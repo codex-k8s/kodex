@@ -5,6 +5,7 @@ import { routeNames } from '@/shared/lib/routes';
 import CommandCenterPage from '@/pages/CommandCenterPage.vue';
 import ExecutionsPage from '@/pages/ExecutionsPage.vue';
 import OwnerInboxPage from '@/pages/OwnerInboxPage.vue';
+import ProjectsPage from '@/pages/ProjectsPage.vue';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -30,6 +31,12 @@ export const router = createRouter({
           name: routeNames.executions,
           component: ExecutionsPage,
           meta: { titleKey: 'navigation.executions' },
+        },
+        {
+          path: 'projects',
+          name: routeNames.projects,
+          component: ProjectsPage,
+          meta: { titleKey: 'navigation.projects' },
         },
       ],
     },

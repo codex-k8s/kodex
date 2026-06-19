@@ -720,6 +720,113 @@ func TestRouterListAgentRunActivitiesErrorMapping(t *testing.T) {
 	}
 }
 
+func TestRouterListProjects(t *testing.T) {
+	client := &fakeInteractionHubClient{projectListResponse: sampleProjectListResponse("project-1")}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/projects?organization_ref=org-1&status=active&page_size=10&page_token=cursor-1", "")
+	req.Header.Set(headerTraceID, "trace-1")
+	req.Header.Set(headerSessionID, "session-1")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.projectListRequest
+	if recorded.GetOrganizationId() != "org-1" || len(recorded.GetStatuses()) != 1 ||
+		recorded.GetStatuses()[0] != projectsv1.ProjectStatus_PROJECT_STATUS_ACTIVE {
+		t.Fatalf("project list request = %+v, want organization and status", recorded)
+	}
+	if recorded.GetPage().GetPageSize() != 10 || recorded.GetPage().GetPageToken() != "cursor-1" {
+		t.Fatalf("project list page = %+v, want pagination", recorded.GetPage())
+	}
+	if recorded.GetMeta().GetActor().GetId() != "owner-1" ||
+		recorded.GetMeta().GetRequestContext().GetTraceId() != "trace-1" ||
+		recorded.GetMeta().GetRequestContext().GetSessionId() != "session-1" {
+		t.Fatalf("project meta = %+v, want actor and request context", recorded.GetMeta())
+	}
+	var body generated.ProjectListResponse
+	decodeJSON(t, rec, &body)
+	if len(body.Projects) != 1 || body.Projects[0].ProjectId != "project-1" ||
+		body.Projects[0].Status != generated.ProjectStatusActive {
+		t.Fatalf("projects = %+v, want active project", body.Projects)
+	}
+	if body.Page.NextPageToken == nil || *body.Page.NextPageToken != "cursor-2" {
+		t.Fatalf("page = %+v, want next cursor", body.Page)
+	}
+	for _, forbidden := range []string{"raw_manifest", "secret-token", "provider_payload"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterListProjectsRejectsBadStatus(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/projects?status=deleted", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.projectListRequest != nil {
+		t.Fatalf("downstream was called after invalid project status")
+	}
+}
+
+func TestRouterListProjectRepositories(t *testing.T) {
+	client := &fakeInteractionHubClient{repositoryListResponse: sampleRepositoryListResponse("project-1", "repo-1")}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/projects/project-1/repositories?status=active&page_size=10&page_token=cursor-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.repositoryListRequest
+	if recorded.GetProjectId() != "project-1" || len(recorded.GetStatuses()) != 1 ||
+		recorded.GetStatuses()[0] != projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE {
+		t.Fatalf("repository request = %+v, want project and active status", recorded)
+	}
+	if recorded.GetPage().GetPageSize() != 10 || recorded.GetPage().GetPageToken() != "cursor-1" {
+		t.Fatalf("repository page = %+v, want pagination", recorded.GetPage())
+	}
+	var body generated.RepositoryListResponse
+	decodeJSON(t, rec, &body)
+	if body.ProjectId != "project-1" || len(body.Repositories) != 1 ||
+		body.Repositories[0].RepositoryId != "repo-1" ||
+		body.Repositories[0].Provider != generated.RepositoryProviderGithub {
+		t.Fatalf("repositories = %+v, want github binding", body)
+	}
+	for _, forbidden := range []string{"raw_diff", "secret-token", "provider_response_body"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterListProjectRepositoriesKeepsProjectIdForEmptyList(t *testing.T) {
+	client := &fakeInteractionHubClient{repositoryListResponse: &projectsv1.ListRepositoriesResponse{Page: &projectsv1.PageResponse{}}}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/projects/project-1/repositories", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body generated.RepositoryListResponse
+	decodeJSON(t, rec, &body)
+	if body.ProjectId != "project-1" || len(body.Repositories) != 0 {
+		t.Fatalf("body = %+v, want project id and empty repositories", body)
+	}
+}
+
 func TestRouterGetGovernanceSummaryByReleasePackage(t *testing.T) {
 	packageID := uuid.NewString()
 	client := &fakeInteractionHubClient{governanceSummaryResponse: sampleGovernanceSummaryResponse(packageID)}
@@ -837,7 +944,7 @@ func TestRouterGetSelfDeploySummary(t *testing.T) {
 		t.Fatalf("summary refs = %+v, want project/repository/digests", summary)
 	}
 	if len(summary.AffectedServiceKeys) != 2 || len(summary.PathCategories) != 2 ||
-		summary.PathCategories[0] != generated.SelfDeployPathCategoryServiceSource {
+		summary.PathCategories[0] != generated.ServiceSource {
 		t.Fatalf("summary = %+v, want affected services and path categories", summary)
 	}
 	governanceTarget := client.governanceSummaryRequest.GetScope().GetTarget()
@@ -1369,7 +1476,7 @@ func TestRouterGetSelfDeploySummaryNeedsServicesPolicyReconcile(t *testing.T) {
 	if body.Summary.ChainStatus != generated.SelfDeployChainStatusNeedsServicesPolicyReconcile ||
 		body.Summary.NextStep.Code != generated.ReconcileServicesPolicy ||
 		len(body.Summary.PathCategories) != 1 ||
-		body.Summary.PathCategories[0] != generated.SelfDeployPathCategoryServicesPolicy ||
+		body.Summary.PathCategories[0] != generated.ServicesPolicy ||
 		body.Summary.ServicesYamlDigest == nil ||
 		*body.Summary.ServicesYamlDigest != "sha256:services" {
 		t.Fatalf("summary = %+v, want services policy reconcile with safe refs", body.Summary)
@@ -1494,6 +1601,7 @@ type fakeInteractionHubClient struct {
 	runtimeStatusRequest      *agentsv1.GetAgentRunRuntimeStatusRequest
 	activitiesRequest         *agentsv1.ListAgentActivitiesRequest
 	selfDeployListRequest     *agentsv1.ListSelfDeployPlansRequest
+	projectListRequest        *projectsv1.ListProjectsRequest
 	selfDeploySignalRequest   *projectsv1.GetSelfDeploySignalRequest
 	repositoryListRequest     *projectsv1.ListRepositoriesRequest
 	governanceSummaryRequest  *governancev1.GetGovernanceSummaryRequest
@@ -1506,6 +1614,7 @@ type fakeInteractionHubClient struct {
 	runtimeStatusResponse     *agentsv1.AgentRunRuntimeStatusResponse
 	activitiesResponse        *agentsv1.ListAgentActivitiesResponse
 	selfDeployListResponse    *agentsv1.ListSelfDeployPlansResponse
+	projectListResponse       *projectsv1.ListProjectsResponse
 	selfDeploySignalResponse  *projectsv1.SelfDeploySignalResponse
 	repositoryListResponse    *projectsv1.ListRepositoriesResponse
 	governanceSummaryResponse *governancev1.GovernanceSummaryResponse
@@ -1518,6 +1627,7 @@ type fakeInteractionHubClient struct {
 	runtimeStatusErr          error
 	activitiesErr             error
 	selfDeployListErr         error
+	projectListErr            error
 	selfDeploySignalErr       error
 	repositoryListErr         error
 	governanceSummaryErr      error
@@ -1562,6 +1672,11 @@ func (f *fakeInteractionHubClient) ListAgentActivities(_ context.Context, reques
 func (f *fakeInteractionHubClient) ListSelfDeployPlans(_ context.Context, request *agentsv1.ListSelfDeployPlansRequest) (*agentsv1.ListSelfDeployPlansResponse, error) {
 	f.selfDeployListRequest = request
 	return f.selfDeployListResponse, f.selfDeployListErr
+}
+
+func (f *fakeInteractionHubClient) ListProjects(_ context.Context, request *projectsv1.ListProjectsRequest) (*projectsv1.ListProjectsResponse, error) {
+	f.projectListRequest = request
+	return f.projectListResponse, f.projectListErr
 }
 
 func (f *fakeInteractionHubClient) GetSelfDeploySignal(_ context.Context, request *projectsv1.GetSelfDeploySignalRequest) (*projectsv1.SelfDeploySignalResponse, error) {
@@ -1688,6 +1803,41 @@ func sampleInteractionResponseResponse(requestID string, action interactionsv1.I
 			SourceRef:           stringPtr("staff-gateway/request-1"),
 			CreatedAt:           now,
 		},
+	}
+}
+
+func sampleProjectListResponse(projectID string) *projectsv1.ListProjectsResponse {
+	return &projectsv1.ListProjectsResponse{
+		Projects: []*projectsv1.Project{{
+			ProjectId:      projectID,
+			OrganizationId: "org-1",
+			Slug:           "kodex",
+			DisplayName:    "KODEX",
+			Description:    stringPtr("Основной проект"),
+			IconObjectUri:  stringPtr("object://icons/project"),
+			Status:         projectsv1.ProjectStatus_PROJECT_STATUS_ACTIVE,
+			Version:        7,
+		}},
+		Page: &projectsv1.PageResponse{NextPageToken: stringPtr("cursor-2")},
+	}
+}
+
+func sampleRepositoryListResponse(projectID string, repositoryID string) *projectsv1.ListRepositoriesResponse {
+	return &projectsv1.ListRepositoriesResponse{
+		Repositories: []*projectsv1.Repository{{
+			RepositoryId:         repositoryID,
+			ProjectId:            projectID,
+			Provider:             projectsv1.RepositoryProvider_REPOSITORY_PROVIDER_GITHUB,
+			ProviderOwner:        "codex-k8s",
+			ProviderName:         "kodex",
+			WebUrl:               "https://github.example.invalid/codex-k8s/kodex",
+			DefaultBranch:        "main",
+			Status:               projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE,
+			ProviderRepositoryId: stringPtr("provider-repo-1"),
+			IconObjectUri:        stringPtr("object://icons/repository"),
+			Version:              8,
+		}},
+		Page: &projectsv1.PageResponse{NextPageToken: stringPtr("cursor-2")},
 	}
 }
 

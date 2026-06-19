@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useDisplay } from 'vuetify';
 
-import { actorTypeOptions, isLocalDevActorHeadersEnabled, scopeTypeOptions } from '@/shared/api/context';
+import { actorTypeOptions, isGatewayActorContextReady, isLocalDevActorHeadersEnabled } from '@/shared/api/context';
 import { routeNames } from '@/shared/lib/routes';
 import { useOperatorContextStore } from '@/features/operator-context/store';
+import { useProjectContextStore } from '@/features/project-context/store';
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const context = useOperatorContextStore();
+const projectContext = useProjectContextStore();
 const localDevActorHeaders = isLocalDevActorHeadersEnabled();
 const { mdAndUp } = useDisplay();
 const drawerOpen = ref(mdAndUp.value);
@@ -32,11 +34,53 @@ const navItems = computed(() => [
     icon: 'mdi-pulse',
     routeName: routeNames.executions,
   },
+  {
+    title: t('navigation.projects'),
+    icon: 'mdi-source-repository-multiple',
+    routeName: routeNames.projects,
+  },
 ]);
 
 const currentTitle = computed(() => {
   const titleKey = route.meta.titleKey;
   return typeof titleKey === 'string' ? t(titleKey) : t('navigation.commandCenter');
+});
+const canLoadProjectContext = computed(() => isGatewayActorContextReady(context.asContext));
+const projectItems = computed(() =>
+  projectContext.projects.map((project) => ({
+    title: project.display_name,
+    subtitle: project.slug,
+    value: project.project_id,
+  })),
+);
+const repositoryItems = computed(() =>
+  projectContext.repositories.map((repository) => ({
+    title: `${repository.provider_owner}/${repository.provider_name}`,
+    subtitle: repository.default_branch,
+    value: repository.repository_id,
+  })),
+);
+const selectedProjectId = computed({
+  get: () => projectContext.selectedProjectId,
+  set: (projectId: string) => {
+    void selectProject(projectId);
+  },
+});
+const selectedRepositoryId = computed({
+  get: () => projectContext.selectedRepositoryId || undefined,
+  set: (repositoryId: string | undefined) => {
+    selectRepository(repositoryId);
+  },
+});
+const contextLabel = computed(() => {
+  if (context.scopeRef.trim() === '') {
+    return t('context.notSelected');
+  }
+  return `${t(`context.scopeLabels.${context.scopeType}`)} / ${context.scopeRef}`;
+});
+
+onMounted(() => {
+  void loadProjectContext();
 });
 
 function goTo(routeName: string) {
@@ -49,6 +93,50 @@ function goTo(routeName: string) {
 watch(mdAndUp, (isDesktop) => {
   drawerOpen.value = isDesktop;
 });
+
+watch(
+  () => [context.localDevActorType, context.localDevActorId],
+  () => {
+    void loadProjectContext();
+  },
+);
+
+async function loadProjectContext() {
+  if (!canLoadProjectContext.value || projectContext.isLoadingProjects) {
+    return;
+  }
+  if (context.scopeType === 'project' && context.scopeRef.trim()) {
+    projectContext.selectedProjectId = context.scopeRef.trim();
+  }
+  await projectContext.loadProjects(context.asContext);
+  applySelectedProjectScope();
+}
+
+async function selectProject(projectId: string) {
+  if (!projectId || !canLoadProjectContext.value) {
+    return;
+  }
+  await projectContext.selectProject(context.asContext, projectId);
+  applySelectedProjectScope();
+}
+
+function selectRepository(repositoryId: string | undefined) {
+  projectContext.selectRepository(repositoryId);
+  if (repositoryId) {
+    context.scopeType = 'repository';
+    context.scopeRef = repositoryId;
+    return;
+  }
+  applySelectedProjectScope();
+}
+
+function applySelectedProjectScope() {
+  if (!projectContext.selectedProjectId) {
+    return;
+  }
+  context.scopeType = 'project';
+  context.scopeRef = projectContext.selectedProjectId;
+}
 </script>
 
 <template>
@@ -105,16 +193,26 @@ watch(mdAndUp, (isDesktop) => {
     <v-main>
       <div class="context-strip">
         <v-select
-          v-model="context.scopeType"
+          v-model="selectedProjectId"
           class="toolbar-field"
-          :items="scopeTypeOptions"
-          :label="t('context.scopeType')"
+          :items="projectItems"
+          :label="t('context.project')"
+          :loading="projectContext.isLoadingProjects"
+          :disabled="!canLoadProjectContext"
         />
-        <v-text-field
-          v-model.trim="context.scopeRef"
+        <v-select
+          v-model="selectedRepositoryId"
           class="toolbar-field"
-          :label="t('context.scopeRef')"
+          :items="repositoryItems"
+          :label="t('context.repository')"
+          :loading="projectContext.isLoadingRepositories"
+          :disabled="!projectContext.selectedProjectId"
+          clearable
         />
+        <v-chip class="toolbar-status" color="info" label variant="tonal">
+          <v-icon icon="mdi-crosshairs-gps" start />
+          {{ contextLabel }}
+        </v-chip>
         <v-chip v-if="!localDevActorHeaders" class="toolbar-status" color="info" label variant="tonal">
           <v-icon icon="mdi-shield-account-outline" start />
           {{ t('context.trustedActorBoundary') }}

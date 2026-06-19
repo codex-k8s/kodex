@@ -37,6 +37,8 @@ func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubCli
 	mux.HandleFunc("GET /v1/agent-runs", handlers.listAgentRunSummaries)
 	mux.HandleFunc("GET /v1/agent-runs/{run_id}/runtime-status", handlers.getAgentRunRuntimeStatus)
 	mux.HandleFunc("GET /v1/agent-runs/{run_id}/activities", handlers.listAgentRunActivities)
+	mux.HandleFunc("GET /v1/projects", handlers.listProjects)
+	mux.HandleFunc("GET /v1/projects/{project_id}/repositories", handlers.listProjectRepositories)
 	mux.HandleFunc("GET /v1/governance/summary", handlers.getGovernanceSummary)
 	mux.HandleFunc("GET /v1/self-deploy/summary", handlers.getSelfDeploySummary)
 	mux.HandleFunc("POST /v1/self-deploy/gates/{gate_request_id}/decision", handlers.submitSelfDeployGateDecision)

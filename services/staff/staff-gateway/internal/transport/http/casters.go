@@ -18,14 +18,21 @@ import (
 )
 
 const defaultPageSize = 25
+
 const (
-	maxActivitySafeTextBytes     = 2000
-	maxActivityDigestBytes       = 256
-	maxActivityRefBytes          = 256
-	maxActivitySafeJSONBytes     = 8192
-	maxActivityIdentifierBytes   = 128
-	maxAgentSafeTextBytes        = 2000
-	maxAgentIdentifierBytes      = 256
+	maxActivitySafeTextBytes   = 2000
+	maxActivityDigestBytes     = 256
+	maxActivityRefBytes        = 256
+	maxActivitySafeJSONBytes   = 8192
+	maxActivityIdentifierBytes = 128
+	maxAgentSafeTextBytes      = 2000
+	maxAgentIdentifierBytes    = 256
+)
+
+const (
+	maxProjectIdentifierBytes    = 256
+	maxProjectSafeTextBytes      = 2000
+	maxProjectURIBytes           = 1024
 	maxGovernanceKindBytes       = 128
 	maxGovernanceRefBytes        = 256
 	maxGovernanceTextBytes       = 2000
@@ -61,6 +68,9 @@ var validRuntimeObservationStates = enumSet(generated.RuntimeObservationStateNot
 var validAgentRuntimeJobStatuses = enumSet(generated.AgentRuntimeJobStatusPending, generated.AgentRuntimeJobStatusClaimed, generated.AgentRuntimeJobStatusRunning, generated.AgentRuntimeJobStatusSucceeded, generated.AgentRuntimeJobStatusFailed, generated.AgentRuntimeJobStatusCancelled, generated.AgentRuntimeJobStatusTimedOut)
 var validAgentActivityKinds = enumSet(generated.AgentActivityKindLifecycle, generated.AgentActivityKindToolUse, generated.AgentActivityKindToolResult, generated.AgentActivityKindPermission, generated.AgentActivityKindProviderSignal, generated.AgentActivityKindRuntimeSignal, generated.AgentActivityKindCheckpoint, generated.AgentActivityKindOther)
 var validAgentActivityStatuses = enumSet(generated.AgentActivityStatusPlanned, generated.AgentActivityStatusStarted, generated.AgentActivityStatusSucceeded, generated.AgentActivityStatusFailed, generated.AgentActivityStatusDenied, generated.AgentActivityStatusWaiting, generated.AgentActivityStatusCancelled, generated.AgentActivityStatusSkipped)
+var validProjectStatuses = enumSet(generated.ProjectStatusActive, generated.ProjectStatusArchived, generated.ProjectStatusDisabled, generated.ProjectStatusUnspecified)
+var validRepositoryProviders = enumSet(generated.RepositoryProviderGithub, generated.RepositoryProviderGitlab, generated.RepositoryProviderUnspecified)
+var validRepositoryStatuses = enumSet(generated.RepositoryStatusActive, generated.RepositoryStatusArchived, generated.RepositoryStatusBlocked, generated.RepositoryStatusPending, generated.RepositoryStatusUnspecified)
 var validGovernanceTargetTypes = enumSet(generated.GovernanceTargetTypeTransition, generated.GovernanceTargetTypePullRequest, generated.GovernanceTargetTypeReleaseCandidate, generated.GovernanceTargetTypeRuntimeJob, generated.GovernanceTargetTypePolicyChange, generated.GovernanceTargetTypeDocument, generated.GovernanceTargetTypeMerge, generated.GovernanceTargetTypePostdeploy, generated.GovernanceTargetTypeRollback, generated.GovernanceTargetTypeSelfDeployPlan)
 var validGovernanceDecisionSummaryKinds = enumSet(generated.GovernanceDecisionSummaryKindRiskAssessment, generated.GovernanceDecisionSummaryKindReviewSignal, generated.GovernanceDecisionSummaryKindGateRequest, generated.GovernanceDecisionSummaryKindGateDecision, generated.GovernanceDecisionSummaryKindReleaseDecisionPackage, generated.GovernanceDecisionSummaryKindReleaseDecision, generated.GovernanceDecisionSummaryKindBlockingSignal, generated.GovernanceDecisionSummaryKindReleaseSafetyState)
 var validGovernanceDecisionAttentions = enumSet(generated.GovernanceDecisionAttentionPending, generated.GovernanceDecisionAttentionCompleted, generated.GovernanceDecisionAttentionBlocked, generated.GovernanceDecisionAttentionInformational)
@@ -76,7 +86,7 @@ var validGovernanceSignalSeverities = enumSet(generated.GovernanceSignalSeverity
 var validGovernanceEvidenceKinds = enumSet(generated.GovernanceEvidenceKindProviderComment, generated.GovernanceEvidenceKindProviderReview, generated.GovernanceEvidenceKindProviderCheck, generated.GovernanceEvidenceKindRuntimeSummary, generated.GovernanceEvidenceKindDocument, generated.GovernanceEvidenceKindRiskFactor, generated.GovernanceEvidenceKindReviewSignal, generated.GovernanceEvidenceKindInteractionCallback, generated.GovernanceEvidenceKindObjectRef, generated.GovernanceEvidenceKindCustom, generated.GovernanceEvidenceKindAgentAcceptance, generated.GovernanceEvidenceKindAgentRun, generated.GovernanceEvidenceKindAgentHumanGate)
 var validSelfDeployPlanStatusFilters = enumSet(generated.SelfDeployPlanStatusFilterUnspecified, generated.SelfDeployPlanStatusFilterPendingApproval, generated.SelfDeployPlanStatusFilterApproved, generated.SelfDeployPlanStatusFilterRejected, generated.SelfDeployPlanStatusFilterCancelled, generated.SelfDeployPlanStatusFilterFailed)
 var validSelfDeployPlanStatuses = enumSet(generated.SelfDeployPlanStatusUnspecified, generated.SelfDeployPlanStatusPendingApproval, generated.SelfDeployPlanStatusApproved, generated.SelfDeployPlanStatusRejected, generated.SelfDeployPlanStatusCancelled, generated.SelfDeployPlanStatusFailed)
-var validSelfDeployPathCategories = enumSet(generated.SelfDeployPathCategoryUnspecified, generated.SelfDeployPathCategoryServiceSource, generated.SelfDeployPathCategoryServiceConfig, generated.SelfDeployPathCategoryDeployManifest, generated.SelfDeployPathCategoryRuntimeConfig, generated.SelfDeployPathCategoryDocumentation, generated.SelfDeployPathCategoryTest, generated.SelfDeployPathCategoryPlatformPolicy, generated.SelfDeployPathCategoryOther, generated.SelfDeployPathCategoryServicesPolicy)
+var validSelfDeployPathCategories = enumSet(generated.Unspecified, generated.ServiceSource, generated.ServiceConfig, generated.DeployManifest, generated.RuntimeConfig, generated.Documentation, generated.Test, generated.PlatformPolicy, generated.Other, generated.ServicesPolicy)
 var validSelfDeployGateDecisionActions = enumSet(generated.SelfDeployGateDecisionActionApprove, generated.SelfDeployGateDecisionActionReject, generated.SelfDeployGateDecisionActionRequestChanges)
 var selfDeployGateOutcomesByAction = map[generated.SelfDeployGateDecisionAction]governancev1.GateOutcome{
 	generated.SelfDeployGateDecisionActionApprove:        governancev1.GateOutcome_GATE_OUTCOME_APPROVE,
@@ -193,6 +203,52 @@ func ListAgentActivitiesRequest(req *http.Request) (*agentsv1.ListAgentActivitie
 		ActivityKind: activityKind,
 		Status:       activityStatus,
 		Page:         page,
+	}, nil
+}
+
+func ListProjectsRequest(req *http.Request) (*projectsv1.ListProjectsRequest, *SafeError) {
+	meta, safeErr := projectQueryMeta(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	status, safeErr := projectStatusFromQuery(req.URL.Query().Get("status"))
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	page, safeErr := projectPageFromQuery(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &projectsv1.ListProjectsRequest{
+		Meta:           meta,
+		OrganizationId: optionalString(req.URL.Query().Get("organization_ref")),
+		Statuses:       optionalProjectStatuses(status),
+		Page:           page,
+	}, nil
+}
+
+func ListProjectRepositoriesRequest(req *http.Request) (*projectsv1.ListRepositoriesRequest, *SafeError) {
+	meta, safeErr := projectQueryMeta(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	projectID := strings.TrimSpace(req.PathValue("project_id"))
+	if projectID == "" || len(projectID) > maxProjectIdentifierBytes {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "project id is invalid", false)
+	}
+	status, safeErr := repositoryStatusFromQuery(req.URL.Query().Get("status"))
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	page, safeErr := projectPageFromQuery(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &projectsv1.ListRepositoriesRequest{
+		Meta:      meta,
+		ProjectId: projectID,
+		Statuses:  optionalRepositoryStatuses(status),
+		Page:      page,
 	}, nil
 }
 
@@ -631,6 +687,26 @@ func agentRunListBuild(requestID string, runs []generated.AgentRunSummary, page 
 	return generated.AgentRunSummaryListResponse{RequestId: requestID, CorrelationId: optionalString(requestID), Runs: runs, Page: page}
 }
 
+func projectItemsOf(response *projectsv1.ListProjectsResponse) []*projectsv1.Project {
+	return response.GetProjects()
+}
+
+func projectListPageOf(response *projectsv1.ListProjectsResponse) generated.PageInfo {
+	return projectPageInfo(response.GetPage())
+}
+
+func projectListBuild(requestID string, projects []generated.ProjectSummary, page generated.PageInfo) generated.ProjectListResponse {
+	return generated.ProjectListResponse{RequestId: requestID, CorrelationId: optionalString(requestID), Projects: projects, Page: page}
+}
+
+func repositoryItemsOf(response *projectsv1.ListRepositoriesResponse) []*projectsv1.Repository {
+	return response.GetRepositories()
+}
+
+func repositoryListPageOf(response *projectsv1.ListRepositoriesResponse) generated.PageInfo {
+	return projectPageInfo(response.GetPage())
+}
+
 func AgentSessionListResponse(response *agentsv1.ListAgentSessionsResponse, requestID string) (generated.AgentSessionListResponse, *SafeError) {
 	return castListEnvelope(
 		response,
@@ -653,6 +729,39 @@ func AgentRunSummaryListResponse(response *agentsv1.ListAgentRunSummariesRespons
 		agentRunSummary,
 		agentRunListBuild,
 	)
+}
+
+func ProjectListResponse(response *projectsv1.ListProjectsResponse, requestID string) (generated.ProjectListResponse, *SafeError) {
+	return castListEnvelope(
+		response,
+		requestID,
+		"project-catalog returned empty project list response",
+		projectItemsOf,
+		projectListPageOf,
+		projectSummary,
+		projectListBuild,
+	)
+}
+
+func RepositoryListResponse(response *projectsv1.ListRepositoriesResponse, projectID string, requestID string) (generated.RepositoryListResponse, *SafeError) {
+	if response == nil {
+		return generated.RepositoryListResponse{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "project-catalog returned empty repository list response", true)
+	}
+	repositories, safeErr := castRepeated(repositoryItemsOf(response), repositorySummary)
+	if safeErr != nil {
+		return generated.RepositoryListResponse{}, safeErr
+	}
+	return generated.RepositoryListResponse{
+		RequestId:     requestID,
+		CorrelationId: optionalString(requestID),
+		ProjectId:     projectID,
+		Repositories:  repositories,
+		Page:          repositoryListPageOf(response),
+	}, nil
+}
+
+func RepositoryListResponseForRequest(response *projectsv1.ListRepositoriesResponse, request *projectsv1.ListRepositoriesRequest, requestID string) (generated.RepositoryListResponse, *SafeError) {
+	return RepositoryListResponse(response, request.GetProjectId(), requestID)
 }
 
 func AgentRunRuntimeStatusResponse(response *agentsv1.AgentRunRuntimeStatusResponse, requestID string) (generated.AgentRunRuntimeStatusResponse, *SafeError) {
@@ -689,6 +798,10 @@ func AgentRunActivitiesResponse(response *agentsv1.ListAgentActivitiesResponse, 
 		Activities:    activities,
 		Page:          agentPageInfo(response.GetPage()),
 	}, nil
+}
+
+func AgentRunActivitiesResponseForRequest(response *agentsv1.ListAgentActivitiesResponse, request *agentsv1.ListAgentActivitiesRequest, requestID string) (generated.AgentRunActivitiesResponse, *SafeError) {
+	return AgentRunActivitiesResponse(response, request.GetRunId(), requestID)
 }
 
 func GovernanceSummaryResponse(response *governancev1.GovernanceSummaryResponse, requestID string) (generated.GovernanceSummaryResponse, *SafeError) {
@@ -1201,6 +1314,32 @@ func activityStatusFromQuery(value string) (*agentsv1.AgentActivityStatus, *Safe
 	})
 }
 
+func projectStatusFromQuery(value string) (*projectsv1.ProjectStatus, *SafeError) {
+	return optionalAgentListStatus(value, "PROJECT_STATUS_", "project status is invalid", projectsv1.ProjectStatus_value, func(number int32) projectsv1.ProjectStatus {
+		return projectsv1.ProjectStatus(number)
+	})
+}
+
+func repositoryStatusFromQuery(value string) (*projectsv1.RepositoryStatus, *SafeError) {
+	return optionalAgentListStatus(value, "REPOSITORY_STATUS_", "repository status is invalid", projectsv1.RepositoryStatus_value, func(number int32) projectsv1.RepositoryStatus {
+		return projectsv1.RepositoryStatus(number)
+	})
+}
+
+func optionalProjectStatuses(status *projectsv1.ProjectStatus) []projectsv1.ProjectStatus {
+	if status == nil {
+		return nil
+	}
+	return []projectsv1.ProjectStatus{*status}
+}
+
+func optionalRepositoryStatuses(status *projectsv1.RepositoryStatus) []projectsv1.RepositoryStatus {
+	if status == nil {
+		return nil
+	}
+	return []projectsv1.RepositoryStatus{*status}
+}
+
 func selfDeployPlanStatusFromQuery(value string) (*agentsv1.SelfDeployPlanStatus, *SafeError) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" || trimmed == "unspecified" {
@@ -1377,6 +1516,14 @@ func agentPageFromQuery(req *http.Request) (*agentsv1.PageRequest, *SafeError) {
 		return nil, safeErr
 	}
 	return &agentsv1.PageRequest{PageSize: pageSize, PageToken: pageToken}, nil
+}
+
+func projectPageFromQuery(req *http.Request) (*projectsv1.PageRequest, *SafeError) {
+	pageSize, pageToken, safeErr := pageParamsFromQuery(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &projectsv1.PageRequest{PageSize: pageSize, PageToken: pageToken}, nil
 }
 
 func pageParamsFromQuery(req *http.Request) (int32, *string, *SafeError) {
@@ -1582,6 +1729,81 @@ func agentRunSummary(item *agentsv1.AgentRunListItem) (generated.AgentRunSummary
 		Version:                 run.GetVersion(),
 	}
 	return output, nil
+}
+
+func projectSummary(project *projectsv1.Project) (generated.ProjectSummary, *SafeError) {
+	if project == nil {
+		return generated.ProjectSummary{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "project-catalog returned empty project", true)
+	}
+	projectID, safeErr := requiredBoundedString(project.GetProjectId(), maxProjectIdentifierBytes, "project-catalog returned invalid project id")
+	if safeErr != nil {
+		return generated.ProjectSummary{}, safeErr
+	}
+	organizationID, safeErr := requiredBoundedString(project.GetOrganizationId(), maxProjectIdentifierBytes, "project-catalog returned invalid organization id")
+	if safeErr != nil {
+		return generated.ProjectSummary{}, safeErr
+	}
+	slug, safeErr := requiredBoundedString(project.GetSlug(), maxProjectIdentifierBytes, "project-catalog returned invalid project slug")
+	if safeErr != nil {
+		return generated.ProjectSummary{}, safeErr
+	}
+	displayName, safeErr := requiredBoundedString(project.GetDisplayName(), maxProjectIdentifierBytes, "project-catalog returned invalid project display name")
+	if safeErr != nil {
+		return generated.ProjectSummary{}, safeErr
+	}
+	return generated.ProjectSummary{
+		ProjectId:      projectID,
+		OrganizationId: organizationID,
+		Slug:           slug,
+		DisplayName:    displayName,
+		Description:    optionalBoundedString(project.GetDescription(), maxProjectSafeTextBytes),
+		IconObjectUri:  optionalBoundedString(project.GetIconObjectUri(), maxProjectURIBytes),
+		Status:         projectStatus(project.GetStatus()),
+		Version:        project.GetVersion(),
+	}, nil
+}
+
+func repositorySummary(repository *projectsv1.Repository) (generated.RepositorySummary, *SafeError) {
+	if repository == nil {
+		return generated.RepositorySummary{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "project-catalog returned empty repository", true)
+	}
+	repositoryID, safeErr := requiredBoundedString(repository.GetRepositoryId(), maxProjectIdentifierBytes, "project-catalog returned invalid repository id")
+	if safeErr != nil {
+		return generated.RepositorySummary{}, safeErr
+	}
+	projectID, safeErr := requiredBoundedString(repository.GetProjectId(), maxProjectIdentifierBytes, "project-catalog returned invalid repository project id")
+	if safeErr != nil {
+		return generated.RepositorySummary{}, safeErr
+	}
+	providerOwner, safeErr := requiredBoundedString(repository.GetProviderOwner(), maxProjectIdentifierBytes, "project-catalog returned invalid repository owner")
+	if safeErr != nil {
+		return generated.RepositorySummary{}, safeErr
+	}
+	providerName, safeErr := requiredBoundedString(repository.GetProviderName(), maxProjectIdentifierBytes, "project-catalog returned invalid repository name")
+	if safeErr != nil {
+		return generated.RepositorySummary{}, safeErr
+	}
+	webURL, safeErr := requiredBoundedString(repository.GetWebUrl(), maxProjectURIBytes, "project-catalog returned invalid repository url")
+	if safeErr != nil {
+		return generated.RepositorySummary{}, safeErr
+	}
+	defaultBranch, safeErr := requiredBoundedString(repository.GetDefaultBranch(), maxProjectIdentifierBytes, "project-catalog returned invalid repository default branch")
+	if safeErr != nil {
+		return generated.RepositorySummary{}, safeErr
+	}
+	return generated.RepositorySummary{
+		RepositoryId:         repositoryID,
+		ProjectId:            projectID,
+		Provider:             repositoryProvider(repository.GetProvider()),
+		ProviderOwner:        providerOwner,
+		ProviderName:         providerName,
+		WebUrl:               webURL,
+		DefaultBranch:        defaultBranch,
+		Status:               repositoryStatus(repository.GetStatus()),
+		ProviderRepositoryId: optionalBoundedString(repository.GetProviderRepositoryId(), maxProjectIdentifierBytes),
+		IconObjectUri:        optionalBoundedString(repository.GetIconObjectUri(), maxProjectURIBytes),
+		Version:              repository.GetVersion(),
+	}, nil
 }
 
 func agentActivitySummary(input *agentsv1.AgentActivitySummary) *generated.AgentActivitySummary {
@@ -2246,7 +2468,7 @@ func selfDeployPlanStatus(value agentsv1.SelfDeployPlanStatus) generated.SelfDep
 func selfDeployPathCategories(values []agentsv1.SelfDeployPathCategory) []generated.SelfDeployPathCategory {
 	result := make([]generated.SelfDeployPathCategory, 0, len(values))
 	for _, value := range values {
-		result = append(result, protoEnum(value.String(), "SELF_DEPLOY_PATH_CATEGORY_", generated.SelfDeployPathCategoryUnspecified, validSelfDeployPathCategories))
+		result = append(result, protoEnum(value.String(), "SELF_DEPLOY_PATH_CATEGORY_", generated.Unspecified, validSelfDeployPathCategories))
 	}
 	return result
 }
@@ -2257,7 +2479,7 @@ func selfDeployProjectPathCategories(values []*projectsv1.SelfDeployPathCategory
 		if value.GetCount() <= 0 {
 			continue
 		}
-		result = append(result, protoEnum(value.GetCategory().String(), "SELF_DEPLOY_PATH_CATEGORY_", generated.SelfDeployPathCategoryUnspecified, validSelfDeployPathCategories))
+		result = append(result, protoEnum(value.GetCategory().String(), "SELF_DEPLOY_PATH_CATEGORY_", generated.Unspecified, validSelfDeployPathCategories))
 	}
 	return result
 }
@@ -2507,6 +2729,18 @@ func agentRunStatus(value agentsv1.AgentRunStatus) generated.AgentRunStatus {
 
 func agentSessionStatus(value agentsv1.AgentSessionStatus) generated.AgentSessionStatus {
 	return protoEnum(value.String(), "AGENT_SESSION_STATUS_", generated.AgentSessionStatusUnspecified, validAgentSessionStatuses)
+}
+
+func projectStatus(value projectsv1.ProjectStatus) generated.ProjectStatus {
+	return protoEnum(value.String(), "PROJECT_STATUS_", generated.ProjectStatusUnspecified, validProjectStatuses)
+}
+
+func repositoryProvider(value projectsv1.RepositoryProvider) generated.RepositoryProvider {
+	return protoEnum(value.String(), "REPOSITORY_PROVIDER_", generated.RepositoryProviderUnspecified, validRepositoryProviders)
+}
+
+func repositoryStatus(value projectsv1.RepositoryStatus) generated.RepositoryStatus {
+	return protoEnum(value.String(), "REPOSITORY_STATUS_", generated.RepositoryStatusUnspecified, validRepositoryStatuses)
 }
 
 func agentScopeRef(input *agentsv1.ScopeRef) (generated.ScopeRef, *SafeError) {
@@ -2794,6 +3028,13 @@ func pageInfo(input *interactionsv1.PageResponse) generated.PageInfo {
 }
 
 func agentPageInfo(input *agentsv1.PageResponse) generated.PageInfo {
+	if input == nil {
+		return generated.PageInfo{}
+	}
+	return generated.PageInfo{NextPageToken: optionalString(input.GetNextPageToken())}
+}
+
+func projectPageInfo(input *projectsv1.PageResponse) generated.PageInfo {
 	if input == nil {
 		return generated.PageInfo{}
 	}

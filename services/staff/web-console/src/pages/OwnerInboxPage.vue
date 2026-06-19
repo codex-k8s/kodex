@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import type { RequestKind, RequestStatus, ResponseAction } from '@/shared/api/generated';
@@ -59,6 +59,21 @@ const canSubmitAction = computed(() => {
   }
   return !selectedActionNeedsSummary.value || responseSummary.value.trim().length > 0;
 });
+
+onMounted(() => {
+  if (context.isReady && inbox.items.length === 0) {
+    void inbox.load(context.asContext);
+  }
+});
+
+watch(
+  () => [context.scopeType, context.scopeRef],
+  () => {
+    if (context.isReady) {
+      void inbox.load(context.asContext);
+    }
+  },
+);
 
 function statusTone(status: RequestStatus): 'neutral' | 'success' | 'warning' | 'error' | 'info' {
   if (status === 'answered') {
