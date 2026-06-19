@@ -669,8 +669,13 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 		Role:         entity.AgentRole{Name: "adhoc", RoleType: "custom"},
 		Chat:         entity.Chat{Name: "Manager", ChatType: "manager"},
 		Repositories: []entity.ProjectRepository{{Provider: "github", Owner: "codex-k8s", Name: "matter-codex", DefaultBranch: "main"}},
-		UserMessage:  "Inspect the current issue and propose next steps.",
-		Locale:       promptTemplateLocaleData{Language: "English"},
+		RuntimeVariables: []entity.ProjectRuntimeVariable{{
+			Name:        "RADAR_AUTO_KUBECONFIG",
+			Description: "kubeconfig for the external radar-auto cluster",
+			Enabled:     true,
+		}},
+		UserMessage: "Inspect the current issue and propose next steps.",
+		Locale:      promptTemplateLocaleData{Language: "English"},
 	})
 	if err != nil {
 		t.Fatalf("BuildRolePrompt() error = %v", err)
@@ -694,6 +699,11 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing credential binding %q: %q", expected, prompt)
 		}
 	}
+	for _, expected := range []string{"RADAR_AUTO_KUBECONFIG", "kubeconfig for the external radar-auto cluster"} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("prompt missing runtime variable %q: %q", expected, prompt)
+		}
+	}
 }
 
 func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
@@ -704,7 +714,12 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 			RoleType:       "worker",
 			PromptTemplate: "{{range .Tools}}{{.Command}}={{.Version}}\n{{end}}{{range .Secrets}}{{.Name}}={{.Env}}|{{.File}}\n{{end}}",
 		},
-		Chat:        entity.Chat{Name: "Backend", ChatType: "worker_reviewer"},
+		Chat: entity.Chat{Name: "Backend", ChatType: "worker_reviewer"},
+		RuntimeVariables: []entity.ProjectRuntimeVariable{{
+			Name:        "STAGING_DB_URL",
+			Description: "staging database DSN",
+			Enabled:     true,
+		}},
 		UserMessage: "Run codegen.",
 	})
 	if err != nil {
@@ -721,6 +736,7 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 		"modelina=5.10.1",
 		"GitHub account=GH_TOKEN",
 		"Kubernetes service account=KUBERNETES_SERVICE_HOST",
+		"Project env STAGING_DB_URL=STAGING_DB_URL",
 	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing %q: %q", expected, prompt)
@@ -1997,6 +2013,159 @@ func assertCardDoesNotExposeSlashCommand(t *testing.T, card *MattermostCard) {
 	}
 }
 
+func TestRuntimeVariableDialogCreatesSecretAndMetadata(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Platform", Slug: "platform"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		RuntimeRunner:   runner,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProjectRuntimeVar,
+		State: encodeDialogState(MenuActionCommand{
+			Resource: menuResourceProject,
+			ID:       "1",
+		}),
+		Submission: map[string]any{
+			dialogFieldProjectID:       "1",
+			dialogFieldRuntimeVarName:  "radar_auto_kubeconfig",
+			dialogFieldRuntimeVarValue: "secret-value",
+			dialogFieldSensitive:       "true",
+			dialogFieldEnabled:         "true",
+			dialogFieldDescription:     "kubeconfig for radar-auto external cluster",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog result error = %q errors = %#v", result.Error, result.Errors)
+	}
+	if runner.runtimeVariableSecretInput.ProjectSlug != "platform" {
+		t.Fatalf("secret input = %#v", runner.runtimeVariableSecretInput)
+	}
+	if runner.runtimeVariableSecretInput.Variable.Name != "RADAR_AUTO_KUBECONFIG" {
+		t.Fatalf("secret variable = %#v", runner.runtimeVariableSecretInput.Variable)
+	}
+	if runner.runtimeVariableSecretInput.Value != "secret-value" {
+		t.Fatalf("secret value was not passed to runner")
+	}
+	variables, _ := store.ListProjectRuntimeVariables(context.Background(), 1)
+	if len(variables) != 1 || variables[0].Name != "RADAR_AUTO_KUBECONFIG" || variables[0].SecretRef == "" {
+		t.Fatalf("variables = %#v", variables)
+	}
+	if result.Card == nil || strings.Contains(result.Card.Text, "secret-value") {
+		t.Fatalf("card exposes secret value or is nil: %#v", result.Card)
+	}
+}
+
+func TestRoleRuntimeVariableAttachDialogCreatesBinding(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Platform", Slug: "platform"},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "sre", RoleType: "worker", Enabled: true},
+		},
+		runtimeVariables: map[int64]entity.ProjectRuntimeVariable{
+			1: {ID: 1, ProjectID: 1, Name: "RADAR_AUTO_KUBECONFIG", Slug: "radar-auto-kubeconfig", SecretRef: "mc-var-platform-radar-auto-kubeconfig", SecretKey: "value", Sensitive: true, Enabled: true},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackRoleRuntimeVarAttach,
+		State:      encodeDialogState(MenuActionCommand{Resource: menuResourceAgentRole, ID: "1"}),
+		Submission: map[string]any{
+			dialogFieldRole:         "1",
+			dialogFieldRuntimeVarID: "1",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog result error = %q errors = %#v", result.Error, result.Errors)
+	}
+	bindings, _ := store.ListAgentRoleRuntimeVariables(context.Background(), 1)
+	if len(bindings) != 1 || bindings[0].Name != "RADAR_AUTO_KUBECONFIG" {
+		t.Fatalf("bindings = %#v", bindings)
+	}
+}
+
+func TestEnqueueAgentTurnPassesRoleRuntimeVariablesToSession(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Radar Auto", Slug: "radar-auto"},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "sre", RoleType: "worker", OpenAIAccountName: "main", SandboxMode: "danger-full-access", Enabled: true},
+		},
+		chats: map[int64]entity.Chat{
+			1: {ID: 1, ProjectID: 1, Name: "Deploy", ChatType: "single_custom", MattermostChannelID: "channel-1"},
+		},
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"main": {Name: "main", SecretRef: "matter-codex-codex-auth-main", Status: "authorized"},
+		},
+		runtimeVariables: map[int64]entity.ProjectRuntimeVariable{
+			1: {ID: 1, ProjectID: 1, Name: "RADAR_AUTO_KUBECONFIG", Slug: "radar-auto-kubeconfig", Description: "kubeconfig for radar-auto external cluster", SecretRef: "mc-var-radar-auto-kubeconfig", SecretKey: "value", Sensitive: true, Enabled: true},
+		},
+		roleRuntimeVariables: map[string]entity.AgentRoleRuntimeVariableBinding{
+			"1:1": {ID: 1, RoleID: 1, RoleName: "sre", VariableID: 1, ProjectID: 1, Name: "RADAR_AUTO_KUBECONFIG", Slug: "radar-auto-kubeconfig", Description: "kubeconfig for radar-auto external cluster", SecretRef: "mc-var-radar-auto-kubeconfig", SecretKey: "value", Sensitive: true, Enabled: true},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:     localizer,
+		Store:         store,
+		RuntimeRunner: runner,
+		BotServiceURL: "http://bot-service",
+		StorageReady:  true,
+		RuntimeReady:  true,
+	})
+
+	queued, err := svc.EnqueueAgentTurn(context.Background(), AgentTurnRequest{
+		Project:      store.projects[1],
+		Chat:         store.chats[1],
+		Role:         store.agentRoles[1],
+		UserMessage:  "Check staging deployment access.",
+		SourcePostID: "post-1",
+		ReplyRootID:  "post-1",
+		UserName:     "owner",
+	})
+	if err != nil {
+		t.Fatalf("EnqueueAgentTurn() error = %v", err)
+	}
+	if queued.SessionKey == "" || len(runner.sessionRuns) != 1 {
+		t.Fatalf("queued = %#v sessionRuns = %#v", queued, runner.sessionRuns)
+	}
+	env := runner.sessionRuns[0].RuntimeEnv
+	if len(env) != 1 || env[0].Name != "RADAR_AUTO_KUBECONFIG" || env[0].SecretName != "mc-var-radar-auto-kubeconfig" {
+		t.Fatalf("runtime env = %#v", env)
+	}
+	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "RADAR_AUTO_KUBECONFIG") {
+		t.Fatalf("session turns = %#v", store.sessionTurns)
+	}
+	session := store.agentSessions[queued.SessionKey]
+	if !strings.Contains(session.Capabilities, "RADAR_AUTO_KUBECONFIG") {
+		t.Fatalf("capabilities = %q", session.Capabilities)
+	}
+}
+
 func TestSlashRepoAddCreatesChannelAndStoresRepository(t *testing.T) {
 	store := &fakeAdminStore{}
 	channels := &fakeChannelManager{}
@@ -3052,6 +3221,9 @@ type fakeRuntimeRunner struct {
 	githubSecretInput          runtimerepo.GitHubTokenSecretInput
 	deletedGitHubSecretAccount string
 	deletedGitHubSecretName    string
+	runtimeVariableSecrets     map[string]string
+	runtimeVariableSecretInput runtimerepo.ProjectRuntimeVariableSecretInput
+	deletedRuntimeVariable     string
 	runStatuses                map[string]runtimerepo.RunStatus
 }
 
@@ -3153,6 +3325,31 @@ func (runner *fakeRuntimeRunner) DeleteGitHubTokenSecret(_ context.Context, acco
 		SecretName:    secretName,
 		Namespace:     "mattermost",
 		SecretDeleted: true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) UpsertProjectRuntimeVariableSecret(_ context.Context, input runtimerepo.ProjectRuntimeVariableSecretInput) (runtimerepo.ProjectRuntimeVariableSecret, error) {
+	runner.runtimeVariableSecretInput = input
+	if runner.runtimeVariableSecrets == nil {
+		runner.runtimeVariableSecrets = map[string]string{}
+	}
+	runner.runtimeVariableSecrets[input.Variable.SecretName] = input.Value
+	return runtimerepo.ProjectRuntimeVariableSecret{
+		SecretName: input.Variable.SecretName,
+		Namespace:  "mattermost",
+		Created:    true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) DeleteProjectRuntimeVariableSecret(_ context.Context, secretName string) (runtimerepo.ProjectRuntimeVariableSecret, error) {
+	runner.deletedRuntimeVariable = secretName
+	if runner.runtimeVariableSecrets != nil {
+		delete(runner.runtimeVariableSecrets, secretName)
+	}
+	return runtimerepo.ProjectRuntimeVariableSecret{
+		SecretName: secretName,
+		Namespace:  "mattermost",
+		Created:    true,
 	}, nil
 }
 
@@ -3340,6 +3537,8 @@ type fakeAdminStore struct {
 	updatedPRURL         string
 	projects             map[int64]entity.Project
 	projectRepositories  map[string]entity.ProjectRepository
+	runtimeVariables     map[int64]entity.ProjectRuntimeVariable
+	roleRuntimeVariables map[string]entity.AgentRoleRuntimeVariableBinding
 	agentRoles           map[int64]entity.AgentRole
 	chats                map[int64]entity.Chat
 	chatParticipants     map[int64][]entity.ChatParticipant
@@ -3510,6 +3709,132 @@ func (store *fakeAdminStore) ListProjectRepositories(_ context.Context, projectI
 	}
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].FullName() < items[j].FullName()
+	})
+	return items, nil
+}
+
+func (store *fakeAdminStore) UpsertProjectRuntimeVariable(_ context.Context, input adminrepo.UpsertProjectRuntimeVariableInput) (entity.ProjectRuntimeVariable, bool, error) {
+	store.ensureRuntimeVariables()
+	for id, item := range store.runtimeVariables {
+		if item.ProjectID == input.ProjectID && item.Name == input.Name {
+			item.Slug = input.Slug
+			item.Description = input.Description
+			item.SecretRef = input.SecretRef
+			item.SecretKey = input.SecretKey
+			item.Sensitive = input.Sensitive
+			item.Enabled = input.Enabled
+			store.runtimeVariables[id] = item
+			return item, false, nil
+		}
+	}
+	item := entity.ProjectRuntimeVariable{
+		ID:          int64(len(store.runtimeVariables) + 1),
+		ProjectID:   input.ProjectID,
+		Name:        input.Name,
+		Slug:        input.Slug,
+		Description: input.Description,
+		SecretRef:   input.SecretRef,
+		SecretKey:   input.SecretKey,
+		Sensitive:   input.Sensitive,
+		Enabled:     input.Enabled,
+	}
+	store.runtimeVariables[item.ID] = item
+	return item, true, nil
+}
+
+func (store *fakeAdminStore) GetProjectRuntimeVariable(_ context.Context, id int64) (entity.ProjectRuntimeVariable, error) {
+	store.ensureRuntimeVariables()
+	item, ok := store.runtimeVariables[id]
+	if !ok {
+		return entity.ProjectRuntimeVariable{}, adminrepo.ErrNotFound
+	}
+	return item, nil
+}
+
+func (store *fakeAdminStore) ListProjectRuntimeVariables(_ context.Context, projectID int64) ([]entity.ProjectRuntimeVariable, error) {
+	store.ensureRuntimeVariables()
+	items := make([]entity.ProjectRuntimeVariable, 0, len(store.runtimeVariables))
+	for _, item := range store.runtimeVariables {
+		if item.ProjectID == projectID {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name < items[j].Name
+	})
+	return items, nil
+}
+
+func (store *fakeAdminStore) DeleteProjectRuntimeVariable(_ context.Context, id int64) (entity.ProjectRuntimeVariable, error) {
+	store.ensureRuntimeVariables()
+	item, ok := store.runtimeVariables[id]
+	if !ok {
+		return entity.ProjectRuntimeVariable{}, adminrepo.ErrNotFound
+	}
+	delete(store.runtimeVariables, id)
+	for key, binding := range store.roleRuntimeVariables {
+		if binding.VariableID == id {
+			delete(store.roleRuntimeVariables, key)
+		}
+	}
+	return item, nil
+}
+
+func (store *fakeAdminStore) UpsertAgentRoleRuntimeVariable(_ context.Context, input adminrepo.UpsertAgentRoleRuntimeVariableInput) (entity.AgentRoleRuntimeVariableBinding, bool, error) {
+	store.ensureRoleRuntimeVariables()
+	role, ok := store.agentRoles[input.RoleID]
+	if !ok {
+		return entity.AgentRoleRuntimeVariableBinding{}, false, adminrepo.ErrNotFound
+	}
+	variable, ok := store.runtimeVariables[input.VariableID]
+	if !ok {
+		return entity.AgentRoleRuntimeVariableBinding{}, false, adminrepo.ErrNotFound
+	}
+	key := fmt.Sprintf("%d:%d", input.RoleID, input.VariableID)
+	existing, exists := store.roleRuntimeVariables[key]
+	id := existing.ID
+	if id == 0 {
+		id = int64(len(store.roleRuntimeVariables) + 1)
+	}
+	binding := entity.AgentRoleRuntimeVariableBinding{
+		ID:          id,
+		RoleID:      role.ID,
+		RoleName:    role.Name,
+		VariableID:  variable.ID,
+		ProjectID:   variable.ProjectID,
+		Name:        variable.Name,
+		Slug:        variable.Slug,
+		Description: variable.Description,
+		SecretRef:   variable.SecretRef,
+		SecretKey:   variable.SecretKey,
+		Sensitive:   variable.Sensitive,
+		Enabled:     variable.Enabled,
+	}
+	store.roleRuntimeVariables[key] = binding
+	return binding, !exists, nil
+}
+
+func (store *fakeAdminStore) DeleteAgentRoleRuntimeVariable(_ context.Context, roleID int64, variableID int64) (entity.AgentRoleRuntimeVariableBinding, error) {
+	store.ensureRoleRuntimeVariables()
+	key := fmt.Sprintf("%d:%d", roleID, variableID)
+	binding, ok := store.roleRuntimeVariables[key]
+	if !ok {
+		return entity.AgentRoleRuntimeVariableBinding{}, adminrepo.ErrNotFound
+	}
+	delete(store.roleRuntimeVariables, key)
+	return binding, nil
+}
+
+func (store *fakeAdminStore) ListAgentRoleRuntimeVariables(_ context.Context, roleID int64) ([]entity.AgentRoleRuntimeVariableBinding, error) {
+	store.ensureRoleRuntimeVariables()
+	items := make([]entity.AgentRoleRuntimeVariableBinding, 0, len(store.roleRuntimeVariables))
+	for _, item := range store.roleRuntimeVariables {
+		if item.RoleID == roleID {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name < items[j].Name
 	})
 	return items, nil
 }
@@ -4022,6 +4347,20 @@ func (store *fakeAdminStore) ensureProjects() {
 func (store *fakeAdminStore) ensureProjectRepositories() {
 	if store.projectRepositories == nil {
 		store.projectRepositories = map[string]entity.ProjectRepository{}
+	}
+}
+
+func (store *fakeAdminStore) ensureRuntimeVariables() {
+	if store.runtimeVariables == nil {
+		store.runtimeVariables = map[int64]entity.ProjectRuntimeVariable{}
+	}
+}
+
+func (store *fakeAdminStore) ensureRoleRuntimeVariables() {
+	store.ensureAgentRoles()
+	store.ensureRuntimeVariables()
+	if store.roleRuntimeVariables == nil {
+		store.roleRuntimeVariables = map[string]entity.AgentRoleRuntimeVariableBinding{}
 	}
 }
 

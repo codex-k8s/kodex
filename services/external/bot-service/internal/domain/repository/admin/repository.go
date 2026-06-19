@@ -147,6 +147,22 @@ type UpsertProjectRepositoryInput struct {
 	Metadata     string
 }
 
+type UpsertProjectRuntimeVariableInput struct {
+	ProjectID   int64
+	Name        string
+	Slug        string
+	Description string
+	SecretRef   string
+	SecretKey   string
+	Sensitive   bool
+	Enabled     bool
+}
+
+type UpsertAgentRoleRuntimeVariableInput struct {
+	RoleID     int64
+	VariableID int64
+}
+
 type UpsertAgentRoleInput struct {
 	ProjectID         int64
 	Name              string
@@ -265,6 +281,13 @@ type Repository interface {
 	ListProjects(ctx context.Context, limit int) ([]entity.Project, error)
 	UpsertProjectRepository(ctx context.Context, input UpsertProjectRepositoryInput) (entity.ProjectRepository, bool, error)
 	ListProjectRepositories(ctx context.Context, projectID int64) ([]entity.ProjectRepository, error)
+	UpsertProjectRuntimeVariable(ctx context.Context, input UpsertProjectRuntimeVariableInput) (entity.ProjectRuntimeVariable, bool, error)
+	GetProjectRuntimeVariable(ctx context.Context, id int64) (entity.ProjectRuntimeVariable, error)
+	ListProjectRuntimeVariables(ctx context.Context, projectID int64) ([]entity.ProjectRuntimeVariable, error)
+	DeleteProjectRuntimeVariable(ctx context.Context, id int64) (entity.ProjectRuntimeVariable, error)
+	UpsertAgentRoleRuntimeVariable(ctx context.Context, input UpsertAgentRoleRuntimeVariableInput) (entity.AgentRoleRuntimeVariableBinding, bool, error)
+	DeleteAgentRoleRuntimeVariable(ctx context.Context, roleID int64, variableID int64) (entity.AgentRoleRuntimeVariableBinding, error)
+	ListAgentRoleRuntimeVariables(ctx context.Context, roleID int64) ([]entity.AgentRoleRuntimeVariableBinding, error)
 	UpsertAgentRole(ctx context.Context, input UpsertAgentRoleInput) (entity.AgentRole, bool, error)
 	GetAgentRole(ctx context.Context, id int64) (entity.AgentRole, error)
 	ListAgentRoles(ctx context.Context, projectID int64) ([]entity.AgentRole, error)

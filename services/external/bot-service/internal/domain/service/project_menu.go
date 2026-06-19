@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -21,6 +23,9 @@ const (
 
 	menuDialogProjectUpsert         = "project_upsert"
 	menuDialogProjectRepositoryBind = "project_repository_bind"
+	menuDialogProjectRuntimeVar     = "project_runtime_var"
+	menuDialogRoleRuntimeVarAttach  = "role_runtime_var_attach"
+	menuDialogRoleRuntimeVarDetach  = "role_runtime_var_detach"
 	menuDialogAgentRoleUpsert       = "agent_role_upsert"
 	menuDialogChatCreate            = "chat_create"
 
@@ -32,9 +37,13 @@ const (
 	menuResourceAgentRole     = "agent_role"
 	menuResourceChat          = "chat"
 	menuResourceThreadContext = "thread_context"
+	menuResourceRuntimeVar    = "project_runtime_var"
 
 	dialogCallbackProjectUpsert         = "agents_project_upsert"
 	dialogCallbackProjectRepositoryBind = "agents_project_repository_bind"
+	dialogCallbackProjectRuntimeVar     = "agents_project_runtime_var"
+	dialogCallbackRoleRuntimeVarAttach  = "agents_role_runtime_var_attach"
+	dialogCallbackRoleRuntimeVarDetach  = "agents_role_runtime_var_detach"
 	dialogCallbackAgentRoleUpsert       = "agents_agent_role_upsert"
 	dialogCallbackChatCreate            = "agents_chat_create"
 
@@ -57,6 +66,11 @@ const (
 	dialogFieldWorkPolicy       = "work_policy"
 	dialogFieldGitHubOwner      = "github_owner"
 	dialogFieldGitHubOwnerType  = "github_owner_type"
+	dialogFieldRuntimeVarID     = "runtime_var_id"
+	dialogFieldRuntimeVarName   = "runtime_var_name"
+	dialogFieldRuntimeVarValue  = "runtime_var_value"
+	dialogFieldSensitive        = "sensitive"
+	dialogFieldEnabled          = "enabled"
 )
 
 func (svc *SlashCommandService) handleProject(ctx context.Context, args []string, command SlashCommand) string {
@@ -212,6 +226,7 @@ func (svc *SlashCommandService) projectEntityCard(ctx context.Context, command M
 	repositories, _ := svc.cfg.Store.ListProjectRepositories(ctx, project.ID)
 	roles, _ := svc.cfg.Store.ListAgentRoles(ctx, project.ID)
 	chats, _ := svc.cfg.Store.ListChats(ctx, project.ID)
+	runtimeVariables, _ := svc.cfg.Store.ListProjectRuntimeVariables(ctx, project.ID)
 	card.Title = svc.t("menu.entity.project.card_title", map[string]any{"Project": project.Name})
 	card.Text = svc.t("menu.entity.project.card_text", map[string]any{"Project": project.Name})
 	card.Fields = []MattermostCardField{
@@ -223,6 +238,7 @@ func (svc *SlashCommandService) projectEntityCard(ctx context.Context, command M
 		{Title: svc.t("menu.entity.field.repositories", nil), Value: "`" + strconv.Itoa(len(repositories)) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.roles", nil), Value: "`" + strconv.Itoa(len(roles)) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.chats", nil), Value: "`" + strconv.Itoa(len(chats)) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.runtime_vars", nil), Value: "`" + strconv.Itoa(len(runtimeVariables)) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.description", nil), Value: emptyAsUnknown(project.Description), Short: false},
 	}
 	projectIDText := strconv.FormatInt(project.ID, 10)
@@ -238,6 +254,9 @@ func (svc *SlashCommandService) projectEntityCard(ctx context.Context, command M
 		repoOnboardAction,
 		svc.menuResourceDialogAction(menuViewProjects, "dialogchatcreate", menuDialogChatCreate, menuResourceProject, projectIDText, "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary", nil),
 		svc.menuResourceDialogAction(menuViewProjects, "dialogroleadd", menuDialogAgentRoleUpsert, menuResourceProject, projectIDText, "menu.action.role_add", "menu.action.role_add.tooltip", "primary", nil),
+		svc.menuResourceDialogAction(menuViewProjects, "dialogprojectruntimevar", menuDialogProjectRuntimeVar, menuResourceProject, projectIDText, "menu.action.runtime_var_add", "menu.action.runtime_var_add.tooltip", "primary", nil),
+		svc.menuResourceDialogAction(menuViewProjects, "dialogroleruntimevarattach", menuDialogRoleRuntimeVarAttach, menuResourceProject, projectIDText, "menu.action.runtime_var_attach", "menu.action.runtime_var_attach.tooltip", "default", nil),
+		svc.menuResourceAction(menuViewProjects, "projectruntimevars", menuActionList, menuResourceRuntimeVar, projectIDText, "menu.action.runtime_var_list", "menu.action.runtime_var_list.tooltip", "default", nil),
 		svc.menuResourceDialogAction(menuViewProjects, "dialogprojectrepo", menuDialogProjectRepositoryBind, menuResourceProject, projectIDText, "menu.action.project_repo_bind", "menu.action.project_repo_bind.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewRoles, "projectroles", menuActionList, menuResourceAgentRole, projectIDText, "menu.action.roles", "menu.action.roles.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewChats, "projectchats", menuActionList, menuResourceChat, projectIDText, "menu.action.chats", "menu.action.chats.tooltip", "default", nil),
@@ -246,6 +265,157 @@ func (svc *SlashCommandService) projectEntityCard(ctx context.Context, command M
 		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
 	}
 	return card
+}
+
+func (svc *SlashCommandService) projectRuntimeVariableListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewProjects)
+	card.Title = svc.t("menu.entity.runtime_vars.title", nil)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("project.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewProjects)
+		return card
+	}
+	projectID, ok := parseInt64ID(command.ID)
+	if !ok {
+		card.Text = svc.t("menu.entity.invalid", nil)
+		card.Actions = svc.entityNavigationActions(menuViewProjects)
+		return card
+	}
+	project, err := svc.cfg.Store.GetProject(ctx, projectID)
+	if err != nil {
+		card.Text = svc.t("project.get.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewProjects)
+		return card
+	}
+	variables, err := svc.cfg.Store.ListProjectRuntimeVariables(ctx, project.ID)
+	if err != nil {
+		card.Text = svc.t("runtime_var.list.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewProjects)
+		return card
+	}
+	card.Text = svc.t("menu.entity.runtime_vars.text", map[string]any{"Project": project.Name, "Count": len(variables)})
+	card.Fields = nil
+	card.Actions = nil
+	if len(variables) == 0 {
+		card.Text = svc.t("runtime_var.list.empty", map[string]any{"Project": project.Name})
+		card.Actions = append(card.Actions, svc.menuResourceDialogAction(menuViewProjects, "dialogprojectruntimevar", menuDialogProjectRuntimeVar, menuResourceProject, strconv.FormatInt(project.ID, 10), "menu.action.runtime_var_add", "menu.action.runtime_var_add.tooltip", "primary", nil))
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewProjects, "openproject", menuActionShow, menuResourceProject, strconv.FormatInt(project.ID, 10), "menu.action.project_open", "menu.action.project_open.tooltip", "default", nil))
+		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewProjects)...)
+		return card
+	}
+	start, end, page := entityPageBounds(len(variables), command.Page)
+	for idx, variable := range variables[start:end] {
+		number := start + idx + 1
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("menu.entity.runtime_var.item_title", map[string]any{"Number": number, "Name": variable.Name}),
+			Value: svc.t("menu.entity.runtime_var.summary", map[string]any{
+				"Description": emptyAsUnknown(variable.Description),
+				"Secret":      maskedSecretRef(variable.SecretRef, variable.SecretKey),
+				"Enabled":     variable.Enabled,
+			}),
+			Short: false,
+		})
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewProjects, "openruntimevar"+strconv.Itoa(number), menuActionShow, menuResourceRuntimeVar, strconv.FormatInt(variable.ID, 10), "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
+	}
+	projectIDText := strconv.FormatInt(project.ID, 10)
+	card.Actions = append(card.Actions, svc.pageActions(menuViewProjects, menuResourceRuntimeVar, projectIDText, page, len(variables))...)
+	card.Actions = append(card.Actions,
+		svc.menuResourceDialogAction(menuViewProjects, "dialogprojectruntimevar", menuDialogProjectRuntimeVar, menuResourceProject, projectIDText, "menu.action.runtime_var_add", "menu.action.runtime_var_add.tooltip", "primary", nil),
+		svc.menuResourceDialogAction(menuViewProjects, "dialogroleruntimevarattach", menuDialogRoleRuntimeVarAttach, menuResourceProject, projectIDText, "menu.action.runtime_var_attach", "menu.action.runtime_var_attach.tooltip", "default", nil),
+		svc.menuResourceAction(menuViewProjects, "openproject", menuActionShow, menuResourceProject, projectIDText, "menu.action.project_open", "menu.action.project_open.tooltip", "default", nil),
+	)
+	return card
+}
+
+func (svc *SlashCommandService) projectRuntimeVariableEntityCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewProjects)
+	card.Title = svc.t("menu.entity.runtime_var.card_title", nil)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("project.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewProjects)
+		return card
+	}
+	variableID, ok := parseInt64ID(command.ID)
+	if !ok {
+		card.Text = svc.t("menu.entity.invalid", nil)
+		card.Actions = svc.entityNavigationActions(menuViewProjects)
+		return card
+	}
+	variable, err := svc.cfg.Store.GetProjectRuntimeVariable(ctx, variableID)
+	if err != nil {
+		card.Text = svc.t("runtime_var.get.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewProjects)
+		return card
+	}
+	project, _ := svc.cfg.Store.GetProject(ctx, variable.ProjectID)
+	card.Title = svc.t("menu.entity.runtime_var.card_title_name", map[string]any{"Name": variable.Name})
+	card.Text = svc.t("menu.entity.runtime_var.card_text", map[string]any{"Name": variable.Name})
+	card.Fields = []MattermostCardField{
+		{Title: svc.t("menu.entity.field.project", nil), Value: "`" + emptyAsUnknown(project.Name) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.runtime_var", nil), Value: "`" + variable.Name + "`", Short: true},
+		{Title: svc.t("menu.entity.field.slug", nil), Value: "`" + variable.Slug + "`", Short: true},
+		{Title: svc.t("menu.entity.field.secret", nil), Value: "`" + maskedSecretRef(variable.SecretRef, variable.SecretKey) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.sensitive", nil), Value: "`" + strconv.FormatBool(variable.Sensitive) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.enabled", nil), Value: "`" + strconv.FormatBool(variable.Enabled) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.description", nil), Value: emptyAsUnknown(variable.Description), Short: false},
+	}
+	variableIDText := strconv.FormatInt(variable.ID, 10)
+	projectIDText := strconv.FormatInt(variable.ProjectID, 10)
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceDialogAction(menuViewProjects, "dialogruntimevaredit", menuDialogProjectRuntimeVar, menuResourceRuntimeVar, variableIDText, "menu.action.runtime_var_edit", "menu.action.runtime_var_edit.tooltip", "primary", nil),
+		svc.menuResourceAction(menuViewProjects, "runtimevardeleteconfirm", menuActionConfirmDelete, menuResourceRuntimeVar, variableIDText, "menu.action.runtime_var_delete", "menu.action.runtime_var_delete.tooltip", "danger", nil),
+		svc.menuResourceDialogAction(menuViewProjects, "dialogroleruntimevarattach", menuDialogRoleRuntimeVarAttach, menuResourceRuntimeVar, variableIDText, "menu.action.runtime_var_attach", "menu.action.runtime_var_attach.tooltip", "default", nil),
+		svc.menuResourceAction(menuViewProjects, "projectruntimevars", menuActionList, menuResourceRuntimeVar, projectIDText, "menu.action.runtime_var_list", "menu.action.runtime_var_list.tooltip", "default", nil),
+		svc.menuResourceAction(menuViewProjects, "openproject", menuActionShow, menuResourceProject, projectIDText, "menu.action.project_open", "menu.action.project_open.tooltip", "default", nil),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) projectRuntimeVariableDeleteConfirmationCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewProjects)
+	card.Title = svc.t("menu.confirm.runtime_var_delete.title", nil)
+	card.Text = svc.t("menu.confirm.runtime_var_delete.text", map[string]any{"Variable": command.ID})
+	card.Fields = []MattermostCardField{{Title: svc.t("menu.entity.field.runtime_var", nil), Value: "`" + command.ID + "`", Short: false}}
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceAction(menuViewProjects, "runtimevardelete", menuActionDelete, menuResourceRuntimeVar, command.ID, "menu.action.confirm_delete", "menu.action.confirm_delete.tooltip", "danger", nil),
+		svc.menuResourceAction(menuViewProjects, "runtimevarcancel", menuActionShow, menuResourceRuntimeVar, command.ID, "menu.action.cancel", "menu.action.cancel.tooltip", "default", nil),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) deleteProjectRuntimeVariableFromMenu(ctx context.Context, command MenuActionCommand) string {
+	variableID, ok := parseInt64ID(command.ID)
+	if !ok {
+		return svc.t("menu.entity.invalid", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("project.storage_not_ready", nil)
+	}
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	variable, err := svc.cfg.Store.GetProjectRuntimeVariable(ctx, variableID)
+	if err != nil {
+		return svc.t("runtime_var.get.failed", map[string]any{"Error": safeError(err)})
+	}
+	if strings.TrimSpace(variable.SecretRef) != "" {
+		if _, err := svc.cfg.RuntimeRunner.DeleteProjectRuntimeVariableSecret(ctx, variable.SecretRef); err != nil {
+			return svc.t("runtime_var.secret_delete.failed", map[string]any{"Error": safeError(err)})
+		}
+	}
+	deleted, err := svc.cfg.Store.DeleteProjectRuntimeVariable(ctx, variableID)
+	if err != nil {
+		return svc.t("runtime_var.delete.failed", map[string]any{"Error": safeError(err)})
+	}
+	_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+		EventType:    "project.runtime_variable.deleted",
+		ActorUserID:  command.UserID,
+		ActorUser:    command.UserName,
+		ResourceType: "project_runtime_variable",
+		ResourceName: deleted.Name,
+		Summary:      "project runtime variable deleted from Mattermost entity card",
+	})
+	return svc.t("runtime_var.delete.result", map[string]any{"Name": deleted.Name, "Project": deleted.ProjectID})
 }
 
 func (svc *SlashCommandService) roleListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
@@ -316,6 +486,7 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 		card.Actions = svc.entityNavigationActions(menuViewRoles)
 		return card
 	}
+	runtimeVariables, _ := svc.cfg.Store.ListAgentRoleRuntimeVariables(ctx, role.ID)
 	card.Title = svc.t("menu.entity.role.card_title", map[string]any{"Role": role.Name})
 	card.Text = svc.t("menu.entity.role.card_text", map[string]any{"Role": role.Name})
 	card.Fields = []MattermostCardField{
@@ -328,6 +499,7 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 		{Title: svc.t("menu.entity.field.prompt_mode", nil), Value: "`" + defaultString(role.PromptMode, "raw") + "`", Short: true},
 		{Title: svc.t("menu.entity.field.kubernetes_access", nil), Value: "`" + defaultString(role.KubernetesAccess, "read-only") + "`", Short: true},
 		{Title: svc.t("menu.entity.field.sandbox", nil), Value: "`" + defaultString(role.SandboxMode, "danger-full-access") + "`", Short: true},
+		{Title: svc.t("menu.entity.field.runtime_vars", nil), Value: "`" + roleRuntimeVariableNames(runtimeVariables) + "`", Short: false},
 		{Title: svc.t("menu.entity.field.prompt", nil), Value: rolePromptLabel(svc, role), Short: true},
 		{Title: svc.t("menu.entity.field.codex_config", nil), Value: svc.settingsSummary(role.ConfigOverlay), Short: true},
 		{Title: svc.t("menu.entity.field.advanced_settings", nil), Value: svc.settingsSummary(role.AdvancedSettings), Short: true},
@@ -335,6 +507,8 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 	}
 	card.Actions = []MattermostCardAction{
 		svc.menuResourceDialogAction(menuViewRoles, "dialogroleedit", menuDialogAgentRoleUpsert, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.role_edit", "menu.action.role_edit.tooltip", "primary", nil),
+		svc.menuResourceDialogAction(menuViewRoles, "dialogroleruntimevarattach", menuDialogRoleRuntimeVarAttach, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.runtime_var_attach", "menu.action.runtime_var_attach.tooltip", "primary", nil),
+		svc.menuResourceDialogAction(menuViewRoles, "dialogroleruntimevardetach", menuDialogRoleRuntimeVarDetach, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.runtime_var_detach", "menu.action.runtime_var_detach.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewProjects, "openproject", menuActionShow, menuResourceProject, strconv.FormatInt(role.ProjectID, 10), "menu.action.project_open", "menu.action.project_open.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewRoles, "rolelist", menuActionList, menuResourceAgentRole, strconv.FormatInt(role.ProjectID, 10), "menu.action.role_list", "menu.action.role_list.tooltip", "default", nil),
 		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
@@ -582,6 +756,192 @@ func (svc *SlashCommandService) projectRepositoryBindDialog(ctx context.Context,
 			},
 		},
 		SubmitLabel: svc.t("dialog.project_repo.submit", nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) projectRuntimeVariableDialog(ctx context.Context, command MenuActionCommand) (*MattermostDialog, string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, svc.t("project.storage_not_ready", nil)
+	}
+	variable := entity.ProjectRuntimeVariable{
+		ProjectID: selectedProjectID(command),
+		SecretKey: "value",
+		Sensitive: true,
+		Enabled:   true,
+	}
+	titleID := "dialog.runtime_var.add.title"
+	introID := "dialog.runtime_var.add.intro"
+	submitID := "dialog.runtime_var.add.submit"
+	editMode := command.Resource == menuResourceRuntimeVar && strings.TrimSpace(command.ID) != ""
+	if editMode {
+		variableID, ok := parseInt64ID(command.ID)
+		if !ok {
+			return nil, svc.t("menu.entity.invalid", nil)
+		}
+		current, err := svc.cfg.Store.GetProjectRuntimeVariable(ctx, variableID)
+		if err != nil {
+			return nil, svc.t("runtime_var.get.failed", map[string]any{"Error": safeError(err)})
+		}
+		variable = current
+		titleID = "dialog.runtime_var.edit.title"
+		introID = "dialog.runtime_var.edit.intro"
+		submitID = "dialog.runtime_var.edit.submit"
+	}
+	projectOptions, errText := svc.projectOptions(ctx, variable.ProjectID)
+	if errText != "" {
+		return nil, errText
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackProjectRuntimeVar,
+		Title:            svc.t(titleID, nil),
+		IntroductionText: svc.t(introID, nil),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.project.field.project", nil),
+				Name:        dialogFieldProjectID,
+				Type:        "select",
+				Default:     selectedIDString(variable.ProjectID),
+				Options:     projectOptions,
+			},
+			{
+				DisplayName: svc.t("dialog.runtime_var.field.name", nil),
+				Name:        dialogFieldRuntimeVarName,
+				Type:        "text",
+				Default:     variable.Name,
+				Placeholder: "RADAR_AUTO_KUBECONFIG",
+				HelpText:    svc.t("dialog.runtime_var.field.name.help", nil),
+				MinLength:   2,
+				MaxLength:   128,
+			},
+			{
+				DisplayName: svc.t("dialog.runtime_var.field.value", nil),
+				Name:        dialogFieldRuntimeVarValue,
+				Type:        "textarea",
+				Placeholder: svc.t("dialog.runtime_var.field.value.placeholder", nil),
+				HelpText:    svc.t("dialog.runtime_var.field.value.help", nil),
+				Optional:    editMode,
+				MaxLength:   60000,
+			},
+			{
+				DisplayName: svc.t("dialog.runtime_var.field.sensitive", nil),
+				Name:        dialogFieldSensitive,
+				Type:        "select",
+				Default:     strconv.FormatBool(variable.Sensitive),
+				Options: []MattermostDialogOption{
+					{Text: svc.t("label.yes", nil), Value: "true"},
+					{Text: svc.t("label.no", nil), Value: "false"},
+				},
+			},
+			{
+				DisplayName: svc.t("dialog.runtime_var.field.enabled", nil),
+				Name:        dialogFieldEnabled,
+				Type:        "select",
+				Default:     strconv.FormatBool(variable.Enabled),
+				Options: []MattermostDialogOption{
+					{Text: svc.t("label.yes", nil), Value: "true"},
+					{Text: svc.t("label.no", nil), Value: "false"},
+				},
+			},
+			{
+				DisplayName: svc.t("dialog.runtime_var.field.description", nil),
+				Name:        dialogFieldDescription,
+				Type:        "textarea",
+				Default:     variable.Description,
+				HelpText:    svc.t("dialog.runtime_var.field.description.help", nil),
+				Optional:    true,
+				MaxLength:   1000,
+			},
+		},
+		SubmitLabel: svc.t(submitID, nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) roleRuntimeVariableAttachDialog(ctx context.Context, command MenuActionCommand) (*MattermostDialog, string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, svc.t("project.storage_not_ready", nil)
+	}
+	projectID, selectedRoleID, selectedVariableID, errText := svc.runtimeVariableSelectionDefaults(ctx, command)
+	if errText != "" {
+		return nil, errText
+	}
+	roleOptions, errText := svc.agentRoleOptions(ctx, projectID, true)
+	if errText != "" {
+		return nil, errText
+	}
+	variableOptions, errText := svc.projectRuntimeVariableOptions(ctx, projectID, selectedVariableID)
+	if errText != "" {
+		return nil, errText
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackRoleRuntimeVarAttach,
+		Title:            svc.t("dialog.role_runtime_var.attach.title", nil),
+		IntroductionText: svc.t("dialog.role_runtime_var.attach.intro", nil),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.role_runtime_var.field.role", nil),
+				Name:        dialogFieldRole,
+				Type:        "select",
+				Default:     selectedIDString(selectedRoleID),
+				Options:     roleOptions,
+			},
+			{
+				DisplayName: svc.t("dialog.role_runtime_var.field.variable", nil),
+				Name:        dialogFieldRuntimeVarID,
+				Type:        "select",
+				Default:     selectedIDString(selectedVariableID),
+				Options:     variableOptions,
+			},
+		},
+		SubmitLabel: svc.t("dialog.role_runtime_var.attach.submit", nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) roleRuntimeVariableDetachDialog(ctx context.Context, command MenuActionCommand) (*MattermostDialog, string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, svc.t("project.storage_not_ready", nil)
+	}
+	roleID, ok := parseInt64ID(command.ID)
+	if command.Resource != menuResourceAgentRole || !ok {
+		return nil, svc.t("dialog.role_runtime_var.detach_from_role_required", nil)
+	}
+	role, err := svc.cfg.Store.GetAgentRole(ctx, roleID)
+	if err != nil {
+		return nil, svc.t("agent_role.get.failed", map[string]any{"Error": safeError(err)})
+	}
+	roleOptions := []MattermostDialogOption{{
+		Text:  svc.t("dialog.role.option", map[string]any{"Role": role.Name, "Type": role.RoleType, "Project": role.ProjectID}),
+		Value: strconv.FormatInt(role.ID, 10),
+	}}
+	variableOptions, errText := svc.agentRoleRuntimeVariableOptions(ctx, role.ID)
+	if errText != "" {
+		return nil, errText
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackRoleRuntimeVarDetach,
+		Title:            svc.t("dialog.role_runtime_var.detach.title", nil),
+		IntroductionText: svc.t("dialog.role_runtime_var.detach.intro", nil),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.role_runtime_var.field.role", nil),
+				Name:        dialogFieldRole,
+				Type:        "select",
+				Default:     strconv.FormatInt(role.ID, 10),
+				Options:     roleOptions,
+			},
+			{
+				DisplayName: svc.t("dialog.role_runtime_var.field.variable", nil),
+				Name:        dialogFieldRuntimeVarID,
+				Type:        "select",
+				Options:     variableOptions,
+			},
+		},
+		SubmitLabel: svc.t("dialog.role_runtime_var.detach.submit", nil),
 		State:       encodeDialogState(command),
 	}, ""
 }
@@ -956,6 +1316,157 @@ func (svc *SlashCommandService) handleProjectRepositoryBindDialog(ctx context.Co
 	return DialogSubmissionResult{StatusCode: 200, Card: svc.dialogResultCard(ctx, state, command, text)}
 }
 
+func (svc *SlashCommandService) handleProjectRuntimeVariableDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	input, value, fieldErrors := svc.projectRuntimeVariableDialogInput(command.Submission)
+	editMode := state.ResourceType == menuResourceRuntimeVar && strings.TrimSpace(state.ResourceID) != ""
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.storage_not_ready", nil)}
+	}
+	if svc.cfg.RuntimeRunner == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime.not_configured", nil)}
+	}
+	project, err := svc.cfg.Store.GetProject(ctx, input.ProjectID)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldProjectID: svc.t("dialog.project.project_invalid", nil)}}
+	}
+	var current entity.ProjectRuntimeVariable
+	if editMode {
+		variableID, ok := parseInt64ID(state.ResourceID)
+		if !ok {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("menu.entity.invalid", nil)}
+		}
+		current, err = svc.cfg.Store.GetProjectRuntimeVariable(ctx, variableID)
+		if err != nil {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime_var.get.failed", map[string]any{"Error": safeError(err)})}
+		}
+		if input.ProjectID != current.ProjectID {
+			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldProjectID: svc.t("dialog.runtime_var.project_edit_not_supported", nil)}}
+		}
+		if input.Name != current.Name {
+			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRuntimeVarName: svc.t("dialog.runtime_var.name_edit_not_supported", nil)}}
+		}
+		input.Slug = current.Slug
+		input.SecretRef = current.SecretRef
+		input.SecretKey = current.SecretKey
+	}
+	if strings.TrimSpace(input.Slug) == "" {
+		input.Slug = runtimeVariableSlug(input.Name)
+	}
+	if strings.TrimSpace(input.SecretKey) == "" {
+		input.SecretKey = "value"
+	}
+	if strings.TrimSpace(input.SecretRef) == "" {
+		input.SecretRef = projectRuntimeVariableSecretName(project, input.Name)
+	}
+	if strings.TrimSpace(value) == "" && !editMode {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRuntimeVarValue: svc.t("dialog.runtime_var.value_required", nil)}}
+	}
+	secretCreated := false
+	if strings.TrimSpace(value) != "" {
+		secret, err := svc.cfg.RuntimeRunner.UpsertProjectRuntimeVariableSecret(ctx, runtimerepo.ProjectRuntimeVariableSecretInput{
+			ProjectSlug: project.Slug,
+			Variable: runtimerepo.RuntimeEnvVar{
+				Name:       input.Name,
+				SecretName: input.SecretRef,
+				SecretKey:  input.SecretKey,
+				Sensitive:  input.Sensitive,
+			},
+			Value: value,
+		})
+		if err != nil {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime_var.secret_save.failed", map[string]any{"Error": safeError(err)})}
+		}
+		input.SecretRef = secret.SecretName
+		secretCreated = secret.Created
+	}
+	variable, created, err := svc.cfg.Store.UpsertProjectRuntimeVariable(ctx, input)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime_var.save.failed", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordProjectAudit(ctx, mattermostDialogSlash(state, command), "project.runtime_variable.upserted", variable.Name, "project runtime variable upserted from Mattermost dialog")
+	stateID := "label.updated"
+	if created {
+		stateID = "label.created"
+	}
+	text := svc.t("runtime_var.save.result", map[string]any{
+		"State":         svc.t(stateID, nil),
+		"Name":          variable.Name,
+		"Project":       project.Name,
+		"Secret":        maskedSecretRef(variable.SecretRef, variable.SecretKey),
+		"Enabled":       variable.Enabled,
+		"SecretCreated": secretCreated,
+	})
+	card := svc.projectRuntimeVariableEntityCard(ctx, MenuActionCommand{View: menuViewProjects, ID: strconv.FormatInt(variable.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
+	card.Text = text + "\n\n" + card.Text
+	return DialogSubmissionResult{StatusCode: 200, Card: card}
+}
+
+func (svc *SlashCommandService) handleRoleRuntimeVariableAttachDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	roleID, variableID, fieldErrors := svc.roleRuntimeVariableDialogInput(command.Submission)
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.storage_not_ready", nil)}
+	}
+	role, err := svc.cfg.Store.GetAgentRole(ctx, roleID)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRole: svc.t("dialog.role_runtime_var.role_invalid", nil)}}
+	}
+	variable, err := svc.cfg.Store.GetProjectRuntimeVariable(ctx, variableID)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRuntimeVarID: svc.t("dialog.role_runtime_var.variable_invalid", nil)}}
+	}
+	if role.ProjectID != variable.ProjectID {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRuntimeVarID: svc.t("dialog.role_runtime_var.project_mismatch", nil)}}
+	}
+	binding, created, err := svc.cfg.Store.UpsertAgentRoleRuntimeVariable(ctx, adminrepo.UpsertAgentRoleRuntimeVariableInput{
+		RoleID:     role.ID,
+		VariableID: variable.ID,
+	})
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("role_runtime_var.attach.failed", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordProjectAudit(ctx, mattermostDialogSlash(state, command), "agent_role.runtime_variable.attached", role.Name+":"+variable.Name, "runtime variable attached to agent role from Mattermost dialog")
+	stateID := "label.updated"
+	if created {
+		stateID = "label.created"
+	}
+	text := svc.t("role_runtime_var.attach.result", map[string]any{
+		"State":    svc.t(stateID, nil),
+		"Role":     binding.RoleName,
+		"Variable": binding.Name,
+	})
+	card := svc.roleEntityCard(ctx, MenuActionCommand{View: menuViewRoles, ID: strconv.FormatInt(role.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
+	card.Text = text + "\n\n" + card.Text
+	return DialogSubmissionResult{StatusCode: 200, Card: card}
+}
+
+func (svc *SlashCommandService) handleRoleRuntimeVariableDetachDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	roleID, variableID, fieldErrors := svc.roleRuntimeVariableDialogInput(command.Submission)
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.storage_not_ready", nil)}
+	}
+	binding, err := svc.cfg.Store.DeleteAgentRoleRuntimeVariable(ctx, roleID, variableID)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("role_runtime_var.detach.failed", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordProjectAudit(ctx, mattermostDialogSlash(state, command), "agent_role.runtime_variable.detached", binding.RoleName+":"+binding.Name, "runtime variable detached from agent role from Mattermost dialog")
+	text := svc.t("role_runtime_var.detach.result", map[string]any{
+		"Role":     binding.RoleName,
+		"Variable": binding.Name,
+	})
+	card := svc.roleEntityCard(ctx, MenuActionCommand{View: menuViewRoles, ID: strconv.FormatInt(roleID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
+	card.Text = text + "\n\n" + card.Text
+	return DialogSubmissionResult{StatusCode: 200, Card: card}
+}
+
 func (svc *SlashCommandService) handleAgentRoleDialogUpsert(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
 	input, fieldErrors := svc.agentRoleDialogInput(command.Submission)
 	editMode := state.ResourceType == menuResourceAgentRole && strings.TrimSpace(state.ResourceID) != ""
@@ -1119,6 +1630,51 @@ func (svc *SlashCommandService) projectDialogInput(submission map[string]any) (a
 		Description:       strings.TrimSpace(submissionString(submission, dialogFieldDescription)),
 		AdvancedSettings:  advanced,
 	}, nil
+}
+
+func (svc *SlashCommandService) projectRuntimeVariableDialogInput(submission map[string]any) (adminrepo.UpsertProjectRuntimeVariableInput, string, map[string]string) {
+	fieldErrors := map[string]string{}
+	projectID, ok := parseInt64ID(submissionString(submission, dialogFieldProjectID))
+	if !ok {
+		fieldErrors[dialogFieldProjectID] = svc.t("dialog.project.project_invalid", nil)
+	}
+	name := strings.ToUpper(strings.TrimSpace(submissionString(submission, dialogFieldRuntimeVarName)))
+	if !validRuntimeVariableName(name) {
+		fieldErrors[dialogFieldRuntimeVarName] = svc.t("dialog.runtime_var.name_invalid", nil)
+	}
+	enabled, ok := parseSubmittedBool(submissionString(submission, dialogFieldEnabled), true)
+	if !ok {
+		fieldErrors[dialogFieldEnabled] = svc.t("dialog.runtime_var.enabled_invalid", nil)
+	}
+	sensitive, ok := parseSubmittedBool(submissionString(submission, dialogFieldSensitive), true)
+	if !ok {
+		fieldErrors[dialogFieldSensitive] = svc.t("dialog.runtime_var.sensitive_invalid", nil)
+	}
+	if len(fieldErrors) > 0 {
+		return adminrepo.UpsertProjectRuntimeVariableInput{}, "", fieldErrors
+	}
+	return adminrepo.UpsertProjectRuntimeVariableInput{
+		ProjectID:   projectID,
+		Name:        name,
+		Slug:        runtimeVariableSlug(name),
+		Description: strings.TrimSpace(submissionString(submission, dialogFieldDescription)),
+		SecretKey:   "value",
+		Sensitive:   sensitive,
+		Enabled:     enabled,
+	}, submissionString(submission, dialogFieldRuntimeVarValue), nil
+}
+
+func (svc *SlashCommandService) roleRuntimeVariableDialogInput(submission map[string]any) (int64, int64, map[string]string) {
+	fieldErrors := map[string]string{}
+	roleID, ok := parseInt64ID(submissionString(submission, dialogFieldRole))
+	if !ok {
+		fieldErrors[dialogFieldRole] = svc.t("dialog.role_runtime_var.role_invalid", nil)
+	}
+	variableID, ok := parseInt64ID(submissionString(submission, dialogFieldRuntimeVarID))
+	if !ok {
+		fieldErrors[dialogFieldRuntimeVarID] = svc.t("dialog.role_runtime_var.variable_invalid", nil)
+	}
+	return roleID, variableID, fieldErrors
 }
 
 func (svc *SlashCommandService) agentRoleDialogInput(submission map[string]any) (adminrepo.UpsertAgentRoleInput, map[string]string) {
@@ -1294,6 +1850,81 @@ func (svc *SlashCommandService) projectRepositoryOptions(ctx context.Context, pr
 	return options, ""
 }
 
+func (svc *SlashCommandService) projectRuntimeVariableOptions(ctx context.Context, projectID int64, selected int64) ([]MattermostDialogOption, string) {
+	if projectID <= 0 {
+		return nil, svc.t("dialog.project.project_invalid", nil)
+	}
+	variables, err := svc.cfg.Store.ListProjectRuntimeVariables(ctx, projectID)
+	if err != nil {
+		return nil, svc.t("runtime_var.list.failed", map[string]any{"Error": safeError(err)})
+	}
+	options := make([]MattermostDialogOption, 0, len(variables))
+	for _, variable := range variables {
+		options = append(options, MattermostDialogOption{
+			Text:  svc.t("dialog.runtime_var.option", map[string]any{"Name": variable.Name, "Enabled": variable.Enabled}),
+			Value: strconv.FormatInt(variable.ID, 10),
+		})
+	}
+	if len(options) == 0 {
+		return nil, svc.t("runtime_var.list.empty", map[string]any{"Project": projectID})
+	}
+	return ensureDialogOption(options, selectedIDString(selected)), ""
+}
+
+func (svc *SlashCommandService) agentRoleRuntimeVariableOptions(ctx context.Context, roleID int64) ([]MattermostDialogOption, string) {
+	if roleID <= 0 {
+		return nil, svc.t("dialog.role_runtime_var.role_invalid", nil)
+	}
+	variables, err := svc.cfg.Store.ListAgentRoleRuntimeVariables(ctx, roleID)
+	if err != nil {
+		return nil, svc.t("role_runtime_var.list.failed", map[string]any{"Error": safeError(err)})
+	}
+	options := make([]MattermostDialogOption, 0, len(variables))
+	for _, variable := range variables {
+		options = append(options, MattermostDialogOption{
+			Text:  svc.t("dialog.runtime_var.option", map[string]any{"Name": variable.Name, "Enabled": variable.Enabled}),
+			Value: strconv.FormatInt(variable.VariableID, 10),
+		})
+	}
+	if len(options) == 0 {
+		return nil, svc.t("role_runtime_var.list.empty", nil)
+	}
+	return options, ""
+}
+
+func (svc *SlashCommandService) runtimeVariableSelectionDefaults(ctx context.Context, command MenuActionCommand) (int64, int64, int64, string) {
+	switch command.Resource {
+	case menuResourceProject:
+		projectID, ok := parseInt64ID(command.ID)
+		if !ok {
+			return 0, 0, 0, svc.t("dialog.project.project_invalid", nil)
+		}
+		return projectID, 0, 0, ""
+	case menuResourceAgentRole:
+		roleID, ok := parseInt64ID(command.ID)
+		if !ok {
+			return 0, 0, 0, svc.t("dialog.role_runtime_var.role_invalid", nil)
+		}
+		role, err := svc.cfg.Store.GetAgentRole(ctx, roleID)
+		if err != nil {
+			return 0, 0, 0, svc.t("agent_role.get.failed", map[string]any{"Error": safeError(err)})
+		}
+		return role.ProjectID, role.ID, 0, ""
+	case menuResourceRuntimeVar:
+		variableID, ok := parseInt64ID(command.ID)
+		if !ok {
+			return 0, 0, 0, svc.t("dialog.role_runtime_var.variable_invalid", nil)
+		}
+		variable, err := svc.cfg.Store.GetProjectRuntimeVariable(ctx, variableID)
+		if err != nil {
+			return 0, 0, 0, svc.t("runtime_var.get.failed", map[string]any{"Error": safeError(err)})
+		}
+		return variable.ProjectID, 0, variable.ID, ""
+	default:
+		return 0, 0, 0, svc.t("dialog.project.project_invalid", nil)
+	}
+}
+
 func projectGitHubSummary(project entity.Project) string {
 	owner := strings.TrimSpace(project.GitHubOwner)
 	account := strings.TrimSpace(project.GitHubAccountName)
@@ -1307,6 +1938,84 @@ func projectGitHubSummary(project entity.Project) string {
 		return owner
 	}
 	return owner + " via " + account
+}
+
+func roleRuntimeVariableNames(variables []entity.AgentRoleRuntimeVariableBinding) string {
+	if len(variables) == 0 {
+		return "-"
+	}
+	names := make([]string, 0, len(variables))
+	for _, variable := range variables {
+		if !variable.Enabled {
+			names = append(names, variable.Name+" (disabled)")
+			continue
+		}
+		names = append(names, variable.Name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
+}
+
+func runtimeVariableSlug(name string) string {
+	return slugifyName(strings.ReplaceAll(name, "_", "-"), "runtime-var")
+}
+
+func projectRuntimeVariableSecretName(project entity.Project, name string) string {
+	base := "mc-var-" + slugifyName(project.Slug, "project") + "-" + runtimeVariableSlug(name)
+	if len(base) <= 63 {
+		return base
+	}
+	sum := sha1.Sum([]byte(project.Slug + ":" + name))
+	suffix := hex.EncodeToString(sum[:4])
+	maxPrefix := 63 - len(suffix) - 1
+	prefix := strings.TrimRight(base[:maxPrefix], "-")
+	if prefix == "" {
+		prefix = "mc-var"
+	}
+	return prefix + "-" + suffix
+}
+
+func maskedSecretRef(secretRef string, secretKey string) string {
+	secretRef = strings.TrimSpace(secretRef)
+	secretKey = defaultString(secretKey, "value")
+	if secretRef == "" {
+		return "-"
+	}
+	return secretRef + ":" + secretKey
+}
+
+func validRuntimeVariableName(value string) bool {
+	if len(value) < 2 || len(value) > 128 || value[0] < 'A' || value[0] > 'Z' {
+		return false
+	}
+	for _, char := range value[1:] {
+		if char >= 'A' && char <= 'Z' {
+			continue
+		}
+		if char >= '0' && char <= '9' {
+			continue
+		}
+		if char == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func parseSubmittedBool(value string, fallback bool) (bool, bool) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return fallback, true
+	}
+	switch value {
+	case "true", "yes", "1":
+		return true, true
+	case "false", "no", "0":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func (svc *SlashCommandService) agentRoleOptions(ctx context.Context, projectID int64, requireOne bool) ([]MattermostDialogOption, string) {

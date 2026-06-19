@@ -97,12 +97,13 @@ type promptTemplateData struct {
 }
 
 type RolePromptInput struct {
-	Project      entity.Project
-	Role         entity.AgentRole
-	Chat         entity.Chat
-	Repositories []entity.ProjectRepository
-	UserMessage  string
-	Locale       promptTemplateLocaleData
+	Project          entity.Project
+	Role             entity.AgentRole
+	Chat             entity.Chat
+	Repositories     []entity.ProjectRepository
+	RuntimeVariables []entity.ProjectRuntimeVariable
+	UserMessage      string
+	Locale           promptTemplateLocaleData
 }
 
 type rolePromptProjectData struct {
@@ -238,7 +239,7 @@ func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
 	}
 	body.WriteString("- Mattermost MCP is available for bounded thread/chat reads and progress updates when needed.\n")
 	appendRuntimeToolsMarkdown(&body)
-	appendSecretBindingsMarkdown(&body)
+	appendSecretBindingsMarkdown(&body, roleSecretBindings(input.RuntimeVariables))
 	if strings.TrimSpace(input.Locale.Language) != "" {
 		body.WriteString("- Response language: ")
 		body.WriteString(input.Locale.Language)
@@ -312,7 +313,7 @@ func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 	body.WriteString("- GitHub CLI: use `gh` when the role has a GitHub account. Token/user/email are exposed through GH_TOKEN, GITHUB_TOKEN, GITHUB_USERNAME/GITHUB_USER and GITHUB_EMAIL.\n")
 	body.WriteString("- Mattermost MCP: use `mattermost_get_thread` to read this thread, `mattermost_search_chat` for small bounded channel searches, `mattermost_post_thread_update` for progress updates, and `mattermost_request_agent` only when the user or role prompt allows delegating to another agent.\n")
 	appendRuntimeToolsMarkdown(&body)
-	appendSecretBindingsMarkdown(&body)
+	appendSecretBindingsMarkdown(&body, roleSecretBindings(input.RuntimeVariables))
 	if strings.TrimSpace(input.Locale.Language) != "" {
 		body.WriteString("- Response language: ")
 		body.WriteString(input.Locale.Language)
@@ -384,7 +385,7 @@ func rolePromptTemplateData(input RolePromptInput) rolePromptData {
 		Repositories: repositories,
 		Task:         rolePromptTaskData{Body: strings.TrimSpace(input.UserMessage)},
 		Tools:        agentRuntimeTools(),
-		Secrets:      agentSecretBindings(),
+		Secrets:      roleSecretBindings(input.RuntimeVariables),
 		Locale:       locale,
 	}
 }
@@ -509,7 +510,7 @@ func samplePromptTemplateData(profileName string, templateKey string, locale pro
 			EmailEnv:    "GITHUB_EMAIL",
 		},
 		Tools:   agentRuntimeTools(),
-		Secrets: agentSecretBindings(),
+		Secrets: roleSecretBindings(nil),
 		Locale:  locale,
 	}
 	if templateKey == reviewPRTemplateKey {
@@ -535,7 +536,7 @@ func withPromptTemplateDefaults(data promptTemplateData) promptTemplateData {
 		data.Tools = agentRuntimeTools()
 	}
 	if len(data.Secrets) == 0 {
-		data.Secrets = agentSecretBindings()
+		data.Secrets = roleSecretBindings(nil)
 	}
 	return data
 }
@@ -614,7 +615,7 @@ func agentSecretBindings() []promptTemplateSecretBindingData {
 			Env:          "KUBERNETES_SERVICE_HOST, KUBERNETES_SERVICE_PORT, KUBERNETES_PORT",
 			File:         "/var/run/secrets/kubernetes.io/serviceaccount/token, /var/run/secrets/kubernetes.io/serviceaccount/ca.crt, /var/run/secrets/kubernetes.io/serviceaccount/namespace",
 			Availability: "developer, reviewer, chat and session agent pods",
-			Purpose:      "allow kubectl to use the pod service account according to Kubernetes RBAC",
+			Purpose:      "access the MatterCodex and agent runtime Kubernetes cluster only when the user prompt or repository instructions explicitly allow it",
 		},
 		{
 			Name:         "Mattermost MCP session",
@@ -625,6 +626,27 @@ func agentSecretBindings() []promptTemplateSecretBindingData {
 			Purpose:      "let Codex call Mattermost MCP tools for bounded thread reads and progress updates",
 		},
 	}
+}
+
+func roleSecretBindings(runtimeVariables []entity.ProjectRuntimeVariable) []promptTemplateSecretBindingData {
+	bindings := agentSecretBindings()
+	for _, variable := range runtimeVariables {
+		if !variable.Enabled || strings.TrimSpace(variable.Name) == "" {
+			continue
+		}
+		description := strings.TrimSpace(variable.Description)
+		if description == "" {
+			description = "project-level runtime variable explicitly attached to this role"
+		}
+		bindings = append(bindings, promptTemplateSecretBindingData{
+			Name:         "Project env " + variable.Name,
+			Kind:         "Kubernetes Secret env binding",
+			Env:          variable.Name,
+			Availability: "only for roles explicitly bound to this project variable",
+			Purpose:      description,
+		})
+	}
+	return bindings
 }
 
 func appendRuntimeToolsMarkdown(body *strings.Builder) {
@@ -643,18 +665,22 @@ func appendRuntimeToolsMarkdown(body *strings.Builder) {
 	}
 }
 
-func appendSecretBindingsMarkdown(body *strings.Builder) {
+func appendSecretBindingsMarkdown(body *strings.Builder, bindings []promptTemplateSecretBindingData) {
 	body.WriteString("- Available credential bindings:\n")
-	for _, binding := range agentSecretBindings() {
+	for _, binding := range bindings {
 		body.WriteString("  - ")
 		body.WriteString(binding.Name)
 		body.WriteString(" (")
 		body.WriteString(binding.Availability)
 		body.WriteString("): env `")
 		body.WriteString(binding.Env)
-		body.WriteString("`; files `")
-		body.WriteString(binding.File)
-		body.WriteString("`. ")
+		body.WriteString("`")
+		if strings.TrimSpace(binding.File) != "" {
+			body.WriteString("; files `")
+			body.WriteString(binding.File)
+			body.WriteString("`")
+		}
+		body.WriteString(". ")
 		body.WriteString(binding.Purpose)
 		body.WriteString(".\n")
 	}

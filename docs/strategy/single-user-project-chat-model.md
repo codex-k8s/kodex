@@ -48,6 +48,7 @@ Role хранит:
 - prompt mode;
 - optional GitHub/OpenAI account bindings;
 - Kubernetes access mode;
+- список project runtime env variables, явно доступных этой role;
 - Codex sandbox mode;
 - Codex `config.toml` overlay;
 - advanced settings JSON;
@@ -89,6 +90,22 @@ OpenAI accounts остаются Codex device-code accounts. В role выбир�
 
 Основной happy path: открыть project dashboard, указать GitHub owner и platform account, подключить repositories из этого owner через branch selection, затем в thread выбрать нужный repository или `No repository`. Глобальный `Repositories` раздел остается fallback/advanced path, где owner может выбрать GitHub account вручную.
 
+## Project Runtime Env Variables
+
+У project есть список runtime env variables для внешних credentials и окружений проекта. Это нужно для случаев, когда workload проекта живет не в том же Kubernetes cluster, где запущены MatterCodex, Mattermost и agent pods.
+
+Модель:
+
+- owner создает project runtime variable из project dashboard;
+- имя переменной задается как обычное env name, например `RADAR_AUTO_KUBECONFIG` или `STAGING_DB_URL`;
+- Kubernetes Secret name генерируется системой из project slug и env name;
+- value сохраняется только в Kubernetes Secret и не рендерится в карточки, prompt или логи;
+- description хранится в БД и рендерится в prompt, чтобы агент понимал назначение переменной;
+- role получает variable только через явную binding-кнопку;
+- agent pod получает env только для variables, привязанных к этой role.
+
+Kubernetes access mode роли (`read-only` / `cluster-admin`) относится к MatterCodex/agent runtime cluster, то есть к кластеру, где запущены Mattermost, bot-service и agent pods. Этот доступ агент использует только если это прямо сказано в prompt, `AGENTS.md` или связанных инструкциях репозитория. Для других кластеров, например `radar-auto`, owner должен создать отдельную project runtime variable с kubeconfig/token/endpoint и явно выдать ее нужной role.
+
 ## Advanced Settings
 
 Расширенные Codex/runtime/provider settings сохраняются, но убираются из first-run UX:
@@ -102,6 +119,6 @@ OpenAI accounts остаются Codex device-code accounts. В role выбир�
 
 ## Product Boundary For Current PR
 
-Текущий PR фиксирует project-level GitHub owner, ограничивает repository onboarding этим owner, добавляет thread-level repository context и передает optional repository в session runner. Это foundation для работы над несколькими repositories одного проекта без превращения project в один repository.
+Текущий PR фиксирует project runtime env variables и role-level bindings. Это foundation для безопасной передачи агентам внешних cluster/database/API credentials без смешивания их с системным Kubernetes access MatterCodex runtime.
 
 Не считается готовым доработкой, если новая owner-facing операция требует помнить внутренний id. Существующие typed commands остаются только fallback/debug path.

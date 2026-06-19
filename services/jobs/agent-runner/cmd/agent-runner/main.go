@@ -696,19 +696,20 @@ func (r *runner) writeReviewFallbackBody(runID string, prNumber string, failedFl
 }
 
 func writeCodexConfig(path string) error {
-	body := `sandbox_mode = "danger-full-access"
+	allowlist := codexShellEnvironmentAllowlist()
+	body := fmt.Sprintf(`sandbox_mode = "danger-full-access"
 approval_policy = "never"
 disable_response_storage = false
 
 [shell_environment_policy]
 inherit = "none"
-include_only = ["PATH", "HOME", "CODEX_HOME", "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_USERNAME", "GITHUB_USER", "GITHUB_EMAIL", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GIT_ASKPASS", "GIT_TERMINAL_PROMPT", "MATTERCODEX_GITHUB_TOKEN_FILE", "KUBECONFIG", "KUBERNETES_SERVICE_HOST", "KUBERNETES_SERVICE_PORT", "KUBERNETES_PORT", "KUBERNETES_PORT_443_TCP", "KUBERNETES_PORT_443_TCP_ADDR", "KUBERNETES_PORT_443_TCP_PORT", "KUBERNETES_PORT_443_TCP_PROTO"]
+include_only = %s
 
 [mcp_servers.context7]
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
 startup_timeout_sec = 20
-`
+`, tomlStringList(allowlist))
 	if mcpURL := strings.TrimSpace(os.Getenv("MATTERCODEX_MCP_URL")); mcpURL != "" {
 		body += fmt.Sprintf(`
 [mcp_servers.mattercodex]
@@ -723,6 +724,78 @@ required = true
 		body += "\n# matter-codex role config overlay\n" + overlay + "\n"
 	}
 	return os.WriteFile(path, []byte(body), 0o600)
+}
+
+func codexShellEnvironmentAllowlist() []string {
+	values := []string{
+		"PATH",
+		"HOME",
+		"CODEX_HOME",
+		"GH_TOKEN",
+		"GITHUB_TOKEN",
+		"GITHUB_USERNAME",
+		"GITHUB_USER",
+		"GITHUB_EMAIL",
+		"GIT_AUTHOR_NAME",
+		"GIT_AUTHOR_EMAIL",
+		"GIT_COMMITTER_NAME",
+		"GIT_COMMITTER_EMAIL",
+		"GIT_ASKPASS",
+		"GIT_TERMINAL_PROMPT",
+		"MATTERCODEX_GITHUB_TOKEN_FILE",
+		"MATTERCODEX_MCP_TOKEN",
+		"KUBECONFIG",
+		"KUBERNETES_SERVICE_HOST",
+		"KUBERNETES_SERVICE_PORT",
+		"KUBERNETES_PORT",
+		"KUBERNETES_PORT_443_TCP",
+		"KUBERNETES_PORT_443_TCP_ADDR",
+		"KUBERNETES_PORT_443_TCP_PORT",
+		"KUBERNETES_PORT_443_TCP_PROTO",
+	}
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		seen[value] = struct{}{}
+	}
+	for _, raw := range strings.Split(os.Getenv("MATTERCODEX_RUNTIME_ENV_ALLOWLIST"), ",") {
+		name := strings.TrimSpace(raw)
+		if name == "" || !validRuntimeEnvName(name) {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		values = append(values, name)
+	}
+	return values
+}
+
+func validRuntimeEnvName(value string) bool {
+	if len(value) < 2 || len(value) > 128 || value[0] < 'A' || value[0] > 'Z' {
+		return false
+	}
+	for _, char := range value[1:] {
+		if char >= 'A' && char <= 'Z' {
+			continue
+		}
+		if char >= '0' && char <= '9' {
+			continue
+		}
+		if char == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func tomlStringList(values []string) string {
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, `"`+escapeTOMLString(value)+`"`)
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 func escapeTOMLString(value string) string {
