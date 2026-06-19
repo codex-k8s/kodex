@@ -865,11 +865,19 @@ func (store *fakeRouterAdminStore) CreateAgentSessionTurn(context.Context, admin
 	return entity.AgentSessionTurn{}, nil
 }
 
+func (store *fakeRouterAdminStore) GetAgentSessionTurn(context.Context, int64) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
 func (store *fakeRouterAdminStore) ClaimNextAgentSessionTurn(context.Context, string) (entity.AgentSessionTurn, error) {
 	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
 }
 
 func (store *fakeRouterAdminStore) CompleteAgentSessionTurn(context.Context, adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, nil
+}
+
+func (store *fakeRouterAdminStore) UpdateAgentSessionTurnStatusPost(context.Context, adminrepo.UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error) {
 	return entity.AgentSessionTurn{}, nil
 }
 

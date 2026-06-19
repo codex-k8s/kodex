@@ -153,6 +153,16 @@ func (surface *ControlSurface) PostThreadMessageWithToken(ctx context.Context, t
 	return createThreadPost(ctx, client, input)
 }
 
+func (surface *ControlSurface) UpdateThreadMessage(ctx context.Context, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
+	return updateThreadPost(ctx, surface.client, input)
+}
+
+func (surface *ControlSurface) UpdateThreadMessageWithToken(ctx context.Context, token string, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
+	client := mattermostmodel.NewAPIv4Client(surface.client.URL)
+	client.SetToken(token)
+	return updateThreadPost(ctx, client, input)
+}
+
 func (surface *ControlSurface) PostThreadCard(ctx context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
 	post := flowCardPost(card)
 	post.RootId = card.RootPostID
@@ -226,6 +236,19 @@ func createThreadPost(ctx context.Context, client *mattermostmodel.Client4, inpu
 	})
 	if err != nil {
 		return statusservice.MattermostPostRef{}, fmt.Errorf("create Mattermost thread post: %w", err)
+	}
+	return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
+}
+
+func updateThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
+	post, _, err := client.UpdatePost(ctx, input.PostID, &mattermostmodel.Post{
+		Id:        input.PostID,
+		ChannelId: input.ChannelID,
+		RootId:    input.RootPostID,
+		Message:   input.Message,
+	})
+	if err != nil {
+		return statusservice.MattermostPostRef{}, fmt.Errorf("update Mattermost thread post: %w", err)
 	}
 	return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
 }

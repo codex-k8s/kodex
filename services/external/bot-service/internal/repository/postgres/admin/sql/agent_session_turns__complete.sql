@@ -13,6 +13,7 @@ returning
 	mattermost_channel_id,
 	mattermost_root_post_id,
 	mattermost_post_id,
+	mattermost_status_post_id,
 	user_id,
 	user_name,
 	message,

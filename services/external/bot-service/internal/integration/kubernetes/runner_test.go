@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -306,8 +307,8 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	if got := podSpec.Containers[0].Image; got != "matter-codex-agent-runner:test" {
 		t.Fatalf("runner image = %q", got)
 	}
-	if got := podSpec.Containers[0].Command[0]; got != "matter-codex-agent-runner" {
-		t.Fatalf("command = %q", got)
+	if got := podSpec.Containers[0].Command; !slices.Equal(got, runnerCommand()) {
+		t.Fatalf("command = %#v", got)
 	}
 	if got := podSpec.Containers[0].Args[0]; got != "developer" {
 		t.Fatalf("args = %q", got)
@@ -382,8 +383,8 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 	if got := podSpec.Containers[0].Image; got != "matter-codex-agent-runner:test" {
 		t.Fatalf("runner image = %q", got)
 	}
-	if got := podSpec.Containers[0].Command[0]; got != "matter-codex-agent-runner" {
-		t.Fatalf("command = %q", got)
+	if got := podSpec.Containers[0].Command; !slices.Equal(got, runnerCommand()) {
+		t.Fatalf("command = %#v", got)
 	}
 	if got := podSpec.Containers[0].Args[0]; got != "reviewer" {
 		t.Fatalf("args = %q", got)

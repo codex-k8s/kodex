@@ -45,6 +45,8 @@ const (
 	runnerHomePath        = "/home/matter-codex"
 	runnerTmpPath         = "/tmp"
 	runtimeEnvAllowlist   = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
+	runnerInitPath        = "/sbin/tini"
+	runnerBinaryName      = "matter-codex-agent-runner"
 	runnerUID             = int64(10001)
 	runnerGID             = int64(10001)
 )
@@ -81,6 +83,10 @@ type Runner struct {
 	agentRunnerServiceAccount string
 	codexAuthSecretName       string
 	gitHubSecretName          string
+}
+
+func runnerCommand() []string {
+	return []string{runnerInitPath, "--", runnerBinaryName}
 }
 
 var _ runtimerepo.Runner = (*Runner)(nil)
@@ -1088,7 +1094,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 						{
 							Name:            "runner",
 							Image:           runner.agentRunnerImage,
-							Command:         []string{"matter-codex-agent-runner"},
+							Command:         runnerCommand(),
 							Args:            []string{"smoke"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
@@ -1142,7 +1148,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 						{
 							Name:            "runner",
 							Image:           runner.agentRunnerImage,
-							Command:         []string{"matter-codex-agent-runner"},
+							Command:         runnerCommand(),
 							Args:            []string{"developer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
@@ -1243,7 +1249,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 						{
 							Name:            "runner",
 							Image:           runner.agentRunnerImage,
-							Command:         []string{"matter-codex-agent-runner"},
+							Command:         runnerCommand(),
 							Args:            []string{"reviewer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
@@ -1401,7 +1407,7 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 						{
 							Name:            "runner",
 							Image:           runner.agentRunnerImage,
-							Command:         []string{"matter-codex-agent-runner"},
+							Command:         runnerCommand(),
 							Args:            []string{"chat"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
@@ -1530,7 +1536,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 				{
 					Name:            "runner",
 					Image:           runner.agentRunnerImage,
-					Command:         []string{"matter-codex-agent-runner"},
+					Command:         runnerCommand(),
 					Args:            []string{"session"},
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					SecurityContext: runnerContainerSecurityContext(),
@@ -1565,7 +1571,7 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 						{
 							Name:            "runner",
 							Image:           runner.agentRunnerImage,
-							Command:         []string{"matter-codex-agent-runner"},
+							Command:         runnerCommand(),
 							Args:            []string{"codex-auth"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
@@ -1614,7 +1620,7 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 						{
 							Name:            "runner",
 							Image:           runner.agentRunnerImage,
-							Command:         []string{"matter-codex-agent-runner"},
+							Command:         runnerCommand(),
 							Args:            []string{"codex-auth-secret-check"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),

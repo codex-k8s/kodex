@@ -43,6 +43,13 @@ type MattermostThreadPostInput struct {
 	Message    string
 }
 
+type MattermostThreadUpdateInput struct {
+	ChannelID  string
+	RootPostID string
+	PostID     string
+	Message    string
+}
+
 type MattermostPostRef struct {
 	ChannelID string
 	PostID    string
@@ -51,6 +58,8 @@ type MattermostPostRef struct {
 type MattermostThreadPublisher interface {
 	PostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error)
 	PostThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadPostInput) (MattermostPostRef, error)
+	UpdateThreadMessage(ctx context.Context, input MattermostThreadUpdateInput) (MattermostPostRef, error)
+	UpdateThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadUpdateInput) (MattermostPostRef, error)
 	PostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
 }
 

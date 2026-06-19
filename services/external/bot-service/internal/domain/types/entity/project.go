@@ -190,21 +190,22 @@ type AgentSession struct {
 }
 
 type AgentSessionTurn struct {
-	ID                   int64
-	SessionID            int64
-	RunID                string
-	MattermostChannelID  string
-	MattermostRootPostID string
-	MattermostPostID     string
-	UserID               string
-	UserName             string
-	Message              string
-	Status               string
-	FinalMessage         string
-	ErrorMessage         string
-	Artifacts            string
-	CreatedAt            time.Time
-	StartedAt            time.Time
-	FinishedAt           time.Time
-	UpdatedAt            time.Time
+	ID                     int64
+	SessionID              int64
+	RunID                  string
+	MattermostChannelID    string
+	MattermostRootPostID   string
+	MattermostPostID       string
+	MattermostStatusPostID string
+	UserID                 string
+	UserName               string
+	Message                string
+	Status                 string
+	FinalMessage           string
+	ErrorMessage           string
+	Artifacts              string
+	CreatedAt              time.Time
+	StartedAt              time.Time
+	FinishedAt             time.Time
+	UpdatedAt              time.Time
 }

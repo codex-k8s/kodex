@@ -699,6 +699,11 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing credential binding %q: %q", expected, prompt)
 		}
 	}
+	for _, expected := range []string{"mattermost_update_turn_status", "--body-file", "Do not inline Markdown"} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
+		}
+	}
 	for _, expected := range []string{"RADAR_AUTO_KUBECONFIG", "kubeconfig for the external radar-auto cluster"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime variable %q: %q", expected, prompt)
@@ -737,6 +742,8 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 		"GitHub account=GH_TOKEN",
 		"Kubernetes service account=KUBERNETES_SERVICE_HOST",
 		"Project env STAGING_DB_URL=STAGING_DB_URL",
+		"mattermost_update_turn_status",
+		"--body-file",
 	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing %q: %q", expected, prompt)
@@ -4348,6 +4355,15 @@ func (store *fakeAdminStore) CreateAgentSessionTurn(_ context.Context, input adm
 	return turn, nil
 }
 
+func (store *fakeAdminStore) GetAgentSessionTurn(_ context.Context, id int64) (entity.AgentSessionTurn, error) {
+	for _, turn := range store.sessionTurns {
+		if turn.ID == id {
+			return turn, nil
+		}
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
 func (store *fakeAdminStore) ClaimNextAgentSessionTurn(_ context.Context, sessionKey string) (entity.AgentSessionTurn, error) {
 	session, err := store.GetAgentSession(context.Background(), sessionKey)
 	if err != nil {
@@ -4356,6 +4372,17 @@ func (store *fakeAdminStore) ClaimNextAgentSessionTurn(_ context.Context, sessio
 	for index, turn := range store.sessionTurns {
 		if turn.SessionID == session.ID && turn.Status == agentSessionTurnQueued {
 			turn.Status = agentSessionTurnRunning
+			store.sessionTurns[index] = turn
+			return turn, nil
+		}
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) UpdateAgentSessionTurnStatusPost(_ context.Context, input adminrepo.UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error) {
+	for index, turn := range store.sessionTurns {
+		if turn.ID == input.TurnID {
+			turn.MattermostStatusPostID = input.StatusPostID
 			store.sessionTurns[index] = turn
 			return turn, nil
 		}

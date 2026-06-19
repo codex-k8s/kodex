@@ -527,6 +527,17 @@ func (repo *Repository) CreateAgentSessionTurn(ctx context.Context, input adminr
 	return item, nil
 }
 
+func (repo *Repository) GetAgentSessionTurn(ctx context.Context, id int64) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__get.sql"), id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSessionTurn{}, fmt.Errorf("get agent session turn: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) ClaimNextAgentSessionTurn(ctx context.Context, sessionKey string) (entity.AgentSessionTurn, error) {
 	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__claim_next.sql"), sessionKey))
 	if err != nil {
@@ -548,6 +559,17 @@ func (repo *Repository) CompleteAgentSessionTurn(ctx context.Context, input admi
 	))
 	if err != nil {
 		return entity.AgentSessionTurn{}, fmt.Errorf("complete agent session turn: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) UpdateAgentSessionTurnStatusPost(ctx context.Context, input adminrepo.UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__update_status_post.sql"),
+		input.TurnID,
+		input.StatusPostID,
+	))
+	if err != nil {
+		return entity.AgentSessionTurn{}, fmt.Errorf("update agent session turn status post: %w", err)
 	}
 	return item, nil
 }
@@ -996,6 +1018,7 @@ func scanAgentSessionTurn(row pgx.Row) (entity.AgentSessionTurn, error) {
 		&item.MattermostChannelID,
 		&item.MattermostRootPostID,
 		&item.MattermostPostID,
+		&item.MattermostStatusPostID,
 		&item.UserID,
 		&item.UserName,
 		&item.Message,

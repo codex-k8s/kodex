@@ -93,6 +93,7 @@ RUN apk add --no-cache \
 		redis \
 		ripgrep \
 		tar \
+		tini \
 		tree \
 	&& ln -sf /usr/local/go/bin/go /usr/local/bin/go \
 	&& ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
@@ -184,4 +185,4 @@ ENV HOME=/home/matter-codex \
 
 USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}
 
-ENTRYPOINT ["/usr/local/bin/matter-codex-agent-runner"]
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/matter-codex-agent-runner"]
