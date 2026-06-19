@@ -100,6 +100,39 @@ func TestKubernetesJobWorkerReportsBuildStepKey(t *testing.T) {
 	}
 }
 
+func TestKubernetesJobWorkerReportsDeployStepKey(t *testing.T) {
+	t.Parallel()
+
+	job := entity.Job{
+		Base:    entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000110"), Version: 2},
+		JobType: enum.JobTypeDeploy,
+		Status:  enum.JobStatusClaimed,
+	}
+	service := &fakeRuntimeJobLifecycle{claim: runtimeservice.ClaimRunnableJobResult{Job: job, LeaseToken: "lease-token"}}
+	executor := fakeKubernetesExecutor{
+		started: runtimekubernetes.StartedJob{
+			RuntimeJobID: job.ID,
+			Namespace:    "runtime-jobs",
+			JobName:      "kodex-rt-test",
+			ExternalRef:  "kubernetes://cluster/namespaces/runtime-jobs/jobs/kodex-rt-test",
+		},
+		result: runtimekubernetes.ExecutionResult{Succeeded: true, ShortLogTail: "server-side apply complete Authorization: Bearer secret-token"},
+	}
+	worker := testKubernetesJobWorker(service, executor)
+
+	worker.claimAndExecute(context.Background())
+
+	if len(service.reportStepKeys) != 2 || service.reportStepKeys[0] != kubernetesDeployStepKey || service.reportStepKeys[1] != kubernetesDeployStepKey {
+		t.Fatalf("report step keys = %v, want deploy step key", service.reportStepKeys)
+	}
+	if service.completeShortLogTail != redactedDiagnosticValue {
+		t.Fatalf("complete short log tail = %q, want redacted deploy tail", service.completeShortLogTail)
+	}
+	if service.completeCalls != 1 || service.failCalls != 0 {
+		t.Fatalf("complete/fail calls = %d/%d, want 1/0", service.completeCalls, service.failCalls)
+	}
+}
+
 func TestRedactBuildLogTailRedactsWholeUnsafeTail(t *testing.T) {
 	t.Parallel()
 

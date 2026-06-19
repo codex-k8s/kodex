@@ -5,8 +5,8 @@ title: kodex — поставка runtime-manager
 status: active
 owner_role: EM
 created_at: 2026-05-07
-updated_at: 2026-06-11
-related_issues: [655, 656, 657, 658, 659, 660, 661, 662, 949, 966, 975]
+updated_at: 2026-06-19
+related_issues: [655, 656, 657, 658, 659, 660, 661, 662, 949, 966, 975, 1085]
 related_prs: []
 related_docsets:
   - docs/domains/runtime-and-fleet/product/requirements.md
@@ -63,6 +63,7 @@ approvals:
 | RTM-BD-5 | без отдельного Issue | Исполнитель `build` готовит сборку саморазвёртывания к запуску после approve gate: перед созданием Kaniko Job проверяет готовность PVC build context, ссылку и объект registry Secret и service account, возвращает типизированную диагностику блокера до запуска Pod, а deploy manifest выдаёт `runtime-manager` минимальные RBAC-права на эти проверки без раскрытия значений Secret. |
 | RTM-BD-6 | без отдельного Issue | Зафиксирован contract-first путь deploy plan: `agent-manager` создаёт `JOB_TYPE_DEPLOY` только после successful build и checked `project-catalog.GetSelfDeployDeployPlan`, а `runtime-manager` принимает `DeployExecutionSpec` только с checked `manifest_bundle_ref`/`manifest_bundle_digest`, rollout targets и expected image refs. Runtime сохраняет и читает такой spec как typed job, claim-ит валидный deploy, применяет checked bundle через controlled executor и не выводит manifest bundle из репозитория, `services.yaml` или build output. |
 | RTM-BD-7 | без отдельного Issue | Подготовлен runtime-owned lifecycle build context для self-deploy: `PrepareBuildContext` идемпотентно фиксирует project/repository/provider/source refs, commit SHA, affected service keys и build plan fingerprint, `ReportBuildContextProgress` принимает только checked source snapshot refs/digests и prepared context refs/digests, `GetBuildContext` отдаёт безопасное состояние. Kubernetes materializer для self-repo создаёт PVC/ref, получает source auth только через SecretRef, проверяет commit/source snapshot и считает digest prepared context без raw webhook/provider payload и token values. |
+| SELF-DEPLOY-RTM | #1085 | Путь саморазвёртывания в runtime закреплён как проверяемый backend-контур: `PrepareBuildContext`/materializer доводят context до `ready` или типизированного блокера, `JOB_TYPE_BUILD` проходит Kaniko claim/observe/complete/fail, а `JOB_TYPE_DEPLOY` с checked `DeployExecutionSpec` claim-ится и исполняется controlled deploy executor. Проверки не требуют выкладки в live-кластер и не раскрывают сырой webhook/provider payload, manifest YAML, kubeconfig или значения секретов. |
 
 ## Таблица реализации
 
