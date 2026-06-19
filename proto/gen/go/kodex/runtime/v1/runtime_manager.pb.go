@@ -1736,8 +1736,10 @@ type RuntimeContext struct {
 	WorkspaceRoot string `protobuf:"bytes,7,opt,name=workspace_root,json=workspaceRoot,proto3" json:"workspace_root,omitempty"`
 	// materialization_fingerprint is the prepared workspace fingerprint.
 	MaterializationFingerprint string `protobuf:"bytes,8,opt,name=materialization_fingerprint,json=materializationFingerprint,proto3" json:"materialization_fingerprint,omitempty"`
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	// workspace_pvc_ref is the Kubernetes PVC reference used for agent-runner execution.
+	WorkspacePvcRef string `protobuf:"bytes,9,opt,name=workspace_pvc_ref,json=workspacePvcRef,proto3" json:"workspace_pvc_ref,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RuntimeContext) Reset() {
@@ -1822,6 +1824,13 @@ func (x *RuntimeContext) GetWorkspaceRoot() string {
 func (x *RuntimeContext) GetMaterializationFingerprint() string {
 	if x != nil {
 		return x.MaterializationFingerprint
+	}
+	return ""
+}
+
+func (x *RuntimeContext) GetWorkspacePvcRef() string {
+	if x != nil {
+		return x.WorkspacePvcRef
 	}
 	return ""
 }
@@ -7827,7 +7836,7 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\x18preferred_fleet_scope_id\x18\x05 \x01(\tH\x00R\x15preferredFleetScopeId\x88\x01\x01\x123\n" +
 	"\x15required_capabilities\x18\x06 \x03(\tR\x14requiredCapabilities\x12#\n" +
 	"\rmetadata_json\x18\a \x01(\tR\fmetadataJsonB\x1b\n" +
-	"\x19_preferred_fleet_scope_id\"\x8a\x03\n" +
+	"\x19_preferred_fleet_scope_id\"\xb6\x03\n" +
 	"\x0eRuntimeContext\x12\x17\n" +
 	"\aslot_id\x18\x01 \x01(\tR\x06slotId\x12%\n" +
 	"\fagent_run_id\x18\x02 \x01(\tH\x00R\n" +
@@ -7838,7 +7847,8 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\x0enamespace_name\x18\x05 \x01(\tR\rnamespaceName\x12'\n" +
 	"\x0fruntime_profile\x18\x06 \x01(\tR\x0eruntimeProfile\x12%\n" +
 	"\x0eworkspace_root\x18\a \x01(\tR\rworkspaceRoot\x12?\n" +
-	"\x1bmaterialization_fingerprint\x18\b \x01(\tR\x1amaterializationFingerprintB\x0f\n" +
+	"\x1bmaterialization_fingerprint\x18\b \x01(\tR\x1amaterializationFingerprint\x12*\n" +
+	"\x11workspace_pvc_ref\x18\t \x01(\tR\x0fworkspacePvcRefB\x0f\n" +
 	"\r_agent_run_idB\x11\n" +
 	"\x0f_fleet_scope_idB\r\n" +
 	"\v_cluster_id\"S\n" +

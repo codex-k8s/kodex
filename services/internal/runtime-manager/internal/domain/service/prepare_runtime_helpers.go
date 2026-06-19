@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -53,5 +54,14 @@ func runtimeContext(slot entity.Slot, materialization entity.WorkspaceMaterializ
 		RuntimeProfile:             slot.RuntimeProfile,
 		WorkspaceRoot:              "/workspace",
 		MaterializationFingerprint: materialization.Fingerprint,
+		WorkspacePVCRef:            workspacePVCRef(slot),
 	}
+}
+
+func workspacePVCRef(slot entity.Slot) string {
+	namespace := strings.TrimSpace(slot.NamespaceName)
+	if namespace == "" {
+		namespace = "kodex-rt-" + shortID(slot.ID)
+	}
+	return "pvc://" + namespace + "/runtime-workspace-" + shortID(slot.ID)
 }

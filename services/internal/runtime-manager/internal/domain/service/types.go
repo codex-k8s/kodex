@@ -50,6 +50,7 @@ type RuntimeContext struct {
 	RuntimeProfile             string
 	WorkspaceRoot              string
 	MaterializationFingerprint string
+	WorkspacePVCRef            string
 }
 
 // WorkspacePolicyInput is a checked project-catalog policy snapshot accepted by runtime-manager.

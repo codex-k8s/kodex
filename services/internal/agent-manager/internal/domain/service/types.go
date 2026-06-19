@@ -728,6 +728,7 @@ type RuntimePreparationResult struct {
 	WorkspaceMaterializationStatus string
 	ContextRef                     string
 	ContextDigest                  string
+	WorkspacePVCRef                string
 	MaterializationFingerprint     string
 	DiagnosticSummary              string
 }

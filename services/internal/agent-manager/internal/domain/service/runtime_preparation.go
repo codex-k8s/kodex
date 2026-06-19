@@ -568,6 +568,10 @@ func (s *Service) agentRunExecutionSpec(
 	if !safeRuntimeJobRef(fingerprint, true) || !safeRuntimeJobRef(contextDigest, true) {
 		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
 	}
+	workspacePVCRef := strings.TrimSpace(result.WorkspacePVCRef)
+	if !safeRuntimeJobRef(workspacePVCRef, true) {
+		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
+	}
 	runnerImageRef := strings.TrimSpace(s.runtimeJobRunnerImageRef)
 	if !safeRuntimeJobRef(runnerImageRef, true) {
 		return AgentRunExecutionSpec{}, NewRuntimeJobError(false, "failed_precondition", "agent run runner image ref is not configured")
@@ -583,6 +587,7 @@ func (s *Service) agentRunExecutionSpec(
 		ExpectedMaterializationFingerprint: fingerprint,
 		WorkspaceRef:                       runtimeWorkspaceRef(materializationID),
 		WorkspaceMountRef:                  runtimeWorkspaceMountRef(slotID),
+		WorkspacePVCRef:                    workspacePVCRef,
 		ContextRef:                         runtimeContextFileRef(materializationID),
 		ContextDigest:                      contextDigest,
 		RunnerProfileRef:                   runnerProfileRef(role.RuntimeProfile),
@@ -613,6 +618,7 @@ func validateAgentRunExecutionSpec(spec AgentRunExecutionSpec) error {
 		spec.ExpectedMaterializationFingerprint,
 		spec.WorkspaceRef,
 		spec.WorkspaceMountRef,
+		spec.WorkspacePVCRef,
 		spec.ContextRef,
 		spec.ContextDigest,
 		spec.RunnerProfileRef,

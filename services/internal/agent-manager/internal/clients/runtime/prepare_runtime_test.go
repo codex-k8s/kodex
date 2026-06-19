@@ -67,7 +67,8 @@ func TestCreateAgentRunJobMapsRequestAndResponse(t *testing.T) {
 	}
 	if spec.GetRunnerMode() != runtimev1.AgentRunRunnerMode_AGENT_RUN_RUNNER_MODE_CODEX_AGENT ||
 		spec.GetRunnerImageRef() != "image://codex-agent@sha256:runner" ||
-		spec.GetContextDigest() != "sha256:agent-run-context" {
+		spec.GetContextDigest() != "sha256:agent-run-context" ||
+		spec.GetWorkspacePvcRef() != "pvc://runtime-jobs/runtime-workspace-agent-run" {
 		t.Fatalf("agent run execution runner/context = %+v", spec)
 	}
 	if len(spec.GetAllowedSecretRefs()) != 1 || spec.GetAllowedSecretRefs()[0].GetSecretRef() != "secret://runtime/agent-token" {
@@ -239,13 +240,15 @@ func TestPrepareRuntimeResultExtractsGeneratedContextDigest(t *testing.T) {
 		RuntimeContext: &runtimev1.RuntimeContext{
 			SlotId:                     slotText,
 			MaterializationFingerprint: "sha256:workspace",
+			WorkspacePvcRef:            "pvc://runtime-jobs/runtime-workspace-agent-run",
 		},
 	})
 	if err != nil {
 		t.Fatalf("prepareRuntimeResult() err = %v", err)
 	}
 	if result.ContextDigest != "sha256:agent-run-context" ||
-		result.ContextRef != "runtime://workspace-materializations/"+materializationID.String()+"/context/agent-run.json" {
+		result.ContextRef != "runtime://workspace-materializations/"+materializationID.String()+"/context/agent-run.json" ||
+		result.WorkspacePVCRef != "pvc://runtime-jobs/runtime-workspace-agent-run" {
 		t.Fatalf("context refs = %+v", result)
 	}
 	if result.SlotStatus != agentservice.RuntimeSlotStatusReady ||
@@ -369,6 +372,7 @@ func testAgentRunExecutionSpec(agentRunID uuid.UUID, slotID uuid.UUID) agentserv
 		ExpectedMaterializationFingerprint: "sha256:workspace",
 		WorkspaceRef:                       "runtime://workspace-materializations/a1a1a1a1-5555-6666-7777-888888888888",
 		WorkspaceMountRef:                  "runtime://slots/" + slotID.String() + "/workspace-mount",
+		WorkspacePVCRef:                    "pvc://runtime-jobs/runtime-workspace-agent-run",
 		ContextRef:                         "runtime://workspace-materializations/a1a1a1a1-5555-6666-7777-888888888888/context/agent-run.json",
 		ContextDigest:                      "sha256:agent-run-context",
 		RunnerProfileRef:                   "runner-profile://go-full",
