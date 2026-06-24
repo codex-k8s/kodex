@@ -31,11 +31,11 @@ const (
 
 	threadContextStatusPending    = "pending"
 	threadContextStatusConfigured = "configured"
-
-	codexAuthDeviceCodeWait = 15 * time.Second
 )
 
 var githubPullURLRE = regexp.MustCompile(`https://github\.com/([^/\s]+)/([^/\s]+)/pull/([0-9]+)`)
+
+var codexAuthDeviceCodeWait = 15 * time.Second
 
 type MattermostThreadPostInput struct {
 	ChannelID  string
@@ -716,7 +716,7 @@ func (svc *ChatRunService) startCodexReauthSession(ctx context.Context, account 
 			return status, false, fmt.Errorf("codex device-code auth job failed")
 		}
 		if time.Now().After(deadline) {
-			return status, false, nil
+			return status, false, fmt.Errorf("codex device-code auth did not provide url/code before timeout: job %s pod %s phase %s", emptyAsUnknown(status.JobName), emptyAsUnknown(status.PodName), emptyAsUnknown(status.PodPhase))
 		}
 		select {
 		case <-ctx.Done():

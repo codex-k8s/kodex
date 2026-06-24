@@ -3285,45 +3285,46 @@ func (inspector *fakeGitHubAccountInspector) InspectToken(_ context.Context, tok
 }
 
 type fakeRuntimeRunner struct {
-	startedRunID               string
-	startedDeveloperRunID      string
-	developerRuns              []runtimerepo.DeveloperRunInput
-	developerBaseBranch        string
-	developerHeadBranch        string
-	developerCodexSecret       string
-	developerGitHubSecret      string
-	startedReviewRunID         string
-	reviewRuns                 []runtimerepo.ReviewRunInput
-	reviewPRNumber             int
-	reviewCodexSecret          string
-	reviewGitHubSecret         string
-	startedChatRunID           string
-	chatRuns                   []runtimerepo.ChatRunInput
-	chatCodexSecret            string
-	chatGitHubSecret           string
-	startedSessionKey          string
-	sessionRuns                []runtimerepo.AgentSessionPodInput
-	sessionCodexSecret         string
-	sessionGitHubSecret        string
-	botTokenSecrets            map[string]string
-	cleanedRunID               string
-	cleanedRunIDs              []string
-	retentionInput             runtimerepo.RetentionCleanupInput
-	retentionResult            runtimerepo.RetentionCleanupResult
-	authAccount                string
-	authSecret                 string
-	authReady                  bool
-	authSecretNotReady         bool
-	authSecretChecks           int
-	deletedAuthAccount         string
-	deletedAuthSecret          string
-	githubSecretInput          runtimerepo.GitHubTokenSecretInput
-	deletedGitHubSecretAccount string
-	deletedGitHubSecretName    string
-	runtimeVariableSecrets     map[string]string
-	runtimeVariableSecretInput runtimerepo.ProjectRuntimeVariableSecretInput
-	deletedRuntimeVariable     string
-	runStatuses                map[string]runtimerepo.RunStatus
+	startedRunID                string
+	startedDeveloperRunID       string
+	developerRuns               []runtimerepo.DeveloperRunInput
+	developerBaseBranch         string
+	developerHeadBranch         string
+	developerCodexSecret        string
+	developerGitHubSecret       string
+	startedReviewRunID          string
+	reviewRuns                  []runtimerepo.ReviewRunInput
+	reviewPRNumber              int
+	reviewCodexSecret           string
+	reviewGitHubSecret          string
+	startedChatRunID            string
+	chatRuns                    []runtimerepo.ChatRunInput
+	chatCodexSecret             string
+	chatGitHubSecret            string
+	startedSessionKey           string
+	sessionRuns                 []runtimerepo.AgentSessionPodInput
+	sessionCodexSecret          string
+	sessionGitHubSecret         string
+	botTokenSecrets             map[string]string
+	cleanedRunID                string
+	cleanedRunIDs               []string
+	retentionInput              runtimerepo.RetentionCleanupInput
+	retentionResult             runtimerepo.RetentionCleanupResult
+	authAccount                 string
+	authSecret                  string
+	authReady                   bool
+	authSecretNotReady          bool
+	authStatusWithoutDeviceCode bool
+	authSecretChecks            int
+	deletedAuthAccount          string
+	deletedAuthSecret           string
+	githubSecretInput           runtimerepo.GitHubTokenSecretInput
+	deletedGitHubSecretAccount  string
+	deletedGitHubSecretName     string
+	runtimeVariableSecrets      map[string]string
+	runtimeVariableSecretInput  runtimerepo.ProjectRuntimeVariableSecretInput
+	deletedRuntimeVariable      string
+	runStatuses                 map[string]runtimerepo.RunStatus
 }
 
 func (runner *fakeRuntimeRunner) StartSmokeRun(_ context.Context, input runtimerepo.SmokeRunInput) (runtimerepo.StartedRun, error) {
@@ -3350,7 +3351,7 @@ func (runner *fakeRuntimeRunner) StartCodexAuthSession(_ context.Context, input 
 }
 
 func (runner *fakeRuntimeRunner) GetCodexAuthStatus(_ context.Context, accountName string, secretName string) (runtimerepo.CodexAuthStatus, error) {
-	return runtimerepo.CodexAuthStatus{
+	status := runtimerepo.CodexAuthStatus{
 		AccountName: accountName,
 		SecretName:  secretName,
 		Namespace:   "mattermost",
@@ -3362,7 +3363,12 @@ func (runner *fakeRuntimeRunner) GetCodexAuthStatus(_ context.Context, accountNa
 		DeviceURL:   "https://auth.openai.com/codex/device",
 		DeviceCode:  "ABCD-12345",
 		AuthReady:   runner.authReady,
-	}, nil
+	}
+	if runner.authStatusWithoutDeviceCode {
+		status.DeviceURL = ""
+		status.DeviceCode = ""
+	}
+	return status, nil
 }
 
 func (runner *fakeRuntimeRunner) CheckCodexAuthSecret(_ context.Context, input runtimerepo.CodexAuthSecretCheckInput) (runtimerepo.CodexAuthSecretCheckResult, error) {
