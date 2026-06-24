@@ -492,7 +492,11 @@ func (svc *ChatRunService) SelectThreadRepository(ctx context.Context, input Thr
 		return ThreadRepositorySelectionResult{}, err
 	}
 	if threadContext.Status == threadContextStatusConfigured {
-		return ThreadRepositorySelectionResult{Context: threadContext}, nil
+		result, err := svc.replayConfiguredThreadContextIfUnstarted(ctx, threadContext)
+		if err != nil {
+			return ThreadRepositorySelectionResult{}, err
+		}
+		return ThreadRepositorySelectionResult{Context: threadContext, RunID: result.RunID}, nil
 	}
 	if input.RepositoryID > 0 {
 		if err := svc.validateThreadRepository(ctx, threadContext, input.RepositoryID); err != nil {
@@ -520,6 +524,27 @@ func (svc *ChatRunService) SelectThreadRepository(ctx context.Context, input Thr
 	}
 	result := svc.HandleChatPost(ctx, pending)
 	return ThreadRepositorySelectionResult{Context: threadContext, RunID: result.RunID}, nil
+}
+
+func (svc *ChatRunService) replayConfiguredThreadContextIfUnstarted(ctx context.Context, threadContext entity.ThreadContext) (ChatRunResult, error) {
+	if strings.TrimSpace(threadContext.PendingMattermostPostID) == "" || strings.TrimSpace(threadContext.PendingMessage) == "" {
+		return ChatRunResult{Ignored: true}, nil
+	}
+	sessions, err := svc.cfg.Store.ListAgentSessionsByThread(ctx, threadContext.ChatID, threadContext.MattermostRootPostID)
+	if err != nil {
+		return ChatRunResult{}, err
+	}
+	if len(sessions) > 0 {
+		return ChatRunResult{Ignored: true}, nil
+	}
+	return svc.HandleChatPost(ctx, ChatPostCommand{
+		ChannelID:  threadContext.MattermostChannelID,
+		PostID:     threadContext.PendingMattermostPostID,
+		RootPostID: threadContext.MattermostRootPostID,
+		UserID:     threadContext.PendingUserID,
+		UserName:   threadContext.PendingUserName,
+		Message:    threadContext.PendingMessage,
+	}), nil
 }
 
 func (svc *ChatRunService) validateThreadRepository(ctx context.Context, threadContext entity.ThreadContext, repositoryID int64) error {

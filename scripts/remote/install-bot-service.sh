@@ -118,7 +118,47 @@ remote_container_importer() {
     fi' </dev/null
 }
 
-if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE:-true}"; then
+remote_container_image_exists() {
+  local image="$1"
+  local image_q
+  image_q="$(mattercodex_shell_quote "$image")"
+  mattercodex_ssh "set -eu
+    image=$image_q
+    refs=\$image
+    first=\${image%%/*}
+    if [ \"\$first\" = \"\$image\" ]; then
+      refs=\"\$refs docker.io/library/\$image\"
+    elif [ \"\${first#*.}\" = \"\$first\" ] && [ \"\${first#*:}\" = \"\$first\" ] && [ \"\$first\" != \"localhost\" ]; then
+      refs=\"\$refs docker.io/\$image\"
+    fi
+    if command -v sudo >/dev/null 2>&1 && sudo -n k3s ctr images ls -q >/tmp/matter-codex-images 2>/dev/null; then
+      :
+    elif command -v sudo >/dev/null 2>&1 && sudo -n ctr -n k8s.io images ls -q >/tmp/matter-codex-images 2>/dev/null; then
+      :
+    else
+      exit 1
+    fi
+    for ref in \$refs; do
+      if grep -Fx -- \"\$ref\" /tmp/matter-codex-images >/dev/null; then
+        exit 0
+      fi
+    done
+    exit 1" </dev/null
+}
+
+SHOULD_BUILD_AGENT_RUNNER=false
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  if mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE:-true}"; then
+    SHOULD_BUILD_AGENT_RUNNER=true
+  elif remote_container_image_exists "$MATTERCODEX_AGENT_RUNNER_IMAGE"; then
+    mattercodex_log "agent-runner image уже есть в Kubernetes runtime"
+  else
+    mattercodex_log "agent-runner image отсутствует в Kubernetes runtime; включается rebuild/import несмотря на MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE=false"
+    SHOULD_BUILD_AGENT_RUNNER=true
+  fi
+fi
+
+if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$SHOULD_BUILD_AGENT_RUNNER"; then
   mattercodex_log "сборка agent-runner image на целевом сервере"
   AGENT_RUNNER_ARCHIVE="$(mattercodex_temp_file)"
   tar -C "$REPO_ROOT" -czf "$AGENT_RUNNER_ARCHIVE" \
@@ -157,6 +197,10 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_
   else
     mattercodex_die "не найден способ собрать или импортировать agent-runner image: нужен docker/nerdctl на сервере либо локальный docker и remote k3s/ctr import"
   fi
+  if ! remote_container_image_exists "$MATTERCODEX_AGENT_RUNNER_IMAGE"; then
+    mattercodex_die "agent-runner image не найден в Kubernetes runtime после build/import: $MATTERCODEX_AGENT_RUNNER_IMAGE"
+  fi
+  mattercodex_log "agent-runner image доступен в Kubernetes runtime"
 fi
 
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_BOT_SERVICE_BUILD_IMAGE:-true}"; then
