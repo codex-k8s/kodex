@@ -61,6 +61,9 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.RuntimeWorkspaceSize != "1Gi" {
 		t.Fatalf("RuntimeWorkspaceSize = %q", cfg.RuntimeWorkspaceSize)
 	}
+	if cfg.AuthCheckJobTTLSeconds != 300 {
+		t.Fatalf("AuthCheckJobTTLSeconds = %d", cfg.AuthCheckJobTTLSeconds)
+	}
 	if cfg.CodexAuthSecretName != "matter-codex-codex-auth" {
 		t.Fatalf("CodexAuthSecretName = %q", cfg.CodexAuthSecretName)
 	}
@@ -71,22 +74,23 @@ func TestConfigDefaults(t *testing.T) {
 
 func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 	cfg := Config{
-		HTTPAddr:              ":8080",
-		Locale:                "en",
-		DefaultChannels:       []string{"agents-control:Agents Control"},
-		ReadHeaderTimeout:     time.Second,
-		ShutdownTimeout:       0,
-		MaxSlashFormBytes:     1024,
-		MaxGitHubWebhookBytes: 1024,
-		RuntimeSmokeImage:     "busybox:1.36",
-		AgentRunnerImage:      "matter-codex-agent-runner:dev",
-		CodexPackage:          "@openai/codex@0.141.0",
-		RuntimeWorkspaceSize:  "1Gi",
-		RuntimeJobTTLSeconds:  86400,
-		RuntimeLogTailLines:   40,
-		AgentServiceAccount:   "matter-codex-agent-runner",
-		CodexAuthSecretName:   "matter-codex-codex-auth",
-		GitHubSecretName:      "matter-codex-github",
+		HTTPAddr:               ":8080",
+		Locale:                 "en",
+		DefaultChannels:        []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:      time.Second,
+		ShutdownTimeout:        0,
+		MaxSlashFormBytes:      1024,
+		MaxGitHubWebhookBytes:  1024,
+		RuntimeSmokeImage:      "busybox:1.36",
+		AgentRunnerImage:       "matter-codex-agent-runner:dev",
+		CodexPackage:           "@openai/codex@0.141.0",
+		RuntimeWorkspaceSize:   "1Gi",
+		RuntimeJobTTLSeconds:   86400,
+		AuthCheckJobTTLSeconds: 300,
+		RuntimeLogTailLines:    40,
+		AgentServiceAccount:    "matter-codex-agent-runner",
+		CodexAuthSecretName:    "matter-codex-codex-auth",
+		GitHubSecretName:       "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")
@@ -95,22 +99,23 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 
 func TestConfigValidationNormalizesLocale(t *testing.T) {
 	cfg := Config{
-		HTTPAddr:              ":8080",
-		Locale:                "ru-RU",
-		DefaultChannels:       []string{"agents-control:Agents Control"},
-		ReadHeaderTimeout:     time.Second,
-		ShutdownTimeout:       time.Second,
-		MaxSlashFormBytes:     1024,
-		MaxGitHubWebhookBytes: 1024,
-		RuntimeSmokeImage:     "busybox:1.36",
-		AgentRunnerImage:      "matter-codex-agent-runner:dev",
-		CodexPackage:          "@openai/codex@0.141.0",
-		RuntimeWorkspaceSize:  "1Gi",
-		RuntimeJobTTLSeconds:  86400,
-		RuntimeLogTailLines:   40,
-		AgentServiceAccount:   "matter-codex-agent-runner",
-		CodexAuthSecretName:   "matter-codex-codex-auth",
-		GitHubSecretName:      "matter-codex-github",
+		HTTPAddr:               ":8080",
+		Locale:                 "ru-RU",
+		DefaultChannels:        []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:      time.Second,
+		ShutdownTimeout:        time.Second,
+		MaxSlashFormBytes:      1024,
+		MaxGitHubWebhookBytes:  1024,
+		RuntimeSmokeImage:      "busybox:1.36",
+		AgentRunnerImage:       "matter-codex-agent-runner:dev",
+		CodexPackage:           "@openai/codex@0.141.0",
+		RuntimeWorkspaceSize:   "1Gi",
+		RuntimeJobTTLSeconds:   86400,
+		AuthCheckJobTTLSeconds: 300,
+		RuntimeLogTailLines:    40,
+		AgentServiceAccount:    "matter-codex-agent-runner",
+		CodexAuthSecretName:    "matter-codex-codex-auth",
+		GitHubSecretName:       "matter-codex-github",
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
@@ -122,22 +127,23 @@ func TestConfigValidationNormalizesLocale(t *testing.T) {
 
 func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 	cfg := Config{
-		HTTPAddr:              ":8080",
-		Locale:                "fr",
-		DefaultChannels:       []string{"agents-control:Agents Control"},
-		ReadHeaderTimeout:     time.Second,
-		ShutdownTimeout:       time.Second,
-		MaxSlashFormBytes:     1024,
-		MaxGitHubWebhookBytes: 1024,
-		RuntimeSmokeImage:     "busybox:1.36",
-		AgentRunnerImage:      "matter-codex-agent-runner:dev",
-		CodexPackage:          "@openai/codex@0.141.0",
-		RuntimeWorkspaceSize:  "1Gi",
-		RuntimeJobTTLSeconds:  86400,
-		RuntimeLogTailLines:   40,
-		AgentServiceAccount:   "matter-codex-agent-runner",
-		CodexAuthSecretName:   "matter-codex-codex-auth",
-		GitHubSecretName:      "matter-codex-github",
+		HTTPAddr:               ":8080",
+		Locale:                 "fr",
+		DefaultChannels:        []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:      time.Second,
+		ShutdownTimeout:        time.Second,
+		MaxSlashFormBytes:      1024,
+		MaxGitHubWebhookBytes:  1024,
+		RuntimeSmokeImage:      "busybox:1.36",
+		AgentRunnerImage:       "matter-codex-agent-runner:dev",
+		CodexPackage:           "@openai/codex@0.141.0",
+		RuntimeWorkspaceSize:   "1Gi",
+		RuntimeJobTTLSeconds:   86400,
+		AuthCheckJobTTLSeconds: 300,
+		RuntimeLogTailLines:    40,
+		AgentServiceAccount:    "matter-codex-agent-runner",
+		CodexAuthSecretName:    "matter-codex-codex-auth",
+		GitHubSecretName:       "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")

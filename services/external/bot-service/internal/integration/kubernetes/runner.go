@@ -57,32 +57,34 @@ var (
 )
 
 type Config struct {
-	Namespace                 string
-	KubeconfigPath            string
-	SmokeImage                string
-	AgentRunnerImage          string
-	CodexPackage              string
-	WorkspaceStorageSize      string
-	JobTTLSecondsAfterFinish  int32
-	LogTailLines              int64
-	AgentRunnerServiceAccount string
-	CodexAuthSecretName       string
-	GitHubSecretName          string
+	Namespace                         string
+	KubeconfigPath                    string
+	SmokeImage                        string
+	AgentRunnerImage                  string
+	CodexPackage                      string
+	WorkspaceStorageSize              string
+	JobTTLSecondsAfterFinish          int32
+	AuthCheckJobTTLSecondsAfterFinish int32
+	LogTailLines                      int64
+	AgentRunnerServiceAccount         string
+	CodexAuthSecretName               string
+	GitHubSecretName                  string
 }
 
 type Runner struct {
-	client                    kubernetes.Interface
-	restConfig                *rest.Config
-	namespace                 string
-	smokeImage                string
-	agentRunnerImage          string
-	codexPackage              string
-	workspaceStorage          resource.Quantity
-	jobTTLSecondsAfterFinish  int32
-	logTailLines              int64
-	agentRunnerServiceAccount string
-	codexAuthSecretName       string
-	gitHubSecretName          string
+	client                            kubernetes.Interface
+	restConfig                        *rest.Config
+	namespace                         string
+	smokeImage                        string
+	agentRunnerImage                  string
+	codexPackage                      string
+	workspaceStorage                  resource.Quantity
+	jobTTLSecondsAfterFinish          int32
+	authCheckJobTTLSecondsAfterFinish int32
+	logTailLines                      int64
+	agentRunnerServiceAccount         string
+	codexAuthSecretName               string
+	gitHubSecretName                  string
 }
 
 func runnerCommand() []string {
@@ -120,18 +122,19 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		return nil, fmt.Errorf("parse workspace storage size: %w", err)
 	}
 	return &Runner{
-		client:                    client,
-		restConfig:                restConfig,
-		namespace:                 namespace,
-		smokeImage:                defaultString(cfg.SmokeImage, "busybox:1.36"),
-		agentRunnerImage:          defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
-		codexPackage:              defaultString(cfg.CodexPackage, "@openai/codex@0.141.0"),
-		workspaceStorage:          storage,
-		jobTTLSecondsAfterFinish:  defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
-		logTailLines:              defaultInt64(cfg.LogTailLines, 40),
-		agentRunnerServiceAccount: defaultString(cfg.AgentRunnerServiceAccount, "matter-codex-agent-runner"),
-		codexAuthSecretName:       defaultString(cfg.CodexAuthSecretName, "matter-codex-codex-auth"),
-		gitHubSecretName:          defaultString(cfg.GitHubSecretName, "matter-codex-github"),
+		client:                            client,
+		restConfig:                        restConfig,
+		namespace:                         namespace,
+		smokeImage:                        defaultString(cfg.SmokeImage, "busybox:1.36"),
+		agentRunnerImage:                  defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
+		codexPackage:                      defaultString(cfg.CodexPackage, "@openai/codex@0.141.0"),
+		workspaceStorage:                  storage,
+		jobTTLSecondsAfterFinish:          defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
+		authCheckJobTTLSecondsAfterFinish: defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),
+		logTailLines:                      defaultInt64(cfg.LogTailLines, 40),
+		agentRunnerServiceAccount:         defaultString(cfg.AgentRunnerServiceAccount, "matter-codex-agent-runner"),
+		codexAuthSecretName:               defaultString(cfg.CodexAuthSecretName, "matter-codex-codex-auth"),
+		gitHubSecretName:                  defaultString(cfg.GitHubSecretName, "matter-codex-github"),
 	}, nil
 }
 
@@ -276,6 +279,7 @@ func (runner *Runner) CheckCodexAuthSecret(ctx context.Context, input runtimerep
 	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.codexAuthSecretCheckJob(input, jobName), metav1.CreateOptions{}); err != nil {
 		return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("create codex auth check job: %w", err)
 	}
+	defer runner.cleanupCodexAuthCheckJob(ctx, jobName)
 
 	deadline := time.Now().Add(90 * time.Second)
 	ticker := time.NewTicker(750 * time.Millisecond)
@@ -366,6 +370,17 @@ func (runner *Runner) CleanupCodexAuthSession(ctx context.Context, accountName s
 		result.JobDeleted = true
 	}
 	return result, nil
+}
+
+func (runner *Runner) cleanupCodexAuthCheckJob(ctx context.Context, jobName string) {
+	jobName = strings.TrimSpace(jobName)
+	if jobName == "" {
+		return
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	background := metav1.DeletePropagationBackground
+	_ = runner.client.BatchV1().Jobs(runner.namespace).Delete(cleanupCtx, jobName, metav1.DeleteOptions{PropagationPolicy: &background})
 }
 
 func (runner *Runner) DeleteCodexAuthAccount(ctx context.Context, accountName string, secretName string) (runtimerepo.CodexAuthAccountDeleteResult, error) {
@@ -1608,7 +1623,7 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoffLimit,
-			TTLSecondsAfterFinished: &runner.jobTTLSecondsAfterFinish,
+			TTLSecondsAfterFinished: &runner.authCheckJobTTLSecondsAfterFinish,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{

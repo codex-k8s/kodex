@@ -94,9 +94,10 @@ func TestStartCodexAuthSessionCreatesHardenedJob(t *testing.T) {
 func TestCodexAuthSecretCheckJobMountsSavedAuthSecret(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	runner, err := NewRunnerWithClient(client, Config{
-		Namespace:                 "mattermost",
-		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+		Namespace:                         "mattermost",
+		AgentRunnerImage:                  "matter-codex-agent-runner:test",
+		AgentRunnerServiceAccount:         "matter-codex-agent-runner",
+		AuthCheckJobTTLSecondsAfterFinish: 60,
 	})
 	if err != nil {
 		t.Fatalf("NewRunnerWithClient() error = %v", err)
@@ -119,6 +120,13 @@ func TestCodexAuthSecretCheckJobMountsSavedAuthSecret(t *testing.T) {
 	}
 	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_CODEX_CONFIG_OVERLAY"); got != "" {
 		t.Fatalf("auth check must not receive config overlay, got %q", got)
+	}
+	if job.Spec.TTLSecondsAfterFinished == nil || *job.Spec.TTLSecondsAfterFinished != 60 {
+		var ttl int32
+		if job.Spec.TTLSecondsAfterFinished != nil {
+			ttl = *job.Spec.TTLSecondsAfterFinished
+		}
+		t.Fatalf("auth check ttl = %d", ttl)
 	}
 }
 

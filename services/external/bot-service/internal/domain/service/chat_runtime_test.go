@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
@@ -231,6 +232,63 @@ func TestChatRunPostsOpenAIReauthInThreadWhenAuthSecretIsInvalid(t *testing.T) {
 	message := publisher.posts[0].Message
 	if !strings.Contains(message, "ABCD-12345") || !strings.Contains(message, "https://auth.openai.com/codex/device") {
 		t.Fatalf("reauth message = %q", message)
+	}
+}
+
+func TestChatRunDoesNotPostEmptyDeviceCodeWhenReauthJobIsNotReady(t *testing.T) {
+	originalWait := codexAuthDeviceCodeWait
+	codexAuthDeviceCodeWait = time.Millisecond
+	t.Cleanup(func() {
+		codexAuthDeviceCodeWait = originalWait
+	})
+
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{authSecretNotReady: true, authStatusWithoutDeviceCode: true}
+	publisher := &fakeThreadPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:       localizer,
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+		DisableMonitor:  true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Continue the work.",
+	})
+
+	if result.RunID != "" || result.Mode != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 {
+		t.Fatalf("agent session should not start, runner=%#v turns=%#v", runner.sessionRuns, store.sessionTurns)
+	}
+	if len(publisher.posts) != 1 {
+		t.Fatalf("posts = %#v", publisher.posts)
+	}
+	message := publisher.posts[0].Message
+	if strings.Contains(message, "code: ``") || strings.Contains(message, "open: ") {
+		t.Fatalf("message exposes empty device-code fields: %q", message)
+	}
+	if !strings.Contains(message, "did not provide url/code") {
+		t.Fatalf("start failure message = %q", message)
 	}
 }
 

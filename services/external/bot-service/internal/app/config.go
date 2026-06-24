@@ -11,36 +11,37 @@ import (
 
 // Config contains bot-service process settings.
 type Config struct {
-	HTTPAddr              string        `env:"MATTERCODEX_BOT_SERVICE_HTTP_ADDR" envDefault:":8080"`
-	MattermostSiteURL     string        `env:"MATTERCODEX_MATTERMOST_SITE_URL"`
-	MattermostInternalURL string        `env:"MATTERCODEX_MATTERMOST_INTERNAL_URL"`
-	BotServiceSiteURL     string        `env:"MATTERCODEX_BOT_SERVICE_SITE_URL"`
-	BotServiceInternalURL string        `env:"MATTERCODEX_BOT_SERVICE_INTERNAL_URL"`
-	Locale                string        `env:"MATTERCODEX_LOCALE" envDefault:"en"`
-	DefaultTeamName       string        `env:"MATTERCODEX_DEFAULT_TEAM_NAME" envDefault:"agents"`
-	DefaultChannels       []string      `env:"MATTERCODEX_DEFAULT_CHANNELS" envDefault:"agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit" envSeparator:","`
-	MattermostBotToken    string        `env:"MATTERCODEX_MATTERMOST_BOT_TOKEN"`
-	MattermostSlashToken  string        `env:"MATTERCODEX_MATTERMOST_SLASH_TOKEN"`
-	GitHubToken           string        `env:"MATTERCODEX_GITHUB_TOKEN"`
-	GitHubWebhookSecret   string        `env:"MATTERCODEX_GITHUB_WEBHOOK_SECRET"`
-	GitHubSecretName      string        `env:"MATTERCODEX_GITHUB_SECRET" envDefault:"matter-codex-github"`
-	DatabaseDSN           string        `env:"MATTERCODEX_DATABASE_DSN"`
-	RuntimeEnabled        bool          `env:"MATTERCODEX_RUNTIME_ENABLED" envDefault:"true"`
-	RuntimeNamespace      string        `env:"MATTERCODEX_RUNTIME_NAMESPACE"`
-	RuntimeKubeconfigPath string        `env:"MATTERCODEX_RUNTIME_KUBECONFIG_PATH"`
-	RuntimeSmokeImage     string        `env:"MATTERCODEX_RUNTIME_SMOKE_IMAGE" envDefault:"busybox:1.36"`
-	AgentRunnerImage      string        `env:"MATTERCODEX_AGENT_RUNNER_IMAGE" envDefault:"matter-codex-agent-runner:dev"`
-	CodexPackage          string        `env:"MATTERCODEX_CODEX_PACKAGE" envDefault:"@openai/codex@0.141.0"`
-	RuntimeWorkspaceSize  string        `env:"MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE" envDefault:"1Gi"`
-	RuntimeJobTTLSeconds  int32         `env:"MATTERCODEX_RUNTIME_JOB_TTL_SECONDS" envDefault:"86400"`
-	RuntimeLogTailLines   int64         `env:"MATTERCODEX_RUNTIME_LOG_TAIL_LINES" envDefault:"40"`
-	AgentServiceAccount   string        `env:"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" envDefault:"matter-codex-agent-runner"`
-	CodexAuthSecretName   string        `env:"MATTERCODEX_CODEX_AUTH_SECRET" envDefault:"matter-codex-codex-auth"`
-	StorageMigrations     bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
-	ReadHeaderTimeout     time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
-	ShutdownTimeout       time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
-	MaxSlashFormBytes     int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_SLASH_FORM_BYTES" envDefault:"65536"`
-	MaxGitHubWebhookBytes int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES" envDefault:"262144"`
+	HTTPAddr               string        `env:"MATTERCODEX_BOT_SERVICE_HTTP_ADDR" envDefault:":8080"`
+	MattermostSiteURL      string        `env:"MATTERCODEX_MATTERMOST_SITE_URL"`
+	MattermostInternalURL  string        `env:"MATTERCODEX_MATTERMOST_INTERNAL_URL"`
+	BotServiceSiteURL      string        `env:"MATTERCODEX_BOT_SERVICE_SITE_URL"`
+	BotServiceInternalURL  string        `env:"MATTERCODEX_BOT_SERVICE_INTERNAL_URL"`
+	Locale                 string        `env:"MATTERCODEX_LOCALE" envDefault:"en"`
+	DefaultTeamName        string        `env:"MATTERCODEX_DEFAULT_TEAM_NAME" envDefault:"agents"`
+	DefaultChannels        []string      `env:"MATTERCODEX_DEFAULT_CHANNELS" envDefault:"agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit" envSeparator:","`
+	MattermostBotToken     string        `env:"MATTERCODEX_MATTERMOST_BOT_TOKEN"`
+	MattermostSlashToken   string        `env:"MATTERCODEX_MATTERMOST_SLASH_TOKEN"`
+	GitHubToken            string        `env:"MATTERCODEX_GITHUB_TOKEN"`
+	GitHubWebhookSecret    string        `env:"MATTERCODEX_GITHUB_WEBHOOK_SECRET"`
+	GitHubSecretName       string        `env:"MATTERCODEX_GITHUB_SECRET" envDefault:"matter-codex-github"`
+	DatabaseDSN            string        `env:"MATTERCODEX_DATABASE_DSN"`
+	RuntimeEnabled         bool          `env:"MATTERCODEX_RUNTIME_ENABLED" envDefault:"true"`
+	RuntimeNamespace       string        `env:"MATTERCODEX_RUNTIME_NAMESPACE"`
+	RuntimeKubeconfigPath  string        `env:"MATTERCODEX_RUNTIME_KUBECONFIG_PATH"`
+	RuntimeSmokeImage      string        `env:"MATTERCODEX_RUNTIME_SMOKE_IMAGE" envDefault:"busybox:1.36"`
+	AgentRunnerImage       string        `env:"MATTERCODEX_AGENT_RUNNER_IMAGE" envDefault:"matter-codex-agent-runner:dev"`
+	CodexPackage           string        `env:"MATTERCODEX_CODEX_PACKAGE" envDefault:"@openai/codex@0.141.0"`
+	RuntimeWorkspaceSize   string        `env:"MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE" envDefault:"1Gi"`
+	RuntimeJobTTLSeconds   int32         `env:"MATTERCODEX_RUNTIME_JOB_TTL_SECONDS" envDefault:"86400"`
+	AuthCheckJobTTLSeconds int32         `env:"MATTERCODEX_CODEX_AUTH_CHECK_JOB_TTL_SECONDS" envDefault:"300"`
+	RuntimeLogTailLines    int64         `env:"MATTERCODEX_RUNTIME_LOG_TAIL_LINES" envDefault:"40"`
+	AgentServiceAccount    string        `env:"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" envDefault:"matter-codex-agent-runner"`
+	CodexAuthSecretName    string        `env:"MATTERCODEX_CODEX_AUTH_SECRET" envDefault:"matter-codex-codex-auth"`
+	StorageMigrations      bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
+	ReadHeaderTimeout      time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
+	ShutdownTimeout        time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	MaxSlashFormBytes      int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_SLASH_FORM_BYTES" envDefault:"65536"`
+	MaxGitHubWebhookBytes  int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES" envDefault:"262144"`
 }
 
 func LoadConfig() (Config, error) {
@@ -72,6 +73,9 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.RuntimeJobTTLSeconds <= 0 {
 		return fmt.Errorf("MATTERCODEX_RUNTIME_JOB_TTL_SECONDS is invalid")
+	}
+	if cfg.AuthCheckJobTTLSeconds <= 0 {
+		return fmt.Errorf("MATTERCODEX_CODEX_AUTH_CHECK_JOB_TTL_SECONDS is invalid")
 	}
 	if cfg.RuntimeLogTailLines <= 0 {
 		return fmt.Errorf("MATTERCODEX_RUNTIME_LOG_TAIL_LINES is invalid")
