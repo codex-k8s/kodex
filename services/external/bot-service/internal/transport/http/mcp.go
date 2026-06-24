@@ -29,6 +29,10 @@ type mcpPostInput struct {
 	Message string `json:"message" jsonschema:"message to post into the current Mattermost thread"`
 }
 
+type mcpStatusInput struct {
+	Message string `json:"message" jsonschema:"current concise status for the active agent turn"`
+}
+
 type mcpRequestAgentInput struct {
 	TargetAgent string `json:"target_agent" jsonschema:"role name or Mattermost @username of the target agent"`
 	Message     string `json:"message" jsonschema:"task message for the target agent"`
@@ -39,7 +43,7 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 		Name:    "matter-codex",
 		Version: "0.1.0",
 	}, &mcp.ServerOptions{
-		Instructions: "Use these tools only for the current Mattermost project chat/thread. Keep reads small: prefer mattermost_get_thread before mattermost_search_chat. Use mattermost_post_thread_update for concise progress updates, and mattermost_request_agent only when the user or role prompt allows asking another agent to work.",
+		Instructions: "Use these tools only for the current Mattermost project chat/thread. Keep reads small: prefer mattermost_get_thread before mattermost_search_chat. Use mattermost_update_turn_status for progress because it edits one status message for the active turn. Use mattermost_post_thread_update only when you intentionally need an additional thread message. Use mattermost_request_agent only when the user or role prompt allows asking another agent to work.",
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_get_thread",
@@ -71,13 +75,27 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_post_thread_update",
-		Description: "Post a concise progress update to the current Mattermost thread.",
+		Description: "Post an additional concise progress update to the current Mattermost thread. Prefer mattermost_update_turn_status for routine progress.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpPostInput) (*mcp.CallToolResult, statusservice.AgentSessionPostResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
 			return mcpToolError("session authorization is missing"), statusservice.AgentSessionPostResult{}, nil
 		}
 		output, err := sessionService.PostThreadUpdate(ctx, sessionKey, token, input.Message)
+		if err != nil {
+			return mcpToolError(err.Error()), statusservice.AgentSessionPostResult{}, nil
+		}
+		return nil, output, nil
+	})
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "mattermost_update_turn_status",
+		Description: "Create or update the single status message for the active agent turn in the current Mattermost thread.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpStatusInput) (*mcp.CallToolResult, statusservice.AgentSessionPostResult, error) {
+		sessionKey, token, ok := mcpSessionAuth(ctx)
+		if !ok {
+			return mcpToolError("session authorization is missing"), statusservice.AgentSessionPostResult{}, nil
+		}
+		output, err := sessionService.UpdateTurnStatus(ctx, sessionKey, token, input.Message)
 		if err != nil {
 			return mcpToolError(err.Error()), statusservice.AgentSessionPostResult{}, nil
 		}

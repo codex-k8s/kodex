@@ -182,7 +182,11 @@ func BuildRolePrompt(input RolePromptInput) (string, error) {
 	if strings.TrimSpace(input.Role.PromptTemplate) == "" {
 		return buildRawRolePrompt(input, userMessage), nil
 	}
-	return RenderRolePromptTemplate(input.Role.PromptTemplate, rolePromptTemplateData(input))
+	rendered, err := RenderRolePromptTemplate(input.Role.PromptTemplate, rolePromptTemplateData(input))
+	if err != nil {
+		return "", err
+	}
+	return appendRoleRuntimeContract(rendered, input), nil
 }
 
 func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
@@ -237,7 +241,7 @@ func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
 			body.WriteString("\n")
 		}
 	}
-	body.WriteString("- Mattermost MCP is available for bounded thread/chat reads and progress updates when needed.\n")
+	appendRoleRuntimeContractMarkdown(&body, input)
 	appendRuntimeToolsMarkdown(&body)
 	appendSecretBindingsMarkdown(&body, roleSecretBindings(input.RuntimeVariables))
 	if strings.TrimSpace(input.Locale.Language) != "" {
@@ -310,8 +314,7 @@ func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 			body.WriteString("\n")
 		}
 	}
-	body.WriteString("- GitHub CLI: use `gh` when the role has a GitHub account. Token/user/email are exposed through GH_TOKEN, GITHUB_TOKEN, GITHUB_USERNAME/GITHUB_USER and GITHUB_EMAIL.\n")
-	body.WriteString("- Mattermost MCP: use `mattermost_get_thread` to read this thread, `mattermost_search_chat` for small bounded channel searches, `mattermost_post_thread_update` for progress updates, and `mattermost_request_agent` only when the user or role prompt allows delegating to another agent.\n")
+	appendRoleRuntimeContractMarkdown(&body, input)
 	appendRuntimeToolsMarkdown(&body)
 	appendSecretBindingsMarkdown(&body, roleSecretBindings(input.RuntimeVariables))
 	if strings.TrimSpace(input.Locale.Language) != "" {
@@ -320,6 +323,30 @@ func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 		body.WriteString("\n")
 	}
 	return strings.TrimSpace(body.String()) + "\n"
+}
+
+func appendRoleRuntimeContract(prompt string, input RolePromptInput) string {
+	var body strings.Builder
+	body.WriteString(strings.TrimSpace(prompt))
+	body.WriteString("\n\n")
+	appendRoleRuntimeContractMarkdown(&body, input)
+	return strings.TrimSpace(body.String()) + "\n"
+}
+
+func appendRoleRuntimeContractMarkdown(body *strings.Builder, input RolePromptInput) {
+	body.WriteString("# Matter-codex runtime contract\n\n")
+	body.WriteString("- GitHub CLI: use `gh` when the role has a GitHub account. Token/user/email are exposed through `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER`, and `GITHUB_EMAIL`. Never print token values.\n")
+	body.WriteString("- For GitHub issue, pull request, review, and comment Markdown, write the body to a temporary file or heredoc and pass it with `--body-file`/API file input. Do not inline Markdown with backticks or shell-sensitive text directly inside a shell command string.\n")
+	body.WriteString("- Mattermost MCP: use `mattermost_get_thread` to read this thread and `mattermost_search_chat` for small bounded channel searches.\n")
+	body.WriteString("- Progress status: use `mattermost_update_turn_status` to update the single status message for this turn. Keep it concise and in the response language")
+	if strings.TrimSpace(input.Locale.Language) != "" {
+		body.WriteString(" (")
+		body.WriteString(input.Locale.Language)
+		body.WriteString(")")
+	}
+	body.WriteString(". Update after planning, after meaningful milestones, before a long wait, and when blocked. Do not create routine progress posts with `mattermost_post_thread_update`.\n")
+	body.WriteString("- Use `mattermost_post_thread_update` only when you intentionally need an additional message in the thread. Use `mattermost_request_agent` only when the user or role prompt allows delegating to another agent.\n")
+	body.WriteString("\n")
 }
 
 func RenderRolePromptTemplate(body string, data rolePromptData) (string, error) {

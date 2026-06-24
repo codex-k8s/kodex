@@ -80,6 +80,7 @@ RUN apk add --no-cache \
     redis \
     ripgrep \
     tar \
+    tini \
     tree \
   && ln -sf /usr/local/go/bin/go /usr/local/bin/go \
   && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt \

@@ -164,6 +164,7 @@ func (svc *AgentSessionService) ClaimNextTurn(ctx context.Context, sessionKey st
 		ExtendTTLSeconds:     session.TTLSeconds,
 	})
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: agentSessionTurnRunning})
+	_, _ = svc.upsertTurnStatusMessage(ctx, session, turn, svc.t("chat.session.status.started", map[string]any{"RunID": turn.RunID}))
 	return AgentSessionTurnClaim{
 		HasTurn:        true,
 		TurnID:         turn.ID,
@@ -217,6 +218,7 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 		prURL = command.Artifacts["pr-url"]
 	}
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
+	_, _ = svc.upsertTurnStatusMessage(ctx, session, turn, svc.turnCompletionStatusMessage(status, turn.RunID))
 	return svc.postTurnResult(ctx, session, turn, status, command)
 }
 
@@ -275,6 +277,29 @@ func (svc *AgentSessionService) PostThreadUpdate(ctx context.Context, sessionKey
 		return AgentSessionPostResult{}, fmt.Errorf("Mattermost thread publisher is not configured")
 	}
 	ref, err := svc.postSessionThreadMessage(ctx, session, rootPostID, message)
+	if err != nil {
+		return AgentSessionPostResult{}, err
+	}
+	return AgentSessionPostResult{SessionKey: session.SessionKey, ChannelID: ref.ChannelID, PostID: ref.PostID}, nil
+}
+
+func (svc *AgentSessionService) UpdateTurnStatus(ctx context.Context, sessionKey string, token string, message string) (AgentSessionPostResult, error) {
+	session, err := svc.authorize(ctx, sessionKey, token)
+	if err != nil {
+		return AgentSessionPostResult{}, err
+	}
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return AgentSessionPostResult{}, fmt.Errorf("message is required")
+	}
+	if session.ActiveTurnID == 0 {
+		return AgentSessionPostResult{}, fmt.Errorf("session has no active turn")
+	}
+	turn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, session.ActiveTurnID)
+	if err != nil {
+		return AgentSessionPostResult{}, err
+	}
+	ref, err := svc.upsertTurnStatusMessage(ctx, session, turn, message)
 	if err != nil {
 		return AgentSessionPostResult{}, err
 	}
@@ -433,6 +458,42 @@ func (svc *AgentSessionService) postTurnResult(ctx context.Context, session enti
 	return err
 }
 
+func (svc *AgentSessionService) upsertTurnStatusMessage(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, message string) (MattermostPostRef, error) {
+	if svc.cfg.ThreadPublisher == nil {
+		return MattermostPostRef{}, fmt.Errorf("Mattermost thread publisher is not configured")
+	}
+	channelID := defaultString(turn.MattermostChannelID, session.MattermostChannelID)
+	rootPostID := defaultString(turn.MattermostRootPostID, session.MattermostRootPostID)
+	if channelID == "" || rootPostID == "" {
+		return MattermostPostRef{}, fmt.Errorf("session turn is not bound to a Mattermost thread")
+	}
+	message = truncateMattermostStatus(strings.TrimSpace(message))
+	if message == "" {
+		return MattermostPostRef{}, fmt.Errorf("message is required")
+	}
+	var ref MattermostPostRef
+	var err error
+	if strings.TrimSpace(turn.MattermostStatusPostID) == "" {
+		ref, err = svc.postSessionThreadMessageOnly(ctx, session, channelID, rootPostID, message)
+		if err != nil {
+			return MattermostPostRef{}, err
+		}
+		_, err := svc.cfg.Store.UpdateAgentSessionTurnStatusPost(ctx, adminrepo.UpdateAgentSessionTurnStatusPostInput{
+			TurnID:       turn.ID,
+			StatusPostID: ref.PostID,
+		})
+		if err != nil {
+			return MattermostPostRef{}, err
+		}
+	} else {
+		ref, err = svc.updateSessionThreadMessageOnly(ctx, session, channelID, rootPostID, turn.MattermostStatusPostID, message)
+		if err != nil {
+			return MattermostPostRef{}, err
+		}
+	}
+	return ref, nil
+}
+
 func (svc *AgentSessionService) postSessionThreadMessage(ctx context.Context, session entity.AgentSession, rootPostID string, message string) (MattermostPostRef, error) {
 	return svc.postSessionThreadMessageOnly(ctx, session, session.MattermostChannelID, rootPostID, message)
 }
@@ -452,6 +513,31 @@ func (svc *AgentSessionService) postSessionThreadMessageOnly(ctx context.Context
 		return svc.cfg.ThreadPublisher.PostThreadMessage(ctx, input)
 	}
 	return svc.cfg.ThreadPublisher.PostThreadMessageWithToken(ctx, secret.Token, input)
+}
+
+func (svc *AgentSessionService) updateSessionThreadMessageOnly(ctx context.Context, session entity.AgentSession, channelID string, rootPostID string, postID string, message string) (MattermostPostRef, error) {
+	input := MattermostThreadUpdateInput{
+		ChannelID:  channelID,
+		RootPostID: rootPostID,
+		PostID:     postID,
+		Message:    message,
+	}
+	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, session.RoleID)
+	if err != nil || identity.TokenSecretRef == "" {
+		return svc.cfg.ThreadPublisher.UpdateThreadMessage(ctx, input)
+	}
+	secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, identity.TokenSecretRef)
+	if err != nil {
+		return svc.cfg.ThreadPublisher.UpdateThreadMessage(ctx, input)
+	}
+	return svc.cfg.ThreadPublisher.UpdateThreadMessageWithToken(ctx, secret.Token, input)
+}
+
+func (svc *AgentSessionService) turnCompletionStatusMessage(status string, runID string) string {
+	if status == agentSessionTurnFailed {
+		return svc.t("chat.session.status.failed", map[string]any{"RunID": runID})
+	}
+	return svc.t("chat.session.status.succeeded", map[string]any{"RunID": runID})
 }
 
 func (svc *AgentSessionService) t(messageID string, data map[string]any) string {
@@ -477,4 +563,14 @@ func boundedMCPPostLimit(limit int) int {
 		return 50
 	}
 	return limit
+}
+
+func truncateMattermostStatus(value string) string {
+	const limit = 3800
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return strings.TrimSpace(string(runes[:limit])) + "\n..."
 }
