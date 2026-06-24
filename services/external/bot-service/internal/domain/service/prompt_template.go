@@ -647,7 +647,7 @@ func agentSecretBindings() []promptTemplateSecretBindingData {
 		{
 			Name:         "Mattermost MCP session",
 			Kind:         "Codex MCP bearer token",
-			Env:          "MATTERCODEX_MCP_TOKEN",
+			Env:          "MATTERCODEX_MCP_TOKEN for the Codex MCP client; not exposed to shell commands",
 			File:         "/var/run/secrets/matter-codex-session/token",
 			Availability: "long-lived chat session pods",
 			Purpose:      "let Codex call Mattermost MCP tools for bounded thread reads and progress updates",

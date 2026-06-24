@@ -15,10 +15,13 @@ func TestCodexShellEnvironmentAllowlistIncludesRuntimeEnv(t *testing.T) {
 	values := codexShellEnvironmentAllowlist()
 	joined := "," + strings.Join(values, ",") + ","
 
-	for _, expected := range []string{"RADAR_AUTO_KUBECONFIG", "STAGING_DB_URL", "MATTERCODEX_MCP_TOKEN"} {
+	for _, expected := range []string{"RADAR_AUTO_KUBECONFIG", "STAGING_DB_URL", "MATTERCODEX_GIT_ASKPASS"} {
 		if !strings.Contains(joined, ","+expected+",") {
 			t.Fatalf("allowlist missing %q: %#v", expected, values)
 		}
+	}
+	if strings.Contains(joined, ",MATTERCODEX_MCP_TOKEN,") {
+		t.Fatalf("allowlist exposes MCP bearer token to shell commands: %#v", values)
 	}
 	if strings.Contains(joined, ",invalid-name,") {
 		t.Fatalf("allowlist contains invalid env name: %#v", values)
@@ -91,15 +94,24 @@ url = "https://developers.openai.com/mcp"
 	}
 
 	shellPolicy := mustTable(t, config, "shell_environment_policy")
+	if got := shellPolicy["inherit"]; got != "all" {
+		t.Fatalf("shell_environment_policy.inherit = %#v", got)
+	}
+	if got := shellPolicy["ignore_default_excludes"]; got != true {
+		t.Fatalf("shell_environment_policy.ignore_default_excludes = %#v", got)
+	}
 	includeOnly, err := stringListValue(shellPolicy["include_only"])
 	if err != nil {
 		t.Fatalf("include_only: %v", err)
 	}
 	joined := "," + strings.Join(includeOnly, ",") + ","
-	for _, expected := range []string{"CUSTOM_ENV", "GH_TOKEN", "MATTERCODEX_MCP_TOKEN", "RADAR_AUTO_KUBECONFIG"} {
+	for _, expected := range []string{"CUSTOM_ENV", "GH_TOKEN", "MATTERCODEX_GIT_ASKPASS", "RADAR_AUTO_KUBECONFIG"} {
 		if !strings.Contains(joined, ","+expected+",") {
 			t.Fatalf("include_only missing %q: %#v", expected, includeOnly)
 		}
+	}
+	if strings.Contains(joined, ",MATTERCODEX_MCP_TOKEN,") {
+		t.Fatalf("include_only exposes MCP bearer token to shell commands: %#v", includeOnly)
 	}
 
 	mcpServers := mustTable(t, config, "mcp_servers")
