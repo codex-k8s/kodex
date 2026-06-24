@@ -393,6 +393,96 @@ func TestChatRunPromptsThreadRepositoryChoiceAndRunsWithoutRepository(t *testing
 	}
 }
 
+func TestChatRunRetriesConfiguredThreadRepositorySelectionWhenSessionWasNotCreated(t *testing.T) {
+	store := chatRuntimeStore()
+	project := store.projects[1]
+	project.GitHubOwner = "codex-k8s"
+	project.GitHubAccountName = "agent"
+	store.projects[1] = project
+	store.repositories[repositoryStoreKey("github", "codex-k8s", "matter-codex")] = entity.Repository{
+		ID:                1,
+		Provider:          "github",
+		Owner:             "codex-k8s",
+		Name:              "matter-codex",
+		DefaultBranch:     "main",
+		GitHubAccountName: "agent",
+		Status:            "active",
+	}
+	store.projectRepositories["1:1"] = entity.ProjectRepository{
+		ID:            1,
+		ProjectID:     1,
+		RepositoryID:  1,
+		Provider:      "github",
+		Owner:         "codex-k8s",
+		Name:          "matter-codex",
+		DefaultBranch: "main",
+		IsDefault:     true,
+	}
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.agentRoles[2] = entity.AgentRole{
+		ID:                2,
+		ProjectID:         1,
+		Name:              "reviewer",
+		RoleType:          "reviewer",
+		OpenAIAccountName: "main",
+		GitHubAccountName: "agent",
+		Enabled:           true,
+	}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "reviewer", MattermostUserID: "reviewer-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Review", ChatType: "worker_reviewer"}
+	store.setChatBindings(1, []int64{1, 2}, []int64{1})
+	store.threadContexts[1] = entity.ThreadContext{
+		ID:                      1,
+		ProjectID:               1,
+		ChatID:                  1,
+		MattermostChannelID:     "channel-1",
+		MattermostRootPostID:    "post-1",
+		RepositoryID:            1,
+		RepositoryProvider:      "github",
+		RepositoryOwner:         "codex-k8s",
+		RepositoryName:          "matter-codex",
+		RepositoryDefaultBranch: "main",
+		Status:                  threadContextStatusConfigured,
+		PendingMattermostPostID: "post-1",
+		PendingUserID:           "owner",
+		PendingUserName:         "owner",
+		PendingMessage:          "@reviewer review https://github.com/codex-k8s/matter-codex/pull/37",
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	selected, err := svc.SelectThreadRepository(context.Background(), ThreadRepositorySelectionInput{ThreadContextID: 1, RepositoryID: 1})
+	if err != nil {
+		t.Fatalf("SelectThreadRepository() error = %v", err)
+	}
+	if selected.RunID == "" {
+		t.Fatalf("selection did not replay pending message: %#v", selected)
+	}
+	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].Role != "reviewer" {
+		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	if len(store.sessionTurns) != 1 || store.sessionTurns[0].MattermostRootPostID != "post-1" {
+		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+}
+
 func TestChatRunFallsBackToProjectGitHubAccount(t *testing.T) {
 	store := chatRuntimeStore()
 	project := store.projects[1]
