@@ -196,6 +196,10 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agents_action"})
 		return
 	}
+	if contextString(request.Context, "kind") == "agent_turn" {
+		router.handleAgentTurnAction(w, r, request)
+		return
+	}
 	if router.slashService == nil {
 		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "slash_service_not_configured"})
 		return
@@ -248,6 +252,35 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		response.Update = cardPost(*result.Card)
 	}
 	writeJSON(w, status, response)
+}
+
+func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Request, request mattermostmodel.PostActionIntegrationRequest) {
+	if router.sessionService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "agent_session_service_not_configured"})
+		return
+	}
+	switch contextString(request.Context, "action") {
+	case "stop_turn":
+		result, err := router.sessionService.StopAgentSessionTurns(r.Context(), statusservice.StopAgentSessionTurnsCommand{
+			TurnIDs:   contextInt64List(request.Context, "turn_ids"),
+			UserID:    strings.TrimSpace(request.UserId),
+			UserName:  strings.TrimSpace(request.UserName),
+			ChannelID: strings.TrimSpace(request.ChannelId),
+			PostID:    strings.TrimSpace(request.PostId),
+		})
+		if err != nil {
+			router.logWarn("agent turn stop failed", "error", err)
+			writeJSON(w, http.StatusBadGateway, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("chat.session.turn.stop.failed", nil)})
+			return
+		}
+		response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.Message}
+		if result.Card != nil {
+			response.Update = cardPost(*result.Card)
+		}
+		writeJSON(w, http.StatusOK, response)
+	default:
+		writeJSON(w, http.StatusBadRequest, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("menu.action.unknown", nil)})
+	}
 }
 
 func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request) {
@@ -666,6 +699,22 @@ func contextInt(context map[string]any, key string) int {
 		return 0
 	}
 	return parsed
+}
+
+func contextInt64List(context map[string]any, key string) []int64 {
+	value := contextString(context, key)
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	items := make([]int64, 0, len(parts))
+	for _, part := range parts {
+		parsed, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
+		if err == nil && parsed > 0 {
+			items = append(items, parsed)
+		}
+	}
+	return items
 }
 
 func parseAgentSessionInternalPath(path string) (string, string, bool) {

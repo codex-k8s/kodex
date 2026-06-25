@@ -2080,11 +2080,13 @@ func (svc *SlashCommandService) handleOpenAIStatus(ctx context.Context, args []s
 		account, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: completed.SecretName, Status: "authorized"})
 		_, _ = svc.cfg.RuntimeRunner.CleanupCodexAuthSession(ctx, account.Name)
 		svc.recordOpenAIAudit(ctx, command, "openai.account.authorized", account.Name, "openai account auth.json saved to Kubernetes Secret")
-		return svc.t("openai.status.authorized", map[string]any{
+		text := svc.t("openai.status.authorized", map[string]any{
 			"Account": account.Name,
 			"Secret":  completed.SecretName,
 			"Saved":   completed.Saved,
 		})
+		text += svc.invalidateIdleAgentSessionsForRolesText(ctx, svc.roleIDsUsingOpenAIAccount(ctx, account.Name))
+		return text
 	}
 	if status.DeviceURL != "" && status.DeviceCode != "" {
 		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: account.SecretRef, Status: "awaiting_user"})
@@ -4534,6 +4536,9 @@ func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Cont
 		"Scopes":        emptyAsUnknown(account.Scopes),
 		"Status":        account.Status,
 	})
+	if !created {
+		text += svc.invalidateIdleAgentSessionsForRolesText(ctx, svc.roleIDsUsingGitHubAccount(ctx, account.Name))
+	}
 	return DialogSubmissionResult{
 		StatusCode: 200,
 		Card:       svc.dialogResultCard(ctx, state, command, text),
@@ -6624,6 +6629,160 @@ func (svc *SlashCommandService) recordGitHubAudit(ctx context.Context, command S
 		ResourceName: resourceName,
 		Summary:      summary,
 	})
+}
+
+type agentSessionInvalidationSummary struct {
+	Invalidated int
+	Skipped     int
+	Failed      int
+}
+
+func (svc *SlashCommandService) invalidateIdleAgentSessionsForRolesText(ctx context.Context, roleIDs []int64) string {
+	summary := svc.invalidateIdleAgentSessionsForRoles(ctx, roleIDs)
+	if summary.Invalidated == 0 && summary.Skipped == 0 && summary.Failed == 0 {
+		return ""
+	}
+	return "\n\n" + svc.t("runtime.session.invalidate.summary", map[string]any{
+		"Invalidated": summary.Invalidated,
+		"Skipped":     summary.Skipped,
+		"Failed":      summary.Failed,
+	})
+}
+
+func (svc *SlashCommandService) invalidateIdleAgentSessionsForRoles(ctx context.Context, roleIDs []int64) agentSessionInvalidationSummary {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil || svc.cfg.RuntimeRunner == nil {
+		return agentSessionInvalidationSummary{}
+	}
+	seen := make(map[int64]struct{}, len(roleIDs))
+	var summary agentSessionInvalidationSummary
+	for _, roleID := range roleIDs {
+		if roleID <= 0 {
+			continue
+		}
+		if _, exists := seen[roleID]; exists {
+			continue
+		}
+		seen[roleID] = struct{}{}
+		sessions, err := svc.cfg.Store.ListAgentSessionsByRole(ctx, roleID)
+		if err != nil {
+			summary.Failed++
+			continue
+		}
+		for _, session := range sessions {
+			if !agentSessionRuntimeReady(session) {
+				continue
+			}
+			if session.Status == agentSessionStatusRunning || session.ActiveTurnID > 0 {
+				summary.Skipped++
+				continue
+			}
+			queued, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, session.ID)
+			if err != nil {
+				summary.Failed++
+				continue
+			}
+			if len(queued) > 0 {
+				summary.Skipped++
+				continue
+			}
+			if _, err := svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, session.SessionKey); err != nil {
+				summary.Failed++
+				continue
+			}
+			if _, err := svc.cfg.Store.ResetAgentSessionRuntime(ctx, session.SessionKey, agentSessionStatusIdle); err != nil {
+				summary.Failed++
+				continue
+			}
+			summary.Invalidated++
+		}
+	}
+	return summary
+}
+
+func (svc *SlashCommandService) roleIDsUsingRuntimeVariable(ctx context.Context, projectID int64, variableID int64) []int64 {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil || variableID == 0 {
+		return nil
+	}
+	roles, err := svc.cfg.Store.ListAgentRoles(ctx, projectID)
+	if err != nil {
+		return nil
+	}
+	var roleIDs []int64
+	for _, role := range roles {
+		bindings, err := svc.cfg.Store.ListAgentRoleRuntimeVariables(ctx, role.ID)
+		if err != nil {
+			continue
+		}
+		for _, binding := range bindings {
+			if binding.VariableID == variableID {
+				roleIDs = append(roleIDs, role.ID)
+				break
+			}
+		}
+	}
+	return roleIDs
+}
+
+func (svc *SlashCommandService) roleIDsUsingOpenAIAccount(ctx context.Context, accountName string) []int64 {
+	accountName = strings.TrimSpace(accountName)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil || accountName == "" {
+		return nil
+	}
+	roles, err := svc.cfg.Store.ListAgentRoles(ctx, 0)
+	if err != nil {
+		return nil
+	}
+	var roleIDs []int64
+	for _, role := range roles {
+		if strings.EqualFold(strings.TrimSpace(role.OpenAIAccountName), accountName) {
+			roleIDs = append(roleIDs, role.ID)
+		}
+	}
+	return roleIDs
+}
+
+func (svc *SlashCommandService) roleIDsUsingGitHubAccount(ctx context.Context, accountName string) []int64 {
+	accountName = strings.TrimSpace(accountName)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil || accountName == "" {
+		return nil
+	}
+	roles, err := svc.cfg.Store.ListAgentRoles(ctx, 0)
+	if err != nil {
+		return nil
+	}
+	projects, _ := svc.cfg.Store.ListProjects(ctx, 1000)
+	projectDefault := make(map[int64]string, len(projects))
+	for _, project := range projects {
+		projectDefault[project.ID] = strings.TrimSpace(project.GitHubAccountName)
+	}
+	var roleIDs []int64
+	for _, role := range roles {
+		roleAccount := strings.TrimSpace(role.GitHubAccountName)
+		if roleAccount == "" {
+			roleAccount = projectDefault[role.ProjectID]
+		}
+		if strings.EqualFold(roleAccount, accountName) {
+			roleIDs = append(roleIDs, role.ID)
+		}
+	}
+	return roleIDs
+}
+
+func (svc *SlashCommandService) projectDefaultGitHubRoleIDs(ctx context.Context, projectID int64) []int64 {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil || projectID == 0 {
+		return nil
+	}
+	roles, err := svc.cfg.Store.ListAgentRoles(ctx, projectID)
+	if err != nil {
+		return nil
+	}
+	var roleIDs []int64
+	for _, role := range roles {
+		if strings.TrimSpace(role.GitHubAccountName) == "" {
+			roleIDs = append(roleIDs, role.ID)
+		}
+	}
+	return roleIDs
 }
 
 func (svc *SlashCommandService) recordRuntimeAudit(ctx context.Context, command SlashCommand, eventType string, resourceName string, summary string) {

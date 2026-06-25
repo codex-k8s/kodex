@@ -788,6 +788,23 @@ func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName s
 	return pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed, nil
 }
 
+func (runner *Runner) CleanupAgentSession(ctx context.Context, sessionKey string) (runtimerepo.AgentSessionCleanupResult, error) {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return runtimerepo.AgentSessionCleanupResult{}, fmt.Errorf("session key is required")
+	}
+	podName := sessionPodName(sessionKey)
+	if err := runner.deleteSessionPod(ctx, podName); err != nil {
+		return runtimerepo.AgentSessionCleanupResult{}, err
+	}
+	return runtimerepo.AgentSessionCleanupResult{
+		SessionKey: sessionKey,
+		Namespace:  runner.namespace,
+		PodName:    podName,
+		PodDeleted: true,
+	}, nil
+}
+
 func (runner *Runner) deleteSessionPod(ctx context.Context, podName string) error {
 	grace := int64(0)
 	background := metav1.DeletePropagationBackground

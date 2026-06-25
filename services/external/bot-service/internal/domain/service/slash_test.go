@@ -2265,6 +2265,75 @@ func TestEnqueueAgentTurnPassesRoleRuntimeVariablesToSession(t *testing.T) {
 	}
 }
 
+func TestInvalidateIdleAgentSessionsForRolesDeletesOnlyIdlePods(t *testing.T) {
+	now := time.Now().UTC()
+	store := &fakeAdminStore{
+		agentSessions: map[string]entity.AgentSession{
+			"idle": {
+				ID:                  1,
+				SessionKey:          "idle",
+				RoleID:              1,
+				Status:              agentSessionStatusIdle,
+				KubernetesNamespace: "mattermost",
+				PodName:             "mc-session-idle",
+				PVCName:             "mc-session-ws-idle",
+				TokenSecretRef:      "matter-codex-session-idle",
+				ExpiresAt:           now.Add(time.Hour),
+			},
+			"running": {
+				ID:                  2,
+				SessionKey:          "running",
+				RoleID:              1,
+				Status:              agentSessionStatusRunning,
+				ActiveTurnID:        2,
+				KubernetesNamespace: "mattermost",
+				PodName:             "mc-session-running",
+				PVCName:             "mc-session-ws-running",
+				TokenSecretRef:      "matter-codex-session-running",
+				ExpiresAt:           now.Add(time.Hour),
+			},
+			"queued": {
+				ID:                  3,
+				SessionKey:          "queued",
+				RoleID:              1,
+				Status:              agentSessionStatusIdle,
+				KubernetesNamespace: "mattermost",
+				PodName:             "mc-session-queued",
+				PVCName:             "mc-session-ws-queued",
+				TokenSecretRef:      "matter-codex-session-queued",
+				ExpiresAt:           now.Add(time.Hour),
+			},
+		},
+		sessionTurns: []entity.AgentSessionTurn{
+			{ID: 3, SessionID: 3, RunID: "run-queued", Status: agentSessionTurnQueued},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         store,
+		RuntimeRunner: runner,
+		StorageReady:  true,
+	})
+
+	text := svc.invalidateIdleAgentSessionsForRolesText(context.Background(), []int64{1})
+
+	if !strings.Contains(text, "invalidated idle pods `1`") || !strings.Contains(text, "skipped active/queued `2`") {
+		t.Fatalf("summary = %q", text)
+	}
+	if len(runner.cleanedSessionKeys) != 1 || runner.cleanedSessionKeys[0] != "idle" {
+		t.Fatalf("cleaned session keys = %#v", runner.cleanedSessionKeys)
+	}
+	if session := store.agentSessions["idle"]; session.PodName != "" || session.TokenSecretRef != "" || session.Status != agentSessionStatusIdle {
+		t.Fatalf("idle session = %#v", session)
+	}
+	if store.agentSessions["running"].PodName == "" || store.agentSessions["queued"].PodName == "" {
+		t.Fatalf("active sessions were invalidated: %#v", store.agentSessions)
+	}
+}
+
 func TestSlashRepoAddCreatesChannelAndStoresRepository(t *testing.T) {
 	store := &fakeAdminStore{}
 	channels := &fakeChannelManager{}
@@ -3305,6 +3374,8 @@ type fakeRuntimeRunner struct {
 	sessionRuns                 []runtimerepo.AgentSessionPodInput
 	sessionCodexSecret          string
 	sessionGitHubSecret         string
+	cleanedSessionKey           string
+	cleanedSessionKeys          []string
 	botTokenSecrets             map[string]string
 	cleanedRunID                string
 	cleanedRunIDs               []string
@@ -3532,6 +3603,17 @@ func (runner *fakeRuntimeRunner) StartAgentSession(_ context.Context, input runt
 		PVCName:    "mc-session-ws-" + input.SessionKey,
 		SecretName: secretName,
 		Created:    true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) CleanupAgentSession(_ context.Context, sessionKey string) (runtimerepo.AgentSessionCleanupResult, error) {
+	runner.cleanedSessionKey = sessionKey
+	runner.cleanedSessionKeys = append(runner.cleanedSessionKeys, sessionKey)
+	return runtimerepo.AgentSessionCleanupResult{
+		SessionKey: sessionKey,
+		Namespace:  "mattermost",
+		PodName:    "mc-session-" + sessionKey,
+		PodDeleted: true,
 	}, nil
 }
 
@@ -4286,6 +4368,17 @@ func (store *fakeAdminStore) ListAgentSessionsByChat(_ context.Context, chatID i
 	return sessions, nil
 }
 
+func (store *fakeAdminStore) ListAgentSessionsByRole(_ context.Context, roleID int64) ([]entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	var sessions []entity.AgentSession
+	for _, session := range store.agentSessions {
+		if session.RoleID == roleID {
+			sessions = append(sessions, session)
+		}
+	}
+	return sessions, nil
+}
+
 func (store *fakeAdminStore) UpdateAgentSessionRuntime(_ context.Context, input adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
 	store.ensureAgentSessions()
 	session, ok := store.agentSessions[input.SessionKey]
@@ -4320,6 +4413,25 @@ func (store *fakeAdminStore) UpdateAgentSessionRuntime(_ context.Context, input 
 		session.ExpiresAt = time.Now().Add(time.Duration(input.ExtendTTLSeconds) * time.Second)
 	}
 	store.agentSessions[input.SessionKey] = session
+	return session, nil
+}
+
+func (store *fakeAdminStore) ResetAgentSessionRuntime(_ context.Context, sessionKey string, status string) (entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	session, ok := store.agentSessions[sessionKey]
+	if !ok {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if strings.TrimSpace(status) != "" {
+		session.Status = status
+	}
+	session.ActiveTurnID = 0
+	session.ActiveRunID = ""
+	session.KubernetesNamespace = ""
+	session.PodName = ""
+	session.PVCName = ""
+	session.TokenSecretRef = ""
+	store.agentSessions[sessionKey] = session
 	return session, nil
 }
 
@@ -4403,6 +4515,20 @@ func (store *fakeAdminStore) CompleteAgentSessionTurn(_ context.Context, input a
 			turn.FinalMessage = input.FinalMessage
 			turn.ErrorMessage = input.ErrorMessage
 			turn.Artifacts = input.Artifacts
+			store.sessionTurns[index] = turn
+			return turn, nil
+		}
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) CancelAgentSessionTurn(_ context.Context, input adminrepo.CancelAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	for index, turn := range store.sessionTurns {
+		if turn.ID == input.TurnID && agentSessionTurnStoppable(turn.Status) {
+			turn.Status = agentSessionTurnCanceled
+			turn.ErrorMessage = input.ErrorMessage
+			turn.Artifacts = input.Artifacts
+			turn.FinishedAt = time.Now().UTC()
 			store.sessionTurns[index] = turn
 			return turn, nil
 		}

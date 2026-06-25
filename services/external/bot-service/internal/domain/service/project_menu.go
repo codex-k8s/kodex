@@ -398,6 +398,7 @@ func (svc *SlashCommandService) deleteProjectRuntimeVariableFromMenu(ctx context
 	if err != nil {
 		return svc.t("runtime_var.get.failed", map[string]any{"Error": safeError(err)})
 	}
+	roleIDs := svc.roleIDsUsingRuntimeVariable(ctx, variable.ProjectID, variable.ID)
 	if strings.TrimSpace(variable.SecretRef) != "" {
 		if _, err := svc.cfg.RuntimeRunner.DeleteProjectRuntimeVariableSecret(ctx, variable.SecretRef); err != nil {
 			return svc.t("runtime_var.secret_delete.failed", map[string]any{"Error": safeError(err)})
@@ -415,7 +416,9 @@ func (svc *SlashCommandService) deleteProjectRuntimeVariableFromMenu(ctx context
 		ResourceName: deleted.Name,
 		Summary:      "project runtime variable deleted from Mattermost entity card",
 	})
-	return svc.t("runtime_var.delete.result", map[string]any{"Name": deleted.Name, "Project": deleted.ProjectID})
+	text := svc.t("runtime_var.delete.result", map[string]any{"Name": deleted.Name, "Project": deleted.ProjectID})
+	text += svc.invalidateIdleAgentSessionsForRolesText(ctx, roleIDs)
+	return text
 }
 
 func (svc *SlashCommandService) roleListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
@@ -1288,6 +1291,9 @@ func (svc *SlashCommandService) handleProjectDialogUpsert(ctx context.Context, c
 		"Team":   emptyAsUnknown(project.MattermostTeamID),
 		"GitHub": projectGitHubSummary(project),
 	})
+	if editMode && strings.TrimSpace(current.GitHubAccountName) != strings.TrimSpace(project.GitHubAccountName) {
+		text += svc.invalidateIdleAgentSessionsForRolesText(ctx, svc.projectDefaultGitHubRoleIDs(ctx, project.ID))
+	}
 	card := svc.projectEntityCard(ctx, MenuActionCommand{View: menuViewProjects, ID: strconv.FormatInt(project.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
 	card.Text = text + "\n\n" + card.Text
 	return DialogSubmissionResult{StatusCode: 200, Card: card}
@@ -1440,9 +1446,13 @@ func (svc *SlashCommandService) handleProjectRuntimeVariableDialog(ctx context.C
 			"Role":     binding.RoleName,
 			"Variable": binding.Name,
 		})
+		text += svc.invalidateIdleAgentSessionsForRolesText(ctx, []int64{role.ID})
 		card := svc.roleEntityCard(ctx, MenuActionCommand{View: menuViewRoles, ID: strconv.FormatInt(role.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
 		card.Text = text + "\n\n" + card.Text
 		return DialogSubmissionResult{StatusCode: 200, Card: card}
+	}
+	if editMode {
+		text += svc.invalidateIdleAgentSessionsForRolesText(ctx, svc.roleIDsUsingRuntimeVariable(ctx, variable.ProjectID, variable.ID))
 	}
 	card := svc.projectRuntimeVariableEntityCard(ctx, MenuActionCommand{View: menuViewProjects, ID: strconv.FormatInt(variable.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
 	card.Text = text + "\n\n" + card.Text
@@ -1485,6 +1495,7 @@ func (svc *SlashCommandService) handleRoleRuntimeVariableAttachDialog(ctx contex
 		"Role":     binding.RoleName,
 		"Variable": binding.Name,
 	})
+	text += svc.invalidateIdleAgentSessionsForRolesText(ctx, []int64{role.ID})
 	card := svc.roleEntityCard(ctx, MenuActionCommand{View: menuViewRoles, ID: strconv.FormatInt(role.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
 	card.Text = text + "\n\n" + card.Text
 	return DialogSubmissionResult{StatusCode: 200, Card: card}
@@ -1507,6 +1518,7 @@ func (svc *SlashCommandService) handleRoleRuntimeVariableDetachDialog(ctx contex
 		"Role":     binding.RoleName,
 		"Variable": binding.Name,
 	})
+	text += svc.invalidateIdleAgentSessionsForRolesText(ctx, []int64{roleID})
 	card := svc.roleEntityCard(ctx, MenuActionCommand{View: menuViewRoles, ID: strconv.FormatInt(roleID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
 	card.Text = text + "\n\n" + card.Text
 	return DialogSubmissionResult{StatusCode: 200, Card: card}
@@ -1562,6 +1574,9 @@ func (svc *SlashCommandService) handleAgentRoleDialogUpsert(ctx context.Context,
 		"Type":    role.RoleType,
 		"Prompt":  rolePromptLabel(svc, role),
 	})
+	if !created {
+		text += svc.invalidateIdleAgentSessionsForRolesText(ctx, []int64{role.ID})
+	}
 	return DialogSubmissionResult{StatusCode: 200, Card: svc.dialogResultCard(ctx, state, command, text)}
 }
 

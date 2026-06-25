@@ -477,6 +477,15 @@ func (repo *Repository) ListAgentSessionsByChat(ctx context.Context, chatID int6
 	return scanAgentSessions(rows)
 }
 
+func (repo *Repository) ListAgentSessionsByRole(ctx context.Context, roleID int64) ([]entity.AgentSession, error) {
+	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_by_role.sql"), roleID)
+	if err != nil {
+		return nil, fmt.Errorf("list agent sessions by role: %w", err)
+	}
+	defer rows.Close()
+	return scanAgentSessions(rows)
+}
+
 func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
 	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__update_runtime.sql"),
 		input.SessionKey,
@@ -492,6 +501,17 @@ func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adm
 	))
 	if err != nil {
 		return entity.AgentSession{}, fmt.Errorf("update agent session runtime: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) ResetAgentSessionRuntime(ctx context.Context, sessionKey string, status string) (entity.AgentSession, error) {
+	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__reset_runtime.sql"), sessionKey, status))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSession{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSession{}, fmt.Errorf("reset agent session runtime: %w", err)
 	}
 	return item, nil
 }
@@ -559,6 +579,21 @@ func (repo *Repository) CompleteAgentSessionTurn(ctx context.Context, input admi
 	))
 	if err != nil {
 		return entity.AgentSessionTurn{}, fmt.Errorf("complete agent session turn: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) CancelAgentSessionTurn(ctx context.Context, input adminrepo.CancelAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__cancel.sql"),
+		input.TurnID,
+		input.ErrorMessage,
+		input.Artifacts,
+	))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSessionTurn{}, fmt.Errorf("cancel agent session turn: %w", err)
 	}
 	return item, nil
 }

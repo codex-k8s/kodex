@@ -81,6 +81,59 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	}
 }
 
+func TestChatRunPostsQueuedTurnCardWithStopButton(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{}
+	publisher := &fakeThreadPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:       localizer,
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		MenuActionURL:   "https://matter-codex.example/mattermost/actions/agents",
+		StorageReady:    true,
+		RuntimeReady:    true,
+		DisableMonitor:  true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Help me decompose the task.",
+	})
+
+	if result.RunID == "" || result.Mode != "session" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(publisher.cards) != 1 || len(publisher.posts) != 0 {
+		t.Fatalf("publisher cards=%#v posts=%#v", publisher.cards, publisher.posts)
+	}
+	card := publisher.cards[0]
+	if card.Title != "Agent turn queued" || len(card.Actions) != 1 {
+		t.Fatalf("card = %#v", card)
+	}
+	action := card.Actions[0]
+	if action.Name != "Stop turn" || action.Style != "danger" {
+		t.Fatalf("action = %#v", action)
+	}
+	if action.Context["kind"] != "agent_turn" || action.Context["action"] != "stop_turn" || action.Context["turn_ids"] != "1" {
+		t.Fatalf("action context = %#v", action.Context)
+	}
+}
+
 func TestChatRunUsesRoleTemplateOnlyForFirstSessionTurn(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{
