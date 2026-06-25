@@ -139,6 +139,103 @@ func TestChatRunUsesRoleTemplateOnlyForFirstSessionTurn(t *testing.T) {
 	}
 }
 
+func TestChatRunQueuesFollowUpsForRunningThreadSessionWithoutRestart(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	store.threadContexts[1] = entity.ThreadContext{
+		ID:                      1,
+		ProjectID:               1,
+		ChatID:                  1,
+		MattermostChannelID:     "channel-1",
+		MattermostRootPostID:    "post-1",
+		RepositoryID:            1,
+		RepositoryProvider:      "github",
+		RepositoryOwner:         "codex-k8s",
+		RepositoryName:          "matter-codex",
+		RepositoryDefaultBranch: "main",
+		Status:                  threadContextStatusConfigured,
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	first := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Start the thread work.",
+	})
+	if first.RunID == "" {
+		t.Fatalf("first result = %#v", first)
+	}
+	if len(runner.sessionRuns) != 1 || len(store.sessionTurns) != 1 {
+		t.Fatalf("initial session state runner=%#v turns=%#v", runner.sessionRuns, store.sessionTurns)
+	}
+	sessionKey := agentSessionKey(1, 1, agentSessionScopeThreadRole, "post-1")
+	session := store.agentSessions[sessionKey]
+	session.Status = agentSessionStatusRunning
+	session.ActiveTurnID = store.sessionTurns[0].ID
+	session.ActiveRunID = store.sessionTurns[0].RunID
+	store.agentSessions[sessionKey] = session
+	store.sessionTurns[0].Status = agentSessionTurnRunning
+
+	for _, item := range []struct {
+		postID  string
+		message string
+	}{
+		{postID: "reply-1", message: "First follow-up."},
+		{postID: "reply-2", message: "Second follow-up."},
+		{postID: "reply-3", message: "Third follow-up."},
+	} {
+		result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+			ChannelID:  "channel-1",
+			PostID:     item.postID,
+			RootPostID: "post-1",
+			UserID:     "owner",
+			UserName:   "owner",
+			Message:    item.message,
+		})
+		if result.RunID == "" || result.Mode != "session" {
+			t.Fatalf("follow-up %s result = %#v", item.postID, result)
+		}
+	}
+	if len(runner.sessionRuns) != 1 {
+		t.Fatalf("running session was restarted: %#v", runner.sessionRuns)
+	}
+	if len(store.sessionTurns) != 4 {
+		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+	session = store.agentSessions[sessionKey]
+	if session.Status != agentSessionStatusRunning || session.ActiveTurnID != store.sessionTurns[0].ID || session.ActiveRunID != store.sessionTurns[0].RunID {
+		t.Fatalf("running session state was changed: %#v", session)
+	}
+	for index, turn := range store.sessionTurns[1:] {
+		if turn.Status != agentSessionTurnQueued {
+			t.Fatalf("turn %d status = %q", index+1, turn.Status)
+		}
+		if !strings.Contains(turn.Message, "Continue the existing Codex session") {
+			t.Fatalf("turn %d is not a continuation prompt: %q", index+1, turn.Message)
+		}
+	}
+}
+
 func TestChatRunDoesNotCreateSessionWhenFirstRoleTemplateFails(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{

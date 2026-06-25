@@ -35,6 +35,9 @@ func TestAgentSessionClaimCreatesInitialStatusPost(t *testing.T) {
 	if !strings.Contains(publisher.posts[0].Message, "run-1") {
 		t.Fatalf("status message = %q", publisher.posts[0].Message)
 	}
+	if !strings.Contains(publisher.posts[0].Message, "OpenAI account: `main`") {
+		t.Fatalf("status message misses account = %q", publisher.posts[0].Message)
+	}
 	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("GetAgentSessionTurn() error = %v", err)
@@ -78,9 +81,58 @@ func TestAgentSessionUpdateTurnStatusEditsSamePost(t *testing.T) {
 	}
 }
 
+func TestAgentSessionCompleteUpdatesStatusWithCodexLimits(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	err = svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+		TurnID:       claim.TurnID,
+		RunID:        claim.RunID,
+		Status:       agentSessionTurnSucceeded,
+		FinalMessage: "done",
+		Artifacts: map[string]string{
+			"openai-account": "main",
+			"codex-limits":   "🕔 5h ████████  96% · 24.06 19:31\n📅 7d ███████░  82% · 25.06 03:42",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	if len(publisher.updates) != 1 {
+		t.Fatalf("updates = %#v", publisher.updates)
+	}
+	message := publisher.updates[0].Message
+	for _, expected := range []string{"agent turn completed", "OpenAI account: `main`", "Codex limits:", "🕔 5h", "📅 7d"} {
+		if !strings.Contains(message, expected) {
+			t.Fatalf("status message misses %q: %q", expected, message)
+		}
+	}
+}
+
 func agentSessionStatusTestDeps() (*fakeAdminStore, *fakeRuntimeRunner, *fakeThreadPublisher) {
 	now := time.Now().UTC()
 	store := &fakeAdminStore{
+		agentRoles: map[int64]entity.AgentRole{
+			1: {
+				ID:                1,
+				ProjectID:         1,
+				Name:              "manager",
+				RoleType:          "manager",
+				OpenAIAccountName: "main",
+				Enabled:           true,
+			},
+		},
 		agentSessions: map[string]entity.AgentSession{
 			"session-1": {
 				ID:                   1,

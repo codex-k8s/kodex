@@ -133,6 +133,46 @@ url = "https://developers.openai.com/mcp"
 	}
 }
 
+func TestLatestCodexLimitsSummaryReadsAndMergesSessionSnapshots(t *testing.T) {
+	codexHome := t.TempDir()
+	sessionDir := filepath.Join(codexHome, "sessions", "2026", "06", "25")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir sessions: %v", err)
+	}
+	body := strings.Join([]string{
+		`{"timestamp":"2026-06-25T06:00:00Z","payload":{"type":"token_count","rate_limits":{"limitId":"codex","primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1772881542},"secondary":{"usedPercent":55,"windowDurationMins":10080,"resetsAt":1773428970},"planType":"team"}}}`,
+		`{"timestamp":"2026-06-25T05:59:00Z","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":46,"window_minutes":300,"resets_at":1772881542},"secondary":{"used_percent":84,"window_minutes":10080,"resets_at":1773428970},"plan_type":"team"}}}`,
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(sessionDir, "session.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatalf("write session jsonl: %v", err)
+	}
+
+	summary, err := latestCodexLimitsSummary(codexHome)
+	if err != nil {
+		t.Fatalf("latestCodexLimitsSummary() error = %v", err)
+	}
+	lines := strings.Split(summary, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("summary = %q", summary)
+	}
+	if !strings.HasPrefix(lines[0], "🕔 5h ████░░░░  54%") {
+		t.Fatalf("5h line = %q", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "📅 7d █░░░░░░░  16%") {
+		t.Fatalf("7d line = %q", lines[1])
+	}
+}
+
+func TestLatestCodexLimitsSummaryAllowsMissingSessions(t *testing.T) {
+	summary, err := latestCodexLimitsSummary(t.TempDir())
+	if err != nil {
+		t.Fatalf("latestCodexLimitsSummary() error = %v", err)
+	}
+	if summary != "" {
+		t.Fatalf("summary = %q, want empty", summary)
+	}
+}
+
 func mustTable(t *testing.T, parent map[string]any, key string) map[string]any {
 	t.Helper()
 	table, ok := asStringAnyMap(parent[key])

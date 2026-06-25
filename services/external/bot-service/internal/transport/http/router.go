@@ -430,6 +430,23 @@ func (router *Router) handleAgentSessionInternal(w http.ResponseWriter, r *http.
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	case "turns/status":
+		if r.Method != http.MethodPost {
+			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+			return
+		}
+		var command statusservice.UpdateAgentSessionTurnStatusCommand
+		if err := json.NewDecoder(r.Body).Decode(&command); err != nil {
+			writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_status_payload"})
+			return
+		}
+		result, err := router.sessionService.UpdateTurnSystemStatus(r.Context(), sessionKey, token, command)
+		if err != nil {
+			router.logWarn("agent session status update failed", "error", err)
+			writeJSON(w, http.StatusBadGateway, transportmodels.ErrorResponse{Error: "agent_session_status_failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
 	default:
 		writeJSON(w, http.StatusNotFound, transportmodels.ErrorResponse{Error: "not_found"})
 	}
