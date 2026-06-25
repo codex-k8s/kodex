@@ -710,8 +710,9 @@ func writeCodexConfig(path string) error {
 		"approval_policy":          "never",
 		"disable_response_storage": false,
 		"shell_environment_policy": map[string]any{
-			"inherit":      "none",
-			"include_only": allowlist,
+			"inherit":                 "all",
+			"ignore_default_excludes": true,
+			"include_only":            allowlist,
 		},
 		"mcp_servers": map[string]any{
 			"context7": map[string]any{
@@ -760,9 +761,8 @@ func ensureCodexRuntimeConfig(config map[string]any, allowlist []string) error {
 	if err != nil {
 		return err
 	}
-	if _, exists := shellPolicy["inherit"]; !exists {
-		shellPolicy["inherit"] = "none"
-	}
+	shellPolicy["inherit"] = "all"
+	shellPolicy["ignore_default_excludes"] = true
 	existingAllowlist, err := stringListValue(shellPolicy["include_only"])
 	if err != nil {
 		return fmt.Errorf("shell_environment_policy.include_only: %w", err)
@@ -861,9 +861,9 @@ func codexShellEnvironmentAllowlist() []string {
 		"GIT_COMMITTER_NAME",
 		"GIT_COMMITTER_EMAIL",
 		"GIT_ASKPASS",
+		"MATTERCODEX_GIT_ASKPASS",
 		"GIT_TERMINAL_PROMPT",
 		"MATTERCODEX_GITHUB_TOKEN_FILE",
-		"MATTERCODEX_MCP_TOKEN",
 		"KUBECONFIG",
 		"KUBERNETES_SERVICE_HOST",
 		"KUBERNETES_SERVICE_PORT",
