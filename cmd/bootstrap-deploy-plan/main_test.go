@@ -22,7 +22,7 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		"KODEX_POSTGRES_PASSWORD='secret-postgres-password'",
 		"KODEX_ACCESS_MANAGER_DATABASE_DSN='secret-access-dsn'",
 		"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN='secret-access-token'",
-	}, "\n")+"\n"+strings.Join(selfDeployReadinessEnvLines(), "\n")), 0o600); err != nil {
+	}, "\n")), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
 	renderDir := filepath.Join(t.TempDir(), "rendered")
@@ -49,9 +49,8 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		"backend service access-manager rendered",
 		"backend service agent-manager rendered",
 		"backend service runtime-manager rendered",
-		"agent-manager self-deploy rendered manifest surface checked",
-		"runtime-manager self-deploy rendered manifest surface checked",
-		"READINESS: component=final-self-deploy-preflight status=ready",
+		"self-deploy readiness checks skipped for manual MVP deploy",
+		"READINESS: component=manual-mvp-deploy-preflight status=ready",
 		"live Kubernetes foundation checks skipped",
 	} {
 		if !strings.Contains(output.String(), expected) {
@@ -73,6 +72,38 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		}
 	}
 	assertRenderedTreeDoesNotContain(t, renderDir, "secret-postgres-password", "secret-access-dsn", "secret-access-token", "secret.registry.local", "secret-namespace", "secret-client-secret")
+}
+
+func TestRunIncludesSelfDeployReadinessOnlyWhenRequested(t *testing.T) {
+	clearDeployPlanEnv(t)
+	repoRoot := createDeployPlanRepo(t, true)
+	envFile := filepath.Join(t.TempDir(), "config.env")
+	if err := os.WriteFile(envFile, []byte("KODEX_INTERNAL_REGISTRY_HOST='127.0.0.1:5000'\n"+strings.Join(selfDeployReadinessEnvLines(), "\n")), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	var output bytes.Buffer
+	if err := run(context.Background(), planOptions{
+		RepoRoot:            repoRoot,
+		EnvFilePath:         envFile,
+		SkipLiveKubernetes:  true,
+		SelfDeployReadiness: true,
+	}, &output); err != nil {
+		t.Fatalf("run deploy plan: %v", err)
+	}
+
+	for _, expected := range []string{
+		"agent-manager self-deploy readiness env checked",
+		"runtime-manager Kubernetes executor readiness env checked",
+		"agent-manager self-deploy rendered manifest surface checked",
+		"runtime-manager self-deploy rendered manifest surface checked",
+		"self-deploy chain acceptance command is available",
+		"READINESS: component=final-self-deploy-preflight status=ready",
+	} {
+		if !strings.Contains(output.String(), expected) {
+			t.Fatalf("self-deploy deploy plan output missing %q: %s", expected, output.String())
+		}
+	}
 }
 
 func TestRunFailsWhenDeployableServiceImageIsMissing(t *testing.T) {
@@ -124,9 +155,10 @@ func TestRunFailsWhenSelfDeployProjectIDIsMissingInvalidOrNil(t *testing.T) {
 			}
 
 			err := run(context.Background(), planOptions{
-				RepoRoot:           repoRoot,
-				EnvFilePath:        envFile,
-				SkipLiveKubernetes: true,
+				RepoRoot:            repoRoot,
+				EnvFilePath:         envFile,
+				SkipLiveKubernetes:  true,
+				SelfDeployReadiness: true,
 			}, discardWriter{})
 			if err == nil {
 				t.Fatal("expected self-deploy project id error")
@@ -153,9 +185,10 @@ func TestRunFailsWhenSelfDeployBuildDispatchIsDisabled(t *testing.T) {
 	}
 
 	err := run(context.Background(), planOptions{
-		RepoRoot:           repoRoot,
-		EnvFilePath:        envFile,
-		SkipLiveKubernetes: true,
+		RepoRoot:            repoRoot,
+		EnvFilePath:         envFile,
+		SkipLiveKubernetes:  true,
+		SelfDeployReadiness: true,
 	}, discardWriter{})
 	if err == nil {
 		t.Fatal("expected disabled self-deploy build dispatch error")
@@ -215,6 +248,37 @@ func TestRequiredSelfDeployRuntimeSecretKeys(t *testing.T) {
 		if !strings.Contains(keys, expected) {
 			t.Fatalf("required self-deploy runtime secret keys missing %s: %s", expected, keys)
 		}
+	}
+}
+
+func TestCheckDerivedRuntimeSecretDataDetectsDrift(t *testing.T) {
+	data := map[string]string{}
+	for _, key := range []string{
+		"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_FLEET_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_PACKAGE_HUB_GRPC_AUTH_TOKEN",
+		"KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN",
+		"KODEX_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_RUNTIME_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN",
+	} {
+		data[key] = key + "-value"
+	}
+	for _, item := range derivedRuntimeSecretKeys() {
+		data[item.Key] = data[item.SourceKey]
+	}
+	if err := checkDerivedRuntimeSecretData(data); err != nil {
+		t.Fatalf("consistent derived secret data: %v", err)
+	}
+
+	data["KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN"] = "stale-value"
+	err := checkDerivedRuntimeSecretData(data)
+	if err == nil {
+		t.Fatal("expected derived key drift error")
+	}
+	if !strings.Contains(err.Error(), "runtime_secret_derived_key_drift") ||
+		!strings.Contains(err.Error(), "KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN") {
+		t.Fatalf("unexpected drift error: %v", err)
 	}
 }
 

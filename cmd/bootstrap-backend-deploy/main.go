@@ -545,9 +545,16 @@ func resolveSecretValues(existing secretSnapshot, lookup func(string) (string, b
 	}
 	for _, derived := range derivedRuntimeSecretKeys() {
 		source := runtime[derived.SourceKey]
-		runtime[derived.Key], err = value("kodex-platform-runtime", derived.Key, literal(source))
-		if err != nil {
-			return secretValues{}, err
+		if strings.TrimSpace(source) == "" {
+			return secretValues{}, fmt.Errorf("cannot derive %s from empty %s", derived.Key, derived.SourceKey)
+		}
+		current := ""
+		if secret := existing["kodex-platform-runtime"]; secret != nil {
+			current = strings.TrimSpace(secret[derived.Key])
+		}
+		runtime[derived.Key] = source
+		if current != source {
+			generated = append(generated, derived.Key)
 		}
 	}
 
