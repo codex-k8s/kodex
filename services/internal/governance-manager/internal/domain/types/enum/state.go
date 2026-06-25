@@ -226,13 +226,17 @@ const (
 type BlockingSignalSourceType string
 
 const (
-	BlockingSignalSourceTypeAcceptance   BlockingSignalSourceType = "acceptance"
-	BlockingSignalSourceTypeReviewSignal BlockingSignalSourceType = "review_signal"
-	BlockingSignalSourceTypeRuntime      BlockingSignalSourceType = "runtime"
-	BlockingSignalSourceTypeProvider     BlockingSignalSourceType = "provider"
-	BlockingSignalSourceTypeInteraction  BlockingSignalSourceType = "interaction"
-	BlockingSignalSourceTypeHuman        BlockingSignalSourceType = "human"
-	BlockingSignalSourceTypeMonitoring   BlockingSignalSourceType = "monitoring"
+	BlockingSignalSourceTypeAcceptance     BlockingSignalSourceType = "acceptance"
+	BlockingSignalSourceTypeReviewSignal   BlockingSignalSourceType = "review_signal"
+	BlockingSignalSourceTypeRuntime        BlockingSignalSourceType = "runtime"
+	BlockingSignalSourceTypeProvider       BlockingSignalSourceType = "provider"
+	BlockingSignalSourceTypeInteraction    BlockingSignalSourceType = "interaction"
+	BlockingSignalSourceTypeHuman          BlockingSignalSourceType = "human"
+	BlockingSignalSourceTypeMonitoring     BlockingSignalSourceType = "monitoring"
+	BlockingSignalSourceTypeSecurity       BlockingSignalSourceType = "security"
+	BlockingSignalSourceTypeDependency     BlockingSignalSourceType = "dependency"
+	BlockingSignalSourceTypeContainer      BlockingSignalSourceType = "container"
+	BlockingSignalSourceTypeInfrastructure BlockingSignalSourceType = "infrastructure"
 )
 
 // BlockingSignalStatus is the lifecycle status of a blocking signal.

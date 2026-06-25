@@ -32,3 +32,24 @@ func TestSelfDeployPlanTargetTypeMigration(t *testing.T) {
 		}
 	}
 }
+
+func TestSecurityBlockingSignalSourceMigration(t *testing.T) {
+	t.Parallel()
+
+	contentBytes, err := os.ReadFile("20260619110000_governance_security_blocking_signal_sources.sql")
+	if err != nil {
+		t.Fatalf("read security blocking signal source migration: %v", err)
+	}
+	content := string(contentBytes)
+	for _, expected := range []string{
+		"governance_manager_blocking_signals_source_type_chk",
+		"'security'",
+		"'dependency'",
+		"'container'",
+		"'infrastructure'",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("security blocking signal source migration misses %q:\n%s", expected, content)
+		}
+	}
+}

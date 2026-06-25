@@ -1360,7 +1360,7 @@ func (s *Service) ListReleaseDecisions(ctx context.Context, input ListReleaseDec
 // RecordBlockingSignal stores a bounded blocking signal reference.
 func (s *Service) RecordBlockingSignal(ctx context.Context, input RecordBlockingSignalInput) (entity.BlockingSignal, error) {
 	target := value.ExternalRef{Type: strings.TrimSpace(input.Target.Type), Ref: strings.TrimSpace(input.Target.Ref)}
-	if target.Type == "" || target.Ref == "" || input.SourceType == "" || input.Severity == "" || input.Severity == enum.SignalSeverityInfo {
+	if target.Type == "" || target.Ref == "" || !validBlockingSignalSourceType(input.SourceType) || input.Severity == "" || input.Severity == enum.SignalSeverityInfo {
 		return entity.BlockingSignal{}, errs.ErrInvalidArgument
 	}
 	if err := validateReleaseSafeRef("blocking_signal.target_type", target.Type, true); err != nil {
@@ -1682,6 +1682,25 @@ func gateOutcomeClearsRelease(outcome enum.GateOutcome) bool {
 
 func terminalBlockingSignalStatus(status enum.BlockingSignalStatus) bool {
 	return status == enum.BlockingSignalStatusResolved || status == enum.BlockingSignalStatusDismissed
+}
+
+func validBlockingSignalSourceType(sourceType enum.BlockingSignalSourceType) bool {
+	switch sourceType {
+	case enum.BlockingSignalSourceTypeAcceptance,
+		enum.BlockingSignalSourceTypeReviewSignal,
+		enum.BlockingSignalSourceTypeRuntime,
+		enum.BlockingSignalSourceTypeProvider,
+		enum.BlockingSignalSourceTypeInteraction,
+		enum.BlockingSignalSourceTypeHuman,
+		enum.BlockingSignalSourceTypeMonitoring,
+		enum.BlockingSignalSourceTypeSecurity,
+		enum.BlockingSignalSourceTypeDependency,
+		enum.BlockingSignalSourceTypeContainer,
+		enum.BlockingSignalSourceTypeInfrastructure:
+		return true
+	default:
+		return false
+	}
 }
 
 func validReleaseSafetyState(state enum.ReleaseSafetyStateKind) bool {
