@@ -6,6 +6,8 @@ import {
   listAgentRunSummaries,
   listAgentSessions,
   listOwnerInboxItems,
+  listProjectRepositories,
+  listProjects,
   respondOwnerInboxItem,
   submitSelfDeployGateDecision,
   type AgentActivityKind,
@@ -19,6 +21,8 @@ import {
   type GetAgentRunRuntimeStatusData,
   type GetSelfDeploySummaryData,
   type GetOwnerInboxItemData,
+  type ListProjectRepositoriesData,
+  type ListProjectsData,
   type ListAgentRunActivitiesData,
   type ListAgentRunSummariesData,
   type ListAgentSessionsData,
@@ -27,6 +31,10 @@ import {
   type OwnerInboxListResponse,
   type OwnerInboxRespondRequest,
   type OwnerInboxRespondResponse,
+  type ProjectListResponse,
+  type ProjectStatus,
+  type RepositoryListResponse,
+  type RepositoryStatus,
   type RespondOwnerInboxItemData,
   type RequestKind,
   type RequestStatus,
@@ -95,6 +103,19 @@ export type SelfDeploySummaryQuery = {
   projectRef?: string;
   repositoryRef?: string;
   providerSignalRef?: string;
+};
+
+export type ProjectListQuery = {
+  organizationRef?: string;
+  status?: ProjectStatus;
+  pageSize?: number;
+  pageToken?: string;
+};
+
+export type RepositoryListQuery = {
+  status?: RepositoryStatus;
+  pageSize?: number;
+  pageToken?: string;
 };
 
 export function canQueryAgentScope(context: OperatorContext): boolean {
@@ -264,6 +285,51 @@ export async function fetchAgentRunActivities(
       path: { run_id: runId },
       query: {
         activity_kind: query.activityKind,
+        status: query.status,
+        page_size: query.pageSize,
+        page_token: query.pageToken,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+}
+
+export async function fetchProjects(
+  context: OperatorContext,
+  query: ProjectListQuery,
+): Promise<ProjectListResponse> {
+  try {
+    const response = await listProjects({
+      client: staffGatewayClient,
+      throwOnError: true,
+      headers: operationHeaders<ListProjectsData['headers']>(context),
+      query: {
+        organization_ref: query.organizationRef,
+        status: query.status,
+        page_size: query.pageSize,
+        page_token: query.pageToken,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+}
+
+export async function fetchProjectRepositories(
+  context: OperatorContext,
+  projectId: string,
+  query: RepositoryListQuery,
+): Promise<RepositoryListResponse> {
+  try {
+    const response = await listProjectRepositories({
+      client: staffGatewayClient,
+      throwOnError: true,
+      headers: operationHeaders<ListProjectRepositoriesData['headers']>(context),
+      path: { project_id: projectId },
+      query: {
         status: query.status,
         page_size: query.pageSize,
         page_token: query.pageToken,

@@ -21,6 +21,52 @@ export type ScopeRef = {
     ref: string;
 };
 
+export type ProjectStatus = 'unspecified' | 'active' | 'archived' | 'disabled';
+
+export type RepositoryProvider = 'unspecified' | 'github' | 'gitlab';
+
+export type RepositoryStatus = 'unspecified' | 'active' | 'pending' | 'blocked' | 'archived';
+
+export type ProjectListResponse = {
+    request_id: string;
+    correlation_id?: string;
+    projects: Array<ProjectSummary>;
+    page: PageInfo;
+};
+
+export type ProjectSummary = {
+    project_id: string;
+    organization_id: string;
+    slug: string;
+    display_name: string;
+    description?: string;
+    icon_object_uri?: string;
+    status: ProjectStatus;
+    version: number;
+};
+
+export type RepositoryListResponse = {
+    request_id: string;
+    correlation_id?: string;
+    project_id: string;
+    repositories: Array<RepositorySummary>;
+    page: PageInfo;
+};
+
+export type RepositorySummary = {
+    repository_id: string;
+    project_id: string;
+    provider: RepositoryProvider;
+    provider_owner: string;
+    provider_name: string;
+    web_url: string;
+    default_branch: string;
+    status: RepositoryStatus;
+    provider_repository_id?: string;
+    icon_object_uri?: string;
+    version: number;
+};
+
 export type RequestKind = 'feedback' | 'approval' | 'human_gate';
 
 export type RequestStatus = 'created' | 'routed' | 'waiting' | 'answered' | 'expired' | 'cancelled' | 'failed';
@@ -624,6 +670,11 @@ export type AgentRunActivity = {
 export type RunIdPath = string;
 
 /**
+ * Safe id проекта из `project-catalog`.
+ */
+export type ProjectIdPath = string;
+
+/**
  * Тип области `agent-manager`.
  */
 export type AgentScopeTypeQuery = AgentScopeType;
@@ -697,6 +748,21 @@ export type AgentActivityKindQuery = AgentActivityKind;
  * Фильтр по статусу safe activity entry.
  */
 export type AgentActivityStatusQuery = AgentActivityStatus;
+
+/**
+ * Safe ref организации для сужения списка проектов.
+ */
+export type OrganizationRefQuery = string;
+
+/**
+ * Фильтр проекта по lifecycle status.
+ */
+export type ProjectStatusQuery = ProjectStatus;
+
+/**
+ * Фильтр repository binding по lifecycle status.
+ */
+export type RepositoryStatusQuery = RepositoryStatus;
 
 /**
  * Тип governance target. Должен передаваться вместе с `target_ref`.
@@ -1465,6 +1531,159 @@ export type ListAgentRunActivitiesResponses = {
 };
 
 export type ListAgentRunActivitiesResponse = ListAgentRunActivitiesResponses[keyof ListAgentRunActivitiesResponses];
+
+export type ListProjectsData = {
+    body?: never;
+    headers: {
+        /**
+         * Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+         */
+        'X-Kodex-Request-Id'?: string;
+        /**
+         * Безопасная ссылка на трассу.
+         */
+        'X-Kodex-Trace-Id'?: string;
+        /**
+         * Безопасная ссылка на пользовательскую сессию.
+         */
+        'X-Kodex-Session-Id'?: string;
+        /**
+         * Тип проверенного субъекта от внешнего auth boundary.
+         */
+        'X-Kodex-Actor-Type': 'user' | 'service' | 'agent' | 'external_account';
+        /**
+         * Safe id проверенного субъекта без email и имени.
+         */
+        'X-Kodex-Actor-Id': string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Safe ref организации для сужения списка проектов.
+         */
+        organization_ref?: string;
+        /**
+         * Фильтр проекта по lifecycle status.
+         */
+        status?: ProjectStatus;
+        page_size?: number;
+        page_token?: string;
+    };
+    url: '/v1/projects';
+};
+
+export type ListProjectsErrors = {
+    /**
+     * Невалидный запрос.
+     */
+    400: SafeError;
+    /**
+     * Не передан проверенный actor context.
+     */
+    401: SafeError;
+    /**
+     * Доменный сервис отказал в доступе.
+     */
+    403: SafeError;
+    /**
+     * Доменный сервис ограничил частоту запросов.
+     */
+    429: SafeError;
+    /**
+     * Доменный сервис временно недоступен.
+     */
+    503: SafeError;
+};
+
+export type ListProjectsError = ListProjectsErrors[keyof ListProjectsErrors];
+
+export type ListProjectsResponses = {
+    /**
+     * Список проектов получен.
+     */
+    200: ProjectListResponse;
+};
+
+export type ListProjectsResponse = ListProjectsResponses[keyof ListProjectsResponses];
+
+export type ListProjectRepositoriesData = {
+    body?: never;
+    headers: {
+        /**
+         * Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+         */
+        'X-Kodex-Request-Id'?: string;
+        /**
+         * Безопасная ссылка на трассу.
+         */
+        'X-Kodex-Trace-Id'?: string;
+        /**
+         * Безопасная ссылка на пользовательскую сессию.
+         */
+        'X-Kodex-Session-Id'?: string;
+        /**
+         * Тип проверенного субъекта от внешнего auth boundary.
+         */
+        'X-Kodex-Actor-Type': 'user' | 'service' | 'agent' | 'external_account';
+        /**
+         * Safe id проверенного субъекта без email и имени.
+         */
+        'X-Kodex-Actor-Id': string;
+    };
+    path: {
+        /**
+         * Safe id проекта из `project-catalog`.
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Фильтр repository binding по lifecycle status.
+         */
+        status?: RepositoryStatus;
+        page_size?: number;
+        page_token?: string;
+    };
+    url: '/v1/projects/{project_id}/repositories';
+};
+
+export type ListProjectRepositoriesErrors = {
+    /**
+     * Невалидный запрос.
+     */
+    400: SafeError;
+    /**
+     * Не передан проверенный actor context.
+     */
+    401: SafeError;
+    /**
+     * Доменный сервис отказал в доступе.
+     */
+    403: SafeError;
+    /**
+     * Ресурс не найден или не виден вызывающей стороне.
+     */
+    404: SafeError;
+    /**
+     * Доменный сервис ограничил частоту запросов.
+     */
+    429: SafeError;
+    /**
+     * Доменный сервис временно недоступен.
+     */
+    503: SafeError;
+};
+
+export type ListProjectRepositoriesError = ListProjectRepositoriesErrors[keyof ListProjectRepositoriesErrors];
+
+export type ListProjectRepositoriesResponses = {
+    /**
+     * Список repository bindings получен.
+     */
+    200: RepositoryListResponse;
+};
+
+export type ListProjectRepositoriesResponse = ListProjectRepositoriesResponses[keyof ListProjectRepositoriesResponses];
 
 export type GetGovernanceSummaryData = {
     body?: never;

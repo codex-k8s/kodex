@@ -266,6 +266,30 @@ const (
 	GovernanceTargetTypeUnspecified      GovernanceTargetType = "unspecified"
 )
 
+// Defines values for ProjectStatus.
+const (
+	ProjectStatusActive      ProjectStatus = "active"
+	ProjectStatusArchived    ProjectStatus = "archived"
+	ProjectStatusDisabled    ProjectStatus = "disabled"
+	ProjectStatusUnspecified ProjectStatus = "unspecified"
+)
+
+// Defines values for RepositoryProvider.
+const (
+	RepositoryProviderGithub      RepositoryProvider = "github"
+	RepositoryProviderGitlab      RepositoryProvider = "gitlab"
+	RepositoryProviderUnspecified RepositoryProvider = "unspecified"
+)
+
+// Defines values for RepositoryStatus.
+const (
+	RepositoryStatusActive      RepositoryStatus = "active"
+	RepositoryStatusArchived    RepositoryStatus = "archived"
+	RepositoryStatusBlocked     RepositoryStatus = "blocked"
+	RepositoryStatusPending     RepositoryStatus = "pending"
+	RepositoryStatusUnspecified RepositoryStatus = "unspecified"
+)
+
 // Defines values for RequestKind.
 const (
 	Approval  RequestKind = "approval"
@@ -395,16 +419,16 @@ const (
 
 // Defines values for SelfDeployPathCategory.
 const (
-	SelfDeployPathCategoryDeployManifest SelfDeployPathCategory = "deploy_manifest"
-	SelfDeployPathCategoryDocumentation  SelfDeployPathCategory = "documentation"
-	SelfDeployPathCategoryOther          SelfDeployPathCategory = "other"
-	SelfDeployPathCategoryPlatformPolicy SelfDeployPathCategory = "platform_policy"
-	SelfDeployPathCategoryRuntimeConfig  SelfDeployPathCategory = "runtime_config"
-	SelfDeployPathCategoryServiceConfig  SelfDeployPathCategory = "service_config"
-	SelfDeployPathCategoryServiceSource  SelfDeployPathCategory = "service_source"
-	SelfDeployPathCategoryServicesPolicy SelfDeployPathCategory = "services_policy"
-	SelfDeployPathCategoryTest           SelfDeployPathCategory = "test"
-	SelfDeployPathCategoryUnspecified    SelfDeployPathCategory = "unspecified"
+	DeployManifest SelfDeployPathCategory = "deploy_manifest"
+	Documentation  SelfDeployPathCategory = "documentation"
+	Other          SelfDeployPathCategory = "other"
+	PlatformPolicy SelfDeployPathCategory = "platform_policy"
+	RuntimeConfig  SelfDeployPathCategory = "runtime_config"
+	ServiceConfig  SelfDeployPathCategory = "service_config"
+	ServiceSource  SelfDeployPathCategory = "service_source"
+	ServicesPolicy SelfDeployPathCategory = "services_policy"
+	Test           SelfDeployPathCategory = "test"
+	Unspecified    SelfDeployPathCategory = "unspecified"
 )
 
 // Defines values for SelfDeployPlanStatus.
@@ -531,6 +555,22 @@ const (
 	RespondOwnerInboxItemParamsXKodexActorTypeExternalAccount RespondOwnerInboxItemParamsXKodexActorType = "external_account"
 	RespondOwnerInboxItemParamsXKodexActorTypeService         RespondOwnerInboxItemParamsXKodexActorType = "service"
 	RespondOwnerInboxItemParamsXKodexActorTypeUser            RespondOwnerInboxItemParamsXKodexActorType = "user"
+)
+
+// Defines values for ListProjectsParamsXKodexActorType.
+const (
+	ListProjectsParamsXKodexActorTypeAgent           ListProjectsParamsXKodexActorType = "agent"
+	ListProjectsParamsXKodexActorTypeExternalAccount ListProjectsParamsXKodexActorType = "external_account"
+	ListProjectsParamsXKodexActorTypeService         ListProjectsParamsXKodexActorType = "service"
+	ListProjectsParamsXKodexActorTypeUser            ListProjectsParamsXKodexActorType = "user"
+)
+
+// Defines values for ListProjectRepositoriesParamsXKodexActorType.
+const (
+	ListProjectRepositoriesParamsXKodexActorTypeAgent           ListProjectRepositoriesParamsXKodexActorType = "agent"
+	ListProjectRepositoriesParamsXKodexActorTypeExternalAccount ListProjectRepositoriesParamsXKodexActorType = "external_account"
+	ListProjectRepositoriesParamsXKodexActorTypeService         ListProjectRepositoriesParamsXKodexActorType = "service"
+	ListProjectRepositoriesParamsXKodexActorTypeUser            ListProjectRepositoriesParamsXKodexActorType = "user"
 )
 
 // Defines values for SubmitSelfDeployGateDecisionParamsXKodexActorType.
@@ -1059,12 +1099,65 @@ type PageInfo struct {
 	NextPageToken *string `json:"next_page_token,omitempty"`
 }
 
+// ProjectListResponse defines model for ProjectListResponse.
+type ProjectListResponse struct {
+	CorrelationId *string          `json:"correlation_id,omitempty"`
+	Page          PageInfo         `json:"page"`
+	Projects      []ProjectSummary `json:"projects"`
+	RequestId     string           `json:"request_id"`
+}
+
+// ProjectStatus defines model for ProjectStatus.
+type ProjectStatus string
+
+// ProjectSummary defines model for ProjectSummary.
+type ProjectSummary struct {
+	Description    *string       `json:"description,omitempty"`
+	DisplayName    string        `json:"display_name"`
+	IconObjectUri  *string       `json:"icon_object_uri,omitempty"`
+	OrganizationId string        `json:"organization_id"`
+	ProjectId      string        `json:"project_id"`
+	Slug           string        `json:"slug"`
+	Status         ProjectStatus `json:"status"`
+	Version        int64         `json:"version"`
+}
+
 // ProviderTargetRef defines model for ProviderTargetRef.
 type ProviderTargetRef struct {
 	CommentRef      *string `json:"comment_ref,omitempty"`
 	PullRequestRef  *string `json:"pull_request_ref,omitempty"`
 	ReviewSignalRef *string `json:"review_signal_ref,omitempty"`
 	WorkItemRef     *string `json:"work_item_ref,omitempty"`
+}
+
+// RepositoryListResponse defines model for RepositoryListResponse.
+type RepositoryListResponse struct {
+	CorrelationId *string             `json:"correlation_id,omitempty"`
+	Page          PageInfo            `json:"page"`
+	ProjectId     string              `json:"project_id"`
+	Repositories  []RepositorySummary `json:"repositories"`
+	RequestId     string              `json:"request_id"`
+}
+
+// RepositoryProvider defines model for RepositoryProvider.
+type RepositoryProvider string
+
+// RepositoryStatus defines model for RepositoryStatus.
+type RepositoryStatus string
+
+// RepositorySummary defines model for RepositorySummary.
+type RepositorySummary struct {
+	DefaultBranch        string             `json:"default_branch"`
+	IconObjectUri        *string            `json:"icon_object_uri,omitempty"`
+	ProjectId            string             `json:"project_id"`
+	Provider             RepositoryProvider `json:"provider"`
+	ProviderName         string             `json:"provider_name"`
+	ProviderOwner        string             `json:"provider_owner"`
+	ProviderRepositoryId *string            `json:"provider_repository_id,omitempty"`
+	RepositoryId         string             `json:"repository_id"`
+	Status               RepositoryStatus   `json:"status"`
+	Version              int64              `json:"version"`
+	WebUrl               string             `json:"web_url"`
 }
 
 // RequestKind defines model for RequestKind.
@@ -1358,17 +1451,29 @@ type GovernanceTargetTypeQuery = GovernanceTargetType
 // IncludeDiagnosticsQuery defines model for IncludeDiagnosticsQuery.
 type IncludeDiagnosticsQuery = bool
 
+// OrganizationRefQuery defines model for OrganizationRefQuery.
+type OrganizationRefQuery = string
+
 // PageSizeQuery defines model for PageSizeQuery.
 type PageSizeQuery = int
 
 // PageTokenQuery defines model for PageTokenQuery.
 type PageTokenQuery = string
 
+// ProjectIdPath defines model for ProjectIdPath.
+type ProjectIdPath = string
+
+// ProjectStatusQuery defines model for ProjectStatusQuery.
+type ProjectStatusQuery = ProjectStatus
+
 // ProviderPullRequestRefQuery defines model for ProviderPullRequestRefQuery.
 type ProviderPullRequestRefQuery = string
 
 // ProviderWorkItemRefQuery defines model for ProviderWorkItemRefQuery.
 type ProviderWorkItemRefQuery = string
+
+// RepositoryStatusQuery defines model for RepositoryStatusQuery.
+type RepositoryStatusQuery = RepositoryStatus
 
 // RequestIdHeader defines model for RequestIdHeader.
 type RequestIdHeader = string
@@ -1740,6 +1845,61 @@ type RespondOwnerInboxItemParams struct {
 
 // RespondOwnerInboxItemParamsXKodexActorType defines parameters for RespondOwnerInboxItem.
 type RespondOwnerInboxItemParamsXKodexActorType string
+
+// ListProjectsParams defines parameters for ListProjects.
+type ListProjectsParams struct {
+	// OrganizationRef Safe ref организации для сужения списка проектов.
+	OrganizationRef *OrganizationRefQuery `form:"organization_ref,omitempty" json:"organization_ref,omitempty"`
+
+	// Status Фильтр проекта по lifecycle status.
+	Status    *ProjectStatusQuery `form:"status,omitempty" json:"status,omitempty"`
+	PageSize  *PageSizeQuery      `form:"page_size,omitempty" json:"page_size,omitempty"`
+	PageToken *PageTokenQuery     `form:"page_token,omitempty" json:"page_token,omitempty"`
+
+	// XKodexRequestId Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
+
+	// XKodexTraceId Безопасная ссылка на трассу.
+	XKodexTraceId *TraceIdHeader `json:"X-Kodex-Trace-Id,omitempty"`
+
+	// XKodexSessionId Безопасная ссылка на пользовательскую сессию.
+	XKodexSessionId *SessionIdHeader `json:"X-Kodex-Session-Id,omitempty"`
+
+	// XKodexActorType Тип проверенного субъекта от внешнего auth boundary.
+	XKodexActorType ListProjectsParamsXKodexActorType `json:"X-Kodex-Actor-Type"`
+
+	// XKodexActorId Safe id проверенного субъекта без email и имени.
+	XKodexActorId ActorIdHeader `json:"X-Kodex-Actor-Id"`
+}
+
+// ListProjectsParamsXKodexActorType defines parameters for ListProjects.
+type ListProjectsParamsXKodexActorType string
+
+// ListProjectRepositoriesParams defines parameters for ListProjectRepositories.
+type ListProjectRepositoriesParams struct {
+	// Status Фильтр repository binding по lifecycle status.
+	Status    *RepositoryStatusQuery `form:"status,omitempty" json:"status,omitempty"`
+	PageSize  *PageSizeQuery         `form:"page_size,omitempty" json:"page_size,omitempty"`
+	PageToken *PageTokenQuery        `form:"page_token,omitempty" json:"page_token,omitempty"`
+
+	// XKodexRequestId Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
+
+	// XKodexTraceId Безопасная ссылка на трассу.
+	XKodexTraceId *TraceIdHeader `json:"X-Kodex-Trace-Id,omitempty"`
+
+	// XKodexSessionId Безопасная ссылка на пользовательскую сессию.
+	XKodexSessionId *SessionIdHeader `json:"X-Kodex-Session-Id,omitempty"`
+
+	// XKodexActorType Тип проверенного субъекта от внешнего auth boundary.
+	XKodexActorType ListProjectRepositoriesParamsXKodexActorType `json:"X-Kodex-Actor-Type"`
+
+	// XKodexActorId Safe id проверенного субъекта без email и имени.
+	XKodexActorId ActorIdHeader `json:"X-Kodex-Actor-Id"`
+}
+
+// ListProjectRepositoriesParamsXKodexActorType defines parameters for ListProjectRepositories.
+type ListProjectRepositoriesParamsXKodexActorType string
 
 // SubmitSelfDeployGateDecisionParams defines parameters for SubmitSelfDeployGateDecision.
 type SubmitSelfDeployGateDecisionParams struct {

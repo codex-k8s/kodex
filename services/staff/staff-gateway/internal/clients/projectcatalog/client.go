@@ -37,6 +37,10 @@ func (c *Client) GetSelfDeploySignal(ctx context.Context, request *projectsv1.Ge
 	return callQuery(ctx, c, request, c.client.GetSelfDeploySignal)
 }
 
+func (c *Client) ListProjects(ctx context.Context, request *projectsv1.ListProjectsRequest) (*projectsv1.ListProjectsResponse, error) {
+	return callQuery(ctx, c, request, c.client.ListProjects)
+}
+
 func (c *Client) ListRepositories(ctx context.Context, request *projectsv1.ListRepositoriesRequest) (*projectsv1.ListRepositoriesResponse, error) {
 	return callQuery(ctx, c, request, c.client.ListRepositories)
 }

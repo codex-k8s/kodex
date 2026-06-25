@@ -67,5 +67,6 @@ type GovernanceManagerClient interface {
 
 type ProjectCatalogClient interface {
 	GetSelfDeploySignal(context.Context, *projectsv1.GetSelfDeploySignalRequest) (*projectsv1.SelfDeploySignalResponse, error)
+	ListProjects(context.Context, *projectsv1.ListProjectsRequest) (*projectsv1.ListProjectsResponse, error)
 	ListRepositories(context.Context, *projectsv1.ListRepositoriesRequest) (*projectsv1.ListRepositoriesResponse, error)
 }

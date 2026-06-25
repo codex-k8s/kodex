@@ -4,7 +4,8 @@ info:
   version: 1.0.0
   description: |
     HTTP-поверхность для операторской консоли сотрудников.
-    Первый контур отдаёт входящие решения владельца из interaction-hub, runtime summary и safe activity timeline из agent-manager.
+    Первый контур отдаёт входящие решения владельца из interaction-hub, project/repository context из project-catalog,
+    runtime summary и safe activity timeline из agent-manager.
   license:
     name: Proprietary
     url: https://github.com/codex-k8s/kodex
@@ -15,6 +16,8 @@ tags:
     description: Безопасное чтение agent sessions для командного центра.
   - name: agent-runs
     description: Безопасное чтение agent Run для операторского UI.
+  - name: projects
+    description: Безопасный выбор project/repository context для operator UI.
   - name: governance
     description: Безопасная сводка governance decisions для операторского UI.
   - name: self-deploy
@@ -313,6 +316,81 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/projects:
+    get:
+      tags: [projects]
+      operationId: listProjects
+      summary: Получить список проектов для операторского контекста.
+      description: |
+        Возвращает safe summaries `project-catalog.ListProjects`, чтобы `web-console` выбирал
+        project context из платформенных данных, а не просил владельца вводить внутренний UUID.
+        Gateway остаётся тонким adapter: не хранит project state, не читает БД `project-catalog`
+        и не возвращает secret values, provider payload, raw manifests или большие документы.
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - $ref: '#/components/parameters/OrganizationRefQuery'
+        - $ref: '#/components/parameters/ProjectStatusQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageTokenQuery'
+      responses:
+        '200':
+          description: Список проектов получен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/projects/{project_id}/repositories:
+    get:
+      tags: [projects]
+      operationId: listProjectRepositories
+      summary: Получить repository bindings проекта.
+      description: |
+        Возвращает safe summaries `project-catalog.ListRepositories` для выбранного проекта.
+        Gateway не вызывает provider API, не читает raw repository contents и не возвращает
+        secrets, tokens, full manifests или provider response body.
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdPath'
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - $ref: '#/components/parameters/RepositoryStatusQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageTokenQuery'
+      responses:
+        '200':
+          description: Список repository bindings получен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepositoryListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
   /v1/governance/summary:
     get:
       tags: [governance]
@@ -461,6 +539,15 @@ components:
         type: string
         pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
       description: Safe id `AgentRun`.
+    ProjectIdPath:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+      description: Safe id проекта из `project-catalog`.
     AgentScopeTypeQuery:
       name: scope_type
       in: query
@@ -577,6 +664,28 @@ components:
       schema:
         $ref: '#/components/schemas/AgentActivityStatus'
       description: Фильтр по статусу safe activity entry.
+    OrganizationRefQuery:
+      name: organization_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref организации для сужения списка проектов.
+    ProjectStatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/ProjectStatus'
+      description: Фильтр проекта по lifecycle status.
+    RepositoryStatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/RepositoryStatus'
+      description: Фильтр repository binding по lifecycle status.
     GovernanceTargetTypeQuery:
       name: target_type
       in: query
@@ -978,6 +1087,112 @@ components:
           $ref: '#/components/schemas/ScopeType'
         ref:
           type: string
+    ProjectStatus:
+      type: string
+      enum: [unspecified, active, archived, disabled]
+    RepositoryProvider:
+      type: string
+      enum: [unspecified, github, gitlab]
+    RepositoryStatus:
+      type: string
+      enum: [unspecified, active, pending, blocked, archived]
+    ProjectListResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, projects, page]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectSummary'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    ProjectSummary:
+      type: object
+      additionalProperties: false
+      required: [project_id, organization_id, slug, display_name, status, version]
+      properties:
+        project_id:
+          type: string
+          maxLength: 256
+        organization_id:
+          type: string
+          maxLength: 256
+        slug:
+          type: string
+          maxLength: 128
+        display_name:
+          type: string
+          maxLength: 256
+        description:
+          type: string
+          maxLength: 2000
+        icon_object_uri:
+          type: string
+          maxLength: 1024
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        version:
+          type: integer
+          format: int64
+    RepositoryListResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, project_id, repositories, page]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        project_id:
+          type: string
+          maxLength: 256
+        repositories:
+          type: array
+          items:
+            $ref: '#/components/schemas/RepositorySummary'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    RepositorySummary:
+      type: object
+      additionalProperties: false
+      required: [repository_id, project_id, provider, provider_owner, provider_name, web_url, default_branch, status, version]
+      properties:
+        repository_id:
+          type: string
+          maxLength: 256
+        project_id:
+          type: string
+          maxLength: 256
+        provider:
+          $ref: '#/components/schemas/RepositoryProvider'
+        provider_owner:
+          type: string
+          maxLength: 256
+        provider_name:
+          type: string
+          maxLength: 256
+        web_url:
+          type: string
+          maxLength: 1024
+        default_branch:
+          type: string
+          maxLength: 256
+        status:
+          $ref: '#/components/schemas/RepositoryStatus'
+        provider_repository_id:
+          type: string
+          maxLength: 256
+        icon_object_uri:
+          type: string
+          maxLength: 1024
+        version:
+          type: integer
+          format: int64
     RequestKind:
       type: string
       enum: [feedback, approval, human_gate]

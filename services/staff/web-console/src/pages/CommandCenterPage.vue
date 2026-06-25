@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
@@ -17,6 +17,7 @@ import {
 import { useExecutionsStore } from '@/features/executions/store';
 import { useOperatorContextStore } from '@/features/operator-context/store';
 import { useOwnerInboxStore } from '@/features/owner-inbox/store';
+import { useProjectContextStore } from '@/features/project-context/store';
 import { useSelfDeployStore } from '@/features/self-deploy/store';
 import { compactRef } from '@/shared/lib/format';
 import { routeNames } from '@/shared/lib/routes';
@@ -28,6 +29,7 @@ const router = useRouter();
 const context = useOperatorContextStore();
 const inbox = useOwnerInboxStore();
 const executions = useExecutionsStore();
+const projectContext = useProjectContextStore();
 const selfDeploy = useSelfDeployStore();
 const selfDeployDecisionComment = ref('');
 const canUseSelfDeployContext = computed(() => isGatewayActorContextReady(context.asContext));
@@ -136,10 +138,10 @@ const selfDeployChip = computed(() => {
   return { color: 'default', label: status ? chainStatusLabel(status) : t('app.unavailable') };
 });
 
-const selfDeployReadiness = computed(() =>
-  selfDeploy.missingActorContext
-    ? { status: t('app.unavailable'), tone: 'waiting' as const }
-    : { status: t('app.live'), tone: 'live' as const },
+const projectReadiness = computed(() =>
+  projectContext.hasProjects
+    ? { status: t('app.live'), tone: 'live' as const }
+    : { status: t('app.unavailable'), tone: 'waiting' as const },
 );
 
 const selfDeployAllowedActions = computed(() => selfDeploy.summary?.governance.allowed_actions ?? []);
@@ -199,6 +201,15 @@ onMounted(() => {
   }
 });
 
+watch(
+  () => [context.scopeType, context.scopeRef],
+  () => {
+    if (context.isReady) {
+      reloadInbox();
+    }
+  },
+);
+
 function reloadInbox() {
   if (context.isReady) {
     void inbox.load(context.asContext);
@@ -209,12 +220,22 @@ function reloadInbox() {
   }
 }
 
+function reloadProjects() {
+  if (canUseSelfDeployContext.value) {
+    void projectContext.loadProjects(context.asContext);
+  }
+}
+
 function openOwnerInbox() {
   void router.push({ name: routeNames.ownerInbox });
 }
 
 function openExecutions() {
   void router.push({ name: routeNames.executions });
+}
+
+function openProjects() {
+  void router.push({ name: routeNames.projects });
 }
 
 function openRun(runId: string) {
@@ -332,6 +353,22 @@ function pathCategoryLabel(category: string) {
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
+        <v-icon icon="mdi-folder-multiple-outline" color="info" size="34" />
+        <div>
+          <div class="meta-text">{{ t('commandCenter.projectsOnPage') }}</div>
+          <div class="summary-card__value">{{ projectContext.projects.length }}</div>
+          <div class="summary-card__hint">{{ t('commandCenter.currentProjectPageHint') }}</div>
+        </div>
+      </v-card>
+      <v-card class="surface-panel summary-card">
+        <v-icon icon="mdi-source-repository-multiple" color="info" size="34" />
+        <div>
+          <div class="meta-text">{{ t('commandCenter.repositoriesOnPage') }}</div>
+          <div class="summary-card__value">{{ projectContext.repositories.length }}</div>
+          <div class="summary-card__hint">{{ t('commandCenter.currentProjectPageHint') }}</div>
+        </div>
+      </v-card>
+      <v-card class="surface-panel summary-card">
         <v-icon icon="mdi-account-clock-outline" color="info" size="34" />
         <div>
           <div class="meta-text">{{ t('commandCenter.sessionsOnPage') }}</div>
@@ -366,6 +403,7 @@ function pathCategoryLabel(category: string) {
     </section>
 
     <ApiErrorAlert :error="inbox.error" :retry-label="t('app.retry')" @retry="reloadInbox" />
+    <ApiErrorAlert :error="projectContext.error" :retry-label="t('app.retry')" @retry="reloadProjects" />
     <ApiErrorAlert :error="selfDeploy.error" :retry-label="t('app.retry')" @retry="reloadSelfDeploy" />
     <ApiErrorAlert :error="selfDeploy.decisionError" :retry-label="t('app.retry')" @retry="reloadSelfDeploy" />
 
@@ -388,11 +426,11 @@ function pathCategoryLabel(category: string) {
             tone="live"
           />
           <SurfaceStateCard
-            icon="mdi-source-branch"
-            :title="t('commandCenter.selfDeploy.readinessTitle')"
-            :text="t('commandCenter.selfDeploy.readinessText')"
-            :status="selfDeployReadiness.status"
-            :tone="selfDeployReadiness.tone"
+            icon="mdi-folder-multiple-outline"
+            :title="t('commandCenter.projectsLive')"
+            :text="t('commandCenter.projectsLiveText')"
+            :status="projectReadiness.status"
+            :tone="projectReadiness.tone"
           />
         </div>
       </v-card>
@@ -417,7 +455,7 @@ function pathCategoryLabel(category: string) {
       </v-card>
     </section>
 
-    <section>
+    <section class="self-deploy-section">
       <v-card class="surface-panel self-deploy-panel">
         <div class="section-header">
           <div>
@@ -542,6 +580,7 @@ function pathCategoryLabel(category: string) {
           {{ t('commandCenter.inputDisabledHint') }}
         </v-alert>
         <div class="quick-actions">
+          <v-btn prepend-icon="mdi-folder-outline" variant="tonal" @click="openProjects">{{ t('navigation.projects') }}</v-btn>
           <v-btn prepend-icon="mdi-play" variant="tonal" disabled>{{ t('commandCenter.startFlow') }}</v-btn>
           <v-btn prepend-icon="mdi-plus" variant="tonal" disabled>{{ t('commandCenter.createIssue') }}</v-btn>
           <v-btn prepend-icon="mdi-account-check-outline" variant="tonal" disabled>
@@ -561,6 +600,9 @@ function pathCategoryLabel(category: string) {
       <div class="side-stack">
         <v-card class="surface-panel pa-5">
           <div class="section-title">{{ t('commandCenter.activeWork') }}</div>
+          <v-btn class="mt-4" prepend-icon="mdi-folder-outline" variant="tonal" @click="openProjects">
+            {{ t('commandCenter.projectsLive') }}
+          </v-btn>
           <v-btn class="mt-4" prepend-icon="mdi-pulse" variant="tonal" @click="openExecutions">
             {{ t('commandCenter.runListsLive') }}
           </v-btn>
@@ -694,6 +736,10 @@ function pathCategoryLabel(category: string) {
 .side-stack {
   display: grid;
   gap: 16px;
+}
+
+.self-deploy-section {
+  order: 5;
 }
 
 .section-header {

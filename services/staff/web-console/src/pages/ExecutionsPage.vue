@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import type { AgentActivityKind, AgentActivityStatus, AgentRunStatus, AgentSessionStatus } from '@/shared/api/generated';
@@ -66,10 +66,19 @@ const canLoad = computed(
 const canLoadOverview = computed(() => context.isReady && !executions.isLoadingList);
 
 onMounted(() => {
-  if (context.isReady && executions.runs.length === 0 && !executions.unsupportedAgentScope) {
+  if (context.isReady && executions.runs.length === 0) {
     void executions.loadOverview(context.asContext);
   }
 });
+
+watch(
+  () => [context.scopeType, context.scopeRef],
+  () => {
+    if (context.isReady) {
+      void executions.loadOverview(context.asContext);
+    }
+  },
+);
 
 function loadRun(pageToken?: string) {
   if (!context.isReady || executions.isLoading || executions.runId.trim().length === 0) {

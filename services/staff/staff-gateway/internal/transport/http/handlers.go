@@ -68,22 +68,15 @@ func (h handlers) listAgentRunSummaries(w http.ResponseWriter, req *http.Request
 }
 
 func (h handlers) listAgentRunActivities(w http.ResponseWriter, req *http.Request) {
-	input, safeErr := ListAgentActivitiesRequest(req)
-	if safeErr != nil {
-		WriteSafeError(w, req, safeErr)
-		return
-	}
-	response, err := h.agentManager.ListAgentActivities(req.Context(), input)
-	if err != nil {
-		WriteSafeError(w, req, agentManagerError(err))
-		return
-	}
-	output, safeErr := AgentRunActivitiesResponse(response, input.GetRunId(), requestIDFromContext(req.Context()))
-	if safeErr != nil {
-		WriteSafeError(w, req, safeErr)
-		return
-	}
-	writeJSON(w, http.StatusOK, output)
+	handleInputQuery(w, req, ListAgentActivitiesRequest, h.agentManager.ListAgentActivities, AgentRunActivitiesResponseForRequest, agentManagerError)
+}
+
+func (h handlers) listProjects(w http.ResponseWriter, req *http.Request) {
+	handleQuery(w, req, ListProjectsRequest, h.projectCatalog.ListProjects, ProjectListResponse, projectCatalogError)
+}
+
+func (h handlers) listProjectRepositories(w http.ResponseWriter, req *http.Request) {
+	handleInputQuery(w, req, ListProjectRepositoriesRequest, h.projectCatalog.ListRepositories, RepositoryListResponseForRequest, projectCatalogError)
 }
 
 func (h handlers) getGovernanceSummary(w http.ResponseWriter, req *http.Request) {
@@ -254,6 +247,32 @@ func handleQuery[Request any, Response any, Output any](
 		return
 	}
 	output, safeErr := cast(response, requestIDFromContext(req.Context()))
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	writeJSON(w, http.StatusOK, output)
+}
+
+func handleInputQuery[Request any, Response any, Output any](
+	w http.ResponseWriter,
+	req *http.Request,
+	build func(*http.Request) (*Request, *SafeError),
+	call func(context.Context, *Request) (*Response, error),
+	cast func(*Response, *Request, string) (Output, *SafeError),
+	mapError func(error) *SafeError,
+) {
+	input, safeErr := build(req)
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	response, err := call(req.Context(), input)
+	if err != nil {
+		WriteSafeError(w, req, mapError(err))
+		return
+	}
+	output, safeErr := cast(response, input, requestIDFromContext(req.Context()))
 	if safeErr != nil {
 		WriteSafeError(w, req, safeErr)
 		return

@@ -17,7 +17,9 @@
 
 - `VITE_STAFF_GATEWAY_BASE_URL` — базовый URL `staff-gateway`.
 - `VITE_STAFF_GATEWAY_TIMEOUT_MS` — timeout HTTP-запросов, default `15000`.
-- `VITE_KODEX_SCOPE_TYPE`, `VITE_KODEX_SCOPE_REF` — начальный scope context.
+- `VITE_KODEX_SCOPE_TYPE`, `VITE_KODEX_SCOPE_REF` — необязательный начальный
+  scope context для local/dev или служебного открытия. Основной production UI
+  выбирает проект и репозиторий из `project-catalog` через `staff-gateway`.
 - `VITE_KODEX_LOCALE` — начальная локаль, default `ru`.
 
 `web-console` не формирует доверенные `X-Kodex-Actor-*` в production-сборке:
@@ -33,12 +35,16 @@
 `VITE_KODEX_LOCAL_DEV_ACTOR_TYPE`, `VITE_KODEX_LOCAL_DEV_ACTOR_ID`; этот режим работает
 только при `import.meta.env.DEV`.
 
-Если scope не задан, экраны входящих решений и списков Run показывают пустое
-состояние и не отправляют scope-зависимые запросы к `staff-gateway`. Блок
-самовыкладки работает иначе: `GET /v1/self-deploy/summary` вызывается без
-ручного `scope_ref`, а `staff-gateway` использует настроенный self-deploy project
-ref из server-side конфигурации. В local-dev режиме с actor headers также должен
-быть задан local-dev actor.
+Если scope не задан, shell запрашивает `GET /v1/projects`, выбирает первый
+доступный active project и загружает `GET /v1/projects/{project_id}/repositories`.
+Владелец выбирает project/repository в верхней панели, а не вводит
+`project_id`, `scope_ref` или repository refs вручную. Если project read surface
+недоступна или проектов нет, экраны входящих решений и списков Run показывают
+честное пустое состояние и не отправляют scope-зависимые запросы к
+`staff-gateway`. Блок самовыкладки остаётся диагностикой: `GET
+/v1/self-deploy/summary` вызывается без ручного `scope_ref`, а `staff-gateway`
+использует настроенный self-deploy project ref из server-side конфигурации. В
+local-dev режиме с actor headers также должен быть задан local-dev actor.
 
 ## Production deploy
 
@@ -88,17 +94,25 @@ governance summary и gate decision. Email из OAuth остаётся auth-фа
 - `GET /v1/agent-runs`
 - `GET /v1/agent-runs/{run_id}/runtime-status`
 - `GET /v1/agent-runs/{run_id}/activities`
+- `GET /v1/projects`
+- `GET /v1/projects/{project_id}/repositories`
 - `GET /v1/self-deploy/summary`
 - `POST /v1/self-deploy/gates/{gate_request_id}/decision`
 
 ## Текущий UX-контур
 
-- Shell адаптируется под мобильную ширину: навигация уходит в temporary drawer, а
-  контекст scope остаётся в верхней полосе.
+- Shell адаптируется под мобильную ширину: навигация уходит в temporary drawer,
+  а project/repository context выбирается в верхней полосе из живых данных
+  `project-catalog`.
 - Командный центр явно разделяет работающие зоны и зоны, которые ждут новый
-  endpoint `staff-gateway`; быстрые действия и чат отключены без подмены
-  production-данных.
-- Self-deploy наблюдение вынесено в отдельный блок командного центра. Он
+  endpoint `staff-gateway`; основной поток показывает входящие решения,
+  project/repository context и исполнения, а быстрые действия и чат отключены без
+  подмены production-данных.
+- Страница проектов показывает доступные project summaries и active repository
+  bindings, переключает scope для входящих решений и исполнений и честно
+  показывает, что Issue/PR workspace ждёт отдельный safe endpoint
+  `staff-gateway`.
+- Self-deploy наблюдение остаётся отдельным диагностическим блоком командного центра. Он
   читает `GET /v1/self-deploy/summary` через настроенный backend context без
   ручного ввода `project_id`, `scope_ref`, repository refs или gate identifiers
   и показывает безопасный owner-facing
@@ -139,10 +153,11 @@ governance summary и gate decision. Email из OAuth остаётся auth-фа
   причину ожидания, safe error code/summary, Human gate/follow-up refs,
   runtime observation и ссылки на session/job/provider refs без raw payload.
 
-Агрегированная витрина командного центра, проектные списки, создание `Issue`,
-запуск flow, чат с `agent-manager` и runtime job refs для self-deploy цепочки
-пока не имеют полного HTTP-контракта в `staff-gateway`; UI отображает эти места
-как отключённые, `unavailable` или `pending` состояния без подмены демо-данными.
+Агрегированная витрина командного центра, создание `Issue`, запуск flow, чат с
+`agent-manager`, список Issue/PR workspace и runtime job refs для self-deploy
+цепочки пока не имеют полного HTTP-контракта в `staff-gateway`; UI отображает
+эти места как отключённые, `unavailable` или `pending` состояния без подмены
+демо-данными.
 Raw webhook body, provider response, diff, полный YAML, tokens, OAuth
 state/cookies, secrets и команды автоматического deploy не попадают в frontend.
 
