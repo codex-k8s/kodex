@@ -684,6 +684,20 @@ func TestAgentRunJobTypeRequiresSafeInput(t *testing.T) {
 			commandID:  mustUUID("00000000-0000-0000-0000-000000000541"),
 		},
 		{
+			name:       "codex spec unsupported instruction ref",
+			agentRunID: &agentRunID,
+			slotID:     &slotID,
+			payload:    []byte(`{}`),
+			spec: func() *AgentRunExecutionSpecInput {
+				copy := spec
+				codexSpec := testCodexSessionExecutionSpec(copy, agentRunID)
+				codexSpec.InstructionObjectRef = "object://instructions/agent-run-531"
+				copy.CodexSessionExecutionSpec = &codexSpec
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000551"),
+		},
+		{
 			name:       "codex spec unsafe instruction ref",
 			agentRunID: &agentRunID,
 			slotID:     &slotID,
@@ -1231,9 +1245,9 @@ func testAgentRunExecutionSpec(agentRunID uuid.UUID, slotID uuid.UUID) AgentRunE
 
 func testCodexSessionExecutionSpec(spec AgentRunExecutionSpecInput, agentRunID uuid.UUID) CodexSessionExecutionSpecInput {
 	return CodexSessionExecutionSpecInput{
-		InstructionObjectRef:    "object://instructions/agent-run-531",
+		InstructionObjectRef:    "workspace://.kodex/execution/instruction.txt",
 		InstructionObjectDigest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-		ResultSchemaRef:         "object://schemas/codex-result-v1",
+		ResultSchemaRef:         "workspace://.kodex/execution/result.schema.json",
 		ResultSchemaDigest:      "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 		WorkspaceSnapshotRef:    "runtime://workspace-snapshots/agent-run-531",
 		HookEndpointRef:         "hook://codex-hook-ingress/agent-runner",

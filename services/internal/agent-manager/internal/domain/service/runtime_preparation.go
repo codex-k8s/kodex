@@ -33,6 +33,8 @@ const (
 	runtimeJobSafeKindLimit       = 64
 	runtimeJobSecretRefLimit      = 16
 	runtimeJobReportingRefLimit   = 8
+	codexWorkspaceRefPrefix       = "workspace://"
+	codexExecutionInputRoot       = ".kodex/execution"
 )
 
 var (
@@ -739,6 +741,14 @@ func validateCodexSessionExecutionSpec(spec CodexSessionExecutionSpec, agentRunS
 			return invalidCodexSessionExecutionSpec()
 		}
 	}
+	if !strings.HasPrefix(strings.TrimSpace(spec.InstructionObjectRef), codexWorkspaceRefPrefix) ||
+		!strings.HasPrefix(strings.TrimSpace(spec.ResultSchemaRef), codexWorkspaceRefPrefix) {
+		return missingCodexSessionExecutionDependency()
+	}
+	if !codexWorkspaceExecutionInputRefReady(spec.InstructionObjectRef) ||
+		!codexWorkspaceExecutionInputRefReady(spec.ResultSchemaRef) {
+		return invalidCodexSessionExecutionSpec()
+	}
 	if !validRuntimeJobSHA256Digest(spec.InstructionObjectDigest) || !validRuntimeJobSHA256Digest(spec.ResultSchemaDigest) {
 		return invalidCodexSessionExecutionSpec()
 	}
@@ -774,6 +784,23 @@ func validateCodexSessionExecutionSpec(spec CodexSessionExecutionSpec, agentRunS
 
 func invalidCodexSessionExecutionSpec() error {
 	return NewRuntimeJobError(false, "failed_precondition", "codex session execution refs are invalid")
+}
+
+func codexWorkspaceExecutionInputRefReady(ref string) bool {
+	value := strings.TrimSpace(ref)
+	relative, ok := strings.CutPrefix(value, codexWorkspaceRefPrefix)
+	if !ok || !safeRuntimeJobRef(value, true) {
+		return false
+	}
+	relative = strings.TrimLeft(relative, "/")
+	if !strings.HasPrefix(relative, codexExecutionInputRoot+"/") {
+		return false
+	}
+	return !strings.Contains(relative, "//") &&
+		!strings.Contains(relative, "/./") &&
+		!strings.Contains(relative, "/../") &&
+		!strings.HasSuffix(relative, "/.") &&
+		!strings.HasSuffix(relative, "/..")
 }
 
 func requiredRuntimeUUID(ref string) (uuid.UUID, error) {

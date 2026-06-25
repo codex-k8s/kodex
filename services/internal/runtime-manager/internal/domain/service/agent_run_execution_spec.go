@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"path"
 	"strings"
 	"unicode/utf8"
 
@@ -30,6 +31,8 @@ const (
 	maxAgentRunExecutionTimeoutSeconds   = 24 * 60 * 60
 	maxAgentRunReportingTargetKindBytes  = 64
 	maxAgentRunAllowedSecretPurposeBytes = 64
+	agentRunWorkspaceRefPrefix           = "workspace://"
+	agentRunExecutionInputRoot           = ".kodex/execution"
 	unsafeAgentRunMarkerList             = "raw_provider_payload|provider_payload|prompt_text|prompt_body|transcript|tool_input|tool_output|workspace_path|kubeconfig|secret_value|secret-value|token=|authorization|stdout|stderr|large_log|-----begin|bearer "
 )
 
@@ -160,6 +163,10 @@ func normalizeCodexSessionExecutionSpec(
 			return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
 		}
 	}
+	if !agentRunWorkspaceExecutionInputRef(normalized.InstructionObjectRef) ||
+		!agentRunWorkspaceExecutionInputRef(normalized.ResultSchemaRef) {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
 	if !validAgentRunSHA256Digest(normalized.InstructionObjectDigest) ||
 		!validAgentRunSHA256Digest(normalized.ResultSchemaDigest) {
 		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
@@ -216,6 +223,17 @@ func normalizeAgentRunExecutionRefs(refs []AgentRunExecutionRefInput, kindMaxByt
 		normalized = append(normalized, AgentRunExecutionRefInput{Kind: kind, Ref: ref})
 	}
 	return normalized, nil
+}
+
+func agentRunWorkspaceExecutionInputRef(ref string) bool {
+	value := strings.TrimSpace(ref)
+	if !safeAgentRunRef(value, true) || !strings.HasPrefix(value, agentRunWorkspaceRefPrefix) {
+		return false
+	}
+	relative := strings.TrimPrefix(value, agentRunWorkspaceRefPrefix)
+	relative = strings.TrimLeft(relative, "/")
+	clean := path.Clean(relative)
+	return clean == relative && strings.HasPrefix(clean, agentRunExecutionInputRoot+"/")
 }
 
 func (s *Service) validateAgentRunExecutionSpecState(ctx context.Context, spec AgentRunExecutionSpecInput, slot entity.Slot) error {

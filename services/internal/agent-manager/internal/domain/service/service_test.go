@@ -19,13 +19,15 @@ import (
 )
 
 const (
-	testInstructionDigest  = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	testResultSchemaDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	testInstructionObjectRef = "workspace://.kodex/execution/instruction.txt"
+	testInstructionDigest    = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	testResultSchemaRef      = "workspace://.kodex/execution/result.schema.json"
+	testResultSchemaDigest   = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
 func testCodexSessionExecutionConfig() CodexSessionExecutionConfig {
 	return CodexSessionExecutionConfig{
-		ResultSchemaRef:    "object://schemas/codex-result-v1",
+		ResultSchemaRef:    testResultSchemaRef,
 		ResultSchemaDigest: testResultSchemaDigest,
 		HookEndpointRef:    "hook://codex-hook-ingress/agent-runner",
 		TimeoutSeconds:     1800,
@@ -712,9 +714,9 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 	if codexSpec == nil {
 		t.Fatal("codex session execution spec is nil")
 	}
-	if codexSpec.InstructionObjectRef != "object://instructions/work-v1" ||
+	if codexSpec.InstructionObjectRef != testInstructionObjectRef ||
 		codexSpec.InstructionObjectDigest != testInstructionDigest ||
-		codexSpec.ResultSchemaRef != "object://schemas/codex-result-v1" ||
+		codexSpec.ResultSchemaRef != testResultSchemaRef ||
 		codexSpec.ResultSchemaDigest != testResultSchemaDigest {
 		t.Fatalf("codex instruction/schema refs = %+v", codexSpec)
 	}
@@ -1298,6 +1300,24 @@ func TestStartAgentRunCodexSessionExecutionSpecRequiresMaterializedRefs(t *testi
 			wantReason: "runtime job retryable",
 		},
 		{
+			name: "object instruction ref waits for workspace materialization",
+			edit: func(fixture *runtimePreparationFixture, _ *CodexSessionExecutionConfig) {
+				version := fixture.repository.promptVersionByID[fixture.promptVersionID]
+				version.TemplateObject.ObjectURI = "object://instructions/work-v1"
+				fixture.repository.promptVersionByID[fixture.promptVersionID] = version
+			},
+			wantStatus: enum.AgentRunStatusWaiting,
+			wantReason: "runtime job retryable",
+		},
+		{
+			name: "object result schema ref waits for workspace materialization",
+			edit: func(_ *runtimePreparationFixture, cfg *CodexSessionExecutionConfig) {
+				cfg.ResultSchemaRef = "object://schemas/codex-result-v1"
+			},
+			wantStatus: enum.AgentRunStatusWaiting,
+			wantReason: "runtime job retryable",
+		},
+		{
 			name: "invalid schema digest fails",
 			edit: func(_ *runtimePreparationFixture, cfg *CodexSessionExecutionConfig) {
 				cfg.ResultSchemaDigest = "sha256:not-a-digest"
@@ -1516,7 +1536,7 @@ func TestStartAgentRunRuntimeJobSpecDoesNotCarryTextPayloads(t *testing.T) {
 		ID:             fixture.promptVersionID,
 		RoleProfileID:  fixture.roleID,
 		PromptKind:     enum.PromptKindWork,
-		TemplateObject: value.ObjectRef{ObjectURI: "s3://prompt-template-text/payload"},
+		TemplateObject: value.ObjectRef{ObjectURI: testInstructionObjectRef, ObjectDigest: testInstructionDigest},
 		TemplateDigest: "sha256:prompt",
 		Status:         enum.PromptVersionStatusActive,
 	}
@@ -8225,7 +8245,7 @@ func newRuntimePreparationFixture() runtimePreparationFixture {
 				ID:             promptVersionID,
 				RoleProfileID:  roleID,
 				PromptKind:     enum.PromptKindWork,
-				TemplateObject: value.ObjectRef{ObjectURI: "object://instructions/work-v1", ObjectDigest: testInstructionDigest},
+				TemplateObject: value.ObjectRef{ObjectURI: testInstructionObjectRef, ObjectDigest: testInstructionDigest},
 				TemplateDigest: "sha256:prompt",
 				Status:         enum.PromptVersionStatusActive,
 			},

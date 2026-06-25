@@ -79,9 +79,9 @@ func TestCreateAgentRunJobMapsRequestAndResponse(t *testing.T) {
 	}
 	codexSpec := spec.GetCodexSessionExecutionSpec()
 	if codexSpec == nil ||
-		codexSpec.GetInstructionObjectRef() != "object://instructions/agent-run" ||
+		codexSpec.GetInstructionObjectRef() != "workspace://.kodex/execution/instruction.txt" ||
 		codexSpec.GetInstructionObjectDigest() != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
-		codexSpec.GetResultSchemaRef() != "object://schemas/codex-result-v1" ||
+		codexSpec.GetResultSchemaRef() != "workspace://.kodex/execution/result.schema.json" ||
 		codexSpec.GetResultSchemaDigest() != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" ||
 		codexSpec.GetWorkspaceSnapshotRef() != "runtime://workspace-snapshots/agent-run" ||
 		codexSpec.GetHookEndpointRef() != "hook://codex-hook-ingress/agent-runner" ||
@@ -386,9 +386,9 @@ func testAgentRunExecutionSpec(agentRunID uuid.UUID, slotID uuid.UUID) agentserv
 		},
 		CodexSessionExecutionSpec: &agentservice.CodexSessionExecutionSpec{
 			CodexSessionExecutionInputRefs: agentservice.CodexSessionExecutionInputRefs{
-				InstructionObjectRef:    "object://instructions/agent-run",
+				InstructionObjectRef:    "workspace://.kodex/execution/instruction.txt",
 				InstructionObjectDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-				ResultSchemaRef:         "object://schemas/codex-result-v1",
+				ResultSchemaRef:         "workspace://.kodex/execution/result.schema.json",
 				ResultSchemaDigest:      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 				WorkspaceSnapshotRef:    "runtime://workspace-snapshots/agent-run",
 				HookEndpointRef:         "hook://codex-hook-ingress/agent-runner",

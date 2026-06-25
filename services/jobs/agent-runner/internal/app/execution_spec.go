@@ -90,6 +90,12 @@ func validateCodexSessionExecutionSpec(spec CodexSessionExecutionSpec, cfg Confi
 			return executionContractUnavailable("codex session execution spec contains invalid refs")
 		}
 	}
+	if _, diagnostic := workspaceExecutionPath(cfg, spec.InstructionObjectRef); !diagnostic.OK() {
+		return diagnostic
+	}
+	if _, diagnostic := workspaceExecutionPath(cfg, spec.ResultSchemaRef); !diagnostic.OK() {
+		return diagnostic
+	}
 	if _, ok := parseSHA256Digest(spec.InstructionObjectDigest); !ok {
 		return executionContractUnavailable("codex session instruction digest is invalid")
 	}
