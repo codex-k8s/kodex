@@ -5,8 +5,8 @@ title: kodex — поставка integration-gateway
 status: active
 owner_role: EM
 created_at: 2026-05-25
-updated_at: 2026-05-27
-related_issues: [781, 792, 807, 770, 829, 853, 895, 909]
+updated_at: 2026-06-19
+related_issues: [781, 792, 807, 770, 829, 853, 895, 909, 1100]
 related_prs: []
 related_docsets:
   - docs/domains/integration-gateway/product/requirements.md
@@ -51,6 +51,7 @@ approvals:
 | IGW-5 | #829 | Deploy-контур: Dockerfile, manifests, secrets refs, runbook, monitoring и rollback. |
 | IGW-6 | #853 | Первый active callback route: generic `/v1/external-callbacks/{callback_source}` проверяет source binding, HMAC SHA-256 подпись, лимиты и вызывает `interaction-hub.RecordChannelCallback` safe envelope без gateway business state. |
 | Provider merge signal checks | #895, #909 | Go checks на staged fixtures проверяют GitHub provider webhook route wiring до `provider-hub.IngestWebhookEvent` и live HTTP diagnostic mode без переноса provider business state в gateway; bootstrap и adoption fixtures проходят один и тот же thin-edge route. |
+| Provider-native MVP checks | #1100 | Go checks на обычные GitHub fixtures `issues`, `pull_request`, `issue_comment`, `pull_request_review` и `push` проверяют HMAC route wiring до `provider-hub.IngestWebhookEvent`; gateway не разбирает provider business semantics, не хранит provider projections/inbox/operations и не публикует provider events. |
 | IGW-7 | #1007 | Публичный HMAC-only endpoint `https://platform.kodex.works/v1/provider-webhooks/github` открыт отдельным `Ingress` на `integration-gateway`, не через OAuth; registration runbook использует только `push` и `pull_request`, а secret берётся из Kubernetes `Secret` без вывода значений. |
 
 ## Зависимости и блокировки
@@ -94,7 +95,7 @@ approvals:
 | Проверки | Health/readiness/metrics/OpenAPI и safe negative responses для GitHub route проверяются Go tests или будущим Go integration runner. |
 | Ops | Runbook и monitoring docs описывают route checks, backpressure, safe errors, provider-hub connectivity и rollback. |
 
-Staged fixtures GitHub `pull_request closed + merged` bootstrap/adoption используются в Go tests: на gateway-стороне проверяется только HTTP boundary, HMAC verifier, delivery/event headers, correlation metadata и передача payload в `provider-hub` client. Provider-owned merge signal, read surface, replay/conflict и outbox проверяются в `provider-hub`; `integration-gateway` не хранит provider projections, inbox, operation state или бизнес-события.
+Staged fixtures GitHub `pull_request closed + merged` bootstrap/adoption и обычные provider-native fixtures `issues`, `pull_request`, `issue_comment`, `pull_request_review`, `push` используются в Go tests: на gateway-стороне проверяется только HTTP boundary, HMAC verifier, delivery/event headers, correlation metadata и передача payload в `provider-hub` client. Provider-owned projection/signal, read surface, replay/conflict и outbox проверяются в `provider-hub`; `integration-gateway` не хранит provider projections, inbox, operation state или бизнес-события.
 
 ## Реализованный callback route IGW-6
 

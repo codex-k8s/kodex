@@ -1,0 +1,30 @@
+{
+  "ref": "refs/heads/main",
+  "before": "1111111111111111111111111111111111111111",
+  "after": "2222222222222222222222222222222222222222",
+  "repository": {
+    "id": 9101001,
+    "full_name": "kodex-smoke/provider-native-work",
+    "private": true,
+    "ssh_url": "RAW_WEBHOOK_ONLY_DO_NOT_LEAK_PUSH"
+  },
+  "head_commit": {
+    "id": "2222222222222222222222222222222222222222",
+    "timestamp": "2026-06-19T10:06:00Z"
+  },
+  "commits": [
+    {
+      "id": "2222222222222222222222222222222222222222",
+      "added": [],
+      "modified": [
+        "services/internal/provider-hub/internal/domain/service/write_pipeline.go",
+        "proto/kodex/providers/v1/provider_hub.proto",
+        "docs/domains/provider-native-work-items/architecture/api_contract.md"
+      ],
+      "removed": []
+    }
+  ],
+  "sender": {
+    "login": "RAW_WEBHOOK_ONLY_DO_NOT_LEAK_PUSH"
+  }
+}
