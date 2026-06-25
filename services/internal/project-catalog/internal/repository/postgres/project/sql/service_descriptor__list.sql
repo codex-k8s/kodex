@@ -3,6 +3,7 @@ WITH active_policy AS (
     SELECT id
     FROM project_catalog_services_policies
     WHERE project_id = @project_id::uuid
+      AND (@services_policy_id::uuid IS NULL OR id = @services_policy_id::uuid)
       AND validation_status = 'valid'
       AND projection_status IN ('synced', 'overridden')
     ORDER BY policy_version DESC, imported_at DESC, id

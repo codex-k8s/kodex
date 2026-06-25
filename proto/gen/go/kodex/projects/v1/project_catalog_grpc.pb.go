@@ -39,6 +39,7 @@ const (
 	ProjectCatalogService_GetSelfDeployDeployPlan_FullMethodName              = "/kodex.projects.v1.ProjectCatalogService/GetSelfDeployDeployPlan"
 	ProjectCatalogService_GetServicesPolicy_FullMethodName                    = "/kodex.projects.v1.ProjectCatalogService/GetServicesPolicy"
 	ProjectCatalogService_ListServiceDescriptors_FullMethodName               = "/kodex.projects.v1.ProjectCatalogService/ListServiceDescriptors"
+	ProjectCatalogService_GetProjectOnboardingStatus_FullMethodName           = "/kodex.projects.v1.ProjectCatalogService/GetProjectOnboardingStatus"
 	ProjectCatalogService_CreatePolicyEditProposal_FullMethodName             = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyEditProposal"
 	ProjectCatalogService_CreatePolicyOverride_FullMethodName                 = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyOverride"
 	ProjectCatalogService_CancelPolicyOverride_FullMethodName                 = "/kodex.projects.v1.ProjectCatalogService/CancelPolicyOverride"
@@ -109,6 +110,8 @@ type ProjectCatalogServiceClient interface {
 	GetServicesPolicy(ctx context.Context, in *GetServicesPolicyRequest, opts ...grpc.CallOption) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
 	ListServiceDescriptors(ctx context.Context, in *ListServiceDescriptorsRequest, opts ...grpc.CallOption) (*ListServiceDescriptorsResponse, error)
+	// GetProjectOnboardingStatus returns safe readiness for manual project/repository onboarding.
+	GetProjectOnboardingStatus(ctx context.Context, in *GetProjectOnboardingStatusRequest, opts ...grpc.CallOption) (*ProjectOnboardingStatusResponse, error)
 	// CreatePolicyEditProposal creates a request to change services.yaml through PR.
 	CreatePolicyEditProposal(ctx context.Context, in *CreatePolicyEditProposalRequest, opts ...grpc.CallOption) (*PolicyEditProposalResponse, error)
 	// CreatePolicyOverride creates a time-bound operator override.
@@ -353,6 +356,16 @@ func (c *projectCatalogServiceClient) ListServiceDescriptors(ctx context.Context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListServiceDescriptorsResponse)
 	err := c.cc.Invoke(ctx, ProjectCatalogService_ListServiceDescriptors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) GetProjectOnboardingStatus(ctx context.Context, in *GetProjectOnboardingStatusRequest, opts ...grpc.CallOption) (*ProjectOnboardingStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProjectOnboardingStatusResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_GetProjectOnboardingStatus_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -607,6 +620,8 @@ type ProjectCatalogServiceServer interface {
 	GetServicesPolicy(context.Context, *GetServicesPolicyRequest) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
 	ListServiceDescriptors(context.Context, *ListServiceDescriptorsRequest) (*ListServiceDescriptorsResponse, error)
+	// GetProjectOnboardingStatus returns safe readiness for manual project/repository onboarding.
+	GetProjectOnboardingStatus(context.Context, *GetProjectOnboardingStatusRequest) (*ProjectOnboardingStatusResponse, error)
 	// CreatePolicyEditProposal creates a request to change services.yaml through PR.
 	CreatePolicyEditProposal(context.Context, *CreatePolicyEditProposalRequest) (*PolicyEditProposalResponse, error)
 	// CreatePolicyOverride creates a time-bound operator override.
@@ -716,6 +731,9 @@ func (UnimplementedProjectCatalogServiceServer) GetServicesPolicy(context.Contex
 }
 func (UnimplementedProjectCatalogServiceServer) ListServiceDescriptors(context.Context, *ListServiceDescriptorsRequest) (*ListServiceDescriptorsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListServiceDescriptors not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) GetProjectOnboardingStatus(context.Context, *GetProjectOnboardingStatusRequest) (*ProjectOnboardingStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetProjectOnboardingStatus not implemented")
 }
 func (UnimplementedProjectCatalogServiceServer) CreatePolicyEditProposal(context.Context, *CreatePolicyEditProposalRequest) (*PolicyEditProposalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePolicyEditProposal not implemented")
@@ -1154,6 +1172,24 @@ func _ProjectCatalogService_ListServiceDescriptors_Handler(srv interface{}, ctx 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectCatalogServiceServer).ListServiceDescriptors(ctx, req.(*ListServiceDescriptorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_GetProjectOnboardingStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetProjectOnboardingStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).GetProjectOnboardingStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_GetProjectOnboardingStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).GetProjectOnboardingStatus(ctx, req.(*GetProjectOnboardingStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1604,6 +1640,10 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListServiceDescriptors",
 			Handler:    _ProjectCatalogService_ListServiceDescriptors_Handler,
+		},
+		{
+			MethodName: "GetProjectOnboardingStatus",
+			Handler:    _ProjectCatalogService_GetProjectOnboardingStatus_Handler,
 		},
 		{
 			MethodName: "CreatePolicyEditProposal",

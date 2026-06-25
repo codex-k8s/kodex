@@ -36,11 +36,12 @@ type RepositoryFilter struct {
 
 // ServiceDescriptorFilter selects typed services from checked policy.
 type ServiceDescriptorFilter struct {
-	ProjectID    uuid.UUID
-	RepositoryID *uuid.UUID
-	ServiceKeys  []string
-	Statuses     []enum.ServiceStatus
-	Page         value.PageRequest
+	ProjectID        uuid.UUID
+	ServicesPolicyID *uuid.UUID
+	RepositoryID     *uuid.UUID
+	ServiceKeys      []string
+	Statuses         []enum.ServiceStatus
+	Page             value.PageRequest
 }
 
 // DocumentationSourceFilter selects project documentation sources.

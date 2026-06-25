@@ -473,6 +473,152 @@ func TestImportServicesPolicyBuildsDescriptorsFromPayload(t *testing.T) {
 	}
 }
 
+func TestGetProjectOnboardingStatusReturnsReadyState(t *testing.T) {
+	ctx := context.Background()
+	svc, _, projectID, repositoryID, policy := newProjectOnboardingStatusFixture(t)
+
+	result, err := svc.GetProjectOnboardingStatus(ctx, GetProjectOnboardingStatusInput{
+		ProjectID:                     projectID,
+		RepositoryID:                  &repositoryID,
+		ServiceKeys:                   []string{"api"},
+		ExpectedSourceRef:             "refs/heads/main",
+		ExpectedSourceCommitSHA:       policy.SourceCommitSHA,
+		ExpectedContentHash:           policy.ContentHash,
+		ExpectedServicesPolicyVersion: &policy.PolicyVersion,
+		Meta:                          queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetProjectOnboardingStatus(): %v", err)
+	}
+	if result.Status != enum.ProjectOnboardingStatusReady {
+		t.Fatalf("status = %s reason = %q, want ready", result.Status, result.SafeReason)
+	}
+	if result.Project == nil || result.Repository == nil || result.ServicesPolicy == nil || len(result.ServiceDescriptors) != 1 {
+		t.Fatalf("result = %+v, want project/repository/policy and one descriptor", result)
+	}
+	if result.ServiceDescriptors[0].ServiceKey != "api" || result.Summary == "" {
+		t.Fatalf("descriptor/summary = %+v/%q, want api and summary", result.ServiceDescriptors, result.Summary)
+	}
+}
+
+func TestGetProjectOnboardingStatusUsesDescriptorsFromExpectedPolicy(t *testing.T) {
+	ctx := context.Background()
+	svc, store, projectID, repositoryID, policy := newProjectOnboardingStatusFixture(t)
+	latestPolicyID := uuid.New()
+	latestPolicy := policy
+	latestPolicy.ID = latestPolicyID
+	latestPolicy.PolicyVersion = policy.PolicyVersion + 1
+	latestPolicy.SourceCommitSHA = "fedcba9876543210fedcba9876543210fedcba98"
+	latestPolicy.ContentHash = "sha256:latest-services-policy"
+	store.policies[latestPolicyID] = latestPolicy
+	store.serviceDescriptors[latestPolicyID] = []entity.ServiceDescriptor{{
+		Base:             entity.Base{ID: uuid.New(), Version: 1},
+		ProjectID:        projectID,
+		ServicesPolicyID: latestPolicyID,
+		RepositoryID:     &repositoryID,
+		ServiceKey:       "api",
+		DisplayName:      "Latest API",
+		Kind:             enum.ServiceKindBackend,
+		RootPath:         "services/latest-api",
+		Status:           enum.ServiceStatusActive,
+	}}
+
+	expectedPolicyID := policy.ID
+	result, err := svc.GetProjectOnboardingStatus(ctx, GetProjectOnboardingStatusInput{
+		ProjectID:                projectID,
+		RepositoryID:             &repositoryID,
+		ServiceKeys:              []string{"api"},
+		ExpectedServicesPolicyID: &expectedPolicyID,
+		Meta:                     queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetProjectOnboardingStatus(): %v", err)
+	}
+	if result.Status != enum.ProjectOnboardingStatusReady {
+		t.Fatalf("status = %s reason = %q, want ready", result.Status, result.SafeReason)
+	}
+	if result.ServicesPolicy == nil || result.ServicesPolicy.ID != policy.ID {
+		t.Fatalf("services policy = %+v, want expected policy %s", result.ServicesPolicy, policy.ID)
+	}
+	if len(result.ServiceDescriptors) != 1 || result.ServiceDescriptors[0].ServicesPolicyID != policy.ID {
+		t.Fatalf("descriptors = %+v, want descriptors from expected policy", result.ServiceDescriptors)
+	}
+}
+
+func TestGetProjectOnboardingStatusReturnsSafeMissingPolicyStatus(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.projects[projectID] = entity.Project{Base: entity.Base{ID: projectID, Version: 1}, OrganizationID: uuid.New(), Slug: "dogfood", DisplayName: "Dogfood", Status: enum.ProjectStatusActive}
+	store.repositories[repositoryID] = entity.RepositoryBinding{Base: entity.Base{ID: repositoryID, Version: 1}, ProjectID: projectID, Provider: enum.RepositoryProviderGitHub, ProviderOwner: "codex-k8s", ProviderName: "dogfood", DefaultBranch: "main", Status: enum.RepositoryStatusActive}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+
+	result, err := svc.GetProjectOnboardingStatus(ctx, GetProjectOnboardingStatusInput{ProjectID: projectID, RepositoryID: &repositoryID, Meta: queryMeta()})
+	if err != nil {
+		t.Fatalf("GetProjectOnboardingStatus(): %v", err)
+	}
+	if result.Status != enum.ProjectOnboardingStatusServicesPolicyNotFound || result.SafeReason != "services_policy_not_found" {
+		t.Fatalf("result = %+v, want services_policy_not_found", result)
+	}
+}
+
+func TestGetProjectOnboardingStatusReturnsStalePolicyStatus(t *testing.T) {
+	ctx := context.Background()
+	svc, _, projectID, repositoryID, _ := newProjectOnboardingStatusFixture(t)
+
+	result, err := svc.GetProjectOnboardingStatus(ctx, GetProjectOnboardingStatusInput{
+		ProjectID:           projectID,
+		RepositoryID:        &repositoryID,
+		ExpectedContentHash: "sha256:other",
+		Meta:                queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetProjectOnboardingStatus(): %v", err)
+	}
+	if result.Status != enum.ProjectOnboardingStatusServicesPolicyStale || result.SafeReason != "services_policy_content_hash_mismatch" {
+		t.Fatalf("result = %+v, want content hash stale status", result)
+	}
+}
+
+func TestGetProjectOnboardingStatusReturnsSafeDescriptorStatus(t *testing.T) {
+	ctx := context.Background()
+	svc, _, projectID, repositoryID, _ := newProjectOnboardingStatusFixture(t)
+
+	result, err := svc.GetProjectOnboardingStatus(ctx, GetProjectOnboardingStatusInput{
+		ProjectID:    projectID,
+		RepositoryID: &repositoryID,
+		ServiceKeys:  []string{"missing"},
+		Meta:         queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetProjectOnboardingStatus(): %v", err)
+	}
+	if result.Status != enum.ProjectOnboardingStatusServiceDescriptorsNotFound || result.SafeReason != "service_descriptors_not_found" {
+		t.Fatalf("result = %+v, want descriptor missing status", result)
+	}
+}
+
+func TestGetProjectOnboardingStatusReturnsRepositoryConflictStatus(t *testing.T) {
+	ctx := context.Background()
+	svc, store, projectID, repositoryID, _ := newProjectOnboardingStatusFixture(t)
+	repository := store.repositories[repositoryID]
+	repository.ProjectID = uuid.New()
+	store.repositories[repositoryID] = repository
+
+	result, err := svc.GetProjectOnboardingStatus(ctx, GetProjectOnboardingStatusInput{
+		ProjectID:    projectID,
+		RepositoryID: &repositoryID,
+		Meta:         queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetProjectOnboardingStatus(): %v", err)
+	}
+	if result.Status != enum.ProjectOnboardingStatusRepositoryBindingConflict || result.SafeReason != "repository_binding_project_mismatch" {
+		t.Fatalf("result = %+v, want repository binding conflict", result)
+	}
+}
+
 func TestImportServicesPolicyValidatesDocumentationSources(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()
@@ -3399,6 +3545,59 @@ func queryMeta() value.QueryMeta {
 	}
 }
 
+func newProjectOnboardingStatusFixture(t *testing.T) (*Service, *memoryRepository, uuid.UUID, uuid.UUID, entity.ServicesPolicy) {
+	t.Helper()
+	now := fixedClock{}.Now()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	store := newMemoryRepository()
+	store.projects[projectID] = entity.Project{
+		Base:           entity.Base{ID: projectID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		OrganizationID: uuid.New(),
+		Slug:           "dogfood",
+		DisplayName:    "Dogfood",
+		Status:         enum.ProjectStatusActive,
+	}
+	store.repositories[repositoryID] = entity.RepositoryBinding{
+		Base:                 entity.Base{ID: repositoryID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		ProjectID:            projectID,
+		Provider:             enum.RepositoryProviderGitHub,
+		ProviderOwner:        "codex-k8s",
+		ProviderName:         "dogfood",
+		DefaultBranch:        "main",
+		Status:               enum.RepositoryStatusActive,
+		ProviderRepositoryID: "R_dogfood",
+	}
+	policy := entity.ServicesPolicy{
+		Base:               entity.Base{ID: policyID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		ProjectID:          projectID,
+		SourceRepositoryID: &repositoryID,
+		SourcePath:         "services.yaml",
+		SourceRef:          "refs/heads/main",
+		SourceCommitSHA:    "0123456789abcdef0123456789abcdef01234567",
+		ContentHash:        "sha256:services-policy",
+		ValidatedPayload:   []byte(servicesPolicyPayload("api", "services/api", "backend")),
+		ValidationStatus:   enum.ServicesPolicyValidationValid,
+		ProjectionStatus:   enum.ServicesPolicyProjectionSynced,
+		PolicyVersion:      1,
+		ImportedAt:         now,
+	}
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{{
+		Base:             entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ProjectID:        projectID,
+		ServicesPolicyID: policyID,
+		RepositoryID:     &repositoryID,
+		ServiceKey:       "api",
+		DisplayName:      "API",
+		Kind:             enum.ServiceKindBackend,
+		RootPath:         "services/api",
+		Status:           enum.ServiceStatusActive,
+	}}
+	return New(store, fixedClock{}, &sequenceIDs{}), store, projectID, repositoryID, policy
+}
+
 func commandMetaWithVersion(commandID uuid.UUID, version int64) value.CommandMeta {
 	meta := commandMeta(commandID)
 	meta.ExpectedVersion = &version
@@ -4101,7 +4300,7 @@ func (r *memoryRepository) notFound() error {
 }
 
 func (r *memoryRepository) ListServiceDescriptors(_ context.Context, filter query.ServiceDescriptorFilter) ([]entity.ServiceDescriptor, query.PageResult, error) {
-	policy, err := r.GetServicesPolicy(context.Background(), filter.ProjectID, nil)
+	policy, err := r.GetServicesPolicy(context.Background(), filter.ProjectID, filter.ServicesPolicyID)
 	if err != nil {
 		return nil, query.PageResult{}, err
 	}

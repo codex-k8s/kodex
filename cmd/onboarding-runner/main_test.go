@@ -813,6 +813,9 @@ func TestRunApplyImportsSelfRepoServicesPolicyThroughProductAPI(t *testing.T) {
 	if projectClient.importServicesPolicyCalls != 1 {
 		t.Fatalf("expected one ImportServicesPolicy call, got %d", projectClient.importServicesPolicyCalls)
 	}
+	if projectClient.onboardingStatusCalls != 1 {
+		t.Fatalf("expected one GetProjectOnboardingStatus call, got %d", projectClient.onboardingStatusCalls)
+	}
 	request := projectClient.lastImportServicesPolicyRequest
 	if request == nil {
 		t.Fatal("expected ImportServicesPolicy request")
@@ -832,6 +835,18 @@ func TestRunApplyImportsSelfRepoServicesPolicyThroughProductAPI(t *testing.T) {
 	if !strings.Contains(request.GetValidatedPayloadJson(), "raw_services_yaml_secret") {
 		t.Fatalf("expected checked payload to reach product API")
 	}
+	statusRequest := projectClient.lastOnboardingStatusRequest
+	if statusRequest == nil {
+		t.Fatal("expected GetProjectOnboardingStatus request")
+	}
+	if statusRequest.GetProjectId() != "project-self" ||
+		statusRequest.GetRepositoryId() != "repo-self" ||
+		statusRequest.GetExpectedSourceRef() != "refs/heads/main" ||
+		statusRequest.GetExpectedSourceCommitSha() != strings.Repeat("b", 40) ||
+		statusRequest.GetExpectedContentHash() != contentHash ||
+		statusRequest.GetExpectedServicesPolicyId() == "" {
+		t.Fatalf("unexpected GetProjectOnboardingStatus request: %+v", statusRequest)
+	}
 	assertRunnerRepositoryReadAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
 	assertRunnerRepositoryReadAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
 	assertSelfDeployAccessRules(t, accessClient, "project-self")
@@ -843,6 +858,7 @@ func TestRunApplyImportsSelfRepoServicesPolicyThroughProductAPI(t *testing.T) {
 	}
 	text := output.String()
 	assertContains(t, text, "services policy import completed")
+	assertContains(t, text, "project onboarding ready")
 	assertContains(t, text, "content_hash="+contentHash)
 	assertNotContains(t, text, "raw_services_yaml_secret")
 }
@@ -1634,6 +1650,8 @@ type fakeProjectCatalogClient struct {
 	createRepositoryErr             error
 	bootstrapPullRequestErr         error
 	importServicesPolicyErr         error
+	onboardingStatusErr             error
+	onboardingStatusResponse        *projectsv1.ProjectOnboardingStatusResponse
 	listProjectsCalls               int
 	createProjectCalls              int
 	listRepositoriesCalls           int
@@ -1641,6 +1659,7 @@ type fakeProjectCatalogClient struct {
 	bootstrapReconcileCalls         int
 	adoptionReconcileCalls          int
 	importServicesPolicyCalls       int
+	onboardingStatusCalls           int
 	createRepositoryCalls           int
 	bootstrapPullRequestCalls       int
 	getRepositoryCalls              int
@@ -1652,6 +1671,7 @@ type fakeProjectCatalogClient struct {
 	lastBootstrapRequest            *projectsv1.ReconcileBootstrapMergeSignalRequest
 	lastAdoptionRequest             *projectsv1.ReconcileAdoptionMergeSignalRequest
 	lastImportServicesPolicyRequest *projectsv1.ImportServicesPolicyRequest
+	lastOnboardingStatusRequest     *projectsv1.GetProjectOnboardingStatusRequest
 	lastCreateRepositoryRequest     *projectsv1.CreateProviderRepositoryRequest
 	lastBootstrapPullRequestRequest *projectsv1.CreateRepositoryBootstrapPullRequestRequest
 	getRepositoryHook               func() error
@@ -1801,13 +1821,79 @@ func (f *fakeProjectCatalogClient) ImportServicesPolicy(_ context.Context, reque
 	}, nil
 }
 
+func (f *fakeProjectCatalogClient) GetProjectOnboardingStatus(_ context.Context, request *projectsv1.GetProjectOnboardingStatusRequest, _ ...grpc.CallOption) (*projectsv1.ProjectOnboardingStatusResponse, error) {
+	f.onboardingStatusCalls++
+	f.lastOnboardingStatusRequest = request
+	if f.onboardingStatusErr != nil {
+		return nil, f.onboardingStatusErr
+	}
+	if f.onboardingStatusResponse != nil {
+		return f.onboardingStatusResponse, nil
+	}
+	repository := f.repository
+	if repository == nil {
+		repository = repositoryFixture()
+	}
+	policyID := request.GetExpectedServicesPolicyId()
+	if policyID == "" {
+		policyID = "policy-self"
+	}
+	policyVersion := request.GetExpectedServicesPolicyVersion()
+	if policyVersion == 0 {
+		policyVersion = 1
+	}
+	serviceKey := "api"
+	if len(request.GetServiceKeys()) > 0 {
+		serviceKey = request.GetServiceKeys()[0]
+	}
+	return &projectsv1.ProjectOnboardingStatusResponse{
+		Status:     projectsv1.ProjectOnboardingStatus_PROJECT_ONBOARDING_STATUS_READY,
+		Repository: repository,
+		ServicesPolicy: &projectsv1.ServicesPolicy{
+			ServicesPolicyId:   policyID,
+			ProjectId:          request.GetProjectId(),
+			SourceRepositoryId: optionalString(request.GetRepositoryId()),
+			SourceRef:          optionalString(request.GetExpectedSourceRef()),
+			SourceCommitSha:    request.GetExpectedSourceCommitSha(),
+			ContentHash:        request.GetExpectedContentHash(),
+			ValidationStatus:   projectsv1.ServicesPolicyValidationStatus_SERVICES_POLICY_VALIDATION_STATUS_VALID,
+			ProjectionStatus:   projectsv1.ServicesPolicyProjectionStatus_SERVICES_POLICY_PROJECTION_STATUS_SYNCED,
+			PolicyVersion:      policyVersion,
+		},
+		ServiceDescriptors: []*projectsv1.ServiceDescriptor{{
+			ServiceDescriptorId: "descriptor-" + serviceKey,
+			ProjectId:           request.GetProjectId(),
+			ServicesPolicyId:    policyID,
+			RepositoryId:        optionalString(request.GetRepositoryId()),
+			ServiceKey:          serviceKey,
+			DisplayName:         serviceKey,
+			Kind:                projectsv1.ServiceKind_SERVICE_KIND_BACKEND,
+			RootPath:            "services/" + serviceKey,
+			Status:              projectsv1.ServiceStatus_SERVICE_STATUS_ACTIVE,
+		}},
+		Summary: "project onboarding ready policy_version=1 descriptors=1",
+	}, nil
+}
+
 func (f *fakeProjectCatalogClient) ReconcileBootstrapMergeSignal(_ context.Context, request *projectsv1.ReconcileBootstrapMergeSignalRequest, _ ...grpc.CallOption) (*projectsv1.BootstrapServicesPolicyImportResponse, error) {
 	f.bootstrapReconcileCalls++
 	f.lastBootstrapRequest = request
 	return &projectsv1.BootstrapServicesPolicyImportResponse{
 		SourceRef:       request.GetMergeSignal().GetSourceRef(),
 		SourceCommitSha: request.GetMergeSignal().GetMergeCommitSha(),
-		Summary:         "bootstrap imported",
+		ServicesPolicy: &projectsv1.ServicesPolicy{
+			ServicesPolicyId:   "bootstrap-policy",
+			ProjectId:          request.GetProjectId(),
+			SourceRepositoryId: optionalString(request.GetRepositoryId()),
+			SourcePath:         request.GetCheckedPolicy().GetSourcePath(),
+			SourceRef:          optionalString(request.GetMergeSignal().GetBaseBranch()),
+			SourceCommitSha:    request.GetMergeSignal().GetMergeCommitSha(),
+			ContentHash:        request.GetCheckedPolicy().GetContentHash(),
+			ValidationStatus:   projectsv1.ServicesPolicyValidationStatus_SERVICES_POLICY_VALIDATION_STATUS_VALID,
+			ProjectionStatus:   projectsv1.ServicesPolicyProjectionStatus_SERVICES_POLICY_PROJECTION_STATUS_SYNCED,
+			PolicyVersion:      1,
+		},
+		Summary: "bootstrap imported",
 	}, nil
 }
 
@@ -1817,7 +1903,19 @@ func (f *fakeProjectCatalogClient) ReconcileAdoptionMergeSignal(_ context.Contex
 	return &projectsv1.BootstrapServicesPolicyImportResponse{
 		SourceRef:       request.GetMergeSignal().GetSourceRef(),
 		SourceCommitSha: request.GetMergeSignal().GetMergeCommitSha(),
-		Summary:         "adoption imported",
+		ServicesPolicy: &projectsv1.ServicesPolicy{
+			ServicesPolicyId:   "adoption-policy",
+			ProjectId:          request.GetProjectId(),
+			SourceRepositoryId: optionalString(request.GetRepositoryId()),
+			SourcePath:         request.GetCheckedPolicy().GetSourcePath(),
+			SourceRef:          optionalString(request.GetMergeSignal().GetBaseBranch()),
+			SourceCommitSha:    request.GetMergeSignal().GetMergeCommitSha(),
+			ContentHash:        request.GetCheckedPolicy().GetContentHash(),
+			ValidationStatus:   projectsv1.ServicesPolicyValidationStatus_SERVICES_POLICY_VALIDATION_STATUS_VALID,
+			ProjectionStatus:   projectsv1.ServicesPolicyProjectionStatus_SERVICES_POLICY_PROJECTION_STATUS_SYNCED,
+			PolicyVersion:      1,
+		},
+		Summary: "adoption imported",
 	}, nil
 }
 

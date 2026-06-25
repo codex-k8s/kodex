@@ -688,6 +688,94 @@ func TestReconcileAdoptionMergeSignalCallsDomainService(t *testing.T) {
 	}
 }
 
+func TestGetProjectOnboardingStatusCallsDomainService(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	expectedVersion := int64(3)
+	service := &fakeProjectService{}
+	service.getOnboardingStatus = func(_ context.Context, input projectservice.GetProjectOnboardingStatusInput) (projectservice.ProjectOnboardingStatusResult, error) {
+		if input.ProjectID != projectID ||
+			input.RepositoryID == nil ||
+			*input.RepositoryID != repositoryID ||
+			input.ExpectedSourceRef != "refs/heads/main" ||
+			input.ExpectedSourceCommitSHA != "0123456789abcdef0123456789abcdef01234567" ||
+			input.ExpectedContentHash != "sha256:policy" ||
+			input.ExpectedServicesPolicyVersion == nil ||
+			*input.ExpectedServicesPolicyVersion != expectedVersion ||
+			len(input.ServiceKeys) != 1 ||
+			input.ServiceKeys[0] != "api" {
+			t.Fatalf("input = %+v, want onboarding status read input", input)
+		}
+		return projectservice.ProjectOnboardingStatusResult{
+			Status: enum.ProjectOnboardingStatusReady,
+			Project: &entity.Project{
+				Base:           entity.Base{ID: projectID, Version: 1},
+				OrganizationID: uuid.New(),
+				Slug:           "dogfood",
+				DisplayName:    "Dogfood",
+				Status:         enum.ProjectStatusActive,
+			},
+			Repository: &entity.RepositoryBinding{
+				Base:          entity.Base{ID: repositoryID, Version: 1},
+				ProjectID:     projectID,
+				Provider:      enum.RepositoryProviderGitHub,
+				ProviderOwner: "codex-k8s",
+				ProviderName:  "dogfood",
+				DefaultBranch: "main",
+				Status:        enum.RepositoryStatusActive,
+			},
+			ServicesPolicy: &entity.ServicesPolicy{
+				Base:             entity.Base{ID: policyID, Version: 1},
+				ProjectID:        projectID,
+				SourcePath:       "services.yaml",
+				SourceCommitSHA:  "0123456789abcdef0123456789abcdef01234567",
+				ContentHash:      "sha256:policy",
+				ValidatedPayload: []byte(`{"spec":{"services":[{"key":"api"}]}}`),
+				ValidationStatus: enum.ServicesPolicyValidationValid,
+				ProjectionStatus: enum.ServicesPolicyProjectionSynced,
+				PolicyVersion:    3,
+				ImportedAt:       time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC),
+			},
+			ServiceDescriptors: []entity.ServiceDescriptor{{
+				Base:             entity.Base{ID: uuid.New(), Version: 1},
+				ProjectID:        projectID,
+				ServicesPolicyID: policyID,
+				RepositoryID:     &repositoryID,
+				ServiceKey:       "api",
+				DisplayName:      "API",
+				Kind:             enum.ServiceKindBackend,
+				RootPath:         "services/api",
+				Status:           enum.ServiceStatusActive,
+			}},
+			Summary: "project onboarding ready policy_version=3 descriptors=1",
+		}, nil
+	}
+	server := NewServer(service)
+
+	response, err := server.GetProjectOnboardingStatus(context.Background(), &projectsv1.GetProjectOnboardingStatusRequest{
+		ProjectId:                     projectID.String(),
+		RepositoryId:                  stringPtr(repositoryID.String()),
+		ServiceKeys:                   []string{"api"},
+		ExpectedSourceRef:             stringPtr("refs/heads/main"),
+		ExpectedSourceCommitSha:       stringPtr("0123456789abcdef0123456789abcdef01234567"),
+		ExpectedContentHash:           stringPtr("sha256:policy"),
+		ExpectedServicesPolicyVersion: &expectedVersion,
+		Meta:                          queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetProjectOnboardingStatus(): %v", err)
+	}
+	if response.GetStatus() != projectsv1.ProjectOnboardingStatus_PROJECT_ONBOARDING_STATUS_READY ||
+		response.GetRepository().GetRepositoryId() != repositoryID.String() ||
+		response.GetServicesPolicy().GetServicesPolicyId() != policyID.String() ||
+		response.GetServicesPolicy().GetValidatedPayloadJson() != "" ||
+		len(response.GetServiceDescriptors()) != 1 ||
+		response.GetSummary() == "" {
+		t.Fatalf("response = %+v, want ready onboarding state", response)
+	}
+}
+
 func TestErrorToStatusMapsDomainErrors(t *testing.T) {
 	t.Parallel()
 
@@ -763,6 +851,7 @@ type fakeProjectService struct {
 	getSelfDeploySignal      func(context.Context, projectservice.GetSelfDeploySignalInput) (projectservice.SelfDeploySignalResult, error)
 	getSelfDeployBuildPlan   func(context.Context, projectservice.GetSelfDeployBuildPlanInput) (projectservice.SelfDeployBuildPlanResult, error)
 	getSelfDeployDeployPlan  func(context.Context, projectservice.GetSelfDeployDeployPlanInput) (projectservice.SelfDeployDeployPlanResult, error)
+	getOnboardingStatus      func(context.Context, projectservice.GetProjectOnboardingStatusInput) (projectservice.ProjectOnboardingStatusResult, error)
 }
 
 func (s *fakeProjectService) CreateProject(ctx context.Context, input projectservice.CreateProjectInput) (entity.Project, error) {
@@ -826,6 +915,13 @@ func (s *fakeProjectService) GetSelfDeployDeployPlan(ctx context.Context, input 
 		return projectservice.SelfDeployDeployPlanResult{}, errs.ErrInvalidArgument
 	}
 	return s.getSelfDeployDeployPlan(ctx, input)
+}
+
+func (s *fakeProjectService) GetProjectOnboardingStatus(ctx context.Context, input projectservice.GetProjectOnboardingStatusInput) (projectservice.ProjectOnboardingStatusResult, error) {
+	if s.getOnboardingStatus == nil {
+		return projectservice.ProjectOnboardingStatusResult{}, errs.ErrInvalidArgument
+	}
+	return s.getOnboardingStatus(ctx, input)
 }
 
 type unimplementedProjectService struct{}
@@ -908,6 +1004,10 @@ func (unimplementedProjectService) GetServicesPolicy(context.Context, projectser
 
 func (unimplementedProjectService) ListServiceDescriptors(context.Context, projectservice.ListServiceDescriptorsInput) (projectservice.ListServiceDescriptorsResult, error) {
 	return projectservice.ListServiceDescriptorsResult{}, errs.ErrInvalidArgument
+}
+
+func (unimplementedProjectService) GetProjectOnboardingStatus(context.Context, projectservice.GetProjectOnboardingStatusInput) (projectservice.ProjectOnboardingStatusResult, error) {
+	return projectservice.ProjectOnboardingStatusResult{}, errs.ErrInvalidArgument
 }
 
 func (unimplementedProjectService) CreatePolicyEditProposal(context.Context, projectservice.CreatePolicyEditProposalInput) (entity.PolicyEditProposal, error) {

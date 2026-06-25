@@ -176,6 +176,7 @@ type projectCatalogAPI interface {
 	ImportServicesPolicy(context.Context, *projectsv1.ImportServicesPolicyRequest, ...grpc.CallOption) (*projectsv1.ServicesPolicyResponse, error)
 	ReconcileBootstrapMergeSignal(context.Context, *projectsv1.ReconcileBootstrapMergeSignalRequest, ...grpc.CallOption) (*projectsv1.BootstrapServicesPolicyImportResponse, error)
 	ReconcileAdoptionMergeSignal(context.Context, *projectsv1.ReconcileAdoptionMergeSignalRequest, ...grpc.CallOption) (*projectsv1.BootstrapServicesPolicyImportResponse, error)
+	GetProjectOnboardingStatus(context.Context, *projectsv1.GetProjectOnboardingStatusRequest, ...grpc.CallOption) (*projectsv1.ProjectOnboardingStatusResponse, error)
 }
 
 type providerHubAPI interface {
@@ -1299,6 +1300,44 @@ func applyServicesPolicyImport(ctx context.Context, client projectCatalogAPI, op
 		safeValue(policy.GetContentHash()),
 		policy.GetPolicyVersion(),
 		policy.GetValidationStatus().String(),
+	)
+	if err := verifyProjectOnboardingStatus(ctx, client, options, policy, output); err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyProjectOnboardingStatus(ctx context.Context, client projectCatalogAPI, options runnerOptions, policy *projectsv1.ServicesPolicy, output io.Writer) error {
+	if policy == nil {
+		return nil
+	}
+	response, err := client.GetProjectOnboardingStatus(ctx, &projectsv1.GetProjectOnboardingStatusRequest{
+		ProjectId:                     options.ProjectID,
+		RepositoryId:                  optionalString(options.RepositoryID),
+		ExpectedSourceRef:             optionalString(policy.GetSourceRef()),
+		ExpectedSourceCommitSha:       optionalString(policy.GetSourceCommitSha()),
+		ExpectedContentHash:           optionalString(policy.GetContentHash()),
+		ExpectedServicesPolicyId:      optionalString(policy.GetServicesPolicyId()),
+		ExpectedServicesPolicyVersion: optionalInt64(policy.GetPolicyVersion()),
+		Meta:                          projectQueryMeta(options),
+	})
+	if err != nil {
+		return safeError("project-catalog GetProjectOnboardingStatus failed", err)
+	}
+	if response.GetStatus() != projectsv1.ProjectOnboardingStatus_PROJECT_ONBOARDING_STATUS_READY {
+		logLine(output, "BLOCKED", "project onboarding status=%s reason=%s summary=%s",
+			response.GetStatus().String(),
+			safeValue(response.GetSafeReason()),
+			safeValue(response.GetSummary()),
+		)
+		return fmt.Errorf("project onboarding is not ready: %s", response.GetStatus().String())
+	}
+	logLine(output, "OK", "project onboarding ready status=%s repository_id=%s policy_id=%s descriptors=%d summary=%s",
+		response.GetStatus().String(),
+		safeValue(response.GetRepository().GetRepositoryId()),
+		safeValue(response.GetServicesPolicy().GetServicesPolicyId()),
+		len(response.GetServiceDescriptors()),
+		safeValue(response.GetSummary()),
 	)
 	return nil
 }
@@ -2862,6 +2901,9 @@ func applyBootstrap(ctx context.Context, client projectCatalogAPI, options runne
 		safeValue(response.GetSourceCommitSha()),
 		safeValue(response.GetSummary()),
 	)
+	if err := verifyProjectOnboardingStatus(ctx, client, options, response.GetServicesPolicy(), output); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2890,6 +2932,9 @@ func applyAdoption(ctx context.Context, client projectCatalogAPI, options runner
 		safeValue(response.GetSourceCommitSha()),
 		safeValue(response.GetSummary()),
 	)
+	if err := verifyProjectOnboardingStatus(ctx, client, options, response.GetServicesPolicy(), output); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -3239,6 +3284,13 @@ func splitRepositoryFullName(fullName string) (string, string, bool) {
 func optionalString(value string) *string {
 	value = strings.TrimSpace(value)
 	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func optionalInt64(value int64) *int64 {
+	if value == 0 {
 		return nil
 	}
 	return &value

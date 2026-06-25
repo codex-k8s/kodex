@@ -267,6 +267,7 @@ func repositoryFilterArgs(filter query.RepositoryFilter) pageQueryArgs {
 
 func serviceDescriptorFilterArgs(filter query.ServiceDescriptorFilter) pageQueryArgs {
 	paging := repositoryStatusesPage(filter.Page, filter.ProjectID, filter.RepositoryID, filter.Statuses)
+	paging.args["services_policy_id"] = postgreslib.NullableUUID(filter.ServicesPolicyID)
 	paging.args["service_keys"] = postgreslib.StringValues(filter.ServiceKeys)
 	return paging
 }

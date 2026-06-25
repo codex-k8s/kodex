@@ -50,6 +50,8 @@ service ProjectCatalogService {
   rpc GetServicesPolicy(GetServicesPolicyRequest) returns (ServicesPolicyResponse);
   // ListServiceDescriptors returns typed service descriptors from active policy.
   rpc ListServiceDescriptors(ListServiceDescriptorsRequest) returns (ListServiceDescriptorsResponse);
+  // GetProjectOnboardingStatus returns safe readiness for manual project/repository onboarding.
+  rpc GetProjectOnboardingStatus(GetProjectOnboardingStatusRequest) returns (ProjectOnboardingStatusResponse);
   // CreatePolicyEditProposal creates a request to change services.yaml through PR.
   rpc CreatePolicyEditProposal(CreatePolicyEditProposalRequest) returns (PolicyEditProposalResponse);
   // CreatePolicyOverride creates a time-bound operator override.
@@ -208,6 +210,22 @@ enum ServicesPolicyProjectionStatus {
   SERVICES_POLICY_PROJECTION_STATUS_PENDING = 2;
   SERVICES_POLICY_PROJECTION_STATUS_FAILED = 3;
   SERVICES_POLICY_PROJECTION_STATUS_OVERRIDDEN = 4;
+}
+
+// ProjectOnboardingStatus describes readiness of manual bootstrap/adoption state.
+enum ProjectOnboardingStatus {
+  PROJECT_ONBOARDING_STATUS_UNSPECIFIED = 0;
+  PROJECT_ONBOARDING_STATUS_READY = 1;
+  PROJECT_ONBOARDING_STATUS_INVALID_INPUT = 2;
+  PROJECT_ONBOARDING_STATUS_PROJECT_NOT_FOUND = 3;
+  PROJECT_ONBOARDING_STATUS_PROJECT_NOT_ACTIVE = 4;
+  PROJECT_ONBOARDING_STATUS_REPOSITORY_BINDING_NOT_FOUND = 5;
+  PROJECT_ONBOARDING_STATUS_REPOSITORY_BINDING_CONFLICT = 6;
+  PROJECT_ONBOARDING_STATUS_REPOSITORY_BINDING_NOT_ACTIVE = 7;
+  PROJECT_ONBOARDING_STATUS_SERVICES_POLICY_NOT_FOUND = 8;
+  PROJECT_ONBOARDING_STATUS_SERVICES_POLICY_NOT_READY = 9;
+  PROJECT_ONBOARDING_STATUS_SERVICES_POLICY_STALE = 10;
+  PROJECT_ONBOARDING_STATUS_SERVICE_DESCRIPTORS_NOT_FOUND = 11;
 }
 
 // SelfDeploySignalStatus описывает готовность project-side self-deploy input.
@@ -1537,6 +1555,46 @@ message ListServiceDescriptorsResponse {
   repeated ServiceDescriptor service_descriptors = 1;
   // page describes continuation state.
   PageResponse page = 2;
+}
+
+// GetProjectOnboardingStatusRequest reads safe readiness for manual bootstrap/adoption.
+message GetProjectOnboardingStatusRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // repository_id optionally requires a concrete repository binding.
+  optional string repository_id = 2;
+  // service_keys optionally require concrete active descriptors.
+  repeated string service_keys = 3;
+  // expected_source_ref optionally checks the latest policy source ref.
+  optional string expected_source_ref = 4;
+  // expected_source_commit_sha optionally checks the latest policy source commit.
+  optional string expected_source_commit_sha = 5;
+  // expected_content_hash optionally checks the latest policy normalized content hash.
+  optional string expected_content_hash = 6;
+  // expected_services_policy_id optionally pins a concrete checked policy id.
+  optional string expected_services_policy_id = 7;
+  // expected_services_policy_version optionally checks the latest policy version.
+  optional int64 expected_services_policy_version = 8;
+  // meta carries read actor and request context.
+  QueryMeta meta = 9;
+}
+
+// ProjectOnboardingStatusResponse returns safe project/repository/policy readiness.
+message ProjectOnboardingStatusResponse {
+  // status describes whether manual bootstrap/adoption has usable checked state.
+  ProjectOnboardingStatus status = 1;
+  // safe_reason explains non-ready status without raw payloads or secrets.
+  optional string safe_reason = 2;
+  // project is present when project exists and is visible.
+  Project project = 3;
+  // repository is present when a requested binding exists and belongs to the project.
+  Repository repository = 4;
+  // services_policy is present when a checked policy exists.
+  ServicesPolicy services_policy = 5;
+  // service_descriptors are active descriptors used by agents and UI surfaces.
+  repeated ServiceDescriptor service_descriptors = 6;
+  // summary is a bounded safe description for logs and operator output.
+  string summary = 7;
 }
 
 // CreatePolicyEditProposalRequest requests a PR-backed services.yaml change.
