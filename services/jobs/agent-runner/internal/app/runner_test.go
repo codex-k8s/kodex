@@ -127,8 +127,8 @@ func TestValidateCodexSessionExecutionSpecRejectsUnsafeRefsWithoutLeak(t *testin
 	cfg.CodexSessionExecutionSpecJSON = validCodexSessionExecutionSpecJSON(t, cfg)
 	cfg.CodexSessionExecutionSpecJSON = strings.ReplaceAll(
 		cfg.CodexSessionExecutionSpecJSON,
-		"object://instructions/11111111",
-		"object://instructions/prompt_body_secret_value",
+		"workspace://.kodex/execution/instruction.txt",
+		"workspace://.kodex/execution/prompt_body_secret_value",
 	)
 
 	_, diagnostic = ValidateCodexSessionExecutionSpec(cfg, contextFile)
@@ -221,7 +221,7 @@ func TestRunnerDoesNotFallbackForObjectExecutionRefs(t *testing.T) {
 	contextPath := writeTempContext(t, raw)
 	cfg.ContextPath = contextPath
 	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
-	cfg.CodexSessionExecutionSpecJSON = validCodexSessionExecutionSpecJSON(t, cfg)
+	cfg.CodexSessionExecutionSpecJSON = objectCodexSessionExecutionSpecJSON(t, cfg)
 	reporter := &recordingReporter{}
 	executor := &recordingExecutor{}
 
@@ -460,9 +460,9 @@ func validConfigAndContext(t *testing.T) (Config, []byte) {
 func validCodexSessionExecutionSpecJSON(t *testing.T, cfg Config) string {
 	t.Helper()
 	payload := map[string]any{
-		"instruction_object_ref":    "object://instructions/11111111",
+		"instruction_object_ref":    "workspace://.kodex/execution/instruction.txt",
 		"instruction_object_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-		"result_schema_ref":         "object://schemas/codex-result-v1",
+		"result_schema_ref":         "workspace://.kodex/execution/result.schema.json",
 		"result_schema_digest":      "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 		"workspace_snapshot_ref":    "runtime://workspace-snapshots/11111111",
 		"hook_endpoint_ref":         "hook://codex-hook-ingress/agent-runner",
@@ -491,6 +491,14 @@ func validCodexSessionExecutionSpecJSON(t *testing.T, cfg Config) string {
 		t.Fatalf("Marshal() err = %v", err)
 	}
 	return string(raw)
+}
+
+func objectCodexSessionExecutionSpecJSON(t *testing.T, cfg Config) string {
+	t.Helper()
+	raw := validCodexSessionExecutionSpecJSON(t, cfg)
+	raw = strings.ReplaceAll(raw, "workspace://.kodex/execution/instruction.txt", "object://instructions/11111111")
+	raw = strings.ReplaceAll(raw, "workspace://.kodex/execution/result.schema.json", "object://schemas/codex-result-v1")
+	return raw
 }
 
 func validWorkspaceCodexSessionExecutionSpecJSON(t *testing.T, cfg Config, instructionDigest string, schemaDigest string, timeoutSeconds int) string {

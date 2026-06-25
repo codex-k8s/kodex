@@ -567,6 +567,7 @@ func prepareRuntimeResult(input agentservice.RuntimePreparationInput, response *
 		WorkspaceMaterializationStatus: runtimeWorkspaceMaterializationStatus(materialization.GetStatus()),
 		ContextRef:                     contextRef,
 		ContextDigest:                  contextDigest,
+		WorkspacePVCRef:                strings.TrimSpace(runtimeContext.GetWorkspacePvcRef()),
 		MaterializationFingerprint:     fingerprint,
 		DiagnosticSummary:              runtimeDiagnosticSummary(slot, materialization),
 	}, nil

@@ -299,6 +299,10 @@ func TestPrepareRuntimeCreatesSlotAndWorkspaceAttempt(t *testing.T) {
 	if result.RuntimeContext.WorkspaceRoot != "/workspace" {
 		t.Fatalf("workspace root = %s, want /workspace", result.RuntimeContext.WorkspaceRoot)
 	}
+	wantWorkspacePVCRef := "pvc://kodex-rt-" + shortID(result.Slot.ID) + "/runtime-workspace-" + shortID(result.Slot.ID)
+	if result.RuntimeContext.WorkspacePVCRef != wantWorkspacePVCRef {
+		t.Fatalf("workspace pvc ref = %s, want %s", result.RuntimeContext.WorkspacePVCRef, wantWorkspacePVCRef)
+	}
 	if len(resolver.requests) != 1 {
 		t.Fatalf("placement resolver calls = %d, want 1", len(resolver.requests))
 	}

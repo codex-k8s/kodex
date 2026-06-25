@@ -19,13 +19,15 @@ import (
 )
 
 const (
-	testInstructionDigest  = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	testResultSchemaDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	testInstructionObjectRef = "workspace://.kodex/execution/instruction.txt"
+	testInstructionDigest    = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	testResultSchemaRef      = "workspace://.kodex/execution/result.schema.json"
+	testResultSchemaDigest   = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
 func testCodexSessionExecutionConfig() CodexSessionExecutionConfig {
 	return CodexSessionExecutionConfig{
-		ResultSchemaRef:    "object://schemas/codex-result-v1",
+		ResultSchemaRef:    testResultSchemaRef,
 		ResultSchemaDigest: testResultSchemaDigest,
 		HookEndpointRef:    "hook://codex-hook-ingress/agent-runner",
 		TimeoutSeconds:     1800,
@@ -655,6 +657,7 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 		WorkspaceRef:                   materializationRef,
 		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
 		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint:     "sha256:workspace",
 		DiagnosticSummary:              "workspace_status=completed",
 	}}
@@ -697,6 +700,9 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 	if spec.ExpectedMaterializationFingerprint != "sha256:workspace" || spec.ContextDigest != "sha256:agent-run-context" {
 		t.Fatalf("runtime job spec digests = %+v", spec)
 	}
+	if spec.WorkspacePVCRef != "pvc://runtime-jobs/runtime-workspace-agent-run" {
+		t.Fatalf("runtime job workspace pvc ref = %q", spec.WorkspacePVCRef)
+	}
 	if spec.RunnerMode != RuntimeJobRunnerModeCodexAgent || spec.RunnerProfileRef != "runner-profile://go-full" || spec.RunnerImageRef != "image://codex-agent@sha256:runner" {
 		t.Fatalf("runtime job runner refs = %+v", spec)
 	}
@@ -708,9 +714,9 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 	if codexSpec == nil {
 		t.Fatal("codex session execution spec is nil")
 	}
-	if codexSpec.InstructionObjectRef != "object://instructions/work-v1" ||
+	if codexSpec.InstructionObjectRef != testInstructionObjectRef ||
 		codexSpec.InstructionObjectDigest != testInstructionDigest ||
-		codexSpec.ResultSchemaRef != "object://schemas/codex-result-v1" ||
+		codexSpec.ResultSchemaRef != testResultSchemaRef ||
 		codexSpec.ResultSchemaDigest != testResultSchemaDigest {
 		t.Fatalf("codex instruction/schema refs = %+v", codexSpec)
 	}
@@ -731,6 +737,234 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 	}
 }
 
+func TestAgentRunEndToEndRuntimeReportingAcceptanceAndFollowUp(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	fixture.ids = []uuid.UUID{
+		fixture.runID,
+		uuid.MustParse("11010000-0001-4000-8000-000000000001"),
+		uuid.MustParse("11010000-0002-4000-8000-000000000002"),
+		uuid.MustParse("11010000-0003-4000-8000-000000000003"),
+		uuid.MustParse("11010000-0004-4000-8000-000000000004"),
+		uuid.MustParse("11010000-0005-4000-8000-000000000005"),
+		uuid.MustParse("11010000-0006-4000-8000-000000000006"),
+		uuid.MustParse("11010000-0007-4000-8000-000000000007"),
+		uuid.MustParse("11010000-0008-4000-8000-000000000008"),
+		uuid.MustParse("11010000-0009-4000-8000-000000000009"),
+		uuid.MustParse("11010000-0010-4000-8000-000000000010"),
+		uuid.MustParse("11010000-0011-4000-8000-000000000011"),
+	}
+	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	materializationRef := uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String()
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                        slotRef,
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   materializationRef,
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
+		MaterializationFingerprint:     "sha256:workspace",
+		DiagnosticSummary:              "workspace_status=completed",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{
+		JobRef:            "runtime-job-ordinary-run",
+		Status:            "pending",
+		DiagnosticSummary: "job_status=pending",
+	}}
+	providerDispatcher := &fakeProviderFollowUpDispatcher{
+		result: ProviderCommandResult{
+			ProviderOperationRef: "provider_operation:ordinary-follow-up",
+			ResultRef:            "github:issue:1101",
+			Target: ProviderCommandTarget{
+				ProviderSlug:       "github",
+				RepositoryFullName: "codex-k8s/kodex",
+				WorkItemKind:       "issue",
+				Number:             1101,
+			},
+			Status: ProviderOperationStatusSucceeded,
+		},
+	}
+	service := New(Config{
+		Repository:                 fixture.repository,
+		Clock:                      fixedClock{now: fixture.now},
+		IDGenerator:                &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:           fixture.guidanceResolver,
+		WorkspacePolicyResolver:    fixture.policyResolver,
+		RuntimePreparer:            runtimePreparer,
+		RuntimeJobCreator:          runtimeJobCreator,
+		RuntimePreparationEnabled:  true,
+		RuntimeJobDispatchEnabled:  true,
+		RuntimeJobRunnerImageRef:   "image://codex-agent@sha256:runner",
+		CodexSessionExecution:      testCodexSessionExecutionConfig(),
+		ProviderFollowUpDispatcher: providerDispatcher,
+	})
+
+	run, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.Status != enum.AgentRunStatusStarting || run.RuntimeContext.JobRef != "runtime-job-ordinary-run" {
+		t.Fatalf("started run = %s/%+v", run.Status, run.RuntimeContext)
+	}
+	if runtimeJobCreator.last.ExecutionSpec.WorkspacePVCRef != "pvc://runtime-jobs/runtime-workspace-agent-run" ||
+		runtimeJobCreator.last.ExecutionSpec.CodexSessionExecutionSpec == nil {
+		t.Fatalf("runtime execution spec = %+v", runtimeJobCreator.last.ExecutionSpec)
+	}
+	fixture.repository.runByID = map[uuid.UUID]entity.AgentRun{run.ID: run}
+
+	runningVersion := run.Version
+	running, err := service.ReportAgentRunState(context.Background(), ReportAgentRunStateInput{
+		Meta:             value.CommandMeta{CommandID: uuid.MustParse("11010000-1001-4000-8000-000000000001"), ExpectedVersion: &runningVersion, Actor: value.Actor{Type: "service", ID: "agent-runner"}},
+		RunID:            run.ID,
+		SessionID:        run.SessionID,
+		RuntimeSlotRef:   run.RuntimeContext.SlotRef,
+		RuntimeJobRef:    run.RuntimeContext.JobRef,
+		State:            RunnerRunStateRunning,
+		SafeSummary:      ptr("runner started ordinary agent run"),
+		DiagnosticDigest: ptr("sha256:runner-running"),
+	})
+	if err != nil {
+		t.Fatalf("ReportAgentRunState(running) err = %v", err)
+	}
+	if running.Status != enum.AgentRunStatusRunning {
+		t.Fatalf("running status = %s", running.Status)
+	}
+	fixture.repository.runByID[run.ID] = running
+
+	activityStartedAt := fixture.now.Add(time.Minute)
+	activityFinishedAt := activityStartedAt.Add(3 * time.Second)
+	activity, err := service.RecordAgentActivity(context.Background(), RecordAgentActivityInput{
+		Meta:            value.CommandMeta{IdempotencyKey: "ordinary-run-tool-1", Actor: value.Actor{Type: "service", ID: "agent-runner"}},
+		SessionID:       run.SessionID,
+		RunID:           &run.ID,
+		TurnID:          "turn:ordinary-1",
+		ToolUseID:       "tool:ordinary-1",
+		ActivityKind:    enum.AgentActivityKindToolResult,
+		ToolName:        "functions.exec_command",
+		ToolCategory:    "shell",
+		Status:          enum.AgentActivityStatusSucceeded,
+		StartedAt:       &activityStartedAt,
+		FinishedAt:      &activityFinishedAt,
+		SafeSummary:     "Executed bounded repository inspection.",
+		PayloadDigest:   "sha256:" + strings.Repeat("c", 64),
+		SafeRefsJSON:    []byte(`{"artifact_ref":"artifact:ordinary-run/tool-1"}`),
+		SafeDetailsJSON: []byte(`{"summary":"bounded metadata","exit_code":0}`),
+		CorrelationID:   "trace:ordinary-run",
+	})
+	if err != nil {
+		t.Fatalf("RecordAgentActivity() err = %v", err)
+	}
+	if activity.ID == uuid.Nil || activity.RunID == nil || *activity.RunID != run.ID {
+		t.Fatalf("activity = %+v", activity)
+	}
+
+	completedVersion := running.Version
+	completed, err := service.ReportAgentRunState(context.Background(), ReportAgentRunStateInput{
+		Meta:             value.CommandMeta{CommandID: uuid.MustParse("11010000-1002-4000-8000-000000000002"), ExpectedVersion: &completedVersion, Actor: value.Actor{Type: "service", ID: "agent-runner"}},
+		RunID:            run.ID,
+		SessionID:        run.SessionID,
+		RuntimeSlotRef:   run.RuntimeContext.SlotRef,
+		RuntimeJobRef:    run.RuntimeContext.JobRef,
+		State:            RunnerRunStateCompleted,
+		SafeSummary:      ptr("agent run completed with bounded result refs"),
+		DiagnosticDigest: ptr("sha256:runner-completed"),
+	})
+	if err != nil {
+		t.Fatalf("ReportAgentRunState(completed) err = %v", err)
+	}
+	if completed.Status != enum.AgentRunStatusCompleted {
+		t.Fatalf("completed status = %s", completed.Status)
+	}
+	fixture.repository.runByID[run.ID] = completed
+
+	acceptance, err := service.RequestAcceptance(context.Background(), RequestAcceptanceInput{
+		Meta:       value.CommandMeta{CommandID: uuid.MustParse("11010000-1003-4000-8000-000000000003"), Actor: testActor()},
+		SessionID:  run.SessionID,
+		RunID:      &run.ID,
+		CheckKinds: []enum.AcceptanceCheckKind{enum.AcceptanceCheckKindRoleResult},
+		TargetRef:  "artifact:ordinary-run/result",
+	})
+	if err != nil {
+		t.Fatalf("RequestAcceptance() err = %v", err)
+	}
+	if acceptance.Status != enum.AcceptanceStatusPending || acceptance.RunID == nil || *acceptance.RunID != run.ID {
+		t.Fatalf("acceptance requested = %+v", acceptance)
+	}
+	fixture.repository.acceptanceByID = map[uuid.UUID]entity.AcceptanceResult{acceptance.ID: acceptance}
+
+	acceptanceVersion := acceptance.Version
+	passed, err := service.RecordAcceptanceResult(context.Background(), RecordAcceptanceResultInput{
+		Meta:               value.CommandMeta{CommandID: uuid.MustParse("11010000-1004-4000-8000-000000000004"), ExpectedVersion: &acceptanceVersion, Actor: testActor()},
+		AcceptanceResultID: acceptance.ID,
+		Status:             enum.AcceptanceStatusPassed,
+		TargetRef:          "artifact:ordinary-run/acceptance-summary",
+		DetailsJSON:        []byte(`{"summary":"ordinary run accepted","digest":"sha256:accepted","artifact_refs":["artifact:ordinary-run/result"]}`),
+	})
+	if err != nil {
+		t.Fatalf("RecordAcceptanceResult() err = %v", err)
+	}
+	if passed.Status != enum.AcceptanceStatusPassed {
+		t.Fatalf("acceptance status = %s", passed.Status)
+	}
+	fixture.repository.acceptanceByID[acceptance.ID] = passed
+
+	intent, err := service.CreateFollowUpIntent(context.Background(), CreateFollowUpIntentInput{
+		Meta:                  value.CommandMeta{IdempotencyKey: "ordinary-follow-up", Actor: testActor()},
+		SessionID:             run.SessionID,
+		AcceptanceResultID:    &acceptance.ID,
+		ProviderWorkItemType:  "task",
+		InstructionBodyDigest: "sha256:" + strings.Repeat("d", 64),
+		SafeTitle:             "Prepare ordinary agent follow-up",
+		SafeSummary:           "Create a bounded provider-native task after accepted agent run result.",
+		RoleHint:              "worker",
+		StageHint:             "follow-up",
+	})
+	if err != nil {
+		t.Fatalf("CreateFollowUpIntent() err = %v", err)
+	}
+	if intent.Status != enum.FollowUpIntentStatusRequested || intent.RunID == nil || *intent.RunID != run.ID ||
+		intent.ProviderTarget.WorkItemRef != "github:issue:42" {
+		t.Fatalf("follow-up intent = %+v", intent)
+	}
+	fixture.repository.followUpByID = map[uuid.UUID]entity.FollowUpIntent{intent.ID: intent}
+
+	intentVersion := intent.Version
+	updated, err := service.DispatchFollowUpIntent(context.Background(), DispatchFollowUpIntentInput{
+		Meta:             value.CommandMeta{CommandID: uuid.MustParse("11010000-1005-4000-8000-000000000005"), ExpectedVersion: &intentVersion, Actor: testActor()},
+		FollowUpIntentID: intent.ID,
+		DispatchKind:     FollowUpDispatchKindCreateIssue,
+		CreateIssue: &FollowUpCreateIssueCommand{
+			ProjectID:         fixture.projectID,
+			RepositoryID:      fixture.repositoryID,
+			ProviderSlug:      "github",
+			ExternalAccountID: uuid.MustParse("11010000-2001-4000-8000-000000000001"),
+			RepositoryTarget:  ProviderCommandTarget{ProviderSlug: "github", RepositoryFullName: "codex-k8s/kodex"},
+			SafeBodyHint:      "Use only accepted safe refs and summary.",
+		},
+		OperationPolicyContext: ProviderOperationPolicyContext{RiskLevel: ProviderRiskLevelLow},
+	})
+	if err != nil {
+		t.Fatalf("DispatchFollowUpIntent() err = %v", err)
+	}
+	if updated.Status != enum.FollowUpIntentStatusCreated || updated.ProviderOperationRef != "provider_operation:ordinary-follow-up" ||
+		updated.ProviderTarget.WorkItemRef != "github:issue:1101" || providerDispatcher.calls != 1 {
+		t.Fatalf("dispatched follow-up = %+v calls=%d", updated, providerDispatcher.calls)
+	}
+	for _, payload := range [][]byte{
+		fixture.repository.updateRunResult.ResultPayload,
+		fixture.repository.activityResult.ResultPayload,
+		fixture.repository.updateAcceptanceResult.ResultPayload,
+		fixture.repository.updateFollowUpResult.ResultPayload,
+	} {
+		for _, forbidden := range []string{"prompt_text", "transcript", "raw_provider_payload", "tool_input", "tool_response", "secret_value", "kubeconfig"} {
+			if strings.Contains(string(payload), forbidden) {
+				t.Fatalf("ordinary run e2e payload contains forbidden marker %q: %s", forbidden, payload)
+			}
+		}
+	}
+}
+
 func TestStartAgentRunWaitsForRuntimeMaterializationBeforeJobDispatch(t *testing.T) {
 	t.Parallel()
 
@@ -743,6 +977,7 @@ func TestStartAgentRunWaitsForRuntimeMaterializationBeforeJobDispatch(t *testing
 		WorkspaceRef:                   materializationRef,
 		WorkspaceMaterializationStatus: "pending",
 		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint:     "sha256:workspace",
 		DiagnosticSummary:              "slot_status=materializing;workspace_status=pending",
 	}}
@@ -820,6 +1055,7 @@ func TestStartAgentRunStoresRetryableRuntimeJobFailureAsWaiting(t *testing.T) {
 		WorkspaceRef:                   materializationRef,
 		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
 		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint:     "sha256:workspace",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{err: NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager unavailable")}
@@ -895,6 +1131,7 @@ func TestStartAgentRunStoresPermanentRuntimeJobFailureAsFailed(t *testing.T) {
 		WorkspaceRef:                   materializationRef,
 		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
 		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint:     "sha256:workspace",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{err: NewRuntimeJobError(false, "failed_precondition", "agent run job rejected")}
@@ -943,6 +1180,7 @@ func TestStartAgentRunRuntimeJobDispatchRequiresExecutionSpecRefs(t *testing.T) 
 				SlotStatus:                     RuntimeSlotStatusReady,
 				WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
 				ContextDigest:                  "sha256:agent-run-context",
+				WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 				MaterializationFingerprint:     "sha256:workspace",
 			},
 			runnerImageRef: "image://codex-agent@sha256:runner",
@@ -955,6 +1193,20 @@ func TestStartAgentRunRuntimeJobDispatchRequiresExecutionSpecRefs(t *testing.T) 
 				SlotStatus:                     RuntimeSlotStatusReady,
 				WorkspaceRef:                   uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
 				WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+				WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
+				MaterializationFingerprint:     "sha256:workspace",
+			},
+			runnerImageRef: "image://codex-agent@sha256:runner",
+			wantStatus:     enum.AgentRunStatusWaiting,
+		},
+		{
+			name: "missing workspace pvc ref",
+			result: RuntimePreparationResult{
+				SlotRef:                        uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String(),
+				SlotStatus:                     RuntimeSlotStatusReady,
+				WorkspaceRef:                   uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
+				WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+				ContextDigest:                  "sha256:agent-run-context",
 				MaterializationFingerprint:     "sha256:workspace",
 			},
 			runnerImageRef: "image://codex-agent@sha256:runner",
@@ -968,6 +1220,7 @@ func TestStartAgentRunRuntimeJobDispatchRequiresExecutionSpecRefs(t *testing.T) 
 				WorkspaceRef:                   uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
 				WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
 				ContextDigest:                  "sha256:agent-run-context",
+				WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 				MaterializationFingerprint:     "sha256:workspace",
 			},
 			wantStatus: enum.AgentRunStatusFailed,
@@ -1018,6 +1271,7 @@ func TestStartAgentRunCodexSessionExecutionSpecRequiresMaterializedRefs(t *testi
 		WorkspaceRef:                   uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
 		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
 		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint:     "sha256:workspace",
 	}
 	tests := []struct {
@@ -1041,6 +1295,24 @@ func TestStartAgentRunCodexSessionExecutionSpecRequiresMaterializedRefs(t *testi
 			edit: func(_ *runtimePreparationFixture, cfg *CodexSessionExecutionConfig) {
 				cfg.ResultSchemaRef = ""
 				cfg.ResultSchemaDigest = ""
+			},
+			wantStatus: enum.AgentRunStatusWaiting,
+			wantReason: "runtime job retryable",
+		},
+		{
+			name: "object instruction ref waits for workspace materialization",
+			edit: func(fixture *runtimePreparationFixture, _ *CodexSessionExecutionConfig) {
+				version := fixture.repository.promptVersionByID[fixture.promptVersionID]
+				version.TemplateObject.ObjectURI = "object://instructions/work-v1"
+				fixture.repository.promptVersionByID[fixture.promptVersionID] = version
+			},
+			wantStatus: enum.AgentRunStatusWaiting,
+			wantReason: "runtime job retryable",
+		},
+		{
+			name: "object result schema ref waits for workspace materialization",
+			edit: func(_ *runtimePreparationFixture, cfg *CodexSessionExecutionConfig) {
+				cfg.ResultSchemaRef = "object://schemas/codex-result-v1"
 			},
 			wantStatus: enum.AgentRunStatusWaiting,
 			wantReason: "runtime job retryable",
@@ -1146,6 +1418,7 @@ func TestStartAgentRunReplayDispatchesCodexSessionSpecAfterRefsReady(t *testing.
 		WorkspaceRef:                   materializationRef,
 		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
 		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint:     "sha256:workspace",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
@@ -1176,6 +1449,9 @@ func TestStartAgentRunReplayDispatchesCodexSessionSpecAfterRefsReady(t *testing.
 	if runtimeJobCreator.last.ExecutionSpec.CodexSessionExecutionSpec == nil {
 		t.Fatal("replay runtime job missing codex session execution spec")
 	}
+	if runtimeJobCreator.last.ExecutionSpec.WorkspacePVCRef != "pvc://runtime-jobs/runtime-workspace-agent-run" {
+		t.Fatalf("replay runtime job workspace pvc ref = %q", runtimeJobCreator.last.ExecutionSpec.WorkspacePVCRef)
+	}
 }
 
 func TestStartAgentRunRuntimeJobDispatchRejectsMissingGuidanceRefs(t *testing.T) {
@@ -1187,6 +1463,7 @@ func TestStartAgentRunRuntimeJobDispatchRejectsMissingGuidanceRefs(t *testing.T)
 		SlotRef:                    uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String(),
 		WorkspaceRef:               uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
 		ContextDigest:              "sha256:agent-run-context",
+		WorkspacePVCRef:            "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint: "sha256:workspace",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
@@ -1259,7 +1536,7 @@ func TestStartAgentRunRuntimeJobSpecDoesNotCarryTextPayloads(t *testing.T) {
 		ID:             fixture.promptVersionID,
 		RoleProfileID:  fixture.roleID,
 		PromptKind:     enum.PromptKindWork,
-		TemplateObject: value.ObjectRef{ObjectURI: "s3://prompt-template-text/payload"},
+		TemplateObject: value.ObjectRef{ObjectURI: testInstructionObjectRef, ObjectDigest: testInstructionDigest},
 		TemplateDigest: "sha256:prompt",
 		Status:         enum.PromptVersionStatusActive,
 	}
@@ -1270,6 +1547,7 @@ func TestStartAgentRunRuntimeJobSpecDoesNotCarryTextPayloads(t *testing.T) {
 		WorkspaceRef:                   uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
 		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
 		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint:     "sha256:workspace",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
@@ -1403,6 +1681,7 @@ func TestStartAgentRunReplayDispatchesRuntimeJobAfterMaterializationReady(t *tes
 		WorkspaceRef:                   materializationRef,
 		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
 		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint:     "sha256:workspace",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
@@ -1479,6 +1758,7 @@ func TestStartAgentRunReplayRecordsFailedRuntimeMaterialization(t *testing.T) {
 		WorkspaceRef:                   materializationRef,
 		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusFailed,
 		ContextDigest:                  "sha256:agent-run-context",
+		WorkspacePVCRef:                "pvc://runtime-jobs/runtime-workspace-agent-run",
 		MaterializationFingerprint:     "sha256:workspace",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
@@ -7965,7 +8245,7 @@ func newRuntimePreparationFixture() runtimePreparationFixture {
 				ID:             promptVersionID,
 				RoleProfileID:  roleID,
 				PromptKind:     enum.PromptKindWork,
-				TemplateObject: value.ObjectRef{ObjectURI: "object://instructions/work-v1", ObjectDigest: testInstructionDigest},
+				TemplateObject: value.ObjectRef{ObjectURI: testInstructionObjectRef, ObjectDigest: testInstructionDigest},
 				TemplateDigest: "sha256:prompt",
 				Status:         enum.PromptVersionStatusActive,
 			},

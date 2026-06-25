@@ -186,6 +186,7 @@ func RuntimeContextToProto(context runtimeservice.RuntimeContext) *runtimev1.Run
 		RuntimeProfile:             context.RuntimeProfile,
 		WorkspaceRoot:              context.WorkspaceRoot,
 		MaterializationFingerprint: context.MaterializationFingerprint,
+		WorkspacePvcRef:            context.WorkspacePVCRef,
 	}
 }
 

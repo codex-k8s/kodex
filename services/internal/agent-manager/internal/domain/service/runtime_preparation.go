@@ -33,6 +33,8 @@ const (
 	runtimeJobSafeKindLimit       = 64
 	runtimeJobSecretRefLimit      = 16
 	runtimeJobReportingRefLimit   = 8
+	codexWorkspaceRefPrefix       = "workspace://"
+	codexExecutionInputRoot       = ".kodex/execution"
 )
 
 var (
@@ -568,6 +570,10 @@ func (s *Service) agentRunExecutionSpec(
 	if !safeRuntimeJobRef(fingerprint, true) || !safeRuntimeJobRef(contextDigest, true) {
 		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
 	}
+	workspacePVCRef := strings.TrimSpace(result.WorkspacePVCRef)
+	if !safeRuntimeJobRef(workspacePVCRef, true) {
+		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
+	}
 	runnerImageRef := strings.TrimSpace(s.runtimeJobRunnerImageRef)
 	if !safeRuntimeJobRef(runnerImageRef, true) {
 		return AgentRunExecutionSpec{}, NewRuntimeJobError(false, "failed_precondition", "agent run runner image ref is not configured")
@@ -583,6 +589,7 @@ func (s *Service) agentRunExecutionSpec(
 		ExpectedMaterializationFingerprint: fingerprint,
 		WorkspaceRef:                       runtimeWorkspaceRef(materializationID),
 		WorkspaceMountRef:                  runtimeWorkspaceMountRef(slotID),
+		WorkspacePVCRef:                    workspacePVCRef,
 		ContextRef:                         runtimeContextFileRef(materializationID),
 		ContextDigest:                      contextDigest,
 		RunnerProfileRef:                   runnerProfileRef(role.RuntimeProfile),
@@ -613,6 +620,7 @@ func validateAgentRunExecutionSpec(spec AgentRunExecutionSpec) error {
 		spec.ExpectedMaterializationFingerprint,
 		spec.WorkspaceRef,
 		spec.WorkspaceMountRef,
+		spec.WorkspacePVCRef,
 		spec.ContextRef,
 		spec.ContextDigest,
 		spec.RunnerProfileRef,
@@ -733,6 +741,14 @@ func validateCodexSessionExecutionSpec(spec CodexSessionExecutionSpec, agentRunS
 			return invalidCodexSessionExecutionSpec()
 		}
 	}
+	if !strings.HasPrefix(strings.TrimSpace(spec.InstructionObjectRef), codexWorkspaceRefPrefix) ||
+		!strings.HasPrefix(strings.TrimSpace(spec.ResultSchemaRef), codexWorkspaceRefPrefix) {
+		return missingCodexSessionExecutionDependency()
+	}
+	if !codexWorkspaceExecutionInputRefReady(spec.InstructionObjectRef) ||
+		!codexWorkspaceExecutionInputRefReady(spec.ResultSchemaRef) {
+		return invalidCodexSessionExecutionSpec()
+	}
 	if !validRuntimeJobSHA256Digest(spec.InstructionObjectDigest) || !validRuntimeJobSHA256Digest(spec.ResultSchemaDigest) {
 		return invalidCodexSessionExecutionSpec()
 	}
@@ -768,6 +784,23 @@ func validateCodexSessionExecutionSpec(spec CodexSessionExecutionSpec, agentRunS
 
 func invalidCodexSessionExecutionSpec() error {
 	return NewRuntimeJobError(false, "failed_precondition", "codex session execution refs are invalid")
+}
+
+func codexWorkspaceExecutionInputRefReady(ref string) bool {
+	value := strings.TrimSpace(ref)
+	relative, ok := strings.CutPrefix(value, codexWorkspaceRefPrefix)
+	if !ok || !safeRuntimeJobRef(value, true) {
+		return false
+	}
+	relative = strings.TrimLeft(relative, "/")
+	if !strings.HasPrefix(relative, codexExecutionInputRoot+"/") {
+		return false
+	}
+	return !strings.Contains(relative, "//") &&
+		!strings.Contains(relative, "/./") &&
+		!strings.Contains(relative, "/../") &&
+		!strings.HasSuffix(relative, "/.") &&
+		!strings.HasSuffix(relative, "/..")
 }
 
 func requiredRuntimeUUID(ref string) (uuid.UUID, error) {
