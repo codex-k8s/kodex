@@ -731,6 +731,7 @@ func TestGetProjectOnboardingStatusCallsDomainService(t *testing.T) {
 				SourcePath:       "services.yaml",
 				SourceCommitSHA:  "0123456789abcdef0123456789abcdef01234567",
 				ContentHash:      "sha256:policy",
+				ValidatedPayload: []byte(`{"spec":{"services":[{"key":"api"}]}}`),
 				ValidationStatus: enum.ServicesPolicyValidationValid,
 				ProjectionStatus: enum.ServicesPolicyProjectionSynced,
 				PolicyVersion:    3,
@@ -768,6 +769,7 @@ func TestGetProjectOnboardingStatusCallsDomainService(t *testing.T) {
 	if response.GetStatus() != projectsv1.ProjectOnboardingStatus_PROJECT_ONBOARDING_STATUS_READY ||
 		response.GetRepository().GetRepositoryId() != repositoryID.String() ||
 		response.GetServicesPolicy().GetServicesPolicyId() != policyID.String() ||
+		response.GetServicesPolicy().GetValidatedPayloadJson() != "" ||
 		len(response.GetServiceDescriptors()) != 1 ||
 		response.GetSummary() == "" {
 		t.Fatalf("response = %+v, want ready onboarding state", response)

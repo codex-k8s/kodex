@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
@@ -66,7 +68,7 @@ func (s *Service) GetProjectOnboardingStatus(ctx context.Context, input GetProje
 		return result, nil
 	}
 
-	descriptors, status, reason, err := s.onboardingServiceDescriptorsStatus(ctx, input)
+	descriptors, status, reason, err := s.onboardingServiceDescriptorsStatus(ctx, input, policy.ID)
 	if err != nil {
 		return ProjectOnboardingStatusResult{}, err
 	}
@@ -119,18 +121,19 @@ func (s *Service) onboardingServicesPolicyStatus(ctx context.Context, input GetP
 	return &policy, enum.ProjectOnboardingStatusReady, "", nil
 }
 
-func (s *Service) onboardingServiceDescriptorsStatus(ctx context.Context, input GetProjectOnboardingStatusInput) ([]entity.ServiceDescriptor, enum.ProjectOnboardingStatus, string, error) {
+func (s *Service) onboardingServiceDescriptorsStatus(ctx context.Context, input GetProjectOnboardingStatusInput, policyID uuid.UUID) ([]entity.ServiceDescriptor, enum.ProjectOnboardingStatus, string, error) {
 	serviceKeys := normalizeServiceKeys(input.ServiceKeys)
 	page := value.PageRequest{}
 	if len(serviceKeys) > 0 {
 		page.PageSize = int32(len(serviceKeys))
 	}
 	descriptors, _, err := s.repository.ListServiceDescriptors(ctx, query.ServiceDescriptorFilter{
-		ProjectID:    input.ProjectID,
-		RepositoryID: input.RepositoryID,
-		ServiceKeys:  serviceKeys,
-		Statuses:     []enum.ServiceStatus{enum.ServiceStatusActive},
-		Page:         page,
+		ProjectID:        input.ProjectID,
+		ServicesPolicyID: &policyID,
+		RepositoryID:     input.RepositoryID,
+		ServiceKeys:      serviceKeys,
+		Statuses:         []enum.ServiceStatus{enum.ServiceStatusActive},
+		Page:             page,
 	})
 	if err != nil {
 		return nil, "", "", err

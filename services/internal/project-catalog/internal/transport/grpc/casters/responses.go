@@ -454,7 +454,7 @@ func ProjectOnboardingStatusResponse(result projectservice.ProjectOnboardingStat
 		SafeReason:         optionalStringPtr(result.SafeReason),
 		Project:            projectPtrToProto(result.Project),
 		Repository:         repositoryPtrToProto(result.Repository),
-		ServicesPolicy:     servicesPolicyPtrToProto(result.ServicesPolicy),
+		ServicesPolicy:     servicesPolicyPtrToOnboardingStatusProto(result.ServicesPolicy),
 		ServiceDescriptors: mapSlice(result.ServiceDescriptors, ServiceDescriptorToProto),
 		Summary:            result.Summary,
 	}
@@ -479,6 +479,15 @@ func servicesPolicyPtrToProto(policy *entity.ServicesPolicy) *projectsv1.Service
 		return nil
 	}
 	return ServicesPolicyToProto(*policy)
+}
+
+func servicesPolicyPtrToOnboardingStatusProto(policy *entity.ServicesPolicy) *projectsv1.ServicesPolicy {
+	response := servicesPolicyPtrToProto(policy)
+	if response == nil {
+		return nil
+	}
+	response.ValidatedPayloadJson = ""
+	return response
 }
 
 func ServiceDescriptorToProto(descriptor entity.ServiceDescriptor) *projectsv1.ServiceDescriptor {

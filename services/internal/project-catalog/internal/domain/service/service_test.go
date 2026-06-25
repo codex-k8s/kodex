@@ -501,6 +501,50 @@ func TestGetProjectOnboardingStatusReturnsReadyState(t *testing.T) {
 	}
 }
 
+func TestGetProjectOnboardingStatusUsesDescriptorsFromExpectedPolicy(t *testing.T) {
+	ctx := context.Background()
+	svc, store, projectID, repositoryID, policy := newProjectOnboardingStatusFixture(t)
+	latestPolicyID := uuid.New()
+	latestPolicy := policy
+	latestPolicy.ID = latestPolicyID
+	latestPolicy.PolicyVersion = policy.PolicyVersion + 1
+	latestPolicy.SourceCommitSHA = "fedcba9876543210fedcba9876543210fedcba98"
+	latestPolicy.ContentHash = "sha256:latest-services-policy"
+	store.policies[latestPolicyID] = latestPolicy
+	store.serviceDescriptors[latestPolicyID] = []entity.ServiceDescriptor{{
+		Base:             entity.Base{ID: uuid.New(), Version: 1},
+		ProjectID:        projectID,
+		ServicesPolicyID: latestPolicyID,
+		RepositoryID:     &repositoryID,
+		ServiceKey:       "api",
+		DisplayName:      "Latest API",
+		Kind:             enum.ServiceKindBackend,
+		RootPath:         "services/latest-api",
+		Status:           enum.ServiceStatusActive,
+	}}
+
+	expectedPolicyID := policy.ID
+	result, err := svc.GetProjectOnboardingStatus(ctx, GetProjectOnboardingStatusInput{
+		ProjectID:                projectID,
+		RepositoryID:             &repositoryID,
+		ServiceKeys:              []string{"api"},
+		ExpectedServicesPolicyID: &expectedPolicyID,
+		Meta:                     queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetProjectOnboardingStatus(): %v", err)
+	}
+	if result.Status != enum.ProjectOnboardingStatusReady {
+		t.Fatalf("status = %s reason = %q, want ready", result.Status, result.SafeReason)
+	}
+	if result.ServicesPolicy == nil || result.ServicesPolicy.ID != policy.ID {
+		t.Fatalf("services policy = %+v, want expected policy %s", result.ServicesPolicy, policy.ID)
+	}
+	if len(result.ServiceDescriptors) != 1 || result.ServiceDescriptors[0].ServicesPolicyID != policy.ID {
+		t.Fatalf("descriptors = %+v, want descriptors from expected policy", result.ServiceDescriptors)
+	}
+}
+
 func TestGetProjectOnboardingStatusReturnsSafeMissingPolicyStatus(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()
@@ -4256,7 +4300,7 @@ func (r *memoryRepository) notFound() error {
 }
 
 func (r *memoryRepository) ListServiceDescriptors(_ context.Context, filter query.ServiceDescriptorFilter) ([]entity.ServiceDescriptor, query.PageResult, error) {
-	policy, err := r.GetServicesPolicy(context.Background(), filter.ProjectID, nil)
+	policy, err := r.GetServicesPolicy(context.Background(), filter.ProjectID, filter.ServicesPolicyID)
 	if err != nil {
 		return nil, query.PageResult{}, err
 	}
