@@ -204,6 +204,53 @@ func TestAgentSessionStopRunningTurnCancelsAndDeletesPod(t *testing.T) {
 	}
 }
 
+func TestAgentSessionStopLastQueuedTurnResetsIdleRuntime(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	session := store.agentSessions["session-1"]
+	session.KubernetesNamespace = "mattermost"
+	session.PodName = "mc-session-session-1"
+	session.PVCName = "mc-session-ws-session-1"
+	session.TokenSecretRef = "matter-codex-session-session-1"
+	store.agentSessions["session-1"] = session
+	store.sessionTurns[0].MattermostStatusPostID = "status-post-1"
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	result, err := svc.StopAgentSessionTurns(context.Background(), StopAgentSessionTurnsCommand{
+		TurnIDs:   []int64{1},
+		UserID:    "owner-user",
+		UserName:  "owner",
+		ChannelID: "channel-1",
+		PostID:    "queue-card-1",
+	})
+	if err != nil {
+		t.Fatalf("StopAgentSessionTurns() error = %v", err)
+	}
+	if !strings.Contains(result.Message, "stopped agent turns: `1`") {
+		t.Fatalf("result = %#v", result)
+	}
+	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("GetAgentSessionTurn() error = %v", err)
+	}
+	if turn.Status != agentSessionTurnCanceled {
+		t.Fatalf("turn status = %q", turn.Status)
+	}
+	session = store.agentSessions["session-1"]
+	if session.Status != agentSessionStatusIdle || session.PodName != "" || session.PVCName != "" || session.TokenSecretRef != "" || runner.cleanedSessionKey != "session-1" {
+		t.Fatalf("session=%#v runner=%#v", session, runner)
+	}
+	if len(publisher.updates) != 1 || !strings.Contains(publisher.updates[0].Message, "agent turn stopped") {
+		t.Fatalf("updates = %#v", publisher.updates)
+	}
+}
+
 func agentSessionStatusTestDeps() (*fakeAdminStore, *fakeRuntimeRunner, *fakeThreadPublisher) {
 	now := time.Now().UTC()
 	store := &fakeAdminStore{

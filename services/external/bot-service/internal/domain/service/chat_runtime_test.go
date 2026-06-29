@@ -289,6 +289,63 @@ func TestChatRunQueuesFollowUpsForRunningThreadSessionWithoutRestart(t *testing.
 	}
 }
 
+func TestChatRunEnsuresIdleSessionRuntimeBeforeQueueingContinuation(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	first := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Start the work.",
+	})
+	if first.RunID == "" || len(runner.sessionRuns) != 1 || len(store.sessionTurns) != 1 {
+		t.Fatalf("first result=%#v runner=%#v turns=%#v", first, runner.sessionRuns, store.sessionTurns)
+	}
+	store.sessionTurns[0].Status = agentSessionTurnSucceeded
+
+	second := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "reply-1",
+		RootPostID: "post-1",
+		UserID:     "owner",
+		UserName:   "owner",
+		Message:    "Continue after the previous pod expired.",
+	})
+	if second.RunID == "" || second.Mode != "session" {
+		t.Fatalf("second result = %#v", second)
+	}
+	if len(runner.sessionRuns) != 2 {
+		t.Fatalf("idle session runtime was not ensured: %#v", runner.sessionRuns)
+	}
+	if len(store.sessionTurns) != 2 || store.sessionTurns[1].Status != agentSessionTurnQueued {
+		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+	if !strings.Contains(store.sessionTurns[1].Message, "Continue after the previous pod expired.") {
+		t.Fatalf("continuation prompt = %q", store.sessionTurns[1].Message)
+	}
+}
+
 func TestChatRunDoesNotCreateSessionWhenFirstRoleTemplateFails(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{

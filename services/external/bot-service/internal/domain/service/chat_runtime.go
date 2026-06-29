@@ -407,7 +407,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	}
 	repo := firstRepository(request.Repositories)
 	started := agentSessionStartedFromSession(session)
-	if !agentSessionRuntimeReady(session) {
+	if agentSessionRuntimeShouldBeEnsured(session) {
 		internalToken, err := svc.sessionInternalToken(ctx, existingSession)
 		if err != nil {
 			return AgentTurnQueued{}, err
@@ -680,6 +680,13 @@ func agentSessionRuntimeReady(session entity.AgentSession) bool {
 	return strings.TrimSpace(session.PodName) != "" &&
 		strings.TrimSpace(session.PVCName) != "" &&
 		strings.TrimSpace(session.TokenSecretRef) != ""
+}
+
+func agentSessionRuntimeShouldBeEnsured(session entity.AgentSession) bool {
+	if !agentSessionRuntimeReady(session) {
+		return true
+	}
+	return session.ActiveTurnID == 0
 }
 
 func agentSessionStartedFromSession(session entity.AgentSession) runtimerepo.StartedAgentSession {

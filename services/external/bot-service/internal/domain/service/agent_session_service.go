@@ -307,7 +307,15 @@ func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, comma
 			return StopAgentSessionTurnsResult{}, err
 		}
 		_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: canceled.RunID, Status: agentSessionTurnCanceled})
-		if turn.Status == agentSessionTurnRunning || session.ActiveTurnID == turn.ID {
+		cleanupRuntime := turn.Status == agentSessionTurnRunning || session.ActiveTurnID == turn.ID
+		if !cleanupRuntime && turn.Status == agentSessionTurnQueued && session.ActiveTurnID == 0 && agentSessionRuntimeReady(session) {
+			queued, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, session.ID)
+			if err != nil {
+				return StopAgentSessionTurnsResult{}, err
+			}
+			cleanupRuntime = len(queued) == 0
+		}
+		if cleanupRuntime {
 			if svc.cfg.RuntimeRunner != nil && strings.TrimSpace(session.PodName) != "" {
 				_, _ = svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, session.SessionKey)
 			}
