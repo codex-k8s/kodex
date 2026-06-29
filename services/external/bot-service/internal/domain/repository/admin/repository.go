@@ -270,6 +270,12 @@ type CompleteAgentSessionTurnInput struct {
 	Artifacts    string
 }
 
+type CancelAgentSessionTurnInput struct {
+	TurnID       int64
+	ErrorMessage string
+	Artifacts    string
+}
+
 type UpdateAgentSessionTurnStatusPostInput struct {
 	TurnID       int64
 	StatusPostID string
@@ -314,12 +320,15 @@ type Repository interface {
 	GetAgentSessionByID(ctx context.Context, id int64) (entity.AgentSession, error)
 	ListAgentSessionsByThread(ctx context.Context, chatID int64, rootPostID string) ([]entity.AgentSession, error)
 	ListAgentSessionsByChat(ctx context.Context, chatID int64) ([]entity.AgentSession, error)
+	ListAgentSessionsByRole(ctx context.Context, roleID int64) ([]entity.AgentSession, error)
 	UpdateAgentSessionRuntime(ctx context.Context, input UpdateAgentSessionRuntimeInput) (entity.AgentSession, error)
 	UpdateAgentSessionSnapshot(ctx context.Context, input UpdateAgentSessionSnapshotInput) (entity.AgentSession, error)
+	ResetAgentSessionRuntime(ctx context.Context, sessionKey string, status string) (entity.AgentSession, error)
 	CreateAgentSessionTurn(ctx context.Context, input CreateAgentSessionTurnInput) (entity.AgentSessionTurn, error)
 	GetAgentSessionTurn(ctx context.Context, id int64) (entity.AgentSessionTurn, error)
 	ClaimNextAgentSessionTurn(ctx context.Context, sessionKey string) (entity.AgentSessionTurn, error)
 	CompleteAgentSessionTurn(ctx context.Context, input CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error)
+	CancelAgentSessionTurn(ctx context.Context, input CancelAgentSessionTurnInput) (entity.AgentSessionTurn, error)
 	UpdateAgentSessionTurnStatusPost(ctx context.Context, input UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error)
 	ListQueuedAgentSessionTurns(ctx context.Context, sessionID int64) ([]entity.AgentSessionTurn, error)
 	UpsertAgentProfile(ctx context.Context, input UpsertAgentProfileInput) (entity.AgentProfile, bool, error)

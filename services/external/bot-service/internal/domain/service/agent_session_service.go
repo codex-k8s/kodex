@@ -29,6 +29,7 @@ const (
 	agentSessionTurnRunning   = "running"
 	agentSessionTurnSucceeded = "succeeded"
 	agentSessionTurnFailed    = "failed"
+	agentSessionTurnCanceled  = "canceled"
 
 	defaultManagerSessionTTLSeconds = 7 * 24 * 60 * 60
 	defaultThreadSessionTTLSeconds  = 3 * 24 * 60 * 60
@@ -90,6 +91,26 @@ type CompleteAgentSessionTurnCommand struct {
 	CodexSessionID           string            `json:"codex_session_id"`
 	SessionArchiveGzipBase64 string            `json:"session_archive_gzip_base64"`
 	Artifacts                map[string]string `json:"artifacts"`
+}
+
+type UpdateAgentSessionTurnStatusCommand struct {
+	RunID         string `json:"run_id"`
+	Phase         string `json:"phase"`
+	OpenAIAccount string `json:"openai_account,omitempty"`
+	CodexLimits   string `json:"codex_limits,omitempty"`
+}
+
+type StopAgentSessionTurnsCommand struct {
+	TurnIDs   []int64
+	UserID    string
+	UserName  string
+	ChannelID string
+	PostID    string
+}
+
+type StopAgentSessionTurnsResult struct {
+	Message string
+	Card    *MattermostCard
 }
 
 type AgentSessionThreadHistory struct {
@@ -164,7 +185,7 @@ func (svc *AgentSessionService) ClaimNextTurn(ctx context.Context, sessionKey st
 		ExtendTTLSeconds:     session.TTLSeconds,
 	})
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: agentSessionTurnRunning})
-	_, _ = svc.upsertTurnStatusMessage(ctx, session, turn, svc.t("chat.session.status.started", map[string]any{"RunID": turn.RunID}))
+	_, _ = svc.upsertTurnStatusMessage(ctx, session, turn, svc.turnStartedStatusMessage(ctx, session, turn.RunID, "", ""))
 	return AgentSessionTurnClaim{
 		HasTurn:        true,
 		TurnID:         turn.ID,
@@ -218,8 +239,103 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 		prURL = command.Artifacts["pr-url"]
 	}
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
-	_, _ = svc.upsertTurnStatusMessage(ctx, session, turn, svc.turnCompletionStatusMessage(status, turn.RunID))
-	return svc.postTurnResult(ctx, session, turn, status, command)
+	_, _ = svc.upsertTurnStatusMessage(ctx, session, turn, svc.turnCompletionStatusMessage(ctx, session, status, turn.RunID, command.Artifacts))
+	if err := svc.postTurnResult(ctx, session, turn, status, command); err != nil {
+		return err
+	}
+	if status == agentSessionTurnSucceeded {
+		_ = svc.postTurnCompletionFYI(ctx, session, turn)
+	}
+	return nil
+}
+
+func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, command StopAgentSessionTurnsCommand) (StopAgentSessionTurnsResult, error) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return StopAgentSessionTurnsResult{}, fmt.Errorf("storage is not ready")
+	}
+	if len(command.TurnIDs) == 0 {
+		return StopAgentSessionTurnsResult{}, fmt.Errorf("turn id is required")
+	}
+	seen := make(map[int64]struct{}, len(command.TurnIDs))
+	stopped := 0
+	skipped := 0
+	for _, turnID := range command.TurnIDs {
+		if turnID <= 0 {
+			continue
+		}
+		if _, exists := seen[turnID]; exists {
+			continue
+		}
+		seen[turnID] = struct{}{}
+		turn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, turnID)
+		if err != nil {
+			if errors.Is(err, adminrepo.ErrNotFound) {
+				skipped++
+				continue
+			}
+			return StopAgentSessionTurnsResult{}, err
+		}
+		if !agentSessionTurnStoppable(turn.Status) {
+			skipped++
+			continue
+		}
+		session, err := svc.cfg.Store.GetAgentSessionByID(ctx, turn.SessionID)
+		if err != nil {
+			return StopAgentSessionTurnsResult{}, err
+		}
+		artifacts := "{}"
+		if strings.TrimSpace(command.UserName) != "" || strings.TrimSpace(command.UserID) != "" {
+			body, err := json.Marshal(map[string]string{
+				"stopped-by":         strings.TrimSpace(command.UserName),
+				"stopped-by-user-id": strings.TrimSpace(command.UserID),
+			})
+			if err != nil {
+				return StopAgentSessionTurnsResult{}, err
+			}
+			artifacts = string(body)
+		}
+		canceled, err := svc.cfg.Store.CancelAgentSessionTurn(ctx, adminrepo.CancelAgentSessionTurnInput{
+			TurnID:       turn.ID,
+			ErrorMessage: svc.t("chat.session.turn.stop.reason", map[string]any{"User": emptyAsUnknown(command.UserName)}),
+			Artifacts:    artifacts,
+		})
+		if err != nil {
+			if errors.Is(err, adminrepo.ErrNotFound) {
+				skipped++
+				continue
+			}
+			return StopAgentSessionTurnsResult{}, err
+		}
+		_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: canceled.RunID, Status: agentSessionTurnCanceled})
+		cleanupRuntime := turn.Status == agentSessionTurnRunning || session.ActiveTurnID == turn.ID
+		if !cleanupRuntime && turn.Status == agentSessionTurnQueued && session.ActiveTurnID == 0 && agentSessionRuntimeReady(session) {
+			queued, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, session.ID)
+			if err != nil {
+				return StopAgentSessionTurnsResult{}, err
+			}
+			cleanupRuntime = len(queued) == 0
+		}
+		if cleanupRuntime {
+			if svc.cfg.RuntimeRunner != nil && strings.TrimSpace(session.PodName) != "" {
+				_, _ = svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, session.SessionKey)
+			}
+			_, _ = svc.cfg.Store.ResetAgentSessionRuntime(ctx, session.SessionKey, agentSessionStatusIdle)
+		}
+		_, _ = svc.upsertTurnStatusMessage(ctx, session, canceled, svc.turnStatusMessage(agentSessionTurnCanceled, canceled.RunID, svc.sessionOpenAIAccountName(ctx, session), ""))
+		stopped++
+	}
+	message := svc.t("chat.session.turn.stop.result", map[string]any{"Stopped": stopped, "Skipped": skipped})
+	result := StopAgentSessionTurnsResult{Message: message}
+	if strings.TrimSpace(command.ChannelID) != "" && strings.TrimSpace(command.PostID) != "" {
+		result.Card = &MattermostCard{
+			ChannelID: command.ChannelID,
+			PostID:    command.PostID,
+			Color:     "#9aa4b2",
+			Title:     svc.t("chat.session.turn.stop.title", nil),
+			Text:      message,
+		}
+	}
+	return result, nil
 }
 
 func (svc *AgentSessionService) ThreadHistory(ctx context.Context, sessionKey string, token string, limit int) (AgentSessionThreadHistory, error) {
@@ -306,6 +422,34 @@ func (svc *AgentSessionService) UpdateTurnStatus(ctx context.Context, sessionKey
 	return AgentSessionPostResult{SessionKey: session.SessionKey, ChannelID: ref.ChannelID, PostID: ref.PostID}, nil
 }
 
+func (svc *AgentSessionService) UpdateTurnSystemStatus(ctx context.Context, sessionKey string, token string, command UpdateAgentSessionTurnStatusCommand) (AgentSessionPostResult, error) {
+	session, err := svc.authorize(ctx, sessionKey, token)
+	if err != nil {
+		return AgentSessionPostResult{}, err
+	}
+	if session.ActiveTurnID == 0 {
+		return AgentSessionPostResult{}, fmt.Errorf("session has no active turn")
+	}
+	turn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, session.ActiveTurnID)
+	if err != nil {
+		return AgentSessionPostResult{}, err
+	}
+	phase := strings.TrimSpace(command.Phase)
+	if phase == "" {
+		phase = agentSessionStatusRunning
+	}
+	runID := defaultString(strings.TrimSpace(command.RunID), turn.RunID)
+	message := svc.turnStartedStatusMessage(ctx, session, runID, command.OpenAIAccount, command.CodexLimits)
+	if phase == agentSessionTurnFailed || phase == agentSessionTurnSucceeded {
+		message = svc.turnStatusMessage(phase, runID, command.OpenAIAccount, command.CodexLimits)
+	}
+	ref, err := svc.upsertTurnStatusMessage(ctx, session, turn, message)
+	if err != nil {
+		return AgentSessionPostResult{}, err
+	}
+	return AgentSessionPostResult{SessionKey: session.SessionKey, ChannelID: ref.ChannelID, PostID: ref.PostID}, nil
+}
+
 func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey string, token string, target string, message string) (AgentSessionAgentRequest, error) {
 	session, err := svc.authorize(ctx, sessionKey, token)
 	if err != nil {
@@ -342,11 +486,13 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 	if rootPostID == "" {
 		return AgentSessionAgentRequest{}, fmt.Errorf("source session is not bound to a Mattermost thread")
 	}
+	requesterUserName := svc.sessionMattermostUsername(ctx, session)
 	queued, err := svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
 		Project:       project,
 		Chat:          chat,
 		Role:          role,
 		Repositories:  repositories,
+		UserName:      requesterUserName,
 		UserMessage:   message,
 		SourcePostID:  rootPostID,
 		ReplyRootID:   rootPostID,
@@ -458,6 +604,19 @@ func (svc *AgentSessionService) postTurnResult(ctx context.Context, session enti
 	return err
 }
 
+func (svc *AgentSessionService) postTurnCompletionFYI(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn) error {
+	if svc.cfg.ThreadPublisher == nil {
+		return nil
+	}
+	userName := mentionableMattermostUsername(turn.UserName)
+	if userName == "" {
+		return nil
+	}
+	message := svc.t("chat.session.fyi.complete", map[string]any{"UserName": userName})
+	_, err := svc.postSessionThreadMessageOnly(ctx, session, turn.MattermostChannelID, turn.MattermostRootPostID, message)
+	return err
+}
+
 func (svc *AgentSessionService) upsertTurnStatusMessage(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, message string) (MattermostPostRef, error) {
 	if svc.cfg.ThreadPublisher == nil {
 		return MattermostPostRef{}, fmt.Errorf("Mattermost thread publisher is not configured")
@@ -533,11 +692,75 @@ func (svc *AgentSessionService) updateSessionThreadMessageOnly(ctx context.Conte
 	return svc.cfg.ThreadPublisher.UpdateThreadMessageWithToken(ctx, secret.Token, input)
 }
 
-func (svc *AgentSessionService) turnCompletionStatusMessage(status string, runID string) string {
-	if status == agentSessionTurnFailed {
-		return svc.t("chat.session.status.failed", map[string]any{"RunID": runID})
+func (svc *AgentSessionService) turnStartedStatusMessage(ctx context.Context, session entity.AgentSession, runID string, openAIAccount string, codexLimits string) string {
+	return svc.turnStatusMessage(agentSessionTurnRunning, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
+}
+
+func (svc *AgentSessionService) turnCompletionStatusMessage(ctx context.Context, session entity.AgentSession, status string, runID string, artifacts map[string]string) string {
+	openAIAccount := ""
+	codexLimits := ""
+	if artifacts != nil {
+		openAIAccount = strings.TrimSpace(artifacts["openai-account"])
+		codexLimits = strings.TrimSpace(artifacts["codex-limits"])
 	}
-	return svc.t("chat.session.status.succeeded", map[string]any{"RunID": runID})
+	return svc.turnStatusMessage(status, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
+}
+
+func (svc *AgentSessionService) turnStatusMessage(status string, runID string, openAIAccount string, codexLimits string) string {
+	data := map[string]any{"RunID": runID}
+	if strings.TrimSpace(openAIAccount) != "" {
+		data["OpenAIAccount"] = strings.TrimSpace(openAIAccount)
+	}
+	if strings.TrimSpace(codexLimits) != "" {
+		data["CodexLimits"] = strings.TrimSpace(codexLimits)
+	}
+	if status == agentSessionTurnFailed {
+		return svc.t("chat.session.status.failed", data)
+	}
+	if status == agentSessionTurnCanceled {
+		return svc.t("chat.session.status.canceled", data)
+	}
+	if status == agentSessionTurnRunning {
+		return svc.t("chat.session.status.started", data)
+	}
+	return svc.t("chat.session.status.succeeded", data)
+}
+
+func (svc *AgentSessionService) sessionOpenAIAccountName(ctx context.Context, session entity.AgentSession) string {
+	role, err := svc.cfg.Store.GetAgentRole(ctx, session.RoleID)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(role.OpenAIAccountName)
+}
+
+func (svc *AgentSessionService) sessionMattermostUsername(ctx context.Context, session entity.AgentSession) string {
+	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, session.RoleID)
+	if err == nil && strings.TrimSpace(identity.Username) != "" {
+		return strings.TrimSpace(identity.Username)
+	}
+	role, err := svc.cfg.Store.GetAgentRole(ctx, session.RoleID)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(role.Name)
+}
+
+func agentSessionTurnStoppable(status string) bool {
+	return status == agentSessionTurnQueued || status == agentSessionTurnRunning
+}
+
+func mentionableMattermostUsername(userName string) string {
+	userName = strings.TrimPrefix(strings.TrimSpace(userName), "@")
+	if userName == "" {
+		return ""
+	}
+	for _, char := range userName {
+		if !isMentionUsernameRune(char) {
+			return ""
+		}
+	}
+	return userName
 }
 
 func (svc *AgentSessionService) t(messageID string, data map[string]any) string {

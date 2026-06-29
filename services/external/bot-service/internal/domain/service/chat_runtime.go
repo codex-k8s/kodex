@@ -95,6 +95,7 @@ type AgentTurnRequest struct {
 
 type AgentTurnQueued struct {
 	RunID      string
+	TurnID     int64
 	SessionKey string
 	Role       entity.AgentRole
 	CreatedPod bool
@@ -267,12 +268,13 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 		return ChatRunResult{}
 	}
 	first := queued[0]
-	svc.postThread(ctx, command, svc.t("chat.session.queued", map[string]any{
+	message := svc.t("chat.session.queued", map[string]any{
 		"Count":      len(queued),
 		"RunID":      first.RunID,
 		"Role":       first.Role.Name,
 		"SessionKey": first.SessionKey,
-	}))
+	})
+	svc.postQueuedTurn(ctx, command, queued, message)
 	return ChatRunResult{RunID: first.RunID, Mode: "session"}
 }
 
@@ -365,7 +367,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
-	_, sessionExists, err := svc.agentSessionExists(ctx, sessionKey)
+	existingSession, sessionExists, err := svc.agentSessionExists(ctx, sessionKey)
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
@@ -399,44 +401,47 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
-	internalToken, err := svc.sessionInternalToken(ctx, session)
-	if err != nil {
-		return AgentTurnQueued{}, err
-	}
 	gitHubSecretName := ""
 	if gitHubOK {
 		gitHubSecretName = gitHubAccount.SecretRef
 	}
 	repo := firstRepository(request.Repositories)
-	started, err := svc.cfg.RuntimeRunner.StartAgentSession(ctx, runtimerepo.AgentSessionPodInput{
-		SessionKey:              session.SessionKey,
-		Role:                    request.Role.Name,
-		BotServiceURL:           svc.botServiceURL(),
-		InternalToken:           internalToken,
-		CodexAuthSecretName:     openAIAccount.SecretRef,
-		GitHubSecretName:        gitHubSecretName,
-		RepositoryProvider:      repo.Provider,
-		RepositoryOwner:         repo.Owner,
-		RepositoryName:          repo.Name,
-		RepositoryDefaultBranch: repo.DefaultBranch,
-		SandboxMode:             request.Role.SandboxMode,
-		ConfigOverlay:           request.Role.ConfigOverlay,
-		RuntimeEnv:              runtimeEnv,
-	})
-	if err != nil {
-		return AgentTurnQueued{}, err
-	}
-	session, err = svc.cfg.Store.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
-		SessionKey:          session.SessionKey,
-		Status:              agentSessionStatusIdle,
-		KubernetesNamespace: started.Namespace,
-		PodName:             started.PodName,
-		PVCName:             started.PVCName,
-		TokenSecretRef:      started.SecretName,
-		ExtendTTLSeconds:    ttlSeconds,
-	})
-	if err != nil {
-		return AgentTurnQueued{}, err
+	started := agentSessionStartedFromSession(session)
+	if agentSessionRuntimeShouldBeEnsured(session) {
+		internalToken, err := svc.sessionInternalToken(ctx, existingSession)
+		if err != nil {
+			return AgentTurnQueued{}, err
+		}
+		started, err = svc.cfg.RuntimeRunner.StartAgentSession(ctx, runtimerepo.AgentSessionPodInput{
+			SessionKey:              session.SessionKey,
+			Role:                    request.Role.Name,
+			BotServiceURL:           svc.botServiceURL(),
+			InternalToken:           internalToken,
+			CodexAuthSecretName:     openAIAccount.SecretRef,
+			GitHubSecretName:        gitHubSecretName,
+			RepositoryProvider:      repo.Provider,
+			RepositoryOwner:         repo.Owner,
+			RepositoryName:          repo.Name,
+			RepositoryDefaultBranch: repo.DefaultBranch,
+			SandboxMode:             request.Role.SandboxMode,
+			ConfigOverlay:           request.Role.ConfigOverlay,
+			RuntimeEnv:              runtimeEnv,
+		})
+		if err != nil {
+			return AgentTurnQueued{}, err
+		}
+		session, err = svc.cfg.Store.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
+			SessionKey:          session.SessionKey,
+			Status:              agentSessionStatusIdle,
+			KubernetesNamespace: started.Namespace,
+			PodName:             started.PodName,
+			PVCName:             started.PVCName,
+			TokenSecretRef:      started.SecretName,
+			ExtendTTLSeconds:    ttlSeconds,
+		})
+		if err != nil {
+			return AgentTurnQueued{}, err
+		}
 	}
 	runID := newChatRunID(request.Chat.ID)
 	turn, err := svc.cfg.Store.CreateAgentSessionTurn(ctx, adminrepo.CreateAgentSessionTurnInput{
@@ -472,12 +477,53 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	}
 	return AgentTurnQueued{
 		RunID:      runID,
+		TurnID:     turn.ID,
 		SessionKey: session.SessionKey,
 		Role:       request.Role,
 		CreatedPod: started.Created,
 		PodName:    started.PodName,
 		PVCName:    started.PVCName,
 	}, nil
+}
+
+func (svc *ChatRunService) postQueuedTurn(ctx context.Context, command ChatPostCommand, queued []AgentTurnQueued, message string) {
+	if svc.cfg.ThreadPublisher == nil || strings.TrimSpace(svc.cfg.MenuActionURL) == "" {
+		svc.postThread(ctx, command, message)
+		return
+	}
+	turnIDs := make([]string, 0, len(queued))
+	for _, item := range queued {
+		if item.TurnID > 0 {
+			turnIDs = append(turnIDs, strconv.FormatInt(item.TurnID, 10))
+		}
+	}
+	if len(turnIDs) == 0 {
+		svc.postThread(ctx, command, message)
+		return
+	}
+	card := MattermostCard{
+		ChannelID:  command.ChannelID,
+		RootPostID: commandRootPostID(command),
+		ActionURL:  svc.cfg.MenuActionURL,
+		Message:    svc.t("menu.message", nil),
+		Color:      "#1c58d9",
+		Title:      svc.t("chat.session.queued.title", nil),
+		Text:       message,
+		Actions: []MattermostCardAction{{
+			ID:      "stopturn",
+			Name:    svc.t("chat.session.turn.stop.action", nil),
+			Tooltip: svc.t("chat.session.turn.stop.tooltip", nil),
+			Style:   "danger",
+			Context: map[string]any{
+				"kind":     "agent_turn",
+				"action":   "stop_turn",
+				"turn_ids": strings.Join(turnIDs, ","),
+			},
+		}},
+	}
+	if _, err := svc.cfg.ThreadPublisher.PostThreadCard(ctx, card); err != nil {
+		svc.postThread(ctx, command, message)
+	}
 }
 
 func (svc *ChatRunService) SelectThreadRepository(ctx context.Context, input ThreadRepositorySelectionInput) (ThreadRepositorySelectionResult, error) {
@@ -628,6 +674,30 @@ func (svc *ChatRunService) agentSessionExists(ctx context.Context, sessionKey st
 		return entity.AgentSession{}, false, nil
 	}
 	return entity.AgentSession{}, false, err
+}
+
+func agentSessionRuntimeReady(session entity.AgentSession) bool {
+	return strings.TrimSpace(session.PodName) != "" &&
+		strings.TrimSpace(session.PVCName) != "" &&
+		strings.TrimSpace(session.TokenSecretRef) != ""
+}
+
+func agentSessionRuntimeShouldBeEnsured(session entity.AgentSession) bool {
+	if !agentSessionRuntimeReady(session) {
+		return true
+	}
+	return session.ActiveTurnID == 0
+}
+
+func agentSessionStartedFromSession(session entity.AgentSession) runtimerepo.StartedAgentSession {
+	return runtimerepo.StartedAgentSession{
+		SessionKey: session.SessionKey,
+		Namespace:  session.KubernetesNamespace,
+		PodName:    session.PodName,
+		PVCName:    session.PVCName,
+		SecretName: session.TokenSecretRef,
+		Created:    false,
+	}
 }
 
 func (svc *ChatRunService) botServiceURL() string {

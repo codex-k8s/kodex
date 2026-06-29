@@ -75,6 +75,13 @@ type sessionTurnCompleteRequest struct {
 	Artifacts                map[string]string `json:"artifacts"`
 }
 
+type sessionTurnStatusRequest struct {
+	RunID         string `json:"run_id"`
+	Phase         string `json:"phase"`
+	OpenAIAccount string `json:"openai_account,omitempty"`
+	CodexLimits   string `json:"codex_limits,omitempty"`
+}
+
 func main() {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -373,6 +380,7 @@ func (r *runner) runSession(ctx context.Context) error {
 	profile := requiredEnv("MATTERCODEX_AGENT_PROFILE")
 	botServiceURL := strings.TrimRight(requiredEnv("MATTERCODEX_BOT_SERVICE_URL"), "/")
 	sessionToken := requiredEnv("MATTERCODEX_SESSION_TOKEN")
+	openAIAccount := strings.TrimSpace(os.Getenv("MATTERCODEX_OPENAI_ACCOUNT"))
 
 	fmt.Println("matter-codex session runner start")
 	fmt.Printf("session-key: %s\n", sessionKey)
@@ -423,6 +431,14 @@ func (r *runner) runSession(ctx context.Context) error {
 		if strings.TrimSpace(claim.CodexSessionID) != "" {
 			codexSessionID = strings.TrimSpace(claim.CodexSessionID)
 		}
+		if err := r.updateSessionTurnStatus(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnStatusRequest{
+			RunID:         claim.RunID,
+			Phase:         "running",
+			OpenAIAccount: openAIAccount,
+			CodexLimits:   r.latestCodexLimitsSummary(),
+		}); err != nil {
+			fmt.Printf("matter-codex session status update skipped: %v\n", err)
+		}
 		finalFile := fmt.Sprintf("session-turn-%d-final.md", claim.TurnID)
 		nextSessionID, finalMessage, runErr := r.runCodexSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, extraEnv)
 		if strings.TrimSpace(nextSessionID) != "" {
@@ -442,6 +458,13 @@ func (r *runner) runSession(ctx context.Context) error {
 			}
 			errorMessage += snapshotErr.Error()
 		}
+		artifacts := map[string]string{}
+		if openAIAccount != "" {
+			artifacts["openai-account"] = openAIAccount
+		}
+		if limits := r.latestCodexLimitsSummary(); limits != "" {
+			artifacts["codex-limits"] = limits
+		}
 		if err := r.completeSessionTurn(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnCompleteRequest{
 			TurnID:                   claim.TurnID,
 			RunID:                    claim.RunID,
@@ -450,7 +473,7 @@ func (r *runner) runSession(ctx context.Context) error {
 			ErrorMessage:             errorMessage,
 			CodexSessionID:           codexSessionID,
 			SessionArchiveGzipBase64: archive,
-			Artifacts:                map[string]string{},
+			Artifacts:                artifacts,
 		}); err != nil {
 			return err
 		}
@@ -595,6 +618,22 @@ func (r *runner) claimSessionTurn(ctx context.Context, client *http.Client, base
 
 func (r *runner) completeSessionTurn(ctx context.Context, client *http.Client, baseURL string, sessionKey string, token string, payload sessionTurnCompleteRequest) error {
 	return r.sessionJSON(ctx, client, http.MethodPost, baseURL, sessionKey, token, "turns/complete", payload, nil)
+}
+
+func (r *runner) updateSessionTurnStatus(ctx context.Context, client *http.Client, baseURL string, sessionKey string, token string, payload sessionTurnStatusRequest) error {
+	if strings.TrimSpace(payload.OpenAIAccount) == "" && strings.TrimSpace(payload.CodexLimits) == "" {
+		return nil
+	}
+	return r.sessionJSON(ctx, client, http.MethodPost, baseURL, sessionKey, token, "turns/status", payload, nil)
+}
+
+func (r *runner) latestCodexLimitsSummary() string {
+	summary, err := latestCodexLimitsSummary(codexHomeDir)
+	if err != nil {
+		fmt.Printf("matter-codex codex limits unavailable: %v\n", err)
+		return ""
+	}
+	return summary
 }
 
 func (r *runner) sessionJSON(ctx context.Context, client *http.Client, method string, baseURL string, sessionKey string, token string, action string, payload any, target any) error {

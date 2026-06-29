@@ -853,7 +853,15 @@ func (store *fakeRouterAdminStore) ListAgentSessionsByChat(context.Context, int6
 	return nil, nil
 }
 
+func (store *fakeRouterAdminStore) ListAgentSessionsByRole(context.Context, int64) ([]entity.AgentSession, error) {
+	return nil, nil
+}
+
 func (store *fakeRouterAdminStore) UpdateAgentSessionRuntime(context.Context, adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
+	return entity.AgentSession{}, nil
+}
+
+func (store *fakeRouterAdminStore) ResetAgentSessionRuntime(context.Context, string, string) (entity.AgentSession, error) {
 	return entity.AgentSession{}, nil
 }
 
@@ -875,6 +883,10 @@ func (store *fakeRouterAdminStore) ClaimNextAgentSessionTurn(context.Context, st
 
 func (store *fakeRouterAdminStore) CompleteAgentSessionTurn(context.Context, adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
 	return entity.AgentSessionTurn{}, nil
+}
+
+func (store *fakeRouterAdminStore) CancelAgentSessionTurn(context.Context, adminrepo.CancelAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
 }
 
 func (store *fakeRouterAdminStore) UpdateAgentSessionTurnStatusPost(context.Context, adminrepo.UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error) {

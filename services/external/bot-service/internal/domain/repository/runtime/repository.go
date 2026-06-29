@@ -87,6 +87,13 @@ type StartedAgentSession struct {
 	Created    bool
 }
 
+type AgentSessionCleanupResult struct {
+	SessionKey string
+	Namespace  string
+	PodName    string
+	PodDeleted bool
+}
+
 type MattermostBotTokenSecretInput struct {
 	SecretName string
 	Token      string
@@ -280,6 +287,7 @@ type Runner interface {
 	StartReviewRun(ctx context.Context, input ReviewRunInput) (StartedRun, error)
 	StartChatRun(ctx context.Context, input ChatRunInput) (StartedRun, error)
 	StartAgentSession(ctx context.Context, input AgentSessionPodInput) (StartedAgentSession, error)
+	CleanupAgentSession(ctx context.Context, sessionKey string) (AgentSessionCleanupResult, error)
 	UpsertMattermostBotTokenSecret(ctx context.Context, input MattermostBotTokenSecretInput) (MattermostBotTokenSecret, error)
 	GetMattermostBotTokenSecret(ctx context.Context, secretName string) (MattermostBotTokenSecret, error)
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
