@@ -543,18 +543,24 @@ func (svc *SlashCommandService) handleRuntimePrune(ctx context.Context, args []s
 	}
 	svc.recordRuntimeAudit(ctx, command, eventType, "agent-runner", eventSummary)
 	return svc.t("runtime.prune.result", map[string]any{
-		"Mode":              svc.t(modeID, nil),
-		"OlderThan":         result.OlderThan.String(),
-		"Namespace":         result.Namespace,
-		"RunsMatched":       result.RunsMatched,
-		"RunIDs":            formatRunIDList(result.MatchedRunIDs, 12),
-		"SkippedActiveJobs": result.SkippedActiveJobs,
-		"JobsMatched":       result.JobsMatched,
-		"JobsDeleted":       result.JobsDeleted,
-		"PVCsMatched":       result.PVCsMatched,
-		"PVCsDeleted":       result.PVCsDeleted,
-		"ConfigMapsMatched": result.ConfigMapsMatched,
-		"ConfigMapsDeleted": result.ConfigMapsDeleted,
+		"Mode":                  svc.t(modeID, nil),
+		"OlderThan":             result.OlderThan.String(),
+		"Namespace":             result.Namespace,
+		"RunsMatched":           result.RunsMatched,
+		"RunIDs":                formatRunIDList(result.MatchedRunIDs, 12),
+		"SkippedActiveJobs":     result.SkippedActiveJobs,
+		"JobsMatched":           result.JobsMatched,
+		"JobsDeleted":           result.JobsDeleted,
+		"PVCsMatched":           result.PVCsMatched,
+		"PVCsDeleted":           result.PVCsDeleted,
+		"ConfigMapsMatched":     result.ConfigMapsMatched,
+		"ConfigMapsDeleted":     result.ConfigMapsDeleted,
+		"SessionPodsMatched":    result.SessionPodsMatched,
+		"SessionPodsDeleted":    result.SessionPodsDeleted,
+		"SessionPVCsMatched":    result.SessionPVCsMatched,
+		"SessionPVCsDeleted":    result.SessionPVCsDeleted,
+		"SessionSecretsMatched": result.SessionSecretsMatched,
+		"SessionSecretsDeleted": result.SessionSecretsDeleted,
 	})
 }
 

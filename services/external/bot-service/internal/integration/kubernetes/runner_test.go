@@ -690,6 +690,148 @@ func TestCleanupExpiredRunsDeletesFinishedAndOrphanResources(t *testing.T) {
 	}
 }
 
+func TestCleanupExpiredRunsDeletesExpiredSessionResources(t *testing.T) {
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	oldTime := metav1.NewTime(now.Add(-48 * time.Hour))
+	activeCreated := metav1.NewTime(now.Add(-48 * time.Hour))
+	orphanCreated := metav1.NewTime(now.Add(-72 * time.Hour))
+	recentFinished := metav1.NewTime(now.Add(-10 * time.Minute))
+	client := fake.NewSimpleClientset(
+		testSessionPod("old-session", corev1.PodSucceeded, oldTime, oldTime),
+		testSessionPVC("old-session", oldTime),
+		testSessionSecret("old-session", oldTime),
+		testSessionPod("active-session", corev1.PodRunning, activeCreated, metav1.Time{}),
+		testSessionPVC("active-session", activeCreated),
+		testSessionSecret("active-session", activeCreated),
+		testSessionPod("recent-session", corev1.PodSucceeded, activeCreated, recentFinished),
+		testSessionPVC("recent-session", activeCreated),
+		testSessionSecret("recent-session", activeCreated),
+		testSessionPVC("orphan-session", orphanCreated),
+		testSessionSecret("orphan-session", orphanCreated),
+	)
+	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost"})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	result, err := runner.CleanupExpiredRuns(context.Background(), runtimerepo.RetentionCleanupInput{
+		OlderThan: 24 * time.Hour,
+		Now:       now,
+		DryRun:    false,
+	})
+	if err != nil {
+		t.Fatalf("CleanupExpiredRuns() error = %v", err)
+	}
+	if result.SessionPodsDeleted != 1 || result.SessionPVCsDeleted != 2 || result.SessionSecretsDeleted != 2 {
+		t.Fatalf("result = %#v", result)
+	}
+	if result.PVCsDeleted != 2 {
+		t.Fatalf("PVCsDeleted = %d, want 2", result.PVCsDeleted)
+	}
+	assertSessionPodMissing(t, client, "old-session")
+	assertSessionPVCMissing(t, client, "old-session")
+	assertSessionSecretMissing(t, client, "old-session")
+	assertSessionPVCMissing(t, client, "orphan-session")
+	assertSessionSecretMissing(t, client, "orphan-session")
+	assertSessionPodExists(t, client, "active-session")
+	assertSessionPVCExists(t, client, "active-session")
+	assertSessionSecretExists(t, client, "active-session")
+	assertSessionPodExists(t, client, "recent-session")
+	assertSessionPVCExists(t, client, "recent-session")
+	assertSessionSecretExists(t, client, "recent-session")
+}
+
+func testSessionPod(sessionKey string, phase corev1.PodPhase, created metav1.Time, finished metav1.Time) *corev1.Pod {
+	status := corev1.PodStatus{Phase: phase}
+	if phase == corev1.PodSucceeded || phase == corev1.PodFailed {
+		status.ContainerStatuses = []corev1.ContainerStatus{
+			{
+				Name: "runner",
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{FinishedAt: finished},
+				},
+			},
+		}
+	}
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              sessionPodName(sessionKey),
+			Namespace:         "mattermost",
+			Labels:            sessionLabels(sessionKey, "manager"),
+			CreationTimestamp: created,
+		},
+		Status: status,
+	}
+}
+
+func testSessionPVC(sessionKey string, created metav1.Time) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              sessionPVCName(sessionKey),
+			Namespace:         "mattermost",
+			Labels:            sessionLabels(sessionKey, "manager"),
+			CreationTimestamp: created,
+		},
+	}
+}
+
+func testSessionSecret(sessionKey string, created metav1.Time) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sessionSecretName(sessionKey),
+			Namespace: "mattermost",
+			Labels: map[string]string{
+				"app.kubernetes.io/name":      "matter-codex-agent-runner",
+				"app.kubernetes.io/component": sessionTokenComponent,
+				labelSessionKey:               kubernetesLabelValue(sessionKey),
+			},
+			CreationTimestamp: created,
+		},
+	}
+}
+
+func assertSessionPodExists(t *testing.T, client *fake.Clientset, sessionKey string) {
+	t.Helper()
+	if _, err := client.CoreV1().Pods("mattermost").Get(context.Background(), sessionPodName(sessionKey), metav1.GetOptions{}); err != nil {
+		t.Fatalf("session pod %s does not exist: %v", sessionKey, err)
+	}
+}
+
+func assertSessionPodMissing(t *testing.T, client *fake.Clientset, sessionKey string) {
+	t.Helper()
+	if _, err := client.CoreV1().Pods("mattermost").Get(context.Background(), sessionPodName(sessionKey), metav1.GetOptions{}); err == nil {
+		t.Fatalf("session pod %s still exists", sessionKey)
+	}
+}
+
+func assertSessionPVCExists(t *testing.T, client *fake.Clientset, sessionKey string) {
+	t.Helper()
+	if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Get(context.Background(), sessionPVCName(sessionKey), metav1.GetOptions{}); err != nil {
+		t.Fatalf("session pvc %s does not exist: %v", sessionKey, err)
+	}
+}
+
+func assertSessionPVCMissing(t *testing.T, client *fake.Clientset, sessionKey string) {
+	t.Helper()
+	if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Get(context.Background(), sessionPVCName(sessionKey), metav1.GetOptions{}); err == nil {
+		t.Fatalf("session pvc %s still exists", sessionKey)
+	}
+}
+
+func assertSessionSecretExists(t *testing.T, client *fake.Clientset, sessionKey string) {
+	t.Helper()
+	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), sessionSecretName(sessionKey), metav1.GetOptions{}); err != nil {
+		t.Fatalf("session secret %s does not exist: %v", sessionKey, err)
+	}
+}
+
+func assertSessionSecretMissing(t *testing.T, client *fake.Clientset, sessionKey string) {
+	t.Helper()
+	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), sessionSecretName(sessionKey), metav1.GetOptions{}); err == nil {
+		t.Fatalf("session secret %s still exists", sessionKey)
+	}
+}
+
 func envValue(env []corev1.EnvVar, name string) string {
 	for _, item := range env {
 		if item.Name == name {

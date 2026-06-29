@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -162,6 +163,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			go listener.Run(ctx)
 		}
 	}
+	if runtimeConfigured && cfg.RuntimeRetentionEnabled {
+		go runRuntimeRetentionLoop(ctx, runtimeRunner, cfg.RuntimeRetentionInterval, cfg.RuntimeRetentionOlderThan, logger)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -171,6 +175,48 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func runRuntimeRetentionLoop(ctx context.Context, runner runtimerepo.Runner, interval time.Duration, olderThan time.Duration, logger *slog.Logger) {
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			result, err := runner.CleanupExpiredRuns(ctx, runtimerepo.RetentionCleanupInput{
+				OlderThan: olderThan,
+				Now:       time.Now().UTC(),
+				DryRun:    false,
+			})
+			if err != nil {
+				logger.Warn("runtime retention cleanup failed", "error", err)
+			} else if retentionCleanupDidWork(result) {
+				logger.Info(
+					"runtime retention cleanup applied",
+					"older_than", result.OlderThan.String(),
+					"namespace", result.Namespace,
+					"jobs_deleted", result.JobsDeleted,
+					"pvcs_deleted", result.PVCsDeleted,
+					"configmaps_deleted", result.ConfigMapsDeleted,
+					"session_pods_deleted", result.SessionPodsDeleted,
+					"session_pvcs_deleted", result.SessionPVCsDeleted,
+					"session_secrets_deleted", result.SessionSecretsDeleted,
+				)
+			}
+			timer.Reset(interval)
+		}
+	}
+}
+
+func retentionCleanupDidWork(result runtimerepo.RetentionCleanupResult) bool {
+	return result.JobsDeleted > 0 ||
+		result.PVCsDeleted > 0 ||
+		result.ConfigMapsDeleted > 0 ||
+		result.SessionPodsDeleted > 0 ||
+		result.SessionPVCsDeleted > 0 ||
+		result.SessionSecretsDeleted > 0
 }
 
 func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, bool) {
