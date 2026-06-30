@@ -337,6 +337,11 @@ func appendRoleRuntimeContractMarkdown(body *strings.Builder, input RolePromptIn
 	body.WriteString("# Matter-codex runtime contract\n\n")
 	body.WriteString("- GitHub CLI: use `gh` when the role has a GitHub account. Token/user/email are exposed through `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER`, and `GITHUB_EMAIL`. Never print token values.\n")
 	body.WriteString("- For GitHub issue, pull request, review, and comment Markdown, write the body to a temporary file or heredoc and pass it with `--body-file`/API file input. Do not inline Markdown with backticks or shell-sensitive text directly inside a shell command string.\n")
+	if strings.TrimSpace(input.Locale.Language) != "" {
+		body.WriteString("- Language: write all user-visible Mattermost replies, GitHub PR bodies, issue bodies, issue comments, review bodies, inline review comments, and delivery summaries in ")
+		body.WriteString(input.Locale.Language)
+		body.WriteString(". Keep code identifiers, file paths, env names, commands, API names, and quoted source text unchanged.\n")
+	}
 	body.WriteString("- Mattermost MCP: use `mattermost_get_thread` to read this thread and `mattermost_search_chat` for small bounded channel searches.\n")
 	body.WriteString("- Progress status: use `mattermost_update_turn_status` to update the single status message for this turn. Keep it concise and in the response language")
 	if strings.TrimSpace(input.Locale.Language) != "" {

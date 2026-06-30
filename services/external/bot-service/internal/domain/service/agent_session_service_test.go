@@ -192,6 +192,79 @@ func TestAgentSessionCompleteSkipsFYIWhenRequesterIsAgentBot(t *testing.T) {
 	}
 }
 
+func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
+	now := time.Now().UTC()
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	store.agentSessions = map[string]entity.AgentSession{
+		"session-1": {
+			ID:                   1,
+			SessionKey:           "session-1",
+			ProjectID:            1,
+			ChatID:               1,
+			RoleID:               1,
+			SessionScope:         agentSessionScopeThreadRole,
+			MattermostChannelID:  "channel-1",
+			MattermostRootPostID: "root-1",
+			Status:               agentSessionStatusIdle,
+			TokenSecretRef:       "session-secret",
+			TTLSeconds:           defaultThreadSessionTTLSeconds,
+			LastActivityAt:       now,
+			ExpiresAt:            now.Add(time.Hour),
+		},
+	}
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
+	publisher := &fakeThreadPublisher{}
+	dispatcher := &fakeAgentTurnDispatcher{queued: AgentTurnQueued{
+		RunID:      "run-sre-1",
+		TurnID:     7,
+		SessionKey: "session-sre",
+		Role:       store.agentRoles[2],
+	}}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.RussianLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		TurnDispatcher:  dispatcher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	result, err := svc.RequestAgent(context.Background(), "session-1", "session-token", "@sre", "Проверь staging deploy.\n\n- Не печатай секреты.")
+	if err != nil {
+		t.Fatalf("RequestAgent() error = %v", err)
+	}
+	if result.RequestedRunID != "run-sre-1" || result.RequestedRoleName != "sre" || result.AuditPostID == "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if dispatcher.request.Role.Name != "sre" || dispatcher.request.UserName != "manager" || dispatcher.request.UserMessage != "Проверь staging deploy.\n\n- Не печатай секреты." {
+		t.Fatalf("dispatcher request = %#v", dispatcher.request)
+	}
+	if len(publisher.posts) != 1 {
+		t.Fatalf("posts = %#v", publisher.posts)
+	}
+	post := publisher.posts[0]
+	if post.ChannelID != "channel-1" || post.RootPostID != "root-1" {
+		t.Fatalf("post binding = %#v", post)
+	}
+	for _, expected := range []string{"matter-codex: @manager запустил @sre", "```markdown", "Проверь staging deploy.", "Не печатай секреты."} {
+		if !strings.Contains(post.Message, expected) {
+			t.Fatalf("audit message missing %q: %q", expected, post.Message)
+		}
+	}
+	if post.Props["matter_codex_event"] != "agent_request" || post.Props["source_agent"] != "manager" || post.Props["target_agent"] != "sre" {
+		t.Fatalf("props = %#v", post.Props)
+	}
+}
+
 func TestAgentSessionStopRunningTurnCancelsAndDeletesPod(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	session := withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
@@ -340,6 +413,16 @@ func withActiveTurn(session entity.AgentSession, turnID int64, runID string) ent
 	session.ActiveTurnID = turnID
 	session.ActiveRunID = runID
 	return session
+}
+
+type fakeAgentTurnDispatcher struct {
+	request AgentTurnRequest
+	queued  AgentTurnQueued
+}
+
+func (dispatcher *fakeAgentTurnDispatcher) EnqueueAgentTurn(_ context.Context, request AgentTurnRequest) (AgentTurnQueued, error) {
+	dispatcher.request = request
+	return dispatcher.queued, nil
 }
 
 var _ runtimerepo.Runner = (*fakeRuntimeRunner)(nil)

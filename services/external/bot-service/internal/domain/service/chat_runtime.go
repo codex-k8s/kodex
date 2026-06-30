@@ -41,6 +41,7 @@ type MattermostThreadPostInput struct {
 	ChannelID  string
 	RootPostID string
 	Message    string
+	Props      map[string]any
 }
 
 type MattermostThreadUpdateInput struct {
@@ -70,6 +71,7 @@ type ChatPostCommand struct {
 	UserID     string
 	UserName   string
 	Message    string
+	Props      map[string]any
 }
 
 type ChatRunResult struct {
@@ -167,6 +169,9 @@ func NewChatRunService(cfg ChatRunServiceConfig) *ChatRunService {
 func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostCommand) ChatRunResult {
 	command = normalizeChatPostCommand(command)
 	if command.ChannelID == "" || command.PostID == "" || command.Message == "" {
+		return ChatRunResult{Ignored: true}
+	}
+	if isMatterCodexSystemPost(command.Props) {
 		return ChatRunResult{Ignored: true}
 	}
 	if strings.HasPrefix(command.Message, "/") {
@@ -1274,6 +1279,21 @@ func normalizeChatPostCommand(command ChatPostCommand) ChatPostCommand {
 	command.UserName = strings.TrimSpace(command.UserName)
 	command.Message = strings.TrimSpace(command.Message)
 	return command
+}
+
+func isMatterCodexSystemPost(props map[string]any) bool {
+	if len(props) == 0 {
+		return false
+	}
+	value, ok := props["matter_codex_event"]
+	if !ok {
+		return false
+	}
+	event, ok := value.(string)
+	if !ok {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(event), "agent_")
 }
 
 func commandRootPostID(command ChatPostCommand) string {

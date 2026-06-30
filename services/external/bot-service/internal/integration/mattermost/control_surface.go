@@ -233,6 +233,7 @@ func createThreadPost(ctx context.Context, client *mattermostmodel.Client4, inpu
 		ChannelId: input.ChannelID,
 		RootId:    input.RootPostID,
 		Message:   input.Message,
+		Props:     input.Props,
 	})
 	if err != nil {
 		return statusservice.MattermostPostRef{}, fmt.Errorf("create Mattermost thread post: %w", err)
