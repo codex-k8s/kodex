@@ -28,30 +28,32 @@ import (
 )
 
 const (
-	defaultNamespaceFile       = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	runnerComponent            = "agent-run"
-	sessionComponent           = "agent-session"
-	sessionTokenComponent      = "agent-session-token"
-	labelRunID                 = "matter-codex.dev/run-id"
-	labelSessionKey            = "matter-codex.dev/session-key"
-	labelAgentRole             = "matter-codex.dev/agent-role"
-	labelOpenAIAccount         = "matter-codex.dev/openai-account"
-	labelGitHubAccount         = "matter-codex.dev/github-account"
-	labelAuthCheckJob          = "matter-codex.dev/auth-check-job"
-	codexAuthSecretVolume      = "codex-auth-secret"
-	gitHubSecretVolume         = "github-secret"
-	sessionSecretVolume        = "session-secret"
-	promptVolume               = "agent-prompt"
-	runnerHomeVolume           = "runner-home"
-	runnerTmpVolume            = "runner-tmp"
-	runnerHomePath             = "/home/matter-codex"
-	runnerTmpPath              = "/tmp"
-	runtimeEnvAllowlist        = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
-	runnerInitPath             = "/sbin/tini"
-	runnerBinaryName           = "matter-codex-agent-runner"
-	runnerUID                  = int64(10001)
-	runnerGID                  = int64(10001)
-	sessionQuotaRetryRetention = time.Hour
+	defaultNamespaceFile         = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	runnerComponent              = "agent-run"
+	sessionComponent             = "agent-session"
+	sessionTokenComponent        = "agent-session-token"
+	labelRunID                   = "matter-codex.dev/run-id"
+	labelSessionKey              = "matter-codex.dev/session-key"
+	labelAgentRole               = "matter-codex.dev/agent-role"
+	labelOpenAIAccount           = "matter-codex.dev/openai-account"
+	labelGitHubAccount           = "matter-codex.dev/github-account"
+	labelAuthCheckJob            = "matter-codex.dev/auth-check-job"
+	codexAuthSecretVolume        = "codex-auth-secret"
+	gitHubSecretVolume           = "github-secret"
+	sessionSecretVolume          = "session-secret"
+	promptVolume                 = "agent-prompt"
+	runnerHomeVolume             = "runner-home"
+	runnerTmpVolume              = "runner-tmp"
+	runnerHomePath               = "/home/matter-codex"
+	runnerTmpPath                = "/tmp"
+	runtimeEnvAllowlist          = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
+	runnerInitPath               = "/sbin/tini"
+	runnerBinaryName             = "matter-codex-agent-runner"
+	runnerUID                    = int64(10001)
+	runnerGID                    = int64(10001)
+	kubernetesAccessReadOnly     = "read-only"
+	kubernetesAccessClusterAdmin = "cluster-admin"
+	sessionQuotaRetryRetention   = time.Hour
 )
 
 var (
@@ -60,38 +62,49 @@ var (
 )
 
 type Config struct {
-	Namespace                         string
-	KubeconfigPath                    string
-	SmokeImage                        string
-	AgentRunnerImage                  string
-	CodexPackage                      string
-	WorkspaceStorageSize              string
-	JobTTLSecondsAfterFinish          int32
-	AuthCheckJobTTLSecondsAfterFinish int32
-	LogTailLines                      int64
-	AgentRunnerServiceAccount         string
-	CodexAuthSecretName               string
-	GitHubSecretName                  string
+	Namespace                             string
+	KubeconfigPath                        string
+	SmokeImage                            string
+	AgentRunnerImage                      string
+	CodexPackage                          string
+	WorkspaceStorageSize                  string
+	JobTTLSecondsAfterFinish              int32
+	AuthCheckJobTTLSecondsAfterFinish     int32
+	LogTailLines                          int64
+	AgentRunnerServiceAccount             string
+	AgentRunnerClusterAdminServiceAccount string
+	CodexAuthSecretName                   string
+	GitHubSecretName                      string
 }
 
 type Runner struct {
-	client                            kubernetes.Interface
-	restConfig                        *rest.Config
-	namespace                         string
-	smokeImage                        string
-	agentRunnerImage                  string
-	codexPackage                      string
-	workspaceStorage                  resource.Quantity
-	jobTTLSecondsAfterFinish          int32
-	authCheckJobTTLSecondsAfterFinish int32
-	logTailLines                      int64
-	agentRunnerServiceAccount         string
-	codexAuthSecretName               string
-	gitHubSecretName                  string
+	client                                kubernetes.Interface
+	restConfig                            *rest.Config
+	namespace                             string
+	smokeImage                            string
+	agentRunnerImage                      string
+	codexPackage                          string
+	workspaceStorage                      resource.Quantity
+	jobTTLSecondsAfterFinish              int32
+	authCheckJobTTLSecondsAfterFinish     int32
+	logTailLines                          int64
+	agentRunnerServiceAccount             string
+	agentRunnerClusterAdminServiceAccount string
+	codexAuthSecretName                   string
+	gitHubSecretName                      string
 }
 
 func runnerCommand() []string {
 	return []string{runnerInitPath, "--", runnerBinaryName}
+}
+
+func normalizedKubernetesAccess(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case kubernetesAccessClusterAdmin:
+		return kubernetesAccessClusterAdmin
+	default:
+		return kubernetesAccessReadOnly
+	}
 }
 
 var _ runtimerepo.Runner = (*Runner)(nil)
@@ -125,19 +138,20 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		return nil, fmt.Errorf("parse workspace storage size: %w", err)
 	}
 	return &Runner{
-		client:                            client,
-		restConfig:                        restConfig,
-		namespace:                         namespace,
-		smokeImage:                        defaultString(cfg.SmokeImage, "busybox:1.36"),
-		agentRunnerImage:                  defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
-		codexPackage:                      defaultString(cfg.CodexPackage, "@openai/codex@0.141.0"),
-		workspaceStorage:                  storage,
-		jobTTLSecondsAfterFinish:          defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
-		authCheckJobTTLSecondsAfterFinish: defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),
-		logTailLines:                      defaultInt64(cfg.LogTailLines, 40),
-		agentRunnerServiceAccount:         defaultString(cfg.AgentRunnerServiceAccount, "matter-codex-agent-runner"),
-		codexAuthSecretName:               defaultString(cfg.CodexAuthSecretName, "matter-codex-codex-auth"),
-		gitHubSecretName:                  defaultString(cfg.GitHubSecretName, "matter-codex-github"),
+		client:                                client,
+		restConfig:                            restConfig,
+		namespace:                             namespace,
+		smokeImage:                            defaultString(cfg.SmokeImage, "busybox:1.36"),
+		agentRunnerImage:                      defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
+		codexPackage:                          defaultString(cfg.CodexPackage, "@openai/codex@0.141.0"),
+		workspaceStorage:                      storage,
+		jobTTLSecondsAfterFinish:              defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
+		authCheckJobTTLSecondsAfterFinish:     defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),
+		logTailLines:                          defaultInt64(cfg.LogTailLines, 40),
+		agentRunnerServiceAccount:             defaultString(cfg.AgentRunnerServiceAccount, "matter-codex-agent-runner"),
+		agentRunnerClusterAdminServiceAccount: defaultString(cfg.AgentRunnerClusterAdminServiceAccount, "matter-codex-agent-runner-cluster-admin"),
+		codexAuthSecretName:                   defaultString(cfg.CodexAuthSecretName, "matter-codex-codex-auth"),
+		gitHubSecretName:                      defaultString(cfg.GitHubSecretName, "matter-codex-github"),
 	}, nil
 }
 
@@ -172,6 +186,13 @@ func (runner *Runner) StartSmokeRun(ctx context.Context, input runtimerepo.Smoke
 		PVCName:   pvcName,
 		Created:   created,
 	}, nil
+}
+
+func (runner *Runner) agentRunnerServiceAccountForAccess(kubernetesAccess string) string {
+	if normalizedKubernetesAccess(kubernetesAccess) == kubernetesAccessClusterAdmin {
+		return runner.agentRunnerClusterAdminServiceAccount
+	}
+	return runner.agentRunnerServiceAccount
 }
 
 func (runner *Runner) StartCodexAuthSession(ctx context.Context, input runtimerepo.CodexAuthSessionInput) (runtimerepo.CodexAuthSession, error) {
@@ -1300,6 +1321,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 	backoffLimit := int32(0)
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
 	gitHubSecretName := defaultString(input.GitHubSecretName, runner.gitHubSecretName)
+	kubernetesAccess := normalizedKubernetesAccess(input.KubernetesAccess)
 	runtimeEnv := runtimeEnvVars(input.RuntimeEnv)
 	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv)
 	return &batchv1.Job{
@@ -1313,7 +1335,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
-					ServiceAccountName:           runner.agentRunnerServiceAccount,
+					ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
 					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
@@ -1328,6 +1350,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 							Env: append([]corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
+								{Name: "MATTERCODEX_KUBERNETES_ACCESS", Value: kubernetesAccess},
 								{Name: "MATTERCODEX_REPO_PROVIDER", Value: input.Provider},
 								{Name: "MATTERCODEX_REPO_OWNER", Value: input.Owner},
 								{Name: "MATTERCODEX_REPO_NAME", Value: input.Name},
@@ -1401,6 +1424,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 	backoffLimit := int32(0)
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
 	gitHubSecretName := defaultString(input.GitHubSecretName, runner.gitHubSecretName)
+	kubernetesAccess := normalizedKubernetesAccess(input.KubernetesAccess)
 	runtimeEnv := runtimeEnvVars(input.RuntimeEnv)
 	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv)
 	return &batchv1.Job{
@@ -1414,7 +1438,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
-					ServiceAccountName:           runner.agentRunnerServiceAccount,
+					ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
 					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
@@ -1429,6 +1453,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 							Env: append([]corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
+								{Name: "MATTERCODEX_KUBERNETES_ACCESS", Value: kubernetesAccess},
 								{Name: "MATTERCODEX_REPO_PROVIDER", Value: input.Provider},
 								{Name: "MATTERCODEX_REPO_OWNER", Value: input.Owner},
 								{Name: "MATTERCODEX_REPO_NAME", Value: input.Name},
@@ -1499,9 +1524,11 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 	backoffLimit := int32(0)
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
+	kubernetesAccess := normalizedKubernetesAccess(input.KubernetesAccess)
 	env := []corev1.EnvVar{
 		{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 		{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
+		{Name: "MATTERCODEX_KUBERNETES_ACCESS", Value: kubernetesAccess},
 		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 		{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
 		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv)},
@@ -1572,7 +1599,7 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
-					ServiceAccountName:           runner.agentRunnerServiceAccount,
+					ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
 					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
@@ -1614,9 +1641,11 @@ func (runner *Runner) sessionPVC(sessionKey string, role string) *corev1.Persist
 
 func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1.Pod {
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
+	kubernetesAccess := normalizedKubernetesAccess(input.KubernetesAccess)
 	env := []corev1.EnvVar{
 		{Name: "MATTERCODEX_SESSION_KEY", Value: input.SessionKey},
 		{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Role},
+		{Name: "MATTERCODEX_KUBERNETES_ACCESS", Value: kubernetesAccess},
 		{Name: "MATTERCODEX_BOT_SERVICE_URL", Value: input.BotServiceURL},
 		{Name: "MATTERCODEX_SESSION_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{Name: sessionSecretName(input.SessionKey)},
@@ -1701,7 +1730,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 			Labels: sessionLabels(input.SessionKey, input.Role),
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName:           runner.agentRunnerServiceAccount,
+			ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
 			AutomountServiceAccountToken: boolPtr(true),
 			SecurityContext:              runnerPodSecurityContext(),
 			RestartPolicy:                corev1.RestartPolicyNever,

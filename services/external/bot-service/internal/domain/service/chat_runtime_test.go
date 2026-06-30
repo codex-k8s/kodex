@@ -748,6 +748,281 @@ func TestChatRunRetriesConfiguredThreadRepositorySelectionWhenSessionWasNotCreat
 	}
 }
 
+func TestChatRunIgnoresAgentBotMessageWithoutAgentMention(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "bot-reply-1",
+		RootPostID: "post-1",
+		UserID:     "manager-user",
+		UserName:   "manager",
+		Message:    "@owner fyi: task complete",
+	})
+
+	if !result.Ignored || result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 || len(store.threadContexts) != 0 {
+		t.Fatalf("bot message should not start runtime or create thread context, runner=%#v turns=%#v contexts=%#v", runner.sessionRuns, store.sessionTurns, store.threadContexts)
+	}
+}
+
+func TestChatRunRoutesAgentBotMentionToMentionedAgent(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "bot-reply-1",
+		RootPostID: "post-1",
+		UserID:     "manager-user",
+		UserName:   "manager",
+		Message:    "@sre please check deployment",
+	})
+
+	if result.RunID == "" || result.Mode != "session" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].Role != "sre" {
+		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	if runner.startedSessionKey != agentSessionKey(1, 2, agentSessionScopeThreadRole, "post-1") {
+		t.Fatalf("session key = %q", runner.startedSessionKey)
+	}
+	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "@sre please check deployment") {
+		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+}
+
+func TestChatRunIgnoresAgentBotMentionOutsideLeadingLaunch(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "bot-reply-1",
+		RootPostID: "post-1",
+		UserID:     "manager-user",
+		UserName:   "manager",
+		Message:    "Status update:\n- SRE follow-up: @sre may need to check deployment after merge.",
+	})
+
+	if !result.Ignored || result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 || len(store.threadContexts) != 0 {
+		t.Fatalf("status mention should not start runtime or create thread context, runner=%#v turns=%#v contexts=%#v", runner.sessionRuns, store.sessionTurns, store.threadContexts)
+	}
+}
+
+func TestChatRunRoutesHumanMentionOutsideLeadingLaunch(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner-user",
+		UserName:  "owner",
+		Message:   "After this plan, please ask @sre to check deployment.",
+	})
+
+	if result.RunID == "" || result.Mode != "session" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].Role != "sre" {
+		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	if runner.startedSessionKey != agentSessionKey(1, 2, agentSessionScopeThreadRole, "post-1") {
+		t.Fatalf("session key = %q", runner.startedSessionKey)
+	}
+}
+
+func TestChatRunIgnoresAgentBotMentionInMarkdownCode(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "bot-reply-1",
+		RootPostID: "post-1",
+		UserID:     "manager-user",
+		UserName:   "manager",
+		Message:    "Status: `@sre` has no cluster-wide RBAC.\n```text\n@manager and @sre are role names here\n```",
+	})
+
+	if !result.Ignored || result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 || len(store.threadContexts) != 0 {
+		t.Fatalf("markdown code mention should not start runtime or create thread context, runner=%#v turns=%#v contexts=%#v", runner.sessionRuns, store.sessionTurns, store.threadContexts)
+	}
+}
+
+func TestChatRunIgnoresAgentBotSelfMention(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "bot-reply-1",
+		RootPostID: "post-1",
+		UserID:     "manager-user",
+		UserName:   "manager",
+		Message:    "@manager continue the same work",
+	})
+
+	if !result.Ignored || result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 || len(store.threadContexts) != 0 {
+		t.Fatalf("self mention should not start runtime or create thread context, runner=%#v turns=%#v contexts=%#v", runner.sessionRuns, store.sessionTurns, store.threadContexts)
+	}
+}
+
+func TestChatRunIgnoresAgentBotSelfMentionWithSharedBotUserAcrossProjects(t *testing.T) {
+	store := chatRuntimeStore()
+	store.projects[2] = entity.Project{ID: 2, Name: "Other", Slug: "other"}
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "developer", RoleType: "worker", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[99] = entity.AgentRole{ID: 99, ProjectID: 2, Name: "developer", RoleType: "worker", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1:  {ID: 1, ProjectID: 1, RoleID: 1, Username: "developer", MattermostUserID: "shared-developer-user", Status: "configured"},
+		99: {ID: 99, ProjectID: 2, RoleID: 99, Username: "developer", MattermostUserID: "shared-developer-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Dev", ChatType: "single_custom_role"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "bot-reply-1",
+		RootPostID: "post-1",
+		UserID:     "shared-developer-user",
+		UserName:   "developer",
+		Message:    "@developer continue only if a human asks",
+	})
+
+	if !result.Ignored || result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 || len(store.threadContexts) != 0 {
+		t.Fatalf("cross-project shared bot user self mention should not start runtime or create thread context, runner=%#v turns=%#v contexts=%#v", runner.sessionRuns, store.sessionTurns, store.threadContexts)
+	}
+}
+
 func TestChatRunFallsBackToProjectGitHubAccount(t *testing.T) {
 	store := chatRuntimeStore()
 	project := store.projects[1]

@@ -156,6 +156,42 @@ func TestAgentSessionCompletePostsFYIToRequester(t *testing.T) {
 	}
 }
 
+func TestAgentSessionCompleteSkipsFYIWhenRequesterIsAgentBot(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	store.sessionTurns[0].UserName = "manager"
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	err = svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+		TurnID:       claim.TurnID,
+		RunID:        claim.RunID,
+		Status:       agentSessionTurnSucceeded,
+		FinalMessage: "done",
+	})
+	if err != nil {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	if len(publisher.posts) != 2 {
+		t.Fatalf("posts = %#v", publisher.posts)
+	}
+	if publisher.posts[1].Message != "done" {
+		t.Fatalf("final message = %q", publisher.posts[1].Message)
+	}
+}
+
 func TestAgentSessionStopRunningTurnCancelsAndDeletesPod(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	session := withActiveTurn(store.agentSessions["session-1"], 1, "run-1")

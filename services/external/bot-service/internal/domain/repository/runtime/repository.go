@@ -13,6 +13,7 @@ type SmokeRunInput struct {
 type DeveloperRunInput struct {
 	RunID               string
 	Profile             string
+	KubernetesAccess    string
 	CodexAuthSecretName string
 	GitHubSecretName    string
 	Provider            string
@@ -31,6 +32,7 @@ type DeveloperRunInput struct {
 type ReviewRunInput struct {
 	RunID               string
 	Profile             string
+	KubernetesAccess    string
 	CodexAuthSecretName string
 	GitHubSecretName    string
 	Provider            string
@@ -46,6 +48,7 @@ type ReviewRunInput struct {
 type ChatRunInput struct {
 	RunID               string
 	Profile             string
+	KubernetesAccess    string
 	CodexAuthSecretName string
 	GitHubSecretName    string
 	Prompt              string
@@ -57,6 +60,7 @@ type ChatRunInput struct {
 type AgentSessionPodInput struct {
 	SessionKey              string
 	Role                    string
+	KubernetesAccess        string
 	BotServiceURL           string
 	InternalToken           string
 	CodexAuthSecretName     string

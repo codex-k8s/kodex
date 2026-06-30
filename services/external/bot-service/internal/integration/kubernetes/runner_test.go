@@ -539,6 +539,46 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	}
 }
 
+func TestStartAgentSessionUsesClusterAdminServiceAccountWhenRequested(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                             "mattermost",
+		AgentRunnerImage:                      "matter-codex-agent-runner:test",
+		WorkspaceStorageSize:                  "1Gi",
+		AgentRunnerServiceAccount:             "matter-codex-agent-runner",
+		AgentRunnerClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
+		CodexAuthSecretName:                   "matter-codex-codex-auth",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	started, err := runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
+		SessionKey:          "project-1-chat-2-role-9",
+		Role:                "sre",
+		KubernetesAccess:    "cluster-admin",
+		BotServiceURL:       "http://bot-service",
+		InternalToken:       "session-token",
+		CodexAuthSecretName: "matter-codex-codex-auth-main",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentSession() error = %v", err)
+	}
+	pod, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get session pod error = %v", err)
+	}
+	if pod.Spec.ServiceAccountName != "matter-codex-agent-runner-cluster-admin" {
+		t.Fatalf("ServiceAccountName = %q", pod.Spec.ServiceAccountName)
+	}
+	if pod.Spec.AutomountServiceAccountToken == nil || !*pod.Spec.AutomountServiceAccountToken {
+		t.Fatal("cluster-admin session pod should automount service account token")
+	}
+	if got := envValue(pod.Spec.Containers[0].Env, "MATTERCODEX_KUBERNETES_ACCESS"); got != "cluster-admin" {
+		t.Fatalf("MATTERCODEX_KUBERNETES_ACCESS = %q", got)
+	}
+}
+
 func TestGetRunStatusReadsJobAndPodStatus(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		&batchv1.Job{
