@@ -1311,7 +1311,7 @@ func selectChatRole(roles []entity.AgentRole, prNumber int) entity.AgentRole {
 			}
 		}
 	}
-	preference := []string{"worker", "manager", "pm_delivery", "analyst", "architect", "writer", "sre", "custom", "reviewer"}
+	preference := []string{"worker", "manager", "pm_delivery", "analyst", "architect", "writer", "sre", "custom", "improver", "reviewer"}
 	for _, roleType := range preference {
 		for _, role := range roles {
 			if role.RoleType == roleType {
@@ -1323,7 +1323,7 @@ func selectChatRole(roles []entity.AgentRole, prNumber int) entity.AgentRole {
 }
 
 func selectDefaultChatRole(roles []entity.AgentRole) entity.AgentRole {
-	preference := []string{"manager", "pm_delivery", "worker", "analyst", "architect", "writer", "sre", "custom", "reviewer"}
+	preference := []string{"manager", "pm_delivery", "worker", "analyst", "architect", "writer", "sre", "custom", "improver", "reviewer"}
 	for _, roleType := range preference {
 		for _, role := range roles {
 			if role.RoleType == roleType {

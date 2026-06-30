@@ -594,6 +594,105 @@ func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
 	}
 }
 
+func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Radar", Slug: "radar-auto", GitHubAccountName: "github-radar-owner-manager"},
+			2: {ID: 2, Name: "My QR Contact", Slug: "myqrcontact", GitHubAccountName: "github-myqrcontact-owner"},
+		},
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"openai-radar-delivery":   {Name: "openai-radar-delivery", Status: "authorized"},
+			"openai-radar-ops-review": {Name: "openai-radar-ops-review", Status: "authorized"},
+		},
+		githubAccounts: map[string]entity.GitHubAccount{
+			"github-myqrcontact-owner":      {Name: "github-myqrcontact-owner", Username: "ai-da-stas", Status: "configured"},
+			"github-radar-owner-manager":    {Name: "github-radar-owner-manager", Username: "ai-da-stas", Status: "configured"},
+			"github-myqrcontact-agent":      {Name: "github-myqrcontact-agent", Username: "kodex-agent", Status: "configured"},
+			"matter-codex-github-sre-agent": {Name: "matter-codex-github-sre-agent", Username: "kodex-agent", Status: "configured"},
+		},
+		repositories: map[string]entity.Repository{
+			repositoryStoreKey("github", "radar-auto", "marketplace"): {
+				ID:            1,
+				Provider:      "github",
+				Owner:         "radar-auto",
+				Name:          "marketplace",
+				DefaultBranch: "main",
+			},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1:  {ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", Enabled: true},
+			10: {ID: 10, ProjectID: 1, Name: "improver", RoleType: "improver", PromptTemplate: "custom prompt", PromptMode: "template", Enabled: true, BotIdentity: "improver"},
+			20: {ID: 20, ProjectID: 2, Name: "manager", RoleType: "manager", Enabled: true},
+		},
+		chats: map[int64]entity.Chat{
+			1: {ID: 1, ProjectID: 1, MattermostChannelID: "channel-radar", Name: "Radar Dev", Slug: "radar-dev", ChatType: "worker_reviewer", Settings: "{}"},
+		},
+		chatParticipants: map[int64][]entity.ChatParticipant{
+			1: {{ID: 1, ChatID: 1, RoleID: 1, RoleName: "manager", Enabled: true}},
+		},
+		chatRepositories: map[int64][]entity.ChatRepositoryBinding{
+			1: {{ID: 1, ChatID: 1, RepositoryID: 1, Provider: "github", Owner: "radar-auto", Name: "marketplace"}},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:      localizer,
+		StatusService:  testStatusService(localizer),
+		Store:          store,
+		ChannelManager: &fakeChannelManager{},
+		RoleBotManager: &fakeRoleBotManager{},
+		RuntimeRunner:  &fakeRuntimeRunner{},
+		StorageReady:   true,
+	})
+
+	if err := svc.BootstrapSystemAgentRoles(context.Background()); err != nil {
+		t.Fatalf("BootstrapSystemAgentRoles() error = %v", err)
+	}
+
+	radarImprover := testRoleByName(t, store, 1, "improver")
+	if radarImprover.PromptTemplate != "custom prompt" {
+		t.Fatalf("existing improver prompt was overwritten: %q", radarImprover.PromptTemplate)
+	}
+	myQRImprover := testRoleByName(t, store, 2, "improver")
+	if myQRImprover.RoleType != "improver" || myQRImprover.PromptMode != "template" || !strings.Contains(myQRImprover.PromptTemplate, "real review feedback") {
+		t.Fatalf("myqr improver = %#v", myQRImprover)
+	}
+	if myQRImprover.GitHubAccountName != "github-myqrcontact-owner" || myQRImprover.OpenAIAccountName != "openai-radar-delivery" {
+		t.Fatalf("myqr improver accounts = %#v", myQRImprover)
+	}
+	participants, _ := store.ListChatParticipants(context.Background(), 1)
+	if !testParticipantsContainRole(participants, radarImprover.ID) {
+		t.Fatalf("radar chat participants do not include improver: %#v", participants)
+	}
+	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), myQRImprover.ID); err != nil {
+		t.Fatalf("myqr improver bot identity not stored: %v", err)
+	}
+
+	matterCodexProject, err := store.GetProjectBySlug(context.Background(), "agents")
+	if err != nil {
+		t.Fatalf("matter-codex project not stored: %v", err)
+	}
+	adminRole := testRoleByName(t, store, matterCodexProject.ID, "mattercodex-admin")
+	if adminRole.KubernetesAccess != "cluster-admin" || adminRole.GitHubAccountName != "github-myqrcontact-owner" || adminRole.OpenAIAccountName != "openai-radar-delivery" {
+		t.Fatalf("admin role = %#v", adminRole)
+	}
+	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), adminRole.ID); err != nil {
+		t.Fatalf("admin bot identity not stored: %v", err)
+	}
+	controlChats, _ := store.ListChats(context.Background(), matterCodexProject.ID)
+	if len(controlChats) != 1 || controlChats[0].Slug != "agents-control" || controlChats[0].MattermostChannelID != "channel-agents-control" {
+		t.Fatalf("control chats = %#v", controlChats)
+	}
+	controlRepos, _ := store.ListChatRepositories(context.Background(), controlChats[0].ID)
+	if len(controlRepos) != 1 || controlRepos[0].FullName() != "codex-k8s/matter-codex" {
+		t.Fatalf("control repositories = %#v", controlRepos)
+	}
+	controlParticipants, _ := store.ListChatParticipants(context.Background(), controlChats[0].ID)
+	if !testParticipantsContainRole(controlParticipants, adminRole.ID) || !testParticipantsContainRole(controlParticipants, testRoleByName(t, store, matterCodexProject.ID, "improver").ID) {
+		t.Fatalf("control participants = %#v", controlParticipants)
+	}
+}
+
 func TestChatDialogCreatesPrivateProjectChannelWithRolesAndRepository(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
@@ -714,6 +813,30 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing runtime variable %q: %q", expected, prompt)
 		}
 	}
+}
+
+func testRoleByName(t *testing.T, store *fakeAdminStore, projectID int64, name string) entity.AgentRole {
+	t.Helper()
+	roles, err := store.ListAgentRoles(context.Background(), projectID)
+	if err != nil {
+		t.Fatalf("list roles: %v", err)
+	}
+	for _, role := range roles {
+		if role.Name == name {
+			return role
+		}
+	}
+	t.Fatalf("role %q not found in project %d: %#v", name, projectID, roles)
+	return entity.AgentRole{}
+}
+
+func testParticipantsContainRole(participants []entity.ChatParticipant, roleID int64) bool {
+	for _, participant := range participants {
+		if participant.RoleID == roleID && participant.Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
