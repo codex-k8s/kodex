@@ -180,9 +180,13 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 		svc.postThread(ctx, command, svc.t("runtime.not_configured", nil))
 		return ChatRunResult{}
 	}
+	var senderIdentity entity.MattermostBotIdentity
+	senderIsAgentBot := false
 	if command.UserID != "" {
-		if _, err := svc.cfg.Store.GetMattermostBotIdentityByUserID(ctx, command.UserID); err == nil {
-			return ChatRunResult{Ignored: true}
+		identity, err := svc.cfg.Store.GetMattermostBotIdentityByUserID(ctx, command.UserID)
+		if err == nil {
+			senderIdentity = identity
+			senderIsAgentBot = true
 		} else if err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
 			svc.postThread(ctx, command, svc.t("chat.run.sender_lookup_failed", map[string]any{"Error": safeError(err)}))
 			return ChatRunResult{}
@@ -214,15 +218,39 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 	for _, role := range roles {
 		rolesByID[role.ID] = role
 	}
-	threadContext, repositories, ready, err := svc.threadContextRepositories(ctx, project, chat, command)
-	if err != nil {
-		svc.postThread(ctx, command, svc.t("chat.run.repositories_lookup_failed", map[string]any{"Error": safeError(err)}))
-		return ChatRunResult{}
+	var targets []chatSessionTarget
+	var threadContext entity.ThreadContext
+	var repositories []entity.ProjectRepository
+	if senderIsAgentBot {
+		targets, err = svc.routeChatPost(ctx, chat, roles, rolesByID, command, entity.ThreadContext{}, senderIdentity, true)
+		if err != nil {
+			svc.postThread(ctx, command, svc.t("chat.run.route_failed", map[string]any{"Error": safeError(err)}))
+			return ChatRunResult{}
+		}
+		if len(targets) == 0 {
+			return ChatRunResult{Ignored: true}
+		}
+		var ready bool
+		_, repositories, ready, err = svc.threadContextRepositories(ctx, project, chat, command)
+		if err != nil {
+			svc.postThread(ctx, command, svc.t("chat.run.repositories_lookup_failed", map[string]any{"Error": safeError(err)}))
+			return ChatRunResult{}
+		}
+		if !ready {
+			return ChatRunResult{}
+		}
+	} else {
+		var ready bool
+		threadContext, repositories, ready, err = svc.threadContextRepositories(ctx, project, chat, command)
+		if err != nil {
+			svc.postThread(ctx, command, svc.t("chat.run.repositories_lookup_failed", map[string]any{"Error": safeError(err)}))
+			return ChatRunResult{}
+		}
+		if !ready {
+			return ChatRunResult{}
+		}
+		targets, err = svc.routeChatPost(ctx, chat, roles, rolesByID, command, threadContext, senderIdentity, false)
 	}
-	if !ready {
-		return ChatRunResult{}
-	}
-	targets, err := svc.routeChatPost(ctx, chat, roles, rolesByID, command, threadContext)
 	if err != nil {
 		svc.postThread(ctx, command, svc.t("chat.run.route_failed", map[string]any{"Error": safeError(err)}))
 		return ChatRunResult{}
@@ -606,12 +634,15 @@ func (svc *ChatRunService) validateThreadRepository(ctx context.Context, threadC
 	return fmt.Errorf("repository is not bound to project")
 }
 
-func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, roles []entity.AgentRole, rolesByID map[int64]entity.AgentRole, command ChatPostCommand, threadContext entity.ThreadContext) ([]chatSessionTarget, error) {
+func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, roles []entity.AgentRole, rolesByID map[int64]entity.AgentRole, command ChatPostCommand, threadContext entity.ThreadContext, senderIdentity entity.MattermostBotIdentity, senderIsAgentBot bool) ([]chatSessionTarget, error) {
 	identities, err := svc.cfg.Store.ListMattermostBotIdentitiesByProject(ctx, chat.ProjectID)
 	if err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
 		return nil, err
 	}
 	mentionedRoles := mentionedAgentRoles(command.Message, identities, rolesByID)
+	if senderIsAgentBot {
+		mentionedRoles = mentionedRolesExcludingSender(mentionedRoles, senderIdentity.RoleID)
+	}
 	isThreadReply := strings.TrimSpace(command.RootPostID) != "" && strings.TrimSpace(command.RootPostID) != strings.TrimSpace(command.PostID)
 	if len(mentionedRoles) > 0 {
 		targets := make([]chatSessionTarget, 0, len(mentionedRoles))
@@ -624,6 +655,9 @@ func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, 
 			})
 		}
 		return targets, nil
+	}
+	if senderIsAgentBot {
+		return nil, nil
 	}
 	if isThreadReply {
 		sessions, err := svc.cfg.Store.ListAgentSessionsByThread(ctx, chat.ID, commandRootPostID(command))
@@ -1277,6 +1311,19 @@ func mentionedAgentRoles(message string, identities []entity.MattermostBotIdenti
 		roles = append(roles, role)
 	}
 	return roles
+}
+
+func mentionedRolesExcludingSender(roles []entity.AgentRole, senderRoleID int64) []entity.AgentRole {
+	if senderRoleID <= 0 || len(roles) == 0 {
+		return roles
+	}
+	filtered := make([]entity.AgentRole, 0, len(roles))
+	for _, role := range roles {
+		if role.ID != senderRoleID {
+			filtered = append(filtered, role)
+		}
+	}
+	return filtered
 }
 
 func messageMentionsUsername(lowerMessage string, username string) bool {
