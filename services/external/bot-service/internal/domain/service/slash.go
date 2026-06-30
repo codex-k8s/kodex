@@ -1495,6 +1495,7 @@ func (svc *SlashCommandService) startFlowDeveloperAttempt(ctx context.Context, f
 	started, err := svc.cfg.RuntimeRunner.StartDeveloperRun(ctx, runtimerepo.DeveloperRunInput{
 		RunID:               runID,
 		Profile:             profileName,
+		KubernetesAccess:    account.Profile.KubernetesAccess,
 		CodexAuthSecretName: account.OpenAIAccount.SecretRef,
 		GitHubSecretName:    account.GitHubAccount.SecretRef,
 		Provider:            flow.Provider,
@@ -1586,6 +1587,7 @@ func (svc *SlashCommandService) startFlowReviewerWithRunID(ctx context.Context, 
 	started, err := svc.cfg.RuntimeRunner.StartReviewRun(ctx, runtimerepo.ReviewRunInput{
 		RunID:               runID,
 		Profile:             profileName,
+		KubernetesAccess:    account.Profile.KubernetesAccess,
 		CodexAuthSecretName: account.OpenAIAccount.SecretRef,
 		GitHubSecretName:    account.GitHubAccount.SecretRef,
 		Provider:            flow.Provider,

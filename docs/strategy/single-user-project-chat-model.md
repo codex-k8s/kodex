@@ -104,7 +104,7 @@ OpenAI accounts остаются Codex device-code accounts. В role выбир�
 - role получает variable только через явную binding-кнопку;
 - agent pod получает env только для variables, привязанных к этой role.
 
-Kubernetes access mode роли (`read-only` / `cluster-admin`) относится к MatterCodex/agent runtime cluster, то есть к кластеру, где запущены Mattermost, bot-service и agent pods. Этот доступ агент использует только если это прямо сказано в prompt, `AGENTS.md` или связанных инструкциях репозитория. Для других кластеров, например `radar-auto`, owner должен создать отдельную project runtime variable с kubeconfig/token/endpoint и явно выдать ее нужной role.
+Kubernetes access mode роли (`read-only` / `cluster-admin`) относится к MatterCodex/agent runtime cluster, то есть к кластеру, где запущены Mattermost, bot-service и agent pods. `read-only` role запускается на namespace-scoped read-only service account. `cluster-admin` role запускается на отдельном service account с `ClusterRoleBinding` к встроенному `cluster-admin` ClusterRole; это осознанный риск владельца для deploy/ops/service roles. Этот доступ агент использует только если это прямо сказано в prompt, `AGENTS.md` или связанных инструкциях репозитория. Для других кластеров, например `radar-auto`, owner должен создать отдельную project runtime variable с kubeconfig/token/endpoint и явно выдать ее нужной role.
 
 ## Advanced Settings
 

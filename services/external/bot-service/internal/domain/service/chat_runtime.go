@@ -444,6 +444,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		started, err = svc.cfg.RuntimeRunner.StartAgentSession(ctx, runtimerepo.AgentSessionPodInput{
 			SessionKey:              session.SessionKey,
 			Role:                    request.Role.Name,
+			KubernetesAccess:        request.Role.KubernetesAccess,
 			BotServiceURL:           svc.botServiceURL(),
 			InternalToken:           internalToken,
 			CodexAuthSecretName:     openAIAccount.SecretRef,
@@ -872,6 +873,7 @@ func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput
 		return svc.cfg.RuntimeRunner.StartReviewRun(ctx, runtimerepo.ReviewRunInput{
 			RunID:               input.RunID,
 			Profile:             input.Role.Name,
+			KubernetesAccess:    input.Role.KubernetesAccess,
 			CodexAuthSecretName: input.OpenAIAccount.SecretRef,
 			GitHubSecretName:    input.GitHubAccount.SecretRef,
 			Provider:            repo.Provider,
@@ -887,6 +889,7 @@ func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput
 		return svc.cfg.RuntimeRunner.StartDeveloperRun(ctx, runtimerepo.DeveloperRunInput{
 			RunID:               input.RunID,
 			Profile:             input.Role.Name,
+			KubernetesAccess:    input.Role.KubernetesAccess,
 			CodexAuthSecretName: input.OpenAIAccount.SecretRef,
 			GitHubSecretName:    input.GitHubAccount.SecretRef,
 			Provider:            repo.Provider,
@@ -909,6 +912,7 @@ func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput
 		return svc.cfg.RuntimeRunner.StartChatRun(ctx, runtimerepo.ChatRunInput{
 			RunID:               input.RunID,
 			Profile:             input.Role.Name,
+			KubernetesAccess:    input.Role.KubernetesAccess,
 			CodexAuthSecretName: input.OpenAIAccount.SecretRef,
 			GitHubSecretName:    gitHubSecret,
 			Prompt:              input.Prompt,

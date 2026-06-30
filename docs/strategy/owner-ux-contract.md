@@ -179,7 +179,9 @@ Agent role связывает project, accounts, optional prompt template, Codex
 Kubernetes access modes MVP:
 
 - `read-only` - default для обычных developer/reviewer roles, агент может читать logs/status при наличии выданных runtime credentials;
-- `cluster-admin` - осознанный owner-selected риск для deploy/ops roles, которым нужно менять ресурсы в других namespaces.
+- `cluster-admin` - осознанный owner-selected риск для deploy/ops/service roles, которым нужно менять ресурсы в любых namespaces и чинить сам MatterCodex через MatterCodex.
+
+Runtime behavior: `cluster-admin` role запускается с отдельным Kubernetes service account, привязанным к встроенному `cluster-admin` ClusterRole. `read-only` role остается на обычном namespace-scoped read-only service account.
 
 Будущий upgrade path: заменить `cluster-admin` на заранее подготовленные role policies per project/namespace без изменения owner-facing role model.
 
