@@ -612,9 +612,28 @@ func (svc *AgentSessionService) postTurnCompletionFYI(ctx context.Context, sessi
 	if userName == "" {
 		return nil
 	}
+	if svc.turnRequesterIsProjectBot(ctx, session.ProjectID, userName) {
+		return nil
+	}
 	message := svc.t("chat.session.fyi.complete", map[string]any{"UserName": userName})
 	_, err := svc.postSessionThreadMessageOnly(ctx, session, turn.MattermostChannelID, turn.MattermostRootPostID, message)
 	return err
+}
+
+func (svc *AgentSessionService) turnRequesterIsProjectBot(ctx context.Context, projectID int64, userName string) bool {
+	if projectID == 0 || strings.TrimSpace(userName) == "" || svc.cfg.Store == nil {
+		return false
+	}
+	identities, err := svc.cfg.Store.ListMattermostBotIdentitiesByProject(ctx, projectID)
+	if err != nil {
+		return false
+	}
+	for _, identity := range identities {
+		if strings.EqualFold(strings.TrimSpace(identity.Username), userName) {
+			return true
+		}
+	}
+	return false
 }
 
 func (svc *AgentSessionService) upsertTurnStatusMessage(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, message string) (MattermostPostRef, error) {

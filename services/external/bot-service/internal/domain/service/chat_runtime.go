@@ -643,6 +643,7 @@ func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, 
 	}
 	mentionedRoles := mentionedAgentRoles(command.Message, identities, rolesByID)
 	if senderIsAgentBot {
+		mentionedRoles = mentionedAgentRolesAtMessageStart(command.Message, identities, rolesByID)
 		mentionedRoles = mentionedRolesExcludingSender(mentionedRoles, senderIdentity.RoleID)
 	}
 	isThreadReply := strings.TrimSpace(command.RootPostID) != "" && strings.TrimSpace(command.RootPostID) != strings.TrimSpace(command.PostID)
@@ -1336,6 +1337,62 @@ func mentionedAgentRoles(message string, identities []entity.MattermostBotIdenti
 		roles = append(roles, role)
 	}
 	return roles
+}
+
+func mentionedAgentRolesAtMessageStart(message string, identities []entity.MattermostBotIdentity, rolesByID map[int64]entity.AgentRole) []entity.AgentRole {
+	if len(identities) == 0 || len(rolesByID) == 0 {
+		return nil
+	}
+	message = strings.ToLower(stripMarkdownCodeForMentionScan(message))
+	seen := make(map[int64]struct{}, len(identities))
+	roles := make([]entity.AgentRole, 0, len(identities))
+	for {
+		message = strings.TrimLeft(message, " \t\r\n")
+		if !strings.HasPrefix(message, "@") {
+			break
+		}
+		role, size, ok := leadingMentionedAgentRole(message, identities, rolesByID)
+		if !ok {
+			break
+		}
+		if _, exists := seen[role.ID]; !exists {
+			seen[role.ID] = struct{}{}
+			roles = append(roles, role)
+		}
+		message = message[size:]
+	}
+	return roles
+}
+
+func leadingMentionedAgentRole(message string, identities []entity.MattermostBotIdentity, rolesByID map[int64]entity.AgentRole) (entity.AgentRole, int, bool) {
+	bestSize := 0
+	var bestRole entity.AgentRole
+	for _, identity := range identities {
+		username := strings.ToLower(strings.TrimSpace(identity.Username))
+		if username == "" {
+			continue
+		}
+		needle := "@" + username
+		if !strings.HasPrefix(message, needle) {
+			continue
+		}
+		end := len(needle)
+		if end < len(message) && isMentionUsernameRune(rune(message[end])) {
+			continue
+		}
+		role, ok := rolesByID[identity.RoleID]
+		if !ok {
+			continue
+		}
+		if end > bestSize {
+			bestSize = end
+			bestRole = role
+		}
+	}
+	if bestSize == 0 {
+		return entity.AgentRole{}, 0, false
+	}
+	return bestRole, bestSize, true
 }
 
 func stripMarkdownCodeForMentionScan(message string) string {
