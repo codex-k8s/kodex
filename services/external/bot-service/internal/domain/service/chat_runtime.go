@@ -180,18 +180,6 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 		svc.postThread(ctx, command, svc.t("runtime.not_configured", nil))
 		return ChatRunResult{}
 	}
-	var senderIdentity entity.MattermostBotIdentity
-	senderIsAgentBot := false
-	if command.UserID != "" {
-		identity, err := svc.cfg.Store.GetMattermostBotIdentityByUserID(ctx, command.UserID)
-		if err == nil {
-			senderIdentity = identity
-			senderIsAgentBot = true
-		} else if err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
-			svc.postThread(ctx, command, svc.t("chat.run.sender_lookup_failed", map[string]any{"Error": safeError(err)}))
-			return ChatRunResult{}
-		}
-	}
 	chat, err := svc.cfg.Store.GetChatByMattermostChannelID(ctx, command.ChannelID)
 	if err != nil {
 		if errors.Is(err, adminrepo.ErrNotFound) {
@@ -199,6 +187,19 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 		}
 		svc.postThread(ctx, command, svc.t("chat.run.chat_lookup_failed", map[string]any{"Error": safeError(err)}))
 		return ChatRunResult{}
+	}
+	var senderIdentity entity.MattermostBotIdentity
+	senderIsAgentBot := false
+	if command.UserID != "" {
+		identity, found, err := svc.mattermostBotIdentityByUserID(ctx, chat.ProjectID, command.UserID)
+		if err != nil {
+			svc.postThread(ctx, command, svc.t("chat.run.sender_lookup_failed", map[string]any{"Error": safeError(err)}))
+			return ChatRunResult{}
+		}
+		if found {
+			senderIdentity = identity
+			senderIsAgentBot = true
+		}
 	}
 	project, err := svc.cfg.Store.GetProject(ctx, chat.ProjectID)
 	if err != nil {
@@ -687,6 +688,26 @@ func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, 
 		target.TTLSeconds = defaultThreadSessionTTLSeconds
 	}
 	return []chatSessionTarget{target}, nil
+}
+
+func (svc *ChatRunService) mattermostBotIdentityByUserID(ctx context.Context, projectID int64, mattermostUserID string) (entity.MattermostBotIdentity, bool, error) {
+	mattermostUserID = strings.TrimSpace(mattermostUserID)
+	if projectID == 0 || mattermostUserID == "" {
+		return entity.MattermostBotIdentity{}, false, nil
+	}
+	identities, err := svc.cfg.Store.ListMattermostBotIdentitiesByProject(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, adminrepo.ErrNotFound) {
+			return entity.MattermostBotIdentity{}, false, nil
+		}
+		return entity.MattermostBotIdentity{}, false, err
+	}
+	for _, identity := range identities {
+		if strings.TrimSpace(identity.MattermostUserID) == mattermostUserID {
+			return identity, true, nil
+		}
+	}
+	return entity.MattermostBotIdentity{}, false, nil
 }
 
 func (svc *ChatRunService) sessionInternalToken(ctx context.Context, session entity.AgentSession) (string, error) {
@@ -1294,7 +1315,7 @@ func mentionedAgentRoles(message string, identities []entity.MattermostBotIdenti
 	}
 	seen := make(map[int64]struct{}, len(identities))
 	roles := make([]entity.AgentRole, 0, len(identities))
-	lowerMessage := strings.ToLower(message)
+	lowerMessage := strings.ToLower(stripMarkdownCodeForMentionScan(message))
 	for _, identity := range identities {
 		username := strings.ToLower(strings.TrimSpace(identity.Username))
 		if username == "" || !messageMentionsUsername(lowerMessage, username) {
@@ -1311,6 +1332,59 @@ func mentionedAgentRoles(message string, identities []entity.MattermostBotIdenti
 		roles = append(roles, role)
 	}
 	return roles
+}
+
+func stripMarkdownCodeForMentionScan(message string) string {
+	if !strings.ContainsAny(message, "`~") {
+		return message
+	}
+	var builder strings.Builder
+	builder.Grow(len(message))
+	inFence := false
+	fenceMarker := ""
+	for index := 0; index < len(message); {
+		if strings.HasPrefix(message[index:], "```") || strings.HasPrefix(message[index:], "~~~") {
+			marker := message[index : index+3]
+			if !inFence {
+				inFence = true
+				fenceMarker = marker
+			} else if marker == fenceMarker {
+				inFence = false
+				fenceMarker = ""
+			}
+			builder.WriteByte(' ')
+			index += 3
+			continue
+		}
+		if inFence {
+			if message[index] == '\n' {
+				builder.WriteByte('\n')
+			} else {
+				builder.WriteByte(' ')
+			}
+			index++
+			continue
+		}
+		if message[index] == '`' {
+			index++
+			for index < len(message) && message[index] != '`' {
+				if message[index] == '\n' {
+					builder.WriteByte('\n')
+				} else {
+					builder.WriteByte(' ')
+				}
+				index++
+			}
+			if index < len(message) {
+				index++
+			}
+			builder.WriteByte(' ')
+			continue
+		}
+		builder.WriteByte(message[index])
+		index++
+	}
+	return builder.String()
 }
 
 func mentionedRolesExcludingSender(roles []entity.AgentRole, senderRoleID int64) []entity.AgentRole {
