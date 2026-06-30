@@ -28,27 +28,30 @@ import (
 )
 
 const (
-	defaultNamespaceFile  = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	runnerComponent       = "agent-run"
-	labelRunID            = "matter-codex.dev/run-id"
-	labelSessionKey       = "matter-codex.dev/session-key"
-	labelAgentRole        = "matter-codex.dev/agent-role"
-	labelOpenAIAccount    = "matter-codex.dev/openai-account"
-	labelGitHubAccount    = "matter-codex.dev/github-account"
-	labelAuthCheckJob     = "matter-codex.dev/auth-check-job"
-	codexAuthSecretVolume = "codex-auth-secret"
-	gitHubSecretVolume    = "github-secret"
-	sessionSecretVolume   = "session-secret"
-	promptVolume          = "agent-prompt"
-	runnerHomeVolume      = "runner-home"
-	runnerTmpVolume       = "runner-tmp"
-	runnerHomePath        = "/home/matter-codex"
-	runnerTmpPath         = "/tmp"
-	runtimeEnvAllowlist   = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
-	runnerInitPath        = "/sbin/tini"
-	runnerBinaryName      = "matter-codex-agent-runner"
-	runnerUID             = int64(10001)
-	runnerGID             = int64(10001)
+	defaultNamespaceFile       = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	runnerComponent            = "agent-run"
+	sessionComponent           = "agent-session"
+	sessionTokenComponent      = "agent-session-token"
+	labelRunID                 = "matter-codex.dev/run-id"
+	labelSessionKey            = "matter-codex.dev/session-key"
+	labelAgentRole             = "matter-codex.dev/agent-role"
+	labelOpenAIAccount         = "matter-codex.dev/openai-account"
+	labelGitHubAccount         = "matter-codex.dev/github-account"
+	labelAuthCheckJob          = "matter-codex.dev/auth-check-job"
+	codexAuthSecretVolume      = "codex-auth-secret"
+	gitHubSecretVolume         = "github-secret"
+	sessionSecretVolume        = "session-secret"
+	promptVolume               = "agent-prompt"
+	runnerHomeVolume           = "runner-home"
+	runnerTmpVolume            = "runner-tmp"
+	runnerHomePath             = "/home/matter-codex"
+	runnerTmpPath              = "/tmp"
+	runtimeEnvAllowlist        = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
+	runnerInitPath             = "/sbin/tini"
+	runnerBinaryName           = "matter-codex-agent-runner"
+	runnerUID                  = int64(10001)
+	runnerGID                  = int64(10001)
+	sessionQuotaRetryRetention = time.Hour
 )
 
 var (
@@ -740,13 +743,11 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	secretName := sessionSecretName(input.SessionKey)
 
 	created := false
-	if _, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, runner.sessionPVC(input.SessionKey, input.Role), metav1.CreateOptions{}); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
-			return runtimerepo.StartedAgentSession{}, fmt.Errorf("create session pvc: %w", err)
-		}
-	} else {
-		created = true
+	pvcCreated, err := runner.ensureSessionPVC(ctx, input.SessionKey, input.Role)
+	if err != nil {
+		return runtimerepo.StartedAgentSession{}, err
 	}
+	created = created || pvcCreated
 	if _, err := runner.upsertSessionTokenSecret(ctx, input.SessionKey, secretName, input.InternalToken); err != nil {
 		return runtimerepo.StartedAgentSession{}, err
 	}
@@ -775,6 +776,30 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 		SecretName: secretName,
 		Created:    created,
 	}, nil
+}
+
+func (runner *Runner) ensureSessionPVC(ctx context.Context, sessionKey string, role string) (bool, error) {
+	pvc := runner.sessionPVC(sessionKey, role)
+	if _, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return false, nil
+		}
+		if !quotaExceeded(err) {
+			return false, fmt.Errorf("create session pvc: %w", err)
+		}
+		cutoff := time.Now().UTC().Add(-sessionQuotaRetryRetention)
+		if _, cleanupErr := runner.cleanupExpiredSessionResources(ctx, cutoff, false); cleanupErr != nil {
+			return false, fmt.Errorf("create session pvc: %w; cleanup expired sessions: %v", err, cleanupErr)
+		}
+		if _, retryErr := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, pvc, metav1.CreateOptions{}); retryErr != nil {
+			if apierrors.IsAlreadyExists(retryErr) {
+				return false, nil
+			}
+			return false, fmt.Errorf("create session pvc after cleanup: %w", retryErr)
+		}
+		return true, nil
+	}
+	return true, nil
 }
 
 func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName string) (bool, error) {
@@ -1071,8 +1096,124 @@ func (runner *Runner) CleanupExpiredRuns(ctx context.Context, input runtimerepo.
 			result.ConfigMapsDeleted++
 		}
 	}
+	sessionResult, err := runner.cleanupExpiredSessionResources(ctx, cutoff, input.DryRun)
+	if err != nil {
+		return runtimerepo.RetentionCleanupResult{}, err
+	}
+	result.SessionPodsMatched = sessionResult.SessionPodsMatched
+	result.SessionPodsDeleted = sessionResult.SessionPodsDeleted
+	result.SessionPVCsMatched = sessionResult.SessionPVCsMatched
+	result.SessionPVCsDeleted = sessionResult.SessionPVCsDeleted
+	result.SessionSecretsMatched = sessionResult.SessionSecretsMatched
+	result.SessionSecretsDeleted = sessionResult.SessionSecretsDeleted
+	result.PVCsMatched += sessionResult.SessionPVCsMatched
+	result.PVCsDeleted += sessionResult.SessionPVCsDeleted
 	result.MatchedRunIDs = sortedRunIDs(matchedRunIDs)
 	result.RunsMatched = len(result.MatchedRunIDs)
+	return result, nil
+}
+
+type sessionCleanupResult struct {
+	SessionPodsMatched    int
+	SessionPodsDeleted    int
+	SessionPVCsMatched    int
+	SessionPVCsDeleted    int
+	SessionSecretsMatched int
+	SessionSecretsDeleted int
+}
+
+func (runner *Runner) cleanupExpiredSessionResources(ctx context.Context, cutoff time.Time, dryRun bool) (sessionCleanupResult, error) {
+	result := sessionCleanupResult{}
+	pods, err := runner.client.CoreV1().Pods(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: sessionLabelSelector()})
+	if err != nil {
+		return sessionCleanupResult{}, fmt.Errorf("list session pods: %w", err)
+	}
+	activeSessions := make(map[string]struct{})
+	expiredTerminalSessions := make(map[string]struct{})
+	knownSessions := make(map[string]struct{})
+	for _, pod := range pods.Items {
+		sessionKey := pod.Labels[labelSessionKey]
+		if sessionKey == "" {
+			continue
+		}
+		knownSessions[sessionKey] = struct{}{}
+		if pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+			activeSessions[sessionKey] = struct{}{}
+			continue
+		}
+		if !olderThan(podFinishedOrCreatedAt(pod), cutoff) {
+			continue
+		}
+		result.SessionPodsMatched++
+		expiredTerminalSessions[sessionKey] = struct{}{}
+		if dryRun {
+			continue
+		}
+		if err := runner.deleteSessionPod(ctx, pod.Name); err != nil {
+			return sessionCleanupResult{}, fmt.Errorf("delete expired session pod %s: %w", pod.Name, err)
+		}
+		result.SessionPodsDeleted++
+	}
+
+	pvcs, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: sessionLabelSelector()})
+	if err != nil {
+		return sessionCleanupResult{}, fmt.Errorf("list session pvcs: %w", err)
+	}
+	for _, pvc := range pvcs.Items {
+		sessionKey := pvc.Labels[labelSessionKey]
+		if sessionKey == "" {
+			continue
+		}
+		if _, active := activeSessions[sessionKey]; active {
+			continue
+		}
+		_, terminalExpired := expiredTerminalSessions[sessionKey]
+		_, known := knownSessions[sessionKey]
+		if !terminalExpired && (known || !olderThan(pvc.CreationTimestamp.Time, cutoff)) {
+			continue
+		}
+		result.SessionPVCsMatched++
+		if dryRun {
+			continue
+		}
+		if err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Delete(ctx, pvc.Name, metav1.DeleteOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return sessionCleanupResult{}, fmt.Errorf("delete expired session pvc %s: %w", pvc.Name, err)
+			}
+		} else {
+			result.SessionPVCsDeleted++
+		}
+	}
+
+	secrets, err := runner.client.CoreV1().Secrets(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: sessionTokenLabelSelector()})
+	if err != nil {
+		return sessionCleanupResult{}, fmt.Errorf("list session token secrets: %w", err)
+	}
+	for _, secret := range secrets.Items {
+		sessionKey := secret.Labels[labelSessionKey]
+		if sessionKey == "" {
+			continue
+		}
+		if _, active := activeSessions[sessionKey]; active {
+			continue
+		}
+		_, terminalExpired := expiredTerminalSessions[sessionKey]
+		_, known := knownSessions[sessionKey]
+		if !terminalExpired && (known || !olderThan(secret.CreationTimestamp.Time, cutoff)) {
+			continue
+		}
+		result.SessionSecretsMatched++
+		if dryRun {
+			continue
+		}
+		if err := runner.client.CoreV1().Secrets(runner.namespace).Delete(ctx, secret.Name, metav1.DeleteOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return sessionCleanupResult{}, fmt.Errorf("delete expired session token secret %s: %w", secret.Name, err)
+			}
+		} else {
+			result.SessionSecretsDeleted++
+		}
+	}
 	return result, nil
 }
 
@@ -1851,7 +1992,7 @@ func (runner *Runner) upsertGitHubTokenSecret(ctx context.Context, input runtime
 func (runner *Runner) upsertSessionTokenSecret(ctx context.Context, sessionKey string, secretName string, token string) (bool, error) {
 	return runner.upsertSecret(ctx, secretName, map[string][]byte{"token": []byte(token)}, map[string]string{
 		"app.kubernetes.io/name":      "matter-codex-agent-runner",
-		"app.kubernetes.io/component": "agent-session-token",
+		"app.kubernetes.io/component": sessionTokenComponent,
 		labelSessionKey:               kubernetesLabelValue(sessionKey),
 	})
 }
@@ -1936,7 +2077,7 @@ func runnerLabels(runID string, role string) map[string]string {
 func sessionLabels(sessionKey string, role string) map[string]string {
 	return map[string]string{
 		"app.kubernetes.io/name":      "matter-codex-agent-runner",
-		"app.kubernetes.io/component": "agent-session",
+		"app.kubernetes.io/component": sessionComponent,
 		labelSessionKey:               kubernetesLabelValue(sessionKey),
 		labelAgentRole:                kubernetesLabelValue(role),
 	}
@@ -1949,6 +2090,20 @@ func runnerLabelSelector() string {
 	}).String()
 }
 
+func sessionLabelSelector() string {
+	return labels.SelectorFromSet(labels.Set{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": sessionComponent,
+	}).String()
+}
+
+func sessionTokenLabelSelector() string {
+	return labels.SelectorFromSet(labels.Set{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": sessionTokenComponent,
+	}).String()
+}
+
 func jobCompletedOrCreatedAt(job batchv1.Job) time.Time {
 	if job.Status.CompletionTime != nil && !job.Status.CompletionTime.IsZero() {
 		return job.Status.CompletionTime.Time
@@ -1956,8 +2111,28 @@ func jobCompletedOrCreatedAt(job batchv1.Job) time.Time {
 	return job.CreationTimestamp.Time
 }
 
+func podFinishedOrCreatedAt(pod corev1.Pod) time.Time {
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.State.Terminated != nil && !status.State.Terminated.FinishedAt.IsZero() {
+			return status.State.Terminated.FinishedAt.Time
+		}
+	}
+	return pod.CreationTimestamp.Time
+}
+
 func olderThan(value time.Time, cutoff time.Time) bool {
 	return !value.IsZero() && value.Before(cutoff)
+}
+
+func quotaExceeded(err error) bool {
+	if !apierrors.IsForbidden(err) {
+		return false
+	}
+	statusErr, ok := err.(*apierrors.StatusError)
+	if !ok {
+		return false
+	}
+	return strings.Contains(strings.ToLower(statusErr.ErrStatus.Message), "exceeded quota")
 }
 
 func runnerRetentionResourceExpired(runID string, createdAt time.Time, cutoff time.Time, jobByRunID map[string]batchv1.Job, matchedRunIDs map[string]struct{}) bool {

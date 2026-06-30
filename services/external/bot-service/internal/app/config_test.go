@@ -61,6 +61,15 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.RuntimeWorkspaceSize != "1Gi" {
 		t.Fatalf("RuntimeWorkspaceSize = %q", cfg.RuntimeWorkspaceSize)
 	}
+	if !cfg.RuntimeRetentionEnabled {
+		t.Fatal("RuntimeRetentionEnabled = false")
+	}
+	if cfg.RuntimeRetentionInterval != 30*time.Minute {
+		t.Fatalf("RuntimeRetentionInterval = %s", cfg.RuntimeRetentionInterval)
+	}
+	if cfg.RuntimeRetentionOlderThan != 24*time.Hour {
+		t.Fatalf("RuntimeRetentionOlderThan = %s", cfg.RuntimeRetentionOlderThan)
+	}
 	if cfg.AuthCheckJobTTLSeconds != 300 {
 		t.Fatalf("AuthCheckJobTTLSeconds = %d", cfg.AuthCheckJobTTLSeconds)
 	}
@@ -91,6 +100,34 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 		AgentServiceAccount:    "matter-codex-agent-runner",
 		CodexAuthSecretName:    "matter-codex-codex-auth",
 		GitHubSecretName:       "matter-codex-github",
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() error = nil")
+	}
+}
+
+func TestConfigValidationRejectsBadRuntimeRetention(t *testing.T) {
+	cfg := Config{
+		HTTPAddr:                  ":8080",
+		Locale:                    "en",
+		DefaultChannels:           []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:         time.Second,
+		ShutdownTimeout:           time.Second,
+		MaxSlashFormBytes:         1024,
+		MaxGitHubWebhookBytes:     1024,
+		RuntimeSmokeImage:         "busybox:1.36",
+		AgentRunnerImage:          "matter-codex-agent-runner:dev",
+		CodexPackage:              "@openai/codex@0.141.0",
+		RuntimeWorkspaceSize:      "1Gi",
+		RuntimeJobTTLSeconds:      86400,
+		RuntimeRetentionEnabled:   true,
+		RuntimeRetentionInterval:  0,
+		RuntimeRetentionOlderThan: 24 * time.Hour,
+		AuthCheckJobTTLSeconds:    300,
+		RuntimeLogTailLines:       40,
+		AgentServiceAccount:       "matter-codex-agent-runner",
+		CodexAuthSecretName:       "matter-codex-codex-auth",
+		GitHubSecretName:          "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")

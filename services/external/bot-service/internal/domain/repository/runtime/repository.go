@@ -257,18 +257,24 @@ type RetentionCleanupInput struct {
 }
 
 type RetentionCleanupResult struct {
-	Namespace         string
-	DryRun            bool
-	OlderThan         time.Duration
-	RunsMatched       int
-	SkippedActiveJobs int
-	JobsMatched       int
-	JobsDeleted       int
-	PVCsMatched       int
-	PVCsDeleted       int
-	ConfigMapsMatched int
-	ConfigMapsDeleted int
-	MatchedRunIDs     []string
+	Namespace             string
+	DryRun                bool
+	OlderThan             time.Duration
+	RunsMatched           int
+	SkippedActiveJobs     int
+	JobsMatched           int
+	JobsDeleted           int
+	PVCsMatched           int
+	PVCsDeleted           int
+	ConfigMapsMatched     int
+	ConfigMapsDeleted     int
+	SessionPodsMatched    int
+	SessionPodsDeleted    int
+	SessionPVCsMatched    int
+	SessionPVCsDeleted    int
+	SessionSecretsMatched int
+	SessionSecretsDeleted int
+	MatchedRunIDs         []string
 }
 
 type Runner interface {
