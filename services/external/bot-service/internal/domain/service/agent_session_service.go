@@ -144,6 +144,7 @@ type AgentSessionAgentRequest struct {
 	RequestedRoleName string `json:"requested_role_name"`
 	RequestedRoleID   int64  `json:"requested_role_id"`
 	TargetSessionKey  string `json:"target_session_key"`
+	AuditPostID       string `json:"audit_post_id,omitempty"`
 }
 
 func NewAgentSessionService(cfg AgentSessionServiceConfig) *AgentSessionService {
@@ -511,12 +512,17 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
+	auditPostID := ""
+	if ref, err := svc.postAgentRequestAudit(ctx, session, rootPostID, requesterUserName, role.Name, message); err == nil {
+		auditPostID = ref.PostID
+	}
 	return AgentSessionAgentRequest{
 		SessionKey:        session.SessionKey,
 		RequestedRunID:    queued.RunID,
 		RequestedRoleName: role.Name,
 		RequestedRoleID:   role.ID,
 		TargetSessionKey:  queued.SessionKey,
+		AuditPostID:       auditPostID,
 	}, nil
 }
 
@@ -684,6 +690,37 @@ func (svc *AgentSessionService) postSessionThreadMessage(ctx context.Context, se
 	return svc.postSessionThreadMessageOnly(ctx, session, session.MattermostChannelID, rootPostID, message)
 }
 
+func (svc *AgentSessionService) postAgentRequestAudit(ctx context.Context, session entity.AgentSession, rootPostID string, requesterUserName string, targetRoleName string, message string) (MattermostPostRef, error) {
+	if svc.cfg.ThreadPublisher == nil {
+		return MattermostPostRef{}, nil
+	}
+	requester := mentionableMattermostUsername(requesterUserName)
+	if requester == "" {
+		requester = "agent"
+	} else {
+		requester = "@" + requester
+	}
+	target := mentionableMattermostUsername(targetRoleName)
+	if target == "" {
+		target = strings.TrimSpace(targetRoleName)
+	}
+	if target == "" {
+		target = "agent"
+	} else {
+		target = "@" + target
+	}
+	return svc.cfg.ThreadPublisher.PostThreadMessage(ctx, MattermostThreadPostInput{
+		ChannelID:  session.MattermostChannelID,
+		RootPostID: rootPostID,
+		Message:    agentRequestAuditMessage(requester, target, message),
+		Props: map[string]any{
+			"matter_codex_event": "agent_request",
+			"source_agent":       strings.TrimPrefix(requester, "@"),
+			"target_agent":       strings.TrimPrefix(target, "@"),
+		},
+	})
+}
+
 func (svc *AgentSessionService) postSessionThreadMessageOnly(ctx context.Context, session entity.AgentSession, channelID string, rootPostID string, message string) (MattermostPostRef, error) {
 	chunks := svc.splitMattermostThreadMessage(ctx, message)
 	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, session.RoleID)
@@ -711,6 +748,30 @@ func (svc *AgentSessionService) postSessionThreadMessageOnly(ctx context.Context
 		}
 	}
 	return ref, nil
+}
+
+func agentRequestAuditMessage(requester string, target string, message string) string {
+	fence := markdownFence(strings.TrimSpace(message))
+	var body strings.Builder
+	body.WriteString("matter-codex: ")
+	body.WriteString(requester)
+	body.WriteString(" запустил ")
+	body.WriteString(target)
+	body.WriteString(" с prompt:\n\n")
+	body.WriteString(fence)
+	body.WriteString("markdown\n")
+	body.WriteString(strings.TrimSpace(message))
+	body.WriteString("\n")
+	body.WriteString(fence)
+	return body.String()
+}
+
+func markdownFence(body string) string {
+	fence := "```"
+	for strings.Contains(body, fence) {
+		fence += "`"
+	}
+	return fence
 }
 
 func (svc *AgentSessionService) updateSessionThreadMessageOnly(ctx context.Context, session entity.AgentSession, channelID string, rootPostID string, postID string, message string) (MattermostPostRef, error) {

@@ -861,6 +861,44 @@ func TestChatRunIgnoresNoTriggerAgentBotMention(t *testing.T) {
 	}
 }
 
+func TestChatRunIgnoresMatterCodexSystemPost(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "system-audit-1",
+		RootPostID: "post-1",
+		UserID:     "owner-user",
+		UserName:   "owner",
+		Message:    "matter-codex: @manager запустил @sre с prompt:\n\n```markdown\n@sre deploy\n```",
+		Props:      map[string]any{"matter_codex_event": "agent_request"},
+	})
+
+	if !result.Ignored || result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 || len(store.threadContexts) != 0 {
+		t.Fatalf("system audit post should not start runtime or create thread context, runner=%#v turns=%#v contexts=%#v", runner.sessionRuns, store.sessionTurns, store.threadContexts)
+	}
+}
+
 func TestChatRunRoutesAgentBotMentionToMentionedAgent(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
