@@ -38,8 +38,14 @@ mattercodex_require_commands envsubst
 
 TEMPLATE_DIR="$REPO_ROOT/deploy/k8s/bot-service"
 
-rm -f "$RENDER_DIR/15-runtime-limits.yaml"
+rm -f "$RENDER_DIR/02-image-registry.yaml" "$RENDER_DIR/03-kaniko-context-pvc.yaml" "$RENDER_DIR/15-runtime-limits.yaml"
 
+if mattercodex_bool "$MATTERCODEX_IMAGE_REGISTRY_MANAGED"; then
+  mattercodex_render_template "$TEMPLATE_DIR/image-registry.yaml.tpl" "$RENDER_DIR/02-image-registry.yaml"
+fi
+if [ "$MATTERCODEX_IMAGE_BUILD_STRATEGY" = "kaniko" ]; then
+  mattercodex_render_template "$TEMPLATE_DIR/kaniko-context-pvc.yaml.tpl" "$RENDER_DIR/03-kaniko-context-pvc.yaml"
+fi
 mattercodex_render_template "$TEMPLATE_DIR/configmap.yaml.tpl" "$RENDER_DIR/10-configmap.yaml"
 if mattercodex_bool "$MATTERCODEX_RUNTIME_ENABLED" && mattercodex_bool "$MATTERCODEX_RUNTIME_LIMITS_ENABLED"; then
   mattercodex_render_template "$TEMPLATE_DIR/runtime-limits.yaml.tpl" "$RENDER_DIR/15-runtime-limits.yaml"

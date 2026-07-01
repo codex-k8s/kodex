@@ -48,11 +48,21 @@
 - `MATTERCODEX_DATABASE_DSN` - optional, берется из Kubernetes Secret `mattermost-datasource` для storage/admin-команд;
 - `MATTERCODEX_STORAGE_MIGRATIONS_ENABLED` - optional, включает Go migrations на старте;
 - `MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES` - optional, лимит размера GitHub webhook payload;
+- `MATTERCODEX_IMAGE_BUILD_STRATEGY` - optional, способ сборки image в remote deploy; default `kaniko`; legacy `docker` требует `docker` или `nerdctl` прямо на целевом сервере;
+- `MATTERCODEX_IMAGE_TAG` - optional, tag для bot-service и agent-runner image; при `kaniko` и `--apply` без явного значения deploy-скрипт генерирует уникальный tag из commit и UTC timestamp;
+- `MATTERCODEX_IMAGE_REPOSITORY_PREFIX` - optional, registry path prefix для image;
+- `MATTERCODEX_IMAGE_REGISTRY_MANAGED` - optional, при `true` render/apply создает встроенный MatterCodex registry в namespace;
+- `MATTERCODEX_IMAGE_REGISTRY_NAME`, `MATTERCODEX_IMAGE_REGISTRY_IMAGE`, `MATTERCODEX_IMAGE_REGISTRY_STORAGE_SIZE`, `MATTERCODEX_IMAGE_REGISTRY_HOST_PORT` - optional, параметры встроенного registry;
+- `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST` - optional, registry host, через который kubelet тянет image; default `localhost:<host-port>` для single-server контура;
+- `MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST` - optional, registry host, в который Kaniko push'ит image изнутри кластера; default Kubernetes service DNS;
+- `MATTERCODEX_KANIKO_IMAGE`, `MATTERCODEX_KANIKO_CONTEXT_PVC`, `MATTERCODEX_KANIKO_CONTEXT_STORAGE_SIZE` - optional, параметры Kaniko executor и PVC build context;
+- `MATTERCODEX_KANIKO_CPU_REQUEST`, `MATTERCODEX_KANIKO_CPU_LIMIT`, `MATTERCODEX_KANIKO_MEMORY_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_LIMIT` - optional, ресурсы Kaniko Job;
+- `MATTERCODEX_KANIKO_JOB_TTL_SECONDS`, `MATTERCODEX_KANIKO_ACTIVE_DEADLINE_SECONDS` - optional, lifecycle limits Kaniko Job;
 - `MATTERCODEX_RUNTIME_ENABLED` - optional, включает Kubernetes runtime adapter;
 - `MATTERCODEX_RUNTIME_NAMESPACE` - optional, namespace для Job/PVC runtime-запусков;
 - `MATTERCODEX_RUNTIME_SMOKE_IMAGE` - optional, legacy image setting; текущий smoke Job запускается через `MATTERCODEX_AGENT_RUNNER_IMAGE`;
-- `MATTERCODEX_AGENT_RUNNER_IMAGE` - optional, image для smoke/developer/reviewer/auth Job; текущий MVP default `matter-codex-agent-runner:dev`;
-- `MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE` - optional, при `true` install script собирает agent-runner image на целевом сервере перед deploy;
+- `MATTERCODEX_AGENT_RUNNER_IMAGE` - optional, image для smoke/developer/reviewer/auth Job; текущий default строится от `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST`;
+- `MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE` - optional, при `true` install script собирает agent-runner image через выбранную `MATTERCODEX_IMAGE_BUILD_STRATEGY` перед deploy;
 - `MATTERCODEX_CODEX_PACKAGE` - optional, npm package spec Codex CLI, который устанавливается в agent-runner image при сборке;
 - `MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE` - optional, размер PVC рабочего каталога smoke-запуска;
 - `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
@@ -78,7 +88,8 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 
 В render directory попадают:
 
-- code ConfigMap с Go source archive (`go.mod`, `go.sum`, `libs/go/i18n`, `services/external/bot-service`);
+- встроенный registry manifest, если `MATTERCODEX_IMAGE_REGISTRY_MANAGED=true`;
+- PVC для Kaniko build context, если `MATTERCODEX_IMAGE_BUILD_STRATEGY=kaniko`;
 - config ConfigMap;
 - ResourceQuota/LimitRange для runtime namespace, если `MATTERCODEX_RUNTIME_LIMITS_ENABLED=true`;
 - ServiceAccount/RBAC для bot-service runtime adapter и agent runner;
@@ -86,7 +97,9 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 - Service;
 - Ingress.
 
-Agent runner image не попадает в render directory. При `--apply` deploy script по умолчанию собирает отдельный image из `services/jobs/agent-runner/Dockerfile`. Если на целевом сервере есть `docker` или `nerdctl`, сборка идет там; если builder'а на сервере нет, но доступен remote `k3s ctr`/`ctr` import и локальный Docker, script собирает image локально и импортирует его в Kubernetes runtime по SSH.
+При `--apply` remote deploy по умолчанию использует `MATTERCODEX_IMAGE_BUILD_STRATEGY=kaniko`: локально создается только tar build context, он передается по SSH во временный pod с PVC, а image собирается Kaniko Job внутри кластера и push'ится во встроенный MatterCodex registry. Kubelet тянет готовые image из этого registry через `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST`. Гигабайтные `docker save` archive через локальную сеть не передаются.
+
+Legacy strategy `MATTERCODEX_IMAGE_BUILD_STRATEGY=docker` оставлена только для контуров, где `docker` или `nerdctl` есть прямо на целевом сервере. Remote installer не делает локальный Docker build/import fallback.
 
 Agent runner image содержит явный non-root user UID/GID `10001`. Runtime Job дополнительно задает pod/container `securityContext`: `runAsNonRoot`, `runAsUser`, `runAsGroup`, `fsGroup`, `seccompProfile: RuntimeDefault`, dropped capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`. Writable paths отдаются через volumes: `/workspace` для run PVC, `/codex-home` для device-code auth, `/home/matter-codex` для `gh`/npm/cache и `/tmp` для временных файлов.
 

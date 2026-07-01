@@ -38,10 +38,12 @@
 | `ssh` | remote deploy wrapper | выполнение Kubernetes операций непосредственно на целевом сервере |
 | `kubectl` | bootstrap/deploy wrapper | применение manifests и rollout/smoke diagnostics в MVP |
 | `envsubst` | manifest render | шаблонизация YAML до появления Go deploy renderer |
-| `base64`, `tar` | secret manifest render и image build context | подготовка Secret data и временного build context для remote image build/import без вывода секретов |
+| `base64`, `tar` | secret manifest render и image build context | подготовка Secret data и временного build context для Kaniko remote image build без вывода секретов |
 | `mmctl` | Mattermost bootstrap | локальное администрирование Mattermost pod без вывода секретов |
 | `openssl` | bootstrap secrets | генерация bootstrap секретов |
-| `docker` или `nerdctl` | bot-service и agent-runner image build | сборка подготовленных runtime images на MVP-контуре без registry pipeline |
+| `gcr.io/kaniko-project/executor` | bot-service и agent-runner image build | default in-cluster image build без Docker daemon и без передачи готовых image с локальной машины |
+| `registry:2` | MatterCodex image registry | single-server локальный registry для Kaniko push и kubelet pull через hostPort |
+| `docker` или `nerdctl` | legacy remote image build | явный fallback только при `MATTERCODEX_IMAGE_BUILD_STRATEGY=docker` и наличии builder на целевом сервере |
 
 ## Agent runner tools - in use
 
@@ -97,9 +99,9 @@
 | `golang:1.26-alpine` | Go build stages | build layer для bot-service и agent-runner binaries; не используется как production runtime |
 | `golang:1.26-alpine` | agent-runner Go toolchain/tools stage | поставляет Go 1.26 и Go CLI tools в agent-runner runtime для свежего codegen/lint toolchain |
 | `alpine:3.22` | bot-service prod Dockerfile | минимальный runtime слой для собранного bot-service binary |
-| `matter-codex-bot-service:dev` | bot-service MVP runtime | локально/удаленно собранный image с готовым `bot-service` binary |
+| `localhost:5001/matter-codex/bot-service:<tag>` | bot-service MVP runtime | image, собранный Kaniko в кластере и опубликованный во встроенный MatterCodex registry |
 | `node:24-alpine` | agent-runner Dockerfile base | runtime слой с npm для установки Codex CLI, Vue/TS/OpenAPI/AsyncAPI tooling и operator/developer CLI tools |
-| `matter-codex-agent-runner:dev` | agent runner MVP runtime | локально собранный non-root image с `matter-codex-agent-runner`, Codex CLI, GitHub/Kubernetes/DB/WebSocket clients, Go toolchain, Vue/TS и API codegen tooling для chat/session agents |
+| `localhost:5001/matter-codex/agent-runner:<tag>` | agent runner MVP runtime | non-root image, собранный Kaniko в кластере, с `matter-codex-agent-runner`, Codex CLI, GitHub/Kubernetes/DB/WebSocket clients, Go toolchain, Vue/TS и API codegen tooling для chat/session agents |
 | `quay.io/oauth2-proxy/oauth2-proxy` | Mattermost public gate | Google OAuth allowlist перед публичным Mattermost URL без встраивания OAuth-логики в Mattermost manifests |
 | `mattermost/mattermost-team-edition` | Mattermost | self-hosted Mattermost для control surface |
 | `postgres:16-alpine` | Mattermost PostgreSQL | single-server MVP БД Mattermost |
