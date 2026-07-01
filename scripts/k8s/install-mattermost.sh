@@ -58,6 +58,18 @@ fi
 
 DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
 
+enable_mattermost_user_access_tokens() {
+  mattercodex_log "проверяется Mattermost user access token config"
+  local mattermost_pod current
+  mattermost_pod="$(kubectl -n "$MATTERCODEX_NAMESPACE" get pod -l app.kubernetes.io/name=mattermost -o jsonpath='{.items[0].metadata.name}')"
+  current="$(kubectl -n "$MATTERCODEX_NAMESPACE" exec "$mattermost_pod" -c mattermost -- mmctl --local --suppress-warnings config get ServiceSettings.EnableUserAccessTokens 2>/dev/null | tail -n 1 | tr -d '\r')"
+  if [ "$current" = "true" ]; then
+    return
+  fi
+  kubectl -n "$MATTERCODEX_NAMESPACE" exec "$mattermost_pod" -c mattermost -- mmctl --local --suppress-warnings config set ServiceSettings.EnableUserAccessTokens true >/dev/null
+  kubectl -n "$MATTERCODEX_NAMESPACE" exec "$mattermost_pod" -c mattermost -- mmctl --local --suppress-warnings config reload >/dev/null
+}
+
 mattercodex_log "применяются манифесты Mattermost"
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/10-postgres.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/20-mattermost.yaml" >/dev/null
@@ -85,6 +97,8 @@ SQL
   else
     mattercodex_log "Mattermost schema migration для лимита сообщений уже применена"
   fi
+
+  enable_mattermost_user_access_tokens
 else
   mattercodex_log "Mattermost schema migration для лимита сообщений пропущена в dry-run"
 fi

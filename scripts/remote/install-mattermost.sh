@@ -60,6 +60,18 @@ APPLY_DRY_RUN_MODE="$DRY_RUN_MODE"
 NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_NAMESPACE")"
 REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
 
+mattercodex_remote_enable_mattermost_user_access_tokens() {
+  mattercodex_log "проверяется Mattermost user access token config"
+  mattercodex_ssh "set -eu
+    MATTERMOST_POD=\"\$($REMOTE_KUBECTL -n $NAMESPACE_Q get pod -l app.kubernetes.io/name=mattermost -o jsonpath='{.items[0].metadata.name}')\"
+    CURRENT=\"\$($REMOTE_KUBECTL -n $NAMESPACE_Q exec \"\$MATTERMOST_POD\" -c mattermost -- mmctl --local --suppress-warnings config get ServiceSettings.EnableUserAccessTokens 2>/dev/null | tail -n 1 | tr -d '\r')\"
+    if [ \"\$CURRENT\" = 'true' ]; then
+      exit 0
+    fi
+    $REMOTE_KUBECTL -n $NAMESPACE_Q exec \"\$MATTERMOST_POD\" -c mattermost -- mmctl --local --suppress-warnings config set ServiceSettings.EnableUserAccessTokens true >/dev/null
+    $REMOTE_KUBECTL -n $NAMESPACE_Q exec \"\$MATTERMOST_POD\" -c mattermost -- mmctl --local --suppress-warnings config reload >/dev/null"
+}
+
 if [ "$DRY_RUN_MODE" = "server" ] && ! mattercodex_ssh "$REMOTE_KUBECTL get namespace $NAMESPACE_Q >/dev/null 2>&1"; then
   mattercodex_log "namespace еще не создан; Mattermost manifests проверяются через remote client dry-run"
   APPLY_DRY_RUN_MODE="client"
@@ -170,6 +182,8 @@ SQL
   else
     mattercodex_log "Mattermost schema migration для лимита сообщений уже применена"
   fi
+
+  mattercodex_remote_enable_mattermost_user_access_tokens
 elif [ "$DRY_RUN_MODE" = "server" ] || [ "$DRY_RUN_MODE" = "client" ]; then
   mattercodex_log "Mattermost schema migration для лимита сообщений пропущена в dry-run"
 fi

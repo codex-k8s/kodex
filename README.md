@@ -39,6 +39,8 @@ Bot-service при этом все равно режет исходящие thre
 
 Это осознанное изменение схемы стороннего приложения. Перед подготовкой matter-codex к opensource и перед обновлением Mattermost это решение надо отдельно пересмотреть.
 
+Также `scripts/remote/install-mattermost.sh --apply` проверяет и включает `ServiceSettings.EnableUserAccessTokens=true`. Это нужно для role bot identities: агентские ответы публикуются от отдельных Mattermost users/bots через user access tokens. Если настройка выключена, Mattermost отклоняет эти token-ы, и bot-service вынужденно публикует сообщения от сервисного `matter-codex`.
+
 ## Bot-Service
 
 Health-only deploy без Mattermost token:
