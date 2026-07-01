@@ -1232,9 +1232,13 @@ func chatRuntimeStore() *fakeAdminStore {
 }
 
 type fakeThreadPublisher struct {
-	posts   []MattermostThreadPostInput
-	updates []MattermostThreadUpdateInput
-	cards   []MattermostCard
+	posts                []MattermostThreadPostInput
+	updates              []MattermostThreadUpdateInput
+	cards                []MattermostCard
+	postWithTokenErr     error
+	updateWithTokenErr   error
+	postWithTokenCalls   int
+	updateWithTokenCalls int
 }
 
 func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
@@ -1243,6 +1247,10 @@ func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input
 }
 
 func (publisher *fakeThreadPublisher) PostThreadMessageWithToken(_ context.Context, _ string, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	publisher.postWithTokenCalls++
+	if publisher.postWithTokenErr != nil {
+		return MattermostPostRef{}, publisher.postWithTokenErr
+	}
 	return publisher.PostThreadMessage(context.Background(), input)
 }
 
@@ -1252,6 +1260,10 @@ func (publisher *fakeThreadPublisher) UpdateThreadMessage(_ context.Context, inp
 }
 
 func (publisher *fakeThreadPublisher) UpdateThreadMessageWithToken(_ context.Context, _ string, input MattermostThreadUpdateInput) (MattermostPostRef, error) {
+	publisher.updateWithTokenCalls++
+	if publisher.updateWithTokenErr != nil {
+		return MattermostPostRef{}, publisher.updateWithTokenErr
+	}
 	return publisher.UpdateThreadMessage(context.Background(), input)
 }
 

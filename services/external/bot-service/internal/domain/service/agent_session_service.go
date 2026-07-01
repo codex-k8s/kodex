@@ -723,18 +723,7 @@ func (svc *AgentSessionService) postAgentRequestAudit(ctx context.Context, sessi
 
 func (svc *AgentSessionService) postSessionThreadMessageOnly(ctx context.Context, session entity.AgentSession, channelID string, rootPostID string, message string) (MattermostPostRef, error) {
 	chunks := svc.splitMattermostThreadMessage(ctx, message)
-	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, session.RoleID)
-	post := svc.cfg.ThreadPublisher.PostThreadMessage
-	if err != nil || identity.TokenSecretRef == "" {
-		post = svc.cfg.ThreadPublisher.PostThreadMessage
-	} else {
-		secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, identity.TokenSecretRef)
-		if err == nil {
-			post = func(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
-				return svc.cfg.ThreadPublisher.PostThreadMessageWithToken(ctx, secret.Token, input)
-			}
-		}
-	}
+	roleToken, hasRoleToken := svc.sessionRoleMattermostToken(ctx, session)
 	var ref MattermostPostRef
 	for _, chunk := range chunks {
 		input := MattermostThreadPostInput{
@@ -742,7 +731,14 @@ func (svc *AgentSessionService) postSessionThreadMessageOnly(ctx context.Context
 			RootPostID: rootPostID,
 			Message:    chunk,
 		}
-		ref, err = post(ctx, input)
+		var err error
+		if hasRoleToken {
+			ref, err = svc.cfg.ThreadPublisher.PostThreadMessageWithToken(ctx, roleToken, input)
+			if err == nil {
+				continue
+			}
+		}
+		ref, err = svc.cfg.ThreadPublisher.PostThreadMessage(ctx, input)
 		if err != nil {
 			return MattermostPostRef{}, err
 		}
@@ -789,7 +785,23 @@ func (svc *AgentSessionService) updateSessionThreadMessageOnly(ctx context.Conte
 	if err != nil {
 		return svc.cfg.ThreadPublisher.UpdateThreadMessage(ctx, input)
 	}
-	return svc.cfg.ThreadPublisher.UpdateThreadMessageWithToken(ctx, secret.Token, input)
+	ref, err := svc.cfg.ThreadPublisher.UpdateThreadMessageWithToken(ctx, secret.Token, input)
+	if err == nil {
+		return ref, nil
+	}
+	return svc.cfg.ThreadPublisher.UpdateThreadMessage(ctx, input)
+}
+
+func (svc *AgentSessionService) sessionRoleMattermostToken(ctx context.Context, session entity.AgentSession) (string, bool) {
+	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, session.RoleID)
+	if err != nil || strings.TrimSpace(identity.TokenSecretRef) == "" {
+		return "", false
+	}
+	secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, identity.TokenSecretRef)
+	if err != nil || strings.TrimSpace(secret.Token) == "" {
+		return "", false
+	}
+	return secret.Token, true
 }
 
 func (svc *AgentSessionService) turnStartedStatusMessage(ctx context.Context, session entity.AgentSession, runID string, openAIAccount string, codexLimits string) string {

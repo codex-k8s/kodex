@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -78,6 +79,87 @@ func TestAgentSessionUpdateTurnStatusEditsSamePost(t *testing.T) {
 	}
 	if publisher.updates[0].PostID != first.PostID || publisher.updates[0].Message != "Проверяю результат" {
 		t.Fatalf("update = %#v", publisher.updates[0])
+	}
+}
+
+func TestAgentSessionPostFallsBackWhenRoleTokenIsInvalid(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {
+			ID:               1,
+			ProjectID:        1,
+			RoleID:           1,
+			Username:         "manager",
+			MattermostUserID: "manager-user",
+			TokenSecretRef:   "role-token-secret",
+			Status:           "configured",
+		},
+	}
+	runner.botTokenSecrets["role-token-secret"] = "expired-role-token"
+	publisher.postWithTokenErr = errors.New("invalid or expired session")
+	store.agentSessions["session-1"] = withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
+	store.sessionTurns[0].Status = agentSessionTurnRunning
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	ref, err := svc.UpdateTurnStatus(context.Background(), "session-1", "session-token", "Планирую работу")
+	if err != nil {
+		t.Fatalf("UpdateTurnStatus() error = %v", err)
+	}
+	if ref.PostID != "reply-root-1" {
+		t.Fatalf("ref = %#v", ref)
+	}
+	if publisher.postWithTokenCalls != 1 {
+		t.Fatalf("postWithTokenCalls = %d", publisher.postWithTokenCalls)
+	}
+	if len(publisher.posts) != 1 || publisher.posts[0].Message != "Планирую работу" {
+		t.Fatalf("fallback posts = %#v", publisher.posts)
+	}
+}
+
+func TestAgentSessionUpdateFallsBackWhenRoleTokenIsInvalid(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {
+			ID:               1,
+			ProjectID:        1,
+			RoleID:           1,
+			Username:         "manager",
+			MattermostUserID: "manager-user",
+			TokenSecretRef:   "role-token-secret",
+			Status:           "configured",
+		},
+	}
+	runner.botTokenSecrets["role-token-secret"] = "expired-role-token"
+	publisher.updateWithTokenErr = errors.New("invalid or expired session")
+	store.agentSessions["session-1"] = withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
+	store.sessionTurns[0].Status = agentSessionTurnRunning
+	store.sessionTurns[0].MattermostStatusPostID = "status-post-1"
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	ref, err := svc.UpdateTurnStatus(context.Background(), "session-1", "session-token", "Проверяю результат")
+	if err != nil {
+		t.Fatalf("UpdateTurnStatus() error = %v", err)
+	}
+	if ref.PostID != "status-post-1" {
+		t.Fatalf("ref = %#v", ref)
+	}
+	if publisher.updateWithTokenCalls != 1 {
+		t.Fatalf("updateWithTokenCalls = %d", publisher.updateWithTokenCalls)
+	}
+	if len(publisher.updates) != 1 || publisher.updates[0].Message != "Проверяю результат" {
+		t.Fatalf("fallback updates = %#v", publisher.updates)
 	}
 }
 
