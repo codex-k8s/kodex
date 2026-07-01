@@ -31,6 +31,7 @@ spec:
             - "--cache-repo=${MATTERCODEX_KANIKO_CACHE_REPO}"
             - "--insecure"
             - "--insecure-registry=${MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST}"
+            - "--skip-unused-stages=true"
             - "--cleanup"
 ${MATTERCODEX_KANIKO_EXTRA_ARGS_YAML}
           volumeMounts:
