@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,6 +47,7 @@ type AgentSessionServiceConfig struct {
 	ThreadPublisher    MattermostThreadPublisher
 	ConversationReader MattermostConversationReader
 	TurnDispatcher     AgentTurnDispatcher
+	MenuActionURL      string
 	StorageReady       bool
 	RuntimeReady       bool
 }
@@ -194,7 +196,7 @@ func (svc *AgentSessionService) ClaimNextTurn(ctx context.Context, sessionKey st
 		ExtendTTLSeconds:     session.TTLSeconds,
 	})
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: agentSessionTurnRunning})
-	_, _ = svc.upsertTurnStatusMessage(ctx, session, turn, svc.turnStartedStatusMessage(ctx, session, turn.RunID, "", ""))
+	_, _ = svc.upsertTurnStatusCard(ctx, session, turn, agentSessionTurnRunning, svc.turnStartedStatusMessage(ctx, session, turn.RunID, "", ""))
 	return AgentSessionTurnClaim{
 		HasTurn:        true,
 		TurnID:         turn.ID,
@@ -248,7 +250,7 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 		prURL = command.Artifacts["pr-url"]
 	}
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
-	_, _ = svc.upsertTurnStatusMessage(ctx, session, turn, svc.turnCompletionStatusMessage(ctx, session, status, turn.RunID, command.Artifacts))
+	_, _ = svc.upsertTurnStatusCard(ctx, session, turn, status, svc.turnCompletionStatusMessage(ctx, session, status, turn.RunID, command.Artifacts))
 	if err := svc.postTurnResult(ctx, session, turn, status, command); err != nil {
 		return err
 	}
@@ -330,7 +332,7 @@ func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, comma
 			}
 			_, _ = svc.cfg.Store.ResetAgentSessionRuntime(ctx, session.SessionKey, agentSessionStatusIdle)
 		}
-		_, _ = svc.upsertTurnStatusMessage(ctx, session, canceled, svc.turnStatusMessage(agentSessionTurnCanceled, canceled.RunID, svc.sessionOpenAIAccountName(ctx, session), ""))
+		_, _ = svc.upsertTurnStatusCard(ctx, session, canceled, agentSessionTurnCanceled, svc.turnStatusMessage(ctx, session, agentSessionTurnCanceled, canceled.RunID, svc.sessionOpenAIAccountName(ctx, session), ""))
 		stopped++
 	}
 	message := svc.t("chat.session.turn.stop.result", map[string]any{"Stopped": stopped, "Skipped": skipped})
@@ -401,7 +403,7 @@ func (svc *AgentSessionService) PostThreadUpdate(ctx context.Context, sessionKey
 	if svc.cfg.ThreadPublisher == nil {
 		return AgentSessionPostResult{}, fmt.Errorf("Mattermost thread publisher is not configured")
 	}
-	ref, err := svc.postSessionThreadMessage(ctx, session, rootPostID, message)
+	ref, err := svc.postSessionThreadMessageWithProps(ctx, session, rootPostID, agentNoTriggerMessage(message), agentProgressPostProps(session, 0, ""))
 	if err != nil {
 		return AgentSessionPostResult{}, err
 	}
@@ -424,7 +426,7 @@ func (svc *AgentSessionService) UpdateTurnStatus(ctx context.Context, sessionKey
 	if err != nil {
 		return AgentSessionPostResult{}, err
 	}
-	ref, err := svc.upsertTurnStatusMessage(ctx, session, turn, message)
+	ref, err := svc.postTurnProgressUpdate(ctx, session, turn, message)
 	if err != nil {
 		return AgentSessionPostResult{}, err
 	}
@@ -450,9 +452,9 @@ func (svc *AgentSessionService) UpdateTurnSystemStatus(ctx context.Context, sess
 	runID := defaultString(strings.TrimSpace(command.RunID), turn.RunID)
 	message := svc.turnStartedStatusMessage(ctx, session, runID, command.OpenAIAccount, command.CodexLimits)
 	if phase == agentSessionTurnFailed || phase == agentSessionTurnSucceeded {
-		message = svc.turnStatusMessage(phase, runID, command.OpenAIAccount, command.CodexLimits)
+		message = svc.turnStatusMessage(ctx, session, phase, runID, command.OpenAIAccount, command.CodexLimits)
 	}
-	ref, err := svc.upsertTurnStatusMessage(ctx, session, turn, message)
+	ref, err := svc.upsertTurnStatusCard(ctx, session, turn, phase, message)
 	if err != nil {
 		return AgentSessionPostResult{}, err
 	}
@@ -650,7 +652,7 @@ func (svc *AgentSessionService) turnRequesterIsProjectBot(ctx context.Context, p
 	return false
 }
 
-func (svc *AgentSessionService) upsertTurnStatusMessage(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, message string) (MattermostPostRef, error) {
+func (svc *AgentSessionService) upsertTurnStatusCard(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, status string, message string) (MattermostPostRef, error) {
 	if svc.cfg.ThreadPublisher == nil {
 		return MattermostPostRef{}, fmt.Errorf("Mattermost thread publisher is not configured")
 	}
@@ -663,10 +665,11 @@ func (svc *AgentSessionService) upsertTurnStatusMessage(ctx context.Context, ses
 	if message == "" {
 		return MattermostPostRef{}, fmt.Errorf("message is required")
 	}
+	card := svc.turnStatusCard(ctx, session, turn, status, channelID, rootPostID, message)
 	var ref MattermostPostRef
 	var err error
 	if strings.TrimSpace(turn.MattermostStatusPostID) == "" {
-		ref, err = svc.postSessionThreadMessageOnly(ctx, session, channelID, rootPostID, message)
+		ref, err = svc.cfg.ThreadPublisher.PostThreadCard(ctx, card)
 		if err != nil {
 			return MattermostPostRef{}, err
 		}
@@ -678,7 +681,8 @@ func (svc *AgentSessionService) upsertTurnStatusMessage(ctx context.Context, ses
 			return MattermostPostRef{}, err
 		}
 	} else {
-		ref, err = svc.updateSessionThreadMessageOnly(ctx, session, channelID, rootPostID, turn.MattermostStatusPostID, message)
+		card.PostID = turn.MattermostStatusPostID
+		ref, err = svc.cfg.ThreadPublisher.UpdateThreadCard(ctx, card)
 		if err != nil {
 			return MattermostPostRef{}, err
 		}
@@ -686,8 +690,90 @@ func (svc *AgentSessionService) upsertTurnStatusMessage(ctx context.Context, ses
 	return ref, nil
 }
 
+func (svc *AgentSessionService) turnStatusCard(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, status string, channelID string, rootPostID string, message string) MattermostCard {
+	card := MattermostCard{
+		ChannelID:  channelID,
+		RootPostID: rootPostID,
+		ActionURL:  svc.cfg.MenuActionURL,
+		Message:    "matter-codex agent turn status #notrigger",
+		Props:      agentStatusPostProps(session, turn, status),
+		Color:      turnStatusColor(status),
+		Title:      svc.t("chat.session.status.title", map[string]any{"Agent": svc.sessionMattermostUsername(ctx, session)}),
+		Text:       message,
+	}
+	if status == agentSessionTurnRunning && strings.TrimSpace(svc.cfg.MenuActionURL) != "" {
+		card.Actions = []MattermostCardAction{{
+			ID:      "stopturn",
+			Name:    svc.t("chat.session.turn.stop.action", nil),
+			Tooltip: svc.t("chat.session.turn.stop.tooltip", nil),
+			Style:   "danger",
+			Context: map[string]any{
+				"kind":     "agent_turn",
+				"action":   "stop_turn",
+				"turn_ids": strconv.FormatInt(turn.ID, 10),
+			},
+		}}
+	}
+	return card
+}
+
+func turnStatusColor(status string) string {
+	switch status {
+	case agentSessionTurnSucceeded:
+		return "#2f8f46"
+	case agentSessionTurnFailed:
+		return "#d24b40"
+	case agentSessionTurnCanceled:
+		return "#9aa4b2"
+	default:
+		return "#1c58d9"
+	}
+}
+
+func agentStatusPostProps(session entity.AgentSession, turn entity.AgentSessionTurn, status string) map[string]any {
+	return map[string]any{
+		"matter_codex_event": "agent_status",
+		"session_key":        session.SessionKey,
+		"role_id":            session.RoleID,
+		"turn_id":            turn.ID,
+		"run_id":             turn.RunID,
+		"status":             status,
+	}
+}
+
+func (svc *AgentSessionService) postTurnProgressUpdate(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, message string) (MattermostPostRef, error) {
+	channelID := defaultString(turn.MattermostChannelID, session.MattermostChannelID)
+	rootPostID := defaultString(turn.MattermostRootPostID, session.MattermostRootPostID)
+	if channelID == "" || rootPostID == "" {
+		return MattermostPostRef{}, fmt.Errorf("session turn is not bound to a Mattermost thread")
+	}
+	return svc.postSessionThreadMessageOnlyWithProps(ctx, session, channelID, rootPostID, agentNoTriggerMessage(message), agentProgressPostProps(session, turn.ID, turn.RunID))
+}
+
+func agentProgressPostProps(session entity.AgentSession, turnID int64, runID string) map[string]any {
+	return map[string]any{
+		"matter_codex_event": "agent_progress",
+		"session_key":        session.SessionKey,
+		"role_id":            session.RoleID,
+		"turn_id":            turnID,
+		"run_id":             runID,
+	}
+}
+
+func agentNoTriggerMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if message == "" || hasMattermostNoTriggerMarker(message) {
+		return message
+	}
+	return message + "\n\n#notrigger"
+}
+
 func (svc *AgentSessionService) postSessionThreadMessage(ctx context.Context, session entity.AgentSession, rootPostID string, message string) (MattermostPostRef, error) {
-	return svc.postSessionThreadMessageOnly(ctx, session, session.MattermostChannelID, rootPostID, message)
+	return svc.postSessionThreadMessageWithProps(ctx, session, rootPostID, message, nil)
+}
+
+func (svc *AgentSessionService) postSessionThreadMessageWithProps(ctx context.Context, session entity.AgentSession, rootPostID string, message string, props map[string]any) (MattermostPostRef, error) {
+	return svc.postSessionThreadMessageOnlyWithProps(ctx, session, session.MattermostChannelID, rootPostID, message, props)
 }
 
 func (svc *AgentSessionService) postAgentRequestAudit(ctx context.Context, session entity.AgentSession, rootPostID string, requesterUserName string, targetRoleName string, message string) (MattermostPostRef, error) {
@@ -722,6 +808,10 @@ func (svc *AgentSessionService) postAgentRequestAudit(ctx context.Context, sessi
 }
 
 func (svc *AgentSessionService) postSessionThreadMessageOnly(ctx context.Context, session entity.AgentSession, channelID string, rootPostID string, message string) (MattermostPostRef, error) {
+	return svc.postSessionThreadMessageOnlyWithProps(ctx, session, channelID, rootPostID, message, nil)
+}
+
+func (svc *AgentSessionService) postSessionThreadMessageOnlyWithProps(ctx context.Context, session entity.AgentSession, channelID string, rootPostID string, message string, props map[string]any) (MattermostPostRef, error) {
 	chunks := svc.splitMattermostThreadMessage(ctx, message)
 	roleToken, hasRoleToken := svc.sessionRoleMattermostToken(ctx, session)
 	var ref MattermostPostRef
@@ -730,6 +820,7 @@ func (svc *AgentSessionService) postSessionThreadMessageOnly(ctx context.Context
 			ChannelID:  channelID,
 			RootPostID: rootPostID,
 			Message:    chunk,
+			Props:      props,
 		}
 		var err error
 		if hasRoleToken {
@@ -805,7 +896,7 @@ func (svc *AgentSessionService) sessionRoleMattermostToken(ctx context.Context, 
 }
 
 func (svc *AgentSessionService) turnStartedStatusMessage(ctx context.Context, session entity.AgentSession, runID string, openAIAccount string, codexLimits string) string {
-	return svc.turnStatusMessage(agentSessionTurnRunning, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
+	return svc.turnStatusMessage(ctx, session, agentSessionTurnRunning, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
 }
 
 func (svc *AgentSessionService) turnCompletionStatusMessage(ctx context.Context, session entity.AgentSession, status string, runID string, artifacts map[string]string) string {
@@ -815,11 +906,14 @@ func (svc *AgentSessionService) turnCompletionStatusMessage(ctx context.Context,
 		openAIAccount = strings.TrimSpace(artifacts["openai-account"])
 		codexLimits = strings.TrimSpace(artifacts["codex-limits"])
 	}
-	return svc.turnStatusMessage(status, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
+	return svc.turnStatusMessage(ctx, session, status, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
 }
 
-func (svc *AgentSessionService) turnStatusMessage(status string, runID string, openAIAccount string, codexLimits string) string {
+func (svc *AgentSessionService) turnStatusMessage(ctx context.Context, session entity.AgentSession, status string, runID string, openAIAccount string, codexLimits string) string {
 	data := map[string]any{"RunID": runID}
+	if agent := strings.TrimSpace(svc.sessionMattermostUsername(ctx, session)); agent != "" {
+		data["Agent"] = agent
+	}
 	if strings.TrimSpace(openAIAccount) != "" {
 		data["OpenAIAccount"] = strings.TrimSpace(openAIAccount)
 	}

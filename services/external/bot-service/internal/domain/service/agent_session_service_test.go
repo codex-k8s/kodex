@@ -19,6 +19,7 @@ func TestAgentSessionClaimCreatesInitialStatusPost(t *testing.T) {
 		Store:           store,
 		RuntimeRunner:   runner,
 		ThreadPublisher: publisher,
+		MenuActionURL:   "https://mattermost.example/actions",
 		StorageReady:    true,
 		RuntimeReady:    true,
 	})
@@ -30,28 +31,39 @@ func TestAgentSessionClaimCreatesInitialStatusPost(t *testing.T) {
 	if !claim.HasTurn || claim.TurnID != 1 {
 		t.Fatalf("claim = %#v", claim)
 	}
-	if len(publisher.posts) != 1 {
-		t.Fatalf("posts = %#v", publisher.posts)
+	if len(publisher.cards) != 1 {
+		t.Fatalf("cards = %#v", publisher.cards)
 	}
-	if !strings.Contains(publisher.posts[0].Message, "run-1") {
-		t.Fatalf("status message = %q", publisher.posts[0].Message)
+	card := publisher.cards[0]
+	if card.Message != "matter-codex agent turn status #notrigger" {
+		t.Fatalf("card message = %q", card.Message)
 	}
-	if !strings.Contains(publisher.posts[0].Message, "OpenAI account: `main`") {
-		t.Fatalf("status message misses account = %q", publisher.posts[0].Message)
+	if card.Props["matter_codex_event"] != "agent_status" || card.Props["status"] != agentSessionTurnRunning {
+		t.Fatalf("card props = %#v", card.Props)
+	}
+	if len(card.Actions) != 1 || card.Actions[0].ID != "stopturn" {
+		t.Fatalf("card actions = %#v", card.Actions)
+	}
+	if !strings.Contains(card.Text, "run-1") {
+		t.Fatalf("status text = %q", card.Text)
+	}
+	if !strings.Contains(card.Text, "OpenAI account: `main`") {
+		t.Fatalf("status text misses account = %q", card.Text)
 	}
 	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("GetAgentSessionTurn() error = %v", err)
 	}
-	if turn.MattermostStatusPostID != "reply-root-1" {
+	if turn.MattermostStatusPostID != "card-root-1" {
 		t.Fatalf("MattermostStatusPostID = %q", turn.MattermostStatusPostID)
 	}
 }
 
-func TestAgentSessionUpdateTurnStatusEditsSamePost(t *testing.T) {
+func TestAgentSessionUpdateTurnStatusPostsProgressWithoutEditingStatusCard(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.agentSessions["session-1"] = withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
 	store.sessionTurns[0].Status = agentSessionTurnRunning
+	store.sessionTurns[0].MattermostStatusPostID = "status-post-1"
 	svc := NewAgentSessionService(AgentSessionServiceConfig{
 		Store:           store,
 		RuntimeRunner:   runner,
@@ -71,14 +83,22 @@ func TestAgentSessionUpdateTurnStatusEditsSamePost(t *testing.T) {
 	if first.PostID != "reply-root-1" || second.PostID != first.PostID {
 		t.Fatalf("post ids first=%q second=%q", first.PostID, second.PostID)
 	}
-	if len(publisher.posts) != 1 {
+	if len(publisher.posts) != 2 {
 		t.Fatalf("posts = %#v", publisher.posts)
 	}
-	if len(publisher.updates) != 1 {
-		t.Fatalf("updates = %#v", publisher.updates)
+	if len(publisher.updates) != 0 || len(publisher.cardUpdates) != 0 {
+		t.Fatalf("updates=%#v cardUpdates=%#v", publisher.updates, publisher.cardUpdates)
 	}
-	if publisher.updates[0].PostID != first.PostID || publisher.updates[0].Message != "Проверяю результат" {
-		t.Fatalf("update = %#v", publisher.updates[0])
+	if !strings.Contains(publisher.posts[0].Message, "Планирую работу") || !strings.Contains(publisher.posts[0].Message, "#notrigger") {
+		t.Fatalf("first progress post = %#v", publisher.posts[0])
+	}
+	if !strings.Contains(publisher.posts[1].Message, "Проверяю результат") || !strings.Contains(publisher.posts[1].Message, "#notrigger") {
+		t.Fatalf("second progress post = %#v", publisher.posts[1])
+	}
+	for _, post := range publisher.posts {
+		if post.Props["matter_codex_event"] != "agent_progress" || post.Props["turn_id"] != int64(1) || post.Props["run_id"] != "run-1" {
+			t.Fatalf("progress props = %#v", post.Props)
+		}
 	}
 }
 
@@ -117,12 +137,12 @@ func TestAgentSessionPostFallsBackWhenRoleTokenIsInvalid(t *testing.T) {
 	if publisher.postWithTokenCalls != 1 {
 		t.Fatalf("postWithTokenCalls = %d", publisher.postWithTokenCalls)
 	}
-	if len(publisher.posts) != 1 || publisher.posts[0].Message != "Планирую работу" {
+	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, "Планирую работу") || !strings.Contains(publisher.posts[0].Message, "#notrigger") {
 		t.Fatalf("fallback posts = %#v", publisher.posts)
 	}
 }
 
-func TestAgentSessionUpdateFallsBackWhenRoleTokenIsInvalid(t *testing.T) {
+func TestAgentSessionPostThreadUpdateAddsNoTriggerProps(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.botIdentities = map[int64]entity.MattermostBotIdentity{
 		1: {
@@ -136,10 +156,7 @@ func TestAgentSessionUpdateFallsBackWhenRoleTokenIsInvalid(t *testing.T) {
 		},
 	}
 	runner.botTokenSecrets["role-token-secret"] = "expired-role-token"
-	publisher.updateWithTokenErr = errors.New("invalid or expired session")
-	store.agentSessions["session-1"] = withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
-	store.sessionTurns[0].Status = agentSessionTurnRunning
-	store.sessionTurns[0].MattermostStatusPostID = "status-post-1"
+	publisher.postWithTokenErr = errors.New("invalid or expired session")
 	svc := NewAgentSessionService(AgentSessionServiceConfig{
 		Store:           store,
 		RuntimeRunner:   runner,
@@ -148,18 +165,25 @@ func TestAgentSessionUpdateFallsBackWhenRoleTokenIsInvalid(t *testing.T) {
 		RuntimeReady:    true,
 	})
 
-	ref, err := svc.UpdateTurnStatus(context.Background(), "session-1", "session-token", "Проверяю результат")
+	ref, err := svc.PostThreadUpdate(context.Background(), "session-1", "session-token", "Пишу промежуточный статус")
 	if err != nil {
-		t.Fatalf("UpdateTurnStatus() error = %v", err)
+		t.Fatalf("PostThreadUpdate() error = %v", err)
 	}
-	if ref.PostID != "status-post-1" {
+	if ref.PostID != "reply-root-1" {
 		t.Fatalf("ref = %#v", ref)
 	}
-	if publisher.updateWithTokenCalls != 1 {
-		t.Fatalf("updateWithTokenCalls = %d", publisher.updateWithTokenCalls)
+	if publisher.postWithTokenCalls != 1 {
+		t.Fatalf("postWithTokenCalls = %d", publisher.postWithTokenCalls)
 	}
-	if len(publisher.updates) != 1 || publisher.updates[0].Message != "Проверяю результат" {
-		t.Fatalf("fallback updates = %#v", publisher.updates)
+	if len(publisher.posts) != 1 {
+		t.Fatalf("posts = %#v", publisher.posts)
+	}
+	post := publisher.posts[0]
+	if !strings.Contains(post.Message, "Пишу промежуточный статус") || !strings.Contains(post.Message, "#notrigger") {
+		t.Fatalf("post message = %q", post.Message)
+	}
+	if post.Props["matter_codex_event"] != "agent_progress" || post.Props["turn_id"] != int64(0) {
+		t.Fatalf("post props = %#v", post.Props)
 	}
 }
 
@@ -191,11 +215,18 @@ func TestAgentSessionCompleteUpdatesStatusWithCodexLimits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompleteTurn() error = %v", err)
 	}
-	if len(publisher.updates) != 1 {
-		t.Fatalf("updates = %#v", publisher.updates)
+	if len(publisher.cards) != 1 {
+		t.Fatalf("cards = %#v", publisher.cards)
 	}
-	message := publisher.updates[0].Message
-	for _, expected := range []string{"agent turn completed", "OpenAI account: `main`", "Codex limits:", "🕔 5h", "📅 7d"} {
+	if len(publisher.cardUpdates) != 1 {
+		t.Fatalf("cardUpdates = %#v", publisher.cardUpdates)
+	}
+	card := publisher.cardUpdates[0]
+	if card.PostID != "card-root-1" {
+		t.Fatalf("card update post id = %q", card.PostID)
+	}
+	message := card.Text
+	for _, expected := range []string{"completed", "OpenAI account: `main`", "Codex limits:", "🕔 5h", "📅 7d"} {
 		if !strings.Contains(message, expected) {
 			t.Fatalf("status message misses %q: %q", expected, message)
 		}
@@ -227,14 +258,17 @@ func TestAgentSessionCompletePostsFYIToRequester(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompleteTurn() error = %v", err)
 	}
-	if len(publisher.posts) != 3 {
+	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
+		t.Fatalf("cards=%#v cardUpdates=%#v", publisher.cards, publisher.cardUpdates)
+	}
+	if len(publisher.posts) != 2 {
 		t.Fatalf("posts = %#v", publisher.posts)
 	}
-	if publisher.posts[1].Message != "done" {
-		t.Fatalf("final message = %q", publisher.posts[1].Message)
+	if publisher.posts[0].Message != "done" {
+		t.Fatalf("final message = %q", publisher.posts[0].Message)
 	}
-	if publisher.posts[2].Message != "@owner fyi: task complete 👆🏻" {
-		t.Fatalf("fyi message = %q", publisher.posts[2].Message)
+	if publisher.posts[1].Message != "@owner fyi: task complete 👆🏻" {
+		t.Fatalf("fyi message = %q", publisher.posts[1].Message)
 	}
 }
 
@@ -264,10 +298,10 @@ func TestAgentSessionCompleteSplitsLongFinalMessageUsingMattermostLimit(t *testi
 	if err != nil {
 		t.Fatalf("CompleteTurn() error = %v", err)
 	}
-	if len(publisher.posts) < 4 {
+	if len(publisher.posts) < 3 {
 		t.Fatalf("posts = %#v", publisher.posts)
 	}
-	for index, post := range publisher.posts[1:] {
+	for index, post := range publisher.posts {
 		if len([]rune(post.Message)) > store.postMessageMaxRunes {
 			t.Fatalf("post %d length = %d, want <= %d", index+1, len([]rune(post.Message)), store.postMessageMaxRunes)
 		}
@@ -305,11 +339,14 @@ func TestAgentSessionCompleteSkipsFYIWhenRequesterIsAgentBot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompleteTurn() error = %v", err)
 	}
-	if len(publisher.posts) != 2 {
+	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
+		t.Fatalf("cards=%#v cardUpdates=%#v", publisher.cards, publisher.cardUpdates)
+	}
+	if len(publisher.posts) != 1 {
 		t.Fatalf("posts = %#v", publisher.posts)
 	}
-	if publisher.posts[1].Message != "done" {
-		t.Fatalf("final message = %q", publisher.posts[1].Message)
+	if publisher.posts[0].Message != "done" {
+		t.Fatalf("final message = %q", publisher.posts[0].Message)
 	}
 }
 
@@ -429,8 +466,8 @@ func TestAgentSessionStopRunningTurnCancelsAndDeletesPod(t *testing.T) {
 	if session.Status != agentSessionStatusIdle || session.PodName != "" || session.TokenSecretRef != "" || runner.cleanedSessionKey != "session-1" {
 		t.Fatalf("session=%#v runner=%#v", session, runner)
 	}
-	if len(publisher.updates) != 1 || !strings.Contains(publisher.updates[0].Message, "agent turn stopped") {
-		t.Fatalf("updates = %#v", publisher.updates)
+	if len(publisher.cardUpdates) != 1 || !strings.Contains(publisher.cardUpdates[0].Text, "turn stopped") {
+		t.Fatalf("cardUpdates = %#v", publisher.cardUpdates)
 	}
 }
 
@@ -476,8 +513,8 @@ func TestAgentSessionStopLastQueuedTurnResetsIdleRuntime(t *testing.T) {
 	if session.Status != agentSessionStatusIdle || session.PodName != "" || session.PVCName != "" || session.TokenSecretRef != "" || runner.cleanedSessionKey != "session-1" {
 		t.Fatalf("session=%#v runner=%#v", session, runner)
 	}
-	if len(publisher.updates) != 1 || !strings.Contains(publisher.updates[0].Message, "agent turn stopped") {
-		t.Fatalf("updates = %#v", publisher.updates)
+	if len(publisher.cardUpdates) != 1 || !strings.Contains(publisher.cardUpdates[0].Text, "turn stopped") {
+		t.Fatalf("cardUpdates = %#v", publisher.cardUpdates)
 	}
 }
 

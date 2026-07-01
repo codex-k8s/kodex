@@ -50,6 +50,7 @@ type MattermostCard struct {
 	RootPostID string
 	ActionURL  string
 	Message    string
+	Props      map[string]any
 	Color      string
 	Title      string
 	Text       string

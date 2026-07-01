@@ -538,11 +538,12 @@ func cardPost(card statusservice.MattermostCard) *mattermostmodel.Post {
 		RootId:    card.RootPostID,
 		Message:   card.Message,
 	}
-	post.SetProps(mattermostmodel.StringInterface{
-		"attachments": []*mattermostmodel.MessageAttachment{
-			cardAttachment(card),
-		},
-	})
+	props := mattermostmodel.StringInterface{}
+	for key, value := range card.Props {
+		props[key] = value
+	}
+	props["attachments"] = []*mattermostmodel.MessageAttachment{cardAttachment(card)}
+	post.SetProps(props)
 	return post
 }
 

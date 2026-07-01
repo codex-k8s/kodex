@@ -49,6 +49,7 @@ type MattermostThreadUpdateInput struct {
 	RootPostID string
 	PostID     string
 	Message    string
+	Props      map[string]any
 }
 
 type MattermostPostRef struct {
@@ -62,6 +63,7 @@ type MattermostThreadPublisher interface {
 	UpdateThreadMessage(ctx context.Context, input MattermostThreadUpdateInput) (MattermostPostRef, error)
 	UpdateThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadUpdateInput) (MattermostPostRef, error)
 	PostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
+	UpdateThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
 }
 
 type ChatPostCommand struct {

@@ -1235,6 +1235,7 @@ type fakeThreadPublisher struct {
 	posts                []MattermostThreadPostInput
 	updates              []MattermostThreadUpdateInput
 	cards                []MattermostCard
+	cardUpdates          []MattermostCard
 	postWithTokenErr     error
 	updateWithTokenErr   error
 	postWithTokenCalls   int
@@ -1270,6 +1271,11 @@ func (publisher *fakeThreadPublisher) UpdateThreadMessageWithToken(_ context.Con
 func (publisher *fakeThreadPublisher) PostThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
 	publisher.cards = append(publisher.cards, card)
 	return MattermostPostRef{ChannelID: card.ChannelID, PostID: "card-" + card.RootPostID}, nil
+}
+
+func (publisher *fakeThreadPublisher) UpdateThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
+	publisher.cardUpdates = append(publisher.cardUpdates, card)
+	return MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, nil
 }
 
 var _ runtimerepo.Runner = (*fakeRuntimeRunner)(nil)
