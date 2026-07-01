@@ -33,6 +33,10 @@ const (
 
 	defaultManagerSessionTTLSeconds = 7 * 24 * 60 * 60
 	defaultThreadSessionTTLSeconds  = 3 * 24 * 60 * 60
+
+	defaultMattermostPostMessageMaxRunes = 65535 / 4
+	mattermostPostChunkReserveRunes      = 128
+	minMattermostPostChunkRunes          = 1000
 )
 
 type AgentSessionServiceConfig struct {
@@ -63,6 +67,10 @@ type MattermostPostMessage struct {
 type MattermostConversationReader interface {
 	GetThreadPosts(ctx context.Context, rootPostID string, limit int) ([]MattermostPostMessage, error)
 	SearchChannelPosts(ctx context.Context, channelID string, query string, limit int) ([]MattermostPostMessage, error)
+}
+
+type mattermostPostLimitReader interface {
+	MattermostPostMessageMaxRunes(ctx context.Context) (int, error)
 }
 
 type AgentSessionSnapshot struct {
@@ -677,20 +685,32 @@ func (svc *AgentSessionService) postSessionThreadMessage(ctx context.Context, se
 }
 
 func (svc *AgentSessionService) postSessionThreadMessageOnly(ctx context.Context, session entity.AgentSession, channelID string, rootPostID string, message string) (MattermostPostRef, error) {
-	input := MattermostThreadPostInput{
-		ChannelID:  channelID,
-		RootPostID: rootPostID,
-		Message:    message,
-	}
+	chunks := svc.splitMattermostThreadMessage(ctx, message)
 	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, session.RoleID)
+	post := svc.cfg.ThreadPublisher.PostThreadMessage
 	if err != nil || identity.TokenSecretRef == "" {
-		return svc.cfg.ThreadPublisher.PostThreadMessage(ctx, input)
+		post = svc.cfg.ThreadPublisher.PostThreadMessage
+	} else {
+		secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, identity.TokenSecretRef)
+		if err == nil {
+			post = func(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
+				return svc.cfg.ThreadPublisher.PostThreadMessageWithToken(ctx, secret.Token, input)
+			}
+		}
 	}
-	secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, identity.TokenSecretRef)
-	if err != nil {
-		return svc.cfg.ThreadPublisher.PostThreadMessage(ctx, input)
+	var ref MattermostPostRef
+	for _, chunk := range chunks {
+		input := MattermostThreadPostInput{
+			ChannelID:  channelID,
+			RootPostID: rootPostID,
+			Message:    chunk,
+		}
+		ref, err = post(ctx, input)
+		if err != nil {
+			return MattermostPostRef{}, err
+		}
 	}
-	return svc.cfg.ThreadPublisher.PostThreadMessageWithToken(ctx, secret.Token, input)
+	return ref, nil
 }
 
 func (svc *AgentSessionService) updateSessionThreadMessageOnly(ctx context.Context, session entity.AgentSession, channelID string, rootPostID string, postID string, message string) (MattermostPostRef, error) {
@@ -815,4 +835,101 @@ func truncateMattermostStatus(value string) string {
 		return value
 	}
 	return strings.TrimSpace(string(runes[:limit])) + "\n..."
+}
+
+func (svc *AgentSessionService) splitMattermostThreadMessage(ctx context.Context, message string) []string {
+	limit := svc.mattermostPostMessageMaxRunes(ctx)
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return []string{message}
+	}
+	if len([]rune(message)) <= limit {
+		return []string{message}
+	}
+	return splitMattermostMessage(message, limit, func(part int, total int) string {
+		if svc.cfg.Localizer == nil {
+			return fmt.Sprintf("Part %d/%d", part, total)
+		}
+		return svc.t("chat.session.message_chunk.header", map[string]any{"Part": part, "Total": total})
+	})
+}
+
+func (svc *AgentSessionService) mattermostPostMessageMaxRunes(ctx context.Context) int {
+	limit := defaultMattermostPostMessageMaxRunes
+	if reader, ok := svc.cfg.Store.(mattermostPostLimitReader); ok {
+		if value, err := reader.MattermostPostMessageMaxRunes(ctx); err == nil && value > 0 {
+			limit = value
+		}
+	}
+	if limit < minMattermostPostChunkRunes {
+		return minMattermostPostChunkRunes
+	}
+	return limit
+}
+
+func splitMattermostMessage(message string, limit int, header func(part int, total int) string) []string {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return []string{message}
+	}
+	if limit < minMattermostPostChunkRunes {
+		limit = minMattermostPostChunkRunes
+	}
+	if len([]rune(message)) <= limit {
+		return []string{message}
+	}
+	payloadLimit := limit - mattermostPostChunkReserveRunes
+	if payloadLimit < minMattermostPostChunkRunes {
+		payloadLimit = limit
+	}
+	rawChunks := splitMattermostMessageBody(message, payloadLimit)
+	if len(rawChunks) <= 1 {
+		return rawChunks
+	}
+	chunks := make([]string, 0, len(rawChunks))
+	for index, chunk := range rawChunks {
+		prefix := header(index+1, len(rawChunks))
+		bodyLimit := limit - len([]rune(prefix)) - 2
+		if bodyLimit < minMattermostPostChunkRunes {
+			bodyLimit = payloadLimit
+		}
+		for _, bodyChunk := range splitMattermostMessageBody(chunk, bodyLimit) {
+			chunks = append(chunks, strings.TrimSpace(prefix+"\n\n"+bodyChunk))
+		}
+	}
+	return chunks
+}
+
+func splitMattermostMessageBody(message string, limit int) []string {
+	message = strings.TrimSpace(message)
+	runes := []rune(message)
+	if len(runes) <= limit {
+		return []string{message}
+	}
+	chunks := make([]string, 0, len(runes)/limit+1)
+	for len(runes) > limit {
+		cut := preferredMattermostChunkCut(runes, limit)
+		chunk := strings.TrimSpace(string(runes[:cut]))
+		if chunk != "" {
+			chunks = append(chunks, chunk)
+		}
+		runes = []rune(strings.TrimSpace(string(runes[cut:])))
+	}
+	if len(runes) > 0 {
+		chunks = append(chunks, strings.TrimSpace(string(runes)))
+	}
+	return chunks
+}
+
+func preferredMattermostChunkCut(runes []rune, limit int) int {
+	if len(runes) <= limit {
+		return len(runes)
+	}
+	minCut := limit / 2
+	for index := limit; index > minCut; index-- {
+		if runes[index-1] == '\n' {
+			return index
+		}
+	}
+	return limit
 }

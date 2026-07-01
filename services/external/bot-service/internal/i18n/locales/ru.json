@@ -811,6 +811,7 @@
   {"id": "chat.session.turn.stop.reason", "translation": "Turn остановлен пользователем {{.User}}."},
   {"id": "chat.session.turn.stop.failed", "translation": "matter-codex: turn не остановлен. Откройте Runtime и проверьте session."},
   {"id": "chat.session.fyi.complete", "translation": "@{{.UserName}} fyi: task complete 👆🏻"},
+  {"id": "chat.session.message_chunk.header", "translation": "Часть {{.Part}}/{{.Total}}"},
   {"id": "chat.session.status.started", "translation": "**Статус:** агент начал работу.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nЛимиты Codex:\n{{.CodexLimits}}{{end}}"},
   {"id": "chat.session.status.succeeded", "translation": "**Статус:** агент завершил работу.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nЛимиты Codex:\n{{.CodexLimits}}{{end}}"},
   {"id": "chat.session.status.failed", "translation": "**Статус:** агент завершился с ошибкой.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nЛимиты Codex:\n{{.CodexLimits}}{{end}}"},

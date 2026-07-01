@@ -156,6 +156,45 @@ func TestAgentSessionCompletePostsFYIToRequester(t *testing.T) {
 	}
 }
 
+func TestAgentSessionCompleteSplitsLongFinalMessageUsingMattermostLimit(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	store.postMessageMaxRunes = 1100
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.RussianLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	longFinal := strings.Repeat("0123456789", 260)
+	err = svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+		TurnID:       claim.TurnID,
+		RunID:        claim.RunID,
+		Status:       agentSessionTurnSucceeded,
+		FinalMessage: longFinal,
+	})
+	if err != nil {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	if len(publisher.posts) < 4 {
+		t.Fatalf("posts = %#v", publisher.posts)
+	}
+	for index, post := range publisher.posts[1:] {
+		if len([]rune(post.Message)) > store.postMessageMaxRunes {
+			t.Fatalf("post %d length = %d, want <= %d", index+1, len([]rune(post.Message)), store.postMessageMaxRunes)
+		}
+		if !strings.Contains(post.Message, "Часть ") {
+			t.Fatalf("post %d misses chunk header: %q", index+1, post.Message)
+		}
+	}
+}
+
 func TestAgentSessionCompleteSkipsFYIWhenRequesterIsAgentBot(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.sessionTurns[0].UserName = "manager"

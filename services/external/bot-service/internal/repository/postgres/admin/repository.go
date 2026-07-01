@@ -25,6 +25,22 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
+func (repo *Repository) MattermostPostMessageMaxRunes(ctx context.Context) (int, error) {
+	var maxBytes int
+	if err := repo.pool.QueryRow(ctx, `
+		select coalesce(max(character_maximum_length), 0)
+		from information_schema.columns
+		where lower(table_name) = 'posts'
+			and lower(column_name) = 'message'
+	`).Scan(&maxBytes); err != nil {
+		return 0, fmt.Errorf("get Mattermost post message max runes: %w", err)
+	}
+	if maxBytes <= 0 {
+		return 0, nil
+	}
+	return maxBytes / 4, nil
+}
+
 func (repo *Repository) UpsertRepository(ctx context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
 	var item entity.Repository
 	var created bool

@@ -811,6 +811,7 @@
   {"id": "chat.session.turn.stop.reason", "translation": "Turn was stopped by {{.User}}."},
   {"id": "chat.session.turn.stop.failed", "translation": "matter-codex: turn was not stopped. Open Runtime and check the session."},
   {"id": "chat.session.fyi.complete", "translation": "@{{.UserName}} fyi: task complete 👆🏻"},
+  {"id": "chat.session.message_chunk.header", "translation": "Part {{.Part}}/{{.Total}}"},
   {"id": "chat.session.status.started", "translation": "**Status:** agent turn started.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nCodex limits:\n{{.CodexLimits}}{{end}}"},
   {"id": "chat.session.status.succeeded", "translation": "**Status:** agent turn completed.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nCodex limits:\n{{.CodexLimits}}{{end}}"},
   {"id": "chat.session.status.failed", "translation": "**Status:** agent turn failed.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nCodex limits:\n{{.CodexLimits}}{{end}}"},

@@ -11,6 +11,8 @@ ENV_FILE="$REPO_ROOT/.env"
 DRY_RUN_MODE="server"
 WAIT=false
 RENDER_DIR=""
+POST_MESSAGE_TARGET_BYTES=200000
+POST_MESSAGE_SCHEMA_MIGRATION="$REPO_ROOT/deploy/k8s/mattermost/migrations/000001_post_message_max_length.sql"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -63,6 +65,29 @@ if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
   kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/25-oauth2-proxy.yaml" >/dev/null
 fi
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/30-ingress.yaml" >/dev/null
+
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  mattercodex_log "ожидание Mattermost перед schema migration"
+  kubectl -n "$MATTERCODEX_NAMESPACE" rollout status statefulset/mattermost-postgres --timeout=180s >/dev/null
+  kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/mattermost --timeout=300s >/dev/null
+  POST_MESSAGE_BYTES="$(kubectl -n "$MATTERCODEX_NAMESPACE" exec -i mattermost-postgres-0 -- sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -P pager=off -At' <<'SQL'
+select coalesce(max(character_maximum_length), 0)
+from information_schema.columns
+where lower(table_name) = 'posts'
+  and lower(column_name) = 'message';
+SQL
+)"
+  if [ "${POST_MESSAGE_BYTES:-0}" -lt "$POST_MESSAGE_TARGET_BYTES" ]; then
+    mattercodex_log "применяется Mattermost schema migration для лимита сообщений"
+    kubectl -n "$MATTERCODEX_NAMESPACE" exec -i mattermost-postgres-0 -- sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -q' < "$POST_MESSAGE_SCHEMA_MIGRATION"
+    kubectl -n "$MATTERCODEX_NAMESPACE" rollout restart deployment/mattermost >/dev/null
+    kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/mattermost --timeout=300s >/dev/null
+  else
+    mattercodex_log "Mattermost schema migration для лимита сообщений уже применена"
+  fi
+else
+  mattercodex_log "Mattermost schema migration для лимита сообщений пропущена в dry-run"
+fi
 
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$WAIT"; then
   mattercodex_log "ожидание rollout PostgreSQL"
