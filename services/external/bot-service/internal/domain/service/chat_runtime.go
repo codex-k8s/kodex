@@ -172,6 +172,9 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 	if strings.HasPrefix(command.Message, "/") {
 		return ChatRunResult{Ignored: true}
 	}
+	if hasMattermostNoTriggerMarker(command.Message) {
+		return ChatRunResult{Ignored: true}
+	}
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		svc.postThread(ctx, command, svc.t("chat.run.storage_not_ready", nil))
 		return ChatRunResult{}
@@ -1527,6 +1530,17 @@ func firstNonEmptyLine(value string) string {
 		}
 	}
 	return ""
+}
+
+func hasMattermostNoTriggerMarker(message string) bool {
+	for _, field := range strings.Fields(strings.ToLower(message)) {
+		token := strings.Trim(field, " \t\r\n.,;:!?()[]{}<>\"'`*_~")
+		switch token {
+		case "#notrigger", "#no-trigger", "#silent":
+			return true
+		}
+	}
+	return false
 }
 
 func newChatRunID(chatID int64) string {
