@@ -17,6 +17,12 @@ const (
 	developerImplementTaskKey = "implement_task"
 	developerFixReviewKey     = "fix_review"
 	reviewPRTemplateKey       = "review_pr"
+	managerCoordinateTaskKey  = "coordinate_task"
+	architectDocsTaskKey      = "architecture_task"
+	docsDocumentationTaskKey  = "documentation_task"
+	sreOperationsTaskKey      = "operations_task"
+	qaRegressionTaskKey       = "regression_task"
+	improverFeedbackTaskKey   = "feedback_improvement"
 )
 
 type promptTemplateRunData struct {
@@ -24,6 +30,12 @@ type promptTemplateRunData struct {
 	Profile string
 	Role    string
 	Locale  string
+}
+
+type promptTemplateProjectData struct {
+	Name        string
+	Slug        string
+	Description string
 }
 
 type promptTemplateAgentData struct {
@@ -86,6 +98,7 @@ type promptTemplateLocaleData struct {
 
 type promptTemplateData struct {
 	Run         promptTemplateRunData
+	Project     promptTemplateProjectData
 	Agent       promptTemplateAgentData
 	Repository  promptTemplateRepositoryData
 	Task        promptTemplateTaskData
@@ -479,6 +492,7 @@ func promptTemplateFuncMap() template.FuncMap {
 func promptTemplateReferenceData() map[string]any {
 	return map[string]any{
 		"RunPlaceholders":         "{{.Run.ID}}, {{.Run.Profile}}, {{.Run.Role}}, {{.Run.Locale}}",
+		"ProjectPlaceholders":     "{{.Project.Name}}, {{.Project.Slug}}, {{.Project.Description}}",
 		"AgentPlaceholders":       "{{.Agent.Profile}}, {{.Agent.Role}}, {{.Agent.KubernetesAccess}}, {{.Agent.SandboxMode}}, {{.Agent.ConfigOverlay}}",
 		"RepositoryPlaceholders":  "{{.Repository.Provider}}, {{.Repository.Owner}}, {{.Repository.Name}}, {{.Repository.FullName}}",
 		"TaskPlaceholders":        "{{.Task.Title}}, {{.Task.Body}}, {{.Task.BaseBranch}}, {{.Task.HeadBranch}}",
@@ -509,6 +523,11 @@ func samplePromptTemplateData(profileName string, templateKey string, locale pro
 			Profile: profileName,
 			Role:    profileName,
 			Locale:  locale.Code,
+		},
+		Project: promptTemplateProjectData{
+			Name:        "Sample Project",
+			Slug:        "sample-project",
+			Description: "Sample project context.",
 		},
 		Agent: promptTemplateAgentData{
 			Profile:          profileName,

@@ -1460,6 +1460,50 @@ func TestProfileDialogSubmissionCreatesProfileAndPromptSeeds(t *testing.T) {
 	}
 }
 
+func TestProfileDialogSubmissionCreatesArchitectPromptSeed(t *testing.T) {
+	store := &fakeAdminStore{
+		openAIAccounts: map[string]entity.OpenAIAccount{"primary": {Name: "primary", SecretRef: "matter-codex-codex-auth-primary", Status: "authorized"}},
+		githubAccounts: map[string]entity.GitHubAccount{"agent": {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"}},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProfileUpsert,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewProfiles, ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id",
+		UserName:   "owner",
+		Submission: map[string]any{
+			dialogFieldProfile:          "architect",
+			dialogFieldRole:             "architect",
+			dialogFieldOpenAIAccount:    "primary",
+			dialogFieldGitHubAccount:    "agent",
+			dialogFieldKubernetesAccess: "read-only",
+			dialogFieldSandboxMode:      "workspace-write",
+			dialogFieldDescription:      "Architecture profile",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	item, err := store.GetAgentPromptTemplate(context.Background(), "architect", architectDocsTaskKey)
+	if err != nil {
+		t.Fatalf("architect prompt seed was not saved: %v", err)
+	}
+	if !strings.Contains(item.Body, "Project: {{default .Repository.Name .Project.Name}}") ||
+		!strings.Contains(item.Body, "Use {{.Locale.Language}}") ||
+		!strings.Contains(item.Body, "prompts sent to other agents through MCP") {
+		t.Fatalf("architect seed body missing generic locale/MCP policy:\n%s", item.Body)
+	}
+}
+
 func TestPromptEditDialogRendersBeforeSave(t *testing.T) {
 	store := &fakeAdminStore{}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
