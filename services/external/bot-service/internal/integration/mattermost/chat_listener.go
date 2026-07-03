@@ -115,6 +115,7 @@ func (listener *ChatListener) handleEvent(ctx context.Context, event *mattermost
 		RootPostID: post.RootId,
 		UserID:     post.UserId,
 		Message:    post.Message,
+		Props:      post.Props,
 	}
 	if command.ChannelID == "" || command.PostID == "" {
 		return

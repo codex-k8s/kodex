@@ -52,7 +52,7 @@ spec:
       containers:
         - name: bot-service
           image: ${MATTERCODEX_BOT_SERVICE_IMAGE}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: ${MATTERCODEX_BOT_SERVICE_IMAGE_PULL_POLICY}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

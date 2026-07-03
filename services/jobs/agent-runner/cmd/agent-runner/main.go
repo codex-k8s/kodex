@@ -621,9 +621,6 @@ func (r *runner) completeSessionTurn(ctx context.Context, client *http.Client, b
 }
 
 func (r *runner) updateSessionTurnStatus(ctx context.Context, client *http.Client, baseURL string, sessionKey string, token string, payload sessionTurnStatusRequest) error {
-	if strings.TrimSpace(payload.OpenAIAccount) == "" && strings.TrimSpace(payload.CodexLimits) == "" {
-		return nil
-	}
 	return r.sessionJSON(ctx, client, http.MethodPost, baseURL, sessionKey, token, "turns/status", payload, nil)
 }
 

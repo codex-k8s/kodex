@@ -704,6 +704,11 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
 		}
 	}
+	for _, expected := range []string{"GitHub PR bodies", "inline review comments", "in English"} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("prompt missing language contract %q: %q", expected, prompt)
+		}
+	}
 	for _, expected := range []string{"RADAR_AUTO_KUBECONFIG", "kubeconfig for the external radar-auto cluster"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime variable %q: %q", expected, prompt)
@@ -3734,6 +3739,11 @@ type fakeAdminStore struct {
 	botIdentities        map[int64]entity.MattermostBotIdentity
 	agentSessions        map[string]entity.AgentSession
 	sessionTurns         []entity.AgentSessionTurn
+	postMessageMaxRunes  int
+}
+
+func (store *fakeAdminStore) MattermostPostMessageMaxRunes(context.Context) (int, error) {
+	return store.postMessageMaxRunes, nil
 }
 
 func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {

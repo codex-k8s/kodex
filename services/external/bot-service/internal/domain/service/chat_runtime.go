@@ -41,6 +41,7 @@ type MattermostThreadPostInput struct {
 	ChannelID  string
 	RootPostID string
 	Message    string
+	Props      map[string]any
 }
 
 type MattermostThreadUpdateInput struct {
@@ -48,6 +49,7 @@ type MattermostThreadUpdateInput struct {
 	RootPostID string
 	PostID     string
 	Message    string
+	Props      map[string]any
 }
 
 type MattermostPostRef struct {
@@ -61,6 +63,7 @@ type MattermostThreadPublisher interface {
 	UpdateThreadMessage(ctx context.Context, input MattermostThreadUpdateInput) (MattermostPostRef, error)
 	UpdateThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadUpdateInput) (MattermostPostRef, error)
 	PostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
+	UpdateThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
 }
 
 type ChatPostCommand struct {
@@ -70,6 +73,7 @@ type ChatPostCommand struct {
 	UserID     string
 	UserName   string
 	Message    string
+	Props      map[string]any
 }
 
 type ChatRunResult struct {
@@ -169,7 +173,13 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 	if command.ChannelID == "" || command.PostID == "" || command.Message == "" {
 		return ChatRunResult{Ignored: true}
 	}
+	if isMatterCodexSystemPost(command.Props) {
+		return ChatRunResult{Ignored: true}
+	}
 	if strings.HasPrefix(command.Message, "/") {
+		return ChatRunResult{Ignored: true}
+	}
+	if hasMattermostNoTriggerMarker(command.Message) {
 		return ChatRunResult{Ignored: true}
 	}
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
@@ -1276,6 +1286,21 @@ func normalizeChatPostCommand(command ChatPostCommand) ChatPostCommand {
 	return command
 }
 
+func isMatterCodexSystemPost(props map[string]any) bool {
+	if len(props) == 0 {
+		return false
+	}
+	value, ok := props["matter_codex_event"]
+	if !ok {
+		return false
+	}
+	event, ok := value.(string)
+	if !ok {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(event), "agent_")
+}
+
 func commandRootPostID(command ChatPostCommand) string {
 	if strings.TrimSpace(command.RootPostID) != "" {
 		return strings.TrimSpace(command.RootPostID)
@@ -1527,6 +1552,17 @@ func firstNonEmptyLine(value string) string {
 		}
 	}
 	return ""
+}
+
+func hasMattermostNoTriggerMarker(message string) bool {
+	for _, field := range strings.Fields(strings.ToLower(message)) {
+		token := strings.Trim(field, " \t\r\n.,;:!?()[]{}<>\"'`*_~")
+		switch token {
+		case "#notrigger", "#no-trigger", "#silent":
+			return true
+		}
+	}
+	return false
 }
 
 func newChatRunID(chatID int64) string {
