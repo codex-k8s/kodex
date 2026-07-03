@@ -153,15 +153,23 @@ type rolePromptRepositoryData struct {
 }
 
 type rolePromptTaskData struct {
-	Body string
+	Title      string
+	Body       string
+	BaseBranch string
+	HeadBranch string
 }
 
 type rolePromptData struct {
 	Project      rolePromptProjectData
 	Role         rolePromptRoleData
+	Agent        promptTemplateAgentData
 	Chat         rolePromptChatData
+	Run          promptTemplateRunData
+	Repository   promptTemplateRepositoryData
 	Repositories []rolePromptRepositoryData
 	Task         rolePromptTaskData
+	PullRequest  promptTemplatePullRequestData
+	GitHub       promptTemplateGitHubData
 	Tools        []promptTemplateToolData
 	Secrets      []promptTemplateSecretBindingData
 	Locale       promptTemplateLocaleData
@@ -351,19 +359,20 @@ func appendRoleRuntimeContractMarkdown(body *strings.Builder, input RolePromptIn
 	body.WriteString("- GitHub CLI: use `gh` when the role has a GitHub account. Token/user/email are exposed through `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER`, and `GITHUB_EMAIL`. Never print token values.\n")
 	body.WriteString("- For GitHub issue, pull request, review, and comment Markdown, write the body to a temporary file or heredoc and pass it with `--body-file`/API file input. Do not inline Markdown with backticks or shell-sensitive text directly inside a shell command string.\n")
 	if strings.TrimSpace(input.Locale.Language) != "" {
-		body.WriteString("- Language: write all user-visible Mattermost replies, GitHub PR bodies, issue bodies, issue comments, review bodies, inline review comments, and delivery summaries in ")
+		body.WriteString("- Language: write all user-visible Mattermost replies, GitHub issue titles and bodies, GitHub PR titles and bodies, issue/PR comments, review bodies, inline review comments, code comments, documentation, and delivery summaries in ")
 		body.WriteString(input.Locale.Language)
-		body.WriteString(". Keep code identifiers, file paths, env names, commands, API names, and quoted source text unchanged.\n")
+		body.WriteString(". Keep code identifiers, file paths, env names, commands, API names, and quoted source text unchanged. If AGENTS.md is missing or does not define a language rule, this runtime locale is authoritative.\n")
 	}
 	body.WriteString("- Mattermost MCP: use `mattermost_get_thread` to read this thread and `mattermost_search_chat` for small bounded channel searches.\n")
-	body.WriteString("- Progress status: use `mattermost_update_turn_status` to update the single status message for this turn. Keep it concise and in the response language")
+	body.WriteString("- Progress status: use `mattermost_update_turn_status` for concise non-triggering progress updates. Matter-codex keeps the start/limits/stop-button status card separate and updates that card itself. Keep progress text in the response language")
 	if strings.TrimSpace(input.Locale.Language) != "" {
 		body.WriteString(" (")
 		body.WriteString(input.Locale.Language)
 		body.WriteString(")")
 	}
 	body.WriteString(". Update after planning, after meaningful milestones, before a long wait, and when blocked. Do not create routine progress posts with `mattermost_post_thread_update`.\n")
-	body.WriteString("- Use `mattermost_post_thread_update` only when you intentionally need an additional message in the thread. Use `mattermost_request_agent` only when the user or role prompt allows delegating to another agent.\n")
+	body.WriteString("- Use `mattermost_post_thread_update` only when you intentionally need an additional message in the thread.\n")
+	body.WriteString("- Agent delegation: launch another agent only with `mattermost_request_agent`. Normal Mattermost username mentions in agent-authored messages never trigger agents; agent bot messages are ignored by chat routing. The platform queues the target turn in that agent's existing thread session; if the target agent is busy, the turn waits until the current turn finishes and the session is saved.\n")
 	body.WriteString("\n")
 }
 
@@ -404,6 +413,18 @@ func rolePromptTemplateData(input RolePromptInput) rolePromptData {
 			DefaultBranch: repo.DefaultBranch,
 		})
 	}
+	repository := promptTemplateRepositoryData{}
+	baseBranch := "main"
+	if len(input.Repositories) > 0 {
+		repo := input.Repositories[0]
+		repository = promptTemplateRepositoryData{
+			Provider: repo.Provider,
+			Owner:    repo.Owner,
+			Name:     repo.Name,
+			FullName: repo.FullName(),
+		}
+		baseBranch = defaultString(repo.DefaultBranch, "main")
+	}
 	return rolePromptData{
 		Project: rolePromptProjectData{
 			ID:          input.Project.ID,
@@ -420,6 +441,13 @@ func rolePromptTemplateData(input RolePromptInput) rolePromptData {
 			SandboxMode:      input.Role.SandboxMode,
 			ConfigOverlay:    input.Role.ConfigOverlay,
 		},
+		Agent: promptTemplateAgentData{
+			Profile:          input.Role.Name,
+			Role:             input.Role.RoleType,
+			KubernetesAccess: input.Role.KubernetesAccess,
+			SandboxMode:      input.Role.SandboxMode,
+			ConfigOverlay:    input.Role.ConfigOverlay,
+		},
 		Chat: rolePromptChatData{
 			ID:              input.Chat.ID,
 			Name:            input.Chat.Name,
@@ -427,11 +455,25 @@ func rolePromptTemplateData(input RolePromptInput) rolePromptData {
 			RootGitHubIssue: input.Chat.RootGitHubIssue,
 			WorkPolicy:      input.Chat.WorkPolicy,
 		},
+		Run: promptTemplateRunData{
+			ID:      "chat-session",
+			Profile: input.Role.Name,
+			Role:    input.Role.RoleType,
+			Locale:  locale.Code,
+		},
+		Repository:   repository,
 		Repositories: repositories,
-		Task:         rolePromptTaskData{Body: strings.TrimSpace(input.UserMessage)},
-		Tools:        agentRuntimeTools(),
-		Secrets:      roleSecretBindings(input.RuntimeVariables),
-		Locale:       locale,
+		Task: rolePromptTaskData{
+			Title:      "Chat task",
+			Body:       strings.TrimSpace(input.UserMessage),
+			BaseBranch: baseBranch,
+			HeadBranch: "matter-codex-chat-session",
+		},
+		PullRequest: promptTemplatePullRequestData{},
+		GitHub:      promptGitHubData(input.Role.GitHubAccountName),
+		Tools:       agentRuntimeTools(),
+		Secrets:     roleSecretBindings(input.RuntimeVariables),
+		Locale:      locale,
 	}
 }
 

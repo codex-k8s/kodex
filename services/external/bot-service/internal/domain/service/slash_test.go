@@ -521,7 +521,7 @@ func TestAgentRoleDialogDefaultsGitHubAccountFromProject(t *testing.T) {
 	}
 }
 
-func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
+func TestAgentRoleDialogSeedsKnownRolePromptTemplate(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
 			1: {ID: 1, Name: "Demo Project", Slug: "demo-project"},
@@ -573,7 +573,7 @@ func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("role not stored: %v", err)
 	}
-	if role.PromptMode != "raw" || role.PromptTemplate != "" {
+	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "You are the matter-codex developer agent.") {
 		t.Fatalf("prompt mode/template = %q/%q", role.PromptMode, role.PromptTemplate)
 	}
 	if role.OpenAIAccountName != "primary" || role.GitHubAccountName != "agent" {
@@ -589,7 +589,7 @@ func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
 	if identity.Username != "backend-dev-bot" || identity.MattermostUserID != "bot-user-backend-dev-bot" || identity.TokenSecretRef == "" {
 		t.Fatalf("bot identity = %#v", identity)
 	}
-	if !strings.Contains(result.Card.Text, "raw chat instruction") {
+	if !strings.Contains(result.Card.Text, "prompt: `template`") {
 		t.Fatalf("card text = %q", result.Card.Text)
 	}
 }
@@ -654,7 +654,7 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 		t.Fatalf("existing improver prompt was overwritten: %q", radarImprover.PromptTemplate)
 	}
 	myQRImprover := testRoleByName(t, store, 2, "improver")
-	if myQRImprover.RoleType != "improver" || myQRImprover.PromptMode != "template" || !strings.Contains(myQRImprover.PromptTemplate, "real review feedback") {
+	if myQRImprover.RoleType != "improver" || myQRImprover.PromptMode != "template" || !strings.Contains(myQRImprover.PromptTemplate, "repeated review feedback") {
 		t.Fatalf("myqr improver = %#v", myQRImprover)
 	}
 	if myQRImprover.GitHubAccountName != "github-myqrcontact-owner" || myQRImprover.OpenAIAccountName != "openai-radar-delivery" {
@@ -803,7 +803,7 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
 		}
 	}
-	for _, expected := range []string{"GitHub PR bodies", "inline review comments", "in English"} {
+	for _, expected := range []string{"GitHub PR titles and bodies", "inline review comments", "in English"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing language contract %q: %q", expected, prompt)
 		}
@@ -4898,7 +4898,7 @@ func (store *fakeAdminStore) GetAgentPromptTemplate(_ context.Context, profileNa
 	store.ensurePromptTemplates()
 	item, ok := store.promptTemplates[promptTemplateMapKey(profileName, templateKey)]
 	if !ok {
-		return entity.AgentPromptTemplate{}, fmt.Errorf("prompt template not found")
+		return entity.AgentPromptTemplate{}, adminrepo.ErrNotFound
 	}
 	return item, nil
 }

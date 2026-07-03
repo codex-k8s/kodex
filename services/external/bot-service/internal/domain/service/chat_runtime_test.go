@@ -73,15 +73,15 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	if runner.startedSessionKey == "" || runner.sessionCodexSecret != "matter-codex-codex-auth-main" {
 		t.Fatalf("session runner = %#v", runner.sessionRuns)
 	}
-	if len(publisher.posts) != 1 || publisher.posts[0].RootPostID != "post-1" || !strings.Contains(publisher.posts[0].Message, "queued agent session turn") {
-		t.Fatalf("posts = %#v", publisher.posts)
+	if len(publisher.posts) != 0 || len(publisher.cards) != 0 {
+		t.Fatalf("chat handler must not create duplicate status posts, posts=%#v cards=%#v", publisher.posts, publisher.cards)
 	}
 	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "Help me decompose the task.") || !strings.Contains(store.sessionTurns[0].Message, "Project: Platform") {
 		t.Fatalf("turns = %#v", store.sessionTurns)
 	}
 }
 
-func TestChatRunPostsQueuedTurnCardWithStopButton(t *testing.T) {
+func TestChatRunDoesNotPostDuplicateQueuedTurnCard(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{
 		ID:                1,
@@ -118,19 +118,11 @@ func TestChatRunPostsQueuedTurnCardWithStopButton(t *testing.T) {
 	if result.RunID == "" || result.Mode != "session" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(publisher.cards) != 1 || len(publisher.posts) != 0 {
+	if len(publisher.cards) != 0 || len(publisher.posts) != 0 {
 		t.Fatalf("publisher cards=%#v posts=%#v", publisher.cards, publisher.posts)
 	}
-	card := publisher.cards[0]
-	if card.Title != "Agent turn queued" || len(card.Actions) != 1 {
-		t.Fatalf("card = %#v", card)
-	}
-	action := card.Actions[0]
-	if action.Name != "Stop turn" || action.Style != "danger" {
-		t.Fatalf("action = %#v", action)
-	}
-	if action.Context["kind"] != "agent_turn" || action.Context["action"] != "stop_turn" || action.Context["turn_ids"] != "1" {
-		t.Fatalf("action context = %#v", action.Context)
+	if len(store.sessionTurns) != 1 {
+		t.Fatalf("turns = %#v", store.sessionTurns)
 	}
 }
 
@@ -899,7 +891,7 @@ func TestChatRunIgnoresMatterCodexSystemPost(t *testing.T) {
 	}
 }
 
-func TestChatRunRoutesAgentBotMentionToMentionedAgent(t *testing.T) {
+func TestChatRunIgnoresAgentBotMentionAtMessageStart(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
 	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
@@ -929,16 +921,13 @@ func TestChatRunRoutesAgentBotMentionToMentionedAgent(t *testing.T) {
 		Message:    "@sre please check deployment",
 	})
 
-	if result.RunID == "" || result.Mode != "session" {
+	if !result.Ignored || result.RunID != "" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].Role != "sre" {
+	if len(runner.sessionRuns) != 0 {
 		t.Fatalf("session runs = %#v", runner.sessionRuns)
 	}
-	if runner.startedSessionKey != agentSessionKey(1, 2, agentSessionScopeThreadRole, "post-1") {
-		t.Fatalf("session key = %q", runner.startedSessionKey)
-	}
-	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "@sre please check deployment") {
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 || len(store.threadContexts) != 0 {
 		t.Fatalf("turns = %#v", store.sessionTurns)
 	}
 }

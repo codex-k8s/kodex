@@ -577,7 +577,7 @@
   {"id": "dialog.role.prompt.raw", "translation": "No template, use chat message"},
   {"id": "dialog.role.prompt.template", "translation": "Use template"},
   {"id": "dialog.role.field.prompt", "translation": "Prompt template"},
-  {"id": "dialog.role.field.prompt.help", "translation": "Optional Markdown Go template. Available: .Project, .Role, .Chat, .Repositories, .Task.Body, .Tools, .Secrets, .Locale."},
+  {"id": "dialog.role.field.prompt.help", "translation": "Optional Markdown Go template. Available: .Project, .Role, .Agent, .Chat, .Repository, .Repositories, .Task, .Run, .PullRequest, .GitHub, .Tools, .Secrets, .Locale. Leave empty to use a built-in seed for known roles or raw mode for custom roles."},
   {"id": "dialog.role.field.advanced", "translation": "Advanced settings JSON"},
   {"id": "dialog.role.field.advanced.help", "translation": "Optional JSON object for role-level runtime/provider settings."},
   {"id": "dialog.role.type_invalid", "translation": "Choose a supported role type."},

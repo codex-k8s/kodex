@@ -577,7 +577,7 @@
   {"id": "dialog.role.prompt.raw", "translation": "Без template, использовать сообщение из чата"},
   {"id": "dialog.role.prompt.template", "translation": "Использовать template"},
   {"id": "dialog.role.field.prompt", "translation": "Prompt template"},
-  {"id": "dialog.role.field.prompt.help", "translation": "Опциональный Markdown Go template. Доступно: .Project, .Role, .Chat, .Repositories, .Task.Body, .Tools, .Secrets, .Locale."},
+  {"id": "dialog.role.field.prompt.help", "translation": "Опциональный Markdown Go template. Доступно: .Project, .Role, .Agent, .Chat, .Repository, .Repositories, .Task, .Run, .PullRequest, .GitHub, .Tools, .Secrets, .Locale. Оставьте пустым, чтобы использовать встроенный seed для известных ролей или raw mode для кастомных ролей."},
   {"id": "dialog.role.field.advanced", "translation": "Advanced settings JSON"},
   {"id": "dialog.role.field.advanced.help", "translation": "Опциональный JSON object для role-level runtime/provider settings."},
   {"id": "dialog.role.type_invalid", "translation": "Выберите поддерживаемый role type."},

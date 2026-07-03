@@ -204,12 +204,23 @@ mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-pos
 
 Prompt template относится к профилю агента и хранится в PostgreSQL. Bot-service рендерит template перед созданием Job с текущей Mattermost locale и передает готовый Markdown prompt в agent pod через ConfigMap. Agent runner не содержит prompt-текстов в Go-коде. В prompt доступны placeholders locale contract (`.Locale.Code`, `.Locale.Language`) и GitHub account/env contract, чтобы агент знал, что `gh` авторизован через `GH_TOKEN`/`GITHUB_TOKEN`, login доступен через `GITHUB_USERNAME`/`GITHUB_USER`, email - через `GITHUB_EMAIL`.
 
-Базовые templates создаются migration:
+Базовые seed templates лежат в `services/external/bot-service/internal/domain/service/prompt_seeds/*.md`. На старте bot-service после migrations запускает seeder, который создает отсутствующие templates в PostgreSQL и не перетирает уже отредактированные в Mattermost templates. SQL migrations владеют только schema/profile metadata и не содержат Markdown prompt bodies.
+
+Стартовый OSS-набор:
 
 - `developer/developer_smoke`;
 - `developer/implement_task`;
 - `developer/fix_review`;
-- `reviewer/review_pr`.
+- `reviewer/review_pr`;
+- `manager/coordinate_task`;
+- `architect/architecture_task`;
+- `docs/documentation_task`;
+- `sre/operations_task`;
+- `qa-bot/regression_task`;
+- `improver/feedback_improvement`;
+- `pm-delivery/delivery_status`;
+- `analyst/analysis_task`;
+- `mattercodex-admin/admin_task`.
 
 Управление через Mattermost:
 

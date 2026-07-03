@@ -73,7 +73,7 @@
 - OpenAI/GitHub accounts выбираются из списков;
 - Kubernetes access mode выбирается явно: `read-only` или `cluster-admin`;
 - Codex sandbox/config overlay сохраняется в role;
-- prompt template можно оставить пустым, и role переходит в raw chat instruction mode;
+- prompt template можно оставить пустым: для известных базовых role bot-service подставляет seed Markdown template, для неизвестных role сохраняет raw chat instruction mode;
 - chat создается как private Mattermost channel внутри project team;
 - worker + reviewer или single custom role выбираются из списка;
 - flow не является первым экраном и доступен только через Advanced.

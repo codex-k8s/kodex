@@ -356,5 +356,14 @@ func openStorage(ctx context.Context, cfg Config, logger *slog.Logger) (*adminpo
 			return nil, nil, fmt.Errorf("run storage migrations: %w", err)
 		}
 	}
-	return adminpostgres.NewRepository(pool), closePool, nil
+	repo := adminpostgres.NewRepository(pool)
+	seeded, err := statusservice.SeedDefaultAgentPromptTemplates(ctx, repo)
+	if err != nil {
+		closePool()
+		return nil, nil, fmt.Errorf("seed default agent prompt templates: %w", err)
+	}
+	if seeded > 0 {
+		logger.Info("seeded default agent prompt templates", "count", seeded)
+	}
+	return repo, closePool, nil
 }

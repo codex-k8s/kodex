@@ -233,6 +233,48 @@ func TestAgentSessionCompleteUpdatesStatusWithCodexLimits(t *testing.T) {
 	}
 }
 
+func TestAgentSessionSystemStatusUpdatesInitialCardWithCodexLimits(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		MenuActionURL:   "https://mattermost.example/actions",
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	ref, err := svc.UpdateTurnSystemStatus(context.Background(), "session-1", "session-token", UpdateAgentSessionTurnStatusCommand{
+		RunID:         claim.RunID,
+		Phase:         agentSessionTurnRunning,
+		OpenAIAccount: "main",
+		CodexLimits:   "5h 96%\n7d 82%",
+	})
+	if err != nil {
+		t.Fatalf("UpdateTurnSystemStatus() error = %v", err)
+	}
+	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
+		t.Fatalf("cards=%#v cardUpdates=%#v", publisher.cards, publisher.cardUpdates)
+	}
+	if ref.PostID != "card-root-1" || publisher.cardUpdates[0].PostID != "card-root-1" {
+		t.Fatalf("ref=%#v update=%#v", ref, publisher.cardUpdates[0])
+	}
+	if len(publisher.cardUpdates[0].Actions) != 1 || publisher.cardUpdates[0].Actions[0].ID != "stopturn" {
+		t.Fatalf("updated card actions = %#v", publisher.cardUpdates[0].Actions)
+	}
+	text := publisher.cardUpdates[0].Text
+	for _, expected := range []string{"agent @manager started", "OpenAI account: `main`", "Codex limits:", "5h 96%", "7d 82%"} {
+		if !strings.Contains(text, expected) {
+			t.Fatalf("updated card misses %q: %q", expected, text)
+		}
+	}
+}
+
 func TestAgentSessionCompletePostsFYIToRequester(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.sessionTurns[0].UserName = "owner"
