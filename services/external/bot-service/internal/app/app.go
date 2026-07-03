@@ -118,6 +118,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		ThreadPublisher:    threadPublisher,
 		ConversationReader: controlSurface,
 		TurnDispatcher:     chatRunSvc,
+		MenuActionURL:      agentsActionURL(cfg),
 		StorageReady:       storage != nil,
 		RuntimeReady:       runtimeConfigured,
 	})

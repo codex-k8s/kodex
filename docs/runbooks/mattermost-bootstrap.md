@@ -59,6 +59,8 @@ bash scripts/remote/install-mattermost.sh --env-file .env --dry-run=server
 
 При включенном `MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED` remote install синхронизирует target secret `MATTERCODEX_MATTERMOST_OAUTH2_PROXY_SECRET` в namespace Mattermost. Client id/secret берутся из `MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_ID`/`MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_SECRET` или из внешних `OAUTH_CLIENT_ID`/`OAUTH_CLIENT_SECRET`, если они переданы процессу deploy. Уже существующий cookie secret сохраняется.
 
+Remote install также содержит Mattermost schema migration из `deploy/k8s/mattermost/migrations/000001_post_message_max_length.sql`. Она расширяет `posts.message` до `varchar(200000)`, чтобы фактический лимит сообщения Mattermost был 50000 runes. Скрипт сначала ждет, пока Mattermost создаст свою схему, затем применяет SQL только если текущая колонка меньше целевого размера, и перезапускает Mattermost только после реального изменения схемы. В dry-run эта миграция не выполняется.
+
 - `OAUTH_CLIENT_ID`;
 - `OAUTH_CLIENT_SECRET`;
 - `KODEX_OAUTH2_PROXY_COOKIE_SECRET`.
@@ -90,6 +92,8 @@ bash scripts/remote/install-mattermost.sh --env-file .env --apply --wait
 ```bash
 bash scripts/remote/smoke-mattermost.sh --env-file .env
 ```
+
+Smoke выводит вычисленный Mattermost лимит сообщения в runes. После успешной schema migration он должен быть `50000`.
 
 Проверка публичного endpoint:
 

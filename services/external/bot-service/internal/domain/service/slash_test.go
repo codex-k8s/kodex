@@ -3862,6 +3862,11 @@ type fakeAdminStore struct {
 	botIdentities        map[int64]entity.MattermostBotIdentity
 	agentSessions        map[string]entity.AgentSession
 	sessionTurns         []entity.AgentSessionTurn
+	postMessageMaxRunes  int
+}
+
+func (store *fakeAdminStore) MattermostPostMessageMaxRunes(context.Context) (int, error) {
+	return store.postMessageMaxRunes, nil
 }
 
 func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {

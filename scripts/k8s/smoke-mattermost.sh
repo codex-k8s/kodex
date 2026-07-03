@@ -60,6 +60,16 @@ if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
   OAUTH2_PROXY_READY="$(kubectl -n "$MATTERCODEX_NAMESPACE" get deployment mattermost-oauth2-proxy -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)"
   mattercodex_log "Mattermost OAuth2 proxy готовых реплик: ${OAUTH2_PROXY_READY:-0}"
 fi
+POST_MESSAGE_BYTES="$(kubectl -n "$MATTERCODEX_NAMESPACE" exec -i mattermost-postgres-0 -- sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -P pager=off -At' <<'SQL'
+select coalesce(max(character_maximum_length), 0)
+from information_schema.columns
+where lower(table_name) = 'posts'
+  and lower(column_name) = 'message';
+SQL
+)"
+if [ "${POST_MESSAGE_BYTES:-0}" -gt 0 ]; then
+  mattercodex_log "Mattermost лимит сообщения, runes: $((POST_MESSAGE_BYTES / 4))"
+fi
 
 if mattercodex_bool "$CHECK_URL"; then
   mattercodex_require_commands curl

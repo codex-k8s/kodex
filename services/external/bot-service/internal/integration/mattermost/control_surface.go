@@ -173,6 +173,15 @@ func (surface *ControlSurface) PostThreadCard(ctx context.Context, card statusse
 	return statusservice.MattermostPostRef{ChannelID: created.ChannelId, PostID: created.Id}, nil
 }
 
+func (surface *ControlSurface) UpdateThreadCard(ctx context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
+	post := flowCardPost(card)
+	updated, _, err := surface.client.UpdatePost(ctx, card.PostID, post)
+	if err != nil {
+		return statusservice.MattermostPostRef{}, fmt.Errorf("update Mattermost thread card: %w", err)
+	}
+	return statusservice.MattermostPostRef{ChannelID: updated.ChannelId, PostID: updated.Id}, nil
+}
+
 func (surface *ControlSurface) GetThreadPosts(ctx context.Context, rootPostID string, limit int) ([]statusservice.MattermostPostMessage, error) {
 	rootPostID = strings.TrimSpace(rootPostID)
 	if rootPostID == "" {
@@ -247,6 +256,7 @@ func updateThreadPost(ctx context.Context, client *mattermostmodel.Client4, inpu
 		ChannelId: input.ChannelID,
 		RootId:    input.RootPostID,
 		Message:   input.Message,
+		Props:     input.Props,
 	})
 	if err != nil {
 		return statusservice.MattermostPostRef{}, fmt.Errorf("update Mattermost thread post: %w", err)
@@ -518,11 +528,12 @@ func flowCardPost(card statusservice.FlowCard) *mattermostmodel.Post {
 		RootId:    card.RootPostID,
 		Message:   card.Message,
 	}
-	post.SetProps(mattermostmodel.StringInterface{
-		"attachments": []*mattermostmodel.MessageAttachment{
-			flowCardAttachment(card),
-		},
-	})
+	props := mattermostmodel.StringInterface{}
+	for key, value := range card.Props {
+		props[key] = value
+	}
+	props["attachments"] = []*mattermostmodel.MessageAttachment{flowCardAttachment(card)}
+	post.SetProps(props)
 	return post
 }
 

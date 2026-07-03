@@ -49,6 +49,7 @@ type MattermostThreadUpdateInput struct {
 	RootPostID string
 	PostID     string
 	Message    string
+	Props      map[string]any
 }
 
 type MattermostPostRef struct {
@@ -62,6 +63,7 @@ type MattermostThreadPublisher interface {
 	UpdateThreadMessage(ctx context.Context, input MattermostThreadUpdateInput) (MattermostPostRef, error)
 	UpdateThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadUpdateInput) (MattermostPostRef, error)
 	PostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
+	UpdateThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
 }
 
 type ChatPostCommand struct {
@@ -175,6 +177,9 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 		return ChatRunResult{Ignored: true}
 	}
 	if strings.HasPrefix(command.Message, "/") {
+		return ChatRunResult{Ignored: true}
+	}
+	if hasMattermostNoTriggerMarker(command.Message) {
 		return ChatRunResult{Ignored: true}
 	}
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
@@ -1547,6 +1552,17 @@ func firstNonEmptyLine(value string) string {
 		}
 	}
 	return ""
+}
+
+func hasMattermostNoTriggerMarker(message string) bool {
+	for _, field := range strings.Fields(strings.ToLower(message)) {
+		token := strings.Trim(field, " \t\r\n.,;:!?()[]{}<>\"'`*_~")
+		switch token {
+		case "#notrigger", "#no-trigger", "#silent":
+			return true
+		}
+	}
+	return false
 }
 
 func newChatRunID(chatID int64) string {

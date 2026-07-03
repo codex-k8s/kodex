@@ -43,7 +43,7 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 		Name:    "matter-codex",
 		Version: "0.1.0",
 	}, &mcp.ServerOptions{
-		Instructions: "Use these tools only for the current Mattermost project chat/thread. Keep reads small: prefer mattermost_get_thread before mattermost_search_chat. Use mattermost_update_turn_status for progress because it edits one status message for the active turn. Use mattermost_post_thread_update only when you intentionally need an additional thread message. Use mattermost_request_agent only when the user or role prompt allows asking another agent to work.",
+		Instructions: "Use these tools only for the current Mattermost project chat/thread. Keep reads small: prefer mattermost_get_thread before mattermost_search_chat. Use mattermost_update_turn_status for concise progress updates; matter-codex keeps the system start/limits/stop-button status message separate. Progress updates are posted as non-triggering thread messages. Use mattermost_post_thread_update only when you intentionally need an additional non-triggering thread message. Use mattermost_request_agent only when the user or role prompt allows asking another agent to work.",
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_get_thread",
@@ -89,7 +89,7 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_update_turn_status",
-		Description: "Create or update the single status message for the active agent turn in the current Mattermost thread.",
+		Description: "Post a concise non-triggering progress update for the active agent turn in the current Mattermost thread. It does not edit the system start/limits/stop-button status message.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpStatusInput) (*mcp.CallToolResult, statusservice.AgentSessionPostResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {

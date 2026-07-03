@@ -786,6 +786,81 @@ func TestChatRunIgnoresAgentBotMessageWithoutAgentMention(t *testing.T) {
 	}
 }
 
+func TestChatRunIgnoresNoTriggerHumanMention(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner-user",
+		UserName:  "owner",
+		Message:   "#notrigger @sre this is a repost, do not run",
+	})
+
+	if !result.Ignored || result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 || len(store.threadContexts) != 0 {
+		t.Fatalf("no-trigger human message should not start runtime or create thread context, runner=%#v turns=%#v contexts=%#v", runner.sessionRuns, store.sessionTurns, store.threadContexts)
+	}
+}
+
+func TestChatRunIgnoresNoTriggerAgentBotMention(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "bot-reply-1",
+		RootPostID: "post-1",
+		UserID:     "manager-user",
+		UserName:   "manager",
+		Message:    "@sre #silent reposted message, do not run",
+	})
+
+	if !result.Ignored || result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 || len(store.threadContexts) != 0 {
+		t.Fatalf("no-trigger bot message should not start runtime or create thread context, runner=%#v turns=%#v contexts=%#v", runner.sessionRuns, store.sessionTurns, store.threadContexts)
+	}
+}
+
 func TestChatRunIgnoresMatterCodexSystemPost(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
@@ -1157,9 +1232,14 @@ func chatRuntimeStore() *fakeAdminStore {
 }
 
 type fakeThreadPublisher struct {
-	posts   []MattermostThreadPostInput
-	updates []MattermostThreadUpdateInput
-	cards   []MattermostCard
+	posts                []MattermostThreadPostInput
+	updates              []MattermostThreadUpdateInput
+	cards                []MattermostCard
+	cardUpdates          []MattermostCard
+	postWithTokenErr     error
+	updateWithTokenErr   error
+	postWithTokenCalls   int
+	updateWithTokenCalls int
 }
 
 func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
@@ -1168,6 +1248,10 @@ func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input
 }
 
 func (publisher *fakeThreadPublisher) PostThreadMessageWithToken(_ context.Context, _ string, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	publisher.postWithTokenCalls++
+	if publisher.postWithTokenErr != nil {
+		return MattermostPostRef{}, publisher.postWithTokenErr
+	}
 	return publisher.PostThreadMessage(context.Background(), input)
 }
 
@@ -1177,12 +1261,21 @@ func (publisher *fakeThreadPublisher) UpdateThreadMessage(_ context.Context, inp
 }
 
 func (publisher *fakeThreadPublisher) UpdateThreadMessageWithToken(_ context.Context, _ string, input MattermostThreadUpdateInput) (MattermostPostRef, error) {
+	publisher.updateWithTokenCalls++
+	if publisher.updateWithTokenErr != nil {
+		return MattermostPostRef{}, publisher.updateWithTokenErr
+	}
 	return publisher.UpdateThreadMessage(context.Background(), input)
 }
 
 func (publisher *fakeThreadPublisher) PostThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
 	publisher.cards = append(publisher.cards, card)
 	return MattermostPostRef{ChannelID: card.ChannelID, PostID: "card-" + card.RootPostID}, nil
+}
+
+func (publisher *fakeThreadPublisher) UpdateThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
+	publisher.cardUpdates = append(publisher.cardUpdates, card)
+	return MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, nil
 }
 
 var _ runtimerepo.Runner = (*fakeRuntimeRunner)(nil)
