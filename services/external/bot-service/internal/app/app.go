@@ -108,6 +108,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		MattermostConfigured:     cfg.MattermostSiteURL != "",
 		ChannelManagerEnabled:    channelManager != nil,
 	})
+	if err := slashSvc.BootstrapSystemAgentRoles(ctx); err != nil {
+		logger.Warn("system agent role bootstrap failed", "error", err)
+	}
 	sessionSvc := statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{
 		Localizer:          localizer,
 		Store:              storage,

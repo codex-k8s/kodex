@@ -2164,6 +2164,7 @@ func agentRoleTypeOptions() []MattermostDialogOption {
 		{Text: "architect", Value: "architect"},
 		{Text: "writer", Value: "writer"},
 		{Text: "sre", Value: "sre"},
+		{Text: "improver", Value: "improver"},
 		{Text: "lexical_guard", Value: "lexical_guard"},
 		{Text: "custom", Value: "custom"},
 	}
@@ -2181,7 +2182,7 @@ func chatTypeOptions() []MattermostDialogOption {
 
 func validAgentRoleType(value string) bool {
 	switch value {
-	case "manager", "pm_delivery", "worker", "reviewer", "analyst", "architect", "writer", "sre", "lexical_guard", "custom":
+	case "manager", "pm_delivery", "worker", "reviewer", "analyst", "architect", "writer", "sre", "improver", "lexical_guard", "custom":
 		return true
 	default:
 		return false
