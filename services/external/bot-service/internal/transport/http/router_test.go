@@ -485,32 +485,6 @@ func attachmentContainsSlashCommand(attachment map[string]any) bool {
 	return false
 }
 
-func TestFlowActionRejectsInvalidJSON(t *testing.T) {
-	router := testRouter("expected-token", true)
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/flow", strings.NewReader(`{`))
-	request.Header.Set("Content-Type", "application/json")
-
-	router.ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
-	}
-}
-
-func TestFlowActionRejectsMissingService(t *testing.T) {
-	router := testRouter("expected-token", true)
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/flow", strings.NewReader(`{"user_id":"owner","context":{"flow_id":"flow1","action":"approve","token":"token"}}`))
-	request.Header.Set("Content-Type", "application/json")
-
-	router.ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
-	}
-}
-
 func TestGitHubWebhookRejectsMissingSecret(t *testing.T) {
 	router := testRouter("expected-token", true)
 	recorder := httptest.NewRecorder()
@@ -520,6 +494,18 @@ func TestGitHubWebhookRejectsMissingSecret(t *testing.T) {
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d", recorder.Code)
+	}
+}
+
+func TestFlowActionEndpointIsNotRegistered(t *testing.T) {
+	router := testRouter("expected-token", true)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/flow", strings.NewReader(`{}`))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -890,6 +876,10 @@ func (store *fakeRouterAdminStore) CancelAgentSessionTurn(context.Context, admin
 }
 
 func (store *fakeRouterAdminStore) UpdateAgentSessionTurnStatusPost(context.Context, adminrepo.UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, nil
+}
+
+func (store *fakeRouterAdminStore) UpdateAgentSessionTurnMessage(context.Context, adminrepo.UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error) {
 	return entity.AgentSessionTurn{}, nil
 }
 

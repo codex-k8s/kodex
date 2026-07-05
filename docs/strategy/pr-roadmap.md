@@ -2,7 +2,7 @@
 
 Этот roadmap заменяет старую разбивку после merge PR #20 и после перехода на single-user model фиксирует новый основной путь: Project = Mattermost team, Chat = private channel, AgentRole = агентная роль в project.
 
-Система уже имеет bootstrap, bot-service, storage, GitHub adapter, Kubernetes runner, Codex developer/reviewer runs, legacy developer-review flow, owner actions, retention cleanup, OAuth gate, i18n и первые `/agents` menu/dialog срезы.
+Система уже имеет bootstrap, bot-service, storage, GitHub adapter, Kubernetes runner, Codex agent/reviewer runs, owner actions, retention cleanup, OAuth gate, i18n и первые `/agents` menu/dialog срезы.
 
 Дальше цель не наращивать typed slash commands и не развивать flow-builder, а довести продукт до owner-first Mattermost UX: владелец открывает `/agents`, создает project, accounts, repositories, roles и chats кнопками/формами, вводит только содержательные данные и не помнит технические identifiers.
 
@@ -20,7 +20,7 @@
 - role editor с optional prompt template, GitHub/OpenAI bindings, Kubernetes access, sandbox и Codex config overlay;
 - chat creator с выбором project, roles, repository, issue и work policy;
 - prompt builder, где пустой template означает raw chat instruction mode;
-- legacy flow/profiles/prompts перенесены в Advanced.
+- legacy profiles/prompts перенесены в Advanced, flow-builder удален из owner-facing UX.
 
 Ручная проверка:
 
@@ -28,7 +28,7 @@
 - создать project и проверить Mattermost team;
 - создать role без prompt template и увидеть raw mode;
 - создать chat с worker + reviewer и проверить private channel;
-- убедиться, что flow находится в Advanced, а не в главном happy path.
+- убедиться, что flow-builder не отображается в owner-facing меню.
 
 ## Next Code PR: Chat-triggered Agent Sessions
 
@@ -73,7 +73,7 @@
 
 - общий слой entity cards/list pages;
 - pagination/filter actions для длинных списков;
-- hidden action state для repository/account/profile/template/run/flow ids;
+- hidden action state для repository/account/profile/template/run ids;
 - единый confirmation flow без ввода технических ids;
 - result/error cards с next actions;
 - тесты, запрещающие `/agents <command>` в owner-facing карточках основного меню.
@@ -134,9 +134,9 @@
 - выполнить check/webhook actions с repository card;
 - удалить/disable metadata через confirmation UI.
 
-## Combined Code PR: Owner Flow MVP
+## Combined Code PR: Owner Chat/Runtime MVP
 
-Цель: одним PR закрыть оставшиеся owner-facing MVP-срезы так, чтобы владелец управлял profiles, prompts, flow, pending decisions и runtime cleanup из `/agents`, без ручного ввода flow/run/profile/template ids для уже созданных сущностей.
+Цель: одним PR закрыть оставшиеся owner-facing MVP-срезы так, чтобы владелец управлял profiles, prompts, chat/thread sessions и runtime cleanup из `/agents`, без ручного ввода run/profile/template ids для уже созданных сущностей.
 
 Содержимое:
 
@@ -149,22 +149,14 @@
 - prompt edit через Markdown submission;
 - placeholders/functions help из i18n;
 - test render before save.
-- wizard: repository -> flow preset -> profiles/accounts -> task -> confirm;
-- system-generated flow id, run ids и branch names;
-- flow card как главный статусный объект;
-- pending decisions list;
-- approve/reject/rerun/stop/hold actions;
-- blocked escalation после лимита попыток;
-- links на PR, logs/status и cleanup.
 - runtime lists: active, held, completed;
-- run/flow status cards с log tail;
-- cleanup конкретного run/flow из карточки;
+- run status cards с log tail;
+- cleanup конкретного run из карточки;
 - retention dry-run с skipped reasons;
 - apply cleanup через confirmation UI;
-- hold/unhold flow;
-- правила: active jobs и waiting/held flows не удаляются без явного owner action.
+- правила: active jobs и thread sessions не удаляются без явного owner action или TTL.
 - полный dogfooding run на `matter-codex` или выбранном repository;
-- проверка developer -> PR -> reviewer -> fix-loop -> owner gate;
+- проверка chat/thread agent run -> PR -> reviewer -> owner feedback;
 - финальный runbook без обязательных typed commands в product path;
 - smoke/deploy evidence;
 - список оставшихся production gaps.
@@ -176,16 +168,13 @@
 - выбрать Kubernetes access mode;
 - открыть template, изменить Markdown, увидеть test render и сохранить;
 - проверить, что prompt language зависит от выбранной локали;
-- запустить developer-review flow, введя только текст задачи;
 - увидеть generated ids только как read-only metadata;
-- получить PR link в flow card;
-- проверить pending decisions;
-- нажать approve/reject/rerun/stop/hold на тестовом flow;
+- получить PR/status link в thread/status card;
 - открыть runtime menu;
 - выбрать run из списка и посмотреть status/log tail;
 - выполнить dry-run retention;
 - подтвердить cleanup конкретного завершенного run;
-- убедиться, что waiting/held flow пропускается cleanup без явного owner action;
+- убедиться, что active jobs и live thread sessions пропускаются cleanup без явного owner action или TTL;
 - пройти end-to-end task в Mattermost;
 - получить PR и reviewer decision;
 - проверить request changes -> fix attempt;
@@ -195,7 +184,7 @@
 ## Оставшиеся production gaps после MVP
 
 - Fine-grained Kubernetes role policies вместо MVP `cluster-admin` для deploy/ops profiles.
-- Более богатая пагинация/поиск для больших списков profiles, flows и runs.
+- Более богатая пагинация/поиск для больших списков profiles, roles, chats и runs.
 - Полная история audit trail и log tail прямо в карточках без fallback typed commands.
 - GitHub App вместо PAT/account token.
 - HA Mattermost/PostgreSQL и managed storage вместо single-server setup.

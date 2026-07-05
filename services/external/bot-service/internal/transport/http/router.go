@@ -31,7 +31,6 @@ const (
 	pathAgentsSlash   = "/mattermost/slash/agents"
 	pathAgentsAction  = "/mattermost/actions/agents"
 	pathAgentsDialog  = "/mattermost/dialogs/agents"
-	pathFlowAction    = "/mattermost/actions/flow"
 	pathGitHubWebhook = "/github/webhook"
 	pathAgentSessions = "/internal/agent-sessions/"
 	pathMCPSessions   = "/mcp/sessions/"
@@ -110,7 +109,6 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.mux.HandleFunc(pathAgentsSlash, router.handleAgentsSlash)
 	router.mux.HandleFunc(pathAgentsAction, router.handleAgentsAction)
 	router.mux.HandleFunc(pathAgentsDialog, router.handleAgentsDialog)
-	router.mux.HandleFunc(pathFlowAction, router.handleFlowAction)
 	router.mux.HandleFunc(pathGitHubWebhook, router.handleGitHubWebhook)
 	router.mux.HandleFunc(pathAgentSessions, router.handleAgentSessionInternal)
 	if router.mcpHandler != nil {
@@ -336,40 +334,6 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
-}
-
-func (router *Router) handleFlowAction(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, router.maxSlashFormBytes)
-	var request mattermostmodel.PostActionIntegrationRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		router.logWarn("invalid Mattermost flow action", "error", err)
-		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_flow_action"})
-		return
-	}
-	if router.slashService == nil {
-		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "slash_service_not_configured"})
-		return
-	}
-	result := router.slashService.HandleFlowAction(r.Context(), statusservice.FlowActionCommand{
-		FlowID:    contextString(request.Context, "flow_id"),
-		Action:    contextString(request.Context, "action"),
-		Token:     contextString(request.Context, "token"),
-		UserID:    strings.TrimSpace(request.UserId),
-		UserName:  strings.TrimSpace(request.UserName),
-		ChannelID: strings.TrimSpace(request.ChannelId),
-		PostID:    strings.TrimSpace(request.PostId),
-	})
-	status := result.StatusCode
-	if status == 0 {
-		status = http.StatusOK
-	}
-	writeJSON(w, status, &mattermostmodel.PostActionIntegrationResponse{
-		EphemeralText: result.EphemeralText,
-	})
 }
 
 func (router *Router) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {

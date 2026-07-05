@@ -281,6 +281,11 @@ type UpdateAgentSessionTurnStatusPostInput struct {
 	StatusPostID string
 }
 
+type UpdateAgentSessionTurnMessageInput struct {
+	TurnID  int64
+	Message string
+}
+
 type Repository interface {
 	UpsertRepository(ctx context.Context, input UpsertRepositoryInput) (entity.Repository, bool, error)
 	GetRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
@@ -330,6 +335,7 @@ type Repository interface {
 	CompleteAgentSessionTurn(ctx context.Context, input CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error)
 	CancelAgentSessionTurn(ctx context.Context, input CancelAgentSessionTurnInput) (entity.AgentSessionTurn, error)
 	UpdateAgentSessionTurnStatusPost(ctx context.Context, input UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error)
+	UpdateAgentSessionTurnMessage(ctx context.Context, input UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error)
 	ListQueuedAgentSessionTurns(ctx context.Context, sessionID int64) ([]entity.AgentSessionTurn, error)
 	UpsertAgentProfile(ctx context.Context, input UpsertAgentProfileInput) (entity.AgentProfile, bool, error)
 	GetAgentProfile(ctx context.Context, name string) (entity.AgentProfile, error)

@@ -223,6 +223,9 @@ func (repo *Repository) ListAgentPromptTemplates(ctx context.Context, profileNam
 func (repo *Repository) GetAgentPromptTemplate(ctx context.Context, profileName string, templateKey string) (entity.AgentPromptTemplate, error) {
 	item, err := scanAgentPromptTemplate(repo.pool.QueryRow(ctx, query("agent_prompt_templates__get.sql"), profileName, templateKey))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentPromptTemplate{}, adminrepo.ErrNotFound
+		}
 		return entity.AgentPromptTemplate{}, fmt.Errorf("get agent prompt template: %w", err)
 	}
 	return item, nil
@@ -621,6 +624,20 @@ func (repo *Repository) UpdateAgentSessionTurnStatusPost(ctx context.Context, in
 	))
 	if err != nil {
 		return entity.AgentSessionTurn{}, fmt.Errorf("update agent session turn status post: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) UpdateAgentSessionTurnMessage(ctx context.Context, input adminrepo.UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__update_message.sql"),
+		input.TurnID,
+		input.Message,
+	))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSessionTurn{}, fmt.Errorf("update agent session turn message: %w", err)
 	}
 	return item, nil
 }

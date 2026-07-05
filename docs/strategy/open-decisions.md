@@ -85,7 +85,7 @@ Agent profile должен управлять не только prompt, но и 
 
 ### Принято для MVP
 
-БД как источник правды, Git fixtures только для seed/default templates.
+БД как runtime source of truth. Default/OSS seed templates хранятся в Git как Markdown-файлы и при старте bot-service добавляются в БД только если соответствующего template еще нет.
 
 ## 8. Один сервис или микросервисы
 

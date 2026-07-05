@@ -911,8 +911,8 @@ remote_psql "select count(*) from matter_codex_agent_session_turns t join matter
 
 manager_ttl="$(remote_psql "select ttl_seconds from matter_codex_agent_sessions where session_key = $(sql_literal "$MANAGER_SESSION_KEY");")"
 worker_ttl="$(remote_psql "select ttl_seconds from matter_codex_agent_sessions where session_key = $(sql_literal "$WORKER_SESSION_KEY");")"
-[ "$manager_ttl" = "604800" ] || mattercodex_die "manager ttl ожидался 604800, сейчас $manager_ttl"
-[ "$worker_ttl" = "259200" ] || mattercodex_die "worker ttl ожидался 259200, сейчас $worker_ttl"
+[ "$manager_ttl" = "14400" ] || mattercodex_die "manager ttl ожидался 14400, сейчас $manager_ttl"
+[ "$worker_ttl" = "14400" ] || mattercodex_die "worker ttl ожидался 14400, сейчас $worker_ttl"
 
 mattercodex_ssh "set -eu
   $REMOTE_KUBECTL -n $NAMESPACE_Q get pod -l matter-codex.dev/session-key=$(mattercodex_shell_quote "$MANAGER_SESSION_KEY") >/dev/null

@@ -73,10 +73,10 @@
 - OpenAI/GitHub accounts выбираются из списков;
 - Kubernetes access mode выбирается явно: `read-only` или `cluster-admin`;
 - Codex sandbox/config overlay сохраняется в role;
-- prompt template можно оставить пустым, и role переходит в raw chat instruction mode;
+- prompt template можно оставить пустым: для известных базовых role bot-service подставляет seed Markdown template, для неизвестных role сохраняет raw chat instruction mode;
 - chat создается как private Mattermost channel внутри project team;
 - worker + reviewer или single custom role выбираются из списка;
-- flow не является первым экраном и доступен только через Advanced.
+- flow не является первым экраном и не входит в owner-facing UX.
 
 ## Chat-triggered Agent Sessions PR
 
@@ -93,36 +93,23 @@
 - финальный ответ агента появляется в thread исходного сообщения;
 - GitHub issue/PR links возвращаются в thread/card.
 
-## Legacy Flow Wizard PR
-
-Проверка:
-
-- legacy flow запускается из `/agents -> Advanced -> Запуск flow`;
-- repository/profile/accounts выбираются из UI;
-- owner вводит только текст задачи;
-- system генерирует flow id, run id, branch name;
-- flow card содержит PR/status/actions;
-- pending decisions показывает waiting/blocked flows;
-- approve/reject/rerun/stop работают кнопками.
-
 ## Runtime And Cleanup PR
 
 Проверка:
 
 - active/held/completed runs видны из runtime menu;
 - status/log tail открывается с карточки run;
-- cleanup конкретного run/flow запускается с его карточки;
+- cleanup конкретного run запускается с его карточки;
 - dry-run retention показывает skipped reasons;
 - apply cleanup требует UI confirmation;
-- held/waiting flows не удаляются без явного owner action.
+- активные thread sessions не удаляются без явного owner action или TTL.
 
 ## E2E Dogfooding PR
 
 Проверка:
 
-- реальный repository проходит путь task -> developer PR -> reviewer decision -> owner gate;
-- request changes запускает fix attempt;
-- лимит попыток переводит flow в blocked;
+- реальный repository проходит путь task -> agent work -> PR -> reviewer decision -> owner feedback;
+- request changes обрабатывается новым turn'ом в том же thread/session;
 - PR и review оформляются через GitHub account агента;
 - Mattermost thread остается источником статуса и решений;
 - cleanup после завершения понятен и безопасен.

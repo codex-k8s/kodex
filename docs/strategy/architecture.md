@@ -7,7 +7,7 @@ MVP реализуется как один backend-сервис `matter-codex`, 
 - `mattermost` - slash commands, bot posts, interactive actions, thread updates.
 - `projects` - Project = Mattermost team, project repository bindings и project-level settings.
 - `chats` - Chat = private Mattermost channel, participants, repository bindings и thread/session context.
-- `orchestrator` - state machine run/step и переходы flow.
+- `orchestration` - запуск agent session, очередь turn'ов, TTL и статусы run.
 - `runtime` - создание Kubernetes pod/job/PVC для agent run.
 - `github` - операции repository, branch, PR, comments, review status.
 - `credentials` - безопасные metadata и ссылки на Kubernetes Secrets.
@@ -47,7 +47,6 @@ UI state хранит технические identifiers в action context ил�
 - account name;
 - profile name;
 - template key;
-- flow id;
 - run id;
 - Kubernetes resource references.
 
@@ -57,7 +56,7 @@ UI state хранит технические identifiers в action context ил�
 
 После установки система должна подготовить базовый control surface:
 
-- `agents-control` - административные команды, onboarding repo/project, tokens, OpenAI accounts, profiles и flow.
+- `agents-control` - административные команды, onboarding repo/project, tokens, OpenAI accounts, roles/profiles и runtime diagnostics.
 - `agents-runs` - общая лента run и переходов статусов.
 - `agent-alerts` - ошибки, блокеры, лимиты, падения runner и запросы решения.
 - `agents-audit` - безопасные audit summaries без секретов.
@@ -73,27 +72,20 @@ UI state хранит технические identifiers в action context ил�
 
 Legacy repository channels остаются для совместимости с текущим onboarding, но не являются главным контейнером будущего UX.
 
-## State machine
+## Runtime lifecycle
 
-Минимальные состояния run:
+Минимальные состояния agent run:
 
 - `created`
 - `queued`
-- `developer_running`
-- `developer_failed`
-- `pr_opened`
-- `review_running`
-- `changes_requested`
-- `fix_running`
-- `approved_by_reviewer`
-- `waiting_owner`
-- `owner_approved`
-- `owner_rejected`
-- `merged`
+- `running`
+- `succeeded`
+- `failed`
+- `stopped`
 - `blocked`
-- `cancelled`
+- `expired`
 
-Run хранит текущий статус, а step хранит конкретную попытку agent execution. Переходы выполняет orchestrator, а не runner pod.
+Run хранит текущий статус pod/job, а thread/session хранит conversation context, очереди turn'ов, выбранный repository context и TTL. Переходы выполняет bot-service orchestration layer, а не runner pod.
 
 ## Agent runner
 
@@ -219,7 +211,6 @@ Owner-facing GitHub account path не должен требовать Kubernetes
 - agent_config_overlays;
 - prompt_templates;
 - mattermost_channel_bindings;
-- flows;
 - runs;
 - steps;
 - artifacts;

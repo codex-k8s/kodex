@@ -32,8 +32,8 @@ const (
 	agentSessionTurnFailed    = "failed"
 	agentSessionTurnCanceled  = "canceled"
 
-	defaultManagerSessionTTLSeconds = 7 * 24 * 60 * 60
-	defaultThreadSessionTTLSeconds  = 3 * 24 * 60 * 60
+	defaultManagerSessionTTLSeconds = 4 * 60 * 60
+	defaultThreadSessionTTLSeconds  = 4 * 60 * 60
 
 	defaultMattermostPostMessageMaxRunes = 65535 / 4
 	mattermostPostChunkReserveRunes      = 128
@@ -498,13 +498,44 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 		return AgentSessionAgentRequest{}, fmt.Errorf("source session is not bound to a Mattermost thread")
 	}
 	requesterUserName := svc.sessionMattermostUsername(ctx, session)
+	targetSessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, rootPostID)
+	userMessage := delegatedAgentRequestMessage(requesterUserName, role.Name, message)
+	if existingTarget, err := svc.cfg.Store.GetAgentSession(ctx, targetSessionKey); err == nil {
+		queuedTurns, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, existingTarget.ID)
+		if err != nil {
+			return AgentSessionAgentRequest{}, err
+		}
+		if len(queuedTurns) > 0 {
+			turn, err := svc.cfg.Store.UpdateAgentSessionTurnMessage(ctx, adminrepo.UpdateAgentSessionTurnMessageInput{
+				TurnID:  queuedTurns[0].ID,
+				Message: appendDelegatedAgentRequestToQueuedPrompt(queuedTurns[0].Message, requesterUserName, role.Name, message),
+			})
+			if err != nil {
+				return AgentSessionAgentRequest{}, err
+			}
+			auditPostID := ""
+			if ref, err := svc.postAgentRequestAudit(ctx, session, rootPostID, requesterUserName, role.Name, message); err == nil {
+				auditPostID = ref.PostID
+			}
+			return AgentSessionAgentRequest{
+				SessionKey:        session.SessionKey,
+				RequestedRunID:    turn.RunID,
+				RequestedRoleName: role.Name,
+				RequestedRoleID:   role.ID,
+				TargetSessionKey:  targetSessionKey,
+				AuditPostID:       auditPostID,
+			}, nil
+		}
+	} else if !errors.Is(err, adminrepo.ErrNotFound) {
+		return AgentSessionAgentRequest{}, err
+	}
 	queued, err := svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
 		Project:       project,
 		Chat:          chat,
 		Role:          role,
 		Repositories:  repositories,
 		UserName:      requesterUserName,
-		UserMessage:   message,
+		UserMessage:   userMessage,
 		SourcePostID:  rootPostID,
 		ReplyRootID:   rootPostID,
 		SessionRootID: rootPostID,
@@ -851,6 +882,52 @@ func agentRequestAuditMessage(requester string, target string, message string) s
 	body.WriteString("\n")
 	body.WriteString(fence)
 	return body.String()
+}
+
+func delegatedAgentRequestMessage(requesterUserName string, targetRoleName string, message string) string {
+	var body strings.Builder
+	body.WriteString("# Запрос к агенту через MatterCodex\n\n")
+	appendDelegatedAgentRequestSection(&body, requesterUserName, targetRoleName, message)
+	body.WriteString("\n\nОбработай этот запрос как отдельную задачу в текущей MatterCodex thread-session. Если нужно вернуть управление инициатору или manager, используй только `mattermost_request_agent`.")
+	return strings.TrimSpace(body.String())
+}
+
+func appendDelegatedAgentRequestToQueuedPrompt(existingPrompt string, requesterUserName string, targetRoleName string, message string) string {
+	var body strings.Builder
+	body.WriteString(strings.TrimSpace(existingPrompt))
+	body.WriteString("\n\n# Дополнительный запрос к этому же занятому агенту\n\n")
+	appendDelegatedAgentRequestSection(&body, requesterUserName, targetRoleName, message)
+	body.WriteString("\n\nЭтот запрос был объединен с уже ожидающим turn. Выполни объединенную работу последовательно, сохранив контекст каждого инициатора.")
+	return strings.TrimSpace(body.String()) + "\n"
+}
+
+func appendDelegatedAgentRequestSection(body *strings.Builder, requesterUserName string, targetRoleName string, message string) {
+	requester := mentionableMattermostUsername(requesterUserName)
+	if requester == "" {
+		requester = "agent"
+	} else {
+		requester = "@" + requester
+	}
+	target := mentionableMattermostUsername(targetRoleName)
+	if target == "" {
+		target = strings.TrimSpace(targetRoleName)
+	}
+	if target == "" {
+		target = "agent"
+	} else {
+		target = "@" + target
+	}
+	fence := markdownFence(strings.TrimSpace(message))
+	body.WriteString("- Инициатор: ")
+	body.WriteString(requester)
+	body.WriteString("\n- Целевой агент: ")
+	body.WriteString(target)
+	body.WriteString("\n\n## Prompt инициатора\n\n")
+	body.WriteString(fence)
+	body.WriteString("markdown\n")
+	body.WriteString(strings.TrimSpace(message))
+	body.WriteString("\n")
+	body.WriteString(fence)
 }
 
 func markdownFence(body string) string {

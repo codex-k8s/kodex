@@ -118,7 +118,7 @@ func (svc *SlashCommandService) handleAgentRole(ctx context.Context, args []stri
 	for _, role := range roles {
 		lines = append(lines, svc.t("agent_role.list.item", map[string]any{
 			"ID":      role.ID,
-			"Project": role.ProjectID,
+			"Project": svc.roleProjectLabel(ctx, role.ProjectID),
 			"Name":    role.Name,
 			"Type":    role.RoleType,
 			"Prompt":  rolePromptLabel(svc, role),
@@ -455,7 +455,7 @@ func (svc *SlashCommandService) roleListCard(ctx context.Context, command MenuAc
 		card.Fields = append(card.Fields, MattermostCardField{
 			Title: svc.t("menu.entity.role.item_title", map[string]any{"Number": number, "Role": role.Name}),
 			Value: svc.t("menu.entity.role.summary", map[string]any{
-				"Project": role.ProjectID,
+				"Project": svc.roleProjectLabel(ctx, role.ProjectID),
 				"Type":    role.RoleType,
 				"OpenAI":  emptyAsUnknown(role.OpenAIAccountName),
 				"GitHub":  emptyAsUnknown(role.GitHubAccountName),
@@ -490,11 +490,12 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 		return card
 	}
 	runtimeVariables, _ := svc.cfg.Store.ListAgentRoleRuntimeVariables(ctx, role.ID)
+	projectLabel := svc.roleProjectLabel(ctx, role.ProjectID)
 	card.Title = svc.t("menu.entity.role.card_title", map[string]any{"Role": role.Name})
 	card.Text = svc.t("menu.entity.role.card_text", map[string]any{"Role": role.Name})
 	card.Fields = []MattermostCardField{
 		{Title: svc.t("menu.entity.field.role", nil), Value: "`" + role.Name + "`", Short: true},
-		{Title: svc.t("menu.entity.field.project", nil), Value: "`" + strconv.FormatInt(role.ProjectID, 10) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.project", nil), Value: "`" + projectLabel + "`", Short: true},
 		{Title: svc.t("menu.entity.field.type", nil), Value: "`" + role.RoleType + "`", Short: true},
 		{Title: svc.t("menu.entity.field.bot_identity", nil), Value: "`" + emptyAsUnknown(role.BotIdentity) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.openai", nil), Value: "`" + emptyAsUnknown(role.OpenAIAccountName) + "`", Short: true},
@@ -968,7 +969,7 @@ func (svc *SlashCommandService) agentRoleDialog(ctx context.Context, command Men
 	role := entity.AgentRole{
 		ProjectID:         selectedProjectID(command),
 		RoleType:          "worker",
-		PromptMode:        "raw",
+		PromptMode:        "template",
 		OpenAIAccountName: "",
 		GitHubAccountName: "",
 		KubernetesAccess:  "read-only",
@@ -1543,6 +1544,15 @@ func (svc *SlashCommandService) handleAgentRoleDialogUpsert(ctx context.Context,
 	if len(fieldErrors) > 0 {
 		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
 	}
+	if !editMode && strings.TrimSpace(input.PromptTemplate) == "" && input.PromptMode == "template" {
+		if seed, ok := promptSeedForAgentRole(input.Name, input.RoleType); ok {
+			body, err := promptSeedMarkdown(seed)
+			if err != nil {
+				return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldPromptTemplate: svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(err)})}}
+			}
+			input.PromptTemplate = body
+		}
+	}
 	if strings.TrimSpace(input.PromptTemplate) != "" {
 		if _, err := RenderRolePromptTemplate(input.PromptTemplate, SampleRolePromptData(input.Name, input.RoleType, svc.promptTemplateLocaleData())); err != nil {
 			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldPromptTemplate: svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(err)})}}
@@ -1569,7 +1579,7 @@ func (svc *SlashCommandService) handleAgentRoleDialogUpsert(ctx context.Context,
 	text := svc.t("agent_role.save.result", map[string]any{
 		"State":   svc.t(stateID, nil),
 		"ID":      role.ID,
-		"Project": role.ProjectID,
+		"Project": svc.roleProjectLabel(ctx, role.ProjectID),
 		"Role":    role.Name,
 		"Type":    role.RoleType,
 		"Prompt":  rolePromptLabel(svc, role),
@@ -2239,6 +2249,20 @@ func rolePromptLabel(svc *SlashCommandService, role entity.AgentRole) string {
 		return svc.t("label.prompt.raw", nil)
 	}
 	return svc.t("label.prompt.template", nil)
+}
+
+func (svc *SlashCommandService) roleProjectLabel(ctx context.Context, projectID int64) string {
+	if projectID <= 0 || svc.cfg.Store == nil {
+		return strconv.FormatInt(projectID, 10)
+	}
+	project, err := svc.cfg.Store.GetProject(ctx, projectID)
+	if err != nil {
+		return strconv.FormatInt(projectID, 10)
+	}
+	if strings.TrimSpace(project.Slug) == "" {
+		return fmt.Sprintf("%s #%d", project.Name, project.ID)
+	}
+	return fmt.Sprintf("%s #%d", project.Slug, project.ID)
 }
 
 func chatParticipantNames(participants []entity.ChatParticipant) string {

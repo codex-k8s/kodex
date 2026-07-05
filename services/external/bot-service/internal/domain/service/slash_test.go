@@ -162,8 +162,6 @@ func TestMenuCardsDoNotExposeTypedCommandBlocks(t *testing.T) {
 	views := []string{
 		menuViewMain,
 		menuViewProjects,
-		menuViewStartFlow,
-		menuViewPending,
 		menuViewRepositories,
 		menuViewAccounts,
 		menuViewOpenAI,
@@ -185,6 +183,24 @@ func TestMenuCardsDoNotExposeTypedCommandBlocks(t *testing.T) {
 		}
 		if strings.Contains(result.Card.Text, "/agents ") {
 			t.Fatalf("%s card still exposes typed command text: %q", view, result.Card.Text)
+		}
+	}
+}
+
+func TestSlashLegacyDevAndFlowCommandsAreDisabled(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+	})
+
+	for _, text := range []string{
+		"dev smoke codex-k8s/matter-codex",
+		"flow start codex-k8s/matter-codex flow1 Update docs",
+	} {
+		got := svc.Handle(context.Background(), SlashCommand{Text: text, UserName: "owner"})
+		if !strings.Contains(got, "unknown command") {
+			t.Fatalf("Handle(%q) = %q", text, got)
 		}
 	}
 }
@@ -521,7 +537,7 @@ func TestAgentRoleDialogDefaultsGitHubAccountFromProject(t *testing.T) {
 	}
 }
 
-func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
+func TestAgentRoleDialogSeedsKnownRolePromptTemplate(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
 			1: {ID: 1, Name: "Demo Project", Slug: "demo-project"},
@@ -573,7 +589,7 @@ func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("role not stored: %v", err)
 	}
-	if role.PromptMode != "raw" || role.PromptTemplate != "" {
+	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "Ты агент developer проекта") || !strings.Contains(role.PromptTemplate, "mattermost_request_agent") {
 		t.Fatalf("prompt mode/template = %q/%q", role.PromptMode, role.PromptTemplate)
 	}
 	if role.OpenAIAccountName != "primary" || role.GitHubAccountName != "agent" {
@@ -589,7 +605,7 @@ func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
 	if identity.Username != "backend-dev-bot" || identity.MattermostUserID != "bot-user-backend-dev-bot" || identity.TokenSecretRef == "" {
 		t.Fatalf("bot identity = %#v", identity)
 	}
-	if !strings.Contains(result.Card.Text, "raw chat instruction") {
+	if !strings.Contains(result.Card.Text, "prompt: `template`") {
 		t.Fatalf("card text = %q", result.Card.Text)
 	}
 }
@@ -654,7 +670,7 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 		t.Fatalf("existing improver prompt was overwritten: %q", radarImprover.PromptTemplate)
 	}
 	myQRImprover := testRoleByName(t, store, 2, "improver")
-	if myQRImprover.RoleType != "improver" || myQRImprover.PromptMode != "template" || !strings.Contains(myQRImprover.PromptTemplate, "real review feedback") {
+	if myQRImprover.RoleType != "improver" || myQRImprover.PromptMode != "template" || !strings.Contains(myQRImprover.PromptTemplate, "повторяющиеся замечания") {
 		t.Fatalf("myqr improver = %#v", myQRImprover)
 	}
 	if myQRImprover.GitHubAccountName != "github-myqrcontact-owner" || myQRImprover.OpenAIAccountName != "openai-radar-delivery" {
@@ -779,10 +795,10 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildRolePrompt() error = %v", err)
 	}
-	if !strings.Contains(prompt, "# User instruction") || !strings.Contains(prompt, "Inspect the current issue and propose next steps.") {
+	if !strings.Contains(prompt, "# Инструкция пользователя") || !strings.Contains(prompt, "Inspect the current issue and propose next steps.") {
 		t.Fatalf("prompt = %q", prompt)
 	}
-	if !strings.Contains(prompt, "Project: Platform") || !strings.Contains(prompt, "github:codex-k8s/matter-codex") {
+	if !strings.Contains(prompt, "Проект: Platform") || !strings.Contains(prompt, "github:codex-k8s/matter-codex") {
 		t.Fatalf("prompt = %q", prompt)
 	}
 	if !strings.Contains(prompt, "`gh` 2.95.0") || !strings.Contains(prompt, "`go` 1.26") || !strings.Contains(prompt, "`kubectl` 1.36.2") {
@@ -793,17 +809,17 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing runtime tool %q: %q", expected, prompt)
 		}
 	}
-	for _, expected := range []string{"Available credential bindings", "GH_TOKEN", "KUBERNETES_SERVICE_HOST", "/var/run/secrets/kubernetes.io/serviceaccount/token"} {
+	for _, expected := range []string{"Доступные привязки учетных данных", "GH_TOKEN", "KUBERNETES_SERVICE_HOST", "/var/run/secrets/kubernetes.io/serviceaccount/token"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing credential binding %q: %q", expected, prompt)
 		}
 	}
-	for _, expected := range []string{"mattermost_update_turn_status", "--body-file", "Do not inline Markdown"} {
+	for _, expected := range []string{"mattermost_update_turn_status", "--body-file", "Не встраивай Markdown"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
 		}
 	}
-	for _, expected := range []string{"GitHub PR bodies", "inline review comments", "in English"} {
+	for _, expected := range []string{"заголовки и описания пул-реквестов", "строчные замечания ревью", "пиши на English"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing language contract %q: %q", expected, prompt)
 		}
@@ -867,9 +883,9 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 		"openapi-ts=0.98.2",
 		"asyncapi=6.0.2",
 		"modelina=5.10.1",
-		"GitHub account=GH_TOKEN",
+		"GitHub-аккаунт=GH_TOKEN",
 		"Kubernetes service account=KUBERNETES_SERVICE_HOST",
-		"Project env STAGING_DB_URL=STAGING_DB_URL",
+		"Проектная переменная STAGING_DB_URL=STAGING_DB_URL",
 		"mattermost_update_turn_status",
 		"--body-file",
 	} {
@@ -1452,11 +1468,52 @@ func TestProfileDialogSubmissionCreatesProfileAndPromptSeeds(t *testing.T) {
 	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerImplementTaskKey)]; !ok {
 		t.Fatalf("implement prompt was not seeded: %#v", store.promptTemplates)
 	}
-	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerFixReviewKey)]; !ok {
-		t.Fatalf("fix prompt was not seeded: %#v", store.promptTemplates)
-	}
 	if result.Card == nil || !strings.Contains(result.Card.Text, "deployer") {
 		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestProfileDialogSubmissionCreatesArchitectPromptSeed(t *testing.T) {
+	store := &fakeAdminStore{
+		openAIAccounts: map[string]entity.OpenAIAccount{"primary": {Name: "primary", SecretRef: "matter-codex-codex-auth-primary", Status: "authorized"}},
+		githubAccounts: map[string]entity.GitHubAccount{"agent": {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"}},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProfileUpsert,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewProfiles, ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id",
+		UserName:   "owner",
+		Submission: map[string]any{
+			dialogFieldProfile:          "architect",
+			dialogFieldRole:             "architect",
+			dialogFieldOpenAIAccount:    "primary",
+			dialogFieldGitHubAccount:    "agent",
+			dialogFieldKubernetesAccess: "read-only",
+			dialogFieldSandboxMode:      "workspace-write",
+			dialogFieldDescription:      "Architecture profile",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	item, err := store.GetAgentPromptTemplate(context.Background(), "architect", architectDocsTaskKey)
+	if err != nil {
+		t.Fatalf("architect prompt seed was not saved: %v", err)
+	}
+	if !strings.Contains(item.Body, "- Проект: {{.Project.Name}}") ||
+		!strings.Contains(item.Body, "Язык владельца: {{.Locale.Language}}") ||
+		!strings.Contains(item.Body, "mattermost_request_agent") {
+		t.Fatalf("architect seed body missing generic locale/MCP policy:\n%s", item.Body)
 	}
 }
 
@@ -1490,79 +1547,6 @@ func TestPromptEditDialogRendersBeforeSave(t *testing.T) {
 		t.Fatalf("prompt template = %#v err=%v", item, err)
 	}
 	if result.Card == nil || !strings.Contains(result.Card.Text, "Review codex-k8s/matter-codex in English") {
-		t.Fatalf("card = %#v", result.Card)
-	}
-}
-
-func TestFlowStartDialogUsesSelectedProfiles(t *testing.T) {
-	store := &fakeAdminStore{
-		repositories: map[string]entity.Repository{
-			"github:codex-k8s/matter-codex": {Provider: "github", Owner: "codex-k8s", Name: "matter-codex", DefaultBranch: "main", GitHubAccountName: "agent", Status: "active"},
-		},
-		profiles: []entity.AgentProfile{
-			{Name: "devx", Role: "developer", Enabled: true, OpenAIAccountName: "devx", GitHubAccountName: "agent"},
-			{Name: "reviewx", Role: "reviewer", Enabled: true, OpenAIAccountName: "reviewx", GitHubAccountName: "primary"},
-		},
-		openAIAccounts: map[string]entity.OpenAIAccount{
-			"devx":    {Name: "devx", SecretRef: "matter-codex-codex-auth-devx", Status: "authorized"},
-			"reviewx": {Name: "reviewx", SecretRef: "matter-codex-codex-auth-reviewx", Status: "authorized"},
-		},
-		githubAccounts: map[string]entity.GitHubAccount{
-			"agent":   {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
-			"primary": {Name: "primary", SecretRef: "matter-codex-github-primary", Status: "configured"},
-		},
-		promptTemplates: map[string]entity.AgentPromptTemplate{
-			promptTemplateMapKey("devx", developerImplementTaskKey): {ProfileName: "devx", TemplateKey: developerImplementTaskKey, Body: "Implement {{.Task.Title}} in {{.Repository.FullName}}"},
-			promptTemplateMapKey("devx", developerFixReviewKey):     {ProfileName: "devx", TemplateKey: developerFixReviewKey, Body: "Fix {{.PullRequest.Number}}"},
-			promptTemplateMapKey("reviewx", reviewPRTemplateKey):    {ProfileName: "reviewx", TemplateKey: reviewPRTemplateKey, Body: "Review {{.PullRequest.Number}}"},
-		},
-	}
-	runner := &fakeRuntimeRunner{}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:         localizer,
-		StatusService:     testStatusService(localizer),
-		Store:             store,
-		RuntimeRunner:     runner,
-		FlowCardPublisher: &fakeFlowCardPublisher{},
-		FlowActionURL:     "http://bot-service/mattermost/actions/flow",
-		DialogSubmitURL:   "http://bot-service/mattermost/dialogs/agents",
-		StorageReady:      true,
-	})
-
-	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
-		CallbackID: dialogCallbackFlowStart,
-		State:      encodeDialogState(MenuActionCommand{View: menuViewStartFlow, ChannelID: "channel-1", PostID: "post-1"}),
-		UserID:     "owner-id",
-		UserName:   "owner",
-		ChannelID:  "channel-1",
-		Submission: map[string]any{
-			dialogFieldFlowRepository:   "github:codex-k8s/matter-codex",
-			dialogFieldDeveloperProfile: "devx",
-			dialogFieldReviewerProfile:  "reviewx",
-			dialogFieldFlowTitle:        "Update docs",
-			dialogFieldFlowTask:         "Update docs safely.",
-			dialogFieldMaxAttempts:      "2",
-		},
-	})
-
-	if result.Error != "" || len(result.Errors) > 0 {
-		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
-	}
-	if len(runner.developerRuns) != 1 || runner.developerRuns[0].Profile != "devx" {
-		t.Fatalf("developer runs = %#v", runner.developerRuns)
-	}
-	if runner.developerCodexSecret != "matter-codex-codex-auth-devx" || runner.developerGitHubSecret != "matter-codex-github-agent" {
-		t.Fatalf("developer secrets = codex %q github %q", runner.developerCodexSecret, runner.developerGitHubSecret)
-	}
-	flows, err := store.ListAgentFlows(context.Background(), "", 10)
-	if err != nil || len(flows) != 1 {
-		t.Fatalf("flows = %#v err=%v", flows, err)
-	}
-	if flows[0].DeveloperProfileName != "devx" || flows[0].ReviewerProfileName != "reviewx" || flows[0].MaxAttempts != 2 {
-		t.Fatalf("flow = %#v", flows[0])
-	}
-	if result.Card == nil || !strings.Contains(result.Card.Text, "developer-review flow started") {
 		t.Fatalf("card = %#v", result.Card)
 	}
 }
@@ -2917,56 +2901,6 @@ func TestSlashRuntimePruneApply(t *testing.T) {
 	}
 }
 
-func TestSlashDevSmokeStatusAndCleanup(t *testing.T) {
-	store := &fakeAdminStore{
-		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "agent"}},
-		openAIAccounts: map[string]entity.OpenAIAccount{
-			"primary": {Name: "primary", Status: "authorized", SecretRef: "matter-codex-codex-auth-primary"},
-		},
-	}
-	runner := &fakeRuntimeRunner{}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:             localizer,
-		StatusService:         testStatusService(localizer),
-		Store:                 store,
-		RuntimeRunner:         runner,
-		GitHubTokenConfigured: true,
-		StorageReady:          true,
-		RuntimeConfigured:     true,
-	})
-
-	text := svc.Handle(context.Background(), SlashCommand{Text: "dev smoke codex-k8s/matter-codex dev-test", UserName: "owner"})
-	if !strings.Contains(text, "developer smoke run started") || !strings.Contains(text, "`dev-test`") {
-		t.Fatalf("Handle(dev smoke) text = %q", text)
-	}
-	if runner.startedDeveloperRunID != "dev-test" || runner.developerHeadBranch != "matter-codex-dev-dev-test" {
-		t.Fatalf("runner = %#v", runner)
-	}
-	if runner.developerCodexSecret != "matter-codex-codex-auth-primary" {
-		t.Fatalf("developerCodexSecret = %q", runner.developerCodexSecret)
-	}
-	if runner.developerGitHubSecret != "matter-codex-github-agent" {
-		t.Fatalf("developerGitHubSecret = %q", runner.developerGitHubSecret)
-	}
-	if store.agentRun.RunID != "dev-test" || store.agentRun.ProfileName != "developer" {
-		t.Fatalf("agentRun = %#v", store.agentRun)
-	}
-
-	text = svc.Handle(context.Background(), SlashCommand{Text: "dev status dev-test"})
-	if !strings.Contains(text, "developer run status") || !strings.Contains(text, "pr-url") || !strings.Contains(text, "https://github.example/pr/10") {
-		t.Fatalf("Handle(dev status) text = %q", text)
-	}
-	if store.updatedRunStatus != "pr_created" || store.updatedPRURL != "https://github.example/pr/10" {
-		t.Fatalf("updated run = %q %q", store.updatedRunStatus, store.updatedPRURL)
-	}
-
-	text = svc.Handle(context.Background(), SlashCommand{Text: "dev cleanup dev-test", UserName: "owner"})
-	if !strings.Contains(text, "developer run cleanup") || !strings.Contains(text, "pvc deleted: `true`") {
-		t.Fatalf("Handle(dev cleanup) text = %q", text)
-	}
-}
-
 func TestSlashReviewPRStatusAndCleanup(t *testing.T) {
 	store := &fakeAdminStore{
 		profiles: []entity.AgentProfile{{Name: "reviewer", Role: "reviewer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "primary"}},
@@ -3014,417 +2948,6 @@ func TestSlashReviewPRStatusAndCleanup(t *testing.T) {
 	text = svc.Handle(context.Background(), SlashCommand{Text: "review cleanup review-test", UserName: "owner"})
 	if !strings.Contains(text, "reviewer run cleanup") || !strings.Contains(text, "pvc deleted: `true`") {
 		t.Fatalf("Handle(review cleanup) text = %q", text)
-	}
-}
-
-func TestSlashFlowStartStartsDeveloperRun(t *testing.T) {
-	store := fakeFlowReadyStore()
-	runner := &fakeRuntimeRunner{}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:         localizer,
-		StatusService:     testStatusService(localizer),
-		Store:             store,
-		RuntimeRunner:     runner,
-		StorageReady:      true,
-		RuntimeConfigured: true,
-	})
-
-	text := svc.Handle(context.Background(), SlashCommand{Text: "flow start codex-k8s/matter-codex flow1 Update docs", UserName: "owner"})
-
-	if !strings.Contains(text, "developer-review flow started") || !strings.Contains(text, "`flow1`") {
-		t.Fatalf("Handle(flow start) text = %q", text)
-	}
-	if runner.startedDeveloperRunID != "flow1-d1" || runner.developerHeadBranch != "matter-codex-flow-flow1" {
-		t.Fatalf("runner = %#v", runner)
-	}
-	if len(runner.developerRuns) != 1 {
-		t.Fatalf("developerRuns = %#v", runner.developerRuns)
-	}
-	if runner.developerRuns[0].BaseBranch != "main" || runner.developerRuns[0].HeadBranch != "matter-codex-flow-flow1" {
-		t.Fatalf("developer run input = %#v", runner.developerRuns[0])
-	}
-	flow, err := store.GetAgentFlow(context.Background(), "flow1")
-	if err != nil {
-		t.Fatalf("GetAgentFlow() error = %v", err)
-	}
-	if flow.Status != flowStatusDeveloperRunning || flow.Attempt != 1 || flow.CurrentDeveloperRunID != "flow1-d1" {
-		t.Fatalf("flow = %#v", flow)
-	}
-	run := store.agentRuns["flow1-d1"]
-	if run.FlowID != "flow1" || run.ProfileName != "developer" {
-		t.Fatalf("agent run = %#v", run)
-	}
-}
-
-func TestSlashFlowStartPublishesOwnerCard(t *testing.T) {
-	store := fakeFlowReadyStore()
-	runner := &fakeRuntimeRunner{}
-	publisher := &fakeFlowCardPublisher{}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:         localizer,
-		StatusService:     testStatusService(localizer),
-		Store:             store,
-		RuntimeRunner:     runner,
-		FlowCardPublisher: publisher,
-		FlowActionURL:     "http://matter-codex-bot-service/mattermost/actions/flow",
-		StorageReady:      true,
-		RuntimeConfigured: true,
-	})
-
-	text := svc.Handle(context.Background(), SlashCommand{
-		Text:      "flow start codex-k8s/matter-codex flow1 Update docs",
-		UserID:    "owner-id",
-		UserName:  "owner",
-		ChannelID: "channel-id",
-	})
-
-	if !strings.Contains(text, "card: posted `post-1`") {
-		t.Fatalf("Handle(flow start card) text = %q", text)
-	}
-	flow, err := store.GetAgentFlow(context.Background(), "flow1")
-	if err != nil {
-		t.Fatalf("GetAgentFlow() error = %v", err)
-	}
-	if flow.OwnerUserID != "owner-id" || flow.OwnerUser != "owner" || flow.ControlChannelID != "channel-id" || flow.ControlPostID != "post-1" || flow.ActionToken == "" {
-		t.Fatalf("flow card fields = %#v", flow)
-	}
-	if publisher.lastCard.ActionURL != "http://matter-codex-bot-service/mattermost/actions/flow" || publisher.lastCard.ChannelID != "channel-id" {
-		t.Fatalf("last card = %#v", publisher.lastCard)
-	}
-	if len(publisher.lastCard.Actions) != 4 {
-		t.Fatalf("actions = %#v", publisher.lastCard.Actions)
-	}
-	contextToken, _ := publisher.lastCard.Actions[0].Context["token"].(string)
-	if contextToken == "" || contextToken != flow.ActionToken {
-		t.Fatalf("action token was not passed through context")
-	}
-}
-
-func TestSlashFlowCardUpdatesExistingPostChannel(t *testing.T) {
-	store := fakeFlowReadyStore()
-	store.agentFlows = map[string]entity.AgentFlow{
-		"flow1": fakeActionFlow(flowStatusWaitingOwner),
-	}
-	publisher := &fakeFlowCardPublisher{}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:         localizer,
-		StatusService:     testStatusService(localizer),
-		Store:             store,
-		FlowCardPublisher: publisher,
-		FlowActionURL:     "http://matter-codex-bot-service/mattermost/actions/flow",
-		StorageReady:      true,
-	})
-
-	text := svc.Handle(context.Background(), SlashCommand{
-		Text:      "flow card flow1",
-		UserID:    "owner-id",
-		UserName:  "owner",
-		ChannelID: "different-channel",
-	})
-
-	if !strings.Contains(text, "flow card published") {
-		t.Fatalf("Handle(flow card) text = %q", text)
-	}
-	if publisher.lastCard.ChannelID != "channel-id" || publisher.lastCard.PostID != "post-1" {
-		t.Fatalf("last card = %#v", publisher.lastCard)
-	}
-}
-
-func TestSlashFlowStatusStartsReviewerAfterDeveloperPR(t *testing.T) {
-	store := fakeFlowReadyStore()
-	runner := &fakeRuntimeRunner{}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:         localizer,
-		StatusService:     testStatusService(localizer),
-		Store:             store,
-		RuntimeRunner:     runner,
-		StorageReady:      true,
-		RuntimeConfigured: true,
-	})
-
-	_ = svc.Handle(context.Background(), SlashCommand{Text: "flow start codex-k8s/matter-codex flow1 Update docs", UserName: "owner"})
-	runner.runStatuses = map[string]runtimerepo.RunStatus{
-		"flow1-d1": fakeSucceededStatus("flow1-d1", map[string]string{
-			"pr-url": "https://github.com/codex-k8s/matter-codex/pull/10",
-		}),
-	}
-
-	text := svc.Handle(context.Background(), SlashCommand{Text: "flow status flow1"})
-
-	if !strings.Contains(text, "reviewer run started: flow1-r1") || !strings.Contains(text, "status: `review_running`") {
-		t.Fatalf("Handle(flow status) text = %q", text)
-	}
-	if runner.startedReviewRunID != "flow1-r1" || runner.reviewPRNumber != 10 {
-		t.Fatalf("runner = %#v", runner)
-	}
-	flow, err := store.GetAgentFlow(context.Background(), "flow1")
-	if err != nil {
-		t.Fatalf("GetAgentFlow() error = %v", err)
-	}
-	if flow.Status != flowStatusReviewRunning || flow.PRNumber != 10 || flow.CurrentReviewerRunID != "flow1-r1" {
-		t.Fatalf("flow = %#v", flow)
-	}
-	run := store.agentRuns["flow1-r1"]
-	if run.FlowID != "flow1" || run.ProfileName != "reviewer" {
-		t.Fatalf("review run = %#v", run)
-	}
-}
-
-func TestSlashFlowStatusStartsFixOnRequestChanges(t *testing.T) {
-	store := fakeFlowReadyStore()
-	runner := &fakeRuntimeRunner{}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:         localizer,
-		StatusService:     testStatusService(localizer),
-		Store:             store,
-		RuntimeRunner:     runner,
-		StorageReady:      true,
-		RuntimeConfigured: true,
-	})
-
-	_ = svc.Handle(context.Background(), SlashCommand{Text: "flow start codex-k8s/matter-codex flow1 Update docs", UserName: "owner"})
-	runner.runStatuses = map[string]runtimerepo.RunStatus{
-		"flow1-d1": fakeSucceededStatus("flow1-d1", map[string]string{
-			"pr-url": "https://github.com/codex-k8s/matter-codex/pull/10",
-		}),
-	}
-	_ = svc.Handle(context.Background(), SlashCommand{Text: "flow status flow1"})
-	runner.runStatuses["flow1-r1"] = fakeSucceededStatus("flow1-r1", map[string]string{
-		"pr-url":          "https://github.com/codex-k8s/matter-codex/pull/10",
-		"review-decision": "request_changes",
-	})
-
-	text := svc.Handle(context.Background(), SlashCommand{Text: "flow status flow1"})
-
-	if !strings.Contains(text, "fix run started: flow1-d2") || !strings.Contains(text, "status: `fix_running`") {
-		t.Fatalf("Handle(flow status request changes) text = %q", text)
-	}
-	if len(runner.developerRuns) != 2 {
-		t.Fatalf("developerRuns = %#v", runner.developerRuns)
-	}
-	fixRun := runner.developerRuns[1]
-	if fixRun.RunID != "flow1-d2" || fixRun.BaseBranch != "matter-codex-flow-flow1" || fixRun.HeadBranch != "matter-codex-flow-flow1" {
-		t.Fatalf("fix developer run = %#v", fixRun)
-	}
-	flow, err := store.GetAgentFlow(context.Background(), "flow1")
-	if err != nil {
-		t.Fatalf("GetAgentFlow() error = %v", err)
-	}
-	if flow.Status != flowStatusFixRunning || flow.Attempt != 2 || flow.CurrentDeveloperRunID != "flow1-d2" {
-		t.Fatalf("flow = %#v", flow)
-	}
-}
-
-func TestSlashFlowBlocksAfterAttemptLimit(t *testing.T) {
-	store := fakeFlowReadyStore()
-	store.agentFlows = map[string]entity.AgentFlow{
-		"flow1": {
-			FlowID:                "flow1",
-			Status:                flowStatusReviewRunning,
-			Provider:              "github",
-			Owner:                 "codex-k8s",
-			Name:                  "matter-codex",
-			BaseBranch:            "main",
-			HeadBranch:            "matter-codex-flow-flow1",
-			Title:                 "Update docs",
-			Task:                  "Update docs",
-			PRURL:                 "https://github.com/codex-k8s/matter-codex/pull/10",
-			PRNumber:              10,
-			Attempt:               defaultFlowMaxAttempts,
-			MaxAttempts:           defaultFlowMaxAttempts,
-			CurrentDeveloperRunID: "flow1-d3",
-			CurrentReviewerRunID:  "flow1-r3",
-		},
-	}
-	runner := &fakeRuntimeRunner{
-		runStatuses: map[string]runtimerepo.RunStatus{
-			"flow1-r3": fakeSucceededStatus("flow1-r3", map[string]string{
-				"pr-url":          "https://github.com/codex-k8s/matter-codex/pull/10",
-				"review-decision": "request_changes",
-			}),
-		},
-	}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:         localizer,
-		StatusService:     testStatusService(localizer),
-		Store:             store,
-		RuntimeRunner:     runner,
-		StorageReady:      true,
-		RuntimeConfigured: true,
-	})
-
-	text := svc.Handle(context.Background(), SlashCommand{Text: "flow status flow1"})
-
-	if !strings.Contains(text, "status: `blocked`") || !strings.Contains(text, "attempt limit reached") {
-		t.Fatalf("Handle(flow status limit) text = %q", text)
-	}
-	if len(runner.developerRuns) != 0 {
-		t.Fatalf("developerRuns = %#v", runner.developerRuns)
-	}
-	flow, err := store.GetAgentFlow(context.Background(), "flow1")
-	if err != nil {
-		t.Fatalf("GetAgentFlow() error = %v", err)
-	}
-	if flow.Status != flowStatusBlocked || flow.Attempt != defaultFlowMaxAttempts {
-		t.Fatalf("flow = %#v", flow)
-	}
-}
-
-func TestFlowActionApproveUpdatesFlowAndCard(t *testing.T) {
-	store := fakeFlowReadyStore()
-	store.agentFlows = map[string]entity.AgentFlow{
-		"flow1": fakeActionFlow(flowStatusWaitingOwner),
-	}
-	publisher := &fakeFlowCardPublisher{}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:         localizer,
-		StatusService:     testStatusService(localizer),
-		Store:             store,
-		FlowCardPublisher: publisher,
-		FlowActionURL:     "http://matter-codex-bot-service/mattermost/actions/flow",
-		StorageReady:      true,
-	})
-
-	result := svc.HandleFlowAction(context.Background(), FlowActionCommand{
-		FlowID:   "flow1",
-		Action:   flowActionApprove,
-		Token:    "action-token",
-		UserID:   "owner-id",
-		UserName: "owner",
-	})
-
-	if result.StatusCode != 200 || !strings.Contains(result.EphemeralText, "flow approved by owner") {
-		t.Fatalf("result = %#v", result)
-	}
-	flow, err := store.GetAgentFlow(context.Background(), "flow1")
-	if err != nil {
-		t.Fatalf("GetAgentFlow() error = %v", err)
-	}
-	if flow.Status != flowStatusOwnerApproved || flow.OwnerDecision != flowOwnerDecisionApproved {
-		t.Fatalf("flow = %#v", flow)
-	}
-	if publisher.lastCard.PostID != "post-1" || publisher.lastCard.Actions[0].Disabled != true {
-		t.Fatalf("last card = %#v", publisher.lastCard)
-	}
-	if !store.auditRecorded {
-		t.Fatal("audit event was not recorded")
-	}
-}
-
-func TestFlowActionRejectsNonOwner(t *testing.T) {
-	store := fakeFlowReadyStore()
-	store.agentFlows = map[string]entity.AgentFlow{
-		"flow1": fakeActionFlow(flowStatusWaitingOwner),
-	}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:     localizer,
-		StatusService: testStatusService(localizer),
-		Store:         store,
-		StorageReady:  true,
-	})
-
-	result := svc.HandleFlowAction(context.Background(), FlowActionCommand{
-		FlowID: "flow1",
-		Action: flowActionReject,
-		Token:  "action-token",
-		UserID: "someone-else",
-	})
-
-	if result.StatusCode != 200 || !strings.Contains(result.EphemeralText, "only the flow owner") {
-		t.Fatalf("result = %#v", result)
-	}
-	flow, err := store.GetAgentFlow(context.Background(), "flow1")
-	if err != nil {
-		t.Fatalf("GetAgentFlow() error = %v", err)
-	}
-	if flow.Status != flowStatusWaitingOwner || flow.OwnerDecision != "" {
-		t.Fatalf("flow = %#v", flow)
-	}
-}
-
-func TestFlowActionRerunStartsReviewer(t *testing.T) {
-	store := fakeFlowReadyStore()
-	store.agentFlows = map[string]entity.AgentFlow{
-		"flow1": fakeActionFlow(flowStatusWaitingOwner),
-	}
-	runner := &fakeRuntimeRunner{}
-	publisher := &fakeFlowCardPublisher{}
-	localizer := testLocalizer(t, texti18n.DefaultLocale)
-	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:         localizer,
-		StatusService:     testStatusService(localizer),
-		Store:             store,
-		RuntimeRunner:     runner,
-		FlowCardPublisher: publisher,
-		FlowActionURL:     "http://matter-codex-bot-service/mattermost/actions/flow",
-		StorageReady:      true,
-		RuntimeConfigured: true,
-	})
-
-	result := svc.HandleFlowAction(context.Background(), FlowActionCommand{
-		FlowID: "flow1",
-		Action: flowActionRerun,
-		Token:  "action-token",
-		UserID: "owner-id",
-	})
-
-	if result.StatusCode != 200 || !strings.Contains(result.EphemeralText, "reviewer rerun started") {
-		t.Fatalf("result = %#v", result)
-	}
-	if len(runner.reviewRuns) != 1 || !strings.Contains(runner.reviewRuns[0].RunID, "-rr-") {
-		t.Fatalf("reviewRuns = %#v", runner.reviewRuns)
-	}
-	flow, err := store.GetAgentFlow(context.Background(), "flow1")
-	if err != nil {
-		t.Fatalf("GetAgentFlow() error = %v", err)
-	}
-	if flow.Status != flowStatusReviewRunning || flow.OwnerDecision != flowOwnerDecisionRerun || flow.CurrentReviewerRunID != runner.reviewRuns[0].RunID {
-		t.Fatalf("flow = %#v", flow)
-	}
-}
-
-func fakeFlowReadyStore() *fakeAdminStore {
-	return &fakeAdminStore{
-		profiles: []entity.AgentProfile{
-			{Name: "developer", Role: "developer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "agent"},
-			{Name: "reviewer", Role: "reviewer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "primary"},
-		},
-		openAIAccounts: map[string]entity.OpenAIAccount{
-			"primary": {Name: "primary", Status: "authorized", SecretRef: "matter-codex-codex-auth-primary"},
-		},
-	}
-}
-
-func fakeActionFlow(status string) entity.AgentFlow {
-	return entity.AgentFlow{
-		FlowID:                "flow1",
-		Status:                status,
-		Provider:              "github",
-		Owner:                 "codex-k8s",
-		Name:                  "matter-codex",
-		BaseBranch:            "main",
-		HeadBranch:            "matter-codex-flow-flow1",
-		Title:                 "Update docs",
-		Task:                  "Update docs",
-		PRURL:                 "https://github.com/codex-k8s/matter-codex/pull/10",
-		PRNumber:              10,
-		Attempt:               1,
-		MaxAttempts:           defaultFlowMaxAttempts,
-		CurrentDeveloperRunID: "flow1-d1",
-		CurrentReviewerRunID:  "flow1-r1",
-		OwnerUserID:           "owner-id",
-		OwnerUser:             "owner",
-		ControlChannelID:      "channel-id",
-		ControlPostID:         "post-1",
-		ActionToken:           "action-token",
 	}
 }
 
@@ -3815,21 +3338,6 @@ func (runner *fakeRuntimeRunner) CleanupExpiredRuns(_ context.Context, input run
 	}
 	result.DryRun = input.DryRun
 	return result, nil
-}
-
-type fakeFlowCardPublisher struct {
-	lastCard FlowCard
-	nextID   int
-}
-
-func (publisher *fakeFlowCardPublisher) UpsertFlowCard(_ context.Context, card FlowCard) (FlowCardPost, error) {
-	publisher.lastCard = card
-	if card.PostID == "" {
-		publisher.nextID++
-		card.PostID = fmt.Sprintf("post-%d", publisher.nextID)
-		publisher.lastCard.PostID = card.PostID
-	}
-	return FlowCardPost{ChannelID: card.ChannelID, PostID: card.PostID}, nil
 }
 
 type fakeAdminStore struct {
@@ -4641,6 +4149,18 @@ func (store *fakeAdminStore) UpdateAgentSessionTurnStatusPost(_ context.Context,
 	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
 }
 
+func (store *fakeAdminStore) UpdateAgentSessionTurnMessage(_ context.Context, input adminrepo.UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error) {
+	for index, turn := range store.sessionTurns {
+		if turn.ID == input.TurnID && turn.Status == agentSessionTurnQueued {
+			turn.Message = input.Message
+			turn.UpdatedAt = time.Now().UTC()
+			store.sessionTurns[index] = turn
+			return turn, nil
+		}
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
 func (store *fakeAdminStore) CompleteAgentSessionTurn(_ context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
 	for index, turn := range store.sessionTurns {
 		if turn.ID == input.TurnID {
@@ -4854,7 +4374,7 @@ func (store *fakeAdminStore) GetAgentPromptTemplate(_ context.Context, profileNa
 	store.ensurePromptTemplates()
 	item, ok := store.promptTemplates[promptTemplateMapKey(profileName, templateKey)]
 	if !ok {
-		return entity.AgentPromptTemplate{}, fmt.Errorf("prompt template not found")
+		return entity.AgentPromptTemplate{}, adminrepo.ErrNotFound
 	}
 	return item, nil
 }
@@ -4878,23 +4398,11 @@ func (store *fakeAdminStore) ensurePromptTemplates() {
 		return
 	}
 	store.promptTemplates = map[string]entity.AgentPromptTemplate{
-		promptTemplateMapKey("developer", developerSmokeTemplateKey): {
-			ID:          1,
-			ProfileName: "developer",
-			TemplateKey: developerSmokeTemplateKey,
-			Body:        "Developer task for {{.Repository.FullName}}: {{.Task.Body}}",
-		},
 		promptTemplateMapKey("developer", developerImplementTaskKey): {
 			ID:          2,
 			ProfileName: "developer",
 			TemplateKey: developerImplementTaskKey,
 			Body:        "Implement {{.Task.Title}} for {{.Repository.FullName}} on {{.Task.HeadBranch}} using {{.Locale.Language}}",
-		},
-		promptTemplateMapKey("developer", developerFixReviewKey): {
-			ID:          3,
-			ProfileName: "developer",
-			TemplateKey: developerFixReviewKey,
-			Body:        "Fix PR #{{.PullRequest.Number}} on {{.Task.HeadBranch}} using {{.GitHub.TokenEnv}}",
 		},
 		promptTemplateMapKey("reviewer", reviewPRTemplateKey): {
 			ID:          4,

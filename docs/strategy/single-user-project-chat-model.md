@@ -11,7 +11,7 @@
 - `Repository` = GitHub repository внутри GitHub owner проекта, подключенный глобально и затем привязанный к project/chat как доступный вариант.
 - `ThreadContext` = привязка Mattermost thread к optional repository и agent session context.
 - `GitHub account` и `OpenAI account` = переиспользуемые credentials, назначаемые на role.
-- `Flow` больше не является центральной сущностью продукта. Legacy flow/actions остаются только в `Advanced` для совместимости и диагностики.
+- `Flow` больше не является продуктовой сущностью. Старые таблицы могут оставаться в БД до отдельной cleanup-миграции, но owner-facing UX и новые сценарии строятся вокруг project/chat/thread sessions.
 
 Главный путь владельца:
 

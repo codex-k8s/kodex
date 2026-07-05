@@ -1,0 +1,23 @@
+update matter_codex_agent_session_turns set
+	message = $2,
+	updated_at = now()
+where id = $1 and status = 'queued'
+returning
+	id,
+	session_id,
+	run_id,
+	mattermost_channel_id,
+	mattermost_root_post_id,
+	mattermost_post_id,
+	mattermost_status_post_id,
+	user_id,
+	user_name,
+	message,
+	status,
+	final_message,
+	error_message,
+	artifacts::text,
+	created_at,
+	coalesce(started_at, 'epoch'::timestamptz),
+	coalesce(finished_at, 'epoch'::timestamptz),
+	updated_at;
