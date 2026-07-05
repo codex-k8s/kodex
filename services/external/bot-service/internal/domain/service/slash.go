@@ -618,7 +618,7 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 	}
 	headBranch := developerSmokeBranch(runID)
 	task := developerSmokeTask(runID, ref)
-	prompt, err := svc.renderStoredPromptTemplate(ctx, "developer", developerSmokeTemplateKey, promptTemplateData{
+	prompt, err := svc.renderStoredPromptTemplate(ctx, "developer", developerImplementTaskKey, promptTemplateData{
 		Run: promptTemplateRunData{
 			ID:      runID,
 			Profile: "developer",
@@ -1454,17 +1454,15 @@ func (svc *SlashCommandService) startFlowDeveloperAttempt(ctx context.Context, f
 	}
 	role := defaultString(account.Profile.Role, "developer")
 	runID := flowDeveloperRunID(flow.FlowID, flow.Attempt)
-	templateKey := developerImplementTaskKey
 	baseBranch := flow.BaseBranch
 	status := flowStatusDeveloperRunning
 	summary := "flow developer attempt started"
 	if fix {
-		templateKey = developerFixReviewKey
 		baseBranch = flow.HeadBranch
 		status = flowStatusFixRunning
 		summary = "flow developer fix attempt started"
 	}
-	prompt, err := svc.renderStoredPromptTemplate(ctx, profileName, templateKey, promptTemplateData{
+	prompt, err := svc.renderStoredPromptTemplate(ctx, profileName, developerImplementTaskKey, promptTemplateData{
 		Run: promptTemplateRunData{
 			ID:      runID,
 			Profile: profileName,

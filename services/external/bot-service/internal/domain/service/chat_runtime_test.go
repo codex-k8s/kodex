@@ -76,7 +76,7 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	if len(publisher.posts) != 0 || len(publisher.cards) != 0 {
 		t.Fatalf("chat handler must not create duplicate status posts, posts=%#v cards=%#v", publisher.posts, publisher.cards)
 	}
-	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "Help me decompose the task.") || !strings.Contains(store.sessionTurns[0].Message, "Project: Platform") {
+	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "Help me decompose the task.") || !strings.Contains(store.sessionTurns[0].Message, "Проект: Platform") {
 		t.Fatalf("turns = %#v", store.sessionTurns)
 	}
 }
@@ -179,7 +179,7 @@ func TestChatRunUsesRoleTemplateOnlyForFirstSessionTurn(t *testing.T) {
 	if strings.Contains(secondPrompt, "BOOTSTRAP TEMPLATE") {
 		t.Fatalf("continuation prompt repeated role template: %q", secondPrompt)
 	}
-	if !strings.Contains(secondPrompt, "# User message") || !strings.Contains(secondPrompt, "Follow-up task.") || !strings.Contains(secondPrompt, "Continue the existing Codex session") {
+	if !strings.Contains(secondPrompt, "# Сообщение пользователя") || !strings.Contains(secondPrompt, "Follow-up task.") || !strings.Contains(secondPrompt, "Продолжай существующую сессию Codex") {
 		t.Fatalf("second prompt = %q", secondPrompt)
 	}
 }
@@ -275,7 +275,7 @@ func TestChatRunQueuesFollowUpsForRunningThreadSessionWithoutRestart(t *testing.
 		if turn.Status != agentSessionTurnQueued {
 			t.Fatalf("turn %d status = %q", index+1, turn.Status)
 		}
-		if !strings.Contains(turn.Message, "Continue the existing Codex session") {
+		if !strings.Contains(turn.Message, "Продолжай существующую сессию Codex") {
 			t.Fatalf("turn %d is not a continuation prompt: %q", index+1, turn.Message)
 		}
 	}

@@ -33,26 +33,10 @@ func promptSeedCatalog() []promptTemplateSeed {
 	return []promptTemplateSeed{
 		{
 			SourceProfile: "developer",
-			TemplateKey:   developerSmokeTemplateKey,
-			Role:          "developer",
-			Description:   "Generic developer smoke task prompt seed",
-			FileName:      "developer_smoke.md",
-		},
-		{
-			SourceProfile: "developer",
 			TemplateKey:   developerImplementTaskKey,
 			Role:          "developer",
 			Description:   "Generic developer implementation prompt seed",
 			FileName:      "developer_implement_task.md",
-			RoleNames:     []string{"developer", "worker", "backend-developer", "frontend-developer", "deployer"},
-			RoleTypes:     []string{"worker", "deployer"},
-		},
-		{
-			SourceProfile: "developer",
-			TemplateKey:   developerFixReviewKey,
-			Role:          "developer",
-			Description:   "Generic developer review-fix prompt seed",
-			FileName:      "developer_fix_review.md",
 			RoleNames:     []string{"developer", "worker", "backend-developer", "frontend-developer", "deployer"},
 			RoleTypes:     []string{"worker", "deployer"},
 		},

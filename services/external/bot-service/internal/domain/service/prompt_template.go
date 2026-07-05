@@ -13,9 +13,7 @@ import (
 )
 
 const (
-	developerSmokeTemplateKey = "developer_smoke"
 	developerImplementTaskKey = "implement_task"
-	developerFixReviewKey     = "fix_review"
 	reviewPRTemplateKey       = "review_pr"
 	managerCoordinateTaskKey  = "coordinate_task"
 	architectDocsTaskKey      = "architecture_task"
@@ -217,12 +215,12 @@ func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
 		return "", fmt.Errorf("user message is required")
 	}
 	var body strings.Builder
-	body.WriteString("# User message\n\n")
+	body.WriteString("# Сообщение пользователя\n\n")
 	body.WriteString(userMessage)
-	body.WriteString("\n\n# Continuation context\n\n")
-	body.WriteString("- Continue the existing Codex session. Keep the role, project, repository, and operating instructions already established earlier in this session.\n")
+	body.WriteString("\n\n# Контекст продолжения\n\n")
+	body.WriteString("- Продолжай существующую сессию Codex. Сохрани роль, проект, репозиторий и рабочие инструкции, которые уже были установлены ранее в этой сессии.\n")
 	if strings.TrimSpace(input.Project.Name) != "" {
-		body.WriteString("- Project: ")
+		body.WriteString("- Проект: ")
 		body.WriteString(input.Project.Name)
 		if strings.TrimSpace(input.Project.Slug) != "" {
 			body.WriteString(" (")
@@ -232,7 +230,7 @@ func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
 		body.WriteString("\n")
 	}
 	if strings.TrimSpace(input.Chat.Name) != "" {
-		body.WriteString("- Chat: ")
+		body.WriteString("- Чат: ")
 		body.WriteString(input.Chat.Name)
 		if strings.TrimSpace(input.Chat.ChatType) != "" {
 			body.WriteString(" / ")
@@ -241,7 +239,7 @@ func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
 		body.WriteString("\n")
 	}
 	if strings.TrimSpace(input.Role.Name) != "" {
-		body.WriteString("- Role: ")
+		body.WriteString("- Роль: ")
 		body.WriteString(input.Role.Name)
 		if strings.TrimSpace(input.Role.RoleType) != "" {
 			body.WriteString(" / ")
@@ -250,14 +248,14 @@ func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
 		body.WriteString("\n")
 	}
 	if len(input.Repositories) > 0 {
-		body.WriteString("- Repositories:\n")
+		body.WriteString("- Репозитории:\n")
 		for _, repo := range input.Repositories {
 			body.WriteString("  - ")
 			body.WriteString(repo.Provider)
 			body.WriteString(":")
 			body.WriteString(repo.FullName())
 			if strings.TrimSpace(repo.DefaultBranch) != "" {
-				body.WriteString(" branch ")
+				body.WriteString(" ветка ")
 				body.WriteString(repo.DefaultBranch)
 			}
 			body.WriteString("\n")
@@ -276,11 +274,11 @@ func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
 
 func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 	var body strings.Builder
-	body.WriteString("# User instruction\n\n")
+	body.WriteString("# Инструкция пользователя\n\n")
 	body.WriteString(userMessage)
-	body.WriteString("\n\n# Matter-codex context\n\n")
+	body.WriteString("\n\n# Контекст Matter-codex\n\n")
 	if strings.TrimSpace(input.Project.Name) != "" {
-		body.WriteString("- Project: ")
+		body.WriteString("- Проект: ")
 		body.WriteString(input.Project.Name)
 		if strings.TrimSpace(input.Project.Slug) != "" {
 			body.WriteString(" (")
@@ -290,7 +288,7 @@ func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 		body.WriteString("\n")
 	}
 	if strings.TrimSpace(input.Chat.Name) != "" {
-		body.WriteString("- Chat: ")
+		body.WriteString("- Чат: ")
 		body.WriteString(input.Chat.Name)
 		if strings.TrimSpace(input.Chat.ChatType) != "" {
 			body.WriteString(" / ")
@@ -299,7 +297,7 @@ func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 		body.WriteString("\n")
 	}
 	if strings.TrimSpace(input.Role.Name) != "" {
-		body.WriteString("- Role: ")
+		body.WriteString("- Роль: ")
 		body.WriteString(input.Role.Name)
 		if strings.TrimSpace(input.Role.RoleType) != "" {
 			body.WriteString(" / ")
@@ -308,29 +306,29 @@ func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 		body.WriteString("\n")
 	}
 	if strings.TrimSpace(input.Role.Description) != "" {
-		body.WriteString("- Role description: ")
+		body.WriteString("- Описание роли: ")
 		body.WriteString(input.Role.Description)
 		body.WriteString("\n")
 	}
 	if strings.TrimSpace(input.Chat.RootGitHubIssue) != "" {
-		body.WriteString("- Root GitHub issue: ")
+		body.WriteString("- Корневая задача GitHub: ")
 		body.WriteString(input.Chat.RootGitHubIssue)
 		body.WriteString("\n")
 	}
 	if strings.TrimSpace(input.Chat.WorkPolicy) != "" {
-		body.WriteString("- Work policy: ")
+		body.WriteString("- Рабочая политика: ")
 		body.WriteString(input.Chat.WorkPolicy)
 		body.WriteString("\n")
 	}
 	if len(input.Repositories) > 0 {
-		body.WriteString("- Repositories:\n")
+		body.WriteString("- Репозитории:\n")
 		for _, repo := range input.Repositories {
 			body.WriteString("  - ")
 			body.WriteString(repo.Provider)
 			body.WriteString(":")
 			body.WriteString(repo.FullName())
 			if strings.TrimSpace(repo.DefaultBranch) != "" {
-				body.WriteString(" branch ")
+				body.WriteString(" ветка ")
 				body.WriteString(repo.DefaultBranch)
 			}
 			body.WriteString("\n")
@@ -356,24 +354,24 @@ func appendRoleRuntimeContract(prompt string, input RolePromptInput) string {
 }
 
 func appendRoleRuntimeContractMarkdown(body *strings.Builder, input RolePromptInput) {
-	body.WriteString("# Matter-codex runtime contract\n\n")
-	body.WriteString("- GitHub CLI: используй `gh`, если у роли есть GitHub account. Token/user/email доступны через `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER` и `GITHUB_EMAIL`. Никогда не печатай значения токенов.\n")
-	body.WriteString("- Для Markdown тела GitHub Issue, Pull Request, review и comments записывай body во временный файл или heredoc и передавай через `--body-file`/API file input. Не встраивай Markdown с backticks или shell-sensitive текстом напрямую в одну shell command string.\n")
+	body.WriteString("# Контракт среды выполнения Matter-codex\n\n")
+	body.WriteString("- GitHub CLI: используй `gh`, если у роли есть GitHub-аккаунт. Токен, пользователь и email доступны через `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER` и `GITHUB_EMAIL`. Никогда не печатай значения токенов.\n")
+	body.WriteString("- Для Markdown-текста задач GitHub, пул-реквестов, ревью и комментариев записывай текст во временный файл или heredoc и передавай через `--body-file`/файловый ввод API. Не встраивай Markdown с обратными кавычками или shell-чувствительным текстом напрямую в одну командную строку shell.\n")
 	if strings.TrimSpace(input.Locale.Language) != "" {
-		body.WriteString("- Язык: все пользовательские Mattermost replies, GitHub issue titles и bodies, GitHub PR titles и bodies, issue/PR comments, review bodies, inline review comments, code comments, documentation и delivery summaries пиши на ")
+		body.WriteString("- Язык: все пользовательские ответы в Mattermost, заголовки и описания задач GitHub, заголовки и описания пул-реквестов, комментарии к задачам и пул-реквестам, тексты ревью, строчные замечания ревью, комментарии в коде, документацию и резюме поставки пиши на ")
 		body.WriteString(input.Locale.Language)
-		body.WriteString(". Code identifiers, file paths, env names, commands, API names и quoted source text оставляй как есть. Если `AGENTS.md` отсутствует или не задает язык, эта runtime locale является обязательной.\n")
+		body.WriteString(". Идентификаторы кода, пути к файлам, имена переменных среды, команды, имена API и цитаты из исходников оставляй как есть. Если `AGENTS.md` отсутствует или не задает язык, эта локаль среды выполнения является обязательной.\n")
 	}
-	body.WriteString("- Mattermost MCP: используй `mattermost_get_thread`, чтобы читать текущий thread, и `mattermost_search_chat` для небольшого bounded поиска по каналу.\n")
-	body.WriteString("- Progress status: используй `mattermost_update_turn_status` для коротких non-triggering progress updates. Matter-codex держит start/limits/stop-button status card отдельно и обновляет ее сам. Progress text пиши на языке ответа")
+	body.WriteString("- Mattermost MCP: используй `mattermost_get_thread`, чтобы читать текущий тред, и `mattermost_search_chat` для небольшого ограниченного поиска по каналу.\n")
+	body.WriteString("- Статус прогресса: используй `mattermost_update_turn_status` для коротких обновлений прогресса, которые не запускают агентов. Matter-codex держит карточку статуса со стартом, лимитами и кнопкой остановки отдельно и обновляет ее сам. Текст прогресса пиши на языке ответа")
 	if strings.TrimSpace(input.Locale.Language) != "" {
 		body.WriteString(" (")
 		body.WriteString(input.Locale.Language)
 		body.WriteString(")")
 	}
-	body.WriteString(". Обновляй статус после планирования, после значимых этапов, перед долгим ожиданием и при блокере. Не создавай routine progress posts через `mattermost_post_thread_update`.\n")
-	body.WriteString("- Используй `mattermost_post_thread_update` только когда тебе намеренно нужно отдельное сообщение в thread.\n")
-	body.WriteString("- Agent delegation: запускай другого агента только через `mattermost_request_agent`. Обычные Mattermost username mentions в сообщениях от агентов никого не запускают; agent bot messages игнорируются chat routing. Платформа ставит target turn в existing thread session целевого агента; если целевой агент занят, turn ждет завершения текущего turn и сохранения session. Если несколько агентов запросят того же занятого target в этом thread, Matter-codex объединит их prompts в один следующий turn с явным указанием инициаторов.\n")
+	body.WriteString(". Обновляй статус после планирования, после значимых этапов, перед долгим ожиданием и при блокере. Не создавай обычные сообщения о прогрессе через `mattermost_post_thread_update`.\n")
+	body.WriteString("- Используй `mattermost_post_thread_update` только когда тебе намеренно нужно отдельное сообщение в треде.\n")
+	body.WriteString("- Делегирование агентам: запускай другого агента только через `mattermost_request_agent`. Обычные упоминания username в Mattermost-сообщениях от агентов никого не запускают; сообщения агентских ботов игнорируются маршрутизацией чата. Платформа ставит ход работы в существующую тредовую сессию целевого агента; если целевой агент занят, ход работы ждет завершения текущего хода и сохранения сессии. Если несколько агентов запросят того же занятого целевого агента в этом треде, Matter-codex объединит их промпты в один следующий ход работы с явным указанием инициаторов.\n")
 	body.WriteString("\n")
 }
 
@@ -612,15 +610,10 @@ func samplePromptTemplateData(profileName string, templateKey string, locale pro
 		data.Agent.Role = "reviewer"
 		data.GitHub.Account = "primary"
 	}
-	if templateKey == developerSmokeTemplateKey || templateKey == developerImplementTaskKey || templateKey == developerFixReviewKey {
+	if templateKey == developerImplementTaskKey {
 		data.Run.Role = "developer"
 		data.Agent.Role = "developer"
 		data.GitHub.Account = "agent"
-	}
-	if templateKey == developerFixReviewKey {
-		data.PullRequest.Number = 10
-		data.PullRequest.URL = "https://github.com/codex-k8s/matter-codex/pull/10"
-		data.Task.HeadBranch = "matter-codex-flow-sample-run"
 	}
 	return data
 }
@@ -637,87 +630,87 @@ func withPromptTemplateDefaults(data promptTemplateData) promptTemplateData {
 
 func agentRuntimeTools() []promptTemplateToolData {
 	return []promptTemplateToolData{
-		{Name: "OpenAI Codex CLI", Command: "codex", Version: "0.141.0", Purpose: "continue or resume Codex agent sessions"},
-		{Name: "Node.js runtime", Command: "node", Version: "24.17.x", Purpose: "run Vue, TypeScript, codegen and diagnostic JavaScript tooling"},
-		{Name: "npm", Command: "npm", Version: "11.13.x", Purpose: "install and run JavaScript packages and npm scripts"},
-		{Name: "pnpm", Command: "pnpm", Version: "11.8.0", Purpose: "install and run workspace-aware JavaScript package scripts"},
-		{Name: "Yarn", Command: "yarn", Version: "1.22.22", Purpose: "run projects that still use Yarn classic"},
-		{Name: "Git", Command: "git", Version: "distro package", Purpose: "clone repositories, manage branches, commit and push changes"},
-		{Name: "GitHub CLI", Command: "gh", Version: "2.95.0", Purpose: "work with GitHub issues, pull requests, reviews, comments, checks and repository metadata"},
-		{Name: "Kubernetes CLI", Command: "kubectl", Version: "1.36.2", Purpose: "inspect and, when the role allows it, manage Kubernetes resources"},
-		{Name: "Helm", Command: "helm", Version: "4.2.1", Purpose: "inspect and render Kubernetes Helm releases and charts"},
-		{Name: "PostgreSQL client", Command: "psql", Version: "18.x distro package", Purpose: "inspect PostgreSQL databases and run SQL diagnostics"},
-		{Name: "Redis client", Command: "redis-cli", Version: "8.x distro package", Purpose: "inspect Redis state and run cache diagnostics"},
-		{Name: "jq", Command: "jq", Version: "distro package", Purpose: "parse and transform JSON in diagnostics and scripts"},
-		{Name: "yq", Command: "yq", Version: "4.53.3", Purpose: "parse and transform YAML manifests and configuration"},
-		{Name: "ripgrep", Command: "rg", Version: "distro package", Purpose: "fast repository text search"},
-		{Name: "fd", Command: "fd", Version: "distro package", Purpose: "fast file discovery"},
-		{Name: "just", Command: "just", Version: "distro package", Purpose: "run justfile project commands"},
-		{Name: "netcat", Command: "nc", Version: "distro package", Purpose: "check raw TCP connectivity while debugging services"},
-		{Name: "DNS tools", Command: "dig", Version: "distro package", Purpose: "debug DNS records and service discovery"},
-		{Name: "Go toolchain", Command: "go", Version: "1.26", Purpose: "build, test and inspect Go modules, including projects pinned to Go 1.25 toolchains"},
-		{Name: "goimports", Command: "goimports", Version: "0.46.0", Purpose: "format Go imports"},
-		{Name: "gofumpt", Command: "gofumpt", Version: "0.10.0", Purpose: "apply stricter Go formatting when the project asks for it"},
-		{Name: "staticcheck", Command: "staticcheck", Version: "0.7.0", Purpose: "run static Go analysis"},
-		{Name: "Goose migrations", Command: "goose", Version: "3.27.1", Purpose: "run and inspect PostgreSQL migrations"},
-		{Name: "sqlc", Command: "sqlc", Version: "1.31.1", Purpose: "generate typed Go database access from SQL"},
-		{Name: "mockgen", Command: "mockgen", Version: "0.6.0", Purpose: "generate Go mocks for tests"},
-		{Name: "OpenAPI Go codegen", Command: "oapi-codegen", Version: "2.7.1", Purpose: "generate Go HTTP transport code from OpenAPI specs"},
-		{Name: "OpenAPI TypeScript codegen", Command: "openapi-ts", Version: "0.98.2", Purpose: "generate TypeScript clients from OpenAPI specs"},
-		{Name: "Vue runtime package", Command: "npm view vue", Version: "3.5.38", Purpose: "Vue runtime package is available through npm for project installs and quick inspection"},
-		{Name: "Vue project scaffolder", Command: "create-vue", Version: "3.22.4", Purpose: "scaffold Vue projects when a new frontend package is needed"},
-		{Name: "TypeScript compiler", Command: "tsc", Version: "6.0.3", Purpose: "type-check TypeScript projects"},
-		{Name: "Vue TypeScript checker", Command: "vue-tsc", Version: "3.3.5", Purpose: "type-check Vue single-file components"},
-		{Name: "Vite", Command: "vite", Version: "8.0.16", Purpose: "run and build Vue/Vite applications"},
-		{Name: "Vitest", Command: "vitest", Version: "4.1.9", Purpose: "run frontend unit tests"},
-		{Name: "ESLint", Command: "eslint", Version: "10.5.0", Purpose: "lint JavaScript and TypeScript code"},
-		{Name: "Prettier", Command: "prettier", Version: "3.8.4", Purpose: "format frontend and documentation files"},
-		{Name: "AsyncAPI CLI", Command: "asyncapi", Version: "6.0.2", Purpose: "validate AsyncAPI specs and run AsyncAPI generators for event/websocket contracts"},
-		{Name: "AsyncAPI generator package", Command: "asyncapi generate", Version: "3.3.0", Purpose: "generate code and documentation from AsyncAPI templates"},
-		{Name: "AsyncAPI Modelina", Command: "modelina", Version: "5.10.1", Purpose: "generate TypeScript models for AsyncAPI/WebSocket payloads when templates use Modelina"},
-		{Name: "WebSocket client", Command: "wscat", Version: "6.1.0", Purpose: "manually connect to and debug websocket endpoints"},
-		{Name: "Buf", Command: "buf", Version: "1.71.0", Purpose: "lint and generate protobuf/gRPC contracts"},
-		{Name: "grpcurl", Command: "grpcurl", Version: "1.9.3", Purpose: "inspect and call gRPC services during debugging"},
-		{Name: "Protocol Buffers compiler", Command: "protoc", Version: "31.x distro package", Purpose: "generate protobuf and gRPC artifacts"},
-		{Name: "Protobuf Go plugin", Command: "protoc-gen-go", Version: "1.36.11", Purpose: "generate Go protobuf types"},
-		{Name: "gRPC Go plugin", Command: "protoc-gen-go-grpc", Version: "1.6.2", Purpose: "generate Go gRPC service stubs"},
-		{Name: "Go linter", Command: "golangci-lint", Version: "2.12.2", Purpose: "run the main Go lint profile when requested"},
+		{Name: "OpenAI Codex CLI", Command: "codex", Version: "0.141.0", Purpose: "продолжать или возобновлять сессии Codex-агентов"},
+		{Name: "Node.js runtime", Command: "node", Version: "24.17.x", Purpose: "запускать Vue, TypeScript, кодогенерацию и диагностические JavaScript-инструменты"},
+		{Name: "npm", Command: "npm", Version: "11.13.x", Purpose: "устанавливать и запускать JavaScript-пакеты и npm-скрипты"},
+		{Name: "pnpm", Command: "pnpm", Version: "11.8.0", Purpose: "устанавливать и запускать JavaScript-скрипты с учетом workspace"},
+		{Name: "Yarn", Command: "yarn", Version: "1.22.22", Purpose: "запускать проекты, которые еще используют Yarn classic"},
+		{Name: "Git", Command: "git", Version: "distro package", Purpose: "клонировать репозитории, управлять ветками, коммитить и пушить изменения"},
+		{Name: "GitHub CLI", Command: "gh", Version: "2.95.0", Purpose: "работать с задачами GitHub, пул-реквестами, ревью, комментариями, проверками и метаданными репозитория"},
+		{Name: "Kubernetes CLI", Command: "kubectl", Version: "1.36.2", Purpose: "инспектировать и, если роль разрешает, управлять ресурсами Kubernetes"},
+		{Name: "Helm", Command: "helm", Version: "4.2.1", Purpose: "инспектировать и рендерить Kubernetes Helm-релизы и чарты"},
+		{Name: "PostgreSQL client", Command: "psql", Version: "18.x distro package", Purpose: "инспектировать базы PostgreSQL и выполнять SQL-диагностику"},
+		{Name: "Redis client", Command: "redis-cli", Version: "8.x distro package", Purpose: "инспектировать состояние Redis и выполнять диагностику кэша"},
+		{Name: "jq", Command: "jq", Version: "distro package", Purpose: "разбирать и преобразовывать JSON в диагностике и скриптах"},
+		{Name: "yq", Command: "yq", Version: "4.53.3", Purpose: "разбирать и преобразовывать YAML-манифесты и конфигурацию"},
+		{Name: "ripgrep", Command: "rg", Version: "distro package", Purpose: "быстро искать текст по репозиторию"},
+		{Name: "fd", Command: "fd", Version: "distro package", Purpose: "быстро искать файлы"},
+		{Name: "just", Command: "just", Version: "distro package", Purpose: "запускать проектные команды из justfile"},
+		{Name: "netcat", Command: "nc", Version: "distro package", Purpose: "проверять raw TCP connectivity при отладке сервисов"},
+		{Name: "DNS tools", Command: "dig", Version: "distro package", Purpose: "отлаживать DNS-записи и service discovery"},
+		{Name: "Go toolchain", Command: "go", Version: "1.26", Purpose: "собирать, тестировать и инспектировать Go-модули, включая проекты, закрепленные на Go 1.25"},
+		{Name: "goimports", Command: "goimports", Version: "0.46.0", Purpose: "форматировать Go-импорты"},
+		{Name: "gofumpt", Command: "gofumpt", Version: "0.10.0", Purpose: "применять более строгое Go-форматирование, когда проект этого требует"},
+		{Name: "staticcheck", Command: "staticcheck", Version: "0.7.0", Purpose: "запускать статический Go-анализ"},
+		{Name: "Goose migrations", Command: "goose", Version: "3.27.1", Purpose: "запускать и инспектировать PostgreSQL-миграции"},
+		{Name: "sqlc", Command: "sqlc", Version: "1.31.1", Purpose: "генерировать типизированный Go-доступ к базе из SQL"},
+		{Name: "mockgen", Command: "mockgen", Version: "0.6.0", Purpose: "генерировать Go-моки для тестов"},
+		{Name: "OpenAPI Go codegen", Command: "oapi-codegen", Version: "2.7.1", Purpose: "генерировать Go HTTP transport code из OpenAPI-спецификаций"},
+		{Name: "OpenAPI TypeScript codegen", Command: "openapi-ts", Version: "0.98.2", Purpose: "генерировать TypeScript-клиенты из OpenAPI-спецификаций"},
+		{Name: "Vue runtime package", Command: "npm view vue", Version: "3.5.38", Purpose: "проверять Vue runtime package через npm для установки в проект и быстрой инспекции"},
+		{Name: "Vue project scaffolder", Command: "create-vue", Version: "3.22.4", Purpose: "создавать каркас Vue-проекта, если нужен новый frontend-пакет"},
+		{Name: "TypeScript compiler", Command: "tsc", Version: "6.0.3", Purpose: "проверять типы в TypeScript-проектах"},
+		{Name: "Vue TypeScript checker", Command: "vue-tsc", Version: "3.3.5", Purpose: "проверять типы Vue single-file components"},
+		{Name: "Vite", Command: "vite", Version: "8.0.16", Purpose: "запускать и собирать Vue/Vite-приложения"},
+		{Name: "Vitest", Command: "vitest", Version: "4.1.9", Purpose: "запускать frontend unit tests"},
+		{Name: "ESLint", Command: "eslint", Version: "10.5.0", Purpose: "линтить JavaScript и TypeScript-код"},
+		{Name: "Prettier", Command: "prettier", Version: "3.8.4", Purpose: "форматировать frontend-файлы и документацию"},
+		{Name: "AsyncAPI CLI", Command: "asyncapi", Version: "6.0.2", Purpose: "валидировать AsyncAPI-спецификации и запускать генераторы для event/websocket-контрактов"},
+		{Name: "AsyncAPI generator package", Command: "asyncapi generate", Version: "3.3.0", Purpose: "генерировать код и документацию из AsyncAPI-шаблонов"},
+		{Name: "AsyncAPI Modelina", Command: "modelina", Version: "5.10.1", Purpose: "генерировать TypeScript-модели для AsyncAPI/WebSocket payloads, когда шаблоны используют Modelina"},
+		{Name: "WebSocket client", Command: "wscat", Version: "6.1.0", Purpose: "вручную подключаться к websocket endpoints и отлаживать их"},
+		{Name: "Buf", Command: "buf", Version: "1.71.0", Purpose: "линтить и генерировать protobuf/gRPC-контракты"},
+		{Name: "grpcurl", Command: "grpcurl", Version: "1.9.3", Purpose: "инспектировать и вызывать gRPC-сервисы при отладке"},
+		{Name: "Protocol Buffers compiler", Command: "protoc", Version: "31.x distro package", Purpose: "генерировать protobuf и gRPC-артефакты"},
+		{Name: "Protobuf Go plugin", Command: "protoc-gen-go", Version: "1.36.11", Purpose: "генерировать Go protobuf types"},
+		{Name: "gRPC Go plugin", Command: "protoc-gen-go-grpc", Version: "1.6.2", Purpose: "генерировать Go gRPC service stubs"},
+		{Name: "Go linter", Command: "golangci-lint", Version: "2.12.2", Purpose: "запускать основной Go lint profile по запросу"},
 	}
 }
 
 func agentSecretBindings() []promptTemplateSecretBindingData {
 	return []promptTemplateSecretBindingData{
 		{
-			Name:         "GitHub account",
-			Kind:         "Kubernetes Secret mount plus shell env",
+			Name:         "GitHub-аккаунт",
+			Kind:         "Kubernetes Secret mount и переменные shell",
 			Env:          "GH_TOKEN, GITHUB_TOKEN, GITHUB_USERNAME, GITHUB_USER, GITHUB_EMAIL, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL, MATTERCODEX_GITHUB_TOKEN_FILE",
 			File:         "/var/run/secrets/matter-codex-github/github-token",
-			Availability: "only when the role has a GitHub account binding",
-			Purpose:      "authenticate git and gh operations as the selected agent GitHub account",
+			Availability: "только если у роли привязан GitHub-аккаунт",
+			Purpose:      "аутентифицировать операции git и gh от имени выбранного GitHub-аккаунта агента",
 		},
 		{
-			Name:         "OpenAI Codex account",
-			Kind:         "Kubernetes Secret mount copied into CODEX_HOME",
+			Name:         "OpenAI Codex-аккаунт",
+			Kind:         "Kubernetes Secret mount, копируемый в CODEX_HOME",
 			Env:          "CODEX_HOME",
 			File:         "/codex-home/auth.json and /var/run/secrets/matter-codex-codex/auth.json",
-			Availability: "required for Codex-backed agent runs",
-			Purpose:      "authenticate Codex CLI with the selected OpenAI account",
+			Availability: "обязателен для запусков агентов через Codex",
+			Purpose:      "аутентифицировать Codex CLI выбранным OpenAI-аккаунтом",
 		},
 		{
 			Name:         "Kubernetes service account",
-			Kind:         "Projected service account token plus in-cluster env",
+			Kind:         "Projected service account token и внутрикластерные переменные среды",
 			Env:          "KUBERNETES_SERVICE_HOST, KUBERNETES_SERVICE_PORT, KUBERNETES_PORT",
 			File:         "/var/run/secrets/kubernetes.io/serviceaccount/token, /var/run/secrets/kubernetes.io/serviceaccount/ca.crt, /var/run/secrets/kubernetes.io/serviceaccount/namespace",
-			Availability: "developer, reviewer, chat and session agent pods",
-			Purpose:      "access the MatterCodex and agent runtime Kubernetes cluster only when the user prompt or repository instructions explicitly allow it",
+			Availability: "поды developer, reviewer, чата и агентских сессий",
+			Purpose:      "доступ к Kubernetes-кластеру MatterCodex и среды выполнения агентов только когда промпт пользователя или инструкции репозитория явно это разрешают",
 		},
 		{
-			Name:         "Mattermost MCP session",
+			Name:         "Mattermost MCP-сессия",
 			Kind:         "Codex MCP bearer token",
-			Env:          "MATTERCODEX_MCP_TOKEN for the Codex MCP client; not exposed to shell commands",
+			Env:          "MATTERCODEX_MCP_TOKEN",
 			File:         "/var/run/secrets/matter-codex-session/token",
-			Availability: "long-lived chat session pods",
-			Purpose:      "let Codex call Mattermost MCP tools for bounded thread reads and progress updates",
+			Availability: "долгоживущие поды чатовых сессий",
+			Purpose:      "позволить Codex MCP-клиенту вызывать Mattermost MCP-инструменты для ограниченного чтения треда и обновлений прогресса; переменная не доступна shell-командам",
 		},
 	}
 }
@@ -730,13 +723,13 @@ func roleSecretBindings(runtimeVariables []entity.ProjectRuntimeVariable) []prom
 		}
 		description := strings.TrimSpace(variable.Description)
 		if description == "" {
-			description = "project-level runtime variable explicitly attached to this role"
+			description = "проектная переменная среды выполнения, явно назначенная этой роли"
 		}
 		bindings = append(bindings, promptTemplateSecretBindingData{
-			Name:         "Project env " + variable.Name,
-			Kind:         "Kubernetes Secret env binding",
+			Name:         "Проектная переменная " + variable.Name,
+			Kind:         "привязка переменной среды из Kubernetes Secret",
 			Env:          variable.Name,
-			Availability: "only for roles explicitly bound to this project variable",
+			Availability: "только для ролей, которым явно назначена эта проектная переменная",
 			Purpose:      description,
 		})
 	}
@@ -744,7 +737,7 @@ func roleSecretBindings(runtimeVariables []entity.ProjectRuntimeVariable) []prom
 }
 
 func appendRuntimeToolsMarkdown(body *strings.Builder) {
-	body.WriteString("- Available runtime tools:\n")
+	body.WriteString("- Доступные инструменты среды выполнения:\n")
 	for _, tool := range agentRuntimeTools() {
 		body.WriteString("  - `")
 		body.WriteString(tool.Command)
@@ -760,21 +753,21 @@ func appendRuntimeToolsMarkdown(body *strings.Builder) {
 }
 
 func appendSecretBindingsMarkdown(body *strings.Builder, bindings []promptTemplateSecretBindingData) {
-	body.WriteString("- Available credential bindings:\n")
+	body.WriteString("- Доступные привязки учетных данных:\n")
 	for _, binding := range bindings {
 		body.WriteString("  - ")
 		body.WriteString(binding.Name)
 		body.WriteString(" (")
 		body.WriteString(binding.Availability)
-		body.WriteString("): env `")
+		body.WriteString("): переменные `")
 		body.WriteString(binding.Env)
 		body.WriteString("`")
 		if strings.TrimSpace(binding.File) != "" {
-			body.WriteString("; files `")
+			body.WriteString("; файлы `")
 			body.WriteString(binding.File)
 			body.WriteString("`")
 		}
-		body.WriteString(". ")
+		body.WriteString(". Назначение: ")
 		body.WriteString(binding.Purpose)
 		body.WriteString(".\n")
 	}

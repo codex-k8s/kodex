@@ -573,7 +573,7 @@ func TestAgentRoleDialogSeedsKnownRolePromptTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("role not stored: %v", err)
 	}
-	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "Ты developer agent проекта") || !strings.Contains(role.PromptTemplate, "mattermost_request_agent") {
+	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "Ты агент developer проекта") || !strings.Contains(role.PromptTemplate, "mattermost_request_agent") {
 		t.Fatalf("prompt mode/template = %q/%q", role.PromptMode, role.PromptTemplate)
 	}
 	if role.OpenAIAccountName != "primary" || role.GitHubAccountName != "agent" {
@@ -779,10 +779,10 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildRolePrompt() error = %v", err)
 	}
-	if !strings.Contains(prompt, "# User instruction") || !strings.Contains(prompt, "Inspect the current issue and propose next steps.") {
+	if !strings.Contains(prompt, "# Инструкция пользователя") || !strings.Contains(prompt, "Inspect the current issue and propose next steps.") {
 		t.Fatalf("prompt = %q", prompt)
 	}
-	if !strings.Contains(prompt, "Project: Platform") || !strings.Contains(prompt, "github:codex-k8s/matter-codex") {
+	if !strings.Contains(prompt, "Проект: Platform") || !strings.Contains(prompt, "github:codex-k8s/matter-codex") {
 		t.Fatalf("prompt = %q", prompt)
 	}
 	if !strings.Contains(prompt, "`gh` 2.95.0") || !strings.Contains(prompt, "`go` 1.26") || !strings.Contains(prompt, "`kubectl` 1.36.2") {
@@ -793,7 +793,7 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing runtime tool %q: %q", expected, prompt)
 		}
 	}
-	for _, expected := range []string{"Available credential bindings", "GH_TOKEN", "KUBERNETES_SERVICE_HOST", "/var/run/secrets/kubernetes.io/serviceaccount/token"} {
+	for _, expected := range []string{"Доступные привязки учетных данных", "GH_TOKEN", "KUBERNETES_SERVICE_HOST", "/var/run/secrets/kubernetes.io/serviceaccount/token"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing credential binding %q: %q", expected, prompt)
 		}
@@ -803,7 +803,7 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
 		}
 	}
-	for _, expected := range []string{"GitHub PR titles", "inline review comments", "пиши на English"} {
+	for _, expected := range []string{"заголовки и описания пул-реквестов", "строчные замечания ревью", "пиши на English"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing language contract %q: %q", expected, prompt)
 		}
@@ -867,9 +867,9 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 		"openapi-ts=0.98.2",
 		"asyncapi=6.0.2",
 		"modelina=5.10.1",
-		"GitHub account=GH_TOKEN",
+		"GitHub-аккаунт=GH_TOKEN",
 		"Kubernetes service account=KUBERNETES_SERVICE_HOST",
-		"Project env STAGING_DB_URL=STAGING_DB_URL",
+		"Проектная переменная STAGING_DB_URL=STAGING_DB_URL",
 		"mattermost_update_turn_status",
 		"--body-file",
 	} {
@@ -1452,9 +1452,6 @@ func TestProfileDialogSubmissionCreatesProfileAndPromptSeeds(t *testing.T) {
 	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerImplementTaskKey)]; !ok {
 		t.Fatalf("implement prompt was not seeded: %#v", store.promptTemplates)
 	}
-	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerFixReviewKey)]; !ok {
-		t.Fatalf("fix prompt was not seeded: %#v", store.promptTemplates)
-	}
 	if result.Card == nil || !strings.Contains(result.Card.Text, "deployer") {
 		t.Fatalf("card = %#v", result.Card)
 	}
@@ -1557,7 +1554,6 @@ func TestFlowStartDialogUsesSelectedProfiles(t *testing.T) {
 		},
 		promptTemplates: map[string]entity.AgentPromptTemplate{
 			promptTemplateMapKey("devx", developerImplementTaskKey): {ProfileName: "devx", TemplateKey: developerImplementTaskKey, Body: "Implement {{.Task.Title}} in {{.Repository.FullName}}"},
-			promptTemplateMapKey("devx", developerFixReviewKey):     {ProfileName: "devx", TemplateKey: developerFixReviewKey, Body: "Fix {{.PullRequest.Number}}"},
 			promptTemplateMapKey("reviewx", reviewPRTemplateKey):    {ProfileName: "reviewx", TemplateKey: reviewPRTemplateKey, Body: "Review {{.PullRequest.Number}}"},
 		},
 	}
@@ -4934,23 +4930,11 @@ func (store *fakeAdminStore) ensurePromptTemplates() {
 		return
 	}
 	store.promptTemplates = map[string]entity.AgentPromptTemplate{
-		promptTemplateMapKey("developer", developerSmokeTemplateKey): {
-			ID:          1,
-			ProfileName: "developer",
-			TemplateKey: developerSmokeTemplateKey,
-			Body:        "Developer task for {{.Repository.FullName}}: {{.Task.Body}}",
-		},
 		promptTemplateMapKey("developer", developerImplementTaskKey): {
 			ID:          2,
 			ProfileName: "developer",
 			TemplateKey: developerImplementTaskKey,
 			Body:        "Implement {{.Task.Title}} for {{.Repository.FullName}} on {{.Task.HeadBranch}} using {{.Locale.Language}}",
-		},
-		promptTemplateMapKey("developer", developerFixReviewKey): {
-			ID:          3,
-			ProfileName: "developer",
-			TemplateKey: developerFixReviewKey,
-			Body:        "Fix PR #{{.PullRequest.Number}} on {{.Task.HeadBranch}} using {{.GitHub.TokenEnv}}",
 		},
 		promptTemplateMapKey("reviewer", reviewPRTemplateKey): {
 			ID:          4,
