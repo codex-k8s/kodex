@@ -1,4 +1,4 @@
-select distinct
+select
 	sessions.id,
 	sessions.session_key,
 	sessions.project_id,
@@ -23,8 +23,12 @@ select distinct
 	sessions.created_at,
 	sessions.updated_at
 from matter_codex_agent_sessions sessions
-join matter_codex_agent_session_turns turns on turns.session_id = sessions.id
-where turns.status = 'queued'
-	and sessions.active_turn_id is null
+where sessions.active_turn_id is null
+	and exists (
+		select 1
+		from matter_codex_agent_session_turns turns
+		where turns.session_id = sessions.id
+			and turns.status = 'queued'
+	)
 order by sessions.updated_at, sessions.id
 limit $1;
