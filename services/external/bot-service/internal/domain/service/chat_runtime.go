@@ -114,6 +114,12 @@ type AgentTurnQueued struct {
 	PVCName    string
 }
 
+type AgentSessionRepairResult struct {
+	QueuedSessionsEnsured int
+	StaleSessionsReset    int
+	Failed                int
+}
+
 type AgentTurnDispatcher interface {
 	EnqueueAgentTurn(ctx context.Context, request AgentTurnRequest) (AgentTurnQueued, error)
 }
@@ -429,26 +435,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	repo := firstRepository(request.Repositories)
 	started := agentSessionStartedFromSession(session)
 	if agentSessionRuntimeShouldBeEnsured(session) {
-		internalToken, err := svc.sessionInternalToken(ctx, existingSession)
-		if err != nil {
-			return AgentTurnQueued{}, err
-		}
-		started, err = svc.cfg.RuntimeRunner.StartAgentSession(ctx, runtimerepo.AgentSessionPodInput{
-			SessionKey:              session.SessionKey,
-			Role:                    request.Role.Name,
-			KubernetesAccess:        request.Role.KubernetesAccess,
-			BotServiceURL:           svc.botServiceURL(),
-			InternalToken:           internalToken,
-			CodexAuthSecretName:     openAIAccount.SecretRef,
-			GitHubSecretName:        gitHubSecretName,
-			RepositoryProvider:      repo.Provider,
-			RepositoryOwner:         repo.Owner,
-			RepositoryName:          repo.Name,
-			RepositoryDefaultBranch: repo.DefaultBranch,
-			SandboxMode:             request.Role.SandboxMode,
-			ConfigOverlay:           request.Role.ConfigOverlay,
-			RuntimeEnv:              runtimeEnv,
-		})
+		started, err = svc.startAgentSessionRuntime(ctx, session, existingSession, request.Role, openAIAccount.SecretRef, gitHubSecretName, repo, runtimeEnv)
 		if err != nil {
 			return AgentTurnQueued{}, err
 		}
@@ -506,6 +493,120 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		PodName:    started.PodName,
 		PVCName:    started.PVCName,
 	}, nil
+}
+
+func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (AgentSessionRepairResult, error) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return AgentSessionRepairResult{}, fmt.Errorf("storage is not ready")
+	}
+	if !svc.cfg.RuntimeReady || svc.cfg.RuntimeRunner == nil {
+		return AgentSessionRepairResult{}, fmt.Errorf("runtime is not ready")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	result := AgentSessionRepairResult{}
+	staleSessions, err := svc.cfg.Store.ListStaleActiveAgentSessions(ctx, limit)
+	if err != nil {
+		return result, err
+	}
+	for _, session := range staleSessions {
+		if strings.TrimSpace(session.PodName) != "" {
+			_, _ = svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, session.SessionKey)
+		}
+		if _, err := svc.cfg.Store.ResetAgentSessionRuntime(ctx, session.SessionKey, agentSessionStatusIdle); err != nil {
+			result.Failed++
+			continue
+		}
+		result.StaleSessionsReset++
+	}
+	queuedSessions, err := svc.cfg.Store.ListQueuedIdleAgentSessions(ctx, limit)
+	if err != nil {
+		return result, err
+	}
+	for _, session := range queuedSessions {
+		if err := svc.ensureQueuedAgentSessionRuntime(ctx, session); err != nil {
+			result.Failed++
+			continue
+		}
+		result.QueuedSessionsEnsured++
+	}
+	return result, nil
+}
+
+func (svc *ChatRunService) ensureQueuedAgentSessionRuntime(ctx context.Context, session entity.AgentSession) error {
+	project, err := svc.cfg.Store.GetProject(ctx, session.ProjectID)
+	if err != nil {
+		return err
+	}
+	chat, err := svc.cfg.Store.GetChat(ctx, session.ChatID)
+	if err != nil {
+		return err
+	}
+	role, err := svc.cfg.Store.GetAgentRole(ctx, session.RoleID)
+	if err != nil {
+		return err
+	}
+	openAIAccount, ok := svc.openAIAccount(ctx, role)
+	if !ok {
+		return fmt.Errorf("OpenAI account is required for role %s", role.Name)
+	}
+	if err := svc.ensureCodexAuthSecretReady(ctx, openAIAccount, role); err != nil {
+		return err
+	}
+	repositories, err := svc.chatRepositories(ctx, chat)
+	if err != nil {
+		return err
+	}
+	gitHubSecretName := ""
+	if gitHubAccount, ok := svc.gitHubAccount(ctx, project, role, firstRepository(repositories)); ok {
+		gitHubSecretName = gitHubAccount.SecretRef
+	}
+	runtimeVariableBindings, err := svc.cfg.Store.ListAgentRoleRuntimeVariables(ctx, role.ID)
+	if err != nil {
+		return err
+	}
+	started, err := svc.startAgentSessionRuntime(ctx, session, session, role, openAIAccount.SecretRef, gitHubSecretName, firstRepository(repositories), runtimeEnvVarsFromBindings(runtimeVariableBindings))
+	if err != nil {
+		return err
+	}
+	ttlSeconds := session.TTLSeconds
+	if ttlSeconds <= 0 {
+		ttlSeconds = defaultThreadSessionTTLSeconds
+	}
+	_, err = svc.cfg.Store.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
+		SessionKey:          session.SessionKey,
+		Status:              agentSessionStatusIdle,
+		KubernetesNamespace: started.Namespace,
+		PodName:             started.PodName,
+		PVCName:             started.PVCName,
+		TokenSecretRef:      started.SecretName,
+		ExtendTTLSeconds:    ttlSeconds,
+	})
+	return err
+}
+
+func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session entity.AgentSession, tokenSession entity.AgentSession, role entity.AgentRole, codexAuthSecretName string, gitHubSecretName string, repo entity.ProjectRepository, runtimeEnv []runtimerepo.RuntimeEnvVar) (runtimerepo.StartedAgentSession, error) {
+	internalToken, err := svc.sessionInternalToken(ctx, tokenSession)
+	if err != nil {
+		return runtimerepo.StartedAgentSession{}, err
+	}
+	return svc.cfg.RuntimeRunner.StartAgentSession(ctx, runtimerepo.AgentSessionPodInput{
+		SessionKey:              session.SessionKey,
+		Role:                    role.Name,
+		KubernetesAccess:        role.KubernetesAccess,
+		BotServiceURL:           svc.botServiceURL(),
+		InternalToken:           internalToken,
+		CodexAuthSecretName:     codexAuthSecretName,
+		GitHubSecretName:        gitHubSecretName,
+		RepositoryProvider:      repo.Provider,
+		RepositoryOwner:         repo.Owner,
+		RepositoryName:          repo.Name,
+		RepositoryDefaultBranch: repo.DefaultBranch,
+		SandboxMode:             role.SandboxMode,
+		ConfigOverlay:           role.ConfigOverlay,
+		RuntimeEnv:              runtimeEnv,
+	})
 }
 
 func (svc *ChatRunService) SelectThreadRepository(ctx context.Context, input ThreadRepositorySelectionInput) (ThreadRepositorySelectionResult, error) {

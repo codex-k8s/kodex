@@ -166,6 +166,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if runtimeConfigured && cfg.RuntimeRetentionEnabled {
 		go runRuntimeRetentionLoop(ctx, runtimeRunner, cfg.RuntimeRetentionInterval, cfg.RuntimeRetentionOlderThan, logger)
 	}
+	if runtimeConfigured && cfg.RuntimeSessionRepairEnabled {
+		go runAgentSessionRepairLoop(ctx, chatRunSvc, cfg.RuntimeSessionRepairInterval, cfg.RuntimeSessionRepairBatch, logger)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -175,6 +178,36 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func runAgentSessionRepairLoop(ctx context.Context, svc *statusservice.ChatRunService, interval time.Duration, batch int, logger *slog.Logger) {
+	timer := time.NewTimer(15 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			result, err := svc.RepairAgentSessions(ctx, batch)
+			if err != nil {
+				logger.Warn("agent session repair failed", "error", err)
+			} else if agentSessionRepairDidWork(result) {
+				logger.Info(
+					"agent session repair applied",
+					"queued_sessions_ensured", result.QueuedSessionsEnsured,
+					"stale_sessions_reset", result.StaleSessionsReset,
+					"failed", result.Failed,
+				)
+			}
+			timer.Reset(interval)
+		}
+	}
+}
+
+func agentSessionRepairDidWork(result statusservice.AgentSessionRepairResult) bool {
+	return result.QueuedSessionsEnsured > 0 ||
+		result.StaleSessionsReset > 0 ||
+		result.Failed > 0
 }
 
 func runRuntimeRetentionLoop(ctx context.Context, runner runtimerepo.Runner, interval time.Duration, olderThan time.Duration, logger *slog.Logger) {

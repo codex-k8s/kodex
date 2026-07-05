@@ -314,6 +314,47 @@ func TestAgentSessionCompletePostsFYIToRequester(t *testing.T) {
 	}
 }
 
+func TestAgentSessionCompleteIsIdempotentForTerminalTurn(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	store.sessionTurns[0].UserName = "owner"
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	command := CompleteAgentSessionTurnCommand{
+		TurnID:         claim.TurnID,
+		RunID:          claim.RunID,
+		Status:         agentSessionTurnSucceeded,
+		FinalMessage:   "done",
+		CodexSessionID: "codex-session-1",
+	}
+	if err := svc.CompleteTurn(context.Background(), "session-1", "session-token", command); err != nil {
+		t.Fatalf("CompleteTurn() first error = %v", err)
+	}
+	postCount := len(publisher.posts)
+	cardUpdateCount := len(publisher.cardUpdates)
+
+	if err := svc.CompleteTurn(context.Background(), "session-1", "session-token", command); err != nil {
+		t.Fatalf("CompleteTurn() retry error = %v", err)
+	}
+	if len(publisher.posts) != postCount || len(publisher.cardUpdates) != cardUpdateCount {
+		t.Fatalf("retry duplicated output: posts=%#v cardUpdates=%#v", publisher.posts, publisher.cardUpdates)
+	}
+	session := store.agentSessions["session-1"]
+	if session.ActiveTurnID != 0 || session.Status != agentSessionStatusIdle || session.CodexSessionID != "codex-session-1" {
+		t.Fatalf("session = %#v", session)
+	}
+}
+
 func TestAgentSessionCompleteSplitsLongFinalMessageUsingMattermostLimit(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.postMessageMaxRunes = 1100

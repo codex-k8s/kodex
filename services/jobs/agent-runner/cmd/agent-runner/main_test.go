@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -170,6 +171,18 @@ func TestLatestCodexLimitsSummaryAllowsMissingSessions(t *testing.T) {
 	}
 	if summary != "" {
 		t.Fatalf("summary = %q, want empty", summary)
+	}
+}
+
+func TestSessionAPIErrorRetryClassification(t *testing.T) {
+	if !sessionAPIErrorRetriable(errors.New("connect: connection refused")) {
+		t.Fatal("network error should be retriable")
+	}
+	if !sessionAPIErrorRetriable(sessionAPIStatusError{StatusCode: 502, Body: "bad gateway"}) {
+		t.Fatal("5xx status should be retriable")
+	}
+	if sessionAPIErrorRetriable(sessionAPIStatusError{StatusCode: 401, Body: "unauthorized"}) {
+		t.Fatal("4xx status should not be retriable")
 	}
 }
 

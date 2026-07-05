@@ -212,9 +212,16 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	if err != nil {
 		return err
 	}
-	status := command.Status
-	if status != agentSessionTurnFailed {
-		status = agentSessionTurnSucceeded
+	status := normalizeAgentSessionCompleteStatus(command.Status)
+	currentTurn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, command.TurnID)
+	if err != nil {
+		return err
+	}
+	if currentTurn.SessionID != session.ID {
+		return fmt.Errorf("turn does not belong to session")
+	}
+	if agentSessionTurnTerminal(currentTurn.Status) {
+		return svc.reconcileCompletedTurnSnapshot(ctx, session, currentTurn, command, currentTurn.Status)
 	}
 	artifacts := "{}"
 	if command.Artifacts != nil {
@@ -238,13 +245,15 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	if status == agentSessionTurnFailed {
 		sessionStatus = agentSessionStatusError
 	}
-	_, _ = svc.cfg.Store.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
+	if _, err := svc.cfg.Store.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
 		SessionKey:               session.SessionKey,
 		CodexSessionID:           command.CodexSessionID,
 		SessionArchiveGzipBase64: command.SessionArchiveGzipBase64,
 		Status:                   sessionStatus,
 		ExtendTTLSeconds:         session.TTLSeconds,
-	})
+	}); err != nil {
+		return err
+	}
 	prURL := ""
 	if command.Artifacts != nil {
 		prURL = command.Artifacts["pr-url"]
@@ -257,6 +266,28 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	if status == agentSessionTurnSucceeded {
 		_ = svc.postTurnCompletionFYI(ctx, session, turn)
 	}
+	return nil
+}
+
+func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, command CompleteAgentSessionTurnCommand, status string) error {
+	sessionStatus := agentSessionStatusIdle
+	if status == agentSessionTurnFailed {
+		sessionStatus = agentSessionStatusError
+	}
+	if _, err := svc.cfg.Store.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
+		SessionKey:               session.SessionKey,
+		CodexSessionID:           command.CodexSessionID,
+		SessionArchiveGzipBase64: command.SessionArchiveGzipBase64,
+		Status:                   sessionStatus,
+		ExtendTTLSeconds:         session.TTLSeconds,
+	}); err != nil {
+		return err
+	}
+	prURL := ""
+	if command.Artifacts != nil {
+		prURL = command.Artifacts["pr-url"]
+	}
+	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
 	return nil
 }
 
@@ -1031,6 +1062,17 @@ func (svc *AgentSessionService) sessionMattermostUsername(ctx context.Context, s
 
 func agentSessionTurnStoppable(status string) bool {
 	return status == agentSessionTurnQueued || status == agentSessionTurnRunning
+}
+
+func agentSessionTurnTerminal(status string) bool {
+	return status == agentSessionTurnSucceeded || status == agentSessionTurnFailed || status == agentSessionTurnCanceled
+}
+
+func normalizeAgentSessionCompleteStatus(status string) string {
+	if status == agentSessionTurnFailed {
+		return agentSessionTurnFailed
+	}
+	return agentSessionTurnSucceeded
 }
 
 func mentionableMattermostUsername(userName string) string {

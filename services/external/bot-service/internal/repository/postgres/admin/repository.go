@@ -505,6 +505,30 @@ func (repo *Repository) ListAgentSessionsByRole(ctx context.Context, roleID int6
 	return scanAgentSessions(rows)
 }
 
+func (repo *Repository) ListQueuedIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_queued_idle.sql"), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list queued idle agent sessions: %w", err)
+	}
+	defer rows.Close()
+	return scanAgentSessions(rows)
+}
+
+func (repo *Repository) ListStaleActiveAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_stale_active.sql"), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list stale active agent sessions: %w", err)
+	}
+	defer rows.Close()
+	return scanAgentSessions(rows)
+}
+
 func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
 	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__update_runtime.sql"),
 		input.SessionKey,

@@ -392,6 +392,109 @@ func TestChatRunEnsuresIdleSessionRuntimeBeforeQueueingContinuation(t *testing.T
 	}
 }
 
+func TestChatRunRepairEnsuresQueuedIdleSessionRuntime(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	sessionKey := agentSessionKey(1, 1, agentSessionScopeThreadRole, "post-1")
+	store.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID:                   1,
+			SessionKey:           sessionKey,
+			ProjectID:            1,
+			ChatID:               1,
+			RoleID:               1,
+			SessionScope:         agentSessionScopeThreadRole,
+			MattermostChannelID:  "channel-1",
+			MattermostRootPostID: "post-1",
+			Status:               agentSessionStatusIdle,
+			PodName:              "mc-session-old",
+			PVCName:              "mc-session-ws-old",
+			TokenSecretRef:       "session-secret",
+			TTLSeconds:           defaultThreadSessionTTLSeconds,
+		},
+	}
+	store.sessionTurns = []entity.AgentSessionTurn{
+		{ID: 1, SessionID: 1, RunID: "run-1", Status: agentSessionTurnQueued, MattermostChannelID: "channel-1", MattermostRootPostID: "post-1"},
+	}
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result, err := svc.RepairAgentSessions(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("RepairAgentSessions() error = %v", err)
+	}
+	if result.QueuedSessionsEnsured != 1 || result.StaleSessionsReset != 0 || result.Failed != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].SessionKey != sessionKey {
+		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	session := store.agentSessions[sessionKey]
+	if session.PodName != "mc-session-"+sessionKey || session.TokenSecretRef == "" {
+		t.Fatalf("session = %#v", session)
+	}
+}
+
+func TestChatRunRepairResetsStaleActiveSession(t *testing.T) {
+	store := chatRuntimeStore()
+	sessionKey := agentSessionKey(1, 1, agentSessionScopeThreadRole, "post-1")
+	store.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID:             1,
+			SessionKey:     sessionKey,
+			ProjectID:      1,
+			ChatID:         1,
+			RoleID:         1,
+			Status:         agentSessionStatusRunning,
+			ActiveTurnID:   1,
+			ActiveRunID:    "run-1",
+			PodName:        "mc-session-stale",
+			PVCName:        "mc-session-ws-stale",
+			TokenSecretRef: "session-secret",
+			TTLSeconds:     defaultThreadSessionTTLSeconds,
+		},
+	}
+	store.sessionTurns = []entity.AgentSessionTurn{
+		{ID: 1, SessionID: 1, RunID: "run-1", Status: agentSessionTurnSucceeded},
+	}
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result, err := svc.RepairAgentSessions(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("RepairAgentSessions() error = %v", err)
+	}
+	if result.StaleSessionsReset != 1 || result.QueuedSessionsEnsured != 0 || result.Failed != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+	session := store.agentSessions[sessionKey]
+	if session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != "" || runner.cleanedSessionKey != sessionKey {
+		t.Fatalf("session=%#v runner=%#v", session, runner)
+	}
+}
+
 func TestChatRunDoesNotCreateSessionWhenFirstRoleTemplateFails(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{
