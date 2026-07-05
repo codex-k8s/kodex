@@ -110,6 +110,15 @@ func promptSeedCatalog() []promptTemplateSeed {
 			RoleNames:     []string{"qa-bot", "qa", "tester"},
 		},
 		{
+			SourceProfile: "ui-designer",
+			TemplateKey:   uiDesignerTaskTemplateKey,
+			Role:          "designer",
+			Description:   "Generic UI/UX designer prompt seed",
+			FileName:      "ui_designer_task.md",
+			RoleNames:     []string{"ui-designer", "ui-ux", "uiux", "designer", "ux", "ux-designer", "product-designer"},
+			RoleTypes:     []string{"designer", "ui_ux", "ux"},
+		},
+		{
 			SourceProfile: "improver",
 			TemplateKey:   improverFeedbackTaskKey,
 			Role:          "improver",

@@ -573,7 +573,7 @@ func TestAgentRoleDialogSeedsKnownRolePromptTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("role not stored: %v", err)
 	}
-	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "You are the matter-codex developer agent.") {
+	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "Ты developer agent проекта") || !strings.Contains(role.PromptTemplate, "mattermost_request_agent") {
 		t.Fatalf("prompt mode/template = %q/%q", role.PromptMode, role.PromptTemplate)
 	}
 	if role.OpenAIAccountName != "primary" || role.GitHubAccountName != "agent" {
@@ -654,7 +654,7 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 		t.Fatalf("existing improver prompt was overwritten: %q", radarImprover.PromptTemplate)
 	}
 	myQRImprover := testRoleByName(t, store, 2, "improver")
-	if myQRImprover.RoleType != "improver" || myQRImprover.PromptMode != "template" || !strings.Contains(myQRImprover.PromptTemplate, "repeated review feedback") {
+	if myQRImprover.RoleType != "improver" || myQRImprover.PromptMode != "template" || !strings.Contains(myQRImprover.PromptTemplate, "повторяющиеся замечания") {
 		t.Fatalf("myqr improver = %#v", myQRImprover)
 	}
 	if myQRImprover.GitHubAccountName != "github-myqrcontact-owner" || myQRImprover.OpenAIAccountName != "openai-radar-delivery" {
@@ -798,12 +798,12 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing credential binding %q: %q", expected, prompt)
 		}
 	}
-	for _, expected := range []string{"mattermost_update_turn_status", "--body-file", "Do not inline Markdown"} {
+	for _, expected := range []string{"mattermost_update_turn_status", "--body-file", "Не встраивай Markdown"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
 		}
 	}
-	for _, expected := range []string{"GitHub PR titles and bodies", "inline review comments", "in English"} {
+	for _, expected := range []string{"GitHub PR titles", "inline review comments", "пиши на English"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing language contract %q: %q", expected, prompt)
 		}
@@ -1497,9 +1497,9 @@ func TestProfileDialogSubmissionCreatesArchitectPromptSeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("architect prompt seed was not saved: %v", err)
 	}
-	if !strings.Contains(item.Body, "Project: {{default .Repository.Name .Project.Name}}") ||
-		!strings.Contains(item.Body, "Use {{.Locale.Language}}") ||
-		!strings.Contains(item.Body, "prompts sent to other agents through MCP") {
+	if !strings.Contains(item.Body, "- Проект: {{.Project.Name}}") ||
+		!strings.Contains(item.Body, "Язык владельца: {{.Locale.Language}}") ||
+		!strings.Contains(item.Body, "mattermost_request_agent") {
 		t.Fatalf("architect seed body missing generic locale/MCP policy:\n%s", item.Body)
 	}
 }
@@ -4678,6 +4678,18 @@ func (store *fakeAdminStore) UpdateAgentSessionTurnStatusPost(_ context.Context,
 	for index, turn := range store.sessionTurns {
 		if turn.ID == input.TurnID {
 			turn.MattermostStatusPostID = input.StatusPostID
+			store.sessionTurns[index] = turn
+			return turn, nil
+		}
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) UpdateAgentSessionTurnMessage(_ context.Context, input adminrepo.UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error) {
+	for index, turn := range store.sessionTurns {
+		if turn.ID == input.TurnID && turn.Status == agentSessionTurnQueued {
+			turn.Message = input.Message
+			turn.UpdatedAt = time.Now().UTC()
 			store.sessionTurns[index] = turn
 			return turn, nil
 		}

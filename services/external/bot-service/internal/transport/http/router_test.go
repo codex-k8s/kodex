@@ -893,6 +893,10 @@ func (store *fakeRouterAdminStore) UpdateAgentSessionTurnStatusPost(context.Cont
 	return entity.AgentSessionTurn{}, nil
 }
 
+func (store *fakeRouterAdminStore) UpdateAgentSessionTurnMessage(context.Context, adminrepo.UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, nil
+}
+
 func (store *fakeRouterAdminStore) ListQueuedAgentSessionTurns(context.Context, int64) ([]entity.AgentSessionTurn, error) {
 	return nil, nil
 }

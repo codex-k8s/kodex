@@ -445,8 +445,13 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	if result.RequestedRunID != "run-sre-1" || result.RequestedRoleName != "sre" || result.AuditPostID == "" {
 		t.Fatalf("result = %#v", result)
 	}
-	if dispatcher.request.Role.Name != "sre" || dispatcher.request.UserName != "manager" || dispatcher.request.UserMessage != "Проверь staging deploy.\n\n- Не печатай секреты." {
+	if dispatcher.calls != 1 || dispatcher.request.Role.Name != "sre" || dispatcher.request.UserName != "manager" {
 		t.Fatalf("dispatcher request = %#v", dispatcher.request)
+	}
+	for _, expected := range []string{"# Запрос к агенту через MatterCodex", "- Инициатор: @manager", "- Целевой агент: @sre", "Проверь staging deploy.", "Не печатай секреты."} {
+		if !strings.Contains(dispatcher.request.UserMessage, expected) {
+			t.Fatalf("dispatcher prompt missing %q: %q", expected, dispatcher.request.UserMessage)
+		}
 	}
 	if len(publisher.posts) != 1 {
 		t.Fatalf("posts = %#v", publisher.posts)
@@ -462,6 +467,98 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	}
 	if post.Props["matter_codex_event"] != "agent_request" || post.Props["source_agent"] != "manager" || post.Props["target_agent"] != "sre" {
 		t.Fatalf("props = %#v", post.Props)
+	}
+}
+
+func TestAgentSessionRequestAgentMergesIntoQueuedTargetTurn(t *testing.T) {
+	now := time.Now().UTC()
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "sre", RoleType: "sre", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "sre", MattermostUserID: "sre-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Ops", ChatType: "multi_role_custom"}
+	store.setChatBindings(1, []int64{1, 2}, nil)
+	targetSessionKey := agentSessionKey(1, 2, agentSessionScopeThreadRole, "root-1")
+	store.agentSessions = map[string]entity.AgentSession{
+		"session-1": {
+			ID:                   1,
+			SessionKey:           "session-1",
+			ProjectID:            1,
+			ChatID:               1,
+			RoleID:               1,
+			SessionScope:         agentSessionScopeThreadRole,
+			MattermostChannelID:  "channel-1",
+			MattermostRootPostID: "root-1",
+			Status:               agentSessionStatusIdle,
+			TokenSecretRef:       "session-secret",
+			TTLSeconds:           defaultThreadSessionTTLSeconds,
+			LastActivityAt:       now,
+			ExpiresAt:            now.Add(time.Hour),
+		},
+		targetSessionKey: {
+			ID:                   2,
+			SessionKey:           targetSessionKey,
+			ProjectID:            1,
+			ChatID:               1,
+			RoleID:               2,
+			SessionScope:         agentSessionScopeThreadRole,
+			MattermostChannelID:  "channel-1",
+			MattermostRootPostID: "root-1",
+			Status:               agentSessionStatusRunning,
+			TokenSecretRef:       "target-secret",
+			TTLSeconds:           defaultThreadSessionTTLSeconds,
+			LastActivityAt:       now,
+			ExpiresAt:            now.Add(time.Hour),
+		},
+	}
+	store.sessionTurns = []entity.AgentSessionTurn{{
+		ID:                   10,
+		SessionID:            2,
+		RunID:                "queued-sre",
+		MattermostChannelID:  "channel-1",
+		MattermostRootPostID: "root-1",
+		MattermostPostID:     "root-1",
+		UserName:             "architect",
+		Message:              "# Запрос к агенту через MatterCodex\n\n- Инициатор: @architect\n\nпервый запрос",
+		Status:               agentSessionTurnQueued,
+	}}
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token", "target-secret": "target-token"}}
+	publisher := &fakeThreadPublisher{}
+	dispatcher := &fakeAgentTurnDispatcher{queued: AgentTurnQueued{RunID: "should-not-be-used"}}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.RussianLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		TurnDispatcher:  dispatcher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	result, err := svc.RequestAgent(context.Background(), "session-1", "session-token", "sre", "второй запрос от manager")
+	if err != nil {
+		t.Fatalf("RequestAgent() error = %v", err)
+	}
+	if result.RequestedRunID != "queued-sre" || result.TargetSessionKey != targetSessionKey {
+		t.Fatalf("result = %#v", result)
+	}
+	if dispatcher.calls != 0 {
+		t.Fatalf("dispatcher was called: %#v", dispatcher)
+	}
+	if len(store.sessionTurns) != 1 {
+		t.Fatalf("sessionTurns = %#v", store.sessionTurns)
+	}
+	merged := store.sessionTurns[0].Message
+	for _, expected := range []string{"первый запрос", "# Дополнительный запрос к этому же занятому агенту", "- Инициатор: @manager", "- Целевой агент: @sre", "второй запрос от manager", "объединен"} {
+		if !strings.Contains(merged, expected) {
+			t.Fatalf("merged prompt missing %q:\n%s", expected, merged)
+		}
+	}
+	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, "matter-codex: @manager запустил @sre") {
+		t.Fatalf("audit posts = %#v", publisher.posts)
 	}
 }
 
@@ -618,9 +715,11 @@ func withActiveTurn(session entity.AgentSession, turnID int64, runID string) ent
 type fakeAgentTurnDispatcher struct {
 	request AgentTurnRequest
 	queued  AgentTurnQueued
+	calls   int
 }
 
 func (dispatcher *fakeAgentTurnDispatcher) EnqueueAgentTurn(_ context.Context, request AgentTurnRequest) (AgentTurnQueued, error) {
+	dispatcher.calls++
 	dispatcher.request = request
 	return dispatcher.queued, nil
 }

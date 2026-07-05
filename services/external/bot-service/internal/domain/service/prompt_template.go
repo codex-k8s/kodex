@@ -23,6 +23,7 @@ const (
 	sreOperationsTaskKey      = "operations_task"
 	qaRegressionTaskKey       = "regression_task"
 	improverFeedbackTaskKey   = "feedback_improvement"
+	uiDesignerTaskTemplateKey = "ui_design_task"
 )
 
 type promptTemplateRunData struct {
@@ -266,7 +267,7 @@ func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
 	appendRuntimeToolsMarkdown(&body)
 	appendSecretBindingsMarkdown(&body, roleSecretBindings(input.RuntimeVariables))
 	if strings.TrimSpace(input.Locale.Language) != "" {
-		body.WriteString("- Response language: ")
+		body.WriteString("- Язык ответа: ")
 		body.WriteString(input.Locale.Language)
 		body.WriteString("\n")
 	}
@@ -339,7 +340,7 @@ func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 	appendRuntimeToolsMarkdown(&body)
 	appendSecretBindingsMarkdown(&body, roleSecretBindings(input.RuntimeVariables))
 	if strings.TrimSpace(input.Locale.Language) != "" {
-		body.WriteString("- Response language: ")
+		body.WriteString("- Язык ответа: ")
 		body.WriteString(input.Locale.Language)
 		body.WriteString("\n")
 	}
@@ -356,23 +357,23 @@ func appendRoleRuntimeContract(prompt string, input RolePromptInput) string {
 
 func appendRoleRuntimeContractMarkdown(body *strings.Builder, input RolePromptInput) {
 	body.WriteString("# Matter-codex runtime contract\n\n")
-	body.WriteString("- GitHub CLI: use `gh` when the role has a GitHub account. Token/user/email are exposed through `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER`, and `GITHUB_EMAIL`. Never print token values.\n")
-	body.WriteString("- For GitHub issue, pull request, review, and comment Markdown, write the body to a temporary file or heredoc and pass it with `--body-file`/API file input. Do not inline Markdown with backticks or shell-sensitive text directly inside a shell command string.\n")
+	body.WriteString("- GitHub CLI: используй `gh`, если у роли есть GitHub account. Token/user/email доступны через `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER` и `GITHUB_EMAIL`. Никогда не печатай значения токенов.\n")
+	body.WriteString("- Для Markdown тела GitHub Issue, Pull Request, review и comments записывай body во временный файл или heredoc и передавай через `--body-file`/API file input. Не встраивай Markdown с backticks или shell-sensitive текстом напрямую в одну shell command string.\n")
 	if strings.TrimSpace(input.Locale.Language) != "" {
-		body.WriteString("- Language: write all user-visible Mattermost replies, GitHub issue titles and bodies, GitHub PR titles and bodies, issue/PR comments, review bodies, inline review comments, code comments, documentation, and delivery summaries in ")
+		body.WriteString("- Язык: все пользовательские Mattermost replies, GitHub issue titles и bodies, GitHub PR titles и bodies, issue/PR comments, review bodies, inline review comments, code comments, documentation и delivery summaries пиши на ")
 		body.WriteString(input.Locale.Language)
-		body.WriteString(". Keep code identifiers, file paths, env names, commands, API names, and quoted source text unchanged. If AGENTS.md is missing or does not define a language rule, this runtime locale is authoritative.\n")
+		body.WriteString(". Code identifiers, file paths, env names, commands, API names и quoted source text оставляй как есть. Если `AGENTS.md` отсутствует или не задает язык, эта runtime locale является обязательной.\n")
 	}
-	body.WriteString("- Mattermost MCP: use `mattermost_get_thread` to read this thread and `mattermost_search_chat` for small bounded channel searches.\n")
-	body.WriteString("- Progress status: use `mattermost_update_turn_status` for concise non-triggering progress updates. Matter-codex keeps the start/limits/stop-button status card separate and updates that card itself. Keep progress text in the response language")
+	body.WriteString("- Mattermost MCP: используй `mattermost_get_thread`, чтобы читать текущий thread, и `mattermost_search_chat` для небольшого bounded поиска по каналу.\n")
+	body.WriteString("- Progress status: используй `mattermost_update_turn_status` для коротких non-triggering progress updates. Matter-codex держит start/limits/stop-button status card отдельно и обновляет ее сам. Progress text пиши на языке ответа")
 	if strings.TrimSpace(input.Locale.Language) != "" {
 		body.WriteString(" (")
 		body.WriteString(input.Locale.Language)
 		body.WriteString(")")
 	}
-	body.WriteString(". Update after planning, after meaningful milestones, before a long wait, and when blocked. Do not create routine progress posts with `mattermost_post_thread_update`.\n")
-	body.WriteString("- Use `mattermost_post_thread_update` only when you intentionally need an additional message in the thread.\n")
-	body.WriteString("- Agent delegation: launch another agent only with `mattermost_request_agent`. Normal Mattermost username mentions in agent-authored messages never trigger agents; agent bot messages are ignored by chat routing. The platform queues the target turn in that agent's existing thread session; if the target agent is busy, the turn waits until the current turn finishes and the session is saved.\n")
+	body.WriteString(". Обновляй статус после планирования, после значимых этапов, перед долгим ожиданием и при блокере. Не создавай routine progress posts через `mattermost_post_thread_update`.\n")
+	body.WriteString("- Используй `mattermost_post_thread_update` только когда тебе намеренно нужно отдельное сообщение в thread.\n")
+	body.WriteString("- Agent delegation: запускай другого агента только через `mattermost_request_agent`. Обычные Mattermost username mentions в сообщениях от агентов никого не запускают; agent bot messages игнорируются chat routing. Платформа ставит target turn в existing thread session целевого агента; если целевой агент занят, turn ждет завершения текущего turn и сохранения session. Если несколько агентов запросят того же занятого target в этом thread, Matter-codex объединит их prompts в один следующий turn с явным указанием инициаторов.\n")
 	body.WriteString("\n")
 }
 

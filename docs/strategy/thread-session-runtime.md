@@ -6,9 +6,10 @@
 
 - Codex session хранится в БД как metadata и сжатый snapshot session JSONL из `$CODEX_HOME/sessions`.
 - Runner перед запуском восстанавливает snapshot в `CODEX_HOME`, а для продолжения вызывает `codex exec resume <session_id>`.
-- Default manager session привязана к `chat_id + role_id` и живет 7 дней от последней активности.
-- Явно упомянутые агенты получают thread-scoped session `chat_id + root_post_id + role_id` и живут 3 суток от последней активности.
+- Default manager session привязана к `chat_id + role_id`. Runtime pod держится прогретым 4 часа от последней активности, а сама session history сохраняется в БД.
+- Явно упомянутые агенты получают thread-scoped session `chat_id + root_post_id + role_id`. Runtime pod держится прогретым 4 часа от последней активности, а сама session history сохраняется в БД.
 - Если агент уже выполняет turn, новые сообщения попадают в FIFO queue этой session.
+- Если один агент запускает другого через MCP `mattermost_request_agent`, а у целевого агента в этом thread уже есть queued turn, новый request не создает второй queued turn: prompt дописывается в существующий queued turn с явным указанием инициатора. Это защищает thread от массовых callback-циклов.
 - У роли создается отдельная Mattermost bot identity. В chat/channel добавляются реальные bot users, чтобы ответы визуально шли от конкретного агента.
 - Mattermost MCP server встроен в bot-service через официальный `github.com/modelcontextprotocol/go-sdk`.
 - MCP tools получают capabilities из role/chat session. Запись в thread и запуск другого агента разрешены только при включенной capability.
@@ -51,8 +52,8 @@ Thread reply с `@agent` mention:
 
 TTL:
 
-- default manager chat session: 7 дней;
-- explicit/thread role session: 3 суток;
+- default manager chat session pod TTL: 4 часа;
+- explicit/thread role session pod TTL: 4 часа;
 - каждый queued/running/completed turn продлевает `expires_at`.
 
 ## MCP tools
@@ -71,6 +72,7 @@ MCP endpoint доступен только внутри runtime через beare
 - tools возвращают ограниченный объем данных;
 - tool не отдает секреты, raw tokens или внутренние Kubernetes secret values;
 - `post_thread_update` и `request_agent` доступны только если capability явно разрешена для session.
+- `request_agent` является единственным штатным способом агенту запустить другого агента. Обычные Mattermost mentions в сообщениях от agent bot identities не запускают turns.
 
 ## Snapshot storage
 

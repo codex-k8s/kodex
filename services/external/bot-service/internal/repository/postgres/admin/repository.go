@@ -625,6 +625,20 @@ func (repo *Repository) UpdateAgentSessionTurnStatusPost(ctx context.Context, in
 	return item, nil
 }
 
+func (repo *Repository) UpdateAgentSessionTurnMessage(ctx context.Context, input adminrepo.UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__update_message.sql"),
+		input.TurnID,
+		input.Message,
+	))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSessionTurn{}, fmt.Errorf("update agent session turn message: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) ListQueuedAgentSessionTurns(ctx context.Context, sessionID int64) ([]entity.AgentSessionTurn, error) {
 	rows, err := repo.pool.Query(ctx, query("agent_session_turns__list_queued.sql"), sessionID)
 	if err != nil {
