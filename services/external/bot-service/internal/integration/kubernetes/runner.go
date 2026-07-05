@@ -44,8 +44,10 @@ const (
 	promptVolume                 = "agent-prompt"
 	runnerHomeVolume             = "runner-home"
 	runnerTmpVolume              = "runner-tmp"
+	runnerDevShmVolume           = "runner-dev-shm"
 	runnerHomePath               = "/home/matter-codex"
 	runnerTmpPath                = "/tmp"
+	runnerDevShmPath             = "/dev/shm"
 	runtimeEnvAllowlist          = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
 	runnerInitPath               = "/sbin/tini"
 	runnerBinaryName             = "matter-codex-agent-runner"
@@ -2460,6 +2462,7 @@ func runnerWritableVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{Name: runnerHomeVolume, MountPath: runnerHomePath},
 		{Name: runnerTmpVolume, MountPath: runnerTmpPath},
+		{Name: runnerDevShmVolume, MountPath: runnerDevShmPath},
 	}
 }
 
@@ -2467,6 +2470,7 @@ func runnerWritableVolumes() []corev1.Volume {
 	return []corev1.Volume{
 		{Name: runnerHomeVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		{Name: runnerTmpVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: runnerDevShmVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory}}},
 	}
 }
 

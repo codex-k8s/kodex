@@ -43,12 +43,13 @@ RUN apk add --no-cache ca-certificates git \
 	&& CGO_ENABLED=0 go install github.com/sqlc-dev/sqlc/cmd/sqlc@"${SQLC_VERSION}" \
 	&& CGO_ENABLED=0 go install go.uber.org/mock/mockgen@"${MOCKGEN_VERSION}"
 
-FROM node:24-alpine
+FROM node:24-bookworm
 
 ARG MATTERCODEX_CODEX_PACKAGE=@openai/codex@0.141.0
 ARG GH_CLI_VERSION=2.95.0
 ARG KUBECTL_VERSION=v1.36.2
 ARG HELM_VERSION=v4.2.1
+ARG JUST_VERSION=1.55.1
 ARG TYPESCRIPT_VERSION=6.0.3
 ARG VUE_VERSION=3.5.38
 ARG CREATE_VUE_VERSION=3.22.4
@@ -58,11 +59,15 @@ ARG VITEST_VERSION=4.1.9
 ARG ESLINT_VERSION=10.5.0
 ARG PRETTIER_VERSION=3.8.4
 ARG PNPM_VERSION=11.8.0
+ARG YARN_VERSION=1.22.22
 ARG HEY_OPENAPI_TS_VERSION=0.98.2
 ARG ASYNCAPI_CLI_VERSION=6.0.2
 ARG ASYNCAPI_GENERATOR_VERSION=3.3.0
 ARG ASYNCAPI_MODELINA_CLI_VERSION=5.10.1
 ARG WSCAT_VERSION=6.1.0
+ARG PLAYWRIGHT_VERSION=1.61.1
+ARG PLAYWRIGHT_MCP_VERSION=0.0.77
+ARG WAIT_ON_VERSION=9.0.10
 ARG MATTERCODEX_AGENT_RUNNER_UID=10001
 ARG MATTERCODEX_AGENT_RUNNER_GID=10001
 
@@ -71,52 +76,68 @@ COPY --from=go-tools /tool-bin/ /usr/local/bin/
 
 COPY --from=builder /out/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner
 
-ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
+	PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-RUN apk add --no-cache \
+RUN set -eu; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends \
 		bash \
-		build-base \
-		bind-tools \
+		build-essential \
 		ca-certificates \
+		chromium \
 		curl \
-		fd \
+		dnsutils \
+		fd-find \
 		git \
 		jq \
-		just \
 		less \
 		make \
 		netcat-openbsd \
 		openssl \
 		openssh-client \
 		postgresql-client \
-		protobuf \
-		redis \
+		protobuf-compiler \
+		redis-tools \
 		ripgrep \
 		tar \
 		tini \
-		tree \
-	&& ln -sf /usr/local/go/bin/go /usr/local/bin/go \
-	&& ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
-	&& set -eu; \
-	case "$(apk --print-arch)" in \
-		x86_64) gh_arch=amd64; kubectl_arch=amd64; helm_arch=amd64 ;; \
-		aarch64) gh_arch=arm64; kubectl_arch=arm64; helm_arch=arm64 ;; \
-		*) echo "unsupported architecture: $(apk --print-arch)" >&2; exit 1 ;; \
+		tree; \
+	ln -sf /usr/bin/fdfind /usr/local/bin/fd; \
+	ln -sf /usr/bin/chromium /usr/local/bin/chromium; \
+	ln -sf /usr/local/go/bin/go /usr/local/bin/go; \
+	ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt; \
+	case "$(dpkg --print-architecture)" in \
+		x86_64) gh_arch=amd64; kubectl_arch=amd64; helm_arch=amd64; just_arch=x86_64 ;; \
+		amd64) gh_arch=amd64; kubectl_arch=amd64; helm_arch=amd64; just_arch=x86_64 ;; \
+		arm64) gh_arch=arm64; kubectl_arch=arm64; helm_arch=arm64; just_arch=aarch64 ;; \
+		aarch64) gh_arch=arm64; kubectl_arch=arm64; helm_arch=arm64; just_arch=aarch64 ;; \
+		*) echo "unsupported architecture: $(dpkg --print-architecture)" >&2; exit 1 ;; \
 	esac; \
-	curl -fsSL -o /tmp/gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_${gh_arch}.tar.gz"; \
+	curl_flags="--ipv4 --fail --show-error --silent --location --retry 5 --retry-all-errors --connect-timeout 20 --max-time 300"; \
+	curl ${curl_flags} -o /tmp/gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_${gh_arch}.tar.gz"; \
 	tar -xzf /tmp/gh.tar.gz -C /tmp; \
 	mv "/tmp/gh_${GH_CLI_VERSION}_linux_${gh_arch}/bin/gh" /usr/local/bin/gh; \
-	curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${kubectl_arch}/kubectl"; \
-	curl -fsSLo /tmp/kubectl.sha256 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${kubectl_arch}/kubectl.sha256"; \
+	curl ${curl_flags} -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${kubectl_arch}/kubectl"; \
+	curl ${curl_flags} -o /tmp/kubectl.sha256 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${kubectl_arch}/kubectl.sha256"; \
 	echo "$(cat /tmp/kubectl.sha256)  /usr/local/bin/kubectl" | sha256sum -c -; \
-	curl -fsSL -o "/tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz" "https://get.helm.sh/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz"; \
-	curl -fsSL -o "/tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum" "https://get.helm.sh/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum"; \
+	curl ${curl_flags} -o "/tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz" "https://get.helm.sh/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz"; \
+	curl ${curl_flags} -o "/tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum" "https://get.helm.sh/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum"; \
 	(cd /tmp && sha256sum -c "helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum"); \
 	tar -xzf "/tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz" -C /tmp; \
 	mv "/tmp/linux-${helm_arch}/helm" /usr/local/bin/helm; \
-	chmod +x /usr/local/bin/gh /usr/local/bin/kubectl /usr/local/bin/helm; \
-	rm -rf /tmp/gh.tar.gz /tmp/gh_${GH_CLI_VERSION}_linux_${gh_arch} /tmp/kubectl.sha256 /tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz /tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum /tmp/linux-${helm_arch} \
-	&& npm install -g \
+	curl ${curl_flags} -o "/tmp/just.tar.gz" "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${just_arch}-unknown-linux-musl.tar.gz"; \
+	tar -xzf /tmp/just.tar.gz -C /tmp just; \
+	mv /tmp/just /usr/local/bin/just; \
+	chmod +x /usr/local/bin/gh /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/just; \
+	rm -rf /tmp/gh.tar.gz /tmp/gh_${GH_CLI_VERSION}_linux_${gh_arch} /tmp/kubectl.sha256 /tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz /tmp/helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz.sha256sum /tmp/linux-${helm_arch} /tmp/just.tar.gz; \
+	if command -v yarn >/dev/null 2>&1 && [ "$(yarn --version)" = "${YARN_VERSION}" ]; then \
+		echo "yarn ${YARN_VERSION} already installed"; \
+	else \
+		rm -f /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+		npm install -g "yarn@${YARN_VERSION}"; \
+	fi; \
+	npm install -g \
 		"${MATTERCODEX_CODEX_PACKAGE}" \
 		"typescript@${TYPESCRIPT_VERSION}" \
 		"vue@${VUE_VERSION}" \
@@ -132,49 +153,60 @@ RUN apk add --no-cache \
 		"@asyncapi/generator@${ASYNCAPI_GENERATOR_VERSION}" \
 		"@asyncapi/modelina-cli@${ASYNCAPI_MODELINA_CLI_VERSION}" \
 		"wscat@${WSCAT_VERSION}" \
-	&& node --version \
-	&& npm --version \
-	&& go version \
-	&& gh --version >/dev/null \
-	&& kubectl version --client=true >/dev/null \
-	&& helm version --short >/dev/null \
-	&& psql --version >/dev/null \
-	&& redis-cli --version >/dev/null \
-	&& jq --version >/dev/null \
-	&& yq --version >/dev/null \
-	&& rg --version >/dev/null \
-	&& fd --version >/dev/null \
-	&& just --version >/dev/null \
-	&& goose --version >/dev/null \
-	&& oapi-codegen -version >/dev/null \
-	&& protoc --version >/dev/null \
-	&& protoc-gen-go --version >/dev/null \
-	&& protoc-gen-go-grpc --version >/dev/null \
-	&& command -v goimports >/dev/null \
-	&& command -v gofumpt >/dev/null \
-	&& staticcheck -version >/dev/null \
-	&& buf --version >/dev/null \
-	&& grpcurl --version >/dev/null \
-	&& sqlc version >/dev/null \
-	&& mockgen -version >/dev/null \
-	&& golangci-lint version >/dev/null \
-	&& tsc --version >/dev/null \
-	&& command -v create-vue >/dev/null \
-	&& vite --version >/dev/null \
-	&& vue-tsc --version >/dev/null \
-	&& vitest --version >/dev/null \
-	&& eslint --version >/dev/null \
-	&& prettier --version >/dev/null \
-	&& pnpm --version >/dev/null \
-	&& yarn --version >/dev/null \
-	&& command -v openapi-ts >/dev/null \
-	&& command -v asyncapi >/dev/null \
-	&& command -v modelina >/dev/null \
-	&& command -v wscat >/dev/null \
-	&& codex --version >/dev/null
+		"playwright@${PLAYWRIGHT_VERSION}" \
+		"@playwright/test@${PLAYWRIGHT_VERSION}" \
+		"@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" \
+		"wait-on@${WAIT_ON_VERSION}"; \
+	playwright install --with-deps chromium; \
+	chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}"; \
+	node --version; \
+	npm --version; \
+	go version; \
+	gh --version >/dev/null; \
+	kubectl version --client=true >/dev/null; \
+	helm version --short >/dev/null; \
+	psql --version >/dev/null; \
+	redis-cli --version >/dev/null; \
+	jq --version >/dev/null; \
+	yq --version >/dev/null; \
+	rg --version >/dev/null; \
+	fd --version >/dev/null; \
+	just --version >/dev/null; \
+	goose --version >/dev/null; \
+	oapi-codegen -version >/dev/null; \
+	protoc --version >/dev/null; \
+	protoc-gen-go --version >/dev/null; \
+	protoc-gen-go-grpc --version >/dev/null; \
+	command -v goimports >/dev/null; \
+	command -v gofumpt >/dev/null; \
+	staticcheck -version >/dev/null; \
+	buf --version >/dev/null; \
+	grpcurl --version >/dev/null; \
+	sqlc version >/dev/null; \
+	mockgen -version >/dev/null; \
+	golangci-lint version >/dev/null; \
+	tsc --version >/dev/null; \
+	command -v create-vue >/dev/null; \
+	vite --version >/dev/null; \
+	vue-tsc --version >/dev/null; \
+	vitest --version >/dev/null; \
+	eslint --version >/dev/null; \
+	prettier --version >/dev/null; \
+	pnpm --version >/dev/null; \
+	yarn --version >/dev/null; \
+	command -v openapi-ts >/dev/null; \
+	command -v asyncapi >/dev/null; \
+	command -v modelina >/dev/null; \
+	command -v wscat >/dev/null; \
+	chromium --version >/dev/null; \
+	playwright --version >/dev/null; \
+	command -v playwright-mcp >/dev/null; \
+	wait-on --version >/dev/null; \
+	codex --version >/dev/null; \
+	rm -rf /var/lib/apt/lists/* /root/.cache
 
-RUN addgroup -g "${MATTERCODEX_AGENT_RUNNER_GID}" matter-codex \
-	&& adduser -D -H -u "${MATTERCODEX_AGENT_RUNNER_UID}" -G matter-codex matter-codex \
+RUN groupadd --gid "${MATTERCODEX_AGENT_RUNNER_GID}" matter-codex \
+	&& useradd --uid "${MATTERCODEX_AGENT_RUNNER_UID}" --gid "${MATTERCODEX_AGENT_RUNNER_GID}" --no-create-home --shell /usr/sbin/nologin matter-codex \
 	&& mkdir -p /home/matter-codex/.npm /home/matter-codex/.config /home/matter-codex/.cache /workspace /codex-home \
 	&& chown -R "${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}" /home/matter-codex /workspace /codex-home
 

@@ -10,6 +10,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ENV_FILE="$REPO_ROOT/.env"
 DRY_RUN_MODE="server"
 WAIT=false
+BUILD_ONLY=false
 RENDER_DIR=""
 TEMP_FILES=()
 TEMP_DIRS=()
@@ -45,6 +46,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --wait)
       WAIT=true
+      shift
+      ;;
+    --build-only)
+      BUILD_ONLY=true
       shift
       ;;
     --dry-run=server)
@@ -407,6 +412,11 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_BOT_SERVICE_B
     mattercodex_die "bot-service image не найден в Kubernetes runtime после build: $MATTERCODEX_BOT_SERVICE_IMAGE"
   fi
   mattercodex_log "bot-service image подготовлен"
+fi
+
+if mattercodex_bool "$BUILD_ONLY"; then
+  mattercodex_log "remote bot-service build-only шаг завершен; manifests и rollout не применялись"
+  exit 0
 fi
 
 if [ -n "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" ] || [ -n "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" ]; then
