@@ -182,6 +182,19 @@ func (surface *ControlSurface) UpdateThreadCard(ctx context.Context, card status
 	return statusservice.MattermostPostRef{ChannelID: updated.ChannelId, PostID: updated.Id}, nil
 }
 
+func (surface *ControlSurface) AddPostReactionWithToken(ctx context.Context, token string, input statusservice.MattermostPostReactionInput) error {
+	client := mattermostmodel.NewAPIv4Client(surface.client.URL)
+	client.SetToken(token)
+	if _, _, err := client.SaveReaction(ctx, &mattermostmodel.Reaction{
+		UserId:    input.UserID,
+		PostId:    input.PostID,
+		EmojiName: input.EmojiName,
+	}); err != nil {
+		return fmt.Errorf("add Mattermost post reaction: %w", err)
+	}
+	return nil
+}
+
 func (surface *ControlSurface) GetThreadPosts(ctx context.Context, rootPostID string, limit int) ([]statusservice.MattermostPostMessage, error) {
 	rootPostID = strings.TrimSpace(rootPostID)
 	if rootPostID == "" {

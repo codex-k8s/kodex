@@ -57,6 +57,12 @@ type MattermostPostRef struct {
 	PostID    string
 }
 
+type MattermostPostReactionInput struct {
+	PostID    string
+	UserID    string
+	EmojiName string
+}
+
 type MattermostThreadPublisher interface {
 	PostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error)
 	PostThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadPostInput) (MattermostPostRef, error)
@@ -64,6 +70,7 @@ type MattermostThreadPublisher interface {
 	UpdateThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadUpdateInput) (MattermostPostRef, error)
 	PostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
 	UpdateThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
+	AddPostReactionWithToken(ctx context.Context, token string, input MattermostPostReactionInput) error
 }
 
 type ChatPostCommand struct {
@@ -252,6 +259,7 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 	}
 	queued := make([]AgentTurnQueued, 0, len(targets))
 	for _, target := range targets {
+		svc.addAgentStartReaction(ctx, command, target.Role)
 		item, err := svc.EnqueueAgentTurn(ctx, AgentTurnRequest{
 			Project:       project,
 			Chat:          chat,
@@ -627,6 +635,29 @@ func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, 
 		target.TTLSeconds = defaultThreadSessionTTLSeconds
 	}
 	return []chatSessionTarget{target}, nil
+}
+
+func (svc *ChatRunService) addAgentStartReaction(ctx context.Context, command ChatPostCommand, role entity.AgentRole) {
+	if svc.cfg.ThreadPublisher == nil || svc.cfg.RuntimeRunner == nil {
+		return
+	}
+	postID := strings.TrimSpace(command.PostID)
+	if postID == "" || role.ID == 0 {
+		return
+	}
+	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, role.ID)
+	if err != nil || strings.TrimSpace(identity.TokenSecretRef) == "" || strings.TrimSpace(identity.MattermostUserID) == "" {
+		return
+	}
+	secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, identity.TokenSecretRef)
+	if err != nil || strings.TrimSpace(secret.Token) == "" {
+		return
+	}
+	_ = svc.cfg.ThreadPublisher.AddPostReactionWithToken(ctx, secret.Token, MattermostPostReactionInput{
+		PostID:    postID,
+		UserID:    identity.MattermostUserID,
+		EmojiName: "eyes",
+	})
 }
 
 func (svc *ChatRunService) mattermostBotIdentityByUserID(ctx context.Context, projectID int64, mattermostUserID string) (entity.MattermostBotIdentity, bool, error) {
