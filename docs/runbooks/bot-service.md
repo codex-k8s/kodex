@@ -98,6 +98,8 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 
 Kaniko Job получает повышенные default resources для тяжелого `agent-runner` image и использует `--skip-unused-stages=true`, чтобы не строить нецелевые Dockerfile stages при `--target`.
 
+Для проверки сборки без изменения bot-service Deployment используйте `scripts/remote/install-bot-service.sh --env-file .env --apply --build-only` и выставьте `MATTERCODEX_BOT_SERVICE_BUILD_IMAGE=false` или `MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE=false`, если нужно собрать только один image.
+
 Legacy strategy `MATTERCODEX_IMAGE_BUILD_STRATEGY=docker` оставлена только для контуров, где `docker` или `nerdctl` есть прямо на целевом сервере. Remote installer не делает локальный Docker build/import fallback.
 
 Agent runner image содержит явный non-root user UID/GID `10001`. Runtime Job дополнительно задает pod/container `securityContext`: `runAsNonRoot`, `runAsUser`, `runAsGroup`, `fsGroup`, `seccompProfile: RuntimeDefault`, dropped capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`. Writable paths отдаются через volumes: `/workspace` для run PVC, `/codex-home` для device-code auth, `/home/matter-codex` для `gh`/npm/cache и `/tmp` для временных файлов.
@@ -202,6 +204,8 @@ mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-pos
 Prompt template относится к профилю агента и хранится в PostgreSQL. Bot-service рендерит template перед созданием Job с текущей Mattermost locale и передает готовый Markdown prompt в agent pod через ConfigMap. Agent runner не содержит prompt-текстов в Go-коде. В prompt доступны placeholders locale contract (`.Locale.Code`, `.Locale.Language`) и GitHub account/env contract, чтобы агент знал, что `gh` авторизован через `GH_TOKEN`/`GITHUB_TOKEN`, login доступен через `GITHUB_USERNAME`/`GITHUB_USER`, email - через `GITHUB_EMAIL`.
 
 Базовые seed templates лежат в `services/external/bot-service/internal/domain/service/prompt_seeds/*.md`. На старте bot-service после migrations запускает seeder, который создает отсутствующие templates в PostgreSQL и не перетирает уже отредактированные в Mattermost templates. SQL migrations владеют только schema/profile metadata и не содержат Markdown prompt bodies. В коробке сидятся роли `manager`, `architect`, `developer`, `reviewer`, `docs`, `sre`, `qa-bot`, `ui-designer`, `improver`, `pm-delivery`, `analyst` и `mattercodex-admin`.
+
+Agent-runner image содержит browser tooling для ролей `developer`, `ui-designer` и `qa-bot`: `chromium`, `playwright`, `@playwright/test`, `@playwright/mcp` и `wait-on`. Основной путь browser smoke/e2e в agent pod - Playwright CLI/API; системный `chromium` доступен для диагностики и версионных проверок. Browser artifacts следует сохранять в `/workspace/artifacts/screenshots` или `/workspace/artifacts/playwright`; `playwright-mcp` используется только если роль явно включает его в Codex `config.toml`.
 
 Стартовый OSS-набор:
 

@@ -804,7 +804,7 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 	if !strings.Contains(prompt, "`gh` 2.95.0") || !strings.Contains(prompt, "`go` 1.26") || !strings.Contains(prompt, "`kubectl` 1.36.2") {
 		t.Fatalf("prompt runtime tools = %q", prompt)
 	}
-	for _, expected := range []string{"`node` 24.17.x", "`vite` 8.0.16", "`asyncapi` 6.0.2", "`wscat` 6.1.0"} {
+	for _, expected := range []string{"`node` 24.17.x", "`vite` 8.0.16", "`asyncapi` 6.0.2", "`wscat` 6.1.0", "`playwright` 1.61.1", "`chromium` distro package"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime tool %q: %q", expected, prompt)
 		}
@@ -883,6 +883,9 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 		"openapi-ts=0.98.2",
 		"asyncapi=6.0.2",
 		"modelina=5.10.1",
+		"playwright=1.61.1",
+		"playwright-mcp=0.0.77",
+		"wait-on=9.0.10",
 		"GitHub-аккаунт=GH_TOKEN",
 		"Kubernetes service account=KUBERNETES_SERVICE_HOST",
 		"Проектная переменная STAGING_DB_URL=STAGING_DB_URL",

@@ -59,11 +59,12 @@
 | `tini` | distro package | Agent container init | PID 1 init для agent-runner pods/jobs; reaps orphaned/zombie child processes от `codex`, `gh`, `git`, `npm` и прокидывает сигналы |
 | `kubectl` | `1.36.2` | Agent Kubernetes diagnostics/deploy | роли с Kubernetes-доступом могут читать логи, проверять ресурсы и выполнять deploy через Kubernetes CLI |
 | `helm` | `4.2.1` | Agent Kubernetes diagnostics/deploy | inspect/render Helm releases and charts |
-| `psql` | `18.x` distro package | Agent PostgreSQL diagnostics | диагностика PostgreSQL и ручная проверка данных по разрешению владельца |
-| `redis-cli` | `8.x` distro package | Agent Redis diagnostics | диагностика Redis/cache состояния по разрешению владельца |
+| `psql` | distro package | Agent PostgreSQL diagnostics | диагностика PostgreSQL и ручная проверка данных по разрешению владельца |
+| `redis-cli` | distro package | Agent Redis diagnostics | диагностика Redis/cache состояния по разрешению владельца |
 | `jq` | distro package | Agent diagnostics/scripts | безопасная обработка JSON-выводов CLI без ad-hoc parsing |
 | `yq` | `v4.53.3` | Agent YAML diagnostics/scripts | обработка YAML manifests/config без строкового парсинга |
-| `rg`, `fd`, `just`, `nc`, `dig`, `tree` | distro packages | Agent development diagnostics | быстрый поиск, запуск project tasks, network/DNS diagnostics и обзор рабочих деревьев |
+| `rg`, `fd`, `nc`, `dig`, `tree` | distro packages | Agent development diagnostics | быстрый поиск, network/DNS diagnostics и обзор рабочих деревьев |
+| `just` | `1.55.1` | Agent task runner | запуск project tasks из justfile через pinned release binary, чтобы не зависеть от distro package availability |
 | `go` | `1.26` | Agent Go development | сборка и тестирование Go modules; Go 1.26 выбран, потому что свежий `sqlc` требует Go >= 1.26, при этом Go 1.25 modules проекта `kodex` остаются совместимыми |
 | `goimports` | `v0.46.0` | Agent Go formatting | форматирование импортов Go |
 | `gofumpt` | `v0.10.0` | Agent Go formatting | stricter Go formatting where requested |
@@ -85,9 +86,13 @@
 | `@asyncapi/generator` | `3.3.0` | Agent AsyncAPI codegen | generator runtime package для AsyncAPI templates |
 | `modelina` | `5.10.1` | Agent AsyncAPI model codegen | генерация TypeScript models для AsyncAPI/WebSocket payloads |
 | `wscat` | `6.1.0` | Agent WebSocket diagnostics | ручная проверка websocket endpoints |
+| `chromium` | distro package | Agent browser diagnostics | системный browser binary для диагностики и версионных проверок; основной путь UI smoke/e2e в agent pod - Playwright CLI/API |
+| `playwright` / `@playwright/test` | `1.61.1` | Agent browser smoke/e2e | browser automation, screenshots, traces и e2e/smoke проверки developer, UI/UX и QA ролей |
+| `@playwright/mcp` | `0.0.77` | Optional agent browser MCP | MCP-сервер браузерной автоматизации для ролей, которым он явно включен в Codex `config.toml` |
+| `wait-on` | `9.0.10` | Agent frontend readiness | ожидание локального dev-server/build preview перед browser smoke/e2e |
 | `buf` | `v1.71.0` | Agent protobuf/gRPC codegen | lint/generate protobuf contracts |
 | `grpcurl` | `v1.9.3` | Agent gRPC diagnostics | инспекция и вызов gRPC сервисов |
-| `protoc` | `31.x` distro package | Agent protobuf/gRPC codegen | генерация protobuf/gRPC артефактов |
+| `protoc` | distro package | Agent protobuf/gRPC codegen | генерация protobuf/gRPC артефактов |
 | `protoc-gen-go` | `v1.36.11` | Agent protobuf Go codegen | генерация Go protobuf типов |
 | `protoc-gen-go-grpc` | `v1.6.2` | Agent gRPC Go codegen | генерация Go gRPC server/client stubs |
 | `golangci-lint` | `v2.12.2` | Agent Go lint | запуск основного Go lint профиля, когда это требуется задачей |
@@ -100,7 +105,7 @@
 | `golang:1.26-alpine` | agent-runner Go toolchain/tools stage | поставляет Go 1.26 и Go CLI tools в agent-runner runtime для свежего codegen/lint toolchain |
 | `alpine:3.22` | bot-service prod Dockerfile | минимальный runtime слой для собранного bot-service binary |
 | `localhost:5001/matter-codex/bot-service:<tag>` | bot-service MVP runtime | image, собранный Kaniko в кластере и опубликованный во встроенный MatterCodex registry |
-| `node:24-alpine` | agent-runner Dockerfile base | runtime слой с npm для установки Codex CLI, Vue/TS/OpenAPI/AsyncAPI tooling и operator/developer CLI tools |
+| `node:24-bookworm` | agent-runner Dockerfile base | glibc runtime слой с npm, Codex CLI, Vue/TS/OpenAPI/AsyncAPI tooling, operator/developer CLI tools и Playwright/Chromium browser tooling |
 | `localhost:5001/matter-codex/agent-runner:<tag>` | agent runner MVP runtime | non-root image, собранный Kaniko в кластере, с `matter-codex-agent-runner`, Codex CLI, GitHub/Kubernetes/DB/WebSocket clients, Go toolchain, Vue/TS и API codegen tooling для chat/session agents |
 | `quay.io/oauth2-proxy/oauth2-proxy` | Mattermost public gate | Google OAuth allowlist перед публичным Mattermost URL без встраивания OAuth-логики в Mattermost manifests |
 | `mattermost/mattermost-team-edition` | Mattermost | self-hosted Mattermost для control surface |

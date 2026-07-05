@@ -80,7 +80,7 @@ func TestStartCodexAuthSessionCreatesHardenedJob(t *testing.T) {
 	if got := podSpec.Containers[0].Args[0]; got != "codex-auth" {
 		t.Fatalf("args = %q", got)
 	}
-	if len(podSpec.Volumes) != 3 {
+	if len(podSpec.Volumes) != 4 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
 	if !hasVolume(podSpec.Volumes, "codex-home") {
@@ -321,7 +321,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	if got := podSpec.Containers[0].Args[0]; got != "developer" {
 		t.Fatalf("args = %q", got)
 	}
-	if len(podSpec.Volumes) != 6 {
+	if len(podSpec.Volumes) != 7 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
 	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth" || podSpec.Volumes[2].Secret.SecretName != "matter-codex-github-agent" {
@@ -401,7 +401,7 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_PR_NUMBER"); got != "12" {
 		t.Fatalf("MATTERCODEX_PR_NUMBER = %q", got)
 	}
-	if len(podSpec.Volumes) != 6 {
+	if len(podSpec.Volumes) != 7 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
 	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth-primary" || podSpec.Volumes[2].Secret.SecretName != "matter-codex-github" {
@@ -466,7 +466,7 @@ func TestStartChatRunCreatesPVCAndJob(t *testing.T) {
 	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_CODEX_CONFIG_OVERLAY"); got != "model = \"gpt-5-codex\"" {
 		t.Fatalf("MATTERCODEX_CODEX_CONFIG_OVERLAY = %q", got)
 	}
-	if len(podSpec.Volumes) != 6 {
+	if len(podSpec.Volumes) != 7 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
 	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth-main" || podSpec.Volumes[3].Secret.SecretName != "matter-codex-github-agent" {
@@ -937,10 +937,10 @@ func assertRunnerPodSecurity(t *testing.T, podSpec corev1.PodSpec) {
 	if got := strings.Join(capabilitiesToStrings(container.SecurityContext.Capabilities.Drop), ","); got != "ALL" {
 		t.Fatalf("dropped capabilities = %q", got)
 	}
-	if !hasVolume(podSpec.Volumes, runnerHomeVolume) || !hasVolume(podSpec.Volumes, runnerTmpVolume) {
+	if !hasVolume(podSpec.Volumes, runnerHomeVolume) || !hasVolume(podSpec.Volumes, runnerTmpVolume) || !hasMemoryVolume(podSpec.Volumes, runnerDevShmVolume) {
 		t.Fatalf("writable volumes missing: %#v", podSpec.Volumes)
 	}
-	if !hasVolumeMount(container.VolumeMounts, runnerHomeVolume, runnerHomePath) || !hasVolumeMount(container.VolumeMounts, runnerTmpVolume, runnerTmpPath) {
+	if !hasVolumeMount(container.VolumeMounts, runnerHomeVolume, runnerHomePath) || !hasVolumeMount(container.VolumeMounts, runnerTmpVolume, runnerTmpPath) || !hasVolumeMount(container.VolumeMounts, runnerDevShmVolume, runnerDevShmPath) {
 		t.Fatalf("writable volume mounts missing: %#v", container.VolumeMounts)
 	}
 }
@@ -956,6 +956,15 @@ func capabilitiesToStrings(values []corev1.Capability) []string {
 func hasVolume(volumes []corev1.Volume, name string) bool {
 	for _, volume := range volumes {
 		if volume.Name == name && volume.EmptyDir != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMemoryVolume(volumes []corev1.Volume, name string) bool {
+	for _, volume := range volumes {
+		if volume.Name == name && volume.EmptyDir != nil && volume.EmptyDir.Medium == corev1.StorageMediumMemory {
 			return true
 		}
 	}
