@@ -52,7 +52,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	})
 	var channelManager statusservice.MattermostChannelManager
 	var roleBotManager statusservice.MattermostRoleBotManager
-	var flowCardPublisher statusservice.FlowCardPublisher
 	var threadPublisher statusservice.MattermostThreadPublisher
 	var dialogOpener httptransport.DialogOpener
 	var controlSurface *mattermostintegration.ControlSurface
@@ -60,7 +59,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
 		channelManager = controlSurface
 		roleBotManager = controlSurface
-		flowCardPublisher = controlSurface
 		threadPublisher = controlSurface
 		dialogOpener = controlSurface
 	}
@@ -86,7 +84,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Store:                    storage,
 		ChannelManager:           channelManager,
 		RoleBotManager:           roleBotManager,
-		FlowCardPublisher:        flowCardPublisher,
 		RepositoryProvider:       gitHubProvider,
 		GitHubRepositoryProvider: gitHubAccountProvider,
 		GitHubAccountInspector:   gitHubAccountInspector,
@@ -97,7 +94,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		GitHubSecretName:         cfg.GitHubSecretName,
 		MenuActionURL:            agentsActionURL(cfg),
 		DialogSubmitURL:          agentsDialogURL(cfg),
-		FlowActionURL:            flowActionURL(cfg),
 		BotTokenConfigured:       cfg.BotTokenConfigured(),
 		SlashTokenConfigured:     cfg.SlashTokenConfigured(),
 		GitHubTokenConfigured:    cfg.GitHubTokenConfigured(),
@@ -290,17 +286,6 @@ func botServiceRuntimeURL(cfg Config) string {
 		baseURL = strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
 	}
 	return baseURL
-}
-
-func flowActionURL(cfg Config) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
-	if baseURL == "" {
-		baseURL = strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
-	}
-	if baseURL == "" {
-		return ""
-	}
-	return baseURL + "/mattermost/actions/flow"
 }
 
 func agentsActionURL(cfg Config) string {

@@ -164,7 +164,7 @@ func (surface *ControlSurface) UpdateThreadMessageWithToken(ctx context.Context,
 }
 
 func (surface *ControlSurface) PostThreadCard(ctx context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
-	post := flowCardPost(card)
+	post := mattermostCardPost(card)
 	post.RootId = card.RootPostID
 	created, _, err := surface.client.CreatePost(ctx, post)
 	if err != nil {
@@ -174,7 +174,7 @@ func (surface *ControlSurface) PostThreadCard(ctx context.Context, card statusse
 }
 
 func (surface *ControlSurface) UpdateThreadCard(ctx context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
-	post := flowCardPost(card)
+	post := mattermostCardPost(card)
 	updated, _, err := surface.client.UpdatePost(ctx, card.PostID, post)
 	if err != nil {
 		return statusservice.MattermostPostRef{}, fmt.Errorf("update Mattermost thread card: %w", err)
@@ -463,22 +463,6 @@ func (surface *ControlSurface) legacyEnsureRepositoryChannel(ctx context.Context
 	return true, nil
 }
 
-func (surface *ControlSurface) UpsertFlowCard(ctx context.Context, card statusservice.FlowCard) (statusservice.FlowCardPost, error) {
-	post := flowCardPost(card)
-	if card.PostID == "" {
-		created, _, err := surface.client.CreatePost(ctx, post)
-		if err != nil {
-			return statusservice.FlowCardPost{}, fmt.Errorf("create Mattermost flow card: %w", err)
-		}
-		return statusservice.FlowCardPost{ChannelID: created.ChannelId, PostID: created.Id}, nil
-	}
-	updated, _, err := surface.client.UpdatePost(ctx, card.PostID, post)
-	if err != nil {
-		return statusservice.FlowCardPost{}, fmt.Errorf("update Mattermost flow card: %w", err)
-	}
-	return statusservice.FlowCardPost{ChannelID: updated.ChannelId, PostID: updated.Id}, nil
-}
-
 func (surface *ControlSurface) OpenDialog(ctx context.Context, triggerID string, dialog statusservice.MattermostDialog) error {
 	elements := make([]mattermostmodel.DialogElement, 0, len(dialog.Elements))
 	for _, element := range dialog.Elements {
@@ -521,7 +505,7 @@ func (surface *ControlSurface) OpenDialog(ctx context.Context, triggerID string,
 	return nil
 }
 
-func flowCardPost(card statusservice.FlowCard) *mattermostmodel.Post {
+func mattermostCardPost(card statusservice.MattermostCard) *mattermostmodel.Post {
 	post := &mattermostmodel.Post{
 		Id:        card.PostID,
 		ChannelId: card.ChannelID,
@@ -532,12 +516,12 @@ func flowCardPost(card statusservice.FlowCard) *mattermostmodel.Post {
 	for key, value := range card.Props {
 		props[key] = value
 	}
-	props["attachments"] = []*mattermostmodel.MessageAttachment{flowCardAttachment(card)}
+	props["attachments"] = []*mattermostmodel.MessageAttachment{mattermostCardAttachment(card)}
 	post.SetProps(props)
 	return post
 }
 
-func flowCardAttachment(card statusservice.FlowCard) *mattermostmodel.MessageAttachment {
+func mattermostCardAttachment(card statusservice.MattermostCard) *mattermostmodel.MessageAttachment {
 	fields := make([]*mattermostmodel.MessageAttachmentField, 0, len(card.Fields))
 	for _, field := range card.Fields {
 		fields = append(fields, &mattermostmodel.MessageAttachmentField{

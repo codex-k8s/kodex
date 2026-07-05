@@ -213,18 +213,6 @@ func TestMattermostAPIURLFallsBackToSiteURL(t *testing.T) {
 	}
 }
 
-func TestFlowActionURLPrefersInternalURL(t *testing.T) {
-	cfg := Config{
-		BotServiceSiteURL:     "https://matter-codex.example.com",
-		BotServiceInternalURL: "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080",
-	}
-	got := flowActionURL(cfg)
-	want := "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080/mattermost/actions/flow"
-	if got != want {
-		t.Fatalf("flowActionURL() = %q, want %q", got, want)
-	}
-}
-
 func TestAgentsActionURLPrefersSiteURL(t *testing.T) {
 	cfg := Config{
 		BotServiceSiteURL:     "https://matter-codex.example.com",

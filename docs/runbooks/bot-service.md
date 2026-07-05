@@ -10,7 +10,6 @@
 - принимать Mattermost slash callback `/mattermost/slash/agents`;
 - показывать Mattermost menu card по пустому `/agents`;
 - принимать Mattermost menu action callback `/mattermost/actions/agents` для кнопок menu card;
-- принимать Mattermost interactive action callback `/mattermost/actions/flow`;
 - отвечать на `/agents status`;
 - выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents locale get|set`, `/agents profile list`, `/agents prompt help|list|show|render|set`, `/agents openai auth|status|list|cleanup`;
 - выполнять GitHub adapter/account команды `/agents github account list`, `/agents github check`, `/agents github branch`, `/agents github pr`;
@@ -18,9 +17,7 @@
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
 - выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup|prune` через client-go, Job, PVC и подготовленный agent-runner image;
-- выполнять Codex developer smoke-команды `/agents dev smoke|status|cleanup`, создающие отдельный Job/PVC, branch, commit и draft PR через OpenAI account, GitHub account и prompt template из agent profile;
 - выполнять Codex reviewer-команды `/agents review pr|status|cleanup`, запускающие отдельный Job/PVC для review существующего GitHub PR через OpenAI account, GitHub account и prompt template из agent profile;
-- выполнять developer-review flow-команды `/agents flow start|status|card|cleanup`, которые запускают developer agent, автоматически передают созданный PR reviewer agent, повторяют fix-попытку при `request_changes`, блокируют flow после трех попыток и публикуют Mattermost card с owner buttons;
 - применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
 - создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
@@ -280,7 +277,7 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 /agents
 ```
 
-Ожидаемый результат: channel-visible menu card с кнопками `Запуск flow`, `Pending`, `Репозитории`, `Аккаунты`, `Профили`, `Prompts`, `Runtime`, `System`, `Help`. Нажатия по кнопкам должны обновлять эту же карточку на выбранный раздел и показывать короткий ephemeral-статус. Кнопка `Назад` возвращает главное меню. В главном меню поля OpenAI и GitHub показывают счетчик готовых accounts в формате `готово/всего`.
+Ожидаемый результат: channel-visible menu card с кнопками `Projects`, `Аккаунты`, `Репозитории`, `Roles`, `Chats`, `Advanced`, `Runtime`, `System`, `Help`. Нажатия по кнопкам должны обновлять эту же карточку на выбранный раздел и показывать короткий ephemeral-статус. Кнопка `Назад` возвращает главное меню. В главном меню поля OpenAI и GitHub показывают счетчик готовых accounts в формате `готово/всего`.
 
 Проверка account menu:
 
@@ -391,46 +388,6 @@ Typed-команды остаются fallback-интерфейсом для т�
 - активные Job не удаляются и учитываются как skipped;
 - после apply `runtime status prune-manual` возвращает, что run не найден.
 
-Дополнительная проверка Codex developer agent:
-
-Перед первой проверкой авторизовать OpenAI account из Mattermost:
-
-```text
-/agents openai auth primary
-/agents openai status primary
-```
-
-После получения ссылки и кода открыть ссылку в браузере, ввести code, затем снова выполнить:
-
-```text
-/agents openai status primary
-/agents openai list
-```
-
-Ожидаемый результат: account `primary` имеет status `authorized`.
-
-```text
-/agents token check
-/agents dev smoke codex-k8s/matter-codex dev-manual
-/agents dev status dev-manual
-```
-
-Ожидаемый результат:
-
-- developer smoke возвращает run id, branch `matter-codex-dev-dev-manual`, Job и PVC;
-- в ответе developer smoke указан OpenAI account `primary`;
-- через некоторое время `dev status` показывает pod phase и artifact `pr-url`;
-- в GitHub появляется draft PR с безопасным документационным изменением `docs/dogfood/codex-developer-smoke.md`;
-- log tail не содержит значений OpenAI/GitHub/Mattermost секретов.
-
-После проверки удалить Kubernetes resources:
-
-```text
-/agents dev cleanup dev-manual
-```
-
-Если smoke run создал draft PR, его надо закрыть/удалить вручную или оставить как проверочный артефакт до решения владельца. Cleanup удаляет только Kubernetes Job/PVC, а не GitHub branch/PR.
-
 Дополнительная проверка Codex reviewer agent:
 
 Перед проверкой нужен authorized OpenAI account из профиля `reviewer`, настроенный GitHub account `primary` и существующий открытый GitHub PR.
@@ -456,44 +413,6 @@ Typed-команды остаются fallback-интерфейсом для т�
 ```
 
 Cleanup удаляет только Kubernetes Job/PVC, а не GitHub review/comment.
-
-Дополнительная проверка developer-review flow:
-
-Перед проверкой нужны authorized OpenAI account для профилей `developer` и `reviewer`, настроенные GitHub accounts `agent` и `primary`, а также доступ bot-service к Kubernetes runtime.
-
-```text
-/agents openai list
-/agents profile list
-/agents prompt render developer implement_task
-/agents prompt render developer fix_review
-/agents prompt render reviewer review_pr
-/agents flow start codex-k8s/matter-codex flow-manual Update docs/dogfood/matter-codex-flow-smoke.md with a short Russian smoke note for developer-review flow
-/agents flow status flow-manual
-/agents flow card flow-manual
-```
-
-Ожидаемый результат:
-
-- flow start возвращает branch `matter-codex-flow-flow-manual`, developer run `flow-manual-d1`, Job, PVC и строку `card`;
-- если slash command был выполнен из Mattermost channel и bot token настроен, bot-service публикует flow card в текущий канал; иначе card можно создать/обновить вручную командой `/agents flow card flow-manual`;
-- flow card содержит buttons `Approve`, `Reject`, `Rerun review`, `Stop`;
-- после завершения developer Job повторный `flow status` показывает `pr-url` и автоматически стартует reviewer run `flow-manual-r1`;
-- после завершения reviewer Job повторный `flow status` показывает один из финальных или промежуточных статусов: `approved_by_reviewer`, `waiting_owner`, `fix_running`, `reviewer_failed`, `blocked`;
-- кнопка `Approve` переводит flow в `owner_approved` и не выполняет merge;
-- кнопка `Reject` переводит flow в `owner_rejected` и не меняет PR;
-- кнопка `Stop` переводит flow в `stopped` и не удаляет Kubernetes Job/PVC;
-- кнопка `Rerun review` стартует новый reviewer run для текущего PR и обновляет card;
-- если reviewer вернул `request_changes`, flow стартует developer fix run `flow-manual-d2` на той же ветке `matter-codex-flow-flow-manual`, затем следующий `flow status` снова запускает reviewer run `flow-manual-r2`;
-- после трех попыток с `request_changes` flow переходит в `blocked`;
-- log tail и ответы Mattermost не содержат значений OpenAI/GitHub/Mattermost секретов.
-
-После проверки удалить Kubernetes resources всех run'ов flow:
-
-```text
-/agents flow cleanup flow-manual
-```
-
-Cleanup удаляет только Kubernetes Job/PVC, а не GitHub branch/PR/review comments.
 
 Проверка webhook reject без корректной подписи:
 
@@ -525,7 +444,6 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Codex smoke/auth/developer/reviewer Job запускаются без automount service account token и с non-root securityContext.
 - Codex developer/reviewer Job получает Codex `auth.json` выбранного OpenAI account и GitHub token/username/email выбранного GitHub account только через Kubernetes Secret volume mount.
 - Developer/reviewer prompt templates хранятся в PostgreSQL, редактируются через Mattermost и передаются agent pod как отрендеренный Markdown через ConfigMap.
-- Mattermost flow card buttons используют per-flow action token в Mattermost action context; token не выводится в card text, ответы, логи или PR.
 - `CODEX_HOME/config.toml` задает `shell_environment_policy` с минимальным environment для команд, которые запускает Codex: `gh` получает только нужные GitHub env, без Mattermost/OpenAI/Kubernetes secret values.
 - Codex agent внутри isolated Kubernetes Job запускается с `sandbox_mode = "danger-full-access"`, потому что `workspace-write` требует `bubblewrap`, который в текущем Kubernetes pod падает до выполнения shell-команд. Изоляционная граница MVP для agent run: отдельный pod, отдельный PVC, отключенный automount service account token и минимальные Secret volume mounts.
 - Developer runner реализован отдельным Go binary в подготовленном image и сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую, но разрешает отвечать на review threads через `gh` при соответствующей задаче.

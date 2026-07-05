@@ -12,13 +12,13 @@
 6. агент работает в Kubernetes pod, а GitHub остается источником issues, branches, PR, review и progress;
 7. финальный ответ агент пишет в thread исходного сообщения.
 
-Система сохраняет текущую рабочую модель: короткие PR, независимый review, GitHub как источник правды и human owner как финальный gate. Flow больше не является центральной сущностью продукта и остается в Advanced/deprecated path.
+Система сохраняет текущую рабочую модель: короткие PR, независимый review, GitHub как источник правды и human owner как финальный gate. Flow больше не является продуктовой сущностью: координация идет через project chat, Mattermost thread, agent role и GitHub.
 
 ## Продуктовый UX-контракт
 
 Основной интерфейс продукта - `/agents` в Mattermost. Owner открывает меню, выбирает разделы кнопками, выбирает существующие сущности из списков и вводит только содержательные данные: текст задачи, Markdown prompt, token при добавлении GitHub account или человекочитаемый label новой сущности.
 
-Owner не должен помнить и вручную вводить внутренние идентификаторы: repository full name после onboarding, account name, profile name, template key, run id, flow id, Kubernetes Job/PVC/Secret name. Эти значения передаются через hidden callback state, action context или выбираются из UI.
+Owner не должен помнить и вручную вводить внутренние идентификаторы: repository full name после onboarding, account name, profile name, template key, run id, Kubernetes Job/PVC/Secret name. Эти значения передаются через hidden callback state, action context или выбираются из UI.
 
 Typed slash commands остаются fallback/debug интерфейсом для runbook и разработки. Они не считаются готовым product path, если та же операция не доступна через owner-facing карточку, кнопку или dialog.
 

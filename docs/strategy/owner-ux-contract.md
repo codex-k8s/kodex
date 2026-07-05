@@ -14,7 +14,7 @@ Owner не должен помнить и вручную вводить:
 - GitHub account name, если account уже создан;
 - agent role/profile name, если role/profile уже создана;
 - prompt template key, если template уже есть в profile;
-- run id, flow id, Kubernetes Job/PVC name;
+- run id, Kubernetes Job/PVC name;
 - Kubernetes Secret name, если Secret создан или известен системе;
 - технические callback/action ids.
 
@@ -53,7 +53,7 @@ Owner не должен помнить и вручную вводить:
 - advanced tools;
 - runtime/status.
 
-Legacy flow, pending decisions, старые profiles и prompt templates не удаляются немедленно, но уходят из основного пути в `Advanced`.
+Старые profiles и prompt templates доступны в `Advanced`. Flow wizard и pending decisions не являются частью owner-facing UX.
 
 Главная карточка показывает безопасную сводку:
 
@@ -187,15 +187,13 @@ Runtime behavior: `cluster-admin` role запускается с отдельн�
 
 NetworkPolicy по умолчанию не включается: это осознанное MVP-решение владельца, потому что агентам может потребоваться ходить во внешние сервисы проекта.
 
-## Legacy Advanced Tools
+## Advanced Tools
 
-Flow wizard, pending decisions, legacy agent profiles и prompt template editor остаются в `Advanced` до полной миграции на chat-triggered roles. Они не должны появляться как первый экран или основной happy path.
+Legacy agent profiles, prompt template editor, runtime diagnostics и system/status остаются в `Advanced` до полной миграции на project roles. Они не должны появляться как первый экран или основной happy path.
 
-Старый flow wizard должен оставаться работоспособным как debug/compatibility path:
+- Advanced включает:
 
-- запуск flow;
-- pending decisions;
-- profiles;
+- legacy profiles;
 - prompt templates;
 - accounts;
 - runtime/runs;
@@ -215,33 +213,6 @@ Prompt templates хранятся в БД и редактируются чере
 
 Язык prompt должен рендериться с учетом выбранной локали пользователя. UI-подсказки и справка по placeholders также идут через i18n.
 
-## Legacy Flow Wizard
-
-Запуск legacy agent flow должен быть wizard-ом внутри `Advanced`:
-
-1. Выбрать repository/project.
-2. Выбрать flow preset: developer-review, dev + product review, dev + technical review, dev + lexical guard, deploy.
-3. Выбрать или подтвердить profiles/accounts.
-4. Ввести текст задачи.
-5. Подтвердить run plan.
-
-`flow-id`, branch name, run ids и Kubernetes resource names генерируются системой. Owner видит человекочитаемый title, repository, branch, PR link, statuses и decisions.
-
-## Legacy Pending Decisions
-
-Раздел pending decisions внутри `Advanced` показывает waiting/blocked flows и действия владельца:
-
-- approve result;
-- reject result;
-- request another fix/review;
-- stop flow;
-- hold flow;
-- cleanup resources;
-- open PR;
-- open run logs/status.
-
-Каждая кнопка работает с конкретным flow из hidden state. Owner не вводит `flow-id`.
-
 ## Runtime And Cleanup
 
 Runtime раздел показывает active, held и completed runs. Cleanup должен уважать рабочий процесс, где задача может ждать решения владельца несколько рабочих дней.
@@ -249,10 +220,10 @@ Runtime раздел показывает active, held и completed runs. Cleanu
 Целевые правила:
 
 - active jobs не удаляются автоматическим cleanup;
-- held/waiting flows не удаляются retention cleanup без owner action;
+- активные jobs и live thread sessions не удаляются retention cleanup без owner action или TTL;
 - dry-run показывает, какие ресурсы были бы затронуты и почему часть ресурсов пропущена;
 - apply требует явного подтверждения через UI;
-- cleanup конкретного run/flow запускается из его карточки.
+- cleanup конкретного run запускается из его карточки.
 
 ## Acceptance Rule For New PR
 
