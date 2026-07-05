@@ -223,6 +223,9 @@ func (repo *Repository) ListAgentPromptTemplates(ctx context.Context, profileNam
 func (repo *Repository) GetAgentPromptTemplate(ctx context.Context, profileName string, templateKey string) (entity.AgentPromptTemplate, error) {
 	item, err := scanAgentPromptTemplate(repo.pool.QueryRow(ctx, query("agent_prompt_templates__get.sql"), profileName, templateKey))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentPromptTemplate{}, adminrepo.ErrNotFound
+		}
 		return entity.AgentPromptTemplate{}, fmt.Errorf("get agent prompt template: %w", err)
 	}
 	return item, nil
