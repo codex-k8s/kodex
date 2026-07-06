@@ -522,6 +522,7 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	}
 	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
 	publisher := &fakeThreadPublisher{}
+	roleBotManager := &fakeRoleBotManager{}
 	dispatcher := &fakeAgentTurnDispatcher{queued: AgentTurnQueued{
 		RunID:      "run-sre-1",
 		TurnID:     7,
@@ -533,6 +534,7 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 		Store:           store,
 		RuntimeRunner:   runner,
 		ThreadPublisher: publisher,
+		RoleBotManager:  roleBotManager,
 		TurnDispatcher:  dispatcher,
 		StorageReady:    true,
 		RuntimeReady:    true,
@@ -547,6 +549,9 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	}
 	if dispatcher.calls != 1 || dispatcher.request.Role.Name != "sre" || dispatcher.request.UserName != "manager" {
 		t.Fatalf("dispatcher request = %#v", dispatcher.request)
+	}
+	if roleBotManager.channelMemberTeam != "platform" || roleBotManager.channelMemberChannelID != "channel-1" || roleBotManager.channelMemberUserID != "sre-user" {
+		t.Fatalf("role bot channel member call = team %q channel %q user %q", roleBotManager.channelMemberTeam, roleBotManager.channelMemberChannelID, roleBotManager.channelMemberUserID)
 	}
 	for _, expected := range []string{"# Запрос к агенту через MatterCodex", "- Инициатор: @manager", "- Целевой агент: @sre", "Проверь staging deploy.", "Не печатай секреты."} {
 		if !strings.Contains(dispatcher.request.UserMessage, expected) {

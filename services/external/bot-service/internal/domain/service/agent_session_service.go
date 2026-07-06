@@ -46,6 +46,7 @@ type AgentSessionServiceConfig struct {
 	RuntimeRunner      runtimerepo.Runner
 	ThreadPublisher    MattermostThreadPublisher
 	ConversationReader MattermostConversationReader
+	RoleBotManager     MattermostRoleBotManager
 	TurnDispatcher     AgentTurnDispatcher
 	MenuActionURL      string
 	StorageReady       bool
@@ -520,6 +521,7 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
+	svc.ensureRequestedRoleChannelMember(ctx, project, chat, role)
 	repositories, err := svc.chatRepositories(ctx, chat)
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
@@ -588,6 +590,21 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 		TargetSessionKey:  queued.SessionKey,
 		AuditPostID:       auditPostID,
 	}, nil
+}
+
+func (svc *AgentSessionService) ensureRequestedRoleChannelMember(ctx context.Context, project entity.Project, chat entity.Chat, role entity.AgentRole) {
+	if svc.cfg.Store == nil || svc.cfg.RoleBotManager == nil {
+		return
+	}
+	channelID := strings.TrimSpace(chat.MattermostChannelID)
+	if channelID == "" {
+		return
+	}
+	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, role.ID)
+	if err != nil || strings.TrimSpace(identity.MattermostUserID) == "" {
+		return
+	}
+	_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, identity.MattermostUserID)
 }
 
 func (svc *AgentSessionService) authorize(ctx context.Context, sessionKey string, token string) (entity.AgentSession, error) {

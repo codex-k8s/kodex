@@ -4836,7 +4836,11 @@ func (manager *fakeChannelManager) EnsureProjectChannel(_ context.Context, teamN
 	}, true, nil
 }
 
-type fakeRoleBotManager struct{}
+type fakeRoleBotManager struct {
+	channelMemberTeam      string
+	channelMemberChannelID string
+	channelMemberUserID    string
+}
 
 func (manager *fakeRoleBotManager) EnsureRoleBot(_ context.Context, input MattermostRoleBotInput) (MattermostRoleBotBinding, error) {
 	return MattermostRoleBotBinding{
@@ -4847,7 +4851,10 @@ func (manager *fakeRoleBotManager) EnsureRoleBot(_ context.Context, input Matter
 	}, nil
 }
 
-func (manager *fakeRoleBotManager) EnsureProjectChannelMember(context.Context, string, string, string) error {
+func (manager *fakeRoleBotManager) EnsureProjectChannelMember(_ context.Context, teamName string, channelID string, userID string) error {
+	manager.channelMemberTeam = teamName
+	manager.channelMemberChannelID = channelID
+	manager.channelMemberUserID = userID
 	return nil
 }
 

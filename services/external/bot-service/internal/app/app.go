@@ -113,6 +113,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		RuntimeRunner:      runtimeRunner,
 		ThreadPublisher:    threadPublisher,
 		ConversationReader: controlSurface,
+		RoleBotManager:     roleBotManager,
 		TurnDispatcher:     chatRunSvc,
 		MenuActionURL:      agentsActionURL(cfg),
 		StorageReady:       storage != nil,
