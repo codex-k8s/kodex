@@ -1,5 +1,9 @@
 update matter_codex_agent_sessions set
-	status = case when $2 <> '' then $2 else status end,
+	status = case
+		when $2 = 'idle' and active_turn_id is not null then status
+		when $2 <> '' then $2
+		else status
+	end,
 	active_turn_id = case when $3 > 0 then $3 else active_turn_id end,
 	active_run_id = case when $4 <> '' then $4 else active_run_id end,
 	mattermost_root_post_id = case when $5 <> '' then $5 else mattermost_root_post_id end,

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
@@ -88,6 +89,32 @@ func TestAgentSessionClaimReturnsAlreadyRunningTurnAfterLostResponse(t *testing.
 	}
 	if len(publisher.cards) != 1 {
 		t.Fatalf("status cards should not duplicate on retry: %#v", publisher.cards)
+	}
+}
+
+func TestAgentSessionRuntimeUpdateDoesNotDowngradeRunningSessionToIdle(t *testing.T) {
+	store, _, _ := agentSessionStatusTestDeps()
+	store.agentSessions["session-1"] = withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
+	session := store.agentSessions["session-1"]
+	session.Status = agentSessionStatusRunning
+	store.agentSessions["session-1"] = session
+
+	updated, err := store.UpdateAgentSessionRuntime(context.Background(), adminrepo.UpdateAgentSessionRuntimeInput{
+		SessionKey:          "session-1",
+		Status:              agentSessionStatusIdle,
+		KubernetesNamespace: "matter-kodex-prod",
+		PodName:             "mc-session-1",
+		PVCName:             "mc-session-ws-1",
+		TokenSecretRef:      "matter-codex-session-1",
+	})
+	if err != nil {
+		t.Fatalf("UpdateAgentSessionRuntime() error = %v", err)
+	}
+	if updated.Status != agentSessionStatusRunning || updated.ActiveTurnID != 1 || updated.ActiveRunID != "run-1" {
+		t.Fatalf("session = %#v", updated)
+	}
+	if updated.PodName != "mc-session-1" || updated.PVCName != "mc-session-ws-1" || updated.TokenSecretRef != "matter-codex-session-1" {
+		t.Fatalf("runtime refs were not updated: %#v", updated)
 	}
 }
 

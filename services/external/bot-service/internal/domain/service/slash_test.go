@@ -4078,7 +4078,7 @@ func (store *fakeAdminStore) UpdateAgentSessionRuntime(_ context.Context, input 
 	if !ok {
 		return entity.AgentSession{}, adminrepo.ErrNotFound
 	}
-	if input.Status != "" {
+	if input.Status != "" && !(input.Status == agentSessionStatusIdle && session.ActiveTurnID != 0) {
 		session.Status = input.Status
 	}
 	if input.ActiveTurnID > 0 {
