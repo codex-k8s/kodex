@@ -59,6 +59,38 @@ func TestAgentSessionClaimCreatesInitialStatusPost(t *testing.T) {
 	}
 }
 
+func TestAgentSessionClaimReturnsAlreadyRunningTurnAfterLostResponse(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		MenuActionURL:   "https://mattermost.example/actions",
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	first, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() first error = %v", err)
+	}
+	second, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() retry error = %v", err)
+	}
+	if !second.HasTurn || second.TurnID != first.TurnID || second.RunID != first.RunID || second.Prompt != first.Prompt {
+		t.Fatalf("retry claim = %#v, first = %#v", second, first)
+	}
+	session := store.agentSessions["session-1"]
+	if session.ActiveTurnID != first.TurnID || session.ActiveRunID != first.RunID || session.Status != agentSessionStatusRunning {
+		t.Fatalf("session = %#v", session)
+	}
+	if len(publisher.cards) != 1 {
+		t.Fatalf("status cards should not duplicate on retry: %#v", publisher.cards)
+	}
+}
+
 func TestAgentSessionUpdateTurnStatusPostsProgressWithoutEditingStatusCard(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.agentSessions["session-1"] = withActiveTurn(store.agentSessions["session-1"], 1, "run-1")

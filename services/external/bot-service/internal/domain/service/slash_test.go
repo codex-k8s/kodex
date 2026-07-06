@@ -4180,6 +4180,11 @@ func (store *fakeAdminStore) ClaimNextAgentSessionTurn(_ context.Context, sessio
 	if err != nil {
 		return entity.AgentSessionTurn{}, err
 	}
+	for _, turn := range store.sessionTurns {
+		if turn.SessionID == session.ID && turn.Status == agentSessionTurnRunning {
+			return turn, nil
+		}
+	}
 	for index, turn := range store.sessionTurns {
 		if turn.SessionID == session.ID && turn.Status == agentSessionTurnQueued {
 			turn.Status = agentSessionTurnRunning
