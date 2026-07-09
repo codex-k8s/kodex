@@ -326,6 +326,8 @@ type Repository interface {
 	ListAgentSessionsByThread(ctx context.Context, chatID int64, rootPostID string) ([]entity.AgentSession, error)
 	ListAgentSessionsByChat(ctx context.Context, chatID int64) ([]entity.AgentSession, error)
 	ListAgentSessionsByRole(ctx context.Context, roleID int64) ([]entity.AgentSession, error)
+	ListQueuedIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)
+	ListStaleActiveAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)
 	UpdateAgentSessionRuntime(ctx context.Context, input UpdateAgentSessionRuntimeInput) (entity.AgentSession, error)
 	UpdateAgentSessionSnapshot(ctx context.Context, input UpdateAgentSessionSnapshotInput) (entity.AgentSession, error)
 	ResetAgentSessionRuntime(ctx context.Context, sessionKey string, status string) (entity.AgentSession, error)

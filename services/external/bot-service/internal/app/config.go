@@ -36,6 +36,9 @@ type Config struct {
 	RuntimeRetentionEnabled         bool          `env:"MATTERCODEX_RUNTIME_RETENTION_ENABLED" envDefault:"true"`
 	RuntimeRetentionInterval        time.Duration `env:"MATTERCODEX_RUNTIME_RETENTION_INTERVAL" envDefault:"30m"`
 	RuntimeRetentionOlderThan       time.Duration `env:"MATTERCODEX_RUNTIME_RETENTION_OLDER_THAN" envDefault:"24h"`
+	RuntimeSessionRepairEnabled     bool          `env:"MATTERCODEX_RUNTIME_SESSION_REPAIR_ENABLED" envDefault:"true"`
+	RuntimeSessionRepairInterval    time.Duration `env:"MATTERCODEX_RUNTIME_SESSION_REPAIR_INTERVAL" envDefault:"30s"`
+	RuntimeSessionRepairBatch       int           `env:"MATTERCODEX_RUNTIME_SESSION_REPAIR_BATCH" envDefault:"20"`
 	AuthCheckJobTTLSeconds          int32         `env:"MATTERCODEX_CODEX_AUTH_CHECK_JOB_TTL_SECONDS" envDefault:"300"`
 	RuntimeLogTailLines             int64         `env:"MATTERCODEX_RUNTIME_LOG_TAIL_LINES" envDefault:"40"`
 	AgentServiceAccount             string        `env:"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" envDefault:"matter-codex-agent-runner"`
@@ -84,6 +87,14 @@ func (cfg *Config) Validate() error {
 		}
 		if cfg.RuntimeRetentionOlderThan <= 0 {
 			return fmt.Errorf("MATTERCODEX_RUNTIME_RETENTION_OLDER_THAN is invalid")
+		}
+	}
+	if cfg.RuntimeSessionRepairEnabled {
+		if cfg.RuntimeSessionRepairInterval <= 0 {
+			return fmt.Errorf("MATTERCODEX_RUNTIME_SESSION_REPAIR_INTERVAL is invalid")
+		}
+		if cfg.RuntimeSessionRepairBatch <= 0 {
+			return fmt.Errorf("MATTERCODEX_RUNTIME_SESSION_REPAIR_BATCH is invalid")
 		}
 	}
 	if cfg.AuthCheckJobTTLSeconds <= 0 {

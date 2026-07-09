@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
@@ -56,6 +57,64 @@ func TestAgentSessionClaimCreatesInitialStatusPost(t *testing.T) {
 	}
 	if turn.MattermostStatusPostID != "card-root-1" {
 		t.Fatalf("MattermostStatusPostID = %q", turn.MattermostStatusPostID)
+	}
+}
+
+func TestAgentSessionClaimReturnsAlreadyRunningTurnAfterLostResponse(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		MenuActionURL:   "https://mattermost.example/actions",
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	first, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() first error = %v", err)
+	}
+	second, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() retry error = %v", err)
+	}
+	if !second.HasTurn || second.TurnID != first.TurnID || second.RunID != first.RunID || second.Prompt != first.Prompt {
+		t.Fatalf("retry claim = %#v, first = %#v", second, first)
+	}
+	session := store.agentSessions["session-1"]
+	if session.ActiveTurnID != first.TurnID || session.ActiveRunID != first.RunID || session.Status != agentSessionStatusRunning {
+		t.Fatalf("session = %#v", session)
+	}
+	if len(publisher.cards) != 1 {
+		t.Fatalf("status cards should not duplicate on retry: %#v", publisher.cards)
+	}
+}
+
+func TestAgentSessionRuntimeUpdateDoesNotDowngradeRunningSessionToIdle(t *testing.T) {
+	store, _, _ := agentSessionStatusTestDeps()
+	store.agentSessions["session-1"] = withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
+	session := store.agentSessions["session-1"]
+	session.Status = agentSessionStatusRunning
+	store.agentSessions["session-1"] = session
+
+	updated, err := store.UpdateAgentSessionRuntime(context.Background(), adminrepo.UpdateAgentSessionRuntimeInput{
+		SessionKey:          "session-1",
+		Status:              agentSessionStatusIdle,
+		KubernetesNamespace: "matter-kodex-prod",
+		PodName:             "mc-session-1",
+		PVCName:             "mc-session-ws-1",
+		TokenSecretRef:      "matter-codex-session-1",
+	})
+	if err != nil {
+		t.Fatalf("UpdateAgentSessionRuntime() error = %v", err)
+	}
+	if updated.Status != agentSessionStatusRunning || updated.ActiveTurnID != 1 || updated.ActiveRunID != "run-1" {
+		t.Fatalf("session = %#v", updated)
+	}
+	if updated.PodName != "mc-session-1" || updated.PVCName != "mc-session-ws-1" || updated.TokenSecretRef != "matter-codex-session-1" {
+		t.Fatalf("runtime refs were not updated: %#v", updated)
 	}
 }
 
@@ -314,6 +373,47 @@ func TestAgentSessionCompletePostsFYIToRequester(t *testing.T) {
 	}
 }
 
+func TestAgentSessionCompleteIsIdempotentForTerminalTurn(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	store.sessionTurns[0].UserName = "owner"
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	command := CompleteAgentSessionTurnCommand{
+		TurnID:         claim.TurnID,
+		RunID:          claim.RunID,
+		Status:         agentSessionTurnSucceeded,
+		FinalMessage:   "done",
+		CodexSessionID: "codex-session-1",
+	}
+	if err := svc.CompleteTurn(context.Background(), "session-1", "session-token", command); err != nil {
+		t.Fatalf("CompleteTurn() first error = %v", err)
+	}
+	postCount := len(publisher.posts)
+	cardUpdateCount := len(publisher.cardUpdates)
+
+	if err := svc.CompleteTurn(context.Background(), "session-1", "session-token", command); err != nil {
+		t.Fatalf("CompleteTurn() retry error = %v", err)
+	}
+	if len(publisher.posts) != postCount || len(publisher.cardUpdates) != cardUpdateCount {
+		t.Fatalf("retry duplicated output: posts=%#v cardUpdates=%#v", publisher.posts, publisher.cardUpdates)
+	}
+	session := store.agentSessions["session-1"]
+	if session.ActiveTurnID != 0 || session.Status != agentSessionStatusIdle || session.CodexSessionID != "codex-session-1" {
+		t.Fatalf("session = %#v", session)
+	}
+}
+
 func TestAgentSessionCompleteSplitsLongFinalMessageUsingMattermostLimit(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.postMessageMaxRunes = 1100
@@ -422,6 +522,7 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	}
 	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
 	publisher := &fakeThreadPublisher{}
+	roleBotManager := &fakeRoleBotManager{}
 	dispatcher := &fakeAgentTurnDispatcher{queued: AgentTurnQueued{
 		RunID:      "run-sre-1",
 		TurnID:     7,
@@ -433,6 +534,7 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 		Store:           store,
 		RuntimeRunner:   runner,
 		ThreadPublisher: publisher,
+		RoleBotManager:  roleBotManager,
 		TurnDispatcher:  dispatcher,
 		StorageReady:    true,
 		RuntimeReady:    true,
@@ -447,6 +549,9 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	}
 	if dispatcher.calls != 1 || dispatcher.request.Role.Name != "sre" || dispatcher.request.UserName != "manager" {
 		t.Fatalf("dispatcher request = %#v", dispatcher.request)
+	}
+	if roleBotManager.channelMemberTeam != "platform" || roleBotManager.channelMemberChannelID != "channel-1" || roleBotManager.channelMemberUserID != "sre-user" {
+		t.Fatalf("role bot channel member call = team %q channel %q user %q", roleBotManager.channelMemberTeam, roleBotManager.channelMemberChannelID, roleBotManager.channelMemberUserID)
 	}
 	for _, expected := range []string{"# Запрос к агенту через MatterCodex", "- Инициатор: @manager", "- Целевой агент: @sre", "Проверь staging deploy.", "Не печатай секреты."} {
 		if !strings.Contains(dispatcher.request.UserMessage, expected) {

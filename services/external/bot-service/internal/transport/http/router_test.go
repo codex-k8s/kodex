@@ -843,6 +843,14 @@ func (store *fakeRouterAdminStore) ListAgentSessionsByRole(context.Context, int6
 	return nil, nil
 }
 
+func (store *fakeRouterAdminStore) ListQueuedIdleAgentSessions(context.Context, int) ([]entity.AgentSession, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) ListStaleActiveAgentSessions(context.Context, int) ([]entity.AgentSession, error) {
+	return nil, nil
+}
+
 func (store *fakeRouterAdminStore) UpdateAgentSessionRuntime(context.Context, adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
 	return entity.AgentSession{}, nil
 }

@@ -1,8 +1,16 @@
-with selected as (
+with active as (
+	select turns.*
+	from matter_codex_agent_session_turns turns
+	join matter_codex_agent_sessions sessions on sessions.id = turns.session_id
+	where sessions.session_key = $1 and turns.status = 'running'
+	order by turns.started_at desc nulls last, turns.id desc
+	limit 1
+), selected as (
 	select turns.id
 	from matter_codex_agent_session_turns turns
 	join matter_codex_agent_sessions sessions on sessions.id = turns.session_id
 	where sessions.session_key = $1 and turns.status = 'queued'
+		and not exists (select 1 from active)
 	order by turns.created_at, turns.id
 	for update skip locked
 	limit 1
@@ -14,6 +22,10 @@ with selected as (
 	from selected
 	where turns.id = selected.id
 	returning turns.*
+), claimed as (
+	select * from active
+	union all
+	select * from updated
 )
 select
 	id,
@@ -34,4 +46,5 @@ select
 	coalesce(started_at, 'epoch'::timestamptz),
 	coalesce(finished_at, 'epoch'::timestamptz),
 	updated_at
-from updated;
+from claimed
+limit 1;

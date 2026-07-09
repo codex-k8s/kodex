@@ -4023,13 +4023,62 @@ func (store *fakeAdminStore) ListAgentSessionsByRole(_ context.Context, roleID i
 	return sessions, nil
 }
 
+func (store *fakeAdminStore) ListQueuedIdleAgentSessions(_ context.Context, limit int) ([]entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	if limit <= 0 {
+		limit = 20
+	}
+	var sessions []entity.AgentSession
+	seen := map[int64]struct{}{}
+	for _, turn := range store.sessionTurns {
+		if turn.Status != agentSessionTurnQueued {
+			continue
+		}
+		session, err := store.GetAgentSessionByID(context.Background(), turn.SessionID)
+		if err != nil || session.ActiveTurnID != 0 {
+			continue
+		}
+		if _, exists := seen[session.ID]; exists {
+			continue
+		}
+		seen[session.ID] = struct{}{}
+		sessions = append(sessions, session)
+		if len(sessions) >= limit {
+			break
+		}
+	}
+	return sessions, nil
+}
+
+func (store *fakeAdminStore) ListStaleActiveAgentSessions(_ context.Context, limit int) ([]entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	if limit <= 0 {
+		limit = 20
+	}
+	var sessions []entity.AgentSession
+	for _, session := range store.agentSessions {
+		if session.ActiveTurnID == 0 {
+			continue
+		}
+		turn, err := store.GetAgentSessionTurn(context.Background(), session.ActiveTurnID)
+		if err != nil || !agentSessionTurnTerminal(turn.Status) {
+			continue
+		}
+		sessions = append(sessions, session)
+		if len(sessions) >= limit {
+			break
+		}
+	}
+	return sessions, nil
+}
+
 func (store *fakeAdminStore) UpdateAgentSessionRuntime(_ context.Context, input adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
 	store.ensureAgentSessions()
 	session, ok := store.agentSessions[input.SessionKey]
 	if !ok {
 		return entity.AgentSession{}, adminrepo.ErrNotFound
 	}
-	if input.Status != "" {
+	if input.Status != "" && !(input.Status == agentSessionStatusIdle && session.ActiveTurnID != 0) {
 		session.Status = input.Status
 	}
 	if input.ActiveTurnID > 0 {
@@ -4130,6 +4179,11 @@ func (store *fakeAdminStore) ClaimNextAgentSessionTurn(_ context.Context, sessio
 	session, err := store.GetAgentSession(context.Background(), sessionKey)
 	if err != nil {
 		return entity.AgentSessionTurn{}, err
+	}
+	for _, turn := range store.sessionTurns {
+		if turn.SessionID == session.ID && turn.Status == agentSessionTurnRunning {
+			return turn, nil
+		}
 	}
 	for index, turn := range store.sessionTurns {
 		if turn.SessionID == session.ID && turn.Status == agentSessionTurnQueued {
@@ -4782,7 +4836,11 @@ func (manager *fakeChannelManager) EnsureProjectChannel(_ context.Context, teamN
 	}, true, nil
 }
 
-type fakeRoleBotManager struct{}
+type fakeRoleBotManager struct {
+	channelMemberTeam      string
+	channelMemberChannelID string
+	channelMemberUserID    string
+}
 
 func (manager *fakeRoleBotManager) EnsureRoleBot(_ context.Context, input MattermostRoleBotInput) (MattermostRoleBotBinding, error) {
 	return MattermostRoleBotBinding{
@@ -4793,7 +4851,10 @@ func (manager *fakeRoleBotManager) EnsureRoleBot(_ context.Context, input Matter
 	}, nil
 }
 
-func (manager *fakeRoleBotManager) EnsureProjectChannelMember(context.Context, string, string, string) error {
+func (manager *fakeRoleBotManager) EnsureProjectChannelMember(_ context.Context, teamName string, channelID string, userID string) error {
+	manager.channelMemberTeam = teamName
+	manager.channelMemberChannelID = channelID
+	manager.channelMemberUserID = userID
 	return nil
 }
 

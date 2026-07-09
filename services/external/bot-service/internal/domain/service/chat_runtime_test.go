@@ -81,6 +81,60 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	}
 }
 
+func TestChatRunAddsAgentEyesReaction(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {
+			ID:               1,
+			ProjectID:        1,
+			RoleID:           1,
+			MattermostUserID: "manager-user",
+			TokenSecretRef:   "manager-token-secret",
+		},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"manager-token-secret": "manager-token"}}
+	publisher := &fakeThreadPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:       localizer,
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+		DisableMonitor:  true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Start working.",
+	})
+
+	if result.RunID == "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(publisher.reactions) != 1 {
+		t.Fatalf("reactions = %#v", publisher.reactions)
+	}
+	reaction := publisher.reactions[0]
+	if publisher.reactionTokens[0] != "manager-token" || reaction.PostID != "post-1" || reaction.UserID != "manager-user" || reaction.EmojiName != "eyes" {
+		t.Fatalf("reaction token=%q input=%#v", publisher.reactionTokens[0], reaction)
+	}
+}
+
 func TestChatRunDoesNotPostDuplicateQueuedTurnCard(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{
@@ -335,6 +389,109 @@ func TestChatRunEnsuresIdleSessionRuntimeBeforeQueueingContinuation(t *testing.T
 	}
 	if !strings.Contains(store.sessionTurns[1].Message, "Continue after the previous pod expired.") {
 		t.Fatalf("continuation prompt = %q", store.sessionTurns[1].Message)
+	}
+}
+
+func TestChatRunRepairEnsuresQueuedIdleSessionRuntime(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	sessionKey := agentSessionKey(1, 1, agentSessionScopeThreadRole, "post-1")
+	store.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID:                   1,
+			SessionKey:           sessionKey,
+			ProjectID:            1,
+			ChatID:               1,
+			RoleID:               1,
+			SessionScope:         agentSessionScopeThreadRole,
+			MattermostChannelID:  "channel-1",
+			MattermostRootPostID: "post-1",
+			Status:               agentSessionStatusIdle,
+			PodName:              "mc-session-old",
+			PVCName:              "mc-session-ws-old",
+			TokenSecretRef:       "session-secret",
+			TTLSeconds:           defaultThreadSessionTTLSeconds,
+		},
+	}
+	store.sessionTurns = []entity.AgentSessionTurn{
+		{ID: 1, SessionID: 1, RunID: "run-1", Status: agentSessionTurnQueued, MattermostChannelID: "channel-1", MattermostRootPostID: "post-1"},
+	}
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result, err := svc.RepairAgentSessions(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("RepairAgentSessions() error = %v", err)
+	}
+	if result.QueuedSessionsEnsured != 1 || result.StaleSessionsReset != 0 || result.Failed != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].SessionKey != sessionKey {
+		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	session := store.agentSessions[sessionKey]
+	if session.PodName != "mc-session-"+sessionKey || session.TokenSecretRef == "" {
+		t.Fatalf("session = %#v", session)
+	}
+}
+
+func TestChatRunRepairResetsStaleActiveSession(t *testing.T) {
+	store := chatRuntimeStore()
+	sessionKey := agentSessionKey(1, 1, agentSessionScopeThreadRole, "post-1")
+	store.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID:             1,
+			SessionKey:     sessionKey,
+			ProjectID:      1,
+			ChatID:         1,
+			RoleID:         1,
+			Status:         agentSessionStatusRunning,
+			ActiveTurnID:   1,
+			ActiveRunID:    "run-1",
+			PodName:        "mc-session-stale",
+			PVCName:        "mc-session-ws-stale",
+			TokenSecretRef: "session-secret",
+			TTLSeconds:     defaultThreadSessionTTLSeconds,
+		},
+	}
+	store.sessionTurns = []entity.AgentSessionTurn{
+		{ID: 1, SessionID: 1, RunID: "run-1", Status: agentSessionTurnSucceeded},
+	}
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result, err := svc.RepairAgentSessions(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("RepairAgentSessions() error = %v", err)
+	}
+	if result.StaleSessionsReset != 1 || result.QueuedSessionsEnsured != 0 || result.Failed != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+	session := store.agentSessions[sessionKey]
+	if session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != "" || runner.cleanedSessionKey != sessionKey {
+		t.Fatalf("session=%#v runner=%#v", session, runner)
 	}
 }
 
@@ -1225,6 +1382,8 @@ type fakeThreadPublisher struct {
 	updates              []MattermostThreadUpdateInput
 	cards                []MattermostCard
 	cardUpdates          []MattermostCard
+	reactions            []MattermostPostReactionInput
+	reactionTokens       []string
 	postWithTokenErr     error
 	updateWithTokenErr   error
 	postWithTokenCalls   int
@@ -1265,6 +1424,12 @@ func (publisher *fakeThreadPublisher) PostThreadCard(_ context.Context, card Mat
 func (publisher *fakeThreadPublisher) UpdateThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
 	publisher.cardUpdates = append(publisher.cardUpdates, card)
 	return MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, nil
+}
+
+func (publisher *fakeThreadPublisher) AddPostReactionWithToken(_ context.Context, token string, input MattermostPostReactionInput) error {
+	publisher.reactionTokens = append(publisher.reactionTokens, token)
+	publisher.reactions = append(publisher.reactions, input)
+	return nil
 }
 
 var _ runtimerepo.Runner = (*fakeRuntimeRunner)(nil)

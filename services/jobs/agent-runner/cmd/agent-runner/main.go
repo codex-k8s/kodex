@@ -35,7 +35,21 @@ const (
 	runnerBinaryPath = "/usr/local/bin/matter-codex-agent-runner"
 )
 
-const codexAuthCheckPrompt = "ping: answer with exactly one word, pong. Do not use tools."
+const (
+	codexAuthCheckPrompt        = "ping: answer with exactly one word, pong. Do not use tools."
+	sessionAPIMaxAttempts       = 30
+	sessionAPIInitialRetryDelay = time.Second
+	sessionAPIMaxRetryDelay     = 10 * time.Second
+)
+
+type sessionAPIStatusError struct {
+	StatusCode int
+	Body       string
+}
+
+func (err sessionAPIStatusError) Error() string {
+	return fmt.Sprintf("bot-service session API returned %d: %s", err.StatusCode, err.Body)
+}
 
 type runner struct {
 	failureLogs []string
@@ -634,6 +648,30 @@ func (r *runner) latestCodexLimitsSummary() string {
 }
 
 func (r *runner) sessionJSON(ctx context.Context, client *http.Client, method string, baseURL string, sessionKey string, token string, action string, payload any, target any) error {
+	delay := sessionAPIInitialRetryDelay
+	for attempt := 1; attempt <= sessionAPIMaxAttempts; attempt++ {
+		err := r.sessionJSONOnce(ctx, client, method, baseURL, sessionKey, token, action, payload, target)
+		if err == nil {
+			return nil
+		}
+		if !sessionAPIErrorRetriable(err) || attempt == sessionAPIMaxAttempts {
+			return err
+		}
+		fmt.Printf("matter-codex session API transient error on %s, retry %d/%d in %s: %v\n", action, attempt+1, sessionAPIMaxAttempts, delay, err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+		delay *= 2
+		if delay > sessionAPIMaxRetryDelay {
+			delay = sessionAPIMaxRetryDelay
+		}
+	}
+	return nil
+}
+
+func (r *runner) sessionJSONOnce(ctx context.Context, client *http.Client, method string, baseURL string, sessionKey string, token string, action string, payload any, target any) error {
 	var body io.Reader
 	if payload != nil {
 		raw, err := json.Marshal(payload)
@@ -657,12 +695,20 @@ func (r *runner) sessionJSON(ctx context.Context, client *http.Client, method st
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		data, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return fmt.Errorf("bot-service session API returned %d: %s", response.StatusCode, strings.TrimSpace(string(data)))
+		return sessionAPIStatusError{StatusCode: response.StatusCode, Body: strings.TrimSpace(string(data))}
 	}
 	if target == nil {
 		return nil
 	}
 	return json.NewDecoder(response.Body).Decode(target)
+}
+
+func sessionAPIErrorRetriable(err error) bool {
+	var statusErr sessionAPIStatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.StatusCode >= http.StatusInternalServerError
+	}
+	return true
 }
 
 func (r *runner) runLogged(ctx context.Context, dir string, extraEnv []string, logName string, name string, args ...string) error {
