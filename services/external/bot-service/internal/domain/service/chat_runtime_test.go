@@ -495,6 +495,85 @@ func TestChatRunRepairResetsStaleActiveSession(t *testing.T) {
 	}
 }
 
+func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "reviewer",
+		RoleType:          "reviewer",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Review", ChatType: "worker_reviewer"}
+	sessionKey := agentSessionKey(1, 1, agentSessionScopeThreadRole, "post-1")
+	store.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID:                   1,
+			SessionKey:           sessionKey,
+			ProjectID:            1,
+			ChatID:               1,
+			RoleID:               1,
+			SessionScope:         agentSessionScopeThreadRole,
+			MattermostChannelID:  "channel-1",
+			MattermostRootPostID: "post-1",
+			Status:               agentSessionStatusRunning,
+			ActiveTurnID:         1,
+			ActiveRunID:          "run-1",
+			PodName:              "mc-session-" + sessionKey,
+			PVCName:              "mc-session-ws-" + sessionKey,
+			TokenSecretRef:       "session-secret",
+			TTLSeconds:           defaultThreadSessionTTLSeconds,
+		},
+	}
+	store.sessionTurns = []entity.AgentSessionTurn{
+		{ID: 1, SessionID: 1, RunID: "run-1", Status: agentSessionTurnRunning, MattermostChannelID: "channel-1", MattermostRootPostID: "post-1"},
+		{ID: 2, SessionID: 1, RunID: "run-2", Status: agentSessionTurnQueued, MattermostChannelID: "channel-1", MattermostRootPostID: "post-1"},
+	}
+	runner := &fakeRuntimeRunner{
+		botTokenSecrets: map[string]string{"session-secret": "session-token"},
+		sessionRuntimeHealth: runtimerepo.AgentSessionRuntimeHealth{
+			SessionKey: sessionKey,
+			Exists:     true,
+			Phase:      "Failed",
+			Terminal:   true,
+			Reason:     "container agent-runner terminated: OOMKilled exit=137",
+		},
+	}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result, err := svc.RepairAgentSessions(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("RepairAgentSessions() error = %v", err)
+	}
+	if result.StaleSessionsReset != 1 || result.QueuedSessionsEnsured != 1 || result.Failed != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+	if store.sessionTurns[0].Status != agentSessionTurnFailed || !strings.Contains(store.sessionTurns[0].ErrorMessage, "OOMKilled") {
+		t.Fatalf("running turn was not failed with OOM reason: %#v", store.sessionTurns[0])
+	}
+	if store.sessionTurns[1].Status != agentSessionTurnQueued {
+		t.Fatalf("queued turn changed unexpectedly: %#v", store.sessionTurns[1])
+	}
+	if runner.cleanedSessionKey != sessionKey {
+		t.Fatalf("cleanedSessionKey = %q", runner.cleanedSessionKey)
+	}
+	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].SessionKey != sessionKey {
+		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	session := store.agentSessions[sessionKey]
+	if session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != "mc-session-"+sessionKey {
+		t.Fatalf("session = %#v", session)
+	}
+}
+
 func TestChatRunDoesNotCreateSessionWhenFirstRoleTemplateFails(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{

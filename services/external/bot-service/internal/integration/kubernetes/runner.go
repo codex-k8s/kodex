@@ -836,6 +836,54 @@ func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName s
 	return pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed, nil
 }
 
+func (runner *Runner) GetAgentSessionRuntimeHealth(ctx context.Context, sessionKey string) (runtimerepo.AgentSessionRuntimeHealth, error) {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return runtimerepo.AgentSessionRuntimeHealth{}, fmt.Errorf("session key is required")
+	}
+	podName := sessionPodName(sessionKey)
+	health := runtimerepo.AgentSessionRuntimeHealth{
+		SessionKey: sessionKey,
+		Namespace:  runner.namespace,
+		PodName:    podName,
+	}
+	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			health.Terminal = true
+			health.Reason = "pod not found"
+			return health, nil
+		}
+		return runtimerepo.AgentSessionRuntimeHealth{}, fmt.Errorf("get session pod health: %w", err)
+	}
+	health.Exists = true
+	health.Phase = string(pod.Status.Phase)
+	health.Terminal = pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
+	health.Reason = sessionPodHealthReason(pod)
+	return health, nil
+}
+
+func sessionPodHealthReason(pod *corev1.Pod) string {
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.State.Terminated != nil {
+			return fmt.Sprintf("container %s terminated: %s exit=%d", status.Name, status.State.Terminated.Reason, status.State.Terminated.ExitCode)
+		}
+		if status.LastTerminationState.Terminated != nil {
+			return fmt.Sprintf("container %s last terminated: %s exit=%d", status.Name, status.LastTerminationState.Terminated.Reason, status.LastTerminationState.Terminated.ExitCode)
+		}
+		if status.State.Waiting != nil && strings.TrimSpace(status.State.Waiting.Reason) != "" {
+			return fmt.Sprintf("container %s waiting: %s", status.Name, status.State.Waiting.Reason)
+		}
+	}
+	if strings.TrimSpace(pod.Status.Reason) != "" {
+		return pod.Status.Reason
+	}
+	if pod.Status.Phase != "" {
+		return string(pod.Status.Phase)
+	}
+	return "unknown"
+}
+
 func (runner *Runner) CleanupAgentSession(ctx context.Context, sessionKey string) (runtimerepo.AgentSessionCleanupResult, error) {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {

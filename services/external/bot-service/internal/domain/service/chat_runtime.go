@@ -520,6 +520,40 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 		}
 		result.StaleSessionsReset++
 	}
+	runningSessions, err := svc.cfg.Store.ListRunningActiveAgentSessions(ctx, limit)
+	if err != nil {
+		return result, err
+	}
+	for _, session := range runningSessions {
+		if session.ActiveTurnID == 0 {
+			continue
+		}
+		health, err := svc.cfg.RuntimeRunner.GetAgentSessionRuntimeHealth(ctx, session.SessionKey)
+		if err != nil {
+			result.Failed++
+			continue
+		}
+		if !health.Terminal {
+			continue
+		}
+		if _, err := svc.cfg.Store.CompleteAgentSessionTurn(ctx, adminrepo.CompleteAgentSessionTurnInput{
+			TurnID:       session.ActiveTurnID,
+			Status:       agentSessionTurnFailed,
+			ErrorMessage: terminalAgentSessionRuntimeError(health),
+			Artifacts:    terminalAgentSessionRuntimeArtifacts(health),
+		}); err != nil {
+			result.Failed++
+			continue
+		}
+		if strings.TrimSpace(session.PodName) != "" || strings.TrimSpace(health.PodName) != "" {
+			_, _ = svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, session.SessionKey)
+		}
+		if _, err := svc.cfg.Store.ResetAgentSessionRuntime(ctx, session.SessionKey, agentSessionStatusIdle); err != nil {
+			result.Failed++
+			continue
+		}
+		result.StaleSessionsReset++
+	}
 	queuedSessions, err := svc.cfg.Store.ListQueuedIdleAgentSessions(ctx, limit)
 	if err != nil {
 		return result, err
@@ -532,6 +566,39 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 		result.QueuedSessionsEnsured++
 	}
 	return result, nil
+}
+
+func terminalAgentSessionRuntimeError(health runtimerepo.AgentSessionRuntimeHealth) string {
+	reason := strings.TrimSpace(health.Reason)
+	if reason == "" {
+		reason = strings.TrimSpace(health.Phase)
+	}
+	if reason == "" {
+		reason = "unknown terminal runtime state"
+	}
+	if health.Exists {
+		return fmt.Sprintf("agent runtime pod is terminal: %s", reason)
+	}
+	return fmt.Sprintf("agent runtime pod is missing: %s", reason)
+}
+
+func terminalAgentSessionRuntimeArtifacts(health runtimerepo.AgentSessionRuntimeHealth) string {
+	payload := map[string]any{
+		"runtime_repair": map[string]any{
+			"session_key": health.SessionKey,
+			"namespace":   health.Namespace,
+			"pod_name":    health.PodName,
+			"exists":      health.Exists,
+			"phase":       health.Phase,
+			"terminal":    health.Terminal,
+			"reason":      health.Reason,
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }
 
 func (svc *ChatRunService) ensureQueuedAgentSessionRuntime(ctx context.Context, session entity.AgentSession) error {
