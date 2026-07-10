@@ -145,7 +145,7 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		namespace:                             namespace,
 		smokeImage:                            defaultString(cfg.SmokeImage, "busybox:1.36"),
 		agentRunnerImage:                      defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
-		codexPackage:                          defaultString(cfg.CodexPackage, "@openai/codex@0.141.0"),
+		codexPackage:                          defaultString(cfg.CodexPackage, "@openai/codex@0.144.1"),
 		workspaceStorage:                      storage,
 		jobTTLSecondsAfterFinish:              defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
 		authCheckJobTTLSecondsAfterFinish:     defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),

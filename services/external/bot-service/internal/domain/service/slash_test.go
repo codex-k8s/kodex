@@ -875,7 +875,7 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 		t.Fatalf("BuildRolePrompt() error = %v", err)
 	}
 	for _, expected := range []string{
-		"codex=0.141.0",
+		"codex=0.144.1",
 		"gh=2.95.0",
 		"go=1.26",
 		"goose=3.27.1",

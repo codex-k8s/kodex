@@ -58,7 +58,7 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.AgentClusterAdminServiceAccount != "matter-codex-agent-runner-cluster-admin" {
 		t.Fatalf("AgentClusterAdminServiceAccount = %q", cfg.AgentClusterAdminServiceAccount)
 	}
-	if cfg.CodexPackage != "@openai/codex@0.141.0" {
+	if cfg.CodexPackage != "@openai/codex@0.144.1" {
 		t.Fatalf("CodexPackage = %q", cfg.CodexPackage)
 	}
 	if cfg.RuntimeWorkspaceSize != "1Gi" {
@@ -95,7 +95,7 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 		MaxGitHubWebhookBytes:           1024,
 		RuntimeSmokeImage:               "busybox:1.36",
 		AgentRunnerImage:                "matter-codex-agent-runner:dev",
-		CodexPackage:                    "@openai/codex@0.141.0",
+		CodexPackage:                    "@openai/codex@0.144.1",
 		RuntimeWorkspaceSize:            "1Gi",
 		RuntimeJobTTLSeconds:            86400,
 		AuthCheckJobTTLSeconds:          300,
@@ -121,7 +121,7 @@ func TestConfigValidationRejectsBadRuntimeRetention(t *testing.T) {
 		MaxGitHubWebhookBytes:           1024,
 		RuntimeSmokeImage:               "busybox:1.36",
 		AgentRunnerImage:                "matter-codex-agent-runner:dev",
-		CodexPackage:                    "@openai/codex@0.141.0",
+		CodexPackage:                    "@openai/codex@0.144.1",
 		RuntimeWorkspaceSize:            "1Gi",
 		RuntimeJobTTLSeconds:            86400,
 		RuntimeRetentionEnabled:         true,
@@ -150,7 +150,7 @@ func TestConfigValidationNormalizesLocale(t *testing.T) {
 		MaxGitHubWebhookBytes:           1024,
 		RuntimeSmokeImage:               "busybox:1.36",
 		AgentRunnerImage:                "matter-codex-agent-runner:dev",
-		CodexPackage:                    "@openai/codex@0.141.0",
+		CodexPackage:                    "@openai/codex@0.144.1",
 		RuntimeWorkspaceSize:            "1Gi",
 		RuntimeJobTTLSeconds:            86400,
 		AuthCheckJobTTLSeconds:          300,
@@ -179,7 +179,7 @@ func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 		MaxGitHubWebhookBytes:           1024,
 		RuntimeSmokeImage:               "busybox:1.36",
 		AgentRunnerImage:                "matter-codex-agent-runner:dev",
-		CodexPackage:                    "@openai/codex@0.141.0",
+		CodexPackage:                    "@openai/codex@0.144.1",
 		RuntimeWorkspaceSize:            "1Gi",
 		RuntimeJobTTLSeconds:            86400,
 		AuthCheckJobTTLSeconds:          300,

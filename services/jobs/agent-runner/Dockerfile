@@ -45,7 +45,7 @@ RUN apk add --no-cache ca-certificates git \
 
 FROM node:24-bookworm
 
-ARG MATTERCODEX_CODEX_PACKAGE=@openai/codex@0.141.0
+ARG MATTERCODEX_CODEX_PACKAGE=@openai/codex@0.144.1
 ARG GH_CLI_VERSION=2.95.0
 ARG KUBECTL_VERSION=v1.36.2
 ARG HELM_VERSION=v4.2.1

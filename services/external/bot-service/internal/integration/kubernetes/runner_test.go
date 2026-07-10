@@ -271,7 +271,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
 		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		CodexPackage:              "@openai/codex@0.141.0",
+		CodexPackage:              "@openai/codex@0.144.1",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName:       "matter-codex-codex-auth",
@@ -350,7 +350,7 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
 		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		CodexPackage:              "@openai/codex@0.141.0",
+		CodexPackage:              "@openai/codex@0.144.1",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName:       "matter-codex-codex-auth",
@@ -424,7 +424,7 @@ func TestStartChatRunCreatesPVCAndJob(t *testing.T) {
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
 		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		CodexPackage:              "@openai/codex@0.141.0",
+		CodexPackage:              "@openai/codex@0.144.1",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName:       "matter-codex-codex-auth",
