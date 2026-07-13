@@ -106,6 +106,8 @@ Agent runner image содержит явный non-root user UID/GID `10001`. Ru
 
 Runtime namespace получает `ResourceQuota` `matter-codex-runtime-quota` и `LimitRange` `matter-codex-runtime-container-defaults`. Quota ограничивает общее число pods, batch Jobs, PVC, суммарный requested storage и суммарные cpu/memory requests/limits. LimitRange задает cpu/memory defaults для containers без явных resources, чтобы quota admission не отклоняла agent Job.
 
+Если новый session pod отклонен ResourceQuota или не размещается scheduler из-за нехватки ресурсов, bot-service автоматически удаляет самый старый idle session pod без queued/running turn и повторяет запуск. PVC и snapshot сессии сохраняются. Если безопасного кандидата нет, turn остается queued; активные agent pod механизм capacity reclaim не удаляет.
+
 ## Remote dry-run
 
 ```bash

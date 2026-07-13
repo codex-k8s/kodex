@@ -393,6 +393,164 @@ func TestChatRunEnsuresIdleSessionRuntimeBeforeQueueingContinuation(t *testing.T
 	}
 }
 
+func TestChatRunEvictsOldestIdleSessionPodOnCapacityPressure(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	oldestActivity := time.Now().Add(-3 * time.Hour)
+	newerActivity := time.Now().Add(-time.Hour)
+	store.agentSessions = map[string]entity.AgentSession{
+		"busy-session": {
+			ID:                  3,
+			SessionKey:          "busy-session",
+			ProjectID:           1,
+			ChatID:              1,
+			RoleID:              1,
+			Status:              agentSessionStatusRunning,
+			ActiveTurnID:        99,
+			KubernetesNamespace: "mattermost",
+			PodName:             "mc-session-busy-session",
+			PVCName:             "mc-session-ws-busy-session",
+			TokenSecretRef:      "matter-codex-session-busy-session",
+			LastActivityAt:      time.Now().Add(-4 * time.Hour),
+		},
+		"oldest-idle": {
+			ID:                  1,
+			SessionKey:          "oldest-idle",
+			ProjectID:           1,
+			ChatID:              1,
+			RoleID:              1,
+			Status:              agentSessionStatusIdle,
+			KubernetesNamespace: "mattermost",
+			PodName:             "mc-session-oldest-idle",
+			PVCName:             "mc-session-ws-oldest-idle",
+			TokenSecretRef:      "matter-codex-session-oldest-idle",
+			LastActivityAt:      oldestActivity,
+		},
+		"newer-idle": {
+			ID:                  2,
+			SessionKey:          "newer-idle",
+			ProjectID:           1,
+			ChatID:              1,
+			RoleID:              1,
+			Status:              agentSessionStatusIdle,
+			KubernetesNamespace: "mattermost",
+			PodName:             "mc-session-newer-idle",
+			PVCName:             "mc-session-ws-newer-idle",
+			TokenSecretRef:      "matter-codex-session-newer-idle",
+			LastActivityAt:      newerActivity,
+		},
+	}
+	runner := &fakeRuntimeRunner{
+		sessionStartErrors: []error{
+			runtimerepo.NewAgentSessionCapacityError("test quota pressure", errors.New("quota exceeded")),
+			nil,
+		},
+	}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:          testLocalizer(t, texti18n.DefaultLocale),
+		Store:              store,
+		RuntimeRunner:      runner,
+		StorageReady:       true,
+		RuntimeReady:       true,
+		DisableMonitor:     true,
+		CapacityRetryDelay: time.Nanosecond,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-capacity",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Start after reclaiming idle capacity.",
+	})
+
+	if result.RunID == "" || result.Mode != "session" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(runner.sessionRuns) != 2 {
+		t.Fatalf("session starts = %#v", runner.sessionRuns)
+	}
+	if len(runner.cleanedSessionKeys) != 1 || runner.cleanedSessionKeys[0] != "oldest-idle" {
+		t.Fatalf("cleaned sessions = %#v", runner.cleanedSessionKeys)
+	}
+	oldest := store.agentSessions["oldest-idle"]
+	if oldest.PodName != "" || oldest.KubernetesNamespace != "" {
+		t.Fatalf("oldest pod binding was not cleared: %#v", oldest)
+	}
+	if oldest.PVCName != "mc-session-ws-oldest-idle" || oldest.TokenSecretRef != "matter-codex-session-oldest-idle" {
+		t.Fatalf("oldest resumable state was not preserved: %#v", oldest)
+	}
+	if newer := store.agentSessions["newer-idle"]; newer.PodName != "mc-session-newer-idle" {
+		t.Fatalf("newer idle pod was evicted: %#v", newer)
+	}
+	if busy := store.agentSessions["busy-session"]; busy.PodName != "mc-session-busy-session" {
+		t.Fatalf("active session pod was evicted: %#v", busy)
+	}
+	if len(store.sessionTurns) != 1 || store.sessionTurns[0].Status != agentSessionTurnQueued {
+		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+}
+
+func TestChatRunKeepsTurnQueuedWhenCapacityCannotBeReclaimed(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{
+		sessionStartErrors: []error{
+			runtimerepo.NewAgentSessionCapacityError("test scheduler pressure", errors.New("insufficient memory")),
+		},
+	}
+	publisher := &fakeThreadPublisher{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:          testLocalizer(t, texti18n.DefaultLocale),
+		Store:              store,
+		RuntimeRunner:      runner,
+		ThreadPublisher:    publisher,
+		StorageReady:       true,
+		RuntimeReady:       true,
+		DisableMonitor:     true,
+		CapacityRetryDelay: time.Nanosecond,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-capacity-wait",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Wait for runtime capacity.",
+	})
+
+	if result.RunID == "" || result.Mode != "session" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(runner.cleanedSessionKeys) != 0 {
+		t.Fatalf("unexpected cleanup = %#v", runner.cleanedSessionKeys)
+	}
+	if len(store.sessionTurns) != 1 || store.sessionTurns[0].Status != agentSessionTurnQueued {
+		t.Fatalf("queued turn was not retained: %#v", store.sessionTurns)
+	}
+	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, result.RunID) {
+		t.Fatalf("capacity wait notification = %#v", publisher.posts)
+	}
+}
+
 func TestChatRunRepairEnsuresQueuedIdleSessionRuntime(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{

@@ -728,6 +728,7 @@
   {"id": "chat.run.prompt_failed", "translation": "matter-codex: agent prompt was not rendered: {{.Error}}"},
   {"id": "chat.run.route_failed", "translation": "matter-codex: chat message was not routed to an agent session: {{.Error}}"},
   {"id": "chat.run.start_failed", "translation": "matter-codex: agent run was not started: {{.Error}}"},
+  {"id": "chat.run.waiting_for_capacity", "translation": "matter-codex: turn `{{.RunID}}` for `@{{.Role}}` is queued and waiting for runtime capacity. The oldest idle agent pod will be released automatically; no action is required."},
   {"id": "chat.run.openai_reauth_required", "translation": "matter-codex: Codex auth for OpenAI account `{{.Account}}` is expired or invalid, so role `{{.Role}}` was not started.\n\nReauthorize the account:\n- open: {{.URL}}\n- code: `{{.Code}}`\n- job: `{{.Job}}`\n- pod: `{{.Pod}}`\n\nAfter confirming in the browser, send the message in this thread again."},
   {"id": "chat.thread.repository_choice.title", "translation": "Choose thread repository"},
   {"id": "chat.thread.repository_choice.text", "translation": "Choose an optional repository from GitHub owner `{{.Owner}}` for this thread. If no repository is selected, the agent starts in an empty workspace PVC."},

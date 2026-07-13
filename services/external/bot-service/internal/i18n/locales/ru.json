@@ -728,6 +728,7 @@
   {"id": "chat.run.prompt_failed", "translation": "matter-codex: agent prompt не отрендерен: {{.Error}}"},
   {"id": "chat.run.route_failed", "translation": "matter-codex: сообщение chat не смаршрутизировано в agent session: {{.Error}}"},
   {"id": "chat.run.start_failed", "translation": "matter-codex: agent run не запущен: {{.Error}}"},
+  {"id": "chat.run.waiting_for_capacity", "translation": "matter-codex: turn `{{.RunID}}` для `@{{.Role}}` поставлен в очередь и ожидает runtime capacity. Самый старый idle agent pod будет освобожден автоматически; действий от пользователя не требуется."},
   {"id": "chat.run.openai_reauth_required", "translation": "matter-codex: Codex auth для OpenAI account `{{.Account}}` протухла или невалидна, поэтому роль `{{.Role}}` не запущена.\n\nПереавторизуйте account:\n- открыть: {{.URL}}\n- code: `{{.Code}}`\n- job: `{{.Job}}`\n- pod: `{{.Pod}}`\n\nПосле подтверждения в браузере напишите сообщение в этот же thread еще раз."},
   {"id": "chat.thread.repository_choice.title", "translation": "Выберите repository для thread"},
   {"id": "chat.thread.repository_choice.text", "translation": "Выберите optional repository из GitHub owner `{{.Owner}}` для этого thread. Если repository не выбран, агент стартует в пустом workspace PVC."},

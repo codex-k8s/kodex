@@ -2,8 +2,46 @@ package runtime
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
+
+var ErrAgentSessionCapacity = errors.New("agent session runtime capacity unavailable")
+
+type AgentSessionCapacityError struct {
+	Reason string
+	Cause  error
+}
+
+func (err *AgentSessionCapacityError) Error() string {
+	if err == nil {
+		return ErrAgentSessionCapacity.Error()
+	}
+	if err.Cause == nil {
+		return fmt.Sprintf("%s: %s", ErrAgentSessionCapacity, err.Reason)
+	}
+	return fmt.Sprintf("%s: %s: %v", ErrAgentSessionCapacity, err.Reason, err.Cause)
+}
+
+func (err *AgentSessionCapacityError) Is(target error) bool {
+	return target == ErrAgentSessionCapacity
+}
+
+func (err *AgentSessionCapacityError) Unwrap() error {
+	if err == nil {
+		return nil
+	}
+	return err.Cause
+}
+
+func NewAgentSessionCapacityError(reason string, cause error) error {
+	return &AgentSessionCapacityError{Reason: reason, Cause: cause}
+}
+
+func IsAgentSessionCapacityError(err error) bool {
+	return errors.Is(err, ErrAgentSessionCapacity)
+}
 
 type SmokeRunInput struct {
 	RunID string

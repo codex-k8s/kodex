@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -3031,6 +3032,7 @@ type fakeRuntimeRunner struct {
 	cleanedSessionKey           string
 	cleanedSessionKeys          []string
 	sessionRuntimeHealth        runtimerepo.AgentSessionRuntimeHealth
+	sessionStartErrors          []error
 	botTokenSecrets             map[string]string
 	cleanedRunID                string
 	cleanedRunIDs               []string
@@ -3250,6 +3252,13 @@ func (runner *fakeRuntimeRunner) StartAgentSession(_ context.Context, input runt
 	if strings.TrimSpace(input.InternalToken) == "" {
 		return runtimerepo.StartedAgentSession{}, fmt.Errorf("internal token is required")
 	}
+	if len(runner.sessionStartErrors) > 0 {
+		err := runner.sessionStartErrors[0]
+		runner.sessionStartErrors = runner.sessionStartErrors[1:]
+		if err != nil {
+			return runtimerepo.StartedAgentSession{}, err
+		}
+	}
 	secretName := "matter-codex-session-" + input.SessionKey
 	if runner.botTokenSecrets == nil {
 		runner.botTokenSecrets = map[string]string{}
@@ -3372,6 +3381,7 @@ func (runner *fakeRuntimeRunner) CleanupExpiredRuns(_ context.Context, input run
 }
 
 type fakeAdminStore struct {
+	capacityMu           sync.Mutex
 	upsert               adminrepo.UpsertRepositoryInput
 	auditRecorded        bool
 	repositories         map[string]entity.Repository
@@ -4051,6 +4061,44 @@ func (store *fakeAdminStore) ListAgentSessionsByRole(_ context.Context, roleID i
 	return sessions, nil
 }
 
+func (store *fakeAdminStore) AcquireAgentSessionCapacityLock(_ context.Context) (func(), error) {
+	store.capacityMu.Lock()
+	return store.capacityMu.Unlock, nil
+}
+
+func (store *fakeAdminStore) ListEvictableIdleAgentSessions(_ context.Context, limit int) ([]entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	if limit <= 0 {
+		limit = 20
+	}
+	var sessions []entity.AgentSession
+	for _, session := range store.agentSessions {
+		if session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || strings.TrimSpace(session.PodName) == "" {
+			continue
+		}
+		busy := false
+		for _, turn := range store.sessionTurns {
+			if turn.SessionID == session.ID && (turn.Status == agentSessionTurnQueued || turn.Status == agentSessionTurnRunning) {
+				busy = true
+				break
+			}
+		}
+		if !busy {
+			sessions = append(sessions, session)
+		}
+	}
+	sort.Slice(sessions, func(i int, j int) bool {
+		if sessions[i].LastActivityAt.Equal(sessions[j].LastActivityAt) {
+			return sessions[i].ID < sessions[j].ID
+		}
+		return sessions[i].LastActivityAt.Before(sessions[j].LastActivityAt)
+	})
+	if len(sessions) > limit {
+		sessions = sessions[:limit]
+	}
+	return sessions, nil
+}
+
 func (store *fakeAdminStore) ListQueuedIdleAgentSessions(_ context.Context, limit int) ([]entity.AgentSession, error) {
 	store.ensureAgentSessions()
 	if limit <= 0 {
@@ -4156,6 +4204,23 @@ func (store *fakeAdminStore) UpdateAgentSessionRuntime(_ context.Context, input 
 		session.ExpiresAt = time.Now().Add(time.Duration(input.ExtendTTLSeconds) * time.Second)
 	}
 	store.agentSessions[input.SessionKey] = session
+	return session, nil
+}
+
+func (store *fakeAdminStore) ClearIdleAgentSessionPod(_ context.Context, sessionKey string, podName string) (entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	session, ok := store.agentSessions[sessionKey]
+	if !ok || session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != podName {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	for _, turn := range store.sessionTurns {
+		if turn.SessionID == session.ID && (turn.Status == agentSessionTurnQueued || turn.Status == agentSessionTurnRunning) {
+			return entity.AgentSession{}, adminrepo.ErrNotFound
+		}
+	}
+	session.KubernetesNamespace = ""
+	session.PodName = ""
+	store.agentSessions[sessionKey] = session
 	return session, nil
 }
 
