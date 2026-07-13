@@ -441,7 +441,8 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - GitHub token, username, email и webhook secret хранятся в Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
-- bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile: RuntimeDefault` и resource requests/limits `100m`/`128Mi`, `1`/`512Mi`.
+- bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true` и `seccompProfile: RuntimeDefault`.
+- Ресурсы bot-service настраиваются через `MATTERCODEX_BOT_SERVICE_CPU_REQUEST`, `MATTERCODEX_BOT_SERVICE_MEMORY_REQUEST`, `MATTERCODEX_BOT_SERVICE_CPU_LIMIT` и `MATTERCODEX_BOT_SERVICE_MEMORY_LIMIT`. Значения по умолчанию: requests `100m`/`512Mi`, limits `1`/`4Gi`; увеличенный memory limit нужен для кратковременных пиков при приеме крупных Codex session snapshots.
 - bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/get/list/update/delete Secret для account-specific Codex auth и session-token cleanup.
 - Runtime namespace получает namespace-level ResourceQuota/LimitRange с owner-instance defaults и env overrides, потому что MVP namespace общий для Mattermost, bot-service и agent Job. CPU limit quota намеренно допускает burst/overcommit, а memory limit quota остается ниже физической памяти типового owner-сервера.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.

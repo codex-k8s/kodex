@@ -116,8 +116,8 @@ spec:
             periodSeconds: 20
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: "${MATTERCODEX_BOT_SERVICE_CPU_REQUEST}"
+              memory: "${MATTERCODEX_BOT_SERVICE_MEMORY_REQUEST}"
             limits:
-              cpu: "1"
-              memory: 512Mi
+              cpu: "${MATTERCODEX_BOT_SERVICE_CPU_LIMIT}"
+              memory: "${MATTERCODEX_BOT_SERVICE_MEMORY_LIMIT}"
