@@ -119,5 +119,4 @@ spec:
               cpu: "${MATTERCODEX_BOT_SERVICE_CPU_REQUEST}"
               memory: "${MATTERCODEX_BOT_SERVICE_MEMORY_REQUEST}"
             limits:
-              cpu: "${MATTERCODEX_BOT_SERVICE_CPU_LIMIT}"
               memory: "${MATTERCODEX_BOT_SERVICE_MEMORY_LIMIT}"
