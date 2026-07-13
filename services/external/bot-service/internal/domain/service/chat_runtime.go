@@ -32,7 +32,7 @@ const (
 	threadContextStatusPending    = "pending"
 	threadContextStatusConfigured = "configured"
 
-	maxAgentSessionCapacityEvictions = 3
+	maxAgentSessionCapacityEvictions = 1
 	defaultCapacityRetryDelay        = 500 * time.Millisecond
 )
 
