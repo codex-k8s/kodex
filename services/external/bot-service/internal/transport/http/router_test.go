@@ -851,6 +851,10 @@ func (store *fakeRouterAdminStore) ListStaleActiveAgentSessions(context.Context,
 	return nil, nil
 }
 
+func (store *fakeRouterAdminStore) ListRunningActiveAgentSessions(context.Context, int) ([]entity.AgentSession, error) {
+	return nil, nil
+}
+
 func (store *fakeRouterAdminStore) UpdateAgentSessionRuntime(context.Context, adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
 	return entity.AgentSession{}, nil
 }

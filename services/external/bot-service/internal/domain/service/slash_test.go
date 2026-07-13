@@ -875,7 +875,7 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 		t.Fatalf("BuildRolePrompt() error = %v", err)
 	}
 	for _, expected := range []string{
-		"codex=0.141.0",
+		"codex=0.144.1",
 		"gh=2.95.0",
 		"go=1.26",
 		"goose=3.27.1",
@@ -3030,6 +3030,7 @@ type fakeRuntimeRunner struct {
 	sessionGitHubSecret         string
 	cleanedSessionKey           string
 	cleanedSessionKeys          []string
+	sessionRuntimeHealth        runtimerepo.AgentSessionRuntimeHealth
 	botTokenSecrets             map[string]string
 	cleanedRunID                string
 	cleanedRunIDs               []string
@@ -3041,6 +3042,7 @@ type fakeRuntimeRunner struct {
 	authSecretNotReady          bool
 	authStatusWithoutDeviceCode bool
 	authSecretChecks            int
+	authSecretCheckErr          error
 	deletedAuthAccount          string
 	deletedAuthSecret           string
 	githubSecretInput           runtimerepo.GitHubTokenSecretInput
@@ -3098,6 +3100,9 @@ func (runner *fakeRuntimeRunner) GetCodexAuthStatus(_ context.Context, accountNa
 
 func (runner *fakeRuntimeRunner) CheckCodexAuthSecret(_ context.Context, input runtimerepo.CodexAuthSecretCheckInput) (runtimerepo.CodexAuthSecretCheckResult, error) {
 	runner.authSecretChecks++
+	if runner.authSecretCheckErr != nil {
+		return runtimerepo.CodexAuthSecretCheckResult{}, runner.authSecretCheckErr
+	}
 	return runtimerepo.CodexAuthSecretCheckResult{
 		AccountName: input.AccountName,
 		SecretName:  input.SecretName,
@@ -3269,6 +3274,29 @@ func (runner *fakeRuntimeRunner) CleanupAgentSession(_ context.Context, sessionK
 		PodName:    "mc-session-" + sessionKey,
 		PodDeleted: true,
 	}, nil
+}
+
+func (runner *fakeRuntimeRunner) GetAgentSessionRuntimeHealth(_ context.Context, sessionKey string) (runtimerepo.AgentSessionRuntimeHealth, error) {
+	if strings.TrimSpace(runner.sessionRuntimeHealth.SessionKey) == "" {
+		return runtimerepo.AgentSessionRuntimeHealth{
+			SessionKey: sessionKey,
+			Namespace:  "mattermost",
+			PodName:    "mc-session-" + sessionKey,
+			Exists:     true,
+			Phase:      "Running",
+			Terminal:   false,
+			Reason:     "Running",
+		}, nil
+	}
+	health := runner.sessionRuntimeHealth
+	health.SessionKey = sessionKey
+	if strings.TrimSpace(health.PodName) == "" {
+		health.PodName = "mc-session-" + sessionKey
+	}
+	if strings.TrimSpace(health.Namespace) == "" {
+		health.Namespace = "mattermost"
+	}
+	return health, nil
 }
 
 func (runner *fakeRuntimeRunner) UpsertMattermostBotTokenSecret(_ context.Context, input runtimerepo.MattermostBotTokenSecretInput) (runtimerepo.MattermostBotTokenSecret, error) {
@@ -4062,6 +4090,28 @@ func (store *fakeAdminStore) ListStaleActiveAgentSessions(_ context.Context, lim
 		}
 		turn, err := store.GetAgentSessionTurn(context.Background(), session.ActiveTurnID)
 		if err != nil || !agentSessionTurnTerminal(turn.Status) {
+			continue
+		}
+		sessions = append(sessions, session)
+		if len(sessions) >= limit {
+			break
+		}
+	}
+	return sessions, nil
+}
+
+func (store *fakeAdminStore) ListRunningActiveAgentSessions(_ context.Context, limit int) ([]entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	if limit <= 0 {
+		limit = 20
+	}
+	var sessions []entity.AgentSession
+	for _, session := range store.agentSessions {
+		if session.ActiveTurnID == 0 {
+			continue
+		}
+		turn, err := store.GetAgentSessionTurn(context.Background(), session.ActiveTurnID)
+		if err != nil || turn.Status != agentSessionTurnRunning {
 			continue
 		}
 		sessions = append(sessions, session)

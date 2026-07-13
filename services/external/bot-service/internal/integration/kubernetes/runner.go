@@ -59,8 +59,9 @@ const (
 )
 
 var (
-	codexDeviceCodeRE = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
-	runtimeEnvNameRE  = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,127}$`)
+	codexDeviceCodeRE        = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
+	runtimeEnvNameRE         = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,127}$`)
+	codexAuthSecretCheckWait = 5 * time.Minute
 )
 
 type Config struct {
@@ -145,7 +146,7 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		namespace:                             namespace,
 		smokeImage:                            defaultString(cfg.SmokeImage, "busybox:1.36"),
 		agentRunnerImage:                      defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
-		codexPackage:                          defaultString(cfg.CodexPackage, "@openai/codex@0.141.0"),
+		codexPackage:                          defaultString(cfg.CodexPackage, "@openai/codex@0.144.1"),
 		workspaceStorage:                      storage,
 		jobTTLSecondsAfterFinish:              defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
 		authCheckJobTTLSecondsAfterFinish:     defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),
@@ -307,7 +308,7 @@ func (runner *Runner) CheckCodexAuthSecret(ctx context.Context, input runtimerep
 	}
 	defer runner.cleanupCodexAuthCheckJob(ctx, jobName)
 
-	deadline := time.Now().Add(90 * time.Second)
+	deadline := time.Now().Add(codexAuthSecretCheckWait)
 	ticker := time.NewTicker(750 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -330,7 +331,12 @@ func (runner *Runner) CheckCodexAuthSecret(ctx context.Context, input runtimerep
 			return result, nil
 		case time.Now().After(deadline):
 			runner.fillCodexAuthCheckPodStatus(ctx, &result)
-			return result, nil
+			return result, fmt.Errorf(
+				"codex auth check timed out: job %s pod %s phase %s",
+				jobName,
+				defaultString(result.PodName, "unknown"),
+				defaultString(result.PodPhase, "unknown"),
+			)
 		}
 
 		select {
@@ -834,6 +840,54 @@ func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName s
 		return false, fmt.Errorf("get session pod: %w", err)
 	}
 	return pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed, nil
+}
+
+func (runner *Runner) GetAgentSessionRuntimeHealth(ctx context.Context, sessionKey string) (runtimerepo.AgentSessionRuntimeHealth, error) {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return runtimerepo.AgentSessionRuntimeHealth{}, fmt.Errorf("session key is required")
+	}
+	podName := sessionPodName(sessionKey)
+	health := runtimerepo.AgentSessionRuntimeHealth{
+		SessionKey: sessionKey,
+		Namespace:  runner.namespace,
+		PodName:    podName,
+	}
+	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			health.Terminal = true
+			health.Reason = "pod not found"
+			return health, nil
+		}
+		return runtimerepo.AgentSessionRuntimeHealth{}, fmt.Errorf("get session pod health: %w", err)
+	}
+	health.Exists = true
+	health.Phase = string(pod.Status.Phase)
+	health.Terminal = pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
+	health.Reason = sessionPodHealthReason(pod)
+	return health, nil
+}
+
+func sessionPodHealthReason(pod *corev1.Pod) string {
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.State.Terminated != nil {
+			return fmt.Sprintf("container %s terminated: %s exit=%d", status.Name, status.State.Terminated.Reason, status.State.Terminated.ExitCode)
+		}
+		if status.LastTerminationState.Terminated != nil {
+			return fmt.Sprintf("container %s last terminated: %s exit=%d", status.Name, status.LastTerminationState.Terminated.Reason, status.LastTerminationState.Terminated.ExitCode)
+		}
+		if status.State.Waiting != nil && strings.TrimSpace(status.State.Waiting.Reason) != "" {
+			return fmt.Sprintf("container %s waiting: %s", status.Name, status.State.Waiting.Reason)
+		}
+	}
+	if strings.TrimSpace(pod.Status.Reason) != "" {
+		return pod.Status.Reason
+	}
+	if pod.Status.Phase != "" {
+		return string(pod.Status.Phase)
+	}
+	return "unknown"
 }
 
 func (runner *Runner) CleanupAgentSession(ctx context.Context, sessionKey string) (runtimerepo.AgentSessionCleanupResult, error) {
@@ -1893,6 +1947,7 @@ func (runner *Runner) fillCodexAuthCheckPodStatus(ctx context.Context, result *r
 		return
 	}
 	result.PodName = pod.Name
+	result.PodPhase = string(pod.Status.Phase)
 	result.LogTail = runner.logTail(ctx, pod.Name)
 }
 

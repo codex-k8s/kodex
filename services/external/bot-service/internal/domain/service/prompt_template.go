@@ -630,7 +630,7 @@ func withPromptTemplateDefaults(data promptTemplateData) promptTemplateData {
 
 func agentRuntimeTools() []promptTemplateToolData {
 	return []promptTemplateToolData{
-		{Name: "OpenAI Codex CLI", Command: "codex", Version: "0.141.0", Purpose: "продолжать или возобновлять сессии Codex-агентов"},
+		{Name: "OpenAI Codex CLI", Command: "codex", Version: "0.144.1", Purpose: "продолжать или возобновлять сессии Codex-агентов"},
 		{Name: "Node.js runtime", Command: "node", Version: "24.17.x", Purpose: "запускать Vue, TypeScript, кодогенерацию и диагностические JavaScript-инструменты"},
 		{Name: "npm", Command: "npm", Version: "11.13.x", Purpose: "устанавливать и запускать JavaScript-пакеты и npm-скрипты"},
 		{Name: "pnpm", Command: "pnpm", Version: "11.8.0", Purpose: "устанавливать и запускать JavaScript-скрипты с учетом workspace"},

@@ -67,8 +67,8 @@
 - `MATTERCODEX_RUNTIME_LIMITS_ENABLED` - optional, включает render/apply namespace `ResourceQuota` и `LimitRange` для runtime namespace; default `true`;
 - `MATTERCODEX_RUNTIME_QUOTA_PODS`, `MATTERCODEX_RUNTIME_QUOTA_JOBS`, `MATTERCODEX_RUNTIME_QUOTA_PVCS` - optional, object count quota для pod, batch Job и PVC в runtime namespace;
 - `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_STORAGE` - optional, суммарная quota на requested PVC storage в runtime namespace;
-- `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_MEMORY`, `MATTERCODEX_RUNTIME_QUOTA_LIMITS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_LIMITS_MEMORY` - optional, namespace quota на compute requests/limits;
-- `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_CPU`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_MEMORY`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_REQUEST_CPU`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_REQUEST_MEMORY` - optional, container defaults для pod без явных resources;
+- `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_MEMORY`, `MATTERCODEX_RUNTIME_QUOTA_LIMITS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_LIMITS_MEMORY` - optional, namespace quota на compute requests/limits; дефолты для single-node owner-инсталляции: requests `28`/`96Gi`, limits `128`/`112Gi`;
+- `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_CPU`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_MEMORY`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_REQUEST_CPU`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_REQUEST_MEMORY` - optional, container defaults для pod без явных resources; дефолты agent container: request `500m`/`1Gi`, limit `4000m`/`4Gi`;
 - `MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT` - optional, ServiceAccount для agent/smoke Job;
 - `MATTERCODEX_CODEX_AUTH_SECRET` - optional, base name для Kubernetes Secrets с Codex `auth.json`; для account `primary` будет создан secret `${MATTERCODEX_CODEX_AUTH_SECRET}-primary`;
 - `MATTERCODEX_DEFAULT_TEAM_NAME` - optional, по умолчанию `agents`;
@@ -441,9 +441,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - GitHub token, username, email и webhook secret хранятся в Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
-- bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile: RuntimeDefault` и базовыми resource requests/limits.
+- bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile: RuntimeDefault` и resource requests/limits `100m`/`128Mi`, `1`/`512Mi`.
 - bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/get/list/update/delete Secret для account-specific Codex auth и session-token cleanup.
-- Runtime namespace получает namespace-level ResourceQuota/LimitRange с conservative defaults и env overrides, потому что MVP namespace общий для Mattermost, bot-service и agent Job.
+- Runtime namespace получает namespace-level ResourceQuota/LimitRange с owner-instance defaults и env overrides, потому что MVP namespace общий для Mattermost, bot-service и agent Job. CPU limit quota намеренно допускает burst/overcommit, а memory limit quota остается ниже физической памяти типового owner-сервера.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
 - Codex smoke/auth/developer/reviewer Job запускаются без automount service account token и с non-root securityContext.
 - Codex developer/reviewer Job получает Codex `auth.json` выбранного OpenAI account и GitHub token/username/email выбранного GitHub account только через Kubernetes Secret volume mount.

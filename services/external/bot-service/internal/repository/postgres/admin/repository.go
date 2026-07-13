@@ -529,6 +529,18 @@ func (repo *Repository) ListStaleActiveAgentSessions(ctx context.Context, limit 
 	return scanAgentSessions(rows)
 }
 
+func (repo *Repository) ListRunningActiveAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_running_active.sql"), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list running active agent sessions: %w", err)
+	}
+	defer rows.Close()
+	return scanAgentSessions(rows)
+}
+
 func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
 	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__update_runtime.sql"),
 		input.SessionKey,

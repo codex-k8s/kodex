@@ -160,6 +160,45 @@ func TestCheckCodexAuthSecretReturnsNotReadyWhenSecretIsMissing(t *testing.T) {
 	}
 }
 
+func TestCheckCodexAuthSecretReturnsInfrastructureErrorOnTimeout(t *testing.T) {
+	originalWait := codexAuthSecretCheckWait
+	codexAuthSecretCheckWait = time.Millisecond
+	t.Cleanup(func() {
+		codexAuthSecretCheckWait = originalWait
+	})
+
+	client := fake.NewSimpleClientset(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "matter-codex-codex-auth-primary", Namespace: "mattermost"},
+		Data:       map[string][]byte{"auth.json": []byte(`{"auth_mode":"chatgpt"}`)},
+	})
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	result, err := runner.CheckCodexAuthSecret(context.Background(), runtimerepo.CodexAuthSecretCheckInput{
+		AccountName: "primary",
+		SecretName:  "matter-codex-codex-auth-primary",
+	})
+	if err == nil || !strings.Contains(err.Error(), "auth check timed out") {
+		t.Fatalf("result = %#v, error = %v", result, err)
+	}
+	if result.Ready {
+		t.Fatalf("result = %#v", result)
+	}
+	jobs, listErr := client.BatchV1().Jobs("mattermost").List(context.Background(), metav1.ListOptions{})
+	if listErr != nil {
+		t.Fatalf("List jobs error = %v", listErr)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("auth check job was not cleaned up: %#v", jobs.Items)
+	}
+}
+
 func TestDeleteCodexAuthAccountDeletesJobAndSecret(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	runner, err := NewRunnerWithClient(client, Config{
@@ -271,7 +310,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
 		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		CodexPackage:              "@openai/codex@0.141.0",
+		CodexPackage:              "@openai/codex@0.144.1",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName:       "matter-codex-codex-auth",
@@ -350,7 +389,7 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
 		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		CodexPackage:              "@openai/codex@0.141.0",
+		CodexPackage:              "@openai/codex@0.144.1",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName:       "matter-codex-codex-auth",
@@ -424,7 +463,7 @@ func TestStartChatRunCreatesPVCAndJob(t *testing.T) {
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
 		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		CodexPackage:              "@openai/codex@0.141.0",
+		CodexPackage:              "@openai/codex@0.144.1",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName:       "matter-codex-codex-auth",

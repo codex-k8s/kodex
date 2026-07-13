@@ -74,6 +74,16 @@ type AgentSessionPodInput struct {
 	RuntimeEnv              []RuntimeEnvVar
 }
 
+type AgentSessionRuntimeHealth struct {
+	SessionKey string
+	Namespace  string
+	PodName    string
+	Exists     bool
+	Phase      string
+	Terminal   bool
+	Reason     string
+}
+
 type RuntimeEnvVar struct {
 	Name        string
 	SecretName  string
@@ -151,6 +161,7 @@ type CodexAuthSecretCheckResult struct {
 	Namespace   string
 	JobName     string
 	PodName     string
+	PodPhase    string
 	Ready       bool
 	LogTail     string
 }
@@ -297,6 +308,7 @@ type Runner interface {
 	StartReviewRun(ctx context.Context, input ReviewRunInput) (StartedRun, error)
 	StartChatRun(ctx context.Context, input ChatRunInput) (StartedRun, error)
 	StartAgentSession(ctx context.Context, input AgentSessionPodInput) (StartedAgentSession, error)
+	GetAgentSessionRuntimeHealth(ctx context.Context, sessionKey string) (AgentSessionRuntimeHealth, error)
 	CleanupAgentSession(ctx context.Context, sessionKey string) (AgentSessionCleanupResult, error)
 	UpsertMattermostBotTokenSecret(ctx context.Context, input MattermostBotTokenSecretInput) (MattermostBotTokenSecret, error)
 	GetMattermostBotTokenSecret(ctx context.Context, secretName string) (MattermostBotTokenSecret, error)
