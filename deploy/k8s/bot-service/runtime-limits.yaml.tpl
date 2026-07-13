@@ -14,7 +14,6 @@ spec:
     requests.storage: "${MATTERCODEX_RUNTIME_QUOTA_REQUESTS_STORAGE}"
     requests.cpu: "${MATTERCODEX_RUNTIME_QUOTA_REQUESTS_CPU}"
     requests.memory: "${MATTERCODEX_RUNTIME_QUOTA_REQUESTS_MEMORY}"
-    limits.cpu: "${MATTERCODEX_RUNTIME_QUOTA_LIMITS_CPU}"
     limits.memory: "${MATTERCODEX_RUNTIME_QUOTA_LIMITS_MEMORY}"
 ---
 apiVersion: v1
@@ -29,7 +28,6 @@ spec:
   limits:
     - type: Container
       default:
-        cpu: "${MATTERCODEX_RUNTIME_LIMIT_DEFAULT_CPU}"
         memory: "${MATTERCODEX_RUNTIME_LIMIT_DEFAULT_MEMORY}"
       defaultRequest:
         cpu: "${MATTERCODEX_RUNTIME_LIMIT_DEFAULT_REQUEST_CPU}"

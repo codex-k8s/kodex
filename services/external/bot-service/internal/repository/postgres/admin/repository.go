@@ -5,12 +5,16 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+const agentSessionCapacityAdvisoryLockKey int64 = 0x6d61747465726364
 
 //go:embed sql/*.sql
 var queryFiles embed.FS
@@ -505,6 +509,38 @@ func (repo *Repository) ListAgentSessionsByRole(ctx context.Context, roleID int6
 	return scanAgentSessions(rows)
 }
 
+func (repo *Repository) AcquireAgentSessionCapacityLock(ctx context.Context) (func(), error) {
+	conn, err := repo.pool.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("acquire agent session capacity lock connection: %w", err)
+	}
+	if _, err := conn.Exec(ctx, "select pg_advisory_lock($1)", agentSessionCapacityAdvisoryLockKey); err != nil {
+		conn.Release()
+		return nil, fmt.Errorf("acquire agent session capacity lock: %w", err)
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			unlockCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			_, _ = conn.Exec(unlockCtx, "select pg_advisory_unlock($1)", agentSessionCapacityAdvisoryLockKey)
+			conn.Release()
+		})
+	}, nil
+}
+
+func (repo *Repository) ListEvictableIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_evictable_idle.sql"), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list evictable idle agent sessions: %w", err)
+	}
+	defer rows.Close()
+	return scanAgentSessions(rows)
+}
+
 func (repo *Repository) ListQueuedIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
@@ -567,6 +603,17 @@ func (repo *Repository) ResetAgentSessionRuntime(ctx context.Context, sessionKey
 			return entity.AgentSession{}, adminrepo.ErrNotFound
 		}
 		return entity.AgentSession{}, fmt.Errorf("reset agent session runtime: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) ClearIdleAgentSessionPod(ctx context.Context, sessionKey string, podName string) (entity.AgentSession, error) {
+	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__clear_idle_pod.sql"), sessionKey, podName))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSession{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSession{}, fmt.Errorf("clear idle agent session pod: %w", err)
 	}
 	return item, nil
 }

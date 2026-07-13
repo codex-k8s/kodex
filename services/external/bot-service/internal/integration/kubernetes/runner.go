@@ -792,10 +792,16 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	}
 	if _, err := runner.client.CoreV1().Pods(runner.namespace).Create(ctx, runner.sessionPod(input), metav1.CreateOptions{}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
+			if quotaExceeded(err) {
+				return runtimerepo.StartedAgentSession{}, runtimerepo.NewAgentSessionCapacityError("Kubernetes resource quota rejected the session pod", err)
+			}
 			return runtimerepo.StartedAgentSession{}, fmt.Errorf("create session pod: %w", err)
 		}
 	} else {
 		created = true
+	}
+	if capacityErr := runner.sessionPodSchedulingCapacityError(ctx, podName); capacityErr != nil {
+		return runtimerepo.StartedAgentSession{}, capacityErr
 	}
 	return runtimerepo.StartedAgentSession{
 		SessionKey: input.SessionKey,
@@ -805,6 +811,23 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 		SecretName: secretName,
 		Created:    created,
 	}, nil
+}
+
+func (runner *Runner) sessionPodSchedulingCapacityError(ctx context.Context, podName string) error {
+	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return nil
+	}
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type != corev1.PodScheduled || condition.Status != corev1.ConditionFalse || !strings.EqualFold(condition.Reason, corev1.PodReasonUnschedulable) {
+			continue
+		}
+		message := strings.ToLower(strings.TrimSpace(condition.Message))
+		if strings.Contains(message, "insufficient ") || strings.Contains(message, "too many pods") || strings.Contains(message, "exceeded quota") {
+			return runtimerepo.NewAgentSessionCapacityError("Kubernetes scheduler cannot place the session pod", fmt.Errorf("%s", condition.Message))
+		}
+	}
+	return nil
 }
 
 func (runner *Runner) ensureSessionPVC(ctx context.Context, sessionKey string, role string) (bool, error) {

@@ -843,6 +843,14 @@ func (store *fakeRouterAdminStore) ListAgentSessionsByRole(context.Context, int6
 	return nil, nil
 }
 
+func (store *fakeRouterAdminStore) AcquireAgentSessionCapacityLock(context.Context) (func(), error) {
+	return func() {}, nil
+}
+
+func (store *fakeRouterAdminStore) ListEvictableIdleAgentSessions(context.Context, int) ([]entity.AgentSession, error) {
+	return nil, nil
+}
+
 func (store *fakeRouterAdminStore) ListQueuedIdleAgentSessions(context.Context, int) ([]entity.AgentSession, error) {
 	return nil, nil
 }
@@ -860,6 +868,10 @@ func (store *fakeRouterAdminStore) UpdateAgentSessionRuntime(context.Context, ad
 }
 
 func (store *fakeRouterAdminStore) ResetAgentSessionRuntime(context.Context, string, string) (entity.AgentSession, error) {
+	return entity.AgentSession{}, nil
+}
+
+func (store *fakeRouterAdminStore) ClearIdleAgentSessionPod(context.Context, string, string) (entity.AgentSession, error) {
 	return entity.AgentSession{}, nil
 }
 

@@ -50,6 +50,8 @@ Thread reply с `@agent` mention:
 - после каждого turn отправляет final answer, artifacts, Codex session id и обновленный session snapshot обратно в bot-service через internal HTTP API;
 - завершает работу после `expires_at`, если очередь пуста.
 
+При нехватке Kubernetes capacity bot-service освобождает самый старый idle session pod по LRU. Кандидат должен не иметь active, queued или running turn. Удаляется только pod: PVC, internal token Secret, Codex session id и snapshot остаются, поэтому следующий turn восстанавливает ту же сессию. Старт runtime сериализуется PostgreSQL advisory lock, чтобы две реплики bot-service не вытеснили несколько pod одновременно. Если idle-кандидатов нет, turn остается в FIFO queue и repair loop повторяет запуск после освобождения ресурсов.
+
 TTL:
 
 - default manager chat session pod TTL: 4 часа;

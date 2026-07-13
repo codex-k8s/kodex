@@ -31,6 +31,9 @@ const (
 
 	threadContextStatusPending    = "pending"
 	threadContextStatusConfigured = "configured"
+
+	maxAgentSessionCapacityEvictions = 1
+	defaultCapacityRetryDelay        = 500 * time.Millisecond
 )
 
 var githubPullURLRE = regexp.MustCompile(`https://github\.com/([^/\s]+)/([^/\s]+)/pull/([0-9]+)`)
@@ -105,13 +108,14 @@ type AgentTurnRequest struct {
 }
 
 type AgentTurnQueued struct {
-	RunID      string
-	TurnID     int64
-	SessionKey string
-	Role       entity.AgentRole
-	CreatedPod bool
-	PodName    string
-	PVCName    string
+	RunID              string
+	TurnID             int64
+	SessionKey         string
+	Role               entity.AgentRole
+	CreatedPod         bool
+	WaitingForCapacity bool
+	PodName            string
+	PVCName            string
 }
 
 type AgentSessionRepairResult struct {
@@ -141,17 +145,18 @@ type ThreadRepositorySelector interface {
 }
 
 type ChatRunServiceConfig struct {
-	Localizer       *texti18n.Localizer
-	Store           adminrepo.Repository
-	RuntimeRunner   runtimerepo.Runner
-	ThreadPublisher MattermostThreadPublisher
-	BotServiceURL   string
-	MenuActionURL   string
-	StorageReady    bool
-	RuntimeReady    bool
-	DisableMonitor  bool
-	MonitorInterval time.Duration
-	MonitorTimeout  time.Duration
+	Localizer          *texti18n.Localizer
+	Store              adminrepo.Repository
+	RuntimeRunner      runtimerepo.Runner
+	ThreadPublisher    MattermostThreadPublisher
+	BotServiceURL      string
+	MenuActionURL      string
+	StorageReady       bool
+	RuntimeReady       bool
+	DisableMonitor     bool
+	MonitorInterval    time.Duration
+	MonitorTimeout     time.Duration
+	CapacityRetryDelay time.Duration
 }
 
 type ChatRunService struct {
@@ -177,6 +182,9 @@ func NewChatRunService(cfg ChatRunServiceConfig) *ChatRunService {
 	}
 	if cfg.MonitorTimeout <= 0 {
 		cfg.MonitorTimeout = 6 * time.Hour
+	}
+	if cfg.CapacityRetryDelay <= 0 {
+		cfg.CapacityRetryDelay = defaultCapacityRetryDelay
 	}
 	return &ChatRunService{cfg: cfg}
 }
@@ -295,6 +303,12 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 			}
 			svc.postThread(ctx, command, svc.t("chat.run.start_failed", map[string]any{"Role": target.Role.Name, "Error": safeError(err)}))
 			continue
+		}
+		if item.WaitingForCapacity {
+			svc.postThread(ctx, command, svc.t("chat.run.waiting_for_capacity", map[string]any{
+				"Role":  target.Role.Name,
+				"RunID": item.RunID,
+			}))
 		}
 		queued = append(queued, item)
 	}
@@ -434,22 +448,29 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	}
 	repo := firstRepository(request.Repositories)
 	started := agentSessionStartedFromSession(session)
+	waitingForCapacity := false
 	if agentSessionRuntimeShouldBeEnsured(session) {
 		started, err = svc.startAgentSessionRuntime(ctx, session, existingSession, request.Role, openAIAccount.SecretRef, gitHubSecretName, repo, runtimeEnv)
 		if err != nil {
-			return AgentTurnQueued{}, err
+			if !runtimerepo.IsAgentSessionCapacityError(err) {
+				return AgentTurnQueued{}, err
+			}
+			waitingForCapacity = true
+			started = runtimerepo.StartedAgentSession{SessionKey: session.SessionKey}
 		}
-		session, err = svc.cfg.Store.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
-			SessionKey:          session.SessionKey,
-			Status:              agentSessionStatusIdle,
-			KubernetesNamespace: started.Namespace,
-			PodName:             started.PodName,
-			PVCName:             started.PVCName,
-			TokenSecretRef:      started.SecretName,
-			ExtendTTLSeconds:    ttlSeconds,
-		})
-		if err != nil {
-			return AgentTurnQueued{}, err
+		if !waitingForCapacity {
+			session, err = svc.cfg.Store.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
+				SessionKey:          session.SessionKey,
+				Status:              agentSessionStatusIdle,
+				KubernetesNamespace: started.Namespace,
+				PodName:             started.PodName,
+				PVCName:             started.PVCName,
+				TokenSecretRef:      started.SecretName,
+				ExtendTTLSeconds:    ttlSeconds,
+			})
+			if err != nil {
+				return AgentTurnQueued{}, err
+			}
 		}
 	}
 	runID := newChatRunID(request.Chat.ID)
@@ -485,13 +506,14 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		return AgentTurnQueued{}, err
 	}
 	return AgentTurnQueued{
-		RunID:      runID,
-		TurnID:     turn.ID,
-		SessionKey: session.SessionKey,
-		Role:       request.Role,
-		CreatedPod: started.Created,
-		PodName:    started.PodName,
-		PVCName:    started.PVCName,
+		RunID:              runID,
+		TurnID:             turn.ID,
+		SessionKey:         session.SessionKey,
+		Role:               request.Role,
+		CreatedPod:         started.Created,
+		WaitingForCapacity: waitingForCapacity,
+		PodName:            started.PodName,
+		PVCName:            started.PVCName,
 	}, nil
 }
 
@@ -658,7 +680,12 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 	if err != nil {
 		return runtimerepo.StartedAgentSession{}, err
 	}
-	return svc.cfg.RuntimeRunner.StartAgentSession(ctx, runtimerepo.AgentSessionPodInput{
+	release, err := svc.cfg.Store.AcquireAgentSessionCapacityLock(ctx)
+	if err != nil {
+		return runtimerepo.StartedAgentSession{}, err
+	}
+	defer release()
+	input := runtimerepo.AgentSessionPodInput{
 		SessionKey:              session.SessionKey,
 		Role:                    role.Name,
 		KubernetesAccess:        role.KubernetesAccess,
@@ -673,7 +700,73 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 		SandboxMode:             role.SandboxMode,
 		ConfigOverlay:           role.ConfigOverlay,
 		RuntimeEnv:              runtimeEnv,
-	})
+	}
+	started, err := svc.cfg.RuntimeRunner.StartAgentSession(ctx, input)
+	for attempt := 0; runtimerepo.IsAgentSessionCapacityError(err) && attempt < maxAgentSessionCapacityEvictions; attempt++ {
+		evicted, evictErr := svc.evictOldestIdleAgentSessionPod(ctx, session.SessionKey)
+		if evictErr != nil {
+			return runtimerepo.StartedAgentSession{}, fmt.Errorf("evict idle agent session pod: %w", evictErr)
+		}
+		if !evicted {
+			return runtimerepo.StartedAgentSession{}, err
+		}
+		if waitErr := waitAgentSessionCapacityRetry(ctx, svc.cfg.CapacityRetryDelay); waitErr != nil {
+			return runtimerepo.StartedAgentSession{}, waitErr
+		}
+		started, err = svc.cfg.RuntimeRunner.StartAgentSession(ctx, input)
+	}
+	return started, err
+}
+
+func (svc *ChatRunService) evictOldestIdleAgentSessionPod(ctx context.Context, targetSessionKey string) (bool, error) {
+	candidates, err := svc.cfg.Store.ListEvictableIdleAgentSessions(ctx, 100)
+	if err != nil {
+		return false, err
+	}
+	for _, candidate := range candidates {
+		if candidate.SessionKey == targetSessionKey || strings.TrimSpace(candidate.PodName) == "" {
+			continue
+		}
+		health, err := svc.cfg.RuntimeRunner.GetAgentSessionRuntimeHealth(ctx, candidate.SessionKey)
+		if err != nil {
+			return false, err
+		}
+		if !health.Exists {
+			if _, clearErr := svc.cfg.Store.ClearIdleAgentSessionPod(ctx, candidate.SessionKey, candidate.PodName); clearErr != nil && !errors.Is(clearErr, adminrepo.ErrNotFound) {
+				return false, clearErr
+			}
+			continue
+		}
+		if _, err := svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, candidate.SessionKey); err != nil {
+			return false, err
+		}
+		if _, clearErr := svc.cfg.Store.ClearIdleAgentSessionPod(ctx, candidate.SessionKey, candidate.PodName); clearErr != nil && !errors.Is(clearErr, adminrepo.ErrNotFound) {
+			return false, clearErr
+		}
+		_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+			EventType:    "agent_session_capacity_evicted",
+			ActorUser:    "matter-codex",
+			ResourceType: "agent_session",
+			ResourceName: candidate.SessionKey,
+			Summary:      "oldest idle agent session pod removed to free runtime capacity",
+		})
+		return true, nil
+	}
+	return false, nil
+}
+
+func waitAgentSessionCapacityRetry(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (svc *ChatRunService) SelectThreadRepository(ctx context.Context, input ThreadRepositorySelectionInput) (ThreadRepositorySelectionResult, error) {

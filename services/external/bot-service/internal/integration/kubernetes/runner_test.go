@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -12,7 +13,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestStartSmokeRunCreatesPVCAndJob(t *testing.T) {
@@ -575,6 +579,59 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	}
 	if !hasSecretVolume(podSpec.Volumes, sessionSecretVolume, started.SecretName) {
 		t.Fatalf("session secret volume missing: %#v", podSpec.Volumes)
+	}
+}
+
+func TestStartAgentSessionReturnsTypedCapacityErrorWhenQuotaRejectsPod(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	client.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "pods"},
+			"mc-session-capacity-test",
+			fmt.Errorf("exceeded quota: matter-codex-runtime-quota, requested: limits.memory=16Gi"),
+		)
+	})
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		WorkspaceStorageSize:      "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	_, err = runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
+		SessionKey:          "capacity-test",
+		Role:                "developer",
+		BotServiceURL:       "http://bot-service",
+		InternalToken:       "session-token",
+		CodexAuthSecretName: "matter-codex-codex-auth-main",
+	})
+	if !runtimerepo.IsAgentSessionCapacityError(err) {
+		t.Fatalf("StartAgentSession() error = %v, want capacity error", err)
+	}
+}
+
+func TestSessionPodSchedulingCapacityErrorRecognizesInsufficientMemory(t *testing.T) {
+	podName := "mc-session-scheduling-test"
+	client := fake.NewSimpleClientset(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: "mattermost"},
+		Status: corev1.PodStatus{Conditions: []corev1.PodCondition{{
+			Type:    corev1.PodScheduled,
+			Status:  corev1.ConditionFalse,
+			Reason:  corev1.PodReasonUnschedulable,
+			Message: "0/1 nodes are available: 1 Insufficient memory.",
+		}}},
+	})
+	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost"})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	err = runner.sessionPodSchedulingCapacityError(context.Background(), podName)
+	if !runtimerepo.IsAgentSessionCapacityError(err) {
+		t.Fatalf("sessionPodSchedulingCapacityError() error = %v, want capacity error", err)
 	}
 }
 
