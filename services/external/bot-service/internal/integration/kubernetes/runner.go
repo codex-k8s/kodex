@@ -59,8 +59,9 @@ const (
 )
 
 var (
-	codexDeviceCodeRE = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
-	runtimeEnvNameRE  = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,127}$`)
+	codexDeviceCodeRE        = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
+	runtimeEnvNameRE         = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,127}$`)
+	codexAuthSecretCheckWait = 5 * time.Minute
 )
 
 type Config struct {
@@ -307,7 +308,7 @@ func (runner *Runner) CheckCodexAuthSecret(ctx context.Context, input runtimerep
 	}
 	defer runner.cleanupCodexAuthCheckJob(ctx, jobName)
 
-	deadline := time.Now().Add(90 * time.Second)
+	deadline := time.Now().Add(codexAuthSecretCheckWait)
 	ticker := time.NewTicker(750 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -330,7 +331,12 @@ func (runner *Runner) CheckCodexAuthSecret(ctx context.Context, input runtimerep
 			return result, nil
 		case time.Now().After(deadline):
 			runner.fillCodexAuthCheckPodStatus(ctx, &result)
-			return result, nil
+			return result, fmt.Errorf(
+				"codex auth check timed out: job %s pod %s phase %s",
+				jobName,
+				defaultString(result.PodName, "unknown"),
+				defaultString(result.PodPhase, "unknown"),
+			)
 		}
 
 		select {
@@ -1941,6 +1947,7 @@ func (runner *Runner) fillCodexAuthCheckPodStatus(ctx context.Context, result *r
 		return
 	}
 	result.PodName = pod.Name
+	result.PodPhase = string(pod.Status.Phase)
 	result.LogTail = runner.logTail(ctx, pod.Name)
 }
 

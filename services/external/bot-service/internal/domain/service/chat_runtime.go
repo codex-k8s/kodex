@@ -35,7 +35,7 @@ const (
 
 var githubPullURLRE = regexp.MustCompile(`https://github\.com/([^/\s]+)/([^/\s]+)/pull/([0-9]+)`)
 
-var codexAuthDeviceCodeWait = 15 * time.Second
+var codexAuthDeviceCodeWait = 5 * time.Minute
 
 type MattermostThreadPostInput struct {
 	ChannelID  string
@@ -902,7 +902,10 @@ func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, accou
 		AccountName: account.Name,
 		SecretName:  account.SecretRef,
 	})
-	if err == nil && check.Ready {
+	if err != nil {
+		return fmt.Errorf("check codex auth secret: %w", err)
+	}
+	if check.Ready {
 		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{
 			Name:      account.Name,
 			SecretRef: account.SecretRef,
@@ -913,9 +916,6 @@ func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, accou
 
 	status, completed, authErr := svc.startCodexReauthSession(ctx, account)
 	if authErr != nil {
-		if err != nil {
-			return fmt.Errorf("check codex auth secret: %v; start codex device-code auth: %w", err, authErr)
-		}
 		return authErr
 	}
 	if completed {

@@ -161,6 +161,7 @@ type CodexAuthSecretCheckResult struct {
 	Namespace   string
 	JobName     string
 	PodName     string
+	PodPhase    string
 	Ready       bool
 	LogTail     string
 }

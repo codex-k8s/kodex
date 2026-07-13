@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -667,6 +668,49 @@ func TestChatRunPostsOpenAIReauthInThreadWhenAuthSecretIsInvalid(t *testing.T) {
 	message := publisher.posts[0].Message
 	if !strings.Contains(message, "ABCD-12345") || !strings.Contains(message, "https://auth.openai.com/codex/device") {
 		t.Fatalf("reauth message = %q", message)
+	}
+}
+
+func TestChatRunDoesNotStartReauthWhenAuthCheckInfrastructureFails(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{authSecretCheckErr: errors.New("auth check pod startup timed out")}
+	publisher := &fakeThreadPublisher{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+		DisableMonitor:  true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Continue the work.",
+	})
+
+	if result.RunID != "" || runner.authAccount != "" || runner.startedSessionKey != "" {
+		t.Fatalf("unexpected run or reauth: result=%#v runner=%#v", result, runner)
+	}
+	if len(store.sessionTurns) != 0 {
+		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, "check codex auth secret") {
+		t.Fatalf("posts = %#v", publisher.posts)
 	}
 }
 
