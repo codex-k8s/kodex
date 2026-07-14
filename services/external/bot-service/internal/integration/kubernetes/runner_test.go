@@ -12,6 +12,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -49,6 +50,7 @@ func TestStartSmokeRunCreatesPVCAndJob(t *testing.T) {
 		t.Fatal("agent job should not automount service account token")
 	}
 	assertRunnerPodSecurity(t, job.Spec.Template.Spec)
+	assertRunnerUtilityResources(t, job.Spec.Template.Spec.Containers[0].Resources)
 	if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Get(context.Background(), "mc-ws-smoke-test", metav1.GetOptions{}); err != nil {
 		t.Fatalf("Get pvc error = %v", err)
 	}
@@ -81,6 +83,7 @@ func TestStartCodexAuthSessionCreatesHardenedJob(t *testing.T) {
 	}
 	podSpec := job.Spec.Template.Spec
 	assertRunnerPodSecurity(t, podSpec)
+	assertRunnerUtilityResources(t, podSpec.Containers[0].Resources)
 	if got := podSpec.Containers[0].Args[0]; got != "codex-auth" {
 		t.Fatalf("args = %q", got)
 	}
@@ -113,6 +116,7 @@ func TestCodexAuthSecretCheckJobMountsSavedAuthSecret(t *testing.T) {
 	}, "mc-codex-auth-check-primary-test")
 	podSpec := job.Spec.Template.Spec
 	assertRunnerPodSecurity(t, podSpec)
+	assertRunnerUtilityResources(t, podSpec.Containers[0].Resources)
 	if got := podSpec.Containers[0].Args[0]; got != "codex-auth-secret-check" {
 		t.Fatalf("args = %q", got)
 	}
@@ -1038,6 +1042,28 @@ func assertRunnerPodSecurity(t *testing.T, podSpec corev1.PodSpec) {
 	}
 	if !hasVolumeMount(container.VolumeMounts, runnerHomeVolume, runnerHomePath) || !hasVolumeMount(container.VolumeMounts, runnerTmpVolume, runnerTmpPath) || !hasVolumeMount(container.VolumeMounts, runnerDevShmVolume, runnerDevShmPath) {
 		t.Fatalf("writable volume mounts missing: %#v", container.VolumeMounts)
+	}
+}
+
+func assertRunnerUtilityResources(t *testing.T, resources corev1.ResourceRequirements) {
+	t.Helper()
+	assertResourceQuantity(t, resources.Requests, corev1.ResourceCPU, runnerUtilityCPURequest)
+	assertResourceQuantity(t, resources.Requests, corev1.ResourceMemory, runnerUtilityMemoryRequest)
+	assertResourceQuantity(t, resources.Limits, corev1.ResourceMemory, runnerUtilityMemoryLimit)
+	if _, exists := resources.Limits[corev1.ResourceCPU]; exists {
+		t.Fatalf("utility runner must not have CPU limit: %#v", resources.Limits)
+	}
+}
+
+func assertResourceQuantity(t *testing.T, resources corev1.ResourceList, name corev1.ResourceName, expected string) {
+	t.Helper()
+	actual, exists := resources[name]
+	if !exists {
+		t.Fatalf("resource %s is missing: %#v", name, resources)
+	}
+	want := resource.MustParse(expected)
+	if actual.Cmp(want) != 0 {
+		t.Fatalf("resource %s = %s, want %s", name, actual.String(), want.String())
 	}
 }
 
