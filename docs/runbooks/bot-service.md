@@ -53,7 +53,7 @@
 - `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST` - optional, registry host, через который kubelet тянет image; default `localhost:<host-port>` для single-server контура;
 - `MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST` - optional, registry host, в который Kaniko push'ит image изнутри кластера; default Kubernetes service DNS;
 - `MATTERCODEX_KANIKO_IMAGE`, `MATTERCODEX_KANIKO_CONTEXT_PVC`, `MATTERCODEX_KANIKO_CONTEXT_STORAGE_SIZE` - optional, параметры Kaniko executor и PVC build context;
-- `MATTERCODEX_KANIKO_CPU_REQUEST`, `MATTERCODEX_KANIKO_CPU_LIMIT`, `MATTERCODEX_KANIKO_MEMORY_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_LIMIT` - optional, ресурсы Kaniko Job;
+- `MATTERCODEX_KANIKO_CPU_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_LIMIT` - optional, ресурсы Kaniko Job; defaults `2000m`/`1Gi`/`4Gi`, CPU limit отсутствует;
 - `MATTERCODEX_KANIKO_JOB_TTL_SECONDS`, `MATTERCODEX_KANIKO_ACTIVE_DEADLINE_SECONDS` - optional, lifecycle limits Kaniko Job;
 - `MATTERCODEX_RUNTIME_ENABLED` - optional, включает Kubernetes runtime adapter;
 - `MATTERCODEX_RUNTIME_NAMESPACE` - optional, namespace для Job/PVC runtime-запусков;

@@ -42,7 +42,6 @@ ${MATTERCODEX_KANIKO_EXTRA_ARGS_YAML}
               cpu: ${MATTERCODEX_KANIKO_CPU_REQUEST}
               memory: ${MATTERCODEX_KANIKO_MEMORY_REQUEST}
             limits:
-              cpu: ${MATTERCODEX_KANIKO_CPU_LIMIT}
               memory: ${MATTERCODEX_KANIKO_MEMORY_LIMIT}
       volumes:
         - name: context
