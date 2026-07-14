@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -183,6 +184,67 @@ func TestSessionAPIErrorRetryClassification(t *testing.T) {
 	}
 	if sessionAPIErrorRetriable(sessionAPIStatusError{StatusCode: 401, Body: "unauthorized"}) {
 		t.Fatal("4xx status should not be retriable")
+	}
+}
+
+func TestCodexTransientCapacityFailureReadsStructuredEvent(t *testing.T) {
+	dir := t.TempDir()
+	eventsPath := filepath.Join(dir, "events.jsonl")
+	stderrPath := filepath.Join(dir, "stderr.log")
+	body := strings.Join([]string{
+		`{"type":"thread.started","thread_id":"session-1"}`,
+		`{"type":"error","message":"Selected model is at capacity. Please try a different model."}`,
+		`{"type":"turn.failed","message":"Selected model is at capacity. Please try a different model."}`,
+	}, "\n")
+	if err := os.WriteFile(eventsPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+	if err := os.WriteFile(stderrPath, nil, 0o600); err != nil {
+		t.Fatalf("write stderr: %v", err)
+	}
+
+	if !codexTransientCapacityFailure(eventsPath, stderrPath, errors.New("exit status 1")) {
+		t.Fatal("capacity failure was not classified as transient")
+	}
+}
+
+func TestCodexTransientCapacityFailureRejectsUsageLimit(t *testing.T) {
+	dir := t.TempDir()
+	eventsPath := filepath.Join(dir, "events.jsonl")
+	stderrPath := filepath.Join(dir, "stderr.log")
+	if err := os.WriteFile(eventsPath, []byte(`{"type":"turn.failed","message":"You have reached your usage limit."}`), 0o600); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+	if err := os.WriteFile(stderrPath, nil, 0o600); err != nil {
+		t.Fatalf("write stderr: %v", err)
+	}
+
+	if codexTransientCapacityFailure(eventsPath, stderrPath, errors.New("exit status 1")) {
+		t.Fatal("usage limit must not be retried as model capacity")
+	}
+}
+
+func TestCodexCapacityRetryScheduleAndArtifacts(t *testing.T) {
+	want := []time.Duration{time.Minute, 3 * time.Minute, 5 * time.Minute}
+	if len(codexCapacityRetryDelays) != len(want) {
+		t.Fatalf("retry delays = %#v", codexCapacityRetryDelays)
+	}
+	for index := range want {
+		if codexCapacityRetryDelays[index] != want[index] {
+			t.Fatalf("retry delay %d = %s, want %s", index, codexCapacityRetryDelays[index], want[index])
+		}
+	}
+	if got := filepath.Base(sessionTurnEventsPath(42, 0)); got != "codex-events-42.jsonl" {
+		t.Fatalf("initial events path = %q", got)
+	}
+	if got := filepath.Base(sessionTurnEventsPath(42, 2)); got != "codex-events-42-retry-2.jsonl" {
+		t.Fatalf("retry events path = %q", got)
+	}
+	prompt := codexCapacityRetryPrompt(2, 3)
+	for _, expected := range []string{"automatic retry 2/3", "Do not restart work", "existing locale"} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("retry prompt misses %q: %q", expected, prompt)
+		}
 	}
 }
 

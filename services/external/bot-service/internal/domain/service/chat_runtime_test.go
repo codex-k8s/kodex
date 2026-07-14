@@ -239,6 +239,66 @@ func TestChatRunUsesRoleTemplateOnlyForFirstSessionTurn(t *testing.T) {
 	}
 }
 
+func TestChatRunRetriesFailedCapacityTurnInSavedSession(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		PromptTemplate:    "BOOTSTRAP TEMPLATE: {{.Task.Body}}",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      testLocalizer(t, texti18n.RussianLocale),
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	first := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner-user",
+		UserName:  "owner",
+		Message:   "Выполни задачу.",
+	})
+	if first.RunID == "" || len(store.sessionTurns) != 1 {
+		t.Fatalf("first result=%#v turns=%#v", first, store.sessionTurns)
+	}
+	sessionKey := runner.startedSessionKey
+	session := store.agentSessions[sessionKey]
+	session.Status = agentSessionStatusError
+	session.CodexSessionID = "codex-session-1"
+	store.agentSessions[sessionKey] = session
+	failedTurn := store.sessionTurns[0]
+	failedTurn.Status = agentSessionTurnFailed
+	store.sessionTurns[0] = failedTurn
+
+	retried, err := svc.RetryAgentTurn(context.Background(), AgentTurnRetryRequest{
+		Session:  session,
+		Turn:     failedTurn,
+		UserID:   "owner-user",
+		UserName: "owner",
+	})
+	if err != nil {
+		t.Fatalf("RetryAgentTurn() error = %v", err)
+	}
+	if retried.RunID == "" || len(store.sessionTurns) != 2 {
+		t.Fatalf("retry result=%#v turns=%#v", retried, store.sessionTurns)
+	}
+	retryPrompt := store.sessionTurns[1].Message
+	if !strings.Contains(retryPrompt, "Продолжи тот же turn") || strings.Contains(retryPrompt, "BOOTSTRAP TEMPLATE") || strings.Contains(retryPrompt, "Выполни задачу") {
+		t.Fatalf("retry prompt = %q", retryPrompt)
+	}
+}
+
 func TestChatRunQueuesFollowUpsForRunningThreadSessionWithoutRestart(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{
@@ -1444,6 +1504,46 @@ func TestChatRunRoutesHumanMentionOutsideLeadingLaunch(t *testing.T) {
 		t.Fatalf("session runs = %#v", runner.sessionRuns)
 	}
 	if runner.startedSessionKey != agentSessionKey(1, 2, agentSessionScopeThreadRole, "post-1") {
+		t.Fatalf("session key = %q", runner.startedSessionKey)
+	}
+}
+
+func TestChatRunRoutesHumanMentionToProjectRoleOutsideChatParticipants(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "docs", RoleType: "writer", OpenAIAccountName: "main", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "docs", MattermostUserID: "docs-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Control", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "post-docs",
+		RootPostID: "root-1",
+		UserID:     "owner-user",
+		UserName:   "owner",
+		Message:    "@docs continue the existing work",
+	})
+
+	if result.RunID == "" || result.Mode != "session" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].Role != "docs" {
+		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	if runner.startedSessionKey != agentSessionKey(1, 2, agentSessionScopeThreadRole, "root-1") {
 		t.Fatalf("session key = %q", runner.startedSessionKey)
 	}
 }
