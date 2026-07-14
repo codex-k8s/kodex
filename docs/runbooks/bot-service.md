@@ -53,7 +53,7 @@
 - `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST` - optional, registry host, через который kubelet тянет image; default `localhost:<host-port>` для single-server контура;
 - `MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST` - optional, registry host, в который Kaniko push'ит image изнутри кластера; default Kubernetes service DNS;
 - `MATTERCODEX_KANIKO_IMAGE`, `MATTERCODEX_KANIKO_CONTEXT_PVC`, `MATTERCODEX_KANIKO_CONTEXT_STORAGE_SIZE` - optional, параметры Kaniko executor и PVC build context;
-- `MATTERCODEX_KANIKO_CPU_REQUEST`, `MATTERCODEX_KANIKO_CPU_LIMIT`, `MATTERCODEX_KANIKO_MEMORY_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_LIMIT` - optional, ресурсы Kaniko Job;
+- `MATTERCODEX_KANIKO_CPU_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_LIMIT` - optional, ресурсы Kaniko Job; defaults `2000m`/`1Gi`/`4Gi`, CPU limit отсутствует;
 - `MATTERCODEX_KANIKO_JOB_TTL_SECONDS`, `MATTERCODEX_KANIKO_ACTIVE_DEADLINE_SECONDS` - optional, lifecycle limits Kaniko Job;
 - `MATTERCODEX_RUNTIME_ENABLED` - optional, включает Kubernetes runtime adapter;
 - `MATTERCODEX_RUNTIME_NAMESPACE` - optional, namespace для Job/PVC runtime-запусков;
@@ -105,6 +105,8 @@ Legacy strategy `MATTERCODEX_IMAGE_BUILD_STRATEGY=docker` оставлена т�
 Agent runner image содержит явный non-root user UID/GID `10001`. Runtime Job дополнительно задает pod/container `securityContext`: `runAsNonRoot`, `runAsUser`, `runAsGroup`, `fsGroup`, `seccompProfile: RuntimeDefault`, dropped capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`. Writable paths отдаются через volumes: `/workspace` для run PVC, `/codex-home` для device-code auth, `/home/matter-codex` для `gh`/npm/cache и `/tmp` для временных файлов.
 
 Runtime namespace получает `ResourceQuota` `matter-codex-runtime-quota` и `LimitRange` `matter-codex-runtime-container-defaults`. Quota ограничивает общее число pods, batch Jobs, PVC, суммарный requested storage и суммарные cpu/memory requests/limits. LimitRange задает cpu/memory defaults для containers без явных resources, чтобы quota admission не отклоняла agent Job.
+
+Полноценные agent session pod используют defaults из LimitRange. Короткие служебные `smoke`, Codex device-auth и auth-check Job задают собственные resources: requests `100m`/`128Mi`, memory limit `1Gi`, CPU limit отсутствует. Это не позволяет utility Job резервировать agent-sized `16Gi` и блокировать MCP-делегирование при заполненной runtime quota.
 
 Если новый session pod отклонен ResourceQuota или не размещается scheduler из-за нехватки ресурсов, bot-service автоматически удаляет самый старый idle session pod без queued/running turn и повторяет запуск. PVC и snapshot сессии сохраняются. Если безопасного кандидата нет, turn остается queued; активные agent pod механизм capacity reclaim не удаляет.
 

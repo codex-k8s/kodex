@@ -53,6 +53,9 @@ const (
 	runnerBinaryName             = "matter-codex-agent-runner"
 	runnerUID                    = int64(10001)
 	runnerGID                    = int64(10001)
+	runnerUtilityCPURequest      = "100m"
+	runnerUtilityMemoryRequest   = "128Mi"
+	runnerUtilityMemoryLimit     = "1Gi"
 	kubernetesAccessReadOnly     = "read-only"
 	kubernetesAccessClusterAdmin = "cluster-admin"
 	sessionQuotaRetryRetention   = time.Hour
@@ -1371,6 +1374,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 							Args:            []string{"smoke"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
+							Resources:       runnerUtilityResourceRequirements(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: runID},
 								{Name: "MATTERCODEX_AGENT_ROLE", Value: role},
@@ -1856,6 +1860,7 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 							Args:            []string{"codex-auth"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
+							Resources:       runnerUtilityResourceRequirements(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: accountName},
 								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: secretName},
@@ -1905,6 +1910,7 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 							Args:            []string{"codex-auth-secret-check"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
+							Resources:       runnerUtilityResourceRequirements(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: input.AccountName},
 								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: input.SecretName},
@@ -2533,6 +2539,18 @@ func runnerContainerSecurityContext() *corev1.SecurityContext {
 		AllowPrivilegeEscalation: boolPtr(false),
 		ReadOnlyRootFilesystem:   boolPtr(true),
 		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+	}
+}
+
+func runnerUtilityResourceRequirements() corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(runnerUtilityCPURequest),
+			corev1.ResourceMemory: resource.MustParse(runnerUtilityMemoryRequest),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: resource.MustParse(runnerUtilityMemoryLimit),
+		},
 	}
 }
 
