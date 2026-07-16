@@ -209,3 +209,23 @@ type AgentSessionTurn struct {
 	FinishedAt             time.Time
 	UpdatedAt              time.Time
 }
+
+type AgentDelegation struct {
+	ID               int64
+	ProjectID        int64
+	SourceSessionID  int64
+	SourceTurnID     int64
+	TargetChatID     int64
+	TargetRoleID     int64
+	TargetRootPostID string
+	TargetSessionID  int64
+	TargetTurnID     int64
+	TargetRunID      string
+	WorkItemKey      string
+	Title            string
+	Status           string
+	CallbackTurnID   int64
+	CallbackRunID    string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}

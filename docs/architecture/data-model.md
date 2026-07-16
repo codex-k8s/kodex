@@ -50,6 +50,7 @@ updated: 2026-07-16
 | --- | --- |
 | `AgentSession` | agent_id, provider_account_id, scope, status, archive_ref |
 | `Turn` | session_id, source, prompt, status, runtime_revision_id, sequence |
+| `AgentDelegation` | source session/turn, target room/thread/session/turn, role, work_item_key, status, callback turn |
 | `RuntimeRevision` | effective config manifest, hashes, image digest, created_at |
 | `RuntimeLease` | session_id, pod identity, heartbeat, expires_at |
 | `UsageObservation` | turn/session/account, limits/tokens/duration |

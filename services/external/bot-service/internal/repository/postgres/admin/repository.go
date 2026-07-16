@@ -746,6 +746,113 @@ func (repo *Repository) ListQueuedAgentSessionTurns(ctx context.Context, session
 	return items, nil
 }
 
+func (repo *Repository) CreateAgentDelegation(ctx context.Context, input adminrepo.CreateAgentDelegationInput) (entity.AgentDelegation, bool, error) {
+	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__insert.sql"),
+		input.ProjectID,
+		input.SourceSessionID,
+		input.SourceTurnID,
+		input.TargetChatID,
+		input.TargetRoleID,
+		input.WorkItemKey,
+		input.Title,
+	))
+	if err == nil {
+		return item, true, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return entity.AgentDelegation{}, false, fmt.Errorf("create agent delegation: %w", err)
+	}
+	item, err = repo.GetAgentDelegationBySourceKey(ctx, input.SourceSessionID, input.WorkItemKey)
+	if err != nil {
+		return entity.AgentDelegation{}, false, err
+	}
+	return item, false, nil
+}
+
+func (repo *Repository) GetAgentDelegationBySourceKey(ctx context.Context, sourceSessionID int64, workItemKey string) (entity.AgentDelegation, error) {
+	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__get_by_source_key.sql"), sourceSessionID, workItemKey))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentDelegation{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentDelegation{}, fmt.Errorf("get agent delegation by source key: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) GetAgentDelegationForCallback(ctx context.Context, targetSessionID int64) (entity.AgentDelegation, error) {
+	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__get_for_callback.sql"), targetSessionID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentDelegation{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentDelegation{}, fmt.Errorf("get agent delegation for callback: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) ListAgentDelegationsBySource(ctx context.Context, sourceSessionID int64, limit int) ([]entity.AgentDelegation, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	rows, err := repo.pool.Query(ctx, query("agent_delegations__list_by_source.sql"), sourceSessionID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list agent delegations by source: %w", err)
+	}
+	defer rows.Close()
+
+	var items []entity.AgentDelegation
+	for rows.Next() {
+		item, err := scanAgentDelegation(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan agent delegation: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent delegations: %w", err)
+	}
+	return items, nil
+}
+
+func (repo *Repository) SetAgentDelegationRoot(ctx context.Context, id int64, rootPostID string) (entity.AgentDelegation, error) {
+	return repo.updateAgentDelegation(ctx, "set root", "agent_delegations__set_root.sql", id, rootPostID)
+}
+
+func (repo *Repository) SetAgentDelegationTarget(ctx context.Context, id int64, targetSessionID int64, targetTurnID int64, targetRunID string) (entity.AgentDelegation, error) {
+	return repo.updateAgentDelegation(ctx, "set target", "agent_delegations__set_target.sql", id, targetSessionID, targetTurnID, targetRunID)
+}
+
+func (repo *Repository) SetAgentDelegationFailed(ctx context.Context, id int64) (entity.AgentDelegation, error) {
+	return repo.updateAgentDelegation(ctx, "set failed", "agent_delegations__set_failed.sql", id)
+}
+
+func (repo *Repository) SetAgentDelegationCallback(ctx context.Context, id int64, callbackTurnID int64, callbackRunID string) (entity.AgentDelegation, error) {
+	item, err := repo.updateAgentDelegation(ctx, "set callback", "agent_delegations__set_callback.sql", id, callbackTurnID, callbackRunID)
+	if !errors.Is(err, adminrepo.ErrNotFound) {
+		return item, err
+	}
+	item, err = scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__get.sql"), id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentDelegation{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentDelegation{}, fmt.Errorf("get existing agent delegation callback: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) updateAgentDelegation(ctx context.Context, action string, queryName string, args ...any) (entity.AgentDelegation, error) {
+	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query(queryName), args...))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentDelegation{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentDelegation{}, fmt.Errorf("%s agent delegation: %w", action, err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) CreateAgentFlow(ctx context.Context, input adminrepo.CreateAgentFlowInput) (entity.AgentFlow, bool, error) {
 	row := repo.pool.QueryRow(ctx, query("agent_flows__insert.sql"),
 		input.FlowID,
@@ -1183,6 +1290,32 @@ func scanAgentSessionTurn(row pgx.Row) (entity.AgentSessionTurn, error) {
 		&item.UpdatedAt,
 	); err != nil {
 		return entity.AgentSessionTurn{}, err
+	}
+	return item, nil
+}
+
+func scanAgentDelegation(row pgx.Row) (entity.AgentDelegation, error) {
+	var item entity.AgentDelegation
+	if err := row.Scan(
+		&item.ID,
+		&item.ProjectID,
+		&item.SourceSessionID,
+		&item.SourceTurnID,
+		&item.TargetChatID,
+		&item.TargetRoleID,
+		&item.TargetRootPostID,
+		&item.TargetSessionID,
+		&item.TargetTurnID,
+		&item.TargetRunID,
+		&item.WorkItemKey,
+		&item.Title,
+		&item.Status,
+		&item.CallbackTurnID,
+		&item.CallbackRunID,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return entity.AgentDelegation{}, err
 	}
 	return item, nil
 }

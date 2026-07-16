@@ -53,6 +53,7 @@ type AgentSessionServiceConfig struct {
 	RoleBotManager     MattermostRoleBotManager
 	TurnDispatcher     AgentTurnDispatcher
 	MenuActionURL      string
+	MattermostSiteURL  string
 	StorageReady       bool
 	RuntimeReady       bool
 }
