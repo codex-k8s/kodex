@@ -1,28 +1,28 @@
 ---
 id: ARCH-MC-001
-title: Архитектурный baseline MatterCodex
+title: Архитектурная основа MatterCodex
 type: architecture-index
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Архитектурный baseline MatterCodex
+# Архитектурная основа MatterCodex
 
-Архитектура MatterCodex строится как provider-neutral control plane для ИИ-сотрудников с Mattermost interaction surface и Kubernetes runtime.
+MatterCodex строится как независимая от поставщика моделей платформа управления ИИ-сотрудниками. Mattermost предоставляет интерфейс взаимодействия, а Kubernetes — среду выполнения.
 
 ## Основные принципы
 
-- Эволюция действующего инстанса без big-bang rewrite.
-- Сначала строгие модули и контракты, затем физическое выделение deployables.
-- PostgreSQL является источником истины для metadata, desired state, очередей и audit.
-- S3-compatible storage является источником истины для artifacts и session archives.
-- Kubernetes является runtime substrate, а не источником бизнес-состояния.
-- Mattermost хранит разговорное представление, но не заменяет ProcessRun, Turn и AuditEvent.
-- AI runtime, GitHub, Kubernetes и внешние бизнес-системы подключаются через provider/integration contracts.
-- Любая внешняя mutation имеет idempotency, capability grant, risk policy и audit.
-- Код не полагается на shell как на orchestration layer.
+- Действующий экземпляр развивается поэтапно, без одномоментного переписывания.
+- Сначала вводятся строгие модули и контракты, затем компоненты физически выделяются в отдельные процессы.
+- PostgreSQL является источником истины для метаданных, желаемого состояния, очередей и аудита.
+- S3-совместимое хранилище является источником истины для файлов и архивов сессий.
+- Kubernetes исполняет рабочую нагрузку, но не хранит бизнес-состояние.
+- Mattermost хранит представление диалогов, но не заменяет `ProcessRun`, `Turn` и `AuditEvent`.
+- Среда выполнения ИИ, GitHub, Kubernetes и внешние бизнес-системы подключаются через контракты поставщиков и интеграций.
+- Любое внешнее изменение имеет ключ идемпотентности, явно выданное право, политику риска и запись аудита.
+- Shell не используется как слой оркестрации прикладной логики.
 
 ## Документы раздела
 
@@ -30,26 +30,26 @@ updated: 2026-07-16
 | --- | --- | --- |
 | `ARCH-MC-001` | `docs/architecture/README.md` | Индекс и принципы. |
 | `ARCH-MC-002` | `docs/architecture/high-level-architecture.md` | Компоненты и потоки. |
-| `ARCH-MC-003` | `docs/architecture/domain-map.md` | Bounded contexts и зависимости. |
-| `ARCH-MC-004` | `docs/architecture/service-boundaries.md` | Границы deployables и переход. |
-| `ARCH-MC-005` | `docs/architecture/integration-map.md` | Внешние системы и integration modes. |
+| `ARCH-MC-003` | `docs/architecture/domain-map.md` | Доменные контексты и зависимости. |
+| `ARCH-MC-004` | `docs/architecture/service-boundaries.md` | Границы компонентов и переход. |
+| `ARCH-MC-005` | `docs/architecture/integration-map.md` | Внешние системы и режимы интеграций. |
 | `ARCH-MC-006` | `docs/architecture/data-model.md` | Сущности, владение данными и инварианты. |
-| `ARCH-MC-007` | `docs/architecture/runtime-and-sessions.md` | Session/turn runtime и account affinity. |
+| `ARCH-MC-007` | `docs/architecture/runtime-and-sessions.md` | Сессии, ходы и привязка учетной записи. |
 | `ARCH-MC-008` | `docs/architecture/attachments-and-artifacts.md` | Входные и выходные файлы. |
-| `ARCH-MC-009` | `docs/architecture/automations-and-playbooks.md` | Schedules, processes и callbacks. |
+| `ARCH-MC-009` | `docs/architecture/automations-and-playbooks.md` | Расписания, процессы и обратные вызовы. |
 
-## Технологический baseline
+## Технологическая основа
 
-- Go для backend, controllers, gateways и runner.
-- Vue 3 + TypeScript для Control Center.
-- PostgreSQL для transactional state.
-- S3-compatible object storage для blobs.
-- Kubernetes для platform и agent workloads.
-- Mattermost REST/WebSocket APIs и официальный Go model/client.
-- OpenAPI для внешних HTTP contracts.
-- AsyncAPI для durable events.
-- Protobuf/gRPC только для оправданных внутренних high-throughput contracts.
-- OpenTelemetry, Prometheus и Grafana для observability.
-- BuildKit для role image builds.
+- Go для серверных приложений, контроллеров, шлюзов и запуска агента.
+- Vue 3 и TypeScript для центра управления.
+- PostgreSQL для транзакционного состояния.
+- S3-совместимое объектное хранилище для двоичных данных.
+- Kubernetes для платформы и рабочих нагрузок агентов.
+- REST и WebSocket API Mattermost и официальный клиент Go.
+- OpenAPI для внешних HTTP-контрактов.
+- AsyncAPI для долговечных событий.
+- Protobuf/gRPC только для обоснованных внутренних контрактов с высокой пропускной способностью.
+- OpenTelemetry, Prometheus и Grafana для наблюдаемости.
+- BuildKit для сборки образов ролей.
 
-Конкретные версии зависимостей фиксируются в dependency catalog и lock files, а не в архитектурных документах.
+Конкретные версии зависимостей фиксируются в каталоге зависимостей и lock-файлах, а не в архитектурных документах.

@@ -1,65 +1,65 @@
 ---
 id: DOM-MC-004
-title: Agents & Instructions
+title: Агенты и инструкции
 type: domain
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Agents & Instructions
+# Агенты и инструкции
 
 ## Назначение
 
-Описывает reusable roles, конкретных ИИ-сотрудников, их assignments, prompts и versioned instruction bundles.
+Описывает переиспользуемые роли, конкретных ИИ-сотрудников, их назначения, промпты и версионируемые наборы инструкций.
 
 ## В границах
 
-- RoleDefinition catalog;
-- Agent identity и presentation;
-- workspace/room assignments;
-- prompt template и locale policy;
-- InstructionSet и versions;
-- effective instruction composition;
-- improver proposals.
+- каталог `RoleDefinition`;
+- учетная запись и представление агента;
+- назначения в рабочие области и комнаты;
+- шаблон промпта и политика локали;
+- `InstructionSet` и его версии;
+- сборка итоговых инструкций;
+- предложения от роли `improver`.
 
-## Instruction sources
+## Источники инструкций
 
-- Git repository (`AGENTS.md` и связанные documents);
-- UI-managed Markdown;
-- GitOps-managed catalog;
-- uploaded artifact bundle;
-- integration-provided read-only knowledge.
+- Git-репозиторий (`AGENTS.md` и связанные документы);
+- Markdown под управлением интерфейса;
+- каталог под управлением GitOps;
+- загруженный набор файлов;
+- знания только для чтения, полученные через интеграцию.
 
-Runtime materializer создает root `AGENTS.md` и связанные файлы независимо от наличия repository checkout.
+Материализатор среды выполнения создает корневой `AGENTS.md` и связанные файлы независимо от наличия checkout репозитория.
 
-## Prompt composition
+## Сборка промпта
 
 Порядок контекста:
 
-1. platform safety/runtime instruction;
-2. RoleDefinition template, если задан;
-3. locale и communication requirements;
-4. InstructionSet manifest;
-5. Workspace/Room context;
-6. integrations/tools reference;
-7. attachments manifest;
-8. user/schedule/delegation instruction.
+1. системные требования безопасности и среды выполнения;
+2. шаблон `RoleDefinition`, если задан;
+3. требования локали и коммуникации;
+4. манифест `InstructionSet`;
+5. контекст `Workspace` и `Room`;
+6. справка по интеграциям и инструментам;
+7. манифест вложений;
+8. пользовательская инструкция, расписание или делегирование.
 
-Пустой role template является валидным raw instruction mode.
+Пустой шаблон роли является допустимым режимом прямой пользовательской инструкции.
 
-Если `AGENTS.md` не задает язык, выбранная user/workspace locale применяется к ответам, PR/issues/comments, документации и code comments, где это уместно.
+Если `AGENTS.md` не задает язык, выбранная локаль пользователя или рабочей области применяется к ответам, PR, Issues, комментариям, документации и комментариям в коде, где это уместно.
 
 ## Improver
 
-Improver не изменяет canonical instructions напрямую. Он создает version proposal/PR с evidence categories, но без secret/raw private content. Proposal проходит review и human gate.
+Роль `improver` не изменяет основные инструкции напрямую. Она создает предложение новой версии или PR с категориями подтверждающих примеров, но без секретов и исходного приватного содержимого. Предложение проходит рецензирование и ручную приемку.
 
-## Acceptance
+## Критерии приемки
 
-- Один RoleDefinition переиспользуется несколькими Agents.
-- Каждый Agent имеет отдельную bot identity.
-- Instructions работают без Git repository.
-- Измененная version применяется со следующего turn.
-- Prompt preview показывает sources и порядок без secret values.
-- Owner может откатить instruction version.
+- Один `RoleDefinition` переиспользуется несколькими агентами.
+- Каждый агент имеет отдельную учетную запись бота.
+- Инструкции работают без Git-репозитория.
+- Измененная версия применяется со следующего хода.
+- Предпросмотр промпта показывает источники и порядок без значений секретов.
+- Владелец может откатить версию инструкций.

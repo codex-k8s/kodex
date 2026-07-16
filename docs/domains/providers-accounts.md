@@ -1,56 +1,56 @@
 ---
 id: DOM-MC-005
-title: Providers & Accounts
+title: Поставщики и учетные записи
 type: domain
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Providers & Accounts
+# Поставщики и учетные записи
 
 ## Назначение
 
-Абстрагирует AI runtime providers, authentication, account pools, model capabilities и usage/limit observations.
+Абстрагирует поставщиков среды выполнения ИИ, авторизацию, пулы учетных записей, возможности моделей и наблюдения за потреблением лимитов.
 
-OpenAI/Codex device-code account является первым provider adapter, но универсальные domains не используют `auth.json` и `config.toml` как свои модели.
+Учетная запись OpenAI/Codex с авторизацией по device code является первым адаптером поставщика, но универсальные домены не используют `auth.json` и `config.toml` как свои модели.
 
 ## В границах
 
-- ProviderDefinition/capabilities;
-- account registration/authorization/revocation;
-- safe account labels/status;
-- account pools и selection policies;
-- model/runtime capability validation;
-- usage observations и freshness;
-- provider-specific materialization adapter.
+- `ProviderDefinition` и возможности;
+- регистрация, авторизация и отзыв учетной записи;
+- безопасные названия и состояния учетных записей;
+- пулы учетных записей и политики выбора;
+- проверка возможностей модели и среды выполнения;
+- наблюдения за потреблением и их актуальность;
+- адаптер материализации конкретного поставщика.
 
-## Account selection
+## Выбор учетной записи
 
-Новая session выбирает account:
+Новая сессия выбирает учетную запись:
 
 - явно пользователем;
-- fixed agent binding;
-- из pool по `least_used`, `weighted` либо будущей policy.
+- из фиксированной привязки агента;
+- из пула по `least_used`, `weighted` либо будущей политике.
 
-Кандидат должен быть enabled, authorized, разрешен Agent/Workspace, поддерживать model и иметь достаточно свежий health/limit status.
+Кандидат должен быть включен, авторизован, разрешен для агента и рабочей области, поддерживать модель и иметь достаточно свежие сведения о работоспособности и лимитах.
 
-## Affinity
+## Привязка сессии
 
-После первого turn session account immutable. Account нельзя подменить при resume. Reauthorization того же logical account обновляет auth revision. Перенос на другой account создает новую session и явный context handoff.
+После первого хода учетная запись сессии неизменяема. Ее нельзя подменить при возобновлении. Повторная авторизация той же логической учетной записи обновляет ревизию авторизации. Перенос на другую учетную запись создает новую сессию и явную передачу контекста.
 
 ## Безопасность
 
-- Raw auth хранится в secret backend.
-- UI показывает label, provider identity, masked metadata, status и observation time.
-- Token/account values отсутствуют в logs и prompt.
-- Authorization diagnostics не трактуют временную provider error как expired auth без подтвержденного признака.
+- Исходные данные авторизации хранятся в хранилище секретов.
+- Интерфейс показывает название, учетную запись поставщика, маскированные метаданные, состояние и время наблюдения.
+- Значения токенов и учетных записей отсутствуют в логах и промпте.
+- Диагностика авторизации не трактует временную ошибку поставщика как истекшую авторизацию без подтвержденного признака.
 
-## Acceptance
+## Критерии приемки
 
-- Несколько accounts работают одновременно.
-- Новые sessions балансируются по policy.
-- Existing session всегда возобновляется исходным account.
-- Expired account дает actionable reauthorization UI.
-- Stale limits помечаются как stale и не выдаются за актуальные.
+- Несколько учетных записей работают одновременно.
+- Новые сессии балансируются по политике.
+- Существующая сессия всегда возобновляется исходной учетной записью.
+- Истекшая авторизация дает понятное действие повторной авторизации в интерфейсе.
+- Устаревшие сведения о лимитах явно помечаются и не выдаются за актуальные.

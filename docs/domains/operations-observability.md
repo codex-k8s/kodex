@@ -1,52 +1,52 @@
 ---
 id: DOM-MC-011
-title: Operations & Observability
+title: Эксплуатация и наблюдаемость
 type: domain
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Operations & Observability
+# Эксплуатация и наблюдаемость
 
 ## Назначение
 
-Предоставляет operational read models, telemetry correlation, capacity state, incidents, backup evidence и безопасную диагностику.
+Предоставляет эксплуатационные проекции чтения, сквозную связь телеметрии, состояние ресурсов, сведения об инцидентах, доказательства резервного копирования и безопасную диагностику.
 
-Не принимает бизнес-решения за Runtime/Integrations и не использует Grafana как source of truth для scheduler.
+Не принимает бизнес-решения за домены среды выполнения и интеграций и не использует Grafana как источник истины для планировщика.
 
-## Signals
+## Сигналы
 
-Metrics:
+Метрики:
 
-- queue depth/age;
-- turn latency/duration/outcome/retries;
-- session pods by state;
-- pending/OOM/evictions/capacity;
-- provider auth/limits freshness;
-- integration/approval latency and failures;
-- artifact ingestion/delivery/scan;
-- image build/cache/scan;
-- schedule delay/misfire/duplicate prevention;
-- backup age/restore drill status.
+- глубина и возраст очереди;
+- задержка, длительность, исход и повторы хода;
+- поды сессий по состояниям;
+- ожидание запуска, OOM, вытеснения и доступные ресурсы;
+- актуальность авторизации и лимитов поставщика модели;
+- задержка и ошибки интеграций и согласований;
+- прием, доставка и проверка файлов;
+- сборка, кэширование и проверка образов;
+- задержка расписания, пропущенные запуски и предотвращение дублей;
+- возраст резервной копии и результат учебного восстановления.
 
-Logs имеют organization/workspace/session/turn/process/correlation IDs и не содержат secret/raw sensitive content.
+Логи содержат идентификаторы организации, рабочей области, сессии, хода, процесса и корреляции и не содержат секреты или необработанные чувствительные данные.
 
-Traces связывают Mattermost event, command, queue, pod, provider, MCP invocation и delivery.
+Трассировки связывают событие Mattermost, команду, очередь, pod, поставщика модели, MCP-вызов и доставку.
 
-## Operational status
+## Эксплуатационное состояние
 
-Control Center показывает user-safe и operator detail уровни. Mattermost error card содержит краткую причину и next action; внутренний stacktrace остается в observability backend.
+Control Center показывает безопасный пользовательский и подробный операторский уровни. Карточка ошибки Mattermost содержит краткую причину и следующее действие; внутренняя трассировка стека остается в системе наблюдаемости.
 
 ## Capacity control
 
-Runtime использует Kubernetes API/metrics для текущего admission, а Prometheus — для трендов, alerts и планирования. Idle eviction не затрагивает active/queued sessions.
+Контроллер среды выполнения использует Kubernetes API и метрики для допуска новой нагрузки, а Prometheus - для трендов, предупреждений и планирования. Вытеснение простаивающих pod не затрагивает активные сессии и очередь.
 
 ## Acceptance
 
-- Один correlation ID проходит end-to-end.
-- Alert содержит runbook link.
-- Owner видит queue/capacity/account/backup status без kubectl.
-- OOM/pending/transient provider error классифицируются раздельно.
-- Telemetry pipeline сам наблюдаем и ограничивает memory/backpressure.
+- Один идентификатор корреляции проходит через весь процесс.
+- Предупреждение содержит ссылку на пошаговую эксплуатационную инструкцию.
+- Владелец видит состояние очереди, ресурсов, учетных записей и резервных копий без `kubectl`.
+- OOM, ожидание запуска и временная ошибка поставщика классифицируются раздельно.
+- Конвейер телеметрии сам наблюдаем и ограничивает потребление памяти и обратное давление.

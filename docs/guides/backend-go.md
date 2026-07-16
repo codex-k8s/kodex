@@ -1,61 +1,61 @@
 ---
 id: GUIDE-MC-003
-title: Backend на Go
+title: Серверная разработка на Go
 type: guide
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Backend на Go
+# Серверная разработка на Go
 
 ## Архитектура
 
-- Entrypoint и transport остаются тонкими.
-- Use case имеет один явный входной command/query и typed result.
-- Domain rules не зависят от SDK external systems.
-- PostgreSQL repositories разделены по bounded context.
-- Long-running loops моделируются controller/scheduler/worker, а не goroutine из HTTP composition root без leadership.
-- External side effects используют idempotency keys и retries с классификацией ошибок.
+- Точка входа и транспорт остаются тонкими.
+- Прикладной сценарий имеет одну явную входную команду или запрос и типизированный результат.
+- Доменные правила не зависят от SDK внешних систем.
+- Репозитории PostgreSQL разделены по доменным контекстам.
+- Долгоживущие циклы моделируются контроллером, планировщиком или обработчиком, а не goroutine из корня сборки HTTP-приложения без выбора лидера.
+- Внешние побочные эффекты используют ключи идемпотентности и повторы с классификацией ошибок.
 
 ## Ошибки
 
-- Domain errors typed и не содержат secret/raw payload.
-- Transport переводит errors в стабильный contract.
-- Retryability определяется typed category, а не поиском произвольной строки, кроме изолированного provider adapter с тестами.
-- `context.Canceled` и deadline обрабатываются отдельно от business failure.
+- Доменные ошибки типизированы и не содержат секретов или исходной полезной нагрузки.
+- Транспорт переводит ошибки в стабильный контракт.
+- Возможность повтора определяется типизированной категорией, а не поиском произвольной строки. Исключение — изолированный адаптер поставщика с тестами.
+- `context.Canceled` и истечение срока обрабатываются отдельно от бизнес-ошибки.
 
 ## Concurrency
 
-- Turn/session invariants обеспечиваются database state/locks, а не только in-memory mutex.
-- Workers используют bounded concurrency.
-- Background tasks имеют graceful shutdown, lease/heartbeat и recovery.
-- Clock инъецируется в schedule/TTL tests.
+- Инварианты хода и сессии обеспечиваются состоянием и блокировками БД, а не только mutex в памяти.
+- Обработчики используют ограниченную параллельность.
+- Фоновые задачи имеют корректное завершение, аренду, пульс и восстановление.
+- Часы внедряются в тесты расписаний и TTL.
 
-## External systems
+## Внешние системы
 
-- Используется официальный SDK/library, если он поддерживается и не ломает contract.
-- HTTP client имеет timeout, connection limits, telemetry и safe error body limit.
-- Kubernetes reconciliation строится на `controller-runtime`/client-go typed APIs.
-- Mattermost использует upstream models/client.
+- Используется официальный SDK или библиотека, если она поддерживается и не ломает контракт.
+- HTTP-клиент имеет тайм-аут, ограничения соединений, телеметрию и безопасное ограничение тела ошибки.
+- Сверка Kubernetes строится на типизированных API `controller-runtime` и client-go.
+- Mattermost использует официальные модели и клиент.
 - MCP использует официальный Go SDK.
 
-## Data
+## Данные
 
-- Migrations выполняются goose и принадлежат service/domain.
-- SQL queries typed; JSONB используется для versioned flexible config, а не для сокрытия неизвестной схемы.
-- Cross-domain SQL запрещен как бизнес-контракт.
-- Transactional outbox создается в business transaction.
+- Миграции выполняются goose и принадлежат сервису и домену.
+- SQL-запросы типизированы; JSONB используется для версионируемой гибкой конфигурации, а не для сокрытия неизвестной схемы.
+- Междоменный SQL запрещен как бизнес-контракт.
+- Транзакционный исходящий журнал заполняется в бизнес-транзакции.
 
 ## Тесты
 
-- Domain unit tests;
-- application tests с fakes/real PostgreSQL по риску;
-- repository integration tests;
-- contract tests adapters;
-- race-sensitive tests с `-race` на релевантных packages;
-- characterization tests до refactoring legacy behavior;
-- E2E для Mattermost/runtime/integration gates.
+- модульные тесты домена;
+- тесты приложения с подменами или настоящим PostgreSQL в зависимости от риска;
+- интеграционные тесты репозиториев;
+- контрактные тесты адаптеров;
+- чувствительные к гонкам тесты с `-race` для затронутых пакетов;
+- характеристические тесты до переработки унаследованного поведения;
+- сквозные тесты Mattermost, среды выполнения и интеграций.
 
 Подробные правила: `docs/design-guidelines/go/**`.

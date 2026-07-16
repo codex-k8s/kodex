@@ -1,32 +1,32 @@
 ---
 id: ARCH-MC-008
-title: Вложения и artifacts
+title: Вложения и файлы
 type: architecture
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Вложения и artifacts
+# Вложения и файлы
 
 ## Источник истины
 
-S3-compatible storage хранит canonical object. Mattermost содержит пользовательскую копию или delivery reference. PostgreSQL хранит metadata, bindings, status и retention.
+S3-совместимое хранилище содержит основной объект. Mattermost содержит пользовательскую копию или ссылку доставки. PostgreSQL хранит метаданные, привязки, состояние и срок хранения.
 
-## Inbound pipeline
+## Прием входного файла
 
-1. Interaction Gateway получает post и `file_ids`.
-2. Metadata проверяется до скачивания.
-3. Content скачивается stream-ом с ограничением размера.
-4. Вычисляется SHA-256, определяется фактический media type.
-5. Выполняются policy и malware checks.
-6. Object сохраняется по непрогнозируемому storage key.
-7. Создаются ArtifactVersion и MessageArtifactBinding.
-8. Runtime materializer размещает файл read-only в session inbox.
-9. Turn prompt получает manifest, но не полный content.
+1. Шлюз взаимодействия получает сообщение и `file_ids`.
+2. Метаданные проверяются до скачивания.
+3. Содержимое скачивается потоком с ограничением размера.
+4. Вычисляется SHA-256 и определяется фактический media type.
+5. Выполняются проверки политик и вредоносного содержимого.
+6. Объект сохраняется по непрогнозируемому ключу хранилища.
+7. Создаются `ArtifactVersion` и `MessageArtifactBinding`.
+8. Материализатор среды выполнения размещает файл только для чтения во входном каталоге сессии.
+9. Промпт хода получает манифест, но не полное содержимое.
 
-## Workspace paths
+## Пути рабочей области
 
 ```text
 /workspace/.matter-codex/
@@ -36,49 +36,49 @@ S3-compatible storage хранит canonical object. Mattermost содержит
   state/
 ```
 
-Original filename хранится отдельно. Safe name не допускает absolute path, `..`, control characters и symlink traversal. Архивы автоматически не распаковываются.
+Исходное имя файла хранится отдельно. Безопасное имя не допускает абсолютный путь, `..`, управляющие символы и переход по символическим ссылкам. Архивы автоматически не распаковываются.
 
-## Prompt manifest
+## Манифест промпта
 
 Для каждого файла передаются:
 
-- original name;
-- local path;
-- media type;
-- size;
-- checksum;
-- source type/post;
+- исходное имя;
+- локальный путь;
+- тип содержимого;
+- размер;
+- контрольная сумма;
+- тип источника и сообщение;
 - краткое пользовательское описание, если задано.
 
-При resume в новый prompt входят только новые attachments; ранее materialized artifacts остаются доступны по session manifest.
+При возобновлении в новый промпт входят только новые вложения; ранее материализованные файлы остаются доступны по манифесту сессии.
 
-## Outbound pipeline
+## Публикация исходящего файла
 
-Agent пишет файл в `MATTERCODEX_OUTPUT_DIR` и вызывает локальный MCP/runtime tool `publish_artifact`.
+Агент пишет файл в `MATTERCODEX_OUTPUT_DIR` и вызывает локальный инструмент MCP `publish_artifact`.
 
-Tool:
+Инструмент:
 
-1. canonicalize path и проверяет, что он внутри outbox текущего turn;
-2. запрещает symlink и special file;
-3. проверяет size/media/scan policy;
-4. загружает canonical object в S3;
-5. создает ArtifactVersion;
-6. передает delivery command Interaction Gateway;
-7. Gateway загружает файл в Mattermost от bot identity агента и отвечает в исходный thread;
-8. post получает internal notrigger property.
+1. канонизирует путь и проверяет, что он внутри исходящего каталога текущего хода;
+2. запрещает символические ссылки и специальные файлы;
+3. проверяет размер, тип содержимого и политику проверки;
+4. загружает основной объект в S3;
+5. создает `ArtifactVersion`;
+6. передает команду доставки шлюзу взаимодействия;
+7. шлюз загружает файл в Mattermost от учетной записи бота агента и отвечает в исходном обсуждении;
+8. сообщение получает внутренний признак `notrigger`.
 
-Если Mattermost limit меньше файла, Gateway публикует scoped expiring download link и metadata. Artifact не теряется при временной ошибке доставки.
+Если лимит Mattermost меньше файла, шлюз публикует ограниченную по области и времени ссылку скачивания и метаданные. Файл не теряется при временной ошибке доставки.
 
 ## Изоляция и безопасность
 
 - Agent не получает Mattermost token и S3 master credential.
-- Runtime tool не публикует `/etc`, secret mounts и файлы другой session.
-- Storage keys разделены organization/workspace/session prefixes и проверяются authorization layer.
+- Инструмент среды выполнения не публикует `/etc`, подключенные секреты и файлы другой сессии.
+- Ключи хранилища разделены префиксами организации, рабочей области и сессии и проверяются слоем авторизации.
 - Sensitive filenames маскируются в logs/audit при необходимости.
 - Scan state: `pending`, `clean`, `quarantined`, `failed`.
-- Quarantined artifact не materialize-ится и не доставляется.
-- Retention и legal hold задаются policy, а не временем жизни pod/PVC.
+- Файл в карантине не материализуется и не доставляется.
+- Срок хранения и юридическая блокировка удаления задаются политикой, а не временем жизни pod или PVC.
 
 ## Backup consistency
 
-Restore считается успешным, если восстановлены PostgreSQL metadata и соответствующие S3 object versions. Backup run сохраняет marker/correlation для проверки согласованности.
+Восстановление считается успешным, если восстановлены метаданные PostgreSQL и соответствующие версии объектов S3. Запуск резервного копирования сохраняет маркер и идентификатор корреляции для проверки согласованности.

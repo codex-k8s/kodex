@@ -1,59 +1,59 @@
 ---
 id: DOM-MC-002
-title: Identity & Access
+title: Идентификация и доступ
 type: domain
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Identity & Access
+# Идентификация и доступ
 
 ## Назначение
 
-Владеет Organization, user identity mapping, memberships, platform roles и policy decisions. Обеспечивает изоляцию даже при baseline «одна Organization на инсталляцию».
+Владеет `Organization`, сопоставлением учетных записей пользователей, членством, ролями платформы и решениями политик. Обеспечивает изоляцию даже в первом профиле «одна организация на установку».
 
 ## В границах
 
-- OIDC identity и mapping Mattermost user;
-- organization membership;
-- роли owner/admin/operator/auditor/member;
-- authorization context для API/MCP;
-- service/session identities;
-- revocation и audit authorization decisions.
+- идентификация OIDC и сопоставление пользователя Mattermost;
+- членство в организации;
+- роли `owner`, `admin`, `operator`, `auditor`, `member`;
+- контекст авторизации для API и MCP;
+- служебные учетные записи и учетные записи сессий;
+- отзыв доступа и аудит решений авторизации.
 
-Не хранит OpenAI/GitHub/API credentials и не управляет Mattermost password/session.
+Не хранит учетные данные OpenAI, GitHub и API и не управляет паролями или сессиями Mattermost.
 
 ## Инварианты
 
-- Каждый бизнес-объект принадлежит Organization либо является system catalog object.
-- Только owner может назначать platform administrator.
-- Session token имеет organization, agent/session scope, expiration и capabilities.
-- Disabled subject не создает новые actions; уже принятые dangerous approvals пересматриваются policy.
+- Каждый бизнес-объект принадлежит `Organization` либо является объектом системного каталога.
+- Только владелец может назначать администратора платформы.
+- Токен сессии содержит организацию, область агента и сессии, срок действия и возможности.
+- Отключенный субъект не создает новые действия; уже согласованные опасные действия повторно проверяются политикой.
 
 ## Интерфейсы
 
-Commands: create organization, invite/map member, change role, disable subject.
+Команды: создать организацию, пригласить или сопоставить участника, изменить роль, отключить субъекта.
 
-Queries: current actor, memberships, effective platform permissions.
+Запросы: текущий субъект, членство, итоговые права платформы.
 
-Events: `OrganizationCreated`, `MembershipChanged`, `SubjectDisabled`, `PolicyChanged`.
+События: `OrganizationCreated`, `MembershipChanged`, `SubjectDisabled`, `PolicyChanged`.
 
-## Observability
+## Наблюдаемость
 
-- denied actions по reason;
-- invalid/expired session identities;
-- administrative role changes;
-- OIDC/Mattermost mapping failures.
+- отклоненные действия с указанием причины;
+- недействительные или истекшие учетные записи сессий;
+- изменения административных ролей;
+- ошибки сопоставления OIDC и Mattermost.
 
-## Acceptance
+## Критерии приемки
 
-- API и MCP отвергают cross-organization IDs.
-- UI не показывает недоступные entities.
-- Audit содержит actor и policy result без token.
-- Две stateless replicas принимают одинаковые authorization decisions.
+- API и MCP отвергают идентификаторы другой организации.
+- Интерфейс не показывает недоступные сущности.
+- Аудит содержит инициатора и результат политики без токена.
+- Две реплики без локального состояния принимают одинаковые решения авторизации.
 
 ## Открытое решение
 
-Полноценный shared multi-tenant SaaS остается за пределами первого production profile; schema и contracts не должны блокировать его позже.
+Полноценный общий многоарендный SaaS остается за пределами первого промышленного профиля; схема и контракты не должны блокировать его последующее появление.

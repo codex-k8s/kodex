@@ -1,55 +1,55 @@
 ---
 id: DOM-MC-009
-title: Automations & Processes
+title: Автоматизации и процессы
 type: domain
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Automations & Processes
+# Автоматизации и процессы
 
 ## Назначение
 
-Владеет Playbook, ProcessRun, child graph, callbacks, human gates, AutomationSchedule и ScheduledRun.
+Владеет `Playbook`, `ProcessRun`, графом дочерних запусков, обратными вызовами, ручной приемкой, `AutomationSchedule` и `ScheduledRun`.
 
-## Schedule semantics
+## Правила расписания
 
-- Timezone обязательна и хранится как IANA name.
-- UI предлагает presets, cron доступен advanced user.
-- `coalesce` является default concurrency policy.
-- `run_once` является default misfire policy.
-- `on_action_or_failure` является default notification policy.
-- `Run now` создает отдельное occurrence и не сдвигает regular next run.
+- Часовой пояс обязателен и хранится как имя IANA.
+- Интерфейс предлагает готовые варианты; cron доступен в расширенных настройках.
+- `coalesce` является политикой параллельности по умолчанию.
+- `run_once` является политикой пропущенного запуска по умолчанию.
+- `on_action_or_failure` является политикой уведомлений по умолчанию.
+- «Запустить сейчас» создает отдельный экземпляр и не сдвигает следующий плановый запуск.
 
-## Scheduled result
+## Результат запуска по расписанию
 
-Outcome: `no_action`, `action_taken`, `requires_human`, `failed`.
+Результат: `no_action`, `action_taken`, `requires_human`, `failed`.
 
-`no_action` может не создавать Mattermost post. `requires_human` всегда создает доступный human gate. History и audit сохраняются для всех outcomes.
+`no_action` может не создавать сообщение Mattermost. `requires_human` всегда создает доступную ручную приемку. История и аудит сохраняются для всех результатов.
 
-## Process orchestration
+## Оркестрация процесса
 
-- Coordinator запускает child agents только через MCP.
-- Child run имеет parent, purpose, input, completion contract и callback target.
-- Callback durable и идемпотентен.
-- Parent не считается завершенным, пока обязательные children/gates не завершены.
-- Failure policy определяет retry, replace, skip либо human escalation.
+- Менеджер является координатором процесса и запускает дочерних агентов только через MCP.
+- Дочерний запуск содержит родителя, назначение, входные данные, контракт завершения и цель обратного вызова.
+- Обратный вызов долговечен, идемпотентен и всегда возвращается менеджеру с исходным инициатором и назначением работы.
+- Родительский процесс не считается завершенным, пока обязательные дочерние запуски и ручные проверки не завершены.
+- Политика ошибки определяет повтор, замену исполнителя, пропуск либо передачу человеку.
 
-## Human-gate lifecycle
+## Жизненный цикл ручной приемки
 
-`draft result -> review cycles -> manager ready -> owner changes/OK -> final review -> owner OK -> publish/merge -> improver`.
+`черновик результата -> циклы рецензирования -> готовность менеджера -> замечания или OK владельца -> финальное рецензирование -> финальный OK владельца -> слияние менеджером -> improver`.
 
-Owner gate относится к конкретному result version. Изменение после OK инвалидирует approval и требует повторного review/gate, кроме заранее разрешенных механических изменений.
+Ручная приемка владельца относится к конкретной версии результата. Изменение после OK отменяет согласование и требует повторного рецензирования и приемки, кроме заранее разрешенных механических изменений.
 
-## Acceptance
+## Критерии приемки
 
-- Две scheduler replicas создают одно occurrence.
-- Restart не теряет next run и не создает duplicate.
-- Schedule применяет свежий RuntimeRevision.
-- Headless run работает без thread.
-- Manager запускает параллельные threads и получает callbacks.
-- Busy target agent сохраняет несколько delegation requests без потери initiators.
-- Final owner OK является обязательным до merge action.
-- Improver запускается после завершенного accepted cycle.
+- Две реплики планировщика создают один экземпляр расписания.
+- Перезапуск не теряет следующий запуск и не создает повтор.
+- Расписание применяет свежую `RuntimeRevision`.
+- Запуск без чата работает без обсуждения.
+- Менеджер запускает параллельные обсуждения и получает обратные вызовы.
+- Занятый целевой агент сохраняет несколько запросов делегирования без потери инициаторов.
+- Финальный OK владельца обязателен до слияния.
+- `improver` запускается после завершенного и принятого цикла.

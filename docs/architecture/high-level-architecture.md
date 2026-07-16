@@ -2,7 +2,7 @@
 id: ARCH-MC-002
 title: Высокоуровневая архитектура
 type: architecture
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
@@ -13,22 +13,22 @@ updated: 2026-07-16
 ```mermaid
 flowchart LR
     U[Пользователь] --> MM[Mattermost]
-    U --> CC[Control Center]
-    MM --> IG[Interaction Gateway]
-    CC --> CP[Control Plane]
+    U --> CC[Центр управления]
+    MM --> IG[Шлюз взаимодействия]
+    CC --> CP[Платформа управления]
     IG --> CP
     CP --> PG[(PostgreSQL)]
-    CP --> OB[(Transactional Outbox)]
-    AS[Automation Scheduler] --> PG
+    CP --> OB[(Транзакционный исходящий журнал)]
+    AS[Планировщик автоматизаций] --> PG
     AS --> OB
-    OB --> RC[Runtime Controller]
+    OB --> RC[Контроллер среды выполнения]
     RC --> K8S[Kubernetes API]
-    K8S --> AR[Agent Runner Pod]
-    AR --> AI[AI Runtime Provider]
-    AR --> MG[Integration Gateway MCP]
-    MG --> EXT[External Systems]
-    MG --> AP[Human Approval]
-    AR --> S3[(S3 Artifact Store)]
+    K8S --> AR[Pod агента]
+    AR --> AI[Поставщик среды выполнения ИИ]
+    AR --> MG[Шлюз интеграций MCP]
+    MG --> EXT[Внешние системы]
+    MG --> AP[Ручное согласование]
+    AR --> S3[(Хранилище файлов S3)]
     IG --> S3
     IG --> MM
     CP --> OT[OpenTelemetry]
@@ -37,59 +37,59 @@ flowchart LR
     MG --> OT
 ```
 
-## Control plane
+## Платформа управления
 
-Хранит desired state и бизнес-модель: organizations, workspaces, agents, providers, integrations, instructions, playbooks, schedules, sessions, artifacts metadata, approvals и audit.
+Хранит желаемое состояние и бизнес-модель: организации, рабочие области, агенты, поставщики моделей, интеграции, инструкции, управляемые процессы, расписания, сессии, метаданные файлов, согласования и аудит.
 
-Control plane не создает Kubernetes pod напрямую из HTTP handler. Он фиксирует транзакционное изменение и публикует durable command через outbox.
+Платформа управления не создает pod Kubernetes напрямую из HTTP-обработчика. Она фиксирует транзакционное изменение и публикует долговечную команду через исходящий журнал.
 
-## Interaction gateway
+## Шлюз взаимодействия
 
-Обрабатывает Mattermost events, slash fallback, interactive cards, dialogs, bot identities, reactions, file delivery и thread updates.
+Обрабатывает события Mattermost, резервные slash-команды, интерактивные карточки, диалоги, учетные записи ботов, реакции, доставку файлов и обновления обсуждений.
 
-Gateway не владеет agent/session бизнес-состоянием. Повторно доставленный Mattermost event должен быть безопасен по `event_id/post_id`.
+Шлюз не владеет бизнес-состоянием агента и сессии. Повторная доставка события Mattermost безопасна благодаря идентификаторам `event_id` и `post_id`.
 
-## Runtime controller
+## Контроллер среды выполнения
 
-Сопоставляет desired runtime state с Kubernetes resources. Reconcile идемпотентен и использует детерминированные имена, labels, owner references и status conditions.
+Сопоставляет желаемое состояние среды выполнения с ресурсами Kubernetes. Сверка идемпотентна и использует детерминированные имена, метки, ссылки на владельца и условия состояния.
 
-Controller решает:
+Контроллер решает:
 
-- какой session pod должен существовать;
-- какой RuntimeRevision должен быть применен;
-- достаточно ли capacity;
-- какой idle pod можно освободить;
-- когда session pod завершить по TTL;
-- когда восстановить queued turn после transient failure.
+- какой pod сессии должен существовать;
+- какую `RuntimeRevision` применить;
+- достаточно ли ресурсов;
+- какой простаивающий pod можно освободить;
+- когда завершить pod сессии по TTL;
+- когда восстановить ход из очереди после временной ошибки.
 
-## Agent runner
+## Запуск агента
 
-Runner является process supervisor внутри session pod:
+Компонент запуска агента управляет процессами внутри pod сессии:
 
-- получает и подтверждает turn;
-- материализует config, auth, instructions и attachments;
-- запускает AI runtime adapter;
-- стримит progress и usage;
-- вызывает разрешенные MCP tools;
-- публикует final result;
-- сохраняет session archive;
-- корректно reap-ит дочерние процессы и обрабатывает termination.
+- получает и подтверждает ход;
+- материализует конфигурацию, авторизацию, инструкции и вложения;
+- запускает адаптер среды выполнения ИИ;
+- передает прогресс и потребление лимитов;
+- вызывает разрешенные инструменты MCP;
+- публикует итоговый результат;
+- сохраняет архив сессии;
+- корректно завершает дочерние процессы и обрабатывает остановку.
 
-Runner не содержит Mattermost, project onboarding и approval business logic.
+Компонент запуска не содержит бизнес-логику Mattermost, создания проектов и согласований.
 
-## Integration gateway
+## Шлюз интеграций
 
-Предоставляет session-scoped MCP endpoint. Он аутентифицирует agent session, вычисляет grants, маскирует данные, создает approvals и выполняет внешние действия от имени IntegrationConnection.
+Предоставляет MCP endpoint в области одной сессии. Он аутентифицирует сессию агента, вычисляет права, маскирует данные, создает запросы согласования и выполняет внешние действия от имени `IntegrationConnection`.
 
-Опасный credential остается в gateway/secret backend и не передается agent pod.
+Опасные учетные данные остаются в шлюзе или хранилище секретов и не передаются в pod агента.
 
-## Automation scheduler
+## Планировщик автоматизаций
 
-Выбирает due AutomationSchedules, создает уникальные occurrences и ставит ScheduledRuns в общую очередь. Scheduler не запускает pod напрямую и не использует Kubernetes CronJob как бизнес-модель.
+Выбирает наступившие `AutomationSchedule`, создает уникальные экземпляры и ставит `ScheduledRun` в общую очередь. Планировщик не запускает pod напрямую и не использует Kubernetes CronJob как бизнес-модель.
 
-## Consistency model
+## Модель согласованности
 
-- Внутри bounded context — PostgreSQL transaction.
-- Между contexts — transactional outbox и идемпотентные consumers.
-- Kubernetes/Mattermost/external APIs — eventual consistency с status и retry.
-- Human approval — durable wait state, а не удержание HTTP request.
+- Внутри доменного контекста используется транзакция PostgreSQL.
+- Между контекстами используются транзакционный исходящий журнал и идемпотентные обработчики.
+- Kubernetes, Mattermost и внешние API согласуются асинхронно с явным состоянием и повторами.
+- Ручное согласование является долговечным состоянием ожидания, а не удержанием HTTP-запроса.

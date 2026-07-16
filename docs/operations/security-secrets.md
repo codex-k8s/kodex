@@ -1,45 +1,45 @@
 ---
 id: OPS-MC-007
-title: Security и secrets
+title: Безопасность и секреты
 type: operations
-status: proposed
+status: approved
 owner: security
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Security и secrets
+# Безопасность и секреты
 
-## Threat boundaries
+## Границы доверия
 
-- пользователь и Mattermost content считаются недоверенными;
-- agent-generated commands и files считаются недоверенными;
-- integration responses могут содержать prompt injection;
-- role install script и dependency supply chain являются привилегированным риском;
-- direct runtime credentials позволяют обойти MCP approval и выдаются осознанно.
+- пользователь и содержимое Mattermost считаются недоверенными;
+- команды и файлы, созданные агентом, считаются недоверенными;
+- ответы интеграций могут содержать инъекцию промпта;
+- сценарий установки роли и цепочка поставки зависимостей являются привилегированным риском;
+- прямые учетные данные среды выполнения позволяют обойти согласование MCP и выдаются осознанно.
 
-## Secret lifecycle
+## Жизненный цикл секрета
 
-- Secret value принимается по защищенному UI/API и сохраняется в secret backend.
-- DB хранит stable credential reference, metadata и revision.
-- UI после создания показывает только masked identity/status.
-- Rotation увеличивает revision и применяется к следующему turn.
-- Revocation блокирует новые tool calls/sessions.
-- Secrets не попадают в Git, prompt, logs, metrics, traces, artifacts и support bundles.
+- Значение секрета принимается через защищенный интерфейс или API и сохраняется в хранилище секретов.
+- БД хранит стабильную ссылку на учетные данные, метаданные и ревизию.
+- После создания интерфейс показывает только маскированное обозначение и состояние.
+- Ротация увеличивает ревизию и применяется к следующему ходу.
+- Отзыв блокирует новые вызовы инструментов и сессии.
+- Секреты не попадают в Git, промпт, логи, метрики, трассировки, файлы и диагностические пакеты.
 
-## Agent isolation
+## Изоляция агента
 
-- ServiceAccount/access profile выбирается явно.
-- Session pod получает только grants текущего RuntimeRevision.
-- Dangerous connection credentials остаются в Integration Gateway.
-- Artifact paths и storage authorization изолированы.
-- Builder не получает runtime secrets.
-- Production profile документирует network/egress policy; отключение контроля является видимым risk acceptance.
+- `ServiceAccount` и профиль доступа выбираются явно.
+- Pod сессии получает только права текущей `RuntimeRevision`.
+- Учетные данные опасных соединений остаются в шлюзе интеграций.
+- Пути файлов и авторизация хранилища изолированы.
+- Сборщик не получает секреты среды выполнения.
+- Промышленный профиль документирует сетевую политику и исходящий доступ; отключение контроля является явно принятым риском.
 
-## Approval
+## Согласование
 
-Human approval связывается с immutable invocation hash. Approver видит безопасное описание effect. Expired/changed request не выполняется.
+Ручное согласование связывается с неизменяемым хешем вызова. Согласующий видит безопасное описание эффекта. Истекший или измененный запрос не выполняется.
 
-## Public release
+## Публичный выпуск
 
-До публикации обязательны threat model review, dependency/license inventory, secret-history scan, security policy, vulnerability reporting channel, supported versions и incident disclosure process.
+До публикации обязательны проверка модели угроз, реестр зависимостей и лицензий, проверка истории на секреты, политика безопасности, канал сообщения об уязвимостях, перечень поддерживаемых версий и процесс раскрытия инцидентов.

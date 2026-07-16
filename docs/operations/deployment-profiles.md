@@ -2,7 +2,7 @@
 id: OPS-MC-002
 title: Профили развертывания
 type: operations
-status: proposed
+status: approved
 owner: sre
 version: 0.1.0
 updated: 2026-07-16
@@ -10,41 +10,41 @@ updated: 2026-07-16
 
 # Профили развертывания
 
-## Starter
+## Начальный профиль
 
-Назначение: личный dogfooding, development, demo и малый single-node контур.
+Назначение: личная эксплуатация, разработка, демонстрация и малый одноузловой контур.
 
-- один Kubernetes cluster/node допустим;
-- bundled PostgreSQL/Mattermost допустимы;
-- MinIO/local S3-compatible storage допустим;
-- stateless services могут иметь одну replica;
-- backup во внешнее хранилище обязателен;
-- отсутствие HA и NetworkPolicy явно отображается как risk;
-- upgrade и restore должны быть воспроизводимы.
+- один кластер или узел Kubernetes допустим;
+- встроенные PostgreSQL и Mattermost допустимы;
+- MinIO или локальное S3-совместимое хранилище допустимо;
+- сервисы без локального состояния могут иметь одну реплику;
+- резервная копия во внешнее хранилище обязательна;
+- отсутствие высокой доступности и NetworkPolicy явно отображается как риск;
+- обновление и восстановление должны быть воспроизводимы.
 
-Starter не называется HA/production-ready только потому, что работает в Kubernetes.
+Начальный профиль не считается высокодоступным или готовым к промышленной эксплуатации только потому, что работает в Kubernetes.
 
-## Production
+## Промышленный профиль
 
 Назначение: коммерческая управляемая инсталляция.
 
-- минимум две replicas stateless platform services;
-- PostgreSQL HA/operator profile и PITR;
-- external durable S3-compatible storage;
-- external/HA OCI registry;
+- минимум две реплики сервисов платформы без локального состояния;
+- высокодоступный PostgreSQL под управлением оператора и PITR;
+- внешнее долговечное S3-совместимое хранилище;
+- внешний или высокодоступный OCI-реестр;
 - OIDC/RBAC;
-- leader election/database claims;
-- PodDisruptionBudgets/topology policies;
-- observability и alerts;
-- регулярные backup/restore drills;
-- signed immutable images;
-- documented network/egress policy;
-- tested upgrade/rollback.
+- выбор лидера или получение заданий через БД;
+- `PodDisruptionBudget` и политики топологии;
+- наблюдаемость и оповещения;
+- регулярные учения по резервному копированию и восстановлению;
+- подписанные неизменяемые образы;
+- документированная сетевая политика и исходящий доступ;
+- проверенные обновление и откат.
 
-## Managed nested cluster
+## Управляемый изолированный кластер
 
-Коммерческий вариант может выдавать клиенту отдельный nested/isolated cluster. Control plane deployment ownership, backup target, domain/TLS, registry и observability должны задаваться values/profile, а не кодом под одну инсталляцию.
+Коммерческий вариант может предоставлять клиенту отдельный вложенный или изолированный кластер. Владение развертыванием платформы управления, цель резервного копирования, домен и TLS, реестр и наблюдаемость задаются параметрами профиля, а не кодом под одну установку.
 
-## Configuration
+## Конфигурация
 
-Один Helm chart поддерживает profiles через schemas/values. Нельзя поддерживать starter и production разными неэквивалентными наборами ad-hoc manifests.
+Один Helm chart поддерживает профили через схемы и values. Нельзя поддерживать начальный и промышленный профили разными неэквивалентными наборами разрозненных манифестов.

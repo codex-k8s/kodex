@@ -1,24 +1,24 @@
 ---
 id: ADR-MC-007
-title: Durable scheduling в PostgreSQL
+title: Долговечное планирование в PostgreSQL
 type: decision
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# ADR-MC-007. Durable scheduling в PostgreSQL
+# ADR-MC-007. Долговечное планирование в PostgreSQL
 
 ## Решение
 
-AutomationSchedule и next-run state хранятся в PostgreSQL. Scheduler создает unique occurrence и queue job transactionally. Kubernetes CronJob и in-memory periodic scheduler не являются business source of truth.
+`AutomationSchedule` и состояние следующего запуска хранятся в PostgreSQL. Планировщик транзакционно создает уникальный экземпляр расписания и задание очереди. Kubernetes CronJob и периодический планировщик в памяти не являются источником бизнес-состояния.
 
-River OSS рассматривается как execution queue для transactional jobs/retries, а cron parser — как готовая библиотека. Durable definitions, misfire/concurrency policies и occurrence history принадлежат MatterCodex.
+River OSS рассматривается как очередь выполнения транзакционных заданий и повторов, а разбор cron выполняет готовая библиотека. Долговечные определения, политики пропущенных запусков и параллельности и история экземпляров принадлежат MatterCodex.
 
 ## Последствия
 
-- Несколько replicas работают без duplicate occurrence.
-- Headless scheduled session является полноценным runtime source.
-- Не появляется отдельный Redis/Temporal dependency на первом этапе.
-- Temporal может быть рассмотрен позже для сложных deterministic workflows.
+- Несколько реплик работают без повторных экземпляров расписания.
+- Сессия по расписанию без чата является полноценным источником запуска.
+- На первом этапе не появляется отдельная зависимость от Redis или Temporal.
+- Temporal может быть рассмотрен позже для сложных детерминированных процессов.

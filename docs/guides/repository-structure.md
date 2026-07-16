@@ -2,7 +2,7 @@
 id: GUIDE-MC-002
 title: Структура монорепозитория
 type: guide
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
@@ -14,18 +14,18 @@ updated: 2026-07-16
 
 ```text
 apps/                 # Пользовательские приложения
-services/             # Deployables по зонам external/internal/jobs/dev
-libs/go/              # Минимальные shared Go primitives
-proto/                # Protobuf/gRPC source и generated contracts
-specs/                # OpenAPI/AsyncAPI source contracts
-config/catalog/       # Versioned role/integration/playbook seeds
-deploy/               # Helm и GitOps desired state
-docs/                 # Product/architecture/domain/guides/operations/ADR
-scripts/              # Короткие developer/bootstrap wrappers
-tools/                # Repo tooling и generators
+services/             # Компоненты по зонам external/internal/jobs/dev
+libs/go/              # Минимальные общие примитивы Go
+proto/                # Исходные и сгенерированные контракты Protobuf/gRPC
+specs/                # Исходные контракты OpenAPI/AsyncAPI
+config/catalog/       # Версионируемые заготовки ролей, интеграций и процессов
+deploy/               # Желаемое состояние Helm и GitOps
+docs/                 # Продукт, архитектура, домены, руководства, эксплуатация и ADR
+scripts/              # Короткие обертки разработчика и начальной настройки
+tools/                # Инструменты репозитория и генераторы
 ```
 
-## Go service
+## Сервис Go
 
 ```text
 services/<zone>/<service>/
@@ -40,30 +40,30 @@ services/<zone>/<service>/
   Dockerfile
 ```
 
-- `cmd` загружает config/logger/signals и вызывает composition root.
-- `domain` не импортирует transport/Kubernetes/Mattermost/PostgreSQL.
-- `domain/service` реализует use cases и transaction boundaries.
-- `domain/repository` определяет необходимые interfaces.
-- `repository` и `clients` реализуют PostgreSQL, Kubernetes, Mattermost, S3 и provider adapters.
-- `transport` преобразует external DTO в application commands.
+- `cmd` загружает конфигурацию, логгер и сигналы и вызывает корень сборки приложения.
+- `domain` не импортирует транспорт, Kubernetes, Mattermost и PostgreSQL.
+- `domain/service` реализует прикладные сценарии и границы транзакций.
+- `domain/repository` определяет необходимые интерфейсы.
+- `repository` и `clients` реализуют PostgreSQL, Kubernetes, Mattermost, S3 и адаптеры поставщиков.
+- `transport` преобразует внешние DTO в команды приложения.
 
-## Shared code
+## Общий код
 
-Shared package создается только при наличии минимум двух реальных consumers и стабильного контракта. Domain types не выносятся в общий `models` пакет.
+Общий пакет создается только при наличии минимум двух реальных потребителей и стабильного контракта. Доменные типы не выносятся в общий пакет `models`.
 
-Допустимые shared primitives:
+Допустимые общие примитивы:
 
-- typed IDs/correlation;
-- clock/UUID abstractions;
-- observability bootstrap;
-- safe logging/redaction;
-- auth context;
-- generated contracts.
+- типизированные идентификаторы и корреляция;
+- абстракции часов и UUID;
+- начальная настройка наблюдаемости;
+- безопасное логирование и маскирование;
+- контекст авторизации;
+- сгенерированные контракты.
 
-## Contracts
+## Контракты
 
-Source contract редактируется в `specs/**` или `proto/**`; generated code не редактируется вручную. Каждая генерация воспроизводима одной repo-командой и проверяется CI на clean diff.
+Исходный контракт редактируется в `specs/**` или `proto/**`; сгенерированный код не редактируется вручную. Каждая генерация воспроизводима одной командой репозитория и проверяется CI на отсутствие diff.
 
 ## Миграция текущей структуры
 
-До выделения сервисов текущий bot-service остается рабочим compatibility deployable. Новая логика появляется в целевых модулях, а старые handlers делегируют им. Массовое перемещение без behavior tests запрещено.
+До выделения сервисов текущий bot-service остается рабочим компонентом совместимости. Новая логика появляется в целевых модулях, а старые обработчики делегируют им. Массовое перемещение без тестов поведения запрещено.

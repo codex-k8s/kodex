@@ -1,51 +1,55 @@
 ---
 id: DOM-MC-006
-title: Runtime Orchestration
+title: Оркестрация среды выполнения
 type: domain
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Runtime Orchestration
+# Оркестрация среды выполнения
 
 ## Назначение
 
-Владеет sessions, turns, runtime revisions, durable queue, leases, capacity decisions и reconciliation desired agent runtime.
+Владеет сессиями, ходами, ревизиями среды выполнения, долговечной очередью, арендой ресурсов, решениями о доступной емкости и сверкой желаемого состояния среды выполнения агентов.
 
 ## Состояния
 
-Session: `idle`, `queued`, `running`, `waiting`, `blocked`, `expired`, `failed`.
+Сессия: `idle`, `queued`, `running`, `waiting_approval`, `waiting_external`, `blocked`, `expired`, `failed`.
 
-Turn: `queued`, `claiming`, `running`, `succeeded`, `failed`, `stopped`, `retry_wait`, `blocked`.
+Ход: `queued`, `claiming`, `running`, `succeeded`, `failed`, `stopped`, `retry_wait`, `blocked`.
 
-Переходы выполняются compare-and-set/transaction, а не присваиванием из transport handler.
+Переходы выполняются атомарным сравнением и заменой внутри транзакции, а не присваиванием из транспортного обработчика.
 
-## Commands
+## Команды
 
-- enqueue turn;
-- claim/heartbeat/complete/fail/stop turn;
-- ensure/release session runtime;
-- refresh runtime revision;
-- retry transient failure;
-- archive/restore session;
-- evict idle runtime.
+- поставить ход в очередь;
+- получить ход, обновить пульс, завершить, пометить ошибкой или остановить;
+- создать или освободить среду выполнения сессии;
+- обновить ревизию среды выполнения;
+- повторить ход после временной ошибки;
+- архивировать или восстановить сессию;
+- вытеснить простаивающую среду выполнения;
+- пометить, архивировать или удалить подходящие ресурсы среды выполнения.
 
-## Transient failures
+## Временные ошибки
 
-Capacity/provider/network ошибки классифицируются typed policy. Retry сохраняет session/PVC и использует bounded backoff. Usage/auth/validation failures не маскируются как capacity retry.
+Ошибки ресурсов, поставщика и сети классифицируются типизированной политикой. Повтор сохраняет сессию и PVC и использует ограниченную задержку. Ошибки лимитов, авторизации и проверки не маскируются под нехватку ресурсов.
 
-## Kubernetes adapter
+## Адаптер Kubernetes
 
-Adapter создает resources из typed specs. Business code не формирует YAML/shell. Runtime controller reconcile-ит deterministic Pod/PVC/Secret/ServiceAccount state и записывает status condition.
+Адаптер создает ресурсы из типизированных спецификаций. Бизнес-код не формирует YAML или shell. Контроллер среды выполнения идемпотентно сверяет состояние `Pod`, `PVC`, `Secret` и `ServiceAccount` и записывает условие состояния.
 
-## Acceptance
+## Критерии приемки
 
-- Один session выполняет максимум один running turn.
-- Queued сообщения выполняются в порядке sequence.
-- Bot-service/controller restart не теряет queue.
-- Stale running state repair-ится по lease/runner evidence.
-- Недостаток capacity не переводит turn в permanent failure.
-- Runtime revision change применяет свежие env/config/integrations к следующему turn.
-- Один idle pod максимум на session, default TTL четыре часа.
+- Одна сессия выполняет не более одного активного хода.
+- Сообщения из очереди выполняются в порядке `sequence`.
+- Перезапуск bot-service или контроллера не теряет очередь.
+- Устаревшее состояние `running` исправляется по аренде и подтверждениям процесса агента.
+- Недостаток ресурсов не переводит ход в необратимую ошибку.
+- Изменение ревизии среды выполнения применяет свежие env, конфигурацию и интеграции к следующему ходу.
+- Для одной сессии существует не более одного простаивающего pod; TTL по умолчанию — четыре часа.
+- PVC не удаляется до проверки S3-архива и истечения периода отсрочки хранения.
+- Удаление канала или обсуждения запускает отсроченную, отменяемую и аудируемую очистку.
+- `waiting_approval` и `waiting_external` защищают сессию от очистки.

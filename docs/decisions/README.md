@@ -2,7 +2,7 @@
 id: ADR-MC-000
 title: Реестр архитектурных решений
 type: decision-index
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
@@ -12,14 +12,14 @@ updated: 2026-07-16
 
 | ADR | Решение | Статус |
 | --- | --- | --- |
-| `ADR-MC-001` | Эволюционный modular monolith и поэтапное выделение сервисов | proposed |
-| `ADR-MC-002` | Universal Organization/Workspace/Agent model | proposed |
-| `ADR-MC-003` | Hybrid UI/GitOps ownership | proposed |
-| `ADR-MC-004` | RuntimeRevision и immutable provider account affinity | proposed |
-| `ADR-MC-005` | Два integration modes и mandatory approvals | proposed |
-| `ADR-MC-006` | S3 как canonical artifact/session storage | proposed |
-| `ADR-MC-007` | PostgreSQL-backed schedules и shared durable run queue | proposed |
-| `ADR-MC-008` | BuildKit и immutable role images | proposed |
-| `ADR-MC-009` | AGPLv3 + commercial licensing direction | proposed/legal-review-required |
+| `ADR-MC-001` | Эволюционный модульный монолит и поэтапное выделение сервисов | approved |
+| `ADR-MC-002` | Универсальная модель `Organization`, `Workspace` и `Agent` | approved |
+| `ADR-MC-003` | Совместное управление через UI и GitOps | approved |
+| `ADR-MC-004` | `RuntimeRevision` и неизменяемая привязка учетной записи поставщика | approved |
+| `ADR-MC-005` | Два режима интеграций и обязательные согласования | approved |
+| `ADR-MC-006` | S3 как основное хранилище файлов и архивов сессий | approved |
+| `ADR-MC-007` | Долговечные расписания и очередь запусков в PostgreSQL | approved |
+| `ADR-MC-008` | BuildKit и неизменяемые образы ролей | approved |
+| `ADR-MC-009` | Публичная редакция AGPL и коммерческая лицензия | approved/legal-review-required |
 
-После owner approval документационного PR статусы технических ADR меняются на `accepted`. Лицензионный ADR остается `proposed` до юридической проверки и отдельного решения о публикации.
+Статус `approved` фиксирует принятое владельцем направление. Для `ADR-MC-009` юридическая проверка текстов лицензий и CLA остается обязательным условием выпуска, но повторный выбор модели не требуется.

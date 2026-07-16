@@ -1,56 +1,56 @@
 ---
 id: OPS-MC-006
-title: Deployment и rollback
+title: Развертывание и откат
 type: operations
-status: proposed
+status: approved
 owner: sre
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Deployment и rollback
+# Развертывание и откат
 
-## Pipeline
+## Процесс
 
-1. PR checks и review результата.
-2. Owner human gate.
-3. Reviewer merge.
-4. Immutable images, SBOM, scan, signature и provenance.
-5. Deploy candidate environment.
-6. Migrations expand/backfill.
-7. Smoke/E2E/analysis.
-8. Production deployment human gate.
-9. GitOps promotion того же digest.
-10. Post-deploy checks и observation window.
-11. Improver запускается по feedback завершенного цикла.
+1. Автоматические проверки PR и рецензирование результата.
+2. Ручная приемка владельцем.
+3. Слияние менеджером после проверки актуального SHA, CI и закрытых замечаний.
+4. Неизменяемые образы, SBOM, проверка, подпись и происхождение.
+5. Развертывание в кандидатном окружении.
+6. Расширяющие миграции и заполнение данных.
+7. Дымовые, сквозные проверки и анализ.
+8. Ручной допуск промышленного развертывания.
+9. Продвижение того же дайджеста через GitOps.
+10. Проверки после развертывания и период наблюдения.
+11. Менеджер запускает `improver` по замечаниям завершенного цикла.
 
-## Active agents
+## Активные агенты
 
 Перед изменением agent-runner/runtime-controller/image:
 
-- platform публикует maintenance notice;
-- проверяет active turns;
-- после notice повторно проверяет, не появился ли новый turn;
-- ожидает завершения или явно останавливает только согласованные runs;
-- session archives сохраняются до pod recreation.
+- платформа публикует уведомление о технических работах;
+- проверяет активные ходы;
+- после уведомления повторно проверяет, не появился ли новый ход;
+- ожидает завершения или явно останавливает только согласованные запуски;
+- архивы сессий сохраняются до пересоздания pod.
 
-Control-plane backward-compatible deploy может выполняться rolling без остановки agent pods, если contract/version matrix это допускает.
+Обратно совместимое развертывание платформы управления может выполняться поочередно без остановки pod агентов, если это допускает матрица совместимости контрактов и версий.
 
-## Strategies
+## Стратегии
 
-- Standard Deployment rolling update для простых stateless services.
-- Argo Rollouts blue-green/canary для high-risk interaction/control services.
-- Preview/pre-promotion smoke до traffic switch.
-- Автоматический abort по readiness/error/latency analysis.
+- Обычное поочередное обновление Deployment для простых сервисов без локального состояния.
+- Argo Rollouts с blue-green или canary для рискованных сервисов взаимодействия и управления.
+- Предварительные дымовые проверки до переключения трафика.
+- Автоматическая остановка по анализу готовности, ошибок и задержек.
 
 Reference: https://argoproj.github.io/argo-rollouts/concepts/
 
-## Database
+## База данных
 
-Schema rollback не является штатным способом. Изменения проектируются так, чтобы предыдущая application version работала на расширенной schema в rollback window.
+Откат схемы не является штатным способом. Изменения проектируются так, чтобы предыдущая версия приложения работала на расширенной схеме в течение окна отката.
 
-Порядок: `expand -> deploy dual-compatible code -> backfill -> switch reads/writes -> contract later`.
+Порядок: `расширение -> развертывание совместимого кода -> заполнение -> переключение чтения и записи -> последующее сужение`.
 
-## Rollback evidence
+## Подтверждения отката
 
-Release хранит image digests, Git SHA, migration version, config revision, smoke results, approver и rollback target. Rollback завершается проверкой queue, Mattermost events, provider auth, session resume и scheduled runs.
+Выпуск хранит дайджесты образов, Git SHA, версию миграций, ревизию конфигурации, результаты дымовых проверок, согласующего и цель отката. Откат завершается проверкой очереди, событий Mattermost, авторизации поставщиков, возобновления сессий и запусков по расписанию.

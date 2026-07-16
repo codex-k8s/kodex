@@ -1,40 +1,40 @@
 ---
 id: GUIDE-MC-004
-title: Control Center на Vue
+title: Центр управления на Vue
 type: guide
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Control Center на Vue
+# Центр управления на Vue
 
 ## Назначение
 
-Control Center закрывает сложную настройку organizations, workspaces, agents, providers, integrations, schedules, playbooks, runtime, artifacts и audit. Mattermost остается conversational surface.
+Центр управления закрывает сложную настройку организаций, рабочих областей, агентов, поставщиков, интеграций, расписаний, управляемых процессов, среды выполнения, файлов и аудита. Mattermost остается основным интерфейсом диалога.
 
 ## Стек
 
 - Vue 3 Composition API;
-- TypeScript strict mode;
-- generated OpenAPI client;
-- Pinia только для cross-page state;
+- строгий режим TypeScript;
+- сгенерированный клиент OpenAPI;
+- Pinia только для состояния между страницами;
 - Vue Router;
-- выбранная и зафиксированная component library либо собственный малый design system;
-- Playwright для critical E2E.
+- выбранная и зафиксированная библиотека компонентов либо собственная малая дизайн-система;
+- Playwright для критичных сквозных сценариев.
 
-Версии утверждаются dependency catalog на момент реализации.
+Версии утверждаются каталогом зависимостей на момент реализации.
 
 ## UX
 
-- Entity list/dashboard/editor вместо command console.
-- Technical IDs скрыты или read-only в advanced diagnostics.
-- Presets для schedule, role и integration setup.
-- Secret input очищается после submit и не возвращается API.
-- Effective configuration объясняет inheritance и `managed_by`.
-- Dangerous action показывает target/effect и требует явного confirmation.
-- Error state сохраняет введенные несекретные данные и предлагает next action.
+- Список, панель и редактор сущности вместо командной консоли.
+- Технические идентификаторы скрыты либо доступны только для чтения в расширенной диагностике.
+- Готовые варианты настройки расписания, роли и интеграции.
+- Поле секрета очищается после отправки и не возвращается API.
+- Итоговая конфигурация объясняет наследование и `managed_by`.
+- Опасное действие показывает цель и эффект и требует явного подтверждения.
+- Состояние ошибки сохраняет введенные несекретные данные и предлагает следующее действие.
 
 ## Архитектура
 
@@ -48,13 +48,13 @@ apps/control-center/src/
   generated/
 ```
 
-Generated client не импортирует UI. Business-specific composables живут в features/entities, а не в global store.
+Сгенерированный клиент не импортирует интерфейс. Прикладные composable-функции живут в `features` и `entities`, а не в глобальном хранилище.
 
-## Quality
+## Качество
 
-- ESLint/format/typecheck/unit tests;
-- component tests для complex editors;
-- Playwright happy/failure/permission paths;
-- accessibility checks для keyboard, labels, focus и contrast;
-- screenshots desktop/mobile для critical flows;
-- no secret/token в browser storage и telemetry.
+- ESLint, форматирование, проверка типов и модульные тесты;
+- тесты компонентов для сложных редакторов;
+- Playwright для успешных сценариев, ошибок и прав доступа;
+- проверки доступности клавиатуры, подписей, фокуса и контраста;
+- снимки экранов на настольном и мобильном разрешении для критичных сценариев;
+- отсутствие секретов и токенов в хранилище браузера и телеметрии.

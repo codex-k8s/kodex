@@ -1,79 +1,81 @@
 ---
 id: ROAD-MC-004
-title: Bootstrap dogfooding Workspace MatterCodex
+title: Подготовка рабочей области MatterCodex
 type: roadmap
-status: proposed
+status: approved
 owner: manager
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Bootstrap dogfooding Workspace MatterCodex
+# Подготовка рабочей области MatterCodex
 
-Bootstrap выполняется после merge documentation baseline. Операция сначала читает live state и переиспользует существующие accounts/integrations без duplicate entities.
+Подготовка выполняется после слияния базовой документации. Операция сначала читает действующее состояние и переиспользует существующие учетные записи и интеграции без создания дублей.
 
-## Workspace
+## Рабочая область
 
-- Name: `MatterCodex`.
-- Slug/team: `matter-codex` либо свободный согласованный вариант.
-- Mattermost: отдельная team.
-- GitHub owner: `codex-k8s`.
-- Repository: `codex-k8s/matter-codex` как optional IT integration context.
-- Locale: Russian.
-- Configuration owner: UI на первом этапе; переход к Git после GitOps wave.
+- Имя: `MatterCodex`.
+- Slug команды: `matter-codex` либо свободный согласованный вариант.
+- Mattermost: отдельная команда.
+- Владелец GitHub: `codex-k8s`.
+- Репозиторий: `codex-k8s/matter-codex` как необязательный контекст интеграции для разработки.
+- Локаль: русский язык.
+- Владелец конфигурации: интерфейс на первом этапе; переход к Git после волны GitOps.
 
-## Agents
+## Агенты
 
-- `manager` — координация waves/result gates.
-- `product-manager` — product requirements, backlog, reporting.
-- `architect` — domains/contracts/service boundaries/ADR.
-- `developer` — Go/backend/runtime implementation.
-- `frontend` — Vue Control Center.
-- `reviewer` — technical/product review и merge после owner OK.
-- `docs` — documentation consistency.
-- `qa-bot` — E2E/regression/evidence.
-- `sre` — deployment/operations/backup/observability.
-- `security` — threat model/integration/supply-chain review.
-- `ui-designer` — UX flows и visual mockups/artifacts.
-- `improver` — feedback-to-instructions cycle.
-- `mattercodex-admin` — emergency/platform configuration profile с отдельным risk policy.
+- `manager` — координация волн, обратных вызовов и ручной приемки, слияние и запуск `improver`.
+- `product-manager` — продуктовые требования, бэклог и отчеты.
+- `architect` — домены, контракты, границы сервисов и ADR.
+- `developer` — реализация серверных компонентов Go и среды выполнения.
+- `frontend` — центр управления на Vue.
+- `reviewer` — независимое техническое и продуктовое рецензирование с обратным вызовом менеджеру.
+- `docs` — согласованность документации.
+- `qa-bot` — сквозные и регрессионные проверки с доказательствами.
+- `sre` — развертывание, эксплуатация, резервное копирование и наблюдаемость.
+- `security` — модель угроз, интеграции, секреты и цепочка поставки.
+- `ui-designer` — пользовательские сценарии, варианты и визуальные макеты.
+- `improver` — перенос замечаний в инструкции и руководства.
+- `mattercodex-admin` — аварийная диагностика и настройка платформы с отдельной политикой риска.
 
-Каждый Agent получает отдельную Mattermost bot identity. Existing AI/GitHub accounts выбираются по purpose и permissions; секретные значения не копируются в prompts или docs.
+Каждый агент получает отдельную учетную запись бота Mattermost. Существующие учетные записи OpenAI и GitHub выбираются по назначению и полномочиям; секретные значения не копируются в промпты или документы.
 
-## Rooms
+Роль `security` создается при подготовке области до первого запуска менеджера. Она независимо проверяет модель угроз, работу с секретами, права интеграций, опасные MCP-вызовы и цепочку поставки, после чего возвращает замечания менеджеру. До появления роли менеджер не запускает проверку безопасности и фиксирует это как блокирующее условие первой архитектурной волны.
 
-- `management` — manager/owner coordination и roadmap.
-- `product` — personas/processes/requirements.
-- `architecture` — boundaries/data/contracts/ADR.
-- `runtime` — sessions/turns/providers/Kubernetes.
-- `integrations` — MCP/connections/approvals.
-- `attachments-artifacts` — files/S3/knowledge.
-- `automations` — schedules/playbooks/callbacks.
+## Комнаты
+
+- `management` — координация менеджера и владельца и план развития.
+- `product` — персоны, процессы и требования.
+- `architecture` — границы, данные, контракты и ADR.
+- `runtime` — сессии, ходы, поставщики моделей и Kubernetes.
+- `integrations` — MCP, подключения и согласования.
+- `attachments-artifacts` — файлы, S3 и база знаний.
+- `automations` — расписания, процессы и обратные вызовы.
 - `control-center` — Vue UX.
-- `operations` — deploy/observability/backup/security.
-- `release` — public/commercial readiness.
+- `operations` — развертывание, наблюдаемость, резервное копирование и безопасность.
+- `release` — готовность публичной и коммерческой редакций.
 
-Rooms private по умолчанию. Owner и релевантные Agents добавляются автоматически.
+Комнаты закрытые по умолчанию. Владелец и релевантные агенты добавляются автоматически.
 
-## Initial GitHub epics
+## Начальные эпики GitHub
 
-Создаются parent issues по Wave 1-11. Массовое создание выполняется только после dry-run списка titles и owner confirmation. Issue содержит result type, dependencies, acceptance, roles и human-gate policy.
+Создаются родительские Issues по волнам 1-11. Массовое создание выполняется только после предварительного списка заголовков и подтверждения владельца. Каждая Issue содержит тип результата, зависимости, критерии приемки, роли и политику ручной приемки.
 
-## Initial schedules
+## Начальные расписания
 
-После реализации scheduling:
+После реализации расписаний:
 
-- daily improver по merged/review feedback;
-- platform health check от `mattercodex-admin`;
-- backup age/restore evidence check от `sre`;
-- weekly manager summary по active epics.
+- ежедневный improver по замечаниям слитых PR и рецензий;
+- проверка работоспособности платформы от `mattercodex-admin`;
+- проверка возраста резервных копий и доказательств восстановления от `sre`;
+- еженедельное резюме менеджера по активным эпикам.
 
-## Bootstrap acceptance
+## Приемка подготовки
 
-- Owner состоит в team/rooms.
-- Все role bots видимы и имеют correct usernames.
-- Accounts/integrations показывают effective grants без secret.
-- Repository доступен через выбранную GitHub integration.
-- Manager отвечает в management room.
-- Agent delegation smoke не использует mention trigger.
-- Ничего не запускается автоматически до owner kickoff.
+- Владелец состоит в команде и комнатах.
+- Все боты ролей видимы и имеют корректные имена.
+- Учетные записи и интеграции показывают фактические права без секретов.
+- Репозиторий доступен через выбранную интеграцию GitHub.
+- Менеджер отвечает в комнате `management`.
+- Проверка делегирования не использует упоминание как триггер.
+- Ничего не запускается автоматически до стартовой команды владельца.

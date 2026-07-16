@@ -2,7 +2,7 @@
 id: OPS-MC-004
 title: Наблюдаемость
 type: operations
-status: proposed
+status: approved
 owner: sre
 version: 0.1.0
 updated: 2026-07-16
@@ -12,42 +12,42 @@ updated: 2026-07-16
 
 ## Стек
 
-- OpenTelemetry SDK/Collector для traces, metrics и log correlation;
-- Prometheus-compatible metrics storage;
-- Grafana dashboards/alerts;
-- централизованный log backend;
-- Kubernetes metrics/events для runtime diagnostics.
+- OpenTelemetry SDK и Collector для трассировки, метрик и корреляции логов;
+- Prometheus-совместимое хранилище метрик;
+- панели и оповещения Grafana;
+- централизованное хранилище логов;
+- метрики и события Kubernetes для диагностики среды выполнения.
 
-## Correlation
+## Корреляция
 
-Минимальные labels/attributes:
+Минимальные метки и атрибуты:
 
-- service/version/environment;
-- organization/workspace;
-- agent/session/turn;
-- process/child/schedule occurrence;
-- integration/tool/approval;
-- correlation/causation IDs.
+- сервис, версия и окружение;
+- организация и рабочая область;
+- агент, сессия и ход;
+- процесс, дочерний запуск и экземпляр расписания;
+- интеграция, инструмент и согласование;
+- идентификаторы корреляции и причины.
 
-Высококардинальные IDs не добавляются бездумно в Prometheus labels; они доступны в traces/logs.
+Высококардинальные идентификаторы не добавляются в метки Prometheus; они доступны в трассировках и логах.
 
-## Dashboards
+## Панели
 
-- platform API/DB/outbox;
-- Mattermost ingress/delivery;
-- turns/sessions/queue/retries;
-- Kubernetes capacity/pending/OOM/eviction;
-- AI accounts auth/limits freshness;
-- integrations/approvals;
-- artifacts/scan/delivery;
-- schedules/misfires;
-- image builds/scans/cache;
-- backup/restore evidence.
+- API платформы, БД и исходящий журнал;
+- прием и доставка Mattermost;
+- ходы, сессии, очередь и повторы;
+- емкость Kubernetes, ожидающие pod, OOM и вытеснение;
+- авторизация учетных записей ИИ и актуальность лимитов;
+- интеграции и согласования;
+- файлы, проверки и доставка;
+- расписания и пропущенные запуски;
+- сборки и проверки образов, кеш;
+- подтверждения резервного копирования и восстановления.
 
-## Alerts
+## Оповещения
 
-Alert имеет severity, symptom, impact, correlation/dashboard и runbook link. Нельзя алертить на каждую ожидаемую provider retry. Обязательны alerts на потерю leadership/queue progress, backup age, persistent delivery failure, DB/S3 unavailability и capacity exhaustion.
+Оповещение содержит серьезность, симптом, влияние, ссылку на корреляцию или панель и эксплуатационную инструкцию. Нельзя оповещать о каждом ожидаемом повторе поставщика. Обязательны оповещения о потере лидерства или движения очереди, устаревшей резервной копии, устойчивой ошибке доставки, недоступности БД или S3 и исчерпании ресурсов.
 
-## Privacy
+## Конфиденциальность
 
-Prompts, file contents, tokens, auth JSON и secret arguments не экспортируются. User content logging выключен по умолчанию; диагностическое включение ограничено scope/TTL/audit.
+Промпты, содержимое файлов, токены, JSON авторизации и секретные аргументы не экспортируются. Логирование пользовательского содержимого выключено по умолчанию; диагностическое включение ограничено областью, TTL и аудитом.

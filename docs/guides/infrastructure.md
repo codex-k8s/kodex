@@ -2,7 +2,7 @@
 id: GUIDE-MC-005
 title: Инфраструктурные изменения
 type: guide
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
@@ -10,38 +10,38 @@ updated: 2026-07-16
 
 # Инфраструктурные изменения
 
-## Source of truth
+## Источник истины
 
-- Helm chart описывает packaged deployment.
-- GitOps environment repository/overlays описывают desired deployment конкретной инсталляции.
-- Runtime-created agent resources принадлежат runtime-controller и не коммитятся в Git.
-- Secret values не хранятся в Helm values/Git; используются secret references.
+- Helm chart описывает упакованное развертывание.
+- Репозиторий окружения и наложения GitOps описывают желаемое развертывание конкретной установки.
+- Созданные во время работы ресурсы агентов принадлежат `runtime-controller` и не коммитятся в Git.
+- Значения секретов не хранятся в Helm values или Git; используются ссылки на секреты.
 
 ## Kubernetes
 
-- Stateless services имеют readiness/liveness/startup probes и минимум две replicas в production profile.
-- Singleton work использует leader election/database claim.
-- PDB, topology spread и graceful termination соответствуют topology инсталляции.
-- Requests задаются по измерениям; CPU limits обычно не применяются к agent builds/runs без причины, memory limits защищают node от uncontrolled exhaustion.
-- Namespace quotas не должны превращать ожидаемую очередь в permanent failure.
-- ServiceAccounts разделены по platform services, builders и agent access profiles.
+- Сервисы без локального состояния имеют проверки готовности, жизнеспособности и запуска и минимум две реплики в промышленном профиле.
+- Одиночная работа использует выбор лидера или получение задания через БД.
+- PDB, распределение по топологии и корректное завершение соответствуют топологии установки.
+- Запросы задаются по измерениям; лимиты CPU обычно не применяются к сборкам и запускам агентов без причины, а лимиты памяти защищают узел от неконтролируемого исчерпания.
+- Квоты namespace не должны превращать ожидаемую очередь в необратимую ошибку.
+- `ServiceAccount` разделены между сервисами платформы, сборщиками и профилями доступа агентов.
 
-## Images
+## Образы
 
-- Image build выполняется BuildKit.
-- Immutable digest используется в manifests/runtime revisions.
-- SBOM, scan, provenance и signature являются release gate.
-- Kaniko и локальный single-PVC registry не являются production target.
+- Сборка образа выполняется BuildKit.
+- Неизменяемый дайджест используется в манифестах и ревизиях среды выполнения.
+- SBOM, проверка уязвимостей, происхождение и подпись являются условием выпуска.
+- Kaniko и локальный реестр на одном PVC не являются промышленной целью.
 
-## Scripts
+## Сценарии
 
-Shell используется для короткого bootstrap/developer wrapper. YAML хранится в `deploy/**`. Go-код не содержит embedded shell workflows и Kubernetes manifests.
+Shell используется для короткой начальной настройки или обертки разработчика. YAML хранится в `deploy/**`. Код Go не содержит встроенные shell-процессы и манифесты Kubernetes.
 
-## Profiles
+## Профили
 
-- `starter`: одна node/малый контур, ограниченная HA, bundled dependencies допустимы, но backup обязателен.
-- `production`: external S3/OCI, HA PostgreSQL, две replicas stateless services, OIDC/RBAC, observability, tested restore.
+- `starter`: один узел или малый контур, ограниченная высокая доступность, встроенные зависимости допустимы, но резервная копия обязательна.
+- `production`: внешние S3 и OCI, высокодоступный PostgreSQL, две реплики сервисов без локального состояния, OIDC/RBAC, наблюдаемость и проверенное восстановление.
 
-## Change process
+## Процесс изменения
 
-Infrastructure PR содержит rendered diff, migration order, rollout/rollback plan, capacity impact, security impact и ручную проверку. Deployment начинается только после проверки active agent turns по действующему operational rule.
+Инфраструктурный PR содержит отрендеренный diff, порядок миграций, план развертывания и отката, влияние на ресурсы и безопасность и ручную проверку. Развертывание начинается только после проверки активных ходов агентов по действующему эксплуатационному правилу.

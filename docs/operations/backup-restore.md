@@ -1,61 +1,61 @@
 ---
 id: OPS-MC-005
-title: Backup и восстановление
+title: Резервное копирование и восстановление
 type: operations
-status: proposed
+status: approved
 owner: sre
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Backup и восстановление
+# Резервное копирование и восстановление
 
 ## Данные
 
-Backup contract покрывает:
+Контракт резервного копирования покрывает:
 
 - MatterCodex PostgreSQL;
 - Mattermost PostgreSQL;
-- S3 buckets с attachments, artifacts, instructions, session archives и Mattermost files;
-- GitOps/Helm desired configuration;
-- Kubernetes resources, которые нельзя воспроизвести из Git/control plane;
-- encrypted bootstrap/recovery material для secret backend;
-- release/image metadata.
+- S3-бакеты с вложениями, файлами, инструкциями, архивами сессий и файлами Mattermost;
+- желаемую конфигурацию GitOps и Helm;
+- ресурсы Kubernetes, которые нельзя воспроизвести из Git или платформы управления;
+- зашифрованные материалы начальной настройки и восстановления хранилища секретов;
+- метаданные выпусков и образов.
 
 ## PostgreSQL
 
-Production profile использует CloudNativePG или эквивалентный оператор с base backups и WAL archive во внешнее object storage. PITR восстанавливает новый cluster, после чего выполняются integrity/application checks.
+Промышленный профиль использует CloudNativePG или эквивалентный оператор с полными резервными копиями и архивом WAL во внешнем объектном хранилище. PITR восстанавливает новый кластер, после чего выполняются проверки целостности и приложения.
 
 Reference: https://cloudnative-pg.io/documentation/current/recovery/
 
 ## Kubernetes
 
-Velero может сохранять Kubernetes objects и нужные volume snapshots/filesystem backups. Он не заменяет application-aware PostgreSQL PITR и S3 versioning.
+Velero может сохранять объекты Kubernetes и необходимые снимки томов или резервные копии файловой системы. Он не заменяет учитывающий приложение PITR PostgreSQL и версионирование S3.
 
 Reference: https://velero.io/docs/main/how-velero-works/
 
 ## S3
 
-- Versioning и lifecycle policies включены согласно retention.
-- Backup bucket/account отделен от runtime credentials.
-- Object checksums и inventory сверяются с DB metadata.
-- Удаление production objects защищено policy/MFA/immutability там, где доступно.
+- Версионирование и политики жизненного цикла включены согласно срокам хранения.
+- Бакет и учетная запись резервного копирования отделены от учетных данных среды выполнения.
+- Контрольные суммы и перечень объектов сверяются с метаданными БД.
+- Удаление промышленных объектов защищено политиками, MFA и неизменяемостью там, где это доступно.
 
 ## Secrets
 
-Обычный application backup не содержит raw secret dump. Secret backend имеет отдельный encrypted recovery process с минимальным кругом доступа и проверкой восстановления.
+Обычная резервная копия приложения не содержит исходную выгрузку секретов. Хранилище секретов имеет отдельный зашифрованный процесс восстановления с минимальным кругом доступа и проверкой результата.
 
-## Restore drill
+## Учение по восстановлению
 
-Минимум раз в квартал для production profile:
+Минимум раз в квартал для промышленного профиля:
 
-1. развернуть изолированный target;
-2. восстановить DB до выбранного времени;
-3. восстановить/подключить S3 objects;
-4. применить GitOps configuration;
-5. проверить users/workspaces/agents/sessions/artifacts/schedules;
-6. выполнить безопасный agent smoke без production mutations;
+1. развернуть изолированное целевое окружение;
+2. восстановить БД до выбранного времени;
+3. восстановить или подключить объекты S3;
+4. применить конфигурацию GitOps;
+5. проверить пользователей, рабочие области, агентов, сессии, файлы и расписания;
+6. выполнить безопасную дымовую проверку агента без промышленных изменений;
 7. зафиксировать фактические RPO/RTO и замечания;
-8. уничтожить drill environment по runbook.
+8. уничтожить тестовое окружение по эксплуатационной инструкции.
 
-Backup без успешного restore drill не считается проверенным.
+Резервная копия без успешного учения по восстановлению не считается проверенной.

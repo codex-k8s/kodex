@@ -1,54 +1,54 @@
 ---
 id: GUIDE-MC-007
-title: Качество API и event contracts
+title: Качество API и событийных контрактов
 type: guide
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Качество API и event contracts
+# Качество API и событийных контрактов
 
 ## OpenAPI
 
-- Source-first YAML/JSON contract в `specs/openapi`.
-- Stable operation IDs и reusable schemas/errors.
-- Pagination/filter/sort задаются явно.
-- Secret write-only поля не возвращаются read API.
-- Breaking change проверяется CI.
-- Server/client types генерируются; ручные DTO допустимы только на adapter boundary с mapping tests.
+- Исходный YAML- или JSON-контракт хранится в `specs/openapi`.
+- Стабильные идентификаторы операций и переиспользуемые схемы и ошибки.
+- Пагинация, фильтрация и сортировка задаются явно.
+- Секретные поля только для записи не возвращаются API чтения.
+- Нарушение совместимости проверяется CI.
+- Серверные и клиентские типы генерируются; ручные DTO допустимы только на границе адаптера с тестами преобразования.
 
 ## AsyncAPI
 
-Каждый command/event envelope содержит:
+Каждый конверт команды или события содержит:
 
 - `event_id`;
-- `event_type` и version;
+- `event_type` и версию;
 - `occurred_at`;
 - `organization_id`;
 - `correlation_id`;
 - `causation_id`;
 - `idempotency_key`;
-- typed payload.
+- типизированную полезную нагрузку.
 
-Consumer обязан выдерживать duplicate delivery и неизвестные optional fields.
+Обработчик обязан выдерживать повторную доставку и неизвестные необязательные поля.
 
 ## Protobuf/gRPC
 
-- Используется только при обоснованном internal contract.
-- Package/version отражены в path и namespace.
-- Field numbers не переиспользуются; удаленные поля reserved.
-- Deadlines и status mapping документированы.
-- Buf lint/breaking/generate выполняются CI.
+- Используется только при обоснованном внутреннем контракте.
+- Пакет и версия отражены в пути и пространстве имен.
+- Номера полей не переиспользуются; удаленные поля резервируются.
+- Сроки выполнения и преобразование состояний документированы.
+- Проверки и генерация Buf выполняются в CI.
 
-## MCP tools
+## Инструменты MCP
 
-- Tool name стабилен и versioned через IntegrationDefinition.
-- Input/output описаны JSON Schema.
-- Risk, required grant, idempotency и approval semantics обязательны.
-- Tool result структурирован; человекочитаемый текст не является единственным status channel.
+- Имя инструмента стабильно и версионируется через `IntegrationDefinition`.
+- Вход и выход описаны JSON Schema.
+- Риск, необходимое право, идемпотентность и правила согласования обязательны.
+- Результат инструмента структурирован; человекочитаемый текст не является единственным каналом состояния.
 
-## Review gate
+## Проверка результата
 
-Контрактный результат проходит отдельные review purposes: domain correctness, compatibility, security/PII, idempotency/retries и usability generated clients.
+Контрактный результат проходит отдельные проверки: корректность домена, совместимость, безопасность и персональные данные, идемпотентность и повторы, удобство сгенерированных клиентов.

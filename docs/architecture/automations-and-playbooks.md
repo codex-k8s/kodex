@@ -1,36 +1,36 @@
 ---
 id: ARCH-MC-009
-title: Автоматизации и playbooks
+title: Автоматизации и управляемые процессы
 type: architecture
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Автоматизации и playbooks
+# Автоматизации и управляемые процессы
 
-## Playbook
+## Управляемый процесс
 
-Playbook является versioned prompt-driven процессом, а не визуальным workflow graph.
+`Playbook` является версионируемым процессом, управляемым промптом, а не визуальным графом действий.
 
 Он содержит:
 
-- input JSON Schema;
-- coordinator agent policy;
-- Markdown instruction template;
-- allowed agents/integrations;
-- concurrency и timeout;
-- callback contract;
-- completion criteria;
-- human gates;
-- result schema.
+- входную JSON Schema;
+- политику агента-координатора;
+- шаблон инструкции Markdown;
+- разрешенных агентов и интеграции;
+- параллельность и тайм-аут;
+- контракт обратного вызова;
+- критерии завершения;
+- шлюзы ручной приемки;
+- схему результата.
 
-ProcessRun фиксирует используемую версию. Изменение Playbook не меняет уже запущенный run.
+`ProcessRun` фиксирует используемую версию. Изменение `Playbook` не меняет уже запущенный процесс.
 
-## Cross-thread orchestration
+## Координация между обсуждениями
 
-Coordinator использует MCP:
+Координатор использует MCP:
 
 - `create_thread`;
 - `delegate_agent`;
@@ -38,53 +38,54 @@ Coordinator использует MCP:
 - `report_process_status`;
 - `publish_artifact`.
 
-Child thread хранит parent process ID. Completion event ставит callback в очередь coordinator session. Callback не зависит от Mattermost mention и не запускается повторно при replay event.
+Дочернее обсуждение хранит идентификатор родительского процесса. Событие завершения ставит обратный вызов в очередь сессии менеджера. Обратный вызов не зависит от упоминания Mattermost и не запускается повторно при повторной доставке события.
 
 ## AutomationSchedule
 
-Schedule target:
+Цель расписания:
 
-- конкретный Agent;
-- versioned Playbook.
+- конкретный `Agent`;
+- версия `Playbook`.
 
 Поля:
 
-- cron или interval;
-- IANA timezone;
-- prompt/version;
-- session policy `new|persistent|rolling`;
-- concurrency `forbid_overlap|queue_all|coalesce`;
-- misfire `skip|run_once|catch_up|within_grace_period`;
-- notification `always|on_action|on_failure|on_action_or_failure|audit_only`;
-- destination room;
-- max runtime/retry policy.
+- cron или интервал;
+- часовой пояс IANA;
+- промпт и его версия;
+- политика сессии `new|persistent|rolling`;
+- параллельность `forbid_overlap|queue_all|coalesce`;
+- обработка пропущенного запуска `skip|run_once|catch_up|within_grace_period`;
+- уведомления `always|on_action|on_failure|on_action_or_failure|audit_only`;
+- целевая комната;
+- максимальное время выполнения и политика повторов.
 
-Рекомендуемые defaults: `new`, `coalesce`, `run_once`, `on_action_or_failure`.
+Рекомендуемые значения по умолчанию: `new`, `coalesce`, `run_once`, `on_action_or_failure`.
 
-## Durable scheduling
+## Долговечное планирование
 
-Пользовательские schedules хранятся в PostgreSQL. Scheduler выбирает due rows через `FOR UPDATE SKIP LOCKED`, создает occurrence и queue job в одной transaction. Уникальный `(schedule_id, scheduled_for)` предотвращает duplicates.
+Пользовательские расписания хранятся в PostgreSQL. Планировщик выбирает наступившие записи через `FOR UPDATE SKIP LOCKED`, создает экземпляр расписания и задание очереди в одной транзакции. Уникальный `(schedule_id, scheduled_for)` предотвращает дубли.
 
-River рассматривается как PostgreSQL-backed execution queue для transactional enqueueing и retries. Его in-memory periodic scheduler не является источником истины; next run и misfire semantics реализуются доменной моделью. Cron parsing выполняется готовой библиотекой, а не собственным parser.
+River рассматривается как очередь выполнения в PostgreSQL для транзакционной постановки заданий и повторов. Его планировщик в памяти не является источником истины; следующий запуск и правила пропущенных запусков реализуются доменной моделью. Cron разбирается готовой библиотекой, а не собственным синтаксическим анализатором.
 
-Kubernetes CronJob не используется для пользовательских schedules: он не знает sessions, provider affinity, grants, approvals и Mattermost delivery.
+Kubernetes CronJob не используется для пользовательских расписаний: он не знает о сессиях, привязке поставщика, правах, согласованиях и доставке Mattermost.
 
-## Headless execution
+## Выполнение без чата
 
-ScheduledRun может не иметь ConversationBinding. При `no_action` результат остается в audit. При action/failure система создает Mattermost post согласно delivery policy. Agent может через MCP создать отдельные threads и delegated runs.
+`ScheduledRun` может не иметь `ConversationBinding`. При `no_action` результат остается в аудите. При выполненном действии или ошибке система создает сообщение Mattermost согласно политике доставки. Агент может через MCP создать отдельные обсуждения и делегированные запуски.
 
-## Human-gate процесс результата
+## Процесс ручной приемки результата
 
-Playbook для разработки или документации должен поддерживать:
+`Playbook` для разработки или документации должен поддерживать:
 
-1. worker result;
-2. 2-3 reviewer cycles;
-3. manager pre-gate check;
-4. owner feedback;
-5. worker fix;
-6. final reviewer cycle;
-7. owner OK;
-8. reviewer merge;
-9. improver run по feedback цикла.
+1. результат исполнителя;
+2. 2-3 цикла рецензирования;
+3. проверку готовности менеджером;
+4. замечания владельца;
+5. исправления исполнителя;
+6. финальный цикл рецензирования;
+7. финальный OK владельца;
+8. обратный вызов рецензента менеджеру с проверкой актуального SHA и замечаний;
+9. слияние менеджером;
+10. запуск improver менеджером по замечаниям цикла.
 
 Следующая независимая волна может стартовать параллельно, если не зависит от непринятого результата.

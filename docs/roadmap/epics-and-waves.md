@@ -2,7 +2,7 @@
 id: ROAD-MC-002
 title: Эпики и волны
 type: roadmap
-status: proposed
+status: approved
 owner: manager
 version: 0.1.0
 updated: 2026-07-16
@@ -13,240 +13,240 @@ updated: 2026-07-16
 ## Принципы поставки
 
 - Волна завершается одним или несколькими принятыми типами результата.
-- Кодовый PR должен быть deployable либо иметь изолированный manual acceptance path.
+- Кодовый PR должен быть готов к развертыванию либо иметь изолированный сценарий ручной приемки.
 - 25-35 PR являются ориентиром, а не искусственным ограничением.
-- Параллельные волны разрешены только при независимых data/contracts.
-- Миграции live data имеют compatibility и rollback window.
-- Deploy выполняется после merge и operational gate, а не для проверки непроверенного design.
+- Параллельные волны разрешены только при независимых данных и контрактах.
+- Миграции действующих данных имеют период совместимости и окно отката.
+- Развертывание выполняется после слияния и эксплуатационного шлюза, а не для проверки непринятого проекта решения.
 
 ## Зависимости
 
 ```text
-Wave 0 Documentation
-  -> Wave 1 Structural Foundation
-      -> Wave 2 Runtime/Dogfooding Spine
-          -> Wave 3 Attachments/Artifacts
-          -> Wave 4 Universal Domain
-              -> Wave 5 Integrations/Approvals
+Wave 0 Документация
+  -> Wave 1 Структурный фундамент
+      -> Wave 2 Среда выполнения и dogfooding
+          -> Wave 3 Вложения и файлы
+          -> Wave 4 Универсальная доменная модель
+              -> Wave 5 Интеграции и согласования
               -> Wave 7 Control Center/GitOps
-          -> Wave 8 Instructions/Processes
-              -> Wave 9 Automations
-      -> Wave 6 Role Images/BuildKit
-  -> Wave 10 Production Platform
-      -> Wave 11 Public/Commercial Release
+          -> Wave 8 Инструкции и процессы
+              -> Wave 9 Автоматизации
+      -> Wave 6 Образы ролей и BuildKit
+  -> Wave 10 Промышленная платформа
+      -> Wave 11 Публичный и коммерческий выпуск
 ```
 
-Wave 6 может идти параллельно Wave 4-5 после появления RuntimeRevision contract. Production work начинается частично раньше, но финальный production gate зависит от стабилизации основных доменов.
+Волна 6 может идти параллельно волнам 4-5 после появления контракта `RuntimeRevision`. Часть промышленной подготовки начинается раньше, но финальный шлюз зависит от стабилизации основных доменов.
 
-## Wave 0. Documentation baseline
+## Wave 0. Базовая документация
 
-Цель: согласовать продукт, домены, архитектуру, guides, ADR, operations и roadmap до масштабного кода.
+Цель: согласовать продукт, домены, архитектуру, руководства, ADR, эксплуатацию и план развития до масштабных изменений кода.
 
 Результат текущего PR:
 
-- universal product model;
-- human-gate delivery process;
-- attachments/artifacts;
-- schedules/playbooks;
-- service/domain boundaries;
-- production/backup/deploy/security baseline;
-- dogfooding bootstrap.
+- универсальная продуктовая модель;
+- процесс поставки с ручной приемкой;
+- вложения и файлы;
+- расписания и управляемые процессы;
+- границы сервисов и доменов;
+- базовый контракт промышленной эксплуатации, резервного копирования, развертывания и безопасности;
+- подготовка dogfooding-области.
 
-Gate: owner comments -> documentation fixes -> consistency review -> owner OK -> merge.
+Шлюз: замечания владельца -> исправление документации -> проверка согласованности -> OK владельца -> слияние.
 
-## Wave 1. Structural foundation
+## Wave 1. Структурный фундамент
 
-Epic outcomes:
+Результаты эпика:
 
-- characterization coverage critical existing behavior;
-- enforceable domain packages;
-- split repositories и application use cases;
-- contracts/tooling skeleton;
-- transactional outbox/idempotency foundation;
-- documentation checks in CI.
+- characterization-покрытие критичного действующего поведения;
+- обязательные границы доменных пакетов;
+- разделенные репозитории данных и прикладные сценарии;
+- каркас контрактов и инструментов;
+- транзакционный outbox и основа идемпотентности;
+- проверки документации в CI.
 
-Representative PRs:
+Представительные PR:
 
-1. Characterization tests и architecture fitness checks.
-2. Repository interfaces и migrations ownership split.
-3. Commands/queries/outbox и idempotent consumer foundation.
-4. Mattermost transport extraction из domain service.
-5. Runtime port extraction из Kubernetes adapter.
+1. Characterization-тесты и проверки архитектурных ограничений.
+2. Интерфейсы репозиториев и разделение владения миграциями.
+3. Команды, запросы, outbox и основа идемпотентных потребителей.
+4. Выделение транспорта Mattermost из доменного сервиса.
+5. Выделение порта среды выполнения из адаптера Kubernetes.
 
-Result gates: repository/data boundaries; application/transport boundaries; outbox delivery contract.
+Шлюзы результата: границы репозиториев и данных; границы приложения и транспорта; контракт доставки outbox.
 
-## Wave 2. Runtime and dogfooding spine
+## Wave 2. Среда выполнения и основа dogfooding
 
-Epic outcomes:
+Результаты эпика:
 
 - RuntimeRevision resolution;
-- immutable provider account affinity;
-- session archives outside pod lifecycle;
-- controller-style reconciliation/leases;
-- durable delegation queue;
-- cross-thread create/delegate/callback MCP;
-- one start message with limits/stop action.
+- неизменяемая привязка учетной записи поставщика к сессии;
+- архивы сессий вне жизненного цикла pod;
+- контроллерная сверка и аренды;
+- долговечная очередь делегирования;
+- MCP для создания обсуждений, делегирования и callbacks;
+- одно стартовое сообщение с лимитами и действием остановки.
 
-Representative PRs:
+Представительные PR:
 
-1. RuntimeRevision schema/effective resolver.
-2. Session account affinity и new-session selection policy.
-3. Session archive adapter и restore contract.
-4. Runtime reconcile/lease/repair extraction.
-5. Parent-child runs, create-thread, callbacks и merged delegation queue.
+1. Схема `RuntimeRevision` и вычисление фактической конфигурации.
+2. Привязка учетной записи к сессии и политика выбора для новой сессии.
+3. Адаптер архива сессии и контракт восстановления.
+4. Выделение сверки, аренды и ремонта среды выполнения.
+5. Родительские и дочерние запуски, создание обсуждений, callbacks и объединенная очередь делегирования.
 
-После этого manager может полноценно вести параллельные dogfooding threads.
+После этого менеджер может полноценно вести параллельные dogfooding-обсуждения.
 
-## Wave 3. Attachments and artifacts
+## Wave 3. Вложения и файлы
 
-Epic outcomes:
+Результаты эпика:
 
-- Artifact metadata/S3 adapter;
-- Mattermost inbound file ingestion;
-- workspace inbox/manifest;
+- метаданные `Artifact` и адаптер S3;
+- прием входных файлов Mattermost;
+- входной каталог рабочей области и манифест;
 - local `publish_artifact` bridge;
-- Mattermost/S3 outbound delivery;
-- scan/quarantine/retention;
-- file/image E2E.
+- исходящая доставка в Mattermost и S3;
+- проверка, карантин и сроки хранения;
+- сквозные проверки файлов и изображений.
 
-Representative PRs:
+Представительные PR:
 
-1. Artifact domain и object storage port.
-2. Inbound Mattermost attachments.
-3. Runtime materialization/prompt context.
-4. Outbound files/images и delivery retry.
-5. Security/limits/scan/retention E2E.
+1. Домен `Artifact` и порт объектного хранилища.
+2. Входные вложения Mattermost.
+3. Материализация среды выполнения и контекст промпта.
+4. Исходящие файлы и изображения и повтор доставки.
+5. Сквозные проверки безопасности, лимитов, проверки содержимого и хранения.
 
-## Wave 4. Universal product model
+## Wave 4. Универсальная продуктовая модель
 
-Epic outcomes:
+Результаты эпика:
 
 - Organization/Workspace/Room;
 - RoleDefinition/Agent/Assignment;
-- provider-neutral accounts/runtime profiles;
-- staged migration current Project/Chat/Role;
-- no-repository InstructionSet baseline.
+- учетные записи и профили среды выполнения без привязки к поставщику;
+- поэтапная миграция текущих `Project`, `Chat` и `Role`;
+- базовый `InstructionSet` без обязательного репозитория.
 
-Representative PRs:
+Представительные PR:
 
-1. Organization scope и compatibility IDs.
-2. Workspace/Room migration и Mattermost bindings.
-3. RoleDefinition/Agent split с сохранением bot identities.
-4. Provider account abstraction/OpenAI adapter.
-5. InstructionSet materialization без Git.
+1. Область `Organization` и идентификаторы совместимости.
+2. Миграция `Workspace` и `Room` и привязки Mattermost.
+3. Разделение `RoleDefinition` и `Agent` с сохранением учетных записей ботов.
+4. Абстракция учетной записи поставщика и адаптер OpenAI.
+5. Материализация `InstructionSet` без Git.
 
-## Wave 5. Integrations and approvals
+## Wave 5. Интеграции и согласования
 
-Epic outcomes:
+Результаты эпика:
 
-- versioned IntegrationDefinition catalog;
+- версионируемый каталог `IntegrationDefinition`;
 - Connection/Capability/Grant;
-- session-scoped MCP Integration Gateway;
-- risk policies и ApprovalRequest;
-- Mattermost/Control Center approval UX;
-- GitHub/Kubernetes/email reference integrations;
-- migration current env/account grants.
+- шлюз MCP с областью одной сессии;
+- политики риска и `ApprovalRequest`;
+- интерфейс согласований Mattermost и Control Center;
+- эталонные интеграции GitHub, Kubernetes и электронной почты;
+- миграция текущих прав на переменные окружения и учетные записи.
 
-Representative PRs:
+Представительные PR:
 
-1. Catalog/schema/import/reconcile.
-2. Connections и credential references.
-3. Grants/effective tools.
-4. MCP gateway и idempotent execution.
-5. Approval lifecycle/UI.
-6. GitHub direct/managed modes migration.
+1. Каталог, схема, импорт и сверка.
+2. Подключения и ссылки на учетные данные.
+3. Права и фактически доступные инструменты.
+4. Шлюз MCP и идемпотентное выполнение.
+5. Жизненный цикл и интерфейс согласования.
+6. Миграция прямого и управляемого режимов GitHub.
 
-## Wave 6. Role images and supply chain
+## Wave 6. Образы ролей и цепочка поставки
 
-Epic outcomes:
+Результаты эпика:
 
-- RoleImageRecipe и canonical hash;
-- BuildKit builder/registry cache;
-- tools manifest для prompt;
-- SBOM/provenance/signing/scanning;
-- RuntimeRevision image digest;
-- migration from Kaniko.
+- `RoleImageRecipe` и канонический хеш;
+- сборщик BuildKit и кэш реестра;
+- манифест инструментов для промпта;
+- SBOM, происхождение, подпись и проверка;
+- дайджест образа `RuntimeRevision`;
+- миграция с Kaniko.
 
-Representative PRs:
+Представительные PR:
 
-1. Recipe/catalog/API.
-2. BuildKit proof и cache.
-3. Isolated build controller.
-4. Supply-chain gates и runtime digest.
+1. Рецепт, каталог и API.
+2. Проверка BuildKit и кэша.
+3. Изолированный контроллер сборки.
+4. Шлюзы цепочки поставки и digest среды выполнения.
 
-## Wave 7. Control Center and GitOps
+## Wave 7. Control Center и GitOps
 
-Epic outcomes:
+Результаты эпика:
 
-- Vue app shell/OIDC/generated API;
-- Workspaces/Agents/Accounts;
-- Integrations/Approvals;
-- Schedules/Playbooks;
-- Runtime/Artifacts/Audit;
-- GitOps import/export/reconcile/drift;
-- responsive/accessibility E2E.
+- каркас Vue-приложения, OIDC и сгенерированный API;
+- рабочие области, агенты и учетные записи;
+- интеграции и согласования;
+- расписания и управляемые процессы;
+- среда выполнения, файлы и аудит;
+- импорт, экспорт, сверка и обнаружение расхождений GitOps;
+- сквозные проверки адаптивности и доступности.
 
-Representative PRs группируются по законченным screens/use cases, а не по frontend/backend слоям.
+Представительные PR группируются по законченным экранам и пользовательским сценариям, а не по слоям клиентской и серверной части.
 
-## Wave 8. Instructions, processes and result gates
+## Wave 8. Инструкции, процессы и шлюзы результата
 
-Epic outcomes:
+Результаты эпика:
 
-- InstructionSet versions/sources;
-- KnowledgeSpace/materialization;
-- Playbook versions/input/result schemas;
-- ProcessRun/ChildRun graph;
-- human gate tied to result version;
-- improver proposal workflow;
-- standard presets для software, documents, analysis и business intake.
+- версии и источники `InstructionSet`;
+- `KnowledgeSpace` и материализация;
+- версии `Playbook` и схемы входа и результата;
+- граф `ProcessRun` и `ChildRun`;
+- ручная приемка, привязанная к версии результата;
+- процесс предложений improver;
+- стандартные пресеты для разработки, документов, анализа и обработки бизнес-заявок.
 
-## Wave 9. Automations
+## Wave 9. Автоматизации
 
-Epic outcomes:
+Результаты эпика:
 
-- AutomationSchedule CRUD/presets/timezone;
-- durable scheduler occurrences;
-- concurrency/misfire/session/delivery policies;
-- headless sessions;
-- run now/history/retry;
-- scheduled attachments/integration results;
-- daily improver и platform health schedules.
+- создание, чтение, изменение и удаление `AutomationSchedule`, пресеты и часовые пояса;
+- долговечные экземпляры запусков планировщика;
+- политики параллельности, пропущенных запусков, сессий и доставки;
+- сессии без обязательного чата;
+- немедленный запуск, история и повторы;
+- вложения и результаты интеграций по расписанию;
+- ежедневный improver и расписания проверки платформы.
 
-## Wave 10. Production platform
+## Wave 10. Промышленная платформа
 
-Epic outcomes:
+Результаты эпика:
 
-- physical service extraction и HA;
-- leader election;
-- OIDC/RBAC/audit hardening;
-- OpenTelemetry/Prometheus/Grafana/log backend;
-- capacity/admission/load tests;
-- CloudNativePG/S3/Velero backup;
-- restore drills;
-- Helm/GitOps/Argo Rollouts;
-- security/threat model/incident runbooks.
+- физическое выделение сервисов и высокая доступность;
+- выбор лидера;
+- усиление OIDC, RBAC и аудита;
+- OpenTelemetry, Prometheus, Grafana и хранилище логов;
+- проверки ресурсов, допуска и нагрузки;
+- резервное копирование через CloudNativePG, S3 и Velero;
+- учебные восстановления;
+- Helm, GitOps и Argo Rollouts;
+- безопасность, модель угроз и runbooks инцидентов.
 
-## Wave 11. Public and commercial release
+## Wave 11. Публичный и коммерческий выпуск
 
-Epic outcomes:
+Результаты эпика:
 
-- legal license decision/CLA/trademark;
-- dependency/license inventory;
-- security policy и vulnerability process;
-- installation/upgrade/migration docs;
-- starter/production release artifacts;
-- public examples/catalog;
-- clean-install, upgrade, rollback, restore и dogfooding E2E;
-- release notes и support matrix.
+- юридическая проверка лицензий, CLA и товарного знака;
+- реестр зависимостей и лицензий;
+- политика безопасности и процесс работы с уязвимостями;
+- документация установки, обновления и миграции;
+- артефакты начального и промышленного выпуска;
+- публичные примеры и каталог;
+- сквозные проверки чистой установки, обновления, отката, восстановления и dogfooding;
+- заметки о выпуске и матрица поддержки.
 
-## Definition of done программы
+## Критерии завершения программы
 
-- Current live data успешно мигрируют.
-- Fresh starter и production-like install проходят E2E.
-- Accepted turn/session/schedule переживают service/pod restart.
-- Опасные tools нельзя выполнить в обход policy выбранного integration mode.
-- Attachments и output files работают end-to-end.
-- Backup restore подтвержден drill evidence.
-- Manager ведет параллельные processes с callbacks и owner gates.
-- Нет обязательной зависимости от Git repository.
-- Public artifacts не содержат secrets, private project references и instance-specific assumptions.
+- Текущие действующие данные успешно мигрируют.
+- Чистая начальная и приближенная к промышленной установки проходят сквозные проверки.
+- Принятые ходы, сессии и расписания переживают перезапуск сервиса или pod.
+- Опасные инструменты нельзя выполнить в обход политики выбранного режима интеграции.
+- Вложения и исходящие файлы работают через весь контур.
+- Восстановление из резервной копии подтверждено учебным прогоном.
+- Менеджер ведет параллельные процессы с callbacks и ручной приемкой владельцем.
+- Нет обязательной зависимости от Git-репозитория.
+- Публичные артефакты не содержат секретов, ссылок на частные проекты и предположений о конкретной инсталляции.

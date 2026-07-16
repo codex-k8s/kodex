@@ -1,39 +1,39 @@
 ---
 id: DOM-MC-003
-title: Workspaces & Conversations
+title: Рабочие области и диалоги
 type: domain
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Workspaces & Conversations
+# Рабочие области и диалоги
 
 ## Назначение
 
-Связывает универсальные Workspace/Room/Conversation с Mattermost teams/channels/posts и определяет routing пользовательских сообщений.
+Связывает универсальные `Workspace`, `Room` и `Conversation` с командами, каналами и сообщениями Mattermost и определяет маршрутизацию пользовательских сообщений.
 
 ## В границах
 
-- workspace lifecycle и Mattermost team binding;
-- room lifecycle и channel binding;
-- default agent и room participants;
-- conversation/thread bindings;
-- inbound message deduplication;
-- explicit user routing;
-- delivery targets и locale.
+- жизненный цикл рабочей области и привязка команды Mattermost;
+- жизненный цикл комнаты и привязка канала;
+- агент по умолчанию и участники комнаты;
+- привязки диалогов и обсуждений;
+- устранение повторов входных сообщений;
+- явная пользовательская маршрутизация;
+- цели доставки и локаль.
 
-Не владеет Turn execution, file blob и Mattermost server configuration.
+Не владеет выполнением хода, двоичным содержимым файлов и конфигурацией сервера Mattermost.
 
-## Routing
+## Маршрутизация
 
-- Сообщение пользователя с явным упоминанием agent направляется этому agent.
-- Сообщение пользователя без упоминаний идет default agent контекста.
-- Сообщение bot identity не запускает agent по mention.
-- Делегирование агентов выполняется только MCP command.
-- Internal notrigger property имеет приоритет над текстовыми mentions.
-- Повторно доставленный post event не создает duplicate turn.
+- Сообщение пользователя с явным упоминанием агента направляется этому агенту.
+- Сообщение пользователя без упоминаний направляется агенту контекста по умолчанию.
+- Сообщение от учетной записи бота не запускает агента по упоминанию.
+- Делегирование агентов выполняется только командой MCP.
+- Внутренний признак `notrigger` имеет приоритет над текстовыми упоминаниями.
+- Повторная доставка события сообщения не создает повторный ход.
 
 ## Данные
 
@@ -41,12 +41,17 @@ Workspace, Room, AgentAssignment, ConversationBinding, MattermostBinding, Inboun
 
 ## События
 
-`WorkspaceCreated`, `RoomCreated`, `ConversationStarted`, `UserInstructionReceived`, `ConversationDeliveryRequested`.
+`WorkspaceCreated`, `RoomCreated`, `ConversationStarted`, `ConversationDeletionRequested`, `ConversationRestored`, `UserInstructionReceived`, `ConversationDeliveryRequested`.
 
-## Acceptance
+## Удаление
 
-- Team/channel создаются либо привязываются идемпотентно.
-- Пользователь выбирает entities без ввода IDs.
-- Role bots приглашаются в team/room.
-- Agent callback/attachment/status post не триггерит новый turn.
-- Conversation может отсутствовать у headless ScheduledRun.
+Удаление канала или обсуждения Mattermost не удаляет сессию немедленно. Привязка переходит в `deletion_pending`, новые сообщения не принимаются, а домен оркестрации получает команду отсроченной очистки. Восстановление в течение срока отсрочки отменяет очистку. Ожидающие решения человека и внешние обратные вызовы должны завершиться либо быть явно отменены до удаления PVC.
+
+## Критерии приемки
+
+- Команда и канал создаются либо привязываются идемпотентно.
+- Пользователь выбирает сущности без ввода идентификаторов.
+- Боты ролей приглашаются в команду и комнату.
+- Обратный вызов агента, вложение или сообщение состояния не запускает новый ход.
+- У `ScheduledRun` без чата может отсутствовать `Conversation`.
+- Удаление и восстановление канала или обсуждения обрабатываются идемпотентно и не теряют архив сессии.

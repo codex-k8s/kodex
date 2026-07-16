@@ -1,49 +1,50 @@
 ---
 id: GUIDE-MC-006
-title: CI baseline
+title: Базовые проверки CI
 type: guide
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# CI baseline
+# Базовые проверки CI
 
 ## Для каждого PR
 
-- format/lint Markdown и проверка ссылок;
+- форматирование Markdown и проверка ссылок;
 - `git diff --check`;
-- Go format, vet/staticcheck, unit/integration tests по scope;
-- Vue lint, typecheck, unit tests и build по scope;
-- contract lint/breaking change/generated diff;
-- migration validation;
-- Helm lint/template/schema checks;
-- secret scan;
-- dependency/license scan;
-- container build для измененных deployables;
-- SBOM и vulnerability scan;
-- PR description с automated и manual checks.
+- форматирование Go, vet/staticcheck, модульные и интеграционные тесты в затронутой области;
+- линтер Vue, проверка типов, модульные тесты и сборка в затронутой области;
+- проверка контрактов, совместимости и сгенерированного diff;
+- проверка миграций;
+- проверки Helm chart, шаблонов и схем;
+- поиск секретов;
+- проверка зависимостей и лицензий;
+- сборка контейнеров для измененных компонентов;
+- SBOM и проверка уязвимостей;
+- описание PR с автоматическими и ручными проверками.
+- проверка русской проектной прозы по словарю допустимых технических исключений.
 
-## Main/release
+## Основная ветка и выпуск
 
-- build один раз и publish immutable image digest;
-- подпись/provenance;
-- deploy candidate environment;
-- smoke и E2E;
-- human environment gate;
-- GitOps promotion того же digest;
-- post-deploy verification;
-- automatic abort/rollback для stateless workload при failed analysis.
+- однократная сборка и публикация неизменяемого дайджеста образа;
+- подпись и происхождение;
+- развертывание кандидатного окружения;
+- дымовые и сквозные проверки;
+- ручной допуск окружения;
+- продвижение того же дайджеста через GitOps;
+- проверка после развертывания;
+- автоматическая остановка или откат нагрузки без локального состояния при неуспешном анализе.
 
-## Generated code
+## Сгенерированный код
 
-CI запускает generators и требует clean worktree. Разница generated code без изменения source contract блокирует PR.
+CI запускает генераторы и требует чистое рабочее дерево. Изменение сгенерированного кода без изменения исходного контракта блокирует PR.
 
-## Documentation-only PR
+## PR только с документацией
 
-Не запускает дорогие image builds без причины, но обязательно проверяет Markdown, internal links, document metadata, forbidden secrets и consistency indexes.
+Не запускает дорогие сборки образов без причины, но обязательно проверяет Markdown, внутренние ссылки, метаданные документов, запрещенные секреты и согласованность индексов.
 
-## Human gate
+## Ручная приемка
 
-CI success не заменяет owner acceptance. Merge action выполняется reviewer после финального owner OK в согласованном процессе результата.
+Успешный CI не заменяет приемку владельцем. Слияние выполняет менеджер после финального OK владельца, обратного вызова рецензента и проверки того же SHA.

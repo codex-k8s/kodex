@@ -2,7 +2,7 @@
 id: ARCH-MC-006
 title: Логическая модель данных
 type: architecture
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
@@ -10,7 +10,7 @@ updated: 2026-07-16
 
 # Логическая модель данных
 
-## Tenancy и workspace
+## Организации и рабочие области
 
 | Сущность | Ключевые поля |
 | --- | --- |
@@ -18,9 +18,9 @@ updated: 2026-07-16
 | `Membership` | organization_id, subject_id, platform_role |
 | `Workspace` | organization_id, name, slug, mattermost_team_id, managed_by |
 | `Room` | workspace_id, mattermost_channel_id, room_type, default_agent_id |
-| `ConversationBinding` | room_id, root_post_id, session/process reference |
+| `ConversationBinding` | room_id, root_post_id, session/process reference, lifecycle_state, deletion_requested_at |
 
-## Agents и instructions
+## Агенты и инструкции
 
 | Сущность | Ключевые поля |
 | --- | --- |
@@ -31,7 +31,7 @@ updated: 2026-07-16
 | `InstructionVersion` | instruction_set_id, content manifest, checksum, created_by |
 | `RuntimeProfile` | provider type, config template, resource class, image recipe, revision |
 
-## Providers и integrations
+## Поставщики и интеграции
 
 | Сущность | Ключевые поля |
 | --- | --- |
@@ -42,8 +42,9 @@ updated: 2026-07-16
 | `IntegrationConnection` | definition_id, organization_id, config, credential_refs, status |
 | `IntegrationGrant` | connection_id, agent_id, capability, constraints |
 | `ApprovalRequest` | initiator, capability, safe arguments, state, expires_at |
+| `ToolInvocation` | session_id, turn_id, connection_id, arguments_hash, state, approval_id, result_ref |
 
-## Runtime
+## Среда выполнения
 
 | Сущность | Ключевые поля |
 | --- | --- |
@@ -52,10 +53,12 @@ updated: 2026-07-16
 | `RuntimeRevision` | effective config manifest, hashes, image digest, created_at |
 | `RuntimeLease` | session_id, pod identity, heartbeat, expires_at |
 | `UsageObservation` | turn/session/account, limits/tokens/duration |
+| `RuntimeResource` | session_id, kind, external_id, state, last_used_at, eligible_at, deleted_at |
+| `ResourceRetentionPolicy` | scope, pod_ttl, temporary_ttl, pvc_grace, archive_retention, version |
 
-`provider_account_id` становится immutable после первого запуска session. Изменение допустимо только через явное создание новой session и context handoff.
+`provider_account_id` становится неизменяемым после первого запуска сессии. Изменение допустимо только через явное создание новой сессии и передачу контекста.
 
-## Processes и schedules
+## Процессы и расписания
 
 | Сущность | Ключевые поля |
 | --- | --- |
@@ -66,9 +69,9 @@ updated: 2026-07-16
 | `ScheduleOccurrence` | schedule_id, scheduled_for, idempotency_key, status |
 | `ScheduledRun` | occurrence_id, process/session reference, outcome |
 
-Уникальный индекс `(schedule_id, scheduled_for)` исключает duplicate occurrences.
+Уникальный индекс `(schedule_id, scheduled_for)` исключает повторное создание экземпляра расписания.
 
-## Artifacts
+## Файлы
 
 | Сущность | Ключевые поля |
 | --- | --- |
@@ -77,19 +80,21 @@ updated: 2026-07-16
 | `MessageArtifactBinding` | artifact_version_id, post_id, thread_id, direction |
 | `ArtifactDelivery` | artifact_version_id, destination, external_id, state |
 
-## Audit и outbox
+## Аудит и исходящий журнал
 
-`AuditEvent` хранит actor, action, target, outcome, correlation_id и безопасные metadata. Raw secrets, полные file contents и unfiltered prompts в audit не сохраняются.
+`AuditEvent` хранит инициатора, действие, цель, исход, `correlation_id` и безопасные метаданные. Необработанные секреты, полное содержимое файлов и неотфильтрованные промпты в аудите не сохраняются.
 
-`OutboxEvent` создается в той же транзакции, что и бизнес-изменение. Consumer фиксирует idempotency key и обработанный version.
+`OutboxEvent` создается в той же транзакции, что и бизнес-изменение. Обработчик фиксирует ключ идемпотентности и обработанную версию.
 
 ## Ключевые инварианты
 
-- Session не resume-ится другим provider account.
-- Turn выполняется строго последовательно внутри session.
-- RuntimeRevision неизменяем и относится к одному turn либо группе идентичных turns.
-- Agent не использует IntegrationConnection без active grant.
-- Approval result нельзя применить к другому tool call.
+- Сессия не возобновляется другой учетной записью поставщика.
+- Ходы выполняются строго последовательно внутри сессии.
+- `RuntimeRevision` неизменяема и относится к одному ходу либо группе идентичных ходов.
+- Агент не использует `IntegrationConnection` без действующего права.
+- Результат согласования нельзя применить к другому вызову инструмента.
+- Ожидающее согласование или внешний обратный вызов блокирует очистку ресурсов среды выполнения.
+- PVC удаляется только после подтвержденного архива сессии и наступления `eligible_at`.
 - ArtifactVersion immutable; изменение файла создает новую version.
 - Git-managed object не изменяется UI до explicit detach.
 - Mattermost/Kubernetes external IDs не являются primary business IDs.

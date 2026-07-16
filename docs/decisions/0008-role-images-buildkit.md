@@ -1,25 +1,25 @@
 ---
 id: ADR-MC-008
-title: Role images и BuildKit
+title: Образы ролей и BuildKit
 type: decision
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# ADR-MC-008. Role images и BuildKit
+# ADR-MC-008. Образы ролей и BuildKit
 
 ## Решение
 
-RoleImageRecipe имеет canonical hash. Existing signed image digest переиспользуется; отсутствующий image собирается BuildKit в isolated builder contour. Typed package lists предпочтительнее shell; install script — administrator-reviewed escape hatch.
+`RoleImageRecipe` имеет канонический хеш. Существующий подписанный дайджест образа переиспользуется; отсутствующий образ собирается BuildKit в изолированном контуре сборки. Типизированные списки пакетов предпочтительнее shell; сценарий установки — проверенный администратором аварийный механизм.
 
-Kaniko исключается из production target как archived/unmaintained upstream.
+Kaniko исключается из промышленной конфигурации как архивированный и неподдерживаемый исходный проект.
 
-Image допускается к runtime после SBOM, scan, provenance и signature gate. Runtime использует digest.
+Образ допускается в среду выполнения после SBOM, проверки уязвимостей, фиксации происхождения и проверки подписи. Среда выполнения использует дайджест.
 
 ## Последствия
 
-- Нужен OCI registry и build cache production profile.
-- Builder отделяется от agent runtime и credentials.
-- Изменение recipe автоматически меняет RuntimeRevision.
+- Нужны OCI-реестр и кеш сборки промышленного профиля.
+- Сборщик отделяется от среды выполнения агента и его учетных данных.
+- Изменение рецепта автоматически меняет `RuntimeRevision`.

@@ -2,7 +2,7 @@
 id: ARCH-MC-004
 title: Границы сервисов и структура репозитория
 type: architecture
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
@@ -41,79 +41,79 @@ deploy/
 docs/
 ```
 
-Каждый Go service использует локальные `cmd`, `internal/app`, `internal/domain`, `internal/repository`, `internal/clients` и `internal/transport`. `libs/go/**` содержит только observability, auth context, typed IDs, clock и другие действительно cross-cutting primitives с несколькими реальными consumers. Детальный layout определен в `docs/design-guidelines/go/services_design_requirements.md`.
+Каждый сервис Go использует локальные `cmd`, `internal/app`, `internal/domain`, `internal/repository`, `internal/clients` и `internal/transport`. `libs/go/**` содержит только наблюдаемость, контекст авторизации, типизированные идентификаторы, часы и другие действительно сквозные примитивы с несколькими реальными потребителями. Подробная структура определена в `docs/design-guidelines/go/services_design_requirements.md`.
 
-## Границы deployables
+## Границы компонентов
 
 ### control-plane
 
-- CRUD и validation business entities;
-- effective configuration и policy evaluation;
+- CRUD и проверка бизнес-сущностей;
+- вычисление итоговой конфигурации и политик;
 - OpenAPI для Control Center;
-- transactional outbox;
-- migrations своих schemas.
+- транзакционный исходящий журнал;
+- миграции собственных схем.
 
-Не выполняет Kubernetes reconciliation, AI runtime и внешние mutations.
+Не выполняет сверку Kubernetes, запуск ИИ и внешние изменения.
 
 ### interaction-gateway
 
 - Mattermost WebSocket/REST;
-- cards, dialogs, reactions, bot identities;
-- inbound files и outbound deliveries;
-- mapping post/thread to platform commands;
-- idempotency входных событий.
+- карточки, диалоги, реакции и учетные записи ботов;
+- входные файлы и исходящие доставки;
+- преобразование сообщений и обсуждений в команды платформы;
+- идемпотентность входных событий.
 
-Не владеет sessions, schedules и integrations.
+Не владеет сессиями, расписаниями и интеграциями.
 
 ### runtime-controller
 
-- reconcile session pods/PVCs/secrets/config resources;
-- RuntimeRevision application;
-- capacity/admission/idle eviction/TTL;
-- lifecycle и status Kubernetes resources.
+- сверка pod, PVC, секретов и конфигурационных ресурсов сессий;
+- применение `RuntimeRevision`;
+- контроль ресурсов, допуск, вытеснение простаивающих pod и TTL;
+- жизненный цикл и состояние ресурсов Kubernetes.
 
 ### integration-gateway
 
-- MCP transport;
-- connection resolution;
-- grants, risk, approvals;
-- credential isolation;
-- idempotent tool execution.
+- транспорт MCP;
+- выбор соединения;
+- права, риски и согласования;
+- изоляция учетных данных;
+- идемпотентное выполнение инструментов.
 
 ### automation-scheduler
 
-- due schedule claim;
-- occurrence idempotency;
-- misfire/concurrency policy;
-- enqueue ScheduledRun;
-- next-run calculation.
+- получение наступивших расписаний;
+- идемпотентность экземпляров расписания;
+- политика пропусков и параллельности;
+- постановка `ScheduledRun` в очередь;
+- вычисление следующего запуска.
 
 ### agent-runner
 
-- turn claim/complete;
-- AI runtime process lifecycle;
-- session restore/snapshot;
-- workspace materialization;
-- local artifact publish bridge.
+- получение и завершение хода;
+- жизненный цикл процесса среды выполнения ИИ;
+- восстановление и снимок сессии;
+- материализация рабочей области;
+- локальный мост публикации файлов.
 
 ## Переход от текущего bot-service
 
-1. Зафиксировать characterization tests существующих flows.
-2. Ввести bounded-context packages и отдельные repository interfaces внутри текущего binary.
+1. Зафиксировать характеристические тесты существующих сценариев.
+2. Ввести пакеты доменных контекстов и отдельные интерфейсы репозиториев внутри текущего процесса.
 3. Разделить общий `admin.Repository` по владельцам данных.
-4. Вынести Mattermost transport из domain services.
-5. Ввести outbox и idempotent command handlers.
-6. Выделить runtime-controller первым самостоятельным service.
-7. Выделить integration-gateway после появления integration model.
+4. Вынести транспорт Mattermost из доменных сервисов.
+5. Ввести исходящий журнал и идемпотентные обработчики команд.
+6. Первым самостоятельным сервисом выделить `runtime-controller`.
+7. Выделить `integration-gateway` после появления модели интеграций.
 8. Выделить interaction-gateway и control-plane после стабилизации OpenAPI.
-9. Удалить compatibility facade только после миграции UI и live data.
+9. Удалить фасад совместимости только после миграции интерфейса и рабочих данных.
 
-Нельзя одновременно менять модель данных, transport, service split и user behavior без промежуточного совместимого состояния.
+Нельзя одновременно менять модель данных, транспорт, границы сервисов и пользовательское поведение без промежуточного совместимого состояния.
 
 ## Внутренние контракты
 
-- External/control API: OpenAPI.
-- Mattermost callbacks: typed HTTP models на основе upstream SDK.
-- Domain events/commands: AsyncAPI и versioned envelopes.
-- Internal streaming/high-throughput: Protobuf/gRPC только после измеренной необходимости.
+- Внешний API и API управления: OpenAPI.
+- Обратные вызовы Mattermost: типизированные HTTP-модели на основе официального SDK.
+- Доменные события и команды: AsyncAPI и версионируемые конверты.
+- Внутренняя потоковая передача с высокой пропускной способностью: Protobuf/gRPC только после измеренной необходимости.
 - MCP: официальный Model Context Protocol Go SDK.

@@ -1,49 +1,49 @@
 ---
 id: DOM-MC-008
-title: Artifacts & Knowledge
+title: Файлы и знания
 type: domain
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Artifacts & Knowledge
+# Файлы и знания
 
 ## Назначение
 
-Владеет файлами, версиями, deliveries, retention, instruction/knowledge objects и безопасной materialization в agent workspace.
+Владеет файлами, версиями, доставкой, сроками хранения, объектами инструкций и знаний и безопасной материализацией в рабочей области агента.
 
 ## Входные источники
 
-- Mattermost attachment;
-- Control Center upload;
-- integration result, например email attachment;
-- agent output;
-- Git/instruction import;
-- backup/restore.
+- вложение Mattermost;
+- загрузка из центра управления;
+- результат интеграции, например вложение письма;
+- результат агента;
+- импорт из Git или набора инструкций;
+- резервное копирование и восстановление.
 
-## Storage lifecycle
+## Жизненный цикл хранения
 
-States: `uploading`, `scanning`, `available`, `quarantined`, `delivery_pending`, `deleted`, `retained`.
+Состояния: `uploading`, `scanning`, `available`, `quarantined`, `delivery_pending`, `deleted`, `retained`.
 
-Object становится доступен runtime только после завершения обязательных checks. ArtifactVersion immutable и адресуется внутренним ID, а не user filename.
+Объект становится доступен среде выполнения только после завершения обязательных проверок. `ArtifactVersion` неизменяема и адресуется внутренним идентификатором, а не пользовательским именем файла.
 
 ## KnowledgeSpace
 
-KnowledgeSpace группирует versioned documents/artifacts и search/index metadata. Исходные документы остаются источником истины; embeddings/search index являются перестраиваемой проекцией.
+`KnowledgeSpace` группирует версионируемые документы и файлы, а также метаданные поиска и индекса. Исходные документы остаются источником истины; векторные представления и поисковый индекс являются перестраиваемой проекцией.
 
 ## Retention
 
-Policy учитывает organization, artifact kind, legal hold, linked active process/session и audit requirements. Удаление metadata и object выполняется согласованно и повторяемо.
+Политика учитывает организацию, вид файла, юридическую блокировку удаления, связанную активную сессию или процесс и требования аудита. Метаданные и объект удаляются согласованно и повторяемо.
 
-## Acceptance
+## Критерии приемки
 
-- PDF/image/text доступны агенту по safe paths.
-- Unicode/duplicate filenames не перезаписываются.
-- Agent публикует Markdown/CSV/PDF/PNG от собственной identity.
-- Publish outside outbox запрещен.
-- Mattermost delivery retry не создает duplicate post.
-- Oversized artifact получает scoped link.
-- Cross-organization access отклоняется.
-- Backup restore проверяет object checksum.
+- PDF, изображения и текст доступны агенту по безопасным путям.
+- Имена в Unicode и повторяющиеся имена файлов не приводят к перезаписи.
+- Агент публикует Markdown, CSV, PDF и PNG от собственной учетной записи.
+- Публикация вне исходящего каталога запрещена.
+- Повтор доставки Mattermost не создает повторное сообщение.
+- Слишком большой файл получает ограниченную ссылку.
+- Доступ из другой организации отклоняется.
+- Восстановление резервной копии проверяет контрольную сумму объекта.

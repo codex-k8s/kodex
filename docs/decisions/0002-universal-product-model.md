@@ -2,7 +2,7 @@
 id: ADR-MC-002
 title: Универсальная продуктовая модель
 type: decision
-status: proposed
+status: approved
 owner: product
 version: 0.1.0
 updated: 2026-07-16
@@ -12,20 +12,20 @@ updated: 2026-07-16
 
 ## Решение
 
-Домен строится вокруг Organization, Workspace, Room, RoleDefinition и Agent. GitHub/repository является optional integration. Один Organization на инсталляцию — первый deployment profile, но organization scope присутствует в schema/contracts с начала migration.
+Домен строится вокруг `Organization`, `Workspace`, `Room`, `RoleDefinition` и `Agent`. GitHub и репозитории являются необязательной интеграцией. Одна организация на установку — первый профиль развертывания, но область организации присутствует в схеме и контрактах с начала миграции.
 
-Mattermost mappings:
+Соответствия Mattermost:
 
-- Workspace = team;
-- Room = channel;
-- Conversation = thread либо headless execution binding;
-- Agent = отдельная bot identity.
+- `Workspace` = команда;
+- `Room` = канал;
+- `Conversation` = обсуждение либо привязка запуска без чата;
+- `Agent` = отдельная учетная запись бота.
 
-`Project`, `Chat` и current `AgentRole` поддерживаются как migration/UI aliases для IT preset.
+`Project`, `Chat` и текущая `AgentRole` поддерживаются как переходные имена интерфейса для ИТ-варианта.
 
 ## Последствия
 
-- Не-IT workspace работает без repository.
-- Role definition переиспользуется; Agent хранит concrete identity/config bindings.
-- Требуется staged data migration и compatibility UI.
-- Provider-specific термины не используются в universal entities.
+- Рабочая область вне ИТ работает без репозитория.
+- Определение роли переиспользуется; агент хранит конкретные привязки учетной записи и конфигурации.
+- Требуется поэтапная миграция данных и совместимый интерфейс.
+- Термины конкретного поставщика не используются в универсальных сущностях.

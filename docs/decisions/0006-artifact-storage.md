@@ -1,23 +1,23 @@
 ---
 id: ADR-MC-006
-title: S3 как canonical artifact storage
+title: S3 как основное хранилище файлов
 type: decision
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# ADR-MC-006. S3 как canonical artifact storage
+# ADR-MC-006. S3 как основное хранилище файлов
 
 ## Решение
 
-Attachments, agent outputs, InstructionSets и session archives хранятся в S3-compatible object storage. Mattermost содержит delivery copy/reference, PostgreSQL — metadata и lifecycle state.
+Вложения, результаты агентов, `InstructionSet` и архивы сессий хранятся в S3-совместимом объектном хранилище. Mattermost содержит копию или ссылку доставки, PostgreSQL — метаданные и состояние жизненного цикла.
 
-Входные файлы проходят hashing/policy/scan до materialization. Агент публикует выходные файлы только через `publish_artifact` из разрешенного outbox.
+Входные файлы проходят хеширование и проверки политики и безопасности до материализации. Агент публикует выходные файлы только через `publish_artifact` из разрешенного исходящего каталога.
 
 ## Последствия
 
-- Pod/PVC и Mattermost retention не уничтожают canonical result.
-- Требуются tenant isolation, retention, versioning и backup consistency.
-- Oversized Mattermost file можно доставить expiring scoped link.
+- TTL pod и PVC и срок хранения Mattermost не уничтожают основной результат.
+- Требуются изоляция организаций, сроки хранения, версионирование и согласованность резервных копий.
+- Слишком большой для Mattermost файл можно доставить ограниченной ссылкой с истекающим сроком.

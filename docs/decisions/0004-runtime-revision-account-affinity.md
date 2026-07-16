@@ -1,24 +1,24 @@
 ---
 id: ADR-MC-004
-title: RuntimeRevision и account affinity
+title: RuntimeRevision и привязка учетной записи
 type: decision
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# ADR-MC-004. RuntimeRevision и account affinity
+# ADR-MC-004. RuntimeRevision и привязка учетной записи
 
 ## Решение
 
-Перед каждым turn строится immutable RuntimeRevision. Изменения env/auth/image/mount/permissions приводят к пересозданию idle session pod перед следующим turn. Provider config materialize-ится заново перед каждым `exec/resume`.
+Перед каждым ходом строится неизменяемая `RuntimeRevision`. Изменения env, авторизации, образа, подключений файлов и прав приводят к пересозданию простаивающего pod сессии перед следующим ходом. Конфигурация поставщика материализуется заново перед каждым `exec` или `resume`.
 
-AIProviderAccount выбирается при создании session и после первого запуска immutable. Автоматическая балансировка разрешена только для новых sessions. Resume другим account запрещен.
+`AIProviderAccount` выбирается при создании сессии и после первого запуска неизменяема. Автоматическая балансировка разрешена только для новых сессий. Возобновление другой учетной записью запрещено.
 
 ## Последствия
 
 - Изменения конфигурации предсказуемо применяются без вмешательства пользователя.
-- Running turn не меняется на лету.
-- Недоступный account требует reauthorization или новой session с context handoff.
-- Session archive должен быть независим от pod lifecycle.
+- Выполняемый ход не меняется на лету.
+- Недоступная учетная запись требует повторной авторизации либо новой сессии с передачей контекста.
+- Архив сессии должен быть независим от жизненного цикла pod.

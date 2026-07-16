@@ -1,54 +1,54 @@
 ---
 id: DOM-MC-010
-title: Images & Supply Chain
+title: Образы и цепочка поставки
 type: domain
-status: proposed
+status: approved
 owner: architect
 version: 0.1.0
 updated: 2026-07-16
 ---
 
-# Images & Supply Chain
+# Образы и цепочка поставки
 
 ## Назначение
 
-Владеет RoleImageRecipe, build request, immutable image digest, cache, SBOM, provenance, scan и signing status.
+Владеет `RoleImageRecipe`, запросом сборки, неизменяемым дайджестом образа, кешем, SBOM, происхождением, проверкой уязвимостей и состоянием подписи.
 
-## Recipe
+## Рецепт
 
-Recipe содержит:
+Рецепт содержит:
 
-- pinned base image reference/digest;
-- target platforms;
-- typed OS/language/tool packages;
-- browser/testing capabilities;
-- optional administrator-reviewed install script;
-- build-time network/registry policy;
-- metadata для prompt tools catalog.
+- закрепленную ссылку или дайджест базового образа;
+- целевые платформы;
+- типизированные пакеты ОС, языков и инструментов;
+- возможности браузера и тестирования;
+- необязательный проверенный администратором сценарий установки;
+- сетевую политику и политику реестра на время сборки;
+- метаданные для каталога инструментов в промпте.
 
-Hash вычисляется по canonical recipe, base digest, build inputs, platform и builder version. Если signed image с таким hash доступен, повторная сборка не запускается.
+Хеш вычисляется по каноническому рецепту, дайджесту базового образа, входам сборки, платформе и версии сборщика. Если подписанный образ с таким хешем доступен, повторная сборка не запускается.
 
-## Builder
+## Сборщик
 
-Kaniko не используется в production baseline, поскольку upstream архивирован. BuildKit выполняет build в отдельном namespace/service account. Rootless mode предпочтителен; privileged fallback допускается только изолированно и документируется.
+Kaniko не используется в промышленной конфигурации, поскольку исходный проект архивирован. BuildKit выполняет сборку в отдельном namespace и под отдельной служебной учетной записью. Режим без root предпочтителен; привилегированный резервный режим допускается только изолированно и документируется.
 
-Builder не получает production runtime credentials. Package registry token, если нужен, выдается как scoped short-lived build secret и не попадает в image layers/logs.
+Сборщик не получает промышленные учетные данные среды выполнения. Токен реестра пакетов, если нужен, выдается как краткоживущий секрет с ограниченной областью и не попадает в слои образа или логи.
 
-## Publication gate
+## Допуск к публикации
 
-Image доступен agents после:
+Образ доступен агентам после:
 
-- successful build;
-- SBOM generation;
-- vulnerability policy;
-- provenance record;
-- signature verification;
-- push в approved OCI registry.
+- успешной сборки;
+- формирования SBOM;
+- прохождения политики уязвимостей;
+- фиксации происхождения;
+- проверки подписи;
+- публикации в разрешенный OCI-реестр.
 
-## Acceptance
+## Критерии приемки
 
-- Одинаковый recipe переиспользует digest.
-- Изменение script/tool/base меняет hash.
-- Failed scan блокирует use и дает actionable status.
-- Runtime запускает digest, а не mutable tag.
-- Prompt tools list соответствует фактическому image manifest.
+- Одинаковый рецепт переиспользует дайджест.
+- Изменение сценария, инструмента или основы меняет хеш.
+- Неуспешная проверка блокирует использование и дает понятное состояние.
+- Среда выполнения запускает дайджест, а не изменяемый тег.
+- Перечень инструментов в промпте соответствует фактическому манифесту образа.
