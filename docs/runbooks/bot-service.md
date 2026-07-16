@@ -460,4 +460,4 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 
 ## Production gaps после MVP
 
-Актуальный список production gaps ведется в `docs/strategy/production-gaps.md`.
+Актуальные production gaps и последовательность их закрытия ведутся в `docs/roadmap/epics-and-waves.md` и `docs/operations/**`.

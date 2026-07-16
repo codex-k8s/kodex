@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/product/requirements.md
+updated: 2026-07-16
+---
+
+> Исторический Mattermost-only UX contract. Актуальный продукт использует Mattermost и Control Center; см. `docs/product/**` и `docs/guides/frontend-vue.md`.
+
 # Owner UX Contract
 
 Этот документ фиксирует целевой продуктовый контракт для Mattermost-интерфейса `matter-codex`. Он важнее текущих технических команд: новые кодовые PR должны приводить поведение к этому контракту, а не расширять набор ручных slash command.

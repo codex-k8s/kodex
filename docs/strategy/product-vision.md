@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/product/README.md
+updated: 2026-07-16
+---
+
+> Историческая single-user GitHub-centric vision. Актуальная product model находится в `docs/product/**`.
+
 # Product Vision
 
 ## Назначение

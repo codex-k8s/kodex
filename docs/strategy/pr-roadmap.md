@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/roadmap/epics-and-waves.md
+updated: 2026-07-16
+---
+
+> Исторический MVP roadmap. Актуальные волны находятся в `docs/roadmap/**`.
+
 # PR Roadmap
 
 Этот roadmap заменяет старую разбивку после merge PR #20 и после перехода на single-user model фиксирует новый основной путь: Project = Mattermost team, Chat = private channel, AgentRole = агентная роль в project.

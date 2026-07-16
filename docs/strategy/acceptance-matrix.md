@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/product/requirements.md
+updated: 2026-07-16
+---
+
+> Историческая acceptance matrix MVP. Актуальные требования находятся в `docs/product/requirements.md`, а волны - в `docs/roadmap/**`.
+
 # Acceptance Matrix
 
 Этот документ задает проверяемую матрицу готовности после пересборки roadmap. Он нужен, чтобы следующий PR не выглядел готовым только потому, что команда работает в happy path.

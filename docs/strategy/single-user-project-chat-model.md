@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/decisions/0002-universal-product-model.md
+updated: 2026-07-16
+---
+
+> Историческая single-user model. Актуальная Organization/Workspace/Agent model зафиксирована в `ADR-MC-002`.
+
 # Single-user Project/Chat Model
 
 Этот документ фиксирует новую целевую модель `matter-codex` после отказа от flow-centric UX. Инстанс считается личным инструментом владельца, поэтому продукт оптимизируется под короткий путь настройки, а не под multi-tenant role model.
