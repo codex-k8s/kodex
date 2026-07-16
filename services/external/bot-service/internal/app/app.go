@@ -116,6 +116,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		RoleBotManager:     roleBotManager,
 		TurnDispatcher:     chatRunSvc,
 		MenuActionURL:      agentsActionURL(cfg),
+		MattermostSiteURL:  cfg.MattermostSiteURL,
 		StorageReady:       storage != nil,
 		RuntimeReady:       runtimeConfigured,
 	})

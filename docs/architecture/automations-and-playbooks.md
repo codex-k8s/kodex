@@ -32,8 +32,8 @@ updated: 2026-07-16
 
 Координатор использует MCP:
 
-- `create_thread`;
-- `delegate_agent`;
+- `mattermost_start_agent_thread`;
+- `mattermost_return_to_requester`;
 - `request_human_gate`;
 - `report_process_status`;
 - `publish_artifact`.

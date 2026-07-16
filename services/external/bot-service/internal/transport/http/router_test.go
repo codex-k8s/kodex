@@ -911,6 +911,38 @@ func (store *fakeRouterAdminStore) ListQueuedAgentSessionTurns(context.Context, 
 	return nil, nil
 }
 
+func (store *fakeRouterAdminStore) CreateAgentDelegation(context.Context, adminrepo.CreateAgentDelegationInput) (entity.AgentDelegation, bool, error) {
+	return entity.AgentDelegation{}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetAgentDelegationBySourceKey(context.Context, int64, string) (entity.AgentDelegation, error) {
+	return entity.AgentDelegation{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) GetAgentDelegationForCallback(context.Context, int64) (entity.AgentDelegation, error) {
+	return entity.AgentDelegation{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListAgentDelegationsBySource(context.Context, int64, int) ([]entity.AgentDelegation, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) SetAgentDelegationRoot(context.Context, int64, string) (entity.AgentDelegation, error) {
+	return entity.AgentDelegation{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) SetAgentDelegationTarget(context.Context, int64, int64, int64, string) (entity.AgentDelegation, error) {
+	return entity.AgentDelegation{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) SetAgentDelegationFailed(context.Context, int64) (entity.AgentDelegation, error) {
+	return entity.AgentDelegation{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) SetAgentDelegationCallback(context.Context, int64, int64, string) (entity.AgentDelegation, error) {
+	return entity.AgentDelegation{}, adminrepo.ErrNotFound
+}
+
 func (store *fakeRouterAdminStore) ListAgentProfiles(context.Context) ([]entity.AgentProfile, error) {
 	return nil, nil
 }

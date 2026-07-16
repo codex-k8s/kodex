@@ -3411,6 +3411,7 @@ type fakeAdminStore struct {
 	botIdentities        map[int64]entity.MattermostBotIdentity
 	agentSessions        map[string]entity.AgentSession
 	sessionTurns         []entity.AgentSessionTurn
+	agentDelegations     map[int64]entity.AgentDelegation
 	postMessageMaxRunes  int
 }
 
@@ -4540,6 +4541,117 @@ func (store *fakeAdminStore) ListAgentPromptTemplates(_ context.Context, profile
 		}
 	}
 	return items, nil
+}
+
+func (store *fakeAdminStore) CreateAgentDelegation(_ context.Context, input adminrepo.CreateAgentDelegationInput) (entity.AgentDelegation, bool, error) {
+	store.ensureAgentDelegations()
+	for _, item := range store.agentDelegations {
+		if item.SourceSessionID == input.SourceSessionID && item.WorkItemKey == input.WorkItemKey {
+			return item, false, nil
+		}
+	}
+	id := int64(len(store.agentDelegations) + 1)
+	item := entity.AgentDelegation{
+		ID:              id,
+		ProjectID:       input.ProjectID,
+		SourceSessionID: input.SourceSessionID,
+		SourceTurnID:    input.SourceTurnID,
+		TargetChatID:    input.TargetChatID,
+		TargetRoleID:    input.TargetRoleID,
+		WorkItemKey:     input.WorkItemKey,
+		Title:           input.Title,
+		Status:          agentDelegationStatusCreating,
+		CreatedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now().UTC(),
+	}
+	store.agentDelegations[id] = item
+	return item, true, nil
+}
+
+func (store *fakeAdminStore) GetAgentDelegationBySourceKey(_ context.Context, sourceSessionID int64, workItemKey string) (entity.AgentDelegation, error) {
+	store.ensureAgentDelegations()
+	for _, item := range store.agentDelegations {
+		if item.SourceSessionID == sourceSessionID && item.WorkItemKey == workItemKey {
+			return item, nil
+		}
+	}
+	return entity.AgentDelegation{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) GetAgentDelegationForCallback(_ context.Context, targetSessionID int64) (entity.AgentDelegation, error) {
+	store.ensureAgentDelegations()
+	var selected entity.AgentDelegation
+	for _, item := range store.agentDelegations {
+		if item.TargetSessionID == targetSessionID && (selected.ID == 0 || item.ID > selected.ID) {
+			selected = item
+		}
+	}
+	if selected.ID == 0 {
+		return entity.AgentDelegation{}, adminrepo.ErrNotFound
+	}
+	return selected, nil
+}
+
+func (store *fakeAdminStore) ListAgentDelegationsBySource(_ context.Context, sourceSessionID int64, limit int) ([]entity.AgentDelegation, error) {
+	store.ensureAgentDelegations()
+	items := make([]entity.AgentDelegation, 0, len(store.agentDelegations))
+	for id := int64(len(store.agentDelegations)); id > 0 && len(items) < limit; id-- {
+		item, ok := store.agentDelegations[id]
+		if ok && item.SourceSessionID == sourceSessionID {
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
+func (store *fakeAdminStore) SetAgentDelegationRoot(_ context.Context, id int64, rootPostID string) (entity.AgentDelegation, error) {
+	return store.updateAgentDelegation(id, func(item *entity.AgentDelegation) {
+		item.TargetRootPostID = rootPostID
+		item.Status = "thread_created"
+	})
+}
+
+func (store *fakeAdminStore) SetAgentDelegationTarget(_ context.Context, id int64, targetSessionID int64, targetTurnID int64, targetRunID string) (entity.AgentDelegation, error) {
+	return store.updateAgentDelegation(id, func(item *entity.AgentDelegation) {
+		item.TargetSessionID = targetSessionID
+		item.TargetTurnID = targetTurnID
+		item.TargetRunID = targetRunID
+		item.Status = agentSessionTurnQueued
+	})
+}
+
+func (store *fakeAdminStore) SetAgentDelegationFailed(_ context.Context, id int64) (entity.AgentDelegation, error) {
+	return store.updateAgentDelegation(id, func(item *entity.AgentDelegation) {
+		item.Status = agentDelegationStatusFailed
+	})
+}
+
+func (store *fakeAdminStore) SetAgentDelegationCallback(_ context.Context, id int64, callbackTurnID int64, callbackRunID string) (entity.AgentDelegation, error) {
+	return store.updateAgentDelegation(id, func(item *entity.AgentDelegation) {
+		if item.CallbackTurnID == 0 {
+			item.CallbackTurnID = callbackTurnID
+			item.CallbackRunID = callbackRunID
+			item.Status = "callback_queued"
+		}
+	})
+}
+
+func (store *fakeAdminStore) updateAgentDelegation(id int64, update func(*entity.AgentDelegation)) (entity.AgentDelegation, error) {
+	store.ensureAgentDelegations()
+	item, ok := store.agentDelegations[id]
+	if !ok {
+		return entity.AgentDelegation{}, adminrepo.ErrNotFound
+	}
+	update(&item)
+	item.UpdatedAt = time.Now().UTC()
+	store.agentDelegations[id] = item
+	return item, nil
+}
+
+func (store *fakeAdminStore) ensureAgentDelegations() {
+	if store.agentDelegations == nil {
+		store.agentDelegations = map[int64]entity.AgentDelegation{}
+	}
 }
 
 func (store *fakeAdminStore) GetAgentPromptTemplate(_ context.Context, profileName string, templateKey string) (entity.AgentPromptTemplate, error) {

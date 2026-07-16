@@ -286,6 +286,16 @@ type UpdateAgentSessionTurnMessageInput struct {
 	Message string
 }
 
+type CreateAgentDelegationInput struct {
+	ProjectID       int64
+	SourceSessionID int64
+	SourceTurnID    int64
+	TargetChatID    int64
+	TargetRoleID    int64
+	WorkItemKey     string
+	Title           string
+}
+
 type Repository interface {
 	UpsertRepository(ctx context.Context, input UpsertRepositoryInput) (entity.Repository, bool, error)
 	GetRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
@@ -343,6 +353,14 @@ type Repository interface {
 	UpdateAgentSessionTurnStatusPost(ctx context.Context, input UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error)
 	UpdateAgentSessionTurnMessage(ctx context.Context, input UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error)
 	ListQueuedAgentSessionTurns(ctx context.Context, sessionID int64) ([]entity.AgentSessionTurn, error)
+	CreateAgentDelegation(ctx context.Context, input CreateAgentDelegationInput) (entity.AgentDelegation, bool, error)
+	GetAgentDelegationBySourceKey(ctx context.Context, sourceSessionID int64, workItemKey string) (entity.AgentDelegation, error)
+	GetAgentDelegationForCallback(ctx context.Context, targetSessionID int64) (entity.AgentDelegation, error)
+	ListAgentDelegationsBySource(ctx context.Context, sourceSessionID int64, limit int) ([]entity.AgentDelegation, error)
+	SetAgentDelegationRoot(ctx context.Context, id int64, rootPostID string) (entity.AgentDelegation, error)
+	SetAgentDelegationTarget(ctx context.Context, id int64, targetSessionID int64, targetTurnID int64, targetRunID string) (entity.AgentDelegation, error)
+	SetAgentDelegationFailed(ctx context.Context, id int64) (entity.AgentDelegation, error)
+	SetAgentDelegationCallback(ctx context.Context, id int64, callbackTurnID int64, callbackRunID string) (entity.AgentDelegation, error)
 	UpsertAgentProfile(ctx context.Context, input UpsertAgentProfileInput) (entity.AgentProfile, bool, error)
 	GetAgentProfile(ctx context.Context, name string) (entity.AgentProfile, error)
 	ListAgentProfiles(ctx context.Context) ([]entity.AgentProfile, error)
