@@ -4,394 +4,499 @@ title: Архитектурное предложение волны 1 «Стру
 type: roadmap
 status: proposed
 owner: architect
-version: 0.1.0
+version: 0.2.0
 updated: 2026-07-16
 ---
 
 # Архитектурное предложение волны 1 «Структурный фундамент»
 
-## Статус и границы
+## Статус и границы доказательств
 
-Документ является предложением по [GitHub Issue #65](https://github.com/codex-k8s/matter-codex/issues/65). Он фиксирует фактическое состояние репозитория на `main` в коммите `719974b8de8d28b3404f161d70994fed45a79cf1` и уточняет первый эволюционный шаг утвержденной архитектуры.
+Документ является исправленным предложением по [GitHub Issue #65](https://github.com/codex-k8s/matter-codex/issues/65). Фактические выводы относятся к `main` в коммите `719974b8de8d28b3404f161d70994fed45a79cf1`. Предложение уточняет путь реализации [ADR-MC-001](../decisions/0001-evolutionary-service-boundaries.md), [целевых границ сервисов](../architecture/service-boundaries.md) и [доменных границ](../architecture/domain-map.md), но не заменяет их.
 
-В результат входят:
+В документ входят:
 
-- карта текущих компонентов, сборки приложения, таблиц и миграций;
-- реестр критичного поведения и очередь характеристических тестов;
-- границы пакетов, портов и владельцев данных для волны 1;
-- совместимые состояния `expand -> migrate -> contract`, условия отката и первые пять PR;
-- риски действующих данных и среды выполнения;
-- связь задач [#51](https://github.com/codex-k8s/matter-codex/issues/51), [#58](https://github.com/codex-k8s/matter-codex/issues/58), [#59](https://github.com/codex-k8s/matter-codex/issues/59), [#60](https://github.com/codex-k8s/matter-codex/issues/60) и [#61](https://github.com/codex-k8s/matter-codex/issues/61) с волной 1;
-- совместимость с открытой во время подготовки задачей [#66](https://github.com/codex-k8s/matter-codex/issues/66), без включения ее продуктовой модели в #65;
-- перечень следующих задач для менеджера.
+- карта текущего `bot-service`, `agent-runner`, таблиц, миграций и границ доверия;
+- обязательное сдерживание подтверждённых рисков до структурных переносов;
+- контракты квитанции входного события, разветвления команд, аренды хода, завершения, обратного вызова и исходящего журнала;
+- совместимые состояния `expand -> cutover -> contract` и матрица `N-1/N`;
+- первые пять независимо реализуемых PR и очередь последующих задач;
+- связь с задачами [#51](https://github.com/codex-k8s/matter-codex/issues/51), [#58](https://github.com/codex-k8s/matter-codex/issues/58), [#59](https://github.com/codex-k8s/matter-codex/issues/59), [#60](https://github.com/codex-k8s/matter-codex/issues/60), [#61](https://github.com/codex-k8s/matter-codex/issues/61) и [#66](https://github.com/codex-k8s/matter-codex/issues/66).
 
-В результат не входят изменения прикладного кода, схемы PostgreSQL, ресурсов Kubernetes, конфигурации Mattermost и действующего развертывания. Кластер и рабочая база данных не инспектировались, поэтому документ не утверждает их текущее состояние. Выводы о действующем инциденте приводятся только как сведения из соответствующих GitHub Issues, а технические выводы — как свойства указанной версии репозитория.
+В этот результат не входят прикладной код, SQL-миграции, Kubernetes-манифесты, Ingress, развертывание и изменения действующей среды. Кластер, рабочая PostgreSQL и S3 не инспектировались. Наличие архивов, число реплик и фактические значения конфигурации не утверждаются. Значения секретов не читались.
 
-Предложение уточняет, но не заменяет [ADR-MC-001](../decisions/0001-evolutionary-service-boundaries.md), [целевые границы сервисов](../architecture/service-boundaries.md) и [план волн](epics-and-waves.md). Новые архитектурные решения здесь не принимаются: документ задает проверяемый путь реализации уже утвержденных решений.
+Отсутствие проверки credential у action/dialog — не сохраняемый контракт `P2`, а подтверждённая уязвимость текущей публичной границы. Любая реализация структурной части волны блокируется до принятого и развёрнутого PR-0.
 
 ## Краткий вывод
 
-Волна 1 должна оставить `bot-service` совместимым развертываемым компонентом и сначала провести границы внутри процесса. Для этого нужно:
+Первые пять результатов волны должны идти в таком порядке:
 
-1. зафиксировать критичное поведение тестами, включая известные разрывы надежности;
-2. заменить единый `admin.Repository` узкими интерфейсами потребителей при одном PostgreSQL-адаптере;
-3. добавить транзакционную границу приема команды, входную идемпотентность и outbox через только добавочные миграции;
-4. отделить транспорт Mattermost от прикладной маршрутизации без изменения HTTP/WebSocket-контрактов;
-5. отделить порт среды выполнения от Kubernetes-адаптера и разложить `agent-runner` на локальные пакеты без создания нового сервиса.
+1. `PR-0` закрывает публичную границу Mattermost: узкий Ingress, удостоверение action/dialog, проверенный actor, защита от replay и SSRF.
+2. `PR-1` создаёт обязательный герметичный и PostgreSQL-тестовый контур и полную матрицу характеристических и secret-canary проверок.
+3. `PR-2` выключает автоматическое разрушительное удаление сессионных PVC/Secret, включая путь квоты, пока нет доказанной допустимости по PostgreSQL и архиву.
+4. `PR-3` вводит сериализацию сессии, lease/heartbeat/fencing, CAS завершения и остановки, атомарный intent обратного вызова и локальный исходящий журнал результата.
+5. `PR-4` вводит версионированный конверт, одну квитанцию provider event, детерминированное разветвление в `N` команд/ходов и честную `at-least-once` доставку Mattermost.
 
-Первое физическое выделение — `runtime-controller` — начинается только после этих шлюзов, в соответствии с ADR-MC-001. Волна 1 не переименовывает действующие таблицы в универсальную модель, не переносит миграции между несколькими процессами и не меняет одновременно модель данных, транспорт, границы развертывания и пользовательское поведение.
+Только после этих пяти PR допускаются узкие репозиторные порты, перенос транспорта и порт среды выполнения. `replicas >= 2` запрещены до зелёных gate квитанции/outbox/idempotency, leader/lease/fencing и управления одиночными циклами.
 
 ## 1. Фактическая карта текущей реализации
 
-### 1.1 Развертываемые компоненты и сборка приложения
+### 1.1 Компоненты и ответственность
 
 ```text
-Mattermost WebSocket/HTTP       GitHub webhook
-             |                       |
-             +-----> bot-service <---+
-                       |
-          +------------+-------------+
-          |            |             |
-      PostgreSQL   Kubernetes API   Mattermost REST
-                       |
-                 Pod agent-runner
-                       |
-                 bot-service internal API/MCP
+Интернет/Mattermost/GitHub
+              |
+       общий Ingress Prefix /
+              |
+         bot-service
+      /       |        \
+Mattermost PostgreSQL Kubernetes API
+                         |
+                  Pod agent-runner
+                         |
+           internal API и сессионный MCP
 ```
 
-| Компонент | Фактическая ответственность | Проверяемое свидетельство |
+| Компонент | Фактическая ответственность | Свидетельство |
 | --- | --- | --- |
-| Корень сборки `bot-service` | Загружает конфигурацию, открывает PostgreSQL, при включенном режиме запускает миграции, добавляет отсутствующие шаблоны промптов, собирает все доменные сервисы и адаптеры, запускает HTTP, слушатель WebSocket, циклы восстановления и хранения. | [`cmd/bot-service/main.go`](../../services/external/bot-service/cmd/bot-service/main.go), [`internal/app/app.go`](../../services/external/bot-service/internal/app/app.go) |
-| HTTP-транспорт | Обслуживает проверки жизнеспособности и готовности, Mattermost slash-команды, действия и диалоги, GitHub webhook, внутренний API сессий и MCP текущей сессии. Проверка готовности сейчас отвечает успехом без проверки PostgreSQL, слушателя или Kubernetes. | [`internal/transport/http/router.go`](../../services/external/bot-service/internal/transport/http/router.go), [`internal/transport/http/mcp.go`](../../services/external/bot-service/internal/transport/http/mcp.go), [`internal/transport/http/router_test.go`](../../services/external/bot-service/internal/transport/http/router_test.go) |
-| Пограничный слой Mattermost | Использует REST для карточек, ботов, пользователей, команд и диалогов; после однократного получения `BotUserID` запускает слушатель WebSocket с внутренним переподключением. | [`internal/integration/mattermost/control_surface.go`](../../services/external/bot-service/internal/integration/mattermost/control_surface.go), [`internal/integration/mattermost/chat_listener.go`](../../services/external/bot-service/internal/integration/mattermost/chat_listener.go), [`internal/app/app.go`](../../services/external/bot-service/internal/app/app.go) |
-| Маршрутизация и постановка хода | Фильтрует системные сообщения и сообщения ботов, выбирает роль по упоминанию, обсуждению или роли чата, вычисляет ключ сессии, запускает Pod и отдельно создает ход и запуск. | [`internal/domain/service/chat_runtime.go`](../../services/external/bot-service/internal/domain/service/chat_runtime.go), [`internal/domain/service/chat_runtime_test.go`](../../services/external/bot-service/internal/domain/service/chat_runtime_test.go) |
-| Сессии, ходы и статусы | Авторизует `agent-runner` через Kubernetes Secret, выдает следующий ход, завершает его, сохраняет снимок, изменяет запуск и карточку, публикует результат, обрабатывает остановку и ручной повтор после исчерпания емкости. | [`internal/domain/service/agent_session_service.go`](../../services/external/bot-service/internal/domain/service/agent_session_service.go), [`internal/domain/service/agent_session_service_test.go`](../../services/external/bot-service/internal/domain/service/agent_session_service_test.go) |
-| Делегирование и обратные вызовы | Создает корневое сообщение в другом чате, сессию и ход, связывает их записью делегирования, возвращает результат непосредственному инициатору и объединяет запрос с уже ожидающим ходом. Шаги PostgreSQL и Mattermost выполняются последовательно, без общей транзакции и outbox. | [`internal/domain/service/agent_delegation_service.go`](../../services/external/bot-service/internal/domain/service/agent_delegation_service.go), [`internal/domain/service/agent_delegation_service_test.go`](../../services/external/bot-service/internal/domain/service/agent_delegation_service_test.go) |
-| Kubernetes-адаптер среды выполнения | Создает и удаляет Jobs, Pods, PVC, Secrets и ConfigMaps, применяет лимиты и вытеснение, проверяет состояние и удаляет просроченные ресурсы. Для сессии использует детерминированные имена ресурсов. | [`internal/integration/kubernetes/runner.go`](../../services/external/bot-service/internal/integration/kubernetes/runner.go), [`internal/integration/kubernetes/runner_test.go`](../../services/external/bot-service/internal/integration/kubernetes/runner_test.go) |
-| `agent-runner` | Восстанавливает архив `CODEX_HOME`, циклически получает ход, запускает или возобновляет `codex`, передает прогресс, создает base64 tar/gzip снимок и завершает ход через внутренний API. Повторяет сетевые/`5xx` вызовы API и отдельно ошибки емкости модели. | [`cmd/agent-runner/main.go`](../../services/jobs/agent-runner/cmd/agent-runner/main.go), [`cmd/agent-runner/main_test.go`](../../services/jobs/agent-runner/cmd/agent-runner/main_test.go) |
-| PostgreSQL-адаптер | Один тип `admin.Repository` реализует доступ ко всем продуктовым данным, данным среды выполнения, поставщиков, процессов и аудита через один `pgxpool.Pool`. | [`internal/domain/repository/admin/repository.go`](../../services/external/bot-service/internal/domain/repository/admin/repository.go), [`internal/repository/postgres/admin/repository.go`](../../services/external/bot-service/internal/repository/postgres/admin/repository.go), [`internal/repository/postgres/admin/sql`](../../services/external/bot-service/internal/repository/postgres/admin/sql) |
-| Миграции | Goose-файлы встроены в исполняемый файл и выполняются при запуске `bot-service`; отдельного средства миграции и отдельного владельца схемы сейчас нет. | [`internal/repository/postgres/migrations/migrations.go`](../../services/external/bot-service/internal/repository/postgres/migrations/migrations.go), [`internal/app/app.go`](../../services/external/bot-service/internal/app/app.go) |
+| Корень сборки `bot-service` | Открывает PostgreSQL, при включённом режиме запускает миграции, собирает сервисы и запускает HTTP, WebSocket listener, repair и retention loops. | [`cmd/bot-service/main.go`](../../services/external/bot-service/cmd/bot-service/main.go), [`internal/app/app.go`](../../services/external/bot-service/internal/app/app.go) |
+| HTTP-маршрутизатор | В одном `ServeMux` регистрирует health, readiness, metrics, slash/action/dialog, GitHub webhook, internal session API и MCP. | [`router.go`](../../services/external/bot-service/internal/transport/http/router.go), [`mcp.go`](../../services/external/bot-service/internal/transport/http/mcp.go) |
+| Маршрутизация Mattermost | Фильтрует сообщения, выбирает одну или несколько целевых ролей и для каждой цели отдельно вызывает постановку хода. | [`chat_runtime.go`](../../services/external/bot-service/internal/domain/service/chat_runtime.go), [`chat_runtime_test.go`](../../services/external/bot-service/internal/domain/service/chat_runtime_test.go) |
+| Сессии и ходы | Авторизует runner, выдаёт ход, завершает его, сохраняет snapshot, меняет карточку и напрямую публикует результат. | [`agent_session_service.go`](../../services/external/bot-service/internal/domain/service/agent_session_service.go), [`agent_session_service_test.go`](../../services/external/bot-service/internal/domain/service/agent_session_service_test.go) |
+| Делегирование | Создаёт целевой тред и ход, а при возврате сначала создаёт или меняет callback turn и только затем выполняет CAS записи делегирования. | [`agent_delegation_service.go`](../../services/external/bot-service/internal/domain/service/agent_delegation_service.go), [`agent_delegations__set_callback.sql`](../../services/external/bot-service/internal/repository/postgres/admin/sql/agent_delegations__set_callback.sql) |
+| Kubernetes-адаптер | Создаёт и удаляет Pod/PVC/Secret/Job/ConfigMap, выбирает ServiceAccount, монтирует учётные данные и выполняет retention. | [`runner.go`](../../services/external/bot-service/internal/integration/kubernetes/runner.go), [`runner_test.go`](../../services/external/bot-service/internal/integration/kubernetes/runner_test.go) |
+| `agent-runner` | Получает и завершает ходы, запускает Codex, передаёт прогресс и сохраняет base64 tar/gzip snapshot. | [`agent-runner/main.go`](../../services/jobs/agent-runner/cmd/agent-runner/main.go), [`agent-runner/main_test.go`](../../services/jobs/agent-runner/cmd/agent-runner/main_test.go) |
+| PostgreSQL-адаптер | Один `admin.Repository` обслуживает все таблицы через один `pgxpool.Pool`; миграции встроены в `bot-service`. | [`domain/repository/admin`](../../services/external/bot-service/internal/domain/repository/admin/repository.go), [`repository/postgres/admin`](../../services/external/bot-service/internal/repository/postgres/admin/repository.go), [`migrations.go`](../../services/external/bot-service/internal/repository/postgres/migrations/migrations.go) |
 
-`bot-service` сейчас является и внешней границей, и прикладным модулем, и владельцем оркестрации среды выполнения. `agent-runner` является отдельным образом и Pod-процессом, но его единственный крупный `main` одновременно содержит клиент API, цикл ходов, запуск процесса Codex, разбор событий, повторы и архивирование. Это границы ответственности, а не основание немедленно добавлять сервисы.
+### 1.2 Подтверждённые разрывы
 
-### 1.2 Фактическая последовательность приема сообщения
+| Разрыв | Фактическое состояние |
+| --- | --- |
+| Публичные маршруты | [`ingress.yaml.tpl`](../../deploy/k8s/bot-service/ingress.yaml.tpl) публикует `/` с `pathType: Prefix`, поэтому наружу попадает весь `ServeMux`, включая `/internal/agent-sessions/`, `/mcp/sessions/` и `/metrics`. |
+| Action/dialog authentication | Slash проверяет общий token, GitHub webhook — HMAC. `handleAgentsAction` и `handleAgentsDialog` принимают actor и контекст из JSON без равноценной credential check. `publishDialogResult` вызывает переданный `request.URL`. |
+| Multi-mention | `routeChatPost` возвращает цель для каждой упомянутой роли, а `HandleChatPost` ставит отдельный ход каждой цели. Один provider event законно создаёт `N` ходов. |
+| Claim | [`agent_session_turns__claim_next.sql`](../../services/external/bot-service/internal/repository/postgres/admin/sql/agent_session_turns__claim_next.sql) не блокирует сессию. Две транзакции могут не увидеть `running` и захватить разные строки `queued`. |
+| Complete/stop | [`agent_session_turns__complete.sql`](../../services/external/bot-service/internal/repository/postgres/admin/sql/agent_session_turns__complete.sql) обновляет по `id` без status/version/lease CAS; остановка выполняется отдельным запросом [`agent_session_turns__cancel.sql`](../../services/external/bot-service/internal/repository/postgres/admin/sql/agent_session_turns__cancel.sql). |
+| Внешняя доставка | `CompleteTurn` сначала переводит ход в терминальное состояние, затем отдельно вызывает Mattermost. Уникального локального delivery intent и доказанного provider idempotency primitive нет. |
+| Callback | `ReturnToRequester` сначала создаёт/изменяет ход, затем устанавливает `callback_turn_id`; проигравший конкурентный CAS не отменяет уже созданный побочный эффект. |
+| Retention | Retention включён по умолчанию и запускается с `DryRun: false`; путь quota retry также вызывает разрушительную очистку. Решение использует метки, фазу и возраст Kubernetes без PostgreSQL/S3 eligibility. |
+| Полномочия | `bot-service` может управлять Pod/PVC/Secret/Job и `pods/exec`; runner может получить read-only либо `cluster-admin` ServiceAccount, прямые OpenAI/GitHub credentials и session/MCP token. |
+| Тестовый контур | Текущий [`Makefile`](../../Makefile) содержит только `test-go`; единственный PostgreSQL-тест использует `TEST_DATABASE_DSN` и выполняет `t.Skip`. `test-go-postgres` и `test-go-all` отсутствуют. |
 
-1. `ChatListener` получает событие `posted`, отбрасывает системный `Post.Type` и передает сообщение в `HandleChatPost`.
-2. `ChatRunService` отбрасывает пустые, служебные, `#notrigger`, slash-команды и сообщения известных учетных записей ботов; затем выбирает роль по упоминанию, существующей сессии обсуждения или настройке чата.
-3. `EnqueueAgentTurn` последовательно вычисляет настройки поставщиков и среды выполнения, создает или обновляет сессию, при необходимости вызывает Kubernetes, добавляет ход и отдельно добавляет `agent_run`.
-4. `agent-runner` получает снимок и запрашивает ход. SQL сначала возвращает уже выполняющийся ход со статусом `running`, иначе блокирует старейший `queued` через `FOR UPDATE SKIP LOCKED`.
-5. После Codex `agent-runner` создает архив и вызывает завершение. `bot-service` последовательно обновляет ход, снимок сессии, запуск, карточку статуса и публикует итог.
+Текущая одна реплика в [`deployment.yaml.tpl`](../../deploy/k8s/bot-service/deployment.yaml.tpl) уменьшает вероятность части гонок, но не превращает их в обеспеченные инварианты.
 
-Нет одной транзакции, объединяющей прием входного события, сессию, ход, запуск и намерение внешней доставки. Нет уникального ключа события или сообщения Mattermost для входного приема. Поэтому повтор WebSocket-события способен поставить второй ход, а сбой между отдельными шагами оставляет частично примененное состояние. Это вывод из [`chat_runtime.go`](../../services/external/bot-service/internal/domain/service/chat_runtime.go), SQL вставки хода [`agent_session_turns__insert.sql`](../../services/external/bot-service/internal/repository/postgres/admin/sql/agent_session_turns__insert.sql) и схемы [`000014_agent_sessions.sql`](../../services/external/bot-service/internal/repository/postgres/migrations/000014_agent_sessions.sql), где `mattermost_post_id` не имеет уникального ограничения.
+## 2. Обязательный контур безопасности
 
-### 1.3 FIFO, получение хода и восстановление
+### 2.1 Публичные и кластерные маршруты после PR-0
 
-SQL [`agent_session_turns__claim_next.sql`](../../services/external/bot-service/internal/repository/postgres/admin/sql/agent_session_turns__claim_next.sql) задает фактический контракт:
+Эталонный снимок отрендерованного Ingress должен быть allowlist, а не отрицательным списком.
 
-- для одной `session_key` уже выполняющийся ход со статусом `running` возвращается повторно;
-- новый ход выбирается только при отсутствии `running`;
-- `queued` упорядочены по `created_at`, затем `id`;
-- конкурентные запросы хода используют `FOR UPDATE SKIP LOCKED`.
+| Маршрут | Доступ после PR-0 | Серверная проверка |
+| --- | --- | --- |
+| `/mattermost/slash/agents` | Публичный только при необходимости действующей конфигурации Mattermost | constant-time проверка slash token, ограничение тела и метода |
+| `/github/webhook` | Публичный | HMAC, ограничение тела и метода |
+| `/mattermost/actions/agents` | Только Mattermost внутри кластера | одноразовая server-side capability и проверенный actor |
+| `/mattermost/dialogs/agents` | Только Mattermost внутри кластера | одноразовая server-side capability и проверенный actor |
+| health/readiness | Только Service/кластера | без секрета, но не через публичный Ingress |
+| `/internal/agent-sessions/*` | Только кластер | действующая проверка session credential; отдельный credential с audience `runner-api` обязателен до runtime port |
+| `/mcp/sessions/*` | Только кластер | действующая проверка session credential; отдельный credential с audience `mcp` и серверный grant обязательны до runtime port |
+| `/metrics` | Только кластер/система наблюдаемости | сетевое ограничение и ServiceMonitor/аналог |
 
-Это дает локальный FIFO и повторяемый ответ после потери HTTP-ответа, но прикладные обновления сессии, запуска и статуса выполняются после получения хода отдельными вызовами. Цикл восстановления также работает локально в каждом экземпляре `bot-service`: он сбрасывает зависшие сессии, помечает активный ход несуществующего или завершенного Pod как `failed` и пытается запустить Pod для ожидающей сессии. Выбор лидера или аренда отсутствует.
+Action URL и dialog callback для Mattermost должны указывать на кластерный Service, а публичный Ingress — содержать только явно разрешённые пути. Проверка принимает эталон отрендерованного YAML и список маршрутов HTTP, чтобы новая внутренняя ручка не стала публичной автоматически.
 
-### 1.4 Первоначальная настройка, учетные записи ботов и привязки аккаунтов
+### 2.2 Удостоверение action/dialog и actor
 
-- При запуске отсутствующие начальные шаблоны промптов добавляются в БД, но существующий текст не перезаписывается. Версия и контрольная сумма начального шаблона не хранятся: [`prompt_seed_catalog.go`](../../services/external/bot-service/internal/domain/service/prompt_seed_catalog.go), [`prompt_seed_catalog_test.go`](../../services/external/bot-service/internal/domain/service/prompt_seed_catalog_test.go).
-- `BootstrapSystemAgentRoles` создает отсутствующие системные роли и связывает учетные записи ботов. Создание Mattermost bot и пользовательского токена доступа зависит от разрешенных серверных настроек; при ошибке создания bot код пробует обычного пользователя: [`system_roles.go`](../../services/external/bot-service/internal/domain/service/system_roles.go), [`control_surface.go`](../../services/external/bot-service/internal/integration/mattermost/control_surface.go).
-- `BotUserID` для слушателя разрешается один раз после старта HTTP. При ошибке слушатель остается выключенным до перезапуска процесса, хотя уже созданный слушатель умеет переподключаться: [`app.go`](../../services/external/bot-service/internal/app/app.go), [`chat_listener.go`](../../services/external/bot-service/internal/integration/mattermost/chat_listener.go). Это фактическая причина структурной части #59.
-- У роли есть `OpenAIAccountName`, но данные `RolePromptInput` не содержат безопасное имя фактически выбранной учетной записи OpenAI. Сессия также не хранит неизменяемую ревизию привязки учетной записи поставщика: [`prompt_template.go`](../../services/external/bot-service/internal/domain/service/prompt_template.go), [`000014_agent_sessions.sql`](../../services/external/bot-service/internal/repository/postgres/migrations/000014_agent_sessions.sql). Это граница #61 и [ADR-MC-004](../decisions/0004-runtime-revision-account-affinity.md), но не повод добавлять универсальную `RuntimeRevision` в волне 1.
+Минимальный механизм PR-0 — непрозрачная одноразовая capability, созданная сервером криптографически стойким генератором и сохранённая только в виде хеша. Запись связывает capability со следующими полями:
 
-## 2. Текущее и целевое владение данными
+- `kind` action/dialog и разрешённая операция;
+- внутренний идентификатор ресурса;
+- проверенный actor или разрешённый серверной политикой набор actor;
+- team/channel/post или dialog instance;
+- время выдачи, время истечения и состояние `unused|consumed|expired|revoked`;
+- хеш безопасного контекста, чтобы один token нельзя было применить к другим аргументам.
 
-### 2.1 Текущее физическое владение
+Callback в одной транзакции проверяет хеш, срок, точные bindings и состояние `unused`, затем переводит capability в `consumed`. Actor строится из сохранённой серверной записи и актуального сопоставления Mattermost, а `user_id`/`user_name` из payload считаются только заявленными полями. Несовпадение заявленного и проверенного actor даёт `401/403` без вызова прикладного сценария. Повтор, просроченный token, другая операция, channel, post или resource также отклоняются без побочного эффекта.
 
-Все таблицы физически принадлежат одному набору миграций `bot-service`, а все запросы — одному PostgreSQL-адаптеру. Ниже «целевой логический владелец волны 1» означает пакет и узкий порт внутри совместимого процесса, а не новый сервис и не перенос таблицы.
+Capability удостоверяет callback, но не заменяет авторизацию. После неё сервер отдельно проверяет разрешение actor на операцию. Полная модель `Organization`/grants/quotas из #66 не входит в PR-0, однако seam обязан возвращать типизированный результат допуска `allowed|denied|indeterminate` с кодом причины; `indeterminate` трактуется как отказ. Prompt, `user_name`, инструкции, метки Kubernetes и idempotency key не являются правом.
 
-| Данные | Создающие/изменяющие миграции | Текущий владелец | Целевой логический владелец волны 1 |
+Допустим эквивалентный механизм доверенного proxy/plugin с подписанным запросом и теми же bindings. Простая проверка IP источника, существования `user_id` или общий статический URL-token не закрывает actor spoof/replay.
+
+### 2.3 Политика `response_url`
+
+Предпочтительно не использовать URL из callback и публиковать результат через настроенный Mattermost client. Если `response_url` временно сохраняется, применяется единая политика:
+
+1. origin точно совпадает с настроенным Mattermost origin; пользователь, fragment и неожиданный port запрещены;
+2. `https` обязателен, кроме отдельно заданного кластерного Mattermost Service origin;
+3. имя разрешается заново перед соединением, все A/AAAA проверяются; loopback, link-local, multicast, unspecified, metadata и частные/кластерные диапазоны запрещены, кроме точного заранее настроенного кластерного Service;
+4. проверенный адрес закрепляется на соединение, чтобы повторное DNS-разрешение не обходило политику;
+5. redirect запрещён; если в будущем разрешается, каждый переход проходит ту же проверку и имеет малый предел;
+6. метод только `POST`, тело и ответ ограничены, тайм-аут задан, ошибки не содержат URL с чувствительными данными.
+
+Отрицательные тесты покрывают внешний origin, userinfo, loopback IPv4/IPv6, private/link-local, cluster metadata, DNS rebinding и redirect на запрещённый адрес.
+
+### 2.4 Матрица прямых и управляемых полномочий
+
+Матрица фиксирует имена, но не значения переменных и секретов.
+
+| Возможность | Текущий прямой путь | Целевая граница до runtime port | Обязательный запрет |
 | --- | --- | --- | --- |
-| `matter_codex_projects`, `matter_codex_project_repositories`, `matter_codex_chats`, `matter_codex_chat_participants`, `matter_codex_chat_repositories`, `matter_codex_thread_contexts` | `000012`, `000013`, `000015`, `000016` | `admin.Repository` и `SlashCommandService` | `conversations`: действующие `Project`/`Chat` как совместимые имена без введения `Organization`/`Workspace`/`Room` в этом PR-цикле |
-| `matter_codex_agent_profiles`, `matter_codex_agent_roles`, `matter_codex_agent_prompt_templates`, `matter_codex_project_runtime_variables`, `matter_codex_agent_role_runtime_variables`, `matter_codex_mattermost_bot_identities` | `000001`, `000003`–`000006`, `000011`, `000012`, `000014`, `000017`–`000019` | `admin.Repository`, меню slash-команд и проектов, сервисы промптов и первоначальной настройки | `agents`: определения ролей, инструкции, привязки учетных записей ботов и переходные настройки; создание бота остается внешним портом Mattermost |
-| `matter_codex_openai_accounts`, `matter_codex_github_accounts`, `matter_codex_credentials`, `matter_codex_repositories` и ссылки на аккаунты | `000001`, `000003`, `000005`, `000009`, `000010`, `000015`, `000016` | `admin.Repository`, сценарии GitHub/OpenAI | `providers`: учетные записи и ссылки на секреты. `matter_codex_repositories` остается переходной GitHub-моделью до волны интеграций; общая `IntegrationConnection` здесь не вводится |
-| `matter_codex_agent_sessions`, `matter_codex_agent_session_turns`, `matter_codex_agent_delegations` | `000014`, `000018`, `000020` | `ChatRunService`, `AgentSessionService`, `AgentDelegationService` | `runtime`: очередь, сессии, получение хода, обратные вызовы и согласование желаемого состояния среды выполнения |
-| `matter_codex_agent_runs` | `000002`, последующие ссылки из `000007` и `000014` | несколько сервисов через `admin.Repository` | `runtime` для текущего факта выполнения; переходная проекция для будущих `Run`/`RoleRun`, без общей новой модели в волне 1 |
-| `matter_codex_agent_flows` | `000007`, `000008`, `000011` | сценарии slash-команд и процессов через `admin.Repository` | `processes`: только изоляция действующего переходного процесса; расширение в новую модель процессов отложено до профильной волны |
-| `matter_codex_audit_events` | `000001` | все сценарии через `admin.Repository` | `audit`: append-only прикладной порт; отдельный сервис не создается |
-| `goose_db_version` и порядок миграций | `migrations.go`, `000001`–`000020` | запуск `bot-service` | одно совместимое средство миграции в будущей поставке `control-plane`; каталог логических владельцев обязателен, конкурентный запуск миграций из будущих сервисов запрещен |
-| Будущий `InboundEventReceipt` | Сейчас отсутствует | Нет владельца и таблицы | `conversations`: уникальность события Mattermost и результат приема; `interaction-gateway` остается только транспортом |
-| Будущий `OutboxEvent` | Сейчас отсутствует | Нет владельца и таблицы | Строкой владеет домен, создавший бизнес-изменение; общий PostgreSQL relay является инфраструктурой доставки, а не общим доменом |
+| Mattermost от `bot-service` | `MATTERCODEX_MATTERMOST_BOT_TOKEN`, `MATTERCODEX_MATTERMOST_SLASH_TOKEN` через Secret env | edge-адаптер с минимальным bot scope; callback actor проверяется сервером | token не попадает в runner, prompt, audit или payload |
+| PostgreSQL `bot-service` | `MATTERCODEX_DATABASE_DSN` через Secret env | единственный владелец схемы и узкие порты | DSN не передаётся в доменные DTO и не логируется |
+| OpenAI Codex runner | `auth.json` как read-only Secret mount | прямой режим только для выбранной provider account; ссылка и ревизия входят в admission | содержимое не попадает в generated config/log/result/archive вне необходимого provider-файла |
+| GitHub runner | Secret mount с token/username/email и env клиента | прямой режим только для явно разрешённой роли; опасные изменения позднее переходят в managed MCP | отсутствие назначения означает отсутствие mount/env/network capability |
+| Kubernetes read-only | отдельный namespaced ServiceAccount/RBAC | прямой режим только для чтения, снимок разрешённых verbs/resources | deny-by-default; ServiceAccount token не монтируется без capability |
+| Kubernetes `cluster-admin` | отдельный ServiceAccount с `ClusterRoleBinding` | до полной #66 — только существующий явно выданный серверный grant и типизированный admission; новые назначения запрещены по умолчанию | PR не расширяет subjects, verbs, scope или automount |
+| MCP | один session bearer сейчас обслуживает runner API и все tools | разные short-lived credentials с audience `runner-api` и `mcp`; каждый side-effecting tool проверяет server-side grant | prompt/instructions не разрешают инструмент |
+| Сеть provider/MCP | фактически определяется Pod и кластером | capability matrix задаёт допустимые назначения/порты и проверяемую NetworkPolicy | неизвестная capability не открывает egress |
 
-Сами миграции `000001`–`000020` остаются неизменяемой историей. Волна 1 добавляет реестр владельцев диапазонов и новых объектов, но не перемещает старые SQL-файлы. Любая новая таблица получает одного логического владельца и только один процесс применения миграций.
+До переноса runtime port обязательны снимки env names, Secret mounts, PodSpec, ServiceAccount/RBAC, NetworkPolicy и серверных grants для каждого профиля. Изменение границы не может расширять полномочия. `replicas >= 2` остаются запрещены до раздела 4 и зелёной матрицы `N-1/N`.
 
-Утвержденные документы упоминают `AgentDelegation` и в контексте диалогов, и в оркестрации. В волне 1 запись состояния делегирования принадлежит `runtime`, потому что связывает исходные и целевые сессии и ходы и управляет состоянием обратного вызова. `conversations` владеет привязкой обсуждения и внешними идентификаторами Mattermost и предоставляет их через порт; прямое междоменное чтение таблиц не вводится.
+## 3. Владение данными и внешними идентификаторами
 
-### 2.2 Почему сейчас не вводится универсальная модель
+### 3.1 Один логический владелец таблицы и мутации
 
-[ADR-MC-002](../decisions/0002-universal-product-model.md) утверждает будущие `Organization`, `Workspace`, `Room`, `RoleDefinition` и `Agent`. Однако одновременное переименование текущих `Project`/`Chat`/`AgentRole`, перенос транспорта и изменение очереди нарушит ADR-MC-001. В волне 1 действующие структуры становятся явно переходными типами своих контекстов. Новые универсальные таблицы, перенос действующих данных и совместимые API должны появиться отдельной волной после стабилизации транзакций и границ.
+Все миграции физически остаются одним упорядоченным потоком `bot-service` до отдельного принятого владельца схемы. Применённые `000001`–`000020` не перемещаются и не редактируются.
 
-## 3. Реестр критичного поведения
+| Таблица/группа | Логический владелец волны 1 | Разрешённые писатели |
+| --- | --- | --- |
+| проекты, чаты, участники, репозитории чата, `thread_contexts`, будущие Mattermost bindings и `InboundEventReceipt` | `conversations` | только прикладные сценарии `conversations` |
+| профили, роли, шаблоны, runtime variables, bot identities | `agents` | только сценарии `agents`; создание bot идёт через порт Mattermost |
+| OpenAI/GitHub accounts, credentials references, repositories | `providers` как переходный владелец | только сценарии `providers`; значения credential не хранятся в DTO |
+| `matter_codex_agent_sessions`, `matter_codex_agent_session_turns`, `matter_codex_agent_delegations`, `matter_codex_agent_runs` | `runtime` | только транзакции `runtime` |
+| `matter_codex_agent_flows` | `processes` | только переходные сценарии `processes` |
+| `matter_codex_audit_events` | `audit` | append-only порт аудита |
+| строка outbox | домен, создавший бизнес-изменение | транзакция этого домена; relay только меняет delivery state |
+| `goose_db_version` и порядок миграций | один владелец схемы | один migration job/process; прикладные реплики миграции конкурентно не запускают |
 
-### 3.1 Приоритеты
+Нельзя делить владение по колонкам одной таблицы. Междоменная команда или событие может вызвать мутацию владельца, но другой домен не выполняет прямой `UPDATE` и не читает таблицу как контракт.
 
-- `P0` — потеря, повтор или неверная маршрутизация пользовательской работы; блокирует структурное перемещение.
-- `P1` — важный эксплуатационный и пользовательский контракт; блокирует извлечение соответствующего адаптера.
-- `P2` — переходное поведение поверхности управления; должно оставаться зеленым, но не определяет первый разрез.
+### 3.2 Внешние идентификаторы Mattermost в sessions/turns
 
-Характеристический тест фиксирует полезное действующее поведение. Известный дефект не закрепляется как желаемый контракт: сначала добавляется воспроизводящий диагностический тест или тест нижнего уровня, затем в том же поведенческом PR вводится новый зеленый инвариант.
+Таблицы sessions/turns целиком принадлежат `runtime`, включая физически существующие `mattermost_channel_id`, `mattermost_root_post_id`, `mattermost_post_id`, `user_id` и `user_name` из [`000014_agent_sessions.sql`](../../services/external/bot-service/internal/repository/postgres/migrations/000014_agent_sessions.sql). Эти поля имеют один из двух смыслов:
 
-### 3.2 Приоритизированный набор
+- неизменяемый snapshot цели доставки/источника на момент принятия команды;
+- стабильная reference на binding, принадлежащий `conversations`.
 
-| Приоритет | Поведение и обязательный инвариант | Что уже покрыто | Что добавить до соответствующего рефакторинга |
-| --- | --- | --- | --- |
-| `P0` | Маршрутизация Mattermost: неизвестный канал игнорируется; упоминание человеком имеет приоритет; обсуждение продолжает одну роль; роль чата используется без явной цели; системные сообщения, slash-команды, `#notrigger` и сообщения ботов агентов не создают ход. | Много сценариев в [`chat_runtime_test.go`](../../services/external/bot-service/internal/domain/service/chat_runtime_test.go), базовый разбор — в [`chat_listener_test.go`](../../services/external/bot-service/internal/integration/mattermost/chat_listener_test.go). | Табличный тест полной матрицы `событие -> команда/игнорирование`, включая несколько упоминаний, общую учетную запись бота, кодовые блоки, обсуждение без сессии и сохранение исходных идентификаторов Mattermost. |
-| `P0` | Входная идемпотентность: одно событие Mattermost создает не более одной команды и одного хода, повтор получает прежний результат. | Нет записи приема и уникального ключа; тест «duplicate queued card» проверяет карточку, а не повтор приема. | Интеграционный тест PostgreSQL конкурентной повторной доставки. Транзакция `conversations` фиксирует `InboundEventReceipt` и `UserInstructionReceived`; идемпотентный обработчик `runtime` отдельно создает один ход. |
-| `P0` | FIFO и получение хода: не более одного `running` хода на сессию; старейший `queued` выдается первым; повторный запрос после потерянного ответа возвращает тот же ход. | Повторный запрос покрыт тестом сервиса с заглушкой; порядок и блокировка заданы [`agent_session_turns__claim_next.sql`](../../services/external/bot-service/internal/repository/postgres/admin/sql/agent_session_turns__claim_next.sql). | Интеграционный тест PostgreSQL с двумя соединениями, одинаковым `created_at`, `SKIP LOCKED`, повторным запросом и переходом к следующему ходу после завершения. |
-| `P0` | Атомарная постановка в `runtime`: сессия, ход, запуск и исходящее намерение среды выполнения либо видны вместе, либо не видны. Pod не является частью транзакции БД, но создается только из долговечного желаемого состояния. | Сейчас шаги раздельны в `EnqueueAgentTurn`. | Идемпотентный обработчик `UserInstructionReceived` и тесты с внесением отказа после каждого шага; после отката нет «сиротского» запуска или хода, а повтор команды завершает начатое намерение. |
-| `P0` | Завершение идемпотентно: повтор не дублирует итог или FYI; сохраненный результат не теряется при ошибке Mattermost. | Повтор терминального завершения покрыт тестом сервиса. Публикация после обновления БД не имеет outbox. | Интеграционный тест `завершение -> ошибка доставки -> повтор обработчика`; одно итоговое событие outbox и один внешний ключ идемпотентности. |
-| `P0` | Делегирование между чатами: `(source_session_id, work_item_key)` создает одну запись; обратный вызов возвращается непосредственному инициатору не более одного раза. | Модульные тесты и проверка жизненного цикла в PostgreSQL; уникальность задана [`000020_agent_delegations.sql`](../../services/external/bot-service/internal/repository/postgres/migrations/000020_agent_delegations.sql). | Конкурентный тест двух запусков и обратных вызовов, а также внесение отказа между корнем Mattermost, целевым ходом и `set_target`; повтор должен завершать запись, а не создавать второй корень или ход. |
-| `P0` | `request_agent` в одном обсуждении: запрос либо атомарно добавляется к одному `queued` ходу, либо создает новый; параллельные запросы не теряются. | Одиночное объединение покрыто модульным тестом. | Конкурентный тест PostgreSQL с блокировкой или compare-and-set; проверить порядок объединенных сообщений. |
-| `P0` | Повтор до старта полезной работы: временный сбой обязательной первоначальной настройки MCP не переводит ход необратимо в `failed`; повтор ограничен и видим. | Повторы API и ошибок емкости модели покрыты тестами `agent-runner`. Общий `runErr` завершается как `failed`. | Классификация `pre_start_transient`, счетчик попыток, задержка, повторная постановка, аренда и тест рестарта между получением хода и запуском Codex. Это первый срез #51. |
-| `P0` | Восстановление не теряет очередь: исчезнувший Pod восстанавливается из долговечного состояния; начатая работа не завершается без классификации и попытки повтора. | Покрыты сброс зависшего состояния, терминальный Pod и запуск ожидающей idle-сессии. | Тесты для отсутствующего Pod до и после подтвержденного старта Codex, нескольких обработчиков восстановления и идемпотентной сверки. |
-| `P0` | Жизненный цикл среды выполнения и PVC: одинаковая сессия создает совместимые детерминированные ресурсы; активная, ожидающая или ждущая обратного вызова сессия не удаляется; удаление PVC разрешено только после проверенного архива. | Создание Pod/PVC, квота и текущая очистка по возрасту покрыты тестами Kubernetes с заглушками. | Контрактный тест порта желаемого состояния. Для будущего удаления — предикат допустимости из БД и подтверждение архива; текущую опасную семантику не считать целевой. |
-| `P0` | Привязка аккаунта и промпт: для текущего хода известно безопасное имя фактической учетной записи, которое не меняется от редактирования роли; значения секретов и переменных среды не попадают в промпт или статус. | Выбор роли и резервной учетной записи GitHub частично покрыт; `RolePromptInput` не содержит имени учетной записи OpenAI, сессия не фиксирует ревизию. | В волне 1 — характеристика текущего выбора и тест отсутствия значений секретов. Неизменяемая привязка и безопасное имя реализуются в волне 2 по ADR-MC-004/#61. |
-| `P0` | Первоначальная настройка и учетные записи ботов: запуск не перезаписывает пользовательский промпт; повтор не дублирует роли и учетные записи; временная недоступность Mattermost не оставляет слушатель навсегда выключенным. | Сохранение промпта и создание системных ролей покрыты. Переподключение слушателя покрыто только после его создания. | Тест приложения для порядка старта и повторного разрешения `BotUserID`, наблюдаемое условие состояния слушателя; готовность остается независимой от внешней сети. Отдельно нужна дымовая проверка серверных настроек из #58. |
-| `P1` | Одна карточка статуса на ход, прогресс публикуется отдельно с `#notrigger`, длинный итог делится без повторного запуска агента. | Соответствующие модульные тесты есть в `agent_session_service_test.go`. | Контрактный тест DTO транспорта и события outbox перед выделением пограничного слоя Mattermost. |
-| `P1` | Остановка: выполняющийся ход становится `canceled` и Pod удаляется; последний ожидающий ход возвращает сессию в `idle`. Повторная остановка безопасна. | Базовые модульные тесты есть. | Тест PostgreSQL с заглушкой среды выполнения для конкурентных остановки и завершения, а также повторной остановки. |
-| `P1` | Емкость: отказ допуска оставляет очередь, вытесняет только допустимую idle-среду; исчерпание повторов дает ручное действие. | Покрыто тестами маршрутизации чата, сессии и Kubernetes. | Контрактный тест между портом среды выполнения и диспетчером без зависимости от типов Kubernetes. |
-| `P1` | Снимок: архив восстанавливается перед возобновлением и сохраняется после хода; повреждение и отсутствие различаются; база не должна оставаться конечным файловым хранилищем. | Код в `agent-runner` есть, выделенных тестов архива недостаточно. | Модульные тесты границы архива, контрольной суммы, размера и классов ошибок; перенос в S3 остается волной 2/3 по ADR-MC-006. |
-| `P2` | Slash-команды, действия и диалоги сохраняют HTTP-статус, проверку токена и безопасные ответы; GitHub webhook отклоняет неверную подпись. | Широко покрыто `slash_test.go` и `router_test.go`. | Оставить регрессионным набором; не смешивать массовую переработку интерфейса slash-команд с волной 1. |
-| `P2` | Переходные CRUD процессов и запусков, а также предварительный просмотр очистки сохраняют текущий контракт. | Покрыто тестами slash-команд и Kubernetes. | Только архитектурный запрет новых зависимостей от общего `admin.Repository`; новая модель процессов появится позже. |
+Создаёт snapshot только транзакция `runtime` из типизированной команды. После создания исходные external IDs не редактируются из `conversations`; изменение binding создаёт новую версию/событие, а не междоменный `UPDATE`. `user_name` является снимком отображения и не используется для авторизации.
 
-### 3.3 Минимальный шлюз перед перемещением пакета
+Потребитель `runtime` объявляет у себя порт чтения `ConversationRoutingPort`; его адаптер получает проверенный `ConversationRouteSnapshot` из владельца `conversations`. Порт возвращает внутренние references, проверенного actor и целевые external IDs без доступа к таблицам другого домена. Для доставки `conversations` объявляет собственный consumer-owned порт к `runtime` только для чтения типизированного delivery intent, а не таблиц sessions/turns.
 
-Для каждого переносимого сценария должны существовать:
+Итоговый контракт:
 
-1. модульный тест выбора прикладного решения без типов SDK/Kubernetes;
-2. интеграционный тест SQL-инварианта, если решение зависит от блокировки, уникального ограничения или транзакции;
-3. контрактный тест адаптера на входной и выходной DTO;
-4. один ручной сценарий через неизменившуюся внешнюю точку входа;
-5. доказательство отсутствия новых импортов из совместимого `admin.Repository`.
+- `conversations` владеет актуальным сопоставлением Workspace/Room/Conversation с Mattermost;
+- `runtime` владеет каждой строкой session/turn и неизменяемым snapshot, использованным конкретным ходом;
+- transport не владеет ни тем, ни другим и только преобразует DTO;
+- прямое междоменное чтение и column-level split ownership запрещены.
 
-## 4. Целевая структура волны 1
+## 4. Обязательные долговечные контракты
 
-### 4.1 Внутри совместимого `bot-service`
+### 4.1 Версионированный конверт событий и команд
+
+События и команды используют общий набор метаданных, но разные поля типа и версии.
+
+| Поле | Контракт |
+| --- | --- |
+| `event_id`/`command_id` | внутренний неизменяемый идентификатор сообщения |
+| `event_type` + `event_version` или `command_type` + `command_version` | стабильное имя и положительная целая версия схемы |
+| `occurred_at`/`created_at` | серверное время события/команды |
+| `authenticated_actor` | типизированная ссылка на actor, способ удостоверения и server-side subject reference |
+| `asserted_actor` | необязательные поля provider payload только для диагностики; не authorization |
+| `organization_scope` | обязательная installation-scoped ссылка уже в первом профиле; не требует таблиц полной #66 |
+| `workspace_scope` | проверенная внутренняя ссылка на текущий Project/будущий Workspace |
+| `session_scope` | необязательная внутренняя ссылка или детерминированный session discriminator |
+| `correlation_id` | одна цепочка от provider event до turn и delivery |
+| `causation_id` | непосредственное входное событие/команда, породившее сообщение |
+| `idempotency_key` | детерминированный ключ повтора внутри указанного scope |
+| `payload` | типизированная версия данных без секретов и неотфильтрованного provider payload |
+| `admission` | типизированный результат `admitted|ignored|rejected|duplicate|deferred` и безопасный reason code |
+
+`organization_scope` в волне 1 является стабильной ссылкой на одну установку и проходит через порт авторизации; создание общей модели Organization/Membership/grants/quotas остаётся в #66. Неизвестный scope, actor или admission даёт fail-closed `rejected`, а не значение по умолчанию.
+
+Prompt, `user_name`, текст instructions, idempotency key и наличие Kubernetes label не являются авторизацией. Сохранённый результат duplicate возвращается только после повторной проверки actor и фактического scope агрегата.
+
+### 4.2 Одна квитанция и детерминированное разветвление в N целей
+
+`InboundEventReceipt` уникален по `(provider, provider_event_type, provider_event_id)`. Для Mattermost `provider_event_id` берётся из стабильной идентичности события/поста, а `provider_event_type` является обязательным discriminator, чтобы создание и изменение одного поста не смешивались. Квитанция хранит хеш канонического безопасного payload и admission outcome.
+
+Алгоритм первого приёма:
+
+1. Удостоверить источник/actor и вычислить scope.
+2. Вычислить каноническую provider identity и попытаться создать одну квитанцию.
+3. Детерминированно получить цели, удалить дубли и отсортировать по `target_discriminator`.
+4. Сохранить неизменяемый target snapshot в результате квитанции.
+5. Для каждой цели создать отдельный command intent и outbox в той же локальной транзакции.
+6. `runtime` идемпотентно материализует отдельную session/turn на каждый command.
+
+`target_discriminator` включает как минимум `target_role_id`, `target_session_scope` и канонический `session_key`/root reference. Ключи:
 
 ```text
-services/external/bot-service/
-  cmd/bot-service/                 # только корень сборки
-  internal/app/                    # запуск и прикладная оркестрация
-  internal/domain/
-    service/<context>/             # прикладные сценарии и транзакционные границы
-    types/<context>/               # принадлежащие контексту типы и ошибки
-    repository/<context>/          # узкие интерфейсы, объявленные потребителем
-  internal/repository/
-    postgres/
-      conversations/
-      agents/
-      providers/
-      runtime/
-      processes/
-      audit/
-      migrations/                 # один упорядоченный совместимый поток
-  internal/clients/
-    mattermost/
-    kubernetes/
-    github/
-  internal/transport/
-    http/
-    mcp/
-    mattermost/                    # WebSocket/HTTP DTO -> прикладные команды
-  internal/compatibility/admin/    # временные фасады только для еще не перенесенного кода
+receipt: <provider>:<provider_event_type>:<provider_event_id>
+command: mattermost.user-instruction.v1:<receipt_id>:<hash(target_discriminator)>
+turn:    runtime.turn.v1:<command_id>:<target_discriminator>
 ```
 
-Здесь `<context>` принимает только значения `conversations`, `agents`, `providers`, `runtime`, `processes` и `audit`. Для `conversations` текущие `Project`, `Chat` и `ThreadContext` остаются переходными типами; `agents` содержит роли, инструкции и привязки учетных записей ботов; `runtime` — сессии, ходы, делегирование и переходы состояния.
+Повтор с тем же provider identity и другим payload hash даёт типизированный conflict и ноль побочных эффектов. Повтор после изменения ролей возвращает исходный сохранённый target snapshot и не добавляет новые цели. Один multi-mention event создаёт одну квитанцию, `N` команд и `N` ходов — по одному на целевую session.
 
-Это логическая конечная форма волны, а не требование массового перемещения каталогов одним PR. Пакет появляется вместе с первым перенесенным сценарием. Интерфейс репозитория объявляется у потребителя и содержит только нужные методы. Реализация PostgreSQL может временно делегировать существующему `admin.Repository`, но новый доменный код не импортирует интерфейс совместимости.
+Обязательны последовательный и конкурентный duplicate multi-mention тесты через два PostgreSQL-соединения. Они проверяют одну квитанцию, исходный `N`-fan-out, по одной команде/turn на discriminator и отсутствие новых целей при повторе.
 
-Mattermost, Kubernetes и GitHub SDK-типы остаются в `clients`/`transport`. `internal/domain/**` использует собственные малые команды, результаты и ошибки. Общий пакет `libs/go` не создается, пока нет как минимум двух реальных потребителей стабильного примитива.
+### 4.3 Сериализация session, lease, heartbeat и fencing
 
-### 4.2 Внутри `agent-runner`
+Claim выполняется одной транзакцией:
 
-```text
-services/jobs/agent-runner/
-  cmd/agent-runner/                # конфигурация, сигналы, сборка зависимостей
-  internal/app/                    # сборка и цикл сессии
-  internal/domain/
-    service/session/               # получение, завершение, прогресс и политика повторов
-    types/                         # ход, снимок и типизированные ошибки
-    repository/                    # порты API сессий, исполнителя и архива
-  internal/clients/
-    controlplane/                  # внутренний клиент HTTP/MCP
-    codex/                         # процесс Codex и разбор событий
-  internal/repository/archive/     # текущая tar/gzip реализация снимка
-```
+1. блокируется строка session `FOR UPDATE` или эквивалентный session guard;
+2. проверяется отсутствие живой аренды активного хода;
+3. повтор с тем же `claim_request_id` возвращает ранее выданный claim;
+4. выбирается старейший `queued` по `(sequence, id)`;
+5. создаётся аренда с `lease_owner`, `lease_expires_at` и монотонным `fencing_token`;
+6. ход меняется `queued -> running` через status/version CAS.
 
-Разделение не меняет образ, команду запуска, контракт переменных среды или протокол `bot-service`. Оно позволяет изолированно проверять повторы и архив до выделения `runtime-controller` и будущего API `control-plane`.
+Частичный уникальный индекс «не более одного `running` на session» служит последней защитой, но не заменяет session lock. Heartbeat продлевает только совпадающие `turn_id + lease_owner + fencing_token + version`. Просроченный ход можно reclaim, увеличив fencing token. Старый worker после reclaim не может выполнить heartbeat, complete или stop.
 
-### 4.3 Целевые сервисы и промежуточные владельцы
+Complete и stop конкурируют через один переход `where status = 'running' and version = ? and fencing_token = ?`. Победитель увеличивает version и создаёт terminal state; проигравший получает `stale_claim|already_terminal|conflict` и не меняет snapshot, run, outbox или Mattermost. Повтор победившей команды с тем же idempotency key возвращает сохранённый outcome.
 
-| Целевой компонент | Что подготавливает волна 1 | Когда допускается физическое выделение |
+Обязательные проверки PR-3:
+
+- два worker одновременно claim одну session;
+- потерянный HTTP-ответ и повтор того же `claim_request_id`;
+- lease expiry/reclaim и рост fencing token;
+- stale complete после reclaim;
+- restart до claim, после claim, до complete и после локального complete;
+- concurrent stop/complete и повтор каждой команды;
+- минимум два настоящих PostgreSQL-соединения, без in-memory mutex как единственной защиты.
+
+### 4.4 Атомарный callback intent
+
+Возврат делегирования не создаёт и не меняет turn до фиксации права на callback. Одна локальная транзакция:
+
+1. блокирует delegation;
+2. проверяет terminal result и payload hash повтора;
+3. переводит delegation в `callback_pending`;
+4. создаёт ровно один command/outbox intent с ключом `delegation.callback.v1:<delegation_id>`;
+5. сохраняет idempotency outcome.
+
+Consumer с тем же deterministic key либо один раз добавляет callback к одному queued turn через version CAS, либо создаёт новый turn, затем сохраняет `callback_turn_id` в собственной транзакции. Повтор возвращает тот же outcome. Другой payload после первого принятого callback даёт conflict и не изменяет prompt.
+
+Тесты: два конкурентных callback; crash до/после транзакции intent; crash после materialize turn до фиксации consumer outcome; restart; проигравший повтор не создаёт второй prompt/turn и получает ссылку на первый результат.
+
+### 4.5 Локальный outbox и внешняя доставка Mattermost
+
+Репозиторий не доказывает наличие у Mattermost idempotency primitive или надёжного readback по пользовательскому ключу. Поэтому внешний результат **не объявляется exactly-once**.
+
+Доказуемый контракт:
+
+- terminal transition и уникальный local outbox intent создаются в одной PostgreSQL-транзакции;
+- ключ вида `mattermost.turn-result.v1:<turn_id>:<result_version>:<destination>` уникален локально;
+- один fenced consumer выполняет `at-least-once` доставку с ограниченным exponential backoff и jitter;
+- состояния: `pending|claimed|retry_wait|delivered|ambiguous|dead_letter`;
+- успешный `post_id`, число попыток, безопасный код ошибки и correlation сохраняются;
+- dead letter и ambiguous доступны оператору и процедуре reconciliation.
+
+| Crash window | Доказуемый результат |
+| --- | --- |
+| До внешнего вызова | intent остаётся и безопасно повторяется; внешнего эффекта нет |
+| После ошибки до retry state | lease истекает, intent повторяется |
+| После подтверждённого ответа и локального ack | `delivered`, повтор не выполняется |
+| После внешнего side effect, но до локального ack | состояние неоднозначно; повтор может создать внешний дубль |
+| Timeout, когда provider мог принять запрос | `ambiguous`; автоматический повтор допускается только принятой политикой риска |
+
+Reconciliation использует provider readback только после отдельного тестового доказательства. Без него оператор сверяет целевой thread, correlation/idempotency metadata и local outbox, затем помечает intent `delivered` либо разрешает повтор. Ручная проверка специально воспроизводит crash до и после side effect и подтверждает отсутствие потери локального intent; возможный внешний дубль в последнем окне фиксируется как ограничение, а не скрывается.
+
+## 5. Обязательные тестовые шлюзы
+
+### 5.1 Тестовый контур PostgreSQL как результат PR-1
+
+Текущие команды ниже отсутствуют; PR-1 обязан их создать согласно [активному PostgreSQL guide](../design-guidelines/go/infrastructure_integration_requirements.md):
+
+- `make test-go` — только герметичные unit/component tests, без PostgreSQL, Docker и тестовых DSN;
+- `make test-go-postgres` — required режим repository/migration/concurrency tests; использует имена вида `MATTERCODEX_*_TEST_DATABASE_DSN`, не печатает значения и завершается явным failure/not-run, а не `t.Skip`;
+- `make test-go-all` — последовательно выполняет оба контура и не маскирует отсутствие PostgreSQL;
+- Kubernetes-native временный PostgreSQL — основной remote-agent путь; Docker допустим только как локальный fallback.
+
+Harness применяет миграции с нуля и отдельно обновляет копию предыдущей схемы с репрезентативными session/turn/delegation данными. Для concurrency tests открываются минимум два независимых соединения/транзакции. Production DSN запрещён. PR-1 не должен описывать эти targets как уже существующие или объявлять PostgreSQL-проверку успешной без фактического запуска.
+
+### 5.2 Матрица характеристических проверок
+
+| Gate | Минимальный набор |
+| --- | --- |
+| Transport/auth | missing/invalid/replayed/expired capability, spoofed actor/channel/post, SSRF origin/IP/DNS/redirect; `401/403`, ноль DB/Kubernetes/Mattermost side effects; снимок public routes |
+| Routing | unknown channel, человек/bot, `#notrigger`, thread/default role, multi-mention `N` targets |
+| Receipt/fan-out | sequential/concurrent duplicate, target order, payload conflict, crash после каждой локальной стадии |
+| Session | FIFO, two-worker claim, lost response, lease reclaim, stale complete, restart, stop/complete CAS |
+| Callback | concurrent return, crash/restart, deterministic consumer key, один resulting turn |
+| Delivery | local unique outbox, retry/backoff/dead-letter, crash до/после side effect, ambiguous reconciliation |
+| Retention | active, queued, approval, callback, no archive, archive failed, grace, unknown PostgreSQL, unknown S3 — удаление запрещено |
+| Privileges | снимки env names/mounts/SA/RBAC/NetworkPolicy/provider capabilities, deny-by-default и отсутствие privilege expansion |
+| Compatibility | migrations from scratch/upgrade, `N-1/N`, consumer fence, drain, rollback/replay |
+
+Все отказные тесты проверяют не только HTTP/status outcome, но и ноль побочных эффектов в БД, Kubernetes и Mattermost.
+
+### 5.3 Матрица синтетических секретов
+
+Используются только уникальные синтетические canary для классов OpenAI, GitHub, Mattermost, Kubernetes, PostgreSQL DSN и session/MCP token. Действующие значения из env, Secret или `.env` не читаются.
+
+Каждый класс canary пропускается через все релевантные каналы, после чего проверяется отсутствие **значения**, а не имени ключа:
+
+| Канал | Что проверяется |
+| --- | --- |
+| generated prompt/config | `AGENTS.md`, Codex `config.toml`, provider config, env allowlist и manifest не содержат canary |
+| structured logs | обычные и error logs, поля и stack context не содержат canary |
+| error/final/status | типизированная ошибка, final message, progress и status card не содержат canary |
+| Mattermost payload | post/update/dialog/action response не содержит canary |
+| audit | action/outcome/correlation и safe metadata не содержат canary |
+| artifacts/archive | artifacts map, JSONL/stderr tail, session snapshot и archive metadata не содержат canary за пределами специально зашифрованного provider-файла, который не публикуется |
+| rendered YAML | Deployment, Pod, Secret references и диагностический render не содержат canary; допустимы только имена Secret/key/env |
+
+## 6. Эволюционная миграция и совместимость
+
+### 6.1 Правила переключения
+
+- Смена владельца схемы, владельца транспорта и поведения выполняется разными контрольными точками.
+- `event_path=legacy|durable`, `delivery_path=legacy|outbox` и `transport_owner=legacy|typed` — отдельные взаимоисключающие переключатели. Одновременно активен ровно один владелец записи и один обработчик каждого эффекта.
+- Переключатели и `consumer_epoch` хранятся серверно; промпт и локальная память процесса не являются источником истины.
+- Каждый обработчик требует аренду/лидера и fencing epoch. Процесс со старым epoch не создаёт побочный эффект.
+- Перед переключением или откатом приём приостанавливается, выполняемая и захваченная работа дренируется либо явно возвращается в `pending`, затем меняется epoch.
+- `contract` выполняется позже, когда нет старых читателей/писателей и принят отдельный план отката.
+- `N-1` ниже означает непосредственно предыдущую принятую контрольную точку, а не произвольный старый исполняемый файл. Нельзя перескочить expand и затем требовать безопасный откат на версию, которая не понимает переключатель и новые долговечные записи.
+
+Перед каждым поведенческим переключением новый исполняемый файл сначала развёртывается с новым путём выключенным. После проверки он становится поддерживаемым `N-1` для следующей контрольной точки.
+
+### 6.2 Состояния
+
+| Состояние | Главное измерение | Внешнее поведение |
 | --- | --- | --- |
-| `control-plane` | Узкие прикладные порты, единое средство миграции, транзакционная граница, контракты команд и outbox. | После стабилизации API и совместимого фасада; не в первых пяти PR. |
-| `interaction-gateway` | Транспорт Mattermost, запись приема, идемпотентность и обработчик доставки отделены от домена. | После стабилизации OpenAPI и команд; текущий WebSocket остается внутри `bot-service` в волне 1. |
-| `runtime-controller` | Порт желаемого состояния среды выполнения и адаптер Kubernetes отделены от домена очереди и сессий. | Первый кандидат на самостоятельный сервис после шлюзов волны 1. |
-| `integration-gateway` | Только порты поставщиков; универсальная модель интеграций не создается. | После профильной модели интеграций и согласований. |
-| `automation-scheduler` | Переходный процесс изолирован от общего репозитория. | После долговечного контракта планирования по ADR-MC-007. |
-| `agent-runner` | Локальные доменные сервисы и типы, порты и адаптеры Codex/control-plane/archive при прежнем протоколе. | Уже отдельный процесс; волна 1 не меняет границу развертывания. |
+| `S0 baseline` | текущий код | подтверждённые риски существуют; структурные PR запрещены |
+| `S1 containment` | PR-0/PR-1/PR-2: публичная граница, тестовый контур, сдерживание очистки | полезная маршрутизация сохранена, опасные callback/cleanup закрыты по умолчанию |
+| `S2 expand` | только добавочная схема для lease, idempotency, callback intent, receipt/outbox и переключателей | все пути остаются `legacy`; обработчики новых записей выключены |
+| `S3 durable behavior` | PR-3: lease/fencing/CAS, callback intent и переключение delivery outbox | транспорт и routing DTO прежние; меняется только надёжность runtime/delivery |
+| `S4 inbound durable` | PR-4: envelope, receipt и переключение команд `1 -> N` | тот же WebSocket/HTTP transport; один долговечный владелец записи и обработчик |
+| `S5 structural seams` | последующие узкие repository/transport/runtime ports | данные и поведение S4 не меняются |
+| `S6 contract` | удаление legacy paths и возможное физическое выделение | не входит в первые пять PR и требует отдельной приёмки |
 
-## 5. Эволюционная миграция
+### 6.3 Матрица `N-1/N` для S2/S3/S4
 
-### 5.1 Обязательные правила
+| Состояние | `N-1` | `N` | Единственный владелец записи/обработчик | Развертывание/переключение | Откат/повтор |
+| --- | --- | --- | --- | --- | --- |
+| `S2 expand` | Читает/пишет старые таблицы, игнорирует добавочные таблицы и nullable-поля | Применяет только добавочную миграцию, но работает с переключателями `legacy` | legacy writer; новые обработчики выключены; миграции запускает один job/process | Сначала миграция, затем последовательное обновление до N; новых побочных эффектов нет | Остановить N и вернуть N-1; схема остаётся. Новые долговечные очереди пусты, повтор не нужен |
+| `S3 durable behavior` | Предыдущий expand-capable исполняемый файл знает переключатели и новые записи и при чужом epoch не выполняет побочные эффекты обработчика | Поддерживает lease/CAS/callback/outbox | после атомарного переключения только fenced N runtime/delivery consumer; transport writer прежний | Развернуть N с переключателями `legacy`, убедиться, что все экземпляры их понимают; остановить приём completion/callback, дренировать старые claims/direct deliveries, выдать новый epoch, включить `delivery_path=outbox` | Приостановить новые terminal/callback команды, оградить N, дождаться отсутствия claims; доставить либо пометить ambiguous outbox, вернуть `legacy`, затем N-1. Старые lease не принимаются, queued turns читаются N-1; локальных дублей/потерь нет |
+| `S4 inbound durable` | Предыдущий S3-compatible исполняемый файл уже понимает receipt/command gate, но новый writer выключен до переключения | Пишет одну receipt и `N` command intents, обработчик материализует существующие session/turn rows | после переключения только fenced N inbound writer и runtime consumer; transport всё ещё `legacy` | Сначала развернуть N с `event_path=legacy`; остановить лидера listener, дренировать provider callbacks и claimed commands, выдать новый epoch, включить `event_path=durable`, затем открыть приём | Закрыть приём, оградить writer/consumer, материализовать все принятые commands в доступные legacy turns, убедиться в отсутствии unclaimed receipt/outbox, вернуть переключатель и N-1. Повтор принимает только identities без receipt; уже принятые events возвращают сохранённый outcome |
 
-- Один PR меняет не более одного главного измерения: тестовый контракт, внутренние границы, добавочную схему и транзакцию, транспорт или адаптер среды выполнения.
-- Старый внешний маршрут и новый прикладной сценарий сосуществуют через фасад; откат приложения не требует отката миграции.
-- Миграции только вперед. Фаза `contract` выполняется в более поздней поставке после доказанного отсутствия старых читателей и писателей.
-- Новые побочные эффекты сначала записываются как намерения. Переключение обработчика выполняется отдельно от добавления таблиц.
-- Pod/PVC/Secret — проекция желаемого состояния, а не источник бизнес-истины.
-- Переименование переходных сущностей и перенос данных в универсальную модель не совмещаются с волной 1.
+Для S3/S4 откат запрещён как простая замена Pod. Если drain/fence/reconciliation не завершены, откат считается небезопасным и останавливается. Внешняя Mattermost доставка остаётся `at-least-once`: матрица гарантирует отсутствие второго **локального** intent, но не скрывает возможный внешний дубль после побочного эффекта до подтверждения.
 
-### 5.2 Совместимые состояния
+Владелец транспорта в S2–S4 не меняется. `transport_owner=typed` переключается только в S5 отдельным PR после доказанного паритета, поэтому владение, транспорт и смена поведения не смешиваются.
 
-| Состояние | Изменение | Совместимость | Условие перехода | Откат |
-| --- | --- | --- | --- | --- |
-| `S0: baseline` | Только характеристические тесты и архитектурные проверки. | Исполняемый файл, схема и поведение неизменны. | Матрица P0 зеленая; известные разрывы перечислены. | Откат тестового PR. |
-| `S1: package seams` | Узкие интерфейсы потребителей, границы пакетов и адаптеры совместимости. | Те же SQL, таблицы, HTTP/MCP и ресурсы среды выполнения. | В новом коде нет импорта общего `admin.Repository`; ручные сценарии совпадают. | Вернуть сборку зависимостей; данные не менялись. |
-| `S2: expand` | Добавочные таблицы и индексы для записей приема, outbox и идемпотентности, допускающие `NULL` ссылки и колонки при необходимости. | Предыдущий исполняемый файл игнорирует новые объекты; старые таблицы и значения сохраняются. | Миграция проверена на пустой и обновляемой БД; конкурентные тесты PostgreSQL зеленые. | Вернуть предыдущий исполняемый файл, оставить добавочные объекты неиспользуемыми. Обратная миграция в рабочей среде не требуется. |
-| `S3: migrate/shadow` | Транзакция `conversations` пишет запись приема и событие `UserInstructionReceived`; отдельная транзакция идемпотентного обработчика `runtime` пишет сессию, ход, запуск и свое исходящее намерение. Обработчик доставки сначала наблюдает либо обслуживает только новые типы эффектов с уникальным ключом. | Внешние точки входа и DTO прежние; старый прямой путь остается доступным до проверки паритета. | Нет двойных ходов и доставок в тестах отказов и конкуренции; размер очереди и повторы наблюдаемы. | Остановить обработчик или переключить маршрутизацию на старый; записи приема и outbox сохраняются для диагностики. |
-| `S4: transport cutover` | Обработчик Mattermost только переводит DTO в прикладную команду; доставка идет через утвержденный обработчик. | WebSocket, URL slash-команд и действий, карточки и семантика `#notrigger` не меняются. | Контрактные тесты и ручной сценарий маршрутизации с обратным вызовом пройдены; очередь пуста или объяснена. | Вернуть сборку на совместимый обработчик, не удаляя записи приема и outbox. |
-| `S5: runtime seam` | Домен сессии формирует запрос желаемого состояния среды выполнения; адаптер Kubernetes его реализует; `agent-runner` разложен по пакетам. | Те же имена, метки и переменные среды Pod/PVC/Secret, тот же внутренний API. | Адаптер-заглушка и текущие модульные тесты Kubernetes совпадают; ручной ход переживает перезапуск Pod. | Вернуть сборку адаптера; ресурсов или схемы нового типа нет. |
-| `S6: contract, не волна 1` | Удаление общего репозитория, прямой доставки, переходных колонок или таблиц либо физическое извлечение сервиса. | Требует отдельного окна и доказательства отсутствия старых потребителей. | Инвентаризация версий и перенос данных завершены, двойное чтение выключено, владелец принял миграцию. | Отдельное исправление вперед; необратимое удаление не входит в волну 1. |
+## 7. Первые пять реализуемых PR
 
-Фаза `migrate` для outbox не должна синтезировать внешние сообщения из исторических запусков: это создало бы повторные эффекты. Допустим перенос технической отметки исходного состояния со статусом, который обработчик не доставляет. Любое переключение должно иметь наблюдаемые счетчики длины и возраста очереди, попыток и окончательных ошибок, но конкретная система метрик внедряется профильным PR.
+### PR-0. Сдерживание публичной границы Mattermost
 
-### 5.3 Условия остановки и отката
+**Результат:** разрешающий список Ingress; internal/MCP/metrics доступны только внутри кластера; action/dialog идут через кластерный Service; одноразовая серверная capability; проверенный actor; replay/expiry bindings; политика `response_url` из раздела 2.3.
 
-Переход останавливается, если обнаружено хотя бы одно условие:
+**Автоматические проверки:** отрицательная матрица auth/actor/replay/SSRF с нулём side effects; снимки зарегистрированных и опубликованных маршрутов; render Ingress; существующие slash/action/dialog/GitHub contract tests.
 
-- одно событие Mattermost создает более одного хода;
-- два конкурентных запроса получают разные `running` ходы одной сессии;
-- обратный вызов или итог публикуется повторно;
-- после отката старый исполняемый файл не читает действующие строки;
-- адаптер среды выполнения меняет имена, метки, точки подключения, service account или привязки секретов без отдельного принятого контракта;
-- очистка способна удалить PVC активной или ожидающей сессии либо сессии без подтвержденного архива;
-- промпт или статус раскрывает значение секрета или переменной среды вместо имени ключа или безопасного имени учетной записи;
-- для продолжения требуется одновременное изменение модели, транспорта и поведения.
+**Ручная проверка:** легитимная slash -> action -> dialog цепочка работает; forged callback отклоняется; с внешнего адреса доступны только allowlisted paths, а internal/MCP/metrics недоступны.
 
-## 6. Первые пять PR
+**Ограничение:** PR не переносит transport packages, не меняет доменную модель и остаётся блокирующим условием любого следующего merge/deploy волны.
 
-### PR 1. Характеристические тесты и архитектурные ограничения
+### PR-1. Обязательный тестовый контур и характеристические доказательства
 
-**Границы:** добавить тестовую матрицу P0 для существующей маршрутизации, FIFO и повторного получения хода, завершения, делегирования и обратного вызова, классов повторов, промптов, первоначальной настройки и контрактов ресурсов среды выполнения. Добавить проверку запрещенных импортов из репозитория совместимости для будущих пакетов и проверку метаданных и ссылок документов. Прикладное поведение и схему не менять.
+**Результат:** создаются `make test-go`, `make test-go-postgres`, `make test-go-all`; обязательный режим PostgreSQL с `MATTERCODEX_*_TEST_DATABASE_DSN`; миграции с нуля и обновление копии; минимум два соединения; контур внесения отказов routing/session/callback/delivery; полная матрица синтетических секретов.
 
-**Зависимости:** нет; это обязательная база остальных PR.
+**Автоматические проверки:** все targets из раздела 5.1; явный тест, что required PostgreSQL mode не делает silent skip; проверка front matter, уникальности `id`, относительных ссылок и архитектурных импортов.
 
-**Автоматические проверки:** `go test ./...`; интеграционные тесты PostgreSQL при наличии `TEST_DATABASE_DSN` без вывода его значения; проверка архитектурных импортов; проверка метаданных Markdown и относительных ссылок; `git diff --check`.
+**Ручная проверка:** владелец видит отдельные исходы «герметичные тесты пройдены», «PostgreSQL пройден» либо явное «не запущен/упал»; зелёный общий статус невозможен без обязательного PostgreSQL контура для storage PR.
 
-**Ручная проверка владельцем:** в тестовой установке отправить обычное сообщение, упоминание агента человеком и ответ в существующем обсуждении; убедиться, что выбирается ожидаемая роль, появляется один ход и одна карточка статуса, а системное сообщение с `#notrigger` не запускает агента.
+**Ограничение:** это новый результат PR, а не описание существующих команд. Прикладная schema/behavior не меняется.
 
-### PR 2. Узкие репозитории и реестр владельцев миграций
+### PR-2. Запрещающее по умолчанию сдерживание очистки сессий
 
-**Границы:** ввести принадлежащие потребителям интерфейсы для `conversations`, `agents`, `providers`, `runtime`, `processes` и `audit`; сохранить один `pgxpool` и делегирующие адаптеры PostgreSQL; добавить машинно проверяемый реестр владельцев существующих таблиц и миграций. Начать со сценариев среды выполнения и разговоров, не перемещая все файлы механически. Схему и семантику SQL не менять.
+**Результат:** автоматическое разрушительное удаление session PVC и session token Secret выключено; retention работает как inventory/dry-run для сессионных данных; повтор после ошибки квоты не вызывает destructive cleanup и возвращает типизированную capacity error. Предикат eligibility принимает факты PostgreSQL/архива, но до доказанного S3 archive любой `unknown` даёт отказ.
 
-**Зависимости:** PR 1.
+**Автоматические проверки:** отрицательная матрица `active|queued|approval|callback|no_archive|archive_failed|grace|unknown_db|unknown_s3`; отдельный quota test; повтор inventory; отсутствие удаления PVC/Secret и audit записи о разрешённом удалении.
 
-**Автоматические проверки:** тесты PR 1; проверки реализации интерфейсов при компиляции; полное и однозначное покрытие `000001`–`000020` реестром; запрет новых импортов `internal/domain/repository/admin` из целевых пакетов; `go test ./...` и `git diff --check`.
+**Ручная проверка:** в изолированной тестовой установке создать старый orphan test PVC и вызвать preview/quota scenario; ресурс остаётся, система показывает безопасную причину и не утверждает наличие архива.
 
-**Ручная проверка владельцем:** открыть текущие экраны slash-команд, проектов и агентов, прочитать существующие проекты, чаты, роли и учетные записи, затем поставить один ход; видимые данные и маршрутизация должны совпасть с исходным состоянием.
+**Ограничение:** полная DB+S3 eligibility и включение автоматической очистки — отдельная последующая задача. Labels и age никогда не дают права удаления.
 
-### PR 3. Транзакционный прием команды, запись приема и outbox
+### PR-3. Транзакционная надёжность session/turn/callback/delivery
 
-**Границы:** миграции фазы `expand` для входной записи приема, идемпотентного выполнения команды и исходящего outbox. В транзакции `conversations` сохранять команду Mattermost и `UserInstructionReceived`; в отдельной транзакции `runtime` идемпотентно сохранять сессию, ход, запуск и намерение создать среду выполнения. Добавить уникальные ключи, ограниченные повторы и состояние окончательного отказа. На первом шаге не удалять прямую доставку и не менять внешний транспорт. Перевести один вертикальный сценарий — новое сообщение в существующий чат. Обратные вызовы и завершение добавлять отдельными коммитами того же ограниченного PR только при сохранении обозримости изменений.
+**Результат:** добавочная схема и затем отдельное переключение для session guard, sequence, lease/heartbeat/fencing, status/version CAS complete/stop, атомарного callback intent и local delivery outbox. В S2 также добавляются неактивные receipt/command schema и `event_path` gate без записи входных событий: это совместимый фундамент отката PR-4. Работает один fenced consumer; этапы S2/S3 обязательны.
 
-**Зависимости:** PR 1–2; принятый контракт SQL и план развертывания и отката.
+**Автоматические проверки:** вся матрица разделов 4.3–4.5; два PostgreSQL-соединения; crash/restart fault injection; старый reader на расширенной схеме; `N-1/N` S2/S3; проверка запрета `replicas >= 2`.
 
-**Автоматические проверки:** миграция с нуля и обновление копии тестовой схемы; два конкурентных соединения для повторного события, FIFO-получения хода и получения записи outbox; внесение отказа в обеих локальных транзакциях и между ними; повтор обработчика после фиксации записи приема; тест старого читателя на расширенной схеме; `go test ./...`; `git diff --check`.
+**Ручная проверка:** два безопасных worker одновременно запрашивают одну session; выполняется один turn. Затем имитируется потеря complete response и недоступность Mattermost: terminal result и один local outbox сохраняются, после восстановления доставка повторяется согласно `at-least-once` контракту.
 
-**Ручная проверка владельцем:** повторно доставить одно и то же безопасное тестовое событие Mattermost либо выполнить предусмотренный сценарий воспроизведения; должен существовать один ход и один итог. Затем временно сделать доставку недоступной, восстановить ее и убедиться, что сохраненный итог доставлен один раз.
+**Ограничение:** внешний Mattermost exactly-once не заявляется. Transport и repository ownership не переносятся.
 
-### PR 4. Граница транспорта Mattermost и исправление запуска слушателя
+### PR-4. Квитанция, версионированный конверт и детерминированное разветвление по целям
 
-**Границы:** перенести преобразование и фильтрацию WebSocket/HTTP DTO, а также адаптер доставки в `transport/mattermost` и `clients/mattermost`; прикладной и доменный слои получают типизированную команду без моделей SDK. Сохранить URL, тексты, карточки и свойства сообщений. Сделать разрешение `BotUserID` повторяемым и добавить безопасное диагностическое условие состояния слушателя, закрывая прикладную часть #59. Проверка готовности не должна опрашивать внешнюю сеть или требовать секрет. Настройки Mattermost из #58 этим PR не менять.
+**Результат:** поля envelope из раздела 4.1; authenticated actor seam; installation/workspace/session scopes без полной #66; одна unique receipt на provider event; immutable target snapshot; `N` per-target commands/turns; typed admission outcome; idempotent consumers; этап S4.
 
-**Зависимости:** PR 1–3, чтобы транспорт опирался на идемпотентную границу команд.
+**Автоматические проверки:** sequential/concurrent duplicate multi-mention; payload conflict; stable target order/discriminator; crash после receipt/command/consume; все correlation/causation/idempotency fields; deny без actor/scope/grant; `N-1/N` S4 и rollback/replay.
 
-**Автоматические проверки:** матрица маршрутизации и контрактные тесты DTO; тест запуска приложения `Mattermost недоступен -> восстановлен -> слушатель запущен`; тест диагностического условия, независимости проверки готовности от внешней сети и идемпотентности доставки; `go test ./...`; `git diff --check`.
+**Ручная проверка:** одно сообщение с двумя упоминаниями создаёт одну receipt и по одному ходу каждой цели. Последовательный и конкурентный повтор не добавляет receipt/target/turn, а изменение списка ролей после первого приёма не меняет сохранённый fan-out.
 
-**Ручная проверка владельцем:** запустить `bot-service` до готовности Mattermost, затем сделать Mattermost доступным без перезапуска `bot-service`; слушатель должен начать принимать сообщения, его диагностическое условие — перейти в рабочее состояние, а повторные подключения не должны создавать второй ход.
+**Ограничение:** WebSocket/HTTP transport остаётся на месте. Новые Organization/Membership/grants/quotas не создаются.
 
-### PR 5. Порт среды выполнения и пакеты `agent-runner`
+## 8. Очередь после первых пяти PR
 
-**Границы:** определить порт желаемого состояния среды выполнения без типов Kubernetes; адаптировать текущий исполнитель; разложить `agent-runner` по `internal/app`, `internal/domain`, `internal/clients` и `internal/repository`. Сохранить образ, команду, имена переменных среды и Pod/PVC/Secret, метки, точки подключения, service account и внутренний API. Добавить классификацию интерфейса для `pre_start_transient`, но изменение политики повторов из #51 при необходимости вынести в отдельный следующий PR.
+После ручной приемки состава менеджер создаёт отдельные Issues, не смешивая типы результата:
 
-**Зависимости:** PR 1–2; для долговечного желаемого состояния и повторов предпочтительно PR 3.
+1. **Волна 1: узкие repository ports и реестр владельцев миграций.** Consumer-owned interfaces, один `pgxpool`, один schema owner, запрет новых импортов `admin.Repository`; зависит от PR-1, PR-3 и PR-4.
+2. **Волна 1: transport Mattermost и восстановление listener.** DTO -> versioned command, прежние URL/карточки, повторяемый `BotUserID`, диагностическое состояние #59; зависит от PR-0 и PR-4.
+3. **Волна 1: runtime port и локальные пакеты `agent-runner`.** Capability matrix, typed admission, snapshot PodSpec/RBAC/NetworkPolicy, без privilege expansion; зависит от PR-2–PR-4.
+4. **Надёжность #51: pre-start transient retry и безопасная HA.** Классы ошибок, retry/backoff, leader для всех loops и только затем `replicas >= 2`.
+5. **Хранение: доказанная PostgreSQL+S3 eligibility и включение cleanup.** Archive checksum/reference, grace/hold/lease/audit, dry-run report и ручной enable gate; зависит от ADR-MC-006 и PR-2.
+6. **Инфраструктура #58: воспроизводимые Mattermost bot settings.** Отдельный SRE-результат без переноса transport.
+7. **Инструкции #60:** версии seed, checksum/drift и управляемое обновление без молчаливой перезаписи.
+8. **Provider account #61:** безопасный alias, неизменяемая session affinity и `RuntimeRevision` по ADR-MC-004.
+9. **Авторизация #66:** отдельные архитектурный, schema и поведенческие срезы Organization/Membership/grants/quotas после стабилизации envelope/admission seam.
 
-**Автоматические проверки:** контрактные тесты порта среды выполнения; тесты снимка и восстановления; тесты классификации повторов; существующие тесты Kubernetes с заглушками; эталонное сравнение сформированного Pod; `go test ./...`; `git diff --check`.
+Физическое выделение `runtime-controller` начинается только после задач 1–3. `interaction-gateway`, `control-plane`, `integration-gateway` и `automation-scheduler` не создаются в первых пяти PR.
 
-**Ручная проверка владельцем:** поставить два последовательных хода в одну сессию обсуждения, удалить только тестовый Pod разрешенным сценарием остановки и восстановления и убедиться, что следующий Pod продолжает ту же сессию с теми же безопасными привязками. Автоматическое удаление PVC в этой проверке запрещено.
+## 9. Основные риски и ограничения
 
-## 7. Данные и среда выполнения: основные риски
+| Риск | Gate |
+| --- | --- |
+| Forged callback/SSRF | PR-0 до любого структурного merge/deploy |
+| Тихо пропущенные PostgreSQL tests | PR-1 required target; storage PR без него не принимается |
+| Потеря PVC/session state | PR-2 fail-closed; полное удаление только после DB+S3 proof |
+| Два active turn/stale complete | PR-3 session guard + lease/fencing/CAS |
+| Двойной callback prompt | PR-3 atomic intent + deterministic consumer key |
+| Потеря/дубль результата Mattermost | local unique outbox + `at-least-once`; ambiguous/manual reconciliation честно видимы |
+| Multi-mention потерян или дублирован | PR-4 `1 receipt -> N commands/turns` и immutable target snapshot |
+| Несовместимый rollback | последовательные checkpoint S2/S3/S4, gate-aware `N-1`, fence/drain/replay |
+| Расширение полномочий | снимки direct/managed matrix, deny-by-default, отдельный typed admission |
+| Случайное включение #66 | только scope/actor/admission seam; продуктовые таблицы и политики остаются отдельной задачей |
 
-| Риск | Фактическое основание в репозитории | Снижение риска/шлюз |
-| --- | --- | --- |
-| Частичное создание хода | Сессия, Pod, ход и запуск создаются последовательными вызовами. | PR 3: локальные транзакции `conversations` и `runtime`, связанные outbox и ключом идемпотентности; среда выполнения создается обработчиком сверки из долговечного намерения. |
-| Повтор входного события | Нет записи приема и уникального ограничения для события или сообщения Mattermost. | PR 3: поставщик и ключ события, сохраненный результат, конкурентный тест. |
-| Повтор или потеря внешней доставки | Завершение сначала фиксирует терминальное состояние, затем отдельно публикует в Mattermost. | Outbox с уникальным ключом эффекта, повторами и наблюдаемой окончательной ошибкой. |
-| Конкурентные одиночные циклы | Каждый экземпляр запускает слушатель, восстановление и хранение; выбор лидера отсутствует. | До горизонтального масштабирования — получение задания или аренда в БД либо лидерство для каждого цикла; #51 не закрывать только увеличением числа экземпляров. |
-| Необратимый временный отказ | `agent-runner` повторяет API/`5xx` и ошибки емкости модели, но общий сбой MCP до старта завершает ход. | Типизированные классы ошибок, счетчик попыток, аренда и ограниченная повторная постановка; тесты #51. |
-| Удаление рабочих данных PVC | Очистка решает по возрасту и статусу Kubernetes и не проверяет очередь, обратный вызов, согласование или архив S3; путь квоты также вызывает очистку. | Не считать очистку только по возрасту целевой политикой. До автоматического удаления — предикат допустимости из БД, инвентаризация и подтвержденный архив согласно [операционному контракту](../operations/runtime-retention.md). |
-| Архив только в PostgreSQL | Снимок сессии хранится как base64 tar/gzip в строке сессии. | В волне 1 выделить порт архива; S3 как источник истины реализовать по ADR-MC-006 до ужесточения хранения. |
-| Смена аккаунта между ходами | Сессия не хранит `RuntimeRevision` или привязку учетной записи поставщика; роль разрешается заново. | В волне 1 зафиксировать текущее поведение и не смешивать с переработкой; неизменяемую привязку реализовать волной 2/#61. |
-| Расхождение начальных шаблонов | При запуске вставляются только отсутствующие шаблоны, без версии и контрольной суммы. | Сохранить запрет перезаписи; модель версии и расхождения из #60 проектировать отдельно, без переноса данных в структурном PR. |
-| Слушатель не стартует после временной ошибки | `BotUserID` разрешается один раз; отдельного наблюдаемого условия слушателя нет. | PR 4: повторяемая инициализация и безопасное диагностическое условие без зависимости health endpoints от внешней сети; #59. |
-| Первоначальная настройка зависит от Mattermost | Создание bot и пользовательского токена требует серверных настроек; резервный путь меняет тип учетной записи. | #58: декларативная настройка и дымовая проверка отдельным инфраструктурным результатом; структура приложения не должна скрывать неверную настройку. |
-| Миграции при нескольких экземплярах | Каждый `bot-service` может вызвать встроенный Goose при запуске. | Одно совместимое средство миграции в будущей поставке; до этого не добавлять владельцев того же потока миграций. |
+## 10. Открытые решения владельца
 
-Операционное состояние конкретного namespace, число экземпляров, включенность очистки и наличие S3-архивов должны проверяться SRE командами только для чтения перед развертыванием. Этот документ таких фактов не устанавливает.
+1. **Механизм action/dialog authentication.** Рекомендуется кластерный callback плюс одноразовая server-side capability. Альтернатива — доверенный proxy/plugin с подписью и теми же bindings. Временное отключение action/dialog допустимо только как аварийный containment, не как завершённый PR-0.
+2. **Retention containment.** Рекомендуется выключить автоматическое удаление session PVC/Secret и quota cleanup до DB+S3 eligibility. Альтернатива — реализовать полный fail-closed predicate уже в PR-2, но это увеличит его объём.
+3. **`cluster-admin`.** Рекомендуется запретить новые назначения и потребовать явный server-side grant для уже существующих профилей до полной #66. Фактические назначения live-среды в этом документе не определены.
+4. **Mattermost ambiguous delivery.** Рекомендуется принять `at-least-once` и ручную reconciliation до доказанного readback. Альтернатива — не включать автоматический retry ambiguous state до отдельного provider contract test.
+5. **Поддерживаемый rollback.** Рекомендуется считать поддерживаемым только непосредственно предыдущий принятый checkpoint и запретить пропуск S2. Откат на исходный baseline после S3/S4 без compatibility bridge не обещается.
+6. **Область #66.** Рекомендуется оставить в волне только обязательные scope/actor/admission поля и deny-by-default seam, без Organization/Membership/grants/quotas schema.
 
-## 8. Сопоставление связанных задач
+## 11. Критерии принятия и цель второго полного рецензирования
 
-| Задача | Связь с волной 1 | Что входит сейчас | Что остается после волны 1 |
-| --- | --- | --- | --- |
-| [#51](https://github.com/codex-k8s/matter-codex/issues/51) — перезапуск, повторы и высокая доступность | Прямой `P0`: показывает разрыв между долговечной очередью и временным сбоем первоначальной настройки, а также риск локальных для экземпляра циклов. | Характеристические тесты, классы ошибок, идемпотентная постановка и outbox, граница среды выполнения и проект ограниченной повторной постановки. | Подтвержденная политика повторов, аренда и сверка, безопасные несколько экземпляров, настройка емкости и хранения и промышленное развертывание. Увеличение памяти само по себе не является архитектурным закрытием. |
-| [#58](https://github.com/codex-k8s/matter-codex/issues/58) — серверные настройки ботов Mattermost | Предусловие воспроизводимой первоначальной настройки и учетных записей, но не переработка пакетов. | Контракт и требование дымовой проверки в P0, явная зависимость PR 4. | Декларативное изменение настроек Mattermost, сохранение при установке и обновлении и SRE-проверка отдельным инфраструктурным PR. |
-| [#59](https://github.com/codex-k8s/matter-codex/issues/59) — порядок старта слушателя | Прямой дефект границы транспорта взаимодействия. | Характеристический тест уровня приложения, повторяемая инициализация и диагностическое условие в PR 4. | Только эксплуатационная проверка развертывания; новая доменная модель не нужна. |
-| [#60](https://github.com/codex-k8s/matter-codex/issues/60) — версионированные начальные шаблоны | Текущий запрет перезаписи — критичный контракт миграции; сама модель версий не нужна для структурного разреза. | Тест сохранения пользовательского текста и фиксация фактического отсутствия версии и контрольной суммы. | Схема, версия, обнаружение расхождения, интерфейс и управляемое обновление в профильной волне инструкций. Существующие шаблоны нельзя молча перезаписывать. |
-| [#61](https://github.com/codex-k8s/matter-codex/issues/61) — безопасное имя учетной записи OpenAI | Демонстрирует отсутствие разрешенной привязки среды выполнения в промпте и статусе. | Тест, что секреты не раскрываются, и характеристика текущего выбора аккаунта. | `RuntimeRevision`, неизменяемая привязка сессии и безопасное имя в промпте и статусе в волне 2 по ADR-MC-004. |
-| [#66](https://github.com/codex-k8s/matter-codex/issues/66) — базовая авторизация и admission quotas | Пересекается с командами, аудитом и портом среды выполнения, но добавляет отдельную продуктовую модель и схему. | Узкие команды должны сохранять контекст инициатора, а runtime port — типизированный результат допуска; реализация `Organization`, grants и quotas в #65 не входит. | После PR 1–2 разделить #66 на собственные архитектурный, schema и поведенческие срезы. Не совмещать миграции #66 с outbox-миграцией PR 3. |
+Предложение можно передавать к созданию implementation Issues, когда владелец:
 
-## 9. Открытые решения для владельца
-
-1. **Имена данных в волне 1.** Рекомендуется оставить `Project`/`Chat`/`AgentRole` и таблицы `matter_codex_*` переходными, а универсальную модель мигрировать отдельной волной. Альтернатива — начать `Organization`/`Workspace` сейчас — связывает два рискованных измерения и не рекомендуется.
-2. **Процесс миграций.** Рекомендуется одно совместимое средство миграции будущего `control-plane` и логический реестр владельцев. Альтернатива — позволить каждому извлекаемому сервису запускать часть потока Goose — создает гонки и неоднозначный откат.
-3. **Переключение outbox.** Рекомендуется `expand -> migrate/shadow -> cutover -> поздний contract`, сохраняя старый путь до доказанного паритета. Альтернатива — немедленно заменить прямую доставку — повышает риск потери итогов.
-4. **Граница #51.** Рекомендуется разделить на срез надежности волны 1 и отдельное развертывание высокой доступности среды выполнения: сначала идемпотентность, классификация и сверка, затем несколько экземпляров и ресурсы. Альтернатива — закрыть #51 инфраструктурным масштабированием — оставляет риски одиночных циклов и повторов.
-5. **Автоматическое удаление PVC сессии.** Рекомендуется запретить принятие семантики только по возрасту как целевой и перед любым включением проверить допустимость по БД и архив. Решение о фактическом включении или выключении конкретной очистки принимает владелец с SRE после инвентаризации только для чтения.
-6. **Очередность #66.** Рекомендуется сначала принять характеристические и пакетные границы PR 1–2, затем проектировать отдельные срезы авторизации и admission control. Альтернатива — добавить `Organization`, grants и quotas в PR 2 или PR 3 — одновременно меняет модель данных и структурную границу и не рекомендуется.
-
-## 10. Следующие задачи GitHub для менеджера
-
-После принятия этого предложения рекомендуется создать следующие задачи с зависимостями:
-
-1. **Волна 1: характеристические тесты маршрутизации, FIFO сессии и обратных вызовов.** Включить матрицу P0, стенд конкурентных тестов PostgreSQL, проверки архитектурных импортов и ручное исходное состояние. Зависимостей нет.
-2. **Волна 1: разделить `admin.Repository` и зарегистрировать владельцев миграций.** Узкие порты потребителей, один адаптер PostgreSQL и одно средство миграции, без изменений схемы. Зависит от задачи 1.
-3. **Волна 1: транзакционная запись приема и outbox для ходов Mattermost.** Добавочная схема, атомарная постановка, идемпотентность эффектов, тесты отказов и конкуренции и откат. Зависит от задач 1–2.
-4. **Волна 1: отделить транспорт Mattermost и восстановление слушателя после гонки запуска.** Типизированные прикладные команды, прежние точки входа и DTO, диагностическое условие слушателя при независимых от внешней сети health endpoints; связать с #59 и указать #58 как инфраструктурное предусловие. Зависит от задач 1–3.
-5. **Волна 1: выделить порт среды выполнения и пакеты `agent-runner`.** Сохранить контракт Kubernetes и среды выполнения, добавить границы архива и повторов; связать с #51. Зависит от задач 1–2, для сверки — от задачи 3.
-6. **Надежность: ограниченная повторная постановка после временного сбоя MCP до старта.** Классы ошибок до и после старта, попытки, задержка, аренда, безопасный перезапуск и свидетельства к #51. Зависит от задач 1, 3 и 5.
-7. **Безопасность данных: предикат допустимости и архивный шлюз удаления PVC сессии.** Инвентаризация только для чтения, предикат хранения из БД, подтверждение S3 и эксплуатационная инструкция; без опасных действий в рамках анализа. Зависит от порта среды выполнения и ADR-MC-006.
-8. **Инфраструктура: воспроизводимые серверные настройки ботов Mattermost и дымовая проверка учетной записи.** Реализовать #58 отдельно от переработки приложения; проверить сохранение при обновлении без вывода значений секретов.
-
-Задачи #60, #61 и #66 не следует дублировать: после волны 1 менеджер уточняет их критерии по сохраненным контрактам и планирует в соответствующих продуктовых волнах. Для #66 сначала нужен отдельный архитектурный разрез и порядок миграций относительно универсальной модели.
-
-## 11. Критерии принятия архитектурного результата
-
-Предложение готово перейти к задачам разработчика, когда владелец:
-
-- подтвердил шесть рекомендованных решений из раздела 9;
-- согласовал текущего и логического владельца каждой группы таблиц;
-- принял реестр P0 как обязательный шлюз, а не как полный новый объем функциональности;
+- выбрал решения раздела 10;
+- принял PR-0 как самостоятельный блокирующий результат;
 - согласовал первые пять PR и отдельную ручную проверку каждого;
-- подтвердил, что универсальная модель, физическое выделение сервисов и опасные действия со средой выполнения не входят в волну 1;
-- поручил менеджеру создать последовательные задачи и назначить независимый полный проход рецензента.
+- подтвердил, что structural ports начинаются только после PR-4;
+- принял внешний `at-least-once` контракт Mattermost и ограничение ambiguous crash window;
+- подтвердил поддерживаемый диапазон `N-1/N` и запрет опасного отката без drain/fence.
 
-Первый проход рецензента должен в первую очередь проверить доказательность карты по коду и SQL, полноту инвариантов повторной доставки и конкурентного получения хода, совместимость отката на каждом состоянии, отсутствие скрытой миграции универсальной модели в волне 1 и сохранение точек расширения для #66 без включения ее объема в #65.
+Точная цель второго полного прохода рецензента:
+
+1. повторно проверить все факты по указанным code/SQL ссылкам;
+2. убедиться, что PR-0 закрывает route exposure, actor/replay и SSRF с нулём side effects;
+3. проверить cardinality `1 receipt -> N commands/turns`, envelope и authorization seam;
+4. проверить session serialization, lease/heartbeat/fencing, complete/stop CAS и atomic callback intent;
+5. проверить честную семантику Mattermost delivery и crash windows;
+6. доказать `N-1/N` для S2/S3/S4, single writer/consumer, feature gates, drain и rollback/replay;
+7. проверить retention fail-closed, PostgreSQL required harness, secret canaries и privilege matrix;
+8. подтвердить одного владельца каждой таблицы/мутации и отсутствие split ownership external IDs;
+9. убедиться, что первые пять PR независимо реализуемы и проверяемы, а #66 и структурные переносы не попали в их скрытый объём.
+
+PostgreSQL integration, rendered Kubernetes и live-проверки не считаются выполненными данным документационным PR. Их наличие здесь — критерии будущих implementation PR, а не заявление об уже полученном доказательстве.
