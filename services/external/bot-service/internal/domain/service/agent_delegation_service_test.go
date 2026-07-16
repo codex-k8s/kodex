@@ -9,9 +9,10 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
-func TestAgentSessionListsChatsAvailableToBothAgents(t *testing.T) {
+func TestAgentSessionListsChatsAvailableToTargetAgent(t *testing.T) {
 	svc, store, _, _ := agentDelegationTestService()
 	store.chatParticipants[1] = []entity.ChatParticipant{{ChatID: 1, RoleID: 1, RoleName: "manager", Enabled: true}}
+	store.chatParticipants[2] = []entity.ChatParticipant{{ChatID: 2, RoleID: 2, RoleName: "architect", Enabled: true}}
 
 	catalog, err := svc.ListAvailableChats(context.Background(), "source-session", "source-token", "architect")
 	if err != nil {
@@ -28,7 +29,7 @@ func TestAgentSessionListsChatsAvailableToBothAgents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ChatDetails() error = %v", err)
 	}
-	if details.Description != "Архитектурные решения" || len(details.Agents) != 2 {
+	if details.Description != "Архитектурные решения" || len(details.Agents) != 1 || details.Agents[0] != "architect" {
 		t.Fatalf("details = %#v", details)
 	}
 }
@@ -83,9 +84,28 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	}
 }
 
-func TestAgentSessionCrossChatDelegationRequiresBothParticipants(t *testing.T) {
+func TestAgentSessionCrossChatDelegationAllowsSourceOutsideTargetChat(t *testing.T) {
 	svc, store, dispatcher, _ := agentDelegationTestService()
 	store.chatParticipants[2] = []entity.ChatParticipant{{ChatID: 2, RoleID: 2, RoleName: "architect", Enabled: true}}
+
+	result, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat:  "architecture",
+		TargetAgent: "architect",
+		Title:       "Границы сервисов",
+		Message:     "Подготовь предложение.",
+		WorkItemKey: "issue-59-architecture",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	if result.TargetAgent != "architect" || dispatcher.calls != 1 {
+		t.Fatalf("result=%#v dispatcher calls=%d", result, dispatcher.calls)
+	}
+}
+
+func TestAgentSessionCrossChatDelegationRequiresTargetParticipant(t *testing.T) {
+	svc, store, dispatcher, _ := agentDelegationTestService()
+	store.chatParticipants[2] = []entity.ChatParticipant{{ChatID: 2, RoleID: 1, RoleName: "manager", Enabled: true}}
 
 	_, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
 		TargetChat:  "architecture",
@@ -94,7 +114,7 @@ func TestAgentSessionCrossChatDelegationRequiresBothParticipants(t *testing.T) {
 		Message:     "Подготовь предложение.",
 		WorkItemKey: "issue-59-architecture",
 	})
-	if err == nil || !strings.Contains(err.Error(), "not available to the current agent") {
+	if err == nil || !strings.Contains(err.Error(), "not available in chat") {
 		t.Fatalf("error = %v", err)
 	}
 	if dispatcher.calls != 0 {

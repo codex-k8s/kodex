@@ -39,7 +39,7 @@ type mcpRequestAgentInput struct {
 }
 
 type mcpListChatsInput struct {
-	TargetAgent string `json:"target_agent,omitempty" jsonschema:"optional role name or Mattermost @username; when set only chats available to both agents are returned"`
+	TargetAgent string `json:"target_agent,omitempty" jsonschema:"optional role name or Mattermost @username; when set only chats with that agent assigned are returned"`
 }
 
 type mcpGetChatInput struct {
@@ -75,11 +75,11 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpLimitInput) (*mcp.CallToolResult, statusservice.AgentSessionThreadHistory, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionThreadHistory{}, nil
+			return mcpToolError("session authorization is missing"), emptyMCPThreadHistory(), nil
 		}
 		output, err := sessionService.ThreadHistory(ctx, sessionKey, token, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionThreadHistory{}, nil
+			return mcpToolError(err.Error()), emptyMCPThreadHistory(), nil
 		}
 		return nil, output, nil
 	})
@@ -89,11 +89,11 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpSearchInput) (*mcp.CallToolResult, statusservice.AgentSessionChatSearch, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionChatSearch{}, nil
+			return mcpToolError("session authorization is missing"), emptyMCPChatSearch(), nil
 		}
 		output, err := sessionService.SearchChat(ctx, sessionKey, token, input.Query, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionChatSearch{}, nil
+			return mcpToolError(err.Error()), emptyMCPChatSearch(), nil
 		}
 		return nil, output, nil
 	})
@@ -127,35 +127,35 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_list_chats",
-		Description: "List project chats available to the current agent. Optionally return only chats also available to a target agent.",
+		Description: "List chats in the current project. Optionally return only chats with a target agent assigned.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpListChatsInput) (*mcp.CallToolResult, statusservice.AgentSessionChatCatalog, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionChatCatalog{}, nil
+			return mcpToolError("session authorization is missing"), emptyMCPChatCatalog(), nil
 		}
 		output, err := sessionService.ListAvailableChats(ctx, sessionKey, token, input.TargetAgent)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionChatCatalog{}, nil
+			return mcpToolError(err.Error()), emptyMCPChatCatalog(), nil
 		}
 		return nil, output, nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_get_chat",
-		Description: "Get purpose, work policy, repositories, and available agents for one accessible project chat.",
+		Description: "Get purpose, work policy, repositories, and assigned agents for one chat in the current project.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpGetChatInput) (*mcp.CallToolResult, statusservice.AgentSessionChatDetails, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionChatDetails{}, nil
+			return mcpToolError("session authorization is missing"), emptyMCPChatDetails(), nil
 		}
 		output, err := sessionService.ChatDetails(ctx, sessionKey, token, input.Chat)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionChatDetails{}, nil
+			return mcpToolError(err.Error()), emptyMCPChatDetails(), nil
 		}
 		return nil, output, nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_start_agent_thread",
-		Description: "Idempotently create a child thread in another accessible project chat and queue a target agent there.",
+		Description: "Idempotently create a child thread in another project chat and queue an agent assigned to that chat.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpStartAgentThreadInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
@@ -179,11 +179,11 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpListDelegationsInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationList, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionDelegationList{}, nil
+			return mcpToolError("session authorization is missing"), emptyMCPDelegationList(), nil
 		}
 		output, err := sessionService.ListDelegations(ctx, sessionKey, token, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionDelegationList{}, nil
+			return mcpToolError(err.Error()), emptyMCPDelegationList(), nil
 		}
 		return nil, output, nil
 	})
@@ -244,4 +244,27 @@ func mcpToolError(message string) *mcp.CallToolResult {
 		Content: []mcp.Content{&mcp.TextContent{Text: message}},
 		IsError: true,
 	}
+}
+
+func emptyMCPThreadHistory() statusservice.AgentSessionThreadHistory {
+	return statusservice.AgentSessionThreadHistory{Posts: make([]statusservice.MattermostPostMessage, 0)}
+}
+
+func emptyMCPChatSearch() statusservice.AgentSessionChatSearch {
+	return statusservice.AgentSessionChatSearch{Posts: make([]statusservice.MattermostPostMessage, 0)}
+}
+
+func emptyMCPChatCatalog() statusservice.AgentSessionChatCatalog {
+	return statusservice.AgentSessionChatCatalog{Chats: make([]statusservice.AgentSessionChatSummary, 0)}
+}
+
+func emptyMCPChatDetails() statusservice.AgentSessionChatDetails {
+	return statusservice.AgentSessionChatDetails{
+		Repositories: make([]string, 0),
+		Agents:       make([]string, 0),
+	}
+}
+
+func emptyMCPDelegationList() statusservice.AgentSessionDelegationList {
+	return statusservice.AgentSessionDelegationList{Delegations: make([]statusservice.AgentSessionDelegationResult, 0)}
 }

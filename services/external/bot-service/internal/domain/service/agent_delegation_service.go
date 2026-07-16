@@ -92,9 +92,6 @@ func (svc *AgentSessionService) ListAvailableChats(ctx context.Context, sessionK
 		if err != nil {
 			return AgentSessionChatCatalog{}, err
 		}
-		if !chatParticipantEnabled(participants, session.RoleID) {
-			continue
-		}
 		if targetRole.ID != 0 && !chatParticipantEnabled(participants, targetRole.ID) {
 			continue
 		}
@@ -125,9 +122,6 @@ func (svc *AgentSessionService) ChatDetails(ctx context.Context, sessionKey stri
 	participants, err := svc.cfg.Store.ListChatParticipants(ctx, chat.ID)
 	if err != nil {
 		return AgentSessionChatDetails{}, err
-	}
-	if !chatParticipantEnabled(participants, session.RoleID) {
-		return AgentSessionChatDetails{}, fmt.Errorf("chat %q is not available to the current agent", chat.Slug)
 	}
 	repositories, err := svc.chatRepositories(ctx, chat)
 	if err != nil {
@@ -177,10 +171,6 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
-	sourceRole, err := svc.cfg.Store.GetAgentRole(ctx, session.RoleID)
-	if err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
 	targetRole, err := svc.resolveRequestedRole(ctx, session.ProjectID, command.TargetAgent)
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
@@ -195,9 +185,6 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	participants, err := svc.cfg.Store.ListChatParticipants(ctx, targetChat.ID)
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
-	}
-	if !chatParticipantEnabled(participants, sourceRole.ID) {
-		return AgentSessionDelegationResult{}, fmt.Errorf("chat %q is not available to the current agent", targetChat.Slug)
 	}
 	if !chatParticipantEnabled(participants, targetRole.ID) {
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent %q is not available in chat %q", targetRole.Name, targetChat.Slug)
