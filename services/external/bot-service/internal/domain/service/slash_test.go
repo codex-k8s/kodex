@@ -815,7 +815,17 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 			t.Fatalf("prompt missing credential binding %q: %q", expected, prompt)
 		}
 	}
-	for _, expected := range []string{"mattermost_update_turn_status", "--body-file", "Не встраивай Markdown"} {
+	for _, expected := range []string{
+		"mattermost_update_turn_status",
+		"--body-file",
+		"Не встраивай Markdown",
+		"mattermost_list_chats(target_agent=",
+		"mattermost_get_chat(chat=",
+		"mattermost_start_agent_thread(target_chat=",
+		"mattermost_return_to_requester(message=",
+		"конфигурация проекта в MatterCodex является источником истины",
+		"не зашивай имя чата",
+	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
 		}
