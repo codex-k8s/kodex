@@ -118,4 +118,11 @@ func TestAgentDelegationRepositoryLifecycle(t *testing.T) {
 	if err != nil || callback.CallbackRunID != "callback-run" || callback.Status != "callback_queued" {
 		t.Fatalf("callback=%#v error=%v", callback, err)
 	}
+	if _, err := pool.Exec(ctx, "update matter_codex_agent_session_turns set status = 'succeeded' where id = $1", callbackTurnID); err != nil {
+		t.Fatalf("complete callback turn: %v", err)
+	}
+	items, err = repository.ListAgentDelegationsBySource(ctx, sourceSessionID, 20)
+	if err != nil || len(items) != 1 || items[0].Status != "callback_succeeded" {
+		t.Fatalf("completed callback items=%#v error=%v", items, err)
+	}
 }
