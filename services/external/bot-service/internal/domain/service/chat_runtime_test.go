@@ -237,6 +237,16 @@ func TestChatRunUsesRoleTemplateOnlyForFirstSessionTurn(t *testing.T) {
 	if !strings.Contains(secondPrompt, "# Сообщение пользователя") || !strings.Contains(secondPrompt, "Follow-up task.") || !strings.Contains(secondPrompt, "Продолжай существующую сессию Codex") {
 		t.Fatalf("second prompt = %q", secondPrompt)
 	}
+	for _, expected := range []string{
+		"mattermost_list_chats(target_agent=",
+		"mattermost_get_chat(chat=",
+		"mattermost_start_agent_thread(target_chat=",
+		"mattermost_return_to_requester(message=",
+	} {
+		if !strings.Contains(secondPrompt, expected) {
+			t.Fatalf("continuation prompt missing runtime contract %q: %q", expected, secondPrompt)
+		}
+	}
 }
 
 func TestChatRunRetriesFailedCapacityTurnInSavedSession(t *testing.T) {

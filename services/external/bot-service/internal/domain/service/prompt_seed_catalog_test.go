@@ -30,6 +30,28 @@ func TestPromptSeedCatalogMarkdownRenders(t *testing.T) {
 	}
 }
 
+func TestManagerPromptSeedDocumentsDynamicCrossChatRouting(t *testing.T) {
+	seed, ok := promptSeedForProfileTemplate("manager", managerCoordinateTaskKey)
+	if !ok {
+		t.Fatal("manager prompt seed is missing")
+	}
+	body, err := promptSeedMarkdown(seed)
+	if err != nil {
+		t.Fatalf("promptSeedMarkdown() error = %v", err)
+	}
+	for _, expected := range []string{
+		"mattermost_list_chats(target_agent)",
+		"mattermost_get_chat(chat)",
+		"mattermost_start_agent_thread(target_chat, target_agent, title, message, work_item_key)",
+		"Конфигурация проекта в MatterCodex является источником истины",
+		"Не угадывай и не зашивай имя чата",
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("manager seed missing cross-chat routing contract %q:\n%s", expected, body)
+		}
+	}
+}
+
 func TestSeedDefaultAgentPromptTemplatesDoesNotOverwriteExistingTemplates(t *testing.T) {
 	store := &fakeAdminStore{
 		promptTemplates: map[string]entity.AgentPromptTemplate{
