@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/operations/deployment-rollbacks.md
+updated: 2026-07-16
+---
+
+> Исторический deployment path MVP. Production contract находится в `docs/operations/**`; текущие команды остаются в `docs/runbooks/**`.
+
 # Deployment And Rollout
 
 ## Цель rollout

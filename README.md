@@ -1,20 +1,23 @@
-# matter-codex
+# MatterCodex
 
-Mattermost-first система управления Codex-агентами для разработки через короткие PR, reviewer loop и финальное решение владельца.
+Платформа для создания и управления ИИ-сотрудниками, которые работают в Mattermost, используют подключенные инструменты и выполняют управляемые человеком процессы. Платформа подходит для разработки, аналитики, документооборота, продаж, поддержки и других предметных областей.
 
 ## Статус
 
-Сейчас проект находится на этапе согласования MVP. Исходная идея описана в `docs/idea/**`, текущая стратегия и план реализации - в `docs/strategy/**`.
+Действующий Mattermost-first runtime используется для dogfooding. Целевая production-архитектура, универсальная продуктовая модель и последовательность эволюции зафиксированы в активной документации. Исходная идея и superseded MVP strategy сохранены только как исторический контекст.
 
-## Быстрые ссылки
+## Документация
 
-- [AS-IS](docs/idea/as-is.md)
-- [TO-BE](docs/idea/to-be.md)
-- [Стратегия MVP](docs/strategy/README.md)
-- [Архитектура MVP](docs/strategy/architecture.md)
-- [Deployment and rollout](docs/strategy/deployment-and-rollout.md)
-- [PR roadmap](docs/strategy/pr-roadmap.md)
-- [Open decisions](docs/strategy/open-decisions.md)
+- [Навигация и источники истины](docs/README.md)
+- [Продуктовая модель](docs/product/README.md)
+- [Архитектура](docs/architecture/README.md)
+- [Домены](docs/domains/README.md)
+- [Архитектурные решения](docs/decisions/README.md)
+- [Инженерные гайды](docs/guides/README.md)
+- [Production operations](docs/operations/README.md)
+- [Эпики и волны](docs/roadmap/epics-and-waves.md)
+- [Human gates по типам результата](docs/roadmap/result-human-gates.md)
+- [Dogfooding bootstrap](docs/roadmap/dogfooding-bootstrap.md)
 - [Mattermost bootstrap runbook](docs/runbooks/mattermost-bootstrap.md)
 - [Bot-service runbook](docs/runbooks/bot-service.md)
 

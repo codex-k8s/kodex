@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/architecture/runtime-and-sessions.md
+updated: 2026-07-16
+---
+
+> Историческое описание текущего runtime. Target contract находится в `docs/architecture/runtime-and-sessions.md`.
+
 # Thread Session Runtime
 
 Этот документ фиксирует выбранную модель долгоживущих Codex-сессий для project chat runtime.

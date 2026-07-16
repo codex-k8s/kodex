@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/roadmap/epics-and-waves.md
+updated: 2026-07-16
+---
+
+> Исторический hardening backlog MVP. Актуальный production roadmap находится в `docs/roadmap/**` и `docs/operations/**`.
+
 # Production Gaps
 
 Этот документ фиксирует ограничения, которые остаются после MVP dogfooding-среза. Он нужен, чтобы не смешивать краткосрочный запуск с production-ready состоянием.

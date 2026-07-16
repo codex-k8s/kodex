@@ -4,7 +4,7 @@
 
 ## Архитектура и структура
 
-- Сервис размещён в `services/<zone>/<service-name>/`, где зона соответствует `docs/design-guidelines/common/project_architecture.md`.
+- Сервис размещен в `services/<zone>/<service-name>/` согласно `docs/architecture/service-boundaries.md` и `docs/guides/repository-structure.md`.
 - Entrypoint тонкий: `cmd/<service>/main.go` только грузит config, logger, context/signal и запускает `internal/app`.
 - `internal/app` является composition root: собирает зависимости, HTTP server, graceful shutdown и lifecycle.
 - Transport слой (`internal/transport/http`) не содержит доменную orchestration-логику.

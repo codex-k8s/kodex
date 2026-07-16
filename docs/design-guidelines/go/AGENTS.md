@@ -18,8 +18,8 @@
 Проектный overlay `matter-codex`:
 - Kubernetes интеграция только через `client-go` и адаптеры.
 - Репозитории (GitHub/GitLab) только через provider-интерфейсы.
-- Оркестрация процессов event/webhook-driven, без workflow-first зависимостей.
+- Оркестрация процессов строится через durable queue, playbooks, schedules, MCP delegation и callbacks без ad-hoc background goroutines.
 - Состояние процессов и синхронизация pod'ов — через PostgreSQL (`JSONB` + `pgvector`).
 - Проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
 
-Эта локальная копия адаптирована из Go-гайдов `kodex`; при конфликте с корневым `AGENTS.md` и `docs/strategy/**` приоритет у проектной документации `matter-codex`.
+Эта локальная копия адаптирована из Go-гайдов `kodex`; при конфликте приоритет имеют корневой `AGENTS.md`, `docs/architecture/**`, `docs/domains/**`, `docs/decisions/**` и `docs/guides/**`.

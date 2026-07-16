@@ -17,10 +17,10 @@
 
 - runtime MVP разворачивается только в Kubernetes;
 - control surface сначала Mattermost-first: slash commands, каналы и bot-service;
-- сервисы платформы пишутся на Go и размещаются в `services/<zone>/<service>/`;
+- сервисы платформы пишутся на Go и размещаются в `services/<zone>/<service>/`, где зона отражает runtime-роль deployable;
 - агентные запуски выполняются отдельными pod'ами с PVC под checkout рабочей ветки;
 - долгоживущее состояние и синхронизация проектируются под PostgreSQL, `JSONB` и будущий `pgvector`;
 - интеграции с Kubernetes, Mattermost и GitHub/GitLab проектируются через SDK/интерфейсы/адаптеры, а не через бизнес-логику в shell;
 - shell допустим только как bootstrap/deploy wrapper на коротком MVP-срезе.
 
-Процесс разработки и ведения документации задаётся корневым `AGENTS.md` и актуальной проектной документацией в `docs/strategy/**`.
+Процесс разработки и ведения документации задается корневым `AGENTS.md`, `docs/product/**`, `docs/architecture/**`, `docs/domains/**`, `docs/decisions/**`, `docs/guides/**` и `docs/roadmap/**`.

@@ -5,7 +5,7 @@
 ## Общее
 
 - Доменная граница не размыта: один сервис отвечает за один bounded context или один edge-контур.
-- Зона выбрана корректно: `internal|external|jobs|dev` (см. `docs/design-guidelines/common/project_architecture.md`).
+- Зона `internal|external|jobs|dev`, deployable и bounded context выбраны согласно `docs/architecture/service-boundaries.md` и `docs/guides/repository-structure.md`.
 - Для `external` edge слой остаётся thin-edge: валидация, auth, routing, Mattermost/GitHub callback handling; доменная логика живёт глубже.
 - Для Go-кода прочитан профильный гайд `docs/design-guidelines/go/services_design_requirements.md`.
 - Модели/типы/DTO размещены по слоям, а не ad-hoc в handler или main.
@@ -31,9 +31,9 @@
 
 ## Специфика matter-codex
 
-- Control surface текущего MVP Mattermost-first: slash command, team/channels и bot-service.
+- Mattermost является conversational surface, Control Center - surface сложной настройки; typed commands остаются debug/fallback.
 - Agent runtime проектируется как отдельный Kubernetes pod с PVC под checkout рабочей ветки.
-- Интеграция с репозиториями идёт через provider-интерфейс; GitHub-специфика не просачивается в домен.
+- Git/repository является optional integration; GitHub-специфика не просачивается в universal domain.
 - Состояние long-running процессов, агентных запусков и блокировок проектируется под PostgreSQL.
 - Данные гибкой структуры проектируются под `JSONB`; векторный поиск - под будущий `pgvector`.
 - Секреты платформы читаются из env/Kubernetes Secret; repo-токены не передаются в доменные DTO сырыми строками.

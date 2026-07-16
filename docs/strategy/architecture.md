@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/architecture/README.md
+updated: 2026-07-16
+---
+
+> Историческая архитектура действующего MVP. Целевая архитектура находится в `docs/architecture/**` и `docs/domains/**`.
+
 # Архитектура MVP
 
 ## Выбранный стартовый подход

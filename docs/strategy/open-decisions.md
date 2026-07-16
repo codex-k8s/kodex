@@ -1,3 +1,12 @@
+---
+type: legacy
+status: superseded
+superseded_by: docs/decisions/README.md
+updated: 2026-07-16
+---
+
+> Исторические решения MVP. Актуальный реестр находится в `docs/decisions/**`.
+
 # Decisions
 
 Этот документ фиксирует решения после первичного review. `matter-codex` является самостоятельным продуктом и не проектируется как часть `kodex`. `kodex` может быть первым dogfooding-репозиторием, но не архитектурной зависимостью.
