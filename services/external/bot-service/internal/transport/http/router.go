@@ -276,6 +276,29 @@ func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Reque
 			response.Update = cardPost(*result.Card)
 		}
 		writeJSON(w, http.StatusOK, response)
+	case "retry_turn":
+		turnIDs := contextInt64List(request.Context, "turn_ids")
+		if len(turnIDs) != 1 {
+			writeJSON(w, http.StatusBadRequest, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("chat.session.turn.retry.failed", nil)})
+			return
+		}
+		result, err := router.sessionService.RetryFailedTurn(r.Context(), statusservice.RetryAgentSessionTurnCommand{
+			TurnID:    turnIDs[0],
+			UserID:    strings.TrimSpace(request.UserId),
+			UserName:  strings.TrimSpace(request.UserName),
+			ChannelID: strings.TrimSpace(request.ChannelId),
+			PostID:    strings.TrimSpace(request.PostId),
+		})
+		if err != nil {
+			router.logWarn("agent turn retry failed", "error", err)
+			writeJSON(w, http.StatusBadGateway, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("chat.session.turn.retry.failed", nil)})
+			return
+		}
+		response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.Message}
+		if result.Card != nil {
+			response.Update = cardPost(*result.Card)
+		}
+		writeJSON(w, http.StatusOK, response)
 	default:
 		writeJSON(w, http.StatusBadRequest, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("menu.action.unknown", nil)})
 	}

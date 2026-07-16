@@ -334,6 +334,135 @@ func TestAgentSessionSystemStatusUpdatesInitialCardWithCodexLimits(t *testing.T)
 	}
 }
 
+func TestAgentSessionSystemStatusShowsCapacityRetryOnExistingCard(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.RussianLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		MenuActionURL:   "https://mattermost.example/actions",
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	_, err = svc.UpdateTurnSystemStatus(context.Background(), "session-1", "session-token", UpdateAgentSessionTurnStatusCommand{
+		RunID:             claim.RunID,
+		Phase:             agentSessionTurnRetrying,
+		OpenAIAccount:     "main",
+		CodexLimits:       "5h 83%",
+		RetryAttempt:      1,
+		RetryMaxAttempts:  3,
+		RetryDelaySeconds: 60,
+	})
+	if err != nil {
+		t.Fatalf("UpdateTurnSystemStatus() error = %v", err)
+	}
+	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
+		t.Fatalf("cards=%#v cardUpdates=%#v", publisher.cards, publisher.cardUpdates)
+	}
+	card := publisher.cardUpdates[0]
+	for _, expected := range []string{"модель временно перегружена", "Повтор `1/3`", "через `1` мин", "OpenAI account: `main`", "5h 83%"} {
+		if !strings.Contains(card.Text, expected) {
+			t.Fatalf("capacity retry card misses %q: %q", expected, card.Text)
+		}
+	}
+	if len(card.Actions) != 1 || card.Actions[0].ID != "stopturn" {
+		t.Fatalf("capacity retry actions = %#v", card.Actions)
+	}
+}
+
+func TestAgentSessionCapacityExhaustionAddsManualRetryAction(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.RussianLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		MenuActionURL:   "https://mattermost.example/actions",
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	err = svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+		TurnID:         claim.TurnID,
+		RunID:          claim.RunID,
+		Status:         agentSessionTurnFailed,
+		ErrorMessage:   "Codex model remained at capacity",
+		CodexSessionID: "codex-session-1",
+		Artifacts: map[string]string{
+			agentTurnArtifactCapacityRetriesExhausted: "true",
+			agentTurnArtifactCapacityRetryCount:       "3",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	if len(publisher.posts) != 0 {
+		t.Fatalf("capacity exhaustion should only use the system card, posts=%#v", publisher.posts)
+	}
+	if len(publisher.cardUpdates) != 1 {
+		t.Fatalf("cardUpdates = %#v", publisher.cardUpdates)
+	}
+	card := publisher.cardUpdates[0]
+	for _, expected := range []string{"после `3` автоматических повторов", "Работа и Codex session сохранены", "Запустить ещё раз"} {
+		if !strings.Contains(card.Text, expected) {
+			t.Fatalf("capacity exhausted card misses %q: %q", expected, card.Text)
+		}
+	}
+	if len(card.Actions) != 1 || card.Actions[0].ID != "retryturn" || card.Actions[0].Context["action"] != "retry_turn" {
+		t.Fatalf("capacity exhausted actions = %#v", card.Actions)
+	}
+}
+
+func TestAgentSessionManualCapacityRetryUsesDispatcher(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	session := store.agentSessions["session-1"]
+	session.Status = agentSessionStatusError
+	session.CodexSessionID = "codex-session-1"
+	store.agentSessions["session-1"] = session
+	store.sessionTurns[0].Status = agentSessionTurnFailed
+	store.sessionTurns[0].Artifacts = `{"codex-capacity-retries-exhausted":"true","codex-capacity-retry-count":"3"}`
+	dispatcher := &fakeAgentTurnDispatcher{retryQueued: AgentTurnQueued{RunID: "run-retry-1", TurnID: 2, SessionKey: "session-1"}}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.RussianLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		TurnDispatcher:  dispatcher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	result, err := svc.RetryFailedTurn(context.Background(), RetryAgentSessionTurnCommand{
+		TurnID:    1,
+		UserID:    "owner-user",
+		UserName:  "owner",
+		ChannelID: "channel-1",
+		PostID:    "status-post-1",
+	})
+	if err != nil {
+		t.Fatalf("RetryFailedTurn() error = %v", err)
+	}
+	if dispatcher.retryCalls != 1 || dispatcher.retryRequest.Session.ID != 1 || dispatcher.retryRequest.Turn.ID != 1 || dispatcher.retryRequest.UserName != "owner" {
+		t.Fatalf("retry dispatcher = %#v", dispatcher)
+	}
+	if result.RunID != "run-retry-1" || result.Card == nil || result.Card.PostID != "status-post-1" {
+		t.Fatalf("result = %#v", result)
+	}
+	if !strings.Contains(result.Message, "run-retry-1") {
+		t.Fatalf("message = %q", result.Message)
+	}
+}
+
 func TestAgentSessionCompletePostsFYIToRequester(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.sessionTurns[0].UserName = "owner"
@@ -818,14 +947,26 @@ func withActiveTurn(session entity.AgentSession, turnID int64, runID string) ent
 }
 
 type fakeAgentTurnDispatcher struct {
-	request AgentTurnRequest
-	queued  AgentTurnQueued
-	calls   int
+	request      AgentTurnRequest
+	queued       AgentTurnQueued
+	calls        int
+	retryRequest AgentTurnRetryRequest
+	retryQueued  AgentTurnQueued
+	retryCalls   int
 }
 
 func (dispatcher *fakeAgentTurnDispatcher) EnqueueAgentTurn(_ context.Context, request AgentTurnRequest) (AgentTurnQueued, error) {
 	dispatcher.calls++
 	dispatcher.request = request
+	return dispatcher.queued, nil
+}
+
+func (dispatcher *fakeAgentTurnDispatcher) RetryAgentTurn(_ context.Context, request AgentTurnRetryRequest) (AgentTurnQueued, error) {
+	dispatcher.retryCalls++
+	dispatcher.retryRequest = request
+	if dispatcher.retryQueued.RunID != "" {
+		return dispatcher.retryQueued, nil
+	}
 	return dispatcher.queued, nil
 }
 

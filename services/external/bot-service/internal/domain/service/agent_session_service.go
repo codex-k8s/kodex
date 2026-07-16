@@ -31,6 +31,10 @@ const (
 	agentSessionTurnSucceeded = "succeeded"
 	agentSessionTurnFailed    = "failed"
 	agentSessionTurnCanceled  = "canceled"
+	agentSessionTurnRetrying  = "capacity_retry"
+
+	agentTurnArtifactCapacityRetriesExhausted = "codex-capacity-retries-exhausted"
+	agentTurnArtifactCapacityRetryCount       = "codex-capacity-retry-count"
 
 	defaultManagerSessionTTLSeconds = 4 * 60 * 60
 	defaultThreadSessionTTLSeconds  = 4 * 60 * 60
@@ -105,10 +109,13 @@ type CompleteAgentSessionTurnCommand struct {
 }
 
 type UpdateAgentSessionTurnStatusCommand struct {
-	RunID         string `json:"run_id"`
-	Phase         string `json:"phase"`
-	OpenAIAccount string `json:"openai_account,omitempty"`
-	CodexLimits   string `json:"codex_limits,omitempty"`
+	RunID             string `json:"run_id"`
+	Phase             string `json:"phase"`
+	OpenAIAccount     string `json:"openai_account,omitempty"`
+	CodexLimits       string `json:"codex_limits,omitempty"`
+	RetryAttempt      int    `json:"retry_attempt,omitempty"`
+	RetryMaxAttempts  int    `json:"retry_max_attempts,omitempty"`
+	RetryDelaySeconds int    `json:"retry_delay_seconds,omitempty"`
 }
 
 type StopAgentSessionTurnsCommand struct {
@@ -121,6 +128,20 @@ type StopAgentSessionTurnsCommand struct {
 
 type StopAgentSessionTurnsResult struct {
 	Message string
+	Card    *MattermostCard
+}
+
+type RetryAgentSessionTurnCommand struct {
+	TurnID    int64
+	UserID    string
+	UserName  string
+	ChannelID string
+	PostID    string
+}
+
+type RetryAgentSessionTurnResult struct {
+	Message string
+	RunID   string
 	Card    *MattermostCard
 }
 
@@ -261,8 +282,10 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	}
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
 	_, _ = svc.upsertTurnStatusCard(ctx, session, turn, status, svc.turnCompletionStatusMessage(ctx, session, status, turn.RunID, command.Artifacts))
-	if err := svc.postTurnResult(ctx, session, turn, status, command); err != nil {
-		return err
+	if !capacityRetriesExhausted(command.Artifacts) {
+		if err := svc.postTurnResult(ctx, session, turn, status, command); err != nil {
+			return err
+		}
 	}
 	if status == agentSessionTurnSucceeded {
 		_ = svc.postTurnCompletionFYI(ctx, session, turn)
@@ -381,6 +404,60 @@ func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, comma
 	return result, nil
 }
 
+func (svc *AgentSessionService) RetryFailedTurn(ctx context.Context, command RetryAgentSessionTurnCommand) (RetryAgentSessionTurnResult, error) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return RetryAgentSessionTurnResult{}, fmt.Errorf("storage is not ready")
+	}
+	if svc.cfg.TurnDispatcher == nil {
+		return RetryAgentSessionTurnResult{}, fmt.Errorf("agent turn dispatcher is not configured")
+	}
+	if command.TurnID <= 0 {
+		return RetryAgentSessionTurnResult{}, fmt.Errorf("turn id is required")
+	}
+	turn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, command.TurnID)
+	if err != nil {
+		return RetryAgentSessionTurnResult{}, err
+	}
+	if turn.Status != agentSessionTurnFailed || !turnCapacityRetriesExhausted(turn) {
+		return RetryAgentSessionTurnResult{}, fmt.Errorf("turn is not eligible for capacity retry")
+	}
+	session, err := svc.cfg.Store.GetAgentSessionByID(ctx, turn.SessionID)
+	if err != nil {
+		return RetryAgentSessionTurnResult{}, err
+	}
+	if session.ActiveTurnID != 0 {
+		return RetryAgentSessionTurnResult{}, fmt.Errorf("session already has an active turn")
+	}
+	queued, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, session.ID)
+	if err != nil {
+		return RetryAgentSessionTurnResult{}, err
+	}
+	if len(queued) > 0 {
+		return RetryAgentSessionTurnResult{}, fmt.Errorf("session already has a queued turn")
+	}
+	retried, err := svc.cfg.TurnDispatcher.RetryAgentTurn(ctx, AgentTurnRetryRequest{
+		Session:  session,
+		Turn:     turn,
+		UserID:   strings.TrimSpace(command.UserID),
+		UserName: strings.TrimSpace(command.UserName),
+	})
+	if err != nil {
+		return RetryAgentSessionTurnResult{}, err
+	}
+	message := svc.t("chat.session.turn.retry.result", map[string]any{"RunID": retried.RunID})
+	result := RetryAgentSessionTurnResult{Message: message, RunID: retried.RunID}
+	if strings.TrimSpace(command.ChannelID) != "" && strings.TrimSpace(command.PostID) != "" {
+		result.Card = &MattermostCard{
+			ChannelID: command.ChannelID,
+			PostID:    command.PostID,
+			Color:     "#1c58d9",
+			Title:     svc.t("chat.session.turn.retry.title", nil),
+			Text:      message,
+		}
+	}
+	return result, nil
+}
+
 func (svc *AgentSessionService) ThreadHistory(ctx context.Context, sessionKey string, token string, limit int) (AgentSessionThreadHistory, error) {
 	session, err := svc.authorize(ctx, sessionKey, token)
 	if err != nil {
@@ -483,10 +560,15 @@ func (svc *AgentSessionService) UpdateTurnSystemStatus(ctx context.Context, sess
 	}
 	runID := defaultString(strings.TrimSpace(command.RunID), turn.RunID)
 	message := svc.turnStartedStatusMessage(ctx, session, runID, command.OpenAIAccount, command.CodexLimits)
+	cardStatus := phase
+	if phase == agentSessionTurnRetrying {
+		cardStatus = agentSessionTurnRunning
+		message = svc.turnCapacityRetryStatusMessage(ctx, session, runID, command)
+	}
 	if phase == agentSessionTurnFailed || phase == agentSessionTurnSucceeded {
 		message = svc.turnStatusMessage(ctx, session, phase, runID, command.OpenAIAccount, command.CodexLimits)
 	}
-	ref, err := svc.upsertTurnStatusCard(ctx, session, turn, phase, message)
+	ref, err := svc.upsertTurnStatusCard(ctx, session, turn, cardStatus, message)
 	if err != nil {
 		return AgentSessionPostResult{}, err
 	}
@@ -792,6 +874,18 @@ func (svc *AgentSessionService) turnStatusCard(ctx context.Context, session enti
 				"turn_ids": strconv.FormatInt(turn.ID, 10),
 			},
 		}}
+	} else if status == agentSessionTurnFailed && turnCapacityRetriesExhausted(turn) && strings.TrimSpace(svc.cfg.MenuActionURL) != "" {
+		card.Actions = []MattermostCardAction{{
+			ID:      "retryturn",
+			Name:    svc.t("chat.session.turn.retry.action", nil),
+			Tooltip: svc.t("chat.session.turn.retry.tooltip", nil),
+			Style:   "primary",
+			Context: map[string]any{
+				"kind":     "agent_turn",
+				"action":   "retry_turn",
+				"turn_ids": strconv.FormatInt(turn.ID, 10),
+			},
+		}}
 	}
 	return card
 }
@@ -1031,20 +1125,16 @@ func (svc *AgentSessionService) turnCompletionStatusMessage(ctx context.Context,
 		openAIAccount = strings.TrimSpace(artifacts["openai-account"])
 		codexLimits = strings.TrimSpace(artifacts["codex-limits"])
 	}
+	if status == agentSessionTurnFailed && capacityRetriesExhausted(artifacts) {
+		data := svc.turnStatusMessageData(ctx, session, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
+		data["RetryCount"] = artifacts[agentTurnArtifactCapacityRetryCount]
+		return svc.t("chat.session.status.capacity_exhausted", data)
+	}
 	return svc.turnStatusMessage(ctx, session, status, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
 }
 
 func (svc *AgentSessionService) turnStatusMessage(ctx context.Context, session entity.AgentSession, status string, runID string, openAIAccount string, codexLimits string) string {
-	data := map[string]any{"RunID": runID}
-	if agent := strings.TrimSpace(svc.sessionMattermostUsername(ctx, session)); agent != "" {
-		data["Agent"] = agent
-	}
-	if strings.TrimSpace(openAIAccount) != "" {
-		data["OpenAIAccount"] = strings.TrimSpace(openAIAccount)
-	}
-	if strings.TrimSpace(codexLimits) != "" {
-		data["CodexLimits"] = strings.TrimSpace(codexLimits)
-	}
+	data := svc.turnStatusMessageData(ctx, session, runID, openAIAccount, codexLimits)
 	if status == agentSessionTurnFailed {
 		return svc.t("chat.session.status.failed", data)
 	}
@@ -1055,6 +1145,47 @@ func (svc *AgentSessionService) turnStatusMessage(ctx context.Context, session e
 		return svc.t("chat.session.status.started", data)
 	}
 	return svc.t("chat.session.status.succeeded", data)
+}
+
+func (svc *AgentSessionService) turnStatusMessageData(ctx context.Context, session entity.AgentSession, runID string, openAIAccount string, codexLimits string) map[string]any {
+	data := map[string]any{"RunID": runID}
+	if agent := strings.TrimSpace(svc.sessionMattermostUsername(ctx, session)); agent != "" {
+		data["Agent"] = agent
+	}
+	if strings.TrimSpace(openAIAccount) != "" {
+		data["OpenAIAccount"] = strings.TrimSpace(openAIAccount)
+	}
+	if strings.TrimSpace(codexLimits) != "" {
+		data["CodexLimits"] = strings.TrimSpace(codexLimits)
+	}
+	return data
+}
+
+func (svc *AgentSessionService) turnCapacityRetryStatusMessage(ctx context.Context, session entity.AgentSession, runID string, command UpdateAgentSessionTurnStatusCommand) string {
+	data := svc.turnStatusMessageData(ctx, session, runID, command.OpenAIAccount, command.CodexLimits)
+	data["Attempt"] = command.RetryAttempt
+	data["MaxAttempts"] = command.RetryMaxAttempts
+	delayMinutes := command.RetryDelaySeconds / 60
+	if delayMinutes <= 0 {
+		delayMinutes = 1
+	}
+	data["DelayMinutes"] = delayMinutes
+	return svc.t("chat.session.status.capacity_retry", data)
+}
+
+func capacityRetriesExhausted(artifacts map[string]string) bool {
+	return strings.EqualFold(strings.TrimSpace(artifacts[agentTurnArtifactCapacityRetriesExhausted]), "true")
+}
+
+func turnCapacityRetriesExhausted(turn entity.AgentSessionTurn) bool {
+	if strings.TrimSpace(turn.Artifacts) == "" {
+		return false
+	}
+	artifacts := map[string]string{}
+	if err := json.Unmarshal([]byte(turn.Artifacts), &artifacts); err != nil {
+		return false
+	}
+	return capacityRetriesExhausted(artifacts)
 }
 
 func (svc *AgentSessionService) sessionOpenAIAccountName(ctx context.Context, session entity.AgentSession) string {

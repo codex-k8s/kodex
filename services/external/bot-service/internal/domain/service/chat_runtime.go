@@ -93,18 +93,26 @@ type ChatRunResult struct {
 }
 
 type AgentTurnRequest struct {
-	Project       entity.Project
-	Chat          entity.Chat
-	Role          entity.AgentRole
-	Repositories  []entity.ProjectRepository
-	UserID        string
-	UserName      string
-	UserMessage   string
-	SourcePostID  string
-	ReplyRootID   string
-	SessionRootID string
-	SessionScope  string
-	TTLSeconds    int
+	Project        entity.Project
+	Chat           entity.Chat
+	Role           entity.AgentRole
+	Repositories   []entity.ProjectRepository
+	UserID         string
+	UserName       string
+	UserMessage    string
+	SourcePostID   string
+	ReplyRootID    string
+	SessionRootID  string
+	SessionScope   string
+	TTLSeconds     int
+	PreparedPrompt string
+}
+
+type AgentTurnRetryRequest struct {
+	Session  entity.AgentSession
+	Turn     entity.AgentSessionTurn
+	UserID   string
+	UserName string
 }
 
 type AgentTurnQueued struct {
@@ -126,6 +134,7 @@ type AgentSessionRepairResult struct {
 
 type AgentTurnDispatcher interface {
 	EnqueueAgentTurn(ctx context.Context, request AgentTurnRequest) (AgentTurnQueued, error)
+	RetryAgentTurn(ctx context.Context, request AgentTurnRetryRequest) (AgentTurnQueued, error)
 }
 
 type ThreadRepositorySelectionInput struct {
@@ -251,6 +260,17 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 	for _, role := range roles {
 		rolesByID[role.ID] = role
 	}
+	projectRoles, err := svc.cfg.Store.ListAgentRoles(ctx, chat.ProjectID)
+	if err != nil {
+		svc.postThread(ctx, command, svc.t("chat.run.roles_lookup_failed", map[string]any{"Error": safeError(err)}))
+		return ChatRunResult{}
+	}
+	mentionRolesByID := make(map[int64]entity.AgentRole, len(projectRoles))
+	for _, role := range projectRoles {
+		if role.Enabled {
+			mentionRolesByID[role.ID] = role
+		}
+	}
 	var targets []chatSessionTarget
 	var threadContext entity.ThreadContext
 	var repositories []entity.ProjectRepository
@@ -263,7 +283,7 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 	if !ready {
 		return ChatRunResult{}
 	}
-	targets, err = svc.routeChatPost(ctx, chat, roles, rolesByID, command, threadContext)
+	targets, err = svc.routeChatPost(ctx, chat, roles, rolesByID, mentionRolesByID, command, threadContext)
 	if err != nil {
 		svc.postThread(ctx, command, svc.t("chat.run.route_failed", map[string]any{"Error": safeError(err)}))
 		return ChatRunResult{}
@@ -421,12 +441,15 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		UserMessage:      request.UserMessage,
 		Locale:           svc.localeData(),
 	}
-	prompt, err := BuildRolePrompt(promptInput)
-	if sessionExists {
-		prompt, err = BuildRoleContinuationPrompt(promptInput)
-	}
-	if err != nil {
-		return AgentTurnQueued{}, err
+	prompt := strings.TrimSpace(request.PreparedPrompt)
+	if prompt == "" {
+		prompt, err = BuildRolePrompt(promptInput)
+		if sessionExists {
+			prompt, err = BuildRoleContinuationPrompt(promptInput)
+		}
+		if err != nil {
+			return AgentTurnQueued{}, err
+		}
 	}
 	session, _, err := svc.cfg.Store.UpsertAgentSession(ctx, adminrepo.UpsertAgentSessionInput{
 		SessionKey:           sessionKey,
@@ -515,6 +538,47 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		PodName:            started.PodName,
 		PVCName:            started.PVCName,
 	}, nil
+}
+
+func (svc *ChatRunService) RetryAgentTurn(ctx context.Context, request AgentTurnRetryRequest) (AgentTurnQueued, error) {
+	if request.Session.ID == 0 || request.Turn.ID == 0 {
+		return AgentTurnQueued{}, fmt.Errorf("session and turn are required")
+	}
+	project, err := svc.cfg.Store.GetProject(ctx, request.Session.ProjectID)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	chat, err := svc.cfg.Store.GetChat(ctx, request.Session.ChatID)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	role, err := svc.cfg.Store.GetAgentRole(ctx, request.Session.RoleID)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	repositories, err := svc.chatRepositories(ctx, chat)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	prompt := strings.TrimSpace(request.Turn.Message)
+	if strings.TrimSpace(request.Session.CodexSessionID) != "" {
+		prompt = svc.t("chat.session.turn.retry.prompt", nil)
+	}
+	return svc.EnqueueAgentTurn(ctx, AgentTurnRequest{
+		Project:        project,
+		Chat:           chat,
+		Role:           role,
+		Repositories:   repositories,
+		UserID:         request.UserID,
+		UserName:       request.UserName,
+		UserMessage:    prompt,
+		PreparedPrompt: prompt,
+		SourcePostID:   request.Turn.MattermostPostID,
+		ReplyRootID:    request.Turn.MattermostRootPostID,
+		SessionRootID:  request.Session.MattermostRootPostID,
+		SessionScope:   request.Session.SessionScope,
+		TTLSeconds:     request.Session.TTLSeconds,
+	})
 }
 
 func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (AgentSessionRepairResult, error) {
@@ -849,12 +913,12 @@ func (svc *ChatRunService) validateThreadRepository(ctx context.Context, threadC
 	return fmt.Errorf("repository is not bound to project")
 }
 
-func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, roles []entity.AgentRole, rolesByID map[int64]entity.AgentRole, command ChatPostCommand, threadContext entity.ThreadContext) ([]chatSessionTarget, error) {
+func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, roles []entity.AgentRole, rolesByID map[int64]entity.AgentRole, mentionRolesByID map[int64]entity.AgentRole, command ChatPostCommand, threadContext entity.ThreadContext) ([]chatSessionTarget, error) {
 	identities, err := svc.cfg.Store.ListMattermostBotIdentitiesByProject(ctx, chat.ProjectID)
 	if err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
 		return nil, err
 	}
-	mentionedRoles := mentionedAgentRoles(command.Message, identities, rolesByID)
+	mentionedRoles := mentionedAgentRoles(command.Message, identities, mentionRolesByID)
 	isThreadReply := strings.TrimSpace(command.RootPostID) != "" && strings.TrimSpace(command.RootPostID) != strings.TrimSpace(command.PostID)
 	if len(mentionedRoles) > 0 {
 		targets := make([]chatSessionTarget, 0, len(mentionedRoles))

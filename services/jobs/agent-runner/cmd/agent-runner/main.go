@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,7 +41,12 @@ const (
 	sessionAPIMaxAttempts       = 30
 	sessionAPIInitialRetryDelay = time.Second
 	sessionAPIMaxRetryDelay     = 10 * time.Second
+	capacityRetryPhase          = "capacity_retry"
+	capacityRetryExhaustedKey   = "codex-capacity-retries-exhausted"
+	capacityRetryCountKey       = "codex-capacity-retry-count"
 )
+
+var codexCapacityRetryDelays = []time.Duration{time.Minute, 3 * time.Minute, 5 * time.Minute}
 
 type sessionAPIStatusError struct {
 	StatusCode int
@@ -90,10 +96,13 @@ type sessionTurnCompleteRequest struct {
 }
 
 type sessionTurnStatusRequest struct {
-	RunID         string `json:"run_id"`
-	Phase         string `json:"phase"`
-	OpenAIAccount string `json:"openai_account,omitempty"`
-	CodexLimits   string `json:"codex_limits,omitempty"`
+	RunID             string `json:"run_id"`
+	Phase             string `json:"phase"`
+	OpenAIAccount     string `json:"openai_account,omitempty"`
+	CodexLimits       string `json:"codex_limits,omitempty"`
+	RetryAttempt      int    `json:"retry_attempt,omitempty"`
+	RetryMaxAttempts  int    `json:"retry_max_attempts,omitempty"`
+	RetryDelaySeconds int    `json:"retry_delay_seconds,omitempty"`
 }
 
 func main() {
@@ -454,10 +463,50 @@ func (r *runner) runSession(ctx context.Context) error {
 			fmt.Printf("matter-codex session status update skipped: %v\n", err)
 		}
 		finalFile := fmt.Sprintf("session-turn-%d-final.md", claim.TurnID)
-		nextSessionID, finalMessage, runErr := r.runCodexSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, extraEnv)
+		retryCount := 0
+		nextSessionID, finalMessage, runErr := r.runCodexSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
 		if strings.TrimSpace(nextSessionID) != "" {
 			codexSessionID = strings.TrimSpace(nextSessionID)
 		}
+		for retryIndex, delay := range codexCapacityRetryDelays {
+			if !codexTransientCapacityFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr) {
+				break
+			}
+			retryCount = retryIndex + 1
+			if err := r.updateSessionTurnStatus(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnStatusRequest{
+				RunID:             claim.RunID,
+				Phase:             capacityRetryPhase,
+				OpenAIAccount:     openAIAccount,
+				CodexLimits:       r.latestCodexLimitsSummary(),
+				RetryAttempt:      retryCount,
+				RetryMaxAttempts:  len(codexCapacityRetryDelays),
+				RetryDelaySeconds: int(delay / time.Second),
+			}); err != nil {
+				fmt.Printf("matter-codex capacity retry status update skipped: %v\n", err)
+			}
+			if err := waitCodexCapacityRetry(ctx, delay); err != nil {
+				runErr = err
+				break
+			}
+			if err := r.updateSessionTurnStatus(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnStatusRequest{
+				RunID:         claim.RunID,
+				Phase:         "running",
+				OpenAIAccount: openAIAccount,
+				CodexLimits:   r.latestCodexLimitsSummary(),
+			}); err != nil {
+				fmt.Printf("matter-codex capacity retry start status update skipped: %v\n", err)
+			}
+			retryClaim := claim
+			if strings.TrimSpace(codexSessionID) != "" {
+				retryClaim.Prompt = codexCapacityRetryPrompt(retryCount, len(codexCapacityRetryDelays))
+			}
+			nextSessionID, finalMessage, runErr = r.runCodexSessionTurn(ctx, retryClaim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
+			if strings.TrimSpace(nextSessionID) != "" {
+				codexSessionID = strings.TrimSpace(nextSessionID)
+			}
+		}
+		capacityRetriesExhausted := runErr != nil && retryCount == len(codexCapacityRetryDelays) &&
+			codexTransientCapacityFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr)
 		archive, snapshotErr := createCodexSessionArchive(codexHomeDir)
 		status := "succeeded"
 		errorMessage := ""
@@ -478,6 +527,13 @@ func (r *runner) runSession(ctx context.Context) error {
 		}
 		if limits := r.latestCodexLimitsSummary(); limits != "" {
 			artifacts["codex-limits"] = limits
+		}
+		if retryCount > 0 {
+			artifacts[capacityRetryCountKey] = strconv.Itoa(retryCount)
+		}
+		if capacityRetriesExhausted {
+			artifacts[capacityRetryExhaustedKey] = "true"
+			errorMessage = fmt.Sprintf("Codex model remained at capacity after %d automatic retries", retryCount)
 		}
 		if err := r.completeSessionTurn(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnCompleteRequest{
 			TurnID:                   claim.TurnID,
@@ -575,10 +631,11 @@ func (r *runner) runCodexExec(ctx context.Context, workDir string, finalFile str
 	return cmd.Run()
 }
 
-func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaimResponse, codexSessionID string, finalFile string, workDir string, extraEnv []string) (string, string, error) {
-	eventsPath := filepath.Join(artifactsDir, fmt.Sprintf("codex-events-%d.jsonl", claim.TurnID))
-	stderrPath := filepath.Join(artifactsDir, fmt.Sprintf("codex-stderr-%d.log", claim.TurnID))
+func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaimResponse, codexSessionID string, finalFile string, workDir string, extraEnv []string, attempt int) (string, string, error) {
+	eventsPath := sessionTurnEventsPath(claim.TurnID, attempt)
+	stderrPath := sessionTurnStderrPath(claim.TurnID, attempt)
 	finalPath := filepath.Join(artifactsDir, finalFile)
+	_ = os.Remove(finalPath)
 	events, err := os.Create(eventsPath)
 	if err != nil {
 		return codexSessionID, "", err
@@ -612,6 +669,92 @@ func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaim
 		finalMessage = tailText(stderrPath, 80)
 	}
 	return codexSessionID, finalMessage, runErr
+}
+
+func sessionTurnEventsPath(turnID int64, attempt int) string {
+	return filepath.Join(artifactsDir, sessionTurnArtifactName("codex-events", turnID, attempt, ".jsonl"))
+}
+
+func sessionTurnStderrPath(turnID int64, attempt int) string {
+	return filepath.Join(artifactsDir, sessionTurnArtifactName("codex-stderr", turnID, attempt, ".log"))
+}
+
+func sessionTurnArtifactName(prefix string, turnID int64, attempt int, extension string) string {
+	if attempt <= 0 {
+		return fmt.Sprintf("%s-%d%s", prefix, turnID, extension)
+	}
+	return fmt.Sprintf("%s-%d-retry-%d%s", prefix, turnID, attempt, extension)
+}
+
+func codexTransientCapacityFailure(eventsPath string, stderrPath string, runErr error) bool {
+	if runErr == nil {
+		return false
+	}
+	if codexEventFileContainsTransientCapacity(eventsPath) {
+		return true
+	}
+	body, err := os.ReadFile(stderrPath)
+	return err == nil && codexTransientCapacityMessage(string(body))
+}
+
+func codexEventFileContainsTransientCapacity(path string) bool {
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		var event struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			continue
+		}
+		if event.Type != "error" && event.Type != "turn.failed" {
+			continue
+		}
+		if codexTransientCapacityMessage(event.Message) {
+			return true
+		}
+	}
+	return false
+}
+
+func codexTransientCapacityMessage(message string) bool {
+	message = strings.ToLower(strings.TrimSpace(message))
+	for _, marker := range []string{
+		"selected model is at capacity",
+		"model is at capacity",
+		"model is currently at capacity",
+		"server is overloaded",
+		"service is temporarily overloaded",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func codexCapacityRetryPrompt(attempt int, maxAttempts int) string {
+	return fmt.Sprintf("Continue the same turn after a transient model-capacity interruption (automatic retry %d/%d). Do not restart work that is already complete. Inspect the current workspace and conversation state, finish the original task, and follow the existing locale and language requirements.", attempt, maxAttempts)
+}
+
+func waitCodexCapacityRetry(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (r *runner) fetchSessionSnapshot(ctx context.Context, client *http.Client, baseURL string, sessionKey string, token string) (sessionSnapshotResponse, error) {
