@@ -458,6 +458,14 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Developer runner реализован отдельным Go binary в подготовленном image и сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую, но разрешает отвечать на review threads через `gh` при соответствующей задаче.
 - Reviewer runner реализован отдельным Go binary в подготовленном image и дает Codex reviewer доступ к `gh` для inline review comments; если Codex не отправил review сам, runner отправляет fallback summary review после `codex exec`.
 
+## Сессии, role bots и `runs`
+
+- OpenAI account записывается в agent session при ее создании. Изменение account у роли не переносит существующую Codex session: для нового account требуется новый корневой Mattermost thread.
+- Статус `blocked` означает подтвержденную cyber-safety блокировку поставщика. Runner не выполняет автоматический обход; пользователь получает ссылку на Trusted Access и продолжает измененную задачу в новом thread.
+- Для каждого проекта bootstrap создает публичный канал `runs`. В нем служебный MatterCodex account создает по одной обновляемой карточке на turn; карточки имеют ссылки на trigger, рабочий thread и все parent run cards.
+- Role identity всегда должна быть Mattermost bot account. При старте bot-service существующая обычная учетная запись роли конвертируется в bot; fallback с созданием обычного пользователя отсутствует.
+- Mattermost не поддерживает read-only состояние отдельного thread. Для контролируемого закрытия истории MatterCodex ставит `thread_context.status = closed`: UI Mattermost по-прежнему позволяет отправить текст, но bot-service не создает turn и просит начать новый корневой thread. Архивация всего канала для этой задачи не применяется.
+
 ## Production gaps после MVP
 
 Актуальные production gaps и последовательность их закрытия ведутся в `docs/roadmap/epics-and-waves.md` и `docs/operations/**`.

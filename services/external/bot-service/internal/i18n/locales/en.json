@@ -764,6 +764,14 @@
   {"id": "chat.session.status.capacity_retry", "translation": "**Status:** the model is temporarily at capacity{{if .Agent}}; agent @{{.Agent}} will continue automatically{{end}}.\n\nRetry `{{.Attempt}}/{{.MaxAttempts}}` starts in `{{.DelayMinutes}}` min.\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nCodex limits:\n{{.CodexLimits}}{{end}}"},
   {"id": "chat.session.status.capacity_exhausted", "translation": "**Status:** the model remained at capacity after `{{.RetryCount}}` automatic retries{{if .Agent}}; agent @{{.Agent}} stopped{{end}}.\n\nThe workspace and Codex session are saved. Click **Run again** to create a new turn and continue.\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nCodex limits:\n{{.CodexLimits}}{{end}}"},
   {"id": "chat.session.status.canceled", "translation": "**Status:** {{if .Agent}}agent @{{.Agent}} turn stopped{{else}}agent turn stopped{{end}}.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}"},
+  {"id": "project.run.card.title", "translation": "Run by @{{.Agent}}"},
+  {"id": "project.run.card.text", "translation": "run: `{{.RunID}}`\nstatus: `{{.Status}}`\nOpenAI account: `{{.Account}}`"},
+  {"id": "project.run.card.field.initiator", "translation": "Initiator"},
+  {"id": "project.run.card.field.trigger", "translation": "Trigger message"},
+  {"id": "project.run.card.field.thread", "translation": "Work thread"},
+  {"id": "project.run.card.field.parent", "translation": "Parent run"},
+  {"id": "project.run.card.field.limits", "translation": "Codex limits"},
+  {"id": "project.runs_channel.failed", "translation": "matter-codex: project runs channel was not prepared: {{.Error}}"},
   {"id": "runtime.session.invalidate.summary", "translation": "Runtime sessions refreshed: invalidated idle pods `{{.Invalidated}}`; skipped active/queued `{{.Skipped}}`; failed `{{.Failed}}`."},
   {"id": "chat.run.record_failed", "translation": "matter-codex: run `{{.RunID}}` started, but metadata was not saved: {{.Error}}"},
   {"id": "chat.run.started", "translation": "matter-codex agent run started:\n- run: `{{.RunID}}`\n- mode: `{{.Mode}}`\n- role: `{{.Role}}`\n- job: `{{.Job}}`\n- pvc: `{{.PVC}}`"},
@@ -948,5 +956,8 @@
   {"id": "router.dialog.open_failed", "translation": "matter-codex: Mattermost dialog was not opened."},
   {"id": "router.dialog.trigger_missing", "translation": "matter-codex: Mattermost did not send a dialog trigger id. Open the menu again and retry."},
   {"id": "router.dialog.invalid_request", "translation": "matter-codex: invalid dialog request."},
-  {"id": "router.dialog.service_missing", "translation": "matter-codex: slash service is not configured."}
+  {"id": "router.dialog.service_missing", "translation": "matter-codex: slash service is not configured."},
+  {"id": "chat.session.status.provider_policy_blocked", "translation": "**Status:** OpenAI cyber safety systems stopped the request{{if .Agent}}; the @{{.Agent}} session is blocked{{end}}.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nCodex limits:\n{{.CodexLimits}}{{end}}"},
+  {"id": "chat.session.provider_policy_blocked", "translation": "OpenAI stopped this request under its cyber safety policy. MatterCodex does not attempt to bypass the safeguard and marked the session as blocked. Start a new thread and change the task framing or strategy. Eligible security research can apply for [Trusted Access for Cyber](https://learn.chatgpt.com/docs/cyber-safety)."},
+  {"id": "chat.session.closed", "translation": "matter-codex: this old thread is closed for agent runs. Start a new root thread to create a clean session with the current OpenAI account and environment."}
 ]

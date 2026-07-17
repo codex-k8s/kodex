@@ -27,4 +27,4 @@ on conflict (slug) do update set
 	description = excluded.description,
 	advanced_settings = excluded.advanced_settings,
 	updated_at = now()
-returning id, name, slug, mattermost_team_id, github_account_name, github_owner, github_owner_type, description, advanced_settings::text, created_at, updated_at, (xmax = 0) as created;
+returning id, name, slug, mattermost_team_id, mattermost_runs_channel_id, github_account_name, github_owner, github_owner_type, description, advanced_settings::text, created_at, updated_at, (xmax = 0) as created;

@@ -69,14 +69,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	gitHubAccountProvider := openGitHubAccountProvider(runtimeRunner, cfg)
 	gitHubAccountInspector := githubintegration.NewTokenInspector()
 	chatRunSvc := statusservice.NewChatRunService(statusservice.ChatRunServiceConfig{
-		Localizer:       localizer,
-		Store:           storage,
-		RuntimeRunner:   runtimeRunner,
-		ThreadPublisher: threadPublisher,
-		BotServiceURL:   botServiceRuntimeURL(cfg),
-		MenuActionURL:   agentsActionURL(cfg),
-		StorageReady:    storage != nil,
-		RuntimeReady:    runtimeConfigured,
+		Localizer:         localizer,
+		Store:             storage,
+		RuntimeRunner:     runtimeRunner,
+		ThreadPublisher:   threadPublisher,
+		BotServiceURL:     botServiceRuntimeURL(cfg),
+		MenuActionURL:     agentsActionURL(cfg),
+		MattermostSiteURL: cfg.MattermostSiteURL,
+		StorageReady:      storage != nil,
+		RuntimeReady:      runtimeConfigured,
 	})
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
 		Localizer:                localizer,

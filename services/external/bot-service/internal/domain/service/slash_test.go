@@ -618,8 +618,8 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 			2: {ID: 2, Name: "My QR Contact", Slug: "myqrcontact", GitHubAccountName: "github-myqrcontact-owner"},
 		},
 		openAIAccounts: map[string]entity.OpenAIAccount{
-			"openai-radar-delivery":   {Name: "openai-radar-delivery", Status: "authorized"},
-			"openai-radar-ops-review": {Name: "openai-radar-ops-review", Status: "authorized"},
+			"openai-codex-main":   {Name: "openai-codex-main", Status: "authorized"},
+			"openai-codex-manage": {Name: "openai-codex-manage", Status: "authorized"},
 		},
 		githubAccounts: map[string]entity.GitHubAccount{
 			"github-myqrcontact-owner":      {Name: "github-myqrcontact-owner", Username: "ai-da-stas", Status: "configured"},
@@ -674,7 +674,7 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 	if myQRImprover.RoleType != "improver" || myQRImprover.PromptMode != "template" || !strings.Contains(myQRImprover.PromptTemplate, "повторяющиеся замечания") {
 		t.Fatalf("myqr improver = %#v", myQRImprover)
 	}
-	if myQRImprover.GitHubAccountName != "github-myqrcontact-owner" || myQRImprover.OpenAIAccountName != "openai-radar-delivery" {
+	if myQRImprover.GitHubAccountName != "github-myqrcontact-owner" || myQRImprover.OpenAIAccountName != "openai-codex-manage" {
 		t.Fatalf("myqr improver accounts = %#v", myQRImprover)
 	}
 	participants, _ := store.ListChatParticipants(context.Background(), 1)
@@ -690,7 +690,7 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 		t.Fatalf("matter-codex project not stored: %v", err)
 	}
 	adminRole := testRoleByName(t, store, matterCodexProject.ID, "mattercodex-admin")
-	if adminRole.KubernetesAccess != "cluster-admin" || adminRole.GitHubAccountName != "github-myqrcontact-owner" || adminRole.OpenAIAccountName != "openai-radar-delivery" {
+	if adminRole.KubernetesAccess != "cluster-admin" || adminRole.GitHubAccountName != "github-myqrcontact-owner" || adminRole.OpenAIAccountName != "openai-codex-main" {
 		t.Fatalf("admin role = %#v", adminRole)
 	}
 	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), adminRole.ID); err != nil {
@@ -707,6 +707,12 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 	controlParticipants, _ := store.ListChatParticipants(context.Background(), controlChats[0].ID)
 	if !testParticipantsContainRole(controlParticipants, adminRole.ID) || !testParticipantsContainRole(controlParticipants, testRoleByName(t, store, matterCodexProject.ID, "improver").ID) {
 		t.Fatalf("control participants = %#v", controlParticipants)
+	}
+	for _, projectID := range []int64{1, 2, matterCodexProject.ID} {
+		project, err := store.GetProject(context.Background(), projectID)
+		if err != nil || project.MattermostRunsChannelID != "channel-runs" {
+			t.Fatalf("project %d runs channel = %#v error=%v", projectID, project, err)
+		}
 	}
 }
 
@@ -3518,6 +3524,17 @@ func (store *fakeAdminStore) UpsertProject(_ context.Context, input adminrepo.Up
 	return project, true, nil
 }
 
+func (store *fakeAdminStore) UpdateProjectRunsChannel(_ context.Context, projectID int64, channelID string) (entity.Project, error) {
+	store.ensureProjects()
+	project, ok := store.projects[projectID]
+	if !ok {
+		return entity.Project{}, adminrepo.ErrNotFound
+	}
+	project.MattermostRunsChannelID = channelID
+	store.projects[projectID] = project
+	return project, nil
+}
+
 func (store *fakeAdminStore) GetProject(_ context.Context, id int64) (entity.Project, error) {
 	store.ensureProjects()
 	project, ok := store.projects[id]
@@ -4288,6 +4305,15 @@ func (store *fakeAdminStore) CreateAgentSessionTurn(_ context.Context, input adm
 		Message:              input.Message,
 		Status:               agentSessionTurnQueued,
 	}
+	if input.ParentTurnID > 0 {
+		turn.ParentTurnIDs = []int64{input.ParentTurnID}
+	}
+	if input.MattermostPostID != "" {
+		turn.TriggerPostIDs = []string{input.MattermostPostID}
+	}
+	if input.UserName != "" {
+		turn.InitiatorUserNames = []string{input.UserName}
+	}
 	store.sessionTurns = append(store.sessionTurns, turn)
 	return turn, nil
 }
@@ -4330,6 +4356,46 @@ func (store *fakeAdminStore) UpdateAgentSessionTurnStatusPost(_ context.Context,
 		}
 	}
 	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) UpdateAgentSessionTurnRunsPost(_ context.Context, input adminrepo.UpdateAgentSessionTurnRunsPostInput) (entity.AgentSessionTurn, error) {
+	for index, turn := range store.sessionTurns {
+		if turn.ID == input.TurnID {
+			turn.MattermostRunsPostID = input.RunsPostID
+			store.sessionTurns[index] = turn
+			return turn, nil
+		}
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) AddAgentSessionTurnOrigin(_ context.Context, input adminrepo.AddAgentSessionTurnOriginInput) (entity.AgentSessionTurn, error) {
+	for index, turn := range store.sessionTurns {
+		if turn.ID != input.TurnID {
+			continue
+		}
+		if input.ParentTurnID > 0 && input.ParentTurnID != turn.ID && !containsInt64(turn.ParentTurnIDs, input.ParentTurnID) {
+			turn.ParentTurnIDs = append(turn.ParentTurnIDs, input.ParentTurnID)
+		}
+		if input.TriggerPostID != "" && !containsString(turn.TriggerPostIDs, input.TriggerPostID) {
+			turn.TriggerPostIDs = append(turn.TriggerPostIDs, input.TriggerPostID)
+		}
+		if input.InitiatorUserName != "" && !containsString(turn.InitiatorUserNames, input.InitiatorUserName) {
+			turn.InitiatorUserNames = append(turn.InitiatorUserNames, input.InitiatorUserName)
+		}
+		store.sessionTurns[index] = turn
+		return turn, nil
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func (store *fakeAdminStore) UpdateAgentSessionTurnMessage(_ context.Context, input adminrepo.UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error) {
@@ -5086,6 +5152,10 @@ func (manager *fakeRoleBotManager) EnsureRoleBot(_ context.Context, input Matter
 		DisplayName: input.DisplayName,
 		Token:       "bot-token-" + input.Username,
 	}, nil
+}
+
+func (manager *fakeRoleBotManager) EnsureExistingRoleBot(_ context.Context, _ string) error {
+	return nil
 }
 
 func (manager *fakeRoleBotManager) EnsureProjectChannelMember(_ context.Context, teamName string, channelID string, userID string) error {

@@ -25,6 +25,8 @@ const (
 	agentSessionStatusIdle    = "idle"
 	agentSessionStatusRunning = "running"
 	agentSessionStatusError   = "error"
+	agentSessionStatusBlocked = "blocked"
+	agentSessionStatusClosed  = "closed"
 
 	agentSessionTurnQueued    = "queued"
 	agentSessionTurnRunning   = "running"
@@ -32,9 +34,12 @@ const (
 	agentSessionTurnFailed    = "failed"
 	agentSessionTurnCanceled  = "canceled"
 	agentSessionTurnRetrying  = "capacity_retry"
+	agentSessionTurnBlocked   = "blocked"
 
 	agentTurnArtifactCapacityRetriesExhausted = "codex-capacity-retries-exhausted"
 	agentTurnArtifactCapacityRetryCount       = "codex-capacity-retry-count"
+	agentTurnArtifactFailureCode              = "failure-code"
+	agentTurnFailureProviderPolicyBlocked     = "provider-policy-blocked"
 
 	defaultManagerSessionTTLSeconds = 4 * 60 * 60
 	defaultThreadSessionTTLSeconds  = 4 * 60 * 60
@@ -194,6 +199,9 @@ func (svc *AgentSessionService) ClaimNextTurn(ctx context.Context, sessionKey st
 	if err != nil {
 		return AgentSessionTurnClaim{}, err
 	}
+	if session.Status == agentSessionStatusBlocked || session.Status == agentSessionStatusClosed {
+		return AgentSessionTurnClaim{Exit: true, ExpiresAt: session.ExpiresAt.UTC().Format(time.RFC3339)}, nil
+	}
 	if time.Now().UTC().After(session.ExpiresAt) {
 		queued, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, session.ID)
 		if err != nil {
@@ -219,7 +227,7 @@ func (svc *AgentSessionService) ClaimNextTurn(ctx context.Context, sessionKey st
 		ExtendTTLSeconds:     session.TTLSeconds,
 	})
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: agentSessionTurnRunning})
-	_, _ = svc.upsertTurnStatusCard(ctx, session, turn, agentSessionTurnRunning, svc.turnStartedStatusMessage(ctx, session, turn.RunID, "", ""))
+	_, _ = svc.upsertTurnStatusCard(ctx, session, turn, agentSessionTurnRunning, svc.turnStartedStatusMessage(ctx, session, turn.RunID, "", ""), "")
 	return AgentSessionTurnClaim{
 		HasTurn:        true,
 		TurnID:         turn.ID,
@@ -236,6 +244,9 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 		return err
 	}
 	status := normalizeAgentSessionCompleteStatus(command.Status)
+	if strings.EqualFold(strings.TrimSpace(command.Artifacts[agentTurnArtifactFailureCode]), agentTurnFailureProviderPolicyBlocked) {
+		status = agentSessionTurnBlocked
+	}
 	currentTurn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, command.TurnID)
 	if err != nil {
 		return err
@@ -267,6 +278,8 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	sessionStatus := agentSessionStatusIdle
 	if status == agentSessionTurnFailed {
 		sessionStatus = agentSessionStatusError
+	} else if status == agentSessionTurnBlocked {
+		sessionStatus = agentSessionStatusBlocked
 	}
 	if _, err := svc.cfg.Store.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
 		SessionKey:               session.SessionKey,
@@ -282,7 +295,7 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 		prURL = command.Artifacts["pr-url"]
 	}
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
-	_, _ = svc.upsertTurnStatusCard(ctx, session, turn, status, svc.turnCompletionStatusMessage(ctx, session, status, turn.RunID, command.Artifacts))
+	_, _ = svc.upsertTurnStatusCard(ctx, session, turn, status, svc.turnCompletionStatusMessage(ctx, session, status, turn.RunID, command.Artifacts), command.Artifacts["codex-limits"])
 	if !capacityRetriesExhausted(command.Artifacts) {
 		if err := svc.postTurnResult(ctx, session, turn, status, command); err != nil {
 			return err
@@ -298,6 +311,8 @@ func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Conte
 	sessionStatus := agentSessionStatusIdle
 	if status == agentSessionTurnFailed {
 		sessionStatus = agentSessionStatusError
+	} else if status == agentSessionTurnBlocked {
+		sessionStatus = agentSessionStatusBlocked
 	}
 	if _, err := svc.cfg.Store.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
 		SessionKey:               session.SessionKey,
@@ -388,7 +403,7 @@ func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, comma
 			}
 			_, _ = svc.cfg.Store.ResetAgentSessionRuntime(ctx, session.SessionKey, agentSessionStatusIdle)
 		}
-		_, _ = svc.upsertTurnStatusCard(ctx, session, canceled, agentSessionTurnCanceled, svc.turnStatusMessage(ctx, session, agentSessionTurnCanceled, canceled.RunID, svc.sessionOpenAIAccountName(ctx, session), ""))
+		_, _ = svc.upsertTurnStatusCard(ctx, session, canceled, agentSessionTurnCanceled, svc.turnStatusMessage(ctx, session, agentSessionTurnCanceled, canceled.RunID, svc.sessionOpenAIAccountName(ctx, session), ""), "")
 		stopped++
 	}
 	message := svc.t("chat.session.turn.stop.result", map[string]any{"Stopped": stopped, "Skipped": skipped})
@@ -569,7 +584,7 @@ func (svc *AgentSessionService) UpdateTurnSystemStatus(ctx context.Context, sess
 	if phase == agentSessionTurnFailed || phase == agentSessionTurnSucceeded {
 		message = svc.turnStatusMessage(ctx, session, phase, runID, command.OpenAIAccount, command.CodexLimits)
 	}
-	ref, err := svc.upsertTurnStatusCard(ctx, session, turn, cardStatus, message)
+	ref, err := svc.upsertTurnStatusCard(ctx, session, turn, cardStatus, message, command.CodexLimits)
 	if err != nil {
 		return AgentSessionPostResult{}, err
 	}
@@ -629,6 +644,17 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 			if err != nil {
 				return AgentSessionAgentRequest{}, err
 			}
+			if session.ActiveTurnID > 0 {
+				turn, err = svc.cfg.Store.AddAgentSessionTurnOrigin(ctx, adminrepo.AddAgentSessionTurnOriginInput{
+					TurnID:            turn.ID,
+					ParentTurnID:      session.ActiveTurnID,
+					TriggerPostID:     rootPostID,
+					InitiatorUserName: requesterUserName,
+				})
+				if err != nil {
+					return AgentSessionAgentRequest{}, err
+				}
+			}
 			auditPostID := ""
 			if ref, err := svc.postAgentRequestAudit(ctx, session, rootPostID, requesterUserName, role.Name, message); err == nil {
 				auditPostID = ref.PostID
@@ -657,6 +683,7 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 		SessionRootID: rootPostID,
 		SessionScope:  agentSessionScopeThreadRole,
 		TTLSeconds:    defaultThreadSessionTTLSeconds,
+		ParentTurnID:  session.ActiveTurnID,
 	})
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
@@ -774,6 +801,8 @@ func (svc *AgentSessionService) postTurnResult(ctx context.Context, session enti
 		if message == "" {
 			message = svc.t("chat.run.failed_short", map[string]any{"RunID": turn.RunID})
 		}
+	} else if status == agentSessionTurnBlocked {
+		message = svc.t("chat.session.provider_policy_blocked", nil)
 	}
 	if message == "" {
 		message = svc.t("chat.run.final_empty", nil)
@@ -814,7 +843,7 @@ func (svc *AgentSessionService) turnRequesterIsProjectBot(ctx context.Context, p
 	return false
 }
 
-func (svc *AgentSessionService) upsertTurnStatusCard(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, status string, message string) (MattermostPostRef, error) {
+func (svc *AgentSessionService) upsertTurnStatusCard(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, status string, message string, codexLimits string) (MattermostPostRef, error) {
 	if svc.cfg.ThreadPublisher == nil {
 		return MattermostPostRef{}, fmt.Errorf("Mattermost thread publisher is not configured")
 	}
@@ -848,6 +877,23 @@ func (svc *AgentSessionService) upsertTurnStatusCard(ctx context.Context, sessio
 		if err != nil {
 			return MattermostPostRef{}, err
 		}
+	}
+	project, projectErr := svc.cfg.Store.GetProject(ctx, session.ProjectID)
+	role, roleErr := svc.cfg.Store.GetAgentRole(ctx, session.RoleID)
+	if projectErr == nil && roleErr == nil {
+		_, _ = upsertProjectRunCard(ctx, projectRunCardInput{
+			Localizer:         svc.cfg.Localizer,
+			Store:             svc.cfg.Store,
+			Publisher:         svc.cfg.ThreadPublisher,
+			MattermostSiteURL: svc.cfg.MattermostSiteURL,
+			Project:           project,
+			Session:           session,
+			Turn:              turn,
+			RoleName:          role.Name,
+			OpenAIAccountName: defaultString(session.OpenAIAccountName, role.OpenAIAccountName),
+			CodexLimits:       codexLimits,
+			Status:            status,
+		})
 	}
 	return ref, nil
 }
@@ -895,6 +941,8 @@ func turnStatusColor(status string) string {
 	switch status {
 	case agentSessionTurnSucceeded:
 		return "#2f8f46"
+	case agentSessionTurnBlocked:
+		return "#e67e22"
 	case agentSessionTurnFailed:
 		return "#d24b40"
 	case agentSessionTurnCanceled:
@@ -1131,6 +1179,10 @@ func (svc *AgentSessionService) turnCompletionStatusMessage(ctx context.Context,
 		data["RetryCount"] = artifacts[agentTurnArtifactCapacityRetryCount]
 		return svc.t("chat.session.status.capacity_exhausted", data)
 	}
+	if status == agentSessionTurnBlocked {
+		data := svc.turnStatusMessageData(ctx, session, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
+		return svc.t("chat.session.status.provider_policy_blocked", data)
+	}
 	return svc.turnStatusMessage(ctx, session, status, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
 }
 
@@ -1141,6 +1193,9 @@ func (svc *AgentSessionService) turnStatusMessage(ctx context.Context, session e
 	}
 	if status == agentSessionTurnCanceled {
 		return svc.t("chat.session.status.canceled", data)
+	}
+	if status == agentSessionTurnBlocked {
+		return svc.t("chat.session.status.provider_policy_blocked", data)
 	}
 	if status == agentSessionTurnRunning {
 		return svc.t("chat.session.status.started", data)
@@ -1214,10 +1269,13 @@ func agentSessionTurnStoppable(status string) bool {
 }
 
 func agentSessionTurnTerminal(status string) bool {
-	return status == agentSessionTurnSucceeded || status == agentSessionTurnFailed || status == agentSessionTurnCanceled
+	return status == agentSessionTurnSucceeded || status == agentSessionTurnFailed || status == agentSessionTurnCanceled || status == agentSessionTurnBlocked
 }
 
 func normalizeAgentSessionCompleteStatus(status string) string {
+	if status == agentSessionTurnBlocked {
+		return agentSessionTurnBlocked
+	}
 	if status == agentSessionTurnFailed {
 		return agentSessionTurnFailed
 	}

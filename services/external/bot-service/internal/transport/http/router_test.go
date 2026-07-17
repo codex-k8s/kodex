@@ -698,6 +698,10 @@ func (store *fakeRouterAdminStore) UpsertProject(_ context.Context, input adminr
 	}, true, nil
 }
 
+func (store *fakeRouterAdminStore) UpdateProjectRunsChannel(context.Context, int64, string) (entity.Project, error) {
+	return entity.Project{}, nil
+}
+
 func (store *fakeRouterAdminStore) GetProject(context.Context, int64) (entity.Project, error) {
 	return entity.Project{}, adminrepo.ErrNotFound
 }
@@ -900,6 +904,14 @@ func (store *fakeRouterAdminStore) CancelAgentSessionTurn(context.Context, admin
 }
 
 func (store *fakeRouterAdminStore) UpdateAgentSessionTurnStatusPost(context.Context, adminrepo.UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, nil
+}
+
+func (store *fakeRouterAdminStore) UpdateAgentSessionTurnRunsPost(context.Context, adminrepo.UpdateAgentSessionTurnRunsPostInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, nil
+}
+
+func (store *fakeRouterAdminStore) AddAgentSessionTurnOrigin(context.Context, adminrepo.AddAgentSessionTurnOriginInput) (entity.AgentSessionTurn, error) {
 	return entity.AgentSessionTurn{}, nil
 }
 

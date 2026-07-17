@@ -60,8 +60,14 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	if dispatcher.request.SessionRootID != "reply-" || !strings.Contains(dispatcher.request.UserMessage, "mattermost_return_to_requester") {
 		t.Fatalf("request = %#v", dispatcher.request)
 	}
+	if dispatcher.request.ParentTurnID != 1 {
+		t.Fatalf("parent turn = %d", dispatcher.request.ParentTurnID)
+	}
 	if len(publisher.posts) < 2 || publisher.posts[0].RootPostID != "" || !strings.Contains(publisher.posts[0].Message, "#notrigger") {
 		t.Fatalf("posts = %#v", publisher.posts)
+	}
+	if !strings.Contains(publisher.posts[0].Message, "https://mattermost.example/matter-codex/pl/management-root") {
+		t.Fatalf("delegated root misses source link: %q", publisher.posts[0].Message)
 	}
 
 	second, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", command)
@@ -159,7 +165,13 @@ func TestAgentSessionReturnsCrossChatResultToImmediateRequester(t *testing.T) {
 	if err != nil || !strings.Contains(callbackTurn.Message, "Архитектурное предложение готово") {
 		t.Fatalf("callback turn = %#v error=%v", callbackTurn, err)
 	}
-	if len(publisher.posts) < 3 || !strings.Contains(publisher.posts[len(publisher.posts)-1].Message, "#notrigger") {
+	if !containsInt64(callbackTurn.ParentTurnIDs, 2) {
+		t.Fatalf("callback parents = %#v", callbackTurn.ParentTurnIDs)
+	}
+	if !containsString(callbackTurn.TriggerPostIDs, "reply-") || !containsString(callbackTurn.InitiatorUserNames, "architect") {
+		t.Fatalf("callback origins triggers=%#v initiators=%#v", callbackTurn.TriggerPostIDs, callbackTurn.InitiatorUserNames)
+	}
+	if len(publisher.posts) < 4 || !strings.Contains(publisher.posts[len(publisher.posts)-1].Message, "https://mattermost.example/matter-codex/pl/management-root") || !strings.Contains(publisher.posts[len(publisher.posts)-1].Message, "#notrigger") {
 		t.Fatalf("posts = %#v", publisher.posts)
 	}
 

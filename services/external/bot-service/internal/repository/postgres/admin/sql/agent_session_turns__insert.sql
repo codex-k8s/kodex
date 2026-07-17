@@ -4,10 +4,25 @@ insert into matter_codex_agent_session_turns (
 	mattermost_channel_id,
 	mattermost_root_post_id,
 	mattermost_post_id,
+	parent_turn_ids,
+	trigger_post_ids,
+	initiator_user_names,
 	user_id,
 	user_name,
 	message
-) values ($1, $2, $3, $4, $5, $6, $7, $8)
+) values (
+	$1,
+	$2,
+	$3,
+	$4,
+	$5,
+	case when $6::bigint > 0 then array[$6::bigint] else '{}'::bigint[] end,
+	case when btrim($5::text) <> '' then array[$5::text] else '{}'::text[] end,
+	case when btrim($8::text) <> '' then array[$8::text] else '{}'::text[] end,
+	$7,
+	$8,
+	$9
+)
 returning
 	id,
 	session_id,
@@ -16,6 +31,10 @@ returning
 	mattermost_root_post_id,
 	mattermost_post_id,
 	mattermost_status_post_id,
+	mattermost_runs_post_id,
+	parent_turn_ids,
+	trigger_post_ids,
+	initiator_user_names,
 	user_id,
 	user_name,
 	message,
