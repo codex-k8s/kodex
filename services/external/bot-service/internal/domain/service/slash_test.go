@@ -502,6 +502,41 @@ func TestProjectDialogSubmissionCreatesMattermostTeam(t *testing.T) {
 	}
 }
 
+func TestProjectDialogReadOnlyPrevalidationRejectsStoredSlugChange(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Demo Project", Slug: "demo-project"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         store,
+		StorageReady:  true,
+	})
+
+	result := svc.PrevalidateDialogSubmissionReadOnly(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProjectUpsert,
+		State:      encodeDialogState(MenuActionCommand{Resource: menuResourceProject, ID: "1"}),
+		Submission: map[string]any{
+			dialogFieldProjectName: "Demo Project",
+			dialogFieldProjectSlug: "changed-slug",
+		},
+	})
+
+	if result.Errors[dialogFieldProjectSlug] == "" {
+		t.Fatalf("read-only prevalidation result = %#v", result)
+	}
+	project, err := store.GetProject(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("GetProject() error = %v", err)
+	}
+	if project.Slug != "demo-project" {
+		t.Fatalf("project changed during read-only prevalidation: %#v", project)
+	}
+}
+
 func TestAgentRoleDialogDefaultsGitHubAccountFromProject(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
@@ -2373,6 +2408,47 @@ func TestRuntimeVariableDialogCreatesSecretAndMetadata(t *testing.T) {
 	}
 	if result.Card == nil || strings.Contains(result.Card.Text, "secret-value") {
 		t.Fatalf("card exposes secret value or is nil: %#v", result.Card)
+	}
+}
+
+func TestFrozenClusterAdminRuntimeVariableValueEditStopsBeforeSecretMutation(t *testing.T) {
+	const secretName = "mc-var-platform-frozen-key"
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Platform", Slug: "platform"},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "configured-admin", RoleType: "admin", KubernetesAccess: "cluster-admin", Enabled: true},
+		},
+		runtimeVariables: map[int64]entity.ProjectRuntimeVariable{
+			1: {ID: 1, ProjectID: 1, Name: "FROZEN_KEY", Slug: "frozen-key", SecretRef: secretName, SecretKey: "value", Sensitive: true, Enabled: true},
+		},
+		roleRuntimeVariables: map[string]entity.AgentRoleRuntimeVariableBinding{
+			"1:1": {ID: 1, RoleID: 1, RoleName: "configured-admin", VariableID: 1, ProjectID: 1, Name: "FROZEN_KEY", Slug: "frozen-key", SecretRef: secretName, SecretKey: "value", Sensitive: true, Enabled: true},
+		},
+	}
+	runner := &fakeRuntimeRunner{runtimeVariableSecrets: map[string]string{secretName: "synthetic-original-value"}}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		RuntimeRunner: runner, StorageReady: true,
+	})
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProjectRuntimeVar,
+		State:      encodeDialogState(MenuActionCommand{Resource: menuResourceRuntimeVar, ID: "1"}),
+		Submission: map[string]any{
+			dialogFieldProjectID:       "1",
+			dialogFieldRuntimeVarName:  "FROZEN_KEY",
+			dialogFieldRuntimeVarValue: "synthetic-replacement-value",
+			dialogFieldSensitive:       "true",
+			dialogFieldEnabled:         "true",
+		},
+	})
+	if result.Errors[dialogFieldRuntimeVarValue] == "" {
+		t.Fatalf("frozen runtime variable edit result = %#v", result)
+	}
+	if runner.runtimeVariableSecretInput.Variable.SecretName != "" || runner.runtimeVariableSecrets[secretName] != "synthetic-original-value" {
+		t.Fatalf("frozen runtime variable changed Secret: input=%#v secrets=%#v", runner.runtimeVariableSecretInput, runner.runtimeVariableSecrets)
 	}
 }
 

@@ -1134,6 +1134,9 @@ func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, accou
 		return fmt.Errorf("check codex auth secret: %w", err)
 	}
 	if check.Ready {
+		if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+			return nil
+		}
 		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{
 			Name:      account.Name,
 			SecretRef: account.SecretRef,

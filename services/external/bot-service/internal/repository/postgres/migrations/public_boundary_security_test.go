@@ -235,8 +235,8 @@ func TestRuntimeRoleNMinusOneAndAdversarialBoundary(t *testing.T) {
 			_, _ = cleanupPool.Exec(cleanupCtx, "grant temporary on database "+pgx.Identifier{databaseName}.Sanitize()+" to public")
 		}
 	})
-	if err := migrations.RunTo(ctx, ownerDSN, 22); err != nil {
-		t.Fatalf("runtime-role migration through v22: %v", err)
+	if err := migrations.RunTo(ctx, ownerDSN, 23); err != nil {
+		t.Fatalf("runtime-role migration through v23: %v", err)
 	}
 	ownerPool := openMigrationPool(t, ctx, ownerDSN)
 	var projectID int64
@@ -262,7 +262,7 @@ where name = 'developer'
 	}
 	ownerPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("runtime-role migration through v23: %v", err)
+		t.Fatalf("runtime-role migration through v24: %v", err)
 	}
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
 	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
@@ -285,7 +285,7 @@ where name = 'developer'
 	}); err != nil {
 		t.Fatalf("N-1 repository DML: %v", err)
 	}
-	if _, err := runtimePool.Exec(ctx, `select set_config('matter_codex.cluster_admin_freeze_writer', 'v23', false)`); err != nil {
+	if _, err := runtimePool.Exec(ctx, `select set_config('matter_codex.cluster_admin_freeze_writer', 'v24', false)`); err != nil {
 		t.Fatalf("self-declared marker compatibility: %v", err)
 	}
 	if _, err := runtimePool.Exec(ctx, `create temporary table matter_codex_agent_profiles(id bigint)`); err == nil {
@@ -322,17 +322,17 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	if err := migrations.DownOne(ctx, dsn); err == nil {
-		t.Fatal("v23 down unexpectedly succeeded")
+		t.Fatal("v24 down unexpectedly succeeded")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 23 {
+	if err != nil || version != 24 {
 		t.Fatalf("version after failed down = %d, error=%v", version, err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated up after failed down: %v", err)
 	}
 	version, err = migrations.Version(ctx, dsn)
-	if err != nil || version != 23 {
+	if err != nil || version != 24 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
 	}
 }
@@ -342,7 +342,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	if err := migrations.RunTo(ctx, dsn, 21); err != nil {
-		t.Fatalf("migrations through current main v21: %v", err)
+		t.Fatalf("migrations through historical base v21: %v", err)
 	}
 	pool := openMigrationPool(t, ctx, dsn)
 	if _, err := pool.Exec(ctx, `update matter_codex_agent_profiles set kubernetes_access = 'cluster-admin' where name = 'developer'`); err != nil {
@@ -495,10 +495,10 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	}
 	pool.Close()
 	if err := migrations.RunTo(ctx, dsn, 22); err != nil {
-		t.Fatalf("upgrade current main v21->v22: %v", err)
+		t.Fatalf("upgrade historical base v21->current main v22: %v", err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v22->latest: %v", err)
+		t.Fatalf("upgrade v22->v23->v24: %v", err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()
@@ -870,6 +870,7 @@ func testFrozenPrivilegeMutationMatrix(
 		{name: "chat root issue", sql: `update matter_codex_chats set root_github_issue = 'mutated#1' where id = $1`, args: []any{chatID}},
 		{name: "chat work policy", sql: `update matter_codex_chats set work_policy = 'mutated policy' where id = $1`, args: []any{chatID}},
 		{name: "chat settings", sql: `update matter_codex_chats set settings = '{"instruction":"mutated"}'::jsonb where id = $1`, args: []any{chatID}},
+		{name: "chat system purpose", sql: `update matter_codex_chats set system_purpose = 'manager' where id = $1`, args: []any{chatID}},
 		{name: "participant remap", sql: `update matter_codex_chat_participants set chat_id = chat_id + 999 where chat_id = $1 and role_id = $2`, args: []any{chatID, roleID}},
 		{name: "session key", sql: `update matter_codex_agent_sessions set session_key = 'mutated-session' where session_key = $1`, args: []any{sessionKey}},
 		{name: "session project", sql: `update matter_codex_agent_sessions set project_id = project_id + 999 where session_key = $1`, args: []any{sessionKey}},
@@ -1069,7 +1070,7 @@ func testNMinusOneRepositoryGuard(t *testing.T, ctx context.Context, pool *pgxpo
 		if _, err := tx.Exec(ctx, "set local role "+roleIdentifier); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `select set_config('matter_codex.cluster_admin_freeze_writer', 'v23', true)`); err != nil {
+		if _, err := tx.Exec(ctx, `select set_config('matter_codex.cluster_admin_freeze_writer', 'v24', true)`); err != nil {
 			return err
 		}
 		var count int

@@ -268,6 +268,39 @@ func TestClusterAdminNewSessionDeniedBeforeDatabaseAndRuntimeSideEffects(t *test
 	}
 }
 
+func TestClusterAdminCommittedRevokeDeniesAuthCheckAndReauthSideEffects(t *testing.T) {
+	baseStore := chatRuntimeStore()
+	project := baseStore.projects[1]
+	role := entity.AgentRole{
+		ID: 1, ProjectID: project.ID, Name: "configured-admin", RoleType: "admin",
+		OpenAIAccountName: "main", KubernetesAccess: "cluster-admin", Enabled: true,
+	}
+	chat := entity.Chat{
+		ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Admin", Slug: "admin-chat", ChatType: "single_custom",
+	}
+	baseStore.agentRoles[role.ID] = role
+	baseStore.chats[chat.ID] = chat
+	baseStore.setChatBindings(chat.ID, []int64{role.ID}, nil)
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuard: true}
+	runner := &fakeRuntimeRunner{authSecretNotReady: true}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+	})
+	_, err := svc.EnqueueAgentTurn(context.Background(), AgentTurnRequest{
+		Project: project, Chat: chat, Role: role, UserID: "owner-id", UserName: "owner",
+		UserMessage: "start", ReplyRootID: "root-revoked", SessionRootID: "root-revoked", SessionScope: agentSessionScopeThreadRole,
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("EnqueueAgentTurn() error = %v", err)
+	}
+	if runner.authSecretChecks != 0 || runner.authAccount != "" || runner.authStatusChecks != 0 || runner.authCompleteCalls != 0 || runner.authCleanupCalls != 0 {
+		t.Fatalf("denied auth guard caused Kubernetes side effects: %#v", runner)
+	}
+	if len(baseStore.agentSessions) != 0 || len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 {
+		t.Fatalf("denied auth guard caused persistence side effects: sessions=%#v turns=%#v runs=%#v", baseStore.agentSessions, baseStore.sessionTurns, baseStore.agentRuns)
+	}
+}
+
 func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testing.T) {
 	baseStore := chatRuntimeStore()
 	project := baseStore.projects[1]

@@ -404,7 +404,7 @@ func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRu
 		if err := adminpostgres.ProvisionRuntimeDatabaseRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User, poolConfig.ConnConfig.Password); err != nil {
 			return nil, nil, fmt.Errorf("provision runtime database role: %w", err)
 		}
-		if err := migrations.RunTo(ctx, cfg.MigrationsDatabaseDSN, 22); err != nil {
+		if err := migrations.RunTo(ctx, cfg.MigrationsDatabaseDSN, 23); err != nil {
 			return nil, nil, fmt.Errorf("run storage migrations through integrity staging schema: %w", err)
 		}
 		if err := prepareClusterAdminSecretIntegrity(ctx, cfg.MigrationsDatabaseDSN, runtimeRunner); err != nil {

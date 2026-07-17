@@ -149,7 +149,8 @@ as $$
 		'chat_type', chat_row.chat_type,
 		'chat_root_github_issue', chat_row.root_github_issue,
 		'chat_work_policy', chat_row.work_policy,
-		'chat_settings', chat_row.settings
+		'chat_settings', chat_row.settings,
+		'chat_system_purpose', chat_row.system_purpose
 	)
 $$;
 
@@ -2084,7 +2085,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 23 is forward-only; schema version remains 23'
+	raise exception 'migration 24 is forward-only; schema version remains 24'
 		using errcode = 'feature_not_supported';
 end
 $$;
