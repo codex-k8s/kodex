@@ -290,6 +290,12 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	}); err != nil {
 		return err
 	}
+	if coordinationStore, ok := svc.cfg.Store.(adminrepo.CoordinationRepository); ok {
+		_, _ = coordinationStore.UpdateWorkClaim(ctx, adminrepo.UpdateWorkClaimInput{
+			TurnID: turn.ID,
+			Status: status,
+		})
+	}
 	prURL := ""
 	if command.Artifacts != nil {
 		prURL = command.Artifacts["pr-url"]
@@ -301,8 +307,10 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 			return err
 		}
 	}
-	if status == agentSessionTurnSucceeded {
-		_ = svc.postTurnCompletionFYI(ctx, session, turn)
+	if status == agentSessionTurnFailed || status == agentSessionTurnBlocked {
+		if err := svc.notifyRootInitiatorFailure(ctx, session, turn, command); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -328,6 +336,9 @@ func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Conte
 		prURL = command.Artifacts["pr-url"]
 	}
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
+	if status == agentSessionTurnFailed || status == agentSessionTurnBlocked {
+		return svc.notifyRootInitiatorFailure(ctx, session, turn, command)
+	}
 	return nil
 }
 
@@ -592,6 +603,14 @@ func (svc *AgentSessionService) UpdateTurnSystemStatus(ctx context.Context, sess
 }
 
 func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey string, token string, target string, message string) (AgentSessionAgentRequest, error) {
+	return svc.requestAgent(ctx, sessionKey, token, target, message, entity.CoordinationCapabilityStartAgents, entity.CoordinationActionStart)
+}
+
+func (svc *AgentSessionService) RequestSync(ctx context.Context, sessionKey string, token string, target string, message string) (AgentSessionAgentRequest, error) {
+	return svc.requestAgent(ctx, sessionKey, token, target, message, entity.CoordinationCapabilityRequestSync, entity.CoordinationActionRequestSync)
+}
+
+func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey string, token string, target string, message string, capability string, action string) (AgentSessionAgentRequest, error) {
 	session, err := svc.authorize(ctx, sessionKey, token)
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
@@ -619,6 +638,9 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
+	if err := svc.requireCoordinationPermission(ctx, session, capability, action, role.ID); err != nil {
+		return AgentSessionAgentRequest{}, err
+	}
 	svc.ensureRequestedRoleChannelMember(ctx, project, chat, role)
 	repositories, err := svc.chatRepositories(ctx, chat)
 	if err != nil {
@@ -636,10 +658,14 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 		if err != nil {
 			return AgentSessionAgentRequest{}, err
 		}
-		if len(queuedTurns) > 0 {
+		queuedTurn, compatible, err := svc.queuedTurnForProcess(ctx, session.ActiveTurnID, queuedTurns)
+		if err != nil {
+			return AgentSessionAgentRequest{}, err
+		}
+		if compatible {
 			turn, err := svc.cfg.Store.UpdateAgentSessionTurnMessage(ctx, adminrepo.UpdateAgentSessionTurnMessageInput{
-				TurnID:  queuedTurns[0].ID,
-				Message: appendDelegatedAgentRequestToQueuedPrompt(queuedTurns[0].Message, requesterUserName, role.Name, message),
+				TurnID:  queuedTurn.ID,
+				Message: appendDelegatedAgentRequestToQueuedPrompt(queuedTurn.Message, requesterUserName, role.Name, message),
 			})
 			if err != nil {
 				return AgentSessionAgentRequest{}, err
@@ -809,38 +835,6 @@ func (svc *AgentSessionService) postTurnResult(ctx context.Context, session enti
 	}
 	_, err := svc.postSessionThreadMessageOnly(ctx, session, turn.MattermostChannelID, turn.MattermostRootPostID, message)
 	return err
-}
-
-func (svc *AgentSessionService) postTurnCompletionFYI(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn) error {
-	if svc.cfg.ThreadPublisher == nil {
-		return nil
-	}
-	userName := mentionableMattermostUsername(turn.UserName)
-	if userName == "" {
-		return nil
-	}
-	if svc.turnRequesterIsProjectBot(ctx, session.ProjectID, userName) {
-		return nil
-	}
-	message := svc.t("chat.session.fyi.complete", map[string]any{"UserName": userName})
-	_, err := svc.postSessionThreadMessageOnly(ctx, session, turn.MattermostChannelID, turn.MattermostRootPostID, message)
-	return err
-}
-
-func (svc *AgentSessionService) turnRequesterIsProjectBot(ctx context.Context, projectID int64, userName string) bool {
-	if projectID == 0 || strings.TrimSpace(userName) == "" || svc.cfg.Store == nil {
-		return false
-	}
-	identities, err := svc.cfg.Store.ListMattermostBotIdentitiesByProject(ctx, projectID)
-	if err != nil {
-		return false
-	}
-	for _, identity := range identities {
-		if strings.EqualFold(strings.TrimSpace(identity.Username), userName) {
-			return true
-		}
-	}
-	return false
 }
 
 func (svc *AgentSessionService) upsertTurnStatusCard(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, status string, message string, codexLimits string) (MattermostPostRef, error) {

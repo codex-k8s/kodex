@@ -523,6 +523,21 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
+	if coordinationStore, ok := svc.cfg.Store.(adminrepo.CoordinationRepository); ok {
+		if _, err := coordinationStore.EnsureTurnProcess(ctx, adminrepo.EnsureTurnProcessInput{
+			TurnID:               turn.ID,
+			ParentTurnID:         request.ParentTurnID,
+			ProjectID:            request.Project.ID,
+			RoleID:               request.Role.ID,
+			InitiatorUserID:      request.UserID,
+			InitiatorUserName:    request.UserName,
+			TriggerPostID:        request.SourcePostID,
+			MattermostChannelID:  request.Chat.MattermostChannelID,
+			MattermostRootPostID: request.ReplyRootID,
+		}); err != nil {
+			return AgentTurnQueued{}, fmt.Errorf("bind turn to process: %w", err)
+		}
+	}
 	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
 		RunID:               runID,
 		FlowID:              "session-" + session.SessionKey,

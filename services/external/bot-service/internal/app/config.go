@@ -19,6 +19,7 @@ type Config struct {
 	Locale                          string        `env:"MATTERCODEX_LOCALE" envDefault:"en"`
 	DefaultTeamName                 string        `env:"MATTERCODEX_DEFAULT_TEAM_NAME" envDefault:"agents"`
 	DefaultChannels                 []string      `env:"MATTERCODEX_DEFAULT_CHANNELS" envDefault:"agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit" envSeparator:","`
+	OwnerMattermostUsername         string        `env:"MATTERCODEX_OWNER_MATTERMOST_USERNAME"`
 	MattermostBotToken              string        `env:"MATTERCODEX_MATTERMOST_BOT_TOKEN"`
 	MattermostSlashToken            string        `env:"MATTERCODEX_MATTERMOST_SLASH_TOKEN"`
 	GitHubToken                     string        `env:"MATTERCODEX_GITHUB_TOKEN"`

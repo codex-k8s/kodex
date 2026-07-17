@@ -17,7 +17,7 @@ func TestPromptSeedCatalogMarkdownRenders(t *testing.T) {
 			if err != nil {
 				t.Fatalf("promptSeedMarkdown() error = %v", err)
 			}
-			if !strings.Contains(body, "{{.Locale.Language}}") || !strings.Contains(body, "mattermost_request_agent") {
+			if !strings.Contains(body, "{{.Locale.Language}}") || !strings.Contains(body, "MatterCodex") || !strings.Contains(body, "MCP") {
 				t.Fatalf("seed is missing locale/MCP contract:\n%s", body)
 			}
 			if _, err := renderAgentPromptTemplate(body, samplePromptTemplateData(seed.SourceProfile, seed.TemplateKey, locale)); err != nil {

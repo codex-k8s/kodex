@@ -91,6 +91,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		ThreadRepositorySelector: chatRunSvc,
 		RuntimeRunner:            runtimeRunner,
 		DefaultTeamName:          cfg.DefaultTeamName,
+		OwnerMattermostUsername:  cfg.OwnerMattermostUsername,
 		CodexAuthSecretName:      cfg.CodexAuthSecretName,
 		GitHubSecretName:         cfg.GitHubSecretName,
 		MenuActionURL:            agentsActionURL(cfg),

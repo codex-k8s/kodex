@@ -190,6 +190,7 @@ type CreateChatInput struct {
 	RootGitHubIssue     string
 	WorkPolicy          string
 	Settings            string
+	SystemPurpose       string
 	RoleIDs             []int64
 	RepositoryIDs       []int64
 }
@@ -371,7 +372,7 @@ type Repository interface {
 	UpdateAgentSessionTurnMessage(ctx context.Context, input UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error)
 	ListQueuedAgentSessionTurns(ctx context.Context, sessionID int64) ([]entity.AgentSessionTurn, error)
 	CreateAgentDelegation(ctx context.Context, input CreateAgentDelegationInput) (entity.AgentDelegation, bool, error)
-	GetAgentDelegationBySourceKey(ctx context.Context, sourceSessionID int64, workItemKey string) (entity.AgentDelegation, error)
+	GetAgentDelegationBySourceTurnKey(ctx context.Context, sourceTurnID int64, workItemKey string) (entity.AgentDelegation, error)
 	GetAgentDelegationForCallback(ctx context.Context, targetSessionID int64) (entity.AgentDelegation, error)
 	ListAgentDelegationsBySource(ctx context.Context, sourceSessionID int64, limit int) ([]entity.AgentDelegation, error)
 	SetAgentDelegationRoot(ctx context.Context, id int64, rootPostID string) (entity.AgentDelegation, error)

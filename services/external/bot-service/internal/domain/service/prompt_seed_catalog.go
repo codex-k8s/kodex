@@ -32,6 +32,15 @@ type promptTemplateSeed struct {
 func promptSeedCatalog() []promptTemplateSeed {
 	return []promptTemplateSeed{
 		{
+			SourceProfile: "director",
+			TemplateKey:   directorCoordinatePortfolioKey,
+			Role:          "director",
+			Description:   "Generic top-level project coordinator prompt seed",
+			FileName:      "director_coordinate_portfolio.md",
+			RoleNames:     []string{"director", "coordinator"},
+			RoleTypes:     []string{"director", "coordinator"},
+		},
+		{
 			SourceProfile: "developer",
 			TemplateKey:   developerImplementTaskKey,
 			Role:          "developer",

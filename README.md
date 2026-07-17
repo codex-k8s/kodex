@@ -36,6 +36,10 @@ bash scripts/remote/install-mattermost.sh --env-file .env --dry-run=server
 
 Matter-codex осознанно меняет PostgreSQL-схему Mattermost во время установки. При `scripts/remote/install-mattermost.sh --apply` после старта Mattermost применяется миграция `deploy/k8s/mattermost/migrations/000001_post_message_max_length.sql`.
 
+Встроенный PostgreSQL использует закрепленный образ `pgvector/pgvector:0.8.5-pg16`: расширение `vector` необходимо для локальной перестраиваемой проекции памяти MatterCodex. Канонический текст памяти остается в обычных таблицах PostgreSQL, а при недоступности локального embedding runtime поиск продолжает работать через полнотекстовый индекс. Внешний embedding API не используется.
+
+При подключении внешнего PostgreSQL администратор обязан заранее установить расширение `pgvector` совместимой версии; миграция MatterCodex выполняет `CREATE EXTENSION vector`, но не устанавливает системный пакет на сервер базы данных.
+
 Миграция меняет колонку `posts.message` на `varchar(200000)`. Mattermost вычисляет runtime-лимит текста поста из размера этой колонки и делит его на 4 для худшего случая UTF-8, поэтому фактический лимит становится 50000 символов. Это нужно, чтобы длинные финальные ответы агентов не терялись.
 
 Bot-service при этом все равно режет исходящие thread-сообщения по фактическому лимиту, прочитанному из `information_schema`, поэтому стандартный Mattermost с дефолтным лимитом тоже поддерживается.

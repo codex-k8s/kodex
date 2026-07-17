@@ -43,6 +43,17 @@ func (surface *ControlSurface) ResolveMattermostUserName(ctx context.Context, us
 	return strings.TrimSpace(user.Username), nil
 }
 
+func (surface *ControlSurface) ResolveMattermostUserID(ctx context.Context, username string) (string, error) {
+	user, _, err := surface.client.GetUserByUsername(ctx, strings.TrimPrefix(strings.TrimSpace(username), "@"), "")
+	if err != nil {
+		return "", fmt.Errorf("get Mattermost user by username: %w", err)
+	}
+	if user == nil || strings.TrimSpace(user.Id) == "" {
+		return "", fmt.Errorf("get Mattermost user by username: response has no user id")
+	}
+	return strings.TrimSpace(user.Id), nil
+}
+
 func (surface *ControlSurface) EnsureRoleBot(ctx context.Context, input statusservice.MattermostRoleBotInput) (statusservice.MattermostRoleBotBinding, error) {
 	username := strings.TrimSpace(input.Username)
 	if username == "" {
@@ -359,6 +370,15 @@ func (surface *ControlSurface) EnsureProjectChannel(ctx context.Context, teamNam
 	}
 	memberUserIDs = surface.memberUserIDsWithControlBot(ctx, memberUserIDs)
 	if channel, response, err := surface.client.GetChannelByName(ctx, channelName, team.Id, ""); err == nil {
+		displayName = strings.TrimSpace(displayName)
+		if displayName != "" && channel.DisplayName != displayName {
+			channel.DisplayName = displayName
+			updated, _, updateErr := surface.client.UpdateChannel(ctx, channel)
+			if updateErr != nil {
+				return statusservice.MattermostChannelBinding{}, false, fmt.Errorf("update Mattermost channel display name: %w", updateErr)
+			}
+			channel = updated
+		}
 		for _, userID := range memberUserIDs {
 			_ = surface.ensureTeamMember(ctx, team.Id, userID)
 			_ = surface.ensureChannelMember(ctx, channel.Id, userID)
