@@ -16,6 +16,7 @@ import (
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
@@ -740,6 +741,9 @@ func (svc *ChatRunService) ensureQueuedAgentSessionRuntime(ctx context.Context, 
 }
 
 func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session entity.AgentSession, tokenSession entity.AgentSession, role entity.AgentRole, codexAuthSecretName string, gitHubSecretName string, repo entity.ProjectRepository, runtimeEnv []runtimerepo.RuntimeEnvVar) (runtimerepo.StartedAgentSession, error) {
+	if err := svc.authorizeClusterAdminRole(ctx, role, "agent_session.start"); err != nil {
+		return runtimerepo.StartedAgentSession{}, err
+	}
 	internalToken, err := svc.sessionInternalToken(ctx, tokenSession)
 	if err != nil {
 		return runtimerepo.StartedAgentSession{}, err
@@ -1161,6 +1165,9 @@ func (svc *ChatRunService) completeCodexAuthSession(ctx context.Context, account
 }
 
 func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput) (runtimerepo.StartedRun, error) {
+	if err := svc.authorizeClusterAdminRole(ctx, input.Role, "agent_run.start"); err != nil {
+		return runtimerepo.StartedRun{}, err
+	}
 	repo := firstRepository(input.Repositories)
 	switch input.Mode {
 	case chatRunModeReviewer:
@@ -1215,6 +1222,31 @@ func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput
 			RuntimeEnv:          input.RuntimeEnv,
 		})
 	}
+}
+
+func (svc *ChatRunService) authorizeClusterAdminRole(ctx context.Context, role entity.AgentRole, operation string) error {
+	if !strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+		return nil
+	}
+	repository, ok := svc.cfg.Store.(securityrepo.Repository)
+	if !ok {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	allowed, err := repository.AdmitExistingClusterAdmin(ctx, securityrepo.ClusterAdminAdmissionInput{
+		SubjectType: "agent_role",
+		SubjectKey:  strconv.FormatInt(role.ID, 10),
+		ProjectID:   role.ProjectID,
+		ProfileName: role.Name,
+		ActorUser:   "runtime",
+		Operation:   operation,
+	})
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return nil
 }
 
 func (svc *ChatRunService) recordRun(ctx context.Context, mode string, started runtimerepo.StartedRun, input chatRunRecordInput) error {
@@ -1438,6 +1470,10 @@ func (svc *ChatRunService) postThreadRepositoryChoiceCard(ctx context.Context, p
 		Color:      "#1c58d9",
 		Title:      svc.t("chat.thread.repository_choice.title", map[string]any{"Project": project.Name}),
 		Text:       svc.t("chat.thread.repository_choice.text", map[string]any{"Owner": emptyAsUnknown(project.GitHubOwner)}),
+		Interaction: MattermostCardInteraction{
+			Actor: AuthenticatedActor{UserID: threadContext.PendingUserID, UserName: threadContext.PendingUserName},
+			Scope: InteractionScope{Workspace: strconv.FormatInt(project.ID, 10)},
+		},
 		Fields: []MattermostCardField{
 			{Title: svc.t("menu.entity.field.project", nil), Value: "`" + project.Name + "`", Short: true},
 			{Title: svc.t("menu.entity.field.github_owner", nil), Value: "`" + emptyAsUnknown(project.GitHubOwner) + "`", Short: true},

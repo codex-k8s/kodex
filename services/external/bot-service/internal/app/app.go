@@ -36,6 +36,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return fmt.Errorf("open localizer: %w", err)
 	}
 	runtimeRunner, runtimeConfigured := openRuntimeRunner(cfg, logger)
+	interactionSecurity := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{Repository: storage})
 
 	statusSvc := statusservice.NewStatusService(statusservice.Config{
 		Localizer:            localizer,
@@ -59,7 +60,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
 		channelManager = controlSurface
 		roleBotManager = controlSurface
-		threadPublisher = controlSurface
+		threadPublisher = statusservice.NewSecuredMattermostThreadPublisher(controlSurface, interactionSecurity)
 		dialogOpener = controlSurface
 	}
 	gitHubProvider, err := openGitHubProvider(cfg)
@@ -126,12 +127,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		SlashService:          slashSvc,
 		SessionService:        sessionSvc,
 		DialogOpener:          dialogOpener,
+		InteractionSecurity:   interactionSecurity,
 		Localizer:             localizer,
 		SlashToken:            cfg.MattermostSlashToken,
 		GitHubWebhookSecret:   cfg.GitHubWebhookSecret,
 		MaxSlashFormBytes:     cfg.MaxSlashFormBytes,
 		MaxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
 		PrometheusRegistry:    newPrometheusRegistry(),
+		MattermostSiteURL:     cfg.MattermostSiteURL,
+		MattermostInternalURL: cfg.MattermostInternalURL,
 		Logger:                logger,
 	})
 	server := &http.Server{
@@ -324,10 +328,7 @@ func botServiceRuntimeURL(cfg Config) string {
 }
 
 func agentsActionURL(cfg Config) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
-	if baseURL == "" {
-		baseURL = strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
-	}
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
 	if baseURL == "" {
 		return ""
 	}
@@ -335,10 +336,7 @@ func agentsActionURL(cfg Config) string {
 }
 
 func agentsDialogURL(cfg Config) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
-	if baseURL == "" {
-		baseURL = strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
-	}
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
 	if baseURL == "" {
 		return ""
 	}

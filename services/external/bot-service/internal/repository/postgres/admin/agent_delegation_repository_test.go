@@ -2,7 +2,6 @@ package admin_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -13,10 +12,7 @@ import (
 )
 
 func TestAgentDelegationRepositoryLifecycle(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_DSN")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_DSN is not configured")
-	}
+	dsn := isolatedPostgresTestDSN(t, "delegation")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := migrations.Run(ctx, dsn); err != nil {

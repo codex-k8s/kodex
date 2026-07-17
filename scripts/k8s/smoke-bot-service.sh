@@ -41,8 +41,14 @@ mattercodex_log "bot-service готовых реплик: ${BOT_READY:-0}"
 
 if mattercodex_bool "$CHECK_URL"; then
   mattercodex_require_commands curl
-  mattercodex_log "проверка публичного health endpoint bot-service"
-  curl -fsS --max-time 15 "$MATTERCODEX_BOT_SERVICE_SITE_URL/healthz" >/dev/null
+  mattercodex_log "проверка публичного allowlist bot-service без передачи секретов"
+  slash_status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -X POST "$MATTERCODEX_BOT_SERVICE_SITE_URL/mattermost/slash/agents")"
+  health_status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$MATTERCODEX_BOT_SERVICE_SITE_URL/healthz")"
+  case "$slash_status" in
+    401|503) ;;
+    *) mattercodex_die "публичный slash endpoint вернул неожиданный HTTP-статус" ;;
+  esac
+  [ "$health_status" = "404" ] || mattercodex_die "кластерный health endpoint опубликован через Ingress"
 fi
 
 mattercodex_log "bot-service read-only проверка завершена"

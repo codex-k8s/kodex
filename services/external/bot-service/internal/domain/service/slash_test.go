@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -611,7 +612,7 @@ func TestAgentRoleDialogSeedsKnownRolePromptTemplate(t *testing.T) {
 	}
 }
 
-func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.T) {
+func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
 			1: {ID: 1, Name: "Radar", Slug: "radar-auto", GitHubAccountName: "github-radar-owner-manager"},
@@ -689,24 +690,14 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 	if err != nil {
 		t.Fatalf("matter-codex project not stored: %v", err)
 	}
-	adminRole := testRoleByName(t, store, matterCodexProject.ID, "mattercodex-admin")
-	if adminRole.KubernetesAccess != "cluster-admin" || adminRole.GitHubAccountName != "github-myqrcontact-owner" || adminRole.OpenAIAccountName != "openai-radar-delivery" {
-		t.Fatalf("admin role = %#v", adminRole)
-	}
-	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), adminRole.ID); err != nil {
-		t.Fatalf("admin bot identity not stored: %v", err)
+	for _, role := range store.agentRoles {
+		if role.ProjectID == matterCodexProject.ID && role.KubernetesAccess == "cluster-admin" {
+			t.Fatalf("bootstrap created forbidden cluster-admin role: %#v", role)
+		}
 	}
 	controlChats, _ := store.ListChats(context.Background(), matterCodexProject.ID)
-	if len(controlChats) != 1 || controlChats[0].Slug != "agents-control" || controlChats[0].MattermostChannelID != "channel-agents-control" {
-		t.Fatalf("control chats = %#v", controlChats)
-	}
-	controlRepos, _ := store.ListChatRepositories(context.Background(), controlChats[0].ID)
-	if len(controlRepos) != 1 || controlRepos[0].FullName() != "codex-k8s/matter-codex" {
-		t.Fatalf("control repositories = %#v", controlRepos)
-	}
-	controlParticipants, _ := store.ListChatParticipants(context.Background(), controlChats[0].ID)
-	if !testParticipantsContainRole(controlParticipants, adminRole.ID) || !testParticipantsContainRole(controlParticipants, testRoleByName(t, store, matterCodexProject.ID, "improver").ID) {
-		t.Fatalf("control participants = %#v", controlParticipants)
+	if len(controlChats) != 0 {
+		t.Fatalf("bootstrap created control chat without an existing granted admin role: %#v", controlChats)
 	}
 }
 
@@ -1437,7 +1428,7 @@ func TestGitHubAccountDialogSubmissionDeletesAccount(t *testing.T) {
 	}
 }
 
-func TestProfileDialogSubmissionCreatesProfileAndPromptSeeds(t *testing.T) {
+func TestProfileDialogSubmissionRejectsNewClusterAdmin(t *testing.T) {
 	store := &fakeAdminStore{
 		profiles:       []entity.AgentProfile{{Name: "developer", Role: "developer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "agent"}},
 		openAIAccounts: map[string]entity.OpenAIAccount{"primary": {Name: "primary", SecretRef: "matter-codex-codex-auth-primary", Status: "authorized"}},
@@ -1469,21 +1460,14 @@ func TestProfileDialogSubmissionCreatesProfileAndPromptSeeds(t *testing.T) {
 		},
 	})
 
-	if result.Error != "" || len(result.Errors) > 0 {
-		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	if result.Error == "" {
+		t.Fatalf("cluster-admin submission unexpectedly succeeded: %#v", result)
 	}
-	profile, err := store.GetAgentProfile(context.Background(), "deployer")
-	if err != nil {
-		t.Fatalf("profile was not saved: %v", err)
+	if _, err := store.GetAgentProfile(context.Background(), "deployer"); !errors.Is(err, adminrepo.ErrNotFound) {
+		t.Fatalf("forbidden profile lookup error = %v", err)
 	}
-	if profile.Role != "deployer" || profile.KubernetesAccess != "cluster-admin" || profile.SandboxMode != "workspace-write" || profile.ConfigOverlay == "" {
-		t.Fatalf("profile = %#v", profile)
-	}
-	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerImplementTaskKey)]; !ok {
-		t.Fatalf("implement prompt was not seeded: %#v", store.promptTemplates)
-	}
-	if result.Card == nil || !strings.Contains(result.Card.Text, "deployer") {
-		t.Fatalf("card = %#v", result.Card)
+	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerImplementTaskKey)]; ok {
+		t.Fatalf("forbidden profile seeded prompt: %#v", store.promptTemplates)
 	}
 }
 
@@ -3723,6 +3707,9 @@ func (store *fakeAdminStore) UpsertAgentRole(_ context.Context, input adminrepo.
 	store.ensureAgentRoles()
 	for id, role := range store.agentRoles {
 		if role.ProjectID == input.ProjectID && role.Name == input.Name {
+			if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") && !strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+				return entity.AgentRole{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+			}
 			role.RoleType = input.RoleType
 			role.Description = input.Description
 			role.PromptTemplate = input.PromptTemplate
@@ -3738,6 +3725,9 @@ func (store *fakeAdminStore) UpsertAgentRole(_ context.Context, input adminrepo.
 			store.agentRoles[id] = role
 			return role, false, nil
 		}
+	}
+	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
+		return entity.AgentRole{}, false, adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	role := entity.AgentRole{
 		ID:                int64(len(store.agentRoles) + 1),
@@ -4514,6 +4504,9 @@ func (store *fakeAdminStore) UpsertAgentProfile(_ context.Context, input adminre
 	store.profileUpsert = input
 	for index, profile := range store.profiles {
 		if profile.Name == input.Name {
+			if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") && !strings.EqualFold(strings.TrimSpace(profile.KubernetesAccess), "cluster-admin") {
+				return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+			}
 			profile.Role = input.Role
 			profile.Description = input.Description
 			profile.Enabled = input.Enabled
@@ -4525,6 +4518,9 @@ func (store *fakeAdminStore) UpsertAgentProfile(_ context.Context, input adminre
 			store.profiles[index] = profile
 			return profile, false, nil
 		}
+	}
+	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
+		return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	profile := entity.AgentProfile{
 		ID:                int64(len(store.profiles) + 1),

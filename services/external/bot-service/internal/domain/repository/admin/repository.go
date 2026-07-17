@@ -7,7 +7,10 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
-var ErrNotFound = errors.New("admin repository item not found")
+var (
+	ErrNotFound                    = errors.New("admin repository item not found")
+	ErrClusterAdminAdmissionDenied = errors.New("cluster-admin assignment is not present in the server-side profile")
+)
 
 type UpsertRepositoryInput struct {
 	Provider          string

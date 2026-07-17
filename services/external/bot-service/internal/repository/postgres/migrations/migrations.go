@@ -20,6 +20,18 @@ var (
 )
 
 func Run(ctx context.Context, dsn string) error {
+	return run(ctx, dsn, 0)
+}
+
+// RunTo применяет миграции до указанной версии включительно.
+func RunTo(ctx context.Context, dsn string, version int64) error {
+	if version <= 0 {
+		return fmt.Errorf("migration version must be positive")
+	}
+	return run(ctx, dsn, version)
+}
+
+func run(ctx context.Context, dsn string, version int64) error {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return fmt.Errorf("open goose database: %w", err)
@@ -32,6 +44,12 @@ func Run(ctx context.Context, dsn string) error {
 	configureGoose()
 	if configureErr != nil {
 		return configureErr
+	}
+	if version > 0 {
+		if err := goose.UpToContext(ctx, db, ".", version); err != nil {
+			return fmt.Errorf("run goose migrations through version %d: %w", version, err)
+		}
+		return nil
 	}
 	if err := goose.UpContext(ctx, db, "."); err != nil {
 		return fmt.Errorf("run goose migrations: %w", err)

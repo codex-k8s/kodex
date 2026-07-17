@@ -213,25 +213,25 @@ func TestMattermostAPIURLFallsBackToSiteURL(t *testing.T) {
 	}
 }
 
-func TestAgentsActionURLPrefersSiteURL(t *testing.T) {
+func TestAgentsActionURLUsesClusterBoundary(t *testing.T) {
 	cfg := Config{
 		BotServiceSiteURL:     "https://matter-codex.example.com",
 		BotServiceInternalURL: "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080",
 	}
 	got := agentsActionURL(cfg)
-	want := "https://matter-codex.example.com/mattermost/actions/agents"
+	want := "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080/mattermost/actions/agents"
 	if got != want {
 		t.Fatalf("agentsActionURL() = %q, want %q", got, want)
 	}
 }
 
-func TestAgentsDialogURLPrefersSiteURL(t *testing.T) {
+func TestAgentsDialogURLUsesClusterBoundary(t *testing.T) {
 	cfg := Config{
 		BotServiceSiteURL:     "https://matter-codex.example.com",
 		BotServiceInternalURL: "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080",
 	}
 	got := agentsDialogURL(cfg)
-	want := "https://matter-codex.example.com/mattermost/dialogs/agents"
+	want := "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080/mattermost/dialogs/agents"
 	if got != want {
 		t.Fatalf("agentsDialogURL() = %q, want %q", got, want)
 	}

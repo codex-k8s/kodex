@@ -40,17 +40,18 @@ type MattermostChannelBinding struct {
 }
 
 type MattermostCard struct {
-	ChannelID  string
-	PostID     string
-	RootPostID string
-	ActionURL  string
-	Message    string
-	Props      map[string]any
-	Color      string
-	Title      string
-	Text       string
-	Fields     []MattermostCardField
-	Actions    []MattermostCardAction
+	ChannelID   string
+	PostID      string
+	RootPostID  string
+	ActionURL   string
+	Message     string
+	Props       map[string]any
+	Color       string
+	Title       string
+	Text        string
+	Fields      []MattermostCardField
+	Actions     []MattermostCardAction
+	Interaction MattermostCardInteraction
 }
 
 type MattermostCardField struct {

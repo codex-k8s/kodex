@@ -5,10 +5,12 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -153,6 +155,21 @@ func (repo *Repository) DeleteRepository(ctx context.Context, provider string, o
 }
 
 func (repo *Repository) UpsertAgentProfile(ctx context.Context, input adminrepo.UpsertAgentProfileInput) (entity.AgentProfile, bool, error) {
+	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
+		allowed, err := repo.AdmitExistingClusterAdmin(ctx, securityrepo.ClusterAdminAdmissionInput{
+			SubjectType: "agent_profile",
+			SubjectKey:  input.Name,
+			ProfileName: input.Name,
+			ActorUser:   "repository",
+			Operation:   "agent_profile.upsert",
+		})
+		if err != nil {
+			return entity.AgentProfile{}, false, err
+		}
+		if !allowed {
+			return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
 	var created bool
 	item, err := scanAgentProfileWithCreated(repo.pool.QueryRow(ctx, query("agent_profiles__upsert.sql"),
 		input.Name,

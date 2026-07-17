@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
@@ -108,6 +111,31 @@ func (repo *Repository) ListProjectRepositories(ctx context.Context, projectID i
 }
 
 func (repo *Repository) UpsertAgentRole(ctx context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
+	var existingID int64
+	err := repo.pool.QueryRow(ctx, query("agent_roles__get_by_project_name.sql"), input.ProjectID, input.Name).Scan(&existingID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return entity.AgentRole{}, false, fmt.Errorf("get agent role for cluster-admin admission: %w", err)
+	}
+	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
+		subjectKey := "new"
+		if existingID > 0 {
+			subjectKey = strconv.FormatInt(existingID, 10)
+		}
+		allowed, err := repo.AdmitExistingClusterAdmin(ctx, securityrepo.ClusterAdminAdmissionInput{
+			SubjectType: "agent_role",
+			SubjectKey:  subjectKey,
+			ProjectID:   input.ProjectID,
+			ProfileName: input.Name,
+			ActorUser:   "repository",
+			Operation:   "agent_role.upsert",
+		})
+		if err != nil {
+			return entity.AgentRole{}, false, err
+		}
+		if !allowed {
+			return entity.AgentRole{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
 	item, created, err := scanAgentRoleWithCreated(repo.pool.QueryRow(ctx, query("agent_roles__upsert.sql"),
 		input.ProjectID,
 		input.Name,

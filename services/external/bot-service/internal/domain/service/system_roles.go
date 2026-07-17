@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
@@ -37,7 +39,7 @@ func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) e
 			return err
 		}
 	}
-	matterCodexProject, err := svc.bootstrapMatterCodexAdmin(ctx, gitHubAccounts, openAIAccountName)
+	matterCodexProject, err := svc.bootstrapMatterCodexAdmin(ctx, gitHubAccounts)
 	if err != nil {
 		return err
 	}
@@ -80,7 +82,7 @@ func (svc *SlashCommandService) bootstrapImproverRole(ctx context.Context, proje
 	return svc.ensureRoleInProjectChats(ctx, project, role)
 }
 
-func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, gitHubAccounts []entity.GitHubAccount, openAIAccountName string) (entity.Project, error) {
+func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, gitHubAccounts []entity.GitHubAccount) (entity.Project, error) {
 	githubAccountName := preferredOwnerGitHubAccount(gitHubAccounts)
 	teamID := ""
 	if svc.cfg.ChannelManager != nil {
@@ -132,28 +134,25 @@ func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, g
 		return entity.Project{}, err
 	}
 	if role.ID == 0 {
-		promptTemplate, err := promptSeedMarkdownForProfileTemplate(systemMatterCodexRoleName, matterCodexAdminTaskTemplateKey)
-		if err != nil {
-			return entity.Project{}, err
-		}
-		role, _, err = svc.cfg.Store.UpsertAgentRole(ctx, adminrepo.UpsertAgentRoleInput{
-			ProjectID:         project.ID,
-			Name:              systemMatterCodexRoleName,
-			RoleType:          "sre",
-			Description:       "Owner-level MatterCodex administration agent with explicit cluster-admin access.",
-			PromptTemplate:    promptTemplate,
-			PromptMode:        "template",
-			GitHubAccountName: githubAccountName,
-			OpenAIAccountName: openAIAccountName,
-			KubernetesAccess:  "cluster-admin",
-			SandboxMode:       "danger-full-access",
-			AdvancedSettings:  "{}",
-			Enabled:           true,
-			BotIdentity:       systemMatterCodexRoleName,
-		})
-		if err != nil {
-			return entity.Project{}, err
-		}
+		return project, nil
+	}
+	repository, ok := svc.cfg.Store.(securityrepo.Repository)
+	if !ok {
+		return entity.Project{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	allowed, err := repository.AdmitExistingClusterAdmin(ctx, securityrepo.ClusterAdminAdmissionInput{
+		SubjectType: "agent_role",
+		SubjectKey:  strconv.FormatInt(role.ID, 10),
+		ProjectID:   project.ID,
+		ProfileName: role.Name,
+		ActorUser:   "bootstrap",
+		Operation:   "system_role.bootstrap",
+	})
+	if err != nil {
+		return entity.Project{}, err
+	}
+	if !allowed {
+		return entity.Project{}, adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	channelID := ""
 	if svc.cfg.ChannelManager != nil {

@@ -6,7 +6,7 @@
 
 В этом PR сервис умеет:
 
-- отвечать на `/healthz`;
+- отвечать на кластерный `/healthz`;
 - принимать Mattermost slash callback `/mattermost/slash/agents`;
 - показывать Mattermost menu card по пустому `/agents`;
 - принимать Mattermost menu action callback `/mattermost/actions/agents` для кнопок menu card;
@@ -93,6 +93,8 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 - Deployment;
 - Service;
 - Ingress.
+
+Публичный Ingress использует точный список разрешённых маршрутов только для `/mattermost/slash/agents` и `/github/webhook`. Маршруты health/readiness, metrics, action/dialog callback, internal agent session и MCP доступны только через кластерный сервис Kubernetes. Mattermost получает action/dialog URL из `MATTERCODEX_BOT_SERVICE_INTERNAL_URL`, поэтому внешний Prefix `/` не требуется.
 
 При `--apply` remote deploy по умолчанию использует `MATTERCODEX_IMAGE_BUILD_STRATEGY=kaniko`: локально создается только tar build context, он передается по SSH во временный pod с PVC, а image собирается Kaniko Job внутри кластера и push'ится во встроенный MatterCodex registry. Kubelet тянет готовые image из этого registry через `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST`. Гигабайтные `docker save` archive через локальную сеть не передаются.
 
@@ -187,7 +189,7 @@ bash scripts/remote/install-bot-service.sh --env-file .env --apply --wait
 bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 ```
 
-Ожидаемый результат: Kubernetes objects существуют, Deployment готов, `/healthz` отвечает через HTTPS.
+Ожидаемый результат: объекты Kubernetes существуют, Deployment готов, публичный slash endpoint возвращает безопасный `401` или `503` без токена, а публичный `/healthz` возвращает `404`. Кластерные probes продолжают проверять health/readiness через сервис Kubernetes.
 
 Проверка storage migrations после deploy:
 
@@ -445,6 +447,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - GitHub token, username, email и webhook secret хранятся в Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
+- Action/dialog callback принимает только одноразовую серверную capability с ограниченным сроком действия и точной привязкой к операции, ресурсу, каналу, карточке, субъекту и области. В PostgreSQL хранится только SHA-256-хеш; повтор, истечение, подделка, подмена субъекта и неизвестный результат допуска дают закрытый отказ.
+- Поля `user_name`, `prompt`, `labels`, `state` и `submission` не предоставляют права. Новое назначение `cluster-admin` запрещено; допускается только точное уже сохранённое серверное состояние профиля или роли с отдельной проверкой и записью аудита.
+- `response_url` разрешён только для настроенного источника Mattermost. Проверяются протокол, hostname, port, DNS-адреса и каждое перенаправление; IP-литерал, loopback, link-local, metadata, произвольный приватный или кластерный адрес назначения и DNS rebinding не приводят к исходящему HTTP-запросу.
 - bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true` и `seccompProfile: RuntimeDefault`.
 - Ресурсы bot-service настраиваются через `MATTERCODEX_BOT_SERVICE_CPU_REQUEST`, `MATTERCODEX_BOT_SERVICE_MEMORY_REQUEST` и `MATTERCODEX_BOT_SERVICE_MEMORY_LIMIT`. Значения по умолчанию: requests `100m`/`512Mi`, memory limit `8Gi`, CPU limit отсутствует; увеличенный memory limit нужен для кратковременных пиков при приеме крупных Codex session snapshots.
 - bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/get/list/update/delete Secret для account-specific Codex auth и session-token cleanup.
@@ -457,6 +462,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Codex agent внутри isolated Kubernetes Job запускается с `sandbox_mode = "danger-full-access"`, потому что `workspace-write` требует `bubblewrap`, который в текущем Kubernetes pod падает до выполнения shell-команд. Изоляционная граница MVP для agent run: отдельный pod, отдельный PVC, отключенный automount service account token и минимальные Secret volume mounts.
 - Developer runner реализован отдельным Go binary в подготовленном image и сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую, но разрешает отвечать на review threads через `gh` при соответствующей задаче.
 - Reviewer runner реализован отдельным Go binary в подготовленном image и дает Codex reviewer доступ к `gh` для inline review comments; если Codex не отправил review сам, runner отправляет fallback summary review после `codex exec`.
+- В текущем наборе манифестов `NetworkPolicy` отсутствует. PR-0 не расширяет сеть и фиксирует это состояние снимком; изоляция исходящего трафика остаётся явным риском начального профиля до отдельного инфраструктурного изменения.
 
 ## Production gaps после MVP
 

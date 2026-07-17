@@ -1,0 +1,491 @@
+package service
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+	"time"
+
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
+)
+
+const (
+	interactionCapabilityContextKey     = "capability"
+	interactionCapabilityPostBindingKey = "capability_post_binding"
+	interactionKindAction               = "action"
+	interactionKindDialog               = "dialog"
+	defaultInstallationScope            = "single-installation"
+	defaultWorkspaceScope               = "installation-root"
+	defaultInteractionCapabilityTTL     = 4 * time.Hour
+)
+
+var (
+	ErrInteractionCapabilityMissing = errors.New("interaction capability is missing")
+	ErrInteractionAuthentication    = errors.New("interaction callback authentication failed")
+	ErrInteractionAdmissionDenied   = errors.New("interaction callback admission denied")
+	ErrInteractionAdmissionUnknown  = errors.New("interaction callback admission indeterminate")
+)
+
+type AuthenticatedActor struct {
+	UserID   string
+	UserName string
+}
+
+type InteractionScope struct {
+	Installation string
+	Workspace    string
+	Session      string
+}
+
+type MattermostCardInteraction struct {
+	Actor AuthenticatedActor
+	Scope InteractionScope
+}
+
+type AdmissionStatus string
+
+const (
+	AdmissionAllowed       AdmissionStatus = "allowed"
+	AdmissionDenied        AdmissionStatus = "denied"
+	AdmissionIndeterminate AdmissionStatus = "indeterminate"
+)
+
+type InteractionAdmissionRequest struct {
+	ActionKey    string
+	Operation    string
+	ResourceType string
+	ResourceID   string
+	Actor        AuthenticatedActor
+	Scope        InteractionScope
+}
+
+type InteractionAdmissionDecision struct {
+	Status AdmissionStatus
+	Reason string
+}
+
+type InteractionAdmission interface {
+	Admit(ctx context.Context, request InteractionAdmissionRequest) InteractionAdmissionDecision
+}
+
+type denyByDefaultInteractionAdmission struct {
+	installationScope string
+}
+
+func (admission denyByDefaultInteractionAdmission) Admit(_ context.Context, request InteractionAdmissionRequest) InteractionAdmissionDecision {
+	if request.ActionKey != "mattermost.callback.action" && request.ActionKey != "mattermost.callback.dialog" {
+		return InteractionAdmissionDecision{Status: AdmissionIndeterminate, Reason: "unknown_action"}
+	}
+	if strings.TrimSpace(request.Actor.UserID) == "" {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "actor_missing"}
+	}
+	if request.Scope.Installation != admission.installationScope {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "installation_scope_mismatch"}
+	}
+	if !validInteractionScope(request.Scope.Workspace) {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "workspace_scope_invalid"}
+	}
+	if request.Scope.Session != "" && !validInteractionScope(request.Scope.Session) {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "session_scope_invalid"}
+	}
+	if strings.Contains(request.Operation, "kind=agent_turn") && request.Scope.Session == "" {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "session_scope_missing"}
+	}
+	if strings.TrimSpace(request.Operation) == "" {
+		return InteractionAdmissionDecision{Status: AdmissionIndeterminate, Reason: "operation_missing"}
+	}
+	return InteractionAdmissionDecision{Status: AdmissionAllowed, Reason: "static_callback_grant"}
+}
+
+type InteractionSecurityConfig struct {
+	Repository        securityrepo.Repository
+	Admission         InteractionAdmission
+	InstallationScope string
+	CapabilityTTL     time.Duration
+	Random            io.Reader
+	Now               func() time.Time
+}
+
+type InteractionSecurityService struct {
+	repository        securityrepo.Repository
+	admission         InteractionAdmission
+	installationScope string
+	capabilityTTL     time.Duration
+	random            io.Reader
+	now               func() time.Time
+}
+
+type AuthenticatedInteraction struct {
+	Actor          AuthenticatedActor
+	Scope          InteractionScope
+	Kind           string
+	Operation      string
+	ResourceType   string
+	ResourceID     string
+	ChannelID      string
+	PostBinding    string
+	CallbackPostID string
+}
+
+type ActionCallback struct {
+	Context   map[string]any
+	UserID    string
+	ChannelID string
+	PostID    string
+}
+
+type DialogCallback struct {
+	CallbackID string
+	State      string
+	UserID     string
+	ChannelID  string
+}
+
+func NewInteractionSecurityService(cfg InteractionSecurityConfig) *InteractionSecurityService {
+	installationScope := strings.TrimSpace(cfg.InstallationScope)
+	if installationScope == "" {
+		installationScope = defaultInstallationScope
+	}
+	capabilityTTL := cfg.CapabilityTTL
+	if capabilityTTL <= 0 {
+		capabilityTTL = defaultInteractionCapabilityTTL
+	}
+	random := cfg.Random
+	if random == nil {
+		random = rand.Reader
+	}
+	now := cfg.Now
+	if now == nil {
+		now = func() time.Time { return time.Now().UTC() }
+	}
+	admission := cfg.Admission
+	if admission == nil {
+		admission = denyByDefaultInteractionAdmission{installationScope: installationScope}
+	}
+	return &InteractionSecurityService{
+		repository:        cfg.Repository,
+		admission:         admission,
+		installationScope: installationScope,
+		capabilityTTL:     capabilityTTL,
+		random:            random,
+		now:               now,
+	}
+}
+
+func (svc *InteractionSecurityService) SealCard(ctx context.Context, card *MattermostCard, actor AuthenticatedActor, scope InteractionScope) error {
+	if card == nil || len(card.Actions) == 0 {
+		return nil
+	}
+	if svc == nil || svc.repository == nil || strings.TrimSpace(actor.UserID) == "" || strings.TrimSpace(card.ChannelID) == "" {
+		card.Actions = nil
+		return ErrInteractionAuthentication
+	}
+	scope = svc.normalizeScope(scope)
+	postBinding := strings.TrimSpace(card.PostID)
+	if postBinding == "" {
+		var err error
+		postBinding, err = svc.randomValue(18)
+		if err != nil {
+			card.Actions = nil
+			return err
+		}
+		postBinding = "card_" + postBinding
+	}
+	sealed := make([]MattermostCardAction, 0, len(card.Actions))
+	for _, action := range card.Actions {
+		contextCopy := cloneInteractionContext(action.Context)
+		contextCopy[interactionCapabilityPostBindingKey] = postBinding
+		operation := actionCallbackOperation(contextCopy)
+		resourceType, resourceID := interactionResource(contextCopy)
+		token, err := svc.issue(ctx, securityrepo.IssueCapabilityInput{
+			Kind:              interactionKindAction,
+			Operation:         operation,
+			ResourceType:      resourceType,
+			ResourceID:        resourceID,
+			ChannelID:         strings.TrimSpace(card.ChannelID),
+			PostBinding:       postBinding,
+			ActorUserID:       strings.TrimSpace(actor.UserID),
+			ActorUserName:     strings.TrimSpace(actor.UserName),
+			InstallationScope: scope.Installation,
+			WorkspaceScope:    scope.Workspace,
+			SessionScope:      scope.Session,
+		}, contextCopy)
+		if err != nil {
+			card.Actions = nil
+			return err
+		}
+		contextCopy[interactionCapabilityContextKey] = token
+		action.Context = contextCopy
+		sealed = append(sealed, action)
+	}
+	card.Actions = sealed
+	return nil
+}
+
+func (svc *InteractionSecurityService) SealDialog(ctx context.Context, dialog *MattermostDialog, interaction AuthenticatedInteraction) error {
+	if dialog == nil {
+		return nil
+	}
+	state, err := interactionState(dialog.State)
+	if err != nil {
+		return fmt.Errorf("parse Mattermost dialog state: %w", err)
+	}
+	state[interactionCapabilityPostBindingKey] = interaction.PostBinding
+	contextCopy := map[string]any{"callback_id": strings.TrimSpace(dialog.CallbackID), "state": state}
+	resourceType, resourceID := interactionResource(state)
+	token, err := svc.issue(ctx, securityrepo.IssueCapabilityInput{
+		Kind:              interactionKindDialog,
+		Operation:         dialogCallbackOperation(dialog.CallbackID),
+		ResourceType:      resourceType,
+		ResourceID:        resourceID,
+		ChannelID:         interaction.ChannelID,
+		PostBinding:       interaction.PostBinding,
+		ActorUserID:       interaction.Actor.UserID,
+		ActorUserName:     interaction.Actor.UserName,
+		InstallationScope: interaction.Scope.Installation,
+		WorkspaceScope:    interaction.Scope.Workspace,
+		SessionScope:      interaction.Scope.Session,
+	}, contextCopy)
+	if err != nil {
+		return err
+	}
+	state[interactionCapabilityContextKey] = token
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("encode Mattermost dialog capability state: %w", err)
+	}
+	dialog.State = string(encoded)
+	return nil
+}
+
+func (svc *InteractionSecurityService) AuthenticateAction(ctx context.Context, callback ActionCallback) (AuthenticatedInteraction, error) {
+	contextCopy := cloneInteractionContext(callback.Context)
+	token := strings.TrimSpace(contextStringValue(contextCopy, interactionCapabilityContextKey))
+	delete(contextCopy, interactionCapabilityContextKey)
+	postBinding := strings.TrimSpace(contextStringValue(contextCopy, interactionCapabilityPostBindingKey))
+	if token == "" || postBinding == "" {
+		return AuthenticatedInteraction{}, ErrInteractionCapabilityMissing
+	}
+	callbackPostID := strings.TrimSpace(callback.PostID)
+	if !strings.HasPrefix(postBinding, "card_") && callbackPostID != postBinding {
+		return AuthenticatedInteraction{}, ErrInteractionAuthentication
+	}
+	interaction, err := svc.consumeAndAdmit(ctx, token, securityrepo.ConsumeCapabilityInput{
+		Kind:         interactionKindAction,
+		Operation:    actionCallbackOperation(contextCopy),
+		ResourceType: resourceValue(contextCopy, "resource_type"),
+		ResourceID:   resourceValue(contextCopy, "resource_id"),
+		ChannelID:    strings.TrimSpace(callback.ChannelID),
+		PostBinding:  postBinding,
+		ActorUserID:  strings.TrimSpace(callback.UserID),
+	}, contextCopy, "mattermost.callback.action")
+	if err != nil {
+		return AuthenticatedInteraction{}, err
+	}
+	interaction.CallbackPostID = callbackPostID
+	return interaction, nil
+}
+
+func (svc *InteractionSecurityService) AuthenticateDialog(ctx context.Context, callback DialogCallback) (AuthenticatedInteraction, string, error) {
+	state, err := interactionState(callback.State)
+	if err != nil {
+		return AuthenticatedInteraction{}, "", ErrInteractionAuthentication
+	}
+	token := strings.TrimSpace(contextStringValue(state, interactionCapabilityContextKey))
+	delete(state, interactionCapabilityContextKey)
+	postBinding := strings.TrimSpace(contextStringValue(state, interactionCapabilityPostBindingKey))
+	if token == "" || postBinding == "" {
+		return AuthenticatedInteraction{}, "", ErrInteractionCapabilityMissing
+	}
+	contextCopy := map[string]any{"callback_id": strings.TrimSpace(callback.CallbackID), "state": state}
+	resourceType, resourceID := interactionResource(state)
+	interaction, err := svc.consumeAndAdmit(ctx, token, securityrepo.ConsumeCapabilityInput{
+		Kind:         interactionKindDialog,
+		Operation:    dialogCallbackOperation(callback.CallbackID),
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		ChannelID:    strings.TrimSpace(callback.ChannelID),
+		PostBinding:  postBinding,
+		ActorUserID:  strings.TrimSpace(callback.UserID),
+	}, contextCopy, "mattermost.callback.dialog")
+	if err != nil {
+		return AuthenticatedInteraction{}, "", err
+	}
+	delete(state, interactionCapabilityPostBindingKey)
+	cleanState, err := json.Marshal(state)
+	if err != nil {
+		return AuthenticatedInteraction{}, "", ErrInteractionAuthentication
+	}
+	return interaction, string(cleanState), nil
+}
+
+func (svc *InteractionSecurityService) issue(ctx context.Context, input securityrepo.IssueCapabilityInput, safeContext map[string]any) (string, error) {
+	token, err := svc.randomValue(32)
+	if err != nil {
+		return "", err
+	}
+	tokenHash := sha256.Sum256([]byte(token))
+	contextHash, err := interactionContextHash(safeContext)
+	if err != nil {
+		return "", err
+	}
+	now := svc.now().UTC()
+	input.TokenHash = tokenHash[:]
+	input.ContextHash = contextHash
+	input.IssuedAt = now
+	input.ExpiresAt = now.Add(svc.capabilityTTL)
+	if err := svc.repository.IssueInteractionCapability(ctx, input); err != nil {
+		return "", fmt.Errorf("store interaction capability: %w", err)
+	}
+	return token, nil
+}
+
+func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, token string, input securityrepo.ConsumeCapabilityInput, safeContext map[string]any, actionKey string) (AuthenticatedInteraction, error) {
+	if svc == nil || svc.repository == nil {
+		return AuthenticatedInteraction{}, ErrInteractionAuthentication
+	}
+	tokenHash := sha256.Sum256([]byte(token))
+	contextHash, err := interactionContextHash(safeContext)
+	if err != nil {
+		return AuthenticatedInteraction{}, ErrInteractionAuthentication
+	}
+	input.TokenHash = tokenHash[:]
+	input.ContextHash = contextHash
+	input.Now = svc.now().UTC()
+	capability, err := svc.repository.ConsumeInteractionCapability(ctx, input)
+	if err != nil {
+		return AuthenticatedInteraction{}, fmt.Errorf("%w: %v", ErrInteractionAuthentication, err)
+	}
+	interaction := AuthenticatedInteraction{
+		Actor: AuthenticatedActor{UserID: capability.ActorUserID, UserName: capability.ActorUserName},
+		Scope: InteractionScope{
+			Installation: capability.InstallationScope,
+			Workspace:    capability.WorkspaceScope,
+			Session:      capability.SessionScope,
+		},
+		Kind:         capability.Kind,
+		Operation:    capability.Operation,
+		ResourceType: capability.ResourceType,
+		ResourceID:   capability.ResourceID,
+		ChannelID:    capability.ChannelID,
+		PostBinding:  capability.PostBinding,
+	}
+	decision := svc.admission.Admit(ctx, InteractionAdmissionRequest{
+		ActionKey:    actionKey,
+		Operation:    interaction.Operation,
+		ResourceType: interaction.ResourceType,
+		ResourceID:   interaction.ResourceID,
+		Actor:        interaction.Actor,
+		Scope:        interaction.Scope,
+	})
+	switch decision.Status {
+	case AdmissionAllowed:
+		return interaction, nil
+	case AdmissionDenied:
+		return AuthenticatedInteraction{}, fmt.Errorf("%w: %s", ErrInteractionAdmissionDenied, decision.Reason)
+	default:
+		return AuthenticatedInteraction{}, fmt.Errorf("%w: %s", ErrInteractionAdmissionUnknown, decision.Reason)
+	}
+}
+
+func (svc *InteractionSecurityService) normalizeScope(scope InteractionScope) InteractionScope {
+	scope.Installation = strings.TrimSpace(scope.Installation)
+	if scope.Installation == "" {
+		scope.Installation = svc.installationScope
+	}
+	scope.Workspace = strings.TrimSpace(scope.Workspace)
+	if scope.Workspace == "" {
+		scope.Workspace = defaultWorkspaceScope
+	}
+	scope.Session = strings.TrimSpace(scope.Session)
+	return scope
+}
+
+func validInteractionScope(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 200 {
+		return false
+	}
+	for _, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '-' || char == '_' || char == ':' || char == '.' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func (svc *InteractionSecurityService) randomValue(size int) (string, error) {
+	buffer := make([]byte, size)
+	if _, err := io.ReadFull(svc.random, buffer); err != nil {
+		return "", fmt.Errorf("generate interaction capability: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buffer), nil
+}
+
+func interactionContextHash(value map[string]any) ([]byte, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("encode interaction capability context: %w", err)
+	}
+	hash := sha256.Sum256(encoded)
+	return hash[:], nil
+}
+
+func cloneInteractionContext(source map[string]any) map[string]any {
+	result := make(map[string]any, len(source)+2)
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
+func interactionState(raw string) (map[string]any, error) {
+	state := map[string]any{}
+	if strings.TrimSpace(raw) == "" {
+		return state, nil
+	}
+	if err := json.Unmarshal([]byte(raw), &state); err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
+func actionCallbackOperation(context map[string]any) string {
+	parts := []string{interactionKindAction}
+	for _, key := range []string{"kind", "action", "dialog", "command", "view"} {
+		if value := strings.TrimSpace(contextStringValue(context, key)); value != "" {
+			parts = append(parts, key+"="+value)
+		}
+	}
+	return strings.Join(parts, ";")
+}
+
+func dialogCallbackOperation(callbackID string) string {
+	return interactionKindDialog + ";callback_id=" + strings.TrimSpace(callbackID)
+}
+
+func interactionResource(context map[string]any) (string, string) {
+	return resourceValue(context, "resource_type"), resourceValue(context, "resource_id")
+}
+
+func resourceValue(context map[string]any, key string) string {
+	return strings.TrimSpace(contextStringValue(context, key))
+}
+
+func contextStringValue(context map[string]any, key string) string {
+	value, ok := context[key]
+	if !ok || value == nil {
+		return ""
+	}
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return fmt.Sprint(value)
+}

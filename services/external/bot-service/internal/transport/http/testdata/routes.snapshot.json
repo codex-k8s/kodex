@@ -1,0 +1,46 @@
+[
+  {
+    "path": "/healthz",
+    "boundary": "cluster"
+  },
+  {
+    "path": "/health/livez",
+    "boundary": "cluster"
+  },
+  {
+    "path": "/health/readyz",
+    "boundary": "cluster"
+  },
+  {
+    "path": "/readyz",
+    "boundary": "cluster"
+  },
+  {
+    "path": "/metrics",
+    "boundary": "cluster"
+  },
+  {
+    "path": "/mattermost/slash/agents",
+    "boundary": "public"
+  },
+  {
+    "path": "/mattermost/actions/agents",
+    "boundary": "cluster"
+  },
+  {
+    "path": "/mattermost/dialogs/agents",
+    "boundary": "cluster"
+  },
+  {
+    "path": "/github/webhook",
+    "boundary": "public"
+  },
+  {
+    "path": "/internal/agent-sessions/",
+    "boundary": "cluster"
+  },
+  {
+    "path": "/mcp/sessions/",
+    "boundary": "cluster"
+  }
+]

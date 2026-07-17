@@ -862,6 +862,13 @@ func (svc *AgentSessionService) turnStatusCard(ctx context.Context, session enti
 		Color:      turnStatusColor(status),
 		Title:      svc.t("chat.session.status.title", map[string]any{"Agent": svc.sessionMattermostUsername(ctx, session)}),
 		Text:       message,
+		Interaction: MattermostCardInteraction{
+			Actor: AuthenticatedActor{UserID: turn.UserID, UserName: turn.UserName},
+			Scope: InteractionScope{
+				Workspace: strconv.FormatInt(session.ProjectID, 10),
+				Session:   session.SessionKey,
+			},
+		},
 	}
 	if status == agentSessionTurnRunning && strings.TrimSpace(svc.cfg.MenuActionURL) != "" {
 		card.Actions = []MattermostCardAction{{
