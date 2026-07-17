@@ -507,7 +507,7 @@ func TestAgentSessionManualCapacityRetryUsesDispatcher(t *testing.T) {
 	}
 }
 
-func TestAgentSessionCompletePostsFYIToRequester(t *testing.T) {
+func TestAgentSessionCompleteDoesNotPostFYIToRequester(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.sessionTurns[0].UserName = "owner"
 	svc := NewAgentSessionService(AgentSessionServiceConfig{
@@ -535,14 +535,11 @@ func TestAgentSessionCompletePostsFYIToRequester(t *testing.T) {
 	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
 		t.Fatalf("cards=%#v cardUpdates=%#v", publisher.cards, publisher.cardUpdates)
 	}
-	if len(publisher.posts) != 2 {
+	if len(publisher.posts) != 1 {
 		t.Fatalf("posts = %#v", publisher.posts)
 	}
 	if publisher.posts[0].Message != "done" {
 		t.Fatalf("final message = %q", publisher.posts[0].Message)
-	}
-	if publisher.posts[1].Message != "@owner fyi: task complete 👆🏻" {
-		t.Fatalf("fyi message = %q", publisher.posts[1].Message)
 	}
 }
 

@@ -11,7 +11,8 @@ import (
 )
 
 type ControlSurface struct {
-	client *mattermostmodel.Client4
+	client      *mattermostmodel.Client4
+	adminClient *mattermostmodel.Client4
 }
 
 var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
@@ -19,10 +20,15 @@ var _ statusservice.MattermostConversationReader = (*ControlSurface)(nil)
 var _ statusservice.MattermostRoleBotManager = (*ControlSurface)(nil)
 var _ statusservice.MattermostInteractionActorVerifier = (*ControlSurface)(nil)
 
-func NewControlSurface(siteURL string, token string) *ControlSurface {
+func NewControlSurface(siteURL string, token string, adminToken string) *ControlSurface {
 	client := mattermostmodel.NewAPIv4Client(siteURL)
 	client.SetToken(token)
-	return &ControlSurface{client: client}
+	adminClient := client
+	if strings.TrimSpace(adminToken) != "" {
+		adminClient = mattermostmodel.NewAPIv4Client(siteURL)
+		adminClient.SetToken(adminToken)
+	}
+	return &ControlSurface{client: client, adminClient: adminClient}
 }
 
 func (surface *ControlSurface) BotUserID(ctx context.Context) (string, error) {
@@ -64,6 +70,17 @@ func (surface *ControlSurface) ResolveMattermostUserName(ctx context.Context, us
 	return strings.TrimSpace(user.Username), nil
 }
 
+func (surface *ControlSurface) ResolveMattermostUserID(ctx context.Context, username string) (string, error) {
+	user, _, err := surface.client.GetUserByUsername(ctx, strings.TrimPrefix(strings.TrimSpace(username), "@"), "")
+	if err != nil {
+		return "", fmt.Errorf("get Mattermost user by username: %w", err)
+	}
+	if user == nil || strings.TrimSpace(user.Id) == "" {
+		return "", fmt.Errorf("get Mattermost user by username: response has no user id")
+	}
+	return strings.TrimSpace(user.Id), nil
+}
+
 func (surface *ControlSurface) EnsureRoleBot(ctx context.Context, input statusservice.MattermostRoleBotInput) (statusservice.MattermostRoleBotBinding, error) {
 	username := strings.TrimSpace(input.Username)
 	if username == "" {
@@ -78,12 +95,12 @@ func (surface *ControlSurface) EnsureRoleBot(ctx context.Context, input statusse
 		return statusservice.MattermostRoleBotBinding{}, err
 	}
 	if bot == nil {
-		user, response, userErr := surface.client.GetUserByUsername(ctx, username, "")
+		user, response, userErr := surface.adminClient.GetUserByUsername(ctx, username, "")
 		if userErr == nil {
 			if user == nil || strings.TrimSpace(user.Id) == "" {
 				return statusservice.MattermostRoleBotBinding{}, fmt.Errorf("get Mattermost role user: response has no user")
 			}
-			bot, _, err = surface.client.ConvertUserToBot(ctx, user.Id)
+			bot, _, err = surface.adminClient.ConvertUserToBot(ctx, user.Id)
 			if err != nil {
 				return statusservice.MattermostRoleBotBinding{}, fmt.Errorf("convert Mattermost role user to bot: %w", err)
 			}
@@ -91,7 +108,7 @@ func (surface *ControlSurface) EnsureRoleBot(ctx context.Context, input statusse
 			if response == nil || response.StatusCode != 404 {
 				return statusservice.MattermostRoleBotBinding{}, fmt.Errorf("get Mattermost role user: %w", userErr)
 			}
-			bot, _, err = surface.client.CreateBot(ctx, &mattermostmodel.Bot{
+			bot, _, err = surface.adminClient.CreateBot(ctx, &mattermostmodel.Bot{
 				Username:    username,
 				DisplayName: displayName,
 				Description: strings.TrimSpace(input.Description),
@@ -112,19 +129,19 @@ func (surface *ControlSurface) EnsureExistingRoleBot(ctx context.Context, userID
 	if userID == "" {
 		return fmt.Errorf("Mattermost role user id is required")
 	}
-	if _, response, err := surface.client.GetBot(ctx, userID, ""); err == nil {
+	if _, response, err := surface.adminClient.GetBot(ctx, userID, ""); err == nil {
 		return nil
 	} else if response == nil || response.StatusCode != 404 {
 		return fmt.Errorf("get Mattermost role bot: %w", err)
 	}
-	if _, _, err := surface.client.ConvertUserToBot(ctx, userID); err != nil {
+	if _, _, err := surface.adminClient.ConvertUserToBot(ctx, userID); err != nil {
 		return fmt.Errorf("convert Mattermost role user to bot: %w", err)
 	}
 	return nil
 }
 
 func (surface *ControlSurface) roleBindingForUser(ctx context.Context, userID string, username string, displayName string) (statusservice.MattermostRoleBotBinding, error) {
-	token, _, err := surface.client.CreateUserAccessToken(ctx, userID, "matter-codex role identity")
+	token, _, err := surface.adminClient.CreateUserAccessToken(ctx, userID, "matter-codex role identity")
 	if err != nil {
 		return statusservice.MattermostRoleBotBinding{}, fmt.Errorf("create Mattermost role identity token: %w", err)
 	}
@@ -152,7 +169,7 @@ func (surface *ControlSurface) EnsureProjectChannelMember(ctx context.Context, t
 
 func (surface *ControlSurface) findBotByUsername(ctx context.Context, username string) (*mattermostmodel.Bot, error) {
 	for page := 0; page < 20; page++ {
-		bots, _, err := surface.client.GetBotsIncludeDeleted(ctx, page, 200, "")
+		bots, _, err := surface.adminClient.GetBotsIncludeDeleted(ctx, page, 200, "")
 		if err != nil {
 			return nil, fmt.Errorf("list Mattermost bots: %w", err)
 		}
@@ -380,6 +397,15 @@ func (surface *ControlSurface) EnsureProjectChannel(ctx context.Context, teamNam
 	}
 	memberUserIDs = surface.memberUserIDsWithControlBot(ctx, memberUserIDs)
 	if channel, response, err := surface.client.GetChannelByName(ctx, channelName, team.Id, ""); err == nil {
+		displayName = strings.TrimSpace(displayName)
+		if displayName != "" && channel.DisplayName != displayName {
+			channel.DisplayName = displayName
+			updated, _, updateErr := surface.client.UpdateChannel(ctx, channel)
+			if updateErr != nil {
+				return statusservice.MattermostChannelBinding{}, false, fmt.Errorf("update Mattermost channel display name: %w", updateErr)
+			}
+			channel = updated
+		}
 		for _, userID := range memberUserIDs {
 			_ = surface.ensureTeamMember(ctx, team.Id, userID)
 			_ = surface.ensureChannelMember(ctx, channel.Id, userID)

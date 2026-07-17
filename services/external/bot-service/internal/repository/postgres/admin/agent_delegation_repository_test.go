@@ -121,4 +121,16 @@ func TestAgentDelegationRepositoryLifecycle(t *testing.T) {
 	if err != nil || len(items) != 1 || items[0].Status != "callback_succeeded" {
 		t.Fatalf("completed callback items=%#v error=%v", items, err)
 	}
+	separateTurn, wasCreated, err := repository.CreateAgentDelegation(ctx, domainrepo.CreateAgentDelegationInput{
+		ProjectID:       projectID,
+		SourceSessionID: sourceSessionID,
+		SourceTurnID:    callbackTurnID,
+		TargetChatID:    targetChatID,
+		TargetRoleID:    targetRoleID,
+		WorkItemKey:     "work-1",
+		Title:           "Work 1 retry in a new process turn",
+	})
+	if err != nil || !wasCreated || separateTurn.ID == created.ID {
+		t.Fatalf("separate source turn item=%#v created=%t error=%v", separateTurn, wasCreated, err)
+	}
 }

@@ -10,3 +10,4 @@ type: Opaque
 data:
   mattermost-bot-token: ${BOT_TOKEN_B64}
   mattermost-slash-token: ${SLASH_TOKEN_B64}
+  mattermost-admin-token: ${ADMIN_TOKEN_B64}

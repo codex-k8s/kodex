@@ -10,6 +10,7 @@ select
 	root_github_issue,
 	work_policy,
 	settings::text,
+	system_purpose,
 	created_at,
 	updated_at
 from matter_codex_chats

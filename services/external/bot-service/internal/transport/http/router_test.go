@@ -1126,7 +1126,7 @@ func (store *fakeRouterAdminStore) CreateAgentDelegation(context.Context, adminr
 	return entity.AgentDelegation{}, true, nil
 }
 
-func (store *fakeRouterAdminStore) GetAgentDelegationBySourceKey(context.Context, int64, string) (entity.AgentDelegation, error) {
+func (store *fakeRouterAdminStore) GetAgentDelegationBySourceTurnKey(context.Context, int64, string) (entity.AgentDelegation, error) {
 	return entity.AgentDelegation{}, adminrepo.ErrNotFound
 }
 

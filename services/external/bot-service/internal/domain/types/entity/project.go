@@ -96,6 +96,7 @@ type Chat struct {
 	RootGitHubIssue     string
 	WorkPolicy          string
 	Settings            string
+	SystemPurpose       string
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }

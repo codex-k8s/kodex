@@ -51,6 +51,10 @@ updated: 2026-07-16
 | `AgentSession` | agent_id, provider_account_id, scope, status, archive_ref |
 | `Turn` | session_id, source, prompt, status, runtime_revision_id, sequence |
 | `AgentDelegation` | source session/turn, target room/thread/session/turn, role, work_item_key, status, callback turn |
+| `RoleCapability` | role_id, capability, constraints, enabled |
+| `RoleRelationshipPolicy` | revision_id, source_role_id, action, target_role_id, constraints |
+| `PolicyRevision` | project_id, version, status, effective policy snapshot |
+| `RunLineage` | process_run_id, root initiator, root trigger, parent run, launching turn/post |
 | `RuntimeRevision` | effective config manifest, hashes, image digest, created_at |
 | `RuntimeLease` | session_id, pod identity, heartbeat, expires_at |
 | `UsageObservation` | turn/session/account, limits/tokens/duration |
@@ -69,6 +73,9 @@ updated: 2026-07-16
 | `AutomationSchedule` | target, cron/interval, timezone, policies, next_run_at |
 | `ScheduleOccurrence` | schedule_id, scheduled_for, idempotency_key, status |
 | `ScheduledRun` | occurrence_id, process/session reference, outcome |
+| `ProcessWave` | process_run_id, coordinator role/session, title, state |
+| `WorkClaim` | process/wave/turn, summary, domains, resource keys, state |
+| `OwnerAttentionRequest` | process/turn, root initiator, severity, summary, state |
 
 Уникальный индекс `(schedule_id, scheduled_for)` исключает повторное создание экземпляра расписания.
 
@@ -80,6 +87,16 @@ updated: 2026-07-16
 | `ArtifactVersion` | artifact_id, storage_key, size, media_type, sha256, scan_status |
 | `MessageArtifactBinding` | artifact_version_id, post_id, thread_id, direction |
 | `ArtifactDelivery` | artifact_version_id, destination, external_id, state |
+
+## Память и опыт
+
+| Сущность | Ключевые поля |
+| --- | --- |
+| `MemoryRecord` | project_id, scope, role_id, status, importance, provenance |
+| `MemoryRecordVersion` | record_id, version, title, content, supersedes, content_hash |
+| `MemoryEmbedding` | version_id, model_revision, dimensions, embedding, indexed_at |
+
+Текстовая версия является источником истины. Embedding хранится как перестраиваемая локальная проекция. Активная работа хранится в `WorkClaim`, а не в памяти.
 
 ## Аудит и исходящий журнал
 
@@ -99,3 +116,6 @@ updated: 2026-07-16
 - ArtifactVersion immutable; изменение файла создает новую version.
 - Git-managed object не изменяется UI до explicit detach.
 - Mattermost/Kubernetes external IDs не являются primary business IDs.
+- Отображаемое имя и тип роли не предоставляют полномочий.
+- Корневой инициатор и ревизия политики не меняются внутри `ProcessRun`.
+- Внешний embedding API не получает содержимое памяти.

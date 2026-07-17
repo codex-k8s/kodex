@@ -2209,6 +2209,8 @@ func (svc *SlashCommandService) optionalGitHubAccountOptions(ctx context.Context
 
 func agentRoleTypeOptions() []MattermostDialogOption {
 	return []MattermostDialogOption{
+		{Text: "director", Value: "director"},
+		{Text: "coordinator", Value: "coordinator"},
 		{Text: "manager", Value: "manager"},
 		{Text: "pm_delivery", Value: "pm_delivery"},
 		{Text: "worker", Value: "worker"},
@@ -2225,6 +2227,7 @@ func agentRoleTypeOptions() []MattermostDialogOption {
 
 func chatTypeOptions() []MattermostDialogOption {
 	return []MattermostDialogOption{
+		{Text: "coordination", Value: "coordination"},
 		{Text: "manager", Value: "manager"},
 		{Text: "pm_delivery", Value: "pm_delivery"},
 		{Text: "worker_reviewer", Value: "worker_reviewer"},
@@ -2235,7 +2238,7 @@ func chatTypeOptions() []MattermostDialogOption {
 
 func validAgentRoleType(value string) bool {
 	switch value {
-	case "manager", "pm_delivery", "worker", "reviewer", "analyst", "architect", "writer", "sre", "improver", "lexical_guard", "custom":
+	case "director", "coordinator", "manager", "pm_delivery", "worker", "reviewer", "analyst", "architect", "writer", "sre", "improver", "lexical_guard", "custom":
 		return true
 	default:
 		return false
@@ -2244,7 +2247,7 @@ func validAgentRoleType(value string) bool {
 
 func validChatType(value string) bool {
 	switch value {
-	case "manager", "pm_delivery", "worker_reviewer", "single_custom", "multi_role_custom", "custom":
+	case "coordination", "manager", "pm_delivery", "worker_reviewer", "single_custom", "multi_role_custom", "custom":
 		return true
 	default:
 		return false

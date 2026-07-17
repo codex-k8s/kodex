@@ -57,7 +57,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	var dialogOpener httptransport.DialogOpener
 	var controlSurface *mattermostintegration.ControlSurface
 	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
-		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
+		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken, cfg.MattermostAdminToken)
 	}
 	interactionSecurity := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
 		Repository: storage,
@@ -98,6 +98,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		ThreadRepositorySelector: chatRunSvc,
 		RuntimeRunner:            runtimeRunner,
 		DefaultTeamName:          cfg.DefaultTeamName,
+		OwnerMattermostUsername:  cfg.OwnerMattermostUsername,
 		CodexAuthSecretName:      cfg.CodexAuthSecretName,
 		GitHubSecretName:         cfg.GitHubSecretName,
 		MenuActionURL:            agentsActionURL(cfg),

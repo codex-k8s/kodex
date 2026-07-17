@@ -98,8 +98,10 @@ fi
 if [ -n "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" ] || [ -n "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" ]; then
   export BOT_TOKEN_B64
   export SLASH_TOKEN_B64
+  export ADMIN_TOKEN_B64
   BOT_TOKEN_B64="$(printf '%s' "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" | base64 | tr -d '\n')"
   SLASH_TOKEN_B64="$(printf '%s' "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" | base64 | tr -d '\n')"
+  ADMIN_TOKEN_B64="$(printf '%s' "${MATTERCODEX_MATTERMOST_ADMIN_TOKEN:-}" | base64 | tr -d '\n')"
   mattercodex_log "применяется bot-service secret"
   apply_rendered_manifest "$REPO_ROOT/deploy/k8s/bot-service/bot-service-secret.yaml.tpl" "$RENDER_DIR/05-bot-service-secret.yaml"
 else

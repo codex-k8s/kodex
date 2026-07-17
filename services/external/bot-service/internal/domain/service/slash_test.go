@@ -591,7 +591,7 @@ func TestAgentRoleDialogSeedsKnownRolePromptTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("role not stored: %v", err)
 	}
-	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "Ты агент developer проекта") || !strings.Contains(role.PromptTemplate, "mattermost_request_agent") {
+	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "Ты агент developer проекта") || !strings.Contains(role.PromptTemplate, "MatterCodex MCP") {
 		t.Fatalf("prompt mode/template = %q/%q", role.PromptMode, role.PromptTemplate)
 	}
 	if role.OpenAIAccountName != "primary" || role.GitHubAccountName != "agent" {
@@ -697,6 +697,19 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 		if err != nil || project.MattermostRunsChannelID != "channel-runs" {
 			t.Fatalf("project %d runs channel = %#v error=%v", projectID, project, err)
 		}
+	}
+	director := testRoleByName(t, store, 1, "director")
+	if !strings.Contains(director.PromptTemplate, "явное подтверждение") {
+		t.Fatalf("director prompt does not require owner approval: %q", director.PromptTemplate)
+	}
+	director.Name = "руководитель"
+	store.agentRoles[director.ID] = director
+	roleCount := len(store.agentRoles)
+	if err := svc.BootstrapSystemAgentRoles(context.Background()); err != nil {
+		t.Fatalf("BootstrapSystemAgentRoles() after director rename error = %v", err)
+	}
+	if len(store.agentRoles) != roleCount {
+		t.Fatalf("director rename created a duplicate role: before=%d after=%d", roleCount, len(store.agentRoles))
 	}
 }
 
@@ -1688,7 +1701,8 @@ func TestProfileDialogSubmissionCreatesArchitectPromptSeed(t *testing.T) {
 	}
 	if !strings.Contains(item.Body, "- Проект: {{.Project.Name}}") ||
 		!strings.Contains(item.Body, "Язык владельца: {{.Locale.Language}}") ||
-		!strings.Contains(item.Body, "mattermost_request_agent") {
+		!strings.Contains(item.Body, "MatterCodex") ||
+		!strings.Contains(item.Body, "MCP") {
 		t.Fatalf("architect seed body missing generic locale/MCP policy:\n%s", item.Body)
 	}
 }
@@ -4047,6 +4061,7 @@ func (store *fakeAdminStore) CreateChat(_ context.Context, input adminrepo.Creat
 			chat.RootGitHubIssue = input.RootGitHubIssue
 			chat.WorkPolicy = input.WorkPolicy
 			chat.Settings = input.Settings
+			chat.SystemPurpose = input.SystemPurpose
 			store.chats[id] = chat
 			store.setChatBindings(chat.ID, input.RoleIDs, input.RepositoryIDs)
 			return chat, false, nil
@@ -4063,6 +4078,7 @@ func (store *fakeAdminStore) CreateChat(_ context.Context, input adminrepo.Creat
 		RootGitHubIssue:     input.RootGitHubIssue,
 		WorkPolicy:          input.WorkPolicy,
 		Settings:            input.Settings,
+		SystemPurpose:       input.SystemPurpose,
 	}
 	store.chats[chat.ID] = chat
 	store.setChatBindings(chat.ID, input.RoleIDs, input.RepositoryIDs)
@@ -4862,7 +4878,7 @@ func (store *fakeAdminStore) ListAgentPromptTemplates(_ context.Context, profile
 func (store *fakeAdminStore) CreateAgentDelegation(_ context.Context, input adminrepo.CreateAgentDelegationInput) (entity.AgentDelegation, bool, error) {
 	store.ensureAgentDelegations()
 	for _, item := range store.agentDelegations {
-		if item.SourceSessionID == input.SourceSessionID && item.WorkItemKey == input.WorkItemKey {
+		if item.SourceTurnID == input.SourceTurnID && item.WorkItemKey == input.WorkItemKey {
 			return item, false, nil
 		}
 	}
@@ -4884,10 +4900,10 @@ func (store *fakeAdminStore) CreateAgentDelegation(_ context.Context, input admi
 	return item, true, nil
 }
 
-func (store *fakeAdminStore) GetAgentDelegationBySourceKey(_ context.Context, sourceSessionID int64, workItemKey string) (entity.AgentDelegation, error) {
+func (store *fakeAdminStore) GetAgentDelegationBySourceTurnKey(_ context.Context, sourceTurnID int64, workItemKey string) (entity.AgentDelegation, error) {
 	store.ensureAgentDelegations()
 	for _, item := range store.agentDelegations {
-		if item.SourceSessionID == sourceSessionID && item.WorkItemKey == workItemKey {
+		if item.SourceTurnID == sourceTurnID && item.WorkItemKey == workItemKey {
 			return item, nil
 		}
 	}
@@ -5349,6 +5365,10 @@ type fakeChannelManager struct {
 	projectTeamName    string
 	projectChannelName string
 	projectChannelType string
+}
+
+func (manager *fakeChannelManager) ResolveMattermostUserID(_ context.Context, username string) (string, error) {
+	return "user-" + strings.TrimPrefix(username, "@"), nil
 }
 
 func (manager *fakeChannelManager) EnsureRepositoryChannel(_ context.Context, _ string, channelName string, _ string) (bool, error) {

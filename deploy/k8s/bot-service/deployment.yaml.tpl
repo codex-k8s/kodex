@@ -78,6 +78,12 @@ spec:
                   name: ${MATTERCODEX_BOT_SERVICE_SECRET}
                   key: mattermost-slash-token
                   optional: true
+            - name: MATTERCODEX_MATTERMOST_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ${MATTERCODEX_BOT_SERVICE_SECRET}
+                  key: mattermost-admin-token
+                  optional: true
             - name: MATTERCODEX_DATABASE_DSN
               valueFrom:
                 secretKeyRef:

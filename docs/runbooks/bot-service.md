@@ -34,6 +34,7 @@
 - `MATTERCODEX_BOT_SERVICE_INTERNAL_URL` - обязательный при заданном bot- или slash-токене внутренний источник callback URL; допускается только `http`/`https` Kubernetes Service DNS с явным портом, без userinfo, query, fragment и произвольного path;
 - `MATTERCODEX_MATTERMOST_INTERNAL_URL` - optional, внутренний URL Mattermost API для bot-service; нужен, если публичный Mattermost закрыт OAuth proxy;
 - `MATTERCODEX_MATTERMOST_BOT_TOKEN` - нужен для provisioning Mattermost team/channels/slash command;
+- `MATTERCODEX_MATTERMOST_ADMIN_TOKEN` - отдельный административный PAT только для создания и обслуживания bot identity ролей; bootstrap хранит его в Kubernetes Secret и не использует для публикации сообщений;
 - `MATTERCODEX_MATTERMOST_SLASH_TOKEN` - optional, обычно заполняется provisioning script в Kubernetes Secret;
 - `MATTERCODEX_GITHUB_SECRET` - optional, имя Kubernetes Secret для reviewer/user GitHub account;
 - `MATTERCODEX_AGENT_GITHUB_SECRET` - optional, имя Kubernetes Secret для developer/agent GitHub account;
@@ -74,6 +75,8 @@
 - `MATTERCODEX_RUNTIME_QUOTA_PODS`, `MATTERCODEX_RUNTIME_QUOTA_JOBS`, `MATTERCODEX_RUNTIME_QUOTA_PVCS` - optional, object count quota для pod, batch Job и PVC в runtime namespace;
 - `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_STORAGE` - optional, суммарная quota на requested PVC storage в runtime namespace;
 - `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_MEMORY`, `MATTERCODEX_RUNTIME_QUOTA_LIMITS_MEMORY` - optional, namespace quota на compute requests и memory limits; дефолты для single-node owner-инсталляции: requests `28`/`96Gi`, memory limits `112Gi`;
+- `MATTERCODEX_OWNER_MATTERMOST_USERNAME` - optional username владельца owner-инстанса, которого bootstrap добавляет в приватные системные каналы координации; значение не хранится в репозитории;
+- `MATTERCODEX_MATTERMOST_ADMIN_USERNAME`, `MATTERCODEX_MATTERMOST_ADMIN_EMAIL` - optional данные выделенного непользовательского lifecycle-admin аккаунта Mattermost; аккаунт остается обычным `system_admin`, потому что Mattermost не разрешает bot account создавать другие bot identity через REST API;
 - `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_MEMORY`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_REQUEST_CPU`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_REQUEST_MEMORY` - optional, container defaults для pod без явных resources; дефолты agent container: request `500m`/`1Gi`, memory limit `16Gi`, CPU limit отсутствует;
 - `MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT` - optional, ServiceAccount для agent/smoke Job;
 - `MATTERCODEX_CODEX_AUTH_SECRET` - optional, base name для Kubernetes Secrets с Codex `auth.json`; для account `primary` будет создан secret `${MATTERCODEX_CODEX_AUTH_SECRET}-primary`;
@@ -217,7 +220,7 @@ mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-pos
 
 Prompt template относится к профилю агента и хранится в PostgreSQL. Bot-service рендерит template перед созданием Job с текущей Mattermost locale и передает готовый Markdown prompt в agent pod через ConfigMap. Agent runner не содержит prompt-текстов в Go-коде. В prompt доступны placeholders locale contract (`.Locale.Code`, `.Locale.Language`) и GitHub account/env contract, чтобы агент знал, что `gh` авторизован через `GH_TOKEN`/`GITHUB_TOKEN`, login доступен через `GITHUB_USERNAME`/`GITHUB_USER`, email - через `GITHUB_EMAIL`.
 
-Базовые seed templates лежат в `services/external/bot-service/internal/domain/service/prompt_seeds/*.md`. На старте bot-service после migrations запускает seeder, который создает отсутствующие templates в PostgreSQL и не перетирает уже отредактированные в Mattermost templates. SQL migrations владеют только schema/profile metadata и не содержат Markdown prompt bodies. В коробке сидятся роли `manager`, `architect`, `developer`, `reviewer`, `docs`, `sre`, `qa-bot`, `ui-designer`, `improver`, `pm-delivery`, `analyst` и `mattercodex-admin`.
+Базовые seed templates лежат в `services/external/bot-service/internal/domain/service/prompt_seeds/*.md`. На старте bot-service после migrations запускает seeder, который создает отсутствующие templates в PostgreSQL и не перетирает уже отредактированные в Mattermost templates. SQL migrations владеют только schema/profile metadata и не содержат Markdown prompt bodies. В коробке сидятся роли `director`, `manager`, `architect`, `developer`, `reviewer`, `docs`, `sre`, `qa-bot`, `ui-designer`, `improver`, `pm-delivery`, `analyst` и `mattercodex-admin`.
 
 Agent-runner image содержит browser tooling для ролей `developer`, `ui-designer` и `qa-bot`: `chromium`, `playwright`, `@playwright/test`, `@playwright/mcp` и `wait-on`. Основной путь browser smoke/e2e в agent pod - Playwright CLI/API; системный `chromium` доступен для диагностики и версионных проверок. Browser artifacts следует сохранять в `/workspace/artifacts/screenshots` или `/workspace/artifacts/playwright`; `playwright-mcp` используется только если роль явно включает его в Codex `config.toml`.
 
@@ -263,16 +266,17 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 Скрипт:
 
-- включает `ServiceSettings.EnableUserAccessTokens`, если personal access tokens выключены;
+- включает `ServiceSettings.EnableUserAccessTokens` и `ServiceSettings.EnableBotAccountCreation`;
 - Mattermost Deployment должен содержать `MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS` с host из `MATTERCODEX_BOT_SERVICE_INTERNAL_URL`, иначе Mattermost заблокирует slash callback во внутренний Kubernetes Service;
 - создает service user `MATTERCODEX_MATTERMOST_BOT_USERNAME`;
 - конвертирует service user в bot;
 - генерирует `MATTERCODEX_MATTERMOST_BOT_TOKEN`;
+- создает отдельный обычный `system_admin` аккаунт `MATTERCODEX_MATTERMOST_ADMIN_USERNAME` и генерирует `MATTERCODEX_MATTERMOST_ADMIN_TOKEN` для жизненного цикла role bot;
 - создает team, дефолтные каналы и slash command `/agents`;
 - сохраняет bot token и slash token в Kubernetes Secret;
 - перезапускает bot-service Deployment.
 
-Значения токенов не выводятся.
+Bot, admin и slash tokens сохраняются в одном Kubernetes Secret, не выводятся и используются раздельно. Публикации и listener работают от `MATTERCODEX_MATTERMOST_BOT_TOKEN`; административный PAT доступен только операциям создания, конвертации и выдачи токенов role bot.
 
 ## Mattermost provisioning через готовый token
 
