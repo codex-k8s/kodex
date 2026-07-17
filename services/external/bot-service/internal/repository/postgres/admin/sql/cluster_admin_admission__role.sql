@@ -11,4 +11,6 @@ select exists(
 		and role.name = $3
 		and frozen.profile_name = role.name
 		and lower(trim(role.kubernetes_access)) = 'cluster-admin'
+		and role.enabled
+		and matter_codex_cluster_admin_role_exact(role.id)
 )

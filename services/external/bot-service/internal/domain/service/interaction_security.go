@@ -451,7 +451,7 @@ func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, toke
 	case AdmissionAllowed:
 		if beforeConsume != nil {
 			if err := beforeConsume(interaction); err != nil {
-				return AuthenticatedInteraction{}, fmt.Errorf("%w: %v", ErrInteractionPreparation, err)
+				return AuthenticatedInteraction{}, fmt.Errorf("%w: %w", ErrInteractionPreparation, err)
 			}
 		}
 		consumed, err := svc.repository.ConsumeInteractionCapability(ctx, input)

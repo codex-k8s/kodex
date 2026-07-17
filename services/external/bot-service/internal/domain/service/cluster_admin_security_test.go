@@ -18,13 +18,16 @@ type admittedAdminStore struct {
 	calls            int
 	bindingCalls     int
 	guardCalls       int
+	guardInputs      []securityrepo.ClusterAdminBindingInput
 	denyBinding      bool
 	denyGuard        bool
+	denyGuardAt      int
 }
 
-func (store *admittedAdminStore) WithExistingClusterAdminRuntimeGuard(_ context.Context, _ securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
+func (store *admittedAdminStore) WithExistingClusterAdminRuntimeGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
 	store.guardCalls++
-	if !store.allowed || store.denyGuard {
+	store.guardInputs = append(store.guardInputs, input)
+	if !store.allowed || store.denyGuard || (store.denyGuardAt > 0 && store.guardCalls == store.denyGuardAt) {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	return sideEffect()
@@ -199,5 +202,48 @@ func TestClusterAdminNewSessionDeniedBeforeDatabaseAndRuntimeSideEffects(t *test
 	}
 	if len(baseStore.agentSessions) != 0 || len(baseStore.sessionTurns) != 0 || len(runner.sessionRuns) != 0 {
 		t.Fatalf("denied new session caused side effects: sessions=%#v turns=%#v runtime=%#v", baseStore.agentSessions, baseStore.sessionTurns, runner.sessionRuns)
+	}
+}
+
+func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testing.T) {
+	baseStore := chatRuntimeStore()
+	project := baseStore.projects[1]
+	role := entity.AgentRole{
+		ID: 1, ProjectID: project.ID, Name: "configured-admin", RoleType: "admin",
+		OpenAIAccountName: "main", KubernetesAccess: "cluster-admin", Enabled: true,
+	}
+	chat := entity.Chat{
+		ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Admin", Slug: "admin-chat", ChatType: "single_custom",
+	}
+	sessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-existing")
+	baseStore.agentRoles[role.ID] = role
+	baseStore.chats[chat.ID] = chat
+	baseStore.setChatBindings(chat.ID, []int64{role.ID}, nil)
+	baseStore.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID: 1, SessionKey: sessionKey, ProjectID: project.ID, ChatID: chat.ID, RoleID: role.ID,
+			SessionScope: agentSessionScopeThreadRole, MattermostChannelID: chat.MattermostChannelID,
+			MattermostRootPostID: "root-existing", OpenAIAccountName: "main", Status: agentSessionStatusRunning,
+			ActiveTurnID: 9, KubernetesNamespace: "synthetic", PodName: "synthetic-pod", PVCName: "synthetic-pvc",
+			TokenSecretRef: "synthetic-session-token", TTLSeconds: defaultThreadSessionTTLSeconds,
+		},
+	}
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: 1}
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+	})
+	_, err := svc.EnqueueAgentTurn(context.Background(), AgentTurnRequest{
+		Project: project, Chat: chat, Role: role, UserID: "owner-id", UserName: "owner",
+		UserMessage: "continue", ReplyRootID: "root-existing", SessionRootID: "root-existing", SessionScope: agentSessionScopeThreadRole,
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("EnqueueAgentTurn() error = %v", err)
+	}
+	if store.guardCalls != 1 || store.guardInputs[0].Operation != "agent_turn.persist.side_effect" || store.guardInputs[0].SessionKey != sessionKey {
+		t.Fatalf("final guard = %#v", store.guardInputs)
+	}
+	if len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 || len(runner.sessionRuns) != 0 {
+		t.Fatalf("denied final guard caused side effects: turns=%#v runs=%#v runtime=%#v", baseStore.sessionTurns, baseStore.agentRuns, runner.sessionRuns)
 	}
 }

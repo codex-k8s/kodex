@@ -112,53 +112,45 @@ func (svc *SlashCommandService) bootstrapImproverRole(ctx context.Context, proje
 	return svc.ensureRoleInProjectChats(ctx, project, role)
 }
 
-func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, gitHubAccounts []entity.GitHubAccount) (entity.Project, error) {
-	githubAccountName := preferredOwnerGitHubAccount(gitHubAccounts)
+func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, _ []entity.GitHubAccount) (entity.Project, error) {
 	project, role, chat, err := svc.preflightMatterCodexAdminBinding(ctx, "system_role.bootstrap")
 	if err != nil {
 		return entity.Project{}, err
 	}
+	repo, err := svc.cfg.Store.GetRepository(ctx, "github", "codex-k8s", "matter-codex")
+	if err != nil {
+		return entity.Project{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	projectRepositories, err := svc.cfg.Store.ListProjectRepositories(ctx, project.ID)
+	if err != nil {
+		return entity.Project{}, err
+	}
+	repositoryBound := false
+	for _, binding := range projectRepositories {
+		if binding.RepositoryID == repo.ID && binding.IsDefault {
+			repositoryBound = true
+			break
+		}
+	}
+	if !repositoryBound {
+		return entity.Project{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
 	if svc.cfg.ChannelManager != nil {
-		_, _, err := svc.cfg.ChannelManager.EnsureProjectTeam(ctx, systemMatterCodexProjectSlug, "MatterCodex", "")
+		err := svc.withClusterAdminRoleBindingGuard(ctx, role, chat.ID, chat.Slug, chat.MattermostChannelID, "", "", "bootstrap", "system_role.ensure_team.side_effect", func() error {
+			_, _, ensureErr := svc.cfg.ChannelManager.EnsureProjectTeam(ctx, systemMatterCodexProjectSlug, "MatterCodex", "")
+			return ensureErr
+		})
 		if err != nil {
 			return entity.Project{}, err
 		}
 	}
-	repo, _, err := svc.cfg.Store.UpsertRepository(ctx, adminrepo.UpsertRepositoryInput{
-		Provider:          "github",
-		Owner:             "codex-k8s",
-		Name:              "matter-codex",
-		DefaultBranch:     "main",
-		GitHubAccountName: githubAccountName,
-	})
-	if err != nil {
-		return entity.Project{}, err
-	}
-	projectRepo, _, err := svc.cfg.Store.UpsertProjectRepository(ctx, adminrepo.UpsertProjectRepositoryInput{
-		ProjectID:    project.ID,
-		RepositoryID: repo.ID,
-		IsDefault:    true,
-	})
-	if err != nil {
-		return entity.Project{}, err
-	}
 	channelID := chat.MattermostChannelID
-	if err := svc.ensureSystemRoleBotIdentity(ctx, project, role, channelID); err != nil {
+	if err := svc.withClusterAdminRoleBindingGuard(ctx, role, chat.ID, chat.Slug, channelID, "", "", "bootstrap", "system_role.bot_identity.side_effect", func() error {
+		return svc.ensureSystemRoleBotIdentity(ctx, project, role, channelID)
+	}); err != nil {
 		return entity.Project{}, err
 	}
-	_, _, err = svc.cfg.Store.CreateChat(ctx, adminrepo.CreateChatInput{
-		ProjectID:           project.ID,
-		MattermostChannelID: channelID,
-		Name:                "Agents Control",
-		Slug:                systemMatterCodexChatSlug,
-		Description:         "MatterCodex owner control chat.",
-		ChatType:            "single_custom",
-		WorkPolicy:          "owner_control",
-		Settings:            "{}",
-		RoleIDs:             []int64{role.ID},
-		RepositoryIDs:       []int64{projectRepo.RepositoryID},
-	})
-	return project, err
+	return project, nil
 }
 
 func (svc *SlashCommandService) preflightMatterCodexAdminBinding(ctx context.Context, operation string) (entity.Project, entity.AgentRole, entity.Chat, error) {
@@ -287,6 +279,9 @@ func (svc *SlashCommandService) reconcileProjectRoleBotIdentities(ctx context.Co
 		if !role.Enabled {
 			continue
 		}
+		if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+			continue
+		}
 		if _, err := svc.ensureRoleBotIdentity(ctx, project, role, ""); err != nil {
 			return err
 		}
@@ -372,7 +367,9 @@ func (svc *SlashCommandService) ensureRoleInProjectChats(ctx context.Context, pr
 		if err := svc.admitClusterAdminRoleBinding(ctx, role, chat.ID, chat.Slug, chat.MattermostChannelID, "", "", "bootstrap", "system_role.bind_chat"); err != nil {
 			return err
 		}
-		if err := svc.ensureSystemRoleBotIdentity(ctx, project, role, chat.MattermostChannelID); err != nil {
+		if err := svc.withClusterAdminRoleBindingGuard(ctx, role, chat.ID, chat.Slug, chat.MattermostChannelID, "", "", "bootstrap", "system_role.bind_chat.bot_identity.side_effect", func() error {
+			return svc.ensureSystemRoleBotIdentity(ctx, project, role, chat.MattermostChannelID)
+		}); err != nil {
 			return err
 		}
 		participants, err := svc.cfg.Store.ListChatParticipants(ctx, chat.ID)

@@ -700,6 +700,108 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 	}
 }
 
+func TestBootstrapMatterCodexAdminGuardsEverySideEffectAdapter(t *testing.T) {
+	tests := []struct {
+		name           string
+		denyAt         int
+		wantTeam       bool
+		wantOperations []string
+	}{
+		{name: "Mattermost team", denyAt: 1, wantOperations: []string{"system_role.ensure_team.side_effect"}},
+		{name: "bot identity and token", denyAt: 2, wantTeam: true, wantOperations: []string{"system_role.ensure_team.side_effect", "system_role.bot_identity.side_effect"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			baseStore := &fakeAdminStore{
+				repositories: map[string]entity.Repository{
+					repositoryStoreKey("github", "codex-k8s", "matter-codex"): {
+						ID: 1, Provider: "github", Owner: "codex-k8s", Name: "matter-codex", DefaultBranch: "main",
+					},
+				},
+				projects: map[int64]entity.Project{
+					1: {ID: 1, Name: "MatterCodex", Slug: systemMatterCodexProjectSlug},
+				},
+				agentRoles: map[int64]entity.AgentRole{
+					1: {
+						ID: 1, ProjectID: 1, Name: systemMatterCodexRoleName, RoleType: "admin",
+						KubernetesAccess: "cluster-admin", Enabled: true, BotIdentity: systemMatterCodexRoleName,
+					},
+				},
+				chats: map[int64]entity.Chat{
+					1: {ID: 1, ProjectID: 1, MattermostChannelID: "channel-control", Name: "Agents Control", Slug: systemMatterCodexChatSlug},
+				},
+				botIdentities: map[int64]entity.MattermostBotIdentity{
+					1: {
+						ID: 1, ProjectID: 1, RoleID: 1, Username: systemMatterCodexRoleName,
+						MattermostUserID: "synthetic-admin-user", TokenSecretRef: "synthetic-admin-token-ref", Status: "configured",
+					},
+				},
+				projectRepositories: map[string]entity.ProjectRepository{
+					"1:1": {ID: 1, ProjectID: 1, RepositoryID: 1, Provider: "github", Owner: "codex-k8s", Name: "matter-codex", DefaultBranch: "main", IsDefault: true},
+				},
+			}
+			store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: test.denyAt}
+			channelManager := &fakeChannelManager{}
+			roleBotManager := &fakeRoleBotManager{}
+			runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"synthetic-admin-token-ref": "synthetic-token"}}
+			localizer := testLocalizer(t, texti18n.RussianLocale)
+			svc := NewSlashCommandService(SlashCommandServiceConfig{
+				Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+				ChannelManager: channelManager, RoleBotManager: roleBotManager, RuntimeRunner: runner,
+				StorageReady: true,
+			})
+
+			_, err := svc.bootstrapMatterCodexAdmin(context.Background(), nil)
+			if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+				t.Fatalf("bootstrapMatterCodexAdmin() error = %v", err)
+			}
+			if (channelManager.projectTeamName != "") != test.wantTeam {
+				t.Fatalf("team side effect=%q, want=%t", channelManager.projectTeamName, test.wantTeam)
+			}
+			if len(baseStore.repositories) != 1 || len(baseStore.projectRepositories) != 1 {
+				t.Fatalf("bootstrap изменил frozen repository state: repositories=%d project_repositories=%d", len(baseStore.repositories), len(baseStore.projectRepositories))
+			}
+			if roleBotManager.channelMemberUserID != "" {
+				t.Fatalf("bot identity guard допустил membership: %q", roleBotManager.channelMemberUserID)
+			}
+			if len(store.guardInputs) != len(test.wantOperations) {
+				t.Fatalf("guard inputs=%#v", store.guardInputs)
+			}
+			for index, operation := range test.wantOperations {
+				if store.guardInputs[index].Operation != operation {
+					t.Fatalf("guard %d=%#v", index, store.guardInputs[index])
+				}
+			}
+		})
+	}
+}
+
+func TestReconcileProjectRoleBotIdentitiesExcludesClusterAdmin(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "MatterCodex", Slug: systemMatterCodexProjectSlug},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: systemMatterCodexRoleName, RoleType: "admin", KubernetesAccess: "cluster-admin", Enabled: true},
+			2: {ID: 2, ProjectID: 1, Name: "improver", RoleType: "improver", KubernetesAccess: "read-only", Enabled: true},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.RussianLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		RoleBotManager: &fakeRoleBotManager{}, RuntimeRunner: &fakeRuntimeRunner{}, StorageReady: true,
+	})
+	if err := svc.reconcileProjectRoleBotIdentities(context.Background(), store.projects[1]); err != nil {
+		t.Fatalf("reconcileProjectRoleBotIdentities() error = %v", err)
+	}
+	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), 1); !errors.Is(err, adminrepo.ErrNotFound) {
+		t.Fatalf("generic reconcile создал cluster-admin identity: %v", err)
+	}
+	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), 2); err != nil {
+		t.Fatalf("generic reconcile не обработал safe role: %v", err)
+	}
+}
+
 func TestChatDialogCreatesPrivateProjectChannelWithRolesAndRepository(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{

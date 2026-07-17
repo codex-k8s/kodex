@@ -2594,6 +2594,131 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 	}
 }
 
+func (svc *SlashCommandService) PrevalidateDialogSubmission(command DialogSubmissionCommand) DialogSubmissionResult {
+	if command.Cancelled {
+		return DialogSubmissionResult{StatusCode: 200}
+	}
+	state, err := decodeDialogState(command.State)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.state_invalid", nil)}
+	}
+	fieldErrors := map[string]string{}
+	switch strings.TrimSpace(command.CallbackID) {
+	case dialogCallbackProjectUpsert:
+		input, validationErrors := svc.projectDialogInput(command.Submission)
+		fieldErrors = validationErrors
+		if strings.TrimSpace(input.GitHubOwner) != "" && strings.TrimSpace(input.GitHubAccountName) == "" {
+			fieldErrors[dialogFieldGitHubAccount] = svc.t("project.github_account.required", map[string]any{"Project": input.Name})
+		}
+	case dialogCallbackProjectRepositoryBind:
+		if _, ok := parseInt64ID(submissionString(command.Submission, dialogFieldProjectID)); !ok {
+			fieldErrors[dialogFieldProjectID] = svc.t("dialog.project.project_invalid", nil)
+		}
+		if _, ok := parseInt64ID(submissionString(command.Submission, dialogFieldRepositoryID)); !ok {
+			fieldErrors[dialogFieldRepositoryID] = svc.t("dialog.project_repo.repository_invalid", nil)
+		}
+	case dialogCallbackProjectRuntimeVar:
+		_, value, validationErrors := svc.projectRuntimeVariableDialogInput(command.Submission)
+		fieldErrors = validationErrors
+		editMode := state.ResourceType == menuResourceRuntimeVar && strings.TrimSpace(state.ResourceID) != ""
+		if strings.TrimSpace(value) == "" && !editMode {
+			fieldErrors[dialogFieldRuntimeVarValue] = svc.t("dialog.runtime_var.value_required", nil)
+		}
+	case dialogCallbackRoleRuntimeVarAttach, dialogCallbackRoleRuntimeVarDetach:
+		_, _, fieldErrors = svc.roleRuntimeVariableDialogInput(command.Submission)
+	case dialogCallbackAgentRoleUpsert:
+		input, validationErrors := svc.agentRoleDialogInput(command.Submission)
+		fieldErrors = validationErrors
+		if len(fieldErrors) == 0 {
+			body := strings.TrimSpace(input.PromptTemplate)
+			if body == "" && input.PromptMode == "template" {
+				if seed, ok := promptSeedForAgentRole(input.Name, input.RoleType); ok {
+					seedBody, seedErr := promptSeedMarkdown(seed)
+					if seedErr != nil {
+						fieldErrors[dialogFieldPromptTemplate] = svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(seedErr)})
+					} else {
+						body = seedBody
+					}
+				}
+			}
+			if body != "" {
+				if _, renderErr := RenderRolePromptTemplate(body, SampleRolePromptData(input.Name, input.RoleType, svc.promptTemplateLocaleData())); renderErr != nil {
+					fieldErrors[dialogFieldPromptTemplate] = svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(renderErr)})
+				}
+			}
+		}
+	case dialogCallbackChatCreate:
+		_, fieldErrors = svc.chatDialogInput(command.Submission)
+	case dialogCallbackRepositoryAdd, dialogCallbackRepositoryEdit:
+		_, fieldErrors = svc.repositoryDialogUpsertInput(command.Submission)
+	case dialogCallbackRepositoryDelete:
+		provider := strings.ToLower(defaultString(submissionString(command.Submission, dialogFieldProvider), "github"))
+		if provider != "github" {
+			fieldErrors[dialogFieldProvider] = svc.t("dialog.repo.provider_invalid", nil)
+		}
+		if _, _, ok := parseSubmittedRepository(submissionString(command.Submission, dialogFieldRepository)); !ok {
+			fieldErrors[dialogFieldRepository] = svc.t("dialog.repo.repository_invalid", nil)
+		}
+		if submissionString(command.Submission, dialogFieldConfirm) != "delete" {
+			fieldErrors[dialogFieldConfirm] = svc.t("dialog.repo.confirm_invalid", nil)
+		}
+	case dialogCallbackOpenAIAuth, dialogCallbackOpenAIStatus, dialogCallbackOpenAICleanup, dialogCallbackOpenAIDelete:
+		_, fieldErrors = svc.dialogAccountName(command.Submission)
+		if command.CallbackID == dialogCallbackOpenAIDelete && submissionString(command.Submission, dialogFieldConfirm) != "delete" {
+			fieldErrors[dialogFieldConfirm] = svc.t("dialog.repo.confirm_invalid", nil)
+		}
+	case dialogCallbackGitHubAccountAdd, dialogCallbackGitHubAccountEdit:
+		_, fieldErrors = svc.githubAccountDialogInput(command.Submission)
+	case dialogCallbackRepositorySearch:
+		if len(strings.TrimSpace(submissionString(command.Submission, dialogFieldSearch))) < 2 {
+			fieldErrors[dialogFieldSearch] = svc.t("dialog.repo.search.query_invalid", nil)
+		}
+	case dialogCallbackRepositorySearchPick:
+		if _, ok := parseRepositoryOnboardingResourceID(submissionString(command.Submission, dialogFieldRepositoryChoice)); !ok {
+			fieldErrors[dialogFieldRepositoryChoice] = svc.t("dialog.repo.repository_invalid", nil)
+		}
+	case dialogCallbackRepositorySearchBranch:
+		if _, ok := parseRepositoryOnboardingResourceID(submissionString(command.Submission, dialogFieldBranchChoice)); !ok {
+			fieldErrors[dialogFieldBranchChoice] = svc.t("dialog.repo.branch_invalid", nil)
+		}
+	case dialogCallbackGitHubAccountDelete:
+		_, fieldErrors = svc.dialogAccountName(command.Submission)
+		if submissionString(command.Submission, dialogFieldConfirm) != "delete" {
+			fieldErrors[dialogFieldConfirm] = svc.t("dialog.repo.confirm_invalid", nil)
+		}
+	case dialogCallbackProfileUpsert:
+		input, validationErrors := svc.profileDialogInput(command.Submission)
+		fieldErrors = validationErrors
+		if strings.TrimSpace(state.ResourceID) != "" && input.Name != state.ResourceID {
+			fieldErrors[dialogFieldProfile] = svc.t("dialog.profile.rename_not_supported", nil)
+		}
+	case dialogCallbackPromptEdit:
+		profileName, templateKey, ok := parsePromptTemplateResourceID(state.ResourceID)
+		if !ok {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("menu.entity.invalid", nil)}
+		}
+		body := strings.TrimSpace(submissionString(command.Submission, dialogFieldTemplateBody))
+		if body == "" {
+			fieldErrors[dialogFieldTemplateBody] = svc.t("dialog.prompt.body_empty", nil)
+		} else if _, err := renderAgentPromptTemplate(body, samplePromptTemplateData(profileName, templateKey, svc.promptTemplateLocaleData())); err != nil {
+			fieldErrors[dialogFieldTemplateBody] = svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(err)})
+		}
+	case dialogCallbackRuntimePruneApply:
+		if strings.TrimSpace(submissionString(command.Submission, dialogFieldOlderThan)) == "" {
+			fieldErrors[dialogFieldOlderThan] = svc.t("runtime.prune.usage", nil)
+		}
+		if submissionString(command.Submission, dialogFieldConfirm) != "apply" {
+			fieldErrors[dialogFieldConfirm] = svc.t("dialog.runtime.confirm_invalid", nil)
+		}
+	default:
+		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.unknown", nil)}
+	}
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	return DialogSubmissionResult{StatusCode: 200}
+}
+
 func (svc *SlashCommandService) menuDialog(ctx context.Context, command MenuActionCommand, dialogID string) (*MattermostDialog, string) {
 	if strings.TrimSpace(svc.cfg.DialogSubmitURL) == "" {
 		return nil, svc.t("dialog.open.not_configured", nil)

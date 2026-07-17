@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -23,6 +24,7 @@ type memoryInteractionRepository struct {
 	inputs       map[string]securityrepo.IssueCapabilityInput
 	admissions   map[string]bool
 	consumes     int
+	checks       int
 	issues       int
 	failIssueAt  int
 	issueErr     error
@@ -70,6 +72,7 @@ func (repo *memoryInteractionRepository) IssueInteractionCapability(_ context.Co
 func (repo *memoryInteractionRepository) CheckInteractionCapability(_ context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
+	repo.checks++
 	return repo.checkInteractionCapability(input)
 }
 
@@ -433,6 +436,62 @@ func TestRouterRejectsReplayedDialogWithoutSecondSideEffect(t *testing.T) {
 	}
 	if store.lastAudit.ActorUser != "owner" {
 		t.Fatalf("audit actor = %q, body user_name must not override authenticated actor", store.lastAudit.ActorUser)
+	}
+}
+
+func TestRouterKeepsDialogCapabilityUnusedForCorrectableFieldError(t *testing.T) {
+	repository := &memoryInteractionRepository{
+		capabilities: map[string]securityrepo.Capability{},
+		inputs:       map[string]securityrepo.IssueCapabilityInput{},
+		admissions:   map[string]bool{},
+	}
+	security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
+		Repository: repository,
+		Admission:  fixedAdmission{status: statusservice.AdmissionAllowed},
+	})
+	store := &fakeRouterAdminStore{}
+	router := testRouterWithDialogStore(&fakeDialogOpener{}, store, security)
+	resolver := &fakeMattermostResolver{addresses: [][]net.IPAddr{{{IP: net.ParseIP("10.20.30.40")}}}}
+	dialer := &pipeMattermostDialer{}
+	router.mattermostResponses = newMattermostResponseClient("", "http://mattermost.test:8065", resolver, dialer)
+	body := testDialogBodyWithURL(t, router, "agents_repo_add", map[string]any{"view": "repositories"}, map[string]any{
+		"provider": "github", "repository": "bad value", "default_branch": "main",
+	}, "http://mattermost.test:8065/hooks/response-id")
+
+	invalidRecorder := httptest.NewRecorder()
+	invalidRequest := httptest.NewRequest("POST", "/mattermost/dialogs/agents", strings.NewReader(body))
+	invalidRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(invalidRecorder, invalidRequest)
+	if invalidRecorder.Code != http.StatusOK || !strings.Contains(invalidRecorder.Body.String(), "repository") {
+		t.Fatalf("field validation status=%d body=%s", invalidRecorder.Code, invalidRecorder.Body.String())
+	}
+	if repository.checks != 0 || repository.consumes != 0 || store.upsertCount != 0 || store.auditRecorded || resolver.calls != 0 || len(dialer.addresses) != 0 {
+		t.Fatalf("field error вызвала побочные эффекты: checks=%d consumes=%d upserts=%d audit=%t resolves=%d dials=%d",
+			repository.checks, repository.consumes, store.upsertCount, store.auditRecorded, resolver.calls, len(dialer.addresses))
+	}
+
+	var correctedPayload map[string]any
+	if err := json.Unmarshal([]byte(body), &correctedPayload); err != nil {
+		t.Fatal(err)
+	}
+	correctedPayload["submission"] = map[string]any{
+		"provider": "github", "repository": "codex-k8s/matter-codex", "default_branch": "main",
+	}
+	correctedBody, err := json.Marshal(correctedPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for attempt, wantStatus := range []int{http.StatusOK, http.StatusUnauthorized} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest("POST", "/mattermost/dialogs/agents", bytes.NewReader(correctedBody))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != wantStatus {
+			t.Fatalf("corrected attempt %d status=%d body=%s", attempt+1, recorder.Code, recorder.Body.String())
+		}
+	}
+	if repository.consumes != 1 || store.upsertCount != 1 {
+		t.Fatalf("corrected retry/replay: consumes=%d upserts=%d", repository.consumes, store.upsertCount)
 	}
 }
 

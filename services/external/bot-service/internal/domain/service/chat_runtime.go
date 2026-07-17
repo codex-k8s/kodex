@@ -513,50 +513,58 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		}
 	}
 	runID := newChatRunID(request.Chat.ID)
-	turn, err := svc.cfg.Store.CreateAgentSessionTurn(ctx, adminrepo.CreateAgentSessionTurnInput{
-		SessionID:            session.ID,
-		RunID:                runID,
-		MattermostChannelID:  request.Chat.MattermostChannelID,
-		MattermostRootPostID: request.ReplyRootID,
-		MattermostPostID:     request.SourcePostID,
-		ParentTurnID:         request.ParentTurnID,
-		UserID:               request.UserID,
-		UserName:             request.UserName,
-		Message:              prompt,
+	var turn entity.AgentSessionTurn
+	err = svc.withClusterAdminRuntimeGuard(ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID, session.SessionKey, "agent_turn.persist.side_effect", func() error {
+		var createErr error
+		turn, createErr = svc.cfg.Store.CreateAgentSessionTurn(ctx, adminrepo.CreateAgentSessionTurnInput{
+			SessionID:            session.ID,
+			RunID:                runID,
+			MattermostChannelID:  request.Chat.MattermostChannelID,
+			MattermostRootPostID: request.ReplyRootID,
+			MattermostPostID:     request.SourcePostID,
+			ParentTurnID:         request.ParentTurnID,
+			UserID:               request.UserID,
+			UserName:             request.UserName,
+			Message:              prompt,
+		})
+		if createErr != nil {
+			return createErr
+		}
+		if _, createErr = svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
+			RunID:               runID,
+			FlowID:              "session-" + session.SessionKey,
+			ProfileName:         request.Role.Name,
+			Role:                request.Role.RoleType,
+			Provider:            firstRepository(request.Repositories).Provider,
+			Owner:               firstRepository(request.Repositories).Owner,
+			Name:                firstRepository(request.Repositories).Name,
+			BaseBranch:          defaultString(firstRepository(request.Repositories).DefaultBranch, "main"),
+			HeadBranch:          "matter-codex-" + runID,
+			Status:              agentSessionTurnQueued,
+			KubernetesNamespace: started.Namespace,
+			JobName:             started.PodName,
+			PVCName:             started.PVCName,
+			Summary:             fmt.Sprintf("session turn chat=%d role=%s turn=%d user=%s", request.Chat.ID, request.Role.Name, turn.ID, request.UserName),
+		}); createErr != nil {
+			return createErr
+		}
+		_, _ = upsertProjectRunCard(ctx, projectRunCardInput{
+			Localizer:         svc.cfg.Localizer,
+			Store:             svc.cfg.Store,
+			Publisher:         svc.cfg.ThreadPublisher,
+			MattermostSiteURL: svc.cfg.MattermostSiteURL,
+			Project:           request.Project,
+			Session:           session,
+			Turn:              turn,
+			RoleName:          request.Role.Name,
+			OpenAIAccountName: openAIAccount.Name,
+			Status:            agentSessionTurnQueued,
+		})
+		return nil
 	})
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
-	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
-		RunID:               runID,
-		FlowID:              "session-" + session.SessionKey,
-		ProfileName:         request.Role.Name,
-		Role:                request.Role.RoleType,
-		Provider:            firstRepository(request.Repositories).Provider,
-		Owner:               firstRepository(request.Repositories).Owner,
-		Name:                firstRepository(request.Repositories).Name,
-		BaseBranch:          defaultString(firstRepository(request.Repositories).DefaultBranch, "main"),
-		HeadBranch:          "matter-codex-" + runID,
-		Status:              agentSessionTurnQueued,
-		KubernetesNamespace: started.Namespace,
-		JobName:             started.PodName,
-		PVCName:             started.PVCName,
-		Summary:             fmt.Sprintf("session turn chat=%d role=%s turn=%d user=%s", request.Chat.ID, request.Role.Name, turn.ID, request.UserName),
-	}); err != nil {
-		return AgentTurnQueued{}, err
-	}
-	_, _ = upsertProjectRunCard(ctx, projectRunCardInput{
-		Localizer:         svc.cfg.Localizer,
-		Store:             svc.cfg.Store,
-		Publisher:         svc.cfg.ThreadPublisher,
-		MattermostSiteURL: svc.cfg.MattermostSiteURL,
-		Project:           request.Project,
-		Session:           session,
-		Turn:              turn,
-		RoleName:          request.Role.Name,
-		OpenAIAccountName: openAIAccount.Name,
-		Status:            agentSessionTurnQueued,
-	})
 	return AgentTurnQueued{
 		RunID:              runID,
 		TurnID:             turn.ID,

@@ -748,6 +748,83 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	}
 }
 
+func TestAgentSessionRequestAgentGuardsEveryClusterAdminSideEffect(t *testing.T) {
+	tests := []struct {
+		name            string
+		denyAt          int
+		wantMembership  bool
+		wantDispatches  int
+		wantGuardOps    []string
+		wantSessionKeys []string
+	}{
+		{name: "membership", denyAt: 1, wantGuardOps: []string{"agent_request.membership.side_effect"}, wantSessionKeys: []string{"target"}},
+		{name: "enqueue", denyAt: 2, wantMembership: true, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.enqueue.side_effect"}, wantSessionKeys: []string{"target", ""}},
+		{name: "audit post", denyAt: 3, wantMembership: true, wantDispatches: 1, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.enqueue.side_effect", "agent_request.audit.side_effect"}, wantSessionKeys: []string{"target", "", "target"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			baseStore := chatRuntimeStore()
+			baseStore.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", Enabled: true}
+			baseStore.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "mattercodex-admin", RoleType: "admin", KubernetesAccess: "cluster-admin", Enabled: true}
+			baseStore.botIdentities = map[int64]entity.MattermostBotIdentity{
+				1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+				2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "mattercodex-admin", MattermostUserID: "admin-user", Status: "configured"},
+			}
+			baseStore.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Control", Slug: "agents-control", ChatType: "multi_role_custom"}
+			baseStore.setChatBindings(1, []int64{1, 2}, nil)
+			baseStore.agentSessions = map[string]entity.AgentSession{
+				"session-1": {
+					ID: 1, SessionKey: "session-1", ProjectID: 1, ChatID: 1, RoleID: 1,
+					SessionScope: agentSessionScopeThreadRole, MattermostChannelID: "channel-1",
+					MattermostRootPostID: "root-1", Status: agentSessionStatusIdle,
+					TokenSecretRef: "session-secret", TTLSeconds: defaultThreadSessionTTLSeconds,
+					LastActivityAt: now, ExpiresAt: now.Add(time.Hour),
+				},
+			}
+			store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: test.denyAt}
+			runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
+			publisher := &fakeThreadPublisher{}
+			roleBotManager := &fakeRoleBotManager{}
+			targetSessionKey := agentSessionKey(1, 2, agentSessionScopeThreadRole, "root-1")
+			dispatcher := &fakeAgentTurnDispatcher{queued: AgentTurnQueued{
+				RunID: "run-admin-1", TurnID: 7, SessionKey: targetSessionKey, Role: baseStore.agentRoles[2],
+			}}
+			svc := NewAgentSessionService(AgentSessionServiceConfig{
+				Localizer: testLocalizer(t, texti18n.RussianLocale), Store: store, RuntimeRunner: runner,
+				ThreadPublisher: publisher, RoleBotManager: roleBotManager, TurnDispatcher: dispatcher,
+				StorageReady: true, RuntimeReady: true,
+			})
+
+			_, err := svc.RequestAgent(context.Background(), "session-1", "session-token", "mattercodex-admin", "Проверь состояние.")
+			if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+				t.Fatalf("RequestAgent() error = %v", err)
+			}
+			if (roleBotManager.channelMemberUserID != "") != test.wantMembership {
+				t.Fatalf("membership side effect=%q, want=%t", roleBotManager.channelMemberUserID, test.wantMembership)
+			}
+			if dispatcher.calls != test.wantDispatches {
+				t.Fatalf("dispatcher calls=%d, want=%d", dispatcher.calls, test.wantDispatches)
+			}
+			if len(publisher.posts) != 0 {
+				t.Fatalf("denied audit guard опубликовал сообщения: %#v", publisher.posts)
+			}
+			if len(store.guardInputs) != len(test.wantGuardOps) {
+				t.Fatalf("guard inputs=%#v", store.guardInputs)
+			}
+			for index, operation := range test.wantGuardOps {
+				wantSessionKey := test.wantSessionKeys[index]
+				if wantSessionKey == "target" {
+					wantSessionKey = targetSessionKey
+				}
+				if store.guardInputs[index].Operation != operation || store.guardInputs[index].SessionKey != wantSessionKey {
+					t.Fatalf("guard %d=%#v", index, store.guardInputs[index])
+				}
+			}
+		})
+	}
+}
+
 func TestAgentSessionRequestAgentMergesIntoQueuedTargetTurn(t *testing.T) {
 	now := time.Now().UTC()
 	store := chatRuntimeStore()

@@ -25,6 +25,8 @@ import (
 
 const serviceName = "matter-codex-bot-service"
 
+const clusterAdminFreezeWriterVersion = "v23"
+
 func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	storage, closeStorage, err := openStorage(ctx, cfg, logger)
 	if err != nil {
@@ -394,7 +396,12 @@ func openStorage(ctx context.Context, cfg Config, logger *slog.Logger) (*adminpo
 		logger.Warn("storage disabled: MATTERCODEX_DATABASE_DSN is not configured")
 		return nil, func() {}, nil
 	}
-	pool, err := pgxpool.New(ctx, cfg.DatabaseDSN)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseDSN)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse storage pool config: %w", err)
+	}
+	poolConfig.ConnConfig.RuntimeParams["matter_codex.cluster_admin_freeze_writer"] = clusterAdminFreezeWriterVersion
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open storage pool: %w", err)
 	}

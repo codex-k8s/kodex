@@ -222,9 +222,9 @@ func (repo *Repository) CreateChat(ctx context.Context, input adminrepo.CreateCh
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var bindingsAllowed bool
-	if err := tx.QueryRow(ctx, query("cluster_admin_bindings__chat_allowed.sql"), input.ProjectID, input.Slug, input.MattermostChannelID, input.RoleIDs).Scan(&bindingsAllowed); err != nil {
-		return entity.Chat{}, false, fmt.Errorf("check frozen cluster-admin chat bindings: %w", err)
+	bindingsAllowed, err := lockClusterAdminChatMutation(ctx, tx, input)
+	if err != nil {
+		return entity.Chat{}, false, err
 	}
 	if !bindingsAllowed {
 		_ = tx.Rollback(ctx)
@@ -254,7 +254,7 @@ func (repo *Repository) CreateChat(ctx context.Context, input adminrepo.CreateCh
 	if err != nil {
 		return entity.Chat{}, false, fmt.Errorf("upsert chat: %w", err)
 	}
-	if _, err := tx.Exec(ctx, query("chat_participants__delete_by_chat.sql"), item.ID); err != nil {
+	if _, err := tx.Exec(ctx, query("chat_participants__delete_not_selected.sql"), item.ID, input.RoleIDs); err != nil {
 		return entity.Chat{}, false, fmt.Errorf("delete chat participants: %w", err)
 	}
 	for _, roleID := range input.RoleIDs {
@@ -265,7 +265,7 @@ func (repo *Repository) CreateChat(ctx context.Context, input adminrepo.CreateCh
 			return entity.Chat{}, false, fmt.Errorf("insert chat participant: %w", err)
 		}
 	}
-	if _, err := tx.Exec(ctx, query("chat_repositories__delete_by_chat.sql"), item.ID); err != nil {
+	if _, err := tx.Exec(ctx, query("chat_repositories__delete_not_selected.sql"), item.ID, input.RepositoryIDs); err != nil {
 		return entity.Chat{}, false, fmt.Errorf("delete chat repositories: %w", err)
 	}
 	for _, repositoryID := range input.RepositoryIDs {
@@ -280,6 +280,112 @@ func (repo *Repository) CreateChat(ctx context.Context, input adminrepo.CreateCh
 		return entity.Chat{}, false, fmt.Errorf("commit create chat: %w", err)
 	}
 	return item, created, nil
+}
+
+func lockClusterAdminChatMutation(ctx context.Context, tx pgx.Tx, input adminrepo.CreateChatInput) (bool, error) {
+	rows, err := tx.Query(ctx, query("cluster_admin_chat_roles__lock.sql"), input.ProjectID, input.RoleIDs)
+	if err != nil {
+		return false, fmt.Errorf("lock cluster-admin chat roles: %w", err)
+	}
+	clusterAdminRoleIDs := make([]int64, 0, len(input.RoleIDs))
+	for rows.Next() {
+		var roleID int64
+		var clusterAdmin bool
+		if err := rows.Scan(&roleID, &clusterAdmin); err != nil {
+			rows.Close()
+			return false, fmt.Errorf("scan locked cluster-admin chat role: %w", err)
+		}
+		if clusterAdmin {
+			clusterAdminRoleIDs = append(clusterAdminRoleIDs, roleID)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return false, fmt.Errorf("read locked cluster-admin chat roles: %w", err)
+	}
+	rows.Close()
+	if len(clusterAdminRoleIDs) == 0 {
+		return true, nil
+	}
+
+	var chatID int64
+	var channelID string
+	err = tx.QueryRow(ctx, query("chats__get_by_project_slug_for_update.sql"), input.ProjectID, input.Slug).Scan(&chatID, &channelID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("lock frozen cluster-admin chat: %w", err)
+	}
+	if strings.TrimSpace(channelID) != strings.TrimSpace(input.MattermostChannelID) {
+		return false, nil
+	}
+
+	participantRows, err := tx.Query(ctx, query("chat_participants__lock.sql"), chatID, clusterAdminRoleIDs)
+	if err != nil {
+		return false, fmt.Errorf("lock frozen cluster-admin chat participants: %w", err)
+	}
+	for participantRows.Next() {
+		var roleID int64
+		var enabled bool
+		if err := participantRows.Scan(&roleID, &enabled); err != nil {
+			participantRows.Close()
+			return false, fmt.Errorf("scan locked cluster-admin chat participant: %w", err)
+		}
+	}
+	if err := participantRows.Err(); err != nil {
+		participantRows.Close()
+		return false, fmt.Errorf("read locked cluster-admin chat participants: %w", err)
+	}
+	participantRows.Close()
+	for _, roleID := range clusterAdminRoleIDs {
+		if err := lockClusterAdminRuntimeVariables(ctx, tx, roleID); err != nil {
+			return false, err
+		}
+		if err := lockClusterAdminRuntimeDependencies(ctx, tx, roleID); err != nil {
+			return false, err
+		}
+	}
+	allowedRepositoryRows, err := tx.Query(ctx, query("cluster_admin_chat_repositories__lock_allowed.sql"), clusterAdminRoleIDs, chatID)
+	if err != nil {
+		return false, fmt.Errorf("lock frozen cluster-admin chat repositories: %w", err)
+	}
+	allowedRepositories := make(map[int64]map[int64]struct{}, len(clusterAdminRoleIDs))
+	for allowedRepositoryRows.Next() {
+		var roleID int64
+		var repositoryID int64
+		if err := allowedRepositoryRows.Scan(&roleID, &repositoryID); err != nil {
+			allowedRepositoryRows.Close()
+			return false, fmt.Errorf("scan frozen cluster-admin chat repository: %w", err)
+		}
+		if allowedRepositories[roleID] == nil {
+			allowedRepositories[roleID] = make(map[int64]struct{})
+		}
+		allowedRepositories[roleID][repositoryID] = struct{}{}
+	}
+	if err := allowedRepositoryRows.Err(); err != nil {
+		allowedRepositoryRows.Close()
+		return false, fmt.Errorf("read frozen cluster-admin chat repositories: %w", err)
+	}
+	allowedRepositoryRows.Close()
+	for _, roleID := range clusterAdminRoleIDs {
+		for _, repositoryID := range input.RepositoryIDs {
+			if repositoryID <= 0 {
+				continue
+			}
+			if _, ok := allowedRepositories[roleID][repositoryID]; !ok {
+				return false, nil
+			}
+		}
+	}
+
+	var allowed bool
+	if err := tx.QueryRow(ctx, query("cluster_admin_bindings__chat_allowed.sql"),
+		input.ProjectID, input.Slug, input.MattermostChannelID, clusterAdminRoleIDs,
+	).Scan(&allowed); err != nil {
+		return false, fmt.Errorf("check frozen cluster-admin chat bindings: %w", err)
+	}
+	return allowed, nil
 }
 
 func (repo *Repository) GetChat(ctx context.Context, id int64) (entity.Chat, error) {

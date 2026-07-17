@@ -14,6 +14,7 @@ import (
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
@@ -619,7 +620,6 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
-	svc.ensureRequestedRoleChannelMember(ctx, project, chat, role)
 	repositories, err := svc.chatRepositories(ctx, chat)
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
@@ -630,6 +630,9 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 	}
 	requesterUserName := svc.sessionMattermostUsername(ctx, session)
 	targetSessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, rootPostID)
+	if err := svc.ensureRequestedRoleChannelMember(ctx, project, chat, role, targetSessionKey, requesterUserName); err != nil {
+		return AgentSessionAgentRequest{}, err
+	}
 	userMessage := delegatedAgentRequestMessage(requesterUserName, role.Name, message)
 	if existingTarget, err := svc.cfg.Store.GetAgentSession(ctx, targetSessionKey); err == nil {
 		queuedTurns, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, existingTarget.ID)
@@ -637,27 +640,41 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 			return AgentSessionAgentRequest{}, err
 		}
 		if len(queuedTurns) > 0 {
-			turn, err := svc.cfg.Store.UpdateAgentSessionTurnMessage(ctx, adminrepo.UpdateAgentSessionTurnMessageInput{
-				TurnID:  queuedTurns[0].ID,
-				Message: appendDelegatedAgentRequestToQueuedPrompt(queuedTurns[0].Message, requesterUserName, role.Name, message),
-			})
-			if err != nil {
-				return AgentSessionAgentRequest{}, err
-			}
-			if session.ActiveTurnID > 0 {
-				turn, err = svc.cfg.Store.AddAgentSessionTurnOrigin(ctx, adminrepo.AddAgentSessionTurnOriginInput{
+			var turn entity.AgentSessionTurn
+			err = svc.withRequestedClusterAdminGuard(ctx, role, chat, targetSessionKey, requesterUserName, "agent_request.merge.side_effect", func() error {
+				var updateErr error
+				turn, updateErr = svc.cfg.Store.UpdateAgentSessionTurnMessage(ctx, adminrepo.UpdateAgentSessionTurnMessageInput{
+					TurnID:  queuedTurns[0].ID,
+					Message: appendDelegatedAgentRequestToQueuedPrompt(queuedTurns[0].Message, requesterUserName, role.Name, message),
+				})
+				if updateErr != nil {
+					return updateErr
+				}
+				if session.ActiveTurnID == 0 {
+					return nil
+				}
+				turn, updateErr = svc.cfg.Store.AddAgentSessionTurnOrigin(ctx, adminrepo.AddAgentSessionTurnOriginInput{
 					TurnID:            turn.ID,
 					ParentTurnID:      session.ActiveTurnID,
 					TriggerPostID:     rootPostID,
 					InitiatorUserName: requesterUserName,
 				})
-				if err != nil {
-					return AgentSessionAgentRequest{}, err
-				}
+				return updateErr
+			})
+			if err != nil {
+				return AgentSessionAgentRequest{}, err
 			}
 			auditPostID := ""
-			if ref, err := svc.postAgentRequestAudit(ctx, session, rootPostID, requesterUserName, role.Name, message); err == nil {
+			var ref MattermostPostRef
+			auditErr := svc.withRequestedClusterAdminGuard(ctx, role, chat, targetSessionKey, requesterUserName, "agent_request.audit.side_effect", func() error {
+				var postErr error
+				ref, postErr = svc.postAgentRequestAudit(ctx, session, rootPostID, requesterUserName, role.Name, message)
+				return postErr
+			})
+			if auditErr == nil {
 				auditPostID = ref.PostID
+			} else if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+				return AgentSessionAgentRequest{}, auditErr
 			}
 			return AgentSessionAgentRequest{
 				SessionKey:        session.SessionKey,
@@ -671,26 +688,42 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 	} else if !errors.Is(err, adminrepo.ErrNotFound) {
 		return AgentSessionAgentRequest{}, err
 	}
-	queued, err := svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
-		Project:       project,
-		Chat:          chat,
-		Role:          role,
-		Repositories:  repositories,
-		UserName:      requesterUserName,
-		UserMessage:   userMessage,
-		SourcePostID:  rootPostID,
-		ReplyRootID:   rootPostID,
-		SessionRootID: rootPostID,
-		SessionScope:  agentSessionScopeThreadRole,
-		TTLSeconds:    defaultThreadSessionTTLSeconds,
-		ParentTurnID:  session.ActiveTurnID,
+	var queued AgentTurnQueued
+	// EnqueueAgentTurn отдельно защищает каждый привязанный к сессии runtime-эффект,
+	// а также финальные запись и публикацию. Внешний guard не блокирует строку
+	// сессии, чтобы dispatcher мог атомарно обновить её через другое соединение.
+	err = svc.withRequestedClusterAdminGuard(ctx, role, chat, "", requesterUserName, "agent_request.enqueue.side_effect", func() error {
+		var enqueueErr error
+		queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
+			Project:       project,
+			Chat:          chat,
+			Role:          role,
+			Repositories:  repositories,
+			UserName:      requesterUserName,
+			UserMessage:   userMessage,
+			SourcePostID:  rootPostID,
+			ReplyRootID:   rootPostID,
+			SessionRootID: rootPostID,
+			SessionScope:  agentSessionScopeThreadRole,
+			TTLSeconds:    defaultThreadSessionTTLSeconds,
+			ParentTurnID:  session.ActiveTurnID,
+		})
+		return enqueueErr
 	})
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
 	auditPostID := ""
-	if ref, err := svc.postAgentRequestAudit(ctx, session, rootPostID, requesterUserName, role.Name, message); err == nil {
+	var ref MattermostPostRef
+	auditErr := svc.withRequestedClusterAdminGuard(ctx, role, chat, queued.SessionKey, requesterUserName, "agent_request.audit.side_effect", func() error {
+		var postErr error
+		ref, postErr = svc.postAgentRequestAudit(ctx, session, rootPostID, requesterUserName, role.Name, message)
+		return postErr
+	})
+	if auditErr == nil {
 		auditPostID = ref.PostID
+	} else if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+		return AgentSessionAgentRequest{}, auditErr
 	}
 	return AgentSessionAgentRequest{
 		SessionKey:        session.SessionKey,
@@ -702,19 +735,36 @@ func (svc *AgentSessionService) RequestAgent(ctx context.Context, sessionKey str
 	}, nil
 }
 
-func (svc *AgentSessionService) ensureRequestedRoleChannelMember(ctx context.Context, project entity.Project, chat entity.Chat, role entity.AgentRole) {
+func (svc *AgentSessionService) ensureRequestedRoleChannelMember(ctx context.Context, project entity.Project, chat entity.Chat, role entity.AgentRole, sessionKey string, actorUser string) error {
 	if svc.cfg.Store == nil || svc.cfg.RoleBotManager == nil {
-		return
+		return nil
 	}
 	channelID := strings.TrimSpace(chat.MattermostChannelID)
 	if channelID == "" {
-		return
+		return nil
 	}
 	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, role.ID)
 	if err != nil || strings.TrimSpace(identity.MattermostUserID) == "" {
-		return
+		return nil
 	}
-	_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, identity.MattermostUserID)
+	return svc.withRequestedClusterAdminGuard(ctx, role, chat, sessionKey, actorUser, "agent_request.membership.side_effect", func() error {
+		return svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, identity.MattermostUserID)
+	})
+}
+
+func (svc *AgentSessionService) withRequestedClusterAdminGuard(ctx context.Context, role entity.AgentRole, chat entity.Chat, sessionKey string, actorUser string, operation string, sideEffect func() error) error {
+	if !strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+		return sideEffect()
+	}
+	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminRuntimeGuardRepository)
+	if !ok {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return repository.WithExistingClusterAdminRuntimeGuard(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: role.ID, ProjectID: role.ProjectID, ChatID: chat.ID, ChatSlug: chat.Slug,
+		MattermostChannelID: chat.MattermostChannelID, SessionKey: sessionKey,
+		ActorUser: actorUser, Operation: operation,
+	}, sideEffect)
 }
 
 func (svc *AgentSessionService) authorize(ctx context.Context, sessionKey string, token string) (entity.AgentSession, error) {

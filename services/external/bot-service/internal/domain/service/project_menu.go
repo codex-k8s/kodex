@@ -2406,11 +2406,30 @@ func (svc *SlashCommandService) ensureRoleBotIdentity(ctx context.Context, proje
 	}
 	username := roleBotUsername(project, role)
 	existing, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, role.ID)
+	if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+		if err != nil || strings.TrimSpace(existing.MattermostUserID) == "" || strings.TrimSpace(existing.TokenSecretRef) == "" || existing.Username != username {
+			return entity.MattermostBotIdentity{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if err := svc.cfg.RoleBotManager.EnsureExistingRoleBot(ctx, existing.MattermostUserID); err != nil {
+			return entity.MattermostBotIdentity{}, err
+		}
+		if _, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); err != nil {
+			return entity.MattermostBotIdentity{}, err
+		}
+		if channelID != "" {
+			if err := svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID); err != nil {
+				return entity.MattermostBotIdentity{}, err
+			}
+		}
+		return existing, nil
+	}
 	if err == nil && existing.MattermostUserID != "" && existing.TokenSecretRef != "" && existing.Username == username {
 		botErr := svc.cfg.RoleBotManager.EnsureExistingRoleBot(ctx, existing.MattermostUserID)
 		if _, secretErr := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); botErr == nil && secretErr == nil {
 			if channelID != "" {
-				_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID)
+				if err := svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID); err != nil {
+					return entity.MattermostBotIdentity{}, err
+				}
 			}
 			return existing, nil
 		}
@@ -2453,7 +2472,9 @@ func (svc *SlashCommandService) ensureRoleBotIdentity(ctx context.Context, proje
 		return entity.MattermostBotIdentity{}, err
 	}
 	if channelID != "" {
-		_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, binding.UserID)
+		if err := svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, binding.UserID); err != nil {
+			return entity.MattermostBotIdentity{}, err
+		}
 	}
 	return identity, nil
 }

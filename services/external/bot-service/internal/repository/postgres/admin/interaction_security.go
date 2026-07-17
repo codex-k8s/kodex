@@ -303,19 +303,35 @@ func (repo *Repository) WithExistingClusterAdminRuntimeGuard(ctx context.Context
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	queryName := "cluster_admin_runtime_guard__lock.sql"
+	queryArgs := []any{input.RoleID, input.ProjectID, input.ChatID, input.ChatSlug, input.MattermostChannelID}
 	if strings.TrimSpace(input.SessionKey) != "" {
 		queryName = "cluster_admin_runtime_guard__lock_session.sql"
+		queryArgs = append(queryArgs, input.SessionKey)
 	}
 	var allowed bool
-	err = tx.QueryRow(ctx, query(queryName),
-		input.RoleID, input.ProjectID, input.ChatID, input.ChatSlug, input.MattermostChannelID, input.SessionKey,
-	).Scan(&allowed)
+	err = tx.QueryRow(ctx, query(queryName), queryArgs...).Scan(&allowed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		allowed = false
 		err = nil
 	}
 	if err != nil {
 		return fmt.Errorf("lock cluster-admin runtime admission: %w", err)
+	}
+	if allowed {
+		if err := lockClusterAdminRuntimeVariables(ctx, tx, input.RoleID); err != nil {
+			return err
+		}
+		if err := lockClusterAdminRuntimeDependencies(ctx, tx, input.RoleID); err != nil {
+			return err
+		}
+		err = tx.QueryRow(ctx, query(queryName), queryArgs...).Scan(&allowed)
+		if errors.Is(err, pgx.ErrNoRows) {
+			allowed = false
+			err = nil
+		}
+		if err != nil {
+			return fmt.Errorf("recheck cluster-admin runtime admission: %w", err)
+		}
 	}
 	outcome := "denied"
 	if allowed {
@@ -342,4 +358,73 @@ func (repo *Repository) WithExistingClusterAdminRuntimeGuard(ctx context.Context
 		return fmt.Errorf("commit cluster-admin runtime guard: %w", err)
 	}
 	return sideEffectErr
+}
+
+func lockClusterAdminRuntimeDependencies(ctx context.Context, tx pgx.Tx, roleID int64) error {
+	for _, queryName := range []string{
+		"cluster_admin_dependencies__lock_frozen.sql",
+		"cluster_admin_openai_accounts__lock.sql",
+		"cluster_admin_openai_credentials__lock.sql",
+		"cluster_admin_github_accounts__lock.sql",
+		"cluster_admin_github_credentials__lock.sql",
+		"cluster_admin_repositories__lock.sql",
+		"cluster_admin_project_repositories__lock.sql",
+		"cluster_admin_chat_repositories__lock.sql",
+	} {
+		rows, err := tx.Query(ctx, query(queryName), roleID)
+		if err != nil {
+			return fmt.Errorf("lock cluster-admin runtime dependency with %s: %w", queryName, err)
+		}
+		for rows.Next() {
+			var dependencyID int64
+			if err := rows.Scan(&dependencyID); err != nil {
+				rows.Close()
+				return fmt.Errorf("scan cluster-admin runtime dependency with %s: %w", queryName, err)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("read cluster-admin runtime dependencies with %s: %w", queryName, err)
+		}
+		rows.Close()
+	}
+	return nil
+}
+
+func lockClusterAdminRuntimeVariables(ctx context.Context, tx pgx.Tx, roleID int64) error {
+	frozenRows, err := tx.Query(ctx, query("cluster_admin_runtime_variables__lock_frozen.sql"), roleID)
+	if err != nil {
+		return fmt.Errorf("lock frozen cluster-admin runtime variables: %w", err)
+	}
+	for frozenRows.Next() {
+		var variableID int64
+		if err := frozenRows.Scan(&variableID); err != nil {
+			frozenRows.Close()
+			return fmt.Errorf("scan frozen cluster-admin runtime variable: %w", err)
+		}
+	}
+	if err := frozenRows.Err(); err != nil {
+		frozenRows.Close()
+		return fmt.Errorf("read frozen cluster-admin runtime variables: %w", err)
+	}
+	frozenRows.Close()
+
+	currentRows, err := tx.Query(ctx, query("cluster_admin_runtime_variables__lock_current.sql"), roleID)
+	if err != nil {
+		return fmt.Errorf("lock current cluster-admin runtime variables: %w", err)
+	}
+	for currentRows.Next() {
+		var bindingID int64
+		var variableID int64
+		if err := currentRows.Scan(&bindingID, &variableID); err != nil {
+			currentRows.Close()
+			return fmt.Errorf("scan current cluster-admin runtime variable: %w", err)
+		}
+	}
+	if err := currentRows.Err(); err != nil {
+		currentRows.Close()
+		return fmt.Errorf("read current cluster-admin runtime variables: %w", err)
+	}
+	currentRows.Close()
+	return nil
 }

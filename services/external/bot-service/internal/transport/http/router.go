@@ -421,8 +421,32 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.invalid_request", nil)})
 		return
 	}
+	callbackID := strings.TrimSpace(request.CallbackId)
+	if callbackID != dialogCallbackResult && router.slashService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.service_missing", nil)})
+		return
+	}
+	if callbackID != dialogCallbackResult {
+		validation := router.slashService.PrevalidateDialogSubmission(statusservice.DialogSubmissionCommand{
+			CallbackID: callbackID,
+			State:      strings.TrimSpace(request.State),
+			UserID:     strings.TrimSpace(request.UserId),
+			ChannelID:  strings.TrimSpace(request.ChannelId),
+			TeamID:     strings.TrimSpace(request.TeamId),
+			Submission: request.Submission,
+			Cancelled:  request.Cancelled,
+		})
+		if validation.Error != "" || len(validation.Errors) > 0 {
+			status := validation.StatusCode
+			if status == 0 {
+				status = http.StatusOK
+			}
+			writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Error: validation.Error, Errors: validation.Errors})
+			return
+		}
+	}
 	interaction, cleanState, err := router.interactionSecurity.AuthenticateDialogPrepared(r.Context(), statusservice.DialogCallback{
-		CallbackID: strings.TrimSpace(request.CallbackId),
+		CallbackID: callbackID,
 		State:      request.State,
 		UserID:     strings.TrimSpace(request.UserId),
 		ChannelID:  strings.TrimSpace(request.ChannelId),
@@ -442,16 +466,12 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	request.State = cleanState
-	if strings.TrimSpace(request.CallbackId) == dialogCallbackResult {
+	if callbackID == dialogCallbackResult {
 		writeJSON(w, http.StatusOK, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
 		return
 	}
-	if router.slashService == nil {
-		writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.service_missing", nil)})
-		return
-	}
 	result := router.slashService.HandleDialogSubmission(r.Context(), statusservice.DialogSubmissionCommand{
-		CallbackID: strings.TrimSpace(request.CallbackId),
+		CallbackID: callbackID,
 		State:      strings.TrimSpace(request.State),
 		UserID:     interaction.Actor.UserID,
 		UserName:   interaction.Actor.UserName,

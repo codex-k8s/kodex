@@ -22,6 +22,7 @@ select exists(
 		and role.project_id = $2
 		and lower(trim(role.kubernetes_access)) = 'cluster-admin'
 		and role.enabled
+		and matter_codex_cluster_admin_binding_exact(role.id, chat.id)
 		and $5 <> ''
 		and chat.mattermost_channel_id = $5
 		and (
@@ -40,6 +41,12 @@ select exists(
 					and frozen_session.chat_id = chat.id
 					and frozen_session.mattermost_channel_id = chat.mattermost_channel_id
 					and frozen_session.session_key = $6
+					and frozen_session.privilege_state = matter_codex_cluster_admin_session_state(session)
+					and not exists (
+						select 1 from matter_codex_cluster_admin_revocations revocation
+						where revocation.resource_type = 'session_binding'
+							and revocation.resource_key = role.id::text || ':' || frozen_session.session_key
+					)
 			)
 		)
 );

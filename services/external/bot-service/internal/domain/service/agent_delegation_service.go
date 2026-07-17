@@ -189,6 +189,9 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	if !chatParticipantEnabled(participants, targetRole.ID) {
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent %q is not available in chat %q", targetRole.Name, targetChat.Slug)
 	}
+	if strings.EqualFold(strings.TrimSpace(targetRole.KubernetesAccess), "cluster-admin") {
+		return AgentSessionDelegationResult{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
 	if strings.TrimSpace(targetChat.MattermostChannelID) == "" {
 		return AgentSessionDelegationResult{}, fmt.Errorf("chat %q is not bound to a Mattermost channel", targetChat.Slug)
 	}
@@ -212,8 +215,10 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 		return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
 	}
 
-	svc.ensureRequestedRoleChannelMember(ctx, project, targetChat, targetRole)
 	requesterUserName := svc.sessionMattermostUsername(ctx, session)
+	if err := svc.ensureRequestedRoleChannelMember(ctx, project, targetChat, targetRole, "", requesterUserName); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
 	sourceThreadURL := svc.mattermostThreadURL(project.Slug, session.MattermostRootPostID)
 	rootPost, err := svc.postDelegatedAgentThread(ctx, delegation, targetChat, targetRole, requesterUserName, sourceThreadURL, command.Message)
 	if err != nil {
