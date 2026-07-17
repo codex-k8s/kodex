@@ -21,6 +21,7 @@ type Config struct {
 	DefaultChannels                 []string      `env:"MATTERCODEX_DEFAULT_CHANNELS" envDefault:"agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit" envSeparator:","`
 	OwnerMattermostUsername         string        `env:"MATTERCODEX_OWNER_MATTERMOST_USERNAME"`
 	MattermostBotToken              string        `env:"MATTERCODEX_MATTERMOST_BOT_TOKEN"`
+	MattermostAdminToken            string        `env:"MATTERCODEX_MATTERMOST_ADMIN_TOKEN"`
 	MattermostSlashToken            string        `env:"MATTERCODEX_MATTERMOST_SLASH_TOKEN"`
 	GitHubToken                     string        `env:"MATTERCODEX_GITHUB_TOKEN"`
 	GitHubWebhookSecret             string        `env:"MATTERCODEX_GITHUB_WEBHOOK_SECRET"`

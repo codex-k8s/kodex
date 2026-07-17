@@ -56,7 +56,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	var dialogOpener httptransport.DialogOpener
 	var controlSurface *mattermostintegration.ControlSurface
 	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
-		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
+		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken, cfg.MattermostAdminToken)
 		channelManager = controlSurface
 		roleBotManager = controlSurface
 		threadPublisher = controlSurface

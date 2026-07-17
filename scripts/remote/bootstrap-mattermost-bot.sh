@@ -92,6 +92,52 @@ ensure_personal_access_tokens_enabled() {
   remote_mmctl config reload >/dev/null
 }
 
+ensure_bot_account_creation_enabled() {
+  local current
+  current="$(remote_mmctl config get ServiceSettings.EnableBotAccountCreation 2>/dev/null | tail -n 1 | tr -d '\r')"
+  if [ "$current" = "true" ]; then
+    mattercodex_log "Mattermost bot account creation: уже включено"
+    return
+  fi
+
+  mattercodex_log "Mattermost bot account creation: включается"
+  remote_mmctl config set ServiceSettings.EnableBotAccountCreation true >/dev/null
+  remote_mmctl config reload >/dev/null
+}
+
+ensure_lifecycle_admin_user() {
+  local user_count bot_count password admin_username_sql
+  admin_username_sql="$(mattercodex_sql_literal "$MATTERCODEX_MATTERMOST_ADMIN_USERNAME")"
+  user_count="$(remote_psql_scalar "select count(*) from users where username=${admin_username_sql};")"
+  if [ "$user_count" = "0" ]; then
+    mattercodex_log "Mattermost lifecycle admin: создается"
+    password="$(mattercodex_generate_password)"
+    remote_mmctl user create \
+      --email "$MATTERCODEX_MATTERMOST_ADMIN_EMAIL" \
+      --username "$MATTERCODEX_MATTERMOST_ADMIN_USERNAME" \
+      --password "$password" \
+      --email-verified \
+      --disable-welcome-email \
+      --system-admin >/dev/null
+  else
+    mattercodex_log "Mattermost lifecycle admin: уже существует"
+  fi
+
+  bot_count="$(remote_psql_scalar "select count(*) from bots b join users u on u.id=b.userid where u.username=${admin_username_sql} and b.deleteat=0;")"
+  [ "$bot_count" = "0" ] || mattercodex_die "Mattermost lifecycle admin не должен быть bot account"
+
+  remote_psql_scalar "
+    update users
+    set roles = trim(both ' ' from concat(
+      case when position('system_user' in roles) = 0 then 'system_user ' else '' end,
+      roles,
+      case when position('system_admin' in roles) = 0 then ' system_admin' else '' end
+    ))
+    where username = ${admin_username_sql}
+      and position('system_admin' in roles) = 0;
+  " >/dev/null
+}
+
 ensure_bot_user() {
   local user_count bot_count password bot_username_sql
   bot_username_sql="$(mattercodex_sql_literal "$MATTERCODEX_MATTERMOST_BOT_USERNAME")"
@@ -137,6 +183,17 @@ generate_bot_token() {
   token="$(MMCTL_OUTPUT="$raw" parse_mmctl_token)"
   if [ -z "$token" ]; then
     mattercodex_die "Mattermost bot token не был получен"
+  fi
+  printf '%s' "$token"
+}
+
+generate_lifecycle_admin_token() {
+  local raw token
+  mattercodex_log "Mattermost lifecycle admin token: генерируется" >&2
+  raw="$(remote_mmctl --json token generate "$MATTERCODEX_MATTERMOST_ADMIN_USERNAME" "matter-codex-role-lifecycle-$(date -u +%Y%m%d%H%M%S)")"
+  token="$(MMCTL_OUTPUT="$raw" parse_mmctl_token)"
+  if [ -z "$token" ]; then
+    mattercodex_die "Mattermost lifecycle admin token не был получен"
   fi
   printf '%s' "$token"
 }
@@ -242,13 +299,16 @@ ensure_slash_command() {
 save_secret_and_restart() {
   local bot_token="$1"
   local slash_token="$2"
+  local admin_token="$3"
   local render_dir
   render_dir="$(mktemp -d)"
   TEMP_DIRS+=("$render_dir")
   export BOT_TOKEN_B64
   export SLASH_TOKEN_B64
+  export ADMIN_TOKEN_B64
   BOT_TOKEN_B64="$(printf '%s' "$bot_token" | base64 | tr -d '\n')"
   SLASH_TOKEN_B64="$(printf '%s' "$slash_token" | base64 | tr -d '\n')"
+  ADMIN_TOKEN_B64="$(printf '%s' "$admin_token" | base64 | tr -d '\n')"
 
   mattercodex_log "bot-service tokens: сохраняются в Kubernetes Secret"
   mattercodex_render_template "$REPO_ROOT/deploy/k8s/bot-service/bot-service-secret.yaml.tpl" "$render_dir/bot-service-secret.yaml"
@@ -264,6 +324,9 @@ save_secret_and_restart() {
 }
 
 ensure_personal_access_tokens_enabled
+ensure_bot_account_creation_enabled
+ensure_lifecycle_admin_user
+ADMIN_TOKEN="$(generate_lifecycle_admin_token)"
 ensure_bot_user
 BOT_TOKEN="$(generate_bot_token)"
 ensure_team
@@ -273,6 +336,6 @@ SLASH_TOKEN="$(ensure_slash_command)"
 if [ -z "$SLASH_TOKEN" ]; then
   mattercodex_die "Mattermost slash token не был получен"
 fi
-save_secret_and_restart "$BOT_TOKEN" "$SLASH_TOKEN"
+save_secret_and_restart "$BOT_TOKEN" "$SLASH_TOKEN" "$ADMIN_TOKEN"
 
 mattercodex_log "Mattermost bot bootstrap завершен"
