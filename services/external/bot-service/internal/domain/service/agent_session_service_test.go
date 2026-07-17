@@ -292,6 +292,50 @@ func TestAgentSessionCompleteUpdatesStatusWithCodexLimits(t *testing.T) {
 	}
 }
 
+func TestAgentSessionProviderPolicyBlockStopsSessionWithoutRawProviderError(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	err = svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+		TurnID:       claim.TurnID,
+		RunID:        claim.RunID,
+		Status:       agentSessionTurnFailed,
+		ErrorMessage: "raw provider response that must not be posted",
+		Artifacts: map[string]string{
+			agentTurnArtifactFailureCode: agentTurnFailureProviderPolicyBlocked,
+			"openai-account":             "main",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	if store.agentSessions["session-1"].Status != agentSessionStatusBlocked {
+		t.Fatalf("session = %#v", store.agentSessions["session-1"])
+	}
+	turn, err := store.GetAgentSessionTurn(context.Background(), claim.TurnID)
+	if err != nil || turn.Status != agentSessionTurnBlocked {
+		t.Fatalf("turn = %#v error=%v", turn, err)
+	}
+	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, "cyber safety") || strings.Contains(publisher.posts[0].Message, "raw provider response") {
+		t.Fatalf("posts = %#v", publisher.posts)
+	}
+	exit, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil || !exit.Exit {
+		t.Fatalf("blocked session claim = %#v error=%v", exit, err)
+	}
+}
+
 func TestAgentSessionSystemStatusUpdatesInitialCardWithCodexLimits(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	svc := NewAgentSessionService(AgentSessionServiceConfig{

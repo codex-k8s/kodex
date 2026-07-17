@@ -741,6 +741,8 @@
   {"id": "chat.thread.repository_choice.no_repository", "translation": "без repository"},
   {"id": "chat.thread.repository_choice.selected.title", "translation": "Repository для thread выбран"},
   {"id": "chat.thread.repository_choice.selected.text", "translation": "Repository context: `{{.Repository}}`.\nRun: `{{.RunID}}`."},
+  {"id": "chat.thread.repository_choice.starting.title", "translation": "Запуск агента принят"},
+  {"id": "chat.thread.repository_choice.starting", "translation": "Repository context сохраняется. Проверка OpenAI account и запуск агента продолжаются в фоне; статус появится в этом thread."},
   {"id": "chat.session.queued.title", "translation": "Agent turn поставлен в очередь"},
   {"id": "chat.session.queued", "translation": "matter-codex поставил turn в agent session:\n- turns: `{{.Count}}`\n- первый run: `{{.RunID}}`\n- первая роль: `{{.Role}}`\n- session: `{{.SessionKey}}`"},
   {"id": "chat.session.turn.stop.action", "translation": "Остановить turn"},
@@ -764,6 +766,14 @@
   {"id": "chat.session.status.capacity_retry", "translation": "**Статус:** модель временно перегружена{{if .Agent}}, работа агента @{{.Agent}} будет продолжена автоматически{{end}}.\n\nПовтор `{{.Attempt}}/{{.MaxAttempts}}` начнётся через `{{.DelayMinutes}}` мин.\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nЛимиты Codex:\n{{.CodexLimits}}{{end}}"},
   {"id": "chat.session.status.capacity_exhausted", "translation": "**Статус:** модель осталась перегружена после `{{.RetryCount}}` автоматических повторов{{if .Agent}}, turn агента @{{.Agent}} остановлен{{end}}.\n\nРабота и Codex session сохранены. Нажмите **Запустить ещё раз**, чтобы создать новый turn и продолжить.\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nЛимиты Codex:\n{{.CodexLimits}}{{end}}"},
   {"id": "chat.session.status.canceled", "translation": "**Статус:** {{if .Agent}}агент @{{.Agent}} остановлен{{else}}запуск агента остановлен{{end}}.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}"},
+  {"id": "project.run.card.title", "translation": "Запуск @{{.Agent}}"},
+  {"id": "project.run.card.text", "translation": "run: `{{.RunID}}`\nстатус: `{{.Status}}`\nOpenAI account: `{{.Account}}`"},
+  {"id": "project.run.card.field.initiator", "translation": "Инициатор"},
+  {"id": "project.run.card.field.trigger", "translation": "Сообщение запуска"},
+  {"id": "project.run.card.field.thread", "translation": "Рабочий тред"},
+  {"id": "project.run.card.field.parent", "translation": "Родительский запуск"},
+  {"id": "project.run.card.field.limits", "translation": "Лимиты Codex"},
+  {"id": "project.runs_channel.failed", "translation": "matter-codex: канал runs проекта не подготовлен: {{.Error}}"},
   {"id": "runtime.session.invalidate.summary", "translation": "Runtime sessions обновлены: idle pods пересозданы `{{.Invalidated}}`; активные/queued пропущены `{{.Skipped}}`; ошибок `{{.Failed}}`."},
   {"id": "chat.run.record_failed", "translation": "matter-codex: run `{{.RunID}}` запущен, но metadata не сохранена: {{.Error}}"},
   {"id": "chat.run.started", "translation": "matter-codex agent run запущен:\n- run: `{{.RunID}}`\n- mode: `{{.Mode}}`\n- role: `{{.Role}}`\n- job: `{{.Job}}`\n- pvc: `{{.PVC}}`"},
@@ -948,5 +958,8 @@
   {"id": "router.dialog.open_failed", "translation": "matter-codex: диалог Mattermost не открыт."},
   {"id": "router.dialog.trigger_missing", "translation": "matter-codex: Mattermost не передал trigger id для диалога. Откройте меню заново и повторите."},
   {"id": "router.dialog.invalid_request", "translation": "matter-codex: некорректный запрос диалога."},
-  {"id": "router.dialog.service_missing", "translation": "matter-codex: slash service не настроен."}
+  {"id": "router.dialog.service_missing", "translation": "matter-codex: slash service не настроен."},
+  {"id": "chat.session.status.provider_policy_blocked", "translation": "**Статус:** запрос остановлен системами кибербезопасности OpenAI{{if .Agent}}; сессия агента @{{.Agent}} заблокирована{{end}}.\n\nrun: `{{.RunID}}`{{if .OpenAIAccount}}\nOpenAI account: `{{.OpenAIAccount}}`{{end}}{{if .CodexLimits}}\n\nЛимиты Codex:\n{{.CodexLimits}}{{end}}"},
+  {"id": "chat.session.provider_policy_blocked", "translation": "OpenAI остановил запрос по политике кибербезопасности. MatterCodex не пытается обходить эту защиту и пометил сессию заблокированной. Создайте новый тред и измените постановку или стратегию задачи. Для разрешенной исследовательской работы можно оформить [Trusted Access for Cyber](https://learn.chatgpt.com/docs/cyber-safety)."},
+  {"id": "chat.session.closed", "translation": "matter-codex: этот старый тред закрыт для запусков агентов. Создайте новый корневой тред, чтобы начать чистую сессию с актуальным OpenAI account и окружением."}
 ]

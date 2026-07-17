@@ -28,6 +28,17 @@ func (repo *Repository) UpsertProject(ctx context.Context, input adminrepo.Upser
 	return item, created, nil
 }
 
+func (repo *Repository) UpdateProjectRunsChannel(ctx context.Context, projectID int64, channelID string) (entity.Project, error) {
+	item, err := scanProject(repo.pool.QueryRow(ctx, query("projects__update_runs_channel.sql"), projectID, channelID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Project{}, adminrepo.ErrNotFound
+		}
+		return entity.Project{}, fmt.Errorf("update project runs channel: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) GetProject(ctx context.Context, id int64) (entity.Project, error) {
 	item, err := scanProject(repo.pool.QueryRow(ctx, query("projects__get.sql"), id))
 	if err != nil {
@@ -212,7 +223,7 @@ func (repo *Repository) CreateChat(ctx context.Context, input adminrepo.CreateCh
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var bindingsAllowed bool
-	if err := tx.QueryRow(ctx, query("cluster_admin_bindings__chat_allowed.sql"), input.ProjectID, input.Slug, input.RoleIDs).Scan(&bindingsAllowed); err != nil {
+	if err := tx.QueryRow(ctx, query("cluster_admin_bindings__chat_allowed.sql"), input.ProjectID, input.Slug, input.MattermostChannelID, input.RoleIDs).Scan(&bindingsAllowed); err != nil {
 		return entity.Chat{}, false, fmt.Errorf("check frozen cluster-admin chat bindings: %w", err)
 	}
 	if !bindingsAllowed {
@@ -404,6 +415,7 @@ func scanProject(row accountRow) (entity.Project, error) {
 		&item.Name,
 		&item.Slug,
 		&item.MattermostTeamID,
+		&item.MattermostRunsChannelID,
 		&item.GitHubAccountName,
 		&item.GitHubOwner,
 		&item.GitHubOwnerType,
@@ -425,6 +437,7 @@ func scanProjectWithCreated(row pgx.Row) (entity.Project, bool, error) {
 		&item.Name,
 		&item.Slug,
 		&item.MattermostTeamID,
+		&item.MattermostRunsChannelID,
 		&item.GitHubAccountName,
 		&item.GitHubOwner,
 		&item.GitHubOwnerType,

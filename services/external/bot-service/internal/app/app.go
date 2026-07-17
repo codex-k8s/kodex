@@ -75,14 +75,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	gitHubAccountProvider := openGitHubAccountProvider(runtimeRunner, cfg)
 	gitHubAccountInspector := githubintegration.NewTokenInspector()
 	chatRunSvc := statusservice.NewChatRunService(statusservice.ChatRunServiceConfig{
-		Localizer:       localizer,
-		Store:           storage,
-		RuntimeRunner:   runtimeRunner,
-		ThreadPublisher: threadPublisher,
-		BotServiceURL:   botServiceRuntimeURL(cfg),
-		MenuActionURL:   agentsActionURL(cfg),
-		StorageReady:    storage != nil,
-		RuntimeReady:    runtimeConfigured,
+		Localizer:         localizer,
+		Store:             storage,
+		RuntimeRunner:     runtimeRunner,
+		ThreadPublisher:   threadPublisher,
+		BotServiceURL:     botServiceRuntimeURL(cfg),
+		MenuActionURL:     agentsActionURL(cfg),
+		MattermostSiteURL: cfg.MattermostSiteURL,
+		StorageReady:      storage != nil,
+		RuntimeReady:      runtimeConfigured,
 	})
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
 		Localizer:                localizer,
@@ -164,11 +165,12 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		if err != nil {
 			logger.Warn("Mattermost chat listener disabled: bot user was not resolved", "error", err)
 		} else if listener, err := mattermostintegration.NewChatListener(mattermostintegration.ChatListenerConfig{
-			SiteURL:   cfg.MattermostAPIURL(),
-			Token:     cfg.MattermostBotToken,
-			BotUserID: botUserID,
-			Handler:   chatRunSvc,
-			Logger:    logger,
+			SiteURL:          cfg.MattermostAPIURL(),
+			Token:            cfg.MattermostBotToken,
+			BotUserID:        botUserID,
+			Handler:          chatRunSvc,
+			UserNameResolver: controlSurface,
+			Logger:           logger,
 		}); err != nil {
 			logger.Warn("Mattermost chat listener disabled: configuration is invalid", "error", err)
 		} else {

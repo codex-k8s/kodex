@@ -57,7 +57,7 @@
 - `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST` - optional, registry host, через который kubelet тянет image; default `localhost:<host-port>` для single-server контура;
 - `MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST` - optional, registry host, в который Kaniko push'ит image изнутри кластера; default Kubernetes service DNS;
 - `MATTERCODEX_KANIKO_IMAGE`, `MATTERCODEX_KANIKO_CONTEXT_PVC`, `MATTERCODEX_KANIKO_CONTEXT_STORAGE_SIZE` - optional, параметры Kaniko executor и PVC build context;
-- `MATTERCODEX_KANIKO_CPU_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_LIMIT` - optional, ресурсы Kaniko Job; defaults `2000m`/`1Gi`/`4Gi`, CPU limit отсутствует;
+- `MATTERCODEX_KANIKO_CPU_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_LIMIT` - optional, ресурсы Kaniko Job; defaults `2000m`/`2Gi`/`24Gi`, CPU limit отсутствует; повышенный лимит нужен для snapshot большого agent-runner image и применяется только к временной build-job;
 - `MATTERCODEX_KANIKO_JOB_TTL_SECONDS`, `MATTERCODEX_KANIKO_ACTIVE_DEADLINE_SECONDS` - optional, lifecycle limits Kaniko Job;
 - `MATTERCODEX_RUNTIME_ENABLED` - optional, включает Kubernetes runtime adapter;
 - `MATTERCODEX_RUNTIME_NAMESPACE` - optional, namespace для Job/PVC runtime-запусков;
@@ -193,7 +193,7 @@ bash scripts/remote/install-bot-service.sh --env-file .env --apply --wait
 bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 ```
 
-Ожидаемый результат: объекты Kubernetes существуют, Deployment готов, публичный slash endpoint возвращает безопасный `401` или `503` без токена, а публичный `/healthz` возвращает `404`. Кластерные probes продолжают проверять health/readiness через сервис Kubernetes.
+Ожидаемый результат для настроенного production-контура: объекты Kubernetes существуют, Deployment готов, публичные slash endpoint и GitHub webhook возвращают устойчивый `401` без токена или подписи, а публичный `/healthz` возвращает `404`. Ответ `503` означает незавершённую конфигурацию и не считается успешным smoke. Кластерные probes продолжают проверять health/readiness через сервис Kubernetes.
 
 Проверка storage migrations после deploy:
 
@@ -451,9 +451,10 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - GitHub token, username, email и webhook secret хранятся в Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
-- Action/dialog callback принимает только одноразовую серверную capability с ограниченным сроком действия и точной привязкой к операции, ресурсу, каналу, фактическому `post_id`, субъекту и области. Capability удостоверяет callback, но не предоставляет право: отдельный допуск проверяет активного пользователя, членство в канале, точный закрытый набор операций и существующий серверный ресурс. В PostgreSQL хранится только SHA-256-хеш; повтор, истечение, подделка, подмена субъекта и неизвестный результат допуска дают закрытый отказ.
+- Action/dialog callback принимает только одноразовую серверную capability с ограниченным сроком действия и точной привязкой к операции, ресурсу, каналу, фактическому `post_id`, субъекту и области. Capability удостоверяет callback, но не предоставляет право: отдельный допуск проверяет активного пользователя, членство в канале, точный закрытый набор операций и существующий серверный ресурс. В PostgreSQL хранится только SHA-256-хеш; denied/indeterminate admission и отклонённый `response_url` не потребляют capability, а финальный атомарный переход в `consumed` происходит только после успешной подготовки и допуска. Повтор, истечение, подделка и подмена субъекта дают закрытый отказ.
+- Capability для action-карточки создаются в состоянии `pending`, становятся `unused` только после подтверждённого обновления точного Mattermost post и переводятся в `revoked` при ошибке или несовпадении ответа. Поэтому даже сценарий «Mattermost применил обновление, затем вернул ошибку» не оставляет пригодных кнопок.
 - Истёкшие строки capability удаляются идемпотентными ограниченными пакетами после периода хранения. Очистка не затрагивает сессии, PVC, Secret, квоты или иные runtime-ресурсы; результат ненулевого прохода и ошибка видны в структурированном журнале без значений capability.
-- Поля `user_name`, `prompt`, `labels`, `state` и `submission` не предоставляют права. Новое назначение `cluster-admin` запрещено; допускается только точное уже сохранённое серверное состояние профиля или роли с отдельной проверкой и записью аудита.
+- Поля `user_name`, `prompt`, `labels`, `state` и `submission` не предоставляют права. Новое назначение `cluster-admin` запрещено; для существующей роли migration freeze фиксирует точные `project_id`, `chat_id`, `mattermost_channel_id` и существовавшие `session_key`. Создание новой привязки, remap канала или новой сессии закрыто отклоняется до Mattermost, Kubernetes и прикладных изменений БД. Непосредственно перед `RuntimeRunner.Start*` транзакционный guard повторно блокирует и проверяет роль, участника, чат, frozen binding и при необходимости сессию; зафиксированные downgrade, disable или delete исключают runtime side effect и дают отдельное событие аудита.
 - `response_url` разрешён только для настроенного источника Mattermost. Проверяются протокол, hostname, port, DNS-адреса и каждое перенаправление; IP-литерал, loopback, link-local, metadata, произвольный приватный или кластерный адрес назначения и DNS rebinding не приводят к исходящему HTTP-запросу.
 - bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true` и `seccompProfile: RuntimeDefault`.
 - Ресурсы bot-service настраиваются через `MATTERCODEX_BOT_SERVICE_CPU_REQUEST`, `MATTERCODEX_BOT_SERVICE_MEMORY_REQUEST` и `MATTERCODEX_BOT_SERVICE_MEMORY_LIMIT`. Значения по умолчанию: requests `100m`/`512Mi`, memory limit `8Gi`, CPU limit отсутствует; увеличенный memory limit нужен для кратковременных пиков при приеме крупных Codex session snapshots.
@@ -468,6 +469,14 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Developer runner реализован отдельным Go binary в подготовленном image и сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую, но разрешает отвечать на review threads через `gh` при соответствующей задаче.
 - Reviewer runner реализован отдельным Go binary в подготовленном image и дает Codex reviewer доступ к `gh` для inline review comments; если Codex не отправил review сам, runner отправляет fallback summary review после `codex exec`.
 - В текущем наборе манифестов `NetworkPolicy` отсутствует. PR-0 не расширяет сеть и фиксирует это состояние снимком; изоляция исходящего трафика остаётся явным риском начального профиля до отдельного инфраструктурного изменения.
+
+## Сессии, role bots и `runs`
+
+- OpenAI account записывается в agent session при ее создании. Изменение account у роли не переносит существующую Codex session: для нового account требуется новый корневой Mattermost thread.
+- Статус `blocked` означает подтвержденную cyber-safety блокировку поставщика. Runner не выполняет автоматический обход; пользователь получает ссылку на Trusted Access и продолжает измененную задачу в новом thread.
+- Для каждого проекта bootstrap создает публичный канал `runs`. В нем служебный MatterCodex account создает по одной обновляемой карточке на turn; карточки имеют ссылки на trigger, рабочий thread и все parent run cards.
+- Role identity всегда должна быть Mattermost bot account. При старте bot-service существующая обычная учетная запись роли конвертируется в bot; fallback с созданием обычного пользователя отсутствует.
+- Mattermost не поддерживает read-only состояние отдельного thread. Для контролируемого закрытия истории MatterCodex ставит `thread_context.status = closed`: UI Mattermost по-прежнему позволяет отправить текст, но bot-service не создает turn и просит начать новый корневой thread. Архивация всего канала для этой задачи не применяется.
 
 ## Production gaps после MVP
 

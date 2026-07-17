@@ -20,7 +20,7 @@ create table if not exists matter_codex_interaction_capabilities (
 	constraint matter_codex_interaction_capabilities_kind_check
 		check (kind in ('action', 'dialog')),
 	constraint matter_codex_interaction_capabilities_status_check
-		check (status in ('unused', 'consumed', 'revoked')),
+		check (status in ('pending', 'unused', 'consumed', 'revoked')),
 	constraint matter_codex_interaction_capabilities_token_hash_check
 		check (octet_length(token_hash) = 32),
 	constraint matter_codex_interaction_capabilities_context_hash_check

@@ -50,6 +50,13 @@ func TestPublicBoundaryMigrationFresh(t *testing.T) {
 	}
 
 	repository := postgresrepo.NewRepository(pool)
+	allowed, err := repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: 1, ProjectID: 1, ChatID: 1, ChatSlug: "missing-admin-chat", MattermostChannelID: "missing-channel",
+		ActorUser: "test", Operation: "test.fresh.binding.admission",
+	})
+	if err != nil || allowed {
+		t.Fatalf("fresh install создал cluster-admin binding: allowed=%t error=%v", allowed, err)
+	}
 	rawToken := "synthetic-capability-never-persisted"
 	tokenHash := sha256.Sum256([]byte(rawToken))
 	contextHash := sha256.Sum256([]byte("synthetic-context"))
@@ -94,6 +101,30 @@ func TestPublicBoundaryMigrationFresh(t *testing.T) {
 	defer poolTwo.Close()
 	repositoryOne := postgresrepo.NewRepository(poolOne)
 	repositoryTwo := postgresrepo.NewRepository(poolTwo)
+	checkResults := make(chan error, 2)
+	checkStart := make(chan struct{})
+	checkReady := make(chan struct{}, 2)
+	for _, concurrentRepository := range []*postgresrepo.Repository{repositoryOne, repositoryTwo} {
+		go func(repo *postgresrepo.Repository) {
+			checkReady <- struct{}{}
+			<-checkStart
+			_, checkErr := repo.CheckInteractionCapability(ctx, consume)
+			checkResults <- checkErr
+		}(concurrentRepository)
+	}
+	<-checkReady
+	<-checkReady
+	close(checkStart)
+	for range 2 {
+		if checkErr := <-checkResults; checkErr != nil {
+			t.Fatalf("двухconnection pre-admission check: %v", checkErr)
+		}
+	}
+	var checkedState string
+	if err := pool.QueryRow(ctx, `select status from matter_codex_interaction_capabilities where token_hash = $1`, concurrentTokenHash[:]).Scan(&checkedState); err != nil || checkedState != "unused" {
+		t.Fatalf("denied/indeterminate check изменил capability: status=%q error=%v", checkedState, err)
+	}
+
 	results := make(chan error, 2)
 	start := make(chan struct{})
 	ready := make(chan struct{}, 2)
@@ -124,6 +155,32 @@ func TestPublicBoundaryMigrationFresh(t *testing.T) {
 	if successes != 1 || replays != 1 {
 		t.Fatalf("конкурентное consume: successes=%d replays=%d", successes, replays)
 	}
+	pendingTokenHash := sha256.Sum256([]byte("synthetic-pending-card-capability"))
+	issue.TokenHash = pendingTokenHash[:]
+	issue.State = securityrepo.CapabilityStatePending
+	if err := repository.IssueInteractionCapability(ctx, issue); err != nil {
+		t.Fatalf("IssueInteractionCapability(pending) error = %v", err)
+	}
+	consume.TokenHash = pendingTokenHash[:]
+	if _, err := repository.CheckInteractionCapability(ctx, consume); !errors.Is(err, securityrepo.ErrCapabilityInactive) {
+		t.Fatalf("pending capability usable before card update: %v", err)
+	}
+	if err := repository.TransitionInteractionCapabilities(ctx, securityrepo.TransitionCapabilitiesInput{
+		TokenHashes: [][]byte{pendingTokenHash[:]}, From: securityrepo.CapabilityStatePending, To: securityrepo.CapabilityStateUnused,
+	}); err != nil {
+		t.Fatalf("activate pending capability: %v", err)
+	}
+	if _, err := repository.CheckInteractionCapability(ctx, consume); err != nil {
+		t.Fatalf("activated capability unusable: %v", err)
+	}
+	if err := repository.TransitionInteractionCapabilities(ctx, securityrepo.TransitionCapabilitiesInput{
+		TokenHashes: [][]byte{pendingTokenHash[:]}, From: securityrepo.CapabilityStateUnused, To: securityrepo.CapabilityStateRevoked,
+	}); err != nil {
+		t.Fatalf("revoke active capability: %v", err)
+	}
+	if _, err := repository.CheckInteractionCapability(ctx, consume); !errors.Is(err, securityrepo.ErrCapabilityInactive) {
+		t.Fatalf("revoked capability remained usable: %v", err)
+	}
 
 	if _, _, err := repository.UpsertAgentProfile(ctx, adminrepo.UpsertAgentProfileInput{
 		Name: "new-admin", Role: "admin", KubernetesAccess: "cluster-admin", Enabled: true,
@@ -138,8 +195,8 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	dsn := isolatedMigrationDSN(t, "upgrade")
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	if err := migrations.RunTo(ctx, dsn, 20); err != nil {
-		t.Fatalf("migrations through v20: %v", err)
+	if err := migrations.RunTo(ctx, dsn, 21); err != nil {
+		t.Fatalf("migrations through current main v21: %v", err)
 	}
 	pool := openMigrationPool(t, ctx, dsn)
 	if _, err := pool.Exec(ctx, `update matter_codex_agent_profiles set kubernetes_access = 'cluster-admin' where name = 'developer'`); err != nil {
@@ -158,12 +215,21 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	if _, err := pool.Exec(ctx, `insert into matter_codex_chat_participants(chat_id, role_id) values ($1, $2)`, chatID, roleID); err != nil {
 		t.Fatalf("подготовка существующей привязки: %v", err)
 	}
+	const existingSessionKey = "existing-admin-session"
+	if _, err := pool.Exec(ctx, `
+		insert into matter_codex_agent_sessions(
+			session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
+			mattermost_root_post_id, ttl_seconds, expires_at
+		) values ($1, $2, $3, $4, 'thread', 'channel-existing', 'root-existing', 3600, now() + interval '1 hour')
+	`, existingSessionKey, projectID, chatID, roleID); err != nil {
+		t.Fatalf("подготовка существующей session binding: %v", err)
+	}
 	pool.Close()
-	if err := migrations.RunTo(ctx, dsn, 21); err != nil {
-		t.Fatalf("upgrade v20->v21: %v", err)
+	if err := migrations.RunTo(ctx, dsn, 22); err != nil {
+		t.Fatalf("upgrade current main v21->v22: %v", err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v21->latest: %v", err)
+		t.Fatalf("upgrade v22->latest: %v", err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()
@@ -183,17 +249,38 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	}
 	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
 		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
-		ActorUser: "test", Operation: "test.binding.admission",
+		MattermostChannelID: "channel-existing", ActorUser: "test", Operation: "test.binding.admission",
 	})
 	if err != nil || !allowed {
 		t.Fatalf("существующая точная привязка: allowed=%t error=%v", allowed, err)
 	}
 	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
 		RoleID: roleID, ProjectID: projectID, ChatID: 0, ChatSlug: "new-admin-chat",
-		ActorUser: "test", Operation: "test.binding.admission",
+		MattermostChannelID: "channel-new", ActorUser: "test", Operation: "test.binding.admission",
 	})
 	if err != nil || allowed {
 		t.Fatalf("новая привязка: allowed=%t error=%v", allowed, err)
+	}
+	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
+		MattermostChannelID: "channel-remapped", ActorUser: "test", Operation: "test.binding.channel-remap",
+	})
+	if err != nil || allowed {
+		t.Fatalf("channel remap: allowed=%t error=%v", allowed, err)
+	}
+	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
+		MattermostChannelID: "channel-existing", SessionKey: existingSessionKey, ActorUser: "test", Operation: "test.binding.existing-session",
+	})
+	if err != nil || !allowed {
+		t.Fatalf("существующая session binding: allowed=%t error=%v", allowed, err)
+	}
+	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
+		MattermostChannelID: "channel-existing", SessionKey: "new-admin-session", ActorUser: "test", Operation: "test.binding.new-session",
+	})
+	if err != nil || allowed {
+		t.Fatalf("новая session binding: allowed=%t error=%v", allowed, err)
 	}
 	if _, _, err := repository.UpsertAgentProfile(ctx, adminrepo.UpsertAgentProfileInput{
 		Name: "developer", Role: "developer", KubernetesAccess: "cluster-admin", Enabled: true,
@@ -222,10 +309,46 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_chats where project_id = $1 and slug = 'new-admin-chat'`, projectID).Scan(&newChatCount); err != nil || newChatCount != 0 {
 		t.Fatalf("новая запрещённая привязка создала чат: count=%d error=%v", newChatCount, err)
 	}
+	if _, _, err := repository.CreateChat(ctx, adminrepo.CreateChatInput{
+		ProjectID: projectID, MattermostChannelID: "channel-remapped", Name: "Existing admin chat", Slug: "existing-admin-chat",
+		ChatType: "single_custom", Settings: "{}", RoleIDs: []int64{roleID},
+	}); !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("channel remap cluster-admin chat error = %v", err)
+	}
+	var persistedChannel string
+	if err := pool.QueryRow(ctx, `select mattermost_channel_id from matter_codex_chats where id = $1`, chatID).Scan(&persistedChannel); err != nil || persistedChannel != "channel-existing" {
+		t.Fatalf("channel remap изменил чат: channel=%q error=%v", persistedChannel, err)
+	}
+	testFrozenBindingTwoConnectionNegatives(t, ctx, dsn, securityrepo.ClusterAdminBindingInput{
+		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
+		MattermostChannelID: "channel-existing", SessionKey: existingSessionKey,
+		ActorUser: "test", Operation: "test.binding.two-connection",
+	})
 	testInteractionResourceScopeAdmission(t, ctx, repository, projectID)
 
 	testAtomicProfileDowngradeBarrier(t, ctx, dsn, "developer")
+	runtimeBinding := securityrepo.ClusterAdminBindingInput{
+		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
+		MattermostChannelID: "channel-existing", SessionKey: existingSessionKey,
+		ActorUser: "test", Operation: "test.runtime.side_effect",
+	}
+	testRuntimeGuardCommittedRevocations(t, ctx, dsn, runtimeBinding)
+	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, runtimeBinding)
+	if err != nil || !allowed {
+		t.Fatalf("preliminary admission перед delete: allowed=%t error=%v", allowed, err)
+	}
 	testAtomicRoleDeleteBarrier(t, ctx, dsn, projectID, roleID)
+	runtimeSideEffect := false
+	if err := repository.WithExistingClusterAdminRuntimeGuard(ctx, runtimeBinding, func() error {
+		runtimeSideEffect = true
+		return nil
+	}); !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) || runtimeSideEffect {
+		t.Fatalf("runtime guard после committed delete: side_effect=%t error=%v", runtimeSideEffect, err)
+	}
+	var runtimeDeniedAuditCount int
+	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_audit_events where event_type = 'cluster_admin.runtime.denied'`).Scan(&runtimeDeniedAuditCount); err != nil || runtimeDeniedAuditCount < 3 {
+		t.Fatalf("runtime denial audit count = %d, error=%v", runtimeDeniedAuditCount, err)
+	}
 	var auditCount int
 	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_audit_events where event_type in ('cluster_admin.admission.allowed', 'cluster_admin.admission.denied')`).Scan(&auditCount); err != nil {
 		t.Fatalf("чтение cluster-admin audit: %v", err)
@@ -308,6 +431,116 @@ func testCapabilityCleanupRetention(t *testing.T, ctx context.Context, pool *pgx
 	var survivors int
 	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_interaction_capabilities where operation = 'action;kind=agents_menu;view=main' and expires_at >= $1`, now.Add(-24*time.Hour)).Scan(&survivors); err != nil || survivors != 2 {
 		t.Fatalf("cleanup удалил действующие/grace rows: survivors=%d error=%v", survivors, err)
+	}
+}
+
+func testRuntimeGuardCommittedRevocations(t *testing.T, ctx context.Context, dsn string, input securityrepo.ClusterAdminBindingInput) {
+	t.Helper()
+	requestPool := openMigrationSingleConnectionPool(t, ctx, dsn)
+	defer requestPool.Close()
+	mutationPool := openMigrationSingleConnectionPool(t, ctx, dsn)
+	defer mutationPool.Close()
+	repository := postgresrepo.NewRepository(requestPool)
+
+	tests := []struct {
+		name       string
+		mutateSQL  string
+		restoreSQL string
+		args       []any
+	}{
+		{
+			name:       "downgrade role",
+			mutateSQL:  `update matter_codex_agent_roles set kubernetes_access = 'read-only' where id = $1`,
+			restoreSQL: `update matter_codex_agent_roles set kubernetes_access = 'cluster-admin' where id = $1`,
+			args:       []any{input.RoleID},
+		},
+		{
+			name:       "disable participant",
+			mutateSQL:  `update matter_codex_chat_participants set enabled = false where chat_id = $1 and role_id = $2`,
+			restoreSQL: `update matter_codex_chat_participants set enabled = true where chat_id = $1 and role_id = $2`,
+			args:       []any{input.ChatID, input.RoleID},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			allowed, err := repository.AdmitExistingClusterAdminBinding(ctx, input)
+			if err != nil || !allowed {
+				t.Fatalf("preliminary admission: allowed=%t error=%v", allowed, err)
+			}
+			started := make(chan struct{})
+			committed := make(chan error, 1)
+			go func() {
+				close(started)
+				_, mutationErr := mutationPool.Exec(ctx, test.mutateSQL, test.args...)
+				committed <- mutationErr
+			}()
+			<-started
+			if err := <-committed; err != nil {
+				t.Fatalf("committed policy mutation: %v", err)
+			}
+			sideEffect := false
+			err = repository.WithExistingClusterAdminRuntimeGuard(ctx, input, func() error {
+				sideEffect = true
+				return nil
+			})
+			if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) || sideEffect {
+				t.Fatalf("runtime guard: side_effect=%t error=%v", sideEffect, err)
+			}
+			if _, err := mutationPool.Exec(ctx, test.restoreSQL, test.args...); err != nil {
+				t.Fatalf("restore synthetic policy fixture: %v", err)
+			}
+		})
+	}
+}
+
+func testFrozenBindingTwoConnectionNegatives(t *testing.T, ctx context.Context, dsn string, input securityrepo.ClusterAdminBindingInput) {
+	t.Helper()
+	poolOne := openMigrationSingleConnectionPool(t, ctx, dsn)
+	defer poolOne.Close()
+	poolTwo := openMigrationSingleConnectionPool(t, ctx, dsn)
+	defer poolTwo.Close()
+	channelRemap := input
+	channelRemap.MattermostChannelID = "channel-remapped"
+	newSession := input
+	newSession.SessionKey = "new-admin-session"
+	inputs := []securityrepo.ClusterAdminBindingInput{channelRemap, newSession}
+	repositories := []*postgresrepo.Repository{postgresrepo.NewRepository(poolOne), postgresrepo.NewRepository(poolTwo)}
+	ready := make(chan struct{}, 2)
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for index := range repositories {
+		go func(repo *postgresrepo.Repository, candidate securityrepo.ClusterAdminBindingInput) {
+			ready <- struct{}{}
+			<-start
+			allowed, err := repo.AdmitExistingClusterAdminBinding(ctx, candidate)
+			if err != nil {
+				results <- err
+				return
+			}
+			if allowed {
+				results <- errors.New("запрещённая cluster-admin binding разрешена")
+				return
+			}
+			results <- nil
+		}(repositories[index], inputs[index])
+	}
+	<-ready
+	<-ready
+	close(start)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatalf("two-connection frozen binding: %v", err)
+		}
+	}
+	var remappedChats, newSessions int
+	if err := poolOne.QueryRow(ctx, `select count(*) from matter_codex_chats where id = $1 and mattermost_channel_id = 'channel-remapped'`, input.ChatID).Scan(&remappedChats); err != nil {
+		t.Fatalf("проверка channel side effects: %v", err)
+	}
+	if err := poolOne.QueryRow(ctx, `select count(*) from matter_codex_agent_sessions where session_key = 'new-admin-session'`).Scan(&newSessions); err != nil {
+		t.Fatalf("проверка session side effects: %v", err)
+	}
+	if remappedChats != 0 || newSessions != 0 {
+		t.Fatalf("frozen binding создала DB side effects: remapped_chats=%d new_sessions=%d", remappedChats, newSessions)
 	}
 }
 

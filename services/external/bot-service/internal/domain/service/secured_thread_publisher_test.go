@@ -31,7 +31,8 @@ func (repository *publisherCapabilityRepository) IssueInteractionCapability(_ co
 	key := string(input.TokenHash)
 	repository.inputs[key] = input
 	repository.capabilities[key] = securityrepo.Capability{
-		Kind: input.Kind, Operation: input.Operation, ResourceType: input.ResourceType, ResourceID: input.ResourceID,
+		State: input.State,
+		Kind:  input.Kind, Operation: input.Operation, ResourceType: input.ResourceType, ResourceID: input.ResourceID,
 		ChannelID: input.ChannelID, PostBinding: input.PostBinding, ActorUserID: input.ActorUserID, ActorUserName: input.ActorUserName,
 		InstallationScope: input.InstallationScope, WorkspaceScope: input.WorkspaceScope, SessionScope: input.SessionScope,
 		IssuedAt: input.IssuedAt, ExpiresAt: input.ExpiresAt,
@@ -39,17 +40,37 @@ func (repository *publisherCapabilityRepository) IssueInteractionCapability(_ co
 	return nil
 }
 
+func (repository *publisherCapabilityRepository) CheckInteractionCapability(_ context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	return repository.checkInteractionCapability(input)
+}
+
 func (repository *publisherCapabilityRepository) ConsumeInteractionCapability(_ context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
+	capability, err := repository.checkInteractionCapability(input)
+	if err != nil {
+		return securityrepo.Capability{}, err
+	}
+	capability.State = securityrepo.CapabilityStateConsumed
+	capability.ConsumedAt = input.Now
+	repository.capabilities[string(input.TokenHash)] = capability
+	return capability, nil
+}
+
+func (repository *publisherCapabilityRepository) checkInteractionCapability(input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
 	key := string(input.TokenHash)
 	capability, ok := repository.capabilities[key]
 	if !ok {
 		return securityrepo.Capability{}, securityrepo.ErrCapabilityNotFound
 	}
 	issued := repository.inputs[key]
-	if !capability.ConsumedAt.IsZero() {
+	if capability.State == securityrepo.CapabilityStateConsumed || !capability.ConsumedAt.IsZero() {
 		return securityrepo.Capability{}, securityrepo.ErrCapabilityConsumed
+	}
+	if capability.State != securityrepo.CapabilityStateUnused {
+		return securityrepo.Capability{}, securityrepo.ErrCapabilityInactive
 	}
 	if !capability.ExpiresAt.After(input.Now) {
 		return securityrepo.Capability{}, securityrepo.ErrCapabilityExpired
@@ -57,9 +78,25 @@ func (repository *publisherCapabilityRepository) ConsumeInteractionCapability(_ 
 	if capability.Kind != input.Kind || capability.Operation != input.Operation || capability.ResourceType != input.ResourceType || capability.ResourceID != input.ResourceID || capability.ChannelID != input.ChannelID || capability.PostBinding != input.PostBinding || capability.ActorUserID != input.ActorUserID || !bytes.Equal(issued.ContextHash, input.ContextHash) {
 		return securityrepo.Capability{}, securityrepo.ErrCapabilityBinding
 	}
-	capability.ConsumedAt = input.Now
-	repository.capabilities[key] = capability
 	return capability, nil
+}
+
+func (repository *publisherCapabilityRepository) TransitionInteractionCapabilities(_ context.Context, input securityrepo.TransitionCapabilitiesInput) error {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	for _, tokenHash := range input.TokenHashes {
+		capability, ok := repository.capabilities[string(tokenHash)]
+		if !ok || capability.State != input.From {
+			return securityrepo.ErrCapabilityInactive
+		}
+	}
+	for _, tokenHash := range input.TokenHashes {
+		key := string(tokenHash)
+		capability := repository.capabilities[key]
+		capability.State = input.To
+		repository.capabilities[key] = capability
+	}
+	return nil
 }
 
 func (*publisherCapabilityRepository) AdmitExistingClusterAdmin(context.Context, securityrepo.ClusterAdminAdmissionInput) (bool, error) {
@@ -187,6 +224,15 @@ func TestSecuredThreadPublisherFailsClosedOnBindingSealAndUpdateErrors(t *testin
 			}
 			if test.name != "update failure" && len(backend.updates) != 0 {
 				t.Fatalf("failed binding reached update: %#v", backend.updates)
+			}
+			if test.name == "update failure" {
+				if len(backend.updates) != 1 || len(backend.updates[0].Actions) != 1 {
+					t.Fatalf("ambiguous update did not expose the applied card fixture: %#v", backend.updates)
+				}
+				callback := ActionCallback{Context: backend.updates[0].Actions[0].Context, UserID: "actor-1", ChannelID: "channel-1", PostID: "post-1"}
+				if _, authErr := security.AuthenticateAction(context.Background(), callback); !errors.Is(authErr, ErrInteractionAuthentication) {
+					t.Fatalf("actions from applied-then-error update remained usable: %v", authErr)
+				}
 			}
 		})
 	}

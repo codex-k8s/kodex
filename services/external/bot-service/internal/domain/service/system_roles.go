@@ -16,16 +16,14 @@ const (
 	systemMatterCodexProjectSlug = "agents"
 	systemMatterCodexRoleName    = "mattercodex-admin"
 	systemMatterCodexChatSlug    = "agents-control"
+	systemProjectRunsChannelSlug = "runs"
 )
 
 func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) error {
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return nil
 	}
-	if _, _, err := svc.preflightMatterCodexAdminBinding(ctx, "system_role.bootstrap.preflight"); err != nil {
-		return err
-	}
-	openAIAccountName, err := svc.preferredSystemOpenAIAccount(ctx)
+	manageOpenAIAccountName, err := svc.preferredManageOpenAIAccount(ctx)
 	if err != nil {
 		return err
 	}
@@ -38,15 +36,44 @@ func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) e
 		return err
 	}
 	for _, project := range projects {
-		if err := svc.bootstrapImproverRole(ctx, project, gitHubAccounts, openAIAccountName); err != nil {
+		if _, err := svc.ensureProjectRunsChannel(ctx, project); err != nil {
+			return err
+		}
+		if err := svc.bootstrapImproverRole(ctx, project, gitHubAccounts, manageOpenAIAccountName); err != nil {
+			return err
+		}
+		if err := svc.reconcileProjectRoleBotIdentities(ctx, project); err != nil {
 			return err
 		}
 	}
 	matterCodexProject, err := svc.bootstrapMatterCodexAdmin(ctx, gitHubAccounts)
 	if err != nil {
+		if errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+			return nil
+		}
 		return err
 	}
-	return svc.bootstrapImproverRole(ctx, matterCodexProject, gitHubAccounts, openAIAccountName)
+	if _, err := svc.ensureProjectRunsChannel(ctx, matterCodexProject); err != nil {
+		return err
+	}
+	if err := svc.bootstrapImproverRole(ctx, matterCodexProject, gitHubAccounts, manageOpenAIAccountName); err != nil {
+		return err
+	}
+	return svc.reconcileProjectRoleBotIdentities(ctx, matterCodexProject)
+}
+
+func (svc *SlashCommandService) ensureProjectRunsChannel(ctx context.Context, project entity.Project) (entity.Project, error) {
+	if svc.cfg.ChannelManager == nil || svc.cfg.Store == nil {
+		return project, nil
+	}
+	channel, _, err := svc.cfg.ChannelManager.EnsureProjectChannel(ctx, project.Slug, systemProjectRunsChannelSlug, "Runs", false, nil)
+	if err != nil {
+		return entity.Project{}, err
+	}
+	if strings.TrimSpace(channel.ID) == strings.TrimSpace(project.MattermostRunsChannelID) {
+		return project, nil
+	}
+	return svc.cfg.Store.UpdateProjectRunsChannel(ctx, project.ID, channel.ID)
 }
 
 func (svc *SlashCommandService) bootstrapImproverRole(ctx context.Context, project entity.Project, gitHubAccounts []entity.GitHubAccount, openAIAccountName string) error {
@@ -87,7 +114,7 @@ func (svc *SlashCommandService) bootstrapImproverRole(ctx context.Context, proje
 
 func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, gitHubAccounts []entity.GitHubAccount) (entity.Project, error) {
 	githubAccountName := preferredOwnerGitHubAccount(gitHubAccounts)
-	project, role, err := svc.preflightMatterCodexAdminBinding(ctx, "system_role.bootstrap")
+	project, role, chat, err := svc.preflightMatterCodexAdminBinding(ctx, "system_role.bootstrap")
 	if err != nil {
 		return entity.Project{}, err
 	}
@@ -115,14 +142,7 @@ func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, g
 	if err != nil {
 		return entity.Project{}, err
 	}
-	channelID := ""
-	if svc.cfg.ChannelManager != nil {
-		channel, _, err := svc.cfg.ChannelManager.EnsureProjectChannel(ctx, project.Slug, systemMatterCodexChatSlug, "Agents Control", true, nil)
-		if err != nil {
-			return entity.Project{}, err
-		}
-		channelID = channel.ID
-	}
+	channelID := chat.MattermostChannelID
 	if err := svc.ensureSystemRoleBotIdentity(ctx, project, role, channelID); err != nil {
 		return entity.Project{}, err
 	}
@@ -141,28 +161,38 @@ func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, g
 	return project, err
 }
 
-func (svc *SlashCommandService) preflightMatterCodexAdminBinding(ctx context.Context, operation string) (entity.Project, entity.AgentRole, error) {
+func (svc *SlashCommandService) preflightMatterCodexAdminBinding(ctx context.Context, operation string) (entity.Project, entity.AgentRole, entity.Chat, error) {
 	project, err := svc.cfg.Store.GetProjectBySlug(ctx, systemMatterCodexProjectSlug)
 	if err != nil {
 		if errors.Is(err, adminrepo.ErrNotFound) {
-			return entity.Project{}, entity.AgentRole{}, adminrepo.ErrClusterAdminAdmissionDenied
+			return entity.Project{}, entity.AgentRole{}, entity.Chat{}, adminrepo.ErrClusterAdminAdmissionDenied
 		}
-		return entity.Project{}, entity.AgentRole{}, err
+		return entity.Project{}, entity.AgentRole{}, entity.Chat{}, err
 	}
 	role, err := svc.systemRoleByName(ctx, project.ID, systemMatterCodexRoleName)
 	if err != nil {
-		return entity.Project{}, entity.AgentRole{}, err
+		return entity.Project{}, entity.AgentRole{}, entity.Chat{}, err
 	}
 	if role.ID == 0 {
-		return entity.Project{}, entity.AgentRole{}, adminrepo.ErrClusterAdminAdmissionDenied
+		return entity.Project{}, entity.AgentRole{}, entity.Chat{}, adminrepo.ErrClusterAdminAdmissionDenied
 	}
-	if err := svc.admitClusterAdminRoleBinding(ctx, role, 0, systemMatterCodexChatSlug, "", "bootstrap", operation); err != nil {
-		return entity.Project{}, entity.AgentRole{}, err
+	chats, err := svc.cfg.Store.ListChats(ctx, project.ID)
+	if err != nil {
+		return entity.Project{}, entity.AgentRole{}, entity.Chat{}, err
 	}
-	return project, role, nil
+	for _, chat := range chats {
+		if chat.Slug != systemMatterCodexChatSlug {
+			continue
+		}
+		if err := svc.admitClusterAdminRoleBinding(ctx, role, chat.ID, chat.Slug, chat.MattermostChannelID, "", "", "bootstrap", operation); err != nil {
+			return entity.Project{}, entity.AgentRole{}, entity.Chat{}, err
+		}
+		return project, role, chat, nil
+	}
+	return entity.Project{}, entity.AgentRole{}, entity.Chat{}, adminrepo.ErrClusterAdminAdmissionDenied
 }
 
-func (svc *SlashCommandService) admitClusterAdminRoleBinding(ctx context.Context, role entity.AgentRole, chatID int64, chatSlug string, actorUserID string, actorUser string, operation string) error {
+func (svc *SlashCommandService) admitClusterAdminRoleBinding(ctx context.Context, role entity.AgentRole, chatID int64, chatSlug string, channelID string, sessionKey string, actorUserID string, actorUser string, operation string) error {
 	if !strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
 		return nil
 	}
@@ -185,7 +215,7 @@ func (svc *SlashCommandService) admitClusterAdminRoleBinding(ctx context.Context
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	allowed, err = bindings.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
-		RoleID: role.ID, ProjectID: role.ProjectID, ChatID: chatID, ChatSlug: chatSlug,
+		RoleID: role.ID, ProjectID: role.ProjectID, ChatID: chatID, ChatSlug: chatSlug, MattermostChannelID: channelID, SessionKey: sessionKey,
 		ActorUserID: actorUserID, ActorUser: actorUser, Operation: operation,
 	})
 	if err != nil {
@@ -197,12 +227,29 @@ func (svc *SlashCommandService) admitClusterAdminRoleBinding(ctx context.Context
 	return nil
 }
 
-func (svc *SlashCommandService) preferredSystemOpenAIAccount(ctx context.Context) (string, error) {
+func (svc *SlashCommandService) withClusterAdminRoleBindingGuard(ctx context.Context, role entity.AgentRole, chatID int64, chatSlug string, channelID string, sessionKey string, actorUserID string, actorUser string, operation string, sideEffect func() error) error {
+	if !strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+		return sideEffect()
+	}
+	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminRuntimeGuardRepository)
+	if !ok {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return repository.WithExistingClusterAdminRuntimeGuard(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: role.ID, ProjectID: role.ProjectID, ChatID: chatID, ChatSlug: chatSlug,
+		MattermostChannelID: channelID, SessionKey: sessionKey, ActorUserID: actorUserID, ActorUser: actorUser, Operation: operation,
+	}, sideEffect)
+}
+
+func (svc *SlashCommandService) preferredManageOpenAIAccount(ctx context.Context) (string, error) {
+	return svc.preferredOpenAIAccount(ctx, []string{"openai-codex-manage", "manage", "openai-codex-main", "main", "primary"})
+}
+
+func (svc *SlashCommandService) preferredOpenAIAccount(ctx context.Context, preferredNames []string) (string, error) {
 	accounts, err := svc.cfg.Store.ListOpenAIAccounts(ctx, 100)
 	if err != nil {
 		return "", err
 	}
-	preferredNames := []string{"openai-radar-delivery", "main", "primary", "openai-radar-ops-review"}
 	for _, preferred := range preferredNames {
 		for _, account := range accounts {
 			if account.Name == preferred && account.Status == "authorized" {
@@ -226,6 +273,25 @@ func (svc *SlashCommandService) preferredSystemOpenAIAccount(ctx context.Context
 		return accounts[0].Name, nil
 	}
 	return "", nil
+}
+
+func (svc *SlashCommandService) reconcileProjectRoleBotIdentities(ctx context.Context, project entity.Project) error {
+	if svc.cfg.RoleBotManager == nil || svc.cfg.RuntimeRunner == nil {
+		return nil
+	}
+	roles, err := svc.cfg.Store.ListAgentRoles(ctx, project.ID)
+	if err != nil {
+		return err
+	}
+	for _, role := range roles {
+		if !role.Enabled {
+			continue
+		}
+		if _, err := svc.ensureRoleBotIdentity(ctx, project, role, ""); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func preferredProjectGitHubAccount(project entity.Project, accounts []entity.GitHubAccount) string {
@@ -303,7 +369,7 @@ func (svc *SlashCommandService) ensureRoleInProjectChats(ctx context.Context, pr
 		return err
 	}
 	for _, chat := range chats {
-		if err := svc.admitClusterAdminRoleBinding(ctx, role, chat.ID, chat.Slug, "", "bootstrap", "system_role.bind_chat"); err != nil {
+		if err := svc.admitClusterAdminRoleBinding(ctx, role, chat.ID, chat.Slug, chat.MattermostChannelID, "", "", "bootstrap", "system_role.bind_chat"); err != nil {
 			return err
 		}
 		if err := svc.ensureSystemRoleBotIdentity(ctx, project, role, chat.MattermostChannelID); err != nil {

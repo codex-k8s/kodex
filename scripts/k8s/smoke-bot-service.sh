@@ -44,14 +44,8 @@ if mattercodex_bool "$CHECK_URL"; then
   mattercodex_log "проверка полной публичной матрицы bot-service без передачи секретов и рабочих payload"
   slash_status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -X POST "$MATTERCODEX_BOT_SERVICE_SITE_URL/mattermost/slash/agents")"
   github_status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -X POST "$MATTERCODEX_BOT_SERVICE_SITE_URL/github/webhook")"
-  case "$slash_status" in
-    401|503) ;;
-    *) mattercodex_die "публичный slash endpoint вернул неожиданный HTTP-статус" ;;
-  esac
-  case "$github_status" in
-    401|503) ;;
-    *) mattercodex_die "публичный GitHub webhook вернул неожиданный HTTP-статус" ;;
-  esac
+  [ "$slash_status" = "401" ] || mattercodex_die "публичный slash endpoint не подтвердил настроенный fail-closed контур"
+  [ "$github_status" = "401" ] || mattercodex_die "публичный GitHub webhook не подтвердил настроенный fail-closed контур"
   internal_paths=(
     "/"
     "/healthz"

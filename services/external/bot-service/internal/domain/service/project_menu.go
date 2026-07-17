@@ -1271,6 +1271,10 @@ func (svc *SlashCommandService) handleProjectDialogUpsert(ctx context.Context, c
 	if err != nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.save.failed", map[string]any{"Error": safeError(err)})}
 	}
+	project, err = svc.ensureProjectRunsChannel(ctx, project)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.runs_channel.failed", map[string]any{"Error": safeError(err)})}
+	}
 	svc.recordProjectAudit(ctx, mattermostDialogSlash(state, command), "project.upserted", project.Slug, "project upserted from Mattermost dialog")
 	stateID := "label.updated"
 	if created {
@@ -1595,15 +1599,33 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldProjectID: svc.t("dialog.project.project_invalid", nil)}}
 	}
 	roles := make([]entity.AgentRole, 0, len(input.RoleIDs))
+	hasClusterAdmin := false
 	for _, roleID := range input.RoleIDs {
 		role, err := svc.cfg.Store.GetAgentRole(ctx, roleID)
 		if err != nil || role.ProjectID != project.ID || !role.Enabled {
 			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldPrimaryRoleID: svc.t("dialog.chat.role_invalid", nil)}}
 		}
 		roles = append(roles, role)
+		if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+			hasClusterAdmin = true
+		}
+	}
+	existingChat := entity.Chat{}
+	if hasClusterAdmin {
+		chats, err := svc.cfg.Store.ListChats(ctx, project.ID)
+		if err != nil {
+			return DialogSubmissionResult{StatusCode: 403, Error: svc.t("chat.save.failed", map[string]any{"Error": safeError(err)})}
+		}
+		for _, chat := range chats {
+			if chat.Slug == input.Slug {
+				existingChat = chat
+				input.MattermostChannelID = chat.MattermostChannelID
+				break
+			}
+		}
 	}
 	for _, role := range roles {
-		if err := svc.admitClusterAdminRoleBinding(ctx, role, 0, input.Slug, command.UserID, command.UserName, "chat.upsert"); err != nil {
+		if err := svc.admitClusterAdminRoleBinding(ctx, role, existingChat.ID, input.Slug, input.MattermostChannelID, "", command.UserID, command.UserName, "chat.upsert"); err != nil {
 			return DialogSubmissionResult{StatusCode: 403, Error: svc.t("chat.save.failed", map[string]any{"Error": safeError(err)})}
 		}
 	}
@@ -1616,7 +1638,7 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRepositoryID: svc.t("dialog.project_repo.repository_invalid", nil)}}
 		}
 	}
-	if svc.cfg.ChannelManager != nil {
+	if svc.cfg.ChannelManager != nil && !hasClusterAdmin {
 		if _, _, err := svc.cfg.ChannelManager.EnsureProjectTeam(ctx, project.Slug, project.Name, command.UserID); err != nil {
 			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.team.failed", map[string]any{"Error": safeError(err)})}
 		}
@@ -1627,6 +1649,17 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 		input.MattermostChannelID = channel.ID
 		for _, role := range roles {
 			if _, err := svc.ensureRoleBotIdentity(ctx, project, role, channel.ID); err != nil {
+				return DialogSubmissionResult{StatusCode: 200, Error: svc.t("agent_role.bot_identity.failed", map[string]any{"Error": safeError(err)})}
+			}
+		}
+	}
+	if svc.cfg.ChannelManager != nil && hasClusterAdmin {
+		for _, role := range roles {
+			err := svc.withClusterAdminRoleBindingGuard(ctx, role, existingChat.ID, input.Slug, input.MattermostChannelID, "", command.UserID, command.UserName, "chat.bot_identity.side_effect", func() error {
+				_, identityErr := svc.ensureRoleBotIdentity(ctx, project, role, input.MattermostChannelID)
+				return identityErr
+			})
+			if err != nil {
 				return DialogSubmissionResult{StatusCode: 200, Error: svc.t("agent_role.bot_identity.failed", map[string]any{"Error": safeError(err)})}
 			}
 		}
@@ -2374,7 +2407,8 @@ func (svc *SlashCommandService) ensureRoleBotIdentity(ctx context.Context, proje
 	username := roleBotUsername(project, role)
 	existing, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, role.ID)
 	if err == nil && existing.MattermostUserID != "" && existing.TokenSecretRef != "" && existing.Username == username {
-		if _, secretErr := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); secretErr == nil {
+		botErr := svc.cfg.RoleBotManager.EnsureExistingRoleBot(ctx, existing.MattermostUserID)
+		if _, secretErr := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); botErr == nil && secretErr == nil {
 			if channelID != "" {
 				_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID)
 			}

@@ -35,4 +35,5 @@ returning
 	sessions.last_activity_at,
 	sessions.expires_at,
 	sessions.created_at,
-	sessions.updated_at;
+	sessions.updated_at,
+	sessions.openai_account_name;

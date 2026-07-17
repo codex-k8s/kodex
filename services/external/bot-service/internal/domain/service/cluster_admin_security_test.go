@@ -17,7 +17,17 @@ type admittedAdminStore struct {
 	bindingAdmission securityrepo.ClusterAdminBindingInput
 	calls            int
 	bindingCalls     int
+	guardCalls       int
 	denyBinding      bool
+	denyGuard        bool
+}
+
+func (store *admittedAdminStore) WithExistingClusterAdminRuntimeGuard(_ context.Context, _ securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
+	store.guardCalls++
+	if !store.allowed || store.denyGuard {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return sideEffect()
 }
 
 func (store *admittedAdminStore) AdmitExistingClusterAdminBinding(_ context.Context, input securityrepo.ClusterAdminBindingInput) (bool, error) {
@@ -33,8 +43,16 @@ func (store *admittedAdminStore) IssueInteractionCapability(context.Context, sec
 	return nil
 }
 
+func (store *admittedAdminStore) CheckInteractionCapability(context.Context, securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	return securityrepo.Capability{}, securityrepo.ErrCapabilityNotFound
+}
+
 func (store *admittedAdminStore) ConsumeInteractionCapability(context.Context, securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
 	return securityrepo.Capability{}, securityrepo.ErrCapabilityNotFound
+}
+
+func (store *admittedAdminStore) TransitionInteractionCapabilities(context.Context, securityrepo.TransitionCapabilitiesInput) error {
+	return nil
 }
 
 func (store *admittedAdminStore) AdmitExistingClusterAdmin(_ context.Context, input securityrepo.ClusterAdminAdmissionInput) (bool, error) {
@@ -61,7 +79,7 @@ func TestClusterAdminRunRequiresExactServerSideGrant(t *testing.T) {
 			svc := NewChatRunService(ChatRunServiceConfig{Store: test.store, RuntimeRunner: runner})
 			_, err := svc.startRun(context.Background(), chatRunStartInput{
 				RunID: "run-1", Mode: chatRunModeDeveloper, Role: role,
-				Chat:   entity.Chat{ID: 9, ProjectID: 7, Slug: "admin-chat"},
+				Chat:   entity.Chat{ID: 9, ProjectID: 7, Slug: "admin-chat", MattermostChannelID: "channel-existing"},
 				Prompt: "cluster-admin", RuntimeEnv: nil,
 			})
 			if test.wantError && !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
@@ -84,10 +102,17 @@ func TestClusterAdminRunRequiresExactServerSideGrant(t *testing.T) {
 				if admitted.bindingCalls != wantBindingCalls {
 					t.Fatalf("binding admission calls = %d, want %d", admitted.bindingCalls, wantBindingCalls)
 				}
+				wantGuardCalls := 0
+				if admitted.allowed && !admitted.denyBinding {
+					wantGuardCalls = 1
+				}
+				if admitted.guardCalls != wantGuardCalls {
+					t.Fatalf("runtime guard calls = %d, want %d", admitted.guardCalls, wantGuardCalls)
+				}
 				if admitted.admission.SubjectType != "agent_role" || admitted.admission.SubjectKey != "42" || admitted.admission.ProjectID != 7 || admitted.admission.ProfileName != "configured-admin" {
 					t.Fatalf("subject admission = %#v", admitted.admission)
 				}
-				if admitted.allowed && (admitted.bindingAdmission.RoleID != 42 || admitted.bindingAdmission.ProjectID != 7 || admitted.bindingAdmission.ChatID != 9 || admitted.bindingAdmission.ChatSlug != "admin-chat") {
+				if admitted.allowed && (admitted.bindingAdmission.RoleID != 42 || admitted.bindingAdmission.ProjectID != 7 || admitted.bindingAdmission.ChatID != 9 || admitted.bindingAdmission.ChatSlug != "admin-chat" || admitted.bindingAdmission.MattermostChannelID != "channel-existing") {
 					t.Fatalf("binding admission = %#v", admitted.bindingAdmission)
 				}
 			}
@@ -111,5 +136,68 @@ func TestPromptCannotEscalateReadOnlyRole(t *testing.T) {
 	}
 	if len(runner.developerRuns) != 1 || runner.developerRuns[0].KubernetesAccess != "read-only" {
 		t.Fatalf("prompt changed Kubernetes access: %#v", runner.developerRuns)
+	}
+}
+
+func TestClusterAdminRuntimeGuardDeniesCommittedChangeBeforeSideEffect(t *testing.T) {
+	store := &admittedAdminStore{fakeAdminStore: &fakeAdminStore{}, allowed: true, denyGuard: true}
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{Store: store, RuntimeRunner: runner})
+	_, err := svc.startRun(context.Background(), chatRunStartInput{
+		RunID: "run-guard-denied",
+		Mode:  chatRunModeDeveloper,
+		Role: entity.AgentRole{
+			ID: 42, ProjectID: 7, Name: "configured-admin", KubernetesAccess: "cluster-admin",
+		},
+		Chat: entity.Chat{
+			ID: 9, ProjectID: 7, Slug: "admin-chat", MattermostChannelID: "channel-existing",
+		},
+		Prompt: "cluster-admin",
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("startRun() error = %v", err)
+	}
+	if store.calls != 1 || store.bindingCalls != 1 || store.guardCalls != 1 {
+		t.Fatalf("admission calls: subject=%d binding=%d guard=%d", store.calls, store.bindingCalls, store.guardCalls)
+	}
+	if store.bindingAdmission.MattermostChannelID != "channel-existing" {
+		t.Fatalf("binding admission channel = %q", store.bindingAdmission.MattermostChannelID)
+	}
+	if len(runner.developerRuns) != 0 || runner.startedDeveloperRunID != "" {
+		t.Fatalf("runtime side effect после guard denial: %#v", runner.developerRuns)
+	}
+}
+
+func TestClusterAdminNewSessionDeniedBeforeDatabaseAndRuntimeSideEffects(t *testing.T) {
+	baseStore := chatRuntimeStore()
+	project := baseStore.projects[1]
+	role := entity.AgentRole{
+		ID: 1, ProjectID: project.ID, Name: "configured-admin", RoleType: "admin",
+		OpenAIAccountName: "main", KubernetesAccess: "cluster-admin", Enabled: true,
+	}
+	chat := entity.Chat{
+		ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Admin", Slug: "admin-chat", ChatType: "single_custom",
+	}
+	baseStore.agentRoles[role.ID] = role
+	baseStore.chats[chat.ID] = chat
+	baseStore.setChatBindings(chat.ID, []int64{role.ID}, nil)
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyBinding: true}
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+	})
+	_, err := svc.EnqueueAgentTurn(context.Background(), AgentTurnRequest{
+		Project: project, Chat: chat, Role: role, UserID: "owner-id", UserName: "owner",
+		UserMessage: "start", ReplyRootID: "root-new", SessionRootID: "root-new", SessionScope: agentSessionScopeThreadRole,
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("EnqueueAgentTurn() error = %v", err)
+	}
+	wantSessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-new")
+	if store.bindingAdmission.MattermostChannelID != "channel-existing" || store.bindingAdmission.SessionKey != wantSessionKey {
+		t.Fatalf("new session admission = %#v", store.bindingAdmission)
+	}
+	if len(baseStore.agentSessions) != 0 || len(baseStore.sessionTurns) != 0 || len(runner.sessionRuns) != 0 {
+		t.Fatalf("denied new session caused side effects: sessions=%#v turns=%#v runtime=%#v", baseStore.agentSessions, baseStore.sessionTurns, runner.sessionRuns)
 	}
 }

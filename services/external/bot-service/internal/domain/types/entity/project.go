@@ -3,17 +3,18 @@ package entity
 import "time"
 
 type Project struct {
-	ID                int64
-	Name              string
-	Slug              string
-	MattermostTeamID  string
-	GitHubAccountName string
-	GitHubOwner       string
-	GitHubOwnerType   string
-	Description       string
-	AdvancedSettings  string
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	ID                      int64
+	Name                    string
+	Slug                    string
+	MattermostTeamID        string
+	MattermostRunsChannelID string
+	GitHubAccountName       string
+	GitHubOwner             string
+	GitHubOwnerType         string
+	Description             string
+	AdvancedSettings        string
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
 }
 
 type ProjectRepository struct {
@@ -172,6 +173,7 @@ type AgentSession struct {
 	SessionScope             string
 	MattermostChannelID      string
 	MattermostRootPostID     string
+	OpenAIAccountName        string
 	CodexSessionID           string
 	Status                   string
 	ActiveTurnID             int64
@@ -197,6 +199,10 @@ type AgentSessionTurn struct {
 	MattermostRootPostID   string
 	MattermostPostID       string
 	MattermostStatusPostID string
+	MattermostRunsPostID   string
+	ParentTurnIDs          []int64
+	TriggerPostIDs         []string
+	InitiatorUserNames     []string
 	UserID                 string
 	UserName               string
 	Message                string

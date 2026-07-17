@@ -14,7 +14,8 @@ insert into matter_codex_interaction_capabilities (
 	session_scope,
 	context_hash,
 	issued_at,
-	expires_at
+	expires_at,
+	status
 ) values (
-	$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+	$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 )

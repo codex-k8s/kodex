@@ -17,5 +17,6 @@ type MattermostRoleBotBinding struct {
 
 type MattermostRoleBotManager interface {
 	EnsureRoleBot(ctx context.Context, input MattermostRoleBotInput) (MattermostRoleBotBinding, error)
+	EnsureExistingRoleBot(ctx context.Context, userID string) error
 	EnsureProjectChannelMember(ctx context.Context, teamName string, channelID string, userID string) error
 }

@@ -11,9 +11,20 @@ var (
 	ErrCapabilityExpired  = errors.New("interaction capability expired")
 	ErrCapabilityConsumed = errors.New("interaction capability consumed")
 	ErrCapabilityBinding  = errors.New("interaction capability binding mismatch")
+	ErrCapabilityInactive = errors.New("interaction capability inactive")
+)
+
+type CapabilityState string
+
+const (
+	CapabilityStatePending  CapabilityState = "pending"
+	CapabilityStateUnused   CapabilityState = "unused"
+	CapabilityStateConsumed CapabilityState = "consumed"
+	CapabilityStateRevoked  CapabilityState = "revoked"
 )
 
 type Capability struct {
+	State             CapabilityState
 	Kind              string
 	Operation         string
 	ResourceType      string
@@ -46,6 +57,7 @@ type IssueCapabilityInput struct {
 	ContextHash       []byte
 	IssuedAt          time.Time
 	ExpiresAt         time.Time
+	State             CapabilityState
 }
 
 type ConsumeCapabilityInput struct {
@@ -59,6 +71,12 @@ type ConsumeCapabilityInput struct {
 	ActorUserID  string
 	ContextHash  []byte
 	Now          time.Time
+}
+
+type TransitionCapabilitiesInput struct {
+	TokenHashes [][]byte
+	From        CapabilityState
+	To          CapabilityState
 }
 
 type InteractionResourceAdmissionInput struct {
@@ -75,13 +93,15 @@ type InteractionResourceAdmissionInput struct {
 }
 
 type ClusterAdminBindingInput struct {
-	RoleID      int64
-	ProjectID   int64
-	ChatID      int64
-	ChatSlug    string
-	Operation   string
-	ActorUserID string
-	ActorUser   string
+	RoleID              int64
+	ProjectID           int64
+	ChatID              int64
+	ChatSlug            string
+	MattermostChannelID string
+	SessionKey          string
+	Operation           string
+	ActorUserID         string
+	ActorUser           string
 }
 
 type CapabilityCleanupInput struct {
@@ -101,7 +121,9 @@ type ClusterAdminAdmissionInput struct {
 
 type Repository interface {
 	IssueInteractionCapability(ctx context.Context, input IssueCapabilityInput) error
+	CheckInteractionCapability(ctx context.Context, input ConsumeCapabilityInput) (Capability, error)
 	ConsumeInteractionCapability(ctx context.Context, input ConsumeCapabilityInput) (Capability, error)
+	TransitionInteractionCapabilities(ctx context.Context, input TransitionCapabilitiesInput) error
 	AdmitExistingClusterAdmin(ctx context.Context, input ClusterAdminAdmissionInput) (bool, error)
 }
 
@@ -111,6 +133,10 @@ type InteractionResourceAdmissionRepository interface {
 
 type ClusterAdminBindingRepository interface {
 	AdmitExistingClusterAdminBinding(ctx context.Context, input ClusterAdminBindingInput) (bool, error)
+}
+
+type ClusterAdminRuntimeGuardRepository interface {
+	WithExistingClusterAdminRuntimeGuard(ctx context.Context, input ClusterAdminBindingInput, sideEffect func() error) error
 }
 
 type CapabilityCleanupRepository interface {

@@ -494,6 +494,7 @@ func (repo *Repository) UpsertAgentSession(ctx context.Context, input adminrepo.
 		input.SessionScope,
 		input.MattermostChannelID,
 		input.MattermostRootPostID,
+		input.OpenAIAccountName,
 		input.TTLSeconds,
 		input.Capabilities,
 	))
@@ -682,6 +683,7 @@ func (repo *Repository) CreateAgentSessionTurn(ctx context.Context, input adminr
 		input.MattermostChannelID,
 		input.MattermostRootPostID,
 		input.MattermostPostID,
+		input.ParentTurnID,
 		input.UserID,
 		input.UserName,
 		input.Message,
@@ -750,6 +752,30 @@ func (repo *Repository) UpdateAgentSessionTurnStatusPost(ctx context.Context, in
 	))
 	if err != nil {
 		return entity.AgentSessionTurn{}, fmt.Errorf("update agent session turn status post: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) UpdateAgentSessionTurnRunsPost(ctx context.Context, input adminrepo.UpdateAgentSessionTurnRunsPostInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__update_runs_post.sql"),
+		input.TurnID,
+		input.RunsPostID,
+	))
+	if err != nil {
+		return entity.AgentSessionTurn{}, fmt.Errorf("update agent session turn runs post: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) AddAgentSessionTurnOrigin(ctx context.Context, input adminrepo.AddAgentSessionTurnOriginInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__add_origin.sql"),
+		input.TurnID,
+		input.ParentTurnID,
+		input.TriggerPostID,
+		input.InitiatorUserName,
+	))
+	if err != nil {
+		return entity.AgentSessionTurn{}, fmt.Errorf("add agent session turn origin: %w", err)
 	}
 	return item, nil
 }
@@ -1287,6 +1313,7 @@ func scanAgentSessionFields(row pgx.Row, extra ...any) (entity.AgentSession, err
 		&item.ExpiresAt,
 		&item.CreatedAt,
 		&item.UpdatedAt,
+		&item.OpenAIAccountName,
 	}
 	dest = append(dest, extra...)
 	if err := row.Scan(dest...); err != nil {
@@ -1320,6 +1347,10 @@ func scanAgentSessionTurn(row pgx.Row) (entity.AgentSessionTurn, error) {
 		&item.MattermostRootPostID,
 		&item.MattermostPostID,
 		&item.MattermostStatusPostID,
+		&item.MattermostRunsPostID,
+		&item.ParentTurnIDs,
+		&item.TriggerPostIDs,
+		&item.InitiatorUserNames,
 		&item.UserID,
 		&item.UserName,
 		&item.Message,

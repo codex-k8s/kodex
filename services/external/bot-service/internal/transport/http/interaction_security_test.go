@@ -49,6 +49,7 @@ func (repo *memoryInteractionRepository) IssueInteractionCapability(_ context.Co
 	key := string(input.TokenHash)
 	repo.inputs[key] = input
 	repo.capabilities[key] = securityrepo.Capability{
+		State:             input.State,
 		Kind:              input.Kind,
 		Operation:         input.Operation,
 		ResourceType:      input.ResourceType,
@@ -64,6 +65,12 @@ func (repo *memoryInteractionRepository) IssueInteractionCapability(_ context.Co
 		ExpiresAt:         input.ExpiresAt,
 	}
 	return nil
+}
+
+func (repo *memoryInteractionRepository) CheckInteractionCapability(_ context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	return repo.checkInteractionCapability(input)
 }
 
 func TestRouterReturnsRetryableFailureWhenActionCardCannotBeSealed(t *testing.T) {
@@ -97,13 +104,27 @@ func (repo *memoryInteractionRepository) ConsumeInteractionCapability(_ context.
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 	repo.consumes++
+	capability, err := repo.checkInteractionCapability(input)
+	if err != nil {
+		return securityrepo.Capability{}, err
+	}
+	capability.State = securityrepo.CapabilityStateConsumed
+	capability.ConsumedAt = input.Now
+	repo.capabilities[string(input.TokenHash)] = capability
+	return capability, nil
+}
+
+func (repo *memoryInteractionRepository) checkInteractionCapability(input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
 	key := string(input.TokenHash)
 	capability, ok := repo.capabilities[key]
 	if !ok {
 		return securityrepo.Capability{}, securityrepo.ErrCapabilityNotFound
 	}
-	if !capability.ConsumedAt.IsZero() {
+	if capability.State == securityrepo.CapabilityStateConsumed || !capability.ConsumedAt.IsZero() {
 		return securityrepo.Capability{}, securityrepo.ErrCapabilityConsumed
+	}
+	if capability.State != securityrepo.CapabilityStateUnused {
+		return securityrepo.Capability{}, securityrepo.ErrCapabilityInactive
 	}
 	if !capability.ExpiresAt.After(input.Now) {
 		return securityrepo.Capability{}, securityrepo.ErrCapabilityExpired
@@ -115,9 +136,25 @@ func (repo *memoryInteractionRepository) ConsumeInteractionCapability(_ context.
 		capability.ActorUserID != input.ActorUserID || !bytes.Equal(issued.ContextHash, input.ContextHash) {
 		return securityrepo.Capability{}, securityrepo.ErrCapabilityBinding
 	}
-	capability.ConsumedAt = input.Now
-	repo.capabilities[key] = capability
 	return capability, nil
+}
+
+func (repo *memoryInteractionRepository) TransitionInteractionCapabilities(_ context.Context, input securityrepo.TransitionCapabilitiesInput) error {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	for _, tokenHash := range input.TokenHashes {
+		capability, ok := repo.capabilities[string(tokenHash)]
+		if !ok || capability.State != input.From {
+			return securityrepo.ErrCapabilityInactive
+		}
+	}
+	for _, tokenHash := range input.TokenHashes {
+		key := string(tokenHash)
+		capability := repo.capabilities[key]
+		capability.State = input.To
+		repo.capabilities[key] = capability
+	}
+	return nil
 }
 
 func (repo *memoryInteractionRepository) AdmitExistingClusterAdmin(_ context.Context, input securityrepo.ClusterAdminAdmissionInput) (bool, error) {
@@ -271,6 +308,18 @@ func TestInteractionCapabilityReplayAndAdmissionDeny(t *testing.T) {
 					t.Fatalf("indeterminate error = %v", err)
 				}
 			}
+			if status != statusservice.AdmissionAllowed {
+				if repo.consumes != 0 {
+					t.Fatalf("отклонённый допуск погасил capability: consumes=%d", repo.consumes)
+				}
+				recovered := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{Repository: repo, Admission: fixedAdmission{status: statusservice.AdmissionAllowed}})
+				if _, retryErr := recovered.AuthenticateAction(context.Background(), callback); retryErr != nil {
+					t.Fatalf("retry after admission recovery = %v", retryErr)
+				}
+				if _, replayErr := recovered.AuthenticateAction(context.Background(), callback); !errors.Is(replayErr, statusservice.ErrInteractionAuthentication) {
+					t.Fatalf("replay after recovered retry = %v", replayErr)
+				}
+			}
 		})
 	}
 }
@@ -400,7 +449,9 @@ func TestRouterRejectsUnsafeResponseURLBeforeBusinessSideEffects(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			store := &fakeRouterAdminStore{}
-			router := testRouterWithDialogStore(&fakeDialogOpener{}, store, newMemoryInteractionSecurity())
+			repository := &memoryInteractionRepository{capabilities: map[string]securityrepo.Capability{}, inputs: map[string]securityrepo.IssueCapabilityInput{}, admissions: map[string]bool{}}
+			security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{Repository: repository, Admission: fixedAdmission{status: statusservice.AdmissionAllowed}})
+			router := testRouterWithDialogStore(&fakeDialogOpener{}, store, security)
 			resolver := &fakeMattermostResolver{addresses: [][]net.IPAddr{test.addresses}}
 			dialer := &pipeMattermostDialer{}
 			router.mattermostResponses = newMattermostResponseClient("https://mattermost.example.com", "", resolver, dialer)
@@ -416,6 +467,29 @@ func TestRouterRejectsUnsafeResponseURLBeforeBusinessSideEffects(t *testing.T) {
 			}
 			if store.upsertCount != 0 || store.auditRecorded || len(dialer.addresses) != 0 {
 				t.Fatalf("unsafe response_url caused side effects: upserts=%d audit=%t dial=%#v", store.upsertCount, store.auditRecorded, dialer.addresses)
+			}
+			if repository.consumes != 0 {
+				t.Fatalf("unsafe response_url погасил capability: consumes=%d", repository.consumes)
+			}
+
+			var retryPayload map[string]any
+			if err := json.Unmarshal([]byte(body), &retryPayload); err != nil {
+				t.Fatal(err)
+			}
+			retryPayload["url"] = "http://mattermost.test:8065/hooks/value"
+			retryBody, _ := json.Marshal(retryPayload)
+			router.mattermostResponses = newMattermostResponseClient("", "http://mattermost.test:8065", &fakeMattermostResolver{addresses: [][]net.IPAddr{{{IP: net.ParseIP("10.20.30.40")}}}}, &pipeMattermostDialer{})
+			for attempt, wantStatus := range []int{200, 401} {
+				retryRecorder := httptest.NewRecorder()
+				retryRequest := httptest.NewRequest("POST", "/mattermost/dialogs/agents", bytes.NewReader(retryBody))
+				retryRequest.Header.Set("Content-Type", "application/json")
+				router.ServeHTTP(retryRecorder, retryRequest)
+				if retryRecorder.Code != wantStatus {
+					t.Fatalf("retry attempt %d status = %d body = %s", attempt+1, retryRecorder.Code, retryRecorder.Body.String())
+				}
+			}
+			if repository.consumes != 1 || store.upsertCount != 1 {
+				t.Fatalf("corrected retry/replay: consumes=%d upserts=%d", repository.consumes, store.upsertCount)
 			}
 		})
 	}

@@ -214,13 +214,25 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 
 	svc.ensureRequestedRoleChannelMember(ctx, project, targetChat, targetRole)
 	requesterUserName := svc.sessionMattermostUsername(ctx, session)
-	rootPost, err := svc.postDelegatedAgentThread(ctx, delegation, targetChat, targetRole, requesterUserName, command.Message)
+	sourceThreadURL := svc.mattermostThreadURL(project.Slug, session.MattermostRootPostID)
+	rootPost, err := svc.postDelegatedAgentThread(ctx, delegation, targetChat, targetRole, requesterUserName, sourceThreadURL, command.Message)
 	if err != nil {
 		_, _ = svc.cfg.Store.SetAgentDelegationFailed(ctx, delegation.ID)
 		return AgentSessionDelegationResult{}, err
 	}
 	delegation, err = svc.cfg.Store.SetAgentDelegationRoot(ctx, delegation.ID, rootPost.PostID)
 	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	targetThreadURL := svc.mattermostThreadURL(project.Slug, rootPost.PostID)
+	auditPost, err := svc.postCrossChatDelegationAudit(ctx, session, requesterUserName, targetRole.Name, targetChat.Slug, targetThreadURL, command.Message)
+	if err != nil {
+		_, _ = svc.cfg.Store.SetAgentDelegationFailed(ctx, delegation.ID)
+		return AgentSessionDelegationResult{}, err
+	}
+	sourceLaunchURL := svc.mattermostThreadURL(project.Slug, auditPost.PostID)
+	if err := svc.updateDelegatedAgentThreadSourceLink(ctx, delegation, targetChat, targetRole, requesterUserName, rootPost, sourceThreadURL, sourceLaunchURL, command.Message); err != nil {
+		_, _ = svc.cfg.Store.SetAgentDelegationFailed(ctx, delegation.ID)
 		return AgentSessionDelegationResult{}, err
 	}
 	repositories, err := svc.chatRepositories(ctx, targetChat)
@@ -235,11 +247,12 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 		Repositories:  repositories,
 		UserName:      requesterUserName,
 		UserMessage:   crossChatDelegatedAgentRequestMessage(requesterUserName, targetRole.Name, command.Message),
-		SourcePostID:  rootPost.PostID,
+		SourcePostID:  auditPost.PostID,
 		ReplyRootID:   rootPost.PostID,
 		SessionRootID: rootPost.PostID,
 		SessionScope:  agentSessionScopeThreadRole,
 		TTLSeconds:    defaultThreadSessionTTLSeconds,
+		ParentTurnID:  session.ActiveTurnID,
 	})
 	if err != nil {
 		_, _ = svc.cfg.Store.SetAgentDelegationFailed(ctx, delegation.ID)
@@ -254,7 +267,6 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 		return AgentSessionDelegationResult{}, err
 	}
 	result := svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation)
-	_, _ = svc.postCrossChatDelegationAudit(ctx, session, requesterUserName, targetRole.Name, targetChat.Slug, result.TargetThreadURL, command.Message)
 	return result, nil
 }
 
@@ -333,8 +345,10 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 		return AgentSessionDelegationResult{}, err
 	}
 	requesterUserName := svc.sessionMattermostUsername(ctx, session)
-	callbackPrompt := crossChatDelegationCallbackMessage(requesterUserName, delegation.Title, svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID), message)
-	turn, runID, err := svc.enqueueDelegationCallback(ctx, project, sourceSession, sourceChat, sourceRole, requesterUserName, callbackPrompt)
+	targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
+	sourceThreadURL := svc.mattermostThreadURL(project.Slug, sourceSession.MattermostRootPostID)
+	callbackPrompt := crossChatDelegationCallbackMessage(requesterUserName, delegation.Title, targetThreadURL, message)
+	turn, runID, err := svc.enqueueDelegationCallback(ctx, project, sourceSession, sourceChat, sourceRole, requesterUserName, callbackPrompt, delegation.TargetTurnID, delegation.TargetRootPostID)
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
@@ -342,11 +356,12 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
-	_, _ = svc.postDelegationCallbackAudit(ctx, sourceSession, requesterUserName, delegation.Title, svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID), message)
+	_, _ = svc.postDelegationCallbackAudit(ctx, sourceSession, requesterUserName, delegation.Title, targetThreadURL, message)
+	_, _ = svc.postDelegationReturnAudit(ctx, session, requesterUserName, delegation.Title, sourceThreadURL)
 	return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
 }
 
-func (svc *AgentSessionService) enqueueDelegationCallback(ctx context.Context, project entity.Project, sourceSession entity.AgentSession, sourceChat entity.Chat, sourceRole entity.AgentRole, requesterUserName string, message string) (entity.AgentSessionTurn, string, error) {
+func (svc *AgentSessionService) enqueueDelegationCallback(ctx context.Context, project entity.Project, sourceSession entity.AgentSession, sourceChat entity.Chat, sourceRole entity.AgentRole, requesterUserName string, message string, parentTurnID int64, triggerPostID string) (entity.AgentSessionTurn, string, error) {
 	queuedTurns, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, sourceSession.ID)
 	if err != nil {
 		return entity.AgentSessionTurn{}, "", err
@@ -356,6 +371,14 @@ func (svc *AgentSessionService) enqueueDelegationCallback(ctx context.Context, p
 			TurnID:  queuedTurns[0].ID,
 			Message: appendDelegationCallbackToQueuedPrompt(queuedTurns[0].Message, message),
 		})
+		if err == nil && parentTurnID > 0 {
+			turn, err = svc.cfg.Store.AddAgentSessionTurnOrigin(ctx, adminrepo.AddAgentSessionTurnOriginInput{
+				TurnID:            turn.ID,
+				ParentTurnID:      parentTurnID,
+				TriggerPostID:     triggerPostID,
+				InitiatorUserName: requesterUserName,
+			})
+		}
 		return turn, turn.RunID, err
 	}
 	repositories, err := svc.chatRepositories(ctx, sourceChat)
@@ -369,11 +392,12 @@ func (svc *AgentSessionService) enqueueDelegationCallback(ctx context.Context, p
 		Repositories:  repositories,
 		UserName:      requesterUserName,
 		UserMessage:   message,
-		SourcePostID:  sourceSession.MattermostRootPostID,
+		SourcePostID:  triggerPostID,
 		ReplyRootID:   sourceSession.MattermostRootPostID,
 		SessionRootID: sourceSession.MattermostRootPostID,
 		SessionScope:  sourceSession.SessionScope,
 		TTLSeconds:    sourceSession.TTLSeconds,
+		ParentTurnID:  parentTurnID,
 	})
 	if err != nil {
 		return entity.AgentSessionTurn{}, "", err
@@ -418,8 +442,8 @@ func projectRepositoryNames(repositories []entity.ProjectRepository) []string {
 	return names
 }
 
-func (svc *AgentSessionService) postDelegatedAgentThread(ctx context.Context, delegation entity.AgentDelegation, chat entity.Chat, role entity.AgentRole, requesterUserName string, message string) (MattermostPostRef, error) {
-	body := crossChatDelegationRootMessage(requesterUserName, role.Name, delegation.Title, message)
+func (svc *AgentSessionService) postDelegatedAgentThread(ctx context.Context, delegation entity.AgentDelegation, chat entity.Chat, role entity.AgentRole, requesterUserName string, sourceThreadURL string, message string) (MattermostPostRef, error) {
+	body := crossChatDelegationRootMessage(requesterUserName, role.Name, delegation.Title, sourceThreadURL, message)
 	chunks := svc.splitMattermostThreadMessage(ctx, body)
 	if len(chunks) == 0 {
 		return MattermostPostRef{}, fmt.Errorf("delegation thread message is empty")
@@ -451,6 +475,29 @@ func (svc *AgentSessionService) postDelegatedAgentThread(ctx context.Context, de
 	return root, nil
 }
 
+func (svc *AgentSessionService) updateDelegatedAgentThreadSourceLink(ctx context.Context, delegation entity.AgentDelegation, chat entity.Chat, role entity.AgentRole, requesterUserName string, rootPost MattermostPostRef, previousURL string, sourceLaunchURL string, message string) error {
+	body := crossChatDelegationRootMessage(requesterUserName, role.Name, delegation.Title, previousURL, message)
+	chunks := svc.splitMattermostThreadMessage(ctx, body)
+	if len(chunks) == 0 || strings.TrimSpace(previousURL) == "" || strings.TrimSpace(sourceLaunchURL) == "" {
+		return fmt.Errorf("delegation source launch message link is empty")
+	}
+	rootMessage := agentNoTriggerMessage(chunks[0])
+	updatedMessage := strings.Replace(rootMessage, previousURL, sourceLaunchURL, 1)
+	if updatedMessage == rootMessage {
+		return fmt.Errorf("delegation source thread link was not found in the target root message")
+	}
+	_, err := svc.cfg.ThreadPublisher.UpdateThreadMessage(ctx, MattermostThreadUpdateInput{
+		ChannelID: chat.MattermostChannelID,
+		PostID:    rootPost.PostID,
+		Message:   updatedMessage,
+		Props: map[string]any{
+			"matter_codex_event": "agent_thread_delegation",
+			"delegation_id":      delegation.ID,
+		},
+	})
+	return err
+}
+
 func (svc *AgentSessionService) postCrossChatDelegationAudit(ctx context.Context, session entity.AgentSession, requester string, targetAgent string, targetChat string, targetURL string, message string) (MattermostPostRef, error) {
 	body := crossChatDelegationAuditMessage(requester, targetAgent, targetChat, targetURL, message)
 	return svc.postSystemThreadMessage(ctx, session.MattermostChannelID, session.MattermostRootPostID, body, "agent_cross_chat_request")
@@ -461,12 +508,16 @@ func (svc *AgentSessionService) postDelegationCallbackAudit(ctx context.Context,
 	return svc.postSystemThreadMessage(ctx, sourceSession.MattermostChannelID, sourceSession.MattermostRootPostID, body, "agent_cross_chat_callback")
 }
 
+func (svc *AgentSessionService) postDelegationReturnAudit(ctx context.Context, targetSession entity.AgentSession, requester string, title string, sourceURL string) (MattermostPostRef, error) {
+	body := crossChatDelegationReturnAuditMessage(requester, title, sourceURL)
+	return svc.postSystemThreadMessage(ctx, targetSession.MattermostChannelID, targetSession.MattermostRootPostID, body, "agent_cross_chat_callback_returned")
+}
+
 func (svc *AgentSessionService) postSystemThreadMessage(ctx context.Context, channelID string, rootPostID string, message string, event string) (MattermostPostRef, error) {
 	chunks := svc.splitMattermostThreadMessage(ctx, message)
-	var ref MattermostPostRef
+	var firstRef MattermostPostRef
 	for _, chunk := range chunks {
-		var err error
-		ref, err = svc.cfg.ThreadPublisher.PostThreadMessage(ctx, MattermostThreadPostInput{
+		ref, err := svc.cfg.ThreadPublisher.PostThreadMessage(ctx, MattermostThreadPostInput{
 			ChannelID:  channelID,
 			RootPostID: rootPostID,
 			Message:    agentNoTriggerMessage(chunk),
@@ -477,8 +528,11 @@ func (svc *AgentSessionService) postSystemThreadMessage(ctx context.Context, cha
 		if err != nil {
 			return MattermostPostRef{}, err
 		}
+		if strings.TrimSpace(firstRef.PostID) == "" {
+			firstRef = ref
+		}
 	}
-	return ref, nil
+	return firstRef, nil
 }
 
 func (svc *AgentSessionService) agentDelegationResult(ctx context.Context, project entity.Project, chat entity.Chat, role entity.AgentRole, delegation entity.AgentDelegation) AgentSessionDelegationResult {
@@ -512,7 +566,7 @@ func crossChatDelegatedAgentRequestMessage(requesterUserName string, targetRoleN
 	return body.String()
 }
 
-func crossChatDelegationRootMessage(requester string, target string, title string, message string) string {
+func crossChatDelegationRootMessage(requester string, target string, title string, sourceThreadURL string, message string) string {
 	requester = mentionableMattermostUsername(requester)
 	if requester != "" {
 		requester = "@" + requester
@@ -521,7 +575,7 @@ func crossChatDelegationRootMessage(requester string, target string, title strin
 	}
 	target = strings.TrimPrefix(mentionableMattermostUsername(target), "@")
 	fence := markdownFence(message)
-	return fmt.Sprintf("## %s\n\n%s запустил @%s.\n\n%smarkdown\n%s\n%s", title, requester, target, fence, message, fence)
+	return fmt.Sprintf("## %s\n\n%s запустил @%s.\n\nИсходный тред: %s\n\n%smarkdown\n%s\n%s", title, requester, target, emptyAsUnknown(sourceThreadURL), fence, message, fence)
 }
 
 func crossChatDelegationAuditMessage(requester string, target string, chat string, threadURL string, message string) string {
@@ -545,4 +599,9 @@ func crossChatDelegationCallbackAuditMessage(requester string, title string, thr
 	requester = strings.TrimPrefix(mentionableMattermostUsername(requester), "@")
 	fence := markdownFence(message)
 	return fmt.Sprintf("matter-codex: @%s вернул результат по работе **%s** из %s.\n\n%smarkdown\n%s\n%s", requester, title, threadURL, fence, message, fence)
+}
+
+func crossChatDelegationReturnAuditMessage(requester string, title string, sourceThreadURL string) string {
+	requester = strings.TrimPrefix(mentionableMattermostUsername(requester), "@")
+	return fmt.Sprintf("matter-codex: @%s вернул результат по работе **%s** в исходный тред: %s", requester, title, emptyAsUnknown(sourceThreadURL))
 }

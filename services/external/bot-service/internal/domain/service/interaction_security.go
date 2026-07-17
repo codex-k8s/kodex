@@ -31,6 +31,7 @@ var (
 	ErrInteractionAuthentication    = errors.New("interaction callback authentication failed")
 	ErrInteractionAdmissionDenied   = errors.New("interaction callback admission denied")
 	ErrInteractionAdmissionUnknown  = errors.New("interaction callback admission indeterminate")
+	ErrInteractionPreparation       = errors.New("interaction callback preparation failed")
 )
 
 type AuthenticatedActor struct {
@@ -222,6 +223,14 @@ func (denyAllInteractionAdmission) Admit(context.Context, InteractionAdmissionRe
 }
 
 func (svc *InteractionSecurityService) SealCard(ctx context.Context, card *MattermostCard, actor AuthenticatedActor, scope InteractionScope) error {
+	return svc.sealCard(ctx, card, actor, scope, securityrepo.CapabilityStateUnused)
+}
+
+func (svc *InteractionSecurityService) SealCardPending(ctx context.Context, card *MattermostCard, actor AuthenticatedActor, scope InteractionScope) error {
+	return svc.sealCard(ctx, card, actor, scope, securityrepo.CapabilityStatePending)
+}
+
+func (svc *InteractionSecurityService) sealCard(ctx context.Context, card *MattermostCard, actor AuthenticatedActor, scope InteractionScope, state securityrepo.CapabilityState) error {
 	if card == nil || len(card.Actions) == 0 {
 		return nil
 	}
@@ -253,10 +262,13 @@ func (svc *InteractionSecurityService) SealCard(ctx context.Context, card *Matte
 			InstallationScope: scope.Installation,
 			WorkspaceScope:    scope.Workspace,
 			SessionScope:      scope.Session,
+			State:             state,
 		}, contextCopy)
 		if err != nil {
+			card.Actions = sealed
+			revokeErr := svc.transitionCardCapabilities(ctx, *card, state, securityrepo.CapabilityStateRevoked)
 			card.Actions = nil
-			return err
+			return errors.Join(err, revokeErr)
 		}
 		contextCopy[interactionCapabilityContextKey] = token
 		action.Context = contextCopy
@@ -322,7 +334,7 @@ func (svc *InteractionSecurityService) AuthenticateAction(ctx context.Context, c
 		ChannelID:    strings.TrimSpace(callback.ChannelID),
 		PostBinding:  postBinding,
 		ActorUserID:  strings.TrimSpace(callback.UserID),
-	}, contextCopy, "mattermost.callback.action", callbackPostID)
+	}, contextCopy, "mattermost.callback.action", callbackPostID, nil)
 	if err != nil {
 		return AuthenticatedInteraction{}, err
 	}
@@ -331,6 +343,14 @@ func (svc *InteractionSecurityService) AuthenticateAction(ctx context.Context, c
 }
 
 func (svc *InteractionSecurityService) AuthenticateDialog(ctx context.Context, callback DialogCallback) (AuthenticatedInteraction, string, error) {
+	return svc.authenticateDialog(ctx, callback, nil)
+}
+
+func (svc *InteractionSecurityService) AuthenticateDialogPrepared(ctx context.Context, callback DialogCallback, beforeConsume func(AuthenticatedInteraction) error) (AuthenticatedInteraction, string, error) {
+	return svc.authenticateDialog(ctx, callback, beforeConsume)
+}
+
+func (svc *InteractionSecurityService) authenticateDialog(ctx context.Context, callback DialogCallback, beforeConsume func(AuthenticatedInteraction) error) (AuthenticatedInteraction, string, error) {
 	state, err := interactionState(callback.State)
 	if err != nil {
 		return AuthenticatedInteraction{}, "", ErrInteractionAuthentication
@@ -351,7 +371,7 @@ func (svc *InteractionSecurityService) AuthenticateDialog(ctx context.Context, c
 		ChannelID:    strings.TrimSpace(callback.ChannelID),
 		PostBinding:  postBinding,
 		ActorUserID:  strings.TrimSpace(callback.UserID),
-	}, contextCopy, "mattermost.callback.dialog", postBinding)
+	}, contextCopy, "mattermost.callback.dialog", postBinding, beforeConsume)
 	if err != nil {
 		return AuthenticatedInteraction{}, "", err
 	}
@@ -378,13 +398,16 @@ func (svc *InteractionSecurityService) issue(ctx context.Context, input security
 	input.ContextHash = contextHash
 	input.IssuedAt = now
 	input.ExpiresAt = now.Add(svc.capabilityTTL)
+	if input.State == "" {
+		input.State = securityrepo.CapabilityStateUnused
+	}
 	if err := svc.repository.IssueInteractionCapability(ctx, input); err != nil {
 		return "", fmt.Errorf("store interaction capability: %w", err)
 	}
 	return token, nil
 }
 
-func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, token string, input securityrepo.ConsumeCapabilityInput, safeContext map[string]any, actionKey string, callbackPostID string) (AuthenticatedInteraction, error) {
+func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, token string, input securityrepo.ConsumeCapabilityInput, safeContext map[string]any, actionKey string, callbackPostID string, beforeConsume func(AuthenticatedInteraction) error) (AuthenticatedInteraction, error) {
 	if svc == nil || svc.repository == nil {
 		return AuthenticatedInteraction{}, ErrInteractionAuthentication
 	}
@@ -396,7 +419,7 @@ func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, toke
 	input.TokenHash = tokenHash[:]
 	input.ContextHash = contextHash
 	input.Now = svc.now().UTC()
-	capability, err := svc.repository.ConsumeInteractionCapability(ctx, input)
+	capability, err := svc.repository.CheckInteractionCapability(ctx, input)
 	if err != nil {
 		return AuthenticatedInteraction{}, fmt.Errorf("%w: %v", ErrInteractionAuthentication, err)
 	}
@@ -426,12 +449,68 @@ func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, toke
 	})
 	switch decision.Status {
 	case AdmissionAllowed:
+		if beforeConsume != nil {
+			if err := beforeConsume(interaction); err != nil {
+				return AuthenticatedInteraction{}, fmt.Errorf("%w: %v", ErrInteractionPreparation, err)
+			}
+		}
+		consumed, err := svc.repository.ConsumeInteractionCapability(ctx, input)
+		if err != nil {
+			return AuthenticatedInteraction{}, fmt.Errorf("%w: %v", ErrInteractionAuthentication, err)
+		}
+		interaction.Actor = AuthenticatedActor{UserID: consumed.ActorUserID, UserName: consumed.ActorUserName}
 		return interaction, nil
 	case AdmissionDenied:
 		return AuthenticatedInteraction{}, fmt.Errorf("%w: %s", ErrInteractionAdmissionDenied, decision.Reason)
 	default:
 		return AuthenticatedInteraction{}, fmt.Errorf("%w: %s", ErrInteractionAdmissionUnknown, decision.Reason)
 	}
+}
+
+func (svc *InteractionSecurityService) ActivateCard(ctx context.Context, card MattermostCard) error {
+	return svc.transitionCardCapabilities(ctx, card, securityrepo.CapabilityStatePending, securityrepo.CapabilityStateUnused)
+}
+
+func (svc *InteractionSecurityService) RevokeCard(ctx context.Context, card MattermostCard) error {
+	pendingErr := svc.transitionCardCapabilities(ctx, card, securityrepo.CapabilityStatePending, securityrepo.CapabilityStateRevoked)
+	if pendingErr == nil {
+		return nil
+	}
+	unusedErr := svc.transitionCardCapabilities(ctx, card, securityrepo.CapabilityStateUnused, securityrepo.CapabilityStateRevoked)
+	if unusedErr == nil {
+		return nil
+	}
+	return errors.Join(pendingErr, unusedErr)
+}
+
+func (svc *InteractionSecurityService) transitionCardCapabilities(ctx context.Context, card MattermostCard, from securityrepo.CapabilityState, to securityrepo.CapabilityState) error {
+	if svc == nil || svc.repository == nil {
+		return ErrInteractionAuthentication
+	}
+	hashes := make([][]byte, 0, len(card.Actions))
+	seen := make(map[[sha256.Size]byte]struct{}, len(card.Actions))
+	for _, action := range card.Actions {
+		token := strings.TrimSpace(contextStringValue(action.Context, interactionCapabilityContextKey))
+		if token == "" {
+			return ErrInteractionCapabilityMissing
+		}
+		hash := sha256.Sum256([]byte(token))
+		if _, exists := seen[hash]; exists {
+			return ErrInteractionAuthentication
+		}
+		seen[hash] = struct{}{}
+		hashCopy := make([]byte, len(hash))
+		copy(hashCopy, hash[:])
+		hashes = append(hashes, hashCopy)
+	}
+	if len(hashes) == 0 {
+		return nil
+	}
+	return svc.repository.TransitionInteractionCapabilities(ctx, securityrepo.TransitionCapabilitiesInput{
+		TokenHashes: hashes,
+		From:        from,
+		To:          to,
+	})
 }
 
 func (svc *InteractionSecurityService) normalizeScope(scope InteractionScope) InteractionScope {

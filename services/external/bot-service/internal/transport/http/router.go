@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
@@ -255,7 +256,7 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "slash_service_not_configured"})
 		return
 	}
-	result := router.slashService.HandleMenuAction(r.Context(), statusservice.MenuActionCommand{
+	command := statusservice.MenuActionCommand{
 		View:      contextString(request.Context, "view"),
 		Command:   contextString(request.Context, "command"),
 		Dialog:    contextString(request.Context, "dialog"),
@@ -267,7 +268,18 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		UserName:  interaction.Actor.UserName,
 		ChannelID: interaction.ChannelID,
 		PostID:    interaction.CallbackPostID,
-	})
+	}
+	if router.slashService.ShouldRunMenuActionAsync(command) {
+		result := router.slashService.AsyncMenuActionAccepted(command)
+		response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.EphemeralText}
+		if result.Card != nil {
+			response.Update = cardPost(*result.Card)
+		}
+		writeJSON(w, result.StatusCode, response)
+		go router.runAsyncMenuAction(context.WithoutCancel(r.Context()), command)
+		return
+	}
+	result := router.slashService.HandleMenuAction(r.Context(), command)
 	status := result.StatusCode
 	if status == 0 {
 		status = http.StatusOK
@@ -312,6 +324,15 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		response.Update = update
 	}
 	writeJSON(w, status, response)
+}
+
+func (router *Router) runAsyncMenuAction(parent context.Context, command statusservice.MenuActionCommand) {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
+	defer cancel()
+	result := router.slashService.HandleMenuAction(ctx, command)
+	if result.StatusCode >= http.StatusBadRequest {
+		router.logWarn("asynchronous Mattermost menu action failed", "action", command.Action, "status", result.StatusCode)
+	}
 }
 
 func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Request, request mattermostmodel.PostActionIntegrationRequest, interaction statusservice.AuthenticatedInteraction) {
@@ -400,24 +421,27 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.invalid_request", nil)})
 		return
 	}
-	interaction, cleanState, err := router.interactionSecurity.AuthenticateDialog(r.Context(), statusservice.DialogCallback{
+	interaction, cleanState, err := router.interactionSecurity.AuthenticateDialogPrepared(r.Context(), statusservice.DialogCallback{
 		CallbackID: strings.TrimSpace(request.CallbackId),
 		State:      request.State,
 		UserID:     strings.TrimSpace(request.UserId),
 		ChannelID:  strings.TrimSpace(request.ChannelId),
+	}, func(statusservice.AuthenticatedInteraction) error {
+		if strings.TrimSpace(request.URL) == "" {
+			return nil
+		}
+		_, prepareErr := router.mattermostResponses.Prepare(r.Context(), request.URL)
+		return prepareErr
 	})
 	if err != nil {
+		if errors.Is(err, statusservice.ErrInteractionPreparation) {
+			writeJSON(w, http.StatusForbidden, mattermostmodel.SubmitDialogResponse{Error: "mattermost_response_url_denied"})
+			return
+		}
 		router.writeDialogInteractionDenied(w, err)
 		return
 	}
 	request.State = cleanState
-	if strings.TrimSpace(request.URL) != "" {
-		_, err = router.mattermostResponses.Prepare(r.Context(), request.URL)
-		if err != nil {
-			writeJSON(w, http.StatusForbidden, mattermostmodel.SubmitDialogResponse{Error: "mattermost_response_url_denied"})
-			return
-		}
-	}
 	if strings.TrimSpace(request.CallbackId) == dialogCallbackResult {
 		writeJSON(w, http.StatusOK, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
 		return

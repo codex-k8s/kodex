@@ -21,6 +21,7 @@ select
 	last_activity_at,
 	expires_at,
 	created_at,
-	updated_at
+	updated_at,
+	openai_account_name
 from matter_codex_agent_sessions
 where id = $1;

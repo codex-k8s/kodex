@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -54,15 +55,19 @@ func (publisher *securedMattermostThreadPublisher) PostThreadCard(ctx context.Co
 	}
 	card.PostID = ref.PostID
 	card.ChannelID = ref.ChannelID
-	if err := publisher.security.SealCard(ctx, &card, card.Interaction.Actor, card.Interaction.Scope); err != nil {
+	if err := publisher.security.SealCardPending(ctx, &card, card.Interaction.Actor, card.Interaction.Scope); err != nil {
 		return MattermostPostRef{}, err
 	}
 	updated, err := publisher.next.UpdateThreadCard(ctx, card)
 	if err != nil {
-		return MattermostPostRef{}, err
+		return MattermostPostRef{}, errors.Join(err, publisher.security.RevokeCard(ctx, card))
 	}
 	if updated.PostID != ref.PostID || updated.ChannelID != ref.ChannelID {
-		return MattermostPostRef{}, fmt.Errorf("mattermost card update changed the exact post binding")
+		bindingErr := fmt.Errorf("mattermost card update changed the exact post binding")
+		return MattermostPostRef{}, errors.Join(bindingErr, publisher.security.RevokeCard(ctx, card))
+	}
+	if err := publisher.security.ActivateCard(ctx, card); err != nil {
+		return MattermostPostRef{}, errors.Join(err, publisher.security.RevokeCard(ctx, card))
 	}
 	return updated, nil
 }
@@ -72,16 +77,28 @@ func (publisher *securedMattermostThreadPublisher) UpdateThreadCard(ctx context.
 		if publisher.security == nil || strings.TrimSpace(card.PostID) == "" {
 			return MattermostPostRef{}, fmt.Errorf("interaction security requires an exact Mattermost post binding")
 		}
-		if err := publisher.security.SealCard(ctx, &card, card.Interaction.Actor, card.Interaction.Scope); err != nil {
+		if err := publisher.security.SealCardPending(ctx, &card, card.Interaction.Actor, card.Interaction.Scope); err != nil {
 			return MattermostPostRef{}, err
 		}
 	}
 	updated, err := publisher.next.UpdateThreadCard(ctx, card)
 	if err != nil {
-		return MattermostPostRef{}, err
+		if len(card.Actions) == 0 {
+			return MattermostPostRef{}, err
+		}
+		return MattermostPostRef{}, errors.Join(err, publisher.security.RevokeCard(ctx, card))
 	}
 	if strings.TrimSpace(card.PostID) != "" && (updated.PostID != card.PostID || updated.ChannelID != strings.TrimSpace(card.ChannelID)) {
-		return MattermostPostRef{}, fmt.Errorf("mattermost card update changed the exact post binding")
+		bindingErr := fmt.Errorf("mattermost card update changed the exact post binding")
+		if len(card.Actions) == 0 {
+			return MattermostPostRef{}, bindingErr
+		}
+		return MattermostPostRef{}, errors.Join(bindingErr, publisher.security.RevokeCard(ctx, card))
+	}
+	if len(card.Actions) > 0 {
+		if err := publisher.security.ActivateCard(ctx, card); err != nil {
+			return MattermostPostRef{}, errors.Join(err, publisher.security.RevokeCard(ctx, card))
+		}
 	}
 	return updated, nil
 }

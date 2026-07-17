@@ -3,7 +3,7 @@ with candidates as (
 	select token_hash
 	from matter_codex_interaction_capabilities
 	where expires_at < $1
-		and status in ('unused', 'consumed', 'revoked')
+		and status in ('pending', 'unused', 'consumed', 'revoked')
 	order by expires_at, token_hash
 	limit $2
 	for update skip locked

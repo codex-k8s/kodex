@@ -47,7 +47,7 @@ curl() {
   printf '%s %s\n' "$method" "$url" >>"$SMOKE_CALLS_FILE"
   case "$url" in
     */mattermost/slash/agents) printf '%s' "${SMOKE_SLASH_STATUS:-401}" ;;
-    */github/webhook) printf '%s' "${SMOKE_GITHUB_STATUS:-503}" ;;
+    */github/webhook) printf '%s' "${SMOKE_GITHUB_STATUS:-401}" ;;
     *) printf '%s' "${SMOKE_INTERNAL_STATUS:-404}" ;;
   esac
 }
@@ -88,5 +88,17 @@ if bash "$REPO_ROOT/scripts/k8s/smoke-bot-service.sh" --env-file "$ENV_FILE" --c
   printf 'smoke принял опубликованный внутренний маршрут\n' >&2
   exit 1
 fi
+
+unset SMOKE_INTERNAL_STATUS
+for variable in SMOKE_SLASH_STATUS SMOKE_GITHUB_STATUS; do
+  SMOKE_CALLS_FILE="$TEST_DIR/${variable}.calls"
+  export SMOKE_CALLS_FILE
+  export "$variable=503"
+  if bash "$REPO_ROOT/scripts/k8s/smoke-bot-service.sh" --env-file "$ENV_FILE" --check-url >/dev/null 2>&1; then
+    printf 'smoke принял 503 вместо устойчивого 401: %s\n' "$variable" >&2
+    exit 1
+  fi
+  unset "$variable"
+done
 
 printf 'матрица smoke-bot-service: PASS\n'
