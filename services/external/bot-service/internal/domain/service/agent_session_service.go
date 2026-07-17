@@ -877,9 +877,11 @@ func (svc *AgentSessionService) turnStatusCard(ctx context.Context, session enti
 			Tooltip: svc.t("chat.session.turn.stop.tooltip", nil),
 			Style:   "danger",
 			Context: map[string]any{
-				"kind":     "agent_turn",
-				"action":   "stop_turn",
-				"turn_ids": strconv.FormatInt(turn.ID, 10),
+				"kind":          "agent_turn",
+				"action":        "stop_turn",
+				"turn_ids":      strconv.FormatInt(turn.ID, 10),
+				"resource_type": "agent_session_turn",
+				"resource_id":   strconv.FormatInt(turn.ID, 10),
 			},
 		}}
 	} else if status == agentSessionTurnFailed && turnCapacityRetriesExhausted(turn) && strings.TrimSpace(svc.cfg.MenuActionURL) != "" {
@@ -889,9 +891,11 @@ func (svc *AgentSessionService) turnStatusCard(ctx context.Context, session enti
 			Tooltip: svc.t("chat.session.turn.retry.tooltip", nil),
 			Style:   "primary",
 			Context: map[string]any{
-				"kind":     "agent_turn",
-				"action":   "retry_turn",
-				"turn_ids": strconv.FormatInt(turn.ID, 10),
+				"kind":          "agent_turn",
+				"action":        "retry_turn",
+				"turn_ids":      strconv.FormatInt(turn.ID, 10),
+				"resource_type": "agent_session_turn",
+				"resource_id":   strconv.FormatInt(turn.ID, 10),
 			},
 		}}
 	}

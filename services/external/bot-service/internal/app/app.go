@@ -9,6 +9,7 @@ import (
 	"time"
 
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 	githubintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/github"
@@ -36,8 +37,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return fmt.Errorf("open localizer: %w", err)
 	}
 	runtimeRunner, runtimeConfigured := openRuntimeRunner(cfg, logger)
-	interactionSecurity := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{Repository: storage})
-
 	statusSvc := statusservice.NewStatusService(statusservice.Config{
 		Localizer:            localizer,
 		ServiceName:          serviceName,
@@ -58,6 +57,12 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	var controlSurface *mattermostintegration.ControlSurface
 	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
 		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
+	}
+	interactionSecurity := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
+		Repository: storage,
+		Admission:  statusservice.NewServerSideInteractionAdmission("", controlSurface, storage),
+	})
+	if controlSurface != nil {
 		channelManager = controlSurface
 		roleBotManager = controlSurface
 		threadPublisher = statusservice.NewSecuredMattermostThreadPublisher(controlSurface, interactionSecurity)
@@ -136,6 +141,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		PrometheusRegistry:    newPrometheusRegistry(),
 		MattermostSiteURL:     cfg.MattermostSiteURL,
 		MattermostInternalURL: cfg.MattermostInternalURL,
+		ThreadPublisher:       threadPublisher,
 		Logger:                logger,
 	})
 	server := &http.Server{
@@ -175,6 +181,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if runtimeConfigured && cfg.RuntimeSessionRepairEnabled {
 		go runAgentSessionRepairLoop(ctx, chatRunSvc, cfg.RuntimeSessionRepairInterval, cfg.RuntimeSessionRepairBatch, logger)
 	}
+	if storage != nil && cfg.InteractionCleanupEnabled {
+		go runInteractionCapabilityCleanupLoop(ctx, storage, cfg.InteractionCleanupInterval, cfg.InteractionCleanupRetention, cfg.InteractionCleanupBatch, logger)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -184,6 +193,35 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func runInteractionCapabilityCleanupLoop(ctx context.Context, repository securityrepo.CapabilityCleanupRepository, interval time.Duration, retention time.Duration, batch int, logger *slog.Logger) {
+	timer := time.NewTimer(20 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			deleted, err := cleanupInteractionCapabilities(ctx, repository, time.Now().UTC(), retention, batch)
+			if err != nil {
+				logger.Warn("interaction capability cleanup failed", "error", err)
+			} else if deleted > 0 {
+				logger.Info("interaction capability cleanup applied", "rows_deleted", deleted, "batch_limit", batch)
+			}
+			timer.Reset(interval)
+		}
+	}
+}
+
+func cleanupInteractionCapabilities(ctx context.Context, repository securityrepo.CapabilityCleanupRepository, now time.Time, retention time.Duration, batch int) (int64, error) {
+	if repository == nil || retention <= 0 || batch <= 0 {
+		return 0, fmt.Errorf("interaction capability cleanup is not configured")
+	}
+	return repository.CleanupInteractionCapabilities(ctx, securityrepo.CapabilityCleanupInput{
+		DeleteBefore: now.UTC().Add(-retention),
+		Limit:        batch,
+	})
 }
 
 func runAgentSessionRepairLoop(ctx context.Context, svc *statusservice.ChatRunService, interval time.Duration, batch int, logger *slog.Logger) {
@@ -321,9 +359,6 @@ func gitHubWebhookURL(cfg Config) string {
 
 func botServiceRuntimeURL(cfg Config) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
-	if baseURL == "" {
-		baseURL = strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
-	}
 	return baseURL
 }
 

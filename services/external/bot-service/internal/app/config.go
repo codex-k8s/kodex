@@ -2,12 +2,18 @@ package app
 
 import (
 	"fmt"
+	"net"
+	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
+
+var kubernetesDNSLabelPattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
 // Config contains bot-service process settings.
 type Config struct {
@@ -49,6 +55,10 @@ type Config struct {
 	ShutdownTimeout                 time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
 	MaxSlashFormBytes               int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_SLASH_FORM_BYTES" envDefault:"65536"`
 	MaxGitHubWebhookBytes           int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES" envDefault:"262144"`
+	InteractionCleanupEnabled       bool          `env:"MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_ENABLED" envDefault:"true"`
+	InteractionCleanupInterval      time.Duration `env:"MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_INTERVAL" envDefault:"30m"`
+	InteractionCleanupRetention     time.Duration `env:"MATTERCODEX_INTERACTION_CAPABILITY_RETENTION" envDefault:"168h"`
+	InteractionCleanupBatch         int           `env:"MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_BATCH" envDefault:"500"`
 }
 
 func LoadConfig() (Config, error) {
@@ -77,6 +87,22 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.MaxGitHubWebhookBytes <= 0 {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES is invalid")
+	}
+	if cfg.InteractiveSurfaceEnabled() {
+		if err := validateInternalServiceOrigin(cfg.BotServiceInternalURL); err != nil {
+			return fmt.Errorf("MATTERCODEX_BOT_SERVICE_INTERNAL_URL is invalid: %w", err)
+		}
+	}
+	if cfg.InteractionCleanupEnabled {
+		if cfg.InteractionCleanupInterval <= 0 {
+			return fmt.Errorf("MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_INTERVAL is invalid")
+		}
+		if cfg.InteractionCleanupRetention <= 0 {
+			return fmt.Errorf("MATTERCODEX_INTERACTION_CAPABILITY_RETENTION is invalid")
+		}
+		if cfg.InteractionCleanupBatch <= 0 || cfg.InteractionCleanupBatch > 10000 {
+			return fmt.Errorf("MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_BATCH is invalid")
+		}
 	}
 	if cfg.RuntimeJobTTLSeconds <= 0 {
 		return fmt.Errorf("MATTERCODEX_RUNTIME_JOB_TTL_SECONDS is invalid")
@@ -141,6 +167,49 @@ func (cfg *Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (cfg Config) InteractiveSurfaceEnabled() bool {
+	return cfg.BotTokenConfigured() || cfg.SlashTokenConfigured()
+}
+
+func validateInternalServiceOrigin(raw string) error {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("scheme, host and port are required")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("scheme must be http or https")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
+		return fmt.Errorf("userinfo, query, fragment and path are forbidden")
+	}
+	hostname := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+	if net.ParseIP(hostname) != nil || !validKubernetesServiceDNSName(hostname) {
+		return fmt.Errorf("host must be a Kubernetes Service DNS name")
+	}
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil || port < 1 || port > 65535 {
+		return fmt.Errorf("an explicit valid port is required")
+	}
+	return nil
+}
+
+func validKubernetesServiceDNSName(hostname string) bool {
+	labels := strings.Split(hostname, ".")
+	validSuffix := len(labels) >= 3 && labels[len(labels)-1] == "svc"
+	if len(labels) >= 5 && strings.Join(labels[len(labels)-3:], ".") == "svc.cluster.local" {
+		validSuffix = true
+	}
+	if !validSuffix {
+		return false
+	}
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 || !kubernetesDNSLabelPattern.MatchString(label) {
+			return false
+		}
+	}
+	return len(hostname) <= 253
 }
 
 func (cfg Config) BotTokenConfigured() bool {

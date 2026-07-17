@@ -10,7 +10,6 @@ import (
 	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
-	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -155,20 +154,9 @@ func (repo *Repository) DeleteRepository(ctx context.Context, provider string, o
 }
 
 func (repo *Repository) UpsertAgentProfile(ctx context.Context, input adminrepo.UpsertAgentProfileInput) (entity.AgentProfile, bool, error) {
-	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
-		allowed, err := repo.AdmitExistingClusterAdmin(ctx, securityrepo.ClusterAdminAdmissionInput{
-			SubjectType: "agent_profile",
-			SubjectKey:  input.Name,
-			ProfileName: input.Name,
-			ActorUser:   "repository",
-			Operation:   "agent_profile.upsert",
-		})
-		if err != nil {
-			return entity.AgentProfile{}, false, err
-		}
-		if !allowed {
-			return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
-		}
+	clusterAdmin := strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin")
+	if clusterAdmin {
+		return repo.upsertFrozenClusterAdminProfile(ctx, input)
 	}
 	var created bool
 	item, err := scanAgentProfileWithCreated(repo.pool.QueryRow(ctx, query("agent_profiles__upsert.sql"),
@@ -183,7 +171,45 @@ func (repo *Repository) UpsertAgentProfile(ctx context.Context, input adminrepo.
 		input.ConfigOverlay,
 	), &created)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) && strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
+			return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+		}
 		return entity.AgentProfile{}, false, fmt.Errorf("upsert agent profile: %w", err)
+	}
+	return item, created, nil
+}
+
+func (repo *Repository) upsertFrozenClusterAdminProfile(ctx context.Context, input adminrepo.UpsertAgentProfileInput) (entity.AgentProfile, bool, error) {
+	tx, err := repo.pool.Begin(ctx)
+	if err != nil {
+		return entity.AgentProfile{}, false, fmt.Errorf("begin cluster-admin profile upsert: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var created bool
+	item, err := scanAgentProfileWithCreated(tx.QueryRow(ctx, query("agent_profiles__update_frozen_cluster_admin.sql"),
+		input.Name, input.Role, input.Description, input.Enabled, input.OpenAIAccountName,
+		input.GitHubAccountName, input.KubernetesAccess, input.SandboxMode, input.ConfigOverlay,
+	), &created)
+	if errors.Is(err, pgx.ErrNoRows) {
+		_ = tx.Rollback(ctx)
+		if auditErr := repo.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+			EventType: "cluster_admin.admission.denied", ActorUser: "repository",
+			ResourceType: "agent_profile", ResourceName: input.Name, Summary: "agent_profile.upsert: denied",
+		}); auditErr != nil {
+			return entity.AgentProfile{}, false, fmt.Errorf("audit denied cluster-admin agent profile upsert: %w", auditErr)
+		}
+		return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	if err != nil {
+		return entity.AgentProfile{}, false, fmt.Errorf("upsert cluster-admin agent profile: %w", err)
+	}
+	if _, err := tx.Exec(ctx, query("audit_events__insert.sql"),
+		"cluster_admin.admission.allowed", "", "repository", "agent_profile", input.Name, "agent_profile.upsert: allowed",
+	); err != nil {
+		return entity.AgentProfile{}, false, fmt.Errorf("audit cluster-admin agent profile upsert: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.AgentProfile{}, false, fmt.Errorf("commit cluster-admin agent profile upsert: %w", err)
 	}
 	return item, created, nil
 }

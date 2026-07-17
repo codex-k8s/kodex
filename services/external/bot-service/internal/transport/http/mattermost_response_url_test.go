@@ -112,6 +112,7 @@ func TestMattermostResponseIPAddressMatrix(t *testing.T) {
 		{name: "unspecified", address: "0.0.0.0", allowPrivate: true, want: false},
 		{name: "ipv6 loopback", address: "::1", allowPrivate: true, want: false},
 		{name: "ipv6 link local", address: "fe80::1", allowPrivate: true, want: false},
+		{name: "metadata aws ipv6", address: "fd00:ec2::254", allowPrivate: true, want: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -119,6 +120,35 @@ func TestMattermostResponseIPAddressMatrix(t *testing.T) {
 				t.Fatalf("allowedMattermostIP(%s, %t) = %t, want %t", test.address, test.allowPrivate, got, test.want)
 			}
 		})
+	}
+}
+
+func TestMattermostResponseDeniesAWSMetadataIPv6BeforeDial(t *testing.T) {
+	resolver := &fakeMattermostResolver{addresses: [][]net.IPAddr{{{IP: net.ParseIP("fd00:ec2::254")}}}}
+	dialer := &pipeMattermostDialer{}
+	client := newMattermostResponseClient("", "http://mattermost.mattermost.svc.cluster.local:8065", resolver, dialer)
+	err := client.PostJSON(context.Background(), "http://mattermost.mattermost.svc.cluster.local:8065/hooks/value", []byte(`{}`))
+	if !errors.Is(err, ErrMattermostResponseURLDenied) {
+		t.Fatalf("PostJSON() error = %v", err)
+	}
+	if resolver.calls != 1 || len(dialer.addresses) != 0 {
+		t.Fatalf("metadata answer reached dial: DNS=%d dial=%#v", resolver.calls, dialer.addresses)
+	}
+}
+
+func TestMattermostResponseRejectsAllDNSAnswersWhenOneIsMetadata(t *testing.T) {
+	resolver := &fakeMattermostResolver{addresses: [][]net.IPAddr{{
+		{IP: net.ParseIP("10.20.30.40")},
+		{IP: net.ParseIP("fd00:ec2::254")},
+	}}}
+	dialer := &pipeMattermostDialer{}
+	client := newMattermostResponseClient("", "http://mattermost.mattermost.svc.cluster.local:8065", resolver, dialer)
+	err := client.PostJSON(context.Background(), "http://mattermost.mattermost.svc.cluster.local:8065/hooks/value", []byte(`{}`))
+	if !errors.Is(err, ErrMattermostResponseURLDenied) {
+		t.Fatalf("PostJSON() error = %v", err)
+	}
+	if resolver.calls != 1 || len(dialer.addresses) != 0 {
+		t.Fatalf("mixed DNS answers reached dial: DNS=%d dial=%#v", resolver.calls, dialer.addresses)
 	}
 }
 

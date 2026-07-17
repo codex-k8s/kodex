@@ -3785,7 +3785,6 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewRoles:
 		return []MattermostCardAction{
-			svc.menuDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, "menu.action.role_add", "menu.action.role_add.tooltip", "primary"),
 			svc.menuResourceAction(menuViewRoles, "rolelist", menuActionList, menuResourceAgentRole, "", "menu.action.role_list", "menu.action.role_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "default"),
 			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
@@ -3793,7 +3792,6 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewChats:
 		return []MattermostCardAction{
-			svc.menuDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary"),
 			svc.menuResourceAction(menuViewChats, "chatlist", menuActionList, menuResourceChat, "", "menu.action.chat_list", "menu.action.chat_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "default"),
 			svc.menuAction(menuViewRoles, "menu.action.roles", "menu.action.roles.tooltip", "default"),

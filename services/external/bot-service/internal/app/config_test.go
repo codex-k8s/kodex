@@ -82,6 +82,9 @@ func TestConfigDefaults(t *testing.T) {
 	if !cfg.StorageMigrations {
 		t.Fatal("StorageMigrations = false")
 	}
+	if !cfg.InteractionCleanupEnabled || cfg.InteractionCleanupInterval != 30*time.Minute || cfg.InteractionCleanupRetention != 168*time.Hour || cfg.InteractionCleanupBatch != 500 {
+		t.Fatalf("interaction cleanup defaults = enabled:%t interval:%s retention:%s batch:%d", cfg.InteractionCleanupEnabled, cfg.InteractionCleanupInterval, cfg.InteractionCleanupRetention, cfg.InteractionCleanupBatch)
+	}
 }
 
 func TestConfigValidationRejectsBadTimeout(t *testing.T) {
@@ -234,5 +237,87 @@ func TestAgentsDialogURLUsesClusterBoundary(t *testing.T) {
 	want := "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080/mattermost/dialogs/agents"
 	if got != want {
 		t.Fatalf("agentsDialogURL() = %q, want %q", got, want)
+	}
+}
+
+func TestInteractiveURLsNeverFallBackToPublicOrigin(t *testing.T) {
+	cfg := Config{BotServiceSiteURL: "https://matter-codex.example.com"}
+	if got := agentsActionURL(cfg); got != "" {
+		t.Fatalf("agentsActionURL() = %q", got)
+	}
+	if got := agentsDialogURL(cfg); got != "" {
+		t.Fatalf("agentsDialogURL() = %q", got)
+	}
+	if got := botServiceRuntimeURL(cfg); got != "" {
+		t.Fatalf("botServiceRuntimeURL() = %q", got)
+	}
+}
+
+func TestInteractiveSurfaceRequiresValidInternalServiceOrigin(t *testing.T) {
+	valid := Config{
+		MattermostSlashToken:  "configured",
+		BotServiceInternalURL: "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080",
+		HTTPAddr:              ":8080", Locale: "en", DefaultChannels: []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout: time.Second, ShutdownTimeout: time.Second, MaxSlashFormBytes: 1024, MaxGitHubWebhookBytes: 1024,
+		RuntimeSmokeImage: "busybox:1.36", AgentRunnerImage: "matter-codex-agent-runner:dev", CodexPackage: "@openai/codex@0.144.1",
+		RuntimeWorkspaceSize: "1Gi", RuntimeJobTTLSeconds: 86400, AuthCheckJobTTLSeconds: 300, RuntimeLogTailLines: 40,
+		AgentServiceAccount: "matter-codex-agent-runner", AgentClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
+		CodexAuthSecretName: "matter-codex-codex-auth", GitHubSecretName: "matter-codex-github",
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid internal origin: %v", err)
+	}
+	if agentsActionURL(valid) == "" || agentsDialogURL(valid) == "" {
+		t.Fatal("interactive callback URL is empty")
+	}
+
+	invalidOrigins := []string{
+		"",
+		"https://public.example.com:443",
+		"http://127.0.0.1:8080",
+		"http://service.svc:8080",
+		"http://.svc:8080",
+		"ftp://matter-codex-bot-service.mattermost.svc:8080",
+		"http://user@matter-codex-bot-service.mattermost.svc:8080",
+		"http://matter-codex-bot-service.mattermost.svc",
+		"http://matter-codex-bot-service.mattermost.svc:8080/callback",
+		"http://matter-codex-bot-service.mattermost.svc:8080?query=1",
+		"http://matter-codex-bot-service.mattermost.svc:8080#fragment",
+	}
+	for _, origin := range invalidOrigins {
+		t.Run(origin, func(t *testing.T) {
+			cfg := valid
+			cfg.BotServiceInternalURL = origin
+			if err := cfg.Validate(); err == nil {
+				t.Fatalf("Validate() accepted origin %q", origin)
+			}
+		})
+	}
+}
+
+func TestInteractionCapabilityCleanupValidation(t *testing.T) {
+	base := Config{
+		HTTPAddr: ":8080", Locale: "en", DefaultChannels: []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout: time.Second, ShutdownTimeout: time.Second, MaxSlashFormBytes: 1024, MaxGitHubWebhookBytes: 1024,
+		RuntimeSmokeImage: "busybox:1.36", AgentRunnerImage: "matter-codex-agent-runner:dev", CodexPackage: "@openai/codex@0.144.1",
+		RuntimeWorkspaceSize: "1Gi", RuntimeJobTTLSeconds: 86400, AuthCheckJobTTLSeconds: 300, RuntimeLogTailLines: 40,
+		AgentServiceAccount: "matter-codex-agent-runner", AgentClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
+		CodexAuthSecretName: "matter-codex-codex-auth", GitHubSecretName: "matter-codex-github",
+		InteractionCleanupEnabled: true, InteractionCleanupInterval: time.Minute, InteractionCleanupRetention: time.Hour, InteractionCleanupBatch: 100,
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid cleanup config: %v", err)
+	}
+	for _, mutate := range []func(*Config){
+		func(cfg *Config) { cfg.InteractionCleanupInterval = 0 },
+		func(cfg *Config) { cfg.InteractionCleanupRetention = 0 },
+		func(cfg *Config) { cfg.InteractionCleanupBatch = 0 },
+		func(cfg *Config) { cfg.InteractionCleanupBatch = 10001 },
+	} {
+		cfg := base
+		mutate(&cfg)
+		if err := cfg.Validate(); err == nil {
+			t.Fatal("Validate() accepted invalid cleanup config")
+		}
 	}
 }

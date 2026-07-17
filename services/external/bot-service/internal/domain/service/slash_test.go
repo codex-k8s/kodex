@@ -663,7 +663,7 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 		StorageReady:   true,
 	})
 
-	if err := svc.BootstrapSystemAgentRoles(context.Background()); err != nil {
+	if err := svc.BootstrapSystemAgentRoles(context.Background()); !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
 		t.Fatalf("BootstrapSystemAgentRoles() error = %v", err)
 	}
 
@@ -671,33 +671,21 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 	if radarImprover.PromptTemplate != "custom prompt" {
 		t.Fatalf("existing improver prompt was overwritten: %q", radarImprover.PromptTemplate)
 	}
-	myQRImprover := testRoleByName(t, store, 2, "improver")
-	if myQRImprover.RoleType != "improver" || myQRImprover.PromptMode != "template" || !strings.Contains(myQRImprover.PromptTemplate, "повторяющиеся замечания") {
-		t.Fatalf("myqr improver = %#v", myQRImprover)
-	}
-	if myQRImprover.GitHubAccountName != "github-myqrcontact-owner" || myQRImprover.OpenAIAccountName != "openai-radar-delivery" {
-		t.Fatalf("myqr improver accounts = %#v", myQRImprover)
-	}
-	participants, _ := store.ListChatParticipants(context.Background(), 1)
-	if !testParticipantsContainRole(participants, radarImprover.ID) {
-		t.Fatalf("radar chat participants do not include improver: %#v", participants)
-	}
-	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), myQRImprover.ID); err != nil {
-		t.Fatalf("myqr improver bot identity not stored: %v", err)
-	}
-
-	matterCodexProject, err := store.GetProjectBySlug(context.Background(), "agents")
-	if err != nil {
-		t.Fatalf("matter-codex project not stored: %v", err)
-	}
 	for _, role := range store.agentRoles {
-		if role.ProjectID == matterCodexProject.ID && role.KubernetesAccess == "cluster-admin" {
-			t.Fatalf("bootstrap created forbidden cluster-admin role: %#v", role)
+		if role.ProjectID == 2 && role.Name == "improver" {
+			t.Fatalf("bootstrap created improver before cluster-admin admission: %#v", role)
 		}
 	}
-	controlChats, _ := store.ListChats(context.Background(), matterCodexProject.ID)
-	if len(controlChats) != 0 {
-		t.Fatalf("bootstrap created control chat without an existing granted admin role: %#v", controlChats)
+	participants, _ := store.ListChatParticipants(context.Background(), 1)
+	if testParticipantsContainRole(participants, radarImprover.ID) {
+		t.Fatalf("bootstrap mutated chat participants before cluster-admin admission: %#v", participants)
+	}
+	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), radarImprover.ID); !errors.Is(err, adminrepo.ErrNotFound) {
+		t.Fatalf("bootstrap created bot identity before cluster-admin admission: %v", err)
+	}
+
+	if _, err := store.GetProjectBySlug(context.Background(), "agents"); !errors.Is(err, adminrepo.ErrNotFound) {
+		t.Fatalf("bootstrap created matter-codex project before cluster-admin admission: %v", err)
 	}
 }
 
@@ -767,6 +755,41 @@ func TestChatDialogCreatesPrivateProjectChannelWithRolesAndRepository(t *testing
 	repositories, _ := store.ListChatRepositories(context.Background(), chat.ID)
 	if len(repositories) != 1 || repositories[0].FullName() != "codex-k8s/matter-codex" {
 		t.Fatalf("repositories = %#v", repositories)
+	}
+}
+
+func TestChatDialogRejectsNewClusterAdminBindingBeforeSideEffects(t *testing.T) {
+	baseStore := &fakeAdminStore{
+		projects: map[int64]entity.Project{1: {ID: 1, Name: "Admin", Slug: "admin"}},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "admin", RoleType: "admin", KubernetesAccess: "cluster-admin", Enabled: true},
+		},
+	}
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyBinding: true}
+	channels := &fakeChannelManager{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		ChannelManager: channels, RoleBotManager: &fakeRoleBotManager{}, RuntimeRunner: &fakeRuntimeRunner{},
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents", StorageReady: true,
+	})
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackChatCreate,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewChats, Resource: menuResourceProject, ID: "1", ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id", UserName: "owner",
+		Submission: map[string]any{
+			dialogFieldProjectID: "1", dialogFieldChatName: "New Admin", dialogFieldChatType: "single_custom",
+			dialogFieldPrimaryRoleID: "1", dialogFieldWorkPolicy: "Owner control.",
+		},
+	})
+	if result.StatusCode != 403 || result.Error == "" {
+		t.Fatalf("dialog result = %#v", result)
+	}
+	if store.calls != 1 || store.bindingCalls != 1 {
+		t.Fatalf("admission calls: subject=%d binding=%d", store.calls, store.bindingCalls)
+	}
+	if channels.projectTeamName != "" || channels.projectChannelName != "" || len(baseStore.chats) != 0 || len(baseStore.chatParticipants) != 0 {
+		t.Fatalf("denied binding caused side effects: channels=%#v chats=%#v participants=%#v", channels, baseStore.chats, baseStore.chatParticipants)
 	}
 }
 

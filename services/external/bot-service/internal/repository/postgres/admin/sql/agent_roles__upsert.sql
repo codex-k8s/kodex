@@ -14,7 +14,7 @@ insert into matter_codex_agent_roles(
 	advanced_settings,
 	enabled,
 	bot_identity
-) values (
+) select
 	$1,
 	$2,
 	$3,
@@ -29,7 +29,7 @@ insert into matter_codex_agent_roles(
 	coalesce(nullif($12, '')::jsonb, '{}'::jsonb),
 	$13,
 	$14
-)
+where lower(trim($9)) <> 'cluster-admin'
 on conflict (project_id, name) do update set
 	role_type = excluded.role_type,
 	description = excluded.description,
@@ -44,4 +44,5 @@ on conflict (project_id, name) do update set
 	enabled = excluded.enabled,
 	bot_identity = excluded.bot_identity,
 	updated_at = now()
+where lower(trim(excluded.kubernetes_access)) <> 'cluster-admin'
 returning id, project_id, name, role_type, description, coalesce(prompt_template, ''), prompt_mode, github_account_name, openai_account_name, kubernetes_access, sandbox_mode, config_overlay, advanced_settings::text, enabled, bot_identity, created_at, updated_at, (xmax = 0) as created;

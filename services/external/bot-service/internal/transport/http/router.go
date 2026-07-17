@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
@@ -67,6 +66,7 @@ type RouterConfig struct {
 	PrometheusRegistry    *prometheus.Registry
 	MattermostSiteURL     string
 	MattermostInternalURL string
+	ThreadPublisher       statusservice.MattermostThreadPublisher
 	MattermostResolver    mattermostDNSResolver
 	MattermostDialer      mattermostContextDialer
 	Logger                *slog.Logger
@@ -84,6 +84,7 @@ type Router struct {
 	maxGitHubWebhookBytes int64
 	interactionSecurity   *statusservice.InteractionSecurityService
 	mattermostResponses   *mattermostResponseClient
+	threadPublisher       statusservice.MattermostThreadPublisher
 	logger                *slog.Logger
 	mcpHandler            http.Handler
 	mux                   *http.ServeMux
@@ -105,6 +106,7 @@ func NewRouter(cfg RouterConfig) *Router {
 		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
 		interactionSecurity:   cfg.InteractionSecurity,
 		mattermostResponses:   newMattermostResponseClient(cfg.MattermostSiteURL, cfg.MattermostInternalURL, cfg.MattermostResolver, cfg.MattermostDialer),
+		threadPublisher:       cfg.ThreadPublisher,
 		logger:                cfg.Logger,
 		mux:                   http.NewServeMux(),
 	}
@@ -204,10 +206,21 @@ func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) 
 	})
 	if result.Card != nil {
 		result.Card.ChannelID = strings.TrimSpace(r.PostForm.Get("channel_id"))
-		_ = router.interactionSecurity.SealCard(r.Context(), result.Card, statusservice.AuthenticatedActor{
+		result.Card.Interaction = statusservice.MattermostCardInteraction{Actor: statusservice.AuthenticatedActor{
 			UserID:   strings.TrimSpace(r.PostForm.Get("user_id")),
 			UserName: strings.TrimSpace(r.PostForm.Get("user_name")),
-		}, statusservice.InteractionScope{})
+		}, Scope: statusservice.InteractionScope{}}
+		if router.threadPublisher == nil {
+			writeCommandResponse(w, http.StatusServiceUnavailable, ephemeral("interaction_capability_unavailable"))
+			return
+		}
+		if _, err := router.threadPublisher.PostThreadCard(r.Context(), *result.Card); err != nil {
+			router.logWarn("publish secured slash card failed", "error", err)
+			writeCommandResponse(w, http.StatusServiceUnavailable, ephemeral("interaction_capability_unavailable"))
+			return
+		}
+		result.Card = nil
+		result.ChannelVisible = false
 	}
 	writeCommandResponse(w, http.StatusOK, slashResponse(result))
 }
@@ -291,9 +304,12 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if result.Card != nil {
-		result.Card.ChannelID = interaction.ChannelID
-		_ = router.interactionSecurity.SealCard(r.Context(), result.Card, interaction.Actor, interaction.Scope)
-		response.Update = cardPost(*result.Card)
+		update, err := router.securedCardUpdate(r.Context(), result.Card, interaction)
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
+		response.Update = update
 	}
 	writeJSON(w, status, response)
 }
@@ -319,8 +335,12 @@ func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Reque
 		}
 		response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.Message}
 		if result.Card != nil {
-			_ = router.interactionSecurity.SealCard(r.Context(), result.Card, interaction.Actor, interaction.Scope)
-			response.Update = cardPost(*result.Card)
+			update, err := router.securedCardUpdate(r.Context(), result.Card, interaction)
+			if err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
+				return
+			}
+			response.Update = update
 		}
 		writeJSON(w, http.StatusOK, response)
 	case "retry_turn":
@@ -343,13 +363,29 @@ func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Reque
 		}
 		response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.Message}
 		if result.Card != nil {
-			_ = router.interactionSecurity.SealCard(r.Context(), result.Card, interaction.Actor, interaction.Scope)
-			response.Update = cardPost(*result.Card)
+			update, err := router.securedCardUpdate(r.Context(), result.Card, interaction)
+			if err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
+				return
+			}
+			response.Update = update
 		}
 		writeJSON(w, http.StatusOK, response)
 	default:
 		writeJSON(w, http.StatusBadRequest, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("menu.action.unknown", nil)})
 	}
+}
+
+func (router *Router) securedCardUpdate(ctx context.Context, card *statusservice.MattermostCard, interaction statusservice.AuthenticatedInteraction) (*mattermostmodel.Post, error) {
+	if card == nil || router.interactionSecurity == nil {
+		return nil, fmt.Errorf("interaction security is not configured")
+	}
+	card.ChannelID = interaction.ChannelID
+	card.PostID = interaction.CallbackPostID
+	if err := router.interactionSecurity.SealCard(ctx, card, interaction.Actor, interaction.Scope); err != nil {
+		return nil, err
+	}
+	return cardPost(*card), nil
 }
 
 func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request) {
@@ -375,9 +411,8 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	request.State = cleanState
-	var responseTarget *mattermostResponseTarget
 	if strings.TrimSpace(request.URL) != "" {
-		responseTarget, err = router.mattermostResponses.Prepare(r.Context(), request.URL)
+		_, err = router.mattermostResponses.Prepare(r.Context(), request.URL)
 		if err != nil {
 			writeJSON(w, http.StatusForbidden, mattermostmodel.SubmitDialogResponse{Error: "mattermost_response_url_denied"})
 			return
@@ -425,8 +460,16 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 	}
 	if result.Card != nil {
 		result.Card.ChannelID = interaction.ChannelID
-		_ = router.interactionSecurity.SealCard(r.Context(), result.Card, interaction.Actor, interaction.Scope)
-		router.publishDialogResult(r.Context(), responseTarget, *result.Card)
+		result.Card.Interaction = statusservice.MattermostCardInteraction{Actor: interaction.Actor, Scope: interaction.Scope}
+		if router.threadPublisher == nil {
+			writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
+		if _, err := router.threadPublisher.PostThreadCard(r.Context(), *result.Card); err != nil {
+			router.logWarn("publish secured dialog result failed", "error", err)
+			writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
 		writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
 		return
 	}
@@ -690,42 +733,6 @@ func cardAttachment(card statusservice.MattermostCard) *mattermostmodel.MessageA
 		Fields:   fields,
 		Actions:  actions,
 	}
-}
-
-func (router *Router) publishDialogResult(ctx context.Context, target *mattermostResponseTarget, card statusservice.MattermostCard) {
-	if target == nil {
-		return
-	}
-	go router.postDialogResult(ctx, target, card)
-}
-
-func (router *Router) postDialogResult(ctx context.Context, target *mattermostResponseTarget, card statusservice.MattermostCard) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	payload := dialogResultResponse(card)
-	body, err := json.Marshal(payload)
-	if err != nil {
-		router.logWarn("marshal Mattermost dialog result failed", "error", err)
-		return
-	}
-	if err := router.mattermostResponses.PostPreparedJSON(ctx, target, body); err != nil {
-		router.logWarn("post Mattermost dialog result denied or failed", "error_type", fmt.Sprintf("%T", err))
-	}
-}
-
-func dialogResultResponse(card statusservice.MattermostCard) *mattermostmodel.CommandResponse {
-	text := strings.TrimSpace(card.Message)
-	if text == "" {
-		text = strings.TrimSpace(card.Text)
-	}
-	if text == "" {
-		text = strings.TrimSpace(card.Title)
-	}
-	response := ephemeral(text)
-	response.Attachments = []*mattermostmodel.MessageAttachment{
-		cardAttachment(card),
-	}
-	return response
 }
 
 func writeCommandResponse(w http.ResponseWriter, status int, response *mattermostmodel.CommandResponse) {

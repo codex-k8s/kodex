@@ -41,14 +41,34 @@ mattercodex_log "bot-service готовых реплик: ${BOT_READY:-0}"
 
 if mattercodex_bool "$CHECK_URL"; then
   mattercodex_require_commands curl
-  mattercodex_log "проверка публичного allowlist bot-service без передачи секретов"
+  mattercodex_log "проверка полной публичной матрицы bot-service без передачи секретов и рабочих payload"
   slash_status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -X POST "$MATTERCODEX_BOT_SERVICE_SITE_URL/mattermost/slash/agents")"
-  health_status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$MATTERCODEX_BOT_SERVICE_SITE_URL/healthz")"
+  github_status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -X POST "$MATTERCODEX_BOT_SERVICE_SITE_URL/github/webhook")"
   case "$slash_status" in
     401|503) ;;
     *) mattercodex_die "публичный slash endpoint вернул неожиданный HTTP-статус" ;;
   esac
-  [ "$health_status" = "404" ] || mattercodex_die "кластерный health endpoint опубликован через Ingress"
+  case "$github_status" in
+    401|503) ;;
+    *) mattercodex_die "публичный GitHub webhook вернул неожиданный HTTP-статус" ;;
+  esac
+  internal_paths=(
+    "/"
+    "/healthz"
+    "/health/livez"
+    "/health/readyz"
+    "/readyz"
+    "/metrics"
+    "/mattermost/actions/agents"
+    "/mattermost/dialogs/agents"
+    "/internal/agent-sessions/synthetic-smoke"
+    "/mcp/sessions/synthetic-smoke"
+    "/internal/synthetic-smoke"
+  )
+  for path in "${internal_paths[@]}"; do
+    status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$MATTERCODEX_BOT_SERVICE_SITE_URL$path")"
+    [ "$status" = "404" ] || mattercodex_die "кластерный маршрут опубликован через Ingress: $path"
+  done
 fi
 
 mattercodex_log "bot-service read-only проверка завершена"

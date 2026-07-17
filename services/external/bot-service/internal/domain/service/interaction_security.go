@@ -20,6 +20,7 @@ const (
 	interactionCapabilityPostBindingKey = "capability_post_binding"
 	interactionKindAction               = "action"
 	interactionKindDialog               = "dialog"
+	interactionDialogCallbackResult     = "agents_dialog_result"
 	defaultInstallationScope            = "single-installation"
 	defaultWorkspaceScope               = "installation-root"
 	defaultInteractionCapabilityTTL     = 4 * time.Hour
@@ -63,6 +64,8 @@ type InteractionAdmissionRequest struct {
 	ResourceID   string
 	Actor        AuthenticatedActor
 	Scope        InteractionScope
+	ChannelID    string
+	PostID       string
 }
 
 type InteractionAdmissionDecision struct {
@@ -74,33 +77,67 @@ type InteractionAdmission interface {
 	Admit(ctx context.Context, request InteractionAdmissionRequest) InteractionAdmissionDecision
 }
 
-type denyByDefaultInteractionAdmission struct {
-	installationScope string
+type MattermostInteractionActorVerifier interface {
+	VerifyInteractionActor(ctx context.Context, userID string, channelID string) (bool, error)
 }
 
-func (admission denyByDefaultInteractionAdmission) Admit(_ context.Context, request InteractionAdmissionRequest) InteractionAdmissionDecision {
+type serverSideInteractionAdmission struct {
+	installationScope string
+	actorVerifier     MattermostInteractionActorVerifier
+	resources         securityrepo.InteractionResourceAdmissionRepository
+}
+
+func NewServerSideInteractionAdmission(installationScope string, actorVerifier MattermostInteractionActorVerifier, resources securityrepo.InteractionResourceAdmissionRepository) InteractionAdmission {
+	installationScope = strings.TrimSpace(installationScope)
+	if installationScope == "" {
+		installationScope = defaultInstallationScope
+	}
+	return &serverSideInteractionAdmission{
+		installationScope: installationScope,
+		actorVerifier:     actorVerifier,
+		resources:         resources,
+	}
+}
+
+func (admission *serverSideInteractionAdmission) Admit(ctx context.Context, request InteractionAdmissionRequest) InteractionAdmissionDecision {
+	if admission == nil || admission.actorVerifier == nil || admission.resources == nil {
+		return InteractionAdmissionDecision{Status: AdmissionIndeterminate, Reason: "admission_backend_missing"}
+	}
 	if request.ActionKey != "mattermost.callback.action" && request.ActionKey != "mattermost.callback.dialog" {
 		return InteractionAdmissionDecision{Status: AdmissionIndeterminate, Reason: "unknown_action"}
 	}
-	if strings.TrimSpace(request.Actor.UserID) == "" {
-		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "actor_missing"}
+	if strings.TrimSpace(request.Actor.UserID) == "" || strings.TrimSpace(request.ChannelID) == "" || strings.TrimSpace(request.PostID) == "" {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "verified_subject_scope_missing"}
 	}
 	if request.Scope.Installation != admission.installationScope {
 		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "installation_scope_mismatch"}
 	}
-	if !validInteractionScope(request.Scope.Workspace) {
-		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "workspace_scope_invalid"}
+	if !validInteractionScope(request.Scope.Workspace) || (request.Scope.Session != "" && !validInteractionScope(request.Scope.Session)) {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "scope_invalid"}
 	}
-	if request.Scope.Session != "" && !validInteractionScope(request.Scope.Session) {
-		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "session_scope_invalid"}
+	if !typedInteractionOperationAllowed(request) {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "operation_resource_denied"}
 	}
-	if strings.Contains(request.Operation, "kind=agent_turn") && request.Scope.Session == "" {
-		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "session_scope_missing"}
+	verified, err := admission.actorVerifier.VerifyInteractionActor(ctx, request.Actor.UserID, request.ChannelID)
+	if err != nil {
+		return InteractionAdmissionDecision{Status: AdmissionIndeterminate, Reason: "subject_verification_failed"}
 	}
-	if strings.TrimSpace(request.Operation) == "" {
-		return InteractionAdmissionDecision{Status: AdmissionIndeterminate, Reason: "operation_missing"}
+	if !verified {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "subject_not_channel_member"}
 	}
-	return InteractionAdmissionDecision{Status: AdmissionAllowed, Reason: "static_callback_grant"}
+	allowed, err := admission.resources.AdmitInteractionResource(ctx, securityrepo.InteractionResourceAdmissionInput{
+		ActionKey: request.ActionKey, Operation: request.Operation,
+		ResourceType: request.ResourceType, ResourceID: request.ResourceID,
+		ActorUserID: request.Actor.UserID, ChannelID: request.ChannelID, PostID: request.PostID,
+		Installation: request.Scope.Installation, Workspace: request.Scope.Workspace, Session: request.Scope.Session,
+	})
+	if err != nil {
+		return InteractionAdmissionDecision{Status: AdmissionIndeterminate, Reason: "resource_verification_failed"}
+	}
+	if !allowed {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "resource_scope_denied"}
+	}
+	return InteractionAdmissionDecision{Status: AdmissionAllowed, Reason: "verified_server_side_grant"}
 }
 
 type InteractionSecurityConfig struct {
@@ -166,7 +203,7 @@ func NewInteractionSecurityService(cfg InteractionSecurityConfig) *InteractionSe
 	}
 	admission := cfg.Admission
 	if admission == nil {
-		admission = denyByDefaultInteractionAdmission{installationScope: installationScope}
+		admission = denyAllInteractionAdmission{}
 	}
 	return &InteractionSecurityService{
 		repository:        cfg.Repository,
@@ -176,6 +213,12 @@ func NewInteractionSecurityService(cfg InteractionSecurityConfig) *InteractionSe
 		random:            random,
 		now:               now,
 	}
+}
+
+type denyAllInteractionAdmission struct{}
+
+func (denyAllInteractionAdmission) Admit(context.Context, InteractionAdmissionRequest) InteractionAdmissionDecision {
+	return InteractionAdmissionDecision{Status: AdmissionIndeterminate, Reason: "admission_not_configured"}
 }
 
 func (svc *InteractionSecurityService) SealCard(ctx context.Context, card *MattermostCard, actor AuthenticatedActor, scope InteractionScope) error {
@@ -189,13 +232,8 @@ func (svc *InteractionSecurityService) SealCard(ctx context.Context, card *Matte
 	scope = svc.normalizeScope(scope)
 	postBinding := strings.TrimSpace(card.PostID)
 	if postBinding == "" {
-		var err error
-		postBinding, err = svc.randomValue(18)
-		if err != nil {
-			card.Actions = nil
-			return err
-		}
-		postBinding = "card_" + postBinding
+		card.Actions = nil
+		return ErrInteractionAuthentication
 	}
 	sealed := make([]MattermostCardAction, 0, len(card.Actions))
 	for _, action := range card.Actions {
@@ -273,7 +311,7 @@ func (svc *InteractionSecurityService) AuthenticateAction(ctx context.Context, c
 		return AuthenticatedInteraction{}, ErrInteractionCapabilityMissing
 	}
 	callbackPostID := strings.TrimSpace(callback.PostID)
-	if !strings.HasPrefix(postBinding, "card_") && callbackPostID != postBinding {
+	if callbackPostID == "" || callbackPostID != postBinding {
 		return AuthenticatedInteraction{}, ErrInteractionAuthentication
 	}
 	interaction, err := svc.consumeAndAdmit(ctx, token, securityrepo.ConsumeCapabilityInput{
@@ -284,7 +322,7 @@ func (svc *InteractionSecurityService) AuthenticateAction(ctx context.Context, c
 		ChannelID:    strings.TrimSpace(callback.ChannelID),
 		PostBinding:  postBinding,
 		ActorUserID:  strings.TrimSpace(callback.UserID),
-	}, contextCopy, "mattermost.callback.action")
+	}, contextCopy, "mattermost.callback.action", callbackPostID)
 	if err != nil {
 		return AuthenticatedInteraction{}, err
 	}
@@ -313,7 +351,7 @@ func (svc *InteractionSecurityService) AuthenticateDialog(ctx context.Context, c
 		ChannelID:    strings.TrimSpace(callback.ChannelID),
 		PostBinding:  postBinding,
 		ActorUserID:  strings.TrimSpace(callback.UserID),
-	}, contextCopy, "mattermost.callback.dialog")
+	}, contextCopy, "mattermost.callback.dialog", postBinding)
 	if err != nil {
 		return AuthenticatedInteraction{}, "", err
 	}
@@ -346,7 +384,7 @@ func (svc *InteractionSecurityService) issue(ctx context.Context, input security
 	return token, nil
 }
 
-func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, token string, input securityrepo.ConsumeCapabilityInput, safeContext map[string]any, actionKey string) (AuthenticatedInteraction, error) {
+func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, token string, input securityrepo.ConsumeCapabilityInput, safeContext map[string]any, actionKey string, callbackPostID string) (AuthenticatedInteraction, error) {
 	if svc == nil || svc.repository == nil {
 		return AuthenticatedInteraction{}, ErrInteractionAuthentication
 	}
@@ -383,6 +421,8 @@ func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, toke
 		ResourceID:   interaction.ResourceID,
 		Actor:        interaction.Actor,
 		Scope:        interaction.Scope,
+		ChannelID:    interaction.ChannelID,
+		PostID:       callbackPostID,
 	})
 	switch decision.Status {
 	case AdmissionAllowed:
@@ -488,4 +528,213 @@ func contextStringValue(context map[string]any, key string) string {
 		return text
 	}
 	return fmt.Sprint(value)
+}
+
+func typedInteractionOperationAllowed(request InteractionAdmissionRequest) bool {
+	parts := strings.Split(strings.TrimSpace(request.Operation), ";")
+	if len(parts) < 2 || (parts[0] != interactionKindAction && parts[0] != interactionKindDialog) {
+		return false
+	}
+	values := make(map[string]string, len(parts)-1)
+	for _, part := range parts[1:] {
+		key, value, ok := strings.Cut(part, "=")
+		if !ok || key == "" || value == "" || values[key] != "" {
+			return false
+		}
+		values[key] = value
+	}
+	resourceType := strings.TrimSpace(request.ResourceType)
+	resourceID := strings.TrimSpace(request.ResourceID)
+	if len(resourceType) > 80 || len(resourceID) > 4096 || strings.ContainsAny(resourceType+resourceID, "\x00\r\n") {
+		return false
+	}
+	if parts[0] == interactionKindDialog {
+		if request.ActionKey != "mattermost.callback.dialog" || len(values) != 1 {
+			return false
+		}
+		return dialogCallbackResourceAllowed(values["callback_id"], resourceType, resourceID)
+	}
+	if request.ActionKey != "mattermost.callback.action" {
+		return false
+	}
+	if values["kind"] == "agent_turn" {
+		if len(values) != 2 || request.Scope.Session == "" || resourceType != "agent_session_turn" || resourceID == "" {
+			return false
+		}
+		return values["action"] == "stop_turn" || values["action"] == "retry_turn"
+	}
+	if values["kind"] != "agents_menu" || !allowedInteractionMenuView(values["view"]) {
+		return false
+	}
+	if len(values) == 2 {
+		return resourceType == "" && resourceID == ""
+	}
+	if len(values) != 3 {
+		return false
+	}
+	if action := values["action"]; action != "" {
+		return menuActionResourceAllowed(action, resourceType, resourceID)
+	}
+	if dialog := values["dialog"]; dialog != "" {
+		return menuDialogResourceAllowed(dialog, resourceType, resourceID)
+	}
+	return false
+}
+
+func allowedInteractionMenuView(view string) bool {
+	switch view {
+	case menuViewMain, menuViewRepositories, menuViewAccounts, menuViewOpenAI, menuViewGitHub,
+		menuViewProfiles, menuViewPrompts, menuViewRuntime, menuViewSystem, menuViewHelp,
+		menuViewProjects, menuViewRoles, menuViewChats, menuViewAdvanced:
+		return true
+	default:
+		return false
+	}
+}
+
+func menuActionResourceAllowed(action string, resourceType string, resourceID string) bool {
+	allowed := func(types ...string) bool {
+		for _, candidate := range types {
+			if resourceType == candidate {
+				return resourceID != "" || action == menuActionList || action == menuActionRepositoryOnboard
+			}
+		}
+		return false
+	}
+	switch action {
+	case menuActionList:
+		return allowed(menuResourceProject, menuResourceRepository, menuResourceAgentRole, menuResourceChat,
+			menuResourceRuntimeVar, menuResourceOpenAIAccount, menuResourceGitHubAccount, menuResourceProfile,
+			menuResourcePromptTemplate, menuResourceRun)
+	case menuActionShow:
+		return allowed(menuResourceProject, menuResourceRepository, menuResourceAgentRole, menuResourceChat,
+			menuResourceRuntimeVar, menuResourceOpenAIAccount, menuResourceGitHubAccount, menuResourceProfile,
+			menuResourcePromptTemplate, menuResourceRun)
+	case menuActionConfirmDelete, menuActionDelete:
+		return allowed(menuResourceRepository, menuResourceRuntimeVar, menuResourceOpenAIAccount, menuResourceGitHubAccount)
+	case menuActionCancel:
+		return resourceType == "" && resourceID == ""
+	case menuActionRepositoryOnboard:
+		return allowed(menuResourceRepository, menuResourceProject)
+	case menuActionRepositoryRepos:
+		return allowed(menuResourceGitHubAccount)
+	case menuActionRepositoryBranches, menuActionRepositoryConnect, menuActionRepositoryCheck, menuActionRepositoryWebhook:
+		return allowed(menuResourceRepository)
+	case menuActionOpenAIAuth, menuActionOpenAIStatus, menuActionOpenAICleanup:
+		return allowed(menuResourceOpenAIAccount)
+	case menuActionSystemStatus, menuActionTokenCheck, menuActionLocaleGet, menuActionLocaleSetRU, menuActionLocaleSetEN:
+		return resourceType == menuResourceSystem && resourceID == ""
+	case menuActionRuntimeSmoke, menuActionRuntimePruneDry, menuActionRuntimePruneApply:
+		return resourceType == menuResourceRuntime && resourceID == ""
+	case menuActionRuntimeCleanup:
+		return allowed(menuResourceRun)
+	case menuActionPromptHelp, menuActionPromptRender:
+		return allowed(menuResourcePromptTemplate)
+	case menuActionProfileEnable, menuActionProfileDisable:
+		return allowed(menuResourceProfile)
+	case menuActionProjectDashboard:
+		return allowed(menuResourceProject)
+	case menuActionProjectBindRepo:
+		return allowed(menuResourceProject)
+	case menuActionThreadRepositorySelect:
+		return allowed(menuResourceThreadContext)
+	default:
+		return false
+	}
+}
+
+func menuDialogResourceAllowed(dialog string, resourceType string, resourceID string) bool {
+	allowed := func(allowEmpty bool, types ...string) bool {
+		if resourceType == "" {
+			return allowEmpty && resourceID == ""
+		}
+		for _, candidate := range types {
+			if resourceType == candidate {
+				return resourceID != ""
+			}
+		}
+		return false
+	}
+	switch dialog {
+	case menuDialogRepositoryAdd, menuDialogRepositorySearch:
+		return allowed(true, menuResourceProject, menuResourceGitHubAccount)
+	case menuDialogRepositoryEdit, menuDialogRepositoryDelete:
+		return allowed(false, menuResourceRepository)
+	case menuDialogOpenAIAuth, menuDialogOpenAIStatus, menuDialogOpenAICleanup, menuDialogOpenAIDelete:
+		return allowed(true, menuResourceOpenAIAccount)
+	case menuDialogGitHubAccountAdd:
+		return allowed(true)
+	case menuDialogGitHubAccountEdit, menuDialogGitHubAccountDelete:
+		return allowed(false, menuResourceGitHubAccount)
+	case menuDialogProfileUpsert:
+		return allowed(true, menuResourceProfile)
+	case menuDialogPromptEdit:
+		return allowed(false, menuResourcePromptTemplate)
+	case menuDialogRuntimePruneApply:
+		return allowed(true, menuResourceRuntime)
+	case menuDialogProjectUpsert:
+		return allowed(true, menuResourceProject)
+	case menuDialogProjectRepositoryBind, menuDialogChatCreate:
+		return allowed(false, menuResourceProject)
+	case menuDialogProjectRuntimeVar:
+		return allowed(false, menuResourceProject, menuResourceRuntimeVar)
+	case menuDialogRoleRuntimeVarAttach:
+		return allowed(false, menuResourceProject, menuResourceAgentRole, menuResourceRuntimeVar)
+	case menuDialogRoleRuntimeVarDetach:
+		return allowed(false, menuResourceAgentRole)
+	case menuDialogAgentRoleUpsert:
+		return allowed(false, menuResourceProject, menuResourceAgentRole)
+	default:
+		return false
+	}
+}
+
+func dialogCallbackResourceAllowed(callbackID string, resourceType string, resourceID string) bool {
+	allowed := func(allowEmpty bool, types ...string) bool {
+		if resourceType == "" {
+			return allowEmpty && resourceID == ""
+		}
+		for _, candidate := range types {
+			if resourceType == candidate {
+				return resourceID != ""
+			}
+		}
+		return false
+	}
+	switch callbackID {
+	case interactionDialogCallbackResult:
+		return allowed(true)
+	case dialogCallbackRepositoryAdd:
+		return allowed(true, menuResourceProject, menuResourceGitHubAccount)
+	case dialogCallbackRepositoryEdit, dialogCallbackRepositoryDelete:
+		return allowed(false, menuResourceRepository)
+	case dialogCallbackRepositorySearch, dialogCallbackRepositorySearchPick, dialogCallbackRepositorySearchBranch:
+		return allowed(true, menuResourceProject, menuResourceGitHubAccount, menuResourceRepository)
+	case dialogCallbackOpenAIAuth, dialogCallbackOpenAIStatus, dialogCallbackOpenAICleanup, dialogCallbackOpenAIDelete:
+		return allowed(true, menuResourceOpenAIAccount)
+	case dialogCallbackGitHubAccountAdd:
+		return allowed(true)
+	case dialogCallbackGitHubAccountEdit, dialogCallbackGitHubAccountDelete:
+		return allowed(false, menuResourceGitHubAccount)
+	case dialogCallbackProfileUpsert:
+		return allowed(true, menuResourceProfile)
+	case dialogCallbackPromptEdit:
+		return allowed(false, menuResourcePromptTemplate)
+	case dialogCallbackRuntimePruneApply:
+		return allowed(true, menuResourceRuntime)
+	case dialogCallbackProjectUpsert:
+		return allowed(true, menuResourceProject)
+	case dialogCallbackProjectRepositoryBind, dialogCallbackChatCreate:
+		return allowed(false, menuResourceProject)
+	case dialogCallbackProjectRuntimeVar:
+		return allowed(false, menuResourceProject, menuResourceRuntimeVar)
+	case dialogCallbackRoleRuntimeVarAttach:
+		return allowed(false, menuResourceProject, menuResourceAgentRole, menuResourceRuntimeVar)
+	case dialogCallbackRoleRuntimeVarDetach:
+		return allowed(false, menuResourceAgentRole)
+	case dialogCallbackAgentRoleUpsert:
+		return allowed(false, menuResourceProject, menuResourceAgentRole)
+	default:
+		return false
+	}
 }

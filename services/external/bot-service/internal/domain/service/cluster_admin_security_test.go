@@ -12,9 +12,21 @@ import (
 
 type admittedAdminStore struct {
 	*fakeAdminStore
-	allowed   bool
-	admission securityrepo.ClusterAdminAdmissionInput
-	calls     int
+	allowed          bool
+	admission        securityrepo.ClusterAdminAdmissionInput
+	bindingAdmission securityrepo.ClusterAdminBindingInput
+	calls            int
+	bindingCalls     int
+	denyBinding      bool
+}
+
+func (store *admittedAdminStore) AdmitExistingClusterAdminBinding(_ context.Context, input securityrepo.ClusterAdminBindingInput) (bool, error) {
+	store.bindingCalls++
+	store.bindingAdmission = input
+	if store.denyBinding {
+		return false, nil
+	}
+	return store.allowed, nil
 }
 
 func (store *admittedAdminStore) IssueInteractionCapability(context.Context, securityrepo.IssueCapabilityInput) error {
@@ -49,6 +61,7 @@ func TestClusterAdminRunRequiresExactServerSideGrant(t *testing.T) {
 			svc := NewChatRunService(ChatRunServiceConfig{Store: test.store, RuntimeRunner: runner})
 			_, err := svc.startRun(context.Background(), chatRunStartInput{
 				RunID: "run-1", Mode: chatRunModeDeveloper, Role: role,
+				Chat:   entity.Chat{ID: 9, ProjectID: 7, Slug: "admin-chat"},
 				Prompt: "cluster-admin", RuntimeEnv: nil,
 			})
 			if test.wantError && !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
@@ -62,10 +75,20 @@ func TestClusterAdminRunRequiresExactServerSideGrant(t *testing.T) {
 			}
 			if admitted, ok := test.store.(*admittedAdminStore); ok {
 				if admitted.calls != 1 {
-					t.Fatalf("profile admission calls = %d", admitted.calls)
+					t.Fatalf("subject admission calls = %d", admitted.calls)
+				}
+				wantBindingCalls := 0
+				if admitted.allowed {
+					wantBindingCalls = 1
+				}
+				if admitted.bindingCalls != wantBindingCalls {
+					t.Fatalf("binding admission calls = %d, want %d", admitted.bindingCalls, wantBindingCalls)
 				}
 				if admitted.admission.SubjectType != "agent_role" || admitted.admission.SubjectKey != "42" || admitted.admission.ProjectID != 7 || admitted.admission.ProfileName != "configured-admin" {
-					t.Fatalf("profile admission binding = %#v", admitted.admission)
+					t.Fatalf("subject admission = %#v", admitted.admission)
+				}
+				if admitted.allowed && (admitted.bindingAdmission.RoleID != 42 || admitted.bindingAdmission.ProjectID != 7 || admitted.bindingAdmission.ChatID != 9 || admitted.bindingAdmission.ChatSlug != "admin-chat") {
+					t.Fatalf("binding admission = %#v", admitted.bindingAdmission)
 				}
 			}
 		})

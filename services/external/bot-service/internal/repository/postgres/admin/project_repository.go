@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
-	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
@@ -111,30 +109,8 @@ func (repo *Repository) ListProjectRepositories(ctx context.Context, projectID i
 }
 
 func (repo *Repository) UpsertAgentRole(ctx context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
-	var existingID int64
-	err := repo.pool.QueryRow(ctx, query("agent_roles__get_by_project_name.sql"), input.ProjectID, input.Name).Scan(&existingID)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return entity.AgentRole{}, false, fmt.Errorf("get agent role for cluster-admin admission: %w", err)
-	}
 	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
-		subjectKey := "new"
-		if existingID > 0 {
-			subjectKey = strconv.FormatInt(existingID, 10)
-		}
-		allowed, err := repo.AdmitExistingClusterAdmin(ctx, securityrepo.ClusterAdminAdmissionInput{
-			SubjectType: "agent_role",
-			SubjectKey:  subjectKey,
-			ProjectID:   input.ProjectID,
-			ProfileName: input.Name,
-			ActorUser:   "repository",
-			Operation:   "agent_role.upsert",
-		})
-		if err != nil {
-			return entity.AgentRole{}, false, err
-		}
-		if !allowed {
-			return entity.AgentRole{}, false, adminrepo.ErrClusterAdminAdmissionDenied
-		}
+		return repo.upsertFrozenClusterAdminRole(ctx, input)
 	}
 	item, created, err := scanAgentRoleWithCreated(repo.pool.QueryRow(ctx, query("agent_roles__upsert.sql"),
 		input.ProjectID,
@@ -153,7 +129,45 @@ func (repo *Repository) UpsertAgentRole(ctx context.Context, input adminrepo.Ups
 		input.BotIdentity,
 	))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) && strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
+			return entity.AgentRole{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+		}
 		return entity.AgentRole{}, false, fmt.Errorf("upsert agent role: %w", err)
+	}
+	return item, created, nil
+}
+
+func (repo *Repository) upsertFrozenClusterAdminRole(ctx context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
+	tx, err := repo.pool.Begin(ctx)
+	if err != nil {
+		return entity.AgentRole{}, false, fmt.Errorf("begin cluster-admin role upsert: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	item, created, err := scanAgentRoleWithCreated(tx.QueryRow(ctx, query("agent_roles__update_frozen_cluster_admin.sql"),
+		input.ProjectID, input.Name, input.RoleType, input.Description, input.PromptTemplate, input.PromptMode,
+		input.GitHubAccountName, input.OpenAIAccountName, input.KubernetesAccess, input.SandboxMode,
+		input.ConfigOverlay, input.AdvancedSettings, input.Enabled, input.BotIdentity,
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		_ = tx.Rollback(ctx)
+		if auditErr := repo.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+			EventType: "cluster_admin.admission.denied", ActorUser: "repository",
+			ResourceType: "agent_role", ResourceName: input.Name, Summary: "agent_role.upsert: denied",
+		}); auditErr != nil {
+			return entity.AgentRole{}, false, fmt.Errorf("audit denied cluster-admin agent role upsert: %w", auditErr)
+		}
+		return entity.AgentRole{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	if err != nil {
+		return entity.AgentRole{}, false, fmt.Errorf("upsert cluster-admin agent role: %w", err)
+	}
+	if _, err := tx.Exec(ctx, query("audit_events__insert.sql"),
+		"cluster_admin.admission.allowed", "", "repository", "agent_role", input.Name, "agent_role.upsert: allowed",
+	); err != nil {
+		return entity.AgentRole{}, false, fmt.Errorf("audit cluster-admin agent role upsert: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.AgentRole{}, false, fmt.Errorf("commit cluster-admin agent role upsert: %w", err)
 	}
 	return item, created, nil
 }
@@ -196,6 +210,24 @@ func (repo *Repository) CreateChat(ctx context.Context, input adminrepo.CreateCh
 		return entity.Chat{}, false, fmt.Errorf("begin create chat: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	var bindingsAllowed bool
+	if err := tx.QueryRow(ctx, query("cluster_admin_bindings__chat_allowed.sql"), input.ProjectID, input.Slug, input.RoleIDs).Scan(&bindingsAllowed); err != nil {
+		return entity.Chat{}, false, fmt.Errorf("check frozen cluster-admin chat bindings: %w", err)
+	}
+	if !bindingsAllowed {
+		_ = tx.Rollback(ctx)
+		if auditErr := repo.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+			EventType:    "cluster_admin.binding.denied",
+			ActorUser:    "repository",
+			ResourceType: "chat",
+			ResourceName: input.Slug,
+			Summary:      "chat.create: denied",
+		}); auditErr != nil {
+			return entity.Chat{}, false, fmt.Errorf("audit denied cluster-admin chat binding: %w", auditErr)
+		}
+		return entity.Chat{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
 
 	item, created, err := scanChatWithCreated(tx.QueryRow(ctx, query("chats__upsert.sql"),
 		input.ProjectID,

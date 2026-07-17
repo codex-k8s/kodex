@@ -12,6 +12,9 @@ import (
 )
 
 var _ securityrepo.Repository = (*Repository)(nil)
+var _ securityrepo.InteractionResourceAdmissionRepository = (*Repository)(nil)
+var _ securityrepo.ClusterAdminBindingRepository = (*Repository)(nil)
+var _ securityrepo.CapabilityCleanupRepository = (*Repository)(nil)
 
 func (repo *Repository) IssueInteractionCapability(ctx context.Context, input securityrepo.IssueCapabilityInput) error {
 	if _, err := repo.pool.Exec(ctx, query("interaction_capabilities__insert.sql"),
@@ -92,6 +95,37 @@ func (repo *Repository) ConsumeInteractionCapability(ctx context.Context, input 
 	return securityrepo.Capability{}, securityrepo.ErrCapabilityBinding
 }
 
+func (repo *Repository) AdmitInteractionResource(ctx context.Context, input securityrepo.InteractionResourceAdmissionInput) (bool, error) {
+	var allowed bool
+	if err := repo.pool.QueryRow(ctx, query("interaction_admission__resource.sql"),
+		input.ActionKey,
+		input.Operation,
+		input.ResourceType,
+		input.ResourceID,
+		input.ActorUserID,
+		input.ChannelID,
+		input.PostID,
+		input.Installation,
+		input.Workspace,
+		input.Session,
+	).Scan(&allowed); err != nil {
+		return false, fmt.Errorf("read interaction resource admission: %w", err)
+	}
+	return allowed, nil
+}
+
+func (repo *Repository) CleanupInteractionCapabilities(ctx context.Context, input securityrepo.CapabilityCleanupInput) (int64, error) {
+	limit := input.Limit
+	if limit <= 0 || limit > 10000 {
+		return 0, fmt.Errorf("interaction capability cleanup limit is invalid")
+	}
+	command, err := repo.pool.Exec(ctx, query("interaction_capabilities__cleanup.sql"), input.DeleteBefore, limit)
+	if err != nil {
+		return 0, fmt.Errorf("cleanup interaction capabilities: %w", err)
+	}
+	return command.RowsAffected(), nil
+}
+
 func (repo *Repository) AdmitExistingClusterAdmin(ctx context.Context, input securityrepo.ClusterAdminAdmissionInput) (bool, error) {
 	var allowed bool
 	var err error
@@ -120,6 +154,28 @@ func (repo *Repository) AdmitExistingClusterAdmin(ctx context.Context, input sec
 	})
 	if auditErr != nil {
 		return false, fmt.Errorf("record cluster-admin admission audit: %w", auditErr)
+	}
+	return allowed, nil
+}
+
+func (repo *Repository) AdmitExistingClusterAdminBinding(ctx context.Context, input securityrepo.ClusterAdminBindingInput) (bool, error) {
+	var allowed bool
+	if err := repo.pool.QueryRow(ctx, query("cluster_admin_binding__admit.sql"), input.RoleID, input.ProjectID, input.ChatID, input.ChatSlug).Scan(&allowed); err != nil {
+		return false, fmt.Errorf("read cluster-admin binding admission: %w", err)
+	}
+	outcome := "denied"
+	if allowed {
+		outcome = "allowed"
+	}
+	if err := repo.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+		EventType:    "cluster_admin.binding." + outcome,
+		ActorUserID:  input.ActorUserID,
+		ActorUser:    input.ActorUser,
+		ResourceType: "agent_role_chat_binding",
+		ResourceName: fmt.Sprintf("%d:%s", input.RoleID, input.ChatSlug),
+		Summary:      input.Operation + ": " + outcome,
+	}); err != nil {
+		return false, fmt.Errorf("record cluster-admin binding audit: %w", err)
 	}
 	return allowed, nil
 }

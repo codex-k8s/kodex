@@ -31,7 +31,7 @@
 
 - `MATTERCODEX_BOT_SERVICE_HOST` - optional, host публичного Ingress;
 - `MATTERCODEX_BOT_SERVICE_SITE_URL` - optional, публичный URL bot-service;
-- `MATTERCODEX_BOT_SERVICE_INTERNAL_URL` - optional, внутренний callback URL для Mattermost slash command и interactive action buttons;
+- `MATTERCODEX_BOT_SERVICE_INTERNAL_URL` - обязательный при заданном bot- или slash-токене внутренний источник callback URL; допускается только `http`/`https` Kubernetes Service DNS с явным портом, без userinfo, query, fragment и произвольного path;
 - `MATTERCODEX_MATTERMOST_INTERNAL_URL` - optional, внутренний URL Mattermost API для bot-service; нужен, если публичный Mattermost закрыт OAuth proxy;
 - `MATTERCODEX_MATTERMOST_BOT_TOKEN` - нужен для provisioning Mattermost team/channels/slash command;
 - `MATTERCODEX_MATTERMOST_SLASH_TOKEN` - optional, обычно заполняется provisioning script в Kubernetes Secret;
@@ -44,6 +44,10 @@
 - `MATTERCODEX_LOCALE` - optional, стартовая локаль Mattermost-facing ответов bot-service; Go-дефолт `en`, deploy-скрипты для текущего контура по умолчанию ставят `ru`;
 - `MATTERCODEX_DATABASE_DSN` - optional, берется из Kubernetes Secret `mattermost-datasource` для storage/admin-команд;
 - `MATTERCODEX_STORAGE_MIGRATIONS_ENABLED` - optional, включает Go migrations на старте;
+- `MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_ENABLED` - optional, включает ограниченную фоновую очистку истёкших строк capability;
+- `MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_INTERVAL` - optional, задаёт интервал запуска очистки;
+- `MATTERCODEX_INTERACTION_CAPABILITY_RETENTION` - optional, задаёт отсрочку после истечения capability до удаления;
+- `MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_BATCH` - optional, задаёт верхнюю границу строк одного прохода;
 - `MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES` - optional, лимит размера GitHub webhook payload;
 - `MATTERCODEX_IMAGE_BUILD_STRATEGY` - optional, способ сборки image в remote deploy; default `kaniko`; legacy `docker` требует `docker` или `nerdctl` прямо на целевом сервере;
 - `MATTERCODEX_IMAGE_TAG` - optional, tag для bot-service и agent-runner image; при `kaniko` и `--apply` без явного значения deploy-скрипт генерирует уникальный tag из commit и UTC timestamp;
@@ -447,7 +451,8 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - GitHub token, username, email и webhook secret хранятся в Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
-- Action/dialog callback принимает только одноразовую серверную capability с ограниченным сроком действия и точной привязкой к операции, ресурсу, каналу, карточке, субъекту и области. В PostgreSQL хранится только SHA-256-хеш; повтор, истечение, подделка, подмена субъекта и неизвестный результат допуска дают закрытый отказ.
+- Action/dialog callback принимает только одноразовую серверную capability с ограниченным сроком действия и точной привязкой к операции, ресурсу, каналу, фактическому `post_id`, субъекту и области. Capability удостоверяет callback, но не предоставляет право: отдельный допуск проверяет активного пользователя, членство в канале, точный закрытый набор операций и существующий серверный ресурс. В PostgreSQL хранится только SHA-256-хеш; повтор, истечение, подделка, подмена субъекта и неизвестный результат допуска дают закрытый отказ.
+- Истёкшие строки capability удаляются идемпотентными ограниченными пакетами после периода хранения. Очистка не затрагивает сессии, PVC, Secret, квоты или иные runtime-ресурсы; результат ненулевого прохода и ошибка видны в структурированном журнале без значений capability.
 - Поля `user_name`, `prompt`, `labels`, `state` и `submission` не предоставляют права. Новое назначение `cluster-admin` запрещено; допускается только точное уже сохранённое серверное состояние профиля или роли с отдельной проверкой и записью аудита.
 - `response_url` разрешён только для настроенного источника Mattermost. Проверяются протокол, hostname, port, DNS-адреса и каждое перенаправление; IP-литерал, loopback, link-local, metadata, произвольный приватный или кластерный адрес назначения и DNS rebinding не приводят к исходящему HTTP-запросу.
 - bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true` и `seccompProfile: RuntimeDefault`.

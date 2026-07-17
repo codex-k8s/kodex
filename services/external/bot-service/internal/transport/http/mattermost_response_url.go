@@ -215,8 +215,12 @@ func allowedMattermostIP(ip net.IP, privateOnly bool) bool {
 }
 
 var deniedMattermostPrefixes = []netip.Prefix{
+	// Поддерживаемые адреса metadata endpoints проверяются централизованно до dial.
+	netip.MustParsePrefix("169.254.169.254/32"),
+	netip.MustParsePrefix("169.254.170.2/32"),
 	netip.MustParsePrefix("100.64.0.0/10"),
 	netip.MustParsePrefix("100.100.100.200/32"),
+	netip.MustParsePrefix("fd00:ec2::254/128"),
 	netip.MustParsePrefix("192.0.0.0/24"),
 	netip.MustParsePrefix("192.0.2.0/24"),
 	netip.MustParsePrefix("198.18.0.0/15"),

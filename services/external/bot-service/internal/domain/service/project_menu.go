@@ -443,8 +443,6 @@ func (svc *SlashCommandService) roleListCard(ctx context.Context, command MenuAc
 		card.Text = svc.t("agent_role.list.empty", nil)
 		if projectID > 0 {
 			card.Actions = append(card.Actions, svc.menuResourceDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.role_add", "menu.action.role_add.tooltip", "primary", nil))
-		} else {
-			card.Actions = append(card.Actions, svc.menuDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, "menu.action.role_add", "menu.action.role_add.tooltip", "primary"))
 		}
 		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewRoles)...)
 		return card
@@ -468,8 +466,6 @@ func (svc *SlashCommandService) roleListCard(ctx context.Context, command MenuAc
 	card.Actions = append(card.Actions, svc.pageActions(menuViewRoles, menuResourceAgentRole, command.ID, page, len(roles))...)
 	if projectID > 0 {
 		card.Actions = append(card.Actions, svc.menuResourceDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.role_add", "menu.action.role_add.tooltip", "primary", nil))
-	} else {
-		card.Actions = append(card.Actions, svc.menuDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, "menu.action.role_add", "menu.action.role_add.tooltip", "primary"))
 	}
 	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewRoles)...)
 	return card
@@ -542,8 +538,6 @@ func (svc *SlashCommandService) chatListCard(ctx context.Context, command MenuAc
 		card.Text = svc.t("chat.list.empty", nil)
 		if projectID > 0 {
 			card.Actions = append(card.Actions, svc.menuResourceDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary", nil))
-		} else {
-			card.Actions = append(card.Actions, svc.menuDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary"))
 		}
 		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewChats)...)
 		return card
@@ -566,8 +560,6 @@ func (svc *SlashCommandService) chatListCard(ctx context.Context, command MenuAc
 	card.Actions = append(card.Actions, svc.pageActions(menuViewChats, menuResourceChat, command.ID, page, len(chats))...)
 	if projectID > 0 {
 		card.Actions = append(card.Actions, svc.menuResourceDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary", nil))
-	} else {
-		card.Actions = append(card.Actions, svc.menuDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary"))
 	}
 	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewChats)...)
 	return card
@@ -1609,6 +1601,11 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldPrimaryRoleID: svc.t("dialog.chat.role_invalid", nil)}}
 		}
 		roles = append(roles, role)
+	}
+	for _, role := range roles {
+		if err := svc.admitClusterAdminRoleBinding(ctx, role, 0, input.Slug, command.UserID, command.UserName, "chat.upsert"); err != nil {
+			return DialogSubmissionResult{StatusCode: 403, Error: svc.t("chat.save.failed", map[string]any{"Error": safeError(err)})}
+		}
 	}
 	for _, repositoryID := range input.RepositoryIDs {
 		if _, _, err := svc.cfg.Store.UpsertProjectRepository(ctx, adminrepo.UpsertProjectRepositoryInput{

@@ -23,10 +23,14 @@ type memoryInteractionRepository struct {
 	inputs       map[string]securityrepo.IssueCapabilityInput
 	admissions   map[string]bool
 	consumes     int
+	issues       int
+	failIssueAt  int
+	issueErr     error
 }
 
 func newMemoryInteractionSecurity() *statusservice.InteractionSecurityService {
 	return statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
+		Admission: fixedAdmission{status: statusservice.AdmissionAllowed},
 		Repository: &memoryInteractionRepository{
 			capabilities: map[string]securityrepo.Capability{},
 			inputs:       map[string]securityrepo.IssueCapabilityInput{},
@@ -38,6 +42,10 @@ func newMemoryInteractionSecurity() *statusservice.InteractionSecurityService {
 func (repo *memoryInteractionRepository) IssueInteractionCapability(_ context.Context, input securityrepo.IssueCapabilityInput) error {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
+	repo.issues++
+	if repo.issueErr != nil && repo.issues >= repo.failIssueAt {
+		return repo.issueErr
+	}
 	key := string(input.TokenHash)
 	repo.inputs[key] = input
 	repo.capabilities[key] = securityrepo.Capability{
@@ -56,6 +64,33 @@ func (repo *memoryInteractionRepository) IssueInteractionCapability(_ context.Co
 		ExpiresAt:         input.ExpiresAt,
 	}
 	return nil
+}
+
+func TestRouterReturnsRetryableFailureWhenActionCardCannotBeSealed(t *testing.T) {
+	repository := &memoryInteractionRepository{
+		capabilities: map[string]securityrepo.Capability{}, inputs: map[string]securityrepo.IssueCapabilityInput{}, admissions: map[string]bool{},
+		failIssueAt: 2, issueErr: errors.New("synthetic capability repository failure"),
+	}
+	security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{Repository: repository, Admission: fixedAdmission{status: statusservice.AdmissionAllowed}})
+	router := testRouterWithDialogStore(&fakeDialogOpener{}, &fakeRouterAdminStore{}, security)
+	body := testActionBody(t, router, map[string]any{"kind": "agents_menu", "view": "runtime"}, "")
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest("POST", "/mattermost/actions/agents", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != 503 || !strings.Contains(recorder.Body.String(), "interaction_capability_unavailable") {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	repository.issueErr = nil
+	retryBody := testActionBody(t, router, map[string]any{"kind": "agents_menu", "view": "runtime"}, "")
+	retryRecorder := httptest.NewRecorder()
+	retryRequest := httptest.NewRequest("POST", "/mattermost/actions/agents", strings.NewReader(retryBody))
+	retryRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(retryRecorder, retryRequest)
+	if retryRecorder.Code != 200 {
+		t.Fatalf("retry status = %d body = %s", retryRecorder.Code, retryRecorder.Body.String())
+	}
 }
 
 func (repo *memoryInteractionRepository) ConsumeInteractionCapability(_ context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {

@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -63,7 +62,7 @@ func TestSlashStatus(t *testing.T) {
 }
 
 func TestSlashMenuReturnsAttachmentActions(t *testing.T) {
-	router := testRouterWithSlashService()
+	router, publisher := testRouterWithSlashPublisher()
 	form := url.Values{}
 	form.Set("token", "expected-token")
 	form.Set("user_id", "owner")
@@ -81,39 +80,35 @@ func TestSlashMenuReturnsAttachmentActions(t *testing.T) {
 	var payload struct {
 		ResponseType string `json:"response_type"`
 		Text         string `json:"text"`
-		Attachments  []struct {
-			Title   string `json:"title"`
-			Actions []struct {
-				ID          string `json:"id"`
-				Name        string `json:"name"`
-				Integration struct {
-					URL     string         `json:"url"`
-					Context map[string]any `json:"context"`
-				} `json:"integration"`
-			} `json:"actions"`
-		} `json:"attachments"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if payload.ResponseType != "in_channel" || !strings.Contains(payload.Text, "control menu") {
+	if payload.ResponseType != "ephemeral" || !strings.Contains(payload.Text, "control menu") {
 		t.Fatalf("unexpected slash payload: %#v", payload)
 	}
-	if len(payload.Attachments) != 1 || payload.Attachments[0].Title != "Main menu" {
-		t.Fatalf("unexpected attachments: %#v", payload.Attachments)
+	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
+		t.Fatalf("two-phase publication = posts:%d updates:%d", len(publisher.cards), len(publisher.cardUpdates))
 	}
-	if len(payload.Attachments[0].Actions) == 0 {
+	if len(publisher.cards[0].Actions) != 0 {
+		t.Fatalf("placeholder exposed actions: %#v", publisher.cards[0].Actions)
+	}
+	card := publisher.cardUpdates[0]
+	if card.Title != "Main menu" || card.PostID != "post-1" || card.ChannelID != "channel-1" {
+		t.Fatalf("bound card = %#v", card)
+	}
+	if len(card.Actions) == 0 {
 		t.Fatal("menu actions are empty")
 	}
-	action := payload.Attachments[0].Actions[0]
+	action := card.Actions[0]
 	if action.ID != "menuprojects" {
 		t.Fatalf("action id = %q", action.ID)
 	}
-	if action.Integration.URL != "http://bot-service/mattermost/actions/agents" {
-		t.Fatalf("action url = %q", action.Integration.URL)
+	if card.ActionURL != "http://bot-service/mattermost/actions/agents" {
+		t.Fatalf("action url = %q", card.ActionURL)
 	}
-	if action.Integration.Context["kind"] != "agents_menu" || action.Integration.Context["view"] != "projects" {
-		t.Fatalf("action context = %#v", action.Integration.Context)
+	if action.Context["kind"] != "agents_menu" || action.Context["view"] != "projects" {
+		t.Fatalf("action context = %#v", action.Context)
 	}
 }
 
@@ -272,7 +267,7 @@ func TestAgentsActionOpensDialog(t *testing.T) {
 
 func TestLegitimateSlashActionDialogCapabilityChain(t *testing.T) {
 	opener := &fakeDialogOpener{}
-	router := testRouterWithDialogService(opener)
+	router, publisher := testRouterWithDialogStoreAndPublisher(opener, &fakeRouterAdminStore{}, newMemoryInteractionSecurity())
 	form := url.Values{
 		"token":      {"expected-token"},
 		"user_id":    {"owner"},
@@ -286,23 +281,13 @@ func TestLegitimateSlashActionDialogCapabilityChain(t *testing.T) {
 	if slashRecorder.Code != http.StatusOK {
 		t.Fatalf("slash status = %d body = %s", slashRecorder.Code, slashRecorder.Body.String())
 	}
-	var slashPayload struct {
-		Attachments []struct {
-			Actions []struct {
-				ID          string `json:"id"`
-				Integration struct {
-					Context map[string]any `json:"context"`
-				} `json:"integration"`
-			} `json:"actions"`
-		} `json:"attachments"`
-	}
-	if err := json.Unmarshal(slashRecorder.Body.Bytes(), &slashPayload); err != nil {
-		t.Fatal(err)
-	}
 	projectsContext := map[string]any(nil)
-	for _, action := range slashPayload.Attachments[0].Actions {
+	if len(publisher.cardUpdates) != 1 {
+		t.Fatalf("slash card updates = %d", len(publisher.cardUpdates))
+	}
+	for _, action := range publisher.cardUpdates[0].Actions {
 		if action.ID == "menuprojects" {
-			projectsContext = action.Integration.Context
+			projectsContext = action.Context
 		}
 	}
 	if projectsContext["capability"] == nil {
@@ -422,6 +407,8 @@ func TestAgentsDialogClosesAndPublishesResult(t *testing.T) {
 		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
 		StorageReady:    true,
 	})
+	security := newMemoryInteractionSecurity()
+	publisher := &recordingThreadPublisher{}
 	router := NewRouter(RouterConfig{
 		StatusService:         statusSvc,
 		SlashService:          slashSvc,
@@ -429,22 +416,13 @@ func TestAgentsDialogClosesAndPublishesResult(t *testing.T) {
 		SlashToken:            "expected-token",
 		MaxSlashFormBytes:     65536,
 		MaxGitHubWebhookBytes: 262144,
-		InteractionSecurity:   newMemoryInteractionSecurity(),
+		InteractionSecurity:   security,
+		ThreadPublisher:       statusservice.NewSecuredMattermostThreadPublisher(publisher, security),
 		MattermostInternalURL: "http://mattermost.test:8065",
 		MattermostResolver: &fakeMattermostResolver{addresses: [][]net.IPAddr{{
 			{IP: net.ParseIP("10.20.30.40")},
 		}}},
 	})
-	type delayedResponse struct {
-		ResponseType string `json:"response_type"`
-		Text         string `json:"text"`
-		Attachments  []struct {
-			Title string `json:"title"`
-			Text  string `json:"text"`
-		} `json:"attachments"`
-	}
-	delivered := make(chan []byte, 1)
-	router.mattermostResponses.dialer = &pipeMattermostDialer{delivered: delivered}
 	recorder := httptest.NewRecorder()
 	body := testDialogBodyWithURL(t, router, "agents_repo_add", map[string]any{"view": "repositories"}, map[string]any{"provider": "github", "repository": "codex-k8s/kodex-package-store", "default_branch": "main"}, "http://mattermost.test:8065/hooks/response-id")
 	request := httptest.NewRequest(http.MethodPost, "/mattermost/dialogs/agents", strings.NewReader(body))
@@ -466,24 +444,12 @@ func TestAgentsDialogClosesAndPublishesResult(t *testing.T) {
 	if payload.Error != "" || payload.Type != "ok" || payload.Form != nil {
 		t.Fatalf("payload = %#v", payload)
 	}
-	select {
-	case deliveredBody := <-delivered:
-		var response delayedResponse
-		if err := json.Unmarshal(deliveredBody, &response); err != nil {
-			t.Fatalf("delayed response decode error = %v", err)
-		}
-		if response.ResponseType != "ephemeral" {
-			t.Fatalf("delayed response = %#v", response)
-		}
-		if len(response.Attachments) != 1 {
-			t.Fatalf("delayed attachments = %#v", response.Attachments)
-		}
-		resultText := response.Text + "\n" + response.Attachments[0].Text
-		if !strings.Contains(resultText, "codex-k8s/kodex-package-store") {
-			t.Fatalf("delayed response text = %q", resultText)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for delayed dialog result")
+	if len(publisher.cards) != 1 {
+		t.Fatalf("published dialog result cards = %d", len(publisher.cards))
+	}
+	resultText := publisher.cards[0].Message + "\n" + publisher.cards[0].Text
+	if !strings.Contains(resultText, "codex-k8s/kodex-package-store") {
+		t.Fatalf("dialog result text = %q", resultText)
 	}
 	if store.upsert.Owner != "codex-k8s" || store.upsert.Name != "kodex-package-store" || store.upsert.DefaultBranch != "main" {
 		t.Fatalf("upsert = %#v", store.upsert)
@@ -639,6 +605,11 @@ func testRouterWithGitHubWebhook(secret string) *Router {
 }
 
 func testRouterWithSlashService() *Router {
+	router, _ := testRouterWithSlashPublisher()
+	return router
+}
+
+func testRouterWithSlashPublisher() (*Router, *recordingThreadPublisher) {
 	localizer, err := texti18n.New(texti18n.DefaultLocale)
 	if err != nil {
 		panic(err)
@@ -664,6 +635,8 @@ func testRouterWithSlashService() *Router {
 		StorageReady:      true,
 		RuntimeConfigured: true,
 	})
+	security := newMemoryInteractionSecurity()
+	publisher := &recordingThreadPublisher{}
 	return NewRouter(RouterConfig{
 		StatusService:         statusSvc,
 		SlashService:          slashSvc,
@@ -671,8 +644,9 @@ func testRouterWithSlashService() *Router {
 		SlashToken:            "expected-token",
 		MaxSlashFormBytes:     65536,
 		MaxGitHubWebhookBytes: 262144,
-		InteractionSecurity:   newMemoryInteractionSecurity(),
-	})
+		InteractionSecurity:   security,
+		ThreadPublisher:       statusservice.NewSecuredMattermostThreadPublisher(publisher, security),
+	}), publisher
 }
 
 func testRouterWithDialogService(opener *fakeDialogOpener) *Router {
@@ -680,6 +654,11 @@ func testRouterWithDialogService(opener *fakeDialogOpener) *Router {
 }
 
 func testRouterWithDialogStore(opener *fakeDialogOpener, store *fakeRouterAdminStore, interactionSecurity *statusservice.InteractionSecurityService) *Router {
+	router, _ := testRouterWithDialogStoreAndPublisher(opener, store, interactionSecurity)
+	return router
+}
+
+func testRouterWithDialogStoreAndPublisher(opener *fakeDialogOpener, store *fakeRouterAdminStore, interactionSecurity *statusservice.InteractionSecurityService) (*Router, *recordingThreadPublisher) {
 	localizer, err := texti18n.New(texti18n.DefaultLocale)
 	if err != nil {
 		panic(err)
@@ -705,6 +684,7 @@ func testRouterWithDialogStore(opener *fakeDialogOpener, store *fakeRouterAdminS
 		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
 		StorageReady:    true,
 	})
+	publisher := &recordingThreadPublisher{}
 	return NewRouter(RouterConfig{
 		StatusService:         statusSvc,
 		SlashService:          slashSvc,
@@ -714,7 +694,51 @@ func testRouterWithDialogStore(opener *fakeDialogOpener, store *fakeRouterAdminS
 		MaxSlashFormBytes:     65536,
 		MaxGitHubWebhookBytes: 262144,
 		InteractionSecurity:   interactionSecurity,
-	})
+		ThreadPublisher:       statusservice.NewSecuredMattermostThreadPublisher(publisher, interactionSecurity),
+	}), publisher
+}
+
+type recordingThreadPublisher struct {
+	cards       []statusservice.MattermostCard
+	cardUpdates []statusservice.MattermostCard
+	postErr     error
+	updateErr   error
+}
+
+func (publisher *recordingThreadPublisher) PostThreadMessage(_ context.Context, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	return statusservice.MattermostPostRef{ChannelID: input.ChannelID, PostID: "post-1"}, nil
+}
+
+func (publisher *recordingThreadPublisher) PostThreadMessageWithToken(ctx context.Context, _ string, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	return publisher.PostThreadMessage(ctx, input)
+}
+
+func (publisher *recordingThreadPublisher) UpdateThreadMessage(_ context.Context, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
+	return statusservice.MattermostPostRef{ChannelID: input.ChannelID, PostID: input.PostID}, nil
+}
+
+func (publisher *recordingThreadPublisher) UpdateThreadMessageWithToken(ctx context.Context, _ string, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
+	return publisher.UpdateThreadMessage(ctx, input)
+}
+
+func (publisher *recordingThreadPublisher) PostThreadCard(_ context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
+	publisher.cards = append(publisher.cards, card)
+	if publisher.postErr != nil {
+		return statusservice.MattermostPostRef{}, publisher.postErr
+	}
+	return statusservice.MattermostPostRef{ChannelID: card.ChannelID, PostID: "post-1"}, nil
+}
+
+func (publisher *recordingThreadPublisher) UpdateThreadCard(_ context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
+	publisher.cardUpdates = append(publisher.cardUpdates, card)
+	if publisher.updateErr != nil {
+		return statusservice.MattermostPostRef{}, publisher.updateErr
+	}
+	return statusservice.MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, nil
+}
+
+func (*recordingThreadPublisher) AddPostReactionWithToken(context.Context, string, statusservice.MattermostPostReactionInput) error {
+	return nil
 }
 
 type fakeDialogOpener struct {

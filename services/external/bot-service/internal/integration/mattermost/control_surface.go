@@ -19,6 +19,7 @@ type ControlSurface struct {
 var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
 var _ statusservice.MattermostConversationReader = (*ControlSurface)(nil)
 var _ statusservice.MattermostRoleBotManager = (*ControlSurface)(nil)
+var _ statusservice.MattermostInteractionActorVerifier = (*ControlSurface)(nil)
 
 func NewControlSurface(siteURL string, token string) *ControlSurface {
 	client := mattermostmodel.NewAPIv4Client(siteURL)
@@ -32,6 +33,26 @@ func (surface *ControlSurface) BotUserID(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("get Mattermost bot user: %w", err)
 	}
 	return user.Id, nil
+}
+
+func (surface *ControlSurface) VerifyInteractionActor(ctx context.Context, userID string, channelID string) (bool, error) {
+	userID = strings.TrimSpace(userID)
+	channelID = strings.TrimSpace(channelID)
+	if userID == "" || channelID == "" {
+		return false, nil
+	}
+	user, _, err := surface.client.GetUser(ctx, userID, "")
+	if err != nil {
+		return false, fmt.Errorf("get Mattermost interaction actor: %w", err)
+	}
+	if user == nil || user.Id != userID || user.DeleteAt != 0 {
+		return false, nil
+	}
+	membership, _, err := surface.client.GetChannelMember(ctx, channelID, userID, "")
+	if err != nil {
+		return false, fmt.Errorf("get Mattermost interaction channel membership: %w", err)
+	}
+	return membership != nil && membership.UserId == userID && membership.ChannelId == channelID, nil
 }
 
 func (surface *ControlSurface) EnsureRoleBot(ctx context.Context, input statusservice.MattermostRoleBotInput) (statusservice.MattermostRoleBotBinding, error) {

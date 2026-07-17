@@ -401,6 +401,9 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if !svc.cfg.RuntimeReady || svc.cfg.RuntimeRunner == nil {
 		return AgentTurnQueued{}, fmt.Errorf("runtime is not ready")
 	}
+	if err := svc.authorizeClusterAdminRole(ctx, request.Role, request.Chat.ID, request.Chat.Slug, "agent_turn.enqueue"); err != nil {
+		return AgentTurnQueued{}, err
+	}
 	openAIAccount, ok := svc.openAIAccount(ctx, request.Role)
 	if !ok {
 		return AgentTurnQueued{}, fmt.Errorf("OpenAI account is required for role %s", request.Role.Name)
@@ -701,6 +704,9 @@ func (svc *ChatRunService) ensureQueuedAgentSessionRuntime(ctx context.Context, 
 	if err != nil {
 		return err
 	}
+	if err := svc.authorizeClusterAdminRole(ctx, role, chat.ID, chat.Slug, "agent_session.repair"); err != nil {
+		return err
+	}
 	openAIAccount, ok := svc.openAIAccount(ctx, role)
 	if !ok {
 		return fmt.Errorf("OpenAI account is required for role %s", role.Name)
@@ -741,7 +747,7 @@ func (svc *ChatRunService) ensureQueuedAgentSessionRuntime(ctx context.Context, 
 }
 
 func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session entity.AgentSession, tokenSession entity.AgentSession, role entity.AgentRole, codexAuthSecretName string, gitHubSecretName string, repo entity.ProjectRepository, runtimeEnv []runtimerepo.RuntimeEnvVar) (runtimerepo.StartedAgentSession, error) {
-	if err := svc.authorizeClusterAdminRole(ctx, role, "agent_session.start"); err != nil {
+	if err := svc.authorizeClusterAdminRole(ctx, role, session.ChatID, "", "agent_session.start"); err != nil {
 		return runtimerepo.StartedAgentSession{}, err
 	}
 	internalToken, err := svc.sessionInternalToken(ctx, tokenSession)
@@ -1165,7 +1171,7 @@ func (svc *ChatRunService) completeCodexAuthSession(ctx context.Context, account
 }
 
 func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput) (runtimerepo.StartedRun, error) {
-	if err := svc.authorizeClusterAdminRole(ctx, input.Role, "agent_run.start"); err != nil {
+	if err := svc.authorizeClusterAdminRole(ctx, input.Role, input.Chat.ID, input.Chat.Slug, "agent_run.start"); err != nil {
 		return runtimerepo.StartedRun{}, err
 	}
 	repo := firstRepository(input.Repositories)
@@ -1224,7 +1230,7 @@ func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput
 	}
 }
 
-func (svc *ChatRunService) authorizeClusterAdminRole(ctx context.Context, role entity.AgentRole, operation string) error {
+func (svc *ChatRunService) authorizeClusterAdminRole(ctx context.Context, role entity.AgentRole, chatID int64, chatSlug string, operation string) error {
 	if !strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
 		return nil
 	}
@@ -1239,6 +1245,20 @@ func (svc *ChatRunService) authorizeClusterAdminRole(ctx context.Context, role e
 		ProfileName: role.Name,
 		ActorUser:   "runtime",
 		Operation:   operation,
+	})
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	bindingRepository, ok := svc.cfg.Store.(securityrepo.ClusterAdminBindingRepository)
+	if !ok {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	allowed, err = bindingRepository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: role.ID, ProjectID: role.ProjectID, ChatID: chatID, ChatSlug: chatSlug,
+		Operation: operation, ActorUser: "runtime",
 	})
 	if err != nil {
 		return err
