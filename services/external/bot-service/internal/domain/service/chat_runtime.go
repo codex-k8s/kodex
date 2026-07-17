@@ -31,6 +31,7 @@ const (
 
 	threadContextStatusPending    = "pending"
 	threadContextStatusConfigured = "configured"
+	threadContextStatusClosed     = "closed"
 
 	maxAgentSessionCapacityEvictions = 1
 	defaultCapacityRetryDelay        = 500 * time.Millisecond
@@ -106,6 +107,7 @@ type AgentTurnRequest struct {
 	SessionScope   string
 	TTLSeconds     int
 	PreparedPrompt string
+	ParentTurnID   int64
 }
 
 type AgentTurnRetryRequest struct {
@@ -160,6 +162,7 @@ type ChatRunServiceConfig struct {
 	ThreadPublisher    MattermostThreadPublisher
 	BotServiceURL      string
 	MenuActionURL      string
+	MattermostSiteURL  string
 	StorageReady       bool
 	RuntimeReady       bool
 	DisableMonitor     bool
@@ -432,6 +435,14 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
+	if sessionExists {
+		if existingSession.Status == agentSessionStatusBlocked || existingSession.Status == agentSessionStatusClosed {
+			return AgentTurnQueued{}, fmt.Errorf("agent session is %s; start a new Mattermost thread", existingSession.Status)
+		}
+		if account := strings.TrimSpace(existingSession.OpenAIAccountName); account != "" && account != openAIAccount.Name {
+			return AgentTurnQueued{}, fmt.Errorf("agent session belongs to OpenAI account %s; start a new Mattermost thread", account)
+		}
+	}
 	promptInput := RolePromptInput{
 		Project:          request.Project,
 		Role:             request.Role,
@@ -459,6 +470,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		SessionScope:         sessionScope,
 		MattermostChannelID:  request.Chat.MattermostChannelID,
 		MattermostRootPostID: sessionRootID,
+		OpenAIAccountName:    openAIAccount.Name,
 		TTLSeconds:           ttlSeconds,
 		Capabilities:         capabilities,
 	})
@@ -503,6 +515,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		MattermostChannelID:  request.Chat.MattermostChannelID,
 		MattermostRootPostID: request.ReplyRootID,
 		MattermostPostID:     request.SourcePostID,
+		ParentTurnID:         request.ParentTurnID,
 		UserID:               request.UserID,
 		UserName:             request.UserName,
 		Message:              prompt,
@@ -528,6 +541,18 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	}); err != nil {
 		return AgentTurnQueued{}, err
 	}
+	_, _ = upsertProjectRunCard(ctx, projectRunCardInput{
+		Localizer:         svc.cfg.Localizer,
+		Store:             svc.cfg.Store,
+		Publisher:         svc.cfg.ThreadPublisher,
+		MattermostSiteURL: svc.cfg.MattermostSiteURL,
+		Project:           request.Project,
+		Session:           session,
+		Turn:              turn,
+		RoleName:          request.Role.Name,
+		OpenAIAccountName: openAIAccount.Name,
+		Status:            agentSessionTurnQueued,
+	})
 	return AgentTurnQueued{
 		RunID:              runID,
 		TurnID:             turn.ID,
@@ -573,6 +598,7 @@ func (svc *ChatRunService) RetryAgentTurn(ctx context.Context, request AgentTurn
 		UserName:       request.UserName,
 		UserMessage:    prompt,
 		PreparedPrompt: prompt,
+		ParentTurnID:   request.Turn.ID,
 		SourcePostID:   request.Turn.MattermostPostID,
 		ReplyRootID:    request.Turn.MattermostRootPostID,
 		SessionRootID:  request.Session.MattermostRootPostID,
@@ -700,7 +726,7 @@ func (svc *ChatRunService) ensureQueuedAgentSessionRuntime(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	openAIAccount, ok := svc.openAIAccount(ctx, role)
+	openAIAccount, ok := svc.openAIAccountForSession(ctx, session, role)
 	if !ok {
 		return fmt.Errorf("OpenAI account is required for role %s", role.Name)
 	}
@@ -1325,6 +1351,10 @@ func (svc *ChatRunService) threadContextRepositories(ctx context.Context, projec
 	rootPostID := commandRootPostID(command)
 	threadContext, err := svc.cfg.Store.GetThreadContext(ctx, chat.ID, rootPostID)
 	if err == nil {
+		if threadContext.Status == threadContextStatusClosed {
+			svc.postThread(ctx, command, svc.t("chat.session.closed", nil))
+			return threadContext, nil, false, nil
+		}
 		if threadContext.Status == threadContextStatusPending {
 			return threadContext, nil, false, nil
 		}
@@ -1498,6 +1528,18 @@ func (svc *ChatRunService) openAIAccount(ctx context.Context, role entity.AgentR
 		return entity.OpenAIAccount{}, false
 	}
 	if strings.TrimSpace(account.SecretRef) == "" || strings.EqualFold(account.Status, "disabled") {
+		return entity.OpenAIAccount{}, false
+	}
+	return account, true
+}
+
+func (svc *ChatRunService) openAIAccountForSession(ctx context.Context, session entity.AgentSession, role entity.AgentRole) (entity.OpenAIAccount, bool) {
+	name := strings.TrimSpace(session.OpenAIAccountName)
+	if name == "" {
+		return svc.openAIAccount(ctx, role)
+	}
+	account, err := svc.cfg.Store.GetOpenAIAccount(ctx, name)
+	if err != nil || strings.TrimSpace(account.SecretRef) == "" || strings.EqualFold(account.Status, "disabled") {
 		return entity.OpenAIAccount{}, false
 	}
 	return account, true

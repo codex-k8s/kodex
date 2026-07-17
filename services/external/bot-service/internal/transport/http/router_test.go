@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -230,6 +231,64 @@ func TestAgentsActionExecutesCommandButton(t *testing.T) {
 	if attachmentContainsSlashCommand(attachment) {
 		t.Fatalf("result card exposes slash command: %#v", attachment)
 	}
+}
+
+func TestThreadRepositoryActionRespondsBeforeAgentStartupCompletes(t *testing.T) {
+	localizer, err := texti18n.New(texti18n.DefaultLocale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selector := &blockingThreadRepositorySelector{
+		started: make(chan struct{}, 1),
+		release: make(chan struct{}),
+	}
+	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
+		Localizer:                localizer,
+		ThreadRepositorySelector: selector,
+	})
+	router := NewRouter(RouterConfig{SlashService: slashSvc, Localizer: localizer, MaxSlashFormBytes: 65536})
+	resourceID := base64.RawURLEncoding.EncodeToString([]byte(`{"thread_context_id":1,"repository_id":0}`))
+	body := `{"user_id":"owner-id","user_name":"owner","channel_id":"channel-1","post_id":"post-1","context":{"action":"thread_repository_select","resource_type":"thread_context","resource_id":"` + resourceID + `"}}`
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/agents", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	done := make(chan struct{})
+	go func() {
+		router.ServeHTTP(recorder, request)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("repository action waited for background startup")
+	}
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "Agent start accepted") {
+		t.Fatalf("body = %s", recorder.Body.String())
+	}
+	select {
+	case <-selector.started:
+	case <-time.After(time.Second):
+		t.Fatal("repository selection was not started in background")
+	}
+	close(selector.release)
+}
+
+type blockingThreadRepositorySelector struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (selector *blockingThreadRepositorySelector) SelectThreadRepository(_ context.Context, input statusservice.ThreadRepositorySelectionInput) (statusservice.ThreadRepositorySelectionResult, error) {
+	selector.started <- struct{}{}
+	<-selector.release
+	return statusservice.ThreadRepositorySelectionResult{
+		Context: entity.ThreadContext{ID: input.ThreadContextID},
+		RunID:   "run-1",
+	}, nil
 }
 
 func TestAgentsActionOpensDialog(t *testing.T) {
@@ -698,6 +757,10 @@ func (store *fakeRouterAdminStore) UpsertProject(_ context.Context, input adminr
 	}, true, nil
 }
 
+func (store *fakeRouterAdminStore) UpdateProjectRunsChannel(context.Context, int64, string) (entity.Project, error) {
+	return entity.Project{}, nil
+}
+
 func (store *fakeRouterAdminStore) GetProject(context.Context, int64) (entity.Project, error) {
 	return entity.Project{}, adminrepo.ErrNotFound
 }
@@ -900,6 +963,14 @@ func (store *fakeRouterAdminStore) CancelAgentSessionTurn(context.Context, admin
 }
 
 func (store *fakeRouterAdminStore) UpdateAgentSessionTurnStatusPost(context.Context, adminrepo.UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, nil
+}
+
+func (store *fakeRouterAdminStore) UpdateAgentSessionTurnRunsPost(context.Context, adminrepo.UpdateAgentSessionTurnRunsPostInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, nil
+}
+
+func (store *fakeRouterAdminStore) AddAgentSessionTurnOrigin(context.Context, adminrepo.AddAgentSessionTurnOriginInput) (entity.AgentSessionTurn, error) {
 	return entity.AgentSessionTurn{}, nil
 }
 

@@ -226,6 +226,7 @@ type UpsertAgentSessionInput struct {
 	SessionScope         string
 	MattermostChannelID  string
 	MattermostRootPostID string
+	OpenAIAccountName    string
 	TTLSeconds           int
 	Capabilities         string
 }
@@ -257,6 +258,7 @@ type CreateAgentSessionTurnInput struct {
 	MattermostChannelID  string
 	MattermostRootPostID string
 	MattermostPostID     string
+	ParentTurnID         int64
 	UserID               string
 	UserName             string
 	Message              string
@@ -281,6 +283,18 @@ type UpdateAgentSessionTurnStatusPostInput struct {
 	StatusPostID string
 }
 
+type UpdateAgentSessionTurnRunsPostInput struct {
+	TurnID     int64
+	RunsPostID string
+}
+
+type AddAgentSessionTurnOriginInput struct {
+	TurnID            int64
+	ParentTurnID      int64
+	TriggerPostID     string
+	InitiatorUserName string
+}
+
 type UpdateAgentSessionTurnMessageInput struct {
 	TurnID  int64
 	Message string
@@ -302,6 +316,7 @@ type Repository interface {
 	ListRepositories(ctx context.Context, limit int) ([]entity.Repository, error)
 	DeleteRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
 	UpsertProject(ctx context.Context, input UpsertProjectInput) (entity.Project, bool, error)
+	UpdateProjectRunsChannel(ctx context.Context, projectID int64, channelID string) (entity.Project, error)
 	GetProject(ctx context.Context, id int64) (entity.Project, error)
 	GetProjectBySlug(ctx context.Context, slug string) (entity.Project, error)
 	ListProjects(ctx context.Context, limit int) ([]entity.Project, error)
@@ -351,6 +366,8 @@ type Repository interface {
 	CompleteAgentSessionTurn(ctx context.Context, input CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error)
 	CancelAgentSessionTurn(ctx context.Context, input CancelAgentSessionTurnInput) (entity.AgentSessionTurn, error)
 	UpdateAgentSessionTurnStatusPost(ctx context.Context, input UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error)
+	UpdateAgentSessionTurnRunsPost(ctx context.Context, input UpdateAgentSessionTurnRunsPostInput) (entity.AgentSessionTurn, error)
+	AddAgentSessionTurnOrigin(ctx context.Context, input AddAgentSessionTurnOriginInput) (entity.AgentSessionTurn, error)
 	UpdateAgentSessionTurnMessage(ctx context.Context, input UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error)
 	ListQueuedAgentSessionTurns(ctx context.Context, sessionID int64) ([]entity.AgentSessionTurn, error)
 	CreateAgentDelegation(ctx context.Context, input CreateAgentDelegationInput) (entity.AgentDelegation, bool, error)

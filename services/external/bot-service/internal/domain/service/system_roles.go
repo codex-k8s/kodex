@@ -14,13 +14,18 @@ const (
 	systemMatterCodexProjectSlug = "agents"
 	systemMatterCodexRoleName    = "mattercodex-admin"
 	systemMatterCodexChatSlug    = "agents-control"
+	systemProjectRunsChannelSlug = "runs"
 )
 
 func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) error {
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return nil
 	}
-	openAIAccountName, err := svc.preferredSystemOpenAIAccount(ctx)
+	manageOpenAIAccountName, err := svc.preferredManageOpenAIAccount(ctx)
+	if err != nil {
+		return err
+	}
+	mainOpenAIAccountName, err := svc.preferredMainOpenAIAccount(ctx)
 	if err != nil {
 		return err
 	}
@@ -33,15 +38,41 @@ func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) e
 		return err
 	}
 	for _, project := range projects {
-		if err := svc.bootstrapImproverRole(ctx, project, gitHubAccounts, openAIAccountName); err != nil {
+		if _, err := svc.ensureProjectRunsChannel(ctx, project); err != nil {
+			return err
+		}
+		if err := svc.bootstrapImproverRole(ctx, project, gitHubAccounts, manageOpenAIAccountName); err != nil {
+			return err
+		}
+		if err := svc.reconcileProjectRoleBotIdentities(ctx, project); err != nil {
 			return err
 		}
 	}
-	matterCodexProject, err := svc.bootstrapMatterCodexAdmin(ctx, gitHubAccounts, openAIAccountName)
+	matterCodexProject, err := svc.bootstrapMatterCodexAdmin(ctx, gitHubAccounts, mainOpenAIAccountName)
 	if err != nil {
 		return err
 	}
-	return svc.bootstrapImproverRole(ctx, matterCodexProject, gitHubAccounts, openAIAccountName)
+	if _, err := svc.ensureProjectRunsChannel(ctx, matterCodexProject); err != nil {
+		return err
+	}
+	if err := svc.bootstrapImproverRole(ctx, matterCodexProject, gitHubAccounts, manageOpenAIAccountName); err != nil {
+		return err
+	}
+	return svc.reconcileProjectRoleBotIdentities(ctx, matterCodexProject)
+}
+
+func (svc *SlashCommandService) ensureProjectRunsChannel(ctx context.Context, project entity.Project) (entity.Project, error) {
+	if svc.cfg.ChannelManager == nil || svc.cfg.Store == nil {
+		return project, nil
+	}
+	channel, _, err := svc.cfg.ChannelManager.EnsureProjectChannel(ctx, project.Slug, systemProjectRunsChannelSlug, "Runs", false, nil)
+	if err != nil {
+		return entity.Project{}, err
+	}
+	if strings.TrimSpace(channel.ID) == strings.TrimSpace(project.MattermostRunsChannelID) {
+		return project, nil
+	}
+	return svc.cfg.Store.UpdateProjectRunsChannel(ctx, project.ID, channel.ID)
 }
 
 func (svc *SlashCommandService) bootstrapImproverRole(ctx context.Context, project entity.Project, gitHubAccounts []entity.GitHubAccount, openAIAccountName string) error {
@@ -181,12 +212,19 @@ func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, g
 	return project, err
 }
 
-func (svc *SlashCommandService) preferredSystemOpenAIAccount(ctx context.Context) (string, error) {
+func (svc *SlashCommandService) preferredManageOpenAIAccount(ctx context.Context) (string, error) {
+	return svc.preferredOpenAIAccount(ctx, []string{"openai-codex-manage", "manage", "openai-codex-main", "main", "primary"})
+}
+
+func (svc *SlashCommandService) preferredMainOpenAIAccount(ctx context.Context) (string, error) {
+	return svc.preferredOpenAIAccount(ctx, []string{"openai-codex-main", "main", "primary", "openai-codex-manage", "manage"})
+}
+
+func (svc *SlashCommandService) preferredOpenAIAccount(ctx context.Context, preferredNames []string) (string, error) {
 	accounts, err := svc.cfg.Store.ListOpenAIAccounts(ctx, 100)
 	if err != nil {
 		return "", err
 	}
-	preferredNames := []string{"openai-radar-delivery", "main", "primary", "openai-radar-ops-review"}
 	for _, preferred := range preferredNames {
 		for _, account := range accounts {
 			if account.Name == preferred && account.Status == "authorized" {
@@ -210,6 +248,25 @@ func (svc *SlashCommandService) preferredSystemOpenAIAccount(ctx context.Context
 		return accounts[0].Name, nil
 	}
 	return "", nil
+}
+
+func (svc *SlashCommandService) reconcileProjectRoleBotIdentities(ctx context.Context, project entity.Project) error {
+	if svc.cfg.RoleBotManager == nil || svc.cfg.RuntimeRunner == nil {
+		return nil
+	}
+	roles, err := svc.cfg.Store.ListAgentRoles(ctx, project.ID)
+	if err != nil {
+		return err
+	}
+	for _, role := range roles {
+		if !role.Enabled {
+			continue
+		}
+		if _, err := svc.ensureRoleBotIdentity(ctx, project, role, ""); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func preferredProjectGitHubAccount(project entity.Project, accounts []entity.GitHubAccount) string {

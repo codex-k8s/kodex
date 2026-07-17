@@ -32,4 +32,5 @@ returning
 	last_activity_at,
 	expires_at,
 	created_at,
-	updated_at;
+	updated_at,
+	openai_account_name;

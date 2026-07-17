@@ -35,6 +35,46 @@ func TestChatRunIgnoresUnknownChannel(t *testing.T) {
 	}
 }
 
+func TestChatRunRejectsClosedHistoricalThread(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", OpenAIAccountName: "main", Enabled: true}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	store.threadContexts[1] = entity.ThreadContext{
+		ID:                   1,
+		ProjectID:            1,
+		ChatID:               1,
+		MattermostChannelID:  "channel-1",
+		MattermostRootPostID: "old-root",
+		Status:               threadContextStatusClosed,
+	}
+	publisher := &fakeThreadPublisher{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   &fakeRuntimeRunner{},
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+		DisableMonitor:  true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "reply-1",
+		RootPostID: "old-root",
+		UserID:     "owner",
+		UserName:   "owner",
+		Message:    "Continue old work",
+	})
+	if result.RunID != "" || len(store.sessionTurns) != 0 {
+		t.Fatalf("result=%#v turns=%#v", result, store.sessionTurns)
+	}
+	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, "closed for agent runs") {
+		t.Fatalf("posts = %#v", publisher.posts)
+	}
+}
+
 func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{

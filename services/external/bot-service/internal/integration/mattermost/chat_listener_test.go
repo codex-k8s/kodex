@@ -1,10 +1,21 @@
 package mattermost
 
 import (
+	"context"
 	"testing"
 
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
 )
+
+type fakeMattermostUserNameResolver struct {
+	userName string
+	calls    int
+}
+
+func (resolver *fakeMattermostUserNameResolver) ResolveMattermostUserName(_ context.Context, _ string) (string, error) {
+	resolver.calls++
+	return resolver.userName, nil
+}
 
 func TestMattermostWebSocketURL(t *testing.T) {
 	tests := map[string]string{
@@ -44,5 +55,34 @@ func TestWebsocketEventPostIgnoresSystemPosts(t *testing.T) {
 
 	if ok {
 		t.Fatal("system post should be ignored")
+	}
+}
+
+func TestChatListenerResolvesAndCachesPostSenderName(t *testing.T) {
+	resolver := &fakeMattermostUserNameResolver{userName: "owner"}
+	listener := &ChatListener{userNameResolver: resolver}
+
+	first := listener.resolveUserName(context.Background(), "user-1", nil)
+	second := listener.resolveUserName(context.Background(), "user-1", nil)
+
+	if first != "owner" || second != "owner" {
+		t.Fatalf("resolved names = %q, %q", first, second)
+	}
+	if resolver.calls != 1 {
+		t.Fatalf("resolver calls = %d, want 1", resolver.calls)
+	}
+}
+
+func TestChatListenerUsesSenderNameFromWebSocketEvent(t *testing.T) {
+	resolver := &fakeMattermostUserNameResolver{userName: "fallback"}
+	listener := &ChatListener{userNameResolver: resolver}
+
+	got := listener.resolveUserName(context.Background(), "user-1", map[string]any{"sender_name": "owner"})
+
+	if got != "owner" {
+		t.Fatalf("resolved name = %q, want owner", got)
+	}
+	if resolver.calls != 0 {
+		t.Fatalf("resolver calls = %d, want 0", resolver.calls)
 	}
 }

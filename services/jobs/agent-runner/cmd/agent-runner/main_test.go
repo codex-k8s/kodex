@@ -224,6 +224,40 @@ func TestCodexTransientCapacityFailureRejectsUsageLimit(t *testing.T) {
 	}
 }
 
+func TestCodexProviderPolicyFailureReadsNestedStructuredEvent(t *testing.T) {
+	dir := t.TempDir()
+	eventsPath := filepath.Join(dir, "events.jsonl")
+	stderrPath := filepath.Join(dir, "stderr.log")
+	body := `{"type":"turn.failed","error":{"message":"Your request was flagged for possible cybersecurity risk. See Trusted Access for Cyber."}}`
+	if err := os.WriteFile(eventsPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+	if err := os.WriteFile(stderrPath, nil, 0o600); err != nil {
+		t.Fatalf("write stderr: %v", err)
+	}
+
+	if !codexProviderPolicyFailure(eventsPath, stderrPath, errors.New("exit status 1")) {
+		t.Fatal("provider policy failure was not classified")
+	}
+}
+
+func TestCodexProviderPolicyFailureRejectsAssistantDiscussion(t *testing.T) {
+	dir := t.TempDir()
+	eventsPath := filepath.Join(dir, "events.jsonl")
+	stderrPath := filepath.Join(dir, "stderr.log")
+	body := `{"type":"item.completed","item":{"text":"The cyber safety classifier is documented here."}}`
+	if err := os.WriteFile(eventsPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+	if err := os.WriteFile(stderrPath, nil, 0o600); err != nil {
+		t.Fatalf("write stderr: %v", err)
+	}
+
+	if codexProviderPolicyFailure(eventsPath, stderrPath, errors.New("exit status 1")) {
+		t.Fatal("assistant discussion must not be classified as a provider policy failure")
+	}
+}
+
 func TestCodexCapacityRetryScheduleAndArtifacts(t *testing.T) {
 	want := []time.Duration{time.Minute, 3 * time.Minute, 5 * time.Minute}
 	if len(codexCapacityRetryDelays) != len(want) {

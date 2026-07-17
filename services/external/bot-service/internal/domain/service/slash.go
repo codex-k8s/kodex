@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
@@ -186,6 +187,26 @@ type SlashCommandService struct {
 
 func NewSlashCommandService(cfg SlashCommandServiceConfig) *SlashCommandService {
 	return &SlashCommandService{cfg: cfg}
+}
+
+func (svc *SlashCommandService) ShouldRunMenuActionAsync(command MenuActionCommand) bool {
+	return command.Action == menuActionThreadRepositorySelect &&
+		command.Resource == menuResourceThreadContext &&
+		svc.cfg.ThreadRepositorySelector != nil
+}
+
+func (svc *SlashCommandService) AsyncMenuActionAccepted(command MenuActionCommand) MenuActionResult {
+	return MenuActionResult{
+		StatusCode:    http.StatusOK,
+		EphemeralText: svc.t("chat.thread.repository_choice.starting", nil),
+		Card: &MattermostCard{
+			ChannelID: command.ChannelID,
+			PostID:    command.PostID,
+			Color:     "#1c58d9",
+			Title:     svc.t("chat.thread.repository_choice.starting.title", nil),
+			Text:      svc.t("chat.thread.repository_choice.starting", nil),
+		},
+	}
 }
 
 func (svc *SlashCommandService) Handle(ctx context.Context, command SlashCommand) string {

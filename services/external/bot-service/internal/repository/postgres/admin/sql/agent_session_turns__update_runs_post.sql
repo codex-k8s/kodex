@@ -1,4 +1,9 @@
-select
+-- name: agent_session_turns__update_runs_post :one
+update matter_codex_agent_session_turns set
+	mattermost_runs_post_id = $2,
+	updated_at = now()
+where id = $1
+returning
 	id,
 	session_id,
 	run_id,
@@ -20,6 +25,4 @@ select
 	created_at,
 	coalesce(started_at, 'epoch'::timestamptz),
 	coalesce(finished_at, 'epoch'::timestamptz),
-	updated_at
-from matter_codex_agent_session_turns
-where id = $1;
+	updated_at;

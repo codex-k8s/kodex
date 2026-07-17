@@ -202,7 +202,7 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "slash_service_not_configured"})
 		return
 	}
-	result := router.slashService.HandleMenuAction(r.Context(), statusservice.MenuActionCommand{
+	command := statusservice.MenuActionCommand{
 		View:      contextString(request.Context, "view"),
 		Command:   contextString(request.Context, "command"),
 		Dialog:    contextString(request.Context, "dialog"),
@@ -214,7 +214,18 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		UserName:  strings.TrimSpace(request.UserName),
 		ChannelID: strings.TrimSpace(request.ChannelId),
 		PostID:    strings.TrimSpace(request.PostId),
-	})
+	}
+	if router.slashService.ShouldRunMenuActionAsync(command) {
+		result := router.slashService.AsyncMenuActionAccepted(command)
+		response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.EphemeralText}
+		if result.Card != nil {
+			response.Update = cardPost(*result.Card)
+		}
+		writeJSON(w, result.StatusCode, response)
+		go router.runAsyncMenuAction(context.WithoutCancel(r.Context()), command)
+		return
+	}
+	result := router.slashService.HandleMenuAction(r.Context(), command)
 	status := result.StatusCode
 	if status == 0 {
 		status = http.StatusOK
@@ -250,6 +261,15 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		response.Update = cardPost(*result.Card)
 	}
 	writeJSON(w, status, response)
+}
+
+func (router *Router) runAsyncMenuAction(parent context.Context, command statusservice.MenuActionCommand) {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
+	defer cancel()
+	result := router.slashService.HandleMenuAction(ctx, command)
+	if result.StatusCode >= http.StatusBadRequest {
+		router.logWarn("asynchronous Mattermost menu action failed", "action", command.Action, "status", result.StatusCode)
+	}
 }
 
 func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Request, request mattermostmodel.PostActionIntegrationRequest) {

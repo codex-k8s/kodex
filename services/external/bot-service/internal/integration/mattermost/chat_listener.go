@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -17,20 +18,27 @@ type ChatPostHandler interface {
 	HandleChatPost(ctx context.Context, command statusservice.ChatPostCommand) statusservice.ChatRunResult
 }
 
+type MattermostUserNameResolver interface {
+	ResolveMattermostUserName(ctx context.Context, userID string) (string, error)
+}
+
 type ChatListenerConfig struct {
-	SiteURL   string
-	Token     string
-	BotUserID string
-	Handler   ChatPostHandler
-	Logger    *slog.Logger
+	SiteURL          string
+	Token            string
+	BotUserID        string
+	Handler          ChatPostHandler
+	UserNameResolver MattermostUserNameResolver
+	Logger           *slog.Logger
 }
 
 type ChatListener struct {
-	siteURL   string
-	token     string
-	botUserID string
-	handler   ChatPostHandler
-	logger    *slog.Logger
+	siteURL          string
+	token            string
+	botUserID        string
+	handler          ChatPostHandler
+	userNameResolver MattermostUserNameResolver
+	userNames        sync.Map
+	logger           *slog.Logger
 }
 
 func NewChatListener(cfg ChatListenerConfig) (*ChatListener, error) {
@@ -45,11 +53,12 @@ func NewChatListener(cfg ChatListenerConfig) (*ChatListener, error) {
 		return nil, fmt.Errorf("chat post handler is required")
 	}
 	return &ChatListener{
-		siteURL:   siteURL,
-		token:     strings.TrimSpace(cfg.Token),
-		botUserID: strings.TrimSpace(cfg.BotUserID),
-		handler:   cfg.Handler,
-		logger:    cfg.Logger,
+		siteURL:          siteURL,
+		token:            strings.TrimSpace(cfg.Token),
+		botUserID:        strings.TrimSpace(cfg.BotUserID),
+		handler:          cfg.Handler,
+		userNameResolver: cfg.UserNameResolver,
+		logger:           cfg.Logger,
 	}, nil
 }
 
@@ -114,6 +123,7 @@ func (listener *ChatListener) handleEvent(ctx context.Context, event *mattermost
 		PostID:     post.Id,
 		RootPostID: post.RootId,
 		UserID:     post.UserId,
+		UserName:   listener.resolveUserName(ctx, post.UserId, event.GetData()),
 		Message:    post.Message,
 		Props:      post.Props,
 	}
@@ -124,6 +134,29 @@ func (listener *ChatListener) handleEvent(ctx context.Context, event *mattermost
 	if !result.Ignored {
 		listener.logInfo("Mattermost chat post handled", "channel_id", command.ChannelID, "post_id", command.PostID, "run_id", result.RunID, "mode", result.Mode)
 	}
+}
+
+func (listener *ChatListener) resolveUserName(ctx context.Context, userID string, data map[string]any) string {
+	if senderName, ok := data["sender_name"].(string); ok && strings.TrimSpace(senderName) != "" {
+		return strings.TrimSpace(senderName)
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" || listener.userNameResolver == nil {
+		return ""
+	}
+	if cached, ok := listener.userNames.Load(userID); ok {
+		return cached.(string)
+	}
+	userName, err := listener.userNameResolver.ResolveMattermostUserName(ctx, userID)
+	if err != nil {
+		listener.logWarn("Mattermost post sender was not resolved", "user_id", userID, "error", err)
+		return ""
+	}
+	userName = strings.TrimSpace(userName)
+	if userName != "" {
+		listener.userNames.Store(userID, userName)
+	}
+	return userName
 }
 
 func websocketEventPost(data map[string]any) (mattermostmodel.Post, bool) {

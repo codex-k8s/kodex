@@ -1279,6 +1279,10 @@ func (svc *SlashCommandService) handleProjectDialogUpsert(ctx context.Context, c
 	if err != nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.save.failed", map[string]any{"Error": safeError(err)})}
 	}
+	project, err = svc.ensureProjectRunsChannel(ctx, project)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.runs_channel.failed", map[string]any{"Error": safeError(err)})}
+	}
 	svc.recordProjectAudit(ctx, mattermostDialogSlash(state, command), "project.upserted", project.Slug, "project upserted from Mattermost dialog")
 	stateID := "label.updated"
 	if created {
@@ -2377,7 +2381,8 @@ func (svc *SlashCommandService) ensureRoleBotIdentity(ctx context.Context, proje
 	username := roleBotUsername(project, role)
 	existing, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, role.ID)
 	if err == nil && existing.MattermostUserID != "" && existing.TokenSecretRef != "" && existing.Username == username {
-		if _, secretErr := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); secretErr == nil {
+		botErr := svc.cfg.RoleBotManager.EnsureExistingRoleBot(ctx, existing.MattermostUserID)
+		if _, secretErr := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); botErr == nil && secretErr == nil {
 			if channelID != "" {
 				_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID)
 			}

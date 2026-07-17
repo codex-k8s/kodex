@@ -21,7 +21,8 @@ select
 	sessions.last_activity_at,
 	sessions.expires_at,
 	sessions.created_at,
-	sessions.updated_at
+	sessions.updated_at,
+	sessions.openai_account_name
 from matter_codex_agent_sessions sessions
 where sessions.active_turn_id is null
 	and exists (

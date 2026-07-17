@@ -44,6 +44,9 @@ const (
 	capacityRetryPhase          = "capacity_retry"
 	capacityRetryExhaustedKey   = "codex-capacity-retries-exhausted"
 	capacityRetryCountKey       = "codex-capacity-retry-count"
+	failureCodeKey              = "failure-code"
+	providerPolicyBlockedCode   = "provider-policy-blocked"
+	providerPolicyBlockedStatus = "blocked"
 )
 
 var codexCapacityRetryDelays = []time.Duration{time.Minute, 3 * time.Minute, 5 * time.Minute}
@@ -507,6 +510,7 @@ func (r *runner) runSession(ctx context.Context) error {
 		}
 		capacityRetriesExhausted := runErr != nil && retryCount == len(codexCapacityRetryDelays) &&
 			codexTransientCapacityFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr)
+		providerPolicyBlocked := codexProviderPolicyFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr)
 		archive, snapshotErr := createCodexSessionArchive(codexHomeDir)
 		status := "succeeded"
 		errorMessage := ""
@@ -534,6 +538,12 @@ func (r *runner) runSession(ctx context.Context) error {
 		if capacityRetriesExhausted {
 			artifacts[capacityRetryExhaustedKey] = "true"
 			errorMessage = fmt.Sprintf("Codex model remained at capacity after %d automatic retries", retryCount)
+		}
+		if providerPolicyBlocked {
+			status = providerPolicyBlockedStatus
+			artifacts[failureCodeKey] = providerPolicyBlockedCode
+			errorMessage = "Codex request was blocked by the provider cyber safety policy"
+			finalMessage = ""
 		}
 		if err := r.completeSessionTurn(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnCompleteRequest{
 			TurnID:                   claim.TurnID,
@@ -731,6 +741,83 @@ func codexTransientCapacityMessage(message string) bool {
 		"model is currently at capacity",
 		"server is overloaded",
 		"service is temporarily overloaded",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func codexProviderPolicyFailure(eventsPath string, stderrPath string, runErr error) bool {
+	if runErr == nil {
+		return false
+	}
+	if codexEventFileContainsProviderPolicyBlock(eventsPath) {
+		return true
+	}
+	body, err := os.ReadFile(stderrPath)
+	return err == nil && codexProviderPolicyMessage(string(body))
+}
+
+func codexEventFileContainsProviderPolicyBlock(path string) bool {
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		var event map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			continue
+		}
+		eventType, _ := event["type"].(string)
+		if eventType != "error" && eventType != "turn.failed" {
+			continue
+		}
+		for _, message := range codexErrorEventMessages(event) {
+			if codexProviderPolicyMessage(message) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func codexErrorEventMessages(event map[string]any) []string {
+	values := []string{}
+	var collect func(any)
+	collect = func(current any) {
+		switch typed := current.(type) {
+		case string:
+			values = append(values, typed)
+		case []any:
+			for _, item := range typed {
+				collect(item)
+			}
+		case map[string]any:
+			for _, item := range typed {
+				collect(item)
+			}
+		}
+	}
+	for _, key := range []string{"message", "error", "details"} {
+		collect(event[key])
+	}
+	return values
+}
+
+func codexProviderPolicyMessage(message string) bool {
+	message = strings.ToLower(strings.TrimSpace(message))
+	for _, marker := range []string{
+		"flagged for possible cybersecurity risk",
+		"blocked due to cybersecurity",
+		"blocked by our cyber safety",
+		"cyber safety classifier",
+		"trusted access for cyber",
+		"chatgpt.com/cyber",
 	} {
 		if strings.Contains(message, marker) {
 			return true
