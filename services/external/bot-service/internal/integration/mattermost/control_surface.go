@@ -32,6 +32,17 @@ func (surface *ControlSurface) BotUserID(ctx context.Context) (string, error) {
 	return user.Id, nil
 }
 
+func (surface *ControlSurface) ResolveMattermostUserName(ctx context.Context, userID string) (string, error) {
+	user, _, err := surface.client.GetUser(ctx, strings.TrimSpace(userID), "")
+	if err != nil {
+		return "", fmt.Errorf("get Mattermost user: %w", err)
+	}
+	if user == nil || strings.TrimSpace(user.Username) == "" {
+		return "", fmt.Errorf("get Mattermost user: response has no username")
+	}
+	return strings.TrimSpace(user.Username), nil
+}
+
 func (surface *ControlSurface) EnsureRoleBot(ctx context.Context, input statusservice.MattermostRoleBotInput) (statusservice.MattermostRoleBotBinding, error) {
 	username := strings.TrimSpace(input.Username)
 	if username == "" {

@@ -155,11 +155,12 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		if err != nil {
 			logger.Warn("Mattermost chat listener disabled: bot user was not resolved", "error", err)
 		} else if listener, err := mattermostintegration.NewChatListener(mattermostintegration.ChatListenerConfig{
-			SiteURL:   cfg.MattermostAPIURL(),
-			Token:     cfg.MattermostBotToken,
-			BotUserID: botUserID,
-			Handler:   chatRunSvc,
-			Logger:    logger,
+			SiteURL:          cfg.MattermostAPIURL(),
+			Token:            cfg.MattermostBotToken,
+			BotUserID:        botUserID,
+			Handler:          chatRunSvc,
+			UserNameResolver: controlSurface,
+			Logger:           logger,
 		}); err != nil {
 			logger.Warn("Mattermost chat listener disabled: configuration is invalid", "error", err)
 		} else {

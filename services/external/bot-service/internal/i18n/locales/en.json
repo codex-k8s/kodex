@@ -741,6 +741,8 @@
   {"id": "chat.thread.repository_choice.no_repository", "translation": "no repository"},
   {"id": "chat.thread.repository_choice.selected.title", "translation": "Thread repository selected"},
   {"id": "chat.thread.repository_choice.selected.text", "translation": "Repository context: `{{.Repository}}`.\nRun: `{{.RunID}}`."},
+  {"id": "chat.thread.repository_choice.starting.title", "translation": "Agent start accepted"},
+  {"id": "chat.thread.repository_choice.starting", "translation": "The repository context is being saved. OpenAI account validation and agent startup continue in the background; status will appear in this thread."},
   {"id": "chat.session.queued.title", "translation": "Agent turn queued"},
   {"id": "chat.session.queued", "translation": "matter-codex queued agent session turn:\n- turns: `{{.Count}}`\n- first run: `{{.RunID}}`\n- first role: `{{.Role}}`\n- session: `{{.SessionKey}}`"},
   {"id": "chat.session.turn.stop.action", "translation": "Stop turn"},
