@@ -1,0 +1,202 @@
+package service
+
+import (
+	"context"
+	"strconv"
+	"strings"
+	"testing"
+
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+)
+
+func TestAgentSessionListActiveWorkUsesProjectScope(t *testing.T) {
+	base, runner, _ := agentSessionStatusTestDeps()
+	store := &fakeCoordinationStore{
+		fakeAdminStore: base,
+		capabilities: map[string]bool{
+			entity.CoordinationCapabilityReadProjectWork: true,
+		},
+		claims: []entity.WorkClaim{{ID: 1, ProcessRunID: 7, TurnID: 11, RoleID: 2, Status: "active"}},
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true,
+	})
+
+	result, err := svc.ListActiveWork(context.Background(), "session-1", "session-token", 20)
+	if err != nil {
+		t.Fatalf("ListActiveWork() error = %v", err)
+	}
+	if store.listProcessRunID != 0 || store.listProjectID != 1 {
+		t.Fatalf("ListActiveWork() scope process=%d project=%d", store.listProcessRunID, store.listProjectID)
+	}
+	if len(result.Claims) != 1 || result.Claims[0].TurnID != 11 {
+		t.Fatalf("ListActiveWork() result = %#v", result)
+	}
+}
+
+func TestAgentSessionUpdateWorkContextRequiresOwnWorkCapability(t *testing.T) {
+	base, runner, _ := agentSessionStatusTestDeps()
+	session := base.agentSessions["session-1"]
+	session.ActiveTurnID = 1
+	base.agentSessions["session-1"] = session
+	store := &fakeCoordinationStore{fakeAdminStore: base, capabilities: map[string]bool{}}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true,
+	})
+
+	_, err := svc.UpdateWorkContext(context.Background(), "session-1", "session-token", AgentSessionWorkContextCommand{Summary: "Работа"})
+	if err == nil || !strings.Contains(err.Error(), entity.CoordinationCapabilityUpdateOwnWork) {
+		t.Fatalf("UpdateWorkContext() denied error = %v", err)
+	}
+	if store.updatedClaim.TurnID != 0 {
+		t.Fatalf("UpdateWorkContext() unexpectedly updated claim = %#v", store.updatedClaim)
+	}
+
+	store.capabilities[entity.CoordinationCapabilityUpdateOwnWork] = true
+	claim, err := svc.UpdateWorkContext(context.Background(), "session-1", "session-token", AgentSessionWorkContextCommand{
+		Summary: " Работа ", Domains: []string{"runtime", "runtime", ""},
+	})
+	if err != nil {
+		t.Fatalf("UpdateWorkContext() allowed error = %v", err)
+	}
+	if claim.TurnID != 1 || store.updatedClaim.Summary != "Работа" || len(store.updatedClaim.Domains) != 1 {
+		t.Fatalf("UpdateWorkContext() claim = %#v input = %#v", claim, store.updatedClaim)
+	}
+}
+
+func TestAgentSessionMemoryRejectsLikelySecretAssignment(t *testing.T) {
+	base, runner, _ := agentSessionStatusTestDeps()
+	store := &fakeCoordinationStore{
+		fakeAdminStore: base,
+		capabilities: map[string]bool{
+			entity.CoordinationCapabilityWriteRoleMemory: true,
+		},
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true,
+	})
+
+	_, err := svc.RememberMemory(context.Background(), "session-1", "session-token", AgentSessionMemoryRememberCommand{
+		Scope: "role", Title: "Доступ", Content: "API_KEY=do-not-store", Importance: "normal",
+	})
+	if err == nil || !strings.Contains(err.Error(), "likely secret") {
+		t.Fatalf("RememberMemory() error = %v", err)
+	}
+}
+
+func TestCoordinationPermissionRequiresCapabilityAndRelationship(t *testing.T) {
+	store := &fakeCoordinationStore{
+		fakeAdminStore: &fakeAdminStore{},
+		capabilities:   map[string]bool{entity.CoordinationCapabilityStartAgents: true},
+		relationships:  map[string]bool{},
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{Store: store})
+	session := entity.AgentSession{ActiveTurnID: 10, ProjectID: 1, RoleID: 2}
+
+	err := svc.requireCoordinationPermission(context.Background(), session, entity.CoordinationCapabilityStartAgents, entity.CoordinationActionStart, 3)
+	if err == nil || !strings.Contains(err.Error(), "denies action") {
+		t.Fatalf("requireCoordinationPermission() relationship error = %v", err)
+	}
+	store.relationships[coordinationRelationshipKey(entity.CoordinationActionStart, 3)] = true
+	if err := svc.requireCoordinationPermission(context.Background(), session, entity.CoordinationCapabilityStartAgents, entity.CoordinationActionStart, 3); err != nil {
+		t.Fatalf("requireCoordinationPermission() allowed error = %v", err)
+	}
+}
+
+func TestQueuedTurnForProcessDoesNotMixRootProcesses(t *testing.T) {
+	store := &fakeCoordinationStore{
+		fakeAdminStore: &fakeAdminStore{},
+		processes: map[int64]entity.ProcessContext{
+			10: {ProcessRunID: 1},
+			20: {ProcessRunID: 2},
+			21: {ProcessRunID: 1},
+		},
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{Store: store})
+	turn, compatible, err := svc.queuedTurnForProcess(context.Background(), 10, []entity.AgentSessionTurn{{ID: 20}, {ID: 21}})
+	if err != nil || !compatible || turn.ID != 21 {
+		t.Fatalf("queuedTurnForProcess() turn=%#v compatible=%t error=%v", turn, compatible, err)
+	}
+	_, compatible, err = svc.queuedTurnForProcess(context.Background(), 10, []entity.AgentSessionTurn{{ID: 20}})
+	if err != nil || compatible {
+		t.Fatalf("queuedTurnForProcess() cross-process compatible=%t error=%v", compatible, err)
+	}
+}
+
+func TestSafeFailureSummaryRedactsSensitiveLinesAndTruncates(t *testing.T) {
+	value := "first line\nauthorization: bearer secret-value\n" + strings.Repeat("x", 1400)
+	result := safeFailureSummary(value)
+	if strings.Contains(result, "secret-value") || !strings.Contains(result, "[скрыто: потенциальный секрет]") {
+		t.Fatalf("safeFailureSummary() = %q", result)
+	}
+	if len([]rune(result)) > 1203 {
+		t.Fatalf("safeFailureSummary() length = %d", len([]rune(result)))
+	}
+}
+
+type fakeCoordinationStore struct {
+	*fakeAdminStore
+	capabilities     map[string]bool
+	relationships    map[string]bool
+	claims           []entity.WorkClaim
+	processes        map[int64]entity.ProcessContext
+	listProcessRunID int64
+	listProjectID    int64
+	updatedClaim     adminrepo.UpdateWorkClaimInput
+}
+
+func (store *fakeCoordinationStore) EnsureTurnProcess(context.Context, adminrepo.EnsureTurnProcessInput) (entity.ProcessContext, error) {
+	return entity.ProcessContext{}, nil
+}
+
+func (store *fakeCoordinationStore) GetTurnProcess(_ context.Context, turnID int64) (entity.ProcessContext, error) {
+	process, ok := store.processes[turnID]
+	if !ok {
+		return entity.ProcessContext{}, adminrepo.ErrNotFound
+	}
+	return process, nil
+}
+
+func (store *fakeCoordinationStore) GetTurnLineage(context.Context, int64) ([]entity.ProcessLineageStep, error) {
+	return nil, adminrepo.ErrNotFound
+}
+
+func (store *fakeCoordinationStore) IsRoleCapabilityAllowed(_ context.Context, _ int64, _ int64, _ int64, capability string) (bool, error) {
+	return store.capabilities[capability], nil
+}
+
+func (store *fakeCoordinationStore) IsRoleRelationshipAllowed(_ context.Context, _ int64, _ int64, _ int64, action string, targetRoleID int64) (bool, error) {
+	return store.relationships[coordinationRelationshipKey(action, targetRoleID)], nil
+}
+
+func (store *fakeCoordinationStore) UpdateWorkClaim(_ context.Context, input adminrepo.UpdateWorkClaimInput) (entity.WorkClaim, error) {
+	store.updatedClaim = input
+	return entity.WorkClaim{TurnID: input.TurnID, Summary: input.Summary, Domains: input.Domains}, nil
+}
+
+func (store *fakeCoordinationStore) ListActiveWork(_ context.Context, processRunID int64, projectID int64, _ int) ([]entity.WorkClaim, error) {
+	store.listProcessRunID = processRunID
+	store.listProjectID = projectID
+	return store.claims, nil
+}
+
+func (store *fakeCoordinationStore) RememberMemory(context.Context, adminrepo.RememberMemoryInput) (entity.MemoryRecord, error) {
+	return entity.MemoryRecord{}, nil
+}
+
+func (store *fakeCoordinationStore) SearchMemory(context.Context, adminrepo.SearchMemoryInput) ([]entity.MemoryRecord, error) {
+	return nil, nil
+}
+
+func (store *fakeCoordinationStore) CreateOwnerAttention(context.Context, adminrepo.CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error) {
+	return entity.OwnerAttentionRequest{}, false, nil
+}
+
+func (store *fakeCoordinationStore) SetOwnerAttentionPost(context.Context, int64, string) (entity.OwnerAttentionRequest, error) {
+	return entity.OwnerAttentionRequest{}, nil
+}
+
+func coordinationRelationshipKey(action string, targetRoleID int64) string {
+	return action + ":" + strconv.FormatInt(targetRoleID, 10)
+}

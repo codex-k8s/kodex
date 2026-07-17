@@ -10,11 +10,13 @@ import (
 )
 
 const (
-	systemImproverRoleName       = "improver"
-	systemMatterCodexProjectSlug = "agents"
-	systemMatterCodexRoleName    = "mattercodex-admin"
-	systemMatterCodexChatSlug    = "agents-control"
-	systemProjectRunsChannelSlug = "runs"
+	systemImproverRoleName        = "improver"
+	systemDirectorRoleName        = "director"
+	systemMatterCodexProjectSlug  = "agents"
+	systemMatterCodexRoleName     = "mattercodex-admin"
+	systemMatterCodexChatSlug     = "agents-control"
+	systemProjectRunsChannelSlug  = "runs"
+	systemCoordinationChannelSlug = "coordination"
 )
 
 func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) error {
@@ -44,6 +46,9 @@ func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) e
 		if err := svc.bootstrapImproverRole(ctx, project, gitHubAccounts, manageOpenAIAccountName); err != nil {
 			return err
 		}
+		if err := svc.bootstrapDirectorRole(ctx, project, gitHubAccounts, manageOpenAIAccountName); err != nil {
+			return err
+		}
 		if err := svc.reconcileProjectRoleBotIdentities(ctx, project); err != nil {
 			return err
 		}
@@ -58,6 +63,9 @@ func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) e
 	if err := svc.bootstrapImproverRole(ctx, matterCodexProject, gitHubAccounts, manageOpenAIAccountName); err != nil {
 		return err
 	}
+	if err := svc.bootstrapDirectorRole(ctx, matterCodexProject, gitHubAccounts, manageOpenAIAccountName); err != nil {
+		return err
+	}
 	return svc.reconcileProjectRoleBotIdentities(ctx, matterCodexProject)
 }
 
@@ -65,7 +73,7 @@ func (svc *SlashCommandService) ensureProjectRunsChannel(ctx context.Context, pr
 	if svc.cfg.ChannelManager == nil || svc.cfg.Store == nil {
 		return project, nil
 	}
-	channel, _, err := svc.cfg.ChannelManager.EnsureProjectChannel(ctx, project.Slug, systemProjectRunsChannelSlug, "Runs", false, nil)
+	channel, _, err := svc.cfg.ChannelManager.EnsureProjectChannel(ctx, project.Slug, systemProjectRunsChannelSlug, svc.t("system.channel.runs.name", nil), false, nil)
 	if err != nil {
 		return entity.Project{}, err
 	}
@@ -73,6 +81,104 @@ func (svc *SlashCommandService) ensureProjectRunsChannel(ctx context.Context, pr
 		return project, nil
 	}
 	return svc.cfg.Store.UpdateProjectRunsChannel(ctx, project.ID, channel.ID)
+}
+
+func (svc *SlashCommandService) bootstrapDirectorRole(ctx context.Context, project entity.Project, gitHubAccounts []entity.GitHubAccount, openAIAccountName string) error {
+	role, err := svc.systemRoleByTypeOrName(ctx, project.ID, "director", systemDirectorRoleName)
+	if err != nil {
+		return err
+	}
+	if role.ID == 0 {
+		promptTemplate, err := promptSeedMarkdownForProfileTemplate(systemDirectorRoleName, directorCoordinatePortfolioKey)
+		if err != nil {
+			return err
+		}
+		role, _, err = svc.cfg.Store.UpsertAgentRole(ctx, adminrepo.UpsertAgentRoleInput{
+			ProjectID:         project.ID,
+			Name:              systemDirectorRoleName,
+			RoleType:          "director",
+			Description:       svc.t("system.role.director.description", nil),
+			PromptTemplate:    promptTemplate,
+			PromptMode:        "template",
+			GitHubAccountName: preferredProjectGitHubAccount(project, gitHubAccounts),
+			OpenAIAccountName: openAIAccountName,
+			KubernetesAccess:  "read-only",
+			SandboxMode:       "danger-full-access",
+			AdvancedSettings:  "{}",
+			Enabled:           true,
+			BotIdentity:       systemDirectorRoleName,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	channelID := ""
+	if svc.cfg.ChannelManager != nil {
+		memberUserIDs := make([]string, 0, 1)
+		if ownerUsername := strings.TrimSpace(svc.cfg.OwnerMattermostUsername); ownerUsername != "" {
+			ownerUserID, err := svc.cfg.ChannelManager.ResolveMattermostUserID(ctx, ownerUsername)
+			if err != nil {
+				return err
+			}
+			memberUserIDs = append(memberUserIDs, ownerUserID)
+		}
+		channel, _, err := svc.cfg.ChannelManager.EnsureProjectChannel(ctx, project.Slug, systemCoordinationChannelSlug, svc.t("system.channel.coordination.name", nil), true, memberUserIDs)
+		if err != nil {
+			return err
+		}
+		channelID = channel.ID
+	}
+	if err := svc.ensureSystemRoleBotIdentity(ctx, project, role, channelID); err != nil {
+		return err
+	}
+	_, _, err = svc.cfg.Store.CreateChat(ctx, adminrepo.CreateChatInput{
+		ProjectID:           project.ID,
+		MattermostChannelID: channelID,
+		Name:                svc.t("system.channel.coordination.name", nil),
+		Slug:                systemCoordinationChannelSlug,
+		Description:         svc.t("system.channel.coordination.description", nil),
+		ChatType:            "coordination",
+		WorkPolicy:          "top_level_coordination",
+		Settings:            "{}",
+		SystemPurpose:       "coordination",
+		RoleIDs:             []int64{role.ID},
+	})
+	if err != nil {
+		return err
+	}
+	policyStore, ok := svc.cfg.Store.(adminrepo.CoordinationPolicyPresetRepository)
+	if !ok {
+		return nil
+	}
+	roles, err := svc.cfg.Store.ListAgentRoles(ctx, project.ID)
+	if err != nil {
+		return err
+	}
+	waveCoordinators := make([]int64, 0)
+	for _, candidate := range roles {
+		if candidate.Enabled && candidate.ID != role.ID && (strings.EqualFold(candidate.RoleType, "manager") || strings.EqualFold(candidate.RoleType, "coordinator") || strings.EqualFold(candidate.Name, "manager")) {
+			waveCoordinators = append(waveCoordinators, candidate.ID)
+		}
+	}
+	return policyStore.ApplyCoordinationPolicyPreset(ctx, project.ID, role.ID, waveCoordinators)
+}
+
+func (svc *SlashCommandService) systemRoleByTypeOrName(ctx context.Context, projectID int64, roleType string, roleName string) (entity.AgentRole, error) {
+	roles, err := svc.cfg.Store.ListAgentRoles(ctx, projectID)
+	if err != nil {
+		return entity.AgentRole{}, err
+	}
+	for _, role := range roles {
+		if strings.EqualFold(strings.TrimSpace(role.RoleType), strings.TrimSpace(roleType)) {
+			return role, nil
+		}
+	}
+	for _, role := range roles {
+		if strings.EqualFold(strings.TrimSpace(role.Name), strings.TrimSpace(roleName)) {
+			return role, nil
+		}
+	}
+	return entity.AgentRole{}, nil
 }
 
 func (svc *SlashCommandService) bootstrapImproverRole(ctx context.Context, project entity.Project, gitHubAccounts []entity.GitHubAccount, openAIAccountName string) error {
@@ -188,7 +294,7 @@ func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, g
 	}
 	channelID := ""
 	if svc.cfg.ChannelManager != nil {
-		channel, _, err := svc.cfg.ChannelManager.EnsureProjectChannel(ctx, project.Slug, systemMatterCodexChatSlug, "Agents Control", true, nil)
+		channel, _, err := svc.cfg.ChannelManager.EnsureProjectChannel(ctx, project.Slug, systemMatterCodexChatSlug, svc.t("system.channel.control.name", nil), true, nil)
 		if err != nil {
 			return entity.Project{}, err
 		}
@@ -200,12 +306,13 @@ func (svc *SlashCommandService) bootstrapMatterCodexAdmin(ctx context.Context, g
 	_, _, err = svc.cfg.Store.CreateChat(ctx, adminrepo.CreateChatInput{
 		ProjectID:           project.ID,
 		MattermostChannelID: channelID,
-		Name:                "Agents Control",
+		Name:                svc.t("system.channel.control.name", nil),
 		Slug:                systemMatterCodexChatSlug,
-		Description:         "MatterCodex owner control chat.",
+		Description:         svc.t("system.channel.control.description", nil),
 		ChatType:            "single_custom",
 		WorkPolicy:          "owner_control",
 		Settings:            "{}",
+		SystemPurpose:       "work_control",
 		RoleIDs:             []int64{role.ID},
 		RepositoryIDs:       []int64{projectRepo.RepositoryID},
 	})
@@ -370,6 +477,7 @@ func (svc *SlashCommandService) ensureRoleInProjectChats(ctx context.Context, pr
 			RootGitHubIssue:     chat.RootGitHubIssue,
 			WorkPolicy:          chat.WorkPolicy,
 			Settings:            chat.Settings,
+			SystemPurpose:       chat.SystemPurpose,
 			RoleIDs:             roleIDs,
 			RepositoryIDs:       chatRepositoryIDs(repositories),
 		})

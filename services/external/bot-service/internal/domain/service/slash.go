@@ -24,6 +24,7 @@ type MattermostChannelManager interface {
 	EnsureRepositoryChannel(ctx context.Context, teamName string, channelName string, displayName string) (bool, error)
 	EnsureProjectTeam(ctx context.Context, teamName string, displayName string, memberUserID string) (MattermostTeamBinding, bool, error)
 	EnsureProjectChannel(ctx context.Context, teamName string, channelName string, displayName string, private bool, memberUserIDs []string) (MattermostChannelBinding, bool, error)
+	ResolveMattermostUserID(ctx context.Context, username string) (string, error)
 }
 
 type MattermostTeamBinding struct {
@@ -166,6 +167,7 @@ type SlashCommandServiceConfig struct {
 	ThreadRepositorySelector ThreadRepositorySelector
 	RuntimeRunner            runtimerepo.Runner
 	DefaultTeamName          string
+	OwnerMattermostUsername  string
 	CodexAuthSecretName      string
 	GitHubSecretName         string
 	MenuActionURL            string
@@ -4653,7 +4655,7 @@ func validGitHubAccountStatus(value string) bool {
 
 func validProfileRole(value string) bool {
 	switch value {
-	case "developer", "reviewer", "deployer", "technical_reviewer", "lexical_guard", "manager", "architect", "docs", "sre", "qa-bot", "qa", "tester", "improver":
+	case "director", "coordinator", "developer", "reviewer", "deployer", "technical_reviewer", "lexical_guard", "manager", "architect", "docs", "sre", "qa-bot", "qa", "tester", "improver":
 		return true
 	default:
 		return false
@@ -5427,6 +5429,8 @@ func (svc *SlashCommandService) runtimeStatusBrief(status runtimerepo.RunStatus)
 
 func profileRoleOptions() []MattermostDialogOption {
 	return []MattermostDialogOption{
+		{Text: "director", Value: "director"},
+		{Text: "coordinator", Value: "coordinator"},
 		{Text: "manager", Value: "manager"},
 		{Text: "architect", Value: "architect"},
 		{Text: "developer", Value: "developer"},

@@ -16,11 +16,12 @@ const (
 )
 
 type AgentSessionChatSummary struct {
-	Slug         string   `json:"slug"`
-	Name         string   `json:"name"`
-	Description  string   `json:"description,omitempty"`
-	ChatType     string   `json:"chat_type"`
-	Repositories []string `json:"repositories,omitempty"`
+	Slug          string   `json:"slug"`
+	Name          string   `json:"name"`
+	Description   string   `json:"description,omitempty"`
+	ChatType      string   `json:"chat_type"`
+	SystemPurpose string   `json:"system_purpose,omitempty"`
+	Repositories  []string `json:"repositories,omitempty"`
 }
 
 type AgentSessionChatCatalog struct {
@@ -30,14 +31,15 @@ type AgentSessionChatCatalog struct {
 }
 
 type AgentSessionChatDetails struct {
-	SessionKey   string   `json:"session_key"`
-	Slug         string   `json:"slug"`
-	Name         string   `json:"name"`
-	Description  string   `json:"description,omitempty"`
-	ChatType     string   `json:"chat_type"`
-	WorkPolicy   string   `json:"work_policy,omitempty"`
-	Repositories []string `json:"repositories,omitempty"`
-	Agents       []string `json:"agents"`
+	SessionKey    string   `json:"session_key"`
+	Slug          string   `json:"slug"`
+	Name          string   `json:"name"`
+	Description   string   `json:"description,omitempty"`
+	ChatType      string   `json:"chat_type"`
+	SystemPurpose string   `json:"system_purpose,omitempty"`
+	WorkPolicy    string   `json:"work_policy,omitempty"`
+	Repositories  []string `json:"repositories,omitempty"`
+	Agents        []string `json:"agents"`
 }
 
 type StartAgentThreadCommand struct {
@@ -100,11 +102,12 @@ func (svc *AgentSessionService) ListAvailableChats(ctx context.Context, sessionK
 			return AgentSessionChatCatalog{}, err
 		}
 		result.Chats = append(result.Chats, AgentSessionChatSummary{
-			Slug:         chat.Slug,
-			Name:         chat.Name,
-			Description:  chat.Description,
-			ChatType:     chat.ChatType,
-			Repositories: projectRepositoryNames(repositories),
+			Slug:          chat.Slug,
+			Name:          chat.Name,
+			Description:   chat.Description,
+			ChatType:      chat.ChatType,
+			SystemPurpose: chat.SystemPurpose,
+			Repositories:  projectRepositoryNames(repositories),
 		})
 	}
 	return result, nil
@@ -134,14 +137,15 @@ func (svc *AgentSessionService) ChatDetails(ctx context.Context, sessionKey stri
 		}
 	}
 	return AgentSessionChatDetails{
-		SessionKey:   session.SessionKey,
-		Slug:         chat.Slug,
-		Name:         chat.Name,
-		Description:  chat.Description,
-		ChatType:     chat.ChatType,
-		WorkPolicy:   chat.WorkPolicy,
-		Repositories: projectRepositoryNames(repositories),
-		Agents:       agents,
+		SessionKey:    session.SessionKey,
+		Slug:          chat.Slug,
+		Name:          chat.Name,
+		Description:   chat.Description,
+		ChatType:      chat.ChatType,
+		SystemPurpose: chat.SystemPurpose,
+		WorkPolicy:    chat.WorkPolicy,
+		Repositories:  projectRepositoryNames(repositories),
+		Agents:        agents,
 	}, nil
 }
 
@@ -177,6 +181,9 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	}
 	if !targetRole.Enabled {
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent role %q is disabled", targetRole.Name)
+	}
+	if err := svc.requireCoordinationPermission(ctx, session, entity.CoordinationCapabilityStartAgents, entity.CoordinationActionStart, targetRole.ID); err != nil {
+		return AgentSessionDelegationResult{}, err
 	}
 	targetChat, err := svc.resolveProjectChat(ctx, session.ProjectID, command.TargetChat)
 	if err != nil {
@@ -344,6 +351,9 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
+	if err := svc.requireCoordinationPermission(ctx, session, entity.CoordinationCapabilityReturnCallback, entity.CoordinationActionCallback, sourceRole.ID); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
 	requesterUserName := svc.sessionMattermostUsername(ctx, session)
 	targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
 	sourceThreadURL := svc.mattermostThreadURL(project.Slug, sourceSession.MattermostRootPostID)
@@ -366,10 +376,14 @@ func (svc *AgentSessionService) enqueueDelegationCallback(ctx context.Context, p
 	if err != nil {
 		return entity.AgentSessionTurn{}, "", err
 	}
-	if len(queuedTurns) > 0 {
+	queuedTurn, compatible, err := svc.queuedTurnForProcess(ctx, parentTurnID, queuedTurns)
+	if err != nil {
+		return entity.AgentSessionTurn{}, "", err
+	}
+	if compatible {
 		turn, err := svc.cfg.Store.UpdateAgentSessionTurnMessage(ctx, adminrepo.UpdateAgentSessionTurnMessageInput{
-			TurnID:  queuedTurns[0].ID,
-			Message: appendDelegationCallbackToQueuedPrompt(queuedTurns[0].Message, message),
+			TurnID:  queuedTurn.ID,
+			Message: appendDelegationCallbackToQueuedPrompt(queuedTurn.Message, message),
 		})
 		if err == nil && parentTurnID > 0 {
 			turn, err = svc.cfg.Store.AddAgentSessionTurnOrigin(ctx, adminrepo.AddAgentSessionTurnOriginInput{

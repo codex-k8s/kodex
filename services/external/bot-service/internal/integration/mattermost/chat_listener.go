@@ -159,10 +159,10 @@ func (listener *ChatListener) resolveUserName(ctx context.Context, userID string
 	return userName
 }
 
-func websocketEventPost(data map[string]any) (mattermostmodel.Post, bool) {
+func websocketEventPost(data map[string]any) (*mattermostmodel.Post, bool) {
 	raw, ok := data["post"]
 	if !ok || raw == nil {
-		return mattermostmodel.Post{}, false
+		return nil, false
 	}
 	var body []byte
 	switch value := raw.(type) {
@@ -172,17 +172,17 @@ func websocketEventPost(data map[string]any) (mattermostmodel.Post, bool) {
 		var err error
 		body, err = json.Marshal(value)
 		if err != nil {
-			return mattermostmodel.Post{}, false
+			return nil, false
 		}
 	}
 	var post mattermostmodel.Post
 	if err := json.Unmarshal(body, &post); err != nil {
-		return mattermostmodel.Post{}, false
+		return nil, false
 	}
 	if strings.TrimSpace(post.Type) != "" {
-		return mattermostmodel.Post{}, false
+		return nil, false
 	}
-	return post, true
+	return &post, true
 }
 
 func mattermostWebSocketURL(siteURL string) (string, error) {

@@ -788,15 +788,15 @@ func (repo *Repository) CreateAgentDelegation(ctx context.Context, input adminre
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return entity.AgentDelegation{}, false, fmt.Errorf("create agent delegation: %w", err)
 	}
-	item, err = repo.GetAgentDelegationBySourceKey(ctx, input.SourceSessionID, input.WorkItemKey)
+	item, err = repo.GetAgentDelegationBySourceTurnKey(ctx, input.SourceTurnID, input.WorkItemKey)
 	if err != nil {
 		return entity.AgentDelegation{}, false, err
 	}
 	return item, false, nil
 }
 
-func (repo *Repository) GetAgentDelegationBySourceKey(ctx context.Context, sourceSessionID int64, workItemKey string) (entity.AgentDelegation, error) {
-	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__get_by_source_key.sql"), sourceSessionID, workItemKey))
+func (repo *Repository) GetAgentDelegationBySourceTurnKey(ctx context.Context, sourceTurnID int64, workItemKey string) (entity.AgentDelegation, error) {
+	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__get_by_source_turn_key.sql"), sourceTurnID, workItemKey))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentDelegation{}, adminrepo.ErrNotFound
