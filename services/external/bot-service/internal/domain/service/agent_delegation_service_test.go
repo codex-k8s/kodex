@@ -63,11 +63,20 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	if dispatcher.request.ParentTurnID != 1 {
 		t.Fatalf("parent turn = %d", dispatcher.request.ParentTurnID)
 	}
+	if dispatcher.request.SourcePostID != "reply-management-root" {
+		t.Fatalf("source launch post = %q", dispatcher.request.SourcePostID)
+	}
 	if len(publisher.posts) < 2 || publisher.posts[0].RootPostID != "" || !strings.Contains(publisher.posts[0].Message, "#notrigger") {
 		t.Fatalf("posts = %#v", publisher.posts)
 	}
-	if !strings.Contains(publisher.posts[0].Message, "https://mattermost.example/matter-codex/pl/management-root") {
-		t.Fatalf("delegated root misses source link: %q", publisher.posts[0].Message)
+	if publisher.posts[1].RootPostID != "management-root" || !strings.Contains(publisher.posts[1].Message, "https://mattermost.example/matter-codex/pl/reply-") {
+		t.Fatalf("source audit misses target thread link: %#v", publisher.posts[1])
+	}
+	if len(publisher.updates) != 1 || publisher.updates[0].PostID != "reply-" || !strings.Contains(publisher.updates[0].Message, "https://mattermost.example/matter-codex/pl/reply-management-root") {
+		t.Fatalf("delegated root misses exact source launch message link: %#v", publisher.updates)
+	}
+	if strings.Contains(publisher.updates[0].Message, "https://mattermost.example/matter-codex/pl/management-root\n") {
+		t.Fatalf("delegated root still links to ambiguous source thread: %q", publisher.updates[0].Message)
 	}
 
 	second, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", command)
