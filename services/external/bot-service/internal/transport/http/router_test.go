@@ -830,6 +830,14 @@ type fakeRouterAdminStore struct {
 	repositories  map[string]entity.Repository
 }
 
+func (*fakeRouterAdminStore) IsFrozenClusterAdminOpenAIAccount(context.Context, string) (bool, error) {
+	return false, nil
+}
+
+func (*fakeRouterAdminStore) IsFrozenClusterAdminGitHubAccount(context.Context, string) (bool, error) {
+	return false, nil
+}
+
 func (store *fakeRouterAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
 	store.upsert = input
 	store.upsertCount++

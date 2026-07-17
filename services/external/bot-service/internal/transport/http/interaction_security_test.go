@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 )
@@ -114,6 +115,27 @@ func (repo *memoryInteractionRepository) ConsumeInteractionCapability(_ context.
 	capability.State = securityrepo.CapabilityStateConsumed
 	capability.ConsumedAt = input.Now
 	repo.capabilities[string(input.TokenHash)] = capability
+	return capability, nil
+}
+
+func (repo *memoryInteractionRepository) ConsumeInteractionCapabilityWithMutation(
+	ctx context.Context,
+	input securityrepo.ConsumeCapabilityInput,
+	mutation func(adminrepo.Repository) error,
+) (securityrepo.Capability, error) {
+	capability, err := repo.ConsumeInteractionCapability(ctx, input)
+	if err != nil {
+		return securityrepo.Capability{}, err
+	}
+	if err := mutation(nil); err != nil {
+		repo.mu.Lock()
+		capability.State = securityrepo.CapabilityStateUnused
+		capability.ConsumedAt = time.Time{}
+		repo.capabilities[string(input.TokenHash)] = capability
+		repo.consumes--
+		repo.mu.Unlock()
+		return securityrepo.Capability{}, err
+	}
 	return capability, nil
 }
 

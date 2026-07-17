@@ -212,6 +212,131 @@ func TestPublicBoundaryMigrationFresh(t *testing.T) {
 	testCapabilityCleanupRetention(t, ctx, pool, repository, now)
 }
 
+func TestRuntimeRoleNMinusOneAndAdversarialBoundary(t *testing.T) {
+	ownerDSN := isolatedMigrationDSN(t, "runtime_role")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	roleName := "mc_runtime_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
+	rolePassword := "synthetic-runtime-password"
+	if err := postgresrepo.ProvisionRuntimeDatabaseRole(ctx, ownerDSN, roleName, rolePassword); err != nil {
+		t.Fatalf("provision runtime role: %v", err)
+	}
+	baseDSN := requiredMigrationDSN(t)
+	roleIdentifier := pgx.Identifier{roleName}.Sanitize()
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cleanupCancel()
+		cleanupPool := openMigrationPool(t, cleanupCtx, baseDSN)
+		defer cleanupPool.Close()
+		_, _ = cleanupPool.Exec(cleanupCtx, "drop owned by "+roleIdentifier)
+		_, _ = cleanupPool.Exec(cleanupCtx, "drop role "+roleIdentifier)
+		var databaseName string
+		if err := cleanupPool.QueryRow(cleanupCtx, `select current_database()`).Scan(&databaseName); err == nil {
+			_, _ = cleanupPool.Exec(cleanupCtx, "grant temporary on database "+pgx.Identifier{databaseName}.Sanitize()+" to public")
+		}
+	})
+	if err := migrations.RunTo(ctx, ownerDSN, 22); err != nil {
+		t.Fatalf("runtime-role migration through v22: %v", err)
+	}
+	ownerPool := openMigrationPool(t, ctx, ownerDSN)
+	var projectID int64
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_projects(name, slug) values ('Runtime proof', 'runtime-proof') returning id`).Scan(&projectID); err != nil {
+		ownerPool.Close()
+		t.Fatalf("seed runtime proof project: %v", err)
+	}
+	if _, err := ownerPool.Exec(ctx, `
+insert into matter_codex_agent_roles(project_id, name, role_type, kubernetes_access)
+values ($1, 'n-minus-one', 'worker', 'read-only')
+`, projectID); err != nil {
+		ownerPool.Close()
+		t.Fatalf("seed N-1 role: %v", err)
+	}
+	if tag, err := ownerPool.Exec(ctx, `
+update matter_codex_agent_profiles
+set kubernetes_access = 'cluster-admin', sandbox_mode = 'danger-full-access',
+	openai_account_name = '', github_account_name = ''
+where name = 'developer'
+`); err != nil || tag.RowsAffected() != 1 {
+		ownerPool.Close()
+		t.Fatalf("seed frozen profile: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	ownerPool.Close()
+	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
+		t.Fatalf("runtime-role migration through v23: %v", err)
+	}
+	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
+	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
+	defer runtimePool.Close()
+	if err := postgresrepo.ValidateRuntimeDatabaseRole(ctx, runtimePool); err != nil {
+		t.Fatalf("runtime role attributes: %v", err)
+	}
+	runtimeRepository := postgresrepo.NewRepository(runtimePool)
+	profiles, err := runtimeRepository.ListAgentProfiles(ctx)
+	if err != nil || len(profiles) == 0 {
+		t.Fatalf("N-1 profiles visibility: count=%d error=%v", len(profiles), err)
+	}
+	roles, err := runtimeRepository.ListAgentRoles(ctx, projectID)
+	if err != nil || len(roles) == 0 {
+		t.Fatalf("N-1 roles visibility: count=%d error=%v", len(roles), err)
+	}
+	if _, _, err := runtimeRepository.UpsertAgentRole(ctx, adminrepo.UpsertAgentRoleInput{
+		ProjectID: projectID, Name: "runtime-dml", RoleType: "worker", PromptMode: "template",
+		KubernetesAccess: "read-only", SandboxMode: "danger-full-access", AdvancedSettings: "{}", Enabled: true,
+	}); err != nil {
+		t.Fatalf("N-1 repository DML: %v", err)
+	}
+	if _, err := runtimePool.Exec(ctx, `select set_config('matter_codex.cluster_admin_freeze_writer', 'v23', false)`); err != nil {
+		t.Fatalf("self-declared marker compatibility: %v", err)
+	}
+	if _, err := runtimePool.Exec(ctx, `create temporary table matter_codex_agent_profiles(id bigint)`); err == nil {
+		t.Fatal("runtime role создала pg_temp shadow relation")
+	}
+	if _, err := runtimePool.Exec(ctx, `create table runtime_ddl_forbidden(id bigint)`); err == nil {
+		t.Fatal("runtime role получила CREATE в service schema")
+	}
+	if _, err := runtimePool.Exec(ctx, `alter table matter_codex_agent_profiles disable trigger user`); err == nil {
+		t.Fatal("runtime role отключила защитные триггеры")
+	}
+	if _, err := runtimePool.Exec(ctx, `delete from matter_codex_cluster_admin_subjects where subject_type = 'agent_profile'`); err == nil {
+		t.Fatal("runtime role получила DELETE для immutable freeze snapshot")
+	}
+	if _, err := runtimePool.Exec(ctx, `update matter_codex_cluster_admin_subjects set privilege_state = '{}'::jsonb`); err == nil {
+		t.Fatal("runtime role получила UPDATE для immutable freeze snapshot")
+	}
+	if tag, err := runtimePool.Exec(ctx, `update matter_codex_agent_profiles set description = 'mutated' where name = 'developer'`); err != nil || tag.RowsAffected() != 0 {
+		t.Fatalf("frozen profile direct DML: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	if tag, err := runtimePool.Exec(ctx, `
+insert into matter_codex_agent_profiles(name, role, kubernetes_access, sandbox_mode)
+values ('forged-admin', 'admin', 'cluster-admin', 'danger-full-access')
+`); err != nil || tag.RowsAffected() != 0 {
+		t.Fatalf("forged cluster-admin direct DML: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+}
+
+func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
+	dsn := isolatedMigrationDSN(t, "forward_only")
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("initial up: %v", err)
+	}
+	if err := migrations.DownOne(ctx, dsn); err == nil {
+		t.Fatal("v23 down unexpectedly succeeded")
+	}
+	version, err := migrations.Version(ctx, dsn)
+	if err != nil || version != 23 {
+		t.Fatalf("version after failed down = %d, error=%v", version, err)
+	}
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("repeated up after failed down: %v", err)
+	}
+	version, err = migrations.Version(ctx, dsn)
+	if err != nil || version != 23 {
+		t.Fatalf("version after repeated up = %d, error=%v", version, err)
+	}
+}
+
 func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testing.T) {
 	dsn := isolatedMigrationDSN(t, "upgrade")
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -378,6 +503,18 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()
 	repository := postgresrepo.NewRepository(pool)
+	for provider, accountName := range map[string]string{"openai": "primary", "github": "agent"} {
+		var frozen bool
+		var dependencyErr error
+		if provider == "openai" {
+			frozen, dependencyErr = repository.IsFrozenClusterAdminOpenAIAccount(ctx, accountName)
+		} else {
+			frozen, dependencyErr = repository.IsFrozenClusterAdminGitHubAccount(ctx, accountName)
+		}
+		if dependencyErr != nil || !frozen {
+			t.Fatalf("frozen %s account dependency: frozen=%t error=%v", provider, frozen, dependencyErr)
+		}
+	}
 	allowed, err := repository.AdmitExistingClusterAdmin(ctx, securityrepo.ClusterAdminAdmissionInput{
 		SubjectType: "agent_profile", SubjectKey: "developer", ProfileName: "developer", ActorUser: "test", Operation: "test.profile.admission",
 	})
@@ -458,7 +595,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	}
 	if _, _, err := repository.CreateChat(ctx, adminrepo.CreateChatInput{
 		ProjectID: projectID, MattermostChannelID: "channel-existing", Name: "Existing admin chat", Slug: "existing-admin-chat",
-		ChatType: "single_custom", Settings: "{}", RoleIDs: []int64{roleID}, RepositoryIDs: []int64{repositoryID},
+		ChatType: "custom", Settings: "{}", RoleIDs: []int64{roleID}, RepositoryIDs: []int64{repositoryID},
 	}); err != nil {
 		t.Fatalf("точный frozen CreateChat: %v", err)
 	}
@@ -528,6 +665,25 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 		repositoryID, projectRepositoryID, chatRepositoryID, existingSessionKey,
 	)
 	testNMinusOneRepositoryGuard(t, ctx, pool, projectID, roleID, chatID)
+	secretMismatchSideEffect := false
+	if err := repository.WithExistingClusterAdminRuntimeGuard(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
+		MattermostChannelID: "channel-existing", SessionKey: existingSessionKey,
+		ActorUser: "test", Operation: "test.runtime.secret_integrity_denied",
+	}, func() error {
+		secretMismatchSideEffect = true
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}); !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) || !secretMismatchSideEffect {
+		t.Fatalf("secret integrity guard denial: callback=%t error=%v", secretMismatchSideEffect, err)
+	}
+	var secretMismatchDeniedAudit int
+	if err := pool.QueryRow(ctx, `
+		select count(*) from matter_codex_audit_events
+		where event_type = 'cluster_admin.runtime.denied'
+			and summary = 'test.runtime.secret_integrity_denied: denied'
+	`).Scan(&secretMismatchDeniedAudit); err != nil || secretMismatchDeniedAudit != 1 {
+		t.Fatalf("secret integrity denied audit=%d error=%v", secretMismatchDeniedAudit, err)
+	}
 	if tag, err := pool.Exec(ctx, `update matter_codex_agent_sessions set status = 'blocked' where session_key = $1`, existingSessionKey); err != nil || tag.RowsAffected() != 1 {
 		t.Fatalf("монотонная блокировка frozen session: rows=%d error=%v", tag.RowsAffected(), err)
 	}
@@ -580,6 +736,58 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	if auditCount < 4 {
 		t.Fatalf("cluster-admin audit count = %d, want at least 4", auditCount)
 	}
+	testMonotonicAccountDependencyRevocations(t, ctx, pool)
+}
+
+func testMonotonicAccountDependencyRevocations(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	for _, account := range []struct {
+		name  string
+		table string
+	}{
+		{name: "primary", table: "matter_codex_openai_accounts"},
+		{name: "agent", table: "matter_codex_github_accounts"},
+	} {
+		var originalStatus string
+		if err := pool.QueryRow(ctx, "select status from "+account.table+" where name = $1", account.name).Scan(&originalStatus); err != nil {
+			t.Fatalf("read %s account status: %v", account.name, err)
+		}
+		if tag, err := pool.Exec(ctx, "update "+account.table+" set status = 'disabled' where name = $1", account.name); err != nil || tag.RowsAffected() != 1 {
+			t.Fatalf("disable frozen %s account: rows=%d error=%v", account.name, tag.RowsAffected(), err)
+		}
+		if tag, err := pool.Exec(ctx, "update "+account.table+" set status = $2 where name = $1", account.name, originalStatus); err != nil || tag.RowsAffected() != 0 {
+			t.Fatalf("restore frozen %s account: rows=%d error=%v", account.name, tag.RowsAffected(), err)
+		}
+	}
+	var credentialID int64
+	var originalCredentialStatus string
+	if err := pool.QueryRow(ctx, `
+		select credential.id, credential.status
+		from matter_codex_credentials credential
+		join matter_codex_openai_accounts account on account.credential_id = credential.id
+		where account.name = 'primary'
+	`).Scan(&credentialID, &originalCredentialStatus); err != nil {
+		t.Fatalf("read frozen credential status: %v", err)
+	}
+	if tag, err := pool.Exec(ctx, `update matter_codex_credentials set status = 'disabled' where id = $1`, credentialID); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("disable frozen credential: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	if tag, err := pool.Exec(ctx, `update matter_codex_credentials set status = $2 where id = $1`, credentialID, originalCredentialStatus); err != nil || tag.RowsAffected() != 0 {
+		t.Fatalf("restore frozen credential: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	var dependencyRevocations int
+	if err := pool.QueryRow(ctx, `
+		select count(*)
+		from matter_codex_cluster_admin_revocations
+		where resource_type = 'profile_dependency'
+			and split_part(resource_key, ':', 1) = 'developer'
+	`).Scan(&dependencyRevocations); err != nil || dependencyRevocations < 3 {
+		t.Fatalf("profile dependency revocations=%d error=%v", dependencyRevocations, err)
+	}
+	var profileExact bool
+	if err := pool.QueryRow(ctx, `select matter_codex_cluster_admin_profile_exact('developer')`).Scan(&profileExact); err != nil || profileExact {
+		t.Fatalf("profile admission survived dependency revocation: exact=%t error=%v", profileExact, err)
+	}
 }
 
 func testFrozenPrivilegeMutationMatrix(
@@ -612,6 +820,7 @@ func testFrozenPrivilegeMutationMatrix(
 		{name: "profile GitHub account", sql: `update matter_codex_agent_profiles set github_account_name = 'other' where name = 'developer'`},
 		{name: "profile sandbox", sql: `update matter_codex_agent_profiles set sandbox_mode = 'workspace-write' where name = 'developer'`},
 		{name: "profile config", sql: `update matter_codex_agent_profiles set config_overlay = 'mutated' where name = 'developer'`},
+		{name: "profile prompt template insert", sql: `insert into matter_codex_agent_prompt_templates(profile_name, template_key, body) values ('developer', 'system', 'mutated instruction')`},
 		{name: "role project", sql: `update matter_codex_agent_roles set project_id = project_id + 999 where id = $1`, args: []any{roleID}},
 		{name: "role name", sql: `update matter_codex_agent_roles set name = 'mutated-admin' where id = $1`, args: []any{roleID}},
 		{name: "role type", sql: `update matter_codex_agent_roles set role_type = 'developer' where id = $1`, args: []any{roleID}},
@@ -624,14 +833,19 @@ func testFrozenPrivilegeMutationMatrix(
 		{name: "role advanced settings", sql: `update matter_codex_agent_roles set advanced_settings = '{"mutated":true}'::jsonb where id = $1`, args: []any{roleID}},
 		{name: "role bot identity", sql: `update matter_codex_agent_roles set bot_identity = 'other' where id = $1`, args: []any{roleID}},
 		{name: "project GitHub binding", sql: `update matter_codex_projects set github_account_name = 'other' where id = $1`, args: []any{projectID}},
+		{name: "project name", sql: `update matter_codex_projects set name = 'Mutated project' where id = $1`, args: []any{projectID}},
+		{name: "project description", sql: `update matter_codex_projects set description = 'mutated instruction context' where id = $1`, args: []any{projectID}},
+		{name: "project advanced settings", sql: `update matter_codex_projects set advanced_settings = '{"instruction":"mutated"}'::jsonb where id = $1`, args: []any{projectID}},
 		{name: "project slug", sql: `update matter_codex_projects set slug = 'mutated-project' where id = $1`, args: []any{projectID}},
 		{name: "project Mattermost team", sql: `update matter_codex_projects set mattermost_team_id = 'mutated-team' where id = $1`, args: []any{projectID}},
 		{name: "project GitHub owner", sql: `update matter_codex_projects set github_owner = 'mutated-owner' where id = $1`, args: []any{projectID}},
 		{name: "project GitHub owner type", sql: `update matter_codex_projects set github_owner_type = 'user' where id = $1`, args: []any{projectID}},
 		{name: "OpenAI account", sql: `update matter_codex_openai_accounts set model_policy = 'mutated' where name = 'primary'`},
 		{name: "OpenAI credential", sql: `update matter_codex_credentials set secret_ref = 'mutated-openai-ref' where id = (select credential_id from matter_codex_openai_accounts where name = 'primary')`},
+		{name: "OpenAI credential same-ref content", sql: `update matter_codex_credentials set secret_content_sha256 = 'mutated-content' where id = (select credential_id from matter_codex_openai_accounts where name = 'primary')`},
 		{name: "GitHub account", sql: `update matter_codex_github_accounts set secret_ref = 'mutated-github-ref' where name = 'agent'`},
 		{name: "GitHub credential", sql: `update matter_codex_credentials set secret_ref = 'mutated-github-credential-ref' where id = (select credential_id from matter_codex_github_accounts where name = 'agent')`},
+		{name: "GitHub credential same-ref UID", sql: `update matter_codex_credentials set secret_resource_uid = 'mutated-uid' where id = (select credential_id from matter_codex_github_accounts where name = 'agent')`},
 		{name: "repository branch", sql: `update matter_codex_repositories set default_branch = 'mutated' where id = $1`, args: []any{repositoryID}},
 		{name: "repository account", sql: `update matter_codex_repositories set github_account_name = 'primary' where id = $1`, args: []any{repositoryID}},
 		{name: "project repository binding", sql: `update matter_codex_project_repositories set is_default = false where id = $1`, args: []any{projectRepositoryID}},
@@ -641,12 +855,21 @@ func testFrozenPrivilegeMutationMatrix(
 		{name: "bot display name", sql: `update matter_codex_mattermost_bot_identities set display_name = 'mutated' where role_id = $1`, args: []any{roleID}},
 		{name: "bot user binding", sql: `update matter_codex_mattermost_bot_identities set mattermost_user_id = 'mutated-admin-user' where role_id = $1`, args: []any{roleID}},
 		{name: "bot token binding", sql: `update matter_codex_mattermost_bot_identities set token_secret_ref = 'mutated-token-ref' where role_id = $1`, args: []any{roleID}},
+		{name: "bot token same-ref content", sql: `update matter_codex_mattermost_bot_identities set secret_content_sha256 = 'mutated-content' where role_id = $1`, args: []any{roleID}},
 		{name: "bot status", sql: `update matter_codex_mattermost_bot_identities set status = 'pending' where role_id = $1`, args: []any{roleID}},
 		{name: "runtime variable project", sql: `update matter_codex_project_runtime_variables set project_id = project_id + 999 where id = $1`, args: []any{runtimeVariableID}},
 		{name: "runtime variable", sql: `update matter_codex_project_runtime_variables set secret_ref = 'mutated-runtime-ref' where id = $1`, args: []any{runtimeVariableID}},
+		{name: "runtime variable same-ref content", sql: `update matter_codex_project_runtime_variables set secret_content_sha256 = 'mutated-content' where id = $1`, args: []any{runtimeVariableID}},
 		{name: "runtime binding remap", sql: `update matter_codex_agent_role_runtime_variables set variable_id = variable_id + 999 where role_id = $1 and variable_id = $2`, args: []any{roleID, runtimeVariableID}},
 		{name: "chat project", sql: `update matter_codex_chats set project_id = project_id + 999 where id = $1`, args: []any{chatID}},
 		{name: "chat channel", sql: `update matter_codex_chats set mattermost_channel_id = 'mutated-channel' where id = $1`, args: []any{chatID}},
+		{name: "chat name", sql: `update matter_codex_chats set name = 'Mutated chat' where id = $1`, args: []any{chatID}},
+		{name: "chat slug", sql: `update matter_codex_chats set slug = 'mutated-chat' where id = $1`, args: []any{chatID}},
+		{name: "chat description", sql: `update matter_codex_chats set description = 'mutated instruction context' where id = $1`, args: []any{chatID}},
+		{name: "chat type", sql: `update matter_codex_chats set chat_type = 'mutated' where id = $1`, args: []any{chatID}},
+		{name: "chat root issue", sql: `update matter_codex_chats set root_github_issue = 'mutated#1' where id = $1`, args: []any{chatID}},
+		{name: "chat work policy", sql: `update matter_codex_chats set work_policy = 'mutated policy' where id = $1`, args: []any{chatID}},
+		{name: "chat settings", sql: `update matter_codex_chats set settings = '{"instruction":"mutated"}'::jsonb where id = $1`, args: []any{chatID}},
 		{name: "participant remap", sql: `update matter_codex_chat_participants set chat_id = chat_id + 999 where chat_id = $1 and role_id = $2`, args: []any{chatID, roleID}},
 		{name: "session key", sql: `update matter_codex_agent_sessions set session_key = 'mutated-session' where session_key = $1`, args: []any{sessionKey}},
 		{name: "session project", sql: `update matter_codex_agent_sessions set project_id = project_id + 999 where session_key = $1`, args: []any{sessionKey}},
@@ -659,6 +882,7 @@ func testFrozenPrivilegeMutationMatrix(
 		{name: "session pod", sql: `update matter_codex_agent_sessions set pod_name = 'mutated-pod' where session_key = $1`, args: []any{sessionKey}},
 		{name: "session PVC", sql: `update matter_codex_agent_sessions set pvc_name = 'mutated-pvc' where session_key = $1`, args: []any{sessionKey}},
 		{name: "session token Secret binding", sql: `update matter_codex_agent_sessions set token_secret_ref = 'mutated-session-token-ref' where session_key = $1`, args: []any{sessionKey}},
+		{name: "session token same-ref version", sql: `update matter_codex_agent_sessions set secret_resource_version = 'mutated-version' where session_key = $1`, args: []any{sessionKey}},
 		{name: "session capabilities", sql: `update matter_codex_agent_sessions set capabilities = '["mutated"]'::jsonb where session_key = $1`, args: []any{sessionKey}},
 	}
 	for _, test := range tests {
@@ -673,6 +897,9 @@ func testFrozenPrivilegeMutationMatrix(
 			var exact bool
 			if err := pool.QueryRow(ctx, `select matter_codex_cluster_admin_role_exact($1)`, roleID).Scan(&exact); err != nil || !exact {
 				t.Fatalf("mutation нарушила точное frozen state: exact=%t error=%v", exact, err)
+			}
+			if err := pool.QueryRow(ctx, `select matter_codex_cluster_admin_profile_exact('developer')`).Scan(&exact); err != nil || !exact {
+				t.Fatalf("mutation нарушила точный frozen profile: exact=%t error=%v", exact, err)
 			}
 		})
 	}
@@ -819,16 +1046,19 @@ func testNMinusOneRepositoryGuard(t *testing.T, ctx context.Context, pool *pgxpo
 		return operation(tx)
 	}
 	if err := runAsNMinusOne(func(tx pgx.Tx) error {
-		var count int
-		if err := tx.QueryRow(ctx, `select count(*) from matter_codex_agent_roles`).Scan(&count); err != nil {
+		var roleCount, profileCount int
+		if err := tx.QueryRow(ctx, `select count(*) from matter_codex_agent_roles`).Scan(&roleCount); err != nil {
 			return err
 		}
-		if count != 0 {
-			return errors.New("N-1 writer увидел frozen agent roles без v23 writer marker")
+		if err := tx.QueryRow(ctx, `select count(*) from matter_codex_agent_profiles`).Scan(&profileCount); err != nil {
+			return err
+		}
+		if roleCount == 0 || profileCount == 0 {
+			return errors.New("N-1 runtime не видит профили или роли, нужные для bootstrap")
 		}
 		return nil
 	}); err != nil {
-		t.Fatalf("N-1 list guard: %v", err)
+		t.Fatalf("N-1 bootstrap visibility: %v", err)
 	}
 	if err := func() error {
 		tx, err := pool.Begin(ctx)
@@ -847,11 +1077,11 @@ func testNMinusOneRepositoryGuard(t *testing.T, ctx context.Context, pool *pgxpo
 			return err
 		}
 		if count == 0 {
-			return errors.New("v23 writer marker не открыл текущему repository точный снимок")
+			return errors.New("самодекларируемый GUC изменил обычную видимость runtime")
 		}
 		return nil
 	}(); err != nil {
-		t.Fatalf("v23 writer compatibility: %v", err)
+		t.Fatalf("self-declared GUC isolation: %v", err)
 	}
 	baseRoleUpsert := `
 		insert into matter_codex_agent_roles(
@@ -1336,6 +1566,16 @@ func migrationDSNWithSearchPath(t *testing.T, dsn string, schema string) string 
 		t.Fatal("небезопасное имя тестовой схемы")
 	}
 	return strings.TrimSpace(dsn) + " search_path=" + schema
+}
+
+func migrationDSNForRole(t *testing.T, dsn string, roleName string, password string) string {
+	t.Helper()
+	parsed, err := url.Parse(dsn)
+	if err != nil || (parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") {
+		t.Fatal("runtime-role PostgreSQL proof requires a URL DSN")
+	}
+	parsed.User = url.UserPassword(roleName, password)
+	return parsed.String()
 }
 
 func openMigrationPool(t *testing.T, ctx context.Context, dsn string) *pgxpool.Pool {

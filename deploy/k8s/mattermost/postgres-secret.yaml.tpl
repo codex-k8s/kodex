@@ -12,3 +12,6 @@ data:
   postgres-user: ${POSTGRES_USER_B64}
   postgres-password: ${POSTGRES_PASSWORD_B64}
   mattermost-datasource: ${POSTGRES_DSN_B64}
+  bot-service-runtime-user: ${POSTGRES_RUNTIME_USER_B64}
+  bot-service-runtime-password: ${POSTGRES_RUNTIME_PASSWORD_B64}
+  bot-service-runtime-datasource: ${POSTGRES_RUNTIME_DSN_B64}

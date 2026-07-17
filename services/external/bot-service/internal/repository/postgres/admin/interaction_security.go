@@ -14,8 +14,11 @@ import (
 
 var _ securityrepo.Repository = (*Repository)(nil)
 var _ securityrepo.InteractionResourceAdmissionRepository = (*Repository)(nil)
+var _ securityrepo.AtomicDialogRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminBindingRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminRuntimeGuardRepository = (*Repository)(nil)
+var _ securityrepo.ClusterAdminSecretIntegrityRepository = (*Repository)(nil)
+var _ securityrepo.ClusterAdminAccountDependencyRepository = (*Repository)(nil)
 var _ securityrepo.CapabilityCleanupRepository = (*Repository)(nil)
 
 func (repo *Repository) IssueInteractionCapability(ctx context.Context, input securityrepo.IssueCapabilityInput) error {
@@ -23,7 +26,7 @@ func (repo *Repository) IssueInteractionCapability(ctx context.Context, input se
 	if state == "" {
 		state = securityrepo.CapabilityStateUnused
 	}
-	if _, err := repo.pool.Exec(ctx, query("interaction_capabilities__insert.sql"),
+	if _, err := repo.db.Exec(ctx, query("interaction_capabilities__insert.sql"),
 		input.TokenHash,
 		input.Kind,
 		input.Operation,
@@ -48,7 +51,7 @@ func (repo *Repository) IssueInteractionCapability(ctx context.Context, input se
 
 func (repo *Repository) CheckInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
 	var capability securityrepo.Capability
-	err := repo.pool.QueryRow(ctx, query("interaction_capabilities__check.sql"),
+	err := repo.db.QueryRow(ctx, query("interaction_capabilities__check.sql"),
 		input.TokenHash,
 		input.Kind,
 		input.Operation,
@@ -87,7 +90,7 @@ func (repo *Repository) CheckInteractionCapability(ctx context.Context, input se
 func (repo *Repository) ConsumeInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
 	var capability securityrepo.Capability
 	var consumedAt time.Time
-	err := repo.pool.QueryRow(ctx, query("interaction_capabilities__consume.sql"),
+	err := repo.db.QueryRow(ctx, query("interaction_capabilities__consume.sql"),
 		input.TokenHash,
 		input.Kind,
 		input.Operation,
@@ -127,10 +130,37 @@ func (repo *Repository) ConsumeInteractionCapability(ctx context.Context, input 
 	return securityrepo.Capability{}, repo.interactionCapabilityStateError(ctx, input.TokenHash, input.Now)
 }
 
+func (repo *Repository) ConsumeInteractionCapabilityWithMutation(
+	ctx context.Context,
+	input securityrepo.ConsumeCapabilityInput,
+	mutation func(adminrepo.Repository) error,
+) (securityrepo.Capability, error) {
+	if mutation == nil {
+		return securityrepo.Capability{}, fmt.Errorf("atomic dialog mutation is required")
+	}
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return securityrepo.Capability{}, fmt.Errorf("begin atomic dialog mutation: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	txRepository := newTransactionalRepository(tx)
+	capability, err := txRepository.ConsumeInteractionCapability(ctx, input)
+	if err != nil {
+		return securityrepo.Capability{}, err
+	}
+	if err := mutation(txRepository); err != nil {
+		return securityrepo.Capability{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return securityrepo.Capability{}, fmt.Errorf("commit atomic dialog mutation: %w", err)
+	}
+	return capability, nil
+}
+
 func (repo *Repository) interactionCapabilityStateError(ctx context.Context, tokenHash []byte, now time.Time) error {
 	var status securityrepo.CapabilityState
 	var expiresAt time.Time
-	if stateErr := repo.pool.QueryRow(ctx, query("interaction_capabilities__state.sql"), tokenHash).Scan(&status, &expiresAt); stateErr != nil {
+	if stateErr := repo.db.QueryRow(ctx, query("interaction_capabilities__state.sql"), tokenHash).Scan(&status, &expiresAt); stateErr != nil {
 		if errors.Is(stateErr, pgx.ErrNoRows) {
 			return securityrepo.ErrCapabilityNotFound
 		}
@@ -163,7 +193,7 @@ func (repo *Repository) TransitionInteractionCapabilities(ctx context.Context, i
 		}
 		seen[key] = struct{}{}
 	}
-	tx, err := repo.pool.Begin(ctx)
+	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin interaction capability transition: %w", err)
 	}
@@ -208,7 +238,7 @@ func (repo *Repository) TransitionInteractionCapabilities(ctx context.Context, i
 
 func (repo *Repository) AdmitInteractionResource(ctx context.Context, input securityrepo.InteractionResourceAdmissionInput) (bool, error) {
 	var allowed bool
-	if err := repo.pool.QueryRow(ctx, query("interaction_admission__resource.sql"),
+	if err := repo.db.QueryRow(ctx, query("interaction_admission__resource.sql"),
 		input.ActionKey,
 		input.Operation,
 		input.ResourceType,
@@ -230,7 +260,7 @@ func (repo *Repository) CleanupInteractionCapabilities(ctx context.Context, inpu
 	if limit <= 0 || limit > 10000 {
 		return 0, fmt.Errorf("interaction capability cleanup limit is invalid")
 	}
-	command, err := repo.pool.Exec(ctx, query("interaction_capabilities__cleanup.sql"), input.DeleteBefore, limit)
+	command, err := repo.db.Exec(ctx, query("interaction_capabilities__cleanup.sql"), input.DeleteBefore, limit)
 	if err != nil {
 		return 0, fmt.Errorf("cleanup interaction capabilities: %w", err)
 	}
@@ -242,9 +272,9 @@ func (repo *Repository) AdmitExistingClusterAdmin(ctx context.Context, input sec
 	var err error
 	switch input.SubjectType {
 	case "agent_profile":
-		err = repo.pool.QueryRow(ctx, query("cluster_admin_admission__profile.sql"), input.SubjectKey, input.ProfileName).Scan(&allowed)
+		err = repo.db.QueryRow(ctx, query("cluster_admin_admission__profile.sql"), input.SubjectKey, input.ProfileName).Scan(&allowed)
 	case "agent_role":
-		err = repo.pool.QueryRow(ctx, query("cluster_admin_admission__role.sql"), input.SubjectKey, input.ProjectID, input.ProfileName).Scan(&allowed)
+		err = repo.db.QueryRow(ctx, query("cluster_admin_admission__role.sql"), input.SubjectKey, input.ProjectID, input.ProfileName).Scan(&allowed)
 	default:
 		allowed = false
 	}
@@ -271,7 +301,7 @@ func (repo *Repository) AdmitExistingClusterAdmin(ctx context.Context, input sec
 
 func (repo *Repository) AdmitExistingClusterAdminBinding(ctx context.Context, input securityrepo.ClusterAdminBindingInput) (bool, error) {
 	var allowed bool
-	if err := repo.pool.QueryRow(ctx, query("cluster_admin_binding__admit.sql"),
+	if err := repo.db.QueryRow(ctx, query("cluster_admin_binding__admit.sql"),
 		input.RoleID, input.ProjectID, input.ChatID, input.ChatSlug, input.MattermostChannelID, input.SessionKey,
 	).Scan(&allowed); err != nil {
 		return false, fmt.Errorf("read cluster-admin binding admission: %w", err)
@@ -297,7 +327,7 @@ func (repo *Repository) WithExistingClusterAdminRuntimeGuard(ctx context.Context
 	if sideEffect == nil {
 		return fmt.Errorf("cluster-admin runtime side effect is required")
 	}
-	tx, err := repo.pool.Begin(ctx)
+	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin cluster-admin runtime guard: %w", err)
 	}
@@ -333,6 +363,13 @@ func (repo *Repository) WithExistingClusterAdminRuntimeGuard(ctx context.Context
 			return fmt.Errorf("recheck cluster-admin runtime admission: %w", err)
 		}
 	}
+	var sideEffectErr error
+	if allowed {
+		sideEffectErr = sideEffect()
+		if errors.Is(sideEffectErr, adminrepo.ErrClusterAdminAdmissionDenied) {
+			allowed = false
+		}
+	}
 	outcome := "denied"
 	if allowed {
 		outcome = "allowed"
@@ -351,13 +388,38 @@ func (repo *Repository) WithExistingClusterAdminRuntimeGuard(ctx context.Context
 		if err := tx.Commit(ctx); err != nil {
 			return fmt.Errorf("commit denied cluster-admin runtime guard audit: %w", err)
 		}
+		if sideEffectErr != nil {
+			return sideEffectErr
+		}
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
-	sideEffectErr := sideEffect()
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit cluster-admin runtime guard: %w", err)
 	}
 	return sideEffectErr
+}
+
+func (repo *Repository) ListClusterAdminSecretIntegrity(ctx context.Context, roleID int64, sessionKey string) ([]securityrepo.SecretIntegrityBinding, error) {
+	rows, err := repo.db.Query(ctx, query("cluster_admin_secret_integrity__list.sql"), roleID, sessionKey)
+	if err != nil {
+		return nil, fmt.Errorf("list cluster-admin secret integrity: %w", err)
+	}
+	defer rows.Close()
+	var bindings []securityrepo.SecretIntegrityBinding
+	for rows.Next() {
+		var binding securityrepo.SecretIntegrityBinding
+		if err := rows.Scan(
+			&binding.Kind, &binding.SecretRef, &binding.SecretKey,
+			&binding.ContentSHA256, &binding.ResourceUID, &binding.ResourceVersion,
+		); err != nil {
+			return nil, fmt.Errorf("scan cluster-admin secret integrity: %w", err)
+		}
+		bindings = append(bindings, binding)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read cluster-admin secret integrity: %w", err)
+	}
+	return bindings, nil
 }
 
 func lockClusterAdminRuntimeDependencies(ctx context.Context, tx pgx.Tx, roleID int64) error {

@@ -23,36 +23,14 @@ where profile.name = $1
 		where revocation.resource_type = 'agent_profile'
 			and revocation.resource_key = profile.name
 	)
-	and (
-		frozen.privilege_state = jsonb_build_object(
-			'name', $1::text,
-			'role', $2::text,
-			'description', $3::text,
-			'enabled', $4::boolean,
-			'openai_account_name', $5::text,
-			'github_account_name', $6::text,
-			'kubernetes_access', $7::text,
-			'sandbox_mode', $8::text,
-			'config_overlay', $9::text
-		)
-		or (
-			profile.enabled
-			and not $4::boolean
-			and (frozen.privilege_state - 'enabled') = (
-				jsonb_build_object(
-					'name', $1::text,
-					'role', $2::text,
-					'description', $3::text,
-					'enabled', $4::boolean,
-					'openai_account_name', $5::text,
-					'github_account_name', $6::text,
-					'kubernetes_access', $7::text,
-					'sandbox_mode', $8::text,
-					'config_overlay', $9::text
-				) - 'enabled'
-			)
-		)
-	)
+	and profile.role = $2
+	and profile.description = $3
+	and ($4::boolean = profile.enabled or (profile.enabled and not $4::boolean))
+	and profile.openai_account_name = $5
+	and profile.github_account_name = $6
+	and profile.kubernetes_access = $7
+	and profile.sandbox_mode = $8
+	and profile.config_overlay = $9
 returning
 	profile.id,
 	profile.name,

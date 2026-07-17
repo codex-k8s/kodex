@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
@@ -31,6 +32,13 @@ func (store *admittedAdminStore) WithExistingClusterAdminRuntimeGuard(_ context.
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	return sideEffect()
+}
+
+func (store *admittedAdminStore) ListClusterAdminSecretIntegrity(context.Context, int64, string) ([]securityrepo.SecretIntegrityBinding, error) {
+	return []securityrepo.SecretIntegrityBinding{{
+		Kind: "openai", SecretRef: "synthetic-openai-secret", SecretKey: "auth.json",
+		ContentSHA256: "synthetic-sha256", ResourceUID: "synthetic-uid", ResourceVersion: "1",
+	}}, nil
 }
 
 func (store *admittedAdminStore) AdmitExistingClusterAdminBinding(_ context.Context, input securityrepo.ClusterAdminBindingInput) (bool, error) {
@@ -171,6 +179,61 @@ func TestClusterAdminRuntimeGuardDeniesCommittedChangeBeforeSideEffect(t *testin
 	}
 }
 
+func TestClusterAdminRuntimeGuardVerifiesSameRefSecretContent(t *testing.T) {
+	store := &admittedAdminStore{fakeAdminStore: &fakeAdminStore{}, allowed: true}
+	tests := []struct {
+		name      string
+		integrity runtimerepo.SecretIntegrity
+		wantRun   bool
+	}{
+		{
+			name: "exact content",
+			integrity: runtimerepo.SecretIntegrity{
+				SecretName: "synthetic-openai-secret", SecretKey: "auth.json",
+				ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1",
+			},
+			wantRun: true,
+		},
+		{
+			name: "same ref different content",
+			integrity: runtimerepo.SecretIntegrity{
+				SecretName: "synthetic-openai-secret", SecretKey: "auth.json",
+				ContentSHA256: "different-sha256", UID: "synthetic-uid", ResourceVersion: "2",
+			},
+		},
+		{
+			name: "same ref recreated secret",
+			integrity: runtimerepo.SecretIntegrity{
+				SecretName: "synthetic-openai-secret", SecretKey: "auth.json",
+				ContentSHA256: "synthetic-sha256", UID: "different-uid", ResourceVersion: "1",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			runner := &fakeRuntimeRunner{secretIntegrity: map[string]runtimerepo.SecretIntegrity{
+				"synthetic-openai-secret/auth.json": test.integrity,
+			}}
+			svc := NewChatRunService(ChatRunServiceConfig{Store: store, RuntimeRunner: runner})
+			_, err := svc.startRun(context.Background(), chatRunStartInput{
+				RunID: "run-secret-integrity", Mode: chatRunModeDeveloper,
+				Role:   entity.AgentRole{ID: 42, ProjectID: 7, Name: "configured-admin", KubernetesAccess: "cluster-admin"},
+				Chat:   entity.Chat{ID: 9, ProjectID: 7, Slug: "admin-chat", MattermostChannelID: "channel-existing"},
+				Prompt: "synthetic cluster-admin prompt",
+			})
+			if test.wantRun {
+				if err != nil || len(runner.developerRuns) != 1 {
+					t.Fatalf("exact secret: runs=%d error=%v", len(runner.developerRuns), err)
+				}
+				return
+			}
+			if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) || len(runner.developerRuns) != 0 {
+				t.Fatalf("mutated secret: runs=%d error=%v", len(runner.developerRuns), err)
+			}
+		})
+	}
+}
+
 func TestClusterAdminNewSessionDeniedBeforeDatabaseAndRuntimeSideEffects(t *testing.T) {
 	baseStore := chatRuntimeStore()
 	project := baseStore.projects[1]
@@ -228,7 +291,7 @@ func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testi
 			TokenSecretRef: "synthetic-session-token", TTLSeconds: defaultThreadSessionTTLSeconds,
 		},
 	}
-	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: 1}
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: 2}
 	runner := &fakeRuntimeRunner{}
 	svc := NewChatRunService(ChatRunServiceConfig{
 		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
@@ -240,7 +303,7 @@ func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testi
 	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
 		t.Fatalf("EnqueueAgentTurn() error = %v", err)
 	}
-	if store.guardCalls != 1 || store.guardInputs[0].Operation != "agent_turn.persist.side_effect" || store.guardInputs[0].SessionKey != sessionKey {
+	if store.guardCalls != 2 || store.guardInputs[1].Operation != "agent_turn.persist.side_effect" || store.guardInputs[1].SessionKey != sessionKey {
 		t.Fatalf("final guard = %#v", store.guardInputs)
 	}
 	if len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 || len(runner.sessionRuns) != 0 {

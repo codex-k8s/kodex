@@ -11,10 +11,5 @@ select exists(
 		and frozen.profile_name = profile.name
 		and lower(trim(profile.kubernetes_access)) = 'cluster-admin'
 		and profile.enabled
-		and frozen.privilege_state = matter_codex_cluster_admin_profile_state(profile)
-		and not exists (
-			select 1 from matter_codex_cluster_admin_revocations revocation
-			where revocation.resource_type = 'agent_profile'
-				and revocation.resource_key = profile.name
-		)
+		and matter_codex_cluster_admin_profile_exact(profile.name)
 )

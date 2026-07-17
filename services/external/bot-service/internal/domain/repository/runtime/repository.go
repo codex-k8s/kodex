@@ -7,6 +7,19 @@ import (
 	"time"
 )
 
+type SecretIntegrityInput struct {
+	SecretName string
+	SecretKey  string
+}
+
+type SecretIntegrity struct {
+	SecretName      string
+	SecretKey       string
+	ContentSHA256   string
+	UID             string
+	ResourceVersion string
+}
+
 var ErrAgentSessionCapacity = errors.New("agent session runtime capacity unavailable")
 
 type AgentSessionCapacityError struct {
@@ -331,6 +344,7 @@ type RetentionCleanupResult struct {
 }
 
 type Runner interface {
+	InspectSecretIntegrity(ctx context.Context, input SecretIntegrityInput) (SecretIntegrity, error)
 	StartSmokeRun(ctx context.Context, input SmokeRunInput) (StartedRun, error)
 	StartCodexAuthSession(ctx context.Context, input CodexAuthSessionInput) (CodexAuthSession, error)
 	GetCodexAuthStatus(ctx context.Context, accountName string, secretName string) (CodexAuthStatus, error)

@@ -2850,6 +2850,47 @@ func TestSlashOpenAIAuthStatusAndList(t *testing.T) {
 	}
 }
 
+func TestFrozenClusterAdminAccountsDenyProviderAndSecretSideEffects(t *testing.T) {
+	store := &fakeAdminStore{
+		frozenOpenAIAccount: "primary",
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", SecretRef: "matter-codex-codex-auth-primary", Status: "authorized"},
+		},
+		frozenGitHubAccount: "agent",
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent": {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	inspector := &fakeGitHubAccountInspector{inspection: providerrepo.GitHubTokenInspection{Username: "mutated"}}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		RuntimeRunner: runner, GitHubAccountInspector: inspector, StorageReady: true, RuntimeConfigured: true,
+		CodexAuthSecretName: "matter-codex-codex-auth", GitHubSecretName: "matter-codex-github",
+	})
+	for _, command := range []string{
+		"openai auth primary", "openai status primary", "openai cleanup primary", "openai delete primary",
+	} {
+		text := svc.Handle(context.Background(), SlashCommand{Text: command, UserName: "owner"})
+		if !strings.Contains(text, "cluster-admin") {
+			t.Fatalf("%s result = %q", command, text)
+		}
+	}
+	if runner.authAccount != "" || runner.authStatusChecks != 0 || runner.authCompleteCalls != 0 || runner.authCleanupCalls != 0 || runner.deletedAuthAccount != "" {
+		t.Fatalf("frozen OpenAI side effects: %#v", runner)
+	}
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackGitHubAccountEdit,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewGitHub, Resource: menuResourceGitHubAccount, ID: "agent"}),
+		UserID:     "owner-id", UserName: "owner",
+		Submission: map[string]any{dialogFieldAccount: "agent", dialogFieldToken: "synthetic-mutated-token"},
+	})
+	if result.Error == "" || inspector.token != "" || runner.githubSecretInput.SecretName != "" {
+		t.Fatalf("frozen GitHub result=%#v inspector=%q secret=%#v", result, inspector.token, runner.githubSecretInput)
+	}
+}
+
 func TestSlashPromptSetRenderShowAndList(t *testing.T) {
 	store := &fakeAdminStore{}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
@@ -3216,6 +3257,9 @@ type fakeRuntimeRunner struct {
 	authSecretNotReady          bool
 	authStatusWithoutDeviceCode bool
 	authSecretChecks            int
+	authStatusChecks            int
+	authCompleteCalls           int
+	authCleanupCalls            int
 	authSecretCheckErr          error
 	deletedAuthAccount          string
 	deletedAuthSecret           string
@@ -3225,7 +3269,22 @@ type fakeRuntimeRunner struct {
 	runtimeVariableSecrets      map[string]string
 	runtimeVariableSecretInput  runtimerepo.ProjectRuntimeVariableSecretInput
 	deletedRuntimeVariable      string
+	secretIntegrity             map[string]runtimerepo.SecretIntegrity
+	secretIntegrityErr          error
 	runStatuses                 map[string]runtimerepo.RunStatus
+}
+
+func (runner *fakeRuntimeRunner) InspectSecretIntegrity(_ context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
+	if runner.secretIntegrityErr != nil {
+		return runtimerepo.SecretIntegrity{}, runner.secretIntegrityErr
+	}
+	if integrity, ok := runner.secretIntegrity[input.SecretName+"/"+input.SecretKey]; ok {
+		return integrity, nil
+	}
+	return runtimerepo.SecretIntegrity{
+		SecretName: input.SecretName, SecretKey: input.SecretKey,
+		ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1",
+	}, nil
 }
 
 func (runner *fakeRuntimeRunner) StartSmokeRun(_ context.Context, input runtimerepo.SmokeRunInput) (runtimerepo.StartedRun, error) {
@@ -3252,6 +3311,7 @@ func (runner *fakeRuntimeRunner) StartCodexAuthSession(_ context.Context, input 
 }
 
 func (runner *fakeRuntimeRunner) GetCodexAuthStatus(_ context.Context, accountName string, secretName string) (runtimerepo.CodexAuthStatus, error) {
+	runner.authStatusChecks++
 	status := runtimerepo.CodexAuthStatus{
 		AccountName: accountName,
 		SecretName:  secretName,
@@ -3288,6 +3348,7 @@ func (runner *fakeRuntimeRunner) CheckCodexAuthSecret(_ context.Context, input r
 }
 
 func (runner *fakeRuntimeRunner) CompleteCodexAuthSession(_ context.Context, input runtimerepo.CodexAuthCompleteInput) (runtimerepo.CodexAuthCompleteResult, error) {
+	runner.authCompleteCalls++
 	return runtimerepo.CodexAuthCompleteResult{
 		AccountName: input.AccountName,
 		SecretName:  input.SecretName,
@@ -3297,6 +3358,7 @@ func (runner *fakeRuntimeRunner) CompleteCodexAuthSession(_ context.Context, inp
 }
 
 func (runner *fakeRuntimeRunner) CleanupCodexAuthSession(_ context.Context, accountName string) (runtimerepo.CodexAuthCleanupResult, error) {
+	runner.authCleanupCalls++
 	return runtimerepo.CodexAuthCleanupResult{
 		AccountName: accountName,
 		Namespace:   "mattermost",
@@ -3585,6 +3647,16 @@ type fakeAdminStore struct {
 	sessionTurns         []entity.AgentSessionTurn
 	agentDelegations     map[int64]entity.AgentDelegation
 	postMessageMaxRunes  int
+	frozenOpenAIAccount  string
+	frozenGitHubAccount  string
+}
+
+func (store *fakeAdminStore) IsFrozenClusterAdminOpenAIAccount(_ context.Context, accountName string) (bool, error) {
+	return accountName != "" && accountName == store.frozenOpenAIAccount, nil
+}
+
+func (store *fakeAdminStore) IsFrozenClusterAdminGitHubAccount(_ context.Context, accountName string) (bool, error) {
+	return accountName != "" && accountName == store.frozenGitHubAccount, nil
 }
 
 func (store *fakeAdminStore) MattermostPostMessageMaxRunes(context.Context) (int, error) {

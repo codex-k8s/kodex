@@ -36,7 +36,7 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands ssh envsubst base64
+mattercodex_require_commands ssh envsubst base64 jq
 
 TEMPLATE_DIR="$REPO_ROOT/deploy/k8s/mattermost"
 
@@ -53,9 +53,9 @@ SECRET_Q="$(mattercodex_shell_quote "$MATTERCODEX_POSTGRES_SECRET")"
 REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
 SECRET_DRY_RUN_MODE="$DRY_RUN_MODE"
 
-if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q get secret $SECRET_Q >/dev/null 2>&1"; then
-  mattercodex_log "PostgreSQL secret: уже существует на сервере, ротация не выполняется"
-  exit 0
+EXISTING_POSTGRES_SECRET=""
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  EXISTING_POSTGRES_SECRET="$(mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q get secret $SECRET_Q -o json 2>/dev/null" || true)"
 fi
 
 if [ "$DRY_RUN_MODE" = "server" ] && ! mattercodex_ssh "$REMOTE_KUBECTL get namespace $NAMESPACE_Q >/dev/null 2>&1"; then
@@ -63,17 +63,43 @@ if [ "$DRY_RUN_MODE" = "server" ] && ! mattercodex_ssh "$REMOTE_KUBECTL get name
   SECRET_DRY_RUN_MODE="client"
 fi
 
-POSTGRES_PASSWORD="${MATTERCODEX_POSTGRES_PASSWORD:-$(mattercodex_generate_password)}"
-POSTGRES_DSN="postgres://${MATTERCODEX_POSTGRES_USER}:${POSTGRES_PASSWORD}@mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local:5432/${MATTERCODEX_POSTGRES_DB}?sslmode=disable&connect_timeout=10"
+if [ -n "$EXISTING_POSTGRES_SECRET" ]; then
+  POSTGRES_DB_B64="$(jq -r '.data["postgres-db"] // empty' <<<"$EXISTING_POSTGRES_SECRET")"
+  POSTGRES_USER_B64="$(jq -r '.data["postgres-user"] // empty' <<<"$EXISTING_POSTGRES_SECRET")"
+  POSTGRES_PASSWORD_B64="$(jq -r '.data["postgres-password"] // empty' <<<"$EXISTING_POSTGRES_SECRET")"
+  POSTGRES_DSN_B64="$(jq -r '.data["mattermost-datasource"] // empty' <<<"$EXISTING_POSTGRES_SECRET")"
+  EXISTING_RUNTIME_KEYS="$(jq '[.data["bot-service-runtime-user"], .data["bot-service-runtime-password"], .data["bot-service-runtime-datasource"]] | map(select(. != null and . != "")) | length' <<<"$EXISTING_POSTGRES_SECRET")"
+  if [ -z "$POSTGRES_DB_B64" ] || [ -z "$POSTGRES_USER_B64" ] || [ -z "$POSTGRES_PASSWORD_B64" ] || [ -z "$POSTGRES_DSN_B64" ]; then
+    mattercodex_die "существующий PostgreSQL secret не содержит полный migration-owner контракт"
+  fi
+  if [ "$EXISTING_RUNTIME_KEYS" = "3" ]; then
+    mattercodex_log "PostgreSQL secret: runtime credentials уже подготовлены, ротация не выполняется"
+    exit 0
+  fi
+  if [ "$EXISTING_RUNTIME_KEYS" != "0" ]; then
+    mattercodex_die "PostgreSQL secret содержит неполный набор bot-service runtime credentials"
+  fi
+else
+  POSTGRES_PASSWORD="${MATTERCODEX_POSTGRES_PASSWORD:-$(mattercodex_generate_password)}"
+  POSTGRES_DSN="postgres://${MATTERCODEX_POSTGRES_USER}:${POSTGRES_PASSWORD}@mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local:5432/${MATTERCODEX_POSTGRES_DB}?sslmode=disable&connect_timeout=10"
+  POSTGRES_DB_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_DB" | base64 | tr -d '\n')"
+  POSTGRES_USER_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_USER" | base64 | tr -d '\n')"
+  POSTGRES_PASSWORD_B64="$(printf '%s' "$POSTGRES_PASSWORD" | base64 | tr -d '\n')"
+  POSTGRES_DSN_B64="$(printf '%s' "$POSTGRES_DSN" | base64 | tr -d '\n')"
+fi
 
-POSTGRES_DB_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_DB" | base64 | tr -d '\n')"
-POSTGRES_USER_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_USER" | base64 | tr -d '\n')"
-POSTGRES_PASSWORD_B64="$(printf '%s' "$POSTGRES_PASSWORD" | base64 | tr -d '\n')"
-POSTGRES_DSN_B64="$(printf '%s' "$POSTGRES_DSN" | base64 | tr -d '\n')"
+POSTGRES_RUNTIME_PASSWORD="${MATTERCODEX_POSTGRES_RUNTIME_PASSWORD:-$(mattercodex_generate_password)}"
+POSTGRES_RUNTIME_DSN="postgres://${MATTERCODEX_POSTGRES_RUNTIME_USER}:${POSTGRES_RUNTIME_PASSWORD}@mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local:5432/${MATTERCODEX_POSTGRES_DB}?sslmode=disable&connect_timeout=10"
+POSTGRES_RUNTIME_USER_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_RUNTIME_USER" | base64 | tr -d '\n')"
+POSTGRES_RUNTIME_PASSWORD_B64="$(printf '%s' "$POSTGRES_RUNTIME_PASSWORD" | base64 | tr -d '\n')"
+POSTGRES_RUNTIME_DSN_B64="$(printf '%s' "$POSTGRES_RUNTIME_DSN" | base64 | tr -d '\n')"
 export POSTGRES_DB_B64
 export POSTGRES_USER_B64
 export POSTGRES_PASSWORD_B64
 export POSTGRES_DSN_B64
+export POSTGRES_RUNTIME_USER_B64
+export POSTGRES_RUNTIME_PASSWORD_B64
+export POSTGRES_RUNTIME_DSN_B64
 
 mattercodex_log "применяется PostgreSQL secret на целевом сервере"
 mattercodex_render_template "$TEMPLATE_DIR/postgres-secret.yaml.tpl" - | mattercodex_remote_kubectl_apply_stdin "$SECRET_DRY_RUN_MODE"

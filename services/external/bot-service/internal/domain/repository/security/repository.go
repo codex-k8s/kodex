@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 )
 
 var (
@@ -131,12 +133,38 @@ type InteractionResourceAdmissionRepository interface {
 	AdmitInteractionResource(ctx context.Context, input InteractionResourceAdmissionInput) (bool, error)
 }
 
+type AtomicDialogRepository interface {
+	ConsumeInteractionCapabilityWithMutation(
+		ctx context.Context,
+		input ConsumeCapabilityInput,
+		mutation func(adminrepo.Repository) error,
+	) (Capability, error)
+}
+
 type ClusterAdminBindingRepository interface {
 	AdmitExistingClusterAdminBinding(ctx context.Context, input ClusterAdminBindingInput) (bool, error)
 }
 
 type ClusterAdminRuntimeGuardRepository interface {
 	WithExistingClusterAdminRuntimeGuard(ctx context.Context, input ClusterAdminBindingInput, sideEffect func() error) error
+}
+
+type SecretIntegrityBinding struct {
+	Kind            string
+	SecretRef       string
+	SecretKey       string
+	ContentSHA256   string
+	ResourceUID     string
+	ResourceVersion string
+}
+
+type ClusterAdminSecretIntegrityRepository interface {
+	ListClusterAdminSecretIntegrity(ctx context.Context, roleID int64, sessionKey string) ([]SecretIntegrityBinding, error)
+}
+
+type ClusterAdminAccountDependencyRepository interface {
+	IsFrozenClusterAdminOpenAIAccount(ctx context.Context, accountName string) (bool, error)
+	IsFrozenClusterAdminGitHubAccount(ctx context.Context, accountName string) (bool, error)
 }
 
 type CapabilityCleanupRepository interface {

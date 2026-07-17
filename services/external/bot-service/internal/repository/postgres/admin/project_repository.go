@@ -12,7 +12,7 @@ import (
 )
 
 func (repo *Repository) UpsertProject(ctx context.Context, input adminrepo.UpsertProjectInput) (entity.Project, bool, error) {
-	item, created, err := scanProjectWithCreated(repo.pool.QueryRow(ctx, query("projects__upsert.sql"),
+	item, created, err := scanProjectWithCreated(repo.db.QueryRow(ctx, query("projects__upsert.sql"),
 		input.Name,
 		input.Slug,
 		input.MattermostTeamID,
@@ -29,7 +29,7 @@ func (repo *Repository) UpsertProject(ctx context.Context, input adminrepo.Upser
 }
 
 func (repo *Repository) UpdateProjectRunsChannel(ctx context.Context, projectID int64, channelID string) (entity.Project, error) {
-	item, err := scanProject(repo.pool.QueryRow(ctx, query("projects__update_runs_channel.sql"), projectID, channelID))
+	item, err := scanProject(repo.db.QueryRow(ctx, query("projects__update_runs_channel.sql"), projectID, channelID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Project{}, adminrepo.ErrNotFound
@@ -40,7 +40,7 @@ func (repo *Repository) UpdateProjectRunsChannel(ctx context.Context, projectID 
 }
 
 func (repo *Repository) GetProject(ctx context.Context, id int64) (entity.Project, error) {
-	item, err := scanProject(repo.pool.QueryRow(ctx, query("projects__get.sql"), id))
+	item, err := scanProject(repo.db.QueryRow(ctx, query("projects__get.sql"), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Project{}, adminrepo.ErrNotFound
@@ -51,7 +51,7 @@ func (repo *Repository) GetProject(ctx context.Context, id int64) (entity.Projec
 }
 
 func (repo *Repository) GetProjectBySlug(ctx context.Context, slug string) (entity.Project, error) {
-	item, err := scanProject(repo.pool.QueryRow(ctx, query("projects__get_by_slug.sql"), slug))
+	item, err := scanProject(repo.db.QueryRow(ctx, query("projects__get_by_slug.sql"), slug))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Project{}, adminrepo.ErrNotFound
@@ -65,7 +65,7 @@ func (repo *Repository) ListProjects(ctx context.Context, limit int) ([]entity.P
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("projects__list.sql"), limit)
+	rows, err := repo.db.Query(ctx, query("projects__list.sql"), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list projects: %w", err)
 	}
@@ -86,7 +86,7 @@ func (repo *Repository) ListProjects(ctx context.Context, limit int) ([]entity.P
 }
 
 func (repo *Repository) UpsertProjectRepository(ctx context.Context, input adminrepo.UpsertProjectRepositoryInput) (entity.ProjectRepository, bool, error) {
-	item, created, err := scanProjectRepositoryWithCreated(repo.pool.QueryRow(ctx, query("project_repositories__upsert.sql"),
+	item, created, err := scanProjectRepositoryWithCreated(repo.db.QueryRow(ctx, query("project_repositories__upsert.sql"),
 		input.ProjectID,
 		input.RepositoryID,
 		input.IsDefault,
@@ -99,7 +99,7 @@ func (repo *Repository) UpsertProjectRepository(ctx context.Context, input admin
 }
 
 func (repo *Repository) ListProjectRepositories(ctx context.Context, projectID int64) ([]entity.ProjectRepository, error) {
-	rows, err := repo.pool.Query(ctx, query("project_repositories__list.sql"), projectID)
+	rows, err := repo.db.Query(ctx, query("project_repositories__list.sql"), projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list project repositories: %w", err)
 	}
@@ -123,7 +123,7 @@ func (repo *Repository) UpsertAgentRole(ctx context.Context, input adminrepo.Ups
 	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
 		return repo.upsertFrozenClusterAdminRole(ctx, input)
 	}
-	item, created, err := scanAgentRoleWithCreated(repo.pool.QueryRow(ctx, query("agent_roles__upsert.sql"),
+	item, created, err := scanAgentRoleWithCreated(repo.db.QueryRow(ctx, query("agent_roles__upsert.sql"),
 		input.ProjectID,
 		input.Name,
 		input.RoleType,
@@ -149,7 +149,7 @@ func (repo *Repository) UpsertAgentRole(ctx context.Context, input adminrepo.Ups
 }
 
 func (repo *Repository) upsertFrozenClusterAdminRole(ctx context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
-	tx, err := repo.pool.Begin(ctx)
+	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return entity.AgentRole{}, false, fmt.Errorf("begin cluster-admin role upsert: %w", err)
 	}
@@ -184,7 +184,7 @@ func (repo *Repository) upsertFrozenClusterAdminRole(ctx context.Context, input 
 }
 
 func (repo *Repository) GetAgentRole(ctx context.Context, id int64) (entity.AgentRole, error) {
-	item, err := scanAgentRole(repo.pool.QueryRow(ctx, query("agent_roles__get.sql"), id))
+	item, err := scanAgentRole(repo.db.QueryRow(ctx, query("agent_roles__get.sql"), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentRole{}, adminrepo.ErrNotFound
@@ -195,7 +195,7 @@ func (repo *Repository) GetAgentRole(ctx context.Context, id int64) (entity.Agen
 }
 
 func (repo *Repository) ListAgentRoles(ctx context.Context, projectID int64) ([]entity.AgentRole, error) {
-	rows, err := repo.pool.Query(ctx, query("agent_roles__list.sql"), projectID)
+	rows, err := repo.db.Query(ctx, query("agent_roles__list.sql"), projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list agent roles: %w", err)
 	}
@@ -216,7 +216,7 @@ func (repo *Repository) ListAgentRoles(ctx context.Context, projectID int64) ([]
 }
 
 func (repo *Repository) CreateChat(ctx context.Context, input adminrepo.CreateChatInput) (entity.Chat, bool, error) {
-	tx, err := repo.pool.Begin(ctx)
+	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return entity.Chat{}, false, fmt.Errorf("begin create chat: %w", err)
 	}
@@ -389,7 +389,7 @@ func lockClusterAdminChatMutation(ctx context.Context, tx pgx.Tx, input adminrep
 }
 
 func (repo *Repository) GetChat(ctx context.Context, id int64) (entity.Chat, error) {
-	item, err := scanChat(repo.pool.QueryRow(ctx, query("chats__get.sql"), id))
+	item, err := scanChat(repo.db.QueryRow(ctx, query("chats__get.sql"), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Chat{}, adminrepo.ErrNotFound
@@ -400,7 +400,7 @@ func (repo *Repository) GetChat(ctx context.Context, id int64) (entity.Chat, err
 }
 
 func (repo *Repository) GetChatByMattermostChannelID(ctx context.Context, channelID string) (entity.Chat, error) {
-	item, err := scanChat(repo.pool.QueryRow(ctx, query("chats__get_by_channel.sql"), channelID))
+	item, err := scanChat(repo.db.QueryRow(ctx, query("chats__get_by_channel.sql"), channelID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Chat{}, adminrepo.ErrNotFound
@@ -411,7 +411,7 @@ func (repo *Repository) GetChatByMattermostChannelID(ctx context.Context, channe
 }
 
 func (repo *Repository) ListChats(ctx context.Context, projectID int64) ([]entity.Chat, error) {
-	rows, err := repo.pool.Query(ctx, query("chats__list.sql"), projectID)
+	rows, err := repo.db.Query(ctx, query("chats__list.sql"), projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list chats: %w", err)
 	}
@@ -432,7 +432,7 @@ func (repo *Repository) ListChats(ctx context.Context, projectID int64) ([]entit
 }
 
 func (repo *Repository) ListChatParticipants(ctx context.Context, chatID int64) ([]entity.ChatParticipant, error) {
-	rows, err := repo.pool.Query(ctx, query("chat_participants__list.sql"), chatID)
+	rows, err := repo.db.Query(ctx, query("chat_participants__list.sql"), chatID)
 	if err != nil {
 		return nil, fmt.Errorf("list chat participants: %w", err)
 	}
@@ -453,7 +453,7 @@ func (repo *Repository) ListChatParticipants(ctx context.Context, chatID int64) 
 }
 
 func (repo *Repository) ListChatRepositories(ctx context.Context, chatID int64) ([]entity.ChatRepositoryBinding, error) {
-	rows, err := repo.pool.Query(ctx, query("chat_repositories__list.sql"), chatID)
+	rows, err := repo.db.Query(ctx, query("chat_repositories__list.sql"), chatID)
 	if err != nil {
 		return nil, fmt.Errorf("list chat repositories: %w", err)
 	}
@@ -474,7 +474,7 @@ func (repo *Repository) ListChatRepositories(ctx context.Context, chatID int64) 
 }
 
 func (repo *Repository) GetThreadContext(ctx context.Context, chatID int64, rootPostID string) (entity.ThreadContext, error) {
-	item, err := scanThreadContext(repo.pool.QueryRow(ctx, query("thread_contexts__get.sql"), chatID, rootPostID))
+	item, err := scanThreadContext(repo.db.QueryRow(ctx, query("thread_contexts__get.sql"), chatID, rootPostID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.ThreadContext{}, adminrepo.ErrNotFound
@@ -485,7 +485,7 @@ func (repo *Repository) GetThreadContext(ctx context.Context, chatID int64, root
 }
 
 func (repo *Repository) GetThreadContextByID(ctx context.Context, id int64) (entity.ThreadContext, error) {
-	item, err := scanThreadContext(repo.pool.QueryRow(ctx, query("thread_contexts__get_by_id.sql"), id))
+	item, err := scanThreadContext(repo.db.QueryRow(ctx, query("thread_contexts__get_by_id.sql"), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.ThreadContext{}, adminrepo.ErrNotFound
@@ -496,7 +496,7 @@ func (repo *Repository) GetThreadContextByID(ctx context.Context, id int64) (ent
 }
 
 func (repo *Repository) UpsertThreadContext(ctx context.Context, input adminrepo.UpsertThreadContextInput) (entity.ThreadContext, bool, error) {
-	item, created, err := scanThreadContextWithCreated(repo.pool.QueryRow(ctx, query("thread_contexts__upsert.sql"),
+	item, created, err := scanThreadContextWithCreated(repo.db.QueryRow(ctx, query("thread_contexts__upsert.sql"),
 		input.ProjectID,
 		input.ChatID,
 		input.MattermostChannelID,

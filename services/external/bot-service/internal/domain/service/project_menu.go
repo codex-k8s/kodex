@@ -1381,6 +1381,19 @@ func (svc *SlashCommandService) handleProjectRuntimeVariableDialog(ctx context.C
 	}
 	secretCreated := false
 	if strings.TrimSpace(value) != "" {
+		if editMode {
+			for _, roleID := range svc.roleIDsUsingRuntimeVariable(ctx, current.ProjectID, current.ID) {
+				role, roleErr := svc.cfg.Store.GetAgentRole(ctx, roleID)
+				if roleErr != nil {
+					return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime_var.get.failed", map[string]any{"Error": safeError(roleErr)})}
+				}
+				if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+					return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{
+						dialogFieldRuntimeVarValue: svc.t("dialog.runtime_var.value_edit_not_supported", nil),
+					}}
+				}
+			}
+		}
 		secret, err := svc.cfg.RuntimeRunner.UpsertProjectRuntimeVariableSecret(ctx, runtimerepo.ProjectRuntimeVariableSecretInput{
 			ProjectSlug: project.Slug,
 			Variable: runtimerepo.RuntimeEnvVar{

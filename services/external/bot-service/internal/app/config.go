@@ -11,6 +11,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
+	"github.com/jackc/pgx/v5"
 )
 
 var kubernetesDNSLabelPattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
@@ -31,6 +32,7 @@ type Config struct {
 	GitHubWebhookSecret             string        `env:"MATTERCODEX_GITHUB_WEBHOOK_SECRET"`
 	GitHubSecretName                string        `env:"MATTERCODEX_GITHUB_SECRET" envDefault:"matter-codex-github"`
 	DatabaseDSN                     string        `env:"MATTERCODEX_DATABASE_DSN"`
+	MigrationsDatabaseDSN           string        `env:"MATTERCODEX_MIGRATIONS_DATABASE_DSN"`
 	RuntimeEnabled                  bool          `env:"MATTERCODEX_RUNTIME_ENABLED" envDefault:"true"`
 	RuntimeNamespace                string        `env:"MATTERCODEX_RUNTIME_NAMESPACE"`
 	RuntimeKubeconfigPath           string        `env:"MATTERCODEX_RUNTIME_KUBECONFIG_PATH"`
@@ -152,6 +154,27 @@ func (cfg *Config) Validate() error {
 	}
 	if strings.TrimSpace(cfg.GitHubSecretName) == "" {
 		return fmt.Errorf("MATTERCODEX_GITHUB_SECRET is required")
+	}
+	if strings.TrimSpace(cfg.DatabaseDSN) != "" && cfg.StorageMigrations && strings.TrimSpace(cfg.MigrationsDatabaseDSN) == "" {
+		return fmt.Errorf("MATTERCODEX_MIGRATIONS_DATABASE_DSN is required when storage migrations are enabled")
+	}
+	if strings.TrimSpace(cfg.DatabaseDSN) != "" {
+		runtimeConfig, err := pgx.ParseConfig(cfg.DatabaseDSN)
+		if err != nil || strings.TrimSpace(runtimeConfig.User) == "" || runtimeConfig.Password == "" {
+			return fmt.Errorf("MATTERCODEX_DATABASE_DSN must contain explicit runtime credentials")
+		}
+		if strings.TrimSpace(cfg.MigrationsDatabaseDSN) != "" {
+			migrationConfig, err := pgx.ParseConfig(cfg.MigrationsDatabaseDSN)
+			if err != nil || strings.TrimSpace(migrationConfig.User) == "" {
+				return fmt.Errorf("MATTERCODEX_MIGRATIONS_DATABASE_DSN must contain explicit migration credentials")
+			}
+			if runtimeConfig.User == migrationConfig.User {
+				return fmt.Errorf("runtime and migrations database roles must be different")
+			}
+			if runtimeConfig.Host != migrationConfig.Host || runtimeConfig.Port != migrationConfig.Port || runtimeConfig.Database != migrationConfig.Database {
+				return fmt.Errorf("runtime and migrations database credentials must use the same endpoint and database")
+			}
+		}
 	}
 	locale, ok := texti18n.ResolveLocale(cfg.Locale)
 	if !ok {

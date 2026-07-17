@@ -24,6 +24,7 @@ create table if not exists matter_codex_cluster_admin_bindings (
 	project_id bigint not null,
 	chat_id bigint not null,
 	mattermost_channel_id text not null,
+	prompt_state jsonb not null,
 	captured_at timestamptz not null default now(),
 	primary key (role_id, chat_id)
 );
@@ -52,6 +53,14 @@ create table if not exists matter_codex_cluster_admin_runtime_variable_bindings 
 	privilege_state jsonb not null,
 	captured_at timestamptz not null default now(),
 	primary key (role_id, variable_id)
+);
+
+create table if not exists matter_codex_cluster_admin_prompt_templates (
+	profile_name text not null,
+	template_key text not null,
+	privilege_state jsonb not null,
+	captured_at timestamptz not null default now(),
+	primary key (profile_name, template_key)
 );
 
 create table if not exists matter_codex_cluster_admin_dependencies (
@@ -93,6 +102,9 @@ stable
 as $$
 	select jsonb_build_object(
 		'project_id', role_row.project_id,
+		'project_name', project.name,
+		'project_description', project.description,
+		'project_advanced_settings', project.advanced_settings,
 		'name', role_row.name,
 		'role_type', role_row.role_type,
 		'description', role_row.description,
@@ -116,6 +128,45 @@ as $$
 	where project.id = role_row.project_id
 $$;
 
+create or replace function matter_codex_cluster_admin_chat_prompt_state(
+	project_row matter_codex_projects,
+	chat_row matter_codex_chats
+)
+returns jsonb
+language sql
+stable
+as $$
+	select jsonb_build_object(
+		'project_id', project_row.id,
+		'project_name', project_row.name,
+		'project_slug', project_row.slug,
+		'project_description', project_row.description,
+		'project_advanced_settings', project_row.advanced_settings,
+		'chat_id', chat_row.id,
+		'chat_name', chat_row.name,
+		'chat_slug', chat_row.slug,
+		'chat_description', chat_row.description,
+		'chat_type', chat_row.chat_type,
+		'chat_root_github_issue', chat_row.root_github_issue,
+		'chat_work_policy', chat_row.work_policy,
+		'chat_settings', chat_row.settings
+	)
+$$;
+
+create or replace function matter_codex_cluster_admin_prompt_template_state(
+	template_row matter_codex_agent_prompt_templates
+)
+returns jsonb
+language sql
+stable
+as $$
+	select jsonb_build_object(
+		'profile_name', template_row.profile_name,
+		'template_key', template_row.template_key,
+		'body', template_row.body
+	)
+$$;
+
 create or replace function matter_codex_cluster_admin_bot_state(binding matter_codex_mattermost_bot_identities)
 returns jsonb
 language sql
@@ -128,6 +179,9 @@ as $$
 		'display_name', binding.display_name,
 		'mattermost_user_id', binding.mattermost_user_id,
 		'token_secret_ref', binding.token_secret_ref,
+		'secret_content_sha256', binding.secret_content_sha256,
+		'secret_resource_uid', binding.secret_resource_uid,
+		'secret_resource_version', binding.secret_resource_version,
 		'status', binding.status
 	)
 $$;
@@ -144,6 +198,9 @@ as $$
 		'description', variable.description,
 		'secret_ref', variable.secret_ref,
 		'secret_key', variable.secret_key,
+		'secret_content_sha256', variable.secret_content_sha256,
+		'secret_resource_uid', variable.secret_resource_uid,
+		'secret_resource_version', variable.secret_resource_version,
 		'sensitive', variable.sensitive,
 		'enabled', variable.enabled
 	)
@@ -167,6 +224,9 @@ as $$
 		'pod_name', session_row.pod_name,
 		'pvc_name', session_row.pvc_name,
 		'token_secret_ref', session_row.token_secret_ref,
+		'secret_content_sha256', session_row.secret_content_sha256,
+		'secret_resource_uid', session_row.secret_resource_uid,
+		'secret_resource_version', session_row.secret_resource_version,
 		'capabilities', session_row.capabilities
 	)
 $$;
@@ -191,6 +251,9 @@ as $$
 		'credential_type', coalesce(credential.credential_type, ''),
 		'credential_provider', coalesce(credential.provider, ''),
 		'credential_secret_ref', coalesce(credential.secret_ref, ''),
+		'credential_secret_content_sha256', coalesce(credential.secret_content_sha256, ''),
+		'credential_secret_resource_uid', coalesce(credential.secret_resource_uid, ''),
+		'credential_secret_resource_version', coalesce(credential.secret_resource_version, ''),
 		'credential_status', coalesce(credential.status, '')
 	)
 	from (select 1) anchor
@@ -238,6 +301,9 @@ as $$
 		'credential_type', coalesce(credential.credential_type, ''),
 		'credential_provider', coalesce(credential.provider, ''),
 		'credential_secret_ref', coalesce(credential.secret_ref, ''),
+		'credential_secret_content_sha256', coalesce(credential.secret_content_sha256, ''),
+		'credential_secret_resource_uid', coalesce(credential.secret_resource_uid, ''),
+		'credential_secret_resource_version', coalesce(credential.secret_resource_version, ''),
 		'credential_status', coalesce(credential.status, '')
 	)
 	from (select 1) anchor
@@ -399,6 +465,90 @@ as $$
 	end
 $$;
 
+-- Снимок профиля разворачивает учётные записи поставщиков и credentials. Одни имена не являются
+-- границей авторизации, потому что status и SecretRef можно перепривязать на месте.
+create or replace function matter_codex_cluster_admin_profile_state(profile matter_codex_agent_profiles)
+returns jsonb
+language sql
+stable
+as $$
+	select jsonb_build_object(
+		'name', profile.name,
+		'role', profile.role,
+		'description', profile.description,
+		'enabled', profile.enabled,
+		'openai_account_name', profile.openai_account_name,
+		'openai_account', case
+			when trim(profile.openai_account_name) = '' then jsonb_build_object('exists', false, 'name', '')
+			else matter_codex_cluster_admin_openai_account_state(trim(profile.openai_account_name))
+		end,
+		'github_account_name', profile.github_account_name,
+		'github_account', case
+			when trim(profile.github_account_name) = '' then jsonb_build_object('exists', false, 'name', '')
+			else matter_codex_cluster_admin_github_account_state(trim(profile.github_account_name))
+		end,
+		'kubernetes_access', profile.kubernetes_access,
+		'sandbox_mode', profile.sandbox_mode,
+		'config_overlay', profile.config_overlay
+	)
+$$;
+
+-- +goose StatementBegin
+do $$
+begin
+	if nullif(trim(current_setting('matter_codex.runtime_role', true)), '') is not null and (
+		exists (
+			select 1
+			from matter_codex_credentials credential
+			where trim(credential.secret_ref) <> ''
+				and (
+					trim(credential.secret_content_sha256) = ''
+					or trim(credential.secret_resource_uid) = ''
+					or trim(credential.secret_resource_version) = ''
+				)
+				and exists (
+					select 1 from matter_codex_openai_accounts account
+					join matter_codex_agent_roles role on role.openai_account_name = account.name
+					where account.credential_id = credential.id
+						and lower(trim(role.kubernetes_access)) = 'cluster-admin'
+					union all
+					select 1 from matter_codex_github_accounts account
+					join matter_codex_agent_roles role on role.github_account_name = account.name
+					where account.credential_id = credential.id
+						and lower(trim(role.kubernetes_access)) = 'cluster-admin'
+				)
+		)
+		or exists (
+			select 1
+			from matter_codex_project_runtime_variables variable
+			join matter_codex_agent_role_runtime_variables binding on binding.variable_id = variable.id
+			join matter_codex_agent_roles role on role.id = binding.role_id
+			where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+				and (
+					trim(variable.secret_content_sha256) = ''
+					or trim(variable.secret_resource_uid) = ''
+					or trim(variable.secret_resource_version) = ''
+				)
+		)
+		or exists (
+			select 1
+			from matter_codex_mattermost_bot_identities binding
+			join matter_codex_agent_roles role on role.id = binding.role_id
+			where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+				and (
+					trim(binding.secret_content_sha256) = ''
+					or trim(binding.secret_resource_uid) = ''
+					or trim(binding.secret_resource_version) = ''
+				)
+		)
+	) then
+		raise exception 'cluster-admin freeze requires staged Secret content integrity metadata'
+			using errcode = 'check_violation';
+	end if;
+end
+$$;
+-- +goose StatementEnd
+
 insert into matter_codex_cluster_admin_subjects(
 	subject_type, subject_key, project_id, profile_name, privilege_state
 )
@@ -406,6 +556,16 @@ select 'agent_profile', profile.name, 0, profile.name,
 	matter_codex_cluster_admin_profile_state(profile)
 from matter_codex_agent_profiles profile
 where lower(trim(profile.kubernetes_access)) = 'cluster-admin'
+on conflict do nothing;
+
+insert into matter_codex_cluster_admin_prompt_templates(profile_name, template_key, privilege_state)
+select template.profile_name, template.template_key,
+	matter_codex_cluster_admin_prompt_template_state(template)
+from matter_codex_agent_prompt_templates template
+join matter_codex_cluster_admin_subjects subject
+	on subject.subject_type = 'agent_profile'
+	and subject.subject_key = template.profile_name
+	and subject.project_id = 0
 on conflict do nothing;
 
 insert into matter_codex_cluster_admin_subjects(
@@ -539,10 +699,14 @@ join matter_codex_chat_repositories binding on binding.chat_id = participant.cha
 where lower(trim(role.kubernetes_access)) = 'cluster-admin'
 on conflict do nothing;
 
-insert into matter_codex_cluster_admin_bindings(role_id, project_id, chat_id, mattermost_channel_id)
-select participant.role_id, role.project_id, participant.chat_id, chat.mattermost_channel_id
+insert into matter_codex_cluster_admin_bindings(
+	role_id, project_id, chat_id, mattermost_channel_id, prompt_state
+)
+select participant.role_id, role.project_id, participant.chat_id, chat.mattermost_channel_id,
+	matter_codex_cluster_admin_chat_prompt_state(project, chat)
 from matter_codex_chat_participants participant
 join matter_codex_agent_roles role on role.id = participant.role_id
+join matter_codex_projects project on project.id = role.project_id
 join matter_codex_chats chat on chat.id = participant.chat_id and chat.project_id = role.project_id
 where participant.enabled
 	and lower(trim(role.kubernetes_access)) = 'cluster-admin'
@@ -575,6 +739,57 @@ join matter_codex_cluster_admin_session_bindings frozen
 	and frozen.session_key = session_row.session_key
 where session_row.status in ('blocked', 'closed')
 on conflict do nothing;
+
+create or replace function matter_codex_cluster_admin_profile_exact(candidate_profile_name text)
+returns boolean
+language sql
+stable
+as $$
+	select exists(
+		select 1
+		from matter_codex_agent_profiles profile
+		join matter_codex_cluster_admin_subjects subject
+			on subject.subject_type = 'agent_profile'
+			and subject.subject_key = profile.name
+			and subject.project_id = 0
+		where profile.name = candidate_profile_name
+			and profile.enabled
+			and lower(trim(profile.kubernetes_access)) = 'cluster-admin'
+			and subject.privilege_state = matter_codex_cluster_admin_profile_state(profile)
+			and not exists (
+				select 1 from matter_codex_cluster_admin_revocations revocation
+				where (
+					revocation.resource_type = 'agent_profile'
+					and revocation.resource_key = profile.name
+				) or (
+					revocation.resource_type = 'profile_dependency'
+					and split_part(revocation.resource_key, ':', 1) = profile.name
+				)
+			)
+			and not exists (
+				select 1
+				from matter_codex_cluster_admin_prompt_templates frozen
+				left join matter_codex_agent_prompt_templates template
+					on template.profile_name = frozen.profile_name
+					and template.template_key = frozen.template_key
+				where frozen.profile_name = profile.name
+					and (
+						template.profile_name is null
+						or frozen.privilege_state <> matter_codex_cluster_admin_prompt_template_state(template)
+					)
+			)
+			and not exists (
+				select 1
+				from matter_codex_agent_prompt_templates template
+				where template.profile_name = profile.name
+					and not exists (
+						select 1 from matter_codex_cluster_admin_prompt_templates frozen
+						where frozen.profile_name = template.profile_name
+							and frozen.template_key = template.template_key
+					)
+			)
+	)
+$$;
 
 create or replace function matter_codex_cluster_admin_role_exact(candidate_role_id bigint)
 returns boolean
@@ -684,10 +899,12 @@ as $$
 		and exists(
 			select 1
 			from matter_codex_cluster_admin_bindings binding
+			join matter_codex_projects project on project.id = binding.project_id
 			join matter_codex_chats chat
 				on chat.id = binding.chat_id
 				and chat.project_id = binding.project_id
 				and chat.mattermost_channel_id = binding.mattermost_channel_id
+				and binding.prompt_state = matter_codex_cluster_admin_chat_prompt_state(project, chat)
 			join matter_codex_chat_participants participant
 				on participant.role_id = binding.role_id
 				and participant.chat_id = binding.chat_id
@@ -790,6 +1007,42 @@ begin
 end
 $$;
 
+create or replace function matter_codex_guard_cluster_admin_prompt_template()
+returns trigger
+language plpgsql
+as $$
+declare
+	profile_name_value text;
+	template_key_value text;
+	frozen_state jsonb;
+begin
+	profile_name_value := case when tg_op = 'INSERT' then new.profile_name else old.profile_name end;
+	template_key_value := case when tg_op = 'INSERT' then new.template_key else old.template_key end;
+	select frozen.privilege_state into frozen_state
+	from matter_codex_cluster_admin_prompt_templates frozen
+	where frozen.profile_name = profile_name_value and frozen.template_key = template_key_value;
+	if frozen_state is null and not exists (
+		select 1 from matter_codex_cluster_admin_subjects subject
+		where subject.subject_type = 'agent_profile'
+			and subject.subject_key = profile_name_value
+			and subject.project_id = 0
+	) then
+		if tg_op = 'DELETE' then return old; end if;
+		return new;
+	end if;
+	if tg_op <> 'DELETE'
+		and frozen_state = matter_codex_cluster_admin_prompt_template_state(new)
+	then
+		return new;
+	end if;
+	perform matter_codex_cluster_admin_record_denied(
+		'agent_prompt_template', profile_name_value || ':' || template_key_value,
+		'prompt_template.mutation'
+	);
+	return null;
+end
+$$;
+
 create or replace function matter_codex_guard_cluster_admin_role()
 returns trigger
 language plpgsql
@@ -877,7 +1130,10 @@ language plpgsql
 as $$
 begin
 	if (
-		old.github_account_name is distinct from new.github_account_name
+			old.name is distinct from new.name
+			or old.description is distinct from new.description
+			or old.advanced_settings is distinct from new.advanced_settings
+			or old.github_account_name is distinct from new.github_account_name
 		or old.slug is distinct from new.slug
 		or old.mattermost_team_id is distinct from new.mattermost_team_id
 		or old.github_owner is distinct from new.github_owner
@@ -1053,6 +1309,7 @@ language plpgsql
 as $$
 declare
 	dependency record;
+	profile_dependency record;
 	key_value text;
 	proposed_state jsonb;
 begin
@@ -1071,6 +1328,16 @@ begin
 		proposed_state := matter_codex_cluster_admin_openai_account_state_values(
 			new.name, new.credential_id, new.status, new.model_policy
 		);
+		if tg_op = 'UPDATE'
+			and lower(trim(new.status)) = 'disabled'
+			and lower(trim(old.status)) <> 'disabled'
+			and (dependency.privilege_state - 'status') = (proposed_state - 'status')
+		then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values ('dependency', dependency.role_id::text || ':openai_account:' || key_value, 'account disabled')
+			on conflict do nothing;
+			continue;
+		end if;
 		if dependency.privilege_state <> proposed_state
 			or exists (
 				select 1 from matter_codex_cluster_admin_revocations revocation
@@ -1080,6 +1347,41 @@ begin
 		then
 			perform matter_codex_cluster_admin_record_denied(
 				'openai_account', dependency.role_id::text || ':' || key_value, 'openai_account.mutation'
+			);
+			return null;
+		end if;
+	end loop;
+	for profile_dependency in
+		select subject.subject_key as profile_name, subject.privilege_state -> 'openai_account' as privilege_state
+		from matter_codex_cluster_admin_subjects subject
+		join matter_codex_agent_profiles profile
+			on subject.subject_type = 'agent_profile'
+			and subject.subject_key = profile.name
+			and trim(profile.openai_account_name) = key_value
+	loop
+		if tg_op = 'DELETE' then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values ('profile_dependency', profile_dependency.profile_name || ':openai_account:' || key_value, 'account deleted')
+			on conflict do nothing;
+			continue;
+		end if;
+		proposed_state := matter_codex_cluster_admin_openai_account_state_values(
+			new.name, new.credential_id, new.status, new.model_policy
+		);
+		if tg_op = 'UPDATE'
+			and lower(trim(new.status)) = 'disabled'
+			and lower(trim(old.status)) <> 'disabled'
+			and (profile_dependency.privilege_state - 'status') = (proposed_state - 'status')
+		then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values ('profile_dependency', profile_dependency.profile_name || ':openai_account:' || key_value, 'account disabled')
+			on conflict do nothing;
+			continue;
+		end if;
+		if profile_dependency.privilege_state <> proposed_state then
+			perform matter_codex_cluster_admin_record_denied(
+				'agent_profile', profile_dependency.profile_name || ':openai_account:' || key_value,
+				'openai_account.profile_dependency.mutation'
 			);
 			return null;
 		end if;
@@ -1095,6 +1397,7 @@ language plpgsql
 as $$
 declare
 	dependency record;
+	profile_dependency record;
 	key_value text;
 	proposed_state jsonb;
 begin
@@ -1113,6 +1416,16 @@ begin
 		proposed_state := matter_codex_cluster_admin_github_account_state_values(
 			new.name, new.credential_id, new.secret_ref, new.username, new.email, new.status
 		);
+		if tg_op = 'UPDATE'
+			and lower(trim(new.status)) = 'disabled'
+			and lower(trim(old.status)) <> 'disabled'
+			and (dependency.privilege_state - 'status') = (proposed_state - 'status')
+		then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values ('dependency', dependency.role_id::text || ':github_account:' || key_value, 'account disabled')
+			on conflict do nothing;
+			continue;
+		end if;
 		if dependency.privilege_state <> proposed_state
 			or exists (
 				select 1 from matter_codex_cluster_admin_revocations revocation
@@ -1122,6 +1435,41 @@ begin
 		then
 			perform matter_codex_cluster_admin_record_denied(
 				'github_account', dependency.role_id::text || ':' || key_value, 'github_account.mutation'
+			);
+			return null;
+		end if;
+	end loop;
+	for profile_dependency in
+		select subject.subject_key as profile_name, subject.privilege_state -> 'github_account' as privilege_state
+		from matter_codex_cluster_admin_subjects subject
+		join matter_codex_agent_profiles profile
+			on subject.subject_type = 'agent_profile'
+			and subject.subject_key = profile.name
+			and trim(profile.github_account_name) = key_value
+	loop
+		if tg_op = 'DELETE' then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values ('profile_dependency', profile_dependency.profile_name || ':github_account:' || key_value, 'account deleted')
+			on conflict do nothing;
+			continue;
+		end if;
+		proposed_state := matter_codex_cluster_admin_github_account_state_values(
+			new.name, new.credential_id, new.secret_ref, new.username, new.email, new.status
+		);
+		if tg_op = 'UPDATE'
+			and lower(trim(new.status)) = 'disabled'
+			and lower(trim(old.status)) <> 'disabled'
+			and (profile_dependency.privilege_state - 'status') = (proposed_state - 'status')
+		then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values ('profile_dependency', profile_dependency.profile_name || ':github_account:' || key_value, 'account disabled')
+			on conflict do nothing;
+			continue;
+		end if;
+		if profile_dependency.privilege_state <> proposed_state then
+			perform matter_codex_cluster_admin_record_denied(
+				'agent_profile', profile_dependency.profile_name || ':github_account:' || key_value,
+				'github_account.profile_dependency.mutation'
 			);
 			return null;
 		end if;
@@ -1137,6 +1485,7 @@ language plpgsql
 as $$
 declare
 	dependency record;
+	profile_dependency record;
 begin
 	for dependency in
 		select distinct frozen.role_id, frozen.resource_type, frozen.resource_key
@@ -1161,11 +1510,55 @@ begin
 			) on conflict do nothing;
 			continue;
 		end if;
+		if tg_op = 'UPDATE'
+			and lower(trim(new.status)) = 'disabled'
+			and lower(trim(old.status)) <> 'disabled'
+			and (to_jsonb(old) - 'status' - 'updated_at') = (to_jsonb(new) - 'status' - 'updated_at')
+		then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values (
+				'dependency', dependency.role_id::text || ':' || dependency.resource_type || ':' || dependency.resource_key,
+				'credential disabled'
+			) on conflict do nothing;
+			continue;
+		end if;
 		if old is distinct from new then
 			perform matter_codex_cluster_admin_record_denied(
 				'credential', dependency.role_id::text || ':' || dependency.resource_type || ':' || dependency.resource_key,
 				'credential.mutation'
 			);
+			return null;
+		end if;
+	end loop;
+	for profile_dependency in
+		select subject.subject_key as profile_name
+		from matter_codex_cluster_admin_subjects subject
+		join matter_codex_agent_profiles profile
+			on subject.subject_type = 'agent_profile' and subject.subject_key = profile.name
+		left join matter_codex_openai_accounts openai_account
+			on openai_account.name = profile.openai_account_name
+		left join matter_codex_github_accounts github_account
+			on github_account.name = profile.github_account_name
+		where old.id in (openai_account.credential_id, github_account.credential_id)
+	loop
+		if tg_op = 'DELETE' then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values ('profile_dependency', profile_dependency.profile_name || ':credential:' || old.id::text, 'credential deleted')
+			on conflict do nothing;
+			continue;
+		end if;
+		if tg_op = 'UPDATE'
+			and lower(trim(new.status)) = 'disabled'
+			and lower(trim(old.status)) <> 'disabled'
+			and (to_jsonb(old) - 'status' - 'updated_at') = (to_jsonb(new) - 'status' - 'updated_at')
+		then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values ('profile_dependency', profile_dependency.profile_name || ':credential:' || old.id::text, 'credential disabled')
+			on conflict do nothing;
+			continue;
+		end if;
+		if old is distinct from new then
+			perform matter_codex_cluster_admin_record_denied('agent_profile', old.id::text, 'credential.profile_dependency.mutation');
 			return null;
 		end if;
 	end loop;
@@ -1339,16 +1732,24 @@ as $$
 declare
 	binding record;
 begin
-	for binding in select role_id, chat_id from matter_codex_cluster_admin_bindings where chat_id = old.id loop
+		for binding in
+			select frozen.role_id, frozen.chat_id, frozen.prompt_state
+			from matter_codex_cluster_admin_bindings frozen
+			where frozen.chat_id = old.id
+		loop
 		if tg_op = 'DELETE' then
 			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
 			values ('chat_binding', binding.role_id::text || ':' || binding.chat_id::text, 'chat deleted')
 			on conflict do nothing;
 			continue;
 		end if;
-		if old.id is distinct from new.id
-			or old.project_id is distinct from new.project_id
-			or old.mattermost_channel_id is distinct from new.mattermost_channel_id
+			if old.id is distinct from new.id
+				or old.project_id is distinct from new.project_id
+				or old.mattermost_channel_id is distinct from new.mattermost_channel_id
+				or binding.prompt_state is distinct from (
+					select matter_codex_cluster_admin_chat_prompt_state(project, new)
+					from matter_codex_projects project where project.id = new.project_id
+				)
 		then
 			perform matter_codex_cluster_admin_record_denied('chat_binding', binding.role_id::text || ':' || binding.chat_id::text, 'chat.channel.mutation');
 			return null;
@@ -1470,6 +1871,10 @@ create trigger matter_codex_cluster_admin_profile_guard
 before insert or update or delete on matter_codex_agent_profiles
 for each row execute function matter_codex_guard_cluster_admin_profile();
 
+create trigger matter_codex_cluster_admin_prompt_template_guard
+before insert or update or delete on matter_codex_agent_prompt_templates
+for each row execute function matter_codex_guard_cluster_admin_prompt_template();
+
 create trigger matter_codex_cluster_admin_role_guard
 before insert or update or delete on matter_codex_agent_roles
 for each row execute function matter_codex_guard_cluster_admin_role();
@@ -1526,25 +1931,161 @@ create trigger matter_codex_cluster_admin_session_guard
 before insert or update or delete on matter_codex_agent_sessions
 for each row execute function matter_codex_guard_cluster_admin_session();
 
-create or replace function matter_codex_require_cluster_admin_freeze_writer()
-returns boolean
-language sql
-stable
-as $$
-	select current_setting('matter_codex.cluster_admin_freeze_writer', true) = 'v23'
+-- Каждая freeze-функция разрешает принадлежащие сервису объекты через migration schema раньше
+-- pg_temp. Runtime-роль не может создавать объекты в этой схеме или временные отношения.
+-- +goose StatementBegin
+do $$
+declare
+	function_row record;
+	trusted_schema text := current_schema();
+begin
+	for function_row in
+		select function_oid.proname as function_name,
+			pg_get_function_identity_arguments(function_oid.oid) as function_arguments
+		from pg_proc function_oid
+		join pg_namespace namespace on namespace.oid = function_oid.pronamespace
+		where namespace.nspname = trusted_schema
+			and (
+				function_oid.proname like 'matter_codex_cluster_admin%'
+				or function_oid.proname like 'matter_codex_guard_cluster_admin%'
+			)
+	loop
+		execute format(
+			'alter function %I.%I(%s) set search_path = pg_catalog, %I, pg_temp',
+			trusted_schema,
+			function_row.function_name,
+			function_row.function_arguments,
+			trusted_schema
+		);
+	end loop;
+end
 $$;
+-- +goose StatementEnd
 
-alter table matter_codex_agent_profiles enable row level security;
-alter table matter_codex_agent_profiles force row level security;
-create policy matter_codex_agent_profiles_freeze_writer on matter_codex_agent_profiles
-	using (matter_codex_require_cluster_admin_freeze_writer())
-	with check (matter_codex_require_cluster_admin_freeze_writer());
+-- Runtime-роль является явным входом миграции, а не управляемым вызывающей стороной маркером
+-- авторизации. Старые тестовые пути без этого входа сохраняют только доступ владельца схемы;
+-- промышленное приложение отказывается использовать их как runtime-соединение.
+-- +goose StatementBegin
+do $$
+declare
+	runtime_role_name text := nullif(trim(current_setting('matter_codex.runtime_role', true)), '');
+	runtime_role_oid oid;
+	trusted_schema text := current_schema();
+	service_database text := current_database();
+	relation_row record;
+	function_row record;
+begin
+	if runtime_role_name is null then
+		return;
+	end if;
 
-alter table matter_codex_agent_roles enable row level security;
-alter table matter_codex_agent_roles force row level security;
-create policy matter_codex_agent_roles_freeze_writer on matter_codex_agent_roles
-	using (matter_codex_require_cluster_admin_freeze_writer())
-	with check (matter_codex_require_cluster_admin_freeze_writer());
+	select role.oid into runtime_role_oid
+	from pg_roles role
+	where role.rolname = runtime_role_name
+		and not role.rolsuper
+		and not role.rolbypassrls
+		and not role.rolcreaterole
+		and not role.rolcreatedb
+		and not role.rolreplication;
+	if runtime_role_oid is null or runtime_role_name = current_user then
+		raise exception 'runtime database role must exist, be unprivileged and differ from the migration owner'
+			using errcode = 'insufficient_privilege';
+	end if;
+	if pg_has_role(runtime_role_name, current_user, 'member') then
+		raise exception 'runtime database role must not inherit or assume the migration owner'
+			using errcode = 'insufficient_privilege';
+	end if;
+	if exists (
+		select 1 from pg_namespace namespace
+		where namespace.nspname = trusted_schema and namespace.nspowner = runtime_role_oid
+	) or exists (
+		select 1
+		from pg_class relation
+		join pg_namespace namespace on namespace.oid = relation.relnamespace
+		where namespace.nspname = trusted_schema
+			and relation.relname like 'matter_codex_%'
+			and relation.relowner = runtime_role_oid
+	) then
+		raise exception 'runtime database role must not own the service schema or relations'
+			using errcode = 'insufficient_privilege';
+	end if;
+
+	execute format('revoke temporary on database %I from public', service_database);
+	execute format('grant temporary on database %I to %I', service_database, current_user);
+	execute format('revoke create on schema %I from public', trusted_schema);
+	execute format('revoke all on schema %I from %I', trusted_schema, runtime_role_name);
+	execute format('grant usage on schema %I to %I', trusted_schema, runtime_role_name);
+
+	for relation_row in
+		select relation.relkind, relation.relname
+		from pg_class relation
+		join pg_namespace namespace on namespace.oid = relation.relnamespace
+		where namespace.nspname = trusted_schema
+			and relation.relname like 'matter_codex_%'
+	loop
+		if relation_row.relkind in ('r', 'p') then
+			if relation_row.relname in (
+				'matter_codex_cluster_admin_subjects',
+				'matter_codex_cluster_admin_bindings',
+				'matter_codex_cluster_admin_session_bindings',
+				'matter_codex_cluster_admin_bot_bindings',
+				'matter_codex_cluster_admin_runtime_variable_bindings',
+				'matter_codex_cluster_admin_prompt_templates',
+				'matter_codex_cluster_admin_dependencies'
+			) then
+				execute format(
+					'grant select on table %I.%I to %I',
+					trusted_schema, relation_row.relname, runtime_role_name
+				);
+			elsif relation_row.relname in (
+				'matter_codex_cluster_admin_revocations',
+				'matter_codex_audit_events'
+			) then
+				execute format(
+					'grant select, insert on table %I.%I to %I',
+					trusted_schema, relation_row.relname, runtime_role_name
+				);
+			else
+				execute format(
+					'grant select, insert, update, delete on table %I.%I to %I',
+					trusted_schema, relation_row.relname, runtime_role_name
+				);
+			end if;
+		elsif relation_row.relkind = 'S' then
+			execute format(
+				'grant usage, select, update on sequence %I.%I to %I',
+				trusted_schema, relation_row.relname, runtime_role_name
+			);
+		end if;
+	end loop;
+
+	for function_row in
+		select routine.proname as function_name,
+			pg_get_function_identity_arguments(routine.oid) as function_arguments
+		from pg_proc routine
+		join pg_namespace namespace on namespace.oid = routine.pronamespace
+		where namespace.nspname = trusted_schema
+			and routine.proname like 'matter_codex_%'
+	loop
+		execute format(
+			'revoke all on function %I.%I(%s) from public',
+			trusted_schema, function_row.function_name, function_row.function_arguments
+		);
+		execute format(
+			'grant execute on function %I.%I(%s) to %I',
+			trusted_schema, function_row.function_name, function_row.function_arguments, runtime_role_name
+		);
+	end loop;
+end
+$$;
+-- +goose StatementEnd
 
 -- +goose Down
-select 1;
+-- +goose StatementBegin
+do $$
+begin
+	raise exception 'migration 23 is forward-only; schema version remains 23'
+		using errcode = 'feature_not_supported';
+end
+$$;
+-- +goose StatementEnd

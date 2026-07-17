@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -25,10 +26,9 @@ import (
 
 const serviceName = "matter-codex-bot-service"
 
-const clusterAdminFreezeWriterVersion = "v23"
-
 func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
-	storage, closeStorage, err := openStorage(ctx, cfg, logger)
+	runtimeRunner, runtimeConfigured := openRuntimeRunner(cfg, logger)
+	storage, closeStorage, err := openStorage(ctx, cfg, logger, runtimeRunner)
 	if err != nil {
 		return err
 	}
@@ -38,7 +38,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("open localizer: %w", err)
 	}
-	runtimeRunner, runtimeConfigured := openRuntimeRunner(cfg, logger)
 	statusSvc := statusservice.NewStatusService(statusservice.Config{
 		Localizer:            localizer,
 		ServiceName:          serviceName,
@@ -391,7 +390,7 @@ func newPrometheusRegistry() *prometheus.Registry {
 	return registry
 }
 
-func openStorage(ctx context.Context, cfg Config, logger *slog.Logger) (*adminpostgres.Repository, func(), error) {
+func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRunner runtimerepo.Runner) (*adminpostgres.Repository, func(), error) {
 	if !cfg.DatabaseConfigured() {
 		logger.Warn("storage disabled: MATTERCODEX_DATABASE_DSN is not configured")
 		return nil, func() {}, nil
@@ -400,7 +399,20 @@ func openStorage(ctx context.Context, cfg Config, logger *slog.Logger) (*adminpo
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse storage pool config: %w", err)
 	}
-	poolConfig.ConnConfig.RuntimeParams["matter_codex.cluster_admin_freeze_writer"] = clusterAdminFreezeWriterVersion
+	if cfg.StorageMigrations {
+		if err := adminpostgres.ProvisionRuntimeDatabaseRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User, poolConfig.ConnConfig.Password); err != nil {
+			return nil, nil, fmt.Errorf("provision runtime database role: %w", err)
+		}
+		if err := migrations.RunTo(ctx, cfg.MigrationsDatabaseDSN, 22); err != nil {
+			return nil, nil, fmt.Errorf("run storage migrations through integrity staging schema: %w", err)
+		}
+		if err := prepareClusterAdminSecretIntegrity(ctx, cfg.MigrationsDatabaseDSN, runtimeRunner); err != nil {
+			return nil, nil, fmt.Errorf("prepare cluster-admin secret integrity: %w", err)
+		}
+		if err := migrations.RunForRuntimeRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User); err != nil {
+			return nil, nil, fmt.Errorf("run storage migrations: %w", err)
+		}
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open storage pool: %w", err)
@@ -412,11 +424,9 @@ func openStorage(ctx context.Context, cfg Config, logger *slog.Logger) (*adminpo
 		closePool()
 		return nil, nil, fmt.Errorf("ping storage: %w", err)
 	}
-	if cfg.StorageMigrations {
-		if err := migrations.Run(ctx, cfg.DatabaseDSN); err != nil {
-			closePool()
-			return nil, nil, fmt.Errorf("run storage migrations: %w", err)
-		}
+	if err := adminpostgres.ValidateRuntimeDatabaseRole(ctx, pool); err != nil {
+		closePool()
+		return nil, nil, fmt.Errorf("validate runtime database role: %w", err)
 	}
 	repo := adminpostgres.NewRepository(pool)
 	seeded, err := statusservice.SeedDefaultAgentPromptTemplates(ctx, repo)
@@ -428,4 +438,120 @@ func openStorage(ctx context.Context, cfg Config, logger *slog.Logger) (*adminpo
 		logger.Info("seeded default agent prompt templates", "count", seeded)
 	}
 	return repo, closePool, nil
+}
+
+type secretIntegrityStagingRow struct {
+	tableName  string
+	id         int64
+	secretName string
+	secretKey  string
+}
+
+func prepareClusterAdminSecretIntegrity(ctx context.Context, dsn string, runtimeRunner runtimerepo.Runner) error {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return fmt.Errorf("open integrity staging database: %w", err)
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, `
+select 'matter_codex_credentials', credential.id, credential.secret_ref,
+	case when account_kind = 'openai' then 'auth.json' else 'github-token' end
+from matter_codex_credentials credential
+join (
+	select distinct account.credential_id, 'openai' as account_kind
+	from matter_codex_openai_accounts account
+	where exists (
+		select 1 from matter_codex_agent_profiles profile
+		where lower(trim(profile.kubernetes_access)) = 'cluster-admin'
+			and profile.openai_account_name = account.name
+	) or exists (
+		select 1 from matter_codex_agent_roles role
+		where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+			and role.openai_account_name = account.name
+	)
+	union
+	select distinct account.credential_id, 'github'
+	from matter_codex_github_accounts account
+	where exists (
+		select 1 from matter_codex_agent_profiles profile
+		where lower(trim(profile.kubernetes_access)) = 'cluster-admin'
+			and profile.github_account_name = account.name
+	) or exists (
+		select 1
+		from matter_codex_agent_roles role
+		join matter_codex_projects project on project.id = role.project_id
+		where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+			and account.name in (role.github_account_name, project.github_account_name)
+	) or exists (
+		select 1
+		from matter_codex_agent_roles role
+		join matter_codex_project_repositories project_repository
+			on project_repository.project_id = role.project_id
+		join matter_codex_repositories repository
+			on repository.id = project_repository.repository_id
+		where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+			and account.name = repository.github_account_name
+	) or exists (
+		select 1
+		from matter_codex_agent_roles role
+		join matter_codex_chat_participants participant
+			on participant.role_id = role.id and participant.enabled
+		join matter_codex_chat_repositories chat_repository
+			on chat_repository.chat_id = participant.chat_id
+		join matter_codex_repositories repository
+			on repository.id = chat_repository.repository_id
+		where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+			and account.name = repository.github_account_name
+	)
+) referenced on referenced.credential_id = credential.id
+where trim(credential.secret_ref) <> ''
+union all
+select 'matter_codex_project_runtime_variables', variable.id, variable.secret_ref, variable.secret_key
+from matter_codex_project_runtime_variables variable
+join matter_codex_agent_role_runtime_variables binding on binding.variable_id = variable.id
+join matter_codex_agent_roles role on role.id = binding.role_id
+where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+union all
+select 'matter_codex_mattermost_bot_identities', binding.id, binding.token_secret_ref, 'token'
+from matter_codex_mattermost_bot_identities binding
+join matter_codex_agent_roles role on role.id = binding.role_id
+where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+union all
+select 'matter_codex_agent_sessions', session.id, session.token_secret_ref, 'token'
+from matter_codex_agent_sessions session
+join matter_codex_agent_roles role on role.id = session.role_id
+where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+	and trim(session.token_secret_ref) <> ''`)
+	if err != nil {
+		return fmt.Errorf("list cluster-admin secret bindings: %w", err)
+	}
+	defer rows.Close()
+	var bindings []secretIntegrityStagingRow
+	for rows.Next() {
+		var item secretIntegrityStagingRow
+		if err := rows.Scan(&item.tableName, &item.id, &item.secretName, &item.secretKey); err != nil {
+			return fmt.Errorf("scan cluster-admin secret binding: %w", err)
+		}
+		bindings = append(bindings, item)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read cluster-admin secret bindings: %w", err)
+	}
+	if len(bindings) > 0 && runtimeRunner == nil {
+		return fmt.Errorf("Kubernetes runtime is required to stage frozen secret integrity")
+	}
+	for _, binding := range bindings {
+		integrity, err := runtimeRunner.InspectSecretIntegrity(ctx, runtimerepo.SecretIntegrityInput{
+			SecretName: binding.secretName,
+			SecretKey:  binding.secretKey,
+		})
+		if err != nil {
+			return fmt.Errorf("inspect frozen secret binding %s/%d: %w", binding.tableName, binding.id, err)
+		}
+		statement := fmt.Sprintf(`update %s set secret_content_sha256 = $1, secret_resource_uid = $2, secret_resource_version = $3 where id = $4`, binding.tableName)
+		if _, err := db.ExecContext(ctx, statement, integrity.ContentSHA256, integrity.UID, integrity.ResourceVersion, binding.id); err != nil {
+			return fmt.Errorf("store frozen secret metadata for %s/%d: %w", binding.tableName, binding.id, err)
+		}
+	}
+	return nil
 }

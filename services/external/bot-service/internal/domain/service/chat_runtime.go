@@ -421,7 +421,11 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if !ok {
 		return AgentTurnQueued{}, fmt.Errorf("OpenAI account is required for role %s", request.Role.Name)
 	}
-	if err := svc.ensureCodexAuthSecretReady(ctx, openAIAccount, request.Role); err != nil {
+	if err := svc.withClusterAdminRuntimeGuard(
+		ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID,
+		sessionKey, "agent_auth.ensure.side_effect",
+		func() error { return svc.ensureCodexAuthSecretReady(ctx, openAIAccount, request.Role) },
+	); err != nil {
 		return AgentTurnQueued{}, err
 	}
 	gitHubAccount, gitHubOK := svc.gitHubAccount(ctx, request.Project, request.Role, firstRepository(request.Repositories))
@@ -1122,6 +1126,9 @@ func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, accou
 		})
 		return nil
 	}
+	if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
 
 	status, completed, authErr := svc.startCodexReauthSession(ctx, account)
 	if authErr != nil {
@@ -1290,10 +1297,43 @@ func (svc *ChatRunService) withClusterAdminRuntimeGuard(ctx context.Context, rol
 	if !ok {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
+	guardedSideEffect := func() error {
+		if err := svc.verifyClusterAdminSecretIntegrity(ctx, role.ID, sessionKey); err != nil {
+			return err
+		}
+		return sideEffect()
+	}
 	return repository.WithExistingClusterAdminRuntimeGuard(ctx, securityrepo.ClusterAdminBindingInput{
 		RoleID: role.ID, ProjectID: role.ProjectID, ChatID: chatID, ChatSlug: chatSlug,
 		MattermostChannelID: channelID, SessionKey: sessionKey, Operation: operation, ActorUser: "runtime",
-	}, sideEffect)
+	}, guardedSideEffect)
+}
+
+func (svc *ChatRunService) verifyClusterAdminSecretIntegrity(ctx context.Context, roleID int64, sessionKey string) error {
+	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminSecretIntegrityRepository)
+	if !ok || svc.cfg.RuntimeRunner == nil {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	bindings, err := repository.ListClusterAdminSecretIntegrity(ctx, roleID, sessionKey)
+	if err != nil {
+		return err
+	}
+	if len(bindings) == 0 {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	for _, binding := range bindings {
+		if strings.TrimSpace(binding.ContentSHA256) == "" || strings.TrimSpace(binding.ResourceUID) == "" || strings.TrimSpace(binding.ResourceVersion) == "" {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		actual, err := svc.cfg.RuntimeRunner.InspectSecretIntegrity(ctx, runtimerepo.SecretIntegrityInput{
+			SecretName: binding.SecretRef,
+			SecretKey:  binding.SecretKey,
+		})
+		if err != nil || actual.ContentSHA256 != binding.ContentSHA256 || actual.UID != binding.ResourceUID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	return nil
 }
 
 func (svc *ChatRunService) authorizeClusterAdminRole(ctx context.Context, role entity.AgentRole, chatID int64, chatSlug string, channelID string, sessionKey string, operation string) error {

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 )
 
@@ -33,6 +34,20 @@ var (
 	ErrInteractionAdmissionUnknown  = errors.New("interaction callback admission indeterminate")
 	ErrInteractionPreparation       = errors.New("interaction callback preparation failed")
 )
+
+type InteractionValidationError struct {
+	StatusCode int
+	ErrorText  string
+	Fields     map[string]string
+}
+
+func (err *InteractionValidationError) Error() string {
+	return "interaction dialog validation failed"
+}
+
+func NewInteractionValidationError(statusCode int, errorText string, fields map[string]string) error {
+	return &InteractionValidationError{StatusCode: statusCode, ErrorText: errorText, Fields: fields}
+}
 
 type AuthenticatedActor struct {
 	UserID   string
@@ -334,7 +349,7 @@ func (svc *InteractionSecurityService) AuthenticateAction(ctx context.Context, c
 		ChannelID:    strings.TrimSpace(callback.ChannelID),
 		PostBinding:  postBinding,
 		ActorUserID:  strings.TrimSpace(callback.UserID),
-	}, contextCopy, "mattermost.callback.action", callbackPostID, nil)
+	}, contextCopy, "mattermost.callback.action", callbackPostID, nil, nil)
 	if err != nil {
 		return AuthenticatedInteraction{}, err
 	}
@@ -343,14 +358,28 @@ func (svc *InteractionSecurityService) AuthenticateAction(ctx context.Context, c
 }
 
 func (svc *InteractionSecurityService) AuthenticateDialog(ctx context.Context, callback DialogCallback) (AuthenticatedInteraction, string, error) {
-	return svc.authenticateDialog(ctx, callback, nil)
+	return svc.authenticateDialog(ctx, callback, nil, nil)
 }
 
 func (svc *InteractionSecurityService) AuthenticateDialogPrepared(ctx context.Context, callback DialogCallback, beforeConsume func(AuthenticatedInteraction) error) (AuthenticatedInteraction, string, error) {
-	return svc.authenticateDialog(ctx, callback, beforeConsume)
+	return svc.authenticateDialog(ctx, callback, beforeConsume, nil)
 }
 
-func (svc *InteractionSecurityService) authenticateDialog(ctx context.Context, callback DialogCallback, beforeConsume func(AuthenticatedInteraction) error) (AuthenticatedInteraction, string, error) {
+func (svc *InteractionSecurityService) AuthenticateDialogPreparedAtomic(
+	ctx context.Context,
+	callback DialogCallback,
+	beforeConsume func(AuthenticatedInteraction) error,
+	mutation func(AuthenticatedInteraction, string, adminrepo.Repository) error,
+) (AuthenticatedInteraction, string, error) {
+	return svc.authenticateDialog(ctx, callback, beforeConsume, mutation)
+}
+
+func (svc *InteractionSecurityService) authenticateDialog(
+	ctx context.Context,
+	callback DialogCallback,
+	beforeConsume func(AuthenticatedInteraction) error,
+	mutation func(AuthenticatedInteraction, string, adminrepo.Repository) error,
+) (AuthenticatedInteraction, string, error) {
 	state, err := interactionState(callback.State)
 	if err != nil {
 		return AuthenticatedInteraction{}, "", ErrInteractionAuthentication
@@ -361,6 +390,13 @@ func (svc *InteractionSecurityService) authenticateDialog(ctx context.Context, c
 	if token == "" || postBinding == "" {
 		return AuthenticatedInteraction{}, "", ErrInteractionCapabilityMissing
 	}
+	cleanStateMap := cloneInteractionContext(state)
+	delete(cleanStateMap, interactionCapabilityPostBindingKey)
+	cleanStateJSON, err := json.Marshal(cleanStateMap)
+	if err != nil {
+		return AuthenticatedInteraction{}, "", ErrInteractionAuthentication
+	}
+	cleanState := string(cleanStateJSON)
 	contextCopy := map[string]any{"callback_id": strings.TrimSpace(callback.CallbackID), "state": state}
 	resourceType, resourceID := interactionResource(state)
 	interaction, err := svc.consumeAndAdmit(ctx, token, securityrepo.ConsumeCapabilityInput{
@@ -371,16 +407,16 @@ func (svc *InteractionSecurityService) authenticateDialog(ctx context.Context, c
 		ChannelID:    strings.TrimSpace(callback.ChannelID),
 		PostBinding:  postBinding,
 		ActorUserID:  strings.TrimSpace(callback.UserID),
-	}, contextCopy, "mattermost.callback.dialog", postBinding, beforeConsume)
+	}, contextCopy, "mattermost.callback.dialog", postBinding, beforeConsume, func(interaction AuthenticatedInteraction, store adminrepo.Repository) error {
+		if mutation == nil {
+			return nil
+		}
+		return mutation(interaction, cleanState, store)
+	})
 	if err != nil {
 		return AuthenticatedInteraction{}, "", err
 	}
-	delete(state, interactionCapabilityPostBindingKey)
-	cleanState, err := json.Marshal(state)
-	if err != nil {
-		return AuthenticatedInteraction{}, "", ErrInteractionAuthentication
-	}
-	return interaction, string(cleanState), nil
+	return interaction, cleanState, nil
 }
 
 func (svc *InteractionSecurityService) issue(ctx context.Context, input securityrepo.IssueCapabilityInput, safeContext map[string]any) (string, error) {
@@ -407,7 +443,7 @@ func (svc *InteractionSecurityService) issue(ctx context.Context, input security
 	return token, nil
 }
 
-func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, token string, input securityrepo.ConsumeCapabilityInput, safeContext map[string]any, actionKey string, callbackPostID string, beforeConsume func(AuthenticatedInteraction) error) (AuthenticatedInteraction, error) {
+func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, token string, input securityrepo.ConsumeCapabilityInput, safeContext map[string]any, actionKey string, callbackPostID string, beforeConsume func(AuthenticatedInteraction) error, mutation func(AuthenticatedInteraction, adminrepo.Repository) error) (AuthenticatedInteraction, error) {
 	if svc == nil || svc.repository == nil {
 		return AuthenticatedInteraction{}, ErrInteractionAuthentication
 	}
@@ -453,6 +489,20 @@ func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, toke
 			if err := beforeConsume(interaction); err != nil {
 				return AuthenticatedInteraction{}, fmt.Errorf("%w: %w", ErrInteractionPreparation, err)
 			}
+		}
+		if mutation != nil {
+			atomicRepository, ok := svc.repository.(securityrepo.AtomicDialogRepository)
+			if !ok {
+				return AuthenticatedInteraction{}, ErrInteractionAuthentication
+			}
+			consumed, err := atomicRepository.ConsumeInteractionCapabilityWithMutation(ctx, input, func(store adminrepo.Repository) error {
+				return mutation(interaction, store)
+			})
+			if err != nil {
+				return AuthenticatedInteraction{}, err
+			}
+			interaction.Actor = AuthenticatedActor{UserID: consumed.ActorUserID, UserName: consumed.ActorUserName}
+			return interaction, nil
 		}
 		consumed, err := svc.repository.ConsumeInteractionCapability(ctx, input)
 		if err != nil {

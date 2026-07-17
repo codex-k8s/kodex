@@ -2,6 +2,8 @@ package kubernetes
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"strings"
@@ -19,6 +21,51 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
+
+func TestInspectSecretIntegrityDetectsSameRefMutationWithoutReturningValue(t *testing.T) {
+	const secretValue = "synthetic-secret-content"
+	client := fake.NewSimpleClientset(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "runtime-secret", Namespace: "mattermost", UID: "uid-original", ResourceVersion: "7",
+		},
+		Data: map[string][]byte{"token": []byte(secretValue)},
+	})
+	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost", WorkspaceStorageSize: "1Gi"})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	integrity, err := runner.InspectSecretIntegrity(context.Background(), runtimerepo.SecretIntegrityInput{
+		SecretName: "runtime-secret", SecretKey: "token",
+	})
+	if err != nil {
+		t.Fatalf("InspectSecretIntegrity() error = %v", err)
+	}
+	digest := sha256.Sum256([]byte(secretValue))
+	if integrity.ContentSHA256 != hex.EncodeToString(digest[:]) || integrity.UID != "uid-original" || integrity.ResourceVersion != "7" {
+		t.Fatalf("integrity = %#v", integrity)
+	}
+	if strings.Contains(fmt.Sprintf("%#v", integrity), secretValue) {
+		t.Fatal("Secret raw value leaked from integrity inspection")
+	}
+	secret, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), "runtime-secret", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get secret error = %v", err)
+	}
+	secret.Data["token"] = []byte("different-synthetic-content")
+	secret.ResourceVersion = "8"
+	if _, err := client.CoreV1().Secrets("mattermost").Update(context.Background(), secret, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("Update secret error = %v", err)
+	}
+	mutated, err := runner.InspectSecretIntegrity(context.Background(), runtimerepo.SecretIntegrityInput{
+		SecretName: "runtime-secret", SecretKey: "token",
+	})
+	if err != nil {
+		t.Fatalf("InspectSecretIntegrity() after mutation error = %v", err)
+	}
+	if mutated.ContentSHA256 == integrity.ContentSHA256 || mutated.UID != integrity.UID {
+		t.Fatalf("same-ref mutation not represented safely: before=%#v after=%#v", integrity, mutated)
+	}
+}
 
 func TestStartSmokeRunCreatesPVCAndJob(t *testing.T) {
 	client := fake.NewSimpleClientset()

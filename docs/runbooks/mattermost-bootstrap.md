@@ -85,7 +85,7 @@ bash scripts/remote/install-foundation.sh --env-file .env --apply
 bash scripts/remote/install-mattermost.sh --env-file .env --apply --wait
 ```
 
-Если secret `${MATTERCODEX_POSTGRES_SECRET}` уже существует, `install-foundation.sh --apply` не ротирует пароль.
+Если Secret `${MATTERCODEX_POSTGRES_SECRET}` уже существует, `install-foundation.sh --apply` не ротирует owner password. При полностью отсутствующей runtime-тройке он добавляет отдельные runtime credentials; частичная тройка считается ошибкой конфигурации и не исправляется догадкой.
 
 ## Read-only smoke
 
@@ -119,3 +119,4 @@ bash scripts/remote/smoke-mattermost.sh --env-file .env --check-url
 - Bootstrap secret создается через Kubernetes API на целевом сервере без вывода значений.
 - OAuth2 proxy secret синхронизируется в Kubernetes namespace Mattermost без вывода значений.
 - `MATTERCODEX_POSTGRES_PASSWORD` можно задать заранее, но для MVP допустима генерация при первом `--apply`.
+- `MATTERCODEX_POSTGRES_RUNTIME_USER` и `MATTERCODEX_POSTGRES_RUNTIME_PASSWORD` задают отдельный login `bot-service`; при отсутствии password foundation генерирует его без вывода. Один PostgreSQL Secret содержит owner DSN Mattermost/миграций и отдельный runtime DSN, но Deployment передаёт приложению их разными переменными и не допускает замену runtime DSN на owner DSN.

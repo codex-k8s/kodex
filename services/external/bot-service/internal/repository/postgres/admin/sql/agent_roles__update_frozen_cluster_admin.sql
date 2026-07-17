@@ -30,56 +30,18 @@ where role.project_id = $1
 		where revocation.resource_type = 'agent_role'
 			and revocation.resource_key = role.id::text
 	)
-	and (
-		frozen.privilege_state = jsonb_build_object(
-			'project_id', $1::bigint,
-			'name', $2::text,
-			'role_type', $3::text,
-			'description', $4::text,
-			'prompt_template', nullif($5::text, ''),
-			'prompt_mode', $6::text,
-			'github_account_name', $7::text,
-			'project_github_account_name', project.github_account_name,
-			'project_slug', project.slug,
-			'project_mattermost_team_id', project.mattermost_team_id,
-			'project_github_owner', project.github_owner,
-			'project_github_owner_type', project.github_owner_type,
-			'openai_account_name', $8::text,
-			'kubernetes_access', $9::text,
-			'sandbox_mode', $10::text,
-			'config_overlay', $11::text,
-			'advanced_settings', coalesce(nullif($12::text, '')::jsonb, '{}'::jsonb),
-			'enabled', $13::boolean,
-			'bot_identity', $14::text
-		)
-		or (
-			role.enabled
-			and not $13::boolean
-			and (frozen.privilege_state - 'enabled') = (
-				jsonb_build_object(
-					'project_id', $1::bigint,
-					'name', $2::text,
-					'role_type', $3::text,
-					'description', $4::text,
-					'prompt_template', nullif($5::text, ''),
-					'prompt_mode', $6::text,
-					'github_account_name', $7::text,
-					'project_github_account_name', project.github_account_name,
-					'project_slug', project.slug,
-					'project_mattermost_team_id', project.mattermost_team_id,
-					'project_github_owner', project.github_owner,
-					'project_github_owner_type', project.github_owner_type,
-					'openai_account_name', $8::text,
-					'kubernetes_access', $9::text,
-					'sandbox_mode', $10::text,
-					'config_overlay', $11::text,
-					'advanced_settings', coalesce(nullif($12::text, '')::jsonb, '{}'::jsonb),
-					'enabled', $13::boolean,
-					'bot_identity', $14::text
-				) - 'enabled'
-			)
-		)
-	)
+	and role.role_type = $3
+	and role.description = $4
+	and role.prompt_template is not distinct from nullif($5::text, '')
+	and role.prompt_mode = $6
+	and role.github_account_name = $7
+	and role.openai_account_name = $8
+	and role.kubernetes_access = $9
+	and role.sandbox_mode = $10
+	and role.config_overlay = $11
+	and role.advanced_settings = coalesce(nullif($12::text, '')::jsonb, '{}'::jsonb)
+	and ($13::boolean = role.enabled or (role.enabled and not $13::boolean))
+	and role.bot_identity = $14
 returning role.id, role.project_id, role.name, role.role_type, role.description,
 	coalesce(role.prompt_template, ''), role.prompt_mode, role.github_account_name,
 	role.openai_account_name, role.kubernetes_access, role.sandbox_mode,

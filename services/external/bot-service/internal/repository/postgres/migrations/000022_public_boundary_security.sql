@@ -1,4 +1,24 @@
 -- +goose Up
+alter table matter_codex_credentials
+	add column if not exists secret_content_sha256 text not null default '',
+	add column if not exists secret_resource_uid text not null default '',
+	add column if not exists secret_resource_version text not null default '';
+
+alter table matter_codex_project_runtime_variables
+	add column if not exists secret_content_sha256 text not null default '',
+	add column if not exists secret_resource_uid text not null default '',
+	add column if not exists secret_resource_version text not null default '';
+
+alter table matter_codex_mattermost_bot_identities
+	add column if not exists secret_content_sha256 text not null default '',
+	add column if not exists secret_resource_uid text not null default '',
+	add column if not exists secret_resource_version text not null default '';
+
+alter table matter_codex_agent_sessions
+	add column if not exists secret_content_sha256 text not null default '',
+	add column if not exists secret_resource_uid text not null default '',
+	add column if not exists secret_resource_version text not null default '';
+
 create table if not exists matter_codex_interaction_capabilities (
 	token_hash bytea primary key,
 	kind text not null,

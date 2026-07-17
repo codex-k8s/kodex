@@ -14,6 +14,7 @@ func TestConfigDefaults(t *testing.T) {
 	t.Setenv("MATTERCODEX_GITHUB_TOKEN", "")
 	t.Setenv("MATTERCODEX_GITHUB_WEBHOOK_SECRET", "")
 	t.Setenv("MATTERCODEX_DATABASE_DSN", "")
+	t.Setenv("MATTERCODEX_MIGRATIONS_DATABASE_DSN", "")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -84,6 +85,48 @@ func TestConfigDefaults(t *testing.T) {
 	}
 	if !cfg.InteractionCleanupEnabled || cfg.InteractionCleanupInterval != 30*time.Minute || cfg.InteractionCleanupRetention != 168*time.Hour || cfg.InteractionCleanupBatch != 500 {
 		t.Fatalf("interaction cleanup defaults = enabled:%t interval:%s retention:%s batch:%d", cfg.InteractionCleanupEnabled, cfg.InteractionCleanupInterval, cfg.InteractionCleanupRetention, cfg.InteractionCleanupBatch)
+	}
+}
+
+func TestConfigValidationDatabaseRoleBoundary(t *testing.T) {
+	tests := []struct {
+		name       string
+		runtimeDSN string
+		ownerDSN   string
+		wantError  bool
+	}{
+		{
+			name:       "separate roles on one endpoint",
+			runtimeDSN: "postgres://runtime:runtime-password@database:5432/mattercodex?sslmode=disable",
+			ownerDSN:   "postgres://owner:owner-password@database:5432/mattercodex?sslmode=disable",
+		},
+		{
+			name:       "missing migration credentials",
+			runtimeDSN: "postgres://runtime:runtime-password@database:5432/mattercodex?sslmode=disable",
+			wantError:  true,
+		},
+		{
+			name:       "same role",
+			runtimeDSN: "postgres://runtime:runtime-password@database:5432/mattercodex?sslmode=disable",
+			ownerDSN:   "postgres://runtime:owner-password@database:5432/mattercodex?sslmode=disable",
+			wantError:  true,
+		},
+		{
+			name:       "different endpoint",
+			runtimeDSN: "postgres://runtime:runtime-password@database:5432/mattercodex?sslmode=disable",
+			ownerDSN:   "postgres://owner:owner-password@other-database:5432/mattercodex?sslmode=disable",
+			wantError:  true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("MATTERCODEX_DATABASE_DSN", test.runtimeDSN)
+			t.Setenv("MATTERCODEX_MIGRATIONS_DATABASE_DSN", test.ownerDSN)
+			_, err := LoadConfig()
+			if (err != nil) != test.wantError {
+				t.Fatalf("LoadConfig() error = %v, wantError=%t", err, test.wantError)
+			}
+		})
 	}
 }
 

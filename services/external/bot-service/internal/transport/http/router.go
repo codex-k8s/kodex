@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
@@ -427,7 +428,7 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if callbackID != dialogCallbackResult {
-		validation := router.slashService.PrevalidateDialogSubmission(statusservice.DialogSubmissionCommand{
+		validation := router.slashService.PrevalidateDialogSubmissionReadOnly(r.Context(), statusservice.DialogSubmissionCommand{
 			CallbackID: callbackID,
 			State:      strings.TrimSpace(request.State),
 			UserID:     strings.TrimSpace(request.UserId),
@@ -445,19 +446,58 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	interaction, cleanState, err := router.interactionSecurity.AuthenticateDialogPrepared(r.Context(), statusservice.DialogCallback{
+	callback := statusservice.DialogCallback{
 		CallbackID: callbackID,
 		State:      request.State,
 		UserID:     strings.TrimSpace(request.UserId),
 		ChannelID:  strings.TrimSpace(request.ChannelId),
-	}, func(statusservice.AuthenticatedInteraction) error {
+	}
+	prepare := func(statusservice.AuthenticatedInteraction) error {
 		if strings.TrimSpace(request.URL) == "" {
 			return nil
 		}
 		_, prepareErr := router.mattermostResponses.Prepare(r.Context(), request.URL)
 		return prepareErr
-	})
+	}
+	var (
+		interaction statusservice.AuthenticatedInteraction
+		cleanState  string
+		result      statusservice.DialogSubmissionResult
+		err         error
+	)
+	if callbackID == dialogCallbackResult {
+		interaction, cleanState, err = router.interactionSecurity.AuthenticateDialogPrepared(r.Context(), callback, prepare)
+	} else {
+		interaction, cleanState, err = router.interactionSecurity.AuthenticateDialogPreparedAtomic(
+			r.Context(), callback, prepare,
+			func(authenticated statusservice.AuthenticatedInteraction, transactionalState string, store adminrepo.Repository) error {
+				result = router.slashService.HandleDialogSubmissionTransactional(r.Context(), statusservice.DialogSubmissionCommand{
+					CallbackID: callbackID,
+					State:      transactionalState,
+					UserID:     authenticated.Actor.UserID,
+					UserName:   authenticated.Actor.UserName,
+					ChannelID:  authenticated.ChannelID,
+					TeamID:     strings.TrimSpace(request.TeamId),
+					Submission: request.Submission,
+					Cancelled:  request.Cancelled,
+				}, store)
+				if result.Error != "" || len(result.Errors) > 0 {
+					return statusservice.NewInteractionValidationError(result.StatusCode, result.Error, result.Errors)
+				}
+				return nil
+			},
+		)
+	}
 	if err != nil {
+		var validationErr *statusservice.InteractionValidationError
+		if errors.As(err, &validationErr) {
+			status := validationErr.StatusCode
+			if status == 0 {
+				status = http.StatusOK
+			}
+			writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Error: validationErr.ErrorText, Errors: validationErr.Fields})
+			return
+		}
 		if errors.Is(err, statusservice.ErrInteractionPreparation) {
 			writeJSON(w, http.StatusForbidden, mattermostmodel.SubmitDialogResponse{Error: "mattermost_response_url_denied"})
 			return
@@ -470,16 +510,6 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
 		return
 	}
-	result := router.slashService.HandleDialogSubmission(r.Context(), statusservice.DialogSubmissionCommand{
-		CallbackID: callbackID,
-		State:      strings.TrimSpace(request.State),
-		UserID:     interaction.Actor.UserID,
-		UserName:   interaction.Actor.UserName,
-		ChannelID:  interaction.ChannelID,
-		TeamID:     strings.TrimSpace(request.TeamId),
-		Submission: request.Submission,
-		Cancelled:  request.Cancelled,
-	})
 	status := result.StatusCode
 	if status == 0 {
 		status = http.StatusOK

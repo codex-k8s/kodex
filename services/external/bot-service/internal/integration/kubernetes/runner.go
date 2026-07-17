@@ -3,6 +3,8 @@ package kubernetes
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -98,6 +100,28 @@ type Runner struct {
 	agentRunnerClusterAdminServiceAccount string
 	codexAuthSecretName                   string
 	gitHubSecretName                      string
+}
+
+func (runner *Runner) InspectSecretIntegrity(ctx context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
+	input.SecretName = strings.TrimSpace(input.SecretName)
+	input.SecretKey = strings.TrimSpace(input.SecretKey)
+	if input.SecretName == "" || input.SecretKey == "" {
+		return runtimerepo.SecretIntegrity{}, fmt.Errorf("secret name and key are required")
+	}
+	secret, err := runner.client.CoreV1().Secrets(runner.namespace).Get(ctx, input.SecretName, metav1.GetOptions{})
+	if err != nil {
+		return runtimerepo.SecretIntegrity{}, fmt.Errorf("inspect secret metadata: %w", err)
+	}
+	value, ok := secret.Data[input.SecretKey]
+	if !ok || len(value) == 0 {
+		return runtimerepo.SecretIntegrity{}, fmt.Errorf("secret key is missing")
+	}
+	digest := sha256.Sum256(value)
+	return runtimerepo.SecretIntegrity{
+		SecretName: input.SecretName, SecretKey: input.SecretKey,
+		ContentSHA256: hex.EncodeToString(digest[:]),
+		UID:           string(secret.UID), ResourceVersion: secret.ResourceVersion,
+	}, nil
 }
 
 func runnerCommand() []string {

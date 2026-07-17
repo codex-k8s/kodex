@@ -90,6 +90,7 @@
           "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-slash-token",
           "${MATTERCODEX_GITHUB_SECRET}/github-token",
           "${MATTERCODEX_GITHUB_SECRET}/github-webhook-secret",
+          "${MATTERCODEX_POSTGRES_SECRET}/bot-service-runtime-datasource",
           "${MATTERCODEX_POSTGRES_SECRET}/mattermost-datasource"
         ]
       }
