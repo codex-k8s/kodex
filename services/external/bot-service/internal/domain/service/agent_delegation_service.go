@@ -368,9 +368,9 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent delegation callback is not configured")
 	}
 	var delegation entity.AgentDelegation
-	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_callback_lookup.side_effect", func(current entity.AgentSession) error {
+	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.delegation_callback_lookup.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
 		var readErr error
-		delegation, readErr = svc.cfg.Store.GetAgentDelegationForCallback(ctx, current.ID)
+		delegation, readErr = guardedStore.GetAgentDelegationForCallback(ctx, current.ID)
 		return readErr
 	})
 	if err != nil {
@@ -380,180 +380,153 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 		return AgentSessionDelegationResult{}, err
 	}
 	var project entity.Project
-	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_callback_project_read.side_effect", func(entity.AgentSession) error {
-		var readErr error
-		project, readErr = svc.cfg.Store.GetProject(ctx, delegation.ProjectID)
-		return readErr
-	})
-	if err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
 	var targetChat entity.Chat
-	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_callback_target_chat_read.side_effect", func(entity.AgentSession) error {
-		var readErr error
-		targetChat, readErr = svc.cfg.Store.GetChat(ctx, delegation.TargetChatID)
-		return readErr
-	})
-	if err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
 	var targetRole entity.AgentRole
-	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_callback_target_role_read.side_effect", func(entity.AgentSession) error {
-		var readErr error
-		targetRole, readErr = svc.cfg.Store.GetAgentRole(ctx, delegation.TargetRoleID)
-		return readErr
-	})
-	if err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
 	if delegation.CallbackRunID != "" {
-		if err := svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_callback_read.side_effect", func(entity.AgentSession) error { return nil }); err != nil {
+		if err := svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.delegation_callback_read.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
+			var readErr error
+			project, readErr = guardedStore.GetProject(ctx, delegation.ProjectID)
+			if readErr == nil {
+				targetChat, readErr = guardedStore.GetChat(ctx, delegation.TargetChatID)
+			}
+			if readErr == nil {
+				targetRole, readErr = guardedStore.GetAgentRole(ctx, delegation.TargetRoleID)
+			}
+			return readErr
+		}); err != nil {
 			return AgentSessionDelegationResult{}, err
 		}
 		return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
 	}
 	var sourceSession entity.AgentSession
-	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_callback_source_lookup.side_effect", func(entity.AgentSession) error {
+	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.delegation_callback_source_lookup.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
 		var readErr error
-		sourceSession, readErr = svc.cfg.Store.GetAgentSessionByID(ctx, delegation.SourceSessionID)
+		sourceSession, readErr = guardedStore.GetAgentSessionByID(ctx, delegation.SourceSessionID)
 		return readErr
 	})
 	if err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
-	if err := svc.withCurrentSessionRuntimeGuard(ctx, sourceSession, "agent_session.delegation_callback_source_identity.side_effect", func(entity.AgentSession) error { return nil }); err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
 	var sourceChat entity.Chat
-	err = svc.withCurrentSessionsRuntimeGuard(ctx, session, sourceSession, "agent_session.delegation_callback_source_chat_read.side_effect", func(_ entity.AgentSession, currentSource entity.AgentSession) error {
-		var readErr error
-		sourceSession = currentSource
-		sourceChat, readErr = svc.cfg.Store.GetChat(ctx, currentSource.ChatID)
-		return readErr
-	})
-	if err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
 	var sourceRole entity.AgentRole
-	err = svc.withCurrentSessionsRuntimeGuard(ctx, session, sourceSession, "agent_session.delegation_callback_source_role_read.side_effect", func(_ entity.AgentSession, currentSource entity.AgentSession) error {
-		var readErr error
-		sourceSession = currentSource
-		sourceRole, readErr = svc.cfg.Store.GetAgentRole(ctx, currentSource.RoleID)
-		return readErr
-	})
-	if err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
-	if err := svc.withCurrentSessionsRuntimeGuard(ctx, session, sourceSession, "agent_session.delegation_callback_permission.side_effect", func(currentChild entity.AgentSession, _ entity.AgentSession) error {
-		return svc.requireCoordinationPermission(ctx, currentChild, entity.CoordinationCapabilityReturnCallback, entity.CoordinationActionCallback, sourceRole.ID)
-	}); err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
 	var requesterUserName string
-	if err := svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_callback_requester_read.side_effect", func(current entity.AgentSession) error {
-		requesterUserName = svc.sessionMattermostUsername(ctx, current)
-		return nil
-	}); err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
-	targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
-	sourceThreadURL := svc.mattermostThreadURL(project.Slug, sourceSession.MattermostRootPostID)
-	callbackPrompt := crossChatDelegationCallbackMessage(requesterUserName, delegation.Title, targetThreadURL, message)
+	var callbackPrompt string
 	var turn entity.AgentSessionTurn
 	var runID string
-	turn, runID, err = svc.enqueueDelegationCallback(ctx, session, project, sourceSession, sourceChat, sourceRole, requesterUserName, callbackPrompt, delegation.TargetTurnID, delegation.TargetRootPostID)
-	if err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
+	newlyQueued := false
 	err = svc.withCurrentSessionsPersistenceGuard(ctx, session, sourceSession, "agent_session.delegation_callback_persist.side_effect", func(_ entity.AgentSession, _ entity.AgentSession, guardedStore adminrepo.Repository) error {
+		currentChild, readErr := guardedStore.GetAgentSession(ctx, session.SessionKey)
+		if readErr != nil || !sameAgentSessionIdentity(currentChild, session) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		currentSource, readErr := guardedStore.GetAgentSession(ctx, sourceSession.SessionKey)
+		if readErr != nil || !sameAgentSessionIdentity(currentSource, sourceSession) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		currentDelegation, readErr := guardedStore.GetAgentDelegationForCallback(ctx, currentChild.ID)
+		if readErr != nil || currentDelegation.ID != delegation.ID || currentDelegation.SourceSessionID != currentSource.ID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		delegation = currentDelegation
+		project, readErr = guardedStore.GetProject(ctx, delegation.ProjectID)
+		if readErr != nil || project.ID != currentChild.ProjectID || project.ID != currentSource.ProjectID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		targetChat, readErr = guardedStore.GetChat(ctx, delegation.TargetChatID)
+		if readErr != nil || targetChat.ID != currentChild.ChatID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		targetRole, readErr = guardedStore.GetAgentRole(ctx, delegation.TargetRoleID)
+		if readErr != nil || targetRole.ID != currentChild.RoleID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if delegation.CallbackRunID != "" {
+			return nil
+		}
+		sourceChat, readErr = guardedStore.GetChat(ctx, currentSource.ChatID)
+		if readErr != nil || sourceChat.ProjectID != currentSource.ProjectID || strings.TrimSpace(sourceChat.MattermostChannelID) != strings.TrimSpace(currentSource.MattermostChannelID) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		sourceRole, readErr = guardedStore.GetAgentRole(ctx, currentSource.RoleID)
+		if readErr != nil || sourceRole.ProjectID != currentSource.ProjectID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if readErr = svc.requireCoordinationPermissionWithStore(ctx, guardedStore, currentChild, entity.CoordinationCapabilityReturnCallback, entity.CoordinationActionCallback, sourceRole.ID); readErr != nil {
+			return readErr
+		}
+		requesterUserName = svc.sessionMattermostUsernameWithStore(ctx, guardedStore, currentChild)
+		targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
+		callbackPrompt = crossChatDelegationCallbackMessage(requesterUserName, delegation.Title, targetThreadURL, message)
+		turn, runID, readErr = svc.enqueueDelegationCallbackWithStore(ctx, guardedStore, currentSource, project, sourceChat, sourceRole, requesterUserName, callbackPrompt, delegation.TargetTurnID, delegation.TargetRootPostID)
+		if readErr != nil {
+			return readErr
+		}
 		var persistErr error
 		delegation, persistErr = guardedStore.SetAgentDelegationCallback(ctx, delegation.ID, turn.ID, runID)
+		newlyQueued = persistErr == nil
 		return persistErr
 	})
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
-	if err := svc.withCurrentSessionsRuntimeGuard(ctx, session, sourceSession, "agent_session.delegation_callback_audit.side_effect", func(_ entity.AgentSession, currentSource entity.AgentSession) error {
-		_, _ = svc.postDelegationCallbackAudit(ctx, currentSource, requesterUserName, delegation.Title, targetThreadURL, message)
-		return nil
-	}); err != nil {
+	if !newlyQueued {
+		return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
+	}
+	targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
+	sourceThreadURL := svc.mattermostThreadURL(project.Slug, sourceSession.MattermostRootPostID)
+	if err := svc.withCurrentSessionsPersistenceGuard(ctx, session, sourceSession, "agent_session.delegation_callback_publish_final_guard", func(_ entity.AgentSession, _ entity.AgentSession, _ adminrepo.Repository) error { return nil }); err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
-	if err := svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_return_audit.side_effect", func(current entity.AgentSession) error {
-		_, _ = svc.postDelegationReturnAudit(ctx, current, requesterUserName, delegation.Title, sourceThreadURL)
-		return nil
-	}); err != nil {
+	_, _ = svc.postDelegationCallbackAudit(ctx, sourceSession, requesterUserName, delegation.Title, targetThreadURL, message)
+	if err := svc.withCurrentSessionsPersistenceGuard(ctx, session, sourceSession, "agent_session.delegation_return_publish_final_guard", func(_ entity.AgentSession, _ entity.AgentSession, _ adminrepo.Repository) error { return nil }); err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
+	_, _ = svc.postDelegationReturnAudit(ctx, session, requesterUserName, delegation.Title, sourceThreadURL)
 	return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
 }
 
-func (svc *AgentSessionService) enqueueDelegationCallback(ctx context.Context, childSession entity.AgentSession, project entity.Project, sourceSession entity.AgentSession, sourceChat entity.Chat, sourceRole entity.AgentRole, requesterUserName string, message string, parentTurnID int64, triggerPostID string) (entity.AgentSessionTurn, string, error) {
-	var queuedTurn entity.AgentSessionTurn
-	compatible := false
-	var compatibleTurn entity.AgentSessionTurn
-	err := svc.withCurrentSessionsPersistenceGuard(ctx, childSession, sourceSession, "agent_session.delegation_callback_queue.side_effect", func(_ entity.AgentSession, currentSource entity.AgentSession, guardedStore adminrepo.Repository) error {
-		queuedTurns, readErr := guardedStore.ListQueuedAgentSessionTurns(ctx, currentSource.ID)
-		if readErr != nil {
-			return readErr
-		}
-		queuedTurn, compatible, readErr = svc.queuedTurnForProcessWithStore(ctx, guardedStore, parentTurnID, queuedTurns)
-		if readErr != nil || !compatible {
-			return readErr
-		}
-		compatibleTurn, readErr = guardedStore.UpdateAgentSessionTurnMessage(ctx, adminrepo.UpdateAgentSessionTurnMessageInput{
-			TurnID: queuedTurn.ID, Message: appendDelegationCallbackToQueuedPrompt(queuedTurn.Message, message),
-		})
-		if readErr == nil && parentTurnID > 0 {
-			compatibleTurn, readErr = guardedStore.AddAgentSessionTurnOrigin(ctx, adminrepo.AddAgentSessionTurnOriginInput{
-				TurnID: compatibleTurn.ID, ParentTurnID: parentTurnID, TriggerPostID: triggerPostID, InitiatorUserName: requesterUserName,
-			})
-		}
-		return readErr
-	})
+func (svc *AgentSessionService) enqueueDelegationCallbackWithStore(ctx context.Context, guardedStore adminrepo.Repository, sourceSession entity.AgentSession, project entity.Project, sourceChat entity.Chat, sourceRole entity.AgentRole, requesterUserName string, message string, parentTurnID int64, triggerPostID string) (entity.AgentSessionTurn, string, error) {
+	queuedTurns, err := guardedStore.ListQueuedAgentSessionTurns(ctx, sourceSession.ID)
+	if err != nil {
+		return entity.AgentSessionTurn{}, "", err
+	}
+	queuedTurn, compatible, err := svc.queuedTurnForProcessWithStore(ctx, guardedStore, parentTurnID, queuedTurns)
 	if err != nil {
 		return entity.AgentSessionTurn{}, "", err
 	}
 	if compatible {
+		compatibleTurn, updateErr := guardedStore.UpdateAgentSessionTurnMessage(ctx, adminrepo.UpdateAgentSessionTurnMessageInput{
+			TurnID: queuedTurn.ID, Message: appendDelegationCallbackToQueuedPrompt(queuedTurn.Message, message),
+		})
+		if updateErr == nil && parentTurnID > 0 {
+			compatibleTurn, updateErr = guardedStore.AddAgentSessionTurnOrigin(ctx, adminrepo.AddAgentSessionTurnOriginInput{
+				TurnID: compatibleTurn.ID, ParentTurnID: parentTurnID, TriggerPostID: triggerPostID, InitiatorUserName: requesterUserName,
+			})
+		}
+		if updateErr != nil {
+			return entity.AgentSessionTurn{}, "", updateErr
+		}
 		return compatibleTurn, compatibleTurn.RunID, nil
 	}
-	var repositories []entity.ProjectRepository
-	err = svc.withCurrentSessionsRuntimeGuard(ctx, childSession, sourceSession, "agent_session.delegation_callback_repositories.side_effect", func(_ entity.AgentSession, _ entity.AgentSession) error {
-		var readErr error
-		repositories, readErr = chatRepositoriesWithStore(ctx, svc.cfg.Store, sourceChat)
-		return readErr
+	dispatcher, ok := svc.cfg.TurnDispatcher.(TransactionalAgentTurnDispatcher)
+	if !ok {
+		return entity.AgentSessionTurn{}, "", fmt.Errorf("agent turn dispatcher does not support transactional existing-session enqueue")
+	}
+	repositories, err := chatRepositoriesWithStore(ctx, guardedStore, sourceChat)
+	if err != nil {
+		return entity.AgentSessionTurn{}, "", err
+	}
+	queued, err := dispatcher.EnqueueExistingAgentTurn(ctx, guardedStore, sourceSession, AgentTurnRequest{
+		Project: project, Chat: sourceChat, Role: sourceRole, Repositories: repositories,
+		UserName: requesterUserName, UserMessage: message, PreparedPrompt: message,
+		SourcePostID: triggerPostID, ReplyRootID: sourceSession.MattermostRootPostID,
+		SessionRootID: sourceSession.MattermostRootPostID, SessionScope: sourceSession.SessionScope,
+		TTLSeconds: sourceSession.TTLSeconds, ParentTurnID: parentTurnID,
 	})
 	if err != nil {
 		return entity.AgentSessionTurn{}, "", err
 	}
-	var queued AgentTurnQueued
-	err = svc.withCurrentSessionsRuntimeGuard(ctx, childSession, sourceSession, "agent_session.delegation_callback_enqueue.side_effect", func(_ entity.AgentSession, currentSource entity.AgentSession) error {
-		var enqueueErr error
-		queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
-			Project:       project,
-			Chat:          sourceChat,
-			Role:          sourceRole,
-			Repositories:  repositories,
-			UserName:      requesterUserName,
-			UserMessage:   message,
-			SourcePostID:  triggerPostID,
-			ReplyRootID:   currentSource.MattermostRootPostID,
-			SessionRootID: currentSource.MattermostRootPostID,
-			SessionScope:  currentSource.SessionScope,
-			TTLSeconds:    currentSource.TTLSeconds,
-			ParentTurnID:  parentTurnID,
-		})
-		return enqueueErr
-	})
-	if err != nil {
-		return entity.AgentSessionTurn{}, "", err
-	}
-	var turn entity.AgentSessionTurn
-	err = svc.withCurrentSessionsRuntimeGuard(ctx, childSession, sourceSession, "agent_session.delegation_callback_turn_read.side_effect", func(_ entity.AgentSession, _ entity.AgentSession) error {
-		var readErr error
-		turn, readErr = svc.cfg.Store.GetAgentSessionTurn(ctx, queued.TurnID)
-		return readErr
-	})
+	turn, err := guardedStore.GetAgentSessionTurn(ctx, queued.TurnID)
 	return turn, queued.RunID, err
 }
 

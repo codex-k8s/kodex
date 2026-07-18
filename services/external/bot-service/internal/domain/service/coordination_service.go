@@ -48,7 +48,11 @@ type AgentSessionOwnerAttentionCommand struct {
 var likelySecretAssignment = regexp.MustCompile(`(?i)(api[_-]?key|access[_-]?key|authorization|bearer|token|password|passwd|secret|private[_-]?key|kubeconfig)\s*[:=]\s*\S+`)
 
 func (svc *AgentSessionService) requireCoordinationPermission(ctx context.Context, session entity.AgentSession, capability string, action string, targetRoleID int64) error {
-	store, ok := svc.cfg.Store.(adminrepo.CoordinationRepository)
+	return svc.requireCoordinationPermissionWithStore(ctx, svc.cfg.Store, session, capability, action, targetRoleID)
+}
+
+func (svc *AgentSessionService) requireCoordinationPermissionWithStore(ctx context.Context, repository adminrepo.Repository, session entity.AgentSession, capability string, action string, targetRoleID int64) error {
+	store, ok := repository.(adminrepo.CoordinationRepository)
 	if !ok {
 		return nil
 	}

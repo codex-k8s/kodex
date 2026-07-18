@@ -140,6 +140,10 @@ type AgentTurnDispatcher interface {
 	RetryAgentTurn(ctx context.Context, request AgentTurnRetryRequest) (AgentTurnQueued, error)
 }
 
+type TransactionalAgentTurnDispatcher interface {
+	EnqueueExistingAgentTurn(ctx context.Context, store adminrepo.Repository, expectedSession entity.AgentSession, request AgentTurnRequest) (AgentTurnQueued, error)
+}
+
 type ThreadRepositorySelectionInput struct {
 	ThreadContextID int64
 	RepositoryID    int64
@@ -634,6 +638,111 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	}, nil
 }
 
+func (svc *ChatRunService) EnqueueExistingAgentTurn(ctx context.Context, store adminrepo.Repository, expectedSession entity.AgentSession, request AgentTurnRequest) (AgentTurnQueued, error) {
+	request.UserMessage = strings.TrimSpace(request.UserMessage)
+	request.PreparedPrompt = strings.TrimSpace(request.PreparedPrompt)
+	request.ReplyRootID = strings.TrimSpace(request.ReplyRootID)
+	if store == nil || expectedSession.ID == 0 || request.Project.ID == 0 || request.Chat.ID == 0 || request.Role.ID == 0 {
+		return AgentTurnQueued{}, fmt.Errorf("transactional existing-session enqueue requires store, session, project, chat, and role")
+	}
+	if request.UserMessage == "" || request.PreparedPrompt == "" || request.ReplyRootID == "" {
+		return AgentTurnQueued{}, fmt.Errorf("transactional existing-session enqueue requires message, prepared prompt, and reply root")
+	}
+	current, err := store.GetAgentSession(ctx, expectedSession.SessionKey)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	if !sameAgentSessionIdentity(current, expectedSession) || current.ProjectID != request.Project.ID || current.ChatID != request.Chat.ID || current.RoleID != request.Role.ID ||
+		strings.TrimSpace(current.MattermostChannelID) != strings.TrimSpace(request.Chat.MattermostChannelID) ||
+		strings.TrimSpace(current.MattermostRootPostID) != strings.TrimSpace(request.SessionRootID) ||
+		strings.TrimSpace(current.SessionScope) != strings.TrimSpace(request.SessionScope) {
+		return AgentTurnQueued{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	if current.Status == agentSessionStatusBlocked || current.Status == agentSessionStatusClosed {
+		return AgentTurnQueued{}, fmt.Errorf("agent session is %s; start a new Mattermost thread", current.Status)
+	}
+	ttlSeconds := request.TTLSeconds
+	if ttlSeconds <= 0 {
+		ttlSeconds = current.TTLSeconds
+	}
+	refreshed, err := store.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
+		SessionKey: current.SessionKey, ExtendTTLSeconds: ttlSeconds,
+	})
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	if !sameAgentSessionIdentity(refreshed, current) {
+		return AgentTurnQueued{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	current = refreshed
+	runID := newChatRunID(request.Chat.ID)
+	turn, err := store.CreateAgentSessionTurn(ctx, adminrepo.CreateAgentSessionTurnInput{
+		SessionID:            current.ID,
+		RunID:                runID,
+		MattermostChannelID:  current.MattermostChannelID,
+		MattermostRootPostID: request.ReplyRootID,
+		MattermostPostID:     request.SourcePostID,
+		ParentTurnID:         request.ParentTurnID,
+		UserID:               request.UserID,
+		UserName:             request.UserName,
+		Message:              request.PreparedPrompt,
+	})
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	if coordinationStore, ok := store.(adminrepo.CoordinationRepository); ok {
+		if _, err := coordinationStore.EnsureTurnProcess(ctx, adminrepo.EnsureTurnProcessInput{
+			TurnID:               turn.ID,
+			ParentTurnID:         request.ParentTurnID,
+			ProjectID:            request.Project.ID,
+			RoleID:               request.Role.ID,
+			InitiatorUserID:      request.UserID,
+			InitiatorUserName:    request.UserName,
+			TriggerPostID:        request.SourcePostID,
+			MattermostChannelID:  current.MattermostChannelID,
+			MattermostRootPostID: request.ReplyRootID,
+		}); err != nil {
+			return AgentTurnQueued{}, fmt.Errorf("bind turn to process: %w", err)
+		}
+	}
+	started := agentSessionStartedFromSession(current)
+	repository := firstRepository(request.Repositories)
+	if _, err := store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
+		RunID:               runID,
+		FlowID:              "session-" + current.SessionKey,
+		ProfileName:         request.Role.Name,
+		Role:                request.Role.RoleType,
+		Provider:            repository.Provider,
+		Owner:               repository.Owner,
+		Name:                repository.Name,
+		BaseBranch:          defaultString(repository.DefaultBranch, "main"),
+		HeadBranch:          "matter-codex-" + runID,
+		Status:              agentSessionTurnQueued,
+		KubernetesNamespace: started.Namespace,
+		JobName:             started.PodName,
+		PVCName:             started.PVCName,
+		Summary:             fmt.Sprintf("session turn chat=%d role=%s turn=%d user=%s", request.Chat.ID, request.Role.Name, turn.ID, request.UserName),
+	}); err != nil {
+		return AgentTurnQueued{}, err
+	}
+	return AgentTurnQueued{
+		RunID: runID, TurnID: turn.ID, SessionKey: current.SessionKey, Role: request.Role,
+		PodName: started.PodName, PVCName: started.PVCName,
+	}, nil
+}
+
+func sameAgentSessionIdentity(left entity.AgentSession, right entity.AgentSession) bool {
+	return left.ID == right.ID && left.SessionKey == right.SessionKey && left.ProjectID == right.ProjectID && left.ChatID == right.ChatID && left.RoleID == right.RoleID &&
+		strings.TrimSpace(left.SessionScope) == strings.TrimSpace(right.SessionScope) &&
+		strings.TrimSpace(left.MattermostChannelID) == strings.TrimSpace(right.MattermostChannelID) &&
+		strings.TrimSpace(left.MattermostRootPostID) == strings.TrimSpace(right.MattermostRootPostID) &&
+		strings.TrimSpace(left.OpenAIAccountName) == strings.TrimSpace(right.OpenAIAccountName) &&
+		strings.TrimSpace(left.CodexSessionID) == strings.TrimSpace(right.CodexSessionID) &&
+		left.Status == right.Status && left.ActiveTurnID == right.ActiveTurnID && left.ActiveRunID == right.ActiveRunID &&
+		left.KubernetesNamespace == right.KubernetesNamespace && left.PodName == right.PodName && left.PVCName == right.PVCName &&
+		left.TokenSecretRef == right.TokenSecretRef && left.Capabilities == right.Capabilities && left.TTLSeconds == right.TTLSeconds
+}
+
 func (svc *ChatRunService) RetryAgentTurn(ctx context.Context, request AgentTurnRetryRequest) (AgentTurnQueued, error) {
 	if request.Session.ID == 0 || request.Turn.ID == 0 {
 		return AgentTurnQueued{}, fmt.Errorf("session and turn are required")
@@ -944,13 +1053,20 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 		return runtimerepo.StartedAgentSession{}, err
 	}
 	var internalToken string
-	err = svc.withClusterAdminRuntimeGuard(
+	var tokenIntegrity *runtimerepo.SecretIntegrity
+	err = svc.withClusterAdminTokenRuntimeGuard(
 		ctx, role, session.ChatID, "", session.MattermostChannelID, session.SessionKey,
-		"agent_session.token_read.side_effect",
-		func() error {
-			var tokenErr error
-			internalToken, tokenErr = svc.sessionInternalToken(ctx, tokenSession, guardRequired)
-			return tokenErr
+		"agent_session.token_read.side_effect", tokenSession,
+		func(secret runtimerepo.MattermostBotTokenSecret) error {
+			if strings.TrimSpace(secret.Token) == "" {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			internalToken = strings.TrimSpace(secret.Token)
+			if guardRequired {
+				integrity := secret.Integrity
+				tokenIntegrity = &integrity
+			}
+			return nil
 		},
 	)
 	if err != nil {
@@ -977,13 +1093,7 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 		ConfigOverlay:           role.ConfigOverlay,
 		RuntimeEnv:              runtimeEnv,
 	}
-	if guardRequired {
-		expectation, expectationErr := svc.clusterAdminSessionTokenSecretIntegrity(ctx, role.ID, session.SessionKey, tokenSession.TokenSecretRef)
-		if expectationErr != nil {
-			return runtimerepo.StartedAgentSession{}, expectationErr
-		}
-		input.TokenSecretIntegrity = &expectation
-	}
+	input.TokenSecretIntegrity = tokenIntegrity
 	var started runtimerepo.StartedAgentSession
 	startRuntime := func() error {
 		return svc.withClusterAdminRuntimeGuard(ctx, role, session.ChatID, "", session.MattermostChannelID, session.SessionKey, "agent_session.start.side_effect", func() error {
@@ -1009,6 +1119,48 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 		err = startRuntime()
 	}
 	return started, err
+}
+
+func (svc *ChatRunService) withClusterAdminTokenRuntimeGuard(ctx context.Context, role entity.AgentRole, chatID int64, chatSlug string, channelID string, sessionKey string, operation string, tokenSession entity.AgentSession, sideEffect func(runtimerepo.MattermostBotTokenSecret) error) error {
+	required, err := clusterAdminSessionGuardRequired(ctx, svc.cfg.Store, role, sessionKey)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(tokenSession.TokenSecretRef) == "" {
+		if required {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		token, err := newInternalToken()
+		if err != nil {
+			return err
+		}
+		return sideEffect(runtimerepo.MattermostBotTokenSecret{Token: token})
+	}
+	if !required {
+		secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, tokenSession.TokenSecretRef)
+		if err == nil && strings.TrimSpace(secret.Token) != "" {
+			return sideEffect(secret)
+		}
+		token, err := newInternalToken()
+		if err != nil {
+			return err
+		}
+		return sideEffect(runtimerepo.MattermostBotTokenSecret{Token: token})
+	}
+	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminRuntimeGuardRepository)
+	if !ok {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return repository.WithExistingClusterAdminRuntimeGuard(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: role.ID, ProjectID: role.ProjectID, ChatID: chatID, ChatSlug: chatSlug,
+		MattermostChannelID: channelID, SessionKey: sessionKey, Operation: operation, ActorUser: "runtime",
+	}, func() error {
+		secret, err := verifyClusterAdminSessionSecretIntegrityWithToken(ctx, svc.cfg.Store, svc.cfg.RuntimeRunner, role.ID, sessionKey, tokenSession.TokenSecretRef)
+		if err != nil {
+			return err
+		}
+		return sideEffect(secret)
+	})
 }
 
 func (svc *ChatRunService) evictOldestIdleAgentSessionPod(ctx context.Context, targetSessionKey string) (bool, error) {
@@ -1280,42 +1432,6 @@ func (svc *ChatRunService) mattermostBotIdentityByUserID(ctx context.Context, pr
 		}
 	}
 	return entity.MattermostBotIdentity{}, false, nil
-}
-
-func (svc *ChatRunService) sessionInternalToken(ctx context.Context, session entity.AgentSession, requireExisting bool) (string, error) {
-	if strings.TrimSpace(session.TokenSecretRef) != "" {
-		secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, session.TokenSecretRef)
-		if err == nil && strings.TrimSpace(secret.Token) != "" {
-			return strings.TrimSpace(secret.Token), nil
-		}
-		if requireExisting {
-			return "", adminrepo.ErrClusterAdminAdmissionDenied
-		}
-	}
-	if requireExisting {
-		return "", adminrepo.ErrClusterAdminAdmissionDenied
-	}
-	return newInternalToken()
-}
-
-func (svc *ChatRunService) clusterAdminSessionTokenSecretIntegrity(ctx context.Context, roleID int64, sessionKey string, secretRef string) (runtimerepo.SecretIntegrity, error) {
-	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminSecretIntegrityRepository)
-	if !ok {
-		return runtimerepo.SecretIntegrity{}, adminrepo.ErrClusterAdminAdmissionDenied
-	}
-	bindings, err := repository.ListClusterAdminSecretIntegrity(ctx, roleID, sessionKey)
-	if err != nil {
-		return runtimerepo.SecretIntegrity{}, err
-	}
-	for _, binding := range bindings {
-		if binding.Kind == "session" && strings.TrimSpace(binding.SecretRef) == strings.TrimSpace(secretRef) && binding.SecretKey == "token" {
-			return runtimerepo.SecretIntegrity{
-				SecretName: binding.SecretRef, SecretKey: binding.SecretKey, ContentSHA256: binding.ContentSHA256,
-				UID: binding.ResourceUID, ResourceVersion: binding.ResourceVersion,
-			}, nil
-		}
-	}
-	return runtimerepo.SecretIntegrity{}, adminrepo.ErrClusterAdminAdmissionDenied
 }
 
 func (svc *ChatRunService) agentSessionExists(ctx context.Context, sessionKey string) (entity.AgentSession, bool, error) {

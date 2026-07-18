@@ -3364,10 +3364,12 @@ type fakeRuntimeRunner struct {
 	deletedRuntimeVariable      string
 	secretIntegrity             map[string]runtimerepo.SecretIntegrity
 	secretIntegrityErr          error
+	secretIntegrityReads        int
 	runStatuses                 map[string]runtimerepo.RunStatus
 }
 
 func (runner *fakeRuntimeRunner) InspectSecretIntegrity(_ context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
+	runner.secretIntegrityReads++
 	if runner.secretIntegrityErr != nil {
 		return runtimerepo.SecretIntegrity{}, runner.secretIntegrityErr
 	}
@@ -3659,7 +3661,17 @@ func (runner *fakeRuntimeRunner) UpsertMattermostBotTokenSecret(_ context.Contex
 func (runner *fakeRuntimeRunner) GetMattermostBotTokenSecret(_ context.Context, secretName string) (runtimerepo.MattermostBotTokenSecret, error) {
 	runner.botTokenSecretReads++
 	if token := runner.botTokenSecrets[secretName]; token != "" {
-		return runtimerepo.MattermostBotTokenSecret{SecretName: secretName, Namespace: "mattermost", Token: token}, nil
+		if runner.secretIntegrityErr != nil {
+			return runtimerepo.MattermostBotTokenSecret{}, runner.secretIntegrityErr
+		}
+		integrity, ok := runner.secretIntegrity[secretName+"/token"]
+		if !ok {
+			integrity = runtimerepo.SecretIntegrity{
+				SecretName: secretName, SecretKey: "token",
+				ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1",
+			}
+		}
+		return runtimerepo.MattermostBotTokenSecret{SecretName: secretName, Namespace: "mattermost", Token: token, Integrity: integrity}, nil
 	}
 	return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("token secret not found")
 }

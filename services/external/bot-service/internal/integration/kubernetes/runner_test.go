@@ -634,7 +634,7 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	}
 }
 
-func TestStartAgentSessionFrozenTokenSecretIsExactNoOp(t *testing.T) {
+func TestStartAgentSessionFrozenTokenSecretUsesImmutableVersionBinding(t *testing.T) {
 	const token = "synthetic-frozen-session-token"
 	const sessionKey = "frozen-session"
 	const secretName = "mc-session-token-frozen-session"
@@ -657,6 +657,7 @@ func TestStartAgentSessionFrozenTokenSecretIsExactNoOp(t *testing.T) {
 			UID: "frozen-secret-uid", ResourceVersion: "17",
 		},
 	}
+	input.PodTokenSecretName = immutableSessionTokenSecretName(input.SessionKey, *input.TokenSecretIntegrity)
 	if _, err := client.CoreV1().Secrets("mattermost").Create(context.Background(), &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "mattermost", UID: "frozen-secret-uid", ResourceVersion: "17"},
 		Data:       map[string][]byte{"token": []byte(token)},
@@ -674,8 +675,8 @@ func TestStartAgentSessionFrozenTokenSecretIsExactNoOp(t *testing.T) {
 		t.Fatalf("StartAgentSession() error = %v", err)
 	}
 	for _, action := range client.Actions() {
-		if action.GetResource().Resource == "secrets" && action.GetVerb() != "get" {
-			t.Fatalf("frozen token secret was mutated: %s %s", action.GetVerb(), action.GetResource().Resource)
+		if action.GetResource().Resource == "secrets" && action.GetVerb() != "get" && action.GetVerb() != "create" {
+			t.Fatalf("frozen token secret received a non-create mutation: %s %s", action.GetVerb(), action.GetResource().Resource)
 		}
 	}
 	secret, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), secretName, metav1.GetOptions{})
@@ -684,6 +685,20 @@ func TestStartAgentSessionFrozenTokenSecretIsExactNoOp(t *testing.T) {
 	}
 	if secret.ResourceVersion != "17" || string(secret.Data["token"]) != token {
 		t.Fatalf("frozen token secret changed: resourceVersion=%q", secret.ResourceVersion)
+	}
+	versioned, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), input.PodTokenSecretName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get immutable token binding: %v", err)
+	}
+	if versioned.Immutable == nil || !*versioned.Immutable || string(versioned.Data["token"]) != token {
+		t.Fatal("immutable token binding was not materialized exactly")
+	}
+	pod, err := client.CoreV1().Pods("mattermost").Get(context.Background(), sessionPodName(sessionKey), metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get session pod: %v", err)
+	}
+	if !podUsesSessionTokenSecret(pod, input.PodTokenSecretName) {
+		t.Fatal("session pod does not use immutable token binding")
 	}
 }
 
@@ -736,6 +751,232 @@ func TestStartAgentSessionFrozenTokenSecretDriftFailsBeforeEffects(t *testing.T)
 				}
 			}
 		})
+	}
+}
+
+func TestStartAgentSessionFrozenTokenSecretBoundaryInterleavingsFailClosed(t *testing.T) {
+	tests := []struct {
+		name          string
+		seedOldPod    bool
+		install       func(*testing.T, *fake.Clientset, runtimerepo.AgentSessionPodInput)
+		forbidActions func(k8stesting.Action) bool
+	}{
+		{
+			name: "after initial guard before pvc",
+			install: func(t *testing.T, client *fake.Clientset, input runtimerepo.AgentSessionPodInput) {
+				originalGets := 0
+				client.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					if action.(k8stesting.GetAction).GetName() != input.TokenSecretIntegrity.SecretName {
+						return false, nil, nil
+					}
+					originalGets++
+					if originalGets != 1 {
+						return false, nil, nil
+					}
+					original := mustTrackedSecret(t, client, input.TokenSecretIntegrity.SecretName).DeepCopy()
+					replaceTrackedSecret(t, client, frozenTokenSecretFixture("synthetic-replacement-token", "replacement-uid", "18"))
+					return true, original, nil
+				})
+			},
+			forbidActions: func(action k8stesting.Action) bool {
+				return action.GetResource().Resource != "secrets" || action.GetVerb() != "get"
+			},
+		},
+		{
+			name: "after pvc mutation",
+			install: func(t *testing.T, client *fake.Clientset, _ runtimerepo.AgentSessionPodInput) {
+				client.PrependReactor("create", "persistentvolumeclaims", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					created := action.(k8stesting.CreateAction).GetObject().DeepCopyObject()
+					if err := client.Tracker().Create(corev1.SchemeGroupVersion.WithResource("persistentvolumeclaims"), created, "mattermost"); err != nil {
+						t.Fatalf("track pvc create: %v", err)
+					}
+					replaceTrackedSecret(t, client, frozenTokenSecretFixture("synthetic-replacement-token", "replacement-uid", "18"))
+					return true, created, nil
+				})
+			},
+			forbidActions: func(action k8stesting.Action) bool {
+				return action.GetResource().Resource == "pods"
+			},
+		},
+		{
+			name: "after immutable secret materialization with same content new identity",
+			install: func(t *testing.T, client *fake.Clientset, input runtimerepo.AgentSessionPodInput) {
+				client.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					created := action.(k8stesting.CreateAction).GetObject().DeepCopyObject()
+					if err := client.Tracker().Create(corev1.SchemeGroupVersion.WithResource("secrets"), created, "mattermost"); err != nil {
+						t.Fatalf("track immutable secret create: %v", err)
+					}
+					replaceTrackedSecret(t, client, frozenTokenSecretFixture(input.InternalToken, "replacement-uid", "18"))
+					return true, created, nil
+				})
+			},
+			forbidActions: func(action k8stesting.Action) bool {
+				return action.GetResource().Resource == "persistentvolumeclaims" || (action.GetResource().Resource == "pods" && (action.GetVerb() == "create" || action.GetVerb() == "delete"))
+			},
+		},
+		{
+			name: "immutable binding metadata drift",
+			install: func(t *testing.T, client *fake.Clientset, _ runtimerepo.AgentSessionPodInput) {
+				client.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					created := action.(k8stesting.CreateAction).GetObject().(*corev1.Secret).DeepCopy()
+					tracked := created.DeepCopy()
+					tracked.Labels[labelSessionKey] = "different-session"
+					if err := client.Tracker().Create(corev1.SchemeGroupVersion.WithResource("secrets"), tracked, "mattermost"); err != nil {
+						t.Fatalf("track immutable secret create: %v", err)
+					}
+					return true, created, nil
+				})
+			},
+			forbidActions: func(action k8stesting.Action) bool {
+				return action.GetResource().Resource == "persistentvolumeclaims" || action.GetResource().Resource == "pods"
+			},
+		},
+		{
+			name:       "before old pod delete after a to b to a",
+			seedOldPod: true,
+			install: func(t *testing.T, client *fake.Clientset, input runtimerepo.AgentSessionPodInput) {
+				client.PrependReactor("get", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					pod, err := client.Tracker().Get(corev1.SchemeGroupVersion.WithResource("pods"), "mattermost", action.(k8stesting.GetAction).GetName())
+					if err != nil {
+						return true, nil, err
+					}
+					replaceTrackedSecret(t, client, frozenTokenSecretFixture("synthetic-replacement-token", "replacement-b-uid", "18"))
+					replaceTrackedSecret(t, client, frozenTokenSecretFixture(input.InternalToken, "replacement-a-uid", "19"))
+					return true, pod.DeepCopyObject(), nil
+				})
+			},
+			forbidActions: func(action k8stesting.Action) bool {
+				return action.GetResource().Resource == "pods" && (action.GetVerb() == "create" || action.GetVerb() == "delete")
+			},
+		},
+		{
+			name:       "after old pod delete",
+			seedOldPod: true,
+			install: func(t *testing.T, client *fake.Clientset, _ runtimerepo.AgentSessionPodInput) {
+				client.PrependReactor("delete", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					if err := client.Tracker().Delete(corev1.SchemeGroupVersion.WithResource("pods"), "mattermost", action.(k8stesting.DeleteAction).GetName()); err != nil {
+						return true, nil, err
+					}
+					replaceTrackedSecret(t, client, frozenTokenSecretFixture("synthetic-replacement-token", "replacement-uid", "18"))
+					return true, nil, nil
+				})
+			},
+			forbidActions: func(action k8stesting.Action) bool {
+				return action.GetResource().Resource == "pods" && action.GetVerb() == "create"
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client, runner, input := frozenSessionBoundaryFixture(t)
+			if test.seedOldPod {
+				oldInput := input
+				oldInput.PodTokenSecretName = input.TokenSecretIntegrity.SecretName
+				if _, err := client.CoreV1().Pods("mattermost").Create(context.Background(), runner.sessionPod(oldInput), metav1.CreateOptions{}); err != nil {
+					t.Fatalf("seed old pod: %v", err)
+				}
+			}
+			test.install(t, client, input)
+			client.ClearActions()
+			if _, err := runner.StartAgentSession(context.Background(), input); err == nil {
+				t.Fatal("StartAgentSession() accepted Secret identity drift")
+			}
+			for _, action := range client.Actions() {
+				if test.forbidActions(action) {
+					t.Fatalf("drift crossed a protected boundary: %s %s", action.GetVerb(), action.GetResource().Resource)
+				}
+			}
+		})
+	}
+}
+
+func TestStartAgentSessionFrozenTokenSecretPodCreateUsesVersionBindingAcrossReplacement(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*testing.T, *fake.Clientset, runtimerepo.AgentSessionPodInput)
+	}{
+		{
+			name: "replacement token",
+			mutate: func(t *testing.T, client *fake.Clientset, _ runtimerepo.AgentSessionPodInput) {
+				replaceTrackedSecret(t, client, frozenTokenSecretFixture("synthetic-replacement-token", "replacement-uid", "18"))
+			},
+		},
+		{
+			name: "a to b to a",
+			mutate: func(t *testing.T, client *fake.Clientset, input runtimerepo.AgentSessionPodInput) {
+				replaceTrackedSecret(t, client, frozenTokenSecretFixture("synthetic-replacement-token", "replacement-b-uid", "18"))
+				replaceTrackedSecret(t, client, frozenTokenSecretFixture(input.InternalToken, "replacement-a-uid", "19"))
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client, runner, input := frozenSessionBoundaryFixture(t)
+			client.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				pod := action.(k8stesting.CreateAction).GetObject().(*corev1.Pod).DeepCopy()
+				expectedName := immutableSessionTokenSecretName(input.SessionKey, *input.TokenSecretIntegrity)
+				if !podUsesSessionTokenSecret(pod, expectedName) {
+					t.Fatal("pod create did not use the immutable Secret identity")
+				}
+				versioned := mustTrackedSecret(t, client, expectedName)
+				if versioned.Immutable == nil || !*versioned.Immutable || string(versioned.Data["token"]) != input.InternalToken {
+					t.Fatal("immutable Secret does not retain the verified token")
+				}
+				test.mutate(t, client, input)
+				if err := client.Tracker().Create(corev1.SchemeGroupVersion.WithResource("pods"), pod, "mattermost"); err != nil {
+					t.Fatalf("track pod create: %v", err)
+				}
+				return true, pod, nil
+			})
+			started, err := runner.StartAgentSession(context.Background(), input)
+			if err != nil {
+				t.Fatalf("StartAgentSession() error = %v", err)
+			}
+			pod, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
+			if err != nil || !podUsesSessionTokenSecret(pod, immutableSessionTokenSecretName(input.SessionKey, *input.TokenSecretIntegrity)) {
+				t.Fatal("created pod lost the immutable Secret binding")
+			}
+		})
+	}
+}
+
+func frozenSessionBoundaryFixture(t *testing.T) (*fake.Clientset, *Runner, runtimerepo.AgentSessionPodInput) {
+	t.Helper()
+	const token = "synthetic-frozen-session-token"
+	digest := sha256.Sum256([]byte(token))
+	expected := runtimerepo.SecretIntegrity{
+		SecretName: "mc-session-token-frozen-session", SecretKey: "token", ContentSHA256: hex.EncodeToString(digest[:]),
+		UID: "frozen-secret-uid", ResourceVersion: "17",
+	}
+	client := fake.NewSimpleClientset(frozenTokenSecretFixture(token, expected.UID, expected.ResourceVersion))
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace: "mattermost", AgentRunnerImage: "matter-codex-agent-runner:test", WorkspaceStorageSize: "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	return client, runner, runtimerepo.AgentSessionPodInput{
+		SessionKey: "frozen-session", Role: "mattercodex-admin", KubernetesAccess: "cluster-admin",
+		BotServiceURL: "http://bot-service", InternalToken: token, CodexAuthSecretName: "matter-codex-codex-auth-main", TokenSecretIntegrity: &expected,
+	}
+}
+
+func mustTrackedSecret(t *testing.T, client *fake.Clientset, name string) *corev1.Secret {
+	t.Helper()
+	object, err := client.Tracker().Get(corev1.SchemeGroupVersion.WithResource("secrets"), "mattermost", name)
+	if err != nil {
+		t.Fatalf("get tracked Secret: %v", err)
+	}
+	return object.(*corev1.Secret)
+}
+
+func replaceTrackedSecret(t *testing.T, client *fake.Clientset, secret *corev1.Secret) {
+	t.Helper()
+	resource := corev1.SchemeGroupVersion.WithResource("secrets")
+	_ = client.Tracker().Delete(resource, "mattermost", secret.Name)
+	if err := client.Tracker().Create(resource, secret.DeepCopy(), "mattermost"); err != nil {
+		t.Fatalf("replace tracked Secret: %v", err)
 	}
 }
 
@@ -993,11 +1234,13 @@ func TestCleanupExpiredRunsDeletesFinishedAndOrphanResources(t *testing.T) {
 }
 
 func TestCleanupExpiredRunsDeletesExpiredSessionResources(t *testing.T) {
+	const protectedSecretName = "mc-session-token-protected-cleanup"
 	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
 	oldTime := metav1.NewTime(now.Add(-48 * time.Hour))
 	activeCreated := metav1.NewTime(now.Add(-48 * time.Hour))
 	orphanCreated := metav1.NewTime(now.Add(-72 * time.Hour))
 	recentFinished := metav1.NewTime(now.Add(-10 * time.Minute))
+	immutable := true
 	client := fake.NewSimpleClientset(
 		testSessionPod("old-session", corev1.PodSucceeded, oldTime, oldTime),
 		testSessionPVC("old-session", oldTime),
@@ -1010,6 +1253,17 @@ func TestCleanupExpiredRunsDeletesExpiredSessionResources(t *testing.T) {
 		testSessionSecret("recent-session", activeCreated),
 		testSessionPVC("orphan-session", orphanCreated),
 		testSessionSecret("orphan-session", orphanCreated),
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: protectedSecretName, Namespace: "mattermost", UID: "protected-secret-uid", ResourceVersion: "17",
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "matter-codex-agent-runner", "app.kubernetes.io/component": sessionTokenComponent,
+					labelSessionKey: kubernetesLabelValue("old-session"),
+				},
+				Finalizers: []string{sessionTokenFinalizer}, CreationTimestamp: oldTime,
+			},
+			Immutable: &immutable, Type: corev1.SecretTypeOpaque, Data: map[string][]byte{"token": []byte("synthetic-protected-cleanup-token")},
+		},
 	)
 	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost"})
 	if err != nil {
@@ -1024,7 +1278,7 @@ func TestCleanupExpiredRunsDeletesExpiredSessionResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CleanupExpiredRuns() error = %v", err)
 	}
-	if result.SessionPodsDeleted != 1 || result.SessionPVCsDeleted != 2 || result.SessionSecretsDeleted != 2 {
+	if result.SessionPodsDeleted != 1 || result.SessionPVCsDeleted != 2 || result.SessionSecretsDeleted != 3 {
 		t.Fatalf("result = %#v", result)
 	}
 	if result.PVCsDeleted != 2 {
@@ -1035,6 +1289,24 @@ func TestCleanupExpiredRunsDeletesExpiredSessionResources(t *testing.T) {
 	assertSessionSecretMissing(t, client, "old-session")
 	assertSessionPVCMissing(t, client, "orphan-session")
 	assertSessionSecretMissing(t, client, "orphan-session")
+	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), protectedSecretName, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("protected immutable session Secret still exists: %v", err)
+	}
+	protectedPatchFound := false
+	for _, action := range client.Actions() {
+		patchAction, ok := action.(k8stesting.PatchAction)
+		if !ok || action.GetResource().Resource != "secrets" || patchAction.GetName() != protectedSecretName {
+			continue
+		}
+		protectedPatchFound = true
+		patch := string(patchAction.GetPatch())
+		if strings.Contains(patch, `"data"`) || strings.Contains(patch, `"stringData"`) {
+			t.Fatal("session token finalizer cleanup included Secret data in the patch")
+		}
+	}
+	if !protectedPatchFound {
+		t.Fatal("protected immutable session Secret was deleted without finalizer cleanup")
+	}
 	assertSessionPodExists(t, client, "active-session")
 	assertSessionPVCExists(t, client, "active-session")
 	assertSessionSecretExists(t, client, "active-session")

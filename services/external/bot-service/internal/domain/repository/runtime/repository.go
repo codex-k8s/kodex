@@ -124,6 +124,7 @@ type AgentSessionPodInput struct {
 	ConfigOverlay           string
 	RuntimeEnv              []RuntimeEnvVar
 	TokenSecretIntegrity    *SecretIntegrity
+	PodTokenSecretName      string
 }
 
 type AgentSessionRuntimeHealth struct {
@@ -170,6 +171,7 @@ type MattermostBotTokenSecret struct {
 	Namespace  string
 	Created    bool
 	Token      string
+	Integrity  SecretIntegrity
 }
 
 type CodexAuthSessionInput struct {

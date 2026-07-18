@@ -1,8 +1,40 @@
 -- +goose Up
 -- Frozen session_key является глобальным монотонным идентификатором. Текущая роль строки
 -- не может изменить классификацию уже зафиксированного или отозванного ключа.
-create unique index matter_codex_cluster_admin_session_bindings_session_key_uq
-	on matter_codex_cluster_admin_session_bindings (session_key);
+-- +goose StatementBegin
+do $$
+declare
+	duplicate_group_count bigint;
+begin
+	-- SHARE не допускает конкурентные записи до завершения предварительной проверки и DDL в этой транзакции.
+	lock table matter_codex_cluster_admin_session_bindings in share mode;
+	select count(*) into duplicate_group_count
+	from (
+		select 1
+		from matter_codex_cluster_admin_session_bindings
+		group by session_key
+		having count(*) > 1
+	) duplicate_groups;
+	if duplicate_group_count > 0 then
+		raise exception using
+			errcode = 'P0001',
+			message = format('MCV25_DUPLICATE_SESSION_KEY_GROUPS duplicate_group_count=%s', duplicate_group_count),
+			detail = 'legacy duplicate inventory requires offline remediation',
+			hint = 'stop writes and follow the offline v25 remediation runbook';
+	end if;
+	begin
+		execute 'create unique index matter_codex_cluster_admin_session_bindings_session_key_uq on matter_codex_cluster_admin_session_bindings (session_key)';
+	exception
+		when unique_violation then
+			raise exception using
+				errcode = 'P0001',
+				message = 'MCV25_DUPLICATE_SESSION_KEY_GROUPS',
+				detail = 'duplicate_group_count=unavailable',
+				hint = 'stop writes and follow the offline v25 remediation runbook';
+	end;
+end
+$$;
+-- +goose StatementEnd
 
 insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason, revoked_at)
 select 'session_key', binding.session_key, revocation.reason, revocation.revoked_at

@@ -378,9 +378,23 @@ func (repo *Repository) withExistingClusterAdminGuard(ctx context.Context, input
 	}
 	var sideEffectErr error
 	if allowed {
-		sideEffectErr = sideEffect(txRepository)
-		if errors.Is(sideEffectErr, adminrepo.ErrClusterAdminAdmissionDenied) {
-			allowed = false
+		if persistence {
+			sideEffectTx, beginErr := tx.Begin(ctx)
+			if beginErr != nil {
+				return fmt.Errorf("begin cluster-admin persistence side effect: %w", beginErr)
+			}
+			sideEffectErr = sideEffect(newTransactionalRepository(sideEffectTx))
+			if sideEffectErr != nil {
+				_ = sideEffectTx.Rollback(ctx)
+				allowed = false
+			} else if commitErr := sideEffectTx.Commit(ctx); commitErr != nil {
+				return fmt.Errorf("commit cluster-admin persistence side effect: %w", commitErr)
+			}
+		} else {
+			sideEffectErr = sideEffect(txRepository)
+			if errors.Is(sideEffectErr, adminrepo.ErrClusterAdminAdmissionDenied) {
+				allowed = false
+			}
 		}
 	}
 	outcome := "denied"

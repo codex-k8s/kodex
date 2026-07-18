@@ -135,16 +135,23 @@ func (store *sessionBarrierStore) ListClusterAdminSecretIntegrity(context.Contex
 
 type sessionBarrierRunner struct {
 	runtimerepo.Runner
-	secretReads int
+	secretReads    int
+	integrityReads int
 }
 
 func (runner *sessionBarrierRunner) InspectSecretIntegrity(context.Context, runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
+	runner.integrityReads++
 	return runtimerepo.SecretIntegrity{ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1"}, nil
 }
 
 func (runner *sessionBarrierRunner) GetMattermostBotTokenSecret(context.Context, string) (runtimerepo.MattermostBotTokenSecret, error) {
 	runner.secretReads++
-	return runtimerepo.MattermostBotTokenSecret{Token: "session-token"}, nil
+	return runtimerepo.MattermostBotTokenSecret{
+		Token: "session-token",
+		Integrity: runtimerepo.SecretIntegrity{
+			SecretName: "session-secret", SecretKey: "token", ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1",
+		},
+	}, nil
 }
 
 type sessionBarrierPublisher struct {
@@ -331,8 +338,8 @@ func TestSessionProductionTransportAllowedControls(t *testing.T) {
 			request.Header.Set("Authorization", "Bearer session-token")
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, request)
-			if recorder.Code != http.StatusOK || store.guardCalls != test.wantHTTPGuards || runner.secretReads != 1 {
-				t.Fatalf("status=%d guards=%d reads=%d body=%s", recorder.Code, store.guardCalls, runner.secretReads, recorder.Body.String())
+			if recorder.Code != http.StatusOK || store.guardCalls != test.wantHTTPGuards || runner.secretReads != 1 || runner.integrityReads != max(0, test.wantHTTPGuards-1) {
+				t.Fatalf("status=%d guards=%d token_reads=%d integrity_reads=%d body=%s", recorder.Code, store.guardCalls, runner.secretReads, runner.integrityReads, recorder.Body.String())
 			}
 		})
 
@@ -354,8 +361,8 @@ func TestSessionProductionTransportAllowedControls(t *testing.T) {
 			}
 			defer func() { _ = session.Close() }()
 			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mattermost_post_thread_update", Arguments: map[string]any{"message": "synthetic progress"}})
-			if err != nil || result == nil || result.IsError || store.guardCalls != test.wantMCPGuards || runner.secretReads != 1 || publisher.posts != 1 {
-				t.Fatalf("result=%#v error=%v guards=%d reads=%d posts=%d", result, err, store.guardCalls, runner.secretReads, publisher.posts)
+			if err != nil || result == nil || result.IsError || store.guardCalls != test.wantMCPGuards || runner.secretReads != 1 || runner.integrityReads != max(0, test.wantMCPGuards-1) || publisher.posts != 1 {
+				t.Fatalf("result=%#v error=%v guards=%d token_reads=%d integrity_reads=%d posts=%d", result, err, store.guardCalls, runner.secretReads, runner.integrityReads, publisher.posts)
 			}
 		})
 	}

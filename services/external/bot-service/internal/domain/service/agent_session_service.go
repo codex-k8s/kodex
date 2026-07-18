@@ -995,14 +995,13 @@ func (svc *AgentSessionService) authorize(ctx context.Context, sessionKey string
 	}
 	var authorized entity.AgentSession
 	var secret runtimerepo.MattermostBotTokenSecret
-	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.callback_token_read.side_effect", func(current entity.AgentSession) error {
+	err = svc.withCurrentSessionTokenRuntimeGuard(ctx, session, "agent_session.callback_token_read.side_effect", func(current entity.AgentSession, guardedSecret runtimerepo.MattermostBotTokenSecret) error {
 		if strings.TrimSpace(current.TokenSecretRef) == "" {
 			return fmt.Errorf("session token secret is not configured")
 		}
-		var tokenErr error
-		secret, tokenErr = svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, current.TokenSecretRef)
+		secret = guardedSecret
 		authorized = current
-		return tokenErr
+		return nil
 	})
 	if err != nil {
 		return entity.AgentSession{}, err
@@ -1011,6 +1010,67 @@ func (svc *AgentSessionService) authorize(ctx context.Context, sessionKey string
 		return entity.AgentSession{}, fmt.Errorf("session token is invalid")
 	}
 	return authorized, nil
+}
+
+func (svc *AgentSessionService) withCurrentSessionTokenRuntimeGuard(ctx context.Context, session entity.AgentSession, operation string, sideEffect func(entity.AgentSession, runtimerepo.MattermostBotTokenSecret) error) error {
+	return svc.withCurrentSessionGuardUsingStoreToken(ctx, svc.cfg.Store, session, operation, session.TokenSecretRef, func(current entity.AgentSession, secret runtimerepo.MattermostBotTokenSecret) error {
+		return sideEffect(current, secret)
+	})
+}
+
+func (svc *AgentSessionService) withCurrentSessionGuardUsingStoreToken(ctx context.Context, store adminrepo.Repository, expected entity.AgentSession, operation string, tokenSecretRef string, sideEffect func(entity.AgentSession, runtimerepo.MattermostBotTokenSecret) error) error {
+	current, err := store.GetAgentSession(ctx, expected.SessionKey)
+	if err != nil {
+		return err
+	}
+	if current.ID != expected.ID || current.RoleID != expected.RoleID || current.ProjectID != expected.ProjectID || current.ChatID != expected.ChatID || current.MattermostChannelID != expected.MattermostChannelID || strings.TrimSpace(current.TokenSecretRef) != strings.TrimSpace(tokenSecretRef) {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	role := entity.AgentRole{ID: current.RoleID, ProjectID: current.ProjectID}
+	if _, ok := store.(securityrepo.ClusterAdminSessionSubjectRepository); !ok {
+		role, err = store.GetAgentRole(ctx, current.RoleID)
+		if err != nil {
+			return err
+		}
+	}
+	required, err := clusterAdminSessionGuardRequired(ctx, store, role, current.SessionKey)
+	if err != nil {
+		return err
+	}
+	if !required {
+		if strings.TrimSpace(current.TokenSecretRef) == "" {
+			return sideEffect(current, runtimerepo.MattermostBotTokenSecret{})
+		}
+		secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, current.TokenSecretRef)
+		if err != nil {
+			return err
+		}
+		return sideEffect(current, secret)
+	}
+	role, err = store.GetAgentRole(ctx, current.RoleID)
+	if err != nil || role.ProjectID != current.ProjectID {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	chat, err := store.GetChat(ctx, current.ChatID)
+	if err != nil || chat.ProjectID != current.ProjectID || strings.TrimSpace(chat.MattermostChannelID) != strings.TrimSpace(current.MattermostChannelID) {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	repository, ok := store.(securityrepo.ClusterAdminRuntimeGuardRepository)
+	if !ok {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	input := securityrepo.ClusterAdminBindingInput{
+		RoleID: current.RoleID, ProjectID: current.ProjectID, ChatID: current.ChatID, ChatSlug: chat.Slug,
+		MattermostChannelID: current.MattermostChannelID, SessionKey: current.SessionKey,
+		Operation: operation, ActorUser: "runtime",
+	}
+	return repository.WithExistingClusterAdminRuntimeGuard(ctx, input, func() error {
+		secret, err := verifyClusterAdminSessionSecretIntegrityWithToken(ctx, store, svc.cfg.RuntimeRunner, current.RoleID, current.SessionKey, current.TokenSecretRef)
+		if err != nil {
+			return err
+		}
+		return sideEffect(current, secret)
+	})
 }
 
 func (svc *AgentSessionService) resolveRequestedRole(ctx context.Context, projectID int64, target string) (entity.AgentRole, error) {
@@ -1518,11 +1578,15 @@ func (svc *AgentSessionService) sessionOpenAIAccountName(ctx context.Context, se
 }
 
 func (svc *AgentSessionService) sessionMattermostUsername(ctx context.Context, session entity.AgentSession) string {
-	identity, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, session.RoleID)
+	return svc.sessionMattermostUsernameWithStore(ctx, svc.cfg.Store, session)
+}
+
+func (svc *AgentSessionService) sessionMattermostUsernameWithStore(ctx context.Context, store adminrepo.Repository, session entity.AgentSession) string {
+	identity, err := store.GetMattermostBotIdentityByRoleID(ctx, session.RoleID)
 	if err == nil && strings.TrimSpace(identity.Username) != "" {
 		return strings.TrimSpace(identity.Username)
 	}
-	role, err := svc.cfg.Store.GetAgentRole(ctx, session.RoleID)
+	role, err := store.GetAgentRole(ctx, session.RoleID)
 	if err != nil {
 		return ""
 	}

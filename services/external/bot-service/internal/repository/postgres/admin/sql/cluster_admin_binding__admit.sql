@@ -44,8 +44,10 @@ select exists(
 					and frozen_session.privilege_state = matter_codex_cluster_admin_session_state(session)
 					and not exists (
 						select 1 from matter_codex_cluster_admin_revocations revocation
-						where revocation.resource_type = 'session_binding'
-							and revocation.resource_key = role.id::text || ':' || frozen_session.session_key
+						where (revocation.resource_type = 'session_binding'
+								and revocation.resource_key = role.id::text || ':' || frozen_session.session_key)
+							or (revocation.resource_type = 'session_key'
+								and revocation.resource_key = frozen_session.session_key)
 					)
 			)
 		)

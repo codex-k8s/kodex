@@ -204,7 +204,7 @@ func TestReturnToRequesterGuardsFrozenSourceAndChildIndependently(t *testing.T) 
 		{
 			name:          "frozen source with ordinary child",
 			frozen:        map[string]bool{"source-session": true},
-			denyOperation: "agent_session.delegation_callback_queue.side_effect.source",
+			denyOperation: "agent_session.delegation_callback_persist.side_effect.source",
 		},
 		{
 			name:          "ordinary source with frozen child",

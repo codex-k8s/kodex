@@ -642,6 +642,9 @@ func TestClusterAdminCurrentSessionCallbacksFailClosedAtTokenAndEffectBarriers(t
 			if runner.botTokenSecretReads != 1 {
 				t.Fatalf("token reads=%d, want=1", runner.botTokenSecretReads)
 			}
+			if runner.secretIntegrityReads != 1 {
+				t.Fatalf("integrity reads=%d, want only the non-token Secret read", runner.secretIntegrityReads)
+			}
 			if store.guardCalls != 2 {
 				t.Fatalf("guards=%#v", store.guardInputs)
 			}

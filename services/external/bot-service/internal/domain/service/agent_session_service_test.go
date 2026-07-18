@@ -1079,6 +1079,12 @@ func (dispatcher *fakeAgentTurnDispatcher) EnqueueAgentTurn(_ context.Context, r
 	return dispatcher.queued, nil
 }
 
+func (dispatcher *fakeAgentTurnDispatcher) EnqueueExistingAgentTurn(_ context.Context, _ adminrepo.Repository, _ entity.AgentSession, request AgentTurnRequest) (AgentTurnQueued, error) {
+	dispatcher.calls++
+	dispatcher.request = request
+	return dispatcher.queued, nil
+}
+
 func (dispatcher *fakeAgentTurnDispatcher) RetryAgentTurn(_ context.Context, request AgentTurnRetryRequest) (AgentTurnQueued, error) {
 	dispatcher.retryCalls++
 	dispatcher.retryRequest = request

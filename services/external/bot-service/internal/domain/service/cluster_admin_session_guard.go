@@ -24,30 +24,51 @@ func clusterAdminSessionGuardRequired(ctx context.Context, store adminrepo.Repos
 }
 
 func verifyClusterAdminSessionSecretIntegrity(ctx context.Context, store adminrepo.Repository, runner runtimerepo.Runner, roleID int64, sessionKey string) error {
+	_, err := verifyClusterAdminSessionSecretIntegrityWithToken(ctx, store, runner, roleID, sessionKey, "")
+	return err
+}
+
+func verifyClusterAdminSessionSecretIntegrityWithToken(ctx context.Context, store adminrepo.Repository, runner runtimerepo.Runner, roleID int64, sessionKey string, tokenSecretRef string) (runtimerepo.MattermostBotTokenSecret, error) {
 	repository, ok := store.(securityrepo.ClusterAdminSecretIntegrityRepository)
 	if !ok || runner == nil {
-		return adminrepo.ErrClusterAdminAdmissionDenied
+		return runtimerepo.MattermostBotTokenSecret{}, adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	bindings, err := repository.ListClusterAdminSecretIntegrity(ctx, roleID, sessionKey)
 	if err != nil {
-		return err
+		return runtimerepo.MattermostBotTokenSecret{}, err
 	}
 	if len(bindings) == 0 {
-		return adminrepo.ErrClusterAdminAdmissionDenied
+		return runtimerepo.MattermostBotTokenSecret{}, adminrepo.ErrClusterAdminAdmissionDenied
 	}
+	tokenSecretRef = strings.TrimSpace(tokenSecretRef)
+	var tokenSecret runtimerepo.MattermostBotTokenSecret
+	tokenBindingFound := tokenSecretRef == ""
 	for _, binding := range bindings {
 		if strings.TrimSpace(binding.ContentSHA256) == "" || strings.TrimSpace(binding.ResourceUID) == "" || strings.TrimSpace(binding.ResourceVersion) == "" {
-			return adminrepo.ErrClusterAdminAdmissionDenied
+			return runtimerepo.MattermostBotTokenSecret{}, adminrepo.ErrClusterAdminAdmissionDenied
 		}
-		actual, err := runner.InspectSecretIntegrity(ctx, runtimerepo.SecretIntegrityInput{
-			SecretName: binding.SecretRef,
-			SecretKey:  binding.SecretKey,
-		})
+		var actual runtimerepo.SecretIntegrity
+		if tokenSecretRef != "" && binding.Kind == "session" && strings.TrimSpace(binding.SecretRef) == tokenSecretRef && binding.SecretKey == "token" {
+			if tokenBindingFound {
+				return runtimerepo.MattermostBotTokenSecret{}, adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			tokenBindingFound = true
+			tokenSecret, err = runner.GetMattermostBotTokenSecret(ctx, tokenSecretRef)
+			actual = tokenSecret.Integrity
+		} else {
+			actual, err = runner.InspectSecretIntegrity(ctx, runtimerepo.SecretIntegrityInput{
+				SecretName: binding.SecretRef,
+				SecretKey:  binding.SecretKey,
+			})
+		}
 		if err != nil || actual.ContentSHA256 != binding.ContentSHA256 || actual.UID != binding.ResourceUID || actual.ResourceVersion != binding.ResourceVersion {
-			return adminrepo.ErrClusterAdminAdmissionDenied
+			return runtimerepo.MattermostBotTokenSecret{}, adminrepo.ErrClusterAdminAdmissionDenied
 		}
 	}
-	return nil
+	if !tokenBindingFound || (tokenSecretRef != "" && strings.TrimSpace(tokenSecret.Token) == "") {
+		return runtimerepo.MattermostBotTokenSecret{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return tokenSecret, nil
 }
 
 func (svc *AgentSessionService) withCurrentSessionRuntimeGuard(ctx context.Context, session entity.AgentSession, operation string, sideEffect func(entity.AgentSession) error) error {

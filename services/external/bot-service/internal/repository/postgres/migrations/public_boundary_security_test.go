@@ -615,6 +615,139 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestV25DuplicateSessionKeyDiagnosticIsSanitizedAndAtomic(t *testing.T) {
+	const privateCanary = "synthetic-private-v25-session-key"
+	dsn := isolatedMigrationDSN(t, "v25_duplicate_privacy")
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	if err := migrations.RunTo(ctx, dsn, 24); err != nil {
+		t.Fatalf("migrations through v24: %v", err)
+	}
+	pool := openMigrationPool(t, ctx, dsn)
+	defer pool.Close()
+	if _, err := pool.Exec(ctx, `
+insert into matter_codex_cluster_admin_session_bindings(
+	role_id, project_id, chat_id, session_key, mattermost_channel_id, privilege_state
+) values
+	(91001, 92001, 93001, $1, 'synthetic-channel-a', '{}'::jsonb),
+	(91002, 92002, 93002, $1, 'synthetic-channel-b', '{}'::jsonb)
+`, privateCanary); err != nil {
+		t.Fatal("seed v24 duplicate session key")
+	}
+	var functionBefore string
+	if err := pool.QueryRow(ctx, `select pg_get_functiondef('matter_codex_guard_cluster_admin_session()'::regprocedure)`).Scan(&functionBefore); err != nil {
+		t.Fatalf("read v24 guard function: %v", err)
+	}
+	migrationErr, stderr := captureMigrationStderr(t, func() error { return migrations.Run(ctx, dsn) })
+	if migrationErr == nil {
+		t.Fatal("v25 accepted duplicate session key")
+	}
+	diagnostic := migrationErr.Error() + stderr
+	if strings.Contains(diagnostic, privateCanary) {
+		t.Fatal("v25 diagnostic disclosed a private session key")
+	}
+	if !strings.Contains(diagnostic, "MCV25_DUPLICATE_SESSION_KEY_GROUPS") || !strings.Contains(diagnostic, "duplicate_group_count=1") {
+		t.Fatal("v25 diagnostic did not contain only the safe remediation code and count")
+	}
+	version, err := migrations.Version(ctx, dsn)
+	if err != nil || version != 24 {
+		t.Fatalf("schema version after rejected v25 = %d, error=%v", version, err)
+	}
+	var indexExists bool
+	if err := pool.QueryRow(ctx, `select to_regclass('matter_codex_cluster_admin_session_bindings_session_key_uq') is not null`).Scan(&indexExists); err != nil || indexExists {
+		t.Fatalf("v25 unique index remained after rollback: exists=%t error=%v", indexExists, err)
+	}
+	var functionAfter string
+	if err := pool.QueryRow(ctx, `select pg_get_functiondef('matter_codex_guard_cluster_admin_session()'::regprocedure)`).Scan(&functionAfter); err != nil || functionAfter != functionBefore {
+		t.Fatal("v25 guard function changed after rejected migration")
+	}
+	var inventoryCount int
+	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_cluster_admin_revocations where resource_type = 'session_key'`).Scan(&inventoryCount); err != nil || inventoryCount != 0 {
+		t.Fatalf("v25 inventory remained after rollback: count=%d error=%v", inventoryCount, err)
+	}
+	var auditDisclosure bool
+	if err := pool.QueryRow(ctx, `select exists(select 1 from matter_codex_audit_events where summary like '%' || $1 || '%')`, privateCanary).Scan(&auditDisclosure); err != nil || auditDisclosure {
+		t.Fatalf("v25 diagnostic leaked into audit: disclosed=%t error=%v", auditDisclosure, err)
+	}
+}
+
+func TestV25PreflightLocksOutConcurrentDuplicateWriter(t *testing.T) {
+	const privateCanary = "synthetic-private-v25-concurrent-key"
+	dsn := isolatedMigrationDSN(t, "v25_duplicate_race")
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	if err := migrations.RunTo(ctx, dsn, 24); err != nil {
+		t.Fatalf("migrations through v24: %v", err)
+	}
+	pool := openMigrationPool(t, ctx, dsn)
+	defer pool.Close()
+	if _, err := pool.Exec(ctx, `
+insert into matter_codex_cluster_admin_session_bindings(
+	role_id, project_id, chat_id, session_key, mattermost_channel_id, privilege_state
+) values (91101, 92101, 93101, $1, 'synthetic-channel-a', '{}'::jsonb)
+`, privateCanary); err != nil {
+		t.Fatal("seed v24 session binding")
+	}
+	writer, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin concurrent writer: %v", err)
+	}
+	defer func() { _ = writer.Rollback(ctx) }()
+	if _, err := writer.Exec(ctx, `
+insert into matter_codex_cluster_admin_session_bindings(
+	role_id, project_id, chat_id, session_key, mattermost_channel_id, privilege_state
+) values (91102, 92102, 93102, $1, 'synthetic-channel-b', '{}'::jsonb)
+`, privateCanary); err != nil {
+		t.Fatal("stage concurrent duplicate")
+	}
+	result := make(chan error, 1)
+	go func() { result <- migrations.Run(ctx, dsn) }()
+	select {
+	case <-result:
+		t.Fatal("v25 preflight did not wait for the concurrent writer")
+	case <-time.After(200 * time.Millisecond):
+	}
+	if err := writer.Commit(ctx); err != nil {
+		t.Fatalf("commit concurrent duplicate: %v", err)
+	}
+	migrationErr := <-result
+	if migrationErr == nil {
+		t.Fatal("v25 accepted a concurrently committed duplicate")
+	}
+	if strings.Contains(migrationErr.Error(), privateCanary) || !strings.Contains(migrationErr.Error(), "MCV25_DUPLICATE_SESSION_KEY_GROUPS") {
+		t.Fatal("concurrent v25 diagnostic was not sanitized")
+	}
+	version, err := migrations.Version(ctx, dsn)
+	if err != nil || version != 24 {
+		t.Fatalf("schema version after concurrent duplicate = %d, error=%v", version, err)
+	}
+	var indexExists bool
+	if err := pool.QueryRow(ctx, `select to_regclass('matter_codex_cluster_admin_session_bindings_session_key_uq') is not null`).Scan(&indexExists); err != nil || indexExists {
+		t.Fatalf("v25 index remained after concurrent duplicate: exists=%t error=%v", indexExists, err)
+	}
+}
+
+func captureMigrationStderr(t *testing.T, fn func() error) (error, string) {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stderr capture: %v", err)
+	}
+	previous := os.Stderr
+	os.Stderr = writer
+	output := make(chan []byte, 1)
+	go func() {
+		captured, _ := io.ReadAll(reader)
+		output <- captured
+	}()
+	runErr := fn()
+	_ = writer.Close()
+	os.Stderr = previous
+	captured := <-output
+	_ = reader.Close()
+	return runErr, string(captured)
+}
+
 func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testing.T) {
 	dsn := isolatedMigrationDSN(t, "upgrade")
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)

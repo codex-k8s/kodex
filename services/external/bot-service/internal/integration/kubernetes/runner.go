@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -34,6 +36,7 @@ const (
 	runnerComponent              = "agent-run"
 	sessionComponent             = "agent-session"
 	sessionTokenComponent        = "agent-session-token"
+	sessionTokenFinalizer        = "matter-codex.dev/session-token-protection"
 	labelRunID                   = "matter-codex.dev/run-id"
 	labelSessionKey              = "matter-codex.dev/session-key"
 	labelAgentRole               = "matter-codex.dev/agent-role"
@@ -116,12 +119,16 @@ func (runner *Runner) InspectSecretIntegrity(ctx context.Context, input runtimer
 	if !ok || len(value) == 0 {
 		return runtimerepo.SecretIntegrity{}, fmt.Errorf("secret key is missing")
 	}
+	return secretIntegrity(secret, input.SecretKey, value), nil
+}
+
+func secretIntegrity(secret *corev1.Secret, secretKey string, value []byte) runtimerepo.SecretIntegrity {
 	digest := sha256.Sum256(value)
 	return runtimerepo.SecretIntegrity{
-		SecretName: input.SecretName, SecretKey: input.SecretKey,
+		SecretName: secret.Name, SecretKey: secretKey,
 		ContentSHA256: hex.EncodeToString(digest[:]),
 		UID:           string(secret.UID), ResourceVersion: secret.ResourceVersion,
-	}, nil
+	}
 }
 
 func runnerCommand() []string {
@@ -797,13 +804,20 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	podName := sessionPodName(input.SessionKey)
 	pvcName := sessionPVCName(input.SessionKey)
 	secretName := sessionSecretName(input.SessionKey)
+	created := false
 	if input.TokenSecretIntegrity != nil {
 		if err := runner.verifyExistingSessionTokenSecret(ctx, secretName, input.InternalToken, *input.TokenSecretIntegrity); err != nil {
 			return runtimerepo.StartedAgentSession{}, err
 		}
+		var err error
+		input.PodTokenSecretName, err = runner.materializeImmutableSessionTokenSecret(ctx, input.SessionKey, input.InternalToken, *input.TokenSecretIntegrity)
+		if err != nil {
+			return runtimerepo.StartedAgentSession{}, err
+		}
+		if err := runner.verifyFrozenSessionTokenBoundary(ctx, input.SessionKey, secretName, input.PodTokenSecretName, input.InternalToken, *input.TokenSecretIntegrity); err != nil {
+			return runtimerepo.StartedAgentSession{}, err
+		}
 	}
-
-	created := false
 	pvcCreated, err := runner.ensureSessionPVC(ctx, input.SessionKey, input.Role)
 	if err != nil {
 		return runtimerepo.StartedAgentSession{}, err
@@ -813,16 +827,31 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 		if _, err := runner.upsertSessionTokenSecret(ctx, input.SessionKey, secretName, input.InternalToken); err != nil {
 			return runtimerepo.StartedAgentSession{}, err
 		}
+		input.PodTokenSecretName = secretName
+	} else {
+		if err := runner.verifyFrozenSessionTokenBoundary(ctx, input.SessionKey, secretName, input.PodTokenSecretName, input.InternalToken, *input.TokenSecretIntegrity); err != nil {
+			return runtimerepo.StartedAgentSession{}, err
+		}
 	}
-	recreatePod, err := runner.sessionPodShouldBeRecreated(ctx, podName)
+	recreatePod, err := runner.sessionPodShouldBeRecreated(ctx, podName, input.PodTokenSecretName)
 	if err != nil {
 		return runtimerepo.StartedAgentSession{}, err
 	}
 	if recreatePod {
+		if input.TokenSecretIntegrity != nil {
+			if err := runner.verifyFrozenSessionTokenBoundary(ctx, input.SessionKey, secretName, input.PodTokenSecretName, input.InternalToken, *input.TokenSecretIntegrity); err != nil {
+				return runtimerepo.StartedAgentSession{}, err
+			}
+		}
 		if err := runner.deleteSessionPod(ctx, podName); err != nil {
 			return runtimerepo.StartedAgentSession{}, err
 		}
 		created = true
+	}
+	if input.TokenSecretIntegrity != nil {
+		if err := runner.verifyFrozenSessionTokenBoundary(ctx, input.SessionKey, secretName, input.PodTokenSecretName, input.InternalToken, *input.TokenSecretIntegrity); err != nil {
+			return runtimerepo.StartedAgentSession{}, err
+		}
 	}
 	if _, err := runner.client.CoreV1().Pods(runner.namespace).Create(ctx, runner.sessionPod(input), metav1.CreateOptions{}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
@@ -845,6 +874,81 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 		SecretName: secretName,
 		Created:    created,
 	}, nil
+}
+
+func (runner *Runner) materializeImmutableSessionTokenSecret(ctx context.Context, sessionKey string, token string, expected runtimerepo.SecretIntegrity) (string, error) {
+	if err := runner.verifyExistingSessionTokenSecret(ctx, expected.SecretName, token, expected); err != nil {
+		return "", err
+	}
+	name := immutableSessionTokenSecretName(sessionKey, expected)
+	immutable := true
+	labels := map[string]string{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": sessionTokenComponent,
+		labelSessionKey:               kubernetesLabelValue(sessionKey),
+	}
+	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
+	created, err := secretClient.Create(ctx, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Finalizers: []string{sessionTokenFinalizer}},
+		Immutable:  &immutable,
+		Type:       corev1.SecretTypeOpaque,
+		Data:       map[string][]byte{"token": []byte(token)},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return "", fmt.Errorf("create immutable session token secret: %w", err)
+		}
+		created, err = secretClient.Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return "", fmt.Errorf("get immutable session token secret: %w", err)
+		}
+	}
+	if created.Immutable == nil || !*created.Immutable || created.Type != corev1.SecretTypeOpaque || created.DeletionTimestamp != nil ||
+		created.Labels["app.kubernetes.io/component"] != sessionTokenComponent ||
+		created.Labels[labelSessionKey] != kubernetesLabelValue(sessionKey) ||
+		!containsString(created.Finalizers, sessionTokenFinalizer) ||
+		!bytes.Equal(created.Data["token"], []byte(token)) {
+		return "", fmt.Errorf("immutable session token secret verification failed")
+	}
+	actual := secretIntegrity(created, "token", created.Data["token"])
+	if actual.ContentSHA256 != expected.ContentSHA256 {
+		return "", fmt.Errorf("immutable session token secret content mismatch")
+	}
+	return name, nil
+}
+
+func (runner *Runner) verifyFrozenSessionTokenBoundary(ctx context.Context, sessionKey string, originalSecretName string, immutableSecretName string, token string, expected runtimerepo.SecretIntegrity) error {
+	if err := runner.verifyExistingSessionTokenSecret(ctx, originalSecretName, token, expected); err != nil {
+		return err
+	}
+	secret, err := runner.client.CoreV1().Secrets(runner.namespace).Get(ctx, immutableSecretName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get immutable session token secret: %w", err)
+	}
+	if secret.Immutable == nil || !*secret.Immutable || secret.Type != corev1.SecretTypeOpaque || secret.DeletionTimestamp != nil ||
+		secret.Labels["app.kubernetes.io/component"] != sessionTokenComponent ||
+		secret.Labels[labelSessionKey] != kubernetesLabelValue(sessionKey) ||
+		!containsString(secret.Finalizers, sessionTokenFinalizer) ||
+		!bytes.Equal(secret.Data["token"], []byte(token)) {
+		return fmt.Errorf("immutable session token secret verification failed")
+	}
+	actual := secretIntegrity(secret, "token", secret.Data["token"])
+	if actual.ContentSHA256 != expected.ContentSHA256 {
+		return fmt.Errorf("immutable session token secret content mismatch")
+	}
+	return nil
+}
+
+func immutableSessionTokenSecretName(sessionKey string, expected runtimerepo.SecretIntegrity) string {
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		sessionKey,
+		expected.SecretName,
+		expected.SecretKey,
+		expected.ContentSHA256,
+		expected.UID,
+		expected.ResourceVersion,
+	}, "\x00")))
+	return "mc-session-token-" + hex.EncodeToString(digest[:20])
 }
 
 func (runner *Runner) verifyExistingSessionTokenSecret(ctx context.Context, secretName string, token string, expected runtimerepo.SecretIntegrity) error {
@@ -905,7 +1009,7 @@ func (runner *Runner) ensureSessionPVC(ctx context.Context, sessionKey string, r
 	return true, nil
 }
 
-func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName string) (bool, error) {
+func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName string, tokenSecretName string) (bool, error) {
 	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -913,7 +1017,43 @@ func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName s
 		}
 		return false, fmt.Errorf("get session pod: %w", err)
 	}
-	return pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed, nil
+	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+		return true, nil
+	}
+	return !podUsesSessionTokenSecret(pod, tokenSecretName), nil
+}
+
+func podUsesSessionTokenSecret(pod *corev1.Pod, tokenSecretName string) bool {
+	tokenSecretName = strings.TrimSpace(tokenSecretName)
+	if pod == nil || tokenSecretName == "" {
+		return false
+	}
+	volumeMatches := false
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Name == sessionSecretVolume && volume.Secret != nil && volume.Secret.SecretName == tokenSecretName {
+			volumeMatches = true
+			break
+		}
+	}
+	if !volumeMatches {
+		return false
+	}
+	requiredEnvironment := map[string]bool{
+		"MATTERCODEX_SESSION_TOKEN": false,
+		"MATTERCODEX_MCP_TOKEN":     false,
+	}
+	for _, container := range pod.Spec.Containers {
+		for _, env := range container.Env {
+			if _, required := requiredEnvironment[env.Name]; !required {
+				continue
+			}
+			if env.ValueFrom == nil || env.ValueFrom.SecretKeyRef == nil || env.ValueFrom.SecretKeyRef.Name != tokenSecretName || env.ValueFrom.SecretKeyRef.Key != "token" {
+				return false
+			}
+			requiredEnvironment[env.Name] = true
+		}
+	}
+	return requiredEnvironment["MATTERCODEX_SESSION_TOKEN"] && requiredEnvironment["MATTERCODEX_MCP_TOKEN"]
 }
 
 func (runner *Runner) GetAgentSessionRuntimeHealth(ctx context.Context, sessionKey string) (runtimerepo.AgentSessionRuntimeHealth, error) {
@@ -1062,6 +1202,7 @@ func (runner *Runner) GetMattermostBotTokenSecret(ctx context.Context, secretNam
 		SecretName: secretName,
 		Namespace:  runner.namespace,
 		Token:      token,
+		Integrity:  secretIntegrity(secret, "token", secret.Data["token"]),
 	}, nil
 }
 
@@ -1357,15 +1498,77 @@ func (runner *Runner) cleanupExpiredSessionResources(ctx context.Context, cutoff
 		if dryRun {
 			continue
 		}
-		if err := runner.client.CoreV1().Secrets(runner.namespace).Delete(ctx, secret.Name, metav1.DeleteOptions{}); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return sessionCleanupResult{}, fmt.Errorf("delete expired session token secret %s: %w", secret.Name, err)
-			}
-		} else {
+		deleted, err := runner.deleteSessionTokenSecret(ctx, secret)
+		if err != nil {
+			return sessionCleanupResult{}, fmt.Errorf("delete expired session token secret %s: %w", secret.Name, err)
+		}
+		if deleted {
 			result.SessionSecretsDeleted++
 		}
 	}
 	return result, nil
+}
+
+func (runner *Runner) deleteSessionTokenSecret(ctx context.Context, listed corev1.Secret) (bool, error) {
+	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
+	secret, err := secretClient.Get(ctx, listed.Name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if containsString(secret.Finalizers, sessionTokenFinalizer) {
+		if secret.Immutable == nil || !*secret.Immutable || secret.DeletionTimestamp != nil ||
+			secret.Labels["app.kubernetes.io/component"] != sessionTokenComponent ||
+			secret.Labels[labelSessionKey] != listed.Labels[labelSessionKey] {
+			return false, fmt.Errorf("protected session token secret identity mismatch")
+		}
+		patch, err := json.Marshal(map[string]any{
+			"metadata": map[string]any{
+				"resourceVersion": secret.ResourceVersion,
+				"finalizers":      removeString(secret.Finalizers, sessionTokenFinalizer),
+			},
+		})
+		if err != nil {
+			return false, fmt.Errorf("encode session token finalizer cleanup: %w", err)
+		}
+		secret, err = secretClient.Patch(ctx, secret.Name, k8stypes.MergePatchType, patch, metav1.PatchOptions{})
+		if err != nil {
+			return false, fmt.Errorf("remove session token finalizer: %w", err)
+		}
+	}
+	uid := secret.UID
+	resourceVersion := secret.ResourceVersion
+	err = secretClient.Delete(ctx, secret.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{
+		UID: &uid, ResourceVersion: &resourceVersion,
+	}})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(values []string, target string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != target {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func (runner *Runner) smokePVC(runID string, role string) *corev1.PersistentVolumeClaim {
@@ -1773,13 +1976,14 @@ func (runner *Runner) sessionPVC(sessionKey string, role string) *corev1.Persist
 func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1.Pod {
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
 	kubernetesAccess := normalizedKubernetesAccess(input.KubernetesAccess)
+	tokenSecretName := defaultString(input.PodTokenSecretName, sessionSecretName(input.SessionKey))
 	env := []corev1.EnvVar{
 		{Name: "MATTERCODEX_SESSION_KEY", Value: input.SessionKey},
 		{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Role},
 		{Name: "MATTERCODEX_KUBERNETES_ACCESS", Value: kubernetesAccess},
 		{Name: "MATTERCODEX_BOT_SERVICE_URL", Value: input.BotServiceURL},
 		{Name: "MATTERCODEX_SESSION_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: sessionSecretName(input.SessionKey)},
+			LocalObjectReference: corev1.LocalObjectReference{Name: tokenSecretName},
 			Key:                  "token",
 		}}},
 		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
@@ -1787,7 +1991,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv)},
 		{Name: "MATTERCODEX_MCP_URL", Value: strings.TrimRight(input.BotServiceURL, "/") + "/mcp/sessions/" + input.SessionKey},
 		{Name: "MATTERCODEX_MCP_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: sessionSecretName(input.SessionKey)},
+			LocalObjectReference: corev1.LocalObjectReference{Name: tokenSecretName},
 			Key:                  "token",
 		}}},
 	}
@@ -1821,7 +2025,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 			Name: sessionSecretVolume,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: sessionSecretName(input.SessionKey),
+					SecretName: tokenSecretName,
 					Items: []corev1.KeyToPath{
 						{Key: "token", Path: "token"},
 					},
