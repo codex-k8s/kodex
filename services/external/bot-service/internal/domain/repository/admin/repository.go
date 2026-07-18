@@ -328,6 +328,14 @@ type CreateAgentDelegationCallbackDeliveryInput struct {
 	ExternalID    string
 }
 
+type CreateAgentDelegationCallbackDeliveryManifestInput struct {
+	DelegationID  int64
+	CallbackRunID string
+	ExpectedCount int
+	ExpectedPlan  []byte
+	PlanSHA256    []byte
+}
+
 type ClaimAgentDelegationCallbackDeliveryInput struct {
 	DelegationID  int64
 	CallbackRunID string
@@ -457,6 +465,8 @@ type ExactAgentSessionsPublishFenceRepository interface {
 
 type AgentDelegationCallbackDeliveryRepository interface {
 	CreateAgentDelegationCallbackDeliveries(ctx context.Context, inputs []CreateAgentDelegationCallbackDeliveryInput) ([]entity.AgentDelegationCallbackDelivery, error)
+	CreateAgentDelegationCallbackDeliveryManifest(ctx context.Context, input CreateAgentDelegationCallbackDeliveryManifestInput) error
+	ValidateAgentDelegationCallbackDeliveryPlan(ctx context.Context, delegationID int64, callbackRunID string) error
 	ListAgentDelegationCallbackDeliveries(ctx context.Context, delegationID int64, callbackRunID string) ([]entity.AgentDelegationCallbackDelivery, error)
 	ClaimAgentDelegationCallbackDelivery(ctx context.Context, input ClaimAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error)
 	ReleaseAgentDelegationCallbackDelivery(ctx context.Context, input ReleaseAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error)

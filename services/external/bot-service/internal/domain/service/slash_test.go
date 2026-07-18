@@ -3762,6 +3762,7 @@ type fakeAdminStore struct {
 	sessionTurns         []entity.AgentSessionTurn
 	agentDelegations     map[int64]entity.AgentDelegation
 	callbackDeliveries   map[int64]entity.AgentDelegationCallbackDelivery
+	callbackManifests    map[string]adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput
 	postMessageMaxRunes  int
 	frozenOpenAIAccount  string
 	frozenGitHubAccount  string

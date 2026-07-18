@@ -442,11 +442,37 @@ func verifyExactCallbackPost(post *mattermostmodel.Post, input statusservice.Mat
 	if post == nil || strings.TrimSpace(post.Id) == "" || post.ChannelId != input.ChannelID || post.RootId != input.RootPostID || post.Message != input.Message {
 		return fmt.Errorf("Mattermost callback post conflicts with the immutable delivery payload")
 	}
-	actualProps := post.GetProps()
-	if !sameJSONValue(actualProps, input.Props) {
+	if !exactCallbackPostProps(post.GetProps(), input.Props) {
 		return fmt.Errorf("Mattermost callback post props conflict with the immutable delivery payload")
 	}
 	return nil
+}
+
+func exactCallbackPostProps(actual map[string]any, clientOwned map[string]any) bool {
+	if len(actual) != len(clientOwned)+1 || actual[mattermostmodel.PostPropsFromBot] != "true" {
+		return false
+	}
+	for key, expected := range clientOwned {
+		if !strings.HasPrefix(key, "matter_codex_") || key == mattermostmodel.PostPropsFromBot {
+			return false
+		}
+		value, exists := actual[key]
+		if !exists || !sameJSONValue(value, expected) {
+			return false
+		}
+	}
+	for key := range actual {
+		if key == mattermostmodel.PostPropsFromBot {
+			continue
+		}
+		if !strings.HasPrefix(key, "matter_codex_") {
+			return false
+		}
+		if _, exists := clientOwned[key]; !exists {
+			return false
+		}
+	}
+	return true
 }
 
 func sameJSONValue(left any, right any) bool {

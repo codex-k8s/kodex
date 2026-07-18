@@ -2,7 +2,11 @@ package testsupport
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -82,28 +86,202 @@ func TestDisposableDatabaseOfflineAdmissionMatrix(t *testing.T) {
 	assertAllowed("explicit ephemeral CI endpoint", ciDSN)
 }
 
-func TestEphemeralCIBootstrapRequiresExactEndpointMarker(t *testing.T) {
-	config, err := pgxpool.ParseConfig("host=ci-postgres port=5432 dbname=bootstrap user=synthetic-user")
-	if err != nil {
-		t.Fatal("не удалось подготовить synthetic CI config")
+func TestBootstrapProofOfflineMatrix(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	nonce := strings.Repeat("ab", 32)
+	nonceBytes, _ := hex.DecodeString(nonce)
+	nonceHash := sha256.Sum256(nonceBytes)
+	valid := bootstrapProof{
+		Version: bootstrapProofVersion, Nonce: nonce, NonceSHA256: hex.EncodeToString(nonceHash[:]),
+		IssuedAt: now.Format(time.RFC3339Nano), ExpiresAt: now.Add(bootstrapProofLifetime).Format(time.RFC3339Nano),
+		EndpointFingerprint: strings.Repeat("c", 64), ServerFingerprint: strings.Repeat("d", 64),
+		MaintenanceDatabase: "bootstrap", Purpose: bootstrapProofPurpose,
+		RunID: strings.Repeat("e", 32), State: bootstrapProofState,
 	}
-	t.Setenv("MATTERCODEX_POSTGRES_TEST_EPHEMERAL_ENDPOINT_MARKER", "synthetic-ci-run-marker")
-	if err := verifyBootstrapEndpointSnapshot(config, "192.0.2.10", 5432, "synthetic-ci-run-marker"); err != nil {
-		t.Fatalf("явно разрешённый ephemeral CI bootstrap отклонён: %v", err)
+	encode := func(proof bootstrapProof) string {
+		t.Helper()
+		value, err := json.Marshal(proof)
+		if err != nil {
+			t.Fatal("сериализация synthetic proof")
+		}
+		return string(value)
 	}
-	for name, proof := range map[string]struct {
-		port    int
-		comment string
-	}{
-		"missing marker":    {port: 5432},
-		"mismatched marker": {port: 5432, comment: "foreign-marker"},
-		"remapped endpoint": {port: 6432, comment: "synthetic-ci-run-marker"},
-	} {
+	if _, err := parseBootstrapProof(encode(valid), now); err != nil {
+		t.Fatalf("допустимый one-shot proof отклонён: %v", err)
+	}
+	cases := map[string]func(*bootstrapProof){
+		"short nonce":      func(proof *bootstrapProof) { proof.Nonce = "aa" },
+		"wrong nonce hash": func(proof *bootstrapProof) { proof.NonceSHA256 = strings.Repeat("f", 64) },
+		"expired": func(proof *bootstrapProof) {
+			proof.IssuedAt = now.Add(-20 * time.Minute).Format(time.RFC3339Nano)
+			proof.ExpiresAt = now.Add(-time.Minute).Format(time.RFC3339Nano)
+		},
+		"future": func(proof *bootstrapProof) {
+			proof.IssuedAt = now.Add(time.Minute).Format(time.RFC3339Nano)
+			proof.ExpiresAt = now.Add(2 * time.Minute).Format(time.RFC3339Nano)
+		},
+		"excessive ttl": func(proof *bootstrapProof) {
+			proof.ExpiresAt = now.Add(bootstrapProofLifetime + time.Second).Format(time.RFC3339Nano)
+		},
+		"wrong endpoint":   func(proof *bootstrapProof) { proof.EndpointFingerprint = "short" },
+		"wrong server":     func(proof *bootstrapProof) { proof.ServerFingerprint = "short" },
+		"wrong database":   func(proof *bootstrapProof) { proof.MaintenanceDatabase = "" },
+		"wrong purpose":    func(proof *bootstrapProof) { proof.Purpose = "foreign-purpose" },
+		"wrong state":      func(proof *bootstrapProof) { proof.State = "consumed" },
+		"malformed run id": func(proof *bootstrapProof) { proof.RunID = "short" },
+	}
+	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
-			if err := verifyBootstrapEndpointSnapshot(config, "192.0.2.10", proof.port, proof.comment); err == nil {
-				t.Fatal("CI bootstrap без точного endpoint proof разрешён")
+			candidate := valid
+			mutate(&candidate)
+			if _, err := parseBootstrapProof(encode(candidate), now); err == nil {
+				t.Fatal("недопустимый bootstrap proof принят")
 			}
 		})
+	}
+	if _, err := parseBootstrapProof("{}", now); err == nil {
+		t.Fatal("пустой bootstrap proof принят")
+	}
+}
+
+func TestGeneratedPostgresHarnessOneShotBootstrapProof(t *testing.T) {
+	if strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_BINDIR")) == "" {
+		t.Skip("server binaries generated PostgreSQL harness не заданы")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	harness, err := StartGeneratedPostgresHarness(ctx)
+	if err != nil {
+		t.Fatalf("start generated PostgreSQL harness: %v", err)
+	}
+	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		if err := harness.Close(cleanupCtx); err != nil {
+			t.Errorf("close generated PostgreSQL harness: %v", err)
+		}
+	}()
+	pool, err := pgxpool.New(ctx, harness.BootstrapDSN)
+	if err != nil {
+		t.Fatalf("connect generated PostgreSQL harness: %v", err)
+	}
+	defer pool.Close()
+	databaseCount := func() int {
+		t.Helper()
+		var count int
+		if err := pool.QueryRow(ctx, `select count(*) from pg_database`).Scan(&count); err != nil {
+			t.Fatalf("count generated PostgreSQL databases: %v", err)
+		}
+		return count
+	}
+	assertNoDatabaseEffect := func(label string, action func() error) {
+		t.Helper()
+		before := databaseCount()
+		if err := action(); err == nil {
+			t.Fatalf("%s был принят", label)
+		}
+		if after := databaseCount(); after != before {
+			t.Fatalf("%s изменил число databases: before=%d after=%d", label, before, after)
+		}
+	}
+	assertNoDatabaseEffect("локальный live endpoint без proof", func() error {
+		_, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, "")
+		return err
+	})
+
+	var proof bootstrapProof
+	if err := json.Unmarshal([]byte(harness.BootstrapProof), &proof); err != nil {
+		t.Fatalf("decode generated proof: %v", err)
+	}
+	encodeProof := func(candidate bootstrapProof) string {
+		t.Helper()
+		value, err := json.Marshal(candidate)
+		if err != nil {
+			t.Fatalf("encode generated proof candidate: %v", err)
+		}
+		return string(value)
+	}
+	for label, mutate := range map[string]func(*bootstrapProof){
+		"endpoint mismatch": func(candidate *bootstrapProof) { candidate.EndpointFingerprint = strings.Repeat("a", 64) },
+		"server mismatch":   func(candidate *bootstrapProof) { candidate.ServerFingerprint = strings.Repeat("b", 64) },
+		"database mismatch": func(candidate *bootstrapProof) { candidate.MaintenanceDatabase = "template1" },
+		"expired proof": func(candidate *bootstrapProof) {
+			candidate.IssuedAt = time.Now().UTC().Add(-2 * bootstrapProofLifetime).Format(time.RFC3339Nano)
+			candidate.ExpiresAt = time.Now().UTC().Add(-bootstrapProofLifetime).Format(time.RFC3339Nano)
+		},
+		"future proof": func(candidate *bootstrapProof) {
+			candidate.IssuedAt = time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano)
+			candidate.ExpiresAt = time.Now().UTC().Add(2 * time.Minute).Format(time.RFC3339Nano)
+		},
+		"short nonce":       func(candidate *bootstrapProof) { candidate.Nonce = "aa" },
+		"malformed purpose": func(candidate *bootstrapProof) { candidate.Purpose = "foreign-purpose" },
+	} {
+		candidate := proof
+		mutate(&candidate)
+		assertNoDatabaseEffect(label, func() error {
+			_, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, encodeProof(candidate))
+			return err
+		})
+	}
+	assertNoDatabaseEffect("malformed proof", func() error {
+		_, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, "{")
+		return err
+	})
+	t.Setenv("MATTERCODEX_POSTGRES_DB", "postgres")
+	assertNoDatabaseEffect("configured production identity", func() error {
+		_, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, harness.BootstrapProof)
+		return err
+	})
+	t.Setenv("MATTERCODEX_POSTGRES_DB", "")
+	target, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, harness.BootstrapProof)
+	if err != nil {
+		t.Fatalf("generated one-shot proof rejected: %v", err)
+	}
+	assertNoDatabaseEffect("reused proof", func() error {
+		_, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, harness.BootstrapProof)
+		return err
+	})
+	if err := DestroyDisposableDatabase(ctx, harness.BootstrapDSN, target); err != nil {
+		t.Fatalf("destroy generated proof target: %v", err)
+	}
+
+	concurrentProof, err := provisionGeneratedBootstrapProof(
+		ctx,
+		harness.BootstrapDSN,
+		harness.dataDirectory,
+		harness.socketDirectory,
+	)
+	if err != nil {
+		t.Fatalf("provision concurrent generated proof: %v", err)
+	}
+	start := make(chan struct{})
+	results := make(chan struct {
+		target DisposableDatabase
+		err    error
+	}, 2)
+	for range 2 {
+		go func() {
+			<-start
+			created, createErr := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, concurrentProof)
+			results <- struct {
+				target DisposableDatabase
+				err    error
+			}{target: created, err: createErr}
+		}()
+	}
+	close(start)
+	winners := make([]DisposableDatabase, 0, 1)
+	for range 2 {
+		result := <-results
+		if result.err == nil {
+			winners = append(winners, result.target)
+		}
+	}
+	if len(winners) != 1 {
+		t.Fatalf("concurrent proof winners=%d, want 1", len(winners))
+	}
+	if err := DestroyDisposableDatabase(ctx, harness.BootstrapDSN, winners[0]); err != nil {
+		t.Fatalf("destroy concurrent proof target: %v", err)
 	}
 }
 

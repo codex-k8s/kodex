@@ -82,7 +82,13 @@ func (svc *AgentSessionService) withCurrentSessionPersistenceGuard(ctx context.C
 }
 
 func (svc *AgentSessionService) withCurrentSessionsPersistenceGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession, adminrepo.Repository) error) error {
-	return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, svc.cfg.Store, child, source, operation, sideEffect)
+	repository, ok := svc.cfg.Store.(adminrepo.ExactAgentSessionsRuntimeGuardRepository)
+	if !ok {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return repository.WithExactAgentSessionsRuntimeGuard(ctx, []entity.AgentSession{child, source}, func(transactionalStore adminrepo.Repository) error {
+		return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, transactionalStore, child, source, operation, sideEffect)
+	})
 }
 
 func (svc *AgentSessionService) withCurrentSessionsPersistenceGuardUsingStore(ctx context.Context, store adminrepo.Repository, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession, adminrepo.Repository) error) error {

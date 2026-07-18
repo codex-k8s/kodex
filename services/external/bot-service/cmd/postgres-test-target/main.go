@@ -29,8 +29,11 @@ func run() int {
 	targetDSN := strings.TrimSpace(os.Getenv("MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN"))
 	targetMarker := strings.TrimSpace(os.Getenv("MATTERCODEX_BOT_SERVICE_TEST_DATABASE_MARKER"))
 	bootstrapDSN := strings.TrimSpace(os.Getenv("MATTERCODEX_BOT_SERVICE_TEST_BOOTSTRAP_DSN"))
+	bootstrapProof := strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_BOOTSTRAP_PROOF"))
 	var target testsupport.DisposableDatabase
+	var harness testsupport.GeneratedPostgresHarness
 	created := false
+	generated := false
 	if targetDSN != "" || targetMarker != "" {
 		if targetDSN == "" || targetMarker == "" || testsupport.ValidateDisposableDatabase(ctx, targetDSN, targetMarker) != nil {
 			fmt.Fprintln(os.Stderr, "заданный PostgreSQL test target не прошёл fail-closed admission")
@@ -38,13 +41,25 @@ func run() int {
 		}
 	} else {
 		if bootstrapDSN == "" {
-			fmt.Fprintln(os.Stderr, "нужен локальный bootstrap DSN либо заранее созданный одноразовый PostgreSQL target")
-			return 1
+			var err error
+			harness, err = testsupport.StartGeneratedPostgresHarness(ctx)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "generated PostgreSQL test harness не запущен")
+				return 1
+			}
+			generated = true
+			bootstrapDSN = harness.BootstrapDSN
+			bootstrapProof = harness.BootstrapProof
 		}
 		var err error
-		target, err = testsupport.BootstrapDisposableDatabase(ctx, bootstrapDSN)
+		target, err = testsupport.BootstrapDisposableDatabase(ctx, bootstrapDSN, bootstrapProof)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "создание одноразового PostgreSQL test target не выполнено: %v\n", err)
+			if generated {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				_ = harness.Close(cleanupCtx)
+				cleanupCancel()
+			}
+			fmt.Fprintln(os.Stderr, "создание одноразового PostgreSQL test target не выполнено")
 			return 1
 		}
 		created = true
@@ -66,6 +81,14 @@ func run() int {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		cleanupErr = testsupport.DestroyDisposableDatabase(cleanupCtx, bootstrapDSN, target)
 		cleanupCancel()
+	}
+	if generated {
+		harnessContext, harnessCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		harnessErr := harness.Close(harnessContext)
+		harnessCancel()
+		if cleanupErr == nil {
+			cleanupErr = harnessErr
+		}
 	}
 	if cleanupErr != nil {
 		fmt.Fprintln(os.Stderr, "безопасное удаление одноразового PostgreSQL test target не выполнено")

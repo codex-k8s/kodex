@@ -39,6 +39,37 @@ func TestReturnToRequesterProductionDispatcherDoesNotSelfLockFrozenSource(t *tes
 	}
 }
 
+func TestReturnToRequesterOrdinaryAndClusterAdminCommitExactTwoRowPlan(t *testing.T) {
+	for _, sourceAccess := range []string{"read-only", "cluster-admin"} {
+		t.Run(sourceAccess, func(t *testing.T) {
+			fixture := newPostgresDelegationFixtureWithSourceAccess(t, 1, sourceAccess)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Короткий атомарный callback.")
+			if err != nil || strings.TrimSpace(result.CallbackRunID) == "" {
+				t.Fatalf("ReturnToRequester(%s) result=%#v error=%v", sourceAccess, result, err)
+			}
+			assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
+			var deliveryCount, destinationCount, deliveredCount, manifestCount int
+			var planValid bool
+			if err := fixture.pool.QueryRow(ctx, `
+select
+	count(*)::integer,
+	count(distinct destination)::integer,
+	count(*) filter (where status = 'delivered')::integer,
+	(select count(*)::integer from matter_codex_agent_delegation_callback_delivery_manifests),
+	bool_and(matter_codex_agent_delegation_callback_plan_valid(delegation_id, callback_run_id))
+from matter_codex_agent_delegation_callback_deliveries
+`).Scan(&deliveryCount, &destinationCount, &deliveredCount, &manifestCount, &planValid); err != nil {
+				t.Fatalf("inspect %s callback plan: %v", sourceAccess, err)
+			}
+			if deliveryCount != 2 || destinationCount != 2 || deliveredCount != 2 || manifestCount != 1 || !planValid {
+				t.Fatalf("%s plan rows=%d destinations=%d delivered=%d manifests=%d valid=%t", sourceAccess, deliveryCount, destinationCount, deliveredCount, manifestCount, planValid)
+			}
+		})
+	}
+}
+
 func TestReturnToRequesterPostgresPreflightRejectsStoredTitleBeforeDurableEffects(t *testing.T) {
 	fixture := newPostgresDelegationFixture(t, 2)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -195,12 +226,37 @@ func TestReturnToRequesterProductionDispatcherErrorRollsBackAndRetriesOnce(t *te
 	assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
 }
 
+func TestReturnToRequesterPostgresFaultsRollbackEveryPersistenceBoundary(t *testing.T) {
+	stages := []string{"after_enqueue", "after_callback_run", "after_first_delivery", "after_second_delivery", "on_commit"}
+	for _, sourceAccess := range []string{"read-only", "cluster-admin"} {
+		for _, stage := range stages {
+			t.Run(sourceAccess+"/"+stage, func(t *testing.T) {
+				fixture := newPostgresDelegationFixtureWithSourceAccess(t, 1, sourceAccess)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				removeFault := installPostgresCallbackPersistenceFault(t, ctx, fixture.pool, stage)
+				if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетическая атомарная ошибка."); err == nil {
+					t.Fatalf("%s/%s fault не остановил callback", sourceAccess, stage)
+				}
+				assertPostgresCallbackPersistenceEmpty(t, ctx, fixture)
+				removeFault()
+				result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Исправленный атомарный повтор.")
+				if err != nil || strings.TrimSpace(result.CallbackRunID) == "" {
+					t.Fatalf("%s/%s retry result=%#v error=%v", sourceAccess, stage, result, err)
+				}
+				assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
+				assertCallbackDeliveryCounts(t, ctx, fixture, 2, 0)
+			})
+		}
+	}
+}
+
 func TestReturnToRequesterFinalPublishGuardRejectsCommittedRevocationBeforeNetwork(t *testing.T) {
 	fixture := newPostgresDelegationFixture(t, 2)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	baseStore := fixture.service.cfg.Store.(*postgresrepo.Repository)
-	hooked := &exactGuardHookStore{Repository: baseStore}
+	hooked := &exactGuardHookStore{Repository: baseStore, beforeAt: 2}
 	hooked.before = func() {
 		if _, err := fixture.pool.Exec(ctx, `
 insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
@@ -224,7 +280,7 @@ func TestReturnToRequesterFinalPublishGuardRejectsCommittedChildRemapBeforeNetwo
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	baseStore := fixture.service.cfg.Store.(*postgresrepo.Repository)
-	hooked := &exactGuardHookStore{Repository: baseStore}
+	hooked := &exactGuardHookStore{Repository: baseStore, beforeAt: 2}
 	hooked.before = func() {
 		if _, err := fixture.pool.Exec(ctx, `
 update matter_codex_chat_participants participant
@@ -714,8 +770,9 @@ func (publisher *postgresDelegationPublisher) ReconcileOrPostThreadMessage(ctx c
 
 type exactGuardHookStore struct {
 	*postgresrepo.Repository
-	beforeOnce sync.Once
-	before     func()
+	beforeAt int64
+	calls    atomic.Int64
+	before   func()
 }
 
 type failOnceDeliveryStore struct {
@@ -731,15 +788,17 @@ func (store *failOnceDeliveryStore) DeliverAgentDelegationCallbackDelivery(ctx c
 }
 
 func (store *exactGuardHookStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
-	store.beforeOnce.Do(func() {
-		if store.before != nil {
-			store.before()
-		}
-	})
+	if store.calls.Add(1) == store.beforeAt && store.before != nil {
+		store.before()
+	}
 	return store.Repository.WithExactAgentSessionsRuntimeGuard(ctx, expected, sideEffect)
 }
 
 func newPostgresDelegationFixture(t *testing.T, maxConnections int32) postgresDelegationFixture {
+	return newPostgresDelegationFixtureWithSourceAccess(t, maxConnections, "cluster-admin")
+}
+
+func newPostgresDelegationFixtureWithSourceAccess(t *testing.T, maxConnections int32, sourceAccess string) postgresDelegationFixture {
 	t.Helper()
 	dsn := isolatedDelegationPostgresDSN(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -751,7 +810,7 @@ func newPostgresDelegationFixture(t *testing.T, maxConnections int32) postgresDe
 	if err != nil {
 		t.Fatalf("open delegation seed pool: %v", err)
 	}
-	seedPostgresDelegation(t, ctx, seedPool)
+	seedPostgresDelegation(t, ctx, seedPool, sourceAccess)
 	seedPool.Close()
 	if err := migrations.RunTo(ctx, dsn, 23); err != nil {
 		t.Fatalf("migrations through v23: %v", err)
@@ -778,7 +837,7 @@ where token_secret_ref = 'source-bot-secret'
 	}
 	seedPool.Close()
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("migrations through v27: %v", err)
+		t.Fatalf("migrations through v28: %v", err)
 	}
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -809,13 +868,13 @@ where token_secret_ref = 'source-bot-secret'
 	return postgresDelegationFixture{pool: pool, service: service, dispatcher: chatRuns, publisher: publisher}
 }
 
-func seedPostgresDelegation(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+func seedPostgresDelegation(t *testing.T, ctx context.Context, pool *pgxpool.Pool, sourceAccess string) {
 	t.Helper()
 	var projectID, sourceRoleID, targetRoleID, sourceChatID, targetChatID int64
 	if err := pool.QueryRow(ctx, `insert into matter_codex_projects(name, slug) values ('Delegation proof', 'delegation-proof') returning id`).Scan(&projectID); err != nil {
 		t.Fatalf("seed delegation project: %v", err)
 	}
-	if err := pool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type, kubernetes_access) values ($1, 'manager-proof', 'manager', 'cluster-admin') returning id`, projectID).Scan(&sourceRoleID); err != nil {
+	if err := pool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type, kubernetes_access) values ($1, 'manager-proof', 'manager', $2) returning id`, projectID, sourceAccess).Scan(&sourceRoleID); err != nil {
 		t.Fatalf("seed source role: %v", err)
 	}
 	if err := pool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type, kubernetes_access) values ($1, 'worker-proof', 'worker', 'read-only') returning id`, projectID).Scan(&targetRoleID); err != nil {
@@ -919,6 +978,94 @@ from matter_codex_agent_delegation_callback_deliveries
 	}
 	if deliveredRows != delivered || incompleteRows != incomplete {
 		t.Fatalf("callback deliveries delivered=%d incomplete=%d, want %d/%d", deliveredRows, incompleteRows, delivered, incomplete)
+	}
+}
+
+func assertPostgresCallbackPersistenceEmpty(t *testing.T, ctx context.Context, fixture postgresDelegationFixture) {
+	t.Helper()
+	assertPostgresDelegationCallbackState(t, ctx, fixture, 0)
+	var deliveries, manifests int
+	if err := fixture.pool.QueryRow(ctx, `
+select
+	(select count(*) from matter_codex_agent_delegation_callback_deliveries),
+	(select count(*) from matter_codex_agent_delegation_callback_delivery_manifests)
+`).Scan(&deliveries, &manifests); err != nil {
+		t.Fatalf("count rolled back callback plan: %v", err)
+	}
+	if deliveries != 0 || manifests != 0 || fixture.publisher.attempts.Load() != 0 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("partial callback state deliveries=%d manifests=%d attempts=%d posts=%d", deliveries, manifests, fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+}
+
+func installPostgresCallbackPersistenceFault(t *testing.T, ctx context.Context, pool *pgxpool.Pool, stage string) func() {
+	t.Helper()
+	functionBody := ""
+	table := ""
+	timing := "after insert"
+	switch stage {
+	case "after_enqueue":
+		table = "matter_codex_agent_runs"
+		functionBody = `
+if new.flow_id = 'session-source-session' and new.status = 'queued' then
+	raise exception 'synthetic callback fault after enqueue';
+end if;`
+	case "after_callback_run":
+		table = "matter_codex_agent_delegations"
+		timing = "after update of callback_run_id"
+		functionBody = `
+if length(trim(coalesce(old.callback_run_id, ''))) = 0 and length(trim(coalesce(new.callback_run_id, ''))) > 0 then
+	raise exception 'synthetic callback fault after callback run';
+end if;`
+	case "after_first_delivery", "after_second_delivery":
+		table = "matter_codex_agent_delegation_callback_deliveries"
+		expectedCount := 1
+		if stage == "after_second_delivery" {
+			expectedCount = 2
+		}
+		functionBody = fmt.Sprintf(`
+if (select count(*) from matter_codex_agent_delegation_callback_deliveries
+	where delegation_id = new.delegation_id and callback_run_id = new.callback_run_id) = %d then
+	raise exception 'synthetic callback fault after delivery row';
+end if;`, expectedCount)
+	case "on_commit":
+		table = "matter_codex_agent_delegation_callback_delivery_manifests"
+		functionBody = `raise exception 'synthetic callback fault on commit';`
+	default:
+		t.Fatalf("unknown PostgreSQL callback fault stage %q", stage)
+	}
+	functionName := pgx.Identifier{"matter_codex_test_callback_fault"}.Sanitize()
+	triggerName := pgx.Identifier{"matter_codex_test_callback_fault_trigger"}.Sanitize()
+	tableName := pgx.Identifier{table}.Sanitize()
+	triggerStatement := fmt.Sprintf(
+		"create trigger %s %s on %s for each row execute function %s();",
+		triggerName, timing, tableName, functionName,
+	)
+	if stage == "on_commit" {
+		triggerStatement = fmt.Sprintf(
+			"create constraint trigger %s after insert on %s deferrable initially deferred for each row execute function %s();",
+			triggerName, tableName, functionName,
+		)
+	}
+	statement := fmt.Sprintf(`
+create function %s() returns trigger language plpgsql as $function$
+begin
+%s
+	return new;
+end
+$function$;
+%s
+`, functionName, functionBody, triggerStatement)
+	if _, err := pool.Exec(ctx, statement); err != nil {
+		t.Fatalf("install PostgreSQL callback fault %s: %v", stage, err)
+	}
+	return func() {
+		t.Helper()
+		if _, err := pool.Exec(ctx, fmt.Sprintf(
+			"drop trigger %s on %s; drop function %s()",
+			triggerName, tableName, functionName,
+		)); err != nil {
+			t.Fatalf("remove PostgreSQL callback fault %s: %v", stage, err)
+		}
 	}
 }
 

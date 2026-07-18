@@ -3,6 +3,7 @@ package admin
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,6 +39,55 @@ func (repo *Repository) CreateAgentDelegationCallbackDeliveries(ctx context.Cont
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func (repo *Repository) CreateAgentDelegationCallbackDeliveryManifest(ctx context.Context, input adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput) error {
+	var expectedCount int
+	var expectedPlan []byte
+	var planSHA256 []byte
+	err := repo.db.QueryRow(ctx, query("agent_delegation_callback_delivery_manifests__insert.sql"),
+		input.DelegationID, input.CallbackRunID, input.ExpectedCount, input.ExpectedPlan, input.PlanSHA256,
+	).Scan(&expectedCount, &expectedPlan, &planSHA256)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = repo.db.QueryRow(ctx, query("agent_delegation_callback_delivery_manifests__get.sql"),
+			input.DelegationID, input.CallbackRunID,
+		).Scan(&expectedCount, &expectedPlan, &planSHA256)
+	}
+	if err != nil {
+		return fmt.Errorf("create agent delegation callback delivery manifest: %w", err)
+	}
+	if expectedCount != input.ExpectedCount || !sameAgentDelegationCallbackProps(expectedPlan, input.ExpectedPlan) || !bytes.Equal(planSHA256, input.PlanSHA256) {
+		return fmt.Errorf("agent delegation callback delivery manifest conflicts with immutable state")
+	}
+	return nil
+}
+
+func (repo *Repository) ValidateAgentDelegationCallbackDeliveryPlan(ctx context.Context, delegationID int64, callbackRunID string) error {
+	var valid bool
+	var expectedCount int
+	var expectedPlan []byte
+	var planSHA256 []byte
+	if err := repo.db.QueryRow(ctx, query("agent_delegation_callback_delivery_manifests__validate.sql"), delegationID, callbackRunID).Scan(
+		&valid, &expectedCount, &expectedPlan, &planSHA256,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("agent delegation callback delivery manifest is missing")
+		}
+		return fmt.Errorf("validate agent delegation callback delivery plan: %w", err)
+	}
+	var normalized any
+	if json.Unmarshal(expectedPlan, &normalized) != nil {
+		return fmt.Errorf("agent delegation callback delivery manifest is invalid")
+	}
+	canonicalPlan, err := json.Marshal(normalized)
+	if err != nil {
+		return fmt.Errorf("canonicalize agent delegation callback delivery manifest: %w", err)
+	}
+	digest := sha256.Sum256(canonicalPlan)
+	if !valid || expectedCount != 2 || !bytes.Equal(planSHA256, digest[:]) {
+		return fmt.Errorf("agent delegation callback delivery plan is incomplete")
+	}
+	return nil
 }
 
 func (repo *Repository) ListAgentDelegationCallbackDeliveries(ctx context.Context, delegationID int64, callbackRunID string) ([]entity.AgentDelegationCallbackDelivery, error) {
@@ -119,7 +169,7 @@ func sameAgentDelegationCallbackDeliveryPlan(item entity.AgentDelegationCallback
 }
 
 func sameAgentDelegationCallbackProps(left []byte, right []byte) bool {
-	var leftValue, rightValue map[string]any
+	var leftValue, rightValue any
 	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
 		return false
 	}

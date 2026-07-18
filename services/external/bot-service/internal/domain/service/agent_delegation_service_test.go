@@ -77,6 +77,51 @@ func (store *fakeAdminStore) CreateAgentDelegationCallbackDeliveries(_ context.C
 	return items, nil
 }
 
+func (store *fakeAdminStore) CreateAgentDelegationCallbackDeliveryManifest(_ context.Context, input adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput) error {
+	store.deliveryMu.Lock()
+	defer store.deliveryMu.Unlock()
+	if store.callbackManifests == nil {
+		store.callbackManifests = map[string]adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput{}
+	}
+	key := strings.TrimSpace(input.CallbackRunID)
+	if existing, ok := store.callbackManifests[key]; ok {
+		if existing.DelegationID != input.DelegationID || existing.ExpectedCount != input.ExpectedCount || string(existing.ExpectedPlan) != string(input.ExpectedPlan) || string(existing.PlanSHA256) != string(input.PlanSHA256) {
+			return errors.New("callback delivery manifest conflict")
+		}
+		return nil
+	}
+	input.ExpectedPlan = append([]byte(nil), input.ExpectedPlan...)
+	input.PlanSHA256 = append([]byte(nil), input.PlanSHA256...)
+	store.callbackManifests[key] = input
+	return nil
+}
+
+func (store *fakeAdminStore) ValidateAgentDelegationCallbackDeliveryPlan(_ context.Context, delegationID int64, callbackRunID string) error {
+	store.deliveryMu.Lock()
+	defer store.deliveryMu.Unlock()
+	manifest, ok := store.callbackManifests[strings.TrimSpace(callbackRunID)]
+	if !ok || manifest.DelegationID != delegationID {
+		return errors.New("callback delivery manifest is missing")
+	}
+	inputs := make([]adminrepo.CreateAgentDelegationCallbackDeliveryInput, 0, len(store.callbackDeliveries))
+	for _, item := range store.callbackDeliveries {
+		if item.DelegationID != delegationID || item.CallbackRunID != callbackRunID {
+			continue
+		}
+		inputs = append(inputs, adminrepo.CreateAgentDelegationCallbackDeliveryInput{
+			DelegationID: item.DelegationID, CallbackRunID: item.CallbackRunID,
+			Destination: item.Destination, Publication: item.Publication,
+			ChannelID: item.ChannelID, RootPostID: item.RootPostID, Message: item.Message,
+			PropsJSON: item.PropsJSON, PayloadSHA256: item.PayloadSHA256, ExternalID: item.ExternalID,
+		})
+	}
+	actual, err := callbackDeliveryManifestInput(inputs)
+	if err != nil || actual.ExpectedCount != manifest.ExpectedCount || string(actual.ExpectedPlan) != string(manifest.ExpectedPlan) || string(actual.PlanSHA256) != string(manifest.PlanSHA256) {
+		return errors.New("callback delivery plan is incomplete")
+	}
+	return nil
+}
+
 func (store *fakeAdminStore) ListAgentDelegationCallbackDeliveries(_ context.Context, delegationID int64, callbackRunID string) ([]entity.AgentDelegationCallbackDelivery, error) {
 	store.deliveryMu.Lock()
 	defer store.deliveryMu.Unlock()
@@ -162,6 +207,31 @@ func (store *fakeAdminStore) DeliverAgentDelegationCallbackDelivery(_ context.Co
 	item.UpdatedAt = input.Now
 	store.callbackDeliveries[item.ID] = item
 	return item, nil
+}
+
+func TestCallbackDeliveriesCompleteRequiresBothExactDestinations(t *testing.T) {
+	delivered := func(destination string, publication string) entity.AgentDelegationCallbackDelivery {
+		return entity.AgentDelegationCallbackDelivery{Destination: destination, Publication: publication, Status: callbackDeliveryStatusDelivered}
+	}
+	source := delivered(callbackDeliveryDestinationSource, "agent_cross_chat_callback:0001")
+	child := delivered(callbackDeliveryDestinationChild, "agent_cross_chat_callback_returned:0001")
+	if callbackDeliveriesComplete([]entity.AgentDelegationCallbackDelivery{source}) {
+		t.Fatal("непустой delivered subset принят как полный plan")
+	}
+	if callbackDeliveriesComplete([]entity.AgentDelegationCallbackDelivery{source, source}) {
+		t.Fatal("duplicate source destination принят как полный plan")
+	}
+	if !callbackDeliveriesComplete([]entity.AgentDelegationCallbackDelivery{source, child}) {
+		t.Fatal("точный delivered source+child plan отклонён")
+	}
+	extra := delivered(callbackDeliveryDestinationSource, "agent_cross_chat_callback:0002")
+	if callbackDeliveriesComplete([]entity.AgentDelegationCallbackDelivery{source, child, extra}) {
+		t.Fatal("delivered plan с лишней публикацией принят как полный")
+	}
+	child.Status = callbackDeliveryStatusPending
+	if callbackDeliveriesComplete([]entity.AgentDelegationCallbackDelivery{source, child}) {
+		t.Fatal("partial delivered source+child plan принят как полный")
+	}
 }
 
 func TestAgentSessionListsChatsAvailableToTargetAgent(t *testing.T) {
@@ -498,6 +568,22 @@ func TestReturnToRequesterRejectsPublicationBoundsBeforeStorage(t *testing.T) {
 				t.Fatalf("ReturnToRequester() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestReturnToRequesterRejectsMoreThanTwoAuditPublicationsBeforePersistence(t *testing.T) {
+	svc, store, dispatcher, publisher := delegationReturnBarrierFixture()
+	svc.cfg.CallbackMaxBytes = 4096
+	svc.cfg.CallbackMaxChunks = 8
+	svc.cfg.CallbackMaxChunkBytes = 512
+	_, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", strings.Repeat("я", 700))
+	if err == nil || !strings.Contains(err.Error(), "exact two-publication limit") {
+		t.Fatalf("ReturnToRequester() error = %v", err)
+	}
+	turn, turnErr := store.GetAgentSessionTurn(context.Background(), 3)
+	delegation := store.agentDelegations[1]
+	if turnErr != nil || turn.Message != "Исходная очередь" || delegation.CallbackTurnID != 0 || delegation.CallbackRunID != "" || dispatcher.calls != 0 || len(publisher.posts) != 0 {
+		t.Fatalf("oversized two-publication plan effects: turn=%#v delegation=%#v dispatch=%d posts=%d error=%v", turn, delegation, dispatcher.calls, len(publisher.posts), turnErr)
 	}
 }
 

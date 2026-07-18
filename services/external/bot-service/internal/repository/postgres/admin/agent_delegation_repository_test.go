@@ -3,14 +3,17 @@ package admin_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
 
 	domainrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	postgresrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,6 +47,9 @@ func TestAgentDelegationRepositoryLifecycle(t *testing.T) {
 	}
 	if err := pool.QueryRow(ctx, "insert into matter_codex_chats(project_id, name, slug) values ($1, 'Target', 'target') returning id", projectID).Scan(&targetChatID); err != nil {
 		t.Fatalf("create target chat: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `insert into matter_codex_chat_participants(chat_id, role_id) values ($1, $2), ($3, $4)`, sourceChatID, sourceRoleID, targetChatID, targetRoleID); err != nil {
+		t.Fatalf("create chat participants: %v", err)
 	}
 
 	expiresAt := time.Now().UTC().Add(time.Hour)
@@ -115,9 +121,8 @@ func TestAgentDelegationRepositoryLifecycle(t *testing.T) {
 	if err != nil || callbackTarget.ID != created.ID {
 		t.Fatalf("callback target=%#v error=%v", callbackTarget, err)
 	}
-	callback, err := repository.SetAgentDelegationCallback(ctx, created.ID, callbackTurnID, "callback-run")
-	if err != nil || callback.CallbackRunID != "callback-run" || callback.Status != "callback_queued" {
-		t.Fatalf("callback=%#v error=%v", callback, err)
+	if _, err := repository.SetAgentDelegationCallback(ctx, created.ID, callbackTurnID, "callback-run"); err == nil {
+		t.Fatal("standalone callback run committed without its complete immutable delivery plan")
 	}
 	callbackProps := func(destination string, publication string, event string, externalID string, payloadHash []byte) []byte {
 		encoded, encodeErr := json.Marshal(map[string]string{
@@ -150,9 +155,81 @@ func TestAgentDelegationRepositoryLifecycle(t *testing.T) {
 			PayloadSHA256: childHash, ExternalID: "bbbbbbbbbbbbbbbbbbbbbbbbbb",
 		},
 	}
-	deliveries, err := repository.CreateAgentDelegationCallbackDeliveries(ctx, deliveryInputs)
-	if err != nil || len(deliveries) != 2 {
-		t.Fatalf("CreateAgentDelegationCallbackDeliveries() items=%#v error=%v", deliveries, err)
+	orderedInputs := append([]domainrepo.CreateAgentDelegationCallbackDeliveryInput(nil), deliveryInputs...)
+	sort.Slice(orderedInputs, func(i int, j int) bool {
+		if orderedInputs[i].Destination == orderedInputs[j].Destination {
+			return orderedInputs[i].Publication < orderedInputs[j].Publication
+		}
+		return orderedInputs[i].Destination < orderedInputs[j].Destination
+	})
+	type manifestEntry struct {
+		Destination   string          `json:"destination"`
+		Publication   string          `json:"publication"`
+		ChannelID     string          `json:"channel_id"`
+		RootPostID    string          `json:"root_post_id"`
+		Message       string          `json:"message"`
+		Props         json.RawMessage `json:"props"`
+		PayloadSHA256 string          `json:"payload_sha256"`
+		ExternalID    string          `json:"external_id"`
+	}
+	manifestEntries := make([]manifestEntry, 0, len(orderedInputs))
+	for _, input := range orderedInputs {
+		manifestEntries = append(manifestEntries, manifestEntry{
+			Destination: input.Destination, Publication: input.Publication,
+			ChannelID: input.ChannelID, RootPostID: input.RootPostID, Message: input.Message,
+			Props: input.PropsJSON, PayloadSHA256: hex.EncodeToString(input.PayloadSHA256), ExternalID: input.ExternalID,
+		})
+	}
+	manifestJSON, err := json.Marshal(manifestEntries)
+	if err != nil {
+		t.Fatalf("encode callback delivery manifest: %v", err)
+	}
+	var normalizedManifest any
+	if err := json.Unmarshal(manifestJSON, &normalizedManifest); err != nil {
+		t.Fatalf("normalize callback delivery manifest: %v", err)
+	}
+	manifestJSON, err = json.Marshal(normalizedManifest)
+	if err != nil {
+		t.Fatalf("canonicalize callback delivery manifest: %v", err)
+	}
+	manifestHash := sha256.Sum256(manifestJSON)
+	manifestInput := domainrepo.CreateAgentDelegationCallbackDeliveryManifestInput{
+		DelegationID: created.ID, CallbackRunID: "callback-run", ExpectedCount: len(manifestEntries),
+		ExpectedPlan: manifestJSON, PlanSHA256: manifestHash[:],
+	}
+	sourceSession, err := repository.GetAgentSessionByID(ctx, sourceSessionID)
+	if err != nil {
+		t.Fatalf("get source session: %v", err)
+	}
+	targetSession, err := repository.GetAgentSessionByID(ctx, targetSessionID)
+	if err != nil {
+		t.Fatalf("get target session: %v", err)
+	}
+	var callback entity.AgentDelegation
+	var deliveries []entity.AgentDelegationCallbackDelivery
+	if err := repository.WithExactAgentSessionsRuntimeGuard(ctx, []entity.AgentSession{targetSession, sourceSession}, func(transactionalStore domainrepo.Repository) error {
+		var callbackErr error
+		callback, callbackErr = transactionalStore.SetAgentDelegationCallback(ctx, created.ID, callbackTurnID, "callback-run")
+		if callbackErr != nil {
+			return callbackErr
+		}
+		deliveryStore, ok := transactionalStore.(domainrepo.AgentDelegationCallbackDeliveryRepository)
+		if !ok {
+			return errors.New("transactional callback delivery repository is required")
+		}
+		deliveries, callbackErr = deliveryStore.CreateAgentDelegationCallbackDeliveries(ctx, deliveryInputs)
+		if callbackErr != nil {
+			return callbackErr
+		}
+		if callbackErr = deliveryStore.CreateAgentDelegationCallbackDeliveryManifest(ctx, manifestInput); callbackErr != nil {
+			return callbackErr
+		}
+		return deliveryStore.ValidateAgentDelegationCallbackDeliveryPlan(ctx, created.ID, "callback-run")
+	}); err != nil {
+		t.Fatalf("commit complete callback delivery plan: %v", err)
+	}
+	if callback.CallbackRunID != "callback-run" || callback.Status != "callback_queued" || len(deliveries) != 2 {
+		t.Fatalf("callback=%#v deliveries=%#v", callback, deliveries)
 	}
 	repeated, err := repository.CreateAgentDelegationCallbackDeliveries(ctx, deliveryInputs)
 	if err != nil || len(repeated) != 2 || repeated[0].ID != deliveries[0].ID || repeated[1].ID != deliveries[1].ID {

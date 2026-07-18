@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -597,7 +598,14 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 		if _, persistErr = deliveryStore.CreateAgentDelegationCallbackDeliveries(ctx, inputs); persistErr != nil {
 			return persistErr
 		}
-		return nil
+		manifest, manifestErr := callbackDeliveryManifestInput(inputs)
+		if manifestErr != nil {
+			return manifestErr
+		}
+		if persistErr = deliveryStore.CreateAgentDelegationCallbackDeliveryManifest(ctx, manifest); persistErr != nil {
+			return persistErr
+		}
+		return deliveryStore.ValidateAgentDelegationCallbackDeliveryPlan(ctx, delegation.ID, delegation.CallbackRunID)
 	})
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
@@ -722,6 +730,9 @@ func (svc *AgentSessionService) buildDelegationCallbackPublicationPlan(
 	if err != nil {
 		return delegationCallbackPublicationPlan{}, err
 	}
+	if len(callbackChunks) != 1 || len(returnChunks) != 1 {
+		return delegationCallbackPublicationPlan{}, fmt.Errorf("callback audit exceeds the exact two-publication limit")
+	}
 	return delegationCallbackPublicationPlan{
 		callbackPrompt:       callbackPrompt,
 		callbackAuditMessage: callbackAudit,
@@ -781,6 +792,65 @@ func callbackDeliveryPlanInputs(delegation entity.AgentDelegation, plan delegati
 		return nil, fmt.Errorf("callback delivery plan is empty")
 	}
 	return inputs, nil
+}
+
+func callbackDeliveryManifestInput(inputs []adminrepo.CreateAgentDelegationCallbackDeliveryInput) (adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput, error) {
+	if len(inputs) != 2 {
+		return adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput{}, fmt.Errorf("callback delivery plan must contain exactly two mandatory publications")
+	}
+	ordered := append([]adminrepo.CreateAgentDelegationCallbackDeliveryInput(nil), inputs...)
+	sort.Slice(ordered, func(i int, j int) bool {
+		if ordered[i].Destination == ordered[j].Destination {
+			return ordered[i].Publication < ordered[j].Publication
+		}
+		return ordered[i].Destination < ordered[j].Destination
+	})
+	type manifestEntry struct {
+		Destination   string          `json:"destination"`
+		Publication   string          `json:"publication"`
+		ChannelID     string          `json:"channel_id"`
+		RootPostID    string          `json:"root_post_id"`
+		Message       string          `json:"message"`
+		Props         json.RawMessage `json:"props"`
+		PayloadSHA256 string          `json:"payload_sha256"`
+		ExternalID    string          `json:"external_id"`
+	}
+	entries := make([]manifestEntry, 0, len(ordered))
+	destinations := make(map[string]struct{}, 2)
+	delegationID := ordered[0].DelegationID
+	callbackRunID := ordered[0].CallbackRunID
+	for _, input := range ordered {
+		if input.DelegationID != delegationID || input.CallbackRunID != callbackRunID || len(input.PayloadSHA256) != sha256.Size || !json.Valid(input.PropsJSON) {
+			return adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput{}, fmt.Errorf("callback delivery plan contains an invalid immutable row")
+		}
+		destinations[input.Destination] = struct{}{}
+		entries = append(entries, manifestEntry{
+			Destination: input.Destination, Publication: input.Publication,
+			ChannelID: input.ChannelID, RootPostID: input.RootPostID,
+			Message: input.Message, Props: append(json.RawMessage(nil), input.PropsJSON...),
+			PayloadSHA256: hex.EncodeToString(input.PayloadSHA256), ExternalID: input.ExternalID,
+		})
+	}
+	if len(destinations) != 2 {
+		return adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput{}, fmt.Errorf("callback delivery plan does not contain exactly two mandatory destinations")
+	}
+	encoded, err := json.Marshal(entries)
+	if err != nil {
+		return adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput{}, fmt.Errorf("encode callback delivery manifest: %w", err)
+	}
+	var normalized any
+	if err := json.Unmarshal(encoded, &normalized); err != nil {
+		return adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput{}, fmt.Errorf("normalize callback delivery manifest: %w", err)
+	}
+	encoded, err = json.Marshal(normalized)
+	if err != nil {
+		return adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput{}, fmt.Errorf("canonicalize callback delivery manifest: %w", err)
+	}
+	digest := sha256.Sum256(encoded)
+	return adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput{
+		DelegationID: delegationID, CallbackRunID: callbackRunID,
+		ExpectedCount: len(entries), ExpectedPlan: encoded, PlanSHA256: append([]byte(nil), digest[:]...),
+	}, nil
 }
 
 func callbackDeliveryExternalID(delegationID int64, callbackRunID string, destination string, publication string) string {
@@ -862,6 +932,9 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 	publisher, ok := svc.cfg.ThreadPublisher.(MattermostIdempotentThreadPublisher)
 	if !ok {
 		return fmt.Errorf("idempotent Mattermost callback publisher is not configured")
+	}
+	if err := deliveryStore.ValidateAgentDelegationCallbackDeliveryPlan(ctx, delegation.ID, delegation.CallbackRunID); err != nil {
+		return err
 	}
 	deliveries, err := deliveryStore.ListAgentDelegationCallbackDeliveries(ctx, delegation.ID, delegation.CallbackRunID)
 	if err != nil {
@@ -1001,15 +1074,26 @@ func (svc *AgentSessionService) releaseCallbackDelivery(ctx context.Context, sto
 }
 
 func callbackDeliveriesComplete(deliveries []entity.AgentDelegationCallbackDelivery) bool {
-	if len(deliveries) == 0 {
+	if len(deliveries) != 2 {
 		return false
 	}
+	destinations := make(map[string]bool, 2)
+	identities := make(map[string]bool, len(deliveries))
 	for _, delivery := range deliveries {
 		if delivery.Status != callbackDeliveryStatusDelivered {
 			return false
 		}
+		if delivery.Destination != callbackDeliveryDestinationSource && delivery.Destination != callbackDeliveryDestinationChild {
+			return false
+		}
+		identity := delivery.Destination + "\x00" + delivery.Publication
+		if identities[identity] {
+			return false
+		}
+		identities[identity] = true
+		destinations[delivery.Destination] = true
 	}
-	return true
+	return destinations[callbackDeliveryDestinationSource] && destinations[callbackDeliveryDestinationChild]
 }
 
 func callbackDeliveriesInFlight(deliveries []entity.AgentDelegationCallbackDelivery, now time.Time) bool {

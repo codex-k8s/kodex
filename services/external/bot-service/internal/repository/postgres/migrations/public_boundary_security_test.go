@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -277,7 +278,7 @@ where name = 'developer'
 	}
 	ownerPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("runtime-role migration through v27: %v", err)
+		t.Fatalf("runtime-role migration through v28: %v", err)
 	}
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
 	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
@@ -377,7 +378,7 @@ where subject_type = 'agent_profile'
 	}
 }
 
-func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27Upgrade(t *testing.T) {
+func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28Upgrade(t *testing.T) {
 	ownerDSN := isolatedMigrationDSN(t, "exact_n_minus_one")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -432,9 +433,9 @@ func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27Upgrade(t *testing
 	}
 	stagingPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27: %v", err)
+		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28: %v", err)
 	}
-	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 27 {
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 28 {
 		t.Fatalf("upgraded exact N-1 schema version = %d, error=%v", version, err)
 	}
 
@@ -601,29 +602,29 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	if err := migrations.DownOne(ctx, dsn); err == nil {
-		t.Fatal("v27 down unexpectedly succeeded")
+		t.Fatal("v28 down unexpectedly succeeded")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 27 {
+	if err != nil || version != 28 {
 		t.Fatalf("version after failed down = %d, error=%v", version, err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated up after failed down: %v", err)
 	}
 	version, err = migrations.Version(ctx, dsn)
-	if err != nil || version != 27 {
+	if err != nil || version != 28 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
 	}
 }
 
-func TestV27CallbackOutboxOwnershipGrantsAndImmutablePlan(t *testing.T) {
-	ownerDSN := isolatedMigrationDSN(t, "v27_callback_outbox")
+func TestV28CallbackOutboxOwnershipGrantsAndImmutableCompletePlan(t *testing.T) {
+	ownerDSN := isolatedMigrationDSN(t, "v28_callback_outbox")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	roleName := "mc_v27_runtime_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
-	rolePassword := "synthetic-v27-runtime-password"
+	roleName := "mc_v28_runtime_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
+	rolePassword := "synthetic-v28-runtime-password"
 	if err := postgresrepo.ProvisionRuntimeDatabaseRole(ctx, ownerDSN, roleName, rolePassword); err != nil {
-		t.Fatalf("provision v27 runtime role: %v", err)
+		t.Fatalf("provision v28 runtime role: %v", err)
 	}
 	roleIdentifier := pgx.Identifier{roleName}.Sanitize()
 	baseDSN := requiredMigrationDSN(t)
@@ -636,101 +637,179 @@ func TestV27CallbackOutboxOwnershipGrantsAndImmutablePlan(t *testing.T) {
 		_, _ = cleanupPool.Exec(cleanupCtx, "drop role "+roleIdentifier)
 	})
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("fresh v27 migration with runtime role: %v", err)
+		t.Fatalf("fresh v28 migration with runtime role: %v", err)
 	}
 	ownerPool := openMigrationPool(t, ctx, ownerDSN)
 	defer ownerPool.Close()
-	var ownerName, schemaName, functionDefinition string
+	var ownerName, schemaName, functionDefinition, manifestFunctionDefinition string
 	if err := ownerPool.QueryRow(ctx, `
 select tableowner, schemaname
 from pg_tables
 where schemaname = current_schema()
 	and tablename = 'matter_codex_agent_delegation_callback_deliveries'
 `).Scan(&ownerName, &schemaName); err != nil {
-		t.Fatalf("ownership v27 outbox: %v", err)
+		t.Fatalf("ownership v28 outbox: %v", err)
 	}
 	var currentUser string
 	if err := ownerPool.QueryRow(ctx, `select current_user`).Scan(&currentUser); err != nil || ownerName != currentUser {
-		t.Fatalf("owner v27 outbox=%q current_user=%q error=%v", ownerName, currentUser, err)
+		t.Fatalf("owner v28 outbox=%q current_user=%q error=%v", ownerName, currentUser, err)
 	}
 	if err := ownerPool.QueryRow(ctx, `select pg_get_functiondef($1::regprocedure)`, schemaName+`.matter_codex_guard_agent_delegation_callback_delivery_plan()`).Scan(&functionDefinition); err != nil {
-		t.Fatalf("function definition v27: %v", err)
+		t.Fatalf("function definition v27 outbox: %v", err)
 	}
 	if !strings.Contains(functionDefinition, "SET search_path TO 'pg_catalog', '") || !strings.Contains(functionDefinition, "'pg_temp'") {
-		t.Fatalf("v27 function search_path не закреплён: %s", functionDefinition)
+		t.Fatalf("v27 outbox function search_path не закреплён: %s", functionDefinition)
 	}
-	var publicTablePrivilege, publicFunctionPrivilege, runtimeFunctionPrivilege bool
+	if err := ownerPool.QueryRow(ctx, `select pg_get_functiondef($1::regprocedure)`, schemaName+`.matter_codex_agent_delegation_callback_plan_valid(bigint,text)`).Scan(&manifestFunctionDefinition); err != nil {
+		t.Fatalf("function definition v28 manifest: %v", err)
+	}
+	if !strings.Contains(manifestFunctionDefinition, "SET search_path TO 'pg_catalog', '") || !strings.Contains(manifestFunctionDefinition, "'pg_temp'") {
+		t.Fatalf("v28 manifest function search_path не закреплён: %s", manifestFunctionDefinition)
+	}
+	var publicTablePrivilege, publicFunctionPrivilege, runtimeFunctionPrivilege, publicManifestPrivilege, runtimeManifestWrite bool
 	if err := ownerPool.QueryRow(ctx, `
 select
 	has_table_privilege('public', $1, 'select,insert,update,delete'),
 	has_function_privilege('public', $2, 'execute'),
-	has_function_privilege($3, $2, 'execute')
-`, schemaName+`.matter_codex_agent_delegation_callback_deliveries`, schemaName+`.matter_codex_guard_agent_delegation_callback_delivery_plan()`, roleName).Scan(
-		&publicTablePrivilege, &publicFunctionPrivilege, &runtimeFunctionPrivilege,
+		has_function_privilege($3, $2, 'execute'),
+		has_table_privilege('public', $4, 'select,insert,update,delete'),
+		has_column_privilege($3, $4, 'expected_plan', 'insert')
+	`, schemaName+`.matter_codex_agent_delegation_callback_deliveries`, schemaName+`.matter_codex_guard_agent_delegation_callback_delivery_plan()`, roleName, schemaName+`.matter_codex_agent_delegation_callback_delivery_manifests`).Scan(
+		&publicTablePrivilege, &publicFunctionPrivilege, &runtimeFunctionPrivilege, &publicManifestPrivilege, &runtimeManifestWrite,
 	); err != nil {
-		t.Fatalf("privilege inspection v27: %v", err)
+		t.Fatalf("privilege inspection v28: %v", err)
 	}
-	if publicTablePrivilege || publicFunctionPrivilege || runtimeFunctionPrivilege {
-		t.Fatalf("избыточные v27 privileges public_table=%t public_function=%t runtime_function=%t", publicTablePrivilege, publicFunctionPrivilege, runtimeFunctionPrivilege)
+	if publicTablePrivilege || publicFunctionPrivilege || runtimeFunctionPrivilege || publicManifestPrivilege || !runtimeManifestWrite {
+		t.Fatalf("избыточные v28 privileges public_table=%t public_function=%t runtime_function=%t public_manifest=%t runtime_manifest_write=%t", publicTablePrivilege, publicFunctionPrivilege, runtimeFunctionPrivilege, publicManifestPrivilege, runtimeManifestWrite)
 	}
 
 	var projectID, roleID, chatID, sessionID, turnID, delegationID int64
-	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_projects(name, slug) values ('V27 proof', 'v27-proof') returning id`).Scan(&projectID); err != nil {
-		t.Fatalf("seed v27 project: %v", err)
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_projects(name, slug) values ('V28 proof', 'v28-proof') returning id`).Scan(&projectID); err != nil {
+		t.Fatalf("seed v28 project: %v", err)
 	}
-	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type) values ($1, 'v27-worker', 'worker') returning id`, projectID).Scan(&roleID); err != nil {
-		t.Fatalf("seed v27 role: %v", err)
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type) values ($1, 'v28-worker', 'worker') returning id`, projectID).Scan(&roleID); err != nil {
+		t.Fatalf("seed v28 role: %v", err)
 	}
-	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_chats(project_id, mattermost_channel_id, name, slug) values ($1, 'v27-channel', 'V27 chat', 'v27-chat') returning id`, projectID).Scan(&chatID); err != nil {
-		t.Fatalf("seed v27 chat: %v", err)
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_chats(project_id, mattermost_channel_id, name, slug) values ($1, 'v28-channel', 'V28 chat', 'v28-chat') returning id`, projectID).Scan(&chatID); err != nil {
+		t.Fatalf("seed v28 chat: %v", err)
 	}
 	if err := ownerPool.QueryRow(ctx, `
 insert into matter_codex_agent_sessions(
 	session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
 	mattermost_root_post_id, ttl_seconds, expires_at
-) values ('v27-session', $1, $2, $3, 'thread_role', 'v27-channel', 'v27-root', 3600, now() + interval '1 hour')
+) values ('v28-session', $1, $2, $3, 'thread_role', 'v28-channel', 'v28-root', 3600, now() + interval '1 hour')
 returning id
 `, projectID, chatID, roleID).Scan(&sessionID); err != nil {
-		t.Fatalf("seed v27 session: %v", err)
+		t.Fatalf("seed v28 session: %v", err)
 	}
 	if err := ownerPool.QueryRow(ctx, `
 insert into matter_codex_agent_session_turns(
 	session_id, run_id, mattermost_channel_id, mattermost_root_post_id, mattermost_post_id, message
-) values ($1, 'v27-source-run', 'v27-channel', 'v27-root', 'v27-root', 'synthetic') returning id
+) values ($1, 'v28-source-run', 'v28-channel', 'v28-root', 'v28-root', 'synthetic') returning id
 `, sessionID).Scan(&turnID); err != nil {
-		t.Fatalf("seed v27 turn: %v", err)
+		t.Fatalf("seed v28 turn: %v", err)
 	}
 	if err := ownerPool.QueryRow(ctx, `
 insert into matter_codex_agent_delegations(
 	project_id, source_session_id, source_turn_id, target_chat_id, target_role_id,
-	work_item_key, title, callback_run_id
-) values ($1, $2, $3, $4, $5, 'v27-work', 'Безопасный title', 'v27-callback-run') returning id
+	work_item_key, title
+) values ($1, $2, $3, $4, $5, 'v28-work', 'Безопасный title') returning id
 `, projectID, sessionID, turnID, chatID, roleID).Scan(&delegationID); err != nil {
-		t.Fatalf("seed v27 delegation: %v", err)
+		t.Fatalf("seed v28 delegation: %v", err)
 	}
 
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
 	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
 	defer runtimePool.Close()
 	var deliveryID int64
-	if err := runtimePool.QueryRow(ctx, `
+	runtimeTx, err := runtimePool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin v28 complete plan: %v", err)
+	}
+	defer func() { _ = runtimeTx.Rollback(ctx) }()
+	if tag, err := runtimeTx.Exec(ctx, `update matter_codex_agent_delegations set callback_run_id = 'v28-callback-run' where id = $1`, delegationID); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("bind v28 callback run: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	rows, err := runtimeTx.Query(ctx, `
 insert into matter_codex_agent_delegation_callback_deliveries(
 	delegation_id, callback_run_id, destination, publication, channel_id,
 	root_post_id, message, props, payload_sha256, external_id
-) values ($1, 'v27-callback-run', 'source_callback', 'agent_cross_chat_callback:0001', 'v27-channel',
-	'v27-root', 'synthetic message', jsonb_build_object(
-		'matter_codex_event', 'agent_cross_chat_callback',
-		'matter_codex_callback_delivery_id', 'aaaaaaaaaaaaaaaaaaaaaaaaaa',
+) select $1, 'v28-callback-run', input.destination, input.publication, 'v28-channel',
+	'v28-root', 'synthetic message', jsonb_build_object(
+		'matter_codex_event', input.event,
+		'matter_codex_callback_delivery_id', input.external_id,
 		'matter_codex_callback_delegation_id', ($1::bigint)::text,
-		'matter_codex_callback_run_id', 'v27-callback-run',
-		'matter_codex_callback_destination', 'source_callback',
-		'matter_codex_callback_publication', 'agent_cross_chat_callback:0001',
-		'matter_codex_callback_payload_sha256', repeat('ab', 32)
+		'matter_codex_callback_run_id', 'v28-callback-run',
+		'matter_codex_callback_destination', input.destination,
+		'matter_codex_callback_publication', input.publication,
+		'matter_codex_callback_payload_sha256', input.payload_hex
 	),
-	decode(repeat('ab', 32), 'hex'), 'aaaaaaaaaaaaaaaaaaaaaaaaaa')
-returning id
-`, delegationID).Scan(&deliveryID); err != nil {
-		t.Fatalf("runtime insert v27 outbox: %v", err)
+	decode(input.payload_hex, 'hex'), input.external_id
+from (values
+	('source_callback', 'agent_cross_chat_callback:0001', 'agent_cross_chat_callback', repeat('ab', 32), 'aaaaaaaaaaaaaaaaaaaaaaaaaa'),
+	('child_return', 'agent_cross_chat_callback_returned:0001', 'agent_cross_chat_callback_returned', repeat('cd', 32), 'bbbbbbbbbbbbbbbbbbbbbbbbbb')
+) as input(destination, publication, event, payload_hex, external_id)
+returning id, destination
+`, delegationID)
+	if err != nil {
+		t.Fatalf("runtime insert v28 complete outbox: %v", err)
+	}
+	for rows.Next() {
+		var id int64
+		var destination string
+		if err := rows.Scan(&id, &destination); err != nil {
+			rows.Close()
+			t.Fatalf("scan v28 delivery: %v", err)
+		}
+		if destination == "source_callback" {
+			deliveryID = id
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		t.Fatalf("iterate v28 delivery: %v", err)
+	}
+	rows.Close()
+	var expectedCount int
+	var expectedPlan []byte
+	if err := runtimeTx.QueryRow(ctx, `
+select count(*)::integer, jsonb_agg(jsonb_build_object(
+	'destination', destination,
+	'publication', publication,
+	'channel_id', channel_id,
+	'root_post_id', root_post_id,
+	'message', message,
+	'props', props,
+	'payload_sha256', encode(payload_sha256, 'hex'),
+	'external_id', external_id
+) order by destination, publication)
+from matter_codex_agent_delegation_callback_deliveries
+where delegation_id = $1 and callback_run_id = 'v28-callback-run'
+`, delegationID).Scan(&expectedCount, &expectedPlan); err != nil {
+		t.Fatalf("build v28 manifest: %v", err)
+	}
+	var normalizedPlan any
+	if err := json.Unmarshal(expectedPlan, &normalizedPlan); err != nil {
+		t.Fatalf("normalize v28 manifest: %v", err)
+	}
+	canonicalPlan, err := json.Marshal(normalizedPlan)
+	if err != nil {
+		t.Fatalf("canonicalize v28 manifest: %v", err)
+	}
+	manifestDigest := sha256.Sum256(canonicalPlan)
+	if _, err := runtimeTx.Exec(ctx, `
+insert into matter_codex_agent_delegation_callback_delivery_manifests(
+	delegation_id, callback_run_id, expected_count, expected_plan, plan_sha256
+) values ($1, 'v28-callback-run', $2, $3::jsonb, $4)
+`, delegationID, expectedCount, canonicalPlan, manifestDigest[:]); err != nil {
+		t.Fatalf("runtime insert v28 manifest: %v", err)
+	}
+	var planValid bool
+	if err := runtimeTx.QueryRow(ctx, `select matter_codex_agent_delegation_callback_plan_valid($1, 'v28-callback-run')`, delegationID).Scan(&planValid); err != nil || !planValid {
+		t.Fatalf("runtime validate v28 manifest: valid=%t error=%v", planValid, err)
+	}
+	if err := runtimeTx.Commit(ctx); err != nil {
+		t.Fatalf("commit v28 complete plan: %v", err)
 	}
 	if tag, err := runtimePool.Exec(ctx, `
 update matter_codex_agent_delegation_callback_deliveries
@@ -738,27 +817,232 @@ set status = 'in_flight', attempt_count = 1, lease_owner = 'synthetic-lease',
 	lease_expires_at = now() + interval '1 minute', last_attempt_at = now(), updated_at = now()
 where id = $1
 `, deliveryID); err != nil || tag.RowsAffected() != 1 {
-		t.Fatalf("runtime state update v27 rows=%d error=%v", tag.RowsAffected(), err)
+		t.Fatalf("runtime state update v28 rows=%d error=%v", tag.RowsAffected(), err)
 	}
 	if _, err := runtimePool.Exec(ctx, `update matter_codex_agent_delegation_callback_deliveries set message = 'mutated' where id = $1`, deliveryID); err == nil {
-		t.Fatal("runtime role изменила immutable v27 payload")
+		t.Fatal("runtime role изменила immutable v28 payload")
 	}
 	if _, err := runtimePool.Exec(ctx, `delete from matter_codex_agent_delegation_callback_deliveries where id = $1`, deliveryID); err == nil {
-		t.Fatal("runtime role удалила durable v27 outbox")
+		t.Fatal("runtime role удалила durable v28 outbox")
 	}
 	if tag, err := runtimePool.Exec(ctx, `
 update matter_codex_agent_delegation_callback_deliveries
 set status = 'delivered', lease_owner = null, lease_expires_at = null,
-	mattermost_post_id = 'v27-post', delivered_at = now(), updated_at = now()
+		mattermost_post_id = 'v28-post', delivered_at = now(), updated_at = now()
 where id = $1
 `, deliveryID); err != nil || tag.RowsAffected() != 1 {
-		t.Fatalf("runtime delivery confirmation v27 rows=%d error=%v", tag.RowsAffected(), err)
+		t.Fatalf("runtime delivery confirmation v28 rows=%d error=%v", tag.RowsAffected(), err)
 	}
 	if _, err := runtimePool.Exec(ctx, `update matter_codex_agent_delegation_callback_deliveries set status = 'pending', mattermost_post_id = '', delivered_at = null where id = $1`, deliveryID); err == nil {
-		t.Fatal("runtime role отменила delivered v27 publication")
+		t.Fatal("runtime role отменила delivered v28 publication")
 	}
 	if _, err := ownerPool.Exec(ctx, `update matter_codex_agent_delegations set callback_run_id = 'foreign-run' where id = $1`, delegationID); err == nil {
-		t.Fatal("v27 позволила отделить callback delivery plan от delegation callback run")
+		t.Fatal("v28 позволила отделить callback delivery plan от delegation callback run")
+	}
+	if _, err := ownerPool.Exec(ctx, `update matter_codex_agent_delegation_callback_delivery_manifests set expected_count = 3 where delegation_id = $1`, delegationID); err == nil {
+		t.Fatal("v28 позволила изменить immutable manifest")
+	}
+	if _, err := ownerPool.Exec(ctx, `delete from matter_codex_agent_delegation_callback_delivery_manifests where delegation_id = $1`, delegationID); err == nil {
+		t.Fatal("v28 позволила удалить immutable manifest")
+	}
+
+	insertDelivery := func(tx pgx.Tx, candidateDelegationID int64, callbackRunID string, destination string, publication string, event string, payloadHex string, externalID string) error {
+		_, err := tx.Exec(ctx, `
+insert into matter_codex_agent_delegation_callback_deliveries(
+	delegation_id, callback_run_id, destination, publication, channel_id,
+	root_post_id, message, props, payload_sha256, external_id
+) values ($1, $2, $3, $4, 'v28-channel', 'v28-root', 'synthetic malformed proof', jsonb_build_object(
+	'matter_codex_event', $5::text,
+	'matter_codex_callback_delivery_id', $7::text,
+	'matter_codex_callback_delegation_id', ($1::bigint)::text,
+	'matter_codex_callback_run_id', $2::text,
+	'matter_codex_callback_destination', $3::text,
+	'matter_codex_callback_publication', $4::text,
+	'matter_codex_callback_payload_sha256', $6::text
+), decode($6::text, 'hex'), $7::text)
+`, candidateDelegationID, callbackRunID, destination, publication, event, payloadHex, externalID)
+		return err
+	}
+	manifestPlan := func(tx pgx.Tx, candidateDelegationID int64, callbackRunID string) ([]byte, []byte) {
+		t.Helper()
+		var encoded []byte
+		if err := tx.QueryRow(ctx, `
+select jsonb_agg(jsonb_build_object(
+	'destination', destination,
+	'publication', publication,
+	'channel_id', channel_id,
+	'root_post_id', root_post_id,
+	'message', message,
+	'props', props,
+	'payload_sha256', encode(payload_sha256, 'hex'),
+	'external_id', external_id
+) order by destination, publication)
+from matter_codex_agent_delegation_callback_deliveries
+where delegation_id = $1 and callback_run_id = $2
+`, candidateDelegationID, callbackRunID).Scan(&encoded); err != nil {
+			t.Fatalf("build malformed v28 manifest plan: %v", err)
+		}
+		var normalized any
+		if err := json.Unmarshal(encoded, &normalized); err != nil {
+			t.Fatalf("normalize malformed v28 manifest plan: %v", err)
+		}
+		canonical, err := json.Marshal(normalized)
+		if err != nil {
+			t.Fatalf("canonicalize malformed v28 manifest plan: %v", err)
+		}
+		digest := sha256.Sum256(canonical)
+		return canonical, digest[:]
+	}
+	for _, malformedCase := range []string{"absent_manifest", "missing_row", "extra_row", "duplicate_row", "wrong_row"} {
+		t.Run(malformedCase, func(t *testing.T) {
+			var candidateDelegationID int64
+			if err := ownerPool.QueryRow(ctx, `
+insert into matter_codex_agent_delegations(
+	project_id, source_session_id, source_turn_id, target_chat_id, target_role_id,
+	work_item_key, title
+) values ($1, $2, $3, $4, $5, $6, 'Malformed v28 proof') returning id
+`, projectID, sessionID, turnID, chatID, roleID, "v28-malformed-"+malformedCase).Scan(&candidateDelegationID); err != nil {
+				t.Fatalf("seed malformed v28 delegation: %v", err)
+			}
+			callbackRunID := "v28-malformed-" + malformedCase
+			tx, err := ownerPool.Begin(ctx)
+			if err != nil {
+				t.Fatalf("begin malformed v28 transaction: %v", err)
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			if _, err := tx.Exec(ctx, `update matter_codex_agent_delegations set callback_run_id = $2 where id = $1`, candidateDelegationID, callbackRunID); err != nil {
+				t.Fatalf("bind malformed v28 callback: %v", err)
+			}
+			if err := insertDelivery(tx, candidateDelegationID, callbackRunID, "source_callback", "agent_cross_chat_callback:0001", "agent_cross_chat_callback", strings.Repeat("12", 32), strings.Repeat("c", 26)); err != nil {
+				t.Fatalf("insert malformed v28 source row: %v", err)
+			}
+			if malformedCase == "duplicate_row" {
+				if err := insertDelivery(tx, candidateDelegationID, callbackRunID, "source_callback", "agent_cross_chat_callback:0001", "agent_cross_chat_callback", strings.Repeat("12", 32), strings.Repeat("c", 26)); err == nil {
+					t.Fatal("v28 accepted duplicate delivery identity")
+				}
+				_ = tx.Rollback(ctx)
+			} else {
+				if malformedCase != "missing_row" {
+					if err := insertDelivery(tx, candidateDelegationID, callbackRunID, "child_return", "agent_cross_chat_callback_returned:0001", "agent_cross_chat_callback_returned", strings.Repeat("34", 32), strings.Repeat("d", 26)); err != nil {
+						t.Fatalf("insert malformed v28 child row: %v", err)
+					}
+				}
+				if malformedCase != "absent_manifest" {
+					plan, digest := manifestPlan(tx, candidateDelegationID, callbackRunID)
+					if malformedCase == "missing_row" {
+						plan = []byte(`[{},{}]`)
+						hash := sha256.Sum256(plan)
+						digest = hash[:]
+					}
+					if malformedCase == "wrong_row" {
+						var entries []map[string]any
+						if err := json.Unmarshal(plan, &entries); err != nil {
+							t.Fatalf("decode wrong-row v28 plan: %v", err)
+						}
+						entries[0]["channel_id"] = "wrong-channel"
+						plan, err = json.Marshal(entries)
+						if err != nil {
+							t.Fatalf("encode wrong-row v28 plan: %v", err)
+						}
+						hash := sha256.Sum256(plan)
+						digest = hash[:]
+					}
+					if _, err := tx.Exec(ctx, `
+insert into matter_codex_agent_delegation_callback_delivery_manifests(
+	delegation_id, callback_run_id, expected_count, expected_plan, plan_sha256
+) values ($1, $2, 2, $3::jsonb, $4)
+`, candidateDelegationID, callbackRunID, plan, digest); err != nil {
+						t.Fatalf("insert malformed v28 manifest: %v", err)
+					}
+				}
+				if malformedCase == "extra_row" {
+					if err := insertDelivery(tx, candidateDelegationID, callbackRunID, "source_callback", "agent_cross_chat_callback:0002", "agent_cross_chat_callback", strings.Repeat("56", 32), strings.Repeat("e", 26)); err != nil {
+						t.Fatalf("insert extra v28 delivery row: %v", err)
+					}
+				}
+				if err := tx.Commit(ctx); err == nil {
+					t.Fatalf("v28 committed malformed callback plan %s", malformedCase)
+				}
+			}
+			var callbackBound, deliveryRows, manifestRows int
+			if err := ownerPool.QueryRow(ctx, `
+select
+	count(*) filter (where length(trim(callback_run_id)) > 0),
+	(select count(*) from matter_codex_agent_delegation_callback_deliveries where delegation_id = $1),
+	(select count(*) from matter_codex_agent_delegation_callback_delivery_manifests where delegation_id = $1)
+from matter_codex_agent_delegations where id = $1
+`, candidateDelegationID).Scan(&callbackBound, &deliveryRows, &manifestRows); err != nil {
+				t.Fatalf("inspect rolled back malformed v28 plan: %v", err)
+			}
+			if callbackBound != 0 || deliveryRows != 0 || manifestRows != 0 {
+				t.Fatalf("malformed v28 plan left callback=%d deliveries=%d manifests=%d", callbackBound, deliveryRows, manifestRows)
+			}
+		})
+	}
+}
+
+func TestV28BtreeIndexesPassAmcheckWithHeapallindexed(t *testing.T) {
+	dsn := isolatedMigrationDSN(t, "v28_amcheck")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("fresh v28 migration before amcheck: %v", err)
+	}
+	pool := openMigrationPool(t, ctx, dsn)
+	defer pool.Close()
+	extensionTx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin amcheck extension provisioning: %v", err)
+	}
+	defer func() { _ = extensionTx.Rollback(ctx) }()
+	if _, err := extensionTx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended('mattercodex.test.amcheck-extension.v1', 0))`); err != nil {
+		t.Fatalf("lock amcheck extension provisioning: %v", err)
+	}
+	if _, err := extensionTx.Exec(ctx, `create extension if not exists amcheck with schema public`); err != nil {
+		t.Fatalf("create amcheck extension: %v", err)
+	}
+	if err := extensionTx.Commit(ctx); err != nil {
+		t.Fatalf("commit amcheck extension provisioning: %v", err)
+	}
+	_ = testsupport.RequiredDSN(t)
+	rows, err := pool.Query(ctx, `
+select index_row.indexrelid::oid
+from pg_index index_row
+join pg_class index_class on index_class.oid = index_row.indexrelid
+join pg_namespace index_namespace on index_namespace.oid = index_class.relnamespace
+join pg_am access_method on access_method.oid = index_class.relam
+where index_namespace.nspname = current_schema()
+	and access_method.amname = 'btree'
+	and index_class.relkind = 'i'
+	and index_class.relpersistence <> 't'
+	and index_row.indisready
+	and index_row.indisvalid
+order by index_row.indexrelid
+`)
+	if err != nil {
+		t.Fatalf("list v28 B-tree indexes for amcheck: %v", err)
+	}
+	var indexOIDs []uint32
+	for rows.Next() {
+		var indexOID uint32
+		if err := rows.Scan(&indexOID); err != nil {
+			rows.Close()
+			t.Fatalf("scan v28 B-tree index oid: %v", err)
+		}
+		indexOIDs = append(indexOIDs, indexOID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		t.Fatalf("iterate v28 B-tree indexes: %v", err)
+	}
+	rows.Close()
+	if len(indexOIDs) == 0 {
+		t.Fatal("v28 schema has no B-tree indexes for amcheck")
+	}
+	for _, indexOID := range indexOIDs {
+		if _, err := pool.Exec(ctx, `select public.bt_index_check($1::oid::regclass, heapallindexed => true)`, indexOID); err != nil {
+			t.Fatalf("amcheck heapallindexed rejected B-tree index oid %d: %v", indexOID, err)
+		}
 	}
 }
 
@@ -1059,7 +1343,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 		t.Fatalf("upgrade historical base v21->current main v22: %v", err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27: %v", err)
+		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27->v28: %v", err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()

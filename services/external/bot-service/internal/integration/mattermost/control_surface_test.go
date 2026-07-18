@@ -56,7 +56,29 @@ func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) 
 	}
 	exactPost := &mattermostmodel.Post{
 		Id: "post-1", ChannelId: input.ChannelID, RootId: input.RootPostID,
-		Message: input.Message, Props: input.Props, PendingPostId: input.IdempotencyID,
+		Message: input.Message, Props: callbackServerProps(input.Props), PendingPostId: input.IdempotencyID,
+	}
+
+	for name, mutate := range map[string]func(*statusservice.MattermostThreadPostInput){
+		"missing client identity": func(candidate *statusservice.MattermostThreadPostInput) {
+			delete(candidate.Props, "matter_codex_callback_delivery_id")
+		},
+		"foreign client identity": func(candidate *statusservice.MattermostThreadPostInput) {
+			candidate.Props["matter_codex_callback_delivery_id"] = "bbbbbbbbbbbbbbbbbbbbbbbbbb"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := input
+			candidate.Props = callbackServerProps(input.Props)
+			delete(candidate.Props, mattermostmodel.PostPropsFromBot)
+			mutate(&candidate)
+			server, postCalls := callbackMattermostServer(t, func(int) []*mattermostmodel.Post { return nil }, false)
+			defer server.Close()
+			surface := NewControlSurface(server.URL, "synthetic-token", "")
+			if _, err := surface.ReconcileOrPostThreadMessage(context.Background(), candidate); err == nil || postCalls.Load() != 0 {
+				t.Fatalf("invalid client identity error=%v create_calls=%d", err, postCalls.Load())
+			}
+		})
 	}
 
 	t.Run("existing exact post", func(t *testing.T) {
@@ -94,6 +116,26 @@ func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) 
 			t.Fatalf("foreign props reconcile error=%v create_calls=%d", err, postCalls.Load())
 		}
 	})
+
+	for name, mutate := range map[string]func(map[string]any){
+		"missing server-owned from_bot": func(props map[string]any) { delete(props, mattermostmodel.PostPropsFromBot) },
+		"wrong server-owned value":      func(props map[string]any) { props[mattermostmodel.PostPropsFromBot] = "false" },
+		"wrong server-owned type":       func(props map[string]any) { props[mattermostmodel.PostPropsFromBot] = true },
+		"unexpected server prop":        func(props map[string]any) { props["from_webhook"] = "true" },
+		"unexpected client prop":        func(props map[string]any) { props["matter_codex_foreign"] = "value" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			foreign := exactPost.Clone()
+			foreign.Props = callbackServerProps(exactPost.GetProps())
+			mutate(foreign.Props)
+			server, postCalls := callbackMattermostServer(t, func(int) []*mattermostmodel.Post { return []*mattermostmodel.Post{foreign} }, false)
+			defer server.Close()
+			surface := NewControlSurface(server.URL, "synthetic-token", "")
+			if _, err := surface.ReconcileOrPostThreadMessage(context.Background(), input); err == nil || postCalls.Load() != 0 {
+				t.Fatalf("invalid props reconcile error=%v create_calls=%d", err, postCalls.Load())
+			}
+		})
+	}
 
 	t.Run("duplicate identity fails closed", func(t *testing.T) {
 		duplicate := exactPost.Clone()
@@ -168,6 +210,7 @@ func callbackMattermostServer(t *testing.T, threadPosts func(int) []*mattermostm
 				return
 			}
 			post.Id = "created-post"
+			post.Props = callbackServerProps(post.GetProps())
 			if err := json.NewEncoder(writer).Encode(&post); err != nil {
 				t.Errorf("encode Mattermost create response: %v", err)
 			}
@@ -176,4 +219,13 @@ func callbackMattermostServer(t *testing.T, threadPosts func(int) []*mattermostm
 		}
 	}))
 	return server, &postCalls
+}
+
+func callbackServerProps(clientProps map[string]any) map[string]any {
+	props := make(map[string]any, len(clientProps)+1)
+	for key, value := range clientProps {
+		props[key] = value
+	}
+	props[mattermostmodel.PostPropsFromBot] = "true"
+	return props
 }
