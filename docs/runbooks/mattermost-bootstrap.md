@@ -85,6 +85,8 @@ bash scripts/remote/install-foundation.sh --env-file .env --apply
 bash scripts/remote/install-mattermost.sh --env-file .env --apply --wait
 ```
 
+Для существующего PVC команда не меняет PostgreSQL image неявно. Если значение `MATTERCODEX_POSTGRES_IMAGE` изменено, сначала выполните `docs/runbooks/postgres-image-change.md`; флаг `--allow-postgres-image-change` используется только внутри описанного окна обслуживания.
+
 Если secret `${MATTERCODEX_POSTGRES_SECRET}` уже существует, `install-foundation.sh --apply` не ротирует пароль.
 
 ## Read-only smoke
