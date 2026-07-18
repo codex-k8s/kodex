@@ -18,6 +18,7 @@ var _ securityrepo.AtomicDialogRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminBindingRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminRuntimeGuardRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminSecretIntegrityRepository = (*Repository)(nil)
+var _ securityrepo.ClusterAdminSessionSubjectRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminAccountDependencyRepository = (*Repository)(nil)
 var _ securityrepo.CapabilityCleanupRepository = (*Repository)(nil)
 
@@ -324,14 +325,14 @@ func (repo *Repository) AdmitExistingClusterAdminBinding(ctx context.Context, in
 }
 
 func (repo *Repository) WithExistingClusterAdminRuntimeGuard(ctx context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
-	return repo.withExistingClusterAdminGuard(ctx, input, false, sideEffect)
+	return repo.withExistingClusterAdminGuard(ctx, input, false, func(adminrepo.Repository) error { return sideEffect() })
 }
 
-func (repo *Repository) WithExistingClusterAdminPersistenceGuard(ctx context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
+func (repo *Repository) WithExistingClusterAdminPersistenceGuard(ctx context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func(adminrepo.Repository) error) error {
 	return repo.withExistingClusterAdminGuard(ctx, input, true, sideEffect)
 }
 
-func (repo *Repository) withExistingClusterAdminGuard(ctx context.Context, input securityrepo.ClusterAdminBindingInput, persistence bool, sideEffect func() error) error {
+func (repo *Repository) withExistingClusterAdminGuard(ctx context.Context, input securityrepo.ClusterAdminBindingInput, persistence bool, sideEffect func(adminrepo.Repository) error) error {
 	if sideEffect == nil {
 		return fmt.Errorf("cluster-admin runtime side effect is required")
 	}
@@ -340,6 +341,7 @@ func (repo *Repository) withExistingClusterAdminGuard(ctx context.Context, input
 		return fmt.Errorf("begin cluster-admin runtime guard: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	txRepository := newTransactionalRepository(tx)
 	queryName := "cluster_admin_runtime_guard__lock.sql"
 	queryArgs := []any{input.RoleID, input.ProjectID, input.ChatID, input.ChatSlug, input.MattermostChannelID}
 	if strings.TrimSpace(input.SessionKey) != "" {
@@ -376,7 +378,7 @@ func (repo *Repository) withExistingClusterAdminGuard(ctx context.Context, input
 	}
 	var sideEffectErr error
 	if allowed {
-		sideEffectErr = sideEffect()
+		sideEffectErr = sideEffect(txRepository)
 		if errors.Is(sideEffectErr, adminrepo.ErrClusterAdminAdmissionDenied) {
 			allowed = false
 		}
@@ -431,6 +433,14 @@ func (repo *Repository) ListClusterAdminSecretIntegrity(ctx context.Context, rol
 		return nil, fmt.Errorf("read cluster-admin secret integrity: %w", err)
 	}
 	return bindings, nil
+}
+
+func (repo *Repository) RequiresClusterAdminSessionGuard(ctx context.Context, roleID int64, sessionKey string) (bool, error) {
+	var required bool
+	if err := repo.db.QueryRow(ctx, query("cluster_admin_session__requires_guard.sql"), roleID, sessionKey).Scan(&required); err != nil {
+		return false, fmt.Errorf("classify cluster-admin session: %w", err)
+	}
+	return required, nil
 }
 
 func lockClusterAdminRuntimeDependencies(ctx context.Context, tx pgx.Tx, roleID int64) error {

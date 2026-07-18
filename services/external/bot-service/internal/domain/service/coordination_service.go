@@ -81,18 +81,18 @@ func (svc *AgentSessionService) SearchMemory(ctx context.Context, sessionKey str
 	if !ok {
 		return AgentSessionMemorySearch{}, fmt.Errorf("project memory is not configured")
 	}
-	if err := svc.requireCoordinationPermission(ctx, session, entity.CoordinationCapabilityReadProjectMemory, "", 0); err != nil {
-		return AgentSessionMemorySearch{}, err
-	}
 	query = strings.TrimSpace(query)
 	if len([]rune(query)) > 500 {
 		return AgentSessionMemorySearch{}, fmt.Errorf("memory query must be no longer than 500 characters")
 	}
-	records, err := store.SearchMemory(ctx, adminrepo.SearchMemoryInput{
-		ProjectID: session.ProjectID,
-		RoleID:    session.RoleID,
-		Query:     query,
-		Limit:     limit,
+	var records []entity.MemoryRecord
+	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.memory_search.side_effect", func(current entity.AgentSession) error {
+		if permissionErr := svc.requireCoordinationPermission(ctx, current, entity.CoordinationCapabilityReadProjectMemory, "", 0); permissionErr != nil {
+			return permissionErr
+		}
+		var searchErr error
+		records, searchErr = store.SearchMemory(ctx, adminrepo.SearchMemoryInput{ProjectID: current.ProjectID, RoleID: current.RoleID, Query: query, Limit: limit})
+		return searchErr
 	})
 	if err != nil {
 		return AgentSessionMemorySearch{}, err
@@ -105,7 +105,7 @@ func (svc *AgentSessionService) RememberMemory(ctx context.Context, sessionKey s
 	if err != nil {
 		return entity.MemoryRecord{}, err
 	}
-	store, ok := svc.cfg.Store.(adminrepo.CoordinationRepository)
+	_, ok := svc.cfg.Store.(adminrepo.CoordinationRepository)
 	if !ok {
 		return entity.MemoryRecord{}, fmt.Errorf("project memory is not configured")
 	}
@@ -135,20 +135,24 @@ func (svc *AgentSessionService) RememberMemory(ctx context.Context, sessionKey s
 	if command.Scope == "project" {
 		capability = entity.CoordinationCapabilityWriteProjectMemory
 	}
-	if err := svc.requireCoordinationPermission(ctx, session, capability, "", 0); err != nil {
-		return entity.MemoryRecord{}, err
-	}
-	return store.RememberMemory(ctx, adminrepo.RememberMemoryInput{
-		ProjectID:       session.ProjectID,
-		Scope:           command.Scope,
-		RoleID:          session.RoleID,
-		CreatedByRoleID: session.RoleID,
-		SourceTurnID:    session.ActiveTurnID,
-		SourcePostID:    session.MattermostRootPostID,
-		Importance:      command.Importance,
-		Title:           command.Title,
-		Content:         command.Content,
+	var record entity.MemoryRecord
+	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.memory_remember.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+		if permissionErr := svc.requireCoordinationPermission(ctx, current, capability, "", 0); permissionErr != nil {
+			return permissionErr
+		}
+		coordinationStore, ok := guardedStore.(adminrepo.CoordinationRepository)
+		if !ok {
+			return fmt.Errorf("project memory is not configured")
+		}
+		var rememberErr error
+		record, rememberErr = coordinationStore.RememberMemory(ctx, adminrepo.RememberMemoryInput{
+			ProjectID: current.ProjectID, Scope: command.Scope, RoleID: current.RoleID, CreatedByRoleID: current.RoleID,
+			SourceTurnID: current.ActiveTurnID, SourcePostID: current.MattermostRootPostID,
+			Importance: command.Importance, Title: command.Title, Content: command.Content,
+		})
+		return rememberErr
 	})
+	return record, err
 }
 
 func (svc *AgentSessionService) ListActiveWork(ctx context.Context, sessionKey string, token string, limit int) (AgentSessionActiveWork, error) {
@@ -160,10 +164,15 @@ func (svc *AgentSessionService) ListActiveWork(ctx context.Context, sessionKey s
 	if !ok {
 		return AgentSessionActiveWork{}, fmt.Errorf("active work registry is not configured")
 	}
-	if err := svc.requireCoordinationPermission(ctx, session, entity.CoordinationCapabilityReadProjectWork, "", 0); err != nil {
-		return AgentSessionActiveWork{}, err
-	}
-	claims, err := store.ListActiveWork(ctx, 0, session.ProjectID, limit)
+	var claims []entity.WorkClaim
+	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.active_work_list.side_effect", func(current entity.AgentSession) error {
+		if permissionErr := svc.requireCoordinationPermission(ctx, current, entity.CoordinationCapabilityReadProjectWork, "", 0); permissionErr != nil {
+			return permissionErr
+		}
+		var listErr error
+		claims, listErr = store.ListActiveWork(ctx, 0, current.ProjectID, limit)
+		return listErr
+	})
 	if err != nil {
 		return AgentSessionActiveWork{}, err
 	}
@@ -178,12 +187,9 @@ func (svc *AgentSessionService) UpdateWorkContext(ctx context.Context, sessionKe
 	if session.ActiveTurnID == 0 {
 		return entity.WorkClaim{}, fmt.Errorf("session has no active turn")
 	}
-	store, ok := svc.cfg.Store.(adminrepo.CoordinationRepository)
+	_, ok := svc.cfg.Store.(adminrepo.CoordinationRepository)
 	if !ok {
 		return entity.WorkClaim{}, fmt.Errorf("active work registry is not configured")
-	}
-	if err := svc.requireCoordinationPermission(ctx, session, entity.CoordinationCapabilityUpdateOwnWork, "", 0); err != nil {
-		return entity.WorkClaim{}, err
 	}
 	command.Summary = strings.TrimSpace(command.Summary)
 	if command.Summary == "" || len([]rune(command.Summary)) > 2000 {
@@ -195,13 +201,23 @@ func (svc *AgentSessionService) UpdateWorkContext(ctx context.Context, sessionKe
 	if containsLikelySecret(append(append(append([]string{command.Summary}, command.Domains...), command.ResourceKeys...), command.Links...)...) {
 		return entity.WorkClaim{}, fmt.Errorf("work context contains a likely secret assignment")
 	}
-	return store.UpdateWorkClaim(ctx, adminrepo.UpdateWorkClaimInput{
-		TurnID:       session.ActiveTurnID,
-		Summary:      command.Summary,
-		Domains:      normalizedStrings(command.Domains),
-		ResourceKeys: normalizedStrings(command.ResourceKeys),
-		Links:        normalizedStrings(command.Links),
+	var claim entity.WorkClaim
+	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.work_context_update.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+		if permissionErr := svc.requireCoordinationPermission(ctx, current, entity.CoordinationCapabilityUpdateOwnWork, "", 0); permissionErr != nil {
+			return permissionErr
+		}
+		coordinationStore, ok := guardedStore.(adminrepo.CoordinationRepository)
+		if !ok {
+			return fmt.Errorf("active work registry is not configured")
+		}
+		var updateErr error
+		claim, updateErr = coordinationStore.UpdateWorkClaim(ctx, adminrepo.UpdateWorkClaimInput{
+			TurnID: current.ActiveTurnID, Summary: command.Summary, Domains: normalizedStrings(command.Domains),
+			ResourceKeys: normalizedStrings(command.ResourceKeys), Links: normalizedStrings(command.Links),
+		})
+		return updateErr
 	})
+	return claim, err
 }
 
 func (svc *AgentSessionService) queuedTurnForProcess(ctx context.Context, parentTurnID int64, queuedTurns []entity.AgentSessionTurn) (entity.AgentSessionTurn, bool, error) {
@@ -243,10 +259,15 @@ func (svc *AgentSessionService) RequestOwnerAttention(ctx context.Context, sessi
 	if !ok {
 		return entity.OwnerAttentionRequest{}, fmt.Errorf("owner attention is not configured")
 	}
-	if err := svc.requireCoordinationPermission(ctx, session, entity.CoordinationCapabilityRequestAttention, "", 0); err != nil {
-		return entity.OwnerAttentionRequest{}, err
-	}
-	process, err := store.GetTurnProcess(ctx, session.ActiveTurnID)
+	var process entity.ProcessContext
+	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.owner_attention_read.side_effect", func(current entity.AgentSession) error {
+		if permissionErr := svc.requireCoordinationPermission(ctx, current, entity.CoordinationCapabilityRequestAttention, "", 0); permissionErr != nil {
+			return permissionErr
+		}
+		var processErr error
+		process, processErr = store.GetTurnProcess(ctx, current.ActiveTurnID)
+		return processErr
+	})
 	if err != nil {
 		return entity.OwnerAttentionRequest{}, err
 	}
@@ -269,16 +290,19 @@ func (svc *AgentSessionService) RequestOwnerAttention(ctx context.Context, sessi
 	if containsLikelySecret(append(append([]string{command.Summary, command.Recommendation}, command.Options...), command.EvidenceLinks...)...) {
 		return entity.OwnerAttentionRequest{}, fmt.Errorf("attention request contains a likely secret assignment")
 	}
-	request, _, err := store.CreateOwnerAttention(ctx, adminrepo.CreateOwnerAttentionInput{
-		ProcessRunID:   process.ProcessRunID,
-		TurnID:         session.ActiveTurnID,
-		Severity:       command.Severity,
-		Summary:        command.Summary,
-		Options:        normalizedStrings(command.Options),
-		Recommendation: strings.TrimSpace(command.Recommendation),
-		EvidenceLinks:  normalizedStrings(command.EvidenceLinks),
-		PauseScope:     command.PauseScope,
-		IdempotencyKey: command.IdempotencyKey,
+	var request entity.OwnerAttentionRequest
+	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.owner_attention_persist.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+		coordinationStore, ok := guardedStore.(adminrepo.CoordinationRepository)
+		if !ok {
+			return fmt.Errorf("owner attention is not configured")
+		}
+		var persistErr error
+		request, _, persistErr = coordinationStore.CreateOwnerAttention(ctx, adminrepo.CreateOwnerAttentionInput{
+			ProcessRunID: process.ProcessRunID, TurnID: current.ActiveTurnID, Severity: command.Severity,
+			Summary: command.Summary, Options: normalizedStrings(command.Options), Recommendation: strings.TrimSpace(command.Recommendation),
+			EvidenceLinks: normalizedStrings(command.EvidenceLinks), PauseScope: command.PauseScope, IdempotencyKey: command.IdempotencyKey,
+		})
+		return persistErr
 	})
 	if err != nil || strings.TrimSpace(request.MattermostPostID) != "" {
 		return request, err
@@ -293,7 +317,17 @@ func (svc *AgentSessionService) RequestOwnerAttention(ctx context.Context, sessi
 	if err != nil {
 		return entity.OwnerAttentionRequest{}, err
 	}
-	return store.SetOwnerAttentionPost(ctx, request.ID, ref.PostID)
+	var updated entity.OwnerAttentionRequest
+	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.owner_attention_post_persist.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
+		coordinationStore, ok := guardedStore.(adminrepo.CoordinationRepository)
+		if !ok {
+			return fmt.Errorf("owner attention is not configured")
+		}
+		var updateErr error
+		updated, updateErr = coordinationStore.SetOwnerAttentionPost(ctx, request.ID, ref.PostID)
+		return updateErr
+	})
+	return updated, err
 }
 
 func (svc *AgentSessionService) notifyRootInitiatorFailure(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, command CompleteAgentSessionTurnCommand) error {

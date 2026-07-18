@@ -3,13 +3,30 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
+
+type countingConversationReader struct {
+	threadCalls int
+	searchCalls int
+}
+
+func (reader *countingConversationReader) GetThreadPosts(context.Context, string, int) ([]MattermostPostMessage, error) {
+	reader.threadCalls++
+	return []MattermostPostMessage{{ID: "thread-post"}}, nil
+}
+
+func (reader *countingConversationReader) SearchChannelPosts(context.Context, string, string, int) ([]MattermostPostMessage, error) {
+	reader.searchCalls++
+	return []MattermostPostMessage{{ID: "search-post"}}, nil
+}
 
 type admittedAdminStore struct {
 	*fakeAdminStore
@@ -23,14 +40,27 @@ type admittedAdminStore struct {
 	denyBinding      bool
 	denyGuard        bool
 	denyGuardAt      int
+	frozenSessions   map[string]bool
+	subjectErr       error
+}
+
+func (store *admittedAdminStore) RequiresClusterAdminSessionGuard(_ context.Context, roleID int64, sessionKey string) (bool, error) {
+	if store.subjectErr != nil {
+		return false, store.subjectErr
+	}
+	if store.frozenSessions[sessionKey] {
+		return true, nil
+	}
+	role := store.fakeAdminStore.agentRoles[roleID]
+	return strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin"), nil
 }
 
 func (store *admittedAdminStore) WithExistingClusterAdminRuntimeGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
 	return store.withExistingClusterAdminGuard(input, sideEffect)
 }
 
-func (store *admittedAdminStore) WithExistingClusterAdminPersistenceGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
-	return store.withExistingClusterAdminGuard(input, sideEffect)
+func (store *admittedAdminStore) WithExistingClusterAdminPersistenceGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func(adminrepo.Repository) error) error {
+	return store.withExistingClusterAdminGuard(input, func() error { return sideEffect(store) })
 }
 
 func (store *admittedAdminStore) withExistingClusterAdminGuard(input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
@@ -515,4 +545,269 @@ func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testi
 	if len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 || len(runner.sessionRuns) != 0 {
 		t.Fatalf("denied final guard caused side effects: turns=%#v runs=%#v runtime=%#v", baseStore.sessionTurns, baseStore.agentRuns, runner.sessionRuns)
 	}
+}
+
+func TestClusterAdminCurrentSessionCallbacksFailClosedAtTokenAndEffectBarriers(t *testing.T) {
+	tests := []struct {
+		name  string
+		call  func(*AgentSessionService) error
+		check func(*testing.T, *fakeAdminStore, *fakeRuntimeRunner, *fakeThreadPublisher, *countingConversationReader)
+	}{
+		{
+			name: "internal snapshot",
+			call: func(svc *AgentSessionService) error {
+				_, err := svc.Snapshot(context.Background(), "session-admin", "session-token")
+				return err
+			},
+		},
+		{
+			name: "internal claim",
+			call: func(svc *AgentSessionService) error {
+				_, err := svc.ClaimNextTurn(context.Background(), "session-admin", "session-token")
+				return err
+			},
+			check: func(t *testing.T, store *fakeAdminStore, _ *fakeRuntimeRunner, _ *fakeThreadPublisher, _ *countingConversationReader) {
+				if store.sessionTurns[0].Status != agentSessionTurnQueued {
+					t.Fatalf("denied claim mutated turn: %#v", store.sessionTurns[0])
+				}
+			},
+		},
+		{
+			name: "internal complete",
+			call: func(svc *AgentSessionService) error {
+				return svc.CompleteTurn(context.Background(), "session-admin", "session-token", CompleteAgentSessionTurnCommand{TurnID: 1, Status: agentSessionTurnSucceeded})
+			},
+			check: func(t *testing.T, store *fakeAdminStore, _ *fakeRuntimeRunner, _ *fakeThreadPublisher, _ *countingConversationReader) {
+				if store.completeTurnCalls != 0 {
+					t.Fatalf("denied complete calls=%d", store.completeTurnCalls)
+				}
+			},
+		},
+		{
+			name: "mcp thread history",
+			call: func(svc *AgentSessionService) error {
+				_, err := svc.ThreadHistory(context.Background(), "session-admin", "session-token", 10)
+				return err
+			},
+			check: func(t *testing.T, _ *fakeAdminStore, _ *fakeRuntimeRunner, _ *fakeThreadPublisher, reader *countingConversationReader) {
+				if reader.threadCalls != 0 {
+					t.Fatalf("denied thread reads=%d", reader.threadCalls)
+				}
+			},
+		},
+		{
+			name: "mcp chat search",
+			call: func(svc *AgentSessionService) error {
+				_, err := svc.SearchChat(context.Background(), "session-admin", "session-token", "query", 10)
+				return err
+			},
+			check: func(t *testing.T, _ *fakeAdminStore, _ *fakeRuntimeRunner, _ *fakeThreadPublisher, reader *countingConversationReader) {
+				if reader.searchCalls != 0 {
+					t.Fatalf("denied search reads=%d", reader.searchCalls)
+				}
+			},
+		},
+		{
+			name: "mcp publish without system fallback",
+			call: func(svc *AgentSessionService) error {
+				_, err := svc.PostThreadUpdate(context.Background(), "session-admin", "session-token", "status")
+				return err
+			},
+			check: func(t *testing.T, _ *fakeAdminStore, _ *fakeRuntimeRunner, publisher *fakeThreadPublisher, _ *countingConversationReader) {
+				if len(publisher.posts) != 0 || publisher.postWithTokenCalls != 0 {
+					t.Fatalf("denied publish used fallback: %#v", publisher)
+				}
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			baseStore, runner, publisher, reader := clusterAdminCurrentSessionFixture()
+			store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: 2}
+			svc := NewAgentSessionService(AgentSessionServiceConfig{
+				Store: store, RuntimeRunner: runner, ThreadPublisher: publisher, ConversationReader: reader,
+				StorageReady: true, RuntimeReady: true,
+			})
+			err := test.call(svc)
+			if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+				t.Fatalf("callback error=%v", err)
+			}
+			if runner.botTokenSecretReads != 1 {
+				t.Fatalf("token reads=%d, want=1", runner.botTokenSecretReads)
+			}
+			if store.guardCalls != 2 {
+				t.Fatalf("guards=%#v", store.guardInputs)
+			}
+			if test.check != nil {
+				test.check(t, baseStore, runner, publisher, reader)
+			}
+		})
+	}
+
+	baseStore, runner, publisher, reader := clusterAdminCurrentSessionFixture()
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: 1}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{Store: store, RuntimeRunner: runner, ThreadPublisher: publisher, ConversationReader: reader, StorageReady: true, RuntimeReady: true})
+	_, err := svc.Snapshot(context.Background(), "session-admin", "session-token")
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) || runner.botTokenSecretReads != 0 {
+		t.Fatalf("token barrier: error=%v reads=%d", err, runner.botTokenSecretReads)
+	}
+}
+
+func TestFrozenClusterAdminCurrentSessionRemainsGuardedAfterRoleDowngrade(t *testing.T) {
+	baseStore, runner, publisher, reader := clusterAdminCurrentSessionFixture()
+	role := baseStore.agentRoles[1]
+	role.KubernetesAccess = "read-only"
+	baseStore.agentRoles[1] = role
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuard: true, frozenSessions: map[string]bool{"session-admin": true}}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{Store: store, RuntimeRunner: runner, ThreadPublisher: publisher, ConversationReader: reader, StorageReady: true, RuntimeReady: true})
+	_, err := svc.Snapshot(context.Background(), "session-admin", "session-token")
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) || runner.botTokenSecretReads != 0 || store.guardCalls != 1 {
+		t.Fatalf("downgraded frozen session bypassed guard: error=%v reads=%d guards=%d", err, runner.botTokenSecretReads, store.guardCalls)
+	}
+}
+
+func clusterAdminCurrentSessionFixture() (*fakeAdminStore, *fakeRuntimeRunner, *fakeThreadPublisher, *countingConversationReader) {
+	now := time.Now().UTC()
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "mattercodex-admin", KubernetesAccess: "cluster-admin", Enabled: true}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, Slug: "admin-chat", MattermostChannelID: "channel-admin"}
+	store.agentSessions = map[string]entity.AgentSession{"session-admin": {
+		ID: 1, SessionKey: "session-admin", ProjectID: 1, ChatID: 1, RoleID: 1, MattermostChannelID: "channel-admin",
+		MattermostRootPostID: "root-admin", Status: agentSessionStatusRunning, ActiveTurnID: 1,
+		TokenSecretRef: "session-secret", TTLSeconds: defaultThreadSessionTTLSeconds, ExpiresAt: now.Add(time.Hour),
+	}}
+	store.sessionTurns = []entity.AgentSessionTurn{{ID: 1, SessionID: 1, RunID: "run-admin", Status: agentSessionTurnQueued, MattermostChannelID: "channel-admin", MattermostRootPostID: "root-admin"}}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{1: {ID: 1, RoleID: 1, ProjectID: 1, Username: "mattercodex-admin", TokenSecretRef: "role-secret"}}
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token", "role-secret": "role-token"}}
+	return store, runner, &fakeThreadPublisher{}, &countingConversationReader{}
+}
+
+func TestClusterAdminRepairGuardsStaleAndRunningSessionAtEveryEffectBoundary(t *testing.T) {
+	t.Run("stale cleanup", func(t *testing.T) {
+		store, runner, sessionKey := clusterAdminRepairFixture(agentSessionTurnSucceeded, true)
+		guarded := &admittedAdminStore{fakeAdminStore: store, allowed: true, denyGuardAt: 1}
+		svc := NewChatRunService(ChatRunServiceConfig{Store: guarded, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true})
+		result, err := svc.RepairAgentSessions(context.Background(), 10)
+		if err != nil || result.Failed != 1 || len(runner.cleanedSessionKeys) != 0 || store.resetSessionCalls != 0 {
+			t.Fatalf("stale cleanup barrier: result=%#v error=%v cleanup=%#v reset=%d", result, err, runner.cleanedSessionKeys, store.resetSessionCalls)
+		}
+		if guarded.guardInputs[0].SessionKey != sessionKey || guarded.guardInputs[0].Operation != "agent_session.repair_stale_cleanup.side_effect" {
+			t.Fatalf("stale cleanup subject=%#v", guarded.guardInputs)
+		}
+	})
+
+	t.Run("stale reset", func(t *testing.T) {
+		store, runner, _ := clusterAdminRepairFixture(agentSessionTurnSucceeded, false)
+		guarded := &admittedAdminStore{fakeAdminStore: store, allowed: true, denyGuardAt: 1}
+		svc := NewChatRunService(ChatRunServiceConfig{Store: guarded, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true})
+		result, err := svc.RepairAgentSessions(context.Background(), 10)
+		if err != nil || result.Failed != 1 || store.resetSessionCalls != 0 {
+			t.Fatalf("stale reset barrier: result=%#v error=%v reset=%d", result, err, store.resetSessionCalls)
+		}
+		if guarded.guardInputs[0].Operation != "agent_session.repair_stale_reset.side_effect" {
+			t.Fatalf("guards=%#v", guarded.guardInputs)
+		}
+	})
+
+	for _, test := range []struct {
+		name          string
+		denyAt        int
+		wantHealth    int
+		wantComplete  int
+		wantCleanup   int
+		wantReset     int
+		wantOperation string
+	}{
+		{name: "health", denyAt: 1, wantOperation: "agent_session.repair_running_health.side_effect"},
+		{name: "complete", denyAt: 2, wantHealth: 1, wantOperation: "agent_session.repair_running_complete.side_effect"},
+		{name: "cleanup", denyAt: 3, wantHealth: 1, wantComplete: 1, wantOperation: "agent_session.repair_running_cleanup.side_effect"},
+		{name: "reset", denyAt: 4, wantHealth: 1, wantComplete: 1, wantCleanup: 1, wantOperation: "agent_session.repair_running_reset.side_effect"},
+	} {
+		t.Run("running "+test.name, func(t *testing.T) {
+			store, runner, sessionKey := clusterAdminRepairFixture(agentSessionTurnRunning, true)
+			runner.sessionRuntimeHealth = runtimerepo.AgentSessionRuntimeHealth{SessionKey: sessionKey, Exists: true, Terminal: true, Phase: "Failed", Reason: "synthetic"}
+			guarded := &admittedAdminStore{fakeAdminStore: store, allowed: true, denyGuardAt: test.denyAt}
+			svc := NewChatRunService(ChatRunServiceConfig{Store: guarded, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true})
+			result, err := svc.RepairAgentSessions(context.Background(), 10)
+			if err != nil || result.Failed != 1 {
+				t.Fatalf("result=%#v error=%v", result, err)
+			}
+			if runner.sessionRuntimeHealthCalls != test.wantHealth || store.completeTurnCalls != test.wantComplete || len(runner.cleanedSessionKeys) != test.wantCleanup || store.resetSessionCalls != test.wantReset {
+				t.Fatalf("effects health=%d complete=%d cleanup=%d reset=%d", runner.sessionRuntimeHealthCalls, store.completeTurnCalls, len(runner.cleanedSessionKeys), store.resetSessionCalls)
+			}
+			last := guarded.guardInputs[len(guarded.guardInputs)-1]
+			if last.Operation != test.wantOperation || last.SessionKey != sessionKey {
+				t.Fatalf("last guard=%#v", last)
+			}
+		})
+	}
+}
+
+func TestClusterAdminCapacityEvictionGuardsSelectedCandidateAtEveryBoundary(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		denyAt        int
+		wantHealth    int
+		wantCleanup   int
+		wantClear     int
+		wantAudit     int
+		wantOperation string
+	}{
+		{name: "health", denyAt: 1, wantOperation: "agent_session.capacity_candidate_health.side_effect"},
+		{name: "cleanup", denyAt: 2, wantHealth: 1, wantOperation: "agent_session.capacity_candidate_cleanup.side_effect"},
+		{name: "clear", denyAt: 3, wantHealth: 1, wantCleanup: 1, wantOperation: "agent_session.capacity_candidate_clear.side_effect"},
+		{name: "audit", denyAt: 4, wantHealth: 1, wantCleanup: 1, wantClear: 1, wantOperation: "agent_session.capacity_candidate_audit.side_effect"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := chatRuntimeStore()
+			store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "former-admin", KubernetesAccess: "read-only", Enabled: true}
+			store.chats[2] = entity.Chat{ID: 2, ProjectID: 1, Slug: "admin-chat", MattermostChannelID: "channel-admin"}
+			store.agentSessions = map[string]entity.AgentSession{"candidate-admin": {
+				ID: 2, SessionKey: "candidate-admin", ProjectID: 1, ChatID: 2, RoleID: 2, MattermostChannelID: "channel-admin",
+				Status: agentSessionStatusIdle, PodName: "candidate-pod", LastActivityAt: time.Now().Add(-time.Hour),
+			}}
+			guarded := &admittedAdminStore{fakeAdminStore: store, allowed: true, denyGuardAt: test.denyAt, frozenSessions: map[string]bool{"candidate-admin": true}}
+			runner := &fakeRuntimeRunner{}
+			svc := NewChatRunService(ChatRunServiceConfig{Store: guarded, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true})
+			evicted, err := svc.evictOldestIdleAgentSessionPod(context.Background(), "requester-session")
+			if evicted || !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+				t.Fatalf("evicted=%t error=%v", evicted, err)
+			}
+			if runner.sessionRuntimeHealthCalls != test.wantHealth || len(runner.cleanedSessionKeys) != test.wantCleanup || store.clearIdleCalls != test.wantClear || store.auditCalls != test.wantAudit {
+				t.Fatalf("effects health=%d cleanup=%d clear=%d audit=%d", runner.sessionRuntimeHealthCalls, len(runner.cleanedSessionKeys), store.clearIdleCalls, store.auditCalls)
+			}
+			last := guarded.guardInputs[len(guarded.guardInputs)-1]
+			if last.Operation != test.wantOperation || last.SessionKey != "candidate-admin" || last.RoleID != 2 || last.ChatID != 2 {
+				t.Fatalf("candidate guard=%#v", last)
+			}
+		})
+	}
+
+	store := chatRuntimeStore()
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "admin", KubernetesAccess: "cluster-admin", Enabled: true}
+	store.chats[2] = entity.Chat{ID: 2, ProjectID: 1, Slug: "admin-chat", MattermostChannelID: "channel-admin"}
+	store.agentSessions = map[string]entity.AgentSession{"candidate-admin": {ID: 2, SessionKey: "candidate-admin", ProjectID: 1, ChatID: 2, RoleID: 2, MattermostChannelID: "channel-admin", Status: agentSessionStatusIdle, PodName: "candidate-pod"}}
+	guarded := &admittedAdminStore{fakeAdminStore: store, allowed: true, subjectErr: errors.New("indeterminate subject")}
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{Store: guarded, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true})
+	if evicted, err := svc.evictOldestIdleAgentSessionPod(context.Background(), "requester"); err == nil || evicted || runner.sessionRuntimeHealthCalls != 0 {
+		t.Fatalf("indeterminate subject did not fail closed: evicted=%t error=%v health=%d", evicted, err, runner.sessionRuntimeHealthCalls)
+	}
+}
+
+func clusterAdminRepairFixture(turnStatus string, withPod bool) (*fakeAdminStore, *fakeRuntimeRunner, string) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "mattercodex-admin", KubernetesAccess: "cluster-admin", Enabled: true}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, Slug: "admin-chat", MattermostChannelID: "channel-admin"}
+	podName := ""
+	if withPod {
+		podName = "admin-pod"
+	}
+	sessionKey := "repair-admin"
+	store.agentSessions = map[string]entity.AgentSession{sessionKey: {
+		ID: 1, SessionKey: sessionKey, ProjectID: 1, ChatID: 1, RoleID: 1, MattermostChannelID: "channel-admin",
+		Status: agentSessionStatusRunning, ActiveTurnID: 1, ActiveRunID: "run-admin", PodName: podName,
+	}}
+	store.sessionTurns = []entity.AgentSessionTurn{{ID: 1, SessionID: 1, RunID: "run-admin", Status: turnStatus}}
+	return store, &fakeRuntimeRunner{}, sessionKey
 }

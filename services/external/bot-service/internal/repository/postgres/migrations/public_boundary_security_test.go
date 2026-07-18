@@ -834,14 +834,18 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	if err != nil || !allowed {
 		t.Fatalf("существующая session binding: allowed=%t error=%v", allowed, err)
 	}
+	requiresGuard, err := repository.RequiresClusterAdminSessionGuard(ctx, roleID, existingSessionKey)
+	if err != nil || !requiresGuard {
+		t.Fatalf("классификация frozen cluster-admin session: required=%t error=%v", requiresGuard, err)
+	}
 	persistenceCallback := false
 	err = repository.WithExistingClusterAdminPersistenceGuard(ctx, securityrepo.ClusterAdminBindingInput{
 		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
 		MattermostChannelID: "channel-existing", SessionKey: existingSessionKey,
 		ActorUser: "test", Operation: "test.binding.existing-session-persistence",
-	}, func() error {
+	}, func(guardedStore adminrepo.Repository) error {
 		persistenceCallback = true
-		_, updateErr := repository.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{SessionKey: existingSessionKey})
+		_, updateErr := guardedStore.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{SessionKey: existingSessionKey})
 		return updateErr
 	})
 	if err != nil || !persistenceCallback {

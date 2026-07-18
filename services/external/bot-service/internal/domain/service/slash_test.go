@@ -3335,6 +3335,7 @@ type fakeRuntimeRunner struct {
 	cleanedSessionKey           string
 	cleanedSessionKeys          []string
 	sessionRuntimeHealth        runtimerepo.AgentSessionRuntimeHealth
+	sessionRuntimeHealthCalls   int
 	sessionStartErrors          []error
 	botTokenSecrets             map[string]string
 	botTokenSecretReads         int
@@ -3611,6 +3612,7 @@ func (runner *fakeRuntimeRunner) CleanupAgentSession(_ context.Context, sessionK
 }
 
 func (runner *fakeRuntimeRunner) GetAgentSessionRuntimeHealth(_ context.Context, sessionKey string) (runtimerepo.AgentSessionRuntimeHealth, error) {
+	runner.sessionRuntimeHealthCalls++
 	if strings.TrimSpace(runner.sessionRuntimeHealth.SessionKey) == "" {
 		return runtimerepo.AgentSessionRuntimeHealth{
 			SessionKey: sessionKey,
@@ -3741,6 +3743,15 @@ type fakeAdminStore struct {
 	postMessageMaxRunes  int
 	frozenOpenAIAccount  string
 	frozenGitHubAccount  string
+	clearIdleCalls       int
+	resetSessionCalls    int
+	completeTurnCalls    int
+	auditCalls           int
+}
+
+func (store *fakeAdminStore) RequiresClusterAdminSessionGuard(_ context.Context, roleID int64, _ string) (bool, error) {
+	role := store.agentRoles[roleID]
+	return strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin"), nil
 }
 
 func (store *fakeAdminStore) IsFrozenClusterAdminOpenAIAccount(_ context.Context, accountName string) (bool, error) {
@@ -4564,6 +4575,7 @@ func (store *fakeAdminStore) UpdateAgentSessionRuntime(_ context.Context, input 
 }
 
 func (store *fakeAdminStore) ClearIdleAgentSessionPod(_ context.Context, sessionKey string, podName string) (entity.AgentSession, error) {
+	store.clearIdleCalls++
 	store.ensureAgentSessions()
 	session, ok := store.agentSessions[sessionKey]
 	if !ok || session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != podName {
@@ -4581,6 +4593,7 @@ func (store *fakeAdminStore) ClearIdleAgentSessionPod(_ context.Context, session
 }
 
 func (store *fakeAdminStore) ResetAgentSessionRuntime(_ context.Context, sessionKey string, status string) (entity.AgentSession, error) {
+	store.resetSessionCalls++
 	store.ensureAgentSessions()
 	session, ok := store.agentSessions[sessionKey]
 	if !ok {
@@ -4739,6 +4752,7 @@ func (store *fakeAdminStore) UpdateAgentSessionTurnMessage(_ context.Context, in
 }
 
 func (store *fakeAdminStore) CompleteAgentSessionTurn(_ context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	store.completeTurnCalls++
 	for index, turn := range store.sessionTurns {
 		if turn.ID == input.TurnID {
 			turn.Status = input.Status
@@ -5435,6 +5449,7 @@ func (store *fakeAdminStore) UpdateAgentRunArtifacts(_ context.Context, input ad
 
 func (store *fakeAdminStore) RecordAuditEvent(context.Context, adminrepo.AuditEventInput) error {
 	store.auditRecorded = true
+	store.auditCalls++
 	return nil
 }
 

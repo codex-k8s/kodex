@@ -150,7 +150,7 @@ type ClusterAdminRuntimeGuardRepository interface {
 }
 
 type ClusterAdminPersistenceGuardRepository interface {
-	WithExistingClusterAdminPersistenceGuard(ctx context.Context, input ClusterAdminBindingInput, sideEffect func() error) error
+	WithExistingClusterAdminPersistenceGuard(ctx context.Context, input ClusterAdminBindingInput, sideEffect func(adminrepo.Repository) error) error
 }
 
 type SecretIntegrityBinding struct {
@@ -164,6 +164,10 @@ type SecretIntegrityBinding struct {
 
 type ClusterAdminSecretIntegrityRepository interface {
 	ListClusterAdminSecretIntegrity(ctx context.Context, roleID int64, sessionKey string) ([]SecretIntegrityBinding, error)
+}
+
+type ClusterAdminSessionSubjectRepository interface {
+	RequiresClusterAdminSessionGuard(ctx context.Context, roleID int64, sessionKey string) (bool, error)
 }
 
 type ClusterAdminAccountDependencyRepository interface {
