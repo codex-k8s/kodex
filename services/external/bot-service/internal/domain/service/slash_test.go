@@ -3730,6 +3730,7 @@ func (runner *fakeRuntimeRunner) CleanupExpiredRuns(_ context.Context, input run
 
 type fakeAdminStore struct {
 	capacityMu           sync.Mutex
+	deliveryMu           sync.Mutex
 	upsert               adminrepo.UpsertRepositoryInput
 	auditRecorded        bool
 	repositories         map[string]entity.Repository
@@ -3760,6 +3761,7 @@ type fakeAdminStore struct {
 	agentSessions        map[string]entity.AgentSession
 	sessionTurns         []entity.AgentSessionTurn
 	agentDelegations     map[int64]entity.AgentDelegation
+	callbackDeliveries   map[int64]entity.AgentDelegationCallbackDelivery
 	postMessageMaxRunes  int
 	frozenOpenAIAccount  string
 	frozenGitHubAccount  string

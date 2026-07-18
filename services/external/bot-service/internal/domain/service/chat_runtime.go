@@ -43,10 +43,11 @@ var githubPullURLRE = regexp.MustCompile(`https://github\.com/([^/\s]+)/([^/\s]+
 var codexAuthDeviceCodeWait = 5 * time.Minute
 
 type MattermostThreadPostInput struct {
-	ChannelID  string
-	RootPostID string
-	Message    string
-	Props      map[string]any
+	ChannelID     string
+	RootPostID    string
+	Message       string
+	Props         map[string]any
+	IdempotencyID string
 }
 
 type MattermostThreadUpdateInput struct {
@@ -76,6 +77,10 @@ type MattermostThreadPublisher interface {
 	PostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
 	UpdateThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
 	AddPostReactionWithToken(ctx context.Context, token string, input MattermostPostReactionInput) error
+}
+
+type MattermostIdempotentThreadPublisher interface {
+	ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error)
 }
 
 type ChatPostCommand struct {

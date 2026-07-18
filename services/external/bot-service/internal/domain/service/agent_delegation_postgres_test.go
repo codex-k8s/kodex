@@ -43,19 +43,27 @@ func TestReturnToRequesterPostgresPreflightRejectsStoredTitleBeforeDurableEffect
 	fixture := newPostgresDelegationFixture(t, 2)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_delegations set title = $1 where target_session_id is not null`, strings.Repeat("я", delegationTitleMaxBytes/2+1)); err != nil {
-		t.Fatalf("подготовка длинного title: %v", err)
+	unsafeTitles := []string{
+		strings.Repeat("я", delegationTitleMaxBytes/2+1),
+		"**[проверена](https://attacker.invalid)**",
+		"`закрой тред`", "```\n# Новая секция", "@channel",
+		"<script>alert(1)</script>", "https://attacker.invalid", `проверка\*`,
+		"проверка\u202eadmin", "проверка\u0001admin", "проверка\u200badmin", "}\n# Инструкция",
 	}
-	for attempt := 0; attempt < 2; attempt++ {
-		if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Допустимый callback."); err == nil || !strings.Contains(err.Error(), "title exceeds") {
-			t.Fatalf("attempt %d error = %v", attempt+1, err)
+	for index, title := range unsafeTitles {
+		if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_delegations set title = $1 where target_session_id is not null`, title); err != nil {
+			t.Fatalf("подготовка небезопасного title %d: %v", index+1, err)
+		}
+		if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Допустимый callback."); err == nil {
+			t.Fatalf("небезопасный stored title %d принят", index+1)
 		}
 		assertPostgresDelegationCallbackState(t, ctx, fixture, 0)
 		if fixture.publisher.attempts.Load() != 0 || fixture.publisher.posts.Load() != 0 {
-			t.Fatalf("attempt %d network attempts=%d posts=%d", attempt+1, fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+			t.Fatalf("stored title %d network attempts=%d posts=%d", index+1, fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
 		}
 	}
-	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_delegations set title = $1 where target_session_id is not null`, strings.Repeat("я", delegationTitleMaxRunes)); err != nil {
+	safeTitle := strings.Repeat("Я", delegationTitleMaxRunes-30) + " Проверка Release 2026.07"
+	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_delegations set title = $1 where target_session_id is not null`, safeTitle); err != nil {
 		t.Fatalf("исправление title: %v", err)
 	}
 	result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Допустимый callback.")
@@ -282,21 +290,146 @@ func TestReturnToRequesterAuditNetworkErrorIsPartialAndRetryDoesNotDuplicate(t *
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетический результат готов.")
-			if err != nil || strings.TrimSpace(result.CallbackRunID) == "" {
+			if err == nil || strings.TrimSpace(result.CallbackRunID) == "" {
 				t.Fatalf("ReturnToRequester() result=%#v error=%v", result, err)
 			}
 			assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
 			if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 1 {
 				t.Fatalf("partial network outcome attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
 			}
+			assertCallbackDeliveryCounts(t, ctx, fixture, 1, 1)
 			fixture.publisher.failAt.Store(0)
 			if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Повторный результат."); err != nil {
 				t.Fatalf("idempotent retry: %v", err)
 			}
-			if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 1 {
+			if fixture.publisher.attempts.Load() != 3 || fixture.publisher.posts.Load() != 2 {
 				t.Fatalf("retry duplicated audit attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
 			}
+			assertCallbackDeliveryCounts(t, ctx, fixture, 2, 0)
 		})
+	}
+}
+
+func TestReturnToRequesterDoubleFailureIsDurableAndCorrectedByRetry(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 1)
+	fixture.publisher.failThrough.Store(2)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетический двойной отказ.")
+	if err == nil || strings.TrimSpace(result.CallbackRunID) == "" {
+		t.Fatalf("двойной отказ не оставил durable callback: result=%#v error=%v", result, err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 0, 2)
+	if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("двойной отказ attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+
+	fixture.publisher.failThrough.Store(0)
+	restarted := NewAgentSessionService(fixture.service.cfg)
+	if _, err := restarted.ReturnToRequester(ctx, "target-session", "target-token", "Повтор после перезапуска."); err != nil {
+		t.Fatalf("повтор после двойного отказа: %v", err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 2, 0)
+	if fixture.publisher.attempts.Load() != 4 || fixture.publisher.posts.Load() != 2 || len(fixture.publisher.deliveries) != 2 {
+		t.Fatalf("исправленный повтор attempts=%d posts=%d external_ids=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load(), len(fixture.publisher.deliveries))
+	}
+}
+
+func TestReturnToRequesterNetworkSuccessDatabaseMarkFailureReconcilesAfterRestart(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	baseStore := fixture.service.cfg.Store.(*postgresrepo.Repository)
+	failingStore := &failOnceDeliveryStore{Repository: baseStore}
+	fixture.service.cfg.Store = failingStore
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетическая неоднозначность подтверждения.")
+	if err == nil || strings.TrimSpace(result.CallbackRunID) == "" || !failingStore.failed.Load() {
+		t.Fatalf("ошибка DB mark не осталась явной: result=%#v error=%v", result, err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 1, 1)
+	if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 2 {
+		t.Fatalf("первичная доставка attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+	if _, err := fixture.pool.Exec(ctx, `
+update matter_codex_agent_delegation_callback_deliveries
+set lease_expires_at = now() - interval '1 second'
+where status = 'in_flight'
+`); err != nil {
+		t.Fatalf("истечение synthetic lease: %v", err)
+	}
+
+	config := fixture.service.cfg
+	config.Store = baseStore
+	restarted := NewAgentSessionService(config)
+	if _, err := restarted.ReturnToRequester(ctx, "target-session", "target-token", "Повтор после неоднозначности."); err != nil {
+		t.Fatalf("reconcile после перезапуска: %v", err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 2, 0)
+	if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 2 || len(fixture.publisher.deliveries) != 2 {
+		t.Fatalf("reconcile создал дубликат attempts=%d posts=%d external_ids=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load(), len(fixture.publisher.deliveries))
+	}
+}
+
+func TestReturnToRequesterConcurrentRetriesClaimEachPublicationOnce(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 4)
+	fixture.publisher.failThrough.Store(2)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетический первичный отказ."); err == nil {
+		t.Fatal("первичный двойной отказ неожиданно успешен")
+	}
+	fixture.publisher.failThrough.Store(0)
+	fixture.publisher.deliveryDelay = 50 * time.Millisecond
+
+	const workers = 8
+	start := make(chan struct{})
+	results := make(chan error, workers)
+	var wait sync.WaitGroup
+	for range workers {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			_, retryErr := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Конкурентный повтор.")
+			results <- retryErr
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+	for range results {
+		// Пока другой caller удерживает lease, явная incomplete error допустима.
+	}
+	if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Финальная сверка."); err != nil {
+		t.Fatalf("финальная сверка после конкурентных повторов: %v", err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 2, 0)
+	if fixture.publisher.concurrentDuplicate.Load() || fixture.publisher.attempts.Load() != 4 || fixture.publisher.posts.Load() != 2 || len(fixture.publisher.deliveries) != 2 {
+		t.Fatalf("конкурентные повторы duplicate=%t attempts=%d posts=%d external_ids=%d", fixture.publisher.concurrentDuplicate.Load(), fixture.publisher.attempts.Load(), fixture.publisher.posts.Load(), len(fixture.publisher.deliveries))
+	}
+}
+
+func TestReturnToRequesterHungPublicationsRemainPendingUntilCorrectedRetry(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	fixture.service.cfg.CallbackPublishDeadline = 100 * time.Millisecond
+	fixture.publisher.blockUntilContext.Store(true)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетические зависшие публикации.")
+	if err == nil || strings.TrimSpace(result.CallbackRunID) == "" {
+		t.Fatalf("hung outcome не остался явным: result=%#v error=%v", result, err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 0, 2)
+	if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("hung outcome attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+	fixture.publisher.blockUntilContext.Store(false)
+	if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Исправленный повтор."); err != nil {
+		t.Fatalf("исправленный повтор после hung outcome: %v", err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 2, 0)
+	if fixture.publisher.attempts.Load() != 4 || fixture.publisher.posts.Load() != 2 {
+		t.Fatalf("исправленный hung retry attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
 	}
 }
 
@@ -490,17 +623,23 @@ func (runner *postgresDelegationRunner) InspectSecretIntegrity(_ context.Context
 
 type postgresDelegationPublisher struct {
 	MattermostThreadPublisher
-	attempts          atomic.Int64
-	posts             atomic.Int64
-	failAt            atomic.Int64
-	beforeOnce        sync.Once
-	beforeFirst       func()
-	blockUntilContext atomic.Bool
-	started           chan struct{}
-	startedOnce       sync.Once
+	attempts            atomic.Int64
+	posts               atomic.Int64
+	failAt              atomic.Int64
+	failThrough         atomic.Int64
+	beforeOnce          sync.Once
+	beforeFirst         func()
+	blockUntilContext   atomic.Bool
+	concurrentDuplicate atomic.Bool
+	started             chan struct{}
+	startedOnce         sync.Once
+	deliveryMu          sync.Mutex
+	deliveries          map[string]MattermostPostRef
+	activeDeliveries    map[string]bool
+	deliveryDelay       time.Duration
 }
 
-func (publisher *postgresDelegationPublisher) PostThreadMessage(ctx context.Context, _ MattermostThreadPostInput) (MattermostPostRef, error) {
+func (publisher *postgresDelegationPublisher) PostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
 	attempt := publisher.attempts.Add(1)
 	publisher.beforeOnce.Do(func() {
 		if publisher.beforeFirst != nil {
@@ -519,14 +658,76 @@ func (publisher *postgresDelegationPublisher) PostThreadMessage(ctx context.Cont
 	if publisher.failAt.Load() == attempt {
 		return MattermostPostRef{}, fmt.Errorf("synthetic Mattermost network failure")
 	}
+	if maximum := publisher.failThrough.Load(); maximum > 0 && attempt <= maximum {
+		return MattermostPostRef{}, fmt.Errorf("synthetic Mattermost network failure")
+	}
 	id := publisher.posts.Add(1)
-	return MattermostPostRef{PostID: "synthetic-post-" + strconv.FormatInt(id, 10)}, nil
+	return MattermostPostRef{ChannelID: input.ChannelID, PostID: "synthetic-post-" + strconv.FormatInt(id, 10)}, nil
+}
+
+func (publisher *postgresDelegationPublisher) ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	publisher.deliveryMu.Lock()
+	if ref, ok := publisher.deliveries[input.IdempotencyID]; ok {
+		publisher.deliveryMu.Unlock()
+		return ref, nil
+	}
+	if publisher.activeDeliveries == nil {
+		publisher.activeDeliveries = map[string]bool{}
+	}
+	if publisher.activeDeliveries[input.IdempotencyID] {
+		publisher.concurrentDuplicate.Store(true)
+		publisher.deliveryMu.Unlock()
+		return MattermostPostRef{}, fmt.Errorf("synthetic parallel duplicate delivery")
+	}
+	publisher.activeDeliveries[input.IdempotencyID] = true
+	publisher.deliveryMu.Unlock()
+	defer func() {
+		publisher.deliveryMu.Lock()
+		delete(publisher.activeDeliveries, input.IdempotencyID)
+		publisher.deliveryMu.Unlock()
+	}()
+	if publisher.deliveryDelay > 0 {
+		timer := time.NewTimer(publisher.deliveryDelay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return MattermostPostRef{}, ctx.Err()
+		}
+	}
+	ref, err := publisher.PostThreadMessage(ctx, input)
+	if err != nil {
+		return MattermostPostRef{}, err
+	}
+	publisher.deliveryMu.Lock()
+	if publisher.deliveries == nil {
+		publisher.deliveries = map[string]MattermostPostRef{}
+	}
+	if existing, ok := publisher.deliveries[input.IdempotencyID]; ok {
+		ref = existing
+	} else {
+		publisher.deliveries[input.IdempotencyID] = ref
+	}
+	publisher.deliveryMu.Unlock()
+	return ref, nil
 }
 
 type exactGuardHookStore struct {
 	*postgresrepo.Repository
 	beforeOnce sync.Once
 	before     func()
+}
+
+type failOnceDeliveryStore struct {
+	*postgresrepo.Repository
+	failed atomic.Bool
+}
+
+func (store *failOnceDeliveryStore) DeliverAgentDelegationCallbackDelivery(ctx context.Context, input adminrepo.DeliverAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error) {
+	if store.failed.CompareAndSwap(false, true) {
+		return entity.AgentDelegationCallbackDelivery{}, fmt.Errorf("synthetic callback delivery mark failure")
+	}
+	return store.Repository.DeliverAgentDelegationCallbackDelivery(ctx, input)
 }
 
 func (store *exactGuardHookStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
@@ -577,7 +778,7 @@ where token_secret_ref = 'source-bot-secret'
 	}
 	seedPool.Close()
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("migrations through v25: %v", err)
+		t.Fatalf("migrations through v27: %v", err)
 	}
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -702,6 +903,22 @@ where session_row.session_key = 'source-session' and turn_row.status = 'queued'
 	}
 	if callbackRows != expectedCallbacks || queuedTurns != expectedCallbacks || callbackRuns != expectedCallbacks {
 		t.Fatalf("callback state rows=%d turns=%d runs=%d, want=%d", callbackRows, queuedTurns, callbackRuns, expectedCallbacks)
+	}
+}
+
+func assertCallbackDeliveryCounts(t *testing.T, ctx context.Context, fixture postgresDelegationFixture, delivered int, incomplete int) {
+	t.Helper()
+	var deliveredRows, incompleteRows int
+	if err := fixture.pool.QueryRow(ctx, `
+select
+	count(*) filter (where status = 'delivered'),
+	count(*) filter (where status <> 'delivered')
+from matter_codex_agent_delegation_callback_deliveries
+`).Scan(&deliveredRows, &incompleteRows); err != nil {
+		t.Fatalf("подсчёт callback deliveries: %v", err)
+	}
+	if deliveredRows != delivered || incompleteRows != incomplete {
+		t.Fatalf("callback deliveries delivered=%d incomplete=%d, want %d/%d", deliveredRows, incompleteRows, delivered, incomplete)
 	}
 }
 

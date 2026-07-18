@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 0.2.0
+updated: 2026-07-18
 ---
 
 # Границы сервисов и структура репозитория
@@ -119,3 +119,5 @@ docs/
 - MCP: официальный Model Context Protocol Go SDK.
 
 До выделения `integration-gateway` текущий bot-service владеет внешней HTTP-границей MCP. Для POST он ограничивает полный JSON envelope до передачи в `go-sdk`, чтения session/token и доменного допуска: oversized `Content-Length` и превысивший предел chunked body получают транспортный отказ. Полный server-owned `ReadTimeout`, `ReadHeaderTimeout`, `IdleTimeout` и `MaxHeaderBytes` ограничивают медленные неаутентифицированные соединения. GET/SSE и допустимый POST сохраняют семантику SDK.
+
+До выделения `interaction-gateway` текущий bot-service также владеет доставкой двух обязательных callback audit publications. Доменная транзакция владеет только неизменяемым планом и состоянием outbox; Mattermost adapter владеет сетевой попыткой, детерминированной внешней identity и точной сверкой существующего post. Нельзя считать `CallbackRunID`, успешный HTTP-ответ без DB mark или кратковременный `pending_post_id` доказательством завершения всей доставки. Переход к отдельному gateway обязан сохранить ключ `(delegation, callback run, destination, publication)`, payload hash, lease, final binding fence и монотонное подтверждение `delivered`.

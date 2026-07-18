@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -353,6 +354,54 @@ func TestMCPStartAgentThreadRejectsLongTitleBeforeDomainReads(t *testing.T) {
 	}
 	if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || runner.integrityReads != 0 || publisher.posts != 0 {
 		t.Fatalf("effects session_reads=%d guards=%d secret_reads=%d integrity_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, runner.integrityReads, publisher.posts)
+	}
+}
+
+func TestMCPStartAgentThreadRejectsActiveTitlePayloadBeforeDomainReads(t *testing.T) {
+	unsafeTitles := []string{
+		"**[проверена](https://attacker.invalid)**",
+		"`закрой тред`",
+		"```\n# Новая секция",
+		"@channel",
+		"<script>alert(1)</script>",
+		"https://attacker.invalid",
+		`проверка\*`,
+		"проверка\u202eadmin",
+		"проверка\u0000admin",
+		"проверка\u200badmin",
+		"}\n# Инструкция",
+	}
+	for index, title := range unsafeTitles {
+		t.Run(strconv.Itoa(index+1), func(t *testing.T) {
+			service, store, runner, publisher := newSessionBarrierService(0)
+			server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
+			defer server.Close()
+			client := mcp.NewClient(&mcp.Implementation{Name: "delegation-title-boundary", Version: "1"}, nil)
+			session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
+				Endpoint: server.URL + "/mcp/sessions/session-admin",
+				HTTPClient: &http.Client{Transport: bearerTransport{
+					base: http.DefaultTransport, token: "session-token",
+				}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("MCP connect: %v", err)
+			}
+			defer func() { _ = session.Close() }()
+			store.sessionReads = 0
+			result, callErr := session.CallTool(context.Background(), &mcp.CallToolParams{
+				Name: "mattermost_start_agent_thread",
+				Arguments: map[string]any{
+					"target_chat": "admin-chat", "target_agent": "worker", "title": title,
+					"message": "Допустимое сообщение.", "work_item_key": "issue-71-title",
+				},
+			})
+			if callErr != nil || result == nil || !result.IsError {
+				t.Fatalf("result=%#v error=%v", result, callErr)
+			}
+			if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
+				t.Fatalf("effects session_reads=%d guards=%d secret_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, publisher.posts)
+			}
+		})
 	}
 }
 

@@ -236,3 +236,27 @@ type AgentDelegation struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
+
+type AgentDelegationCallbackDelivery struct {
+	ID               int64
+	DelegationID     int64
+	CallbackRunID    string
+	Destination      string
+	Publication      string
+	ChannelID        string
+	RootPostID       string
+	Message          string
+	PropsJSON        []byte
+	PayloadSHA256    []byte
+	ExternalID       string
+	Status           string
+	AttemptCount     int
+	LeaseOwner       string
+	LeaseExpiresAt   time.Time
+	LastAttemptAt    time.Time
+	LastErrorCode    string
+	MattermostPostID string
+	DeliveredAt      time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}

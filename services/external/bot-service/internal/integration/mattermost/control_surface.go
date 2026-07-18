@@ -1,7 +1,10 @@
 package mattermost
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -38,6 +41,7 @@ func DefaultHTTPClientConfig() HTTPClientConfig {
 }
 
 var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
+var _ statusservice.MattermostIdempotentThreadPublisher = (*ControlSurface)(nil)
 var _ statusservice.MattermostConversationReader = (*ControlSurface)(nil)
 var _ statusservice.MattermostRoleBotManager = (*ControlSurface)(nil)
 var _ statusservice.MattermostInteractionActorVerifier = (*ControlSurface)(nil)
@@ -264,6 +268,40 @@ func (surface *ControlSurface) PostThreadMessageWithToken(ctx context.Context, t
 	return createThreadPost(ctx, client, input)
 }
 
+func (surface *ControlSurface) ReconcileOrPostThreadMessage(ctx context.Context, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	if strings.TrimSpace(input.IdempotencyID) == "" {
+		return statusservice.MattermostPostRef{}, fmt.Errorf("Mattermost idempotency identity is required")
+	}
+	plannedID, ok := input.Props["matter_codex_callback_delivery_id"].(string)
+	if !ok || plannedID != input.IdempotencyID || strings.TrimSpace(input.ChannelID) == "" || strings.TrimSpace(input.RootPostID) == "" || input.Message == "" {
+		return statusservice.MattermostPostRef{}, fmt.Errorf("Mattermost callback delivery plan is incomplete")
+	}
+	if ref, found, err := reconcileThreadPost(ctx, surface.client, input); err != nil || found {
+		return ref, err
+	}
+	post, _, createErr := surface.client.CreatePost(ctx, &mattermostmodel.Post{
+		ChannelId:     input.ChannelID,
+		RootId:        input.RootPostID,
+		Message:       input.Message,
+		Props:         input.Props,
+		PendingPostId: input.IdempotencyID,
+	})
+	if createErr == nil {
+		if err := verifyExactCallbackPost(post, input); err != nil {
+			return statusservice.MattermostPostRef{}, err
+		}
+		return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
+	}
+	ref, found, reconcileErr := reconcileThreadPost(ctx, surface.client, input)
+	if reconcileErr != nil {
+		return statusservice.MattermostPostRef{}, errors.Join(createErr, reconcileErr)
+	}
+	if found {
+		return ref, nil
+	}
+	return statusservice.MattermostPostRef{}, createErr
+}
+
 func (surface *ControlSurface) UpdateThreadMessage(ctx context.Context, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
 	return updateThreadPost(ctx, surface.client, input)
 }
@@ -361,15 +399,60 @@ func (surface *ControlSurface) SearchChannelPosts(ctx context.Context, channelID
 
 func createThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
 	post, _, err := client.CreatePost(ctx, &mattermostmodel.Post{
-		ChannelId: input.ChannelID,
-		RootId:    input.RootPostID,
-		Message:   input.Message,
-		Props:     input.Props,
+		ChannelId:     input.ChannelID,
+		RootId:        input.RootPostID,
+		Message:       input.Message,
+		Props:         input.Props,
+		PendingPostId: input.IdempotencyID,
 	})
 	if err != nil {
 		return statusservice.MattermostPostRef{}, fmt.Errorf("create Mattermost thread post: %w", err)
 	}
 	return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
+}
+
+func reconcileThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, bool, error) {
+	postList, _, err := client.GetPostThread(ctx, input.RootPostID, "", false)
+	if err != nil {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("reconcile Mattermost callback post: %w", err)
+	}
+	if postList == nil {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("reconcile Mattermost callback post: empty response")
+	}
+	var matched *mattermostmodel.Post
+	for _, post := range postList.Posts {
+		if post == nil || post.GetProps()["matter_codex_callback_delivery_id"] != input.IdempotencyID {
+			continue
+		}
+		if matched != nil {
+			return statusservice.MattermostPostRef{}, false, fmt.Errorf("Mattermost callback delivery identity is not unique")
+		}
+		matched = post
+	}
+	if matched == nil {
+		return statusservice.MattermostPostRef{}, false, nil
+	}
+	if err := verifyExactCallbackPost(matched, input); err != nil {
+		return statusservice.MattermostPostRef{}, false, err
+	}
+	return statusservice.MattermostPostRef{ChannelID: matched.ChannelId, PostID: matched.Id}, true, nil
+}
+
+func verifyExactCallbackPost(post *mattermostmodel.Post, input statusservice.MattermostThreadPostInput) error {
+	if post == nil || strings.TrimSpace(post.Id) == "" || post.ChannelId != input.ChannelID || post.RootId != input.RootPostID || post.Message != input.Message {
+		return fmt.Errorf("Mattermost callback post conflicts with the immutable delivery payload")
+	}
+	actualProps := post.GetProps()
+	if !sameJSONValue(actualProps, input.Props) {
+		return fmt.Errorf("Mattermost callback post props conflict with the immutable delivery payload")
+	}
+	return nil
+}
+
+func sameJSONValue(left any, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
 }
 
 func updateThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {

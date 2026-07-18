@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1919,6 +1920,16 @@ type fakeThreadPublisher struct {
 func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
 	publisher.posts = append(publisher.posts, input)
 	return MattermostPostRef{ChannelID: input.ChannelID, PostID: "reply-" + input.RootPostID}, nil
+}
+
+func (publisher *fakeThreadPublisher) ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	for index, post := range publisher.posts {
+		if post.IdempotencyID == input.IdempotencyID && input.IdempotencyID != "" {
+			return MattermostPostRef{ChannelID: post.ChannelID, PostID: fmt.Sprintf("idempotent-post-%d", index+1)}, nil
+		}
+	}
+	publisher.posts = append(publisher.posts, input)
+	return MattermostPostRef{ChannelID: input.ChannelID, PostID: fmt.Sprintf("idempotent-post-%d", len(publisher.posts))}, nil
 }
 
 func (publisher *fakeThreadPublisher) PostThreadMessageWithToken(_ context.Context, _ string, input MattermostThreadPostInput) (MattermostPostRef, error) {

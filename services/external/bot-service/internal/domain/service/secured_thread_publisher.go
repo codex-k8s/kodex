@@ -13,6 +13,7 @@ type securedMattermostThreadPublisher struct {
 }
 
 var _ MattermostThreadPublisher = (*securedMattermostThreadPublisher)(nil)
+var _ MattermostIdempotentThreadPublisher = (*securedMattermostThreadPublisher)(nil)
 
 func NewSecuredMattermostThreadPublisher(next MattermostThreadPublisher, security *InteractionSecurityService) MattermostThreadPublisher {
 	if next == nil {
@@ -27,6 +28,14 @@ func (publisher *securedMattermostThreadPublisher) PostThreadMessage(ctx context
 
 func (publisher *securedMattermostThreadPublisher) PostThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadPostInput) (MattermostPostRef, error) {
 	return publisher.next.PostThreadMessageWithToken(ctx, token, input)
+}
+
+func (publisher *securedMattermostThreadPublisher) ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	next, ok := publisher.next.(MattermostIdempotentThreadPublisher)
+	if !ok {
+		return MattermostPostRef{}, fmt.Errorf("idempotent Mattermost thread publication is not configured")
+	}
+	return next.ReconcileOrPostThreadMessage(ctx, input)
 }
 
 func (publisher *securedMattermostThreadPublisher) UpdateThreadMessage(ctx context.Context, input MattermostThreadUpdateInput) (MattermostPostRef, error) {

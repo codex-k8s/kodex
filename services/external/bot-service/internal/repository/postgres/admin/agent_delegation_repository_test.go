@@ -1,7 +1,12 @@
 package admin_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -113,6 +118,85 @@ func TestAgentDelegationRepositoryLifecycle(t *testing.T) {
 	callback, err := repository.SetAgentDelegationCallback(ctx, created.ID, callbackTurnID, "callback-run")
 	if err != nil || callback.CallbackRunID != "callback-run" || callback.Status != "callback_queued" {
 		t.Fatalf("callback=%#v error=%v", callback, err)
+	}
+	callbackProps := func(destination string, publication string, event string, externalID string, payloadHash []byte) []byte {
+		encoded, encodeErr := json.Marshal(map[string]string{
+			"matter_codex_event":                   event,
+			"matter_codex_callback_delivery_id":    externalID,
+			"matter_codex_callback_delegation_id":  strconv.FormatInt(created.ID, 10),
+			"matter_codex_callback_run_id":         "callback-run",
+			"matter_codex_callback_destination":    destination,
+			"matter_codex_callback_publication":    publication,
+			"matter_codex_callback_payload_sha256": hex.EncodeToString(payloadHash),
+		})
+		if encodeErr != nil {
+			t.Fatalf("encode callback props: %v", encodeErr)
+		}
+		return encoded
+	}
+	sourceHash := bytes.Repeat([]byte{0xab}, 32)
+	childHash := bytes.Repeat([]byte{0xcd}, 32)
+	deliveryInputs := []domainrepo.CreateAgentDelegationCallbackDeliveryInput{
+		{
+			DelegationID: created.ID, CallbackRunID: "callback-run", Destination: "source_callback", Publication: "agent_cross_chat_callback:0001",
+			ChannelID: "source-channel", RootPostID: "source-root", Message: "source audit",
+			PropsJSON:     callbackProps("source_callback", "agent_cross_chat_callback:0001", "agent_cross_chat_callback", "aaaaaaaaaaaaaaaaaaaaaaaaaa", sourceHash),
+			PayloadSHA256: sourceHash, ExternalID: "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		{
+			DelegationID: created.ID, CallbackRunID: "callback-run", Destination: "child_return", Publication: "agent_cross_chat_callback_returned:0001",
+			ChannelID: "target-channel", RootPostID: "target-root", Message: "child audit",
+			PropsJSON:     callbackProps("child_return", "agent_cross_chat_callback_returned:0001", "agent_cross_chat_callback_returned", "bbbbbbbbbbbbbbbbbbbbbbbbbb", childHash),
+			PayloadSHA256: childHash, ExternalID: "bbbbbbbbbbbbbbbbbbbbbbbbbb",
+		},
+	}
+	deliveries, err := repository.CreateAgentDelegationCallbackDeliveries(ctx, deliveryInputs)
+	if err != nil || len(deliveries) != 2 {
+		t.Fatalf("CreateAgentDelegationCallbackDeliveries() items=%#v error=%v", deliveries, err)
+	}
+	repeated, err := repository.CreateAgentDelegationCallbackDeliveries(ctx, deliveryInputs)
+	if err != nil || len(repeated) != 2 || repeated[0].ID != deliveries[0].ID || repeated[1].ID != deliveries[1].ID {
+		t.Fatalf("idempotent outbox insert items=%#v error=%v", repeated, err)
+	}
+	conflicting := deliveryInputs[0]
+	conflicting.Message = "foreign payload"
+	if _, err := repository.CreateAgentDelegationCallbackDeliveries(ctx, []domainrepo.CreateAgentDelegationCallbackDeliveryInput{conflicting}); err == nil {
+		t.Fatal("immutable callback delivery plan accepted a conflicting payload")
+	}
+	now := time.Now().UTC()
+	claimed, err := repository.ClaimAgentDelegationCallbackDelivery(ctx, domainrepo.ClaimAgentDelegationCallbackDeliveryInput{
+		DelegationID: created.ID, CallbackRunID: "callback-run", Now: now,
+		LeaseOwner: "lease-source", LeaseUntil: now.Add(time.Minute),
+	})
+	if err != nil || claimed.Status != "in_flight" || claimed.AttemptCount != 1 {
+		t.Fatalf("ClaimAgentDelegationCallbackDelivery() item=%#v error=%v", claimed, err)
+	}
+	if _, err := repository.DeliverAgentDelegationCallbackDelivery(ctx, domainrepo.DeliverAgentDelegationCallbackDeliveryInput{
+		ID: claimed.ID, LeaseOwner: "foreign-lease", MattermostPostID: "post-source", Now: now,
+	}); !errors.Is(err, domainrepo.ErrNotFound) {
+		t.Fatalf("foreign lease delivery error=%v", err)
+	}
+	delivered, err := repository.DeliverAgentDelegationCallbackDelivery(ctx, domainrepo.DeliverAgentDelegationCallbackDeliveryInput{
+		ID: claimed.ID, LeaseOwner: claimed.LeaseOwner, MattermostPostID: "post-source", Now: now,
+	})
+	if err != nil || delivered.Status != "delivered" || delivered.MattermostPostID != "post-source" {
+		t.Fatalf("DeliverAgentDelegationCallbackDelivery() item=%#v error=%v", delivered, err)
+	}
+	remaining, err := repository.ClaimAgentDelegationCallbackDelivery(ctx, domainrepo.ClaimAgentDelegationCallbackDeliveryInput{
+		DelegationID: created.ID, CallbackRunID: "callback-run", Now: now,
+		LeaseOwner: "lease-child", LeaseUntil: now.Add(time.Minute),
+	})
+	if err != nil || remaining.ID == claimed.ID || remaining.Destination != "child_return" {
+		t.Fatalf("partial outcome claim item=%#v error=%v", remaining, err)
+	}
+	if _, err := repository.ReleaseAgentDelegationCallbackDelivery(ctx, domainrepo.ReleaseAgentDelegationCallbackDeliveryInput{
+		ID: remaining.ID, LeaseOwner: remaining.LeaseOwner, Status: "pending", LastErrorCode: "mattermost_unconfirmed", Now: now,
+	}); err != nil {
+		t.Fatalf("ReleaseAgentDelegationCallbackDelivery() error=%v", err)
+	}
+	listed, err := repository.ListAgentDelegationCallbackDeliveries(ctx, created.ID, "callback-run")
+	if err != nil || len(listed) != 2 || listed[0].Status == listed[1].Status {
+		t.Fatalf("partial durable state items=%#v error=%v", listed, err)
 	}
 	if _, err := pool.Exec(ctx, "update matter_codex_agent_session_turns set status = 'succeeded' where id = $1", callbackTurnID); err != nil {
 		t.Fatalf("complete callback turn: %v", err)

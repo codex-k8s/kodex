@@ -277,7 +277,7 @@ where name = 'developer'
 	}
 	ownerPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("runtime-role migration through v25: %v", err)
+		t.Fatalf("runtime-role migration through v27: %v", err)
 	}
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
 	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
@@ -377,7 +377,7 @@ where subject_type = 'agent_profile'
 	}
 }
 
-func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26Upgrade(t *testing.T) {
+func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27Upgrade(t *testing.T) {
 	ownerDSN := isolatedMigrationDSN(t, "exact_n_minus_one")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -432,9 +432,9 @@ func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26Upgrade(t *testing.T)
 	}
 	stagingPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26: %v", err)
+		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27: %v", err)
 	}
-	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 26 {
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 27 {
 		t.Fatalf("upgraded exact N-1 schema version = %d, error=%v", version, err)
 	}
 
@@ -601,18 +601,164 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	if err := migrations.DownOne(ctx, dsn); err == nil {
-		t.Fatal("v26 down unexpectedly succeeded")
+		t.Fatal("v27 down unexpectedly succeeded")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 26 {
+	if err != nil || version != 27 {
 		t.Fatalf("version after failed down = %d, error=%v", version, err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated up after failed down: %v", err)
 	}
 	version, err = migrations.Version(ctx, dsn)
-	if err != nil || version != 26 {
+	if err != nil || version != 27 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
+	}
+}
+
+func TestV27CallbackOutboxOwnershipGrantsAndImmutablePlan(t *testing.T) {
+	ownerDSN := isolatedMigrationDSN(t, "v27_callback_outbox")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	roleName := "mc_v27_runtime_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
+	rolePassword := "synthetic-v27-runtime-password"
+	if err := postgresrepo.ProvisionRuntimeDatabaseRole(ctx, ownerDSN, roleName, rolePassword); err != nil {
+		t.Fatalf("provision v27 runtime role: %v", err)
+	}
+	roleIdentifier := pgx.Identifier{roleName}.Sanitize()
+	baseDSN := requiredMigrationDSN(t)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cleanupCancel()
+		cleanupPool := openMigrationPool(t, cleanupCtx, baseDSN)
+		defer cleanupPool.Close()
+		_, _ = cleanupPool.Exec(cleanupCtx, "drop owned by "+roleIdentifier)
+		_, _ = cleanupPool.Exec(cleanupCtx, "drop role "+roleIdentifier)
+	})
+	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
+		t.Fatalf("fresh v27 migration with runtime role: %v", err)
+	}
+	ownerPool := openMigrationPool(t, ctx, ownerDSN)
+	defer ownerPool.Close()
+	var ownerName, schemaName, functionDefinition string
+	if err := ownerPool.QueryRow(ctx, `
+select tableowner, schemaname
+from pg_tables
+where schemaname = current_schema()
+	and tablename = 'matter_codex_agent_delegation_callback_deliveries'
+`).Scan(&ownerName, &schemaName); err != nil {
+		t.Fatalf("ownership v27 outbox: %v", err)
+	}
+	var currentUser string
+	if err := ownerPool.QueryRow(ctx, `select current_user`).Scan(&currentUser); err != nil || ownerName != currentUser {
+		t.Fatalf("owner v27 outbox=%q current_user=%q error=%v", ownerName, currentUser, err)
+	}
+	if err := ownerPool.QueryRow(ctx, `select pg_get_functiondef($1::regprocedure)`, schemaName+`.matter_codex_guard_agent_delegation_callback_delivery_plan()`).Scan(&functionDefinition); err != nil {
+		t.Fatalf("function definition v27: %v", err)
+	}
+	if !strings.Contains(functionDefinition, "SET search_path TO 'pg_catalog', '") || !strings.Contains(functionDefinition, "'pg_temp'") {
+		t.Fatalf("v27 function search_path не закреплён: %s", functionDefinition)
+	}
+	var publicTablePrivilege, publicFunctionPrivilege, runtimeFunctionPrivilege bool
+	if err := ownerPool.QueryRow(ctx, `
+select
+	has_table_privilege('public', $1, 'select,insert,update,delete'),
+	has_function_privilege('public', $2, 'execute'),
+	has_function_privilege($3, $2, 'execute')
+`, schemaName+`.matter_codex_agent_delegation_callback_deliveries`, schemaName+`.matter_codex_guard_agent_delegation_callback_delivery_plan()`, roleName).Scan(
+		&publicTablePrivilege, &publicFunctionPrivilege, &runtimeFunctionPrivilege,
+	); err != nil {
+		t.Fatalf("privilege inspection v27: %v", err)
+	}
+	if publicTablePrivilege || publicFunctionPrivilege || runtimeFunctionPrivilege {
+		t.Fatalf("избыточные v27 privileges public_table=%t public_function=%t runtime_function=%t", publicTablePrivilege, publicFunctionPrivilege, runtimeFunctionPrivilege)
+	}
+
+	var projectID, roleID, chatID, sessionID, turnID, delegationID int64
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_projects(name, slug) values ('V27 proof', 'v27-proof') returning id`).Scan(&projectID); err != nil {
+		t.Fatalf("seed v27 project: %v", err)
+	}
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type) values ($1, 'v27-worker', 'worker') returning id`, projectID).Scan(&roleID); err != nil {
+		t.Fatalf("seed v27 role: %v", err)
+	}
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_chats(project_id, mattermost_channel_id, name, slug) values ($1, 'v27-channel', 'V27 chat', 'v27-chat') returning id`, projectID).Scan(&chatID); err != nil {
+		t.Fatalf("seed v27 chat: %v", err)
+	}
+	if err := ownerPool.QueryRow(ctx, `
+insert into matter_codex_agent_sessions(
+	session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
+	mattermost_root_post_id, ttl_seconds, expires_at
+) values ('v27-session', $1, $2, $3, 'thread_role', 'v27-channel', 'v27-root', 3600, now() + interval '1 hour')
+returning id
+`, projectID, chatID, roleID).Scan(&sessionID); err != nil {
+		t.Fatalf("seed v27 session: %v", err)
+	}
+	if err := ownerPool.QueryRow(ctx, `
+insert into matter_codex_agent_session_turns(
+	session_id, run_id, mattermost_channel_id, mattermost_root_post_id, mattermost_post_id, message
+) values ($1, 'v27-source-run', 'v27-channel', 'v27-root', 'v27-root', 'synthetic') returning id
+`, sessionID).Scan(&turnID); err != nil {
+		t.Fatalf("seed v27 turn: %v", err)
+	}
+	if err := ownerPool.QueryRow(ctx, `
+insert into matter_codex_agent_delegations(
+	project_id, source_session_id, source_turn_id, target_chat_id, target_role_id,
+	work_item_key, title, callback_run_id
+) values ($1, $2, $3, $4, $5, 'v27-work', 'Безопасный title', 'v27-callback-run') returning id
+`, projectID, sessionID, turnID, chatID, roleID).Scan(&delegationID); err != nil {
+		t.Fatalf("seed v27 delegation: %v", err)
+	}
+
+	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
+	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
+	defer runtimePool.Close()
+	var deliveryID int64
+	if err := runtimePool.QueryRow(ctx, `
+insert into matter_codex_agent_delegation_callback_deliveries(
+	delegation_id, callback_run_id, destination, publication, channel_id,
+	root_post_id, message, props, payload_sha256, external_id
+) values ($1, 'v27-callback-run', 'source_callback', 'agent_cross_chat_callback:0001', 'v27-channel',
+	'v27-root', 'synthetic message', jsonb_build_object(
+		'matter_codex_event', 'agent_cross_chat_callback',
+		'matter_codex_callback_delivery_id', 'aaaaaaaaaaaaaaaaaaaaaaaaaa',
+		'matter_codex_callback_delegation_id', ($1::bigint)::text,
+		'matter_codex_callback_run_id', 'v27-callback-run',
+		'matter_codex_callback_destination', 'source_callback',
+		'matter_codex_callback_publication', 'agent_cross_chat_callback:0001',
+		'matter_codex_callback_payload_sha256', repeat('ab', 32)
+	),
+	decode(repeat('ab', 32), 'hex'), 'aaaaaaaaaaaaaaaaaaaaaaaaaa')
+returning id
+`, delegationID).Scan(&deliveryID); err != nil {
+		t.Fatalf("runtime insert v27 outbox: %v", err)
+	}
+	if tag, err := runtimePool.Exec(ctx, `
+update matter_codex_agent_delegation_callback_deliveries
+set status = 'in_flight', attempt_count = 1, lease_owner = 'synthetic-lease',
+	lease_expires_at = now() + interval '1 minute', last_attempt_at = now(), updated_at = now()
+where id = $1
+`, deliveryID); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("runtime state update v27 rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	if _, err := runtimePool.Exec(ctx, `update matter_codex_agent_delegation_callback_deliveries set message = 'mutated' where id = $1`, deliveryID); err == nil {
+		t.Fatal("runtime role изменила immutable v27 payload")
+	}
+	if _, err := runtimePool.Exec(ctx, `delete from matter_codex_agent_delegation_callback_deliveries where id = $1`, deliveryID); err == nil {
+		t.Fatal("runtime role удалила durable v27 outbox")
+	}
+	if tag, err := runtimePool.Exec(ctx, `
+update matter_codex_agent_delegation_callback_deliveries
+set status = 'delivered', lease_owner = null, lease_expires_at = null,
+	mattermost_post_id = 'v27-post', delivered_at = now(), updated_at = now()
+where id = $1
+`, deliveryID); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("runtime delivery confirmation v27 rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	if _, err := runtimePool.Exec(ctx, `update matter_codex_agent_delegation_callback_deliveries set status = 'pending', mattermost_post_id = '', delivered_at = null where id = $1`, deliveryID); err == nil {
+		t.Fatal("runtime role отменила delivered v27 publication")
+	}
+	if _, err := ownerPool.Exec(ctx, `update matter_codex_agent_delegations set callback_run_id = 'foreign-run' where id = $1`, delegationID); err == nil {
+		t.Fatal("v27 позволила отделить callback delivery plan от delegation callback run")
 	}
 }
 
@@ -913,7 +1059,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 		t.Fatalf("upgrade historical base v21->current main v22: %v", err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v22->v23->v24->v25->v26: %v", err)
+		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27: %v", err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()
@@ -2175,11 +2321,14 @@ func isolatedMigrationDSN(t *testing.T, label string) string {
 func migrationDSNForRole(t *testing.T, dsn string, roleName string, password string) string {
 	t.Helper()
 	parsed, err := url.Parse(dsn)
-	if err != nil || (parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") {
-		t.Fatal("runtime-role PostgreSQL proof requires a URL DSN")
+	if err == nil && (parsed.Scheme == "postgres" || parsed.Scheme == "postgresql") {
+		parsed.User = url.UserPassword(roleName, password)
+		return parsed.String()
 	}
-	parsed.User = url.UserPassword(roleName, password)
-	return parsed.String()
+	if strings.ContainsAny(roleName+password, " '\"=\\") {
+		t.Fatal("runtime-role PostgreSQL proof has an unsafe synthetic identity")
+	}
+	return strings.TrimSpace(dsn) + " user=" + roleName + " password=" + password
 }
 
 func openMigrationPool(t *testing.T, ctx context.Context, dsn string) *pgxpool.Pool {
