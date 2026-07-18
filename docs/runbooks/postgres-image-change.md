@@ -50,11 +50,21 @@ scripts/remote/install-mattermost.sh \
 REINDEX DATABASE mattermost;
 ```
 
-3. Только после успешного перестроения записать актуальную версию default collation:
+3. Проверить записанную и фактическую версии default collation:
+
+```sql
+SELECT datcollversion, pg_database_collation_actual_version(oid)
+FROM pg_database
+WHERE datname = current_database();
+```
+
+Если обе версии заданы, только после успешного перестроения записать актуальную версию:
 
 ```sql
 ALTER DATABASE mattermost REFRESH COLLATION VERSION;
 ```
+
+PostgreSQL намеренно не разрешает `NULL -> non-NULL` через `REFRESH COLLATION VERSION`. Такое состояние возникает, например, после перехода с musl на glibc. Не обновлять `pg_database` вручную. После `REINDEX` снять новый dump, восстановить его в созданную из `template0` БД с теми же `ENCODING`, `LC_COLLATE`, `LC_CTYPE` и owner, выполнить `amcheck`, сравнить ключевые данные и переключить имя БД при остановленных writers. Новая БД запишет текущую версию collation штатным путем.
 
 4. Повторно выполнить `verify-btree-indexes.sql`. Проверка должна завершиться без исключения.
 5. Повторить установку с `--allow-postgres-image-change`: успешная проверка разблокирует применение Mattermost.
@@ -65,6 +75,7 @@ ALTER DATABASE mattermost REFRESH COLLATION VERSION;
 ## Проверка после восстановления
 
 - все B-tree индексы проходят `amcheck` с `heapallindexed=true`;
+- записанная и фактическая версии default collation совпадают либо поставщик штатно не возвращает версию;
 - запрос по каждому ранее конфликтующему уникальному ключу возвращает одну строку;
 - Mattermost принимает и читает сообщения;
 - bot-service готов на всех репликах;
