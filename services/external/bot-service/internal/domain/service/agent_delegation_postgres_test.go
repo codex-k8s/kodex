@@ -37,6 +37,9 @@ func TestReturnToRequesterProductionDispatcherDoesNotSelfLockFrozenSource(t *tes
 		t.Fatal("production dispatcher did not persist callback run")
 	}
 	assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
+	if fixture.publisher.posts.Load() != 2 {
+		t.Fatalf("audit posts = %d, want source and requester posts", fixture.publisher.posts.Load())
+	}
 }
 
 func TestReturnToRequesterProductionDispatcherRevocationFailsBeforeEffects(t *testing.T) {
@@ -103,6 +106,9 @@ func TestReturnToRequesterProductionDispatcherPoolOneConcurrentIdempotency(t *te
 		}
 	}
 	assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
+	if fixture.publisher.posts.Load() != 2 || fixture.publisher.attempts.Load() != 2 {
+		t.Fatalf("concurrent callback audit posts=%d attempts=%d, want exactly two", fixture.publisher.posts.Load(), fixture.publisher.attempts.Load())
+	}
 }
 
 func TestReturnToRequesterProductionDispatcherErrorRollsBackAndRetriesOnce(t *testing.T) {
@@ -120,6 +126,119 @@ func TestReturnToRequesterProductionDispatcherErrorRollsBackAndRetriesOnce(t *te
 		t.Fatalf("ReturnToRequester() retry result=%#v error=%v", result, err)
 	}
 	assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
+}
+
+func TestReturnToRequesterFinalPublishGuardRejectsCommittedRevocationBeforeNetwork(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	baseStore := fixture.service.cfg.Store.(*postgresrepo.Repository)
+	hooked := &exactGuardHookStore{Repository: baseStore}
+	hooked.before = func() {
+		if _, err := fixture.pool.Exec(ctx, `
+insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+values ('session_key', 'source-session', 'synthetic final-boundary revocation')
+`); err != nil {
+			t.Fatalf("commit source revocation before final guard: %v", err)
+		}
+	}
+	fixture.service.cfg.Store = hooked
+	if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетический результат готов."); err == nil {
+		t.Fatal("ReturnToRequester() published after a committed pre-boundary revocation")
+	}
+	assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
+	if fixture.publisher.attempts.Load() != 0 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("committed pre-boundary revocation produced attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+}
+
+func TestReturnToRequesterFinalPublishGuardRejectsCommittedChildRemapBeforeNetwork(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	baseStore := fixture.service.cfg.Store.(*postgresrepo.Repository)
+	hooked := &exactGuardHookStore{Repository: baseStore}
+	hooked.before = func() {
+		if _, err := fixture.pool.Exec(ctx, `
+update matter_codex_chat_participants participant
+set enabled = false
+from matter_codex_agent_sessions session_row
+where session_row.session_key = 'target-session'
+	and participant.chat_id = session_row.chat_id
+	and participant.role_id = session_row.role_id
+`); err != nil {
+			t.Fatalf("commit child remap before final guard: %v", err)
+		}
+	}
+	fixture.service.cfg.Store = hooked
+	if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетический результат готов."); err == nil {
+		t.Fatal("ReturnToRequester() published after a committed pre-boundary child remap")
+	}
+	assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
+	if fixture.publisher.attempts.Load() != 0 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("committed pre-boundary child remap produced attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+}
+
+func TestReturnToRequesterFinalPublishGuardSerializesRevocationStartedAfterLocks(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	revokeDone := make(chan error, 1)
+	fixture.publisher.beforeFirst = func() {
+		go func() {
+			_, err := fixture.pool.Exec(ctx, `
+insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+values ('session_key', 'source-session', 'synthetic concurrent final-boundary revocation')
+`)
+			revokeDone <- err
+		}()
+		select {
+		case err := <-revokeDone:
+			t.Fatalf("source revocation completed before the guarded network call returned: %v", err)
+		case <-time.After(150 * time.Millisecond):
+		}
+	}
+	if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетический результат готов."); err == nil {
+		t.Fatal("second audit boundary unexpectedly survived the serialized source revocation")
+	}
+	select {
+	case err := <-revokeDone:
+		if err != nil {
+			t.Fatalf("serialized source revocation: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("source revocation remained blocked after guarded publish returned")
+	}
+	if fixture.publisher.posts.Load() != 1 {
+		t.Fatalf("serialized publish posts = %d, want the first post linearized before revocation", fixture.publisher.posts.Load())
+	}
+}
+
+func TestReturnToRequesterAuditNetworkErrorIsPartialAndRetryDoesNotDuplicate(t *testing.T) {
+	for _, failAt := range []int64{1, 2} {
+		t.Run("failure_"+strconv.FormatInt(failAt, 10), func(t *testing.T) {
+			fixture := newPostgresDelegationFixture(t, 1)
+			fixture.publisher.failAt.Store(failAt)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетический результат готов.")
+			if err != nil || strings.TrimSpace(result.CallbackRunID) == "" {
+				t.Fatalf("ReturnToRequester() result=%#v error=%v", result, err)
+			}
+			assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
+			if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 1 {
+				t.Fatalf("partial network outcome attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+			}
+			fixture.publisher.failAt.Store(0)
+			if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Повторный результат."); err != nil {
+				t.Fatalf("idempotent retry: %v", err)
+			}
+			if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 1 {
+				t.Fatalf("retry duplicated audit attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+			}
+		})
+	}
 }
 
 type postgresDelegationFixture struct {
@@ -174,12 +293,40 @@ func (runner *postgresDelegationRunner) InspectSecretIntegrity(_ context.Context
 
 type postgresDelegationPublisher struct {
 	MattermostThreadPublisher
-	posts atomic.Int64
+	attempts    atomic.Int64
+	posts       atomic.Int64
+	failAt      atomic.Int64
+	beforeOnce  sync.Once
+	beforeFirst func()
 }
 
 func (publisher *postgresDelegationPublisher) PostThreadMessage(_ context.Context, _ MattermostThreadPostInput) (MattermostPostRef, error) {
+	attempt := publisher.attempts.Add(1)
+	publisher.beforeOnce.Do(func() {
+		if publisher.beforeFirst != nil {
+			publisher.beforeFirst()
+		}
+	})
+	if publisher.failAt.Load() == attempt {
+		return MattermostPostRef{}, fmt.Errorf("synthetic Mattermost network failure")
+	}
 	id := publisher.posts.Add(1)
 	return MattermostPostRef{PostID: "synthetic-post-" + strconv.FormatInt(id, 10)}, nil
+}
+
+type exactGuardHookStore struct {
+	*postgresrepo.Repository
+	beforeOnce sync.Once
+	before     func()
+}
+
+func (store *exactGuardHookStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	store.beforeOnce.Do(func() {
+		if store.before != nil {
+			store.before()
+		}
+	})
+	return store.Repository.WithExactAgentSessionsRuntimeGuard(ctx, expected, sideEffect)
 }
 
 func newPostgresDelegationFixture(t *testing.T, maxConnections int32) postgresDelegationFixture {

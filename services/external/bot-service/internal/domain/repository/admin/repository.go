@@ -408,3 +408,7 @@ type Repository interface {
 	UpdateAgentRunArtifacts(ctx context.Context, input UpdateAgentRunArtifactsInput) (entity.AgentRun, error)
 	RecordAuditEvent(ctx context.Context, input AuditEventInput) error
 }
+
+type ExactAgentSessionsRuntimeGuardRepository interface {
+	WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(Repository) error) error
+}

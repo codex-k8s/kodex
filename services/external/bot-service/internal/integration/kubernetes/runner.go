@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -889,7 +891,7 @@ func (runner *Runner) materializeImmutableSessionTokenSecret(ctx context.Context
 	}
 	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
 	created, err := secretClient.Create(ctx, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Finalizers: []string{sessionTokenFinalizer}},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: runner.namespace, Labels: labels, Finalizers: []string{sessionTokenFinalizer}},
 		Immutable:  &immutable,
 		Type:       corev1.SecretTypeOpaque,
 		Data:       map[string][]byte{"token": []byte(token)},
@@ -903,11 +905,7 @@ func (runner *Runner) materializeImmutableSessionTokenSecret(ctx context.Context
 			return "", fmt.Errorf("get immutable session token secret: %w", err)
 		}
 	}
-	if created.Immutable == nil || !*created.Immutable || created.Type != corev1.SecretTypeOpaque || created.DeletionTimestamp != nil ||
-		created.Labels["app.kubernetes.io/component"] != sessionTokenComponent ||
-		created.Labels[labelSessionKey] != kubernetesLabelValue(sessionKey) ||
-		!containsString(created.Finalizers, sessionTokenFinalizer) ||
-		!bytes.Equal(created.Data["token"], []byte(token)) {
+	if !exactManagedSessionTokenSecret(created, runner.namespace, name, kubernetesLabelValue(sessionKey), []byte(token), true, true) {
 		return "", fmt.Errorf("immutable session token secret verification failed")
 	}
 	actual := secretIntegrity(created, "token", created.Data["token"])
@@ -925,11 +923,7 @@ func (runner *Runner) verifyFrozenSessionTokenBoundary(ctx context.Context, sess
 	if err != nil {
 		return fmt.Errorf("get immutable session token secret: %w", err)
 	}
-	if secret.Immutable == nil || !*secret.Immutable || secret.Type != corev1.SecretTypeOpaque || secret.DeletionTimestamp != nil ||
-		secret.Labels["app.kubernetes.io/component"] != sessionTokenComponent ||
-		secret.Labels[labelSessionKey] != kubernetesLabelValue(sessionKey) ||
-		!containsString(secret.Finalizers, sessionTokenFinalizer) ||
-		!bytes.Equal(secret.Data["token"], []byte(token)) {
+	if !exactManagedSessionTokenSecret(secret, runner.namespace, immutableSecretName, kubernetesLabelValue(sessionKey), []byte(token), true, true) {
 		return fmt.Errorf("immutable session token secret verification failed")
 	}
 	actual := secretIntegrity(secret, "token", secret.Data["token"])
@@ -949,6 +943,47 @@ func immutableSessionTokenSecretName(sessionKey string, expected runtimerepo.Sec
 		expected.ResourceVersion,
 	}, "\x00")))
 	return "mc-session-token-" + hex.EncodeToString(digest[:20])
+}
+
+func exactManagedSessionTokenSecret(secret *corev1.Secret, namespace string, name string, sessionLabel string, token []byte, versioned bool, protected bool) bool {
+	if secret == nil || strings.TrimSpace(namespace) == "" || strings.TrimSpace(name) == "" || strings.TrimSpace(sessionLabel) == "" || len(token) == 0 {
+		return false
+	}
+	if secret.Name != name || secret.Namespace != namespace || secret.GenerateName != "" || secret.DeletionTimestamp != nil || secret.DeletionGracePeriodSeconds != nil {
+		return false
+	}
+	if !maps.Equal(secret.Labels, map[string]string{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": sessionTokenComponent,
+		labelSessionKey:               sessionLabel,
+	}) || len(secret.Annotations) != 0 || len(secret.OwnerReferences) != 0 {
+		return false
+	}
+	if secret.Type != corev1.SecretTypeOpaque || len(secret.StringData) != 0 || len(secret.Data) != 1 || !bytes.Equal(secret.Data["token"], token) {
+		return false
+	}
+	if versioned {
+		if !isImmutableSessionTokenSecretName(secret.Name) || secret.Immutable == nil || !*secret.Immutable {
+			return false
+		}
+	} else if secret.Immutable != nil {
+		return false
+	}
+	expectedFinalizers := []string{}
+	if protected {
+		expectedFinalizers = []string{sessionTokenFinalizer}
+	}
+	return slices.Equal(secret.Finalizers, expectedFinalizers)
+}
+
+func isImmutableSessionTokenSecretName(name string) bool {
+	const prefix = "mc-session-token-"
+	digest := strings.TrimPrefix(name, prefix)
+	if digest == name || len(digest) != 40 || strings.ToLower(digest) != digest {
+		return false
+	}
+	_, err := hex.DecodeString(digest)
+	return err == nil
 }
 
 func (runner *Runner) verifyExistingSessionTokenSecret(ctx context.Context, secretName string, token string, expected runtimerepo.SecretIntegrity) error {
@@ -1511,6 +1546,14 @@ func (runner *Runner) cleanupExpiredSessionResources(ctx context.Context, cutoff
 
 func (runner *Runner) deleteSessionTokenSecret(ctx context.Context, listed corev1.Secret) (bool, error) {
 	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
+	versioned := isImmutableSessionTokenSecretName(listed.Name)
+	protected := versioned
+	token := listed.Data["token"]
+	sessionLabel := listed.Labels[labelSessionKey]
+	if strings.TrimSpace(string(listed.UID)) == "" || strings.TrimSpace(listed.ResourceVersion) == "" ||
+		!exactManagedSessionTokenSecret(&listed, runner.namespace, listed.Name, sessionLabel, token, versioned, protected) {
+		return false, fmt.Errorf("listed session token secret is not exact-managed")
+	}
 	secret, err := secretClient.Get(ctx, listed.Name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -1518,16 +1561,15 @@ func (runner *Runner) deleteSessionTokenSecret(ctx context.Context, listed corev
 		}
 		return false, err
 	}
-	if containsString(secret.Finalizers, sessionTokenFinalizer) {
-		if secret.Immutable == nil || !*secret.Immutable || secret.DeletionTimestamp != nil ||
-			secret.Labels["app.kubernetes.io/component"] != sessionTokenComponent ||
-			secret.Labels[labelSessionKey] != listed.Labels[labelSessionKey] {
-			return false, fmt.Errorf("protected session token secret identity mismatch")
-		}
+	if secret.UID != listed.UID || !exactManagedSessionTokenSecret(secret, runner.namespace, listed.Name, sessionLabel, token, versioned, protected) {
+		return false, fmt.Errorf("session token secret identity mismatch")
+	}
+	if protected {
 		patch, err := json.Marshal(map[string]any{
 			"metadata": map[string]any{
+				"uid":             string(listed.UID),
 				"resourceVersion": secret.ResourceVersion,
-				"finalizers":      removeString(secret.Finalizers, sessionTokenFinalizer),
+				"finalizers":      []string{},
 			},
 		})
 		if err != nil {
@@ -1537,8 +1579,12 @@ func (runner *Runner) deleteSessionTokenSecret(ctx context.Context, listed corev
 		if err != nil {
 			return false, fmt.Errorf("remove session token finalizer: %w", err)
 		}
+		if secret.UID != listed.UID || strings.TrimSpace(secret.ResourceVersion) == "" ||
+			!exactManagedSessionTokenSecret(secret, runner.namespace, listed.Name, sessionLabel, token, true, false) {
+			return false, fmt.Errorf("session token secret finalizer response identity mismatch")
+		}
 	}
-	uid := secret.UID
+	uid := listed.UID
 	resourceVersion := secret.ResourceVersion
 	err = secretClient.Delete(ctx, secret.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{
 		UID: &uid, ResourceVersion: &resourceVersion,

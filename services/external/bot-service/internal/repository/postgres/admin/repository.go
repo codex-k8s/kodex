@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +35,7 @@ type repositoryDB interface {
 }
 
 var _ adminrepo.Repository = (*Repository)(nil)
+var _ adminrepo.ExactAgentSessionsRuntimeGuardRepository = (*Repository)(nil)
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool, db: pool}
@@ -526,6 +528,93 @@ func (repo *Repository) GetAgentSession(ctx context.Context, sessionKey string) 
 		return entity.AgentSession{}, fmt.Errorf("get agent session: %w", err)
 	}
 	return item, nil
+}
+
+func (repo *Repository) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	if sideEffect == nil {
+		return fmt.Errorf("exact agent sessions runtime side effect is required")
+	}
+	normalized, err := normalizeExactAgentSessionBindings(expected)
+	if err != nil {
+		return err
+	}
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin exact agent sessions runtime guard: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	for _, binding := range normalized {
+		var roleProjectID int64
+		var roleEnabled bool
+		var chatProjectID int64
+		var chatChannelID string
+		var participantEnabled bool
+		current, lockErr := scanAgentSessionFields(
+			tx.QueryRow(ctx, query("agent_sessions__lock_exact_runtime.sql"), binding.SessionKey),
+			&roleProjectID,
+			&roleEnabled,
+			&chatProjectID,
+			&chatChannelID,
+			&participantEnabled,
+		)
+		if errors.Is(lockErr, pgx.ErrNoRows) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if lockErr != nil {
+			return fmt.Errorf("lock exact agent session runtime binding: %w", lockErr)
+		}
+		if !exactAgentSessionRuntimeBindingEqual(current, binding) || !roleEnabled || !participantEnabled ||
+			roleProjectID != binding.ProjectID || chatProjectID != binding.ProjectID || strings.TrimSpace(chatChannelID) != strings.TrimSpace(binding.MattermostChannelID) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	if _, err := tx.Exec(ctx, "lock table matter_codex_cluster_admin_revocations in share mode"); err != nil {
+		return fmt.Errorf("lock agent session runtime revocations: %w", err)
+	}
+	if err := sideEffect(newTransactionalRepository(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit exact agent sessions runtime guard: %w", err)
+	}
+	return nil
+}
+
+func normalizeExactAgentSessionBindings(expected []entity.AgentSession) ([]entity.AgentSession, error) {
+	if len(expected) == 0 {
+		return nil, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	byIdentity := make(map[string]entity.AgentSession, len(expected))
+	for _, binding := range expected {
+		if binding.ID <= 0 || strings.TrimSpace(binding.SessionKey) == "" {
+			return nil, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		key := fmt.Sprintf("%020d\x00%s", binding.ID, strings.TrimSpace(binding.SessionKey))
+		if previous, exists := byIdentity[key]; exists && !exactAgentSessionRuntimeBindingEqual(previous, binding) {
+			return nil, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		byIdentity[key] = binding
+	}
+	result := make([]entity.AgentSession, 0, len(byIdentity))
+	for _, binding := range byIdentity {
+		result = append(result, binding)
+	}
+	sort.Slice(result, func(left int, right int) bool {
+		if result[left].ID != result[right].ID {
+			return result[left].ID < result[right].ID
+		}
+		return result[left].SessionKey < result[right].SessionKey
+	})
+	return result, nil
+}
+
+func exactAgentSessionRuntimeBindingEqual(left entity.AgentSession, right entity.AgentSession) bool {
+	return left.ID == right.ID && strings.TrimSpace(left.SessionKey) == strings.TrimSpace(right.SessionKey) &&
+		left.ProjectID == right.ProjectID && left.ChatID == right.ChatID && left.RoleID == right.RoleID &&
+		strings.TrimSpace(left.SessionScope) == strings.TrimSpace(right.SessionScope) &&
+		strings.TrimSpace(left.MattermostChannelID) == strings.TrimSpace(right.MattermostChannelID) &&
+		strings.TrimSpace(left.MattermostRootPostID) == strings.TrimSpace(right.MattermostRootPostID) &&
+		strings.TrimSpace(left.TokenSecretRef) == strings.TrimSpace(right.TokenSecretRef)
 }
 
 func (repo *Repository) GetAgentSessionByID(ctx context.Context, id int64) (entity.AgentSession, error) {

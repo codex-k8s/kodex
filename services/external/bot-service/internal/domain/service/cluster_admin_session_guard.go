@@ -81,18 +81,48 @@ func (svc *AgentSessionService) withCurrentSessionPersistenceGuard(ctx context.C
 	return svc.withCurrentSessionGuard(ctx, session, operation, true, sideEffect)
 }
 
-func (svc *AgentSessionService) withCurrentSessionsRuntimeGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession) error) error {
-	return svc.withCurrentSessionRuntimeGuard(ctx, child, operation+".child", func(currentChild entity.AgentSession) error {
-		return svc.withCurrentSessionRuntimeGuard(ctx, source, operation+".source", func(currentSource entity.AgentSession) error {
-			return sideEffect(currentChild, currentSource)
+func (svc *AgentSessionService) withCurrentSessionsPersistenceGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession, adminrepo.Repository) error) error {
+	return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, svc.cfg.Store, child, source, operation, sideEffect)
+}
+
+func (svc *AgentSessionService) withCurrentSessionsPersistenceGuardUsingStore(ctx context.Context, store adminrepo.Repository, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession, adminrepo.Repository) error) error {
+	if child.ID == source.ID || strings.TrimSpace(child.SessionKey) == strings.TrimSpace(source.SessionKey) {
+		if child.ID != source.ID || strings.TrimSpace(child.SessionKey) != strings.TrimSpace(source.SessionKey) ||
+			child.ProjectID != source.ProjectID || child.ChatID != source.ChatID || child.RoleID != source.RoleID ||
+			strings.TrimSpace(child.MattermostChannelID) != strings.TrimSpace(source.MattermostChannelID) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		return svc.withCurrentSessionGuardUsingStore(ctx, store, child, operation+".deduplicated", true, func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+			return sideEffect(current, current, guardedStore)
+		})
+	}
+	childFirst := child.ID < source.ID || (child.ID == source.ID && child.SessionKey < source.SessionKey)
+	first := child
+	firstSuffix := ".child"
+	second := source
+	secondSuffix := ".source"
+	if !childFirst {
+		first, second = source, child
+		firstSuffix, secondSuffix = ".source", ".child"
+	}
+	return svc.withCurrentSessionGuardUsingStore(ctx, store, first, operation+firstSuffix, true, func(currentFirst entity.AgentSession, firstStore adminrepo.Repository) error {
+		return svc.withCurrentSessionGuardUsingStore(ctx, firstStore, second, operation+secondSuffix, true, func(currentSecond entity.AgentSession, secondStore adminrepo.Repository) error {
+			if childFirst {
+				return sideEffect(currentFirst, currentSecond, secondStore)
+			}
+			return sideEffect(currentSecond, currentFirst, secondStore)
 		})
 	})
 }
 
-func (svc *AgentSessionService) withCurrentSessionsPersistenceGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession, adminrepo.Repository) error) error {
-	return svc.withCurrentSessionPersistenceGuard(ctx, child, operation+".child", func(currentChild entity.AgentSession, childStore adminrepo.Repository) error {
-		return svc.withCurrentSessionGuardUsingStore(ctx, childStore, source, operation+".source", true, func(currentSource entity.AgentSession, sourceStore adminrepo.Repository) error {
-			return sideEffect(currentChild, currentSource, sourceStore)
+func (svc *AgentSessionService) withCurrentSessionsPublishGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession) error) error {
+	repository, ok := svc.cfg.Store.(adminrepo.ExactAgentSessionsRuntimeGuardRepository)
+	if !ok {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return repository.WithExactAgentSessionsRuntimeGuard(ctx, []entity.AgentSession{child, source}, func(lockedStore adminrepo.Repository) error {
+		return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, lockedStore, child, source, operation, func(currentChild entity.AgentSession, currentSource entity.AgentSession, _ adminrepo.Repository) error {
+			return sideEffect(currentChild, currentSource)
 		})
 	})
 }

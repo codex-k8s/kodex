@@ -9,7 +9,7 @@
         "apiGroups=core;resources=pods;verbs=create,get,list,delete",
         "apiGroups=core;resources=pods/log;verbs=get",
         "apiGroups=core;resources=pods/exec;verbs=create",
-        "apiGroups=core;resources=secrets;verbs=create,get,list,update,delete",
+        "apiGroups=core;resources=secrets;verbs=create,get,list,update,patch,delete",
         "apiGroups=batch;resources=jobs;verbs=create,get,list,delete"
       ]
     },

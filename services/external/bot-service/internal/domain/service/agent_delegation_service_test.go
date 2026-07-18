@@ -11,6 +11,30 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
+func (store *fakeAdminStore) WithExactAgentSessionsRuntimeGuard(_ context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	store.capacityMu.Lock()
+	defer store.capacityMu.Unlock()
+	seen := make(map[string]entity.AgentSession, len(expected))
+	for _, binding := range expected {
+		key := strings.TrimSpace(binding.SessionKey)
+		if key == "" {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if previous, exists := seen[key]; exists && (previous.ID != binding.ID || previous.RoleID != binding.RoleID || previous.ChatID != binding.ChatID) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		seen[key] = binding
+		current, exists := store.agentSessions[key]
+		if !exists || current.ID != binding.ID || current.ProjectID != binding.ProjectID || current.ChatID != binding.ChatID || current.RoleID != binding.RoleID ||
+			strings.TrimSpace(current.MattermostChannelID) != strings.TrimSpace(binding.MattermostChannelID) ||
+			strings.TrimSpace(current.MattermostRootPostID) != strings.TrimSpace(binding.MattermostRootPostID) ||
+			strings.TrimSpace(current.TokenSecretRef) != strings.TrimSpace(binding.TokenSecretRef) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	return sideEffect(store)
+}
+
 func TestAgentSessionListsChatsAvailableToTargetAgent(t *testing.T) {
 	svc, store, _, _ := agentDelegationTestService()
 	store.chatParticipants[1] = []entity.ChatParticipant{{ChatID: 1, RoleID: 1, RoleName: "manager", Enabled: true}}

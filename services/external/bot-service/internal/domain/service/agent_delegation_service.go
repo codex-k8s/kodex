@@ -474,14 +474,24 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	}
 	targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
 	sourceThreadURL := svc.mattermostThreadURL(project.Slug, sourceSession.MattermostRootPostID)
-	if err := svc.withCurrentSessionsPersistenceGuard(ctx, session, sourceSession, "agent_session.delegation_callback_publish_final_guard", func(_ entity.AgentSession, _ entity.AgentSession, _ adminrepo.Repository) error { return nil }); err != nil {
+	callbackAuditChunks := svc.splitMattermostThreadMessage(ctx, crossChatDelegationCallbackAuditMessage(requesterUserName, delegation.Title, targetThreadURL, message))
+	returnAuditChunks := svc.splitMattermostThreadMessage(ctx, crossChatDelegationReturnAuditMessage(requesterUserName, delegation.Title, sourceThreadURL))
+	var callbackPublishErr error
+	if err := svc.withCurrentSessionsPublishGuard(ctx, session, sourceSession, "agent_session.delegation_callback_publish_final_guard", func(_ entity.AgentSession, currentSource entity.AgentSession) error {
+		_, callbackPublishErr = svc.postSystemThreadMessageChunks(ctx, currentSource.MattermostChannelID, currentSource.MattermostRootPostID, callbackAuditChunks, "agent_cross_chat_callback")
+		return nil
+	}); err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
-	_, _ = svc.postDelegationCallbackAudit(ctx, sourceSession, requesterUserName, delegation.Title, targetThreadURL, message)
-	if err := svc.withCurrentSessionsPersistenceGuard(ctx, session, sourceSession, "agent_session.delegation_return_publish_final_guard", func(_ entity.AgentSession, _ entity.AgentSession, _ adminrepo.Repository) error { return nil }); err != nil {
+	_ = callbackPublishErr
+	var returnPublishErr error
+	if err := svc.withCurrentSessionsPublishGuard(ctx, session, sourceSession, "agent_session.delegation_return_publish_final_guard", func(currentChild entity.AgentSession, _ entity.AgentSession) error {
+		_, returnPublishErr = svc.postSystemThreadMessageChunks(ctx, currentChild.MattermostChannelID, currentChild.MattermostRootPostID, returnAuditChunks, "agent_cross_chat_callback_returned")
+		return nil
+	}); err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
-	_, _ = svc.postDelegationReturnAudit(ctx, session, requesterUserName, delegation.Title, sourceThreadURL)
+	_ = returnPublishErr
 	return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
 }
 
@@ -639,6 +649,10 @@ func (svc *AgentSessionService) postDelegationReturnAudit(ctx context.Context, t
 
 func (svc *AgentSessionService) postSystemThreadMessage(ctx context.Context, channelID string, rootPostID string, message string, event string) (MattermostPostRef, error) {
 	chunks := svc.splitMattermostThreadMessage(ctx, message)
+	return svc.postSystemThreadMessageChunks(ctx, channelID, rootPostID, chunks, event)
+}
+
+func (svc *AgentSessionService) postSystemThreadMessageChunks(ctx context.Context, channelID string, rootPostID string, chunks []string, event string) (MattermostPostRef, error) {
 	var firstRef MattermostPostRef
 	for _, chunk := range chunks {
 		ref, err := svc.cfg.ThreadPublisher.PostThreadMessage(ctx, MattermostThreadPostInput{

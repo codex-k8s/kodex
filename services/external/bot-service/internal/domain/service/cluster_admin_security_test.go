@@ -64,6 +64,12 @@ func (store *admittedAdminStore) WithExistingClusterAdminPersistenceGuard(_ cont
 	return store.withExistingClusterAdminGuard(input, func() error { return sideEffect(store) })
 }
 
+func (store *admittedAdminStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.fakeAdminStore.WithExactAgentSessionsRuntimeGuard(ctx, expected, func(adminrepo.Repository) error {
+		return sideEffect(store)
+	})
+}
+
 func (store *admittedAdminStore) withExistingClusterAdminGuard(input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
 	store.guardCalls++
 	store.guardInputs = append(store.guardInputs, input)

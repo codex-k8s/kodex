@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -60,6 +61,35 @@ func TestDeploymentSecuritySnapshot(t *testing.T) {
 	}
 	if string(actual) != string(expected) {
 		t.Fatalf("снимок RBAC/PodSpec/Secret refs/NetworkPolicy изменился:\n--- expected\n%s\n--- actual\n%s", expected, actual)
+	}
+}
+
+func TestBotServiceRuntimeSecretRBACMatchesCleanupProtocol(t *testing.T) {
+	objects := decodeYAMLDocuments(t, filepath.Join(testRepositoryRoot(t), "deploy/k8s/bot-service/rbac.yaml.tpl"))
+	wantVerbs := []string{"create", "get", "list", "update", "patch", "delete"}
+	found := false
+	for _, object := range objects {
+		if stringValue(object["kind"]) != "Role" || nestedString(object, "metadata", "name") != "matter-codex-bot-service-runtime" {
+			continue
+		}
+		for _, rawRule := range sliceValue(object["rules"]) {
+			rule, _ := rawRule.(map[string]any)
+			apiGroups := stringSlice(rule["apiGroups"])
+			resources := stringSlice(rule["resources"])
+			verbs := stringSlice(rule["verbs"])
+			if slices.Contains(apiGroups, "*") || slices.Contains(resources, "*") || slices.Contains(verbs, "*") {
+				t.Fatal("runtime Role must not contain wildcard permissions")
+			}
+			if slices.Equal(resources, []string{"secrets"}) {
+				found = true
+				if !slices.Equal(apiGroups, []string{""}) || !slices.Equal(verbs, wantVerbs) {
+					t.Fatalf("Secret RBAC apiGroups=%v verbs=%v, want core/%v", apiGroups, verbs, wantVerbs)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("runtime Role Secret rule was not found")
 	}
 }
 
