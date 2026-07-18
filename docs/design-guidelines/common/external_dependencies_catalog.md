@@ -109,7 +109,7 @@
 | `localhost:5001/matter-codex/agent-runner:<tag>` | agent runner MVP runtime | non-root image, собранный Kaniko в кластере, с `matter-codex-agent-runner`, Codex CLI, GitHub/Kubernetes/DB/WebSocket clients, Go toolchain, Vue/TS и API codegen tooling для chat/session agents |
 | `quay.io/oauth2-proxy/oauth2-proxy` | Mattermost public gate | Google OAuth allowlist перед публичным Mattermost URL без встраивания OAuth-логики в Mattermost manifests |
 | `mattermost/mattermost-team-edition` | Mattermost | self-hosted Mattermost для control surface |
-| `pgvector/pgvector:0.8.5-pg16` | Mattermost и MatterCodex PostgreSQL | PostgreSQL 16 с локальным `pgvector` для канонических данных и перестраиваемой поисковой проекции памяти |
+| `pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb` | Mattermost и MatterCodex PostgreSQL | PostgreSQL 16 с локальным `pgvector`; digest исключает незаметную смену libc/правил сортировки под существующим PVC |
 | `busybox` | init/wait helpers | lightweight init helper в manifests; legacy smoke image setting сохраняется для совместимости config |
 
 ## Процесс изменений каталога

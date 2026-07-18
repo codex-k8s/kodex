@@ -1198,6 +1198,101 @@ func TestChatRunPromptsThreadRepositoryChoiceAndRunsWithoutRepository(t *testing
 	}
 }
 
+func TestChatRunRestoresMissingThreadContextFromExistingSession(t *testing.T) {
+	store := chatRuntimeStore()
+	project := store.projects[1]
+	project.GitHubOwner = "codex-k8s"
+	project.GitHubAccountName = "agent"
+	store.projects[1] = project
+	store.repositories[repositoryStoreKey("github", "codex-k8s", "matter-codex")] = entity.Repository{
+		ID:                1,
+		Provider:          "github",
+		Owner:             "codex-k8s",
+		Name:              "matter-codex",
+		DefaultBranch:     "main",
+		GitHubAccountName: "agent",
+		Status:            "active",
+	}
+	store.projectRepositories["1:1"] = entity.ProjectRepository{
+		ID:            1,
+		ProjectID:     1,
+		RepositoryID:  1,
+		Provider:      "github",
+		Owner:         "codex-k8s",
+		Name:          "matter-codex",
+		DefaultBranch: "main",
+		IsDefault:     true,
+	}
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		GitHubAccountName: "agent",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Management", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	rootPostID := "manager-root"
+	sessionKey := agentSessionKey(1, 1, agentSessionScopeThreadRole, rootPostID)
+	store.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID:                   1,
+			SessionKey:           sessionKey,
+			ProjectID:            1,
+			ChatID:               1,
+			RoleID:               1,
+			SessionScope:         agentSessionScopeThreadRole,
+			MattermostChannelID:  "channel-1",
+			MattermostRootPostID: rootPostID,
+			OpenAIAccountName:    "main",
+			CodexSessionID:       "codex-session-1",
+			Status:               agentSessionStatusIdle,
+			Capabilities:         `{"repositories":[{"provider":"github","owner":"codex-k8s","name":"matter-codex","default_branch":"main"}]}`,
+			TTLSeconds:           defaultThreadSessionTTLSeconds,
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	publisher := &fakeThreadPublisher{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		MenuActionURL:   "https://matter-codex.example/mattermost/actions/agents",
+		StorageReady:    true,
+		RuntimeReady:    true,
+		DisableMonitor:  true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID:  "channel-1",
+		PostID:     "reply-1",
+		RootPostID: rootPostID,
+		UserID:     "owner",
+		UserName:   "owner",
+		Message:    "Continue the existing manager session.",
+	})
+
+	if result.RunID == "" || result.Mode != "session" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(publisher.cards) != 0 {
+		t.Fatalf("existing session must not prompt for repository selection: %#v", publisher.cards)
+	}
+	threadContext, err := store.GetThreadContext(context.Background(), 1, rootPostID)
+	if err != nil || threadContext.Status != threadContextStatusConfigured || threadContext.RepositoryID != 1 {
+		t.Fatalf("thread context = %#v err=%v", threadContext, err)
+	}
+	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].RepositoryOwner != "codex-k8s" || runner.sessionRuns[0].RepositoryName != "matter-codex" {
+		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "Continue the existing manager session.") {
+		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+}
+
 func TestChatRunRetriesConfiguredThreadRepositorySelectionWhenSessionWasNotCreated(t *testing.T) {
 	store := chatRuntimeStore()
 	project := store.projects[1]
