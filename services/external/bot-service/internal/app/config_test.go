@@ -1,9 +1,36 @@
 package app
 
 import (
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
+
+func TestFoundationDSNBuilderSupportsReservedPassword(t *testing.T) {
+	password := "synthetic/with+reserved=value"
+	command := exec.Command(
+		"bash", "-c",
+		`. "$1"; mattercodex_postgres_dsn "$2" "$3" "$4" "$5"`,
+		"bash",
+		filepath.Join(testRepositoryRoot(t), "scripts/lib/env.sh"),
+		"runtime-user", password, "mattermost-postgres.mattermost.svc.cluster.local", "mattercodex",
+	)
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("foundation DSN builder error = %v", err)
+	}
+	config, err := pgx.ParseConfig(strings.TrimSpace(string(output)))
+	if err != nil {
+		t.Fatalf("pgx.ParseConfig(foundation DSN) error = %v", err)
+	}
+	if config.User != "runtime-user" || config.Password != password || config.Database != "mattercodex" {
+		t.Fatal("foundation DSN builder изменил parser-visible credentials")
+	}
+}
 
 func TestConfigDefaults(t *testing.T) {
 	t.Setenv("MATTERCODEX_MATTERMOST_SITE_URL", "")

@@ -1,11 +1,16 @@
 package migrations_test
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
+	"io"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -21,6 +26,8 @@ import (
 )
 
 var migrationSchemaSequence atomic.Uint64
+
+const exactNMinusOneSHA = "e61d5aec0829de38aeaf71a0ee7d9e5fc6126a82"
 
 type runtimeGuardMutationBarrier struct {
 	name         string
@@ -218,11 +225,14 @@ func TestRuntimeRoleNMinusOneAndAdversarialBoundary(t *testing.T) {
 	defer cancel()
 	roleName := "mc_runtime_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
 	rolePassword := "synthetic-runtime-password"
+	helperRoleName := "mc_runtime_helper_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
+	helperRoleCreated := false
 	if err := postgresrepo.ProvisionRuntimeDatabaseRole(ctx, ownerDSN, roleName, rolePassword); err != nil {
 		t.Fatalf("provision runtime role: %v", err)
 	}
 	baseDSN := requiredMigrationDSN(t)
 	roleIdentifier := pgx.Identifier{roleName}.Sanitize()
+	helperRoleIdentifier := pgx.Identifier{helperRoleName}.Sanitize()
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cleanupCancel()
@@ -230,6 +240,10 @@ func TestRuntimeRoleNMinusOneAndAdversarialBoundary(t *testing.T) {
 		defer cleanupPool.Close()
 		_, _ = cleanupPool.Exec(cleanupCtx, "drop owned by "+roleIdentifier)
 		_, _ = cleanupPool.Exec(cleanupCtx, "drop role "+roleIdentifier)
+		if helperRoleCreated {
+			_, _ = cleanupPool.Exec(cleanupCtx, "drop owned by "+helperRoleIdentifier)
+			_, _ = cleanupPool.Exec(cleanupCtx, "drop role "+helperRoleIdentifier)
+		}
 		var databaseName string
 		if err := cleanupPool.QueryRow(cleanupCtx, `select current_database()`).Scan(&databaseName); err == nil {
 			_, _ = cleanupPool.Exec(cleanupCtx, "grant temporary on database "+pgx.Identifier{databaseName}.Sanitize()+" to public")
@@ -311,6 +325,270 @@ insert into matter_codex_agent_profiles(name, role, kubernetes_access, sandbox_m
 values ('forged-admin', 'admin', 'cluster-admin', 'danger-full-access')
 `); err != nil || tag.RowsAffected() != 0 {
 		t.Fatalf("forged cluster-admin direct DML: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+
+	ownerPool = openMigrationPool(t, ctx, ownerDSN)
+	var schemaName string
+	if err := ownerPool.QueryRow(ctx, `select current_schema()`).Scan(&schemaName); err != nil {
+		ownerPool.Close()
+		t.Fatalf("read runtime schema: %v", err)
+	}
+	if _, err := ownerPool.Exec(ctx, "create role "+helperRoleIdentifier+" nologin"); err != nil {
+		ownerPool.Close()
+		t.Fatalf("create assumable helper role: %v", err)
+	}
+	helperRoleCreated = true
+	for _, statement := range []string{
+		"grant usage on schema " + pgx.Identifier{schemaName}.Sanitize() + " to " + helperRoleIdentifier,
+		"grant select, update on matter_codex_cluster_admin_subjects to " + helperRoleIdentifier,
+		"grant " + helperRoleIdentifier + " to " + roleIdentifier,
+	} {
+		if _, err := ownerPool.Exec(ctx, statement); err != nil {
+			ownerPool.Close()
+			t.Fatalf("grant assumable helper role: %v", err)
+		}
+	}
+	ownerPool.Close()
+
+	tx, err := runtimePool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin SET ROLE proof: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "set local role "+helperRoleIdentifier); err != nil {
+		t.Fatalf("SET ROLE helper: %v", err)
+	}
+	if tag, err := tx.Exec(ctx, `
+update matter_codex_cluster_admin_subjects
+set privilege_state = privilege_state || '{"membership_proof":true}'::jsonb
+where subject_type = 'agent_profile'
+`); err != nil || tag.RowsAffected() == 0 {
+		t.Fatalf("SET ROLE adversarial DML proof: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("rollback SET ROLE proof: %v", err)
+	}
+	if err := postgresrepo.ValidateRuntimeDatabaseRole(ctx, runtimePool); err == nil {
+		t.Fatal("runtime validator принял assumable membership")
+	}
+	if err := postgresrepo.ProvisionRuntimeDatabaseRole(ctx, ownerDSN, roleName, rolePassword); err == nil {
+		t.Fatal("runtime provisioning не обнаружил старый membership drift")
+	}
+}
+
+func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24Upgrade(t *testing.T) {
+	ownerDSN := isolatedMigrationDSN(t, "exact_n_minus_one")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	binary := buildExactNMinusOneBinary(t, ctx)
+	runExactNMinusOneBinary(t, ctx, binary, ownerDSN, true)
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 22 {
+		t.Fatalf("exact N-1 bootstrap schema version = %d, error=%v", version, err)
+	}
+
+	roleName := "mc_exact_n_minus_one_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
+	rolePassword := "synthetic-exact-n-minus-one-password"
+	if err := postgresrepo.ProvisionRuntimeDatabaseRole(ctx, ownerDSN, roleName, rolePassword); err != nil {
+		t.Fatalf("provision exact N-1 runtime role: %v", err)
+	}
+	roleIdentifier := pgx.Identifier{roleName}.Sanitize()
+	baseDSN := requiredMigrationDSN(t)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cleanupCancel()
+		cleanupPool := openMigrationPool(t, cleanupCtx, baseDSN)
+		defer cleanupPool.Close()
+		_, _ = cleanupPool.Exec(cleanupCtx, "drop owned by "+roleIdentifier)
+		_, _ = cleanupPool.Exec(cleanupCtx, "drop role "+roleIdentifier)
+	})
+	if err := migrations.RunTo(ctx, ownerDSN, 23); err != nil {
+		t.Fatalf("upgrade exact N-1 database through v23: %v", err)
+	}
+	stagingPool := openMigrationPool(t, ctx, ownerDSN)
+	for _, statement := range []string{
+		`insert into matter_codex_mattermost_bot_identities(
+			project_id, role_id, username, mattermost_user_id, token_secret_ref, status
+		)
+		select role.project_id, role.id, 'synthetic-admin-' || role.id::text,
+			'synthetic-admin-user-' || role.id::text, 'synthetic-admin-token-' || role.id::text, 'active'
+		from matter_codex_agent_roles role
+		where lower(trim(role.kubernetes_access)) = 'cluster-admin'
+		on conflict (role_id) do nothing`,
+		`update matter_codex_credentials
+		set secret_content_sha256 = repeat('a', 64), secret_resource_uid = 'synthetic-credential-uid', secret_resource_version = '1'
+		where trim(secret_ref) <> ''`,
+		`update matter_codex_mattermost_bot_identities
+		set secret_content_sha256 = repeat('b', 64), secret_resource_uid = 'synthetic-bot-uid', secret_resource_version = '1'
+		where trim(token_secret_ref) <> ''`,
+		`update matter_codex_project_runtime_variables
+		set secret_content_sha256 = repeat('c', 64), secret_resource_uid = 'synthetic-variable-uid', secret_resource_version = '1'
+		where trim(secret_ref) <> ''`,
+	} {
+		if _, err := stagingPool.Exec(ctx, statement); err != nil {
+			stagingPool.Close()
+			t.Fatalf("stage synthetic exact N-1 Secret integrity: %v", err)
+		}
+	}
+	stagingPool.Close()
+	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
+		t.Fatalf("upgrade exact N-1 database v22->v23->v24: %v", err)
+	}
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 24 {
+		t.Fatalf("upgraded exact N-1 schema version = %d, error=%v", version, err)
+	}
+
+	ownerPool := openMigrationPool(t, ctx, ownerDSN)
+	defer ownerPool.Close()
+	var roleID int64
+	if err := ownerPool.QueryRow(ctx, `
+select id
+from matter_codex_agent_roles
+where name = 'mattercodex-admin' and kubernetes_access = 'cluster-admin'
+`).Scan(&roleID); err != nil {
+		t.Fatalf("find exact N-1 frozen role: %v", err)
+	}
+	var subjectsBefore, dependenciesBefore, deniedBefore int
+	if err := ownerPool.QueryRow(ctx, `select count(*) from matter_codex_cluster_admin_subjects`).Scan(&subjectsBefore); err != nil {
+		t.Fatalf("count frozen subjects before exact N-1: %v", err)
+	}
+	if err := ownerPool.QueryRow(ctx, `select count(*) from matter_codex_cluster_admin_dependencies`).Scan(&dependenciesBefore); err != nil {
+		t.Fatalf("count frozen dependencies before exact N-1: %v", err)
+	}
+	if err := ownerPool.QueryRow(ctx, `select count(*) from matter_codex_audit_events where event_type = 'cluster_admin.freeze.denied'`).Scan(&deniedBefore); err != nil {
+		t.Fatalf("count freeze denials before exact N-1: %v", err)
+	}
+
+	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
+	runExactNMinusOneBinary(t, ctx, binary, runtimeDSN, false)
+	var subjectsAfter, dependenciesAfter, deniedAfter int
+	if err := ownerPool.QueryRow(ctx, `select count(*) from matter_codex_cluster_admin_subjects`).Scan(&subjectsAfter); err != nil {
+		t.Fatalf("count frozen subjects after exact N-1: %v", err)
+	}
+	if err := ownerPool.QueryRow(ctx, `select count(*) from matter_codex_cluster_admin_dependencies`).Scan(&dependenciesAfter); err != nil {
+		t.Fatalf("count frozen dependencies after exact N-1: %v", err)
+	}
+	if err := ownerPool.QueryRow(ctx, `select count(*) from matter_codex_audit_events where event_type = 'cluster_admin.freeze.denied'`).Scan(&deniedAfter); err != nil {
+		t.Fatalf("count freeze denials after exact N-1: %v", err)
+	}
+	if subjectsAfter != subjectsBefore || dependenciesAfter != dependenciesBefore {
+		t.Fatalf(
+			"exact N-1 expanded freeze state: subjects=%d/%d dependencies=%d/%d",
+			subjectsBefore, subjectsAfter, dependenciesBefore, dependenciesAfter,
+		)
+	}
+	if deniedAfter != deniedBefore {
+		t.Fatalf("exact N-1 produced freeze denials: before=%d after=%d", deniedBefore, deniedAfter)
+	}
+	var exact bool
+	if err := ownerPool.QueryRow(ctx, `select matter_codex_cluster_admin_role_exact($1)`, roleID).Scan(&exact); err != nil || !exact {
+		var revocations string
+		if queryErr := ownerPool.QueryRow(ctx, `
+select coalesce(string_agg(resource_type || ':' || resource_key || ':' || reason, ', ' order by revoked_at, resource_type, resource_key), '')
+from matter_codex_cluster_admin_revocations
+`).Scan(&revocations); queryErr != nil {
+			t.Fatalf("read exact N-1 revocations: %v", queryErr)
+		}
+		t.Fatalf("exact N-1 expanded frozen role: exact=%t error=%v revocations=%s", exact, err, revocations)
+	}
+}
+
+func buildExactNMinusOneBinary(t *testing.T, ctx context.Context) string {
+	t.Helper()
+	repositoryRootOutput, err := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		t.Fatalf("locate repository for exact N-1: %v", err)
+	}
+	repositoryRoot := strings.TrimSpace(string(repositoryRootOutput))
+	worktreeRoot := filepath.Join(t.TempDir(), "source")
+	command := exec.CommandContext(ctx, "git", "worktree", "add", "--detach", worktreeRoot, exactNMinusOneSHA)
+	command.Dir = repositoryRoot
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("create exact N-1 worktree: %v: %s", err, strings.TrimSpace(string(output)))
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cleanupCancel()
+		cleanup := exec.CommandContext(cleanupCtx, "git", "worktree", "remove", "--force", worktreeRoot)
+		cleanup.Dir = repositoryRoot
+		if output, err := cleanup.CombinedOutput(); err != nil {
+			t.Errorf("remove exact N-1 worktree: %v: %s", err, strings.TrimSpace(string(output)))
+		}
+	})
+	binary := filepath.Join(t.TempDir(), "bot-service-exact-n-minus-one")
+	command = exec.CommandContext(ctx, "go", "build", "-o", binary, "./services/external/bot-service/cmd/bot-service")
+	command.Dir = worktreeRoot
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build exact N-1 %s: %v: %s", exactNMinusOneSHA, err, strings.TrimSpace(string(output)))
+	}
+	return binary
+}
+
+func runExactNMinusOneBinary(t *testing.T, ctx context.Context, binary string, dsn string, migrationsEnabled bool) {
+	t.Helper()
+	command := exec.CommandContext(ctx, binary)
+	command.Env = append(os.Environ(),
+		"MATTERCODEX_DATABASE_DSN="+dsn,
+		"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED="+strconv.FormatBool(migrationsEnabled),
+		"MATTERCODEX_RUNTIME_ENABLED=false",
+		"MATTERCODEX_BOT_SERVICE_HTTP_ADDR=127.0.0.1:0",
+		"MATTERCODEX_LOCALE=en",
+	)
+	reader, writer := io.Pipe()
+	command.Stdout = writer
+	command.Stderr = writer
+	lineCh := make(chan string, 64)
+	go func() {
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			lineCh <- scanner.Text()
+		}
+		close(lineCh)
+	}()
+	if err := command.Start(); err != nil {
+		_ = writer.Close()
+		t.Fatalf("start exact N-1 binary: %v", err)
+	}
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- command.Wait()
+		_ = writer.Close()
+	}()
+	timer := time.NewTimer(20 * time.Second)
+	defer timer.Stop()
+	var output strings.Builder
+	signaled := false
+	for {
+		select {
+		case line, ok := <-lineCh:
+			if ok {
+				output.WriteString(line)
+				output.WriteByte('\n')
+				if !signaled && strings.Contains(line, "bot-service listening") {
+					signaled = true
+					if err := command.Process.Signal(os.Interrupt); err != nil {
+						t.Fatalf("stop exact N-1 binary: %v", err)
+					}
+				}
+			}
+		case err := <-waitCh:
+			logs := output.String()
+			if err != nil {
+				t.Fatalf("exact N-1 binary exited with error: %v; logs=%s", err, logs)
+			}
+			if !signaled {
+				t.Fatalf("exact N-1 binary did not reach listen state; logs=%s", logs)
+			}
+			if strings.Contains(logs, "system agent role bootstrap failed") {
+				t.Fatalf("exact N-1 bootstrap degraded after upgrade; logs=%s", logs)
+			}
+			return
+		case <-timer.C:
+			_ = command.Process.Kill()
+			t.Fatalf("exact N-1 binary did not start before timeout")
+		case <-ctx.Done():
+			_ = command.Process.Kill()
+			t.Fatalf("exact N-1 binary context ended: %v", ctx.Err())
+		}
 	}
 }
 
@@ -555,6 +833,19 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	})
 	if err != nil || !allowed {
 		t.Fatalf("существующая session binding: allowed=%t error=%v", allowed, err)
+	}
+	persistenceCallback := false
+	err = repository.WithExistingClusterAdminPersistenceGuard(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
+		MattermostChannelID: "channel-existing", SessionKey: existingSessionKey,
+		ActorUser: "test", Operation: "test.binding.existing-session-persistence",
+	}, func() error {
+		persistenceCallback = true
+		_, updateErr := repository.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{SessionKey: existingSessionKey})
+		return updateErr
+	})
+	if err != nil || !persistenceCallback {
+		t.Fatalf("существующая persistence binding: callback=%t error=%v", persistenceCallback, err)
 	}
 	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
 		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
@@ -1061,6 +1352,90 @@ func testNMinusOneRepositoryGuard(t *testing.T, ctx context.Context, pool *pgxpo
 	}); err != nil {
 		t.Fatalf("N-1 bootstrap visibility: %v", err)
 	}
+	var repositoryID, projectRepositoryID int64
+	var repositoryProvider, repositoryOwner, repositoryName, defaultBranch, githubAccountName, mattermostChannel string
+	var projectRepositoryMetadata string
+	var projectRepositoryDefault bool
+	if err := pool.QueryRow(ctx, `
+select repository.id, binding.id, repository.provider, repository.owner, repository.name,
+	repository.default_branch, repository.github_account_name, repository.mattermost_channel,
+	binding.is_default, binding.metadata::text
+from matter_codex_project_repositories binding
+join matter_codex_repositories repository on repository.id = binding.repository_id
+where binding.project_id = $1
+order by binding.id
+limit 1
+`, projectID).Scan(
+		&repositoryID, &projectRepositoryID, &repositoryProvider, &repositoryOwner, &repositoryName,
+		&defaultBranch, &githubAccountName, &mattermostChannel, &projectRepositoryDefault, &projectRepositoryMetadata,
+	); err != nil {
+		t.Fatalf("load frozen repository for N-1 upsert: %v", err)
+	}
+	exactRepositoryUpsert := `
+	insert into matter_codex_repositories(provider, owner, name, default_branch, github_account_name, mattermost_channel)
+	values ($1, $2, $3, $4, $5, $6)
+	on conflict (provider, owner, name) do update set
+		default_branch = excluded.default_branch,
+		github_account_name = excluded.github_account_name,
+		mattermost_channel = excluded.mattermost_channel,
+		updated_at = now()
+	returning id
+`
+	exactProjectRepositoryUpsert := `
+	insert into matter_codex_project_repositories(project_id, repository_id, is_default, metadata)
+	values ($1, $2, $3, $4::jsonb)
+	on conflict (project_id, repository_id) do update set
+		is_default = excluded.is_default,
+		metadata = excluded.metadata,
+		updated_at = now()
+	returning id
+`
+	if err := runAsNMinusOne(func(tx pgx.Tx) error {
+		var actualRepositoryID, actualBindingID int64
+		if err := tx.QueryRow(
+			ctx, exactRepositoryUpsert,
+			repositoryProvider, repositoryOwner, repositoryName, defaultBranch, githubAccountName, mattermostChannel,
+		).Scan(&actualRepositoryID); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(
+			ctx, exactProjectRepositoryUpsert,
+			projectID, repositoryID, projectRepositoryDefault, projectRepositoryMetadata,
+		).Scan(&actualBindingID); err != nil {
+			return err
+		}
+		if actualRepositoryID != repositoryID || actualBindingID != projectRepositoryID {
+			return fmt.Errorf("exact ON CONFLICT returned repository=%d binding=%d", actualRepositoryID, actualBindingID)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("exact N-1 repository ON CONFLICT: %v", err)
+	}
+	if err := runAsNMinusOne(func(tx pgx.Tx) error {
+		var ignored int64
+		return tx.QueryRow(
+			ctx, exactRepositoryUpsert,
+			repositoryProvider, repositoryOwner, repositoryName, defaultBranch+"-remapped", githubAccountName, mattermostChannel,
+		).Scan(&ignored)
+	}); err == nil {
+		t.Fatal("N-1 repository remap расширил frozen state")
+	}
+	if err := runAsNMinusOne(func(tx pgx.Tx) error {
+		var newRepositoryID, ignored int64
+		if err := tx.QueryRow(ctx, `
+			insert into matter_codex_repositories(provider, owner, name, default_branch)
+			values ('github', 'synthetic-owner', 'n-minus-one-expansion', 'main')
+			returning id
+		`).Scan(&newRepositoryID); err != nil {
+			return err
+		}
+		return tx.QueryRow(
+			ctx, exactProjectRepositoryUpsert,
+			projectID, newRepositoryID, false, `{}`,
+		).Scan(&ignored)
+	}); err == nil {
+		t.Fatal("N-1 project repository expansion прошла freeze guard")
+	}
 	if err := func() error {
 		tx, err := pool.Begin(ctx)
 		if err != nil {
@@ -1121,20 +1496,57 @@ func testNMinusOneRepositoryGuard(t *testing.T, ctx context.Context, pool *pgxpo
 	}); err == nil {
 		t.Fatal("N-1 profile upsert расширил frozen state")
 	}
-	if err := runAsNMinusOne(func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `delete from matter_codex_chat_participants where chat_id = $1 and role_id = $2`, chatID, roleID); err != nil {
-			return err
-		}
-		tag, err := tx.Exec(ctx, `insert into matter_codex_chat_participants(chat_id, role_id, enabled) values ($1, $2, true)`, chatID, roleID)
+	var chatRepositoryID, chatRepositoryRepositoryID int64
+	if err := pool.QueryRow(ctx, `
+		select id, repository_id
+		from matter_codex_chat_repositories
+		where chat_id = $1
+		order by id
+		limit 1
+	`, chatID).Scan(&chatRepositoryID, &chatRepositoryRepositoryID); err != nil {
+		t.Fatalf("N-1 frozen chat repository: %v", err)
+	}
+	if err := func() error {
+		tx, err := pool.Begin(ctx)
 		if err != nil {
 			return err
 		}
-		if tag.RowsAffected() != 0 {
-			return errors.New("N-1 CreateChat восстановил отозванного participant")
+		defer func() { _ = tx.Rollback(ctx) }()
+		if _, err := tx.Exec(ctx, "set local role "+roleIdentifier); err != nil {
+			return err
 		}
-		return nil
-	}); err != nil {
-		t.Fatalf("N-1 CreateChat participant guard: %v", err)
+		if _, err := tx.Exec(ctx, `delete from matter_codex_chat_participants where chat_id = $1`, chatID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `delete from matter_codex_chat_repositories where chat_id = $1`, chatID); err != nil {
+			return err
+		}
+		var restoredParticipantID, restoredChatRepositoryID int64
+		if err := tx.QueryRow(ctx, `
+			insert into matter_codex_chat_participants(chat_id, role_id)
+			values ($1, $2)
+			on conflict (chat_id, role_id) do update set enabled = true
+			returning id
+		`, chatID, roleID).Scan(&restoredParticipantID); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `
+			insert into matter_codex_chat_repositories(chat_id, repository_id)
+			values ($1, $2)
+			on conflict (chat_id, repository_id) do nothing
+			returning id
+		`, chatID, chatRepositoryRepositoryID).Scan(&restoredChatRepositoryID); err != nil {
+			return err
+		}
+		if restoredParticipantID <= 0 || restoredChatRepositoryID != chatRepositoryID {
+			return fmt.Errorf(
+				"exact N-1 CreateChat restored participant=%d chat_repository=%d, want repository=%d",
+				restoredParticipantID, restoredChatRepositoryID, chatRepositoryID,
+			)
+		}
+		return tx.Commit(ctx)
+	}(); err != nil {
+		t.Fatalf("exact N-1 CreateChat delete/reinsert: %v", err)
 	}
 	var roleCount int
 	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_agent_roles where project_id = $1 and name = 'n-minus-one-new-admin'`, projectID).Scan(&roleCount); err != nil || roleCount != 0 {

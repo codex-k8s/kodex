@@ -3337,6 +3337,7 @@ type fakeRuntimeRunner struct {
 	sessionRuntimeHealth        runtimerepo.AgentSessionRuntimeHealth
 	sessionStartErrors          []error
 	botTokenSecrets             map[string]string
+	botTokenSecretReads         int
 	cleanedRunID                string
 	cleanedRunIDs               []string
 	retentionInput              runtimerepo.RetentionCleanupInput
@@ -3646,6 +3647,7 @@ func (runner *fakeRuntimeRunner) UpsertMattermostBotTokenSecret(_ context.Contex
 }
 
 func (runner *fakeRuntimeRunner) GetMattermostBotTokenSecret(_ context.Context, secretName string) (runtimerepo.MattermostBotTokenSecret, error) {
+	runner.botTokenSecretReads++
 	if token := runner.botTokenSecrets[secretName]; token != "" {
 		return runtimerepo.MattermostBotTokenSecret{SecretName: secretName, Namespace: "mattermost", Token: token}, nil
 	}

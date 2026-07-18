@@ -26,6 +26,14 @@ type admittedAdminStore struct {
 }
 
 func (store *admittedAdminStore) WithExistingClusterAdminRuntimeGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
+	return store.withExistingClusterAdminGuard(input, sideEffect)
+}
+
+func (store *admittedAdminStore) WithExistingClusterAdminPersistenceGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
+	return store.withExistingClusterAdminGuard(input, sideEffect)
+}
+
+func (store *admittedAdminStore) withExistingClusterAdminGuard(input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
 	store.guardCalls++
 	store.guardInputs = append(store.guardInputs, input)
 	if !store.allowed || store.denyGuard || (store.denyGuardAt > 0 && store.guardCalls == store.denyGuardAt) {
@@ -208,6 +216,13 @@ func TestClusterAdminRuntimeGuardVerifiesSameRefSecretContent(t *testing.T) {
 				ContentSHA256: "synthetic-sha256", UID: "different-uid", ResourceVersion: "1",
 			},
 		},
+		{
+			name: "same ref newer resource version",
+			integrity: runtimerepo.SecretIntegrity{
+				SecretName: "synthetic-openai-secret", SecretKey: "auth.json",
+				ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "2",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -268,6 +283,53 @@ func TestClusterAdminNewSessionDeniedBeforeDatabaseAndRuntimeSideEffects(t *test
 	}
 }
 
+func TestClusterAdminCommittedRevokeDeniesSessionPersistence(t *testing.T) {
+	baseStore := chatRuntimeStore()
+	project := baseStore.projects[1]
+	role := entity.AgentRole{
+		ID: 1, ProjectID: project.ID, Name: "configured-admin", RoleType: "admin",
+		OpenAIAccountName: "main", KubernetesAccess: "cluster-admin", Enabled: true,
+	}
+	chat := entity.Chat{
+		ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Admin", Slug: "admin-chat", ChatType: "single_custom",
+	}
+	sessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-existing")
+	baseStore.agentRoles[role.ID] = role
+	baseStore.chats[chat.ID] = chat
+	baseStore.setChatBindings(chat.ID, []int64{role.ID}, nil)
+	baseStore.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID: 1, SessionKey: sessionKey, ProjectID: project.ID, ChatID: chat.ID, RoleID: role.ID,
+			SessionScope: agentSessionScopeThreadRole, MattermostChannelID: chat.MattermostChannelID,
+			MattermostRootPostID: "root-existing", OpenAIAccountName: "main", Status: agentSessionStatusIdle,
+			Capabilities: `{"frozen":true}`, TTLSeconds: 111,
+		},
+	}
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: 2}
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+	})
+	_, err := svc.EnqueueAgentTurn(context.Background(), AgentTurnRequest{
+		Project: project, Chat: chat, Role: role, UserID: "owner-id", UserName: "owner",
+		UserMessage: "continue", ReplyRootID: "root-existing", SessionRootID: "root-existing",
+		SessionScope: agentSessionScopeThreadRole, TTLSeconds: 222,
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("EnqueueAgentTurn() error = %v", err)
+	}
+	if store.guardCalls != 2 || store.guardInputs[1].Operation != "agent_session.persist.side_effect" {
+		t.Fatalf("session persistence guard = %#v", store.guardInputs)
+	}
+	persisted := baseStore.agentSessions[sessionKey]
+	if persisted.TTLSeconds != 111 || persisted.Capabilities != `{"frozen":true}` {
+		t.Fatalf("revoked session persistence changed state: %#v", persisted)
+	}
+	if len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 || len(runner.sessionRuns) != 0 {
+		t.Fatalf("revoked session persistence caused side effects: turns=%#v runs=%#v runtime=%#v", baseStore.sessionTurns, baseStore.agentRuns, runner.sessionRuns)
+	}
+}
+
 func TestClusterAdminCommittedRevokeDeniesAuthCheckAndReauthSideEffects(t *testing.T) {
 	baseStore := chatRuntimeStore()
 	project := baseStore.projects[1]
@@ -301,6 +363,117 @@ func TestClusterAdminCommittedRevokeDeniesAuthCheckAndReauthSideEffects(t *testi
 	}
 }
 
+func TestClusterAdminCommittedRevokeSkipsReactionSecretAndPublish(t *testing.T) {
+	baseStore := chatRuntimeStore()
+	project := baseStore.projects[1]
+	role := entity.AgentRole{
+		ID: 1, ProjectID: project.ID, Name: "configured-admin", RoleType: "admin",
+		OpenAIAccountName: "main", KubernetesAccess: "cluster-admin", Enabled: true,
+	}
+	chat := entity.Chat{
+		ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Admin", Slug: "admin-chat", ChatType: "single_custom",
+	}
+	baseStore.agentRoles[role.ID] = role
+	baseStore.chats[chat.ID] = chat
+	baseStore.botIdentities = map[int64]entity.MattermostBotIdentity{
+		role.ID: {
+			RoleID: role.ID, ProjectID: project.ID, MattermostUserID: "synthetic-admin-user",
+			TokenSecretRef: "synthetic-admin-token", Status: "active",
+		},
+	}
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuard: true}
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"synthetic-admin-token": "synthetic-token"}}
+	publisher := &fakeThreadPublisher{}
+	svc := NewChatRunService(ChatRunServiceConfig{Store: store, RuntimeRunner: runner, ThreadPublisher: publisher})
+	sessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-revoked")
+	svc.addAgentStartReaction(
+		context.Background(),
+		ChatPostCommand{PostID: "post-revoked", RootPostID: "root-revoked"},
+		chat, role, sessionKey,
+	)
+	if store.calls != 1 || store.guardCalls != 1 || store.guardInputs[0].Operation != "agent_reaction.start.side_effect" {
+		t.Fatalf("reaction final guard = %#v", store.guardInputs)
+	}
+	if runner.botTokenSecretReads != 0 || len(publisher.reactionTokens) != 0 || len(publisher.reactions) != 0 {
+		t.Fatalf("revoked reaction side effects: secret_reads=%d tokens=%d reactions=%d", runner.botTokenSecretReads, len(publisher.reactionTokens), len(publisher.reactions))
+	}
+}
+
+func TestClusterAdminRepairRechecksAuthTokenRuntimeAndPersistenceCallbacks(t *testing.T) {
+	tests := []struct {
+		name             string
+		denyAt           int
+		wantAuthChecks   int
+		wantTokenReads   int
+		wantRuntimeCalls int
+		wantOperations   []string
+	}{
+		{name: "auth secret", denyAt: 1, wantOperations: []string{"agent_session.repair_auth.side_effect"}},
+		{name: "session token", denyAt: 2, wantAuthChecks: 1, wantOperations: []string{"agent_session.repair_auth.side_effect", "agent_session.token_read.side_effect"}},
+		{name: "runtime start", denyAt: 3, wantAuthChecks: 1, wantTokenReads: 1, wantOperations: []string{"agent_session.repair_auth.side_effect", "agent_session.token_read.side_effect", "agent_session.start.side_effect"}},
+		{name: "runtime persistence", denyAt: 4, wantAuthChecks: 1, wantTokenReads: 1, wantRuntimeCalls: 1, wantOperations: []string{"agent_session.repair_auth.side_effect", "agent_session.token_read.side_effect", "agent_session.start.side_effect", "agent_session.repair_persist.side_effect"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			baseStore := chatRuntimeStore()
+			project := baseStore.projects[1]
+			role := entity.AgentRole{
+				ID: 1, ProjectID: project.ID, Name: "configured-admin", RoleType: "admin",
+				OpenAIAccountName: "main", KubernetesAccess: "cluster-admin", Enabled: true,
+			}
+			chat := entity.Chat{
+				ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Admin", Slug: "admin-chat", ChatType: "single_custom",
+			}
+			sessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-repair")
+			baseStore.agentRoles[role.ID] = role
+			baseStore.chats[chat.ID] = chat
+			baseStore.setChatBindings(chat.ID, []int64{role.ID}, nil)
+			baseStore.agentSessions = map[string]entity.AgentSession{
+				sessionKey: {
+					ID: 1, SessionKey: sessionKey, ProjectID: project.ID, ChatID: chat.ID, RoleID: role.ID,
+					SessionScope: agentSessionScopeThreadRole, MattermostChannelID: chat.MattermostChannelID,
+					MattermostRootPostID: "root-repair", OpenAIAccountName: "main", Status: agentSessionStatusIdle,
+					PodName: "stale-pod", PVCName: "stale-pvc", TokenSecretRef: "session-secret",
+					TTLSeconds: defaultThreadSessionTTLSeconds,
+				},
+			}
+			baseStore.sessionTurns = []entity.AgentSessionTurn{
+				{ID: 1, SessionID: 1, RunID: "run-repair", Status: agentSessionTurnQueued, MattermostChannelID: chat.MattermostChannelID, MattermostRootPostID: "root-repair"},
+			}
+			store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: test.denyAt}
+			runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "synthetic-session-token"}}
+			svc := NewChatRunService(ChatRunServiceConfig{
+				Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+			})
+			result, err := svc.RepairAgentSessions(context.Background(), 10)
+			if err != nil {
+				t.Fatalf("RepairAgentSessions() error = %v", err)
+			}
+			if result.Failed != 1 || result.QueuedSessionsEnsured != 0 {
+				t.Fatalf("RepairAgentSessions() result = %#v", result)
+			}
+			if runner.authSecretChecks != test.wantAuthChecks || runner.botTokenSecretReads != test.wantTokenReads || len(runner.sessionRuns) != test.wantRuntimeCalls {
+				t.Fatalf(
+					"repair callbacks: auth=%d token=%d runtime=%d",
+					runner.authSecretChecks, runner.botTokenSecretReads, len(runner.sessionRuns),
+				)
+			}
+			if len(store.guardInputs) != len(test.wantOperations) {
+				t.Fatalf("repair guards = %#v", store.guardInputs)
+			}
+			for index, operation := range test.wantOperations {
+				if store.guardInputs[index].Operation != operation || store.guardInputs[index].SessionKey != sessionKey {
+					t.Fatalf("repair guard[%d] = %#v", index, store.guardInputs[index])
+				}
+			}
+			persisted := baseStore.agentSessions[sessionKey]
+			if test.denyAt == 4 && persisted.PodName != "stale-pod" {
+				t.Fatalf("revoked repair persisted runtime state: %#v", persisted)
+			}
+		})
+	}
+}
+
 func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testing.T) {
 	baseStore := chatRuntimeStore()
 	project := baseStore.projects[1]
@@ -324,7 +497,7 @@ func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testi
 			TokenSecretRef: "synthetic-session-token", TTLSeconds: defaultThreadSessionTTLSeconds,
 		},
 	}
-	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: 2}
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: 3}
 	runner := &fakeRuntimeRunner{}
 	svc := NewChatRunService(ChatRunServiceConfig{
 		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
@@ -336,7 +509,7 @@ func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testi
 	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
 		t.Fatalf("EnqueueAgentTurn() error = %v", err)
 	}
-	if store.guardCalls != 2 || store.guardInputs[1].Operation != "agent_turn.persist.side_effect" || store.guardInputs[1].SessionKey != sessionKey {
+	if store.guardCalls != 3 || store.guardInputs[2].Operation != "agent_turn.persist.side_effect" || store.guardInputs[2].SessionKey != sessionKey {
 		t.Fatalf("final guard = %#v", store.guardInputs)
 	}
 	if len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 || len(runner.sessionRuns) != 0 {

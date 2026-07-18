@@ -149,6 +149,10 @@ type ClusterAdminRuntimeGuardRepository interface {
 	WithExistingClusterAdminRuntimeGuard(ctx context.Context, input ClusterAdminBindingInput, sideEffect func() error) error
 }
 
+type ClusterAdminPersistenceGuardRepository interface {
+	WithExistingClusterAdminPersistenceGuard(ctx context.Context, input ClusterAdminBindingInput, sideEffect func() error) error
+}
+
 type SecretIntegrityBinding struct {
 	Kind            string
 	SecretRef       string

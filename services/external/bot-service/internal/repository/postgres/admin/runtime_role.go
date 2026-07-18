@@ -44,6 +44,14 @@ begin
 	if runtime_role_name = current_user then
 		raise exception 'runtime database role must differ from migration role' using errcode = 'invalid_authorization_specification';
 	end if;
+	if exists (
+		select 1
+		from pg_catalog.pg_roles runtime_role
+		join pg_catalog.pg_auth_members membership on membership.member = runtime_role.oid
+		where runtime_role.rolname = runtime_role_name
+	) then
+		raise exception 'runtime database role must not have role memberships' using errcode = 'invalid_authorization_specification';
+	end if;
 	if not exists (select 1 from pg_catalog.pg_roles where rolname = runtime_role_name) then
 		execute pg_catalog.format(
 			'create role %I login password %L nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls',
@@ -103,45 +111,26 @@ select
 	),
 	exists (
 		select 1
-		from pg_roles inherited
-		where inherited.rolname <> current_user
-			and pg_has_role(current_user, inherited.oid, 'MEMBER')
-			and (
-				inherited.rolsuper
-				or inherited.rolbypassrls
-				or inherited.rolcreaterole
-				or inherited.rolcreatedb
-				or inherited.rolreplication
-				or exists (
-					select 1 from pg_namespace namespace
-					where namespace.nspname = current_schema() and namespace.nspowner = inherited.oid
-				)
-				or exists (
-					select 1
-					from pg_class relation
-					join pg_namespace namespace on namespace.oid = relation.relnamespace
-					where namespace.nspname = current_schema()
-						and relation.relname like 'matter_codex_%'
-						and relation.relowner = inherited.oid
-				)
-			)
+		from pg_catalog.pg_roles assumable
+		where assumable.rolname <> current_user
+			and pg_catalog.pg_has_role(current_user, assumable.oid, 'MEMBER')
 	)
 from pg_roles role
 where role.rolname = current_user`
 	var (
-		roleName                                 string
-		superuser, bypassRLS                     bool
-		createRole, createDB, replication        bool
-		temporary, createSchema                  bool
-		ownsSchema, ownsRelation, dangerousGrant bool
+		roleName                                      string
+		superuser, bypassRLS                          bool
+		createRole, createDB, replication             bool
+		temporary, createSchema                       bool
+		ownsSchema, ownsRelation, assumableMembership bool
 	)
 	if err := pool.QueryRow(ctx, statement).Scan(
 		&roleName, &superuser, &bypassRLS, &createRole, &createDB, &replication,
-		&temporary, &createSchema, &ownsSchema, &ownsRelation, &dangerousGrant,
+		&temporary, &createSchema, &ownsSchema, &ownsRelation, &assumableMembership,
 	); err != nil {
 		return fmt.Errorf("inspect runtime database role: %w", err)
 	}
-	if superuser || bypassRLS || createRole || createDB || replication || temporary || createSchema || ownsSchema || ownsRelation || dangerousGrant {
+	if superuser || bypassRLS || createRole || createDB || replication || temporary || createSchema || ownsSchema || ownsRelation || assumableMembership {
 		return fmt.Errorf("runtime database role %q violates the least-privilege contract", roleName)
 	}
 	return nil

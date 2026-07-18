@@ -81,7 +81,7 @@ if [ -n "$EXISTING_POSTGRES_SECRET" ]; then
   fi
 else
   POSTGRES_PASSWORD="${MATTERCODEX_POSTGRES_PASSWORD:-$(mattercodex_generate_password)}"
-  POSTGRES_DSN="postgres://${MATTERCODEX_POSTGRES_USER}:${POSTGRES_PASSWORD}@mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local:5432/${MATTERCODEX_POSTGRES_DB}?sslmode=disable&connect_timeout=10"
+  POSTGRES_DSN="$(mattercodex_postgres_dsn "$MATTERCODEX_POSTGRES_USER" "$POSTGRES_PASSWORD" "mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local" "$MATTERCODEX_POSTGRES_DB")"
   POSTGRES_DB_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_DB" | base64 | tr -d '\n')"
   POSTGRES_USER_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_USER" | base64 | tr -d '\n')"
   POSTGRES_PASSWORD_B64="$(printf '%s' "$POSTGRES_PASSWORD" | base64 | tr -d '\n')"
@@ -89,7 +89,7 @@ else
 fi
 
 POSTGRES_RUNTIME_PASSWORD="${MATTERCODEX_POSTGRES_RUNTIME_PASSWORD:-$(mattercodex_generate_password)}"
-POSTGRES_RUNTIME_DSN="postgres://${MATTERCODEX_POSTGRES_RUNTIME_USER}:${POSTGRES_RUNTIME_PASSWORD}@mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local:5432/${MATTERCODEX_POSTGRES_DB}?sslmode=disable&connect_timeout=10"
+POSTGRES_RUNTIME_DSN="$(mattercodex_postgres_dsn "$MATTERCODEX_POSTGRES_RUNTIME_USER" "$POSTGRES_RUNTIME_PASSWORD" "mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local" "$MATTERCODEX_POSTGRES_DB")"
 POSTGRES_RUNTIME_USER_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_RUNTIME_USER" | base64 | tr -d '\n')"
 POSTGRES_RUNTIME_PASSWORD_B64="$(printf '%s' "$POSTGRES_RUNTIME_PASSWORD" | base64 | tr -d '\n')"
 POSTGRES_RUNTIME_DSN_B64="$(printf '%s' "$POSTGRES_RUNTIME_DSN" | base64 | tr -d '\n')"

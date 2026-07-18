@@ -324,6 +324,14 @@ func (repo *Repository) AdmitExistingClusterAdminBinding(ctx context.Context, in
 }
 
 func (repo *Repository) WithExistingClusterAdminRuntimeGuard(ctx context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
+	return repo.withExistingClusterAdminGuard(ctx, input, false, sideEffect)
+}
+
+func (repo *Repository) WithExistingClusterAdminPersistenceGuard(ctx context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
+	return repo.withExistingClusterAdminGuard(ctx, input, true, sideEffect)
+}
+
+func (repo *Repository) withExistingClusterAdminGuard(ctx context.Context, input securityrepo.ClusterAdminBindingInput, persistence bool, sideEffect func() error) error {
 	if sideEffect == nil {
 		return fmt.Errorf("cluster-admin runtime side effect is required")
 	}
@@ -336,6 +344,9 @@ func (repo *Repository) WithExistingClusterAdminRuntimeGuard(ctx context.Context
 	queryArgs := []any{input.RoleID, input.ProjectID, input.ChatID, input.ChatSlug, input.MattermostChannelID}
 	if strings.TrimSpace(input.SessionKey) != "" {
 		queryName = "cluster_admin_runtime_guard__lock_session.sql"
+		if persistence {
+			queryName = "cluster_admin_runtime_guard__lock_session_persistence.sql"
+		}
 		queryArgs = append(queryArgs, input.SessionKey)
 	}
 	var allowed bool

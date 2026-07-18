@@ -296,6 +296,31 @@ mattercodex_generate_password() {
   mattercodex_die "openssl нужен для генерации PostgreSQL password, если MATTERCODEX_POSTGRES_PASSWORD не задан"
 }
 
+mattercodex_validate_postgres_dsn() {
+  local dsn="${1:-}"
+  local postgres_dsn_pattern='^postgres://([^:/@?#]+):([^/@?#]+)@([[:alnum:].-]+):([0-9]+)/([^/?#]+)\?sslmode=disable&connect_timeout=10$'
+  if [[ ! "$dsn" =~ $postgres_dsn_pattern ]]; then
+    mattercodex_die "PostgreSQL DSN не прошёл безопасную синтаксическую проверку"
+  fi
+}
+
+mattercodex_postgres_dsn() {
+  local username="${1:-}"
+  local password="${2:-}"
+  local hostname="${3:-}"
+  local database="${4:-}"
+  if [ -z "$username" ] || [ -z "$password" ] || [ -z "$hostname" ] || [ -z "$database" ]; then
+    mattercodex_die "для PostgreSQL DSN обязательны user, password, host и database"
+  fi
+  local encoded_username encoded_password encoded_database dsn
+  encoded_username="$(jq -nr --arg value "$username" '$value | @uri')"
+  encoded_password="$(jq -nr --arg value "$password" '$value | @uri')"
+  encoded_database="$(jq -nr --arg value "$database" '$value | @uri')"
+  dsn="postgres://${encoded_username}:${encoded_password}@${hostname}:5432/${encoded_database}?sslmode=disable&connect_timeout=10"
+  mattercodex_validate_postgres_dsn "$dsn"
+  printf '%s\n' "$dsn"
+}
+
 mattercodex_generate_oauth2_cookie_secret() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -base64 24 | tr -d '\n'

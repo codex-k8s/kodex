@@ -1576,8 +1576,17 @@ declare
 	dependency record;
 	key_value text;
 	proposed_state jsonb;
+	existing_id bigint;
 begin
-	key_value := case when tg_op = 'INSERT' then new.id::text else old.id::text end;
+	if tg_op = 'INSERT' then
+		select repository.id
+		into existing_id
+		from matter_codex_repositories repository
+		where repository.provider = new.provider
+			and repository.owner = new.owner
+			and repository.name = new.name;
+	end if;
+	key_value := case when tg_op = 'INSERT' then coalesce(existing_id, new.id)::text else old.id::text end;
 	for dependency in
 		select role_id, privilege_state
 		from matter_codex_cluster_admin_dependencies
@@ -1590,7 +1599,7 @@ begin
 			continue;
 		end if;
 		proposed_state := matter_codex_cluster_admin_repository_state_values(
-			new.id, new.provider, new.owner, new.name, new.default_branch,
+			coalesce(existing_id, new.id), new.provider, new.owner, new.name, new.default_branch,
 			new.status, new.mattermost_channel, new.github_account_name
 		);
 		if dependency.privilege_state <> proposed_state
@@ -1620,8 +1629,16 @@ declare
 	key_value text;
 	proposed_state jsonb;
 	project_id_value bigint;
+	existing_id bigint;
 begin
-	key_value := case when tg_op = 'INSERT' then new.id::text else old.id::text end;
+	if tg_op = 'INSERT' then
+		select binding.id
+		into existing_id
+		from matter_codex_project_repositories binding
+		where binding.project_id = new.project_id
+			and binding.repository_id = new.repository_id;
+	end if;
+	key_value := case when tg_op = 'INSERT' then coalesce(existing_id, new.id)::text else old.id::text end;
 	project_id_value := case when tg_op = 'INSERT' then new.project_id else old.project_id end;
 	for dependency in
 		select frozen.role_id, frozen.privilege_state
@@ -1648,7 +1665,7 @@ begin
 			continue;
 		end if;
 		proposed_state := matter_codex_cluster_admin_project_repository_state_values(
-			new.id, new.project_id, new.repository_id, new.is_default, new.metadata
+			coalesce(existing_id, new.id), new.project_id, new.repository_id, new.is_default, new.metadata
 		);
 		if dependency.privilege_state is null
 			or dependency.privilege_state <> proposed_state
@@ -1678,8 +1695,30 @@ declare
 	key_value text;
 	proposed_state jsonb;
 	chat_id_value bigint;
+	existing_id bigint;
 begin
-	key_value := case when tg_op = 'INSERT' then new.id::text else old.id::text end;
+	if tg_op = 'INSERT' then
+		select binding.id
+		into existing_id
+		from matter_codex_chat_repositories binding
+		where binding.chat_id = new.chat_id
+			and binding.repository_id = new.repository_id;
+		if existing_id is null then
+			select frozen.resource_key::bigint
+			into existing_id
+			from matter_codex_cluster_admin_dependencies frozen
+			where frozen.resource_type = 'chat_repository'
+				and frozen.resource_key ~ '^[0-9]+$'
+				and frozen.privilege_state = matter_codex_cluster_admin_chat_repository_state_values(
+					frozen.resource_key::bigint, new.chat_id, new.repository_id
+				)
+			limit 1;
+			if existing_id is not null then
+				new.id := existing_id;
+			end if;
+		end if;
+	end if;
+	key_value := case when tg_op = 'INSERT' then coalesce(existing_id, new.id)::text else old.id::text end;
 	chat_id_value := case when tg_op = 'INSERT' then new.chat_id else old.chat_id end;
 	for dependency in
 		select frozen.role_id, frozen.privilege_state
@@ -1699,13 +1738,10 @@ begin
 			)
 	loop
 		if tg_op = 'DELETE' then
-			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
-			values ('dependency', dependency.role_id::text || ':chat_repository:' || key_value, 'binding deleted')
-			on conflict do nothing;
 			continue;
 		end if;
 		proposed_state := matter_codex_cluster_admin_chat_repository_state_values(
-			new.id, new.chat_id, new.repository_id
+			coalesce(existing_id, new.id), new.chat_id, new.repository_id
 		);
 		if dependency.privilege_state is null
 			or dependency.privilege_state <> proposed_state
@@ -1723,6 +1759,34 @@ begin
 	end loop;
 	if tg_op = 'DELETE' then return old; end if;
 	return new;
+end
+$$;
+
+create or replace function matter_codex_defer_cluster_admin_chat_repository_delete()
+returns trigger
+language plpgsql
+as $$
+declare
+	dependency record;
+begin
+	for dependency in
+		select frozen.role_id, frozen.privilege_state
+		from matter_codex_cluster_admin_dependencies frozen
+		where frozen.resource_type = 'chat_repository'
+			and frozen.resource_key = old.id::text
+	loop
+		if not exists (
+			select 1
+			from matter_codex_chat_repositories binding
+			where binding.id = old.id
+				and dependency.privilege_state = matter_codex_cluster_admin_chat_repository_state(binding.id)
+		) then
+			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+			values ('dependency', dependency.role_id::text || ':chat_repository:' || old.id::text, 'binding deleted')
+			on conflict do nothing;
+		end if;
+	end loop;
+	return old;
 end
 $$;
 
@@ -1783,26 +1847,62 @@ begin
 		perform matter_codex_cluster_admin_record_denied('chat_binding', key_value, 'participant.remap');
 		return null;
 	end if;
-	if tg_op = 'DELETE' or (tg_op = 'UPDATE' and old.enabled and not new.enabled) then
+	if tg_op = 'DELETE' then
+		return old;
+	end if;
+	if tg_op = 'UPDATE' and old.enabled and not new.enabled then
 		if exists (
 			select 1 from matter_codex_cluster_admin_bindings binding
 			where binding.role_id = old.role_id and binding.chat_id = old.chat_id
 		) then
 			insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
-			values ('chat_binding', key_value, case when tg_op = 'DELETE' then 'participant deleted' else 'participant disabled' end)
+			values ('chat_binding', key_value, 'participant disabled')
 			on conflict do nothing;
 		end if;
-		if tg_op = 'DELETE' then return old; end if;
 		return new;
 	end if;
 	if new.enabled and exists (
 		select 1 from matter_codex_cluster_admin_subjects subject
 		where subject.subject_type = 'agent_role' and subject.subject_key = new.role_id::text
-	) and not matter_codex_cluster_admin_binding_exact(new.role_id, new.chat_id) then
+	) and not matter_codex_cluster_admin_binding_exact(new.role_id, new.chat_id)
+	and not exists (
+		select 1
+		from matter_codex_cluster_admin_bindings binding
+		where binding.role_id = new.role_id
+			and binding.chat_id = new.chat_id
+			and not exists (
+				select 1 from matter_codex_cluster_admin_revocations revocation
+				where revocation.resource_type = 'chat_binding'
+					and revocation.resource_key = binding.role_id::text || ':' || binding.chat_id::text
+			)
+	) then
 		perform matter_codex_cluster_admin_record_denied('chat_binding', key_value, 'participant.mutation');
 		return null;
 	end if;
 	return new;
+end
+$$;
+
+create or replace function matter_codex_defer_cluster_admin_participant_delete()
+returns trigger
+language plpgsql
+as $$
+begin
+	if exists (
+		select 1 from matter_codex_cluster_admin_bindings binding
+		where binding.role_id = old.role_id and binding.chat_id = old.chat_id
+	) and not exists (
+		select 1
+		from matter_codex_chat_participants participant
+		where participant.role_id = old.role_id
+			and participant.chat_id = old.chat_id
+			and participant.enabled
+	) then
+		insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+		values ('chat_binding', old.role_id::text || ':' || old.chat_id::text, 'participant deleted')
+		on conflict do nothing;
+	end if;
+	return old;
 end
 $$;
 
@@ -1920,6 +2020,11 @@ create trigger matter_codex_cluster_admin_chat_repository_guard
 before insert or update or delete on matter_codex_chat_repositories
 for each row execute function matter_codex_guard_cluster_admin_chat_repository();
 
+create constraint trigger matter_codex_cluster_admin_chat_repository_delete_guard
+after delete on matter_codex_chat_repositories
+deferrable initially deferred
+for each row execute function matter_codex_defer_cluster_admin_chat_repository_delete();
+
 create trigger matter_codex_cluster_admin_chat_guard
 before update or delete on matter_codex_chats
 for each row execute function matter_codex_guard_cluster_admin_chat();
@@ -1927,6 +2032,11 @@ for each row execute function matter_codex_guard_cluster_admin_chat();
 create trigger matter_codex_cluster_admin_participant_guard
 before insert or update or delete on matter_codex_chat_participants
 for each row execute function matter_codex_guard_cluster_admin_participant();
+
+create constraint trigger matter_codex_cluster_admin_participant_delete_guard
+after delete on matter_codex_chat_participants
+deferrable initially deferred
+for each row execute function matter_codex_defer_cluster_admin_participant_delete();
 
 create trigger matter_codex_cluster_admin_session_guard
 before insert or update or delete on matter_codex_agent_sessions
