@@ -1382,6 +1382,24 @@ func (svc *ChatRunService) threadContextRepositories(ctx context.Context, projec
 	if err != nil {
 		return entity.ThreadContext{}, nil, false, err
 	}
+	sessions, err := svc.cfg.Store.ListAgentSessionsByThread(ctx, chat.ID, rootPostID)
+	if err != nil {
+		return entity.ThreadContext{}, nil, false, err
+	}
+	if len(sessions) > 0 {
+		threadContext, _, err = svc.cfg.Store.UpsertThreadContext(ctx, adminrepo.UpsertThreadContextInput{
+			ProjectID:            project.ID,
+			ChatID:               chat.ID,
+			MattermostChannelID:  chat.MattermostChannelID,
+			MattermostRootPostID: rootPostID,
+			RepositoryID:         existingThreadRepositoryID(sessions, repositories),
+			Status:               threadContextStatusConfigured,
+		})
+		if err != nil {
+			return entity.ThreadContext{}, nil, false, err
+		}
+		return threadContext, threadContextRepository(threadContext), true, nil
+	}
 	if len(repositories) == 0 {
 		threadContext, _, err = svc.cfg.Store.UpsertThreadContext(ctx, adminrepo.UpsertThreadContextInput{
 			ProjectID:            project.ID,
@@ -1453,6 +1471,36 @@ func (svc *ChatRunService) threadRepositoryOptions(ctx context.Context, chat ent
 		return repositories, nil
 	}
 	return svc.cfg.Store.ListProjectRepositories(ctx, chat.ProjectID)
+}
+
+func existingThreadRepositoryID(sessions []entity.AgentSession, repositories []entity.ProjectRepository) int64 {
+	var repositoryID int64
+	for _, session := range sessions {
+		var capabilities struct {
+			Repositories []struct {
+				Provider string `json:"provider"`
+				Owner    string `json:"owner"`
+				Name     string `json:"name"`
+			} `json:"repositories"`
+		}
+		if json.Unmarshal([]byte(session.Capabilities), &capabilities) != nil || len(capabilities.Repositories) == 0 {
+			continue
+		}
+		saved := capabilities.Repositories[0]
+		for _, repository := range repositories {
+			if !strings.EqualFold(strings.TrimSpace(repository.Provider), strings.TrimSpace(saved.Provider)) ||
+				!strings.EqualFold(strings.TrimSpace(repository.Owner), strings.TrimSpace(saved.Owner)) ||
+				!strings.EqualFold(strings.TrimSpace(repository.Name), strings.TrimSpace(saved.Name)) {
+				continue
+			}
+			if repositoryID != 0 && repositoryID != repository.RepositoryID {
+				return 0
+			}
+			repositoryID = repository.RepositoryID
+			break
+		}
+	}
+	return repositoryID
 }
 
 func threadContextRepository(threadContext entity.ThreadContext) []entity.ProjectRepository {
