@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ type sessionBarrierStore struct {
 	adminrepo.Repository
 	adminrepo.CoordinationRepository
 	guardCalls   int
+	sessionReads int
 	guardInputs  []securityrepo.ClusterAdminBindingInput
 	denyAt       int
 	requireGuard bool
@@ -29,6 +31,7 @@ type sessionBarrierStore struct {
 }
 
 func (store *sessionBarrierStore) GetAgentSession(_ context.Context, sessionKey string) (entity.AgentSession, error) {
+	store.sessionReads++
 	if sessionKey != store.session.SessionKey {
 		return entity.AgentSession{}, adminrepo.ErrNotFound
 	}
@@ -240,7 +243,7 @@ func TestInternalAgentSessionProductionTransportBarrierMatrix(t *testing.T) {
 
 func TestMCPSessionRevocationBarrierPreventsPublishAndSystemFallback(t *testing.T) {
 	service, store, runner, publisher := newSessionBarrierService(2)
-	server := httptest.NewServer(newMCPHandler(service))
+	server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
 	defer server.Close()
 	client := mcp.NewClient(&mcp.Implementation{Name: "barrier-test", Version: "1"}, nil)
 	transport := &mcp.StreamableClientTransport{
@@ -292,7 +295,7 @@ func TestMCPSessionProductionTransportBarrierMatrix(t *testing.T) {
 		for _, test := range tests {
 			t.Run(test.name+" boundary "+string(rune('0'+boundary)), func(t *testing.T) {
 				service, store, runner, publisher := newSessionBarrierService(boundary)
-				server := httptest.NewServer(newMCPHandler(service))
+				server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
 				defer server.Close()
 				client := mcp.NewClient(&mcp.Implementation{Name: "barrier-matrix", Version: "1"}, nil)
 				transport := &mcp.StreamableClientTransport{
@@ -314,6 +317,42 @@ func TestMCPSessionProductionTransportBarrierMatrix(t *testing.T) {
 				assertSessionTransportBarrier(t, store, runner, publisher, boundary)
 			})
 		}
+	}
+}
+
+func TestMCPStartAgentThreadRejectsLongTitleBeforeDomainReads(t *testing.T) {
+	service, store, runner, publisher := newSessionBarrierService(0)
+	server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
+	defer server.Close()
+	client := mcp.NewClient(&mcp.Implementation{Name: "delegation-input-boundary", Version: "1"}, nil)
+	session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
+		Endpoint:   server.URL + "/mcp/sessions/session-admin",
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: "session-token"}},
+	}, nil)
+	if err != nil {
+		t.Fatalf("MCP connect: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+	store.sessionReads = 0
+	store.guardCalls = 0
+	runner.secretReads = 0
+	runner.integrityReads = 0
+	publisher.posts = 0
+
+	for attempt := 0; attempt < 2; attempt++ {
+		result, callErr := session.CallTool(context.Background(), &mcp.CallToolParams{
+			Name: "mattermost_start_agent_thread",
+			Arguments: map[string]any{
+				"target_chat": "admin-chat", "target_agent": "worker",
+				"title": strings.Repeat("я", 257), "message": "Допустимое сообщение.", "work_item_key": "issue-71-title",
+			},
+		})
+		if callErr != nil || result == nil || !result.IsError {
+			t.Fatalf("attempt %d result=%#v error=%v", attempt+1, result, callErr)
+		}
+	}
+	if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || runner.integrityReads != 0 || publisher.posts != 0 {
+		t.Fatalf("effects session_reads=%d guards=%d secret_reads=%d integrity_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, runner.integrityReads, publisher.posts)
 	}
 }
 
@@ -349,7 +388,7 @@ func TestSessionProductionTransportAllowedControls(t *testing.T) {
 			if !test.requireGuard {
 				store.role.KubernetesAccess = "read-only"
 			}
-			server := httptest.NewServer(newMCPHandler(service))
+			server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
 			defer server.Close()
 			client := mcp.NewClient(&mcp.Implementation{Name: "allowed-control", Version: "1"}, nil)
 			session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{

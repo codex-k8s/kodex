@@ -1,6 +1,7 @@
 package app
 
 import (
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -112,6 +113,23 @@ func TestConfigDefaults(t *testing.T) {
 	}
 	if !cfg.InteractionCleanupEnabled || cfg.InteractionCleanupInterval != 30*time.Minute || cfg.InteractionCleanupRetention != 168*time.Hour || cfg.InteractionCleanupBatch != 500 {
 		t.Fatalf("interaction cleanup defaults = enabled:%t interval:%s retention:%s batch:%d", cfg.InteractionCleanupEnabled, cfg.InteractionCleanupInterval, cfg.InteractionCleanupRetention, cfg.InteractionCleanupBatch)
+	}
+	if cfg.ReadHeaderTimeout != 5*time.Second || cfg.ReadTimeout != 10*time.Second || cfg.IdleTimeout != time.Minute || cfg.MaxHeaderBytes != 1024*1024 || cfg.MaxMCPRequestBodyBytes != 1024*1024 {
+		t.Fatalf("HTTP boundary defaults = header:%s read:%s idle:%s max_header:%d max_mcp:%d", cfg.ReadHeaderTimeout, cfg.ReadTimeout, cfg.IdleTimeout, cfg.MaxHeaderBytes, cfg.MaxMCPRequestBodyBytes)
+	}
+}
+
+func TestHTTPServerUsesBoundedReadAndConnectionSettings(t *testing.T) {
+	cfg := Config{
+		HTTPAddr:          ":9090",
+		ReadHeaderTimeout: 2 * time.Second,
+		ReadTimeout:       7 * time.Second,
+		IdleTimeout:       45 * time.Second,
+		MaxHeaderBytes:    64 * 1024,
+	}
+	server := newHTTPServer(cfg, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	if server.Addr != cfg.HTTPAddr || server.ReadHeaderTimeout != cfg.ReadHeaderTimeout || server.ReadTimeout != cfg.ReadTimeout || server.IdleTimeout != cfg.IdleTimeout || server.MaxHeaderBytes != cfg.MaxHeaderBytes {
+		t.Fatalf("server bounds = addr:%s header:%s read:%s idle:%s max_header:%d", server.Addr, server.ReadHeaderTimeout, server.ReadTimeout, server.IdleTimeout, server.MaxHeaderBytes)
 	}
 }
 

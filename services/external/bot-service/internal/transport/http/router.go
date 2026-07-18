@@ -55,23 +55,24 @@ type DialogOpener interface {
 }
 
 type RouterConfig struct {
-	StatusService         *statusservice.StatusService
-	SlashService          *statusservice.SlashCommandService
-	SessionService        *statusservice.AgentSessionService
-	DialogOpener          DialogOpener
-	InteractionSecurity   *statusservice.InteractionSecurityService
-	Localizer             *texti18n.Localizer
-	SlashToken            string
-	GitHubWebhookSecret   string
-	MaxSlashFormBytes     int64
-	MaxGitHubWebhookBytes int64
-	PrometheusRegistry    *prometheus.Registry
-	MattermostSiteURL     string
-	MattermostInternalURL string
-	ThreadPublisher       statusservice.MattermostThreadPublisher
-	MattermostResolver    mattermostDNSResolver
-	MattermostDialer      mattermostContextDialer
-	Logger                *slog.Logger
+	StatusService          *statusservice.StatusService
+	SlashService           *statusservice.SlashCommandService
+	SessionService         *statusservice.AgentSessionService
+	DialogOpener           DialogOpener
+	InteractionSecurity    *statusservice.InteractionSecurityService
+	Localizer              *texti18n.Localizer
+	SlashToken             string
+	GitHubWebhookSecret    string
+	MaxSlashFormBytes      int64
+	MaxGitHubWebhookBytes  int64
+	MaxMCPRequestBodyBytes int64
+	PrometheusRegistry     *prometheus.Registry
+	MattermostSiteURL      string
+	MattermostInternalURL  string
+	ThreadPublisher        statusservice.MattermostThreadPublisher
+	MattermostResolver     mattermostDNSResolver
+	MattermostDialer       mattermostContextDialer
+	Logger                 *slog.Logger
 }
 
 type Router struct {
@@ -113,7 +114,7 @@ func NewRouter(cfg RouterConfig) *Router {
 		mux:                   http.NewServeMux(),
 	}
 	if cfg.SessionService != nil {
-		router.mcpHandler = newMCPHandler(cfg.SessionService)
+		router.mcpHandler = newMCPHandler(cfg.SessionService, cfg.MaxMCPRequestBodyBytes)
 	}
 	registry := cfg.PrometheusRegistry
 	if registry == nil {

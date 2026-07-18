@@ -171,6 +171,58 @@ func TestAgentSessionCrossChatDelegationRequiresTargetParticipant(t *testing.T) 
 	}
 }
 
+func TestStartAgentThreadRejectsUserControlledBoundsBeforeStorage(t *testing.T) {
+	valid := StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Границы",
+		Message: "Допустимое сообщение.", WorkItemKey: "issue-71-bounds",
+	}
+	tests := []struct {
+		name   string
+		mutate func(*StartAgentThreadCommand)
+		want   string
+	}{
+		{name: "target chat bytes", mutate: func(command *StartAgentThreadCommand) {
+			command.TargetChat = strings.Repeat("x", delegationTargetMaxBytes+1)
+		}, want: "target chat exceeds"},
+		{name: "target agent runes", mutate: func(command *StartAgentThreadCommand) {
+			command.TargetAgent = strings.Repeat("x", delegationTargetMaxRunes+1)
+		}, want: "target agent exceeds"},
+		{name: "title bytes", mutate: func(command *StartAgentThreadCommand) {
+			command.Title = strings.Repeat("я", delegationTitleMaxBytes/2+1)
+		}, want: "title exceeds"},
+		{name: "title runes", mutate: func(command *StartAgentThreadCommand) { command.Title = strings.Repeat("x", delegationTitleMaxRunes+1) }, want: "title exceeds"},
+		{name: "message bytes", mutate: func(command *StartAgentThreadCommand) {
+			command.Message = strings.Repeat("я", defaultCallbackMaxBytes/2+1)
+		}, want: "message exceeds"},
+		{name: "work key newline", mutate: func(command *StartAgentThreadCommand) { command.WorkItemKey = "issue-71\nsecond" }, want: "single line"},
+		{name: "invalid utf8", mutate: func(command *StartAgentThreadCommand) { command.Message = string([]byte{0xff}) }, want: "valid UTF-8"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			command := valid
+			test.mutate(&command)
+			svc := NewAgentSessionService(AgentSessionServiceConfig{})
+			for attempt := 0; attempt < 2; attempt++ {
+				if _, err := svc.StartAgentThread(context.Background(), "must-not-read", "must-not-read", command); err == nil || !strings.Contains(err.Error(), test.want) {
+					t.Fatalf("attempt %d error = %v", attempt+1, err)
+				}
+			}
+		})
+	}
+}
+
+func TestStartAgentThreadAcceptsValidNearBoundaryMetadata(t *testing.T) {
+	svc, _, dispatcher, _ := agentDelegationTestService()
+	result, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect",
+		Title: strings.Repeat("я", delegationTitleMaxRunes), Message: strings.Repeat("я", 1024),
+		WorkItemKey: strings.Repeat("w", delegationWorkKeyMaxRunes),
+	})
+	if err != nil || result.TargetRunID != "target-run" || dispatcher.calls != 1 {
+		t.Fatalf("result=%#v error=%v dispatcher calls=%d", result, err, dispatcher.calls)
+	}
+}
+
 func TestAgentSessionReturnsCrossChatResultToImmediateRequester(t *testing.T) {
 	svc, store, dispatcher, publisher := agentDelegationTestService()
 	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
@@ -268,6 +320,31 @@ func TestReturnToRequesterRejectsConcurrencyBeforeStorage(t *testing.T) {
 	defer release()
 	if _, err := svc.ReturnToRequester(context.Background(), "not-read", "not-read", "второй callback"); err == nil || !strings.Contains(err.Error(), "concurrency") {
 		t.Fatalf("ReturnToRequester() error = %v", err)
+	}
+}
+
+func TestReturnToRequesterPreflightsStoredTitleBeforeDurableEffects(t *testing.T) {
+	svc, store, dispatcher, publisher := delegationReturnBarrierFixture()
+	delegation := store.agentDelegations[1]
+	delegation.Title = strings.Repeat("я", delegationTitleMaxBytes/2+1)
+	store.agentDelegations[1] = delegation
+
+	for attempt := 0; attempt < 2; attempt++ {
+		if _, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", "Допустимый callback."); err == nil || !strings.Contains(err.Error(), "title exceeds") {
+			t.Fatalf("attempt %d error = %v", attempt+1, err)
+		}
+		turn, turnErr := store.GetAgentSessionTurn(context.Background(), 3)
+		current := store.agentDelegations[1]
+		if turnErr != nil || turn.Message != "Исходная очередь" || current.CallbackTurnID != 0 || current.CallbackRunID != "" || dispatcher.calls != 0 || len(publisher.posts) != 0 {
+			t.Fatalf("attempt %d durable effects: turn=%#v delegation=%#v dispatch=%d posts=%d error=%v", attempt+1, turn, current, dispatcher.calls, len(publisher.posts), turnErr)
+		}
+	}
+
+	delegation.Title = strings.Repeat("я", delegationTitleMaxRunes)
+	store.agentDelegations[1] = delegation
+	result, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", "Допустимый callback.")
+	if err != nil || result.CallbackRunID != "callback-run" || dispatcher.calls != 0 || len(publisher.posts) != 2 {
+		t.Fatalf("corrected retry result=%#v error=%v dispatch=%d posts=%d", result, err, dispatcher.calls, len(publisher.posts))
 	}
 }
 

@@ -56,9 +56,13 @@ type Config struct {
 	CodexAuthSecretName                 string        `env:"MATTERCODEX_CODEX_AUTH_SECRET" envDefault:"matter-codex-codex-auth"`
 	StorageMigrations                   bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
 	ReadHeaderTimeout                   time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
+	ReadTimeout                         time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_TIMEOUT" envDefault:"10s"`
+	IdleTimeout                         time.Duration `env:"MATTERCODEX_BOT_SERVICE_IDLE_TIMEOUT" envDefault:"60s"`
+	MaxHeaderBytes                      int           `env:"MATTERCODEX_BOT_SERVICE_MAX_HEADER_BYTES" envDefault:"1048576"`
 	ShutdownTimeout                     time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
 	MaxSlashFormBytes                   int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_SLASH_FORM_BYTES" envDefault:"65536"`
 	MaxGitHubWebhookBytes               int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES" envDefault:"262144"`
+	MaxMCPRequestBodyBytes              int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_MCP_REQUEST_BODY_BYTES" envDefault:"1048576"`
 	InteractionCleanupEnabled           bool          `env:"MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_ENABLED" envDefault:"true"`
 	InteractionCleanupInterval          time.Duration `env:"MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_INTERVAL" envDefault:"30m"`
 	InteractionCleanupRetention         time.Duration `env:"MATTERCODEX_INTERACTION_CAPABILITY_RETENTION" envDefault:"168h"`
@@ -91,8 +95,17 @@ func (cfg *Config) Validate() error {
 	if strings.TrimSpace(cfg.HTTPAddr) == "" {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_HTTP_ADDR is required")
 	}
-	if cfg.ReadHeaderTimeout <= 0 {
+	if cfg.ReadHeaderTimeout <= 0 || cfg.ReadHeaderTimeout > 30*time.Second {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT is invalid")
+	}
+	if cfg.ReadTimeout < cfg.ReadHeaderTimeout || cfg.ReadTimeout > time.Minute {
+		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_READ_TIMEOUT is invalid")
+	}
+	if cfg.IdleTimeout <= 0 || cfg.IdleTimeout > 5*time.Minute {
+		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_IDLE_TIMEOUT is invalid")
+	}
+	if cfg.MaxHeaderBytes < 1024 || cfg.MaxHeaderBytes > 1024*1024 {
+		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_MAX_HEADER_BYTES is invalid")
 	}
 	if cfg.ShutdownTimeout <= 0 {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT is invalid")
@@ -102,6 +115,9 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.MaxGitHubWebhookBytes <= 0 {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES is invalid")
+	}
+	if cfg.MaxMCPRequestBodyBytes <= 0 || cfg.MaxMCPRequestBodyBytes > 2*1024*1024 {
+		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_MAX_MCP_REQUEST_BODY_BYTES is invalid")
 	}
 	if cfg.MattermostHTTPTimeout <= 0 || cfg.MattermostHTTPTimeout > 15*time.Second {
 		return fmt.Errorf("MATTERCODEX_MATTERMOST_HTTP_TIMEOUT is invalid")
@@ -120,6 +136,9 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.CallbackMaxBytes <= 0 || cfg.CallbackMaxBytes > 256*1024 {
 		return fmt.Errorf("MATTERCODEX_CALLBACK_MAX_BYTES is invalid")
+	}
+	if cfg.MaxMCPRequestBodyBytes < int64(cfg.CallbackMaxBytes*6+16*1024) {
+		return fmt.Errorf("MCP request body and callback byte limits are inconsistent")
 	}
 	if cfg.CallbackMaxChunks < 2 || cfg.CallbackMaxChunks > 16 {
 		return fmt.Errorf("MATTERCODEX_CALLBACK_MAX_CHUNKS is invalid")
@@ -239,6 +258,18 @@ func (cfg *Config) Validate() error {
 }
 
 func (cfg *Config) applyPublishDefaults() {
+	if cfg.ReadTimeout == 0 {
+		cfg.ReadTimeout = 10 * time.Second
+	}
+	if cfg.IdleTimeout == 0 {
+		cfg.IdleTimeout = time.Minute
+	}
+	if cfg.MaxHeaderBytes == 0 {
+		cfg.MaxHeaderBytes = 1024 * 1024
+	}
+	if cfg.MaxMCPRequestBodyBytes == 0 {
+		cfg.MaxMCPRequestBodyBytes = 1024 * 1024
+	}
 	if cfg.MattermostHTTPTimeout == 0 {
 		cfg.MattermostHTTPTimeout = 5 * time.Second
 	}

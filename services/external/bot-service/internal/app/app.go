@@ -144,27 +144,24 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
-		StatusService:         statusSvc,
-		SlashService:          slashSvc,
-		SessionService:        sessionSvc,
-		DialogOpener:          dialogOpener,
-		InteractionSecurity:   interactionSecurity,
-		Localizer:             localizer,
-		SlashToken:            cfg.MattermostSlashToken,
-		GitHubWebhookSecret:   cfg.GitHubWebhookSecret,
-		MaxSlashFormBytes:     cfg.MaxSlashFormBytes,
-		MaxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
-		PrometheusRegistry:    newPrometheusRegistry(),
-		MattermostSiteURL:     cfg.MattermostSiteURL,
-		MattermostInternalURL: cfg.MattermostInternalURL,
-		ThreadPublisher:       threadPublisher,
-		Logger:                logger,
+		StatusService:          statusSvc,
+		SlashService:           slashSvc,
+		SessionService:         sessionSvc,
+		DialogOpener:           dialogOpener,
+		InteractionSecurity:    interactionSecurity,
+		Localizer:              localizer,
+		SlashToken:             cfg.MattermostSlashToken,
+		GitHubWebhookSecret:    cfg.GitHubWebhookSecret,
+		MaxSlashFormBytes:      cfg.MaxSlashFormBytes,
+		MaxGitHubWebhookBytes:  cfg.MaxGitHubWebhookBytes,
+		MaxMCPRequestBodyBytes: cfg.MaxMCPRequestBodyBytes,
+		PrometheusRegistry:     newPrometheusRegistry(),
+		MattermostSiteURL:      cfg.MattermostSiteURL,
+		MattermostInternalURL:  cfg.MattermostInternalURL,
+		ThreadPublisher:        threadPublisher,
+		Logger:                 logger,
 	})
-	server := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           router,
-		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
-	}
+	server := newHTTPServer(cfg, router)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -209,6 +206,17 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return server.Shutdown(shutdownCtx)
 	case err := <-errCh:
 		return err
+	}
+}
+
+func newHTTPServer(cfg Config, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           handler,
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		ReadTimeout:       cfg.ReadTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+		MaxHeaderBytes:    cfg.MaxHeaderBytes,
 	}
 }
 

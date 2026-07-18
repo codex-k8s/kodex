@@ -21,6 +21,7 @@ import (
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	postgresrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/testsupport"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -1954,9 +1955,13 @@ func testInteractionResourceScopeAdmission(t *testing.T, ctx context.Context, re
 
 func testCapabilityCleanupRetention(t *testing.T, ctx context.Context, pool *pgxpool.Pool, repository *postgresrepo.Repository, now time.Time) {
 	t.Helper()
+	hashes := map[string][]byte{}
+	contextHashes := map[string][]byte{}
 	insert := func(label string, status string, issuedAt time.Time, expiresAt time.Time, consumedAt any) {
 		hash := sha256.Sum256([]byte("cleanup-" + label))
 		contextHash := sha256.Sum256([]byte("cleanup-context-" + label))
+		hashes[label] = append([]byte(nil), hash[:]...)
+		contextHashes[label] = append([]byte(nil), contextHash[:]...)
 		if _, err := pool.Exec(ctx, `
 			insert into matter_codex_interaction_capabilities(
 				token_hash, kind, operation, channel_id, post_binding, actor_user_id,
@@ -1970,24 +1975,58 @@ func testCapabilityCleanupRetention(t *testing.T, ctx context.Context, pool *pgx
 	insert("old-unused", "unused", now.Add(-72*time.Hour), now.Add(-70*time.Hour), nil)
 	insert("old-consumed", "consumed", now.Add(-72*time.Hour), now.Add(-69*time.Hour), now.Add(-71*time.Hour))
 	insert("old-revoked", "revoked", now.Add(-72*time.Hour), now.Add(-68*time.Hour), nil)
-	insert("grace", "unused", now.Add(-3*time.Hour), now.Add(-2*time.Hour), nil)
-	insert("valid", "unused", now.Add(-time.Hour), now.Add(time.Hour), nil)
+	insert("old-pending", "pending", now.Add(-72*time.Hour), now.Add(-67*time.Hour), nil)
+	insert("pending-in-grace", "pending", now.Add(-30*time.Hour), now.Add(-23*time.Hour), nil)
+	insert("pending-at-boundary", "pending", now.Add(-30*time.Hour), now.Add(-24*time.Hour), nil)
+	insert("unused-in-grace", "unused", now.Add(-3*time.Hour), now.Add(-2*time.Hour), nil)
+	insert("active-unused", "unused", now.Add(-time.Hour), now.Add(time.Hour), nil)
 
-	deleted, err := repository.CleanupInteractionCapabilities(ctx, securityrepo.CapabilityCleanupInput{DeleteBefore: now.Add(-24 * time.Hour), Limit: 2})
-	if err != nil || deleted != 2 {
+	deleteBefore := now.Add(-24 * time.Hour)
+	deleted, err := repository.CleanupInteractionCapabilities(ctx, securityrepo.CapabilityCleanupInput{DeleteBefore: deleteBefore, Limit: 3})
+	if err != nil || deleted != 3 {
 		t.Fatalf("первый bounded cleanup: deleted=%d error=%v", deleted, err)
 	}
-	deleted, err = repository.CleanupInteractionCapabilities(ctx, securityrepo.CapabilityCleanupInput{DeleteBefore: now.Add(-24 * time.Hour), Limit: 2})
+	deleted, err = repository.CleanupInteractionCapabilities(ctx, securityrepo.CapabilityCleanupInput{DeleteBefore: deleteBefore, Limit: 3})
 	if err != nil || deleted != 1 {
 		t.Fatalf("второй bounded cleanup: deleted=%d error=%v", deleted, err)
 	}
-	deleted, err = repository.CleanupInteractionCapabilities(ctx, securityrepo.CapabilityCleanupInput{DeleteBefore: now.Add(-24 * time.Hour), Limit: 2})
+	deleted, err = repository.CleanupInteractionCapabilities(ctx, securityrepo.CapabilityCleanupInput{DeleteBefore: deleteBefore, Limit: 3})
 	if err != nil || deleted != 0 {
 		t.Fatalf("идемпотентный cleanup: deleted=%d error=%v", deleted, err)
 	}
-	var survivors int
-	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_interaction_capabilities where operation = 'action;kind=agents_menu;view=main' and expires_at >= $1`, now.Add(-24*time.Hour)).Scan(&survivors); err != nil || survivors != 2 {
-		t.Fatalf("cleanup удалил действующие/grace rows: survivors=%d error=%v", survivors, err)
+	for _, label := range []string{"old-unused", "old-consumed", "old-revoked", "old-pending"} {
+		var exists bool
+		if err := pool.QueryRow(ctx, `select exists(select 1 from matter_codex_interaction_capabilities where token_hash = $1)`, hashes[label]).Scan(&exists); err != nil || exists {
+			t.Fatalf("cleanup сохранил stale %s: exists=%t error=%v", label, exists, err)
+		}
+	}
+	for _, label := range []string{"pending-in-grace", "pending-at-boundary", "unused-in-grace", "active-unused"} {
+		var status string
+		var expiresAt time.Time
+		if err := pool.QueryRow(ctx, `select status, expires_at from matter_codex_interaction_capabilities where token_hash = $1`, hashes[label]).Scan(&status, &expiresAt); err != nil {
+			t.Fatalf("cleanup преждевременно удалил %s: %v", label, err)
+		}
+		if (strings.HasPrefix(label, "pending-") && status != "pending") ||
+			(strings.HasPrefix(label, "unused-") && status != "unused") ||
+			(label == "active-unused" && status != "unused") {
+			t.Fatalf("cleanup изменил status %s: %q", label, status)
+		}
+		if label == "pending-at-boundary" && (expiresAt.Sub(deleteBefore) > time.Microsecond || deleteBefore.Sub(expiresAt) > time.Microsecond) {
+			t.Fatalf("точная boundary-time семантика потеряна: expires_at=%s delete_before=%s", expiresAt, deleteBefore)
+		}
+	}
+	activeCheck := securityrepo.ConsumeCapabilityInput{
+		TokenHash: hashes["active-unused"], Kind: "action", Operation: "action;kind=agents_menu;view=main",
+		ChannelID: "channel-1", PostBinding: "post-1", ActorUserID: "owner-id", ContextHash: contextHashes["active-unused"], Now: now,
+	}
+	if _, err := repository.CheckInteractionCapability(ctx, activeCheck); err != nil {
+		t.Fatalf("cleanup повредил активную unused capability: %v", err)
+	}
+	pendingCheck := activeCheck
+	pendingCheck.TokenHash = hashes["pending-in-grace"]
+	pendingCheck.ContextHash = contextHashes["pending-in-grace"]
+	if _, err := repository.CheckInteractionCapability(ctx, pendingCheck); !errors.Is(err, securityrepo.ErrCapabilityExpired) {
+		t.Fatalf("expired pending внутри retention grace стала пригодной: %v", err)
 	}
 }
 
@@ -2125,55 +2164,12 @@ func testAtomicRoleDeleteBarrier(t *testing.T, ctx context.Context, dsn string, 
 
 func requiredMigrationDSN(t *testing.T) string {
 	t.Helper()
-	dsn := strings.TrimSpace(os.Getenv("MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN"))
-	if dsn != "" {
-		return dsn
-	}
-	if os.Getenv("MATTERCODEX_POSTGRES_TEST_REQUIRED") == "1" {
-		t.Fatal("MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN обязателен в required-режиме PostgreSQL-тестов")
-	}
-	t.Skip("MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN не задан")
-	return ""
+	return testsupport.RequiredDSN(t)
 }
 
 func isolatedMigrationDSN(t *testing.T, label string) string {
 	t.Helper()
-	baseDSN := requiredMigrationDSN(t)
-	schema := "mc_migration_" + label + "_" + strconv.FormatInt(time.Now().UTC().UnixNano(), 36) + "_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	pool := openMigrationPool(t, ctx, baseDSN)
-	identifier := pgx.Identifier{schema}.Sanitize()
-	if _, err := pool.Exec(ctx, "create schema "+identifier); err != nil {
-		pool.Close()
-		t.Fatalf("создание изолированной схемы PostgreSQL: %v", err)
-	}
-	pool.Close()
-	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cleanupCancel()
-		cleanupPool := openMigrationPool(t, cleanupCtx, baseDSN)
-		defer cleanupPool.Close()
-		if _, err := cleanupPool.Exec(cleanupCtx, "drop schema "+identifier+" cascade"); err != nil {
-			t.Errorf("очистка схемы PostgreSQL: %v", err)
-		}
-	})
-	return migrationDSNWithSearchPath(t, baseDSN, schema)
-}
-
-func migrationDSNWithSearchPath(t *testing.T, dsn string, schema string) string {
-	t.Helper()
-	parsed, err := url.Parse(dsn)
-	if err == nil && (parsed.Scheme == "postgres" || parsed.Scheme == "postgresql") {
-		query := parsed.Query()
-		query.Set("search_path", schema)
-		parsed.RawQuery = query.Encode()
-		return parsed.String()
-	}
-	if strings.ContainsAny(schema, " '=") {
-		t.Fatal("небезопасное имя тестовой схемы")
-	}
-	return strings.TrimSpace(dsn) + " search_path=" + schema
+	return testsupport.IsolatedSchemaDSN(t, "migration_"+label)
 }
 
 func migrationDSNForRole(t *testing.T, dsn string, roleName string, password string) string {

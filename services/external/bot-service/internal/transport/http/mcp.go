@@ -1,7 +1,11 @@
 package http
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -13,8 +17,9 @@ import (
 type mcpContextKey string
 
 const (
-	mcpSessionKeyContext mcpContextKey = "matter-codex-session-key"
-	mcpTokenContext      mcpContextKey = "matter-codex-session-token"
+	mcpSessionKeyContext       mcpContextKey = "matter-codex-session-key"
+	mcpTokenContext            mcpContextKey = "matter-codex-session-token"
+	defaultMCPRequestBodyBytes               = 1024 * 1024
 )
 
 type mcpLimitInput struct {
@@ -92,7 +97,10 @@ type mcpOwnerAttentionInput struct {
 	IdempotencyKey string   `json:"idempotency_key" jsonschema:"stable key preventing duplicate notifications for the same decision"`
 }
 
-func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handler {
+func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBodyBytes int64) http.Handler {
+	if maximumBodyBytes <= 0 {
+		maximumBodyBytes = defaultMCPRequestBodyBytes
+	}
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "matter-codex",
 		Version: "0.1.0",
@@ -341,12 +349,52 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 		return server
 	}, nil)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			if err := readBoundedMCPRequestBody(w, r, maximumBodyBytes); err != nil {
+				writeMCPBodyBoundaryError(w, err)
+				return
+			}
+		}
 		sessionKey := strings.Trim(strings.TrimPrefix(r.URL.Path, pathMCPSessions), "/")
 		token := bearerToken(r.Header.Get("Authorization"))
 		ctx := context.WithValue(r.Context(), mcpSessionKeyContext, sessionKey)
 		ctx = context.WithValue(ctx, mcpTokenContext, token)
 		streamable.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func readBoundedMCPRequestBody(w http.ResponseWriter, r *http.Request, maximumBodyBytes int64) error {
+	if maximumBodyBytes <= 0 {
+		return fmt.Errorf("MCP request body limit is invalid")
+	}
+	if r.ContentLength > maximumBodyBytes {
+		return &http.MaxBytesError{Limit: maximumBodyBytes}
+	}
+	limited := http.MaxBytesReader(w, r.Body, maximumBodyBytes)
+	body, err := io.ReadAll(limited)
+	if closeErr := limited.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.ContentLength = int64(len(body))
+	return nil
+}
+
+func writeMCPBodyBoundaryError(w http.ResponseWriter, err error) {
+	var maximumBytesError *http.MaxBytesError
+	if errors.As(err, &maximumBytesError) {
+		http.Error(w, "MCP request body is too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	var networkError interface{ Timeout() bool }
+	if errors.As(err, &networkError) && networkError.Timeout() {
+		http.Error(w, "MCP request body read timed out", http.StatusRequestTimeout)
+		return
+	}
+	http.Error(w, "MCP request body could not be read", http.StatusBadRequest)
 }
 
 func mcpSessionAuth(ctx context.Context) (string, string, bool) {

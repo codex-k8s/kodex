@@ -117,3 +117,5 @@ docs/
 - Доменные события и команды: AsyncAPI и версионируемые конверты.
 - Внутренняя потоковая передача с высокой пропускной способностью: Protobuf/gRPC только после измеренной необходимости.
 - MCP: официальный Model Context Protocol Go SDK.
+
+До выделения `integration-gateway` текущий bot-service владеет внешней HTTP-границей MCP. Для POST он ограничивает полный JSON envelope до передачи в `go-sdk`, чтения session/token и доменного допуска: oversized `Content-Length` и превысивший предел chunked body получают транспортный отказ. Полный server-owned `ReadTimeout`, `ReadHeaderTimeout`, `IdleTimeout` и `MaxHeaderBytes` ограничивают медленные неаутентифицированные соединения. GET/SSE и допустимый POST сохраняют семантику SDK.

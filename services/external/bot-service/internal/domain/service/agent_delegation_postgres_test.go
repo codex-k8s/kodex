@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,11 +16,10 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	postgresrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/testsupport"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-var delegationPostgresSequence atomic.Uint64
 
 func TestReturnToRequesterProductionDispatcherDoesNotSelfLockFrozenSource(t *testing.T) {
 	fixture := newPostgresDelegationFixture(t, 2)
@@ -39,6 +36,68 @@ func TestReturnToRequesterProductionDispatcherDoesNotSelfLockFrozenSource(t *tes
 	assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
 	if fixture.publisher.posts.Load() != 2 {
 		t.Fatalf("audit posts = %d, want source and requester posts", fixture.publisher.posts.Load())
+	}
+}
+
+func TestReturnToRequesterPostgresPreflightRejectsStoredTitleBeforeDurableEffects(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_delegations set title = $1 where target_session_id is not null`, strings.Repeat("я", delegationTitleMaxBytes/2+1)); err != nil {
+		t.Fatalf("подготовка длинного title: %v", err)
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Допустимый callback."); err == nil || !strings.Contains(err.Error(), "title exceeds") {
+			t.Fatalf("attempt %d error = %v", attempt+1, err)
+		}
+		assertPostgresDelegationCallbackState(t, ctx, fixture, 0)
+		if fixture.publisher.attempts.Load() != 0 || fixture.publisher.posts.Load() != 0 {
+			t.Fatalf("attempt %d network attempts=%d posts=%d", attempt+1, fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+		}
+	}
+	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_delegations set title = $1 where target_session_id is not null`, strings.Repeat("я", delegationTitleMaxRunes)); err != nil {
+		t.Fatalf("исправление title: %v", err)
+	}
+	result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Допустимый callback.")
+	if err != nil || strings.TrimSpace(result.CallbackRunID) == "" {
+		t.Fatalf("corrected retry result=%#v error=%v", result, err)
+	}
+	assertPostgresDelegationCallbackState(t, ctx, fixture, 1)
+	if fixture.publisher.posts.Load() != 2 {
+		t.Fatalf("corrected retry posts=%d", fixture.publisher.posts.Load())
+	}
+}
+
+func TestStartAgentThreadPostgresRejectsLongTitleBeforeDurableEffects(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	counts := func() [4]int64 {
+		var result [4]int64
+		if err := fixture.pool.QueryRow(ctx, `
+select
+	(select count(*) from matter_codex_agent_delegations),
+	(select count(*) from matter_codex_agent_session_turns),
+	(select count(*) from matter_codex_agent_runs),
+	(select count(*) from matter_codex_audit_events)
+`).Scan(&result[0], &result[1], &result[2], &result[3]); err != nil {
+			t.Fatalf("подсчёт durable rows: %v", err)
+		}
+		return result
+	}
+	before := counts()
+	command := StartAgentThreadCommand{
+		TargetChat: "target", TargetAgent: "worker-proof",
+		Title: strings.Repeat("я", delegationTitleMaxBytes/2+1), Message: "Допустимое сообщение.",
+		WorkItemKey: "issue-71-postgres-title",
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if _, err := fixture.service.StartAgentThread(ctx, "source-session", "source-token", command); err == nil || !strings.Contains(err.Error(), "title exceeds") {
+			t.Fatalf("attempt %d error = %v", attempt+1, err)
+		}
+	}
+	if after := counts(); after != before || fixture.publisher.attempts.Load() != 0 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("invalid start effects before=%v after=%v network_attempts=%d posts=%d", before, after, fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
 	}
 }
 
@@ -687,45 +746,5 @@ func proveGuardedSourceUsesSamePostgresTransaction(t *testing.T, ctx context.Con
 
 func isolatedDelegationPostgresDSN(t *testing.T) string {
 	t.Helper()
-	baseDSN := strings.TrimSpace(os.Getenv("MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN"))
-	if baseDSN == "" {
-		if os.Getenv("MATTERCODEX_POSTGRES_TEST_REQUIRED") == "1" {
-			t.Fatal("MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN обязателен для PostgreSQL-теста callback")
-		}
-		t.Skip("MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN не задан")
-	}
-	schema := "mc_callback_" + strconv.FormatInt(time.Now().UTC().UnixNano(), 36) + "_" + strconv.FormatUint(delegationPostgresSequence.Add(1), 36)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	pool, err := pgxpool.New(ctx, baseDSN)
-	if err != nil {
-		t.Fatalf("open PostgreSQL for callback schema: %v", err)
-	}
-	identifier := pgx.Identifier{schema}.Sanitize()
-	if _, err := pool.Exec(ctx, "create schema "+identifier); err != nil {
-		pool.Close()
-		t.Fatalf("create callback schema: %v", err)
-	}
-	pool.Close()
-	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cleanupCancel()
-		cleanupPool, cleanupErr := pgxpool.New(cleanupCtx, baseDSN)
-		if cleanupErr != nil {
-			t.Errorf("open callback cleanup pool: %v", cleanupErr)
-			return
-		}
-		defer cleanupPool.Close()
-		if _, cleanupErr = cleanupPool.Exec(cleanupCtx, "drop schema "+identifier+" cascade"); cleanupErr != nil {
-			t.Errorf("drop callback schema: %v", cleanupErr)
-		}
-	})
-	parsed, err := url.Parse(baseDSN)
-	if err == nil && (parsed.Scheme == "postgres" || parsed.Scheme == "postgresql") {
-		query := parsed.Query()
-		query.Set("search_path", schema)
-		parsed.RawQuery = query.Encode()
-		return parsed.String()
-	}
-	return baseDSN + " search_path=" + schema
+	return testsupport.IsolatedSchemaDSN(t, "callback")
 }

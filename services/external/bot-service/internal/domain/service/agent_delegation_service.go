@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
@@ -13,6 +14,15 @@ import (
 const (
 	agentDelegationStatusCreating = "creating"
 	agentDelegationStatusFailed   = "failed"
+
+	delegationTargetMaxBytes   = 256
+	delegationTargetMaxRunes   = 128
+	delegationTitleMaxBytes    = 512
+	delegationTitleMaxRunes    = 200
+	delegationWorkKeyMaxBytes  = 200
+	delegationWorkKeyMaxRunes  = 200
+	delegationLinkMaxBytes     = 4096
+	delegationIdentityMaxBytes = 256
 )
 
 type AgentSessionChatSummary struct {
@@ -64,6 +74,18 @@ type AgentSessionDelegationResult struct {
 type AgentSessionDelegationList struct {
 	SessionKey  string                         `json:"session_key"`
 	Delegations []AgentSessionDelegationResult `json:"delegations"`
+}
+
+type delegationCallbackPublicationPlan struct {
+	callbackPrompt       string
+	callbackAuditMessage string
+	returnAuditMessage   string
+	callbackChannelID    string
+	callbackRootPostID   string
+	returnChannelID      string
+	returnRootPostID     string
+	callbackAuditChunks  []string
+	returnAuditChunks    []string
 }
 
 func (svc *AgentSessionService) ListAvailableChats(ctx context.Context, sessionKey string, token string, targetAgent string) (AgentSessionChatCatalog, error) {
@@ -159,23 +181,20 @@ func (svc *AgentSessionService) ChatDetails(ctx context.Context, sessionKey stri
 }
 
 func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey string, token string, command StartAgentThreadCommand) (AgentSessionDelegationResult, error) {
+	command.TargetChat = strings.TrimSpace(command.TargetChat)
+	command.TargetAgent = strings.TrimSpace(strings.TrimPrefix(command.TargetAgent, "@"))
+	command.Title = strings.TrimSpace(command.Title)
+	command.Message = strings.TrimSpace(command.Message)
+	command.WorkItemKey = strings.TrimSpace(command.WorkItemKey)
+	if err := svc.validateStartAgentThreadCommand(command); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
 	session, err := svc.authorize(ctx, sessionKey, token)
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
 	if svc.cfg.TurnDispatcher == nil || svc.cfg.ThreadPublisher == nil {
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent thread delegation is not configured")
-	}
-	command.TargetChat = strings.TrimSpace(command.TargetChat)
-	command.TargetAgent = strings.TrimSpace(strings.TrimPrefix(command.TargetAgent, "@"))
-	command.Title = strings.TrimSpace(command.Title)
-	command.Message = strings.TrimSpace(command.Message)
-	command.WorkItemKey = strings.TrimSpace(command.WorkItemKey)
-	if command.TargetChat == "" || command.TargetAgent == "" || command.Title == "" || command.Message == "" || command.WorkItemKey == "" {
-		return AgentSessionDelegationResult{}, fmt.Errorf("target chat, target agent, title, message, and work item key are required")
-	}
-	if len(command.WorkItemKey) > 200 || strings.ContainsAny(command.WorkItemKey, "\r\n") {
-		return AgentSessionDelegationResult{}, fmt.Errorf("work item key must be a single line no longer than 200 characters")
 	}
 	if session.ActiveTurnID == 0 {
 		return AgentSessionDelegationResult{}, fmt.Errorf("source session has no active turn")
@@ -211,6 +230,10 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	if strings.TrimSpace(targetChat.MattermostChannelID) == "" {
 		return AgentSessionDelegationResult{}, fmt.Errorf("chat %q is not bound to a Mattermost channel", targetChat.Slug)
 	}
+	requesterUserName := svc.sessionMattermostUsername(ctx, session)
+	if err := svc.validateStartAgentThreadResolvedMetadata(project, targetChat, targetRole, session, requesterUserName); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
 
 	var delegation entity.AgentDelegation
 	var created bool
@@ -232,7 +255,6 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 		return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
 	}
 
-	requesterUserName := svc.sessionMattermostUsername(ctx, session)
 	if err := svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_membership.side_effect", func(entity.AgentSession) error {
 		return svc.ensureRequestedRoleChannelMember(ctx, project, targetChat, targetRole, "", requesterUserName)
 	}); err != nil {
@@ -409,10 +431,33 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
-	var sourceChat entity.Chat
-	var sourceRole entity.AgentRole
-	var requesterUserName string
-	var callbackPrompt string
+	project, err = svc.cfg.Store.GetProject(ctx, delegation.ProjectID)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	targetChat, err = svc.cfg.Store.GetChat(ctx, delegation.TargetChatID)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	targetRole, err = svc.cfg.Store.GetAgentRole(ctx, delegation.TargetRoleID)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	sourceChat, err := svc.cfg.Store.GetChat(ctx, sourceSession.ChatID)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	sourceRole, err := svc.cfg.Store.GetAgentRole(ctx, sourceSession.RoleID)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	requesterUserName := svc.sessionMattermostUsername(ctx, session)
+	publicationPlan, err := svc.buildDelegationCallbackPublicationPlan(
+		ctx, delegation, project, targetChat, targetRole, session, sourceSession, sourceChat, sourceRole, requesterUserName, message,
+	)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
 	var turn entity.AgentSessionTurn
 	var runID string
 	newlyQueued := false
@@ -456,10 +501,17 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 		if readErr = svc.requireCoordinationPermissionWithStore(ctx, guardedStore, currentChild, entity.CoordinationCapabilityReturnCallback, entity.CoordinationActionCallback, sourceRole.ID); readErr != nil {
 			return readErr
 		}
-		requesterUserName = svc.sessionMattermostUsernameWithStore(ctx, guardedStore, currentChild)
-		targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
-		callbackPrompt = crossChatDelegationCallbackMessage(requesterUserName, delegation.Title, targetThreadURL, message)
-		turn, runID, readErr = svc.enqueueDelegationCallbackWithStore(ctx, guardedStore, currentSource, project, sourceChat, sourceRole, requesterUserName, callbackPrompt, delegation.TargetTurnID, delegation.TargetRootPostID)
+		currentRequesterUserName := svc.sessionMattermostUsernameWithStore(ctx, guardedStore, currentChild)
+		currentCallbackPrompt, currentCallbackAudit, currentReturnAudit, validationErr := svc.delegationCallbackPublicationMessages(
+			delegation, project, targetChat, targetRole, currentChild, currentSource, sourceChat, sourceRole, currentRequesterUserName, message,
+		)
+		if validationErr != nil || currentCallbackPrompt != publicationPlan.callbackPrompt || currentCallbackAudit != publicationPlan.callbackAuditMessage || currentReturnAudit != publicationPlan.returnAuditMessage ||
+			currentSource.MattermostChannelID != publicationPlan.callbackChannelID || currentSource.MattermostRootPostID != publicationPlan.callbackRootPostID ||
+			currentChild.MattermostChannelID != publicationPlan.returnChannelID || currentChild.MattermostRootPostID != publicationPlan.returnRootPostID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		requesterUserName = currentRequesterUserName
+		turn, runID, readErr = svc.enqueueDelegationCallbackWithStore(ctx, guardedStore, currentSource, project, sourceChat, sourceRole, requesterUserName, publicationPlan.callbackPrompt, delegation.TargetTurnID, delegation.TargetRootPostID)
 		if readErr != nil {
 			return readErr
 		}
@@ -474,21 +526,14 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	if !newlyQueued {
 		return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
 	}
-	targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
-	sourceThreadURL := svc.mattermostThreadURL(project.Slug, sourceSession.MattermostRootPostID)
-	callbackAuditChunks, returnAuditChunks, err := svc.boundedCallbackAuditChunks(
-		ctx,
-		crossChatDelegationCallbackAuditMessage(requesterUserName, delegation.Title, targetThreadURL, message),
-		crossChatDelegationReturnAuditMessage(requesterUserName, delegation.Title, sourceThreadURL),
-	)
-	if err != nil {
-		return AgentSessionDelegationResult{}, err
-	}
 	publishCtx, cancelPublish := context.WithTimeout(ctx, svc.cfg.CallbackPublishDeadline)
 	defer cancelPublish()
 	var callbackPublishErr error
 	if err := svc.withCurrentSessionsPublishGuard(publishCtx, session, sourceSession, "agent_session.delegation_callback_publish_final_guard", func(_ entity.AgentSession, currentSource entity.AgentSession) error {
-		_, callbackPublishErr = svc.postSystemThreadMessageChunks(publishCtx, currentSource.MattermostChannelID, currentSource.MattermostRootPostID, callbackAuditChunks, "agent_cross_chat_callback")
+		if currentSource.MattermostChannelID != publicationPlan.callbackChannelID || currentSource.MattermostRootPostID != publicationPlan.callbackRootPostID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		_, callbackPublishErr = svc.postSystemThreadMessageChunks(publishCtx, publicationPlan.callbackChannelID, publicationPlan.callbackRootPostID, publicationPlan.callbackAuditChunks, "agent_cross_chat_callback")
 		return nil
 	}); err != nil {
 		return AgentSessionDelegationResult{}, err
@@ -496,7 +541,10 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	_ = callbackPublishErr
 	var returnPublishErr error
 	if err := svc.withCurrentSessionsPublishGuard(publishCtx, session, sourceSession, "agent_session.delegation_return_publish_final_guard", func(currentChild entity.AgentSession, _ entity.AgentSession) error {
-		_, returnPublishErr = svc.postSystemThreadMessageChunks(publishCtx, currentChild.MattermostChannelID, currentChild.MattermostRootPostID, returnAuditChunks, "agent_cross_chat_callback_returned")
+		if currentChild.MattermostChannelID != publicationPlan.returnChannelID || currentChild.MattermostRootPostID != publicationPlan.returnRootPostID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		_, returnPublishErr = svc.postSystemThreadMessageChunks(publishCtx, publicationPlan.returnChannelID, publicationPlan.returnRootPostID, publicationPlan.returnAuditChunks, "agent_cross_chat_callback_returned")
 		return nil
 	}); err != nil {
 		return AgentSessionDelegationResult{}, err
@@ -509,8 +557,14 @@ func (svc *AgentSessionService) admitCallbackPublication(message string) (func()
 	if message == "" {
 		return nil, fmt.Errorf("callback message is required")
 	}
+	if !utf8.ValidString(message) {
+		return nil, fmt.Errorf("callback message must be valid UTF-8")
+	}
 	if len(message) > svc.cfg.CallbackMaxBytes {
 		return nil, fmt.Errorf("callback message exceeds the server byte limit")
+	}
+	if utf8.RuneCountInString(message) > svc.cfg.CallbackMaxBytes {
+		return nil, fmt.Errorf("callback message exceeds the server rune limit")
 	}
 	inputChunks := boundMattermostChunksByBytes([]string{message}, svc.cfg.CallbackMaxChunkBytes)
 	if len(inputChunks)+1 > svc.cfg.CallbackMaxChunks {
@@ -535,12 +589,177 @@ func (svc *AgentSessionService) boundedCallbackAuditChunks(ctx context.Context, 
 	if len(callbackChunks)+len(returnChunks) > svc.cfg.CallbackMaxChunks {
 		return nil, nil, fmt.Errorf("callback audit exceeds the server chunk limit")
 	}
+	totalBytes := 0
 	for _, chunk := range append(append([]string{}, callbackChunks...), returnChunks...) {
 		if len(agentNoTriggerMessage(chunk)) > svc.cfg.CallbackMaxChunkBytes {
 			return nil, nil, fmt.Errorf("callback audit chunk exceeds the server byte limit")
 		}
+		totalBytes += len(agentNoTriggerMessage(chunk))
+	}
+	if totalBytes > svc.cfg.CallbackMaxChunks*svc.cfg.CallbackMaxChunkBytes {
+		return nil, nil, fmt.Errorf("callback audit exceeds the server combined byte limit")
 	}
 	return callbackChunks, returnChunks, nil
+}
+
+func (svc *AgentSessionService) validateStartAgentThreadCommand(command StartAgentThreadCommand) error {
+	if err := validateDelegationText("target chat", command.TargetChat, delegationTargetMaxBytes, delegationTargetMaxRunes, true); err != nil {
+		return err
+	}
+	if err := validateDelegationText("target agent", command.TargetAgent, delegationTargetMaxBytes, delegationTargetMaxRunes, true); err != nil {
+		return err
+	}
+	if err := validateDelegationText("title", command.Title, delegationTitleMaxBytes, delegationTitleMaxRunes, true); err != nil {
+		return err
+	}
+	if err := validateDelegationText("message", command.Message, svc.cfg.CallbackMaxBytes, svc.cfg.CallbackMaxBytes, false); err != nil {
+		return err
+	}
+	return validateDelegationText("work item key", command.WorkItemKey, delegationWorkKeyMaxBytes, delegationWorkKeyMaxRunes, true)
+}
+
+func (svc *AgentSessionService) validateStartAgentThreadResolvedMetadata(project entity.Project, targetChat entity.Chat, targetRole entity.AgentRole, session entity.AgentSession, requesterUserName string) error {
+	for _, item := range []struct {
+		label string
+		value string
+	}{
+		{"project slug", project.Slug},
+		{"target chat", targetChat.Slug},
+		{"target chat channel id", targetChat.MattermostChannelID},
+		{"target agent", targetRole.Name},
+		{"requester", requesterUserName},
+		{"source channel id", session.MattermostChannelID},
+		{"source root post id", session.MattermostRootPostID},
+	} {
+		if err := validateDelegationText(item.label, item.value, delegationIdentityMaxBytes, delegationIdentityMaxBytes, true); err != nil {
+			return err
+		}
+	}
+	sourceThreadURL := svc.mattermostThreadURL(project.Slug, session.MattermostRootPostID)
+	if sourceThreadURL != "" {
+		return validateDelegationText("source thread link", sourceThreadURL, delegationLinkMaxBytes, delegationLinkMaxBytes, true)
+	}
+	return nil
+}
+
+func (svc *AgentSessionService) buildDelegationCallbackPublicationPlan(
+	ctx context.Context,
+	delegation entity.AgentDelegation,
+	project entity.Project,
+	targetChat entity.Chat,
+	targetRole entity.AgentRole,
+	targetSession entity.AgentSession,
+	sourceSession entity.AgentSession,
+	sourceChat entity.Chat,
+	sourceRole entity.AgentRole,
+	requesterUserName string,
+	message string,
+) (delegationCallbackPublicationPlan, error) {
+	callbackPrompt, callbackAudit, returnAudit, err := svc.delegationCallbackPublicationMessages(
+		delegation, project, targetChat, targetRole, targetSession, sourceSession, sourceChat, sourceRole, requesterUserName, message,
+	)
+	if err != nil {
+		return delegationCallbackPublicationPlan{}, err
+	}
+	maximumPromptBytes := svc.cfg.CallbackMaxBytes + delegationTitleMaxBytes + delegationLinkMaxBytes + delegationIdentityMaxBytes + 16*1024
+	if len(callbackPrompt) > maximumPromptBytes || utf8.RuneCountInString(callbackPrompt) > maximumPromptBytes {
+		return delegationCallbackPublicationPlan{}, fmt.Errorf("callback prompt exceeds the server envelope limit")
+	}
+	callbackChunks, returnChunks, err := svc.boundedCallbackAuditChunks(ctx, callbackAudit, returnAudit)
+	if err != nil {
+		return delegationCallbackPublicationPlan{}, err
+	}
+	return delegationCallbackPublicationPlan{
+		callbackPrompt:       callbackPrompt,
+		callbackAuditMessage: callbackAudit,
+		returnAuditMessage:   returnAudit,
+		callbackChannelID:    sourceSession.MattermostChannelID,
+		callbackRootPostID:   sourceSession.MattermostRootPostID,
+		returnChannelID:      targetSession.MattermostChannelID,
+		returnRootPostID:     targetSession.MattermostRootPostID,
+		callbackAuditChunks:  callbackChunks,
+		returnAuditChunks:    returnChunks,
+	}, nil
+}
+
+func (svc *AgentSessionService) delegationCallbackPublicationMessages(
+	delegation entity.AgentDelegation,
+	project entity.Project,
+	targetChat entity.Chat,
+	targetRole entity.AgentRole,
+	targetSession entity.AgentSession,
+	sourceSession entity.AgentSession,
+	sourceChat entity.Chat,
+	sourceRole entity.AgentRole,
+	requesterUserName string,
+	message string,
+) (string, string, string, error) {
+	metadata := []struct {
+		label string
+		value string
+	}{
+		{"work item key", delegation.WorkItemKey},
+		{"project slug", project.Slug},
+		{"target chat", targetChat.Slug},
+		{"target chat channel id", targetChat.MattermostChannelID},
+		{"target agent", targetRole.Name},
+		{"target session channel id", targetSession.MattermostChannelID},
+		{"target session root post id", targetSession.MattermostRootPostID},
+		{"source chat", sourceChat.Slug},
+		{"source chat channel id", sourceChat.MattermostChannelID},
+		{"source agent", sourceRole.Name},
+		{"requester", requesterUserName},
+		{"target root post id", delegation.TargetRootPostID},
+		{"source session channel id", sourceSession.MattermostChannelID},
+		{"source root post id", sourceSession.MattermostRootPostID},
+	}
+	if err := validateDelegationText("title", delegation.Title, delegationTitleMaxBytes, delegationTitleMaxRunes, true); err != nil {
+		return "", "", "", err
+	}
+	if err := validateDelegationText("callback message", message, svc.cfg.CallbackMaxBytes, svc.cfg.CallbackMaxBytes, false); err != nil {
+		return "", "", "", err
+	}
+	for _, item := range metadata {
+		maximumBytes := delegationIdentityMaxBytes
+		maximumRunes := delegationIdentityMaxBytes
+		if item.label == "work item key" {
+			maximumBytes = delegationWorkKeyMaxBytes
+			maximumRunes = delegationWorkKeyMaxRunes
+		}
+		if err := validateDelegationText(item.label, item.value, maximumBytes, maximumRunes, true); err != nil {
+			return "", "", "", err
+		}
+	}
+	targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
+	sourceThreadURL := svc.mattermostThreadURL(project.Slug, sourceSession.MattermostRootPostID)
+	if err := validateDelegationText("target thread link", targetThreadURL, delegationLinkMaxBytes, delegationLinkMaxBytes, true); err != nil {
+		return "", "", "", err
+	}
+	if err := validateDelegationText("source thread link", sourceThreadURL, delegationLinkMaxBytes, delegationLinkMaxBytes, true); err != nil {
+		return "", "", "", err
+	}
+	return crossChatDelegationCallbackMessage(requesterUserName, delegation.Title, targetThreadURL, message),
+		crossChatDelegationCallbackAuditMessage(requesterUserName, delegation.Title, targetThreadURL, message),
+		crossChatDelegationReturnAuditMessage(requesterUserName, delegation.Title, sourceThreadURL), nil
+}
+
+func validateDelegationText(label string, value string, maximumBytes int, maximumRunes int, singleLine bool) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s is required", label)
+	}
+	if !utf8.ValidString(value) {
+		return fmt.Errorf("%s must be valid UTF-8", label)
+	}
+	if len(value) > maximumBytes {
+		return fmt.Errorf("%s exceeds the server byte limit", label)
+	}
+	if utf8.RuneCountInString(value) > maximumRunes {
+		return fmt.Errorf("%s exceeds the server rune limit", label)
+	}
+	if singleLine && strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("%s must be a single line", label)
+	}
+	return nil
 }
 
 func boundMattermostChunksByBytes(chunks []string, maximumBytes int) []string {
