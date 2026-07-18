@@ -11,8 +11,11 @@ ENV_FILE="$REPO_ROOT/.env"
 DRY_RUN_MODE="server"
 WAIT=false
 RENDER_DIR=""
+ALLOW_POSTGRES_IMAGE_CHANGE=false
+POSTGRES_INDEX_VERIFIED=false
 POST_MESSAGE_TARGET_BYTES=200000
 POST_MESSAGE_SCHEMA_MIGRATION="$REPO_ROOT/deploy/k8s/mattermost/migrations/000001_post_message_max_length.sql"
+POSTGRES_INDEX_VERIFICATION="$REPO_ROOT/deploy/k8s/mattermost/maintenance/verify-btree-indexes.sql"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -26,6 +29,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --wait)
       WAIT=true
+      shift
+      ;;
+    --allow-postgres-image-change)
+      ALLOW_POSTGRES_IMAGE_CHANGE=true
       shift
       ;;
     --dry-run=server)
@@ -58,6 +65,23 @@ fi
 
 DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
 
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  CURRENT_POSTGRES_IMAGE="$(kubectl -n "$MATTERCODEX_NAMESPACE" get statefulset mattermost-postgres -o jsonpath='{.spec.template.spec.containers[?(@.name=="postgres")].image}' 2>/dev/null || true)"
+  if [ -n "$CURRENT_POSTGRES_IMAGE" ] && [ "$CURRENT_POSTGRES_IMAGE" != "$MATTERCODEX_POSTGRES_IMAGE" ]; then
+    if ! mattercodex_bool "$ALLOW_POSTGRES_IMAGE_CHANGE"; then
+      mattercodex_die "PostgreSQL image изменился; выполните docs/runbooks/postgres-image-change.md и повторите с --allow-postgres-image-change"
+    fi
+    mattercodex_log "обнаружена явно разрешенная смена PostgreSQL image"
+  fi
+  if mattercodex_bool "$ALLOW_POSTGRES_IMAGE_CHANGE" && [ -n "$CURRENT_POSTGRES_IMAGE" ]; then
+    MATTERMOST_REPLICAS="$(kubectl -n "$MATTERCODEX_NAMESPACE" get deployment mattermost -o jsonpath='{.spec.replicas}' 2>/dev/null || printf '0')"
+    BOT_SERVICE_REPLICAS="$(kubectl -n "$MATTERCODEX_NAMESPACE" get deployment matter-codex-bot-service -o jsonpath='{.spec.replicas}' 2>/dev/null || printf '0')"
+    if [ "${MATTERMOST_REPLICAS:-0}" -gt 0 ] || [ "${BOT_SERVICE_REPLICAS:-0}" -gt 0 ]; then
+      mattercodex_die "перед разрешенной сменой PostgreSQL image остановите Mattermost и bot-service согласно runbook"
+    fi
+  fi
+fi
+
 enable_mattermost_integrations() {
   mattercodex_log "проверяются настройки Mattermost integration accounts"
   local mattermost_pod current changed
@@ -78,8 +102,17 @@ enable_mattermost_integrations() {
   fi
 }
 
-mattercodex_log "применяются манифесты Mattermost"
+mattercodex_log "применяется манифест PostgreSQL"
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/10-postgres.yaml" >/dev/null
+if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$ALLOW_POSTGRES_IMAGE_CHANGE"; then
+  mattercodex_log "ожидание PostgreSQL перед проверкой разрешенной смены image"
+  kubectl -n "$MATTERCODEX_NAMESPACE" rollout status statefulset/mattermost-postgres --timeout=180s >/dev/null
+  mattercodex_log "проверяется целостность B-tree после разрешенной смены PostgreSQL image"
+  kubectl -n "$MATTERCODEX_NAMESPACE" exec -i mattermost-postgres-0 -- sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -q' < "$POSTGRES_INDEX_VERIFICATION"
+  POSTGRES_INDEX_VERIFIED=true
+fi
+
+mattercodex_log "применяются манифесты Mattermost"
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/20-mattermost.yaml" >/dev/null
 if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
   kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/25-oauth2-proxy.yaml" >/dev/null
@@ -88,7 +121,9 @@ kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/30-ingress.yaml" >/de
 
 if [ "$DRY_RUN_MODE" = "none" ]; then
   mattercodex_log "ожидание Mattermost перед schema migration"
-  kubectl -n "$MATTERCODEX_NAMESPACE" rollout status statefulset/mattermost-postgres --timeout=180s >/dev/null
+  if ! mattercodex_bool "$POSTGRES_INDEX_VERIFIED"; then
+    kubectl -n "$MATTERCODEX_NAMESPACE" rollout status statefulset/mattermost-postgres --timeout=180s >/dev/null
+  fi
   kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/mattermost --timeout=300s >/dev/null
   POST_MESSAGE_BYTES="$(kubectl -n "$MATTERCODEX_NAMESPACE" exec -i mattermost-postgres-0 -- sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -P pager=off -At' <<'SQL'
 select coalesce(max(character_maximum_length), 0)

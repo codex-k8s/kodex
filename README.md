@@ -36,7 +36,9 @@ bash scripts/remote/install-mattermost.sh --env-file .env --dry-run=server
 
 Matter-codex осознанно меняет PostgreSQL-схему Mattermost во время установки. При `scripts/remote/install-mattermost.sh --apply` после старта Mattermost применяется миграция `deploy/k8s/mattermost/migrations/000001_post_message_max_length.sql`.
 
-Встроенный PostgreSQL использует закрепленный образ `pgvector/pgvector:0.8.5-pg16`: расширение `vector` необходимо для локальной перестраиваемой проекции памяти MatterCodex. Канонический текст памяти остается в обычных таблицах PostgreSQL, а при недоступности локального embedding runtime поиск продолжает работать через полнотекстовый индекс. Внешний embedding API не используется.
+PostgreSQL image по умолчанию закреплен digest. Установщик блокирует его неявную смену для существующего PVC: изменение libc или правил сортировки без перестроения индексов способно нарушить уникальность данных. Контролируемое переключение выполняется только по `docs/runbooks/postgres-image-change.md`.
+
+Встроенный PostgreSQL использует `pgvector/pgvector:0.8.5-pg16`, закрепленный неизменяемым digest из каталога внешних зависимостей: расширение `vector` необходимо для локальной перестраиваемой проекции памяти MatterCodex. Канонический текст памяти остается в обычных таблицах PostgreSQL, а при недоступности локального embedding runtime поиск продолжает работать через полнотекстовый индекс. Внешний embedding API не используется.
 
 При подключении внешнего PostgreSQL администратор обязан заранее установить расширение `pgvector` совместимой версии; миграция MatterCodex выполняет `CREATE EXTENSION vector`, но не устанавливает системный пакет на сервер базы данных.
 

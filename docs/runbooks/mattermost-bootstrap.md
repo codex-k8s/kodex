@@ -85,7 +85,9 @@ bash scripts/remote/install-foundation.sh --env-file .env --apply
 bash scripts/remote/install-mattermost.sh --env-file .env --apply --wait
 ```
 
-Если Secret `${MATTERCODEX_POSTGRES_SECRET}` уже существует, `install-foundation.sh --apply` не ротирует owner password. При полностью отсутствующей runtime-тройке он добавляет отдельные runtime credentials; частичная тройка считается ошибкой конфигурации и не исправляется догадкой.
+Для существующего PVC команда не меняет PostgreSQL image неявно. Если значение `MATTERCODEX_POSTGRES_IMAGE` изменено, сначала выполните `docs/runbooks/postgres-image-change.md`; флаг `--allow-postgres-image-change` используется только внутри описанного окна обслуживания.
+
+Если Secret `${MATTERCODEX_POSTGRES_SECRET}` уже существует, `install-foundation.sh --apply` не ротирует пароль владельца схемы. При полностью отсутствующей runtime-тройке он добавляет отдельные учетные данные; частичная тройка считается ошибкой конфигурации и не исправляется догадкой.
 
 ## Read-only smoke
 
