@@ -3,8 +3,11 @@ package mattermost
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
@@ -13,6 +16,25 @@ import (
 type ControlSurface struct {
 	client      *mattermostmodel.Client4
 	adminClient *mattermostmodel.Client4
+	httpClient  *http.Client
+}
+
+type HTTPClientConfig struct {
+	Timeout               time.Duration
+	DialTimeout           time.Duration
+	TLSHandshakeTimeout   time.Duration
+	ResponseHeaderTimeout time.Duration
+	IdleConnTimeout       time.Duration
+}
+
+func DefaultHTTPClientConfig() HTTPClientConfig {
+	return HTTPClientConfig{
+		Timeout:               5 * time.Second,
+		DialTimeout:           2 * time.Second,
+		TLSHandshakeTimeout:   2 * time.Second,
+		ResponseHeaderTimeout: 3 * time.Second,
+		IdleConnTimeout:       30 * time.Second,
+	}
 }
 
 var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
@@ -21,14 +43,62 @@ var _ statusservice.MattermostRoleBotManager = (*ControlSurface)(nil)
 var _ statusservice.MattermostInteractionActorVerifier = (*ControlSurface)(nil)
 
 func NewControlSurface(siteURL string, token string, adminToken string) *ControlSurface {
-	client := mattermostmodel.NewAPIv4Client(siteURL)
-	client.SetToken(token)
+	return NewControlSurfaceWithHTTPConfig(siteURL, token, adminToken, DefaultHTTPClientConfig())
+}
+
+func NewControlSurfaceWithHTTPConfig(siteURL string, token string, adminToken string, config HTTPClientConfig) *ControlSurface {
+	httpClient := newBoundedHTTPClient(config)
+	client := newMattermostClient(siteURL, token, httpClient)
 	adminClient := client
 	if strings.TrimSpace(adminToken) != "" {
-		adminClient = mattermostmodel.NewAPIv4Client(siteURL)
-		adminClient.SetToken(adminToken)
+		adminClient = newMattermostClient(siteURL, adminToken, httpClient)
 	}
-	return &ControlSurface{client: client, adminClient: adminClient}
+	return &ControlSurface{client: client, adminClient: adminClient, httpClient: httpClient}
+}
+
+func newBoundedHTTPClient(config HTTPClientConfig) *http.Client {
+	defaults := DefaultHTTPClientConfig()
+	if config.Timeout <= 0 {
+		config.Timeout = defaults.Timeout
+	}
+	if config.DialTimeout <= 0 {
+		config.DialTimeout = defaults.DialTimeout
+	}
+	if config.TLSHandshakeTimeout <= 0 {
+		config.TLSHandshakeTimeout = defaults.TLSHandshakeTimeout
+	}
+	if config.ResponseHeaderTimeout <= 0 {
+		config.ResponseHeaderTimeout = defaults.ResponseHeaderTimeout
+	}
+	if config.IdleConnTimeout <= 0 {
+		config.IdleConnTimeout = defaults.IdleConnTimeout
+	}
+	dialer := &net.Dialer{Timeout: config.DialTimeout, KeepAlive: 30 * time.Second}
+	return &http.Client{
+		Timeout: config.Timeout,
+		Transport: &http.Transport{
+			DialContext:           dialer.DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          32,
+			MaxIdleConnsPerHost:   8,
+			MaxConnsPerHost:       32,
+			IdleConnTimeout:       config.IdleConnTimeout,
+			TLSHandshakeTimeout:   config.TLSHandshakeTimeout,
+			ResponseHeaderTimeout: config.ResponseHeaderTimeout,
+			ExpectContinueTimeout: time.Second,
+		},
+	}
+}
+
+func newMattermostClient(siteURL string, token string, httpClient *http.Client) *mattermostmodel.Client4 {
+	client := mattermostmodel.NewAPIv4Client(siteURL)
+	client.HTTPClient = httpClient
+	client.SetToken(token)
+	return client
+}
+
+func (surface *ControlSurface) clientWithToken(token string) *mattermostmodel.Client4 {
+	return newMattermostClient(surface.client.URL, token, surface.httpClient)
 }
 
 func (surface *ControlSurface) BotUserID(ctx context.Context) (string, error) {
@@ -190,8 +260,7 @@ func (surface *ControlSurface) PostThreadMessage(ctx context.Context, input stat
 }
 
 func (surface *ControlSurface) PostThreadMessageWithToken(ctx context.Context, token string, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
-	client := mattermostmodel.NewAPIv4Client(surface.client.URL)
-	client.SetToken(token)
+	client := surface.clientWithToken(token)
 	return createThreadPost(ctx, client, input)
 }
 
@@ -200,8 +269,7 @@ func (surface *ControlSurface) UpdateThreadMessage(ctx context.Context, input st
 }
 
 func (surface *ControlSurface) UpdateThreadMessageWithToken(ctx context.Context, token string, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
-	client := mattermostmodel.NewAPIv4Client(surface.client.URL)
-	client.SetToken(token)
+	client := surface.clientWithToken(token)
 	return updateThreadPost(ctx, client, input)
 }
 
@@ -225,8 +293,7 @@ func (surface *ControlSurface) UpdateThreadCard(ctx context.Context, card status
 }
 
 func (surface *ControlSurface) AddPostReactionWithToken(ctx context.Context, token string, input statusservice.MattermostPostReactionInput) error {
-	client := mattermostmodel.NewAPIv4Client(surface.client.URL)
-	client.SetToken(token)
+	client := surface.clientWithToken(token)
 	if _, _, err := client.SaveReaction(ctx, &mattermostmodel.Reaction{
 		UserId:    input.UserID,
 		PostId:    input.PostID,

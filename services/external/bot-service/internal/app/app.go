@@ -57,7 +57,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	var dialogOpener httptransport.DialogOpener
 	var controlSurface *mattermostintegration.ControlSurface
 	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
-		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken, cfg.MattermostAdminToken)
+		controlSurface = mattermostintegration.NewControlSurfaceWithHTTPConfig(
+			cfg.MattermostAPIURL(), cfg.MattermostBotToken, cfg.MattermostAdminToken,
+			mattermostintegration.HTTPClientConfig{
+				Timeout: cfg.MattermostHTTPTimeout, DialTimeout: cfg.MattermostHTTPDialTimeout,
+				TLSHandshakeTimeout:   cfg.MattermostHTTPTLSHandshakeTimeout,
+				ResponseHeaderTimeout: cfg.MattermostHTTPResponseHeaderTimeout,
+				IdleConnTimeout:       cfg.MattermostHTTPIdleConnTimeout,
+			},
+		)
 	}
 	interactionSecurity := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
 		Repository: storage,
@@ -117,17 +125,22 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		logger.Warn("system agent role bootstrap failed", "error", err)
 	}
 	sessionSvc := statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{
-		Localizer:          localizer,
-		Store:              storage,
-		RuntimeRunner:      runtimeRunner,
-		ThreadPublisher:    threadPublisher,
-		ConversationReader: controlSurface,
-		RoleBotManager:     roleBotManager,
-		TurnDispatcher:     chatRunSvc,
-		MenuActionURL:      agentsActionURL(cfg),
-		MattermostSiteURL:  cfg.MattermostSiteURL,
-		StorageReady:       storage != nil,
-		RuntimeReady:       runtimeConfigured,
+		Localizer:                  localizer,
+		Store:                      storage,
+		RuntimeRunner:              runtimeRunner,
+		ThreadPublisher:            threadPublisher,
+		ConversationReader:         controlSurface,
+		RoleBotManager:             roleBotManager,
+		TurnDispatcher:             chatRunSvc,
+		MenuActionURL:              agentsActionURL(cfg),
+		MattermostSiteURL:          cfg.MattermostSiteURL,
+		StorageReady:               storage != nil,
+		RuntimeReady:               runtimeConfigured,
+		CallbackMaxBytes:           cfg.CallbackMaxBytes,
+		CallbackMaxChunks:          cfg.CallbackMaxChunks,
+		CallbackMaxChunkBytes:      cfg.CallbackMaxChunkBytes,
+		CallbackPublishConcurrency: cfg.CallbackPublishConcurrency,
+		CallbackPublishDeadline:    cfg.CallbackPublishDeadline,
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{

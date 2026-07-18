@@ -48,24 +48,41 @@ const (
 	defaultMattermostPostMessageMaxRunes = 65535 / 4
 	mattermostPostChunkReserveRunes      = 128
 	minMattermostPostChunkRunes          = 1000
+
+	defaultCallbackMaxBytes           = 128 * 1024
+	maximumCallbackMaxBytes           = 256 * 1024
+	defaultCallbackMaxChunks          = 8
+	maximumCallbackMaxChunks          = 16
+	defaultCallbackMaxChunkBytes      = 48 * 1024
+	maximumCallbackMaxChunkBytes      = 64 * 1024
+	defaultCallbackPublishConcurrency = 4
+	maximumCallbackPublishConcurrency = 32
+	defaultCallbackPublishDeadline    = 5 * time.Second
+	maximumCallbackPublishDeadline    = 15 * time.Second
 )
 
 type AgentSessionServiceConfig struct {
-	Localizer          *texti18n.Localizer
-	Store              adminrepo.Repository
-	RuntimeRunner      runtimerepo.Runner
-	ThreadPublisher    MattermostThreadPublisher
-	ConversationReader MattermostConversationReader
-	RoleBotManager     MattermostRoleBotManager
-	TurnDispatcher     AgentTurnDispatcher
-	MenuActionURL      string
-	MattermostSiteURL  string
-	StorageReady       bool
-	RuntimeReady       bool
+	Localizer                  *texti18n.Localizer
+	Store                      adminrepo.Repository
+	RuntimeRunner              runtimerepo.Runner
+	ThreadPublisher            MattermostThreadPublisher
+	ConversationReader         MattermostConversationReader
+	RoleBotManager             MattermostRoleBotManager
+	TurnDispatcher             AgentTurnDispatcher
+	MenuActionURL              string
+	MattermostSiteURL          string
+	StorageReady               bool
+	RuntimeReady               bool
+	CallbackMaxBytes           int
+	CallbackMaxChunks          int
+	CallbackMaxChunkBytes      int
+	CallbackPublishConcurrency int
+	CallbackPublishDeadline    time.Duration
 }
 
 type AgentSessionService struct {
-	cfg AgentSessionServiceConfig
+	cfg                  AgentSessionServiceConfig
+	callbackPublishSlots chan struct{}
 }
 
 type MattermostPostMessage struct {
@@ -193,7 +210,29 @@ type AgentSessionAgentRequest struct {
 }
 
 func NewAgentSessionService(cfg AgentSessionServiceConfig) *AgentSessionService {
-	return &AgentSessionService{cfg: cfg}
+	cfg.CallbackMaxBytes = boundedPositiveInt(cfg.CallbackMaxBytes, defaultCallbackMaxBytes, maximumCallbackMaxBytes)
+	cfg.CallbackMaxChunks = boundedPositiveInt(cfg.CallbackMaxChunks, defaultCallbackMaxChunks, maximumCallbackMaxChunks)
+	cfg.CallbackMaxChunkBytes = boundedPositiveInt(cfg.CallbackMaxChunkBytes, defaultCallbackMaxChunkBytes, maximumCallbackMaxChunkBytes)
+	cfg.CallbackPublishConcurrency = boundedPositiveInt(cfg.CallbackPublishConcurrency, defaultCallbackPublishConcurrency, maximumCallbackPublishConcurrency)
+	if cfg.CallbackPublishDeadline <= 0 {
+		cfg.CallbackPublishDeadline = defaultCallbackPublishDeadline
+	} else if cfg.CallbackPublishDeadline > maximumCallbackPublishDeadline {
+		cfg.CallbackPublishDeadline = maximumCallbackPublishDeadline
+	}
+	return &AgentSessionService{
+		cfg:                  cfg,
+		callbackPublishSlots: make(chan struct{}, cfg.CallbackPublishConcurrency),
+	}
+}
+
+func boundedPositiveInt(value int, defaultValue int, maximum int) int {
+	if value <= 0 {
+		return defaultValue
+	}
+	if value > maximum {
+		return maximum
+	}
+	return value
 }
 
 func (svc *AgentSessionService) Snapshot(ctx context.Context, sessionKey string, token string) (AgentSessionSnapshot, error) {

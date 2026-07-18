@@ -356,13 +356,15 @@ func (svc *AgentSessionService) ListDelegations(ctx context.Context, sessionKey 
 }
 
 func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKey string, token string, message string) (AgentSessionDelegationResult, error) {
-	session, err := svc.authorize(ctx, sessionKey, token)
+	message = strings.TrimSpace(message)
+	releasePublishSlot, err := svc.admitCallbackPublication(message)
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
-	message = strings.TrimSpace(message)
-	if message == "" {
-		return AgentSessionDelegationResult{}, fmt.Errorf("callback message is required")
+	defer releasePublishSlot()
+	session, err := svc.authorize(ctx, sessionKey, token)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
 	}
 	if svc.cfg.TurnDispatcher == nil || svc.cfg.ThreadPublisher == nil {
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent delegation callback is not configured")
@@ -474,25 +476,98 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	}
 	targetThreadURL := svc.mattermostThreadURL(project.Slug, delegation.TargetRootPostID)
 	sourceThreadURL := svc.mattermostThreadURL(project.Slug, sourceSession.MattermostRootPostID)
-	callbackAuditChunks := svc.splitMattermostThreadMessage(ctx, crossChatDelegationCallbackAuditMessage(requesterUserName, delegation.Title, targetThreadURL, message))
-	returnAuditChunks := svc.splitMattermostThreadMessage(ctx, crossChatDelegationReturnAuditMessage(requesterUserName, delegation.Title, sourceThreadURL))
+	callbackAuditChunks, returnAuditChunks, err := svc.boundedCallbackAuditChunks(
+		ctx,
+		crossChatDelegationCallbackAuditMessage(requesterUserName, delegation.Title, targetThreadURL, message),
+		crossChatDelegationReturnAuditMessage(requesterUserName, delegation.Title, sourceThreadURL),
+	)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	publishCtx, cancelPublish := context.WithTimeout(ctx, svc.cfg.CallbackPublishDeadline)
+	defer cancelPublish()
 	var callbackPublishErr error
-	if err := svc.withCurrentSessionsPublishGuard(ctx, session, sourceSession, "agent_session.delegation_callback_publish_final_guard", func(_ entity.AgentSession, currentSource entity.AgentSession) error {
-		_, callbackPublishErr = svc.postSystemThreadMessageChunks(ctx, currentSource.MattermostChannelID, currentSource.MattermostRootPostID, callbackAuditChunks, "agent_cross_chat_callback")
+	if err := svc.withCurrentSessionsPublishGuard(publishCtx, session, sourceSession, "agent_session.delegation_callback_publish_final_guard", func(_ entity.AgentSession, currentSource entity.AgentSession) error {
+		_, callbackPublishErr = svc.postSystemThreadMessageChunks(publishCtx, currentSource.MattermostChannelID, currentSource.MattermostRootPostID, callbackAuditChunks, "agent_cross_chat_callback")
 		return nil
 	}); err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
 	_ = callbackPublishErr
 	var returnPublishErr error
-	if err := svc.withCurrentSessionsPublishGuard(ctx, session, sourceSession, "agent_session.delegation_return_publish_final_guard", func(currentChild entity.AgentSession, _ entity.AgentSession) error {
-		_, returnPublishErr = svc.postSystemThreadMessageChunks(ctx, currentChild.MattermostChannelID, currentChild.MattermostRootPostID, returnAuditChunks, "agent_cross_chat_callback_returned")
+	if err := svc.withCurrentSessionsPublishGuard(publishCtx, session, sourceSession, "agent_session.delegation_return_publish_final_guard", func(currentChild entity.AgentSession, _ entity.AgentSession) error {
+		_, returnPublishErr = svc.postSystemThreadMessageChunks(publishCtx, currentChild.MattermostChannelID, currentChild.MattermostRootPostID, returnAuditChunks, "agent_cross_chat_callback_returned")
 		return nil
 	}); err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
 	_ = returnPublishErr
 	return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
+}
+
+func (svc *AgentSessionService) admitCallbackPublication(message string) (func(), error) {
+	if message == "" {
+		return nil, fmt.Errorf("callback message is required")
+	}
+	if len(message) > svc.cfg.CallbackMaxBytes {
+		return nil, fmt.Errorf("callback message exceeds the server byte limit")
+	}
+	inputChunks := boundMattermostChunksByBytes([]string{message}, svc.cfg.CallbackMaxChunkBytes)
+	if len(inputChunks)+1 > svc.cfg.CallbackMaxChunks {
+		return nil, fmt.Errorf("callback message exceeds the server chunk limit")
+	}
+	for _, chunk := range inputChunks {
+		if len(agentNoTriggerMessage(chunk)) > svc.cfg.CallbackMaxChunkBytes {
+			return nil, fmt.Errorf("callback message exceeds the server chunk byte limit")
+		}
+	}
+	select {
+	case svc.callbackPublishSlots <- struct{}{}:
+		return func() { <-svc.callbackPublishSlots }, nil
+	default:
+		return nil, fmt.Errorf("callback publication concurrency limit is reached")
+	}
+}
+
+func (svc *AgentSessionService) boundedCallbackAuditChunks(ctx context.Context, callbackMessage string, returnMessage string) ([]string, []string, error) {
+	callbackChunks := boundMattermostChunksByBytes(svc.splitMattermostThreadMessage(ctx, callbackMessage), svc.cfg.CallbackMaxChunkBytes)
+	returnChunks := boundMattermostChunksByBytes(svc.splitMattermostThreadMessage(ctx, returnMessage), svc.cfg.CallbackMaxChunkBytes)
+	if len(callbackChunks)+len(returnChunks) > svc.cfg.CallbackMaxChunks {
+		return nil, nil, fmt.Errorf("callback audit exceeds the server chunk limit")
+	}
+	for _, chunk := range append(append([]string{}, callbackChunks...), returnChunks...) {
+		if len(agentNoTriggerMessage(chunk)) > svc.cfg.CallbackMaxChunkBytes {
+			return nil, nil, fmt.Errorf("callback audit chunk exceeds the server byte limit")
+		}
+	}
+	return callbackChunks, returnChunks, nil
+}
+
+func boundMattermostChunksByBytes(chunks []string, maximumBytes int) []string {
+	payloadBytes := maximumBytes - len("\n\n#notrigger")
+	if payloadBytes < 1 {
+		payloadBytes = 1
+	}
+	result := make([]string, 0, len(chunks))
+	for _, chunk := range chunks {
+		remaining := strings.TrimSpace(chunk)
+		for len(remaining) > payloadBytes {
+			cut := 0
+			for index := range remaining {
+				if index > payloadBytes {
+					break
+				}
+				cut = index
+			}
+			if cut <= 0 {
+				cut = payloadBytes
+			}
+			result = append(result, strings.TrimSpace(remaining[:cut]))
+			remaining = strings.TrimSpace(remaining[cut:])
+		}
+		result = append(result, remaining)
+	}
+	return result
 }
 
 func (svc *AgentSessionService) enqueueDelegationCallbackWithStore(ctx context.Context, guardedStore adminrepo.Repository, sourceSession entity.AgentSession, project entity.Project, sourceChat entity.Chat, sourceRole entity.AgentRole, requesterUserName string, message string, parentTurnID int64, triggerPostID string) (entity.AgentSessionTurn, string, error) {

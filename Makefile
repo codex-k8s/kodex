@@ -1,4 +1,4 @@
-.PHONY: test-go test-go-postgres test-go-all tidy-go
+.PHONY: test-go test-go-postgres test-go-all test-render-evidence tidy-go
 
 test-go:
 	go test ./...
@@ -8,6 +8,9 @@ test-go-postgres:
 	MATTERCODEX_POSTGRES_TEST_REQUIRED=1 go test ./services/external/bot-service/internal/repository/postgres/... -count=1
 
 test-go-all: test-go test-go-postgres
+
+test-render-evidence:
+	go test ./services/external/bot-service/internal/app -run TestBotServiceRenderCountsNonEmptyObjects -count=1
 
 tidy-go:
 	go mod tidy

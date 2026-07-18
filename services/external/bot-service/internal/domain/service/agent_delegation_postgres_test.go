@@ -241,6 +241,144 @@ func TestReturnToRequesterAuditNetworkErrorIsPartialAndRetryDoesNotDuplicate(t *
 	}
 }
 
+func TestReturnToRequesterHungPublishHasScopedBoundedFence(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 4)
+	fixture.service.cfg.CallbackPublishDeadline = 350 * time.Millisecond
+	fixture.publisher.blockUntilContext.Store(true)
+	fixture.publisher.started = make(chan struct{})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := fixture.pool.Exec(ctx, `
+insert into matter_codex_agent_sessions(
+	session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
+	mattermost_root_post_id, status, ttl_seconds, expires_at
+)
+select 'unrelated-session', project_id, chat_id, role_id, 'thread_role',
+	mattermost_channel_id, 'unrelated-root', 'idle', 3600, now() + interval '1 hour'
+from matter_codex_agent_sessions where session_key = 'target-session'
+`); err != nil {
+		t.Fatalf("seed unrelated session: %v", err)
+	}
+	callbackDone := make(chan error, 1)
+	startedAt := time.Now()
+	go func() {
+		_, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетический hung publish.")
+		callbackDone <- err
+	}()
+	select {
+	case <-fixture.publisher.started:
+	case <-ctx.Done():
+		t.Fatal("publisher не достигнут до общего deadline")
+	}
+	sameRevokeDone := make(chan error, 1)
+	go func() {
+		_, err := fixture.pool.Exec(ctx, `
+insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+values ('session_key', 'source-session', 'synthetic same-subject deadline revocation')
+`)
+		sameRevokeDone <- err
+	}()
+	select {
+	case err := <-sameRevokeDone:
+		t.Fatalf("same-subject revoke обошёл delivery fence: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	unrelatedCtx, cancelUnrelated := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancelUnrelated()
+	if _, err := fixture.pool.Exec(unrelatedCtx, `
+insert into matter_codex_cluster_admin_revocations(resource_type, resource_key, reason)
+values ('session_key', 'unrelated-session', 'synthetic unrelated deadline revocation')
+`); err != nil {
+		t.Fatalf("unrelated revoke был заблокирован hung publish: %v", err)
+	}
+	select {
+	case err := <-callbackDone:
+		if err == nil {
+			t.Fatal("hung publish неожиданно завершился успешно")
+		}
+		if elapsed := time.Since(startedAt); elapsed > time.Second {
+			t.Fatalf("server-owned publish deadline не ограничил boundary: %s", elapsed)
+		}
+	case <-ctx.Done():
+		t.Fatal("callback boundary не завершился по server-owned deadline")
+	}
+	select {
+	case err := <-sameRevokeDone:
+		if err != nil {
+			t.Fatalf("same-subject revoke после deadline: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("same-subject revoke остался заблокирован после deadline")
+	}
+	var one int
+	if err := fixture.pool.QueryRow(ctx, `select 1`).Scan(&one); err != nil || one != 1 {
+		t.Fatalf("pgx pool не освобождён после deadline: value=%d error=%v", one, err)
+	}
+	if fixture.publisher.posts.Load() != 0 || fixture.publisher.attempts.Load() != 1 {
+		t.Fatalf("hung publisher posts=%d attempts=%d", fixture.publisher.posts.Load(), fixture.publisher.attempts.Load())
+	}
+}
+
+func TestExactPublishGuardTwoConnectionLockOrderHasNoDeadlock(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	sourceSession, err := fixture.service.cfg.Store.GetAgentSession(ctx, "source-session")
+	if err != nil {
+		t.Fatalf("read source session: %v", err)
+	}
+	childSession, err := fixture.service.cfg.Store.GetAgentSession(ctx, "target-session")
+	if err != nil {
+		t.Fatalf("read child session: %v", err)
+	}
+	writer, err := fixture.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin writer: %v", err)
+	}
+	defer func() { _ = writer.Rollback(context.Background()) }()
+	if _, err := writer.Exec(ctx, `
+select identity.id
+from matter_codex_mattermost_bot_identities identity
+where identity.role_id = $1
+for update
+`, sourceSession.RoleID); err != nil {
+		t.Fatalf("lock dependency subject row: %v", err)
+	}
+	guardDone := make(chan error, 1)
+	var networkCalls atomic.Int64
+	go func() {
+		guardDone <- fixture.service.withCurrentSessionsPublishGuard(ctx, childSession, sourceSession, "synthetic.lock_order", func(entity.AgentSession, entity.AgentSession) error {
+			networkCalls.Add(1)
+			return nil
+		})
+	}()
+	select {
+	case err := <-guardDone:
+		t.Fatalf("guard не дождался уже захваченной dependency row: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if _, err := writer.Exec(ctx, `
+delete from matter_codex_mattermost_bot_identities
+where role_id = $1
+`, sourceSession.RoleID); err != nil {
+		t.Fatalf("dependency-trigger writer revocation встретил deadlock/timeout: %v", err)
+	}
+	if err := writer.Commit(ctx); err != nil {
+		t.Fatalf("commit dependency writer: %v", err)
+	}
+	select {
+	case err := <-guardDone:
+		if err == nil {
+			t.Fatal("guard не увидел committed dependency revocation")
+		}
+	case <-ctx.Done():
+		t.Fatal("guard остался заблокирован после writer commit")
+	}
+	if networkCalls.Load() != 0 {
+		t.Fatalf("network calls after committed dependency revocation = %d", networkCalls.Load())
+	}
+}
+
 type postgresDelegationFixture struct {
 	pool       *pgxpool.Pool
 	service    *AgentSessionService
@@ -293,20 +431,32 @@ func (runner *postgresDelegationRunner) InspectSecretIntegrity(_ context.Context
 
 type postgresDelegationPublisher struct {
 	MattermostThreadPublisher
-	attempts    atomic.Int64
-	posts       atomic.Int64
-	failAt      atomic.Int64
-	beforeOnce  sync.Once
-	beforeFirst func()
+	attempts          atomic.Int64
+	posts             atomic.Int64
+	failAt            atomic.Int64
+	beforeOnce        sync.Once
+	beforeFirst       func()
+	blockUntilContext atomic.Bool
+	started           chan struct{}
+	startedOnce       sync.Once
 }
 
-func (publisher *postgresDelegationPublisher) PostThreadMessage(_ context.Context, _ MattermostThreadPostInput) (MattermostPostRef, error) {
+func (publisher *postgresDelegationPublisher) PostThreadMessage(ctx context.Context, _ MattermostThreadPostInput) (MattermostPostRef, error) {
 	attempt := publisher.attempts.Add(1)
 	publisher.beforeOnce.Do(func() {
 		if publisher.beforeFirst != nil {
 			publisher.beforeFirst()
 		}
 	})
+	if publisher.blockUntilContext.Load() {
+		publisher.startedOnce.Do(func() {
+			if publisher.started != nil {
+				close(publisher.started)
+			}
+		})
+		<-ctx.Done()
+		return MattermostPostRef{}, ctx.Err()
+	}
 	if publisher.failAt.Load() == attempt {
 		return MattermostPostRef{}, fmt.Errorf("synthetic Mattermost network failure")
 	}
@@ -394,6 +544,7 @@ where token_secret_ref = 'source-bot-secret'
 	service := NewAgentSessionService(AgentSessionServiceConfig{
 		Store: repository, RuntimeRunner: runner, ThreadPublisher: publisher, TurnDispatcher: chatRuns,
 		MattermostSiteURL: "https://mattermost.example", StorageReady: true, RuntimeReady: true,
+		CallbackPublishConcurrency: 32,
 	})
 	return postgresDelegationFixture{pool: pool, service: service, dispatcher: chatRuns, publisher: publisher}
 }

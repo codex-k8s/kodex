@@ -36,6 +36,7 @@ type repositoryDB interface {
 
 var _ adminrepo.Repository = (*Repository)(nil)
 var _ adminrepo.ExactAgentSessionsRuntimeGuardRepository = (*Repository)(nil)
+var _ adminrepo.ExactAgentSessionsPublishFenceRepository = (*Repository)(nil)
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool, db: pool}
@@ -542,7 +543,11 @@ func (repo *Repository) WithExactAgentSessionsRuntimeGuard(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("begin exact agent sessions runtime guard: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
+	}()
 	for _, binding := range normalized {
 		var roleProjectID int64
 		var roleEnabled bool
@@ -568,14 +573,116 @@ func (repo *Repository) WithExactAgentSessionsRuntimeGuard(ctx context.Context, 
 			return adminrepo.ErrClusterAdminAdmissionDenied
 		}
 	}
-	if _, err := tx.Exec(ctx, "lock table matter_codex_cluster_admin_revocations in share mode"); err != nil {
-		return fmt.Errorf("lock agent session runtime revocations: %w", err)
+	if err := lockExactAgentSessionSubjects(ctx, tx, normalized); err != nil {
+		return err
 	}
 	if err := sideEffect(newTransactionalRepository(tx)); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit exact agent sessions runtime guard: %w", err)
+	}
+	return nil
+}
+
+func (repo *Repository) LockExactAgentSessionsPublishFence(ctx context.Context, expected []entity.AgentSession) error {
+	if repo.pool != nil {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	normalized, err := normalizeExactAgentSessionBindings(expected)
+	if err != nil {
+		return err
+	}
+	sessionKeys := make([]string, 0, len(normalized))
+	for _, binding := range normalized {
+		sessionKeys = append(sessionKeys, strings.TrimSpace(binding.SessionKey))
+	}
+	var lockedCount int
+	if err := repo.db.QueryRow(ctx, query("cluster_admin_delivery_fences__lock.sql"), sessionKeys).Scan(&lockedCount); err != nil {
+		return fmt.Errorf("lock exact agent session delivery fences: %w", err)
+	}
+	if lockedCount != len(sessionKeys) {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return nil
+}
+
+func lockExactAgentSessionSubjects(ctx context.Context, tx pgx.Tx, expected []entity.AgentSession) error {
+	type roleSubject struct {
+		id        int64
+		projectID int64
+	}
+	type chatSubject struct {
+		id        int64
+		projectID int64
+		channelID string
+	}
+	type participantSubject struct {
+		chatID int64
+		roleID int64
+	}
+	rolesByID := make(map[int64]roleSubject, len(expected))
+	chatsByID := make(map[int64]chatSubject, len(expected))
+	participantsByKey := make(map[string]participantSubject, len(expected))
+	for _, binding := range expected {
+		rolesByID[binding.RoleID] = roleSubject{id: binding.RoleID, projectID: binding.ProjectID}
+		chatsByID[binding.ChatID] = chatSubject{id: binding.ChatID, projectID: binding.ProjectID, channelID: strings.TrimSpace(binding.MattermostChannelID)}
+		key := fmt.Sprintf("%020d\x00%020d", binding.ChatID, binding.RoleID)
+		participantsByKey[key] = participantSubject{chatID: binding.ChatID, roleID: binding.RoleID}
+	}
+	roles := make([]roleSubject, 0, len(rolesByID))
+	for _, subject := range rolesByID {
+		roles = append(roles, subject)
+	}
+	sort.Slice(roles, func(i, j int) bool { return roles[i].id < roles[j].id })
+	for _, subject := range roles {
+		var projectID int64
+		var enabled bool
+		if err := tx.QueryRow(ctx, query("agent_roles__lock_exact_runtime.sql"), subject.id).Scan(&projectID, &enabled); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			return fmt.Errorf("lock exact agent role runtime subject: %w", err)
+		}
+		if projectID != subject.projectID || !enabled {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	chats := make([]chatSubject, 0, len(chatsByID))
+	for _, subject := range chatsByID {
+		chats = append(chats, subject)
+	}
+	sort.Slice(chats, func(i, j int) bool { return chats[i].id < chats[j].id })
+	for _, subject := range chats {
+		var projectID int64
+		var channelID string
+		if err := tx.QueryRow(ctx, query("chats__lock_exact_runtime.sql"), subject.id).Scan(&projectID, &channelID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			return fmt.Errorf("lock exact chat runtime subject: %w", err)
+		}
+		if projectID != subject.projectID || strings.TrimSpace(channelID) != subject.channelID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	participantKeys := make([]string, 0, len(participantsByKey))
+	for key := range participantsByKey {
+		participantKeys = append(participantKeys, key)
+	}
+	sort.Strings(participantKeys)
+	for _, key := range participantKeys {
+		subject := participantsByKey[key]
+		var enabled bool
+		if err := tx.QueryRow(ctx, query("chat_participants__lock_exact_runtime.sql"), subject.chatID, subject.roleID).Scan(&enabled); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			return fmt.Errorf("lock exact chat participant runtime subject: %w", err)
+		}
+		if !enabled {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
 	}
 	return nil
 }

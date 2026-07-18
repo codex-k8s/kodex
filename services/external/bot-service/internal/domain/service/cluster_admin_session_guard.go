@@ -121,8 +121,17 @@ func (svc *AgentSessionService) withCurrentSessionsPublishGuard(ctx context.Cont
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	return repository.WithExactAgentSessionsRuntimeGuard(ctx, []entity.AgentSession{child, source}, func(lockedStore adminrepo.Repository) error {
-		return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, lockedStore, child, source, operation, func(currentChild entity.AgentSession, currentSource entity.AgentSession, _ adminrepo.Repository) error {
-			return sideEffect(currentChild, currentSource)
+		return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, lockedStore, child, source, operation+".dependencies", func(currentChild entity.AgentSession, currentSource entity.AgentSession, dependencyStore adminrepo.Repository) error {
+			fenceStore, ok := dependencyStore.(adminrepo.ExactAgentSessionsPublishFenceRepository)
+			if !ok {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			if err := fenceStore.LockExactAgentSessionsPublishFence(ctx, []entity.AgentSession{currentChild, currentSource}); err != nil {
+				return err
+			}
+			return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, dependencyStore, currentChild, currentSource, operation+".fenced_recheck", func(recheckedChild entity.AgentSession, recheckedSource entity.AgentSession, _ adminrepo.Repository) error {
+				return sideEffect(recheckedChild, recheckedSource)
+			})
 		})
 	})
 }

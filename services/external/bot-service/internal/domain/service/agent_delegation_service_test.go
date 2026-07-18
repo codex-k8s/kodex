@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
@@ -33,6 +34,13 @@ func (store *fakeAdminStore) WithExactAgentSessionsRuntimeGuard(_ context.Contex
 		}
 	}
 	return sideEffect(store)
+}
+
+func (store *fakeAdminStore) LockExactAgentSessionsPublishFence(_ context.Context, expected []entity.AgentSession) error {
+	if len(expected) == 0 {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return nil
 }
 
 func TestAgentSessionListsChatsAvailableToTargetAgent(t *testing.T) {
@@ -216,6 +224,62 @@ func TestAgentSessionReturnsCrossChatResultToImmediateRequester(t *testing.T) {
 	}
 	if dispatcher.calls != 1 {
 		t.Fatalf("dispatcher calls after duplicate callback = %d", dispatcher.calls)
+	}
+}
+
+func TestReturnToRequesterRejectsPublicationBoundsBeforeStorage(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  AgentSessionServiceConfig
+		message string
+		want    string
+	}{
+		{
+			name:    "bytes",
+			config:  AgentSessionServiceConfig{CallbackMaxBytes: 16},
+			message: strings.Repeat("x", 17),
+			want:    "byte limit",
+		},
+		{
+			name: "chunks",
+			config: AgentSessionServiceConfig{
+				CallbackMaxBytes: 1000, CallbackMaxChunks: 2, CallbackMaxChunkBytes: 300,
+			},
+			message: strings.Repeat("я", 400),
+			want:    "chunk limit",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			svc := NewAgentSessionService(test.config)
+			if _, err := svc.ReturnToRequester(context.Background(), "not-read", "not-read", test.message); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("ReturnToRequester() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestReturnToRequesterRejectsConcurrencyBeforeStorage(t *testing.T) {
+	svc := NewAgentSessionService(AgentSessionServiceConfig{CallbackPublishConcurrency: 1})
+	release, err := svc.admitCallbackPublication("занятый callback")
+	if err != nil {
+		t.Fatalf("первый admission: %v", err)
+	}
+	defer release()
+	if _, err := svc.ReturnToRequester(context.Background(), "not-read", "not-read", "второй callback"); err == nil || !strings.Contains(err.Error(), "concurrency") {
+		t.Fatalf("ReturnToRequester() error = %v", err)
+	}
+}
+
+func TestBoundMattermostChunksByBytesPreservesUTF8AndHardLimit(t *testing.T) {
+	chunks := boundMattermostChunksByBytes([]string{strings.Repeat("я", 20)}, 24)
+	if len(chunks) < 2 {
+		t.Fatalf("chunks = %#v", chunks)
+	}
+	for _, chunk := range chunks {
+		if !utf8.ValidString(chunk) || len(agentNoTriggerMessage(chunk)) > 24 {
+			t.Fatalf("невалидный bounded chunk: %q bytes=%d", chunk, len(agentNoTriggerMessage(chunk)))
+		}
 	}
 }
 
