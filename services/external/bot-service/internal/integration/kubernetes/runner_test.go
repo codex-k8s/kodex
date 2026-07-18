@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
@@ -630,6 +631,120 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	}
 	if !hasSecretVolume(podSpec.Volumes, sessionSecretVolume, started.SecretName) {
 		t.Fatalf("session secret volume missing: %#v", podSpec.Volumes)
+	}
+}
+
+func TestStartAgentSessionFrozenTokenSecretIsExactNoOp(t *testing.T) {
+	const token = "synthetic-frozen-session-token"
+	const sessionKey = "frozen-session"
+	const secretName = "mc-session-token-frozen-session"
+	digest := sha256.Sum256([]byte(token))
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		WorkspaceStorageSize:      "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	input := runtimerepo.AgentSessionPodInput{
+		SessionKey: sessionKey, Role: "mattercodex-admin", KubernetesAccess: "cluster-admin",
+		BotServiceURL: "http://bot-service", InternalToken: token, CodexAuthSecretName: "matter-codex-codex-auth-main",
+		TokenSecretIntegrity: &runtimerepo.SecretIntegrity{
+			SecretName: secretName, SecretKey: "token", ContentSHA256: hex.EncodeToString(digest[:]),
+			UID: "frozen-secret-uid", ResourceVersion: "17",
+		},
+	}
+	if _, err := client.CoreV1().Secrets("mattermost").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "mattermost", UID: "frozen-secret-uid", ResourceVersion: "17"},
+		Data:       map[string][]byte{"token": []byte(token)},
+	}, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create secret fixture: %v", err)
+	}
+	if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Create(context.Background(), runner.sessionPVC(sessionKey, input.Role), metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create pvc fixture: %v", err)
+	}
+	if _, err := client.CoreV1().Pods("mattermost").Create(context.Background(), runner.sessionPod(input), metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create pod fixture: %v", err)
+	}
+	client.ClearActions()
+	if _, err := runner.StartAgentSession(context.Background(), input); err != nil {
+		t.Fatalf("StartAgentSession() error = %v", err)
+	}
+	for _, action := range client.Actions() {
+		if action.GetResource().Resource == "secrets" && action.GetVerb() != "get" {
+			t.Fatalf("frozen token secret was mutated: %s %s", action.GetVerb(), action.GetResource().Resource)
+		}
+	}
+	secret, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), secretName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get frozen token secret: %v", err)
+	}
+	if secret.ResourceVersion != "17" || string(secret.Data["token"]) != token {
+		t.Fatalf("frozen token secret changed: resourceVersion=%q", secret.ResourceVersion)
+	}
+}
+
+func TestStartAgentSessionFrozenTokenSecretDriftFailsBeforeEffects(t *testing.T) {
+	const token = "synthetic-frozen-session-token"
+	digest := sha256.Sum256([]byte(token))
+	expected := runtimerepo.SecretIntegrity{
+		SecretName: "mc-session-token-frozen-session", SecretKey: "token", ContentSHA256: hex.EncodeToString(digest[:]),
+		UID: "frozen-secret-uid", ResourceVersion: "17",
+	}
+	tests := []struct {
+		name      string
+		secret    *corev1.Secret
+		readError bool
+	}{
+		{name: "missing"},
+		{name: "read error", readError: true},
+		{name: "content", secret: frozenTokenSecretFixture("different-token", "frozen-secret-uid", "17")},
+		{name: "uid", secret: frozenTokenSecretFixture(token, "different-uid", "17")},
+		{name: "resource version", secret: frozenTokenSecretFixture(token, "frozen-secret-uid", "18")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client := fake.NewSimpleClientset()
+			if test.secret != nil {
+				if _, err := client.CoreV1().Secrets("mattermost").Create(context.Background(), test.secret, metav1.CreateOptions{}); err != nil {
+					t.Fatalf("create secret fixture: %v", err)
+				}
+			}
+			if test.readError {
+				client.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, fmt.Errorf("synthetic secret read failure")
+				})
+			}
+			runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost", WorkspaceStorageSize: "1Gi"})
+			if err != nil {
+				t.Fatalf("NewRunnerWithClient() error = %v", err)
+			}
+			client.ClearActions()
+			_, err = runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
+				SessionKey: "frozen-session", Role: "mattercodex-admin", KubernetesAccess: "cluster-admin",
+				BotServiceURL: "http://bot-service", InternalToken: token, TokenSecretIntegrity: &expected,
+			})
+			if err == nil {
+				t.Fatal("StartAgentSession() error = nil")
+			}
+			for _, action := range client.Actions() {
+				if action.GetVerb() != "get" || action.GetResource().Resource != "secrets" {
+					t.Fatalf("drift produced an effect: %s %s", action.GetVerb(), action.GetResource().Resource)
+				}
+			}
+		})
+	}
+}
+
+func frozenTokenSecretFixture(token string, uid string, resourceVersion string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "mc-session-token-frozen-session", Namespace: "mattermost", UID: types.UID(uid), ResourceVersion: resourceVersion,
+		},
+		Data: map[string][]byte{"token": []byte(token)},
 	}
 }
 

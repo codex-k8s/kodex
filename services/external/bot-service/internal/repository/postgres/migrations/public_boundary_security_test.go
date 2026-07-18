@@ -276,7 +276,7 @@ where name = 'developer'
 	}
 	ownerPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("runtime-role migration through v24: %v", err)
+		t.Fatalf("runtime-role migration through v25: %v", err)
 	}
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
 	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
@@ -431,9 +431,9 @@ func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24Upgrade(t *testing.T) {
 	}
 	stagingPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("upgrade exact N-1 database v22->v23->v24: %v", err)
+		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25: %v", err)
 	}
-	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 24 {
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 25 {
 		t.Fatalf("upgraded exact N-1 schema version = %d, error=%v", version, err)
 	}
 
@@ -600,17 +600,17 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	if err := migrations.DownOne(ctx, dsn); err == nil {
-		t.Fatal("v24 down unexpectedly succeeded")
+		t.Fatal("v25 down unexpectedly succeeded")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 24 {
+	if err != nil || version != 25 {
 		t.Fatalf("version after failed down = %d, error=%v", version, err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated up after failed down: %v", err)
 	}
 	version, err = migrations.Version(ctx, dsn)
-	if err != nil || version != 24 {
+	if err != nil || version != 25 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
 	}
 }
@@ -754,12 +754,15 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 		t.Fatalf("подготовка существующей runtime binding: %v", err)
 	}
 	const existingSessionKey = "existing-admin-session"
+	const rebindSessionKey = "rebind-admin-session"
 	if _, err := pool.Exec(ctx, `
 		insert into matter_codex_agent_sessions(
 			session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
 			mattermost_root_post_id, ttl_seconds, expires_at
-		) values ($1, $2, $3, $4, 'thread', 'channel-existing', 'root-existing', 3600, now() + interval '1 hour')
-	`, existingSessionKey, projectID, chatID, roleID); err != nil {
+		) values
+			($1, $3, $4, $5, 'thread', 'channel-existing', 'root-existing', 3600, now() + interval '1 hour'),
+			($2, $3, $4, $5, 'thread', 'channel-existing', 'root-rebind', 3600, now() + interval '1 hour')
+	`, existingSessionKey, rebindSessionKey, projectID, chatID, roleID); err != nil {
 		t.Fatalf("подготовка существующей session binding: %v", err)
 	}
 	const blockedSessionKey = "blocked-admin-session"
@@ -776,7 +779,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 		t.Fatalf("upgrade historical base v21->current main v22: %v", err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v22->v23->v24: %v", err)
+		t.Fatalf("upgrade v22->v23->v24->v25: %v", err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()
@@ -838,6 +841,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	if err != nil || !requiresGuard {
 		t.Fatalf("классификация frozen cluster-admin session: required=%t error=%v", requiresGuard, err)
 	}
+	testFrozenSessionKeyRebindDenied(t, ctx, pool, repository, projectID, chatID, rebindSessionKey)
 	persistenceCallback := false
 	err = repository.WithExistingClusterAdminPersistenceGuard(ctx, securityrepo.ClusterAdminBindingInput{
 		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
@@ -1082,6 +1086,60 @@ func testMonotonicAccountDependencyRevocations(t *testing.T, ctx context.Context
 	var profileExact bool
 	if err := pool.QueryRow(ctx, `select matter_codex_cluster_admin_profile_exact('developer')`).Scan(&profileExact); err != nil || profileExact {
 		t.Fatalf("profile admission survived dependency revocation: exact=%t error=%v", profileExact, err)
+	}
+}
+
+func testFrozenSessionKeyRebindDenied(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	repository *postgresrepo.Repository,
+	projectID int64,
+	chatID int64,
+	sessionKey string,
+) {
+	t.Helper()
+	var ordinaryRoleID int64
+	if err := pool.QueryRow(ctx, `
+		insert into matter_codex_agent_roles(
+			project_id, name, role_type, kubernetes_access, sandbox_mode, enabled
+		) values ($1, 'ordinary-rebind', 'worker', 'read-only', 'workspace-write', true)
+		returning id
+	`, projectID).Scan(&ordinaryRoleID); err != nil {
+		t.Fatalf("создание обычной роли для session_key regression: %v", err)
+	}
+	if tag, err := pool.Exec(ctx, `delete from matter_codex_agent_sessions where session_key = $1`, sessionKey); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("delete frozen session перед rebind: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	requiresGuard, err := repository.RequiresClusterAdminSessionGuard(ctx, ordinaryRoleID, sessionKey)
+	if err != nil || !requiresGuard {
+		t.Fatalf("rebound frozen key classifier: required=%t error=%v", requiresGuard, err)
+	}
+	insertSQL := `
+		insert into matter_codex_agent_sessions(
+			session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
+			mattermost_root_post_id, ttl_seconds, expires_at
+		) values ($1, $2, $3, $4, 'thread', $5, $6, 3600, now() + interval '1 hour')
+	`
+	if tag, err := pool.Exec(ctx, insertSQL, sessionKey, projectID, chatID, ordinaryRoleID, "channel-existing", "root-rebound"); err != nil || tag.RowsAffected() != 0 {
+		t.Fatalf("INSERT повторно использовал frozen session_key: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	if tag, err := pool.Exec(ctx, insertSQL+` on conflict (session_key) do update set role_id = excluded.role_id`, sessionKey, projectID, chatID, ordinaryRoleID, "channel-forged", "root-forged"); err != nil || tag.RowsAffected() != 0 {
+		t.Fatalf("UPSERT повторно использовал frozen session_key: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	const ordinarySessionKey = "ordinary-unique-session"
+	if tag, err := pool.Exec(ctx, insertSQL, ordinarySessionKey, projectID, chatID, ordinaryRoleID, "channel-existing", "root-ordinary"); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("обычный уникальный session_key не создан: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	if required, err := repository.RequiresClusterAdminSessionGuard(ctx, ordinaryRoleID, ordinarySessionKey); err != nil || required {
+		t.Fatalf("обычный уникальный key ошибочно guarded: required=%t error=%v", required, err)
+	}
+	if tag, err := pool.Exec(ctx, `update matter_codex_agent_sessions set session_key = $1 where session_key = $2`, sessionKey, ordinarySessionKey); err != nil || tag.RowsAffected() != 0 {
+		t.Fatalf("UPDATE привязал ordinary row к frozen session_key: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+	var reboundRows int
+	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_agent_sessions where session_key = $1`, sessionKey).Scan(&reboundRows); err != nil || reboundRows != 0 {
+		t.Fatalf("frozen session_key восстановлен после revoke: rows=%d error=%v", reboundRows, err)
 	}
 }
 

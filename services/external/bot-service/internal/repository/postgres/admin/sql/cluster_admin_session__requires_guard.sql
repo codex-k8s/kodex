@@ -2,8 +2,13 @@
 select exists (
 	select 1
 	from matter_codex_cluster_admin_session_bindings
-	where role_id = $1
-		and session_key = $2
+	where session_key = $2
+)
+or exists (
+	select 1
+	from matter_codex_cluster_admin_revocations
+	where resource_type = 'session_key'
+		and resource_key = $2
 )
 or exists (
 	select 1

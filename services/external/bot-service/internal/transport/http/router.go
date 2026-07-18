@@ -239,6 +239,10 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agents_action"})
 		return
 	}
+	if contextString(request.Context, "kind") == "agent_turn" && contextString(request.Context, "action") == "stop_turn" {
+		router.handleAgentTurnStopAction(w, r, request)
+		return
+	}
 	interaction, err := router.interactionSecurity.AuthenticateAction(r.Context(), statusservice.ActionCallback{
 		Context:   request.Context,
 		UserID:    strings.TrimSpace(request.UserId),
@@ -327,6 +331,65 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, status, response)
 }
 
+func (router *Router) handleAgentTurnStopAction(w http.ResponseWriter, r *http.Request, request mattermostmodel.PostActionIntegrationRequest) {
+	if router.sessionService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "agent_session_service_not_configured"})
+		return
+	}
+	turnIDs := contextInt64List(request.Context, "turn_ids")
+	resourceID, resourceErr := strconv.ParseInt(contextString(request.Context, "resource_id"), 10, 64)
+	if len(turnIDs) != 1 || resourceErr != nil || resourceID <= 0 || turnIDs[0] != resourceID || contextString(request.Context, "resource_type") != "agent_session_turn" {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agent_turn_action"})
+		return
+	}
+	callback := statusservice.ActionCallback{
+		Context: request.Context, UserID: strings.TrimSpace(request.UserId),
+		ChannelID: strings.TrimSpace(request.ChannelId), PostID: strings.TrimSpace(request.PostId),
+	}
+	var plan statusservice.StopAgentSessionTurnsPlan
+	interaction, err := router.interactionSecurity.AuthenticateActionAtomic(r.Context(), callback, func(interaction statusservice.AuthenticatedInteraction, store adminrepo.Repository) error {
+		if interaction.ResourceType != "agent_session_turn" || interaction.ResourceID != strconv.FormatInt(resourceID, 10) || strings.TrimSpace(interaction.Scope.Session) == "" || strings.TrimSpace(interaction.Scope.Workspace) == "" {
+			return statusservice.ErrInteractionAuthentication
+		}
+		var prepareErr error
+		plan, prepareErr = router.sessionService.PrepareStopAgentSessionTurns(r.Context(), statusservice.StopAgentSessionTurnsCommand{
+			TurnIDs: []int64{resourceID}, SessionKey: interaction.Scope.Session, WorkspaceScope: interaction.Scope.Workspace,
+			UserID: interaction.Actor.UserID, UserName: interaction.Actor.UserName,
+			ChannelID: interaction.ChannelID, PostID: interaction.CallbackPostID,
+		}, store)
+		return prepareErr
+	})
+	if err != nil {
+		router.writeInteractionDenied(w, err)
+		return
+	}
+	result, err := router.sessionService.FinalizeStopAgentSessionTurns(r.Context(), plan)
+	if err != nil {
+		router.logWarn("agent turn stop failed", "error", err)
+		writeJSON(w, http.StatusBadGateway, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("chat.session.turn.stop.failed", nil)})
+		return
+	}
+	response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.Message}
+	if result.Card != nil {
+		var update *mattermostmodel.Post
+		updateErr := router.sessionService.GuardStopAgentSessionTurnsResponse(r.Context(), plan, func() error {
+			var guardErr error
+			update, guardErr = router.securedCardUpdate(r.Context(), result.Card, interaction)
+			return guardErr
+		})
+		if updateErr != nil {
+			if errors.Is(updateErr, adminrepo.ErrClusterAdminAdmissionDenied) {
+				router.writeInteractionDenied(w, updateErr)
+				return
+			}
+			writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
+		response.Update = update
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (router *Router) runAsyncMenuAction(parent context.Context, command statusservice.MenuActionCommand) {
 	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
 	defer cancel()
@@ -343,28 +406,7 @@ func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Reque
 	}
 	switch contextString(request.Context, "action") {
 	case "stop_turn":
-		result, err := router.sessionService.StopAgentSessionTurns(r.Context(), statusservice.StopAgentSessionTurnsCommand{
-			TurnIDs:   contextInt64List(request.Context, "turn_ids"),
-			UserID:    interaction.Actor.UserID,
-			UserName:  interaction.Actor.UserName,
-			ChannelID: interaction.ChannelID,
-			PostID:    interaction.CallbackPostID,
-		})
-		if err != nil {
-			router.logWarn("agent turn stop failed", "error", err)
-			writeJSON(w, http.StatusBadGateway, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("chat.session.turn.stop.failed", nil)})
-			return
-		}
-		response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.Message}
-		if result.Card != nil {
-			update, err := router.securedCardUpdate(r.Context(), result.Card, interaction)
-			if err != nil {
-				writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
-				return
-			}
-			response.Update = update
-		}
-		writeJSON(w, http.StatusOK, response)
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agent_turn_action"})
 	case "retry_turn":
 		turnIDs := contextInt64List(request.Context, "turn_ids")
 		if len(turnIDs) != 1 {

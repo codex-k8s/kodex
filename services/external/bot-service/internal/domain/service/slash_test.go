@@ -3337,6 +3337,7 @@ type fakeRuntimeRunner struct {
 	sessionRuntimeHealth        runtimerepo.AgentSessionRuntimeHealth
 	sessionRuntimeHealthCalls   int
 	sessionStartErrors          []error
+	sessionCleanupErrors        []error
 	botTokenSecrets             map[string]string
 	botTokenSecretReads         int
 	cleanedRunID                string
@@ -3603,6 +3604,13 @@ func (runner *fakeRuntimeRunner) StartAgentSession(_ context.Context, input runt
 func (runner *fakeRuntimeRunner) CleanupAgentSession(_ context.Context, sessionKey string) (runtimerepo.AgentSessionCleanupResult, error) {
 	runner.cleanedSessionKey = sessionKey
 	runner.cleanedSessionKeys = append(runner.cleanedSessionKeys, sessionKey)
+	if len(runner.sessionCleanupErrors) > 0 {
+		err := runner.sessionCleanupErrors[0]
+		runner.sessionCleanupErrors = runner.sessionCleanupErrors[1:]
+		if err != nil {
+			return runtimerepo.AgentSessionCleanupResult{}, err
+		}
+	}
 	return runtimerepo.AgentSessionCleanupResult{
 		SessionKey: sessionKey,
 		Namespace:  "mattermost",

@@ -30,18 +30,19 @@ func (reader *countingConversationReader) SearchChannelPosts(context.Context, st
 
 type admittedAdminStore struct {
 	*fakeAdminStore
-	allowed          bool
-	admission        securityrepo.ClusterAdminAdmissionInput
-	bindingAdmission securityrepo.ClusterAdminBindingInput
-	calls            int
-	bindingCalls     int
-	guardCalls       int
-	guardInputs      []securityrepo.ClusterAdminBindingInput
-	denyBinding      bool
-	denyGuard        bool
-	denyGuardAt      int
-	frozenSessions   map[string]bool
-	subjectErr       error
+	allowed            bool
+	admission          securityrepo.ClusterAdminAdmissionInput
+	bindingAdmission   securityrepo.ClusterAdminBindingInput
+	calls              int
+	bindingCalls       int
+	guardCalls         int
+	guardInputs        []securityrepo.ClusterAdminBindingInput
+	denyBinding        bool
+	denyGuard          bool
+	denyGuardAt        int
+	denyGuardOperation string
+	frozenSessions     map[string]bool
+	subjectErr         error
 }
 
 func (store *admittedAdminStore) RequiresClusterAdminSessionGuard(_ context.Context, roleID int64, sessionKey string) (bool, error) {
@@ -66,17 +67,23 @@ func (store *admittedAdminStore) WithExistingClusterAdminPersistenceGuard(_ cont
 func (store *admittedAdminStore) withExistingClusterAdminGuard(input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
 	store.guardCalls++
 	store.guardInputs = append(store.guardInputs, input)
-	if !store.allowed || store.denyGuard || (store.denyGuardAt > 0 && store.guardCalls == store.denyGuardAt) {
+	if !store.allowed || store.denyGuard || (store.denyGuardAt > 0 && store.guardCalls == store.denyGuardAt) || store.denyGuardOperation == input.Operation {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	return sideEffect()
 }
 
 func (store *admittedAdminStore) ListClusterAdminSecretIntegrity(context.Context, int64, string) ([]securityrepo.SecretIntegrityBinding, error) {
-	return []securityrepo.SecretIntegrityBinding{{
-		Kind: "openai", SecretRef: "synthetic-openai-secret", SecretKey: "auth.json",
-		ContentSHA256: "synthetic-sha256", ResourceUID: "synthetic-uid", ResourceVersion: "1",
-	}}, nil
+	return []securityrepo.SecretIntegrityBinding{
+		{
+			Kind: "openai", SecretRef: "synthetic-openai-secret", SecretKey: "auth.json",
+			ContentSHA256: "synthetic-sha256", ResourceUID: "synthetic-uid", ResourceVersion: "1",
+		},
+		{
+			Kind: "session", SecretRef: "session-secret", SecretKey: "token",
+			ContentSHA256: "synthetic-sha256", ResourceUID: "synthetic-uid", ResourceVersion: "1",
+		},
+	}, nil
 }
 
 func (store *admittedAdminStore) AdmitExistingClusterAdminBinding(_ context.Context, input securityrepo.ClusterAdminBindingInput) (bool, error) {
@@ -719,8 +726,8 @@ func TestClusterAdminRepairGuardsStaleAndRunningSessionAtEveryEffectBoundary(t *
 		wantOperation string
 	}{
 		{name: "health", denyAt: 1, wantOperation: "agent_session.repair_running_health.side_effect"},
-		{name: "complete", denyAt: 2, wantHealth: 1, wantOperation: "agent_session.repair_running_complete.side_effect"},
-		{name: "cleanup", denyAt: 3, wantHealth: 1, wantComplete: 1, wantOperation: "agent_session.repair_running_cleanup.side_effect"},
+		{name: "cleanup", denyAt: 2, wantHealth: 1, wantOperation: "agent_session.repair_running_cleanup.side_effect"},
+		{name: "complete", denyAt: 3, wantHealth: 1, wantCleanup: 1, wantOperation: "agent_session.repair_running_complete.side_effect"},
 		{name: "reset", denyAt: 4, wantHealth: 1, wantComplete: 1, wantCleanup: 1, wantOperation: "agent_session.repair_running_reset.side_effect"},
 	} {
 		t.Run("running "+test.name, func(t *testing.T) {
@@ -741,6 +748,100 @@ func TestClusterAdminRepairGuardsStaleAndRunningSessionAtEveryEffectBoundary(t *
 			}
 		})
 	}
+
+	for _, test := range []struct {
+		name       string
+		turnStatus string
+	}{
+		{name: "stale", turnStatus: agentSessionTurnSucceeded},
+		{name: "running", turnStatus: agentSessionTurnRunning},
+	} {
+		for _, cleanupErr := range []error{errors.New("synthetic cleanup error"), context.DeadlineExceeded} {
+			t.Run(test.name+" cleanup failure "+cleanupErr.Error(), func(t *testing.T) {
+				store, runner, sessionKey := clusterAdminRepairFixture(test.turnStatus, true)
+				runner.sessionCleanupErrors = []error{cleanupErr}
+				if test.turnStatus == agentSessionTurnRunning {
+					runner.sessionRuntimeHealth = runtimerepo.AgentSessionRuntimeHealth{SessionKey: sessionKey, Exists: true, Terminal: true, Phase: "Failed", Reason: "synthetic"}
+				}
+				guarded := &admittedAdminStore{fakeAdminStore: store, allowed: true}
+				svc := NewChatRunService(ChatRunServiceConfig{Store: guarded, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true})
+				result, err := svc.RepairAgentSessions(context.Background(), 10)
+				if err != nil || result.Failed != 1 {
+					t.Fatalf("result=%#v error=%v", result, err)
+				}
+				if len(runner.cleanedSessionKeys) != 1 || store.completeTurnCalls != 0 || store.resetSessionCalls != 0 || store.auditCalls != 0 {
+					t.Fatalf("cleanup failure effects cleanup=%d complete=%d reset=%d audit=%d", len(runner.cleanedSessionKeys), store.completeTurnCalls, store.resetSessionCalls, store.auditCalls)
+				}
+				persisted := store.agentSessions[sessionKey]
+				if persisted.PodName == "" || persisted.ActiveTurnID == 0 || persisted.Status != agentSessionStatusRunning {
+					t.Fatalf("cleanup failure lost retry state: %#v", persisted)
+				}
+			})
+		}
+	}
+}
+
+func TestClusterAdminStopTurnGuardsTargetAtEveryBoundary(t *testing.T) {
+	tests := []struct {
+		name            string
+		denyOperation   string
+		wantCanceled    bool
+		wantCleanup     int
+		wantReset       int
+		wantCardUpdates int
+	}{
+		{name: "prepare", denyOperation: "agent_session.stop_prepare.side_effect"},
+		{name: "cleanup", denyOperation: "agent_session.stop_cleanup.side_effect", wantCanceled: true},
+		{name: "reset", denyOperation: "agent_session.stop_reset.side_effect", wantCanceled: true, wantCleanup: 1},
+		{name: "card", denyOperation: "agent_session.stop_card.side_effect", wantCanceled: true, wantCleanup: 1, wantReset: 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			baseStore, runner, publisher, _ := clusterAdminCurrentSessionFixture()
+			session := baseStore.agentSessions["session-admin"]
+			session.PodName = "admin-pod"
+			baseStore.agentSessions[session.SessionKey] = session
+			guarded := &admittedAdminStore{
+				fakeAdminStore: baseStore, allowed: true, frozenSessions: map[string]bool{session.SessionKey: true},
+				denyGuardOperation: test.denyOperation,
+			}
+			svc := NewAgentSessionService(AgentSessionServiceConfig{Store: guarded, RuntimeRunner: runner, ThreadPublisher: publisher, StorageReady: true, RuntimeReady: true})
+			_, err := svc.StopAgentSessionTurns(context.Background(), StopAgentSessionTurnsCommand{TurnIDs: []int64{1}})
+			if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+				t.Fatalf("StopAgentSessionTurns() error = %v", err)
+			}
+			turn, turnErr := baseStore.GetAgentSessionTurn(context.Background(), 1)
+			if turnErr != nil || (turn.Status == agentSessionTurnCanceled) != test.wantCanceled {
+				t.Fatalf("turn=%#v error=%v", turn, turnErr)
+			}
+			if len(runner.cleanedSessionKeys) != test.wantCleanup || baseStore.resetSessionCalls != test.wantReset || len(publisher.cardUpdates) != test.wantCardUpdates {
+				t.Fatalf("effects cleanup=%d reset=%d cards=%d", len(runner.cleanedSessionKeys), baseStore.resetSessionCalls, len(publisher.cardUpdates))
+			}
+			for _, input := range guarded.guardInputs {
+				if input.SessionKey != "session-admin" || input.RoleID != 1 || input.ChatID != 1 || input.MattermostChannelID != "channel-admin" {
+					t.Fatalf("target guard subject=%#v", input)
+				}
+			}
+		})
+	}
+
+	t.Run("cleanup error preserves runtime refs", func(t *testing.T) {
+		baseStore, runner, publisher, _ := clusterAdminCurrentSessionFixture()
+		session := baseStore.agentSessions["session-admin"]
+		session.PodName = "admin-pod"
+		baseStore.agentSessions[session.SessionKey] = session
+		runner.sessionCleanupErrors = []error{context.DeadlineExceeded}
+		guarded := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, frozenSessions: map[string]bool{session.SessionKey: true}}
+		svc := NewAgentSessionService(AgentSessionServiceConfig{Store: guarded, RuntimeRunner: runner, ThreadPublisher: publisher, StorageReady: true, RuntimeReady: true})
+		_, err := svc.StopAgentSessionTurns(context.Background(), StopAgentSessionTurnsCommand{TurnIDs: []int64{1}})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("StopAgentSessionTurns() error = %v", err)
+		}
+		persisted := baseStore.agentSessions[session.SessionKey]
+		if persisted.PodName != "admin-pod" || persisted.TokenSecretRef == "" || baseStore.resetSessionCalls != 0 || len(publisher.cardUpdates) != 0 {
+			t.Fatalf("cleanup error lost retry state: session=%#v reset=%d cards=%d", persisted, baseStore.resetSessionCalls, len(publisher.cardUpdates))
+		}
+	})
 }
 
 func TestClusterAdminCapacityEvictionGuardsSelectedCandidateAtEveryBoundary(t *testing.T) {

@@ -126,16 +126,30 @@ type UpdateAgentSessionTurnStatusCommand struct {
 }
 
 type StopAgentSessionTurnsCommand struct {
-	TurnIDs   []int64
-	UserID    string
-	UserName  string
-	ChannelID string
-	PostID    string
+	TurnIDs        []int64
+	SessionKey     string
+	WorkspaceScope string
+	UserID         string
+	UserName       string
+	ChannelID      string
+	PostID         string
 }
 
 type StopAgentSessionTurnsResult struct {
 	Message string
 	Card    *MattermostCard
+}
+
+type StopAgentSessionTurnsPlan struct {
+	command StopAgentSessionTurnsCommand
+	items   []stopAgentSessionTurnPlanItem
+	skipped int
+}
+
+type stopAgentSessionTurnPlanItem struct {
+	session        entity.AgentSession
+	turn           entity.AgentSessionTurn
+	cleanupRuntime bool
 }
 
 type RetryAgentSessionTurnCommand struct {
@@ -415,15 +429,28 @@ func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Conte
 }
 
 func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, command StopAgentSessionTurnsCommand) (StopAgentSessionTurnsResult, error) {
+	plan, err := svc.PrepareStopAgentSessionTurns(ctx, command, svc.cfg.Store)
+	if err != nil {
+		return StopAgentSessionTurnsResult{}, err
+	}
+	return svc.FinalizeStopAgentSessionTurns(ctx, plan)
+}
+
+func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context, command StopAgentSessionTurnsCommand, store adminrepo.Repository) (StopAgentSessionTurnsPlan, error) {
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
-		return StopAgentSessionTurnsResult{}, fmt.Errorf("storage is not ready")
+		return StopAgentSessionTurnsPlan{}, fmt.Errorf("storage is not ready")
 	}
 	if len(command.TurnIDs) == 0 {
-		return StopAgentSessionTurnsResult{}, fmt.Errorf("turn id is required")
+		return StopAgentSessionTurnsPlan{}, fmt.Errorf("turn id is required")
+	}
+	if store == nil {
+		return StopAgentSessionTurnsPlan{}, fmt.Errorf("transactional store is required")
+	}
+	if strings.TrimSpace(command.SessionKey) != "" && len(command.TurnIDs) != 1 {
+		return StopAgentSessionTurnsPlan{}, adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	seen := make(map[int64]struct{}, len(command.TurnIDs))
-	stopped := 0
-	skipped := 0
+	plan := StopAgentSessionTurnsPlan{command: command}
 	for _, turnID := range command.TurnIDs {
 		if turnID <= 0 {
 			continue
@@ -432,21 +459,24 @@ func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, comma
 			continue
 		}
 		seen[turnID] = struct{}{}
-		turn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, turnID)
+		turn, err := store.GetAgentSessionTurn(ctx, turnID)
 		if err != nil {
 			if errors.Is(err, adminrepo.ErrNotFound) {
-				skipped++
+				plan.skipped++
 				continue
 			}
-			return StopAgentSessionTurnsResult{}, err
+			return StopAgentSessionTurnsPlan{}, err
 		}
 		if !agentSessionTurnStoppable(turn.Status) {
-			skipped++
+			plan.skipped++
 			continue
 		}
-		session, err := svc.cfg.Store.GetAgentSessionByID(ctx, turn.SessionID)
+		session, err := store.GetAgentSessionByID(ctx, turn.SessionID)
 		if err != nil {
-			return StopAgentSessionTurnsResult{}, err
+			return StopAgentSessionTurnsPlan{}, err
+		}
+		if strings.TrimSpace(command.SessionKey) != "" && (session.SessionKey != strings.TrimSpace(command.SessionKey) || session.MattermostChannelID != strings.TrimSpace(command.ChannelID) || strconv.FormatInt(session.ProjectID, 10) != strings.TrimSpace(command.WorkspaceScope)) {
+			return StopAgentSessionTurnsPlan{}, adminrepo.ErrClusterAdminAdmissionDenied
 		}
 		artifacts := "{}"
 		if strings.TrimSpace(command.UserName) != "" || strings.TrimSpace(command.UserID) != "" {
@@ -455,52 +485,102 @@ func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, comma
 				"stopped-by-user-id": strings.TrimSpace(command.UserID),
 			})
 			if err != nil {
-				return StopAgentSessionTurnsResult{}, err
+				return StopAgentSessionTurnsPlan{}, err
 			}
 			artifacts = string(body)
 		}
-		canceled, err := svc.cfg.Store.CancelAgentSessionTurn(ctx, adminrepo.CancelAgentSessionTurnInput{
-			TurnID:       turn.ID,
-			ErrorMessage: svc.t("chat.session.turn.stop.reason", map[string]any{"User": emptyAsUnknown(command.UserName)}),
-			Artifacts:    artifacts,
+		var canceled entity.AgentSessionTurn
+		cleanupRuntime := false
+		err = svc.withCurrentSessionGuardUsingStore(ctx, store, session, "agent_session.stop_prepare.side_effect", true, func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+			currentTurn, readErr := guardedStore.GetAgentSessionTurn(ctx, turn.ID)
+			if readErr != nil {
+				return readErr
+			}
+			if currentTurn.ID != turn.ID || currentTurn.SessionID != current.ID || !agentSessionTurnStoppable(currentTurn.Status) {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			canceled, readErr = guardedStore.CancelAgentSessionTurn(ctx, adminrepo.CancelAgentSessionTurnInput{
+				TurnID: currentTurn.ID, ErrorMessage: svc.t("chat.session.turn.stop.reason", map[string]any{"User": emptyAsUnknown(command.UserName)}), Artifacts: artifacts,
+			})
+			if readErr != nil {
+				return readErr
+			}
+			if _, readErr = guardedStore.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: canceled.RunID, Status: agentSessionTurnCanceled}); readErr != nil {
+				return readErr
+			}
+			cleanupRuntime = currentTurn.Status == agentSessionTurnRunning || current.ActiveTurnID == currentTurn.ID
+			if !cleanupRuntime && currentTurn.Status == agentSessionTurnQueued && current.ActiveTurnID == 0 && agentSessionRuntimeReady(current) {
+				queued, queueErr := guardedStore.ListQueuedAgentSessionTurns(ctx, current.ID)
+				if queueErr != nil {
+					return queueErr
+				}
+				cleanupRuntime = len(queued) == 0
+			}
+			session = current
+			return nil
 		})
 		if err != nil {
 			if errors.Is(err, adminrepo.ErrNotFound) {
-				skipped++
+				plan.skipped++
 				continue
 			}
-			return StopAgentSessionTurnsResult{}, err
+			return StopAgentSessionTurnsPlan{}, err
 		}
-		_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: canceled.RunID, Status: agentSessionTurnCanceled})
-		cleanupRuntime := turn.Status == agentSessionTurnRunning || session.ActiveTurnID == turn.ID
-		if !cleanupRuntime && turn.Status == agentSessionTurnQueued && session.ActiveTurnID == 0 && agentSessionRuntimeReady(session) {
-			queued, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, session.ID)
-			if err != nil {
+		plan.items = append(plan.items, stopAgentSessionTurnPlanItem{session: session, turn: canceled, cleanupRuntime: cleanupRuntime})
+	}
+	return plan, nil
+}
+
+func (svc *AgentSessionService) FinalizeStopAgentSessionTurns(ctx context.Context, plan StopAgentSessionTurnsPlan) (StopAgentSessionTurnsResult, error) {
+	for index := range plan.items {
+		item := &plan.items[index]
+		if item.cleanupRuntime {
+			if svc.cfg.RuntimeRunner != nil && strings.TrimSpace(item.session.PodName) != "" {
+				if err := svc.withCurrentSessionRuntimeGuard(ctx, item.session, "agent_session.stop_cleanup.side_effect", func(current entity.AgentSession) error {
+					_, cleanupErr := svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, current.SessionKey)
+					return cleanupErr
+				}); err != nil {
+					return StopAgentSessionTurnsResult{}, err
+				}
+			}
+			if err := svc.withCurrentSessionPersistenceGuard(ctx, item.session, "agent_session.stop_reset.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+				reset, resetErr := guardedStore.ResetAgentSessionRuntime(ctx, current.SessionKey, agentSessionStatusIdle)
+				if resetErr == nil {
+					item.session = reset
+				}
+				return resetErr
+			}); err != nil {
 				return StopAgentSessionTurnsResult{}, err
 			}
-			cleanupRuntime = len(queued) == 0
 		}
-		if cleanupRuntime {
-			if svc.cfg.RuntimeRunner != nil && strings.TrimSpace(session.PodName) != "" {
-				_, _ = svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, session.SessionKey)
-			}
-			_, _ = svc.cfg.Store.ResetAgentSessionRuntime(ctx, session.SessionKey, agentSessionStatusIdle)
+		if err := svc.withCurrentSessionPersistenceGuard(ctx, item.session, "agent_session.stop_card.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+			_, cardErr := svc.upsertTurnStatusCardWithStore(ctx, guardedStore, current, item.turn, agentSessionTurnCanceled, svc.turnStatusMessage(ctx, current, agentSessionTurnCanceled, item.turn.RunID, svc.sessionOpenAIAccountName(ctx, current), ""), "")
+			return cardErr
+		}); err != nil {
+			return StopAgentSessionTurnsResult{}, err
 		}
-		_, _ = svc.upsertTurnStatusCard(ctx, session, canceled, agentSessionTurnCanceled, svc.turnStatusMessage(ctx, session, agentSessionTurnCanceled, canceled.RunID, svc.sessionOpenAIAccountName(ctx, session), ""), "")
-		stopped++
 	}
-	message := svc.t("chat.session.turn.stop.result", map[string]any{"Stopped": stopped, "Skipped": skipped})
+	message := svc.t("chat.session.turn.stop.result", map[string]any{"Stopped": len(plan.items), "Skipped": plan.skipped})
 	result := StopAgentSessionTurnsResult{Message: message}
-	if strings.TrimSpace(command.ChannelID) != "" && strings.TrimSpace(command.PostID) != "" {
+	if strings.TrimSpace(plan.command.ChannelID) != "" && strings.TrimSpace(plan.command.PostID) != "" {
 		result.Card = &MattermostCard{
-			ChannelID: command.ChannelID,
-			PostID:    command.PostID,
+			ChannelID: plan.command.ChannelID,
+			PostID:    plan.command.PostID,
 			Color:     "#9aa4b2",
 			Title:     svc.t("chat.session.turn.stop.title", nil),
 			Text:      message,
 		}
 	}
 	return result, nil
+}
+
+func (svc *AgentSessionService) GuardStopAgentSessionTurnsResponse(ctx context.Context, plan StopAgentSessionTurnsPlan, sideEffect func() error) error {
+	if len(plan.items) != 1 || sideEffect == nil {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return svc.withCurrentSessionPersistenceGuard(ctx, plan.items[0].session, "agent_session.stop_response.side_effect", func(entity.AgentSession, adminrepo.Repository) error {
+		return sideEffect()
+	})
 }
 
 func (svc *AgentSessionService) RetryFailedTurn(ctx context.Context, command RetryAgentSessionTurnCommand) (RetryAgentSessionTurnResult, error) {
@@ -956,16 +1036,20 @@ func (svc *AgentSessionService) resolveRequestedRole(ctx context.Context, projec
 }
 
 func (svc *AgentSessionService) chatRepositories(ctx context.Context, chat entity.Chat) ([]entity.ProjectRepository, error) {
-	bindings, err := svc.cfg.Store.ListChatRepositories(ctx, chat.ID)
+	return chatRepositoriesWithStore(ctx, svc.cfg.Store, chat)
+}
+
+func chatRepositoriesWithStore(ctx context.Context, store adminrepo.Repository, chat entity.Chat) ([]entity.ProjectRepository, error) {
+	bindings, err := store.ListChatRepositories(ctx, chat.ID)
 	if err != nil {
 		return nil, err
 	}
 	if len(bindings) == 0 {
-		return svc.cfg.Store.ListProjectRepositories(ctx, chat.ProjectID)
+		return store.ListProjectRepositories(ctx, chat.ProjectID)
 	}
 	repositories := make([]entity.ProjectRepository, 0, len(bindings))
 	for _, binding := range bindings {
-		repo, err := svc.cfg.Store.GetRepository(ctx, binding.Provider, binding.Owner, binding.Name)
+		repo, err := store.GetRepository(ctx, binding.Provider, binding.Owner, binding.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -1004,8 +1088,15 @@ func (svc *AgentSessionService) postTurnResult(ctx context.Context, session enti
 }
 
 func (svc *AgentSessionService) upsertTurnStatusCard(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, status string, message string, codexLimits string) (MattermostPostRef, error) {
+	return svc.upsertTurnStatusCardWithStore(ctx, svc.cfg.Store, session, turn, status, message, codexLimits)
+}
+
+func (svc *AgentSessionService) upsertTurnStatusCardWithStore(ctx context.Context, store adminrepo.Repository, session entity.AgentSession, turn entity.AgentSessionTurn, status string, message string, codexLimits string) (MattermostPostRef, error) {
 	if svc.cfg.ThreadPublisher == nil {
 		return MattermostPostRef{}, fmt.Errorf("Mattermost thread publisher is not configured")
+	}
+	if store == nil {
+		return MattermostPostRef{}, fmt.Errorf("transactional store is required")
 	}
 	channelID := defaultString(turn.MattermostChannelID, session.MattermostChannelID)
 	rootPostID := defaultString(turn.MattermostRootPostID, session.MattermostRootPostID)
@@ -1024,7 +1115,7 @@ func (svc *AgentSessionService) upsertTurnStatusCard(ctx context.Context, sessio
 		if err != nil {
 			return MattermostPostRef{}, err
 		}
-		_, err := svc.cfg.Store.UpdateAgentSessionTurnStatusPost(ctx, adminrepo.UpdateAgentSessionTurnStatusPostInput{
+		_, err := store.UpdateAgentSessionTurnStatusPost(ctx, adminrepo.UpdateAgentSessionTurnStatusPostInput{
 			TurnID:       turn.ID,
 			StatusPostID: ref.PostID,
 		})
@@ -1038,12 +1129,12 @@ func (svc *AgentSessionService) upsertTurnStatusCard(ctx context.Context, sessio
 			return MattermostPostRef{}, err
 		}
 	}
-	project, projectErr := svc.cfg.Store.GetProject(ctx, session.ProjectID)
-	role, roleErr := svc.cfg.Store.GetAgentRole(ctx, session.RoleID)
+	project, projectErr := store.GetProject(ctx, session.ProjectID)
+	role, roleErr := store.GetAgentRole(ctx, session.RoleID)
 	if projectErr == nil && roleErr == nil {
 		_, _ = upsertProjectRunCard(ctx, projectRunCardInput{
 			Localizer:         svc.cfg.Localizer,
-			Store:             svc.cfg.Store,
+			Store:             store,
 			Publisher:         svc.cfg.ThreadPublisher,
 			MattermostSiteURL: svc.cfg.MattermostSiteURL,
 			Project:           project,

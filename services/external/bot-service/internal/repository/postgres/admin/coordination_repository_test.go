@@ -2,12 +2,13 @@ package admin_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	domainrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	postgresrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
@@ -15,10 +16,7 @@ import (
 )
 
 func TestCoordinationRepositoryLifecycle(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_DSN")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_DSN is not configured")
-	}
+	dsn := isolatedPostgresTestDSN(t, "coordination")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := migrations.Run(ctx, dsn); err != nil {
@@ -56,10 +54,10 @@ func TestCoordinationRepositoryLifecycle(t *testing.T) {
 	assertRelationship(t, ctx, repository, 0, projectID, workerID, entity.CoordinationActionStart, managerID, false)
 
 	chatID := insertCoordinationTestChat(t, ctx, pool, projectID)
-	rootSessionID := insertCoordinationTestSession(t, ctx, pool, projectID, chatID, directorID, "root-session")
-	childSessionID := insertCoordinationTestSession(t, ctx, pool, projectID, chatID, managerID, "child-session")
-	rootTurnID := insertCoordinationTestTurn(t, ctx, pool, rootSessionID, "root-run", "root-post")
-	childTurnID := insertCoordinationTestTurn(t, ctx, pool, childSessionID, "child-run", "child-post")
+	rootSessionID := insertCoordinationTestSession(t, ctx, pool, projectID, chatID, directorID, fmt.Sprintf("root-session-%d", suffix))
+	childSessionID := insertCoordinationTestSession(t, ctx, pool, projectID, chatID, managerID, fmt.Sprintf("child-session-%d", suffix))
+	rootTurnID := insertCoordinationTestTurn(t, ctx, pool, rootSessionID, fmt.Sprintf("root-run-%d", suffix), "root-post")
+	childTurnID := insertCoordinationTestTurn(t, ctx, pool, childSessionID, fmt.Sprintf("child-run-%d", suffix), "child-post")
 
 	rootProcess, err := repository.EnsureTurnProcess(ctx, domainrepo.EnsureTurnProcessInput{
 		TurnID: rootTurnID, ProjectID: projectID, RoleID: directorID,
@@ -105,7 +103,7 @@ func TestCoordinationRepositoryLifecycle(t *testing.T) {
 	}
 	_, err = repository.RememberMemory(ctx, domainrepo.RememberMemoryInput{
 		ProjectID: projectID, Scope: "role", RoleID: managerID, CreatedByRoleID: managerID, SourceTurnID: childTurnID,
-		Title: "Опыт роли", Content: "Проверять активные работы", Importance: "normal",
+		Title: "Опыт роли", Content: "проверять активные работы", Importance: "normal",
 	})
 	if err != nil {
 		t.Fatalf("RememberMemory(role) error = %v", err)
@@ -133,6 +131,7 @@ func TestCoordinationRepositoryLifecycle(t *testing.T) {
 	if err != nil || created || duplicate.ID != attention.ID {
 		t.Fatalf("CreateOwnerAttention(duplicate) item=%#v created=%t error=%v", duplicate, created, err)
 	}
+	assertCoordinationTransactionRepository(t, ctx, repository, projectID, managerID, childTurnID, rootProcess.ProcessRunID, suffix)
 
 	if _, err := pool.Exec(ctx, "update matter_codex_policy_revisions set status = 'archived' where id = $1", rootProcess.PolicyRevisionID); err != nil {
 		t.Fatalf("archive policy revision: %v", err)
@@ -143,6 +142,75 @@ func TestCoordinationRepositoryLifecycle(t *testing.T) {
 	}
 	assertCapability(t, ctx, repository, rootTurnID, projectID, directorID, entity.CoordinationCapabilityStartAgents, true)
 	assertCapability(t, ctx, repository, 0, projectID, directorID, entity.CoordinationCapabilityStartAgents, false)
+}
+
+func assertCoordinationTransactionRepository(
+	t *testing.T,
+	ctx context.Context,
+	repository *postgresrepo.Repository,
+	projectID int64,
+	roleID int64,
+	turnID int64,
+	processRunID int64,
+	suffix int64,
+) {
+	t.Helper()
+	tokenHash := sha256.Sum256([]byte(fmt.Sprintf("coordination-transaction-token-%d", suffix)))
+	contextHash := sha256.Sum256([]byte(fmt.Sprintf("coordination-transaction-context-%d", suffix)))
+	now := time.Now().UTC()
+	issue := securityrepo.IssueCapabilityInput{
+		TokenHash: tokenHash[:], Kind: "dialog", Operation: "coordination.transaction",
+		ResourceType: "work_context", ResourceID: fmt.Sprintf("%d", turnID), ChannelID: "channel",
+		PostBinding: "post", ActorUserID: "owner-id", ActorUserName: "owner",
+		InstallationScope: "single-installation", WorkspaceScope: fmt.Sprintf("%d", projectID),
+		ContextHash: contextHash[:], IssuedAt: now, ExpiresAt: now.Add(time.Hour), State: securityrepo.CapabilityStateUnused,
+	}
+	if err := repository.IssueInteractionCapability(ctx, issue); err != nil {
+		t.Fatalf("IssueInteractionCapability(transaction repository) error = %v", err)
+	}
+	_, err := repository.ConsumeInteractionCapabilityWithMutation(ctx, securityrepo.ConsumeCapabilityInput{
+		TokenHash: tokenHash[:], Kind: issue.Kind, Operation: issue.Operation,
+		ResourceType: issue.ResourceType, ResourceID: issue.ResourceID, ChannelID: issue.ChannelID,
+		PostBinding: issue.PostBinding, ActorUserID: issue.ActorUserID, ContextHash: contextHash[:], Now: now.Add(time.Minute),
+	}, func(store domainrepo.Repository) error {
+		coordinationStore, ok := store.(domainrepo.CoordinationRepository)
+		if !ok {
+			return fmt.Errorf("transaction repository does not implement coordination repository")
+		}
+		if _, err := coordinationStore.GetTurnProcess(ctx, turnID); err != nil {
+			return err
+		}
+		if _, err := coordinationStore.GetTurnLineage(ctx, turnID); err != nil {
+			return err
+		}
+		if _, err := coordinationStore.UpdateWorkClaim(ctx, domainrepo.UpdateWorkClaimInput{TurnID: turnID, Summary: "Транзакционный guarded callback"}); err != nil {
+			return err
+		}
+		if _, err := coordinationStore.ListActiveWork(ctx, processRunID, projectID, 10); err != nil {
+			return err
+		}
+		if _, err := coordinationStore.RememberMemory(ctx, domainrepo.RememberMemoryInput{
+			ProjectID: projectID, Scope: "role", RoleID: roleID, CreatedByRoleID: roleID, SourceTurnID: turnID,
+			Title: "Транзакционный контекст", Content: "Проверять транзакционную repository привязку", Importance: "normal",
+		}); err != nil {
+			return err
+		}
+		if _, err := coordinationStore.SearchMemory(ctx, domainrepo.SearchMemoryInput{ProjectID: projectID, RoleID: roleID, Query: "транзакционную", Limit: 10}); err != nil {
+			return err
+		}
+		request, _, err := coordinationStore.CreateOwnerAttention(ctx, domainrepo.CreateOwnerAttentionInput{
+			ProcessRunID: processRunID, TurnID: turnID, Severity: "normal", Summary: "Транзакционная проверка",
+			PauseScope: "turn", IdempotencyKey: fmt.Sprintf("transaction-context-%d", suffix),
+		})
+		if err != nil {
+			return err
+		}
+		_, err = coordinationStore.SetOwnerAttentionPost(ctx, request.ID, "transaction-post")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("ConsumeInteractionCapabilityWithMutation(coordination repository) error = %v", err)
+	}
 }
 
 func insertCoordinationTestRole(t *testing.T, ctx context.Context, pool *pgxpool.Pool, projectID int64, name string, roleType string) int64 {

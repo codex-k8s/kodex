@@ -330,6 +330,14 @@ func (svc *InteractionSecurityService) SealDialog(ctx context.Context, dialog *M
 }
 
 func (svc *InteractionSecurityService) AuthenticateAction(ctx context.Context, callback ActionCallback) (AuthenticatedInteraction, error) {
+	return svc.authenticateAction(ctx, callback, nil)
+}
+
+func (svc *InteractionSecurityService) AuthenticateActionAtomic(ctx context.Context, callback ActionCallback, mutation func(AuthenticatedInteraction, adminrepo.Repository) error) (AuthenticatedInteraction, error) {
+	return svc.authenticateAction(ctx, callback, mutation)
+}
+
+func (svc *InteractionSecurityService) authenticateAction(ctx context.Context, callback ActionCallback, mutation func(AuthenticatedInteraction, adminrepo.Repository) error) (AuthenticatedInteraction, error) {
 	contextCopy := cloneInteractionContext(callback.Context)
 	token := strings.TrimSpace(contextStringValue(contextCopy, interactionCapabilityContextKey))
 	delete(contextCopy, interactionCapabilityContextKey)
@@ -349,7 +357,7 @@ func (svc *InteractionSecurityService) AuthenticateAction(ctx context.Context, c
 		ChannelID:    strings.TrimSpace(callback.ChannelID),
 		PostBinding:  postBinding,
 		ActorUserID:  strings.TrimSpace(callback.UserID),
-	}, contextCopy, "mattermost.callback.action", callbackPostID, nil, nil)
+	}, contextCopy, "mattermost.callback.action", callbackPostID, nil, mutation)
 	if err != nil {
 		return AuthenticatedInteraction{}, err
 	}
@@ -466,12 +474,13 @@ func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, toke
 			Workspace:    capability.WorkspaceScope,
 			Session:      capability.SessionScope,
 		},
-		Kind:         capability.Kind,
-		Operation:    capability.Operation,
-		ResourceType: capability.ResourceType,
-		ResourceID:   capability.ResourceID,
-		ChannelID:    capability.ChannelID,
-		PostBinding:  capability.PostBinding,
+		Kind:           capability.Kind,
+		Operation:      capability.Operation,
+		ResourceType:   capability.ResourceType,
+		ResourceID:     capability.ResourceID,
+		ChannelID:      capability.ChannelID,
+		PostBinding:    capability.PostBinding,
+		CallbackPostID: callbackPostID,
 	}
 	decision := svc.admission.Admit(ctx, InteractionAdmissionRequest{
 		ActionKey:    actionKey,

@@ -797,6 +797,11 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	podName := sessionPodName(input.SessionKey)
 	pvcName := sessionPVCName(input.SessionKey)
 	secretName := sessionSecretName(input.SessionKey)
+	if input.TokenSecretIntegrity != nil {
+		if err := runner.verifyExistingSessionTokenSecret(ctx, secretName, input.InternalToken, *input.TokenSecretIntegrity); err != nil {
+			return runtimerepo.StartedAgentSession{}, err
+		}
+	}
 
 	created := false
 	pvcCreated, err := runner.ensureSessionPVC(ctx, input.SessionKey, input.Role)
@@ -804,8 +809,10 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 		return runtimerepo.StartedAgentSession{}, err
 	}
 	created = created || pvcCreated
-	if _, err := runner.upsertSessionTokenSecret(ctx, input.SessionKey, secretName, input.InternalToken); err != nil {
-		return runtimerepo.StartedAgentSession{}, err
+	if input.TokenSecretIntegrity == nil {
+		if _, err := runner.upsertSessionTokenSecret(ctx, input.SessionKey, secretName, input.InternalToken); err != nil {
+			return runtimerepo.StartedAgentSession{}, err
+		}
 	}
 	recreatePod, err := runner.sessionPodShouldBeRecreated(ctx, podName)
 	if err != nil {
@@ -838,6 +845,23 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 		SecretName: secretName,
 		Created:    created,
 	}, nil
+}
+
+func (runner *Runner) verifyExistingSessionTokenSecret(ctx context.Context, secretName string, token string, expected runtimerepo.SecretIntegrity) error {
+	if strings.TrimSpace(expected.SecretName) != secretName || strings.TrimSpace(expected.SecretKey) != "token" ||
+		strings.TrimSpace(expected.ContentSHA256) == "" || strings.TrimSpace(expected.UID) == "" || strings.TrimSpace(expected.ResourceVersion) == "" {
+		return fmt.Errorf("existing session token secret integrity is invalid")
+	}
+	actual, err := runner.InspectSecretIntegrity(ctx, runtimerepo.SecretIntegrityInput{SecretName: secretName, SecretKey: "token"})
+	if err != nil {
+		return fmt.Errorf("inspect existing session token secret: %w", err)
+	}
+	tokenSHA256 := sha256.Sum256([]byte(token))
+	if actual.ContentSHA256 != expected.ContentSHA256 || actual.UID != expected.UID || actual.ResourceVersion != expected.ResourceVersion ||
+		hex.EncodeToString(tokenSHA256[:]) != expected.ContentSHA256 {
+		return fmt.Errorf("existing session token secret integrity mismatch")
+	}
+	return nil
 }
 
 func (runner *Runner) sessionPodSchedulingCapacityError(ctx context.Context, podName string) error {
@@ -2162,11 +2186,21 @@ func (runner *Runner) upsertSecret(ctx context.Context, name string, data map[st
 	if secret.Labels == nil {
 		secret.Labels = make(map[string]string)
 	}
+	unchanged := true
 	for key, value := range labels {
+		if secret.Labels[key] != value {
+			unchanged = false
+		}
 		secret.Labels[key] = value
 	}
 	for key, value := range data {
+		if !bytes.Equal(secret.Data[key], value) {
+			unchanged = false
+		}
 		secret.Data[key] = value
+	}
+	if unchanged {
+		return false, nil
 	}
 	if _, err := secretClient.Update(ctx, secret, metav1.UpdateOptions{}); err != nil {
 		return false, fmt.Errorf("update secret %s: %w", name, err)

@@ -699,8 +699,8 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 				continue
 			}
 			if guardErr := svc.withClusterAdminRuntimeGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.repair_stale_cleanup.side_effect", func() error {
-				_, _ = svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, current.SessionKey)
-				return nil
+				_, cleanupErr := svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, current.SessionKey)
+				return cleanupErr
 			}); guardErr != nil {
 				result.Failed++
 				continue
@@ -745,6 +745,20 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 		if !health.Terminal {
 			continue
 		}
+		if strings.TrimSpace(current.PodName) != "" || strings.TrimSpace(health.PodName) != "" {
+			current, role, chat, subjectErr = svc.loadAgentSessionGuardSubject(ctx, session)
+			if subjectErr != nil {
+				result.Failed++
+				continue
+			}
+			if guardErr := svc.withClusterAdminRuntimeGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.repair_running_cleanup.side_effect", func() error {
+				_, cleanupErr := svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, current.SessionKey)
+				return cleanupErr
+			}); guardErr != nil {
+				result.Failed++
+				continue
+			}
+		}
 		current, role, chat, subjectErr = svc.loadAgentSessionGuardSubject(ctx, session)
 		if subjectErr != nil {
 			result.Failed++
@@ -761,20 +775,6 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 		}); guardErr != nil {
 			result.Failed++
 			continue
-		}
-		if strings.TrimSpace(current.PodName) != "" || strings.TrimSpace(health.PodName) != "" {
-			current, role, chat, subjectErr = svc.loadAgentSessionGuardSubject(ctx, session)
-			if subjectErr != nil {
-				result.Failed++
-				continue
-			}
-			if guardErr := svc.withClusterAdminRuntimeGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.repair_running_cleanup.side_effect", func() error {
-				_, _ = svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, current.SessionKey)
-				return nil
-			}); guardErr != nil {
-				result.Failed++
-				continue
-			}
 		}
 		current, role, chat, subjectErr = svc.loadAgentSessionGuardSubject(ctx, session)
 		if subjectErr != nil {
@@ -939,13 +939,17 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 	if err := svc.authorizeClusterAdminRole(ctx, role, session.ChatID, "", session.MattermostChannelID, session.SessionKey, "agent_session.start"); err != nil {
 		return runtimerepo.StartedAgentSession{}, err
 	}
+	guardRequired, err := clusterAdminSessionGuardRequired(ctx, svc.cfg.Store, role, session.SessionKey)
+	if err != nil {
+		return runtimerepo.StartedAgentSession{}, err
+	}
 	var internalToken string
-	err := svc.withClusterAdminRuntimeGuard(
+	err = svc.withClusterAdminRuntimeGuard(
 		ctx, role, session.ChatID, "", session.MattermostChannelID, session.SessionKey,
 		"agent_session.token_read.side_effect",
 		func() error {
 			var tokenErr error
-			internalToken, tokenErr = svc.sessionInternalToken(ctx, tokenSession)
+			internalToken, tokenErr = svc.sessionInternalToken(ctx, tokenSession, guardRequired)
 			return tokenErr
 		},
 	)
@@ -972,6 +976,13 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 		SandboxMode:             role.SandboxMode,
 		ConfigOverlay:           role.ConfigOverlay,
 		RuntimeEnv:              runtimeEnv,
+	}
+	if guardRequired {
+		expectation, expectationErr := svc.clusterAdminSessionTokenSecretIntegrity(ctx, role.ID, session.SessionKey, tokenSession.TokenSecretRef)
+		if expectationErr != nil {
+			return runtimerepo.StartedAgentSession{}, expectationErr
+		}
+		input.TokenSecretIntegrity = &expectation
 	}
 	var started runtimerepo.StartedAgentSession
 	startRuntime := func() error {
@@ -1271,14 +1282,40 @@ func (svc *ChatRunService) mattermostBotIdentityByUserID(ctx context.Context, pr
 	return entity.MattermostBotIdentity{}, false, nil
 }
 
-func (svc *ChatRunService) sessionInternalToken(ctx context.Context, session entity.AgentSession) (string, error) {
+func (svc *ChatRunService) sessionInternalToken(ctx context.Context, session entity.AgentSession, requireExisting bool) (string, error) {
 	if strings.TrimSpace(session.TokenSecretRef) != "" {
 		secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, session.TokenSecretRef)
 		if err == nil && strings.TrimSpace(secret.Token) != "" {
 			return strings.TrimSpace(secret.Token), nil
 		}
+		if requireExisting {
+			return "", adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	if requireExisting {
+		return "", adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	return newInternalToken()
+}
+
+func (svc *ChatRunService) clusterAdminSessionTokenSecretIntegrity(ctx context.Context, roleID int64, sessionKey string, secretRef string) (runtimerepo.SecretIntegrity, error) {
+	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminSecretIntegrityRepository)
+	if !ok {
+		return runtimerepo.SecretIntegrity{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	bindings, err := repository.ListClusterAdminSecretIntegrity(ctx, roleID, sessionKey)
+	if err != nil {
+		return runtimerepo.SecretIntegrity{}, err
+	}
+	for _, binding := range bindings {
+		if binding.Kind == "session" && strings.TrimSpace(binding.SecretRef) == strings.TrimSpace(secretRef) && binding.SecretKey == "token" {
+			return runtimerepo.SecretIntegrity{
+				SecretName: binding.SecretRef, SecretKey: binding.SecretKey, ContentSHA256: binding.ContentSHA256,
+				UID: binding.ResourceUID, ResourceVersion: binding.ResourceVersion,
+			}, nil
+		}
+	}
+	return runtimerepo.SecretIntegrity{}, adminrepo.ErrClusterAdminAdmissionDenied
 }
 
 func (svc *ChatRunService) agentSessionExists(ctx context.Context, sessionKey string) (entity.AgentSession, bool, error) {

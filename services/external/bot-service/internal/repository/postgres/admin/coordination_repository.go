@@ -18,7 +18,7 @@ var _ adminrepo.CoordinationRepository = (*Repository)(nil)
 var _ adminrepo.CoordinationPolicyPresetRepository = (*Repository)(nil)
 
 func (repo *Repository) ApplyCoordinationPolicyPreset(ctx context.Context, projectID int64, topCoordinatorRoleID int64, waveCoordinatorRoleIDs []int64) error {
-	tx, err := repo.pool.Begin(ctx)
+	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin apply coordination policy preset: %w", err)
 	}
@@ -137,7 +137,7 @@ func (repo *Repository) ApplyCoordinationPolicyPreset(ctx context.Context, proje
 }
 
 func (repo *Repository) EnsureTurnProcess(ctx context.Context, input adminrepo.EnsureTurnProcessInput) (entity.ProcessContext, error) {
-	tx, err := repo.pool.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return entity.ProcessContext{}, fmt.Errorf("begin ensure turn process: %w", err)
 	}
@@ -207,7 +207,7 @@ func (repo *Repository) EnsureTurnProcess(ctx context.Context, input adminrepo.E
 }
 
 func (repo *Repository) GetTurnProcess(ctx context.Context, turnID int64) (entity.ProcessContext, error) {
-	item, err := scanProcessContext(repo.pool.QueryRow(ctx, processContextSQL, turnID))
+	item, err := scanProcessContext(repo.db.QueryRow(ctx, processContextSQL, turnID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.ProcessContext{}, adminrepo.ErrNotFound
 	}
@@ -218,7 +218,7 @@ func (repo *Repository) GetTurnProcess(ctx context.Context, turnID int64) (entit
 }
 
 func (repo *Repository) GetTurnLineage(ctx context.Context, turnID int64) ([]entity.ProcessLineageStep, error) {
-	rows, err := repo.pool.Query(ctx, `
+	rows, err := repo.db.Query(ctx, `
 		with recursive lineage as (
 			select pt.turn_id, pt.parent_turn_id, pt.launch_post_id, 0 as depth
 			from matter_codex_process_turns pt
@@ -261,7 +261,7 @@ func (repo *Repository) GetTurnLineage(ctx context.Context, turnID int64) ([]ent
 
 func (repo *Repository) IsRoleCapabilityAllowed(ctx context.Context, turnID int64, projectID int64, roleID int64, capability string) (bool, error) {
 	var allowed bool
-	err := repo.pool.QueryRow(ctx, `
+	err := repo.db.QueryRow(ctx, `
 		with selected_policy as (
 			select candidate.id
 			from (
@@ -291,7 +291,7 @@ func (repo *Repository) IsRoleCapabilityAllowed(ctx context.Context, turnID int6
 
 func (repo *Repository) IsRoleRelationshipAllowed(ctx context.Context, turnID int64, projectID int64, sourceRoleID int64, action string, targetRoleID int64) (bool, error) {
 	var allowed bool
-	err := repo.pool.QueryRow(ctx, `
+	err := repo.db.QueryRow(ctx, `
 		with selected_policy as (
 			select candidate.id
 			from (
@@ -320,7 +320,7 @@ func (repo *Repository) IsRoleRelationshipAllowed(ctx context.Context, turnID in
 }
 
 func (repo *Repository) UpdateWorkClaim(ctx context.Context, input adminrepo.UpdateWorkClaimInput) (entity.WorkClaim, error) {
-	row := repo.pool.QueryRow(ctx, `
+	row := repo.db.QueryRow(ctx, `
 		update matter_codex_work_claims
 		set summary = case when $2 = '' then summary else $2 end,
 			domains = case when cardinality(coalesce($3::text[], '{}'::text[])) = 0 then domains else $3 end,
@@ -345,7 +345,7 @@ func (repo *Repository) ListActiveWork(ctx context.Context, processRunID int64, 
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}
-	rows, err := repo.pool.Query(ctx, `
+	rows, err := repo.db.Query(ctx, `
 		select w.id, w.process_run_id, w.turn_id, w.role_id, r.name, w.summary,
 			w.domains, w.resource_keys, w.links, w.status, w.updated_at
 		from matter_codex_work_claims w
@@ -372,7 +372,7 @@ func (repo *Repository) ListActiveWork(ctx context.Context, processRunID int64, 
 func (repo *Repository) RememberMemory(ctx context.Context, input adminrepo.RememberMemoryInput) (entity.MemoryRecord, error) {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(input.Title) + "\x00" + strings.TrimSpace(input.Content)))
 	hash := hex.EncodeToString(sum[:])
-	tx, err := repo.pool.Begin(ctx)
+	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return entity.MemoryRecord{}, fmt.Errorf("begin remember memory: %w", err)
 	}
@@ -410,7 +410,7 @@ func (repo *Repository) SearchMemory(ctx context.Context, input adminrepo.Search
 	if input.Limit <= 0 || input.Limit > 50 {
 		input.Limit = 10
 	}
-	rows, err := repo.pool.Query(ctx, memoryRecordSQL+`
+	rows, err := repo.db.Query(ctx, memoryRecordSQL+`
 		where m.project_id = $1 and m.status = 'active'
 			and (m.scope = 'project' or (m.scope = 'role' and m.role_id = $2))
 			and ($3 = '' or v.search_document @@ plainto_tsquery('simple', $3))
@@ -434,7 +434,7 @@ func (repo *Repository) SearchMemory(ctx context.Context, input adminrepo.Search
 }
 
 func (repo *Repository) CreateOwnerAttention(ctx context.Context, input adminrepo.CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error) {
-	row := repo.pool.QueryRow(ctx, `
+	row := repo.db.QueryRow(ctx, `
 		insert into matter_codex_owner_attention_requests (
 			process_run_id, turn_id, severity, summary, options, recommendation,
 			evidence_links, pause_scope, idempotency_key
@@ -447,7 +447,7 @@ func (repo *Repository) CreateOwnerAttention(ctx context.Context, input adminrep
 	item, err := scanOwnerAttention(row)
 	created := err == nil
 	if errors.Is(err, pgx.ErrNoRows) {
-		item, err = scanOwnerAttention(repo.pool.QueryRow(ctx, `
+		item, err = scanOwnerAttention(repo.db.QueryRow(ctx, `
 			select id, process_run_id, turn_id, severity, summary, options, recommendation,
 				evidence_links, pause_scope, idempotency_key, mattermost_post_id, status
 			from matter_codex_owner_attention_requests
@@ -461,7 +461,7 @@ func (repo *Repository) CreateOwnerAttention(ctx context.Context, input adminrep
 }
 
 func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, id int64, postID string) (entity.OwnerAttentionRequest, error) {
-	item, err := scanOwnerAttention(repo.pool.QueryRow(ctx, `
+	item, err := scanOwnerAttention(repo.db.QueryRow(ctx, `
 		update matter_codex_owner_attention_requests set mattermost_post_id = $2, updated_at = now()
 		where id = $1
 		returning id, process_run_id, turn_id, severity, summary, options, recommendation,

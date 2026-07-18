@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
@@ -191,6 +193,83 @@ func TestAgentSessionReturnsCrossChatResultToImmediateRequester(t *testing.T) {
 	if dispatcher.calls != 1 {
 		t.Fatalf("dispatcher calls after duplicate callback = %d", dispatcher.calls)
 	}
+}
+
+func TestReturnToRequesterGuardsFrozenSourceAndChildIndependently(t *testing.T) {
+	tests := []struct {
+		name          string
+		frozen        map[string]bool
+		denyOperation string
+	}{
+		{
+			name:          "frozen source with ordinary child",
+			frozen:        map[string]bool{"source-session": true},
+			denyOperation: "agent_session.delegation_callback_queue.side_effect.source",
+		},
+		{
+			name:          "ordinary source with frozen child",
+			frozen:        map[string]bool{"target-session": true},
+			denyOperation: "agent_session.delegation_callback_lookup.side_effect",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			svc, baseStore, dispatcher, publisher := delegationReturnBarrierFixture()
+			store := &admittedAdminStore{
+				fakeAdminStore: baseStore, allowed: true, frozenSessions: test.frozen,
+				denyGuardOperation: test.denyOperation,
+			}
+			svc.cfg.Store = store
+			_, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", "Синтетический результат.")
+			if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+				t.Fatalf("ReturnToRequester() error = %v", err)
+			}
+			turn, turnErr := baseStore.GetAgentSessionTurn(context.Background(), 3)
+			if turnErr != nil || turn.Message != "Исходная очередь" || len(turn.ParentTurnIDs) != 0 {
+				t.Fatalf("denied source mutation: turn=%#v error=%v", turn, turnErr)
+			}
+			delegation := baseStore.agentDelegations[1]
+			if delegation.CallbackTurnID != 0 || delegation.CallbackRunID != "" || dispatcher.calls != 0 || len(publisher.posts) != 0 {
+				t.Fatalf("denied callback effects: delegation=%#v dispatch=%d posts=%d", delegation, dispatcher.calls, len(publisher.posts))
+			}
+		})
+	}
+
+	t.Run("allowed frozen source control", func(t *testing.T) {
+		svc, baseStore, _, _ := delegationReturnBarrierFixture()
+		store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, frozenSessions: map[string]bool{"source-session": true}}
+		svc.cfg.Store = store
+		result, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", "Синтетический результат.")
+		if err != nil || result.CallbackRunID != "callback-run" {
+			t.Fatalf("ReturnToRequester() result=%#v error=%v", result, err)
+		}
+		if len(store.guardInputs) == 0 {
+			t.Fatal("frozen source did not use guard")
+		}
+		for _, input := range store.guardInputs {
+			if input.SessionKey != "source-session" || input.RoleID != 1 || input.ChatID != 1 || input.MattermostChannelID != "management-channel" {
+				t.Fatalf("source guard subject = %#v", input)
+			}
+		}
+	})
+}
+
+func delegationReturnBarrierFixture() (*AgentSessionService, *fakeAdminStore, *fakeAgentTurnDispatcher, *fakeThreadPublisher) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	store.agentDelegations = map[int64]entity.AgentDelegation{1: {
+		ID: 1, ProjectID: 1, SourceSessionID: 1, SourceTurnID: 1,
+		TargetChatID: 2, TargetRoleID: 2, TargetRootPostID: "reply-", TargetSessionID: 2, TargetTurnID: 2,
+		TargetRunID: "target-run", WorkItemKey: "synthetic-return", Title: "Синтетическая делегация", Status: agentSessionTurnRunning,
+	}}
+	store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{
+		ID: 3, SessionID: 1, RunID: "callback-run", Message: "Исходная очередь",
+		MattermostChannelID: "management-channel", MattermostRootPostID: "management-root", Status: agentSessionTurnQueued,
+	})
+	dispatcher.calls = 0
+	dispatcher.queued = AgentTurnQueued{RunID: "callback-run", TurnID: 3, SessionKey: "source-session"}
+	publisher.posts = nil
+	publisher.updates = nil
+	return svc, store, dispatcher, publisher
 }
 
 func agentDelegationTestService() (*AgentSessionService, *fakeAdminStore, *fakeAgentTurnDispatcher, *fakeThreadPublisher) {

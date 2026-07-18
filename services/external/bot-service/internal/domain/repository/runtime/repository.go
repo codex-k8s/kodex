@@ -123,6 +123,7 @@ type AgentSessionPodInput struct {
 	SandboxMode             string
 	ConfigOverlay           string
 	RuntimeEnv              []RuntimeEnvVar
+	TokenSecretIntegrity    *SecretIntegrity
 }
 
 type AgentSessionRuntimeHealth struct {

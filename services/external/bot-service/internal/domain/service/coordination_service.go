@@ -221,10 +221,14 @@ func (svc *AgentSessionService) UpdateWorkContext(ctx context.Context, sessionKe
 }
 
 func (svc *AgentSessionService) queuedTurnForProcess(ctx context.Context, parentTurnID int64, queuedTurns []entity.AgentSessionTurn) (entity.AgentSessionTurn, bool, error) {
+	return svc.queuedTurnForProcessWithStore(ctx, svc.cfg.Store, parentTurnID, queuedTurns)
+}
+
+func (svc *AgentSessionService) queuedTurnForProcessWithStore(ctx context.Context, repository adminrepo.Repository, parentTurnID int64, queuedTurns []entity.AgentSessionTurn) (entity.AgentSessionTurn, bool, error) {
 	if len(queuedTurns) == 0 {
 		return entity.AgentSessionTurn{}, false, nil
 	}
-	store, ok := svc.cfg.Store.(adminrepo.CoordinationRepository)
+	store, ok := repository.(adminrepo.CoordinationRepository)
 	if !ok {
 		return queuedTurns[0], true, nil
 	}

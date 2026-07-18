@@ -269,7 +269,7 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 		}
 		output, err := sessionService.SearchMemory(ctx, sessionKey, token, input.Query, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionMemorySearch{}, nil
+			return mcpToolError(err.Error()), emptyMCPMemorySearch(), nil
 		}
 		return nil, output, nil
 	})
@@ -299,7 +299,7 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 		}
 		output, err := sessionService.ListActiveWork(ctx, sessionKey, token, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionActiveWork{}, nil
+			return mcpToolError(err.Error()), emptyMCPActiveWork(), nil
 		}
 		return nil, output, nil
 	})
@@ -315,7 +315,7 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 			Summary: input.Summary, Domains: input.Domains, ResourceKeys: input.ResourceKeys, Links: input.Links,
 		})
 		if err != nil {
-			return mcpToolError(err.Error()), entity.WorkClaim{}, nil
+			return mcpToolError(err.Error()), emptyMCPWorkClaim(), nil
 		}
 		return nil, output, nil
 	})
@@ -333,7 +333,7 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService) http.Handl
 			PauseScope: input.PauseScope, IdempotencyKey: input.IdempotencyKey,
 		})
 		if err != nil {
-			return mcpToolError(err.Error()), entity.OwnerAttentionRequest{}, nil
+			return mcpToolError(err.Error()), emptyMCPOwnerAttention(), nil
 		}
 		return nil, output, nil
 	})
@@ -389,4 +389,20 @@ func emptyMCPChatDetails() statusservice.AgentSessionChatDetails {
 
 func emptyMCPDelegationList() statusservice.AgentSessionDelegationList {
 	return statusservice.AgentSessionDelegationList{Delegations: make([]statusservice.AgentSessionDelegationResult, 0)}
+}
+
+func emptyMCPMemorySearch() statusservice.AgentSessionMemorySearch {
+	return statusservice.AgentSessionMemorySearch{Records: make([]entity.MemoryRecord, 0)}
+}
+
+func emptyMCPActiveWork() statusservice.AgentSessionActiveWork {
+	return statusservice.AgentSessionActiveWork{Claims: make([]entity.WorkClaim, 0)}
+}
+
+func emptyMCPWorkClaim() entity.WorkClaim {
+	return entity.WorkClaim{Domains: make([]string, 0), ResourceKeys: make([]string, 0), Links: make([]string, 0)}
+}
+
+func emptyMCPOwnerAttention() entity.OwnerAttentionRequest {
+	return entity.OwnerAttentionRequest{Options: make([]string, 0), EvidenceLinks: make([]string, 0)}
 }

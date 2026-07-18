@@ -20,15 +20,16 @@ import (
 )
 
 type memoryInteractionRepository struct {
-	mu           sync.Mutex
-	capabilities map[string]securityrepo.Capability
-	inputs       map[string]securityrepo.IssueCapabilityInput
-	admissions   map[string]bool
-	consumes     int
-	checks       int
-	issues       int
-	failIssueAt  int
-	issueErr     error
+	mu            sync.Mutex
+	capabilities  map[string]securityrepo.Capability
+	inputs        map[string]securityrepo.IssueCapabilityInput
+	admissions    map[string]bool
+	consumes      int
+	checks        int
+	issues        int
+	failIssueAt   int
+	issueErr      error
+	mutationStore adminrepo.Repository
 }
 
 func newMemoryInteractionSecurity() *statusservice.InteractionSecurityService {
@@ -127,7 +128,7 @@ func (repo *memoryInteractionRepository) ConsumeInteractionCapabilityWithMutatio
 	if err != nil {
 		return securityrepo.Capability{}, err
 	}
-	if err := mutation(nil); err != nil {
+	if err := mutation(repo.mutationStore); err != nil {
 		repo.mu.Lock()
 		capability.State = securityrepo.CapabilityStateUnused
 		capability.ConsumedAt = time.Time{}

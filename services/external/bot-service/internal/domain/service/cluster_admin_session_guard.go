@@ -60,8 +60,28 @@ func (svc *AgentSessionService) withCurrentSessionPersistenceGuard(ctx context.C
 	return svc.withCurrentSessionGuard(ctx, session, operation, true, sideEffect)
 }
 
+func (svc *AgentSessionService) withCurrentSessionsRuntimeGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession) error) error {
+	return svc.withCurrentSessionRuntimeGuard(ctx, child, operation+".child", func(currentChild entity.AgentSession) error {
+		return svc.withCurrentSessionRuntimeGuard(ctx, source, operation+".source", func(currentSource entity.AgentSession) error {
+			return sideEffect(currentChild, currentSource)
+		})
+	})
+}
+
+func (svc *AgentSessionService) withCurrentSessionsPersistenceGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession, adminrepo.Repository) error) error {
+	return svc.withCurrentSessionPersistenceGuard(ctx, child, operation+".child", func(currentChild entity.AgentSession, childStore adminrepo.Repository) error {
+		return svc.withCurrentSessionGuardUsingStore(ctx, childStore, source, operation+".source", true, func(currentSource entity.AgentSession, sourceStore adminrepo.Repository) error {
+			return sideEffect(currentChild, currentSource, sourceStore)
+		})
+	})
+}
+
 func (svc *AgentSessionService) withCurrentSessionGuard(ctx context.Context, expected entity.AgentSession, operation string, persistence bool, sideEffect func(entity.AgentSession, adminrepo.Repository) error) error {
-	current, err := svc.cfg.Store.GetAgentSession(ctx, expected.SessionKey)
+	return svc.withCurrentSessionGuardUsingStore(ctx, svc.cfg.Store, expected, operation, persistence, sideEffect)
+}
+
+func (svc *AgentSessionService) withCurrentSessionGuardUsingStore(ctx context.Context, store adminrepo.Repository, expected entity.AgentSession, operation string, persistence bool, sideEffect func(entity.AgentSession, adminrepo.Repository) error) error {
+	current, err := store.GetAgentSession(ctx, expected.SessionKey)
 	if err != nil {
 		return err
 	}
@@ -69,24 +89,24 @@ func (svc *AgentSessionService) withCurrentSessionGuard(ctx context.Context, exp
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	role := entity.AgentRole{ID: current.RoleID, ProjectID: current.ProjectID}
-	if _, ok := svc.cfg.Store.(securityrepo.ClusterAdminSessionSubjectRepository); !ok {
-		role, err = svc.cfg.Store.GetAgentRole(ctx, current.RoleID)
+	if _, ok := store.(securityrepo.ClusterAdminSessionSubjectRepository); !ok {
+		role, err = store.GetAgentRole(ctx, current.RoleID)
 		if err != nil {
 			return err
 		}
 	}
-	required, err := clusterAdminSessionGuardRequired(ctx, svc.cfg.Store, role, current.SessionKey)
+	required, err := clusterAdminSessionGuardRequired(ctx, store, role, current.SessionKey)
 	if err != nil {
 		return err
 	}
 	if !required {
-		return sideEffect(current, svc.cfg.Store)
+		return sideEffect(current, store)
 	}
-	role, err = svc.cfg.Store.GetAgentRole(ctx, current.RoleID)
+	role, err = store.GetAgentRole(ctx, current.RoleID)
 	if err != nil || role.ProjectID != current.ProjectID {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
-	chat, err := svc.cfg.Store.GetChat(ctx, current.ChatID)
+	chat, err := store.GetChat(ctx, current.ChatID)
 	if err != nil || chat.ProjectID != current.ProjectID || strings.TrimSpace(chat.MattermostChannelID) != strings.TrimSpace(current.MattermostChannelID) {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
@@ -96,25 +116,25 @@ func (svc *AgentSessionService) withCurrentSessionGuard(ctx context.Context, exp
 		Operation: operation, ActorUser: "runtime",
 	}
 	if persistence {
-		repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminPersistenceGuardRepository)
+		repository, ok := store.(securityrepo.ClusterAdminPersistenceGuardRepository)
 		if !ok {
 			return adminrepo.ErrClusterAdminAdmissionDenied
 		}
 		return repository.WithExistingClusterAdminPersistenceGuard(ctx, input, func(guardedStore adminrepo.Repository) error {
-			if err := verifyClusterAdminSessionSecretIntegrity(ctx, svc.cfg.Store, svc.cfg.RuntimeRunner, current.RoleID, current.SessionKey); err != nil {
+			if err := verifyClusterAdminSessionSecretIntegrity(ctx, guardedStore, svc.cfg.RuntimeRunner, current.RoleID, current.SessionKey); err != nil {
 				return err
 			}
 			return sideEffect(current, guardedStore)
 		})
 	}
-	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminRuntimeGuardRepository)
+	repository, ok := store.(securityrepo.ClusterAdminRuntimeGuardRepository)
 	if !ok {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	return repository.WithExistingClusterAdminRuntimeGuard(ctx, input, func() error {
-		if err := verifyClusterAdminSessionSecretIntegrity(ctx, svc.cfg.Store, svc.cfg.RuntimeRunner, current.RoleID, current.SessionKey); err != nil {
+		if err := verifyClusterAdminSessionSecretIntegrity(ctx, store, svc.cfg.RuntimeRunner, current.RoleID, current.SessionKey); err != nil {
 			return err
 		}
-		return sideEffect(current, svc.cfg.Store)
+		return sideEffect(current, store)
 	})
 }
