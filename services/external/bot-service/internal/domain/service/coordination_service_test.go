@@ -137,13 +137,20 @@ func TestSafeFailureSummaryRedactsSensitiveLinesAndTruncates(t *testing.T) {
 
 type fakeCoordinationStore struct {
 	*fakeAdminStore
-	capabilities     map[string]bool
-	relationships    map[string]bool
-	claims           []entity.WorkClaim
-	processes        map[int64]entity.ProcessContext
-	listProcessRunID int64
-	listProjectID    int64
-	updatedClaim     adminrepo.UpdateWorkClaimInput
+	capabilities            map[string]bool
+	relationships           map[string]bool
+	claims                  []entity.WorkClaim
+	processes               map[int64]entity.ProcessContext
+	listProcessRunID        int64
+	listProjectID           int64
+	updatedClaim            adminrepo.UpdateWorkClaimInput
+	updatedClaims           []adminrepo.UpdateWorkClaimInput
+	updateWorkClaimErr      error
+	reconcileErr            error
+	reconcileCalls          int
+	ownerAttention          entity.OwnerAttentionRequest
+	createOwnerAttentionErr error
+	setOwnerAttentionErr    error
 }
 
 func (store *fakeCoordinationStore) EnsureTurnProcess(context.Context, adminrepo.EnsureTurnProcessInput) (entity.ProcessContext, error) {
@@ -172,6 +179,10 @@ func (store *fakeCoordinationStore) IsRoleRelationshipAllowed(_ context.Context,
 
 func (store *fakeCoordinationStore) UpdateWorkClaim(_ context.Context, input adminrepo.UpdateWorkClaimInput) (entity.WorkClaim, error) {
 	store.updatedClaim = input
+	store.updatedClaims = append(store.updatedClaims, input)
+	if store.updateWorkClaimErr != nil {
+		return entity.WorkClaim{}, store.updateWorkClaimErr
+	}
 	return entity.WorkClaim{TurnID: input.TurnID, Summary: input.Summary, Domains: input.Domains}, nil
 }
 
@@ -189,16 +200,28 @@ func (store *fakeCoordinationStore) SearchMemory(context.Context, adminrepo.Sear
 	return nil, nil
 }
 
-func (store *fakeCoordinationStore) CreateOwnerAttention(context.Context, adminrepo.CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error) {
-	return entity.OwnerAttentionRequest{}, false, nil
+func (store *fakeCoordinationStore) CreateOwnerAttention(_ context.Context, input adminrepo.CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error) {
+	if store.createOwnerAttentionErr != nil {
+		return entity.OwnerAttentionRequest{}, false, store.createOwnerAttentionErr
+	}
+	if store.ownerAttention.ID != 0 {
+		return store.ownerAttention, false, nil
+	}
+	store.ownerAttention = entity.OwnerAttentionRequest{ID: 1, ProcessRunID: input.ProcessRunID, TurnID: input.TurnID}
+	return store.ownerAttention, true, nil
 }
 
-func (store *fakeCoordinationStore) SetOwnerAttentionPost(context.Context, int64, string) (entity.OwnerAttentionRequest, error) {
-	return entity.OwnerAttentionRequest{}, nil
+func (store *fakeCoordinationStore) SetOwnerAttentionPost(_ context.Context, _ int64, postID string) (entity.OwnerAttentionRequest, error) {
+	if store.setOwnerAttentionErr != nil {
+		return entity.OwnerAttentionRequest{}, store.setOwnerAttentionErr
+	}
+	store.ownerAttention.MattermostPostID = postID
+	return store.ownerAttention, nil
 }
 
 func (store *fakeCoordinationStore) ReconcileProcessRun(context.Context, int64) error {
-	return nil
+	store.reconcileCalls++
+	return store.reconcileErr
 }
 
 func coordinationRelationshipKey(action string, targetRoleID int64) string {

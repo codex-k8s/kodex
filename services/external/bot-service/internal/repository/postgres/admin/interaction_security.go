@@ -143,7 +143,11 @@ func (repo *Repository) ConsumeInteractionCapabilityWithMutation(
 	if err != nil {
 		return securityrepo.Capability{}, fmt.Errorf("begin atomic dialog mutation: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
+	}()
 	txRepository := newTransactionalRepository(tx)
 	capability, err := txRepository.ConsumeInteractionCapability(ctx, input)
 	if err != nil {
@@ -377,6 +381,8 @@ func (repo *Repository) withExistingClusterAdminGuard(ctx context.Context, input
 		}
 	}
 	var sideEffectErr error
+	var finalizeCtx context.Context
+	var cancelFinalize context.CancelFunc
 	if allowed {
 		if persistence {
 			sideEffectTx, beginErr := tx.Begin(ctx)
@@ -384,24 +390,31 @@ func (repo *Repository) withExistingClusterAdminGuard(ctx context.Context, input
 				return fmt.Errorf("begin cluster-admin persistence side effect: %w", beginErr)
 			}
 			sideEffectErr = sideEffect(newTransactionalRepository(sideEffectTx))
+			finalizeCtx, cancelFinalize = context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 			if sideEffectErr != nil {
-				_ = sideEffectTx.Rollback(ctx)
+				_ = sideEffectTx.Rollback(finalizeCtx)
 				allowed = false
-			} else if commitErr := sideEffectTx.Commit(ctx); commitErr != nil {
+			} else if commitErr := sideEffectTx.Commit(finalizeCtx); commitErr != nil {
+				cancelFinalize()
 				return fmt.Errorf("commit cluster-admin persistence side effect: %w", commitErr)
 			}
 		} else {
 			sideEffectErr = sideEffect(txRepository)
+			finalizeCtx, cancelFinalize = context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 			if errors.Is(sideEffectErr, adminrepo.ErrClusterAdminAdmissionDenied) {
 				allowed = false
 			}
 		}
 	}
+	if finalizeCtx == nil {
+		finalizeCtx, cancelFinalize = context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	}
+	defer cancelFinalize()
 	outcome := "denied"
 	if allowed {
 		outcome = "allowed"
 	}
-	if _, err := tx.Exec(ctx, query("audit_events__insert.sql"),
+	if _, err := tx.Exec(finalizeCtx, query("audit_events__insert.sql"),
 		"cluster_admin.runtime."+outcome,
 		input.ActorUserID,
 		input.ActorUser,
@@ -409,19 +422,19 @@ func (repo *Repository) withExistingClusterAdminGuard(ctx context.Context, input
 		fmt.Sprintf("%d:%d:%s", input.RoleID, input.ChatID, input.SessionKey),
 		input.Operation+": "+outcome,
 	); err != nil {
-		return fmt.Errorf("record cluster-admin runtime guard audit: %w", err)
+		return errors.Join(sideEffectErr, fmt.Errorf("record cluster-admin runtime guard audit: %w", err))
 	}
 	if !allowed {
-		if err := tx.Commit(ctx); err != nil {
-			return fmt.Errorf("commit denied cluster-admin runtime guard audit: %w", err)
+		if err := tx.Commit(finalizeCtx); err != nil {
+			return errors.Join(sideEffectErr, fmt.Errorf("commit denied cluster-admin runtime guard audit: %w", err))
 		}
 		if sideEffectErr != nil {
 			return sideEffectErr
 		}
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit cluster-admin runtime guard: %w", err)
+	if err := tx.Commit(finalizeCtx); err != nil {
+		return errors.Join(sideEffectErr, fmt.Errorf("commit cluster-admin runtime guard: %w", err))
 	}
 	return sideEffectErr
 }

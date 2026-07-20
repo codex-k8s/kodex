@@ -39,6 +39,82 @@ func TestReturnToRequesterProductionDispatcherDoesNotSelfLockFrozenSource(t *tes
 	}
 }
 
+func TestTerminalCompleteReconcilesProcessAndWorkWithMaxConnsOne(t *testing.T) {
+	for _, sourceAccess := range []string{"read-only", "cluster-admin"} {
+		t.Run(sourceAccess, func(t *testing.T) {
+			fixture := newPostgresDelegationFixtureWithSourceAccess(t, 1, sourceAccess)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			var projectID, policyID, roleID, turnID int64
+			if err := fixture.pool.QueryRow(ctx, `
+select session_row.project_id, policy.id, session_row.role_id, turn_row.id
+from matter_codex_agent_sessions session_row
+join matter_codex_agent_session_turns turn_row on turn_row.session_id = session_row.id
+join matter_codex_policy_revisions policy on policy.project_id = session_row.project_id and policy.status = 'active'
+where session_row.session_key = 'source-session' and turn_row.run_id = 'source-run'
+`).Scan(&projectID, &policyID, &roleID, &turnID); err != nil {
+				t.Fatalf("read terminal fixture identities: %v", err)
+			}
+			var processID int64
+			if err := fixture.pool.QueryRow(ctx, `
+insert into matter_codex_process_runs(
+	public_id, project_id, policy_revision_id, root_role_id, root_initiator_user_id,
+	root_initiator_user_name, root_trigger_post_id, root_channel_id, root_thread_post_id, status
+) values ($1, $2, $3, $4, 'owner-user', 'owner', 'source-root', 'source-channel', 'source-root', 'running')
+returning id
+`, "terminal-"+strings.ReplaceAll(sourceAccess, "-", ""), projectID, policyID, roleID).Scan(&processID); err != nil {
+				t.Fatalf("seed terminal process: %v", err)
+			}
+			if _, err := fixture.pool.Exec(ctx, `insert into matter_codex_process_turns(turn_id, process_run_id, launch_post_id) values ($1, $2, 'source-root')`, turnID, processID); err != nil {
+				t.Fatalf("seed terminal process links: %v", err)
+			}
+			if _, err := fixture.pool.Exec(ctx, `insert into matter_codex_work_claims(process_run_id, turn_id, role_id, summary, status) values ($1, $2, $3, 'terminal proof', 'active')`, processID, turnID, roleID); err != nil {
+				t.Fatalf("seed terminal work claim: %v", err)
+			}
+			if _, err := fixture.pool.Exec(ctx, `
+insert into matter_codex_agent_runs(run_id, profile_name, role, provider, owner, name, head_branch, status)
+values ('source-run', 'manager-proof', 'manager', 'github', 'codex-k8s', 'matter-codex', 'terminal-proof', 'running')
+`); err != nil {
+				t.Fatalf("seed terminal agent run: %v", err)
+			}
+			callCtx, cancelCall := context.WithCancel(ctx)
+			defer cancelCall()
+			fixture.publisher.beforeFirst = cancelCall
+			fixture.publisher.failAt.Store(1)
+			err := fixture.service.CompleteTurn(callCtx, "source-session", "source-token", CompleteAgentSessionTurnCommand{
+				TurnID: turnID, RunID: "source-run", Status: agentSessionTurnSucceeded, FinalMessage: "Синтетический terminal результат.",
+			})
+			if err == nil || !strings.Contains(err.Error(), "synthetic Mattermost network failure") {
+				t.Fatalf("CompleteTurn(%s) error=%v", sourceAccess, err)
+			}
+			var turnStatus, processStatus, workStatus string
+			if err := fixture.pool.QueryRow(ctx, `
+select turn_row.status, process.status, claim.status
+from matter_codex_agent_session_turns turn_row
+join matter_codex_process_turns process_turn on process_turn.turn_id = turn_row.id
+join matter_codex_process_runs process on process.id = process_turn.process_run_id
+join matter_codex_work_claims claim on claim.turn_id = turn_row.id
+where turn_row.id = $1
+`, turnID).Scan(&turnStatus, &processStatus, &workStatus); err != nil {
+				t.Fatalf("read reconciled terminal state: %v", err)
+			}
+			if turnStatus != agentSessionTurnSucceeded || processStatus != "completed" || workStatus != agentSessionTurnSucceeded {
+				t.Fatalf("terminal state turn=%q process=%q work=%q", turnStatus, processStatus, workStatus)
+			}
+			fixture.publisher.failAt.Store(0)
+			attemptsBeforeRetry := fixture.publisher.attempts.Load()
+			if err := fixture.service.CompleteTurn(ctx, "source-session", "source-token", CompleteAgentSessionTurnCommand{
+				TurnID: turnID, RunID: "source-run", Status: agentSessionTurnSucceeded, FinalMessage: "Повтор.",
+			}); err != nil {
+				t.Fatalf("terminal retry(%s) error=%v", sourceAccess, err)
+			}
+			if fixture.publisher.attempts.Load() != attemptsBeforeRetry {
+				t.Fatalf("terminal retry duplicated publication: before=%d after=%d", attemptsBeforeRetry, fixture.publisher.attempts.Load())
+			}
+		})
+	}
+}
+
 func TestReturnToRequesterOrdinaryAndClusterAdminCommitExactTwoRowPlan(t *testing.T) {
 	for _, sourceAccess := range []string{"read-only", "cluster-admin"} {
 		t.Run(sourceAccess, func(t *testing.T) {
@@ -659,10 +735,19 @@ type postgresDelegationRunner struct {
 
 func (runner *postgresDelegationRunner) GetMattermostBotTokenSecret(_ context.Context, secretName string) (runtimerepo.MattermostBotTokenSecret, error) {
 	runner.tokenReads.Add(1)
-	if secretName != "target-secret" {
+	token := ""
+	switch secretName {
+	case "source-secret":
+		token = "source-token"
+	case "target-secret":
+		token = "target-token"
+	default:
 		return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("synthetic token secret not found")
 	}
-	return runtimerepo.MattermostBotTokenSecret{SecretName: secretName, Token: "target-token"}, nil
+	return runtimerepo.MattermostBotTokenSecret{
+		SecretName: secretName, Token: token,
+		Integrity: runtimerepo.SecretIntegrity{SecretName: secretName, SecretKey: "token", ContentSHA256: strings.Repeat("a", 64), UID: "source-session-uid", ResourceVersion: "1"},
+	}, nil
 }
 
 func (runner *postgresDelegationRunner) InspectSecretIntegrity(_ context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
@@ -719,6 +804,18 @@ func (publisher *postgresDelegationPublisher) PostThreadMessage(ctx context.Cont
 	}
 	id := publisher.posts.Add(1)
 	return MattermostPostRef{ChannelID: input.ChannelID, PostID: "synthetic-post-" + strconv.FormatInt(id, 10)}, nil
+}
+
+func (publisher *postgresDelegationPublisher) PostThreadMessageWithToken(ctx context.Context, _ string, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	return publisher.PostThreadMessage(ctx, input)
+}
+
+func (publisher *postgresDelegationPublisher) PostThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
+	return MattermostPostRef{ChannelID: card.ChannelID, PostID: "synthetic-card-" + card.RootPostID}, nil
+}
+
+func (publisher *postgresDelegationPublisher) UpdateThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
+	return MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, nil
 }
 
 func (publisher *postgresDelegationPublisher) ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {

@@ -584,6 +584,99 @@ func TestAgentSessionCompleteIsIdempotentForTerminalTurn(t *testing.T) {
 	}
 }
 
+func TestAgentSessionCompleteReconcilesTerminalProcessAfterEveryExternalFailure(t *testing.T) {
+	statusErr := errors.New("синтетическая ошибка карточки")
+	resultErr := errors.New("синтетическая ошибка результата")
+	attentionErr := errors.New("синтетическая ошибка публикации внимания")
+	reconcileErr := errors.New("синтетическая ошибка reconciliation")
+	tests := []struct {
+		name      string
+		configure func(*fakeCoordinationStore, *fakeThreadPublisher)
+		want      []error
+	}{
+		{name: "карточка", configure: func(_ *fakeCoordinationStore, publisher *fakeThreadPublisher) {
+			publisher.cardUpdateErr = statusErr
+		}, want: []error{statusErr}},
+		{name: "результат", configure: func(_ *fakeCoordinationStore, publisher *fakeThreadPublisher) {
+			publisher.postErrors = []error{resultErr, nil}
+		}, want: []error{resultErr}},
+		{name: "публикация внимания", configure: func(_ *fakeCoordinationStore, publisher *fakeThreadPublisher) {
+			publisher.postErrors = []error{nil, attentionErr}
+		}, want: []error{attentionErr}},
+		{name: "reconciliation", configure: func(store *fakeCoordinationStore, _ *fakeThreadPublisher) {
+			store.reconcileErr = reconcileErr
+		}, want: []error{reconcileErr}},
+		{name: "все причины", configure: func(store *fakeCoordinationStore, publisher *fakeThreadPublisher) {
+			publisher.cardUpdateErr = statusErr
+			publisher.postErrors = []error{resultErr, attentionErr}
+			store.reconcileErr = reconcileErr
+		}, want: []error{statusErr, resultErr, attentionErr, reconcileErr}},
+	}
+	for _, clusterAdmin := range []bool{false, true} {
+		mode := "обычная роль"
+		if clusterAdmin {
+			mode = "cluster-admin"
+		}
+		for _, test := range tests {
+			t.Run(mode+"/"+test.name, func(t *testing.T) {
+				svc, store, _, publisher := terminalReconciliationTestDeps(t, clusterAdmin)
+				test.configure(store, publisher)
+				err := svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+					TurnID: 1, RunID: "run-1", Status: agentSessionTurnFailed, ErrorMessage: "синтетический terminal failure",
+				})
+				for _, wanted := range test.want {
+					if !errors.Is(err, wanted) {
+						t.Fatalf("CompleteTurn() error=%v, отсутствует %v", err, wanted)
+					}
+				}
+				if store.reconcileCalls != 1 {
+					t.Fatalf("reconciliation calls=%d, want 1", store.reconcileCalls)
+				}
+				if store.updatedClaim.Status != agentSessionTurnFailed {
+					t.Fatalf("work claim status=%q", store.updatedClaim.Status)
+				}
+				turn, readErr := store.GetAgentSessionTurn(context.Background(), 1)
+				if readErr != nil || turn.Status != agentSessionTurnFailed {
+					t.Fatalf("terminal turn=%#v error=%v", turn, readErr)
+				}
+			})
+		}
+	}
+}
+
+func TestAgentSessionTerminalCompleteRetryRepairsReconciliationWithoutDuplicateResult(t *testing.T) {
+	for _, clusterAdmin := range []bool{false, true} {
+		mode := "обычная роль"
+		if clusterAdmin {
+			mode = "cluster-admin"
+		}
+		t.Run(mode, func(t *testing.T) {
+			svc, store, _, publisher := terminalReconciliationTestDeps(t, clusterAdmin)
+			resultErr := errors.New("синтетическая потеря результата")
+			reconcileErr := errors.New("синтетическая потеря reconciliation")
+			publisher.postErr = resultErr
+			store.reconcileErr = reconcileErr
+			command := CompleteAgentSessionTurnCommand{TurnID: 1, RunID: "run-1", Status: agentSessionTurnSucceeded, FinalMessage: "готово"}
+			firstErr := svc.CompleteTurn(context.Background(), "session-1", "session-token", command)
+			if !errors.Is(firstErr, resultErr) || !errors.Is(firstErr, reconcileErr) || store.reconcileCalls != 1 {
+				t.Fatalf("first error=%v reconcile=%d", firstErr, store.reconcileCalls)
+			}
+			publisher.postErr = nil
+			store.reconcileErr = nil
+			postsBeforeRetry := len(publisher.posts)
+			if err := svc.CompleteTurn(context.Background(), "session-1", "session-token", command); err != nil {
+				t.Fatalf("terminal retry error=%v", err)
+			}
+			if store.reconcileCalls != 2 || store.updatedClaim.Status != agentSessionTurnSucceeded {
+				t.Fatalf("retry reconcile=%d claim=%#v", store.reconcileCalls, store.updatedClaim)
+			}
+			if len(publisher.posts) != postsBeforeRetry {
+				t.Fatalf("terminal retry duplicated result: posts=%#v", publisher.posts)
+			}
+		})
+	}
+}
+
 func TestAgentSessionCompleteSplitsLongFinalMessageUsingMattermostLimit(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.postMessageMaxRunes = 1100
@@ -1007,6 +1100,113 @@ func TestAgentSessionStopLastQueuedTurnResetsIdleRuntime(t *testing.T) {
 	if len(publisher.cardUpdates) != 1 || !strings.Contains(publisher.cardUpdates[0].Text, "turn stopped") {
 		t.Fatalf("cardUpdates = %#v", publisher.cardUpdates)
 	}
+}
+
+func TestAgentSessionStopReconcilesCanceledTurnAfterFinalizeFaultMatrixAndRetry(t *testing.T) {
+	cleanupErr := errors.New("синтетическая ошибка cleanup")
+	resetErr := errors.New("синтетическая ошибка reset")
+	cardErr := errors.New("синтетическая ошибка card")
+	reconcileErr := errors.New("синтетическая ошибка reconciliation")
+	tests := []struct {
+		name      string
+		configure func(*fakeCoordinationStore, *fakeRuntimeRunner, *fakeThreadPublisher)
+		want      []error
+	}{
+		{name: "cleanup", configure: func(_ *fakeCoordinationStore, runner *fakeRuntimeRunner, _ *fakeThreadPublisher) {
+			runner.sessionCleanupErrors = []error{cleanupErr}
+		}, want: []error{cleanupErr}},
+		{name: "reset", configure: func(store *fakeCoordinationStore, _ *fakeRuntimeRunner, _ *fakeThreadPublisher) {
+			store.resetSessionErrors = []error{resetErr}
+		}, want: []error{resetErr}},
+		{name: "card", configure: func(_ *fakeCoordinationStore, _ *fakeRuntimeRunner, publisher *fakeThreadPublisher) {
+			publisher.cardUpdateErr = cardErr
+		}, want: []error{cardErr}},
+		{name: "reconciliation", configure: func(store *fakeCoordinationStore, _ *fakeRuntimeRunner, _ *fakeThreadPublisher) {
+			store.reconcileErr = reconcileErr
+		}, want: []error{reconcileErr}},
+		{name: "card и reconciliation", configure: func(store *fakeCoordinationStore, _ *fakeRuntimeRunner, publisher *fakeThreadPublisher) {
+			publisher.cardUpdateErr = cardErr
+			store.reconcileErr = reconcileErr
+		}, want: []error{cardErr, reconcileErr}},
+	}
+	for _, clusterAdmin := range []bool{false, true} {
+		mode := "обычная роль"
+		if clusterAdmin {
+			mode = "cluster-admin"
+		}
+		for _, test := range tests {
+			t.Run(mode+"/"+test.name, func(t *testing.T) {
+				svc, store, runner, publisher := terminalReconciliationTestDeps(t, clusterAdmin)
+				test.configure(store, runner, publisher)
+				command := StopAgentSessionTurnsCommand{TurnIDs: []int64{1}, UserID: "owner-user", UserName: "owner"}
+				_, err := svc.StopAgentSessionTurns(context.Background(), command)
+				for _, wanted := range test.want {
+					if !errors.Is(err, wanted) {
+						t.Fatalf("StopAgentSessionTurns() error=%v, отсутствует %v", err, wanted)
+					}
+				}
+				if store.reconcileCalls != 1 || store.updatedClaim.Status != agentSessionTurnCanceled {
+					t.Fatalf("reconcile=%d claim=%#v", store.reconcileCalls, store.updatedClaim)
+				}
+				turn, readErr := store.GetAgentSessionTurn(context.Background(), 1)
+				if readErr != nil || turn.Status != agentSessionTurnCanceled {
+					t.Fatalf("canceled turn=%#v error=%v", turn, readErr)
+				}
+
+				runner.sessionCleanupErrors = nil
+				store.resetSessionErrors = nil
+				store.reconcileErr = nil
+				publisher.cardUpdateErr = nil
+				cleanupCalls := len(runner.cleanedSessionKeys)
+				cardCalls := len(publisher.cardUpdates)
+				result, retryErr := svc.StopAgentSessionTurns(context.Background(), command)
+				if retryErr != nil {
+					t.Fatalf("repeat stop error=%v", retryErr)
+				}
+				if store.reconcileCalls != 2 || store.updatedClaim.Status != agentSessionTurnCanceled {
+					t.Fatalf("repeat reconcile=%d claim=%#v", store.reconcileCalls, store.updatedClaim)
+				}
+				if len(runner.cleanedSessionKeys) != cleanupCalls || len(publisher.cardUpdates) != cardCalls {
+					t.Fatalf("repeat stop duplicated effects: cleanup=%d/%d cards=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, len(publisher.cardUpdates), cardCalls)
+				}
+				if !strings.Contains(result.Message, "stopped agent turns: `0`") {
+					t.Fatalf("repeat result=%#v", result)
+				}
+			})
+		}
+	}
+}
+
+func terminalReconciliationTestDeps(t *testing.T, clusterAdmin bool) (*AgentSessionService, *fakeCoordinationStore, *fakeRuntimeRunner, *fakeThreadPublisher) {
+	t.Helper()
+	base, runner, publisher := agentSessionStatusTestDeps()
+	session := withActiveTurn(base.agentSessions["session-1"], 1, "run-1")
+	session.PodName = "session-pod"
+	session.PVCName = "session-pvc"
+	base.agentSessions[session.SessionKey] = session
+	base.sessionTurns[0].Status = agentSessionTurnRunning
+	base.sessionTurns[0].MattermostStatusPostID = "status-post-1"
+	base.projects = map[int64]entity.Project{1: {ID: 1, Name: "Проект", Slug: "project"}}
+	base.chats = map[int64]entity.Chat{1: {ID: 1, ProjectID: 1, Slug: "chat", MattermostChannelID: "channel-1"}}
+	store := &fakeCoordinationStore{
+		fakeAdminStore: base,
+		processes: map[int64]entity.ProcessContext{1: {
+			ProcessRunID: 1, ProcessPublicID: "process-1", ProjectID: 1, RootInitiatorUserName: "owner",
+			RootChannelID: "channel-1", RootThreadPostID: "root-1",
+		}},
+	}
+	var repository adminrepo.Repository = store
+	if clusterAdmin {
+		role := base.agentRoles[1]
+		role.KubernetesAccess = "cluster-admin"
+		base.agentRoles[1] = role
+		repository = &admittedCoordinationStore{fakeCoordinationStore: store, allowed: true}
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer: testLocalizer(t, texti18n.DefaultLocale), Store: repository, RuntimeRunner: runner,
+		ThreadPublisher: publisher, StorageReady: true, RuntimeReady: true,
+	})
+	return svc, store, runner, publisher
 }
 
 func agentSessionStatusTestDeps() (*fakeAdminStore, *fakeRuntimeRunner, *fakeThreadPublisher) {

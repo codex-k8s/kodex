@@ -45,6 +45,35 @@ type admittedAdminStore struct {
 	subjectErr         error
 }
 
+type admittedCoordinationStore struct {
+	*fakeCoordinationStore
+	allowed     bool
+	guardInputs []securityrepo.ClusterAdminBindingInput
+}
+
+func (store *admittedCoordinationStore) WithExistingClusterAdminRuntimeGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
+	store.guardInputs = append(store.guardInputs, input)
+	if !store.allowed {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return sideEffect()
+}
+
+func (store *admittedCoordinationStore) WithExistingClusterAdminPersistenceGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func(adminrepo.Repository) error) error {
+	store.guardInputs = append(store.guardInputs, input)
+	if !store.allowed {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return sideEffect(store)
+}
+
+func (store *admittedCoordinationStore) ListClusterAdminSecretIntegrity(context.Context, int64, string) ([]securityrepo.SecretIntegrityBinding, error) {
+	return []securityrepo.SecretIntegrityBinding{{
+		Kind: "session", SecretRef: "session-secret", SecretKey: "token",
+		ContentSHA256: "synthetic-sha256", ResourceUID: "synthetic-uid", ResourceVersion: "1",
+	}}, nil
+}
+
 func (store *admittedAdminStore) RequiresClusterAdminSessionGuard(_ context.Context, roleID int64, sessionKey string) (bool, error) {
 	if store.subjectErr != nil {
 		return false, store.subjectErr

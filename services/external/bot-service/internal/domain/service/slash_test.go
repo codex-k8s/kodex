@@ -3775,6 +3775,7 @@ type fakeAdminStore struct {
 	frozenGitHubAccount  string
 	clearIdleCalls       int
 	resetSessionCalls    int
+	resetSessionErrors   []error
 	completeTurnCalls    int
 	auditCalls           int
 }
@@ -4624,6 +4625,13 @@ func (store *fakeAdminStore) ClearIdleAgentSessionPod(_ context.Context, session
 
 func (store *fakeAdminStore) ResetAgentSessionRuntime(_ context.Context, sessionKey string, status string) (entity.AgentSession, error) {
 	store.resetSessionCalls++
+	if len(store.resetSessionErrors) > 0 {
+		err := store.resetSessionErrors[0]
+		store.resetSessionErrors = store.resetSessionErrors[1:]
+		if err != nil {
+			return entity.AgentSession{}, err
+		}
+	}
 	store.ensureAgentSessions()
 	session, ok := store.agentSessions[sessionKey]
 	if !ok {

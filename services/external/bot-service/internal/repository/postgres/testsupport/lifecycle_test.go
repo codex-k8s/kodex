@@ -176,6 +176,22 @@ func TestGeneratedPostgresHarnessOneShotBootstrapProof(t *testing.T) {
 		}
 		return count
 	}
+	assertConsumedReservedLedger := func(target DisposableDatabase) {
+		t.Helper()
+		var state string
+		var databaseOID int64
+		var consumed bool
+		if err := pool.QueryRow(ctx, `
+select target_state, coalesce(target_database_oid::bigint, 0), consumed_at is not null
+from public.mattercodex_test_bootstrap_proofs
+where target_database = $1
+`, target.Database).Scan(&state, &databaseOID, &consumed); err != nil {
+			t.Fatalf("read consumed reserved ledger: %v", err)
+		}
+		if state != bootstrapTargetStateReserved || databaseOID != 0 || !consumed {
+			t.Fatalf("ledger state=%q oid=%d consumed=%t", state, databaseOID, consumed)
+		}
+	}
 	assertNoDatabaseEffect := func(label string, action func() error) {
 		t.Helper()
 		before := databaseCount()
@@ -602,6 +618,99 @@ func TestGeneratedPostgresHarnessOneShotBootstrapProof(t *testing.T) {
 		defer manualCancel()
 		if err := boundedBootstrapTargetCleanup(manualCtx, harness.BootstrapDSN, target, false, false); err != nil {
 			t.Fatalf("manual reconciliation после deadline: %v", err)
+		}
+	})
+
+	t.Run("definite pre-create collision preserves foreign database", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision collision proof: %v", err)
+		}
+		before := databaseCount()
+		options := bootstrapLifecycleOptions{
+			cleanupTimeout: 10 * time.Second,
+			attemptTimeout: 3 * time.Second,
+			retryDelay:     10 * time.Millisecond,
+			hook: func(hookCtx context.Context, point bootstrapLifecycleHookPoint, input bootstrapLifecycleHookInput) error {
+				if point != bootstrapHookBeforeCreateExec {
+					return nil
+				}
+				identifier := pgx.Identifier{input.target.Database}.Sanitize()
+				owner := pgx.Identifier{generatedPostgresOwner}.Sanitize()
+				_, createErr := pool.Exec(hookCtx, "create database "+identifier+" with template template0 owner "+owner)
+				return createErr
+			},
+		}
+		collisionCtx := context.WithValue(context.Background(), bootstrapLifecycleOptionsContextKey{}, options)
+		target, bootstrapErr := BootstrapDisposableDatabase(collisionCtx, harness.BootstrapDSN, proof)
+		if bootstrapErr == nil || !strings.Contains(bootstrapErr.Error(), "однозначной коллизией") || !strings.Contains(bootstrapErr.Error(), "объекта-сироты") {
+			t.Fatalf("однозначная коллизия не диагностирована: %v", bootstrapErr)
+		}
+		snapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+		if err != nil || !snapshot.exists || snapshot.comment != "" || snapshot.databaseOID == bootstrapTargetDatabaseOID(target.Marker) {
+			t.Fatalf("foreign database не сохранена: snapshot=%#v error=%v", snapshot, err)
+		}
+		assertConsumedReservedLedger(target)
+		if _, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof); err == nil {
+			t.Fatal("proof definite collision повторно принят")
+		}
+		if _, err := pool.Exec(ctx, "drop database "+pgx.Identifier{target.Database}.Sanitize()+" with (force)"); err != nil {
+			t.Fatalf("test cleanup collision database: %v", err)
+		}
+		if after := databaseCount(); after != before {
+			t.Fatalf("collision test cleanup изменил baseline: before=%d after=%d", before, after)
+		}
+	})
+
+	t.Run("post-create pre-ledger replacement survives", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision pre-ledger replacement proof: %v", err)
+		}
+		before := databaseCount()
+		var originalOID int64
+		options := bootstrapLifecycleOptions{
+			cleanupTimeout: 10 * time.Second,
+			attemptTimeout: 3 * time.Second,
+			retryDelay:     10 * time.Millisecond,
+			hook: func(hookCtx context.Context, point bootstrapLifecycleHookPoint, input bootstrapLifecycleHookInput) error {
+				if point != bootstrapHookAfterCreateExec {
+					return nil
+				}
+				original, readErr := readBootstrapTargetSnapshot(hookCtx, pool, input.target.Database)
+				if readErr != nil || !original.exists {
+					return fmt.Errorf("read original pre-ledger target: %w", readErr)
+				}
+				originalOID = original.databaseOID
+				identifier := pgx.Identifier{input.target.Database}.Sanitize()
+				if _, dropErr := pool.Exec(hookCtx, "drop database "+identifier+" with (force)"); dropErr != nil {
+					return dropErr
+				}
+				owner := pgx.Identifier{generatedPostgresOwner}.Sanitize()
+				if _, createErr := pool.Exec(hookCtx, "create database "+identifier+" with template template0 owner "+owner); createErr != nil {
+					return createErr
+				}
+				return fmt.Errorf("синтетическая pre-ledger подмена target")
+			},
+		}
+		replacementCtx := context.WithValue(context.Background(), bootstrapLifecycleOptionsContextKey{}, options)
+		target, bootstrapErr := BootstrapDisposableDatabase(replacementCtx, harness.BootstrapDSN, proof)
+		if bootstrapErr == nil || !strings.Contains(bootstrapErr.Error(), "коллизию или объект-сироту") || !strings.Contains(bootstrapErr.Error(), "не подтверждена") {
+			t.Fatalf("pre-ledger replacement не диагностирован: %v", bootstrapErr)
+		}
+		snapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+		if err != nil || !snapshot.exists || snapshot.databaseOID == originalOID || snapshot.comment != "" {
+			t.Fatalf("pre-ledger replacement не сохранён: snapshot=%#v original=%d error=%v", snapshot, originalOID, err)
+		}
+		assertConsumedReservedLedger(target)
+		if _, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof); err == nil {
+			t.Fatal("proof pre-ledger replacement повторно принят")
+		}
+		if _, err := pool.Exec(ctx, "drop database "+pgx.Identifier{target.Database}.Sanitize()+" with (force)"); err != nil {
+			t.Fatalf("test cleanup pre-ledger replacement: %v", err)
+		}
+		if after := databaseCount(); after != before {
+			t.Fatalf("pre-ledger replacement cleanup изменил baseline: before=%d after=%d", before, after)
 		}
 	})
 

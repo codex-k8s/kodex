@@ -77,6 +77,10 @@ func (svc *AgentSessionService) withCurrentSessionRuntimeGuard(ctx context.Conte
 	})
 }
 
+func (svc *AgentSessionService) withCurrentSessionRuntimeGuardWithStore(ctx context.Context, session entity.AgentSession, operation string, sideEffect func(entity.AgentSession, adminrepo.Repository) error) error {
+	return svc.withCurrentSessionGuard(ctx, session, operation, true, sideEffect)
+}
+
 func (svc *AgentSessionService) withCurrentSessionPersistenceGuard(ctx context.Context, session entity.AgentSession, operation string, sideEffect func(entity.AgentSession, adminrepo.Repository) error) error {
 	return svc.withCurrentSessionGuard(ctx, session, operation, true, sideEffect)
 }

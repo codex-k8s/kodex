@@ -185,7 +185,7 @@ func TestStopTurnProductionActionUsesAtomicTargetSessionGuard(t *testing.T) {
 				if store.cancelCalls != 1 || store.runUpdateCalls != 1 || repository.consumes != 1 || len(publisher.cardUpdates) != 1 {
 					t.Fatalf("normal effects cancel=%d run=%d consume=%d cards=%d", store.cancelCalls, store.runUpdateCalls, repository.consumes, len(publisher.cardUpdates))
 				}
-				if test.requireGuard && len(store.guardInputs) != 3 {
+				if test.requireGuard && len(store.guardInputs) != 4 {
 					t.Fatalf("guarded control guards=%#v", store.guardInputs)
 				}
 				return
@@ -205,7 +205,7 @@ func TestStopTurnProductionActionUsesAtomicTargetSessionGuard(t *testing.T) {
 func TestStopTurnProductionActionGuardsResponseCapabilityBoundary(t *testing.T) {
 	store := newStopTurnTransportStore()
 	store.requireGuard = true
-	store.denyGuardAt = 3
+	store.denyGuardAt = 4
 	repository := &memoryInteractionRepository{
 		capabilities: map[string]securityrepo.Capability{}, inputs: map[string]securityrepo.IssueCapabilityInput{}, admissions: map[string]bool{}, mutationStore: store,
 	}
@@ -224,7 +224,7 @@ func TestStopTurnProductionActionGuardsResponseCapabilityBoundary(t *testing.T) 
 	})
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, pathAgentsAction, strings.NewReader(body)))
-	if recorder.Code != http.StatusUnauthorized || repository.issues != 1 || len(store.guardInputs) != 3 {
+	if recorder.Code != http.StatusUnauthorized || repository.issues != 1 || len(store.guardInputs) != 4 {
 		t.Fatalf("status=%d consumes=%d issues=%d guards=%#v body=%s", recorder.Code, repository.consumes, repository.issues, store.guardInputs, recorder.Body.String())
 	}
 	for _, input := range store.guardInputs {

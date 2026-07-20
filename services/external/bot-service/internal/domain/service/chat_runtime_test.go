@@ -1911,6 +1911,10 @@ type fakeThreadPublisher struct {
 	cardUpdates          []MattermostCard
 	reactions            []MattermostPostReactionInput
 	reactionTokens       []string
+	postErr              error
+	postErrors           []error
+	cardPostErr          error
+	cardUpdateErr        error
 	postWithTokenErr     error
 	updateWithTokenErr   error
 	postWithTokenCalls   int
@@ -1918,6 +1922,16 @@ type fakeThreadPublisher struct {
 }
 
 func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	if len(publisher.postErrors) > 0 {
+		err := publisher.postErrors[0]
+		publisher.postErrors = publisher.postErrors[1:]
+		if err != nil {
+			return MattermostPostRef{}, err
+		}
+	}
+	if publisher.postErr != nil {
+		return MattermostPostRef{}, publisher.postErr
+	}
 	publisher.posts = append(publisher.posts, input)
 	return MattermostPostRef{ChannelID: input.ChannelID, PostID: "reply-" + input.RootPostID}, nil
 }
@@ -1954,11 +1968,17 @@ func (publisher *fakeThreadPublisher) UpdateThreadMessageWithToken(_ context.Con
 }
 
 func (publisher *fakeThreadPublisher) PostThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
+	if publisher.cardPostErr != nil {
+		return MattermostPostRef{}, publisher.cardPostErr
+	}
 	publisher.cards = append(publisher.cards, card)
 	return MattermostPostRef{ChannelID: card.ChannelID, PostID: "card-" + card.RootPostID}, nil
 }
 
 func (publisher *fakeThreadPublisher) UpdateThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
+	if publisher.cardUpdateErr != nil {
+		return MattermostPostRef{}, publisher.cardUpdateErr
+	}
 	publisher.cardUpdates = append(publisher.cardUpdates, card)
 	return MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, nil
 }

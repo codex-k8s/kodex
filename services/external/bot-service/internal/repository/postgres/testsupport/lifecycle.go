@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -117,6 +119,7 @@ type bootstrapTargetLedger struct {
 type bootstrapLifecycleHookPoint string
 
 const (
+	bootstrapHookBeforeCreateExec      bootstrapLifecycleHookPoint = "before_create_exec"
 	bootstrapHookAfterCreateExec       bootstrapLifecycleHookPoint = "after_create_exec"
 	bootstrapHookAfterCreateIdentified bootstrapLifecycleHookPoint = "after_create_identified"
 	bootstrapHookBeforeComment         bootstrapLifecycleHookPoint = "before_comment"
@@ -261,6 +264,20 @@ func sha256Text(value string) string {
 	return hex.EncodeToString(digest[:])
 }
 
+func bootstrapTargetDatabaseOID(markerValue string) int64 {
+	digest := sha256.Sum256([]byte("mattercodex-test-database-oid-v1\x00" + markerValue))
+	oid := binary.BigEndian.Uint32(digest[:4])&0x7fffffff | 1<<14
+	return int64(oid)
+}
+
+func definiteCreateDatabaseNotApplied(err error) bool {
+	var postgresErr *pgconn.PgError
+	if !errors.As(err, &postgresErr) {
+		return false
+	}
+	return postgresErr.Code == "42P04" || postgresErr.Code == "23505"
+}
+
 func BootstrapDisposableDatabase(ctx context.Context, bootstrapDSN string, proofValue string) (DisposableDatabase, error) {
 	config, err := validateBootstrapEndpointOffline(bootstrapDSN)
 	if err != nil {
@@ -294,7 +311,16 @@ func BootstrapDisposableDatabase(ctx context.Context, bootstrapDSN string, proof
 	}
 	identifier := pgx.Identifier{target.Database}.Sanitize()
 	owner := pgx.Identifier{identity.currentUserName}.Sanitize()
-	if _, err := connection.Exec(ctx, "create database "+identifier+" with template template0 owner "+owner); err != nil {
+	expectedDatabaseOID := bootstrapTargetDatabaseOID(target.Marker)
+	if err := runBootstrapLifecycleHook(ctx, bootstrapHookBeforeCreateExec, bootstrapLifecycleHookInput{
+		bootstrapDSN: bootstrapDSN, target: target,
+	}); err != nil {
+		return failBootstrapWithCleanup(ctx, bootstrapDSN, target, "создание одноразовой PostgreSQL database не начато")
+	}
+	if _, err := connection.Exec(ctx, "create database "+identifier+" with template template0 owner "+owner+" oid "+strconv.FormatInt(expectedDatabaseOID, 10)); err != nil {
+		if definiteCreateDatabaseNotApplied(err) {
+			return target, fmt.Errorf("создание одноразовой PostgreSQL database отклонено однозначной коллизией; резервирование использовано, удаление объекта-сироты запрещено")
+		}
 		return failBootstrapWithCleanup(ctx, bootstrapDSN, target, "создание одноразовой PostgreSQL database не выполнено")
 	}
 	if err := runBootstrapLifecycleHook(ctx, bootstrapHookAfterCreateExec, bootstrapLifecycleHookInput{
@@ -418,6 +444,10 @@ func recordBootstrapTargetIdentity(
 	}
 	if err := validateBootstrapTargetSnapshot(snapshot, ledger, target.Marker, false); err != nil {
 		return 0, err
+	}
+	expectedDatabaseOID := bootstrapTargetDatabaseOID(target.Marker)
+	if snapshot.databaseOID != expectedDatabaseOID {
+		return 0, fmt.Errorf("созданный PostgreSQL target не имеет независимой creation identity")
 	}
 	if ledger.databaseOID == 0 {
 		if err := setBootstrapTargetCreated(attemptCtx, connection, marker.runID, target, snapshot.databaseOID); err != nil {
@@ -560,6 +590,9 @@ func cleanupBootstrapTargetOnce(
 		}
 		if err := validateBootstrapTargetSnapshot(snapshot, ledger, target.Marker, false); err != nil {
 			return bootstrapCleanupError{message: err.Error(), retryable: false}
+		}
+		if snapshot.databaseOID != bootstrapTargetDatabaseOID(target.Marker) {
+			return bootstrapCleanupError{message: "cleanup PostgreSQL target обнаружил коллизию или объект-сироту без независимой creation identity", retryable: false}
 		}
 		if err := setBootstrapTargetCreated(ctx, connection, marker.runID, target, snapshot.databaseOID); err != nil {
 			return bootstrapCleanupError{message: "cleanup PostgreSQL target не зафиксировал OID", retryable: true}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
@@ -357,18 +358,28 @@ func (svc *AgentSessionService) notifyRootInitiatorFailure(ctx context.Context, 
 		"RunID": turn.RunID,
 		"Error": errorMessage,
 	})
-	request, _, err := store.CreateOwnerAttention(ctx, adminrepo.CreateOwnerAttentionInput{
-		ProcessRunID:   process.ProcessRunID,
-		TurnID:         turn.ID,
-		Severity:       "urgent",
-		Summary:        summary,
-		Recommendation: svc.t("coordination.failure.recommendation", nil),
-		EvidenceLinks: []string{
-			svc.mattermostThreadURLForProcess(ctx, process),
-			svc.mattermostThreadURLForSession(ctx, session),
-		},
-		PauseScope:     "wave",
-		IdempotencyKey: fmt.Sprintf("turn-%d-final-failure", turn.ID),
+	evidenceLinks := []string{
+		svc.mattermostThreadURLForProcess(ctx, process),
+		svc.mattermostThreadURLForSession(ctx, session),
+	}
+	var request entity.OwnerAttentionRequest
+	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.failure_attention_create.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
+		coordinationStore, configured := guardedStore.(adminrepo.CoordinationRepository)
+		if !configured {
+			return fmt.Errorf("owner attention is not configured")
+		}
+		var createErr error
+		request, _, createErr = coordinationStore.CreateOwnerAttention(ctx, adminrepo.CreateOwnerAttentionInput{
+			ProcessRunID:   process.ProcessRunID,
+			TurnID:         turn.ID,
+			Severity:       "urgent",
+			Summary:        summary,
+			Recommendation: svc.t("coordination.failure.recommendation", nil),
+			EvidenceLinks:  evidenceLinks,
+			PauseScope:     "wave",
+			IdempotencyKey: fmt.Sprintf("turn-%d-final-failure", turn.ID),
+		})
+		return createErr
 	})
 	if err != nil || request.MattermostPostID != "" {
 		return err
@@ -418,19 +429,34 @@ func (svc *AgentSessionService) notifyRootInitiatorFailure(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	_, err = store.SetOwnerAttentionPost(ctx, request.ID, ref.PostID)
-	return err
+	return svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.failure_attention_post_persist.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
+		coordinationStore, configured := guardedStore.(adminrepo.CoordinationRepository)
+		if !configured {
+			return fmt.Errorf("owner attention is not configured")
+		}
+		_, persistErr := coordinationStore.SetOwnerAttentionPost(ctx, request.ID, ref.PostID)
+		return persistErr
+	})
 }
 
-func (svc *AgentSessionService) reconcileProcessRun(ctx context.Context, turnID int64) error {
-	store, ok := svc.cfg.Store.(adminrepo.CoordinationRepository)
-	if !ok {
-		return nil
-	}
-	if err := store.ReconcileProcessRun(ctx, turnID); err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
-		return err
-	}
-	return nil
+func (svc *AgentSessionService) reconcileTerminalProcessRun(ctx context.Context, session entity.AgentSession, turnID int64, status string, operation string) error {
+	reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return svc.withCurrentSessionPersistenceGuard(reconcileCtx, session, operation, func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
+		store, ok := guardedStore.(adminrepo.CoordinationRepository)
+		if !ok {
+			return nil
+		}
+		_, workErr := store.UpdateWorkClaim(reconcileCtx, adminrepo.UpdateWorkClaimInput{TurnID: turnID, Status: status})
+		if errors.Is(workErr, adminrepo.ErrNotFound) {
+			workErr = nil
+		}
+		processErr := store.ReconcileProcessRun(reconcileCtx, turnID)
+		if errors.Is(processErr, adminrepo.ErrNotFound) {
+			processErr = nil
+		}
+		return errors.Join(workErr, processErr)
+	})
 }
 
 func (svc *AgentSessionService) processLineageMarkdown(ctx context.Context, projectID int64, lineage []entity.ProcessLineageStep) string {
