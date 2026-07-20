@@ -153,6 +153,42 @@ func (repo *Repository) EnsureTurnProcess(ctx context.Context, input adminrepo.E
 			return entity.ProcessContext{}, fmt.Errorf("get parent turn process: %w", err)
 		}
 	}
+	if processID == 0 && input.ParentTurnID == 0 && strings.TrimSpace(input.InitiatorUserID) != "" {
+		err = tx.QueryRow(ctx, `
+			select process.id
+			from matter_codex_process_runs process
+			join matter_codex_owner_attention_requests attention on attention.process_run_id = process.id
+			join matter_codex_agent_session_turns attention_turn on attention_turn.id = attention.turn_id
+			where process.project_id = $1
+				and attention_turn.mattermost_channel_id = $2
+				and attention_turn.mattermost_root_post_id = $3
+				and process.root_initiator_user_id = $4
+				and attention.status = 'open'
+			order by attention.updated_at desc
+			limit 1
+			for update of process
+		`, input.ProjectID, input.MattermostChannelID, input.MattermostRootPostID, input.InitiatorUserID).Scan(&processID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return entity.ProcessContext{}, fmt.Errorf("find process awaiting owner response: %w", err)
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			processID = 0
+		} else {
+			if _, err := tx.Exec(ctx, `
+				update matter_codex_owner_attention_requests attention
+				set status = 'resolved', resolved_at = now(), resolved_by_user_id = $2,
+					resolved_by_post_id = $3, updated_at = now()
+				from matter_codex_agent_session_turns attention_turn
+				where attention.process_run_id = $1 and attention.status = 'open'
+					and attention_turn.id = attention.turn_id
+					and attention_turn.mattermost_channel_id = $4
+					and attention_turn.mattermost_root_post_id = $5
+			`, processID, input.InitiatorUserID, input.TriggerPostID,
+				input.MattermostChannelID, input.MattermostRootPostID); err != nil {
+				return entity.ProcessContext{}, fmt.Errorf("resolve owner attention: %w", err)
+			}
+		}
+	}
 	if processID == 0 {
 		var revisionID int64
 		err = tx.QueryRow(ctx, `select id from matter_codex_policy_revisions where project_id = $1 and status = 'active'`, input.ProjectID).Scan(&revisionID)
@@ -195,6 +231,17 @@ func (repo *Repository) EnsureTurnProcess(ctx context.Context, input adminrepo.E
 		on conflict (turn_id) do update set status = 'active', updated_at = now()
 	`, processID, input.TurnID, input.RoleID); err != nil {
 		return entity.ProcessContext{}, fmt.Errorf("create turn work claim: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		update matter_codex_process_runs process
+		set status = case when exists (
+				select 1 from matter_codex_owner_attention_requests attention
+				where attention.process_run_id = process.id and attention.status = 'open'
+			) then 'waiting_owner' else 'running' end,
+			updated_at = now(), finished_at = null
+		where process.id = $1
+	`, processID); err != nil {
+		return entity.ProcessContext{}, fmt.Errorf("mark process running: %w", err)
 	}
 	item, err := scanProcessContext(tx.QueryRow(ctx, processContextSQL, input.TurnID))
 	if err != nil {
@@ -457,6 +504,13 @@ func (repo *Repository) CreateOwnerAttention(ctx context.Context, input adminrep
 	if err != nil {
 		return entity.OwnerAttentionRequest{}, false, fmt.Errorf("create owner attention: %w", err)
 	}
+	if _, err := repo.pool.Exec(ctx, `
+		update matter_codex_process_runs
+		set status = 'waiting_owner', updated_at = now(), finished_at = null
+		where id = $1
+	`, input.ProcessRunID); err != nil {
+		return entity.OwnerAttentionRequest{}, false, fmt.Errorf("mark process waiting for owner: %w", err)
+	}
 	return item, created, nil
 }
 
@@ -471,6 +525,52 @@ func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, id int64, pos
 		return entity.OwnerAttentionRequest{}, fmt.Errorf("set owner attention post: %w", err)
 	}
 	return item, nil
+}
+
+func (repo *Repository) ReconcileProcessRun(ctx context.Context, turnID int64) error {
+	tag, err := repo.pool.Exec(ctx, `
+		with selected_process as (
+			select process_run_id
+			from matter_codex_process_turns
+			where turn_id = $1
+		), process_state as (
+			select process.id,
+				exists (
+					select 1
+					from matter_codex_owner_attention_requests attention
+					where attention.process_run_id = process.id and attention.status = 'open'
+				) as has_open_attention,
+				exists (
+					select 1
+					from matter_codex_process_turns process_turn
+					join matter_codex_agent_session_turns turn on turn.id = process_turn.turn_id
+					where process_turn.process_run_id = process.id
+						and turn.status in ('queued', 'running', 'capacity_retry')
+				) as has_active_turn
+			from matter_codex_process_runs process
+			join selected_process selected on selected.process_run_id = process.id
+		)
+		update matter_codex_process_runs process
+		set status = case
+				when state.has_open_attention then 'waiting_owner'
+				when state.has_active_turn then 'running'
+				else 'completed'
+			end,
+			finished_at = case
+				when state.has_open_attention or state.has_active_turn then null
+				else coalesce(process.finished_at, now())
+			end,
+			updated_at = now()
+		from process_state state
+		where process.id = state.id
+	`, turnID)
+	if err != nil {
+		return fmt.Errorf("reconcile process run: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return adminrepo.ErrNotFound
+	}
+	return nil
 }
 
 const processContextSQL = `

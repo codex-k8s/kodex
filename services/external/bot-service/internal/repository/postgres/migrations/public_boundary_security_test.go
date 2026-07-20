@@ -251,8 +251,8 @@ func TestRuntimeRoleNMinusOneAndAdversarialBoundary(t *testing.T) {
 			_, _ = cleanupPool.Exec(cleanupCtx, "grant temporary on database "+pgx.Identifier{databaseName}.Sanitize()+" to public")
 		}
 	})
-	if err := migrations.RunTo(ctx, ownerDSN, 23); err != nil {
-		t.Fatalf("runtime-role migration through v23: %v", err)
+	if err := migrations.RunTo(ctx, ownerDSN, 24); err != nil {
+		t.Fatalf("runtime-role migration through v25: %v", err)
 	}
 	ownerPool := openMigrationPool(t, ctx, ownerDSN)
 	var projectID int64
@@ -278,7 +278,7 @@ where name = 'developer'
 	}
 	ownerPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("runtime-role migration through v28: %v", err)
+		t.Fatalf("runtime-role migration through v29: %v", err)
 	}
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
 	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
@@ -301,7 +301,7 @@ where name = 'developer'
 	}); err != nil {
 		t.Fatalf("N-1 repository DML: %v", err)
 	}
-	if _, err := runtimePool.Exec(ctx, `select set_config('matter_codex.cluster_admin_freeze_writer', 'v24', false)`); err != nil {
+	if _, err := runtimePool.Exec(ctx, `select set_config('matter_codex.cluster_admin_freeze_writer', 'v25', false)`); err != nil {
 		t.Fatalf("self-declared marker compatibility: %v", err)
 	}
 	if _, err := runtimePool.Exec(ctx, `create temporary table matter_codex_agent_profiles(id bigint)`); err == nil {
@@ -378,7 +378,7 @@ where subject_type = 'agent_profile'
 	}
 }
 
-func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28Upgrade(t *testing.T) {
+func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29Upgrade(t *testing.T) {
 	ownerDSN := isolatedMigrationDSN(t, "exact_n_minus_one")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -403,8 +403,8 @@ func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28Upgrade(t *test
 		_, _ = cleanupPool.Exec(cleanupCtx, "drop owned by "+roleIdentifier)
 		_, _ = cleanupPool.Exec(cleanupCtx, "drop role "+roleIdentifier)
 	})
-	if err := migrations.RunTo(ctx, ownerDSN, 23); err != nil {
-		t.Fatalf("upgrade exact N-1 database through v23: %v", err)
+	if err := migrations.RunTo(ctx, ownerDSN, 24); err != nil {
+		t.Fatalf("upgrade exact N-1 database through v25: %v", err)
 	}
 	stagingPool := openMigrationPool(t, ctx, ownerDSN)
 	for _, statement := range []string{
@@ -433,9 +433,9 @@ func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28Upgrade(t *test
 	}
 	stagingPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28: %v", err)
+		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28->v29: %v", err)
 	}
-	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 28 {
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 29 {
 		t.Fatalf("upgraded exact N-1 schema version = %d, error=%v", version, err)
 	}
 
@@ -602,29 +602,29 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	if err := migrations.DownOne(ctx, dsn); err == nil {
-		t.Fatal("v28 down unexpectedly succeeded")
+		t.Fatal("v29 down unexpectedly succeeded")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 28 {
+	if err != nil || version != 29 {
 		t.Fatalf("version after failed down = %d, error=%v", version, err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated up after failed down: %v", err)
 	}
 	version, err = migrations.Version(ctx, dsn)
-	if err != nil || version != 28 {
+	if err != nil || version != 29 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
 	}
 }
 
-func TestV28CallbackOutboxOwnershipGrantsAndImmutableCompletePlan(t *testing.T) {
-	ownerDSN := isolatedMigrationDSN(t, "v28_callback_outbox")
+func TestV29CallbackOutboxOwnershipGrantsAndImmutableCompletePlan(t *testing.T) {
+	ownerDSN := isolatedMigrationDSN(t, "v29_callback_outbox")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	roleName := "mc_v28_runtime_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
-	rolePassword := "synthetic-v28-runtime-password"
+	roleName := "mc_v29_runtime_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
+	rolePassword := "synthetic-v29-runtime-password"
 	if err := postgresrepo.ProvisionRuntimeDatabaseRole(ctx, ownerDSN, roleName, rolePassword); err != nil {
-		t.Fatalf("provision v28 runtime role: %v", err)
+		t.Fatalf("provision v29 runtime role: %v", err)
 	}
 	roleIdentifier := pgx.Identifier{roleName}.Sanitize()
 	baseDSN := requiredMigrationDSN(t)
@@ -637,7 +637,7 @@ func TestV28CallbackOutboxOwnershipGrantsAndImmutableCompletePlan(t *testing.T) 
 		_, _ = cleanupPool.Exec(cleanupCtx, "drop role "+roleIdentifier)
 	})
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("fresh v28 migration with runtime role: %v", err)
+		t.Fatalf("fresh v29 migration with runtime role: %v", err)
 	}
 	ownerPool := openMigrationPool(t, ctx, ownerDSN)
 	defer ownerPool.Close()
@@ -648,23 +648,23 @@ from pg_tables
 where schemaname = current_schema()
 	and tablename = 'matter_codex_agent_delegation_callback_deliveries'
 `).Scan(&ownerName, &schemaName); err != nil {
-		t.Fatalf("ownership v28 outbox: %v", err)
+		t.Fatalf("ownership v29 outbox: %v", err)
 	}
 	var currentUser string
 	if err := ownerPool.QueryRow(ctx, `select current_user`).Scan(&currentUser); err != nil || ownerName != currentUser {
-		t.Fatalf("owner v28 outbox=%q current_user=%q error=%v", ownerName, currentUser, err)
+		t.Fatalf("owner v29 outbox=%q current_user=%q error=%v", ownerName, currentUser, err)
 	}
 	if err := ownerPool.QueryRow(ctx, `select pg_get_functiondef($1::regprocedure)`, schemaName+`.matter_codex_guard_agent_delegation_callback_delivery_plan()`).Scan(&functionDefinition); err != nil {
-		t.Fatalf("function definition v27 outbox: %v", err)
+		t.Fatalf("function definition v28 outbox: %v", err)
 	}
 	if !strings.Contains(functionDefinition, "SET search_path TO 'pg_catalog', '") || !strings.Contains(functionDefinition, "'pg_temp'") {
-		t.Fatalf("v27 outbox function search_path не закреплён: %s", functionDefinition)
+		t.Fatalf("v28 outbox function search_path не закреплён: %s", functionDefinition)
 	}
 	if err := ownerPool.QueryRow(ctx, `select pg_get_functiondef($1::regprocedure)`, schemaName+`.matter_codex_agent_delegation_callback_plan_valid(bigint,text)`).Scan(&manifestFunctionDefinition); err != nil {
-		t.Fatalf("function definition v28 manifest: %v", err)
+		t.Fatalf("function definition v29 manifest: %v", err)
 	}
 	if !strings.Contains(manifestFunctionDefinition, "SET search_path TO 'pg_catalog', '") || !strings.Contains(manifestFunctionDefinition, "'pg_temp'") {
-		t.Fatalf("v28 manifest function search_path не закреплён: %s", manifestFunctionDefinition)
+		t.Fatalf("v29 manifest function search_path не закреплён: %s", manifestFunctionDefinition)
 	}
 	var publicTablePrivilege, publicFunctionPrivilege, runtimeFunctionPrivilege, publicManifestPrivilege, runtimeManifestWrite bool
 	if err := ownerPool.QueryRow(ctx, `
@@ -677,45 +677,45 @@ select
 	`, schemaName+`.matter_codex_agent_delegation_callback_deliveries`, schemaName+`.matter_codex_guard_agent_delegation_callback_delivery_plan()`, roleName, schemaName+`.matter_codex_agent_delegation_callback_delivery_manifests`).Scan(
 		&publicTablePrivilege, &publicFunctionPrivilege, &runtimeFunctionPrivilege, &publicManifestPrivilege, &runtimeManifestWrite,
 	); err != nil {
-		t.Fatalf("privilege inspection v28: %v", err)
+		t.Fatalf("privilege inspection v29: %v", err)
 	}
 	if publicTablePrivilege || publicFunctionPrivilege || runtimeFunctionPrivilege || publicManifestPrivilege || !runtimeManifestWrite {
-		t.Fatalf("избыточные v28 privileges public_table=%t public_function=%t runtime_function=%t public_manifest=%t runtime_manifest_write=%t", publicTablePrivilege, publicFunctionPrivilege, runtimeFunctionPrivilege, publicManifestPrivilege, runtimeManifestWrite)
+		t.Fatalf("избыточные v29 privileges public_table=%t public_function=%t runtime_function=%t public_manifest=%t runtime_manifest_write=%t", publicTablePrivilege, publicFunctionPrivilege, runtimeFunctionPrivilege, publicManifestPrivilege, runtimeManifestWrite)
 	}
 
 	var projectID, roleID, chatID, sessionID, turnID, delegationID int64
-	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_projects(name, slug) values ('V28 proof', 'v28-proof') returning id`).Scan(&projectID); err != nil {
-		t.Fatalf("seed v28 project: %v", err)
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_projects(name, slug) values ('V29 proof', 'v29-proof') returning id`).Scan(&projectID); err != nil {
+		t.Fatalf("seed v29 project: %v", err)
 	}
-	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type) values ($1, 'v28-worker', 'worker') returning id`, projectID).Scan(&roleID); err != nil {
-		t.Fatalf("seed v28 role: %v", err)
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type) values ($1, 'v29-worker', 'worker') returning id`, projectID).Scan(&roleID); err != nil {
+		t.Fatalf("seed v29 role: %v", err)
 	}
-	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_chats(project_id, mattermost_channel_id, name, slug) values ($1, 'v28-channel', 'V28 chat', 'v28-chat') returning id`, projectID).Scan(&chatID); err != nil {
-		t.Fatalf("seed v28 chat: %v", err)
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_chats(project_id, mattermost_channel_id, name, slug) values ($1, 'v29-channel', 'V29 chat', 'v29-chat') returning id`, projectID).Scan(&chatID); err != nil {
+		t.Fatalf("seed v29 chat: %v", err)
 	}
 	if err := ownerPool.QueryRow(ctx, `
 insert into matter_codex_agent_sessions(
 	session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
 	mattermost_root_post_id, ttl_seconds, expires_at
-) values ('v28-session', $1, $2, $3, 'thread_role', 'v28-channel', 'v28-root', 3600, now() + interval '1 hour')
+) values ('v29-session', $1, $2, $3, 'thread_role', 'v29-channel', 'v29-root', 3600, now() + interval '1 hour')
 returning id
 `, projectID, chatID, roleID).Scan(&sessionID); err != nil {
-		t.Fatalf("seed v28 session: %v", err)
+		t.Fatalf("seed v29 session: %v", err)
 	}
 	if err := ownerPool.QueryRow(ctx, `
 insert into matter_codex_agent_session_turns(
 	session_id, run_id, mattermost_channel_id, mattermost_root_post_id, mattermost_post_id, message
-) values ($1, 'v28-source-run', 'v28-channel', 'v28-root', 'v28-root', 'synthetic') returning id
+) values ($1, 'v29-source-run', 'v29-channel', 'v29-root', 'v29-root', 'synthetic') returning id
 `, sessionID).Scan(&turnID); err != nil {
-		t.Fatalf("seed v28 turn: %v", err)
+		t.Fatalf("seed v29 turn: %v", err)
 	}
 	if err := ownerPool.QueryRow(ctx, `
 insert into matter_codex_agent_delegations(
 	project_id, source_session_id, source_turn_id, target_chat_id, target_role_id,
 	work_item_key, title
-) values ($1, $2, $3, $4, $5, 'v28-work', 'Безопасный title') returning id
+) values ($1, $2, $3, $4, $5, 'v29-work', 'Безопасный title') returning id
 `, projectID, sessionID, turnID, chatID, roleID).Scan(&delegationID); err != nil {
-		t.Fatalf("seed v28 delegation: %v", err)
+		t.Fatalf("seed v29 delegation: %v", err)
 	}
 
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
@@ -724,22 +724,22 @@ insert into matter_codex_agent_delegations(
 	var deliveryID int64
 	runtimeTx, err := runtimePool.Begin(ctx)
 	if err != nil {
-		t.Fatalf("begin v28 complete plan: %v", err)
+		t.Fatalf("begin v29 complete plan: %v", err)
 	}
 	defer func() { _ = runtimeTx.Rollback(ctx) }()
-	if tag, err := runtimeTx.Exec(ctx, `update matter_codex_agent_delegations set callback_run_id = 'v28-callback-run' where id = $1`, delegationID); err != nil || tag.RowsAffected() != 1 {
-		t.Fatalf("bind v28 callback run: rows=%d error=%v", tag.RowsAffected(), err)
+	if tag, err := runtimeTx.Exec(ctx, `update matter_codex_agent_delegations set callback_run_id = 'v29-callback-run' where id = $1`, delegationID); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("bind v29 callback run: rows=%d error=%v", tag.RowsAffected(), err)
 	}
 	rows, err := runtimeTx.Query(ctx, `
 insert into matter_codex_agent_delegation_callback_deliveries(
 	delegation_id, callback_run_id, destination, publication, channel_id,
 	root_post_id, message, props, payload_sha256, external_id
-) select $1, 'v28-callback-run', input.destination, input.publication, 'v28-channel',
-	'v28-root', 'synthetic message', jsonb_build_object(
+) select $1, 'v29-callback-run', input.destination, input.publication, 'v29-channel',
+	'v29-root', 'synthetic message', jsonb_build_object(
 		'matter_codex_event', input.event,
 		'matter_codex_callback_delivery_id', input.external_id,
 		'matter_codex_callback_delegation_id', ($1::bigint)::text,
-		'matter_codex_callback_run_id', 'v28-callback-run',
+		'matter_codex_callback_run_id', 'v29-callback-run',
 		'matter_codex_callback_destination', input.destination,
 		'matter_codex_callback_publication', input.publication,
 		'matter_codex_callback_payload_sha256', input.payload_hex
@@ -752,14 +752,14 @@ from (values
 returning id, destination
 `, delegationID)
 	if err != nil {
-		t.Fatalf("runtime insert v28 complete outbox: %v", err)
+		t.Fatalf("runtime insert v29 complete outbox: %v", err)
 	}
 	for rows.Next() {
 		var id int64
 		var destination string
 		if err := rows.Scan(&id, &destination); err != nil {
 			rows.Close()
-			t.Fatalf("scan v28 delivery: %v", err)
+			t.Fatalf("scan v29 delivery: %v", err)
 		}
 		if destination == "source_callback" {
 			deliveryID = id
@@ -767,7 +767,7 @@ returning id, destination
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		t.Fatalf("iterate v28 delivery: %v", err)
+		t.Fatalf("iterate v29 delivery: %v", err)
 	}
 	rows.Close()
 	var expectedCount int
@@ -784,32 +784,32 @@ select count(*)::integer, jsonb_agg(jsonb_build_object(
 	'external_id', external_id
 ) order by destination, publication)
 from matter_codex_agent_delegation_callback_deliveries
-where delegation_id = $1 and callback_run_id = 'v28-callback-run'
+where delegation_id = $1 and callback_run_id = 'v29-callback-run'
 `, delegationID).Scan(&expectedCount, &expectedPlan); err != nil {
-		t.Fatalf("build v28 manifest: %v", err)
+		t.Fatalf("build v29 manifest: %v", err)
 	}
 	var normalizedPlan any
 	if err := json.Unmarshal(expectedPlan, &normalizedPlan); err != nil {
-		t.Fatalf("normalize v28 manifest: %v", err)
+		t.Fatalf("normalize v29 manifest: %v", err)
 	}
 	canonicalPlan, err := json.Marshal(normalizedPlan)
 	if err != nil {
-		t.Fatalf("canonicalize v28 manifest: %v", err)
+		t.Fatalf("canonicalize v29 manifest: %v", err)
 	}
 	manifestDigest := sha256.Sum256(canonicalPlan)
 	if _, err := runtimeTx.Exec(ctx, `
 insert into matter_codex_agent_delegation_callback_delivery_manifests(
 	delegation_id, callback_run_id, expected_count, expected_plan, plan_sha256
-) values ($1, 'v28-callback-run', $2, $3::jsonb, $4)
+) values ($1, 'v29-callback-run', $2, $3::jsonb, $4)
 `, delegationID, expectedCount, canonicalPlan, manifestDigest[:]); err != nil {
-		t.Fatalf("runtime insert v28 manifest: %v", err)
+		t.Fatalf("runtime insert v29 manifest: %v", err)
 	}
 	var planValid bool
-	if err := runtimeTx.QueryRow(ctx, `select matter_codex_agent_delegation_callback_plan_valid($1, 'v28-callback-run')`, delegationID).Scan(&planValid); err != nil || !planValid {
-		t.Fatalf("runtime validate v28 manifest: valid=%t error=%v", planValid, err)
+	if err := runtimeTx.QueryRow(ctx, `select matter_codex_agent_delegation_callback_plan_valid($1, 'v29-callback-run')`, delegationID).Scan(&planValid); err != nil || !planValid {
+		t.Fatalf("runtime validate v29 manifest: valid=%t error=%v", planValid, err)
 	}
 	if err := runtimeTx.Commit(ctx); err != nil {
-		t.Fatalf("commit v28 complete plan: %v", err)
+		t.Fatalf("commit v29 complete plan: %v", err)
 	}
 	if tag, err := runtimePool.Exec(ctx, `
 update matter_codex_agent_delegation_callback_deliveries
@@ -817,33 +817,33 @@ set status = 'in_flight', attempt_count = 1, lease_owner = 'synthetic-lease',
 	lease_expires_at = now() + interval '1 minute', last_attempt_at = now(), updated_at = now()
 where id = $1
 `, deliveryID); err != nil || tag.RowsAffected() != 1 {
-		t.Fatalf("runtime state update v28 rows=%d error=%v", tag.RowsAffected(), err)
+		t.Fatalf("runtime state update v29 rows=%d error=%v", tag.RowsAffected(), err)
 	}
 	if _, err := runtimePool.Exec(ctx, `update matter_codex_agent_delegation_callback_deliveries set message = 'mutated' where id = $1`, deliveryID); err == nil {
-		t.Fatal("runtime role изменила immutable v28 payload")
+		t.Fatal("runtime role изменила immutable v29 payload")
 	}
 	if _, err := runtimePool.Exec(ctx, `delete from matter_codex_agent_delegation_callback_deliveries where id = $1`, deliveryID); err == nil {
-		t.Fatal("runtime role удалила durable v28 outbox")
+		t.Fatal("runtime role удалила durable v29 outbox")
 	}
 	if tag, err := runtimePool.Exec(ctx, `
 update matter_codex_agent_delegation_callback_deliveries
 set status = 'delivered', lease_owner = null, lease_expires_at = null,
-		mattermost_post_id = 'v28-post', delivered_at = now(), updated_at = now()
+		mattermost_post_id = 'v29-post', delivered_at = now(), updated_at = now()
 where id = $1
 `, deliveryID); err != nil || tag.RowsAffected() != 1 {
-		t.Fatalf("runtime delivery confirmation v28 rows=%d error=%v", tag.RowsAffected(), err)
+		t.Fatalf("runtime delivery confirmation v29 rows=%d error=%v", tag.RowsAffected(), err)
 	}
 	if _, err := runtimePool.Exec(ctx, `update matter_codex_agent_delegation_callback_deliveries set status = 'pending', mattermost_post_id = '', delivered_at = null where id = $1`, deliveryID); err == nil {
-		t.Fatal("runtime role отменила delivered v28 publication")
+		t.Fatal("runtime role отменила delivered v29 publication")
 	}
 	if _, err := ownerPool.Exec(ctx, `update matter_codex_agent_delegations set callback_run_id = 'foreign-run' where id = $1`, delegationID); err == nil {
-		t.Fatal("v28 позволила отделить callback delivery plan от delegation callback run")
+		t.Fatal("v29 позволила отделить callback delivery plan от delegation callback run")
 	}
 	if _, err := ownerPool.Exec(ctx, `update matter_codex_agent_delegation_callback_delivery_manifests set expected_count = 3 where delegation_id = $1`, delegationID); err == nil {
-		t.Fatal("v28 позволила изменить immutable manifest")
+		t.Fatal("v29 позволила изменить immutable manifest")
 	}
 	if _, err := ownerPool.Exec(ctx, `delete from matter_codex_agent_delegation_callback_delivery_manifests where delegation_id = $1`, delegationID); err == nil {
-		t.Fatal("v28 позволила удалить immutable manifest")
+		t.Fatal("v29 позволила удалить immutable manifest")
 	}
 
 	insertDelivery := func(tx pgx.Tx, candidateDelegationID int64, callbackRunID string, destination string, publication string, event string, payloadHex string, externalID string) error {
@@ -851,7 +851,7 @@ where id = $1
 insert into matter_codex_agent_delegation_callback_deliveries(
 	delegation_id, callback_run_id, destination, publication, channel_id,
 	root_post_id, message, props, payload_sha256, external_id
-) values ($1, $2, $3, $4, 'v28-channel', 'v28-root', 'synthetic malformed proof', jsonb_build_object(
+) values ($1, $2, $3, $4, 'v29-channel', 'v29-root', 'synthetic malformed proof', jsonb_build_object(
 	'matter_codex_event', $5::text,
 	'matter_codex_callback_delivery_id', $7::text,
 	'matter_codex_callback_delegation_id', ($1::bigint)::text,
@@ -880,15 +880,15 @@ select jsonb_agg(jsonb_build_object(
 from matter_codex_agent_delegation_callback_deliveries
 where delegation_id = $1 and callback_run_id = $2
 `, candidateDelegationID, callbackRunID).Scan(&encoded); err != nil {
-			t.Fatalf("build malformed v28 manifest plan: %v", err)
+			t.Fatalf("build malformed v29 manifest plan: %v", err)
 		}
 		var normalized any
 		if err := json.Unmarshal(encoded, &normalized); err != nil {
-			t.Fatalf("normalize malformed v28 manifest plan: %v", err)
+			t.Fatalf("normalize malformed v29 manifest plan: %v", err)
 		}
 		canonical, err := json.Marshal(normalized)
 		if err != nil {
-			t.Fatalf("canonicalize malformed v28 manifest plan: %v", err)
+			t.Fatalf("canonicalize malformed v29 manifest plan: %v", err)
 		}
 		digest := sha256.Sum256(canonical)
 		return canonical, digest[:]
@@ -900,31 +900,31 @@ where delegation_id = $1 and callback_run_id = $2
 insert into matter_codex_agent_delegations(
 	project_id, source_session_id, source_turn_id, target_chat_id, target_role_id,
 	work_item_key, title
-) values ($1, $2, $3, $4, $5, $6, 'Malformed v28 proof') returning id
-`, projectID, sessionID, turnID, chatID, roleID, "v28-malformed-"+malformedCase).Scan(&candidateDelegationID); err != nil {
-				t.Fatalf("seed malformed v28 delegation: %v", err)
+) values ($1, $2, $3, $4, $5, $6, 'Malformed v29 proof') returning id
+`, projectID, sessionID, turnID, chatID, roleID, "v29-malformed-"+malformedCase).Scan(&candidateDelegationID); err != nil {
+				t.Fatalf("seed malformed v29 delegation: %v", err)
 			}
-			callbackRunID := "v28-malformed-" + malformedCase
+			callbackRunID := "v29-malformed-" + malformedCase
 			tx, err := ownerPool.Begin(ctx)
 			if err != nil {
-				t.Fatalf("begin malformed v28 transaction: %v", err)
+				t.Fatalf("begin malformed v29 transaction: %v", err)
 			}
 			defer func() { _ = tx.Rollback(ctx) }()
 			if _, err := tx.Exec(ctx, `update matter_codex_agent_delegations set callback_run_id = $2 where id = $1`, candidateDelegationID, callbackRunID); err != nil {
-				t.Fatalf("bind malformed v28 callback: %v", err)
+				t.Fatalf("bind malformed v29 callback: %v", err)
 			}
 			if err := insertDelivery(tx, candidateDelegationID, callbackRunID, "source_callback", "agent_cross_chat_callback:0001", "agent_cross_chat_callback", strings.Repeat("12", 32), strings.Repeat("c", 26)); err != nil {
-				t.Fatalf("insert malformed v28 source row: %v", err)
+				t.Fatalf("insert malformed v29 source row: %v", err)
 			}
 			if malformedCase == "duplicate_row" {
 				if err := insertDelivery(tx, candidateDelegationID, callbackRunID, "source_callback", "agent_cross_chat_callback:0001", "agent_cross_chat_callback", strings.Repeat("12", 32), strings.Repeat("c", 26)); err == nil {
-					t.Fatal("v28 accepted duplicate delivery identity")
+					t.Fatal("v29 accepted duplicate delivery identity")
 				}
 				_ = tx.Rollback(ctx)
 			} else {
 				if malformedCase != "missing_row" {
 					if err := insertDelivery(tx, candidateDelegationID, callbackRunID, "child_return", "agent_cross_chat_callback_returned:0001", "agent_cross_chat_callback_returned", strings.Repeat("34", 32), strings.Repeat("d", 26)); err != nil {
-						t.Fatalf("insert malformed v28 child row: %v", err)
+						t.Fatalf("insert malformed v29 child row: %v", err)
 					}
 				}
 				if malformedCase != "absent_manifest" {
@@ -937,12 +937,12 @@ insert into matter_codex_agent_delegations(
 					if malformedCase == "wrong_row" {
 						var entries []map[string]any
 						if err := json.Unmarshal(plan, &entries); err != nil {
-							t.Fatalf("decode wrong-row v28 plan: %v", err)
+							t.Fatalf("decode wrong-row v29 plan: %v", err)
 						}
 						entries[0]["channel_id"] = "wrong-channel"
 						plan, err = json.Marshal(entries)
 						if err != nil {
-							t.Fatalf("encode wrong-row v28 plan: %v", err)
+							t.Fatalf("encode wrong-row v29 plan: %v", err)
 						}
 						hash := sha256.Sum256(plan)
 						digest = hash[:]
@@ -952,16 +952,16 @@ insert into matter_codex_agent_delegation_callback_delivery_manifests(
 	delegation_id, callback_run_id, expected_count, expected_plan, plan_sha256
 ) values ($1, $2, 2, $3::jsonb, $4)
 `, candidateDelegationID, callbackRunID, plan, digest); err != nil {
-						t.Fatalf("insert malformed v28 manifest: %v", err)
+						t.Fatalf("insert malformed v29 manifest: %v", err)
 					}
 				}
 				if malformedCase == "extra_row" {
 					if err := insertDelivery(tx, candidateDelegationID, callbackRunID, "source_callback", "agent_cross_chat_callback:0002", "agent_cross_chat_callback", strings.Repeat("56", 32), strings.Repeat("e", 26)); err != nil {
-						t.Fatalf("insert extra v28 delivery row: %v", err)
+						t.Fatalf("insert extra v29 delivery row: %v", err)
 					}
 				}
 				if err := tx.Commit(ctx); err == nil {
-					t.Fatalf("v28 committed malformed callback plan %s", malformedCase)
+					t.Fatalf("v29 committed malformed callback plan %s", malformedCase)
 				}
 			}
 			var callbackBound, deliveryRows, manifestRows int
@@ -972,21 +972,21 @@ select
 	(select count(*) from matter_codex_agent_delegation_callback_delivery_manifests where delegation_id = $1)
 from matter_codex_agent_delegations where id = $1
 `, candidateDelegationID).Scan(&callbackBound, &deliveryRows, &manifestRows); err != nil {
-				t.Fatalf("inspect rolled back malformed v28 plan: %v", err)
+				t.Fatalf("inspect rolled back malformed v29 plan: %v", err)
 			}
 			if callbackBound != 0 || deliveryRows != 0 || manifestRows != 0 {
-				t.Fatalf("malformed v28 plan left callback=%d deliveries=%d manifests=%d", callbackBound, deliveryRows, manifestRows)
+				t.Fatalf("malformed v29 plan left callback=%d deliveries=%d manifests=%d", callbackBound, deliveryRows, manifestRows)
 			}
 		})
 	}
 }
 
-func TestV28BtreeIndexesPassAmcheckWithHeapallindexed(t *testing.T) {
-	dsn := isolatedMigrationDSN(t, "v28_amcheck")
+func TestV29BtreeIndexesPassAmcheckWithHeapallindexed(t *testing.T) {
+	dsn := isolatedMigrationDSN(t, "v29_amcheck")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("fresh v28 migration before amcheck: %v", err)
+		t.Fatalf("fresh v29 migration before amcheck: %v", err)
 	}
 	pool := openMigrationPool(t, ctx, dsn)
 	defer pool.Close()
@@ -1020,24 +1020,24 @@ where index_namespace.nspname = current_schema()
 order by index_row.indexrelid
 `)
 	if err != nil {
-		t.Fatalf("list v28 B-tree indexes for amcheck: %v", err)
+		t.Fatalf("list v29 B-tree indexes for amcheck: %v", err)
 	}
 	var indexOIDs []uint32
 	for rows.Next() {
 		var indexOID uint32
 		if err := rows.Scan(&indexOID); err != nil {
 			rows.Close()
-			t.Fatalf("scan v28 B-tree index oid: %v", err)
+			t.Fatalf("scan v29 B-tree index oid: %v", err)
 		}
 		indexOIDs = append(indexOIDs, indexOID)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		t.Fatalf("iterate v28 B-tree indexes: %v", err)
+		t.Fatalf("iterate v29 B-tree indexes: %v", err)
 	}
 	rows.Close()
 	if len(indexOIDs) == 0 {
-		t.Fatal("v28 schema has no B-tree indexes for amcheck")
+		t.Fatal("v29 schema has no B-tree indexes for amcheck")
 	}
 	for _, indexOID := range indexOIDs {
 		if _, err := pool.Exec(ctx, `select public.bt_index_check($1::oid::regclass, heapallindexed => true)`, indexOID); err != nil {
@@ -1046,13 +1046,13 @@ order by index_row.indexrelid
 	}
 }
 
-func TestV25DuplicateSessionKeyDiagnosticIsSanitizedAndAtomic(t *testing.T) {
-	const privateCanary = "synthetic-private-v25-session-key"
-	dsn := isolatedMigrationDSN(t, "v25_duplicate_privacy")
+func TestV26DuplicateSessionKeyDiagnosticIsSanitizedAndAtomic(t *testing.T) {
+	const privateCanary = "synthetic-private-v26-session-key"
+	dsn := isolatedMigrationDSN(t, "v26_duplicate_privacy")
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	if err := migrations.RunTo(ctx, dsn, 24); err != nil {
-		t.Fatalf("migrations through v24: %v", err)
+	if err := migrations.RunTo(ctx, dsn, 25); err != nil {
+		t.Fatalf("migrations through v25: %v", err)
 	}
 	pool := openMigrationPool(t, ctx, dsn)
 	defer pool.Close()
@@ -1063,52 +1063,52 @@ insert into matter_codex_cluster_admin_session_bindings(
 	(91001, 92001, 93001, $1, 'synthetic-channel-a', '{}'::jsonb),
 	(91002, 92002, 93002, $1, 'synthetic-channel-b', '{}'::jsonb)
 `, privateCanary); err != nil {
-		t.Fatal("seed v24 duplicate session key")
+		t.Fatal("seed v25 duplicate session key")
 	}
 	var functionBefore string
 	if err := pool.QueryRow(ctx, `select pg_get_functiondef('matter_codex_guard_cluster_admin_session()'::regprocedure)`).Scan(&functionBefore); err != nil {
-		t.Fatalf("read v24 guard function: %v", err)
+		t.Fatalf("read v25 guard function: %v", err)
 	}
 	migrationErr, stderr := captureMigrationStderr(t, func() error { return migrations.Run(ctx, dsn) })
 	if migrationErr == nil {
-		t.Fatal("v25 accepted duplicate session key")
+		t.Fatal("v26 accepted duplicate session key")
 	}
 	diagnostic := migrationErr.Error() + stderr
 	if strings.Contains(diagnostic, privateCanary) {
-		t.Fatal("v25 diagnostic disclosed a private session key")
+		t.Fatal("v26 diagnostic disclosed a private session key")
 	}
-	if !strings.Contains(diagnostic, "MCV25_DUPLICATE_SESSION_KEY_GROUPS") || !strings.Contains(diagnostic, "duplicate_group_count=1") {
-		t.Fatal("v25 diagnostic did not contain only the safe remediation code and count")
+	if !strings.Contains(diagnostic, "MCV26_DUPLICATE_SESSION_KEY_GROUPS") || !strings.Contains(diagnostic, "duplicate_group_count=1") {
+		t.Fatal("v26 diagnostic did not contain only the safe remediation code and count")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 24 {
-		t.Fatalf("schema version after rejected v25 = %d, error=%v", version, err)
+	if err != nil || version != 25 {
+		t.Fatalf("schema version after rejected v26 = %d, error=%v", version, err)
 	}
 	var indexExists bool
 	if err := pool.QueryRow(ctx, `select to_regclass('matter_codex_cluster_admin_session_bindings_session_key_uq') is not null`).Scan(&indexExists); err != nil || indexExists {
-		t.Fatalf("v25 unique index remained after rollback: exists=%t error=%v", indexExists, err)
+		t.Fatalf("v26 unique index remained after rollback: exists=%t error=%v", indexExists, err)
 	}
 	var functionAfter string
 	if err := pool.QueryRow(ctx, `select pg_get_functiondef('matter_codex_guard_cluster_admin_session()'::regprocedure)`).Scan(&functionAfter); err != nil || functionAfter != functionBefore {
-		t.Fatal("v25 guard function changed after rejected migration")
+		t.Fatal("v26 guard function changed after rejected migration")
 	}
 	var inventoryCount int
 	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_cluster_admin_revocations where resource_type = 'session_key'`).Scan(&inventoryCount); err != nil || inventoryCount != 0 {
-		t.Fatalf("v25 inventory remained after rollback: count=%d error=%v", inventoryCount, err)
+		t.Fatalf("v26 inventory remained after rollback: count=%d error=%v", inventoryCount, err)
 	}
 	var auditDisclosure bool
 	if err := pool.QueryRow(ctx, `select exists(select 1 from matter_codex_audit_events where summary like '%' || $1 || '%')`, privateCanary).Scan(&auditDisclosure); err != nil || auditDisclosure {
-		t.Fatalf("v25 diagnostic leaked into audit: disclosed=%t error=%v", auditDisclosure, err)
+		t.Fatalf("v26 diagnostic leaked into audit: disclosed=%t error=%v", auditDisclosure, err)
 	}
 }
 
-func TestV25PreflightLocksOutConcurrentDuplicateWriter(t *testing.T) {
-	const privateCanary = "synthetic-private-v25-concurrent-key"
-	dsn := isolatedMigrationDSN(t, "v25_duplicate_race")
+func TestV26PreflightLocksOutConcurrentDuplicateWriter(t *testing.T) {
+	const privateCanary = "synthetic-private-v26-concurrent-key"
+	dsn := isolatedMigrationDSN(t, "v26_duplicate_race")
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	if err := migrations.RunTo(ctx, dsn, 24); err != nil {
-		t.Fatalf("migrations through v24: %v", err)
+	if err := migrations.RunTo(ctx, dsn, 25); err != nil {
+		t.Fatalf("migrations through v25: %v", err)
 	}
 	pool := openMigrationPool(t, ctx, dsn)
 	defer pool.Close()
@@ -1117,7 +1117,7 @@ insert into matter_codex_cluster_admin_session_bindings(
 	role_id, project_id, chat_id, session_key, mattermost_channel_id, privilege_state
 ) values (91101, 92101, 93101, $1, 'synthetic-channel-a', '{}'::jsonb)
 `, privateCanary); err != nil {
-		t.Fatal("seed v24 session binding")
+		t.Fatal("seed v25 session binding")
 	}
 	writer, err := pool.Begin(ctx)
 	if err != nil {
@@ -1135,7 +1135,7 @@ insert into matter_codex_cluster_admin_session_bindings(
 	go func() { result <- migrations.Run(ctx, dsn) }()
 	select {
 	case <-result:
-		t.Fatal("v25 preflight did not wait for the concurrent writer")
+		t.Fatal("v26 preflight did not wait for the concurrent writer")
 	case <-time.After(200 * time.Millisecond):
 	}
 	if err := writer.Commit(ctx); err != nil {
@@ -1143,18 +1143,18 @@ insert into matter_codex_cluster_admin_session_bindings(
 	}
 	migrationErr := <-result
 	if migrationErr == nil {
-		t.Fatal("v25 accepted a concurrently committed duplicate")
+		t.Fatal("v26 accepted a concurrently committed duplicate")
 	}
-	if strings.Contains(migrationErr.Error(), privateCanary) || !strings.Contains(migrationErr.Error(), "MCV25_DUPLICATE_SESSION_KEY_GROUPS") {
-		t.Fatal("concurrent v25 diagnostic was not sanitized")
+	if strings.Contains(migrationErr.Error(), privateCanary) || !strings.Contains(migrationErr.Error(), "MCV26_DUPLICATE_SESSION_KEY_GROUPS") {
+		t.Fatal("concurrent v26 diagnostic was not sanitized")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 24 {
+	if err != nil || version != 25 {
 		t.Fatalf("schema version after concurrent duplicate = %d, error=%v", version, err)
 	}
 	var indexExists bool
 	if err := pool.QueryRow(ctx, `select to_regclass('matter_codex_cluster_admin_session_bindings_session_key_uq') is not null`).Scan(&indexExists); err != nil || indexExists {
-		t.Fatalf("v25 index remained after concurrent duplicate: exists=%t error=%v", indexExists, err)
+		t.Fatalf("v26 index remained after concurrent duplicate: exists=%t error=%v", indexExists, err)
 	}
 }
 
@@ -1343,7 +1343,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 		t.Fatalf("upgrade historical base v21->current main v22: %v", err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27->v28: %v", err)
+		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27->v28->v29: %v", err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()
@@ -2071,7 +2071,7 @@ limit 1
 		if _, err := tx.Exec(ctx, "set local role "+roleIdentifier); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `select set_config('matter_codex.cluster_admin_freeze_writer', 'v24', true)`); err != nil {
+		if _, err := tx.Exec(ctx, `select set_config('matter_codex.cluster_admin_freeze_writer', 'v25', true)`); err != nil {
 			return err
 		}
 		var count int

@@ -1002,6 +1002,10 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 		Role:         entity.AgentRole{Name: "adhoc", RoleType: "custom"},
 		Chat:         entity.Chat{Name: "Manager", ChatType: "manager"},
 		Repositories: []entity.ProjectRepository{{Provider: "github", Owner: "codex-k8s", Name: "matter-codex", DefaultBranch: "main"}},
+		GitHubAccount: entity.GitHubAccount{
+			Name:     "github-platform-owner",
+			Username: "ai-da-stas",
+		},
 		RuntimeVariables: []entity.ProjectRuntimeVariable{{
 			Name:        "RADAR_AUTO_KUBECONFIG",
 			Description: "kubeconfig for the external radar-auto cluster",
@@ -1042,6 +1046,9 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 		"mattermost_return_to_requester(message=",
 		"конфигурация проекта в MatterCodex является источником истины",
 		"не зашивай имя чата",
+		"MatterCodex alias привязки `github-platform-owner`",
+		"ожидаемый аутентифицированный GitHub login `ai-da-stas`",
+		"Alias привязки не обязан совпадать с login",
 	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)

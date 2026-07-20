@@ -487,6 +487,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		Chat:             request.Chat,
 		Repositories:     request.Repositories,
 		RuntimeVariables: runtimeVariables,
+		GitHubAccount:    gitHubAccount,
 		UserMessage:      request.UserMessage,
 		Locale:           svc.localeData(),
 	}

@@ -212,7 +212,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 000028 is forward-only: callback delivery completeness proof cannot be removed safely';
+	raise exception 'migration 000029 is forward-only: callback delivery completeness proof cannot be removed safely';
 end
 $$;
 -- +goose StatementEnd

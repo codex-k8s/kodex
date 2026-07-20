@@ -77,7 +77,7 @@ updated: 2026-07-16
 | `ScheduledRun` | occurrence_id, process/session reference, outcome |
 | `ProcessWave` | process_run_id, coordinator role/session, title, state |
 | `WorkClaim` | process/wave/turn, summary, domains, resource keys, state |
-| `OwnerAttentionRequest` | process/turn, root initiator, severity, summary, state |
+| `OwnerAttentionRequest` | process/turn, root initiator, severity, summary, state, resolved_at, resolved_by_user/post |
 
 Уникальный индекс `(schedule_id, scheduled_for)` исключает повторное создание экземпляра расписания.
 

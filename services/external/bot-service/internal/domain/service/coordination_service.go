@@ -422,6 +422,17 @@ func (svc *AgentSessionService) notifyRootInitiatorFailure(ctx context.Context, 
 	return err
 }
 
+func (svc *AgentSessionService) reconcileProcessRun(ctx context.Context, turnID int64) error {
+	store, ok := svc.cfg.Store.(adminrepo.CoordinationRepository)
+	if !ok {
+		return nil
+	}
+	if err := store.ReconcileProcessRun(ctx, turnID); err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
 func (svc *AgentSessionService) processLineageMarkdown(ctx context.Context, projectID int64, lineage []entity.ProcessLineageStep) string {
 	project, err := svc.cfg.Store.GetProject(ctx, projectID)
 	if err != nil {

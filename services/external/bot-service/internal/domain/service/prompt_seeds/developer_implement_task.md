@@ -11,6 +11,7 @@
 {{if .Task.BaseBranch}}- Базовая ветка: {{.Task.BaseBranch}}{{end}}
 {{if .Task.HeadBranch}}- Рабочая ветка: {{.Task.HeadBranch}}{{end}}
 {{if .GitHub.Account}}- GitHub-аккаунт: {{.GitHub.Account}}{{end}}
+{{if .GitHub.Username}}- Ожидаемый аутентифицированный GitHub login: {{.GitHub.Username}}{{end}}
 
 ## Задача пользователя
 

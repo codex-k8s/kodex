@@ -165,7 +165,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 000027 is forward-only: durable callback delivery state cannot be removed safely';
+	raise exception 'migration 000028 is forward-only: durable callback delivery state cannot be removed safely';
 end
 $$;
 -- +goose StatementEnd

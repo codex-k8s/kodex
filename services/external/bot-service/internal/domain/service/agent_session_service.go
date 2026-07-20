@@ -426,7 +426,7 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 			return err
 		}
 	}
-	return nil
+	return svc.reconcileProcessRun(ctx, turn.ID)
 }
 
 func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, command CompleteAgentSessionTurnCommand, status string) error {
@@ -455,16 +455,24 @@ func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Conte
 	}
 	if err := svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.reconcile_artifacts_persist.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
 		_, _ = guardedStore.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
+		if coordinationStore, ok := guardedStore.(adminrepo.CoordinationRepository); ok {
+			_, _ = coordinationStore.UpdateWorkClaim(ctx, adminrepo.UpdateWorkClaimInput{
+				TurnID: turn.ID,
+				Status: status,
+			})
+		}
 		return nil
 	}); err != nil {
 		return err
 	}
 	if status == agentSessionTurnFailed || status == agentSessionTurnBlocked {
-		return svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.reconcile_attention.side_effect", func(current entity.AgentSession) error {
+		if err := svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.reconcile_attention.side_effect", func(current entity.AgentSession) error {
 			return svc.notifyRootInitiatorFailure(ctx, current, turn, command)
-		})
+		}); err != nil {
+			return err
+		}
 	}
-	return nil
+	return svc.reconcileProcessRun(ctx, turn.ID)
 }
 
 func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, command StopAgentSessionTurnsCommand) (StopAgentSessionTurnsResult, error) {
@@ -547,6 +555,14 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 			if _, readErr = guardedStore.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: canceled.RunID, Status: agentSessionTurnCanceled}); readErr != nil {
 				return readErr
 			}
+			if coordinationStore, ok := guardedStore.(adminrepo.CoordinationRepository); ok {
+				if _, readErr = coordinationStore.UpdateWorkClaim(ctx, adminrepo.UpdateWorkClaimInput{
+					TurnID: canceled.ID,
+					Status: agentSessionTurnCanceled,
+				}); readErr != nil {
+					return readErr
+				}
+			}
 			cleanupRuntime = currentTurn.Status == agentSessionTurnRunning || current.ActiveTurnID == currentTurn.ID
 			if !cleanupRuntime && currentTurn.Status == agentSessionTurnQueued && current.ActiveTurnID == 0 && agentSessionRuntimeReady(current) {
 				queued, queueErr := guardedStore.ListQueuedAgentSessionTurns(ctx, current.ID)
@@ -596,6 +612,9 @@ func (svc *AgentSessionService) FinalizeStopAgentSessionTurns(ctx context.Contex
 			_, cardErr := svc.upsertTurnStatusCardWithStore(ctx, guardedStore, current, item.turn, agentSessionTurnCanceled, svc.turnStatusMessage(ctx, current, agentSessionTurnCanceled, item.turn.RunID, svc.sessionOpenAIAccountName(ctx, current), ""), "")
 			return cardErr
 		}); err != nil {
+			return StopAgentSessionTurnsResult{}, err
+		}
+		if err := svc.reconcileProcessRun(ctx, item.turn.ID); err != nil {
 			return StopAgentSessionTurnsResult{}, err
 		}
 	}
@@ -1443,7 +1462,7 @@ func delegatedAgentRequestMessage(requesterUserName string, targetRoleName strin
 	var body strings.Builder
 	body.WriteString("# Запрос к агенту через MatterCodex\n\n")
 	appendDelegatedAgentRequestSection(&body, requesterUserName, targetRoleName, message)
-	body.WriteString("\n\nОбработай этот запрос как отдельную задачу в текущей MatterCodex thread-session. Если нужно вернуть управление инициатору или manager, используй только `mattermost_request_agent`.")
+	body.WriteString("\n\nОбработай этот запрос как отдельную задачу в текущей MatterCodex thread-session. Если задача явно запущена в отдельном дочернем треде, верни итог через `mattermost_return_to_requester`. Для запуска в текущем треде отдельный callback не требуется: опубликуй итог здесь и не запускай исходного агента через `mattermost_request_agent`, если это прямо не требуется задачей и политикой.")
 	return strings.TrimSpace(body.String())
 }
 

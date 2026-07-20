@@ -197,6 +197,10 @@ func (store *fakeCoordinationStore) SetOwnerAttentionPost(context.Context, int64
 	return entity.OwnerAttentionRequest{}, nil
 }
 
+func (store *fakeCoordinationStore) ReconcileProcessRun(context.Context, int64) error {
+	return nil
+}
+
 func coordinationRelationshipKey(action string, targetRoleID int64) string {
 	return action + ":" + strconv.FormatInt(targetRoleID, 10)
 }

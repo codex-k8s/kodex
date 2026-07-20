@@ -2195,7 +2195,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 24 is forward-only; schema version remains 24'
+	raise exception 'migration 25 is forward-only; schema version remains 25'
 		using errcode = 'feature_not_supported';
 end
 $$;

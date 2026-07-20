@@ -206,7 +206,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 000026 is forward-only: scoped delivery fences cannot be relaxed safely';
+	raise exception 'migration 000027 is forward-only: scoped delivery fences cannot be relaxed safely';
 end
 $$;
 -- +goose StatementEnd

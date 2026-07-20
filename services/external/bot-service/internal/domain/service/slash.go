@@ -635,7 +635,7 @@ func (svc *SlashCommandService) handleReviewPR(ctx context.Context, args []strin
 		PullRequest: promptTemplatePullRequestData{
 			Number: number,
 		},
-		GitHub: promptGitHubData(githubAccountName),
+		GitHub: promptGitHubData(githubAccountName, ""),
 		Locale: svc.promptTemplateLocaleData(),
 	})
 	if err != nil {
@@ -5622,9 +5622,10 @@ func (svc *SlashCommandService) promptTemplateSeedBody(ctx context.Context, seed
 	return "", err
 }
 
-func promptGitHubData(accountName string) promptTemplateGitHubData {
+func promptGitHubData(accountName string, username string) promptTemplateGitHubData {
 	return promptTemplateGitHubData{
 		Account:     defaultString(accountName, "primary"),
+		Username:    strings.TrimSpace(username),
 		TokenEnv:    "GH_TOKEN / GITHUB_TOKEN",
 		UsernameEnv: "GITHUB_USERNAME / GITHUB_USER",
 		EmailEnv:    "GITHUB_EMAIL",

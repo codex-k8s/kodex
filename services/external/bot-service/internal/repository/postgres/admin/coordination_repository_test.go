@@ -133,6 +133,47 @@ func TestCoordinationRepositoryLifecycle(t *testing.T) {
 	}
 	assertCoordinationTransactionRepository(t, ctx, repository, projectID, managerID, childTurnID, rootProcess.ProcessRunID, suffix)
 
+	waitingProcess, err := repository.GetTurnProcess(ctx, childTurnID)
+	if err != nil || waitingProcess.Status != "waiting_owner" {
+		t.Fatalf("GetTurnProcess(waiting) process=%#v error=%v", waitingProcess, err)
+	}
+
+	ownerReplyTurnID := insertCoordinationTestTurn(t, ctx, pool, rootSessionID, "owner-reply-run", "owner-reply-post")
+	resumedProcess, err := repository.EnsureTurnProcess(ctx, domainrepo.EnsureTurnProcessInput{
+		TurnID: ownerReplyTurnID, ProjectID: projectID, RoleID: directorID,
+		InitiatorUserID: "owner-id", InitiatorUserName: "owner", TriggerPostID: "owner-reply-post",
+		MattermostChannelID: "channel", MattermostRootPostID: "root-post",
+	})
+	if err != nil {
+		t.Fatalf("EnsureTurnProcess(owner reply) error = %v", err)
+	}
+	if resumedProcess.ProcessRunID != rootProcess.ProcessRunID || resumedProcess.Status != "running" {
+		t.Fatalf("owner reply process = %#v, root process = %#v", resumedProcess, rootProcess)
+	}
+	var attentionStatus, resolvedByUserID, resolvedByPostID string
+	if err := pool.QueryRow(ctx, `
+		select status, resolved_by_user_id, resolved_by_post_id
+		from matter_codex_owner_attention_requests where id = $1
+	`, attention.ID).Scan(&attentionStatus, &resolvedByUserID, &resolvedByPostID); err != nil {
+		t.Fatalf("read resolved attention: %v", err)
+	}
+	if attentionStatus != "resolved" || resolvedByUserID != "owner-id" || resolvedByPostID != "owner-reply-post" {
+		t.Fatalf("resolved attention status=%q user=%q post=%q", attentionStatus, resolvedByUserID, resolvedByPostID)
+	}
+	if _, err := pool.Exec(ctx, `
+		update matter_codex_agent_session_turns set status = 'succeeded'
+		where id = any($1::bigint[])
+	`, []int64{rootTurnID, childTurnID, ownerReplyTurnID}); err != nil {
+		t.Fatalf("complete process turns: %v", err)
+	}
+	if err := repository.ReconcileProcessRun(ctx, ownerReplyTurnID); err != nil {
+		t.Fatalf("ReconcileProcessRun() error = %v", err)
+	}
+	completedProcess, err := repository.GetTurnProcess(ctx, ownerReplyTurnID)
+	if err != nil || completedProcess.Status != "completed" {
+		t.Fatalf("GetTurnProcess(completed) process=%#v error=%v", completedProcess, err)
+	}
+
 	if _, err := pool.Exec(ctx, "update matter_codex_policy_revisions set status = 'archived' where id = $1", rootProcess.PolicyRevisionID); err != nil {
 		t.Fatalf("archive policy revision: %v", err)
 	}

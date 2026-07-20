@@ -18,9 +18,9 @@ begin
 	if duplicate_group_count > 0 then
 		raise exception using
 			errcode = 'P0001',
-			message = format('MCV25_DUPLICATE_SESSION_KEY_GROUPS duplicate_group_count=%s', duplicate_group_count),
+			message = format('MCV26_DUPLICATE_SESSION_KEY_GROUPS duplicate_group_count=%s', duplicate_group_count),
 			detail = 'legacy duplicate inventory requires offline remediation',
-			hint = 'stop writes and follow the offline v25 remediation runbook';
+			hint = 'stop writes and follow the offline v26 remediation runbook';
 	end if;
 	begin
 		execute 'create unique index matter_codex_cluster_admin_session_bindings_session_key_uq on matter_codex_cluster_admin_session_bindings (session_key)';
@@ -28,9 +28,9 @@ begin
 		when unique_violation then
 			raise exception using
 				errcode = 'P0001',
-				message = 'MCV25_DUPLICATE_SESSION_KEY_GROUPS',
+				message = 'MCV26_DUPLICATE_SESSION_KEY_GROUPS',
 				detail = 'duplicate_group_count=unavailable',
-				hint = 'stop writes and follow the offline v25 remediation runbook';
+				hint = 'stop writes and follow the offline v26 remediation runbook';
 	end;
 end
 $$;
@@ -161,7 +161,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 000025 is forward-only: frozen session_key inventory cannot be relaxed safely';
+	raise exception 'migration 000026 is forward-only: frozen session_key inventory cannot be relaxed safely';
 end
 $$;
 -- +goose StatementEnd
