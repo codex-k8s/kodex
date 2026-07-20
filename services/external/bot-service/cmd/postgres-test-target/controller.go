@@ -29,6 +29,8 @@ const (
 	postgresControllerLabel          = "mattercodex.dev/postgres-test-run"
 	postgresDisposableNamespaceLabel = "mattercodex.dev/disposable-postgres-tests"
 	postgresContainerPort            = 5432
+	postgres15ControllerImage        = "pgvector/pgvector:0.8.5-pg15@sha256:18d16372b8406bb38a9f94cbff15d125c463d71fde2770aa8b5c64bfcc1578ee"
+	postgres16ControllerImage        = "pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb"
 )
 
 type controllerPostgresHarness struct {
@@ -77,12 +79,27 @@ func startControllerPostgres(ctx context.Context, mode postgresTestMode, major s
 func postgresControllerImage(major string) (string, error) {
 	switch major {
 	case "15":
-		return "pgvector/pgvector:0.8.5-pg15", nil
+		return postgres15ControllerImage, nil
 	case "16":
-		return "pgvector/pgvector:0.8.5-pg16", nil
+		return postgres16ControllerImage, nil
 	default:
 		return "", fmt.Errorf("unsupported PostgreSQL major")
 	}
+}
+
+func validatePostgresControllerImage(major string, image string) error {
+	expected, err := postgresControllerImage(major)
+	if err != nil || image != expected {
+		return fmt.Errorf("PostgreSQL controller image не закреплён за exact major и OCI digest")
+	}
+	tagDigest := strings.Split(image, "@sha256:")
+	if len(tagDigest) != 2 || len(tagDigest[1]) != 64 || !strings.HasSuffix(tagDigest[0], "-pg"+major) {
+		return fmt.Errorf("PostgreSQL controller image имеет недопустимый OCI ref")
+	}
+	if _, err := hex.DecodeString(tagDigest[1]); err != nil {
+		return fmt.Errorf("PostgreSQL controller image имеет недопустимый OCI digest")
+	}
+	return nil
 }
 
 func randomControllerIdentity() (string, error) {
@@ -119,6 +136,9 @@ func startDockerPostgres(ctx context.Context, major string) (*controllerPostgres
 	}
 	image, err := postgresControllerImage(major)
 	if err != nil {
+		return nil, err
+	}
+	if err := validatePostgresControllerImage(major, image); err != nil {
 		return nil, err
 	}
 	containerOutput, err := exec.CommandContext(ctx, "docker", dockerRunArguments(identity, image)...).Output()
@@ -236,6 +256,9 @@ func startKubernetesPostgres(ctx context.Context, major string) (*controllerPost
 	}
 	image, err := postgresControllerImage(major)
 	if err != nil {
+		return nil, err
+	}
+	if err := validatePostgresControllerImage(major, image); err != nil {
 		return nil, err
 	}
 	pod, err := client.CoreV1().Pods(namespace).Create(ctx, kubernetesPostgresPod(identity, image), metav1.CreateOptions{})

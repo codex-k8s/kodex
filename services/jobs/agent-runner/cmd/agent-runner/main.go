@@ -56,6 +56,9 @@ const (
 	maxSessionArchiveFileBytes  = int64(8 << 20)
 	maxSessionArchiveTotalBytes = int64(32 << 20)
 	maxSessionArchiveFiles      = 512
+	maxSessionArchiveEntries    = 1024
+	maxSessionArchiveTarBytes   = maxSessionArchiveTotalBytes + int64(maxSessionArchiveEntries*512+maxSessionArchiveFiles*511+1024)
+	maxProtectedValueBytes      = int64(64 << 20)
 )
 
 var codexCapacityRetryDelays = []time.Duration{time.Minute, 3 * time.Minute, 5 * time.Minute}
@@ -77,6 +80,8 @@ type runner struct {
 	codexHome             string
 	rawArtifacts          string
 	secrets               secretInventory
+	safety                runSafety
+	credentialFiles       []string
 }
 
 type githubAccount struct {
@@ -650,6 +655,10 @@ func (r *runner) executeSessionTurn(
 }
 
 func (r *runner) createSessionArchive(root string) (string, error) {
+	if r.safety.isUnsafe() {
+		_ = os.RemoveAll(filepath.Join(root, "sessions"))
+		return "", credentialRotationError{}
+	}
 	if r.sessionArchiveCreator != nil {
 		return r.sessionArchiveCreator(root, r.secrets)
 	}
@@ -710,8 +719,12 @@ func (r *runner) prepareEphemeralRuntime() error {
 			return fmt.Errorf("эфемерный каталог runner не создан")
 		}
 	}
-	inventory, err := buildSecretInventory(os.Environ(), nil)
+	inventory, err := buildSecretInventory(os.Environ(), r.credentialFiles)
 	if err != nil {
+		r.cleanupEphemeralRuntime()
+		return err
+	}
+	if err := inventory.validateForExecution(); err != nil {
 		r.cleanupEphemeralRuntime()
 		return err
 	}
@@ -727,15 +740,6 @@ func (r *runner) cleanupEphemeralRuntime() {
 	r.ephemeralRoot = ""
 	r.codexHome = ""
 	r.rawArtifacts = ""
-}
-
-func (r *runner) extendSecretInventory(environment []string) error {
-	inventory, err := buildSecretInventory(environment, nil)
-	if err != nil {
-		return err
-	}
-	r.secrets = r.secrets.merge(inventory)
-	return nil
 }
 
 func (r *runner) command(ctx context.Context, name string, args ...string) *exec.Cmd {
@@ -757,6 +761,10 @@ func (r *runner) rawArtifactPath(name string) (string, error) {
 
 func (r *runner) publishSanitizedFile(source string, destination string) error {
 	defer os.Remove(source)
+	if r.safety.isUnsafe() {
+		_ = os.Remove(destination)
+		return credentialRotationError{}
+	}
 	info, err := os.Stat(source)
 	if err != nil {
 		return err
@@ -861,25 +869,40 @@ func (r *runner) runCodexExec(ctx context.Context, workDir string, finalFile str
 		return err
 	}
 	defer stderr.Close()
-	cmd := r.command(ctx, "codex", "exec", "--json", "--cd", workDir, "--sandbox", codexSandboxMode(), "--skip-git-repo-check", "--output-last-message", finalPath, "-")
-	cmd.Env = mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+r.codexHome)...)
-	if err := r.extendSecretInventory(cmd.Env); err != nil {
+	environment := mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+r.codexHome)...)
+	cmd, credentialGuard, err := r.guardedCommand(ctx, environment, "codex", "exec", "--json", "--cd", workDir, "--sandbox", codexSandboxMode(), "--skip-git-repo-check", "--output-last-message", finalPath, "-")
+	if err != nil {
+		_ = events.Close()
+		_ = stderr.Close()
+		for _, path := range []string{eventsPath, stderrPath, finalPath} {
+			_ = os.Remove(path)
+		}
 		return err
 	}
 	prompt, err := io.ReadAll(promptFile)
 	if err != nil {
+		_ = credentialGuard.finish(nil)
 		return err
 	}
 	protectedPrompt, err := r.secrets.protect(string(prompt))
 	if err != nil {
+		_ = credentialGuard.finish(nil)
 		return err
 	}
 	cmd.Stdin = strings.NewReader(protectedPrompt)
 	cmd.Stdout = events
 	cmd.Stderr = stderr
+	credentialGuard.start()
 	runErr := cmd.Run()
 	_ = events.Close()
 	_ = stderr.Close()
+	runErr = credentialGuard.finish(runErr)
+	if r.safety.isUnsafe() {
+		for _, path := range []string{eventsPath, stderrPath, finalPath} {
+			_ = os.Remove(path)
+		}
+		return runErr
+	}
 	for _, pair := range [][2]string{
 		{eventsPath, filepath.Join(artifactsDir, "codex-events.jsonl")},
 		{stderrPath, filepath.Join(artifactsDir, "codex-stderr.log")},
@@ -935,22 +958,36 @@ func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaim
 	} else {
 		args = append(args, "--json", "--cd", workDir, "--sandbox", codexSandboxMode(), "--skip-git-repo-check", "--output-last-message", rawFinalPath, "-")
 	}
-	cmd := r.command(ctx, "codex", args...)
-	cmd.Dir = workDir
-	cmd.Env = mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+r.codexHome)...)
-	if err := r.extendSecretInventory(cmd.Env); err != nil {
+	environment := mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+r.codexHome)...)
+	cmd, credentialGuard, err := r.guardedCommand(ctx, environment, "codex", args...)
+	if err != nil {
+		_ = events.Close()
+		_ = stderr.Close()
+		for _, path := range []string{rawEventsPath, rawStderrPath, rawFinalPath} {
+			_ = os.Remove(path)
+		}
 		return codexSessionID, "", err
 	}
+	cmd.Dir = workDir
 	protectedPrompt, err := r.secrets.protect(claim.Prompt)
 	if err != nil {
+		_ = credentialGuard.finish(nil)
 		return codexSessionID, "", err
 	}
 	cmd.Stdin = strings.NewReader(protectedPrompt)
 	cmd.Stdout = events
 	cmd.Stderr = stderr
+	credentialGuard.start()
 	runErr := cmd.Run()
 	_ = events.Close()
 	_ = stderr.Close()
+	runErr = credentialGuard.finish(runErr)
+	if r.safety.isUnsafe() {
+		for _, path := range []string{rawEventsPath, rawStderrPath, rawFinalPath, eventsPath, stderrPath, finalPath} {
+			_ = os.Remove(path)
+		}
+		return codexSessionID, "", runErr
+	}
 	for _, pair := range [][2]string{{rawEventsPath, eventsPath}, {rawStderrPath, stderrPath}, {rawFinalPath, finalPath}} {
 		if _, err := os.Stat(pair[0]); err == nil {
 			if err := r.publishSanitizedFile(pair[0], pair[1]); err != nil {
@@ -1161,6 +1198,9 @@ func (r *runner) updateSessionTurnStatus(ctx context.Context, client *http.Clien
 }
 
 func (r *runner) latestCodexLimitsSummary() string {
+	if r.safety.isUnsafe() {
+		return ""
+	}
 	summary, err := latestCodexLimitsSummary(r.codexHome)
 	if err != nil {
 		safeError, protectErr := r.secrets.protect(err.Error())
@@ -1206,6 +1246,9 @@ func (r *runner) sessionJSON(ctx context.Context, client *http.Client, method st
 }
 
 func (r *runner) sessionJSONOnce(ctx context.Context, client *http.Client, method string, baseURL string, sessionKey string, token string, action string, payload any, target any) error {
+	if r.safety.isUnsafe() {
+		return credentialRotationError{}
+	}
 	var body io.Reader
 	if payload != nil {
 		raw, err := json.Marshal(payload)
@@ -1249,6 +1292,10 @@ func (r *runner) sessionJSONOnce(ctx context.Context, client *http.Client, metho
 }
 
 func sessionAPIErrorRetriable(err error) bool {
+	var rotationErr credentialRotationError
+	if errors.As(err, &rotationErr) {
+		return false
+	}
 	var statusErr sessionAPIStatusError
 	if errors.As(err, &statusErr) {
 		return statusErr.StatusCode >= http.StatusInternalServerError
@@ -1267,18 +1314,25 @@ func (r *runner) runLogged(ctx context.Context, dir string, extraEnv []string, l
 	if err != nil {
 		return err
 	}
-	cmd := r.command(ctx, name, args...)
-	cmd.Dir = dir
-	cmd.Env = mergeEnv(os.Environ(), extraEnv...)
-	if err := r.extendSecretInventory(cmd.Env); err != nil {
+	environment := mergeEnv(os.Environ(), extraEnv...)
+	cmd, credentialGuard, err := r.guardedCommand(ctx, environment, name, args...)
+	if err != nil {
 		_ = logFile.Close()
 		_ = os.Remove(rawLogPath)
 		return err
 	}
+	cmd.Dir = dir
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
+	credentialGuard.start()
 	runErr := cmd.Run()
 	_ = logFile.Close()
+	runErr = credentialGuard.finish(runErr)
+	if r.safety.isUnsafe() {
+		_ = os.Remove(rawLogPath)
+		_ = os.Remove(logPath)
+		return runErr
+	}
 	if err := r.publishSanitizedFile(rawLogPath, logPath); err != nil {
 		return errors.Join(runErr, err)
 	}
@@ -1297,19 +1351,26 @@ func (r *runner) capture(ctx context.Context, dir string, extraEnv []string, log
 	if err != nil {
 		return "", err
 	}
-	cmd := r.command(ctx, name, args...)
-	cmd.Dir = dir
-	cmd.Env = mergeEnv(os.Environ(), extraEnv...)
-	if err := r.extendSecretInventory(cmd.Env); err != nil {
+	environment := mergeEnv(os.Environ(), extraEnv...)
+	cmd, credentialGuard, err := r.guardedCommand(ctx, environment, name, args...)
+	if err != nil {
 		_ = logFile.Close()
 		_ = os.Remove(rawLogPath)
 		return "", err
 	}
+	cmd.Dir = dir
 	stdout := boundedStringWriter{limit: maxPublishedArtifactBytes}
 	cmd.Stdout = io.MultiWriter(&stdout, logFile)
 	cmd.Stderr = logFile
+	credentialGuard.start()
 	runErr := cmd.Run()
 	_ = logFile.Close()
+	runErr = credentialGuard.finish(runErr)
+	if r.safety.isUnsafe() {
+		_ = os.Remove(rawLogPath)
+		_ = os.Remove(logPath)
+		return "", runErr
+	}
 	if err := r.publishSanitizedFile(rawLogPath, logPath); err != nil {
 		return "", errors.Join(runErr, err)
 	}
@@ -1732,10 +1793,12 @@ func (err sessionArchiveLimitError) Error() string {
 }
 
 type secretInventory struct {
-	replacer          *strings.Replacer
-	fragments         []string
-	hasShortSensitive bool
-	values            map[string]struct{}
+	replacer                      *strings.Replacer
+	percentCanonical              []string
+	hexCanonical                  []string
+	fragmentCandidates            []string
+	hasUnsupportedShortCredential bool
+	values                        map[string]struct{}
 }
 
 type secretRedactor struct {
@@ -1748,26 +1811,8 @@ func newSecretRedactor(environment []string) secretRedactor {
 }
 
 func buildSecretInventory(environment []string, explicitFiles []string) (secretInventory, error) {
-	runtimeNames := map[string]bool{}
-	for _, item := range environment {
-		name, value, ok := strings.Cut(item, "=")
-		if ok && name == "MATTERCODEX_RUNTIME_ENV_ALLOWLIST" {
-			for _, raw := range strings.Split(value, ",") {
-				runtimeNames[strings.TrimSpace(raw)] = true
-			}
-		}
-	}
 	values := map[string]struct{}{}
-	for _, item := range environment {
-		name, value, ok := strings.Cut(item, "=")
-		if !ok || (!runtimeNames[name] && !sensitiveEnvironmentName(name)) {
-			continue
-		}
-		addSecretValue(values, value)
-		if trimmed := strings.TrimSpace(value); trimmed != value {
-			addSecretValue(values, trimmed)
-		}
-	}
+	collectEnvironmentSecretValues(values, environment)
 	files := append(credentialFileSources(environment), explicitFiles...)
 	seenFiles := map[string]struct{}{}
 	for _, path := range files {
@@ -1787,6 +1832,38 @@ func buildSecretInventory(environment []string, explicitFiles []string) (secretI
 	return compileSecretInventory(values), nil
 }
 
+func collectEnvironmentSecretValues(values map[string]struct{}, environment []string) {
+	runtimeNames := runtimeEnvironmentNames(environment)
+	for _, item := range environment {
+		name, value, ok := strings.Cut(item, "=")
+		if !ok || (!runtimeNames[name] && !sensitiveEnvironmentName(name)) {
+			continue
+		}
+		if credentialFileEnvironmentName(name, runtimeNames) {
+			continue
+		}
+		addSecretValue(values, value)
+		if trimmed := strings.TrimSpace(value); trimmed != value {
+			addSecretValue(values, trimmed)
+		}
+	}
+}
+
+func runtimeEnvironmentNames(environment []string) map[string]bool {
+	names := map[string]bool{}
+	for _, item := range environment {
+		name, value, ok := strings.Cut(item, "=")
+		if ok && name == "MATTERCODEX_RUNTIME_ENV_ALLOWLIST" {
+			for _, raw := range strings.Split(value, ",") {
+				if candidate := strings.TrimSpace(raw); candidate != "" {
+					names[candidate] = true
+				}
+			}
+		}
+	}
+	return names
+}
+
 func credentialFileSources(environment []string) []string {
 	paths := []string{
 		codexAuthPath,
@@ -1795,13 +1872,13 @@ func credentialFileSources(environment []string) []string {
 		kubernetesServiceAccountTokenPath,
 		matterCodexSessionTokenPath,
 	}
+	runtimeNames := runtimeEnvironmentNames(environment)
 	for _, item := range environment {
 		name, value, ok := strings.Cut(item, "=")
 		if !ok {
 			continue
 		}
-		if name == "KUBECONFIG" || name == "MATTERCODEX_GITHUB_TOKEN_FILE" ||
-			(strings.HasSuffix(name, "_FILE") && sensitiveEnvironmentName(strings.TrimSuffix(name, "_FILE"))) {
+		if credentialFileEnvironmentName(name, runtimeNames) {
 			paths = append(paths, strings.Split(value, string(os.PathListSeparator))...)
 		}
 	}
@@ -1809,42 +1886,39 @@ func credentialFileSources(environment []string) []string {
 }
 
 func addCredentialFileValues(values map[string]struct{}, path string) error {
-	info, err := os.Stat(path)
+	body, exists, err := readCredentialSource(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("credential source недоступен")
+		return err
 	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("credential source не является обычным файлом")
+	if !exists {
+		return nil
 	}
-	if info.Size() > maxCredentialFileBytes {
-		return boundedFileError{Kind: "credential source"}
-	}
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("credential source не прочитан")
-	}
+	collectCredentialFileValues(values, body)
+	return nil
+}
+
+func collectCredentialFileValues(values map[string]struct{}, body []byte) {
 	trimmed := strings.TrimSpace(string(body))
 	if trimmed == "" {
-		return nil
+		return
 	}
 	var decoded any
 	if json.Unmarshal(body, &decoded) == nil {
 		collectJSONSecretValues(values, "", false, decoded)
-		return nil
+		return
 	}
-	addSecretValue(values, trimmed)
+	if !strings.Contains(trimmed, "\n") || strings.Contains(strings.ToUpper(trimmed), "PRIVATE KEY") {
+		addSecretValue(values, trimmed)
+		return
+	}
 	for _, line := range strings.Split(trimmed, "\n") {
-		if _, value, ok := strings.Cut(line, ":"); ok {
+		if key, value, ok := strings.Cut(line, ":"); ok && sensitiveJSONCredentialKey(strings.TrimSpace(key)) {
 			addSecretValue(values, strings.Trim(strings.TrimSpace(value), `"'`))
 		}
-		if _, value, ok := strings.Cut(line, "="); ok {
+		if key, value, ok := strings.Cut(line, "="); ok && sensitiveJSONCredentialKey(strings.TrimSpace(key)) {
 			addSecretValue(values, strings.Trim(strings.TrimSpace(value), `"'`))
 		}
 	}
-	return nil
 }
 
 func collectJSONSecretValues(values map[string]struct{}, key string, sensitiveParent bool, value any) {
@@ -1875,14 +1949,16 @@ func sensitiveJSONCredentialKey(key string) bool {
 }
 
 func addSecretValue(values map[string]struct{}, value string) {
-	if len(value) >= 8 {
+	if value != "" {
 		values[value] = struct{}{}
 	}
 }
 
 func compileSecretInventory(values map[string]struct{}) secretInventory {
 	exact := map[string]struct{}{}
-	fragments := map[string]struct{}{}
+	percentCanonical := map[string]struct{}{}
+	hexCanonical := map[string]struct{}{}
+	fragmentCandidates := map[string]struct{}{}
 	hasShort := false
 	for value := range values {
 		if len(value) < 16 {
@@ -1890,12 +1966,14 @@ func compileSecretInventory(values map[string]struct{}) secretInventory {
 		}
 		for _, representation := range secretRepresentations(value) {
 			exact[representation] = struct{}{}
-			if len(representation) >= 16 {
-				middle := len(representation) / 2
-				if middle >= 8 && len(representation)-middle >= 8 {
-					fragments[representation[:middle]] = struct{}{}
-					fragments[representation[middle:]] = struct{}{}
-				}
+		}
+		if len(value) >= 16 {
+			fragmentCandidates[value] = struct{}{}
+		}
+		hexCanonical[hex.EncodeToString([]byte(value))] = struct{}{}
+		for _, encoded := range []string{url.QueryEscape(value), url.PathEscape(value)} {
+			if strings.Contains(encoded, "%") {
+				percentCanonical[normalizePercentEncoding(encoded)] = struct{}{}
 			}
 		}
 	}
@@ -1908,12 +1986,28 @@ func compileSecretInventory(values map[string]struct{}) secretInventory {
 	for _, value := range ordered {
 		replacements = append(replacements, value, redactedSecretValue)
 	}
-	orderedFragments := make([]string, 0, len(fragments))
-	for fragment := range fragments {
-		orderedFragments = append(orderedFragments, fragment)
+	orderedPercent := make([]string, 0, len(percentCanonical))
+	for candidate := range percentCanonical {
+		orderedPercent = append(orderedPercent, candidate)
+	}
+	sort.Slice(orderedPercent, func(left, right int) bool { return len(orderedPercent[left]) > len(orderedPercent[right]) })
+	orderedHex := make([]string, 0, len(hexCanonical))
+	for candidate := range hexCanonical {
+		orderedHex = append(orderedHex, candidate)
+	}
+	sort.Slice(orderedHex, func(left, right int) bool { return len(orderedHex[left]) > len(orderedHex[right]) })
+	orderedFragments := make([]string, 0, len(fragmentCandidates))
+	for candidate := range fragmentCandidates {
+		orderedFragments = append(orderedFragments, candidate)
 	}
 	sort.Slice(orderedFragments, func(left, right int) bool { return len(orderedFragments[left]) > len(orderedFragments[right]) })
-	inventory := secretInventory{fragments: orderedFragments, hasShortSensitive: hasShort, values: values}
+	inventory := secretInventory{
+		percentCanonical:              orderedPercent,
+		hexCanonical:                  orderedHex,
+		fragmentCandidates:            orderedFragments,
+		hasUnsupportedShortCredential: hasShort,
+		values:                        values,
+	}
 	if len(replacements) > 0 {
 		inventory.replacer = strings.NewReplacer(replacements...)
 	}
@@ -1931,6 +2025,7 @@ func secretRepresentations(value string) []string {
 		base64.URLEncoding.EncodeToString([]byte(value)),
 		base64.RawURLEncoding.EncodeToString([]byte(value)),
 		hex.EncodeToString([]byte(value)),
+		strings.ToUpper(hex.EncodeToString([]byte(value))),
 		url.QueryEscape(value),
 		url.PathEscape(value),
 	} {
@@ -1961,19 +2056,124 @@ func (inventory secretInventory) protect(value string) (string, error) {
 	if value == "" {
 		return value, nil
 	}
-	if inventory.hasShortSensitive {
-		return "", unsafeSecretFragmentError{}
+	if err := inventory.validateForExecution(); err != nil {
+		return "", err
+	}
+	if int64(len(value)) > maxProtectedValueBytes {
+		return "", boundedFileError{Kind: "protected output"}
+	}
+	for _, decoded := range decodedPercentRepresentations(value) {
+		for _, candidate := range inventory.fragmentCandidates {
+			if strings.Contains(decoded, candidate) || containsBoundedFragmentedSecret(decoded, candidate) {
+				return "", unsafeSecretFragmentError{}
+			}
+		}
+	}
+	if len(inventory.percentCanonical) > 0 {
+		normalized := normalizePercentEncoding(value)
+		for _, candidate := range inventory.percentCanonical {
+			if strings.Contains(normalized, candidate) {
+				return "", unsafeSecretFragmentError{}
+			}
+		}
+	}
+	if len(inventory.hexCanonical) > 0 {
+		normalized := strings.ToLower(value)
+		for _, candidate := range inventory.hexCanonical {
+			if strings.Contains(normalized, candidate) {
+				return "", unsafeSecretFragmentError{}
+			}
+		}
 	}
 	protected := value
 	if inventory.replacer != nil {
 		protected = inventory.replacer.Replace(protected)
 	}
-	for _, fragment := range inventory.fragments {
-		if strings.Contains(protected, fragment) {
+	for _, candidate := range inventory.fragmentCandidates {
+		if containsBoundedFragmentedSecret(protected, candidate) {
 			return "", unsafeSecretFragmentError{}
 		}
 	}
 	return protected, nil
+}
+
+func decodedPercentRepresentations(value string) []string {
+	normalized := normalizePercentEncoding(value)
+	result := make([]string, 0, 2)
+	if decoded, err := url.PathUnescape(normalized); err == nil && decoded != value {
+		result = append(result, decoded)
+	}
+	if decoded, err := url.QueryUnescape(normalized); err == nil && decoded != value {
+		if len(result) == 0 || result[0] != decoded {
+			result = append(result, decoded)
+		}
+	}
+	return result
+}
+
+func (inventory secretInventory) validateForExecution() error {
+	if inventory.hasUnsupportedShortCredential {
+		return unsupportedShortCredentialError{}
+	}
+	return nil
+}
+
+func normalizePercentEncoding(value string) string {
+	result := []byte(value)
+	for index := 0; index+2 < len(result); index++ {
+		if result[index] != '%' || !isHexDigit(result[index+1]) || !isHexDigit(result[index+2]) {
+			continue
+		}
+		result[index+1] = upperHexDigit(result[index+1])
+		result[index+2] = upperHexDigit(result[index+2])
+		index += 2
+	}
+	return string(result)
+}
+
+func upperHexDigit(value byte) byte {
+	if value >= 'a' && value <= 'f' {
+		return value - ('a' - 'A')
+	}
+	return value
+}
+
+func isHexDigit(value byte) bool {
+	return value >= '0' && value <= '9' || value >= 'a' && value <= 'f' || value >= 'A' && value <= 'F'
+}
+
+func containsBoundedFragmentedSecret(value string, secret string) bool {
+	if len(secret) < 16 || len(value) < len(secret) {
+		return false
+	}
+	const maxFragmentGap = 64
+	for start := strings.IndexByte(value, secret[0]); start >= 0; {
+		position := start
+		hadGap := false
+		matched := true
+		for secretIndex := 1; secretIndex < len(secret); secretIndex++ {
+			remaining := value[position+1:]
+			searchLimit := min(len(remaining), maxFragmentGap+1)
+			next := strings.IndexByte(remaining[:searchLimit], secret[secretIndex])
+			if next < 0 {
+				matched = false
+				break
+			}
+			if next > 0 {
+				hadGap = true
+			}
+			position += next + 1
+		}
+		if matched && hadGap {
+			return true
+		}
+		nextStart := strings.IndexByte(value[start+1:], secret[0])
+		if nextStart < 0 {
+			break
+		}
+		start += nextStart + 1
+	}
+	return false
 }
 
 func sensitiveEnvironmentName(name string) bool {
@@ -2052,6 +2252,9 @@ func reviewFlag(decision string) string {
 }
 
 func (r *runner) artifact(key string, value string) {
+	if r.safety.isUnsafe() {
+		return
+	}
 	protected, err := r.secrets.protect(value)
 	if err != nil {
 		return
@@ -2063,6 +2266,9 @@ func (r *runner) artifact(key string, value string) {
 }
 
 func (r *runner) printFinalAnswer(finalFile string) {
+	if r.safety.isUnsafe() {
+		return
+	}
 	body, err := os.ReadFile(filepath.Join(artifactsDir, finalFile))
 	if err != nil {
 		return
@@ -2094,6 +2300,9 @@ func (r *runner) fail(err error, logs []string) {
 }
 
 func (r *runner) tailFile(path string, lines int) {
+	if r.safety.isUnsafe() {
+		return
+	}
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return
@@ -2167,10 +2376,15 @@ func sanitizeSessionSources(root string, inventory secretInventory) error {
 		return fmt.Errorf("каталог сессий имеет недопустимый тип")
 	}
 	fileCount := 0
+	entryCount := 0
 	totalBytes := int64(0)
 	err = filepath.WalkDir(sessionsRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		entryCount++
+		if entryCount > maxSessionArchiveEntries {
+			return sessionArchiveLimitError{Limit: "количества записей"}
 		}
 		if entry.IsDir() {
 			return nil
@@ -2253,10 +2467,15 @@ func createCodexSessionArchive(root string, inventory secretInventory) (string, 
 	gzipWriter := gzip.NewWriter(&raw)
 	tarWriter := tar.NewWriter(gzipWriter)
 	fileCount := 0
+	entryCount := 0
 	totalBytes := int64(0)
 	err = filepath.WalkDir(sessionsRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		entryCount++
+		if entryCount > maxSessionArchiveEntries {
+			return sessionArchiveLimitError{Limit: "количества записей"}
 		}
 		info, err := entry.Info()
 		if err != nil {
@@ -2271,6 +2490,10 @@ func createCodexSessionArchive(root string, inventory secretInventory) (string, 
 			return err
 		}
 		header.Name = filepath.ToSlash(relative)
+		header.Format = tar.FormatUSTAR
+		header.ModTime = header.ModTime.Truncate(time.Second)
+		header.AccessTime = time.Time{}
+		header.ChangeTime = time.Time{}
 		if entry.IsDir() {
 			header.Mode = 0o700
 			return tarWriter.WriteHeader(header)
@@ -2324,7 +2547,7 @@ func restoreCodexSessionArchive(encoded string, root string) error {
 	if encoded == "" {
 		return nil
 	}
-	maxEncodedBytes := base64.StdEncoding.EncodedLen(int(maxSessionArchiveTotalBytes + maxSessionArchiveFiles*1024))
+	maxEncodedBytes := base64.StdEncoding.EncodedLen(int(maxSessionArchiveTarBytes + 1024))
 	if len(encoded) > maxEncodedBytes {
 		return sessionArchiveLimitError{Limit: "сжатого размера"}
 	}
@@ -2337,21 +2560,28 @@ func restoreCodexSessionArchive(encoded string, root string) error {
 		return fmt.Errorf("open codex session archive: %w", err)
 	}
 	defer gzipReader.Close()
-	tarReader := tar.NewReader(gzipReader)
+	limitedArchive := &io.LimitedReader{R: gzipReader, N: maxSessionArchiveTarBytes + 1}
+	tarReader := tar.NewReader(limitedArchive)
 	fileCount := 0
 	entryCount := 0
 	totalBytes := int64(0)
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
+			if limitedArchive.N <= 0 {
+				return sessionArchiveLimitError{Limit: "несжатого размера"}
+			}
 			return nil
 		}
 		if err != nil {
 			return fmt.Errorf("read codex session archive: %w", err)
 		}
 		entryCount++
-		if entryCount > maxSessionArchiveFiles*2 {
+		if entryCount > maxSessionArchiveEntries {
 			return sessionArchiveLimitError{Limit: "количества записей"}
+		}
+		if header.Format != tar.FormatUSTAR {
+			return fmt.Errorf("архив сессии содержит недопустимый формат записи")
 		}
 		target, err := safeArchiveTarget(root, header.Name)
 		if err != nil {

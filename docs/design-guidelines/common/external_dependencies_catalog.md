@@ -110,7 +110,8 @@
 | `quay.io/oauth2-proxy/oauth2-proxy` | Mattermost public gate | Google OAuth allowlist перед публичным Mattermost URL без встраивания OAuth-логики в Mattermost manifests |
 | `mattermost/mattermost-team-edition` | Mattermost | self-hosted Mattermost для control surface |
 | `pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb` | Mattermost и MatterCodex PostgreSQL | PostgreSQL 16 с локальным `pgvector`; digest исключает незаметную смену libc/правил сортировки под существующим PVC |
-| `pgvector/pgvector:0.8.5-pg15`, `pgvector/pgvector:0.8.5-pg16` | только disposable PostgreSQL integration tests | локальный Docker и временный Kubernetes test runner для обязательной матрицы PG15/16; Pod/контейнер не используют PVC и удаляются по exact run identity |
+| `pgvector/pgvector:0.8.5-pg15@sha256:18d16372b8406bb38a9f94cbff15d125c463d71fde2770aa8b5c64bfcc1578ee` | только disposable PostgreSQL 15 integration tests | локальный Docker и временный Kubernetes test runner; OCI index digest проверен 2026-07-20 через authoritative Docker Registry HTTP API V2 `registry-1.docker.io/v2/pgvector/pgvector/manifests/0.8.5-pg15` |
+| `pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb` | только disposable PostgreSQL 16 integration tests | локальный Docker и временный Kubernetes test runner; OCI index digest проверен 2026-07-20 через authoritative Docker Registry HTTP API V2 `registry-1.docker.io/v2/pgvector/pgvector/manifests/0.8.5-pg16`; Pod/контейнер не используют PVC и удаляются по exact run identity |
 | `busybox` | init/wait helpers | lightweight init helper в manifests; legacy smoke image setting сохраняется для совместимости config |
 
 ## Процесс изменений каталога

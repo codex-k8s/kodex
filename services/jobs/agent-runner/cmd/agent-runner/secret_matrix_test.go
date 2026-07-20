@@ -13,8 +13,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,46 +57,151 @@ func TestRunScopedSecretInventoryIncludesFileOnlyAndExtraEnvSources(t *testing.T
 	for source, value := range fileOnly {
 		for _, representation := range []string{value, base64.RawURLEncoding.EncodeToString([]byte(value)), hex.EncodeToString([]byte(value))} {
 			protected, protectErr := inventory.protect("provider failure: " + representation)
-			if protectErr != nil || strings.Contains(protected, representation) {
+			if protectErr == nil && strings.Contains(protected, representation) {
 				t.Fatalf("file-only источник %s не защищён", source)
 			}
 		}
 	}
 	for _, representation := range []string{extraValue, base64.RawURLEncoding.EncodeToString([]byte(extraValue)), hex.EncodeToString([]byte(extraValue))} {
 		protected, protectErr := inventory.protect("provider failure: " + representation)
-		if protectErr != nil || strings.Contains(protected, representation) {
+		if protectErr == nil && strings.Contains(protected, representation) {
 			t.Fatal("extraEnv источник не защищён")
 		}
 	}
 }
 
+func TestKubeconfigInventoryIgnoresShortSchemaFieldsButKeepsCredentialValues(t *testing.T) {
+	const credential = "mc-kubeconfig-token-a53c90f1"
+	path := filepath.Join(t.TempDir(), "kubeconfig")
+	body := "apiVersion: v1\nkind: Config\nusers:\n- name: synthetic\n  user:\n    token: " + credential + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inventory, err := buildSecretInventory([]string{"KUBECONFIG=" + path}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inventory.validateForExecution(); err != nil {
+		t.Fatalf("короткие несекретные поля kubeconfig отклонили inventory: %T", err)
+	}
+	protected, err := inventory.protect("provider failure: " + credential)
+	if err != nil || strings.Contains(protected, credential) {
+		t.Fatal("credential из kubeconfig не защищён")
+	}
+}
+
+func TestShortSensitiveCredentialsFailClosedForEnvFileAndExtraEnvLengthsOneThroughSeven(t *testing.T) {
+	for length := 1; length <= 7; length++ {
+		for _, source := range []string{"env", "file", "extraEnv"} {
+			t.Run(fmt.Sprintf("%s/%d", source, length), func(t *testing.T) {
+				value := strings.Repeat("x", length)
+				environment := []string{}
+				explicitFiles := []string{}
+				runnerEnvironment := []string{}
+				testRunner := &runner{}
+				switch source {
+				case "env":
+					environment = []string{"OPENAI_API_KEY=" + value}
+					t.Setenv("OPENAI_API_KEY", value)
+				case "file":
+					path := filepath.Join(t.TempDir(), "credential")
+					if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
+						t.Fatal(err)
+					}
+					explicitFiles = []string{path}
+					testRunner.credentialFiles = []string{path}
+				case "extraEnv":
+					environment = []string{"MATTERCODEX_MCP_TOKEN=" + value}
+					runnerEnvironment = environment
+				}
+				inventory, err := buildSecretInventory(environment, explicitFiles)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var shortErr unsupportedShortCredentialError
+				if _, err := inventory.protect("безопасный диагностический текст"); !errors.As(err, &shortErr) {
+					t.Fatalf("inventory не сохранил short credential: %T", err)
+				}
+				commandInvoked := false
+				testRunner.commandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+					commandInvoked = true
+					return exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+				}
+				t.Cleanup(testRunner.cleanupEphemeralRuntime)
+				_, _, runErr := testRunner.runCodexSessionTurn(context.Background(), sessionTurnClaimResponse{
+					TurnID: int64(770000 + length), Prompt: "synthetic short credential boundary",
+				}, "", "short-final.md", t.TempDir(), runnerEnvironment, 0)
+				if !errors.As(runErr, &shortErr) || commandInvoked {
+					t.Fatalf("production boundary: error=%T command_invoked=%t", runErr, commandInvoked)
+				}
+				requests := 0
+				server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+					requests++
+					response.WriteHeader(http.StatusNoContent)
+				}))
+				defer server.Close()
+				transportRunner := &runner{secrets: inventory}
+				err = transportRunner.sessionJSONOnce(context.Background(), server.Client(), http.MethodPost, server.URL, "session", "token", "turns/status", sessionTurnStatusRequest{RunID: "run", Phase: "safe"}, nil)
+				if !errors.As(err, &shortErr) || requests != 0 {
+					t.Fatalf("network boundary: error=%T requests=%d", err, requests)
+				}
+			})
+		}
+	}
+}
+
 func TestSecretInventoryIndependentEncodingCorpusAndFragments(t *testing.T) {
-	const secret = "mc-independent-encoding-8a2f6107"
+	const secret = "mc/independent%encoding-8a2f6107"
 	inventory, err := buildSecretInventory([]string{"OPENAI_API_KEY=" + secret}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	encoded := []string{
-		url.QueryEscape(secret),
+		percentEncodeForTest(secret, true),
+		percentEncodeForTest(secret, false),
 		base64.RawURLEncoding.EncodeToString([]byte(secret)),
 		hex.EncodeToString([]byte(secret)),
+		strings.ToUpper(hex.EncodeToString([]byte(secret))),
 	}
 	for _, representation := range encoded {
 		protected, protectErr := inventory.protect("ошибка поставщика: " + representation)
-		if protectErr != nil || strings.Contains(protected, representation) {
+		if protectErr == nil && strings.Contains(protected, representation) {
 			t.Fatal("независимое encoded-представление не защищено")
 		}
 	}
-	middle := len(secret) / 2
-	fragmented := secret[:middle] + "<разрыв>" + secret[middle:]
-	if _, err := inventory.protect(fragmented); err == nil {
-		t.Fatal("fragment-представление не завершилось fail-closed")
-	} else {
-		var fragmentErr unsafeSecretFragmentError
-		if !errors.As(err, &fragmentErr) {
-			t.Fatalf("fragment error = %T, want unsafeSecretFragmentError", err)
+	for fragmentLength := 1; fragmentLength <= 7; fragmentLength++ {
+		parts := make([]string, 0, len(secret)/fragmentLength+1)
+		for offset := 0; offset < len(secret); offset += fragmentLength {
+			end := min(offset+fragmentLength, len(secret))
+			parts = append(parts, secret[offset:end])
+		}
+		fragmented := strings.Join(parts, "<split>")
+		if _, err := inventory.protect(fragmented); err == nil {
+			t.Fatalf("fragment length %d не завершился fail-closed", fragmentLength)
+		} else {
+			var fragmentErr unsafeSecretFragmentError
+			if !errors.As(err, &fragmentErr) {
+				t.Fatalf("fragment length %d error = %T", fragmentLength, err)
+			}
 		}
 	}
+}
+
+func percentEncodeForTest(value string, uppercase bool) string {
+	const upperDigits = "0123456789ABCDEF"
+	const lowerDigits = "0123456789abcdef"
+	digits := upperDigits
+	if !uppercase {
+		digits = lowerDigits
+	}
+	var encoded strings.Builder
+	encoded.Grow(len(value) * 3)
+	for _, item := range []byte(value) {
+		encoded.WriteByte('%')
+		encoded.WriteByte(digits[item>>4])
+		encoded.WriteByte(digits[item&0x0f])
+	}
+	return encoded.String()
 }
 
 func TestSessionArchiveSanitizesSourceAndRejectsLimitsBeforeAllocation(t *testing.T) {
@@ -233,6 +338,105 @@ func TestRestoreSessionArchiveRejectsOversizeHeader(t *testing.T) {
 	}
 }
 
+func TestRestoreSessionArchiveRejectsExtendedHeadersOutsideCountedUSTARContract(t *testing.T) {
+	var compressed bytes.Buffer
+	gzipWriter := gzip.NewWriter(&compressed)
+	tarWriter := tar.NewWriter(gzipWriter)
+	if err := tarWriter.WriteHeader(&tar.Header{
+		Name:       "sessions/run/" + strings.Repeat("long-name-", 30),
+		Mode:       0o600,
+		Typeflag:   tar.TypeReg,
+		Format:     tar.FormatPAX,
+		PAXRecords: map[string]string{"comment": "unsupported extended header"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = tarWriter.Close()
+	_ = gzipWriter.Close()
+	err := restoreCodexSessionArchive(base64.StdEncoding.EncodeToString(compressed.Bytes()), t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "формат записи") {
+		t.Fatalf("extended header error = %v", err)
+	}
+}
+
+func TestSessionArchiveDirectoryEntryBoundaryRoundTrip(t *testing.T) {
+	t.Run("1024 entries with empty directories", func(t *testing.T) {
+		root := t.TempDir()
+		sessions := filepath.Join(root, "sessions")
+		if err := os.MkdirAll(sessions, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		for index := 0; index < maxSessionArchiveEntries-1; index++ {
+			if err := os.Mkdir(filepath.Join(sessions, fmt.Sprintf("empty-%04d", index)), 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		archive, err := createCodexSessionArchive(root, secretInventory{})
+		if err != nil {
+			t.Fatalf("create exact entry boundary: %v", err)
+		}
+		restored := t.TempDir()
+		if err := restoreCodexSessionArchive(archive, restored); err != nil {
+			t.Fatalf("restore exact entry boundary: %v", err)
+		}
+		entries, err := os.ReadDir(filepath.Join(restored, "sessions"))
+		if err != nil || len(entries) != maxSessionArchiveEntries-1 {
+			t.Fatalf("restored empty directories=%d error=%v", len(entries), err)
+		}
+	})
+
+	t.Run("1024 empty subdirectories exceed root-inclusive limit", func(t *testing.T) {
+		root := t.TempDir()
+		sessions := filepath.Join(root, "sessions")
+		if err := os.MkdirAll(sessions, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		for index := 0; index < maxSessionArchiveEntries; index++ {
+			if err := os.Mkdir(filepath.Join(sessions, fmt.Sprintf("empty-%04d", index)), 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, err := createCodexSessionArchive(root, secretInventory{})
+		var limitErr sessionArchiveLimitError
+		if !errors.As(err, &limitErr) || limitErr.Limit != "количества записей" {
+			t.Fatalf("over-bound entry error = %v", err)
+		}
+		if _, statErr := os.Stat(sessions); !os.IsNotExist(statErr) {
+			t.Fatalf("unsafe source не удалён: %v", statErr)
+		}
+	})
+
+	t.Run("mixed directories and files at exact boundary", func(t *testing.T) {
+		root := t.TempDir()
+		sessions := filepath.Join(root, "sessions")
+		if err := os.MkdirAll(sessions, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		for index := 0; index < maxSessionArchiveEntries-maxSessionArchiveFiles-1; index++ {
+			if err := os.Mkdir(filepath.Join(sessions, fmt.Sprintf("directory-%04d", index)), 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for index := 0; index < maxSessionArchiveFiles; index++ {
+			if err := os.WriteFile(filepath.Join(sessions, fmt.Sprintf("file-%04d", index)), []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		archive, err := createCodexSessionArchive(root, secretInventory{})
+		if err != nil {
+			t.Fatalf("create mixed boundary: %v", err)
+		}
+		restored := t.TempDir()
+		if err := restoreCodexSessionArchive(archive, restored); err != nil {
+			t.Fatalf("restore mixed boundary: %v", err)
+		}
+		entries, err := os.ReadDir(filepath.Join(restored, "sessions"))
+		if err != nil || len(entries) != maxSessionArchiveEntries-1 {
+			t.Fatalf("restored mixed entries=%d error=%v", len(entries), err)
+		}
+	})
+}
+
 func TestSessionTransportProtectsRawJSONAndBase64ValuesBeforeBotService(t *testing.T) {
 	fixtures := syntheticSecretMatrix()
 	environment := make([]string, 0, len(fixtures))
@@ -300,6 +504,61 @@ func TestSessionTransportFailsClosedBeforeNetworkOnSecretFragments(t *testing.T)
 	var fragmentErr unsafeSecretFragmentError
 	if !errors.As(err, &fragmentErr) || requests != 0 {
 		t.Fatalf("fragment transport error=%v requests=%d", err, requests)
+	}
+}
+
+func TestSessionTransportFailsClosedOnNormalizedAndMultiFragmentCorpus(t *testing.T) {
+	const secret = "mc/transport%encoding-4197be20"
+	inventory, err := buildSecretInventory([]string{"OPENAI_API_KEY=" + secret}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	representations := []string{
+		hex.EncodeToString([]byte(secret)),
+		strings.ToUpper(hex.EncodeToString([]byte(secret))),
+		percentEncodeForTest(secret, true),
+		percentEncodeForTest(secret, false),
+	}
+	for fragmentLength := 1; fragmentLength <= 7; fragmentLength++ {
+		parts := make([]string, 0, len(secret)/fragmentLength+1)
+		for offset := 0; offset < len(secret); offset += fragmentLength {
+			parts = append(parts, secret[offset:min(offset+fragmentLength, len(secret))])
+		}
+		representations = append(representations, strings.Join(parts, "<split>"))
+	}
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		requests++
+		response.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	for index, representation := range representations {
+		runner := &runner{secrets: inventory}
+		err := runner.sessionJSONOnce(context.Background(), server.Client(), http.MethodPost, server.URL, "session", "token", "turns/complete", sessionTurnCompleteRequest{
+			TurnID: int64(index + 1), RunID: "run", Status: "failed", ErrorMessage: representation,
+		}, nil)
+		var fragmentErr unsafeSecretFragmentError
+		if !errors.As(err, &fragmentErr) {
+			t.Fatalf("corpus item %d не завершился fail-closed: %T", index, err)
+		}
+	}
+	if requests != 0 {
+		t.Fatalf("normalized/fragment corpus пересёк network boundary: %d", requests)
+	}
+
+	runner := &runner{secrets: inventory}
+	source := filepath.Join(t.TempDir(), "raw-staging")
+	destination := filepath.Join(t.TempDir(), "published")
+	if err := os.WriteFile(source, []byte(representations[2]), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.publishSanitizedFile(source, destination); err == nil {
+		t.Fatal("unsafe normalized staging неожиданно опубликован")
+	}
+	for _, path := range []string{source, destination} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("unsafe staging path не удалён: %s", filepath.Base(path))
+		}
 	}
 }
 

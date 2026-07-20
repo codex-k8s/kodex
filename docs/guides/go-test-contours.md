@@ -38,7 +38,12 @@ make test-go-postgres
 MATTERCODEX_TEST_POSTGRES_MODE=docker make test-go-postgres
 ```
 
-Для каждой major-версии создаётся отдельный контейнер `pgvector/pgvector:0.8.5-pg15|pg16` с уникальными именем и label, случайным портом только на `127.0.0.1` и без общего тома. Перед `docker rm --force` сверяются точный container ID и label; replacement не удаляется. Недоступный daemon даёт `NOT RUN`, а не успех.
+Для каждой major-версии создаётся отдельный контейнер с закреплённым OCI index digest:
+
+- PostgreSQL 15 — `pgvector/pgvector:0.8.5-pg15@sha256:18d16372b8406bb38a9f94cbff15d125c463d71fde2770aa8b5c64bfcc1578ee`;
+- PostgreSQL 16 — `pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb`.
+
+Дайджесты проверены 2026-07-20 непосредственно через Docker Registry HTTP API V2 для `registry-1.docker.io`; один ref нельзя переиспользовать для другой major-версии. Контейнер получает уникальные имя и label, случайный порт только на `127.0.0.1` и не получает общий том. Перед `docker rm --force` сверяются точный container ID и label; replacement не удаляется. Недоступный daemon даёт `NOT RUN`, а не успех. Kubernetes mode использует те же закреплённые ref и отвергает mutable tag или неверное соответствие major-версии до создания Pod.
 
 ### Локальные server binaries
 
@@ -91,12 +96,16 @@ make test-go-postgres
 | --- | --- |
 | Промпт и Codex `config.toml` | `TestSyntheticSecretMatrixIsRedactedFromRunnerChannels` проверяет сформированный ввод и ссылку `bearer_token_env_var` без значения. |
 | Структурированные журналы, stderr, ошибка, итог, статус и метаданные артефактов | Та же проверка пропускает каждый класс через централизованное скрытие и проверяет исходное, экранированное JSON и base64-представления. |
-| Архив сессии | Перед упаковкой исходные session-файлы атомарно санитизируются. Лимиты до чтения: 8 MiB на файл, 32 MiB суммарно и 512 файлов; превышение даёт типизированный fail-closed исход и удаление небезопасного source tree. Восстановление применяет те же пределы. |
+| Архив сессии | Перед упаковкой исходные session-файлы атомарно санитизируются. Лимиты до чтения и `WriteHeader`: 8 MiB на файл, 32 MiB суммарно, 512 файлов и 1024 записи tar, включая корень `sessions`, каталоги, regular files и каждый допустимый header. Create и restore используют один entry limit; принятый create архив проходит restore при неизменённых данных. Превышение даёт типизированный fail-closed исход и удаление небезопасного source tree. |
 | Полезная нагрузка Mattermost | `TestSessionTransportProtectsRawJSONAndBase64ValuesBeforeBotService` доказывает, что raw, JSON-escaped и base64-значения без префикса `KEY=` не пересекают HTTP-границу runner → bot-service. `TestAgentSessionFailedCompletionPublishesOnlyRunnerSanitizedPayload` проводит уже безопасный payload через реальные completion persistence, status card, result publisher и `notifyRootInitiatorFailure`. Bot-service не получает доступ к значениям секретов. |
 | Рабочая нагрузка Kubernetes и отрендерованный YAML | `TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects` проверяет Pod: присутствуют только имена Secret и ключей, а не значения. Сами синтетические Secret используются только внутри поддельного клиента. |
 | Аудит PostgreSQL | Миграционные проверки и проверки допуска сохраняют только безопасные события, ссылки и хеши и проверяют отсутствие синтетического секрета в `matter_codex_audit_events`. |
 
-Единый inventory запуска строится из фактически выданных `env`/`extraEnv` и credential-файлов GitHub, OpenAI/Codex, Kubernetes ServiceAccount, MCP-сессии и других scoped `_FILE` источников. Он применяется к stdout, stderr, JSONL events, final/progress/status, архиву и артефактам. URL/base64url/hex-представления проверяет независимо заданный corpus. Полные представления скрываются; split/fragment-представление, которое нельзя надёжно восстановить универсальным regex, даёт типизированный fail-closed отказ публикации.
+Единый inventory запуска строится из фактически выданных `env`/`extraEnv` и credential-файлов GitHub, OpenAI/Codex, Kubernetes ServiceAccount, MCP-сессии, `KUBECONFIG` и других scoped `_FILE` источников. Любое непустое sensitive-значение сохраняется в inventory. Значение короче 16 байт считается неподдерживаемым для безопасного поиска фрагментов и закрыто отклоняет запуск до child, публикации и сети; короткая общая строка не передаётся глобальному replacer.
+
+Перед каждым child значения файлов один раз копируются в уникальный каталог `0700` как файлы `0600`; `KUBECONFIG`, `MATTERCODEX_GITHUB_TOKEN_FILE` и scoped `_FILE` в child env переписываются на этот снимок. Исходные projected и иные пути, которые child всё ещё технически способен открыть, контролируются весь период `cmd.Run`. Изменение, удаление или появление значения отменяет subprocess, навсегда помечает текущий запуск небезопасным, удаляет raw staging и session source и запрещает events, final, archive, status, completion и любой последующий HTTP-вызов этого запуска.
+
+Поддерживаемый набор защиты ограничен raw и JSON-escaped значениями, standard/raw base64 и base64url, URL/path percent-encoding с обоими регистрами hex digits, lower/uppercase hex и последовательными фрагментами исходного значения с кусками длиной 1–7 байт и ограниченным промежутком. Exact-представления скрываются; совпадение после консервативной percent/case-нормализации или streaming-fragment detection даёт типизированный fail-closed отказ до публикации и сети. Corpus тестов строит эти формы независимо от sanitizer. Защита не заявляется для произвольного шифрования, хеширования, перестановки или неограниченного преобразования. Новый secret-bearing output path разрешён только через этот общий fail-closed boundary; если нужное преобразование им не поддерживается, path не получает credential либо публикация запрещается.
 
 Raw stdout/stderr/events/final и рабочие session-файлы находятся только в уникальном каталоге `/tmp/mattercodex-run-*` с режимом `0700`, а не на workspace/PVC. На persistent workspace атомарно публикуются только ограниченные по размеру санитизированные файлы. После обычного завершения source-файлы сессии атомарно санитизируются перед архивированием; при небезопасном содержимом или превышении лимита source tree удаляется. При kill/OOM container-ephemeral staging исчезает вместе с контейнером. Восстановление между запусками сохраняет только последний принятый bot-service санитизированный bounded archive; сырой rollout не является частью recovery-контракта.
 

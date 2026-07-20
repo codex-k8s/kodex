@@ -12,7 +12,11 @@ import (
 )
 
 func TestDockerRunArgumentsUseExactIdentityAndLoopbackRandomPort(t *testing.T) {
-	arguments := dockerRunArguments("run-identity", "example.invalid/postgres:test")
+	image, err := postgresControllerImage("15")
+	if err != nil {
+		t.Fatal(err)
+	}
+	arguments := dockerRunArguments("run-identity", image)
 	for _, required := range []string{
 		"--name", "mc-postgres-test-run-identity",
 		"--label", postgresControllerLabel + "=run-identity",
@@ -24,6 +28,39 @@ func TestDockerRunArgumentsUseExactIdentityAndLoopbackRandomPort(t *testing.T) {
 	}
 	if slices.Contains(arguments, "--rm") {
 		t.Fatal("Docker controller не должен терять identity до подтверждённого cleanup")
+	}
+}
+
+func TestPostgresControllerImagesRequireDigestAndExactMajorMapping(t *testing.T) {
+	for _, major := range []string{"15", "16"} {
+		image, err := postgresControllerImage(major)
+		if err != nil {
+			t.Fatalf("postgresControllerImage(%s): %v", major, err)
+		}
+		if err := validatePostgresControllerImage(major, image); err != nil {
+			t.Fatalf("validatePostgresControllerImage(%s): %v", major, err)
+		}
+		arguments := dockerRunArguments("run-identity", image)
+		if arguments[len(arguments)-1] != image {
+			t.Fatalf("Docker image для PG%s не закреплён", major)
+		}
+		pod := kubernetesPostgresPod("run-identity", image)
+		if pod.Spec.Containers[0].Image != image {
+			t.Fatalf("Kubernetes image для PG%s не закреплён", major)
+		}
+	}
+	for _, testCase := range []struct {
+		major string
+		image string
+	}{
+		{major: "15", image: "pgvector/pgvector:0.8.5-pg15"},
+		{major: "15", image: postgres16ControllerImage},
+		{major: "16", image: postgres15ControllerImage},
+		{major: "16", image: "pgvector/pgvector:0.8.5-pg16@sha256:not-a-digest"},
+	} {
+		if err := validatePostgresControllerImage(testCase.major, testCase.image); err == nil {
+			t.Fatalf("небезопасный image ref принят для PG%s", testCase.major)
+		}
 	}
 }
 

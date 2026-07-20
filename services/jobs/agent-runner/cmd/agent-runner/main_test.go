@@ -22,6 +22,9 @@ func TestMain(testMain *testing.M) {
 	if os.Getenv("MATTERCODEX_TEST_MCP_BOOTSTRAP_HELPER") == "1" {
 		os.Exit(runMatterCodexMCPBootstrapShim())
 	}
+	if os.Getenv("MATTERCODEX_TEST_CREDENTIAL_ROTATION_HELPER") == "1" {
+		os.Exit(runCredentialRotationHelper())
+	}
 	os.Exit(testMain.Run())
 }
 
@@ -548,6 +551,170 @@ func TestKilledCodexSubprocessHelper(t *testing.T) {
 	_, _ = fmt.Fprintln(os.Stdout, secret)
 	_, _ = fmt.Fprintln(os.Stderr, secret)
 	time.Sleep(30 * time.Second)
+}
+
+func TestCredentialSourcesAreSnapshottedAndRotationCancelsWithoutPublication(t *testing.T) {
+	for index, testCase := range []struct {
+		name             string
+		credentialEnv    string
+		additionalSource bool
+	}{
+		{name: "ServiceAccount", additionalSource: true},
+		{name: "KUBECONFIG", credentialEnv: "KUBECONFIG"},
+		{name: "scoped _FILE", credentialEnv: "SCOPED_CREDENTIAL_FILE"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			directory := t.TempDir()
+			source := filepath.Join(directory, "credential-source")
+			if err := os.WriteFile(source, []byte("mc-rotation-before-71b8a920"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			started := filepath.Join(directory, "started")
+			observation := filepath.Join(directory, "snapshot-observation")
+			turnID := int64(780000 + index)
+			persistentPaths := []string{
+				sessionTurnEventsPath(turnID, 0),
+				sessionTurnStderrPath(turnID, 0),
+				filepath.Join(artifactsDir, fmt.Sprintf("rotation-final-%d.md", index)),
+			}
+			for _, path := range persistentPaths {
+				_ = os.Remove(path)
+				path := path
+				t.Cleanup(func() { _ = os.Remove(path) })
+			}
+			extraEnv := []string{
+				"MATTERCODEX_TEST_CREDENTIAL_ROTATION_HELPER=1",
+				"MATTERCODEX_TEST_ROTATION_SOURCE=" + source,
+				"MATTERCODEX_TEST_ROTATION_STARTED=" + started,
+				"MATTERCODEX_TEST_ROTATION_OBSERVATION=" + observation,
+				"MATTERCODEX_TEST_ROTATION_PATH_ENV=" + testCase.credentialEnv,
+			}
+			if testCase.credentialEnv != "" {
+				extraEnv = append(extraEnv, testCase.credentialEnv+"="+source)
+			}
+			if testCase.credentialEnv == "SCOPED_CREDENTIAL_FILE" {
+				extraEnv = append(extraEnv, "MATTERCODEX_RUNTIME_ENV_ALLOWLIST=SCOPED_CREDENTIAL_FILE")
+			}
+			runner := &runner{commandContext: func(ctx context.Context, _ string, args ...string) *exec.Cmd {
+				finalPath := ""
+				for argumentIndex, argument := range args {
+					if argument == "--output-last-message" && argumentIndex+1 < len(args) {
+						finalPath = args[argumentIndex+1]
+					}
+				}
+				return exec.CommandContext(ctx, os.Args[0], "-test.run=^$", "--", finalPath)
+			}}
+			if testCase.additionalSource {
+				runner.credentialFiles = []string{source}
+			}
+			t.Cleanup(runner.cleanupEphemeralRuntime)
+			type result struct {
+				err error
+			}
+			resultChannel := make(chan result, 1)
+			workDir := t.TempDir()
+			go func() {
+				_, _, err := runner.runCodexSessionTurn(context.Background(), sessionTurnClaimResponse{
+					TurnID: turnID, Prompt: "synthetic credential rotation boundary",
+				}, "", fmt.Sprintf("rotation-final-%d.md", index), workDir, extraEnv, 0)
+				resultChannel <- result{err: err}
+			}()
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				if _, err := os.Stat(started); err == nil {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("subprocess не достиг production start boundary")
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			if err := os.WriteFile(source, []byte("mc-rotation-after-bf26d104"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var runResult result
+			select {
+			case runResult = <-resultChannel:
+			case <-time.After(5 * time.Second):
+				t.Fatal("rotation не отменила subprocess")
+			}
+			var rotationErr credentialRotationError
+			if !errors.As(runResult.err, &rotationErr) || !runner.safety.isUnsafe() {
+				t.Fatalf("rotation result=%T unsafe=%t", runResult.err, runner.safety.isUnsafe())
+			}
+			if testCase.credentialEnv != "" {
+				body, err := os.ReadFile(observation)
+				if err != nil || string(body) != "snapshot-ok" {
+					t.Fatalf("child не получил private snapshot path: observation=%q error=%v", string(body), err)
+				}
+			}
+			for _, path := range persistentPaths {
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Fatalf("unsafe persistent output существует: %s", filepath.Base(path))
+				}
+			}
+			if _, err := os.Stat(runner.rawArtifacts); !os.IsNotExist(err) {
+				t.Fatalf("raw staging не удалён: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(runner.codexHome, "sessions")); !os.IsNotExist(err) {
+				t.Fatalf("unsafe session source не удалён: %v", err)
+			}
+			archive, archiveErr := runner.createSessionArchive(runner.codexHome)
+			if archive != "" || !errors.As(archiveErr, &rotationErr) {
+				t.Fatalf("archive не запрещён после rotation: archive_set=%t error=%T", archive != "", archiveErr)
+			}
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+				requests++
+				response.WriteHeader(http.StatusNoContent)
+			}))
+			defer server.Close()
+			for _, action := range []string{"turns/status", "turns/complete"} {
+				err := runner.sessionJSONOnce(context.Background(), server.Client(), http.MethodPost, server.URL, "session", "token", action, sessionTurnStatusRequest{RunID: "run", Phase: "safe"}, nil)
+				if !errors.As(err, &rotationErr) {
+					t.Fatalf("%s не запрещён после rotation: %T", action, err)
+				}
+			}
+			if requests != 0 {
+				t.Fatalf("после rotation выполнены network requests: %d", requests)
+			}
+		})
+	}
+}
+
+func runCredentialRotationHelper() int {
+	source := os.Getenv("MATTERCODEX_TEST_ROTATION_SOURCE")
+	started := os.Getenv("MATTERCODEX_TEST_ROTATION_STARTED")
+	observation := os.Getenv("MATTERCODEX_TEST_ROTATION_OBSERVATION")
+	pathEnvironmentName := os.Getenv("MATTERCODEX_TEST_ROTATION_PATH_ENV")
+	if source == "" || started == "" {
+		return 2
+	}
+	if pathEnvironmentName != "" {
+		snapshotPath := os.Getenv(pathEnvironmentName)
+		info, err := os.Stat(snapshotPath)
+		parentInfo, parentErr := os.Stat(filepath.Dir(snapshotPath))
+		if snapshotPath == "" || snapshotPath == source || err != nil || parentErr != nil || info.Mode().Perm() != 0o600 || parentInfo.Mode().Perm() != 0o700 {
+			return 2
+		}
+		if err := os.WriteFile(observation, []byte("snapshot-ok"), 0o600); err != nil {
+			return 2
+		}
+	}
+	if err := os.WriteFile(started, []byte("started"), 0o600); err != nil {
+		return 2
+	}
+	time.Sleep(2 * time.Second)
+	body, err := os.ReadFile(source)
+	if err != nil {
+		return 2
+	}
+	_, _ = os.Stdout.Write(body)
+	if len(os.Args) > 0 {
+		finalPath := os.Args[len(os.Args)-1]
+		_ = os.WriteFile(finalPath, body, 0o600)
+	}
+	return 0
 }
 
 func mustTable(t *testing.T, parent map[string]any, key string) map[string]any {
