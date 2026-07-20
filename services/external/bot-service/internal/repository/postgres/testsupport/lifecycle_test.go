@@ -9,9 +9,11 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -283,6 +285,401 @@ func TestGeneratedPostgresHarnessOneShotBootstrapProof(t *testing.T) {
 	if err := DestroyDisposableDatabase(ctx, harness.BootstrapDSN, winners[0]); err != nil {
 		t.Fatalf("destroy concurrent proof target: %v", err)
 	}
+
+	t.Run("post-create fault matrix", func(t *testing.T) {
+		cases := []struct {
+			name         string
+			point        bootstrapLifecycleHookPoint
+			cancelCause  bool
+			bootstrapDSN string
+		}{
+			{name: "неоднозначный CREATE", point: bootstrapHookAfterCreateExec},
+			{name: "после зафиксированного CREATE", point: bootstrapHookAfterCreateIdentified},
+			{name: "COMMENT не применён", point: bootstrapHookBeforeComment},
+			{name: "COMMENT применён с неоднозначным ответом", point: bootstrapHookAfterCommentExec},
+			{name: "ошибка deriveDSN", point: bootstrapHookBeforeDeriveDSN},
+			{name: "ошибка перед финальной Validate", point: bootstrapHookBeforeFinalValidate},
+			{name: "ошибка после финальной Validate", point: bootstrapHookAfterFinalValidate},
+			{name: "отмена caller во время финальной Validate", point: bootstrapHookBeforeFinalValidate, cancelCause: true},
+			{name: "отмена caller после CREATE", point: bootstrapHookAfterCreateIdentified, cancelCause: true},
+			{name: "loopback external-style endpoint", point: bootstrapHookBeforeDeriveDSN, bootstrapDSN: harness.LoopbackBootstrapDSN},
+		}
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				bootstrapDSN := testCase.bootstrapDSN
+				if bootstrapDSN == "" {
+					bootstrapDSN = harness.BootstrapDSN
+				}
+				proof, err := provisionGeneratedBootstrapProof(
+					ctx, bootstrapDSN, harness.dataDirectory, harness.socketDirectory,
+				)
+				if err != nil {
+					t.Fatalf("provision fault proof: %v", err)
+				}
+				before := databaseCount()
+				var cancelCase context.CancelFunc
+				options := bootstrapLifecycleOptions{
+					cleanupTimeout: 10 * time.Second,
+					attemptTimeout: 3 * time.Second,
+					retryDelay:     10 * time.Millisecond,
+					hook: func(_ context.Context, point bootstrapLifecycleHookPoint, _ bootstrapLifecycleHookInput) error {
+						if point != testCase.point {
+							return nil
+						}
+						if testCase.cancelCause {
+							cancelCase()
+							return nil
+						}
+						return fmt.Errorf("синтетический отказ lifecycle")
+					},
+				}
+				caseCtx := context.WithValue(context.Background(), bootstrapLifecycleOptionsContextKey{}, options)
+				caseCtx, cancelCase = context.WithTimeout(caseCtx, 30*time.Second)
+				target, bootstrapErr := BootstrapDisposableDatabase(caseCtx, bootstrapDSN, proof)
+				cancelCase()
+				if bootstrapErr == nil {
+					t.Fatal("синтетический post-CREATE отказ не возвращён")
+				}
+				if target.Database == "" || target.Marker == "" {
+					t.Fatal("post-CREATE ошибка скрыла exact target handle")
+				}
+				if !strings.Contains(bootstrapErr.Error(), "компенсирующ") {
+					t.Fatalf("ошибка не содержит итог компенсирующей очистки: %v", bootstrapErr)
+				}
+				if strings.Contains(bootstrapErr.Error(), target.Marker) || strings.Contains(bootstrapErr.Error(), proof) {
+					t.Fatal("ошибка раскрыла marker или proof")
+				}
+				if after := databaseCount(); after != before {
+					t.Fatalf("post-CREATE отказ оставил database: before=%d after=%d", before, after)
+				}
+				if _, reuseErr := BootstrapDisposableDatabase(ctx, bootstrapDSN, proof); reuseErr == nil {
+					t.Fatal("proof повторно принят после компенсирующей очистки")
+				}
+			})
+		}
+	})
+
+	t.Run("transient cleanup reconnect retry", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision retry proof: %v", err)
+		}
+		before := databaseCount()
+		var cleanupAttempts atomic.Int32
+		options := bootstrapLifecycleOptions{
+			cleanupTimeout: 10 * time.Second,
+			attemptTimeout: 3 * time.Second,
+			retryDelay:     10 * time.Millisecond,
+			attempts:       4,
+			hook: func(_ context.Context, point bootstrapLifecycleHookPoint, _ bootstrapLifecycleHookInput) error {
+				switch point {
+				case bootstrapHookBeforeComment:
+					return fmt.Errorf("синтетический отказ до COMMENT")
+				case bootstrapHookBeforeCleanupAttempt:
+					if cleanupAttempts.Add(1) <= 2 {
+						return fmt.Errorf("синтетическая потеря cleanup connection")
+					}
+				}
+				return nil
+			},
+		}
+		retryCtx := context.WithValue(context.Background(), bootstrapLifecycleOptionsContextKey{}, options)
+		if _, err := BootstrapDisposableDatabase(retryCtx, harness.BootstrapDSN, proof); err == nil {
+			t.Fatal("bootstrap без COMMENT неожиданно успешен")
+		} else if strings.Contains(err.Error(), "не подтверждена") {
+			t.Fatalf("cleanup не восстановился после transient отказов: %v", err)
+		}
+		if cleanupAttempts.Load() != 3 {
+			t.Fatalf("cleanup attempts=%d, want 3", cleanupAttempts.Load())
+		}
+		if after := databaseCount(); after != before {
+			t.Fatalf("retry cleanup оставил database: before=%d after=%d", before, after)
+		}
+	})
+
+	t.Run("ambiguous drop reconciliation", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision DROP proof: %v", err)
+		}
+		target, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof)
+		if err != nil {
+			t.Fatalf("bootstrap DROP target: %v", err)
+		}
+		var ambiguous atomic.Bool
+		options := bootstrapLifecycleOptions{
+			cleanupTimeout: 10 * time.Second,
+			attemptTimeout: 3 * time.Second,
+			retryDelay:     10 * time.Millisecond,
+			hook: func(_ context.Context, point bootstrapLifecycleHookPoint, _ bootstrapLifecycleHookInput) error {
+				if point == bootstrapHookAfterDropExec && ambiguous.CompareAndSwap(false, true) {
+					return fmt.Errorf("синтетическая потеря ответа DROP")
+				}
+				return nil
+			},
+		}
+		destroyCtx := context.WithValue(ctx, bootstrapLifecycleOptionsContextKey{}, options)
+		if err := DestroyDisposableDatabase(destroyCtx, harness.BootstrapDSN, target); err != nil {
+			t.Fatalf("ambiguous DROP не reconciled: %v", err)
+		}
+		if !ambiguous.Load() {
+			t.Fatal("fault после DROP не был вызван")
+		}
+	})
+
+	t.Run("fail-closed identity matrix", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision identity proof: %v", err)
+		}
+		target, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof)
+		if err != nil {
+			t.Fatalf("bootstrap identity target: %v", err)
+		}
+		marker, err := parseDisposableMarker(target.Marker, time.Now().UTC())
+		if err != nil {
+			t.Fatalf("parse target marker: %v", err)
+		}
+		original, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+		if err != nil || !original.exists {
+			t.Fatalf("read original target: %v", err)
+		}
+		assertDeniedAndPreserved := func(label string, bootstrapDSN string, candidate DisposableDatabase) {
+			t.Helper()
+			destroyCtx, destroyCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer destroyCancel()
+			destroyErr := DestroyDisposableDatabase(destroyCtx, bootstrapDSN, candidate)
+			if destroyErr == nil {
+				t.Fatalf("%s: недоказанный DROP разрешён", label)
+			}
+			if strings.Contains(destroyErr.Error(), target.Marker) || strings.Contains(destroyErr.Error(), proof) {
+				t.Fatalf("%s: ошибка раскрыла marker или proof", label)
+			}
+			actual, snapshotErr := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+			if snapshotErr != nil || !actual.exists || actual.databaseOID != original.databaseOID {
+				t.Fatalf("%s: original target удалён или заменён: exists=%t same_oid=%t err=%v",
+					label, actual.exists, actual.databaseOID == original.databaseOID, snapshotErr)
+			}
+		}
+
+		wrongName := target
+		wrongName.Database = disposableDatabasePrefix + strings.Repeat("f", 24)
+		assertDeniedAndPreserved("wrong name", harness.BootstrapDSN, wrongName)
+		wrongMarker := target
+		wrongMarker.Marker = target.Marker + "00"
+		assertDeniedAndPreserved("wrong proof marker", harness.BootstrapDSN, wrongMarker)
+		wrongTargetDSN := target
+		wrongTargetDSN.DSN = harness.BootstrapDSN
+		assertDeniedAndPreserved("wrong target DSN", harness.BootstrapDSN, wrongTargetDSN)
+		assertDeniedAndPreserved("wrong maintenance database", target.DSN, target)
+
+		identifier := pgx.Identifier{target.Database}.Sanitize()
+		comment := strings.ReplaceAll(target.Marker, "'", "''")
+		if _, err := pool.Exec(ctx, "comment on database "+identifier+" is null"); err != nil {
+			t.Fatalf("remove marker for negative test: %v", err)
+		}
+		assertDeniedAndPreserved("missing applied marker", harness.BootstrapDSN, target)
+		if _, err := pool.Exec(ctx, "comment on database "+identifier+" is 'foreign-marker'"); err != nil {
+			t.Fatalf("set foreign marker: %v", err)
+		}
+		assertDeniedAndPreserved("foreign marker", harness.BootstrapDSN, target)
+		if _, err := pool.Exec(ctx, "comment on database "+identifier+" is '"+comment+"'"); err != nil {
+			t.Fatalf("restore marker: %v", err)
+		}
+
+		foreignOwner := "mc_test_foreign_owner"
+		foreignOwnerIdentifier := pgx.Identifier{foreignOwner}.Sanitize()
+		if _, err := pool.Exec(ctx, "create role "+foreignOwnerIdentifier+" nologin"); err != nil {
+			t.Fatalf("create foreign owner: %v", err)
+		}
+		if _, err := pool.Exec(ctx, "alter database "+identifier+" owner to "+foreignOwnerIdentifier); err != nil {
+			t.Fatalf("replace target owner: %v", err)
+		}
+		assertDeniedAndPreserved("wrong owner", harness.BootstrapDSN, target)
+		if _, err := pool.Exec(ctx, "alter database "+identifier+" owner to "+pgx.Identifier{generatedPostgresOwner}.Sanitize()); err != nil {
+			t.Fatalf("restore target owner: %v", err)
+		}
+		if _, err := pool.Exec(ctx, "drop role "+foreignOwnerIdentifier); err != nil {
+			t.Fatalf("drop foreign owner: %v", err)
+		}
+
+		table := pgx.Identifier{bootstrapProofTable}.Sanitize()
+		trigger := pgx.Identifier{bootstrapProofGuardTrigger}.Sanitize()
+		if _, err := pool.Exec(ctx, "update public."+table+" set purpose='foreign-purpose' where run_id=$1", marker.runID); err == nil {
+			t.Fatal("immutable creation ledger разрешил изменение consumed proof")
+		}
+		mutateLedger := func(query string, arguments ...any) error {
+			if _, err := pool.Exec(ctx, "alter table public."+table+" disable trigger "+trigger); err != nil {
+				return err
+			}
+			_, mutationErr := pool.Exec(ctx, query, arguments...)
+			_, enableErr := pool.Exec(ctx, "alter table public."+table+" enable trigger "+trigger)
+			if mutationErr != nil {
+				return mutationErr
+			}
+			return enableErr
+		}
+		if err := mutateLedger("update public."+table+" set target_database_oid=$2::oid where run_id=$1", marker.runID, original.databaseOID+1); err != nil {
+			t.Fatalf("mutate ledger OID: %v", err)
+		}
+		assertDeniedAndPreserved("wrong ledger OID", harness.BootstrapDSN, target)
+		if err := mutateLedger("update public."+table+" set target_database_oid=$2::oid where run_id=$1", marker.runID, original.databaseOID); err != nil {
+			t.Fatalf("restore ledger OID: %v", err)
+		}
+		if err := mutateLedger("update public."+table+" set target_state=$2, target_dropped_at=clock_timestamp() where run_id=$1", marker.runID, bootstrapTargetStateDropped); err != nil {
+			t.Fatalf("mutate ledger state: %v", err)
+		}
+		assertDeniedAndPreserved("wrong registry state", harness.BootstrapDSN, target)
+		if err := mutateLedger("update public."+table+" set target_state=$2, target_dropped_at=null where run_id=$1", marker.runID, bootstrapTargetStateMarked); err != nil {
+			t.Fatalf("restore ledger state: %v", err)
+		}
+		if err := mutateLedger("update public."+table+" set server_fingerprint=$2 where run_id=$1", marker.runID, strings.Repeat("a", 64)); err != nil {
+			t.Fatalf("mutate ledger server: %v", err)
+		}
+		assertDeniedAndPreserved("wrong registry server", harness.BootstrapDSN, target)
+		if err := mutateLedger("update public."+table+" set server_fingerprint=$2 where run_id=$1", marker.runID, marker.serverFingerprint); err != nil {
+			t.Fatalf("restore ledger server: %v", err)
+		}
+		if err := mutateLedger("update public."+table+" set purpose='foreign-purpose' where run_id=$1", marker.runID); err != nil {
+			t.Fatalf("mutate ledger purpose: %v", err)
+		}
+		assertDeniedAndPreserved("wrong consumed proof purpose", harness.BootstrapDSN, target)
+		if err := mutateLedger("update public."+table+" set purpose=$2 where run_id=$1", marker.runID, bootstrapProofPurpose); err != nil {
+			t.Fatalf("restore ledger purpose: %v", err)
+		}
+		if err := mutateLedger("update public."+table+" set target_database=$2 where run_id=$1", marker.runID, disposableDatabasePrefix+strings.Repeat("e", 24)); err != nil {
+			t.Fatalf("mutate ledger target: %v", err)
+		}
+		assertDeniedAndPreserved("wrong registry target", harness.BootstrapDSN, target)
+		if err := mutateLedger("update public."+table+" set target_database=$2 where run_id=$1", marker.runID, target.Database); err != nil {
+			t.Fatalf("restore ledger target: %v", err)
+		}
+		if err := mutateLedger("update public."+table+" set target_marker_sha256=decode(repeat('00', 32), 'hex') where run_id=$1", marker.runID); err != nil {
+			t.Fatalf("mutate ledger marker hash: %v", err)
+		}
+		assertDeniedAndPreserved("wrong registry marker hash", harness.BootstrapDSN, target)
+		markerDigest := sha256.Sum256([]byte(target.Marker))
+		if err := mutateLedger("update public."+table+" set target_marker_sha256=$2 where run_id=$1", marker.runID, markerDigest[:]); err != nil {
+			t.Fatalf("restore ledger marker hash: %v", err)
+		}
+
+		if err := DestroyDisposableDatabase(ctx, harness.BootstrapDSN, target); err != nil {
+			t.Fatalf("destroy target after identity matrix: %v", err)
+		}
+	})
+
+	t.Run("bounded cleanup deadline", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision deadline proof: %v", err)
+		}
+		options := bootstrapLifecycleOptions{
+			cleanupTimeout: 120 * time.Millisecond,
+			attemptTimeout: 40 * time.Millisecond,
+			retryDelay:     5 * time.Millisecond,
+			attempts:       8,
+			hook: func(hookCtx context.Context, point bootstrapLifecycleHookPoint, _ bootstrapLifecycleHookInput) error {
+				if point == bootstrapHookBeforeComment {
+					return fmt.Errorf("синтетический отказ до COMMENT")
+				}
+				if point == bootstrapHookBeforeCleanupAttempt {
+					<-hookCtx.Done()
+					return hookCtx.Err()
+				}
+				return nil
+			},
+		}
+		deadlineCtx := context.WithValue(context.Background(), bootstrapLifecycleOptionsContextKey{}, options)
+		started := time.Now()
+		target, bootstrapErr := BootstrapDisposableDatabase(deadlineCtx, harness.BootstrapDSN, proof)
+		if bootstrapErr == nil || !strings.Contains(bootstrapErr.Error(), "не подтверждена") {
+			t.Fatalf("deadline cleanup не вернул явную итоговую ошибку: %v", bootstrapErr)
+		}
+		if elapsed := time.Since(started); elapsed > time.Second {
+			t.Fatalf("deadline cleanup не ограничен: %s", elapsed)
+		}
+		manualCtx, manualCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer manualCancel()
+		if err := boundedBootstrapTargetCleanup(manualCtx, harness.BootstrapDSN, target, false, false); err != nil {
+			t.Fatalf("manual reconciliation после deadline: %v", err)
+		}
+	})
+
+	t.Run("adversarial replacement survives", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision replacement proof: %v", err)
+		}
+		before := databaseCount()
+		var originalOID int64
+		options := bootstrapLifecycleOptions{
+			cleanupTimeout: 10 * time.Second,
+			attemptTimeout: 3 * time.Second,
+			retryDelay:     10 * time.Millisecond,
+			hook: func(hookCtx context.Context, point bootstrapLifecycleHookPoint, input bootstrapLifecycleHookInput) error {
+				if point != bootstrapHookAfterCreateIdentified {
+					return nil
+				}
+				originalOID = input.databaseOID
+				identifier := pgx.Identifier{input.target.Database}.Sanitize()
+				if _, err := pool.Exec(hookCtx, "drop database "+identifier+" with (force)"); err != nil {
+					return err
+				}
+				owner := pgx.Identifier{generatedPostgresOwner}.Sanitize()
+				if _, err := pool.Exec(hookCtx, "create database "+identifier+" with template template0 owner "+owner); err != nil {
+					return err
+				}
+				comment := strings.ReplaceAll(input.target.Marker, "'", "''")
+				if _, err := pool.Exec(hookCtx, "comment on database "+identifier+" is '"+comment+"'"); err != nil {
+					return err
+				}
+				return fmt.Errorf("синтетическая подмена target")
+			},
+		}
+		replacementCtx := context.WithValue(context.Background(), bootstrapLifecycleOptionsContextKey{}, options)
+		target, bootstrapErr := BootstrapDisposableDatabase(replacementCtx, harness.BootstrapDSN, proof)
+		if bootstrapErr == nil || !strings.Contains(bootstrapErr.Error(), "не подтверждена") {
+			t.Fatalf("replacement не вызвал fail-closed cleanup: %v", bootstrapErr)
+		}
+		snapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+		if err != nil || !snapshot.exists || snapshot.databaseOID == originalOID {
+			t.Fatalf("replacement не сохранён: exists=%t oid=%d original=%d err=%v", snapshot.exists, snapshot.databaseOID, originalOID, err)
+		}
+		if _, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof); err == nil {
+			t.Fatal("proof replacement-сценария повторно принят")
+		}
+		if _, err := pool.Exec(ctx, "drop database "+pgx.Identifier{target.Database}.Sanitize()+" with (force)"); err != nil {
+			t.Fatalf("test cleanup replacement: %v", err)
+		}
+		if after := databaseCount(); after != before {
+			t.Fatalf("replacement test cleanup изменил baseline: before=%d after=%d", before, after)
+		}
+	})
+
+	t.Run("concurrent cleanup", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision concurrent cleanup proof: %v", err)
+		}
+		target, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof)
+		if err != nil {
+			t.Fatalf("bootstrap concurrent cleanup target: %v", err)
+		}
+		start := make(chan struct{})
+		errorsChannel := make(chan error, 2)
+		for range 2 {
+			go func() {
+				<-start
+				errorsChannel <- DestroyDisposableDatabase(ctx, harness.BootstrapDSN, target)
+			}()
+		}
+		close(start)
+		for range 2 {
+			if err := <-errorsChannel; err != nil {
+				t.Fatalf("concurrent cleanup: %v", err)
+			}
+		}
+	})
 }
 
 func TestVectorExtensionLifecycleSerializesCleanDatabase(t *testing.T) {

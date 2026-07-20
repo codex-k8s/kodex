@@ -75,6 +75,9 @@ func run() int {
 		"MATTERCODEX_BOT_SERVICE_TEST_DATABASE_MARKER="+targetMarker,
 		"MATTERCODEX_POSTGRES_TEST_REQUIRED=1",
 	)
+	if generated {
+		command.Env = append(command.Env, "MATTERCODEX_POSTGRES_TEST_BINDIR="+harness.ServerBinDirectory())
+	}
 	runErr := command.Run()
 	cleanupErr := error(nil)
 	if created {
