@@ -302,17 +302,19 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	}
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
 	_, _ = svc.upsertTurnStatusCard(ctx, session, turn, status, svc.turnCompletionStatusMessage(ctx, session, status, turn.RunID, command.Artifacts), command.Artifacts["codex-limits"])
+	var completionErr error
 	if !capacityRetriesExhausted(command.Artifacts) {
 		if err := svc.postTurnResult(ctx, session, turn, status, command); err != nil {
-			return err
+			completionErr = errors.Join(completionErr, err)
 		}
 	}
 	if status == agentSessionTurnFailed || status == agentSessionTurnBlocked {
 		if err := svc.notifyRootInitiatorFailure(ctx, session, turn, command); err != nil {
-			return err
+			completionErr = errors.Join(completionErr, err)
 		}
 	}
-	return nil
+	completionErr = errors.Join(completionErr, svc.reconcileProcessRun(ctx, turn.ID))
+	return completionErr
 }
 
 func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, command CompleteAgentSessionTurnCommand, status string) error {
@@ -336,10 +338,18 @@ func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Conte
 		prURL = command.Artifacts["pr-url"]
 	}
 	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: status, PRURL: prURL})
-	if status == agentSessionTurnFailed || status == agentSessionTurnBlocked {
-		return svc.notifyRootInitiatorFailure(ctx, session, turn, command)
+	if coordinationStore, ok := svc.cfg.Store.(adminrepo.CoordinationRepository); ok {
+		_, _ = coordinationStore.UpdateWorkClaim(ctx, adminrepo.UpdateWorkClaimInput{
+			TurnID: turn.ID,
+			Status: status,
+		})
 	}
-	return nil
+	var completionErr error
+	if status == agentSessionTurnFailed || status == agentSessionTurnBlocked {
+		completionErr = svc.notifyRootInitiatorFailure(ctx, session, turn, command)
+	}
+	completionErr = errors.Join(completionErr, svc.reconcileProcessRun(ctx, turn.ID))
+	return completionErr
 }
 
 func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, command StopAgentSessionTurnsCommand) (StopAgentSessionTurnsResult, error) {
@@ -400,6 +410,12 @@ func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, comma
 			return StopAgentSessionTurnsResult{}, err
 		}
 		_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: canceled.RunID, Status: agentSessionTurnCanceled})
+		if coordinationStore, ok := svc.cfg.Store.(adminrepo.CoordinationRepository); ok {
+			_, _ = coordinationStore.UpdateWorkClaim(ctx, adminrepo.UpdateWorkClaimInput{
+				TurnID: canceled.ID,
+				Status: agentSessionTurnCanceled,
+			})
+		}
 		cleanupRuntime := turn.Status == agentSessionTurnRunning || session.ActiveTurnID == turn.ID
 		if !cleanupRuntime && turn.Status == agentSessionTurnQueued && session.ActiveTurnID == 0 && agentSessionRuntimeReady(session) {
 			queued, err := svc.cfg.Store.ListQueuedAgentSessionTurns(ctx, session.ID)
@@ -415,6 +431,9 @@ func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, comma
 			_, _ = svc.cfg.Store.ResetAgentSessionRuntime(ctx, session.SessionKey, agentSessionStatusIdle)
 		}
 		_, _ = svc.upsertTurnStatusCard(ctx, session, canceled, agentSessionTurnCanceled, svc.turnStatusMessage(ctx, session, agentSessionTurnCanceled, canceled.RunID, svc.sessionOpenAIAccountName(ctx, session), ""), "")
+		if err := svc.reconcileProcessRun(ctx, canceled.ID); err != nil {
+			return StopAgentSessionTurnsResult{}, err
+		}
 		stopped++
 	}
 	message := svc.t("chat.session.turn.stop.result", map[string]any{"Stopped": stopped, "Skipped": skipped})
@@ -1073,7 +1092,7 @@ func delegatedAgentRequestMessage(requesterUserName string, targetRoleName strin
 	var body strings.Builder
 	body.WriteString("# Запрос к агенту через MatterCodex\n\n")
 	appendDelegatedAgentRequestSection(&body, requesterUserName, targetRoleName, message)
-	body.WriteString("\n\nОбработай этот запрос как отдельную задачу в текущей MatterCodex thread-session. Если нужно вернуть управление инициатору или manager, используй только `mattermost_request_agent`.")
+	body.WriteString("\n\nОбработай этот запрос как отдельную задачу в текущей MatterCodex thread-session. Если задача явно запущена в отдельном дочернем треде, верни итог через `mattermost_return_to_requester`. Для запуска в текущем треде отдельный callback не требуется: опубликуй итог здесь и не запускай исходного агента через `mattermost_request_agent`, если это прямо не требуется задачей и политикой.")
 	return strings.TrimSpace(body.String())
 }
 

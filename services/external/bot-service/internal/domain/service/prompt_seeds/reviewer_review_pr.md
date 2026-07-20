@@ -10,6 +10,7 @@
 {{if .Repository.FullName}}- Репозиторий: {{.Repository.FullName}}{{else}}- Репозиторий: не выбран{{end}}
 {{if .PullRequest.URL}}- Пул-реквест: #{{.PullRequest.Number}} {{.PullRequest.URL}}{{end}}
 {{if .GitHub.Account}}- GitHub-аккаунт: {{.GitHub.Account}}{{end}}
+{{if .GitHub.Username}}- Ожидаемый аутентифицированный GitHub login: {{.GitHub.Username}}{{end}}
 
 ## Задача пользователя
 

@@ -70,6 +70,7 @@ type promptTemplatePullRequestData struct {
 
 type promptTemplateGitHubData struct {
 	Account     string
+	Username    string
 	TokenEnv    string
 	UsernameEnv string
 	EmailEnv    string
@@ -115,6 +116,7 @@ type RolePromptInput struct {
 	Chat             entity.Chat
 	Repositories     []entity.ProjectRepository
 	RuntimeVariables []entity.ProjectRuntimeVariable
+	GitHubAccount    entity.GitHubAccount
 	UserMessage      string
 	Locale           promptTemplateLocaleData
 }
@@ -357,6 +359,18 @@ func appendRoleRuntimeContract(prompt string, input RolePromptInput) string {
 func appendRoleRuntimeContractMarkdown(body *strings.Builder, input RolePromptInput) {
 	body.WriteString("# Контракт среды выполнения Matter-codex\n\n")
 	body.WriteString("- GitHub CLI: используй `gh`, если у роли есть GitHub-аккаунт. Токен, пользователь и email доступны через `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER` и `GITHUB_EMAIL`. Никогда не печатай значения токенов.\n")
+	githubAlias := defaultString(input.Role.GitHubAccountName, input.GitHubAccount.Name)
+	if strings.TrimSpace(githubAlias) != "" {
+		body.WriteString("- GitHub identity: MatterCodex alias привязки `")
+		body.WriteString(githubAlias)
+		body.WriteString("`")
+		if strings.TrimSpace(input.GitHubAccount.Username) != "" {
+			body.WriteString(", ожидаемый аутентифицированный GitHub login `")
+			body.WriteString(input.GitHubAccount.Username)
+			body.WriteString("`")
+		}
+		body.WriteString(". Alias привязки не обязан совпадать с login. Проверяй фактическую identity через `gh api user --jq .login` и сравнивай с ожидаемым login, а не с alias.\n")
+	}
 	body.WriteString("- Для Markdown-текста задач GitHub, пул-реквестов, ревью и комментариев записывай текст во временный файл или heredoc и передавай через `--body-file`/файловый ввод API. Не встраивай Markdown с обратными кавычками или shell-чувствительным текстом напрямую в одну командную строку shell.\n")
 	if strings.TrimSpace(input.Locale.Language) != "" {
 		body.WriteString("- Язык: все пользовательские ответы в Mattermost, заголовки и описания задач GitHub, заголовки и описания пул-реквестов, комментарии к задачам и пул-реквестам, тексты ревью, строчные замечания ревью, комментарии в коде, документацию и резюме поставки пиши на ")
@@ -478,7 +492,7 @@ func rolePromptTemplateData(input RolePromptInput) rolePromptData {
 			HeadBranch: "matter-codex-chat-session",
 		},
 		PullRequest: promptTemplatePullRequestData{},
-		GitHub:      promptGitHubData(input.Role.GitHubAccountName),
+		GitHub:      promptGitHubData(input.Role.GitHubAccountName, input.GitHubAccount.Username),
 		Tools:       agentRuntimeTools(),
 		Secrets:     roleSecretBindings(input.RuntimeVariables),
 		Locale:      locale,
@@ -547,7 +561,7 @@ func promptTemplateReferenceData() map[string]any {
 		"RepositoryPlaceholders":  "{{.Repository.Provider}}, {{.Repository.Owner}}, {{.Repository.Name}}, {{.Repository.FullName}}",
 		"TaskPlaceholders":        "{{.Task.Title}}, {{.Task.Body}}, {{.Task.BaseBranch}}, {{.Task.HeadBranch}}",
 		"PullRequestPlaceholders": "{{.PullRequest.Number}}, {{.PullRequest.URL}}, {{.PullRequest.Title}}, {{.PullRequest.BaseBranch}}, {{.PullRequest.HeadBranch}}",
-		"GitHubPlaceholders":      "{{.GitHub.Account}}, {{.GitHub.TokenEnv}}, {{.GitHub.UsernameEnv}}, {{.GitHub.EmailEnv}}",
+		"GitHubPlaceholders":      "{{.GitHub.Account}}, {{.GitHub.Username}}, {{.GitHub.TokenEnv}}, {{.GitHub.UsernameEnv}}, {{.GitHub.EmailEnv}}",
 		"ToolsPlaceholders":       "{{range .Tools}}- {{.Command}} ({{.Name}}): {{.Purpose}}{{end}}",
 		"SecretPlaceholders":      "{{range .Secrets}}- {{.Name}} {{.Kind}} env={{.Env}} file={{.File}}: {{.Purpose}}{{end}}",
 		"LocalePlaceholders":      "{{.Locale.Code}}, {{.Locale.Language}}",
