@@ -504,7 +504,7 @@ func (repo *Repository) CreateOwnerAttention(ctx context.Context, input adminrep
 	if err != nil {
 		return entity.OwnerAttentionRequest{}, false, fmt.Errorf("create owner attention: %w", err)
 	}
-	if _, err := repo.pool.Exec(ctx, `
+	if _, err := repo.db.Exec(ctx, `
 		update matter_codex_process_runs
 		set status = 'waiting_owner', updated_at = now(), finished_at = null
 		where id = $1
@@ -528,7 +528,7 @@ func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, id int64, pos
 }
 
 func (repo *Repository) ReconcileProcessRun(ctx context.Context, turnID int64) error {
-	tag, err := repo.pool.Exec(ctx, `
+	tag, err := repo.db.Exec(ctx, `
 		with selected_process as (
 			select process_run_id
 			from matter_codex_process_turns

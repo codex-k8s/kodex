@@ -812,8 +812,8 @@ func newPostgresDelegationFixtureWithSourceAccess(t *testing.T, maxConnections i
 	}
 	seedPostgresDelegation(t, ctx, seedPool, sourceAccess)
 	seedPool.Close()
-	if err := migrations.RunTo(ctx, dsn, 23); err != nil {
-		t.Fatalf("migrations through v23: %v", err)
+	if err := migrations.RunTo(ctx, dsn, 24); err != nil {
+		t.Fatalf("migrations through v24: %v", err)
 	}
 	seedPool, err = pgxpool.New(ctx, dsn)
 	if err != nil {
@@ -837,7 +837,7 @@ where token_secret_ref = 'source-bot-secret'
 	}
 	seedPool.Close()
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("migrations through v28: %v", err)
+		t.Fatalf("migrations through v29: %v", err)
 	}
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
