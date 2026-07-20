@@ -1,10 +1,10 @@
 package http
 
 import (
-	"bytes"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
@@ -23,38 +24,55 @@ import (
 )
 
 const (
-	pathHealthz       = "/healthz"
-	pathHealthLivez   = "/health/livez"
-	pathHealthReady   = "/health/readyz"
-	pathReadyz        = "/readyz"
-	pathMetrics       = "/metrics"
-	pathAgentsSlash   = "/mattermost/slash/agents"
-	pathAgentsAction  = "/mattermost/actions/agents"
-	pathAgentsDialog  = "/mattermost/dialogs/agents"
-	pathGitHubWebhook = "/github/webhook"
-	pathAgentSessions = "/internal/agent-sessions/"
-	pathMCPSessions   = "/mcp/sessions/"
-
+	pathHealthz          = "/healthz"
+	pathHealthLivez      = "/health/livez"
+	pathHealthReady      = "/health/readyz"
+	pathReadyz           = "/readyz"
+	pathMetrics          = "/metrics"
+	pathAgentsSlash      = "/mattermost/slash/agents"
+	pathAgentsAction     = "/mattermost/actions/agents"
+	pathAgentsDialog     = "/mattermost/dialogs/agents"
+	pathGitHubWebhook    = "/github/webhook"
+	pathAgentSessions    = "/internal/agent-sessions/"
+	pathMCPSessions      = "/mcp/sessions/"
 	dialogCallbackResult = "agents_dialog_result"
 )
+
+type RouteBoundary string
+
+const (
+	RouteBoundaryPublic  RouteBoundary = "public"
+	RouteBoundaryCluster RouteBoundary = "cluster"
+)
+
+type RegisteredRoute struct {
+	Path     string        `json:"path"`
+	Boundary RouteBoundary `json:"boundary"`
+}
 
 type DialogOpener interface {
 	OpenDialog(ctx context.Context, triggerID string, dialog statusservice.MattermostDialog) error
 }
 
 type RouterConfig struct {
-	StatusService         *statusservice.StatusService
-	SlashService          *statusservice.SlashCommandService
-	SessionService        *statusservice.AgentSessionService
-	DialogOpener          DialogOpener
-	Localizer             *texti18n.Localizer
-	SlashToken            string
-	GitHubWebhookSecret   string
-	MaxSlashFormBytes     int64
-	MaxGitHubWebhookBytes int64
-	PrometheusRegistry    *prometheus.Registry
-	MattermostHTTPClient  *http.Client
-	Logger                *slog.Logger
+	StatusService          *statusservice.StatusService
+	SlashService           *statusservice.SlashCommandService
+	SessionService         *statusservice.AgentSessionService
+	DialogOpener           DialogOpener
+	InteractionSecurity    *statusservice.InteractionSecurityService
+	Localizer              *texti18n.Localizer
+	SlashToken             string
+	GitHubWebhookSecret    string
+	MaxSlashFormBytes      int64
+	MaxGitHubWebhookBytes  int64
+	MaxMCPRequestBodyBytes int64
+	PrometheusRegistry     *prometheus.Registry
+	MattermostSiteURL      string
+	MattermostInternalURL  string
+	ThreadPublisher        statusservice.MattermostThreadPublisher
+	MattermostResolver     mattermostDNSResolver
+	MattermostDialer       mattermostContextDialer
+	Logger                 *slog.Logger
 }
 
 type Router struct {
@@ -67,19 +85,18 @@ type Router struct {
 	gitHubWebhookSecret   string
 	maxSlashFormBytes     int64
 	maxGitHubWebhookBytes int64
-	mattermostHTTPClient  *http.Client
+	interactionSecurity   *statusservice.InteractionSecurityService
+	mattermostResponses   *mattermostResponseClient
+	threadPublisher       statusservice.MattermostThreadPublisher
 	logger                *slog.Logger
 	mcpHandler            http.Handler
 	mux                   *http.ServeMux
+	registeredRoutes      []RegisteredRoute
 }
 
 var _ http.Handler = (*Router)(nil)
 
 func NewRouter(cfg RouterConfig) *Router {
-	mattermostHTTPClient := cfg.MattermostHTTPClient
-	if mattermostHTTPClient == nil {
-		mattermostHTTPClient = http.DefaultClient
-	}
 	router := &Router{
 		statusService:         cfg.StatusService,
 		slashService:          cfg.SlashService,
@@ -90,31 +107,42 @@ func NewRouter(cfg RouterConfig) *Router {
 		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
 		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
 		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
-		mattermostHTTPClient:  mattermostHTTPClient,
+		interactionSecurity:   cfg.InteractionSecurity,
+		mattermostResponses:   newMattermostResponseClient(cfg.MattermostSiteURL, cfg.MattermostInternalURL, cfg.MattermostResolver, cfg.MattermostDialer),
+		threadPublisher:       cfg.ThreadPublisher,
 		logger:                cfg.Logger,
 		mux:                   http.NewServeMux(),
 	}
 	if cfg.SessionService != nil {
-		router.mcpHandler = newMCPHandler(cfg.SessionService)
+		router.mcpHandler = newMCPHandler(cfg.SessionService, cfg.MaxMCPRequestBodyBytes)
 	}
 	registry := cfg.PrometheusRegistry
 	if registry == nil {
 		registry = prometheus.NewRegistry()
 	}
-	router.mux.HandleFunc(pathHealthz, router.handleHealth)
-	router.mux.HandleFunc(pathHealthLivez, router.handleLivez)
-	router.mux.HandleFunc(pathHealthReady, router.handleReady)
-	router.mux.HandleFunc(pathReadyz, router.handleReady)
-	router.mux.Handle(pathMetrics, promhttp.HandlerFor(registry, promhttp.HandlerOpts{Registry: registry, EnableOpenMetrics: true}))
-	router.mux.HandleFunc(pathAgentsSlash, router.handleAgentsSlash)
-	router.mux.HandleFunc(pathAgentsAction, router.handleAgentsAction)
-	router.mux.HandleFunc(pathAgentsDialog, router.handleAgentsDialog)
-	router.mux.HandleFunc(pathGitHubWebhook, router.handleGitHubWebhook)
-	router.mux.HandleFunc(pathAgentSessions, router.handleAgentSessionInternal)
+	router.register(pathHealthz, RouteBoundaryCluster, http.HandlerFunc(router.handleHealth))
+	router.register(pathHealthLivez, RouteBoundaryCluster, http.HandlerFunc(router.handleLivez))
+	router.register(pathHealthReady, RouteBoundaryCluster, http.HandlerFunc(router.handleReady))
+	router.register(pathReadyz, RouteBoundaryCluster, http.HandlerFunc(router.handleReady))
+	router.register(pathMetrics, RouteBoundaryCluster, promhttp.HandlerFor(registry, promhttp.HandlerOpts{Registry: registry, EnableOpenMetrics: true}))
+	router.register(pathAgentsSlash, RouteBoundaryPublic, http.HandlerFunc(router.handleAgentsSlash))
+	router.register(pathAgentsAction, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentsAction))
+	router.register(pathAgentsDialog, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentsDialog))
+	router.register(pathGitHubWebhook, RouteBoundaryPublic, http.HandlerFunc(router.handleGitHubWebhook))
+	router.register(pathAgentSessions, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentSessionInternal))
 	if router.mcpHandler != nil {
-		router.mux.Handle(pathMCPSessions, router.mcpHandler)
+		router.register(pathMCPSessions, RouteBoundaryCluster, router.mcpHandler)
 	}
 	return router
+}
+
+func (router *Router) register(path string, boundary RouteBoundary, handler http.Handler) {
+	router.mux.Handle(path, handler)
+	router.registeredRoutes = append(router.registeredRoutes, RegisteredRoute{Path: path, Boundary: boundary})
+}
+
+func (router *Router) RegisteredRoutes() []RegisteredRoute {
+	return append([]RegisteredRoute(nil), router.registeredRoutes...)
 }
 
 func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +207,24 @@ func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) 
 		TeamID:      strings.TrimSpace(r.PostForm.Get("team_id")),
 		TeamDomain:  strings.TrimSpace(r.PostForm.Get("team_domain")),
 	})
+	if result.Card != nil {
+		result.Card.ChannelID = strings.TrimSpace(r.PostForm.Get("channel_id"))
+		result.Card.Interaction = statusservice.MattermostCardInteraction{Actor: statusservice.AuthenticatedActor{
+			UserID:   strings.TrimSpace(r.PostForm.Get("user_id")),
+			UserName: strings.TrimSpace(r.PostForm.Get("user_name")),
+		}, Scope: statusservice.InteractionScope{}}
+		if router.threadPublisher == nil {
+			writeCommandResponse(w, http.StatusServiceUnavailable, ephemeral("interaction_capability_unavailable"))
+			return
+		}
+		if _, err := router.threadPublisher.PostThreadCard(r.Context(), *result.Card); err != nil {
+			router.logWarn("publish secured slash card failed", "error", err)
+			writeCommandResponse(w, http.StatusServiceUnavailable, ephemeral("interaction_capability_unavailable"))
+			return
+		}
+		result.Card = nil
+		result.ChannelVisible = false
+	}
 	writeCommandResponse(w, http.StatusOK, slashResponse(result))
 }
 
@@ -194,8 +240,22 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agents_action"})
 		return
 	}
+	if contextString(request.Context, "kind") == "agent_turn" && contextString(request.Context, "action") == "stop_turn" {
+		router.handleAgentTurnStopAction(w, r, request)
+		return
+	}
+	interaction, err := router.interactionSecurity.AuthenticateAction(r.Context(), statusservice.ActionCallback{
+		Context:   request.Context,
+		UserID:    strings.TrimSpace(request.UserId),
+		ChannelID: strings.TrimSpace(request.ChannelId),
+		PostID:    strings.TrimSpace(request.PostId),
+	})
+	if err != nil {
+		router.writeInteractionDenied(w, err)
+		return
+	}
 	if contextString(request.Context, "kind") == "agent_turn" {
-		router.handleAgentTurnAction(w, r, request)
+		router.handleAgentTurnAction(w, r, request, interaction)
 		return
 	}
 	if router.slashService == nil {
@@ -210,10 +270,10 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		Resource:  contextString(request.Context, "resource_type"),
 		ID:        contextString(request.Context, "resource_id"),
 		Page:      contextInt(request.Context, "page"),
-		UserID:    strings.TrimSpace(request.UserId),
-		UserName:  strings.TrimSpace(request.UserName),
-		ChannelID: strings.TrimSpace(request.ChannelId),
-		PostID:    strings.TrimSpace(request.PostId),
+		UserID:    interaction.Actor.UserID,
+		UserName:  interaction.Actor.UserName,
+		ChannelID: interaction.ChannelID,
+		PostID:    interaction.CallbackPostID,
 	}
 	if router.slashService.ShouldRunMenuActionAsync(command) {
 		result := router.slashService.AsyncMenuActionAccepted(command)
@@ -248,6 +308,10 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 			writeJSON(w, http.StatusServiceUnavailable, response)
 			return
 		}
+		if err := router.interactionSecurity.SealDialog(r.Context(), result.Dialog, interaction); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
 		if err := router.dialogOpener.OpenDialog(r.Context(), triggerID, *result.Dialog); err != nil {
 			router.logWarn("open Mattermost dialog failed", "error", err)
 			response.EphemeralText = router.t("router.dialog.open_failed", nil)
@@ -258,9 +322,73 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if result.Card != nil {
-		response.Update = cardPost(*result.Card)
+		update, err := router.securedCardUpdate(r.Context(), result.Card, interaction)
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
+		response.Update = update
 	}
 	writeJSON(w, status, response)
+}
+
+func (router *Router) handleAgentTurnStopAction(w http.ResponseWriter, r *http.Request, request mattermostmodel.PostActionIntegrationRequest) {
+	if router.sessionService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "agent_session_service_not_configured"})
+		return
+	}
+	turnIDs := contextInt64List(request.Context, "turn_ids")
+	resourceID, resourceErr := strconv.ParseInt(contextString(request.Context, "resource_id"), 10, 64)
+	if len(turnIDs) != 1 || resourceErr != nil || resourceID <= 0 || turnIDs[0] != resourceID || contextString(request.Context, "resource_type") != "agent_session_turn" {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agent_turn_action"})
+		return
+	}
+	callback := statusservice.ActionCallback{
+		Context: request.Context, UserID: strings.TrimSpace(request.UserId),
+		ChannelID: strings.TrimSpace(request.ChannelId), PostID: strings.TrimSpace(request.PostId),
+	}
+	var plan statusservice.StopAgentSessionTurnsPlan
+	interaction, err := router.interactionSecurity.AuthenticateActionAtomic(r.Context(), callback, func(interaction statusservice.AuthenticatedInteraction, store adminrepo.Repository) error {
+		if interaction.ResourceType != "agent_session_turn" || interaction.ResourceID != strconv.FormatInt(resourceID, 10) || strings.TrimSpace(interaction.Scope.Session) == "" || strings.TrimSpace(interaction.Scope.Workspace) == "" {
+			return statusservice.ErrInteractionAuthentication
+		}
+		var prepareErr error
+		plan, prepareErr = router.sessionService.PrepareStopAgentSessionTurns(r.Context(), statusservice.StopAgentSessionTurnsCommand{
+			TurnIDs: []int64{resourceID}, SessionKey: interaction.Scope.Session, WorkspaceScope: interaction.Scope.Workspace,
+			UserID: interaction.Actor.UserID, UserName: interaction.Actor.UserName,
+			ChannelID: interaction.ChannelID, PostID: interaction.CallbackPostID,
+		}, store)
+		return prepareErr
+	})
+	if err != nil {
+		router.writeInteractionDenied(w, err)
+		return
+	}
+	result, err := router.sessionService.FinalizeStopAgentSessionTurns(r.Context(), plan)
+	if err != nil {
+		router.logWarn("agent turn stop failed", "error", err)
+		writeJSON(w, http.StatusBadGateway, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("chat.session.turn.stop.failed", nil)})
+		return
+	}
+	response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.Message}
+	if result.Card != nil {
+		var update *mattermostmodel.Post
+		updateErr := router.sessionService.GuardStopAgentSessionTurnsResponse(r.Context(), plan, func() error {
+			var guardErr error
+			update, guardErr = router.securedCardUpdate(r.Context(), result.Card, interaction)
+			return guardErr
+		})
+		if updateErr != nil {
+			if errors.Is(updateErr, adminrepo.ErrClusterAdminAdmissionDenied) {
+				router.writeInteractionDenied(w, updateErr)
+				return
+			}
+			writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
+		response.Update = update
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (router *Router) runAsyncMenuAction(parent context.Context, command statusservice.MenuActionCommand) {
@@ -272,30 +400,14 @@ func (router *Router) runAsyncMenuAction(parent context.Context, command statuss
 	}
 }
 
-func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Request, request mattermostmodel.PostActionIntegrationRequest) {
+func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Request, request mattermostmodel.PostActionIntegrationRequest, interaction statusservice.AuthenticatedInteraction) {
 	if router.sessionService == nil {
 		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "agent_session_service_not_configured"})
 		return
 	}
 	switch contextString(request.Context, "action") {
 	case "stop_turn":
-		result, err := router.sessionService.StopAgentSessionTurns(r.Context(), statusservice.StopAgentSessionTurnsCommand{
-			TurnIDs:   contextInt64List(request.Context, "turn_ids"),
-			UserID:    strings.TrimSpace(request.UserId),
-			UserName:  strings.TrimSpace(request.UserName),
-			ChannelID: strings.TrimSpace(request.ChannelId),
-			PostID:    strings.TrimSpace(request.PostId),
-		})
-		if err != nil {
-			router.logWarn("agent turn stop failed", "error", err)
-			writeJSON(w, http.StatusBadGateway, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("chat.session.turn.stop.failed", nil)})
-			return
-		}
-		response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.Message}
-		if result.Card != nil {
-			response.Update = cardPost(*result.Card)
-		}
-		writeJSON(w, http.StatusOK, response)
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agent_turn_action"})
 	case "retry_turn":
 		turnIDs := contextInt64List(request.Context, "turn_ids")
 		if len(turnIDs) != 1 {
@@ -304,10 +416,10 @@ func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Reque
 		}
 		result, err := router.sessionService.RetryFailedTurn(r.Context(), statusservice.RetryAgentSessionTurnCommand{
 			TurnID:    turnIDs[0],
-			UserID:    strings.TrimSpace(request.UserId),
-			UserName:  strings.TrimSpace(request.UserName),
-			ChannelID: strings.TrimSpace(request.ChannelId),
-			PostID:    strings.TrimSpace(request.PostId),
+			UserID:    interaction.Actor.UserID,
+			UserName:  interaction.Actor.UserName,
+			ChannelID: interaction.ChannelID,
+			PostID:    interaction.CallbackPostID,
 		})
 		if err != nil {
 			router.logWarn("agent turn retry failed", "error", err)
@@ -316,12 +428,29 @@ func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Reque
 		}
 		response := &mattermostmodel.PostActionIntegrationResponse{EphemeralText: result.Message}
 		if result.Card != nil {
-			response.Update = cardPost(*result.Card)
+			update, err := router.securedCardUpdate(r.Context(), result.Card, interaction)
+			if err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
+				return
+			}
+			response.Update = update
 		}
 		writeJSON(w, http.StatusOK, response)
 	default:
 		writeJSON(w, http.StatusBadRequest, &mattermostmodel.PostActionIntegrationResponse{EphemeralText: router.t("menu.action.unknown", nil)})
 	}
+}
+
+func (router *Router) securedCardUpdate(ctx context.Context, card *statusservice.MattermostCard, interaction statusservice.AuthenticatedInteraction) (*mattermostmodel.Post, error) {
+	if card == nil || router.interactionSecurity == nil {
+		return nil, fmt.Errorf("interaction security is not configured")
+	}
+	card.ChannelID = interaction.ChannelID
+	card.PostID = interaction.CallbackPostID
+	if err := router.interactionSecurity.SealCard(ctx, card, interaction.Actor, interaction.Scope); err != nil {
+		return nil, err
+	}
+	return cardPost(*card), nil
 }
 
 func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request) {
@@ -336,23 +465,94 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.invalid_request", nil)})
 		return
 	}
-	if strings.TrimSpace(request.CallbackId) == dialogCallbackResult {
-		writeJSON(w, http.StatusOK, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
-		return
-	}
-	if router.slashService == nil {
+	callbackID := strings.TrimSpace(request.CallbackId)
+	if callbackID != dialogCallbackResult && router.slashService == nil {
 		writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.service_missing", nil)})
 		return
 	}
-	result := router.slashService.HandleDialogSubmission(r.Context(), statusservice.DialogSubmissionCommand{
-		CallbackID: strings.TrimSpace(request.CallbackId),
-		State:      strings.TrimSpace(request.State),
+	if callbackID != dialogCallbackResult {
+		validation := router.slashService.PrevalidateDialogSubmissionReadOnly(r.Context(), statusservice.DialogSubmissionCommand{
+			CallbackID: callbackID,
+			State:      strings.TrimSpace(request.State),
+			UserID:     strings.TrimSpace(request.UserId),
+			ChannelID:  strings.TrimSpace(request.ChannelId),
+			TeamID:     strings.TrimSpace(request.TeamId),
+			Submission: request.Submission,
+			Cancelled:  request.Cancelled,
+		})
+		if validation.Error != "" || len(validation.Errors) > 0 {
+			status := validation.StatusCode
+			if status == 0 {
+				status = http.StatusOK
+			}
+			writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Error: validation.Error, Errors: validation.Errors})
+			return
+		}
+	}
+	callback := statusservice.DialogCallback{
+		CallbackID: callbackID,
+		State:      request.State,
 		UserID:     strings.TrimSpace(request.UserId),
 		ChannelID:  strings.TrimSpace(request.ChannelId),
-		TeamID:     strings.TrimSpace(request.TeamId),
-		Submission: request.Submission,
-		Cancelled:  request.Cancelled,
-	})
+	}
+	prepare := func(statusservice.AuthenticatedInteraction) error {
+		if strings.TrimSpace(request.URL) == "" {
+			return nil
+		}
+		_, prepareErr := router.mattermostResponses.Prepare(r.Context(), request.URL)
+		return prepareErr
+	}
+	var (
+		interaction statusservice.AuthenticatedInteraction
+		cleanState  string
+		result      statusservice.DialogSubmissionResult
+		err         error
+	)
+	if callbackID == dialogCallbackResult {
+		interaction, cleanState, err = router.interactionSecurity.AuthenticateDialogPrepared(r.Context(), callback, prepare)
+	} else {
+		interaction, cleanState, err = router.interactionSecurity.AuthenticateDialogPreparedAtomic(
+			r.Context(), callback, prepare,
+			func(authenticated statusservice.AuthenticatedInteraction, transactionalState string, store adminrepo.Repository) error {
+				result = router.slashService.HandleDialogSubmissionTransactional(r.Context(), statusservice.DialogSubmissionCommand{
+					CallbackID: callbackID,
+					State:      transactionalState,
+					UserID:     authenticated.Actor.UserID,
+					UserName:   authenticated.Actor.UserName,
+					ChannelID:  authenticated.ChannelID,
+					TeamID:     strings.TrimSpace(request.TeamId),
+					Submission: request.Submission,
+					Cancelled:  request.Cancelled,
+				}, store)
+				if result.Error != "" || len(result.Errors) > 0 {
+					return statusservice.NewInteractionValidationError(result.StatusCode, result.Error, result.Errors)
+				}
+				return nil
+			},
+		)
+	}
+	if err != nil {
+		var validationErr *statusservice.InteractionValidationError
+		if errors.As(err, &validationErr) {
+			status := validationErr.StatusCode
+			if status == 0 {
+				status = http.StatusOK
+			}
+			writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Error: validationErr.ErrorText, Errors: validationErr.Fields})
+			return
+		}
+		if errors.Is(err, statusservice.ErrInteractionPreparation) {
+			writeJSON(w, http.StatusForbidden, mattermostmodel.SubmitDialogResponse{Error: "mattermost_response_url_denied"})
+			return
+		}
+		router.writeDialogInteractionDenied(w, err)
+		return
+	}
+	request.State = cleanState
+	if callbackID == dialogCallbackResult {
+		writeJSON(w, http.StatusOK, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
+		return
+	}
 	status := result.StatusCode
 	if status == 0 {
 		status = http.StatusOK
@@ -365,6 +565,10 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if result.Dialog != nil {
+		if err := router.interactionSecurity.SealDialog(r.Context(), result.Dialog, interaction); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
 		writeJSON(w, status, mattermostmodel.SubmitDialogResponse{
 			Type: string(mattermostmodel.SubmitDialogResponseTypeForm),
 			Form: mattermostDialogForm(*result.Dialog),
@@ -372,7 +576,17 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if result.Card != nil {
-		router.publishDialogResult(r.Context(), request.URL, *result.Card)
+		result.Card.ChannelID = interaction.ChannelID
+		result.Card.Interaction = statusservice.MattermostCardInteraction{Actor: interaction.Actor, Scope: interaction.Scope}
+		if router.threadPublisher == nil {
+			writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
+		if _, err := router.threadPublisher.PostThreadCard(r.Context(), *result.Card); err != nil {
+			router.logWarn("publish secured dialog result failed", "error", err)
+			writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
 		writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
 		return
 	}
@@ -498,6 +712,22 @@ func (router *Router) logWarn(message string, args ...any) {
 	}
 }
 
+func (router *Router) writeInteractionDenied(w http.ResponseWriter, err error) {
+	status := http.StatusUnauthorized
+	if errors.Is(err, statusservice.ErrInteractionAdmissionDenied) || errors.Is(err, statusservice.ErrInteractionAdmissionUnknown) {
+		status = http.StatusForbidden
+	}
+	writeJSON(w, status, transportmodels.ErrorResponse{Error: "interaction_callback_denied"})
+}
+
+func (router *Router) writeDialogInteractionDenied(w http.ResponseWriter, err error) {
+	status := http.StatusUnauthorized
+	if errors.Is(err, statusservice.ErrInteractionAdmissionDenied) || errors.Is(err, statusservice.ErrInteractionAdmissionUnknown) {
+		status = http.StatusForbidden
+	}
+	writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Error: "interaction_callback_denied"})
+}
+
 func (router *Router) t(messageID string, data map[string]any) string {
 	return router.localizer.T(messageID, data)
 }
@@ -620,55 +850,6 @@ func cardAttachment(card statusservice.MattermostCard) *mattermostmodel.MessageA
 		Fields:   fields,
 		Actions:  actions,
 	}
-}
-
-func (router *Router) publishDialogResult(ctx context.Context, responseURL string, card statusservice.MattermostCard) {
-	responseURL = strings.TrimSpace(responseURL)
-	if responseURL == "" {
-		return
-	}
-	go router.postDialogResult(ctx, responseURL, card)
-}
-
-func (router *Router) postDialogResult(ctx context.Context, responseURL string, card statusservice.MattermostCard) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	payload := dialogResultResponse(card)
-	body, err := json.Marshal(payload)
-	if err != nil {
-		router.logWarn("marshal Mattermost dialog result failed", "error", err)
-		return
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, responseURL, bytes.NewReader(body))
-	if err != nil {
-		router.logWarn("create Mattermost dialog result request failed", "error", err)
-		return
-	}
-	request.Header.Set("Content-Type", "application/json; charset=utf-8")
-	response, err := router.mattermostHTTPClient.Do(request)
-	if err != nil {
-		router.logWarn("post Mattermost dialog result failed", "error", err)
-		return
-	}
-	defer response.Body.Close()
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		router.logWarn("post Mattermost dialog result returned non-success status", "status", response.StatusCode)
-	}
-}
-
-func dialogResultResponse(card statusservice.MattermostCard) *mattermostmodel.CommandResponse {
-	text := strings.TrimSpace(card.Message)
-	if text == "" {
-		text = strings.TrimSpace(card.Text)
-	}
-	if text == "" {
-		text = strings.TrimSpace(card.Title)
-	}
-	response := ephemeral(text)
-	response.Attachments = []*mattermostmodel.MessageAttachment{
-		cardAttachment(card),
-	}
-	return response
 }
 
 func writeCommandResponse(w http.ResponseWriter, status int, response *mattermostmodel.CommandResponse) {

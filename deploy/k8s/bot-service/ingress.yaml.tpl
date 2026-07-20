@@ -21,8 +21,15 @@ spec:
     - host: ${MATTERCODEX_BOT_SERVICE_HOST}
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - path: /mattermost/slash/agents
+            pathType: Exact
+            backend:
+              service:
+                name: matter-codex-bot-service
+                port:
+                  name: http
+          - path: /github/webhook
+            pathType: Exact
             backend:
               service:
                 name: matter-codex-bot-service

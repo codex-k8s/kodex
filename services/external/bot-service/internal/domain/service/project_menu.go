@@ -443,8 +443,6 @@ func (svc *SlashCommandService) roleListCard(ctx context.Context, command MenuAc
 		card.Text = svc.t("agent_role.list.empty", nil)
 		if projectID > 0 {
 			card.Actions = append(card.Actions, svc.menuResourceDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.role_add", "menu.action.role_add.tooltip", "primary", nil))
-		} else {
-			card.Actions = append(card.Actions, svc.menuDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, "menu.action.role_add", "menu.action.role_add.tooltip", "primary"))
 		}
 		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewRoles)...)
 		return card
@@ -468,8 +466,6 @@ func (svc *SlashCommandService) roleListCard(ctx context.Context, command MenuAc
 	card.Actions = append(card.Actions, svc.pageActions(menuViewRoles, menuResourceAgentRole, command.ID, page, len(roles))...)
 	if projectID > 0 {
 		card.Actions = append(card.Actions, svc.menuResourceDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.role_add", "menu.action.role_add.tooltip", "primary", nil))
-	} else {
-		card.Actions = append(card.Actions, svc.menuDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, "menu.action.role_add", "menu.action.role_add.tooltip", "primary"))
 	}
 	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewRoles)...)
 	return card
@@ -542,8 +538,6 @@ func (svc *SlashCommandService) chatListCard(ctx context.Context, command MenuAc
 		card.Text = svc.t("chat.list.empty", nil)
 		if projectID > 0 {
 			card.Actions = append(card.Actions, svc.menuResourceDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary", nil))
-		} else {
-			card.Actions = append(card.Actions, svc.menuDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary"))
 		}
 		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewChats)...)
 		return card
@@ -566,8 +560,6 @@ func (svc *SlashCommandService) chatListCard(ctx context.Context, command MenuAc
 	card.Actions = append(card.Actions, svc.pageActions(menuViewChats, menuResourceChat, command.ID, page, len(chats))...)
 	if projectID > 0 {
 		card.Actions = append(card.Actions, svc.menuResourceDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary", nil))
-	} else {
-		card.Actions = append(card.Actions, svc.menuDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary"))
 	}
 	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewChats)...)
 	return card
@@ -1389,6 +1381,19 @@ func (svc *SlashCommandService) handleProjectRuntimeVariableDialog(ctx context.C
 	}
 	secretCreated := false
 	if strings.TrimSpace(value) != "" {
+		if editMode {
+			for _, roleID := range svc.roleIDsUsingRuntimeVariable(ctx, current.ProjectID, current.ID) {
+				role, roleErr := svc.cfg.Store.GetAgentRole(ctx, roleID)
+				if roleErr != nil {
+					return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime_var.get.failed", map[string]any{"Error": safeError(roleErr)})}
+				}
+				if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+					return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{
+						dialogFieldRuntimeVarValue: svc.t("dialog.runtime_var.value_edit_not_supported", nil),
+					}}
+				}
+			}
+		}
 		secret, err := svc.cfg.RuntimeRunner.UpsertProjectRuntimeVariableSecret(ctx, runtimerepo.ProjectRuntimeVariableSecretInput{
 			ProjectSlug: project.Slug,
 			Variable: runtimerepo.RuntimeEnvVar{
@@ -1607,12 +1612,35 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldProjectID: svc.t("dialog.project.project_invalid", nil)}}
 	}
 	roles := make([]entity.AgentRole, 0, len(input.RoleIDs))
+	hasClusterAdmin := false
 	for _, roleID := range input.RoleIDs {
 		role, err := svc.cfg.Store.GetAgentRole(ctx, roleID)
 		if err != nil || role.ProjectID != project.ID || !role.Enabled {
 			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldPrimaryRoleID: svc.t("dialog.chat.role_invalid", nil)}}
 		}
 		roles = append(roles, role)
+		if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+			hasClusterAdmin = true
+		}
+	}
+	existingChat := entity.Chat{}
+	if hasClusterAdmin {
+		chats, err := svc.cfg.Store.ListChats(ctx, project.ID)
+		if err != nil {
+			return DialogSubmissionResult{StatusCode: 403, Error: svc.t("chat.save.failed", map[string]any{"Error": safeError(err)})}
+		}
+		for _, chat := range chats {
+			if chat.Slug == input.Slug {
+				existingChat = chat
+				input.MattermostChannelID = chat.MattermostChannelID
+				break
+			}
+		}
+	}
+	for _, role := range roles {
+		if err := svc.admitClusterAdminRoleBinding(ctx, role, existingChat.ID, input.Slug, input.MattermostChannelID, "", command.UserID, command.UserName, "chat.upsert"); err != nil {
+			return DialogSubmissionResult{StatusCode: 403, Error: svc.t("chat.save.failed", map[string]any{"Error": safeError(err)})}
+		}
 	}
 	for _, repositoryID := range input.RepositoryIDs {
 		if _, _, err := svc.cfg.Store.UpsertProjectRepository(ctx, adminrepo.UpsertProjectRepositoryInput{
@@ -1623,7 +1651,7 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRepositoryID: svc.t("dialog.project_repo.repository_invalid", nil)}}
 		}
 	}
-	if svc.cfg.ChannelManager != nil {
+	if svc.cfg.ChannelManager != nil && !hasClusterAdmin {
 		if _, _, err := svc.cfg.ChannelManager.EnsureProjectTeam(ctx, project.Slug, project.Name, command.UserID); err != nil {
 			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.team.failed", map[string]any{"Error": safeError(err)})}
 		}
@@ -1634,6 +1662,17 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 		input.MattermostChannelID = channel.ID
 		for _, role := range roles {
 			if _, err := svc.ensureRoleBotIdentity(ctx, project, role, channel.ID); err != nil {
+				return DialogSubmissionResult{StatusCode: 200, Error: svc.t("agent_role.bot_identity.failed", map[string]any{"Error": safeError(err)})}
+			}
+		}
+	}
+	if svc.cfg.ChannelManager != nil && hasClusterAdmin {
+		for _, role := range roles {
+			err := svc.withClusterAdminRoleBindingGuard(ctx, role, existingChat.ID, input.Slug, input.MattermostChannelID, "", command.UserID, command.UserName, "chat.bot_identity.side_effect", func() error {
+				_, identityErr := svc.ensureRoleBotIdentity(ctx, project, role, input.MattermostChannelID)
+				return identityErr
+			})
+			if err != nil {
 				return DialogSubmissionResult{StatusCode: 200, Error: svc.t("agent_role.bot_identity.failed", map[string]any{"Error": safeError(err)})}
 			}
 		}
@@ -2383,11 +2422,30 @@ func (svc *SlashCommandService) ensureRoleBotIdentity(ctx context.Context, proje
 	}
 	username := roleBotUsername(project, role)
 	existing, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, role.ID)
+	if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+		if err != nil || strings.TrimSpace(existing.MattermostUserID) == "" || strings.TrimSpace(existing.TokenSecretRef) == "" || existing.Username != username {
+			return entity.MattermostBotIdentity{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if err := svc.cfg.RoleBotManager.EnsureExistingRoleBot(ctx, existing.MattermostUserID); err != nil {
+			return entity.MattermostBotIdentity{}, err
+		}
+		if _, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); err != nil {
+			return entity.MattermostBotIdentity{}, err
+		}
+		if channelID != "" {
+			if err := svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID); err != nil {
+				return entity.MattermostBotIdentity{}, err
+			}
+		}
+		return existing, nil
+	}
 	if err == nil && existing.MattermostUserID != "" && existing.TokenSecretRef != "" && existing.Username == username {
 		botErr := svc.cfg.RoleBotManager.EnsureExistingRoleBot(ctx, existing.MattermostUserID)
 		if _, secretErr := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); botErr == nil && secretErr == nil {
 			if channelID != "" {
-				_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID)
+				if err := svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID); err != nil {
+					return entity.MattermostBotIdentity{}, err
+				}
 			}
 			return existing, nil
 		}
@@ -2430,7 +2488,9 @@ func (svc *SlashCommandService) ensureRoleBotIdentity(ctx context.Context, proje
 		return entity.MattermostBotIdentity{}, err
 	}
 	if channelID != "" {
-		_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, binding.UserID)
+		if err := svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, binding.UserID); err != nil {
+			return entity.MattermostBotIdentity{}, err
+		}
 	}
 	return identity, nil
 }

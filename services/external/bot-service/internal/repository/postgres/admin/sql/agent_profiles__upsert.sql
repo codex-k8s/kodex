@@ -9,7 +9,7 @@ insert into matter_codex_agent_profiles(
 	kubernetes_access,
 	sandbox_mode,
 	config_overlay
-) values (
+) select
 	$1,
 	$2,
 	$3,
@@ -19,7 +19,7 @@ insert into matter_codex_agent_profiles(
 	$7,
 	$8,
 	$9
-)
+where lower(trim($7)) <> 'cluster-admin'
 on conflict (name) do update set
 	role = excluded.role,
 	description = excluded.description,
@@ -30,6 +30,7 @@ on conflict (name) do update set
 	sandbox_mode = excluded.sandbox_mode,
 	config_overlay = excluded.config_overlay,
 	updated_at = now()
+where lower(trim(excluded.kubernetes_access)) <> 'cluster-admin'
 returning
 	id,
 	name,

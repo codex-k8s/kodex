@@ -16,6 +16,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
@@ -42,17 +43,18 @@ type MattermostChannelBinding struct {
 }
 
 type MattermostCard struct {
-	ChannelID  string
-	PostID     string
-	RootPostID string
-	ActionURL  string
-	Message    string
-	Props      map[string]any
-	Color      string
-	Title      string
-	Text       string
-	Fields     []MattermostCardField
-	Actions    []MattermostCardAction
+	ChannelID   string
+	PostID      string
+	RootPostID  string
+	ActionURL   string
+	Message     string
+	Props       map[string]any
+	Color       string
+	Title       string
+	Text        string
+	Fields      []MattermostCardField
+	Actions     []MattermostCardAction
+	Interaction MattermostCardInteraction
 }
 
 type MattermostCardField struct {
@@ -996,6 +998,9 @@ func (svc *SlashCommandService) handleOpenAIAuth(ctx context.Context, args []str
 	if err != nil {
 		return svc.validationErrorText(err)
 	}
+	if err := svc.ensureOpenAIAccountNotFrozen(ctx, accountName); err != nil {
+		return svc.t("openai.auth.store_failed", map[string]any{"Error": safeError(err)})
+	}
 	secretName := codexAuthSecretName(svc.cfg.CodexAuthSecretName, accountName)
 	account, created, err := svc.cfg.Store.UpsertOpenAIAccount(ctx, adminrepo.UpsertOpenAIAccountInput{
 		Name:           accountName,
@@ -1036,6 +1041,9 @@ func (svc *SlashCommandService) handleOpenAIStatus(ctx context.Context, args []s
 	accountName, err := parseOpenAIAccountName(args[0])
 	if err != nil {
 		return svc.validationErrorText(err)
+	}
+	if err := svc.ensureOpenAIAccountNotFrozen(ctx, accountName); err != nil {
+		return svc.t("openai.status.failed", map[string]any{"Error": safeError(err)})
 	}
 	account, ok := svc.openAIAccount(ctx, accountName)
 	if !ok {
@@ -1117,6 +1125,9 @@ func (svc *SlashCommandService) handleOpenAICleanup(ctx context.Context, args []
 	if err != nil {
 		return svc.validationErrorText(err)
 	}
+	if err := svc.ensureOpenAIAccountNotFrozen(ctx, accountName); err != nil {
+		return svc.t("openai.cleanup.failed", map[string]any{"Error": safeError(err)})
+	}
 	result, err := svc.cfg.RuntimeRunner.CleanupCodexAuthSession(ctx, accountName)
 	if err != nil {
 		return svc.t("openai.cleanup.failed", map[string]any{"Error": safeError(err)})
@@ -1139,6 +1150,9 @@ func (svc *SlashCommandService) handleOpenAIDelete(ctx context.Context, args []s
 	accountName, err := parseOpenAIAccountName(args[0])
 	if err != nil {
 		return svc.validationErrorText(err)
+	}
+	if err := svc.ensureOpenAIAccountNotFrozen(ctx, accountName); err != nil {
+		return svc.t("openai.delete.failed", map[string]any{"Error": safeError(err)})
 	}
 	account, err := svc.cfg.Store.GetOpenAIAccount(ctx, accountName)
 	if err != nil {
@@ -2141,6 +2155,9 @@ func (svc *SlashCommandService) deleteGitHubAccountText(ctx context.Context, acc
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return svc.t("github.account.list.storage_not_ready", nil)
 	}
+	if err := svc.ensureGitHubAccountNotFrozen(ctx, accountName); err != nil {
+		return svc.t("github.account.delete_failed", map[string]any{"Error": safeError(err)})
+	}
 	account, err := svc.cfg.Store.GetGitHubAccount(ctx, accountName)
 	if err != nil {
 		if errors.Is(err, adminrepo.ErrNotFound) {
@@ -2593,6 +2610,249 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 	default:
 		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.unknown", nil)}
 	}
+}
+
+func (svc *SlashCommandService) PrevalidateDialogSubmission(command DialogSubmissionCommand) DialogSubmissionResult {
+	if command.Cancelled {
+		return DialogSubmissionResult{StatusCode: 200}
+	}
+	state, err := decodeDialogState(command.State)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.state_invalid", nil)}
+	}
+	fieldErrors := map[string]string{}
+	switch strings.TrimSpace(command.CallbackID) {
+	case dialogCallbackProjectUpsert:
+		input, validationErrors := svc.projectDialogInput(command.Submission)
+		fieldErrors = validationErrors
+		if strings.TrimSpace(input.GitHubOwner) != "" && strings.TrimSpace(input.GitHubAccountName) == "" {
+			fieldErrors[dialogFieldGitHubAccount] = svc.t("project.github_account.required", map[string]any{"Project": input.Name})
+		}
+	case dialogCallbackProjectRepositoryBind:
+		if _, ok := parseInt64ID(submissionString(command.Submission, dialogFieldProjectID)); !ok {
+			fieldErrors[dialogFieldProjectID] = svc.t("dialog.project.project_invalid", nil)
+		}
+		if _, ok := parseInt64ID(submissionString(command.Submission, dialogFieldRepositoryID)); !ok {
+			fieldErrors[dialogFieldRepositoryID] = svc.t("dialog.project_repo.repository_invalid", nil)
+		}
+	case dialogCallbackProjectRuntimeVar:
+		_, value, validationErrors := svc.projectRuntimeVariableDialogInput(command.Submission)
+		fieldErrors = validationErrors
+		editMode := state.ResourceType == menuResourceRuntimeVar && strings.TrimSpace(state.ResourceID) != ""
+		if strings.TrimSpace(value) == "" && !editMode {
+			fieldErrors[dialogFieldRuntimeVarValue] = svc.t("dialog.runtime_var.value_required", nil)
+		}
+	case dialogCallbackRoleRuntimeVarAttach, dialogCallbackRoleRuntimeVarDetach:
+		_, _, fieldErrors = svc.roleRuntimeVariableDialogInput(command.Submission)
+	case dialogCallbackAgentRoleUpsert:
+		input, validationErrors := svc.agentRoleDialogInput(command.Submission)
+		fieldErrors = validationErrors
+		if len(fieldErrors) == 0 {
+			body := strings.TrimSpace(input.PromptTemplate)
+			if body == "" && input.PromptMode == "template" {
+				if seed, ok := promptSeedForAgentRole(input.Name, input.RoleType); ok {
+					seedBody, seedErr := promptSeedMarkdown(seed)
+					if seedErr != nil {
+						fieldErrors[dialogFieldPromptTemplate] = svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(seedErr)})
+					} else {
+						body = seedBody
+					}
+				}
+			}
+			if body != "" {
+				if _, renderErr := RenderRolePromptTemplate(body, SampleRolePromptData(input.Name, input.RoleType, svc.promptTemplateLocaleData())); renderErr != nil {
+					fieldErrors[dialogFieldPromptTemplate] = svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(renderErr)})
+				}
+			}
+		}
+	case dialogCallbackChatCreate:
+		_, fieldErrors = svc.chatDialogInput(command.Submission)
+	case dialogCallbackRepositoryAdd, dialogCallbackRepositoryEdit:
+		_, fieldErrors = svc.repositoryDialogUpsertInput(command.Submission)
+	case dialogCallbackRepositoryDelete:
+		provider := strings.ToLower(defaultString(submissionString(command.Submission, dialogFieldProvider), "github"))
+		if provider != "github" {
+			fieldErrors[dialogFieldProvider] = svc.t("dialog.repo.provider_invalid", nil)
+		}
+		if _, _, ok := parseSubmittedRepository(submissionString(command.Submission, dialogFieldRepository)); !ok {
+			fieldErrors[dialogFieldRepository] = svc.t("dialog.repo.repository_invalid", nil)
+		}
+		if submissionString(command.Submission, dialogFieldConfirm) != "delete" {
+			fieldErrors[dialogFieldConfirm] = svc.t("dialog.repo.confirm_invalid", nil)
+		}
+	case dialogCallbackOpenAIAuth, dialogCallbackOpenAIStatus, dialogCallbackOpenAICleanup, dialogCallbackOpenAIDelete:
+		_, fieldErrors = svc.dialogAccountName(command.Submission)
+		if command.CallbackID == dialogCallbackOpenAIDelete && submissionString(command.Submission, dialogFieldConfirm) != "delete" {
+			fieldErrors[dialogFieldConfirm] = svc.t("dialog.repo.confirm_invalid", nil)
+		}
+	case dialogCallbackGitHubAccountAdd, dialogCallbackGitHubAccountEdit:
+		_, fieldErrors = svc.githubAccountDialogInput(command.Submission)
+	case dialogCallbackRepositorySearch:
+		if len(strings.TrimSpace(submissionString(command.Submission, dialogFieldSearch))) < 2 {
+			fieldErrors[dialogFieldSearch] = svc.t("dialog.repo.search.query_invalid", nil)
+		}
+	case dialogCallbackRepositorySearchPick:
+		if _, ok := parseRepositoryOnboardingResourceID(submissionString(command.Submission, dialogFieldRepositoryChoice)); !ok {
+			fieldErrors[dialogFieldRepositoryChoice] = svc.t("dialog.repo.repository_invalid", nil)
+		}
+	case dialogCallbackRepositorySearchBranch:
+		if _, ok := parseRepositoryOnboardingResourceID(submissionString(command.Submission, dialogFieldBranchChoice)); !ok {
+			fieldErrors[dialogFieldBranchChoice] = svc.t("dialog.repo.branch_invalid", nil)
+		}
+	case dialogCallbackGitHubAccountDelete:
+		_, fieldErrors = svc.dialogAccountName(command.Submission)
+		if submissionString(command.Submission, dialogFieldConfirm) != "delete" {
+			fieldErrors[dialogFieldConfirm] = svc.t("dialog.repo.confirm_invalid", nil)
+		}
+	case dialogCallbackProfileUpsert:
+		input, validationErrors := svc.profileDialogInput(command.Submission)
+		fieldErrors = validationErrors
+		if strings.TrimSpace(state.ResourceID) != "" && input.Name != state.ResourceID {
+			fieldErrors[dialogFieldProfile] = svc.t("dialog.profile.rename_not_supported", nil)
+		}
+	case dialogCallbackPromptEdit:
+		profileName, templateKey, ok := parsePromptTemplateResourceID(state.ResourceID)
+		if !ok {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("menu.entity.invalid", nil)}
+		}
+		body := strings.TrimSpace(submissionString(command.Submission, dialogFieldTemplateBody))
+		if body == "" {
+			fieldErrors[dialogFieldTemplateBody] = svc.t("dialog.prompt.body_empty", nil)
+		} else if _, err := renderAgentPromptTemplate(body, samplePromptTemplateData(profileName, templateKey, svc.promptTemplateLocaleData())); err != nil {
+			fieldErrors[dialogFieldTemplateBody] = svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(err)})
+		}
+	case dialogCallbackRuntimePruneApply:
+		if strings.TrimSpace(submissionString(command.Submission, dialogFieldOlderThan)) == "" {
+			fieldErrors[dialogFieldOlderThan] = svc.t("runtime.prune.usage", nil)
+		}
+		if submissionString(command.Submission, dialogFieldConfirm) != "apply" {
+			fieldErrors[dialogFieldConfirm] = svc.t("dialog.runtime.confirm_invalid", nil)
+		}
+	default:
+		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.unknown", nil)}
+	}
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	return DialogSubmissionResult{StatusCode: 200}
+}
+
+// PrevalidateDialogSubmissionReadOnly находит все исправимые зависимые от БД ошибки полей,
+// не изменяя capability, прикладное состояние или состояние поставщика.
+func (svc *SlashCommandService) PrevalidateDialogSubmissionReadOnly(ctx context.Context, command DialogSubmissionCommand) DialogSubmissionResult {
+	result := svc.PrevalidateDialogSubmission(command)
+	if result.Error != "" || len(result.Errors) > 0 || command.Cancelled {
+		return result
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return result
+	}
+	state, err := decodeDialogState(command.State)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.state_invalid", nil)}
+	}
+	fieldErrors := map[string]string{}
+	switch strings.TrimSpace(command.CallbackID) {
+	case dialogCallbackProjectUpsert:
+		input, _ := svc.projectDialogInput(command.Submission)
+		if strings.TrimSpace(state.ResourceID) != "" {
+			projectID, ok := parseInt64ID(state.ResourceID)
+			if !ok {
+				return DialogSubmissionResult{StatusCode: 200, Error: svc.t("menu.entity.invalid", nil)}
+			}
+			current, getErr := svc.cfg.Store.GetProject(ctx, projectID)
+			if getErr != nil {
+				fieldErrors[dialogFieldProjectID] = svc.t("dialog.project.project_invalid", nil)
+			} else if input.Slug != current.Slug {
+				fieldErrors[dialogFieldProjectSlug] = svc.t("dialog.project.slug_edit_not_supported", nil)
+			}
+		}
+		if input.GitHubAccountName != "" {
+			account, getErr := svc.cfg.Store.GetGitHubAccount(ctx, input.GitHubAccountName)
+			if getErr != nil || account.Status != "configured" || strings.TrimSpace(account.SecretRef) == "" {
+				fieldErrors[dialogFieldGitHubAccount] = svc.t("dialog.github.not_found", map[string]any{"Account": input.GitHubAccountName})
+			}
+		}
+	case dialogCallbackProjectRuntimeVar:
+		input, _, _ := svc.projectRuntimeVariableDialogInput(command.Submission)
+		if _, getErr := svc.cfg.Store.GetProject(ctx, input.ProjectID); getErr != nil {
+			fieldErrors[dialogFieldProjectID] = svc.t("dialog.project.project_invalid", nil)
+		}
+		if state.ResourceType == menuResourceRuntimeVar && state.ResourceID != "" {
+			variableID, ok := parseInt64ID(state.ResourceID)
+			if !ok {
+				return DialogSubmissionResult{StatusCode: 200, Error: svc.t("menu.entity.invalid", nil)}
+			}
+			current, getErr := svc.cfg.Store.GetProjectRuntimeVariable(ctx, variableID)
+			if getErr != nil {
+				fieldErrors[dialogFieldRuntimeVarName] = svc.t("menu.entity.invalid", nil)
+			} else {
+				if input.ProjectID != current.ProjectID {
+					fieldErrors[dialogFieldProjectID] = svc.t("dialog.runtime_var.project_edit_not_supported", nil)
+				}
+				if input.Name != current.Name {
+					fieldErrors[dialogFieldRuntimeVarName] = svc.t("dialog.runtime_var.name_edit_not_supported", nil)
+				}
+			}
+		}
+	case dialogCallbackAgentRoleUpsert:
+		input, _ := svc.agentRoleDialogInput(command.Submission)
+		if state.ResourceType == menuResourceAgentRole && state.ResourceID != "" {
+			roleID, ok := parseInt64ID(state.ResourceID)
+			if !ok {
+				return DialogSubmissionResult{StatusCode: 200, Error: svc.t("menu.entity.invalid", nil)}
+			}
+			current, getErr := svc.cfg.Store.GetAgentRole(ctx, roleID)
+			if getErr != nil || input.ProjectID != current.ProjectID || input.Name != current.Name {
+				fieldErrors[dialogFieldRole] = svc.t("dialog.role.rename_not_supported", nil)
+			}
+		}
+	case dialogCallbackRepositoryEdit:
+		input, _ := svc.repositoryDialogUpsertInput(command.Submission)
+		if _, getErr := svc.cfg.Store.GetRepository(ctx, input.Provider, input.Owner, input.Name); getErr != nil {
+			fieldErrors[dialogFieldRepository] = svc.t("dialog.repo.not_found", map[string]any{"Repository": input.Owner + "/" + input.Name})
+		}
+	case dialogCallbackGitHubAccountEdit:
+		input, _ := svc.githubAccountDialogInput(command.Submission)
+		if _, getErr := svc.cfg.Store.GetGitHubAccount(ctx, input.Name); getErr != nil {
+			fieldErrors[dialogFieldAccount] = svc.t("dialog.github.not_found", map[string]any{"Account": input.Name})
+		}
+	case dialogCallbackProjectRepositoryBind:
+		projectID, _ := parseInt64ID(submissionString(command.Submission, dialogFieldProjectID))
+		repositoryID, _ := parseInt64ID(submissionString(command.Submission, dialogFieldRepositoryID))
+		if _, getErr := svc.cfg.Store.GetProject(ctx, projectID); getErr != nil {
+			fieldErrors[dialogFieldProjectID] = svc.t("dialog.project.project_invalid", nil)
+		}
+		repositories, getErr := svc.cfg.Store.ListRepositories(ctx, 1000)
+		found := false
+		for _, repository := range repositories {
+			if repository.ID == repositoryID {
+				found = true
+				break
+			}
+		}
+		if getErr != nil || !found {
+			fieldErrors[dialogFieldRepositoryID] = svc.t("dialog.project_repo.repository_invalid", nil)
+		}
+	}
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	return result
+}
+
+// HandleDialogSubmissionTransactional повторяет read-only проверку и выполняет прикладное
+// изменение в транзакции репозитория, которая погашает capability взаимодействия.
+func (svc *SlashCommandService) HandleDialogSubmissionTransactional(ctx context.Context, command DialogSubmissionCommand, store adminrepo.Repository) DialogSubmissionResult {
+	transactional := *svc
+	if store != nil {
+		transactional.cfg.Store = store
+	}
+	validation := transactional.PrevalidateDialogSubmissionReadOnly(ctx, command)
+	if validation.Error != "" || len(validation.Errors) > 0 {
+		return validation
+	}
+	return transactional.HandleDialogSubmission(ctx, command)
 }
 
 func (svc *SlashCommandService) menuDialog(ctx context.Context, command MenuActionCommand, dialogID string) (*MattermostDialog, string) {
@@ -3143,6 +3403,9 @@ func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Cont
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.list.storage_not_ready", nil)}
 	}
+	if err := svc.ensureGitHubAccountNotFrozen(ctx, input.Name); err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.save_failed", map[string]any{"Error": safeError(err)})}
+	}
 	if svc.cfg.GitHubAccountInspector == nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.inspect_not_configured", nil)}
 	}
@@ -3212,6 +3475,36 @@ func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Cont
 		StatusCode: 200,
 		Card:       svc.dialogResultCard(ctx, state, command, text),
 	}
+}
+
+func (svc *SlashCommandService) ensureOpenAIAccountNotFrozen(ctx context.Context, accountName string) error {
+	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminAccountDependencyRepository)
+	if !ok {
+		return fmt.Errorf("cluster-admin account dependency guard is unavailable")
+	}
+	frozen, err := repository.IsFrozenClusterAdminOpenAIAccount(ctx, accountName)
+	if err != nil {
+		return err
+	}
+	if frozen {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return nil
+}
+
+func (svc *SlashCommandService) ensureGitHubAccountNotFrozen(ctx context.Context, accountName string) error {
+	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminAccountDependencyRepository)
+	if !ok {
+		return fmt.Errorf("cluster-admin account dependency guard is unavailable")
+	}
+	frozen, err := repository.IsFrozenClusterAdminGitHubAccount(ctx, accountName)
+	if err != nil {
+		return err
+	}
+	if frozen {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return nil
 }
 
 func (svc *SlashCommandService) handleRepositorySearchDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
@@ -3807,7 +4100,6 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewRoles:
 		return []MattermostCardAction{
-			svc.menuDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, "menu.action.role_add", "menu.action.role_add.tooltip", "primary"),
 			svc.menuResourceAction(menuViewRoles, "rolelist", menuActionList, menuResourceAgentRole, "", "menu.action.role_list", "menu.action.role_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "default"),
 			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
@@ -3815,7 +4107,6 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewChats:
 		return []MattermostCardAction{
-			svc.menuDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary"),
 			svc.menuResourceAction(menuViewChats, "chatlist", menuActionList, menuResourceChat, "", "menu.action.chat_list", "menu.action.chat_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "default"),
 			svc.menuAction(menuViewRoles, "menu.action.roles", "menu.action.roles.tooltip", "default"),

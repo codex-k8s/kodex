@@ -87,7 +87,7 @@ bash scripts/remote/install-mattermost.sh --env-file .env --apply --wait
 
 Для существующего PVC команда не меняет PostgreSQL image неявно. Если значение `MATTERCODEX_POSTGRES_IMAGE` изменено, сначала выполните `docs/runbooks/postgres-image-change.md`; флаг `--allow-postgres-image-change` используется только внутри описанного окна обслуживания.
 
-Если secret `${MATTERCODEX_POSTGRES_SECRET}` уже существует, `install-foundation.sh --apply` не ротирует пароль.
+Если Secret `${MATTERCODEX_POSTGRES_SECRET}` уже существует, `install-foundation.sh --apply` не ротирует пароль владельца схемы. При полностью отсутствующей runtime-тройке он добавляет отдельные учетные данные; частичная тройка считается ошибкой конфигурации и не исправляется догадкой.
 
 ## Read-only smoke
 
@@ -121,3 +121,4 @@ bash scripts/remote/smoke-mattermost.sh --env-file .env --check-url
 - Bootstrap secret создается через Kubernetes API на целевом сервере без вывода значений.
 - OAuth2 proxy secret синхронизируется в Kubernetes namespace Mattermost без вывода значений.
 - `MATTERCODEX_POSTGRES_PASSWORD` можно задать заранее, но для MVP допустима генерация при первом `--apply`.
+- `MATTERCODEX_POSTGRES_RUNTIME_USER` и `MATTERCODEX_POSTGRES_RUNTIME_PASSWORD` задают отдельный login `bot-service`; при отсутствии password foundation генерирует его без вывода. Один PostgreSQL Secret содержит owner DSN Mattermost/миграций и отдельный runtime DSN, но Deployment передаёт приложению их разными переменными и не допускает замену runtime DSN на owner DSN.

@@ -1,10 +1,16 @@
 package mattermost
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
@@ -13,21 +19,90 @@ import (
 type ControlSurface struct {
 	client      *mattermostmodel.Client4
 	adminClient *mattermostmodel.Client4
+	httpClient  *http.Client
+}
+
+type HTTPClientConfig struct {
+	Timeout               time.Duration
+	DialTimeout           time.Duration
+	TLSHandshakeTimeout   time.Duration
+	ResponseHeaderTimeout time.Duration
+	IdleConnTimeout       time.Duration
+}
+
+func DefaultHTTPClientConfig() HTTPClientConfig {
+	return HTTPClientConfig{
+		Timeout:               5 * time.Second,
+		DialTimeout:           2 * time.Second,
+		TLSHandshakeTimeout:   2 * time.Second,
+		ResponseHeaderTimeout: 3 * time.Second,
+		IdleConnTimeout:       30 * time.Second,
+	}
 }
 
 var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
+var _ statusservice.MattermostIdempotentThreadPublisher = (*ControlSurface)(nil)
 var _ statusservice.MattermostConversationReader = (*ControlSurface)(nil)
 var _ statusservice.MattermostRoleBotManager = (*ControlSurface)(nil)
+var _ statusservice.MattermostInteractionActorVerifier = (*ControlSurface)(nil)
 
 func NewControlSurface(siteURL string, token string, adminToken string) *ControlSurface {
-	client := mattermostmodel.NewAPIv4Client(siteURL)
-	client.SetToken(token)
+	return NewControlSurfaceWithHTTPConfig(siteURL, token, adminToken, DefaultHTTPClientConfig())
+}
+
+func NewControlSurfaceWithHTTPConfig(siteURL string, token string, adminToken string, config HTTPClientConfig) *ControlSurface {
+	httpClient := newBoundedHTTPClient(config)
+	client := newMattermostClient(siteURL, token, httpClient)
 	adminClient := client
 	if strings.TrimSpace(adminToken) != "" {
-		adminClient = mattermostmodel.NewAPIv4Client(siteURL)
-		adminClient.SetToken(adminToken)
+		adminClient = newMattermostClient(siteURL, adminToken, httpClient)
 	}
-	return &ControlSurface{client: client, adminClient: adminClient}
+	return &ControlSurface{client: client, adminClient: adminClient, httpClient: httpClient}
+}
+
+func newBoundedHTTPClient(config HTTPClientConfig) *http.Client {
+	defaults := DefaultHTTPClientConfig()
+	if config.Timeout <= 0 {
+		config.Timeout = defaults.Timeout
+	}
+	if config.DialTimeout <= 0 {
+		config.DialTimeout = defaults.DialTimeout
+	}
+	if config.TLSHandshakeTimeout <= 0 {
+		config.TLSHandshakeTimeout = defaults.TLSHandshakeTimeout
+	}
+	if config.ResponseHeaderTimeout <= 0 {
+		config.ResponseHeaderTimeout = defaults.ResponseHeaderTimeout
+	}
+	if config.IdleConnTimeout <= 0 {
+		config.IdleConnTimeout = defaults.IdleConnTimeout
+	}
+	dialer := &net.Dialer{Timeout: config.DialTimeout, KeepAlive: 30 * time.Second}
+	return &http.Client{
+		Timeout: config.Timeout,
+		Transport: &http.Transport{
+			DialContext:           dialer.DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          32,
+			MaxIdleConnsPerHost:   8,
+			MaxConnsPerHost:       32,
+			IdleConnTimeout:       config.IdleConnTimeout,
+			TLSHandshakeTimeout:   config.TLSHandshakeTimeout,
+			ResponseHeaderTimeout: config.ResponseHeaderTimeout,
+			ExpectContinueTimeout: time.Second,
+		},
+	}
+}
+
+func newMattermostClient(siteURL string, token string, httpClient *http.Client) *mattermostmodel.Client4 {
+	client := mattermostmodel.NewAPIv4Client(siteURL)
+	client.HTTPClient = httpClient
+	client.SetToken(token)
+	return client
+}
+
+func (surface *ControlSurface) clientWithToken(token string) *mattermostmodel.Client4 {
+	return newMattermostClient(surface.client.URL, token, surface.httpClient)
 }
 
 func (surface *ControlSurface) BotUserID(ctx context.Context) (string, error) {
@@ -36,6 +111,26 @@ func (surface *ControlSurface) BotUserID(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("get Mattermost bot user: %w", err)
 	}
 	return user.Id, nil
+}
+
+func (surface *ControlSurface) VerifyInteractionActor(ctx context.Context, userID string, channelID string) (bool, error) {
+	userID = strings.TrimSpace(userID)
+	channelID = strings.TrimSpace(channelID)
+	if userID == "" || channelID == "" {
+		return false, nil
+	}
+	user, _, err := surface.client.GetUser(ctx, userID, "")
+	if err != nil {
+		return false, fmt.Errorf("get Mattermost interaction actor: %w", err)
+	}
+	if user == nil || user.Id != userID || user.DeleteAt != 0 {
+		return false, nil
+	}
+	membership, _, err := surface.client.GetChannelMember(ctx, channelID, userID, "")
+	if err != nil {
+		return false, fmt.Errorf("get Mattermost interaction channel membership: %w", err)
+	}
+	return membership != nil && membership.UserId == userID && membership.ChannelId == channelID, nil
 }
 
 func (surface *ControlSurface) ResolveMattermostUserName(ctx context.Context, userID string) (string, error) {
@@ -169,9 +264,42 @@ func (surface *ControlSurface) PostThreadMessage(ctx context.Context, input stat
 }
 
 func (surface *ControlSurface) PostThreadMessageWithToken(ctx context.Context, token string, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
-	client := mattermostmodel.NewAPIv4Client(surface.client.URL)
-	client.SetToken(token)
+	client := surface.clientWithToken(token)
 	return createThreadPost(ctx, client, input)
+}
+
+func (surface *ControlSurface) ReconcileOrPostThreadMessage(ctx context.Context, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	if strings.TrimSpace(input.IdempotencyID) == "" {
+		return statusservice.MattermostPostRef{}, fmt.Errorf("Mattermost idempotency identity is required")
+	}
+	plannedID, ok := input.Props["matter_codex_callback_delivery_id"].(string)
+	if !ok || plannedID != input.IdempotencyID || strings.TrimSpace(input.ChannelID) == "" || strings.TrimSpace(input.RootPostID) == "" || input.Message == "" {
+		return statusservice.MattermostPostRef{}, fmt.Errorf("Mattermost callback delivery plan is incomplete")
+	}
+	if ref, found, err := reconcileThreadPost(ctx, surface.client, input); err != nil || found {
+		return ref, err
+	}
+	post, _, createErr := surface.client.CreatePost(ctx, &mattermostmodel.Post{
+		ChannelId:     input.ChannelID,
+		RootId:        input.RootPostID,
+		Message:       input.Message,
+		Props:         input.Props,
+		PendingPostId: input.IdempotencyID,
+	})
+	if createErr == nil {
+		if err := verifyExactCallbackPost(post, input); err != nil {
+			return statusservice.MattermostPostRef{}, err
+		}
+		return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
+	}
+	ref, found, reconcileErr := reconcileThreadPost(ctx, surface.client, input)
+	if reconcileErr != nil {
+		return statusservice.MattermostPostRef{}, errors.Join(createErr, reconcileErr)
+	}
+	if found {
+		return ref, nil
+	}
+	return statusservice.MattermostPostRef{}, createErr
 }
 
 func (surface *ControlSurface) UpdateThreadMessage(ctx context.Context, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
@@ -179,8 +307,7 @@ func (surface *ControlSurface) UpdateThreadMessage(ctx context.Context, input st
 }
 
 func (surface *ControlSurface) UpdateThreadMessageWithToken(ctx context.Context, token string, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
-	client := mattermostmodel.NewAPIv4Client(surface.client.URL)
-	client.SetToken(token)
+	client := surface.clientWithToken(token)
 	return updateThreadPost(ctx, client, input)
 }
 
@@ -204,8 +331,7 @@ func (surface *ControlSurface) UpdateThreadCard(ctx context.Context, card status
 }
 
 func (surface *ControlSurface) AddPostReactionWithToken(ctx context.Context, token string, input statusservice.MattermostPostReactionInput) error {
-	client := mattermostmodel.NewAPIv4Client(surface.client.URL)
-	client.SetToken(token)
+	client := surface.clientWithToken(token)
 	if _, _, err := client.SaveReaction(ctx, &mattermostmodel.Reaction{
 		UserId:    input.UserID,
 		PostId:    input.PostID,
@@ -273,15 +399,86 @@ func (surface *ControlSurface) SearchChannelPosts(ctx context.Context, channelID
 
 func createThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
 	post, _, err := client.CreatePost(ctx, &mattermostmodel.Post{
-		ChannelId: input.ChannelID,
-		RootId:    input.RootPostID,
-		Message:   input.Message,
-		Props:     input.Props,
+		ChannelId:     input.ChannelID,
+		RootId:        input.RootPostID,
+		Message:       input.Message,
+		Props:         input.Props,
+		PendingPostId: input.IdempotencyID,
 	})
 	if err != nil {
 		return statusservice.MattermostPostRef{}, fmt.Errorf("create Mattermost thread post: %w", err)
 	}
 	return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
+}
+
+func reconcileThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, bool, error) {
+	postList, _, err := client.GetPostThread(ctx, input.RootPostID, "", false)
+	if err != nil {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("reconcile Mattermost callback post: %w", err)
+	}
+	if postList == nil {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("reconcile Mattermost callback post: empty response")
+	}
+	var matched *mattermostmodel.Post
+	for _, post := range postList.Posts {
+		if post == nil || post.GetProps()["matter_codex_callback_delivery_id"] != input.IdempotencyID {
+			continue
+		}
+		if matched != nil {
+			return statusservice.MattermostPostRef{}, false, fmt.Errorf("Mattermost callback delivery identity is not unique")
+		}
+		matched = post
+	}
+	if matched == nil {
+		return statusservice.MattermostPostRef{}, false, nil
+	}
+	if err := verifyExactCallbackPost(matched, input); err != nil {
+		return statusservice.MattermostPostRef{}, false, err
+	}
+	return statusservice.MattermostPostRef{ChannelID: matched.ChannelId, PostID: matched.Id}, true, nil
+}
+
+func verifyExactCallbackPost(post *mattermostmodel.Post, input statusservice.MattermostThreadPostInput) error {
+	if post == nil || strings.TrimSpace(post.Id) == "" || post.ChannelId != input.ChannelID || post.RootId != input.RootPostID || post.Message != input.Message {
+		return fmt.Errorf("Mattermost callback post conflicts with the immutable delivery payload")
+	}
+	if !exactCallbackPostProps(post.GetProps(), input.Props) {
+		return fmt.Errorf("Mattermost callback post props conflict with the immutable delivery payload")
+	}
+	return nil
+}
+
+func exactCallbackPostProps(actual map[string]any, clientOwned map[string]any) bool {
+	if len(actual) != len(clientOwned)+1 || actual[mattermostmodel.PostPropsFromBot] != "true" {
+		return false
+	}
+	for key, expected := range clientOwned {
+		if !strings.HasPrefix(key, "matter_codex_") || key == mattermostmodel.PostPropsFromBot {
+			return false
+		}
+		value, exists := actual[key]
+		if !exists || !sameJSONValue(value, expected) {
+			return false
+		}
+	}
+	for key := range actual {
+		if key == mattermostmodel.PostPropsFromBot {
+			continue
+		}
+		if !strings.HasPrefix(key, "matter_codex_") {
+			return false
+		}
+		if _, exists := clientOwned[key]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func sameJSONValue(left any, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
 }
 
 func updateThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {

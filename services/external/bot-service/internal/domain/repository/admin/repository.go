@@ -3,11 +3,15 @@ package admin
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
-var ErrNotFound = errors.New("admin repository item not found")
+var (
+	ErrNotFound                    = errors.New("admin repository item not found")
+	ErrClusterAdminAdmissionDenied = errors.New("cluster-admin assignment is not present in the server-side profile")
+)
 
 type UpsertRepositoryInput struct {
 	Provider          string
@@ -311,6 +315,51 @@ type CreateAgentDelegationInput struct {
 	Title           string
 }
 
+type CreateAgentDelegationCallbackDeliveryInput struct {
+	DelegationID  int64
+	CallbackRunID string
+	Destination   string
+	Publication   string
+	ChannelID     string
+	RootPostID    string
+	Message       string
+	PropsJSON     []byte
+	PayloadSHA256 []byte
+	ExternalID    string
+}
+
+type CreateAgentDelegationCallbackDeliveryManifestInput struct {
+	DelegationID  int64
+	CallbackRunID string
+	ExpectedCount int
+	ExpectedPlan  []byte
+	PlanSHA256    []byte
+}
+
+type ClaimAgentDelegationCallbackDeliveryInput struct {
+	DelegationID  int64
+	CallbackRunID string
+	Now           time.Time
+	LeaseOwner    string
+	LeaseUntil    time.Time
+	ExcludedIDs   []int64
+}
+
+type ReleaseAgentDelegationCallbackDeliveryInput struct {
+	ID            int64
+	LeaseOwner    string
+	Status        string
+	LastErrorCode string
+	Now           time.Time
+}
+
+type DeliverAgentDelegationCallbackDeliveryInput struct {
+	ID               int64
+	LeaseOwner       string
+	MattermostPostID string
+	Now              time.Time
+}
+
 type Repository interface {
 	UpsertRepository(ctx context.Context, input UpsertRepositoryInput) (entity.Repository, bool, error)
 	GetRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
@@ -404,4 +453,22 @@ type Repository interface {
 	ListAgentRunsByFlowID(ctx context.Context, flowID string) ([]entity.AgentRun, error)
 	UpdateAgentRunArtifacts(ctx context.Context, input UpdateAgentRunArtifactsInput) (entity.AgentRun, error)
 	RecordAuditEvent(ctx context.Context, input AuditEventInput) error
+}
+
+type ExactAgentSessionsRuntimeGuardRepository interface {
+	WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(Repository) error) error
+}
+
+type ExactAgentSessionsPublishFenceRepository interface {
+	LockExactAgentSessionsPublishFence(ctx context.Context, expected []entity.AgentSession) error
+}
+
+type AgentDelegationCallbackDeliveryRepository interface {
+	CreateAgentDelegationCallbackDeliveries(ctx context.Context, inputs []CreateAgentDelegationCallbackDeliveryInput) ([]entity.AgentDelegationCallbackDelivery, error)
+	CreateAgentDelegationCallbackDeliveryManifest(ctx context.Context, input CreateAgentDelegationCallbackDeliveryManifestInput) error
+	ValidateAgentDelegationCallbackDeliveryPlan(ctx context.Context, delegationID int64, callbackRunID string) error
+	ListAgentDelegationCallbackDeliveries(ctx context.Context, delegationID int64, callbackRunID string) ([]entity.AgentDelegationCallbackDelivery, error)
+	ClaimAgentDelegationCallbackDelivery(ctx context.Context, input ClaimAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error)
+	ReleaseAgentDelegationCallbackDelivery(ctx context.Context, input ReleaseAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error)
+	DeliverAgentDelegationCallbackDelivery(ctx context.Context, input DeliverAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error)
 }

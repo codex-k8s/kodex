@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -501,6 +502,41 @@ func TestProjectDialogSubmissionCreatesMattermostTeam(t *testing.T) {
 	}
 }
 
+func TestProjectDialogReadOnlyPrevalidationRejectsStoredSlugChange(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Demo Project", Slug: "demo-project"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         store,
+		StorageReady:  true,
+	})
+
+	result := svc.PrevalidateDialogSubmissionReadOnly(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProjectUpsert,
+		State:      encodeDialogState(MenuActionCommand{Resource: menuResourceProject, ID: "1"}),
+		Submission: map[string]any{
+			dialogFieldProjectName: "Demo Project",
+			dialogFieldProjectSlug: "changed-slug",
+		},
+	})
+
+	if result.Errors[dialogFieldProjectSlug] == "" {
+		t.Fatalf("read-only prevalidation result = %#v", result)
+	}
+	project, err := store.GetProject(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("GetProject() error = %v", err)
+	}
+	if project.Slug != "demo-project" {
+		t.Fatalf("project changed during read-only prevalidation: %#v", project)
+	}
+}
+
 func TestAgentRoleDialogDefaultsGitHubAccountFromProject(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
@@ -611,7 +647,7 @@ func TestAgentRoleDialogSeedsKnownRolePromptTemplate(t *testing.T) {
 	}
 }
 
-func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.T) {
+func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
 			1: {ID: 1, Name: "Radar", Slug: "radar-auto", GitHubAccountName: "github-radar-owner-manager"},
@@ -679,48 +715,19 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 	}
 	participants, _ := store.ListChatParticipants(context.Background(), 1)
 	if !testParticipantsContainRole(participants, radarImprover.ID) {
-		t.Fatalf("radar chat participants do not include improver: %#v", participants)
+		t.Fatalf("bootstrap did not bind safe improver before admin admission: %#v", participants)
+	}
+	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), radarImprover.ID); err != nil {
+		t.Fatalf("bootstrap did not create safe improver bot identity: %v", err)
 	}
 	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), myQRImprover.ID); err != nil {
-		t.Fatalf("myqr improver bot identity not stored: %v", err)
+		t.Fatalf("bootstrap did not create second safe improver bot identity: %v", err)
 	}
 
-	matterCodexProject, err := store.GetProjectBySlug(context.Background(), "agents")
-	if err != nil {
-		t.Fatalf("matter-codex project not stored: %v", err)
+	if _, err := store.GetProjectBySlug(context.Background(), "agents"); !errors.Is(err, adminrepo.ErrNotFound) {
+		t.Fatalf("bootstrap created matter-codex project before cluster-admin admission: %v", err)
 	}
-	adminRole := testRoleByName(t, store, matterCodexProject.ID, "mattercodex-admin")
-	if adminRole.KubernetesAccess != "cluster-admin" || adminRole.GitHubAccountName != "github-myqrcontact-owner" || adminRole.OpenAIAccountName != "openai-codex-main" {
-		t.Fatalf("admin role = %#v", adminRole)
-	}
-	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), adminRole.ID); err != nil {
-		t.Fatalf("admin bot identity not stored: %v", err)
-	}
-	controlChats, _ := store.ListChats(context.Background(), matterCodexProject.ID)
-	if len(controlChats) != 2 {
-		t.Fatalf("control chats = %#v", controlChats)
-	}
-	var controlChat, coordinationChat entity.Chat
-	for _, chat := range controlChats {
-		if chat.Slug == "agents-control" {
-			controlChat = chat
-		}
-		if chat.Slug == "coordination" {
-			coordinationChat = chat
-		}
-	}
-	if controlChat.MattermostChannelID != "channel-agents-control" || coordinationChat.MattermostChannelID != "channel-coordination" {
-		t.Fatalf("system chats = %#v", controlChats)
-	}
-	controlRepos, _ := store.ListChatRepositories(context.Background(), controlChat.ID)
-	if len(controlRepos) != 1 || controlRepos[0].FullName() != "codex-k8s/matter-codex" {
-		t.Fatalf("control repositories = %#v", controlRepos)
-	}
-	controlParticipants, _ := store.ListChatParticipants(context.Background(), controlChat.ID)
-	if !testParticipantsContainRole(controlParticipants, adminRole.ID) || !testParticipantsContainRole(controlParticipants, testRoleByName(t, store, matterCodexProject.ID, "improver").ID) {
-		t.Fatalf("control participants = %#v", controlParticipants)
-	}
-	for _, projectID := range []int64{1, 2, matterCodexProject.ID} {
+	for _, projectID := range []int64{1, 2} {
 		project, err := store.GetProject(context.Background(), projectID)
 		if err != nil || project.MattermostRunsChannelID != "channel-runs" {
 			t.Fatalf("project %d runs channel = %#v error=%v", projectID, project, err)
@@ -738,6 +745,108 @@ func TestBootstrapSystemAgentRolesCreatesImproverAndMatterCodexAdmin(t *testing.
 	}
 	if len(store.agentRoles) != roleCount {
 		t.Fatalf("director rename created a duplicate role: before=%d after=%d", roleCount, len(store.agentRoles))
+	}
+}
+
+func TestBootstrapMatterCodexAdminGuardsEverySideEffectAdapter(t *testing.T) {
+	tests := []struct {
+		name           string
+		denyAt         int
+		wantTeam       bool
+		wantOperations []string
+	}{
+		{name: "Mattermost team", denyAt: 1, wantOperations: []string{"system_role.ensure_team.side_effect"}},
+		{name: "bot identity and token", denyAt: 2, wantTeam: true, wantOperations: []string{"system_role.ensure_team.side_effect", "system_role.bot_identity.side_effect"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			baseStore := &fakeAdminStore{
+				repositories: map[string]entity.Repository{
+					repositoryStoreKey("github", "codex-k8s", "matter-codex"): {
+						ID: 1, Provider: "github", Owner: "codex-k8s", Name: "matter-codex", DefaultBranch: "main",
+					},
+				},
+				projects: map[int64]entity.Project{
+					1: {ID: 1, Name: "MatterCodex", Slug: systemMatterCodexProjectSlug},
+				},
+				agentRoles: map[int64]entity.AgentRole{
+					1: {
+						ID: 1, ProjectID: 1, Name: systemMatterCodexRoleName, RoleType: "admin",
+						KubernetesAccess: "cluster-admin", Enabled: true, BotIdentity: systemMatterCodexRoleName,
+					},
+				},
+				chats: map[int64]entity.Chat{
+					1: {ID: 1, ProjectID: 1, MattermostChannelID: "channel-control", Name: "Agents Control", Slug: systemMatterCodexChatSlug},
+				},
+				botIdentities: map[int64]entity.MattermostBotIdentity{
+					1: {
+						ID: 1, ProjectID: 1, RoleID: 1, Username: systemMatterCodexRoleName,
+						MattermostUserID: "synthetic-admin-user", TokenSecretRef: "synthetic-admin-token-ref", Status: "configured",
+					},
+				},
+				projectRepositories: map[string]entity.ProjectRepository{
+					"1:1": {ID: 1, ProjectID: 1, RepositoryID: 1, Provider: "github", Owner: "codex-k8s", Name: "matter-codex", DefaultBranch: "main", IsDefault: true},
+				},
+			}
+			store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: test.denyAt}
+			channelManager := &fakeChannelManager{}
+			roleBotManager := &fakeRoleBotManager{}
+			runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"synthetic-admin-token-ref": "synthetic-token"}}
+			localizer := testLocalizer(t, texti18n.RussianLocale)
+			svc := NewSlashCommandService(SlashCommandServiceConfig{
+				Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+				ChannelManager: channelManager, RoleBotManager: roleBotManager, RuntimeRunner: runner,
+				StorageReady: true,
+			})
+
+			_, err := svc.bootstrapMatterCodexAdmin(context.Background(), nil)
+			if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+				t.Fatalf("bootstrapMatterCodexAdmin() error = %v", err)
+			}
+			if (channelManager.projectTeamName != "") != test.wantTeam {
+				t.Fatalf("team side effect=%q, want=%t", channelManager.projectTeamName, test.wantTeam)
+			}
+			if len(baseStore.repositories) != 1 || len(baseStore.projectRepositories) != 1 {
+				t.Fatalf("bootstrap изменил frozen repository state: repositories=%d project_repositories=%d", len(baseStore.repositories), len(baseStore.projectRepositories))
+			}
+			if roleBotManager.channelMemberUserID != "" {
+				t.Fatalf("bot identity guard допустил membership: %q", roleBotManager.channelMemberUserID)
+			}
+			if len(store.guardInputs) != len(test.wantOperations) {
+				t.Fatalf("guard inputs=%#v", store.guardInputs)
+			}
+			for index, operation := range test.wantOperations {
+				if store.guardInputs[index].Operation != operation {
+					t.Fatalf("guard %d=%#v", index, store.guardInputs[index])
+				}
+			}
+		})
+	}
+}
+
+func TestReconcileProjectRoleBotIdentitiesExcludesClusterAdmin(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "MatterCodex", Slug: systemMatterCodexProjectSlug},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: systemMatterCodexRoleName, RoleType: "admin", KubernetesAccess: "cluster-admin", Enabled: true},
+			2: {ID: 2, ProjectID: 1, Name: "improver", RoleType: "improver", KubernetesAccess: "read-only", Enabled: true},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.RussianLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		RoleBotManager: &fakeRoleBotManager{}, RuntimeRunner: &fakeRuntimeRunner{}, StorageReady: true,
+	})
+	if err := svc.reconcileProjectRoleBotIdentities(context.Background(), store.projects[1]); err != nil {
+		t.Fatalf("reconcileProjectRoleBotIdentities() error = %v", err)
+	}
+	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), 1); !errors.Is(err, adminrepo.ErrNotFound) {
+		t.Fatalf("generic reconcile создал cluster-admin identity: %v", err)
+	}
+	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), 2); err != nil {
+		t.Fatalf("generic reconcile не обработал safe role: %v", err)
 	}
 }
 
@@ -807,6 +916,83 @@ func TestChatDialogCreatesPrivateProjectChannelWithRolesAndRepository(t *testing
 	repositories, _ := store.ListChatRepositories(context.Background(), chat.ID)
 	if len(repositories) != 1 || repositories[0].FullName() != "codex-k8s/matter-codex" {
 		t.Fatalf("repositories = %#v", repositories)
+	}
+}
+
+func TestChatDialogRejectsNewClusterAdminBindingBeforeSideEffects(t *testing.T) {
+	baseStore := &fakeAdminStore{
+		projects: map[int64]entity.Project{1: {ID: 1, Name: "Admin", Slug: "admin"}},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "admin", RoleType: "admin", KubernetesAccess: "cluster-admin", Enabled: true},
+		},
+	}
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyBinding: true}
+	channels := &fakeChannelManager{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		ChannelManager: channels, RoleBotManager: &fakeRoleBotManager{}, RuntimeRunner: &fakeRuntimeRunner{},
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents", StorageReady: true,
+	})
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackChatCreate,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewChats, Resource: menuResourceProject, ID: "1", ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id", UserName: "owner",
+		Submission: map[string]any{
+			dialogFieldProjectID: "1", dialogFieldChatName: "New Admin", dialogFieldChatType: "single_custom",
+			dialogFieldPrimaryRoleID: "1", dialogFieldWorkPolicy: "Owner control.",
+		},
+	})
+	if result.StatusCode != 403 || result.Error == "" {
+		t.Fatalf("dialog result = %#v", result)
+	}
+	if store.calls != 1 || store.bindingCalls != 1 {
+		t.Fatalf("admission calls: subject=%d binding=%d", store.calls, store.bindingCalls)
+	}
+	if channels.projectTeamName != "" || channels.projectChannelName != "" || len(baseStore.chats) != 0 || len(baseStore.chatParticipants) != 0 {
+		t.Fatalf("denied binding caused side effects: channels=%#v chats=%#v participants=%#v", channels, baseStore.chats, baseStore.chatParticipants)
+	}
+}
+
+func TestChatDialogRechecksClusterAdminBeforeBotIdentitySideEffects(t *testing.T) {
+	baseStore := &fakeAdminStore{
+		projects: map[int64]entity.Project{1: {ID: 1, Name: "Admin", Slug: "admin"}},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "admin", RoleType: "admin", KubernetesAccess: "cluster-admin", Enabled: true},
+		},
+		chats: map[int64]entity.Chat{
+			1: {ID: 1, ProjectID: 1, MattermostChannelID: "channel-existing", Name: "Existing Admin", Slug: "existing-admin"},
+		},
+	}
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuard: true}
+	channels := &fakeChannelManager{}
+	roleBots := &fakeRoleBotManager{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		ChannelManager: channels, RoleBotManager: roleBots, RuntimeRunner: &fakeRuntimeRunner{},
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents", StorageReady: true,
+	})
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackChatCreate,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewChats, Resource: menuResourceProject, ID: "1", ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id", UserName: "owner",
+		Submission: map[string]any{
+			dialogFieldProjectID: "1", dialogFieldChatName: "Existing Admin", dialogFieldChatType: "single_custom",
+			dialogFieldPrimaryRoleID: "1", dialogFieldWorkPolicy: "Owner control.",
+		},
+	})
+	if result.Error == "" {
+		t.Fatalf("dialog result = %#v", result)
+	}
+	if store.calls != 1 || store.bindingCalls != 1 || store.guardCalls != 1 {
+		t.Fatalf("admission calls: subject=%d binding=%d guard=%d", store.calls, store.bindingCalls, store.guardCalls)
+	}
+	if roleBots.channelMemberChannelID != "" || channels.projectTeamName != "" || channels.projectChannelName != "" {
+		t.Fatalf("runtime guard denial caused Mattermost side effects: role_bot=%#v channels=%#v", roleBots, channels)
+	}
+	if chat := baseStore.chats[1]; chat.MattermostChannelID != "channel-existing" || chat.Name != "Existing Admin" {
+		t.Fatalf("runtime guard denial changed chat: %#v", chat)
 	}
 }
 
@@ -1475,7 +1661,7 @@ func TestGitHubAccountDialogSubmissionDeletesAccount(t *testing.T) {
 	}
 }
 
-func TestProfileDialogSubmissionCreatesProfileAndPromptSeeds(t *testing.T) {
+func TestProfileDialogSubmissionRejectsNewClusterAdmin(t *testing.T) {
 	store := &fakeAdminStore{
 		profiles:       []entity.AgentProfile{{Name: "developer", Role: "developer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "agent"}},
 		openAIAccounts: map[string]entity.OpenAIAccount{"primary": {Name: "primary", SecretRef: "matter-codex-codex-auth-primary", Status: "authorized"}},
@@ -1507,21 +1693,14 @@ func TestProfileDialogSubmissionCreatesProfileAndPromptSeeds(t *testing.T) {
 		},
 	})
 
-	if result.Error != "" || len(result.Errors) > 0 {
-		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	if result.Error == "" {
+		t.Fatalf("cluster-admin submission unexpectedly succeeded: %#v", result)
 	}
-	profile, err := store.GetAgentProfile(context.Background(), "deployer")
-	if err != nil {
-		t.Fatalf("profile was not saved: %v", err)
+	if _, err := store.GetAgentProfile(context.Background(), "deployer"); !errors.Is(err, adminrepo.ErrNotFound) {
+		t.Fatalf("forbidden profile lookup error = %v", err)
 	}
-	if profile.Role != "deployer" || profile.KubernetesAccess != "cluster-admin" || profile.SandboxMode != "workspace-write" || profile.ConfigOverlay == "" {
-		t.Fatalf("profile = %#v", profile)
-	}
-	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerImplementTaskKey)]; !ok {
-		t.Fatalf("implement prompt was not seeded: %#v", store.promptTemplates)
-	}
-	if result.Card == nil || !strings.Contains(result.Card.Text, "deployer") {
-		t.Fatalf("card = %#v", result.Card)
+	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerImplementTaskKey)]; ok {
+		t.Fatalf("forbidden profile seeded prompt: %#v", store.promptTemplates)
 	}
 }
 
@@ -2239,6 +2418,47 @@ func TestRuntimeVariableDialogCreatesSecretAndMetadata(t *testing.T) {
 	}
 }
 
+func TestFrozenClusterAdminRuntimeVariableValueEditStopsBeforeSecretMutation(t *testing.T) {
+	const secretName = "mc-var-platform-frozen-key"
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Platform", Slug: "platform"},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "configured-admin", RoleType: "admin", KubernetesAccess: "cluster-admin", Enabled: true},
+		},
+		runtimeVariables: map[int64]entity.ProjectRuntimeVariable{
+			1: {ID: 1, ProjectID: 1, Name: "FROZEN_KEY", Slug: "frozen-key", SecretRef: secretName, SecretKey: "value", Sensitive: true, Enabled: true},
+		},
+		roleRuntimeVariables: map[string]entity.AgentRoleRuntimeVariableBinding{
+			"1:1": {ID: 1, RoleID: 1, RoleName: "configured-admin", VariableID: 1, ProjectID: 1, Name: "FROZEN_KEY", Slug: "frozen-key", SecretRef: secretName, SecretKey: "value", Sensitive: true, Enabled: true},
+		},
+	}
+	runner := &fakeRuntimeRunner{runtimeVariableSecrets: map[string]string{secretName: "synthetic-original-value"}}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		RuntimeRunner: runner, StorageReady: true,
+	})
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProjectRuntimeVar,
+		State:      encodeDialogState(MenuActionCommand{Resource: menuResourceRuntimeVar, ID: "1"}),
+		Submission: map[string]any{
+			dialogFieldProjectID:       "1",
+			dialogFieldRuntimeVarName:  "FROZEN_KEY",
+			dialogFieldRuntimeVarValue: "synthetic-replacement-value",
+			dialogFieldSensitive:       "true",
+			dialogFieldEnabled:         "true",
+		},
+	})
+	if result.Errors[dialogFieldRuntimeVarValue] == "" {
+		t.Fatalf("frozen runtime variable edit result = %#v", result)
+	}
+	if runner.runtimeVariableSecretInput.Variable.SecretName != "" || runner.runtimeVariableSecrets[secretName] != "synthetic-original-value" {
+		t.Fatalf("frozen runtime variable changed Secret: input=%#v secrets=%#v", runner.runtimeVariableSecretInput, runner.runtimeVariableSecrets)
+	}
+}
+
 func TestRoleRuntimeVariableAttachDialogFallsBackToCreateWhenProjectHasNoEnv(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
@@ -2727,6 +2947,47 @@ func TestSlashOpenAIAuthStatusAndList(t *testing.T) {
 	}
 }
 
+func TestFrozenClusterAdminAccountsDenyProviderAndSecretSideEffects(t *testing.T) {
+	store := &fakeAdminStore{
+		frozenOpenAIAccount: "primary",
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", SecretRef: "matter-codex-codex-auth-primary", Status: "authorized"},
+		},
+		frozenGitHubAccount: "agent",
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent": {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	inspector := &fakeGitHubAccountInspector{inspection: providerrepo.GitHubTokenInspection{Username: "mutated"}}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		RuntimeRunner: runner, GitHubAccountInspector: inspector, StorageReady: true, RuntimeConfigured: true,
+		CodexAuthSecretName: "matter-codex-codex-auth", GitHubSecretName: "matter-codex-github",
+	})
+	for _, command := range []string{
+		"openai auth primary", "openai status primary", "openai cleanup primary", "openai delete primary",
+	} {
+		text := svc.Handle(context.Background(), SlashCommand{Text: command, UserName: "owner"})
+		if !strings.Contains(text, "cluster-admin") {
+			t.Fatalf("%s result = %q", command, text)
+		}
+	}
+	if runner.authAccount != "" || runner.authStatusChecks != 0 || runner.authCompleteCalls != 0 || runner.authCleanupCalls != 0 || runner.deletedAuthAccount != "" {
+		t.Fatalf("frozen OpenAI side effects: %#v", runner)
+	}
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackGitHubAccountEdit,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewGitHub, Resource: menuResourceGitHubAccount, ID: "agent"}),
+		UserID:     "owner-id", UserName: "owner",
+		Submission: map[string]any{dialogFieldAccount: "agent", dialogFieldToken: "synthetic-mutated-token"},
+	})
+	if result.Error == "" || inspector.token != "" || runner.githubSecretInput.SecretName != "" {
+		t.Fatalf("frozen GitHub result=%#v inspector=%q secret=%#v", result, inspector.token, runner.githubSecretInput)
+	}
+}
+
 func TestSlashPromptSetRenderShowAndList(t *testing.T) {
 	store := &fakeAdminStore{}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
@@ -3081,8 +3342,11 @@ type fakeRuntimeRunner struct {
 	cleanedSessionKey           string
 	cleanedSessionKeys          []string
 	sessionRuntimeHealth        runtimerepo.AgentSessionRuntimeHealth
+	sessionRuntimeHealthCalls   int
 	sessionStartErrors          []error
+	sessionCleanupErrors        []error
 	botTokenSecrets             map[string]string
+	botTokenSecretReads         int
 	cleanedRunID                string
 	cleanedRunIDs               []string
 	retentionInput              runtimerepo.RetentionCleanupInput
@@ -3093,6 +3357,9 @@ type fakeRuntimeRunner struct {
 	authSecretNotReady          bool
 	authStatusWithoutDeviceCode bool
 	authSecretChecks            int
+	authStatusChecks            int
+	authCompleteCalls           int
+	authCleanupCalls            int
 	authSecretCheckErr          error
 	deletedAuthAccount          string
 	deletedAuthSecret           string
@@ -3102,7 +3369,24 @@ type fakeRuntimeRunner struct {
 	runtimeVariableSecrets      map[string]string
 	runtimeVariableSecretInput  runtimerepo.ProjectRuntimeVariableSecretInput
 	deletedRuntimeVariable      string
+	secretIntegrity             map[string]runtimerepo.SecretIntegrity
+	secretIntegrityErr          error
+	secretIntegrityReads        int
 	runStatuses                 map[string]runtimerepo.RunStatus
+}
+
+func (runner *fakeRuntimeRunner) InspectSecretIntegrity(_ context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
+	runner.secretIntegrityReads++
+	if runner.secretIntegrityErr != nil {
+		return runtimerepo.SecretIntegrity{}, runner.secretIntegrityErr
+	}
+	if integrity, ok := runner.secretIntegrity[input.SecretName+"/"+input.SecretKey]; ok {
+		return integrity, nil
+	}
+	return runtimerepo.SecretIntegrity{
+		SecretName: input.SecretName, SecretKey: input.SecretKey,
+		ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1",
+	}, nil
 }
 
 func (runner *fakeRuntimeRunner) StartSmokeRun(_ context.Context, input runtimerepo.SmokeRunInput) (runtimerepo.StartedRun, error) {
@@ -3129,6 +3413,7 @@ func (runner *fakeRuntimeRunner) StartCodexAuthSession(_ context.Context, input 
 }
 
 func (runner *fakeRuntimeRunner) GetCodexAuthStatus(_ context.Context, accountName string, secretName string) (runtimerepo.CodexAuthStatus, error) {
+	runner.authStatusChecks++
 	status := runtimerepo.CodexAuthStatus{
 		AccountName: accountName,
 		SecretName:  secretName,
@@ -3165,6 +3450,7 @@ func (runner *fakeRuntimeRunner) CheckCodexAuthSecret(_ context.Context, input r
 }
 
 func (runner *fakeRuntimeRunner) CompleteCodexAuthSession(_ context.Context, input runtimerepo.CodexAuthCompleteInput) (runtimerepo.CodexAuthCompleteResult, error) {
+	runner.authCompleteCalls++
 	return runtimerepo.CodexAuthCompleteResult{
 		AccountName: input.AccountName,
 		SecretName:  input.SecretName,
@@ -3174,6 +3460,7 @@ func (runner *fakeRuntimeRunner) CompleteCodexAuthSession(_ context.Context, inp
 }
 
 func (runner *fakeRuntimeRunner) CleanupCodexAuthSession(_ context.Context, accountName string) (runtimerepo.CodexAuthCleanupResult, error) {
+	runner.authCleanupCalls++
 	return runtimerepo.CodexAuthCleanupResult{
 		AccountName: accountName,
 		Namespace:   "mattermost",
@@ -3326,6 +3613,13 @@ func (runner *fakeRuntimeRunner) StartAgentSession(_ context.Context, input runt
 func (runner *fakeRuntimeRunner) CleanupAgentSession(_ context.Context, sessionKey string) (runtimerepo.AgentSessionCleanupResult, error) {
 	runner.cleanedSessionKey = sessionKey
 	runner.cleanedSessionKeys = append(runner.cleanedSessionKeys, sessionKey)
+	if len(runner.sessionCleanupErrors) > 0 {
+		err := runner.sessionCleanupErrors[0]
+		runner.sessionCleanupErrors = runner.sessionCleanupErrors[1:]
+		if err != nil {
+			return runtimerepo.AgentSessionCleanupResult{}, err
+		}
+	}
 	return runtimerepo.AgentSessionCleanupResult{
 		SessionKey: sessionKey,
 		Namespace:  "mattermost",
@@ -3335,6 +3629,7 @@ func (runner *fakeRuntimeRunner) CleanupAgentSession(_ context.Context, sessionK
 }
 
 func (runner *fakeRuntimeRunner) GetAgentSessionRuntimeHealth(_ context.Context, sessionKey string) (runtimerepo.AgentSessionRuntimeHealth, error) {
+	runner.sessionRuntimeHealthCalls++
 	if strings.TrimSpace(runner.sessionRuntimeHealth.SessionKey) == "" {
 		return runtimerepo.AgentSessionRuntimeHealth{
 			SessionKey: sessionKey,
@@ -3371,8 +3666,19 @@ func (runner *fakeRuntimeRunner) UpsertMattermostBotTokenSecret(_ context.Contex
 }
 
 func (runner *fakeRuntimeRunner) GetMattermostBotTokenSecret(_ context.Context, secretName string) (runtimerepo.MattermostBotTokenSecret, error) {
+	runner.botTokenSecretReads++
 	if token := runner.botTokenSecrets[secretName]; token != "" {
-		return runtimerepo.MattermostBotTokenSecret{SecretName: secretName, Namespace: "mattermost", Token: token}, nil
+		if runner.secretIntegrityErr != nil {
+			return runtimerepo.MattermostBotTokenSecret{}, runner.secretIntegrityErr
+		}
+		integrity, ok := runner.secretIntegrity[secretName+"/token"]
+		if !ok {
+			integrity = runtimerepo.SecretIntegrity{
+				SecretName: secretName, SecretKey: "token",
+				ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1",
+			}
+		}
+		return runtimerepo.MattermostBotTokenSecret{SecretName: secretName, Namespace: "mattermost", Token: token, Integrity: integrity}, nil
 	}
 	return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("token secret not found")
 }
@@ -3431,6 +3737,7 @@ func (runner *fakeRuntimeRunner) CleanupExpiredRuns(_ context.Context, input run
 
 type fakeAdminStore struct {
 	capacityMu           sync.Mutex
+	deliveryMu           sync.Mutex
 	upsert               adminrepo.UpsertRepositoryInput
 	auditRecorded        bool
 	repositories         map[string]entity.Repository
@@ -3461,7 +3768,29 @@ type fakeAdminStore struct {
 	agentSessions        map[string]entity.AgentSession
 	sessionTurns         []entity.AgentSessionTurn
 	agentDelegations     map[int64]entity.AgentDelegation
+	callbackDeliveries   map[int64]entity.AgentDelegationCallbackDelivery
+	callbackManifests    map[string]adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput
 	postMessageMaxRunes  int
+	frozenOpenAIAccount  string
+	frozenGitHubAccount  string
+	clearIdleCalls       int
+	resetSessionCalls    int
+	resetSessionErrors   []error
+	completeTurnCalls    int
+	auditCalls           int
+}
+
+func (store *fakeAdminStore) RequiresClusterAdminSessionGuard(_ context.Context, roleID int64, _ string) (bool, error) {
+	role := store.agentRoles[roleID]
+	return strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin"), nil
+}
+
+func (store *fakeAdminStore) IsFrozenClusterAdminOpenAIAccount(_ context.Context, accountName string) (bool, error) {
+	return accountName != "" && accountName == store.frozenOpenAIAccount, nil
+}
+
+func (store *fakeAdminStore) IsFrozenClusterAdminGitHubAccount(_ context.Context, accountName string) (bool, error) {
+	return accountName != "" && accountName == store.frozenGitHubAccount, nil
 }
 
 func (store *fakeAdminStore) MattermostPostMessageMaxRunes(context.Context) (int, error) {
@@ -3773,6 +4102,9 @@ func (store *fakeAdminStore) UpsertAgentRole(_ context.Context, input adminrepo.
 	store.ensureAgentRoles()
 	for id, role := range store.agentRoles {
 		if role.ProjectID == input.ProjectID && role.Name == input.Name {
+			if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") && !strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+				return entity.AgentRole{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+			}
 			role.RoleType = input.RoleType
 			role.Description = input.Description
 			role.PromptTemplate = input.PromptTemplate
@@ -3788,6 +4120,9 @@ func (store *fakeAdminStore) UpsertAgentRole(_ context.Context, input adminrepo.
 			store.agentRoles[id] = role
 			return role, false, nil
 		}
+	}
+	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
+		return entity.AgentRole{}, false, adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	role := entity.AgentRole{
 		ID:                int64(len(store.agentRoles) + 1),
@@ -4271,6 +4606,7 @@ func (store *fakeAdminStore) UpdateAgentSessionRuntime(_ context.Context, input 
 }
 
 func (store *fakeAdminStore) ClearIdleAgentSessionPod(_ context.Context, sessionKey string, podName string) (entity.AgentSession, error) {
+	store.clearIdleCalls++
 	store.ensureAgentSessions()
 	session, ok := store.agentSessions[sessionKey]
 	if !ok || session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != podName {
@@ -4288,6 +4624,14 @@ func (store *fakeAdminStore) ClearIdleAgentSessionPod(_ context.Context, session
 }
 
 func (store *fakeAdminStore) ResetAgentSessionRuntime(_ context.Context, sessionKey string, status string) (entity.AgentSession, error) {
+	store.resetSessionCalls++
+	if len(store.resetSessionErrors) > 0 {
+		err := store.resetSessionErrors[0]
+		store.resetSessionErrors = store.resetSessionErrors[1:]
+		if err != nil {
+			return entity.AgentSession{}, err
+		}
+	}
 	store.ensureAgentSessions()
 	session, ok := store.agentSessions[sessionKey]
 	if !ok {
@@ -4446,6 +4790,7 @@ func (store *fakeAdminStore) UpdateAgentSessionTurnMessage(_ context.Context, in
 }
 
 func (store *fakeAdminStore) CompleteAgentSessionTurn(_ context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	store.completeTurnCalls++
 	for index, turn := range store.sessionTurns {
 		if turn.ID == input.TurnID {
 			turn.Status = input.Status
@@ -4615,6 +4960,9 @@ func (store *fakeAdminStore) UpsertAgentProfile(_ context.Context, input adminre
 	store.profileUpsert = input
 	for index, profile := range store.profiles {
 		if profile.Name == input.Name {
+			if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") && !strings.EqualFold(strings.TrimSpace(profile.KubernetesAccess), "cluster-admin") {
+				return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+			}
 			profile.Role = input.Role
 			profile.Description = input.Description
 			profile.Enabled = input.Enabled
@@ -4626,6 +4974,9 @@ func (store *fakeAdminStore) UpsertAgentProfile(_ context.Context, input adminre
 			store.profiles[index] = profile
 			return profile, false, nil
 		}
+	}
+	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
+		return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	profile := entity.AgentProfile{
 		ID:                int64(len(store.profiles) + 1),
@@ -5136,6 +5487,7 @@ func (store *fakeAdminStore) UpdateAgentRunArtifacts(_ context.Context, input ad
 
 func (store *fakeAdminStore) RecordAuditEvent(context.Context, adminrepo.AuditEventInput) error {
 	store.auditRecorded = true
+	store.auditCalls++
 	return nil
 }
 

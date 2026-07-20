@@ -5,12 +5,15 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,17 +24,31 @@ var queryFiles embed.FS
 
 type Repository struct {
 	pool *pgxpool.Pool
+	db   repositoryDB
+}
+
+type repositoryDB interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+	Begin(context.Context) (pgx.Tx, error)
 }
 
 var _ adminrepo.Repository = (*Repository)(nil)
+var _ adminrepo.ExactAgentSessionsRuntimeGuardRepository = (*Repository)(nil)
+var _ adminrepo.ExactAgentSessionsPublishFenceRepository = (*Repository)(nil)
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool}
+	return &Repository{pool: pool, db: pool}
+}
+
+func newTransactionalRepository(tx pgx.Tx) *Repository {
+	return &Repository{db: tx}
 }
 
 func (repo *Repository) MattermostPostMessageMaxRunes(ctx context.Context) (int, error) {
 	var maxBytes int
-	if err := repo.pool.QueryRow(ctx, `
+	if err := repo.db.QueryRow(ctx, `
 		select coalesce(max(character_maximum_length), 0)
 		from information_schema.columns
 		where lower(table_name) = 'posts'
@@ -48,7 +65,7 @@ func (repo *Repository) MattermostPostMessageMaxRunes(ctx context.Context) (int,
 func (repo *Repository) UpsertRepository(ctx context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
 	var item entity.Repository
 	var created bool
-	if err := repo.pool.QueryRow(ctx, query("repositories__upsert.sql"),
+	if err := repo.db.QueryRow(ctx, query("repositories__upsert.sql"),
 		input.Provider,
 		input.Owner,
 		input.Name,
@@ -75,7 +92,7 @@ func (repo *Repository) UpsertRepository(ctx context.Context, input adminrepo.Up
 
 func (repo *Repository) GetRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error) {
 	var item entity.Repository
-	if err := repo.pool.QueryRow(ctx, query("repositories__get.sql"), provider, owner, name).Scan(
+	if err := repo.db.QueryRow(ctx, query("repositories__get.sql"), provider, owner, name).Scan(
 		&item.ID,
 		&item.Provider,
 		&item.Owner,
@@ -99,7 +116,7 @@ func (repo *Repository) ListRepositories(ctx context.Context, limit int) ([]enti
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("repositories__list.sql"), limit)
+	rows, err := repo.db.Query(ctx, query("repositories__list.sql"), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list repositories: %w", err)
 	}
@@ -132,7 +149,7 @@ func (repo *Repository) ListRepositories(ctx context.Context, limit int) ([]enti
 
 func (repo *Repository) DeleteRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error) {
 	var item entity.Repository
-	if err := repo.pool.QueryRow(ctx, query("repositories__delete.sql"), provider, owner, name).Scan(
+	if err := repo.db.QueryRow(ctx, query("repositories__delete.sql"), provider, owner, name).Scan(
 		&item.ID,
 		&item.Provider,
 		&item.Owner,
@@ -153,8 +170,12 @@ func (repo *Repository) DeleteRepository(ctx context.Context, provider string, o
 }
 
 func (repo *Repository) UpsertAgentProfile(ctx context.Context, input adminrepo.UpsertAgentProfileInput) (entity.AgentProfile, bool, error) {
+	clusterAdmin := strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin")
+	if clusterAdmin {
+		return repo.upsertFrozenClusterAdminProfile(ctx, input)
+	}
 	var created bool
-	item, err := scanAgentProfileWithCreated(repo.pool.QueryRow(ctx, query("agent_profiles__upsert.sql"),
+	item, err := scanAgentProfileWithCreated(repo.db.QueryRow(ctx, query("agent_profiles__upsert.sql"),
 		input.Name,
 		input.Role,
 		input.Description,
@@ -166,13 +187,51 @@ func (repo *Repository) UpsertAgentProfile(ctx context.Context, input adminrepo.
 		input.ConfigOverlay,
 	), &created)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) && strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
+			return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+		}
 		return entity.AgentProfile{}, false, fmt.Errorf("upsert agent profile: %w", err)
 	}
 	return item, created, nil
 }
 
+func (repo *Repository) upsertFrozenClusterAdminProfile(ctx context.Context, input adminrepo.UpsertAgentProfileInput) (entity.AgentProfile, bool, error) {
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return entity.AgentProfile{}, false, fmt.Errorf("begin cluster-admin profile upsert: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var created bool
+	item, err := scanAgentProfileWithCreated(tx.QueryRow(ctx, query("agent_profiles__update_frozen_cluster_admin.sql"),
+		input.Name, input.Role, input.Description, input.Enabled, input.OpenAIAccountName,
+		input.GitHubAccountName, input.KubernetesAccess, input.SandboxMode, input.ConfigOverlay,
+	), &created)
+	if errors.Is(err, pgx.ErrNoRows) {
+		_ = tx.Rollback(ctx)
+		if auditErr := repo.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+			EventType: "cluster_admin.admission.denied", ActorUser: "repository",
+			ResourceType: "agent_profile", ResourceName: input.Name, Summary: "agent_profile.upsert: denied",
+		}); auditErr != nil {
+			return entity.AgentProfile{}, false, fmt.Errorf("audit denied cluster-admin agent profile upsert: %w", auditErr)
+		}
+		return entity.AgentProfile{}, false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	if err != nil {
+		return entity.AgentProfile{}, false, fmt.Errorf("upsert cluster-admin agent profile: %w", err)
+	}
+	if _, err := tx.Exec(ctx, query("audit_events__insert.sql"),
+		"cluster_admin.admission.allowed", "", "repository", "agent_profile", input.Name, "agent_profile.upsert: allowed",
+	); err != nil {
+		return entity.AgentProfile{}, false, fmt.Errorf("audit cluster-admin agent profile upsert: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.AgentProfile{}, false, fmt.Errorf("commit cluster-admin agent profile upsert: %w", err)
+	}
+	return item, created, nil
+}
+
 func (repo *Repository) GetAgentProfile(ctx context.Context, name string) (entity.AgentProfile, error) {
-	item, err := scanAgentProfile(repo.pool.QueryRow(ctx, query("agent_profiles__get.sql"), name))
+	item, err := scanAgentProfile(repo.db.QueryRow(ctx, query("agent_profiles__get.sql"), name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentProfile{}, adminrepo.ErrNotFound
@@ -183,7 +242,7 @@ func (repo *Repository) GetAgentProfile(ctx context.Context, name string) (entit
 }
 
 func (repo *Repository) ListAgentProfiles(ctx context.Context) ([]entity.AgentProfile, error) {
-	rows, err := repo.pool.Query(ctx, query("agent_profiles__list.sql"))
+	rows, err := repo.db.Query(ctx, query("agent_profiles__list.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("list agent profiles: %w", err)
 	}
@@ -204,7 +263,7 @@ func (repo *Repository) ListAgentProfiles(ctx context.Context) ([]entity.AgentPr
 }
 
 func (repo *Repository) ListAgentPromptTemplates(ctx context.Context, profileName string) ([]entity.AgentPromptTemplate, error) {
-	rows, err := repo.pool.Query(ctx, query("agent_prompt_templates__list.sql"), profileName)
+	rows, err := repo.db.Query(ctx, query("agent_prompt_templates__list.sql"), profileName)
 	if err != nil {
 		return nil, fmt.Errorf("list agent prompt templates: %w", err)
 	}
@@ -225,7 +284,7 @@ func (repo *Repository) ListAgentPromptTemplates(ctx context.Context, profileNam
 }
 
 func (repo *Repository) GetAgentPromptTemplate(ctx context.Context, profileName string, templateKey string) (entity.AgentPromptTemplate, error) {
-	item, err := scanAgentPromptTemplate(repo.pool.QueryRow(ctx, query("agent_prompt_templates__get.sql"), profileName, templateKey))
+	item, err := scanAgentPromptTemplate(repo.db.QueryRow(ctx, query("agent_prompt_templates__get.sql"), profileName, templateKey))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentPromptTemplate{}, adminrepo.ErrNotFound
@@ -237,7 +296,7 @@ func (repo *Repository) GetAgentPromptTemplate(ctx context.Context, profileName 
 
 func (repo *Repository) UpsertAgentPromptTemplate(ctx context.Context, input adminrepo.UpsertAgentPromptTemplateInput) (entity.AgentPromptTemplate, bool, error) {
 	var created bool
-	item, err := scanAgentPromptTemplateWithCreated(repo.pool.QueryRow(ctx, query("agent_prompt_templates__upsert.sql"),
+	item, err := scanAgentPromptTemplateWithCreated(repo.db.QueryRow(ctx, query("agent_prompt_templates__upsert.sql"),
 		input.ProfileName,
 		input.TemplateKey,
 		input.Body,
@@ -249,7 +308,7 @@ func (repo *Repository) UpsertAgentPromptTemplate(ctx context.Context, input adm
 }
 
 func (repo *Repository) UpsertOpenAIAccount(ctx context.Context, input adminrepo.UpsertOpenAIAccountInput) (entity.OpenAIAccount, bool, error) {
-	row := repo.pool.QueryRow(ctx, query("openai_accounts__upsert.sql"),
+	row := repo.db.QueryRow(ctx, query("openai_accounts__upsert.sql"),
 		input.Name,
 		input.CredentialName,
 		input.SecretRef,
@@ -266,7 +325,7 @@ func (repo *Repository) ListOpenAIAccounts(ctx context.Context, limit int) ([]en
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("openai_accounts__list.sql"), limit)
+	rows, err := repo.db.Query(ctx, query("openai_accounts__list.sql"), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list openai accounts: %w", err)
 	}
@@ -287,7 +346,7 @@ func (repo *Repository) ListOpenAIAccounts(ctx context.Context, limit int) ([]en
 }
 
 func (repo *Repository) GetOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error) {
-	item, err := scanOpenAIAccount(repo.pool.QueryRow(ctx, query("openai_accounts__get.sql"), name))
+	item, err := scanOpenAIAccount(repo.db.QueryRow(ctx, query("openai_accounts__get.sql"), name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.OpenAIAccount{}, adminrepo.ErrNotFound
@@ -298,7 +357,7 @@ func (repo *Repository) GetOpenAIAccount(ctx context.Context, name string) (enti
 }
 
 func (repo *Repository) UpdateOpenAIAccountStatus(ctx context.Context, input adminrepo.UpdateOpenAIAccountStatusInput) (entity.OpenAIAccount, error) {
-	item, err := scanOpenAIAccount(repo.pool.QueryRow(ctx, query("openai_accounts__update_status.sql"),
+	item, err := scanOpenAIAccount(repo.db.QueryRow(ctx, query("openai_accounts__update_status.sql"),
 		input.Name,
 		input.SecretRef,
 		input.Status,
@@ -310,7 +369,7 @@ func (repo *Repository) UpdateOpenAIAccountStatus(ctx context.Context, input adm
 }
 
 func (repo *Repository) DeleteOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error) {
-	item, err := scanOpenAIAccount(repo.pool.QueryRow(ctx, query("openai_accounts__delete.sql"), name))
+	item, err := scanOpenAIAccount(repo.db.QueryRow(ctx, query("openai_accounts__delete.sql"), name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.OpenAIAccount{}, adminrepo.ErrNotFound
@@ -324,7 +383,7 @@ func (repo *Repository) ListGitHubAccounts(ctx context.Context, limit int) ([]en
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("github_accounts__list.sql"), limit)
+	rows, err := repo.db.Query(ctx, query("github_accounts__list.sql"), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list github accounts: %w", err)
 	}
@@ -345,7 +404,7 @@ func (repo *Repository) ListGitHubAccounts(ctx context.Context, limit int) ([]en
 }
 
 func (repo *Repository) GetGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error) {
-	item, err := scanGitHubAccount(repo.pool.QueryRow(ctx, query("github_accounts__get.sql"), name))
+	item, err := scanGitHubAccount(repo.db.QueryRow(ctx, query("github_accounts__get.sql"), name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.GitHubAccount{}, adminrepo.ErrNotFound
@@ -356,7 +415,7 @@ func (repo *Repository) GetGitHubAccount(ctx context.Context, name string) (enti
 }
 
 func (repo *Repository) UpsertGitHubAccount(ctx context.Context, input adminrepo.UpsertGitHubAccountInput) (entity.GitHubAccount, bool, error) {
-	item, created, err := scanGitHubAccountWithCreated(repo.pool.QueryRow(ctx, query("github_accounts__upsert.sql"),
+	item, created, err := scanGitHubAccountWithCreated(repo.db.QueryRow(ctx, query("github_accounts__upsert.sql"),
 		input.Name,
 		input.CredentialName,
 		input.SecretRef,
@@ -372,7 +431,7 @@ func (repo *Repository) UpsertGitHubAccount(ctx context.Context, input adminrepo
 }
 
 func (repo *Repository) DeleteGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error) {
-	item, err := scanGitHubAccount(repo.pool.QueryRow(ctx, query("github_accounts__delete.sql"), name))
+	item, err := scanGitHubAccount(repo.db.QueryRow(ctx, query("github_accounts__delete.sql"), name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.GitHubAccount{}, adminrepo.ErrNotFound
@@ -383,7 +442,7 @@ func (repo *Repository) DeleteGitHubAccount(ctx context.Context, name string) (e
 }
 
 func (repo *Repository) UpsertMattermostBotIdentity(ctx context.Context, input adminrepo.UpsertMattermostBotIdentityInput) (entity.MattermostBotIdentity, bool, error) {
-	item, created, err := scanMattermostBotIdentityWithCreated(repo.pool.QueryRow(ctx, query("mattermost_bot_identities__upsert.sql"),
+	item, created, err := scanMattermostBotIdentityWithCreated(repo.db.QueryRow(ctx, query("mattermost_bot_identities__upsert.sql"),
 		input.ProjectID,
 		input.RoleID,
 		input.Username,
@@ -400,7 +459,7 @@ func (repo *Repository) UpsertMattermostBotIdentity(ctx context.Context, input a
 }
 
 func (repo *Repository) GetMattermostBotIdentityByRoleID(ctx context.Context, roleID int64) (entity.MattermostBotIdentity, error) {
-	item, err := scanMattermostBotIdentity(repo.pool.QueryRow(ctx, query("mattermost_bot_identities__get_by_role.sql"), roleID))
+	item, err := scanMattermostBotIdentity(repo.db.QueryRow(ctx, query("mattermost_bot_identities__get_by_role.sql"), roleID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.MattermostBotIdentity{}, adminrepo.ErrNotFound
@@ -411,7 +470,7 @@ func (repo *Repository) GetMattermostBotIdentityByRoleID(ctx context.Context, ro
 }
 
 func (repo *Repository) GetMattermostBotIdentityByUserID(ctx context.Context, mattermostUserID string) (entity.MattermostBotIdentity, error) {
-	item, err := scanMattermostBotIdentity(repo.pool.QueryRow(ctx, query("mattermost_bot_identities__get_by_user.sql"), mattermostUserID))
+	item, err := scanMattermostBotIdentity(repo.db.QueryRow(ctx, query("mattermost_bot_identities__get_by_user.sql"), mattermostUserID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.MattermostBotIdentity{}, adminrepo.ErrNotFound
@@ -422,7 +481,7 @@ func (repo *Repository) GetMattermostBotIdentityByUserID(ctx context.Context, ma
 }
 
 func (repo *Repository) ListMattermostBotIdentitiesByProject(ctx context.Context, projectID int64) ([]entity.MattermostBotIdentity, error) {
-	rows, err := repo.pool.Query(ctx, query("mattermost_bot_identities__list_by_project.sql"), projectID)
+	rows, err := repo.db.Query(ctx, query("mattermost_bot_identities__list_by_project.sql"), projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list mattermost bot identities: %w", err)
 	}
@@ -443,7 +502,7 @@ func (repo *Repository) ListMattermostBotIdentitiesByProject(ctx context.Context
 }
 
 func (repo *Repository) UpsertAgentSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
-	item, created, err := scanAgentSessionWithCreated(repo.pool.QueryRow(ctx, query("agent_sessions__upsert.sql"),
+	item, created, err := scanAgentSessionWithCreated(repo.db.QueryRow(ctx, query("agent_sessions__upsert.sql"),
 		input.SessionKey,
 		input.ProjectID,
 		input.ChatID,
@@ -462,7 +521,7 @@ func (repo *Repository) UpsertAgentSession(ctx context.Context, input adminrepo.
 }
 
 func (repo *Repository) GetAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
-	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__get.sql"), sessionKey))
+	item, err := scanAgentSession(repo.db.QueryRow(ctx, query("agent_sessions__get.sql"), sessionKey))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentSession{}, adminrepo.ErrNotFound
@@ -472,8 +531,201 @@ func (repo *Repository) GetAgentSession(ctx context.Context, sessionKey string) 
 	return item, nil
 }
 
+func (repo *Repository) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	if sideEffect == nil {
+		return fmt.Errorf("exact agent sessions runtime side effect is required")
+	}
+	normalized, err := normalizeExactAgentSessionBindings(expected)
+	if err != nil {
+		return err
+	}
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin exact agent sessions runtime guard: %w", err)
+	}
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
+	}()
+	for _, binding := range normalized {
+		var roleProjectID int64
+		var roleEnabled bool
+		var chatProjectID int64
+		var chatChannelID string
+		var participantEnabled bool
+		current, lockErr := scanAgentSessionFields(
+			tx.QueryRow(ctx, query("agent_sessions__lock_exact_runtime.sql"), binding.SessionKey),
+			&roleProjectID,
+			&roleEnabled,
+			&chatProjectID,
+			&chatChannelID,
+			&participantEnabled,
+		)
+		if errors.Is(lockErr, pgx.ErrNoRows) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if lockErr != nil {
+			return fmt.Errorf("lock exact agent session runtime binding: %w", lockErr)
+		}
+		if !exactAgentSessionRuntimeBindingEqual(current, binding) || !roleEnabled || !participantEnabled ||
+			roleProjectID != binding.ProjectID || chatProjectID != binding.ProjectID || strings.TrimSpace(chatChannelID) != strings.TrimSpace(binding.MattermostChannelID) {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	if err := lockExactAgentSessionSubjects(ctx, tx, normalized); err != nil {
+		return err
+	}
+	if err := sideEffect(newTransactionalRepository(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit exact agent sessions runtime guard: %w", err)
+	}
+	return nil
+}
+
+func (repo *Repository) LockExactAgentSessionsPublishFence(ctx context.Context, expected []entity.AgentSession) error {
+	if repo.pool != nil {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	normalized, err := normalizeExactAgentSessionBindings(expected)
+	if err != nil {
+		return err
+	}
+	sessionKeys := make([]string, 0, len(normalized))
+	for _, binding := range normalized {
+		sessionKeys = append(sessionKeys, strings.TrimSpace(binding.SessionKey))
+	}
+	var lockedCount int
+	if err := repo.db.QueryRow(ctx, query("cluster_admin_delivery_fences__lock.sql"), sessionKeys).Scan(&lockedCount); err != nil {
+		return fmt.Errorf("lock exact agent session delivery fences: %w", err)
+	}
+	if lockedCount != len(sessionKeys) {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return nil
+}
+
+func lockExactAgentSessionSubjects(ctx context.Context, tx pgx.Tx, expected []entity.AgentSession) error {
+	type roleSubject struct {
+		id        int64
+		projectID int64
+	}
+	type chatSubject struct {
+		id        int64
+		projectID int64
+		channelID string
+	}
+	type participantSubject struct {
+		chatID int64
+		roleID int64
+	}
+	rolesByID := make(map[int64]roleSubject, len(expected))
+	chatsByID := make(map[int64]chatSubject, len(expected))
+	participantsByKey := make(map[string]participantSubject, len(expected))
+	for _, binding := range expected {
+		rolesByID[binding.RoleID] = roleSubject{id: binding.RoleID, projectID: binding.ProjectID}
+		chatsByID[binding.ChatID] = chatSubject{id: binding.ChatID, projectID: binding.ProjectID, channelID: strings.TrimSpace(binding.MattermostChannelID)}
+		key := fmt.Sprintf("%020d\x00%020d", binding.ChatID, binding.RoleID)
+		participantsByKey[key] = participantSubject{chatID: binding.ChatID, roleID: binding.RoleID}
+	}
+	roles := make([]roleSubject, 0, len(rolesByID))
+	for _, subject := range rolesByID {
+		roles = append(roles, subject)
+	}
+	sort.Slice(roles, func(i, j int) bool { return roles[i].id < roles[j].id })
+	for _, subject := range roles {
+		var projectID int64
+		var enabled bool
+		if err := tx.QueryRow(ctx, query("agent_roles__lock_exact_runtime.sql"), subject.id).Scan(&projectID, &enabled); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			return fmt.Errorf("lock exact agent role runtime subject: %w", err)
+		}
+		if projectID != subject.projectID || !enabled {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	chats := make([]chatSubject, 0, len(chatsByID))
+	for _, subject := range chatsByID {
+		chats = append(chats, subject)
+	}
+	sort.Slice(chats, func(i, j int) bool { return chats[i].id < chats[j].id })
+	for _, subject := range chats {
+		var projectID int64
+		var channelID string
+		if err := tx.QueryRow(ctx, query("chats__lock_exact_runtime.sql"), subject.id).Scan(&projectID, &channelID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			return fmt.Errorf("lock exact chat runtime subject: %w", err)
+		}
+		if projectID != subject.projectID || strings.TrimSpace(channelID) != subject.channelID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	participantKeys := make([]string, 0, len(participantsByKey))
+	for key := range participantsByKey {
+		participantKeys = append(participantKeys, key)
+	}
+	sort.Strings(participantKeys)
+	for _, key := range participantKeys {
+		subject := participantsByKey[key]
+		var enabled bool
+		if err := tx.QueryRow(ctx, query("chat_participants__lock_exact_runtime.sql"), subject.chatID, subject.roleID).Scan(&enabled); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			return fmt.Errorf("lock exact chat participant runtime subject: %w", err)
+		}
+		if !enabled {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+	}
+	return nil
+}
+
+func normalizeExactAgentSessionBindings(expected []entity.AgentSession) ([]entity.AgentSession, error) {
+	if len(expected) == 0 {
+		return nil, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	byIdentity := make(map[string]entity.AgentSession, len(expected))
+	for _, binding := range expected {
+		if binding.ID <= 0 || strings.TrimSpace(binding.SessionKey) == "" {
+			return nil, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		key := fmt.Sprintf("%020d\x00%s", binding.ID, strings.TrimSpace(binding.SessionKey))
+		if previous, exists := byIdentity[key]; exists && !exactAgentSessionRuntimeBindingEqual(previous, binding) {
+			return nil, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		byIdentity[key] = binding
+	}
+	result := make([]entity.AgentSession, 0, len(byIdentity))
+	for _, binding := range byIdentity {
+		result = append(result, binding)
+	}
+	sort.Slice(result, func(left int, right int) bool {
+		if result[left].ID != result[right].ID {
+			return result[left].ID < result[right].ID
+		}
+		return result[left].SessionKey < result[right].SessionKey
+	})
+	return result, nil
+}
+
+func exactAgentSessionRuntimeBindingEqual(left entity.AgentSession, right entity.AgentSession) bool {
+	return left.ID == right.ID && strings.TrimSpace(left.SessionKey) == strings.TrimSpace(right.SessionKey) &&
+		left.ProjectID == right.ProjectID && left.ChatID == right.ChatID && left.RoleID == right.RoleID &&
+		strings.TrimSpace(left.SessionScope) == strings.TrimSpace(right.SessionScope) &&
+		strings.TrimSpace(left.MattermostChannelID) == strings.TrimSpace(right.MattermostChannelID) &&
+		strings.TrimSpace(left.MattermostRootPostID) == strings.TrimSpace(right.MattermostRootPostID) &&
+		strings.TrimSpace(left.TokenSecretRef) == strings.TrimSpace(right.TokenSecretRef)
+}
+
 func (repo *Repository) GetAgentSessionByID(ctx context.Context, id int64) (entity.AgentSession, error) {
-	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__get_by_id.sql"), id))
+	item, err := scanAgentSession(repo.db.QueryRow(ctx, query("agent_sessions__get_by_id.sql"), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentSession{}, adminrepo.ErrNotFound
@@ -484,7 +736,7 @@ func (repo *Repository) GetAgentSessionByID(ctx context.Context, id int64) (enti
 }
 
 func (repo *Repository) ListAgentSessionsByThread(ctx context.Context, chatID int64, rootPostID string) ([]entity.AgentSession, error) {
-	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_by_thread.sql"), chatID, rootPostID)
+	rows, err := repo.db.Query(ctx, query("agent_sessions__list_by_thread.sql"), chatID, rootPostID)
 	if err != nil {
 		return nil, fmt.Errorf("list agent sessions by thread: %w", err)
 	}
@@ -493,7 +745,7 @@ func (repo *Repository) ListAgentSessionsByThread(ctx context.Context, chatID in
 }
 
 func (repo *Repository) ListAgentSessionsByChat(ctx context.Context, chatID int64) ([]entity.AgentSession, error) {
-	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_by_chat.sql"), chatID)
+	rows, err := repo.db.Query(ctx, query("agent_sessions__list_by_chat.sql"), chatID)
 	if err != nil {
 		return nil, fmt.Errorf("list agent sessions by chat: %w", err)
 	}
@@ -502,7 +754,7 @@ func (repo *Repository) ListAgentSessionsByChat(ctx context.Context, chatID int6
 }
 
 func (repo *Repository) ListAgentSessionsByRole(ctx context.Context, roleID int64) ([]entity.AgentSession, error) {
-	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_by_role.sql"), roleID)
+	rows, err := repo.db.Query(ctx, query("agent_sessions__list_by_role.sql"), roleID)
 	if err != nil {
 		return nil, fmt.Errorf("list agent sessions by role: %w", err)
 	}
@@ -534,7 +786,7 @@ func (repo *Repository) ListEvictableIdleAgentSessions(ctx context.Context, limi
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_evictable_idle.sql"), limit)
+	rows, err := repo.db.Query(ctx, query("agent_sessions__list_evictable_idle.sql"), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list evictable idle agent sessions: %w", err)
 	}
@@ -546,7 +798,7 @@ func (repo *Repository) ListQueuedIdleAgentSessions(ctx context.Context, limit i
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_queued_idle.sql"), limit)
+	rows, err := repo.db.Query(ctx, query("agent_sessions__list_queued_idle.sql"), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list queued idle agent sessions: %w", err)
 	}
@@ -558,7 +810,7 @@ func (repo *Repository) ListStaleActiveAgentSessions(ctx context.Context, limit 
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_stale_active.sql"), limit)
+	rows, err := repo.db.Query(ctx, query("agent_sessions__list_stale_active.sql"), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list stale active agent sessions: %w", err)
 	}
@@ -570,7 +822,7 @@ func (repo *Repository) ListRunningActiveAgentSessions(ctx context.Context, limi
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_running_active.sql"), limit)
+	rows, err := repo.db.Query(ctx, query("agent_sessions__list_running_active.sql"), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list running active agent sessions: %w", err)
 	}
@@ -579,7 +831,7 @@ func (repo *Repository) ListRunningActiveAgentSessions(ctx context.Context, limi
 }
 
 func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
-	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__update_runtime.sql"),
+	item, err := scanAgentSession(repo.db.QueryRow(ctx, query("agent_sessions__update_runtime.sql"),
 		input.SessionKey,
 		input.Status,
 		input.ActiveTurnID,
@@ -598,7 +850,7 @@ func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adm
 }
 
 func (repo *Repository) ResetAgentSessionRuntime(ctx context.Context, sessionKey string, status string) (entity.AgentSession, error) {
-	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__reset_runtime.sql"), sessionKey, status))
+	item, err := scanAgentSession(repo.db.QueryRow(ctx, query("agent_sessions__reset_runtime.sql"), sessionKey, status))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentSession{}, adminrepo.ErrNotFound
@@ -609,7 +861,7 @@ func (repo *Repository) ResetAgentSessionRuntime(ctx context.Context, sessionKey
 }
 
 func (repo *Repository) ClearIdleAgentSessionPod(ctx context.Context, sessionKey string, podName string) (entity.AgentSession, error) {
-	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__clear_idle_pod.sql"), sessionKey, podName))
+	item, err := scanAgentSession(repo.db.QueryRow(ctx, query("agent_sessions__clear_idle_pod.sql"), sessionKey, podName))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentSession{}, adminrepo.ErrNotFound
@@ -620,7 +872,7 @@ func (repo *Repository) ClearIdleAgentSessionPod(ctx context.Context, sessionKey
 }
 
 func (repo *Repository) UpdateAgentSessionSnapshot(ctx context.Context, input adminrepo.UpdateAgentSessionSnapshotInput) (entity.AgentSession, error) {
-	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__update_snapshot.sql"),
+	item, err := scanAgentSession(repo.db.QueryRow(ctx, query("agent_sessions__update_snapshot.sql"),
 		input.SessionKey,
 		input.CodexSessionID,
 		input.SessionArchiveGzipBase64,
@@ -634,7 +886,7 @@ func (repo *Repository) UpdateAgentSessionSnapshot(ctx context.Context, input ad
 }
 
 func (repo *Repository) CreateAgentSessionTurn(ctx context.Context, input adminrepo.CreateAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
-	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__insert.sql"),
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__insert.sql"),
 		input.SessionID,
 		input.RunID,
 		input.MattermostChannelID,
@@ -652,7 +904,7 @@ func (repo *Repository) CreateAgentSessionTurn(ctx context.Context, input adminr
 }
 
 func (repo *Repository) GetAgentSessionTurn(ctx context.Context, id int64) (entity.AgentSessionTurn, error) {
-	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__get.sql"), id))
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__get.sql"), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
@@ -663,7 +915,7 @@ func (repo *Repository) GetAgentSessionTurn(ctx context.Context, id int64) (enti
 }
 
 func (repo *Repository) ClaimNextAgentSessionTurn(ctx context.Context, sessionKey string) (entity.AgentSessionTurn, error) {
-	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__claim_next.sql"), sessionKey))
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__claim_next.sql"), sessionKey))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
@@ -674,7 +926,7 @@ func (repo *Repository) ClaimNextAgentSessionTurn(ctx context.Context, sessionKe
 }
 
 func (repo *Repository) CompleteAgentSessionTurn(ctx context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
-	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__complete.sql"),
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__complete.sql"),
 		input.TurnID,
 		input.Status,
 		input.FinalMessage,
@@ -688,7 +940,7 @@ func (repo *Repository) CompleteAgentSessionTurn(ctx context.Context, input admi
 }
 
 func (repo *Repository) CancelAgentSessionTurn(ctx context.Context, input adminrepo.CancelAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
-	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__cancel.sql"),
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__cancel.sql"),
 		input.TurnID,
 		input.ErrorMessage,
 		input.Artifacts,
@@ -703,7 +955,7 @@ func (repo *Repository) CancelAgentSessionTurn(ctx context.Context, input adminr
 }
 
 func (repo *Repository) UpdateAgentSessionTurnStatusPost(ctx context.Context, input adminrepo.UpdateAgentSessionTurnStatusPostInput) (entity.AgentSessionTurn, error) {
-	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__update_status_post.sql"),
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__update_status_post.sql"),
 		input.TurnID,
 		input.StatusPostID,
 	))
@@ -714,7 +966,7 @@ func (repo *Repository) UpdateAgentSessionTurnStatusPost(ctx context.Context, in
 }
 
 func (repo *Repository) UpdateAgentSessionTurnRunsPost(ctx context.Context, input adminrepo.UpdateAgentSessionTurnRunsPostInput) (entity.AgentSessionTurn, error) {
-	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__update_runs_post.sql"),
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__update_runs_post.sql"),
 		input.TurnID,
 		input.RunsPostID,
 	))
@@ -725,7 +977,7 @@ func (repo *Repository) UpdateAgentSessionTurnRunsPost(ctx context.Context, inpu
 }
 
 func (repo *Repository) AddAgentSessionTurnOrigin(ctx context.Context, input adminrepo.AddAgentSessionTurnOriginInput) (entity.AgentSessionTurn, error) {
-	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__add_origin.sql"),
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__add_origin.sql"),
 		input.TurnID,
 		input.ParentTurnID,
 		input.TriggerPostID,
@@ -738,7 +990,7 @@ func (repo *Repository) AddAgentSessionTurnOrigin(ctx context.Context, input adm
 }
 
 func (repo *Repository) UpdateAgentSessionTurnMessage(ctx context.Context, input adminrepo.UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error) {
-	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__update_message.sql"),
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__update_message.sql"),
 		input.TurnID,
 		input.Message,
 	))
@@ -752,7 +1004,7 @@ func (repo *Repository) UpdateAgentSessionTurnMessage(ctx context.Context, input
 }
 
 func (repo *Repository) ListQueuedAgentSessionTurns(ctx context.Context, sessionID int64) ([]entity.AgentSessionTurn, error) {
-	rows, err := repo.pool.Query(ctx, query("agent_session_turns__list_queued.sql"), sessionID)
+	rows, err := repo.db.Query(ctx, query("agent_session_turns__list_queued.sql"), sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("list queued agent session turns: %w", err)
 	}
@@ -773,7 +1025,7 @@ func (repo *Repository) ListQueuedAgentSessionTurns(ctx context.Context, session
 }
 
 func (repo *Repository) CreateAgentDelegation(ctx context.Context, input adminrepo.CreateAgentDelegationInput) (entity.AgentDelegation, bool, error) {
-	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__insert.sql"),
+	item, err := scanAgentDelegation(repo.db.QueryRow(ctx, query("agent_delegations__insert.sql"),
 		input.ProjectID,
 		input.SourceSessionID,
 		input.SourceTurnID,
@@ -796,7 +1048,7 @@ func (repo *Repository) CreateAgentDelegation(ctx context.Context, input adminre
 }
 
 func (repo *Repository) GetAgentDelegationBySourceTurnKey(ctx context.Context, sourceTurnID int64, workItemKey string) (entity.AgentDelegation, error) {
-	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__get_by_source_turn_key.sql"), sourceTurnID, workItemKey))
+	item, err := scanAgentDelegation(repo.db.QueryRow(ctx, query("agent_delegations__get_by_source_turn_key.sql"), sourceTurnID, workItemKey))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentDelegation{}, adminrepo.ErrNotFound
@@ -807,7 +1059,7 @@ func (repo *Repository) GetAgentDelegationBySourceTurnKey(ctx context.Context, s
 }
 
 func (repo *Repository) GetAgentDelegationForCallback(ctx context.Context, targetSessionID int64) (entity.AgentDelegation, error) {
-	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__get_for_callback.sql"), targetSessionID))
+	item, err := scanAgentDelegation(repo.db.QueryRow(ctx, query("agent_delegations__get_for_callback.sql"), targetSessionID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentDelegation{}, adminrepo.ErrNotFound
@@ -821,7 +1073,7 @@ func (repo *Repository) ListAgentDelegationsBySource(ctx context.Context, source
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("agent_delegations__list_by_source.sql"), sourceSessionID, limit)
+	rows, err := repo.db.Query(ctx, query("agent_delegations__list_by_source.sql"), sourceSessionID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list agent delegations by source: %w", err)
 	}
@@ -858,7 +1110,7 @@ func (repo *Repository) SetAgentDelegationCallback(ctx context.Context, id int64
 	if !errors.Is(err, adminrepo.ErrNotFound) {
 		return item, err
 	}
-	item, err = scanAgentDelegation(repo.pool.QueryRow(ctx, query("agent_delegations__get.sql"), id))
+	item, err = scanAgentDelegation(repo.db.QueryRow(ctx, query("agent_delegations__get.sql"), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentDelegation{}, adminrepo.ErrNotFound
@@ -869,7 +1121,7 @@ func (repo *Repository) SetAgentDelegationCallback(ctx context.Context, id int64
 }
 
 func (repo *Repository) updateAgentDelegation(ctx context.Context, action string, queryName string, args ...any) (entity.AgentDelegation, error) {
-	item, err := scanAgentDelegation(repo.pool.QueryRow(ctx, query(queryName), args...))
+	item, err := scanAgentDelegation(repo.db.QueryRow(ctx, query(queryName), args...))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentDelegation{}, adminrepo.ErrNotFound
@@ -880,7 +1132,7 @@ func (repo *Repository) updateAgentDelegation(ctx context.Context, action string
 }
 
 func (repo *Repository) CreateAgentFlow(ctx context.Context, input adminrepo.CreateAgentFlowInput) (entity.AgentFlow, bool, error) {
-	row := repo.pool.QueryRow(ctx, query("agent_flows__insert.sql"),
+	row := repo.db.QueryRow(ctx, query("agent_flows__insert.sql"),
 		input.FlowID,
 		input.Status,
 		input.Provider,
@@ -908,7 +1160,7 @@ func (repo *Repository) CreateAgentFlow(ctx context.Context, input adminrepo.Cre
 }
 
 func (repo *Repository) GetAgentFlow(ctx context.Context, flowID string) (entity.AgentFlow, error) {
-	item, err := scanAgentFlow(repo.pool.QueryRow(ctx, query("agent_flows__get.sql"), flowID))
+	item, err := scanAgentFlow(repo.db.QueryRow(ctx, query("agent_flows__get.sql"), flowID))
 	if err != nil {
 		return entity.AgentFlow{}, fmt.Errorf("get agent flow: %w", err)
 	}
@@ -919,7 +1171,7 @@ func (repo *Repository) ListAgentFlows(ctx context.Context, status string, limit
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("agent_flows__list.sql"), status, limit)
+	rows, err := repo.db.Query(ctx, query("agent_flows__list.sql"), status, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list agent flows: %w", err)
 	}
@@ -940,7 +1192,7 @@ func (repo *Repository) ListAgentFlows(ctx context.Context, status string, limit
 }
 
 func (repo *Repository) UpdateAgentFlow(ctx context.Context, input adminrepo.UpdateAgentFlowInput) (entity.AgentFlow, error) {
-	item, err := scanAgentFlow(repo.pool.QueryRow(ctx, query("agent_flows__update.sql"),
+	item, err := scanAgentFlow(repo.db.QueryRow(ctx, query("agent_flows__update.sql"),
 		input.FlowID,
 		input.Status,
 		input.PRURL,
@@ -963,7 +1215,7 @@ func (repo *Repository) UpdateAgentFlow(ctx context.Context, input adminrepo.Upd
 }
 
 func (repo *Repository) CreateAgentRun(ctx context.Context, input adminrepo.CreateAgentRunInput) (entity.AgentRun, error) {
-	row := repo.pool.QueryRow(ctx, query("agent_runs__insert.sql"),
+	row := repo.db.QueryRow(ctx, query("agent_runs__insert.sql"),
 		input.RunID,
 		input.FlowID,
 		input.ProfileName,
@@ -987,7 +1239,7 @@ func (repo *Repository) CreateAgentRun(ctx context.Context, input adminrepo.Crea
 }
 
 func (repo *Repository) GetAgentRun(ctx context.Context, runID string) (entity.AgentRun, error) {
-	item, err := scanAgentRun(repo.pool.QueryRow(ctx, query("agent_runs__get.sql"), runID))
+	item, err := scanAgentRun(repo.db.QueryRow(ctx, query("agent_runs__get.sql"), runID))
 	if err != nil {
 		return entity.AgentRun{}, fmt.Errorf("get agent run: %w", err)
 	}
@@ -998,7 +1250,7 @@ func (repo *Repository) ListAgentRuns(ctx context.Context, limit int) ([]entity.
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := repo.pool.Query(ctx, query("agent_runs__list.sql"), limit)
+	rows, err := repo.db.Query(ctx, query("agent_runs__list.sql"), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list agent runs: %w", err)
 	}
@@ -1019,7 +1271,7 @@ func (repo *Repository) ListAgentRuns(ctx context.Context, limit int) ([]entity.
 }
 
 func (repo *Repository) ListAgentRunsByFlowID(ctx context.Context, flowID string) ([]entity.AgentRun, error) {
-	rows, err := repo.pool.Query(ctx, query("agent_runs__list_by_flow.sql"), flowID)
+	rows, err := repo.db.Query(ctx, query("agent_runs__list_by_flow.sql"), flowID)
 	if err != nil {
 		return nil, fmt.Errorf("list agent runs by flow: %w", err)
 	}
@@ -1040,7 +1292,7 @@ func (repo *Repository) ListAgentRunsByFlowID(ctx context.Context, flowID string
 }
 
 func (repo *Repository) UpdateAgentRunArtifacts(ctx context.Context, input adminrepo.UpdateAgentRunArtifactsInput) (entity.AgentRun, error) {
-	item, err := scanAgentRun(repo.pool.QueryRow(ctx, query("agent_runs__update_artifacts.sql"),
+	item, err := scanAgentRun(repo.db.QueryRow(ctx, query("agent_runs__update_artifacts.sql"),
 		input.RunID,
 		input.Status,
 		input.PRURL,
@@ -1052,7 +1304,7 @@ func (repo *Repository) UpdateAgentRunArtifacts(ctx context.Context, input admin
 }
 
 func (repo *Repository) RecordAuditEvent(ctx context.Context, input adminrepo.AuditEventInput) error {
-	if _, err := repo.pool.Exec(ctx, query("audit_events__insert.sql"),
+	if _, err := repo.db.Exec(ctx, query("audit_events__insert.sql"),
 		input.EventType,
 		input.ActorUserID,
 		input.ActorUser,

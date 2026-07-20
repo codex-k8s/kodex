@@ -88,8 +88,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: ${MATTERCODEX_POSTGRES_SECRET}
+                  key: bot-service-runtime-datasource
+            - name: MATTERCODEX_MIGRATIONS_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: ${MATTERCODEX_POSTGRES_SECRET}
                   key: mattermost-datasource
-                  optional: true
             - name: MATTERCODEX_GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:

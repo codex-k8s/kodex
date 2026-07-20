@@ -51,6 +51,8 @@ updated: 2026-07-16
 | `AgentSession` | agent_id, provider_account_id, scope, status, archive_ref |
 | `Turn` | session_id, source, prompt, status, runtime_revision_id, sequence |
 | `AgentDelegation` | source session/turn, target room/thread/session/turn, role, work_item_key, status, callback turn |
+| `CallbackDeliveryPlan` | delegation_id, callback_run_id, exact immutable destinations/publications, canonical plan hash |
+| `CallbackDelivery` | delegation_id, callback_run_id, destination, publication, channel/root/message/props hash, lease, delivered state |
 | `RoleCapability` | role_id, capability, constraints, enabled |
 | `RoleRelationshipPolicy` | revision_id, source_role_id, action, target_role_id, constraints |
 | `PolicyRevision` | project_id, version, status, effective policy snapshot |

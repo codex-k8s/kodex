@@ -11,7 +11,7 @@ import (
 )
 
 func (repo *Repository) UpsertProjectRuntimeVariable(ctx context.Context, input adminrepo.UpsertProjectRuntimeVariableInput) (entity.ProjectRuntimeVariable, bool, error) {
-	item, created, err := scanProjectRuntimeVariableWithCreated(repo.pool.QueryRow(ctx, query("project_runtime_variables__upsert.sql"),
+	item, created, err := scanProjectRuntimeVariableWithCreated(repo.db.QueryRow(ctx, query("project_runtime_variables__upsert.sql"),
 		input.ProjectID,
 		input.Name,
 		input.Slug,
@@ -28,7 +28,7 @@ func (repo *Repository) UpsertProjectRuntimeVariable(ctx context.Context, input 
 }
 
 func (repo *Repository) GetProjectRuntimeVariable(ctx context.Context, id int64) (entity.ProjectRuntimeVariable, error) {
-	item, err := scanProjectRuntimeVariable(repo.pool.QueryRow(ctx, query("project_runtime_variables__get.sql"), id))
+	item, err := scanProjectRuntimeVariable(repo.db.QueryRow(ctx, query("project_runtime_variables__get.sql"), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.ProjectRuntimeVariable{}, adminrepo.ErrNotFound
@@ -39,7 +39,7 @@ func (repo *Repository) GetProjectRuntimeVariable(ctx context.Context, id int64)
 }
 
 func (repo *Repository) ListProjectRuntimeVariables(ctx context.Context, projectID int64) ([]entity.ProjectRuntimeVariable, error) {
-	rows, err := repo.pool.Query(ctx, query("project_runtime_variables__list.sql"), projectID)
+	rows, err := repo.db.Query(ctx, query("project_runtime_variables__list.sql"), projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list project runtime variables: %w", err)
 	}
@@ -60,7 +60,7 @@ func (repo *Repository) ListProjectRuntimeVariables(ctx context.Context, project
 }
 
 func (repo *Repository) DeleteProjectRuntimeVariable(ctx context.Context, id int64) (entity.ProjectRuntimeVariable, error) {
-	item, err := scanProjectRuntimeVariable(repo.pool.QueryRow(ctx, query("project_runtime_variables__delete.sql"), id))
+	item, err := scanProjectRuntimeVariable(repo.db.QueryRow(ctx, query("project_runtime_variables__delete.sql"), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.ProjectRuntimeVariable{}, adminrepo.ErrNotFound
@@ -71,7 +71,7 @@ func (repo *Repository) DeleteProjectRuntimeVariable(ctx context.Context, id int
 }
 
 func (repo *Repository) UpsertAgentRoleRuntimeVariable(ctx context.Context, input adminrepo.UpsertAgentRoleRuntimeVariableInput) (entity.AgentRoleRuntimeVariableBinding, bool, error) {
-	item, created, err := scanAgentRoleRuntimeVariableBindingWithCreated(repo.pool.QueryRow(ctx, query("agent_role_runtime_variables__upsert.sql"), input.RoleID, input.VariableID))
+	item, created, err := scanAgentRoleRuntimeVariableBindingWithCreated(repo.db.QueryRow(ctx, query("agent_role_runtime_variables__upsert.sql"), input.RoleID, input.VariableID))
 	if err != nil {
 		return entity.AgentRoleRuntimeVariableBinding{}, false, fmt.Errorf("upsert agent role runtime variable: %w", err)
 	}
@@ -79,7 +79,7 @@ func (repo *Repository) UpsertAgentRoleRuntimeVariable(ctx context.Context, inpu
 }
 
 func (repo *Repository) DeleteAgentRoleRuntimeVariable(ctx context.Context, roleID int64, variableID int64) (entity.AgentRoleRuntimeVariableBinding, error) {
-	item, err := scanAgentRoleRuntimeVariableBinding(repo.pool.QueryRow(ctx, query("agent_role_runtime_variables__delete.sql"), roleID, variableID))
+	item, err := scanAgentRoleRuntimeVariableBinding(repo.db.QueryRow(ctx, query("agent_role_runtime_variables__delete.sql"), roleID, variableID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentRoleRuntimeVariableBinding{}, adminrepo.ErrNotFound
@@ -90,7 +90,7 @@ func (repo *Repository) DeleteAgentRoleRuntimeVariable(ctx context.Context, role
 }
 
 func (repo *Repository) ListAgentRoleRuntimeVariables(ctx context.Context, roleID int64) ([]entity.AgentRoleRuntimeVariableBinding, error) {
-	rows, err := repo.pool.Query(ctx, query("agent_role_runtime_variables__list.sql"), roleID)
+	rows, err := repo.db.Query(ctx, query("agent_role_runtime_variables__list.sql"), roleID)
 	if err != nil {
 		return nil, fmt.Errorf("list agent role runtime variables: %w", err)
 	}

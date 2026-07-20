@@ -1,0 +1,102 @@
+{
+  "rbac": [
+    {
+      "kind": "Role",
+      "name": "matter-codex-bot-service-runtime",
+      "rules": [
+        "apiGroups=core;resources=persistentvolumeclaims;verbs=create,get,list,delete",
+        "apiGroups=core;resources=configmaps;verbs=create,get,list,delete",
+        "apiGroups=core;resources=pods;verbs=create,get,list,delete",
+        "apiGroups=core;resources=pods/log;verbs=get",
+        "apiGroups=core;resources=pods/exec;verbs=create",
+        "apiGroups=core;resources=secrets;verbs=create,get,list,update,patch,delete",
+        "apiGroups=batch;resources=jobs;verbs=create,get,list,delete"
+      ]
+    },
+    {
+      "kind": "RoleBinding",
+      "name": "matter-codex-bot-service-runtime",
+      "role_ref": "Role/matter-codex-bot-service-runtime",
+      "subjects": [
+        "ServiceAccount/matter-codex-bot-service"
+      ]
+    },
+    {
+      "kind": "Role",
+      "name": "matter-codex-agent-runner-readonly",
+      "rules": [
+        "apiGroups=core;resources=pods,pods/log,services,endpoints,configmaps,persistentvolumeclaims,events;verbs=get,list,watch",
+        "apiGroups=apps;resources=deployments,statefulsets,daemonsets,replicasets;verbs=get,list,watch",
+        "apiGroups=batch;resources=jobs,cronjobs;verbs=get,list,watch",
+        "apiGroups=networking.k8s.io;resources=ingresses;verbs=get,list,watch"
+      ]
+    },
+    {
+      "kind": "RoleBinding",
+      "name": "matter-codex-agent-runner-readonly",
+      "role_ref": "Role/matter-codex-agent-runner-readonly",
+      "subjects": [
+        "ServiceAccount/${MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT}"
+      ]
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "name": "matter-codex-agent-runner-cluster-admin",
+      "role_ref": "ClusterRole/cluster-admin",
+      "subjects": [
+        "ServiceAccount/${MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT}"
+      ]
+    }
+  ],
+  "pod": {
+    "service_account": "matter-codex-bot-service",
+    "security_context": {
+      "runAsGroup": 10001,
+      "runAsNonRoot": true,
+      "runAsUser": 10001,
+      "seccompProfile": {
+        "type": "RuntimeDefault"
+      }
+    },
+    "init_containers": [
+      {
+        "name": "wait-for-postgres",
+        "security_context": {
+          "allowPrivilegeEscalation": false,
+          "capabilities": {
+            "drop": [
+              "ALL"
+            ]
+          },
+          "readOnlyRootFilesystem": true
+        },
+        "secret_refs": null
+      }
+    ],
+    "containers": [
+      {
+        "name": "bot-service",
+        "security_context": {
+          "allowPrivilegeEscalation": false,
+          "capabilities": {
+            "drop": [
+              "ALL"
+            ]
+          },
+          "readOnlyRootFilesystem": true
+        },
+        "secret_refs": [
+          "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-admin-token",
+          "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-bot-token",
+          "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-slash-token",
+          "${MATTERCODEX_GITHUB_SECRET}/github-token",
+          "${MATTERCODEX_GITHUB_SECRET}/github-webhook-secret",
+          "${MATTERCODEX_POSTGRES_SECRET}/bot-service-runtime-datasource",
+          "${MATTERCODEX_POSTGRES_SECRET}/mattermost-datasource"
+        ]
+      }
+    ],
+    "secret_volumes": null
+  },
+  "network_policies": []
+}
