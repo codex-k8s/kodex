@@ -347,9 +347,9 @@ func (harness GeneratedPostgresHarness) ServerBinDirectory() string {
 	return harness.binDirectory
 }
 
-func initializeGeneratedProofRegistry(ctx context.Context, binDirectory string, dataDirectory string) error {
+func bootstrapProofRegistryStatement() string {
 	table := bootstrapProofTable
-	statement := fmt.Sprintf(`
+	return fmt.Sprintf(`
 create table public.%s (
 	nonce_sha256 bytea primary key,
 	version integer not null,
@@ -460,6 +460,10 @@ before update on public.%s
 for each row execute function public.%s();
 `, table, table, bootstrapProofGuardFunction, bootstrapProofGuardFunction,
 		bootstrapProofGuardTrigger, table, bootstrapProofGuardFunction)
+}
+
+func initializeGeneratedProofRegistry(ctx context.Context, binDirectory string, dataDirectory string) error {
+	statement := bootstrapProofRegistryStatement()
 	command := exec.CommandContext(ctx, filepath.Join(binDirectory, "postgres"),
 		"--single", "-D", dataDirectory, "postgres",
 	)

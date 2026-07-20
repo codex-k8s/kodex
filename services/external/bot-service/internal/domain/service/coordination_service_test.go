@@ -135,7 +135,7 @@ func TestSafeFailureSummaryRedactsSensitiveLinesAndTruncates(t *testing.T) {
 	}
 }
 
-func TestSafeFailureSummaryRedactsSyntheticSecretMatrixBeforeMattermostPayload(t *testing.T) {
+func TestSafeFailureSummaryKeepsOnlyKeyedFallbackRedaction(t *testing.T) {
 	fixtures := map[string]string{
 		"OPENAI_API_KEY":                   "mc-sentinel-openai-mattermost-0de13d2c",
 		"GH_TOKEN":                         "mc-sentinel-github-mattermost-23e25df0",
@@ -174,6 +174,7 @@ type fakeCoordinationStore struct {
 	reconcileErr            error
 	reconcileCalls          int
 	ownerAttention          entity.OwnerAttentionRequest
+	ownerAttentionInput     adminrepo.CreateOwnerAttentionInput
 	createOwnerAttentionErr error
 	setOwnerAttentionErr    error
 }
@@ -226,6 +227,7 @@ func (store *fakeCoordinationStore) SearchMemory(context.Context, adminrepo.Sear
 }
 
 func (store *fakeCoordinationStore) CreateOwnerAttention(_ context.Context, input adminrepo.CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error) {
+	store.ownerAttentionInput = input
 	if store.createOwnerAttentionErr != nil {
 		return entity.OwnerAttentionRequest{}, false, store.createOwnerAttentionErr
 	}

@@ -3,8 +3,24 @@ package main
 import (
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
+
+func TestParsePostgresTestModeAcceptsOnlyDocumentedModes(t *testing.T) {
+	for raw, expected := range map[string]postgresTestMode{
+		"": postgresTestModeLocalBinaries, "local-binaries": postgresTestModeLocalBinaries,
+		"scoped-dsn": postgresTestModeScopedDSN, "docker": postgresTestModeDocker, "kubernetes": postgresTestModeKubernetes,
+	} {
+		actual, err := parsePostgresTestMode(raw)
+		if err != nil || actual != expected {
+			t.Fatalf("parsePostgresTestMode(%q) = %q, %v", raw, actual, err)
+		}
+	}
+	if _, err := parsePostgresTestMode("shared-production"); err == nil {
+		t.Fatal("неизвестный PostgreSQL mode принят")
+	}
+}
 
 func TestParsePostgresMajorsRequiresSupportedDistinctVersions(t *testing.T) {
 	majors, err := parsePostgresMajors("15,16,15")
@@ -50,13 +66,50 @@ func TestSelectMajorEnvironmentRejectsIncompleteScopedPair(t *testing.T) {
 }
 
 func TestPostgresTestCommandEnvironmentDropsMatrixSecretInputs(t *testing.T) {
-	const sentinel = "synthetic-secret-sentinel"
 	environment := postgresTestCommandEnvironment([]string{
 		"PATH=/usr/bin",
-		"MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN_15=" + sentinel,
-		"MATTERCODEX_POSTGRES_TEST_BOOTSTRAP_PROOF_16=" + sentinel,
+		"MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN_15=sentinel-a",
+		"MATTERCODEX_POSTGRES_TEST_BOOTSTRAP_PROOF_16=sentinel-b",
+		"MATTERCODEX_DATABASE_DSN=sentinel-c",
+		"MATTERCODEX_MIGRATIONS_DATABASE_DSN=sentinel-d",
+		"MATTERCODEX_POSTGRES_HOST=sentinel-e",
+		"MATTERCODEX_POSTGRES_DB=sentinel-f",
+		"PGHOST=sentinel-g",
+		"PGPASSWORD=sentinel-h",
+		"DATABASE_URL=sentinel-i",
+		"POSTGRES_PASSWORD=sentinel-j",
+		"HOME=/synthetic/home-with-pgpass",
+		"GOFLAGS=-run=^$",
+		"GOENV=/tmp/adversarial-goenv",
+		"GOWORK=/tmp/adversarial-workspace",
 	})
 	if !slices.Equal(environment, []string{"PATH=/usr/bin"}) {
-		t.Fatalf("filtered environment = %#v", environment)
+		t.Fatalf("filtered environment names = %q", environmentNames(environment))
+	}
+}
+
+func environmentNames(environment []string) []string {
+	names := make([]string, 0, len(environment))
+	for _, item := range environment {
+		name, _, _ := strings.Cut(item, "=")
+		names = append(names, name)
+	}
+	return names
+}
+
+func TestExecutionSentinelRequiresExactMajorAndContent(t *testing.T) {
+	directory, path, value, err := newPostgresExecutionSentinel("15")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(directory)
+	if err := os.WriteFile(path, []byte("15\n"+value+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyPostgresExecutionSentinel(path, "15", value); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyPostgresExecutionSentinel(path, "16", value); err == nil {
+		t.Fatal("sentinel несовпадающей major-версии принят")
 	}
 }

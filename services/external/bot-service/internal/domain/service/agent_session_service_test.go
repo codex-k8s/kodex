@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -581,6 +582,47 @@ func TestAgentSessionCompleteIsIdempotentForTerminalTurn(t *testing.T) {
 	session := store.agentSessions["session-1"]
 	if session.ActiveTurnID != 0 || session.Status != agentSessionStatusIdle || session.CodexSessionID != "codex-session-1" {
 		t.Fatalf("session = %#v", session)
+	}
+}
+
+func TestAgentSessionFailedCompletionPublishesOnlyRunnerSanitizedPayload(t *testing.T) {
+	svc, store, _, publisher := terminalReconciliationTestDeps(t, false)
+	const safeMarker = "[скрыто]"
+	command := CompleteAgentSessionTurnCommand{
+		TurnID:       1,
+		RunID:        "run-1",
+		Status:       agentSessionTurnFailed,
+		FinalMessage: "безопасный итог: " + safeMarker,
+		ErrorMessage: "безопасная ошибка: " + safeMarker,
+		Artifacts:    map[string]string{"diagnostic": "безопасный артефакт: " + safeMarker},
+	}
+	if err := svc.CompleteTurn(context.Background(), "session-1", "session-token", command); err != nil {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(struct {
+		Turn           entity.AgentSessionTurn
+		Posts          []MattermostThreadPostInput
+		StatusCards    []MattermostCard
+		OwnerAttention adminrepo.CreateOwnerAttentionInput
+	}{turn, publisher.posts, publisher.cardUpdates, store.ownerAttentionInput})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), safeMarker) {
+		t.Fatalf("production completion path потерял безопасный marker: %s", payload)
+	}
+	if len(publisher.posts) < 2 {
+		t.Fatalf("publisher posts = %d, нужны result и failure attention", len(publisher.posts))
+	}
+	if len(publisher.cardUpdates) != 1 {
+		t.Fatalf("status card updates = %d, want 1", len(publisher.cardUpdates))
+	}
+	if store.ownerAttentionInput.IdempotencyKey != "turn-1-final-failure" || store.ownerAttention.MattermostPostID == "" {
+		t.Fatalf("owner attention не прошёл persistence boundary: input=%#v item=%#v", store.ownerAttentionInput, store.ownerAttention)
 	}
 }
 

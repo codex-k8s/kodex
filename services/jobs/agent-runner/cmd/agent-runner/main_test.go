@@ -8,13 +8,22 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/BurntSushi/toml"
 )
+
+func TestMain(testMain *testing.M) {
+	if os.Getenv("MATTERCODEX_TEST_MCP_BOOTSTRAP_HELPER") == "1" {
+		os.Exit(runMatterCodexMCPBootstrapShim())
+	}
+	os.Exit(testMain.Run())
+}
 
 func TestCodexShellEnvironmentAllowlistIncludesRuntimeEnv(t *testing.T) {
 	t.Setenv("MATTERCODEX_RUNTIME_ENV_ALLOWLIST", "RADAR_AUTO_KUBECONFIG,invalid-name,STAGING_DB_URL,RADAR_AUTO_KUBECONFIG")
@@ -305,26 +314,58 @@ func TestMatterCodexMCPBootstrapFailureBaselineRemainsFailedAfterDependencyRecov
 		t.Cleanup(func() { _ = os.Remove(path) })
 	}
 
-	dependencyAvailable := false
-	executions := 0
+	var dependencyAvailable atomic.Bool
+	var mcpBootstrapRequests atomic.Int32
 	claims := 0
 	var completion sessionTurnCompleteRequest
-	runner := &runner{
-		sessionTurnExecutor: func(_ context.Context, claim sessionTurnClaimResponse, sessionID string, _ string, _ string, _ []string, attempt int) (string, string, error) {
-			executions++
-			if dependencyAvailable || claim.TurnID != turnID || attempt != 0 {
-				t.Fatal("характеристическая fault-инъекция выполнила неожиданный запуск")
-			}
-			if err := os.WriteFile(eventsPath, nil, 0o600); err != nil {
-				t.Fatalf("создание пустого журнала событий: %v", err)
-			}
-			stderr := "required MCP servers failed to initialize: mattercodex: handshaking with MCP server failed\n"
-			if err := os.WriteFile(stderrPath, []byte(stderr), 0o600); err != nil {
-				t.Fatalf("создание синтетического stderr: %v", err)
-			}
-			return sessionID, stderr, errors.New("exit status 1")
-		},
-		sessionArchiveCreator: func(string) (string, error) { return "", nil },
+	terminalState := ""
+	mcpServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		mcpBootstrapRequests.Add(1)
+		if request.Method != http.MethodPost {
+			response.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var envelope struct {
+			Method string `json:"method"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&envelope); err != nil || envelope.Method != "initialize" {
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if !dependencyAvailable.Load() {
+			response.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{},"serverInfo":{"name":"synthetic-mattercodex","version":"1"}}}`))
+	}))
+	defer mcpServer.Close()
+	completionObserved := make(chan struct{})
+	dependencyRestored := make(chan struct{})
+	go func() {
+		<-completionObserved
+		dependencyAvailable.Store(true)
+		close(dependencyRestored)
+	}()
+	shimDirectory := t.TempDir()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(executable, filepath.Join(shimDirectory, "codex")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", shimDirectory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("MATTERCODEX_MCP_URL", mcpServer.URL)
+	t.Setenv("MATTERCODEX_MCP_TOKEN", "synthetic-mcp-bootstrap-token-not-logged")
+	executionMarker := filepath.Join(t.TempDir(), "codex-executed")
+	runner := &runner{sessionArchiveCreator: func(string, secretInventory) (string, error) { return "", nil }}
+	t.Cleanup(runner.cleanupEphemeralRuntime)
+	if err := runner.prepareEphemeralRuntime(); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeCodexConfig(filepath.Join(runner.codexHome, "config.toml")); err != nil {
+		t.Fatal(err)
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -343,9 +384,6 @@ func TestMatterCodexMCPBootstrapFailureBaselineRemainsFailedAfterDependencyRecov
 				})
 				return
 			}
-			if !dependencyAvailable {
-				t.Error("следующий claim выполнен до восстановления зависимости")
-			}
 			_ = json.NewEncoder(response).Encode(sessionTurnClaimResponse{Exit: true})
 		case "/internal/agent-sessions/" + sessionKey + "/turns/status":
 			response.WriteHeader(http.StatusNoContent)
@@ -355,7 +393,9 @@ func TestMatterCodexMCPBootstrapFailureBaselineRemainsFailedAfterDependencyRecov
 				response.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			dependencyAvailable = true
+			terminalState = completion.Status
+			close(completionObserved)
+			<-dependencyRestored
 			response.WriteHeader(http.StatusNoContent)
 		default:
 			t.Errorf("неожиданный session API path: %s", request.URL.Path)
@@ -367,15 +407,19 @@ func TestMatterCodexMCPBootstrapFailureBaselineRemainsFailedAfterDependencyRecov
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := runner.runSessionTurns(
-		ctx, server.Client(), server.URL, sessionKey, sessionToken, "", t.TempDir(), nil, "",
+		ctx, server.Client(), server.URL, sessionKey, sessionToken, "", t.TempDir(), []string{
+			"MATTERCODEX_TEST_MCP_BOOTSTRAP_HELPER=1",
+			"MATTERCODEX_TEST_MCP_ENDPOINT=" + mcpServer.URL,
+			"MATTERCODEX_TEST_MCP_EXECUTION_MARKER=" + executionMarker,
+		}, "",
 	); err != nil {
 		t.Fatalf("характеристический session loop: %v", err)
 	}
-	if completion.TurnID != turnID || completion.Status != "failed" || completion.ErrorMessage != "exit status 1" {
-		t.Fatalf("baseline completion = %#v", completion)
+	if completion.TurnID != turnID || completion.Status != "failed" || terminalState != "failed" || completion.ErrorMessage != "exit status 1" {
+		t.Fatalf("baseline completion = %#v terminal_state=%q", completion, terminalState)
 	}
-	if executions != 1 || claims != 2 || !dependencyAvailable {
-		t.Fatalf("baseline executions=%d claims=%d dependency_available=%t", executions, claims, dependencyAvailable)
+	if _, err := os.Stat(executionMarker); err != nil || mcpBootstrapRequests.Load() != 1 || claims != 2 || !dependencyAvailable.Load() {
+		t.Fatalf("baseline marker=%v mcp_requests=%d claims=%d dependency_available=%t", err, mcpBootstrapRequests.Load(), claims, dependencyAvailable.Load())
 	}
 	if info, err := os.Stat(eventsPath); err != nil || info.Size() != 0 {
 		t.Fatalf("Codex events до MCP bootstrap: info=%v error=%v", info, err)
@@ -388,6 +432,122 @@ func TestMatterCodexMCPBootstrapFailureBaselineRemainsFailedAfterDependencyRecov
 	}
 	// Успех этого теста фиксирует только текущий долг #51: после восстановления
 	// зависимости тот же ход остаётся failed и автоматически не продолжается.
+}
+
+func runMatterCodexMCPBootstrapShim() int {
+	marker := os.Getenv("MATTERCODEX_TEST_MCP_EXECUTION_MARKER")
+	if marker == "" {
+		return 2
+	}
+	file, err := os.OpenFile(marker, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return 2
+	}
+	_ = file.Close()
+	config, err := os.ReadFile(filepath.Join(os.Getenv("CODEX_HOME"), "config.toml"))
+	endpoint := os.Getenv("MATTERCODEX_TEST_MCP_ENDPOINT")
+	if err != nil || !strings.Contains(string(config), "required = true") || !strings.Contains(string(config), endpoint) {
+		return 2
+	}
+	client := &http.Client{Timeout: time.Second}
+	requestBody := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"codex-production-boundary-shim","version":"1"}}}`)
+	request, err := http.NewRequest(http.MethodPost, endpoint, requestBody)
+	if err != nil {
+		return 2
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json, text/event-stream")
+	response, err := client.Do(request)
+	if err == nil {
+		_ = response.Body.Close()
+	}
+	if err != nil || response.StatusCode != http.StatusOK {
+		_, _ = fmt.Fprintln(os.Stderr, "required MCP servers failed to initialize: mattercodex: handshaking with MCP server failed")
+		return 1
+	}
+	_, _ = fmt.Fprintln(os.Stdout, `{"type":"thread.started","thread_id":"unexpected-after-bootstrap"}`)
+	return 0
+}
+
+func TestKilledCodexSubprocessLeavesOnlySanitizedPersistentOutputs(t *testing.T) {
+	const (
+		secret = "mc-killed-child-secret-51de7802"
+		turnID = int64(510078)
+	)
+	if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{
+		sessionTurnEventsPath(turnID, 0),
+		sessionTurnStderrPath(turnID, 0),
+		filepath.Join(artifactsDir, fmt.Sprintf("session-turn-%d-final.md", turnID)),
+	}
+	for _, path := range paths {
+		_ = os.Remove(path)
+		path := path
+		t.Cleanup(func() { _ = os.Remove(path) })
+	}
+	runner := &runner{commandContext: func(ctx context.Context, _ string, args ...string) *exec.Cmd {
+		finalPath := ""
+		for index, argument := range args {
+			if argument == "--output-last-message" && index+1 < len(args) {
+				finalPath = args[index+1]
+			}
+		}
+		return exec.CommandContext(ctx, os.Args[0], "-test.run=TestKilledCodexSubprocessHelper", "--", finalPath)
+	}}
+	t.Cleanup(runner.cleanupEphemeralRuntime)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	_, _, runErr := runner.runCodexSessionTurn(ctx, sessionTurnClaimResponse{
+		TurnID: turnID, Prompt: "synthetic kill test",
+	}, "", fmt.Sprintf("session-turn-%d-final.md", turnID), t.TempDir(), []string{
+		"MATTERCODEX_TEST_KILLED_HELPER=1",
+		"OPENAI_API_KEY=" + secret,
+	}, 0)
+	if runErr == nil {
+		t.Fatal("убитый subprocess неожиданно завершился успешно")
+	}
+	for _, path := range paths {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("санитизированный persistent output %s отсутствует: %v", filepath.Base(path), err)
+		}
+		if strings.Contains(string(body), secret) {
+			t.Fatalf("persistent output %s содержит raw secret", filepath.Base(path))
+		}
+	}
+	entries, err := os.ReadDir(runner.rawArtifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("raw staging не очищен после kill: %d файлов", len(entries))
+	}
+	rollout := filepath.Join(runner.codexHome, "sessions", "synthetic", "rollout.jsonl")
+	body, err := os.ReadFile(rollout)
+	if err != nil {
+		t.Fatalf("санитизированный source rollout отсутствует: %v", err)
+	}
+	if strings.Contains(string(body), secret) || !strings.Contains(string(body), redactedSecretValue) {
+		t.Fatal("source rollout после kill не санитизирован")
+	}
+}
+
+func TestKilledCodexSubprocessHelper(t *testing.T) {
+	if os.Getenv("MATTERCODEX_TEST_KILLED_HELPER") != "1" {
+		return
+	}
+	secret := os.Getenv("OPENAI_API_KEY")
+	finalPath := os.Args[len(os.Args)-1]
+	if err := os.MkdirAll(filepath.Join(os.Getenv("CODEX_HOME"), "sessions", "synthetic"), 0o700); err != nil {
+		os.Exit(2)
+	}
+	_ = os.WriteFile(filepath.Join(os.Getenv("CODEX_HOME"), "sessions", "synthetic", "rollout.jsonl"), []byte(secret), 0o600)
+	_ = os.WriteFile(finalPath, []byte(secret), 0o600)
+	_, _ = fmt.Fprintln(os.Stdout, secret)
+	_, _ = fmt.Fprintln(os.Stderr, secret)
+	time.Sleep(30 * time.Second)
 }
 
 func mustTable(t *testing.T, parent map[string]any, key string) map[string]any {

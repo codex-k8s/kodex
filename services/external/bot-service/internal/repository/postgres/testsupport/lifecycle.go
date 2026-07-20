@@ -1613,6 +1613,10 @@ func provisionGeneratedBootstrapProof(
 	if err := validateBootstrapProofRegistry(ctx, connection); err != nil {
 		return "", fmt.Errorf("generated PostgreSQL harness не нашёл exact proof registry")
 	}
+	return issueBootstrapProof(ctx, connection, identity)
+}
+
+func issueBootstrapProof(ctx context.Context, connection *pgxpool.Conn, identity postgresServerIdentity) (string, error) {
 	nonce, err := randomHex(32)
 	if err != nil {
 		return "", fmt.Errorf("generated PostgreSQL harness не создал proof nonce")
