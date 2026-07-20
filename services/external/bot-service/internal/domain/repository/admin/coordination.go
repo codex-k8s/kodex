@@ -70,6 +70,7 @@ type CoordinationRepository interface {
 	SearchMemory(ctx context.Context, input SearchMemoryInput) ([]entity.MemoryRecord, error)
 	CreateOwnerAttention(ctx context.Context, input CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error)
 	SetOwnerAttentionPost(ctx context.Context, id int64, postID string) (entity.OwnerAttentionRequest, error)
+	ReconcileProcessRun(ctx context.Context, turnID int64) error
 }
 
 type CoordinationPolicyPresetRepository interface {

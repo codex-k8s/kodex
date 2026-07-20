@@ -987,6 +987,19 @@ func withActiveTurn(session entity.AgentSession, turnID int64, runID string) ent
 	return session
 }
 
+func TestDelegatedAgentRequestMessageDoesNotStartRequesterAsCallback(t *testing.T) {
+	message := delegatedAgentRequestMessage("manager-bot", "sre", "Проверь развертывание")
+	if !strings.Contains(message, "mattermost_return_to_requester") {
+		t.Fatalf("delegated request does not explain cross-thread callback: %q", message)
+	}
+	if strings.Contains(message, "используй только `mattermost_request_agent`") {
+		t.Fatalf("delegated request contains the obsolete callback instruction: %q", message)
+	}
+	if !strings.Contains(message, "Для запуска в текущем треде отдельный callback не требуется") {
+		t.Fatalf("delegated request does not distinguish same-thread work: %q", message)
+	}
+}
+
 type fakeAgentTurnDispatcher struct {
 	request      AgentTurnRequest
 	queued       AgentTurnQueued

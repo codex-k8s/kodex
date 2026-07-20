@@ -313,6 +313,8 @@ run_kaniko_build_remote() {
   mattercodex_remote_kubectl_apply_stdin none < "$job_manifest"
   wait_kaniko_job_remote "$job_name"
   mattercodex_log "Kaniko сборка $component завершена: $pull_image"
+  mattercodex_log "удаляется завершённый Kaniko job, чтобы освободить runtime quota"
+  mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q delete job $job_name_q --ignore-not-found --wait=false >/dev/null" </dev/null
 }
 
 apply_kaniko_build_infra_remote
