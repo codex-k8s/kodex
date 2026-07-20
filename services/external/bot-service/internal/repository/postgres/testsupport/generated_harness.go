@@ -10,10 +10,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const generatedPostgresOwner = "mattercodex_test_owner"
+const (
+	generatedPostgresOwner             = "mattercodex_test_owner"
+	generatedPostgresAuthorityFilename = ".mattercodex-generated-private-cluster-v1"
+	generatedPostgresAuthorityContent  = "mattercodex generated private PostgreSQL cluster v1\n"
+)
 
 type GeneratedPostgresHarness struct {
 	BootstrapDSN         string
@@ -26,7 +33,18 @@ type GeneratedPostgresHarness struct {
 	socketDirectory string
 	binDirectory    string
 	serverPort      int
+	authorityKey    string
 }
+
+type generatedPostgresAuthority struct {
+	rootDirectory     string
+	dataDirectory     string
+	socketDirectory   string
+	systemIdentifier  string
+	serverFingerprint string
+}
+
+var generatedPostgresAuthorities sync.Map
 
 func StartGeneratedPostgresHarness(ctx context.Context) (GeneratedPostgresHarness, error) {
 	binDirectory, err := generatedPostgresBinDirectory(ctx)
@@ -74,6 +92,9 @@ func StartGeneratedPostgresHarness(ctx context.Context) (GeneratedPostgresHarnes
 	if err := initializeGeneratedProofRegistry(registryContext, binDirectory, harness.dataDirectory); err != nil {
 		return GeneratedPostgresHarness{}, err
 	}
+	if err := writeGeneratedPostgresAuthoritySentinel(harness.rootDirectory); err != nil {
+		return GeneratedPostgresHarness{}, err
+	}
 	startContext, cancelStart := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelStart()
 	startOptions := strings.Join([]string{
@@ -111,6 +132,16 @@ func StartGeneratedPostgresHarness(ctx context.Context) (GeneratedPostgresHarnes
 	if err != nil {
 		return GeneratedPostgresHarness{}, err
 	}
+	harness.authorityKey, err = registerGeneratedPostgresAuthority(
+		proofContext,
+		harness.BootstrapDSN,
+		harness.rootDirectory,
+		harness.dataDirectory,
+		harness.socketDirectory,
+	)
+	if err != nil {
+		return GeneratedPostgresHarness{}, err
+	}
 	versionOutput, err := exec.CommandContext(ctx, filepath.Join(binDirectory, "postgres"), "--version").Output()
 	if err == nil {
 		fields := strings.Fields(string(versionOutput))
@@ -120,6 +151,183 @@ func StartGeneratedPostgresHarness(ctx context.Context) (GeneratedPostgresHarnes
 	}
 	cleanup = false
 	return harness, nil
+}
+
+func registerGeneratedPostgresAuthority(
+	ctx context.Context,
+	bootstrapDSN string,
+	rootDirectory string,
+	dataDirectory string,
+	socketDirectory string,
+) (string, error) {
+	config, err := parseDSNWithoutDisclosure(bootstrapDSN)
+	if err != nil {
+		return "", err
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return "", fmt.Errorf("generated PostgreSQL harness не подключился для регистрации exclusive authority")
+	}
+	defer pool.Close()
+	connection, err := pool.Acquire(ctx)
+	if err != nil {
+		return "", fmt.Errorf("generated PostgreSQL harness не получил connection для регистрации exclusive authority")
+	}
+	defer connection.Release()
+	identity, err := readPostgresServerIdentity(ctx, connection, config)
+	if err != nil {
+		return "", err
+	}
+	if err := validateBootstrapProofRegistry(ctx, connection); err != nil {
+		return "", fmt.Errorf("generated PostgreSQL harness не подтвердил offline proof registry")
+	}
+	root, err := exactPrivateDirectory(rootDirectory)
+	if err != nil {
+		return "", fmt.Errorf("generated PostgreSQL harness не подтвердил private root")
+	}
+	data, err := exactPrivateDirectory(dataDirectory)
+	if err != nil {
+		return "", fmt.Errorf("generated PostgreSQL harness не подтвердил private PGDATA")
+	}
+	socket, err := exactPrivateDirectory(socketDirectory)
+	if err != nil {
+		return "", fmt.Errorf("generated PostgreSQL harness не подтвердил private socket directory")
+	}
+	actualData, err := filepath.EvalSymlinks(identity.dataDirectory)
+	if err != nil || actualData != data || filepath.Dir(data) != root || filepath.Dir(socket) != root {
+		return "", fmt.Errorf("generated PostgreSQL harness получил несовпадающую private cluster identity")
+	}
+	authority := generatedPostgresAuthority{
+		rootDirectory: root, dataDirectory: data, socketDirectory: socket,
+		systemIdentifier: identity.systemIdentifier, serverFingerprint: identity.serverFingerprint,
+	}
+	if _, loaded := generatedPostgresAuthorities.LoadOrStore(identity.serverFingerprint, authority); loaded {
+		return "", fmt.Errorf("generated PostgreSQL exclusive authority уже зарегистрирована")
+	}
+	return identity.serverFingerprint, nil
+}
+
+func requireRegisteredGeneratedPostgresAuthority(identity postgresServerIdentity) error {
+	value, ok := generatedPostgresAuthorities.Load(identity.serverFingerprint)
+	if !ok {
+		return fmt.Errorf("PostgreSQL endpoint не имеет generated private-cluster authority")
+	}
+	authority, ok := value.(generatedPostgresAuthority)
+	if !ok || authority.serverFingerprint != identity.serverFingerprint ||
+		authority.systemIdentifier != identity.systemIdentifier {
+		return fmt.Errorf("generated PostgreSQL private-cluster authority имеет несовпадающую server identity")
+	}
+	root, rootErr := exactPrivateDirectory(authority.rootDirectory)
+	data, dataErr := exactPrivateDirectory(authority.dataDirectory)
+	socket, socketErr := exactPrivateDirectory(authority.socketDirectory)
+	actualData, actualErr := filepath.EvalSymlinks(identity.dataDirectory)
+	if rootErr != nil || dataErr != nil || socketErr != nil || actualErr != nil ||
+		root != authority.rootDirectory || data != authority.dataDirectory || socket != authority.socketDirectory ||
+		actualData != authority.dataDirectory || filepath.Dir(data) != root || filepath.Dir(socket) != root {
+		return fmt.Errorf("generated PostgreSQL private-cluster authority больше не подтверждена")
+	}
+	sentinelPath := filepath.Join(root, generatedPostgresAuthorityFilename)
+	sentinel, sentinelErr := os.ReadFile(sentinelPath)
+	sentinelInfo, sentinelStatErr := os.Stat(sentinelPath)
+	if sentinelErr != nil || sentinelStatErr != nil || string(sentinel) != generatedPostgresAuthorityContent ||
+		!sentinelInfo.Mode().IsRegular() || sentinelInfo.Mode().Perm() != 0o400 {
+		return fmt.Errorf("generated PostgreSQL offline authority sentinel больше не подтверждён")
+	}
+	return nil
+}
+
+func validateGeneratedPrivateClusterAuthority(
+	ctx context.Context,
+	config *pgxpool.Config,
+	identity postgresServerIdentity,
+) error {
+	configuredSocket := strings.TrimSpace(config.ConnConfig.Host)
+	if !strings.HasPrefix(configuredSocket, "/") {
+		return fmt.Errorf("PostgreSQL endpoint не является generated private Unix socket")
+	}
+	socket, err := exactPrivateDirectory(configuredSocket)
+	if err != nil || filepath.Base(socket) != "socket" {
+		return fmt.Errorf("generated PostgreSQL socket directory не подтверждён")
+	}
+	root, err := exactPrivateDirectory(filepath.Dir(socket))
+	if err != nil || !strings.HasPrefix(filepath.Base(root), "mattercodex-postgres-harness-") {
+		return fmt.Errorf("generated PostgreSQL private root не подтверждён")
+	}
+	data, err := exactPrivateDirectory(filepath.Join(root, "data"))
+	if err != nil || filepath.Dir(data) != root {
+		return fmt.Errorf("generated PostgreSQL private PGDATA не подтверждён")
+	}
+	actualData, err := filepath.EvalSymlinks(identity.dataDirectory)
+	if err != nil || actualData != data {
+		return fmt.Errorf("generated PostgreSQL server использует несовпадающий PGDATA")
+	}
+	sentinel, err := os.ReadFile(filepath.Join(root, generatedPostgresAuthorityFilename))
+	if err != nil || string(sentinel) != generatedPostgresAuthorityContent {
+		return fmt.Errorf("generated PostgreSQL offline authority sentinel не подтверждён")
+	}
+	sentinelInfo, err := os.Stat(filepath.Join(root, generatedPostgresAuthorityFilename))
+	if err != nil || !sentinelInfo.Mode().IsRegular() || sentinelInfo.Mode().Perm() != 0o400 {
+		return fmt.Errorf("generated PostgreSQL offline authority sentinel имеет небезопасные права")
+	}
+	maintenanceDSN, err := deriveDSN(config.ConnConfig.ConnString(), "postgres", "public")
+	if err != nil {
+		return fmt.Errorf("generated PostgreSQL maintenance DSN не получен")
+	}
+	maintenanceConfig, err := parseDSNWithoutDisclosure(maintenanceDSN)
+	if err != nil {
+		return err
+	}
+	maintenancePool, err := pgxpool.NewWithConfig(ctx, maintenanceConfig)
+	if err != nil {
+		return fmt.Errorf("generated PostgreSQL maintenance connection не создан")
+	}
+	defer maintenancePool.Close()
+	connection, err := maintenancePool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("generated PostgreSQL maintenance connection не получен")
+	}
+	defer connection.Release()
+	maintenanceIdentity, err := readPostgresServerIdentity(ctx, connection, maintenanceConfig)
+	if err != nil || maintenanceIdentity.currentDatabase != "postgres" ||
+		maintenanceIdentity.systemIdentifier != identity.systemIdentifier ||
+		maintenanceIdentity.serverFingerprint != identity.serverFingerprint ||
+		maintenanceIdentity.dataDirectory != identity.dataDirectory {
+		return fmt.Errorf("generated PostgreSQL maintenance server identity не подтверждена")
+	}
+	if err := validateBootstrapProofRegistry(ctx, connection); err != nil {
+		return fmt.Errorf("generated PostgreSQL offline proof registry не подтверждён")
+	}
+	return nil
+}
+
+func writeGeneratedPostgresAuthoritySentinel(rootDirectory string) error {
+	path := filepath.Join(rootDirectory, generatedPostgresAuthorityFilename)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o400)
+	if err != nil {
+		return fmt.Errorf("generated PostgreSQL offline authority sentinel не создан")
+	}
+	writeErr := error(nil)
+	if _, err := file.WriteString(generatedPostgresAuthorityContent); err != nil {
+		writeErr = fmt.Errorf("generated PostgreSQL offline authority sentinel не записан")
+	} else if err := file.Sync(); err != nil {
+		writeErr = fmt.Errorf("generated PostgreSQL offline authority sentinel не синхронизирован")
+	}
+	if err := file.Close(); writeErr == nil && err != nil {
+		writeErr = fmt.Errorf("generated PostgreSQL offline authority sentinel не закрыт")
+	}
+	return writeErr
+}
+
+func exactPrivateDirectory(path string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil || !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
+		return "", fmt.Errorf("каталог не является private directory")
+	}
+	return resolved, nil
 }
 
 func reserveGeneratedPostgresPort() (int, error) {
@@ -266,6 +474,10 @@ for each row execute function public.%s();
 func (harness *GeneratedPostgresHarness) Close(ctx context.Context) error {
 	if harness == nil || strings.TrimSpace(harness.rootDirectory) == "" {
 		return nil
+	}
+	if harness.authorityKey != "" {
+		generatedPostgresAuthorities.Delete(harness.authorityKey)
+		harness.authorityKey = ""
 	}
 	stopContext, cancelStop := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelStop()

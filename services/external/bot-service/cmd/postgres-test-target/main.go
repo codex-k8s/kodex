@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -59,7 +60,15 @@ func run() int {
 				_ = harness.Close(cleanupCtx)
 				cleanupCancel()
 			}
-			fmt.Fprintln(os.Stderr, "создание одноразового PostgreSQL test target не выполнено")
+			if !generated && target.Database != "" {
+				fmt.Fprintf(
+					os.Stderr,
+					"PostgreSQL test target %s сохранён или зарезервирован; состояние и очистку должен сверить владелец ephemeral endpoint/controller\n",
+					target.Database,
+				)
+			} else {
+				fmt.Fprintln(os.Stderr, "создание одноразового PostgreSQL test target не выполнено")
+			}
 			return 1
 		}
 		created = true
@@ -84,6 +93,15 @@ func run() int {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		cleanupErr = testsupport.DestroyDisposableDatabase(cleanupCtx, bootstrapDSN, target)
 		cleanupCancel()
+		var handoffError testsupport.ExternalCleanupRequiredError
+		if errors.As(cleanupErr, &handoffError) {
+			fmt.Fprintf(
+				os.Stderr,
+				"PostgreSQL test target сохранён; очистку database %s должен выполнить владелец ephemeral endpoint/controller\n",
+				handoffError.Database,
+			)
+			cleanupErr = nil
+		}
 	}
 	if generated {
 		harnessContext, harnessCancel := context.WithTimeout(context.Background(), 30*time.Second)

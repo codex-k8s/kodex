@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -139,11 +138,13 @@ type bootstrapLifecycleHookInput struct {
 }
 
 type bootstrapLifecycleOptions struct {
-	hook           func(context.Context, bootstrapLifecycleHookPoint, bootstrapLifecycleHookInput) error
-	cleanupTimeout time.Duration
-	attemptTimeout time.Duration
-	retryDelay     time.Duration
-	attempts       int
+	hook                       func(context.Context, bootstrapLifecycleHookPoint, bootstrapLifecycleHookInput) error
+	createDatabaseOIDForTest   int64
+	createDatabaseErrorForTest error
+	cleanupTimeout             time.Duration
+	attemptTimeout             time.Duration
+	retryDelay                 time.Duration
+	attempts                   int
 }
 
 type bootstrapLifecycleOptionsContextKey struct{}
@@ -153,8 +154,26 @@ type bootstrapCleanupError struct {
 	retryable bool
 }
 
+type bootstrapCreateCollisionError struct {
+	sqlState string
+}
+
+func (err bootstrapCreateCollisionError) Error() string {
+	return "создание одноразовой PostgreSQL database отклонено однозначной коллизией; резервирование использовано, удаление объекта-сироты запрещено"
+}
+
 func (err bootstrapCleanupError) Error() string {
 	return err.message
+}
+
+// ExternalCleanupRequiredError передаёт удаление exact database владельцу
+// внешнего ephemeral endpoint, не раскрывая DSN, proof или marker.
+type ExternalCleanupRequiredError struct {
+	Database string
+}
+
+func (err ExternalCleanupRequiredError) Error() string {
+	return "PostgreSQL test target сохранён; destructive cleanup должен выполнить владелец ephemeral endpoint/controller"
 }
 
 func RequiredDSN(t *testing.T) string {
@@ -264,18 +283,12 @@ func sha256Text(value string) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func bootstrapTargetDatabaseOID(markerValue string) int64 {
-	digest := sha256.Sum256([]byte("mattercodex-test-database-oid-v1\x00" + markerValue))
-	oid := binary.BigEndian.Uint32(digest[:4])&0x7fffffff | 1<<14
-	return int64(oid)
-}
-
-func definiteCreateDatabaseNotApplied(err error) bool {
+func definiteCreateDatabaseNotApplied(err error) (string, bool) {
 	var postgresErr *pgconn.PgError
 	if !errors.As(err, &postgresErr) {
-		return false
+		return "", false
 	}
-	return postgresErr.Code == "42P04" || postgresErr.Code == "23505"
+	return postgresErr.Code, postgresErr.Code == "42P04" || postgresErr.Code == "23505"
 }
 
 func BootstrapDisposableDatabase(ctx context.Context, bootstrapDSN string, proofValue string) (DisposableDatabase, error) {
@@ -311,15 +324,26 @@ func BootstrapDisposableDatabase(ctx context.Context, bootstrapDSN string, proof
 	}
 	identifier := pgx.Identifier{target.Database}.Sanitize()
 	owner := pgx.Identifier{identity.currentUserName}.Sanitize()
-	expectedDatabaseOID := bootstrapTargetDatabaseOID(target.Marker)
+	options := bootstrapLifecycleOptionsFromContext(ctx)
 	if err := runBootstrapLifecycleHook(ctx, bootstrapHookBeforeCreateExec, bootstrapLifecycleHookInput{
-		bootstrapDSN: bootstrapDSN, target: target,
+		bootstrapDSN: bootstrapDSN, target: target, databaseOID: options.createDatabaseOIDForTest,
 	}); err != nil {
 		return failBootstrapWithCleanup(ctx, bootstrapDSN, target, "создание одноразовой PostgreSQL database не начато")
 	}
-	if _, err := connection.Exec(ctx, "create database "+identifier+" with template template0 owner "+owner+" oid "+strconv.FormatInt(expectedDatabaseOID, 10)); err != nil {
-		if definiteCreateDatabaseNotApplied(err) {
-			return target, fmt.Errorf("создание одноразовой PostgreSQL database отклонено однозначной коллизией; резервирование использовано, удаление объекта-сироты запрещено")
+	createStatement := "create database " + identifier + " with template template0 owner " + owner
+	if options.createDatabaseOIDForTest != 0 {
+		if options.createDatabaseOIDForTest < 1<<14 || options.createDatabaseOIDForTest > 1<<32-1 {
+			return target, fmt.Errorf("тестовый OID PostgreSQL database вне допустимого диапазона")
+		}
+		createStatement += " oid " + strconv.FormatInt(options.createDatabaseOIDForTest, 10)
+	}
+	createErr := options.createDatabaseErrorForTest
+	if createErr == nil {
+		_, createErr = connection.Exec(ctx, createStatement)
+	}
+	if createErr != nil {
+		if sqlState, definite := definiteCreateDatabaseNotApplied(createErr); definite {
+			return target, bootstrapCreateCollisionError{sqlState: sqlState}
 		}
 		return failBootstrapWithCleanup(ctx, bootstrapDSN, target, "создание одноразовой PostgreSQL database не выполнено")
 	}
@@ -445,10 +469,6 @@ func recordBootstrapTargetIdentity(
 	if err := validateBootstrapTargetSnapshot(snapshot, ledger, target.Marker, false); err != nil {
 		return 0, err
 	}
-	expectedDatabaseOID := bootstrapTargetDatabaseOID(target.Marker)
-	if snapshot.databaseOID != expectedDatabaseOID {
-		return 0, fmt.Errorf("созданный PostgreSQL target не имеет независимой creation identity")
-	}
 	if ledger.databaseOID == 0 {
 		if err := setBootstrapTargetCreated(attemptCtx, connection, marker.runID, target, snapshot.databaseOID); err != nil {
 			return 0, err
@@ -567,6 +587,9 @@ func cleanupBootstrapTargetOnce(
 	if _, err := connection.Exec(ctx, `select pg_advisory_lock(hashtextextended($1, 0))`, marker.runID); err != nil {
 		return bootstrapCleanupError{message: "cleanup PostgreSQL target не получил exact claim lock", retryable: true}
 	}
+	if err := validateBootstrapProofRegistry(ctx, connection); err != nil {
+		return bootstrapCleanupError{message: "cleanup PostgreSQL target не подтвердил immutable proof registry", retryable: false}
+	}
 	ledger, err := loadBootstrapTargetLedger(ctx, connection, marker, target, identity)
 	if err != nil {
 		return bootstrapCleanupError{message: err.Error(), retryable: false}
@@ -576,6 +599,12 @@ func cleanupBootstrapTargetOnce(
 		return bootstrapCleanupError{message: "cleanup PostgreSQL target не прочитал exact database identity", retryable: true}
 	}
 	if !snapshot.exists {
+		if !requireMarker && ledger.state != bootstrapTargetStateMarked && ledger.state != bootstrapTargetStateDropped {
+			return bootstrapCleanupError{
+				message:   "PostgreSQL target до exact applied marker сохранён для ручной сверки; consumed proof и ledger не изменены",
+				retryable: false,
+			}
+		}
 		if err := setBootstrapTargetDropped(ctx, connection, marker.runID, target, ledger.databaseOID); err != nil {
 			return bootstrapCleanupError{message: "cleanup PostgreSQL target не зафиксировал подтверждённое отсутствие", retryable: true}
 		}
@@ -584,30 +613,17 @@ func cleanupBootstrapTargetOnce(
 	if ledger.state == bootstrapTargetStateDropped {
 		return bootstrapCleanupError{message: "cleanup PostgreSQL target обнаружил replacement после подтверждённого удаления", retryable: false}
 	}
-	if ledger.databaseOID == 0 {
-		if requireMarker || ledger.state != bootstrapTargetStateReserved {
-			return bootstrapCleanupError{message: "cleanup PostgreSQL target не имеет доказанной creation identity", retryable: false}
+	if ledger.databaseOID == 0 || ledger.state != bootstrapTargetStateMarked {
+		return bootstrapCleanupError{
+			message:   "PostgreSQL target до exact applied marker сохранён как коллизия или объект-сирота; требуется ручная очистка владельцем endpoint",
+			retryable: false,
 		}
-		if err := validateBootstrapTargetSnapshot(snapshot, ledger, target.Marker, false); err != nil {
-			return bootstrapCleanupError{message: err.Error(), retryable: false}
-		}
-		if snapshot.databaseOID != bootstrapTargetDatabaseOID(target.Marker) {
-			return bootstrapCleanupError{message: "cleanup PostgreSQL target обнаружил коллизию или объект-сироту без независимой creation identity", retryable: false}
-		}
-		if err := setBootstrapTargetCreated(ctx, connection, marker.runID, target, snapshot.databaseOID); err != nil {
-			return bootstrapCleanupError{message: "cleanup PostgreSQL target не зафиксировал OID", retryable: true}
-		}
-		ledger.databaseOID = snapshot.databaseOID
-		ledger.state = bootstrapTargetStateCreated
 	}
-	if err := validateBootstrapTargetSnapshot(snapshot, ledger, target.Marker, requireMarker); err != nil {
+	if err := validateBootstrapTargetSnapshot(snapshot, ledger, target.Marker, true); err != nil {
 		return bootstrapCleanupError{message: err.Error(), retryable: false}
 	}
-	if snapshot.comment == target.Marker && ledger.state != bootstrapTargetStateMarked {
-		if err := setBootstrapTargetMarked(ctx, connection, marker.runID, target, snapshot.databaseOID); err != nil {
-			return bootstrapCleanupError{message: "cleanup PostgreSQL target не зафиксировал applied marker", retryable: true}
-		}
-		ledger.state = bootstrapTargetStateMarked
+	if err := requireRegisteredGeneratedPostgresAuthority(identity); err != nil {
+		return ExternalCleanupRequiredError{Database: target.Database}
 	}
 	if requireMarker {
 		if err := ValidateDisposableDatabase(ctx, target.DSN, target.Marker); err != nil {
@@ -1470,6 +1486,11 @@ func FreshDatabaseDSN(t *testing.T, label string) string {
 		pool.Close()
 		t.Fatal("создание database отклонено server identity")
 	}
+	if err := validateGeneratedPrivateClusterAuthority(ctx, baseConfig, identity); err != nil {
+		connection.Release()
+		pool.Close()
+		t.Fatal("создание чистой database требует generated private-cluster authority")
+	}
 	runID, err := randomHex(16)
 	if err != nil {
 		connection.Release()
@@ -1503,41 +1524,6 @@ func FreshDatabaseDSN(t *testing.T, label string) string {
 		t.Fatal("чистая одноразовая PostgreSQL database не прошла admission")
 	}
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cleanupCancel()
-		if ValidateDisposableDatabase(cleanupCtx, targetDSN, markerValue) != nil {
-			t.Error("удаление чистой PostgreSQL database отклонено повторным admission")
-			return
-		}
-		parentMarker, markerErr := markerForDSN(baseDSN)
-		if markerErr != nil || ValidateDisposableDatabase(cleanupCtx, baseDSN, parentMarker) != nil {
-			t.Error("cleanup parent PostgreSQL database не прошла admission")
-			return
-		}
-		cleanupConfig, cleanupMarker, cleanupErr := validateDisposableIdentityOffline(baseDSN, parentMarker, time.Now().UTC())
-		if cleanupErr != nil {
-			t.Error("cleanup parent PostgreSQL database не прошла offline admission")
-			return
-		}
-		cleanupPool, cleanupErr := pgxpool.NewWithConfig(cleanupCtx, cleanupConfig)
-		if cleanupErr != nil {
-			t.Error("подключение для удаления тестовой database не выполнено")
-			return
-		}
-		defer cleanupPool.Close()
-		cleanupConnection, cleanupErr := cleanupPool.Acquire(cleanupCtx)
-		if cleanupErr != nil {
-			t.Error("cleanup connection одноразовой database не получено")
-			return
-		}
-		defer cleanupConnection.Release()
-		if validateDisposableDatabaseConnection(cleanupCtx, cleanupConnection, cleanupConfig, parentMarker, cleanupMarker) != nil {
-			t.Error("DROP DATABASE отклонён повторным admission parent database")
-			return
-		}
-		if _, cleanupErr := cleanupConnection.Exec(cleanupCtx, "drop database "+identifier+" with (force)"); cleanupErr != nil {
-			t.Error("удаление одноразовой database не выполнено")
-		}
 		disposableMarkers.Delete(database)
 	})
 	return targetDSN

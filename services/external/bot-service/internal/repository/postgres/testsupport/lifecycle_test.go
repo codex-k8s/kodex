@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -192,6 +194,22 @@ where target_database = $1
 			t.Fatalf("ledger state=%q oid=%d consumed=%t", state, databaseOID, consumed)
 		}
 	}
+	assertConsumedCreatedLedger := func(target DisposableDatabase, expectedOID int64) {
+		t.Helper()
+		var state string
+		var databaseOID int64
+		var consumed bool
+		if err := pool.QueryRow(ctx, `
+select target_state, coalesce(target_database_oid::bigint, 0), consumed_at is not null
+from public.mattercodex_test_bootstrap_proofs
+where target_database = $1
+`, target.Database).Scan(&state, &databaseOID, &consumed); err != nil {
+			t.Fatalf("read consumed created ledger: %v", err)
+		}
+		if state != bootstrapTargetStateCreated || databaseOID != expectedOID || !consumed {
+			t.Fatalf("ledger state=%q oid=%d consumed=%t", state, databaseOID, consumed)
+		}
+	}
 	assertNoDatabaseEffect := func(label string, action func() error) {
 		t.Helper()
 		before := databaseCount()
@@ -308,16 +326,17 @@ where target_database = $1
 			point        bootstrapLifecycleHookPoint
 			cancelCause  bool
 			bootstrapDSN string
+			preserved    bool
 		}{
-			{name: "неоднозначный CREATE", point: bootstrapHookAfterCreateExec},
-			{name: "после зафиксированного CREATE", point: bootstrapHookAfterCreateIdentified},
-			{name: "COMMENT не применён", point: bootstrapHookBeforeComment},
-			{name: "COMMENT применён с неоднозначным ответом", point: bootstrapHookAfterCommentExec},
+			{name: "неоднозначный CREATE", point: bootstrapHookAfterCreateExec, preserved: true},
+			{name: "после зафиксированного CREATE", point: bootstrapHookAfterCreateIdentified, preserved: true},
+			{name: "COMMENT не применён", point: bootstrapHookBeforeComment, preserved: true},
+			{name: "COMMENT применён с неоднозначным ответом", point: bootstrapHookAfterCommentExec, preserved: true},
 			{name: "ошибка deriveDSN", point: bootstrapHookBeforeDeriveDSN},
 			{name: "ошибка перед финальной Validate", point: bootstrapHookBeforeFinalValidate},
 			{name: "ошибка после финальной Validate", point: bootstrapHookAfterFinalValidate},
 			{name: "отмена caller во время финальной Validate", point: bootstrapHookBeforeFinalValidate, cancelCause: true},
-			{name: "отмена caller после CREATE", point: bootstrapHookAfterCreateIdentified, cancelCause: true},
+			{name: "отмена caller после CREATE", point: bootstrapHookAfterCreateIdentified, cancelCause: true, preserved: true},
 			{name: "loopback external-style endpoint", point: bootstrapHookBeforeDeriveDSN, bootstrapDSN: harness.LoopbackBootstrapDSN},
 		}
 		for _, testCase := range cases {
@@ -334,11 +353,15 @@ where target_database = $1
 				}
 				before := databaseCount()
 				var cancelCase context.CancelFunc
+				var dropCalls atomic.Int32
 				options := bootstrapLifecycleOptions{
 					cleanupTimeout: 10 * time.Second,
 					attemptTimeout: 3 * time.Second,
 					retryDelay:     10 * time.Millisecond,
 					hook: func(_ context.Context, point bootstrapLifecycleHookPoint, _ bootstrapLifecycleHookInput) error {
+						if point == bootstrapHookBeforeDrop {
+							dropCalls.Add(1)
+						}
 						if point != testCase.point {
 							return nil
 						}
@@ -365,8 +388,25 @@ where target_database = $1
 				if strings.Contains(bootstrapErr.Error(), target.Marker) || strings.Contains(bootstrapErr.Error(), proof) {
 					t.Fatal("ошибка раскрыла marker или proof")
 				}
-				if after := databaseCount(); after != before {
-					t.Fatalf("post-CREATE отказ оставил database: before=%d after=%d", before, after)
+				after := databaseCount()
+				if testCase.preserved {
+					if after != before+1 || dropCalls.Load() != 0 {
+						t.Fatalf("pre-marker отказ не сохранил target без DROP: before=%d after=%d drops=%d", before, after, dropCalls.Load())
+					}
+					snapshot, snapshotErr := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+					if snapshotErr != nil || !snapshot.exists {
+						t.Fatalf("pre-marker target не сохранён: %v", snapshotErr)
+					}
+					if testCase.point == bootstrapHookAfterCreateExec {
+						assertConsumedReservedLedger(target)
+					} else {
+						assertConsumedCreatedLedger(target, snapshot.databaseOID)
+					}
+					if _, cleanupErr := pool.Exec(ctx, "drop database "+pgx.Identifier{target.Database}.Sanitize()+" with (force)"); cleanupErr != nil {
+						t.Fatalf("controller cleanup preserved target: %v", cleanupErr)
+					}
+				} else if after != before || dropCalls.Load() == 0 {
+					t.Fatalf("post-marker generated cleanup: before=%d after=%d drops=%d", before, after, dropCalls.Load())
 				}
 				if _, reuseErr := BootstrapDisposableDatabase(ctx, bootstrapDSN, proof); reuseErr == nil {
 					t.Fatal("proof повторно принят после компенсирующей очистки")
@@ -389,8 +429,8 @@ where target_database = $1
 			attempts:       4,
 			hook: func(_ context.Context, point bootstrapLifecycleHookPoint, _ bootstrapLifecycleHookInput) error {
 				switch point {
-				case bootstrapHookBeforeComment:
-					return fmt.Errorf("синтетический отказ до COMMENT")
+				case bootstrapHookBeforeDeriveDSN:
+					return fmt.Errorf("синтетический отказ после exact marker")
 				case bootstrapHookBeforeCleanupAttempt:
 					if cleanupAttempts.Add(1) <= 2 {
 						return fmt.Errorf("синтетическая потеря cleanup connection")
@@ -614,51 +654,101 @@ where target_database = $1
 		if elapsed := time.Since(started); elapsed > time.Second {
 			t.Fatalf("deadline cleanup не ограничен: %s", elapsed)
 		}
-		manualCtx, manualCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer manualCancel()
-		if err := boundedBootstrapTargetCleanup(manualCtx, harness.BootstrapDSN, target, false, false); err != nil {
-			t.Fatalf("manual reconciliation после deadline: %v", err)
+		snapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+		if err != nil || !snapshot.exists {
+			t.Fatalf("deadline cleanup не сохранил pre-marker target: %v", err)
+		}
+		assertConsumedCreatedLedger(target, snapshot.databaseOID)
+		if _, err := pool.Exec(ctx, "drop database "+pgx.Identifier{target.Database}.Sanitize()+" with (force)"); err != nil {
+			t.Fatalf("controller cleanup deadline target: %v", err)
 		}
 	})
 
-	t.Run("definite pre-create collision preserves foreign database", func(t *testing.T) {
-		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
-		if err != nil {
-			t.Fatalf("provision collision proof: %v", err)
+	t.Run("definite create collisions preserve foreign database", func(t *testing.T) {
+		cases := []struct {
+			name             string
+			expectedSQLState string
+			testDatabaseOID  int64
+		}{
+			{name: "42P04 name collision", expectedSQLState: "42P04", testDatabaseOID: 2_000_000_001},
+			{name: "23505 unique collision", expectedSQLState: "23505", testDatabaseOID: 2_000_000_002},
 		}
-		before := databaseCount()
-		options := bootstrapLifecycleOptions{
-			cleanupTimeout: 10 * time.Second,
-			attemptTimeout: 3 * time.Second,
-			retryDelay:     10 * time.Millisecond,
-			hook: func(hookCtx context.Context, point bootstrapLifecycleHookPoint, input bootstrapLifecycleHookInput) error {
-				if point != bootstrapHookBeforeCreateExec {
-					return nil
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+				if err != nil {
+					t.Fatalf("provision collision proof: %v", err)
 				}
-				identifier := pgx.Identifier{input.target.Database}.Sanitize()
-				owner := pgx.Identifier{generatedPostgresOwner}.Sanitize()
-				_, createErr := pool.Exec(hookCtx, "create database "+identifier+" with template template0 owner "+owner)
-				return createErr
-			},
-		}
-		collisionCtx := context.WithValue(context.Background(), bootstrapLifecycleOptionsContextKey{}, options)
-		target, bootstrapErr := BootstrapDisposableDatabase(collisionCtx, harness.BootstrapDSN, proof)
-		if bootstrapErr == nil || !strings.Contains(bootstrapErr.Error(), "однозначной коллизией") || !strings.Contains(bootstrapErr.Error(), "объекта-сироты") {
-			t.Fatalf("однозначная коллизия не диагностирована: %v", bootstrapErr)
-		}
-		snapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
-		if err != nil || !snapshot.exists || snapshot.comment != "" || snapshot.databaseOID == bootstrapTargetDatabaseOID(target.Marker) {
-			t.Fatalf("foreign database не сохранена: snapshot=%#v error=%v", snapshot, err)
-		}
-		assertConsumedReservedLedger(target)
-		if _, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof); err == nil {
-			t.Fatal("proof definite collision повторно принят")
-		}
-		if _, err := pool.Exec(ctx, "drop database "+pgx.Identifier{target.Database}.Sanitize()+" with (force)"); err != nil {
-			t.Fatalf("test cleanup collision database: %v", err)
-		}
-		if after := databaseCount(); after != before {
-			t.Fatalf("collision test cleanup изменил baseline: before=%d after=%d", before, after)
+				before := databaseCount()
+				foreignDatabase := ""
+				var dropCalls atomic.Int32
+				var createDatabaseError error
+				if testCase.expectedSQLState == "23505" {
+					connection, acquireErr := pool.Acquire(ctx)
+					if acquireErr != nil {
+						t.Fatalf("acquire real 23505 connection: %v", acquireErr)
+					}
+					table := pgx.Identifier{uniqueName("mc_unique_collision", 48)}.Sanitize()
+					if _, err := connection.Exec(ctx, "create temporary table "+table+"(id integer primary key)"); err != nil {
+						connection.Release()
+						t.Fatalf("prepare real 23505 constraint: %v", err)
+					}
+					_, createDatabaseError = connection.Exec(ctx, "insert into "+table+" values (1), (1)")
+					connection.Release()
+					var postgresErr *pgconn.PgError
+					if !errors.As(createDatabaseError, &postgresErr) || postgresErr.Code != "23505" {
+						t.Fatalf("real PostgreSQL не вернул 23505: %v", createDatabaseError)
+					}
+				}
+				options := bootstrapLifecycleOptions{
+					createDatabaseOIDForTest:   testCase.testDatabaseOID,
+					createDatabaseErrorForTest: createDatabaseError,
+					cleanupTimeout:             10 * time.Second,
+					attemptTimeout:             3 * time.Second,
+					retryDelay:                 10 * time.Millisecond,
+					hook: func(hookCtx context.Context, point bootstrapLifecycleHookPoint, input bootstrapLifecycleHookInput) error {
+						if point == bootstrapHookBeforeDrop {
+							dropCalls.Add(1)
+						}
+						if point != bootstrapHookBeforeCreateExec {
+							return nil
+						}
+						foreignDatabase = input.target.Database
+						identifier := pgx.Identifier{foreignDatabase}.Sanitize()
+						owner := pgx.Identifier{generatedPostgresOwner}.Sanitize()
+						_, createErr := pool.Exec(
+							hookCtx,
+							"create database "+identifier+" with template template0 owner "+owner+" oid "+fmt.Sprint(input.databaseOID),
+						)
+						return createErr
+					},
+				}
+				collisionCtx := context.WithValue(context.Background(), bootstrapLifecycleOptionsContextKey{}, options)
+				target, bootstrapErr := BootstrapDisposableDatabase(collisionCtx, harness.BootstrapDSN, proof)
+				var collisionErr bootstrapCreateCollisionError
+				if !errors.As(bootstrapErr, &collisionErr) || collisionErr.sqlState != testCase.expectedSQLState ||
+					!strings.Contains(bootstrapErr.Error(), "объекта-сироты") {
+					t.Fatalf("однозначная коллизия не диагностирована: %v", bootstrapErr)
+				}
+				foreignSnapshot, err := readBootstrapTargetSnapshot(ctx, pool, foreignDatabase)
+				if err != nil || !foreignSnapshot.exists || foreignSnapshot.comment != "" || foreignSnapshot.databaseOID != testCase.testDatabaseOID {
+					t.Fatalf("foreign collision database не сохранена: snapshot=%#v error=%v", foreignSnapshot, err)
+				}
+				targetSnapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+				if err != nil || !targetSnapshot.exists || dropCalls.Load() != 0 {
+					t.Fatalf("collision target state unexpected: snapshot=%#v drops=%d error=%v", targetSnapshot, dropCalls.Load(), err)
+				}
+				assertConsumedReservedLedger(target)
+				if _, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof); err == nil {
+					t.Fatal("proof definite collision повторно принят")
+				}
+				if _, err := pool.Exec(ctx, "drop database "+pgx.Identifier{foreignDatabase}.Sanitize()+" with (force)"); err != nil {
+					t.Fatalf("controller cleanup collision database: %v", err)
+				}
+				if after := databaseCount(); after != before {
+					t.Fatalf("collision test cleanup изменил baseline: before=%d after=%d", before, after)
+				}
+			})
 		}
 	})
 
@@ -669,11 +759,15 @@ where target_database = $1
 		}
 		before := databaseCount()
 		var originalOID int64
+		var dropCalls atomic.Int32
 		options := bootstrapLifecycleOptions{
 			cleanupTimeout: 10 * time.Second,
 			attemptTimeout: 3 * time.Second,
 			retryDelay:     10 * time.Millisecond,
 			hook: func(hookCtx context.Context, point bootstrapLifecycleHookPoint, input bootstrapLifecycleHookInput) error {
+				if point == bootstrapHookBeforeDrop {
+					dropCalls.Add(1)
+				}
 				if point != bootstrapHookAfterCreateExec {
 					return nil
 				}
@@ -687,7 +781,10 @@ where target_database = $1
 					return dropErr
 				}
 				owner := pgx.Identifier{generatedPostgresOwner}.Sanitize()
-				if _, createErr := pool.Exec(hookCtx, "create database "+identifier+" with template template0 owner "+owner); createErr != nil {
+				if _, createErr := pool.Exec(
+					hookCtx,
+					"create database "+identifier+" with template template0 owner "+owner+" oid "+fmt.Sprint(originalOID),
+				); createErr != nil {
 					return createErr
 				}
 				return fmt.Errorf("синтетическая pre-ledger подмена target")
@@ -695,11 +792,11 @@ where target_database = $1
 		}
 		replacementCtx := context.WithValue(context.Background(), bootstrapLifecycleOptionsContextKey{}, options)
 		target, bootstrapErr := BootstrapDisposableDatabase(replacementCtx, harness.BootstrapDSN, proof)
-		if bootstrapErr == nil || !strings.Contains(bootstrapErr.Error(), "коллизию или объект-сироту") || !strings.Contains(bootstrapErr.Error(), "не подтверждена") {
+		if bootstrapErr == nil || !strings.Contains(bootstrapErr.Error(), "коллиз") || !strings.Contains(bootstrapErr.Error(), "не подтверждена") {
 			t.Fatalf("pre-ledger replacement не диагностирован: %v", bootstrapErr)
 		}
 		snapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
-		if err != nil || !snapshot.exists || snapshot.databaseOID == originalOID || snapshot.comment != "" {
+		if err != nil || !snapshot.exists || snapshot.databaseOID != originalOID || snapshot.comment != "" || dropCalls.Load() != 0 {
 			t.Fatalf("pre-ledger replacement не сохранён: snapshot=%#v original=%d error=%v", snapshot, originalOID, err)
 		}
 		assertConsumedReservedLedger(target)
@@ -721,11 +818,15 @@ where target_database = $1
 		}
 		before := databaseCount()
 		var originalOID int64
+		var dropCalls atomic.Int32
 		options := bootstrapLifecycleOptions{
 			cleanupTimeout: 10 * time.Second,
 			attemptTimeout: 3 * time.Second,
 			retryDelay:     10 * time.Millisecond,
 			hook: func(hookCtx context.Context, point bootstrapLifecycleHookPoint, input bootstrapLifecycleHookInput) error {
+				if point == bootstrapHookBeforeDrop {
+					dropCalls.Add(1)
+				}
 				if point != bootstrapHookAfterCreateIdentified {
 					return nil
 				}
@@ -735,11 +836,10 @@ where target_database = $1
 					return err
 				}
 				owner := pgx.Identifier{generatedPostgresOwner}.Sanitize()
-				if _, err := pool.Exec(hookCtx, "create database "+identifier+" with template template0 owner "+owner); err != nil {
-					return err
-				}
-				comment := strings.ReplaceAll(input.target.Marker, "'", "''")
-				if _, err := pool.Exec(hookCtx, "comment on database "+identifier+" is '"+comment+"'"); err != nil {
+				if _, err := pool.Exec(
+					hookCtx,
+					"create database "+identifier+" with template template0 owner "+owner+" oid "+fmt.Sprint(originalOID),
+				); err != nil {
 					return err
 				}
 				return fmt.Errorf("синтетическая подмена target")
@@ -751,9 +851,10 @@ where target_database = $1
 			t.Fatalf("replacement не вызвал fail-closed cleanup: %v", bootstrapErr)
 		}
 		snapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
-		if err != nil || !snapshot.exists || snapshot.databaseOID == originalOID {
+		if err != nil || !snapshot.exists || snapshot.databaseOID != originalOID || snapshot.comment != "" || dropCalls.Load() != 0 {
 			t.Fatalf("replacement не сохранён: exists=%t oid=%d original=%d err=%v", snapshot.exists, snapshot.databaseOID, originalOID, err)
 		}
+		assertConsumedCreatedLedger(target, originalOID)
 		if _, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof); err == nil {
 			t.Fatal("proof replacement-сценария повторно принят")
 		}
@@ -762,6 +863,98 @@ where target_database = $1
 		}
 		if after := databaseCount(); after != before {
 			t.Fatalf("replacement test cleanup изменил baseline: before=%d after=%d", before, after)
+		}
+	})
+
+	t.Run("external endpoint hands cleanup to owner without DROP", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision external-style proof: %v", err)
+		}
+		authorityValue, loaded := generatedPostgresAuthorities.LoadAndDelete(harness.authorityKey)
+		if !loaded {
+			t.Fatal("generated authority отсутствует до external-style проверки")
+		}
+		authorityRestored := false
+		defer func() {
+			if !authorityRestored {
+				generatedPostgresAuthorities.Store(harness.authorityKey, authorityValue)
+			}
+		}()
+		target, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof)
+		if err != nil {
+			t.Fatalf("bootstrap external-style target: %v", err)
+		}
+		var dropCalls atomic.Int32
+		destroyOptions := bootstrapLifecycleOptions{
+			hook: func(_ context.Context, point bootstrapLifecycleHookPoint, _ bootstrapLifecycleHookInput) error {
+				if point == bootstrapHookBeforeDrop {
+					dropCalls.Add(1)
+				}
+				return nil
+			},
+		}
+		destroyCtx := context.WithValue(ctx, bootstrapLifecycleOptionsContextKey{}, destroyOptions)
+		destroyErr := DestroyDisposableDatabase(destroyCtx, harness.BootstrapDSN, target)
+		var handoffErr ExternalCleanupRequiredError
+		if !errors.As(destroyErr, &handoffErr) || handoffErr.Database != target.Database || dropCalls.Load() != 0 {
+			t.Fatalf("external cleanup handoff не выполнен безопасно: error=%v drops=%d", destroyErr, dropCalls.Load())
+		}
+		snapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+		if err != nil || !snapshot.exists || snapshot.comment != target.Marker {
+			t.Fatalf("external target не сохранён для владельца endpoint: snapshot=%#v error=%v", snapshot, err)
+		}
+		generatedPostgresAuthorities.Store(harness.authorityKey, authorityValue)
+		authorityRestored = true
+		if err := DestroyDisposableDatabase(ctx, harness.BootstrapDSN, target); err != nil {
+			t.Fatalf("generated owner cleanup external-style target: %v", err)
+		}
+	})
+
+	t.Run("external compensation hands marked target to owner without DROP", func(t *testing.T) {
+		proof, err := provisionGeneratedBootstrapProof(ctx, harness.BootstrapDSN, harness.dataDirectory, harness.socketDirectory)
+		if err != nil {
+			t.Fatalf("provision external compensation proof: %v", err)
+		}
+		authorityValue, loaded := generatedPostgresAuthorities.LoadAndDelete(harness.authorityKey)
+		if !loaded {
+			t.Fatal("generated authority отсутствует до external compensation проверки")
+		}
+		authorityRestored := false
+		defer func() {
+			if !authorityRestored {
+				generatedPostgresAuthorities.Store(harness.authorityKey, authorityValue)
+			}
+		}()
+		var dropCalls atomic.Int32
+		options := bootstrapLifecycleOptions{
+			hook: func(_ context.Context, point bootstrapLifecycleHookPoint, _ bootstrapLifecycleHookInput) error {
+				if point == bootstrapHookBeforeDrop {
+					dropCalls.Add(1)
+				}
+				if point == bootstrapHookBeforeDeriveDSN {
+					return fmt.Errorf("синтетический отказ external lifecycle после exact marker")
+				}
+				return nil
+			},
+		}
+		bootstrapCtx := context.WithValue(ctx, bootstrapLifecycleOptionsContextKey{}, options)
+		target, bootstrapErr := BootstrapDisposableDatabase(bootstrapCtx, harness.BootstrapDSN, proof)
+		var handoffErr ExternalCleanupRequiredError
+		if !errors.As(bootstrapErr, &handoffErr) || handoffErr.Database != target.Database || dropCalls.Load() != 0 {
+			t.Fatalf("external compensation не передала cleanup владельцу: error=%v drops=%d", bootstrapErr, dropCalls.Load())
+		}
+		snapshot, err := readBootstrapTargetSnapshot(ctx, pool, target.Database)
+		if err != nil || !snapshot.exists || snapshot.comment != target.Marker {
+			t.Fatalf("external compensation скрыла сохранённый target: snapshot=%#v error=%v", snapshot, err)
+		}
+		if _, err := BootstrapDisposableDatabase(ctx, harness.BootstrapDSN, proof); err == nil {
+			t.Fatal("external compensation proof повторно принят")
+		}
+		generatedPostgresAuthorities.Store(harness.authorityKey, authorityValue)
+		authorityRestored = true
+		if err := DestroyDisposableDatabase(ctx, harness.BootstrapDSN, target); err != nil {
+			t.Fatalf("generated owner cleanup compensated target: %v", err)
 		}
 	})
 
