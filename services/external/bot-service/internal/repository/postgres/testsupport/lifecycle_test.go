@@ -1,3 +1,5 @@
+//go:build postgres
+
 package testsupport
 
 import (
@@ -150,7 +152,7 @@ func TestBootstrapProofOfflineMatrix(t *testing.T) {
 
 func TestGeneratedPostgresHarnessOneShotBootstrapProof(t *testing.T) {
 	if strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_BINDIR")) == "" {
-		t.Skip("server binaries generated PostgreSQL harness не заданы")
+		t.Fatal("серверные исполняемые файлы автоматически созданной оснастки PostgreSQL обязательны")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()

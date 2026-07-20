@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"sigs.k8s.io/yaml"
 )
 
 func TestInspectSecretIntegrityDetectsSameRefMutationWithoutReturningValue(t *testing.T) {
@@ -631,6 +632,79 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	}
 	if !hasSecretVolume(podSpec.Volumes, sessionSecretVolume, started.SecretName) {
 		t.Fatalf("session secret volume missing: %#v", podSpec.Volumes)
+	}
+}
+
+func TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects(t *testing.T) {
+	secrets := map[string]string{
+		"OpenAI":         "mc-sentinel-openai-render-76c8b2a1",
+		"GitHub":         "mc-sentinel-github-render-26a517fe",
+		"Mattermost":     "mc-sentinel-mattermost-render-19d487b0",
+		"Kubernetes":     "mc-sentinel-kubernetes-render-aba3e3c4",
+		"PostgreSQL DSN": "postgres://mc-sentinel-postgres-render-8c0777bf@127.0.0.1/disposable",
+		"session/MCP":    "mc-sentinel-session-mcp-render-a5fb2298",
+	}
+	client := fake.NewSimpleClientset(
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "synthetic-openai", Namespace: "mattermost"},
+			Data:       map[string][]byte{"auth.json": []byte(secrets["OpenAI"])},
+		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "synthetic-github", Namespace: "mattermost"},
+			Data:       map[string][]byte{"github-token": []byte(secrets["GitHub"]), "github-username": []byte("synthetic"), "github-email": []byte("synthetic@example.invalid")},
+		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "synthetic-runtime", Namespace: "mattermost"},
+			Data: map[string][]byte{
+				"mattermost": []byte(secrets["Mattermost"]),
+				"kubernetes": []byte(secrets["Kubernetes"]),
+				"postgres":   []byte(secrets["PostgreSQL DSN"]),
+			},
+		},
+	)
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		WorkspaceStorageSize:      "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	runtimeEnv := []runtimerepo.RuntimeEnvVar{
+		{Name: "SYNTHETIC_MATTERMOST_TOKEN", SecretName: "synthetic-runtime", SecretKey: "mattermost", Sensitive: true},
+		{Name: "SYNTHETIC_KUBERNETES_TOKEN", SecretName: "synthetic-runtime", SecretKey: "kubernetes", Sensitive: true},
+		{Name: "MATTERCODEX_DATABASE_DSN", SecretName: "synthetic-runtime", SecretKey: "postgres", Sensitive: true},
+	}
+	started, err := runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
+		SessionKey: "secret-matrix", Role: "developer", BotServiceURL: "http://bot-service",
+		InternalToken: secrets["session/MCP"], CodexAuthSecretName: "synthetic-openai",
+		GitHubSecretName: "synthetic-github", RuntimeEnv: runtimeEnv,
+	})
+	if err != nil {
+		t.Fatalf("StartAgentSession() error = %v", err)
+	}
+	pod, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get session pod error = %v", err)
+	}
+	renderedYAML, err := yaml.Marshal(pod)
+	if err != nil {
+		t.Fatalf("yaml.Marshal(pod) error = %v", err)
+	}
+	for class, value := range secrets {
+		if strings.Contains(string(renderedYAML), value) {
+			t.Fatalf("отрендерованный Pod содержит значение класса %s", class)
+		}
+	}
+	if !strings.Contains(string(renderedYAML), "synthetic-runtime") ||
+		!strings.Contains(string(renderedYAML), "mc-session-token-secret-matrix") ||
+		!strings.Contains(string(renderedYAML), "secretKeyRef") {
+		t.Fatal("отрендерованный Pod не сохранил ссылки на Secret и ключи")
+	}
+	sessionSecret, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), started.SecretName, metav1.GetOptions{})
+	if err != nil || string(sessionSecret.Data["token"]) != secrets["session/MCP"] {
+		t.Fatalf("synthetic session Secret не материализован только в Secret: error=%v", err)
 	}
 }
 

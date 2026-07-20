@@ -1,7 +1,12 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -280,6 +285,109 @@ func TestCodexCapacityRetryScheduleAndArtifacts(t *testing.T) {
 			t.Fatalf("retry prompt misses %q: %q", expected, prompt)
 		}
 	}
+}
+
+func TestMatterCodexMCPBootstrapFailureBaselineRemainsFailedAfterDependencyRecovery(t *testing.T) {
+	const (
+		sessionKey   = "characteristic-session-51"
+		sessionToken = "synthetic-session-token-not-logged"
+		turnID       = int64(510077)
+	)
+	if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
+		t.Fatalf("создание каталога артефактов: %v", err)
+	}
+	eventsPath := sessionTurnEventsPath(turnID, 0)
+	stderrPath := sessionTurnStderrPath(turnID, 0)
+	finalPath := filepath.Join(artifactsDir, fmt.Sprintf("session-turn-%d-final.md", turnID))
+	for _, path := range []string{eventsPath, stderrPath, finalPath} {
+		_ = os.Remove(path)
+		path := path
+		t.Cleanup(func() { _ = os.Remove(path) })
+	}
+
+	dependencyAvailable := false
+	executions := 0
+	claims := 0
+	var completion sessionTurnCompleteRequest
+	runner := &runner{
+		sessionTurnExecutor: func(_ context.Context, claim sessionTurnClaimResponse, sessionID string, _ string, _ string, _ []string, attempt int) (string, string, error) {
+			executions++
+			if dependencyAvailable || claim.TurnID != turnID || attempt != 0 {
+				t.Fatal("характеристическая fault-инъекция выполнила неожиданный запуск")
+			}
+			if err := os.WriteFile(eventsPath, nil, 0o600); err != nil {
+				t.Fatalf("создание пустого журнала событий: %v", err)
+			}
+			stderr := "required MCP servers failed to initialize: mattercodex: handshaking with MCP server failed\n"
+			if err := os.WriteFile(stderrPath, []byte(stderr), 0o600); err != nil {
+				t.Fatalf("создание синтетического stderr: %v", err)
+			}
+			return sessionID, stderr, errors.New("exit status 1")
+		},
+		sessionArchiveCreator: func(string) (string, error) { return "", nil },
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+sessionToken {
+			t.Error("session API получил неверную авторизацию")
+			response.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/internal/agent-sessions/" + sessionKey + "/turns/claim":
+			claims++
+			response.Header().Set("Content-Type", "application/json")
+			if claims == 1 {
+				_ = json.NewEncoder(response).Encode(sessionTurnClaimResponse{
+					HasTurn: true, TurnID: turnID, RunID: "run-51-baseline", Prompt: "synthetic task",
+				})
+				return
+			}
+			if !dependencyAvailable {
+				t.Error("следующий claim выполнен до восстановления зависимости")
+			}
+			_ = json.NewEncoder(response).Encode(sessionTurnClaimResponse{Exit: true})
+		case "/internal/agent-sessions/" + sessionKey + "/turns/status":
+			response.WriteHeader(http.StatusNoContent)
+		case "/internal/agent-sessions/" + sessionKey + "/turns/complete":
+			if err := json.NewDecoder(request.Body).Decode(&completion); err != nil {
+				t.Errorf("декодирование завершения хода: %v", err)
+				response.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			dependencyAvailable = true
+			response.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("неожиданный session API path: %s", request.URL.Path)
+			response.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := runner.runSessionTurns(
+		ctx, server.Client(), server.URL, sessionKey, sessionToken, "", t.TempDir(), nil, "",
+	); err != nil {
+		t.Fatalf("характеристический session loop: %v", err)
+	}
+	if completion.TurnID != turnID || completion.Status != "failed" || completion.ErrorMessage != "exit status 1" {
+		t.Fatalf("baseline completion = %#v", completion)
+	}
+	if executions != 1 || claims != 2 || !dependencyAvailable {
+		t.Fatalf("baseline executions=%d claims=%d dependency_available=%t", executions, claims, dependencyAvailable)
+	}
+	if info, err := os.Stat(eventsPath); err != nil || info.Size() != 0 {
+		t.Fatalf("Codex events до MCP bootstrap: info=%v error=%v", info, err)
+	}
+	if _, err := os.Stat(finalPath); !os.IsNotExist(err) {
+		t.Fatalf("финальный файл неожиданно создан: %v", err)
+	}
+	if completion.FinalMessage == "" || completion.CodexSessionID != "" {
+		t.Fatalf("baseline result потерял характеристические признаки: %#v", completion)
+	}
+	// Успех этого теста фиксирует только текущий долг #51: после восстановления
+	// зависимости тот же ход остаётся failed и автоматически не продолжается.
 }
 
 func mustTable(t *testing.T, parent map[string]any, key string) map[string]any {

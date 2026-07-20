@@ -180,10 +180,7 @@ func RequiredDSN(t *testing.T) string {
 	t.Helper()
 	dsn := strings.TrimSpace(os.Getenv(testDatabaseDSNEnvironment))
 	if dsn == "" {
-		if os.Getenv("MATTERCODEX_POSTGRES_TEST_REQUIRED") == "1" {
-			t.Fatal("одноразовый PostgreSQL target обязателен в required-режиме")
-		}
-		t.Skip("одноразовый PostgreSQL target не задан")
+		t.Fatal("одноразовый PostgreSQL target обязателен; используйте make test-go-postgres")
 	}
 	marker, err := markerForDSN(dsn)
 	if err != nil {
@@ -213,6 +210,31 @@ func ValidateDisposableDatabase(ctx context.Context, dsn string, markerValue str
 	}
 	defer connection.Release()
 	return validateDisposableDatabaseConnection(ctx, connection, config, markerValue, marker)
+}
+
+// ValidatePostgresMajor проверяет фактическую основную версию одноразовой цели,
+// не включая DSN или метаданные сервера в диагностическое сообщение.
+func ValidatePostgresMajor(ctx context.Context, dsn string, expected string) error {
+	if expected != "15" && expected != "16" {
+		return fmt.Errorf("неподдерживаемая ожидаемая PostgreSQL major-версия")
+	}
+	config, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return fmt.Errorf("одноразовый PostgreSQL target имеет недопустимый DSN")
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return fmt.Errorf("одноразовый PostgreSQL target недоступен")
+	}
+	defer pool.Close()
+	var versionNumber int
+	if err := pool.QueryRow(ctx, `select current_setting('server_version_num')::integer`).Scan(&versionNumber); err != nil {
+		return fmt.Errorf("major-версия одноразового PostgreSQL target не прочитана")
+	}
+	if strconv.Itoa(versionNumber/10000) != expected {
+		return fmt.Errorf("одноразовый PostgreSQL target имеет несовпадающую major-версию")
+	}
+	return nil
 }
 
 type rowQuerier interface {

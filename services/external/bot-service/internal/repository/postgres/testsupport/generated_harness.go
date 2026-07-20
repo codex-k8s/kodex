@@ -500,6 +500,7 @@ func (harness *GeneratedPostgresHarness) Close(ctx context.Context) error {
 
 func generatedPostgresBinDirectory(ctx context.Context) (string, error) {
 	candidates := make([]string, 0, 8)
+	expectedMajor := strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_MAJOR"))
 	if configured := strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_BINDIR")); configured != "" {
 		candidates = append(candidates, configured)
 	}
@@ -528,6 +529,13 @@ func generatedPostgresBinDirectory(ctx context.Context) (string, error) {
 			}
 		}
 		if valid {
+			if expectedMajor != "" {
+				output, err := exec.CommandContext(ctx, filepath.Join(candidate, "postgres"), "--version").Output()
+				fields := strings.Fields(string(output))
+				if err != nil || len(fields) < 3 || strings.SplitN(fields[2], ".", 2)[0] != expectedMajor {
+					continue
+				}
+			}
 			return candidate, nil
 		}
 	}

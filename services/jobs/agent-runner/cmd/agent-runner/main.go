@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -61,7 +62,9 @@ func (err sessionAPIStatusError) Error() string {
 }
 
 type runner struct {
-	failureLogs []string
+	failureLogs           []string
+	sessionTurnExecutor   func(context.Context, sessionTurnClaimResponse, string, string, string, []string, int) (string, string, error)
+	sessionArchiveCreator func(string) (string, error)
 }
 
 type githubAccount struct {
@@ -440,7 +443,23 @@ func (r *runner) runSession(ctx context.Context) error {
 			workDir = repoDir
 		}
 	}
-	codexSessionID := strings.TrimSpace(snapshot.CodexSessionID)
+	return r.runSessionTurns(
+		ctx, client, botServiceURL, sessionKey, sessionToken, openAIAccount,
+		workDir, extraEnv, strings.TrimSpace(snapshot.CodexSessionID),
+	)
+}
+
+func (r *runner) runSessionTurns(
+	ctx context.Context,
+	client *http.Client,
+	botServiceURL string,
+	sessionKey string,
+	sessionToken string,
+	openAIAccount string,
+	workDir string,
+	extraEnv []string,
+	codexSessionID string,
+) error {
 	for {
 		claim, err := r.claimSessionTurn(ctx, client, botServiceURL, sessionKey, sessionToken)
 		if err != nil {
@@ -467,7 +486,7 @@ func (r *runner) runSession(ctx context.Context) error {
 		}
 		finalFile := fmt.Sprintf("session-turn-%d-final.md", claim.TurnID)
 		retryCount := 0
-		nextSessionID, finalMessage, runErr := r.runCodexSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
+		nextSessionID, finalMessage, runErr := r.executeSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
 		if strings.TrimSpace(nextSessionID) != "" {
 			codexSessionID = strings.TrimSpace(nextSessionID)
 		}
@@ -503,7 +522,7 @@ func (r *runner) runSession(ctx context.Context) error {
 			if strings.TrimSpace(codexSessionID) != "" {
 				retryClaim.Prompt = codexCapacityRetryPrompt(retryCount, len(codexCapacityRetryDelays))
 			}
-			nextSessionID, finalMessage, runErr = r.runCodexSessionTurn(ctx, retryClaim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
+			nextSessionID, finalMessage, runErr = r.executeSessionTurn(ctx, retryClaim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
 			if strings.TrimSpace(nextSessionID) != "" {
 				codexSessionID = strings.TrimSpace(nextSessionID)
 			}
@@ -511,7 +530,7 @@ func (r *runner) runSession(ctx context.Context) error {
 		capacityRetriesExhausted := runErr != nil && retryCount == len(codexCapacityRetryDelays) &&
 			codexTransientCapacityFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr)
 		providerPolicyBlocked := codexProviderPolicyFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr)
-		archive, snapshotErr := createCodexSessionArchive(codexHomeDir)
+		archive, snapshotErr := r.createSessionArchive(codexHomeDir)
 		status := "succeeded"
 		errorMessage := ""
 		if runErr != nil {
@@ -545,6 +564,12 @@ func (r *runner) runSession(ctx context.Context) error {
 			errorMessage = "Codex request was blocked by the provider cyber safety policy"
 			finalMessage = ""
 		}
+		redactor := newSecretRedactor(os.Environ())
+		finalMessage = redactor.Redact(finalMessage)
+		errorMessage = redactor.Redact(errorMessage)
+		for key, value := range artifacts {
+			artifacts[key] = redactor.Redact(value)
+		}
 		if err := r.completeSessionTurn(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnCompleteRequest{
 			TurnID:                   claim.TurnID,
 			RunID:                    claim.RunID,
@@ -558,6 +583,28 @@ func (r *runner) runSession(ctx context.Context) error {
 			return err
 		}
 	}
+}
+
+func (r *runner) executeSessionTurn(
+	ctx context.Context,
+	claim sessionTurnClaimResponse,
+	codexSessionID string,
+	finalFile string,
+	workDir string,
+	extraEnv []string,
+	attempt int,
+) (string, string, error) {
+	if r.sessionTurnExecutor != nil {
+		return r.sessionTurnExecutor(ctx, claim, codexSessionID, finalFile, workDir, extraEnv, attempt)
+	}
+	return r.runCodexSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, extraEnv, attempt)
+}
+
+func (r *runner) createSessionArchive(root string) (string, error) {
+	if r.sessionArchiveCreator != nil {
+		return r.sessionArchiveCreator(root)
+	}
+	return createCodexSessionArchive(root)
 }
 
 func (r *runner) prepareSessionRepository(ctx context.Context, account githubAccount, githubEnv []string) error {
@@ -622,12 +669,12 @@ func (r *runner) runCodexExec(ctx context.Context, workDir string, finalFile str
 		return err
 	}
 	defer promptFile.Close()
-	events, err := os.Create(filepath.Join(artifactsDir, "codex-events.jsonl"))
+	events, err := os.OpenFile(filepath.Join(artifactsDir, "codex-events.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
 	defer events.Close()
-	stderr, err := os.Create(filepath.Join(artifactsDir, "codex-stderr.log"))
+	stderr, err := os.OpenFile(filepath.Join(artifactsDir, "codex-stderr.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -635,10 +682,29 @@ func (r *runner) runCodexExec(ctx context.Context, workDir string, finalFile str
 	r.failureLogs = append(r.failureLogs, filepath.Join(artifactsDir, "codex-stderr.log"))
 	cmd := exec.CommandContext(ctx, "codex", "exec", "--json", "--cd", workDir, "--sandbox", codexSandboxMode(), "--skip-git-repo-check", "--output-last-message", filepath.Join(artifactsDir, finalFile), "-")
 	cmd.Env = mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+codexHomeDir)...)
-	cmd.Stdin = promptFile
+	prompt, err := io.ReadAll(promptFile)
+	if err != nil {
+		return err
+	}
+	cmd.Stdin = strings.NewReader(newSecretRedactor(cmd.Env).Redact(string(prompt)))
 	cmd.Stdout = events
 	cmd.Stderr = stderr
-	return cmd.Run()
+	runErr := cmd.Run()
+	_ = events.Close()
+	_ = stderr.Close()
+	redactor := newSecretRedactor(cmd.Env)
+	for _, path := range []string{
+		filepath.Join(artifactsDir, "codex-events.jsonl"),
+		filepath.Join(artifactsDir, "codex-stderr.log"),
+		filepath.Join(artifactsDir, finalFile),
+	} {
+		if _, err := os.Stat(path); err == nil {
+			if err := redactFile(path, redactor); err != nil {
+				runErr = errors.Join(runErr, err)
+			}
+		}
+	}
+	return runErr
 }
 
 func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaimResponse, codexSessionID string, finalFile string, workDir string, extraEnv []string, attempt int) (string, string, error) {
@@ -646,12 +712,12 @@ func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaim
 	stderrPath := sessionTurnStderrPath(claim.TurnID, attempt)
 	finalPath := filepath.Join(artifactsDir, finalFile)
 	_ = os.Remove(finalPath)
-	events, err := os.Create(eventsPath)
+	events, err := os.OpenFile(eventsPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return codexSessionID, "", err
 	}
 	defer events.Close()
-	stderr, err := os.Create(stderrPath)
+	stderr, err := os.OpenFile(stderrPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return codexSessionID, "", err
 	}
@@ -667,10 +733,24 @@ func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaim
 	cmd := exec.CommandContext(ctx, "codex", args...)
 	cmd.Dir = workDir
 	cmd.Env = mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+codexHomeDir)...)
-	cmd.Stdin = strings.NewReader(claim.Prompt)
+	cmd.Stdin = strings.NewReader(newSecretRedactor(cmd.Env).Redact(claim.Prompt))
 	cmd.Stdout = events
 	cmd.Stderr = stderr
 	runErr := cmd.Run()
+	_ = events.Close()
+	_ = stderr.Close()
+	redactor := newSecretRedactor(cmd.Env)
+	if err := redactFile(eventsPath, redactor); err != nil {
+		runErr = errors.Join(runErr, err)
+	}
+	if err := redactFile(stderrPath, redactor); err != nil {
+		runErr = errors.Join(runErr, err)
+	}
+	if _, err := os.Stat(finalPath); err == nil {
+		if err := redactFile(finalPath, redactor); err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+	}
 	if discovered := readCodexSessionID(eventsPath); discovered != "" {
 		codexSessionID = discovered
 	}
@@ -925,7 +1005,10 @@ func (r *runner) sessionJSONOnce(ctx context.Context, client *http.Client, metho
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		data, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return sessionAPIStatusError{StatusCode: response.StatusCode, Body: strings.TrimSpace(string(data))}
+		return sessionAPIStatusError{
+			StatusCode: response.StatusCode,
+			Body:       newSecretRedactor(os.Environ()).Redact(strings.TrimSpace(string(data))),
+		}
 	}
 	if target == nil {
 		return nil
@@ -943,27 +1026,30 @@ func sessionAPIErrorRetriable(err error) bool {
 
 func (r *runner) runLogged(ctx context.Context, dir string, extraEnv []string, logName string, name string, args ...string) error {
 	logPath := filepath.Join(artifactsDir, logName)
-	logFile, err := os.Create(logPath)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
-	defer logFile.Close()
 	r.failureLogs = append(r.failureLogs, logPath)
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Env = mergeEnv(os.Environ(), extraEnv...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
-	return cmd.Run()
+	runErr := cmd.Run()
+	_ = logFile.Close()
+	if err := redactFile(logPath, newSecretRedactor(cmd.Env)); err != nil {
+		return errors.Join(runErr, err)
+	}
+	return runErr
 }
 
 func (r *runner) capture(ctx context.Context, dir string, extraEnv []string, logName string, name string, args ...string) (string, error) {
 	logPath := filepath.Join(artifactsDir, logName)
-	logFile, err := os.Create(logPath)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return "", err
 	}
-	defer logFile.Close()
 	r.failureLogs = append(r.failureLogs, logPath)
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
@@ -971,10 +1057,16 @@ func (r *runner) capture(ctx context.Context, dir string, extraEnv []string, log
 	var stdout strings.Builder
 	cmd.Stdout = io.MultiWriter(&stdout, logFile)
 	cmd.Stderr = logFile
-	if err := cmd.Run(); err != nil {
-		return "", err
+	runErr := cmd.Run()
+	_ = logFile.Close()
+	redactor := newSecretRedactor(cmd.Env)
+	if err := redactFile(logPath, redactor); err != nil {
+		return "", errors.Join(runErr, err)
 	}
-	return stdout.String(), nil
+	if runErr != nil {
+		return "", runErr
+	}
+	return redactor.Redact(stdout.String()), nil
 }
 
 func (r *runner) gitHasChanges(ctx context.Context) (bool, error) {
@@ -1349,6 +1441,94 @@ func mergeEnv(base []string, overrides ...string) []string {
 	return result
 }
 
+const redactedSecretValue = "[скрыто: синтетический секрет или секрет среды выполнения]"
+
+type secretRedactor struct {
+	replacer *strings.Replacer
+}
+
+func newSecretRedactor(environment []string) secretRedactor {
+	runtimeNames := map[string]bool{}
+	for _, item := range environment {
+		name, value, ok := strings.Cut(item, "=")
+		if ok && name == "MATTERCODEX_RUNTIME_ENV_ALLOWLIST" {
+			for _, raw := range strings.Split(value, ",") {
+				runtimeNames[strings.TrimSpace(raw)] = true
+			}
+		}
+	}
+	values := map[string]bool{}
+	for _, item := range environment {
+		name, value, ok := strings.Cut(item, "=")
+		if !ok || len(value) < 8 || (!runtimeNames[name] && !sensitiveEnvironmentName(name)) {
+			continue
+		}
+		candidates := []string{value}
+		if trimmed := strings.TrimSpace(value); trimmed != value && len(trimmed) >= 8 {
+			candidates = append(candidates, trimmed)
+		}
+		for _, candidate := range candidates {
+			values[candidate] = true
+			if encoded, err := json.Marshal(candidate); err == nil && len(encoded) > 2 {
+				values[string(encoded[1:len(encoded)-1])] = true
+			}
+			values[base64.StdEncoding.EncodeToString([]byte(candidate))] = true
+			values[base64.RawStdEncoding.EncodeToString([]byte(candidate))] = true
+		}
+	}
+	ordered := make([]string, 0, len(values))
+	for value := range values {
+		if len(value) >= 8 {
+			ordered = append(ordered, value)
+		}
+	}
+	sort.Slice(ordered, func(left, right int) bool { return len(ordered[left]) > len(ordered[right]) })
+	replacements := make([]string, 0, len(ordered)*2)
+	for _, value := range ordered {
+		replacements = append(replacements, value, redactedSecretValue)
+	}
+	if len(replacements) == 0 {
+		return secretRedactor{}
+	}
+	return secretRedactor{replacer: strings.NewReplacer(replacements...)}
+}
+
+func sensitiveEnvironmentName(name string) bool {
+	switch name {
+	case "OPENAI_API_KEY",
+		"GH_TOKEN", "GITHUB_TOKEN", "MATTERCODEX_GITHUB_TOKEN", "MATTERCODEX_GITHUB_WEBHOOK_SECRET",
+		"MATTERCODEX_MATTERMOST_BOT_TOKEN", "MATTERCODEX_MATTERMOST_ADMIN_TOKEN", "MATTERCODEX_MATTERMOST_SLASH_TOKEN",
+		"KUBERNETES_BEARER_TOKEN",
+		"MATTERCODEX_DATABASE_DSN", "MATTERCODEX_MIGRATIONS_DATABASE_DSN",
+		"MATTERCODEX_SESSION_TOKEN", "MATTERCODEX_MCP_TOKEN":
+		return true
+	default:
+		return false
+	}
+}
+
+func (redactor secretRedactor) Redact(value string) string {
+	if redactor.replacer == nil || value == "" {
+		return value
+	}
+	return redactor.replacer.Replace(value)
+}
+
+func redactFile(path string, redactor secretRedactor) error {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	redacted := redactor.Redact(string(body))
+	if redacted == string(body) {
+		return os.Chmod(path, 0o600)
+	}
+	if err := os.WriteFile(path, []byte(redacted), 0o600); err != nil {
+		return fmt.Errorf("redact runtime artifact: %w", err)
+	}
+	return os.Chmod(path, 0o600)
+}
+
 func readDecision(path string) string {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -1403,7 +1583,7 @@ func reviewFlag(decision string) string {
 }
 
 func artifact(key string, value string) {
-	value = strings.TrimSpace(value)
+	value = strings.TrimSpace(newSecretRedactor(os.Environ()).Redact(value))
 	if key != "" && value != "" {
 		fmt.Printf("matter-codex artifact %s: %s\n", key, value)
 	}
@@ -1414,7 +1594,7 @@ func (r *runner) printFinalAnswer(finalFile string) {
 	if err != nil {
 		return
 	}
-	text := strings.TrimSpace(string(body))
+	text := strings.TrimSpace(newSecretRedactor(os.Environ()).Redact(string(body)))
 	if text == "" {
 		return
 	}
@@ -1424,7 +1604,8 @@ func (r *runner) printFinalAnswer(finalFile string) {
 }
 
 func fail(err error, logs []string) {
-	fmt.Fprintf(os.Stderr, "matter-codex runner error: %v\n", err)
+	redactor := newSecretRedactor(os.Environ())
+	fmt.Fprintf(os.Stderr, "matter-codex runner error: %s\n", redactor.Redact(err.Error()))
 	artifact("exit-code", "1")
 	for _, path := range logs {
 		tailFile(path, 40)
@@ -1437,6 +1618,7 @@ func tailFile(path string, lines int) {
 	if err != nil {
 		return
 	}
+	body = []byte(newSecretRedactor(os.Environ()).Redact(string(body)))
 	parts := strings.Split(strings.TrimSpace(string(body)), "\n")
 	if len(parts) > lines {
 		parts = parts[len(parts)-lines:]
@@ -1503,6 +1685,7 @@ func createCodexSessionArchive(root string) (string, error) {
 	var raw bytes.Buffer
 	gzipWriter := gzip.NewWriter(&raw)
 	tarWriter := tar.NewWriter(gzipWriter)
+	redactor := newSecretRedactor(os.Environ())
 	err = filepath.WalkDir(sessionsRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -1520,18 +1703,19 @@ func createCodexSessionArchive(root string) (string, error) {
 			return err
 		}
 		header.Name = filepath.ToSlash(relative)
-		if err := tarWriter.WriteHeader(header); err != nil {
-			return err
-		}
 		if entry.IsDir() {
-			return nil
+			return tarWriter.WriteHeader(header)
 		}
-		file, err := os.Open(path)
+		body, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		defer file.Close()
-		_, err = io.Copy(tarWriter, file)
+		body = []byte(redactor.Redact(string(body)))
+		header.Size = int64(len(body))
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return err
+		}
+		_, err = tarWriter.Write(body)
 		return err
 	})
 	if err != nil {
