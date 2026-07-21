@@ -3,6 +3,9 @@
 package migrations_test
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -57,8 +60,7 @@ func TestRuntimeRevisionMigrationUpgradesV29WithLegacySessionAndQueue(t *testing
 		pool.Close()
 		t.Fatalf("seed v29 session: %v", err)
 	}
-	legacyRaw := []byte("legacy-bounded-archive")
-	legacyPayload := base64.StdEncoding.EncodeToString(legacyRaw)
+	legacyPayload, legacyRaw := migrationArchiveFixture(t, "legacy-bounded-archive")
 	if _, err := repository.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
 		SessionKey: session.SessionKey, CodexSessionID: "legacy-codex-safe-id",
 		SessionArchiveGzipBase64: legacyPayload, Status: "idle", ExtendTTLSeconds: 3600,
@@ -111,4 +113,28 @@ insert into matter_codex_agent_session_turns(
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated v30 up: %v", err)
 	}
+}
+
+func migrationArchiveFixture(t *testing.T, value string) (string, []byte) {
+	t.Helper()
+	var raw bytes.Buffer
+	gzipWriter := gzip.NewWriter(&raw)
+	tarWriter := tar.NewWriter(gzipWriter)
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "sessions", Typeflag: tar.TypeDir, Mode: 0o700, Format: tar.FormatUSTAR}); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte(value)
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "sessions/state.json", Typeflag: tar.TypeReg, Mode: 0o600, Size: int64(len(body)), Format: tar.FormatUSTAR}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tarWriter.Write(body); err != nil {
+		t.Fatal(err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(raw.Bytes()), raw.Bytes()
 }

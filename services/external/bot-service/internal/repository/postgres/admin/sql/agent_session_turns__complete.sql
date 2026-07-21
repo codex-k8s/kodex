@@ -3,9 +3,10 @@ update matter_codex_agent_session_turns set
 	final_message = $3,
 	error_message = $4,
 	artifacts = $5::jsonb,
+	completion_pod_uid = $6,
 	finished_at = now(),
 	updated_at = now()
-where id = $1
+where id = $1 and status = 'running'
 returning
 	id,
 	session_id,

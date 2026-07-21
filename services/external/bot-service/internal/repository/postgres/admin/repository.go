@@ -871,8 +871,6 @@ func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adm
 		input.PVCName,
 		input.TokenSecretRef,
 		input.ExtendTTLSeconds,
-		input.DesiredRuntimeRevisionID,
-		input.AppliedRuntimeRevisionID,
 	))
 	if err != nil {
 		return entity.AgentSession{}, fmt.Errorf("update agent session runtime: %w", err)
@@ -964,6 +962,7 @@ func (repo *Repository) CompleteAgentSessionTurn(ctx context.Context, input admi
 		input.FinalMessage,
 		input.ErrorMessage,
 		input.Artifacts,
+		input.CompletionPodUID,
 	))
 	if err != nil {
 		return entity.AgentSessionTurn{}, fmt.Errorf("complete agent session turn: %w", err)

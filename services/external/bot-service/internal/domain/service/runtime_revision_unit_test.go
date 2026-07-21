@@ -16,7 +16,7 @@ import (
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
-func TestRuntimeRevisionComponentPersistsTurnAndRecreatesIdleSessionForChangedDigest(t *testing.T) {
+func TestRuntimeRevisionUnitPersistsTurnAndRecreatesIdleSessionForChangedDigest(t *testing.T) {
 	base := chatRuntimeStore()
 	base.openAIAccounts["main"] = entity.OpenAIAccount{
 		Name: "main", SecretRef: "matter-codex-codex-auth-main", Status: "authorized",
@@ -152,9 +152,10 @@ func TestRuntimeRevisionComponentPersistsTurnAndRecreatesIdleSessionForChangedDi
 
 type runtimeRevisionFakeStore struct {
 	*fakeAdminStore
-	revisions map[string]entity.RuntimeRevision
-	states    map[string]entity.AgentSessionRuntimeRevisionState
-	archives  map[int64][]entity.AgentSessionArchive
+	revisions       map[string]entity.RuntimeRevision
+	states          map[string]entity.AgentSessionRuntimeRevisionState
+	archives        map[int64][]entity.AgentSessionArchive
+	secretRevisions map[string]entity.RuntimeSecretBindingRevision
 }
 
 func (store *runtimeRevisionFakeStore) UpsertAgentSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
@@ -219,6 +220,25 @@ func (store *runtimeRevisionFakeStore) GetAgentSessionRuntimeRevisionState(_ con
 	return state, nil
 }
 
+func (store *runtimeRevisionFakeStore) ObserveRuntimeSecretBinding(_ context.Context, input adminrepo.ObserveRuntimeSecretBindingInput) (entity.RuntimeSecretBindingRevision, error) {
+	if store.secretRevisions == nil {
+		store.secretRevisions = make(map[string]entity.RuntimeSecretBindingRevision)
+	}
+	if existing, ok := store.secretRevisions[input.BindingKey]; ok && existing.SecretName == input.SecretName && existing.SecretKey == input.SecretKey && existing.IntegritySHA256 == input.IntegritySHA256 {
+		return existing, nil
+	}
+	revision := int64(1)
+	if existing, ok := store.secretRevisions[input.BindingKey]; ok {
+		revision = existing.Revision + 1
+	}
+	observed := entity.RuntimeSecretBindingRevision{
+		BindingKey: input.BindingKey, SecretName: input.SecretName, SecretKey: input.SecretKey,
+		IntegritySHA256: input.IntegritySHA256, Revision: revision, UpdatedAt: time.Now().UTC(),
+	}
+	store.secretRevisions[input.BindingKey] = observed
+	return observed, nil
+}
+
 func (store *runtimeRevisionFakeStore) SetAgentSessionDesiredRuntimeRevision(_ context.Context, input adminrepo.SetAgentSessionDesiredRuntimeRevisionInput) (entity.AgentSessionRuntimeRevisionState, error) {
 	session, ok := store.agentSessions[input.SessionKey]
 	if !ok {
@@ -232,14 +252,49 @@ func (store *runtimeRevisionFakeStore) SetAgentSessionDesiredRuntimeRevision(_ c
 	return state, nil
 }
 
-func (store *runtimeRevisionFakeStore) MarkAgentSessionRuntimeApplied(_ context.Context, input adminrepo.MarkAgentSessionRuntimeAppliedInput) (entity.AgentSessionRuntimeRevisionState, error) {
+func (store *runtimeRevisionFakeStore) AcquireAgentSessionRuntimeLease(_ context.Context, input adminrepo.AcquireAgentSessionRuntimeLeaseInput) (entity.AgentSessionRuntimeRevisionState, error) {
 	state, ok := store.states[input.SessionKey]
-	if !ok || state.DesiredRuntimeRevisionID != input.RuntimeRevisionID {
-		return entity.AgentSessionRuntimeRevisionState{}, adminrepo.ErrNotFound
+	if !ok || state.DesiredRuntimeRevisionID != input.DesiredRuntimeRevisionID || state.AppliedRuntimeRevisionID != input.ExpectedAppliedRuntimeRevisionID || state.AppliedPodUID != input.ExpectedPodUID || state.ReconcileLeaseToken != "" {
+		return entity.AgentSessionRuntimeRevisionState{}, adminrepo.ErrRuntimeReconciliationConflict
 	}
-	state.AppliedRuntimeRevisionID = input.RuntimeRevisionID
+	state.ReconcileLeaseToken = input.LeaseToken
+	state.ReconcileLeaseExpiresAt = time.Now().UTC().Add(time.Duration(input.LeaseSeconds) * time.Second)
 	store.states[input.SessionKey] = state
 	return state, nil
+}
+
+func (store *runtimeRevisionFakeStore) RefreshAgentSessionRuntimeLease(_ context.Context, input adminrepo.AcquireAgentSessionRuntimeLeaseInput) (entity.AgentSessionRuntimeRevisionState, error) {
+	state, ok := store.states[input.SessionKey]
+	if !ok || state.DesiredRuntimeRevisionID != input.DesiredRuntimeRevisionID || state.AppliedRuntimeRevisionID != input.ExpectedAppliedRuntimeRevisionID || state.AppliedPodUID != input.ExpectedPodUID || state.ReconcileLeaseToken != input.LeaseToken || time.Now().UTC().After(state.ReconcileLeaseExpiresAt) {
+		return entity.AgentSessionRuntimeRevisionState{}, adminrepo.ErrRuntimeReconciliationConflict
+	}
+	state.ReconcileLeaseExpiresAt = time.Now().UTC().Add(time.Duration(input.LeaseSeconds) * time.Second)
+	store.states[input.SessionKey] = state
+	return state, nil
+}
+
+func (store *runtimeRevisionFakeStore) MarkAgentSessionRuntimeApplied(_ context.Context, input adminrepo.MarkAgentSessionRuntimeAppliedInput) (entity.AgentSessionRuntimeRevisionState, error) {
+	state, ok := store.states[input.SessionKey]
+	if !ok || state.DesiredRuntimeRevisionID != input.RuntimeRevisionID || state.AppliedRuntimeRevisionID != input.ExpectedAppliedRuntimeRevisionID || state.AppliedPodUID != input.ExpectedPodUID || state.ReconcileLeaseToken != input.LeaseToken {
+		return entity.AgentSessionRuntimeRevisionState{}, adminrepo.ErrRuntimeReconciliationConflict
+	}
+	state.AppliedRuntimeRevisionID = input.RuntimeRevisionID
+	state.AppliedPodUID = input.AppliedPodUID
+	state.ReconcileLeaseToken = ""
+	state.ReconcileLeaseExpiresAt = time.Time{}
+	store.states[input.SessionKey] = state
+	return state, nil
+}
+
+func (store *runtimeRevisionFakeStore) ReleaseAgentSessionRuntimeLease(_ context.Context, input adminrepo.ReleaseAgentSessionRuntimeLeaseInput) error {
+	state, ok := store.states[input.SessionKey]
+	if !ok || state.ReconcileLeaseToken != input.LeaseToken {
+		return adminrepo.ErrRuntimeReconciliationConflict
+	}
+	state.ReconcileLeaseToken = ""
+	state.ReconcileLeaseExpiresAt = time.Time{}
+	store.states[input.SessionKey] = state
+	return nil
 }
 
 func (store *runtimeRevisionFakeStore) GetNextQueuedAgentSessionRuntimeRevision(_ context.Context, sessionID int64) (entity.RuntimeRevision, error) {

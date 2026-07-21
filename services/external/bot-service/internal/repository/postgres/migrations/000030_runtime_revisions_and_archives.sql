@@ -14,9 +14,27 @@ create table matter_codex_runtime_revisions (
 		check (length(trim(account_alias)) > 0 and length(trim(authorization_revision)) > 0)
 );
 
+create table matter_codex_runtime_secret_binding_revisions (
+	binding_key text primary key,
+	secret_name text not null,
+	secret_key text not null,
+	integrity_sha256 text not null,
+	revision bigint not null default 1,
+	updated_at timestamptz not null default now(),
+	constraint matter_codex_runtime_secret_binding_identity_check check (
+		length(trim(binding_key)) > 0 and length(trim(secret_name)) > 0 and length(trim(secret_key)) > 0
+	),
+	constraint matter_codex_runtime_secret_binding_integrity_check check (integrity_sha256 ~ '^[0-9a-f]{64}$'),
+	constraint matter_codex_runtime_secret_binding_revision_check check (revision > 0)
+);
+
 alter table matter_codex_agent_sessions
 	add column desired_runtime_revision_id bigint references matter_codex_runtime_revisions(id),
 	add column applied_runtime_revision_id bigint references matter_codex_runtime_revisions(id),
+	add column applied_pod_uid text not null default '',
+	add column runtime_reconcile_lease_token text not null default '',
+	add column runtime_reconcile_lease_revision_id bigint references matter_codex_runtime_revisions(id),
+	add column runtime_reconcile_lease_expires_at timestamptz,
 	add column archive_version bigint not null default 0,
 	add column archive_sha256 text not null default '',
 	add column archive_size_bytes bigint not null default 0,
@@ -25,13 +43,18 @@ alter table matter_codex_agent_sessions
 		or (
 			archive_version > 0
 			and archive_sha256 ~ '^[0-9a-f]{64}$'
-			and archive_size_bytes >= 0
+			and archive_size_bytes > 0
 			and archive_size_bytes <= 50331648
 		)
+	),
+	add constraint matter_codex_agent_sessions_runtime_lease_check check (
+		(runtime_reconcile_lease_token = '' and runtime_reconcile_lease_revision_id is null and runtime_reconcile_lease_expires_at is null)
+		or (runtime_reconcile_lease_token <> '' and runtime_reconcile_lease_expires_at is not null)
 	);
 
 alter table matter_codex_agent_session_turns
-	add column runtime_revision_id bigint references matter_codex_runtime_revisions(id);
+	add column runtime_revision_id bigint references matter_codex_runtime_revisions(id),
+	add column completion_pod_uid text not null default '';
 
 create index matter_codex_agent_sessions_desired_revision_idx
 	on matter_codex_agent_sessions(desired_runtime_revision_id)
@@ -48,6 +71,7 @@ create index matter_codex_agent_session_turns_runtime_revision_idx
 create table matter_codex_agent_session_archives (
 	id bigserial primary key,
 	session_id bigint not null references matter_codex_agent_sessions(id) on delete restrict,
+	turn_id bigint references matter_codex_agent_session_turns(id) on delete restrict,
 	version bigint not null,
 	codex_session_id text not null,
 	payload_gzip_base64 text not null,
@@ -61,9 +85,13 @@ create table matter_codex_agent_session_archives (
 	),
 	constraint matter_codex_agent_session_archives_sha256_check check (sha256 ~ '^[0-9a-f]{64}$'),
 	constraint matter_codex_agent_session_archives_size_check check (
-		size_bytes >= 0 and size_bytes <= 50331648
+		size_bytes > 0 and size_bytes <= 50331648
 	)
 );
+
+create unique index matter_codex_agent_session_archives_turn_idx
+	on matter_codex_agent_session_archives(turn_id)
+	where turn_id is not null;
 
 create index matter_codex_agent_session_archives_latest_idx
 	on matter_codex_agent_session_archives(session_id, version desc);
@@ -124,6 +152,7 @@ begin
 		trusted_schema, trusted_schema
 	);
 	execute format('revoke all on table %I.matter_codex_runtime_revisions from public', trusted_schema);
+	execute format('revoke all on table %I.matter_codex_runtime_secret_binding_revisions from public', trusted_schema);
 	execute format('revoke all on table %I.matter_codex_agent_session_archives from public', trusted_schema);
 	execute format('revoke all on function %I.matter_codex_guard_runtime_immutable() from public', trusted_schema);
 	execute format('revoke all on function %I.matter_codex_guard_agent_session_account_affinity() from public', trusted_schema);
@@ -137,6 +166,10 @@ begin
 			trusted_schema, runtime_role_name
 		);
 		execute format(
+			'grant select, insert, update on table %I.matter_codex_runtime_secret_binding_revisions to %I',
+			trusted_schema, runtime_role_name
+		);
+		execute format(
 			'grant select, insert on table %I.matter_codex_agent_session_archives to %I',
 			trusted_schema, runtime_role_name
 		);
@@ -145,7 +178,7 @@ begin
 			trusted_schema, runtime_role_name
 		);
 		execute format(
-			'grant update (desired_runtime_revision_id, applied_runtime_revision_id, archive_version, archive_sha256, archive_size_bytes) on table %I.matter_codex_agent_sessions to %I',
+			'grant update (desired_runtime_revision_id, applied_runtime_revision_id, applied_pod_uid, runtime_reconcile_lease_token, runtime_reconcile_lease_revision_id, runtime_reconcile_lease_expires_at, archive_version, archive_sha256, archive_size_bytes) on table %I.matter_codex_agent_sessions to %I',
 			trusted_schema, runtime_role_name
 		);
 	end if;

@@ -132,6 +132,145 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	}
 }
 
+func TestExistingSessionKeepsOpenAIAccountAfterRoleBindingChanges(t *testing.T) {
+	base := chatRuntimeStore()
+	store := &runtimeRevisionFakeStore{
+		fakeAdminStore: base, revisions: map[string]entity.RuntimeRevision{},
+		states: map[string]entity.AgentSessionRuntimeRevisionState{}, archives: map[int64][]entity.AgentSessionArchive{},
+	}
+	store.openAIAccounts["secondary"] = entity.OpenAIAccount{
+		Name: "secondary", SecretRef: "matter-codex-codex-auth-secondary", Status: "authorized",
+	}
+	role := entity.AgentRole{
+		ID: 1, ProjectID: 1, Name: "developer", RoleType: "worker",
+		OpenAIAccountName: "main", KubernetesAccess: "read-only", SandboxMode: "danger-full-access", Enabled: true,
+	}
+	store.agentRoles[role.ID] = role
+	chat := entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-account-affinity", Slug: "account-affinity", Name: "Account affinity"}
+	store.chats[chat.ID] = chat
+	runner := &restoringRuntimeRunner{fakeRuntimeRunner: &fakeRuntimeRunner{}}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer: testLocalizer(t, texti18n.DefaultLocale), Store: store, RuntimeRunner: runner,
+		StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+		BotServiceURL: "http://bot-service", AgentRunnerImage: "agent-runner@sha256:synthetic",
+	})
+	request := AgentTurnRequest{
+		Project: store.projects[1], Chat: chat, Role: role, UserID: "owner", UserName: "owner",
+		UserMessage: "first turn", PreparedPrompt: "first prepared prompt", SourcePostID: "account-post-1",
+		ReplyRootID: "account-root", SessionRootID: "account-root", SessionScope: agentSessionScopeThreadRole,
+	}
+	first, err := svc.EnqueueAgentTurn(context.Background(), request)
+	if err != nil {
+		t.Fatalf("first EnqueueAgentTurn() error = %v", err)
+	}
+	if first.SessionKey == "" || len(runner.sessionRuns) != 1 || runner.sessionRuns[0].OpenAIAccountAlias != "main" || runner.sessionRuns[0].CodexAuthSecretName != "matter-codex-codex-auth-main" {
+		t.Fatalf("first account binding: result=%#v runs=%#v", first, runner.sessionRuns)
+	}
+
+	role.OpenAIAccountName = "secondary"
+	store.agentRoles[role.ID] = role
+	request.Role = role
+	request.UserMessage = "continuation after role account change"
+	request.PreparedPrompt = "continuation prepared prompt"
+	request.SourcePostID = "account-post-2"
+	second, err := svc.EnqueueAgentTurn(context.Background(), request)
+	if err != nil {
+		t.Fatalf("continuation EnqueueAgentTurn() error = %v", err)
+	}
+	if second.SessionKey != first.SessionKey || len(runner.sessionRuns) != 2 {
+		t.Fatalf("continuation session: first=%#v second=%#v runs=%#v", first, second, runner.sessionRuns)
+	}
+	continuation := runner.sessionRuns[1]
+	if continuation.OpenAIAccountAlias != "main" || continuation.CodexAuthSecretName != "matter-codex-codex-auth-main" {
+		t.Fatalf("existing session followed mutable role account: %#v", continuation)
+	}
+	if persisted := store.agentSessions[first.SessionKey]; persisted.OpenAIAccountName != "main" {
+		t.Fatalf("persisted session account affinity = %q", persisted.OpenAIAccountName)
+	}
+}
+
+func TestRuntimeSecretRevisionIsStableAndRotatesForCurrentEnqueue(t *testing.T) {
+	base := chatRuntimeStore()
+	account := base.openAIAccounts["main"]
+	account.ID = 7
+	account.CredentialID = 11
+	account.UpdatedAt = time.Date(2026, time.July, 21, 10, 0, 0, 0, time.UTC)
+	base.openAIAccounts["main"] = account
+	role := entity.AgentRole{
+		ID: 1, ProjectID: 1, Name: "developer", RoleType: "worker", OpenAIAccountName: "main",
+		KubernetesAccess: "read-only", SandboxMode: "danger-full-access", Enabled: true,
+	}
+	base.agentRoles[role.ID] = role
+	chat := entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-secret-revision", Slug: "secret-revision", Name: "Secret revision"}
+	base.chats[chat.ID] = chat
+	store := &runtimeRevisionFakeStore{
+		fakeAdminStore: base, revisions: map[string]entity.RuntimeRevision{},
+		states: map[string]entity.AgentSessionRuntimeRevisionState{}, archives: map[int64][]entity.AgentSessionArchive{},
+	}
+	runner := &restoringRuntimeRunner{fakeRuntimeRunner: &fakeRuntimeRunner{secretIntegrity: map[string]runtimerepo.SecretIntegrity{
+		"matter-codex-codex-auth-main/auth.json": {
+			SecretName: "matter-codex-codex-auth-main", SecretKey: "auth.json",
+			ContentSHA256: "synthetic-content-r1", UID: "synthetic-secret-uid", ResourceVersion: "1",
+		},
+	}}}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer: testLocalizer(t, texti18n.DefaultLocale), Store: store, RuntimeRunner: runner,
+		StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+		BotServiceURL: "http://bot-service", AgentRunnerImage: "agent-runner@sha256:synthetic",
+	})
+	request := AgentTurnRequest{
+		Project: base.projects[1], Chat: chat, Role: role, UserID: "owner", UserName: "owner",
+		UserMessage: "first", PreparedPrompt: "first prompt", SourcePostID: "secret-post-1",
+		ReplyRootID: "secret-root", SessionRootID: "secret-root", SessionScope: agentSessionScopeThreadRole,
+	}
+	if _, err := svc.EnqueueAgentTurn(context.Background(), request); err != nil {
+		t.Fatalf("first enqueue: %v", err)
+	}
+	firstRevisionID := base.sessionTurns[0].RuntimeRevisionID
+	firstRevision, err := store.GetRuntimeRevision(context.Background(), firstRevisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstRevision.AuthorizationRevision != "openai:7:auth.json:r1" {
+		t.Fatalf("first authorization revision = %q", firstRevision.AuthorizationRevision)
+	}
+
+	account.CredentialID = 12
+	account.UpdatedAt = account.UpdatedAt.Add(time.Hour)
+	base.openAIAccounts["main"] = account
+	request.UserMessage = "unchanged ready check"
+	request.PreparedPrompt = "second prompt"
+	request.SourcePostID = "secret-post-2"
+	if _, err := svc.EnqueueAgentTurn(context.Background(), request); err != nil {
+		t.Fatalf("stable enqueue: %v", err)
+	}
+	if len(store.revisions) != 1 || base.sessionTurns[1].RuntimeRevisionID != firstRevisionID || store.secretRevisions["openai:7:auth.json"].Revision != 1 {
+		t.Fatalf("unchanged Secret changed revision: revisions=%#v bindings=%#v turns=%#v", store.revisions, store.secretRevisions, base.sessionTurns)
+	}
+
+	runner.secretIntegrity["matter-codex-codex-auth-main/auth.json"] = runtimerepo.SecretIntegrity{
+		SecretName: "matter-codex-codex-auth-main", SecretKey: "auth.json",
+		ContentSHA256: "synthetic-content-r2", UID: "synthetic-secret-uid", ResourceVersion: "2",
+	}
+	request.UserMessage = "same ref after reauth"
+	request.PreparedPrompt = "third prompt"
+	request.SourcePostID = "secret-post-3"
+	if _, err := svc.EnqueueAgentTurn(context.Background(), request); err != nil {
+		t.Fatalf("rotated enqueue: %v", err)
+	}
+	thirdRevisionID := base.sessionTurns[2].RuntimeRevisionID
+	thirdRevision, err := store.GetRuntimeRevision(context.Background(), thirdRevisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.revisions) != 2 || thirdRevisionID == firstRevisionID || thirdRevision.AuthorizationRevision != "openai:7:auth.json:r2" || store.secretRevisions["openai:7:auth.json"].Revision != 2 {
+		t.Fatalf("reauth did not affect current enqueue: revisions=%#v bindings=%#v turns=%#v", store.revisions, store.secretRevisions, base.sessionTurns)
+	}
+	if strings.Contains(firstRevision.Manifest+thirdRevision.Manifest, "synthetic-content-r") {
+		t.Fatal("runtime manifest contains Secret integrity value")
+	}
+}
+
 func TestChatRunAddsAgentEyesReaction(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{

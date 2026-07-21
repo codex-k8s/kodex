@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	ErrNotFound                    = errors.New("admin repository item not found")
-	ErrClusterAdminAdmissionDenied = errors.New("cluster-admin assignment is not present in the server-side profile")
-	ErrRuntimeRevisionConflict     = errors.New("runtime revision digest conflicts with a different manifest")
+	ErrNotFound                      = errors.New("admin repository item not found")
+	ErrClusterAdminAdmissionDenied   = errors.New("cluster-admin assignment is not present in the server-side profile")
+	ErrRuntimeRevisionConflict       = errors.New("runtime revision digest conflicts with a different manifest")
+	ErrRuntimeReconciliationConflict = errors.New("runtime reconciliation fence conflict")
 )
 
 type UpsertRepositoryInput struct {
@@ -307,14 +308,45 @@ type SetAgentSessionDesiredRuntimeRevisionInput struct {
 
 // MarkAgentSessionRuntimeAppliedInput фиксирует применение только после подтверждения ожидаемого pod.
 type MarkAgentSessionRuntimeAppliedInput struct {
-	SessionKey        string
-	RuntimeRevisionID int64
+	SessionKey                       string
+	RuntimeRevisionID                int64
+	ExpectedAppliedRuntimeRevisionID int64
+	ExpectedPodUID                   string
+	AppliedPodUID                    string
+	LeaseToken                       string
+}
+
+// ObserveRuntimeSecretBindingInput не содержит Secret value и повышает revision только при смене safe metadata.
+type ObserveRuntimeSecretBindingInput struct {
+	BindingKey      string
+	SecretName      string
+	SecretKey       string
+	IntegritySHA256 string
+}
+
+// AcquireAgentSessionRuntimeLeaseInput ставит DB-fence перед сверкой Kubernetes.
+type AcquireAgentSessionRuntimeLeaseInput struct {
+	SessionKey                       string
+	DesiredRuntimeRevisionID         int64
+	ExpectedAppliedRuntimeRevisionID int64
+	ExpectedPodUID                   string
+	LeaseToken                       string
+	LeaseSeconds                     int
+}
+
+// ReleaseAgentSessionRuntimeLeaseInput снимает только собственную аренду после безопасного отказа.
+type ReleaseAgentSessionRuntimeLeaseInput struct {
+	SessionKey string
+	LeaseToken string
 }
 
 // CompleteAgentSessionTurnWithArchiveInput содержит один атомарный переход состояния хода и архива.
 type CompleteAgentSessionTurnWithArchiveInput struct {
 	SessionKey               string
 	TurnID                   int64
+	RunID                    string
+	RuntimeRevisionID        int64
+	PodUID                   string
 	TurnStatus               string
 	SessionStatus            string
 	FinalMessage             string
@@ -328,11 +360,12 @@ type CompleteAgentSessionTurnWithArchiveInput struct {
 }
 
 type CompleteAgentSessionTurnInput struct {
-	TurnID       int64
-	Status       string
-	FinalMessage string
-	ErrorMessage string
-	Artifacts    string
+	TurnID           int64
+	Status           string
+	FinalMessage     string
+	ErrorMessage     string
+	Artifacts        string
+	CompletionPodUID string
 }
 
 type CancelAgentSessionTurnInput struct {
@@ -526,8 +559,12 @@ type RuntimeRevisionRepository interface {
 	EnsureRuntimeRevision(ctx context.Context, input EnsureRuntimeRevisionInput) (entity.RuntimeRevision, error)
 	GetRuntimeRevision(ctx context.Context, id int64) (entity.RuntimeRevision, error)
 	GetAgentSessionRuntimeRevisionState(ctx context.Context, sessionKey string) (entity.AgentSessionRuntimeRevisionState, error)
+	ObserveRuntimeSecretBinding(ctx context.Context, input ObserveRuntimeSecretBindingInput) (entity.RuntimeSecretBindingRevision, error)
 	SetAgentSessionDesiredRuntimeRevision(ctx context.Context, input SetAgentSessionDesiredRuntimeRevisionInput) (entity.AgentSessionRuntimeRevisionState, error)
+	AcquireAgentSessionRuntimeLease(ctx context.Context, input AcquireAgentSessionRuntimeLeaseInput) (entity.AgentSessionRuntimeRevisionState, error)
+	RefreshAgentSessionRuntimeLease(ctx context.Context, input AcquireAgentSessionRuntimeLeaseInput) (entity.AgentSessionRuntimeRevisionState, error)
 	MarkAgentSessionRuntimeApplied(ctx context.Context, input MarkAgentSessionRuntimeAppliedInput) (entity.AgentSessionRuntimeRevisionState, error)
+	ReleaseAgentSessionRuntimeLease(ctx context.Context, input ReleaseAgentSessionRuntimeLeaseInput) error
 	GetNextQueuedAgentSessionRuntimeRevision(ctx context.Context, sessionID int64) (entity.RuntimeRevision, error)
 }
 

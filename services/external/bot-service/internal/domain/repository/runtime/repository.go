@@ -147,6 +147,8 @@ type AgentSessionPodInput struct {
 	TokenSecretIntegrity    *SecretIntegrity
 	PodTokenSecretName      string
 	RuntimeRevisionDigest   string
+	ExpectedPodUID          string
+	ReconcileFence          func(context.Context) error
 	AllowPodRecreation      bool
 	RequirePodReuse         bool
 }

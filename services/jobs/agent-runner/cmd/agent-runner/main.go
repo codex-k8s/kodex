@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +23,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/codex-k8s/matter-codex/libs/go/sessionarchive"
 	"golang.org/x/sys/unix"
 )
 
@@ -67,7 +67,6 @@ const (
 	maxSessionArchiveTotalBytes      = int64(32 << 20)
 	maxSessionArchiveFiles           = 512
 	maxSessionArchiveEntries         = 1024
-	maxSessionArchiveTarBytes        = maxSessionArchiveTotalBytes + int64(maxSessionArchiveEntries*512+maxSessionArchiveFiles*511+1024)
 	maxProtectedValueBytes           = int64(64 << 20)
 )
 
@@ -112,13 +111,14 @@ type sessionSnapshotResponse struct {
 }
 
 type sessionTurnClaimResponse struct {
-	HasTurn        bool   `json:"has_turn"`
-	Exit           bool   `json:"exit"`
-	TurnID         int64  `json:"turn_id"`
-	RunID          string `json:"run_id"`
-	Prompt         string `json:"prompt"`
-	CodexSessionID string `json:"codex_session_id"`
-	ExpiresAt      string `json:"expires_at"`
+	HasTurn           bool   `json:"has_turn"`
+	Exit              bool   `json:"exit"`
+	TurnID            int64  `json:"turn_id"`
+	RunID             string `json:"run_id"`
+	Prompt            string `json:"prompt"`
+	CodexSessionID    string `json:"codex_session_id"`
+	RuntimeRevisionID int64  `json:"runtime_revision_id"`
+	ExpiresAt         string `json:"expires_at"`
 }
 
 type sessionTurnCompleteRequest struct {
@@ -131,6 +131,8 @@ type sessionTurnCompleteRequest struct {
 	SessionArchiveGzipBase64 string            `json:"session_archive_gzip_base64"`
 	ArchiveSHA256            string            `json:"archive_sha256"`
 	ArchiveSizeBytes         int64             `json:"archive_size_bytes"`
+	RuntimeRevisionID        int64             `json:"runtime_revision_id,omitempty"`
+	PodUID                   string            `json:"pod_uid,omitempty"`
 	Artifacts                map[string]string `json:"artifacts"`
 }
 
@@ -663,6 +665,8 @@ func (r *runner) runSessionTurns(
 			SessionArchiveGzipBase64: archive,
 			ArchiveSHA256:            archiveSHA256,
 			ArchiveSizeBytes:         archiveSizeBytes,
+			RuntimeRevisionID:        claim.RuntimeRevisionID,
+			PodUID:                   strings.TrimSpace(os.Getenv("MATTERCODEX_POD_UID")),
 			Artifacts:                artifacts,
 		}); err != nil {
 			return err
@@ -1830,9 +1834,7 @@ func (err boundedFileError) Error() string {
 	return err.Kind + ": превышен серверный предел размера"
 }
 
-type sessionArchiveLimitError struct {
-	Limit string
-}
+type sessionArchiveLimitError = sessionarchive.LimitError
 
 type credentialCorpusLimitError struct {
 	Limit string
@@ -1840,10 +1842,6 @@ type credentialCorpusLimitError struct {
 
 func (err credentialCorpusLimitError) Error() string {
 	return "credential corpus отклонён: превышен серверный предел " + err.Limit
-}
-
-func (err sessionArchiveLimitError) Error() string {
-	return "архив сессии отклонён: превышен серверный предел " + err.Limit
 }
 
 type secretInventory struct {
@@ -2685,65 +2683,7 @@ func restoreCodexSessionArchive(encoded string, root string) error {
 }
 
 func restoreCodexSessionArchiveWithMetadata(encoded string, root string, expectedSHA256 string, expectedSizeBytes int64) error {
-	encoded = strings.TrimSpace(encoded)
-	if encoded == "" {
-		if strings.TrimSpace(expectedSHA256) != "" || expectedSizeBytes != 0 {
-			return fmt.Errorf("пустой архив сессии содержит неожиданные метаданные")
-		}
-		return nil
-	}
-	maxEncodedBytes := base64.StdEncoding.EncodedLen(int(maxSessionArchiveTarBytes + 1024))
-	if len(encoded) > maxEncodedBytes {
-		return sessionArchiveLimitError{Limit: "сжатого размера"}
-	}
-	raw, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return fmt.Errorf("decode codex session archive: %w", err)
-	}
-	digest := sha256.Sum256(raw)
-	actualSHA256 := hex.EncodeToString(digest[:])
-	if strings.TrimSpace(expectedSHA256) != "" && actualSHA256 != strings.TrimSpace(expectedSHA256) {
-		return fmt.Errorf("контрольная сумма архива сессии не совпадает")
-	}
-	if expectedSizeBytes != 0 && int64(len(raw)) != expectedSizeBytes {
-		return fmt.Errorf("размер архива сессии не совпадает")
-	}
-	if err := validateSessionArchive(raw, nil); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(root, 0o700); err != nil {
-		return err
-	}
-	stagingRoot, err := os.MkdirTemp(root, ".sessions-restore-")
-	if err != nil {
-		return fmt.Errorf("private staging восстановления сессии не создан")
-	}
-	if err := os.Chmod(stagingRoot, 0o700); err != nil {
-		_ = os.RemoveAll(stagingRoot)
-		return fmt.Errorf("private staging восстановления сессии не защищён")
-	}
-	defer os.RemoveAll(stagingRoot)
-	if err := validateSessionArchive(raw, func(header *tar.Header, name string, reader io.Reader) error {
-		target := filepath.Join(stagingRoot, filepath.FromSlash(name))
-		switch header.Typeflag {
-		case tar.TypeDir:
-			return os.Mkdir(target, 0o700)
-		case tar.TypeReg:
-			file, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-			if err != nil {
-				return err
-			}
-			_, copyErr := io.CopyN(file, reader, header.Size)
-			syncErr := file.Sync()
-			closeErr := file.Close()
-			return errors.Join(copyErr, syncErr, closeErr)
-		default:
-			return fmt.Errorf("архив сессии содержит недопустимый тип записи")
-		}
-	}); err != nil {
-		return err
-	}
-	return replaceDirectoryAtomically(filepath.Join(stagingRoot, "sessions"), filepath.Join(root, "sessions"))
+	return sessionarchive.RestoreEncoded(encoded, root, expectedSHA256, expectedSizeBytes)
 }
 
 func sessionArchiveMetadata(encoded string) (string, int64, error) {
@@ -2751,152 +2691,11 @@ func sessionArchiveMetadata(encoded string) (string, int64, error) {
 	if encoded == "" {
 		return "", 0, nil
 	}
-	maxEncodedBytes := base64.StdEncoding.EncodedLen(int(maxSessionArchiveTarBytes + 1024))
-	if len(encoded) > maxEncodedBytes {
-		return "", 0, sessionArchiveLimitError{Limit: "сжатого размера"}
-	}
-	raw, err := base64.StdEncoding.DecodeString(encoded)
+	metadata, err := sessionarchive.ValidateEncoded(encoded, "", 0)
 	if err != nil {
-		return "", 0, fmt.Errorf("decode codex session archive metadata: %w", err)
+		return "", 0, fmt.Errorf("validate codex session archive metadata: %w", err)
 	}
-	digest := sha256.Sum256(raw)
-	return hex.EncodeToString(digest[:]), int64(len(raw)), nil
-}
-
-type sessionArchiveVisitor func(header *tar.Header, canonicalName string, reader io.Reader) error
-
-func validateSessionArchive(raw []byte, visitor sessionArchiveVisitor) error {
-	compressed := bytes.NewReader(raw)
-	gzipReader, err := gzip.NewReader(compressed)
-	if err != nil {
-		return fmt.Errorf("open codex session archive: %w", err)
-	}
-	gzipReader.Multistream(false)
-	limitedArchive := &io.LimitedReader{R: gzipReader, N: maxSessionArchiveTarBytes + 1}
-	tarReader := tar.NewReader(limitedArchive)
-	fileCount := 0
-	entryCount := 0
-	totalBytes := int64(0)
-	previousName := ""
-	directories := map[string]struct{}{}
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			_ = gzipReader.Close()
-			return fmt.Errorf("read codex session archive: %w", err)
-		}
-		entryCount++
-		if entryCount > maxSessionArchiveEntries {
-			return sessionArchiveLimitError{Limit: "количества записей"}
-		}
-		if header.Format != tar.FormatUSTAR {
-			_ = gzipReader.Close()
-			return fmt.Errorf("архив сессии содержит недопустимый формат записи")
-		}
-		name, err := canonicalArchiveName(header.Name)
-		if err != nil {
-			_ = gzipReader.Close()
-			return err
-		}
-		if entryCount == 1 {
-			if name != "sessions" || header.Typeflag != tar.TypeDir {
-				_ = gzipReader.Close()
-				return fmt.Errorf("архив сессии не содержит canonical directory root")
-			}
-		} else if name <= previousName {
-			_ = gzipReader.Close()
-			return fmt.Errorf("архив сессии содержит дубликат или нарушенный порядок записей")
-		}
-		if header.Linkname != "" || header.Mode < 0 || header.Mode&^0o777 != 0 || header.Devmajor != 0 || header.Devminor != 0 {
-			_ = gzipReader.Close()
-			return fmt.Errorf("архив сессии содержит недопустимую USTAR семантику")
-		}
-		parent := filepath.ToSlash(filepath.Dir(filepath.FromSlash(name)))
-		if name != "sessions" {
-			if _, exists := directories[parent]; !exists {
-				_ = gzipReader.Close()
-				return fmt.Errorf("архив сессии содержит запись до canonical parent directory")
-			}
-		}
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if header.Size != 0 {
-				_ = gzipReader.Close()
-				return fmt.Errorf("архив сессии содержит directory с данными")
-			}
-			directories[name] = struct{}{}
-		case tar.TypeReg:
-			fileCount++
-			totalBytes += header.Size
-			if fileCount > maxSessionArchiveFiles || header.Size < 0 || header.Size > maxSessionArchiveFileBytes {
-				_ = gzipReader.Close()
-				return sessionArchiveLimitError{Limit: "размера или количества файлов"}
-			}
-			if totalBytes > maxSessionArchiveTotalBytes {
-				_ = gzipReader.Close()
-				return sessionArchiveLimitError{Limit: "общего размера"}
-			}
-			if visitor != nil {
-				if err := visitor(header, name, tarReader); err != nil {
-					_ = gzipReader.Close()
-					return err
-				}
-			} else if _, err := io.CopyN(io.Discard, tarReader, header.Size); err != nil {
-				_ = gzipReader.Close()
-				return fmt.Errorf("архив сессии содержит усечённый файл")
-			}
-		default:
-			_ = gzipReader.Close()
-			return fmt.Errorf("архив сессии содержит недопустимый тип записи")
-		}
-		if visitor != nil && header.Typeflag == tar.TypeDir {
-			if err := visitor(header, name, tarReader); err != nil {
-				_ = gzipReader.Close()
-				return err
-			}
-		}
-		previousName = name
-	}
-	if entryCount == 0 {
-		_ = gzipReader.Close()
-		return fmt.Errorf("архив сессии не содержит canonical directory root")
-	}
-	trailing, err := io.ReadAll(limitedArchive)
-	if err != nil {
-		_ = gzipReader.Close()
-		return fmt.Errorf("архив сессии не прошёл проверку gzip")
-	}
-	for _, value := range trailing {
-		if value != 0 {
-			_ = gzipReader.Close()
-			return fmt.Errorf("архив сессии содержит недопустимые trailing data")
-		}
-	}
-	if limitedArchive.N <= 0 {
-		_ = gzipReader.Close()
-		return sessionArchiveLimitError{Limit: "несжатого размера"}
-	}
-	if err := gzipReader.Close(); err != nil || compressed.Len() != 0 {
-		return fmt.Errorf("архив сессии содержит недопустимый gzip stream")
-	}
-	return nil
-}
-
-func canonicalArchiveName(rawName string) (string, error) {
-	if rawName == "" || strings.Contains(rawName, "\\") {
-		return "", fmt.Errorf("unsafe archive path")
-	}
-	cleaned := filepath.ToSlash(filepath.Clean(filepath.FromSlash(rawName)))
-	if cleaned != rawName || filepath.IsAbs(filepath.FromSlash(rawName)) || cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
-		return "", fmt.Errorf("unsafe archive path")
-	}
-	if cleaned != "sessions" && !strings.HasPrefix(cleaned, "sessions/") {
-		return "", fmt.Errorf("unexpected archive path")
-	}
-	return cleaned, nil
+	return metadata.SHA256, metadata.SizeBytes, nil
 }
 
 func replaceDirectoryAtomically(source string, target string) error {

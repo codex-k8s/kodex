@@ -4758,6 +4758,12 @@ func (store *fakeAdminStore) ClaimNextAgentSessionTurn(_ context.Context, sessio
 	}
 	for _, turn := range store.sessionTurns {
 		if turn.SessionID == session.ID && turn.Status == agentSessionTurnRunning {
+			if session.ActiveTurnID != turn.ID || session.ActiveRunID != turn.RunID {
+				session.Status = agentSessionStatusRunning
+				session.ActiveTurnID = turn.ID
+				session.ActiveRunID = turn.RunID
+				store.agentSessions[sessionKey] = session
+			}
 			return turn, nil
 		}
 	}
@@ -4765,6 +4771,10 @@ func (store *fakeAdminStore) ClaimNextAgentSessionTurn(_ context.Context, sessio
 		if turn.SessionID == session.ID && turn.Status == agentSessionTurnQueued {
 			turn.Status = agentSessionTurnRunning
 			store.sessionTurns[index] = turn
+			session.Status = agentSessionStatusRunning
+			session.ActiveTurnID = turn.ID
+			session.ActiveRunID = turn.RunID
+			store.agentSessions[sessionKey] = session
 			return turn, nil
 		}
 	}

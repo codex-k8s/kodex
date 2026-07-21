@@ -1060,8 +1060,6 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 		} else if callbackDeliveriesComplete(finalDeliveries) {
 			return nil
 		}
-	} else {
-		// Незавершённое состояние ниже превращается в явную ошибку общего выхода.
 	}
 	if listErr == nil && !callbackDeliveriesComplete(finalDeliveries) {
 		pending := 0

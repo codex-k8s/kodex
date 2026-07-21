@@ -145,13 +145,14 @@ type AgentSessionSnapshot struct {
 }
 
 type AgentSessionTurnClaim struct {
-	HasTurn        bool   `json:"has_turn"`
-	Exit           bool   `json:"exit"`
-	TurnID         int64  `json:"turn_id,omitempty"`
-	RunID          string `json:"run_id,omitempty"`
-	Prompt         string `json:"prompt,omitempty"`
-	CodexSessionID string `json:"codex_session_id,omitempty"`
-	ExpiresAt      string `json:"expires_at"`
+	HasTurn           bool   `json:"has_turn"`
+	Exit              bool   `json:"exit"`
+	TurnID            int64  `json:"turn_id,omitempty"`
+	RunID             string `json:"run_id,omitempty"`
+	Prompt            string `json:"prompt,omitempty"`
+	CodexSessionID    string `json:"codex_session_id,omitempty"`
+	RuntimeRevisionID int64  `json:"runtime_revision_id,omitempty"`
+	ExpiresAt         string `json:"expires_at"`
 }
 
 type CompleteAgentSessionTurnCommand struct {
@@ -164,6 +165,8 @@ type CompleteAgentSessionTurnCommand struct {
 	SessionArchiveGzipBase64 string            `json:"session_archive_gzip_base64"`
 	ArchiveSHA256            string            `json:"archive_sha256"`
 	ArchiveSizeBytes         int64             `json:"archive_size_bytes"`
+	RuntimeRevisionID        int64             `json:"runtime_revision_id,omitempty"`
+	PodUID                   string            `json:"pod_uid,omitempty"`
 	Artifacts                map[string]string `json:"artifacts"`
 }
 
@@ -346,19 +349,6 @@ func (svc *AgentSessionService) ClaimNextTurn(ctx context.Context, sessionKey st
 		}
 		return AgentSessionTurnClaim{}, err
 	}
-	if err := svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.claim_runtime_persist.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
-		_, _ = guardedStore.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
-			SessionKey:           current.SessionKey,
-			Status:               agentSessionStatusRunning,
-			ActiveTurnID:         turn.ID,
-			ActiveRunID:          turn.RunID,
-			MattermostRootPostID: turn.MattermostRootPostID,
-			ExtendTTLSeconds:     current.TTLSeconds,
-		})
-		return nil
-	}); err != nil {
-		return AgentSessionTurnClaim{}, err
-	}
 	if err := svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.claim_artifacts_persist.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
 		_, _ = guardedStore.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: turn.RunID, Status: agentSessionTurnRunning})
 		return nil
@@ -372,12 +362,13 @@ func (svc *AgentSessionService) ClaimNextTurn(ctx context.Context, sessionKey st
 		return AgentSessionTurnClaim{}, err
 	}
 	return AgentSessionTurnClaim{
-		HasTurn:        true,
-		TurnID:         turn.ID,
-		RunID:          turn.RunID,
-		Prompt:         turn.Message,
-		CodexSessionID: session.CodexSessionID,
-		ExpiresAt:      session.ExpiresAt.UTC().Format(time.RFC3339),
+		HasTurn:           true,
+		TurnID:            turn.ID,
+		RunID:             turn.RunID,
+		Prompt:            turn.Message,
+		CodexSessionID:    session.CodexSessionID,
+		RuntimeRevisionID: turn.RuntimeRevisionID,
+		ExpiresAt:         session.ExpiresAt.UTC().Format(time.RFC3339),
 	}, nil
 }
 
@@ -402,9 +393,6 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	if currentTurn.SessionID != session.ID {
 		return fmt.Errorf("turn does not belong to session")
 	}
-	if agentSessionTurnTerminal(currentTurn.Status) {
-		return svc.reconcileCompletedTurnSnapshot(ctx, session, currentTurn, command, currentTurn.Status)
-	}
 	artifacts := "{}"
 	if command.Artifacts != nil {
 		body, err := json.Marshal(command.Artifacts)
@@ -412,6 +400,14 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 			return fmt.Errorf("marshal turn artifacts: %w", err)
 		}
 		artifacts = string(body)
+	}
+	if agentSessionTurnTerminal(currentTurn.Status) {
+		if _, atomic := svc.cfg.Store.(adminrepo.AgentSessionArchiveRepository); !atomic {
+			if currentTurn.RunID != strings.TrimSpace(command.RunID) || currentTurn.Status != status || currentTurn.FinalMessage != command.FinalMessage || currentTurn.ErrorMessage != command.ErrorMessage || defaultString(strings.TrimSpace(currentTurn.Artifacts), "{}") != artifacts || session.CodexSessionID != strings.TrimSpace(command.CodexSessionID) || session.SessionArchiveGzipBase64 != strings.TrimSpace(command.SessionArchiveGzipBase64) {
+				return fmt.Errorf("terminal turn replay does not match persisted result")
+			}
+			return svc.reconcileCompletedTurnSnapshot(ctx, session, currentTurn, command, currentTurn.Status)
+		}
 	}
 	sessionStatus := agentSessionStatusIdle
 	if status == agentSessionTurnFailed {
@@ -421,11 +417,15 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	}
 	var turn entity.AgentSessionTurn
 	atomicCompletion := false
+	alreadyCompleted := false
 	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.complete_turn_persist.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
 		if archiveStore, ok := guardedStore.(adminrepo.AgentSessionArchiveRepository); ok {
 			completion, completeErr := archiveStore.CompleteAgentSessionTurnWithArchive(ctx, adminrepo.CompleteAgentSessionTurnWithArchiveInput{
 				SessionKey:               session.SessionKey,
 				TurnID:                   command.TurnID,
+				RunID:                    command.RunID,
+				RuntimeRevisionID:        command.RuntimeRevisionID,
+				PodUID:                   command.PodUID,
 				TurnStatus:               status,
 				SessionStatus:            sessionStatus,
 				FinalMessage:             command.FinalMessage,
@@ -440,6 +440,7 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 			if completeErr == nil {
 				turn = completion.Turn
 				atomicCompletion = true
+				alreadyCompleted = completion.AlreadyCompleted
 			}
 			return completeErr
 		}
@@ -455,6 +456,9 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	})
 	if err != nil {
 		return err
+	}
+	if alreadyCompleted {
+		return svc.reconcileCompletedTurnSnapshot(ctx, session, turn, command, turn.Status)
 	}
 	var completionErr error
 	if !atomicCompletion {

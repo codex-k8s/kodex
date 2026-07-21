@@ -98,6 +98,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		AgentRunnerImage:                      cfg.AgentRunnerImage,
 		AgentRunnerServiceAccount:             cfg.AgentServiceAccount,
 		AgentRunnerClusterAdminServiceAccount: cfg.AgentClusterAdminServiceAccount,
+		WorkspaceStorage:                      cfg.RuntimeWorkspaceSize,
+		SessionCPURequest:                     cfg.AgentSessionCPURequest,
+		SessionMemoryRequest:                  cfg.AgentSessionMemoryRequest,
+		SessionMemoryLimit:                    cfg.AgentSessionMemoryLimit,
+		DevShmSizeLimit:                       cfg.AgentDevShmSizeLimit,
 	})
 	automationSvc := statusservice.NewAutomationService(statusservice.AutomationServiceConfig{
 		Repository:              automationStorage,

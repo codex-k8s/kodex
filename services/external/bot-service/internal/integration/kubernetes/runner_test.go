@@ -761,12 +761,33 @@ func TestStartAgentSessionChangedRevisionRecreatesOnlyExactPod(t *testing.T) {
 	client.ClearActions()
 	input.RuntimeRevisionDigest = "4444444444444444444444444444444444444444444444444444444444444444"
 	input.AllowPodRecreation = true
+	input.ReconcileFence = func(context.Context) error { return errors.New("synthetic stale DB fence") }
+	if _, err := runner.StartAgentSession(context.Background(), input); err == nil {
+		t.Fatal("Pod UID delete ignored stale DB fence")
+	}
+	for _, action := range client.Actions() {
+		if action.GetResource().Resource == "pods" && action.GetVerb() == "delete" {
+			t.Fatal("stale DB fence allowed Pod UID delete")
+		}
+	}
+	if _, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("stale DB fence removed confirmed Pod: %v", err)
+	}
+	client.ClearActions()
+	fenceRefreshes := 0
+	input.ReconcileFence = func(context.Context) error {
+		fenceRefreshes++
+		return nil
+	}
 	recreated, err := runner.StartAgentSession(context.Background(), input)
 	if err != nil {
 		t.Fatalf("recreate StartAgentSession() error = %v", err)
 	}
 	if recreated.Recreation.Action != runtimerepo.AgentSessionPodRecreated || recreated.Recreation.PreviousPodUID != "runtime-pod-uid-v1" {
 		t.Fatalf("recreation = %#v", recreated.Recreation)
+	}
+	if fenceRefreshes != 1 {
+		t.Fatalf("DB fence refreshes before exact Pod delete = %d", fenceRefreshes)
 	}
 	replacement, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
 	if err != nil {
@@ -802,6 +823,61 @@ func TestStartAgentSessionChangedRevisionRecreatesOnlyExactPod(t *testing.T) {
 	if podDelete == nil || podDelete.GetDeleteOptions().Preconditions == nil || podDelete.GetDeleteOptions().Preconditions.UID == nil || string(*podDelete.GetDeleteOptions().Preconditions.UID) != "runtime-pod-uid-v1" {
 		t.Fatalf("Pod recreation did not use exact UID precondition: %#v", podDelete)
 	}
+}
+
+func TestStartAgentSessionRejectsReplacementPodWithMatchingNameLabelsAndDigest(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace: "mattermost", AgentRunnerImage: "matter-codex-agent-runner:test",
+		WorkspaceStorageSize: "1Gi", AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const digest = "5555555555555555555555555555555555555555555555555555555555555555"
+	input := runtimerepo.AgentSessionPodInput{
+		SessionKey: "runtime-uid-replacement", Role: "developer", BotServiceURL: "http://bot-service",
+		InternalToken: "synthetic-session-token", CodexAuthSecretName: "matter-codex-codex-auth-main",
+		RuntimeRevisionDigest: digest,
+	}
+	started, err := runner.StartAgentSession(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pod, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pod.UID = types.UID("confirmed-pod-uid")
+	pod.Status.Phase = corev1.PodRunning
+	if _, err := client.CoreV1().Pods("mattermost").Update(context.Background(), pod, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	replacement := pod.DeepCopy()
+	replacement.UID = types.UID("replacement-pod-uid")
+	replacement.Spec.Containers[0].Image = "foreign-image-with-matching-labels:test"
+	if err := client.Tracker().Delete(corev1.SchemeGroupVersion.WithResource("pods"), "mattermost", pod.Name); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Tracker().Create(corev1.SchemeGroupVersion.WithResource("pods"), replacement, "mattermost"); err != nil {
+		t.Fatal(err)
+	}
+	client.ClearActions()
+	input.ExpectedPodUID = "confirmed-pod-uid"
+	input.AllowPodRecreation = true
+	if _, err := runner.StartAgentSession(context.Background(), input); err == nil {
+		t.Fatal("replacement Pod with matching public identity was reused or deleted")
+	}
+	for _, action := range client.Actions() {
+		if action.GetResource().Resource == "pods" && (action.GetVerb() == "delete" || action.GetVerb() == "create") {
+			t.Fatalf("replacement Pod was mutated through %s", action.GetVerb())
+		}
+	}
+	current, err := client.CoreV1().Pods("mattermost").Get(context.Background(), pod.Name, metav1.GetOptions{})
+	if err != nil || current.UID != replacement.UID || current.Spec.Containers[0].Image != replacement.Spec.Containers[0].Image {
+		t.Fatalf("replacement Pod changed: current=%#v error=%v", current, err)
+	}
+	assertNoPersistentSessionObjectDeletion(t, client.Actions())
 }
 
 func assertNoPersistentSessionObjectDeletion(t *testing.T, actions []k8stesting.Action) {

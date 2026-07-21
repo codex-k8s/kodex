@@ -833,6 +833,7 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	input.RepositoryName = strings.TrimSpace(input.RepositoryName)
 	input.RepositoryDefaultBranch = strings.TrimSpace(input.RepositoryDefaultBranch)
 	input.RuntimeRevisionDigest = strings.TrimSpace(input.RuntimeRevisionDigest)
+	input.ExpectedPodUID = strings.TrimSpace(input.ExpectedPodUID)
 	if input.SessionKey == "" {
 		return runtimerepo.StartedAgentSession{}, fmt.Errorf("session key is required")
 	}
@@ -924,6 +925,11 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 				return runtimerepo.StartedAgentSession{}, err
 			}
 		}
+		if input.ReconcileFence != nil {
+			if err := input.ReconcileFence(ctx); err != nil {
+				return runtimerepo.StartedAgentSession{}, fmt.Errorf("refresh runtime reconciliation fence before Pod UID delete: %w", err)
+			}
+		}
 		if err := runner.deleteExactSessionPod(ctx, existingPod); err != nil {
 			return runtimerepo.StartedAgentSession{}, err
 		}
@@ -936,6 +942,11 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	}
 	currentPod := existingPod
 	if action != runtimerepo.AgentSessionPodReused {
+		if action != runtimerepo.AgentSessionPodRecreated && input.ReconcileFence != nil {
+			if err := input.ReconcileFence(ctx); err != nil {
+				return runtimerepo.StartedAgentSession{}, fmt.Errorf("refresh runtime reconciliation fence before Pod create: %w", err)
+			}
+		}
 		currentPod, err = runner.client.CoreV1().Pods(runner.namespace).Create(ctx, runner.sessionPod(input), metav1.CreateOptions{})
 	}
 	if err != nil {
@@ -1142,6 +1153,9 @@ func (runner *Runner) sessionPodReconciliation(ctx context.Context, podName stri
 	}
 	if !sessionPodHasExpectedIdentity(pod, input) {
 		return nil, "", fmt.Errorf("existing session pod identity does not match expected session")
+	}
+	if input.ExpectedPodUID != "" && string(pod.UID) != input.ExpectedPodUID {
+		return nil, "", fmt.Errorf("existing session pod UID does not match confirmed runtime identity")
 	}
 	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 		return pod, runtimerepo.AgentSessionPodRecreated, nil
@@ -2133,6 +2147,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 		{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: input.OpenAIAccountAlias},
 		{Name: "MATTERCODEX_KUBERNETES_ACCESS", Value: kubernetesAccess},
 		{Name: "MATTERCODEX_BOT_SERVICE_URL", Value: input.BotServiceURL},
+		{Name: "MATTERCODEX_POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.uid"}}},
 		{Name: "MATTERCODEX_SESSION_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{Name: tokenSecretName},
 			Key:                  "token",

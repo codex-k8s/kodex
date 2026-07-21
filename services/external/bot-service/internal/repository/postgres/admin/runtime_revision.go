@@ -2,22 +2,15 @@ package admin
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/codex-k8s/matter-codex/libs/go/sessionarchive"
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
-)
-
-const (
-	maxConfirmedArchiveEncodedBytes = 64 << 20
-	maxConfirmedArchiveDecodedBytes = 48 << 20
 )
 
 func (repo *Repository) EnsureRuntimeRevision(ctx context.Context, input adminrepo.EnsureRuntimeRevisionInput) (entity.RuntimeRevision, error) {
@@ -70,12 +63,100 @@ func (repo *Repository) GetAgentSessionRuntimeRevisionState(ctx context.Context,
 	return repo.scanAgentSessionRuntimeRevisionState(ctx, query("agent_sessions__runtime_revision_state.sql"), strings.TrimSpace(sessionKey))
 }
 
+func (repo *Repository) ObserveRuntimeSecretBinding(ctx context.Context, input adminrepo.ObserveRuntimeSecretBindingInput) (entity.RuntimeSecretBindingRevision, error) {
+	var item entity.RuntimeSecretBindingRevision
+	err := repo.db.QueryRow(ctx, query("runtime_secret_bindings__observe.sql"),
+		strings.TrimSpace(input.BindingKey), strings.TrimSpace(input.SecretName),
+		strings.TrimSpace(input.SecretKey), strings.TrimSpace(input.IntegritySHA256),
+	).Scan(&item.BindingKey, &item.SecretName, &item.SecretKey, &item.IntegritySHA256, &item.Revision, &item.UpdatedAt)
+	if err != nil {
+		return entity.RuntimeSecretBindingRevision{}, fmt.Errorf("observe runtime secret binding revision: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) SetAgentSessionDesiredRuntimeRevision(ctx context.Context, input adminrepo.SetAgentSessionDesiredRuntimeRevisionInput) (entity.AgentSessionRuntimeRevisionState, error) {
-	return repo.scanAgentSessionRuntimeRevisionState(ctx, query("agent_sessions__set_desired_revision.sql"), strings.TrimSpace(input.SessionKey), input.RuntimeRevisionID)
+	item, err := repo.scanAgentSessionRuntimeRevisionState(ctx, query("agent_sessions__set_desired_revision.sql"), strings.TrimSpace(input.SessionKey), input.RuntimeRevisionID)
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		return entity.AgentSessionRuntimeRevisionState{}, adminrepo.ErrRuntimeReconciliationConflict
+	}
+	return item, err
+}
+
+func (repo *Repository) AcquireAgentSessionRuntimeLease(ctx context.Context, input adminrepo.AcquireAgentSessionRuntimeLeaseInput) (entity.AgentSessionRuntimeRevisionState, error) {
+	if err := validateRuntimeLeaseInput(input); err != nil {
+		return entity.AgentSessionRuntimeRevisionState{}, err
+	}
+	leaseSeconds := input.LeaseSeconds
+	if leaseSeconds <= 0 {
+		leaseSeconds = 120
+	}
+	item, err := repo.scanAgentSessionRuntimeRevisionState(ctx, query("agent_sessions__acquire_runtime_lease.sql"),
+		strings.TrimSpace(input.SessionKey), input.DesiredRuntimeRevisionID,
+		input.ExpectedAppliedRuntimeRevisionID, strings.TrimSpace(input.ExpectedPodUID),
+		strings.TrimSpace(input.LeaseToken), leaseSeconds,
+	)
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		return entity.AgentSessionRuntimeRevisionState{}, adminrepo.ErrRuntimeReconciliationConflict
+	}
+	return item, err
+}
+
+func (repo *Repository) RefreshAgentSessionRuntimeLease(ctx context.Context, input adminrepo.AcquireAgentSessionRuntimeLeaseInput) (entity.AgentSessionRuntimeRevisionState, error) {
+	if err := validateRuntimeLeaseInput(input); err != nil {
+		return entity.AgentSessionRuntimeRevisionState{}, err
+	}
+	leaseSeconds := input.LeaseSeconds
+	if leaseSeconds <= 0 {
+		leaseSeconds = 120
+	}
+	item, err := repo.scanAgentSessionRuntimeRevisionState(ctx, query("agent_sessions__refresh_runtime_lease.sql"),
+		strings.TrimSpace(input.SessionKey), input.DesiredRuntimeRevisionID,
+		input.ExpectedAppliedRuntimeRevisionID, strings.TrimSpace(input.ExpectedPodUID),
+		strings.TrimSpace(input.LeaseToken), leaseSeconds,
+	)
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		return entity.AgentSessionRuntimeRevisionState{}, adminrepo.ErrRuntimeReconciliationConflict
+	}
+	return item, err
 }
 
 func (repo *Repository) MarkAgentSessionRuntimeApplied(ctx context.Context, input adminrepo.MarkAgentSessionRuntimeAppliedInput) (entity.AgentSessionRuntimeRevisionState, error) {
-	return repo.scanAgentSessionRuntimeRevisionState(ctx, query("agent_sessions__mark_applied_revision.sql"), strings.TrimSpace(input.SessionKey), input.RuntimeRevisionID)
+	if strings.TrimSpace(input.SessionKey) == "" || input.RuntimeRevisionID < 0 || input.ExpectedAppliedRuntimeRevisionID < 0 || strings.TrimSpace(input.AppliedPodUID) == "" || strings.TrimSpace(input.LeaseToken) == "" {
+		return entity.AgentSessionRuntimeRevisionState{}, fmt.Errorf("mark applied runtime revision requires exact session, Pod UID, revision, and lease")
+	}
+	if input.ExpectedAppliedRuntimeRevisionID > 0 && strings.TrimSpace(input.ExpectedPodUID) == "" {
+		return entity.AgentSessionRuntimeRevisionState{}, fmt.Errorf("mark applied runtime revision requires expected Pod UID")
+	}
+	item, err := repo.scanAgentSessionRuntimeRevisionState(ctx, query("agent_sessions__mark_applied_revision.sql"),
+		strings.TrimSpace(input.SessionKey), input.RuntimeRevisionID, input.ExpectedAppliedRuntimeRevisionID,
+		strings.TrimSpace(input.ExpectedPodUID), strings.TrimSpace(input.AppliedPodUID), strings.TrimSpace(input.LeaseToken),
+	)
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		return entity.AgentSessionRuntimeRevisionState{}, adminrepo.ErrRuntimeReconciliationConflict
+	}
+	return item, err
+}
+
+func (repo *Repository) ReleaseAgentSessionRuntimeLease(ctx context.Context, input adminrepo.ReleaseAgentSessionRuntimeLeaseInput) error {
+	if strings.TrimSpace(input.SessionKey) == "" || strings.TrimSpace(input.LeaseToken) == "" {
+		return fmt.Errorf("release runtime reconciliation lease requires session and lease token")
+	}
+	_, err := repo.db.Exec(ctx, query("agent_sessions__release_runtime_lease.sql"), strings.TrimSpace(input.SessionKey), strings.TrimSpace(input.LeaseToken))
+	if err != nil {
+		return fmt.Errorf("release agent session runtime lease: %w", err)
+	}
+	return nil
+}
+
+func validateRuntimeLeaseInput(input adminrepo.AcquireAgentSessionRuntimeLeaseInput) error {
+	if strings.TrimSpace(input.SessionKey) == "" || input.DesiredRuntimeRevisionID < 0 || input.ExpectedAppliedRuntimeRevisionID < 0 || strings.TrimSpace(input.LeaseToken) == "" {
+		return fmt.Errorf("runtime reconciliation lease requires exact session, revisions, and lease token")
+	}
+	if input.ExpectedAppliedRuntimeRevisionID > 0 && strings.TrimSpace(input.ExpectedPodUID) == "" {
+		return fmt.Errorf("runtime reconciliation lease requires expected Pod UID")
+	}
+	return nil
 }
 
 func (repo *Repository) scanAgentSessionRuntimeRevisionState(ctx context.Context, statement string, arguments ...any) (entity.AgentSessionRuntimeRevisionState, error) {
@@ -85,6 +166,9 @@ func (repo *Repository) scanAgentSessionRuntimeRevisionState(ctx context.Context
 		&item.SessionKey,
 		&item.DesiredRuntimeRevisionID,
 		&item.AppliedRuntimeRevisionID,
+		&item.AppliedPodUID,
+		&item.ReconcileLeaseToken,
+		&item.ReconcileLeaseExpiresAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.AgentSessionRuntimeRevisionState{}, adminrepo.ErrNotFound
@@ -139,30 +223,40 @@ func (repo *Repository) GetLatestAgentSessionArchive(ctx context.Context, sessio
 }
 
 func (repo *Repository) CompleteAgentSessionTurnWithArchive(ctx context.Context, input adminrepo.CompleteAgentSessionTurnWithArchiveInput) (entity.AgentSessionCompletion, error) {
-	if err := validateConfirmedArchive(input.SessionArchiveGzipBase64, input.ArchiveSHA256, input.ArchiveSizeBytes); err != nil {
+	archiveMetadata, err := validateConfirmedArchive(input.TurnStatus, input.SessionArchiveGzipBase64, input.ArchiveSHA256, input.ArchiveSizeBytes)
+	if err != nil {
 		return entity.AgentSessionCompletion{}, err
 	}
+	input.ArchiveSHA256 = archiveMetadata.SHA256
+	input.ArchiveSizeBytes = archiveMetadata.SizeBytes
 	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return entity.AgentSessionCompletion{}, fmt.Errorf("begin atomic agent session completion: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
-	var turnSessionID int64
-	var currentTurnStatus string
-	if err := tx.QueryRow(ctx, query("agent_session_turns__lock_completion.sql"), input.TurnID).Scan(&turnSessionID, &currentTurnStatus); err != nil {
+	var turnSessionID, turnRuntimeRevisionID int64
+	var currentTurnStatus, turnRunID, currentFinalMessage, currentErrorMessage, currentArtifacts, completionPodUID string
+	if err := tx.QueryRow(ctx, query("agent_session_turns__lock_completion.sql"), input.TurnID).Scan(
+		&turnSessionID, &currentTurnStatus, &turnRunID, &turnRuntimeRevisionID,
+		&currentFinalMessage, &currentErrorMessage, &currentArtifacts, &completionPodUID,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentSessionCompletion{}, adminrepo.ErrNotFound
 		}
 		return entity.AgentSessionCompletion{}, fmt.Errorf("lock agent session turn completion: %w", err)
 	}
-	var sessionID, currentArchiveVersion int64
-	var legacyCodexSessionID, legacyPayload string
+	var sessionID, currentArchiveVersion, activeTurnID, appliedRuntimeRevisionID int64
+	var legacyCodexSessionID, legacyPayload, activeRunID, appliedPodUID string
 	if err := tx.QueryRow(ctx, query("agent_sessions__lock_completion.sql"), strings.TrimSpace(input.SessionKey)).Scan(
 		&sessionID,
 		&currentArchiveVersion,
 		&legacyCodexSessionID,
 		&legacyPayload,
+		&activeTurnID,
+		&activeRunID,
+		&appliedRuntimeRevisionID,
+		&appliedPodUID,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentSessionCompletion{}, adminrepo.ErrNotFound
@@ -174,15 +268,36 @@ func (repo *Repository) CompleteAgentSessionTurnWithArchive(ctx context.Context,
 	}
 	txRepo := newTransactionalRepository(tx)
 	if terminalAgentSessionTurnStatus(currentTurnStatus) {
+		if strings.TrimSpace(input.RunID) != turnRunID || strings.TrimSpace(input.TurnStatus) != currentTurnStatus ||
+			input.FinalMessage != currentFinalMessage || input.ErrorMessage != currentErrorMessage || input.Artifacts != currentArtifacts ||
+			input.RuntimeRevisionID != turnRuntimeRevisionID || strings.TrimSpace(input.PodUID) != completionPodUID {
+			return entity.AgentSessionCompletion{}, fmt.Errorf("terminal completion replay does not match persisted turn")
+		}
 		result, err := txRepo.readExistingAgentSessionCompletion(ctx, sessionID, input.TurnID)
 		if err != nil {
 			return entity.AgentSessionCompletion{}, err
+		}
+		if !exactArchiveReplay(result.Archive, input) {
+			return entity.AgentSessionCompletion{}, fmt.Errorf("terminal completion replay does not match persisted archive")
 		}
 		result.AlreadyCompleted = true
 		if err := tx.Commit(ctx); err != nil {
 			return entity.AgentSessionCompletion{}, fmt.Errorf("commit idempotent agent session completion: %w", err)
 		}
 		return result, nil
+	}
+	if currentTurnStatus != "running" || strings.TrimSpace(input.RunID) == "" || strings.TrimSpace(input.RunID) != turnRunID ||
+		activeTurnID != input.TurnID || strings.TrimSpace(activeRunID) != turnRunID {
+		return entity.AgentSessionCompletion{}, fmt.Errorf("completion does not match the active running turn")
+	}
+	legacyRuntime := turnRuntimeRevisionID == 0 && appliedRuntimeRevisionID == 0 && input.RuntimeRevisionID == 0
+	if !legacyRuntime {
+		if turnRuntimeRevisionID <= 0 || input.RuntimeRevisionID != turnRuntimeRevisionID || appliedRuntimeRevisionID != turnRuntimeRevisionID ||
+			strings.TrimSpace(input.PodUID) == "" || strings.TrimSpace(input.PodUID) != strings.TrimSpace(appliedPodUID) {
+			return entity.AgentSessionCompletion{}, fmt.Errorf("completion runtime revision or pod identity fence does not match")
+		}
+	} else if strings.TrimSpace(input.PodUID) != "" && strings.TrimSpace(input.PodUID) != strings.TrimSpace(appliedPodUID) {
+		return entity.AgentSessionCompletion{}, fmt.Errorf("legacy completion pod identity fence does not match")
 	}
 
 	var archive entity.AgentSessionArchive
@@ -193,7 +308,7 @@ func (repo *Repository) CompleteAgentSessionTurnWithArchive(ctx context.Context,
 				return entity.AgentSessionCompletion{}, fmt.Errorf("validate previous agent session archive: %w", err)
 			}
 			if _, err := scanAgentSessionArchive(tx.QueryRow(ctx, query("agent_session_archives__insert.sql"),
-				sessionID, int64(1), legacyCodexSessionID, legacyPayload, legacySHA, legacySize,
+				sessionID, nil, int64(1), legacyCodexSessionID, legacyPayload, legacySHA, legacySize,
 			)); err != nil {
 				return entity.AgentSessionCompletion{}, fmt.Errorf("preserve previous agent session archive: %w", err)
 			}
@@ -201,6 +316,7 @@ func (repo *Repository) CompleteAgentSessionTurnWithArchive(ctx context.Context,
 		}
 		archive, err = scanAgentSessionArchive(tx.QueryRow(ctx, query("agent_session_archives__insert.sql"),
 			sessionID,
+			input.TurnID,
 			currentArchiveVersion+1,
 			strings.TrimSpace(input.CodexSessionID),
 			input.SessionArchiveGzipBase64,
@@ -215,6 +331,7 @@ func (repo *Repository) CompleteAgentSessionTurnWithArchive(ctx context.Context,
 	turn, err := txRepo.CompleteAgentSessionTurn(ctx, adminrepo.CompleteAgentSessionTurnInput{
 		TurnID: input.TurnID, Status: input.TurnStatus,
 		FinalMessage: input.FinalMessage, ErrorMessage: input.ErrorMessage, Artifacts: input.Artifacts,
+		CompletionPodUID: strings.TrimSpace(input.PodUID),
 	})
 	if err != nil {
 		return entity.AgentSessionCompletion{}, err
@@ -254,13 +371,28 @@ func (repo *Repository) readExistingAgentSessionCompletion(ctx context.Context, 
 	if err != nil {
 		return entity.AgentSessionCompletion{}, err
 	}
-	archive, err := repo.GetLatestAgentSessionArchive(ctx, sessionID)
+	archive, err := scanAgentSessionArchive(repo.db.QueryRow(ctx, query("agent_session_archives__by_turn.sql"), sessionID, turnID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		archive = entity.AgentSessionArchive{}
+		err = nil
+	}
 	if errors.Is(err, adminrepo.ErrNotFound) {
 		archive = entity.AgentSessionArchive{}
 	} else if err != nil {
 		return entity.AgentSessionCompletion{}, err
 	}
 	return entity.AgentSessionCompletion{Turn: turn, Session: session, Archive: archive}, nil
+}
+
+func exactArchiveReplay(archive entity.AgentSessionArchive, input adminrepo.CompleteAgentSessionTurnWithArchiveInput) bool {
+	payload := strings.TrimSpace(input.SessionArchiveGzipBase64)
+	if archive.ID == 0 {
+		return payload == "" && strings.TrimSpace(input.ArchiveSHA256) == "" && input.ArchiveSizeBytes == 0
+	}
+	return payload == archive.PayloadGzipBase64 &&
+		strings.TrimSpace(input.CodexSessionID) == archive.CodexSessionID &&
+		strings.TrimSpace(input.ArchiveSHA256) == archive.SHA256 &&
+		input.ArchiveSizeBytes == archive.SizeBytes
 }
 
 func scanRuntimeRevision(row pgx.Row) (entity.RuntimeRevision, error) {
@@ -274,6 +406,7 @@ func scanAgentSessionArchive(row pgx.Row) (entity.AgentSessionArchive, error) {
 	err := row.Scan(
 		&item.ID,
 		&item.SessionID,
+		&item.TurnID,
 		&item.Version,
 		&item.CodexSessionID,
 		&item.PayloadGzipBase64,
@@ -284,41 +417,31 @@ func scanAgentSessionArchive(row pgx.Row) (entity.AgentSessionArchive, error) {
 	return item, err
 }
 
-func validateConfirmedArchive(payload string, expectedSHA256 string, expectedSize int64) error {
+func validateConfirmedArchive(turnStatus string, payload string, expectedSHA256 string, expectedSize int64) (sessionarchive.Metadata, error) {
 	payload = strings.TrimSpace(payload)
 	if payload == "" {
 		if strings.TrimSpace(expectedSHA256) != "" || expectedSize != 0 {
-			return fmt.Errorf("empty archive has unexpected metadata")
+			return sessionarchive.Metadata{}, fmt.Errorf("empty archive has unexpected metadata")
 		}
-		return nil
+		if strings.TrimSpace(turnStatus) == "succeeded" {
+			return sessionarchive.Metadata{}, fmt.Errorf("successful completion requires a non-empty archive")
+		}
+		return sessionarchive.Metadata{}, nil
 	}
-	actualSHA256, actualSize, err := confirmedArchiveMetadata(payload)
+	expectedSHA256 = strings.TrimSpace(expectedSHA256)
+	if (expectedSHA256 == "") != (expectedSize == 0) || expectedSize < 0 {
+		return sessionarchive.Metadata{}, fmt.Errorf("archive metadata is only partially specified")
+	}
+	metadata, err := sessionarchive.ValidateEncoded(payload, expectedSHA256, expectedSize)
 	if err != nil {
-		return err
+		return sessionarchive.Metadata{}, err
 	}
-	if actualSHA256 != strings.TrimSpace(expectedSHA256) || actualSize != expectedSize {
-		return fmt.Errorf("archive metadata mismatch")
-	}
-	return nil
+	return metadata, nil
 }
 
 func confirmedArchiveMetadata(payload string) (string, int64, error) {
-	payload = strings.TrimSpace(payload)
-	if len(payload) == 0 || len(payload) > maxConfirmedArchiveEncodedBytes {
-		return "", 0, fmt.Errorf("archive encoded size is outside the bounded contract")
-	}
-	if base64.StdEncoding.DecodedLen(len(payload)) > maxConfirmedArchiveDecodedBytes {
-		return "", 0, fmt.Errorf("archive decoded size exceeds the bounded contract")
-	}
-	decoded, err := base64.StdEncoding.DecodeString(payload)
-	if err != nil {
-		return "", 0, fmt.Errorf("decode confirmed archive: %w", err)
-	}
-	if len(decoded) > maxConfirmedArchiveDecodedBytes {
-		return "", 0, fmt.Errorf("archive decoded size exceeds the bounded contract")
-	}
-	digest := sha256.Sum256(decoded)
-	return hex.EncodeToString(digest[:]), int64(len(decoded)), nil
+	metadata, err := sessionarchive.ValidateEncoded(payload, "", 0)
+	return metadata.SHA256, metadata.SizeBytes, err
 }
 
 func terminalAgentSessionTurnStatus(status string) bool {
