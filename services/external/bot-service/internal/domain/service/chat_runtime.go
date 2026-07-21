@@ -217,7 +217,7 @@ func NewChatRunService(cfg ChatRunServiceConfig) *ChatRunService {
 		cfg.CapacityRetryDelay = defaultCapacityRetryDelay
 	}
 	turnStatusCards := NewAgentSessionService(AgentSessionServiceConfig{
-		Localizer: cfg.Localizer, Store: cfg.Store, ThreadPublisher: cfg.ThreadPublisher,
+		Localizer: cfg.Localizer, Store: cfg.Store, RuntimeRunner: cfg.RuntimeRunner, ThreadPublisher: cfg.ThreadPublisher,
 		MenuActionURL: cfg.MenuActionURL, MattermostSiteURL: cfg.MattermostSiteURL,
 		StorageReady: cfg.StorageReady,
 	})
@@ -971,29 +971,37 @@ func (svc *ChatRunService) completeAndReconcileRepairTurn(ctx context.Context, s
 		return nil
 	}
 	var turn entity.AgentSessionTurn
-	err := svc.withClusterAdminPersistenceGuard(ctx, role, chat.ID, chat.Slug, session.MattermostChannelID, session.SessionKey, operation, func(guardedStore adminrepo.Repository) error {
+	canceledNoop := false
+	err := svc.turnStatusCards.withCurrentSessionPersistenceFence(ctx, session, operation, func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
 		currentTurn, getErr := guardedStore.GetAgentSessionTurn(ctx, session.ActiveTurnID)
 		if getErr != nil {
 			return getErr
 		}
-		if currentTurn.SessionID != session.ID || currentTurn.RunID != session.ActiveRunID {
+		if currentTurn.SessionID != current.ID || currentTurn.RunID != session.ActiveRunID {
 			return adminrepo.ErrClusterAdminAdmissionDenied
 		}
 		if agentSessionTurnTerminal(currentTurn.Status) {
 			turn = currentTurn
+			canceledNoop = currentTurn.Status == agentSessionTurnCanceled
 			return nil
 		}
 		var completeErr error
 		turn, completeErr = guardedStore.CompleteAgentSessionTurn(ctx, adminrepo.CompleteAgentSessionTurnInput{
-			TurnID:       currentTurn.ID,
-			Status:       agentSessionTurnFailed,
-			ErrorMessage: errorMessage,
-			Artifacts:    artifacts,
+			SessionID:      current.ID,
+			TurnID:         currentTurn.ID,
+			RunID:          currentTurn.RunID,
+			ExpectedStatus: currentTurn.Status,
+			Status:         agentSessionTurnFailed,
+			ErrorMessage:   errorMessage,
+			Artifacts:      artifacts,
 		})
 		return completeErr
 	})
 	if err != nil {
 		return err
+	}
+	if canceledNoop {
+		return nil
 	}
 	if svc.cfg.AutomationRuntimeReconciler == nil {
 		return nil

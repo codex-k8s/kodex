@@ -512,6 +512,61 @@ func TestAgentSessionCompleteUpdatesStatusWithCodexLimits(t *testing.T) {
 	}
 }
 
+func TestAgentSessionCompleteCanceledTurnIsFencedNoop(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	stopArtifacts := `{"matter-codex-stop-purpose":"recoverable_stop_v1","matter-codex-stop-cleanup-required":"true","matter-codex-stop-cleanup-completed":"true","matter-codex-stop-reset-completed":"false","matter-codex-stop-card-completed":"false","matter-codex-stop-process-completed":"false","matter-codex-stop-automation-completed":"false"}`
+	store.sessionTurns[0].Status = agentSessionTurnCanceled
+	store.sessionTurns[0].Artifacts = stopArtifacts
+	reconciler := &fakeAutomationRuntimeReconciler{}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+		Store:                       store,
+		RuntimeRunner:               runner,
+		ThreadPublisher:             publisher,
+		AutomationRuntimeReconciler: reconciler,
+		StorageReady:                true,
+		RuntimeReady:                true,
+	})
+
+	err := svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+		TurnID: 1, RunID: "run-1", Status: agentSessionTurnSucceeded,
+		Artifacts: map[string]string{"stale": "completion"},
+	})
+	if err != nil {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
+	if err != nil || turn.Status != agentSessionTurnCanceled || turn.Artifacts != stopArtifacts {
+		t.Fatalf("turn = %#v error=%v", turn, err)
+	}
+	if store.exactGuardCalls != 1 || store.completeTurnCalls != 0 || reconciler.calls != 0 || len(publisher.posts) != 0 || len(publisher.cardUpdates) != 0 {
+		t.Fatalf("fence=%d complete=%d reconcile=%d posts=%d cards=%d", store.exactGuardCalls, store.completeTurnCalls, reconciler.calls, len(publisher.posts), len(publisher.cardUpdates))
+	}
+}
+
+func TestAgentSessionCompleteRejectsStaleRunInsideFence(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	err := svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+		TurnID: 1, RunID: "stale-run", Status: agentSessionTurnSucceeded,
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	turn, readErr := store.GetAgentSessionTurn(context.Background(), 1)
+	if readErr != nil || turn.Status != agentSessionTurnQueued || store.completeTurnCalls != 0 || store.exactGuardCalls != 1 {
+		t.Fatalf("turn=%#v read_error=%v complete=%d fence=%d", turn, readErr, store.completeTurnCalls, store.exactGuardCalls)
+	}
+}
+
 func TestAgentSessionProviderPolicyBlockStopsSessionWithoutRawProviderError(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	reconciler := &fakeAutomationRuntimeReconciler{}

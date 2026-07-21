@@ -951,6 +951,9 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 	if store.sessionTurns[0].Status != agentSessionTurnFailed || !strings.Contains(store.sessionTurns[0].ErrorMessage, "OOMKilled") {
 		t.Fatalf("running turn was not failed with OOM reason: %#v", store.sessionTurns[0])
 	}
+	if store.exactGuardCalls == 0 || store.completeTurnCalls != 1 || store.completeTurnInput.SessionID != 1 || store.completeTurnInput.TurnID != 1 || store.completeTurnInput.RunID != "run-1" || store.completeTurnInput.ExpectedStatus != agentSessionTurnRunning {
+		t.Fatalf("repair completion fence=%d calls=%d input=%#v", store.exactGuardCalls, store.completeTurnCalls, store.completeTurnInput)
+	}
 	if store.sessionTurns[1].Status != agentSessionTurnQueued {
 		t.Fatalf("queued turn changed unexpectedly: %#v", store.sessionTurns[1])
 	}

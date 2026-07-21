@@ -3820,6 +3820,8 @@ type fakeAdminStore struct {
 	resetSessionCalls    int
 	resetSessionErrors   []error
 	completeTurnCalls    int
+	completeTurnInput    adminrepo.CompleteAgentSessionTurnInput
+	exactGuardCalls      int
 	auditCalls           int
 	auditEvents          []adminrepo.AuditEventInput
 }
@@ -4851,8 +4853,9 @@ func (store *fakeAdminStore) UpdateAgentSessionTurnMessage(_ context.Context, in
 
 func (store *fakeAdminStore) CompleteAgentSessionTurn(_ context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
 	store.completeTurnCalls++
+	store.completeTurnInput = input
 	for index, turn := range store.sessionTurns {
-		if turn.ID == input.TurnID {
+		if turn.ID == input.TurnID && turn.SessionID == input.SessionID && turn.RunID == input.RunID && turn.Status == input.ExpectedStatus && agentSessionTurnStoppable(turn.Status) {
 			turn.Status = input.Status
 			turn.FinalMessage = input.FinalMessage
 			turn.ErrorMessage = input.ErrorMessage
@@ -4861,7 +4864,7 @@ func (store *fakeAdminStore) CompleteAgentSessionTurn(_ context.Context, input a
 			return turn, nil
 		}
 	}
-	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+	return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
 }
 
 func (store *fakeAdminStore) CancelAgentSessionTurn(_ context.Context, input adminrepo.CancelAgentSessionTurnInput) (entity.AgentSessionTurn, error) {

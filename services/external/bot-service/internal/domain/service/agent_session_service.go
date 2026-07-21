@@ -414,21 +414,6 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	if strings.EqualFold(strings.TrimSpace(command.Artifacts[agentTurnArtifactFailureCode]), agentTurnFailureProviderPolicyBlocked) {
 		status = agentSessionTurnBlocked
 	}
-	var currentTurn entity.AgentSessionTurn
-	err = svc.withCurrentSessionRuntimeGuardWithStore(ctx, session, "agent_session.complete_turn_read.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
-		var readErr error
-		currentTurn, readErr = guardedStore.GetAgentSessionTurn(ctx, command.TurnID)
-		return readErr
-	})
-	if err != nil {
-		return err
-	}
-	if currentTurn.SessionID != session.ID {
-		return fmt.Errorf("turn does not belong to session")
-	}
-	if agentSessionTurnTerminal(currentTurn.Status) {
-		return svc.reconcileCompletedTurnSnapshot(ctx, session, currentTurn, command, currentTurn.Status)
-	}
 	artifacts := "{}"
 	if command.Artifacts != nil {
 		body, err := json.Marshal(command.Artifacts)
@@ -438,19 +423,46 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 		artifacts = string(body)
 	}
 	var turn entity.AgentSessionTurn
-	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.complete_turn_persist.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
+	terminalRetry := false
+	canceledNoop := false
+	err = svc.withCurrentSessionPersistenceFence(ctx, session, "agent_session.complete_turn_persist.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+		currentTurn, readErr := guardedStore.GetAgentSessionTurn(ctx, command.TurnID)
+		if readErr != nil {
+			return readErr
+		}
+		if currentTurn.SessionID != current.ID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if runID := strings.TrimSpace(command.RunID); runID != "" && runID != currentTurn.RunID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if agentSessionTurnTerminal(currentTurn.Status) {
+			turn = currentTurn
+			canceledNoop = currentTurn.Status == agentSessionTurnCanceled
+			terminalRetry = !canceledNoop
+			return nil
+		}
 		var completeErr error
 		turn, completeErr = guardedStore.CompleteAgentSessionTurn(ctx, adminrepo.CompleteAgentSessionTurnInput{
-			TurnID:       command.TurnID,
-			Status:       status,
-			FinalMessage: command.FinalMessage,
-			ErrorMessage: command.ErrorMessage,
-			Artifacts:    artifacts,
+			SessionID:      current.ID,
+			TurnID:         currentTurn.ID,
+			RunID:          currentTurn.RunID,
+			ExpectedStatus: currentTurn.Status,
+			Status:         status,
+			FinalMessage:   command.FinalMessage,
+			ErrorMessage:   command.ErrorMessage,
+			Artifacts:      artifacts,
 		})
 		return completeErr
 	})
 	if err != nil {
 		return err
+	}
+	if canceledNoop {
+		return nil
+	}
+	if terminalRetry {
+		return svc.reconcileCompletedTurnSnapshot(ctx, session, turn, command, turn.Status)
 	}
 	sessionStatus := agentSessionStatusIdle
 	if status == agentSessionTurnFailed {
@@ -621,25 +633,25 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 		if strings.TrimSpace(command.SessionKey) != "" && (session.SessionKey != strings.TrimSpace(command.SessionKey) || session.MattermostChannelID != strings.TrimSpace(command.ChannelID) || strconv.FormatInt(session.ProjectID, 10) != strings.TrimSpace(command.WorkspaceScope)) {
 			return StopAgentSessionTurnsPlan{}, adminrepo.ErrClusterAdminAdmissionDenied
 		}
+		if strictCapabilityAction {
+			lockStore, ok := store.(adminrepo.AgentSessionLockRepository)
+			if !ok {
+				return StopAgentSessionTurnsPlan{}, adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			locked, lockErr := lockStore.LockAgentSession(ctx, session.SessionKey)
+			if lockErr != nil {
+				return StopAgentSessionTurnsPlan{}, lockErr
+			}
+			if locked.ID != session.ID || locked.ProjectID != session.ProjectID || locked.ChatID != session.ChatID || locked.RoleID != session.RoleID ||
+				locked.MattermostChannelID != session.MattermostChannelID || locked.MattermostRootPostID != session.MattermostRootPostID {
+				return StopAgentSessionTurnsPlan{}, adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			session = locked
+		}
 		var canceled entity.AgentSessionTurn
 		cleanupRuntime := false
 		reconcileOnly := false
 		err = svc.withCurrentSessionGuardUsingStore(ctx, store, session, "agent_session.stop_prepare.side_effect", true, func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
-			if strictCapabilityAction {
-				lockStore, ok := guardedStore.(adminrepo.AgentSessionLockRepository)
-				if !ok {
-					return adminrepo.ErrClusterAdminAdmissionDenied
-				}
-				locked, lockErr := lockStore.LockAgentSession(ctx, current.SessionKey)
-				if lockErr != nil {
-					return lockErr
-				}
-				if locked.ID != current.ID || locked.ProjectID != current.ProjectID || locked.ChatID != current.ChatID || locked.RoleID != current.RoleID ||
-					locked.MattermostChannelID != current.MattermostChannelID || locked.MattermostRootPostID != current.MattermostRootPostID {
-					return adminrepo.ErrClusterAdminAdmissionDenied
-				}
-				current = locked
-			}
 			currentTurn, readErr := guardedStore.GetAgentSessionTurn(ctx, turn.ID)
 			if readErr != nil {
 				return readErr

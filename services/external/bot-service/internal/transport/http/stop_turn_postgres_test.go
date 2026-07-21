@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	automationsrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/automations"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
@@ -36,8 +38,49 @@ type postgresStopFaults struct {
 type postgresStopStore struct {
 	adminrepo.Repository
 	adminrepo.CoordinationRepository
-	exact  adminrepo.ExactAgentSessionsRuntimeGuardRepository
-	faults *postgresStopFaults
+	exact   adminrepo.ExactAgentSessionsRuntimeGuardRepository
+	faults  *postgresStopFaults
+	barrier *postgresStopCommitBarrier
+}
+
+type postgresStopCommitBarrier struct {
+	exactStarted      chan struct{}
+	cancelPersisted   chan struct{}
+	cancelRelease     chan struct{}
+	completePersisted chan struct{}
+	completeRelease   chan struct{}
+	sessionLockStart  chan struct{}
+	exactOnce         sync.Once
+	cancelOnce        sync.Once
+	completeOnce      sync.Once
+	sessionLockOnce   sync.Once
+}
+
+type postgresStopSecurityStore struct {
+	securityrepo.Repository
+	atomic securityrepo.AtomicDialogRepository
+	replay securityrepo.ConsumedCapabilityReplayRepository
+	store  *postgresStopStore
+}
+
+func (store *postgresStopSecurityStore) ConsumeInteractionCapabilityWithMutation(ctx context.Context, input securityrepo.ConsumeCapabilityInput, mutation func(adminrepo.Repository) error) (securityrepo.Capability, error) {
+	return store.atomic.ConsumeInteractionCapabilityWithMutation(ctx, input, func(transactional adminrepo.Repository) error {
+		wrapped, err := store.store.wrapTransactional(transactional)
+		if err != nil {
+			return err
+		}
+		return mutation(wrapped)
+	})
+}
+
+func (store *postgresStopSecurityStore) ReplayConsumedInteractionCapabilityWithMutation(ctx context.Context, input securityrepo.ConsumeCapabilityInput, mutation func(securityrepo.Capability, adminrepo.Repository) error) (securityrepo.Capability, error) {
+	return store.replay.ReplayConsumedInteractionCapabilityWithMutation(ctx, input, func(capability securityrepo.Capability, transactional adminrepo.Repository) error {
+		wrapped, err := store.store.wrapTransactional(transactional)
+		if err != nil {
+			return err
+		}
+		return mutation(capability, wrapped)
+	})
 }
 
 func newPostgresStopStore(repository *adminpostgres.Repository, faults *postgresStopFaults) *postgresStopStore {
@@ -47,15 +90,65 @@ func newPostgresStopStore(repository *adminpostgres.Repository, faults *postgres
 }
 
 func (store *postgresStopStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	if store.barrier != nil && store.barrier.exactStarted != nil {
+		store.barrier.exactOnce.Do(func() { close(store.barrier.exactStarted) })
+	}
 	return store.exact.WithExactAgentSessionsRuntimeGuard(ctx, expected, func(transactional adminrepo.Repository) error {
-		coordination, ok := transactional.(adminrepo.CoordinationRepository)
-		if !ok {
-			return adminrepo.ErrClusterAdminAdmissionDenied
+		wrapped, err := store.wrapTransactional(transactional)
+		if err != nil {
+			return err
 		}
-		return sideEffect(&postgresStopStore{
-			Repository: transactional, CoordinationRepository: coordination, exact: store.exact, faults: store.faults,
-		})
+		return sideEffect(wrapped)
 	})
+}
+
+func (store *postgresStopStore) wrapTransactional(transactional adminrepo.Repository) (*postgresStopStore, error) {
+	coordination, ok := transactional.(adminrepo.CoordinationRepository)
+	if !ok {
+		return nil, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return &postgresStopStore{
+		Repository: transactional, CoordinationRepository: coordination, exact: store.exact, faults: store.faults, barrier: store.barrier,
+	}, nil
+}
+
+func (store *postgresStopStore) LockAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
+	if store.barrier != nil && store.barrier.sessionLockStart != nil {
+		store.barrier.sessionLockOnce.Do(func() { close(store.barrier.sessionLockStart) })
+	}
+	repository, ok := store.Repository.(adminrepo.AgentSessionLockRepository)
+	if !ok {
+		return entity.AgentSession{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return repository.LockAgentSession(ctx, sessionKey)
+}
+
+func (store *postgresStopStore) CancelAgentSessionTurn(ctx context.Context, input adminrepo.CancelAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	turn, err := store.Repository.CancelAgentSessionTurn(ctx, input)
+	if err != nil || store.barrier == nil || store.barrier.cancelPersisted == nil {
+		return turn, err
+	}
+	store.barrier.cancelOnce.Do(func() { close(store.barrier.cancelPersisted) })
+	select {
+	case <-store.barrier.cancelRelease:
+		return turn, nil
+	case <-ctx.Done():
+		return entity.AgentSessionTurn{}, ctx.Err()
+	}
+}
+
+func (store *postgresStopStore) CompleteAgentSessionTurn(ctx context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	turn, err := store.Repository.CompleteAgentSessionTurn(ctx, input)
+	if err != nil || store.barrier == nil || store.barrier.completePersisted == nil {
+		return turn, err
+	}
+	store.barrier.completeOnce.Do(func() { close(store.barrier.completePersisted) })
+	select {
+	case <-store.barrier.completeRelease:
+		return turn, nil
+	case <-ctx.Done():
+		return entity.AgentSessionTurn{}, ctx.Err()
+	}
 }
 
 func (store *postgresStopStore) CompareAndSwapAgentSessionTurnArtifacts(ctx context.Context, input adminrepo.CompareAndSwapAgentSessionTurnArtifactsInput) (entity.AgentSessionTurn, error) {
@@ -92,6 +185,13 @@ type postgresStopRunner struct {
 	mu            sync.Mutex
 	cleanupCalls  int
 	cleanupErrors []error
+}
+
+func (runner *postgresStopRunner) GetMattermostBotTokenSecret(_ context.Context, secretName string) (runtimerepo.MattermostBotTokenSecret, error) {
+	if secretName != "stop-secret" {
+		return runtimerepo.MattermostBotTokenSecret{}, errors.New("неизвестный тестовый secret")
+	}
+	return runtimerepo.MattermostBotTokenSecret{Token: "session-token"}, nil
 }
 
 func (runner *postgresStopRunner) CleanupAgentSession(_ context.Context, sessionKey string) (runtimerepo.AgentSessionCleanupResult, error) {
@@ -133,6 +233,14 @@ func (publisher *postgresStopPublisher) UpdateThreadCard(_ context.Context, card
 	defer publisher.mu.Unlock()
 	publisher.cardUpdates = append(publisher.cardUpdates, card)
 	return statusservice.MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, nil
+}
+
+func (publisher *postgresStopPublisher) PostThreadMessage(_ context.Context, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	return statusservice.MattermostPostRef{ChannelID: input.ChannelID, PostID: "result-post"}, nil
+}
+
+func (publisher *postgresStopPublisher) PostThreadMessageWithToken(ctx context.Context, _ string, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	return publisher.PostThreadMessage(ctx, input)
 }
 
 func (publisher *postgresStopPublisher) snapshot() ([]statusservice.MattermostCard, []statusservice.MattermostCard) {
@@ -331,6 +439,184 @@ func TestStopTurnProductionRouterPostgresResumesCleanupAndResetFaults(t *testing
 	}
 }
 
+func TestCompleteAgentSessionTurnPostgresCASRejectsStaleBindings(t *testing.T) {
+	fixture := newPostgresStopHTTPFixture(t, "completion_cas")
+	base := adminrepo.CompleteAgentSessionTurnInput{
+		SessionID: fixture.sessionID, TurnID: fixture.turnID, RunID: fixture.runtimeRunID,
+		ExpectedStatus: "running", Status: "succeeded", Artifacts: `{"completion":"stale"}`,
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*adminrepo.CompleteAgentSessionTurnInput)
+	}{
+		{name: "session", mutate: func(input *adminrepo.CompleteAgentSessionTurnInput) { input.SessionID++ }},
+		{name: "run", mutate: func(input *adminrepo.CompleteAgentSessionTurnInput) { input.RunID = "stale-run" }},
+		{name: "status", mutate: func(input *adminrepo.CompleteAgentSessionTurnInput) { input.ExpectedStatus = "queued" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			input := base
+			test.mutate(&input)
+			if _, err := fixture.admin.CompleteAgentSessionTurn(context.Background(), input); !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+				t.Fatalf("CompleteAgentSessionTurn() error=%v", err)
+			}
+			turn, err := fixture.admin.GetAgentSessionTurn(context.Background(), fixture.turnID)
+			if err != nil || turn.Status != "running" || turn.Artifacts != "{}" {
+				t.Fatalf("turn=%#v error=%v", turn, err)
+			}
+		})
+	}
+
+	stopArtifacts := `{"matter-codex-stop-purpose":"recoverable_stop_v1","matter-codex-stop-cleanup-completed":"false"}`
+	if _, err := fixture.admin.CancelAgentSessionTurn(context.Background(), adminrepo.CancelAgentSessionTurnInput{
+		TurnID: fixture.turnID, ErrorMessage: "stopped", Artifacts: stopArtifacts,
+	}); err != nil {
+		t.Fatalf("CancelAgentSessionTurn() error=%v", err)
+	}
+	if _, err := fixture.admin.CompleteAgentSessionTurn(context.Background(), base); !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("stale CompleteAgentSessionTurn() error=%v", err)
+	}
+	turn, err := fixture.admin.GetAgentSessionTurn(context.Background(), fixture.turnID)
+	persistedArtifacts := map[string]any{}
+	decodeErr := json.Unmarshal([]byte(turn.Artifacts), &persistedArtifacts)
+	if err != nil || decodeErr != nil || turn.Status != "canceled" || persistedArtifacts["matter-codex-stop-purpose"] != "recoverable_stop_v1" || persistedArtifacts["matter-codex-stop-cleanup-completed"] != "false" || len(persistedArtifacts) != 2 {
+		t.Fatalf("canceled turn=%#v error=%v", turn, err)
+	}
+}
+
+func TestStopTurnProductionRouterPostgresSerializesInternalCompletion(t *testing.T) {
+	t.Run("Stop commit first", func(t *testing.T) {
+		fixture := newPostgresStopHTTPFixture(t, "stop_completion_stop_first")
+		barrier := &postgresStopCommitBarrier{
+			exactStarted:    make(chan struct{}),
+			cancelPersisted: make(chan struct{}),
+			cancelRelease:   make(chan struct{}),
+		}
+		fixture.store.barrier = barrier
+		defer releasePostgresBarrier(barrier.cancelRelease)
+		automation := fixture.automationService()
+		router, security := fixture.router(t, automation, 30*time.Minute)
+		stopBody := fixture.issueActionBody(t, security, "stop_turn", fixture.projectID, fixture.sessionKey, fixture.turnID)
+
+		stopResult := make(chan postgresHTTPResult, 1)
+		go func() { stopResult <- serveStopTurnActionResult(router, stopBody) }()
+		waitPostgresBarrier(t, barrier.cancelPersisted, "Stop cancel persist")
+		completeResult := make(chan postgresHTTPResult, 1)
+		go func() { completeResult <- serveCompleteTurnResult(router, fixture) }()
+		waitPostgresBarrier(t, barrier.exactStarted, "CompleteTurn exact fence")
+		releasePostgresBarrier(barrier.cancelRelease)
+
+		stop := waitPostgresHTTPResult(t, stopResult, "Stop response")
+		complete := waitPostgresHTTPResult(t, completeResult, "CompleteTurn response")
+		if stop.code != http.StatusOK || complete.code != http.StatusOK {
+			t.Fatalf("Stop=%d %s Complete=%d %s", stop.code, stop.body, complete.code, complete.body)
+		}
+		fixture.assertTerminalExactlyOnce(t)
+
+		restarted, _ := fixture.router(t, automation, 30*time.Minute)
+		if retry := serveCompleteTurnResult(restarted, fixture); retry.code != http.StatusBadGateway {
+			t.Fatalf("CompleteTurn restart status=%d body=%s", retry.code, retry.body)
+		}
+		if retry := serveStopTurnActionResult(restarted, stopBody); retry.code != http.StatusUnauthorized {
+			t.Fatalf("Stop restart status=%d body=%s", retry.code, retry.body)
+		}
+		fixture.assertTerminalExactlyOnce(t)
+	})
+
+	t.Run("CompleteTurn commit first", func(t *testing.T) {
+		fixture := newPostgresStopHTTPFixture(t, "stop_completion_complete_first")
+		barrier := &postgresStopCommitBarrier{
+			completePersisted: make(chan struct{}),
+			completeRelease:   make(chan struct{}),
+			sessionLockStart:  make(chan struct{}),
+		}
+		fixture.store.barrier = barrier
+		defer releasePostgresBarrier(barrier.completeRelease)
+		automation := fixture.automationService()
+		router, security := fixture.router(t, automation, 30*time.Minute)
+		stopBody := fixture.issueActionBody(t, security, "stop_turn", fixture.projectID, fixture.sessionKey, fixture.turnID)
+
+		completeResult := make(chan postgresHTTPResult, 1)
+		go func() { completeResult <- serveCompleteTurnResult(router, fixture) }()
+		waitPostgresBarrier(t, barrier.completePersisted, "CompleteTurn CAS persist")
+		stopResult := make(chan postgresHTTPResult, 1)
+		go func() { stopResult <- serveStopTurnActionResult(router, stopBody) }()
+		waitPostgresBarrier(t, barrier.sessionLockStart, "Stop session fence")
+		releasePostgresBarrier(barrier.completeRelease)
+
+		complete := waitPostgresHTTPResult(t, completeResult, "CompleteTurn response")
+		stop := waitPostgresHTTPResult(t, stopResult, "Stop response")
+		if complete.code != http.StatusOK || stop.code != http.StatusUnauthorized {
+			t.Fatalf("Complete=%d %s Stop=%d %s", complete.code, complete.body, stop.code, stop.body)
+		}
+		fixture.assertCompletionWonExactlyOnce(t)
+
+		restarted, _ := fixture.router(t, automation, 30*time.Minute)
+		if retry := serveCompleteTurnResult(restarted, fixture); retry.code != http.StatusOK {
+			t.Fatalf("CompleteTurn restart status=%d body=%s", retry.code, retry.body)
+		}
+		if retry := serveStopTurnActionResult(restarted, stopBody); retry.code != http.StatusUnauthorized {
+			t.Fatalf("Stop restart status=%d body=%s", retry.code, retry.body)
+		}
+		fixture.assertCompletionWonExactlyOnce(t)
+	})
+}
+
+type postgresHTTPResult struct {
+	code int
+	body string
+}
+
+func serveStopTurnActionResult(router *Router, body string) postgresHTTPResult {
+	recorder := serveStopTurnAction(router, body)
+	return postgresHTTPResult{code: recorder.Code, body: recorder.Body.String()}
+}
+
+func serveCompleteTurnResult(router *Router, fixture *postgresStopHTTPFixture) postgresHTTPResult {
+	payload, err := json.Marshal(statusservice.CompleteAgentSessionTurnCommand{
+		TurnID: fixture.turnID, RunID: fixture.runtimeRunID, Status: "succeeded", FinalMessage: "completed",
+		Artifacts: map[string]string{"completion": "winner"},
+	})
+	if err != nil {
+		return postgresHTTPResult{code: 0, body: err.Error()}
+	}
+	request := httptest.NewRequest(http.MethodPost, "/internal/agent-sessions/"+fixture.sessionKey+"/turns/complete", bytes.NewReader(payload))
+	request.Header.Set("Authorization", "Bearer session-token")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	return postgresHTTPResult{code: recorder.Code, body: recorder.Body.String()}
+}
+
+func waitPostgresBarrier(t *testing.T, barrier <-chan struct{}, name string) {
+	t.Helper()
+	select {
+	case <-barrier:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("барьер %s не достигнут", name)
+	}
+}
+
+func waitPostgresHTTPResult(t *testing.T, result <-chan postgresHTTPResult, name string) postgresHTTPResult {
+	t.Helper()
+	select {
+	case response := <-result:
+		return response
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%s не завершён", name)
+		return postgresHTTPResult{}
+	}
+}
+
+func releasePostgresBarrier(barrier chan struct{}) {
+	if barrier == nil {
+		return
+	}
+	select {
+	case <-barrier:
+	default:
+		close(barrier)
+	}
+}
+
 func newPostgresStopHTTPFixture(t *testing.T, schema string) *postgresStopHTTPFixture {
 	t.Helper()
 	dsn := testsupport.IsolatedSchemaDSN(t, schema)
@@ -457,8 +743,11 @@ func (fixture *postgresStopHTTPFixture) automationService() *statusservice.Autom
 
 func (fixture *postgresStopHTTPFixture) router(t *testing.T, reconciler statusservice.AutomationRuntimeTerminalReconciler, ttl time.Duration) (*Router, *statusservice.InteractionSecurityService) {
 	t.Helper()
+	securityRepository := &postgresStopSecurityStore{
+		Repository: fixture.admin, atomic: fixture.admin, replay: fixture.admin, store: fixture.store,
+	}
 	security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
-		Repository:    fixture.admin,
+		Repository:    securityRepository,
 		Admission:     statusservice.NewServerSideInteractionAdmission("", postgresStopActorVerifier{}, fixture.admin),
 		CapabilityTTL: ttl,
 		Now:           func() time.Time { return fixture.securityNow },
@@ -560,5 +849,58 @@ func (fixture *postgresStopHTTPFixture) assertTerminalExactlyOnce(t *testing.T) 
 	}
 	if occurrenceStatus != string(value.AutomationRunStatusFailed) || processStatus != "completed" || claimStatus != "canceled" || runCount != 1 || occurrenceCount != 1 || terminalAuditCount != 1 {
 		t.Fatalf("terminal occurrence=%q process=%q claim=%q runs=%d occurrences=%d audit=%d", occurrenceStatus, processStatus, claimStatus, runCount, occurrenceCount, terminalAuditCount)
+	}
+}
+
+func (fixture *postgresStopHTTPFixture) assertCompletionWonExactlyOnce(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	turn, err := fixture.admin.GetAgentSessionTurn(ctx, fixture.turnID)
+	if err != nil || turn.Status != "succeeded" {
+		t.Fatalf("turn=%#v error=%v", turn, err)
+	}
+	artifacts := map[string]any{}
+	if err := json.Unmarshal([]byte(turn.Artifacts), &artifacts); err != nil || artifacts["completion"] != "winner" || artifacts["matter-codex-stop-purpose"] != nil {
+		t.Fatalf("completion artifacts=%#v error=%v", artifacts, err)
+	}
+	session, err := fixture.admin.GetAgentSession(ctx, fixture.sessionKey)
+	if err != nil || session.Status != "idle" || session.ActiveTurnID != 0 || session.ActiveRunID != "" {
+		t.Fatalf("session=%#v error=%v", session, err)
+	}
+	run, err := automationspostgres.NewRepository(fixture.pool).GetRun(ctx, fixture.scheduledRun, fixture.projectID, "owner-user")
+	if err != nil || run.Status != string(value.AutomationRunStatusFailed) || run.Outcome != string(value.AutomationRunOutcomeFailed) {
+		t.Fatalf("scheduled run=%#v error=%v", run, err)
+	}
+	var occurrenceStatus, processStatus, claimStatus, agentRunStatus string
+	if err := fixture.pool.QueryRow(ctx, `select status from matter_codex_schedule_occurrences where id = $1`, run.OccurrenceID).Scan(&occurrenceStatus); err != nil {
+		t.Fatalf("прочитать occurrence: %v", err)
+	}
+	if err := fixture.pool.QueryRow(ctx, `select process.status, claim.status from matter_codex_process_runs process join matter_codex_work_claims claim on claim.process_run_id = process.id where process.id = $1`, fixture.processRunID).Scan(&processStatus, &claimStatus); err != nil {
+		t.Fatalf("прочитать process reconciliation: %v", err)
+	}
+	if err := fixture.pool.QueryRow(ctx, `select status from matter_codex_agent_runs where run_id = $1`, fixture.runtimeRunID).Scan(&agentRunStatus); err != nil {
+		t.Fatalf("прочитать agent run: %v", err)
+	}
+	var runCount, occurrenceCount, terminalAuditCount int
+	if err := fixture.pool.QueryRow(ctx, `select count(*) from matter_codex_scheduled_runs where schedule_id = $1`, run.ScheduleID).Scan(&runCount); err != nil {
+		t.Fatalf("посчитать runs: %v", err)
+	}
+	if err := fixture.pool.QueryRow(ctx, `select count(*) from matter_codex_schedule_occurrences where schedule_id = $1`, run.ScheduleID).Scan(&occurrenceCount); err != nil {
+		t.Fatalf("посчитать occurrences: %v", err)
+	}
+	if err := fixture.pool.QueryRow(ctx, `select count(*) from matter_codex_automation_audit_events where scheduled_run_id = $1 and event_type = 'run.runtime_terminal'`, run.ID).Scan(&terminalAuditCount); err != nil {
+		t.Fatalf("посчитать terminal audit: %v", err)
+	}
+	if occurrenceStatus != string(value.AutomationRunStatusFailed) || processStatus != "completed" || claimStatus != "succeeded" || agentRunStatus != "succeeded" || runCount != 1 || occurrenceCount != 1 || terminalAuditCount != 1 {
+		t.Fatalf("completion occurrence=%q process=%q claim=%q agent_run=%q runs=%d occurrences=%d audit=%d", occurrenceStatus, processStatus, claimStatus, agentRunStatus, runCount, occurrenceCount, terminalAuditCount)
+	}
+	_, updates := fixture.publisher.snapshot()
+	for _, card := range updates {
+		for _, action := range card.Actions {
+			if action.Context["action"] == "recover_stop_turn" {
+				t.Fatalf("ложная recovery-card: %#v", card)
+			}
+		}
 	}
 }

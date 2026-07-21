@@ -288,11 +288,14 @@ type CreateAgentSessionTurnInput struct {
 }
 
 type CompleteAgentSessionTurnInput struct {
-	TurnID       int64
-	Status       string
-	FinalMessage string
-	ErrorMessage string
-	Artifacts    string
+	SessionID      int64
+	TurnID         int64
+	RunID          string
+	ExpectedStatus string
+	Status         string
+	FinalMessage   string
+	ErrorMessage   string
+	Artifacts      string
 }
 
 type CancelAgentSessionTurnInput struct {

@@ -969,12 +969,18 @@ func (repo *Repository) ClaimNextAgentSessionTurn(ctx context.Context, sessionKe
 func (repo *Repository) CompleteAgentSessionTurn(ctx context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
 	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__complete.sql"),
 		input.TurnID,
+		input.SessionID,
+		input.RunID,
+		input.ExpectedStatus,
 		input.Status,
 		input.FinalMessage,
 		input.ErrorMessage,
 		input.Artifacts,
 	))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
 		return entity.AgentSessionTurn{}, fmt.Errorf("complete agent session turn: %w", err)
 	}
 	return item, nil
