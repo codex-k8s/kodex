@@ -524,8 +524,6 @@ if [ "$DRY_RUN_MODE" = "none" ]; then
   LEGACY_CODE_CONFIGMAP_Q="$(mattercodex_shell_quote "$LEGACY_CODE_CONFIGMAP")"
   mattercodex_log "удаляется legacy bot-service source ConfigMap на целевом сервере, если он остался"
   mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q delete configmap $LEGACY_CODE_CONFIGMAP_Q --ignore-not-found >/dev/null"
-  mattercodex_log "перезапуск bot-service для применения image/config на целевом сервере"
-  mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q rollout restart deployment/matter-codex-bot-service >/dev/null"
   if mattercodex_bool "$WAIT"; then
     mattercodex_log "ожидание rollout bot-service на целевом сервере"
     mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q rollout status deployment/matter-codex-bot-service --timeout=300s >/dev/null"

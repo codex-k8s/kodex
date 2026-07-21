@@ -187,8 +187,6 @@ if [ "$DRY_RUN_MODE" = "none" ]; then
   LEGACY_CODE_CONFIGMAP="${MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP:-matter-codex-bot-service-code}"
   mattercodex_log "удаляется legacy bot-service source ConfigMap, если он остался"
   kubectl -n "$MATTERCODEX_NAMESPACE" delete configmap "$LEGACY_CODE_CONFIGMAP" --ignore-not-found >/dev/null
-  mattercodex_log "перезапуск bot-service для применения image/config"
-  kubectl -n "$MATTERCODEX_NAMESPACE" rollout restart deployment/matter-codex-bot-service >/dev/null
   if mattercodex_bool "$WAIT"; then
     mattercodex_log "ожидание rollout bot-service"
     kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/matter-codex-bot-service --timeout=300s >/dev/null

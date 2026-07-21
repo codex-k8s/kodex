@@ -14,6 +14,8 @@ spec:
       app.kubernetes.io/component: bot-service
   template:
     metadata:
+      annotations:
+        matter-codex.kodex.works/config-revision: "${MATTERCODEX_BOT_SERVICE_CONFIG_REVISION}"
       labels:
         app.kubernetes.io/name: matter-codex-bot-service
         app.kubernetes.io/component: bot-service
