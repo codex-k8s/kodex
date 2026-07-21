@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -66,6 +67,21 @@ func TestInspectSecretIntegrityDetectsSameRefMutationWithoutReturningValue(t *te
 	}
 	if mutated.ContentSHA256 == integrity.ContentSHA256 || mutated.UID != integrity.UID {
 		t.Fatalf("same-ref mutation not represented safely: before=%#v after=%#v", integrity, mutated)
+	}
+}
+
+func TestInspectSecretIntegrityClassifiesMissingSecret(t *testing.T) {
+	runner, err := NewRunnerWithClient(fake.NewSimpleClientset(), Config{
+		Namespace: "mattermost", WorkspaceStorageSize: "1Gi",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	_, err = runner.InspectSecretIntegrity(context.Background(), runtimerepo.SecretIntegrityInput{
+		SecretName: "missing-runtime-secret", SecretKey: "token",
+	})
+	if !errors.Is(err, runtimerepo.ErrSecretNotFound) {
+		t.Fatalf("InspectSecretIntegrity() error = %v, want ErrSecretNotFound", err)
 	}
 }
 

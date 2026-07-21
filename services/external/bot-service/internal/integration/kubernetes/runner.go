@@ -123,6 +123,9 @@ func (runner *Runner) InspectSecretIntegrity(ctx context.Context, input runtimer
 	}
 	secret, err := runner.client.CoreV1().Secrets(runner.namespace).Get(ctx, input.SecretName, metav1.GetOptions{})
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return runtimerepo.SecretIntegrity{}, fmt.Errorf("%w: %s", runtimerepo.ErrSecretNotFound, input.SecretName)
+		}
 		return runtimerepo.SecretIntegrity{}, fmt.Errorf("inspect secret metadata: %w", err)
 	}
 	value, ok := secret.Data[input.SecretKey]
