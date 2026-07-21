@@ -11,6 +11,7 @@ import (
 	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	instructionsrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/instructions"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -308,17 +309,62 @@ func (repo *Repository) UpsertAgentPromptTemplate(ctx context.Context, input adm
 }
 
 func (repo *Repository) UpgradeUnmodifiedAgentPromptSeed(ctx context.Context, input adminrepo.UpgradeAgentPromptSeedInput) (adminrepo.UpgradeAgentPromptSeedResult, error) {
-	var result adminrepo.UpgradeAgentPromptSeedResult
-	err := repo.db.QueryRow(ctx, query("agent_prompt_templates__upgrade_seed.sql"),
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("begin unmodified agent prompt seed upgrade: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	templateTag, err := tx.Exec(ctx, query("agent_prompt_templates__upgrade_seed.sql"),
 		input.ProfileName,
 		input.TemplateKey,
 		input.PreviousBody,
 		input.Body,
+	)
+	if err != nil {
+		return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("upgrade unmodified agent prompt template seed: %w", err)
+	}
+	rows, err := tx.Query(ctx, query("agent_roles__seed_upgrade_candidates.sql"),
+		input.PreviousBody,
 		normalizedPromptSeedKeys(input.RoleNames),
 		normalizedPromptSeedKeys(input.RoleTypes),
-	).Scan(&result.TemplatesUpdated, &result.RolesUpdated)
+	)
 	if err != nil {
-		return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("upgrade unmodified agent prompt seed: %w", err)
+		return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("lock unmodified agent prompt seed roles: %w", err)
+	}
+	candidates := make([]entity.AgentRole, 0)
+	for rows.Next() {
+		role, scanErr := scanAgentRole(rows)
+		if scanErr != nil {
+			rows.Close()
+			return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("scan unmodified agent prompt seed role: %w", scanErr)
+		}
+		candidates = append(candidates, role)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("read unmodified agent prompt seed roles: %w", err)
+	}
+	rows.Close()
+	result := adminrepo.UpgradeAgentPromptSeedResult{TemplatesUpdated: int(templateTag.RowsAffected())}
+	for _, candidate := range candidates {
+		updated, updateErr := scanAgentRole(tx.QueryRow(ctx, query("agent_roles__upgrade_seed_by_id.sql"),
+			candidate.ID,
+			input.PreviousBody,
+			input.Body,
+		))
+		if errors.Is(updateErr, pgx.ErrNoRows) {
+			return adminrepo.UpgradeAgentPromptSeedResult{}, instructionsrepo.ErrInstructionWriteConflict
+		}
+		if updateErr != nil {
+			return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("upgrade unmodified agent prompt seed role: %w", updateErr)
+		}
+		if syncErr := syncUniversalAgent(ctx, tx, updated, "startup-prompt-seed"); syncErr != nil {
+			return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("sync universal agent prompt seed: %w", syncErr)
+		}
+		result.RolesUpdated++
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("commit unmodified agent prompt seed upgrade: %w", err)
 	}
 	return result, nil
 }
@@ -487,12 +533,12 @@ func (repo *Repository) UpsertMattermostBotIdentity(ctx context.Context, input a
 	if err != nil {
 		return entity.MattermostBotIdentity{}, false, fmt.Errorf("upsert mattermost bot identity: %w", err)
 	}
-	tag, err := tx.Exec(ctx, query("universal_agents__bind_bot_identity.sql"), input.RoleID, item.ID)
+	tag, err := tx.Exec(ctx, query("universal_agents__bind_bot_identity.sql"), input.RoleID, item.ID, input.ProjectID)
 	if err != nil {
 		return entity.MattermostBotIdentity{}, false, fmt.Errorf("bind agent bot identity projection: %w", err)
 	}
 	if tag.RowsAffected() != 1 {
-		return entity.MattermostBotIdentity{}, false, fmt.Errorf("bind agent bot identity projection: agent projection not found")
+		return entity.MattermostBotIdentity{}, false, adminrepo.ErrBotIdentityBindingDenied
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.MattermostBotIdentity{}, false, fmt.Errorf("commit mattermost bot identity upsert: %w", err)

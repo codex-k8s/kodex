@@ -1,8 +1,7 @@
 -- +goose Up
-create extension if not exists pgcrypto with schema public;
-
--- До создания partial unique индексов явно отклоняем неоднозначные внешние
--- привязки. В диагностике нет пользовательских значений.
+-- До создания target-схемы явно отклоняем неоднозначные привязки, нарушение
+-- legacy-владения и неподдерживаемый размер. В диагностике нет пользовательских
+-- значений.
 -- +goose StatementBegin
 do $$
 begin
@@ -23,12 +22,45 @@ begin
 		group by mattermost_channel_id
 		having count(*) > 1
 	) then
-		raise exception 'MCV30_DUPLICATE_MATTERMOST_CHANNEL_BINDINGS'
-			using errcode = 'unique_violation';
+			raise exception 'MCV30_DUPLICATE_MATTERMOST_CHANNEL_BINDINGS'
+				using errcode = 'unique_violation';
+	end if;
+	if exists (
+		select 1
+		from matter_codex_chat_participants participant
+		join matter_codex_chats chat on chat.id = participant.chat_id
+		join matter_codex_agent_roles role on role.id = participant.role_id
+		where chat.project_id <> role.project_id
+	) then
+		raise exception 'MCV30_CROSS_PROJECT_CHAT_PARTICIPANT'
+			using errcode = 'check_violation';
+	end if;
+	if exists (
+		select 1
+		from matter_codex_mattermost_bot_identities bot_identity
+		join matter_codex_agent_roles role on role.id = bot_identity.role_id
+		where bot_identity.project_id <> role.project_id
+	) then
+		raise exception 'MCV30_CROSS_PROJECT_BOT_IDENTITY'
+			using errcode = 'check_violation';
+	end if;
+	if exists (
+		select 1
+		from matter_codex_agent_roles role
+		where octet_length(convert_to(coalesce(role.prompt_template, ''), 'UTF8')) > 65536
+	) then
+		raise exception 'MCV30_INSTRUCTION_MARKDOWN_TOO_LARGE'
+			using errcode = 'check_violation';
 	end if;
 end
 $$;
 -- +goose StatementEnd
+
+-- Параллельные пакетные тесты могут одновременно поднимать одну fresh database.
+-- Транзакционная блокировка делает CREATE EXTENSION IF NOT EXISTS действительно
+-- идемпотентным и не оставляет отдельного состояния после rollback миграции.
+select pg_advisory_xact_lock(hashtext('matter-codex:migration:000030:extensions'));
+create extension if not exists pgcrypto with schema public;
 
 create table matter_codex_workspaces (
 	id bigserial primary key,
@@ -47,7 +79,7 @@ create table matter_codex_workspaces (
 	created_at timestamptz not null default now(),
 	updated_at timestamptz not null default now(),
 	constraint matter_codex_workspaces_legacy_project_fkey
-		foreign key (legacy_project_id) references matter_codex_projects(id) on delete restrict,
+		foreign key (legacy_project_id) references matter_codex_projects(id) on delete cascade,
 	constraint matter_codex_workspaces_scope_check check (trim(organization_scope) <> ''),
 	constraint matter_codex_workspaces_slug_check check (trim(slug) <> ''),
 	constraint matter_codex_workspaces_status_check check (status in ('active', 'disabled', 'archived')),
@@ -83,9 +115,9 @@ create table matter_codex_rooms (
 	updated_at timestamptz not null default now(),
 	constraint matter_codex_rooms_workspace_fkey
 		foreign key (organization_scope, workspace_id)
-		references matter_codex_workspaces(organization_scope, id) on delete restrict,
+		references matter_codex_workspaces(organization_scope, id) on delete cascade,
 	constraint matter_codex_rooms_legacy_chat_fkey
-		foreign key (legacy_chat_id) references matter_codex_chats(id) on delete restrict,
+		foreign key (legacy_chat_id) references matter_codex_chats(id) on delete cascade,
 	constraint matter_codex_rooms_scope_check check (trim(organization_scope) <> ''),
 	constraint matter_codex_rooms_slug_check check (trim(slug) <> ''),
 	constraint matter_codex_rooms_status_check check (status in ('active', 'disabled', 'archived')),
@@ -118,7 +150,7 @@ create table matter_codex_role_definitions (
 	created_at timestamptz not null default now(),
 	updated_at timestamptz not null default now(),
 	constraint matter_codex_role_definitions_legacy_role_fkey
-		foreign key (legacy_agent_role_id) references matter_codex_agent_roles(id) on delete restrict,
+		foreign key (legacy_agent_role_id) references matter_codex_agent_roles(id) on delete cascade,
 	constraint matter_codex_role_definitions_scope_check check (trim(organization_scope) <> ''),
 	constraint matter_codex_role_definitions_slug_check check (trim(slug) <> ''),
 	constraint matter_codex_role_definitions_role_type_check check (trim(role_type) <> ''),
@@ -170,7 +202,7 @@ create table matter_codex_instruction_versions (
 	constraint matter_codex_instruction_versions_scope_check check (trim(organization_scope) <> ''),
 	constraint matter_codex_instruction_versions_number_check check (version > 0),
 	constraint matter_codex_instruction_versions_markdown_check
-		check (octet_length(convert_to(markdown, 'UTF8')) <= 262144),
+		check (octet_length(convert_to(markdown, 'UTF8')) <= 65536),
 	constraint matter_codex_instruction_versions_hash_length_check check (octet_length(content_sha256) = 32),
 	constraint matter_codex_instruction_versions_hash_check
 		check (content_sha256 = public.digest(convert_to(markdown, 'UTF8'), 'sha256')),
@@ -203,15 +235,15 @@ create table matter_codex_agents (
 	created_at timestamptz not null default now(),
 	updated_at timestamptz not null default now(),
 	constraint matter_codex_agents_legacy_role_fkey
-		foreign key (legacy_agent_role_id) references matter_codex_agent_roles(id) on delete restrict,
+		foreign key (legacy_agent_role_id) references matter_codex_agent_roles(id) on delete cascade,
 	constraint matter_codex_agents_role_definition_fkey
 		foreign key (organization_scope, role_definition_id)
-		references matter_codex_role_definitions(organization_scope, id) on delete restrict,
+		references matter_codex_role_definitions(organization_scope, id) on delete cascade,
 	constraint matter_codex_agents_instruction_set_fkey
 		foreign key (organization_scope, instruction_set_id)
 		references matter_codex_instruction_sets(organization_scope, id) on delete restrict,
 	constraint matter_codex_agents_bot_identity_fkey
-		foreign key (bot_identity_id) references matter_codex_mattermost_bot_identities(id) on delete restrict,
+		foreign key (bot_identity_id) references matter_codex_mattermost_bot_identities(id) on delete set null,
 	constraint matter_codex_agents_scope_check check (trim(organization_scope) <> ''),
 	constraint matter_codex_agents_slug_check check (trim(slug) <> ''),
 	constraint matter_codex_agents_status_check check (status in ('active', 'disabled', 'archived')),
@@ -237,13 +269,13 @@ create table matter_codex_agent_assignments (
 	updated_at timestamptz not null default now(),
 	constraint matter_codex_agent_assignments_agent_fkey
 		foreign key (organization_scope, agent_id)
-		references matter_codex_agents(organization_scope, id) on delete restrict,
+		references matter_codex_agents(organization_scope, id) on delete cascade,
 	constraint matter_codex_agent_assignments_workspace_fkey
 		foreign key (organization_scope, workspace_id)
-		references matter_codex_workspaces(organization_scope, id) on delete restrict,
+		references matter_codex_workspaces(organization_scope, id) on delete cascade,
 	constraint matter_codex_agent_assignments_room_fkey
 		foreign key (organization_scope, workspace_id, room_id)
-		references matter_codex_rooms(organization_scope, workspace_id, id) on delete restrict,
+		references matter_codex_rooms(organization_scope, workspace_id, id) on delete cascade,
 	constraint matter_codex_agent_assignments_scope_check check (trim(organization_scope) <> ''),
 	unique nulls not distinct (agent_id, workspace_id, room_id)
 );
@@ -361,7 +393,8 @@ join matter_codex_role_definitions role_definition
 left join matter_codex_instruction_sets instruction_set
 	on instruction_set.slug = 'agent-' || role.id::text
 left join matter_codex_mattermost_bot_identities bot_identity
-	on bot_identity.role_id = role.id
+		on bot_identity.role_id = role.id
+		and bot_identity.project_id = role.project_id
 order by role.id;
 
 insert into matter_codex_agent_assignments(
@@ -380,8 +413,15 @@ insert into matter_codex_agent_assignments(
 select
 	agent.organization_scope, agent.id, room.workspace_id, room.id, participant.enabled, false
 from matter_codex_chat_participants participant
-join matter_codex_agents agent on agent.legacy_agent_role_id = participant.role_id
-join matter_codex_rooms room on room.legacy_chat_id = participant.chat_id
+join matter_codex_agent_roles role on role.id = participant.role_id
+join matter_codex_chats chat
+	on chat.id = participant.chat_id
+	and chat.project_id = role.project_id
+join matter_codex_agents agent on agent.legacy_agent_role_id = role.id
+join matter_codex_workspaces workspace on workspace.legacy_project_id = role.project_id
+join matter_codex_rooms room
+	on room.legacy_chat_id = chat.id
+	and room.workspace_id = workspace.id
 order by participant.id;
 
 -- +goose StatementBegin

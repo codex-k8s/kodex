@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -459,8 +461,14 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, router.maxSlashFormBytes)
+	body, readErr := io.ReadAll(r.Body)
+	if readErr != nil || !utf8.Valid(body) {
+		router.logWarn("invalid Mattermost agents dialog", "error", readErr)
+		writeJSON(w, http.StatusBadRequest, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.invalid_request", nil)})
+		return
+	}
 	var request mattermostmodel.SubmitDialogRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+	if err := json.Unmarshal(body, &request); err != nil {
 		router.logWarn("invalid Mattermost agents dialog", "error", err)
 		writeJSON(w, http.StatusBadRequest, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.invalid_request", nil)})
 		return

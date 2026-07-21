@@ -87,25 +87,32 @@ func TestUniversalModelCommandsKeepGitOptionalAndNormalizeActor(t *testing.T) {
 func TestUniversalModelRejectsInstructionAboveByteLimitBeforeRepository(t *testing.T) {
 	exactStub := &universalModelRepositoryStub{}
 	exactService := NewUniversalModelService(exactStub)
+	exactMarkdown := strings.Repeat("я", MaxAgentsDialogInstructionMarkdownBytes/2)
 	if _, err := exactService.UpsertAgent(context.Background(), UpsertAgentCommand{
-		Name: "bounded", PromptTemplate: strings.Repeat("a", MaxInstructionMarkdownBytes),
+		Name: "bounded", PromptTemplate: exactMarkdown,
 	}); err != nil {
 		t.Fatalf("UpsertAgent() rejected exact byte limit: %v", err)
 	}
-	if len(exactStub.agentInput.PromptTemplate) != MaxInstructionMarkdownBytes {
+	if len(exactStub.agentInput.PromptTemplate) != MaxAgentsDialogInstructionMarkdownBytes {
 		t.Fatalf("exact byte limit passed to repository = %d", len(exactStub.agentInput.PromptTemplate))
 	}
 
 	stub := &universalModelRepositoryStub{}
 	svc := NewUniversalModelService(stub)
 	_, err := svc.UpsertAgent(context.Background(), UpsertAgentCommand{
-		Name: "oversized", PromptTemplate: strings.Repeat("я", MaxInstructionMarkdownBytes/2+1),
+		Name: "oversized", PromptTemplate: exactMarkdown + "я",
 	})
 	if !errors.Is(err, ErrInstructionTooLarge) {
 		t.Fatalf("UpsertAgent() error = %v", err)
 	}
 	if stub.agentInput.Name != "" {
 		t.Fatalf("репозиторий вызван для oversized Markdown: %#v", stub.agentInput)
+	}
+	_, err = svc.UpsertAgent(context.Background(), UpsertAgentCommand{
+		Name: "invalid-utf8", PromptTemplate: string([]byte{0xff}),
+	})
+	if !errors.Is(err, ErrInstructionInvalidUTF8) {
+		t.Fatalf("UpsertAgent() invalid UTF-8 error = %v", err)
 	}
 }
 
@@ -187,13 +194,91 @@ func TestAgentRoleDialogInputEnforcesInstructionByteLimit(t *testing.T) {
 		dialogFieldRole:             "translator",
 		dialogFieldRoleType:         "worker",
 		dialogFieldPromptMode:       "raw",
-		dialogFieldPromptTemplate:   strings.Repeat("я", MaxInstructionMarkdownBytes/2+1),
+		dialogFieldPromptTemplate:   strings.Repeat("я", MaxAgentsDialogInstructionMarkdownBytes/2+1),
 		dialogFieldKubernetesAccess: "read-only",
 		dialogFieldSandboxMode:      "danger-full-access",
 	})
-	if !strings.Contains(fieldErrors[dialogFieldPromptTemplate], "262144") {
+	if !strings.Contains(fieldErrors[dialogFieldPromptTemplate], "3000") {
 		t.Fatalf("oversized prompt error = %#v", fieldErrors)
 	}
+	_, fieldErrors = svc.agentRoleDialogInput(map[string]any{
+		dialogFieldProjectID:        "1",
+		dialogFieldRole:             "translator",
+		dialogFieldRoleType:         "worker",
+		dialogFieldPromptMode:       "raw",
+		dialogFieldPromptTemplate:   string([]byte{0xff}),
+		dialogFieldKubernetesAccess: "read-only",
+		dialogFieldSandboxMode:      "danger-full-access",
+	})
+	if !strings.Contains(fieldErrors[dialogFieldPromptTemplate], "UTF-8") {
+		t.Fatalf("invalid UTF-8 prompt error = %#v", fieldErrors)
+	}
+}
+
+func TestAgentRoleDialogCreatesAndReopensExactUTF8ByteBoundary(t *testing.T) {
+	exactMarkdown := strings.Repeat("я", MaxAgentsDialogInstructionMarkdownBytes/2)
+	localizer := testLocalizer(t, "ru")
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{1: {ID: 1, Name: "Legal"}},
+		agentRoles: map[int64]entity.AgentRole{7: {
+			ID: 7, ProjectID: 1, Name: "translator", RoleType: "worker",
+			PromptTemplate: exactMarkdown, PromptMode: "raw", Enabled: true,
+		}},
+	}
+	stub := &universalModelRepositoryStub{snapshot: entity.AgentInstructionSnapshot{
+		RoleDefinition: entity.RoleDefinition{ManagedBy: entity.ConfigurationOwnerUI},
+		Agent:          entity.Agent{ManagedBy: entity.ConfigurationOwnerUI},
+		InstructionSet: entity.InstructionSet{ID: 11, ManagedBy: entity.ConfigurationOwnerUI},
+	}}
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
+		UniversalModel: NewUniversalModelService(stub), StorageReady: true,
+	})
+
+	input, fieldErrors := svc.agentRoleDialogInput(map[string]any{
+		dialogFieldProjectID:        "1",
+		dialogFieldRole:             "translator",
+		dialogFieldRoleType:         "worker",
+		dialogFieldPromptMode:       "raw",
+		dialogFieldPromptTemplate:   exactMarkdown,
+		dialogFieldKubernetesAccess: "read-only",
+		dialogFieldSandboxMode:      "danger-full-access",
+	})
+	if len(fieldErrors) != 0 || input.PromptTemplate != exactMarkdown {
+		t.Fatalf("create boundary input=%#v errors=%#v", input, fieldErrors)
+	}
+
+	dialog, errorText := svc.agentRoleDialog(context.Background(), MenuActionCommand{
+		Resource: menuResourceAgentRole,
+		ID:       "7",
+	})
+	if errorText != "" || dialog == nil {
+		t.Fatalf("edit boundary dialog=%#v error=%q", dialog, errorText)
+	}
+	for _, element := range dialog.Elements {
+		if element.Name != dialogFieldPromptTemplate {
+			continue
+		}
+		if element.Default != exactMarkdown || len(element.Default) != MaxAgentsDialogInstructionMarkdownBytes {
+			t.Fatalf("reopened prompt bytes=%d", len(element.Default))
+		}
+		if element.MaxLength != MaxAgentsDialogInstructionMarkdownBytes {
+			t.Fatalf("textarea max length=%d", element.MaxLength)
+		}
+		store.agentRoles[7] = entity.AgentRole{
+			ID: 7, ProjectID: 1, Name: "translator", RoleType: "worker",
+			PromptTemplate: exactMarkdown + "я", PromptMode: "raw", Enabled: true,
+		}
+		oversizedDialog, oversizedError := svc.agentRoleDialog(context.Background(), MenuActionCommand{
+			Resource: menuResourceAgentRole,
+			ID:       "7",
+		})
+		if oversizedDialog != nil || !strings.Contains(oversizedError, "3000") {
+			t.Fatalf("oversized reopen dialog=%#v error=%q", oversizedDialog, oversizedError)
+		}
+		return
+	}
+	t.Fatal("edit dialog не содержит поле инструкций")
 }
 
 func TestUniversalModelRussianDialogLabelsFitMattermostLimits(t *testing.T) {

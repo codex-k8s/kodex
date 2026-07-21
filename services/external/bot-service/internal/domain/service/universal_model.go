@@ -5,17 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	instructionsrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/instructions"
 	workspacesrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/workspaces"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
-const MaxInstructionMarkdownBytes = 256 * 1024
+const (
+	MaxInstructionMarkdownBytes             = 64 * 1024
+	MaxAgentsDialogInstructionMarkdownBytes = 3000
+)
 
 var (
 	ErrUniversalModelUnavailable = errors.New("universal model repository is unavailable")
 	ErrInstructionTooLarge       = errors.New("instruction markdown exceeds the byte limit")
+	ErrInstructionInvalidUTF8    = errors.New("instruction markdown is not valid UTF-8")
 )
 
 type UpsertWorkspaceCommand struct {
@@ -116,7 +121,10 @@ func (svc *UniversalModelService) UpsertAgent(ctx context.Context, command Upser
 	if svc == nil || svc.instructions == nil {
 		return instructionsrepo.UpsertAgentResult{}, ErrUniversalModelUnavailable
 	}
-	if len([]byte(command.PromptTemplate)) > MaxInstructionMarkdownBytes {
+	if !utf8.ValidString(command.PromptTemplate) {
+		return instructionsrepo.UpsertAgentResult{}, ErrInstructionInvalidUTF8
+	}
+	if len(command.PromptTemplate) > MaxAgentsDialogInstructionMarkdownBytes {
 		return instructionsrepo.UpsertAgentResult{}, ErrInstructionTooLarge
 	}
 	result, err := svc.instructions.UpsertAgent(ctx, instructionsrepo.UpsertAgentInput{

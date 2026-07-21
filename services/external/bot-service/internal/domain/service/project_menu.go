@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
@@ -517,7 +518,7 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 		)
 	}
 	editAction := svc.menuResourceDialogAction(menuViewRoles, "dialogroleedit", menuDialogAgentRoleUpsert, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.role_edit", "menu.action.role_edit.tooltip", "primary", nil)
-	if snapshot.InstructionSet.ManagedBy == entity.ConfigurationOwnerGit {
+	if agentConfigurationManagedByGit(snapshot) {
 		editAction.Disabled = true
 	}
 	card.Actions = []MattermostCardAction{
@@ -528,12 +529,18 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 		svc.menuResourceAction(menuViewRoles, "rolelist", menuActionList, menuResourceAgentRole, strconv.FormatInt(role.ProjectID, 10), "menu.action.role_list", "menu.action.role_list.tooltip", "default", nil),
 		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
 	}
-	if snapshot.InstructionSet.ManagedBy == entity.ConfigurationOwnerGit {
+	if agentConfigurationManagedByGit(snapshot) {
 		card.Actions = append([]MattermostCardAction{
 			svc.menuResourceAction(menuViewRoles, "instructiondetach", menuActionInstructionDetach, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.instruction_detach", "menu.action.instruction_detach.tooltip", "danger", nil),
 		}, card.Actions...)
 	}
 	return card
+}
+
+func agentConfigurationManagedByGit(snapshot entity.AgentInstructionSnapshot) bool {
+	return snapshot.RoleDefinition.ManagedBy == entity.ConfigurationOwnerGit ||
+		snapshot.Agent.ManagedBy == entity.ConfigurationOwnerGit ||
+		snapshot.InstructionSet.ManagedBy == entity.ConfigurationOwnerGit
 }
 
 func (svc *SlashCommandService) detachInstructionSetFromMenu(ctx context.Context, command MenuActionCommand) string {
@@ -1016,9 +1023,12 @@ func (svc *SlashCommandService) agentRoleDialog(ctx context.Context, command Men
 		}
 		if svc.cfg.UniversalModel != nil {
 			snapshot, snapshotErr := svc.cfg.UniversalModel.GetAgentInstructionSnapshot(ctx, roleID)
-			if snapshotErr == nil && snapshot.InstructionSet.ManagedBy == entity.ConfigurationOwnerGit {
+			if snapshotErr == nil && agentConfigurationManagedByGit(snapshot) {
 				return nil, svc.t("instruction.git_managed", nil)
 			}
+		}
+		if !utf8.ValidString(current.PromptTemplate) || len(current.PromptTemplate) > MaxAgentsDialogInstructionMarkdownBytes {
+			return nil, svc.t("instruction.dialog_limit", map[string]any{"Limit": MaxAgentsDialogInstructionMarkdownBytes})
 		}
 		role = current
 	}
@@ -1119,7 +1129,7 @@ func (svc *SlashCommandService) agentRoleDialog(ctx context.Context, command Men
 				Default:     role.PromptTemplate,
 				HelpText:    svc.t("dialog.role.field.prompt.help", nil),
 				Optional:    true,
-				MaxLength:   MaxInstructionMarkdownBytes,
+				MaxLength:   MaxAgentsDialogInstructionMarkdownBytes,
 			},
 			{
 				DisplayName: svc.t("dialog.profile.field.kubernetes", nil),
@@ -1920,8 +1930,10 @@ func (svc *SlashCommandService) agentRoleDialogInput(submission map[string]any) 
 		fieldErrors[dialogFieldPromptMode] = svc.t("dialog.role.prompt_mode_invalid", nil)
 	}
 	promptTemplate := strings.TrimSpace(submissionString(submission, dialogFieldPromptTemplate))
-	if len([]byte(promptTemplate)) > MaxInstructionMarkdownBytes {
-		fieldErrors[dialogFieldPromptTemplate] = svc.t("dialog.role.prompt_too_large", map[string]any{"Limit": MaxInstructionMarkdownBytes})
+	if !utf8.ValidString(promptTemplate) {
+		fieldErrors[dialogFieldPromptTemplate] = svc.t("dialog.role.prompt_invalid_utf8", nil)
+	} else if len(promptTemplate) > MaxAgentsDialogInstructionMarkdownBytes {
+		fieldErrors[dialogFieldPromptTemplate] = svc.t("dialog.role.prompt_too_large", map[string]any{"Limit": MaxAgentsDialogInstructionMarkdownBytes})
 	}
 	kubernetesAccess := strings.ToLower(defaultString(submissionString(submission, dialogFieldKubernetesAccess), "read-only"))
 	if !validKubernetesAccess(kubernetesAccess) {

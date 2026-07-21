@@ -11,6 +11,7 @@ import (
 var (
 	ErrNotFound                    = errors.New("admin repository item not found")
 	ErrClusterAdminAdmissionDenied = errors.New("cluster-admin assignment is not present in the server-side profile")
+	ErrBotIdentityBindingDenied    = errors.New("mattermost bot identity does not belong to the exact UI-managed agent workspace")
 )
 
 type UpsertRepositoryInput struct {

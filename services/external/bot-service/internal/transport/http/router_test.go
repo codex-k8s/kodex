@@ -529,6 +529,92 @@ func TestAgentsDialogClosesAndPublishesResult(t *testing.T) {
 	}
 }
 
+func TestAgentsRoleDialogTransportEnforcesExactUTF8Boundary(t *testing.T) {
+	exactMarkdown := strings.Repeat("я", statusservice.MaxAgentsDialogInstructionMarkdownBytes/2)
+	store := &fakeRouterAdminStore{}
+	router := testRouterWithDialogStore(&fakeDialogOpener{}, store, newMemoryInteractionSecurity())
+	submission := map[string]any{
+		"project_id":        "1",
+		"role":              "translator",
+		"role_type":         "worker",
+		"prompt_mode":       "raw",
+		"prompt_template":   exactMarkdown,
+		"kubernetes_access": "read-only",
+		"sandbox_mode":      "danger-full-access",
+	}
+	body := testDialogBody(t, router, "agents_agent_role_upsert", map[string]any{"view": "roles"}, submission)
+	if len(body) >= 65536 {
+		t.Fatalf("точная UI-граница не помещается в transport body: %d", len(body))
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/dialogs/agents", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if store.agentRoleUpsertCount != 1 || store.lastAgentRoleInput.PromptTemplate != exactMarkdown {
+		t.Fatalf("agent role upsert count=%d input-bytes=%d", store.agentRoleUpsertCount, len(store.lastAgentRoleInput.PromptTemplate))
+	}
+}
+
+func TestAgentsRoleDialogTransportRejectsAboveBoundaryAndInvalidUTF8(t *testing.T) {
+	t.Run("above byte boundary", func(t *testing.T) {
+		store := &fakeRouterAdminStore{}
+		router := testRouterWithDialogStore(&fakeDialogOpener{}, store, newMemoryInteractionSecurity())
+		body := testDialogBody(t, router, "agents_agent_role_upsert", map[string]any{"view": "roles"}, map[string]any{
+			"project_id":        "1",
+			"role":              "translator",
+			"role_type":         "worker",
+			"prompt_mode":       "raw",
+			"prompt_template":   strings.Repeat("я", statusservice.MaxAgentsDialogInstructionMarkdownBytes/2+1),
+			"kubernetes_access": "read-only",
+			"sandbox_mode":      "danger-full-access",
+		})
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/mattermost/dialogs/agents", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(recorder, request)
+
+		if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "3000") {
+			t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+		}
+		if store.agentRoleUpsertCount != 0 {
+			t.Fatalf("oversized dialog reached repository: %d", store.agentRoleUpsertCount)
+		}
+	})
+
+	t.Run("invalid UTF-8 JSON", func(t *testing.T) {
+		store := &fakeRouterAdminStore{}
+		router := testRouterWithDialogStore(&fakeDialogOpener{}, store, newMemoryInteractionSecurity())
+		body := testDialogBody(t, router, "agents_agent_role_upsert", map[string]any{"view": "roles"}, map[string]any{
+			"project_id":        "1",
+			"role":              "translator",
+			"role_type":         "worker",
+			"prompt_mode":       "raw",
+			"prompt_template":   "valid-marker",
+			"kubernetes_access": "read-only",
+			"sandbox_mode":      "danger-full-access",
+		})
+		body = strings.Replace(body, "valid-marker", string([]byte{0xff}), 1)
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/mattermost/dialogs/agents", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(recorder, request)
+
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+		}
+		if store.agentRoleUpsertCount != 0 {
+			t.Fatalf("invalid UTF-8 dialog reached repository: %d", store.agentRoleUpsertCount)
+		}
+	})
+}
+
 func TestMattermostDialogFormConvertsSelectOptions(t *testing.T) {
 	form := mattermostDialogForm(statusservice.MattermostDialog{
 		CallbackID:       "agents_repo_search_pick",
@@ -556,6 +642,57 @@ func TestMattermostDialogFormConvertsSelectOptions(t *testing.T) {
 	}
 	if form.Elements[0].Options[0].Text != "codex-k8s/matter-codex" || form.Elements[0].Options[0].Value != "repo-state" {
 		t.Fatalf("form options = %#v", form.Elements[0].Options)
+	}
+}
+
+func TestMattermostDialogFormReopensExactInstructionBoundaryThroughJSON(t *testing.T) {
+	exactMarkdown := strings.Repeat("я", statusservice.MaxAgentsDialogInstructionMarkdownBytes/2)
+	form := mattermostDialogForm(statusservice.MattermostDialog{
+		CallbackID: "agents_agent_role_upsert",
+		Title:      "Edit agent",
+		Elements: []statusservice.MattermostDialogElement{{
+			DisplayName: "Instructions",
+			Name:        "prompt_template",
+			Type:        "textarea",
+			Default:     exactMarkdown,
+			Optional:    true,
+			MaxLength:   statusservice.MaxAgentsDialogInstructionMarkdownBytes,
+		}},
+	})
+	if err := form.IsValid(); err != nil {
+		t.Fatalf("Mattermost dialog rejected exact reopened boundary: %v", err)
+	}
+	encoded, err := json.Marshal(form)
+	if err != nil {
+		t.Fatalf("json.Marshal(dialog) error = %v", err)
+	}
+	if len(encoded) >= 65536 {
+		t.Fatalf("reopened dialog JSON exceeds transport boundary: %d", len(encoded))
+	}
+	var reopened struct {
+		Elements []struct {
+			Default   string `json:"default"`
+			MaxLength int    `json:"max_length"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal(encoded, &reopened); err != nil {
+		t.Fatalf("json.Unmarshal(dialog) error = %v", err)
+	}
+	if len(reopened.Elements) != 1 || reopened.Elements[0].Default != exactMarkdown || reopened.Elements[0].MaxLength != statusservice.MaxAgentsDialogInstructionMarkdownBytes {
+		t.Fatalf("reopened dialog = %#v", reopened)
+	}
+
+	cardJSON, err := json.Marshal(cardPost(statusservice.MattermostCard{
+		Fields: []statusservice.MattermostCardField{
+			{Title: "Instruction version", Value: "`V2`", Short: true},
+			{Title: "Instruction SHA-256", Value: "`aabb`"},
+		},
+	}))
+	if err != nil {
+		t.Fatalf("json.Marshal(card) error = %v", err)
+	}
+	if bytes.Contains(cardJSON, []byte(exactMarkdown)) || !json.Valid(cardJSON) {
+		t.Fatal("карточка должна передавать только метаданные инструкции как корректный JSON")
 	}
 }
 
@@ -826,11 +963,13 @@ func (opener *fakeDialogOpener) OpenDialog(_ context.Context, triggerID string, 
 }
 
 type fakeRouterAdminStore struct {
-	upsert        adminrepo.UpsertRepositoryInput
-	upsertCount   int
-	auditRecorded bool
-	lastAudit     adminrepo.AuditEventInput
-	repositories  map[string]entity.Repository
+	upsert               adminrepo.UpsertRepositoryInput
+	upsertCount          int
+	lastAgentRoleInput   adminrepo.UpsertAgentRoleInput
+	agentRoleUpsertCount int
+	auditRecorded        bool
+	lastAudit            adminrepo.AuditEventInput
+	repositories         map[string]entity.Repository
 }
 
 func (*fakeRouterAdminStore) IsFrozenClusterAdminOpenAIAccount(context.Context, string) (bool, error) {
@@ -962,7 +1101,9 @@ func (store *fakeRouterAdminStore) ListAgentRoleRuntimeVariables(context.Context
 }
 
 func (store *fakeRouterAdminStore) UpsertAgentRole(_ context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
-	return entity.AgentRole{ProjectID: input.ProjectID, Name: input.Name, RoleType: input.RoleType, Enabled: input.Enabled}, true, nil
+	store.lastAgentRoleInput = input
+	store.agentRoleUpsertCount++
+	return entity.AgentRole{ID: 7, ProjectID: input.ProjectID, Name: input.Name, RoleType: input.RoleType, PromptTemplate: input.PromptTemplate, Enabled: input.Enabled}, true, nil
 }
 
 func (store *fakeRouterAdminStore) GetAgentRole(context.Context, int64) (entity.AgentRole, error) {

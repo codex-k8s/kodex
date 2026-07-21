@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -188,8 +189,8 @@ func syncUniversalAgent(ctx context.Context, tx pgx.Tx, role entity.AgentRole, a
 func resolveInstructionSet(ctx context.Context, tx pgx.Tx, role entity.AgentRole, actorRef string, status string) (int64, error) {
 	var instructionSetID int64
 	var managedBy string
-	var currentVersionID *int64
-	err := tx.QueryRow(ctx, query("universal_instruction_sets__lock.sql"), role.ID).Scan(&instructionSetID, &managedBy, &currentVersionID)
+	var recordVersion int64
+	err := tx.QueryRow(ctx, query("universal_instruction_sets__lock.sql"), role.ID).Scan(&instructionSetID, &managedBy, &recordVersion)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return 0, fmt.Errorf("lock instruction set: %w", err)
 	}
@@ -203,7 +204,7 @@ func resolveInstructionSet(ctx context.Context, tx pgx.Tx, role entity.AgentRole
 		if err := tx.QueryRow(ctx, query("universal_instruction_sets__insert.sql"), role.ID, role.Name, status).Scan(&instructionSetID); err != nil {
 			return 0, fmt.Errorf("insert instruction set: %w", err)
 		}
-		currentVersionID = nil
+		recordVersion = 1
 	}
 	digest := sha256.Sum256([]byte(role.PromptTemplate))
 	var existingVersionID int64
@@ -213,7 +214,10 @@ func resolveInstructionSet(ctx context.Context, tx pgx.Tx, role entity.AgentRole
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return 0, fmt.Errorf("read current instruction version: %w", err)
 	}
-	if err == nil && string(existingDigest) == string(digest[:]) {
+	if err == nil && bytes.Equal(existingDigest, digest[:]) {
+		if err := setCurrentInstructionVersion(ctx, tx, instructionSetID, existingVersionID, role, status, existingVersion, recordVersion); err != nil {
+			return 0, err
+		}
 		return instructionSetID, nil
 	}
 	var versionID int64
@@ -223,12 +227,37 @@ func resolveInstructionSet(ctx context.Context, tx pgx.Tx, role entity.AgentRole
 	).Scan(&versionID, &version); err != nil {
 		return 0, fmt.Errorf("publish instruction version: %w", err)
 	}
-	if _, err := tx.Exec(ctx, query("universal_instruction_sets__set_current.sql"),
-		instructionSetID, versionID, role.Name, status, fmt.Sprintf("legacy-agent-role:%d:version:%d", role.ID, version),
-	); err != nil {
-		return 0, fmt.Errorf("set current instruction version: %w", err)
+	if err := setCurrentInstructionVersion(ctx, tx, instructionSetID, versionID, role, status, version, recordVersion); err != nil {
+		return 0, err
 	}
 	return instructionSetID, nil
+}
+
+func setCurrentInstructionVersion(
+	ctx context.Context,
+	tx pgx.Tx,
+	instructionSetID int64,
+	versionID int64,
+	role entity.AgentRole,
+	status string,
+	version int64,
+	recordVersion int64,
+) error {
+	tag, err := tx.Exec(ctx, query("universal_instruction_sets__set_current.sql"),
+		instructionSetID,
+		versionID,
+		role.Name,
+		status,
+		fmt.Sprintf("legacy-agent-role:%d:version:%d", role.ID, version),
+		recordVersion,
+	)
+	if err != nil {
+		return fmt.Errorf("set current instruction version: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return instructionsrepo.ErrInstructionWriteConflict
+	}
+	return nil
 }
 
 func (repo *Repository) GetAgentInstructionSnapshot(ctx context.Context, legacyAgentRoleID int64) (entity.AgentInstructionSnapshot, error) {
@@ -248,11 +277,11 @@ func (repo *Repository) DetachInstructionSet(ctx context.Context, input instruct
 		return entity.AgentInstructionSnapshot{}, fmt.Errorf("begin instruction set detach: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	tag, err := tx.Exec(ctx, query("universal_instruction_sets__detach.sql"), input.LegacyAgentRoleID, normalizedRepositoryActor(input.ActorRef))
-	if err != nil {
+	var detachedCount int64
+	if err := tx.QueryRow(ctx, query("universal_instruction_sets__detach.sql"), input.LegacyAgentRoleID, normalizedRepositoryActor(input.ActorRef)).Scan(&detachedCount); err != nil {
 		return entity.AgentInstructionSnapshot{}, fmt.Errorf("detach instruction set: %w", err)
 	}
-	if tag.RowsAffected() > 0 {
+	if detachedCount > 0 {
 		if _, err := tx.Exec(ctx, query("audit_events__insert.sql"),
 			"instruction_set.detached", "", normalizedRepositoryActor(input.ActorRef),
 			"instruction_set", fmt.Sprintf("legacy-agent-role:%d", input.LegacyAgentRoleID),

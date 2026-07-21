@@ -3,7 +3,7 @@ insert into matter_codex_workspaces(
 	organization_scope, legacy_project_id, name, slug, description,
 	mattermost_team_id, status, managed_by, source_revision, record_version
 ) values (
-	'installation', $1, $2, $3, $4, $5, 'active', 'ui', 'legacy-project:' || $1::text, 1
+	'installation', $1::bigint, $2, $3, $4, $5, 'active', 'ui', 'legacy-project:' || $1::bigint::text, 1
 )
 on conflict (legacy_project_id) do update set
 	name = excluded.name,

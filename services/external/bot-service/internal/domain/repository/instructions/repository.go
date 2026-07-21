@@ -7,7 +7,10 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
-var ErrManagedByGit = errors.New("agent instruction configuration is managed by git")
+var (
+	ErrManagedByGit             = errors.New("agent instruction configuration is managed by git")
+	ErrInstructionWriteConflict = errors.New("agent instruction configuration changed concurrently")
+)
 
 type UpsertAgentInput struct {
 	ProjectID         int64

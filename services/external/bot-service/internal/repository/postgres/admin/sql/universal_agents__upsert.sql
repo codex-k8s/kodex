@@ -6,19 +6,19 @@ insert into matter_codex_agents(
 )
 select
 	role_definition.organization_scope,
-	$1,
+	$1::bigint,
 	role_definition.id,
 	$2,
 	bot_identity.id,
 	$3,
-	'legacy-agent-' || $1::text,
+	'legacy-agent-' || $1::bigint::text,
 	$4,
 	'ui',
-	'legacy-agent-role:' || $1::text,
+	'legacy-agent-role:' || $1::bigint::text,
 	1
 from matter_codex_role_definitions role_definition
-left join matter_codex_mattermost_bot_identities bot_identity on bot_identity.role_id = $1
-where role_definition.legacy_agent_role_id = $1
+left join matter_codex_mattermost_bot_identities bot_identity on bot_identity.role_id = $1::bigint
+where role_definition.legacy_agent_role_id = $1::bigint
 on conflict (legacy_agent_role_id) do update set
 	role_definition_id = excluded.role_definition_id,
 	instruction_set_id = excluded.instruction_set_id,

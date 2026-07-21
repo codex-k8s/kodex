@@ -5,10 +5,10 @@ insert into matter_codex_rooms(
 	source_revision, record_version
 )
 select
-	workspace.organization_scope, workspace.id, $1, $2, $3, $4,
-	$5, $6, $7, $8, 'active', 'ui', 'legacy-chat:' || $1::text, 1
+	workspace.organization_scope, workspace.id, $1::bigint, $2, $3, $4,
+	$5, $6, $7, $8, 'active', 'ui', 'legacy-chat:' || $1::bigint::text, 1
 from matter_codex_workspaces workspace
-where workspace.legacy_project_id = $9
+where workspace.legacy_project_id = $9::bigint
 on conflict (legacy_chat_id) do update set
 	workspace_id = excluded.workspace_id,
 	name = excluded.name,
