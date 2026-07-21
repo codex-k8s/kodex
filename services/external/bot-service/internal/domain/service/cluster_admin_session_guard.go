@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
@@ -83,6 +84,19 @@ func (svc *AgentSessionService) withCurrentSessionRuntimeGuardWithStore(ctx cont
 
 func (svc *AgentSessionService) withCurrentSessionPersistenceGuard(ctx context.Context, session entity.AgentSession, operation string, sideEffect func(entity.AgentSession, adminrepo.Repository) error) error {
 	return svc.withCurrentSessionGuard(ctx, session, operation, true, sideEffect)
+}
+
+func (svc *AgentSessionService) withCurrentSessionPersistenceFence(ctx context.Context, session entity.AgentSession, operation string, sideEffect func(entity.AgentSession, adminrepo.Repository) error) error {
+	repository, ok := svc.cfg.Store.(adminrepo.ExactAgentSessionsRuntimeGuardRepository)
+	if !ok {
+		return fmt.Errorf("exact agent session persistence fence is not configured: %w", adminrepo.ErrClusterAdminAdmissionDenied)
+	}
+	return repository.WithExactAgentSessionsRuntimeGuard(ctx, []entity.AgentSession{session}, func(transactionalStore adminrepo.Repository) error {
+		if err := svc.withCurrentSessionGuardUsingStore(ctx, transactionalStore, session, operation, true, sideEffect); err != nil {
+			return fmt.Errorf("recheck exact agent session persistence fence: %w", err)
+		}
+		return nil
+	})
 }
 
 func (svc *AgentSessionService) withCurrentSessionsPersistenceGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession, adminrepo.Repository) error) error {

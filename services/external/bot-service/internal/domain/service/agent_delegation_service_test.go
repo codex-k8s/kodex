@@ -15,6 +15,7 @@ import (
 func (store *fakeAdminStore) WithExactAgentSessionsRuntimeGuard(_ context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
 	store.capacityMu.Lock()
 	defer store.capacityMu.Unlock()
+	store.exactGuardCalls++
 	seen := make(map[string]entity.AgentSession, len(expected))
 	for _, binding := range expected {
 		key := strings.TrimSpace(binding.SessionKey)
@@ -337,6 +338,66 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	}
 	if len(store.agentDelegations) != 1 {
 		t.Fatalf("stored delegations = %#v", store.agentDelegations)
+	}
+}
+
+func TestAgentSessionStartsFrozenClusterAdminCrossChatThread(t *testing.T) {
+	svc, baseStore, dispatcher, publisher := agentDelegationTestService()
+	targetRole := baseStore.agentRoles[2]
+	targetRole.KubernetesAccess = "cluster-admin"
+	baseStore.agentRoles[2] = targetRole
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true}
+	svc.cfg.Store = store
+
+	result, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat:  "architecture",
+		TargetAgent: "architect",
+		Title:       "Проверка инфраструктуры",
+		Message:     "Проверь инфраструктуру в рамках существующего назначения.",
+		WorkItemKey: "issue-59-cluster-admin",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	if result.TargetAgent != "architect" || result.TargetChat != "architecture" || dispatcher.calls != 1 {
+		t.Fatalf("result=%#v dispatcher calls=%d", result, dispatcher.calls)
+	}
+	if len(publisher.posts) < 2 || len(store.guardInputs) < 6 {
+		t.Fatalf("posts=%#v guards=%#v", publisher.posts, store.guardInputs)
+	}
+	for _, input := range store.guardInputs {
+		if input.RoleID != 2 || input.ProjectID != 1 || input.ChatID != 2 || input.ChatSlug != "architecture" || input.MattermostChannelID != "architecture-channel" {
+			t.Fatalf("target guard subject = %#v", input)
+		}
+	}
+	if store.guardInputs[0].Operation != "agent_thread.delegation_create.side_effect" {
+		t.Fatalf("first target guard = %#v", store.guardInputs[0])
+	}
+	if got := store.guardInputs[len(store.guardInputs)-1]; got.Operation != "agent_thread.target_persist.side_effect" || got.SessionKey != "target-session" {
+		t.Fatalf("final target guard = %#v", got)
+	}
+}
+
+func TestAgentSessionRejectsUnfrozenClusterAdminCrossChatThread(t *testing.T) {
+	svc, baseStore, dispatcher, publisher := agentDelegationTestService()
+	targetRole := baseStore.agentRoles[2]
+	targetRole.KubernetesAccess = "cluster-admin"
+	baseStore.agentRoles[2] = targetRole
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: false}
+	svc.cfg.Store = store
+
+	_, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat:  "architecture",
+		TargetAgent: "architect",
+		Title:       "Проверка инфраструктуры",
+		Message:     "Этот запуск не имеет замороженного назначения.",
+		WorkItemKey: "issue-59-unfrozen-cluster-admin",
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	if dispatcher.calls != 0 || len(publisher.posts) != 0 || len(baseStore.agentDelegations) != 0 {
+		t.Fatalf("denied effects: dispatch=%d posts=%d delegations=%#v", dispatcher.calls, len(publisher.posts), baseStore.agentDelegations)
 	}
 }
 

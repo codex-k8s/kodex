@@ -321,6 +321,90 @@ func (surface *ControlSurface) PostThreadCard(ctx context.Context, card statusse
 	return statusservice.MattermostPostRef{ChannelID: created.ChannelId, PostID: created.Id}, nil
 }
 
+func (surface *ControlSurface) ReconcileOrPostThreadCard(ctx context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
+	deliveryID, err := statusCardDeliveryID(card)
+	if err != nil {
+		return statusservice.MattermostPostRef{}, err
+	}
+	if ref, found, reconcileErr := reconcileStatusCard(ctx, surface.client, card, deliveryID); reconcileErr != nil || found {
+		return ref, reconcileErr
+	}
+	post := mattermostCardPost(card)
+	post.RootId = card.RootPostID
+	post.PendingPostId = deliveryID
+	created, _, createErr := surface.client.CreatePost(ctx, post)
+	if createErr == nil {
+		if err := verifyStatusCardBinding(created, card, deliveryID); err != nil {
+			return statusservice.MattermostPostRef{}, err
+		}
+		return statusservice.MattermostPostRef{ChannelID: created.ChannelId, PostID: created.Id}, nil
+	}
+	ref, found, reconcileErr := reconcileStatusCard(ctx, surface.client, card, deliveryID)
+	if reconcileErr != nil {
+		return statusservice.MattermostPostRef{}, errors.Join(createErr, reconcileErr)
+	}
+	if found {
+		return ref, nil
+	}
+	return statusservice.MattermostPostRef{}, fmt.Errorf("create Mattermost thread status card: %w", createErr)
+}
+
+func statusCardDeliveryID(card statusservice.MattermostCard) (string, error) {
+	deliveryID, ok := card.Props["matter_codex_status_delivery_id"].(string)
+	deliveryID = strings.TrimSpace(deliveryID)
+	if !ok || len(deliveryID) != 26 || strings.TrimSpace(card.ChannelID) == "" || strings.TrimSpace(card.RootPostID) == "" || card.Message == "" ||
+		card.Props["matter_codex_event"] != "agent_status" || card.Props["session_key"] == nil || card.Props["role_id"] == nil || card.Props["turn_id"] == nil || card.Props["run_id"] == nil {
+		return "", fmt.Errorf("Mattermost status-card delivery plan is incomplete")
+	}
+	for _, char := range deliveryID {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') {
+			return "", fmt.Errorf("Mattermost status-card delivery identity is invalid")
+		}
+	}
+	return deliveryID, nil
+}
+
+func reconcileStatusCard(ctx context.Context, client *mattermostmodel.Client4, card statusservice.MattermostCard, deliveryID string) (statusservice.MattermostPostRef, bool, error) {
+	postList, _, err := client.GetPostThread(ctx, card.RootPostID, "", false)
+	if err != nil {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("reconcile Mattermost status card: %w", err)
+	}
+	if postList == nil {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("reconcile Mattermost status card: empty response")
+	}
+	var matched *mattermostmodel.Post
+	for _, post := range postList.Posts {
+		if post == nil || post.GetProps()["matter_codex_status_delivery_id"] != deliveryID {
+			continue
+		}
+		if matched != nil {
+			return statusservice.MattermostPostRef{}, false, fmt.Errorf("Mattermost status-card delivery identity is not unique")
+		}
+		matched = post
+	}
+	if matched == nil {
+		return statusservice.MattermostPostRef{}, false, nil
+	}
+	if err := verifyStatusCardBinding(matched, card, deliveryID); err != nil {
+		return statusservice.MattermostPostRef{}, false, err
+	}
+	return statusservice.MattermostPostRef{ChannelID: matched.ChannelId, PostID: matched.Id}, true, nil
+}
+
+func verifyStatusCardBinding(post *mattermostmodel.Post, card statusservice.MattermostCard, deliveryID string) error {
+	if post == nil || strings.TrimSpace(post.Id) == "" || post.ChannelId != card.ChannelID || post.RootId != card.RootPostID || post.Message != card.Message {
+		return fmt.Errorf("Mattermost status card conflicts with the durable delivery binding")
+	}
+	actual := post.GetProps()
+	for _, key := range []string{"matter_codex_event", "matter_codex_status_delivery_id", "session_key", "role_id", "turn_id", "run_id"} {
+		expected, exists := card.Props[key]
+		if !exists || !sameJSONValue(actual[key], expected) {
+			return fmt.Errorf("Mattermost status card conflicts with the durable delivery identity %s", deliveryID)
+		}
+	}
+	return nil
+}
+
 func (surface *ControlSurface) UpdateThreadCard(ctx context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
 	post := mattermostCardPost(card)
 	updated, _, err := surface.client.UpdatePost(ctx, card.PostID, post)
@@ -449,7 +533,7 @@ func verifyExactCallbackPost(post *mattermostmodel.Post, input statusservice.Mat
 }
 
 func exactCallbackPostProps(actual map[string]any, clientOwned map[string]any) bool {
-	if len(actual) != len(clientOwned)+1 || actual[mattermostmodel.PostPropsFromBot] != "true" {
+	if actual[mattermostmodel.PostPropsFromBot] != "true" {
 		return false
 	}
 	for key, expected := range clientOwned {
@@ -462,11 +546,8 @@ func exactCallbackPostProps(actual map[string]any, clientOwned map[string]any) b
 		}
 	}
 	for key := range actual {
-		if key == mattermostmodel.PostPropsFromBot {
+		if key == mattermostmodel.PostPropsFromBot || !strings.HasPrefix(key, "matter_codex_") {
 			continue
-		}
-		if !strings.HasPrefix(key, "matter_codex_") {
-			return false
 		}
 		if _, exists := clientOwned[key]; !exists {
 			return false

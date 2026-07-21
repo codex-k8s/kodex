@@ -6,6 +6,7 @@ import (
 	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
 var (
@@ -141,6 +142,14 @@ type AtomicDialogRepository interface {
 	) (Capability, error)
 }
 
+type ConsumedCapabilityReplayRepository interface {
+	ReplayConsumedInteractionCapabilityWithMutation(
+		ctx context.Context,
+		input ConsumeCapabilityInput,
+		mutation func(Capability, adminrepo.Repository) error,
+	) (Capability, error)
+}
+
 type ClusterAdminBindingRepository interface {
 	AdmitExistingClusterAdminBinding(ctx context.Context, input ClusterAdminBindingInput) (bool, error)
 }
@@ -151,6 +160,10 @@ type ClusterAdminRuntimeGuardRepository interface {
 
 type ClusterAdminPersistenceGuardRepository interface {
 	WithExistingClusterAdminPersistenceGuard(ctx context.Context, input ClusterAdminBindingInput, sideEffect func(adminrepo.Repository) error) error
+}
+
+type ClusterAdminSessionBootstrapRepository interface {
+	CreateFrozenClusterAdminSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error)
 }
 
 type SecretIntegrityBinding struct {

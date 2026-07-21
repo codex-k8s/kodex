@@ -15,6 +15,7 @@ import (
 var _ securityrepo.Repository = (*Repository)(nil)
 var _ securityrepo.InteractionResourceAdmissionRepository = (*Repository)(nil)
 var _ securityrepo.AtomicDialogRepository = (*Repository)(nil)
+var _ securityrepo.ConsumedCapabilityReplayRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminBindingRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminRuntimeGuardRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminSecretIntegrityRepository = (*Repository)(nil)
@@ -158,6 +159,75 @@ func (repo *Repository) ConsumeInteractionCapabilityWithMutation(
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return securityrepo.Capability{}, fmt.Errorf("commit atomic dialog mutation: %w", err)
+	}
+	return capability, nil
+}
+
+func (repo *Repository) ReplayConsumedInteractionCapabilityWithMutation(
+	ctx context.Context,
+	input securityrepo.ConsumeCapabilityInput,
+	mutation func(securityrepo.Capability, adminrepo.Repository) error,
+) (securityrepo.Capability, error) {
+	if mutation == nil {
+		return securityrepo.Capability{}, fmt.Errorf("consumed capability replay mutation is required")
+	}
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return securityrepo.Capability{}, fmt.Errorf("begin consumed capability replay: %w", err)
+	}
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
+	}()
+	txRepository := newTransactionalRepository(tx)
+	capability, err := txRepository.checkConsumedInteractionCapability(ctx, input)
+	if err != nil {
+		return securityrepo.Capability{}, err
+	}
+	if err := mutation(capability, txRepository); err != nil {
+		return securityrepo.Capability{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return securityrepo.Capability{}, fmt.Errorf("commit consumed capability replay: %w", err)
+	}
+	return capability, nil
+}
+
+func (repo *Repository) checkConsumedInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	var capability securityrepo.Capability
+	if err := repo.db.QueryRow(ctx, query("interaction_capabilities__replay_consumed.sql"),
+		input.TokenHash,
+		input.Kind,
+		input.Operation,
+		input.ResourceType,
+		input.ResourceID,
+		input.ChannelID,
+		input.PostBinding,
+		input.ActorUserID,
+		input.ContextHash,
+		input.Now,
+	).Scan(
+		&capability.State,
+		&capability.Kind,
+		&capability.Operation,
+		&capability.ResourceType,
+		&capability.ResourceID,
+		&capability.ChannelID,
+		&capability.PostBinding,
+		&capability.ActorUserID,
+		&capability.ActorUserName,
+		&capability.InstallationScope,
+		&capability.WorkspaceScope,
+		&capability.SessionScope,
+		&capability.IssuedAt,
+		&capability.ExpiresAt,
+		&capability.ConsumedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return securityrepo.Capability{}, securityrepo.ErrCapabilityBinding
+		}
+		return securityrepo.Capability{}, fmt.Errorf("check consumed interaction capability replay: %w", err)
 	}
 	return capability, nil
 }

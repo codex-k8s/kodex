@@ -243,16 +243,23 @@ type UpsertMattermostBotIdentityInput struct {
 }
 
 type UpsertAgentSessionInput struct {
-	SessionKey           string
-	ProjectID            int64
-	ChatID               int64
-	RoleID               int64
-	SessionScope         string
-	MattermostChannelID  string
-	MattermostRootPostID string
-	OpenAIAccountName    string
-	TTLSeconds           int
-	Capabilities         string
+	SessionKey            string
+	ProjectID             int64
+	ChatID                int64
+	RoleID                int64
+	SessionScope          string
+	MattermostChannelID   string
+	MattermostRootPostID  string
+	OpenAIAccountName     string
+	KubernetesNamespace   string
+	PodName               string
+	PVCName               string
+	TokenSecretRef        string
+	SecretContentSHA256   string
+	SecretResourceUID     string
+	SecretResourceVersion string
+	TTLSeconds            int
+	Capabilities          string
 }
 
 type UpdateAgentSessionRuntimeInput struct {
@@ -289,11 +296,14 @@ type CreateAgentSessionTurnInput struct {
 }
 
 type CompleteAgentSessionTurnInput struct {
-	TurnID       int64
-	Status       string
-	FinalMessage string
-	ErrorMessage string
-	Artifacts    string
+	SessionID      int64
+	TurnID         int64
+	RunID          string
+	ExpectedStatus string
+	Status         string
+	FinalMessage   string
+	ErrorMessage   string
+	Artifacts      string
 }
 
 type CancelAgentSessionTurnInput struct {
@@ -305,6 +315,20 @@ type CancelAgentSessionTurnInput struct {
 type UpdateAgentSessionTurnStatusPostInput struct {
 	TurnID       int64
 	StatusPostID string
+}
+
+type CompareAndSwapAgentSessionTurnArtifactsInput struct {
+	TurnID            int64
+	ExpectedArtifacts string
+	Artifacts         string
+}
+
+type AgentSessionTurnArtifactsRepository interface {
+	CompareAndSwapAgentSessionTurnArtifacts(ctx context.Context, input CompareAndSwapAgentSessionTurnArtifactsInput) (entity.AgentSessionTurn, error)
+}
+
+type AgentSessionLockRepository interface {
+	LockAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error)
 }
 
 type UpdateAgentSessionTurnRunsPostInput struct {
@@ -422,6 +446,7 @@ type Repository interface {
 	ListAgentSessionsByRole(ctx context.Context, roleID int64) ([]entity.AgentSession, error)
 	AcquireAgentSessionCapacityLock(ctx context.Context) (func(), error)
 	ListEvictableIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)
+	EvictIdleAgentSessionPod(ctx context.Context, sessionKey string, podName string, sideEffect func() error) (entity.AgentSession, error)
 	ListQueuedIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)
 	ListStaleActiveAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)
 	ListRunningActiveAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)

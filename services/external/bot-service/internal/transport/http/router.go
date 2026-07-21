@@ -250,7 +250,8 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agents_action"})
 		return
 	}
-	if contextString(request.Context, "kind") == "agent_turn" && contextString(request.Context, "action") == "stop_turn" {
+	action := contextString(request.Context, "action")
+	if contextString(request.Context, "kind") == "agent_turn" && (action == "stop_turn" || action == "recover_stop_turn") {
 		router.handleAgentTurnStopAction(w, r, request)
 		return
 	}
@@ -359,7 +360,7 @@ func (router *Router) handleAgentTurnStopAction(w http.ResponseWriter, r *http.R
 		ChannelID: strings.TrimSpace(request.ChannelId), PostID: strings.TrimSpace(request.PostId),
 	}
 	var plan statusservice.StopAgentSessionTurnsPlan
-	interaction, err := router.interactionSecurity.AuthenticateActionAtomic(r.Context(), callback, func(interaction statusservice.AuthenticatedInteraction, store adminrepo.Repository) error {
+	interaction, err := router.interactionSecurity.AuthenticateAgentTurnStopActionAtomic(r.Context(), callback, func(interaction statusservice.AuthenticatedInteraction, store adminrepo.Repository, consumedReplay bool) error {
 		if interaction.ResourceType != "agent_session_turn" || interaction.ResourceID != strconv.FormatInt(resourceID, 10) || strings.TrimSpace(interaction.Scope.Session) == "" || strings.TrimSpace(interaction.Scope.Workspace) == "" {
 			return statusservice.ErrInteractionAuthentication
 		}
@@ -368,7 +369,11 @@ func (router *Router) handleAgentTurnStopAction(w http.ResponseWriter, r *http.R
 			TurnIDs: []int64{resourceID}, SessionKey: interaction.Scope.Session, WorkspaceScope: interaction.Scope.Workspace,
 			UserID: interaction.Actor.UserID, UserName: interaction.Actor.UserName,
 			ChannelID: interaction.ChannelID, PostID: interaction.CallbackPostID,
+			CapabilityAction: interaction.Action,
 		}, store)
+		if prepareErr == nil && consumedReplay && !plan.ReconcileOnly() {
+			return statusservice.ErrInteractionAuthentication
+		}
 		return prepareErr
 	})
 	if err != nil {
@@ -417,7 +422,7 @@ func (router *Router) handleAgentTurnAction(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	switch contextString(request.Context, "action") {
-	case "stop_turn":
+	case "stop_turn", "recover_stop_turn":
 		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agent_turn_action"})
 	case "retry_turn":
 		turnIDs := contextInt64List(request.Context, "turn_ids")
