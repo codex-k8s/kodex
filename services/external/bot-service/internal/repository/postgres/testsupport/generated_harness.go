@@ -347,9 +347,9 @@ func (harness GeneratedPostgresHarness) ServerBinDirectory() string {
 	return harness.binDirectory
 }
 
-func initializeGeneratedProofRegistry(ctx context.Context, binDirectory string, dataDirectory string) error {
+func bootstrapProofRegistryStatement() string {
 	table := bootstrapProofTable
-	statement := fmt.Sprintf(`
+	return fmt.Sprintf(`
 create table public.%s (
 	nonce_sha256 bytea primary key,
 	version integer not null,
@@ -460,6 +460,10 @@ before update on public.%s
 for each row execute function public.%s();
 `, table, table, bootstrapProofGuardFunction, bootstrapProofGuardFunction,
 		bootstrapProofGuardTrigger, table, bootstrapProofGuardFunction)
+}
+
+func initializeGeneratedProofRegistry(ctx context.Context, binDirectory string, dataDirectory string) error {
+	statement := bootstrapProofRegistryStatement()
 	command := exec.CommandContext(ctx, filepath.Join(binDirectory, "postgres"),
 		"--single", "-D", dataDirectory, "postgres",
 	)
@@ -500,6 +504,7 @@ func (harness *GeneratedPostgresHarness) Close(ctx context.Context) error {
 
 func generatedPostgresBinDirectory(ctx context.Context) (string, error) {
 	candidates := make([]string, 0, 8)
+	expectedMajor := strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_MAJOR"))
 	if configured := strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_BINDIR")); configured != "" {
 		candidates = append(candidates, configured)
 	}
@@ -528,6 +533,13 @@ func generatedPostgresBinDirectory(ctx context.Context) (string, error) {
 			}
 		}
 		if valid {
+			if expectedMajor != "" {
+				output, err := exec.CommandContext(ctx, filepath.Join(candidate, "postgres"), "--version").Output()
+				fields := strings.Fields(string(output))
+				if err != nil || len(fields) < 3 || strings.SplitN(fields[2], ".", 2)[0] != expectedMajor {
+					continue
+				}
+			}
 			return candidate, nil
 		}
 	}

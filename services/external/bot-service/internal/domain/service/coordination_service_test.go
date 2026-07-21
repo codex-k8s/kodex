@@ -135,6 +135,31 @@ func TestSafeFailureSummaryRedactsSensitiveLinesAndTruncates(t *testing.T) {
 	}
 }
 
+func TestSafeFailureSummaryKeepsOnlyKeyedFallbackRedaction(t *testing.T) {
+	fixtures := map[string]string{
+		"OPENAI_API_KEY":                   "mc-sentinel-openai-mattermost-0de13d2c",
+		"GH_TOKEN":                         "mc-sentinel-github-mattermost-23e25df0",
+		"MATTERCODEX_MATTERMOST_BOT_TOKEN": "mc-sentinel-mattermost-payload-870877bc",
+		"KUBERNETES_BEARER_TOKEN":          "mc-sentinel-kubernetes-payload-8178f233",
+		"MATTERCODEX_DATABASE_DSN":         "postgres://mc-sentinel-postgres-payload-a3b33c1e@127.0.0.1/disposable",
+		"MATTERCODEX_SESSION_TOKEN":        "mc-sentinel-session-payload-a7076e4c",
+		"MATTERCODEX_MCP_TOKEN":            "mc-sentinel-mcp-payload-42f4eb88",
+	}
+	lines := []string{"controlled fault before provider effect"}
+	for name, value := range fixtures {
+		lines = append(lines, name+"="+value)
+	}
+	result := safeFailureSummary(strings.Join(lines, "\n"))
+	if !strings.Contains(result, "controlled fault before provider effect") {
+		t.Fatalf("безопасная причина отказа потеряна: %q", result)
+	}
+	for class, value := range fixtures {
+		if strings.Contains(result, value) {
+			t.Fatalf("Mattermost payload содержит значение класса %s", class)
+		}
+	}
+}
+
 type fakeCoordinationStore struct {
 	*fakeAdminStore
 	capabilities            map[string]bool
@@ -149,6 +174,7 @@ type fakeCoordinationStore struct {
 	reconcileErr            error
 	reconcileCalls          int
 	ownerAttention          entity.OwnerAttentionRequest
+	ownerAttentionInput     adminrepo.CreateOwnerAttentionInput
 	createOwnerAttentionErr error
 	setOwnerAttentionErr    error
 }
@@ -201,6 +227,7 @@ func (store *fakeCoordinationStore) SearchMemory(context.Context, adminrepo.Sear
 }
 
 func (store *fakeCoordinationStore) CreateOwnerAttention(_ context.Context, input adminrepo.CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error) {
+	store.ownerAttentionInput = input
 	if store.createOwnerAttentionErr != nil {
 		return entity.OwnerAttentionRequest{}, false, store.createOwnerAttentionErr
 	}

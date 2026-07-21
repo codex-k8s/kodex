@@ -1,3 +1,5 @@
+//go:build postgres
+
 package admin_test
 
 import (

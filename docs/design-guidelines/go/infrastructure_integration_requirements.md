@@ -43,11 +43,16 @@
 - Полный Go-контур с тестовой БД запускается через `make test-go-all`; он объединяет `make test-go`
   и `make test-go-postgres`.
 - Предпочтительный remote-agent путь для integration tests — Kubernetes-native runner:
-  `MATTERCODEX_TEST_POSTGRES_MODE=kubernetes make test-go-postgres`. Runner поднимает временный namespace или использует
-  заданный `MATTERCODEX_TEST_POSTGRES_K8S_NAMESPACE`, создаёт ephemeral PostgreSQL pod/service, тестовые БД, локальный
-  `port-forward`, экспортирует `MATTERCODEX_*_TEST_DATABASE_DSN` и удаляет созданные ресурсы после завершения.
+  `MATTERCODEX_TEST_POSTGRES_MODE=kubernetes make test-go-postgres`. Runner использует только явно заданный
+  `MATTERCODEX_TEST_POSTGRES_K8S_NAMESPACE`, заранее помеченный как disposable test namespace, создаёт ephemeral
+  PostgreSQL Job/Service, тестовые БД и локальный `port-forward`, передаёт дочернему тесту только scoped
+  `MATTERCODEX_*_TEST_DATABASE_DSN` и удаляет созданные ресурсы по точным UID после завершения. Job имеет
+  `activeDeadlineSeconds`, `ttlSecondsAfterFinished` и владеет Service через точный `ownerReference`, поэтому
+  срок полномочия и внешняя очистка не зависят от живого callback runner. Namespace, RBAC и ServiceAccount этот
+  target не создаёт и не изменяет.
 - Docker fallback допустим только как локальный convenience path (`MATTERCODEX_TEST_POSTGRES_MODE=docker make test-go-postgres`)
-  и не является требованием к remote-agent серверу или CI.
+  и не является требованием к remote-agent серверу или CI. Контейнер запускается с `--rm`, независимым
+  self-deadline и проверяемой lease-label; persistent custom network не создаётся.
 - Production PostgreSQL запрещено использовать для repository integration tests. Для required integration-проверки
   нужны внешние тестовые DSN, Kubernetes test namespace/RBAC или локальный Docker fallback в developer-окружении.
 
