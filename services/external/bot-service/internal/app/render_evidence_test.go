@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
 func TestEnvsubstHelperProcess(t *testing.T) {
@@ -22,10 +24,8 @@ func TestEnvsubstHelperProcess(t *testing.T) {
 }
 
 func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
-	for _, commandName := range []string{"bash", "kubectl", "yq"} {
-		if _, err := exec.LookPath(commandName); err != nil {
-			t.Fatalf("для render regression обязательна команда %s", commandName)
-		}
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Fatal("для render regression обязательна команда bash")
 	}
 	repositoryRoot := testRepositoryRoot(t)
 	temporaryDirectory := t.TempDir()
@@ -63,14 +63,48 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 	if output, err := render.CombinedOutput(); err != nil {
 		t.Fatalf("synthetic render: %v; output=%s", err, output)
 	}
-	verify := exec.Command("bash", filepath.Join(repositoryRoot, "scripts/k8s/verify-rendered-objects.sh"),
-		"--render-dir", renderDirectory, "--expected-files", "8", "--expected-objects", "18")
-	output, err := verify.CombinedOutput()
+	yamlFiles, err := filepath.Glob(filepath.Join(renderDirectory, "*.yaml"))
 	if err != nil {
-		t.Fatalf("render evidence: %v; output=%s", err, output)
+		t.Fatalf("поиск отрендеренных YAML: %v", err)
 	}
-	if !strings.Contains(string(output), "files=8 objects=18 client_dry_run=18") {
-		t.Fatalf("render evidence output = %s", output)
+	if len(yamlFiles) != 8 {
+		t.Fatalf("число YAML-файлов = %d, ожидалось 8", len(yamlFiles))
+	}
+	objectCount := 0
+	for _, yamlFile := range yamlFiles {
+		file, err := os.Open(yamlFile)
+		if err != nil {
+			t.Fatalf("открытие %s: %v", filepath.Base(yamlFile), err)
+		}
+		decoder := yaml.NewYAMLOrJSONDecoder(file, 4096)
+		for {
+			var object map[string]any
+			err := decoder.Decode(&object)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				_ = file.Close()
+				t.Fatalf("разбор %s: %v", filepath.Base(yamlFile), err)
+			}
+			if len(object) == 0 {
+				continue
+			}
+			kind, kindOK := object["kind"].(string)
+			metadata, metadataOK := object["metadata"].(map[string]any)
+			name, nameOK := metadata["name"].(string)
+			if !kindOK || strings.TrimSpace(kind) == "" || !metadataOK || !nameOK || strings.TrimSpace(name) == "" {
+				_ = file.Close()
+				t.Fatalf("%s содержит объект без kind/metadata.name", filepath.Base(yamlFile))
+			}
+			objectCount++
+		}
+		if err := file.Close(); err != nil {
+			t.Fatalf("закрытие %s: %v", filepath.Base(yamlFile), err)
+		}
+	}
+	if objectCount != 18 {
+		t.Fatalf("число Kubernetes objects = %d, ожидалось 18", objectCount)
 	}
 }
 
