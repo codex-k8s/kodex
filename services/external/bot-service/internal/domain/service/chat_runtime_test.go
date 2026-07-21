@@ -11,6 +11,15 @@ import (
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
+	kubernetesruntime "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/kubernetes"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestChatRunIgnoresUnknownChannel(t *testing.T) {
@@ -609,6 +618,110 @@ func TestChatRunEvictsOldestIdleSessionPodOnCapacityPressure(t *testing.T) {
 	if len(store.sessionTurns) != 1 || store.sessionTurns[0].Status != agentSessionTurnQueued {
 		t.Fatalf("turns = %#v", store.sessionTurns)
 	}
+}
+
+func TestChatRunDoesNotEvictOrRetryWhenSessionPVCQuotaRejected(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	store.agentSessions = map[string]entity.AgentSession{
+		"oldest-idle": {
+			ID:                  1,
+			SessionKey:          "oldest-idle",
+			ProjectID:           1,
+			ChatID:              1,
+			RoleID:              1,
+			Status:              agentSessionStatusIdle,
+			KubernetesNamespace: "mattermost",
+			PodName:             "mc-session-oldest-idle",
+			PVCName:             "mc-session-ws-oldest-idle",
+			TokenSecretRef:      "matter-codex-session-oldest-idle",
+			LastActivityAt:      time.Now().Add(-3 * time.Hour),
+		},
+	}
+	client := fake.NewSimpleClientset(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "mc-session-oldest-idle", Namespace: "mattermost", UID: types.UID("oldest-idle-pod-uid"), ResourceVersion: "1",
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	})
+	pvcCreateAttempts := 0
+	client.PrependReactor("create", "persistentvolumeclaims", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		pvcCreateAttempts++
+		pvc := action.(k8stesting.CreateAction).GetObject().(*corev1.PersistentVolumeClaim)
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "persistentvolumeclaims"},
+			pvc.Name,
+			fmt.Errorf("exceeded quota: matter-codex-runtime-quota, requested: requests.storage=1Gi"),
+		)
+	})
+	runner, err := kubernetesruntime.NewRunnerWithClient(client, kubernetesruntime.Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		WorkspaceStorageSize:      "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:          testLocalizer(t, texti18n.DefaultLocale),
+		Store:              store,
+		RuntimeRunner:      codexReadyRuntimeRunner{Runner: runner},
+		BotServiceURL:      "http://bot-service",
+		StorageReady:       true,
+		RuntimeReady:       true,
+		DisableMonitor:     true,
+		CapacityRetryDelay: time.Nanosecond,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-pvc-quota",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Keep retained session data when PVC quota is exhausted.",
+	})
+
+	if result.RunID == "" || result.Mode != "session" {
+		t.Fatalf("result = %#v", result)
+	}
+	if pvcCreateAttempts != 1 {
+		t.Fatalf("session PVC create attempts = %d, want 1", pvcCreateAttempts)
+	}
+	for _, action := range client.Actions() {
+		if action.GetResource().Resource == "pods" && action.GetVerb() == "delete" {
+			t.Fatalf("PVC quota path deleted a session pod: %#v", action)
+		}
+	}
+	oldest := store.agentSessions["oldest-idle"]
+	if oldest.PodName != "mc-session-oldest-idle" || oldest.KubernetesNamespace != "mattermost" {
+		t.Fatalf("PVC quota path evicted idle session: %#v", oldest)
+	}
+	if _, err := client.CoreV1().Pods("mattermost").Get(context.Background(), oldest.PodName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("idle session pod was removed: %v", err)
+	}
+}
+
+type codexReadyRuntimeRunner struct {
+	runtimerepo.Runner
+}
+
+func (runner codexReadyRuntimeRunner) CheckCodexAuthSecret(_ context.Context, input runtimerepo.CodexAuthSecretCheckInput) (runtimerepo.CodexAuthSecretCheckResult, error) {
+	return runtimerepo.CodexAuthSecretCheckResult{
+		AccountName: input.AccountName,
+		SecretName:  input.SecretName,
+		Namespace:   "mattermost",
+		Ready:       true,
+	}, nil
 }
 
 func TestChatRunKeepsTurnQueuedWhenCapacityCannotBeReclaimed(t *testing.T) {

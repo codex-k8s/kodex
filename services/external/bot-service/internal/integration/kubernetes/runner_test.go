@@ -1257,6 +1257,9 @@ func TestStartAgentSessionReturnsTypedCapacityErrorWithoutCleanupWhenPVCQuotaRej
 	if !errors.As(err, &capacityErr) || capacityErr.Cause == nil {
 		t.Fatalf("StartAgentSession() error = %#v, want typed capacity error with cause", err)
 	}
+	if capacityErr.Kind != runtimerepo.AgentSessionCapacityKindSessionPVCQuota || runtimerepo.IsReclaimableAgentSessionCapacityError(err) {
+		t.Fatalf("StartAgentSession() capacity error = %#v, want non-reclaimable session PVC quota", capacityErr)
+	}
 	pvcCreates := 0
 	for _, action := range client.Actions() {
 		resource := action.GetResource().Resource
@@ -1598,6 +1601,74 @@ func TestCleanupExpiredRunsRepeatedInventoryDoesNotMutateResources(t *testing.T)
 	assertSessionSecretExists(t, client, "orphan-session")
 }
 
+func TestCleanupExpiredRunsDoesNotDeleteReplacementSessionPod(t *testing.T) {
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	oldTime := metav1.NewTime(now.Add(-72 * time.Hour))
+	listedPod := testSessionPod("replaced-session", corev1.PodSucceeded, oldTime, oldTime)
+	listedPod.UID = types.UID("listed-pod-uid")
+	listedPod.ResourceVersion = "7"
+	replacementPod := testSessionPod("replaced-session", corev1.PodRunning, metav1.NewTime(now), metav1.Time{})
+	replacementPod.UID = types.UID("replacement-pod-uid")
+	replacementPod.ResourceVersion = "8"
+	client := fake.NewSimpleClientset(listedPod)
+	interleaved := false
+	client.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		if interleaved {
+			return false, nil, nil
+		}
+		interleaved = true
+		resource := corev1.SchemeGroupVersion.WithResource("pods")
+		if err := client.Tracker().Delete(resource, "mattermost", listedPod.Name); err != nil {
+			return true, nil, err
+		}
+		if err := client.Tracker().Add(replacementPod.DeepCopy()); err != nil {
+			return true, nil, err
+		}
+		return true, &corev1.PodList{Items: []corev1.Pod{*listedPod.DeepCopy()}}, nil
+	})
+	deleteCalls := 0
+	client.PrependReactor("delete", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		deleteCalls++
+		deleteAction, ok := action.(k8stesting.DeleteAction)
+		if !ok {
+			return true, nil, fmt.Errorf("delete action has type %T", action)
+		}
+		preconditions := deleteAction.GetDeleteOptions().Preconditions
+		if preconditions == nil || preconditions.UID == nil || *preconditions.UID != listedPod.UID ||
+			preconditions.ResourceVersion == nil || *preconditions.ResourceVersion != listedPod.ResourceVersion {
+			return true, nil, fmt.Errorf("delete preconditions = %#v, want UID %s and resourceVersion %s", preconditions, listedPod.UID, listedPod.ResourceVersion)
+		}
+		return true, nil, apierrors.NewConflict(
+			schema.GroupResource{Resource: "pods"},
+			listedPod.Name,
+			fmt.Errorf("UID precondition does not match replacement"),
+		)
+	})
+	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost"})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	result, err := runner.CleanupExpiredRuns(context.Background(), runtimerepo.RetentionCleanupInput{
+		OlderThan: 24 * time.Hour,
+		Now:       now,
+		DryRun:    false,
+	})
+	if err != nil {
+		t.Fatalf("CleanupExpiredRuns() error = %v", err)
+	}
+	if !interleaved || deleteCalls != 1 || result.SessionPodsMatched != 1 || result.SessionPodsDeleted != 0 {
+		t.Fatalf("result = %#v, interleaved=%t deleteCalls=%d", result, interleaved, deleteCalls)
+	}
+	remaining, err := client.CoreV1().Pods("mattermost").Get(context.Background(), replacementPod.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("replacement session pod was deleted: %v", err)
+	}
+	if remaining.UID != replacementPod.UID || remaining.Status.Phase != corev1.PodRunning {
+		t.Fatalf("replacement session pod = %#v", remaining)
+	}
+}
+
 func testSessionPod(sessionKey string, phase corev1.PodPhase, created metav1.Time, finished metav1.Time) *corev1.Pod {
 	status := corev1.PodStatus{Phase: phase}
 	if phase == corev1.PodSucceeded || phase == corev1.PodFailed {
@@ -1614,6 +1685,8 @@ func testSessionPod(sessionKey string, phase corev1.PodPhase, created metav1.Tim
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              sessionPodName(sessionKey),
 			Namespace:         "mattermost",
+			UID:               types.UID("uid-" + kubernetesLabelValue(sessionKey)),
+			ResourceVersion:   "1",
 			Labels:            sessionLabels(sessionKey, "manager"),
 			CreationTimestamp: created,
 		},

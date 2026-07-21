@@ -1069,7 +1069,7 @@ func (runner *Runner) ensureSessionPVC(ctx context.Context, sessionKey string, r
 			return false, nil
 		}
 		if quotaExceeded(err) {
-			return false, runtimerepo.NewAgentSessionCapacityError("Kubernetes resource quota rejected the session PVC", err)
+			return false, runtimerepo.NewAgentSessionPVCQuotaCapacityError("Kubernetes resource quota rejected the session PVC", err)
 		}
 		return false, fmt.Errorf("create session pvc: %w", err)
 	}
@@ -1520,10 +1520,13 @@ func (runner *Runner) cleanupExpiredSessionResources(ctx context.Context, cutoff
 		if dryRun {
 			continue
 		}
-		if err := runner.deleteSessionPod(ctx, pod.Name); err != nil {
+		deleted, err := runner.deleteExpiredSessionPod(ctx, pod)
+		if err != nil {
 			return sessionCleanupResult{}, fmt.Errorf("delete expired session pod %s: %w", pod.Name, err)
 		}
-		result.SessionPodsDeleted++
+		if deleted {
+			result.SessionPodsDeleted++
+		}
 	}
 
 	pvcs, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: sessionLabelSelector()})
@@ -1567,6 +1570,46 @@ func (runner *Runner) cleanupExpiredSessionResources(ctx context.Context, cutoff
 		result.SessionDiagnostics = append(result.SessionDiagnostics, runtimerepo.DiagnoseSessionRetention(sessionKey, item.pvcs, item.secrets, item.facts))
 	}
 	return result, nil
+}
+
+func (runner *Runner) deleteExpiredSessionPod(ctx context.Context, pod corev1.Pod) (bool, error) {
+	if pod.UID == "" {
+		return false, fmt.Errorf("session pod %s has no UID", pod.Name)
+	}
+	uid := pod.UID
+	preconditions := &metav1.Preconditions{UID: &uid}
+	if pod.ResourceVersion != "" {
+		resourceVersion := pod.ResourceVersion
+		preconditions.ResourceVersion = &resourceVersion
+	}
+	grace := int64(0)
+	background := metav1.DeletePropagationBackground
+	err := runner.client.CoreV1().Pods(runner.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
+		GracePeriodSeconds: &grace,
+		PropagationPolicy:  &background,
+		Preconditions:      preconditions,
+	})
+	if apierrors.IsNotFound(err) || apierrors.IsConflict(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("delete retained session pod: %w", err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		current, getErr := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+		if apierrors.IsNotFound(getErr) {
+			return true, nil
+		}
+		if getErr != nil {
+			return false, fmt.Errorf("wait for retained session pod deletion: %w", getErr)
+		}
+		if current.UID != pod.UID {
+			return true, nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return false, fmt.Errorf("session pod %s identity %s was not deleted before timeout", pod.Name, pod.UID)
 }
 
 func (runner *Runner) smokePVC(runID string, role string) *corev1.PersistentVolumeClaim {

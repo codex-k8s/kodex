@@ -25,9 +25,17 @@ var (
 	ErrSecretNotFound       = errors.New("runtime secret not found")
 )
 
+type AgentSessionCapacityKind string
+
+const (
+	AgentSessionCapacityKindReclaimable     AgentSessionCapacityKind = "reclaimable"
+	AgentSessionCapacityKindSessionPVCQuota AgentSessionCapacityKind = "session_pvc_quota"
+)
+
 type AgentSessionCapacityError struct {
 	Reason string
 	Cause  error
+	Kind   AgentSessionCapacityKind
 }
 
 func (err *AgentSessionCapacityError) Error() string {
@@ -52,11 +60,20 @@ func (err *AgentSessionCapacityError) Unwrap() error {
 }
 
 func NewAgentSessionCapacityError(reason string, cause error) error {
-	return &AgentSessionCapacityError{Reason: reason, Cause: cause}
+	return &AgentSessionCapacityError{Reason: reason, Cause: cause, Kind: AgentSessionCapacityKindReclaimable}
+}
+
+func NewAgentSessionPVCQuotaCapacityError(reason string, cause error) error {
+	return &AgentSessionCapacityError{Reason: reason, Cause: cause, Kind: AgentSessionCapacityKindSessionPVCQuota}
 }
 
 func IsAgentSessionCapacityError(err error) bool {
 	return errors.Is(err, ErrAgentSessionCapacity)
+}
+
+func IsReclaimableAgentSessionCapacityError(err error) bool {
+	var capacityErr *AgentSessionCapacityError
+	return errors.As(err, &capacityErr) && capacityErr.Kind == AgentSessionCapacityKindReclaimable
 }
 
 type SmokeRunInput struct {
