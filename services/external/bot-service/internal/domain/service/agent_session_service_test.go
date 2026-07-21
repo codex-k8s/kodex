@@ -887,6 +887,43 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	}
 }
 
+func TestAgentSessionRequestAgentRejectsInvalidProcessRootBeforeMembership(t *testing.T) {
+	now := time.Now().UTC()
+	baseStore := chatRuntimeStore()
+	baseStore.agentSessions = map[string]entity.AgentSession{
+		"session-1": {
+			ID: 1, SessionKey: "session-1", ProjectID: 1, ChatID: 1, RoleID: 1,
+			MattermostChannelID: "channel-1", MattermostRootPostID: "root-1",
+			Status: agentSessionStatusRunning, ActiveTurnID: 1, ActiveRunID: "run-manager-1",
+			TokenSecretRef: "session-secret", TTLSeconds: defaultThreadSessionTTLSeconds,
+			LastActivityAt: now, ExpiresAt: now.Add(time.Hour),
+		},
+	}
+	baseStore.sessionTurns = []entity.AgentSessionTurn{{ID: 1, SessionID: 1, RunID: "run-manager-1", UserID: "delegating-agent-user", Status: agentSessionTurnRunning}}
+	store := &fakeCoordinationStore{
+		fakeAdminStore: baseStore,
+		processes: map[int64]entity.ProcessContext{
+			1: {},
+		},
+	}
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
+	publisher := &fakeThreadPublisher{}
+	roleBotManager := &fakeRoleBotManager{}
+	dispatcher := &fakeAgentTurnDispatcher{}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Store: store, RuntimeRunner: runner, ThreadPublisher: publisher,
+		RoleBotManager: roleBotManager, TurnDispatcher: dispatcher, StorageReady: true, RuntimeReady: true,
+	})
+
+	_, err := svc.RequestAgent(context.Background(), "session-1", "session-token", "@sre", "Проверь staging.")
+	if err == nil || !strings.Contains(err.Error(), "missing for process") {
+		t.Fatalf("RequestAgent() error = %v", err)
+	}
+	if roleBotManager.channelMemberUserID != "" || len(publisher.posts) != 0 || dispatcher.calls != 0 {
+		t.Fatalf("side effects membership=%q posts=%d dispatcher=%d", roleBotManager.channelMemberUserID, len(publisher.posts), dispatcher.calls)
+	}
+}
+
 func TestAgentSessionRequestAgentGuardsEveryClusterAdminSideEffect(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -992,7 +1029,9 @@ func TestAgentSessionRequestAgentMergesIntoQueuedTargetTurn(t *testing.T) {
 			SessionScope:         agentSessionScopeThreadRole,
 			MattermostChannelID:  "channel-1",
 			MattermostRootPostID: "root-1",
-			Status:               agentSessionStatusIdle,
+			Status:               agentSessionStatusRunning,
+			ActiveTurnID:         1,
+			ActiveRunID:          "run-manager-1",
 			TokenSecretRef:       "session-secret",
 			TTLSeconds:           defaultThreadSessionTTLSeconds,
 			LastActivityAt:       now,
@@ -1014,17 +1053,22 @@ func TestAgentSessionRequestAgentMergesIntoQueuedTargetTurn(t *testing.T) {
 			ExpiresAt:            now.Add(time.Hour),
 		},
 	}
-	store.sessionTurns = []entity.AgentSessionTurn{{
-		ID:                   10,
-		SessionID:            2,
-		RunID:                "queued-sre",
-		MattermostChannelID:  "channel-1",
-		MattermostRootPostID: "root-1",
-		MattermostPostID:     "root-1",
-		UserName:             "architect",
-		Message:              "# Запрос к агенту через MatterCodex\n\n- Инициатор: @architect\n\nпервый запрос",
-		Status:               agentSessionTurnQueued,
-	}}
+	store.sessionTurns = []entity.AgentSessionTurn{
+		{
+			ID: 1, SessionID: 1, RunID: "run-manager-1", MattermostChannelID: "channel-1",
+			MattermostRootPostID: "root-1", MattermostPostID: "root-1",
+			UserID: "owner-user", UserName: "owner", Status: agentSessionTurnRunning,
+		}, {
+			ID:                   10,
+			SessionID:            2,
+			RunID:                "queued-sre",
+			MattermostChannelID:  "channel-1",
+			MattermostRootPostID: "root-1",
+			MattermostPostID:     "root-1",
+			UserName:             "architect",
+			Message:              "# Запрос к агенту через MatterCodex\n\n- Инициатор: @architect\n\nпервый запрос",
+			Status:               agentSessionTurnQueued,
+		}}
 	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token", "target-secret": "target-token"}}
 	publisher := &fakeThreadPublisher{}
 	dispatcher := &fakeAgentTurnDispatcher{queued: AgentTurnQueued{RunID: "should-not-be-used"}}
@@ -1048,10 +1092,10 @@ func TestAgentSessionRequestAgentMergesIntoQueuedTargetTurn(t *testing.T) {
 	if dispatcher.calls != 0 {
 		t.Fatalf("dispatcher was called: %#v", dispatcher)
 	}
-	if len(store.sessionTurns) != 1 {
+	if len(store.sessionTurns) != 2 {
 		t.Fatalf("sessionTurns = %#v", store.sessionTurns)
 	}
-	merged := store.sessionTurns[0].Message
+	merged := store.sessionTurns[1].Message
 	for _, expected := range []string{"первый запрос", "# Дополнительный запрос к этому же занятому агенту", "- Инициатор: @manager", "- Целевой агент: @sre", "второй запрос от manager", "объединен"} {
 		if !strings.Contains(merged, expected) {
 			t.Fatalf("merged prompt missing %q:\n%s", expected, merged)

@@ -883,6 +883,14 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 	if message == "" {
 		return AgentSessionAgentRequest{}, fmt.Errorf("message is required")
 	}
+	if session.ActiveTurnID == 0 {
+		return AgentSessionAgentRequest{}, fmt.Errorf("source session has no active turn")
+	}
+	sourceTurnID := session.ActiveTurnID
+	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, svc.cfg.Store, sourceTurnID)
+	if err != nil {
+		return AgentSessionAgentRequest{}, err
+	}
 	project, err := svc.cfg.Store.GetProject(ctx, session.ProjectID)
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
@@ -908,7 +916,10 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 	}
 	requesterUserName := svc.sessionMattermostUsername(ctx, session)
 	targetSessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, rootPostID)
-	if err := svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.agent_request_membership.side_effect", func(entity.AgentSession) error {
+	if err := svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.agent_request_membership.side_effect", func(current entity.AgentSession) error {
+		if current.ActiveTurnID != sourceTurnID {
+			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
+		}
 		return svc.ensureRequestedRoleChannelMember(ctx, project, chat, role, targetSessionKey, requesterUserName)
 	}); err != nil {
 		return AgentSessionAgentRequest{}, err
@@ -919,23 +930,26 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 		if err != nil {
 			return AgentSessionAgentRequest{}, err
 		}
-		queuedTurn, compatible, err := svc.queuedTurnForProcess(ctx, session.ActiveTurnID, queuedTurns)
+		queuedTurn, compatible, err := svc.queuedTurnForProcess(ctx, sourceTurnID, queuedTurns)
 		if err != nil {
 			return AgentSessionAgentRequest{}, err
 		}
 		if compatible {
 			var turn entity.AgentSessionTurn
 			err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.agent_request_merge.side_effect", func(current entity.AgentSession) error {
+				if current.ActiveTurnID != sourceTurnID {
+					return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
+				}
 				return svc.withRequestedClusterAdminGuard(ctx, role, chat, targetSessionKey, requesterUserName, "agent_request.merge.side_effect", func() error {
 					var updateErr error
 					turn, updateErr = svc.cfg.Store.UpdateAgentSessionTurnMessage(ctx, adminrepo.UpdateAgentSessionTurnMessageInput{
 						TurnID: queuedTurn.ID, Message: appendDelegatedAgentRequestToQueuedPrompt(queuedTurn.Message, requesterUserName, role.Name, message),
 					})
-					if updateErr != nil || current.ActiveTurnID == 0 {
+					if updateErr != nil {
 						return updateErr
 					}
 					turn, updateErr = svc.cfg.Store.AddAgentSessionTurnOrigin(ctx, adminrepo.AddAgentSessionTurnOriginInput{
-						TurnID: turn.ID, ParentTurnID: current.ActiveTurnID, TriggerPostID: rootPostID, InitiatorUserName: requesterUserName,
+						TurnID: turn.ID, ParentTurnID: sourceTurnID, TriggerPostID: rootPostID, InitiatorUserName: requesterUserName,
 					})
 					return updateErr
 				})
@@ -970,11 +984,6 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 		return AgentSessionAgentRequest{}, err
 	}
 	var queued AgentTurnQueued
-	sourceTurnID := session.ActiveTurnID
-	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, svc.cfg.Store, sourceTurnID)
-	if err != nil {
-		return AgentSessionAgentRequest{}, err
-	}
 	// EnqueueAgentTurn отдельно защищает каждый привязанный к сессии runtime-эффект,
 	// а также финальные запись и публикацию. Внешний guard не блокирует строку
 	// сессии, чтобы dispatcher мог атомарно обновить её через другое соединение.
