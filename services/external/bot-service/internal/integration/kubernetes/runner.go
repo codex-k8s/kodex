@@ -1274,7 +1274,7 @@ func (runner *Runner) CleanupAgentSession(ctx context.Context, sessionKey string
 		return runtimerepo.AgentSessionCleanupResult{}, fmt.Errorf("session key is required")
 	}
 	podName := sessionPodName(sessionKey)
-	if err := runner.deleteSessionPod(ctx, podName); err != nil {
+	if err := runner.deleteSessionPod(ctx, sessionKey, podName); err != nil {
 		return runtimerepo.AgentSessionCleanupResult{}, err
 	}
 	return runtimerepo.AgentSessionCleanupResult{
@@ -1285,7 +1285,7 @@ func (runner *Runner) CleanupAgentSession(ctx context.Context, sessionKey string
 	}, nil
 }
 
-func (runner *Runner) deleteSessionPod(ctx context.Context, podName string) error {
+func (runner *Runner) deleteSessionPod(ctx context.Context, sessionKey string, podName string) error {
 	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -1293,8 +1293,13 @@ func (runner *Runner) deleteSessionPod(ctx context.Context, podName string) erro
 		}
 		return fmt.Errorf("get exact session pod before deletion: %w", err)
 	}
-	if pod.Labels["app.kubernetes.io/name"] != "matter-codex-agent-runner" || pod.Labels["app.kubernetes.io/component"] != sessionComponent {
+	if pod.Labels["app.kubernetes.io/name"] != "matter-codex-agent-runner" ||
+		pod.Labels["app.kubernetes.io/component"] != sessionComponent ||
+		pod.Labels[labelSessionKey] != kubernetesLabelValue(sessionKey) {
 		return fmt.Errorf("session pod identity does not permit deletion")
+	}
+	if pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+		return fmt.Errorf("only an exact terminal session pod may be deleted")
 	}
 	return runner.deleteExactSessionPod(ctx, pod)
 }
@@ -1303,13 +1308,17 @@ func (runner *Runner) deleteExactSessionPod(ctx context.Context, pod *corev1.Pod
 	if pod == nil || strings.TrimSpace(pod.Name) == "" || pod.Namespace != runner.namespace {
 		return fmt.Errorf("exact session pod identity is required for deletion")
 	}
+	if pod.UID == "" || strings.TrimSpace(pod.ResourceVersion) == "" {
+		return fmt.Errorf("session pod UID and resourceVersion are required for deletion")
+	}
 	grace := int64(0)
 	background := metav1.DeletePropagationBackground
 	uid := pod.UID
+	resourceVersion := pod.ResourceVersion
 	if err := runner.client.CoreV1().Pods(runner.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
 		GracePeriodSeconds: &grace,
 		PropagationPolicy:  &background,
-		Preconditions:      &metav1.Preconditions{UID: &uid},
+		Preconditions:      &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
 	}); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("delete completed session pod: %w", err)
 	}

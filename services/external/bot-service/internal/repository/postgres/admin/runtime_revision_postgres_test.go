@@ -176,10 +176,6 @@ func TestRuntimeRevisionAccountAffinityAndAtomicArchiveInvariants(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CreateAgentSessionTurn(invalid archive) error = %v", err)
 	}
-	invalidTurn, err = repository.ClaimNextAgentSessionTurn(ctx, fixture.session.SessionKey)
-	if err != nil {
-		t.Fatalf("ClaimNextAgentSessionTurn(invalid archive) error = %v", err)
-	}
 	if _, err := repository.CompleteAgentSessionTurnWithArchive(ctx, adminrepo.CompleteAgentSessionTurnWithArchiveInput{
 		SessionKey: fixture.session.SessionKey, TurnID: invalidTurn.ID, RunID: invalidTurn.RunID,
 		RuntimeRevisionID: revision.ID, PodUID: "pod-runtime-1", TurnStatus: "succeeded", SessionStatus: "idle",

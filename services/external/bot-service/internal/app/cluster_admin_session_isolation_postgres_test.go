@@ -18,6 +18,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
@@ -65,17 +66,39 @@ func TestPrepareClusterAdminSecretIntegrityIsolatesMissingSessionToken(t *testin
 				sessionKey = "isolation-test"
 				podName    = "mc-session-isolation-test"
 				pvcName    = "mc-session-ws-isolation-test"
+				podUID     = "isolation-pod-uid"
+				podVersion = "7"
 			)
 			sessionID := seedClusterAdminSessionWithMissingToken(t, ctx, pool, sessionKey, podName, pvcName)
 			client := fake.NewSimpleClientset(
-				&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: namespace}},
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: podName, Namespace: namespace, UID: types.UID(podUID), ResourceVersion: podVersion,
+						Labels: map[string]string{
+							"app.kubernetes.io/name":       "matter-codex-agent-runner",
+							"app.kubernetes.io/component":  "agent-session",
+							"matter-codex.dev/session-key": sessionKey,
+						},
+					},
+					Status: corev1.PodStatus{Phase: corev1.PodFailed},
+				},
 				&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: namespace}},
 			)
-			if test.podDeleteError != nil {
-				client.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, k8sruntime.Object, error) {
+			client.PrependReactor("delete", "pods", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+				deleteAction, ok := action.(k8stesting.DeleteAction)
+				if !ok {
+					return true, nil, errors.New("unexpected Pod delete action")
+				}
+				preconditions := deleteAction.GetDeleteOptions().Preconditions
+				if preconditions == nil || preconditions.UID == nil || string(*preconditions.UID) != podUID ||
+					preconditions.ResourceVersion == nil || *preconditions.ResourceVersion != podVersion {
+					return true, nil, errors.New("Pod delete lacks exact UID/resourceVersion preconditions")
+				}
+				if test.podDeleteError != nil {
 					return true, nil, test.podDeleteError
-				})
-			}
+				}
+				return false, nil, nil
+			})
 			runner, err := kubernetesintegration.NewRunnerWithClient(client, kubernetesintegration.Config{
 				Namespace: namespace, WorkspaceStorageSize: "1Gi",
 			})
@@ -127,6 +150,11 @@ func TestPrepareClusterAdminSecretIntegrityIsolatesMissingSessionToken(t *testin
 			}
 			if _, err := client.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, pvcName, metav1.GetOptions{}); err != nil {
 				t.Fatalf("session PVC was not preserved: %v", err)
+			}
+			for _, action := range client.Actions() {
+				if action.GetVerb() == "delete" && (action.GetResource().Resource == "persistentvolumeclaims" || action.GetResource().Resource == "secrets") {
+					t.Fatalf("persistent session resource received delete action: %s", action.GetResource().Resource)
+				}
 			}
 		})
 	}

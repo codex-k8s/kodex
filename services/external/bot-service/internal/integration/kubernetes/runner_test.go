@@ -753,6 +753,7 @@ func TestStartAgentSessionChangedRevisionRecreatesOnlyExactPod(t *testing.T) {
 		t.Fatalf("get initial Pod: %v", err)
 	}
 	pod.UID = types.UID("runtime-pod-uid-v1")
+	pod.ResourceVersion = "7"
 	pod.Status.Phase = corev1.PodRunning
 	if _, err := client.CoreV1().Pods("mattermost").Update(context.Background(), pod, metav1.UpdateOptions{}); err != nil {
 		t.Fatalf("set initial Pod UID: %v", err)
@@ -820,8 +821,10 @@ func TestStartAgentSessionChangedRevisionRecreatesOnlyExactPod(t *testing.T) {
 			podDelete = candidate
 		}
 	}
-	if podDelete == nil || podDelete.GetDeleteOptions().Preconditions == nil || podDelete.GetDeleteOptions().Preconditions.UID == nil || string(*podDelete.GetDeleteOptions().Preconditions.UID) != "runtime-pod-uid-v1" {
-		t.Fatalf("Pod recreation did not use exact UID precondition: %#v", podDelete)
+	if podDelete == nil || podDelete.GetDeleteOptions().Preconditions == nil || podDelete.GetDeleteOptions().Preconditions.UID == nil ||
+		string(*podDelete.GetDeleteOptions().Preconditions.UID) != "runtime-pod-uid-v1" ||
+		podDelete.GetDeleteOptions().Preconditions.ResourceVersion == nil || *podDelete.GetDeleteOptions().Preconditions.ResourceVersion != "7" {
+		t.Fatalf("Pod recreation did not use exact UID/resourceVersion preconditions: %#v", podDelete)
 	}
 }
 
@@ -1894,6 +1897,39 @@ func TestCleanupExpiredRunsDoesNotDeleteReplacementSessionPod(t *testing.T) {
 	}
 	if remaining.UID != replacementPod.UID || remaining.Status.Phase != corev1.PodRunning {
 		t.Fatalf("replacement session pod = %#v", remaining)
+	}
+}
+
+func TestCleanupAgentSessionRejectsNonTerminalOrIncompletePodIdentity(t *testing.T) {
+	for _, test := range []struct {
+		name            string
+		phase           corev1.PodPhase
+		uid             types.UID
+		resourceVersion string
+	}{
+		{name: "active Pod", phase: corev1.PodRunning, uid: "active-pod-uid", resourceVersion: "7"},
+		{name: "missing UID", phase: corev1.PodFailed, resourceVersion: "7"},
+		{name: "missing resourceVersion", phase: corev1.PodFailed, uid: "terminal-pod-uid"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			const sessionKey = "cleanup-exact-identity"
+			pod := testSessionPod(sessionKey, test.phase, metav1.Now(), metav1.Now())
+			pod.UID = test.uid
+			pod.ResourceVersion = test.resourceVersion
+			client := fake.NewSimpleClientset(pod)
+			runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost"})
+			if err != nil {
+				t.Fatalf("NewRunnerWithClient() error = %v", err)
+			}
+			if _, err := runner.CleanupAgentSession(context.Background(), sessionKey); err == nil {
+				t.Fatal("CleanupAgentSession() accepted an inexact terminal Pod identity")
+			}
+			for _, action := range client.Actions() {
+				if action.GetVerb() == "delete" {
+					t.Fatalf("inexact terminal Pod identity allowed delete of %s", action.GetResource().Resource)
+				}
+			}
+		})
 	}
 }
 

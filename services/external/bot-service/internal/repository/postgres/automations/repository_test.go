@@ -204,6 +204,15 @@ func TestAutomationRepositoryMigrationAndIdempotency(t *testing.T) {
 	if err != nil || threadReplay.MattermostRootPostID != "automation-session-1" {
 		t.Fatalf("restart после publish checkpoint run=%#v error=%v", threadReplay, err)
 	}
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("применить upgrade 30→31 с runtime-данными: %v", err)
+	}
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("повторно применить миграции после upgrade 30→31: %v", err)
+	}
+	if version, err := migrations.Version(ctx, dsn); err != nil || version != 31 {
+		t.Fatalf("версия после повторного upgrade 30→31 = %d, error=%v", version, err)
+	}
 	adminRepository := adminpostgres.NewRepository(pool)
 	replayedTurn, err := adminRepository.CreateAgentSessionTurn(ctx, adminrepo.CreateAgentSessionTurnInput{
 		SessionID: sessionID, RunID: "runtime-run-1", MattermostChannelID: "automation-channel",

@@ -1502,7 +1502,15 @@ func (svc *ChatRunService) resolveRuntimeBindingRevisions(ctx context.Context, r
 			environmentIdentity: runtimeEnvironmentIdentity(binding.Name, binding.SecretRef, secretKey),
 		})
 	}
-	if err := svc.withClusterAdminRuntimeGuard(ctx, role, chat.ID, chat.Slug, chat.MattermostChannelID, sessionKey, "agent_session.runtime_secret_revision_read.side_effect", func() error {
+	guardStore := svc.cfg.Store
+	if directStore != nil {
+		transactionalStore, ok := directStore.(adminrepo.Repository)
+		if !ok {
+			return runtimeBindingRevisions{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		guardStore = transactionalStore
+	}
+	if err := svc.withClusterAdminRuntimeGuardUsingStore(ctx, guardStore, role, chat.ID, chat.Slug, chat.MattermostChannelID, sessionKey, "agent_session.runtime_secret_revision_read.side_effect", func() error {
 		for index := range observations {
 			integrity, err := svc.cfg.RuntimeRunner.InspectSecretIntegrity(ctx, runtimerepo.SecretIntegrityInput{
 				SecretName: observations[index].secretName, SecretKey: observations[index].secretKey,
@@ -2113,19 +2121,23 @@ func (svc *ChatRunService) startRunAuthorized(ctx context.Context, input chatRun
 }
 
 func (svc *ChatRunService) withClusterAdminRuntimeGuard(ctx context.Context, role entity.AgentRole, chatID int64, chatSlug string, channelID string, sessionKey string, operation string, sideEffect func() error) error {
-	required, err := clusterAdminSessionGuardRequired(ctx, svc.cfg.Store, role, sessionKey)
+	return svc.withClusterAdminRuntimeGuardUsingStore(ctx, svc.cfg.Store, role, chatID, chatSlug, channelID, sessionKey, operation, sideEffect)
+}
+
+func (svc *ChatRunService) withClusterAdminRuntimeGuardUsingStore(ctx context.Context, store adminrepo.Repository, role entity.AgentRole, chatID int64, chatSlug string, channelID string, sessionKey string, operation string, sideEffect func() error) error {
+	required, err := clusterAdminSessionGuardRequired(ctx, store, role, sessionKey)
 	if err != nil {
 		return err
 	}
 	if !required {
 		return sideEffect()
 	}
-	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminRuntimeGuardRepository)
+	repository, ok := store.(securityrepo.ClusterAdminRuntimeGuardRepository)
 	if !ok {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	guardedSideEffect := func() error {
-		if err := svc.verifyClusterAdminSecretIntegrity(ctx, role.ID, sessionKey); err != nil {
+		if err := verifyClusterAdminSessionSecretIntegrity(ctx, store, svc.cfg.RuntimeRunner, role.ID, sessionKey); err != nil {
 			return err
 		}
 		return sideEffect()

@@ -3,7 +3,13 @@
 package service
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -96,9 +102,13 @@ values ('source-run', 'manager-proof', 'manager', 'github', 'codex-k8s', 'matter
 			defer cancelCall()
 			fixture.publisher.beforeFirst = cancelCall
 			fixture.publisher.failAt.Store(1)
-			err := fixture.service.CompleteTurn(callCtx, "source-session", "source-token", CompleteAgentSessionTurnCommand{
-				TurnID: turnID, RunID: "source-run", Status: agentSessionTurnSucceeded, FinalMessage: "Синтетический terminal результат.",
-			})
+			archivePayload, archiveSHA, archiveSize := postgresDelegationArchiveFixture("terminal-completion")
+			completion := CompleteAgentSessionTurnCommand{
+				TurnID: turnID, RunID: "source-run", Status: agentSessionTurnSucceeded,
+				FinalMessage: "Синтетический terminal результат.", CodexSessionID: "terminal-codex-session",
+				SessionArchiveGzipBase64: archivePayload, ArchiveSHA256: archiveSHA, ArchiveSizeBytes: archiveSize,
+			}
+			err := fixture.service.CompleteTurn(callCtx, "source-session", "source-token", completion)
 			if err == nil || !strings.Contains(err.Error(), "synthetic Mattermost network failure") {
 				t.Fatalf("CompleteTurn(%s) error=%v", sourceAccess, err)
 			}
@@ -118,9 +128,7 @@ where turn_row.id = $1
 			}
 			fixture.publisher.failAt.Store(0)
 			attemptsBeforeRetry := fixture.publisher.attempts.Load()
-			if err := fixture.service.CompleteTurn(ctx, "source-session", "source-token", CompleteAgentSessionTurnCommand{
-				TurnID: turnID, RunID: "source-run", Status: agentSessionTurnSucceeded, FinalMessage: "Повтор.",
-			}); err != nil {
+			if err := fixture.service.CompleteTurn(ctx, "source-session", "source-token", completion); err != nil {
 				t.Fatalf("terminal retry(%s) error=%v", sourceAccess, err)
 			}
 			if fixture.publisher.attempts.Load() != attemptsBeforeRetry {
@@ -768,6 +776,8 @@ func (runner *postgresDelegationRunner) GetMattermostBotTokenSecret(_ context.Co
 func (runner *postgresDelegationRunner) InspectSecretIntegrity(_ context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
 	runner.integrityReads.Add(1)
 	switch input.SecretName + "/" + input.SecretKey {
+	case "matter-codex-codex-auth-primary/auth.json":
+		return runtimerepo.SecretIntegrity{SecretName: input.SecretName, SecretKey: input.SecretKey, ContentSHA256: strings.Repeat("c", 64), UID: "source-codex-auth-uid", ResourceVersion: "1"}, nil
 	case "source-bot-secret/token":
 		return runtimerepo.SecretIntegrity{SecretName: input.SecretName, SecretKey: input.SecretKey, ContentSHA256: strings.Repeat("b", 64), UID: "source-bot-uid", ResourceVersion: "1"}, nil
 	case "source-secret/token":
@@ -947,6 +957,15 @@ where token_secret_ref = 'source-bot-secret'
 		seedPool.Close()
 		t.Fatalf("stage bot Secret integrity metadata: %v", err)
 	}
+	if _, err := seedPool.Exec(ctx, `
+update matter_codex_credentials credential
+set secret_content_sha256 = repeat('c', 64), secret_resource_uid = 'source-codex-auth-uid', secret_resource_version = '1'
+from matter_codex_openai_accounts account
+where account.name = 'primary' and account.credential_id = credential.id
+`); err != nil {
+		seedPool.Close()
+		t.Fatalf("stage OpenAI Secret integrity metadata: %v", err)
+	}
 	seedPool.Close()
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("migrations through v31: %v", err)
@@ -1029,13 +1048,16 @@ values ($1, $3, null, 'source-root'), ($2, $3, $1, 'target-root')
 func seedPostgresDelegation(t *testing.T, ctx context.Context, pool *pgxpool.Pool, sourceAccess string) {
 	t.Helper()
 	var projectID, sourceRoleID, targetRoleID, sourceChatID, targetChatID int64
+	if _, err := pool.Exec(ctx, `update matter_codex_openai_accounts set status = 'authorized' where name = 'primary'`); err != nil {
+		t.Fatalf("authorize delegation OpenAI account: %v", err)
+	}
 	if err := pool.QueryRow(ctx, `insert into matter_codex_projects(name, slug) values ('Delegation proof', 'delegation-proof') returning id`).Scan(&projectID); err != nil {
 		t.Fatalf("seed delegation project: %v", err)
 	}
-	if err := pool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type, kubernetes_access) values ($1, 'manager-proof', 'manager', $2) returning id`, projectID, sourceAccess).Scan(&sourceRoleID); err != nil {
+	if err := pool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type, openai_account_name, kubernetes_access) values ($1, 'manager-proof', 'manager', 'primary', $2) returning id`, projectID, sourceAccess).Scan(&sourceRoleID); err != nil {
 		t.Fatalf("seed source role: %v", err)
 	}
-	if err := pool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type, kubernetes_access) values ($1, 'worker-proof', 'worker', 'read-only') returning id`, projectID).Scan(&targetRoleID); err != nil {
+	if err := pool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type, openai_account_name, kubernetes_access) values ($1, 'worker-proof', 'worker', 'primary', 'read-only') returning id`, projectID).Scan(&targetRoleID); err != nil {
 		t.Fatalf("seed target role: %v", err)
 	}
 	if err := pool.QueryRow(ctx, `insert into matter_codex_chats(project_id, mattermost_channel_id, name, slug, chat_type) values ($1, 'source-channel', 'Source', 'source', 'manager') returning id`, projectID).Scan(&sourceChatID); err != nil {
@@ -1058,8 +1080,8 @@ values ($1, $2, 'manager-proof', 'manager-user', 'source-bot-secret', 'active'),
 	if err := pool.QueryRow(ctx, `
 insert into matter_codex_agent_sessions(
 	session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
-	mattermost_root_post_id, status, kubernetes_namespace, pod_name, pvc_name, token_secret_ref, ttl_seconds, expires_at
-) values ('source-session', $1, $2, $3, 'thread_role', 'source-channel', 'source-root', 'running', 'mattermost', 'source-pod', 'source-pvc', 'source-secret', 3600, now() + interval '1 hour')
+	mattermost_root_post_id, openai_account_name, status, kubernetes_namespace, pod_name, pvc_name, token_secret_ref, ttl_seconds, expires_at
+) values ('source-session', $1, $2, $3, 'thread_role', 'source-channel', 'source-root', 'primary', 'running', 'mattermost', 'source-pod', 'source-pvc', 'source-secret', 3600, now() + interval '1 hour')
 returning id
 `, projectID, sourceChatID, sourceRoleID).Scan(&sourceSessionID); err != nil {
 		t.Fatalf("seed source session: %v", err)
@@ -1067,8 +1089,8 @@ returning id
 	if err := pool.QueryRow(ctx, `
 insert into matter_codex_agent_sessions(
 	session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
-	mattermost_root_post_id, status, kubernetes_namespace, pod_name, pvc_name, token_secret_ref, ttl_seconds, expires_at
-) values ('target-session', $1, $2, $3, 'thread_role', 'target-channel', 'target-root', 'running', 'mattermost', 'target-pod', 'target-pvc', 'target-secret', 3600, now() + interval '1 hour')
+	mattermost_root_post_id, openai_account_name, status, kubernetes_namespace, pod_name, pvc_name, token_secret_ref, ttl_seconds, expires_at
+) values ('target-session', $1, $2, $3, 'thread_role', 'target-channel', 'target-root', 'primary', 'running', 'mattermost', 'target-pod', 'target-pvc', 'target-secret', 3600, now() + interval '1 hour')
 returning id
 `, projectID, targetChatID, targetRoleID).Scan(&targetSessionID); err != nil {
 		t.Fatalf("seed target session: %v", err)
@@ -1100,6 +1122,31 @@ insert into matter_codex_agent_delegations(
 `, projectID, sourceSessionID, sourceTurnID, targetChatID, targetRoleID, targetSessionID, targetTurnID); err != nil {
 		t.Fatalf("seed delegation: %v", err)
 	}
+}
+
+func postgresDelegationArchiveFixture(value string) (string, string, int64) {
+	var raw bytes.Buffer
+	gzipWriter := gzip.NewWriter(&raw)
+	tarWriter := tar.NewWriter(gzipWriter)
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "sessions", Typeflag: tar.TypeDir, Mode: 0o700, Format: tar.FormatUSTAR}); err != nil {
+		panic(err)
+	}
+	body := []byte(value)
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "sessions/state.json", Typeflag: tar.TypeReg, Mode: 0o600, Size: int64(len(body)), Format: tar.FormatUSTAR}); err != nil {
+		panic(err)
+	}
+	if _, err := tarWriter.Write(body); err != nil {
+		panic(err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		panic(err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		panic(err)
+	}
+	compressed := raw.Bytes()
+	digest := sha256.Sum256(compressed)
+	return base64.StdEncoding.EncodeToString(compressed), hex.EncodeToString(digest[:]), int64(len(compressed))
 }
 
 func assertPostgresDelegationCallbackState(t *testing.T, ctx context.Context, fixture postgresDelegationFixture, expectedCallbacks int) {

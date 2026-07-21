@@ -1329,6 +1329,9 @@ func (repo *Repository) UpdateAgentRunArtifacts(ctx context.Context, input admin
 		input.PRURL,
 	))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentRun{}, adminrepo.ErrNotFound
+		}
 		return entity.AgentRun{}, fmt.Errorf("update agent run artifacts: %w", err)
 	}
 	return item, nil
