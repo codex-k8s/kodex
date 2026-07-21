@@ -11,6 +11,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
@@ -90,6 +91,58 @@ func TestAgentSessionClaimReturnsAlreadyRunningTurnAfterLostResponse(t *testing.
 	}
 	if len(publisher.cards) != 1 {
 		t.Fatalf("status cards should not duplicate on retry: %#v", publisher.cards)
+	}
+}
+
+func TestAgentSessionAutomationCallbackUsesAuthenticatedExactBinding(t *testing.T) {
+	store, runner, _ := agentSessionStatusTestDeps()
+	store.agentSessions["session-1"] = withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
+	store.sessionTurns[0].Status = agentSessionTurnRunning
+	completer := &fakeAutomationCallbackCompleter{result: AutomationCallbackResult{Run: entity.ScheduledRun{
+		PublicID: "scheduled-run-11111111111111111111111111111111",
+		Status:   string(value.AutomationRunStatusSucceeded),
+		Outcome:  string(value.AutomationRunOutcomeNoAction),
+	}}}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Store:               store,
+		RuntimeRunner:       runner,
+		AutomationCallbacks: completer,
+		StorageReady:        true,
+		RuntimeReady:        true,
+	})
+
+	result, err := svc.CompleteAutomationCallback(context.Background(), "session-1", "session-token", CompleteAutomationCallbackCommand{
+		RunPublicID:             "scheduled-run-11111111111111111111111111111111",
+		CallbackContractVersion: value.AutomationCallbackContractV1,
+		Outcome:                 string(value.AutomationRunOutcomeNoAction),
+		AgentSummary:            "Действия не требуются",
+		ExactPayload:            []byte(`{"callback":"first"}`),
+	})
+	if err != nil || result.Run.PublicID == "" {
+		t.Fatalf("CompleteAutomationCallback() result=%#v error=%v", result, err)
+	}
+	if completer.calls != 1 || completer.command.AuthenticatedProjectID != 1 || completer.command.AuthenticatedSessionID != 1 || completer.command.AuthenticatedSessionKey != "session-1" {
+		t.Fatalf("callback получил не серверную привязку: calls=%d command=%#v", completer.calls, completer.command)
+	}
+	if string(completer.command.ExactPayload) != `{"callback":"first"}` {
+		t.Fatalf("callback потерял точные байты payload")
+	}
+
+	session := store.agentSessions["session-1"]
+	session.ActiveTurnID = 0
+	session.ActiveRunID = ""
+	store.agentSessions["session-1"] = session
+	if _, err := svc.CompleteAutomationCallback(context.Background(), "session-1", "session-token", CompleteAutomationCallbackCommand{
+		RunPublicID:             "scheduled-run-11111111111111111111111111111111",
+		CallbackContractVersion: value.AutomationCallbackContractV1,
+		Outcome:                 string(value.AutomationRunOutcomeNoAction),
+		AgentSummary:            "Действия не требуются",
+		ExactPayload:            []byte(`{"callback":"first"}`),
+	}); err != nil {
+		t.Fatalf("terminal replay после очистки active binding error=%v", err)
+	}
+	if completer.calls != 2 || completer.command.AuthenticatedSessionID != 1 {
+		t.Fatalf("terminal replay не передан атомарному repository fence: calls=%d command=%#v", completer.calls, completer.command)
 	}
 }
 
@@ -295,13 +348,15 @@ func TestAgentSessionCompleteUpdatesStatusWithCodexLimits(t *testing.T) {
 
 func TestAgentSessionProviderPolicyBlockStopsSessionWithoutRawProviderError(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
+	reconciler := &fakeAutomationRuntimeReconciler{}
 	svc := NewAgentSessionService(AgentSessionServiceConfig{
-		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
-		Store:           store,
-		RuntimeRunner:   runner,
-		ThreadPublisher: publisher,
-		StorageReady:    true,
-		RuntimeReady:    true,
+		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+		Store:                       store,
+		RuntimeRunner:               runner,
+		ThreadPublisher:             publisher,
+		AutomationRuntimeReconciler: reconciler,
+		StorageReady:                true,
+		RuntimeReady:                true,
 	})
 
 	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
@@ -327,6 +382,9 @@ func TestAgentSessionProviderPolicyBlockStopsSessionWithoutRawProviderError(t *t
 	turn, err := store.GetAgentSessionTurn(context.Background(), claim.TurnID)
 	if err != nil || turn.Status != agentSessionTurnBlocked {
 		t.Fatalf("turn = %#v error=%v", turn, err)
+	}
+	if reconciler.calls != 1 || reconciler.commands[0].RuntimeSessionID != 1 || reconciler.commands[0].RuntimeTurnID != claim.TurnID || reconciler.commands[0].RuntimeRunID != claim.RunID || reconciler.commands[0].RuntimeStatus != agentSessionTurnBlocked {
+		t.Fatalf("blocked automation reconciliation = %#v", reconciler.commands)
 	}
 	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, "cyber safety") || strings.Contains(publisher.posts[0].Message, "raw provider response") {
 		t.Fatalf("posts = %#v", publisher.posts)
@@ -547,13 +605,15 @@ func TestAgentSessionCompleteDoesNotPostFYIToRequester(t *testing.T) {
 func TestAgentSessionCompleteIsIdempotentForTerminalTurn(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.sessionTurns[0].UserName = "owner"
+	reconciler := &fakeAutomationRuntimeReconciler{}
 	svc := NewAgentSessionService(AgentSessionServiceConfig{
-		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
-		Store:           store,
-		RuntimeRunner:   runner,
-		ThreadPublisher: publisher,
-		StorageReady:    true,
-		RuntimeReady:    true,
+		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+		Store:                       store,
+		RuntimeRunner:               runner,
+		ThreadPublisher:             publisher,
+		StorageReady:                true,
+		RuntimeReady:                true,
+		AutomationRuntimeReconciler: reconciler,
 	})
 
 	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
@@ -582,6 +642,9 @@ func TestAgentSessionCompleteIsIdempotentForTerminalTurn(t *testing.T) {
 	session := store.agentSessions["session-1"]
 	if session.ActiveTurnID != 0 || session.Status != agentSessionStatusIdle || session.CodexSessionID != "codex-session-1" {
 		t.Fatalf("session = %#v", session)
+	}
+	if reconciler.calls != 2 || reconciler.commands[0].RuntimeSessionID != 1 || reconciler.commands[0].RuntimeTurnID != claim.TurnID || reconciler.commands[0].RuntimeRunID != claim.RunID || reconciler.commands[0].RuntimeStatus != agentSessionTurnSucceeded {
+		t.Fatalf("terminal automation reconciliation=%#v", reconciler.commands)
 	}
 }
 
@@ -1201,6 +1264,110 @@ func TestAgentSessionStopLastQueuedTurnResetsIdleRuntime(t *testing.T) {
 	}
 }
 
+func TestAgentSessionStopReconcilesAutomationForRunningAndQueuedTurns(t *testing.T) {
+	for _, status := range []string{agentSessionTurnRunning, agentSessionTurnQueued} {
+		t.Run(status, func(t *testing.T) {
+			store, runner, publisher := agentSessionStatusTestDeps()
+			session := store.agentSessions["session-1"]
+			session.KubernetesNamespace = "mattermost"
+			session.PodName = "mc-session-session-1"
+			session.PVCName = "mc-session-ws-session-1"
+			session.TokenSecretRef = "matter-codex-session-session-1"
+			if status == agentSessionTurnRunning {
+				session = withActiveTurn(session, 1, "run-1")
+			}
+			store.agentSessions[session.SessionKey] = session
+			store.sessionTurns[0].Status = status
+			store.sessionTurns[0].MattermostStatusPostID = "status-post-1"
+			reconciler := &fakeAutomationRuntimeReconciler{}
+			svc := NewAgentSessionService(AgentSessionServiceConfig{
+				Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+				Store:                       store,
+				RuntimeRunner:               runner,
+				ThreadPublisher:             publisher,
+				AutomationRuntimeReconciler: reconciler,
+				StorageReady:                true,
+				RuntimeReady:                true,
+			})
+			command := StopAgentSessionTurnsCommand{TurnIDs: []int64{1}, UserID: "owner-user", UserName: "owner"}
+
+			if _, err := svc.StopAgentSessionTurns(context.Background(), command); err != nil {
+				t.Fatalf("StopAgentSessionTurns() error = %v", err)
+			}
+			turn, err := store.GetAgentSessionTurn(context.Background(), 1)
+			if err != nil || turn.Status != agentSessionTurnCanceled {
+				t.Fatalf("canceled turn=%#v error=%v", turn, err)
+			}
+			if reconciler.calls != 1 {
+				t.Fatalf("automation reconciliation calls=%d, want 1", reconciler.calls)
+			}
+			wantCommand := AutomationRuntimeTerminalCommand{
+				ProjectID: 1, RuntimeSessionID: 1, RuntimeTurnID: 1, RuntimeRunID: "run-1", RuntimeStatus: agentSessionTurnCanceled,
+			}
+			if reconciler.commands[0] != wantCommand {
+				t.Fatalf("automation reconciliation command=%#v, want %#v", reconciler.commands[0], wantCommand)
+			}
+
+			cleanupCalls := len(runner.cleanedSessionKeys)
+			cardCalls := len(publisher.cardUpdates)
+			result, err := svc.StopAgentSessionTurns(context.Background(), command)
+			if err != nil {
+				t.Fatalf("reconcile-only StopAgentSessionTurns() error = %v", err)
+			}
+			if reconciler.calls != 2 || reconciler.commands[1] != wantCommand {
+				t.Fatalf("reconcile-only automation commands=%#v", reconciler.commands)
+			}
+			if len(runner.cleanedSessionKeys) != cleanupCalls || len(publisher.cardUpdates) != cardCalls {
+				t.Fatalf("reconcile-only retry duplicated side effects: cleanup=%d/%d cards=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, len(publisher.cardUpdates), cardCalls)
+			}
+			if !strings.Contains(result.Message, "stopped agent turns: `0`") {
+				t.Fatalf("reconcile-only result=%#v", result)
+			}
+		})
+	}
+}
+
+func TestAgentSessionStopAutomationReconciliationFailureIsObservableAndRetryable(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	session := withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
+	session.PodName = "mc-session-session-1"
+	store.agentSessions[session.SessionKey] = session
+	store.sessionTurns[0].Status = agentSessionTurnRunning
+	store.sessionTurns[0].MattermostStatusPostID = "status-post-1"
+	reconciliationErr := errors.New("синтетическая ошибка automation reconciliation")
+	reconciler := &fakeAutomationRuntimeReconciler{err: reconciliationErr}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+		Store:                       store,
+		RuntimeRunner:               runner,
+		ThreadPublisher:             publisher,
+		AutomationRuntimeReconciler: reconciler,
+		StorageReady:                true,
+		RuntimeReady:                true,
+	})
+	command := StopAgentSessionTurnsCommand{TurnIDs: []int64{1}, UserID: "owner-user", UserName: "owner"}
+
+	if _, err := svc.StopAgentSessionTurns(context.Background(), command); !errors.Is(err, reconciliationErr) {
+		t.Fatalf("StopAgentSessionTurns() error=%v, want %v", err, reconciliationErr)
+	}
+	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
+	if err != nil || turn.Status != agentSessionTurnCanceled || reconciler.calls != 1 {
+		t.Fatalf("first attempt turn=%#v calls=%d error=%v", turn, reconciler.calls, err)
+	}
+	cleanupCalls := len(runner.cleanedSessionKeys)
+	cardCalls := len(publisher.cardUpdates)
+	reconciler.err = nil
+	if _, err := svc.StopAgentSessionTurns(context.Background(), command); err != nil {
+		t.Fatalf("reconcile-only retry error=%v", err)
+	}
+	if reconciler.calls != 2 {
+		t.Fatalf("automation reconciliation calls=%d, want 2", reconciler.calls)
+	}
+	if len(runner.cleanedSessionKeys) != cleanupCalls || len(publisher.cardUpdates) != cardCalls {
+		t.Fatalf("reconcile-only retry duplicated side effects: cleanup=%d/%d cards=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, len(publisher.cardUpdates), cardCalls)
+	}
+}
+
 func TestAgentSessionStopReconcilesCanceledTurnAfterFinalizeFaultMatrixAndRetry(t *testing.T) {
 	cleanupErr := errors.New("синтетическая ошибка cleanup")
 	resetErr := errors.New("синтетическая ошибка reset")
@@ -1383,6 +1550,31 @@ type fakeAgentTurnDispatcher struct {
 	retryRequest AgentTurnRetryRequest
 	retryQueued  AgentTurnQueued
 	retryCalls   int
+}
+
+type fakeAutomationCallbackCompleter struct {
+	command AutomationCallbackCommand
+	result  AutomationCallbackResult
+	err     error
+	calls   int
+}
+
+type fakeAutomationRuntimeReconciler struct {
+	commands []AutomationRuntimeTerminalCommand
+	err      error
+	calls    int
+}
+
+func (reconciler *fakeAutomationRuntimeReconciler) ReconcileRuntimeTerminal(_ context.Context, command AutomationRuntimeTerminalCommand) error {
+	reconciler.calls++
+	reconciler.commands = append(reconciler.commands, command)
+	return reconciler.err
+}
+
+func (completer *fakeAutomationCallbackCompleter) CompleteCallback(_ context.Context, command AutomationCallbackCommand) (AutomationCallbackResult, error) {
+	completer.calls++
+	completer.command = command
+	return completer.result, completer.err
 }
 
 func (dispatcher *fakeAgentTurnDispatcher) EnqueueAgentTurn(_ context.Context, request AgentTurnRequest) (AgentTurnQueued, error) {

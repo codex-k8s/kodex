@@ -62,22 +62,52 @@ const (
 )
 
 type AgentSessionServiceConfig struct {
-	Localizer                  *texti18n.Localizer
-	Store                      adminrepo.Repository
-	RuntimeRunner              runtimerepo.Runner
-	ThreadPublisher            MattermostThreadPublisher
-	ConversationReader         MattermostConversationReader
-	RoleBotManager             MattermostRoleBotManager
-	TurnDispatcher             AgentTurnDispatcher
-	MenuActionURL              string
-	MattermostSiteURL          string
-	StorageReady               bool
-	RuntimeReady               bool
-	CallbackMaxBytes           int
-	CallbackMaxChunks          int
-	CallbackMaxChunkBytes      int
-	CallbackPublishConcurrency int
-	CallbackPublishDeadline    time.Duration
+	Localizer                   *texti18n.Localizer
+	Store                       adminrepo.Repository
+	RuntimeRunner               runtimerepo.Runner
+	ThreadPublisher             MattermostThreadPublisher
+	ConversationReader          MattermostConversationReader
+	RoleBotManager              MattermostRoleBotManager
+	TurnDispatcher              AgentTurnDispatcher
+	AutomationCallbacks         AutomationCallbackCompleter
+	AutomationRuntimeReconciler AutomationRuntimeTerminalReconciler
+	MenuActionURL               string
+	MattermostSiteURL           string
+	StorageReady                bool
+	RuntimeReady                bool
+	CallbackMaxBytes            int
+	CallbackMaxChunks           int
+	CallbackMaxChunkBytes       int
+	CallbackPublishConcurrency  int
+	CallbackPublishDeadline     time.Duration
+}
+
+type CompleteAutomationCallbackCommand struct {
+	RunPublicID             string
+	CallbackContractVersion string
+	Outcome                 string
+	AgentSummary            string
+	ExactPayload            []byte
+}
+
+func (svc *AgentSessionService) CompleteAutomationCallback(ctx context.Context, sessionKey string, token string, command CompleteAutomationCallbackCommand) (AutomationCallbackResult, error) {
+	if svc.cfg.AutomationCallbacks == nil {
+		return AutomationCallbackResult{}, errors.New("automation callbacks are not configured")
+	}
+	session, err := svc.authorize(ctx, sessionKey, token)
+	if err != nil {
+		return AutomationCallbackResult{}, err
+	}
+	return svc.cfg.AutomationCallbacks.CompleteCallback(ctx, AutomationCallbackCommand{
+		RunPublicID:             command.RunPublicID,
+		AuthenticatedProjectID:  session.ProjectID,
+		AuthenticatedSessionID:  session.ID,
+		AuthenticatedSessionKey: session.SessionKey,
+		CallbackContractVersion: command.CallbackContractVersion,
+		Outcome:                 command.Outcome,
+		AgentSummary:            command.AgentSummary,
+		ExactPayload:            append([]byte(nil), command.ExactPayload...),
+	})
 }
 
 type AgentSessionService struct {
@@ -421,6 +451,7 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 		completionErr = errors.Join(completionErr, svc.notifyRootInitiatorFailure(ctx, session, turn, command))
 	}
 	completionErr = errors.Join(completionErr, svc.reconcileTerminalProcessRun(ctx, session, turn.ID, status, "agent_session.complete_reconcile.side_effect"))
+	completionErr = errors.Join(completionErr, svc.reconcileAutomationRuntimeTerminal(ctx, session, turn, status))
 	return completionErr
 }
 
@@ -467,7 +498,21 @@ func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Conte
 		completionErr = errors.Join(completionErr, svc.notifyRootInitiatorFailure(ctx, session, turn, command))
 	}
 	completionErr = errors.Join(completionErr, svc.reconcileTerminalProcessRun(ctx, session, turn.ID, status, "agent_session.reconcile_completed_turn.side_effect"))
+	completionErr = errors.Join(completionErr, svc.reconcileAutomationRuntimeTerminal(ctx, session, turn, status))
 	return completionErr
+}
+
+func (svc *AgentSessionService) reconcileAutomationRuntimeTerminal(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, status string) error {
+	if svc.cfg.AutomationRuntimeReconciler == nil || !agentSessionTurnTerminal(status) {
+		return nil
+	}
+	return svc.cfg.AutomationRuntimeReconciler.ReconcileRuntimeTerminal(ctx, AutomationRuntimeTerminalCommand{
+		ProjectID:        session.ProjectID,
+		RuntimeSessionID: session.ID,
+		RuntimeTurnID:    turn.ID,
+		RuntimeRunID:     turn.RunID,
+		RuntimeStatus:    status,
+	})
 }
 
 func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, command StopAgentSessionTurnsCommand) (StopAgentSessionTurnsResult, error) {
@@ -626,6 +671,7 @@ func (svc *AgentSessionService) FinalizeStopAgentSessionTurns(ctx context.Contex
 			}
 		}
 		finalizationErr = errors.Join(finalizationErr, svc.reconcileTerminalProcessRun(ctx, item.session, item.turn.ID, agentSessionTurnCanceled, "agent_session.stop_reconcile.side_effect"))
+		finalizationErr = errors.Join(finalizationErr, svc.reconcileAutomationRuntimeTerminal(ctx, item.session, item.turn, agentSessionTurnCanceled))
 	}
 	if finalizationErr != nil {
 		return StopAgentSessionTurnsResult{}, finalizationErr

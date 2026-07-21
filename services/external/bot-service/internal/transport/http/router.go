@@ -263,17 +263,18 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	command := statusservice.MenuActionCommand{
-		View:      contextString(request.Context, "view"),
-		Command:   contextString(request.Context, "command"),
-		Dialog:    contextString(request.Context, "dialog"),
-		Action:    contextString(request.Context, "action"),
-		Resource:  contextString(request.Context, "resource_type"),
-		ID:        contextString(request.Context, "resource_id"),
-		Page:      contextInt(request.Context, "page"),
-		UserID:    interaction.Actor.UserID,
-		UserName:  interaction.Actor.UserName,
-		ChannelID: interaction.ChannelID,
-		PostID:    interaction.CallbackPostID,
+		View:           contextString(request.Context, "view"),
+		Command:        contextString(request.Context, "command"),
+		Dialog:         contextString(request.Context, "dialog"),
+		Action:         contextString(request.Context, "action"),
+		Resource:       contextString(request.Context, "resource_type"),
+		ID:             contextString(request.Context, "resource_id"),
+		IdempotencyKey: contextString(request.Context, "idempotency_key"),
+		Page:           contextInt(request.Context, "page"),
+		UserID:         interaction.Actor.UserID,
+		UserName:       interaction.Actor.UserName,
+		ChannelID:      interaction.ChannelID,
+		PostID:         interaction.CallbackPostID,
 	}
 	if router.slashService.ShouldRunMenuActionAsync(command) {
 		result := router.slashService.AsyncMenuActionAccepted(command)

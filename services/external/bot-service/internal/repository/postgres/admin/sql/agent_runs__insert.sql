@@ -32,7 +32,7 @@ insert into matter_codex_agent_runs(
 )
 on conflict (run_id) do update set
 	flow_id = excluded.flow_id,
-	status = excluded.status,
+	status = matter_codex_agent_runs.status,
 	kubernetes_namespace = excluded.kubernetes_namespace,
 	job_name = excluded.job_name,
 	pvc_name = excluded.pvc_name,

@@ -1,0 +1,643 @@
+package service
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"embed"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"text/template"
+	"time"
+	_ "time/tzdata" // Встраиваем IANA-базу для минимального production-образа без системного tzdata.
+	"unicode/utf8"
+
+	automationsrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/automations"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
+)
+
+const (
+	defaultAutomationCallbackTTL      = 24 * time.Hour
+	maxAutomationScheduleName         = 120
+	maxAutomationCallbackRunes        = 1000
+	maxAutomationCallbackBytes        = 4000
+	maxAutomationCallbackPayloadBytes = 16 * 1024
+	automationSessionScope            = "automation-run"
+)
+
+//go:embed automation_playbook.md
+var automationPlaybookFiles embed.FS
+
+type AutomationCatalog interface {
+	GetProject(ctx context.Context, id int64) (entity.Project, error)
+	GetAgentRole(ctx context.Context, id int64) (entity.AgentRole, error)
+	GetChat(ctx context.Context, id int64) (entity.Chat, error)
+	ListChatParticipants(ctx context.Context, chatID int64) ([]entity.ChatParticipant, error)
+	ListProjectRepositories(ctx context.Context, projectID int64) ([]entity.ProjectRepository, error)
+}
+
+type AutomationRunDispatcher interface {
+	EnqueueAgentTurn(ctx context.Context, request AgentTurnRequest) (AgentTurnQueued, error)
+}
+
+type AutomationThreadPublisher interface {
+	PostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error)
+}
+
+type AutomationServiceConfig struct {
+	Repository              automationsrepo.Repository
+	Catalog                 AutomationCatalog
+	Dispatcher              AutomationRunDispatcher
+	Publisher               AutomationThreadPublisher
+	OwnerMattermostUsername string
+	StorageReady            bool
+	RuntimeReady            bool
+	Now                     func() time.Time
+}
+
+type AutomationService struct {
+	cfg AutomationServiceConfig
+}
+
+type CreateAutomationScheduleCommand struct {
+	Actor             AuthenticatedActor
+	ProjectID         int64
+	TargetAgentRoleID int64
+	TargetChatID      int64
+	Name              string
+	Preset            string
+	LocalTime         string
+	TimeZone          string
+	PlaybookKey       string
+	IdempotencyKey    string
+}
+
+type RunAutomationNowCommand struct {
+	Actor          AuthenticatedActor
+	ProjectID      int64
+	ScheduleID     string
+	IdempotencyKey string
+}
+
+type RunAutomationNowResult struct {
+	Run       entity.ScheduledRun
+	Duplicate bool
+}
+
+type AutomationCallbackCommand struct {
+	RunPublicID             string
+	AuthenticatedProjectID  int64
+	AuthenticatedSessionID  int64
+	AuthenticatedSessionKey string
+	CallbackContractVersion string
+	Outcome                 string
+	AgentSummary            string
+	ExactPayload            []byte
+}
+
+type AutomationCallbackResult struct {
+	Run       entity.ScheduledRun
+	Duplicate bool
+}
+
+type AutomationCallbackCompleter interface {
+	CompleteCallback(ctx context.Context, command AutomationCallbackCommand) (AutomationCallbackResult, error)
+}
+
+type AutomationRuntimeTerminalCommand struct {
+	ProjectID        int64
+	RuntimeSessionID int64
+	RuntimeTurnID    int64
+	RuntimeRunID     string
+	RuntimeStatus    string
+}
+
+type AutomationRuntimeTerminalReconciler interface {
+	ReconcileRuntimeTerminal(ctx context.Context, command AutomationRuntimeTerminalCommand) error
+}
+
+func NewAutomationService(cfg AutomationServiceConfig) *AutomationService {
+	if cfg.Now == nil {
+		cfg.Now = time.Now
+	}
+	return &AutomationService{cfg: cfg}
+}
+
+func (svc *AutomationService) Available() bool {
+	return svc != nil && svc.cfg.StorageReady && svc.cfg.Repository != nil && svc.cfg.Catalog != nil
+}
+
+func (svc *AutomationService) CreateSchedule(ctx context.Context, command CreateAutomationScheduleCommand) (entity.AutomationSchedule, bool, error) {
+	if !svc.Available() {
+		return entity.AutomationSchedule{}, false, errors.New("automation storage is not ready")
+	}
+	actor, err := svc.authorizeOwner(command.Actor)
+	if err != nil {
+		return entity.AutomationSchedule{}, false, err
+	}
+	command.Name = strings.TrimSpace(command.Name)
+	command.Preset = strings.TrimSpace(command.Preset)
+	command.LocalTime = strings.TrimSpace(command.LocalTime)
+	command.TimeZone = strings.TrimSpace(command.TimeZone)
+	command.PlaybookKey = strings.TrimSpace(command.PlaybookKey)
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if command.ProjectID <= 0 || command.TargetAgentRoleID <= 0 || command.TargetChatID <= 0 || command.IdempotencyKey == "" {
+		return entity.AutomationSchedule{}, false, errors.New("automation schedule scope and idempotency key are required")
+	}
+	if command.Name == "" || utf8.RuneCountInString(command.Name) > maxAutomationScheduleName {
+		return entity.AutomationSchedule{}, false, errors.New("automation schedule name is invalid")
+	}
+	if command.Preset != string(value.AutomationSchedulePresetDaily) {
+		return entity.AutomationSchedule{}, false, errors.New("unsupported automation schedule preset")
+	}
+	if command.PlaybookKey != value.AutomationPlaybookProjectCheckV1 {
+		return entity.AutomationSchedule{}, false, errors.New("unsupported automation playbook")
+	}
+	project, role, chat, err := svc.validateTarget(ctx, command.ProjectID, command.TargetAgentRoleID, command.TargetChatID)
+	if err != nil {
+		return entity.AutomationSchedule{}, false, err
+	}
+	_ = project
+	_ = role
+	_ = chat
+
+	now := svc.cfg.Now().UTC()
+	nextRunAt, err := nextDailyAutomationRun(now, command.LocalTime, command.TimeZone)
+	if err != nil {
+		return entity.AutomationSchedule{}, false, err
+	}
+	promptSnapshot := mustAutomationPlaybook()
+	promptHash := sha256.Sum256([]byte(promptSnapshot))
+	commandHash, err := automationCommandHash(struct {
+		ActorUserID       string `json:"actor_user_id"`
+		ProjectID         int64  `json:"project_id"`
+		TargetAgentRoleID int64  `json:"target_agent_role_id"`
+		TargetChatID      int64  `json:"target_chat_id"`
+		Name              string `json:"name"`
+		Preset            string `json:"preset"`
+		LocalTime         string `json:"local_time"`
+		TimeZone          string `json:"time_zone"`
+		PlaybookKey       string `json:"playbook_key"`
+	}{actor.UserID, command.ProjectID, command.TargetAgentRoleID, command.TargetChatID, command.Name, command.Preset, command.LocalTime, command.TimeZone, command.PlaybookKey})
+	if err != nil {
+		return entity.AutomationSchedule{}, false, err
+	}
+	return svc.cfg.Repository.CreateSchedule(ctx, automationsrepo.CreateScheduleInput{
+		PublicID:                newAutomationID("schedule"),
+		ProjectID:               command.ProjectID,
+		TargetAgentRoleID:       command.TargetAgentRoleID,
+		TargetChatID:            command.TargetChatID,
+		Name:                    command.Name,
+		OwnerMattermostUserID:   actor.UserID,
+		OwnerMattermostUserName: actor.UserName,
+		Preset:                  command.Preset,
+		LocalTime:               command.LocalTime,
+		TimeZone:                command.TimeZone,
+		NextRunAt:               nextRunAt,
+		PlaybookKey:             command.PlaybookKey,
+		PromptVersion:           value.AutomationPromptVersionV1,
+		PromptSnapshot:          promptSnapshot,
+		PromptSHA256:            promptHash[:],
+		CallbackContractVersion: value.AutomationCallbackContractV1,
+		IdempotencyKey:          command.IdempotencyKey,
+		CommandHash:             commandHash,
+		Now:                     now,
+	})
+}
+
+func (svc *AutomationService) ListSchedules(ctx context.Context, actor AuthenticatedActor, projectID int64, limit int) ([]entity.AutomationSchedule, error) {
+	authorized, err := svc.authorizeOwner(actor)
+	if err != nil {
+		return nil, err
+	}
+	if projectID <= 0 {
+		return nil, errors.New("project is required")
+	}
+	return svc.cfg.Repository.ListSchedules(ctx, projectID, authorized.UserID, limit)
+}
+
+func (svc *AutomationService) GetSchedule(ctx context.Context, actor AuthenticatedActor, publicID string, projectID int64) (entity.AutomationSchedule, error) {
+	authorized, err := svc.authorizeOwner(actor)
+	if err != nil {
+		return entity.AutomationSchedule{}, err
+	}
+	return svc.cfg.Repository.GetSchedule(ctx, strings.TrimSpace(publicID), projectID, authorized.UserID)
+}
+
+func (svc *AutomationService) RunNow(ctx context.Context, command RunAutomationNowCommand) (RunAutomationNowResult, error) {
+	if !svc.Available() || !svc.cfg.RuntimeReady || svc.cfg.Dispatcher == nil || svc.cfg.Publisher == nil {
+		return RunAutomationNowResult{}, errors.New("automation runtime is not ready")
+	}
+	actor, err := svc.authorizeOwner(command.Actor)
+	if err != nil {
+		return RunAutomationNowResult{}, err
+	}
+	command.ScheduleID = strings.TrimSpace(command.ScheduleID)
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if command.ProjectID <= 0 || command.ScheduleID == "" || command.IdempotencyKey == "" {
+		return RunAutomationNowResult{}, errors.New("automation run scope and idempotency key are required")
+	}
+	now := svc.cfg.Now().UTC()
+	occurrencePublicID := newAutomationID("occurrence")
+	runPublicID := newAutomationID("scheduled-run")
+	run, created, err := svc.cfg.Repository.CreateManualRun(ctx, automationsrepo.CreateManualRunInput{
+		SchedulePublicID:      command.ScheduleID,
+		ProjectID:             command.ProjectID,
+		OwnerMattermostUserID: actor.UserID,
+		IdempotencyKey:        command.IdempotencyKey,
+		OccurrencePublicID:    occurrencePublicID,
+		RunPublicID:           runPublicID,
+		ScheduledFor:          now,
+		CallbackExpiresAt:     now.Add(defaultAutomationCallbackTTL),
+		RuntimeRunID:          automationRuntimeRunID(runPublicID),
+	})
+	if err != nil {
+		return RunAutomationNowResult{}, err
+	}
+	duplicate := !created
+	if automationRunTerminal(run.Status) || run.Status == string(value.AutomationRunStatusRunning) {
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, nil
+	}
+
+	schedule, err := svc.cfg.Repository.GetSchedule(ctx, command.ScheduleID, command.ProjectID, actor.UserID)
+	if err != nil {
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
+	}
+	project, role, chat, err := svc.validateTarget(ctx, schedule.ProjectID, schedule.TargetAgentRoleID, schedule.TargetChatID)
+	if err != nil {
+		return svc.failRun(ctx, run, actor, "Цель расписания больше недоступна", err)
+	}
+	if run.ProjectID != project.ID || run.TargetAgentRoleID != role.ID || run.TargetChatID != chat.ID || run.OwnerMattermostUserID != actor.UserID {
+		return svc.failRun(ctx, run, actor, "Привязка запуска не совпала с расписанием", automationsrepo.ErrForbidden)
+	}
+
+	postRef := MattermostPostRef{ChannelID: run.MattermostChannelID, PostID: run.MattermostRootPostID}
+	if strings.TrimSpace(postRef.PostID) == "" {
+		postRef, err = svc.cfg.Publisher.PostThreadMessage(ctx, MattermostThreadPostInput{
+			ChannelID:     chat.MattermostChannelID,
+			Message:       agentNoTriggerMessage(fmt.Sprintf("Запущена автоматизация «%s» (%s). Ход выполнения публикуется в этом треде.", schedule.Name, run.PublicID)),
+			IdempotencyID: run.PublicID,
+			Props: map[string]any{
+				"mattercodex_automation_run_id": run.PublicID,
+				"mattercodex_system":            true,
+			},
+		})
+		if err != nil {
+			return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
+		}
+		if strings.TrimSpace(postRef.PostID) == "" || strings.TrimSpace(postRef.ChannelID) != strings.TrimSpace(chat.MattermostChannelID) {
+			return RunAutomationNowResult{Run: run, Duplicate: duplicate}, automationsrepo.ErrForbidden
+		}
+		run, err = svc.cfg.Repository.RecordRunThread(ctx, automationsrepo.RecordRunThreadInput{
+			RunPublicID:           run.PublicID,
+			ProjectID:             run.ProjectID,
+			OwnerMattermostUserID: actor.UserID,
+			MattermostChannelID:   postRef.ChannelID,
+			MattermostRootPostID:  postRef.PostID,
+			Now:                   svc.cfg.Now().UTC(),
+		})
+		if err != nil {
+			return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
+		}
+	} else if strings.TrimSpace(postRef.ChannelID) != strings.TrimSpace(chat.MattermostChannelID) {
+		return svc.failRun(ctx, run, actor, "Сохранённая привязка треда не совпала с целью расписания", automationsrepo.ErrForbidden)
+	}
+
+	prompt, err := renderAutomationPrompt(schedule, run)
+	if err != nil {
+		return svc.failRun(ctx, run, actor, "Не удалось подготовить playbook", err)
+	}
+	repositories, err := svc.cfg.Catalog.ListProjectRepositories(ctx, project.ID)
+	if err != nil {
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
+	}
+	queued, err := svc.cfg.Dispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
+		Project:        project,
+		Chat:           chat,
+		Role:           role,
+		Repositories:   repositories,
+		UserID:         actor.UserID,
+		UserName:       actor.UserName,
+		UserMessage:    "Выполнить сохранённый playbook автоматизации",
+		SourcePostID:   postRef.PostID,
+		ReplyRootID:    postRef.PostID,
+		SessionRootID:  postRef.PostID,
+		SessionScope:   automationSessionScope,
+		PreparedPrompt: prompt,
+		RequestedRunID: run.RuntimeRunID,
+	})
+	if err != nil {
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
+	}
+	if queued.RunID != run.RuntimeRunID || queued.TurnID <= 0 || strings.TrimSpace(queued.SessionKey) == "" {
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, automationsrepo.ErrConflict
+	}
+	bound, err := svc.cfg.Repository.BindRun(ctx, automationsrepo.BindRunInput{
+		RunPublicID:           run.PublicID,
+		ProjectID:             project.ID,
+		OwnerMattermostUserID: actor.UserID,
+		RuntimeSessionID:      queued.SessionID,
+		RuntimeSessionKey:     queued.SessionKey,
+		RuntimeTurnID:         queued.TurnID,
+		RuntimeRunID:          queued.RunID,
+		MattermostChannelID:   postRef.ChannelID,
+		MattermostRootPostID:  postRef.PostID,
+		Now:                   svc.cfg.Now().UTC(),
+	})
+	if err != nil {
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
+	}
+	return RunAutomationNowResult{Run: bound, Duplicate: duplicate}, nil
+}
+
+func (svc *AutomationService) GetRun(ctx context.Context, actor AuthenticatedActor, publicID string, projectID int64) (entity.ScheduledRun, error) {
+	authorized, err := svc.authorizeOwner(actor)
+	if err != nil {
+		return entity.ScheduledRun{}, err
+	}
+	return svc.cfg.Repository.GetRun(ctx, strings.TrimSpace(publicID), projectID, authorized.UserID)
+}
+
+func (svc *AutomationService) ListRuns(ctx context.Context, actor AuthenticatedActor, schedulePublicID string, projectID int64, limit int) ([]entity.ScheduledRun, error) {
+	authorized, err := svc.authorizeOwner(actor)
+	if err != nil {
+		return nil, err
+	}
+	return svc.cfg.Repository.ListRuns(ctx, strings.TrimSpace(schedulePublicID), projectID, authorized.UserID, limit)
+}
+
+func (svc *AutomationService) CompleteCallback(ctx context.Context, command AutomationCallbackCommand) (AutomationCallbackResult, error) {
+	if !svc.Available() {
+		return AutomationCallbackResult{}, errors.New("automation storage is not ready")
+	}
+	if !validAutomationPublicID(command.RunPublicID, "scheduled-run") || command.AuthenticatedProjectID <= 0 || command.AuthenticatedSessionID <= 0 || !validAutomationSessionKey(command.AuthenticatedSessionKey) {
+		return AutomationCallbackResult{}, automationsrepo.ErrForbidden
+	}
+	if command.CallbackContractVersion != value.AutomationCallbackContractV1 {
+		return AutomationCallbackResult{}, automationsrepo.ErrForbidden
+	}
+	status := string(value.AutomationRunStatusSucceeded)
+	switch value.AutomationRunOutcome(command.Outcome) {
+	case value.AutomationRunOutcomeNoAction, value.AutomationRunOutcomeActionTaken, value.AutomationRunOutcomeRequiresHuman:
+	case value.AutomationRunOutcomeFailed:
+		status = string(value.AutomationRunStatusFailed)
+	default:
+		return AutomationCallbackResult{}, errors.New("unsupported automation outcome")
+	}
+	if err := validateAutomationCallbackSummary(command.AgentSummary); err != nil {
+		return AutomationCallbackResult{}, err
+	}
+	if len(command.ExactPayload) == 0 || len(command.ExactPayload) > maxAutomationCallbackPayloadBytes {
+		return AutomationCallbackResult{}, errors.New("automation callback payload is missing or exceeds the contract")
+	}
+	payloadHash := automationCallbackPayloadHash(command.ExactPayload)
+	safeSummary := automationServerSummary(command.Outcome)
+	if safeSummary == "" {
+		return AutomationCallbackResult{}, errors.New("automation callback summary is required")
+	}
+	run, duplicate, err := svc.cfg.Repository.CompleteCallback(ctx, automationsrepo.CompleteCallbackInput{
+		RunPublicID:             command.RunPublicID,
+		AuthenticatedProjectID:  command.AuthenticatedProjectID,
+		AuthenticatedSessionID:  command.AuthenticatedSessionID,
+		AuthenticatedSessionKey: command.AuthenticatedSessionKey,
+		CallbackContractVersion: command.CallbackContractVersion,
+		Status:                  status,
+		Outcome:                 command.Outcome,
+		SafeSummary:             safeSummary,
+		PayloadSHA256:           payloadHash,
+		Now:                     svc.cfg.Now().UTC(),
+	})
+	return AutomationCallbackResult{Run: run, Duplicate: duplicate}, err
+}
+
+func (svc *AutomationService) ReconcileRuntimeTerminal(ctx context.Context, command AutomationRuntimeTerminalCommand) error {
+	if !svc.Available() {
+		return errors.New("automation storage is not ready")
+	}
+	if command.ProjectID <= 0 || command.RuntimeSessionID <= 0 || command.RuntimeTurnID <= 0 || strings.TrimSpace(command.RuntimeRunID) == "" {
+		return automationsrepo.ErrForbidden
+	}
+	summary := automationRuntimeTerminalSummary(command.RuntimeStatus)
+	if summary == "" {
+		return errors.New("automation runtime status is not terminal")
+	}
+	_, _, err := svc.cfg.Repository.ReconcileRuntimeTerminal(ctx, automationsrepo.ReconcileRuntimeTerminalInput{
+		ProjectID:        command.ProjectID,
+		RuntimeSessionID: command.RuntimeSessionID,
+		RuntimeTurnID:    command.RuntimeTurnID,
+		RuntimeRunID:     command.RuntimeRunID,
+		RuntimeStatus:    command.RuntimeStatus,
+		SafeSummary:      summary,
+		Now:              svc.cfg.Now().UTC(),
+	})
+	return err
+}
+
+func (svc *AutomationService) validateTarget(ctx context.Context, projectID int64, roleID int64, chatID int64) (entity.Project, entity.AgentRole, entity.Chat, error) {
+	project, err := svc.cfg.Catalog.GetProject(ctx, projectID)
+	if err != nil {
+		return entity.Project{}, entity.AgentRole{}, entity.Chat{}, fmt.Errorf("get automation project: %w", err)
+	}
+	role, err := svc.cfg.Catalog.GetAgentRole(ctx, roleID)
+	if err != nil {
+		return entity.Project{}, entity.AgentRole{}, entity.Chat{}, fmt.Errorf("get automation agent role: %w", err)
+	}
+	chat, err := svc.cfg.Catalog.GetChat(ctx, chatID)
+	if err != nil {
+		return entity.Project{}, entity.AgentRole{}, entity.Chat{}, fmt.Errorf("get automation chat: %w", err)
+	}
+	if role.ProjectID != project.ID || chat.ProjectID != project.ID || !role.Enabled || strings.TrimSpace(chat.MattermostChannelID) == "" {
+		return entity.Project{}, entity.AgentRole{}, entity.Chat{}, automationsrepo.ErrForbidden
+	}
+	participants, err := svc.cfg.Catalog.ListChatParticipants(ctx, chat.ID)
+	if err != nil {
+		return entity.Project{}, entity.AgentRole{}, entity.Chat{}, fmt.Errorf("list automation chat participants: %w", err)
+	}
+	for _, participant := range participants {
+		if participant.RoleID == role.ID && participant.Enabled {
+			return project, role, chat, nil
+		}
+	}
+	return entity.Project{}, entity.AgentRole{}, entity.Chat{}, automationsrepo.ErrForbidden
+}
+
+func (svc *AutomationService) authorizeOwner(actor AuthenticatedActor) (AuthenticatedActor, error) {
+	if svc == nil || !svc.Available() {
+		return AuthenticatedActor{}, errors.New("automation storage is not ready")
+	}
+	actor.UserID = strings.TrimSpace(actor.UserID)
+	actor.UserName = normalizeMattermostUsername(actor.UserName)
+	owner := normalizeMattermostUsername(svc.cfg.OwnerMattermostUsername)
+	if actor.UserID == "" || actor.UserName == "" || owner == "" || actor.UserName != owner {
+		return AuthenticatedActor{}, automationsrepo.ErrForbidden
+	}
+	return actor, nil
+}
+
+func (svc *AutomationService) failRun(ctx context.Context, run entity.ScheduledRun, actor AuthenticatedActor, safeSummary string, cause error) (RunAutomationNowResult, error) {
+	failed, failErr := svc.cfg.Repository.FailRun(ctx, automationsrepo.FailRunInput{
+		RunPublicID:           run.PublicID,
+		ProjectID:             run.ProjectID,
+		OwnerMattermostUserID: actor.UserID,
+		SafeSummary:           safeSummary,
+		Now:                   svc.cfg.Now().UTC(),
+	})
+	if failErr != nil {
+		return RunAutomationNowResult{}, errors.Join(cause, failErr)
+	}
+	return RunAutomationNowResult{Run: failed}, cause
+}
+
+func nextDailyAutomationRun(now time.Time, localTime string, timeZone string) (time.Time, error) {
+	parsed, err := time.Parse("15:04", localTime)
+	if err != nil {
+		return time.Time{}, errors.New("automation local time must use HH:MM")
+	}
+	location, err := loadAutomationTimeZone(timeZone)
+	if err != nil {
+		return time.Time{}, errors.New("automation time zone is invalid")
+	}
+	localNow := now.In(location)
+	next := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), parsed.Hour(), parsed.Minute(), 0, 0, location)
+	if !next.After(localNow) {
+		next = time.Date(localNow.Year(), localNow.Month(), localNow.Day()+1, parsed.Hour(), parsed.Minute(), 0, 0, location)
+	}
+	return next.UTC(), nil
+}
+
+func loadAutomationTimeZone(name string) (*time.Location, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || name == "Local" || len(name) > 100 || (name != "UTC" && !strings.Contains(name, "/")) {
+		return nil, errors.New("unsupported IANA time zone")
+	}
+	return time.LoadLocation(name)
+}
+
+func renderAutomationPrompt(schedule entity.AutomationSchedule, run entity.ScheduledRun) (string, error) {
+	expectedHash := sha256.Sum256([]byte(strings.TrimSpace(schedule.PromptSnapshot)))
+	if !bytes.Equal(expectedHash[:], schedule.PromptSHA256) {
+		return "", errors.New("automation prompt snapshot checksum mismatch")
+	}
+	playbookTemplate, err := template.New("automation_playbook_snapshot").Parse(schedule.PromptSnapshot)
+	if err != nil {
+		return "", fmt.Errorf("parse automation playbook snapshot: %w", err)
+	}
+	var body bytes.Buffer
+	err = playbookTemplate.Execute(&body, map[string]string{
+		"RunPublicID":             run.PublicID,
+		"ScheduleName":            schedule.Name,
+		"ProjectName":             schedule.ProjectName,
+		"PlaybookKey":             schedule.PlaybookKey,
+		"CallbackContractVersion": schedule.CallbackContractVersion,
+	})
+	if err != nil {
+		return "", fmt.Errorf("render automation playbook: %w", err)
+	}
+	return strings.TrimSpace(body.String()), nil
+}
+
+func validateAutomationCallbackSummary(summary string) error {
+	if !utf8.ValidString(summary) || strings.TrimSpace(summary) == "" {
+		return errors.New("automation callback summary is required")
+	}
+	if len(summary) > maxAutomationCallbackBytes || utf8.RuneCountInString(summary) > maxAutomationCallbackRunes {
+		return errors.New("automation callback summary exceeds the contract")
+	}
+	if strings.ContainsRune(summary, '\x00') || strings.ContainsRune(summary, '\r') {
+		return errors.New("automation callback summary contains a disallowed control character")
+	}
+	return nil
+}
+
+func automationServerSummary(outcome string) string {
+	switch value.AutomationRunOutcome(outcome) {
+	case value.AutomationRunOutcomeNoAction:
+		return "Автоматизация завершена: действий не требуется."
+	case value.AutomationRunOutcomeActionTaken:
+		return "Автоматизация завершена: действие выполнено."
+	case value.AutomationRunOutcomeRequiresHuman:
+		return "Автоматизация завершена: требуется решение человека."
+	case value.AutomationRunOutcomeFailed:
+		return "Автоматизация завершилась ошибкой."
+	default:
+		return ""
+	}
+}
+
+func automationRuntimeTerminalSummary(status string) string {
+	switch status {
+	case agentSessionTurnSucceeded:
+		return "Среда выполнения завершилась без принятого результата автоматизации."
+	case agentSessionTurnFailed:
+		return "Среда выполнения автоматизации завершилась ошибкой."
+	case agentSessionTurnBlocked:
+		return "Среда выполнения автоматизации была заблокирована."
+	case agentSessionTurnCanceled:
+		return "Выполнение автоматизации было остановлено."
+	default:
+		return ""
+	}
+}
+
+func automationCallbackPayloadHash(exactPayload []byte) []byte {
+	hash := sha256.New()
+	_, _ = hash.Write([]byte("mattercodex.automation.callback.v1\x00"))
+	_, _ = hash.Write(exactPayload)
+	return hash.Sum(nil)
+}
+
+func validAutomationPublicID(publicID string, prefix string) bool {
+	expectedPrefix := prefix + "-"
+	if len(publicID) != len(expectedPrefix)+32 || !strings.HasPrefix(publicID, expectedPrefix) {
+		return false
+	}
+	_, err := hex.DecodeString(publicID[len(expectedPrefix):])
+	return err == nil
+}
+
+func validAutomationSessionKey(sessionKey string) bool {
+	return sessionKey != "" && len(sessionKey) <= 512 && strings.TrimSpace(sessionKey) == sessionKey && !strings.ContainsAny(sessionKey, "\x00\r\n")
+}
+
+func automationRunTerminal(status string) bool {
+	return status == string(value.AutomationRunStatusSucceeded) || status == string(value.AutomationRunStatusFailed)
+}
+
+func automationRuntimeRunID(runPublicID string) string {
+	hash := sha256.Sum256([]byte(runPublicID))
+	return "automation-runtime-" + hex.EncodeToString(hash[:])
+}
+
+func automationCommandHash(value any) ([]byte, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("encode automation command hash: %w", err)
+	}
+	hash := sha256.Sum256(encoded)
+	return hash[:], nil
+}
+
+func newAutomationID(prefix string) string {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		panic(fmt.Sprintf("generate automation id: %v", err))
+	}
+	return prefix + "-" + hex.EncodeToString(raw)
+}
+
+func normalizeMattermostUsername(username string) string {
+	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(username), "@"))
+}
+
+func mustAutomationPlaybook() string {
+	body, err := automationPlaybookFiles.ReadFile("automation_playbook.md")
+	if err != nil {
+		panic(err)
+	}
+	return strings.TrimSpace(string(body))
+}

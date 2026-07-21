@@ -118,17 +118,18 @@ type SlashCommand struct {
 }
 
 type MenuActionCommand struct {
-	View      string
-	Command   string
-	Dialog    string
-	Action    string
-	Resource  string
-	ID        string
-	Page      int
-	UserID    string
-	UserName  string
-	ChannelID string
-	PostID    string
+	View           string
+	Command        string
+	Dialog         string
+	Action         string
+	Resource       string
+	ID             string
+	IdempotencyKey string
+	Page           int
+	UserID         string
+	UserName       string
+	ChannelID      string
+	PostID         string
 }
 
 type MenuActionResult struct {
@@ -167,6 +168,7 @@ type SlashCommandServiceConfig struct {
 	GitHubRepositoryProvider providerrepo.GitHubAccountRepositoryProvider
 	GitHubAccountInspector   providerrepo.GitHubAccountInspector
 	ThreadRepositorySelector ThreadRepositorySelector
+	Automations              *AutomationService
 	RuntimeRunner            runtimerepo.Runner
 	DefaultTeamName          string
 	OwnerMattermostUsername  string
@@ -1272,6 +1274,8 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 	switch action {
 	case menuActionList:
 		switch resource {
+		case menuResourceAutomationSchedule:
+			return svc.menuCardResult(command, svc.automationScheduleListCard(ctx, command))
 		case menuResourceProject:
 			return svc.menuCardResult(command, svc.projectListCard(ctx, command))
 		case menuResourceRepository:
@@ -1297,6 +1301,10 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 		}
 	case menuActionShow:
 		switch resource {
+		case menuResourceAutomationSchedule:
+			return svc.menuCardResult(command, svc.automationScheduleCard(ctx, command))
+		case menuResourceAutomationRun:
+			return svc.menuCardResult(command, svc.automationRunEntityCard(ctx, command))
 		case menuResourceProject:
 			return svc.menuCardResult(command, svc.projectEntityCard(ctx, command))
 		case menuResourceRepository:
@@ -1413,6 +1421,10 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 		return svc.menuCardResult(command, svc.updateProfileEnabledCard(ctx, command, true))
 	case menuActionProfileDisable:
 		return svc.menuCardResult(command, svc.updateProfileEnabledCard(ctx, command, false))
+	case menuActionAutomationHistory:
+		return svc.menuCardResult(command, svc.automationHistoryCard(ctx, command))
+	case menuActionAutomationRunNow:
+		return svc.menuCardResult(command, svc.automationRunNowCard(ctx, command))
 	default:
 		return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
 	}
@@ -2573,6 +2585,8 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.state_invalid", nil)}
 	}
 	switch strings.TrimSpace(command.CallbackID) {
+	case dialogCallbackAutomationCreate:
+		return svc.handleAutomationCreateDialog(ctx, command, state)
 	case dialogCallbackProjectUpsert:
 		return svc.handleProjectDialogUpsert(ctx, command, state)
 	case dialogCallbackProjectRepositoryBind:
@@ -2634,6 +2648,8 @@ func (svc *SlashCommandService) PrevalidateDialogSubmission(command DialogSubmis
 	}
 	fieldErrors := map[string]string{}
 	switch strings.TrimSpace(command.CallbackID) {
+	case dialogCallbackAutomationCreate:
+		_, fieldErrors = svc.automationDialogInput(command.Submission)
 	case dialogCallbackProjectUpsert:
 		input, validationErrors := svc.projectDialogInput(command.Submission)
 		fieldErrors = validationErrors
@@ -2765,6 +2781,15 @@ func (svc *SlashCommandService) PrevalidateDialogSubmissionReadOnly(ctx context.
 	}
 	fieldErrors := map[string]string{}
 	switch strings.TrimSpace(command.CallbackID) {
+	case dialogCallbackAutomationCreate:
+		input, _ := svc.automationDialogInput(command.Submission)
+		if svc.cfg.Automations == nil {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("automation.unavailable", nil)}
+		}
+		if _, _, _, targetErr := svc.cfg.Automations.validateTarget(ctx, input.ProjectID, input.RoleID, input.ChatID); targetErr != nil {
+			fieldErrors[dialogFieldAutomationRole] = svc.t("automation.validation.binding", nil)
+			fieldErrors[dialogFieldAutomationChat] = svc.t("automation.validation.binding", nil)
+		}
 	case dialogCallbackProjectUpsert:
 		input, _ := svc.projectDialogInput(command.Submission)
 		if strings.TrimSpace(state.ResourceID) != "" {
@@ -2872,6 +2897,8 @@ func (svc *SlashCommandService) menuDialog(ctx context.Context, command MenuActi
 		return nil, svc.t("dialog.open.not_configured", nil)
 	}
 	switch dialogID {
+	case menuDialogAutomationCreate:
+		return svc.automationCreateDialog(ctx, command)
 	case menuDialogProjectUpsert:
 		return svc.projectDialog(ctx, command)
 	case menuDialogProjectRepositoryBind:
@@ -3925,12 +3952,13 @@ func (svc *SlashCommandService) dialogResultCard(ctx context.Context, state matt
 
 func mattermostDialogCommand(state mattermostDialogState, command DialogSubmissionCommand) MenuActionCommand {
 	return MenuActionCommand{
-		View:      state.View,
-		ID:        state.ResourceID,
-		UserID:    command.UserID,
-		UserName:  defaultString(command.UserName, state.UserName),
-		ChannelID: defaultString(state.ChannelID, command.ChannelID),
-		PostID:    state.PostID,
+		View:           state.View,
+		ID:             state.ResourceID,
+		IdempotencyKey: state.IdempotencyKey,
+		UserID:         command.UserID,
+		UserName:       defaultString(command.UserName, state.UserName),
+		ChannelID:      defaultString(state.ChannelID, command.ChannelID),
+		PostID:         state.PostID,
 	}
 }
 
@@ -3982,6 +4010,8 @@ func menuCommandPrivateOutput(command string) bool {
 
 func (svc *SlashCommandService) menuText(view string) string {
 	switch view {
+	case menuViewAutomations:
+		return svc.t("menu.automations.text", nil)
 	case menuViewProjects:
 		return svc.t("menu.projects.text", nil)
 	case menuViewRepositories:
@@ -4069,6 +4099,7 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 	case menuViewMain:
 		return []MattermostCardAction{
 			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "primary"),
+			svc.menuAction(menuViewAutomations, "menu.action.automations", "menu.action.automations.tooltip", "primary"),
 			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
 			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
 			svc.menuAction(menuViewRoles, "menu.action.roles", "menu.action.roles.tooltip", "default"),
@@ -4083,6 +4114,12 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 			svc.menuDialogAction(menuViewProjects, "dialogprojectadd", menuDialogProjectUpsert, "menu.action.project_add", "menu.action.project_add.tooltip", "primary"),
 			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
 			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewAutomations:
+		return []MattermostCardAction{
+			svc.menuResourceAction(menuViewAutomations, "automationlist", menuActionList, menuResourceAutomationSchedule, "", "automation.action.list", "automation.action.list.tooltip", "primary", nil),
+			svc.automationCreateAction(),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewAccounts:
@@ -4619,22 +4656,24 @@ func (svc *SlashCommandService) validationErrorText(err error) string {
 }
 
 type mattermostDialogState struct {
-	View         string `json:"view"`
-	ResourceType string `json:"resource_type,omitempty"`
-	ResourceID   string `json:"resource_id,omitempty"`
-	ChannelID    string `json:"channel_id"`
-	PostID       string `json:"post_id"`
-	UserName     string `json:"user_name"`
+	View           string `json:"view"`
+	ResourceType   string `json:"resource_type,omitempty"`
+	ResourceID     string `json:"resource_id,omitempty"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	ChannelID      string `json:"channel_id"`
+	PostID         string `json:"post_id"`
+	UserName       string `json:"user_name"`
 }
 
 func encodeDialogState(command MenuActionCommand) string {
 	state := mattermostDialogState{
-		View:         normalizeMenuView(command.View),
-		ResourceType: strings.TrimSpace(command.Resource),
-		ResourceID:   strings.TrimSpace(command.ID),
-		ChannelID:    strings.TrimSpace(command.ChannelID),
-		PostID:       strings.TrimSpace(command.PostID),
-		UserName:     strings.TrimSpace(command.UserName),
+		View:           normalizeMenuView(command.View),
+		ResourceType:   strings.TrimSpace(command.Resource),
+		ResourceID:     strings.TrimSpace(command.ID),
+		IdempotencyKey: strings.TrimSpace(command.IdempotencyKey),
+		ChannelID:      strings.TrimSpace(command.ChannelID),
+		PostID:         strings.TrimSpace(command.PostID),
+		UserName:       strings.TrimSpace(command.UserName),
 	}
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -4654,6 +4693,7 @@ func decodeDialogState(raw string) (mattermostDialogState, error) {
 	state.View = normalizeMenuView(defaultString(state.View, menuViewRepositories))
 	state.ResourceType = strings.TrimSpace(state.ResourceType)
 	state.ResourceID = strings.TrimSpace(state.ResourceID)
+	state.IdempotencyKey = strings.TrimSpace(state.IdempotencyKey)
 	state.ChannelID = strings.TrimSpace(state.ChannelID)
 	state.PostID = strings.TrimSpace(state.PostID)
 	state.UserName = strings.TrimSpace(state.UserName)
@@ -4985,6 +5025,8 @@ func validSandboxMode(value string) bool {
 
 func normalizeMenuView(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
+	case menuViewAutomations:
+		return menuViewAutomations
 	case menuViewProjects:
 		return menuViewProjects
 	case menuViewRepositories:

@@ -729,7 +729,7 @@ func allowedInteractionMenuView(view string) bool {
 	switch view {
 	case menuViewMain, menuViewRepositories, menuViewAccounts, menuViewOpenAI, menuViewGitHub,
 		menuViewProfiles, menuViewPrompts, menuViewRuntime, menuViewSystem, menuViewHelp,
-		menuViewProjects, menuViewRoles, menuViewChats, menuViewAdvanced:
+		menuViewProjects, menuViewRoles, menuViewChats, menuViewAdvanced, menuViewAutomations:
 		return true
 	default:
 		return false
@@ -749,11 +749,11 @@ func menuActionResourceAllowed(action string, resourceType string, resourceID st
 	case menuActionList:
 		return allowed(menuResourceProject, menuResourceRepository, menuResourceAgentRole, menuResourceChat,
 			menuResourceRuntimeVar, menuResourceOpenAIAccount, menuResourceGitHubAccount, menuResourceProfile,
-			menuResourcePromptTemplate, menuResourceRun)
+			menuResourcePromptTemplate, menuResourceRun, menuResourceAutomationSchedule)
 	case menuActionShow:
 		return allowed(menuResourceProject, menuResourceRepository, menuResourceAgentRole, menuResourceChat,
 			menuResourceRuntimeVar, menuResourceOpenAIAccount, menuResourceGitHubAccount, menuResourceProfile,
-			menuResourcePromptTemplate, menuResourceRun)
+			menuResourcePromptTemplate, menuResourceRun, menuResourceAutomationSchedule, menuResourceAutomationRun)
 	case menuActionConfirmDelete, menuActionDelete:
 		return allowed(menuResourceRepository, menuResourceRuntimeVar, menuResourceOpenAIAccount, menuResourceGitHubAccount)
 	case menuActionCancel:
@@ -782,6 +782,8 @@ func menuActionResourceAllowed(action string, resourceType string, resourceID st
 		return allowed(menuResourceProject)
 	case menuActionThreadRepositorySelect:
 		return allowed(menuResourceThreadContext)
+	case menuActionAutomationHistory, menuActionAutomationRunNow:
+		return allowed(menuResourceAutomationSchedule)
 	default:
 		return false
 	}
@@ -800,6 +802,8 @@ func menuDialogResourceAllowed(dialog string, resourceType string, resourceID st
 		return false
 	}
 	switch dialog {
+	case menuDialogAutomationCreate:
+		return allowed(true)
 	case menuDialogRepositoryAdd, menuDialogRepositorySearch:
 		return allowed(true, menuResourceProject, menuResourceGitHubAccount)
 	case menuDialogRepositoryEdit, menuDialogRepositoryDelete:
@@ -846,6 +850,8 @@ func dialogCallbackResourceAllowed(callbackID string, resourceType string, resou
 		return false
 	}
 	switch callbackID {
+	case dialogCallbackAutomationCreate:
+		return allowed(true)
 	case interactionDialogCallbackResult:
 		return allowed(true)
 	case dialogCallbackRepositoryAdd:

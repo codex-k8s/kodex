@@ -97,6 +97,49 @@ type mcpOwnerAttentionInput struct {
 	IdempotencyKey string   `json:"idempotency_key" jsonschema:"stable key preventing duplicate notifications for the same decision"`
 }
 
+type mcpAutomationCallbackInput struct {
+	ScheduleRunID    string `json:"schedule_run_id" jsonschema:"public id of the scheduled automation run from the saved playbook"`
+	CallbackContract string `json:"callback_contract" jsonschema:"callback contract version from the saved playbook"`
+	Outcome          string `json:"outcome" jsonschema:"one of no_action, action_taken, requires_human, or failed"`
+	Summary          string `json:"summary" jsonschema:"brief safe result without secrets or raw prompts, max 1000 characters"`
+}
+
+type mcpAutomationCallbackOutput struct {
+	ScheduleRunID string `json:"schedule_run_id"`
+	Status        string `json:"status"`
+	Outcome       string `json:"outcome"`
+	Duplicate     bool   `json:"duplicate"`
+}
+
+func automationCallbackInputSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"schedule_run_id", "callback_contract", "outcome", "summary"},
+		"properties": map[string]any{
+			"schedule_run_id": map[string]any{
+				"type": "string", "minLength": 46, "maxLength": 46,
+				"pattern":     "^scheduled-run-[a-f0-9]{32}$",
+				"description": "public id of the scheduled automation run from the saved playbook",
+			},
+			"callback_contract": map[string]any{
+				"type": "string", "minLength": 22, "maxLength": 22,
+				"enum":        []string{"automation.callback.v1"},
+				"description": "callback contract version from the saved playbook",
+			},
+			"outcome": map[string]any{
+				"type": "string", "minLength": 6, "maxLength": 14,
+				"enum":        []string{"no_action", "action_taken", "requires_human", "failed"},
+				"description": "terminal automation outcome",
+			},
+			"summary": map[string]any{
+				"type": "string", "minLength": 1, "maxLength": 1000,
+				"description": "bounded agent detail used only for exact replay identity; the server stores its own safe summary",
+			},
+		},
+	}
+}
+
 func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBodyBytes int64) http.Handler {
 	if maximumBodyBytes <= 0 {
 		maximumBodyBytes = defaultMCPRequestBodyBytes
@@ -326,6 +369,32 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBod
 			return mcpToolError(err.Error()), emptyMCPWorkClaim(), nil
 		}
 		return nil, output, nil
+	})
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "mattermost_complete_automation",
+		Description: "Complete the exactly bound scheduled automation run. The first callback requires the authenticated live session and turn; an accepted identical replay uses the persisted binding and exact payload hash.",
+		InputSchema: automationCallbackInputSchema(),
+	}, func(ctx context.Context, request *mcp.CallToolRequest, input mcpAutomationCallbackInput) (*mcp.CallToolResult, mcpAutomationCallbackOutput, error) {
+		sessionKey, token, ok := mcpSessionAuth(ctx)
+		if !ok {
+			return mcpToolError("session authorization is missing"), mcpAutomationCallbackOutput{}, nil
+		}
+		output, err := sessionService.CompleteAutomationCallback(ctx, sessionKey, token, statusservice.CompleteAutomationCallbackCommand{
+			RunPublicID:             input.ScheduleRunID,
+			CallbackContractVersion: input.CallbackContract,
+			Outcome:                 input.Outcome,
+			AgentSummary:            input.Summary,
+			ExactPayload:            append([]byte(nil), request.Params.Arguments...),
+		})
+		if err != nil {
+			return mcpToolError("automation callback rejected"), mcpAutomationCallbackOutput{}, nil
+		}
+		return nil, mcpAutomationCallbackOutput{
+			ScheduleRunID: output.Run.PublicID,
+			Status:        output.Run.Status,
+			Outcome:       output.Run.Outcome,
+			Duplicate:     output.Duplicate,
+		}, nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_request_owner_attention",

@@ -23,6 +23,15 @@ insert into matter_codex_agent_session_turns (
 	$8,
 	$9
 )
+on conflict (run_id) do update
+set run_id = excluded.run_id
+where matter_codex_agent_session_turns.session_id = excluded.session_id
+	and matter_codex_agent_session_turns.mattermost_channel_id = excluded.mattermost_channel_id
+	and matter_codex_agent_session_turns.mattermost_root_post_id = excluded.mattermost_root_post_id
+	and matter_codex_agent_session_turns.mattermost_post_id = excluded.mattermost_post_id
+	and matter_codex_agent_session_turns.user_id = excluded.user_id
+	and matter_codex_agent_session_turns.user_name = excluded.user_name
+	and matter_codex_agent_session_turns.message = excluded.message
 returning
 	id,
 	session_id,

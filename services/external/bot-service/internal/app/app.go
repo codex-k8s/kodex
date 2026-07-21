@@ -18,6 +18,7 @@ import (
 	kubernetesintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/kubernetes"
 	mattermostintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/mattermost"
 	adminpostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
+	automationspostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/automations"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
 	httptransport "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,7 +30,7 @@ const serviceName = "matter-codex-bot-service"
 
 func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	runtimeRunner, runtimeConfigured := openRuntimeRunner(cfg, logger)
-	storage, closeStorage, err := openStorage(ctx, cfg, logger, runtimeRunner)
+	storage, automationStorage, closeStorage, err := openStorage(ctx, cfg, logger, runtimeRunner)
 	if err != nil {
 		return err
 	}
@@ -95,6 +96,16 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		StorageReady:      storage != nil,
 		RuntimeReady:      runtimeConfigured,
 	})
+	automationSvc := statusservice.NewAutomationService(statusservice.AutomationServiceConfig{
+		Repository:              automationStorage,
+		Catalog:                 storage,
+		Dispatcher:              chatRunSvc,
+		Publisher:               threadPublisher,
+		OwnerMattermostUsername: cfg.OwnerMattermostUsername,
+		StorageReady:            automationStorage != nil,
+		RuntimeReady:            runtimeConfigured,
+	})
+	chatRunSvc.SetAutomationRuntimeReconciler(automationSvc)
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
 		Localizer:                localizer,
 		StatusService:            statusSvc,
@@ -105,6 +116,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		GitHubRepositoryProvider: gitHubAccountProvider,
 		GitHubAccountInspector:   gitHubAccountInspector,
 		ThreadRepositorySelector: chatRunSvc,
+		Automations:              automationSvc,
 		RuntimeRunner:            runtimeRunner,
 		DefaultTeamName:          cfg.DefaultTeamName,
 		OwnerMattermostUsername:  cfg.OwnerMattermostUsername,
@@ -126,22 +138,24 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		logger.Warn("system agent role bootstrap failed", "error", err)
 	}
 	sessionSvc := statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{
-		Localizer:                  localizer,
-		Store:                      storage,
-		RuntimeRunner:              runtimeRunner,
-		ThreadPublisher:            threadPublisher,
-		ConversationReader:         controlSurface,
-		RoleBotManager:             roleBotManager,
-		TurnDispatcher:             chatRunSvc,
-		MenuActionURL:              agentsActionURL(cfg),
-		MattermostSiteURL:          cfg.MattermostSiteURL,
-		StorageReady:               storage != nil,
-		RuntimeReady:               runtimeConfigured,
-		CallbackMaxBytes:           cfg.CallbackMaxBytes,
-		CallbackMaxChunks:          cfg.CallbackMaxChunks,
-		CallbackMaxChunkBytes:      cfg.CallbackMaxChunkBytes,
-		CallbackPublishConcurrency: cfg.CallbackPublishConcurrency,
-		CallbackPublishDeadline:    cfg.CallbackPublishDeadline,
+		Localizer:                   localizer,
+		Store:                       storage,
+		RuntimeRunner:               runtimeRunner,
+		ThreadPublisher:             threadPublisher,
+		ConversationReader:          controlSurface,
+		RoleBotManager:              roleBotManager,
+		TurnDispatcher:              chatRunSvc,
+		AutomationCallbacks:         automationSvc,
+		AutomationRuntimeReconciler: automationSvc,
+		MenuActionURL:               agentsActionURL(cfg),
+		MattermostSiteURL:           cfg.MattermostSiteURL,
+		StorageReady:                storage != nil,
+		RuntimeReady:                runtimeConfigured,
+		CallbackMaxBytes:            cfg.CallbackMaxBytes,
+		CallbackMaxChunks:           cfg.CallbackMaxChunks,
+		CallbackMaxChunkBytes:       cfg.CallbackMaxChunkBytes,
+		CallbackPublishConcurrency:  cfg.CallbackPublishConcurrency,
+		CallbackPublishDeadline:     cfg.CallbackPublishDeadline,
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
@@ -421,58 +435,58 @@ func newPrometheusRegistry() *prometheus.Registry {
 	return registry
 }
 
-func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRunner runtimerepo.Runner) (*adminpostgres.Repository, func(), error) {
+func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRunner runtimerepo.Runner) (*adminpostgres.Repository, *automationspostgres.Repository, func(), error) {
 	if !cfg.DatabaseConfigured() {
 		logger.Warn("storage disabled: MATTERCODEX_DATABASE_DSN is not configured")
-		return nil, func() {}, nil
+		return nil, nil, func() {}, nil
 	}
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseDSN)
 	if err != nil {
-		return nil, nil, fmt.Errorf("parse storage pool config: %w", err)
+		return nil, nil, nil, fmt.Errorf("parse storage pool config: %w", err)
 	}
 	if cfg.StorageMigrations {
 		if err := adminpostgres.ProvisionRuntimeDatabaseRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User, poolConfig.ConnConfig.Password); err != nil {
-			return nil, nil, fmt.Errorf("provision runtime database role: %w", err)
+			return nil, nil, nil, fmt.Errorf("provision runtime database role: %w", err)
 		}
 		if err := migrations.RunTo(ctx, cfg.MigrationsDatabaseDSN, 24); err != nil {
-			return nil, nil, fmt.Errorf("run storage migrations through integrity staging schema: %w", err)
+			return nil, nil, nil, fmt.Errorf("run storage migrations through integrity staging schema: %w", err)
 		}
 		blockedSessions, err := prepareClusterAdminSecretIntegrity(ctx, cfg.MigrationsDatabaseDSN, runtimeRunner)
 		if err != nil {
-			return nil, nil, fmt.Errorf("prepare cluster-admin secret integrity: %w", err)
+			return nil, nil, nil, fmt.Errorf("prepare cluster-admin secret integrity: %w", err)
 		}
 		if blockedSessions > 0 {
 			logger.Warn("blocked cluster-admin sessions with missing runtime token secrets", "count", blockedSessions)
 		}
 		if err := migrations.RunForRuntimeRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User); err != nil {
-			return nil, nil, fmt.Errorf("run storage migrations: %w", err)
+			return nil, nil, nil, fmt.Errorf("run storage migrations: %w", err)
 		}
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open storage pool: %w", err)
+		return nil, nil, nil, fmt.Errorf("open storage pool: %w", err)
 	}
 	closePool := func() {
 		pool.Close()
 	}
 	if err := pool.Ping(ctx); err != nil {
 		closePool()
-		return nil, nil, fmt.Errorf("ping storage: %w", err)
+		return nil, nil, nil, fmt.Errorf("ping storage: %w", err)
 	}
 	if err := adminpostgres.ValidateRuntimeDatabaseRole(ctx, pool); err != nil {
 		closePool()
-		return nil, nil, fmt.Errorf("validate runtime database role: %w", err)
+		return nil, nil, nil, fmt.Errorf("validate runtime database role: %w", err)
 	}
 	repo := adminpostgres.NewRepository(pool)
 	seeded, err := statusservice.SeedDefaultAgentPromptTemplates(ctx, repo)
 	if err != nil {
 		closePool()
-		return nil, nil, fmt.Errorf("seed default agent prompt templates: %w", err)
+		return nil, nil, nil, fmt.Errorf("seed default agent prompt templates: %w", err)
 	}
 	if seeded > 0 {
 		logger.Info("seeded default agent prompt templates", "count", seeded)
 	}
-	return repo, closePool, nil
+	return repo, automationspostgres.NewRepository(pool), closePool, nil
 }
 
 type secretIntegrityStagingRow struct {

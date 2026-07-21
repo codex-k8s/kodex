@@ -114,6 +114,7 @@ type AgentTurnRequest struct {
 	TTLSeconds     int
 	PreparedPrompt string
 	ParentTurnID   int64
+	RequestedRunID string
 }
 
 type AgentTurnRetryRequest struct {
@@ -126,6 +127,7 @@ type AgentTurnRetryRequest struct {
 type AgentTurnQueued struct {
 	RunID              string
 	TurnID             int64
+	SessionID          int64
 	SessionKey         string
 	Role               entity.AgentRole
 	CreatedPod         bool
@@ -166,19 +168,20 @@ type ThreadRepositorySelector interface {
 }
 
 type ChatRunServiceConfig struct {
-	Localizer          *texti18n.Localizer
-	Store              adminrepo.Repository
-	RuntimeRunner      runtimerepo.Runner
-	ThreadPublisher    MattermostThreadPublisher
-	BotServiceURL      string
-	MenuActionURL      string
-	MattermostSiteURL  string
-	StorageReady       bool
-	RuntimeReady       bool
-	DisableMonitor     bool
-	MonitorInterval    time.Duration
-	MonitorTimeout     time.Duration
-	CapacityRetryDelay time.Duration
+	Localizer                   *texti18n.Localizer
+	Store                       adminrepo.Repository
+	RuntimeRunner               runtimerepo.Runner
+	ThreadPublisher             MattermostThreadPublisher
+	BotServiceURL               string
+	MenuActionURL               string
+	MattermostSiteURL           string
+	StorageReady                bool
+	RuntimeReady                bool
+	DisableMonitor              bool
+	MonitorInterval             time.Duration
+	MonitorTimeout              time.Duration
+	CapacityRetryDelay          time.Duration
+	AutomationRuntimeReconciler AutomationRuntimeTerminalReconciler
 }
 
 type ChatRunService struct {
@@ -209,6 +212,12 @@ func NewChatRunService(cfg ChatRunServiceConfig) *ChatRunService {
 		cfg.CapacityRetryDelay = defaultCapacityRetryDelay
 	}
 	return &ChatRunService{cfg: cfg}
+}
+
+func (svc *ChatRunService) SetAutomationRuntimeReconciler(reconciler AutomationRuntimeTerminalReconciler) {
+	if svc != nil {
+		svc.cfg.AutomationRuntimeReconciler = reconciler
+	}
 }
 
 func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostCommand) ChatRunResult {
@@ -564,7 +573,12 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 			}
 		}
 	}
-	runID := newChatRunID(request.Chat.ID)
+	runID := request.RequestedRunID
+	if runID == "" {
+		runID = newChatRunID(request.Chat.ID)
+	} else if len(runID) > 200 || strings.TrimSpace(runID) != runID || strings.ContainsAny(runID, "\x00\r\n") {
+		return AgentTurnQueued{}, fmt.Errorf("requested run id is invalid")
+	}
 	var turn entity.AgentSessionTurn
 	err = svc.withClusterAdminRuntimeGuard(ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID, session.SessionKey, "agent_turn.persist.side_effect", func() error {
 		var createErr error
@@ -597,6 +611,10 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 				return fmt.Errorf("bind turn to process: %w", createErr)
 			}
 		}
+		runtimeStatus := turn.Status
+		if runtimeStatus == "" {
+			runtimeStatus = agentSessionTurnQueued
+		}
 		if _, createErr = svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
 			RunID:               runID,
 			FlowID:              "session-" + session.SessionKey,
@@ -607,7 +625,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 			Name:                firstRepository(request.Repositories).Name,
 			BaseBranch:          defaultString(firstRepository(request.Repositories).DefaultBranch, "main"),
 			HeadBranch:          "matter-codex-" + runID,
-			Status:              agentSessionTurnQueued,
+			Status:              runtimeStatus,
 			KubernetesNamespace: started.Namespace,
 			JobName:             started.PodName,
 			PVCName:             started.PVCName,
@@ -625,7 +643,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 			Turn:              turn,
 			RoleName:          request.Role.Name,
 			OpenAIAccountName: openAIAccount.Name,
-			Status:            agentSessionTurnQueued,
+			Status:            runtimeStatus,
 		})
 		return nil
 	})
@@ -635,6 +653,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	return AgentTurnQueued{
 		RunID:              runID,
 		TurnID:             turn.ID,
+		SessionID:          session.ID,
 		SessionKey:         session.SessionKey,
 		Role:               request.Role,
 		CreatedPod:         started.Created,
@@ -732,7 +751,7 @@ func (svc *ChatRunService) EnqueueExistingAgentTurn(ctx context.Context, store a
 		return AgentTurnQueued{}, err
 	}
 	return AgentTurnQueued{
-		RunID: runID, TurnID: turn.ID, SessionKey: current.SessionKey, Role: request.Role,
+		RunID: runID, TurnID: turn.ID, SessionID: current.ID, SessionKey: current.SessionKey, Role: request.Role,
 		PodName: started.PodName, PVCName: started.PVCName,
 	}, nil
 }
@@ -826,6 +845,17 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 			result.Failed++
 			continue
 		}
+		if current.ActiveTurnID > 0 && svc.cfg.AutomationRuntimeReconciler != nil {
+			if repairErr := svc.completeAndReconcileRepairTurn(ctx, current, role, chat, "agent_session.repair_stale_terminal_reconcile.side_effect", "agent runtime became stale before terminal completion", "{}"); repairErr != nil {
+				result.Failed++
+				continue
+			}
+			current, role, chat, subjectErr = svc.loadAgentSessionGuardSubject(ctx, session)
+			if subjectErr != nil {
+				result.Failed++
+				continue
+			}
+		}
 		if guardErr := svc.withClusterAdminPersistenceGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.repair_stale_reset.side_effect", func(guardedStore adminrepo.Repository) error {
 			_, resetErr := guardedStore.ResetAgentSessionRuntime(ctx, current.SessionKey, agentSessionStatusIdle)
 			return resetErr
@@ -879,15 +909,7 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 			result.Failed++
 			continue
 		}
-		if guardErr := svc.withClusterAdminPersistenceGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.repair_running_complete.side_effect", func(guardedStore adminrepo.Repository) error {
-			_, completeErr := guardedStore.CompleteAgentSessionTurn(ctx, adminrepo.CompleteAgentSessionTurnInput{
-				TurnID:       current.ActiveTurnID,
-				Status:       agentSessionTurnFailed,
-				ErrorMessage: terminalAgentSessionRuntimeError(health),
-				Artifacts:    terminalAgentSessionRuntimeArtifacts(health),
-			})
-			return completeErr
-		}); guardErr != nil {
+		if repairErr := svc.completeAndReconcileRepairTurn(ctx, current, role, chat, "agent_session.repair_running_complete.side_effect", terminalAgentSessionRuntimeError(health), terminalAgentSessionRuntimeArtifacts(health)); repairErr != nil {
 			result.Failed++
 			continue
 		}
@@ -917,6 +939,47 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 		result.QueuedSessionsEnsured++
 	}
 	return result, nil
+}
+
+func (svc *ChatRunService) completeAndReconcileRepairTurn(ctx context.Context, session entity.AgentSession, role entity.AgentRole, chat entity.Chat, operation string, errorMessage string, artifacts string) error {
+	if session.ActiveTurnID <= 0 {
+		return nil
+	}
+	var turn entity.AgentSessionTurn
+	err := svc.withClusterAdminPersistenceGuard(ctx, role, chat.ID, chat.Slug, session.MattermostChannelID, session.SessionKey, operation, func(guardedStore adminrepo.Repository) error {
+		currentTurn, getErr := guardedStore.GetAgentSessionTurn(ctx, session.ActiveTurnID)
+		if getErr != nil {
+			return getErr
+		}
+		if currentTurn.SessionID != session.ID || currentTurn.RunID != session.ActiveRunID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if agentSessionTurnTerminal(currentTurn.Status) {
+			turn = currentTurn
+			return nil
+		}
+		var completeErr error
+		turn, completeErr = guardedStore.CompleteAgentSessionTurn(ctx, adminrepo.CompleteAgentSessionTurnInput{
+			TurnID:       currentTurn.ID,
+			Status:       agentSessionTurnFailed,
+			ErrorMessage: errorMessage,
+			Artifacts:    artifacts,
+		})
+		return completeErr
+	})
+	if err != nil {
+		return err
+	}
+	if svc.cfg.AutomationRuntimeReconciler == nil {
+		return nil
+	}
+	return svc.cfg.AutomationRuntimeReconciler.ReconcileRuntimeTerminal(ctx, AutomationRuntimeTerminalCommand{
+		ProjectID:        session.ProjectID,
+		RuntimeSessionID: session.ID,
+		RuntimeTurnID:    turn.ID,
+		RuntimeRunID:     turn.RunID,
+		RuntimeStatus:    turn.Status,
+	})
 }
 
 func (svc *ChatRunService) loadAgentSessionGuardSubject(ctx context.Context, expected entity.AgentSession) (entity.AgentSession, entity.AgentRole, entity.Chat, error) {
