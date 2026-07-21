@@ -2335,32 +2335,80 @@ func containsBoundedFragmentedSecret(value string, secret string) bool {
 	if len(secret) < 16 || len(value) < len(secret) {
 		return false
 	}
-	const maxFragmentGap = 64
-	for start := strings.IndexByte(value, secret[0]); start >= 0; {
-		position := start
-		hadGap := false
-		matched := true
-		for secretIndex := 1; secretIndex < len(secret); secretIndex++ {
-			remaining := value[position+1:]
-			searchLimit := min(len(remaining), maxFragmentGap+1)
-			next := strings.IndexByte(remaining[:searchLimit], secret[secretIndex])
-			if next < 0 {
-				matched = false
-				break
-			}
-			if next > 0 {
-				hadGap = true
-			}
-			position += next + 1
-		}
-		if matched && hadGap {
+	for fragmentLength := 1; fragmentLength <= 7; fragmentLength++ {
+		if containsRepeatedSecretFragmentSeparator(value, secret, fragmentLength) {
 			return true
 		}
-		nextStart := strings.IndexByte(value[start+1:], secret[0])
-		if nextStart < 0 {
+	}
+	for split := 1; split < len(secret); split++ {
+		if containsTwoSecretFragments(value, secret[:split], secret[split:]) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsRepeatedSecretFragmentSeparator(value string, secret string, fragmentLength int) bool {
+	if fragmentLength <= 0 || len(secret) <= fragmentLength {
+		return false
+	}
+	first := secret[:fragmentLength]
+	secondEnd := min(fragmentLength*2, len(secret))
+	second := secret[fragmentLength:secondEnd]
+	for start := strings.Index(value, first); start >= 0; {
+		firstEnd := start + len(first)
+		searchEnd := min(len(value), firstEnd+64+len(second))
+		for secondOffset := strings.Index(value[firstEnd:searchEnd], second); secondOffset >= 0; {
+			secondStart := firstEnd + secondOffset
+			if secondStart > firstEnd && matchesRepeatedSecretFragments(value, secret, fragmentLength, start, value[firstEnd:secondStart]) {
+				return true
+			}
+			next := strings.Index(value[secondStart+1:searchEnd], second)
+			if next < 0 {
+				break
+			}
+			secondOffset = secondStart + 1 + next - firstEnd
+		}
+		next := strings.Index(value[start+1:], first)
+		if next < 0 {
 			break
 		}
-		start += nextStart + 1
+		start += next + 1
+	}
+	return false
+}
+
+func matchesRepeatedSecretFragments(value string, secret string, fragmentLength int, start int, separator string) bool {
+	position := start
+	for offset := 0; offset < len(secret); offset += fragmentLength {
+		if offset > 0 {
+			if !strings.HasPrefix(value[position:], separator) {
+				return false
+			}
+			position += len(separator)
+		}
+		end := min(offset+fragmentLength, len(secret))
+		fragment := secret[offset:end]
+		if !strings.HasPrefix(value[position:], fragment) {
+			return false
+		}
+		position += len(fragment)
+	}
+	return true
+}
+
+func containsTwoSecretFragments(value string, first string, second string) bool {
+	for start := strings.Index(value, first); start >= 0; {
+		firstEnd := start + len(first)
+		searchEnd := min(len(value), firstEnd+64+len(second))
+		if secondOffset := strings.Index(value[firstEnd:searchEnd], second); secondOffset > 0 {
+			return true
+		}
+		next := strings.Index(value[start+1:], first)
+		if next < 0 {
+			break
+		}
+		start += next + 1
 	}
 	return false
 }

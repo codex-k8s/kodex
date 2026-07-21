@@ -20,6 +20,11 @@ func TestPromptSeedCatalogMarkdownRenders(t *testing.T) {
 			if !strings.Contains(body, "{{.Locale.Language}}") || !strings.Contains(body, "MatterCodex") || !strings.Contains(body, "MCP") {
 				t.Fatalf("seed is missing locale/MCP contract:\n%s", body)
 			}
+			for _, forbidden := range []string{".GitHub.Account", ".GitHub.Username", "настроенный GitHub-аккаунт"} {
+				if strings.Contains(body, forbidden) {
+					t.Fatalf("active seed contains platform-owned GitHub identity metadata %q:\n%s", forbidden, body)
+				}
+			}
 			rendered, err := renderAgentPromptTemplate(body, samplePromptTemplateData(seed.SourceProfile, seed.TemplateKey, locale))
 			if err != nil {
 				t.Fatalf("renderAgentPromptTemplate() error = %v", err)

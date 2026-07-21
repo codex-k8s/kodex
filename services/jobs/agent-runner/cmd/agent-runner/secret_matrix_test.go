@@ -277,6 +277,22 @@ func TestSecretInventoryIndependentEncodingCorpusAndFragments(t *testing.T) {
 	}
 }
 
+func TestSecretInventoryIgnoresIncidentalSparseSubsequence(t *testing.T) {
+	const secret = "abcdefghijklmnop"
+	inventory, err := buildSecretInventory([]string{"STAGING_SERVER_ROOT_PASSWORD=" + secret}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := "a-0-b--1--c---2---d----3----e-----4-----f------5------g-------6-------h-8-i--9--j---0---k----1----l-----2-----m------3------n-------4-------o-5-p"
+	protected, err := inventory.protect(text)
+	if err != nil {
+		t.Fatalf("случайная разреженная подпоследовательность вызвала fragmented-secret guard: %v", err)
+	}
+	if protected != text {
+		t.Fatalf("разреженная подпоследовательность была изменена: %q", protected)
+	}
+}
+
 func percentEncodeForTest(value string, uppercase bool) string {
 	const upperDigits = "0123456789ABCDEF"
 	const lowerDigits = "0123456789abcdef"

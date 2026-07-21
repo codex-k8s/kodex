@@ -358,7 +358,7 @@ func appendRoleRuntimeContract(prompt string, input RolePromptInput) string {
 
 func appendRoleRuntimeContractMarkdown(body *strings.Builder, input RolePromptInput) {
 	body.WriteString("# Контракт среды выполнения Matter-codex\n\n")
-	body.WriteString("- GitHub CLI: используй `gh`, если роли выданы GitHub credentials. Они выбираются платформой отдельно для каждой роли; не требуй конкретный alias или login из текста задачи и не переноси identity запускающей роли в дочерний промпт. Токен, пользователь и email доступны через `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER` и `GITHUB_EMAIL`. Никогда не печатай их значения.\n")
+	body.WriteString("- GitHub CLI: используй `gh`, если доступны `GH_TOKEN`/`GITHUB_TOKEN`. Проверяй фактическую возможность выполнить требуемую операцию; не делай конкретный login или identity условием работы и не переноси такие требования в дочерний промпт. Пользователь и email доступны через `GITHUB_USERNAME`/`GITHUB_USER` и `GITHUB_EMAIL`. Никогда не печатай значения credentials.\n")
 	body.WriteString("- Для Markdown-текста задач GitHub, пул-реквестов, ревью и комментариев записывай текст во временный файл или heredoc и передавай через `--body-file`/файловый ввод API. Не встраивай Markdown с обратными кавычками или shell-чувствительным текстом напрямую в одну командную строку shell.\n")
 	if strings.TrimSpace(input.Locale.Language) != "" {
 		body.WriteString("- Язык: все пользовательские ответы в Mattermost, заголовки и описания задач GitHub, заголовки и описания пул-реквестов, комментарии к задачам и пул-реквестам, тексты ревью, строчные замечания ревью, комментарии в коде, документацию и резюме поставки пиши на ")
@@ -693,12 +693,12 @@ func agentRuntimeTools() []promptTemplateToolData {
 func agentSecretBindings() []promptTemplateSecretBindingData {
 	return []promptTemplateSecretBindingData{
 		{
-			Name:         "GitHub-аккаунт",
+			Name:         "GitHub credentials",
 			Kind:         "Kubernetes Secret mount и переменные shell",
 			Env:          "GH_TOKEN, GITHUB_TOKEN, GITHUB_USERNAME, GITHUB_USER, GITHUB_EMAIL, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL, MATTERCODEX_GITHUB_TOKEN_FILE",
 			File:         "/var/run/secrets/matter-codex-github/github-token",
-			Availability: "только если у роли привязан GitHub-аккаунт",
-			Purpose:      "аутентифицировать операции git и gh от имени выбранного GitHub-аккаунта агента",
+			Availability: "только если роли выдан доступ к GitHub",
+			Purpose:      "аутентифицировать операции git и gh; достаточность доступа определяется фактическими разрешениями операции",
 		},
 		{
 			Name:         "OpenAI Codex-аккаунт",

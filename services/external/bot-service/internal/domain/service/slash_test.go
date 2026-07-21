@@ -1046,8 +1046,8 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 		"mattermost_return_to_requester(message=",
 		"конфигурация проекта в MatterCodex является источником истины",
 		"не зашивай имя чата",
-		"выбираются платформой отдельно для каждой роли",
-		"не требуй конкретный alias или login",
+		"Проверяй фактическую возможность выполнить требуемую операцию",
+		"не делай конкретный login или identity условием работы",
 	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
@@ -1125,7 +1125,7 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 		"playwright=1.61.1",
 		"playwright-mcp=0.0.77",
 		"wait-on=9.0.10",
-		"GitHub-аккаунт=GH_TOKEN",
+		"GitHub credentials=GH_TOKEN",
 		"Kubernetes service account=KUBERNETES_SERVICE_HOST",
 		"Проектная переменная STAGING_DB_URL=STAGING_DB_URL",
 		"mattermost_update_turn_status",
