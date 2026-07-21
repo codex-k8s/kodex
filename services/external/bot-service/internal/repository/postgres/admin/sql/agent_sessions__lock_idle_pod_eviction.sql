@@ -25,20 +25,12 @@ select
 	sessions.openai_account_name
 from matter_codex_agent_sessions sessions
 join matter_codex_agent_roles roles on roles.id = sessions.role_id
-where sessions.status = 'idle'
-	and sessions.active_turn_id is null
-	and sessions.pod_name <> ''
+where sessions.session_key = $1
+	and sessions.pod_name = $2
 	and lower(trim(roles.kubernetes_access)) <> 'cluster-admin'
 	and not exists (
 		select 1
 		from matter_codex_cluster_admin_session_bindings bindings
 		where bindings.session_key = sessions.session_key
 	)
-	and not exists (
-		select 1
-		from matter_codex_agent_session_turns turns
-		where turns.session_id = sessions.id
-			and turns.status in ('queued', 'running')
-	)
-order by sessions.last_activity_at, sessions.id
-limit $1;
+for update of sessions;

@@ -948,42 +948,36 @@ func TestClusterAdminStopTurnGuardsTargetAtEveryBoundary(t *testing.T) {
 	})
 }
 
-func TestClusterAdminCapacityEvictionGuardsSelectedCandidateAtEveryBoundary(t *testing.T) {
+func TestCapacityEvictionSkipsClusterAdminGuardedCandidates(t *testing.T) {
 	for _, test := range []struct {
-		name          string
-		denyAt        int
-		wantHealth    int
-		wantCleanup   int
-		wantClear     int
-		wantAudit     int
-		wantOperation string
+		name             string
+		kubernetesAccess string
+		frozen           bool
 	}{
-		{name: "health", denyAt: 1, wantOperation: "agent_session.capacity_candidate_health.side_effect"},
-		{name: "cleanup", denyAt: 2, wantHealth: 1, wantOperation: "agent_session.capacity_candidate_cleanup.side_effect"},
-		{name: "clear", denyAt: 3, wantHealth: 1, wantCleanup: 1, wantOperation: "agent_session.capacity_candidate_clear.side_effect"},
-		{name: "audit", denyAt: 4, wantHealth: 1, wantCleanup: 1, wantClear: 1, wantOperation: "agent_session.capacity_candidate_audit.side_effect"},
+		{name: "current cluster admin", kubernetesAccess: "cluster-admin"},
+		{name: "formerly privileged session", kubernetesAccess: "read-only", frozen: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := chatRuntimeStore()
-			store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "former-admin", KubernetesAccess: "read-only", Enabled: true}
+			store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "admin", KubernetesAccess: test.kubernetesAccess, Enabled: true}
 			store.chats[2] = entity.Chat{ID: 2, ProjectID: 1, Slug: "admin-chat", MattermostChannelID: "channel-admin"}
 			store.agentSessions = map[string]entity.AgentSession{"candidate-admin": {
 				ID: 2, SessionKey: "candidate-admin", ProjectID: 1, ChatID: 2, RoleID: 2, MattermostChannelID: "channel-admin",
 				Status: agentSessionStatusIdle, PodName: "candidate-pod", LastActivityAt: time.Now().Add(-time.Hour),
 			}}
-			guarded := &admittedAdminStore{fakeAdminStore: store, allowed: true, denyGuardAt: test.denyAt, frozenSessions: map[string]bool{"candidate-admin": true}}
+			frozenSessions := map[string]bool{}
+			if test.frozen {
+				frozenSessions["candidate-admin"] = true
+			}
+			guarded := &admittedAdminStore{fakeAdminStore: store, allowed: true, frozenSessions: frozenSessions}
 			runner := &fakeRuntimeRunner{}
 			svc := NewChatRunService(ChatRunServiceConfig{Store: guarded, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true})
 			evicted, err := svc.evictOldestIdleAgentSessionPod(context.Background(), "requester-session")
-			if evicted || !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+			if err != nil || evicted {
 				t.Fatalf("evicted=%t error=%v", evicted, err)
 			}
-			if runner.sessionRuntimeHealthCalls != test.wantHealth || len(runner.cleanedSessionKeys) != test.wantCleanup || store.clearIdleCalls != test.wantClear || store.auditCalls != test.wantAudit {
-				t.Fatalf("effects health=%d cleanup=%d clear=%d audit=%d", runner.sessionRuntimeHealthCalls, len(runner.cleanedSessionKeys), store.clearIdleCalls, store.auditCalls)
-			}
-			last := guarded.guardInputs[len(guarded.guardInputs)-1]
-			if last.Operation != test.wantOperation || last.SessionKey != "candidate-admin" || last.RoleID != 2 || last.ChatID != 2 {
-				t.Fatalf("candidate guard=%#v", last)
+			if runner.sessionRuntimeHealthCalls != 0 || len(runner.cleanedSessionKeys) != 0 || store.clearIdleCalls != 0 || store.auditCalls != 0 || len(guarded.guardInputs) != 0 {
+				t.Fatalf("guarded candidate effects health=%d cleanup=%d clear=%d audit=%d guards=%d", runner.sessionRuntimeHealthCalls, len(runner.cleanedSessionKeys), store.clearIdleCalls, store.auditCalls, len(guarded.guardInputs))
 			}
 		})
 	}

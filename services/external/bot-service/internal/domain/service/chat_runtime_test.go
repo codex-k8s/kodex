@@ -1148,6 +1148,43 @@ func TestCodexAuthCheckReclaimsOldestIdleSessionOnCapacityPressure(t *testing.T)
 	}
 }
 
+func TestCodexAuthCheckDoesNotEvictSessionQueuedAfterHealthCheck(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", Enabled: true}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", Slug: "manager"}
+	store.agentSessions = map[string]entity.AgentSession{
+		"idle": {
+			ID: 1, SessionKey: "idle", ProjectID: 1, ChatID: 1, RoleID: 1,
+			Status: agentSessionStatusIdle, KubernetesNamespace: "mattermost", PodName: "mc-session-idle",
+			PVCName: "mc-session-ws-idle", TokenSecretRef: "matter-codex-session-idle",
+			LastActivityAt: time.Now().Add(-4 * time.Hour),
+		},
+	}
+	store.beforeIdlePodEviction = func() {
+		store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{ID: 1, SessionID: 1, RunID: "queued-during-health-check", Status: agentSessionTurnQueued})
+		store.beforeIdlePodEviction = nil
+	}
+	capacityErr := runtimerepo.NewAgentSessionCapacityError("test scheduler pressure", errors.New("insufficient cpu"))
+	runner := &fakeRuntimeRunner{authSecretCheckErrors: []error{capacityErr, capacityErr}}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true,
+		DisableMonitor: true, CapacityRetryDelay: time.Nanosecond,
+	})
+
+	_, err := svc.checkCodexAuthSecretWithCapacityReclaim(context.Background(), runtimerepo.CodexAuthSecretCheckInput{
+		AccountName: "main", SecretName: "matter-codex-codex-auth-main",
+	})
+	if !runtimerepo.IsReclaimableAgentSessionCapacityError(err) {
+		t.Fatalf("capacity error = %v", err)
+	}
+	if runner.sessionRuntimeHealthCalls != 1 || len(runner.cleanedSessionKeys) != 0 {
+		t.Fatalf("health=%d cleanup=%#v", runner.sessionRuntimeHealthCalls, runner.cleanedSessionKeys)
+	}
+	if session := store.agentSessions["idle"]; session.PodName != "mc-session-idle" || session.KubernetesNamespace != "mattermost" {
+		t.Fatalf("busy session pod was evicted: %#v", session)
+	}
+}
+
 func TestChatRunDoesNotPostEmptyDeviceCodeWhenReauthJobIsNotReady(t *testing.T) {
 	originalWait := codexAuthDeviceCodeWait
 	codexAuthDeviceCodeWait = time.Millisecond

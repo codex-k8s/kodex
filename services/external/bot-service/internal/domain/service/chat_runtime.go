@@ -1320,65 +1320,40 @@ func (svc *ChatRunService) evictOldestIdleAgentSessionPod(ctx context.Context, t
 		if candidate.SessionKey == targetSessionKey || strings.TrimSpace(candidate.PodName) == "" {
 			continue
 		}
-		current, role, chat, err := svc.loadAgentSessionGuardSubject(ctx, candidate)
+		current, role, _, err := svc.loadAgentSessionGuardSubject(ctx, candidate)
 		if err != nil {
 			return false, err
 		}
-		var health runtimerepo.AgentSessionRuntimeHealth
-		if err := svc.withClusterAdminRuntimeGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.capacity_candidate_health.side_effect", func() error {
-			var healthErr error
-			health, healthErr = svc.cfg.RuntimeRunner.GetAgentSessionRuntimeHealth(ctx, current.SessionKey)
-			return healthErr
-		}); err != nil {
+		guardRequired, err := clusterAdminSessionGuardRequired(ctx, svc.cfg.Store, role, current.SessionKey)
+		if err != nil {
 			return false, err
 		}
-		if !health.Exists {
-			current, role, chat, err = svc.loadAgentSessionGuardSubject(ctx, candidate)
-			if err != nil {
-				return false, err
-			}
-			clearErr := svc.withClusterAdminPersistenceGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.capacity_candidate_clear_missing.side_effect", func(guardedStore adminrepo.Repository) error {
-				_, callbackErr := guardedStore.ClearIdleAgentSessionPod(ctx, current.SessionKey, current.PodName)
-				return callbackErr
-			})
-			if clearErr != nil && !errors.Is(clearErr, adminrepo.ErrNotFound) {
-				return false, clearErr
-			}
+		if guardRequired {
 			continue
 		}
-		current, role, chat, err = svc.loadAgentSessionGuardSubject(ctx, candidate)
+		health, err := svc.cfg.RuntimeRunner.GetAgentSessionRuntimeHealth(ctx, current.SessionKey)
 		if err != nil {
 			return false, err
 		}
-		if err := svc.withClusterAdminRuntimeGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.capacity_candidate_cleanup.side_effect", func() error {
+		_, evictErr := svc.cfg.Store.EvictIdleAgentSessionPod(ctx, current.SessionKey, current.PodName, func() error {
+			if !health.Exists {
+				return nil
+			}
 			_, cleanupErr := svc.cfg.RuntimeRunner.CleanupAgentSession(ctx, current.SessionKey)
 			return cleanupErr
-		}); err != nil {
-			return false, err
-		}
-		current, role, chat, err = svc.loadAgentSessionGuardSubject(ctx, candidate)
-		if err != nil {
-			return false, err
-		}
-		clearErr := svc.withClusterAdminPersistenceGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.capacity_candidate_clear.side_effect", func(guardedStore adminrepo.Repository) error {
-			_, callbackErr := guardedStore.ClearIdleAgentSessionPod(ctx, current.SessionKey, current.PodName)
-			return callbackErr
 		})
-		if clearErr != nil && !errors.Is(clearErr, adminrepo.ErrNotFound) {
-			return false, clearErr
+		if errors.Is(evictErr, adminrepo.ErrNotFound) {
+			continue
 		}
-		current, role, chat, err = svc.loadAgentSessionGuardSubject(ctx, candidate)
-		if err != nil {
-			return false, err
+		if evictErr != nil {
+			return false, evictErr
 		}
-		if err := svc.withClusterAdminPersistenceGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.capacity_candidate_audit.side_effect", func(guardedStore adminrepo.Repository) error {
-			return guardedStore.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
-				EventType:    "agent_session_capacity_evicted",
-				ActorUser:    "matter-codex",
-				ResourceType: "agent_session",
-				ResourceName: current.SessionKey,
-				Summary:      "oldest idle agent session pod removed to free runtime capacity",
-			})
+		if err := svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+			EventType:    "agent_session_capacity_evicted",
+			ActorUser:    "matter-codex",
+			ResourceType: "agent_session",
+			ResourceName: current.SessionKey,
+			Summary:      "oldest idle agent session pod removed to free runtime capacity",
 		}); err != nil {
 			return false, err
 		}

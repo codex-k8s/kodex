@@ -3828,51 +3828,52 @@ func (runner *fakeRuntimeRunner) CleanupExpiredRuns(_ context.Context, input run
 }
 
 type fakeAdminStore struct {
-	capacityMu           sync.Mutex
-	deliveryMu           sync.Mutex
-	upsert               adminrepo.UpsertRepositoryInput
-	auditRecorded        bool
-	repositories         map[string]entity.Repository
-	deletedRepo          entity.Repository
-	profiles             []entity.AgentProfile
-	openAIAccounts       map[string]entity.OpenAIAccount
-	deletedOpenAIAccount entity.OpenAIAccount
-	githubAccounts       map[string]entity.GitHubAccount
-	githubUpsert         adminrepo.UpsertGitHubAccountInput
-	deletedGitHubAccount entity.GitHubAccount
-	profileUpsert        adminrepo.UpsertAgentProfileInput
-	promptTemplates      map[string]entity.AgentPromptTemplate
-	agentRun             entity.AgentRun
-	agentRuns            map[string]entity.AgentRun
-	agentFlows           map[string]entity.AgentFlow
-	updatedRunStatus     string
-	updatedPRURL         string
-	projects             map[int64]entity.Project
-	projectRepositories  map[string]entity.ProjectRepository
-	runtimeVariables     map[int64]entity.ProjectRuntimeVariable
-	roleRuntimeVariables map[string]entity.AgentRoleRuntimeVariableBinding
-	agentRoles           map[int64]entity.AgentRole
-	chats                map[int64]entity.Chat
-	chatParticipants     map[int64][]entity.ChatParticipant
-	chatRepositories     map[int64][]entity.ChatRepositoryBinding
-	threadContexts       map[int64]entity.ThreadContext
-	botIdentities        map[int64]entity.MattermostBotIdentity
-	agentSessions        map[string]entity.AgentSession
-	sessionTurns         []entity.AgentSessionTurn
-	agentDelegations     map[int64]entity.AgentDelegation
-	callbackDeliveries   map[int64]entity.AgentDelegationCallbackDelivery
-	callbackManifests    map[string]adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput
-	postMessageMaxRunes  int
-	frozenOpenAIAccount  string
-	frozenGitHubAccount  string
-	clearIdleCalls       int
-	resetSessionCalls    int
-	resetSessionErrors   []error
-	completeTurnCalls    int
-	completeTurnInput    adminrepo.CompleteAgentSessionTurnInput
-	exactGuardCalls      int
-	auditCalls           int
-	auditEvents          []adminrepo.AuditEventInput
+	capacityMu            sync.Mutex
+	deliveryMu            sync.Mutex
+	upsert                adminrepo.UpsertRepositoryInput
+	auditRecorded         bool
+	repositories          map[string]entity.Repository
+	deletedRepo           entity.Repository
+	profiles              []entity.AgentProfile
+	openAIAccounts        map[string]entity.OpenAIAccount
+	deletedOpenAIAccount  entity.OpenAIAccount
+	githubAccounts        map[string]entity.GitHubAccount
+	githubUpsert          adminrepo.UpsertGitHubAccountInput
+	deletedGitHubAccount  entity.GitHubAccount
+	profileUpsert         adminrepo.UpsertAgentProfileInput
+	promptTemplates       map[string]entity.AgentPromptTemplate
+	agentRun              entity.AgentRun
+	agentRuns             map[string]entity.AgentRun
+	agentFlows            map[string]entity.AgentFlow
+	updatedRunStatus      string
+	updatedPRURL          string
+	projects              map[int64]entity.Project
+	projectRepositories   map[string]entity.ProjectRepository
+	runtimeVariables      map[int64]entity.ProjectRuntimeVariable
+	roleRuntimeVariables  map[string]entity.AgentRoleRuntimeVariableBinding
+	agentRoles            map[int64]entity.AgentRole
+	chats                 map[int64]entity.Chat
+	chatParticipants      map[int64][]entity.ChatParticipant
+	chatRepositories      map[int64][]entity.ChatRepositoryBinding
+	threadContexts        map[int64]entity.ThreadContext
+	botIdentities         map[int64]entity.MattermostBotIdentity
+	agentSessions         map[string]entity.AgentSession
+	sessionTurns          []entity.AgentSessionTurn
+	agentDelegations      map[int64]entity.AgentDelegation
+	callbackDeliveries    map[int64]entity.AgentDelegationCallbackDelivery
+	callbackManifests     map[string]adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput
+	postMessageMaxRunes   int
+	frozenOpenAIAccount   string
+	frozenGitHubAccount   string
+	beforeIdlePodEviction func()
+	clearIdleCalls        int
+	resetSessionCalls     int
+	resetSessionErrors    []error
+	completeTurnCalls     int
+	completeTurnInput     adminrepo.CompleteAgentSessionTurnInput
+	exactGuardCalls       int
+	auditCalls            int
+	auditEvents           []adminrepo.AuditEventInput
 }
 
 func (store *fakeAdminStore) RequiresClusterAdminSessionGuard(_ context.Context, roleID int64, _ string) (bool, error) {
@@ -4719,6 +4720,33 @@ func (store *fakeAdminStore) ClearIdleAgentSessionPod(_ context.Context, session
 			return entity.AgentSession{}, adminrepo.ErrNotFound
 		}
 	}
+	session.KubernetesNamespace = ""
+	session.PodName = ""
+	store.agentSessions[sessionKey] = session
+	return session, nil
+}
+
+func (store *fakeAdminStore) EvictIdleAgentSessionPod(_ context.Context, sessionKey string, podName string, sideEffect func() error) (entity.AgentSession, error) {
+	if store.beforeIdlePodEviction != nil {
+		store.beforeIdlePodEviction()
+	}
+	store.ensureAgentSessions()
+	session, ok := store.agentSessions[sessionKey]
+	if !ok || session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != podName {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	for _, turn := range store.sessionTurns {
+		if turn.SessionID == session.ID && (turn.Status == agentSessionTurnQueued || turn.Status == agentSessionTurnRunning) {
+			return entity.AgentSession{}, adminrepo.ErrNotFound
+		}
+	}
+	if sideEffect == nil {
+		return entity.AgentSession{}, errors.New("idle agent session pod eviction side effect is required")
+	}
+	if err := sideEffect(); err != nil {
+		return entity.AgentSession{}, err
+	}
+	store.clearIdleCalls++
 	session.KubernetesNamespace = ""
 	session.PodName = ""
 	store.agentSessions[sessionKey] = session

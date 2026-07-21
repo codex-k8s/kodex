@@ -1081,6 +1081,15 @@ func (store *fakeRouterAdminStore) ClearIdleAgentSessionPod(context.Context, str
 	return entity.AgentSession{}, nil
 }
 
+func (store *fakeRouterAdminStore) EvictIdleAgentSessionPod(_ context.Context, _ string, _ string, sideEffect func() error) (entity.AgentSession, error) {
+	if sideEffect != nil {
+		if err := sideEffect(); err != nil {
+			return entity.AgentSession{}, err
+		}
+	}
+	return entity.AgentSession{}, nil
+}
+
 func (store *fakeRouterAdminStore) UpdateAgentSessionSnapshot(context.Context, adminrepo.UpdateAgentSessionSnapshotInput) (entity.AgentSession, error) {
 	return entity.AgentSession{}, nil
 }

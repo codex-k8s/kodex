@@ -445,6 +445,7 @@ type Repository interface {
 	ListAgentSessionsByRole(ctx context.Context, roleID int64) ([]entity.AgentSession, error)
 	AcquireAgentSessionCapacityLock(ctx context.Context) (func(), error)
 	ListEvictableIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)
+	EvictIdleAgentSessionPod(ctx context.Context, sessionKey string, podName string, sideEffect func() error) (entity.AgentSession, error)
 	ListQueuedIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)
 	ListStaleActiveAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)
 	ListRunningActiveAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error)
