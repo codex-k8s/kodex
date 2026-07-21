@@ -95,7 +95,23 @@ type InteractionAdmission interface {
 }
 
 type MattermostInteractionActorVerifier interface {
-	VerifyInteractionActor(ctx context.Context, userID string, channelID string) (bool, error)
+	VerifyInteractionActor(ctx context.Context, userID string, channelID string) (MattermostInteractionActorProof, error)
+}
+
+// MattermostInteractionActorProof является положительным authoritative
+// доказательством активного человека и его членства в точном канале.
+type MattermostInteractionActorProof struct {
+	UserID        string
+	ChannelID     string
+	Active        bool
+	Human         bool
+	ChannelMember bool
+}
+
+func (proof MattermostInteractionActorProof) admits(userID string, channelID string) bool {
+	return proof.Active && proof.Human && proof.ChannelMember &&
+		strings.TrimSpace(proof.UserID) == strings.TrimSpace(userID) &&
+		strings.TrimSpace(proof.ChannelID) == strings.TrimSpace(channelID)
 }
 
 type serverSideInteractionAdmission struct {
@@ -135,12 +151,12 @@ func (admission *serverSideInteractionAdmission) Admit(ctx context.Context, requ
 	if !typedInteractionOperationAllowed(request) {
 		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "operation_resource_denied"}
 	}
-	verified, err := admission.actorVerifier.VerifyInteractionActor(ctx, request.Actor.UserID, request.ChannelID)
+	proof, err := admission.actorVerifier.VerifyInteractionActor(ctx, request.Actor.UserID, request.ChannelID)
 	if err != nil {
 		return InteractionAdmissionDecision{Status: AdmissionIndeterminate, Reason: "subject_verification_failed"}
 	}
-	if !verified {
-		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "subject_not_channel_member"}
+	if !proof.admits(request.Actor.UserID, request.ChannelID) {
+		return InteractionAdmissionDecision{Status: AdmissionDenied, Reason: "subject_not_authoritative_human"}
 	}
 	allowed, err := admission.resources.AdmitInteractionResource(ctx, securityrepo.InteractionResourceAdmissionInput{
 		ActionKey: request.ActionKey, Operation: request.Operation,
@@ -160,6 +176,7 @@ func (admission *serverSideInteractionAdmission) Admit(ctx context.Context, requ
 type InteractionSecurityConfig struct {
 	Repository        securityrepo.Repository
 	Admission         InteractionAdmission
+	ActorVerifier     MattermostInteractionActorVerifier
 	InstallationScope string
 	CapabilityTTL     time.Duration
 	Random            io.Reader
@@ -169,6 +186,7 @@ type InteractionSecurityConfig struct {
 type InteractionSecurityService struct {
 	repository        securityrepo.Repository
 	admission         InteractionAdmission
+	actorVerifier     MattermostInteractionActorVerifier
 	installationScope string
 	capabilityTTL     time.Duration
 	random            io.Reader
@@ -225,6 +243,7 @@ func NewInteractionSecurityService(cfg InteractionSecurityConfig) *InteractionSe
 	return &InteractionSecurityService{
 		repository:        cfg.Repository,
 		admission:         admission,
+		actorVerifier:     cfg.ActorVerifier,
 		installationScope: installationScope,
 		capabilityTTL:     capabilityTTL,
 		random:            random,
@@ -529,7 +548,26 @@ func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, toke
 }
 
 func (svc *InteractionSecurityService) ActivateCard(ctx context.Context, card MattermostCard) error {
+	if integrationApprovalCard(card) {
+		if svc == nil || svc.actorVerifier == nil {
+			return ErrInteractionAuthentication
+		}
+		proof, err := svc.actorVerifier.VerifyInteractionActor(ctx, card.Interaction.Actor.UserID, card.ChannelID)
+		if err != nil || !proof.admits(card.Interaction.Actor.UserID, card.ChannelID) {
+			return ErrInteractionAuthentication
+		}
+	}
 	return svc.transitionCardCapabilities(ctx, card, securityrepo.CapabilityStatePending, securityrepo.CapabilityStateUnused)
+}
+
+func integrationApprovalCard(card MattermostCard) bool {
+	for _, action := range card.Actions {
+		resourceType, _ := interactionResource(action.Context)
+		if resourceType == "integration_approval" {
+			return true
+		}
+	}
+	return false
 }
 
 func (svc *InteractionSecurityService) RevokeCard(ctx context.Context, card MattermostCard) error {

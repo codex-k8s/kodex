@@ -133,6 +133,12 @@ type InteractionResourceAdmissionRepository interface {
 	AdmitInteractionResource(ctx context.Context, input InteractionResourceAdmissionInput) (bool, error)
 }
 
+// IntegrationMutationPathRepository проверяет фактический current/frozen субъект
+// сессии на прямой путь изменения Kubernetes в обход managed MCP.
+type IntegrationMutationPathRepository interface {
+	HasDirectIntegrationMutationPath(ctx context.Context, roleID int64, sessionKey string) (bool, error)
+}
+
 type AtomicDialogRepository interface {
 	ConsumeInteractionCapabilityWithMutation(
 		ctx context.Context,

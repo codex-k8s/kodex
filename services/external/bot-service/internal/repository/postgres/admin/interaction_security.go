@@ -14,6 +14,7 @@ import (
 
 var _ securityrepo.Repository = (*Repository)(nil)
 var _ securityrepo.InteractionResourceAdmissionRepository = (*Repository)(nil)
+var _ securityrepo.IntegrationMutationPathRepository = (*Repository)(nil)
 var _ securityrepo.AtomicDialogRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminBindingRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminRuntimeGuardRepository = (*Repository)(nil)
@@ -264,6 +265,14 @@ func (repo *Repository) AdmitInteractionResource(ctx context.Context, input secu
 		return false, fmt.Errorf("read interaction resource admission: %w", err)
 	}
 	return allowed, nil
+}
+
+func (repo *Repository) HasDirectIntegrationMutationPath(ctx context.Context, roleID int64, sessionKey string) (bool, error) {
+	var direct bool
+	if err := repo.db.QueryRow(ctx, query("integration_mutation_path__exists.sql"), roleID, strings.TrimSpace(sessionKey)).Scan(&direct); err != nil {
+		return false, fmt.Errorf("read integration direct mutation path: %w", err)
+	}
+	return direct, nil
 }
 
 func (repo *Repository) CleanupInteractionCapabilities(ctx context.Context, input securityrepo.CapabilityCleanupInput) (int64, error) {

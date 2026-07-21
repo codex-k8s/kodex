@@ -9,6 +9,7 @@ import (
 
 	integrationsdomain "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/integrations"
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 )
 
 var _ integrationsdomain.SessionAdmission = (*AgentSessionService)(nil)
@@ -23,6 +24,14 @@ func (svc *AgentSessionService) AuthorizeIntegrationSession(ctx context.Context,
 	if session.Status != agentSessionStatusRunning || session.ActiveTurnID <= 0 || !session.ExpiresAt.After(now) ||
 		strings.TrimSpace(session.MattermostChannelID) == "" || strings.TrimSpace(session.MattermostRootPostID) == "" ||
 		strings.TrimSpace(session.TokenSecretRef) == "" {
+		return integrationsdomain.SessionContext{}, integrationsdomain.ErrUnauthorized
+	}
+	mutationGuard, ok := svc.cfg.Store.(securityrepo.IntegrationMutationPathRepository)
+	if !ok {
+		return integrationsdomain.SessionContext{}, integrationsdomain.ErrUnauthorized
+	}
+	directMutationPath, err := mutationGuard.HasDirectIntegrationMutationPath(ctx, session.RoleID, session.SessionKey)
+	if err != nil || directMutationPath {
 		return integrationsdomain.SessionContext{}, integrationsdomain.ErrUnauthorized
 	}
 	turn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, session.ActiveTurnID)

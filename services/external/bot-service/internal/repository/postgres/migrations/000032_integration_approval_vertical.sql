@@ -261,6 +261,22 @@ create table matter_codex_integration_test_executions (
 );
 
 -- +goose StatementBegin
+create function matter_codex_integration_direct_kubernetes_env(value text)
+returns boolean
+language sql
+immutable
+returns null on null input
+as $$
+	select upper(btrim(value)) in (
+		'KUBECONFIG', 'KUBE_CONFIG', 'KUBE_TOKEN', 'K8S_TOKEN', 'KUBERNETES_TOKEN',
+		'KUBERNETES_SERVICE_ACCOUNT_TOKEN', 'KUBERNETES_CLIENT_CERT', 'KUBERNETES_CLIENT_KEY',
+		'KUBE_CLIENT_CERT', 'KUBE_CLIENT_KEY'
+	)
+	or upper(btrim(value)) ~ '(^|_)(KUBECONFIG|KUBE_CONFIG|KUBE_TOKEN|K8S_TOKEN|KUBERNETES_TOKEN|KUBERNETES_SERVICE_ACCOUNT_TOKEN|KUBERNETES_CLIENT_CERT|KUBERNETES_CLIENT_KEY|KUBE_CLIENT_CERT|KUBE_CLIENT_KEY)(_FILE)?$'
+$$;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 create function matter_codex_guard_tool_invocation()
 returns trigger
 language plpgsql
@@ -377,10 +393,13 @@ begin
 	execute format('alter function %I.matter_codex_guard_tool_invocation() set search_path = pg_catalog, %I, pg_temp', trusted_schema, trusted_schema);
 	execute format('alter function %I.matter_codex_guard_approval_request() set search_path = pg_catalog, %I, pg_temp', trusted_schema, trusted_schema);
 	execute format('alter function %I.matter_codex_guard_integration_test_execution() set search_path = pg_catalog, %I, pg_temp', trusted_schema, trusted_schema);
+	execute format('alter function %I.matter_codex_integration_direct_kubernetes_env(text) set search_path = pg_catalog, %I, pg_temp', trusted_schema, trusted_schema);
 	execute format('revoke all on function %I.matter_codex_guard_tool_invocation() from public', trusted_schema);
 	execute format('revoke all on function %I.matter_codex_guard_approval_request() from public', trusted_schema);
 	execute format('revoke all on function %I.matter_codex_guard_integration_test_execution() from public', trusted_schema);
+	execute format('revoke all on function %I.matter_codex_integration_direct_kubernetes_env(text) from public', trusted_schema);
 	if runtime_role_name is not null then
+		execute format('grant execute on function %I.matter_codex_integration_direct_kubernetes_env(text) to %I', trusted_schema, runtime_role_name);
 		execute format('grant select on table %I.matter_codex_integration_capabilities to %I', trusted_schema, runtime_role_name);
 		execute format('grant select on table %I.matter_codex_integration_connections to %I', trusted_schema, runtime_role_name);
 		execute format('grant select on table %I.matter_codex_integration_grants to %I', trusted_schema, runtime_role_name);
@@ -398,7 +417,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 000030 is forward-only: integration approval evidence cannot be removed safely';
+	raise exception 'migration 000032 is forward-only: integration approval evidence cannot be removed safely';
 end
 $$;
 -- +goose StatementEnd

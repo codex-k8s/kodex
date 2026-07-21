@@ -221,6 +221,55 @@ func TestSecuredThreadPublisherReconcilesExactApprovalPlaceholder(t *testing.T) 
 	}
 }
 
+func TestSecuredThreadPublisherRequiresAuthoritativeHumanBeforeApprovalActivation(t *testing.T) {
+	tests := []struct {
+		name        string
+		allowed     bool
+		verifierErr error
+		wantErr     bool
+	}{
+		{name: "external bot is denied", allowed: false, wantErr: true},
+		{name: "Mattermost verification unavailable", verifierErr: errors.New("synthetic Mattermost failure"), wantErr: true},
+		{name: "verified human is allowed", allowed: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := newPublisherCapabilityRepository()
+			verifier := &admissionActorVerifier{allowed: test.allowed, err: test.verifierErr}
+			security := NewInteractionSecurityService(InteractionSecurityConfig{
+				Repository: repository, Admission: fixedServiceAdmission(AdmissionAllowed), ActorVerifier: verifier,
+			})
+			backend := &publisherBackend{}
+			publisher := NewSecuredMattermostThreadPublisher(backend, security)
+			card := securedPublisherTestCard()
+			card.Actions[0].Context = map[string]any{
+				"kind": "integration_approval", "action": "approve",
+				"resource_type": "integration_approval", "resource_id": "apr_0123456789abcdef0123456789abcdef",
+			}
+			_, err := publisher.PostThreadCard(context.Background(), card)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("PostThreadCard() error=%v, wantErr=%v", err, test.wantErr)
+			}
+			if verifier.calls != 1 || verifier.userID != "actor-1" || verifier.channel != "channel-1" {
+				t.Fatalf("authoritative proof calls=%d subject=%q channel=%q", verifier.calls, verifier.userID, verifier.channel)
+			}
+			if len(backend.updates) != 1 || len(backend.updates[0].Actions) != 1 {
+				t.Fatalf("bound approval card updates=%#v", backend.updates)
+			}
+			callback := ActionCallback{
+				Context: backend.updates[0].Actions[0].Context, UserID: "actor-1", ChannelID: "channel-1", PostID: "post-1",
+			}
+			_, authErr := security.AuthenticateAction(context.Background(), callback)
+			if test.wantErr && !errors.Is(authErr, ErrInteractionAuthentication) {
+				t.Fatalf("denied activation left a usable capability: %v", authErr)
+			}
+			if !test.wantErr && authErr != nil {
+				t.Fatalf("verified human callback error=%v", authErr)
+			}
+		})
+	}
+}
+
 func TestSecuredThreadPublisherFailsClosedOnBindingSealAndUpdateErrors(t *testing.T) {
 	tests := []struct {
 		name      string

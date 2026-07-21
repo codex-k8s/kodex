@@ -16,11 +16,14 @@ type admissionActorVerifier struct {
 	channel string
 }
 
-func (verifier *admissionActorVerifier) VerifyInteractionActor(_ context.Context, userID string, channelID string) (bool, error) {
+func (verifier *admissionActorVerifier) VerifyInteractionActor(_ context.Context, userID string, channelID string) (MattermostInteractionActorProof, error) {
 	verifier.calls++
 	verifier.userID = userID
 	verifier.channel = channelID
-	return verifier.allowed, verifier.err
+	return MattermostInteractionActorProof{
+		UserID: userID, ChannelID: channelID,
+		Active: verifier.allowed, Human: verifier.allowed, ChannelMember: verifier.allowed,
+	}, verifier.err
 }
 
 type admissionResourceRepository struct {

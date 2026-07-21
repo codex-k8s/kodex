@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,8 +29,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const syntheticCredential = "synthetic-live-credential-value"
-
 type postgresFixture struct {
 	pool      *pgxpool.Pool
 	repo      *repository.Repository
@@ -39,6 +39,17 @@ type postgresFixture struct {
 
 type sessionAdmissionStub struct {
 	session domain.SessionContext
+}
+
+type authoritativeActorVerifier struct {
+	human bool
+	err   error
+}
+
+func (verifier *authoritativeActorVerifier) VerifyInteractionActor(_ context.Context, userID string, channelID string) (statusservice.MattermostInteractionActorProof, error) {
+	return statusservice.MattermostInteractionActorProof{
+		UserID: userID, ChannelID: channelID, Active: true, Human: verifier.human, ChannelMember: true,
+	}, verifier.err
 }
 
 type integrationTokenRunner struct {
@@ -61,14 +72,17 @@ type approvalPublisherStub struct {
 	deliveries []domain.ApprovalDelivery
 }
 
+type approvalCardCapture struct {
+	statusservice.MattermostThreadPublisher
+	card statusservice.MattermostCard
+}
+
+func (capture *approvalCardCapture) ReconcileOrPostThreadCard(_ context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
+	capture.card = card
+	return statusservice.MattermostPostRef{ChannelID: card.ChannelID, PostID: "captured-approval-post"}, nil
+}
+
 func (stub *approvalPublisherStub) EnsureApprovalCard(_ context.Context, delivery domain.ApprovalDelivery) (string, error) {
-	encoded, err := json.Marshal(delivery)
-	if err != nil {
-		return "", err
-	}
-	if strings.Contains(string(encoded), syntheticCredential) {
-		return "", errors.New("credential попал в карточку")
-	}
 	stub.mu.Lock()
 	stub.deliveries = append(stub.deliveries, delivery)
 	stub.mu.Unlock()
@@ -128,7 +142,6 @@ where correlation_id = (select correlation_id from matter_codex_tool_invocations
 	if _, err := fixture.pool.Exec(context.Background(), `update matter_codex_integration_test_executions set result = '{}'::jsonb`); err == nil {
 		t.Fatal("immutable execution receipt was modified")
 	}
-	fixture.assertNoCredentialLeak(t)
 }
 
 func TestIntegrationSessionAdmissionUsesExactRootOrDirectHuman(t *testing.T) {
@@ -178,6 +191,97 @@ insert into matter_codex_mattermost_bot_identities(
 	}
 	if _, err := service.AuthorizeIntegrationSession(context.Background(), fixture.session.SessionKey, "session-bearer"); !errors.Is(err, domain.ErrUnauthorized) {
 		t.Fatalf("bot root initiator admission error=%v", err)
+	}
+}
+
+func TestIntegrationSessionAdmissionRejectsEveryDirectKubernetesMutationPath(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*postgresFixture)
+	}{
+		{name: "current role cluster admin", mutate: func(fixture *postgresFixture) {
+			tx, err := fixture.pool.Begin(context.Background())
+			if err != nil {
+				t.Fatalf("begin legacy cluster-admin fixture: %v", err)
+			}
+			defer func() { _ = tx.Rollback(context.Background()) }()
+			if _, err := tx.Exec(context.Background(), `set local session_replication_role = replica`); err != nil {
+				t.Fatalf("disable mutation trigger for legacy fixture: %v", err)
+			}
+			if _, err := tx.Exec(context.Background(), `update matter_codex_agent_roles set kubernetes_access = 'cluster-admin' where id = $1`, fixture.session.RoleID); err != nil {
+				t.Fatalf("seed legacy current cluster-admin role: %v", err)
+			}
+			if err := tx.Commit(context.Background()); err != nil {
+				t.Fatalf("commit legacy current cluster-admin role: %v", err)
+			}
+		}},
+		{name: "frozen session cluster admin", mutate: func(fixture *postgresFixture) {
+			_, err := fixture.pool.Exec(context.Background(), `
+update matter_codex_agent_sessions
+set capabilities = jsonb_set(capabilities, '{kubernetes_access}', '"cluster-admin"'::jsonb, true)
+where id = $1
+`, fixture.session.SessionID)
+			if err != nil {
+				t.Fatalf("seed frozen cluster-admin capability: %v", err)
+			}
+		}},
+		{name: "frozen direct kubeconfig", mutate: func(fixture *postgresFixture) {
+			_, err := fixture.pool.Exec(context.Background(), `
+update matter_codex_agent_sessions
+set capabilities = jsonb_set(capabilities, '{runtime_env}', '[{"name":"KUBECONFIG"}]'::jsonb, true)
+where id = $1
+`, fixture.session.SessionID)
+			if err != nil {
+				t.Fatalf("seed frozen kubeconfig capability: %v", err)
+			}
+		}},
+		{name: "current direct service account token", mutate: func(fixture *postgresFixture) {
+			var variableID int64
+			if err := fixture.pool.QueryRow(context.Background(), `
+insert into matter_codex_project_runtime_variables(project_id, name, slug, secret_ref)
+values ($1, 'KUBERNETES_SERVICE_ACCOUNT_TOKEN_FILE', 'direct-kube-token', 'synthetic-direct-kube-token-ref')
+returning id
+`, fixture.session.ProjectID).Scan(&variableID); err != nil {
+				t.Fatalf("seed current direct Kubernetes variable: %v", err)
+			}
+			if _, err := fixture.pool.Exec(context.Background(), `
+insert into matter_codex_agent_role_runtime_variables(role_id, variable_id) values ($1, $2)
+`, fixture.session.RoleID, variableID); err != nil {
+				t.Fatalf("bind current direct Kubernetes variable: %v", err)
+			}
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newPostgresFixture(t, "direct_path_"+strings.ReplaceAll(test.name, " ", "_"))
+			test.mutate(fixture)
+			store := adminpostgres.NewRepository(fixture.pool)
+			admission := statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{
+				Store: store, RuntimeRunner: integrationTokenRunner{}, StorageReady: true, RuntimeReady: true,
+			})
+			service := domain.NewService(domain.ServiceConfig{
+				Repository: fixture.repo, Admission: admission, CardPublisher: fixture.publisher,
+			})
+			if _, err := service.Catalog(context.Background(), fixture.session.SessionKey, "session-bearer"); !errors.Is(err, domain.ErrUnauthorized) {
+				t.Fatalf("managed tools/list admission error=%v", err)
+			}
+			if _, err := service.RestartWorkload(context.Background(), fixture.session.SessionKey, "session-bearer", fixture.input("restart:test:direct-path:0001")); !errors.Is(err, domain.ErrUnauthorized) {
+				t.Fatalf("managed tools/call admission error=%v", err)
+			}
+			var invocations, approvals int
+			if err := fixture.pool.QueryRow(context.Background(), `select count(*) from matter_codex_tool_invocations`).Scan(&invocations); err != nil {
+				t.Fatalf("count denied invocations: %v", err)
+			}
+			if err := fixture.pool.QueryRow(context.Background(), `select count(*) from matter_codex_approval_requests`).Scan(&approvals); err != nil {
+				t.Fatalf("count denied approvals: %v", err)
+			}
+			fixture.publisher.mu.Lock()
+			cards := len(fixture.publisher.deliveries)
+			fixture.publisher.mu.Unlock()
+			if invocations != 0 || approvals != 0 || cards != 0 || fixture.executionCount(t) != 0 {
+				t.Fatalf("denied path side effects: invocations=%d approvals=%d cards=%d executions=%d", invocations, approvals, cards, fixture.executionCount(t))
+			}
+		})
 	}
 }
 
@@ -389,6 +493,154 @@ where capability.token_hash = $2
 	}
 }
 
+func TestIntegrationServerSideAdmissionAndAtomicHumanCallback(t *testing.T) {
+	for _, decision := range []domain.ApprovalDecision{domain.ApprovalDecisionApprove, domain.ApprovalDecisionReject} {
+		t.Run(string(decision), func(t *testing.T) {
+			fixture := newPostgresFixture(t, "callback_"+string(decision))
+			result := fixture.request(t, "restart:test:callback:"+string(decision)+":0001")
+			input := fixture.decisionInput(t, result, decision)
+			verifier := &authoritativeActorVerifier{human: true}
+			store := adminpostgres.NewRepository(fixture.pool)
+			allowed, err := store.AdmitInteractionResource(context.Background(), securityrepo.InteractionResourceAdmissionInput{
+				ActionKey: "mattermost.callback.action", Operation: "action;kind=integration_approval;action=" + string(decision),
+				ResourceType: "integration_approval", ResourceID: result.ApprovalID,
+				ActorUserID: input.ActorUserID, ChannelID: input.ChannelID, PostID: input.PostID,
+				Installation: domain.InstallationScope, Workspace: fixture.session.WorkspaceScope, Session: fixture.session.SessionKey,
+			})
+			if err != nil || !allowed {
+				t.Fatalf("server-side AdmitInteractionResource() allowed=%t error=%v", allowed, err)
+			}
+			security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
+				Repository: store,
+				Admission: statusservice.NewServerSideInteractionAdmission(
+					domain.InstallationScope, verifier, store,
+				),
+				ActorVerifier: verifier,
+			})
+			card := integrationApprovalCallbackCard(fixture, result, input, decision)
+			if err := security.SealCardPending(context.Background(), &card, card.Interaction.Actor, card.Interaction.Scope); err != nil {
+				t.Fatalf("SealCardPending() error=%v", err)
+			}
+			if err := security.ActivateCard(context.Background(), card); err != nil {
+				t.Fatalf("ActivateCard() error=%v", err)
+			}
+			callback := statusservice.ActionCallback{
+				Context: card.Actions[0].Context, UserID: input.ActorUserID,
+				ChannelID: input.ChannelID, PostID: input.PostID,
+			}
+			interaction, err := security.AuthenticateActionAtomic(context.Background(), callback, func(interaction statusservice.AuthenticatedInteraction, transactional adminrepo.Repository) error {
+				decisionStore, ok := transactional.(interface {
+					DecideIntegrationApproval(context.Context, domain.ApprovalDecisionInput) (domain.Invocation, error)
+				})
+				if !ok {
+					return errors.New("transactional integration decision adapter is unavailable")
+				}
+				input.ActorUserID = interaction.Actor.UserID
+				input.ActorUserName = interaction.Actor.UserName
+				_, err := decisionStore.DecideIntegrationApproval(context.Background(), input)
+				return err
+			})
+			if err != nil {
+				t.Fatalf("authoritative callback unexpectedly became denied/indeterminate: %v", err)
+			}
+			if interaction.ResourceID != result.ApprovalID || interaction.Actor.UserID != "direct-human" {
+				t.Fatalf("authenticated interaction=%+v", interaction)
+			}
+			var capabilityState, approvalState, invocationState string
+			if err := fixture.pool.QueryRow(context.Background(), `
+select capability.status, approval.state, invocation.state
+from matter_codex_interaction_capabilities capability
+join matter_codex_approval_requests approval on approval.public_id = $1
+join matter_codex_tool_invocations invocation on invocation.id = approval.invocation_id
+where capability.resource_type = 'integration_approval'
+	and capability.resource_id = approval.public_id
+`, result.ApprovalID).Scan(&capabilityState, &approvalState, &invocationState); err != nil {
+				t.Fatalf("read authoritative callback state: %v", err)
+			}
+			expectedState := "approved"
+			if decision == domain.ApprovalDecisionReject {
+				expectedState = "rejected"
+			}
+			if capabilityState != "consumed" || approvalState != expectedState || invocationState != expectedState || fixture.executionCount(t) != 0 {
+				t.Fatalf("callback capability=%q approval=%q invocation=%q receipts=%d", capabilityState, approvalState, invocationState, fixture.executionCount(t))
+			}
+		})
+	}
+}
+
+func TestIntegrationExternalUnprojectedBotCallbackFailsClosed(t *testing.T) {
+	fixture := newPostgresFixture(t, "external_bot_callback")
+	result := fixture.request(t, "restart:test:external-bot:0001")
+	input := fixture.decisionInput(t, result, domain.ApprovalDecisionApprove)
+	verifier := &authoritativeActorVerifier{human: true}
+	store := adminpostgres.NewRepository(fixture.pool)
+	security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
+		Repository: store,
+		Admission: statusservice.NewServerSideInteractionAdmission(
+			domain.InstallationScope, verifier, store,
+		),
+		ActorVerifier: verifier,
+	})
+	card := integrationApprovalCallbackCard(fixture, result, input, domain.ApprovalDecisionApprove)
+	if err := security.SealCardPending(context.Background(), &card, card.Interaction.Actor, card.Interaction.Scope); err != nil {
+		t.Fatalf("SealCardPending() error=%v", err)
+	}
+	if err := security.ActivateCard(context.Background(), card); err != nil {
+		t.Fatalf("initial human activation error=%v", err)
+	}
+	var localBotIdentities int
+	if err := fixture.pool.QueryRow(context.Background(), `
+select count(*) from matter_codex_mattermost_bot_identities where mattermost_user_id = 'direct-human'
+`).Scan(&localBotIdentities); err != nil || localBotIdentities != 0 {
+		t.Fatalf("external actor unexpectedly projected into local bot table: count=%d error=%v", localBotIdentities, err)
+	}
+	verifier.human = false
+	callback := statusservice.ActionCallback{
+		Context: card.Actions[0].Context, UserID: input.ActorUserID,
+		ChannelID: input.ChannelID, PostID: input.PostID,
+	}
+	if _, err := security.AuthenticateActionAtomic(context.Background(), callback, func(statusservice.AuthenticatedInteraction, adminrepo.Repository) error {
+		t.Fatal("external bot reached atomic approval mutation")
+		return nil
+	}); !errors.Is(err, statusservice.ErrInteractionAdmissionDenied) {
+		t.Fatalf("external bot callback error=%v", err)
+	}
+	token, _ := card.Actions[0].Context["capability"].(string)
+	tokenHash := sha256.Sum256([]byte(token))
+	var capabilityState, approvalState, invocationState string
+	if err := fixture.pool.QueryRow(context.Background(), `
+select capability.status, approval.state, invocation.state
+from matter_codex_interaction_capabilities capability
+join matter_codex_approval_requests approval on approval.public_id = $1
+join matter_codex_tool_invocations invocation on invocation.id = approval.invocation_id
+where capability.token_hash = $2
+`, result.ApprovalID, tokenHash[:]).Scan(&capabilityState, &approvalState, &invocationState); err != nil {
+		t.Fatalf("read denied bot callback state: %v", err)
+	}
+	if capabilityState != "unused" || approvalState != "pending" || invocationState != "pending" || fixture.executionCount(t) != 0 {
+		t.Fatalf("denied bot capability=%q approval=%q invocation=%q receipts=%d", capabilityState, approvalState, invocationState, fixture.executionCount(t))
+	}
+}
+
+func integrationApprovalCallbackCard(fixture *postgresFixture, result domain.ToolResult, input domain.ApprovalDecisionInput, decision domain.ApprovalDecision) statusservice.MattermostCard {
+	return statusservice.MattermostCard{
+		ChannelID: input.ChannelID, PostID: input.PostID,
+		Actions: []statusservice.MattermostCardAction{{
+			ID: string(decision), Context: map[string]any{
+				"kind": "integration_approval", "action": string(decision),
+				"resource_type": "integration_approval", "resource_id": result.ApprovalID,
+				"approval_binding_sha256": input.ApprovalBindingHash,
+			},
+		}},
+		Interaction: statusservice.MattermostCardInteraction{
+			Actor: statusservice.AuthenticatedActor{UserID: input.ActorUserID, UserName: input.ActorUserName},
+			Scope: statusservice.InteractionScope{
+				Installation: domain.InstallationScope, Workspace: fixture.session.WorkspaceScope, Session: fixture.session.SessionKey,
+			},
+		},
+	}
+}
+
 func TestIntegrationFreshAuthorizationAndNegativeMatrix(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -511,7 +763,7 @@ insert into matter_codex_mattermost_bot_identities(
 	if _, err := fixture.pool.Exec(context.Background(), `update matter_codex_approval_requests set approval_binding_sha256 = decode($2, 'hex') where public_id = $1`, result.ApprovalID, strings.Repeat("0", 64)); err == nil {
 		t.Fatal("immutable approval binding was modified")
 	}
-	if _, err := fixture.pool.Exec(context.Background(), `update matter_codex_integration_connections set credential_ref = $1`, syntheticCredential); err == nil {
+	if _, err := fixture.pool.Exec(context.Background(), `update matter_codex_integration_connections set credential_ref = $1`, "synthetic-credential-material-must-not-fit-reference"); err == nil {
 		t.Fatal("connection accepted a credential value")
 	}
 }
@@ -588,6 +840,103 @@ func TestIntegrationRequestScopeAndIdempotencyNegativeMatrix(t *testing.T) {
 	}
 }
 
+func TestIntegrationSyntheticOnlyCanaryProductionProjections(t *testing.T) {
+	fixture := newPostgresFixture(t, "synthetic_canary")
+	rawCanary := `synthetic-only-issue93:"credential/value+20260721`
+	referenceCanary := "synthetic-issue93-session-reference-20260721"
+	fixture.session.SessionTokenSecretRef = referenceCanary
+	if _, err := fixture.pool.Exec(context.Background(), `
+update matter_codex_agent_sessions set token_secret_ref = $2 where id = $1
+`, fixture.session.SessionID, referenceCanary); err != nil {
+		t.Fatalf("seed synthetic-only credential reference: %v", err)
+	}
+	service := domain.NewService(domain.ServiceConfig{
+		Repository:    fixture.repo,
+		Admission:     syntheticCanaryAdmission{session: fixture.session, token: rawCanary},
+		CardPublisher: fixture.publisher,
+	})
+	result, err := service.RestartWorkload(context.Background(), fixture.session.SessionKey, rawCanary, fixture.input("restart:test:synthetic-canary:0001"))
+	if err != nil {
+		t.Fatalf("RestartWorkload() synthetic-only boundary error=%v", err)
+	}
+	fixture.publisher.mu.Lock()
+	if len(fixture.publisher.deliveries) != 1 {
+		fixture.publisher.mu.Unlock()
+		t.Fatalf("synthetic-only deliveries=%d", len(fixture.publisher.deliveries))
+	}
+	delivery := fixture.publisher.deliveries[0]
+	fixture.publisher.mu.Unlock()
+
+	var storedReference string
+	if err := fixture.pool.QueryRow(context.Background(), `
+select session_token_secret_ref from matter_codex_tool_invocations where public_id = $1
+`, result.InvocationID).Scan(&storedReference); err != nil || storedReference != referenceCanary {
+		t.Fatalf("synthetic reference did not cross authoritative source boundary: ref=%q error=%v", storedReference, err)
+	}
+	capture := &approvalCardCapture{}
+	cardPublisher := statusservice.NewIntegrationApprovalPublisher(nil, capture, "https://bot.invalid/mattermost/actions/agents")
+	if _, err := cardPublisher.EnsureApprovalCard(context.Background(), delivery); err != nil {
+		t.Fatalf("render production Mattermost approval card: %v", err)
+	}
+	var auditProjection string
+	if err := fixture.pool.QueryRow(context.Background(), `
+select coalesce(string_agg(safe_metadata::text || summary || reason_code, E'\n'), '')
+from matter_codex_audit_events where event_type like 'integration.%'
+`).Scan(&auditProjection); err != nil {
+		t.Fatalf("read production audit projection: %v", err)
+	}
+	projections, err := json.Marshal(map[string]any{
+		"mcp_result":         result,
+		"mcp_error":          domain.ReasonCode(errors.New(rawCanary)),
+		"mattermost_card":    capture.card,
+		"mattermost_payload": delivery,
+		"audit":              auditProjection,
+		"log_error_reason":   domain.ReasonCode(fmt.Errorf("synthetic executor: %s", rawCanary)),
+	})
+	if err != nil {
+		t.Fatalf("encode production projections: %v", err)
+	}
+	assertSyntheticCanariesAbsent(t, string(projections), rawCanary, referenceCanary)
+	if strings.Contains(string(projections), "credential_ref") || strings.Contains(string(projections), "session_token_secret_ref") {
+		t.Fatalf("credential reference field leaked into outward production projection: %s", projections)
+	}
+}
+
+type syntheticCanaryAdmission struct {
+	session domain.SessionContext
+	token   string
+}
+
+func (admission syntheticCanaryAdmission) AuthorizeIntegrationSession(_ context.Context, sessionKey string, token string) (domain.SessionContext, error) {
+	if sessionKey != admission.session.SessionKey || token != admission.token {
+		return domain.SessionContext{}, domain.ErrUnauthorized
+	}
+	return admission.session, nil
+}
+
+func assertSyntheticCanariesAbsent(t *testing.T, projection string, canaries ...string) {
+	t.Helper()
+	for _, canary := range canaries {
+		jsonValue, err := json.Marshal(canary)
+		if err != nil {
+			t.Fatalf("encode synthetic canary: %v", err)
+		}
+		representations := []string{
+			canary,
+			string(jsonValue[1 : len(jsonValue)-1]),
+			base64.StdEncoding.EncodeToString([]byte(canary)),
+			base64.RawStdEncoding.EncodeToString([]byte(canary)),
+			base64.URLEncoding.EncodeToString([]byte(canary)),
+			base64.RawURLEncoding.EncodeToString([]byte(canary)),
+		}
+		for _, representation := range representations {
+			if representation != "" && strings.Contains(projection, representation) {
+				t.Fatalf("synthetic-only canary representation leaked: %q", representation)
+			}
+		}
+	}
+}
+
 func TestIntegrationExpiredApprovalIsTerminalWithoutReceipt(t *testing.T) {
 	fixture := newPostgresFixture(t, "approval_expired")
 	now := time.Now().UTC()
@@ -600,8 +949,12 @@ func TestIntegrationExpiredApprovalIsTerminalWithoutReceipt(t *testing.T) {
 		t.Fatalf("request expiring approval: %v", err)
 	}
 	now = now.Add(2 * time.Minute)
-	if _, err := service.DecideApproval(context.Background(), fixture.decisionInput(t, result, domain.ApprovalDecisionApprove)); !errors.Is(err, domain.ErrApprovalTerminal) {
-		t.Fatalf("expired approval decision error=%v", err)
+	replay, err := service.RestartWorkload(context.Background(), fixture.session.SessionKey, "session-bearer", fixture.input("restart:test:expired:0001"))
+	if err != nil {
+		t.Fatalf("replay expiring approval: %v", err)
+	}
+	if replay.Status != domain.InvocationStatusExpired || replay.ReasonCode != "approval.expired" {
+		t.Fatalf("expired replay=%+v", replay)
 	}
 	var approvalState, invocationState string
 	if err := fixture.pool.QueryRow(context.Background(), `
@@ -614,6 +967,20 @@ where approval.public_id = $1
 	}
 	if approvalState != "expired" || invocationState != "expired" || fixture.executionCount(t) != 0 {
 		t.Fatalf("expired approval=%q invocation=%q receipts=%d", approvalState, invocationState, fixture.executionCount(t))
+	}
+	fixture.publisher.mu.Lock()
+	deliveries := len(fixture.publisher.deliveries)
+	fixture.publisher.mu.Unlock()
+	if deliveries != 1 {
+		t.Fatalf("passive expiry repeated approval card: deliveries=%d", deliveries)
+	}
+	var expiryAudits int
+	if err := fixture.pool.QueryRow(context.Background(), `
+select count(*) from matter_codex_audit_events
+where event_type = 'integration.approval.decided' and reason_code = 'approval.expired'
+	and safe_metadata ->> 'approval_id' = $1
+`, result.ApprovalID).Scan(&expiryAudits); err != nil || expiryAudits != 1 {
+		t.Fatalf("passive expiry audit count=%d error=%v", expiryAudits, err)
 	}
 }
 
@@ -844,26 +1211,4 @@ func (fixture *postgresFixture) executionCount(t *testing.T) int {
 		t.Fatalf("count executions: %v", err)
 	}
 	return count
-}
-
-func (fixture *postgresFixture) assertNoCredentialLeak(t *testing.T) {
-	t.Helper()
-	var body string
-	if err := fixture.pool.QueryRow(context.Background(), `
-select coalesce(string_agg(safe_metadata::text || summary || reason_code, E'\n'), '')
-from matter_codex_audit_events
-where event_type like 'integration.%'
-`).Scan(&body); err != nil {
-		t.Fatalf("read integration audit: %v", err)
-	}
-	fixture.publisher.mu.Lock()
-	encoded, err := json.Marshal(fixture.publisher.deliveries)
-	fixture.publisher.mu.Unlock()
-	if err != nil {
-		t.Fatalf("encode cards: %v", err)
-	}
-	body += string(encoded)
-	if strings.Contains(body, syntheticCredential) || strings.Contains(body, "credential_ref") {
-		t.Fatal("credential или credential_ref попал в безопасную поверхность")
-	}
 }

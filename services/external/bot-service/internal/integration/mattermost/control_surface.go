@@ -113,24 +113,27 @@ func (surface *ControlSurface) BotUserID(ctx context.Context) (string, error) {
 	return user.Id, nil
 }
 
-func (surface *ControlSurface) VerifyInteractionActor(ctx context.Context, userID string, channelID string) (bool, error) {
+func (surface *ControlSurface) VerifyInteractionActor(ctx context.Context, userID string, channelID string) (statusservice.MattermostInteractionActorProof, error) {
 	userID = strings.TrimSpace(userID)
 	channelID = strings.TrimSpace(channelID)
 	if userID == "" || channelID == "" {
-		return false, nil
+		return statusservice.MattermostInteractionActorProof{}, nil
 	}
 	user, _, err := surface.client.GetUser(ctx, userID, "")
 	if err != nil {
-		return false, fmt.Errorf("get Mattermost interaction actor: %w", err)
+		return statusservice.MattermostInteractionActorProof{}, fmt.Errorf("get Mattermost interaction actor: %w", err)
 	}
 	if user == nil || user.Id != userID || user.DeleteAt != 0 {
-		return false, nil
+		return statusservice.MattermostInteractionActorProof{UserID: userID, ChannelID: channelID}, nil
 	}
 	membership, _, err := surface.client.GetChannelMember(ctx, channelID, userID, "")
 	if err != nil {
-		return false, fmt.Errorf("get Mattermost interaction channel membership: %w", err)
+		return statusservice.MattermostInteractionActorProof{}, fmt.Errorf("get Mattermost interaction channel membership: %w", err)
 	}
-	return membership != nil && membership.UserId == userID && membership.ChannelId == channelID, nil
+	return statusservice.MattermostInteractionActorProof{
+		UserID: userID, ChannelID: channelID, Active: true, Human: !user.IsBot,
+		ChannelMember: membership != nil && membership.UserId == userID && membership.ChannelId == channelID,
+	}, nil
 }
 
 func (surface *ControlSurface) ResolveMattermostUserName(ctx context.Context, userID string) (string, error) {

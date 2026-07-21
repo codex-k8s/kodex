@@ -130,6 +130,9 @@ func (repo *Repository) CreateOrReplayInvocation(ctx context.Context, input doma
 		if !sameReplayBinding(existing, input, binding) {
 			return domain.Invocation{}, false, domain.ErrIdempotencyConflict
 		}
+		if err := txRepo.expireApprovalOnReplay(ctx, existing.invocationID, input.Now); err != nil {
+			return domain.Invocation{}, false, err
+		}
 		invocation, err := txRepo.invocationByID(ctx, existing.invocationID)
 		if err != nil {
 			return domain.Invocation{}, false, err

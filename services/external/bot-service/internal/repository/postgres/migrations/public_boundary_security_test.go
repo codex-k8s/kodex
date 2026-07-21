@@ -280,7 +280,7 @@ where name = 'developer'
 	}
 	ownerPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("runtime-role migration through v30: %v", err)
+		t.Fatalf("runtime-role migration through v32: %v", err)
 	}
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
 	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
@@ -380,7 +380,7 @@ where subject_type = 'agent_profile'
 	}
 }
 
-func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30Upgrade(t *testing.T) {
+func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30V32Upgrade(t *testing.T) {
 	ownerDSN := isolatedMigrationDSN(t, "exact_n_minus_one")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -435,9 +435,9 @@ func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30Upgrade(t
 	}
 	stagingPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28->v29->v30: %v", err)
+		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28->v29->v30->v32: %v", err)
 	}
-	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 30 {
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 32 {
 		t.Fatalf("upgraded exact N-1 schema version = %d, error=%v", version, err)
 	}
 
@@ -604,18 +604,95 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	if err := migrations.DownOne(ctx, dsn); err == nil {
-		t.Fatal("v30 down unexpectedly succeeded")
+		t.Fatal("v32 down unexpectedly succeeded")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 30 {
+	if err != nil || version != 32 {
 		t.Fatalf("version after failed down = %d, error=%v", version, err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated up after failed down: %v", err)
 	}
 	version, err = migrations.Version(ctx, dsn)
-	if err != nil || version != 30 {
+	if err != nil || version != 32 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
+	}
+}
+
+func TestIntegrationMigrationRuntimeGrantsAndSearchPath(t *testing.T) {
+	dsn := isolatedMigrationDSN(t, "integration_runtime_grants")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	roleName := "mc_integration_runtime_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
+	rolePassword := "synthetic-integration-runtime-password"
+	if err := postgresrepo.ProvisionRuntimeDatabaseRole(ctx, dsn, roleName, rolePassword); err != nil {
+		t.Fatalf("provision integration runtime role: %v", err)
+	}
+	roleIdentifier := pgx.Identifier{roleName}.Sanitize()
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cleanupCancel()
+		cleanupPool := openMigrationPool(t, cleanupCtx, requiredMigrationDSN(t))
+		defer cleanupPool.Close()
+		_, _ = cleanupPool.Exec(cleanupCtx, "drop owned by "+roleIdentifier)
+		_, _ = cleanupPool.Exec(cleanupCtx, "drop role "+roleIdentifier)
+	})
+	if err := migrations.RunForRuntimeRole(ctx, dsn, roleName); err != nil {
+		t.Fatalf("run migration 000032 for runtime role: %v", err)
+	}
+	ownerPool := openMigrationPool(t, ctx, dsn)
+	defer ownerPool.Close()
+	var schemaName, functionDefinition string
+	if err := ownerPool.QueryRow(ctx, `select current_schema()`).Scan(&schemaName); err != nil {
+		t.Fatalf("read integration schema: %v", err)
+	}
+	functionName := schemaName + ".matter_codex_integration_direct_kubernetes_env(text)"
+	if err := ownerPool.QueryRow(ctx, `select pg_get_functiondef($1::regprocedure)`, functionName).Scan(&functionDefinition); err != nil {
+		t.Fatalf("read integration mutation guard function: %v", err)
+	}
+	if !strings.Contains(functionDefinition, "SET search_path TO 'pg_catalog', '") || !strings.Contains(functionDefinition, "'pg_temp'") {
+		t.Fatalf("integration mutation guard search_path не закреплён: %s", functionDefinition)
+	}
+	var publicExecute, runtimeExecute bool
+	if err := ownerPool.QueryRow(ctx, `
+select has_function_privilege('public', $1, 'execute'), has_function_privilege($2, $1, 'execute')
+`, functionName, roleName).Scan(&publicExecute, &runtimeExecute); err != nil {
+		t.Fatalf("read integration mutation guard grants: %v", err)
+	}
+	if publicExecute || !runtimeExecute {
+		t.Fatalf("integration mutation guard grants public=%t runtime=%t", publicExecute, runtimeExecute)
+	}
+	runtimeDSN := migrationDSNForRole(t, dsn, roleName, rolePassword)
+	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
+	defer runtimePool.Close()
+	for _, test := range []struct {
+		table      string
+		privileges string
+		forbidden  string
+	}{
+		{table: "matter_codex_integration_capabilities", privileges: "select", forbidden: "insert,update,delete"},
+		{table: "matter_codex_integration_connections", privileges: "select", forbidden: "insert,update,delete"},
+		{table: "matter_codex_integration_grants", privileges: "select", forbidden: "insert,update,delete"},
+		{table: "matter_codex_tool_invocations", privileges: "select,insert,update", forbidden: "delete"},
+		{table: "matter_codex_approval_requests", privileges: "select,insert,update", forbidden: "delete"},
+		{table: "matter_codex_integration_test_executions", privileges: "select,insert", forbidden: "update,delete"},
+	} {
+		for _, privilege := range strings.Split(test.privileges, ",") {
+			var allowed bool
+			if err := ownerPool.QueryRow(ctx, `select has_table_privilege($1, $2, $3)`, roleName, schemaName+"."+test.table, privilege).Scan(&allowed); err != nil || !allowed {
+				t.Fatalf("runtime %s privilege %s: allowed=%t error=%v", test.table, privilege, allowed, err)
+			}
+		}
+		for _, privilege := range strings.Split(test.forbidden, ",") {
+			var allowed bool
+			if err := ownerPool.QueryRow(ctx, `select has_table_privilege($1, $2, $3)`, roleName, schemaName+"."+test.table, privilege).Scan(&allowed); err != nil || allowed {
+				t.Fatalf("forbidden runtime %s privilege %s: allowed=%t error=%v", test.table, privilege, allowed, err)
+			}
+		}
+	}
+	var detectsDirect bool
+	if err := runtimePool.QueryRow(ctx, `select matter_codex_integration_direct_kubernetes_env('RADAR_KUBECONFIG_FILE')`).Scan(&detectsDirect); err != nil || !detectsDirect {
+		t.Fatalf("runtime typed Kubernetes mutation guard: direct=%t error=%v", detectsDirect, err)
 	}
 }
 
@@ -1345,7 +1422,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 		t.Fatalf("upgrade historical base v21->current main v22: %v", err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27->v28->v29->v30: %v", err)
+		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27->v28->v29->v30->v32: %v", err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()

@@ -77,8 +77,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		)
 	}
 	interactionSecurity := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
-		Repository: storage,
-		Admission:  statusservice.NewServerSideInteractionAdmission("", controlSurface, storage),
+		Repository:    storage,
+		Admission:     statusservice.NewServerSideInteractionAdmission("", controlSurface, storage),
+		ActorVerifier: controlSurface,
 	})
 	if controlSurface != nil {
 		channelManager = controlSurface

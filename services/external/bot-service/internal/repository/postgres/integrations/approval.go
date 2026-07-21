@@ -71,6 +71,7 @@ func (repo *Repository) ReleaseApprovalDelivery(ctx context.Context, approvalID 
 
 type lockedApproval struct {
 	id                int64
+	publicID          string
 	invocationID      int64
 	state             domain.InvocationStatus
 	bindingHash       string
@@ -99,7 +100,7 @@ func (repo *Repository) DecideApproval(ctx context.Context, input domain.Approva
 	txRepo := newTransactionalRepository(tx)
 	var locked lockedApproval
 	err = tx.QueryRow(ctx, query("approval__lock.sql"), input.ApprovalPublicID).Scan(
-		&locked.id, &locked.invocationID, &locked.state, &locked.bindingHash,
+		&locked.id, &locked.publicID, &locked.invocationID, &locked.state, &locked.bindingHash,
 		&locked.approverUserID, &locked.approverUserName, &locked.expiresAt,
 		&locked.channelID, &locked.rootPostID, &locked.postID,
 		&locked.invocationState, &locked.correlationID, &locked.installationScope,
@@ -157,6 +158,48 @@ func (repo *Repository) DecideApproval(ctx context.Context, input domain.Approva
 		return domain.Invocation{}, fmt.Errorf("commit integration approval: %w", err)
 	}
 	return invocation, nil
+}
+
+func (repo *Repository) expireApprovalOnReplay(ctx context.Context, invocationID int64, now time.Time) error {
+	var locked lockedApproval
+	err := repo.db.QueryRow(ctx, query("approval__lock_by_invocation.sql"), invocationID).Scan(
+		&locked.id, &locked.publicID, &locked.invocationID, &locked.state, &locked.bindingHash,
+		&locked.approverUserID, &locked.approverUserName, &locked.expiresAt,
+		&locked.channelID, &locked.rootPostID, &locked.postID,
+		&locked.invocationState, &locked.correlationID, &locked.installationScope,
+		&locked.workspaceScope, &locked.sessionScope,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrApprovalBinding
+	}
+	if err != nil {
+		return fmt.Errorf("lock integration approval replay: %w", err)
+	}
+	if locked.state != domain.InvocationStatusPending || locked.expiresAt.After(now) {
+		return nil
+	}
+	approvalCommand, err := repo.db.Exec(ctx, query("approval__expire.sql"), locked.id, now)
+	if err != nil {
+		return fmt.Errorf("expire integration approval: %w", err)
+	}
+	if approvalCommand.RowsAffected() != 1 {
+		return domain.ErrApprovalTerminal
+	}
+	invocationCommand, err := repo.db.Exec(ctx, query("invocation__expire.sql"), locked.invocationID, now)
+	if err != nil {
+		return fmt.Errorf("expire integration invocation: %w", err)
+	}
+	if invocationCommand.RowsAffected() != 1 {
+		return domain.ErrApprovalTerminal
+	}
+	return repo.appendAudit(ctx, auditInput{
+		EventType: "integration.approval.decided", ActorUserID: "matter-codex-system", ActorUser: "matter-codex",
+		ResourceType: "approval_request", ResourceName: locked.publicID,
+		Summary: "Истекло согласование опасной capability.", CorrelationID: locked.correlationID,
+		InstallationScope: locked.installationScope, WorkspaceScope: locked.workspaceScope,
+		SessionScope: locked.sessionScope, Outcome: string(domain.InvocationStatusExpired), ReasonCode: "approval.expired",
+		Metadata: auditMetadata{ApprovalID: locked.publicID}, Now: now,
+	})
 }
 
 func (repo *Repository) applyApprovalDecision(ctx context.Context, locked lockedApproval, desired domain.InvocationStatus, input domain.ApprovalDecisionInput, reasonCode string) error {

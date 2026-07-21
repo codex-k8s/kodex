@@ -44,6 +44,40 @@ func TestControlSurfaceUsesBoundedHTTPTransportForEveryToken(t *testing.T) {
 	}
 }
 
+func TestControlSurfaceProvesAuthoritativeHumanFromMattermost(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		isBot bool
+		human bool
+	}{
+		{name: "external unprojected bot", isBot: true, human: false},
+		{name: "active human", human: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				writer.Header().Set("Content-Type", "application/json")
+				switch request.URL.Path {
+				case "/api/v4/users/external-user":
+					_ = json.NewEncoder(writer).Encode(&mattermostmodel.User{Id: "external-user", Username: "external", IsBot: test.isBot})
+				case "/api/v4/channels/channel-1/members/external-user":
+					_ = json.NewEncoder(writer).Encode(&mattermostmodel.ChannelMember{ChannelId: "channel-1", UserId: "external-user"})
+				default:
+					http.NotFound(writer, request)
+				}
+			}))
+			defer server.Close()
+
+			proof, err := NewControlSurface(server.URL, "synthetic-token", "").VerifyInteractionActor(context.Background(), "external-user", "channel-1")
+			if err != nil {
+				t.Fatalf("VerifyInteractionActor() error=%v", err)
+			}
+			if proof.UserID != "external-user" || proof.ChannelID != "channel-1" || !proof.Active || !proof.ChannelMember || proof.Human != test.human {
+				t.Fatalf("authoritative proof=%#v", proof)
+			}
+		})
+	}
+}
+
 func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) {
 	input := statusservice.MattermostThreadPostInput{
 		ChannelID: "channel-1", RootPostID: "root-1", Message: "immutable callback\n\n#notrigger",

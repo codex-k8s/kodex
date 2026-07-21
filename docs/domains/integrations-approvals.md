@@ -4,7 +4,7 @@ title: Интеграции и согласования
 type: domain
 status: approved
 owner: architect
-version: 0.2.0
+version: 0.2.1
 updated: 2026-07-21
 ---
 
@@ -38,17 +38,18 @@ updated: 2026-07-21
 
 - в каталоге существует ровно одна опасная capability `deployment.restart_workload@1` с исполнителем `recording_test`;
 - `Connection`, `IntegrationCapability`, `IntegrationGrant`, `ToolInvocation` и `ApprovalRequest` хранятся в PostgreSQL;
-- динамический MCP-каталог показывает capability только сессии с действующим точным grant;
+- динамический MCP-каталог показывает capability только сессии с действующим точным grant и без current/frozen прямого Kubernetes mutation path (`cluster-admin`, kubeconfig, token, client certificate/key или эквивалентная runtime variable);
 - запрос фиксирует хеш аргументов и отдельный хеш полного approval binding, возвращает `pending` и не запускает executor;
-- решение принимает только exact root/direct human initiator через отдельный защищённый Mattermost callback, а bearer сессии агента не является полномочием согласования;
+- решение принимает только exact root/direct human initiator через отдельный защищённый Mattermost callback; при активации карточки и при callback Mattermost должен положительно подтвердить активного пользователя, членство в точном канале и `IsBot == false`, а отсутствие идентификатора во внутренней таблице bot identity само по себе не является human proof;
 - погашение одноразовой callback capability и переход approval/invocation фиксируются одной PostgreSQL-транзакцией; исправимая ошибка решения откатывает оба изменения;
 - worker перед записью квитанции повторно проверяет сессию, capability, connection, grant, ревизии, ограничения и approval;
 - единственный executor записывает immutable receipt в PostgreSQL. Он не имеет Kubernetes-клиента, `kubectl`, credential или внешнего mutation path;
 - уникальная квитанция по `ToolInvocation` и execution fence обеспечивают exactly-once доказательство при параллельных worker и восстановлении после сбоя.
+- повтор pending-вызова после `expires_at` атомарно переводит approval и invocation в `expired`, пишет безопасный audit и возвращает сохранённый terminal result без клика, новой карточки или квитанции.
 
 Если отзыв полномочия зафиксирован до записи квитанции, invocation монотонно переходит в `cancelled` с безопасным кодом `execution.authorization_changed`, а строка executor не появляется. Если точная квитанция уже зафиксирована, поздний отзыв не переписывает совершившийся факт: восстановление читает ту же квитанцию и завершает invocation в `succeeded`.
 
-Повтор того же MCP-вызова с тем же idempotency key и неизменным binding возвращает сохранённый `succeeded`. Credential value и даже `credential_ref` не входят в схему MCP, карточку, результат, аудит, лог или ошибку; текущая тестовая connection обязана иметь пустой `credential_ref`.
+Повтор того же MCP-вызова с тем же idempotency key и неизменным binding возвращает сохранённый terminal result. Credential value и даже `credential_ref` не входят в схему MCP, карточку, результат, аудит, лог или ошибку; текущая тестовая connection обязана иметь пустой `credential_ref`. Synthetic-only canary проходит разрешённые bearer/reference source boundaries и проверяется в raw, JSON-escaped, base64 и base64url представлениях на фактических MCP result/error, Mattermost card/payload и PostgreSQL audit-проекциях. Этот срез не материализует integration credential в Codex config, runtime pod или workspace; отсутствие credential на этих общих поверхностях проверяют их отдельные production-boundary тесты, а не integration executor.
 
 ## Контракт MCP среды выполнения
 
