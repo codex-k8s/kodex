@@ -55,8 +55,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			Role:          "reviewer",
 			Description:   "Generic pull request reviewer prompt seed",
 			FileName:      "reviewer_review_pr.md",
-			RoleNames:     []string{"reviewer", "technical-reviewer", "technical_reviewer", "lexical-guard", "lexical_guard"},
-			RoleTypes:     []string{"reviewer", "lexical_guard"},
+			RoleNames:     []string{"reviewer", "technical-reviewer", "technical_reviewer", "security", "security-reviewer", "security_reviewer", "lexical-guard", "lexical_guard"},
+			RoleTypes:     []string{"reviewer", "security", "security_reviewer", "lexical_guard"},
 		},
 		{
 			SourceProfile: "manager",

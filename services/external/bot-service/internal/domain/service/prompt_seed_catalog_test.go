@@ -52,6 +52,88 @@ func TestManagerPromptSeedDocumentsDynamicCrossChatRouting(t *testing.T) {
 	}
 }
 
+func TestManagedReviewTriagePromptContract(t *testing.T) {
+	managerSeed, ok := promptSeedForProfileTemplate("manager", managerCoordinateTaskKey)
+	if !ok {
+		t.Fatal("manager prompt seed is missing")
+	}
+	managerBody, err := promptSeedMarkdown(managerSeed)
+	if err != nil {
+		t.Fatalf("promptSeedMarkdown(manager) error = %v", err)
+	}
+	for _, expected := range []string{
+		"Merge blocker",
+		"MVP follow-up",
+		"Informational",
+		"GitHub GraphQL `reviewThreads`",
+		"labels `mvp-follow-up`",
+		"ограниченную неблокирующую волну",
+	} {
+		if !strings.Contains(managerBody, expected) {
+			t.Fatalf("manager seed missing review triage contract %q:\n%s", expected, managerBody)
+		}
+	}
+
+	reviewSeed, ok := promptSeedForProfileTemplate("reviewer", reviewPRTemplateKey)
+	if !ok {
+		t.Fatal("review prompt seed is missing")
+	}
+	reviewBody, err := promptSeedMarkdown(reviewSeed)
+	if err != nil {
+		t.Fatalf("promptSeedMarkdown(reviewer) error = %v", err)
+	}
+	for _, expected := range []string{
+		"Merge blocker",
+		"MVP follow-up",
+		"Informational",
+		"labels `mvp-follow-up`",
+		"URL Issue",
+		"почему замечание не является blocker",
+		"GitHub GraphQL `reviewThreads`",
+	} {
+		if !strings.Contains(reviewBody, expected) {
+			t.Fatalf("review seed missing review triage contract %q:\n%s", expected, reviewBody)
+		}
+	}
+	issueURLIndex := strings.Index(reviewBody, "URL Issue")
+	reasonIndex := strings.Index(reviewBody, "почему замечание не является blocker")
+	resolveIndex := strings.Index(reviewBody, "только после этого разреши thread")
+	if issueURLIndex < 0 || reasonIndex < 0 || resolveIndex < 0 || issueURLIndex > resolveIndex || reasonIndex > resolveIndex {
+		t.Fatalf("review seed must require Issue URL and non-blocker reason before resolving the thread:\n%s", reviewBody)
+	}
+
+	securitySeed, ok := promptSeedForAgentRole("security-reviewer", "security")
+	if !ok || securitySeed.SourceProfile != "reviewer" || securitySeed.TemplateKey != reviewPRTemplateKey {
+		t.Fatalf("security review role does not resolve to shared review triage seed: %#v, ok=%v", securitySeed, ok)
+	}
+
+	directorSeed, ok := promptSeedForProfileTemplate("director", directorCoordinatePortfolioKey)
+	if !ok {
+		t.Fatal("director prompt seed is missing")
+	}
+	directorBody, err := promptSeedMarkdown(directorSeed)
+	if err != nil {
+		t.Fatalf("promptSeedMarkdown(director) error = %v", err)
+	}
+	for _, expected := range []string{"label `mvp-follow-up`", "неблокирующую волну", "не запускает новый `improver` рекурсивно"} {
+		if !strings.Contains(directorBody, expected) {
+			t.Fatalf("director seed missing follow-up contract %q:\n%s", expected, directorBody)
+		}
+	}
+
+	improverSeed, ok := promptSeedForProfileTemplate("improver", improverFeedbackTaskKey)
+	if !ok {
+		t.Fatal("improver prompt seed is missing")
+	}
+	improverBody, err := promptSeedMarkdown(improverSeed)
+	if err != nil {
+		t.Fatalf("promptSeedMarkdown(improver) error = %v", err)
+	}
+	if !strings.Contains(improverBody, "слияние результата текущего цикла `improver` основанием для рекурсивного запуска") {
+		t.Fatalf("improver seed missing terminal-cycle contract:\n%s", improverBody)
+	}
+}
+
 func TestSeedDefaultAgentPromptTemplatesDoesNotOverwriteExistingTemplates(t *testing.T) {
 	store := &fakeAdminStore{
 		promptTemplates: map[string]entity.AgentPromptTemplate{
