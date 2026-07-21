@@ -1949,6 +1949,8 @@ func assertRunnerUtilityResources(t *testing.T, resources corev1.ResourceRequire
 
 func assertRunnerSessionResources(t *testing.T, resources corev1.ResourceRequirements) {
 	t.Helper()
+	assertResourceQuantity(t, resources.Requests, corev1.ResourceCPU, runnerSessionCPURequest)
+	assertResourceQuantity(t, resources.Requests, corev1.ResourceMemory, runnerSessionMemoryRequest)
 	assertResourceQuantity(t, resources.Limits, corev1.ResourceMemory, runnerSessionMemoryLimit)
 	if _, exists := resources.Limits[corev1.ResourceCPU]; exists {
 		t.Fatalf("session runner must not have a cpu limit: %#v", resources.Limits)

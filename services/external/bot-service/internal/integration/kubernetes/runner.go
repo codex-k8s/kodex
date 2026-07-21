@@ -62,6 +62,8 @@ const (
 	runnerGID                    = int64(10001)
 	runnerUtilityCPURequest      = "100m"
 	runnerUtilityMemoryRequest   = "128Mi"
+	runnerSessionCPURequest      = "500m"
+	runnerSessionMemoryRequest   = "1Gi"
 	runnerSessionMemoryLimit     = "64Gi"
 	runnerUtilityMemoryLimit     = "4Gi"
 	runnerDevShmSizeLimit        = "8Gi"
@@ -83,6 +85,8 @@ type Config struct {
 	AgentRunnerImage                      string
 	CodexPackage                          string
 	WorkspaceStorageSize                  string
+	SessionCPURequest                     string
+	SessionMemoryRequest                  string
 	SessionMemoryLimit                    string
 	UtilityMemoryLimit                    string
 	DevShmSizeLimit                       string
@@ -103,6 +107,8 @@ type Runner struct {
 	agentRunnerImage                      string
 	codexPackage                          string
 	workspaceStorage                      resource.Quantity
+	sessionCPURequest                     resource.Quantity
+	sessionMemoryRequest                  resource.Quantity
 	sessionMemoryLimit                    resource.Quantity
 	utilityMemoryLimit                    resource.Quantity
 	devShmSizeLimit                       resource.Quantity
@@ -187,6 +193,14 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 	if err != nil {
 		return nil, fmt.Errorf("parse workspace storage size: %w", err)
 	}
+	sessionCPURequest, err := parsePositiveResourceQuantity(cfg.SessionCPURequest, runnerSessionCPURequest, "session cpu request")
+	if err != nil {
+		return nil, err
+	}
+	sessionMemoryRequest, err := parsePositiveResourceQuantity(cfg.SessionMemoryRequest, runnerSessionMemoryRequest, "session memory request")
+	if err != nil {
+		return nil, err
+	}
 	sessionMemoryLimit, err := parsePositiveResourceQuantity(cfg.SessionMemoryLimit, runnerSessionMemoryLimit, "session memory limit")
 	if err != nil {
 		return nil, err
@@ -207,6 +221,8 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		agentRunnerImage:                      defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
 		codexPackage:                          defaultString(cfg.CodexPackage, "@openai/codex@0.144.1"),
 		workspaceStorage:                      storage,
+		sessionCPURequest:                     sessionCPURequest,
+		sessionMemoryRequest:                  sessionMemoryRequest,
 		sessionMemoryLimit:                    sessionMemoryLimit,
 		utilityMemoryLimit:                    utilityMemoryLimit,
 		devShmSizeLimit:                       devShmSizeLimit,
@@ -2905,6 +2921,10 @@ func (runner *Runner) runnerUtilityResourceRequirements() corev1.ResourceRequire
 
 func (runner *Runner) runnerSessionResourceRequirements() corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    runner.sessionCPURequest,
+			corev1.ResourceMemory: runner.sessionMemoryRequest,
+		},
 		Limits: corev1.ResourceList{
 			corev1.ResourceMemory: runner.sessionMemoryLimit,
 		},

@@ -93,8 +93,8 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.RuntimeWorkspaceSize != "1Gi" {
 		t.Fatalf("RuntimeWorkspaceSize = %q", cfg.RuntimeWorkspaceSize)
 	}
-	if cfg.AgentSessionMemoryLimit != "64Gi" || cfg.AgentUtilityMemoryLimit != "4Gi" || cfg.AgentDevShmSizeLimit != "8Gi" {
-		t.Fatalf("agent memory defaults = session:%q utility:%q dev-shm:%q", cfg.AgentSessionMemoryLimit, cfg.AgentUtilityMemoryLimit, cfg.AgentDevShmSizeLimit)
+	if cfg.AgentSessionCPURequest != "500m" || cfg.AgentSessionMemoryRequest != "1Gi" || cfg.AgentSessionMemoryLimit != "64Gi" || cfg.AgentUtilityMemoryLimit != "4Gi" || cfg.AgentDevShmSizeLimit != "8Gi" {
+		t.Fatalf("agent resource defaults = cpu-request:%q memory-request:%q session-limit:%q utility-limit:%q dev-shm:%q", cfg.AgentSessionCPURequest, cfg.AgentSessionMemoryRequest, cfg.AgentSessionMemoryLimit, cfg.AgentUtilityMemoryLimit, cfg.AgentDevShmSizeLimit)
 	}
 	if !cfg.RuntimeRetentionEnabled {
 		t.Fatal("RuntimeRetentionEnabled = false")

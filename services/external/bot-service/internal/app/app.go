@@ -334,6 +334,8 @@ func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, boo
 		AgentRunnerImage:                      cfg.AgentRunnerImage,
 		CodexPackage:                          cfg.CodexPackage,
 		WorkspaceStorageSize:                  cfg.RuntimeWorkspaceSize,
+		SessionCPURequest:                     cfg.AgentSessionCPURequest,
+		SessionMemoryRequest:                  cfg.AgentSessionMemoryRequest,
 		SessionMemoryLimit:                    cfg.AgentSessionMemoryLimit,
 		UtilityMemoryLimit:                    cfg.AgentUtilityMemoryLimit,
 		DevShmSizeLimit:                       cfg.AgentDevShmSizeLimit,
