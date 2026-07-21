@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
 	"errors"
 	"fmt"
@@ -20,25 +21,29 @@ const (
 )
 
 type promptTemplateSeed struct {
-	SourceProfile string
-	TemplateKey   string
-	Role          string
-	Description   string
-	FileName      string
-	RoleNames     []string
-	RoleTypes     []string
+	SourceProfile  string
+	TemplateKey    string
+	Role           string
+	Description    string
+	FileName       string
+	RoleNames      []string
+	RoleTypes      []string
+	Version        int
+	PreviousSHA256 []string
 }
 
 func promptSeedCatalog() []promptTemplateSeed {
-	return []promptTemplateSeed{
+	seeds := []promptTemplateSeed{
 		{
-			SourceProfile: "director",
-			TemplateKey:   directorCoordinatePortfolioKey,
-			Role:          "director",
-			Description:   "Generic top-level project coordinator prompt seed",
-			FileName:      "director_coordinate_portfolio.md",
-			RoleNames:     []string{"director", "coordinator"},
-			RoleTypes:     []string{"director", "coordinator"},
+			SourceProfile:  "director",
+			TemplateKey:    directorCoordinatePortfolioKey,
+			Role:           "director",
+			Description:    "Generic top-level project coordinator prompt seed",
+			FileName:       "director_coordinate_portfolio.md",
+			RoleNames:      []string{"director", "coordinator"},
+			RoleTypes:      []string{"director", "coordinator"},
+			Version:        2,
+			PreviousSHA256: []string{"9757920bae68b4a14732e530d5dfb7f5d8afd6a0fdbe0377035d26e4a945e791"},
 		},
 		{
 			SourceProfile: "developer",
@@ -50,22 +55,26 @@ func promptSeedCatalog() []promptTemplateSeed {
 			RoleTypes:     []string{"worker", "deployer"},
 		},
 		{
-			SourceProfile: "reviewer",
-			TemplateKey:   reviewPRTemplateKey,
-			Role:          "reviewer",
-			Description:   "Generic pull request reviewer prompt seed",
-			FileName:      "reviewer_review_pr.md",
-			RoleNames:     []string{"reviewer", "technical-reviewer", "technical_reviewer", "security", "security-reviewer", "security_reviewer", "lexical-guard", "lexical_guard"},
-			RoleTypes:     []string{"reviewer", "security", "security_reviewer", "lexical_guard"},
+			SourceProfile:  "reviewer",
+			TemplateKey:    reviewPRTemplateKey,
+			Role:           "reviewer",
+			Description:    "Generic pull request reviewer prompt seed",
+			FileName:       "reviewer_review_pr.md",
+			RoleNames:      []string{"reviewer", "technical-reviewer", "technical_reviewer", "security", "security-reviewer", "security_reviewer", "lexical-guard", "lexical_guard"},
+			RoleTypes:      []string{"reviewer", "security", "security_reviewer", "lexical_guard"},
+			Version:        2,
+			PreviousSHA256: []string{"54260e1c6e1edec6b01e2f0d6cfeae51bef874811ce2e79ca67d8e597aa97d45"},
 		},
 		{
-			SourceProfile: "manager",
-			TemplateKey:   managerCoordinateTaskKey,
-			Role:          "manager",
-			Description:   "Generic manager coordination prompt seed",
-			FileName:      "manager_coordinate_task.md",
-			RoleNames:     []string{"manager"},
-			RoleTypes:     []string{"manager"},
+			SourceProfile:  "manager",
+			TemplateKey:    managerCoordinateTaskKey,
+			Role:           "manager",
+			Description:    "Generic manager coordination prompt seed",
+			FileName:       "manager_coordinate_task.md",
+			RoleNames:      []string{"manager"},
+			RoleTypes:      []string{"manager"},
+			Version:        2,
+			PreviousSHA256: []string{"be3491a2b6b9822557bc20ec6e2d27e5c425eb0b0667aed9e877386e7e30cfa2"},
 		},
 		{
 			SourceProfile: "architect",
@@ -112,13 +121,15 @@ func promptSeedCatalog() []promptTemplateSeed {
 			RoleTypes:     []string{"designer", "ui_ux", "ux"},
 		},
 		{
-			SourceProfile: "improver",
-			TemplateKey:   improverFeedbackTaskKey,
-			Role:          "improver",
-			Description:   "Generic instruction improvement prompt seed",
-			FileName:      "improver_feedback_improvement.md",
-			RoleNames:     []string{"improver"},
-			RoleTypes:     []string{"improver"},
+			SourceProfile:  "improver",
+			TemplateKey:    improverFeedbackTaskKey,
+			Role:           "improver",
+			Description:    "Generic instruction improvement prompt seed",
+			FileName:       "improver_feedback_improvement.md",
+			RoleNames:      []string{"improver"},
+			RoleTypes:      []string{"improver"},
+			Version:        2,
+			PreviousSHA256: []string{"3cd624912902adc423658192bd41a9c0a0b2630cadb061644f0c9aa9bf5e07dd"},
 		},
 		{
 			SourceProfile: "pm-delivery",
@@ -147,6 +158,12 @@ func promptSeedCatalog() []promptTemplateSeed {
 			RoleNames:     []string{"mattercodex-admin", "matter-codex-admin"},
 		},
 	}
+	for index := range seeds {
+		if seeds[index].Version == 0 {
+			seeds[index].Version = 1
+		}
+	}
+	return seeds
 }
 
 func promptSeedsForRole(role string) []promptTemplateSeed {
@@ -215,28 +232,68 @@ func SeedDefaultAgentPromptTemplates(ctx context.Context, store adminrepo.Reposi
 	if store == nil {
 		return 0, nil
 	}
-	created := 0
+	changed := 0
 	for _, seed := range promptSeedCatalog() {
-		if _, err := store.GetAgentPromptTemplate(ctx, seed.SourceProfile, seed.TemplateKey); err == nil {
-			continue
-		} else if !errors.Is(err, adminrepo.ErrNotFound) {
-			return created, err
-		}
-		body, err := promptSeedMarkdown(seed)
+		seedChanged, err := seedDefaultAgentPromptTemplate(ctx, store, seed)
 		if err != nil {
-			return created, err
+			return changed, err
 		}
-		if _, newTemplate, err := store.UpsertAgentPromptTemplate(ctx, adminrepo.UpsertAgentPromptTemplateInput{
+		if seedChanged {
+			changed++
+		}
+	}
+	return changed, nil
+}
+
+func seedDefaultAgentPromptTemplate(ctx context.Context, store adminrepo.Repository, seed promptTemplateSeed) (bool, error) {
+	if seed.Version <= 0 {
+		return false, fmt.Errorf("prompt seed %s/%s has invalid version", seed.SourceProfile, seed.TemplateKey)
+	}
+	body, err := promptSeedMarkdown(seed)
+	if err != nil {
+		return false, err
+	}
+	existing, err := store.GetAgentPromptTemplate(ctx, seed.SourceProfile, seed.TemplateKey)
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		_, created, upsertErr := store.UpsertAgentPromptTemplate(ctx, adminrepo.UpsertAgentPromptTemplateInput{
 			ProfileName: seed.SourceProfile,
 			TemplateKey: seed.TemplateKey,
 			Body:        body,
-		}); err != nil {
-			return created, err
-		} else if newTemplate {
-			created++
+		})
+		return created, upsertErr
+	}
+	if err != nil {
+		return false, err
+	}
+	if existing.Body == body || !matchesPreviousPromptSeedBody(existing.Body, seed.PreviousSHA256) {
+		return false, nil
+	}
+	upgrader, ok := store.(adminrepo.AgentPromptSeedUpgradeRepository)
+	if !ok {
+		return false, nil
+	}
+	result, err := upgrader.UpgradeUnmodifiedAgentPromptSeed(ctx, adminrepo.UpgradeAgentPromptSeedInput{
+		ProfileName:  seed.SourceProfile,
+		TemplateKey:  seed.TemplateKey,
+		PreviousBody: existing.Body,
+		Body:         body,
+		RoleNames:    seed.RoleNames,
+		RoleTypes:    seed.RoleTypes,
+	})
+	if err != nil {
+		return false, err
+	}
+	return result.TemplatesUpdated > 0 || result.RolesUpdated > 0, nil
+}
+
+func matchesPreviousPromptSeedBody(body string, digests []string) bool {
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(body)))
+	for _, candidate := range digests {
+		if strings.EqualFold(strings.TrimSpace(candidate), digest) {
+			return true
 		}
 	}
-	return created, nil
+	return false
 }
 
 func normalizePromptSeedKey(value string) string {

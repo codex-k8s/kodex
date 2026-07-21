@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -165,5 +167,53 @@ func TestSeedDefaultAgentPromptTemplatesDoesNotOverwriteExistingTemplates(t *tes
 	}
 	if _, err := store.GetAgentPromptTemplate(context.Background(), "qa-bot", qaRegressionTaskKey); err != nil {
 		t.Fatalf("qa-bot seed was not inserted: %v", err)
+	}
+}
+
+func TestSeedDefaultAgentPromptTemplateUpgradesOnlyUnmodifiedSeedCopies(t *testing.T) {
+	previousBody := "previous default seed\n"
+	previousDigest := fmt.Sprintf("%x", sha256.Sum256([]byte(previousBody)))
+	seed := promptTemplateSeed{
+		SourceProfile:  "manager",
+		TemplateKey:    managerCoordinateTaskKey,
+		FileName:       "manager_coordinate_task.md",
+		RoleNames:      []string{"manager"},
+		RoleTypes:      []string{"manager"},
+		Version:        2,
+		PreviousSHA256: []string{previousDigest},
+	}
+	store := &fakeAdminStore{
+		promptTemplates: map[string]entity.AgentPromptTemplate{
+			promptTemplateMapKey(seed.SourceProfile, seed.TemplateKey): {
+				ProfileName: seed.SourceProfile,
+				TemplateKey: seed.TemplateKey,
+				Body:        previousBody,
+			},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", PromptTemplate: previousBody},
+			2: {ID: 2, ProjectID: 2, Name: "manager", RoleType: "manager", PromptTemplate: "owner customized role prompt"},
+		},
+	}
+
+	changed, err := seedDefaultAgentPromptTemplate(context.Background(), store, seed)
+	if err != nil {
+		t.Fatalf("seedDefaultAgentPromptTemplate() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("seedDefaultAgentPromptTemplate() did not report an upgrade")
+	}
+	want, err := promptSeedMarkdown(seed)
+	if err != nil {
+		t.Fatalf("promptSeedMarkdown() error = %v", err)
+	}
+	if got := store.promptTemplates[promptTemplateMapKey(seed.SourceProfile, seed.TemplateKey)].Body; got != want {
+		t.Fatalf("template body was not upgraded")
+	}
+	if got := store.agentRoles[1].PromptTemplate; got != want {
+		t.Fatalf("unmodified role prompt was not upgraded")
+	}
+	if got := store.agentRoles[2].PromptTemplate; got != "owner customized role prompt" {
+		t.Fatalf("custom role prompt was overwritten: %q", got)
 	}
 }

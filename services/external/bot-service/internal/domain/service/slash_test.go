@@ -5139,6 +5139,28 @@ func (store *fakeAdminStore) UpsertAgentPromptTemplate(_ context.Context, input 
 	return item, !exists, nil
 }
 
+func (store *fakeAdminStore) UpgradeUnmodifiedAgentPromptSeed(_ context.Context, input adminrepo.UpgradeAgentPromptSeedInput) (adminrepo.UpgradeAgentPromptSeedResult, error) {
+	store.ensurePromptTemplates()
+	store.ensureAgentRoles()
+	result := adminrepo.UpgradeAgentPromptSeedResult{}
+	key := promptTemplateMapKey(input.ProfileName, input.TemplateKey)
+	item, exists := store.promptTemplates[key]
+	if exists && item.Body == input.PreviousBody {
+		item.Body = input.Body
+		store.promptTemplates[key] = item
+		result.TemplatesUpdated = 1
+	}
+	for id, role := range store.agentRoles {
+		if role.PromptTemplate != input.PreviousBody || (!containsNormalized(input.RoleNames, role.Name) && !containsNormalized(input.RoleTypes, role.RoleType)) {
+			continue
+		}
+		role.PromptTemplate = input.Body
+		store.agentRoles[id] = role
+		result.RolesUpdated++
+	}
+	return result, nil
+}
+
 func (store *fakeAdminStore) ensurePromptTemplates() {
 	if store.promptTemplates != nil {
 		return

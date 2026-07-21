@@ -62,6 +62,9 @@ const (
 	runnerGID                    = int64(10001)
 	runnerUtilityCPURequest      = "100m"
 	runnerUtilityMemoryRequest   = "128Mi"
+	runnerSessionMemoryLimit     = "64Gi"
+	runnerUtilityMemoryLimit     = "4Gi"
+	runnerDevShmSizeLimit        = "8Gi"
 	kubernetesAccessReadOnly     = "read-only"
 	kubernetesAccessClusterAdmin = "cluster-admin"
 	sessionQuotaRetryRetention   = time.Hour
@@ -80,6 +83,9 @@ type Config struct {
 	AgentRunnerImage                      string
 	CodexPackage                          string
 	WorkspaceStorageSize                  string
+	SessionMemoryLimit                    string
+	UtilityMemoryLimit                    string
+	DevShmSizeLimit                       string
 	JobTTLSecondsAfterFinish              int32
 	AuthCheckJobTTLSecondsAfterFinish     int32
 	LogTailLines                          int64
@@ -97,6 +103,9 @@ type Runner struct {
 	agentRunnerImage                      string
 	codexPackage                          string
 	workspaceStorage                      resource.Quantity
+	sessionMemoryLimit                    resource.Quantity
+	utilityMemoryLimit                    resource.Quantity
+	devShmSizeLimit                       resource.Quantity
 	jobTTLSecondsAfterFinish              int32
 	authCheckJobTTLSecondsAfterFinish     int32
 	logTailLines                          int64
@@ -175,6 +184,18 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 	if err != nil {
 		return nil, fmt.Errorf("parse workspace storage size: %w", err)
 	}
+	sessionMemoryLimit, err := parsePositiveResourceQuantity(cfg.SessionMemoryLimit, runnerSessionMemoryLimit, "session memory limit")
+	if err != nil {
+		return nil, err
+	}
+	utilityMemoryLimit, err := parsePositiveResourceQuantity(cfg.UtilityMemoryLimit, runnerUtilityMemoryLimit, "utility memory limit")
+	if err != nil {
+		return nil, err
+	}
+	devShmSizeLimit, err := parsePositiveResourceQuantity(cfg.DevShmSizeLimit, runnerDevShmSizeLimit, "dev shm size limit")
+	if err != nil {
+		return nil, err
+	}
 	return &Runner{
 		client:                                client,
 		restConfig:                            restConfig,
@@ -183,6 +204,9 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		agentRunnerImage:                      defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
 		codexPackage:                          defaultString(cfg.CodexPackage, "@openai/codex@0.144.1"),
 		workspaceStorage:                      storage,
+		sessionMemoryLimit:                    sessionMemoryLimit,
+		utilityMemoryLimit:                    utilityMemoryLimit,
+		devShmSizeLimit:                       devShmSizeLimit,
 		jobTTLSecondsAfterFinish:              defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
 		authCheckJobTTLSecondsAfterFinish:     defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),
 		logTailLines:                          defaultInt64(cfg.LogTailLines, 40),
@@ -1670,7 +1694,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 							Args:            []string{"smoke"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
-							Resources:       runnerUtilityResourceRequirements(),
+							Resources:       runner.runnerUtilityResourceRequirements(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: runID},
 								{Name: "MATTERCODEX_AGENT_ROLE", Value: role},
@@ -1689,7 +1713,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 								},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -1726,6 +1750,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 							Args:            []string{"developer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
+							Resources:       runner.runnerSessionResourceRequirements(),
 							Env: append([]corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
@@ -1792,7 +1817,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 								},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -1829,6 +1854,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 							Args:            []string{"reviewer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
+							Resources:       runner.runnerSessionResourceRequirements(),
 							Env: append([]corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
@@ -1893,7 +1919,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 								},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -1990,11 +2016,12 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 							Args:            []string{"chat"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
+							Resources:       runner.runnerSessionResourceRequirements(),
 							Env:             env,
 							VolumeMounts:    append(volumeMounts, runnerWritableVolumeMounts()...),
 						},
 					},
-					Volumes: append(volumes, runnerWritableVolumes()...),
+					Volumes: append(volumes, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -2122,11 +2149,12 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 					Args:            []string{"session"},
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					SecurityContext: runnerContainerSecurityContext(),
+					Resources:       runner.runnerSessionResourceRequirements(),
 					Env:             env,
 					VolumeMounts:    append(volumeMounts, runnerWritableVolumeMounts()...),
 				},
 			},
-			Volumes: append(volumes, runnerWritableVolumes()...),
+			Volumes: append(volumes, runner.runnerWritableVolumes()...),
 		},
 	}
 }
@@ -2157,7 +2185,7 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 							Args:            []string{"codex-auth"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
-							Resources:       runnerUtilityResourceRequirements(),
+							Resources:       runner.runnerUtilityResourceRequirements(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: accountName},
 								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: secretName},
@@ -2174,7 +2202,7 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -2207,7 +2235,7 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 							Args:            []string{"codex-auth-secret-check"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
-							Resources:       runnerUtilityResourceRequirements(),
+							Resources:       runner.runnerUtilityResourceRequirements(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: input.AccountName},
 								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: input.SecretName},
@@ -2236,7 +2264,7 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 								},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -2826,6 +2854,17 @@ func defaultInt64(value int64, fallback int64) int64 {
 	return value
 }
 
+func parsePositiveResourceQuantity(value string, fallback string, field string) (resource.Quantity, error) {
+	quantity, err := resource.ParseQuantity(defaultString(value, fallback))
+	if err != nil {
+		return resource.Quantity{}, fmt.Errorf("parse %s: %w", field, err)
+	}
+	if quantity.Sign() <= 0 {
+		return resource.Quantity{}, fmt.Errorf("%s must be positive", field)
+	}
+	return quantity, nil
+}
+
 func runnerPodSecurityContext() *corev1.PodSecurityContext {
 	fsGroupChangePolicy := corev1.FSGroupChangeOnRootMismatch
 	return &corev1.PodSecurityContext{
@@ -2849,11 +2888,22 @@ func runnerContainerSecurityContext() *corev1.SecurityContext {
 	}
 }
 
-func runnerUtilityResourceRequirements() corev1.ResourceRequirements {
+func (runner *Runner) runnerUtilityResourceRequirements() corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse(runnerUtilityCPURequest),
 			corev1.ResourceMemory: resource.MustParse(runnerUtilityMemoryRequest),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: runner.utilityMemoryLimit,
+		},
+	}
+}
+
+func (runner *Runner) runnerSessionResourceRequirements() corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: runner.sessionMemoryLimit,
 		},
 	}
 }
@@ -2866,11 +2916,11 @@ func runnerWritableVolumeMounts() []corev1.VolumeMount {
 	}
 }
 
-func runnerWritableVolumes() []corev1.Volume {
+func (runner *Runner) runnerWritableVolumes() []corev1.Volume {
 	return []corev1.Volume{
 		{Name: runnerHomeVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		{Name: runnerTmpVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-		{Name: runnerDevShmVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory}}},
+		{Name: runnerDevShmVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory, SizeLimit: &runner.devShmSizeLimit}}},
 	}
 }
 

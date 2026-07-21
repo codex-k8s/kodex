@@ -42,6 +42,9 @@ type Config struct {
 	AgentRunnerImage                    string        `env:"MATTERCODEX_AGENT_RUNNER_IMAGE" envDefault:"matter-codex-agent-runner:dev"`
 	CodexPackage                        string        `env:"MATTERCODEX_CODEX_PACKAGE" envDefault:"@openai/codex@0.144.1"`
 	RuntimeWorkspaceSize                string        `env:"MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE" envDefault:"1Gi"`
+	AgentSessionMemoryLimit             string        `env:"MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT" envDefault:"64Gi"`
+	AgentUtilityMemoryLimit             string        `env:"MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT" envDefault:"4Gi"`
+	AgentDevShmSizeLimit                string        `env:"MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT" envDefault:"8Gi"`
 	RuntimeJobTTLSeconds                int32         `env:"MATTERCODEX_RUNTIME_JOB_TTL_SECONDS" envDefault:"86400"`
 	RuntimeRetentionEnabled             bool          `env:"MATTERCODEX_RUNTIME_RETENTION_ENABLED" envDefault:"true"`
 	RuntimeRetentionInterval            time.Duration `env:"MATTERCODEX_RUNTIME_RETENTION_INTERVAL" envDefault:"30m"`
