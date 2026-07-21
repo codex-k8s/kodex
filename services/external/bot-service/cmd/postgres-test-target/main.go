@@ -200,6 +200,9 @@ func runTarget(arguments []string, expectedMajor string) int {
 		"GOFLAGS=",
 		"GOWORK=off",
 	)
+	if endpoints := strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_EPHEMERAL_ENDPOINTS")); endpoints != "" {
+		command.Env = append(command.Env, "MATTERCODEX_POSTGRES_TEST_EPHEMERAL_ENDPOINTS="+endpoints)
+	}
 	if expectedMajor != "" {
 		command.Env = append(command.Env, "MATTERCODEX_POSTGRES_TEST_MAJOR="+expectedMajor)
 	}

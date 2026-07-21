@@ -150,9 +150,30 @@ func TestBootstrapProofOfflineMatrix(t *testing.T) {
 	}
 }
 
+func TestExplicitlyAllowedHostPort(t *testing.T) {
+	t.Setenv("MATTERCODEX_POSTGRES_TEST_EPHEMERAL_ENDPOINTS", "127.0.0.1:15432,10.0.0.8:25432")
+	for _, test := range []struct {
+		name string
+		host string
+		port uint16
+		want bool
+	}{
+		{name: "exact loopback endpoint", host: "127.0.0.1", port: 15432, want: true},
+		{name: "exact private endpoint", host: "10.0.0.8", port: 25432, want: true},
+		{name: "different port", host: "127.0.0.1", port: 15433},
+		{name: "empty host", port: 15432},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := explicitlyAllowedHostPort(test.host, test.port); got != test.want {
+				t.Fatalf("explicitlyAllowedHostPort(%q, %d) = %t, want %t", test.host, test.port, got, test.want)
+			}
+		})
+	}
+}
+
 func TestGeneratedPostgresHarnessOneShotBootstrapProof(t *testing.T) {
 	if strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_BINDIR")) == "" {
-		t.Fatal("серверные исполняемые файлы автоматически созданной оснастки PostgreSQL обязательны")
+		t.Skip("проверка относится только к local-binaries оснастке")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
@@ -987,6 +1008,9 @@ where target_database = $1
 }
 
 func TestVectorExtensionLifecycleSerializesCleanDatabase(t *testing.T) {
+	if strings.TrimSpace(os.Getenv("MATTERCODEX_POSTGRES_TEST_BINDIR")) == "" {
+		t.Skip("fresh database authority относится только к local-binaries оснастке")
+	}
 	dsn := FreshDatabaseDSN(t, "vector_race")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

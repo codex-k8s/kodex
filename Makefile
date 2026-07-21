@@ -4,7 +4,7 @@ test-go:
 	env -u GOFLAGS GOENV=off GOWORK=off go test -tags= ./...
 
 test-go-postgres:
-	@env -u GOFLAGS GOENV=off GOWORK=off go run ./services/external/bot-service/cmd/postgres-test-target --majors 15,16 -- go test -tags=postgres ./services/external/bot-service/internal/repository/postgres/... ./services/external/bot-service/internal/domain/service -count=1
+	@env -u GOFLAGS GOENV=off GOWORK=off go run ./services/external/bot-service/cmd/postgres-test-target --majors 15,16 -- go test -tags=postgres ./services/external/bot-service/internal/repository/postgres/... ./services/external/bot-service/internal/domain/service ./services/external/bot-service/internal/app -count=1
 
 test-go-all:
 	@$(MAKE) test-go
