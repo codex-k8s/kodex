@@ -185,7 +185,8 @@ type ChatRunServiceConfig struct {
 }
 
 type ChatRunService struct {
-	cfg ChatRunServiceConfig
+	cfg             ChatRunServiceConfig
+	turnStatusCards *AgentSessionService
 }
 
 type CodexReauthRequiredError struct {
@@ -211,7 +212,12 @@ func NewChatRunService(cfg ChatRunServiceConfig) *ChatRunService {
 	if cfg.CapacityRetryDelay <= 0 {
 		cfg.CapacityRetryDelay = defaultCapacityRetryDelay
 	}
-	return &ChatRunService{cfg: cfg}
+	turnStatusCards := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer: cfg.Localizer, Store: cfg.Store, ThreadPublisher: cfg.ThreadPublisher,
+		MenuActionURL: cfg.MenuActionURL, MattermostSiteURL: cfg.MattermostSiteURL,
+		StorageReady: cfg.StorageReady,
+	})
+	return &ChatRunService{cfg: cfg, turnStatusCards: turnStatusCards}
 }
 
 func (svc *ChatRunService) SetAutomationRuntimeReconciler(reconciler AutomationRuntimeTerminalReconciler) {
@@ -649,6 +655,11 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	})
 	if err != nil {
 		return AgentTurnQueued{}, err
+	}
+	if svc.turnStatusCards != nil && svc.cfg.ThreadPublisher != nil && strings.TrimSpace(svc.cfg.MenuActionURL) != "" {
+		status := defaultString(strings.TrimSpace(turn.Status), agentSessionTurnQueued)
+		message := svc.turnStatusCards.turnStatusMessage(ctx, session, status, turn.RunID, openAIAccount.Name, "")
+		_, _ = svc.turnStatusCards.upsertTurnStatusCard(ctx, session, turn, status, message, "")
 	}
 	return AgentTurnQueued{
 		RunID:              runID,

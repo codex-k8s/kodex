@@ -3,9 +3,11 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
@@ -32,6 +34,31 @@ type stopTurnTransportRunner struct {
 	runtimerepo.Runner
 }
 
+type stopTurnTransportReconciler struct {
+	mu    sync.Mutex
+	calls int
+	err   error
+}
+
+func (reconciler *stopTurnTransportReconciler) ReconcileRuntimeTerminal(context.Context, statusservice.AutomationRuntimeTerminalCommand) error {
+	reconciler.mu.Lock()
+	defer reconciler.mu.Unlock()
+	reconciler.calls++
+	return reconciler.err
+}
+
+func (reconciler *stopTurnTransportReconciler) setError(err error) {
+	reconciler.mu.Lock()
+	reconciler.err = err
+	reconciler.mu.Unlock()
+}
+
+func (reconciler *stopTurnTransportReconciler) callCount() int {
+	reconciler.mu.Lock()
+	defer reconciler.mu.Unlock()
+	return reconciler.calls
+}
+
 func (stopTurnTransportRunner) InspectSecretIntegrity(context.Context, runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
 	return runtimerepo.SecretIntegrity{ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1"}, nil
 }
@@ -46,6 +73,7 @@ func newStopTurnTransportStore() *stopTurnTransportStore {
 		turn: entity.AgentSessionTurn{
 			ID: 1, SessionID: 1, RunID: "run-1", Status: "queued",
 			MattermostChannelID: "channel-1", MattermostRootPostID: "root-1", MattermostStatusPostID: "status-post-1",
+			UserID: "owner", UserName: "owner",
 		},
 	}
 }
@@ -250,6 +278,127 @@ func TestStopTurnProductionActionRejectsForgedTurnWithoutConsumingCapability(t *
 	if recorder.Code != http.StatusBadRequest || store.cancelCalls != 0 || repository.consumes != 0 {
 		t.Fatalf("status=%d cancel=%d consume=%d body=%s", recorder.Code, store.cancelCalls, repository.consumes, recorder.Body.String())
 	}
+}
+
+func TestStopTurnProductionActionRecoversTerminalReconciliationAfterRestart(t *testing.T) {
+	store := newStopTurnTransportStore()
+	repository := &memoryInteractionRepository{
+		capabilities: map[string]securityrepo.Capability{}, inputs: map[string]securityrepo.IssueCapabilityInput{}, admissions: map[string]bool{}, mutationStore: store,
+	}
+	reconciler := &stopTurnTransportReconciler{}
+	reconciliationErr := errors.New("synthetic terminal reconciliation failure")
+	reconciler.setError(reconciliationErr)
+	publisher := &recordingThreadPublisher{}
+	router := newStopTurnRecoveryRouter(t, store, repository, publisher, reconciler)
+	originalBody := stopTurnActionBody(t, router, "session-1", map[string]any{
+		"kind": "agent_turn", "action": "stop_turn", "turn_ids": "1", "resource_type": "agent_session_turn", "resource_id": "1",
+	})
+
+	first := serveStopTurnAction(router, originalBody)
+	if first.Code != http.StatusBadGateway || store.turn.Status != "canceled" || store.cancelCalls != 1 || repository.consumes != 1 || reconciler.callCount() != 1 {
+		t.Fatalf("first status=%d turn=%q cancel=%d consume=%d reconcile=%d body=%s", first.Code, store.turn.Status, store.cancelCalls, repository.consumes, reconciler.callCount(), first.Body.String())
+	}
+	if len(publisher.cardUpdates) != 1 || len(publisher.cardUpdates[0].Actions) != 1 {
+		t.Fatalf("recovery card updates=%#v issues=%d turn=%#v session=%#v", publisher.cardUpdates, repository.issues, store.turn, store.session)
+	}
+	recoveryBody := stopTurnBodyFromCard(t, publisher.cardUpdates[0])
+
+	reconciler.setError(nil)
+	restarted := newStopTurnRecoveryRouter(t, store, repository, publisher, reconciler)
+	for _, test := range []struct {
+		name string
+		body string
+	}{
+		{name: "wrong actor", body: mutateStopTurnBody(t, originalBody, func(payload map[string]any) { payload["user_id"] = "other-user" })},
+		{name: "changed replay", body: mutateStopTurnBody(t, originalBody, func(payload map[string]any) { payload["context"].(map[string]any)["changed"] = "true" })},
+		{name: "wrong project", body: stopTurnActionBodyWithScope(t, restarted, "2", "session-1")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := serveStopTurnAction(restarted, test.body)
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+	wrongSession := serveStopTurnAction(restarted, stopTurnActionBodyWithScope(t, restarted, "1", "other-session"))
+	if wrongSession.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong session status=%d body=%s", wrongSession.Code, wrongSession.Body.String())
+	}
+	if reconciler.callCount() != 1 || store.cancelCalls != 1 {
+		t.Fatalf("denied replay side effects cancel=%d reconcile=%d", store.cancelCalls, reconciler.callCount())
+	}
+
+	recovered := serveStopTurnAction(restarted, recoveryBody)
+	if recovered.Code != http.StatusOK || store.cancelCalls != 1 || repository.consumes != 2 || reconciler.callCount() != 2 {
+		t.Fatalf("recovery status=%d cancel=%d consume=%d replay=%d reconcile=%d body=%s", recovered.Code, store.cancelCalls, repository.consumes, repository.replays, reconciler.callCount(), recovered.Body.String())
+	}
+	cardUpdates := len(publisher.cardUpdates)
+	exactReplay := serveStopTurnAction(restarted, originalBody)
+	if exactReplay.Code != http.StatusOK || store.cancelCalls != 1 || repository.replays != 1 || reconciler.callCount() != 3 || len(publisher.cardUpdates) != cardUpdates {
+		t.Fatalf("exact replay status=%d cancel=%d replay=%d reconcile=%d cards=%d/%d body=%s", exactReplay.Code, store.cancelCalls, repository.replays, reconciler.callCount(), len(publisher.cardUpdates), cardUpdates, exactReplay.Body.String())
+	}
+}
+
+func newStopTurnRecoveryRouter(t *testing.T, store *stopTurnTransportStore, repository *memoryInteractionRepository, publisher *recordingThreadPublisher, reconciler *stopTurnTransportReconciler) *Router {
+	t.Helper()
+	security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{Repository: repository, Admission: fixedAdmission{status: statusservice.AdmissionAllowed}})
+	localizer, err := texti18n.New(texti18n.DefaultLocale)
+	if err != nil {
+		t.Fatalf("localizer: %v", err)
+	}
+	securedPublisher := statusservice.NewSecuredMattermostThreadPublisher(publisher, security)
+	return NewRouter(RouterConfig{
+		SessionService: statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{
+			Localizer: localizer, Store: store, RuntimeRunner: stopTurnTransportRunner{}, ThreadPublisher: securedPublisher,
+			AutomationRuntimeReconciler: reconciler, MenuActionURL: "https://mattermost.example/actions", StorageReady: true,
+		}),
+		InteractionSecurity: security, Localizer: localizer, MaxSlashFormBytes: 65536, ThreadPublisher: securedPublisher,
+	})
+}
+
+func serveStopTurnAction(router *Router, body string) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, pathAgentsAction, strings.NewReader(body)))
+	return recorder
+}
+
+func stopTurnBodyFromCard(t *testing.T, card statusservice.MattermostCard) string {
+	t.Helper()
+	payload, err := json.Marshal(map[string]any{
+		"user_id": card.Interaction.Actor.UserID, "channel_id": card.ChannelID, "post_id": card.PostID, "context": card.Actions[0].Context,
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	return string(payload)
+}
+
+func mutateStopTurnBody(t *testing.T, body string, mutation func(map[string]any)) string {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	mutation(payload)
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	return string(encoded)
+}
+
+func stopTurnActionBodyWithScope(t *testing.T, router *Router, workspaceScope string, sessionScope string) string {
+	t.Helper()
+	card := statusservice.MattermostCard{
+		ChannelID: "channel-1", PostID: "post-1",
+		Actions: []statusservice.MattermostCardAction{{ID: "stopturn", Context: map[string]any{
+			"kind": "agent_turn", "action": "stop_turn", "turn_ids": "1", "resource_type": "agent_session_turn", "resource_id": "1",
+		}}},
+	}
+	if err := router.interactionSecurity.SealCard(context.Background(), &card, statusservice.AuthenticatedActor{UserID: "owner", UserName: "owner"}, statusservice.InteractionScope{Workspace: workspaceScope, Session: sessionScope}); err != nil {
+		t.Fatalf("SealCard() error = %v", err)
+	}
+	return stopTurnBodyFromCard(t, card)
 }
 
 func stopTurnActionBody(t *testing.T, router *Router, sessionScope string, actionContext map[string]any) string {

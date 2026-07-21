@@ -15,6 +15,24 @@ import (
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
+func TestAgentSessionStatusCardExposesStopForQueuedAndCanceledRecovery(t *testing.T) {
+	store, _, _ := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer: testLocalizer(t, texti18n.DefaultLocale), Store: store,
+		MenuActionURL: "https://mattermost.example/actions", StorageReady: true,
+	})
+	session := store.agentSessions["session-1"]
+	turn := store.sessionTurns[0]
+	for _, status := range []string{agentSessionTurnRunning, agentSessionTurnQueued, agentSessionTurnCanceled} {
+		t.Run(status, func(t *testing.T) {
+			card := svc.turnStatusCard(context.Background(), session, turn, status, "channel-1", "root-1", "status")
+			if len(card.Actions) != 1 || card.Actions[0].ID != "stopturn" || card.Actions[0].Context["resource_id"] != "1" {
+				t.Fatalf("status=%q actions=%#v", status, card.Actions)
+			}
+		})
+	}
+}
+
 func TestAgentSessionClaimCreatesInitialStatusPost(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	svc := NewAgentSessionService(AgentSessionServiceConfig{

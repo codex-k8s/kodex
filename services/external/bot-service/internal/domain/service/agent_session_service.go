@@ -201,6 +201,18 @@ type stopAgentSessionTurnPlanItem struct {
 	reconcileOnly  bool
 }
 
+func (plan StopAgentSessionTurnsPlan) ReconcileOnly() bool {
+	if len(plan.items) == 0 {
+		return false
+	}
+	for _, item := range plan.items {
+		if !item.reconcileOnly {
+			return false
+		}
+	}
+	return true
+}
+
 type RetryAgentSessionTurnCommand struct {
 	TurnID    int64
 	UserID    string
@@ -583,12 +595,22 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 		}
 		var canceled entity.AgentSessionTurn
 		cleanupRuntime := false
+		reconcileOnly := false
 		err = svc.withCurrentSessionGuardUsingStore(ctx, store, session, "agent_session.stop_prepare.side_effect", true, func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
 			currentTurn, readErr := guardedStore.GetAgentSessionTurn(ctx, turn.ID)
 			if readErr != nil {
 				return readErr
 			}
-			if currentTurn.ID != turn.ID || currentTurn.SessionID != current.ID || !agentSessionTurnStoppable(currentTurn.Status) {
+			if currentTurn.ID != turn.ID || currentTurn.SessionID != current.ID {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			if currentTurn.Status == agentSessionTurnCanceled {
+				canceled = currentTurn
+				reconcileOnly = true
+				session = current
+				return nil
+			}
+			if !agentSessionTurnStoppable(currentTurn.Status) {
 				return adminrepo.ErrClusterAdminAdmissionDenied
 			}
 			canceled, readErr = guardedStore.CancelAgentSessionTurn(ctx, adminrepo.CancelAgentSessionTurnInput{
@@ -626,8 +648,12 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 			}
 			return StopAgentSessionTurnsPlan{}, err
 		}
-		plan.items = append(plan.items, stopAgentSessionTurnPlanItem{session: session, turn: canceled, cleanupRuntime: cleanupRuntime})
-		plan.stopped++
+		plan.items = append(plan.items, stopAgentSessionTurnPlanItem{session: session, turn: canceled, cleanupRuntime: cleanupRuntime, reconcileOnly: reconcileOnly})
+		if reconcileOnly {
+			plan.skipped++
+		} else {
+			plan.stopped++
+		}
 	}
 	return plan, nil
 }
@@ -664,7 +690,12 @@ func (svc *AgentSessionService) FinalizeStopAgentSessionTurns(ctx context.Contex
 			if err := svc.withCurrentSessionPersistenceGuard(ctx, item.session, "agent_session.stop_card.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
 				account := svc.sessionOpenAIAccountNameWithStore(ctx, guardedStore, current)
 				message := svc.turnStatusMessageWithStore(ctx, guardedStore, current, agentSessionTurnCanceled, item.turn.RunID, account, "")
-				_, cardErr := svc.upsertTurnStatusCardWithStore(ctx, guardedStore, current, item.turn, agentSessionTurnCanceled, message, "")
+				recoveryTurn := item.turn
+				if userID := strings.TrimSpace(plan.command.UserID); userID != "" {
+					recoveryTurn.UserID = userID
+					recoveryTurn.UserName = strings.TrimSpace(plan.command.UserName)
+				}
+				_, cardErr := svc.upsertTurnStatusCardWithStore(ctx, guardedStore, current, recoveryTurn, agentSessionTurnCanceled, message, "")
 				return cardErr
 			}); err != nil {
 				finalizationErr = errors.Join(finalizationErr, err)
@@ -1365,11 +1396,17 @@ func (svc *AgentSessionService) turnStatusCardWithStore(ctx context.Context, sto
 			},
 		},
 	}
-	if status == agentSessionTurnRunning && strings.TrimSpace(svc.cfg.MenuActionURL) != "" {
+	if (status == agentSessionTurnRunning || status == agentSessionTurnQueued || status == agentSessionTurnCanceled) && strings.TrimSpace(svc.cfg.MenuActionURL) != "" {
+		actionNameID := "chat.session.turn.stop.action"
+		actionTooltipID := "chat.session.turn.stop.tooltip"
+		if status == agentSessionTurnCanceled {
+			actionNameID = "chat.session.turn.stop.reconcile_action"
+			actionTooltipID = "chat.session.turn.stop.reconcile_tooltip"
+		}
 		card.Actions = []MattermostCardAction{{
 			ID:      "stopturn",
-			Name:    svc.t("chat.session.turn.stop.action", nil),
-			Tooltip: svc.t("chat.session.turn.stop.tooltip", nil),
+			Name:    svc.t(actionNameID, nil),
+			Tooltip: svc.t(actionTooltipID, nil),
 			Style:   "danger",
 			Context: map[string]any{
 				"kind":          "agent_turn",
@@ -1668,6 +1705,9 @@ func (svc *AgentSessionService) turnStatusMessageWithStore(ctx context.Context, 
 	}
 	if status == agentSessionTurnCanceled {
 		return svc.t("chat.session.status.canceled", data)
+	}
+	if status == agentSessionTurnQueued {
+		return svc.t("chat.session.status.queued", data)
 	}
 	if status == agentSessionTurnBlocked {
 		return svc.t("chat.session.status.provider_policy_blocked", data)

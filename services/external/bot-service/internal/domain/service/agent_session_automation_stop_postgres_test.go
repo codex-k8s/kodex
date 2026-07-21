@@ -5,6 +5,8 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +28,14 @@ type automationStopPostgresFixture struct {
 	runtimeTurnID     int64
 	ownerMattermostID string
 	processRunID      int64
+}
+
+type failingAutomationRuntimeReconciler struct {
+	err error
+}
+
+func (reconciler failingAutomationRuntimeReconciler) ReconcileRuntimeTerminal(context.Context, AutomationRuntimeTerminalCommand) error {
+	return reconciler.err
 }
 
 func TestAgentSessionStopPersistsAutomationTerminalHistoryPostgres(t *testing.T) {
@@ -51,6 +61,83 @@ func TestAgentSessionStopPersistsAutomationTerminalHistoryPostgres(t *testing.T)
 				t.Fatalf("reconcile-only retry duplicated status card: got=%d want=%d", got, cardCount)
 			}
 		})
+	}
+}
+
+func TestAgentSessionStopRecoversAutomationTerminalHistoryAfterRestartPostgres(t *testing.T) {
+	reconciliationErr := errors.New("synthetic terminal reconciliation failure")
+	for _, status := range []string{agentSessionTurnRunning, agentSessionTurnQueued} {
+		t.Run(status, func(t *testing.T) {
+			fixture := newAutomationStopPostgresFixture(t, status, true)
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			fixture.service.cfg.AutomationRuntimeReconciler = failingAutomationRuntimeReconciler{err: reconciliationErr}
+			command := StopAgentSessionTurnsCommand{TurnIDs: []int64{fixture.runtimeTurnID}, UserID: "owner-user", UserName: "owner"}
+
+			if _, err := fixture.service.StopAgentSessionTurns(ctx, command); !errors.Is(err, reconciliationErr) {
+				t.Fatalf("first StopAgentSessionTurns(%s) error=%v", status, err)
+			}
+			assertAutomationStopPendingReconciliation(t, ctx, fixture)
+			cardCount := len(fixture.publisher.cards) + len(fixture.publisher.cardUpdates)
+
+			fixture.service = newAutomationStopPostgresService(fixture.pool, fixture.publisher)
+			if _, err := fixture.service.StopAgentSessionTurns(ctx, command); err != nil {
+				t.Fatalf("restarted StopAgentSessionTurns(%s) error=%v", status, err)
+			}
+			assertAutomationStopPostgresState(t, ctx, fixture)
+			if got := len(fixture.publisher.cards) + len(fixture.publisher.cardUpdates); got != cardCount {
+				t.Fatalf("restart duplicated status card: got=%d want=%d", got, cardCount)
+			}
+		})
+	}
+}
+
+func TestAgentSessionStopReconcilesAlreadyCanceledAutomationTurnPostgres(t *testing.T) {
+	fixture := newAutomationStopPostgresFixture(t, agentSessionTurnQueued, true)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_session_turns set status = 'canceled' where id = $1`, fixture.runtimeTurnID); err != nil {
+		t.Fatalf("prepare canceled turn: %v", err)
+	}
+	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_runs set status = 'canceled' where run_id = (select run_id from matter_codex_agent_session_turns where id = $1)`, fixture.runtimeTurnID); err != nil {
+		t.Fatalf("prepare canceled run: %v", err)
+	}
+	fixture.service = newAutomationStopPostgresService(fixture.pool, fixture.publisher)
+	if _, err := fixture.service.StopAgentSessionTurns(ctx, StopAgentSessionTurnsCommand{TurnIDs: []int64{fixture.runtimeTurnID}, UserID: "owner-user", UserName: "owner"}); err != nil {
+		t.Fatalf("reconcile-only canceled StopAgentSessionTurns() error=%v", err)
+	}
+	assertAutomationStopPostgresState(t, ctx, fixture)
+}
+
+func TestAgentSessionStopConcurrentDuplicateDeliveryIsExactlyOncePostgres(t *testing.T) {
+	fixture := newAutomationStopPostgresFixture(t, agentSessionTurnRunning, true)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := StopAgentSessionTurnsCommand{TurnIDs: []int64{fixture.runtimeTurnID}, UserID: "owner-user", UserName: "owner"}
+	const deliveries = 8
+	start := make(chan struct{})
+	errorsByDelivery := make(chan error, deliveries)
+	var wait sync.WaitGroup
+	for range deliveries {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			_, err := fixture.service.StopAgentSessionTurns(ctx, command)
+			errorsByDelivery <- err
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(errorsByDelivery)
+	for err := range errorsByDelivery {
+		if err != nil {
+			t.Fatalf("concurrent StopAgentSessionTurns() error=%v", err)
+		}
+	}
+	assertAutomationStopPostgresState(t, ctx, fixture)
+	if got := len(fixture.publisher.cards) + len(fixture.publisher.cardUpdates); got != 1 {
+		t.Fatalf("concurrent delivery status cards=%d want=1", got)
 	}
 }
 
@@ -257,5 +344,31 @@ func assertAutomationStopPostgresState(t *testing.T, ctx context.Context, fixtur
 	}
 	if runCount != 1 || occurrenceCount != 1 || terminalAuditCount != 1 {
 		t.Fatalf("terminal history duplicates: runs=%d occurrences=%d terminal_audit=%d", runCount, occurrenceCount, terminalAuditCount)
+	}
+}
+
+func assertAutomationStopPendingReconciliation(t *testing.T, ctx context.Context, fixture automationStopPostgresFixture) {
+	t.Helper()
+	turn, err := adminpostgres.NewRepository(fixture.pool).GetAgentSessionTurn(ctx, fixture.runtimeTurnID)
+	if err != nil || turn.Status != agentSessionTurnCanceled {
+		t.Fatalf("pending reconciliation turn=%#v error=%v", turn, err)
+	}
+	run, err := automationspostgres.NewRepository(fixture.pool).GetRun(ctx, fixture.runPublicID, fixture.projectID, fixture.ownerMattermostID)
+	if err != nil {
+		t.Fatalf("read pending scheduled run: %v", err)
+	}
+	if run.Status != string(value.AutomationRunStatusRunning) {
+		t.Fatalf("pending scheduled run status=%q", run.Status)
+	}
+	var occurrenceStatus string
+	var terminalAuditCount int
+	if err := fixture.pool.QueryRow(ctx, `select status from matter_codex_schedule_occurrences where id = $1`, run.OccurrenceID).Scan(&occurrenceStatus); err != nil {
+		t.Fatalf("read pending occurrence: %v", err)
+	}
+	if err := fixture.pool.QueryRow(ctx, `select count(*) from matter_codex_automation_audit_events where scheduled_run_id = $1 and event_type = 'run.runtime_terminal'`, run.ID).Scan(&terminalAuditCount); err != nil {
+		t.Fatalf("count pending terminal audit: %v", err)
+	}
+	if occurrenceStatus != string(value.AutomationRunStatusRunning) || terminalAuditCount != 0 {
+		t.Fatalf("pending occurrence=%q terminal audit=%d", occurrenceStatus, terminalAuditCount)
 	}
 }

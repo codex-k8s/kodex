@@ -186,7 +186,7 @@ func TestChatRunAddsAgentEyesReaction(t *testing.T) {
 	}
 }
 
-func TestChatRunDoesNotPostDuplicateQueuedTurnCard(t *testing.T) {
+func TestChatRunPostsSingleQueuedTurnCardWithStop(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{
 		ID:                1,
@@ -223,11 +223,18 @@ func TestChatRunDoesNotPostDuplicateQueuedTurnCard(t *testing.T) {
 	if result.RunID == "" || result.Mode != "session" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(publisher.cards) != 0 || len(publisher.posts) != 0 {
+	if len(publisher.cards) != 1 || len(publisher.posts) != 0 {
 		t.Fatalf("publisher cards=%#v posts=%#v", publisher.cards, publisher.posts)
+	}
+	card := publisher.cards[0]
+	if card.Props["status"] != agentSessionTurnQueued || len(card.Actions) != 1 || card.Actions[0].ID != "stopturn" {
+		t.Fatalf("queued status card=%#v", card)
 	}
 	if len(store.sessionTurns) != 1 {
 		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+	if store.sessionTurns[0].MattermostStatusPostID == "" {
+		t.Fatalf("queued turn status post was not persisted: %#v", store.sessionTurns[0])
 	}
 }
 
@@ -1428,7 +1435,7 @@ func TestChatRunRestoresMissingThreadContextFromExistingSession(t *testing.T) {
 	if result.RunID == "" || result.Mode != "session" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(publisher.cards) != 0 {
+	if len(publisher.cards) != 1 || publisher.cards[0].Message != "matter-codex agent turn status #notrigger" {
 		t.Fatalf("existing session must not prompt for repository selection: %#v", publisher.cards)
 	}
 	threadContext, err := store.GetThreadContext(context.Background(), 1, rootPostID)
