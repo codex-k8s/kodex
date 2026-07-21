@@ -150,6 +150,40 @@ func TestShortSensitiveCredentialsFailClosedForEnvFileAndExtraEnvLengthsOneThrou
 	}
 }
 
+func TestShortNonCredentialRuntimeEnvironmentValueIsAllowedAndRedacted(t *testing.T) {
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=STAGING_SERVER_ROOT_USER",
+		"STAGING_SERVER_ROOT_USER=root",
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inventory.validateForExecution(); err != nil {
+		t.Fatalf("короткий runtime username отклонил запуск: %T", err)
+	}
+	protected, err := inventory.protect("runtime user=root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(protected, "root") {
+		t.Fatalf("короткое runtime value не скрыто: %q", protected)
+	}
+}
+
+func TestShortCredentialLikeRuntimeEnvironmentValueStillFailsClosed(t *testing.T) {
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=STAGING_SERVER_ROOT_PASSWORD",
+		"STAGING_SERVER_ROOT_PASSWORD=short",
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shortErr unsupportedShortCredentialError
+	if err := inventory.validateForExecution(); !errors.As(err, &shortErr) {
+		t.Fatalf("короткий runtime password не отклонён: %T", err)
+	}
+}
+
 func TestSecretInventoryIndependentEncodingCorpusAndFragments(t *testing.T) {
 	const secret = "mc/independent%encoding-8a2f6107"
 	inventory, err := buildSecretInventory([]string{"OPENAI_API_KEY=" + secret}, nil)
@@ -365,6 +399,31 @@ func TestRestoreSessionArchiveRejectsExtendedHeadersOutsideCountedUSTARContract(
 }
 
 func TestRestoreSessionArchiveRequiresDirectoryRootAndLeavesExistingTargetAtomic(t *testing.T) {
+	t.Run("legacy setgid permissions are normalized", func(t *testing.T) {
+		archive := encodeUSTARForTest(t, []testTarEntry{
+			{header: tar.Header{Name: "sessions", Mode: 0o2755, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}},
+			{header: tar.Header{Name: "sessions/run", Mode: 0o2755, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}},
+			{header: tar.Header{Name: "sessions/run/rollout.jsonl", Mode: 0o644, Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}, body: "legacy"},
+		})
+		root := t.TempDir()
+		if err := restoreCodexSessionArchive(archive, root); err != nil {
+			t.Fatalf("legacy archive restore error = %v", err)
+		}
+		for path, wantMode := range map[string]os.FileMode{
+			filepath.Join(root, "sessions"):                         0o700,
+			filepath.Join(root, "sessions", "run"):                  0o700,
+			filepath.Join(root, "sessions", "run", "rollout.jsonl"): 0o600,
+		} {
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm() != wantMode {
+				t.Fatalf("mode %s = %o, want %o", filepath.Base(path), info.Mode().Perm(), wantMode)
+			}
+		}
+	})
+
 	t.Run("regular-file root", func(t *testing.T) {
 		archive := encodeUSTARForTest(t, []testTarEntry{{header: tar.Header{Name: "sessions", Mode: 0o600, Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}}})
 		root := t.TempDir()

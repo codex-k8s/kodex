@@ -730,8 +730,9 @@ func (r *runner) prepareEphemeralRuntime() error {
 		}
 	}
 	values := map[string]struct{}{}
-	collectEnvironmentSecretValues(values, os.Environ())
-	inventory, err := compileSecretInventory(values, map[string]int64{})
+	permittedShortValues := map[string]struct{}{}
+	collectEnvironmentSecretValues(values, permittedShortValues, os.Environ())
+	inventory, err := compileSecretInventory(values, map[string]int64{}, permittedShortValues)
 	if err != nil {
 		r.cleanupEphemeralRuntime()
 		return err
@@ -1834,6 +1835,7 @@ type secretInventory struct {
 	hexCanonical                  []string
 	fragmentCandidates            []string
 	hasUnsupportedShortCredential bool
+	permittedShortValues          map[string]struct{}
 	values                        map[string]struct{}
 	sources                       map[string]int64
 }
@@ -1850,7 +1852,8 @@ func newSecretRedactor(environment []string) secretRedactor {
 func buildSecretInventory(environment []string, explicitFiles []string) (secretInventory, error) {
 	values := map[string]struct{}{}
 	sources := map[string]int64{}
-	collectEnvironmentSecretValues(values, environment)
+	permittedShortValues := map[string]struct{}{}
+	collectEnvironmentSecretValues(values, permittedShortValues, environment)
 	files := append(credentialFileSources(environment), explicitFiles...)
 	seenFiles := map[string]struct{}{}
 	for _, path := range files {
@@ -1870,10 +1873,10 @@ func buildSecretInventory(environment []string, explicitFiles []string) (secretI
 			return secretInventory{}, err
 		}
 	}
-	return compileSecretInventory(values, sources)
+	return compileSecretInventory(values, sources, permittedShortValues)
 }
 
-func collectEnvironmentSecretValues(values map[string]struct{}, environment []string) {
+func collectEnvironmentSecretValues(values map[string]struct{}, permittedShortValues map[string]struct{}, environment []string) {
 	runtimeNames := runtimeEnvironmentNames(environment)
 	for _, item := range environment {
 		name, value, ok := strings.Cut(item, "=")
@@ -1884,8 +1887,14 @@ func collectEnvironmentSecretValues(values map[string]struct{}, environment []st
 			continue
 		}
 		addSecretValue(values, value)
+		if runtimeNames[name] && !credentialLikeEnvironmentName(name) {
+			addSecretValue(permittedShortValues, value)
+		}
 		if trimmed := strings.TrimSpace(value); trimmed != value {
 			addSecretValue(values, trimmed)
+			if runtimeNames[name] && !credentialLikeEnvironmentName(name) {
+				addSecretValue(permittedShortValues, trimmed)
+			}
 		}
 	}
 }
@@ -2038,7 +2047,7 @@ func (budget *credentialRepresentationBudget) addSize(size int64) error {
 	return nil
 }
 
-func compileSecretInventory(values map[string]struct{}, sources map[string]int64) (secretInventory, error) {
+func compileSecretInventory(values map[string]struct{}, sources map[string]int64, permittedShortValues map[string]struct{}) (secretInventory, error) {
 	exact := map[string]struct{}{}
 	percentCanonical := map[string]struct{}{}
 	hexCanonical := map[string]struct{}{}
@@ -2047,7 +2056,9 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 	hasShort := false
 	for value := range values {
 		if len(value) < 16 {
-			hasShort = true
+			if _, permitted := permittedShortValues[value]; !permitted {
+				hasShort = true
+			}
 		}
 		for _, representation := range secretRepresentations(value) {
 			if _, exists := exact[representation]; !exists {
@@ -2113,6 +2124,7 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 		hexCanonical:                  orderedHex,
 		fragmentCandidates:            orderedFragments,
 		hasUnsupportedShortCredential: hasShort,
+		permittedShortValues:          permittedShortValues,
 		values:                        values,
 		sources:                       sources,
 	}
@@ -2151,11 +2163,18 @@ func secretRepresentations(value string) []string {
 func (inventory secretInventory) merge(other secretInventory) (secretInventory, error) {
 	values := make(map[string]struct{}, len(inventory.values)+len(other.values))
 	sources := make(map[string]int64, len(inventory.sources)+len(other.sources))
+	permittedShortValues := make(map[string]struct{}, len(inventory.permittedShortValues)+len(other.permittedShortValues))
 	for value := range inventory.values {
 		values[value] = struct{}{}
 	}
 	for value := range other.values {
 		values[value] = struct{}{}
+	}
+	for value := range inventory.permittedShortValues {
+		permittedShortValues[value] = struct{}{}
+	}
+	for value := range other.permittedShortValues {
+		permittedShortValues[value] = struct{}{}
 	}
 	for path, size := range inventory.sources {
 		sources[path] = size
@@ -2168,7 +2187,7 @@ func (inventory secretInventory) merge(other secretInventory) (secretInventory, 
 	if err := validateCredentialSourceBudget(sources); err != nil {
 		return secretInventory{}, err
 	}
-	return compileSecretInventory(values, sources)
+	return compileSecretInventory(values, sources, permittedShortValues)
 
 }
 
@@ -2308,6 +2327,21 @@ func sensitiveEnvironmentName(name string) bool {
 	default:
 		return false
 	}
+}
+
+func credentialLikeEnvironmentName(name string) bool {
+	if sensitiveEnvironmentName(name) {
+		return true
+	}
+	normalized := strings.ToUpper(strings.NewReplacer("-", "_", ".", "_").Replace(name))
+	for _, marker := range []string{
+		"TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "API_KEY", "PRIVATE_KEY", "ACCESS_KEY", "REFRESH", "COOKIE", "_PAT", "_DSN",
+	} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (redactor secretRedactor) Redact(value string) string {
@@ -2760,7 +2794,9 @@ func validateSessionArchive(raw []byte, visitor sessionArchiveVisitor) error {
 			_ = gzipReader.Close()
 			return fmt.Errorf("архив сессии содержит дубликат или нарушенный порядок записей")
 		}
-		if header.Linkname != "" || header.Mode < 0 || header.Mode&^0o777 != 0 || header.Devmajor != 0 || header.Devminor != 0 {
+		// Старые версии runner сохраняли setuid/setgid/sticky-биты. При восстановлении
+		// права всегда нормализуются в приватные 0700/0600, поэтому эти биты инертны.
+		if header.Linkname != "" || header.Mode < 0 || header.Mode&^0o7777 != 0 || header.Devmajor != 0 || header.Devminor != 0 {
 			_ = gzipReader.Close()
 			return fmt.Errorf("архив сессии содержит недопустимую USTAR семантику")
 		}
