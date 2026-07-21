@@ -671,6 +671,7 @@ func (svc *AgentSessionService) FinalizeStopAgentSessionTurns(ctx context.Contex
 			}
 		}
 		finalizationErr = errors.Join(finalizationErr, svc.reconcileTerminalProcessRun(ctx, item.session, item.turn.ID, agentSessionTurnCanceled, "agent_session.stop_reconcile.side_effect"))
+		finalizationErr = errors.Join(finalizationErr, svc.reconcileAutomationRuntimeTerminal(ctx, item.session, item.turn, agentSessionTurnCanceled))
 	}
 	if finalizationErr != nil {
 		return StopAgentSessionTurnsResult{}, finalizationErr

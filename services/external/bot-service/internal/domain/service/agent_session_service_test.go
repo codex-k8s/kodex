@@ -1207,6 +1207,110 @@ func TestAgentSessionStopLastQueuedTurnResetsIdleRuntime(t *testing.T) {
 	}
 }
 
+func TestAgentSessionStopReconcilesAutomationForRunningAndQueuedTurns(t *testing.T) {
+	for _, status := range []string{agentSessionTurnRunning, agentSessionTurnQueued} {
+		t.Run(status, func(t *testing.T) {
+			store, runner, publisher := agentSessionStatusTestDeps()
+			session := store.agentSessions["session-1"]
+			session.KubernetesNamespace = "mattermost"
+			session.PodName = "mc-session-session-1"
+			session.PVCName = "mc-session-ws-session-1"
+			session.TokenSecretRef = "matter-codex-session-session-1"
+			if status == agentSessionTurnRunning {
+				session = withActiveTurn(session, 1, "run-1")
+			}
+			store.agentSessions[session.SessionKey] = session
+			store.sessionTurns[0].Status = status
+			store.sessionTurns[0].MattermostStatusPostID = "status-post-1"
+			reconciler := &fakeAutomationRuntimeReconciler{}
+			svc := NewAgentSessionService(AgentSessionServiceConfig{
+				Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+				Store:                       store,
+				RuntimeRunner:               runner,
+				ThreadPublisher:             publisher,
+				AutomationRuntimeReconciler: reconciler,
+				StorageReady:                true,
+				RuntimeReady:                true,
+			})
+			command := StopAgentSessionTurnsCommand{TurnIDs: []int64{1}, UserID: "owner-user", UserName: "owner"}
+
+			if _, err := svc.StopAgentSessionTurns(context.Background(), command); err != nil {
+				t.Fatalf("StopAgentSessionTurns() error = %v", err)
+			}
+			turn, err := store.GetAgentSessionTurn(context.Background(), 1)
+			if err != nil || turn.Status != agentSessionTurnCanceled {
+				t.Fatalf("canceled turn=%#v error=%v", turn, err)
+			}
+			if reconciler.calls != 1 {
+				t.Fatalf("automation reconciliation calls=%d, want 1", reconciler.calls)
+			}
+			wantCommand := AutomationRuntimeTerminalCommand{
+				ProjectID: 1, RuntimeSessionID: 1, RuntimeTurnID: 1, RuntimeRunID: "run-1", RuntimeStatus: agentSessionTurnCanceled,
+			}
+			if reconciler.commands[0] != wantCommand {
+				t.Fatalf("automation reconciliation command=%#v, want %#v", reconciler.commands[0], wantCommand)
+			}
+
+			cleanupCalls := len(runner.cleanedSessionKeys)
+			cardCalls := len(publisher.cardUpdates)
+			result, err := svc.StopAgentSessionTurns(context.Background(), command)
+			if err != nil {
+				t.Fatalf("reconcile-only StopAgentSessionTurns() error = %v", err)
+			}
+			if reconciler.calls != 2 || reconciler.commands[1] != wantCommand {
+				t.Fatalf("reconcile-only automation commands=%#v", reconciler.commands)
+			}
+			if len(runner.cleanedSessionKeys) != cleanupCalls || len(publisher.cardUpdates) != cardCalls {
+				t.Fatalf("reconcile-only retry duplicated side effects: cleanup=%d/%d cards=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, len(publisher.cardUpdates), cardCalls)
+			}
+			if !strings.Contains(result.Message, "stopped agent turns: `0`") {
+				t.Fatalf("reconcile-only result=%#v", result)
+			}
+		})
+	}
+}
+
+func TestAgentSessionStopAutomationReconciliationFailureIsObservableAndRetryable(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	session := withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
+	session.PodName = "mc-session-session-1"
+	store.agentSessions[session.SessionKey] = session
+	store.sessionTurns[0].Status = agentSessionTurnRunning
+	store.sessionTurns[0].MattermostStatusPostID = "status-post-1"
+	reconciliationErr := errors.New("синтетическая ошибка automation reconciliation")
+	reconciler := &fakeAutomationRuntimeReconciler{err: reconciliationErr}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+		Store:                       store,
+		RuntimeRunner:               runner,
+		ThreadPublisher:             publisher,
+		AutomationRuntimeReconciler: reconciler,
+		StorageReady:                true,
+		RuntimeReady:                true,
+	})
+	command := StopAgentSessionTurnsCommand{TurnIDs: []int64{1}, UserID: "owner-user", UserName: "owner"}
+
+	if _, err := svc.StopAgentSessionTurns(context.Background(), command); !errors.Is(err, reconciliationErr) {
+		t.Fatalf("StopAgentSessionTurns() error=%v, want %v", err, reconciliationErr)
+	}
+	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
+	if err != nil || turn.Status != agentSessionTurnCanceled || reconciler.calls != 1 {
+		t.Fatalf("first attempt turn=%#v calls=%d error=%v", turn, reconciler.calls, err)
+	}
+	cleanupCalls := len(runner.cleanedSessionKeys)
+	cardCalls := len(publisher.cardUpdates)
+	reconciler.err = nil
+	if _, err := svc.StopAgentSessionTurns(context.Background(), command); err != nil {
+		t.Fatalf("reconcile-only retry error=%v", err)
+	}
+	if reconciler.calls != 2 {
+		t.Fatalf("automation reconciliation calls=%d, want 2", reconciler.calls)
+	}
+	if len(runner.cleanedSessionKeys) != cleanupCalls || len(publisher.cardUpdates) != cardCalls {
+		t.Fatalf("reconcile-only retry duplicated side effects: cleanup=%d/%d cards=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, len(publisher.cardUpdates), cardCalls)
+	}
+}
+
 func TestAgentSessionStopReconcilesCanceledTurnAfterFinalizeFaultMatrixAndRetry(t *testing.T) {
 	cleanupErr := errors.New("синтетическая ошибка cleanup")
 	resetErr := errors.New("синтетическая ошибка reset")
