@@ -27,7 +27,7 @@ func TestLegacyQueuedTurnRepairsRuntimeThenClaimsAfterUpgrade(t *testing.T) {
 	dsn := testsupport.IsolatedSchemaDSN(t, "runtime_upgrade_repair_claim")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if err := migrations.RunTo(ctx, dsn, 29); err != nil {
+	if err := migrations.RunTo(ctx, dsn, 30); err != nil {
 		t.Fatalf("prepare N-1 schema: %v", err)
 	}
 	pool, err := pgxpool.New(ctx, dsn)

@@ -949,7 +949,7 @@ where token_secret_ref = 'source-bot-secret'
 	}
 	seedPool.Close()
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("migrations through v30: %v", err)
+		t.Fatalf("migrations through v31: %v", err)
 	}
 	seedPool, err = pgxpool.New(ctx, dsn)
 	if err != nil {

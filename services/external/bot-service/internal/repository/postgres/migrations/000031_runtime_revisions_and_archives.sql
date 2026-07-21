@@ -190,7 +190,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 000030 is forward-only: runtime revisions and confirmed archives cannot be removed safely';
+	raise exception 'migration 000031 is forward-only: runtime revisions and confirmed archives cannot be removed safely';
 end
 $$;
 -- +goose StatementEnd
