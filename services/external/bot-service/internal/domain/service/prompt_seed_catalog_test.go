@@ -67,7 +67,9 @@ func TestManagedReviewTriagePromptContract(t *testing.T) {
 		"Informational",
 		"GitHub GraphQL `reviewThreads`",
 		"labels `mvp-follow-up`",
-		"ограниченную неблокирующую волну",
+		"prototype-accelerated",
+		"один reviewer pass и один security pass",
+		"post-merge reviewer и security",
 	} {
 		if !strings.Contains(managerBody, expected) {
 			t.Fatalf("manager seed missing review triage contract %q:\n%s", expected, managerBody)
@@ -115,7 +117,7 @@ func TestManagedReviewTriagePromptContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("promptSeedMarkdown(director) error = %v", err)
 	}
-	for _, expected := range []string{"label `mvp-follow-up`", "неблокирующую волну", "не запускает новый `improver` рекурсивно"} {
+	for _, expected := range []string{"mvp-follow-up", "до шести независимых manager-волн", "merged PR без label `improved`"} {
 		if !strings.Contains(directorBody, expected) {
 			t.Fatalf("director seed missing follow-up contract %q:\n%s", expected, directorBody)
 		}
@@ -129,8 +131,10 @@ func TestManagedReviewTriagePromptContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("promptSeedMarkdown(improver) error = %v", err)
 	}
-	if !strings.Contains(improverBody, "слияние результата текущего цикла `improver` основанием для рекурсивного запуска") {
-		t.Fatalf("improver seed missing terminal-cycle contract:\n%s", improverBody)
+	for _, expected := range []string{"merged PR за период без label `improved`", "добавь ему `improved`", "очередным ежедневным batch"} {
+		if !strings.Contains(improverBody, expected) {
+			t.Fatalf("improver seed missing daily batch contract %q:\n%s", expected, improverBody)
+		}
 	}
 }
 

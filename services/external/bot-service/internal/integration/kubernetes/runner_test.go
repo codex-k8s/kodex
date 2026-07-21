@@ -1920,9 +1920,8 @@ func assertRunnerUtilityResources(t *testing.T, resources corev1.ResourceRequire
 	t.Helper()
 	assertResourceQuantity(t, resources.Requests, corev1.ResourceCPU, runnerUtilityCPURequest)
 	assertResourceQuantity(t, resources.Requests, corev1.ResourceMemory, runnerUtilityMemoryRequest)
-	assertResourceQuantity(t, resources.Limits, corev1.ResourceMemory, runnerUtilityMemoryLimit)
-	if _, exists := resources.Limits[corev1.ResourceCPU]; exists {
-		t.Fatalf("utility runner must not have CPU limit: %#v", resources.Limits)
+	if len(resources.Limits) != 0 {
+		t.Fatalf("utility runner must not have resource limits: %#v", resources.Limits)
 	}
 }
 

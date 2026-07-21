@@ -734,8 +734,8 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 		}
 	}
 	director := testRoleByName(t, store, 1, "director")
-	if !strings.Contains(director.PromptTemplate, "явное подтверждение") {
-		t.Fatalf("director prompt does not require owner approval: %q", director.PromptTemplate)
+	if !strings.Contains(director.PromptTemplate, "если инициатор ещё не одобрил режим и границы") || !strings.Contains(director.PromptTemplate, "Явное предварительное одобрение не дублируй") {
+		t.Fatalf("director prompt does not preserve approval without duplicate gates: %q", director.PromptTemplate)
 	}
 	director.Name = "руководитель"
 	store.agentRoles[director.ID] = director

@@ -62,7 +62,6 @@ const (
 	runnerGID                    = int64(10001)
 	runnerUtilityCPURequest      = "100m"
 	runnerUtilityMemoryRequest   = "128Mi"
-	runnerUtilityMemoryLimit     = "1Gi"
 	kubernetesAccessReadOnly     = "read-only"
 	kubernetesAccessClusterAdmin = "cluster-admin"
 	sessionQuotaRetryRetention   = time.Hour
@@ -2855,9 +2854,6 @@ func runnerUtilityResourceRequirements() corev1.ResourceRequirements {
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse(runnerUtilityCPURequest),
 			corev1.ResourceMemory: resource.MustParse(runnerUtilityMemoryRequest),
-		},
-		Limits: corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse(runnerUtilityMemoryLimit),
 		},
 	}
 }
