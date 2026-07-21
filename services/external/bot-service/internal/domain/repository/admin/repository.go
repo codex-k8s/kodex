@@ -306,6 +306,20 @@ type UpdateAgentSessionTurnStatusPostInput struct {
 	StatusPostID string
 }
 
+type CompareAndSwapAgentSessionTurnArtifactsInput struct {
+	TurnID            int64
+	ExpectedArtifacts string
+	Artifacts         string
+}
+
+type AgentSessionTurnArtifactsRepository interface {
+	CompareAndSwapAgentSessionTurnArtifacts(ctx context.Context, input CompareAndSwapAgentSessionTurnArtifactsInput) (entity.AgentSessionTurn, error)
+}
+
+type AgentSessionLockRepository interface {
+	LockAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error)
+}
+
 type UpdateAgentSessionTurnRunsPostInput struct {
 	TurnID     int64
 	RunsPostID string

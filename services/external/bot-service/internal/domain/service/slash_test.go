@@ -4750,6 +4750,22 @@ func (store *fakeAdminStore) GetAgentSessionTurn(_ context.Context, id int64) (e
 	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
 }
 
+func (store *fakeAdminStore) LockAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
+	return store.GetAgentSession(ctx, sessionKey)
+}
+
+func (store *fakeAdminStore) CompareAndSwapAgentSessionTurnArtifacts(_ context.Context, input adminrepo.CompareAndSwapAgentSessionTurnArtifactsInput) (entity.AgentSessionTurn, error) {
+	for index, turn := range store.sessionTurns {
+		if turn.ID != input.TurnID || turn.Status != agentSessionTurnCanceled || turn.Artifacts != input.ExpectedArtifacts {
+			continue
+		}
+		turn.Artifacts = input.Artifacts
+		store.sessionTurns[index] = turn
+		return turn, nil
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
+}
+
 func (store *fakeAdminStore) ClaimNextAgentSessionTurn(_ context.Context, sessionKey string) (entity.AgentSessionTurn, error) {
 	session, err := store.GetAgentSession(context.Background(), sessionKey)
 	if err != nil {

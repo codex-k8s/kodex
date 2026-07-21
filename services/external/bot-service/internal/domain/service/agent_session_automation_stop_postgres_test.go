@@ -96,7 +96,13 @@ func TestAgentSessionStopReconcilesAlreadyCanceledAutomationTurnPostgres(t *test
 	fixture := newAutomationStopPostgresFixture(t, agentSessionTurnQueued, true)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_session_turns set status = 'canceled' where id = $1`, fixture.runtimeTurnID); err != nil {
+	artifacts, err := agentTurnStopArtifacts("{}", agentTurnStopState{
+		ActorUserID: "owner-user", ActorUserName: "owner", CleanupCompleted: true, ResetCompleted: true,
+	})
+	if err != nil {
+		t.Fatalf("prepare durable stop artifacts: %v", err)
+	}
+	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_session_turns set status = 'canceled', artifacts = $2 where id = $1`, fixture.runtimeTurnID, artifacts); err != nil {
 		t.Fatalf("prepare canceled turn: %v", err)
 	}
 	if _, err := fixture.pool.Exec(ctx, `update matter_codex_agent_runs set status = 'canceled' where run_id = (select run_id from matter_codex_agent_session_turns where id = $1)`, fixture.runtimeTurnID); err != nil {

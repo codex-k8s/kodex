@@ -124,8 +124,8 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	if runner.startedSessionKey == "" || runner.sessionCodexSecret != "matter-codex-codex-auth-main" {
 		t.Fatalf("session runner = %#v", runner.sessionRuns)
 	}
-	if len(publisher.posts) != 0 || len(publisher.cards) != 0 {
-		t.Fatalf("chat handler must not create duplicate status posts, posts=%#v cards=%#v", publisher.posts, publisher.cards)
+	if len(publisher.posts) != 0 || len(publisher.cards) != 1 || publisher.cards[0].Props["status"] != agentSessionTurnQueued {
+		t.Fatalf("chat handler must create one queued status card, posts=%#v cards=%#v", publisher.posts, publisher.cards)
 	}
 	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "Help me decompose the task.") || !strings.Contains(store.sessionTurns[0].Message, "Проект: Platform") {
 		t.Fatalf("turns = %#v", store.sessionTurns)

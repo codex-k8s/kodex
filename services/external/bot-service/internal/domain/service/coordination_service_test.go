@@ -181,6 +181,12 @@ type fakeCoordinationStore struct {
 	setOwnerAttentionErr    error
 }
 
+func (store *fakeCoordinationStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.fakeAdminStore.WithExactAgentSessionsRuntimeGuard(ctx, expected, func(adminrepo.Repository) error {
+		return sideEffect(store)
+	})
+}
+
 func (store *fakeCoordinationStore) EnsureTurnProcess(context.Context, adminrepo.EnsureTurnProcessInput) (entity.ProcessContext, error) {
 	return entity.ProcessContext{}, nil
 }

@@ -35,4 +35,4 @@ join matter_codex_chat_participants participant
 	on participant.chat_id = session_row.chat_id
 	and participant.role_id = session_row.role_id
 where session_row.session_key = $1
-for share of session_row;
+for update of session_row;

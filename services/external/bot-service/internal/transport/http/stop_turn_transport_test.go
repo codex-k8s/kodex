@@ -92,6 +92,19 @@ func (store *stopTurnTransportStore) GetAgentSessionByID(_ context.Context, id i
 	return store.session, nil
 }
 
+func (store *stopTurnTransportStore) LockAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
+	return store.GetAgentSession(ctx, sessionKey)
+}
+
+func (store *stopTurnTransportStore) WithExactAgentSessionsRuntimeGuard(_ context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	if len(expected) != 1 || expected[0].ID != store.session.ID || expected[0].SessionKey != store.session.SessionKey || expected[0].ProjectID != store.session.ProjectID ||
+		expected[0].ChatID != store.session.ChatID || expected[0].RoleID != store.session.RoleID || expected[0].MattermostChannelID != store.session.MattermostChannelID ||
+		expected[0].MattermostRootPostID != store.session.MattermostRootPostID || expected[0].TokenSecretRef != store.session.TokenSecretRef {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return sideEffect(store)
+}
+
 func (store *stopTurnTransportStore) GetAgentSessionTurn(_ context.Context, id int64) (entity.AgentSessionTurn, error) {
 	if id != store.turn.ID {
 		return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
@@ -150,6 +163,15 @@ func (store *stopTurnTransportStore) CancelAgentSessionTurn(_ context.Context, i
 	}
 	store.cancelCalls++
 	store.turn.Status = "canceled"
+	store.turn.Artifacts = input.Artifacts
+	return store.turn, nil
+}
+
+func (store *stopTurnTransportStore) CompareAndSwapAgentSessionTurnArtifacts(_ context.Context, input adminrepo.CompareAndSwapAgentSessionTurnArtifactsInput) (entity.AgentSessionTurn, error) {
+	if input.TurnID != store.turn.ID || store.turn.Status != "canceled" || input.ExpectedArtifacts != store.turn.Artifacts {
+		return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	store.turn.Artifacts = input.Artifacts
 	return store.turn, nil
 }
 
@@ -213,7 +235,7 @@ func TestStopTurnProductionActionUsesAtomicTargetSessionGuard(t *testing.T) {
 				if store.cancelCalls != 1 || store.runUpdateCalls != 1 || repository.consumes != 1 || len(publisher.cardUpdates) != 1 {
 					t.Fatalf("normal effects cancel=%d run=%d consume=%d cards=%d", store.cancelCalls, store.runUpdateCalls, repository.consumes, len(publisher.cardUpdates))
 				}
-				if test.requireGuard && len(store.guardInputs) != 4 {
+				if test.requireGuard && len(store.guardInputs) != 7 {
 					t.Fatalf("guarded control guards=%#v", store.guardInputs)
 				}
 				return
@@ -233,7 +255,7 @@ func TestStopTurnProductionActionUsesAtomicTargetSessionGuard(t *testing.T) {
 func TestStopTurnProductionActionGuardsResponseCapabilityBoundary(t *testing.T) {
 	store := newStopTurnTransportStore()
 	store.requireGuard = true
-	store.denyGuardAt = 4
+	store.denyGuardAt = 7
 	repository := &memoryInteractionRepository{
 		capabilities: map[string]securityrepo.Capability{}, inputs: map[string]securityrepo.IssueCapabilityInput{}, admissions: map[string]bool{}, mutationStore: store,
 	}
@@ -252,7 +274,7 @@ func TestStopTurnProductionActionGuardsResponseCapabilityBoundary(t *testing.T) 
 	})
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, pathAgentsAction, strings.NewReader(body)))
-	if recorder.Code != http.StatusUnauthorized || repository.issues != 1 || len(store.guardInputs) != 4 {
+	if recorder.Code != http.StatusUnauthorized || repository.issues != 1 || len(store.guardInputs) != 7 {
 		t.Fatalf("status=%d consumes=%d issues=%d guards=%#v body=%s", recorder.Code, repository.consumes, repository.issues, store.guardInputs, recorder.Body.String())
 	}
 	for _, input := range store.guardInputs {
@@ -334,8 +356,12 @@ func TestStopTurnProductionActionRecoversTerminalReconciliationAfterRestart(t *t
 	}
 	cardUpdates := len(publisher.cardUpdates)
 	exactReplay := serveStopTurnAction(restarted, originalBody)
-	if exactReplay.Code != http.StatusOK || store.cancelCalls != 1 || repository.replays != 1 || reconciler.callCount() != 3 || len(publisher.cardUpdates) != cardUpdates {
+	if exactReplay.Code != http.StatusUnauthorized || store.cancelCalls != 1 || repository.replays != 1 || reconciler.callCount() != 2 || len(publisher.cardUpdates) != cardUpdates {
 		t.Fatalf("exact replay status=%d cancel=%d replay=%d reconcile=%d cards=%d/%d body=%s", exactReplay.Code, store.cancelCalls, repository.replays, reconciler.callCount(), len(publisher.cardUpdates), cardUpdates, exactReplay.Body.String())
+	}
+	secondRecovery := serveStopTurnAction(restarted, recoveryBody)
+	if secondRecovery.Code != http.StatusUnauthorized || store.cancelCalls != 1 || repository.replays != 1 || reconciler.callCount() != 2 || len(publisher.cardUpdates) != cardUpdates {
+		t.Fatalf("second recovery status=%d cancel=%d replay=%d reconcile=%d cards=%d/%d body=%s", secondRecovery.Code, store.cancelCalls, repository.replays, reconciler.callCount(), len(publisher.cardUpdates), cardUpdates, secondRecovery.Body.String())
 	}
 }
 

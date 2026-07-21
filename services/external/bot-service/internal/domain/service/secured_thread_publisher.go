@@ -48,14 +48,14 @@ func (publisher *securedMattermostThreadPublisher) UpdateThreadMessageWithToken(
 
 func (publisher *securedMattermostThreadPublisher) PostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error) {
 	if len(card.Actions) == 0 {
-		return publisher.next.PostThreadCard(ctx, card)
+		return publisher.postOrReconcileThreadCard(ctx, card)
 	}
 	if publisher.security == nil {
 		return MattermostPostRef{}, fmt.Errorf("interaction security is not configured")
 	}
 	placeholder := card
 	placeholder.Actions = nil
-	ref, err := publisher.next.PostThreadCard(ctx, placeholder)
+	ref, err := publisher.postOrReconcileThreadCard(ctx, placeholder)
 	if err != nil {
 		return MattermostPostRef{}, err
 	}
@@ -79,6 +79,17 @@ func (publisher *securedMattermostThreadPublisher) PostThreadCard(ctx context.Co
 		return MattermostPostRef{}, errors.Join(err, publisher.security.RevokeCard(ctx, card))
 	}
 	return updated, nil
+}
+
+func (publisher *securedMattermostThreadPublisher) postOrReconcileThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error) {
+	if deliveryID := strings.TrimSpace(contextStringValue(card.Props, agentStatusDeliveryIDProp)); deliveryID != "" {
+		next, ok := publisher.next.(MattermostIdempotentCardPublisher)
+		if !ok {
+			return MattermostPostRef{}, fmt.Errorf("idempotent Mattermost card publisher is not configured")
+		}
+		return next.ReconcileOrPostThreadCard(ctx, card)
+	}
+	return publisher.next.PostThreadCard(ctx, card)
 }
 
 func (publisher *securedMattermostThreadPublisher) UpdateThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error) {

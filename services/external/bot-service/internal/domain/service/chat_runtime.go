@@ -83,6 +83,10 @@ type MattermostIdempotentThreadPublisher interface {
 	ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error)
 }
 
+type MattermostIdempotentCardPublisher interface {
+	ReconcileOrPostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
+}
+
 type ChatPostCommand struct {
 	ChannelID  string
 	PostID     string
@@ -656,10 +660,20 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
-	if svc.turnStatusCards != nil && svc.cfg.ThreadPublisher != nil && strings.TrimSpace(svc.cfg.MenuActionURL) != "" {
-		status := defaultString(strings.TrimSpace(turn.Status), agentSessionTurnQueued)
-		message := svc.turnStatusCards.turnStatusMessage(ctx, session, status, turn.RunID, openAIAccount.Name, "")
-		_, _ = svc.turnStatusCards.upsertTurnStatusCard(ctx, session, turn, status, message, "")
+	if svc.turnStatusCards != nil && svc.cfg.ThreadPublisher != nil {
+		err = svc.turnStatusCards.withCurrentSessionPersistenceFence(ctx, session, "agent_session.queued_card_publish.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+			currentTurn, readErr := guardedStore.GetAgentSessionTurn(ctx, turn.ID)
+			if readErr != nil {
+				return readErr
+			}
+			status := defaultString(strings.TrimSpace(currentTurn.Status), agentSessionTurnQueued)
+			message := svc.turnStatusCards.turnStatusMessageWithStore(ctx, guardedStore, current, status, currentTurn.RunID, openAIAccount.Name, "")
+			_, publishErr := svc.turnStatusCards.upsertTurnStatusCardWithStore(ctx, guardedStore, current, currentTurn, status, message, "")
+			return publishErr
+		})
+		if err != nil {
+			return AgentTurnQueued{}, err
+		}
 	}
 	return AgentTurnQueued{
 		RunID:              runID,

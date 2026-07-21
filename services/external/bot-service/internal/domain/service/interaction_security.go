@@ -185,6 +185,7 @@ type AuthenticatedInteraction struct {
 	ChannelID      string
 	PostBinding    string
 	CallbackPostID string
+	Action         string
 }
 
 type ActionCallback struct {
@@ -352,8 +353,9 @@ func (svc *InteractionSecurityService) AuthenticateAgentTurnStopActionAtomic(
 	postBinding := strings.TrimSpace(contextStringValue(contextCopy, interactionCapabilityPostBindingKey))
 	callbackPostID := strings.TrimSpace(callback.PostID)
 	resourceType, resourceID := interactionResource(contextCopy)
+	action := contextStringValue(contextCopy, "action")
 	if token == "" || postBinding == "" || callbackPostID == "" || callbackPostID != postBinding ||
-		contextStringValue(contextCopy, "kind") != "agent_turn" || contextStringValue(contextCopy, "action") != "stop_turn" ||
+		contextStringValue(contextCopy, "kind") != "agent_turn" || (action != agentTurnStopAction && action != agentTurnStopRecoveryAction) ||
 		resourceType != "agent_session_turn" || resourceID == "" {
 		return AuthenticatedInteraction{}, ErrInteractionAuthentication
 	}
@@ -368,6 +370,9 @@ func (svc *InteractionSecurityService) AuthenticateAgentTurnStopActionAtomic(
 	})
 	if err == nil || !errors.Is(err, securityrepo.ErrCapabilityConsumed) {
 		return interaction, err
+	}
+	if action != agentTurnStopAction {
+		return AuthenticatedInteraction{}, ErrInteractionAuthentication
 	}
 	return svc.replayConsumedActionAndAdmit(ctx, token, input, contextCopy, callbackPostID, mutation)
 }
@@ -517,6 +522,7 @@ func (svc *InteractionSecurityService) consumeAndAdmit(ctx context.Context, toke
 		ChannelID:      capability.ChannelID,
 		PostBinding:    capability.PostBinding,
 		CallbackPostID: callbackPostID,
+		Action:         contextStringValue(safeContext, "action"),
 	}
 	decision := svc.admission.Admit(ctx, InteractionAdmissionRequest{
 		ActionKey:    actionKey,
@@ -585,6 +591,7 @@ func (svc *InteractionSecurityService) replayConsumedActionAndAdmit(
 	var interaction AuthenticatedInteraction
 	capability, err := repository.ReplayConsumedInteractionCapabilityWithMutation(ctx, input, func(capability securityrepo.Capability, store adminrepo.Repository) error {
 		interaction = authenticatedInteraction(capability, callbackPostID)
+		interaction.Action = contextStringValue(safeContext, "action")
 		decision := svc.admission.Admit(ctx, InteractionAdmissionRequest{
 			ActionKey: "mattermost.callback.action", Operation: interaction.Operation,
 			ResourceType: interaction.ResourceType, ResourceID: interaction.ResourceID,
@@ -799,7 +806,7 @@ func typedInteractionOperationAllowed(request InteractionAdmissionRequest) bool 
 		if len(values) != 2 || request.Scope.Session == "" || resourceType != "agent_session_turn" || resourceID == "" {
 			return false
 		}
-		return values["action"] == "stop_turn" || values["action"] == "retry_turn"
+		return values["action"] == agentTurnStopAction || values["action"] == agentTurnStopRecoveryAction || values["action"] == "retry_turn"
 	}
 	if values["kind"] != "agents_menu" || !allowedInteractionMenuView(values["view"]) {
 		return false

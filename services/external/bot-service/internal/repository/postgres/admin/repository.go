@@ -762,6 +762,20 @@ func (repo *Repository) GetAgentSessionByID(ctx context.Context, id int64) (enti
 	return item, nil
 }
 
+func (repo *Repository) LockAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
+	if repo.pool != nil {
+		return entity.AgentSession{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	var id int64
+	if err := repo.db.QueryRow(ctx, query("agent_sessions__lock.sql"), sessionKey).Scan(&id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSession{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSession{}, fmt.Errorf("lock agent session: %w", err)
+	}
+	return repo.GetAgentSessionByID(ctx, id)
+}
+
 func (repo *Repository) ListAgentSessionsByThread(ctx context.Context, chatID int64, rootPostID string) ([]entity.AgentSession, error) {
 	rows, err := repo.db.Query(ctx, query("agent_sessions__list_by_thread.sql"), chatID, rootPostID)
 	if err != nil {
@@ -987,7 +1001,25 @@ func (repo *Repository) UpdateAgentSessionTurnStatusPost(ctx context.Context, in
 		input.StatusPostID,
 	))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
 		return entity.AgentSessionTurn{}, fmt.Errorf("update agent session turn status post: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) CompareAndSwapAgentSessionTurnArtifacts(ctx context.Context, input adminrepo.CompareAndSwapAgentSessionTurnArtifactsInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__compare_and_swap_artifacts.sql"),
+		input.TurnID,
+		input.ExpectedArtifacts,
+		input.Artifacts,
+	))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		return entity.AgentSessionTurn{}, fmt.Errorf("compare and swap agent session turn artifacts: %w", err)
 	}
 	return item, nil
 }

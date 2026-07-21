@@ -73,6 +73,13 @@ func (store *sessionBarrierStore) WithExistingClusterAdminPersistenceGuard(_ con
 	return sideEffect(store)
 }
 
+func (store *sessionBarrierStore) WithExactAgentSessionsRuntimeGuard(_ context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	if len(expected) != 1 || expected[0].ID != store.session.ID || expected[0].SessionKey != store.session.SessionKey {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return sideEffect(store)
+}
+
 func (store *sessionBarrierStore) GetProject(context.Context, int64) (entity.Project, error) {
 	return entity.Project{ID: 1, Slug: "project"}, nil
 }
