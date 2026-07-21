@@ -269,6 +269,7 @@ func (svc *AgentSessionService) rootInitiatorUserIDForTurn(ctx context.Context, 
 			if userID := strings.TrimSpace(process.RootInitiatorUserID); userID != "" {
 				return userID, nil
 			}
+			return "", fmt.Errorf("root initiator Mattermost user id is missing for process of turn %d", turnID)
 		} else if !errors.Is(err, adminrepo.ErrNotFound) {
 			return "", err
 		}

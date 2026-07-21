@@ -340,6 +340,27 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	}
 }
 
+func TestAgentSessionStartCrossChatThreadRejectsChangedSourceTurn(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	publisher.beforeUpdate = func() {
+		session := store.agentSessions["source-session"]
+		session.ActiveTurnID = 99
+		session.ActiveRunID = "new-source-run"
+		store.agentSessions["source-session"] = session
+	}
+
+	_, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Границы сервисов",
+		Message: "Подготовь предложение.", WorkItemKey: "issue-59-active-turn-race",
+	})
+	if err == nil || !strings.Contains(err.Error(), "active turn changed") {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	if dispatcher.calls != 0 {
+		t.Fatalf("dispatcher calls = %d", dispatcher.calls)
+	}
+}
+
 func TestAgentSessionCrossChatDelegationAllowsSourceOutsideTargetChat(t *testing.T) {
 	svc, store, dispatcher, _ := agentDelegationTestService()
 	store.chatParticipants[2] = []entity.ChatParticipant{{ChatID: 2, RoleID: 2, RoleName: "architect", Enabled: true}}
@@ -552,6 +573,37 @@ func TestAgentSessionReturnsCrossChatResultToImmediateRequester(t *testing.T) {
 	}
 	if dispatcher.calls != 1 {
 		t.Fatalf("dispatcher calls after duplicate callback = %d", dispatcher.calls)
+	}
+}
+
+func TestEnqueueDelegationCallbackUsesProcessRootWithoutCompatibleQueuedTurn(t *testing.T) {
+	svc, store, dispatcher, _ := agentDelegationTestService()
+	store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{
+		ID: 3, SessionID: 1, RunID: "callback-run", MattermostChannelID: "management-channel",
+		MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnRunning,
+	})
+	coordinationStore := &fakeCoordinationStore{
+		fakeAdminStore: store,
+		processes: map[int64]entity.ProcessContext{
+			2: {RootInitiatorUserID: "owner-user"},
+		},
+	}
+	svc.cfg.Store = coordinationStore
+	dispatcher.queued = AgentTurnQueued{RunID: "callback-run", TurnID: 3, SessionKey: "source-session"}
+	dispatcher.calls = 0
+
+	turn, runID, err := svc.enqueueDelegationCallbackWithStore(
+		context.Background(), coordinationStore, store.agentSessions["source-session"], store.projects[1],
+		store.chats[1], store.agentRoles[1], "architect", "Результат готов.", 2, "reply-",
+	)
+	if err != nil {
+		t.Fatalf("enqueueDelegationCallbackWithStore() error = %v", err)
+	}
+	if turn.ID != 3 || runID != "callback-run" || dispatcher.calls != 1 {
+		t.Fatalf("turn=%#v run=%q calls=%d", turn, runID, dispatcher.calls)
+	}
+	if dispatcher.request.UserID != "owner-user" || dispatcher.request.ParentTurnID != 2 {
+		t.Fatalf("dispatcher request = %#v", dispatcher.request)
 	}
 }
 

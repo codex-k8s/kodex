@@ -970,7 +970,8 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 		return AgentSessionAgentRequest{}, err
 	}
 	var queued AgentTurnQueued
-	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, svc.cfg.Store, session.ActiveTurnID)
+	sourceTurnID := session.ActiveTurnID
+	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, svc.cfg.Store, sourceTurnID)
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
@@ -978,6 +979,9 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 	// а также финальные запись и публикацию. Внешний guard не блокирует строку
 	// сессии, чтобы dispatcher мог атомарно обновить её через другое соединение.
 	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.agent_request_enqueue.side_effect", func(current entity.AgentSession) error {
+		if current.ActiveTurnID != sourceTurnID {
+			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
+		}
 		return svc.withRequestedClusterAdminGuard(ctx, role, chat, "", requesterUserName, "agent_request.enqueue.side_effect", func() error {
 			var enqueueErr error
 			queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
@@ -993,7 +997,7 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 				SessionRootID: rootPostID,
 				SessionScope:  agentSessionScopeThreadRole,
 				TTLSeconds:    defaultThreadSessionTTLSeconds,
-				ParentTurnID:  current.ActiveTurnID,
+				ParentTurnID:  sourceTurnID,
 			})
 			return enqueueErr
 		})
