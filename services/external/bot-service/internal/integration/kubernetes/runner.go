@@ -382,6 +382,9 @@ func (runner *Runner) CheckCodexAuthSecret(ctx context.Context, input runtimerep
 		return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("get codex auth secret: %w", err)
 	}
 	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.codexAuthSecretCheckJob(input, jobName), metav1.CreateOptions{}); err != nil {
+		if quotaExceeded(err) {
+			return runtimerepo.CodexAuthSecretCheckResult{}, runtimerepo.NewAgentSessionCapacityError("Kubernetes resource quota rejected the Codex auth check job", err)
+		}
 		return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("create codex auth check job: %w", err)
 	}
 	defer runner.cleanupCodexAuthCheckJob(ctx, jobName)
@@ -392,6 +395,11 @@ func (runner *Runner) CheckCodexAuthSecret(ctx context.Context, input runtimerep
 
 	for {
 		runner.fillCodexAuthCheckPodStatus(ctx, &result)
+		if result.PodName != "" {
+			if capacityErr := runner.sessionPodSchedulingCapacityError(ctx, result.PodName); capacityErr != nil {
+				return result, capacityErr
+			}
+		}
 		job, err := runner.client.BatchV1().Jobs(runner.namespace).Get(ctx, jobName, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {

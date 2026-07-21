@@ -281,6 +281,44 @@ func TestCheckCodexAuthSecretReturnsInfrastructureErrorOnTimeout(t *testing.T) {
 	}
 }
 
+func TestCheckCodexAuthSecretReturnsCapacityErrorForUnschedulablePod(t *testing.T) {
+	client := fake.NewSimpleClientset(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "matter-codex-codex-auth-primary", Namespace: "mattermost"},
+		Data:       map[string][]byte{"auth.json": []byte(`{"auth_mode":"chatgpt"}`)},
+	})
+	client.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		job := action.(k8stesting.CreateAction).GetObject().(*batchv1.Job)
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: job.Name + "-pod", Namespace: "mattermost", Labels: job.Spec.Template.Labels},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{{
+					Type: corev1.PodScheduled, Status: corev1.ConditionFalse,
+					Reason: corev1.PodReasonUnschedulable, Message: "0/1 nodes are available: 1 Insufficient cpu.",
+				}},
+			},
+		}
+		if err := client.Tracker().Add(pod); err != nil {
+			return true, nil, err
+		}
+		return false, nil, nil
+	})
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace: "mattermost", AgentRunnerImage: "matter-codex-agent-runner:test",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	result, err := runner.CheckCodexAuthSecret(context.Background(), runtimerepo.CodexAuthSecretCheckInput{
+		AccountName: "primary", SecretName: "matter-codex-codex-auth-primary",
+	})
+	if !runtimerepo.IsReclaimableAgentSessionCapacityError(err) || result.PodPhase != string(corev1.PodPending) {
+		t.Fatalf("result=%#v error=%v", result, err)
+	}
+}
+
 func TestDeleteCodexAuthAccountDeletesJobAndSecret(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	runner, err := NewRunnerWithClient(client, Config{

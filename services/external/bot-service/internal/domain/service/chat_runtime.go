@@ -1576,7 +1576,7 @@ func (svc *ChatRunService) botServiceURL() string {
 }
 
 func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, account entity.OpenAIAccount, role entity.AgentRole) error {
-	check, err := svc.cfg.RuntimeRunner.CheckCodexAuthSecret(ctx, runtimerepo.CodexAuthSecretCheckInput{
+	check, err := svc.checkCodexAuthSecretWithCapacityReclaim(ctx, runtimerepo.CodexAuthSecretCheckInput{
 		AccountName: account.Name,
 		SecretName:  account.SecretRef,
 	})
@@ -1603,7 +1603,7 @@ func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, accou
 		return authErr
 	}
 	if completed {
-		check, err = svc.cfg.RuntimeRunner.CheckCodexAuthSecret(ctx, runtimerepo.CodexAuthSecretCheckInput{
+		check, err = svc.checkCodexAuthSecretWithCapacityReclaim(ctx, runtimerepo.CodexAuthSecretCheckInput{
 			AccountName: account.Name,
 			SecretName:  account.SecretRef,
 		})
@@ -1624,6 +1624,37 @@ func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, accou
 		JobName:     status.JobName,
 		PodName:     status.PodName,
 	}
+}
+
+func (svc *ChatRunService) checkCodexAuthSecretWithCapacityReclaim(ctx context.Context, input runtimerepo.CodexAuthSecretCheckInput) (runtimerepo.CodexAuthSecretCheckResult, error) {
+	check := func() (runtimerepo.CodexAuthSecretCheckResult, error) {
+		return svc.cfg.RuntimeRunner.CheckCodexAuthSecret(ctx, input)
+	}
+	result, err := check()
+	if !runtimerepo.IsReclaimableAgentSessionCapacityError(err) {
+		return result, err
+	}
+	release, lockErr := svc.cfg.Store.AcquireAgentSessionCapacityLock(ctx)
+	if lockErr != nil {
+		return runtimerepo.CodexAuthSecretCheckResult{}, lockErr
+	}
+	defer release()
+
+	result, err = check()
+	for attempt := 0; runtimerepo.IsReclaimableAgentSessionCapacityError(err) && attempt < maxAgentSessionCapacityEvictions; attempt++ {
+		evicted, evictErr := svc.evictOldestIdleAgentSessionPod(ctx, "")
+		if evictErr != nil {
+			return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("evict idle agent session pod before Codex auth check: %w", evictErr)
+		}
+		if !evicted {
+			return result, err
+		}
+		if waitErr := waitAgentSessionCapacityRetry(ctx, svc.cfg.CapacityRetryDelay); waitErr != nil {
+			return runtimerepo.CodexAuthSecretCheckResult{}, waitErr
+		}
+		result, err = check()
+	}
+	return result, err
 }
 
 func (svc *ChatRunService) startCodexReauthSession(ctx context.Context, account entity.OpenAIAccount) (runtimerepo.CodexAuthStatus, bool, error) {

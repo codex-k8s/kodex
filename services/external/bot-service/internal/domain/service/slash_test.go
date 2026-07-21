@@ -3404,6 +3404,7 @@ type fakeRuntimeRunner struct {
 	authCompleteCalls           int
 	authCleanupCalls            int
 	authSecretCheckErr          error
+	authSecretCheckErrors       []error
 	deletedAuthAccount          string
 	deletedAuthSecret           string
 	githubSecretInput           runtimerepo.GitHubTokenSecretInput
@@ -3479,6 +3480,13 @@ func (runner *fakeRuntimeRunner) GetCodexAuthStatus(_ context.Context, accountNa
 
 func (runner *fakeRuntimeRunner) CheckCodexAuthSecret(_ context.Context, input runtimerepo.CodexAuthSecretCheckInput) (runtimerepo.CodexAuthSecretCheckResult, error) {
 	runner.authSecretChecks++
+	if len(runner.authSecretCheckErrors) > 0 {
+		err := runner.authSecretCheckErrors[0]
+		runner.authSecretCheckErrors = runner.authSecretCheckErrors[1:]
+		if err != nil {
+			return runtimerepo.CodexAuthSecretCheckResult{}, err
+		}
+	}
 	if runner.authSecretCheckErr != nil {
 		return runtimerepo.CodexAuthSecretCheckResult{}, runner.authSecretCheckErr
 	}

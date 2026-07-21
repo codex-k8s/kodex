@@ -1115,6 +1115,39 @@ func TestChatRunDoesNotStartReauthWhenAuthCheckInfrastructureFails(t *testing.T)
 	}
 }
 
+func TestCodexAuthCheckReclaimsOldestIdleSessionOnCapacityPressure(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", Enabled: true}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", Slug: "manager"}
+	store.agentSessions = map[string]entity.AgentSession{
+		"oldest-idle": {
+			ID: 1, SessionKey: "oldest-idle", ProjectID: 1, ChatID: 1, RoleID: 1,
+			Status: agentSessionStatusIdle, KubernetesNamespace: "mattermost", PodName: "mc-session-oldest-idle",
+			PVCName: "mc-session-ws-oldest-idle", TokenSecretRef: "matter-codex-session-oldest-idle",
+			LastActivityAt: time.Now().Add(-4 * time.Hour),
+		},
+	}
+	capacityErr := runtimerepo.NewAgentSessionCapacityError("test scheduler pressure", errors.New("insufficient cpu"))
+	runner := &fakeRuntimeRunner{authSecretCheckErrors: []error{capacityErr, capacityErr, nil}}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true,
+		DisableMonitor: true, CapacityRetryDelay: time.Nanosecond,
+	})
+
+	result, err := svc.checkCodexAuthSecretWithCapacityReclaim(context.Background(), runtimerepo.CodexAuthSecretCheckInput{
+		AccountName: "main", SecretName: "matter-codex-codex-auth-main",
+	})
+	if err != nil || !result.Ready {
+		t.Fatalf("check result=%#v error=%v", result, err)
+	}
+	if runner.authSecretChecks != 3 || len(runner.cleanedSessionKeys) != 1 || runner.cleanedSessionKeys[0] != "oldest-idle" {
+		t.Fatalf("checks=%d cleanup=%#v", runner.authSecretChecks, runner.cleanedSessionKeys)
+	}
+	if session := store.agentSessions["oldest-idle"]; session.PodName != "" || session.PVCName == "" || session.TokenSecretRef == "" {
+		t.Fatalf("idle session state = %#v", session)
+	}
+}
+
 func TestChatRunDoesNotPostEmptyDeviceCodeWhenReauthJobIsNotReady(t *testing.T) {
 	originalWait := codexAuthDeviceCodeWait
 	codexAuthDeviceCodeWait = time.Millisecond
