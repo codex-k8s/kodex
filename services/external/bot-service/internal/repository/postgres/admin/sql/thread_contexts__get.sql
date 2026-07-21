@@ -15,6 +15,7 @@ select
 	tc.pending_user_id,
 	tc.pending_user_name,
 	tc.pending_message,
+	tc.pending_mattermost_file_ids,
 	tc.created_at,
 	tc.updated_at
 from matter_codex_thread_contexts tc

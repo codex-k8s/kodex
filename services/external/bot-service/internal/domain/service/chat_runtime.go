@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	domainartifact "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/artifact"
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
@@ -90,6 +91,7 @@ type ChatPostCommand struct {
 	UserID     string
 	UserName   string
 	Message    string
+	FileIDs    []string
 	Props      map[string]any
 }
 
@@ -115,6 +117,7 @@ type AgentTurnRequest struct {
 	PreparedPrompt string
 	ParentTurnID   int64
 	RequestedRunID string
+	FileIDs        []string
 }
 
 type AgentTurnRetryRequest struct {
@@ -182,6 +185,11 @@ type ChatRunServiceConfig struct {
 	MonitorTimeout              time.Duration
 	CapacityRetryDelay          time.Duration
 	AutomationRuntimeReconciler AutomationRuntimeTerminalReconciler
+	Artifacts                   TurnArtifactService
+}
+
+type TurnArtifactService interface {
+	IngestIncoming(ctx context.Context, input domainartifact.IngestInput) (domainartifact.Manifest, error)
 }
 
 type ChatRunService struct {
@@ -222,7 +230,7 @@ func (svc *ChatRunService) SetAutomationRuntimeReconciler(reconciler AutomationR
 
 func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostCommand) ChatRunResult {
 	command = normalizeChatPostCommand(command)
-	if command.ChannelID == "" || command.PostID == "" || command.Message == "" {
+	if command.ChannelID == "" || command.PostID == "" || (command.Message == "" && len(command.FileIDs) == 0) {
 		return ChatRunResult{Ignored: true}
 	}
 	if isMatterCodexSystemPost(command.Props) {
@@ -233,6 +241,13 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 	}
 	if hasMattermostNoTriggerMarker(command.Message) {
 		return ChatRunResult{Ignored: true}
+	}
+	if len(command.FileIDs) > 0 && svc.cfg.Artifacts == nil {
+		svc.postThread(ctx, command, svc.t("chat.run.artifacts_not_configured", nil))
+		return ChatRunResult{}
+	}
+	if command.Message == "" {
+		command.Message = svc.t("chat.run.attachments_only_prompt", nil)
 	}
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		svc.postThread(ctx, command, svc.t("chat.run.storage_not_ready", nil))
@@ -334,6 +349,7 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 			SessionRootID: target.SessionRootID,
 			SessionScope:  target.SessionScope,
 			TTLSeconds:    target.TTLSeconds,
+			FileIDs:       command.FileIDs,
 		})
 		if err != nil {
 			var message string
@@ -437,6 +453,9 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if request.ReplyRootID == "" {
 		return AgentTurnQueued{}, fmt.Errorf("Mattermost reply root post id is required")
 	}
+	if len(request.FileIDs) > 0 && svc.cfg.Artifacts == nil {
+		return AgentTurnQueued{}, fmt.Errorf("artifact service is not ready")
+	}
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return AgentTurnQueued{}, fmt.Errorf("storage is not ready")
 	}
@@ -534,6 +553,29 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
+	runID := request.RequestedRunID
+	if runID == "" {
+		runID = newChatRunID(request.Chat.ID)
+	} else if len(runID) > 200 || strings.TrimSpace(runID) != runID || strings.ContainsAny(runID, "\x00\r\n") {
+		return AgentTurnQueued{}, fmt.Errorf("requested run id is invalid")
+	}
+	if len(request.FileIDs) > 0 {
+		manifest, ingestErr := svc.cfg.Artifacts.IngestIncoming(ctx, domainartifact.IngestInput{
+			Scope: domainartifact.Scope{
+				ProjectID: request.Project.ID, ChatID: request.Chat.ID, SessionID: session.ID, RoleID: request.Role.ID,
+				TurnID: runID, SessionKey: session.SessionKey, MattermostChannelID: request.Chat.MattermostChannelID,
+				MattermostRootPostID: request.ReplyRootID,
+			},
+			SourcePostID: request.SourcePostID, SourceUserID: request.UserID, FileIDs: request.FileIDs,
+		})
+		if ingestErr != nil {
+			return AgentTurnQueued{}, fmt.Errorf("ingest turn artifacts: %w", ingestErr)
+		}
+		prompt, err = domainartifact.AppendManifestToPrompt(prompt, manifest)
+		if err != nil {
+			return AgentTurnQueued{}, err
+		}
+	}
 	gitHubSecretName := ""
 	if gitHubOK {
 		gitHubSecretName = gitHubAccount.SecretRef
@@ -572,12 +614,6 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 				return AgentTurnQueued{}, err
 			}
 		}
-	}
-	runID := request.RequestedRunID
-	if runID == "" {
-		runID = newChatRunID(request.Chat.ID)
-	} else if len(runID) > 200 || strings.TrimSpace(runID) != runID || strings.ContainsAny(runID, "\x00\r\n") {
-		return AgentTurnQueued{}, fmt.Errorf("requested run id is invalid")
 	}
 	var turn entity.AgentSessionTurn
 	err = svc.withClusterAdminRuntimeGuard(ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID, session.SessionKey, "agent_turn.persist.side_effect", func() error {
@@ -1363,6 +1399,7 @@ func (svc *ChatRunService) SelectThreadRepository(ctx context.Context, input Thr
 		UserID:     threadContext.PendingUserID,
 		UserName:   threadContext.PendingUserName,
 		Message:    threadContext.PendingMessage,
+		FileIDs:    append([]string(nil), threadContext.PendingMattermostFileIDs...),
 	}
 	result := svc.HandleChatPost(ctx, pending)
 	return ThreadRepositorySelectionResult{Context: threadContext, RunID: result.RunID}, nil
@@ -1386,6 +1423,7 @@ func (svc *ChatRunService) replayConfiguredThreadContextIfUnstarted(ctx context.
 		UserID:     threadContext.PendingUserID,
 		UserName:   threadContext.PendingUserName,
 		Message:    threadContext.PendingMessage,
+		FileIDs:    append([]string(nil), threadContext.PendingMattermostFileIDs...),
 	}), nil
 }
 
@@ -1971,15 +2009,16 @@ func (svc *ChatRunService) threadContextRepositories(ctx context.Context, projec
 		return threadContext, nil, true, nil
 	}
 	threadContext, created, err := svc.cfg.Store.UpsertThreadContext(ctx, adminrepo.UpsertThreadContextInput{
-		ProjectID:               project.ID,
-		ChatID:                  chat.ID,
-		MattermostChannelID:     chat.MattermostChannelID,
-		MattermostRootPostID:    rootPostID,
-		Status:                  threadContextStatusPending,
-		PendingMattermostPostID: command.PostID,
-		PendingUserID:           command.UserID,
-		PendingUserName:         command.UserName,
-		PendingMessage:          command.Message,
+		ProjectID:                project.ID,
+		ChatID:                   chat.ID,
+		MattermostChannelID:      chat.MattermostChannelID,
+		MattermostRootPostID:     rootPostID,
+		Status:                   threadContextStatusPending,
+		PendingMattermostPostID:  command.PostID,
+		PendingUserID:            command.UserID,
+		PendingUserName:          command.UserName,
+		PendingMessage:           command.Message,
+		PendingMattermostFileIDs: append([]string(nil), command.FileIDs...),
 	})
 	if err != nil {
 		return entity.ThreadContext{}, nil, false, err
@@ -2232,6 +2271,20 @@ func normalizeChatPostCommand(command ChatPostCommand) ChatPostCommand {
 	command.UserID = strings.TrimSpace(command.UserID)
 	command.UserName = strings.TrimSpace(command.UserName)
 	command.Message = strings.TrimSpace(command.Message)
+	fileIDs := make([]string, 0, len(command.FileIDs))
+	seen := make(map[string]struct{}, len(command.FileIDs))
+	for _, fileID := range command.FileIDs {
+		fileID = strings.TrimSpace(fileID)
+		if fileID == "" {
+			continue
+		}
+		if _, exists := seen[fileID]; exists {
+			continue
+		}
+		seen[fileID] = struct{}{}
+		fileIDs = append(fileIDs, fileID)
+	}
+	command.FileIDs = fileIDs
 	return command
 }
 

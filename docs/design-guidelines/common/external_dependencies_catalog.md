@@ -13,6 +13,11 @@
 
 | Dependency | Version | Scope | Why |
 |---|---:|---|---|
+| `github.com/aws/aws-sdk-go-v2` | `v1.42.1` | Artifact storage | базовые типы и конфигурация AWS SDK v2 для S3-compatible object storage |
+| `github.com/aws/aws-sdk-go-v2/config` | `v1.32.30` | Artifact storage | проверенная загрузка конфигурации S3-клиента bot-service |
+| `github.com/aws/aws-sdk-go-v2/credentials` | `v1.19.29` | Artifact storage | статический credentials provider только внутри bot-service; учетные данные не передаются agent pod |
+| `github.com/aws/aws-sdk-go-v2/service/s3` | `v1.105.2` | Artifact storage | immutable `PutObject` с checksum/`If-None-Match` и потоковый `GetObject` для S3-compatible backend |
+| `github.com/aws/smithy-go` | `v1.27.3` | Artifact storage | типизированная классификация кодов S3 API, включая конфликт неизменяемой записи |
 | `github.com/caarlos0/env/v11` | `v11.3.1` | Config | typed env -> struct parsing без самописного env loader в сервисе |
 | `github.com/fsnotify/fsnotify` | `v1.10.1` | Runtime security | fail-closed события create/write/delete/rename/replace и ошибки очереди для per-run credential guard |
 | `github.com/google/go-github/v88` | `v88.0.0` | GitHub SDK | repository access, branch/PR operations и webhook payload helpers без ручной REST-обвязки |

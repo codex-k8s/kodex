@@ -82,6 +82,17 @@ type Config struct {
 	CallbackMaxChunkBytes               int           `env:"MATTERCODEX_CALLBACK_MAX_CHUNK_BYTES" envDefault:"49152"`
 	CallbackPublishConcurrency          int           `env:"MATTERCODEX_CALLBACK_PUBLISH_CONCURRENCY" envDefault:"4"`
 	CallbackPublishDeadline             time.Duration `env:"MATTERCODEX_CALLBACK_PUBLISH_DEADLINE" envDefault:"5s"`
+	ArtifactsEnabled                    bool          `env:"MATTERCODEX_ARTIFACTS_ENABLED" envDefault:"false"`
+	ArtifactS3Endpoint                  string        `env:"MATTERCODEX_ARTIFACT_S3_ENDPOINT"`
+	ArtifactS3Region                    string        `env:"MATTERCODEX_ARTIFACT_S3_REGION" envDefault:"us-east-1"`
+	ArtifactS3Bucket                    string        `env:"MATTERCODEX_ARTIFACT_S3_BUCKET"`
+	ArtifactS3AccessKeyID               string        `env:"MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID"`
+	ArtifactS3SecretAccessKey           string        `env:"MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY"`
+	ArtifactS3UsePathStyle              bool          `env:"MATTERCODEX_ARTIFACT_S3_USE_PATH_STYLE" envDefault:"true"`
+	ArtifactMaxFilesPerTurn             int           `env:"MATTERCODEX_ARTIFACT_MAX_FILES_PER_TURN" envDefault:"8"`
+	ArtifactMaxObjectBytes              int64         `env:"MATTERCODEX_ARTIFACT_MAX_OBJECT_BYTES" envDefault:"8388608"`
+	ArtifactMaxTurnBytes                int64         `env:"MATTERCODEX_ARTIFACT_MAX_TURN_BYTES" envDefault:"33554432"`
+	ArtifactRetention                   time.Duration `env:"MATTERCODEX_ARTIFACT_RETENTION" envDefault:"2160h"`
 }
 
 func LoadConfig() (Config, error) {
@@ -159,6 +170,28 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.CallbackPublishDeadline <= 0 || cfg.CallbackPublishDeadline > 15*time.Second {
 		return fmt.Errorf("MATTERCODEX_CALLBACK_PUBLISH_DEADLINE is invalid")
+	}
+	if cfg.ArtifactMaxFilesPerTurn <= 0 || cfg.ArtifactMaxFilesPerTurn > 8 {
+		return fmt.Errorf("MATTERCODEX_ARTIFACT_MAX_FILES_PER_TURN is invalid")
+	}
+	if cfg.ArtifactMaxObjectBytes <= 0 || cfg.ArtifactMaxObjectBytes > 8*1024*1024 {
+		return fmt.Errorf("MATTERCODEX_ARTIFACT_MAX_OBJECT_BYTES is invalid")
+	}
+	if cfg.ArtifactMaxTurnBytes < cfg.ArtifactMaxObjectBytes || cfg.ArtifactMaxTurnBytes > 32*1024*1024 {
+		return fmt.Errorf("MATTERCODEX_ARTIFACT_MAX_TURN_BYTES is invalid")
+	}
+	if cfg.ArtifactRetention < 90*24*time.Hour {
+		return fmt.Errorf("MATTERCODEX_ARTIFACT_RETENTION is invalid")
+	}
+	if cfg.ArtifactsEnabled {
+		if !cfg.DatabaseConfigured() || !cfg.BotTokenConfigured() || !cfg.RuntimeEnabled {
+			return fmt.Errorf("artifact storage requires database, Mattermost bot, and runtime")
+		}
+		if strings.TrimSpace(cfg.ArtifactS3Endpoint) == "" || strings.TrimSpace(cfg.ArtifactS3Region) == "" ||
+			strings.TrimSpace(cfg.ArtifactS3Bucket) == "" || strings.TrimSpace(cfg.ArtifactS3AccessKeyID) == "" ||
+			strings.TrimSpace(cfg.ArtifactS3SecretAccessKey) == "" {
+			return fmt.Errorf("artifact S3 configuration is incomplete")
+		}
 	}
 	if cfg.InteractiveSurfaceEnabled() {
 		if err := validateInternalServiceOrigin(cfg.BotServiceInternalURL); err != nil {
@@ -304,6 +337,18 @@ func (cfg *Config) applyPublishDefaults() {
 	}
 	if cfg.CallbackPublishDeadline == 0 {
 		cfg.CallbackPublishDeadline = 5 * time.Second
+	}
+	if cfg.ArtifactMaxFilesPerTurn == 0 {
+		cfg.ArtifactMaxFilesPerTurn = 8
+	}
+	if cfg.ArtifactMaxObjectBytes == 0 {
+		cfg.ArtifactMaxObjectBytes = 8 * 1024 * 1024
+	}
+	if cfg.ArtifactMaxTurnBytes == 0 {
+		cfg.ArtifactMaxTurnBytes = 32 * 1024 * 1024
+	}
+	if cfg.ArtifactRetention == 0 {
+		cfg.ArtifactRetention = 90 * 24 * time.Hour
 	}
 }
 

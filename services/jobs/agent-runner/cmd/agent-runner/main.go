@@ -92,6 +92,7 @@ type runner struct {
 	safety                   runSafety
 	credentialFiles          []string
 	credentialWatcherFactory func() (credentialEventWatcher, error)
+	artifactBridge           *artifactBridge
 }
 
 type githubAccount struct {
@@ -104,17 +105,41 @@ type sessionSnapshotResponse struct {
 	SessionKey               string `json:"session_key"`
 	CodexSessionID           string `json:"codex_session_id"`
 	SessionArchiveGzipBase64 string `json:"session_archive_gzip_base64"`
+	ArtifactsEnabled         bool   `json:"artifacts_enabled"`
 	ExpiresAt                string `json:"expires_at"`
 }
 
 type sessionTurnClaimResponse struct {
-	HasTurn        bool   `json:"has_turn"`
-	Exit           bool   `json:"exit"`
-	TurnID         int64  `json:"turn_id"`
-	RunID          string `json:"run_id"`
-	Prompt         string `json:"prompt"`
-	CodexSessionID string `json:"codex_session_id"`
-	ExpiresAt      string `json:"expires_at"`
+	HasTurn          bool                    `json:"has_turn"`
+	Exit             bool                    `json:"exit"`
+	TurnID           int64                   `json:"turn_id"`
+	RunID            string                  `json:"run_id"`
+	Prompt           string                  `json:"prompt"`
+	CodexSessionID   string                  `json:"codex_session_id"`
+	ExpiresAt        string                  `json:"expires_at"`
+	ArtifactManifest sessionArtifactManifest `json:"artifact_manifest"`
+}
+
+type sessionArtifactManifest struct {
+	SchemaVersion string                         `json:"schema_version"`
+	TurnID        string                         `json:"turn_id"`
+	Files         []sessionArtifactManifestEntry `json:"files"`
+}
+
+type sessionArtifactManifestEntry struct {
+	OriginalName      string                        `json:"original_name"`
+	LocalPath         string                        `json:"local_path"`
+	MediaType         string                        `json:"media_type"`
+	Size              int64                         `json:"size"`
+	SHA256            string                        `json:"sha256"`
+	ArtifactVersionID string                        `json:"artifact_version_id"`
+	Source            sessionArtifactManifestSource `json:"source"`
+}
+
+type sessionArtifactManifestSource struct {
+	Kind   string `json:"kind"`
+	PostID string `json:"post_id"`
+	FileID string `json:"file_id"`
 }
 
 type sessionTurnCompleteRequest struct {
@@ -473,12 +498,22 @@ func (r *runner) runSession(ctx context.Context) error {
 	if err := r.prepareWorkspace(); err != nil {
 		return err
 	}
-	if err := r.prepareCodexHome(ctx); err != nil {
-		return err
-	}
 	client := &http.Client{Timeout: 60 * time.Second}
 	snapshot, err := r.fetchSessionSnapshot(ctx, client, botServiceURL, sessionKey, sessionToken)
 	if err != nil {
+		return err
+	}
+	if snapshot.ArtifactsEnabled {
+		if err := r.startArtifactBridge(ctx, botServiceURL, sessionKey, sessionToken); err != nil {
+			return err
+		}
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			r.stopArtifactBridge(shutdownCtx)
+		}()
+	}
+	if err := r.prepareCodexHome(ctx); err != nil {
 		return err
 	}
 	if err := restoreCodexSessionArchive(snapshot.SessionArchiveGzipBase64, r.codexHome); err != nil {
@@ -532,6 +567,30 @@ func (r *runner) runSessionTurns(
 		if strings.TrimSpace(claim.CodexSessionID) != "" {
 			codexSessionID = strings.TrimSpace(claim.CodexSessionID)
 		}
+		turnEnv := append([]string(nil), extraEnv...)
+		if claim.ArtifactManifest.SchemaVersion != "" {
+			outputDir, prepareErr := r.prepareTurnArtifacts(ctx, client, botServiceURL, sessionKey, sessionToken, claim)
+			if prepareErr != nil || r.artifactBridge == nil {
+				if prepareErr == nil {
+					prepareErr = fmt.Errorf("локальный мост артефактов не настроен")
+				}
+				safeMessage, protectErr := r.secrets.protect(prepareErr.Error())
+				if protectErr != nil {
+					safeMessage = unsafeSecretFragmentError{}.Error()
+				}
+				if err := r.completeSessionTurn(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnCompleteRequest{
+					TurnID: claim.TurnID, RunID: claim.RunID, Status: "failed", ErrorMessage: safeMessage,
+				}); err != nil {
+					return err
+				}
+				continue
+			}
+			r.artifactBridge.activate(activeArtifactTurn{
+				botServiceURL: botServiceURL, sessionKey: sessionKey, sessionToken: sessionToken,
+				turnID: claim.RunID, outboxDir: outputDir,
+			})
+			turnEnv = append(turnEnv, "MATTERCODEX_OUTPUT_DIR="+outputDir)
+		}
 		if err := r.updateSessionTurnStatus(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnStatusRequest{
 			RunID:         claim.RunID,
 			Phase:         "running",
@@ -542,7 +601,7 @@ func (r *runner) runSessionTurns(
 		}
 		finalFile := fmt.Sprintf("session-turn-%d-final.md", claim.TurnID)
 		retryCount := 0
-		nextSessionID, finalMessage, runErr := r.executeSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
+		nextSessionID, finalMessage, runErr := r.executeSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, turnEnv, retryCount)
 		if strings.TrimSpace(nextSessionID) != "" {
 			codexSessionID = strings.TrimSpace(nextSessionID)
 		}
@@ -578,7 +637,7 @@ func (r *runner) runSessionTurns(
 			if strings.TrimSpace(codexSessionID) != "" {
 				retryClaim.Prompt = codexCapacityRetryPrompt(retryCount, len(codexCapacityRetryDelays))
 			}
-			nextSessionID, finalMessage, runErr = r.executeSessionTurn(ctx, retryClaim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
+			nextSessionID, finalMessage, runErr = r.executeSessionTurn(ctx, retryClaim, codexSessionID, finalFile, workDir, turnEnv, retryCount)
 			if strings.TrimSpace(nextSessionID) != "" {
 				codexSessionID = strings.TrimSpace(nextSessionID)
 			}
@@ -648,6 +707,9 @@ func (r *runner) runSessionTurns(
 			Artifacts:                artifacts,
 		}); err != nil {
 			return err
+		}
+		if r.artifactBridge != nil {
+			r.artifactBridge.deactivate()
 		}
 	}
 }
@@ -1537,6 +1599,18 @@ func ensureCodexRuntimeConfig(config map[string]any, allowlist []string) error {
 			"required":             true,
 		}
 	}
+	if artifactMCPURL := strings.TrimSpace(os.Getenv("MATTERCODEX_ARTIFACT_MCP_URL")); artifactMCPURL != "" {
+		mcpServers, err := ensureTOMLTable(config, "mcp_servers")
+		if err != nil {
+			return err
+		}
+		mcpServers["mattercodex_artifacts"] = map[string]any{
+			"url":                 artifactMCPURL,
+			"startup_timeout_sec": 10,
+			"tool_timeout_sec":    60,
+			"required":            true,
+		}
+	}
 	return nil
 }
 
@@ -1627,6 +1701,7 @@ func codexShellEnvironmentAllowlist() []string {
 		"KUBERNETES_PORT_443_TCP_ADDR",
 		"KUBERNETES_PORT_443_TCP_PORT",
 		"KUBERNETES_PORT_443_TCP_PROTO",
+		"MATTERCODEX_OUTPUT_DIR",
 	}
 	seen := make(map[string]struct{}, len(values))
 	for _, value := range values {

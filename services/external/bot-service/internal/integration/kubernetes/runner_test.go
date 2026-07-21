@@ -648,6 +648,16 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	assertRunnerPodSecurity(t, podSpec)
 	assertRunnerSessionResources(t, podSpec.Containers[0].Resources)
 	container := podSpec.Containers[0]
+	for _, item := range container.Env {
+		if strings.HasPrefix(item.Name, "MATTERCODEX_ARTIFACT_S3_") || item.Name == "MATTERCODEX_MATTERMOST_BOT_TOKEN" {
+			t.Fatalf("service credential env reached agent pod: %s", item.Name)
+		}
+	}
+	for _, volume := range podSpec.Volumes {
+		if volume.Secret != nil && volume.Secret.SecretName == "matter-codex-artifact-storage" {
+			t.Fatal("artifact storage Secret reached agent pod")
+		}
+	}
 	if got := envValue(container.Env, "MATTERCODEX_MCP_URL"); got != "http://bot-service/mcp/sessions/project-1-chat-2-role-3" {
 		t.Fatalf("MATTERCODEX_MCP_URL = %q", got)
 	}

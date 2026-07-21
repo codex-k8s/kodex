@@ -508,6 +508,7 @@ func (repo *Repository) UpsertThreadContext(ctx context.Context, input adminrepo
 		input.PendingUserID,
 		input.PendingUserName,
 		input.PendingMessage,
+		input.PendingMattermostFileIDs,
 	))
 	if err != nil {
 		return entity.ThreadContext{}, false, fmt.Errorf("upsert thread context: %w", err)
@@ -665,6 +666,7 @@ func scanThreadContext(row accountRow) (entity.ThreadContext, error) {
 		&item.PendingUserID,
 		&item.PendingUserName,
 		&item.PendingMessage,
+		&item.PendingMattermostFileIDs,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	); err != nil {
@@ -692,6 +694,7 @@ func scanThreadContextWithCreated(row pgx.Row) (entity.ThreadContext, bool, erro
 		&item.PendingUserID,
 		&item.PendingUserName,
 		&item.PendingMessage,
+		&item.PendingMattermostFileIDs,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 		&created,

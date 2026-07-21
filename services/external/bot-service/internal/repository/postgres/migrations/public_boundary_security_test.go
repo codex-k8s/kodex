@@ -280,7 +280,7 @@ where name = 'developer'
 	}
 	ownerPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("runtime-role migration through v29: %v", err)
+		t.Fatalf("runtime-role migration through v30: %v", err)
 	}
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
 	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
@@ -616,6 +616,92 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 	version, err = migrations.Version(ctx, dsn)
 	if err != nil || version != 30 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
+	}
+}
+
+func TestV30ArtifactOwnershipGrantsScopeAndImmutability(t *testing.T) {
+	ownerDSN := isolatedMigrationDSN(t, "v30_artifacts")
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	roleName := "mc_v30_runtime_" + strconv.FormatUint(migrationSchemaSequence.Add(1), 36)
+	rolePassword := "synthetic-v30-runtime-password"
+	if err := postgresrepo.ProvisionRuntimeDatabaseRole(ctx, ownerDSN, roleName, rolePassword); err != nil {
+		t.Fatalf("provision v30 runtime role: %v", err)
+	}
+	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
+		t.Fatalf("fresh v30 migration with runtime role: %v", err)
+	}
+	ownerPool := openMigrationPool(t, ctx, ownerDSN)
+	defer ownerPool.Close()
+	version, err := migrations.Version(ctx, ownerDSN)
+	if err != nil || version != 30 {
+		t.Fatalf("v30 migration version=%d error=%v", version, err)
+	}
+	var publicTable, publicFunction, runtimeDelete, runtimeInsert bool
+	if err := ownerPool.QueryRow(ctx, `
+select
+	has_table_privilege('public', current_schema() || '.matter_codex_artifacts', 'select'),
+	has_function_privilege('public', current_schema() || '.matter_codex_guard_artifact_binding()', 'execute'),
+	has_table_privilege($1, current_schema() || '.matter_codex_artifacts', 'delete'),
+	has_table_privilege($1, current_schema() || '.matter_codex_artifacts', 'insert')
+`, roleName).Scan(&publicTable, &publicFunction, &runtimeDelete, &runtimeInsert); err != nil {
+		t.Fatalf("inspect v30 privileges: %v", err)
+	}
+	if publicTable || publicFunction || runtimeDelete || !runtimeInsert {
+		t.Fatalf("v30 privileges public_table=%t public_function=%t runtime_delete=%t runtime_insert=%t", publicTable, publicFunction, runtimeDelete, runtimeInsert)
+	}
+	var functionDefinition string
+	if err := ownerPool.QueryRow(ctx, `select pg_get_functiondef((current_schema() || '.matter_codex_guard_artifact_binding()')::regprocedure)`).Scan(&functionDefinition); err != nil {
+		t.Fatalf("read v30 binding guard: %v", err)
+	}
+	if !strings.Contains(functionDefinition, "SET search_path TO 'pg_catalog',") || !strings.Contains(functionDefinition, "'pg_temp'") {
+		t.Fatalf("v30 binding guard search_path не закреплён: %s", functionDefinition)
+	}
+
+	runtimePool := openMigrationPool(t, ctx, migrationDSNForRole(t, ownerDSN, roleName, rolePassword))
+	defer runtimePool.Close()
+	artifactID := strings.Repeat("a", 32)
+	versionID := strings.Repeat("b", 32)
+	if _, err := runtimePool.Exec(ctx, `
+insert into matter_codex_artifacts(
+	id, project_id, chat_id, session_id, turn_id, direction,
+	mattermost_post_id, mattermost_file_id, retention_until
+) values ($1, 1, 2, 3, 'run-1', 'inbound', 'post-1', 'file-1', now() + interval '90 days')
+`, artifactID); err != nil {
+		t.Fatalf("runtime insert v30 artifact: %v", err)
+	}
+	if _, err := runtimePool.Exec(ctx, `
+insert into matter_codex_artifact_versions(
+	id, artifact_id, storage_key, original_name, safe_name, media_type,
+	declared_media_type, size_bytes, sha256, state
+) values ($1, $2, $3, 'input.txt', $4, 'text/plain', 'text/plain', 4, $5, 'uploading')
+`, versionID, artifactID, "projects/1/sessions/3/artifacts/"+artifactID+"/versions/"+versionID, "1-"+versionID+".txt", strings.Repeat("c", 64)); err != nil {
+		t.Fatalf("runtime insert v30 version: %v", err)
+	}
+	if _, err := runtimePool.Exec(ctx, `
+insert into matter_codex_message_artifact_bindings(
+	artifact_version_id, project_id, chat_id, session_id, turn_id,
+	mattermost_post_id, mattermost_file_id, direction, ordinal
+) values ($1, 1, 2, 3, 'run-1', 'post-1', 'file-1', 'inbound', 1)
+`, versionID); err != nil {
+		t.Fatalf("runtime insert v30 binding: %v", err)
+	}
+	if _, err := runtimePool.Exec(ctx, `update matter_codex_artifact_versions set state = 'scanning', updated_at = now() where id = $1`, versionID); err != nil {
+		t.Fatalf("runtime transition v30 version: %v", err)
+	}
+	if _, err := runtimePool.Exec(ctx, `update matter_codex_artifact_versions set sha256 = repeat('d', 64) where id = $1`, versionID); err == nil {
+		t.Fatal("runtime role изменила immutable v30 artifact metadata")
+	}
+	if _, err := runtimePool.Exec(ctx, `
+insert into matter_codex_message_artifact_bindings(
+	artifact_version_id, project_id, chat_id, session_id, turn_id,
+	mattermost_post_id, mattermost_file_id, direction, ordinal
+) values ($1, 99, 2, 3, 'run-foreign', 'post-1', 'file-1', 'inbound', 1)
+`, versionID); err == nil {
+		t.Fatal("runtime role создала cross-scope v30 binding")
+	}
+	if _, err := runtimePool.Exec(ctx, `delete from matter_codex_artifacts where id = $1`, artifactID); err == nil {
+		t.Fatal("runtime role удалила immutable v30 artifact")
 	}
 }
 
@@ -1345,7 +1431,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 		t.Fatalf("upgrade historical base v21->current main v22: %v", err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27->v28->v29: %v", err)
+		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27->v28->v29->v30: %v", err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()

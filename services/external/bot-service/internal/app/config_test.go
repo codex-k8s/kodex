@@ -120,6 +120,23 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.ReadHeaderTimeout != 5*time.Second || cfg.ReadTimeout != 10*time.Second || cfg.IdleTimeout != time.Minute || cfg.MaxHeaderBytes != 1024*1024 || cfg.MaxMCPRequestBodyBytes != 1024*1024 {
 		t.Fatalf("HTTP boundary defaults = header:%s read:%s idle:%s max_header:%d max_mcp:%d", cfg.ReadHeaderTimeout, cfg.ReadTimeout, cfg.IdleTimeout, cfg.MaxHeaderBytes, cfg.MaxMCPRequestBodyBytes)
 	}
+	if cfg.ArtifactsEnabled || cfg.ArtifactMaxFilesPerTurn != 8 || cfg.ArtifactMaxObjectBytes != 8*1024*1024 || cfg.ArtifactMaxTurnBytes != 32*1024*1024 || cfg.ArtifactRetention != 90*24*time.Hour {
+		t.Fatalf("artifact defaults = enabled:%t files:%d object:%d turn:%d retention:%s", cfg.ArtifactsEnabled, cfg.ArtifactMaxFilesPerTurn, cfg.ArtifactMaxObjectBytes, cfg.ArtifactMaxTurnBytes, cfg.ArtifactRetention)
+	}
+}
+
+func TestConfigArtifactFeatureIsStagedAndFailsClosedWhenIncomplete(t *testing.T) {
+	t.Setenv("MATTERCODEX_ARTIFACTS_ENABLED", "true")
+	t.Setenv("MATTERCODEX_DATABASE_DSN", "postgres://runtime:runtime-password@database:5432/mattercodex?sslmode=disable")
+	t.Setenv("MATTERCODEX_MIGRATIONS_DATABASE_DSN", "postgres://owner:owner-password@database:5432/mattercodex?sslmode=disable")
+	t.Setenv("MATTERCODEX_MATTERMOST_BOT_TOKEN", "synthetic-bot-token")
+	t.Setenv("MATTERCODEX_ARTIFACT_S3_ENDPOINT", "")
+	t.Setenv("MATTERCODEX_ARTIFACT_S3_BUCKET", "")
+	t.Setenv("MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID", "")
+	t.Setenv("MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY", "")
+	if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "artifact S3 configuration is incomplete") {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
 }
 
 func TestHTTPServerUsesBoundedReadAndConnectionSettings(t *testing.T) {

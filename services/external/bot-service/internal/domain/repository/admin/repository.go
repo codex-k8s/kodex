@@ -218,16 +218,17 @@ type CreateChatInput struct {
 }
 
 type UpsertThreadContextInput struct {
-	ProjectID               int64
-	ChatID                  int64
-	MattermostChannelID     string
-	MattermostRootPostID    string
-	RepositoryID            int64
-	Status                  string
-	PendingMattermostPostID string
-	PendingUserID           string
-	PendingUserName         string
-	PendingMessage          string
+	ProjectID                int64
+	ChatID                   int64
+	MattermostChannelID      string
+	MattermostRootPostID     string
+	RepositoryID             int64
+	Status                   string
+	PendingMattermostPostID  string
+	PendingUserID            string
+	PendingUserName          string
+	PendingMessage           string
+	PendingMattermostFileIDs []string
 }
 
 type UpsertMattermostBotIdentityInput struct {

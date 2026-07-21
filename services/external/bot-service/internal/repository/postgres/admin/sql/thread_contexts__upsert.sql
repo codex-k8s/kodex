@@ -10,7 +10,8 @@ with upserted as (
 		pending_mattermost_post_id,
 		pending_user_id,
 		pending_user_name,
-		pending_message
+		pending_message,
+		pending_mattermost_file_ids
 	) values (
 		$1,
 		$2,
@@ -21,7 +22,8 @@ with upserted as (
 		$7,
 		$8,
 		$9,
-		$10
+		$10,
+		$11
 	)
 	on conflict (chat_id, mattermost_root_post_id) do update set
 		project_id = excluded.project_id,
@@ -32,6 +34,7 @@ with upserted as (
 		pending_user_id = case when excluded.pending_user_id <> '' then excluded.pending_user_id else matter_codex_thread_contexts.pending_user_id end,
 		pending_user_name = case when excluded.pending_user_name <> '' then excluded.pending_user_name else matter_codex_thread_contexts.pending_user_name end,
 		pending_message = case when excluded.pending_message <> '' then excluded.pending_message else matter_codex_thread_contexts.pending_message end,
+		pending_mattermost_file_ids = case when cardinality(excluded.pending_mattermost_file_ids) > 0 then excluded.pending_mattermost_file_ids else matter_codex_thread_contexts.pending_mattermost_file_ids end,
 		updated_at = now()
 	returning *, (xmax = 0) as created
 )
@@ -51,6 +54,7 @@ select
 	u.pending_user_id,
 	u.pending_user_name,
 	u.pending_message,
+	u.pending_mattermost_file_ids,
 	u.created_at,
 	u.updated_at,
 	u.created

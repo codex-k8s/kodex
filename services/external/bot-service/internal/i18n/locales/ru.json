@@ -716,6 +716,8 @@
   {"id": "runtime.list.failed", "translation": "matter-codex: runtime runs не прочитаны: {{.Error}}"},
   {"id": "runtime.list.empty", "translation": "matter-codex: сохраненных runtime runs пока нет."},
   {"id": "chat.run.storage_not_ready", "translation": "matter-codex: storage еще не готов, chat runs недоступны."},
+  {"id": "chat.run.artifacts_not_configured", "translation": "matter-codex: безопасная обработка вложений пока не включена; ход не запущен."},
+  {"id": "chat.run.attachments_only_prompt", "translation": "Проверь вложения текущего хода и выполни задачу, которую можно достоверно определить по их содержимому."},
   {"id": "chat.run.sender_lookup_failed", "translation": "matter-codex: sender identity не проверена: {{.Error}}"},
   {"id": "chat.run.chat_lookup_failed", "translation": "matter-codex: конфигурация chat не прочитана: {{.Error}}"},
   {"id": "chat.run.project_lookup_failed", "translation": "matter-codex: конфигурация project не прочитана: {{.Error}}"},

@@ -3,15 +3,19 @@ package http
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	domainartifact "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/artifact"
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
@@ -66,6 +70,7 @@ type RouterConfig struct {
 	MaxSlashFormBytes      int64
 	MaxGitHubWebhookBytes  int64
 	MaxMCPRequestBodyBytes int64
+	MaxArtifactBodyBytes   int64
 	PrometheusRegistry     *prometheus.Registry
 	MattermostSiteURL      string
 	MattermostInternalURL  string
@@ -85,6 +90,7 @@ type Router struct {
 	gitHubWebhookSecret   string
 	maxSlashFormBytes     int64
 	maxGitHubWebhookBytes int64
+	maxArtifactBodyBytes  int64
 	interactionSecurity   *statusservice.InteractionSecurityService
 	mattermostResponses   *mattermostResponseClient
 	threadPublisher       statusservice.MattermostThreadPublisher
@@ -97,6 +103,9 @@ type Router struct {
 var _ http.Handler = (*Router)(nil)
 
 func NewRouter(cfg RouterConfig) *Router {
+	if cfg.MaxArtifactBodyBytes <= 0 || cfg.MaxArtifactBodyBytes > domainartifact.DefaultMaxObjectBytes {
+		cfg.MaxArtifactBodyBytes = domainartifact.DefaultMaxObjectBytes
+	}
 	router := &Router{
 		statusService:         cfg.StatusService,
 		slashService:          cfg.SlashService,
@@ -107,6 +116,7 @@ func NewRouter(cfg RouterConfig) *Router {
 		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
 		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
 		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
+		maxArtifactBodyBytes:  cfg.MaxArtifactBodyBytes,
 		interactionSecurity:   cfg.InteractionSecurity,
 		mattermostResponses:   newMattermostResponseClient(cfg.MattermostSiteURL, cfg.MattermostInternalURL, cfg.MattermostResolver, cfg.MattermostDialer),
 		threadPublisher:       cfg.ThreadPublisher,
@@ -644,6 +654,10 @@ func (router *Router) handleAgentSessionInternal(w http.ResponseWriter, r *http.
 		writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "missing_bearer_token"})
 		return
 	}
+	if strings.HasPrefix(action, "artifacts/") {
+		router.handleAgentSessionArtifact(w, r, sessionKey, token, strings.TrimPrefix(action, "artifacts/"))
+		return
+	}
 	switch action {
 	case "snapshot":
 		if r.Method != http.MethodGet {
@@ -705,6 +719,128 @@ func (router *Router) handleAgentSessionInternal(w http.ResponseWriter, r *http.
 	default:
 		writeJSON(w, http.StatusNotFound, transportmodels.ErrorResponse{Error: "not_found"})
 	}
+}
+
+type quarantineArtifactRequest struct {
+	TurnID         string `json:"turn_id"`
+	IdempotencyKey string `json:"idempotency_key"`
+	OriginalName   string `json:"original_name"`
+	MediaType      string `json:"media_type"`
+	Size           int64  `json:"size"`
+	SHA256         string `json:"sha256"`
+	Reason         string `json:"reason"`
+}
+
+func (router *Router) handleAgentSessionArtifact(w http.ResponseWriter, r *http.Request, sessionKey string, token string, action string) {
+	switch action {
+	case "publish":
+		router.handleAgentSessionArtifactPublish(w, r, sessionKey, token)
+	case "quarantine":
+		router.handleAgentSessionArtifactQuarantine(w, r, sessionKey, token)
+	default:
+		if r.Method != http.MethodGet || strings.Contains(action, "/") || strings.TrimSpace(action) == "" {
+			writeJSON(w, http.StatusNotFound, transportmodels.ErrorResponse{Error: "not_found"})
+			return
+		}
+		version, body, err := router.sessionService.DownloadArtifact(r.Context(), sessionKey, token, r.URL.Query().Get("turn_id"), action)
+		if err != nil {
+			router.writeArtifactError(w, err, "agent_session_artifact_download_failed")
+			return
+		}
+		defer body.Close()
+		contentDisposition := mime.FormatMediaType("attachment", map[string]string{"filename": version.SafeName})
+		w.Header().Set("Content-Type", version.MediaType)
+		w.Header().Set("Content-Disposition", contentDisposition)
+		w.Header().Set("Content-Length", strconv.FormatInt(version.Size, 10))
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-MatterCodex-Artifact-SHA256", version.SHA256)
+		w.WriteHeader(http.StatusOK)
+		if _, err := io.CopyN(w, body, version.Size); err != nil {
+			router.logWarn("agent session artifact stream failed", "error", err)
+		}
+	}
+}
+
+func (router *Router) handleAgentSessionArtifactPublish(w http.ResponseWriter, r *http.Request, sessionKey string, token string) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+		return
+	}
+	if r.ContentLength > router.maxArtifactBodyBytes {
+		writeJSON(w, http.StatusRequestEntityTooLarge, transportmodels.ErrorResponse{Error: "artifact_limit_exceeded"})
+		return
+	}
+	nameBody, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(r.Header.Get("X-MatterCodex-Artifact-Name")))
+	if err != nil || len(nameBody) == 0 || len(nameBody) > 1024 {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_artifact_name"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, router.maxArtifactBodyBytes+1)
+	result, err := router.sessionService.PublishArtifact(r.Context(), sessionKey, token, statusservice.PublishAgentSessionArtifactCommand{
+		TurnID:         r.Header.Get("X-MatterCodex-Turn-ID"),
+		IdempotencyKey: r.Header.Get("Idempotency-Key"),
+		OriginalName:   string(nameBody),
+		Body:           r.Body,
+	})
+	if errors.Is(err, domainartifact.ErrQuarantined) {
+		writeJSON(w, http.StatusUnprocessableEntity, result)
+		return
+	}
+	if err != nil {
+		router.writeArtifactError(w, err, "agent_session_artifact_publish_failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (router *Router) handleAgentSessionArtifactQuarantine(w http.ResponseWriter, r *http.Request, sessionKey string, token string) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	var request quarantineArtifactRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_artifact_quarantine_payload"})
+		return
+	}
+	result, err := router.sessionService.PublishArtifact(r.Context(), sessionKey, token, statusservice.PublishAgentSessionArtifactCommand{
+		TurnID:         request.TurnID,
+		IdempotencyKey: request.IdempotencyKey,
+		OriginalName:   request.OriginalName,
+		Quarantine: &domainartifact.QuarantineInput{
+			MediaType: request.MediaType,
+			Size:      request.Size,
+			SHA256:    request.SHA256,
+			Reason:    request.Reason,
+		},
+	})
+	if err != nil && !errors.Is(err, domainartifact.ErrQuarantined) {
+		router.writeArtifactError(w, err, "agent_session_artifact_quarantine_failed")
+		return
+	}
+	writeJSON(w, http.StatusUnprocessableEntity, result)
+}
+
+func (router *Router) writeArtifactError(w http.ResponseWriter, err error, fallback string) {
+	status := http.StatusBadGateway
+	code := fallback
+	switch {
+	case errors.Is(err, domainartifact.ErrScopeDenied), errors.Is(err, domainartifact.ErrNotFound):
+		status, code = http.StatusForbidden, "artifact_scope_denied"
+	case errors.Is(err, domainartifact.ErrLimitExceeded):
+		status, code = http.StatusRequestEntityTooLarge, "artifact_limit_exceeded"
+	case errors.Is(err, domainartifact.ErrMediaTypeDenied):
+		status, code = http.StatusUnsupportedMediaType, "artifact_media_type_denied"
+	case errors.Is(err, domainartifact.ErrQuarantined):
+		status, code = http.StatusUnprocessableEntity, "artifact_quarantined"
+	case errors.Is(err, domainartifact.ErrConflict):
+		status, code = http.StatusConflict, "artifact_conflict"
+	}
+	router.logWarn("agent session artifact request failed", "code", code, "status", status)
+	writeJSON(w, status, transportmodels.ErrorResponse{Error: code})
 }
 
 func (router *Router) logWarn(message string, args ...any) {

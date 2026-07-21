@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	domainartifact "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/artifact"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -17,7 +18,9 @@ import (
 	githubintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/github"
 	kubernetesintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/kubernetes"
 	mattermostintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/mattermost"
+	s3integration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/s3"
 	adminpostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
+	artifactpostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/artifact"
 	automationspostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/automations"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
 	httptransport "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http"
@@ -30,11 +33,15 @@ const serviceName = "matter-codex-bot-service"
 
 func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	runtimeRunner, runtimeConfigured := openRuntimeRunner(cfg, logger)
-	storage, automationStorage, closeStorage, err := openStorage(ctx, cfg, logger, runtimeRunner)
+	storage, storagePool, closeStorage, err := openStorage(ctx, cfg, logger, runtimeRunner)
 	if err != nil {
 		return err
 	}
 	defer closeStorage()
+	var automationStorage *automationspostgres.Repository
+	if storagePool != nil {
+		automationStorage = automationspostgres.NewRepository(storagePool)
+	}
 
 	localizer, err := texti18n.New(cfg.Locale)
 	if err != nil {
@@ -69,6 +76,32 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			},
 		)
 	}
+	var artifactSvc *domainartifact.Service
+	if cfg.ArtifactsEnabled {
+		if !runtimeConfigured || runtimeRunner == nil || storagePool == nil || controlSurface == nil {
+			return fmt.Errorf("artifact storage dependencies are not ready")
+		}
+		objectStore, err := s3integration.New(ctx, s3integration.Config{
+			Endpoint: cfg.ArtifactS3Endpoint, Region: cfg.ArtifactS3Region, Bucket: cfg.ArtifactS3Bucket,
+			AccessKeyID: cfg.ArtifactS3AccessKeyID, SecretAccessKey: cfg.ArtifactS3SecretAccessKey,
+			UsePathStyle: cfg.ArtifactS3UsePathStyle,
+		})
+		if err != nil {
+			return err
+		}
+		delivery, err := mattermostintegration.NewArtifactDelivery(controlSurface, runtimeRunner)
+		if err != nil {
+			return err
+		}
+		artifactSvc, err = domainartifact.NewService(domainartifact.ServiceConfig{
+			Repository: artifactpostgres.NewRepository(storagePool), Source: controlSurface, ObjectStore: objectStore, Delivery: delivery,
+			MaxFilesPerTurn: cfg.ArtifactMaxFilesPerTurn, MaxObjectBytes: cfg.ArtifactMaxObjectBytes,
+			MaxTurnBytes: cfg.ArtifactMaxTurnBytes, Retention: cfg.ArtifactRetention,
+		})
+		if err != nil {
+			return err
+		}
+	}
 	interactionSecurity := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
 		Repository: storage,
 		Admission:  statusservice.NewServerSideInteractionAdmission("", controlSurface, storage),
@@ -95,6 +128,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		MattermostSiteURL: cfg.MattermostSiteURL,
 		StorageReady:      storage != nil,
 		RuntimeReady:      runtimeConfigured,
+		Artifacts:         artifactSvc,
 	})
 	automationSvc := statusservice.NewAutomationService(statusservice.AutomationServiceConfig{
 		Repository:              automationStorage,
@@ -156,6 +190,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		CallbackMaxChunkBytes:       cfg.CallbackMaxChunkBytes,
 		CallbackPublishConcurrency:  cfg.CallbackPublishConcurrency,
 		CallbackPublishDeadline:     cfg.CallbackPublishDeadline,
+		Artifacts:                   artifactSvc,
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
@@ -170,6 +205,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		MaxSlashFormBytes:      cfg.MaxSlashFormBytes,
 		MaxGitHubWebhookBytes:  cfg.MaxGitHubWebhookBytes,
 		MaxMCPRequestBodyBytes: cfg.MaxMCPRequestBodyBytes,
+		MaxArtifactBodyBytes:   cfg.ArtifactMaxObjectBytes,
 		PrometheusRegistry:     newPrometheusRegistry(),
 		MattermostSiteURL:      cfg.MattermostSiteURL,
 		MattermostInternalURL:  cfg.MattermostInternalURL,
@@ -435,7 +471,7 @@ func newPrometheusRegistry() *prometheus.Registry {
 	return registry
 }
 
-func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRunner runtimerepo.Runner) (*adminpostgres.Repository, *automationspostgres.Repository, func(), error) {
+func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRunner runtimerepo.Runner) (*adminpostgres.Repository, *pgxpool.Pool, func(), error) {
 	if !cfg.DatabaseConfigured() {
 		logger.Warn("storage disabled: MATTERCODEX_DATABASE_DSN is not configured")
 		return nil, nil, func() {}, nil
@@ -486,7 +522,7 @@ func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRu
 	if seeded > 0 {
 		logger.Info("seeded default agent prompt templates", "count", seeded)
 	}
-	return repo, automationspostgres.NewRepository(pool), closePool, nil
+	return repo, pool, closePool, nil
 }
 
 type secretIntegrityStagingRow struct {

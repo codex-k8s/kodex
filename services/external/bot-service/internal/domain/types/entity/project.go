@@ -125,23 +125,24 @@ func (binding ChatRepositoryBinding) FullName() string {
 }
 
 type ThreadContext struct {
-	ID                      int64
-	ProjectID               int64
-	ChatID                  int64
-	MattermostChannelID     string
-	MattermostRootPostID    string
-	RepositoryID            int64
-	RepositoryProvider      string
-	RepositoryOwner         string
-	RepositoryName          string
-	RepositoryDefaultBranch string
-	Status                  string
-	PendingMattermostPostID string
-	PendingUserID           string
-	PendingUserName         string
-	PendingMessage          string
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
+	ID                       int64
+	ProjectID                int64
+	ChatID                   int64
+	MattermostChannelID      string
+	MattermostRootPostID     string
+	RepositoryID             int64
+	RepositoryProvider       string
+	RepositoryOwner          string
+	RepositoryName           string
+	RepositoryDefaultBranch  string
+	Status                   string
+	PendingMattermostPostID  string
+	PendingUserID            string
+	PendingUserName          string
+	PendingMessage           string
+	PendingMattermostFileIDs []string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
 }
 
 func (context ThreadContext) RepositoryFullName() string {

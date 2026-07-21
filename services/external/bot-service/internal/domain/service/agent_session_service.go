@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
 
+	domainartifact "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/artifact"
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
@@ -80,6 +82,7 @@ type AgentSessionServiceConfig struct {
 	CallbackMaxChunkBytes       int
 	CallbackPublishConcurrency  int
 	CallbackPublishDeadline     time.Duration
+	Artifacts                   AgentSessionArtifactService
 }
 
 type CompleteAutomationCallbackCommand struct {
@@ -110,6 +113,12 @@ func (svc *AgentSessionService) CompleteAutomationCallback(ctx context.Context, 
 	})
 }
 
+type AgentSessionArtifactService interface {
+	ManifestForTurn(ctx context.Context, scope domainartifact.Scope) (domainartifact.Manifest, error)
+	OpenForTurn(ctx context.Context, scope domainartifact.Scope, versionID string) (domainartifact.Version, io.ReadCloser, error)
+	PublishOutgoing(ctx context.Context, input domainartifact.PublishInput) (domainartifact.PublishResult, error)
+}
+
 type AgentSessionService struct {
 	cfg                  AgentSessionServiceConfig
 	callbackPublishSlots chan struct{}
@@ -138,17 +147,19 @@ type AgentSessionSnapshot struct {
 	SessionKey               string `json:"session_key"`
 	CodexSessionID           string `json:"codex_session_id"`
 	SessionArchiveGzipBase64 string `json:"session_archive_gzip_base64"`
+	ArtifactsEnabled         bool   `json:"artifacts_enabled"`
 	ExpiresAt                string `json:"expires_at"`
 }
 
 type AgentSessionTurnClaim struct {
-	HasTurn        bool   `json:"has_turn"`
-	Exit           bool   `json:"exit"`
-	TurnID         int64  `json:"turn_id,omitempty"`
-	RunID          string `json:"run_id,omitempty"`
-	Prompt         string `json:"prompt,omitempty"`
-	CodexSessionID string `json:"codex_session_id,omitempty"`
-	ExpiresAt      string `json:"expires_at"`
+	HasTurn          bool                    `json:"has_turn"`
+	Exit             bool                    `json:"exit"`
+	TurnID           int64                   `json:"turn_id,omitempty"`
+	RunID            string                  `json:"run_id,omitempty"`
+	Prompt           string                  `json:"prompt,omitempty"`
+	CodexSessionID   string                  `json:"codex_session_id,omitempty"`
+	ExpiresAt        string                  `json:"expires_at"`
+	ArtifactManifest domainartifact.Manifest `json:"artifact_manifest"`
 }
 
 type CompleteAgentSessionTurnCommand struct {
@@ -278,6 +289,7 @@ func (svc *AgentSessionService) Snapshot(ctx context.Context, sessionKey string,
 			SessionKey:               current.SessionKey,
 			CodexSessionID:           current.CodexSessionID,
 			SessionArchiveGzipBase64: current.SessionArchiveGzipBase64,
+			ArtifactsEnabled:         svc.cfg.Artifacts != nil,
 			ExpiresAt:                current.ExpiresAt.UTC().Format(time.RFC3339),
 		}
 		return nil
@@ -344,13 +356,21 @@ func (svc *AgentSessionService) ClaimNextTurn(ctx context.Context, sessionKey st
 	}); err != nil {
 		return AgentSessionTurnClaim{}, err
 	}
+	var manifest domainartifact.Manifest
+	if svc.cfg.Artifacts != nil {
+		manifest, err = svc.cfg.Artifacts.ManifestForTurn(ctx, artifactScope(session, turn))
+		if err != nil {
+			return AgentSessionTurnClaim{}, fmt.Errorf("load turn artifact manifest: %w", err)
+		}
+	}
 	return AgentSessionTurnClaim{
-		HasTurn:        true,
-		TurnID:         turn.ID,
-		RunID:          turn.RunID,
-		Prompt:         turn.Message,
-		CodexSessionID: session.CodexSessionID,
-		ExpiresAt:      session.ExpiresAt.UTC().Format(time.RFC3339),
+		HasTurn:          true,
+		TurnID:           turn.ID,
+		RunID:            turn.RunID,
+		Prompt:           turn.Message,
+		CodexSessionID:   session.CodexSessionID,
+		ExpiresAt:        session.ExpiresAt.UTC().Format(time.RFC3339),
+		ArtifactManifest: manifest,
 	}, nil
 }
 

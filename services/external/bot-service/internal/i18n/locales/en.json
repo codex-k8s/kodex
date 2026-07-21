@@ -716,6 +716,8 @@
   {"id": "runtime.list.failed", "translation": "matter-codex: runtime runs were not read: {{.Error}}"},
   {"id": "runtime.list.empty", "translation": "matter-codex: no runtime runs are stored yet."},
   {"id": "chat.run.storage_not_ready", "translation": "matter-codex: storage is not ready, chat runs are unavailable."},
+  {"id": "chat.run.artifacts_not_configured", "translation": "matter-codex: safe attachment handling is not enabled; the turn was not started."},
+  {"id": "chat.run.attachments_only_prompt", "translation": "Inspect the current turn attachments and perform the task that can be reliably inferred from their content."},
   {"id": "chat.run.sender_lookup_failed", "translation": "matter-codex: sender identity was not checked: {{.Error}}"},
   {"id": "chat.run.chat_lookup_failed", "translation": "matter-codex: chat configuration was not read: {{.Error}}"},
   {"id": "chat.run.project_lookup_failed", "translation": "matter-codex: project configuration was not read: {{.Error}}"},

@@ -131,6 +131,17 @@ else
   mattercodex_log "Mattermost bot/slash token не заданы; bot-service secret не создается"
 fi
 
+if mattercodex_bool "${MATTERCODEX_ARTIFACTS_ENABLED:-false}" || [ -n "${MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID:-}" ] || [ -n "${MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY:-}" ]; then
+  [ -n "${MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID:-}" ] || mattercodex_die "для artifact storage не задан MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID"
+  [ -n "${MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY:-}" ] || mattercodex_die "для artifact storage не задан MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY"
+  export ARTIFACT_S3_ACCESS_KEY_ID_B64
+  export ARTIFACT_S3_SECRET_ACCESS_KEY_B64
+  ARTIFACT_S3_ACCESS_KEY_ID_B64="$(printf '%s' "$MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID" | base64 | tr -d '\n')"
+  ARTIFACT_S3_SECRET_ACCESS_KEY_B64="$(printf '%s' "$MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY" | base64 | tr -d '\n')"
+  mattercodex_log "применяется отдельный Secret artifact storage"
+  apply_rendered_manifest "$REPO_ROOT/deploy/k8s/bot-service/artifact-storage-secret.yaml.tpl" "$RENDER_DIR/05a-artifact-storage-secret.yaml"
+fi
+
 GITHUB_TOKEN_VALUE="${MATTERCODEX_GITHUB_TOKEN:-${GITHUB_PAT:-${GIT_BOT_TOKEN:-}}}"
 GITHUB_WEBHOOK_SECRET_VALUE="${MATTERCODEX_GITHUB_WEBHOOK_SECRET:-${GITHUB_WEBHOOK_SECRET:-}}"
 GITHUB_USERNAME_VALUE="${MATTERCODEX_GITHUB_USERNAME:-${GITHUB_USERNAME:-${GITHUB_USER:-}}}"

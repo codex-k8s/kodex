@@ -108,6 +108,18 @@ spec:
                   name: ${MATTERCODEX_GITHUB_SECRET}
                   key: github-webhook-secret
                   optional: true
+            - name: MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ${MATTERCODEX_ARTIFACT_STORAGE_SECRET}
+                  key: access-key-id
+                  optional: true
+            - name: MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${MATTERCODEX_ARTIFACT_STORAGE_SECRET}
+                  key: secret-access-key
+                  optional: true
           startupProbe:
             httpGet:
               path: /healthz
