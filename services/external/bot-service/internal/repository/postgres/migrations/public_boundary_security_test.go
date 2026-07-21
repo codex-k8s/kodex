@@ -380,7 +380,7 @@ where subject_type = 'agent_profile'
 	}
 }
 
-func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30Upgrade(t *testing.T) {
+func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30V31Upgrade(t *testing.T) {
 	ownerDSN := isolatedMigrationDSN(t, "exact_n_minus_one")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -435,9 +435,9 @@ func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30Upgrade(t
 	}
 	stagingPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28->v29->v30: %v", err)
+		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28->v29->v30->v31: %v", err)
 	}
-	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 30 {
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 31 {
 		t.Fatalf("upgraded exact N-1 schema version = %d, error=%v", version, err)
 	}
 
@@ -604,17 +604,17 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	if err := migrations.DownOne(ctx, dsn); err == nil {
-		t.Fatal("v30 down unexpectedly succeeded")
+		t.Fatal("v31 down unexpectedly succeeded")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 30 {
+	if err != nil || version != 31 {
 		t.Fatalf("version after failed down = %d, error=%v", version, err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated up after failed down: %v", err)
 	}
 	version, err = migrations.Version(ctx, dsn)
-	if err != nil || version != 30 {
+	if err != nil || version != 31 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
 	}
 }
