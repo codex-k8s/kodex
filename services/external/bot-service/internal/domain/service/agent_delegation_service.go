@@ -279,6 +279,10 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	if session.ActiveTurnID == 0 {
 		return AgentSessionDelegationResult{}, fmt.Errorf("source session has no active turn")
 	}
+	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, svc.cfg.Store, session.ActiveTurnID)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
 	project, err := svc.cfg.Store.GetProject(ctx, session.ProjectID)
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
@@ -386,7 +390,8 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_enqueue.side_effect", func(current entity.AgentSession) error {
 		var enqueueErr error
 		queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
-			Project: project, Chat: targetChat, Role: targetRole, Repositories: repositories, UserName: requesterUserName,
+			Project: project, Chat: targetChat, Role: targetRole, Repositories: repositories,
+			UserID: rootInitiatorUserID, UserName: requesterUserName,
 			UserMessage:  crossChatDelegatedAgentRequestMessage(requesterUserName, targetRole.Name, command.Message),
 			SourcePostID: auditPost.PostID, ReplyRootID: rootPost.PostID, SessionRootID: rootPost.PostID,
 			SessionScope: agentSessionScopeThreadRole, TTLSeconds: defaultThreadSessionTTLSeconds, ParentTurnID: current.ActiveTurnID,
@@ -1263,9 +1268,13 @@ func (svc *AgentSessionService) enqueueDelegationCallbackWithStore(ctx context.C
 	if err != nil {
 		return entity.AgentSessionTurn{}, "", err
 	}
+	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, guardedStore, parentTurnID)
+	if err != nil {
+		return entity.AgentSessionTurn{}, "", err
+	}
 	queued, err := dispatcher.EnqueueExistingAgentTurn(ctx, guardedStore, sourceSession, AgentTurnRequest{
 		Project: project, Chat: sourceChat, Role: sourceRole, Repositories: repositories,
-		UserName: requesterUserName, UserMessage: message, PreparedPrompt: message,
+		UserID: rootInitiatorUserID, UserName: requesterUserName, UserMessage: message, PreparedPrompt: message,
 		SourcePostID: triggerPostID, ReplyRootID: sourceSession.MattermostRootPostID,
 		SessionRootID: sourceSession.MattermostRootPostID, SessionScope: sourceSession.SessionScope,
 		TTLSeconds: sourceSession.TTLSeconds, ParentTurnID: parentTurnID,

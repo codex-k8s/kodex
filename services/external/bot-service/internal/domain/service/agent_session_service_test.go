@@ -818,13 +818,20 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 			SessionScope:         agentSessionScopeThreadRole,
 			MattermostChannelID:  "channel-1",
 			MattermostRootPostID: "root-1",
-			Status:               agentSessionStatusIdle,
+			Status:               agentSessionStatusRunning,
+			ActiveTurnID:         1,
+			ActiveRunID:          "run-manager-1",
 			TokenSecretRef:       "session-secret",
 			TTLSeconds:           defaultThreadSessionTTLSeconds,
 			LastActivityAt:       now,
 			ExpiresAt:            now.Add(time.Hour),
 		},
 	}
+	store.sessionTurns = []entity.AgentSessionTurn{{
+		ID: 1, SessionID: 1, RunID: "run-manager-1", MattermostChannelID: "channel-1",
+		MattermostRootPostID: "root-1", MattermostPostID: "root-1",
+		UserID: "owner-user", UserName: "owner", Status: agentSessionTurnRunning,
+	}}
 	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
 	publisher := &fakeThreadPublisher{}
 	roleBotManager := &fakeRoleBotManager{}
@@ -852,7 +859,7 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	if result.RequestedRunID != "run-sre-1" || result.RequestedRoleName != "sre" || result.AuditPostID == "" {
 		t.Fatalf("result = %#v", result)
 	}
-	if dispatcher.calls != 1 || dispatcher.request.Role.Name != "sre" || dispatcher.request.UserName != "manager" {
+	if dispatcher.calls != 1 || dispatcher.request.Role.Name != "sre" || dispatcher.request.UserName != "manager" || dispatcher.request.UserID != "owner-user" {
 		t.Fatalf("dispatcher request = %#v", dispatcher.request)
 	}
 	if roleBotManager.channelMemberTeam != "platform" || roleBotManager.channelMemberChannelID != "channel-1" || roleBotManager.channelMemberUserID != "sre-user" {
@@ -909,11 +916,17 @@ func TestAgentSessionRequestAgentGuardsEveryClusterAdminSideEffect(t *testing.T)
 				"session-1": {
 					ID: 1, SessionKey: "session-1", ProjectID: 1, ChatID: 1, RoleID: 1,
 					SessionScope: agentSessionScopeThreadRole, MattermostChannelID: "channel-1",
-					MattermostRootPostID: "root-1", Status: agentSessionStatusIdle,
+					MattermostRootPostID: "root-1", Status: agentSessionStatusRunning,
+					ActiveTurnID: 1, ActiveRunID: "run-manager-1",
 					TokenSecretRef: "session-secret", TTLSeconds: defaultThreadSessionTTLSeconds,
 					LastActivityAt: now, ExpiresAt: now.Add(time.Hour),
 				},
 			}
+			baseStore.sessionTurns = []entity.AgentSessionTurn{{
+				ID: 1, SessionID: 1, RunID: "run-manager-1", MattermostChannelID: "channel-1",
+				MattermostRootPostID: "root-1", MattermostPostID: "root-1",
+				UserID: "owner-user", UserName: "owner", Status: agentSessionTurnRunning,
+			}}
 			store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: test.denyAt}
 			runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
 			publisher := &fakeThreadPublisher{}

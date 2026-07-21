@@ -261,6 +261,19 @@ func TestAgentSessionListsChatsAvailableToTargetAgent(t *testing.T) {
 
 func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	svc, store, dispatcher, publisher := agentDelegationTestService()
+	store.sessionTurns[0].UserID = "delegating-agent-user"
+	svc.cfg.Store = &fakeCoordinationStore{
+		fakeAdminStore: store,
+		capabilities: map[string]bool{
+			entity.CoordinationCapabilityStartAgents: true,
+		},
+		relationships: map[string]bool{
+			coordinationRelationshipKey(entity.CoordinationActionStart, 2): true,
+		},
+		processes: map[int64]entity.ProcessContext{
+			1: {RootInitiatorUserID: "owner-user"},
+		},
+	}
 	command := StartAgentThreadCommand{
 		TargetChat:  "architecture",
 		TargetAgent: "architect",
@@ -287,6 +300,9 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	}
 	if dispatcher.request.ParentTurnID != 1 {
 		t.Fatalf("parent turn = %d", dispatcher.request.ParentTurnID)
+	}
+	if dispatcher.request.UserID != "owner-user" {
+		t.Fatalf("root initiator user id = %q", dispatcher.request.UserID)
 	}
 	if dispatcher.request.SourcePostID != "reply-management-root" {
 		t.Fatalf("source launch post = %q", dispatcher.request.SourcePostID)
@@ -748,8 +764,8 @@ func agentDelegationTestService() (*AgentSessionService, *fakeAdminStore, *fakeA
 		},
 	}
 	store.sessionTurns = []entity.AgentSessionTurn{
-		{ID: 1, SessionID: 1, RunID: "source-run", MattermostChannelID: "management-channel", MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnRunning},
-		{ID: 2, SessionID: 2, RunID: "target-run", MattermostChannelID: "architecture-channel", MattermostRootPostID: "reply-", MattermostPostID: "reply-", Status: agentSessionTurnRunning},
+		{ID: 1, SessionID: 1, RunID: "source-run", MattermostChannelID: "management-channel", MattermostRootPostID: "management-root", MattermostPostID: "management-root", UserID: "owner-user", UserName: "owner", Status: agentSessionTurnRunning},
+		{ID: 2, SessionID: 2, RunID: "target-run", MattermostChannelID: "architecture-channel", MattermostRootPostID: "reply-", MattermostPostID: "reply-", UserID: "owner-user", UserName: "manager", Status: agentSessionTurnRunning},
 	}
 	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{
 		"source-secret": "source-token",

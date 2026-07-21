@@ -970,6 +970,10 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 		return AgentSessionAgentRequest{}, err
 	}
 	var queued AgentTurnQueued
+	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, svc.cfg.Store, session.ActiveTurnID)
+	if err != nil {
+		return AgentSessionAgentRequest{}, err
+	}
 	// EnqueueAgentTurn отдельно защищает каждый привязанный к сессии runtime-эффект,
 	// а также финальные запись и публикацию. Внешний guard не блокирует строку
 	// сессии, чтобы dispatcher мог атомарно обновить её через другое соединение.
@@ -981,6 +985,7 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 				Chat:          chat,
 				Role:          role,
 				Repositories:  repositories,
+				UserID:        rootInitiatorUserID,
 				UserName:      requesterUserName,
 				UserMessage:   userMessage,
 				SourcePostID:  rootPostID,
