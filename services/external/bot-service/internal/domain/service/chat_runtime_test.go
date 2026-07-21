@@ -1179,6 +1179,12 @@ func TestChatRunPromptsThreadRepositoryChoiceAndRunsWithoutRepository(t *testing
 	if len(publisher.cards) != 1 || len(publisher.cards[0].Actions) < 2 {
 		t.Fatalf("cards = %#v", publisher.cards)
 	}
+	for _, action := range publisher.cards[0].Actions[:2] {
+		state := threadRepositoryStateFromCardAction(t, action)
+		if got := contextStringValue(action.Context, interactionCapabilityResourceIDKey); got != fmt.Sprint(state.ThreadContextID) {
+			t.Fatalf("capability resource id = %q for context %#v", got, action.Context)
+		}
+	}
 	if runner.startedSessionKey != "" {
 		t.Fatalf("session should not start before repository choice: %#v", runner.sessionRuns)
 	}
@@ -1197,6 +1203,15 @@ func TestChatRunPromptsThreadRepositoryChoiceAndRunsWithoutRepository(t *testing
 	if runner.sessionRuns[0].RepositoryOwner != "" || runner.sessionRuns[0].RepositoryName != "" {
 		t.Fatalf("session should start without repository checkout: %#v", runner.sessionRuns[0])
 	}
+}
+
+func threadRepositoryStateFromCardAction(t *testing.T, action MattermostCardAction) threadRepositorySelectionState {
+	t.Helper()
+	state, ok := parseThreadRepositorySelectionResourceID(contextStringValue(action.Context, "resource_id"))
+	if !ok {
+		t.Fatalf("thread repository action context = %#v", action.Context)
+	}
+	return state
 }
 
 func TestChatRunRestoresMissingThreadContextFromExistingSession(t *testing.T) {

@@ -19,6 +19,7 @@ import (
 const (
 	interactionCapabilityContextKey     = "capability"
 	interactionCapabilityPostBindingKey = "capability_post_binding"
+	interactionCapabilityResourceIDKey  = "capability_resource_id"
 	interactionKindAction               = "action"
 	interactionKindDialog               = "dialog"
 	interactionDialogCallbackResult     = "agents_dialog_result"
@@ -650,7 +651,11 @@ func dialogCallbackOperation(callbackID string) string {
 }
 
 func interactionResource(context map[string]any) (string, string) {
-	return resourceValue(context, "resource_type"), resourceValue(context, "resource_id")
+	resourceID := resourceValue(context, interactionCapabilityResourceIDKey)
+	if resourceID == "" {
+		resourceID = resourceValue(context, "resource_id")
+	}
+	return resourceValue(context, "resource_type"), resourceID
 }
 
 func resourceValue(context map[string]any, key string) string {

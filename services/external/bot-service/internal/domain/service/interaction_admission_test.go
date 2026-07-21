@@ -91,6 +91,17 @@ func TestServerSideInteractionAdmissionAllowsOnlyTypedOperationsAndResources(t *
 	}
 }
 
+func TestInteractionResourceUsesSeparateCapabilityResourceID(t *testing.T) {
+	resourceType, resourceID := interactionResource(map[string]any{
+		"resource_type":                    menuResourceThreadContext,
+		"resource_id":                      "encoded-command-state",
+		interactionCapabilityResourceIDKey: "296",
+	})
+	if resourceType != menuResourceThreadContext || resourceID != "296" {
+		t.Fatalf("interaction resource = %q/%q", resourceType, resourceID)
+	}
+}
+
 func TestServerSideInteractionAdmissionFailsClosedBeforeResourceMutation(t *testing.T) {
 	tests := []struct {
 		name      string
