@@ -69,14 +69,17 @@ func (publisher *securedMattermostThreadPublisher) PostThreadCard(ctx context.Co
 	}
 	updated, err := publisher.next.UpdateThreadCard(ctx, card)
 	if err != nil {
-		return MattermostPostRef{}, errors.Join(err, publisher.security.RevokeCard(ctx, card))
+		updated, err = publisher.reconcileThreadCardUpdate(ctx, card, err)
+		if err != nil {
+			return MattermostPostRef{}, err
+		}
 	}
 	if updated.PostID != ref.PostID || updated.ChannelID != ref.ChannelID {
 		bindingErr := fmt.Errorf("mattermost card update changed the exact post binding")
 		return MattermostPostRef{}, errors.Join(bindingErr, publisher.security.RevokeCard(ctx, card))
 	}
 	if err := publisher.security.ActivateCard(ctx, card); err != nil {
-		return MattermostPostRef{}, errors.Join(err, publisher.security.RevokeCard(ctx, card))
+		return MattermostPostRef{}, err
 	}
 	return updated, nil
 }
@@ -106,7 +109,10 @@ func (publisher *securedMattermostThreadPublisher) UpdateThreadCard(ctx context.
 		if len(card.Actions) == 0 {
 			return MattermostPostRef{}, err
 		}
-		return MattermostPostRef{}, errors.Join(err, publisher.security.RevokeCard(ctx, card))
+		updated, err = publisher.reconcileThreadCardUpdate(ctx, card, err)
+		if err != nil {
+			return MattermostPostRef{}, err
+		}
 	}
 	if strings.TrimSpace(card.PostID) != "" && (updated.PostID != card.PostID || updated.ChannelID != strings.TrimSpace(card.ChannelID)) {
 		bindingErr := fmt.Errorf("mattermost card update changed the exact post binding")
@@ -117,10 +123,25 @@ func (publisher *securedMattermostThreadPublisher) UpdateThreadCard(ctx context.
 	}
 	if len(card.Actions) > 0 {
 		if err := publisher.security.ActivateCard(ctx, card); err != nil {
-			return MattermostPostRef{}, errors.Join(err, publisher.security.RevokeCard(ctx, card))
+			return MattermostPostRef{}, err
 		}
 	}
 	return updated, nil
+}
+
+func (publisher *securedMattermostThreadPublisher) reconcileThreadCardUpdate(ctx context.Context, card MattermostCard, updateErr error) (MattermostPostRef, error) {
+	reconciler, ok := publisher.next.(MattermostThreadCardUpdateReconciler)
+	if !ok {
+		return MattermostPostRef{}, updateErr
+	}
+	ref, applied, err := reconciler.ReconcileThreadCardUpdate(ctx, card)
+	if err != nil {
+		return MattermostPostRef{}, errors.Join(updateErr, err)
+	}
+	if applied {
+		return ref, nil
+	}
+	return MattermostPostRef{}, errors.Join(updateErr, publisher.security.RevokeCard(ctx, card))
 }
 
 func (publisher *securedMattermostThreadPublisher) AddPostReactionWithToken(ctx context.Context, token string, input MattermostPostReactionInput) error {

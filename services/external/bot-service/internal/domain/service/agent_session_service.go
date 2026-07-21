@@ -661,8 +661,25 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 			}
 			if currentTurn.Status == agentSessionTurnCanceled {
 				state, stateErr := agentTurnStopStateFromArtifacts(currentTurn.Artifacts)
-				if stateErr != nil || strictCapabilityAction && !agentTurnStopRecoveryAllowed(command.CapabilityAction, state) {
+				if stateErr != nil || strictCapabilityAction && (!agentTurnStopRecoveryAllowed(command.CapabilityAction, state) || state.ActorUserID != strings.TrimSpace(command.UserID)) {
 					return adminrepo.ErrClusterAdminAdmissionDenied
+				}
+				if strictCapabilityAction && command.CapabilityAction == agentTurnStopRecoveryAction && !state.CardCompleted {
+					state.CardCompleted = true
+					artifacts, artifactsErr := agentTurnStopArtifacts(currentTurn.Artifacts, state)
+					if artifactsErr != nil {
+						return artifactsErr
+					}
+					artifactStore, ok := guardedStore.(adminrepo.AgentSessionTurnArtifactsRepository)
+					if !ok {
+						return adminrepo.ErrClusterAdminAdmissionDenied
+					}
+					currentTurn, readErr = artifactStore.CompareAndSwapAgentSessionTurnArtifacts(ctx, adminrepo.CompareAndSwapAgentSessionTurnArtifactsInput{
+						TurnID: currentTurn.ID, ExpectedArtifacts: currentTurn.Artifacts, Artifacts: artifacts,
+					})
+					if readErr != nil {
+						return fmt.Errorf("persist published agent turn recovery card: %w", readErr)
+					}
 				}
 				canceled = currentTurn
 				reconcileOnly = true
@@ -2073,7 +2090,7 @@ func agentTurnStopRecoveryAllowed(action string, state agentTurnStopState) bool 
 	case agentTurnStopAction:
 		return !state.CardCompleted
 	case agentTurnStopRecoveryAction:
-		return state.CardCompleted
+		return state.CleanupCompleted && state.ResetCompleted
 	default:
 		return false
 	}

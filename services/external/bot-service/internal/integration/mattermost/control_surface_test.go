@@ -98,6 +98,70 @@ func TestControlSurfaceReconcilesStatusCardAfterAmbiguousCreateAndRestart(t *tes
 	}
 }
 
+func TestControlSurfaceReconcilesBothAmbiguousUpdateOutcomes(t *testing.T) {
+	card := statusservice.MattermostCard{
+		ChannelID: "channel-1", RootPostID: "root-1", PostID: "status-post-1",
+		Message: "matter-codex agent turn status #notrigger",
+		Props:   map[string]any{"matter_codex_event": "agent_status", "session_key": "session-1", "turn_id": int64(2)},
+		Actions: []statusservice.MattermostCardAction{{
+			ID: "stopturn", Name: "Завершить остановку", Context: map[string]any{
+				"kind": "agent_turn", "action": "recover_stop_turn", "capability": "synthetic-capability",
+			},
+		}},
+	}
+	for _, test := range []struct {
+		name        string
+		applyUpdate bool
+	}{
+		{name: "update not applied", applyUpdate: false},
+		{name: "update applied response lost", applyUpdate: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			actual := &mattermostmodel.Post{
+				Id: card.PostID, ChannelId: card.ChannelID, RootId: card.RootPostID,
+				Message: "previous status card", Props: map[string]any{"matter_codex_event": "agent_status"},
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				writer.Header().Set("Content-Type", "application/json")
+				switch request.Method {
+				case http.MethodPut:
+					var attempted mattermostmodel.Post
+					if err := json.NewDecoder(request.Body).Decode(&attempted); err != nil {
+						t.Errorf("decode Mattermost update request: %v", err)
+					}
+					if test.applyUpdate {
+						actual = &attempted
+						actual.Id = card.PostID
+						actual.ChannelId = card.ChannelID
+						actual.RootId = card.RootPostID
+					}
+					writer.WriteHeader(http.StatusBadGateway)
+					_, _ = writer.Write([]byte(`{"id":"synthetic","message":"ambiguous update","status_code":502}`))
+				case http.MethodGet:
+					if err := json.NewEncoder(writer).Encode(actual); err != nil {
+						t.Errorf("encode Mattermost post response: %v", err)
+					}
+				default:
+					http.NotFound(writer, request)
+				}
+			}))
+			defer server.Close()
+
+			surface := NewControlSurface(server.URL, "synthetic-token", "")
+			if _, err := surface.UpdateThreadCard(context.Background(), card); err == nil {
+				t.Fatal("ambiguous UpdateThreadCard() error = nil")
+			}
+			ref, applied, err := surface.ReconcileThreadCardUpdate(context.Background(), card)
+			if err != nil || applied != test.applyUpdate {
+				t.Fatalf("reconcile ref=%#v applied=%t/%t error=%v", ref, applied, test.applyUpdate, err)
+			}
+			if applied && (ref.ChannelID != card.ChannelID || ref.PostID != card.PostID) {
+				t.Fatalf("reconciled binding=%#v", ref)
+			}
+		})
+	}
+}
+
 func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) {
 	input := statusservice.MattermostThreadPostInput{
 		ChannelID: "channel-1", RootPostID: "root-1", Message: "immutable callback\n\n#notrigger",
