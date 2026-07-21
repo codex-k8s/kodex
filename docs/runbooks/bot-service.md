@@ -153,7 +153,7 @@ Runtime namespace получает `ResourceQuota` `matter-codex-runtime-quota` 
 
 Полноценные agent session pod явно задают requests `MATTERCODEX_AGENT_SESSION_CPU_REQUEST`/`MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST` и индивидуальный memory ceiling `MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT`. Явный request обязателен: иначе Kubernetes при заданном limit может приравнять request к `64Gi` и заблокировать параллельные волны. Короткие служебные `smoke`, Codex device-auth и auth-check Job задают requests `100m`/`128Mi` и ceiling `MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT`. CPU limits отсутствуют. Namespace-level `limits.memory` quota намеренно не задаётся, поэтому высокий ceiling одного pod не блокирует одновременное планирование до шести волн. Один runaway container при этом не может занять всю память узла, а memory-backed `/dev/shm` дополнительно ограничен `MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT`. Оператор сохраняет контроль requests, pod quota, node pressure и удаление старейших idle pod.
 
-Если новый session pod отклонен ResourceQuota или не размещается scheduler из-за нехватки ресурсов, bot-service автоматически удаляет самый старый idle session pod без queued/running turn и повторяет запуск. PVC и snapshot сессии сохраняются. Если безопасного кандидата нет, turn остается queued; активные agent pod механизм capacity reclaim не удаляет.
+Если новый session pod отклонен ResourceQuota или не размещается scheduler из-за нехватки ресурсов, bot-service может удалить самый старый idle session pod без queued/running turn и повторить запуск. PVC и snapshot сессии сохраняются. Если безопасного кандидата нет, turn остается queued; активные agent pod механизм capacity reclaim не удаляет. Отказ ResourceQuota при создании самого session PVC отдельно возвращается из Kubernetes-адаптера как типизированная ошибка ёмкости без очистки PVC/Secret и без внутреннего повтора создания PVC.
 
 ## Remote dry-run
 
@@ -413,7 +413,7 @@ Typed-команды остаются fallback-интерфейсом для т�
 - runtime smoke возвращает run id, Job и PVC без вывода секретов; Job использует `matter-codex-agent-runner`;
 - runtime status показывает Job/PVC, pod phase и короткий log tail smoke Job;
 - runtime cleanup удаляет Job и PVC.
-- runtime prune по умолчанию работает в dry-run режиме и показывает старые завершенные Job/PVC/ConfigMap, которые будут удалены retention cleanup.
+- runtime prune по умолчанию работает в dry-run режиме и показывает старые завершенные Job/PVC/ConfigMap. Session PVC и Secret токена показываются отдельно в режиме `inventory-only` с диагностическими причинами и не удаляются даже при `--apply`.
 
 Проверка runtime quota/limits после deploy:
 
@@ -439,8 +439,19 @@ Typed-команды остаются fallback-интерфейсом для т�
 
 - первый `runtime prune 1s` показывает `mode: dry-run` и не удаляет ресурсы;
 - `runtime prune 1s --apply` удаляет завершенный Job/PVC/ConfigMap только если run уже завершен;
+- оба запуска показывают для session PVC/Secret режим `inventory-only`, нулевые счётчики удаления и причины `containment`; непроверенные PostgreSQL/S3 отражаются как `unknown_db` и `unknown_s3`, а не как утверждение о наличии архива;
 - активные Job не удаляются и учитываются как skipped;
 - после apply `runtime status prune-manual` возвращает, что run не найден.
+
+Ручная приёмка сдерживания сессионных данных выполняется только в изолированной тестовой установке:
+
+1. Создать старый синтетический session PVC и соответствующий синтетический token Secret без действующих учётных данных.
+2. Запустить `/agents runtime prune <возраст>` и затем `/agents runtime prune <возраст> --apply`.
+3. Повторить предварительный просмотр и убедиться, что PVC и Secret существуют в неизменном виде, их удаление равно нулю, а результат не утверждает наличие архива.
+4. Воспроизвести исчерпание квоты на создание session PVC и убедиться, что вызывающий код различает неустранимый вытеснением вид `AgentSessionCapacityError`, `ChatRunService` выполняет одну попытку создания PVC без вытеснения простаивающего pod и `CleanupAgentSession`, а сохранённые PVC/Secret не получают `delete` или `patch`.
+5. Проверить аудит: допустима запись инвентаризации, но отсутствует запись, утверждающая разрешённое или выполненное удаление session PVC/Secret.
+
+Эта проверка не является разрешением на промышленный deploy или Kubernetes apply.
 
 Дополнительная проверка Codex reviewer agent:
 
@@ -528,7 +539,7 @@ order by destination, publication;
 - `response_url` разрешён только для настроенного источника Mattermost. Проверяются протокол, hostname, port, DNS-адреса и каждое перенаправление; IP-литерал, loopback, link-local, metadata, произвольный приватный или кластерный адрес назначения и DNS rebinding не приводят к исходящему HTTP-запросу.
 - bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true` и `seccompProfile: RuntimeDefault`.
 - Ресурсы bot-service настраиваются через `MATTERCODEX_BOT_SERVICE_CPU_REQUEST`, `MATTERCODEX_BOT_SERVICE_MEMORY_REQUEST` и `MATTERCODEX_BOT_SERVICE_MEMORY_LIMIT`. Значения по умолчанию: requests `100m`/`512Mi`, memory limit `8Gi`, CPU limit отсутствует; увеличенный memory limit нужен для кратковременных пиков при приеме крупных Codex session snapshots.
-- bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и `create/get/list/update/patch/delete` для Secret. Verb `patch` используется только для атомарного снятия управляемого finalizer с точными UID/resourceVersion перед retention-delete; область ресурса не расширена и остаётся той же namespace-wide `secrets`, которая уже требовалась для create/get/list/update/delete. Wildcard API groups, resources и verbs не выдаются.
+- bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и `create/get/list/update/patch/delete` для Secret. Сдерживание session retention использует для token Secret только инвентаризацию и не вызывает `patch` или `delete`; наличие namespace-wide разрешения не является разрешением доменного действия и не создаёт включающего пути. Wildcard API groups, resources и verbs не выдаются.
 - Runtime namespace получает namespace-level ResourceQuota/LimitRange с owner-instance defaults и env overrides, потому что MVP namespace общий для Mattermost, bot-service и agent Job. CPU/memory requests сохраняют scheduler accounting; aggregate `limits.memory` quota отсутствует, CPU limits не задаются, но каждый agent/utility container имеет высокий индивидуальный memory ceiling и ограниченный `/dev/shm`. Оператор обязан контролировать node pressure и число одновременно работающих и прогретых pod.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
 - Codex smoke/auth/developer/reviewer Job запускаются без automount service account token и с non-root securityContext.

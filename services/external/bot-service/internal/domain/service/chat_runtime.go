@@ -1109,7 +1109,7 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 		})
 	}
 	err = startRuntime()
-	for attempt := 0; runtimerepo.IsAgentSessionCapacityError(err) && attempt < maxAgentSessionCapacityEvictions; attempt++ {
+	for attempt := 0; runtimerepo.IsReclaimableAgentSessionCapacityError(err) && attempt < maxAgentSessionCapacityEvictions; attempt++ {
 		var evicted bool
 		evictErr := error(nil)
 		evicted, evictErr = svc.evictOldestIdleAgentSessionPod(ctx, session.SessionKey)

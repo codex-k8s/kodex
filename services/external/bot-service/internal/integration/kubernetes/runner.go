@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
@@ -25,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -69,7 +67,6 @@ const (
 	runnerDevShmSizeLimit        = "8Gi"
 	kubernetesAccessReadOnly     = "read-only"
 	kubernetesAccessClusterAdmin = "cluster-admin"
-	sessionQuotaRetryRetention   = time.Hour
 )
 
 var (
@@ -1071,20 +1068,10 @@ func (runner *Runner) ensureSessionPVC(ctx context.Context, sessionKey string, r
 		if apierrors.IsAlreadyExists(err) {
 			return false, nil
 		}
-		if !quotaExceeded(err) {
-			return false, fmt.Errorf("create session pvc: %w", err)
+		if quotaExceeded(err) {
+			return false, runtimerepo.NewAgentSessionPVCQuotaCapacityError("Kubernetes resource quota rejected the session PVC", err)
 		}
-		cutoff := time.Now().UTC().Add(-sessionQuotaRetryRetention)
-		if _, cleanupErr := runner.cleanupExpiredSessionResources(ctx, cutoff, false); cleanupErr != nil {
-			return false, fmt.Errorf("create session pvc: %w; cleanup expired sessions: %v", err, cleanupErr)
-		}
-		if _, retryErr := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, pvc, metav1.CreateOptions{}); retryErr != nil {
-			if apierrors.IsAlreadyExists(retryErr) {
-				return false, nil
-			}
-			return false, fmt.Errorf("create session pvc after cleanup: %w", retryErr)
-		}
-		return true, nil
+		return false, fmt.Errorf("create session pvc: %w", err)
 	}
 	return true, nil
 }
@@ -1383,9 +1370,10 @@ func (runner *Runner) CleanupExpiredRuns(ctx context.Context, input runtimerepo.
 	}
 	cutoff := now.Add(-input.OlderThan)
 	result := runtimerepo.RetentionCleanupResult{
-		Namespace: runner.namespace,
-		DryRun:    input.DryRun,
-		OlderThan: input.OlderThan,
+		Namespace:       runner.namespace,
+		DryRun:          input.DryRun,
+		OlderThan:       input.OlderThan,
+		SessionDataMode: runtimerepo.SessionDataRetentionModeInventoryOnly,
 	}
 
 	jobs, err := runner.client.BatchV1().Jobs(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: runnerLabelSelector()})
@@ -1478,8 +1466,7 @@ func (runner *Runner) CleanupExpiredRuns(ctx context.Context, input runtimerepo.
 	result.SessionPVCsDeleted = sessionResult.SessionPVCsDeleted
 	result.SessionSecretsMatched = sessionResult.SessionSecretsMatched
 	result.SessionSecretsDeleted = sessionResult.SessionSecretsDeleted
-	result.PVCsMatched += sessionResult.SessionPVCsMatched
-	result.PVCsDeleted += sessionResult.SessionPVCsDeleted
+	result.SessionDiagnostics = sessionResult.SessionDiagnostics
 	result.MatchedRunIDs = sortedRunIDs(matchedRunIDs)
 	result.RunsMatched = len(result.MatchedRunIDs)
 	return result, nil
@@ -1492,39 +1479,54 @@ type sessionCleanupResult struct {
 	SessionPVCsDeleted    int
 	SessionSecretsMatched int
 	SessionSecretsDeleted int
+	SessionDiagnostics    []runtimerepo.SessionRetentionDiagnostic
 }
 
 func (runner *Runner) cleanupExpiredSessionResources(ctx context.Context, cutoff time.Time, dryRun bool) (sessionCleanupResult, error) {
 	result := sessionCleanupResult{}
+	type inventory struct {
+		facts   runtimerepo.SessionRetentionFacts
+		pvcs    int
+		secrets int
+	}
+	inventoryBySession := make(map[string]*inventory)
+	getInventory := func(sessionKey string) *inventory {
+		item, ok := inventoryBySession[sessionKey]
+		if !ok {
+			item = &inventory{}
+			inventoryBySession[sessionKey] = item
+		}
+		return item
+	}
 	pods, err := runner.client.CoreV1().Pods(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: sessionLabelSelector()})
 	if err != nil {
 		return sessionCleanupResult{}, fmt.Errorf("list session pods: %w", err)
 	}
-	activeSessions := make(map[string]struct{})
-	expiredTerminalSessions := make(map[string]struct{})
-	knownSessions := make(map[string]struct{})
 	for _, pod := range pods.Items {
 		sessionKey := pod.Labels[labelSessionKey]
 		if sessionKey == "" {
 			continue
 		}
-		knownSessions[sessionKey] = struct{}{}
+		item := getInventory(sessionKey)
 		if pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
-			activeSessions[sessionKey] = struct{}{}
+			item.facts.Active = true
 			continue
 		}
 		if !olderThan(podFinishedOrCreatedAt(pod), cutoff) {
+			item.facts.Grace = true
 			continue
 		}
 		result.SessionPodsMatched++
-		expiredTerminalSessions[sessionKey] = struct{}{}
 		if dryRun {
 			continue
 		}
-		if err := runner.deleteSessionPod(ctx, pod.Name); err != nil {
+		deleted, err := runner.deleteExpiredSessionPod(ctx, pod)
+		if err != nil {
 			return sessionCleanupResult{}, fmt.Errorf("delete expired session pod %s: %w", pod.Name, err)
 		}
-		result.SessionPodsDeleted++
+		if deleted {
+			result.SessionPodsDeleted++
+		}
 	}
 
 	pvcs, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: sessionLabelSelector()})
@@ -1536,25 +1538,10 @@ func (runner *Runner) cleanupExpiredSessionResources(ctx context.Context, cutoff
 		if sessionKey == "" {
 			continue
 		}
-		if _, active := activeSessions[sessionKey]; active {
-			continue
-		}
-		_, terminalExpired := expiredTerminalSessions[sessionKey]
-		_, known := knownSessions[sessionKey]
-		if !terminalExpired && (known || !olderThan(pvc.CreationTimestamp.Time, cutoff)) {
-			continue
-		}
+		item := getInventory(sessionKey)
+		item.pvcs++
+		item.facts.Grace = item.facts.Grace || !olderThan(pvc.CreationTimestamp.Time, cutoff)
 		result.SessionPVCsMatched++
-		if dryRun {
-			continue
-		}
-		if err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Delete(ctx, pvc.Name, metav1.DeleteOptions{}); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return sessionCleanupResult{}, fmt.Errorf("delete expired session pvc %s: %w", pvc.Name, err)
-			}
-		} else {
-			result.SessionPVCsDeleted++
-		}
 	}
 
 	secrets, err := runner.client.CoreV1().Secrets(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: sessionTokenLabelSelector()})
@@ -1566,100 +1553,63 @@ func (runner *Runner) cleanupExpiredSessionResources(ctx context.Context, cutoff
 		if sessionKey == "" {
 			continue
 		}
-		if _, active := activeSessions[sessionKey]; active {
-			continue
-		}
-		_, terminalExpired := expiredTerminalSessions[sessionKey]
-		_, known := knownSessions[sessionKey]
-		if !terminalExpired && (known || !olderThan(secret.CreationTimestamp.Time, cutoff)) {
-			continue
-		}
+		item := getInventory(sessionKey)
+		item.secrets++
+		item.facts.Grace = item.facts.Grace || !olderThan(secret.CreationTimestamp.Time, cutoff)
 		result.SessionSecretsMatched++
-		if dryRun {
-			continue
-		}
-		deleted, err := runner.deleteSessionTokenSecret(ctx, secret)
-		if err != nil {
-			return sessionCleanupResult{}, fmt.Errorf("delete expired session token secret %s: %w", secret.Name, err)
-		}
-		if deleted {
-			result.SessionSecretsDeleted++
-		}
+	}
+	sessionKeys := make([]string, 0, len(inventoryBySession))
+	for sessionKey := range inventoryBySession {
+		sessionKeys = append(sessionKeys, sessionKey)
+	}
+	sort.Strings(sessionKeys)
+	for _, sessionKey := range sessionKeys {
+		item := inventoryBySession[sessionKey]
+		item.facts.UnknownDB = true
+		item.facts.UnknownS3 = true
+		result.SessionDiagnostics = append(result.SessionDiagnostics, runtimerepo.DiagnoseSessionRetention(sessionKey, item.pvcs, item.secrets, item.facts))
 	}
 	return result, nil
 }
 
-func (runner *Runner) deleteSessionTokenSecret(ctx context.Context, listed corev1.Secret) (bool, error) {
-	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
-	versioned := isImmutableSessionTokenSecretName(listed.Name)
-	protected := versioned
-	token := listed.Data["token"]
-	sessionLabel := listed.Labels[labelSessionKey]
-	if strings.TrimSpace(string(listed.UID)) == "" || strings.TrimSpace(listed.ResourceVersion) == "" ||
-		!exactManagedSessionTokenSecret(&listed, runner.namespace, listed.Name, sessionLabel, token, versioned, protected) {
-		return false, fmt.Errorf("listed session token secret is not exact-managed")
+func (runner *Runner) deleteExpiredSessionPod(ctx context.Context, pod corev1.Pod) (bool, error) {
+	if pod.UID == "" {
+		return false, fmt.Errorf("session pod %s has no UID", pod.Name)
 	}
-	secret, err := secretClient.Get(ctx, listed.Name, metav1.GetOptions{})
+	uid := pod.UID
+	preconditions := &metav1.Preconditions{UID: &uid}
+	if pod.ResourceVersion != "" {
+		resourceVersion := pod.ResourceVersion
+		preconditions.ResourceVersion = &resourceVersion
+	}
+	grace := int64(0)
+	background := metav1.DeletePropagationBackground
+	err := runner.client.CoreV1().Pods(runner.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
+		GracePeriodSeconds: &grace,
+		PropagationPolicy:  &background,
+		Preconditions:      preconditions,
+	})
+	if apierrors.IsNotFound(err) || apierrors.IsConflict(err) {
+		return false, nil
+	}
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
+		return false, fmt.Errorf("delete retained session pod: %w", err)
 	}
-	if secret.UID != listed.UID || !exactManagedSessionTokenSecret(secret, runner.namespace, listed.Name, sessionLabel, token, versioned, protected) {
-		return false, fmt.Errorf("session token secret identity mismatch")
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		current, getErr := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+		if apierrors.IsNotFound(getErr) {
+			return true, nil
+		}
+		if getErr != nil {
+			return false, fmt.Errorf("wait for retained session pod deletion: %w", getErr)
+		}
+		if current.UID != pod.UID {
+			return true, nil
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	if protected {
-		patch, err := json.Marshal(map[string]any{
-			"metadata": map[string]any{
-				"uid":             string(listed.UID),
-				"resourceVersion": secret.ResourceVersion,
-				"finalizers":      []string{},
-			},
-		})
-		if err != nil {
-			return false, fmt.Errorf("encode session token finalizer cleanup: %w", err)
-		}
-		secret, err = secretClient.Patch(ctx, secret.Name, k8stypes.MergePatchType, patch, metav1.PatchOptions{})
-		if err != nil {
-			return false, fmt.Errorf("remove session token finalizer: %w", err)
-		}
-		if secret.UID != listed.UID || strings.TrimSpace(secret.ResourceVersion) == "" ||
-			!exactManagedSessionTokenSecret(secret, runner.namespace, listed.Name, sessionLabel, token, true, false) {
-			return false, fmt.Errorf("session token secret finalizer response identity mismatch")
-		}
-	}
-	uid := listed.UID
-	resourceVersion := secret.ResourceVersion
-	err = secretClient.Delete(ctx, secret.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{
-		UID: &uid, ResourceVersion: &resourceVersion,
-	}})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
-func removeString(values []string, target string) []string {
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		if value != target {
-			result = append(result, value)
-		}
-	}
-	return result
+	return false, fmt.Errorf("session pod %s identity %s was not deleted before timeout", pod.Name, pod.UID)
 }
 
 func (runner *Runner) smokePVC(runID string, role string) *corev1.PersistentVolumeClaim {

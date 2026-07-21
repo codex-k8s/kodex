@@ -525,14 +525,20 @@ func (svc *SlashCommandService) handleRuntimePrune(ctx context.Context, args []s
 		return svc.t("runtime.prune.failed", map[string]any{"Error": safeError(err)})
 	}
 	modeID := "runtime.prune.mode_dry_run"
-	eventType := "runtime.retention.checked"
-	eventSummary := "runtime retention cleanup dry-run requested from Mattermost slash command"
-	if !result.DryRun {
+	eventType := "runtime.retention.inventoried"
+	eventSummary := "runtime retention inventory completed; session PVC and token Secret preserved"
+	if !result.DryRun && retentionCleanupMutationCount(result) > 0 {
 		modeID = "runtime.prune.mode_apply"
-		eventType = "runtime.retention.cleaned"
-		eventSummary = "runtime retention cleanup applied from Mattermost slash command"
+		eventType = "runtime.retention.resources.cleaned"
+		eventSummary = "non-session resources or session pods cleaned; session PVC and token Secret preserved"
+	} else if !result.DryRun {
+		modeID = "runtime.prune.mode_apply"
 	}
 	svc.recordRuntimeAudit(ctx, command, eventType, "agent-runner", eventSummary)
+	sessionDataMode := result.SessionDataMode
+	if sessionDataMode == "" {
+		sessionDataMode = runtimerepo.SessionDataRetentionModeInventoryOnly
+	}
 	return svc.t("runtime.prune.result", map[string]any{
 		"Mode":                  svc.t(modeID, nil),
 		"OlderThan":             result.OlderThan.String(),
@@ -552,7 +558,13 @@ func (svc *SlashCommandService) handleRuntimePrune(ctx context.Context, args []s
 		"SessionPVCsDeleted":    result.SessionPVCsDeleted,
 		"SessionSecretsMatched": result.SessionSecretsMatched,
 		"SessionSecretsDeleted": result.SessionSecretsDeleted,
+		"SessionDataMode":       sessionDataMode,
+		"SessionDiagnostics":    formatSessionRetentionDiagnostics(result.SessionDiagnostics, 12),
 	})
+}
+
+func retentionCleanupMutationCount(result runtimerepo.RetentionCleanupResult) int {
+	return result.JobsDeleted + result.PVCsDeleted + result.ConfigMapsDeleted + result.SessionPodsDeleted
 }
 
 func (svc *SlashCommandService) handleReview(ctx context.Context, args []string, command SlashCommand) string {
@@ -5045,6 +5057,28 @@ func formatRunIDList(runIDs []string, limit int) string {
 		return strings.Join(runIDs, ", ")
 	}
 	return strings.Join(runIDs[:limit], ", ") + fmt.Sprintf(" ... +%d", len(runIDs)-limit)
+}
+
+func formatSessionRetentionDiagnostics(diagnostics []runtimerepo.SessionRetentionDiagnostic, limit int) string {
+	if len(diagnostics) == 0 {
+		return "-"
+	}
+	if limit <= 0 || limit > len(diagnostics) {
+		limit = len(diagnostics)
+	}
+	items := make([]string, 0, limit)
+	for _, diagnostic := range diagnostics[:limit] {
+		reasons := make([]string, 0, len(diagnostic.Reasons))
+		for _, reason := range diagnostic.Reasons {
+			reasons = append(reasons, string(reason))
+		}
+		items = append(items, fmt.Sprintf("%s=%s", diagnostic.SessionKey, strings.Join(reasons, ",")))
+	}
+	result := strings.Join(items, "; ")
+	if len(diagnostics) > limit {
+		result += fmt.Sprintf(" ... +%d", len(diagnostics)-limit)
+	}
+	return result
 }
 
 func pullRequestNumberFromURL(value string) int {
