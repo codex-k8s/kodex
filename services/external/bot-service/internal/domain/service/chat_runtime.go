@@ -2488,10 +2488,12 @@ func threadRepositoryChoiceAction(svc *ChatRunService, actionID string, threadCo
 		Tooltip: svc.t(tooltipID, data),
 		Style:   style,
 		Context: map[string]any{
-			"view":          menuViewChats,
-			"action":        menuActionThreadRepositorySelect,
-			"resource_type": menuResourceThreadContext,
-			"resource_id":   threadRepositorySelectionResourceID(threadContextID, repositoryID),
+			"kind":                             "agents_menu",
+			"view":                             menuViewChats,
+			"action":                           menuActionThreadRepositorySelect,
+			"resource_type":                    menuResourceThreadContext,
+			"resource_id":                      threadRepositorySelectionResourceID(threadContextID, repositoryID),
+			interactionCapabilityResourceIDKey: strconv.FormatInt(threadContextID, 10),
 		},
 	}
 }

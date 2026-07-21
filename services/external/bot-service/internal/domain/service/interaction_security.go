@@ -19,6 +19,7 @@ import (
 const (
 	interactionCapabilityContextKey     = "capability"
 	interactionCapabilityPostBindingKey = "capability_post_binding"
+	interactionCapabilityResourceIDKey  = "capability_resource_id"
 	interactionKindAction               = "action"
 	interactionKindDialog               = "dialog"
 	interactionDialogCallbackResult     = "agents_dialog_result"
@@ -349,11 +350,12 @@ func (svc *InteractionSecurityService) authenticateAction(ctx context.Context, c
 	if callbackPostID == "" || callbackPostID != postBinding {
 		return AuthenticatedInteraction{}, ErrInteractionAuthentication
 	}
+	resourceType, resourceID := interactionResource(contextCopy)
 	interaction, err := svc.consumeAndAdmit(ctx, token, securityrepo.ConsumeCapabilityInput{
 		Kind:         interactionKindAction,
 		Operation:    actionCallbackOperation(contextCopy),
-		ResourceType: resourceValue(contextCopy, "resource_type"),
-		ResourceID:   resourceValue(contextCopy, "resource_id"),
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
 		ChannelID:    strings.TrimSpace(callback.ChannelID),
 		PostBinding:  postBinding,
 		ActorUserID:  strings.TrimSpace(callback.UserID),
@@ -650,7 +652,11 @@ func dialogCallbackOperation(callbackID string) string {
 }
 
 func interactionResource(context map[string]any) (string, string) {
-	return resourceValue(context, "resource_type"), resourceValue(context, "resource_id")
+	resourceID := resourceValue(context, interactionCapabilityResourceIDKey)
+	if resourceID == "" {
+		resourceID = resourceValue(context, "resource_id")
+	}
+	return resourceValue(context, "resource_type"), resourceID
 }
 
 func resourceValue(context map[string]any, key string) string {
