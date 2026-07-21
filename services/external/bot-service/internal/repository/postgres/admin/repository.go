@@ -37,6 +37,8 @@ type repositoryDB interface {
 var _ adminrepo.Repository = (*Repository)(nil)
 var _ adminrepo.ExactAgentSessionsRuntimeGuardRepository = (*Repository)(nil)
 var _ adminrepo.ExactAgentSessionsPublishFenceRepository = (*Repository)(nil)
+var _ adminrepo.RuntimeRevisionRepository = (*Repository)(nil)
+var _ adminrepo.AgentSessionArchiveRepository = (*Repository)(nil)
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool, db: pool}
@@ -869,6 +871,8 @@ func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adm
 		input.PVCName,
 		input.TokenSecretRef,
 		input.ExtendTTLSeconds,
+		input.DesiredRuntimeRevisionID,
+		input.AppliedRuntimeRevisionID,
 	))
 	if err != nil {
 		return entity.AgentSession{}, fmt.Errorf("update agent session runtime: %w", err)
@@ -923,6 +927,7 @@ func (repo *Repository) CreateAgentSessionTurn(ctx context.Context, input adminr
 		input.UserID,
 		input.UserName,
 		input.Message,
+		input.RuntimeRevisionID,
 	))
 	if err != nil {
 		return entity.AgentSessionTurn{}, fmt.Errorf("create agent session turn: %w", err)
@@ -1598,6 +1603,7 @@ func scanAgentSessionTurn(row pgx.Row) (entity.AgentSessionTurn, error) {
 		&item.StartedAt,
 		&item.FinishedAt,
 		&item.UpdatedAt,
+		&item.RuntimeRevisionID,
 	); err != nil {
 		return entity.AgentSessionTurn{}, err
 	}

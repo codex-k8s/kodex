@@ -25,4 +25,5 @@ returning
 	created_at,
 	coalesce(started_at, 'epoch'::timestamptz),
 	coalesce(finished_at, 'epoch'::timestamptz),
-	updated_at;
+	updated_at,
+	coalesce(runtime_revision_id, 0);

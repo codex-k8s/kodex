@@ -11,6 +11,7 @@ import (
 var (
 	ErrNotFound                    = errors.New("admin repository item not found")
 	ErrClusterAdminAdmissionDenied = errors.New("cluster-admin assignment is not present in the server-side profile")
+	ErrRuntimeRevisionConflict     = errors.New("runtime revision digest conflicts with a different manifest")
 )
 
 type UpsertRepositoryInput struct {
@@ -255,16 +256,18 @@ type UpsertAgentSessionInput struct {
 }
 
 type UpdateAgentSessionRuntimeInput struct {
-	SessionKey           string
-	Status               string
-	ActiveTurnID         int64
-	ActiveRunID          string
-	MattermostRootPostID string
-	KubernetesNamespace  string
-	PodName              string
-	PVCName              string
-	TokenSecretRef       string
-	ExtendTTLSeconds     int
+	SessionKey               string
+	Status                   string
+	ActiveTurnID             int64
+	ActiveRunID              string
+	MattermostRootPostID     string
+	KubernetesNamespace      string
+	PodName                  string
+	PVCName                  string
+	TokenSecretRef           string
+	ExtendTTLSeconds         int
+	DesiredRuntimeRevisionID int64
+	AppliedRuntimeRevisionID int64
 }
 
 type UpdateAgentSessionSnapshotInput struct {
@@ -285,6 +288,43 @@ type CreateAgentSessionTurnInput struct {
 	UserID               string
 	UserName             string
 	Message              string
+	RuntimeRevisionID    int64
+}
+
+// EnsureRuntimeRevisionInput описывает безопасную неизменяемую ревизию для идемпотентного сохранения.
+type EnsureRuntimeRevisionInput struct {
+	Digest                string
+	Manifest              string
+	AccountAlias          string
+	AuthorizationRevision string
+}
+
+// SetAgentSessionDesiredRuntimeRevisionInput назначает ревизию только следующему ходу сессии.
+type SetAgentSessionDesiredRuntimeRevisionInput struct {
+	SessionKey        string
+	RuntimeRevisionID int64
+}
+
+// MarkAgentSessionRuntimeAppliedInput фиксирует применение только после подтверждения ожидаемого pod.
+type MarkAgentSessionRuntimeAppliedInput struct {
+	SessionKey        string
+	RuntimeRevisionID int64
+}
+
+// CompleteAgentSessionTurnWithArchiveInput содержит один атомарный переход состояния хода и архива.
+type CompleteAgentSessionTurnWithArchiveInput struct {
+	SessionKey               string
+	TurnID                   int64
+	TurnStatus               string
+	SessionStatus            string
+	FinalMessage             string
+	ErrorMessage             string
+	Artifacts                string
+	CodexSessionID           string
+	SessionArchiveGzipBase64 string
+	ArchiveSHA256            string
+	ArchiveSizeBytes         int64
+	ExtendTTLSeconds         int
 }
 
 type CompleteAgentSessionTurnInput struct {
@@ -479,6 +519,22 @@ type ExactAgentSessionsRuntimeGuardRepository interface {
 
 type ExactAgentSessionsPublishFenceRepository interface {
 	LockExactAgentSessionsPublishFence(ctx context.Context, expected []entity.AgentSession) error
+}
+
+// RuntimeRevisionRepository хранит ревизии и связи желаемой и применённой ревизий без побочных эффектов в Kubernetes.
+type RuntimeRevisionRepository interface {
+	EnsureRuntimeRevision(ctx context.Context, input EnsureRuntimeRevisionInput) (entity.RuntimeRevision, error)
+	GetRuntimeRevision(ctx context.Context, id int64) (entity.RuntimeRevision, error)
+	GetAgentSessionRuntimeRevisionState(ctx context.Context, sessionKey string) (entity.AgentSessionRuntimeRevisionState, error)
+	SetAgentSessionDesiredRuntimeRevision(ctx context.Context, input SetAgentSessionDesiredRuntimeRevisionInput) (entity.AgentSessionRuntimeRevisionState, error)
+	MarkAgentSessionRuntimeApplied(ctx context.Context, input MarkAgentSessionRuntimeAppliedInput) (entity.AgentSessionRuntimeRevisionState, error)
+	GetNextQueuedAgentSessionRuntimeRevision(ctx context.Context, sessionID int64) (entity.RuntimeRevision, error)
+}
+
+// AgentSessionArchiveRepository предоставляет только подтверждённые версии архива и атомарное завершение.
+type AgentSessionArchiveRepository interface {
+	GetLatestAgentSessionArchive(ctx context.Context, sessionID int64) (entity.AgentSessionArchive, error)
+	CompleteAgentSessionTurnWithArchive(ctx context.Context, input CompleteAgentSessionTurnWithArchiveInput) (entity.AgentSessionCompletion, error)
 }
 
 type AgentDelegationCallbackDeliveryRepository interface {

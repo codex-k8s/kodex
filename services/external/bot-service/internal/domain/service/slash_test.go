@@ -4727,6 +4727,7 @@ func (store *fakeAdminStore) CreateAgentSessionTurn(_ context.Context, input adm
 		UserName:             input.UserName,
 		Message:              input.Message,
 		Status:               agentSessionTurnQueued,
+		RuntimeRevisionID:    input.RuntimeRevisionID,
 	}
 	if input.ParentTurnID > 0 {
 		turn.ParentTurnIDs = []int64{input.ParentTurnID}

@@ -11,6 +11,8 @@ update matter_codex_agent_sessions set
 	pod_name = case when $7 <> '' then $7 else pod_name end,
 	pvc_name = case when $8 <> '' then $8 else pvc_name end,
 	token_secret_ref = case when $9 <> '' then $9 else token_secret_ref end,
+	desired_runtime_revision_id = case when $11 > 0 then $11 else desired_runtime_revision_id end,
+	applied_runtime_revision_id = case when $12 > 0 then $12 else applied_runtime_revision_id end,
 	last_activity_at = now(),
 	expires_at = case when $10 > 0 then now() + make_interval(secs => $10::int) else expires_at end,
 	updated_at = now()

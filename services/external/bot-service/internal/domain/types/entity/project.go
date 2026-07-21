@@ -215,6 +215,7 @@ type AgentSessionTurn struct {
 	StartedAt              time.Time
 	FinishedAt             time.Time
 	UpdatedAt              time.Time
+	RuntimeRevisionID      int64
 }
 
 type AgentDelegation struct {

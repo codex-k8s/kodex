@@ -11,6 +11,8 @@ with active as (
 	join matter_codex_agent_sessions sessions on sessions.id = turns.session_id
 	where sessions.session_key = $1 and turns.status = 'queued'
 		and not exists (select 1 from active)
+		and (sessions.desired_runtime_revision_id is null or sessions.desired_runtime_revision_id = sessions.applied_runtime_revision_id)
+		and (turns.runtime_revision_id is null or turns.runtime_revision_id = sessions.applied_runtime_revision_id)
 	order by turns.created_at, turns.id
 	for update skip locked
 	limit 1
@@ -49,6 +51,7 @@ select
 	created_at,
 	coalesce(started_at, 'epoch'::timestamptz),
 	coalesce(finished_at, 'epoch'::timestamptz),
-	updated_at
+	updated_at,
+	coalesce(runtime_revision_id, 0)
 from claimed
 limit 1;

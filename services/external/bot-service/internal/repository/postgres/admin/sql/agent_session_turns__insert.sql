@@ -9,7 +9,8 @@ insert into matter_codex_agent_session_turns (
 	initiator_user_names,
 	user_id,
 	user_name,
-	message
+	message,
+	runtime_revision_id
 ) values (
 	$1,
 	$2,
@@ -21,7 +22,8 @@ insert into matter_codex_agent_session_turns (
 	case when btrim($8::text) <> '' then array[$8::text] else '{}'::text[] end,
 	$7,
 	$8,
-	$9
+	$9,
+	nullif($10::bigint, 0)
 )
 on conflict (run_id) do update
 set run_id = excluded.run_id
@@ -54,4 +56,5 @@ returning
 	created_at,
 	coalesce(started_at, 'epoch'::timestamptz),
 	coalesce(finished_at, 'epoch'::timestamptz),
-	updated_at;
+	updated_at,
+	coalesce(runtime_revision_id, 0);
