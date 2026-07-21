@@ -145,7 +145,7 @@ func (svc *SlashCommandService) handleChat(ctx context.Context, args []string) s
 	for _, chat := range chats {
 		lines = append(lines, svc.t("chat.list.item", map[string]any{
 			"ID":      chat.ID,
-			"Project": chat.ProjectID,
+			"Project": svc.roleProjectLabel(ctx, chat.ProjectID),
 			"Name":    chat.Name,
 			"Type":    chat.ChatType,
 			"Channel": emptyAsUnknown(chat.MattermostChannelID),
@@ -486,6 +486,10 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 		return card
 	}
 	runtimeVariables, _ := svc.cfg.Store.ListAgentRoleRuntimeVariables(ctx, role.ID)
+	snapshot := entity.AgentInstructionSnapshot{}
+	if svc.cfg.UniversalModel != nil {
+		snapshot, _ = svc.cfg.UniversalModel.GetAgentInstructionSnapshot(ctx, role.ID)
+	}
 	projectLabel := svc.roleProjectLabel(ctx, role.ProjectID)
 	card.Title = svc.t("menu.entity.role.card_title", map[string]any{"Role": role.Name})
 	card.Text = svc.t("menu.entity.role.card_text", map[string]any{"Role": role.Name})
@@ -505,15 +509,47 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 		{Title: svc.t("menu.entity.field.advanced_settings", nil), Value: svc.settingsSummary(role.AdvancedSettings), Short: true},
 		{Title: svc.t("menu.entity.field.description", nil), Value: emptyAsUnknown(role.Description), Short: false},
 	}
+	if snapshot.InstructionSet.ID > 0 {
+		card.Fields = append(card.Fields,
+			MattermostCardField{Title: svc.t("menu.entity.field.instruction_version", nil), Value: "`V" + strconv.FormatInt(snapshot.InstructionVersion.Version, 10) + "`", Short: true},
+			MattermostCardField{Title: svc.t("menu.entity.field.instruction_sha256", nil), Value: "`" + hex.EncodeToString(snapshot.InstructionVersion.ContentSHA256) + "`", Short: false},
+			MattermostCardField{Title: svc.t("menu.entity.field.managed_by", nil), Value: "`" + string(snapshot.InstructionSet.ManagedBy) + "`", Short: true},
+		)
+	}
+	editAction := svc.menuResourceDialogAction(menuViewRoles, "dialogroleedit", menuDialogAgentRoleUpsert, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.role_edit", "menu.action.role_edit.tooltip", "primary", nil)
+	if snapshot.InstructionSet.ManagedBy == entity.ConfigurationOwnerGit {
+		editAction.Disabled = true
+	}
 	card.Actions = []MattermostCardAction{
-		svc.menuResourceDialogAction(menuViewRoles, "dialogroleedit", menuDialogAgentRoleUpsert, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.role_edit", "menu.action.role_edit.tooltip", "primary", nil),
+		editAction,
 		svc.menuResourceDialogAction(menuViewRoles, "dialogroleruntimevarattach", menuDialogRoleRuntimeVarAttach, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.runtime_var_attach", "menu.action.runtime_var_attach.tooltip", "primary", nil),
 		svc.menuResourceDialogAction(menuViewRoles, "dialogroleruntimevardetach", menuDialogRoleRuntimeVarDetach, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.runtime_var_detach", "menu.action.runtime_var_detach.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewProjects, "openproject", menuActionShow, menuResourceProject, strconv.FormatInt(role.ProjectID, 10), "menu.action.project_open", "menu.action.project_open.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewRoles, "rolelist", menuActionList, menuResourceAgentRole, strconv.FormatInt(role.ProjectID, 10), "menu.action.role_list", "menu.action.role_list.tooltip", "default", nil),
 		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
 	}
+	if snapshot.InstructionSet.ManagedBy == entity.ConfigurationOwnerGit {
+		card.Actions = append([]MattermostCardAction{
+			svc.menuResourceAction(menuViewRoles, "instructiondetach", menuActionInstructionDetach, menuResourceAgentRole, strconv.FormatInt(role.ID, 10), "menu.action.instruction_detach", "menu.action.instruction_detach.tooltip", "danger", nil),
+		}, card.Actions...)
+	}
 	return card
+}
+
+func (svc *SlashCommandService) detachInstructionSetFromMenu(ctx context.Context, command MenuActionCommand) string {
+	roleID, ok := parseInt64ID(command.ID)
+	if !ok || svc.cfg.UniversalModel == nil {
+		return svc.t("menu.entity.invalid", nil)
+	}
+	snapshot, err := svc.cfg.UniversalModel.DetachInstructionSet(ctx, roleID, command.UserName)
+	if err != nil {
+		return svc.t("instruction.detach.failed", map[string]any{"Error": safeError(err)})
+	}
+	return svc.t("instruction.detach.result", map[string]any{
+		"Agent":   snapshot.Agent.Name,
+		"Version": snapshot.InstructionVersion.Version,
+		"SHA256":  hex.EncodeToString(snapshot.InstructionVersion.ContentSHA256),
+	})
 }
 
 func (svc *SlashCommandService) chatListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
@@ -548,7 +584,7 @@ func (svc *SlashCommandService) chatListCard(ctx context.Context, command MenuAc
 		card.Fields = append(card.Fields, MattermostCardField{
 			Title: svc.t("menu.entity.chat.item_title", map[string]any{"Number": number, "Chat": chat.Name}),
 			Value: svc.t("menu.entity.chat.summary", map[string]any{
-				"Project": chat.ProjectID,
+				"Project": svc.roleProjectLabel(ctx, chat.ProjectID),
 				"Type":    chat.ChatType,
 				"Channel": emptyAsUnknown(chat.MattermostChannelID),
 				"Issue":   emptyAsUnknown(chat.RootGitHubIssue),
@@ -585,7 +621,7 @@ func (svc *SlashCommandService) chatEntityCard(ctx context.Context, command Menu
 	card.Text = svc.t("menu.entity.chat.card_text", map[string]any{"Chat": chat.Name})
 	card.Fields = []MattermostCardField{
 		{Title: svc.t("menu.entity.field.chat", nil), Value: "`" + chat.Name + "`", Short: true},
-		{Title: svc.t("menu.entity.field.project", nil), Value: "`" + strconv.FormatInt(chat.ProjectID, 10) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.project", nil), Value: "`" + svc.roleProjectLabel(ctx, chat.ProjectID) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.type", nil), Value: "`" + chat.ChatType + "`", Short: true},
 		{Title: svc.t("menu.entity.field.channel", nil), Value: "`" + emptyAsUnknown(chat.MattermostChannelID) + "`", Short: false},
 		{Title: svc.t("menu.entity.field.roles", nil), Value: "`" + chatParticipantNames(participants) + "`", Short: false},
@@ -978,6 +1014,12 @@ func (svc *SlashCommandService) agentRoleDialog(ctx context.Context, command Men
 		if err != nil {
 			return nil, svc.t("agent_role.get.failed", map[string]any{"Error": safeError(err)})
 		}
+		if svc.cfg.UniversalModel != nil {
+			snapshot, snapshotErr := svc.cfg.UniversalModel.GetAgentInstructionSnapshot(ctx, roleID)
+			if snapshotErr == nil && snapshot.InstructionSet.ManagedBy == entity.ConfigurationOwnerGit {
+				return nil, svc.t("instruction.git_managed", nil)
+			}
+		}
 		role = current
 	}
 	if !editMode && role.ProjectID > 0 {
@@ -1077,7 +1119,7 @@ func (svc *SlashCommandService) agentRoleDialog(ctx context.Context, command Men
 				Default:     role.PromptTemplate,
 				HelpText:    svc.t("dialog.role.field.prompt.help", nil),
 				Optional:    true,
-				MaxLength:   12000,
+				MaxLength:   MaxInstructionMarkdownBytes,
 			},
 			{
 				DisplayName: svc.t("dialog.profile.field.kubernetes", nil),
@@ -1267,7 +1309,24 @@ func (svc *SlashCommandService) handleProjectDialogUpsert(ctx context.Context, c
 		}
 		input.MattermostTeamID = team.ID
 	}
-	project, created, err := svc.cfg.Store.UpsertProject(ctx, input)
+	var project entity.Project
+	var created bool
+	var err error
+	if svc.cfg.UniversalModel != nil {
+		result, modelErr := svc.cfg.UniversalModel.UpsertWorkspace(ctx, UpsertWorkspaceCommand{
+			Name: input.Name, Slug: input.Slug, MattermostTeamID: input.MattermostTeamID,
+			GitHubAccountName: input.GitHubAccountName, GitHubOwner: input.GitHubOwner,
+			GitHubOwnerType: input.GitHubOwnerType, Description: input.Description,
+			AdvancedSettings: input.AdvancedSettings, ActorRef: command.UserName,
+		})
+		if modelErr != nil {
+			err = modelErr
+		} else {
+			project, created = result.Legacy, result.Created
+		}
+	} else {
+		project, created, err = svc.cfg.Store.UpsertProject(ctx, input)
+	}
 	if err != nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.save.failed", map[string]any{"Error": safeError(err)})}
 	}
@@ -1569,7 +1628,26 @@ func (svc *SlashCommandService) handleAgentRoleDialogUpsert(ctx context.Context,
 	} else {
 		input.PromptMode = "raw"
 	}
-	role, created, err := svc.cfg.Store.UpsertAgentRole(ctx, input)
+	var role entity.AgentRole
+	var created bool
+	var err error
+	if svc.cfg.UniversalModel != nil {
+		result, modelErr := svc.cfg.UniversalModel.UpsertAgent(ctx, UpsertAgentCommand{
+			ProjectID: input.ProjectID, Name: input.Name, RoleType: input.RoleType,
+			Description: input.Description, PromptTemplate: input.PromptTemplate, PromptMode: input.PromptMode,
+			GitHubAccountName: input.GitHubAccountName, OpenAIAccountName: input.OpenAIAccountName,
+			KubernetesAccess: input.KubernetesAccess, SandboxMode: input.SandboxMode,
+			ConfigOverlay: input.ConfigOverlay, AdvancedSettings: input.AdvancedSettings,
+			Enabled: input.Enabled, BotIdentity: input.BotIdentity, ActorRef: command.UserName,
+		})
+		if modelErr != nil {
+			err = modelErr
+		} else {
+			role, created = result.Legacy, result.Created
+		}
+	} else {
+		role, created, err = svc.cfg.Store.UpsertAgentRole(ctx, input)
+	}
 	if err != nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("agent_role.save.failed", map[string]any{"Error": safeError(err)})}
 	}
@@ -1677,7 +1755,24 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 			}
 		}
 	}
-	chat, created, err := svc.cfg.Store.CreateChat(ctx, input)
+	var chat entity.Chat
+	var created bool
+	if svc.cfg.UniversalModel != nil {
+		result, modelErr := svc.cfg.UniversalModel.UpsertRoom(ctx, UpsertRoomCommand{
+			ProjectID: input.ProjectID, MattermostChannelID: input.MattermostChannelID,
+			Name: input.Name, Slug: input.Slug, Description: input.Description,
+			RoomType: input.ChatType, RootGitHubIssue: input.RootGitHubIssue,
+			WorkPolicy: input.WorkPolicy, Settings: input.Settings, SystemPurpose: input.SystemPurpose,
+			RoleIDs: input.RoleIDs, RepositoryIDs: input.RepositoryIDs, ActorRef: command.UserName,
+		})
+		if modelErr != nil {
+			err = modelErr
+		} else {
+			chat, created = result.Legacy, result.Created
+		}
+	} else {
+		chat, created, err = svc.cfg.Store.CreateChat(ctx, input)
+	}
 	if err != nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("chat.save.failed", map[string]any{"Error": safeError(err)})}
 	}
@@ -1824,6 +1919,10 @@ func (svc *SlashCommandService) agentRoleDialogInput(submission map[string]any) 
 	if promptMode != "raw" && promptMode != "template" {
 		fieldErrors[dialogFieldPromptMode] = svc.t("dialog.role.prompt_mode_invalid", nil)
 	}
+	promptTemplate := strings.TrimSpace(submissionString(submission, dialogFieldPromptTemplate))
+	if len([]byte(promptTemplate)) > MaxInstructionMarkdownBytes {
+		fieldErrors[dialogFieldPromptTemplate] = svc.t("dialog.role.prompt_too_large", map[string]any{"Limit": MaxInstructionMarkdownBytes})
+	}
 	kubernetesAccess := strings.ToLower(defaultString(submissionString(submission, dialogFieldKubernetesAccess), "read-only"))
 	if !validKubernetesAccess(kubernetesAccess) {
 		fieldErrors[dialogFieldKubernetesAccess] = svc.t("dialog.profile.kubernetes_invalid", nil)
@@ -1844,7 +1943,7 @@ func (svc *SlashCommandService) agentRoleDialogInput(submission map[string]any) 
 		Name:              name,
 		RoleType:          roleType,
 		Description:       strings.TrimSpace(submissionString(submission, dialogFieldDescription)),
-		PromptTemplate:    strings.TrimSpace(submissionString(submission, dialogFieldPromptTemplate)),
+		PromptTemplate:    promptTemplate,
 		PromptMode:        promptMode,
 		GitHubAccountName: githubAccount,
 		OpenAIAccountName: openAIAccount,

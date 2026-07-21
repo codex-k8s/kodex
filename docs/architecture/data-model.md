@@ -4,8 +4,8 @@ title: Логическая модель данных
 type: architecture
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 0.2.0
+updated: 2026-07-21
 ---
 
 # Логическая модель данных
@@ -30,6 +30,26 @@ updated: 2026-07-16
 | `InstructionSet` | organization_id, name, source_type, managed_by, current_version_id |
 | `InstructionVersion` | instruction_set_id, content manifest, checksum, created_by |
 | `RuntimeProfile` | provider type, config template, resource class, image recipe, revision |
+
+## Переходная модель Universal
+
+До создания полного домена организаций перечисленные выше `organization_id` представлены обязательным непустым `organization_scope` со значением одной установки. Это разделитель данных, но не преждевременная реализация `Organization`, `Membership`, прав доступа, квот или admission.
+
+Расширяющая миграция поддерживает следующие временные соответствия:
+
+| Целевая сущность | Совместимая проекция | Правило записи |
+| --- | --- | --- |
+| `Workspace` | `Project` | 1:1 по обязательному `legacy_project_id` |
+| `Room` | `Chat` | 1:1 по обязательному `legacy_chat_id` внутри `Workspace` |
+| `RoleDefinition` + `Agent` | `AgentRole` | для каждого legacy-роли создаются отдельное определение и конкретный агент |
+| `AgentAssignment` | участник `Chat` и принадлежность `AgentRole` проекту | назначение на рабочую область обязательно, назначение на комнату необязательно |
+| `InstructionSet.current_version_id` | `AgentRole.prompt_template` | новая неизменяемая версия и legacy prompt обновляются атомарно |
+
+Внутренние `bigint` PK используются для бизнес-ссылок. Mattermost team/channel/bot ID остаются только внешними привязками с частичными уникальными ограничениями. Все межагрегатные FK подтверждают общий `organization_scope`, а назначение комнаты дополнительно подтверждает её принадлежность рабочей области. Удаления через cascade в expand-период не допускаются.
+
+После переключения только процесс N записывает конфигурацию и в одной транзакции изменяет целевой агрегат с legacy-проекцией. Параллельная запись N-1 только в legacy-таблицы запрещена. Старые readers продолжают читать проекцию до отдельного contract-изменения.
+
+`InstructionVersion` содержит не более 256 КиБ Markdown, SHA-256, монотонный номер и ссылку на инициатора. Строка версии неизменяема, а `current_version_id` может указывать только на версию того же набора и области. Объект с `managed_by=git` нельзя изменить через интерфейс до явного отсоединения с сохранением происхождения и аудитом.
 
 ## Поставщики и интеграции
 

@@ -776,6 +776,8 @@ func menuActionResourceAllowed(action string, resourceType string, resourceID st
 		return allowed(menuResourcePromptTemplate)
 	case menuActionProfileEnable, menuActionProfileDisable:
 		return allowed(menuResourceProfile)
+	case menuActionInstructionDetach:
+		return allowed(menuResourceAgentRole)
 	case menuActionProjectDashboard:
 		return allowed(menuResourceProject)
 	case menuActionProjectBindRepo:

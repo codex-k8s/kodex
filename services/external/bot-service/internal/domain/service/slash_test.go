@@ -497,7 +497,7 @@ func TestProjectDialogSubmissionCreatesMattermostTeam(t *testing.T) {
 	if channels.projectTeamName != "demo-project" {
 		t.Fatalf("team name = %q", channels.projectTeamName)
 	}
-	if result.Card == nil || result.Card.Title != "Project `Demo Project`" {
+	if result.Card == nil || result.Card.Title != "Workspace `Demo Project`" {
 		t.Fatalf("card = %#v", result.Card)
 	}
 }
@@ -642,7 +642,7 @@ func TestAgentRoleDialogSeedsKnownRolePromptTemplate(t *testing.T) {
 	if identity.Username != "backend-dev-bot" || identity.MattermostUserID != "bot-user-backend-dev-bot" || identity.TokenSecretRef == "" {
 		t.Fatalf("bot identity = %#v", identity)
 	}
-	if !strings.Contains(result.Card.Text, "prompt: `template`") {
+	if !strings.Contains(result.Card.Text, "Instructions: `template`") {
 		t.Fatalf("card text = %q", result.Card.Text)
 	}
 }

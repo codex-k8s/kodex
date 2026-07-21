@@ -4,8 +4,8 @@ title: Развертывание и откат
 type: operations
 status: approved
 owner: sre
-version: 0.3.0
-updated: 2026-07-18
+version: 0.4.0
+updated: 2026-07-21
 ---
 
 # Развертывание и откат
@@ -51,9 +51,11 @@ Reference: https://argoproj.github.io/argo-rollouts/concepts/
 
 Откат схемы не является штатным способом. Изменения проектируются так, чтобы предыдущая версия приложения работала на расширенной схеме в течение окна отката.
 
-Миграции `000025_cluster_admin_freeze.sql`, `000026_cluster_admin_session_key_inventory.sql`, `000027_cluster_admin_delivery_fences.sql`, `000028_agent_delegation_callback_outbox.sql` и `000029_agent_delegation_callback_plan_manifest.sql` являются forward-only. Физический `down` для каждой закрыто завершается ошибкой, сохраняет последнюю применённую `goose` version и физически оставляет объекты заморозки, глобальный инвентарь `session_key`, scoped delivery fence, центральный trigger, durable callback delivery plan/state и immutable manifest точного множества. После такого отказа повторный `up` является безопасным no-op и не создаёт дублирующие триггеры, fence, delivery rows, manifests или записи инвентаря.
+Миграции `000025_cluster_admin_freeze.sql`, `000026_cluster_admin_session_key_inventory.sql`, `000027_cluster_admin_delivery_fences.sql`, `000028_agent_delegation_callback_outbox.sql`, `000029_agent_delegation_callback_plan_manifest.sql` и `000030_universal_model.sql` являются forward-only. Физический `down` для каждой закрыто завершается ошибкой, сохраняет последнюю применённую `goose` version и физически оставляет созданные ограничения и данные. Для `000030` сохраняются universal-таблицы, 1:1 bindings, назначения и неизменяемая история инструкций. После такого отказа повторный `up` является безопасным no-op и не создаёт дубликаты.
 
-Откат приложения разрешён только на заранее проверенный exact N-1 SHA/дайджест, чей reader и runtime DML доказанно совместимы с расширенной схемой `000025`–`000029`. Старому процессу передают только отдельный runtime DML login; migration/schema-owner DSN нельзя использовать как fallback. Перед переключением повторяют adversarial проверку runtime-атрибутов, видимости profiles/roles, запрета DDL/TEMP/disable-trigger, отсутствия расширения frozen state, запрета повторного использования frozen `session_key`, сохранения scoped publish fence и неизменности callback outbox/manifest. Откат не удаляет `000027`–`000029`, не отключает их triggers, не изменяет незавершённые delivery rows и не отменяет меры PR #74/#75. Exact N-1 reader игнорирует добавочные таблицы, но не подтверждает callback delivery; во время такого отката маршрут `mattermost_return_to_requester` должен быть отключён либо трафик должен оставаться на новой версии. Накопленные outbox, manifests, fence и revocations сохраняются для исправления вперёд. Если exact N-1 не прошёл этот шлюз, допустимо только исправление вперёд.
+Перед переключением конфигурационных записей на `000030` нужен короткий quiesce: одновременно работающие N-1 legacy-only и N dual-write процессы запрещены. После миграции проверяются обезличенные количества соответствий `Project`/`Workspace`, `Chat`/`Room`, `AgentRole`/`Agent`, назначения и SHA-256 версий; внутренние и внешние идентификаторы в журналы не выводятся. Откат приложения выполняется только после quiesce на проверенный N-1 SHA без `Down`: общие данные и prompt остаются в legacy-проекции, а универсальное редактирование блокируется до исправления вперёд.
+
+Откат приложения разрешён только на заранее проверенный exact N-1 SHA/дайджест, чей reader и runtime DML доказанно совместимы с расширенной схемой `000025`–`000030`. Старому процессу передают только отдельный runtime DML login; migration/schema-owner DSN нельзя использовать как fallback. Перед переключением повторяют adversarial проверку runtime-атрибутов, видимости profiles/roles, запрета DDL/TEMP/disable-trigger, отсутствия расширения frozen state, запрета повторного использования frozen `session_key`, сохранения scoped publish fence, неизменности callback outbox/manifest и чтения legacy-проекции Universal. Откат не удаляет `000027`–`000030`, не отключает их triggers, не изменяет незавершённые delivery rows и не отменяет меры PR #74/#75. Exact N-1 reader игнорирует добавочные таблицы, но не подтверждает callback delivery; во время такого отката маршрут `mattermost_return_to_requester` должен быть отключён либо трафик должен оставаться на новой версии. Накопленные universal-данные, outbox, manifests, fence и revocations сохраняются для исправления вперёд. Если exact N-1 не прошёл этот шлюз, допустимо только исправление вперёд.
 
 Если upgrade `25 -> 26` останавливается с `MCV26_DUPLICATE_SESSION_KEY_GROUPS`, версия и схема остаются на `25`. Остановите записи, устраните legacy-дубликаты офлайн через внутренние surrogate row ID и проверяйте результат только агрегатами. Значения `session_key`, `role_id` и другие идентификаторы нельзя выводить в консоль, журналы или тикеты. После обезличенного подтверждения нулевого числа групп повторите upgrade.
 
@@ -63,4 +65,4 @@ Reference: https://argoproj.github.io/argo-rollouts/concepts/
 
 ## Подтверждения отката
 
-Выпуск хранит дайджесты образов, Git SHA, версию миграций, ревизию конфигурации, результаты дымовых проверок, согласующего и цель отката. Доказательство для `000025`–`000029` отдельно фиксирует отказ каждого `down`, неизменную `goose` version, наличие fence/outbox/manifest/triggers после отката приложения и успешный повторный `up`. Откат завершается проверкой очереди, callback delivery states, событий Mattermost, авторизации поставщиков, возобновления сессий и запусков по расписанию.
+Выпуск хранит дайджесты образов, Git SHA, версию миграций, ревизию конфигурации, результаты дымовых проверок, согласующего и цель отката. Доказательство для `000025`–`000030` отдельно фиксирует отказ каждого `down`, неизменную `goose` version, наличие universal-таблиц, fence/outbox/manifest/triggers после отката приложения и успешный повторный `up`. Откат завершается проверкой очереди, callback delivery states, событий Mattermost, legacy-проекции Universal, авторизации поставщиков, возобновления сессий и запусков по расписанию.

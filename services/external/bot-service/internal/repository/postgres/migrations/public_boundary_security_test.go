@@ -280,7 +280,7 @@ where name = 'developer'
 	}
 	ownerPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("runtime-role migration through v29: %v", err)
+		t.Fatalf("runtime-role migration through v30: %v", err)
 	}
 	runtimeDSN := migrationDSNForRole(t, ownerDSN, roleName, rolePassword)
 	runtimePool := openMigrationPool(t, ctx, runtimeDSN)
@@ -380,7 +380,7 @@ where subject_type = 'agent_profile'
 	}
 }
 
-func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29Upgrade(t *testing.T) {
+func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30Upgrade(t *testing.T) {
 	ownerDSN := isolatedMigrationDSN(t, "exact_n_minus_one")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -435,9 +435,9 @@ func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29Upgrade(t *t
 	}
 	stagingPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28->v29: %v", err)
+		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28->v29->v30: %v", err)
 	}
-	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 29 {
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 30 {
 		t.Fatalf("upgraded exact N-1 schema version = %d, error=%v", version, err)
 	}
 
@@ -604,17 +604,17 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	if err := migrations.DownOne(ctx, dsn); err == nil {
-		t.Fatal("v29 down unexpectedly succeeded")
+		t.Fatal("v30 down unexpectedly succeeded")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 29 {
+	if err != nil || version != 30 {
 		t.Fatalf("version after failed down = %d, error=%v", version, err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated up after failed down: %v", err)
 	}
 	version, err = migrations.Version(ctx, dsn)
-	if err != nil || version != 29 {
+	if err != nil || version != 30 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
 	}
 }
@@ -1345,7 +1345,7 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 		t.Fatalf("upgrade historical base v21->current main v22: %v", err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27->v28->v29: %v", err)
+		t.Fatalf("upgrade v22->v23->v24->v25->v26->v27->v28->v29->v30: %v", err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
 	defer pool.Close()

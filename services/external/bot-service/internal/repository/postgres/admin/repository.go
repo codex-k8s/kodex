@@ -469,7 +469,12 @@ func (repo *Repository) DeleteGitHubAccount(ctx context.Context, name string) (e
 }
 
 func (repo *Repository) UpsertMattermostBotIdentity(ctx context.Context, input adminrepo.UpsertMattermostBotIdentityInput) (entity.MattermostBotIdentity, bool, error) {
-	item, created, err := scanMattermostBotIdentityWithCreated(repo.db.QueryRow(ctx, query("mattermost_bot_identities__upsert.sql"),
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return entity.MattermostBotIdentity{}, false, fmt.Errorf("begin mattermost bot identity upsert: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	item, created, err := scanMattermostBotIdentityWithCreated(tx.QueryRow(ctx, query("mattermost_bot_identities__upsert.sql"),
 		input.ProjectID,
 		input.RoleID,
 		input.Username,
@@ -481,6 +486,16 @@ func (repo *Repository) UpsertMattermostBotIdentity(ctx context.Context, input a
 	))
 	if err != nil {
 		return entity.MattermostBotIdentity{}, false, fmt.Errorf("upsert mattermost bot identity: %w", err)
+	}
+	tag, err := tx.Exec(ctx, query("universal_agents__bind_bot_identity.sql"), input.RoleID, item.ID)
+	if err != nil {
+		return entity.MattermostBotIdentity{}, false, fmt.Errorf("bind agent bot identity projection: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return entity.MattermostBotIdentity{}, false, fmt.Errorf("bind agent bot identity projection: agent projection not found")
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.MattermostBotIdentity{}, false, fmt.Errorf("commit mattermost bot identity upsert: %w", err)
 	}
 	return item, created, nil
 }

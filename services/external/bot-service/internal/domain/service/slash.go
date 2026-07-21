@@ -161,6 +161,7 @@ type SlashCommandServiceConfig struct {
 	Localizer                *texti18n.Localizer
 	StatusService            *StatusService
 	Store                    adminrepo.Repository
+	UniversalModel           *UniversalModelService
 	ChannelManager           MattermostChannelManager
 	RoleBotManager           MattermostRoleBotManager
 	RepositoryProvider       providerrepo.RepositoryProvider
@@ -190,6 +191,9 @@ type SlashCommandService struct {
 }
 
 func NewSlashCommandService(cfg SlashCommandServiceConfig) *SlashCommandService {
+	if cfg.UniversalModel == nil && cfg.Store != nil {
+		cfg.UniversalModel = NewUniversalModelService(cfg.Store)
+	}
 	return &SlashCommandService{cfg: cfg}
 }
 
@@ -1401,6 +1405,8 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 		return svc.menuCardResult(command, svc.updateProfileEnabledCard(ctx, command, true))
 	case menuActionProfileDisable:
 		return svc.menuCardResult(command, svc.updateProfileEnabledCard(ctx, command, false))
+	case menuActionInstructionDetach:
+		return svc.menuActionTextResult(ctx, command, svc.detachInstructionSetFromMenu(ctx, command), false)
 	default:
 		return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
 	}
@@ -2847,6 +2853,7 @@ func (svc *SlashCommandService) HandleDialogSubmissionTransactional(ctx context.
 	transactional := *svc
 	if store != nil {
 		transactional.cfg.Store = store
+		transactional.cfg.UniversalModel = NewUniversalModelService(store)
 	}
 	validation := transactional.PrevalidateDialogSubmissionReadOnly(ctx, command)
 	if validation.Error != "" || len(validation.Errors) > 0 {
@@ -4827,6 +4834,7 @@ const (
 	menuActionShow               = "show"
 	menuActionConfirmDelete      = "confirm_delete"
 	menuActionDelete             = "delete"
+	menuActionInstructionDetach  = "instruction_detach"
 	menuActionCancel             = "cancel"
 	menuActionRepositoryOnboard  = "repository_onboard"
 	menuActionRepositoryRepos    = "repository_repos"

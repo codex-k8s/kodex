@@ -7,25 +7,23 @@ import (
 	"strings"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	instructionsrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/instructions"
+	workspacesrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/workspaces"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
 
 func (repo *Repository) UpsertProject(ctx context.Context, input adminrepo.UpsertProjectInput) (entity.Project, bool, error) {
-	item, created, err := scanProjectWithCreated(repo.db.QueryRow(ctx, query("projects__upsert.sql"),
-		input.Name,
-		input.Slug,
-		input.MattermostTeamID,
-		input.GitHubAccountName,
-		input.GitHubOwner,
-		input.GitHubOwnerType,
-		input.Description,
-		input.AdvancedSettings,
-	))
+	result, err := repo.UpsertWorkspace(ctx, workspacesrepo.UpsertWorkspaceInput{
+		Name: input.Name, Slug: input.Slug, MattermostTeamID: input.MattermostTeamID,
+		GitHubAccountName: input.GitHubAccountName, GitHubOwner: input.GitHubOwner,
+		GitHubOwnerType: input.GitHubOwnerType, Description: input.Description,
+		AdvancedSettings: input.AdvancedSettings, ActorRef: "legacy-admin-repository",
+	})
 	if err != nil {
 		return entity.Project{}, false, fmt.Errorf("upsert project: %w", err)
 	}
-	return item, created, nil
+	return result.Legacy, result.Created, nil
 }
 
 func (repo *Repository) UpdateProjectRunsChannel(ctx context.Context, projectID int64, channelID string) (entity.Project, error) {
@@ -120,35 +118,10 @@ func (repo *Repository) ListProjectRepositories(ctx context.Context, projectID i
 }
 
 func (repo *Repository) UpsertAgentRole(ctx context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
-	if strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
-		return repo.upsertFrozenClusterAdminRole(ctx, input)
-	}
-	item, created, err := scanAgentRoleWithCreated(repo.db.QueryRow(ctx, query("agent_roles__upsert.sql"),
-		input.ProjectID,
-		input.Name,
-		input.RoleType,
-		input.Description,
-		input.PromptTemplate,
-		input.PromptMode,
-		input.GitHubAccountName,
-		input.OpenAIAccountName,
-		input.KubernetesAccess,
-		input.SandboxMode,
-		input.ConfigOverlay,
-		input.AdvancedSettings,
-		input.Enabled,
-		input.BotIdentity,
-	))
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) && strings.EqualFold(strings.TrimSpace(input.KubernetesAccess), "cluster-admin") {
-			return entity.AgentRole{}, false, adminrepo.ErrClusterAdminAdmissionDenied
-		}
-		return entity.AgentRole{}, false, fmt.Errorf("upsert agent role: %w", err)
-	}
-	return item, created, nil
+	return repo.upsertAgentRoleWithActor(ctx, input, "legacy-admin-repository")
 }
 
-func (repo *Repository) upsertFrozenClusterAdminRole(ctx context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
+func (repo *Repository) upsertFrozenClusterAdminRole(ctx context.Context, input adminrepo.UpsertAgentRoleInput, actorRef string) (entity.AgentRole, bool, error) {
 	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return entity.AgentRole{}, false, fmt.Errorf("begin cluster-admin role upsert: %w", err)
@@ -171,6 +144,9 @@ func (repo *Repository) upsertFrozenClusterAdminRole(ctx context.Context, input 
 	}
 	if err != nil {
 		return entity.AgentRole{}, false, fmt.Errorf("upsert cluster-admin agent role: %w", err)
+	}
+	if err := syncUniversalAgent(ctx, tx, item, actorRef); err != nil {
+		return entity.AgentRole{}, false, err
 	}
 	if _, err := tx.Exec(ctx, query("audit_events__insert.sql"),
 		"cluster_admin.admission.allowed", "", "repository", "agent_role", input.Name, "agent_role.upsert: allowed",
@@ -264,6 +240,32 @@ func (repo *Repository) CreateChat(ctx context.Context, input adminrepo.CreateCh
 		}
 		if _, err := tx.Exec(ctx, query("chat_participants__insert.sql"), item.ID, roleID); err != nil {
 			return entity.Chat{}, false, fmt.Errorf("insert chat participant: %w", err)
+		}
+	}
+	room, err := scanRoom(tx.QueryRow(ctx, query("universal_rooms__upsert.sql"),
+		item.ID, item.Name, item.Slug, item.Description, item.ChatType,
+		item.SystemPurpose, item.WorkPolicy, item.MattermostChannelID, item.ProjectID,
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.Chat{}, false, workspacesrepo.ErrManagedByGit
+	}
+	if err != nil {
+		return entity.Chat{}, false, fmt.Errorf("upsert room projection: %w", err)
+	}
+	_ = room
+	if _, err := tx.Exec(ctx, query("universal_agent_assignments__room_disable.sql"), item.ID, input.RoleIDs); err != nil {
+		return entity.Chat{}, false, fmt.Errorf("disable removed room assignments: %w", err)
+	}
+	for index, roleID := range input.RoleIDs {
+		if roleID <= 0 {
+			continue
+		}
+		tag, err := tx.Exec(ctx, query("universal_agent_assignments__room_upsert.sql"), roleID, item.ID, index == 0)
+		if err != nil {
+			return entity.Chat{}, false, fmt.Errorf("upsert room agent assignment: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return entity.Chat{}, false, fmt.Errorf("upsert room agent assignment: %w", instructionsrepo.ErrManagedByGit)
 		}
 	}
 	if _, err := tx.Exec(ctx, query("chat_repositories__delete_not_selected.sql"), item.ID, input.RepositoryIDs); err != nil {
