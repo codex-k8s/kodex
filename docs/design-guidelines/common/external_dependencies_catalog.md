@@ -14,6 +14,7 @@
 | Dependency | Version | Scope | Why |
 |---|---:|---|---|
 | `github.com/caarlos0/env/v11` | `v11.3.1` | Config | typed env -> struct parsing без самописного env loader в сервисе |
+| `github.com/fsnotify/fsnotify` | `v1.10.1` | Runtime security | fail-closed события create/write/delete/rename/replace и ошибки очереди для per-run credential guard |
 | `github.com/google/go-github/v88` | `v88.0.0` | GitHub SDK | repository access, branch/PR operations и webhook payload helpers без ручной REST-обвязки |
 | `github.com/jackc/pgx/v5` | `v5.10.0` | PostgreSQL | storage repositories через `pgxpool`; `stdlib` driver для goose |
 | `github.com/mattermost/mattermost/server/public` | `v0.4.2` | Mattermost SDK/model | typed `CommandResponse` и публичные модели Mattermost вместо ручных JSON-структур |
@@ -21,6 +22,7 @@
 | `github.com/nicksnyder/go-i18n/v2` | `v2.6.1` | i18n | runtime `libs/go/i18n` для embedded JSON message catalogs, template variables и locale switching |
 | `github.com/pressly/goose/v3` | `v3.27.1` | PostgreSQL migrations | embedded SQL migrations с `-- +goose Up/Down` вместо самописного migration runner |
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics`, Go/process collectors и Prometheus HTTP handler |
+| `golang.org/x/sys` | `v0.44.0` | Linux filesystem | атомарная публикация восстановленного дерева сессий через `renameat2` без промежуточного изменения target |
 | `k8s.io/api` | `v0.36.1` | Kubernetes typed API | typed `batch/v1` Job, `core/v1` Pod/PVC и `PodLogOptions` для runtime adapter |
 | `k8s.io/apimachinery` | `v0.36.1` | Kubernetes API machinery | typed meta/options, labels, resource quantities и Kubernetes API errors |
 | `k8s.io/client-go` | `v0.36.1` | Kubernetes SDK | in-cluster/kubeconfig client, Job/PVC/Secret operations, pod status/log tail и `remotecommand` exec для Codex auth handoff без shell-first runtime |

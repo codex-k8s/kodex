@@ -324,8 +324,13 @@ func TestRestoreSessionArchiveRejectsOversizeHeader(t *testing.T) {
 	var compressed bytes.Buffer
 	gzipWriter := gzip.NewWriter(&compressed)
 	tarWriter := tar.NewWriter(gzipWriter)
+	for _, name := range []string{"sessions", "sessions/run"} {
+		if err := tarWriter.WriteHeader(&tar.Header{Name: name, Mode: 0o700, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := tarWriter.WriteHeader(&tar.Header{
-		Name: "sessions/run/rollout.jsonl", Mode: 0o600, Size: maxSessionArchiveFileBytes + 1, Typeflag: tar.TypeReg,
+		Name: "sessions/run/rollout.jsonl", Mode: 0o600, Size: maxSessionArchiveFileBytes + 1, Typeflag: tar.TypeReg, Format: tar.FormatUSTAR,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -357,6 +362,124 @@ func TestRestoreSessionArchiveRejectsExtendedHeadersOutsideCountedUSTARContract(
 	if err == nil || !strings.Contains(err.Error(), "формат записи") {
 		t.Fatalf("extended header error = %v", err)
 	}
+}
+
+func TestRestoreSessionArchiveRequiresDirectoryRootAndLeavesExistingTargetAtomic(t *testing.T) {
+	t.Run("regular-file root", func(t *testing.T) {
+		archive := encodeUSTARForTest(t, []testTarEntry{{header: tar.Header{Name: "sessions", Mode: 0o600, Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}}})
+		root := t.TempDir()
+		if err := restoreCodexSessionArchive(archive, root); err == nil || !strings.Contains(err.Error(), "directory root") {
+			t.Fatalf("regular-file root error = %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(root, "sessions")); !os.IsNotExist(err) {
+			t.Fatalf("regular-file root изменил target: %v", err)
+		}
+	})
+
+	t.Run("valid file then symlink", func(t *testing.T) {
+		archive := encodeUSTARForTest(t, []testTarEntry{
+			{header: tar.Header{Name: "sessions", Mode: 0o700, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}},
+			{header: tar.Header{Name: "sessions/run", Mode: 0o700, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}},
+			{header: tar.Header{Name: "sessions/run/rollout.jsonl", Mode: 0o600, Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}, body: "accepted-before-error"},
+			{header: tar.Header{Name: "sessions/run/z-link", Mode: 0o777, Typeflag: tar.TypeSymlink, Linkname: "rollout.jsonl", Format: tar.FormatUSTAR}},
+		})
+		root := t.TempDir()
+		target := filepath.Join(root, "sessions")
+		if err := os.Mkdir(target, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		existing := filepath.Join(target, "existing")
+		if err := os.WriteFile(existing, []byte("unchanged"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := restoreCodexSessionArchive(archive, root); err == nil {
+			t.Fatal("symlink archive accepted")
+		}
+		body, err := os.ReadFile(existing)
+		if err != nil || string(body) != "unchanged" {
+			t.Fatalf("existing target изменён: body=%q error=%v", string(body), err)
+		}
+		if _, err := os.Stat(filepath.Join(target, "run", "rollout.jsonl")); !os.IsNotExist(err) {
+			t.Fatalf("partial target опубликован: %v", err)
+		}
+		entries, err := os.ReadDir(root)
+		if err != nil || len(entries) != 1 || entries[0].Name() != "sessions" {
+			t.Fatalf("private staging не очищен: entries=%v error=%v", entries, err)
+		}
+	})
+
+	t.Run("duplicate entry", func(t *testing.T) {
+		archive := encodeUSTARForTest(t, []testTarEntry{
+			{header: tar.Header{Name: "sessions", Mode: 0o700, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}},
+			{header: tar.Header{Name: "sessions/run", Mode: 0o700, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}},
+			{header: tar.Header{Name: "sessions/run", Mode: 0o700, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}},
+		})
+		if err := restoreCodexSessionArchive(archive, t.TempDir()); err == nil || !strings.Contains(err.Error(), "дубликат") {
+			t.Fatalf("duplicate error = %v", err)
+		}
+	})
+
+	t.Run("successful atomic replacement round-trip", func(t *testing.T) {
+		sourceRoot := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(sourceRoot, "sessions", "run"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sourceRoot, "sessions", "run", "rollout.jsonl"), []byte("round-trip"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		archive, err := createCodexSessionArchive(sourceRoot, secretInventory{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		targetRoot := t.TempDir()
+		if err := os.Mkdir(filepath.Join(targetRoot, "sessions"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(targetRoot, "sessions", "old"), []byte("old"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := restoreCodexSessionArchive(archive, targetRoot); err != nil {
+			t.Fatal(err)
+		}
+		body, err := os.ReadFile(filepath.Join(targetRoot, "sessions", "run", "rollout.jsonl"))
+		if err != nil || string(body) != "round-trip" {
+			t.Fatalf("round-trip body=%q error=%v", string(body), err)
+		}
+		if _, err := os.Stat(filepath.Join(targetRoot, "sessions", "old")); !os.IsNotExist(err) {
+			t.Fatalf("old target остался после atomic exchange: %v", err)
+		}
+	})
+}
+
+type testTarEntry struct {
+	header tar.Header
+	body   string
+}
+
+func encodeUSTARForTest(t *testing.T, entries []testTarEntry) string {
+	t.Helper()
+	var compressed bytes.Buffer
+	gzipWriter := gzip.NewWriter(&compressed)
+	tarWriter := tar.NewWriter(gzipWriter)
+	for _, entry := range entries {
+		header := entry.header
+		header.Size = int64(len(entry.body))
+		if err := tarWriter.WriteHeader(&header); err != nil {
+			t.Fatal(err)
+		}
+		if entry.body != "" {
+			if _, err := io.WriteString(tarWriter, entry.body); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(compressed.Bytes())
 }
 
 func TestSessionArchiveDirectoryEntryBoundaryRoundTrip(t *testing.T) {

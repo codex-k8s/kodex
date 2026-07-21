@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
@@ -16,18 +19,22 @@ func TestDockerRunArgumentsUseExactIdentityAndLoopbackRandomPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	arguments := dockerRunArguments("run-identity", image)
+	const expiresAt = int64(1900000000)
+	arguments := dockerRunArguments("run-identity", image, expiresAt)
 	for _, required := range []string{
+		"--rm", "--init", "--stop-timeout", "30",
 		"--name", "mc-postgres-test-run-identity",
 		"--label", postgresControllerLabel + "=run-identity",
+		"--label", postgresControllerLabel + "-expires-at=" + strconv.FormatInt(expiresAt, 10),
 		"--publish", "127.0.0.1::5432",
+		"--entrypoint", "/usr/bin/timeout", "12m", "/usr/local/bin/docker-entrypoint.sh", "postgres",
 	} {
 		if !slices.Contains(arguments, required) {
 			t.Fatalf("docker arguments не содержат %q: %#v", required, arguments)
 		}
 	}
-	if slices.Contains(arguments, "--rm") {
-		t.Fatal("Docker controller не должен терять identity до подтверждённого cleanup")
+	if slices.Contains(arguments, "network") {
+		t.Fatal("Docker controller не должен создавать persistent custom network")
 	}
 }
 
@@ -40,12 +47,12 @@ func TestPostgresControllerImagesRequireDigestAndExactMajorMapping(t *testing.T)
 		if err := validatePostgresControllerImage(major, image); err != nil {
 			t.Fatalf("validatePostgresControllerImage(%s): %v", major, err)
 		}
-		arguments := dockerRunArguments("run-identity", image)
-		if arguments[len(arguments)-1] != image {
+		arguments := dockerRunArguments("run-identity", image, 1900000000)
+		if !slices.Contains(arguments, image) {
 			t.Fatalf("Docker image для PG%s не закреплён", major)
 		}
-		pod := kubernetesPostgresPod("run-identity", image)
-		if pod.Spec.Containers[0].Image != image {
+		job := kubernetesPostgresJob("run-identity", image)
+		if job.Spec.Template.Spec.Containers[0].Image != image {
 			t.Fatalf("Kubernetes image для PG%s не закреплён", major)
 		}
 	}
@@ -76,35 +83,46 @@ func TestParseLoopbackDockerPortRejectsBroadOrAmbiguousBinding(t *testing.T) {
 	}
 }
 
-func TestKubernetesPostgresPodHasNoServiceAccountTokenOrPrivilegeExpansion(t *testing.T) {
-	pod := kubernetesPostgresPod("run-identity", "example.invalid/postgres:test")
-	if pod.GenerateName != "mc-postgres-test-" || pod.Labels[postgresControllerLabel] != "run-identity" {
-		t.Fatalf("Pod identity = %#v", pod.ObjectMeta)
+func TestKubernetesPostgresJobHasKillSafeLifetimeWithoutPrivilegeExpansion(t *testing.T) {
+	job := kubernetesPostgresJob("run-identity", "example.invalid/postgres:test")
+	if job.GenerateName != "mc-postgres-test-" || job.Labels[postgresControllerLabel] != "run-identity" {
+		t.Fatalf("Job identity = %#v", job.ObjectMeta)
 	}
-	if pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken {
+	if job.Spec.ActiveDeadlineSeconds == nil || *job.Spec.ActiveDeadlineSeconds != int64(postgresControllerLifetime/time.Second) ||
+		job.Spec.TTLSecondsAfterFinished == nil || *job.Spec.TTLSecondsAfterFinished != postgresControllerTTLSeconds ||
+		job.Spec.BackoffLimit == nil || *job.Spec.BackoffLimit != 0 {
+		t.Fatalf("Job lifetime = %#v", job.Spec)
+	}
+	pod := job.Spec.Template.Spec
+	if pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken {
 		t.Fatal("disposable PostgreSQL Pod получает ServiceAccount token")
 	}
-	if len(pod.Spec.Containers) != 1 || pod.Spec.Containers[0].SecurityContext == nil ||
-		pod.Spec.Containers[0].SecurityContext.AllowPrivilegeEscalation == nil || *pod.Spec.Containers[0].SecurityContext.AllowPrivilegeEscalation {
-		t.Fatalf("Pod security context = %#v", pod.Spec.Containers)
+	if len(pod.Containers) != 1 || pod.Containers[0].SecurityContext == nil ||
+		pod.Containers[0].SecurityContext.AllowPrivilegeEscalation == nil || *pod.Containers[0].SecurityContext.AllowPrivilegeEscalation {
+		t.Fatalf("Pod security context = %#v", pod.Containers)
 	}
-	if len(pod.Spec.Containers[0].SecurityContext.Capabilities.Drop) != 1 || pod.Spec.Containers[0].SecurityContext.Capabilities.Drop[0] != "ALL" {
+	if len(pod.Containers[0].SecurityContext.Capabilities.Drop) != 1 || pod.Containers[0].SecurityContext.Capabilities.Drop[0] != "ALL" {
 		t.Fatal("disposable PostgreSQL Pod не удаляет Linux capabilities")
 	}
 }
 
 func TestKubernetesPostgresServiceIsClusterInternalAndSelectsExactRun(t *testing.T) {
-	service := kubernetesPostgresService("run-identity")
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "postgres-job", UID: types.UID("job-uid")}}
+	service := kubernetesPostgresService("run-identity", job)
 	if service.Spec.Type != "ClusterIP" || service.Spec.Selector[postgresControllerLabel] != "run-identity" || service.Labels[postgresControllerLabel] != "run-identity" {
 		t.Fatalf("Service boundary = %#v", service)
 	}
 	if len(service.Spec.Ports) != 1 || service.Spec.Ports[0].Port != 5432 {
 		t.Fatalf("Service ports = %#v", service.Spec.Ports)
 	}
+	if len(service.OwnerReferences) != 1 || service.OwnerReferences[0].UID != job.UID || service.OwnerReferences[0].Kind != "Job" || service.OwnerReferences[0].Controller == nil || !*service.OwnerReferences[0].Controller {
+		t.Fatalf("Service ownerRef = %#v", service.OwnerReferences)
+	}
 }
 
 func TestKubernetesCleanupRefusesReplacementService(t *testing.T) {
-	service := kubernetesPostgresService("replacement-run")
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "postgres-job", UID: types.UID("job-uid")}}
+	service := kubernetesPostgresService("replacement-run", job)
 	service.Name = "mc-postgres-test-replacement"
 	service.GenerateName = ""
 	service.Namespace = "disposable-tests"
@@ -117,5 +135,12 @@ func TestKubernetesCleanupRefusesReplacementService(t *testing.T) {
 	current, readErr := client.CoreV1().Services(service.Namespace).Get(context.Background(), service.Name, metav1.GetOptions{})
 	if readErr != nil || current.UID != service.UID {
 		t.Fatalf("replacement Service был изменён: item=%#v error=%v", current, readErr)
+	}
+}
+
+func TestKubernetesControllerRefusesUnlabelledDisposableTargetBeforeMutation(t *testing.T) {
+	t.Setenv("MATTERCODEX_TEST_POSTGRES_K8S_NAMESPACE", "")
+	if _, err := startKubernetesPostgres(context.Background(), "15"); err == nil || !strings.Contains(err.Error(), "disposable namespace") {
+		t.Fatalf("kubernetes admission error = %v", err)
 	}
 }

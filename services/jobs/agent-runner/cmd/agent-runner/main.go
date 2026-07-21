@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -41,24 +42,29 @@ const (
 )
 
 const (
-	codexAuthCheckPrompt        = "ping: answer with exactly one word, pong. Do not use tools."
-	sessionAPIMaxAttempts       = 30
-	sessionAPIInitialRetryDelay = time.Second
-	sessionAPIMaxRetryDelay     = 10 * time.Second
-	capacityRetryPhase          = "capacity_retry"
-	capacityRetryExhaustedKey   = "codex-capacity-retries-exhausted"
-	capacityRetryCountKey       = "codex-capacity-retry-count"
-	failureCodeKey              = "failure-code"
-	providerPolicyBlockedCode   = "provider-policy-blocked"
-	providerPolicyBlockedStatus = "blocked"
-	maxCredentialFileBytes      = int64(2 << 20)
-	maxPublishedArtifactBytes   = int64(8 << 20)
-	maxSessionArchiveFileBytes  = int64(8 << 20)
-	maxSessionArchiveTotalBytes = int64(32 << 20)
-	maxSessionArchiveFiles      = 512
-	maxSessionArchiveEntries    = 1024
-	maxSessionArchiveTarBytes   = maxSessionArchiveTotalBytes + int64(maxSessionArchiveEntries*512+maxSessionArchiveFiles*511+1024)
-	maxProtectedValueBytes      = int64(64 << 20)
+	codexAuthCheckPrompt             = "ping: answer with exactly one word, pong. Do not use tools."
+	sessionAPIMaxAttempts            = 30
+	sessionAPIInitialRetryDelay      = time.Second
+	sessionAPIMaxRetryDelay          = 10 * time.Second
+	capacityRetryPhase               = "capacity_retry"
+	capacityRetryExhaustedKey        = "codex-capacity-retries-exhausted"
+	capacityRetryCountKey            = "codex-capacity-retry-count"
+	failureCodeKey                   = "failure-code"
+	providerPolicyBlockedCode        = "provider-policy-blocked"
+	providerPolicyBlockedStatus      = "blocked"
+	maxCredentialFileBytes           = int64(2 << 20)
+	maxKubeconfigSources             = 512
+	maxCredentialSources             = 512
+	maxCredentialSourceBytes         = int64(8 << 20)
+	maxCredentialRepresentations     = 8192
+	maxCredentialRepresentationBytes = int64(96 << 20)
+	maxPublishedArtifactBytes        = int64(8 << 20)
+	maxSessionArchiveFileBytes       = int64(8 << 20)
+	maxSessionArchiveTotalBytes      = int64(32 << 20)
+	maxSessionArchiveFiles           = 512
+	maxSessionArchiveEntries         = 1024
+	maxSessionArchiveTarBytes        = maxSessionArchiveTotalBytes + int64(maxSessionArchiveEntries*512+maxSessionArchiveFiles*511+1024)
+	maxProtectedValueBytes           = int64(64 << 20)
 )
 
 var codexCapacityRetryDelays = []time.Duration{time.Minute, 3 * time.Minute, 5 * time.Minute}
@@ -73,15 +79,16 @@ func (err sessionAPIStatusError) Error() string {
 }
 
 type runner struct {
-	failureLogs           []string
-	sessionArchiveCreator func(string, secretInventory) (string, error)
-	commandContext        func(context.Context, string, ...string) *exec.Cmd
-	ephemeralRoot         string
-	codexHome             string
-	rawArtifacts          string
-	secrets               secretInventory
-	safety                runSafety
-	credentialFiles       []string
+	failureLogs              []string
+	sessionArchiveCreator    func(string, secretInventory) (string, error)
+	commandContext           func(context.Context, string, ...string) *exec.Cmd
+	ephemeralRoot            string
+	codexHome                string
+	rawArtifacts             string
+	secrets                  secretInventory
+	safety                   runSafety
+	credentialFiles          []string
+	credentialWatcherFactory func() (credentialEventWatcher, error)
 }
 
 type githubAccount struct {
@@ -286,7 +293,7 @@ func (r *runner) runDeveloper(ctx context.Context) error {
 	if err := r.prepareCodexHome(ctx); err != nil {
 		return err
 	}
-	account, err := readGitHubAccount()
+	account, err := r.readGitHubAccount(ctx)
 	if err != nil {
 		return err
 	}
@@ -365,7 +372,7 @@ func (r *runner) runReviewer(ctx context.Context) error {
 	if err := r.prepareCodexHome(ctx); err != nil {
 		return err
 	}
-	account, err := readGitHubAccount()
+	account, err := r.readGitHubAccount(ctx)
 	if err != nil {
 		return err
 	}
@@ -436,7 +443,7 @@ func (r *runner) runChat(ctx context.Context) error {
 	}
 	extraEnv := []string{}
 	if os.Getenv("MATTERCODEX_GITHUB_ENABLED") == "true" {
-		account, err := readGitHubAccount()
+		account, err := r.readGitHubAccount(ctx)
 		if err != nil {
 			return err
 		}
@@ -477,7 +484,7 @@ func (r *runner) runSession(ctx context.Context) error {
 	extraEnv := []string{}
 	workDir := workspaceDir
 	if os.Getenv("MATTERCODEX_GITHUB_ENABLED") == "true" {
-		account, err := readGitHubAccount()
+		account, err := r.readGitHubAccount(ctx)
 		if err != nil {
 			return err
 		}
@@ -719,7 +726,9 @@ func (r *runner) prepareEphemeralRuntime() error {
 			return fmt.Errorf("эфемерный каталог runner не создан")
 		}
 	}
-	inventory, err := buildSecretInventory(os.Environ(), r.credentialFiles)
+	values := map[string]struct{}{}
+	collectEnvironmentSecretValues(values, os.Environ())
+	inventory, err := compileSecretInventory(values, map[string]int64{})
 	if err != nil {
 		r.cleanupEphemeralRuntime()
 		return err
@@ -828,7 +837,11 @@ func (r *runner) prepareCodexHome(ctx context.Context) error {
 	if err := writeCodexConfig(filepath.Join(r.codexHome, "config.toml")); err != nil {
 		return err
 	}
-	if err := copyFile(codexAuthPath, filepath.Join(r.codexHome, "auth.json"), 0o600); err != nil {
+	authBody, err := r.readCredentialFileWithEventGuard(ctx, codexAuthPath)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(r.codexHome, "auth.json"), authBody, 0o600); err != nil {
 		return err
 	}
 	if err := r.runLogged(ctx, "", []string{"CODEX_HOME=" + r.codexHome}, "codex-login-status.log", "codex", "login", "status"); err != nil {
@@ -892,8 +905,10 @@ func (r *runner) runCodexExec(ctx context.Context, workDir string, finalFile str
 	cmd.Stdin = strings.NewReader(protectedPrompt)
 	cmd.Stdout = events
 	cmd.Stderr = stderr
-	credentialGuard.start()
-	runErr := cmd.Run()
+	runErr := credentialGuard.start()
+	if runErr == nil {
+		runErr = cmd.Run()
+	}
 	_ = events.Close()
 	_ = stderr.Close()
 	runErr = credentialGuard.finish(runErr)
@@ -977,8 +992,10 @@ func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaim
 	cmd.Stdin = strings.NewReader(protectedPrompt)
 	cmd.Stdout = events
 	cmd.Stderr = stderr
-	credentialGuard.start()
-	runErr := cmd.Run()
+	runErr := credentialGuard.start()
+	if runErr == nil {
+		runErr = cmd.Run()
+	}
 	_ = events.Close()
 	_ = stderr.Close()
 	runErr = credentialGuard.finish(runErr)
@@ -1324,8 +1341,10 @@ func (r *runner) runLogged(ctx context.Context, dir string, extraEnv []string, l
 	cmd.Dir = dir
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
-	credentialGuard.start()
-	runErr := cmd.Run()
+	runErr := credentialGuard.start()
+	if runErr == nil {
+		runErr = cmd.Run()
+	}
 	_ = logFile.Close()
 	runErr = credentialGuard.finish(runErr)
 	if r.safety.isUnsafe() {
@@ -1362,8 +1381,10 @@ func (r *runner) capture(ctx context.Context, dir string, extraEnv []string, log
 	stdout := boundedStringWriter{limit: maxPublishedArtifactBytes}
 	cmd.Stdout = io.MultiWriter(&stdout, logFile)
 	cmd.Stderr = logFile
-	credentialGuard.start()
-	runErr := cmd.Run()
+	runErr := credentialGuard.start()
+	if runErr == nil {
+		runErr = cmd.Run()
+	}
 	_ = logFile.Close()
 	runErr = credentialGuard.finish(runErr)
 	if r.safety.isUnsafe() {
@@ -1701,10 +1722,14 @@ func printAuthJSON() error {
 	return err
 }
 
-func readGitHubAccount() (githubAccount, error) {
-	token, err := readRequiredSecretFile(gitHubTokenPath, "github token")
+func (r *runner) readGitHubAccount(ctx context.Context) (githubAccount, error) {
+	tokenBody, err := r.readCredentialFileWithEventGuard(ctx, gitHubTokenPath)
 	if err != nil {
 		return githubAccount{}, err
+	}
+	token := strings.TrimSpace(string(tokenBody))
+	if token == "" {
+		return githubAccount{}, fmt.Errorf("github token is empty")
 	}
 	username, err := readRequiredSecretFile(gitHubUserPath, "github username")
 	if err != nil {
@@ -1788,6 +1813,14 @@ type sessionArchiveLimitError struct {
 	Limit string
 }
 
+type credentialCorpusLimitError struct {
+	Limit string
+}
+
+func (err credentialCorpusLimitError) Error() string {
+	return "credential corpus отклонён: превышен серверный предел " + err.Limit
+}
+
 func (err sessionArchiveLimitError) Error() string {
 	return "архив сессии отклонён: превышен серверный предел " + err.Limit
 }
@@ -1799,6 +1832,7 @@ type secretInventory struct {
 	fragmentCandidates            []string
 	hasUnsupportedShortCredential bool
 	values                        map[string]struct{}
+	sources                       map[string]int64
 }
 
 type secretRedactor struct {
@@ -1812,6 +1846,7 @@ func newSecretRedactor(environment []string) secretRedactor {
 
 func buildSecretInventory(environment []string, explicitFiles []string) (secretInventory, error) {
 	values := map[string]struct{}{}
+	sources := map[string]int64{}
 	collectEnvironmentSecretValues(values, environment)
 	files := append(credentialFileSources(environment), explicitFiles...)
 	seenFiles := map[string]struct{}{}
@@ -1820,16 +1855,19 @@ func buildSecretInventory(environment []string, explicitFiles []string) (secretI
 		if path == "" {
 			continue
 		}
-		cleaned := filepath.Clean(path)
+		cleaned, err := canonicalCredentialPath(path)
+		if err != nil {
+			return secretInventory{}, err
+		}
 		if _, exists := seenFiles[cleaned]; exists {
 			continue
 		}
 		seenFiles[cleaned] = struct{}{}
-		if err := addCredentialFileValues(values, cleaned); err != nil {
+		if err := addCredentialFileValues(values, sources, cleaned); err != nil {
 			return secretInventory{}, err
 		}
 	}
-	return compileSecretInventory(values), nil
+	return compileSecretInventory(values, sources)
 }
 
 func collectEnvironmentSecretValues(values map[string]struct{}, environment []string) {
@@ -1865,13 +1903,22 @@ func runtimeEnvironmentNames(environment []string) map[string]bool {
 }
 
 func credentialFileSources(environment []string) []string {
-	paths := []string{
+	paths := defaultCredentialFileSources()
+	return append(paths, credentialFileEnvironmentSources(environment)...)
+}
+
+func defaultCredentialFileSources() []string {
+	return []string{
 		codexAuthPath,
 		filepath.Join(codexAuthDir, "auth.json"),
 		gitHubTokenPath,
 		kubernetesServiceAccountTokenPath,
 		matterCodexSessionTokenPath,
 	}
+}
+
+func credentialFileEnvironmentSources(environment []string) []string {
+	paths := []string{}
 	runtimeNames := runtimeEnvironmentNames(environment)
 	for _, item := range environment {
 		name, value, ok := strings.Cut(item, "=")
@@ -1885,13 +1932,26 @@ func credentialFileSources(environment []string) []string {
 	return paths
 }
 
-func addCredentialFileValues(values map[string]struct{}, path string) error {
-	body, exists, err := readCredentialSource(path)
+func addCredentialFileValues(values map[string]struct{}, sources map[string]int64, path string) error {
+	info, err := os.Stat(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("credential source недоступен")
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("credential source не является обычным файлом")
+	}
+	if info.Size() < 0 || info.Size() > maxCredentialFileBytes {
+		return boundedFileError{Kind: "credential source"}
+	}
+	if err := addCredentialSourceBudget(sources, path, info.Size()); err != nil {
 		return err
 	}
-	if !exists {
-		return nil
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("credential source не прочитан")
 	}
 	collectCredentialFileValues(values, body)
 	return nil
@@ -1954,26 +2014,70 @@ func addSecretValue(values map[string]struct{}, value string) {
 	}
 }
 
-func compileSecretInventory(values map[string]struct{}) secretInventory {
+type credentialRepresentationBudget struct {
+	count int
+	bytes int64
+}
+
+func (budget *credentialRepresentationBudget) add(value string) error {
+	return budget.addSize(int64(len(value)))
+}
+
+func (budget *credentialRepresentationBudget) addSize(size int64) error {
+	budget.count++
+	budget.bytes += size
+	if budget.count > maxCredentialRepresentations {
+		return credentialCorpusLimitError{Limit: "числа производных представлений"}
+	}
+	if budget.bytes > maxCredentialRepresentationBytes {
+		return credentialCorpusLimitError{Limit: "общего размера производных представлений"}
+	}
+	return nil
+}
+
+func compileSecretInventory(values map[string]struct{}, sources map[string]int64) (secretInventory, error) {
 	exact := map[string]struct{}{}
 	percentCanonical := map[string]struct{}{}
 	hexCanonical := map[string]struct{}{}
 	fragmentCandidates := map[string]struct{}{}
+	budget := credentialRepresentationBudget{}
 	hasShort := false
 	for value := range values {
 		if len(value) < 16 {
 			hasShort = true
 		}
 		for _, representation := range secretRepresentations(value) {
-			exact[representation] = struct{}{}
+			if _, exists := exact[representation]; !exists {
+				if err := budget.add(representation); err != nil {
+					return secretInventory{}, err
+				}
+				exact[representation] = struct{}{}
+			}
 		}
 		if len(value) >= 16 {
-			fragmentCandidates[value] = struct{}{}
+			if _, exists := fragmentCandidates[value]; !exists {
+				if err := budget.add(value); err != nil {
+					return secretInventory{}, err
+				}
+				fragmentCandidates[value] = struct{}{}
+			}
 		}
-		hexCanonical[hex.EncodeToString([]byte(value))] = struct{}{}
+		hexValue := hex.EncodeToString([]byte(value))
+		if _, exists := hexCanonical[hexValue]; !exists {
+			if err := budget.add(hexValue); err != nil {
+				return secretInventory{}, err
+			}
+			hexCanonical[hexValue] = struct{}{}
+		}
 		for _, encoded := range []string{url.QueryEscape(value), url.PathEscape(value)} {
 			if strings.Contains(encoded, "%") {
-				percentCanonical[normalizePercentEncoding(encoded)] = struct{}{}
+				canonical := normalizePercentEncoding(encoded)
+				if _, exists := percentCanonical[canonical]; !exists {
+					if err := budget.add(canonical); err != nil {
+						return secretInventory{}, err
+					}
+					percentCanonical[canonical] = struct{}{}
+				}
 			}
 		}
 	}
@@ -2007,11 +2111,12 @@ func compileSecretInventory(values map[string]struct{}) secretInventory {
 		fragmentCandidates:            orderedFragments,
 		hasUnsupportedShortCredential: hasShort,
 		values:                        values,
+		sources:                       sources,
 	}
 	if len(replacements) > 0 {
 		inventory.replacer = strings.NewReplacer(replacements...)
 	}
-	return inventory
+	return inventory, nil
 }
 
 func secretRepresentations(value string) []string {
@@ -2040,15 +2145,27 @@ func secretRepresentations(value string) []string {
 	return result
 }
 
-func (inventory secretInventory) merge(other secretInventory) secretInventory {
+func (inventory secretInventory) merge(other secretInventory) (secretInventory, error) {
 	values := make(map[string]struct{}, len(inventory.values)+len(other.values))
+	sources := make(map[string]int64, len(inventory.sources)+len(other.sources))
 	for value := range inventory.values {
 		values[value] = struct{}{}
 	}
 	for value := range other.values {
 		values[value] = struct{}{}
 	}
-	return compileSecretInventory(values)
+	for path, size := range inventory.sources {
+		sources[path] = size
+	}
+	for path, size := range other.sources {
+		if existing, exists := sources[path]; !exists || size > existing {
+			sources[path] = size
+		}
+	}
+	if err := validateCredentialSourceBudget(sources); err != nil {
+		return secretInventory{}, err
+	}
+	return compileSecretInventory(values, sources)
 
 }
 
@@ -2555,25 +2672,67 @@ func restoreCodexSessionArchive(encoded string, root string) error {
 	if err != nil {
 		return fmt.Errorf("decode codex session archive: %w", err)
 	}
-	gzipReader, err := gzip.NewReader(bytes.NewReader(raw))
+	if err := validateSessionArchive(raw, nil); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return err
+	}
+	stagingRoot, err := os.MkdirTemp(root, ".sessions-restore-")
+	if err != nil {
+		return fmt.Errorf("private staging восстановления сессии не создан")
+	}
+	if err := os.Chmod(stagingRoot, 0o700); err != nil {
+		_ = os.RemoveAll(stagingRoot)
+		return fmt.Errorf("private staging восстановления сессии не защищён")
+	}
+	defer os.RemoveAll(stagingRoot)
+	if err := validateSessionArchive(raw, func(header *tar.Header, name string, reader io.Reader) error {
+		target := filepath.Join(stagingRoot, filepath.FromSlash(name))
+		switch header.Typeflag {
+		case tar.TypeDir:
+			return os.Mkdir(target, 0o700)
+		case tar.TypeReg:
+			file, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+			if err != nil {
+				return err
+			}
+			_, copyErr := io.CopyN(file, reader, header.Size)
+			syncErr := file.Sync()
+			closeErr := file.Close()
+			return errors.Join(copyErr, syncErr, closeErr)
+		default:
+			return fmt.Errorf("архив сессии содержит недопустимый тип записи")
+		}
+	}); err != nil {
+		return err
+	}
+	return replaceDirectoryAtomically(filepath.Join(stagingRoot, "sessions"), filepath.Join(root, "sessions"))
+}
+
+type sessionArchiveVisitor func(header *tar.Header, canonicalName string, reader io.Reader) error
+
+func validateSessionArchive(raw []byte, visitor sessionArchiveVisitor) error {
+	compressed := bytes.NewReader(raw)
+	gzipReader, err := gzip.NewReader(compressed)
 	if err != nil {
 		return fmt.Errorf("open codex session archive: %w", err)
 	}
-	defer gzipReader.Close()
+	gzipReader.Multistream(false)
 	limitedArchive := &io.LimitedReader{R: gzipReader, N: maxSessionArchiveTarBytes + 1}
 	tarReader := tar.NewReader(limitedArchive)
 	fileCount := 0
 	entryCount := 0
 	totalBytes := int64(0)
+	previousName := ""
+	directories := map[string]struct{}{}
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
-			if limitedArchive.N <= 0 {
-				return sessionArchiveLimitError{Limit: "несжатого размера"}
-			}
-			return nil
+			break
 		}
 		if err != nil {
+			_ = gzipReader.Close()
 			return fmt.Errorf("read codex session archive: %w", err)
 		}
 		entryCount++
@@ -2581,70 +2740,138 @@ func restoreCodexSessionArchive(encoded string, root string) error {
 			return sessionArchiveLimitError{Limit: "количества записей"}
 		}
 		if header.Format != tar.FormatUSTAR {
+			_ = gzipReader.Close()
 			return fmt.Errorf("архив сессии содержит недопустимый формат записи")
 		}
-		target, err := safeArchiveTarget(root, header.Name)
+		name, err := canonicalArchiveName(header.Name)
 		if err != nil {
+			_ = gzipReader.Close()
 			return err
+		}
+		if entryCount == 1 {
+			if name != "sessions" || header.Typeflag != tar.TypeDir {
+				_ = gzipReader.Close()
+				return fmt.Errorf("архив сессии не содержит canonical directory root")
+			}
+		} else if name <= previousName {
+			_ = gzipReader.Close()
+			return fmt.Errorf("архив сессии содержит дубликат или нарушенный порядок записей")
+		}
+		if header.Linkname != "" || header.Mode < 0 || header.Mode&^0o777 != 0 || header.Devmajor != 0 || header.Devminor != 0 {
+			_ = gzipReader.Close()
+			return fmt.Errorf("архив сессии содержит недопустимую USTAR семантику")
+		}
+		parent := filepath.ToSlash(filepath.Dir(filepath.FromSlash(name)))
+		if name != "sessions" {
+			if _, exists := directories[parent]; !exists {
+				_ = gzipReader.Close()
+				return fmt.Errorf("архив сессии содержит запись до canonical parent directory")
+			}
 		}
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0o700); err != nil {
-				return err
+			if header.Size != 0 {
+				_ = gzipReader.Close()
+				return fmt.Errorf("архив сессии содержит directory с данными")
 			}
+			directories[name] = struct{}{}
 		case tar.TypeReg:
 			fileCount++
 			totalBytes += header.Size
 			if fileCount > maxSessionArchiveFiles || header.Size < 0 || header.Size > maxSessionArchiveFileBytes {
+				_ = gzipReader.Close()
 				return sessionArchiveLimitError{Limit: "размера или количества файлов"}
 			}
 			if totalBytes > maxSessionArchiveTotalBytes {
+				_ = gzipReader.Close()
 				return sessionArchiveLimitError{Limit: "общего размера"}
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
-				return err
-			}
-			file, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-			if err != nil {
-				return err
-			}
-			if _, err := io.CopyN(file, tarReader, header.Size); err != nil {
-				_ = file.Close()
-				return err
-			}
-			if err := file.Close(); err != nil {
-				return err
+			if visitor != nil {
+				if err := visitor(header, name, tarReader); err != nil {
+					_ = gzipReader.Close()
+					return err
+				}
+			} else if _, err := io.CopyN(io.Discard, tarReader, header.Size); err != nil {
+				_ = gzipReader.Close()
+				return fmt.Errorf("архив сессии содержит усечённый файл")
 			}
 		default:
+			_ = gzipReader.Close()
 			return fmt.Errorf("архив сессии содержит недопустимый тип записи")
 		}
+		if visitor != nil && header.Typeflag == tar.TypeDir {
+			if err := visitor(header, name, tarReader); err != nil {
+				_ = gzipReader.Close()
+				return err
+			}
+		}
+		previousName = name
 	}
+	if entryCount == 0 {
+		_ = gzipReader.Close()
+		return fmt.Errorf("архив сессии не содержит canonical directory root")
+	}
+	trailing, err := io.ReadAll(limitedArchive)
+	if err != nil {
+		_ = gzipReader.Close()
+		return fmt.Errorf("архив сессии не прошёл проверку gzip")
+	}
+	for _, value := range trailing {
+		if value != 0 {
+			_ = gzipReader.Close()
+			return fmt.Errorf("архив сессии содержит недопустимые trailing data")
+		}
+	}
+	if limitedArchive.N <= 0 {
+		_ = gzipReader.Close()
+		return sessionArchiveLimitError{Limit: "несжатого размера"}
+	}
+	if err := gzipReader.Close(); err != nil || compressed.Len() != 0 {
+		return fmt.Errorf("архив сессии содержит недопустимый gzip stream")
+	}
+	return nil
 }
 
-func safeArchiveTarget(root string, name string) (string, error) {
-	name = filepath.Clean(filepath.FromSlash(name))
-	if filepath.IsAbs(name) || name == "." || strings.HasPrefix(name, ".."+string(filepath.Separator)) || name == ".." {
-		return "", fmt.Errorf("unsafe archive path %q", name)
+func canonicalArchiveName(rawName string) (string, error) {
+	if rawName == "" || strings.Contains(rawName, "\\") {
+		return "", fmt.Errorf("unsafe archive path")
 	}
-	if name != "sessions" && !strings.HasPrefix(name, "sessions"+string(filepath.Separator)) {
-		return "", fmt.Errorf("unexpected archive path %q", name)
+	cleaned := filepath.ToSlash(filepath.Clean(filepath.FromSlash(rawName)))
+	if cleaned != rawName || filepath.IsAbs(filepath.FromSlash(rawName)) || cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", fmt.Errorf("unsafe archive path")
 	}
-	return filepath.Join(root, name), nil
+	if cleaned != "sessions" && !strings.HasPrefix(cleaned, "sessions/") {
+		return "", fmt.Errorf("unexpected archive path")
+	}
+	return cleaned, nil
 }
 
-func copyFile(source string, target string, mode os.FileMode) error {
-	input, err := os.Open(source)
-	if err != nil {
-		return err
+func replaceDirectoryAtomically(source string, target string) error {
+	sourceInfo, err := os.Lstat(source)
+	if err != nil || !sourceInfo.IsDir() || sourceInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("staging directory восстановления недоступен")
 	}
-	defer input.Close()
-	output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
-	if err != nil {
-		return err
+	targetInfo, err := os.Lstat(target)
+	if os.IsNotExist(err) {
+		if err := unix.Renameat2(unix.AT_FDCWD, source, unix.AT_FDCWD, target, unix.RENAME_NOREPLACE); err != nil {
+			return fmt.Errorf("atomic publication каталога сессий не выполнена")
+		}
+		return nil
 	}
-	defer output.Close()
-	_, err = io.Copy(output, input)
-	return err
+	if err != nil || !targetInfo.IsDir() || targetInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("существующий каталог сессий имеет недопустимый тип")
+	}
+	if err := unix.Renameat2(unix.AT_FDCWD, source, unix.AT_FDCWD, target, unix.RENAME_EXCHANGE); err != nil {
+		return fmt.Errorf("atomic exchange каталога сессий не выполнен")
+	}
+	if err := os.RemoveAll(source); err == nil {
+		return nil
+	}
+	if rollbackErr := unix.Renameat2(unix.AT_FDCWD, source, unix.AT_FDCWD, target, unix.RENAME_EXCHANGE); rollbackErr != nil {
+		return fmt.Errorf("atomic exchange каталога сессий не очищен и rollback не подтверждён")
+	}
+	_ = os.RemoveAll(source)
+	return fmt.Errorf("atomic exchange каталога сессий отменён из-за ошибки cleanup")
 }
 
 func requiredEnv(name string) string {

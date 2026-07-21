@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,11 +12,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/fsnotify/fsnotify"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func TestMain(testMain *testing.M) {
@@ -566,7 +570,11 @@ func TestCredentialSourcesAreSnapshottedAndRotationCancelsWithoutPublication(t *
 		t.Run(testCase.name, func(t *testing.T) {
 			directory := t.TempDir()
 			source := filepath.Join(directory, "credential-source")
-			if err := os.WriteFile(source, []byte("mc-rotation-before-71b8a920"), 0o600); err != nil {
+			sourceBody := "mc-rotation-before-71b8a920"
+			if testCase.credentialEnv == "KUBECONFIG" {
+				sourceBody = "apiVersion: v1\nkind: Config\nusers:\n- name: synthetic\n  user:\n    token: mc-rotation-before-71b8a920\n"
+			}
+			if err := os.WriteFile(source, []byte(sourceBody), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			started := filepath.Join(directory, "started")
@@ -715,6 +723,484 @@ func runCredentialRotationHelper() int {
 		_ = os.WriteFile(finalPath, body, 0o600)
 	}
 	return 0
+}
+
+func TestStructuredKubeconfigSourcesAreBoundedSnapshottedAndRewritten(t *testing.T) {
+	directory := t.TempDir()
+	linked := map[string]string{
+		"token":  "mc-kube-linked-token-1b0eb619",
+		"key":    "mc-kube-linked-key-1b0eb620",
+		"cert":   "mc-kube-linked-cert-1b0eb621",
+		"ca":     "mc-kube-linked-ca-1b0eb622",
+		"inline": "mc-kube-inline-token-1b0eb623",
+		"server": "mc-kube-server-auth-1b0eb625",
+		"proxy":  "mc-kube-proxy-pass-1b0eb626",
+	}
+	paths := map[string]string{}
+	for _, name := range []string{"token", "key", "cert", "ca"} {
+		value := linked[name]
+		paths[name] = filepath.Join(directory, name)
+		if err := os.WriteFile(paths[name], []byte(value), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	firstKubeconfig := filepath.Join(directory, "kubeconfig-a")
+	secondKubeconfig := filepath.Join(directory, "kubeconfig-b")
+	firstBody := fmt.Sprintf("apiVersion: v1\nkind: Config\nusers:\n- name: first\n  user:\n    token: %s\n    tokenFile: %s\n    client-key-data: %s\nclusters:\n- name: first\n  cluster:\n    server: https://%s@kubernetes.invalid\n    proxy-url: https://proxy-user:%s@proxy.invalid\n    certificate-authority: %s\n", linked["inline"], filepath.Base(paths["token"]), base64.StdEncoding.EncodeToString([]byte("mc-kube-inline-key-1b0eb624")), linked["server"], linked["proxy"], filepath.Base(paths["ca"]))
+	secondBody := fmt.Sprintf("apiVersion: v1\nkind: Config\nusers:\n- name: second\n  user:\n    client-key: %s\n    client-certificate: %s\nclusters:\n- name: second\n  cluster:\n    server: https://kubernetes.invalid\n", filepath.Base(paths["key"]), filepath.Base(paths["cert"]))
+	for path, body := range map[string]string{firstKubeconfig: firstBody, secondKubeconfig: secondBody} {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	testRunner := &runner{credentialFiles: []string{}}
+	t.Cleanup(testRunner.cleanupEphemeralRuntime)
+	environment := []string{"KUBECONFIG=" + strings.Join([]string{firstKubeconfig, secondKubeconfig}, string(os.PathListSeparator))}
+	command, guard, err := testRunner.guardedCommand(context.Background(), environment, os.Args[0], "-test.run=^$")
+	if err != nil {
+		t.Fatalf("guardedCommand() error = %v", err)
+	}
+	defer guard.abort()
+	rewrittenValue := environmentValue(command.Env, "KUBECONFIG")
+	rewrittenKubeconfigs := filepath.SplitList(rewrittenValue)
+	if len(rewrittenKubeconfigs) != 2 {
+		t.Fatalf("rewritten KUBECONFIG entries = %d", len(rewrittenKubeconfigs))
+	}
+	observedReferences := map[string]string{}
+	for _, path := range rewrittenKubeconfigs {
+		if !strings.HasPrefix(path, guard.snapshotRoot+string(filepath.Separator)) || path == firstKubeconfig || path == secondKubeconfig {
+			t.Fatalf("kubeconfig не переведён в private snapshot: %q", path)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		config, err := clientcmd.Load(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, authInfo := range config.AuthInfos {
+			for name, reference := range map[string]string{"token": authInfo.TokenFile, "key": authInfo.ClientKey, "cert": authInfo.ClientCertificate} {
+				if reference != "" {
+					observedReferences[name] = reference
+				}
+			}
+		}
+		for _, cluster := range config.Clusters {
+			if cluster.CertificateAuthority != "" {
+				observedReferences["ca"] = cluster.CertificateAuthority
+			}
+		}
+	}
+	for name, original := range paths {
+		rewritten := observedReferences[name]
+		if rewritten == "" || rewritten == original || !strings.HasPrefix(rewritten, guard.snapshotRoot+string(filepath.Separator)) {
+			t.Fatalf("linked %s ref не переписан: %q", name, rewritten)
+		}
+		info, err := os.Stat(rewritten)
+		body, readErr := os.ReadFile(rewritten)
+		if err != nil || readErr != nil || info.Mode().Perm() != 0o600 || string(body) != linked[name] {
+			t.Fatalf("linked %s snapshot не совпал: stat=%v read=%v", name, err, readErr)
+		}
+	}
+	for _, secret := range []string{linked["inline"], linked["token"], linked["key"], linked["cert"], linked["server"], linked["proxy"], "mc-kube-inline-key-1b0eb624", base64.StdEncoding.EncodeToString([]byte("proxy-user:" + linked["proxy"]))} {
+		protected, protectErr := testRunner.secrets.protect("transport: " + secret)
+		if protectErr == nil && strings.Contains(protected, secret) {
+			t.Fatal("фактическое kubeconfig credential value отсутствует в inventory")
+		}
+	}
+}
+
+func TestStructuredKubeconfigRejectsDynamicProvidersBeforeChild(t *testing.T) {
+	for name, provider := range map[string]string{
+		"exec":          "exec:\n      command: credential-plugin",
+		"auth-provider": "auth-provider:\n      name: oidc",
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "kubeconfig")
+			body := "apiVersion: v1\nkind: Config\nusers:\n- name: synthetic\n  user:\n    " + provider + "\n"
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			testRunner := &runner{credentialFiles: []string{}}
+			t.Cleanup(testRunner.cleanupEphemeralRuntime)
+			_, _, err := testRunner.guardedCommand(context.Background(), []string{"KUBECONFIG=" + path}, os.Args[0], "-test.run=^$")
+			var providerErr unsupportedCredentialProviderError
+			if !errors.As(err, &providerErr) {
+				t.Fatalf("dynamic provider error = %T", err)
+			}
+		})
+	}
+}
+
+func TestKubeconfigLinkedFileEventCancelsRunningChild(t *testing.T) {
+	directory := t.TempDir()
+	tokenPath := filepath.Join(directory, "token")
+	kubeconfigPath := filepath.Join(directory, "kubeconfig")
+	if err := os.WriteFile(tokenPath, []byte("mc-linked-before-5517e301"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body := "apiVersion: v1\nkind: Config\nusers:\n- name: synthetic\n  user:\n    tokenFile: token\n"
+	if err := os.WriteFile(kubeconfigPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	testRunner := &runner{credentialFiles: []string{}}
+	t.Cleanup(testRunner.cleanupEphemeralRuntime)
+	cmd, guard, err := testRunner.guardedCommand(context.Background(), []string{
+		"KUBECONFIG=" + kubeconfigPath,
+		"MATTERCODEX_TEST_GUARD_SLEEP=1",
+	}, os.Args[0], "-test.run=TestCredentialGuardSleepHelper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := guard.start(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		_ = guard.finish(err)
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tokenPath, []byte("mc-linked-after--5517e302"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runErr := guard.finish(cmd.Wait())
+	var rotationErr credentialRotationError
+	if !errors.As(runErr, &rotationErr) || !testRunner.safety.isUnsafe() {
+		t.Fatalf("linked rotation error=%T unsafe=%t", runErr, testRunner.safety.isUnsafe())
+	}
+}
+
+func TestCredentialGuardSleepHelper(t *testing.T) {
+	if os.Getenv("MATTERCODEX_TEST_GUARD_SLEEP") != "1" {
+		return
+	}
+	time.Sleep(30 * time.Second)
+}
+
+func TestRuntimeCodexAuthMutationCancelsChildAndBlocksPublication(t *testing.T) {
+	const (
+		oldCredential = "mc-runtime-auth-old-6e74d901"
+		newCredential = "mc-runtime-auth-new-6e74d902"
+		turnID        = int64(790201)
+	)
+	testRunner := &runner{credentialFiles: []string{}, commandContext: func(ctx context.Context, _ string, args ...string) *exec.Cmd {
+		finalPath := ""
+		for index, argument := range args {
+			if argument == "--output-last-message" && index+1 < len(args) {
+				finalPath = args[index+1]
+			}
+		}
+		return exec.CommandContext(ctx, os.Args[0], "-test.run=TestRuntimeCodexAuthMutationHelper", "--", finalPath)
+	}}
+	if err := testRunner.prepareEphemeralRuntime(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(testRunner.cleanupEphemeralRuntime)
+	if err := os.WriteFile(filepath.Join(testRunner.codexHome, "config.toml"), []byte("sandbox_mode = \"danger-full-access\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	authBody, _ := json.Marshal(map[string]any{"tokens": map[string]string{"access_token": oldCredential}})
+	if err := os.WriteFile(filepath.Join(testRunner.codexHome, "auth.json"), authBody, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	finalName := "runtime-auth-final.md"
+	for _, path := range []string{sessionTurnEventsPath(turnID, 0), sessionTurnStderrPath(turnID, 0), filepath.Join(artifactsDir, finalName)} {
+		_ = os.Remove(path)
+		path := path
+		t.Cleanup(func() { _ = os.Remove(path) })
+	}
+	_, _, runErr := testRunner.runCodexSessionTurn(context.Background(), sessionTurnClaimResponse{TurnID: turnID, Prompt: "runtime auth mutation"}, "", finalName, t.TempDir(), []string{
+		"MATTERCODEX_TEST_RUNTIME_AUTH_MUTATION=1",
+		"MATTERCODEX_TEST_RUNTIME_AUTH_NEW=" + newCredential,
+	}, 0)
+	var rotationErr credentialRotationError
+	if !errors.As(runErr, &rotationErr) || !testRunner.safety.isUnsafe() {
+		t.Fatalf("runtime auth mutation error=%T unsafe=%t", runErr, testRunner.safety.isUnsafe())
+	}
+	for _, path := range []string{sessionTurnEventsPath(turnID, 0), sessionTurnStderrPath(turnID, 0), filepath.Join(artifactsDir, finalName)} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("unsafe runtime auth output опубликован: %s", filepath.Base(path))
+		}
+	}
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		requests++
+		response.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	err := testRunner.sessionJSONOnce(context.Background(), server.Client(), http.MethodPost, server.URL, "session", "token", "turns/status", sessionTurnStatusRequest{RunID: "run", Phase: newCredential}, nil)
+	if !errors.As(err, &rotationErr) || requests != 0 {
+		t.Fatalf("runtime auth network boundary: error=%T requests=%d", err, requests)
+	}
+}
+
+func TestRuntimeCodexAuthMutationHelper(t *testing.T) {
+	if os.Getenv("MATTERCODEX_TEST_RUNTIME_AUTH_MUTATION") != "1" {
+		return
+	}
+	credential := os.Getenv("MATTERCODEX_TEST_RUNTIME_AUTH_NEW")
+	authBody, _ := json.Marshal(map[string]any{"tokens": map[string]string{"access_token": credential}})
+	if err := os.WriteFile(filepath.Join(os.Getenv("CODEX_HOME"), "auth.json"), authBody, 0o600); err != nil {
+		os.Exit(2)
+	}
+	_, _ = fmt.Fprintln(os.Stdout, credential)
+	if len(os.Args) > 0 {
+		_ = os.WriteFile(os.Args[len(os.Args)-1], []byte(credential), 0o600)
+	}
+	time.Sleep(30 * time.Second)
+}
+
+func TestCredentialEventGuardRejectsAllMutationShapesAndTransientMetadataRestore(t *testing.T) {
+	for _, mutation := range []string{"write-restore-metadata", "create", "delete", "rename"} {
+		t.Run(mutation, func(t *testing.T) {
+			directory := t.TempDir()
+			source := filepath.Join(directory, "credential")
+			original := "mc-event-before-90b7a610"
+			if mutation != "create" {
+				if err := os.WriteFile(source, []byte(original), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			testRunner := &runner{credentialFiles: []string{source}}
+			t.Cleanup(testRunner.cleanupEphemeralRuntime)
+			_, guard, err := testRunner.guardedCommand(context.Background(), nil, os.Args[0], "-test.run=^$")
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch mutation {
+			case "write-restore-metadata":
+				info, err := os.Stat(source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				rotated := "mc-event-rotate-90b7a611"
+				if len(rotated) != len(original) {
+					t.Fatal("test fixture lengths differ")
+				}
+				if err := os.WriteFile(source, []byte(rotated), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chtimes(source, info.ModTime(), info.ModTime()); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(source, []byte(original), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chtimes(source, info.ModTime(), info.ModTime()); err != nil {
+					t.Fatal(err)
+				}
+			case "create":
+				if err := os.WriteFile(source, []byte("mc-event-created-90b7a612"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			case "delete":
+				if err := os.Remove(source); err != nil {
+					t.Fatal(err)
+				}
+			case "rename":
+				if err := os.Rename(source, filepath.Join(directory, "credential-replaced")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			deadline := time.Now().Add(2 * time.Second)
+			for !testRunner.safety.isUnsafe() && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			var rotationErr credentialRotationError
+			if err := guard.start(); !errors.As(err, &rotationErr) || !testRunner.safety.isUnsafe() {
+				t.Fatalf("mutation %s: start error=%T unsafe=%t", mutation, err, testRunner.safety.isUnsafe())
+			}
+			if err := guard.finish(nil); !errors.As(err, &rotationErr) {
+				t.Fatalf("mutation %s: finish error=%T", mutation, err)
+			}
+		})
+	}
+}
+
+type fakeCredentialEventWatcher struct {
+	events    chan fsnotify.Event
+	errors    chan error
+	closeOnce sync.Once
+	onAdd     func(string)
+}
+
+func newFakeCredentialEventWatcher() *fakeCredentialEventWatcher {
+	return &fakeCredentialEventWatcher{events: make(chan fsnotify.Event, 64), errors: make(chan error, 8)}
+}
+
+func (watcher *fakeCredentialEventWatcher) Add(path string) error {
+	if watcher.onAdd != nil {
+		watcher.onAdd(path)
+	}
+	return nil
+}
+
+func (watcher *fakeCredentialEventWatcher) Close() error {
+	watcher.closeOnce.Do(func() {
+		close(watcher.events)
+		close(watcher.errors)
+	})
+	return nil
+}
+
+func (watcher *fakeCredentialEventWatcher) Events() <-chan fsnotify.Event { return watcher.events }
+func (watcher *fakeCredentialEventWatcher) Errors() <-chan error          { return watcher.errors }
+func (watcher *fakeCredentialEventWatcher) TriggerSync(path string) error {
+	watcher.events <- fsnotify.Event{Name: path, Op: fsnotify.Create}
+	return nil
+}
+
+func TestCredentialEventGuardFailsClosedOnReadBeforeWatchAndWatcherErrors(t *testing.T) {
+	t.Run("read-before-watch", func(t *testing.T) {
+		source := filepath.Join(t.TempDir(), "credential")
+		if err := os.WriteFile(source, []byte("mc-watch-before-2902f801"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		watcher := newFakeCredentialEventWatcher()
+		var once sync.Once
+		watcher.onAdd = func(path string) {
+			if path != filepath.Dir(source) {
+				return
+			}
+			once.Do(func() {
+				_ = os.WriteFile(source, []byte("mc-watch-during-2902f802"), 0o600)
+				watcher.events <- fsnotify.Event{Name: source, Op: fsnotify.Write}
+			})
+		}
+		testRunner := &runner{
+			credentialFiles: []string{source},
+			credentialWatcherFactory: func() (credentialEventWatcher, error) {
+				return watcher, nil
+			},
+		}
+		t.Cleanup(testRunner.cleanupEphemeralRuntime)
+		_, _, err := testRunner.guardedCommand(context.Background(), nil, os.Args[0], "-test.run=^$")
+		var rotationErr credentialRotationError
+		if !errors.As(err, &rotationErr) || !testRunner.safety.isUnsafe() {
+			t.Fatalf("read-before-watch error=%T unsafe=%t", err, testRunner.safety.isUnsafe())
+		}
+	})
+
+	for _, watcherError := range []error{fsnotify.ErrEventOverflow, errors.New("synthetic watcher failure")} {
+		t.Run(watcherError.Error(), func(t *testing.T) {
+			source := filepath.Join(t.TempDir(), "credential")
+			if err := os.WriteFile(source, []byte("mc-watch-error-2902f803"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			watcher := newFakeCredentialEventWatcher()
+			testRunner := &runner{
+				credentialFiles: []string{source},
+				credentialWatcherFactory: func() (credentialEventWatcher, error) {
+					return watcher, nil
+				},
+			}
+			t.Cleanup(testRunner.cleanupEphemeralRuntime)
+			_, guard, err := testRunner.guardedCommand(context.Background(), nil, os.Args[0], "-test.run=^$")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(testRunner.rawArtifacts, "raw"), []byte("unsafe"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(testRunner.codexHome, "sessions"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			watcher.errors <- watcherError
+			deadline := time.Now().Add(time.Second)
+			for !testRunner.safety.isUnsafe() && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			var rotationErr credentialRotationError
+			if err := guard.finish(nil); !errors.As(err, &rotationErr) {
+				t.Fatalf("watcher error result = %T", err)
+			}
+			if _, err := os.Stat(testRunner.rawArtifacts); !os.IsNotExist(err) {
+				t.Fatalf("watcher error не удалил raw staging: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(testRunner.codexHome, "sessions")); !os.IsNotExist(err) {
+				t.Fatalf("watcher error не удалил session staging: %v", err)
+			}
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+				requests++
+				response.WriteHeader(http.StatusNoContent)
+			}))
+			defer server.Close()
+			err = testRunner.sessionJSONOnce(context.Background(), server.Client(), http.MethodPost, server.URL, "session", "token", "turns/status", sessionTurnStatusRequest{RunID: "run", Phase: "safe"}, nil)
+			if !errors.As(err, &rotationErr) || requests != 0 {
+				t.Fatalf("watcher error network boundary: error=%T requests=%d", err, requests)
+			}
+		})
+	}
+}
+
+func TestCredentialCorpusServerOwnedBoundaries(t *testing.T) {
+	sources := map[string]int64{}
+	for index := 0; index < maxCredentialSources; index++ {
+		if err := addCredentialSourceBudget(sources, fmt.Sprintf("/synthetic/source-%04d", index), 0); err != nil {
+			t.Fatalf("source boundary %d rejected: %v", index, err)
+		}
+	}
+	if err := addCredentialSourceBudget(sources, "/synthetic/source-over", 0); err == nil {
+		t.Fatal("source count above boundary accepted")
+	}
+	for _, size := range []int64{maxCredentialSourceBytes - 1, maxCredentialSourceBytes, maxCredentialSourceBytes + 1} {
+		corpus := map[string]int64{}
+		err := addCredentialSourceBudget(corpus, "/synthetic/aggregate", size)
+		if size <= maxCredentialSourceBytes && err != nil || size > maxCredentialSourceBytes && err == nil {
+			t.Fatalf("aggregate source bytes %d: %v", size, err)
+		}
+	}
+	for _, count := range []int{maxCredentialRepresentations - 1, maxCredentialRepresentations, maxCredentialRepresentations + 1} {
+		budget := credentialRepresentationBudget{}
+		var err error
+		for index := 0; index < count; index++ {
+			err = budget.add("x")
+			if err != nil {
+				break
+			}
+		}
+		if count <= maxCredentialRepresentations && err != nil || count > maxCredentialRepresentations && err == nil {
+			t.Fatalf("representation count %d: %v", count, err)
+		}
+	}
+	for _, size := range []int64{maxCredentialRepresentationBytes - 1, maxCredentialRepresentationBytes, maxCredentialRepresentationBytes + 1} {
+		budget := credentialRepresentationBudget{}
+		err := budget.addSize(size)
+		if size <= maxCredentialRepresentationBytes && err != nil || size > maxCredentialRepresentationBytes && err == nil {
+			t.Fatalf("representation bytes %d: %v", size, err)
+		}
+	}
+}
+
+func TestKubeconfigSourceCountAcceptsBelowBoundaryAndRejects513(t *testing.T) {
+	for _, count := range []int{16, maxKubeconfigSources, maxKubeconfigSources + 1} {
+		t.Run(fmt.Sprintf("%d", count), func(t *testing.T) {
+			directory := t.TempDir()
+			paths := make([]string, 0, count)
+			for index := 0; index < count; index++ {
+				path := filepath.Join(directory, fmt.Sprintf("kubeconfig-%04d", index))
+				if err := os.WriteFile(path, []byte("apiVersion: v1\nkind: Config\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				paths = append(paths, path)
+			}
+			testRunner := &runner{credentialFiles: []string{}}
+			t.Cleanup(testRunner.cleanupEphemeralRuntime)
+			_, guard, err := testRunner.guardedCommand(context.Background(), []string{"KUBECONFIG=" + strings.Join(paths, string(os.PathListSeparator))}, os.Args[0], "-test.run=^$")
+			if guard != nil {
+				guard.abort()
+			}
+			var limitErr credentialCorpusLimitError
+			if count <= maxKubeconfigSources && err != nil {
+				t.Fatalf("KUBECONFIG sources at or below boundary rejected: %v", err)
+			}
+			if count > maxKubeconfigSources && !errors.As(err, &limitErr) {
+				t.Fatalf("513 KUBECONFIG sources error = %T", err)
+			}
+		})
+	}
 }
 
 func mustTable(t *testing.T, parent map[string]any, key string) map[string]any {

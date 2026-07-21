@@ -44,4 +44,33 @@ if grep -Eq 'return "pgvector/pgvector:0\.8\.5-pg(15|16)"' "$controller_source";
   exit 1
 fi
 
+for lifetime_guard in \
+  '"--rm"' \
+  '"--entrypoint", "/usr/bin/timeout"' \
+  'ActiveDeadlineSeconds:' \
+  'TTLSecondsAfterFinished:' \
+  'NewControllerRef(owner'
+do
+  if ! grep -Fq "$lifetime_guard" "$controller_source"; then
+    echo "FAIL: PostgreSQL controller не имеет независимого kill/OOM-safe lifetime guard" >&2
+    exit 1
+  fi
+done
+if grep -Fq '"network", "create"' "$controller_source"; then
+  echo "FAIL: Docker controller создаёт persistent custom network" >&2
+  exit 1
+fi
+
+target_source="$repo_root/services/external/bot-service/cmd/postgres-test-target/main.go"
+for cache_guard in \
+  'materializeGoCacheEnvironment' \
+  '"GOENV=off", "GOFLAGS=", "GOWORK=off"' \
+  '"GOMODCACHE", "GOCACHE", "GOPATH"'
+do
+  if ! grep -Fq "$cache_guard" "$target_source"; then
+    echo "FAIL: PostgreSQL target не материализует server-owned Go cache paths до смены HOME" >&2
+    exit 1
+  fi
+done
+
 echo "PASS: Go test contours игнорируют внешние test-affecting GOFLAGS"

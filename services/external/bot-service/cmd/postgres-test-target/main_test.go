@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -85,6 +87,44 @@ func TestPostgresTestCommandEnvironmentDropsMatrixSecretInputs(t *testing.T) {
 	})
 	if !slices.Equal(environment, []string{"PATH=/usr/bin"}) {
 		t.Fatalf("filtered environment names = %q", environmentNames(environment))
+	}
+}
+
+func TestMaterializeGoCacheEnvironmentUsesPreHomeDefaultsAndOfflineMode(t *testing.T) {
+	home := t.TempDir()
+	adversarial := filepath.Join(t.TempDir(), "must-not-pass")
+	environment := []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + home,
+		"GOMODCACHE=" + filepath.Join(adversarial, "mod"),
+		"GOCACHE=" + filepath.Join(adversarial, "build"),
+		"GOPATH=" + filepath.Join(adversarial, "gopath"),
+		"GOFLAGS=-run=^$",
+		"GOENV=/tmp/adversarial-goenv",
+		"GOWORK=/tmp/adversarial-workspace",
+		"GOPROXY=off",
+		"GOSUMDB=off",
+	}
+	cacheEnvironment, err := materializeGoCacheEnvironment(context.Background(), environment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]string{}
+	for _, item := range cacheEnvironment {
+		name, value, _ := strings.Cut(item, "=")
+		values[name] = value
+	}
+	for name, expected := range map[string]string{
+		"GOMODCACHE": filepath.Join(home, "go", "pkg", "mod"),
+		"GOCACHE":    filepath.Join(home, ".cache", "go-build"),
+		"GOPATH":     filepath.Join(home, "go"),
+	} {
+		if values[name] != expected || !filepath.IsAbs(values[name]) || strings.Contains(values[name], adversarial) {
+			t.Fatalf("%s = %q, want pre-HOME default %q", name, values[name], expected)
+		}
+	}
+	if offline := safeOfflineGoEnvironment(environment); !slices.Equal(offline, []string{"GOPROXY=off", "GOSUMDB=off"}) {
+		t.Fatalf("offline Go environment = %q", offline)
 	}
 }
 

@@ -15,10 +15,12 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/testsupport"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
@@ -31,6 +33,8 @@ const (
 	postgresContainerPort            = 5432
 	postgres15ControllerImage        = "pgvector/pgvector:0.8.5-pg15@sha256:18d16372b8406bb38a9f94cbff15d125c463d71fde2770aa8b5c64bfcc1578ee"
 	postgres16ControllerImage        = "pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb"
+	postgresControllerLifetime       = 12 * time.Minute
+	postgresControllerTTLSeconds     = int32(60)
 )
 
 type controllerPostgresHarness struct {
@@ -110,16 +114,23 @@ func randomControllerIdentity() (string, error) {
 	return hex.EncodeToString(body), nil
 }
 
-func dockerRunArguments(identity string, image string) []string {
+func dockerRunArguments(identity string, image string, expiresAt int64) []string {
 	return []string{
 		"run", "--detach",
+		"--rm",
+		"--init",
+		"--stop-timeout", "30",
 		"--name", "mc-postgres-test-" + identity,
 		"--label", postgresControllerLabel + "=" + identity,
+		"--label", postgresControllerLabel + "-expires-at=" + strconv.FormatInt(expiresAt, 10),
 		"--publish", "127.0.0.1::5432",
 		"--env", "POSTGRES_HOST_AUTH_METHOD=trust",
 		"--env", "POSTGRES_USER=mattercodex_test_owner",
 		"--env", "POSTGRES_DB=postgres",
+		"--entrypoint", "/usr/bin/timeout",
 		image,
+		"--foreground", "--signal=TERM", "--kill-after=30s", "12m",
+		"/usr/local/bin/docker-entrypoint.sh", "postgres",
 	}
 }
 
@@ -141,7 +152,8 @@ func startDockerPostgres(ctx context.Context, major string) (*controllerPostgres
 	if err := validatePostgresControllerImage(major, image); err != nil {
 		return nil, err
 	}
-	containerOutput, err := exec.CommandContext(ctx, "docker", dockerRunArguments(identity, image)...).Output()
+	expiresAt := time.Now().Add(postgresControllerLifetime).Unix()
+	containerOutput, err := exec.CommandContext(ctx, "docker", dockerRunArguments(identity, image, expiresAt)...).Output()
 	if err != nil {
 		return nil, fmt.Errorf("docker mode не создал disposable container")
 	}
@@ -151,7 +163,7 @@ func startDockerPostgres(ctx context.Context, major string) (*controllerPostgres
 	}
 	harness := &controllerPostgresHarness{}
 	harness.close = func(closeCtx context.Context) error {
-		if err := validateDockerContainerIdentity(closeCtx, containerID, identity); err != nil {
+		if err := validateDockerContainerIdentity(closeCtx, containerID, identity, expiresAt); err != nil {
 			return err
 		}
 		if err := exec.CommandContext(closeCtx, "docker", "rm", "--force", containerID).Run(); err != nil {
@@ -172,7 +184,7 @@ func startDockerPostgres(ctx context.Context, major string) (*controllerPostgres
 		cancel()
 		return nil, errors.Join(startErr, cleanupErr)
 	}
-	if err := validateDockerContainerIdentity(ctx, containerID, identity); err != nil {
+	if err := validateDockerContainerIdentity(ctx, containerID, identity, expiresAt); err != nil {
 		return cleanupOnError(err)
 	}
 	portOutput, err := exec.CommandContext(ctx, "docker", "port", containerID, "5432/tcp").Output()
@@ -205,13 +217,13 @@ func dockerContainerExists(ctx context.Context, containerID string) (bool, error
 	return true, nil
 }
 
-func validateDockerContainerIdentity(ctx context.Context, containerID string, identity string) error {
-	output, err := exec.CommandContext(ctx, "docker", "inspect", "--format", `{{.Id}} {{index .Config.Labels "mattercodex.dev/postgres-test-run"}}`, containerID).Output()
+func validateDockerContainerIdentity(ctx context.Context, containerID string, identity string, expiresAt int64) error {
+	output, err := exec.CommandContext(ctx, "docker", "inspect", "--format", `{{.Id}} {{index .Config.Labels "mattercodex.dev/postgres-test-run"}} {{index .Config.Labels "mattercodex.dev/postgres-test-run-expires-at"}} {{.HostConfig.AutoRemove}} {{.HostConfig.RestartPolicy.Name}}`, containerID).Output()
 	if err != nil {
 		return fmt.Errorf("docker mode не подтвердил exact container identity")
 	}
 	fields := strings.Fields(string(output))
-	if len(fields) != 2 || fields[0] != containerID || fields[1] != identity {
+	if len(fields) != 5 || fields[0] != containerID || fields[1] != identity || fields[2] != strconv.FormatInt(expiresAt, 10) || fields[3] != "true" || fields[4] != "no" {
 		return fmt.Errorf("docker mode обнаружил replacement container")
 	}
 	return nil
@@ -261,9 +273,9 @@ func startKubernetesPostgres(ctx context.Context, major string) (*controllerPost
 	if err := validatePostgresControllerImage(major, image); err != nil {
 		return nil, err
 	}
-	pod, err := client.CoreV1().Pods(namespace).Create(ctx, kubernetesPostgresPod(identity, image), metav1.CreateOptions{})
+	job, err := client.BatchV1().Jobs(namespace).Create(ctx, kubernetesPostgresJob(identity, image), metav1.CreateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("kubernetes mode не создал disposable Pod")
+		return nil, fmt.Errorf("kubernetes mode не создал disposable Job")
 	}
 	harness := &controllerPostgresHarness{}
 	var portForward *exec.Cmd
@@ -293,24 +305,24 @@ func startKubernetesPostgres(ctx context.Context, major string) (*controllerPost
 				}
 			}
 		}
-		current, err := client.CoreV1().Pods(namespace).Get(closeCtx, pod.Name, metav1.GetOptions{})
+		current, err := client.BatchV1().Jobs(namespace).Get(closeCtx, job.Name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
-			return fmt.Errorf("kubernetes mode не прочитал exact Pod перед cleanup")
+			return fmt.Errorf("kubernetes mode не прочитал exact Job перед cleanup")
 		}
-		if current.UID != pod.UID || current.Labels[postgresControllerLabel] != identity {
-			return fmt.Errorf("kubernetes mode обнаружил replacement Pod")
+		if current.UID != job.UID || current.Labels[postgresControllerLabel] != identity {
+			return fmt.Errorf("kubernetes mode обнаружил replacement Job")
 		}
-		uid := types.UID(pod.UID)
+		uid := types.UID(job.UID)
 		policy := metav1.DeletePropagationBackground
-		if err := client.CoreV1().Pods(namespace).Delete(closeCtx, pod.Name, metav1.DeleteOptions{
+		if err := client.BatchV1().Jobs(namespace).Delete(closeCtx, job.Name, metav1.DeleteOptions{
 			Preconditions: &metav1.Preconditions{UID: &uid}, PropagationPolicy: &policy,
 		}); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("kubernetes mode не удалил exact UID Pod")
+			return fmt.Errorf("kubernetes mode не удалил exact UID Job")
 		}
-		return waitKubernetesPodDeleted(closeCtx, client, namespace, pod.Name, pod.UID)
+		return waitKubernetesJobDeleted(closeCtx, client, namespace, job.Name, job.UID)
 	}
 	cleanupOnError := func(startErr error) (*controllerPostgresHarness, error) {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -318,11 +330,11 @@ func startKubernetesPostgres(ctx context.Context, major string) (*controllerPost
 		cancel()
 		return nil, errors.Join(startErr, cleanupErr)
 	}
-	service, err = client.CoreV1().Services(namespace).Create(ctx, kubernetesPostgresService(identity), metav1.CreateOptions{})
+	service, err = client.CoreV1().Services(namespace).Create(ctx, kubernetesPostgresService(identity, job), metav1.CreateOptions{})
 	if err != nil {
 		return cleanupOnError(fmt.Errorf("kubernetes mode не создал disposable Service"))
 	}
-	if err := waitKubernetesPodReady(ctx, client, namespace, pod.Name, pod.UID, identity); err != nil {
+	if err := waitKubernetesJobPodReady(ctx, client, namespace, job, identity); err != nil {
 		return cleanupOnError(err)
 	}
 	port, err := reserveLoopbackPort()
@@ -354,14 +366,14 @@ func waitKubernetesServiceDeleted(ctx context.Context, client kubernetes.Interfa
 	}, uid, "Service")
 }
 
-func waitKubernetesPodDeleted(ctx context.Context, client kubernetes.Interface, namespace string, name string, uid types.UID) error {
+func waitKubernetesJobDeleted(ctx context.Context, client kubernetes.Interface, namespace string, name string, uid types.UID) error {
 	return waitForKubernetesDeletion(ctx, func() (types.UID, error) {
-		pod, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		job, err := client.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return "", err
 		}
-		return pod.UID, nil
-	}, uid, "Pod")
+		return job.UID, nil
+	}, uid, "Job")
 }
 
 func waitForKubernetesDeletion(ctx context.Context, readUID func() (types.UID, error), expectedUID types.UID, resourceKind string) error {
@@ -386,9 +398,10 @@ func waitForKubernetesDeletion(ctx context.Context, readUID func() (types.UID, e
 	}
 }
 
-func kubernetesPostgresService(identity string) *corev1.Service {
+func kubernetesPostgresService(identity string, owner *batchv1.Job) *corev1.Service {
+	ownerReference := metav1.NewControllerRef(owner, schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"})
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{GenerateName: "mc-postgres-test-", Labels: map[string]string{postgresControllerLabel: identity}},
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "mc-postgres-test-", Labels: map[string]string{postgresControllerLabel: identity}, OwnerReferences: []metav1.OwnerReference{*ownerReference}},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: map[string]string{postgresControllerLabel: identity},
@@ -397,39 +410,56 @@ func kubernetesPostgresService(identity string) *corev1.Service {
 	}
 }
 
-func kubernetesPostgresPod(identity string, image string) *corev1.Pod {
+func kubernetesPostgresJob(identity string, image string) *batchv1.Job {
 	falseValue := false
 	trueValue := true
 	runAsNonRoot := true
 	userID := int64(999)
-	return &corev1.Pod{
+	activeDeadlineSeconds := int64(postgresControllerLifetime / time.Second)
+	backoffLimit := int32(0)
+	ttlSecondsAfterFinished := postgresControllerTTLSeconds
+	terminationGracePeriodSeconds := int64(30)
+	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: "mc-postgres-test-", Labels: map[string]string{postgresControllerLabel: identity}},
-		Spec: corev1.PodSpec{
-			AutomountServiceAccountToken: &falseValue,
-			RestartPolicy:                corev1.RestartPolicyNever,
-			SecurityContext:              &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, RunAsUser: &userID, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
-			Containers: []corev1.Container{{
-				Name: "postgres", Image: image, ImagePullPolicy: corev1.PullIfNotPresent,
-				Env:   []corev1.EnvVar{{Name: "POSTGRES_HOST_AUTH_METHOD", Value: "trust"}, {Name: "POSTGRES_USER", Value: "mattercodex_test_owner"}, {Name: "POSTGRES_DB", Value: "postgres"}},
-				Ports: []corev1.ContainerPort{{Name: "postgres", ContainerPort: postgresContainerPort, Protocol: corev1.ProtocolTCP}},
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("256Mi")},
-					Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2"), corev1.ResourceMemory: resource.MustParse("2Gi")},
+		Spec: batchv1.JobSpec{
+			ActiveDeadlineSeconds:   &activeDeadlineSeconds,
+			BackoffLimit:            &backoffLimit,
+			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{postgresControllerLabel: identity}},
+				Spec: corev1.PodSpec{
+					AutomountServiceAccountToken:  &falseValue,
+					RestartPolicy:                 corev1.RestartPolicyNever,
+					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+					SecurityContext:               &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, RunAsUser: &userID, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+					Containers: []corev1.Container{{
+						Name: "postgres", Image: image, ImagePullPolicy: corev1.PullIfNotPresent,
+						Env:   []corev1.EnvVar{{Name: "POSTGRES_HOST_AUTH_METHOD", Value: "trust"}, {Name: "POSTGRES_USER", Value: "mattercodex_test_owner"}, {Name: "POSTGRES_DB", Value: "postgres"}},
+						Ports: []corev1.ContainerPort{{Name: "postgres", ContainerPort: postgresContainerPort, Protocol: corev1.ProtocolTCP}},
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("256Mi")},
+							Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2"), corev1.ResourceMemory: resource.MustParse("2Gi")},
+						},
+						SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: &falseValue, ReadOnlyRootFilesystem: &falseValue, RunAsNonRoot: &trueValue, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}},
+					}},
 				},
-				SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: &falseValue, ReadOnlyRootFilesystem: &falseValue, RunAsNonRoot: &trueValue, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}},
-			}},
+			},
 		},
 	}
 }
 
-func waitKubernetesPodReady(ctx context.Context, client kubernetes.Interface, namespace string, name string, uid types.UID, identity string) error {
+func waitKubernetesJobPodReady(ctx context.Context, client kubernetes.Interface, namespace string, job *batchv1.Job, identity string) error {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		pod, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err == nil {
-			if pod.UID != uid || pod.Labels[postgresControllerLabel] != identity {
-				return fmt.Errorf("kubernetes mode обнаружил replacement Pod")
+		pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: postgresControllerLabel + "=" + identity})
+		if err == nil && len(pods.Items) > 1 {
+			return fmt.Errorf("kubernetes mode обнаружил неоднозначные Job Pods")
+		}
+		if err == nil && len(pods.Items) == 1 {
+			pod := pods.Items[0]
+			if pod.Labels[postgresControllerLabel] != identity || !metav1.IsControlledBy(&pod, job) {
+				return fmt.Errorf("kubernetes mode обнаружил replacement Job Pod")
 			}
 			for _, condition := range pod.Status.Conditions {
 				if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
@@ -437,12 +467,12 @@ func waitKubernetesPodReady(ctx context.Context, client kubernetes.Interface, na
 				}
 			}
 			if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
-				return fmt.Errorf("kubernetes PostgreSQL Pod завершился до ready")
+				return fmt.Errorf("kubernetes PostgreSQL Job Pod завершился до ready")
 			}
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("kubernetes PostgreSQL Pod не стал ready")
+			return fmt.Errorf("kubernetes PostgreSQL Job Pod не стал ready")
 		case <-ticker.C:
 		}
 	}

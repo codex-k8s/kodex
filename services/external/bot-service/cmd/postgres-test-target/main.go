@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -180,7 +181,15 @@ func runTarget(arguments []string, expectedMajor string) int {
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
+	goCacheEnvironment, err := materializeGoCacheEnvironment(ctx, os.Environ())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "безопасные Go cache paths не материализованы")
+		return 1
+	}
 	command.Env = append(postgresTestCommandEnvironment(os.Environ()),
+		goCacheEnvironment...)
+	command.Env = append(command.Env, safeOfflineGoEnvironment(os.Environ())...)
+	command.Env = append(command.Env,
 		"MATTERCODEX_BOT_SERVICE_TEST_DATABASE_DSN="+targetDSN,
 		"MATTERCODEX_BOT_SERVICE_TEST_DATABASE_MARKER="+targetMarker,
 		"MATTERCODEX_POSTGRES_TEST_REQUIRED=1",
@@ -393,7 +402,7 @@ func selectMajorEnvironment(major string) (func(), error) {
 func postgresTestCommandEnvironment(source []string) []string {
 	allowedNames := map[string]bool{
 		"PATH": true, "TMPDIR": true,
-		"GOCACHE": true, "GOMODCACHE": true, "GOPATH": true, "GOROOT": true,
+		"GOROOT":      true,
 		"CGO_ENABLED": true, "CC": true, "CXX": true, "AR": true, "PKG_CONFIG_PATH": true,
 		"LANG": true, "LC_ALL": true, "TZ": true,
 	}
@@ -403,6 +412,60 @@ func postgresTestCommandEnvironment(source []string) []string {
 		if ok && allowedNames[name] {
 			result = append(result, item)
 		}
+	}
+	return result
+}
+
+func materializeGoCacheEnvironment(ctx context.Context, source []string) ([]string, error) {
+	allowedNames := map[string]bool{"PATH": true, "HOME": true, "TMPDIR": true, "GOROOT": true}
+	discoveryEnvironment := make([]string, 0, len(source)+3)
+	for _, item := range source {
+		name, _, ok := strings.Cut(item, "=")
+		if ok && allowedNames[name] {
+			discoveryEnvironment = append(discoveryEnvironment, item)
+		}
+	}
+	discoveryEnvironment = append(discoveryEnvironment, "GOENV=off", "GOFLAGS=", "GOWORK=off")
+	command := exec.CommandContext(ctx, "go", "env", "-json", "GOMODCACHE", "GOCACHE", "GOPATH")
+	command.Env = discoveryEnvironment
+	output, err := command.Output()
+	if err != nil {
+		return nil, fmt.Errorf("go cache discovery failed")
+	}
+	values := map[string]string{}
+	if err := json.Unmarshal(output, &values); err != nil {
+		return nil, fmt.Errorf("go cache discovery output invalid")
+	}
+	result := make([]string, 0, 3)
+	for _, name := range []string{"GOMODCACHE", "GOCACHE", "GOPATH"} {
+		value := strings.TrimSpace(values[name])
+		if value == "" {
+			return nil, fmt.Errorf("go cache path missing")
+		}
+		for _, path := range filepath.SplitList(value) {
+			if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+				return nil, fmt.Errorf("go cache path is not absolute")
+			}
+		}
+		result = append(result, name+"="+value)
+	}
+	return result, nil
+}
+
+func safeOfflineGoEnvironment(source []string) []string {
+	values := map[string]string{}
+	for _, item := range source {
+		name, value, ok := strings.Cut(item, "=")
+		if ok {
+			values[name] = strings.TrimSpace(value)
+		}
+	}
+	result := []string{}
+	if values["GOPROXY"] == "off" {
+		result = append(result, "GOPROXY=off")
+	}
+	if values["GOSUMDB"] == "off" {
+		result = append(result, "GOSUMDB=off")
 	}
 	return result
 }
