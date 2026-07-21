@@ -209,6 +209,7 @@ remote_registry_image_exists() {
   local image_path
   local repository
   local tag
+  local accept_header
   local registry_url_q
 
   if [ "$image" = "${image#*/}" ]; then
@@ -220,8 +221,9 @@ remote_registry_image_exists() {
   if [ "$repository" = "$image_path" ] || [ -z "$repository" ] || [ -z "$tag" ]; then
     return 1
   fi
+  accept_header="application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json"
   registry_url_q="$(mattercodex_shell_quote "http://${MATTERCODEX_IMAGE_REGISTRY_PULL_HOST}/v2/${repository}/manifests/${tag}")"
-  mattercodex_ssh "curl -fsS -H 'Accept: application/vnd.docker.distribution.manifest.v2+json' $registry_url_q >/dev/null" </dev/null
+  mattercodex_ssh "curl -fsS -H 'Accept: $accept_header' $registry_url_q >/dev/null" </dev/null
 }
 
 kaniko_arg_yaml_line() {

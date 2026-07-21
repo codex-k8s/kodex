@@ -549,6 +549,36 @@ func (repo *Repository) UpsertAgentSession(ctx context.Context, input adminrepo.
 	return item, created, nil
 }
 
+func (repo *Repository) CreateFrozenClusterAdminSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
+	var created bool
+	if err := repo.db.QueryRow(ctx, query("cluster_admin_session__create_frozen.sql"),
+		input.SessionKey,
+		input.ProjectID,
+		input.ChatID,
+		input.RoleID,
+		input.SessionScope,
+		input.MattermostChannelID,
+		input.MattermostRootPostID,
+		input.OpenAIAccountName,
+		input.KubernetesNamespace,
+		input.PodName,
+		input.PVCName,
+		input.TokenSecretRef,
+		input.SecretContentSHA256,
+		input.SecretResourceUID,
+		input.SecretResourceVersion,
+		input.TTLSeconds,
+		input.Capabilities,
+	).Scan(&created); err != nil {
+		return entity.AgentSession{}, false, fmt.Errorf("create frozen cluster-admin session: %w", err)
+	}
+	item, err := repo.GetAgentSession(ctx, input.SessionKey)
+	if err != nil {
+		return entity.AgentSession{}, false, err
+	}
+	return item, created, nil
+}
+
 func (repo *Repository) GetAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
 	item, err := scanAgentSession(repo.db.QueryRow(ctx, query("agent_sessions__get.sql"), sessionKey))
 	if err != nil {
@@ -764,6 +794,20 @@ func (repo *Repository) GetAgentSessionByID(ctx context.Context, id int64) (enti
 	return item, nil
 }
 
+func (repo *Repository) LockAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
+	if repo.pool != nil {
+		return entity.AgentSession{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	var id int64
+	if err := repo.db.QueryRow(ctx, query("agent_sessions__lock.sql"), sessionKey).Scan(&id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSession{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSession{}, fmt.Errorf("lock agent session: %w", err)
+	}
+	return repo.GetAgentSessionByID(ctx, id)
+}
+
 func (repo *Repository) ListAgentSessionsByThread(ctx context.Context, chatID int64, rootPostID string) ([]entity.AgentSession, error) {
 	rows, err := repo.db.Query(ctx, query("agent_sessions__list_by_thread.sql"), chatID, rootPostID)
 	if err != nil {
@@ -821,6 +865,50 @@ func (repo *Repository) ListEvictableIdleAgentSessions(ctx context.Context, limi
 	}
 	defer rows.Close()
 	return scanAgentSessions(rows)
+}
+
+func (repo *Repository) EvictIdleAgentSessionPod(ctx context.Context, sessionKey string, podName string, sideEffect func() error) (entity.AgentSession, error) {
+	if sideEffect == nil {
+		return entity.AgentSession{}, fmt.Errorf("idle agent session pod eviction side effect is required")
+	}
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return entity.AgentSession{}, fmt.Errorf("begin idle agent session pod eviction: %w", err)
+	}
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
+	}()
+
+	locked, err := scanAgentSession(tx.QueryRow(ctx, query("agent_sessions__lock_idle_pod_eviction.sql"), sessionKey, podName))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.AgentSession{}, fmt.Errorf("lock idle agent session pod eviction: %w", err)
+	}
+	var evictable bool
+	if err := tx.QueryRow(ctx, query("agent_sessions__idle_pod_evictable.sql"), sessionKey, podName).Scan(&evictable); err != nil {
+		return entity.AgentSession{}, fmt.Errorf("recheck idle agent session pod eviction: %w", err)
+	}
+	if !evictable {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if err := sideEffect(); err != nil {
+		return entity.AgentSession{}, err
+	}
+	cleared, err := scanAgentSession(tx.QueryRow(ctx, query("agent_sessions__clear_idle_pod.sql"), locked.SessionKey, locked.PodName))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.AgentSession{}, fmt.Errorf("clear evicted idle agent session pod: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.AgentSession{}, fmt.Errorf("commit idle agent session pod eviction: %w", err)
+	}
+	return cleared, nil
 }
 
 func (repo *Repository) ListQueuedIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error) {
@@ -958,6 +1046,9 @@ func (repo *Repository) ClaimNextAgentSessionTurn(ctx context.Context, sessionKe
 func (repo *Repository) CompleteAgentSessionTurn(ctx context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
 	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__complete.sql"),
 		input.TurnID,
+		input.SessionID,
+		input.RunID,
+		input.ExpectedStatus,
 		input.Status,
 		input.FinalMessage,
 		input.ErrorMessage,
@@ -965,6 +1056,9 @@ func (repo *Repository) CompleteAgentSessionTurn(ctx context.Context, input admi
 		input.CompletionPodUID,
 	))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
 		return entity.AgentSessionTurn{}, fmt.Errorf("complete agent session turn: %w", err)
 	}
 	return item, nil
@@ -991,7 +1085,25 @@ func (repo *Repository) UpdateAgentSessionTurnStatusPost(ctx context.Context, in
 		input.StatusPostID,
 	))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
 		return entity.AgentSessionTurn{}, fmt.Errorf("update agent session turn status post: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) CompareAndSwapAgentSessionTurnArtifacts(ctx context.Context, input adminrepo.CompareAndSwapAgentSessionTurnArtifactsInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.db.QueryRow(ctx, query("agent_session_turns__compare_and_swap_artifacts.sql"),
+		input.TurnID,
+		input.ExpectedArtifacts,
+		input.Artifacts,
+	))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		return entity.AgentSessionTurn{}, fmt.Errorf("compare and swap agent session turn artifacts: %w", err)
 	}
 	return item, nil
 }

@@ -25,6 +25,7 @@ type memoryInteractionRepository struct {
 	inputs        map[string]securityrepo.IssueCapabilityInput
 	admissions    map[string]bool
 	consumes      int
+	replays       int
 	checks        int
 	issues        int
 	failIssueAt   int
@@ -135,6 +136,31 @@ func (repo *memoryInteractionRepository) ConsumeInteractionCapabilityWithMutatio
 		repo.capabilities[string(input.TokenHash)] = capability
 		repo.consumes--
 		repo.mu.Unlock()
+		return securityrepo.Capability{}, err
+	}
+	return capability, nil
+}
+
+func (repo *memoryInteractionRepository) ReplayConsumedInteractionCapabilityWithMutation(
+	_ context.Context,
+	input securityrepo.ConsumeCapabilityInput,
+	mutation func(securityrepo.Capability, adminrepo.Repository) error,
+) (securityrepo.Capability, error) {
+	repo.mu.Lock()
+	key := string(input.TokenHash)
+	capability, ok := repo.capabilities[key]
+	issued := repo.inputs[key]
+	if !ok || capability.State != securityrepo.CapabilityStateConsumed || capability.ConsumedAt.IsZero() ||
+		!capability.ExpiresAt.After(input.Now) || capability.Kind != input.Kind || capability.Operation != input.Operation ||
+		capability.ResourceType != input.ResourceType || capability.ResourceID != input.ResourceID ||
+		capability.ChannelID != input.ChannelID || capability.PostBinding != input.PostBinding ||
+		capability.ActorUserID != input.ActorUserID || !bytes.Equal(issued.ContextHash, input.ContextHash) {
+		repo.mu.Unlock()
+		return securityrepo.Capability{}, securityrepo.ErrCapabilityBinding
+	}
+	repo.replays++
+	repo.mu.Unlock()
+	if err := mutation(capability, repo.mutationStore); err != nil {
 		return securityrepo.Capability{}, err
 	}
 	return capability, nil

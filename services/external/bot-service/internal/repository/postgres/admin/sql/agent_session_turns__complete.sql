@@ -1,12 +1,16 @@
 update matter_codex_agent_session_turns set
-	status = $2,
-	final_message = $3,
-	error_message = $4,
-	artifacts = $5::jsonb,
-	completion_pod_uid = $6,
+	status = $5,
+	final_message = $6,
+	error_message = $7,
+	artifacts = $8::jsonb,
+	completion_pod_uid = $9,
 	finished_at = now(),
 	updated_at = now()
-where id = $1 and status = 'running'
+where id = $1
+	and session_id = $2
+	and run_id = $3
+	and status = $4
+	and status in ('queued', 'running')
 returning
 	id,
 	session_id,

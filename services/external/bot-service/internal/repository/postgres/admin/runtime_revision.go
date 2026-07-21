@@ -329,7 +329,8 @@ func (repo *Repository) CompleteAgentSessionTurnWithArchive(ctx context.Context,
 	}
 
 	turn, err := txRepo.CompleteAgentSessionTurn(ctx, adminrepo.CompleteAgentSessionTurnInput{
-		TurnID: input.TurnID, Status: input.TurnStatus,
+		SessionID: sessionID, TurnID: input.TurnID, RunID: turnRunID,
+		ExpectedStatus: currentTurnStatus, Status: input.TurnStatus,
 		FinalMessage: input.FinalMessage, ErrorMessage: input.ErrorMessage, Artifacts: input.Artifacts,
 		CompletionPodUID: strings.TrimSpace(input.PodUID),
 	})

@@ -309,9 +309,6 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	if !chatParticipantEnabled(participants, targetRole.ID) {
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent %q is not available in chat %q", targetRole.Name, targetChat.Slug)
 	}
-	if strings.EqualFold(strings.TrimSpace(targetRole.KubernetesAccess), "cluster-admin") {
-		return AgentSessionDelegationResult{}, adminrepo.ErrClusterAdminAdmissionDenied
-	}
 	if strings.TrimSpace(targetChat.MattermostChannelID) == "" {
 		return AgentSessionDelegationResult{}, fmt.Errorf("chat %q is not bound to a Mattermost channel", targetChat.Slug)
 	}
@@ -322,16 +319,18 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 
 	var delegation entity.AgentDelegation
 	var created bool
-	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.delegation_create.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
-		if current.ActiveTurnID != sourceTurnID {
-			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
-		}
-		var createErr error
-		delegation, created, createErr = guardedStore.CreateAgentDelegation(ctx, adminrepo.CreateAgentDelegationInput{
-			ProjectID: current.ProjectID, SourceSessionID: current.ID, SourceTurnID: sourceTurnID,
-			TargetChatID: targetChat.ID, TargetRoleID: targetRole.ID, WorkItemKey: command.WorkItemKey, Title: command.Title,
+	err = svc.withRequestedClusterAdminPersistenceGuard(ctx, targetRole, targetChat, "", requesterUserName, "agent_thread.delegation_create.side_effect", func(targetStore adminrepo.Repository) error {
+		return svc.withCurrentSessionGuardUsingStore(ctx, targetStore, session, "agent_session.delegation_create.side_effect", true, func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+			if current.ActiveTurnID != sourceTurnID {
+				return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
+			}
+			var createErr error
+			delegation, created, createErr = guardedStore.CreateAgentDelegation(ctx, adminrepo.CreateAgentDelegationInput{
+				ProjectID: current.ProjectID, SourceSessionID: current.ID, SourceTurnID: sourceTurnID,
+				TargetChatID: targetChat.ID, TargetRoleID: targetRole.ID, WorkItemKey: command.WorkItemKey, Title: command.Title,
+			})
+			return createErr
 		})
-		return createErr
 	})
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
@@ -351,9 +350,11 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	sourceThreadURL := svc.mattermostThreadURL(project.Slug, session.MattermostRootPostID)
 	var rootPost MattermostPostRef
 	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_thread_publish.side_effect", func(entity.AgentSession) error {
-		var publishErr error
-		rootPost, publishErr = svc.postDelegatedAgentThread(ctx, delegation, targetChat, targetRole, requesterUserName, sourceThreadURL, command.Message)
-		return publishErr
+		return svc.withRequestedClusterAdminGuard(ctx, targetRole, targetChat, "", requesterUserName, "agent_thread.thread_publish.side_effect", func() error {
+			var publishErr error
+			rootPost, publishErr = svc.postDelegatedAgentThread(ctx, delegation, targetChat, targetRole, requesterUserName, sourceThreadURL, command.Message)
+			return publishErr
+		})
 	})
 	if err != nil {
 		_ = svc.setCurrentSessionDelegationFailed(ctx, session, delegation.ID)
@@ -380,7 +381,9 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	}
 	sourceLaunchURL := svc.mattermostThreadURL(project.Slug, auditPost.PostID)
 	if err := svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_thread_update.side_effect", func(entity.AgentSession) error {
-		return svc.updateDelegatedAgentThreadSourceLink(ctx, delegation, targetChat, targetRole, requesterUserName, rootPost, sourceThreadURL, sourceLaunchURL, command.Message)
+		return svc.withRequestedClusterAdminGuard(ctx, targetRole, targetChat, "", requesterUserName, "agent_thread.thread_update.side_effect", func() error {
+			return svc.updateDelegatedAgentThreadSourceLink(ctx, delegation, targetChat, targetRole, requesterUserName, rootPost, sourceThreadURL, sourceLaunchURL, command.Message)
+		})
 	}); err != nil {
 		_ = svc.setCurrentSessionDelegationFailed(ctx, session, delegation.ID)
 		return AgentSessionDelegationResult{}, err
@@ -395,15 +398,17 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 		if current.ActiveTurnID != sourceTurnID {
 			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
 		}
-		var enqueueErr error
-		queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
-			Project: project, Chat: targetChat, Role: targetRole, Repositories: repositories,
-			UserID: rootInitiatorUserID, UserName: requesterUserName,
-			UserMessage:  crossChatDelegatedAgentRequestMessage(requesterUserName, targetRole.Name, command.Message),
-			SourcePostID: auditPost.PostID, ReplyRootID: rootPost.PostID, SessionRootID: rootPost.PostID,
-			SessionScope: agentSessionScopeThreadRole, TTLSeconds: defaultThreadSessionTTLSeconds, ParentTurnID: sourceTurnID,
+		return svc.withRequestedClusterAdminGuard(ctx, targetRole, targetChat, "", requesterUserName, "agent_thread.enqueue.side_effect", func() error {
+			var enqueueErr error
+			queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
+				Project: project, Chat: targetChat, Role: targetRole, Repositories: repositories,
+				UserID: rootInitiatorUserID, UserName: requesterUserName,
+				UserMessage:  crossChatDelegatedAgentRequestMessage(requesterUserName, targetRole.Name, command.Message),
+				SourcePostID: auditPost.PostID, ReplyRootID: rootPost.PostID, SessionRootID: rootPost.PostID,
+				SessionScope: agentSessionScopeThreadRole, TTLSeconds: defaultThreadSessionTTLSeconds, ParentTurnID: sourceTurnID,
+			})
+			return enqueueErr
 		})
-		return enqueueErr
 	})
 	if err != nil {
 		_ = svc.setCurrentSessionDelegationFailed(ctx, session, delegation.ID)
@@ -411,17 +416,21 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	}
 	var targetSession entity.AgentSession
 	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_target_read.side_effect", func(entity.AgentSession) error {
-		var readErr error
-		targetSession, readErr = svc.cfg.Store.GetAgentSession(ctx, queued.SessionKey)
-		return readErr
+		return svc.withRequestedClusterAdminGuard(ctx, targetRole, targetChat, queued.SessionKey, requesterUserName, "agent_thread.target_read.side_effect", func() error {
+			var readErr error
+			targetSession, readErr = svc.cfg.Store.GetAgentSession(ctx, queued.SessionKey)
+			return readErr
+		})
 	})
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
-	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.delegation_target_persist.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
-		var persistErr error
-		delegation, persistErr = guardedStore.SetAgentDelegationTarget(ctx, delegation.ID, targetSession.ID, queued.TurnID, queued.RunID)
-		return persistErr
+	err = svc.withRequestedClusterAdminPersistenceGuard(ctx, targetRole, targetChat, queued.SessionKey, requesterUserName, "agent_thread.target_persist.side_effect", func(targetStore adminrepo.Repository) error {
+		return svc.withCurrentSessionGuardUsingStore(ctx, targetStore, session, "agent_session.delegation_target_persist.side_effect", true, func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
+			var persistErr error
+			delegation, persistErr = guardedStore.SetAgentDelegationTarget(ctx, delegation.ID, targetSession.ID, queued.TurnID, queued.RunID)
+			return persistErr
+		})
 	})
 	if err != nil {
 		return AgentSessionDelegationResult{}, err

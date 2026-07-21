@@ -172,7 +172,7 @@ func validateRaw(raw []byte, visit visitor) error {
 			_ = gzipReader.Close()
 			return fmt.Errorf("архив сессии содержит дубликат или нарушенный порядок записей")
 		}
-		if header.Linkname != "" || header.Mode < 0 || header.Mode&^0o777 != 0 || header.Devmajor != 0 || header.Devminor != 0 {
+		if header.Linkname != "" || header.Mode < 0 || header.Mode&^0o7777 != 0 || header.Devmajor != 0 || header.Devminor != 0 {
 			_ = gzipReader.Close()
 			return fmt.Errorf("архив сессии содержит недопустимую USTAR семантику")
 		}

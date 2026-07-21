@@ -18,12 +18,12 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
 )
 
-func TestRuntimeRevisionMigrationUpgradesV30WithLegacySessionAndQueue(t *testing.T) {
-	dsn := isolatedMigrationDSN(t, "runtime_revision_v30")
+func TestRuntimeRevisionMigrationUpgradesV33WithLegacySessionAndQueue(t *testing.T) {
+	dsn := isolatedMigrationDSN(t, "runtime_revision_v33")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if err := migrations.RunTo(ctx, dsn, 30); err != nil {
-		t.Fatalf("prepare v30 schema: %v", err)
+	if err := migrations.RunTo(ctx, dsn, 33); err != nil {
+		t.Fatalf("prepare v33 schema: %v", err)
 	}
 	pool := openMigrationPool(t, ctx, dsn)
 	repository := postgresrepo.NewRepository(pool)
@@ -58,7 +58,7 @@ func TestRuntimeRevisionMigrationUpgradesV30WithLegacySessionAndQueue(t *testing
 	})
 	if err != nil {
 		pool.Close()
-		t.Fatalf("seed v30 session: %v", err)
+		t.Fatalf("seed v33 session: %v", err)
 	}
 	legacyPayload, legacyRaw := migrationArchiveFixture(t, "legacy-bounded-archive")
 	if _, err := repository.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
@@ -75,14 +75,14 @@ insert into matter_codex_agent_session_turns(
 ) values ($1, 'legacy-queued-run', 'channel-runtime-upgrade', '', 'legacy-post', 'legacy-user', 'developer', 'legacy queued turn')
 `, session.ID); err != nil {
 		pool.Close()
-		t.Fatalf("seed v30 queued turn: %v", err)
+		t.Fatalf("seed v33 queued turn: %v", err)
 	}
 	pool.Close()
 
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("upgrade v30->v31: %v", err)
+		t.Fatalf("upgrade v33->v34: %v", err)
 	}
-	if version, err := migrations.Version(ctx, dsn); err != nil || version != 31 {
+	if version, err := migrations.Version(ctx, dsn); err != nil || version != 34 {
 		t.Fatalf("schema version after runtime upgrade = %d, error=%v", version, err)
 	}
 	pool = openMigrationPool(t, ctx, dsn)
@@ -111,7 +111,7 @@ insert into matter_codex_agent_session_turns(
 		t.Fatal("upgraded session account affinity accepted mutation")
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("repeated v31 up: %v", err)
+		t.Fatalf("repeated v34 up: %v", err)
 	}
 }
 

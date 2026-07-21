@@ -158,6 +158,12 @@ type runtimeRevisionFakeStore struct {
 	secretRevisions map[string]entity.RuntimeSecretBindingRevision
 }
 
+func (store *runtimeRevisionFakeStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.fakeAdminStore.WithExactAgentSessionsRuntimeGuard(ctx, expected, func(adminrepo.Repository) error {
+		return sideEffect(store)
+	})
+}
+
 func (store *runtimeRevisionFakeStore) UpsertAgentSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
 	session, created, err := store.fakeAdminStore.UpsertAgentSession(ctx, input)
 	if err != nil {

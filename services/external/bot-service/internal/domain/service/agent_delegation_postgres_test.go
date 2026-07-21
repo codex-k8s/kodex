@@ -968,7 +968,7 @@ where account.name = 'primary' and account.credential_id = credential.id
 	}
 	seedPool.Close()
 	if err := migrations.Run(ctx, dsn); err != nil {
-		t.Fatalf("migrations through v31: %v", err)
+		t.Fatalf("migrations through v34: %v", err)
 	}
 	seedPool, err = pgxpool.New(ctx, dsn)
 	if err != nil {

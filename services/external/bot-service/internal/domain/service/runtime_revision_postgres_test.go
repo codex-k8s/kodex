@@ -27,7 +27,7 @@ func TestLegacyQueuedTurnRepairsRuntimeThenClaimsAfterUpgrade(t *testing.T) {
 	dsn := testsupport.IsolatedSchemaDSN(t, "runtime_upgrade_repair_claim")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if err := migrations.RunTo(ctx, dsn, 30); err != nil {
+	if err := migrations.RunTo(ctx, dsn, 33); err != nil {
 		t.Fatalf("prepare N-1 schema: %v", err)
 	}
 	pool, err := pgxpool.New(ctx, dsn)
@@ -136,7 +136,7 @@ returning id
 		t.Fatalf("repair result = %#v", repair)
 	}
 	state, err := repository.GetAgentSessionRuntimeRevisionState(ctx, session.SessionKey)
-	if err != nil || state.DesiredRuntimeRevisionID != 0 || state.AppliedRuntimeRevisionID != 0 || state.AppliedPodUID != "legacy-runtime-pod-uid" {
+	if err != nil || state.DesiredRuntimeRevisionID != 0 || state.AppliedRuntimeRevisionID != 0 || state.AppliedPodUID != "legacy-runtime-pod-uid" || state.ReconcileLeaseToken != "" {
 		t.Fatalf("legacy runtime state = %#v, error=%v", state, err)
 	}
 	sessionService := NewAgentSessionService(AgentSessionServiceConfig{

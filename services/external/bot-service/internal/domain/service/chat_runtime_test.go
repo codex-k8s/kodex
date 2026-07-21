@@ -124,8 +124,8 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	if runner.startedSessionKey == "" || runner.sessionCodexSecret != "matter-codex-codex-auth-main" {
 		t.Fatalf("session runner = %#v", runner.sessionRuns)
 	}
-	if len(publisher.posts) != 0 || len(publisher.cards) != 0 {
-		t.Fatalf("chat handler must not create duplicate status posts, posts=%#v cards=%#v", publisher.posts, publisher.cards)
+	if len(publisher.posts) != 0 || len(publisher.cards) != 1 || publisher.cards[0].Props["status"] != agentSessionTurnQueued {
+		t.Fatalf("chat handler must create one queued status card, posts=%#v cards=%#v", publisher.posts, publisher.cards)
 	}
 	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "Help me decompose the task.") || !strings.Contains(store.sessionTurns[0].Message, "Проект: Platform") {
 		t.Fatalf("turns = %#v", store.sessionTurns)
@@ -325,7 +325,7 @@ func TestChatRunAddsAgentEyesReaction(t *testing.T) {
 	}
 }
 
-func TestChatRunDoesNotPostDuplicateQueuedTurnCard(t *testing.T) {
+func TestChatRunPostsSingleQueuedTurnCardWithStop(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{
 		ID:                1,
@@ -362,11 +362,18 @@ func TestChatRunDoesNotPostDuplicateQueuedTurnCard(t *testing.T) {
 	if result.RunID == "" || result.Mode != "session" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(publisher.cards) != 0 || len(publisher.posts) != 0 {
+	if len(publisher.cards) != 1 || len(publisher.posts) != 0 {
 		t.Fatalf("publisher cards=%#v posts=%#v", publisher.cards, publisher.posts)
+	}
+	card := publisher.cards[0]
+	if card.Props["status"] != agentSessionTurnQueued || len(card.Actions) != 1 || card.Actions[0].ID != "stopturn" {
+		t.Fatalf("queued status card=%#v", card)
 	}
 	if len(store.sessionTurns) != 1 {
 		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+	if store.sessionTurns[0].MattermostStatusPostID == "" {
+		t.Fatalf("queued turn status post was not persisted: %#v", store.sessionTurns[0])
 	}
 }
 
@@ -1083,6 +1090,9 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 	if store.sessionTurns[0].Status != agentSessionTurnFailed || !strings.Contains(store.sessionTurns[0].ErrorMessage, "OOMKilled") {
 		t.Fatalf("running turn was not failed with OOM reason: %#v", store.sessionTurns[0])
 	}
+	if store.exactGuardCalls == 0 || store.completeTurnCalls != 1 || store.completeTurnInput.SessionID != 1 || store.completeTurnInput.TurnID != 1 || store.completeTurnInput.RunID != "run-1" || store.completeTurnInput.ExpectedStatus != agentSessionTurnRunning {
+		t.Fatalf("repair completion fence=%d calls=%d input=%#v", store.exactGuardCalls, store.completeTurnCalls, store.completeTurnInput)
+	}
 	if store.sessionTurns[1].Status != agentSessionTurnQueued {
 		t.Fatalf("queued turn changed unexpectedly: %#v", store.sessionTurns[1])
 	}
@@ -1241,6 +1251,76 @@ func TestChatRunDoesNotStartReauthWhenAuthCheckInfrastructureFails(t *testing.T)
 	}
 	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, "check codex auth secret") {
 		t.Fatalf("posts = %#v", publisher.posts)
+	}
+}
+
+func TestCodexAuthCheckReclaimsOldestIdleSessionOnCapacityPressure(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", Enabled: true}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", Slug: "manager"}
+	store.agentSessions = map[string]entity.AgentSession{
+		"oldest-idle": {
+			ID: 1, SessionKey: "oldest-idle", ProjectID: 1, ChatID: 1, RoleID: 1,
+			Status: agentSessionStatusIdle, KubernetesNamespace: "mattermost", PodName: "mc-session-oldest-idle",
+			PVCName: "mc-session-ws-oldest-idle", TokenSecretRef: "matter-codex-session-oldest-idle",
+			LastActivityAt: time.Now().Add(-4 * time.Hour),
+		},
+	}
+	capacityErr := runtimerepo.NewAgentSessionCapacityError("test scheduler pressure", errors.New("insufficient cpu"))
+	runner := &fakeRuntimeRunner{authSecretCheckErrors: []error{capacityErr, capacityErr, nil}}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true,
+		DisableMonitor: true, CapacityRetryDelay: time.Nanosecond,
+	})
+
+	result, err := svc.checkCodexAuthSecretWithCapacityReclaim(context.Background(), runtimerepo.CodexAuthSecretCheckInput{
+		AccountName: "main", SecretName: "matter-codex-codex-auth-main",
+	})
+	if err != nil || !result.Ready {
+		t.Fatalf("check result=%#v error=%v", result, err)
+	}
+	if runner.authSecretChecks != 3 || len(runner.cleanedSessionKeys) != 1 || runner.cleanedSessionKeys[0] != "oldest-idle" {
+		t.Fatalf("checks=%d cleanup=%#v", runner.authSecretChecks, runner.cleanedSessionKeys)
+	}
+	if session := store.agentSessions["oldest-idle"]; session.PodName != "" || session.PVCName == "" || session.TokenSecretRef == "" {
+		t.Fatalf("idle session state = %#v", session)
+	}
+}
+
+func TestCodexAuthCheckDoesNotEvictSessionQueuedAfterHealthCheck(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", Enabled: true}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", Slug: "manager"}
+	store.agentSessions = map[string]entity.AgentSession{
+		"idle": {
+			ID: 1, SessionKey: "idle", ProjectID: 1, ChatID: 1, RoleID: 1,
+			Status: agentSessionStatusIdle, KubernetesNamespace: "mattermost", PodName: "mc-session-idle",
+			PVCName: "mc-session-ws-idle", TokenSecretRef: "matter-codex-session-idle",
+			LastActivityAt: time.Now().Add(-4 * time.Hour),
+		},
+	}
+	store.beforeIdlePodEviction = func() {
+		store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{ID: 1, SessionID: 1, RunID: "queued-during-health-check", Status: agentSessionTurnQueued})
+		store.beforeIdlePodEviction = nil
+	}
+	capacityErr := runtimerepo.NewAgentSessionCapacityError("test scheduler pressure", errors.New("insufficient cpu"))
+	runner := &fakeRuntimeRunner{authSecretCheckErrors: []error{capacityErr, capacityErr}}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true,
+		DisableMonitor: true, CapacityRetryDelay: time.Nanosecond,
+	})
+
+	_, err := svc.checkCodexAuthSecretWithCapacityReclaim(context.Background(), runtimerepo.CodexAuthSecretCheckInput{
+		AccountName: "main", SecretName: "matter-codex-codex-auth-main",
+	})
+	if !runtimerepo.IsReclaimableAgentSessionCapacityError(err) {
+		t.Fatalf("capacity error = %v", err)
+	}
+	if runner.sessionRuntimeHealthCalls != 1 || len(runner.cleanedSessionKeys) != 0 {
+		t.Fatalf("health=%d cleanup=%#v", runner.sessionRuntimeHealthCalls, runner.cleanedSessionKeys)
+	}
+	if session := store.agentSessions["idle"]; session.PodName != "mc-session-idle" || session.KubernetesNamespace != "mattermost" {
+		t.Fatalf("busy session pod was evicted: %#v", session)
 	}
 }
 
@@ -1567,7 +1647,7 @@ func TestChatRunRestoresMissingThreadContextFromExistingSession(t *testing.T) {
 	if result.RunID == "" || result.Mode != "session" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(publisher.cards) != 0 {
+	if len(publisher.cards) != 1 || publisher.cards[0].Message != "matter-codex agent turn status #notrigger" {
 		t.Fatalf("existing session must not prompt for repository selection: %#v", publisher.cards)
 	}
 	threadContext, err := store.GetThreadContext(context.Background(), 1, rootPostID)

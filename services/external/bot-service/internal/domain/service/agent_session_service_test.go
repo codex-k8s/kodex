@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,24 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
+
+func TestAgentSessionStatusCardExposesStopForQueuedAndCanceledRecovery(t *testing.T) {
+	store, _, _ := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer: testLocalizer(t, texti18n.DefaultLocale), Store: store,
+		MenuActionURL: "https://mattermost.example/actions", StorageReady: true,
+	})
+	session := store.agentSessions["session-1"]
+	turn := store.sessionTurns[0]
+	for _, status := range []string{agentSessionTurnRunning, agentSessionTurnQueued, agentSessionTurnCanceled} {
+		t.Run(status, func(t *testing.T) {
+			card := svc.turnStatusCard(context.Background(), session, turn, status, "channel-1", "root-1", "status")
+			if len(card.Actions) != 1 || card.Actions[0].ID != "stopturn" || card.Actions[0].Context["resource_id"] != "1" {
+				t.Fatalf("status=%q actions=%#v", status, card.Actions)
+			}
+		})
+	}
+}
 
 func TestAgentSessionClaimCreatesInitialStatusPost(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
@@ -41,7 +60,7 @@ func TestAgentSessionClaimCreatesInitialStatusPost(t *testing.T) {
 	if card.Message != "matter-codex agent turn status #notrigger" {
 		t.Fatalf("card message = %q", card.Message)
 	}
-	if card.Props["matter_codex_event"] != "agent_status" || card.Props["status"] != agentSessionTurnRunning {
+	if card.Props["matter_codex_event"] != "agent_status" || card.Props["status"] != agentSessionTurnQueued || card.Props[agentStatusDeliveryIDProp] == "" {
 		t.Fatalf("card props = %#v", card.Props)
 	}
 	if len(card.Actions) != 1 || card.Actions[0].ID != "stopturn" {
@@ -53,12 +72,97 @@ func TestAgentSessionClaimCreatesInitialStatusPost(t *testing.T) {
 	if !strings.Contains(card.Text, "OpenAI account: `main`") {
 		t.Fatalf("status text misses account = %q", card.Text)
 	}
+	if len(publisher.cardUpdates) != 1 || publisher.cardUpdates[0].Props["status"] != agentSessionTurnRunning || publisher.cardUpdates[0].PostID != "card-root-1" {
+		t.Fatalf("running card update = %#v", publisher.cardUpdates)
+	}
 	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("GetAgentSessionTurn() error = %v", err)
 	}
 	if turn.MattermostStatusPostID != "card-root-1" {
 		t.Fatalf("MattermostStatusPostID = %q", turn.MattermostStatusPostID)
+	}
+}
+
+type blockingQueuedStatusPublisher struct {
+	*fakeThreadPublisher
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (publisher *blockingQueuedStatusPublisher) PostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error) {
+	publisher.once.Do(func() { close(publisher.entered) })
+	select {
+	case <-publisher.release:
+	case <-ctx.Done():
+		return MattermostPostRef{}, ctx.Err()
+	}
+	return publisher.fakeThreadPublisher.PostThreadCard(ctx, card)
+}
+
+func TestAgentSessionQueuedPublicationSerializesClaim(t *testing.T) {
+	store, runner, basePublisher := agentSessionStatusTestDeps()
+	publisher := &blockingQueuedStatusPublisher{
+		fakeThreadPublisher: basePublisher,
+		entered:             make(chan struct{}),
+		release:             make(chan struct{}),
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		MenuActionURL:   "https://mattermost.example/actions",
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session := store.agentSessions["session-1"]
+	turn := store.sessionTurns[0]
+	publicationResult := make(chan error, 1)
+	go func() {
+		publicationResult <- svc.withCurrentSessionPersistenceFence(ctx, session, "test.queued_publication", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+			message := svc.turnStatusMessageWithStore(ctx, guardedStore, current, agentSessionTurnQueued, turn.RunID, "main", "")
+			_, err := svc.upsertTurnStatusCardWithStore(ctx, guardedStore, current, turn, agentSessionTurnQueued, message, "")
+			return err
+		})
+	}()
+	select {
+	case <-publisher.entered:
+	case <-ctx.Done():
+		t.Fatal("queued-card publication не началась")
+	}
+
+	type claimResult struct {
+		claim AgentSessionTurnClaim
+		err   error
+	}
+	claimed := make(chan claimResult, 1)
+	go func() {
+		claim, err := svc.ClaimNextTurn(ctx, "session-1", "session-token")
+		claimed <- claimResult{claim: claim, err: err}
+	}()
+	select {
+	case result := <-claimed:
+		t.Fatalf("claim обошёл незавершённую queued-card publication: %#v", result)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(publisher.release)
+	if err := <-publicationResult; err != nil {
+		t.Fatalf("queued-card publication error=%v", err)
+	}
+	result := <-claimed
+	if result.err != nil || !result.claim.HasTurn || result.claim.TurnID != turn.ID {
+		t.Fatalf("claim=%#v error=%v", result.claim, result.err)
+	}
+	if len(publisher.cards) != 1 || publisher.cards[0].Props["status"] != agentSessionTurnQueued || len(publisher.cardUpdates) != 1 || publisher.cardUpdates[0].Props["status"] != agentSessionTurnRunning {
+		t.Fatalf("cards=%#v updates=%#v", publisher.cards, publisher.cardUpdates)
+	}
+	currentTurn, err := store.GetAgentSessionTurn(ctx, turn.ID)
+	if err != nil || currentTurn.MattermostStatusPostID != "card-root-1" {
+		t.Fatalf("turn=%#v error=%v", currentTurn, err)
 	}
 }
 
@@ -91,6 +195,68 @@ func TestAgentSessionClaimReturnsAlreadyRunningTurnAfterLostResponse(t *testing.
 	}
 	if len(publisher.cards) != 1 {
 		t.Fatalf("status cards should not duplicate on retry: %#v", publisher.cards)
+	}
+}
+
+type restartSafeStatusPublisher struct {
+	*fakeThreadPublisher
+	createdByDelivery map[string]MattermostCard
+	ambiguousOnce     bool
+	reconcileCalls    int
+}
+
+func (publisher *restartSafeStatusPublisher) ReconcileOrPostThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
+	publisher.reconcileCalls++
+	deliveryID, _ := card.Props[agentStatusDeliveryIDProp].(string)
+	if existing, ok := publisher.createdByDelivery[deliveryID]; ok {
+		return MattermostPostRef{ChannelID: existing.ChannelID, PostID: "durable-status-post"}, nil
+	}
+	publisher.createdByDelivery[deliveryID] = card
+	publisher.cards = append(publisher.cards, card)
+	if publisher.ambiguousOnce {
+		publisher.ambiguousOnce = false
+		return MattermostPostRef{}, errors.New("синтетическая неоднозначность публикации")
+	}
+	return MattermostPostRef{ChannelID: card.ChannelID, PostID: "durable-status-post"}, nil
+}
+
+func TestAgentSessionClaimRepairsAmbiguousQueuedCardAfterRestart(t *testing.T) {
+	store, runner, basePublisher := agentSessionStatusTestDeps()
+	publisher := &restartSafeStatusPublisher{
+		fakeThreadPublisher: basePublisher,
+		createdByDelivery:   map[string]MattermostCard{},
+		ambiguousOnce:       true,
+	}
+	config := AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: NewSecuredMattermostThreadPublisher(publisher, nil),
+		StorageReady:    true,
+		RuntimeReady:    true,
+	}
+
+	if _, err := NewAgentSessionService(config).ClaimNextTurn(context.Background(), "session-1", "session-token"); err == nil {
+		t.Fatal("неоднозначная первая публикация не вернула ошибку")
+	}
+	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
+	if err != nil || turn.Status != agentSessionTurnQueued || turn.MattermostStatusPostID != "" {
+		t.Fatalf("после fault turn=%#v error=%v", turn, err)
+	}
+	if current := store.agentSessions["session-1"]; current.ActiveTurnID != 0 || current.Status != agentSessionStatusIdle {
+		t.Fatalf("claim пересёк незавершённую публикацию: %#v", current)
+	}
+
+	claim, err := NewAgentSessionService(config).ClaimNextTurn(context.Background(), "session-1", "session-token")
+	if err != nil || !claim.HasTurn || claim.TurnID != 1 {
+		t.Fatalf("restart claim=%#v error=%v", claim, err)
+	}
+	turn, err = store.GetAgentSessionTurn(context.Background(), 1)
+	if err != nil || turn.Status != agentSessionTurnRunning || turn.MattermostStatusPostID != "durable-status-post" {
+		t.Fatalf("recovered turn=%#v error=%v", turn, err)
+	}
+	if len(publisher.cards) != 1 || len(publisher.createdByDelivery) != 1 || publisher.reconcileCalls != 2 || len(publisher.cardUpdates) != 1 {
+		t.Fatalf("publication create=%d identities=%d reconcile=%d updates=%d", len(publisher.cards), len(publisher.createdByDelivery), publisher.reconcileCalls, len(publisher.cardUpdates))
 	}
 }
 
@@ -331,10 +497,10 @@ func TestAgentSessionCompleteUpdatesStatusWithCodexLimits(t *testing.T) {
 	if len(publisher.cards) != 1 {
 		t.Fatalf("cards = %#v", publisher.cards)
 	}
-	if len(publisher.cardUpdates) != 1 {
+	if len(publisher.cardUpdates) != 2 {
 		t.Fatalf("cardUpdates = %#v", publisher.cardUpdates)
 	}
-	card := publisher.cardUpdates[0]
+	card := publisher.cardUpdates[len(publisher.cardUpdates)-1]
 	if card.PostID != "card-root-1" {
 		t.Fatalf("card update post id = %q", card.PostID)
 	}
@@ -343,6 +509,61 @@ func TestAgentSessionCompleteUpdatesStatusWithCodexLimits(t *testing.T) {
 		if !strings.Contains(message, expected) {
 			t.Fatalf("status message misses %q: %q", expected, message)
 		}
+	}
+}
+
+func TestAgentSessionCompleteCanceledTurnIsFencedNoop(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	stopArtifacts := `{"matter-codex-stop-purpose":"recoverable_stop_v1","matter-codex-stop-cleanup-required":"true","matter-codex-stop-cleanup-completed":"true","matter-codex-stop-reset-completed":"false","matter-codex-stop-card-completed":"false","matter-codex-stop-process-completed":"false","matter-codex-stop-automation-completed":"false"}`
+	store.sessionTurns[0].Status = agentSessionTurnCanceled
+	store.sessionTurns[0].Artifacts = stopArtifacts
+	reconciler := &fakeAutomationRuntimeReconciler{}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+		Store:                       store,
+		RuntimeRunner:               runner,
+		ThreadPublisher:             publisher,
+		AutomationRuntimeReconciler: reconciler,
+		StorageReady:                true,
+		RuntimeReady:                true,
+	})
+
+	err := svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+		TurnID: 1, RunID: "run-1", Status: agentSessionTurnSucceeded,
+		Artifacts: map[string]string{"stale": "completion"},
+	})
+	if err != nil {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	turn, err := store.GetAgentSessionTurn(context.Background(), 1)
+	if err != nil || turn.Status != agentSessionTurnCanceled || turn.Artifacts != stopArtifacts {
+		t.Fatalf("turn = %#v error=%v", turn, err)
+	}
+	if store.exactGuardCalls != 1 || store.completeTurnCalls != 0 || reconciler.calls != 0 || len(publisher.posts) != 0 || len(publisher.cardUpdates) != 0 {
+		t.Fatalf("fence=%d complete=%d reconcile=%d posts=%d cards=%d", store.exactGuardCalls, store.completeTurnCalls, reconciler.calls, len(publisher.posts), len(publisher.cardUpdates))
+	}
+}
+
+func TestAgentSessionCompleteRejectsStaleRunInsideFence(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
+
+	err := svc.CompleteTurn(context.Background(), "session-1", "session-token", CompleteAgentSessionTurnCommand{
+		TurnID: 1, RunID: "stale-run", Status: agentSessionTurnSucceeded,
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	turn, readErr := store.GetAgentSessionTurn(context.Background(), 1)
+	if readErr != nil || turn.Status != agentSessionTurnQueued || store.completeTurnCalls != 0 || store.exactGuardCalls != 1 {
+		t.Fatalf("turn=%#v read_error=%v complete=%d fence=%d", turn, readErr, store.completeTurnCalls, store.exactGuardCalls)
 	}
 }
 
@@ -420,16 +641,17 @@ func TestAgentSessionSystemStatusUpdatesInitialCardWithCodexLimits(t *testing.T)
 	if err != nil {
 		t.Fatalf("UpdateTurnSystemStatus() error = %v", err)
 	}
-	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
+	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 2 {
 		t.Fatalf("cards=%#v cardUpdates=%#v", publisher.cards, publisher.cardUpdates)
 	}
-	if ref.PostID != "card-root-1" || publisher.cardUpdates[0].PostID != "card-root-1" {
-		t.Fatalf("ref=%#v update=%#v", ref, publisher.cardUpdates[0])
+	card := publisher.cardUpdates[len(publisher.cardUpdates)-1]
+	if ref.PostID != "card-root-1" || card.PostID != "card-root-1" {
+		t.Fatalf("ref=%#v update=%#v", ref, card)
 	}
-	if len(publisher.cardUpdates[0].Actions) != 1 || publisher.cardUpdates[0].Actions[0].ID != "stopturn" {
-		t.Fatalf("updated card actions = %#v", publisher.cardUpdates[0].Actions)
+	if len(card.Actions) != 1 || card.Actions[0].ID != "stopturn" {
+		t.Fatalf("updated card actions = %#v", card.Actions)
 	}
-	text := publisher.cardUpdates[0].Text
+	text := card.Text
 	for _, expected := range []string{"agent @manager started", "OpenAI account: `main`", "Codex limits:", "5h 96%", "7d 82%"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("updated card misses %q: %q", expected, text)
@@ -492,10 +714,10 @@ func TestAgentSessionSystemStatusShowsCapacityRetryOnExistingCard(t *testing.T) 
 	if err != nil {
 		t.Fatalf("UpdateTurnSystemStatus() error = %v", err)
 	}
-	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
+	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 2 {
 		t.Fatalf("cards=%#v cardUpdates=%#v", publisher.cards, publisher.cardUpdates)
 	}
-	card := publisher.cardUpdates[0]
+	card := publisher.cardUpdates[len(publisher.cardUpdates)-1]
 	for _, expected := range []string{"модель временно перегружена", "Повтор `1/3`", "через `1` мин", "OpenAI account: `main`", "5h 83%"} {
 		if !strings.Contains(card.Text, expected) {
 			t.Fatalf("capacity retry card misses %q: %q", expected, card.Text)
@@ -539,10 +761,10 @@ func TestAgentSessionCapacityExhaustionAddsManualRetryAction(t *testing.T) {
 	if len(publisher.posts) != 0 {
 		t.Fatalf("capacity exhaustion should only use the system card, posts=%#v", publisher.posts)
 	}
-	if len(publisher.cardUpdates) != 1 {
+	if len(publisher.cardUpdates) != 2 {
 		t.Fatalf("cardUpdates = %#v", publisher.cardUpdates)
 	}
-	card := publisher.cardUpdates[0]
+	card := publisher.cardUpdates[len(publisher.cardUpdates)-1]
 	for _, expected := range []string{"после `3` автоматических повторов", "Работа и Codex session сохранены", "Запустить ещё раз"} {
 		if !strings.Contains(card.Text, expected) {
 			t.Fatalf("capacity exhausted card misses %q: %q", expected, card.Text)
@@ -618,7 +840,7 @@ func TestAgentSessionCompleteDoesNotPostFYIToRequester(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompleteTurn() error = %v", err)
 	}
-	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
+	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 2 {
 		t.Fatalf("cards=%#v cardUpdates=%#v", publisher.cards, publisher.cardUpdates)
 	}
 	if len(publisher.posts) != 1 {
@@ -876,7 +1098,7 @@ func TestAgentSessionCompleteSkipsFYIWhenRequesterIsAgentBot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompleteTurn() error = %v", err)
 	}
-	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 1 {
+	if len(publisher.cards) != 1 || len(publisher.cardUpdates) != 2 {
 		t.Fatalf("cards=%#v cardUpdates=%#v", publisher.cards, publisher.cardUpdates)
 	}
 	if len(publisher.posts) != 1 {
@@ -1341,8 +1563,8 @@ func TestAgentSessionStopReconcilesAutomationForRunningAndQueuedTurns(t *testing
 			if err != nil {
 				t.Fatalf("reconcile-only StopAgentSessionTurns() error = %v", err)
 			}
-			if reconciler.calls != 2 || reconciler.commands[1] != wantCommand {
-				t.Fatalf("reconcile-only automation commands=%#v", reconciler.commands)
+			if reconciler.calls != 1 {
+				t.Fatalf("completed Stop replay duplicated automation commands=%#v", reconciler.commands)
 			}
 			if len(runner.cleanedSessionKeys) != cleanupCalls || len(publisher.cardUpdates) != cardCalls {
 				t.Fatalf("reconcile-only retry duplicated side effects: cleanup=%d/%d cards=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, len(publisher.cardUpdates), cardCalls)
@@ -1403,24 +1625,20 @@ func TestAgentSessionStopReconcilesCanceledTurnAfterFinalizeFaultMatrixAndRetry(
 	tests := []struct {
 		name      string
 		configure func(*fakeCoordinationStore, *fakeRuntimeRunner, *fakeThreadPublisher)
-		want      []error
+		want      error
 	}{
 		{name: "cleanup", configure: func(_ *fakeCoordinationStore, runner *fakeRuntimeRunner, _ *fakeThreadPublisher) {
 			runner.sessionCleanupErrors = []error{cleanupErr}
-		}, want: []error{cleanupErr}},
+		}, want: cleanupErr},
 		{name: "reset", configure: func(store *fakeCoordinationStore, _ *fakeRuntimeRunner, _ *fakeThreadPublisher) {
 			store.resetSessionErrors = []error{resetErr}
-		}, want: []error{resetErr}},
+		}, want: resetErr},
 		{name: "card", configure: func(_ *fakeCoordinationStore, _ *fakeRuntimeRunner, publisher *fakeThreadPublisher) {
 			publisher.cardUpdateErr = cardErr
-		}, want: []error{cardErr}},
+		}, want: cardErr},
 		{name: "reconciliation", configure: func(store *fakeCoordinationStore, _ *fakeRuntimeRunner, _ *fakeThreadPublisher) {
 			store.reconcileErr = reconcileErr
-		}, want: []error{reconcileErr}},
-		{name: "card и reconciliation", configure: func(store *fakeCoordinationStore, _ *fakeRuntimeRunner, publisher *fakeThreadPublisher) {
-			publisher.cardUpdateErr = cardErr
-			store.reconcileErr = reconcileErr
-		}, want: []error{cardErr, reconcileErr}},
+		}, want: reconcileErr},
 	}
 	for _, clusterAdmin := range []bool{false, true} {
 		mode := "обычная роль"
@@ -1433,13 +1651,15 @@ func TestAgentSessionStopReconcilesCanceledTurnAfterFinalizeFaultMatrixAndRetry(
 				test.configure(store, runner, publisher)
 				command := StopAgentSessionTurnsCommand{TurnIDs: []int64{1}, UserID: "owner-user", UserName: "owner"}
 				_, err := svc.StopAgentSessionTurns(context.Background(), command)
-				for _, wanted := range test.want {
-					if !errors.Is(err, wanted) {
-						t.Fatalf("StopAgentSessionTurns() error=%v, отсутствует %v", err, wanted)
-					}
+				if !errors.Is(err, test.want) {
+					t.Fatalf("StopAgentSessionTurns() error=%v, отсутствует %v", err, test.want)
 				}
-				if store.reconcileCalls != 1 || store.updatedClaim.Status != agentSessionTurnCanceled {
-					t.Fatalf("reconcile=%d claim=%#v", store.reconcileCalls, store.updatedClaim)
+				wantInitialReconcile := 0
+				if test.name == "reconciliation" {
+					wantInitialReconcile = 1
+				}
+				if store.reconcileCalls != wantInitialReconcile || store.updatedClaim.Status != agentSessionTurnCanceled {
+					t.Fatalf("reconcile=%d/%d claim=%#v", store.reconcileCalls, wantInitialReconcile, store.updatedClaim)
 				}
 				turn, readErr := store.GetAgentSessionTurn(context.Background(), 1)
 				if readErr != nil || turn.Status != agentSessionTurnCanceled {
@@ -1450,20 +1670,37 @@ func TestAgentSessionStopReconcilesCanceledTurnAfterFinalizeFaultMatrixAndRetry(
 				store.resetSessionErrors = nil
 				store.reconcileErr = nil
 				publisher.cardUpdateErr = nil
-				cleanupCalls := len(runner.cleanedSessionKeys)
-				cardCalls := len(publisher.cardUpdates)
 				result, retryErr := svc.StopAgentSessionTurns(context.Background(), command)
 				if retryErr != nil {
 					t.Fatalf("repeat stop error=%v", retryErr)
 				}
-				if store.reconcileCalls != 2 || store.updatedClaim.Status != agentSessionTurnCanceled {
-					t.Fatalf("repeat reconcile=%d claim=%#v", store.reconcileCalls, store.updatedClaim)
+				wantReconcileCalls := 1
+				if test.name == "reconciliation" {
+					wantReconcileCalls = 2
 				}
-				if len(runner.cleanedSessionKeys) != cleanupCalls || len(publisher.cardUpdates) != cardCalls {
-					t.Fatalf("repeat stop duplicated effects: cleanup=%d/%d cards=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, len(publisher.cardUpdates), cardCalls)
+				if store.reconcileCalls != wantReconcileCalls || store.updatedClaim.Status != agentSessionTurnCanceled {
+					t.Fatalf("repeat reconcile=%d/%d claim=%#v", store.reconcileCalls, wantReconcileCalls, store.updatedClaim)
+				}
+				if len(publisher.cardUpdates) != 1 {
+					t.Fatalf("recovery card updates=%d, want 1", len(publisher.cardUpdates))
 				}
 				if !strings.Contains(result.Message, "stopped agent turns: `0`") {
 					t.Fatalf("repeat result=%#v", result)
+				}
+				turn, readErr = store.GetAgentSessionTurn(context.Background(), 1)
+				state, stateErr := agentTurnStopStateFromArtifacts(turn.Artifacts)
+				if readErr != nil || stateErr != nil || !state.completed() || !agentSessionRuntimeCleared(store.agentSessions["session-1"]) {
+					t.Fatalf("recovered state=%#v session=%#v read=%v state_error=%v", state, store.agentSessions["session-1"], readErr, stateErr)
+				}
+				cleanupCalls := len(runner.cleanedSessionKeys)
+				resetCalls := store.resetSessionCalls
+				cardCalls := len(publisher.cardUpdates)
+				reconcileCalls := store.reconcileCalls
+				if _, retryErr = svc.StopAgentSessionTurns(context.Background(), command); retryErr != nil {
+					t.Fatalf("completed replay error=%v", retryErr)
+				}
+				if len(runner.cleanedSessionKeys) != cleanupCalls || store.resetSessionCalls != resetCalls || len(publisher.cardUpdates) != cardCalls || store.reconcileCalls != reconcileCalls {
+					t.Fatalf("completed replay duplicated effects cleanup=%d/%d reset=%d/%d card=%d/%d reconcile=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, store.resetSessionCalls, resetCalls, len(publisher.cardUpdates), cardCalls, store.reconcileCalls, reconcileCalls)
 				}
 			})
 		}
