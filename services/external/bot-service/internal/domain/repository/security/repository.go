@@ -141,6 +141,14 @@ type AtomicDialogRepository interface {
 	) (Capability, error)
 }
 
+type ConsumedCapabilityReplayRepository interface {
+	ReplayConsumedInteractionCapabilityWithMutation(
+		ctx context.Context,
+		input ConsumeCapabilityInput,
+		mutation func(Capability, adminrepo.Repository) error,
+	) (Capability, error)
+}
+
 type ClusterAdminBindingRepository interface {
 	AdmitExistingClusterAdminBinding(ctx context.Context, input ClusterAdminBindingInput) (bool, error)
 }

@@ -124,8 +124,8 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	if runner.startedSessionKey == "" || runner.sessionCodexSecret != "matter-codex-codex-auth-main" {
 		t.Fatalf("session runner = %#v", runner.sessionRuns)
 	}
-	if len(publisher.posts) != 0 || len(publisher.cards) != 0 {
-		t.Fatalf("chat handler must not create duplicate status posts, posts=%#v cards=%#v", publisher.posts, publisher.cards)
+	if len(publisher.posts) != 0 || len(publisher.cards) != 1 || publisher.cards[0].Props["status"] != agentSessionTurnQueued {
+		t.Fatalf("chat handler must create one queued status card, posts=%#v cards=%#v", publisher.posts, publisher.cards)
 	}
 	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "Help me decompose the task.") || !strings.Contains(store.sessionTurns[0].Message, "Проект: Platform") {
 		t.Fatalf("turns = %#v", store.sessionTurns)
@@ -186,7 +186,7 @@ func TestChatRunAddsAgentEyesReaction(t *testing.T) {
 	}
 }
 
-func TestChatRunDoesNotPostDuplicateQueuedTurnCard(t *testing.T) {
+func TestChatRunPostsSingleQueuedTurnCardWithStop(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{
 		ID:                1,
@@ -223,11 +223,18 @@ func TestChatRunDoesNotPostDuplicateQueuedTurnCard(t *testing.T) {
 	if result.RunID == "" || result.Mode != "session" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(publisher.cards) != 0 || len(publisher.posts) != 0 {
+	if len(publisher.cards) != 1 || len(publisher.posts) != 0 {
 		t.Fatalf("publisher cards=%#v posts=%#v", publisher.cards, publisher.posts)
+	}
+	card := publisher.cards[0]
+	if card.Props["status"] != agentSessionTurnQueued || len(card.Actions) != 1 || card.Actions[0].ID != "stopturn" {
+		t.Fatalf("queued status card=%#v", card)
 	}
 	if len(store.sessionTurns) != 1 {
 		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+	if store.sessionTurns[0].MattermostStatusPostID == "" {
+		t.Fatalf("queued turn status post was not persisted: %#v", store.sessionTurns[0])
 	}
 }
 
@@ -944,6 +951,9 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 	if store.sessionTurns[0].Status != agentSessionTurnFailed || !strings.Contains(store.sessionTurns[0].ErrorMessage, "OOMKilled") {
 		t.Fatalf("running turn was not failed with OOM reason: %#v", store.sessionTurns[0])
 	}
+	if store.exactGuardCalls == 0 || store.completeTurnCalls != 1 || store.completeTurnInput.SessionID != 1 || store.completeTurnInput.TurnID != 1 || store.completeTurnInput.RunID != "run-1" || store.completeTurnInput.ExpectedStatus != agentSessionTurnRunning {
+		t.Fatalf("repair completion fence=%d calls=%d input=%#v", store.exactGuardCalls, store.completeTurnCalls, store.completeTurnInput)
+	}
 	if store.sessionTurns[1].Status != agentSessionTurnQueued {
 		t.Fatalf("queued turn changed unexpectedly: %#v", store.sessionTurns[1])
 	}
@@ -1428,7 +1438,7 @@ func TestChatRunRestoresMissingThreadContextFromExistingSession(t *testing.T) {
 	if result.RunID == "" || result.Mode != "session" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(publisher.cards) != 0 {
+	if len(publisher.cards) != 1 || publisher.cards[0].Message != "matter-codex agent turn status #notrigger" {
 		t.Fatalf("existing session must not prompt for repository selection: %#v", publisher.cards)
 	}
 	threadContext, err := store.GetThreadContext(context.Background(), 1, rootPostID)

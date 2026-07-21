@@ -469,20 +469,24 @@ func (svc *AgentSessionService) reconcileTerminalProcessRun(ctx context.Context,
 	reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	return svc.withCurrentSessionPersistenceGuard(reconcileCtx, session, operation, func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
-		store, ok := guardedStore.(adminrepo.CoordinationRepository)
-		if !ok {
-			return nil
-		}
-		_, workErr := store.UpdateWorkClaim(reconcileCtx, adminrepo.UpdateWorkClaimInput{TurnID: turnID, Status: status})
-		if errors.Is(workErr, adminrepo.ErrNotFound) {
-			workErr = nil
-		}
-		processErr := store.ReconcileProcessRun(reconcileCtx, turnID)
-		if errors.Is(processErr, adminrepo.ErrNotFound) {
-			processErr = nil
-		}
-		return errors.Join(workErr, processErr)
+		return svc.reconcileTerminalProcessRunWithStore(reconcileCtx, guardedStore, turnID, status)
 	})
+}
+
+func (svc *AgentSessionService) reconcileTerminalProcessRunWithStore(ctx context.Context, guardedStore adminrepo.Repository, turnID int64, status string) error {
+	store, ok := guardedStore.(adminrepo.CoordinationRepository)
+	if !ok {
+		return nil
+	}
+	_, workErr := store.UpdateWorkClaim(ctx, adminrepo.UpdateWorkClaimInput{TurnID: turnID, Status: status})
+	if errors.Is(workErr, adminrepo.ErrNotFound) {
+		workErr = nil
+	}
+	processErr := store.ReconcileProcessRun(ctx, turnID)
+	if errors.Is(processErr, adminrepo.ErrNotFound) {
+		processErr = nil
+	}
+	return errors.Join(workErr, processErr)
 }
 
 func (svc *AgentSessionService) processLineageMarkdown(ctx context.Context, projectID int64, lineage []entity.ProcessLineageStep) string {

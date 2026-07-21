@@ -44,6 +44,60 @@ func TestControlSurfaceUsesBoundedHTTPTransportForEveryToken(t *testing.T) {
 	}
 }
 
+func TestControlSurfaceReconcilesStatusCardAfterAmbiguousCreateAndRestart(t *testing.T) {
+	card := statusservice.MattermostCard{
+		ChannelID: "channel-1", RootPostID: "root-1", Message: "matter-codex agent turn status #notrigger",
+		Props: map[string]any{
+			"matter_codex_event": "agent_status", "matter_codex_status_delivery_id": "cccccccccccccccccccccccccc",
+			"session_key": "session-1", "role_id": int64(1), "turn_id": int64(2), "run_id": "run-1", "status": "queued",
+		},
+	}
+	var getCalls atomic.Int64
+	var postCalls atomic.Int64
+	var created *mattermostmodel.Post
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/posts/root-1/thread"):
+			call := getCalls.Add(1)
+			list := &mattermostmodel.PostList{Posts: map[string]*mattermostmodel.Post{}, Order: []string{}}
+			if call >= 3 && created != nil {
+				list.Posts[created.Id] = created
+				list.Order = append(list.Order, created.Id)
+			}
+			if err := json.NewEncoder(writer).Encode(list); err != nil {
+				t.Errorf("encode Mattermost thread response: %v", err)
+			}
+		case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/posts"):
+			postCalls.Add(1)
+			var post mattermostmodel.Post
+			if err := json.NewDecoder(request.Body).Decode(&post); err != nil {
+				t.Errorf("decode Mattermost status create request: %v", err)
+			}
+			post.Id = "durable-status-post"
+			created = &post
+			writer.WriteHeader(http.StatusBadGateway)
+			_, _ = writer.Write([]byte(`{"id":"synthetic","message":"ambiguous create","status_code":502}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	first := NewControlSurface(server.URL, "synthetic-token", "")
+	if _, err := first.ReconcileOrPostThreadCard(context.Background(), card); err == nil {
+		t.Fatal("первая неоднозначная публикация не вернула ошибку")
+	}
+	if created == nil || created.PendingPostId != "cccccccccccccccccccccccccc" || postCalls.Load() != 1 {
+		t.Fatalf("created=%#v post_calls=%d", created, postCalls.Load())
+	}
+	restarted := NewControlSurface(server.URL, "synthetic-token", "")
+	ref, err := restarted.ReconcileOrPostThreadCard(context.Background(), card)
+	if err != nil || ref.PostID != "durable-status-post" || postCalls.Load() != 1 {
+		t.Fatalf("restart ref=%#v error=%v post_calls=%d", ref, err, postCalls.Load())
+	}
+}
+
 func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) {
 	input := statusservice.MattermostThreadPostInput{
 		ChannelID: "channel-1", RootPostID: "root-1", Message: "immutable callback\n\n#notrigger",

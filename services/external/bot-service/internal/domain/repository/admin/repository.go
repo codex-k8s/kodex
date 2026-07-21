@@ -288,11 +288,14 @@ type CreateAgentSessionTurnInput struct {
 }
 
 type CompleteAgentSessionTurnInput struct {
-	TurnID       int64
-	Status       string
-	FinalMessage string
-	ErrorMessage string
-	Artifacts    string
+	SessionID      int64
+	TurnID         int64
+	RunID          string
+	ExpectedStatus string
+	Status         string
+	FinalMessage   string
+	ErrorMessage   string
+	Artifacts      string
 }
 
 type CancelAgentSessionTurnInput struct {
@@ -304,6 +307,20 @@ type CancelAgentSessionTurnInput struct {
 type UpdateAgentSessionTurnStatusPostInput struct {
 	TurnID       int64
 	StatusPostID string
+}
+
+type CompareAndSwapAgentSessionTurnArtifactsInput struct {
+	TurnID            int64
+	ExpectedArtifacts string
+	Artifacts         string
+}
+
+type AgentSessionTurnArtifactsRepository interface {
+	CompareAndSwapAgentSessionTurnArtifacts(ctx context.Context, input CompareAndSwapAgentSessionTurnArtifactsInput) (entity.AgentSessionTurn, error)
+}
+
+type AgentSessionLockRepository interface {
+	LockAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error)
 }
 
 type UpdateAgentSessionTurnRunsPostInput struct {

@@ -1,8 +1,9 @@
 update matter_codex_agent_session_turns set
-	mattermost_status_post_id = $2,
+	artifacts = $3::jsonb,
 	updated_at = now()
 where id = $1
-	and (mattermost_status_post_id = '' or mattermost_status_post_id = $2)
+	and status = 'canceled'
+	and artifacts = $2::jsonb
 returning
 	id,
 	session_id,

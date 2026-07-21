@@ -67,6 +67,12 @@ func (store *admittedCoordinationStore) WithExistingClusterAdminPersistenceGuard
 	return sideEffect(store)
 }
 
+func (store *admittedCoordinationStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.fakeAdminStore.WithExactAgentSessionsRuntimeGuard(ctx, expected, func(adminrepo.Repository) error {
+		return sideEffect(store)
+	})
+}
+
 func (store *admittedCoordinationStore) ListClusterAdminSecretIntegrity(context.Context, int64, string) ([]securityrepo.SecretIntegrityBinding, error) {
 	return []securityrepo.SecretIntegrityBinding{{
 		Kind: "session", SecretRef: "session-secret", SecretKey: "token",

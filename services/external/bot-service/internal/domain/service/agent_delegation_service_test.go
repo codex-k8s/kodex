@@ -15,6 +15,7 @@ import (
 func (store *fakeAdminStore) WithExactAgentSessionsRuntimeGuard(_ context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
 	store.capacityMu.Lock()
 	defer store.capacityMu.Unlock()
+	store.exactGuardCalls++
 	seen := make(map[string]entity.AgentSession, len(expected))
 	for _, binding := range expected {
 		key := strings.TrimSpace(binding.SessionKey)
