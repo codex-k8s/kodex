@@ -533,7 +533,7 @@ func verifyExactCallbackPost(post *mattermostmodel.Post, input statusservice.Mat
 }
 
 func exactCallbackPostProps(actual map[string]any, clientOwned map[string]any) bool {
-	if len(actual) != len(clientOwned)+1 || actual[mattermostmodel.PostPropsFromBot] != "true" {
+	if actual[mattermostmodel.PostPropsFromBot] != "true" {
 		return false
 	}
 	for key, expected := range clientOwned {
@@ -546,11 +546,8 @@ func exactCallbackPostProps(actual map[string]any, clientOwned map[string]any) b
 		}
 	}
 	for key := range actual {
-		if key == mattermostmodel.PostPropsFromBot {
+		if key == mattermostmodel.PostPropsFromBot || !strings.HasPrefix(key, "matter_codex_") {
 			continue
-		}
-		if !strings.HasPrefix(key, "matter_codex_") {
-			return false
 		}
 		if _, exists := clientOwned[key]; !exists {
 			return false

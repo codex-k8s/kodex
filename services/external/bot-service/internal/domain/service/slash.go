@@ -5698,10 +5698,8 @@ func (svc *SlashCommandService) promptTemplateSeedBody(ctx context.Context, seed
 	return "", err
 }
 
-func promptGitHubData(accountName string, username string) promptTemplateGitHubData {
+func promptGitHubData(_ string, _ string) promptTemplateGitHubData {
 	return promptTemplateGitHubData{
-		Account:     defaultString(accountName, "primary"),
-		Username:    strings.TrimSpace(username),
 		TokenEnv:    "GH_TOKEN / GITHUB_TOKEN",
 		UsernameEnv: "GITHUB_USERNAME / GITHUB_USER",
 		EmailEnv:    "GITHUB_EMAIL",

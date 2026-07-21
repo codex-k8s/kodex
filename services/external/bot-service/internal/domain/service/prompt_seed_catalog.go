@@ -10,7 +10,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 )
 
-//go:embed prompt_seeds/*.md prompt_seeds/history/v1/*.md
+//go:embed prompt_seeds/*.md prompt_seeds/history/v1/*.md prompt_seeds/history/v2/*.md
 var promptSeedFiles embed.FS
 
 const (
@@ -52,6 +52,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "developer_implement_task.md",
 			RoleNames:     []string{"developer", "worker", "backend-developer", "frontend-developer", "deployer"},
 			RoleTypes:     []string{"worker", "deployer"},
+			Version:       2,
+			PreviousFiles: []string{"history/v1/developer_implement_task.md"},
 		},
 		{
 			SourceProfile: "reviewer",
@@ -61,8 +63,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "reviewer_review_pr.md",
 			RoleNames:     []string{"reviewer", "technical-reviewer", "technical_reviewer", "security", "security-reviewer", "security_reviewer", "lexical-guard", "lexical_guard"},
 			RoleTypes:     []string{"reviewer", "security", "security_reviewer", "lexical_guard"},
-			Version:       2,
-			PreviousFiles: []string{"history/v1/reviewer_review_pr.md"},
+			Version:       3,
+			PreviousFiles: []string{"history/v1/reviewer_review_pr.md", "history/v2/reviewer_review_pr.md"},
 		},
 		{
 			SourceProfile: "manager",
@@ -72,8 +74,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "manager_coordinate_task.md",
 			RoleNames:     []string{"manager"},
 			RoleTypes:     []string{"manager"},
-			Version:       2,
-			PreviousFiles: []string{"history/v1/manager_coordinate_task.md"},
+			Version:       3,
+			PreviousFiles: []string{"history/v1/manager_coordinate_task.md", "history/v2/manager_coordinate_task.md"},
 		},
 		{
 			SourceProfile: "architect",

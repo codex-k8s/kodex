@@ -101,4 +101,17 @@ for variable in SMOKE_SLASH_STATUS SMOKE_GITHUB_STATUS; do
   unset "$variable"
 done
 
+INSTALLER="$REPO_ROOT/scripts/remote/install-bot-service.sh"
+for manifest_media_type in \
+  'application/vnd.oci.image.manifest.v1+json' \
+  'application/vnd.docker.distribution.manifest.v2+json' \
+  'application/vnd.oci.image.index.v1+json' \
+  'application/vnd.docker.distribution.manifest.list.v2+json'
+do
+  if ! grep -Fq "$manifest_media_type" "$INSTALLER"; then
+    printf 'registry probe не поддерживает media type Kaniko/runtime: %s\n' "$manifest_media_type" >&2
+    exit 1
+  fi
+done
+
 printf 'матрица smoke-bot-service: PASS\n'

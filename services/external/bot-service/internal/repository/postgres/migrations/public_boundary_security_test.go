@@ -380,7 +380,7 @@ where subject_type = 'agent_profile'
 	}
 }
 
-func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30Upgrade(t *testing.T) {
+func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30V31Upgrade(t *testing.T) {
 	ownerDSN := isolatedMigrationDSN(t, "exact_n_minus_one")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -435,9 +435,9 @@ func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30Upgrade(t
 	}
 	stagingPool.Close()
 	if err := migrations.RunForRuntimeRole(ctx, ownerDSN, roleName); err != nil {
-		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28->v29->v30: %v", err)
+		t.Fatalf("upgrade exact N-1 database v22->v23->v24->v25->v26->v27->v28->v29->v30->v31->v32->v33: %v", err)
 	}
-	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 30 {
+	if version, err := migrations.Version(ctx, ownerDSN); err != nil || version != 33 {
 		t.Fatalf("upgraded exact N-1 schema version = %d, error=%v", version, err)
 	}
 
@@ -604,18 +604,111 @@ func TestForwardOnlyDownKeepsVersionAndUpIsIdempotent(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	if err := migrations.DownOne(ctx, dsn); err == nil {
-		t.Fatal("v30 down unexpectedly succeeded")
+		t.Fatal("v33 down unexpectedly succeeded")
 	}
 	version, err := migrations.Version(ctx, dsn)
-	if err != nil || version != 30 {
+	if err != nil || version != 33 {
 		t.Fatalf("version after failed down = %d, error=%v", version, err)
 	}
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("repeated up after failed down: %v", err)
 	}
 	version, err = migrations.Version(ctx, dsn)
-	if err != nil || version != 30 {
+	if err != nil || version != 33 {
 		t.Fatalf("version after repeated up = %d, error=%v", version, err)
+	}
+}
+
+func TestV32RemovesHistoricalGitHubIdentityFromPromptTemplates(t *testing.T) {
+	dsn := isolatedMigrationDSN(t, "v32_prompt_identity")
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	if err := migrations.RunTo(ctx, dsn, 31); err != nil {
+		t.Fatalf("migrate through v31: %v", err)
+	}
+	pool := openMigrationPool(t, ctx, dsn)
+	defer pool.Close()
+	const historical = "before\n{{if .GitHub.Account}}- GitHub-аккаунт: {{.GitHub.Account}}{{end}}\n{{if .GitHub.Username}}- login: {{.GitHub.Username}}{{end}}\n- Используй GitHub через `gh` и настроенный GitHub-аккаунт. Не печатай значения токенов.\n- GitHub credentials назначает MatterCodex для этой роли. Не требуй alias/login, указанный в задаче другим агентом, и не сравнивай его с identity запускающей роли; критерием является достаточность фактических прав для ревью.\n- GitHub credentials выбираются MatterCodex отдельно для каждой целевой роли. Никогда не добавляй в дочерний промпт требование использовать конкретный account alias, login или identity, не копируй identity координатора и не делай имя владельца условием выполнения. Передавай требуемое действие и уровень доступа; целевой агент сам проверит, достаточно ли выданных ему прав.\nafter\n"
+	var projectID int64
+	if err := pool.QueryRow(ctx, `
+insert into matter_codex_projects(name, slug) values ('Prompt hygiene', 'prompt-hygiene') returning id
+`).Scan(&projectID); err != nil {
+		t.Fatalf("insert project: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+insert into matter_codex_agent_roles(project_id, name, role_type, prompt_template)
+values ($1, 'developer', 'worker', $2)
+`, projectID, historical); err != nil {
+		t.Fatalf("insert historical role prompt: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+insert into matter_codex_agent_prompt_templates(profile_name, template_key, body)
+values ('developer', 'implement_task', $1)
+`, historical); err != nil {
+		t.Fatalf("insert historical catalog prompt: %v", err)
+	}
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("apply v32: %v", err)
+	}
+	queries := []struct {
+		query string
+		args  []any
+	}{
+		{query: `select prompt_template from matter_codex_agent_roles where project_id = $1 and name = 'developer'`, args: []any{projectID}},
+		{query: `select body from matter_codex_agent_prompt_templates where profile_name = 'developer' and template_key = 'implement_task'`},
+	}
+	for _, item := range queries {
+		var body string
+		if err := pool.QueryRow(ctx, item.query, item.args...).Scan(&body); err != nil {
+			t.Fatalf("read sanitized prompt: %v", err)
+		}
+		for _, forbidden := range []string{".GitHub.Account", ".GitHub.Username", "настроенный GitHub-аккаунт", "GitHub credentials назначает MatterCodex", "GitHub credentials выбираются MatterCodex"} {
+			if strings.Contains(body, forbidden) {
+				t.Fatalf("v32 left GitHub identity metadata %q in %q", forbidden, body)
+			}
+		}
+		if !strings.Contains(body, "before") || !strings.Contains(body, "after") ||
+			!strings.Contains(body, "Используй GitHub через `gh`. Не печатай значения credentials.") ||
+			!strings.Contains(body, "Критерием доступа является возможность выполнить нужные GitHub-операции.") ||
+			!strings.Contains(body, "В дочернем промпте передавай требуемое действие и уровень доступа.") {
+			t.Fatalf("v32 damaged surrounding prompt content: %q", body)
+		}
+	}
+}
+
+func TestV33RemovesResidualGitHubIdentityWithoutEnvironmentPlaceholders(t *testing.T) {
+	dsn := isolatedMigrationDSN(t, "v33_prompt_identity_residuals")
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	if err := migrations.RunTo(ctx, dsn, 32); err != nil {
+		t.Fatalf("migrate through v32: %v", err)
+	}
+	pool := openMigrationPool(t, ctx, dsn)
+	defer pool.Close()
+	const historical = "before\nGitHub account: {{.GitHub.Account}}\nUse {{.GitHub.TokenEnv}}, {{.GitHub.UsernameEnv}} and {{.GitHub.EmailEnv}}.\nafter\n"
+	if _, err := pool.Exec(ctx, `
+insert into matter_codex_agent_prompt_templates(profile_name, template_key, body)
+values ('developer', 'legacy_identity', $1)
+`, historical); err != nil {
+		t.Fatalf("insert residual prompt: %v", err)
+	}
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("apply v33: %v", err)
+	}
+	var body string
+	if err := pool.QueryRow(ctx, `
+select body from matter_codex_agent_prompt_templates
+where profile_name = 'developer' and template_key = 'legacy_identity'
+`).Scan(&body); err != nil {
+		t.Fatalf("read sanitized residual prompt: %v", err)
+	}
+	if strings.Contains(body, ".GitHub.Account") || strings.Contains(body, ".GitHub.Username}}") {
+		t.Fatalf("v33 left GitHub identity metadata in %q", body)
+	}
+	for _, expected := range []string{"before", "after", ".GitHub.TokenEnv", ".GitHub.UsernameEnv", ".GitHub.EmailEnv"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("v33 removed runtime environment placeholder %q from %q", expected, body)
+		}
 	}
 }
 
@@ -1420,6 +1513,58 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	})
 	if err != nil || !persistenceCallback {
 		t.Fatalf("существующая persistence binding: callback=%t error=%v", persistenceCallback, err)
+	}
+	const bootstrappedSessionKey = "bootstrapped-admin-session"
+	bootstrapped, created, err := repository.CreateFrozenClusterAdminSession(ctx, adminrepo.UpsertAgentSessionInput{
+		SessionKey:            bootstrappedSessionKey,
+		ProjectID:             projectID,
+		ChatID:                chatID,
+		RoleID:                roleID,
+		SessionScope:          "thread_role",
+		MattermostChannelID:   "channel-existing",
+		MattermostRootPostID:  "root-bootstrapped",
+		OpenAIAccountName:     "primary",
+		KubernetesNamespace:   "matter-kodex-prod",
+		PodName:               "mc-session-bootstrapped-admin-session",
+		PVCName:               "mc-session-ws-bootstrapped-admin-session",
+		TokenSecretRef:        "matter-codex-session-bootstrapped-admin-session",
+		SecretContentSHA256:   strings.Repeat("a", 64),
+		SecretResourceUID:     "synthetic-bootstrap-uid",
+		SecretResourceVersion: "1",
+		TTLSeconds:            3600,
+		Capabilities:          `{}`,
+	})
+	if err != nil || !created || bootstrapped.SessionKey != bootstrappedSessionKey {
+		t.Fatalf("atomic frozen session bootstrap: created=%t session=%q error=%v", created, bootstrapped.SessionKey, err)
+	}
+	if _, created, err = repository.CreateFrozenClusterAdminSession(ctx, adminrepo.UpsertAgentSessionInput{
+		SessionKey:            bootstrappedSessionKey,
+		ProjectID:             projectID,
+		ChatID:                chatID,
+		RoleID:                roleID,
+		SessionScope:          "thread_role",
+		MattermostChannelID:   "channel-existing",
+		MattermostRootPostID:  "root-bootstrapped",
+		OpenAIAccountName:     "primary",
+		KubernetesNamespace:   "matter-kodex-prod",
+		PodName:               "mc-session-bootstrapped-admin-session",
+		PVCName:               "mc-session-ws-bootstrapped-admin-session",
+		TokenSecretRef:        "matter-codex-session-bootstrapped-admin-session",
+		SecretContentSHA256:   strings.Repeat("a", 64),
+		SecretResourceUID:     "synthetic-bootstrap-uid",
+		SecretResourceVersion: "1",
+		TTLSeconds:            3600,
+		Capabilities:          `{}`,
+	}); err != nil || created {
+		t.Fatalf("idempotent frozen session bootstrap: created=%t error=%v", created, err)
+	}
+	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
+		MattermostChannelID: "channel-existing", SessionKey: bootstrappedSessionKey,
+		ActorUser: "test", Operation: "test.binding.bootstrapped-session",
+	})
+	if err != nil || !allowed {
+		t.Fatalf("bootstrapped session binding: allowed=%t error=%v", allowed, err)
 	}
 	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
 		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",

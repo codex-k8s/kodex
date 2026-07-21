@@ -730,8 +730,9 @@ func (r *runner) prepareEphemeralRuntime() error {
 		}
 	}
 	values := map[string]struct{}{}
-	collectEnvironmentSecretValues(values, os.Environ())
-	inventory, err := compileSecretInventory(values, map[string]int64{})
+	exactOnlyValues := map[string]struct{}{}
+	collectEnvironmentSecretValues(values, exactOnlyValues, os.Environ())
+	inventory, err := compileSecretInventory(values, map[string]int64{}, exactOnlyValues)
 	if err != nil {
 		r.cleanupEphemeralRuntime()
 		return err
@@ -1834,6 +1835,7 @@ type secretInventory struct {
 	hexCanonical                  []string
 	fragmentCandidates            []string
 	hasUnsupportedShortCredential bool
+	exactOnlyValues               map[string]struct{}
 	values                        map[string]struct{}
 	sources                       map[string]int64
 }
@@ -1850,7 +1852,8 @@ func newSecretRedactor(environment []string) secretRedactor {
 func buildSecretInventory(environment []string, explicitFiles []string) (secretInventory, error) {
 	values := map[string]struct{}{}
 	sources := map[string]int64{}
-	collectEnvironmentSecretValues(values, environment)
+	exactOnlyValues := map[string]struct{}{}
+	collectEnvironmentSecretValues(values, exactOnlyValues, environment)
 	files := append(credentialFileSources(environment), explicitFiles...)
 	seenFiles := map[string]struct{}{}
 	for _, path := range files {
@@ -1866,15 +1869,17 @@ func buildSecretInventory(environment []string, explicitFiles []string) (secretI
 			continue
 		}
 		seenFiles[cleaned] = struct{}{}
-		if err := addCredentialFileValues(values, sources, cleaned); err != nil {
+		if err := addCredentialFileValues(values, exactOnlyValues, sources, cleaned); err != nil {
 			return secretInventory{}, err
 		}
 	}
-	return compileSecretInventory(values, sources)
+	return compileSecretInventory(values, sources, exactOnlyValues)
 }
 
-func collectEnvironmentSecretValues(values map[string]struct{}, environment []string) {
+func collectEnvironmentSecretValues(values map[string]struct{}, exactOnlyValues map[string]struct{}, environment []string) {
 	runtimeNames := runtimeEnvironmentNames(environment)
+	sensitiveRuntimeNames := sensitiveRuntimeEnvironmentNames(environment)
+	strongValues := map[string]struct{}{}
 	for _, item := range environment {
 		name, value, ok := strings.Cut(item, "=")
 		if !ok || (!runtimeNames[name] && !sensitiveEnvironmentName(name)) {
@@ -1884,10 +1889,38 @@ func collectEnvironmentSecretValues(values map[string]struct{}, environment []st
 			continue
 		}
 		addSecretValue(values, value)
+		strong := !runtimeNames[name] || sensitiveRuntimeNames[name] || credentialLikeEnvironmentName(name)
+		if strong {
+			addSecretValue(strongValues, value)
+			delete(exactOnlyValues, value)
+		} else if _, alreadyStrong := strongValues[value]; !alreadyStrong {
+			addSecretValue(exactOnlyValues, value)
+		}
 		if trimmed := strings.TrimSpace(value); trimmed != value {
 			addSecretValue(values, trimmed)
+			if strong {
+				addSecretValue(strongValues, trimmed)
+				delete(exactOnlyValues, trimmed)
+			} else if _, alreadyStrong := strongValues[trimmed]; !alreadyStrong {
+				addSecretValue(exactOnlyValues, trimmed)
+			}
 		}
 	}
+}
+
+func sensitiveRuntimeEnvironmentNames(environment []string) map[string]bool {
+	names := map[string]bool{}
+	for _, item := range environment {
+		name, value, ok := strings.Cut(item, "=")
+		if ok && name == "MATTERCODEX_RUNTIME_SENSITIVE_ENV_ALLOWLIST" {
+			for _, raw := range strings.Split(value, ",") {
+				if candidate := strings.TrimSpace(raw); candidate != "" {
+					names[candidate] = true
+				}
+			}
+		}
+	}
+	return names
 }
 
 func runtimeEnvironmentNames(environment []string) map[string]bool {
@@ -1935,7 +1968,7 @@ func credentialFileEnvironmentSources(environment []string) []string {
 	return paths
 }
 
-func addCredentialFileValues(values map[string]struct{}, sources map[string]int64, path string) error {
+func addCredentialFileValues(values map[string]struct{}, exactOnlyValues map[string]struct{}, sources map[string]int64, path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1956,11 +1989,20 @@ func addCredentialFileValues(values map[string]struct{}, sources map[string]int6
 	if err != nil {
 		return fmt.Errorf("credential source не прочитан")
 	}
-	collectCredentialFileValues(values, body)
+	collectCredentialFileValues(values, exactOnlyValues, body)
 	return nil
 }
 
-func collectCredentialFileValues(values map[string]struct{}, body []byte) {
+func collectCredentialFileValues(values map[string]struct{}, exactOnlyValues map[string]struct{}, body []byte) {
+	credentialValues := map[string]struct{}{}
+	collectCredentialFileValuesInto(credentialValues, body)
+	for value := range credentialValues {
+		values[value] = struct{}{}
+		delete(exactOnlyValues, value)
+	}
+}
+
+func collectCredentialFileValuesInto(values map[string]struct{}, body []byte) {
 	trimmed := strings.TrimSpace(string(body))
 	if trimmed == "" {
 		return
@@ -2038,7 +2080,7 @@ func (budget *credentialRepresentationBudget) addSize(size int64) error {
 	return nil
 }
 
-func compileSecretInventory(values map[string]struct{}, sources map[string]int64) (secretInventory, error) {
+func compileSecretInventory(values map[string]struct{}, sources map[string]int64, exactOnlyValues map[string]struct{}) (secretInventory, error) {
 	exact := map[string]struct{}{}
 	percentCanonical := map[string]struct{}{}
 	hexCanonical := map[string]struct{}{}
@@ -2046,10 +2088,17 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 	budget := credentialRepresentationBudget{}
 	hasShort := false
 	for value := range values {
+		_, exactOnly := exactOnlyValues[value]
 		if len(value) < 16 {
-			hasShort = true
+			if !exactOnly {
+				hasShort = true
+			}
 		}
-		for _, representation := range secretRepresentations(value) {
+		representations := secretRepresentations(value)
+		if exactOnly {
+			representations = []string{value}
+		}
+		for _, representation := range representations {
 			if _, exists := exact[representation]; !exists {
 				if err := budget.add(representation); err != nil {
 					return secretInventory{}, err
@@ -2057,7 +2106,7 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 				exact[representation] = struct{}{}
 			}
 		}
-		if len(value) >= 16 {
+		if !exactOnly && len(value) >= 16 {
 			if _, exists := fragmentCandidates[value]; !exists {
 				if err := budget.add(value); err != nil {
 					return secretInventory{}, err
@@ -2065,21 +2114,23 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 				fragmentCandidates[value] = struct{}{}
 			}
 		}
-		hexValue := hex.EncodeToString([]byte(value))
-		if _, exists := hexCanonical[hexValue]; !exists {
-			if err := budget.add(hexValue); err != nil {
-				return secretInventory{}, err
+		if !exactOnly {
+			hexValue := hex.EncodeToString([]byte(value))
+			if _, exists := hexCanonical[hexValue]; !exists {
+				if err := budget.add(hexValue); err != nil {
+					return secretInventory{}, err
+				}
+				hexCanonical[hexValue] = struct{}{}
 			}
-			hexCanonical[hexValue] = struct{}{}
-		}
-		for _, encoded := range []string{url.QueryEscape(value), url.PathEscape(value)} {
-			if strings.Contains(encoded, "%") {
-				canonical := normalizePercentEncoding(encoded)
-				if _, exists := percentCanonical[canonical]; !exists {
-					if err := budget.add(canonical); err != nil {
-						return secretInventory{}, err
+			for _, encoded := range []string{url.QueryEscape(value), url.PathEscape(value)} {
+				if strings.Contains(encoded, "%") {
+					canonical := normalizePercentEncoding(encoded)
+					if _, exists := percentCanonical[canonical]; !exists {
+						if err := budget.add(canonical); err != nil {
+							return secretInventory{}, err
+						}
+						percentCanonical[canonical] = struct{}{}
 					}
-					percentCanonical[canonical] = struct{}{}
 				}
 			}
 		}
@@ -2113,6 +2164,7 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 		hexCanonical:                  orderedHex,
 		fragmentCandidates:            orderedFragments,
 		hasUnsupportedShortCredential: hasShort,
+		exactOnlyValues:               exactOnlyValues,
 		values:                        values,
 		sources:                       sources,
 	}
@@ -2151,11 +2203,28 @@ func secretRepresentations(value string) []string {
 func (inventory secretInventory) merge(other secretInventory) (secretInventory, error) {
 	values := make(map[string]struct{}, len(inventory.values)+len(other.values))
 	sources := make(map[string]int64, len(inventory.sources)+len(other.sources))
+	exactOnlyValues := make(map[string]struct{}, len(inventory.exactOnlyValues)+len(other.exactOnlyValues))
 	for value := range inventory.values {
 		values[value] = struct{}{}
 	}
 	for value := range other.values {
 		values[value] = struct{}{}
+	}
+	for value := range inventory.exactOnlyValues {
+		exactOnlyValues[value] = struct{}{}
+	}
+	for value := range other.exactOnlyValues {
+		exactOnlyValues[value] = struct{}{}
+	}
+	for value := range inventory.values {
+		if _, exactOnly := inventory.exactOnlyValues[value]; !exactOnly {
+			delete(exactOnlyValues, value)
+		}
+	}
+	for value := range other.values {
+		if _, exactOnly := other.exactOnlyValues[value]; !exactOnly {
+			delete(exactOnlyValues, value)
+		}
 	}
 	for path, size := range inventory.sources {
 		sources[path] = size
@@ -2168,7 +2237,7 @@ func (inventory secretInventory) merge(other secretInventory) (secretInventory, 
 	if err := validateCredentialSourceBudget(sources); err != nil {
 		return secretInventory{}, err
 	}
-	return compileSecretInventory(values, sources)
+	return compileSecretInventory(values, sources, exactOnlyValues)
 
 }
 
@@ -2266,32 +2335,80 @@ func containsBoundedFragmentedSecret(value string, secret string) bool {
 	if len(secret) < 16 || len(value) < len(secret) {
 		return false
 	}
-	const maxFragmentGap = 64
-	for start := strings.IndexByte(value, secret[0]); start >= 0; {
-		position := start
-		hadGap := false
-		matched := true
-		for secretIndex := 1; secretIndex < len(secret); secretIndex++ {
-			remaining := value[position+1:]
-			searchLimit := min(len(remaining), maxFragmentGap+1)
-			next := strings.IndexByte(remaining[:searchLimit], secret[secretIndex])
-			if next < 0 {
-				matched = false
-				break
-			}
-			if next > 0 {
-				hadGap = true
-			}
-			position += next + 1
-		}
-		if matched && hadGap {
+	for fragmentLength := 1; fragmentLength <= 7; fragmentLength++ {
+		if containsRepeatedSecretFragmentSeparator(value, secret, fragmentLength) {
 			return true
 		}
-		nextStart := strings.IndexByte(value[start+1:], secret[0])
-		if nextStart < 0 {
+	}
+	for split := 1; split < len(secret); split++ {
+		if containsTwoSecretFragments(value, secret[:split], secret[split:]) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsRepeatedSecretFragmentSeparator(value string, secret string, fragmentLength int) bool {
+	if fragmentLength <= 0 || len(secret) <= fragmentLength {
+		return false
+	}
+	first := secret[:fragmentLength]
+	secondEnd := min(fragmentLength*2, len(secret))
+	second := secret[fragmentLength:secondEnd]
+	for start := strings.Index(value, first); start >= 0; {
+		firstEnd := start + len(first)
+		searchEnd := min(len(value), firstEnd+64+len(second))
+		for secondOffset := strings.Index(value[firstEnd:searchEnd], second); secondOffset >= 0; {
+			secondStart := firstEnd + secondOffset
+			if secondStart > firstEnd && matchesRepeatedSecretFragments(value, secret, fragmentLength, start, value[firstEnd:secondStart]) {
+				return true
+			}
+			next := strings.Index(value[secondStart+1:searchEnd], second)
+			if next < 0 {
+				break
+			}
+			secondOffset = secondStart + 1 + next - firstEnd
+		}
+		next := strings.Index(value[start+1:], first)
+		if next < 0 {
 			break
 		}
-		start += nextStart + 1
+		start += next + 1
+	}
+	return false
+}
+
+func matchesRepeatedSecretFragments(value string, secret string, fragmentLength int, start int, separator string) bool {
+	position := start
+	for offset := 0; offset < len(secret); offset += fragmentLength {
+		if offset > 0 {
+			if !strings.HasPrefix(value[position:], separator) {
+				return false
+			}
+			position += len(separator)
+		}
+		end := min(offset+fragmentLength, len(secret))
+		fragment := secret[offset:end]
+		if !strings.HasPrefix(value[position:], fragment) {
+			return false
+		}
+		position += len(fragment)
+	}
+	return true
+}
+
+func containsTwoSecretFragments(value string, first string, second string) bool {
+	for start := strings.Index(value, first); start >= 0; {
+		firstEnd := start + len(first)
+		searchEnd := min(len(value), firstEnd+64+len(second))
+		if secondOffset := strings.Index(value[firstEnd:searchEnd], second); secondOffset > 0 {
+			return true
+		}
+		next := strings.Index(value[start+1:], first)
+		if next < 0 {
+			break
+		}
+		start += next + 1
 	}
 	return false
 }
@@ -2308,6 +2425,21 @@ func sensitiveEnvironmentName(name string) bool {
 	default:
 		return false
 	}
+}
+
+func credentialLikeEnvironmentName(name string) bool {
+	if sensitiveEnvironmentName(name) {
+		return true
+	}
+	normalized := strings.ToUpper(strings.NewReplacer("-", "_", ".", "_").Replace(name))
+	for _, marker := range []string{
+		"TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "API_KEY", "PRIVATE_KEY", "ACCESS_KEY", "REFRESH", "COOKIE", "_PAT", "_DSN",
+	} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (redactor secretRedactor) Redact(value string) string {
@@ -2760,7 +2892,9 @@ func validateSessionArchive(raw []byte, visitor sessionArchiveVisitor) error {
 			_ = gzipReader.Close()
 			return fmt.Errorf("архив сессии содержит дубликат или нарушенный порядок записей")
 		}
-		if header.Linkname != "" || header.Mode < 0 || header.Mode&^0o777 != 0 || header.Devmajor != 0 || header.Devminor != 0 {
+		// Старые версии runner сохраняли setuid/setgid/sticky-биты. При восстановлении
+		// права всегда нормализуются в приватные 0700/0600, поэтому эти биты инертны.
+		if header.Linkname != "" || header.Mode < 0 || header.Mode&^0o7777 != 0 || header.Devmajor != 0 || header.Devminor != 0 {
 			_ = gzipReader.Close()
 			return fmt.Errorf("архив сессии содержит недопустимую USTAR семантику")
 		}

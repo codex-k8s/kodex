@@ -156,18 +156,19 @@ func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) 
 		}
 	})
 
-	t.Run("foreign extra props fail closed", func(t *testing.T) {
-		foreign := exactPost.Clone()
-		foreign.Props = map[string]any{}
+	t.Run("server-owned preview props are ignored", func(t *testing.T) {
+		withPreview := exactPost.Clone()
+		withPreview.Props = map[string]any{}
 		for key, value := range input.Props {
-			foreign.Props[key] = value
+			withPreview.Props[key] = value
 		}
-		foreign.Props["foreign_property"] = "foreign value"
-		server, postCalls := callbackMattermostServer(t, func(int) []*mattermostmodel.Post { return []*mattermostmodel.Post{foreign} }, false)
+		withPreview.Props[mattermostmodel.PostPropsFromBot] = "true"
+		withPreview.Props["previewed_post"] = "server generated preview"
+		server, postCalls := callbackMattermostServer(t, func(int) []*mattermostmodel.Post { return []*mattermostmodel.Post{withPreview} }, false)
 		defer server.Close()
 		surface := NewControlSurface(server.URL, "synthetic-token", "")
-		if _, err := surface.ReconcileOrPostThreadMessage(context.Background(), input); err == nil || postCalls.Load() != 0 {
-			t.Fatalf("foreign props reconcile error=%v create_calls=%d", err, postCalls.Load())
+		if _, err := surface.ReconcileOrPostThreadMessage(context.Background(), input); err != nil || postCalls.Load() != 0 {
+			t.Fatalf("server props reconcile error=%v create_calls=%d", err, postCalls.Load())
 		}
 	})
 
@@ -175,7 +176,6 @@ func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) 
 		"missing server-owned from_bot": func(props map[string]any) { delete(props, mattermostmodel.PostPropsFromBot) },
 		"wrong server-owned value":      func(props map[string]any) { props[mattermostmodel.PostPropsFromBot] = "false" },
 		"wrong server-owned type":       func(props map[string]any) { props[mattermostmodel.PostPropsFromBot] = true },
-		"unexpected server prop":        func(props map[string]any) { props["from_webhook"] = "true" },
 		"unexpected client prop":        func(props map[string]any) { props["matter_codex_foreign"] = "value" },
 	} {
 		t.Run(name, func(t *testing.T) {

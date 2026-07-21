@@ -547,6 +547,36 @@ func (repo *Repository) UpsertAgentSession(ctx context.Context, input adminrepo.
 	return item, created, nil
 }
 
+func (repo *Repository) CreateFrozenClusterAdminSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
+	var created bool
+	if err := repo.db.QueryRow(ctx, query("cluster_admin_session__create_frozen.sql"),
+		input.SessionKey,
+		input.ProjectID,
+		input.ChatID,
+		input.RoleID,
+		input.SessionScope,
+		input.MattermostChannelID,
+		input.MattermostRootPostID,
+		input.OpenAIAccountName,
+		input.KubernetesNamespace,
+		input.PodName,
+		input.PVCName,
+		input.TokenSecretRef,
+		input.SecretContentSHA256,
+		input.SecretResourceUID,
+		input.SecretResourceVersion,
+		input.TTLSeconds,
+		input.Capabilities,
+	).Scan(&created); err != nil {
+		return entity.AgentSession{}, false, fmt.Errorf("create frozen cluster-admin session: %w", err)
+	}
+	item, err := repo.GetAgentSession(ctx, input.SessionKey)
+	if err != nil {
+		return entity.AgentSession{}, false, err
+	}
+	return item, created, nil
+}
+
 func (repo *Repository) GetAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
 	item, err := scanAgentSession(repo.db.QueryRow(ctx, query("agent_sessions__get.sql"), sessionKey))
 	if err != nil {
@@ -833,6 +863,50 @@ func (repo *Repository) ListEvictableIdleAgentSessions(ctx context.Context, limi
 	}
 	defer rows.Close()
 	return scanAgentSessions(rows)
+}
+
+func (repo *Repository) EvictIdleAgentSessionPod(ctx context.Context, sessionKey string, podName string, sideEffect func() error) (entity.AgentSession, error) {
+	if sideEffect == nil {
+		return entity.AgentSession{}, fmt.Errorf("idle agent session pod eviction side effect is required")
+	}
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return entity.AgentSession{}, fmt.Errorf("begin idle agent session pod eviction: %w", err)
+	}
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
+	}()
+
+	locked, err := scanAgentSession(tx.QueryRow(ctx, query("agent_sessions__lock_idle_pod_eviction.sql"), sessionKey, podName))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.AgentSession{}, fmt.Errorf("lock idle agent session pod eviction: %w", err)
+	}
+	var evictable bool
+	if err := tx.QueryRow(ctx, query("agent_sessions__idle_pod_evictable.sql"), sessionKey, podName).Scan(&evictable); err != nil {
+		return entity.AgentSession{}, fmt.Errorf("recheck idle agent session pod eviction: %w", err)
+	}
+	if !evictable {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if err := sideEffect(); err != nil {
+		return entity.AgentSession{}, err
+	}
+	cleared, err := scanAgentSession(tx.QueryRow(ctx, query("agent_sessions__clear_idle_pod.sql"), locked.SessionKey, locked.PodName))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.AgentSession{}, fmt.Errorf("clear evicted idle agent session pod: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.AgentSession{}, fmt.Errorf("commit idle agent session pod eviction: %w", err)
+	}
+	return cleared, nil
 }
 
 func (repo *Repository) ListQueuedIdleAgentSessions(ctx context.Context, limit int) ([]entity.AgentSession, error) {

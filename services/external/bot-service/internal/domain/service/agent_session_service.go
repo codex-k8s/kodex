@@ -1330,7 +1330,32 @@ func (svc *AgentSessionService) withRequestedClusterAdminGuard(ctx context.Conte
 		RoleID: role.ID, ProjectID: role.ProjectID, ChatID: chat.ID, ChatSlug: chat.Slug,
 		MattermostChannelID: chat.MattermostChannelID, SessionKey: sessionKey,
 		ActorUser: actorUser, Operation: operation,
-	}, sideEffect)
+	}, func() error {
+		if err := verifyClusterAdminSessionSecretIntegrity(ctx, svc.cfg.Store, svc.cfg.RuntimeRunner, role.ID, sessionKey); err != nil {
+			return err
+		}
+		return sideEffect()
+	})
+}
+
+func (svc *AgentSessionService) withRequestedClusterAdminPersistenceGuard(ctx context.Context, role entity.AgentRole, chat entity.Chat, sessionKey string, actorUser string, operation string, sideEffect func(adminrepo.Repository) error) error {
+	if !strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin") {
+		return sideEffect(svc.cfg.Store)
+	}
+	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminPersistenceGuardRepository)
+	if !ok {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return repository.WithExistingClusterAdminPersistenceGuard(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: role.ID, ProjectID: role.ProjectID, ChatID: chat.ID, ChatSlug: chat.Slug,
+		MattermostChannelID: chat.MattermostChannelID, SessionKey: sessionKey,
+		ActorUser: actorUser, Operation: operation,
+	}, func(guardedStore adminrepo.Repository) error {
+		if err := verifyClusterAdminSessionSecretIntegrity(ctx, guardedStore, svc.cfg.RuntimeRunner, role.ID, sessionKey); err != nil {
+			return err
+		}
+		return sideEffect(guardedStore)
+	})
 }
 
 func (svc *AgentSessionService) authorize(ctx context.Context, sessionKey string, token string) (entity.AgentSession, error) {

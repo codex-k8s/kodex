@@ -150,6 +150,96 @@ func TestShortSensitiveCredentialsFailClosedForEnvFileAndExtraEnvLengthsOneThrou
 	}
 }
 
+func TestShortNonCredentialRuntimeEnvironmentValueIsAllowedAndRedacted(t *testing.T) {
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=STAGING_SERVER_ROOT_USER",
+		"STAGING_SERVER_ROOT_USER=root",
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inventory.validateForExecution(); err != nil {
+		t.Fatalf("короткий runtime username отклонил запуск: %T", err)
+	}
+	protected, err := inventory.protect("runtime user=root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(protected, "root") {
+		t.Fatalf("короткое runtime value не скрыто: %q", protected)
+	}
+}
+
+func TestShortCredentialLikeRuntimeEnvironmentValueStillFailsClosed(t *testing.T) {
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=STAGING_SERVER_ROOT_PASSWORD",
+		"STAGING_SERVER_ROOT_PASSWORD=short",
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shortErr unsupportedShortCredentialError
+	if err := inventory.validateForExecution(); !errors.As(err, &shortErr) {
+		t.Fatalf("короткий runtime password не отклонён: %T", err)
+	}
+}
+
+func TestNonSensitiveRuntimeEnvironmentUsesExactRedactionOnly(t *testing.T) {
+	const value = "staging.radar-auto.internal"
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=STAGING_SERVER_HOST",
+		"STAGING_SERVER_HOST=" + value,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fragmented := strings.Join(strings.Split(value, ""), " описание ")
+	if _, err := inventory.protect("Обычный диагностический текст: " + fragmented); err != nil {
+		t.Fatalf("несекретный runtime host вызвал fragmented-secret guard: %v", err)
+	}
+	protected, err := inventory.protect("host=" + value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(protected, value) {
+		t.Fatalf("точное значение runtime host не скрыто: %q", protected)
+	}
+}
+
+func TestExplicitSensitiveRuntimeEnvironmentKeepsFragmentGuard(t *testing.T) {
+	const value = "opaque-runtime-value-93f1c6b8"
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=EXTERNAL_ENDPOINT",
+		"MATTERCODEX_RUNTIME_SENSITIVE_ENV_ALLOWLIST=EXTERNAL_ENDPOINT",
+		"EXTERNAL_ENDPOINT=" + value,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	middle := len(value) / 2
+	var fragmentErr unsafeSecretFragmentError
+	if _, err := inventory.protect(value[:middle] + "<split>" + value[middle:]); !errors.As(err, &fragmentErr) {
+		t.Fatalf("явно sensitive runtime value не сохранило fragmented guard: %T", err)
+	}
+}
+
+func TestSensitiveSourceWinsWhenValueMatchesNonSensitiveRuntimeEnvironment(t *testing.T) {
+	const value = "shared-credential-value-71f08da2"
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=STAGING_SERVER_HOST",
+		"STAGING_SERVER_HOST=" + value,
+		"OPENAI_API_KEY=" + value,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	middle := len(value) / 2
+	var fragmentErr unsafeSecretFragmentError
+	if _, err := inventory.protect(value[:middle] + "<split>" + value[middle:]); !errors.As(err, &fragmentErr) {
+		t.Fatalf("совпавший sensitive credential был ослаблен exact-only политикой: %T", err)
+	}
+}
+
 func TestSecretInventoryIndependentEncodingCorpusAndFragments(t *testing.T) {
 	const secret = "mc/independent%encoding-8a2f6107"
 	inventory, err := buildSecretInventory([]string{"OPENAI_API_KEY=" + secret}, nil)
@@ -184,6 +274,22 @@ func TestSecretInventoryIndependentEncodingCorpusAndFragments(t *testing.T) {
 				t.Fatalf("fragment length %d error = %T", fragmentLength, err)
 			}
 		}
+	}
+}
+
+func TestSecretInventoryIgnoresIncidentalSparseSubsequence(t *testing.T) {
+	const secret = "abcdefghijklmnop"
+	inventory, err := buildSecretInventory([]string{"STAGING_SERVER_ROOT_PASSWORD=" + secret}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := "a-0-b--1--c---2---d----3----e-----4-----f------5------g-------6-------h-8-i--9--j---0---k----1----l-----2-----m------3------n-------4-------o-5-p"
+	protected, err := inventory.protect(text)
+	if err != nil {
+		t.Fatalf("случайная разреженная подпоследовательность вызвала fragmented-secret guard: %v", err)
+	}
+	if protected != text {
+		t.Fatalf("разреженная подпоследовательность была изменена: %q", protected)
 	}
 }
 
@@ -365,6 +471,31 @@ func TestRestoreSessionArchiveRejectsExtendedHeadersOutsideCountedUSTARContract(
 }
 
 func TestRestoreSessionArchiveRequiresDirectoryRootAndLeavesExistingTargetAtomic(t *testing.T) {
+	t.Run("legacy setgid permissions are normalized", func(t *testing.T) {
+		archive := encodeUSTARForTest(t, []testTarEntry{
+			{header: tar.Header{Name: "sessions", Mode: 0o2755, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}},
+			{header: tar.Header{Name: "sessions/run", Mode: 0o2755, Typeflag: tar.TypeDir, Format: tar.FormatUSTAR}},
+			{header: tar.Header{Name: "sessions/run/rollout.jsonl", Mode: 0o644, Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}, body: "legacy"},
+		})
+		root := t.TempDir()
+		if err := restoreCodexSessionArchive(archive, root); err != nil {
+			t.Fatalf("legacy archive restore error = %v", err)
+		}
+		for path, wantMode := range map[string]os.FileMode{
+			filepath.Join(root, "sessions"):                         0o700,
+			filepath.Join(root, "sessions", "run"):                  0o700,
+			filepath.Join(root, "sessions", "run", "rollout.jsonl"): 0o600,
+		} {
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm() != wantMode {
+				t.Fatalf("mode %s = %o, want %o", filepath.Base(path), info.Mode().Perm(), wantMode)
+			}
+		}
+	})
+
 	t.Run("regular-file root", func(t *testing.T) {
 		archive := encodeUSTARForTest(t, []testTarEntry{{header: tar.Header{Name: "sessions", Mode: 0o600, Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}}})
 		root := t.TempDir()
