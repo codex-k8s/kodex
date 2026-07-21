@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -104,6 +105,9 @@ type sessionSnapshotResponse struct {
 	SessionKey               string `json:"session_key"`
 	CodexSessionID           string `json:"codex_session_id"`
 	SessionArchiveGzipBase64 string `json:"session_archive_gzip_base64"`
+	ArchiveVersion           int64  `json:"archive_version"`
+	ArchiveSHA256            string `json:"archive_sha256"`
+	ArchiveSizeBytes         int64  `json:"archive_size_bytes"`
 	ExpiresAt                string `json:"expires_at"`
 }
 
@@ -125,6 +129,8 @@ type sessionTurnCompleteRequest struct {
 	ErrorMessage             string            `json:"error_message"`
 	CodexSessionID           string            `json:"codex_session_id"`
 	SessionArchiveGzipBase64 string            `json:"session_archive_gzip_base64"`
+	ArchiveSHA256            string            `json:"archive_sha256"`
+	ArchiveSizeBytes         int64             `json:"archive_size_bytes"`
 	Artifacts                map[string]string `json:"artifacts"`
 }
 
@@ -481,7 +487,15 @@ func (r *runner) runSession(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := restoreCodexSessionArchive(snapshot.SessionArchiveGzipBase64, r.codexHome); err != nil {
+	if snapshot.ArchiveVersion > 0 && (strings.TrimSpace(snapshot.ArchiveSHA256) == "" || snapshot.ArchiveSizeBytes <= 0) {
+		return fmt.Errorf("подтверждённый архив сессии не содержит обязательные метаданные")
+	}
+	if err := restoreCodexSessionArchiveWithMetadata(
+		snapshot.SessionArchiveGzipBase64,
+		r.codexHome,
+		snapshot.ArchiveSHA256,
+		snapshot.ArchiveSizeBytes,
+	); err != nil {
 		return err
 	}
 	extraEnv := []string{}
@@ -587,6 +601,8 @@ func (r *runner) runSessionTurns(
 			codexTransientCapacityFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr)
 		providerPolicyBlocked := codexProviderPolicyFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr)
 		archive, snapshotErr := r.createSessionArchive(r.codexHome)
+		archiveSHA256, archiveSizeBytes, metadataErr := sessionArchiveMetadata(archive)
+		snapshotErr = errors.Join(snapshotErr, metadataErr)
 		status := "succeeded"
 		errorMessage := ""
 		if runErr != nil {
@@ -645,6 +661,8 @@ func (r *runner) runSessionTurns(
 			ErrorMessage:             errorMessage,
 			CodexSessionID:           codexSessionID,
 			SessionArchiveGzipBase64: archive,
+			ArchiveSHA256:            archiveSHA256,
+			ArchiveSizeBytes:         archiveSizeBytes,
 			Artifacts:                artifacts,
 		}); err != nil {
 			return err
@@ -2663,8 +2681,15 @@ func createCodexSessionArchive(root string, inventory secretInventory) (string, 
 }
 
 func restoreCodexSessionArchive(encoded string, root string) error {
+	return restoreCodexSessionArchiveWithMetadata(encoded, root, "", 0)
+}
+
+func restoreCodexSessionArchiveWithMetadata(encoded string, root string, expectedSHA256 string, expectedSizeBytes int64) error {
 	encoded = strings.TrimSpace(encoded)
 	if encoded == "" {
+		if strings.TrimSpace(expectedSHA256) != "" || expectedSizeBytes != 0 {
+			return fmt.Errorf("пустой архив сессии содержит неожиданные метаданные")
+		}
 		return nil
 	}
 	maxEncodedBytes := base64.StdEncoding.EncodedLen(int(maxSessionArchiveTarBytes + 1024))
@@ -2674,6 +2699,14 @@ func restoreCodexSessionArchive(encoded string, root string) error {
 	raw, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return fmt.Errorf("decode codex session archive: %w", err)
+	}
+	digest := sha256.Sum256(raw)
+	actualSHA256 := hex.EncodeToString(digest[:])
+	if strings.TrimSpace(expectedSHA256) != "" && actualSHA256 != strings.TrimSpace(expectedSHA256) {
+		return fmt.Errorf("контрольная сумма архива сессии не совпадает")
+	}
+	if expectedSizeBytes != 0 && int64(len(raw)) != expectedSizeBytes {
+		return fmt.Errorf("размер архива сессии не совпадает")
 	}
 	if err := validateSessionArchive(raw, nil); err != nil {
 		return err
@@ -2711,6 +2744,23 @@ func restoreCodexSessionArchive(encoded string, root string) error {
 		return err
 	}
 	return replaceDirectoryAtomically(filepath.Join(stagingRoot, "sessions"), filepath.Join(root, "sessions"))
+}
+
+func sessionArchiveMetadata(encoded string) (string, int64, error) {
+	encoded = strings.TrimSpace(encoded)
+	if encoded == "" {
+		return "", 0, nil
+	}
+	maxEncodedBytes := base64.StdEncoding.EncodedLen(int(maxSessionArchiveTarBytes + 1024))
+	if len(encoded) > maxEncodedBytes {
+		return "", 0, sessionArchiveLimitError{Limit: "сжатого размера"}
+	}
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", 0, fmt.Errorf("decode codex session archive metadata: %w", err)
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]), int64(len(raw)), nil
 }
 
 type sessionArchiveVisitor func(header *tar.Header, canonicalName string, reader io.Reader) error

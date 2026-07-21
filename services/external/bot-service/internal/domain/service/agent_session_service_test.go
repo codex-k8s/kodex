@@ -437,6 +437,33 @@ func TestAgentSessionSystemStatusUpdatesInitialCardWithCodexLimits(t *testing.T)
 	}
 }
 
+func TestAgentSessionStatusUsesPersistedAccountAffinity(t *testing.T) {
+	store, runner, publisher := agentSessionStatusTestDeps()
+	session := store.agentSessions["session-1"]
+	session.OpenAIAccountName = "bound-account"
+	store.agentSessions[session.SessionKey] = session
+	role := store.agentRoles[session.RoleID]
+	role.OpenAIAccountName = "changed-role-account"
+	store.agentRoles[role.ID] = role
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer: testLocalizer(t, texti18n.DefaultLocale), Store: store, RuntimeRunner: runner,
+		ThreadPublisher: publisher, StorageReady: true, RuntimeReady: true,
+	})
+	claim, err := svc.ClaimNextTurn(context.Background(), session.SessionKey, "session-token")
+	if err != nil {
+		t.Fatalf("ClaimNextTurn() error = %v", err)
+	}
+	if _, err := svc.UpdateTurnSystemStatus(context.Background(), session.SessionKey, "session-token", UpdateAgentSessionTurnStatusCommand{
+		RunID: claim.RunID, Phase: agentSessionTurnRunning, OpenAIAccount: "callback-account",
+	}); err != nil {
+		t.Fatalf("UpdateTurnSystemStatus() error = %v", err)
+	}
+	status := publisher.cardUpdates[len(publisher.cardUpdates)-1].Text
+	if !strings.Contains(status, "OpenAI account: `bound-account`") || strings.Contains(status, "changed-role-account") || strings.Contains(status, "callback-account") {
+		t.Fatalf("status does not preserve DB account affinity: %q", status)
+	}
+}
+
 func TestAgentSessionSystemStatusShowsCapacityRetryOnExistingCard(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	svc := NewAgentSessionService(AgentSessionServiceConfig{

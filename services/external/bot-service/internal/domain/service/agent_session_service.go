@@ -138,6 +138,9 @@ type AgentSessionSnapshot struct {
 	SessionKey               string `json:"session_key"`
 	CodexSessionID           string `json:"codex_session_id"`
 	SessionArchiveGzipBase64 string `json:"session_archive_gzip_base64"`
+	ArchiveVersion           int64  `json:"archive_version"`
+	ArchiveSHA256            string `json:"archive_sha256"`
+	ArchiveSizeBytes         int64  `json:"archive_size_bytes"`
 	ExpiresAt                string `json:"expires_at"`
 }
 
@@ -159,6 +162,8 @@ type CompleteAgentSessionTurnCommand struct {
 	ErrorMessage             string            `json:"error_message"`
 	CodexSessionID           string            `json:"codex_session_id"`
 	SessionArchiveGzipBase64 string            `json:"session_archive_gzip_base64"`
+	ArchiveSHA256            string            `json:"archive_sha256"`
+	ArchiveSizeBytes         int64             `json:"archive_size_bytes"`
 	Artifacts                map[string]string `json:"artifacts"`
 }
 
@@ -280,6 +285,19 @@ func (svc *AgentSessionService) Snapshot(ctx context.Context, sessionKey string,
 			SessionArchiveGzipBase64: current.SessionArchiveGzipBase64,
 			ExpiresAt:                current.ExpiresAt.UTC().Format(time.RFC3339),
 		}
+		if archiveStore, ok := svc.cfg.Store.(adminrepo.AgentSessionArchiveRepository); ok {
+			archive, archiveErr := archiveStore.GetLatestAgentSessionArchive(ctx, current.ID)
+			if archiveErr != nil && !errors.Is(archiveErr, adminrepo.ErrNotFound) {
+				return archiveErr
+			}
+			if archiveErr == nil {
+				snapshot.CodexSessionID = archive.CodexSessionID
+				snapshot.SessionArchiveGzipBase64 = archive.PayloadGzipBase64
+				snapshot.ArchiveVersion = archive.Version
+				snapshot.ArchiveSHA256 = archive.SHA256
+				snapshot.ArchiveSizeBytes = archive.SizeBytes
+			}
+		}
 		return nil
 	})
 	return snapshot, err
@@ -292,6 +310,15 @@ func (svc *AgentSessionService) ClaimNextTurn(ctx context.Context, sessionKey st
 	}
 	if session.Status == agentSessionStatusBlocked || session.Status == agentSessionStatusClosed {
 		return AgentSessionTurnClaim{Exit: true, ExpiresAt: session.ExpiresAt.UTC().Format(time.RFC3339)}, nil
+	}
+	if revisionStore, ok := svc.cfg.Store.(adminrepo.RuntimeRevisionRepository); ok && session.ActiveTurnID == 0 {
+		state, stateErr := revisionStore.GetAgentSessionRuntimeRevisionState(ctx, session.SessionKey)
+		if stateErr != nil {
+			return AgentSessionTurnClaim{}, stateErr
+		}
+		if state.DesiredRuntimeRevisionID > 0 && state.DesiredRuntimeRevisionID != state.AppliedRuntimeRevisionID {
+			return AgentSessionTurnClaim{Exit: true, ExpiresAt: session.ExpiresAt.UTC().Format(time.RFC3339)}, nil
+		}
 	}
 	if time.Now().UTC().After(session.ExpiresAt) {
 		var queued []entity.AgentSessionTurn
@@ -386,8 +413,36 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 		}
 		artifacts = string(body)
 	}
+	sessionStatus := agentSessionStatusIdle
+	if status == agentSessionTurnFailed {
+		sessionStatus = agentSessionStatusError
+	} else if status == agentSessionTurnBlocked {
+		sessionStatus = agentSessionStatusBlocked
+	}
 	var turn entity.AgentSessionTurn
+	atomicCompletion := false
 	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.complete_turn_persist.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
+		if archiveStore, ok := guardedStore.(adminrepo.AgentSessionArchiveRepository); ok {
+			completion, completeErr := archiveStore.CompleteAgentSessionTurnWithArchive(ctx, adminrepo.CompleteAgentSessionTurnWithArchiveInput{
+				SessionKey:               session.SessionKey,
+				TurnID:                   command.TurnID,
+				TurnStatus:               status,
+				SessionStatus:            sessionStatus,
+				FinalMessage:             command.FinalMessage,
+				ErrorMessage:             command.ErrorMessage,
+				Artifacts:                artifacts,
+				CodexSessionID:           command.CodexSessionID,
+				SessionArchiveGzipBase64: command.SessionArchiveGzipBase64,
+				ArchiveSHA256:            command.ArchiveSHA256,
+				ArchiveSizeBytes:         command.ArchiveSizeBytes,
+				ExtendTTLSeconds:         session.TTLSeconds,
+			})
+			if completeErr == nil {
+				turn = completion.Turn
+				atomicCompletion = true
+			}
+			return completeErr
+		}
 		var completeErr error
 		turn, completeErr = guardedStore.CompleteAgentSessionTurn(ctx, adminrepo.CompleteAgentSessionTurnInput{
 			TurnID:       command.TurnID,
@@ -401,24 +456,20 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	if err != nil {
 		return err
 	}
-	sessionStatus := agentSessionStatusIdle
-	if status == agentSessionTurnFailed {
-		sessionStatus = agentSessionStatusError
-	} else if status == agentSessionTurnBlocked {
-		sessionStatus = agentSessionStatusBlocked
-	}
 	var completionErr error
-	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.complete_snapshot_persist.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
-		_, persistErr := guardedStore.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
-			SessionKey:               current.SessionKey,
-			CodexSessionID:           command.CodexSessionID,
-			SessionArchiveGzipBase64: command.SessionArchiveGzipBase64,
-			Status:                   sessionStatus,
-			ExtendTTLSeconds:         current.TTLSeconds,
+	if !atomicCompletion {
+		err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.complete_snapshot_persist.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+			_, persistErr := guardedStore.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
+				SessionKey:               current.SessionKey,
+				CodexSessionID:           command.CodexSessionID,
+				SessionArchiveGzipBase64: command.SessionArchiveGzipBase64,
+				Status:                   sessionStatus,
+				ExtendTTLSeconds:         current.TTLSeconds,
+			})
+			return persistErr
 		})
-		return persistErr
-	})
-	completionErr = errors.Join(completionErr, err)
+		completionErr = errors.Join(completionErr, err)
+	}
 	completionErr = errors.Join(completionErr, svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.complete_work_persist.side_effect", func(_ entity.AgentSession, guardedStore adminrepo.Repository) error {
 		if coordinationStore, ok := guardedStore.(adminrepo.CoordinationRepository); ok {
 			_, updateErr := coordinationStore.UpdateWorkClaim(ctx, adminrepo.UpdateWorkClaimInput{TurnID: turn.ID, Status: status})
@@ -464,6 +515,9 @@ func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Conte
 	}
 	var completionErr error
 	err := svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.reconcile_snapshot_persist.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+		if _, ok := guardedStore.(adminrepo.AgentSessionArchiveRepository); ok {
+			return nil
+		}
 		_, persistErr := guardedStore.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
 			SessionKey:               current.SessionKey,
 			CodexSessionID:           command.CodexSessionID,
@@ -1631,7 +1685,7 @@ func (svc *AgentSessionService) sessionRoleMattermostTokenWithStore(ctx context.
 }
 
 func (svc *AgentSessionService) turnStartedStatusMessage(ctx context.Context, session entity.AgentSession, runID string, openAIAccount string, codexLimits string) string {
-	return svc.turnStatusMessage(ctx, session, agentSessionTurnRunning, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountName(ctx, session)), codexLimits)
+	return svc.turnStatusMessage(ctx, session, agentSessionTurnRunning, runID, defaultString(svc.sessionOpenAIAccountName(ctx, session), openAIAccount), codexLimits)
 }
 
 func (svc *AgentSessionService) turnCompletionStatusMessage(ctx context.Context, session entity.AgentSession, status string, runID string, artifacts map[string]string) string {
@@ -1646,15 +1700,15 @@ func (svc *AgentSessionService) turnCompletionStatusMessageWithStore(ctx context
 		codexLimits = strings.TrimSpace(artifacts["codex-limits"])
 	}
 	if status == agentSessionTurnFailed && capacityRetriesExhausted(artifacts) {
-		data := svc.turnStatusMessageDataWithStore(ctx, store, session, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountNameWithStore(ctx, store, session)), codexLimits)
+		data := svc.turnStatusMessageDataWithStore(ctx, store, session, runID, defaultString(svc.sessionOpenAIAccountNameWithStore(ctx, store, session), openAIAccount), codexLimits)
 		data["RetryCount"] = artifacts[agentTurnArtifactCapacityRetryCount]
 		return svc.t("chat.session.status.capacity_exhausted", data)
 	}
 	if status == agentSessionTurnBlocked {
-		data := svc.turnStatusMessageDataWithStore(ctx, store, session, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountNameWithStore(ctx, store, session)), codexLimits)
+		data := svc.turnStatusMessageDataWithStore(ctx, store, session, runID, defaultString(svc.sessionOpenAIAccountNameWithStore(ctx, store, session), openAIAccount), codexLimits)
 		return svc.t("chat.session.status.provider_policy_blocked", data)
 	}
-	return svc.turnStatusMessageWithStore(ctx, store, session, status, runID, defaultString(openAIAccount, svc.sessionOpenAIAccountNameWithStore(ctx, store, session)), codexLimits)
+	return svc.turnStatusMessageWithStore(ctx, store, session, status, runID, defaultString(svc.sessionOpenAIAccountNameWithStore(ctx, store, session), openAIAccount), codexLimits)
 }
 
 func (svc *AgentSessionService) turnStatusMessage(ctx context.Context, session entity.AgentSession, status string, runID string, openAIAccount string, codexLimits string) string {
@@ -1728,6 +1782,9 @@ func (svc *AgentSessionService) sessionOpenAIAccountName(ctx context.Context, se
 }
 
 func (svc *AgentSessionService) sessionOpenAIAccountNameWithStore(ctx context.Context, store adminrepo.Repository, session entity.AgentSession) string {
+	if accountName := strings.TrimSpace(session.OpenAIAccountName); accountName != "" {
+		return accountName
+	}
 	role, err := store.GetAgentRole(ctx, session.RoleID)
 	if err != nil {
 		return ""

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -449,6 +450,55 @@ func TestRestoreSessionArchiveRequiresDirectoryRootAndLeavesExistingTargetAtomic
 			t.Fatalf("old target остался после atomic exchange: %v", err)
 		}
 	})
+}
+
+func TestRestoreSessionArchiveVerifiesConfirmedMetadataBeforeTargetMutation(t *testing.T) {
+	sourceRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(sourceRoot, "sessions", "run"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "sessions", "run", "rollout.jsonl"), []byte("confirmed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := createCodexSessionArchive(sourceRoot, secretInventory{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, size, err := sessionArchiveMetadata(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name           string
+		expectedDigest string
+		expectedSize   int64
+	}{
+		{name: "checksum mismatch", expectedDigest: strings.Repeat("0", sha256.Size*2), expectedSize: size},
+		{name: "size mismatch", expectedDigest: digest, expectedSize: size + 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			targetRoot := t.TempDir()
+			target := filepath.Join(targetRoot, "sessions")
+			if err := os.Mkdir(target, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			existing := filepath.Join(target, "existing.jsonl")
+			if err := os.WriteFile(existing, []byte("unchanged"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := restoreCodexSessionArchiveWithMetadata(archive, targetRoot, test.expectedDigest, test.expectedSize); err == nil {
+				t.Fatal("архив с несовпадающими подтверждёнными метаданными принят")
+			}
+			body, err := os.ReadFile(existing)
+			if err != nil || string(body) != "unchanged" {
+				t.Fatalf("target изменён до проверки метаданных: body=%q error=%v", string(body), err)
+			}
+			if _, err := os.Stat(filepath.Join(target, "run", "rollout.jsonl")); !os.IsNotExist(err) {
+				t.Fatalf("неподтверждённый архив опубликован: %v", err)
+			}
+		})
+	}
 }
 
 type testTarEntry struct {

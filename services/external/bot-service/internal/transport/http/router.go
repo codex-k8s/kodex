@@ -24,18 +24,19 @@ import (
 )
 
 const (
-	pathHealthz          = "/healthz"
-	pathHealthLivez      = "/health/livez"
-	pathHealthReady      = "/health/readyz"
-	pathReadyz           = "/readyz"
-	pathMetrics          = "/metrics"
-	pathAgentsSlash      = "/mattermost/slash/agents"
-	pathAgentsAction     = "/mattermost/actions/agents"
-	pathAgentsDialog     = "/mattermost/dialogs/agents"
-	pathGitHubWebhook    = "/github/webhook"
-	pathAgentSessions    = "/internal/agent-sessions/"
-	pathMCPSessions      = "/mcp/sessions/"
-	dialogCallbackResult = "agents_dialog_result"
+	pathHealthz                        = "/healthz"
+	pathHealthLivez                    = "/health/livez"
+	pathHealthReady                    = "/health/readyz"
+	pathReadyz                         = "/readyz"
+	pathMetrics                        = "/metrics"
+	pathAgentsSlash                    = "/mattermost/slash/agents"
+	pathAgentsAction                   = "/mattermost/actions/agents"
+	pathAgentsDialog                   = "/mattermost/dialogs/agents"
+	pathGitHubWebhook                  = "/github/webhook"
+	pathAgentSessions                  = "/internal/agent-sessions/"
+	pathMCPSessions                    = "/mcp/sessions/"
+	dialogCallbackResult               = "agents_dialog_result"
+	maxAgentSessionCompletionBodyBytes = int64(64 << 20)
 )
 
 type RouteBoundary string
@@ -674,6 +675,7 @@ func (router *Router) handleAgentSessionInternal(w http.ResponseWriter, r *http.
 			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
 			return
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxAgentSessionCompletionBodyBytes)
 		var command statusservice.CompleteAgentSessionTurnCommand
 		if err := json.NewDecoder(r.Body).Decode(&command); err != nil {
 			writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_complete_payload"})
@@ -684,7 +686,7 @@ func (router *Router) handleAgentSessionInternal(w http.ResponseWriter, r *http.
 			writeJSON(w, http.StatusBadGateway, transportmodels.ErrorResponse{Error: "agent_session_complete_failed"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		writeJSON(w, http.StatusOK, transportmodels.AgentSessionCompleteResponse{Status: "ok"})
 	case "turns/status":
 		if r.Method != http.MethodPost {
 			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
