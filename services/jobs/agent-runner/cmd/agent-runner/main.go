@@ -26,10 +26,13 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var (
+	workspaceDir = "/workspace"
+	repoDir      = "/workspace/repo"
+	artifactsDir = "/workspace/artifacts"
+)
+
 const (
-	workspaceDir                      = "/workspace"
-	repoDir                           = "/workspace/repo"
-	artifactsDir                      = "/workspace/artifacts"
 	codexAuthDir                      = "/codex-home"
 	promptPath                        = "/var/run/matter-codex-prompt/prompt.md"
 	codexAuthPath                     = "/var/run/secrets/matter-codex-codex/auth.json"

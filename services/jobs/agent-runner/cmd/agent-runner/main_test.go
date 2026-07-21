@@ -304,6 +304,8 @@ func TestCodexCapacityRetryScheduleAndArtifacts(t *testing.T) {
 }
 
 func TestMatterCodexMCPBootstrapFailureBaselineRemainsFailedAfterDependencyRecovery(t *testing.T) {
+	useTestWorkspace(t)
+
 	const (
 		sessionKey   = "characteristic-session-51"
 		sessionToken = "synthetic-session-token-not-logged"
@@ -477,6 +479,8 @@ func runMatterCodexMCPBootstrapShim() int {
 }
 
 func TestKilledCodexSubprocessLeavesOnlySanitizedPersistentOutputs(t *testing.T) {
+	useTestWorkspace(t)
+
 	const (
 		secret = "mc-killed-child-secret-51de7802"
 		turnID = int64(510078)
@@ -1075,7 +1079,10 @@ func TestCredentialEventGuardFailsClosedOnReadBeforeWatchAndWatcherErrors(t *tes
 			},
 		}
 		t.Cleanup(testRunner.cleanupEphemeralRuntime)
-		_, _, err := testRunner.guardedCommand(context.Background(), nil, os.Args[0], "-test.run=^$")
+		_, guard, err := testRunner.guardedCommand(context.Background(), nil, os.Args[0], "-test.run=^$")
+		if err == nil {
+			err = guard.finish(guard.start())
+		}
 		var rotationErr credentialRotationError
 		if !errors.As(err, &rotationErr) || !testRunner.safety.isUnsafe() {
 			t.Fatalf("read-before-watch error=%T unsafe=%t", err, testRunner.safety.isUnsafe())
@@ -1201,6 +1208,21 @@ func TestKubeconfigSourceCountAcceptsBelowBoundaryAndRejects513(t *testing.T) {
 			}
 		})
 	}
+}
+
+func useTestWorkspace(t *testing.T) {
+	t.Helper()
+	oldWorkspaceDir := workspaceDir
+	oldRepoDir := repoDir
+	oldArtifactsDir := artifactsDir
+	workspaceDir = t.TempDir()
+	repoDir = filepath.Join(workspaceDir, "repo")
+	artifactsDir = filepath.Join(workspaceDir, "artifacts")
+	t.Cleanup(func() {
+		workspaceDir = oldWorkspaceDir
+		repoDir = oldRepoDir
+		artifactsDir = oldArtifactsDir
+	})
 }
 
 func mustTable(t *testing.T, parent map[string]any, key string) map[string]any {
