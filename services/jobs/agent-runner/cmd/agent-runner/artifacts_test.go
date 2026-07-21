@@ -121,7 +121,7 @@ func TestArtifactBridgeQuarantinesKnownSecretWithoutUploadingBody(t *testing.T) 
 	if err := os.WriteFile(filepath.Join(outbox, "result.txt"), []byte("value="+secretValue), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	inventory, err := compileSecretInventory(map[string]struct{}{secretValue: {}}, map[string]int64{})
+	inventory, err := compileSecretInventory(map[string]struct{}{secretValue: {}}, map[string]int64{}, map[string]struct{}{})
 	if err != nil {
 		t.Fatal(err)
 	}
