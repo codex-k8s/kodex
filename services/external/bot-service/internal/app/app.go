@@ -295,16 +295,19 @@ func runRuntimeRetentionLoop(ctx context.Context, runner runtimerepo.Runner, int
 			})
 			if err != nil {
 				logger.Warn("runtime retention cleanup failed", "error", err)
-			} else if retentionCleanupDidWork(result) {
+			} else if retentionCleanupHasReport(result) {
 				logger.Info(
-					"runtime retention cleanup applied",
+					"runtime retention pass completed",
 					"older_than", result.OlderThan.String(),
 					"namespace", result.Namespace,
+					"session_data_mode", result.SessionDataMode,
 					"jobs_deleted", result.JobsDeleted,
 					"pvcs_deleted", result.PVCsDeleted,
 					"configmaps_deleted", result.ConfigMapsDeleted,
 					"session_pods_deleted", result.SessionPodsDeleted,
+					"session_pvcs_inventoried", result.SessionPVCsMatched,
 					"session_pvcs_deleted", result.SessionPVCsDeleted,
+					"session_secrets_inventoried", result.SessionSecretsMatched,
 					"session_secrets_deleted", result.SessionSecretsDeleted,
 				)
 			}
@@ -313,13 +316,13 @@ func runRuntimeRetentionLoop(ctx context.Context, runner runtimerepo.Runner, int
 	}
 }
 
-func retentionCleanupDidWork(result runtimerepo.RetentionCleanupResult) bool {
+func retentionCleanupHasReport(result runtimerepo.RetentionCleanupResult) bool {
 	return result.JobsDeleted > 0 ||
 		result.PVCsDeleted > 0 ||
 		result.ConfigMapsDeleted > 0 ||
 		result.SessionPodsDeleted > 0 ||
-		result.SessionPVCsDeleted > 0 ||
-		result.SessionSecretsDeleted > 0
+		result.SessionPVCsMatched > 0 ||
+		result.SessionSecretsMatched > 0
 }
 
 func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, bool) {

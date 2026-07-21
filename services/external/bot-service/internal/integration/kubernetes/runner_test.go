@@ -1219,6 +1219,61 @@ func TestStartAgentSessionReturnsTypedCapacityErrorWhenQuotaRejectsPod(t *testin
 	}
 }
 
+func TestStartAgentSessionReturnsTypedCapacityErrorWithoutCleanupWhenPVCQuotaRejected(t *testing.T) {
+	oldTime := metav1.NewTime(time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC))
+	client := fake.NewSimpleClientset(
+		testSessionPVC("retained-session", oldTime),
+		testSessionSecret("retained-session", oldTime),
+	)
+	client.PrependReactor("create", "persistentvolumeclaims", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "persistentvolumeclaims"},
+			action.(k8stesting.CreateAction).GetObject().(*corev1.PersistentVolumeClaim).Name,
+			fmt.Errorf("exceeded quota: matter-codex-runtime-quota, requested: requests.storage=1Gi"),
+		)
+	})
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		WorkspaceStorageSize:      "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	client.ClearActions()
+	_, err = runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
+		SessionKey:          "capacity-pvc-test",
+		Role:                "developer",
+		BotServiceURL:       "http://bot-service",
+		InternalToken:       "synthetic-session-token",
+		CodexAuthSecretName: "matter-codex-codex-auth-main",
+	})
+	if !runtimerepo.IsAgentSessionCapacityError(err) {
+		t.Fatalf("StartAgentSession() error = %v, want capacity error", err)
+	}
+	var capacityErr *runtimerepo.AgentSessionCapacityError
+	if !errors.As(err, &capacityErr) || capacityErr.Cause == nil {
+		t.Fatalf("StartAgentSession() error = %#v, want typed capacity error with cause", err)
+	}
+	pvcCreates := 0
+	for _, action := range client.Actions() {
+		resource := action.GetResource().Resource
+		if resource == "persistentvolumeclaims" && action.GetVerb() == "create" {
+			pvcCreates++
+		}
+		if (resource == "persistentvolumeclaims" || resource == "secrets") && (action.GetVerb() == "delete" || action.GetVerb() == "patch") {
+			t.Fatalf("quota path mutated retained session data: %s %s", action.GetVerb(), resource)
+		}
+	}
+	if pvcCreates != 1 {
+		t.Fatalf("session PVC create attempts = %d, want 1", pvcCreates)
+	}
+	assertSessionPVCExists(t, client, "retained-session")
+	assertSessionSecretExists(t, client, "retained-session")
+}
+
 func TestSessionPodSchedulingCapacityErrorRecognizesInsufficientMemory(t *testing.T) {
 	podName := "mc-session-scheduling-test"
 	client := fake.NewSimpleClientset(&corev1.Pod{
@@ -1432,7 +1487,7 @@ func TestCleanupExpiredRunsDeletesFinishedAndOrphanResources(t *testing.T) {
 	}
 }
 
-func TestCleanupExpiredRunsDeletesExpiredSessionResources(t *testing.T) {
+func TestCleanupExpiredRunsInventoriesSessionDataWithoutDeleting(t *testing.T) {
 	protectedSecretName := "mc-session-token-" + strings.Repeat("a", 40)
 	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
 	oldTime := metav1.NewTime(now.Add(-48 * time.Hour))
@@ -1477,305 +1532,70 @@ func TestCleanupExpiredRunsDeletesExpiredSessionResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CleanupExpiredRuns() error = %v", err)
 	}
-	if result.SessionPodsDeleted != 1 || result.SessionPVCsDeleted != 2 || result.SessionSecretsDeleted != 3 {
+	if result.SessionDataMode != runtimerepo.SessionDataRetentionModeInventoryOnly || result.SessionPodsDeleted != 1 ||
+		result.SessionPVCsMatched != 4 || result.SessionSecretsMatched != 5 || result.SessionPVCsDeleted != 0 || result.SessionSecretsDeleted != 0 {
 		t.Fatalf("result = %#v", result)
 	}
-	if result.PVCsDeleted != 2 {
-		t.Fatalf("PVCsDeleted = %d, want 2", result.PVCsDeleted)
+	if result.PVCsMatched != 0 || result.PVCsDeleted != 0 {
+		t.Fatalf("session inventory leaked into deletable PVC counters: %#v", result)
 	}
 	assertSessionPodMissing(t, client, "old-session")
-	assertSessionPVCMissing(t, client, "old-session")
-	assertSessionSecretMissing(t, client, "old-session")
-	assertSessionPVCMissing(t, client, "orphan-session")
-	assertSessionSecretMissing(t, client, "orphan-session")
-	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), protectedSecretName, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
-		t.Fatalf("protected immutable session Secret still exists: %v", err)
+	for _, sessionKey := range []string{"old-session", "active-session", "recent-session", "orphan-session"} {
+		assertSessionPVCExists(t, client, sessionKey)
+		assertSessionSecretExists(t, client, sessionKey)
 	}
-	protectedPatchFound := false
+	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), protectedSecretName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("protected immutable session Secret was not retained: %v", err)
+	}
 	for _, action := range client.Actions() {
-		patchAction, ok := action.(k8stesting.PatchAction)
-		if !ok || action.GetResource().Resource != "secrets" || patchAction.GetName() != protectedSecretName {
-			continue
+		resource := action.GetResource().Resource
+		if (resource == "persistentvolumeclaims" || resource == "secrets") && (action.GetVerb() == "delete" || action.GetVerb() == "patch") {
+			t.Fatalf("retention mutated session data: %s %s", action.GetVerb(), resource)
 		}
-		protectedPatchFound = true
-		patch := string(patchAction.GetPatch())
-		if strings.Contains(patch, `"data"`) || strings.Contains(patch, `"stringData"`) {
-			t.Fatal("session token finalizer cleanup included Secret data in the patch")
-		}
-	}
-	if !protectedPatchFound {
-		t.Fatal("protected immutable session Secret was deleted without finalizer cleanup")
 	}
 	assertSessionPodExists(t, client, "active-session")
-	assertSessionPVCExists(t, client, "active-session")
-	assertSessionSecretExists(t, client, "active-session")
 	assertSessionPodExists(t, client, "recent-session")
-	assertSessionPVCExists(t, client, "recent-session")
-	assertSessionSecretExists(t, client, "recent-session")
-}
-
-func TestRetentionSessionTokenSecretKeepsListedUIDFenceAcrossInterleavings(t *testing.T) {
-	const token = "synthetic-retention-token"
-	name := "mc-session-token-" + strings.Repeat("b", 40)
-	listed := retentionVersionedSecret(name, token, "uid-a", "17")
-	conflict := func() error {
-		return apierrors.NewConflict(schema.GroupResource{Resource: "secrets"}, name, fmt.Errorf("synthetic resource version conflict"))
-	}
-	tests := []struct {
-		name       string
-		objects    []runtime.Object
-		install    func(*testing.T, *fake.Clientset)
-		wantError  bool
-		wantDelete bool
-		assert     func(*testing.T, *fake.Clientset)
-	}{
-		{
-			name:      "listed a replaced by b before get",
-			objects:   []runtime.Object{retentionVersionedSecret(name, token, "uid-b", "18")},
-			wantError: true,
-			assert: func(t *testing.T, client *fake.Clientset) {
-				assertRetentionSecretIdentity(t, client, name, "uid-b", true)
-			},
-		},
-		{
-			name:    "listed a is not found before get",
-			objects: []runtime.Object{listed.DeepCopy()},
-			install: func(_ *testing.T, client *fake.Clientset) {
-				client.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-					return true, nil, apierrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, name)
-				})
-			},
-			assert: func(t *testing.T, client *fake.Clientset) {
-				assertRetentionSecretIdentity(t, client, name, "uid-a", true)
-			},
-		},
-		{
-			name:    "a enters deleting state before get",
-			objects: []runtime.Object{listed.DeepCopy()},
-			install: func(_ *testing.T, client *fake.Clientset) {
-				client.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-					deleting := listed.DeepCopy()
-					timestamp := metav1.NewTime(time.Date(2026, 7, 18, 12, 2, 0, 0, time.UTC))
-					deleting.DeletionTimestamp = &timestamp
-					return true, deleting, nil
-				})
-			},
-			wantError: true,
-			assert: func(t *testing.T, client *fake.Clientset) {
-				assertRetentionSecretIdentity(t, client, name, "uid-a", true)
-			},
-		},
-		{
-			name:    "a loses managed finalizer before mutation",
-			objects: []runtime.Object{listed.DeepCopy()},
-			install: func(_ *testing.T, client *fake.Clientset) {
-				client.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-					unprotected := listed.DeepCopy()
-					unprotected.Finalizers = nil
-					return true, unprotected, nil
-				})
-			},
-			wantError: true,
-			assert: func(t *testing.T, client *fake.Clientset) {
-				assertRetentionSecretIdentity(t, client, name, "uid-a", true)
-			},
-		},
-		{
-			name:    "a replaced by b before metadata mutation",
-			objects: []runtime.Object{listed.DeepCopy()},
-			install: func(t *testing.T, client *fake.Clientset) {
-				client.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
-					current := mustTrackedSecret(t, client, action.(k8stesting.GetAction).GetName()).DeepCopy()
-					replaceTrackedSecret(t, client, retentionVersionedSecret(name, token, "uid-b", "18"))
-					return true, current, nil
-				})
-				client.PrependReactor("patch", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-					return true, nil, conflict()
-				})
-			},
-			wantError: true,
-			assert: func(t *testing.T, client *fake.Clientset) {
-				assertRetentionSecretIdentity(t, client, name, "uid-b", true)
-			},
-		},
-		{
-			name:    "a replaced by b after finalizer mutation",
-			objects: []runtime.Object{listed.DeepCopy()},
-			install: func(t *testing.T, client *fake.Clientset) {
-				client.PrependReactor("patch", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
-					patchAction := action.(k8stesting.PatchAction)
-					if !strings.Contains(string(patchAction.GetPatch()), `"uid":"uid-a"`) || !strings.Contains(string(patchAction.GetPatch()), `"resourceVersion":"17"`) {
-						t.Fatal("metadata mutation is missing atomic UID/resourceVersion tests")
-					}
-					patched := listed.DeepCopy()
-					patched.Finalizers = nil
-					patched.ResourceVersion = "18"
-					if err := client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("secrets"), patched.DeepCopy(), "mattermost"); err != nil {
-						t.Fatalf("track patched Secret: %v", err)
-					}
-					replaceTrackedSecret(t, client, retentionVersionedSecret(name, token, "uid-b", "19"))
-					return true, patched, nil
-				})
-				client.PrependReactor("delete", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-					return true, nil, conflict()
-				})
-			},
-			wantError: true,
-			assert: func(t *testing.T, client *fake.Clientset) {
-				assertRetentionSecretIdentity(t, client, name, "uid-b", true)
-			},
-		},
-		{
-			name:    "resource version conflict before metadata mutation",
-			objects: []runtime.Object{listed.DeepCopy()},
-			install: func(t *testing.T, client *fake.Clientset) {
-				client.PrependReactor("patch", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-					current := listed.DeepCopy()
-					current.ResourceVersion = "18"
-					if err := client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("secrets"), current, "mattermost"); err != nil {
-						t.Fatalf("track resourceVersion drift: %v", err)
-					}
-					return true, nil, conflict()
-				})
-			},
-			wantError: true,
-			assert: func(t *testing.T, client *fake.Clientset) {
-				assertRetentionSecretIdentity(t, client, name, "uid-a", true)
-			},
-		},
-		{
-			name:    "continuous exact identity",
-			objects: []runtime.Object{listed.DeepCopy()},
-			install: func(t *testing.T, client *fake.Clientset) {
-				client.PrependReactor("patch", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
-					patchAction := action.(k8stesting.PatchAction)
-					if !strings.Contains(string(patchAction.GetPatch()), `"uid":"uid-a"`) || !strings.Contains(string(patchAction.GetPatch()), `"resourceVersion":"17"`) {
-						t.Fatal("metadata mutation is missing atomic UID/resourceVersion tests")
-					}
-					patched := listed.DeepCopy()
-					patched.Finalizers = nil
-					patched.ResourceVersion = "18"
-					if err := client.Tracker().Update(corev1.SchemeGroupVersion.WithResource("secrets"), patched.DeepCopy(), "mattermost"); err != nil {
-						t.Fatalf("track patched Secret: %v", err)
-					}
-					return true, patched, nil
-				})
-			},
-			wantDelete: true,
-			assert: func(t *testing.T, client *fake.Clientset) {
-				var deleteSeen bool
-				for _, action := range client.Actions() {
-					if action.GetResource().Resource != "secrets" || action.GetVerb() != "delete" {
-						continue
-					}
-					deleteSeen = true
-					options := action.(k8stesting.DeleteAction).GetDeleteOptions()
-					if options.Preconditions == nil || options.Preconditions.UID == nil || string(*options.Preconditions.UID) != "uid-a" ||
-						options.Preconditions.ResourceVersion == nil || *options.Preconditions.ResourceVersion != "18" {
-						t.Fatalf("delete preconditions = %#v", options.Preconditions)
-					}
-				}
-				if !deleteSeen {
-					t.Fatal("continuous exact chain did not issue delete")
-				}
-				if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
-					t.Fatalf("continuous exact Secret was not deleted: %v", err)
-				}
-			},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			client := fake.NewSimpleClientset(test.objects...)
-			if test.install != nil {
-				test.install(t, client)
-			}
-			runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost", WorkspaceStorageSize: "1Gi"})
-			if err != nil {
-				t.Fatalf("NewRunnerWithClient() error = %v", err)
-			}
-			client.ClearActions()
-			deleted, err := runner.deleteSessionTokenSecret(context.Background(), *listed.DeepCopy())
-			if (err != nil) != test.wantError || deleted != test.wantDelete {
-				t.Fatalf("deleteSessionTokenSecret() deleted=%v error=%v", deleted, err)
-			}
-			if err != nil && strings.Contains(err.Error(), token) {
-				t.Fatal("retention error disclosed token material")
-			}
-			test.assert(t, client)
-			if !test.wantDelete {
-				for _, action := range client.Actions() {
-					if action.GetResource().Resource == "secrets" && action.GetVerb() == "delete" && test.name != "a replaced by b after finalizer mutation" {
-						t.Fatal("replacement/conflict path attempted Secret deletion")
-					}
-				}
-			}
-		})
-	}
-
-	t.Run("listed object is not exact-managed", func(t *testing.T) {
-		foreign := listed.DeepCopy()
-		foreign.Labels["unexpected"] = "foreign"
-		client := fake.NewSimpleClientset(foreign.DeepCopy())
-		runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost", WorkspaceStorageSize: "1Gi"})
-		if err != nil {
-			t.Fatalf("NewRunnerWithClient() error = %v", err)
+	for _, diagnostic := range result.SessionDiagnostics {
+		if len(diagnostic.Reasons) == 0 || diagnostic.Reasons[0] != runtimerepo.SessionRetentionReasonContainment ||
+			!slices.Contains(diagnostic.Reasons, runtimerepo.SessionRetentionReasonUnknownDB) ||
+			!slices.Contains(diagnostic.Reasons, runtimerepo.SessionRetentionReasonUnknownS3) {
+			t.Fatalf("unsafe session diagnostic = %#v", diagnostic)
 		}
-		client.ClearActions()
-		if deleted, err := runner.deleteSessionTokenSecret(context.Background(), *foreign); err == nil || deleted {
-			t.Fatalf("foreign Secret deleted=%v error=%v", deleted, err)
+		if slices.Contains(diagnostic.Reasons, runtimerepo.SessionRetentionReasonNoArchive) {
+			t.Fatalf("inventory falsely asserted missing archive: %#v", diagnostic)
 		}
-		for _, action := range client.Actions() {
-			if action.GetResource().Resource == "secrets" && action.GetVerb() != "get" {
-				t.Fatalf("foreign Secret received mutation %s", action.GetVerb())
-			}
-		}
-	})
-
-	t.Run("authorization forbids patch without deleting", func(t *testing.T) {
-		client := fake.NewSimpleClientset(listed.DeepCopy())
-		client.PrependReactor("patch", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-			return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, name, fmt.Errorf("synthetic patch denial"))
-		})
-		runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost", WorkspaceStorageSize: "1Gi"})
-		if err != nil {
-			t.Fatalf("NewRunnerWithClient() error = %v", err)
-		}
-		if deleted, err := runner.deleteSessionTokenSecret(context.Background(), *listed.DeepCopy()); err == nil || deleted {
-			t.Fatalf("forbidden patch deleted=%v error=%v", deleted, err)
-		}
-		assertRetentionSecretIdentity(t, client, name, "uid-a", true)
-		for _, action := range client.Actions() {
-			if action.GetResource().Resource == "secrets" && action.GetVerb() == "delete" {
-				t.Fatal("Forbidden patch was followed by delete")
-			}
-		}
-	})
-}
-
-func retentionVersionedSecret(name string, token string, uid string, resourceVersion string) *corev1.Secret {
-	immutable := true
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name, Namespace: "mattermost", UID: types.UID(uid), ResourceVersion: resourceVersion,
-			Labels: map[string]string{
-				"app.kubernetes.io/name": "matter-codex-agent-runner", "app.kubernetes.io/component": sessionTokenComponent,
-				labelSessionKey: "retention-session",
-			},
-			Finalizers: []string{sessionTokenFinalizer},
-		},
-		Immutable: &immutable,
-		Type:      corev1.SecretTypeOpaque,
-		Data:      map[string][]byte{"token": []byte(token)},
 	}
 }
 
-func assertRetentionSecretIdentity(t *testing.T, client *fake.Clientset, name string, uid string, protected bool) {
-	t.Helper()
-	secret := mustTrackedSecret(t, client, name)
-	if string(secret.UID) != uid || containsString(secret.Finalizers, sessionTokenFinalizer) != protected {
-		t.Fatalf("retained Secret identity/finalizer changed: uid=%q finalizers=%v", secret.UID, secret.Finalizers)
+func TestCleanupExpiredRunsRepeatedInventoryDoesNotMutateResources(t *testing.T) {
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	oldTime := metav1.NewTime(now.Add(-72 * time.Hour))
+	client := fake.NewSimpleClientset(testSessionPVC("orphan-session", oldTime), testSessionSecret("orphan-session", oldTime))
+	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost"})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
 	}
+	input := runtimerepo.RetentionCleanupInput{OlderThan: 24 * time.Hour, Now: now, DryRun: true}
+	first, err := runner.CleanupExpiredRuns(context.Background(), input)
+	if err != nil {
+		t.Fatalf("first CleanupExpiredRuns() error = %v", err)
+	}
+	client.ClearActions()
+	second, err := runner.CleanupExpiredRuns(context.Background(), input)
+	if err != nil {
+		t.Fatalf("second CleanupExpiredRuns() error = %v", err)
+	}
+	if fmt.Sprintf("%#v", first.SessionDiagnostics) != fmt.Sprintf("%#v", second.SessionDiagnostics) ||
+		first.SessionPVCsMatched != second.SessionPVCsMatched || first.SessionSecretsMatched != second.SessionSecretsMatched {
+		t.Fatalf("repeated inventory changed result: first=%#v second=%#v", first, second)
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() != "list" {
+			t.Fatalf("repeated inventory mutated resource: %s %s", action.GetVerb(), action.GetResource().Resource)
+		}
+	}
+	assertSessionPVCExists(t, client, "orphan-session")
+	assertSessionSecretExists(t, client, "orphan-session")
 }
 
 func testSessionPod(sessionKey string, phase corev1.PodPhase, created metav1.Time, finished metav1.Time) *corev1.Pod {
@@ -1852,24 +1672,10 @@ func assertSessionPVCExists(t *testing.T, client *fake.Clientset, sessionKey str
 	}
 }
 
-func assertSessionPVCMissing(t *testing.T, client *fake.Clientset, sessionKey string) {
-	t.Helper()
-	if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Get(context.Background(), sessionPVCName(sessionKey), metav1.GetOptions{}); err == nil {
-		t.Fatalf("session pvc %s still exists", sessionKey)
-	}
-}
-
 func assertSessionSecretExists(t *testing.T, client *fake.Clientset, sessionKey string) {
 	t.Helper()
 	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), sessionSecretName(sessionKey), metav1.GetOptions{}); err != nil {
 		t.Fatalf("session secret %s does not exist: %v", sessionKey, err)
-	}
-}
-
-func assertSessionSecretMissing(t *testing.T, client *fake.Clientset, sessionKey string) {
-	t.Helper()
-	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), sessionSecretName(sessionKey), metav1.GetOptions{}); err == nil {
-		t.Fatalf("session secret %s still exists", sessionKey)
 	}
 }
 

@@ -3215,6 +3215,49 @@ func TestSlashRuntimePruneApply(t *testing.T) {
 	}
 }
 
+func TestSlashRuntimePruneSessionInventoryDoesNotRecordDeletionAudit(t *testing.T) {
+	store := &fakeAdminStore{}
+	runner := &fakeRuntimeRunner{
+		retentionResult: runtimerepo.RetentionCleanupResult{
+			Namespace:             "mattermost",
+			OlderThan:             time.Hour,
+			SessionDataMode:       runtimerepo.SessionDataRetentionModeInventoryOnly,
+			SessionPVCsMatched:    1,
+			SessionSecretsMatched: 1,
+			SessionDiagnostics: []runtimerepo.SessionRetentionDiagnostic{{
+				SessionKey: "old-session",
+				Reasons: []runtimerepo.SessionRetentionReason{
+					runtimerepo.SessionRetentionReasonContainment,
+					runtimerepo.SessionRetentionReasonUnknownDB,
+					runtimerepo.SessionRetentionReasonUnknownS3,
+				},
+			}},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     runner,
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "runtime prune 1h --apply", UserName: "owner"})
+	if !strings.Contains(text, "inventory-only") || !strings.Contains(text, "containment,unknown_db,unknown_s3") ||
+		!strings.Contains(text, "session pvc inventoried/deleted: `1`/`0`") {
+		t.Fatalf("Handle(runtime prune session inventory) text = %q", text)
+	}
+	if len(store.auditEvents) != 1 || store.auditEvents[0].EventType != "runtime.retention.inventoried" {
+		t.Fatalf("session inventory audit = %#v", store.auditEvents)
+	}
+	if strings.Contains(store.auditEvents[0].EventType, "deleted") || strings.Contains(store.auditEvents[0].Summary, "deleted") ||
+		strings.Contains(store.auditEvents[0].Summary, "allowed") {
+		t.Fatalf("session inventory recorded false deletion audit: %#v", store.auditEvents[0])
+	}
+}
+
 func TestSlashReviewPRStatusAndCleanup(t *testing.T) {
 	store := &fakeAdminStore{
 		profiles: []entity.AgentProfile{{Name: "reviewer", Role: "reviewer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "primary"}},
@@ -3778,6 +3821,7 @@ type fakeAdminStore struct {
 	resetSessionErrors   []error
 	completeTurnCalls    int
 	auditCalls           int
+	auditEvents          []adminrepo.AuditEventInput
 }
 
 func (store *fakeAdminStore) RequiresClusterAdminSessionGuard(_ context.Context, roleID int64, _ string) (bool, error) {
@@ -5507,9 +5551,10 @@ func (store *fakeAdminStore) UpdateAgentRunArtifacts(_ context.Context, input ad
 	return run, nil
 }
 
-func (store *fakeAdminStore) RecordAuditEvent(context.Context, adminrepo.AuditEventInput) error {
+func (store *fakeAdminStore) RecordAuditEvent(_ context.Context, input adminrepo.AuditEventInput) error {
 	store.auditRecorded = true
 	store.auditCalls++
+	store.auditEvents = append(store.auditEvents, input)
 	return nil
 }
 

@@ -332,6 +332,7 @@ type RetentionCleanupResult struct {
 	Namespace             string
 	DryRun                bool
 	OlderThan             time.Duration
+	SessionDataMode       SessionDataRetentionMode
 	RunsMatched           int
 	SkippedActiveJobs     int
 	JobsMatched           int
@@ -346,6 +347,7 @@ type RetentionCleanupResult struct {
 	SessionPVCsDeleted    int
 	SessionSecretsMatched int
 	SessionSecretsDeleted int
+	SessionDiagnostics    []SessionRetentionDiagnostic
 	MatchedRunIDs         []string
 }
 
