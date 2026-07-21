@@ -65,6 +65,28 @@ func TestDisableCodexConfigOverlayForAuthCheck(t *testing.T) {
 	}
 }
 
+func TestSessionRepositoryCheckoutRequired(t *testing.T) {
+	tests := []struct {
+		name             string
+		repositoryExists bool
+		preserveExisting bool
+		want             bool
+	}{
+		{name: "new repository", repositoryExists: false, preserveExisting: false, want: true},
+		{name: "new repository with restored session", repositoryExists: false, preserveExisting: true, want: true},
+		{name: "existing first-run repository", repositoryExists: true, preserveExisting: false, want: true},
+		{name: "existing resumed workspace", repositoryExists: true, preserveExisting: true, want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := sessionRepositoryCheckoutRequired(test.repositoryExists, test.preserveExisting); got != test.want {
+				t.Fatalf("sessionRepositoryCheckoutRequired(%t, %t) = %t, want %t", test.repositoryExists, test.preserveExisting, got, test.want)
+			}
+		})
+	}
+}
+
 func TestWriteCodexConfigMergesRoleConfigWithoutDuplicateKeys(t *testing.T) {
 	t.Setenv("MATTERCODEX_MCP_URL", "http://matter-codex-mcp")
 	t.Setenv("MATTERCODEX_RUNTIME_ENV_ALLOWLIST", "RADAR_AUTO_KUBECONFIG")
