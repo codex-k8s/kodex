@@ -62,30 +62,32 @@ const (
 )
 
 type AgentSessionServiceConfig struct {
-	Localizer                  *texti18n.Localizer
-	Store                      adminrepo.Repository
-	RuntimeRunner              runtimerepo.Runner
-	ThreadPublisher            MattermostThreadPublisher
-	ConversationReader         MattermostConversationReader
-	RoleBotManager             MattermostRoleBotManager
-	TurnDispatcher             AgentTurnDispatcher
-	AutomationCallbacks        AutomationCallbackCompleter
-	MenuActionURL              string
-	MattermostSiteURL          string
-	StorageReady               bool
-	RuntimeReady               bool
-	CallbackMaxBytes           int
-	CallbackMaxChunks          int
-	CallbackMaxChunkBytes      int
-	CallbackPublishConcurrency int
-	CallbackPublishDeadline    time.Duration
+	Localizer                   *texti18n.Localizer
+	Store                       adminrepo.Repository
+	RuntimeRunner               runtimerepo.Runner
+	ThreadPublisher             MattermostThreadPublisher
+	ConversationReader          MattermostConversationReader
+	RoleBotManager              MattermostRoleBotManager
+	TurnDispatcher              AgentTurnDispatcher
+	AutomationCallbacks         AutomationCallbackCompleter
+	AutomationRuntimeReconciler AutomationRuntimeTerminalReconciler
+	MenuActionURL               string
+	MattermostSiteURL           string
+	StorageReady                bool
+	RuntimeReady                bool
+	CallbackMaxBytes            int
+	CallbackMaxChunks           int
+	CallbackMaxChunkBytes       int
+	CallbackPublishConcurrency  int
+	CallbackPublishDeadline     time.Duration
 }
 
 type CompleteAutomationCallbackCommand struct {
 	RunPublicID             string
 	CallbackContractVersion string
 	Outcome                 string
-	SafeSummary             string
+	AgentSummary            string
+	ExactPayload            []byte
 }
 
 func (svc *AgentSessionService) CompleteAutomationCallback(ctx context.Context, sessionKey string, token string, command CompleteAutomationCallbackCommand) (AutomationCallbackResult, error) {
@@ -96,32 +98,16 @@ func (svc *AgentSessionService) CompleteAutomationCallback(ctx context.Context, 
 	if err != nil {
 		return AutomationCallbackResult{}, err
 	}
-	var result AutomationCallbackResult
-	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "automation.callback.persist.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
-		if current.ID != session.ID || current.ProjectID != session.ProjectID || current.ActiveTurnID <= 0 || strings.TrimSpace(current.ActiveRunID) == "" {
-			return errors.New("automation callback session binding is invalid")
-		}
-		turn, getErr := guardedStore.GetAgentSessionTurn(ctx, current.ActiveTurnID)
-		if getErr != nil {
-			return getErr
-		}
-		if turn.SessionID != current.ID || turn.ID != current.ActiveTurnID || turn.RunID != current.ActiveRunID || (turn.Status != agentSessionTurnRunning && turn.Status != agentSessionTurnQueued) {
-			return errors.New("automation callback turn binding is invalid")
-		}
-		var completeErr error
-		result, completeErr = svc.cfg.AutomationCallbacks.CompleteCallback(ctx, AutomationCallbackCommand{
-			RunPublicID:             command.RunPublicID,
-			ProjectID:               current.ProjectID,
-			RuntimeSessionID:        current.ID,
-			RuntimeTurnID:           turn.ID,
-			RuntimeRunID:            turn.RunID,
-			CallbackContractVersion: command.CallbackContractVersion,
-			Outcome:                 command.Outcome,
-			SafeSummary:             command.SafeSummary,
-		})
-		return completeErr
+	return svc.cfg.AutomationCallbacks.CompleteCallback(ctx, AutomationCallbackCommand{
+		RunPublicID:             command.RunPublicID,
+		AuthenticatedProjectID:  session.ProjectID,
+		AuthenticatedSessionID:  session.ID,
+		AuthenticatedSessionKey: session.SessionKey,
+		CallbackContractVersion: command.CallbackContractVersion,
+		Outcome:                 command.Outcome,
+		AgentSummary:            command.AgentSummary,
+		ExactPayload:            append([]byte(nil), command.ExactPayload...),
 	})
-	return result, err
 }
 
 type AgentSessionService struct {
@@ -465,6 +451,7 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 		completionErr = errors.Join(completionErr, svc.notifyRootInitiatorFailure(ctx, session, turn, command))
 	}
 	completionErr = errors.Join(completionErr, svc.reconcileTerminalProcessRun(ctx, session, turn.ID, status, "agent_session.complete_reconcile.side_effect"))
+	completionErr = errors.Join(completionErr, svc.reconcileAutomationRuntimeTerminal(ctx, session, turn, status))
 	return completionErr
 }
 
@@ -511,7 +498,21 @@ func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Conte
 		completionErr = errors.Join(completionErr, svc.notifyRootInitiatorFailure(ctx, session, turn, command))
 	}
 	completionErr = errors.Join(completionErr, svc.reconcileTerminalProcessRun(ctx, session, turn.ID, status, "agent_session.reconcile_completed_turn.side_effect"))
+	completionErr = errors.Join(completionErr, svc.reconcileAutomationRuntimeTerminal(ctx, session, turn, status))
 	return completionErr
+}
+
+func (svc *AgentSessionService) reconcileAutomationRuntimeTerminal(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, status string) error {
+	if svc.cfg.AutomationRuntimeReconciler == nil || !agentSessionTurnTerminal(status) {
+		return nil
+	}
+	return svc.cfg.AutomationRuntimeReconciler.ReconcileRuntimeTerminal(ctx, AutomationRuntimeTerminalCommand{
+		ProjectID:        session.ProjectID,
+		RuntimeSessionID: session.ID,
+		RuntimeTurnID:    turn.ID,
+		RuntimeRunID:     turn.RunID,
+		RuntimeStatus:    status,
+	})
 }
 
 func (svc *AgentSessionService) StopAgentSessionTurns(ctx context.Context, command StopAgentSessionTurnsCommand) (StopAgentSessionTurnsResult, error) {

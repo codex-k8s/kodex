@@ -47,6 +47,16 @@ type CreateManualRunInput struct {
 	RunPublicID           string
 	ScheduledFor          time.Time
 	CallbackExpiresAt     time.Time
+	RuntimeRunID          string
+}
+
+type RecordRunThreadInput struct {
+	RunPublicID           string
+	ProjectID             int64
+	OwnerMattermostUserID string
+	MattermostChannelID   string
+	MattermostRootPostID  string
+	Now                   time.Time
 }
 
 type BindRunInput struct {
@@ -72,10 +82,9 @@ type FailRunInput struct {
 
 type CompleteCallbackInput struct {
 	RunPublicID             string
-	ProjectID               int64
-	RuntimeSessionID        int64
-	RuntimeTurnID           int64
-	RuntimeRunID            string
+	AuthenticatedProjectID  int64
+	AuthenticatedSessionID  int64
+	AuthenticatedSessionKey string
 	CallbackContractVersion string
 	Status                  string
 	Outcome                 string
@@ -84,15 +93,27 @@ type CompleteCallbackInput struct {
 	Now                     time.Time
 }
 
+type ReconcileRuntimeTerminalInput struct {
+	ProjectID        int64
+	RuntimeSessionID int64
+	RuntimeTurnID    int64
+	RuntimeRunID     string
+	RuntimeStatus    string
+	SafeSummary      string
+	Now              time.Time
+}
+
 type Repository interface {
 	CreateSchedule(ctx context.Context, input CreateScheduleInput) (entity.AutomationSchedule, bool, error)
 	GetSchedule(ctx context.Context, publicID string, projectID int64, ownerMattermostUserID string) (entity.AutomationSchedule, error)
 	ListSchedules(ctx context.Context, projectID int64, ownerMattermostUserID string, limit int) ([]entity.AutomationSchedule, error)
 	CreateManualRun(ctx context.Context, input CreateManualRunInput) (entity.ScheduledRun, bool, error)
+	RecordRunThread(ctx context.Context, input RecordRunThreadInput) (entity.ScheduledRun, error)
 	BindRun(ctx context.Context, input BindRunInput) (entity.ScheduledRun, error)
 	FailRun(ctx context.Context, input FailRunInput) (entity.ScheduledRun, error)
 	GetRun(ctx context.Context, publicID string, projectID int64, ownerMattermostUserID string) (entity.ScheduledRun, error)
 	ListRuns(ctx context.Context, schedulePublicID string, projectID int64, ownerMattermostUserID string, limit int) ([]entity.ScheduledRun, error)
 	CompleteCallback(ctx context.Context, input CompleteCallbackInput) (entity.ScheduledRun, bool, error)
+	ReconcileRuntimeTerminal(ctx context.Context, input ReconcileRuntimeTerminalInput) (entity.ScheduledRun, bool, error)
 	RevokeCallback(ctx context.Context, runPublicID string, projectID int64, now time.Time) error
 }

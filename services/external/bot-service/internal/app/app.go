@@ -105,6 +105,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		StorageReady:            automationStorage != nil,
 		RuntimeReady:            runtimeConfigured,
 	})
+	chatRunSvc.SetAutomationRuntimeReconciler(automationSvc)
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
 		Localizer:                localizer,
 		StatusService:            statusSvc,
@@ -137,23 +138,24 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		logger.Warn("system agent role bootstrap failed", "error", err)
 	}
 	sessionSvc := statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{
-		Localizer:                  localizer,
-		Store:                      storage,
-		RuntimeRunner:              runtimeRunner,
-		ThreadPublisher:            threadPublisher,
-		ConversationReader:         controlSurface,
-		RoleBotManager:             roleBotManager,
-		TurnDispatcher:             chatRunSvc,
-		AutomationCallbacks:        automationSvc,
-		MenuActionURL:              agentsActionURL(cfg),
-		MattermostSiteURL:          cfg.MattermostSiteURL,
-		StorageReady:               storage != nil,
-		RuntimeReady:               runtimeConfigured,
-		CallbackMaxBytes:           cfg.CallbackMaxBytes,
-		CallbackMaxChunks:          cfg.CallbackMaxChunks,
-		CallbackMaxChunkBytes:      cfg.CallbackMaxChunkBytes,
-		CallbackPublishConcurrency: cfg.CallbackPublishConcurrency,
-		CallbackPublishDeadline:    cfg.CallbackPublishDeadline,
+		Localizer:                   localizer,
+		Store:                       storage,
+		RuntimeRunner:               runtimeRunner,
+		ThreadPublisher:             threadPublisher,
+		ConversationReader:          controlSurface,
+		RoleBotManager:              roleBotManager,
+		TurnDispatcher:              chatRunSvc,
+		AutomationCallbacks:         automationSvc,
+		AutomationRuntimeReconciler: automationSvc,
+		MenuActionURL:               agentsActionURL(cfg),
+		MattermostSiteURL:           cfg.MattermostSiteURL,
+		StorageReady:                storage != nil,
+		RuntimeReady:                runtimeConfigured,
+		CallbackMaxBytes:            cfg.CallbackMaxBytes,
+		CallbackMaxChunks:           cfg.CallbackMaxChunks,
+		CallbackMaxChunkBytes:       cfg.CallbackMaxChunkBytes,
+		CallbackPublishConcurrency:  cfg.CallbackPublishConcurrency,
+		CallbackPublishDeadline:     cfg.CallbackPublishDeadline,
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{

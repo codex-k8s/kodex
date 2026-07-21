@@ -120,7 +120,7 @@ create table matter_codex_scheduled_runs (
 		),
 	constraint matter_codex_scheduled_runs_runtime_binding_check
 		check (
-			(runtime_session_id is null and runtime_turn_id is null and runtime_session_key = '' and runtime_run_id = '')
+			(runtime_session_id is null and runtime_turn_id is null and runtime_session_key = '' and runtime_run_id <> '')
 			or (runtime_session_id is not null and runtime_turn_id is not null and runtime_session_key <> '' and runtime_run_id <> '')
 		)
 );
@@ -130,6 +130,9 @@ create index matter_codex_scheduled_runs_history_idx
 
 create index matter_codex_scheduled_runs_callback_idx
 	on matter_codex_scheduled_runs(public_id, project_id, runtime_session_id, runtime_turn_id, runtime_run_id);
+
+create unique index matter_codex_scheduled_runs_runtime_run_key
+	on matter_codex_scheduled_runs(project_id, runtime_run_id);
 
 create table matter_codex_automation_audit_events (
 	id bigserial primary key,

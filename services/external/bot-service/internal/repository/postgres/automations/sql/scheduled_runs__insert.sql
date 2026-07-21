@@ -12,11 +12,12 @@ insert into matter_codex_scheduled_runs (
 	correlation_id,
 	prompt_version,
 	callback_contract_version,
-	callback_expires_at
+	callback_expires_at,
+	runtime_run_id
 )
 values (
 	$1, $2, $3, $4, $5, $6, $7, $8,
-	'manual', 'queued', $1, $9, $10, $11
+	'manual', 'queued', $1, $9, $10, $11, $12
 )
 on conflict (occurrence_id)
 do update set occurrence_id = excluded.occurrence_id

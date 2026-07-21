@@ -111,6 +111,35 @@ type mcpAutomationCallbackOutput struct {
 	Duplicate     bool   `json:"duplicate"`
 }
 
+func automationCallbackInputSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"schedule_run_id", "callback_contract", "outcome", "summary"},
+		"properties": map[string]any{
+			"schedule_run_id": map[string]any{
+				"type": "string", "minLength": 46, "maxLength": 46,
+				"pattern":     "^scheduled-run-[a-f0-9]{32}$",
+				"description": "public id of the scheduled automation run from the saved playbook",
+			},
+			"callback_contract": map[string]any{
+				"type": "string", "minLength": 22, "maxLength": 22,
+				"enum":        []string{"automation.callback.v1"},
+				"description": "callback contract version from the saved playbook",
+			},
+			"outcome": map[string]any{
+				"type": "string", "minLength": 6, "maxLength": 14,
+				"enum":        []string{"no_action", "action_taken", "requires_human", "failed"},
+				"description": "terminal automation outcome",
+			},
+			"summary": map[string]any{
+				"type": "string", "minLength": 1, "maxLength": 1000,
+				"description": "bounded agent detail used only for exact replay identity; the server stores its own safe summary",
+			},
+		},
+	}
+}
+
 func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBodyBytes int64) http.Handler {
 	if maximumBodyBytes <= 0 {
 		maximumBodyBytes = defaultMCPRequestBodyBytes
@@ -343,8 +372,9 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBod
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_complete_automation",
-		Description: "Complete the currently bound scheduled automation run. The callback is accepted only for the authenticated current session and turn; an identical replay is idempotent.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpAutomationCallbackInput) (*mcp.CallToolResult, mcpAutomationCallbackOutput, error) {
+		Description: "Complete the exactly bound scheduled automation run. The first callback requires the authenticated live session and turn; an accepted identical replay uses the persisted binding and exact payload hash.",
+		InputSchema: automationCallbackInputSchema(),
+	}, func(ctx context.Context, request *mcp.CallToolRequest, input mcpAutomationCallbackInput) (*mcp.CallToolResult, mcpAutomationCallbackOutput, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
 			return mcpToolError("session authorization is missing"), mcpAutomationCallbackOutput{}, nil
@@ -353,7 +383,8 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBod
 			RunPublicID:             input.ScheduleRunID,
 			CallbackContractVersion: input.CallbackContract,
 			Outcome:                 input.Outcome,
-			SafeSummary:             input.Summary,
+			AgentSummary:            input.Summary,
+			ExactPayload:            append([]byte(nil), request.Params.Arguments...),
 		})
 		if err != nil {
 			return mcpToolError("automation callback rejected"), mcpAutomationCallbackOutput{}, nil

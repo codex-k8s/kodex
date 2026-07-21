@@ -180,6 +180,7 @@ func (repo *Repository) CreateManualRun(ctx context.Context, input automationsre
 		schedule.PromptVersion,
 		schedule.CallbackContractVersion,
 		input.CallbackExpiresAt,
+		input.RuntimeRunID,
 	).Scan(&runPublicID, &runCreated); err != nil {
 		return entity.ScheduledRun{}, false, fmt.Errorf("insert scheduled run: %w", err)
 	}
@@ -200,6 +201,44 @@ func (repo *Repository) CreateManualRun(ctx context.Context, input automationsre
 	return item, created, nil
 }
 
+func (repo *Repository) RecordRunThread(ctx context.Context, input automationsrepo.RecordRunThreadInput) (entity.ScheduledRun, error) {
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return entity.ScheduledRun{}, fmt.Errorf("begin record automation thread: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	txRepo := newTransactionalRepository(tx)
+	item, err := txRepo.lockRun(ctx, input.RunPublicID)
+	if err != nil {
+		return entity.ScheduledRun{}, err
+	}
+	if item.ProjectID != input.ProjectID || item.OwnerMattermostUserID != input.OwnerMattermostUserID {
+		return entity.ScheduledRun{}, automationsrepo.ErrForbidden
+	}
+	if item.Status != string(value.AutomationRunStatusQueued) {
+		return entity.ScheduledRun{}, automationsrepo.ErrConflict
+	}
+	if item.MattermostRootPostID != "" || item.MattermostChannelID != "" {
+		if item.MattermostChannelID != input.MattermostChannelID || item.MattermostRootPostID != input.MattermostRootPostID {
+			return entity.ScheduledRun{}, automationsrepo.ErrConflict
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return entity.ScheduledRun{}, fmt.Errorf("commit existing automation thread: %w", err)
+		}
+		return item, nil
+	}
+	if _, err := txRepo.db.Exec(ctx, query("scheduled_runs__record_thread.sql"), item.ID, input.MattermostChannelID, input.MattermostRootPostID, input.Now); err != nil {
+		return entity.ScheduledRun{}, fmt.Errorf("record automation thread: %w", err)
+	}
+	if err := txRepo.insertAudit(ctx, item.ProjectID, item.ScheduleID, item.ID, "run.thread_recorded", item.OwnerMattermostUserID, item.OwnerMattermostUserName, item.CorrelationID, ""); err != nil {
+		return entity.ScheduledRun{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.ScheduledRun{}, fmt.Errorf("commit automation thread: %w", err)
+	}
+	return repo.getRun(ctx, item.PublicID, item.ProjectID, item.OwnerMattermostUserID)
+}
+
 func (repo *Repository) BindRun(ctx context.Context, input automationsrepo.BindRunInput) (entity.ScheduledRun, error) {
 	tx, err := repo.db.Begin(ctx)
 	if err != nil {
@@ -214,8 +253,20 @@ func (repo *Repository) BindRun(ctx context.Context, input automationsrepo.BindR
 	if item.ProjectID != input.ProjectID || item.OwnerMattermostUserID != input.OwnerMattermostUserID {
 		return entity.ScheduledRun{}, automationsrepo.ErrForbidden
 	}
-	if item.Status == string(value.AutomationRunStatusSucceeded) || item.Status == string(value.AutomationRunStatusFailed) {
+	if automationRunIsTerminal(item.Status) {
 		return entity.ScheduledRun{}, automationsrepo.ErrConflict
+	}
+	if item.RuntimeRunID != input.RuntimeRunID || item.MattermostChannelID != input.MattermostChannelID || item.MattermostRootPostID != input.MattermostRootPostID {
+		return entity.ScheduledRun{}, automationsrepo.ErrConflict
+	}
+	binding, err := txRepo.lockRuntimeBinding(ctx, input.RuntimeSessionID, input.RuntimeTurnID)
+	if err != nil {
+		return entity.ScheduledRun{}, err
+	}
+	if binding.SessionID != input.RuntimeSessionID || binding.SessionKey != input.RuntimeSessionKey || binding.ProjectID != item.ProjectID || binding.ChatID != item.TargetChatID || binding.RoleID != item.TargetAgentRoleID ||
+		binding.TurnID != input.RuntimeTurnID || binding.TurnSessionID != binding.SessionID || binding.TurnRunID != input.RuntimeRunID ||
+		binding.TurnChannelID != input.MattermostChannelID || binding.TurnRootPostID != input.MattermostRootPostID || binding.TurnPostID != input.MattermostRootPostID {
+		return entity.ScheduledRun{}, automationsrepo.ErrForbidden
 	}
 	if item.RuntimeSessionID != 0 {
 		if item.RuntimeSessionID == input.RuntimeSessionID && item.RuntimeSessionKey == input.RuntimeSessionKey && item.RuntimeTurnID == input.RuntimeTurnID && item.RuntimeRunID == input.RuntimeRunID && item.MattermostChannelID == input.MattermostChannelID && item.MattermostRootPostID == input.MattermostRootPostID {
@@ -225,6 +276,15 @@ func (repo *Repository) BindRun(ctx context.Context, input automationsrepo.BindR
 			return item, nil
 		}
 		return entity.ScheduledRun{}, automationsrepo.ErrConflict
+	}
+	if binding.TurnStatus != "queued" && binding.TurnStatus != "running" {
+		if err := txRepo.failRunLocked(ctx, item, "Среда выполнения завершилась до сохранения полной привязки автоматизации.", input.Now, "run.runtime_terminal"); err != nil {
+			return entity.ScheduledRun{}, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return entity.ScheduledRun{}, fmt.Errorf("commit terminal automation binding: %w", err)
+		}
+		return repo.getRun(ctx, item.PublicID, item.ProjectID, item.OwnerMattermostUserID)
 	}
 	if _, err := txRepo.db.Exec(ctx, query("scheduled_runs__bind.sql"), item.ID, input.RuntimeSessionID, input.RuntimeSessionKey, input.RuntimeTurnID, input.RuntimeRunID, input.MattermostChannelID, input.MattermostRootPostID, input.Now); err != nil {
 		return entity.ScheduledRun{}, fmt.Errorf("bind scheduled run: %w", err)
@@ -325,16 +385,10 @@ func (repo *Repository) CompleteCallback(ctx context.Context, input automationsr
 	if err != nil {
 		return entity.ScheduledRun{}, false, err
 	}
-	if item.ProjectID != input.ProjectID {
+	if item.ProjectID != input.AuthenticatedProjectID || item.RuntimeSessionID != input.AuthenticatedSessionID || item.RuntimeSessionKey != input.AuthenticatedSessionKey || item.CallbackContractVersion != input.CallbackContractVersion {
 		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
 	}
-	if item.RuntimeSessionID != input.RuntimeSessionID || item.RuntimeTurnID != input.RuntimeTurnID || item.RuntimeRunID != input.RuntimeRunID || item.CallbackContractVersion != input.CallbackContractVersion {
-		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
-	}
-	if !item.CallbackRevokedAt.IsZero() || !input.Now.Before(item.CallbackExpiresAt) {
-		return entity.ScheduledRun{}, false, automationsrepo.ErrCallbackRevoked
-	}
-	if item.Status == string(value.AutomationRunStatusSucceeded) || item.Status == string(value.AutomationRunStatusFailed) {
+	if automationRunIsTerminal(item.Status) {
 		if bytes.Equal(item.CallbackPayloadSHA256, input.PayloadSHA256) {
 			if err := tx.Commit(ctx); err != nil {
 				return entity.ScheduledRun{}, false, fmt.Errorf("commit duplicate automation callback: %w", err)
@@ -342,6 +396,24 @@ func (repo *Repository) CompleteCallback(ctx context.Context, input automationsr
 			return item, true, nil
 		}
 		return entity.ScheduledRun{}, false, automationsrepo.ErrCallbackMismatch
+	}
+	if item.RuntimeSessionID == 0 || item.RuntimeTurnID == 0 || item.RuntimeRunID == "" {
+		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
+	}
+	binding, err := txRepo.lockRuntimeBinding(ctx, item.RuntimeSessionID, item.RuntimeTurnID)
+	if err != nil {
+		return entity.ScheduledRun{}, false, err
+	}
+	if binding.SessionID != item.RuntimeSessionID || binding.SessionKey != item.RuntimeSessionKey || binding.ProjectID != item.ProjectID || binding.ChatID != item.TargetChatID || binding.RoleID != item.TargetAgentRoleID ||
+		binding.SessionStatus != "running" ||
+		binding.ActiveTurnID != item.RuntimeTurnID || binding.ActiveRunID != item.RuntimeRunID ||
+		binding.TurnID != item.RuntimeTurnID || binding.TurnSessionID != item.RuntimeSessionID || binding.TurnRunID != item.RuntimeRunID ||
+		binding.TurnChannelID != item.MattermostChannelID || binding.TurnRootPostID != item.MattermostRootPostID || binding.TurnPostID != item.MattermostRootPostID ||
+		(binding.TurnStatus != "queued" && binding.TurnStatus != "running") {
+		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
+	}
+	if !item.CallbackRevokedAt.IsZero() || !input.Now.Before(item.CallbackExpiresAt) {
+		return entity.ScheduledRun{}, false, automationsrepo.ErrCallbackRevoked
 	}
 	if _, err := txRepo.db.Exec(ctx, query("scheduled_runs__complete.sql"), item.ID, input.Status, input.Outcome, input.SafeSummary, input.PayloadSHA256, input.Now); err != nil {
 		return entity.ScheduledRun{}, false, fmt.Errorf("complete scheduled run: %w", err)
@@ -357,6 +429,42 @@ func (repo *Repository) CompleteCallback(ctx context.Context, input automationsr
 	}
 	result, err := repo.getRun(ctx, item.PublicID, item.ProjectID, item.OwnerMattermostUserID)
 	return result, false, err
+}
+
+func (repo *Repository) ReconcileRuntimeTerminal(ctx context.Context, input automationsrepo.ReconcileRuntimeTerminalInput) (entity.ScheduledRun, bool, error) {
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return entity.ScheduledRun{}, false, fmt.Errorf("begin automation runtime reconciliation: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	txRepo := newTransactionalRepository(tx)
+	item, err := txRepo.lockRunByRuntime(ctx, input.ProjectID, input.RuntimeRunID)
+	if errors.Is(err, automationsrepo.ErrNotFound) {
+		return entity.ScheduledRun{}, false, nil
+	}
+	if err != nil {
+		return entity.ScheduledRun{}, false, err
+	}
+	if item.RuntimeRunID != input.RuntimeRunID || item.ProjectID != input.ProjectID {
+		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
+	}
+	if item.RuntimeSessionID != 0 && (item.RuntimeSessionID != input.RuntimeSessionID || item.RuntimeTurnID != input.RuntimeTurnID) {
+		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
+	}
+	if automationRunIsTerminal(item.Status) {
+		if err := tx.Commit(ctx); err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("commit existing terminal automation run: %w", err)
+		}
+		return item, false, nil
+	}
+	if err := txRepo.failRunLocked(ctx, item, input.SafeSummary, input.Now, "run.runtime_terminal"); err != nil {
+		return entity.ScheduledRun{}, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.ScheduledRun{}, false, fmt.Errorf("commit automation runtime reconciliation: %w", err)
+	}
+	result, err := repo.getRun(ctx, item.PublicID, item.ProjectID, item.OwnerMattermostUserID)
+	return result, true, err
 }
 
 func (repo *Repository) RevokeCallback(ctx context.Context, runPublicID string, projectID int64, now time.Time) error {
@@ -396,6 +504,80 @@ func (repo *Repository) lockRun(ctx context.Context, publicID string) (entity.Sc
 		return entity.ScheduledRun{}, fmt.Errorf("lock scheduled run: %w", err)
 	}
 	return item, nil
+}
+
+func (repo *Repository) lockRunByRuntime(ctx context.Context, projectID int64, runtimeRunID string) (entity.ScheduledRun, error) {
+	item, err := scanRun(repo.db.QueryRow(ctx, query("scheduled_runs__lock_runtime_run.sql"), projectID, runtimeRunID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.ScheduledRun{}, automationsrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.ScheduledRun{}, fmt.Errorf("lock scheduled run by runtime: %w", err)
+	}
+	return item, nil
+}
+
+type runtimeBinding struct {
+	SessionID      int64
+	SessionKey     string
+	ProjectID      int64
+	ChatID         int64
+	RoleID         int64
+	ActiveTurnID   int64
+	ActiveRunID    string
+	SessionStatus  string
+	TurnID         int64
+	TurnSessionID  int64
+	TurnRunID      string
+	TurnStatus     string
+	TurnChannelID  string
+	TurnRootPostID string
+	TurnPostID     string
+}
+
+func (repo *Repository) lockRuntimeBinding(ctx context.Context, sessionID int64, turnID int64) (runtimeBinding, error) {
+	var binding runtimeBinding
+	err := repo.db.QueryRow(ctx, query("automation_runtime_binding__lock.sql"), sessionID, turnID).Scan(
+		&binding.SessionID,
+		&binding.SessionKey,
+		&binding.ProjectID,
+		&binding.ChatID,
+		&binding.RoleID,
+		&binding.ActiveTurnID,
+		&binding.ActiveRunID,
+		&binding.SessionStatus,
+		&binding.TurnID,
+		&binding.TurnSessionID,
+		&binding.TurnRunID,
+		&binding.TurnStatus,
+		&binding.TurnChannelID,
+		&binding.TurnRootPostID,
+		&binding.TurnPostID,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return runtimeBinding{}, automationsrepo.ErrForbidden
+	}
+	if err != nil {
+		return runtimeBinding{}, fmt.Errorf("lock automation runtime binding: %w", err)
+	}
+	return binding, nil
+}
+
+func (repo *Repository) failRunLocked(ctx context.Context, item entity.ScheduledRun, safeSummary string, now time.Time, eventType string) error {
+	if _, err := repo.db.Exec(ctx, query("scheduled_runs__fail.sql"), item.ID, safeSummary, now); err != nil {
+		return fmt.Errorf("fail scheduled run: %w", err)
+	}
+	if _, err := repo.db.Exec(ctx, query("schedule_occurrences__status.sql"), item.OccurrenceID, string(value.AutomationRunStatusFailed), now); err != nil {
+		return fmt.Errorf("fail schedule occurrence: %w", err)
+	}
+	if err := repo.insertAudit(ctx, item.ProjectID, item.ScheduleID, item.ID, eventType, "", "", item.CorrelationID, safeSummary); err != nil {
+		return err
+	}
+	return nil
+}
+
+func automationRunIsTerminal(status string) bool {
+	return status == string(value.AutomationRunStatusSucceeded) || status == string(value.AutomationRunStatusFailed)
 }
 
 func (repo *Repository) insertAudit(ctx context.Context, projectID int64, scheduleID int64, runID int64, eventType string, actorUserID string, actorUserName string, correlationID string, safeSummary string) error {

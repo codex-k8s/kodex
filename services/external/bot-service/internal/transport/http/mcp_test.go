@@ -59,6 +59,15 @@ func TestMCPAutomationCallbackContractIsDiscoverable(t *testing.T) {
 				t.Fatalf("callback schema не содержит %s: %s", field, schema)
 			}
 		}
+		var discovered map[string]any
+		if err := json.Unmarshal(schema, &discovered); err != nil {
+			t.Fatalf("decode callback schema: %v", err)
+		}
+		properties, _ := discovered["properties"].(map[string]any)
+		summary, _ := properties["summary"].(map[string]any)
+		if summary["maxLength"] != float64(1000) || discovered["additionalProperties"] != false {
+			t.Fatalf("callback schema не задаёт fail-closed bounds: %s", schema)
+		}
 		return
 	}
 	t.Fatal("MCP tool mattermost_complete_automation отсутствует")

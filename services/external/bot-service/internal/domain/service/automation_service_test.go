@@ -1,8 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -29,15 +32,15 @@ func TestAutomationRunNowDispatchesSavedPlaybookAndBindsRuntime(t *testing.T) {
 		ProjectID: 1, ProjectName: schedule.ProjectName, TargetAgentRoleID: 2, TargetAgentRoleName: "developer",
 		TargetChatID: 3, TargetChatName: "Development", OwnerMattermostUserID: "owner-id", Status: string(value.AutomationRunStatusQueued),
 	}
+	run.RuntimeRunID = automationRuntimeRunID(run.PublicID)
 	repository := &fakeAutomationRepository{schedule: schedule, run: run, createRunCreated: true}
 	catalog := &fakeAutomationCatalog{
 		project:      entity.Project{ID: 1, Name: "MatterCodex"},
 		role:         entity.AgentRole{ID: 2, ProjectID: 1, Name: "developer", Enabled: true},
 		chat:         entity.Chat{ID: 3, ProjectID: 1, Name: "Development", MattermostChannelID: "channel-1"},
 		participants: []entity.ChatParticipant{{ChatID: 3, RoleID: 2, Enabled: true}},
-		session:      entity.AgentSession{ID: 6, SessionKey: "session-1", ProjectID: 1, ChatID: 3, RoleID: 2, ActiveTurnID: 7, ActiveRunID: "runtime-run-1"},
 	}
-	dispatcher := &fakeAutomationDispatcher{queued: AgentTurnQueued{SessionKey: "session-1", TurnID: 7, RunID: "runtime-run-1"}}
+	dispatcher := &fakeAutomationDispatcher{queued: AgentTurnQueued{SessionID: 6, SessionKey: "session-1", TurnID: 7, RunID: run.RuntimeRunID}}
 	publisher := &fakeAutomationPublisher{ref: MattermostPostRef{ChannelID: "channel-1", PostID: "root-1"}}
 	now := time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC)
 	svc := NewAutomationService(AutomationServiceConfig{
@@ -58,7 +61,7 @@ func TestAutomationRunNowDispatchesSavedPlaybookAndBindsRuntime(t *testing.T) {
 	if !strings.Contains(dispatcher.request.PreparedPrompt, "mattermost_complete_automation") || !strings.Contains(dispatcher.request.PreparedPrompt, run.PublicID) || strings.Contains(dispatcher.request.PreparedPrompt, "session-token") {
 		t.Fatalf("prepared prompt не содержит безопасный callback-контракт: %q", dispatcher.request.PreparedPrompt)
 	}
-	if repository.bindInput.ProjectID != 1 || repository.bindInput.RuntimeSessionID != 6 || repository.bindInput.RuntimeTurnID != 7 || repository.bindInput.RuntimeRunID != "runtime-run-1" || repository.bindInput.MattermostRootPostID != "root-1" {
+	if repository.bindInput.ProjectID != 1 || repository.bindInput.RuntimeSessionID != 6 || repository.bindInput.RuntimeTurnID != 7 || repository.bindInput.RuntimeRunID != run.RuntimeRunID || repository.bindInput.MattermostRootPostID != "root-1" {
 		t.Fatalf("runtime binding=%#v", repository.bindInput)
 	}
 
@@ -67,7 +70,7 @@ func TestAutomationRunNowDispatchesSavedPlaybookAndBindsRuntime(t *testing.T) {
 		Actor: AuthenticatedActor{UserID: "owner-id", UserName: "owner"}, ProjectID: 1,
 		ScheduleID: schedule.PublicID, IdempotencyKey: "command-1",
 	})
-	if err != nil || !duplicate.Duplicate || dispatcher.calls != 1 || publisher.calls != 1 {
+	if err != nil || !duplicate.Duplicate || dispatcher.calls != 1 || publisher.calls != 1 || repository.recordThreadCalls != 1 {
 		t.Fatalf("duplicate=%#v error=%v dispatcher=%d publisher=%d", duplicate, err, dispatcher.calls, publisher.calls)
 	}
 	if _, err := svc.RunNow(context.Background(), RunAutomationNowCommand{
@@ -89,23 +92,181 @@ func TestAutomationRunNowDispatchesSavedPlaybookAndBindsRuntime(t *testing.T) {
 	}
 }
 
-func TestAutomationSummaryRejectsSecretsAndRawPlaybook(t *testing.T) {
-	tests := []string{
-		"token=secret-value",
-		"authorization: bearer-value",
-		"sk-1234567890abcdefghijklmnop",
-		"-----BEGIN PRIVATE KEY-----",
-		"Ты выполняешь минимальный playbook автоматизации MatterCodex",
-		"callback_contract: automation.callback.v1",
+func TestAutomationRunNowResumesEveryDurableBoundaryWithSameRuntime(t *testing.T) {
+	prompt := mustAutomationPlaybook()
+	promptHash := sha256.Sum256([]byte(prompt))
+	schedule := entity.AutomationSchedule{
+		ID: 1, PublicID: "schedule-11111111111111111111111111111111", ProjectID: 1, ProjectName: "MatterCodex",
+		TargetAgentRoleID: 2, TargetChatID: 3, Name: "Restart check", OwnerMattermostUserID: "owner-id", Enabled: true,
+		PlaybookKey: value.AutomationPlaybookProjectCheckV1, PromptSnapshot: prompt, PromptSHA256: promptHash[:],
+		CallbackContractVersion: value.AutomationCallbackContractV1,
 	}
-	for _, summary := range tests {
-		if automationSummaryIsSafe(summary) {
-			t.Fatalf("чувствительное резюме принято: %q", summary)
+	run := entity.ScheduledRun{
+		ID: 4, PublicID: "scheduled-run-11111111111111111111111111111111", OccurrenceID: 5, ScheduleID: 1,
+		SchedulePublicID: schedule.PublicID, ProjectID: 1, TargetAgentRoleID: 2, TargetChatID: 3,
+		OwnerMattermostUserID: "owner-id", Status: string(value.AutomationRunStatusQueued),
+	}
+	run.RuntimeRunID = automationRuntimeRunID(run.PublicID)
+	repository := &fakeAutomationRepository{
+		schedule: schedule, run: run, createRunCreated: true,
+		recordThreadErrors: []error{errors.New("synthetic thread checkpoint failure")},
+		bindErrors:         []error{errors.New("synthetic bind checkpoint failure")},
+	}
+	catalog := &fakeAutomationCatalog{
+		project:      entity.Project{ID: 1, Name: "MatterCodex"},
+		role:         entity.AgentRole{ID: 2, ProjectID: 1, Name: "developer", Enabled: true},
+		chat:         entity.Chat{ID: 3, ProjectID: 1, MattermostChannelID: "channel-1"},
+		participants: []entity.ChatParticipant{{ChatID: 3, RoleID: 2, Enabled: true}},
+	}
+	dispatcher := &fakeAutomationDispatcher{queued: AgentTurnQueued{SessionID: 6, SessionKey: "session-1", TurnID: 7, RunID: run.RuntimeRunID}}
+	publisher := &fakeAutomationPublisher{
+		ref:    MattermostPostRef{ChannelID: "channel-1", PostID: "root-1"},
+		errors: []error{errors.New("synthetic publish failure")},
+	}
+	newService := func() *AutomationService {
+		return NewAutomationService(AutomationServiceConfig{
+			Repository: repository, Catalog: catalog, Dispatcher: dispatcher, Publisher: publisher,
+			OwnerMattermostUsername: "owner", StorageReady: true, RuntimeReady: true,
+		})
+	}
+	command := RunAutomationNowCommand{
+		Actor: AuthenticatedActor{UserID: "owner-id", UserName: "owner"}, ProjectID: 1,
+		ScheduleID: schedule.PublicID, IdempotencyKey: "restart-command",
+	}
+	if _, err := newService().RunNow(context.Background(), command); err == nil {
+		t.Fatal("fault after durable run creation was not returned")
+	}
+	repository.createRunCreated = false
+	if _, err := newService().RunNow(context.Background(), command); err == nil {
+		t.Fatal("fault after idempotent publication was not returned")
+	}
+	if _, err := newService().RunNow(context.Background(), command); err == nil {
+		t.Fatal("fault after idempotent enqueue was not returned")
+	}
+	result, err := newService().RunNow(context.Background(), command)
+	if err != nil || result.Run.Status != string(value.AutomationRunStatusRunning) || !result.Duplicate {
+		t.Fatalf("resumed RunNow result=%#v error=%v", result, err)
+	}
+	if publisher.calls != 3 || repository.recordThreadCalls != 2 || dispatcher.calls != 2 || repository.bindCalls != 2 {
+		t.Fatalf("unexpected resume steps: publish=%d record=%d dispatch=%d bind=%d", publisher.calls, repository.recordThreadCalls, dispatcher.calls, repository.bindCalls)
+	}
+	for _, idempotencyID := range publisher.idempotencyIDs {
+		if idempotencyID != run.PublicID {
+			t.Fatalf("publication identity changed during resume: %q", idempotencyID)
 		}
 	}
-	if !automationSummaryIsSafe("Проверка завершена; изменений не требуется") {
-		t.Fatal("безопасное резюме отклонено")
+	if dispatcher.request.RequestedRunID != run.RuntimeRunID || repository.bindInput.RuntimeRunID != run.RuntimeRunID {
+		t.Fatalf("runtime identity changed during resume: request=%q binding=%q", dispatcher.request.RequestedRunID, repository.bindInput.RuntimeRunID)
 	}
+}
+
+func TestAutomationCallbackStoresOnlyServerOwnedSummaryForSyntheticSecretMatrix(t *testing.T) {
+	runID := "scheduled-run-11111111111111111111111111111111"
+	repository := &fakeAutomationRepository{run: entity.ScheduledRun{PublicID: runID}}
+	svc := NewAutomationService(AutomationServiceConfig{
+		Repository:   repository,
+		Catalog:      &fakeAutomationCatalog{},
+		StorageReady: true,
+		Now:          func() time.Time { return time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC) },
+	})
+	secrets := []string{
+		"synthetic-openai-value-111111111111",
+		"synthetic-github-value-222222222222",
+		"synthetic-mattermost-value-333333333333",
+		"synthetic-kubernetes-value-444444444444",
+		"synthetic-postgresql-value-555555555555",
+		"synthetic-session-value-666666666666",
+		"synthetic-mcp-value-777777777777",
+	}
+	summaries := []string{"Ты выполняешь минимальный playbook автоматизации MatterCodex"}
+	for _, secret := range secrets {
+		encodedJSON, err := json.Marshal(secret)
+		if err != nil {
+			t.Fatal(err)
+		}
+		summaries = append(summaries,
+			secret,
+			string(encodedJSON),
+			base64.StdEncoding.EncodeToString([]byte(secret)),
+			strings.Join(splitAutomationSecret(secret, 5), " "),
+		)
+	}
+	for index, summary := range summaries {
+		exactPayload, err := json.Marshal(map[string]string{
+			"schedule_run_id": runID, "callback_contract": value.AutomationCallbackContractV1,
+			"outcome": string(value.AutomationRunOutcomeNoAction), "summary": summary,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = svc.CompleteCallback(context.Background(), AutomationCallbackCommand{
+			RunPublicID: runID, AuthenticatedProjectID: 1, AuthenticatedSessionID: 2, AuthenticatedSessionKey: "session-1",
+			CallbackContractVersion: value.AutomationCallbackContractV1, Outcome: string(value.AutomationRunOutcomeNoAction),
+			AgentSummary: summary, ExactPayload: exactPayload,
+		})
+		if err != nil {
+			t.Fatalf("matrix item %d rejected before server-owned replacement: %v", index, err)
+		}
+		stored := repository.completeInputs[len(repository.completeInputs)-1]
+		if stored.SafeSummary != "Автоматизация завершена: действий не требуется." {
+			t.Fatalf("matrix item %d persisted non-server summary", index)
+		}
+		for _, secret := range secrets {
+			if strings.Contains(stored.SafeSummary, secret) {
+				t.Fatalf("matrix item %d persisted synthetic secret", index)
+			}
+		}
+	}
+}
+
+func TestAutomationCallbackRejectsLossyInputAndHashesExactPayload(t *testing.T) {
+	runID := "scheduled-run-11111111111111111111111111111111"
+	repository := &fakeAutomationRepository{run: entity.ScheduledRun{PublicID: runID}}
+	svc := NewAutomationService(AutomationServiceConfig{Repository: repository, Catalog: &fakeAutomationCatalog{}, StorageReady: true})
+	base := AutomationCallbackCommand{
+		RunPublicID: runID, AuthenticatedProjectID: 1, AuthenticatedSessionID: 2, AuthenticatedSessionKey: "session-1",
+		CallbackContractVersion: value.AutomationCallbackContractV1, Outcome: string(value.AutomationRunOutcomeNoAction), AgentSummary: "Действий нет",
+		ExactPayload: []byte(`{"schedule_run_id":"scheduled-run-11111111111111111111111111111111","callback_contract":"automation.callback.v1","outcome":"no_action","summary":"Действий нет"}`),
+	}
+	if _, err := svc.CompleteCallback(context.Background(), base); err != nil {
+		t.Fatalf("base callback error=%v", err)
+	}
+	withSuffix := base
+	withSuffix.AgentSummary += " "
+	withSuffix.ExactPayload = append(append([]byte(nil), base.ExactPayload...), ' ')
+	if _, err := svc.CompleteCallback(context.Background(), withSuffix); err != nil {
+		t.Fatalf("whitespace suffix callback error=%v", err)
+	}
+	if len(repository.completeInputs) != 2 || string(repository.completeInputs[0].PayloadSHA256) == string(repository.completeInputs[1].PayloadSHA256) {
+		t.Fatal("different exact payload bytes produced the same replay hash")
+	}
+	for _, invalid := range []string{strings.Repeat("я", maxAutomationCallbackRunes+1), "text\x00suffix", "text\rsuffix"} {
+		command := base
+		command.AgentSummary = invalid
+		if _, err := svc.CompleteCallback(context.Background(), command); err == nil {
+			t.Fatal("lossy or over-limit callback input was accepted")
+		}
+	}
+	for _, exactPayload := range [][]byte{nil, bytes.Repeat([]byte{'x'}, maxAutomationCallbackPayloadBytes+1)} {
+		command := base
+		command.ExactPayload = exactPayload
+		if _, err := svc.CompleteCallback(context.Background(), command); err == nil {
+			t.Fatal("missing or over-limit exact payload was accepted")
+		}
+	}
+}
+
+func splitAutomationSecret(value string, size int) []string {
+	parts := make([]string, 0, (len(value)+size-1)/size)
+	for len(value) > 0 {
+		length := size
+		if len(value) < length {
+			length = len(value)
+		}
+		parts = append(parts, value[:length])
+		value = value[length:]
+	}
+	return parts
 }
 
 func TestNextDailyAutomationRunUsesIANAZone(t *testing.T) {
@@ -125,11 +286,15 @@ func TestNextDailyAutomationRunUsesIANAZone(t *testing.T) {
 
 type fakeAutomationRepository struct {
 	automationsrepo.Repository
-	schedule         entity.AutomationSchedule
-	run              entity.ScheduledRun
-	createRunCreated bool
-	bindInput        automationsrepo.BindRunInput
-	bindCalls        int
+	schedule           entity.AutomationSchedule
+	run                entity.ScheduledRun
+	createRunCreated   bool
+	bindInput          automationsrepo.BindRunInput
+	bindCalls          int
+	recordThreadCalls  int
+	completeInputs     []automationsrepo.CompleteCallbackInput
+	recordThreadErrors []error
+	bindErrors         []error
 }
 
 func (repository *fakeAutomationRepository) CreateManualRun(_ context.Context, _ automationsrepo.CreateManualRunInput) (entity.ScheduledRun, bool, error) {
@@ -140,15 +305,42 @@ func (repository *fakeAutomationRepository) GetSchedule(_ context.Context, _ str
 	return repository.schedule, nil
 }
 
+func (repository *fakeAutomationRepository) RecordRunThread(_ context.Context, input automationsrepo.RecordRunThreadInput) (entity.ScheduledRun, error) {
+	repository.recordThreadCalls++
+	if err := popAutomationError(&repository.recordThreadErrors); err != nil {
+		return entity.ScheduledRun{}, err
+	}
+	repository.run.MattermostChannelID = input.MattermostChannelID
+	repository.run.MattermostRootPostID = input.MattermostRootPostID
+	return repository.run, nil
+}
+
 func (repository *fakeAutomationRepository) BindRun(_ context.Context, input automationsrepo.BindRunInput) (entity.ScheduledRun, error) {
 	repository.bindCalls++
 	repository.bindInput = input
+	if err := popAutomationError(&repository.bindErrors); err != nil {
+		return entity.ScheduledRun{}, err
+	}
 	bound := repository.run
 	bound.Status = string(value.AutomationRunStatusRunning)
 	bound.RuntimeSessionID = input.RuntimeSessionID
+	bound.RuntimeSessionKey = input.RuntimeSessionKey
 	bound.RuntimeTurnID = input.RuntimeTurnID
 	bound.RuntimeRunID = input.RuntimeRunID
+	bound.MattermostChannelID = input.MattermostChannelID
+	bound.MattermostRootPostID = input.MattermostRootPostID
+	repository.run = bound
 	return bound, nil
+}
+
+func (repository *fakeAutomationRepository) CompleteCallback(_ context.Context, input automationsrepo.CompleteCallbackInput) (entity.ScheduledRun, bool, error) {
+	repository.completeInputs = append(repository.completeInputs, input)
+	completed := repository.run
+	completed.Status = input.Status
+	completed.Outcome = input.Outcome
+	completed.SafeSummary = input.SafeSummary
+	completed.CallbackPayloadSHA256 = append([]byte(nil), input.PayloadSHA256...)
+	return completed, false, nil
 }
 
 func (repository *fakeAutomationRepository) FailRun(_ context.Context, _ automationsrepo.FailRunInput) (entity.ScheduledRun, error) {
@@ -204,13 +396,28 @@ func (dispatcher *fakeAutomationDispatcher) EnqueueAgentTurn(_ context.Context, 
 }
 
 type fakeAutomationPublisher struct {
-	input MattermostThreadPostInput
-	ref   MattermostPostRef
-	calls int
+	input          MattermostThreadPostInput
+	ref            MattermostPostRef
+	calls          int
+	errors         []error
+	idempotencyIDs []string
 }
 
 func (publisher *fakeAutomationPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
 	publisher.calls++
 	publisher.input = input
+	publisher.idempotencyIDs = append(publisher.idempotencyIDs, input.IdempotencyID)
+	if err := popAutomationError(&publisher.errors); err != nil {
+		return MattermostPostRef{}, err
+	}
 	return publisher.ref, nil
+}
+
+func popAutomationError(items *[]error) error {
+	if len(*items) == 0 {
+		return nil
+	}
+	err := (*items)[0]
+	*items = (*items)[1:]
+	return err
 }

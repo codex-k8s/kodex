@@ -810,13 +810,15 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 			Reason:     "container agent-runner terminated: OOMKilled exit=137",
 		},
 	}
+	reconciler := &fakeAutomationRuntimeReconciler{}
 	svc := NewChatRunService(ChatRunServiceConfig{
-		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
-		Store:          store,
-		RuntimeRunner:  runner,
-		StorageReady:   true,
-		RuntimeReady:   true,
-		DisableMonitor: true,
+		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+		Store:                       store,
+		RuntimeRunner:               runner,
+		StorageReady:                true,
+		RuntimeReady:                true,
+		DisableMonitor:              true,
+		AutomationRuntimeReconciler: reconciler,
 	})
 
 	result, err := svc.RepairAgentSessions(context.Background(), 10)
@@ -837,6 +839,13 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 	}
 	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].SessionKey != sessionKey {
 		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	if reconciler.calls != 1 || len(reconciler.commands) != 1 {
+		t.Fatalf("automation reconciler calls = %d commands = %#v", reconciler.calls, reconciler.commands)
+	}
+	command := reconciler.commands[0]
+	if command.ProjectID != 1 || command.RuntimeSessionID != 1 || command.RuntimeTurnID != 1 || command.RuntimeRunID != "run-1" || command.RuntimeStatus != agentSessionTurnFailed {
+		t.Fatalf("automation reconcile command = %#v", command)
 	}
 	session := store.agentSessions[sessionKey]
 	if session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != "mc-session-"+sessionKey {

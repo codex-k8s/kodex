@@ -115,26 +115,34 @@ func TestAgentSessionAutomationCallbackUsesAuthenticatedExactBinding(t *testing.
 		RunPublicID:             "scheduled-run-11111111111111111111111111111111",
 		CallbackContractVersion: value.AutomationCallbackContractV1,
 		Outcome:                 string(value.AutomationRunOutcomeNoAction),
-		SafeSummary:             "Действия не требуются",
+		AgentSummary:            "Действия не требуются",
+		ExactPayload:            []byte(`{"callback":"first"}`),
 	})
 	if err != nil || result.Run.PublicID == "" {
 		t.Fatalf("CompleteAutomationCallback() result=%#v error=%v", result, err)
 	}
-	if completer.calls != 1 || completer.command.ProjectID != 1 || completer.command.RuntimeSessionID != 1 || completer.command.RuntimeTurnID != 1 || completer.command.RuntimeRunID != "run-1" {
+	if completer.calls != 1 || completer.command.AuthenticatedProjectID != 1 || completer.command.AuthenticatedSessionID != 1 || completer.command.AuthenticatedSessionKey != "session-1" {
 		t.Fatalf("callback получил не серверную привязку: calls=%d command=%#v", completer.calls, completer.command)
 	}
+	if string(completer.command.ExactPayload) != `{"callback":"first"}` {
+		t.Fatalf("callback потерял точные байты payload")
+	}
 
-	store.sessionTurns[0].SessionID = 999
+	session := store.agentSessions["session-1"]
+	session.ActiveTurnID = 0
+	session.ActiveRunID = ""
+	store.agentSessions["session-1"] = session
 	if _, err := svc.CompleteAutomationCallback(context.Background(), "session-1", "session-token", CompleteAutomationCallbackCommand{
 		RunPublicID:             "scheduled-run-11111111111111111111111111111111",
 		CallbackContractVersion: value.AutomationCallbackContractV1,
 		Outcome:                 string(value.AutomationRunOutcomeNoAction),
-		SafeSummary:             "Действия не требуются",
-	}); err == nil {
-		t.Fatal("callback с подменённой привязкой turn принят")
+		AgentSummary:            "Действия не требуются",
+		ExactPayload:            []byte(`{"callback":"first"}`),
+	}); err != nil {
+		t.Fatalf("terminal replay после очистки active binding error=%v", err)
 	}
-	if completer.calls != 1 {
-		t.Fatalf("callback completer вызван после подмены scope: %d", completer.calls)
+	if completer.calls != 2 || completer.command.AuthenticatedSessionID != 1 {
+		t.Fatalf("terminal replay не передан атомарному repository fence: calls=%d command=%#v", completer.calls, completer.command)
 	}
 }
 
@@ -592,13 +600,15 @@ func TestAgentSessionCompleteDoesNotPostFYIToRequester(t *testing.T) {
 func TestAgentSessionCompleteIsIdempotentForTerminalTurn(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
 	store.sessionTurns[0].UserName = "owner"
+	reconciler := &fakeAutomationRuntimeReconciler{}
 	svc := NewAgentSessionService(AgentSessionServiceConfig{
-		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
-		Store:           store,
-		RuntimeRunner:   runner,
-		ThreadPublisher: publisher,
-		StorageReady:    true,
-		RuntimeReady:    true,
+		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+		Store:                       store,
+		RuntimeRunner:               runner,
+		ThreadPublisher:             publisher,
+		StorageReady:                true,
+		RuntimeReady:                true,
+		AutomationRuntimeReconciler: reconciler,
 	})
 
 	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
@@ -627,6 +637,9 @@ func TestAgentSessionCompleteIsIdempotentForTerminalTurn(t *testing.T) {
 	session := store.agentSessions["session-1"]
 	if session.ActiveTurnID != 0 || session.Status != agentSessionStatusIdle || session.CodexSessionID != "codex-session-1" {
 		t.Fatalf("session = %#v", session)
+	}
+	if reconciler.calls != 2 || reconciler.commands[0].RuntimeSessionID != 1 || reconciler.commands[0].RuntimeTurnID != claim.TurnID || reconciler.commands[0].RuntimeRunID != claim.RunID || reconciler.commands[0].RuntimeStatus != agentSessionTurnSucceeded {
+		t.Fatalf("terminal automation reconciliation=%#v", reconciler.commands)
 	}
 }
 
@@ -1378,6 +1391,18 @@ type fakeAutomationCallbackCompleter struct {
 	result  AutomationCallbackResult
 	err     error
 	calls   int
+}
+
+type fakeAutomationRuntimeReconciler struct {
+	commands []AutomationRuntimeTerminalCommand
+	err      error
+	calls    int
+}
+
+func (reconciler *fakeAutomationRuntimeReconciler) ReconcileRuntimeTerminal(_ context.Context, command AutomationRuntimeTerminalCommand) error {
+	reconciler.calls++
+	reconciler.commands = append(reconciler.commands, command)
+	return reconciler.err
 }
 
 func (completer *fakeAutomationCallbackCompleter) CompleteCallback(_ context.Context, command AutomationCallbackCommand) (AutomationCallbackResult, error) {

@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"text/template"
 	"time"
@@ -23,21 +22,16 @@ import (
 )
 
 const (
-	defaultAutomationCallbackTTL = 24 * time.Hour
-	maxAutomationScheduleName    = 120
-	maxAutomationSafeSummary     = 1000
-	automationSessionScope       = "automation-run"
+	defaultAutomationCallbackTTL      = 24 * time.Hour
+	maxAutomationScheduleName         = 120
+	maxAutomationCallbackRunes        = 1000
+	maxAutomationCallbackBytes        = 4000
+	maxAutomationCallbackPayloadBytes = 16 * 1024
+	automationSessionScope            = "automation-run"
 )
 
 //go:embed automation_playbook.md
 var automationPlaybookFiles embed.FS
-
-var automationSensitiveSummaryPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*\S+`),
-	regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{16,}\b`),
-	regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{20,}\b`),
-	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`),
-}
 
 type AutomationCatalog interface {
 	GetProject(ctx context.Context, id int64) (entity.Project, error)
@@ -45,7 +39,6 @@ type AutomationCatalog interface {
 	GetChat(ctx context.Context, id int64) (entity.Chat, error)
 	ListChatParticipants(ctx context.Context, chatID int64) ([]entity.ChatParticipant, error)
 	ListProjectRepositories(ctx context.Context, projectID int64) ([]entity.ProjectRepository, error)
-	GetAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error)
 }
 
 type AutomationRunDispatcher interface {
@@ -98,13 +91,13 @@ type RunAutomationNowResult struct {
 
 type AutomationCallbackCommand struct {
 	RunPublicID             string
-	ProjectID               int64
-	RuntimeSessionID        int64
-	RuntimeTurnID           int64
-	RuntimeRunID            string
+	AuthenticatedProjectID  int64
+	AuthenticatedSessionID  int64
+	AuthenticatedSessionKey string
 	CallbackContractVersion string
 	Outcome                 string
-	SafeSummary             string
+	AgentSummary            string
+	ExactPayload            []byte
 }
 
 type AutomationCallbackResult struct {
@@ -114,6 +107,18 @@ type AutomationCallbackResult struct {
 
 type AutomationCallbackCompleter interface {
 	CompleteCallback(ctx context.Context, command AutomationCallbackCommand) (AutomationCallbackResult, error)
+}
+
+type AutomationRuntimeTerminalCommand struct {
+	ProjectID        int64
+	RuntimeSessionID int64
+	RuntimeTurnID    int64
+	RuntimeRunID     string
+	RuntimeStatus    string
+}
+
+type AutomationRuntimeTerminalReconciler interface {
+	ReconcileRuntimeTerminal(ctx context.Context, command AutomationRuntimeTerminalCommand) error
 }
 
 func NewAutomationService(cfg AutomationServiceConfig) *AutomationService {
@@ -238,26 +243,30 @@ func (svc *AutomationService) RunNow(ctx context.Context, command RunAutomationN
 		return RunAutomationNowResult{}, errors.New("automation run scope and idempotency key are required")
 	}
 	now := svc.cfg.Now().UTC()
+	occurrencePublicID := newAutomationID("occurrence")
+	runPublicID := newAutomationID("scheduled-run")
 	run, created, err := svc.cfg.Repository.CreateManualRun(ctx, automationsrepo.CreateManualRunInput{
 		SchedulePublicID:      command.ScheduleID,
 		ProjectID:             command.ProjectID,
 		OwnerMattermostUserID: actor.UserID,
 		IdempotencyKey:        command.IdempotencyKey,
-		OccurrencePublicID:    newAutomationID("occurrence"),
-		RunPublicID:           newAutomationID("scheduled-run"),
+		OccurrencePublicID:    occurrencePublicID,
+		RunPublicID:           runPublicID,
 		ScheduledFor:          now,
 		CallbackExpiresAt:     now.Add(defaultAutomationCallbackTTL),
+		RuntimeRunID:          automationRuntimeRunID(runPublicID),
 	})
 	if err != nil {
 		return RunAutomationNowResult{}, err
 	}
-	if !created {
-		return RunAutomationNowResult{Run: run, Duplicate: true}, nil
+	duplicate := !created
+	if automationRunTerminal(run.Status) || run.Status == string(value.AutomationRunStatusRunning) {
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, nil
 	}
 
 	schedule, err := svc.cfg.Repository.GetSchedule(ctx, command.ScheduleID, command.ProjectID, actor.UserID)
 	if err != nil {
-		return svc.failRun(ctx, run, actor, "Не удалось повторно проверить расписание перед запуском", err)
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
 	}
 	project, role, chat, err := svc.validateTarget(ctx, schedule.ProjectID, schedule.TargetAgentRoleID, schedule.TargetChatID)
 	if err != nil {
@@ -267,20 +276,36 @@ func (svc *AutomationService) RunNow(ctx context.Context, command RunAutomationN
 		return svc.failRun(ctx, run, actor, "Привязка запуска не совпала с расписанием", automationsrepo.ErrForbidden)
 	}
 
-	postRef, err := svc.cfg.Publisher.PostThreadMessage(ctx, MattermostThreadPostInput{
-		ChannelID:     chat.MattermostChannelID,
-		Message:       agentNoTriggerMessage(fmt.Sprintf("Запущена автоматизация «%s» (%s). Ход выполнения публикуется в этом треде.", schedule.Name, run.PublicID)),
-		IdempotencyID: run.PublicID,
-		Props: map[string]any{
-			"mattercodex_automation_run_id": run.PublicID,
-			"mattercodex_system":            true,
-		},
-	})
-	if err != nil {
-		return svc.failRun(ctx, run, actor, "Не удалось создать тред выполнения", err)
-	}
-	if strings.TrimSpace(postRef.PostID) == "" || strings.TrimSpace(postRef.ChannelID) != strings.TrimSpace(chat.MattermostChannelID) {
-		return svc.failRun(ctx, run, actor, "Mattermost вернул несовпадающую привязку треда", automationsrepo.ErrForbidden)
+	postRef := MattermostPostRef{ChannelID: run.MattermostChannelID, PostID: run.MattermostRootPostID}
+	if strings.TrimSpace(postRef.PostID) == "" {
+		postRef, err = svc.cfg.Publisher.PostThreadMessage(ctx, MattermostThreadPostInput{
+			ChannelID:     chat.MattermostChannelID,
+			Message:       agentNoTriggerMessage(fmt.Sprintf("Запущена автоматизация «%s» (%s). Ход выполнения публикуется в этом треде.", schedule.Name, run.PublicID)),
+			IdempotencyID: run.PublicID,
+			Props: map[string]any{
+				"mattercodex_automation_run_id": run.PublicID,
+				"mattercodex_system":            true,
+			},
+		})
+		if err != nil {
+			return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
+		}
+		if strings.TrimSpace(postRef.PostID) == "" || strings.TrimSpace(postRef.ChannelID) != strings.TrimSpace(chat.MattermostChannelID) {
+			return RunAutomationNowResult{Run: run, Duplicate: duplicate}, automationsrepo.ErrForbidden
+		}
+		run, err = svc.cfg.Repository.RecordRunThread(ctx, automationsrepo.RecordRunThreadInput{
+			RunPublicID:           run.PublicID,
+			ProjectID:             run.ProjectID,
+			OwnerMattermostUserID: actor.UserID,
+			MattermostChannelID:   postRef.ChannelID,
+			MattermostRootPostID:  postRef.PostID,
+			Now:                   svc.cfg.Now().UTC(),
+		})
+		if err != nil {
+			return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
+		}
+	} else if strings.TrimSpace(postRef.ChannelID) != strings.TrimSpace(chat.MattermostChannelID) {
+		return svc.failRun(ctx, run, actor, "Сохранённая привязка треда не совпала с целью расписания", automationsrepo.ErrForbidden)
 	}
 
 	prompt, err := renderAutomationPrompt(schedule, run)
@@ -289,7 +314,7 @@ func (svc *AutomationService) RunNow(ctx context.Context, command RunAutomationN
 	}
 	repositories, err := svc.cfg.Catalog.ListProjectRepositories(ctx, project.ID)
 	if err != nil {
-		return svc.failRun(ctx, run, actor, "Не удалось проверить репозитории проекта", err)
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
 	}
 	queued, err := svc.cfg.Dispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
 		Project:        project,
@@ -304,23 +329,20 @@ func (svc *AutomationService) RunNow(ctx context.Context, command RunAutomationN
 		SessionRootID:  postRef.PostID,
 		SessionScope:   automationSessionScope,
 		PreparedPrompt: prompt,
+		RequestedRunID: run.RuntimeRunID,
 	})
 	if err != nil {
-		return svc.failRun(ctx, run, actor, "Не удалось поставить playbook в очередь", err)
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
 	}
-	session, err := svc.cfg.Catalog.GetAgentSession(ctx, queued.SessionKey)
-	if err != nil {
-		return svc.failRun(ctx, run, actor, "Не удалось проверить созданную сессию", err)
-	}
-	if session.ProjectID != project.ID || session.ChatID != chat.ID || session.RoleID != role.ID || session.ActiveTurnID != queued.TurnID || session.ActiveRunID != queued.RunID {
-		return svc.failRun(ctx, run, actor, "Созданная сессия не совпала с запуском", automationsrepo.ErrForbidden)
+	if queued.RunID != run.RuntimeRunID || queued.TurnID <= 0 || strings.TrimSpace(queued.SessionKey) == "" {
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, automationsrepo.ErrConflict
 	}
 	bound, err := svc.cfg.Repository.BindRun(ctx, automationsrepo.BindRunInput{
 		RunPublicID:           run.PublicID,
 		ProjectID:             project.ID,
 		OwnerMattermostUserID: actor.UserID,
-		RuntimeSessionID:      session.ID,
-		RuntimeSessionKey:     session.SessionKey,
+		RuntimeSessionID:      queued.SessionID,
+		RuntimeSessionKey:     queued.SessionKey,
 		RuntimeTurnID:         queued.TurnID,
 		RuntimeRunID:          queued.RunID,
 		MattermostChannelID:   postRef.ChannelID,
@@ -328,9 +350,9 @@ func (svc *AutomationService) RunNow(ctx context.Context, command RunAutomationN
 		Now:                   svc.cfg.Now().UTC(),
 	})
 	if err != nil {
-		return svc.failRun(ctx, run, actor, "Не удалось сохранить привязку выполнения", err)
+		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, err
 	}
-	return RunAutomationNowResult{Run: bound}, nil
+	return RunAutomationNowResult{Run: bound, Duplicate: duplicate}, nil
 }
 
 func (svc *AutomationService) GetRun(ctx context.Context, actor AuthenticatedActor, publicID string, projectID int64) (entity.ScheduledRun, error) {
@@ -353,12 +375,7 @@ func (svc *AutomationService) CompleteCallback(ctx context.Context, command Auto
 	if !svc.Available() {
 		return AutomationCallbackResult{}, errors.New("automation storage is not ready")
 	}
-	command.RunPublicID = strings.TrimSpace(command.RunPublicID)
-	command.RuntimeRunID = strings.TrimSpace(command.RuntimeRunID)
-	command.CallbackContractVersion = strings.TrimSpace(command.CallbackContractVersion)
-	command.Outcome = strings.TrimSpace(command.Outcome)
-	command.SafeSummary = sanitizeAutomationSummary(command.SafeSummary)
-	if command.RunPublicID == "" || command.ProjectID <= 0 || command.RuntimeSessionID <= 0 || command.RuntimeTurnID <= 0 || command.RuntimeRunID == "" {
+	if !validAutomationPublicID(command.RunPublicID, "scheduled-run") || command.AuthenticatedProjectID <= 0 || command.AuthenticatedSessionID <= 0 || !validAutomationSessionKey(command.AuthenticatedSessionKey) {
 		return AutomationCallbackResult{}, automationsrepo.ErrForbidden
 	}
 	if command.CallbackContractVersion != value.AutomationCallbackContractV1 {
@@ -372,39 +389,53 @@ func (svc *AutomationService) CompleteCallback(ctx context.Context, command Auto
 	default:
 		return AutomationCallbackResult{}, errors.New("unsupported automation outcome")
 	}
-	if command.SafeSummary == "" {
-		return AutomationCallbackResult{}, errors.New("automation callback summary is required")
-	}
-	if !automationSummaryIsSafe(command.SafeSummary) {
-		return AutomationCallbackResult{}, errors.New("automation callback summary contains disallowed sensitive content")
-	}
-	payloadHash, err := automationCommandHash(struct {
-		RunPublicID             string `json:"schedule_run_id"`
-		ProjectID               int64  `json:"project_id"`
-		RuntimeSessionID        int64  `json:"runtime_session_id"`
-		RuntimeTurnID           int64  `json:"runtime_turn_id"`
-		RuntimeRunID            string `json:"runtime_run_id"`
-		CallbackContractVersion string `json:"callback_contract"`
-		Outcome                 string `json:"outcome"`
-		SafeSummary             string `json:"summary"`
-	}{command.RunPublicID, command.ProjectID, command.RuntimeSessionID, command.RuntimeTurnID, command.RuntimeRunID, command.CallbackContractVersion, command.Outcome, command.SafeSummary})
-	if err != nil {
+	if err := validateAutomationCallbackSummary(command.AgentSummary); err != nil {
 		return AutomationCallbackResult{}, err
+	}
+	if len(command.ExactPayload) == 0 || len(command.ExactPayload) > maxAutomationCallbackPayloadBytes {
+		return AutomationCallbackResult{}, errors.New("automation callback payload is missing or exceeds the contract")
+	}
+	payloadHash := automationCallbackPayloadHash(command.ExactPayload)
+	safeSummary := automationServerSummary(command.Outcome)
+	if safeSummary == "" {
+		return AutomationCallbackResult{}, errors.New("automation callback summary is required")
 	}
 	run, duplicate, err := svc.cfg.Repository.CompleteCallback(ctx, automationsrepo.CompleteCallbackInput{
 		RunPublicID:             command.RunPublicID,
-		ProjectID:               command.ProjectID,
-		RuntimeSessionID:        command.RuntimeSessionID,
-		RuntimeTurnID:           command.RuntimeTurnID,
-		RuntimeRunID:            command.RuntimeRunID,
+		AuthenticatedProjectID:  command.AuthenticatedProjectID,
+		AuthenticatedSessionID:  command.AuthenticatedSessionID,
+		AuthenticatedSessionKey: command.AuthenticatedSessionKey,
 		CallbackContractVersion: command.CallbackContractVersion,
 		Status:                  status,
 		Outcome:                 command.Outcome,
-		SafeSummary:             command.SafeSummary,
+		SafeSummary:             safeSummary,
 		PayloadSHA256:           payloadHash,
 		Now:                     svc.cfg.Now().UTC(),
 	})
 	return AutomationCallbackResult{Run: run, Duplicate: duplicate}, err
+}
+
+func (svc *AutomationService) ReconcileRuntimeTerminal(ctx context.Context, command AutomationRuntimeTerminalCommand) error {
+	if !svc.Available() {
+		return errors.New("automation storage is not ready")
+	}
+	if command.ProjectID <= 0 || command.RuntimeSessionID <= 0 || command.RuntimeTurnID <= 0 || strings.TrimSpace(command.RuntimeRunID) == "" {
+		return automationsrepo.ErrForbidden
+	}
+	summary := automationRuntimeTerminalSummary(command.RuntimeStatus)
+	if summary == "" {
+		return errors.New("automation runtime status is not terminal")
+	}
+	_, _, err := svc.cfg.Repository.ReconcileRuntimeTerminal(ctx, automationsrepo.ReconcileRuntimeTerminalInput{
+		ProjectID:        command.ProjectID,
+		RuntimeSessionID: command.RuntimeSessionID,
+		RuntimeTurnID:    command.RuntimeTurnID,
+		RuntimeRunID:     command.RuntimeRunID,
+		RuntimeStatus:    command.RuntimeStatus,
+		SafeSummary:      summary,
+		Now:              svc.cfg.Now().UTC(),
+	})
+	return err
 }
 
 func (svc *AutomationService) validateTarget(ctx context.Context, projectID int64, roleID int64, chatID int64) (entity.Project, entity.AgentRole, entity.Chat, error) {
@@ -453,7 +484,7 @@ func (svc *AutomationService) failRun(ctx context.Context, run entity.ScheduledR
 		RunPublicID:           run.PublicID,
 		ProjectID:             run.ProjectID,
 		OwnerMattermostUserID: actor.UserID,
-		SafeSummary:           sanitizeAutomationSummary(safeSummary),
+		SafeSummary:           safeSummary,
 		Now:                   svc.cfg.Now().UTC(),
 	})
 	if failErr != nil {
@@ -510,31 +541,76 @@ func renderAutomationPrompt(schedule entity.AutomationSchedule, run entity.Sched
 	return strings.TrimSpace(body.String()), nil
 }
 
-func sanitizeAutomationSummary(summary string) string {
-	summary = strings.TrimSpace(strings.Map(func(r rune) rune {
-		if r == '\x00' || r == '\r' {
-			return -1
-		}
-		return r
-	}, summary))
-	runes := []rune(summary)
-	if len(runes) > maxAutomationSafeSummary {
-		summary = string(runes[:maxAutomationSafeSummary])
+func validateAutomationCallbackSummary(summary string) error {
+	if !utf8.ValidString(summary) || strings.TrimSpace(summary) == "" {
+		return errors.New("automation callback summary is required")
 	}
-	return summary
+	if len(summary) > maxAutomationCallbackBytes || utf8.RuneCountInString(summary) > maxAutomationCallbackRunes {
+		return errors.New("automation callback summary exceeds the contract")
+	}
+	if strings.ContainsRune(summary, '\x00') || strings.ContainsRune(summary, '\r') {
+		return errors.New("automation callback summary contains a disallowed control character")
+	}
+	return nil
 }
 
-func automationSummaryIsSafe(summary string) bool {
-	lower := strings.ToLower(summary)
-	if strings.Contains(lower, "ты выполняешь минимальный playbook") || strings.Contains(lower, "callback_contract:") {
+func automationServerSummary(outcome string) string {
+	switch value.AutomationRunOutcome(outcome) {
+	case value.AutomationRunOutcomeNoAction:
+		return "Автоматизация завершена: действий не требуется."
+	case value.AutomationRunOutcomeActionTaken:
+		return "Автоматизация завершена: действие выполнено."
+	case value.AutomationRunOutcomeRequiresHuman:
+		return "Автоматизация завершена: требуется решение человека."
+	case value.AutomationRunOutcomeFailed:
+		return "Автоматизация завершилась ошибкой."
+	default:
+		return ""
+	}
+}
+
+func automationRuntimeTerminalSummary(status string) string {
+	switch status {
+	case agentSessionTurnSucceeded:
+		return "Среда выполнения завершилась без принятого результата автоматизации."
+	case agentSessionTurnFailed:
+		return "Среда выполнения автоматизации завершилась ошибкой."
+	case agentSessionTurnBlocked:
+		return "Среда выполнения автоматизации была заблокирована."
+	case agentSessionTurnCanceled:
+		return "Выполнение автоматизации было остановлено."
+	default:
+		return ""
+	}
+}
+
+func automationCallbackPayloadHash(exactPayload []byte) []byte {
+	hash := sha256.New()
+	_, _ = hash.Write([]byte("mattercodex.automation.callback.v1\x00"))
+	_, _ = hash.Write(exactPayload)
+	return hash.Sum(nil)
+}
+
+func validAutomationPublicID(publicID string, prefix string) bool {
+	expectedPrefix := prefix + "-"
+	if len(publicID) != len(expectedPrefix)+32 || !strings.HasPrefix(publicID, expectedPrefix) {
 		return false
 	}
-	for _, pattern := range automationSensitiveSummaryPatterns {
-		if pattern.MatchString(summary) {
-			return false
-		}
-	}
-	return true
+	_, err := hex.DecodeString(publicID[len(expectedPrefix):])
+	return err == nil
+}
+
+func validAutomationSessionKey(sessionKey string) bool {
+	return sessionKey != "" && len(sessionKey) <= 512 && strings.TrimSpace(sessionKey) == sessionKey && !strings.ContainsAny(sessionKey, "\x00\r\n")
+}
+
+func automationRunTerminal(status string) bool {
+	return status == string(value.AutomationRunStatusSucceeded) || status == string(value.AutomationRunStatusFailed)
+}
+
+func automationRuntimeRunID(runPublicID string) string {
+	hash := sha256.Sum256([]byte(runPublicID))
+	return "automation-runtime-" + hex.EncodeToString(hash[:])
 }
 
 func automationCommandHash(value any) ([]byte, error) {
