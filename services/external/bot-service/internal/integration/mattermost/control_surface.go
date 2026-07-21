@@ -302,6 +302,58 @@ func (surface *ControlSurface) ReconcileOrPostThreadMessage(ctx context.Context,
 	return statusservice.MattermostPostRef{}, createErr
 }
 
+func (surface *ControlSurface) FindExactThreadCard(ctx context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, bool, error) {
+	deliveryID, ok := card.Props["matter_codex_delivery_id"].(string)
+	if !ok || strings.TrimSpace(deliveryID) == "" || strings.TrimSpace(card.ChannelID) == "" || strings.TrimSpace(card.RootPostID) == "" {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("mattermost approval card identity is invalid")
+	}
+	postList, _, err := surface.client.GetPostThread(ctx, card.RootPostID, "", false)
+	if err != nil {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("read back Mattermost approval card: %w", err)
+	}
+	if postList == nil {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("mattermost approval card readback is empty")
+	}
+	var matched *mattermostmodel.Post
+	for _, post := range postList.Posts {
+		if post == nil || post.GetProps()["matter_codex_delivery_id"] != deliveryID {
+			continue
+		}
+		if matched != nil {
+			return statusservice.MattermostPostRef{}, false, fmt.Errorf("mattermost approval card identity is not unique")
+		}
+		matched = post
+	}
+	if matched == nil {
+		return statusservice.MattermostPostRef{}, false, nil
+	}
+	if matched.ChannelId != card.ChannelID || matched.RootId != card.RootPostID || matched.Message != card.Message ||
+		!exactApprovalCardProps(matched.GetProps(), card.Props) {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("mattermost approval card conflicts with the immutable delivery binding")
+	}
+	return statusservice.MattermostPostRef{ChannelID: matched.ChannelId, PostID: matched.Id}, true, nil
+}
+
+func exactApprovalCardProps(actual map[string]any, expected map[string]any) bool {
+	for key, value := range expected {
+		if !strings.HasPrefix(key, "matter_codex_") || !sameJSONValue(actual[key], value) {
+			return false
+		}
+	}
+	for key := range actual {
+		if key == mattermostmodel.PostPropsFromBot || key == "attachments" {
+			continue
+		}
+		if !strings.HasPrefix(key, "matter_codex_") {
+			return false
+		}
+		if _, ok := expected[key]; !ok {
+			return false
+		}
+	}
+	return actual[mattermostmodel.PostPropsFromBot] == "true"
+}
+
 func (surface *ControlSurface) UpdateThreadMessage(ctx context.Context, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {
 	return updateThreadPost(ctx, surface.client, input)
 }

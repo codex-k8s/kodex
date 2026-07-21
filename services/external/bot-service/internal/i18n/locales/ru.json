@@ -1071,5 +1071,19 @@
   {"id": "automation.validation.time_zone", "translation": "Выберите поддерживаемый часовой пояс."},
   {"id": "automation.validation.playbook", "translation": "Выберите поддерживаемый playbook."},
   {"id": "automation.validation.binding", "translation": "Агент и чат должны быть включены и принадлежать выбранному проекту."},
-  {"id": "automation.create.failed", "translation": "Расписание не создано: область доступа или привязка цели изменилась. Откройте диалог заново."}
+  {"id": "automation.create.failed", "translation": "Расписание не создано: область доступа или привязка цели изменилась. Откройте диалог заново."},
+  {"id": "integration.approval.card.title", "translation": "Требуется согласование интеграционного действия"},
+  {"id": "integration.approval.card.text", "translation": "Агент запросил опасную возможность `{{.Capability}}`. В этом срезе подтверждение создаёт только тестовую запись в PostgreSQL и не изменяет Kubernetes или внешнюю систему."},
+  {"id": "integration.approval.card.field.connection", "translation": "Подключение"},
+  {"id": "integration.approval.card.field.risk", "translation": "Риск"},
+  {"id": "integration.approval.card.field.target", "translation": "Цель"},
+  {"id": "integration.approval.card.field.expires", "translation": "Истекает"},
+  {"id": "integration.approval.action.approve", "translation": "Согласовать"},
+  {"id": "integration.approval.action.approve.tooltip", "translation": "Разрешить одну тестовую recording execution"},
+  {"id": "integration.approval.action.reject", "translation": "Отклонить"},
+  {"id": "integration.approval.action.reject.tooltip", "translation": "Отклонить этот запрос"},
+  {"id": "integration.approval.result.approved", "translation": "Запрос согласован. Тестовая recording execution будет выполнена worker-процессом."},
+  {"id": "integration.approval.result.rejected", "translation": "Запрос отклонён. Тестовая execution не выполнялась."},
+  {"id": "integration.approval.result.title.approved", "translation": "Интеграционное действие согласовано"},
+  {"id": "integration.approval.result.title.rejected", "translation": "Интеграционное действие отклонено"}
 ]

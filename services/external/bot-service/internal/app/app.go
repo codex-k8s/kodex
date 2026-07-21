@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	domainintegrations "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/integrations"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -17,8 +20,10 @@ import (
 	githubintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/github"
 	kubernetesintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/kubernetes"
 	mattermostintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/mattermost"
+	recordingintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/recording"
 	adminpostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
 	automationspostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/automations"
+	integrationpostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/integrations"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
 	httptransport "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,9 +33,11 @@ import (
 
 const serviceName = "matter-codex-bot-service"
 
+const integrationWorkerRunDeadline = 25 * time.Second
+
 func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	runtimeRunner, runtimeConfigured := openRuntimeRunner(cfg, logger)
-	storage, automationStorage, closeStorage, err := openStorage(ctx, cfg, logger, runtimeRunner)
+	storage, automationStorage, integrationStorage, closeStorage, err := openStorage(ctx, cfg, logger, runtimeRunner)
 	if err != nil {
 		return err
 	}
@@ -157,11 +164,34 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		CallbackPublishConcurrency:  cfg.CallbackPublishConcurrency,
 		CallbackPublishDeadline:     cfg.CallbackPublishDeadline,
 	})
+	var integrationSvc *domainintegrations.Service
+	if integrationStorage != nil && threadPublisher != nil && agentsActionURL(cfg) != "" {
+		integrationSvc = domainintegrations.NewService(domainintegrations.ServiceConfig{
+			Repository: integrationStorage,
+			Admission:  sessionSvc,
+			CardPublisher: statusservice.NewIntegrationApprovalPublisher(
+				localizer, threadPublisher, agentsActionURL(cfg),
+			),
+		})
+	}
+	var integrationWorker *domainintegrations.Worker
+	if integrationStorage != nil {
+		workerID, err := newIntegrationWorkerID()
+		if err != nil {
+			return fmt.Errorf("create integration worker identity: %w", err)
+		}
+		integrationWorker = domainintegrations.NewWorker(domainintegrations.WorkerConfig{
+			Repository: integrationStorage,
+			Executor:   recordingintegration.New(integrationStorage, nil, nil),
+			WorkerID:   workerID,
+		})
+	}
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
 		StatusService:          statusSvc,
 		SlashService:           slashSvc,
 		SessionService:         sessionSvc,
+		IntegrationService:     integrationSvc,
 		DialogOpener:           dialogOpener,
 		InteractionSecurity:    interactionSecurity,
 		Localizer:              localizer,
@@ -213,6 +243,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if storage != nil && cfg.InteractionCleanupEnabled {
 		go runInteractionCapabilityCleanupLoop(ctx, storage, cfg.InteractionCleanupInterval, cfg.InteractionCleanupRetention, cfg.InteractionCleanupBatch, logger)
 	}
+	if integrationWorker != nil {
+		go runIntegrationWorkerLoop(ctx, integrationWorker, time.Second, logger)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -252,6 +285,33 @@ func runInteractionCapabilityCleanupLoop(ctx context.Context, repository securit
 			timer.Reset(interval)
 		}
 	}
+}
+
+func runIntegrationWorkerLoop(ctx context.Context, worker *domainintegrations.Worker, interval time.Duration, logger *slog.Logger) {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			runCtx, cancel := context.WithTimeout(ctx, integrationWorkerRunDeadline)
+			_, err := worker.RunOnce(runCtx)
+			cancel()
+			if err != nil && !errors.Is(err, domainintegrations.ErrNoExecution) {
+				logger.Warn("integration recording worker failed", "reason", domainintegrations.ReasonCode(err))
+			}
+			timer.Reset(interval)
+		}
+	}
+}
+
+func newIntegrationWorkerID() (string, error) {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "", err
+	}
+	return "worker_" + hex.EncodeToString(value), nil
 }
 
 func cleanupInteractionCapabilities(ctx context.Context, repository securityrepo.CapabilityCleanupRepository, now time.Time, retention time.Duration, batch int) (int64, error) {
@@ -435,58 +495,58 @@ func newPrometheusRegistry() *prometheus.Registry {
 	return registry
 }
 
-func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRunner runtimerepo.Runner) (*adminpostgres.Repository, *automationspostgres.Repository, func(), error) {
+func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRunner runtimerepo.Runner) (*adminpostgres.Repository, *automationspostgres.Repository, *integrationpostgres.Repository, func(), error) {
 	if !cfg.DatabaseConfigured() {
 		logger.Warn("storage disabled: MATTERCODEX_DATABASE_DSN is not configured")
-		return nil, nil, func() {}, nil
+		return nil, nil, nil, func() {}, nil
 	}
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseDSN)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("parse storage pool config: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("parse storage pool config: %w", err)
 	}
 	if cfg.StorageMigrations {
 		if err := adminpostgres.ProvisionRuntimeDatabaseRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User, poolConfig.ConnConfig.Password); err != nil {
-			return nil, nil, nil, fmt.Errorf("provision runtime database role: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("provision runtime database role: %w", err)
 		}
 		if err := migrations.RunTo(ctx, cfg.MigrationsDatabaseDSN, 24); err != nil {
-			return nil, nil, nil, fmt.Errorf("run storage migrations through integrity staging schema: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("run storage migrations through integrity staging schema: %w", err)
 		}
 		blockedSessions, err := prepareClusterAdminSecretIntegrity(ctx, cfg.MigrationsDatabaseDSN, runtimeRunner)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("prepare cluster-admin secret integrity: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("prepare cluster-admin secret integrity: %w", err)
 		}
 		if blockedSessions > 0 {
 			logger.Warn("blocked cluster-admin sessions with missing runtime token secrets", "count", blockedSessions)
 		}
 		if err := migrations.RunForRuntimeRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User); err != nil {
-			return nil, nil, nil, fmt.Errorf("run storage migrations: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("run storage migrations: %w", err)
 		}
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("open storage pool: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("open storage pool: %w", err)
 	}
 	closePool := func() {
 		pool.Close()
 	}
 	if err := pool.Ping(ctx); err != nil {
 		closePool()
-		return nil, nil, nil, fmt.Errorf("ping storage: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("ping storage: %w", err)
 	}
 	if err := adminpostgres.ValidateRuntimeDatabaseRole(ctx, pool); err != nil {
 		closePool()
-		return nil, nil, nil, fmt.Errorf("validate runtime database role: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("validate runtime database role: %w", err)
 	}
 	repo := adminpostgres.NewRepository(pool)
 	seeded, err := statusservice.SeedDefaultAgentPromptTemplates(ctx, repo)
 	if err != nil {
 		closePool()
-		return nil, nil, nil, fmt.Errorf("seed default agent prompt templates: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("seed default agent prompt templates: %w", err)
 	}
 	if seeded > 0 {
 		logger.Info("seeded default agent prompt templates", "count", seeded)
 	}
-	return repo, automationspostgres.NewRepository(pool), closePool, nil
+	return repo, automationspostgres.NewRepository(pool), integrationpostgres.NewRepository(pool), closePool, nil
 }
 
 type secretIntegrityStagingRow struct {

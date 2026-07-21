@@ -33,14 +33,20 @@ type memoryInteractionRepository struct {
 }
 
 func newMemoryInteractionSecurity() *statusservice.InteractionSecurityService {
+	security, _ := newMemoryInteractionSecurityWithRepository()
+	return security
+}
+
+func newMemoryInteractionSecurityWithRepository() (*statusservice.InteractionSecurityService, *memoryInteractionRepository) {
+	repository := &memoryInteractionRepository{
+		capabilities: map[string]securityrepo.Capability{},
+		inputs:       map[string]securityrepo.IssueCapabilityInput{},
+		admissions:   map[string]bool{},
+	}
 	return statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
-		Admission: fixedAdmission{status: statusservice.AdmissionAllowed},
-		Repository: &memoryInteractionRepository{
-			capabilities: map[string]securityrepo.Capability{},
-			inputs:       map[string]securityrepo.IssueCapabilityInput{},
-			admissions:   map[string]bool{},
-		},
-	})
+		Admission:  fixedAdmission{status: statusservice.AdmissionAllowed},
+		Repository: repository,
+	}), repository
 }
 
 func (repo *memoryInteractionRepository) IssueInteractionCapability(_ context.Context, input securityrepo.IssueCapabilityInput) error {

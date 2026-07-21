@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/integrations"
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
@@ -54,10 +56,19 @@ type DialogOpener interface {
 	OpenDialog(ctx context.Context, triggerID string, dialog statusservice.MattermostDialog) error
 }
 
+type integrationApprovalService interface {
+	integrationMCPService
+}
+
+type integrationApprovalDecisionStore interface {
+	DecideIntegrationApproval(ctx context.Context, input integrations.ApprovalDecisionInput) (integrations.Invocation, error)
+}
+
 type RouterConfig struct {
 	StatusService          *statusservice.StatusService
 	SlashService           *statusservice.SlashCommandService
 	SessionService         *statusservice.AgentSessionService
+	IntegrationService     integrationApprovalService
 	DialogOpener           DialogOpener
 	InteractionSecurity    *statusservice.InteractionSecurityService
 	Localizer              *texti18n.Localizer
@@ -79,6 +90,7 @@ type Router struct {
 	statusService         *statusservice.StatusService
 	slashService          *statusservice.SlashCommandService
 	sessionService        *statusservice.AgentSessionService
+	integrationService    integrationApprovalService
 	dialogOpener          DialogOpener
 	localizer             *texti18n.Localizer
 	slashToken            string
@@ -101,6 +113,7 @@ func NewRouter(cfg RouterConfig) *Router {
 		statusService:         cfg.StatusService,
 		slashService:          cfg.SlashService,
 		sessionService:        cfg.SessionService,
+		integrationService:    cfg.IntegrationService,
 		dialogOpener:          cfg.DialogOpener,
 		localizer:             cfg.Localizer,
 		slashToken:            cfg.SlashToken,
@@ -114,7 +127,7 @@ func NewRouter(cfg RouterConfig) *Router {
 		mux:                   http.NewServeMux(),
 	}
 	if cfg.SessionService != nil {
-		router.mcpHandler = newMCPHandler(cfg.SessionService, cfg.MaxMCPRequestBodyBytes)
+		router.mcpHandler = newMCPHandlerWithIntegrations(cfg.SessionService, cfg.IntegrationService, cfg.MaxMCPRequestBodyBytes)
 	}
 	registry := cfg.PrometheusRegistry
 	if registry == nil {
@@ -240,6 +253,10 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agents_action"})
 		return
 	}
+	if contextString(request.Context, "kind") == "integration_approval" {
+		router.handleIntegrationApprovalAction(w, r, request)
+		return
+	}
 	if contextString(request.Context, "kind") == "agent_turn" && contextString(request.Context, "action") == "stop_turn" {
 		router.handleAgentTurnStopAction(w, r, request)
 		return
@@ -331,6 +348,79 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		response.Update = update
 	}
 	writeJSON(w, status, response)
+}
+
+func (router *Router) handleIntegrationApprovalAction(w http.ResponseWriter, r *http.Request, request mattermostmodel.PostActionIntegrationRequest) {
+	if router.integrationService == nil || router.interactionSecurity == nil {
+		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "integration_approval_unavailable"})
+		return
+	}
+	action := contextString(request.Context, "action")
+	approvalID := contextString(request.Context, "resource_id")
+	bindingHash := contextString(request.Context, "approval_binding_sha256")
+	if contextString(request.Context, "resource_type") != "integration_approval" || approvalID == "" || !validSHA256Hex(bindingHash) {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_integration_approval"})
+		return
+	}
+	decision := integrations.ApprovalDecision(action)
+	if decision != integrations.ApprovalDecisionApprove && decision != integrations.ApprovalDecisionReject {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_integration_approval"})
+		return
+	}
+	callback := statusservice.ActionCallback{
+		Context: request.Context, UserID: strings.TrimSpace(request.UserId),
+		ChannelID: strings.TrimSpace(request.ChannelId), PostID: strings.TrimSpace(request.PostId),
+	}
+	interaction, err := router.interactionSecurity.AuthenticateActionAtomic(r.Context(), callback, func(interaction statusservice.AuthenticatedInteraction, store adminrepo.Repository) error {
+		if interaction.ResourceType != "integration_approval" || interaction.ResourceID != approvalID || interaction.Scope.Workspace == "" || interaction.Scope.Session == "" {
+			return statusservice.ErrInteractionAuthentication
+		}
+		decisionStore, ok := store.(integrationApprovalDecisionStore)
+		if !ok {
+			return statusservice.ErrInteractionAuthentication
+		}
+		_, decideErr := decisionStore.DecideIntegrationApproval(r.Context(), integrations.ApprovalDecisionInput{
+			ApprovalPublicID: approvalID, ApprovalBindingHash: bindingHash, Decision: decision,
+			ActorUserID: interaction.Actor.UserID, ActorUserName: interaction.Actor.UserName,
+			ChannelID: interaction.ChannelID, PostID: interaction.CallbackPostID, Now: time.Now().UTC(),
+		})
+		return decideErr
+	})
+	if err != nil {
+		router.writeInteractionDenied(w, err)
+		return
+	}
+	messageID := "integration.approval.result.rejected"
+	titleID := "integration.approval.result.title.rejected"
+	color := "#c4314b"
+	if decision == integrations.ApprovalDecisionApprove {
+		messageID = "integration.approval.result.approved"
+		titleID = "integration.approval.result.title.approved"
+		color = "#2f8f46"
+	}
+	response := &mattermostmodel.PostActionIntegrationResponse{
+		EphemeralText: router.t(messageID, nil),
+		Update: cardPost(statusservice.MattermostCard{
+			ChannelID: interaction.ChannelID, PostID: interaction.CallbackPostID,
+			Message: "matter-codex integration approval result #notrigger",
+			Props: map[string]any{
+				"matter_codex_event":                   "integration_approval_result",
+				"matter_codex_approval_id":             approvalID,
+				"matter_codex_approval_binding_sha256": bindingHash,
+				"matter_codex_decision":                string(decision),
+			},
+			Color: color, Title: router.t(titleID, nil), Text: router.t(messageID, nil),
+		}),
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func validSHA256Hex(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 32
 }
 
 func (router *Router) handleAgentTurnStopAction(w http.ResponseWriter, r *http.Request, request mattermostmodel.PostActionIntegrationRequest) {

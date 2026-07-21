@@ -707,6 +707,12 @@ func typedInteractionOperationAllowed(request InteractionAdmissionRequest) bool 
 		}
 		return values["action"] == "stop_turn" || values["action"] == "retry_turn"
 	}
+	if values["kind"] == "integration_approval" {
+		if len(values) != 2 || request.Scope.Session == "" || resourceType != "integration_approval" || resourceID == "" {
+			return false
+		}
+		return values["action"] == "approve" || values["action"] == "reject"
+	}
 	if values["kind"] != "agents_menu" || !allowedInteractionMenuView(values["view"]) {
 		return false
 	}

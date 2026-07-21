@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/integrations"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -140,10 +141,61 @@ func automationCallbackInputSchema() map[string]any {
 	}
 }
 
+type mcpRestartWorkloadInput struct {
+	Connection     string `json:"connection" jsonschema:"публичный идентификатор подключения"`
+	Namespace      string `json:"namespace" jsonschema:"точная метка namespace для тестовой записи"`
+	WorkloadKind   string `json:"workload_kind" jsonschema:"типизированный вид workload: Deployment"`
+	WorkloadName   string `json:"workload_name" jsonschema:"точное имя workload для тестовой записи"`
+	IdempotencyKey string `json:"idempotency_key" jsonschema:"устойчивый ключ идемпотентности точного binding"`
+}
+
+type integrationMCPService interface {
+	Catalog(ctx context.Context, sessionKey string, token string) ([]integrations.CatalogEntry, error)
+	RestartWorkload(ctx context.Context, sessionKey string, token string, input integrations.RestartWorkloadInput) (integrations.ToolResult, error)
+}
+
 func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBodyBytes int64) http.Handler {
+	return newMCPHandlerWithIntegrations(sessionService, nil, maximumBodyBytes)
+}
+
+func newMCPHandlerWithIntegrations(sessionService *statusservice.AgentSessionService, integrationService integrationMCPService, maximumBodyBytes int64) http.Handler {
 	if maximumBodyBytes <= 0 {
 		maximumBodyBytes = defaultMCPRequestBodyBytes
 	}
+	streamable := mcp.NewStreamableHTTPHandler(func(request *http.Request) *mcp.Server {
+		exposeIntegration := false
+		if integrationService != nil {
+			sessionKey, token, ok := mcpSessionAuth(request.Context())
+			if ok {
+				catalog, err := integrationService.Catalog(request.Context(), sessionKey, token)
+				if err == nil {
+					for _, entry := range catalog {
+						if entry.CapabilityKey == integrations.CapabilityRestartWorkload && entry.Version == integrations.CapabilityVersion {
+							exposeIntegration = true
+							break
+						}
+					}
+				}
+			}
+		}
+		return newMCPServer(sessionService, integrationService, exposeIntegration)
+	}, nil)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			if err := readBoundedMCPRequestBody(w, r, maximumBodyBytes); err != nil {
+				writeMCPBodyBoundaryError(w, err)
+				return
+			}
+		}
+		sessionKey := strings.Trim(strings.TrimPrefix(r.URL.Path, pathMCPSessions), "/")
+		token := bearerToken(r.Header.Get("Authorization"))
+		ctx := context.WithValue(r.Context(), mcpSessionKeyContext, sessionKey)
+		ctx = context.WithValue(ctx, mcpTokenContext, token)
+		streamable.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func newMCPServer(sessionService *statusservice.AgentSessionService, integrationService integrationMCPService, exposeIntegration bool) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "matter-codex",
 		Version: "0.1.0",
@@ -414,22 +466,26 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBod
 		}
 		return nil, output, nil
 	})
-	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
-		return server
-	}, nil)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			if err := readBoundedMCPRequestBody(w, r, maximumBodyBytes); err != nil {
-				writeMCPBodyBoundaryError(w, err)
-				return
+	if exposeIntegration && integrationService != nil {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        integrations.CapabilityRestartWorkload,
+			Description: "Запросить согласование типизированного перезапуска workload. Эта версия только записывает тестовое выполнение в PostgreSQL и не изменяет Kubernetes или внешнюю систему.",
+		}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpRestartWorkloadInput) (*mcp.CallToolResult, integrations.ToolResult, error) {
+			sessionKey, token, ok := mcpSessionAuth(ctx)
+			if !ok {
+				return mcpToolError("authorization.denied"), integrations.ToolResult{}, nil
 			}
-		}
-		sessionKey := strings.Trim(strings.TrimPrefix(r.URL.Path, pathMCPSessions), "/")
-		token := bearerToken(r.Header.Get("Authorization"))
-		ctx := context.WithValue(r.Context(), mcpSessionKeyContext, sessionKey)
-		ctx = context.WithValue(ctx, mcpTokenContext, token)
-		streamable.ServeHTTP(w, r.WithContext(ctx))
-	})
+			output, err := integrationService.RestartWorkload(ctx, sessionKey, token, integrations.RestartWorkloadInput{
+				Connection: input.Connection, Namespace: input.Namespace, WorkloadKind: input.WorkloadKind,
+				WorkloadName: input.WorkloadName, IdempotencyKey: input.IdempotencyKey,
+			})
+			if err != nil {
+				return mcpToolError(integrations.ReasonCode(err)), integrations.ToolResult{}, nil
+			}
+			return nil, output, nil
+		})
+	}
+	return server
 }
 
 func readBoundedMCPRequestBody(w http.ResponseWriter, r *http.Request, maximumBodyBytes int64) error {

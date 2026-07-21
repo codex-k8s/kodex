@@ -14,6 +14,7 @@ type securedMattermostThreadPublisher struct {
 
 var _ MattermostThreadPublisher = (*securedMattermostThreadPublisher)(nil)
 var _ MattermostIdempotentThreadPublisher = (*securedMattermostThreadPublisher)(nil)
+var _ MattermostIdempotentCardPublisher = (*securedMattermostThreadPublisher)(nil)
 
 func NewSecuredMattermostThreadPublisher(next MattermostThreadPublisher, security *InteractionSecurityService) MattermostThreadPublisher {
 	if next == nil {
@@ -36,6 +37,23 @@ func (publisher *securedMattermostThreadPublisher) ReconcileOrPostThreadMessage(
 		return MattermostPostRef{}, fmt.Errorf("idempotent Mattermost thread publication is not configured")
 	}
 	return next.ReconcileOrPostThreadMessage(ctx, input)
+}
+
+func (publisher *securedMattermostThreadPublisher) ReconcileOrPostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error) {
+	finder, ok := publisher.next.(MattermostExactThreadCardFinder)
+	if !ok {
+		return MattermostPostRef{}, fmt.Errorf("idempotent Mattermost card readback is not configured")
+	}
+	ref, found, err := finder.FindExactThreadCard(ctx, card)
+	if err != nil {
+		return MattermostPostRef{}, err
+	}
+	if !found {
+		return publisher.PostThreadCard(ctx, card)
+	}
+	card.ChannelID = ref.ChannelID
+	card.PostID = ref.PostID
+	return publisher.UpdateThreadCard(ctx, card)
 }
 
 func (publisher *securedMattermostThreadPublisher) UpdateThreadMessage(ctx context.Context, input MattermostThreadUpdateInput) (MattermostPostRef, error) {

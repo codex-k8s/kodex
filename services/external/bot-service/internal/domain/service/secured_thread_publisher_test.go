@@ -107,10 +107,19 @@ type publisherBackend struct {
 	postRef     MattermostPostRef
 	postErr     error
 	updateErr   error
+	findRef     MattermostPostRef
+	findFound   bool
+	findErr     error
+	finds       int
 	posts       []MattermostCard
 	updates     []MattermostCard
 	updateStart chan struct{}
 	updateGate  chan struct{}
+}
+
+func (backend *publisherBackend) FindExactThreadCard(_ context.Context, _ MattermostCard) (MattermostPostRef, bool, error) {
+	backend.finds++
+	return backend.findRef, backend.findFound, backend.findErr
 }
 
 func (*publisherBackend) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
@@ -188,6 +197,27 @@ func TestSecuredThreadPublisherBindsActualPostAndSurvivesRestart(t *testing.T) {
 	}
 	if _, err := restarted.AuthenticateAction(context.Background(), callback); !errors.Is(err, ErrInteractionAuthentication) {
 		t.Fatalf("replay error = %v", err)
+	}
+}
+
+func TestSecuredThreadPublisherReconcilesExactApprovalPlaceholder(t *testing.T) {
+	repository := newPublisherCapabilityRepository()
+	security := NewInteractionSecurityService(InteractionSecurityConfig{Repository: repository, Admission: fixedServiceAdmission(AdmissionAllowed)})
+	backend := &publisherBackend{
+		findRef: MattermostPostRef{ChannelID: "channel-1", PostID: "approval-placeholder"}, findFound: true,
+	}
+	publisher := NewSecuredMattermostThreadPublisher(backend, security).(MattermostIdempotentCardPublisher)
+	card := securedPublisherTestCard()
+	card.Props = map[string]any{"matter_codex_delivery_id": "apr_0123456789abcdef0123456789abcdef"}
+	ref, err := publisher.ReconcileOrPostThreadCard(context.Background(), card)
+	if err != nil {
+		t.Fatalf("ReconcileOrPostThreadCard() error=%v", err)
+	}
+	if ref.PostID != "approval-placeholder" || backend.finds != 1 || len(backend.posts) != 0 || len(backend.updates) != 1 {
+		t.Fatalf("approval reconciliation ref=%+v finds=%d posts=%d updates=%d", ref, backend.finds, len(backend.posts), len(backend.updates))
+	}
+	if backend.updates[0].Actions[0].Context[interactionCapabilityContextKey] == nil {
+		t.Fatal("reconciled approval card was not sealed before activation")
 	}
 }
 

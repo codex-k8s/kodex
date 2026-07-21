@@ -1071,5 +1071,19 @@
   {"id": "automation.validation.time_zone", "translation": "Select a supported time zone."},
   {"id": "automation.validation.playbook", "translation": "Select a supported playbook."},
   {"id": "automation.validation.binding", "translation": "The agent and chat must be enabled and belong to the selected project."},
-  {"id": "automation.create.failed", "translation": "The schedule was not created because scope or target binding changed. Reopen the dialog."}
+  {"id": "automation.create.failed", "translation": "The schedule was not created because scope or target binding changed. Reopen the dialog."},
+  {"id": "integration.approval.card.title", "translation": "Integration action approval required"},
+  {"id": "integration.approval.card.text", "translation": "The agent requested the dangerous `{{.Capability}}` capability. In this slice, approval only creates a test PostgreSQL record and does not change Kubernetes or any external system."},
+  {"id": "integration.approval.card.field.connection", "translation": "Connection"},
+  {"id": "integration.approval.card.field.risk", "translation": "Risk"},
+  {"id": "integration.approval.card.field.target", "translation": "Target"},
+  {"id": "integration.approval.card.field.expires", "translation": "Expires"},
+  {"id": "integration.approval.action.approve", "translation": "Approve"},
+  {"id": "integration.approval.action.approve.tooltip", "translation": "Allow one test recording execution"},
+  {"id": "integration.approval.action.reject", "translation": "Reject"},
+  {"id": "integration.approval.action.reject.tooltip", "translation": "Reject this request"},
+  {"id": "integration.approval.result.approved", "translation": "The request was approved. The worker will perform the test recording execution."},
+  {"id": "integration.approval.result.rejected", "translation": "The request was rejected. No test execution was performed."},
+  {"id": "integration.approval.result.title.approved", "translation": "Integration action approved"},
+  {"id": "integration.approval.result.title.rejected", "translation": "Integration action rejected"}
 ]

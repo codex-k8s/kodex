@@ -243,7 +243,13 @@ func (repo *Repository) TransitionInteractionCapabilities(ctx context.Context, i
 
 func (repo *Repository) AdmitInteractionResource(ctx context.Context, input securityrepo.InteractionResourceAdmissionInput) (bool, error) {
 	var allowed bool
-	if err := repo.db.QueryRow(ctx, query("interaction_admission__resource.sql"),
+	queryName := "interaction_admission__resource.sql"
+	if input.ResourceType == "integration_approval" {
+		// Интеграционный запрос отделён от базового admission: так двоичный файл
+		// остаётся совместимым со схемой до появления миграции интеграций.
+		queryName = "interaction_admission__integration_approval.sql"
+	}
+	if err := repo.db.QueryRow(ctx, query(queryName),
 		input.ActionKey,
 		input.Operation,
 		input.ResourceType,
