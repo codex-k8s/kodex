@@ -350,6 +350,62 @@ func TestInteractionCapabilityReplayAndAdmissionDeny(t *testing.T) {
 	}
 }
 
+func TestInteractionCapabilitySeparatesCommandStateFromAdmissionResource(t *testing.T) {
+	newFixture := func(t *testing.T) (*statusservice.InteractionSecurityService, *memoryInteractionRepository, statusservice.ActionCallback) {
+		t.Helper()
+		repo := &memoryInteractionRepository{
+			capabilities: map[string]securityrepo.Capability{}, inputs: map[string]securityrepo.IssueCapabilityInput{}, admissions: map[string]bool{},
+		}
+		security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
+			Repository: repo, Admission: fixedAdmission{status: statusservice.AdmissionAllowed},
+		})
+		card := statusservice.MattermostCard{ChannelID: "channel-1", PostID: "post-1", Actions: []statusservice.MattermostCardAction{{Context: map[string]any{
+			"view": "chats", "action": "thread_repository_select", "resource_type": "thread_context",
+			"resource_id": "encoded-thread-and-repository", "capability_resource_id": "296",
+		}}}}
+		if err := security.SealCard(context.Background(), &card, statusservice.AuthenticatedActor{UserID: "owner", UserName: "trusted-owner"}, statusservice.InteractionScope{}); err != nil {
+			t.Fatal(err)
+		}
+		for _, issued := range repo.inputs {
+			if issued.ResourceType != "thread_context" || issued.ResourceID != "296" {
+				t.Fatalf("issued capability resource = %q/%q", issued.ResourceType, issued.ResourceID)
+			}
+		}
+		return security, repo, statusservice.ActionCallback{
+			Context: card.Actions[0].Context, UserID: "owner", ChannelID: "channel-1", PostID: "post-1",
+		}
+	}
+
+	security, repo, callback := newFixture(t)
+	mutated := false
+	interaction, err := security.AuthenticateActionAtomic(context.Background(), callback, func(interaction statusservice.AuthenticatedInteraction, _ adminrepo.Repository) error {
+		mutated = true
+		if interaction.ResourceType != "thread_context" || interaction.ResourceID != "296" {
+			t.Fatalf("authenticated resource = %q/%q", interaction.ResourceType, interaction.ResourceID)
+		}
+		if got := callback.Context["resource_id"]; got != "encoded-thread-and-repository" {
+			t.Fatalf("command state = %#v", got)
+		}
+		return nil
+	})
+	if err != nil || !mutated || interaction.Actor.UserName != "trusted-owner" || repo.consumes != 1 {
+		t.Fatalf("AuthenticateActionAtomic() = %#v, %v, mutated=%t consumes=%d", interaction, err, mutated, repo.consumes)
+	}
+	if _, replayErr := security.AuthenticateAction(context.Background(), callback); !errors.Is(replayErr, statusservice.ErrInteractionAuthentication) {
+		t.Fatalf("replay error = %v", replayErr)
+	}
+
+	for _, key := range []string{"resource_id", "capability_resource_id"} {
+		t.Run("tampered "+key, func(t *testing.T) {
+			security, _, callback := newFixture(t)
+			callback.Context[key] = "tampered"
+			if _, err := security.AuthenticateAction(context.Background(), callback); !errors.Is(err, statusservice.ErrInteractionAuthentication) {
+				t.Fatalf("tampered callback error = %v", err)
+			}
+		})
+	}
+}
+
 func TestInteractionCapabilityExpiry(t *testing.T) {
 	now := time.Date(2026, time.July, 17, 12, 0, 0, 0, time.UTC)
 	repo := &memoryInteractionRepository{capabilities: map[string]securityrepo.Capability{}, inputs: map[string]securityrepo.IssueCapabilityInput{}, admissions: map[string]bool{}}

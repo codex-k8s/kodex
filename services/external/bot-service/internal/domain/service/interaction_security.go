@@ -350,11 +350,12 @@ func (svc *InteractionSecurityService) authenticateAction(ctx context.Context, c
 	if callbackPostID == "" || callbackPostID != postBinding {
 		return AuthenticatedInteraction{}, ErrInteractionAuthentication
 	}
+	resourceType, resourceID := interactionResource(contextCopy)
 	interaction, err := svc.consumeAndAdmit(ctx, token, securityrepo.ConsumeCapabilityInput{
 		Kind:         interactionKindAction,
 		Operation:    actionCallbackOperation(contextCopy),
-		ResourceType: resourceValue(contextCopy, "resource_type"),
-		ResourceID:   resourceValue(contextCopy, "resource_id"),
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
 		ChannelID:    strings.TrimSpace(callback.ChannelID),
 		PostBinding:  postBinding,
 		ActorUserID:  strings.TrimSpace(callback.UserID),
