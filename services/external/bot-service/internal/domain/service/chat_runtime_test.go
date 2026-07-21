@@ -1184,6 +1184,18 @@ func TestChatRunPromptsThreadRepositoryChoiceAndRunsWithoutRepository(t *testing
 		if got := contextStringValue(action.Context, interactionCapabilityResourceIDKey); got != fmt.Sprint(state.ThreadContextID) {
 			t.Fatalf("capability resource id = %q for context %#v", got, action.Context)
 		}
+		if got := contextStringValue(action.Context, "kind"); got != "agents_menu" {
+			t.Fatalf("interaction kind = %q for context %#v", got, action.Context)
+		}
+		resourceType, resourceID := interactionResource(action.Context)
+		if !typedInteractionOperationAllowed(InteractionAdmissionRequest{
+			ActionKey:    "mattermost.callback.action",
+			Operation:    actionCallbackOperation(action.Context),
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+		}) {
+			t.Fatalf("thread repository action is rejected by typed admission: %#v", action.Context)
+		}
 	}
 	if runner.startedSessionKey != "" {
 		t.Fatalf("session should not start before repository choice: %#v", runner.sessionRuns)

@@ -258,9 +258,12 @@ func TestThreadRepositoryActionRespondsBeforeAgentStartupCompletes(t *testing.T)
 	})
 	resourceID := base64.RawURLEncoding.EncodeToString([]byte(`{"thread_context_id":1,"repository_id":0}`))
 	body := testActionBody(t, router, map[string]any{
-		"action":        "thread_repository_select",
-		"resource_type": "thread_context",
-		"resource_id":   resourceID,
+		"kind":                   "agents_menu",
+		"view":                   "chats",
+		"action":                 "thread_repository_select",
+		"resource_type":          "thread_context",
+		"resource_id":            resourceID,
+		"capability_resource_id": "1",
 	}, "")
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/agents", strings.NewReader(body))
