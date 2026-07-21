@@ -49,4 +49,4 @@ where role.id = $1
 	)
 	and $5 <> ''
 	and chat.mattermost_channel_id = $5
-for share of project, role, subject, bot, frozen_bot, chat, binding, participant, frozen_session, session
+for share of project, role, bot, chat, participant, session

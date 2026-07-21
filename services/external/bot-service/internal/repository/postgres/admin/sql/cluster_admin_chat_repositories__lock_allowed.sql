@@ -7,4 +7,4 @@ join matter_codex_chat_repositories binding
 where dependency.role_id = any($1::bigint[])
 	and binding.chat_id = $2
 order by dependency.role_id, binding.repository_id
-for share of dependency, binding;
+for share of binding;
