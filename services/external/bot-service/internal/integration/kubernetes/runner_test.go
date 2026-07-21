@@ -665,6 +665,158 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	}
 }
 
+func TestStartAgentSessionReusesMatchingRevisionAndDefersActiveMismatch(t *testing.T) {
+	const currentDigest = "1111111111111111111111111111111111111111111111111111111111111111"
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace: "mattermost", AgentRunnerImage: "matter-codex-agent-runner:test",
+		WorkspaceStorageSize: "1Gi", AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	input := runtimerepo.AgentSessionPodInput{
+		SessionKey: "runtime-reuse", Role: "developer", BotServiceURL: "http://bot-service",
+		InternalToken: "synthetic-session-token", CodexAuthSecretName: "matter-codex-codex-auth-main",
+		RuntimeRevisionDigest: currentDigest,
+	}
+	if _, err := runner.StartAgentSession(context.Background(), input); err != nil {
+		t.Fatalf("initial StartAgentSession() error = %v", err)
+	}
+
+	client.ClearActions()
+	reused, err := runner.StartAgentSession(context.Background(), input)
+	if err != nil {
+		t.Fatalf("reuse StartAgentSession() error = %v", err)
+	}
+	if reused.Recreation.Action != runtimerepo.AgentSessionPodReused {
+		t.Fatalf("reuse action = %q", reused.Recreation.Action)
+	}
+	assertNoPersistentSessionObjectDeletion(t, client.Actions())
+
+	client.ClearActions()
+	input.RuntimeRevisionDigest = "2222222222222222222222222222222222222222222222222222222222222222"
+	deferred, err := runner.StartAgentSession(context.Background(), input)
+	if err != nil {
+		t.Fatalf("deferred StartAgentSession() error = %v", err)
+	}
+	if deferred.Recreation.Action != runtimerepo.AgentSessionPodRecreationDeferred {
+		t.Fatalf("deferred action = %q", deferred.Recreation.Action)
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() == "delete" {
+			t.Fatalf("active revision mismatch caused deletion of %s", action.GetResource().Resource)
+		}
+	}
+
+	if err := client.Tracker().Delete(corev1.SchemeGroupVersion.WithResource("pods"), "mattermost", sessionPodName(input.SessionKey)); err != nil {
+		t.Fatalf("remove Pod fixture: %v", err)
+	}
+	client.ClearActions()
+	input.AllowPodRecreation = true
+	input.RequirePodReuse = true
+	reuseRequired, err := runner.StartAgentSession(context.Background(), input)
+	if err != nil {
+		t.Fatalf("reuse-required StartAgentSession() error = %v", err)
+	}
+	if reuseRequired.Recreation.Action != runtimerepo.AgentSessionPodReuseRequired {
+		t.Fatalf("reuse-required action = %q", reuseRequired.Recreation.Action)
+	}
+	for _, action := range client.Actions() {
+		if action.GetResource().Resource == "pods" && (action.GetVerb() == "create" || action.GetVerb() == "delete") {
+			t.Fatalf("unreconstructable prior revision mutated Pod: %s", action.GetVerb())
+		}
+	}
+	assertNoPersistentSessionObjectDeletion(t, client.Actions())
+}
+
+func TestStartAgentSessionChangedRevisionRecreatesOnlyExactPod(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace: "mattermost", AgentRunnerImage: "matter-codex-agent-runner:test",
+		WorkspaceStorageSize: "1Gi", AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	input := runtimerepo.AgentSessionPodInput{
+		SessionKey: "runtime-recreate", Role: "developer", BotServiceURL: "http://bot-service",
+		InternalToken: "synthetic-session-token", CodexAuthSecretName: "matter-codex-codex-auth-main",
+		RuntimeRevisionDigest: "3333333333333333333333333333333333333333333333333333333333333333",
+	}
+	started, err := runner.StartAgentSession(context.Background(), input)
+	if err != nil {
+		t.Fatalf("initial StartAgentSession() error = %v", err)
+	}
+	pod, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get initial Pod: %v", err)
+	}
+	pod.UID = types.UID("runtime-pod-uid-v1")
+	pod.Status.Phase = corev1.PodRunning
+	if _, err := client.CoreV1().Pods("mattermost").Update(context.Background(), pod, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("set initial Pod UID: %v", err)
+	}
+
+	client.ClearActions()
+	input.RuntimeRevisionDigest = "4444444444444444444444444444444444444444444444444444444444444444"
+	input.AllowPodRecreation = true
+	recreated, err := runner.StartAgentSession(context.Background(), input)
+	if err != nil {
+		t.Fatalf("recreate StartAgentSession() error = %v", err)
+	}
+	if recreated.Recreation.Action != runtimerepo.AgentSessionPodRecreated || recreated.Recreation.PreviousPodUID != "runtime-pod-uid-v1" {
+		t.Fatalf("recreation = %#v", recreated.Recreation)
+	}
+	replacement, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get replacement Pod: %v", err)
+	}
+	if got := replacement.Annotations[annotationRuntimeRevisionDigest]; got != input.RuntimeRevisionDigest {
+		t.Fatalf("replacement digest = %q", got)
+	}
+	if len(replacement.Annotations) != 1 {
+		t.Fatalf("replacement Pod received unexpected runtime revision annotations: %#v", replacement.Annotations)
+	}
+	if got := replacement.Spec.Volumes[0].PersistentVolumeClaim.ClaimName; got != started.PVCName {
+		t.Fatalf("replacement PVC = %q", got)
+	}
+	if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Get(context.Background(), started.PVCName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("persistent session PVC missing after recreation: %v", err)
+	}
+	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), started.SecretName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("session token Secret missing after recreation: %v", err)
+	}
+	assertNoPersistentSessionObjectDeletion(t, client.Actions())
+
+	var podDelete k8stesting.DeleteAction
+	for _, action := range client.Actions() {
+		if action.GetVerb() == "delete" && action.GetResource().Resource == "pods" {
+			candidate, ok := action.(k8stesting.DeleteAction)
+			if !ok {
+				t.Fatalf("unexpected Pod delete action type %T", action)
+			}
+			podDelete = candidate
+		}
+	}
+	if podDelete == nil || podDelete.GetDeleteOptions().Preconditions == nil || podDelete.GetDeleteOptions().Preconditions.UID == nil || string(*podDelete.GetDeleteOptions().Preconditions.UID) != "runtime-pod-uid-v1" {
+		t.Fatalf("Pod recreation did not use exact UID precondition: %#v", podDelete)
+	}
+}
+
+func assertNoPersistentSessionObjectDeletion(t *testing.T, actions []k8stesting.Action) {
+	t.Helper()
+	for _, action := range actions {
+		if action.GetVerb() != "delete" {
+			continue
+		}
+		switch action.GetResource().Resource {
+		case "persistentvolumeclaims", "secrets":
+			t.Fatalf("runtime revision reconciliation deleted persistent %s", action.GetResource().Resource)
+		}
+	}
+}
+
 func TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects(t *testing.T) {
 	secrets := map[string]string{
 		"OpenAI":         "mc-sentinel-openai-render-76c8b2a1",

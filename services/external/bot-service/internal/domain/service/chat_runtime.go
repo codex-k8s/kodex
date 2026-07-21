@@ -18,6 +18,7 @@ import (
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+	runtimevalue "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
@@ -36,6 +37,7 @@ const (
 
 	maxAgentSessionCapacityEvictions = 1
 	defaultCapacityRetryDelay        = 500 * time.Millisecond
+	kubernetesAccessClusterAdmin     = "cluster-admin"
 )
 
 var githubPullURLRE = regexp.MustCompile(`https://github\.com/([^/\s]+)/([^/\s]+)/pull/([0-9]+)`)
@@ -168,20 +170,23 @@ type ThreadRepositorySelector interface {
 }
 
 type ChatRunServiceConfig struct {
-	Localizer                   *texti18n.Localizer
-	Store                       adminrepo.Repository
-	RuntimeRunner               runtimerepo.Runner
-	ThreadPublisher             MattermostThreadPublisher
-	BotServiceURL               string
-	MenuActionURL               string
-	MattermostSiteURL           string
-	StorageReady                bool
-	RuntimeReady                bool
-	DisableMonitor              bool
-	MonitorInterval             time.Duration
-	MonitorTimeout              time.Duration
-	CapacityRetryDelay          time.Duration
-	AutomationRuntimeReconciler AutomationRuntimeTerminalReconciler
+	Localizer                             *texti18n.Localizer
+	Store                                 adminrepo.Repository
+	RuntimeRunner                         runtimerepo.Runner
+	ThreadPublisher                       MattermostThreadPublisher
+	BotServiceURL                         string
+	MenuActionURL                         string
+	MattermostSiteURL                     string
+	StorageReady                          bool
+	RuntimeReady                          bool
+	DisableMonitor                        bool
+	MonitorInterval                       time.Duration
+	MonitorTimeout                        time.Duration
+	CapacityRetryDelay                    time.Duration
+	AgentRunnerImage                      string
+	AgentRunnerServiceAccount             string
+	AgentRunnerClusterAdminServiceAccount string
+	AutomationRuntimeReconciler           AutomationRuntimeTerminalReconciler
 }
 
 type ChatRunService struct {
@@ -210,6 +215,15 @@ func NewChatRunService(cfg ChatRunServiceConfig) *ChatRunService {
 	}
 	if cfg.CapacityRetryDelay <= 0 {
 		cfg.CapacityRetryDelay = defaultCapacityRetryDelay
+	}
+	if strings.TrimSpace(cfg.AgentRunnerImage) == "" {
+		cfg.AgentRunnerImage = "matter-codex-agent-runner:dev"
+	}
+	if strings.TrimSpace(cfg.AgentRunnerServiceAccount) == "" {
+		cfg.AgentRunnerServiceAccount = "matter-codex-agent-runner"
+	}
+	if strings.TrimSpace(cfg.AgentRunnerClusterAdminServiceAccount) == "" {
+		cfg.AgentRunnerClusterAdminServiceAccount = "matter-codex-agent-runner-cluster-admin"
 	}
 	return &ChatRunService{cfg: cfg}
 }
@@ -490,6 +504,11 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 			return AgentTurnQueued{}, fmt.Errorf("agent session belongs to OpenAI account %s; start a new Mattermost thread", account)
 		}
 	}
+	gitHubSecretName := ""
+	if gitHubOK {
+		gitHubSecretName = gitHubAccount.SecretRef
+	}
+	repo := firstRepository(request.Repositories)
 	promptInput := RolePromptInput{
 		Project:          request.Project,
 		Role:             request.Role,
@@ -534,15 +553,53 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
-	gitHubSecretName := ""
-	if gitHubOK {
-		gitHubSecretName = gitHubAccount.SecretRef
+	var runtimeRevision entity.RuntimeRevision
+	var runtimeRevisionForPod entity.RuntimeRevision
+	if _, ok := svc.cfg.Store.(adminrepo.RuntimeRevisionRepository); ok {
+		candidate, buildErr := svc.buildRuntimeRevision(request.Role, openAIAccount, gitHubSecretName, repo, runtimeEnv)
+		if buildErr != nil {
+			return AgentTurnQueued{}, buildErr
+		}
+		err = svc.withClusterAdminPersistenceGuard(
+			ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID,
+			session.SessionKey, "agent_session.runtime_revision_persist.side_effect",
+			func(guardedStore adminrepo.Repository) error {
+				revisionStore, ok := guardedStore.(adminrepo.RuntimeRevisionRepository)
+				if !ok {
+					return fmt.Errorf("runtime revision repository is required")
+				}
+				var persistErr error
+				runtimeRevision, persistErr = revisionStore.EnsureRuntimeRevision(ctx, adminrepo.EnsureRuntimeRevisionInput{
+					Digest: candidate.Digest, Manifest: candidate.ManifestJSON,
+					AccountAlias:          candidate.Manifest.Account.Alias,
+					AuthorizationRevision: candidate.Manifest.Account.AuthorizationRevision,
+				})
+				if persistErr != nil {
+					return persistErr
+				}
+				runtimeRevisionForPod = runtimeRevision
+				if sessionExists {
+					queuedRevision, queuedErr := revisionStore.GetNextQueuedAgentSessionRuntimeRevision(ctx, session.ID)
+					if queuedErr == nil {
+						runtimeRevisionForPod = queuedRevision
+					} else if !errors.Is(queuedErr, adminrepo.ErrNotFound) {
+						return queuedErr
+					}
+				}
+				_, persistErr = revisionStore.SetAgentSessionDesiredRuntimeRevision(ctx, adminrepo.SetAgentSessionDesiredRuntimeRevisionInput{
+					SessionKey: session.SessionKey, RuntimeRevisionID: runtimeRevisionForPod.ID,
+				})
+				return persistErr
+			},
+		)
+		if err != nil {
+			return AgentTurnQueued{}, err
+		}
 	}
-	repo := firstRepository(request.Repositories)
 	started := agentSessionStartedFromSession(session)
 	waitingForCapacity := false
 	if agentSessionRuntimeShouldBeEnsured(session) {
-		started, err = svc.startAgentSessionRuntime(ctx, session, existingSession, request.Role, openAIAccount.SecretRef, gitHubSecretName, repo, runtimeEnv)
+		started, err = svc.startAgentSessionRuntime(ctx, session, existingSession, request.Role, openAIAccount.SecretRef, gitHubSecretName, repo, runtimeEnv, runtimeRevisionForPod, runtimeRevisionForPod.ID != runtimeRevision.ID)
 		if err != nil {
 			if !runtimerepo.IsAgentSessionCapacityError(err) {
 				return AgentTurnQueued{}, err
@@ -551,20 +608,32 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 			started = runtimerepo.StartedAgentSession{SessionKey: session.SessionKey}
 		}
 		if !waitingForCapacity {
+			if started.Recreation.Action == runtimerepo.AgentSessionPodRecreationDeferred || started.Recreation.Action == runtimerepo.AgentSessionPodReuseRequired {
+				return AgentTurnQueued{}, fmt.Errorf("runtime revision cannot be applied safely to an idle session")
+			}
 			err = svc.withClusterAdminPersistenceGuard(
 				ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID,
 				session.SessionKey, "agent_session.runtime_persist.side_effect",
 				func(guardedStore adminrepo.Repository) error {
 					var persistErr error
 					session, persistErr = guardedStore.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
-						SessionKey:          session.SessionKey,
-						Status:              agentSessionStatusIdle,
-						KubernetesNamespace: started.Namespace,
-						PodName:             started.PodName,
-						PVCName:             started.PVCName,
-						TokenSecretRef:      started.SecretName,
-						ExtendTTLSeconds:    ttlSeconds,
+						SessionKey:               session.SessionKey,
+						Status:                   agentSessionStatusIdle,
+						KubernetesNamespace:      started.Namespace,
+						PodName:                  started.PodName,
+						PVCName:                  started.PVCName,
+						TokenSecretRef:           started.SecretName,
+						ExtendTTLSeconds:         ttlSeconds,
+						DesiredRuntimeRevisionID: runtimeRevisionForPod.ID,
+						AppliedRuntimeRevisionID: runtimeRevisionForPod.ID,
 					})
+					if persistErr == nil && runtimeRevisionForPod.ID > 0 {
+						if revisionStore, ok := guardedStore.(adminrepo.RuntimeRevisionRepository); ok {
+							_, persistErr = revisionStore.MarkAgentSessionRuntimeApplied(ctx, adminrepo.MarkAgentSessionRuntimeAppliedInput{
+								SessionKey: session.SessionKey, RuntimeRevisionID: runtimeRevisionForPod.ID,
+							})
+						}
+					}
 					return persistErr
 				},
 			)
@@ -592,6 +661,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 			UserID:               request.UserID,
 			UserName:             request.UserName,
 			Message:              prompt,
+			RuntimeRevisionID:    runtimeRevision.ID,
 		})
 		if createErr != nil {
 			return createErr
@@ -700,6 +770,46 @@ func (svc *ChatRunService) EnqueueExistingAgentTurn(ctx context.Context, store a
 		return AgentTurnQueued{}, adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	current = refreshed
+	var runtimeRevision entity.RuntimeRevision
+	var desiredRuntimeRevision entity.RuntimeRevision
+	if revisionStore, ok := store.(adminrepo.RuntimeRevisionRepository); ok {
+		account, accountErr := store.GetOpenAIAccount(ctx, current.OpenAIAccountName)
+		if accountErr != nil {
+			return AgentTurnQueued{}, accountErr
+		}
+		bindings, bindingsErr := store.ListAgentRoleRuntimeVariables(ctx, request.Role.ID)
+		if bindingsErr != nil {
+			return AgentTurnQueued{}, bindingsErr
+		}
+		gitHubSecretName := ""
+		if gitHubAccount, exists := svc.gitHubAccount(ctx, request.Project, request.Role, firstRepository(request.Repositories)); exists {
+			gitHubSecretName = gitHubAccount.SecretRef
+		}
+		candidate, buildErr := svc.buildRuntimeRevision(request.Role, account, gitHubSecretName, firstRepository(request.Repositories), runtimeEnvVarsFromBindings(bindings))
+		if buildErr != nil {
+			return AgentTurnQueued{}, buildErr
+		}
+		runtimeRevision, err = revisionStore.EnsureRuntimeRevision(ctx, adminrepo.EnsureRuntimeRevisionInput{
+			Digest: candidate.Digest, Manifest: candidate.ManifestJSON,
+			AccountAlias:          candidate.Manifest.Account.Alias,
+			AuthorizationRevision: candidate.Manifest.Account.AuthorizationRevision,
+		})
+		if err != nil {
+			return AgentTurnQueued{}, err
+		}
+		desiredRuntimeRevision = runtimeRevision
+		queuedRevision, queuedErr := revisionStore.GetNextQueuedAgentSessionRuntimeRevision(ctx, current.ID)
+		if queuedErr == nil {
+			desiredRuntimeRevision = queuedRevision
+		} else if !errors.Is(queuedErr, adminrepo.ErrNotFound) {
+			return AgentTurnQueued{}, queuedErr
+		}
+		if _, err := revisionStore.SetAgentSessionDesiredRuntimeRevision(ctx, adminrepo.SetAgentSessionDesiredRuntimeRevisionInput{
+			SessionKey: current.SessionKey, RuntimeRevisionID: desiredRuntimeRevision.ID,
+		}); err != nil {
+			return AgentTurnQueued{}, err
+		}
+	}
 	runID := newChatRunID(request.Chat.ID)
 	turn, err := store.CreateAgentSessionTurn(ctx, adminrepo.CreateAgentSessionTurnInput{
 		SessionID:            current.ID,
@@ -711,6 +821,7 @@ func (svc *ChatRunService) EnqueueExistingAgentTurn(ctx context.Context, store a
 		UserID:               request.UserID,
 		UserName:             request.UserName,
 		Message:              request.PreparedPrompt,
+		RuntimeRevisionID:    runtimeRevision.ID,
 	})
 	if err != nil {
 		return AgentTurnQueued{}, err
@@ -1086,9 +1197,33 @@ func (svc *ChatRunService) ensureQueuedAgentSessionRuntime(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	started, err := svc.startAgentSessionRuntime(ctx, session, session, role, openAIAccount.SecretRef, gitHubSecretName, firstRepository(repositories), runtimeEnvVarsFromBindings(runtimeVariableBindings))
+	runtimeEnv := runtimeEnvVarsFromBindings(runtimeVariableBindings)
+	var runtimeRevision entity.RuntimeRevision
+	requirePodReuse := false
+	if revisionStore, ok := svc.cfg.Store.(adminrepo.RuntimeRevisionRepository); ok {
+		runtimeRevision, err = revisionStore.GetNextQueuedAgentSessionRuntimeRevision(ctx, session.ID)
+		if err != nil {
+			return err
+		}
+		candidate, buildErr := svc.buildRuntimeRevision(role, openAIAccount, gitHubSecretName, firstRepository(repositories), runtimeEnv)
+		if buildErr != nil {
+			return buildErr
+		}
+		if candidate.Digest != runtimeRevision.Digest {
+			requirePodReuse = true
+		}
+		if _, err := revisionStore.SetAgentSessionDesiredRuntimeRevision(ctx, adminrepo.SetAgentSessionDesiredRuntimeRevisionInput{
+			SessionKey: session.SessionKey, RuntimeRevisionID: runtimeRevision.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	started, err := svc.startAgentSessionRuntime(ctx, session, session, role, openAIAccount.SecretRef, gitHubSecretName, firstRepository(repositories), runtimeEnv, runtimeRevision, requirePodReuse)
 	if err != nil {
 		return err
+	}
+	if started.Recreation.Action == runtimerepo.AgentSessionPodRecreationDeferred || started.Recreation.Action == runtimerepo.AgentSessionPodReuseRequired {
+		return fmt.Errorf("queued turn runtime revision cannot be restored safely")
 	}
 	ttlSeconds := session.TTLSeconds
 	if ttlSeconds <= 0 {
@@ -1099,21 +1234,30 @@ func (svc *ChatRunService) ensureQueuedAgentSessionRuntime(ctx context.Context, 
 		"agent_session.repair_persist.side_effect",
 		func(guardedStore adminrepo.Repository) error {
 			_, persistErr := guardedStore.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
-				SessionKey:          session.SessionKey,
-				Status:              agentSessionStatusIdle,
-				KubernetesNamespace: started.Namespace,
-				PodName:             started.PodName,
-				PVCName:             started.PVCName,
-				TokenSecretRef:      started.SecretName,
-				ExtendTTLSeconds:    ttlSeconds,
+				SessionKey:               session.SessionKey,
+				Status:                   agentSessionStatusIdle,
+				KubernetesNamespace:      started.Namespace,
+				PodName:                  started.PodName,
+				PVCName:                  started.PVCName,
+				TokenSecretRef:           started.SecretName,
+				ExtendTTLSeconds:         ttlSeconds,
+				DesiredRuntimeRevisionID: runtimeRevision.ID,
+				AppliedRuntimeRevisionID: runtimeRevision.ID,
 			})
+			if persistErr == nil && runtimeRevision.ID > 0 {
+				if revisionStore, ok := guardedStore.(adminrepo.RuntimeRevisionRepository); ok {
+					_, persistErr = revisionStore.MarkAgentSessionRuntimeApplied(ctx, adminrepo.MarkAgentSessionRuntimeAppliedInput{
+						SessionKey: session.SessionKey, RuntimeRevisionID: runtimeRevision.ID,
+					})
+				}
+			}
 			return persistErr
 		},
 	)
 	return err
 }
 
-func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session entity.AgentSession, tokenSession entity.AgentSession, role entity.AgentRole, codexAuthSecretName string, gitHubSecretName string, repo entity.ProjectRepository, runtimeEnv []runtimerepo.RuntimeEnvVar) (runtimerepo.StartedAgentSession, error) {
+func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session entity.AgentSession, tokenSession entity.AgentSession, role entity.AgentRole, codexAuthSecretName string, gitHubSecretName string, repo entity.ProjectRepository, runtimeEnv []runtimerepo.RuntimeEnvVar, revision entity.RuntimeRevision, requirePodReuse bool) (runtimerepo.StartedAgentSession, error) {
 	if err := svc.authorizeClusterAdminRole(ctx, role, session.ChatID, "", session.MattermostChannelID, session.SessionKey, "agent_session.start"); err != nil {
 		return runtimerepo.StartedAgentSession{}, err
 	}
@@ -1149,6 +1293,7 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 	input := runtimerepo.AgentSessionPodInput{
 		SessionKey:              session.SessionKey,
 		Role:                    role.Name,
+		OpenAIAccountAlias:      revision.AccountAlias,
 		KubernetesAccess:        role.KubernetesAccess,
 		BotServiceURL:           svc.botServiceURL(),
 		InternalToken:           internalToken,
@@ -1161,6 +1306,12 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 		SandboxMode:             role.SandboxMode,
 		ConfigOverlay:           role.ConfigOverlay,
 		RuntimeEnv:              runtimeEnv,
+		RuntimeRevisionDigest:   revision.Digest,
+		AllowPodRecreation:      session.ActiveTurnID == 0,
+		RequirePodReuse:         requirePodReuse,
+	}
+	if input.OpenAIAccountAlias == "" {
+		input.OpenAIAccountAlias = strings.TrimSpace(session.OpenAIAccountName)
 	}
 	input.TokenSecretIntegrity = tokenIntegrity
 	var started runtimerepo.StartedAgentSession
@@ -1188,6 +1339,32 @@ func (svc *ChatRunService) startAgentSessionRuntime(ctx context.Context, session
 		err = startRuntime()
 	}
 	return started, err
+}
+
+func (svc *ChatRunService) buildRuntimeRevision(role entity.AgentRole, account entity.OpenAIAccount, gitHubSecretName string, repo entity.ProjectRepository, runtimeEnv []runtimerepo.RuntimeEnvVar) (runtimevalue.RuntimeRevision, error) {
+	environment := make([]runtimevalue.RuntimeEnvironmentReference, 0, len(runtimeEnv))
+	for _, variable := range runtimeEnv {
+		environment = append(environment, runtimevalue.RuntimeEnvironmentReference{
+			Name: variable.Name, SecretName: variable.SecretName, SecretKey: variable.SecretKey,
+		})
+	}
+	serviceAccountName := svc.cfg.AgentRunnerServiceAccount
+	if strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), kubernetesAccessClusterAdmin) {
+		serviceAccountName = svc.cfg.AgentRunnerClusterAdminServiceAccount
+	}
+	authorizationRevision := fmt.Sprintf("credential-%d:%s", account.CredentialID, account.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	return runtimevalue.BuildRuntimeRevision(runtimevalue.RuntimeRevisionInput{
+		RoleID: role.ID, RoleName: role.Name, RoleType: role.RoleType,
+		RoleUpdatedAt: role.UpdatedAt, Instruction: role.PromptTemplate, AdvancedSettings: role.AdvancedSettings,
+		AccountAlias: account.Name, AuthorizationRevision: authorizationRevision,
+		CodexAuthSecretRef: account.SecretRef, GitHubSecretRef: gitHubSecretName,
+		RunnerImage: svc.cfg.AgentRunnerImage, BotServiceURL: svc.botServiceURL(),
+		SandboxMode: role.SandboxMode, ConfigOverlay: role.ConfigOverlay,
+		Repository: runtimevalue.RuntimeRepositoryManifest{
+			Provider: repo.Provider, Owner: repo.Owner, Name: repo.Name, DefaultBranch: repo.DefaultBranch,
+		},
+		Environment: environment, KubernetesAccess: role.KubernetesAccess, ServiceAccountName: serviceAccountName,
+	})
 }
 
 func (svc *ChatRunService) withClusterAdminTokenRuntimeGuard(ctx context.Context, role entity.AgentRole, chatID int64, chatSlug string, channelID string, sessionKey string, operation string, tokenSession entity.AgentSession, sideEffect func(runtimerepo.MattermostBotTokenSecret) error) error {

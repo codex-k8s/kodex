@@ -131,6 +131,7 @@ type ChatRunInput struct {
 type AgentSessionPodInput struct {
 	SessionKey              string
 	Role                    string
+	OpenAIAccountAlias      string
 	KubernetesAccess        string
 	BotServiceURL           string
 	InternalToken           string
@@ -145,6 +146,9 @@ type AgentSessionPodInput struct {
 	RuntimeEnv              []RuntimeEnvVar
 	TokenSecretIntegrity    *SecretIntegrity
 	PodTokenSecretName      string
+	RuntimeRevisionDigest   string
+	AllowPodRecreation      bool
+	RequirePodReuse         bool
 }
 
 type AgentSessionRuntimeHealth struct {
@@ -166,12 +170,34 @@ type RuntimeEnvVar struct {
 }
 
 type StartedAgentSession struct {
-	SessionKey string
-	Namespace  string
-	PodName    string
-	PVCName    string
-	SecretName string
-	Created    bool
+	SessionKey            string
+	Namespace             string
+	PodName               string
+	PVCName               string
+	SecretName            string
+	Created               bool
+	PodUID                string
+	RuntimeRevisionDigest string
+	Recreation            AgentSessionPodRecreation
+}
+
+// AgentSessionPodAction описывает безопасный исход сверки pod с желаемой ревизией.
+type AgentSessionPodAction string
+
+const (
+	AgentSessionPodCreated            AgentSessionPodAction = "created"
+	AgentSessionPodReused             AgentSessionPodAction = "reused"
+	AgentSessionPodRecreated          AgentSessionPodAction = "recreated"
+	AgentSessionPodRecreationDeferred AgentSessionPodAction = "deferred_active"
+	AgentSessionPodReuseRequired      AgentSessionPodAction = "reuse_required"
+)
+
+// AgentSessionPodRecreation доказывает исход сверки без содержимого манифеста или Secret.
+type AgentSessionPodRecreation struct {
+	Action         AgentSessionPodAction
+	PreviousPodUID string
+	CurrentPodUID  string
+	RevisionDigest string
 }
 
 type AgentSessionCleanupResult struct {

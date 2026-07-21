@@ -32,41 +32,42 @@ import (
 )
 
 const (
-	defaultNamespaceFile         = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	runnerComponent              = "agent-run"
-	sessionComponent             = "agent-session"
-	sessionTokenComponent        = "agent-session-token"
-	sessionTokenFinalizer        = "matter-codex.dev/session-token-protection"
-	labelRunID                   = "matter-codex.dev/run-id"
-	labelSessionKey              = "matter-codex.dev/session-key"
-	labelAgentRole               = "matter-codex.dev/agent-role"
-	labelOpenAIAccount           = "matter-codex.dev/openai-account"
-	labelGitHubAccount           = "matter-codex.dev/github-account"
-	labelAuthCheckJob            = "matter-codex.dev/auth-check-job"
-	codexAuthSecretVolume        = "codex-auth-secret"
-	gitHubSecretVolume           = "github-secret"
-	sessionSecretVolume          = "session-secret"
-	promptVolume                 = "agent-prompt"
-	runnerHomeVolume             = "runner-home"
-	runnerTmpVolume              = "runner-tmp"
-	runnerDevShmVolume           = "runner-dev-shm"
-	runnerHomePath               = "/home/matter-codex"
-	runnerTmpPath                = "/tmp"
-	runnerDevShmPath             = "/dev/shm"
-	runtimeEnvAllowlist          = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
-	runnerInitPath               = "/sbin/tini"
-	runnerBinaryName             = "matter-codex-agent-runner"
-	runnerUID                    = int64(10001)
-	runnerGID                    = int64(10001)
-	runnerUtilityCPURequest      = "100m"
-	runnerUtilityMemoryRequest   = "128Mi"
-	runnerSessionCPURequest      = "500m"
-	runnerSessionMemoryRequest   = "1Gi"
-	runnerSessionMemoryLimit     = "64Gi"
-	runnerUtilityMemoryLimit     = "4Gi"
-	runnerDevShmSizeLimit        = "8Gi"
-	kubernetesAccessReadOnly     = "read-only"
-	kubernetesAccessClusterAdmin = "cluster-admin"
+	defaultNamespaceFile            = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	runnerComponent                 = "agent-run"
+	sessionComponent                = "agent-session"
+	sessionTokenComponent           = "agent-session-token"
+	sessionTokenFinalizer           = "matter-codex.dev/session-token-protection"
+	labelRunID                      = "matter-codex.dev/run-id"
+	labelSessionKey                 = "matter-codex.dev/session-key"
+	labelAgentRole                  = "matter-codex.dev/agent-role"
+	labelOpenAIAccount              = "matter-codex.dev/openai-account"
+	labelGitHubAccount              = "matter-codex.dev/github-account"
+	labelAuthCheckJob               = "matter-codex.dev/auth-check-job"
+	annotationRuntimeRevisionDigest = "matter-codex.dev/runtime-revision-digest"
+	codexAuthSecretVolume           = "codex-auth-secret"
+	gitHubSecretVolume              = "github-secret"
+	sessionSecretVolume             = "session-secret"
+	promptVolume                    = "agent-prompt"
+	runnerHomeVolume                = "runner-home"
+	runnerTmpVolume                 = "runner-tmp"
+	runnerDevShmVolume              = "runner-dev-shm"
+	runnerHomePath                  = "/home/matter-codex"
+	runnerTmpPath                   = "/tmp"
+	runnerDevShmPath                = "/dev/shm"
+	runtimeEnvAllowlist             = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
+	runnerInitPath                  = "/sbin/tini"
+	runnerBinaryName                = "matter-codex-agent-runner"
+	runnerUID                       = int64(10001)
+	runnerGID                       = int64(10001)
+	runnerUtilityCPURequest         = "100m"
+	runnerUtilityMemoryRequest      = "128Mi"
+	runnerSessionCPURequest         = "500m"
+	runnerSessionMemoryRequest      = "1Gi"
+	runnerSessionMemoryLimit        = "64Gi"
+	runnerUtilityMemoryLimit        = "4Gi"
+	runnerDevShmSizeLimit           = "8Gi"
+	kubernetesAccessReadOnly        = "read-only"
+	kubernetesAccessClusterAdmin    = "cluster-admin"
 )
 
 var (
@@ -823,6 +824,7 @@ func (runner *Runner) StartChatRun(ctx context.Context, input runtimerepo.ChatRu
 func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.AgentSessionPodInput) (runtimerepo.StartedAgentSession, error) {
 	input.SessionKey = strings.TrimSpace(input.SessionKey)
 	input.Role = strings.TrimSpace(input.Role)
+	input.OpenAIAccountAlias = strings.TrimSpace(input.OpenAIAccountAlias)
 	input.BotServiceURL = strings.TrimRight(strings.TrimSpace(input.BotServiceURL), "/")
 	input.InternalToken = strings.TrimSpace(input.InternalToken)
 	input.CodexAuthSecretName = strings.TrimSpace(input.CodexAuthSecretName)
@@ -830,6 +832,7 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	input.RepositoryOwner = strings.TrimSpace(input.RepositoryOwner)
 	input.RepositoryName = strings.TrimSpace(input.RepositoryName)
 	input.RepositoryDefaultBranch = strings.TrimSpace(input.RepositoryDefaultBranch)
+	input.RuntimeRevisionDigest = strings.TrimSpace(input.RuntimeRevisionDigest)
 	if input.SessionKey == "" {
 		return runtimerepo.StartedAgentSession{}, fmt.Errorf("session key is required")
 	}
@@ -844,6 +847,14 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	}
 	if input.CodexAuthSecretName == "" {
 		return runtimerepo.StartedAgentSession{}, fmt.Errorf("codex auth secret name is required")
+	}
+	if input.RuntimeRevisionDigest != "" {
+		if len(input.RuntimeRevisionDigest) != sha256.Size*2 {
+			return runtimerepo.StartedAgentSession{}, fmt.Errorf("runtime revision digest is invalid")
+		}
+		if _, err := hex.DecodeString(input.RuntimeRevisionDigest); err != nil || strings.ToLower(input.RuntimeRevisionDigest) != input.RuntimeRevisionDigest {
+			return runtimerepo.StartedAgentSession{}, fmt.Errorf("runtime revision digest is invalid")
+		}
 	}
 	podName := sessionPodName(input.SessionKey)
 	pvcName := sessionPVCName(input.SessionKey)
@@ -877,17 +888,43 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 			return runtimerepo.StartedAgentSession{}, err
 		}
 	}
-	recreatePod, err := runner.sessionPodShouldBeRecreated(ctx, podName, input.PodTokenSecretName)
+	existingPod, action, err := runner.sessionPodReconciliation(ctx, podName, input)
 	if err != nil {
 		return runtimerepo.StartedAgentSession{}, err
 	}
-	if recreatePod {
+	previousPodUID := ""
+	if existingPod != nil {
+		previousPodUID = string(existingPod.UID)
+	}
+	if input.RequirePodReuse && action != runtimerepo.AgentSessionPodReused {
+		return runtimerepo.StartedAgentSession{
+			SessionKey: input.SessionKey, Namespace: runner.namespace, PodName: podName,
+			PVCName: pvcName, SecretName: secretName, Created: created,
+			PodUID: previousPodUID, RuntimeRevisionDigest: input.RuntimeRevisionDigest,
+			Recreation: runtimerepo.AgentSessionPodRecreation{
+				Action: runtimerepo.AgentSessionPodReuseRequired, PreviousPodUID: previousPodUID,
+				CurrentPodUID: previousPodUID, RevisionDigest: input.RuntimeRevisionDigest,
+			},
+		}, nil
+	}
+	if action == runtimerepo.AgentSessionPodRecreationDeferred {
+		return runtimerepo.StartedAgentSession{
+			SessionKey: input.SessionKey, Namespace: runner.namespace, PodName: podName,
+			PVCName: pvcName, SecretName: secretName, Created: created,
+			PodUID: previousPodUID, RuntimeRevisionDigest: input.RuntimeRevisionDigest,
+			Recreation: runtimerepo.AgentSessionPodRecreation{
+				Action: action, PreviousPodUID: previousPodUID, CurrentPodUID: previousPodUID,
+				RevisionDigest: input.RuntimeRevisionDigest,
+			},
+		}, nil
+	}
+	if action == runtimerepo.AgentSessionPodRecreated {
 		if input.TokenSecretIntegrity != nil {
 			if err := runner.verifyFrozenSessionTokenBoundary(ctx, input.SessionKey, secretName, input.PodTokenSecretName, input.InternalToken, *input.TokenSecretIntegrity); err != nil {
 				return runtimerepo.StartedAgentSession{}, err
 			}
 		}
-		if err := runner.deleteSessionPod(ctx, podName); err != nil {
+		if err := runner.deleteExactSessionPod(ctx, existingPod); err != nil {
 			return runtimerepo.StartedAgentSession{}, err
 		}
 		created = true
@@ -897,26 +934,45 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 			return runtimerepo.StartedAgentSession{}, err
 		}
 	}
-	if _, err := runner.client.CoreV1().Pods(runner.namespace).Create(ctx, runner.sessionPod(input), metav1.CreateOptions{}); err != nil {
+	currentPod := existingPod
+	if action != runtimerepo.AgentSessionPodReused {
+		currentPod, err = runner.client.CoreV1().Pods(runner.namespace).Create(ctx, runner.sessionPod(input), metav1.CreateOptions{})
+	}
+	if err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			if quotaExceeded(err) {
 				return runtimerepo.StartedAgentSession{}, runtimerepo.NewAgentSessionCapacityError("Kubernetes resource quota rejected the session pod", err)
 			}
 			return runtimerepo.StartedAgentSession{}, fmt.Errorf("create session pod: %w", err)
 		}
+		currentPod, err = runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
+		if err != nil {
+			return runtimerepo.StartedAgentSession{}, fmt.Errorf("confirm concurrently created session pod: %w", err)
+		}
+		if !sessionPodHasExpectedIdentity(currentPod, input) || !podUsesSessionTokenSecret(currentPod, input.PodTokenSecretName) || !podUsesRuntimeRevision(currentPod, input.RuntimeRevisionDigest) {
+			return runtimerepo.StartedAgentSession{}, fmt.Errorf("concurrent session pod does not match expected identity and revision")
+		}
 	} else {
-		created = true
+		if action != runtimerepo.AgentSessionPodReused {
+			created = true
+		}
 	}
 	if capacityErr := runner.sessionPodSchedulingCapacityError(ctx, podName); capacityErr != nil {
 		return runtimerepo.StartedAgentSession{}, capacityErr
 	}
 	return runtimerepo.StartedAgentSession{
-		SessionKey: input.SessionKey,
-		Namespace:  runner.namespace,
-		PodName:    podName,
-		PVCName:    pvcName,
-		SecretName: secretName,
-		Created:    created,
+		SessionKey:            input.SessionKey,
+		Namespace:             runner.namespace,
+		PodName:               podName,
+		PVCName:               pvcName,
+		SecretName:            secretName,
+		Created:               created,
+		PodUID:                string(currentPod.UID),
+		RuntimeRevisionDigest: input.RuntimeRevisionDigest,
+		Recreation: runtimerepo.AgentSessionPodRecreation{
+			Action: action, PreviousPodUID: previousPodUID, CurrentPodUID: string(currentPod.UID),
+			RevisionDigest: input.RuntimeRevisionDigest,
+		},
 	}, nil
 }
 
@@ -1076,18 +1132,45 @@ func (runner *Runner) ensureSessionPVC(ctx context.Context, sessionKey string, r
 	return true, nil
 }
 
-func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName string, tokenSecretName string) (bool, error) {
+func (runner *Runner) sessionPodReconciliation(ctx context.Context, podName string, input runtimerepo.AgentSessionPodInput) (*corev1.Pod, runtimerepo.AgentSessionPodAction, error) {
 	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return false, nil
+			return nil, runtimerepo.AgentSessionPodCreated, nil
 		}
-		return false, fmt.Errorf("get session pod: %w", err)
+		return nil, "", fmt.Errorf("get session pod: %w", err)
+	}
+	if !sessionPodHasExpectedIdentity(pod, input) {
+		return nil, "", fmt.Errorf("existing session pod identity does not match expected session")
 	}
 	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-		return true, nil
+		return pod, runtimerepo.AgentSessionPodRecreated, nil
 	}
-	return !podUsesSessionTokenSecret(pod, tokenSecretName), nil
+	matches := podUsesSessionTokenSecret(pod, input.PodTokenSecretName) && podUsesRuntimeRevision(pod, input.RuntimeRevisionDigest)
+	if matches {
+		return pod, runtimerepo.AgentSessionPodReused, nil
+	}
+	if input.RuntimeRevisionDigest != "" && !input.AllowPodRecreation {
+		return pod, runtimerepo.AgentSessionPodRecreationDeferred, nil
+	}
+	return pod, runtimerepo.AgentSessionPodRecreated, nil
+}
+
+func sessionPodHasExpectedIdentity(pod *corev1.Pod, input runtimerepo.AgentSessionPodInput) bool {
+	if pod == nil || pod.Name != sessionPodName(input.SessionKey) {
+		return false
+	}
+	return pod.Labels["app.kubernetes.io/name"] == "matter-codex-agent-runner" &&
+		pod.Labels["app.kubernetes.io/component"] == sessionComponent &&
+		pod.Labels[labelSessionKey] == kubernetesLabelValue(input.SessionKey)
+}
+
+func podUsesRuntimeRevision(pod *corev1.Pod, digest string) bool {
+	digest = strings.TrimSpace(digest)
+	if digest == "" {
+		return true
+	}
+	return pod != nil && strings.TrimSpace(pod.Annotations[annotationRuntimeRevisionDigest]) == digest
 }
 
 func podUsesSessionTokenSecret(pod *corev1.Pod, tokenSecretName string) bool {
@@ -1189,25 +1272,48 @@ func (runner *Runner) CleanupAgentSession(ctx context.Context, sessionKey string
 }
 
 func (runner *Runner) deleteSessionPod(ctx context.Context, podName string) error {
+	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("get exact session pod before deletion: %w", err)
+	}
+	if pod.Labels["app.kubernetes.io/name"] != "matter-codex-agent-runner" || pod.Labels["app.kubernetes.io/component"] != sessionComponent {
+		return fmt.Errorf("session pod identity does not permit deletion")
+	}
+	return runner.deleteExactSessionPod(ctx, pod)
+}
+
+func (runner *Runner) deleteExactSessionPod(ctx context.Context, pod *corev1.Pod) error {
+	if pod == nil || strings.TrimSpace(pod.Name) == "" || pod.Namespace != runner.namespace {
+		return fmt.Errorf("exact session pod identity is required for deletion")
+	}
 	grace := int64(0)
 	background := metav1.DeletePropagationBackground
-	if err := runner.client.CoreV1().Pods(runner.namespace).Delete(ctx, podName, metav1.DeleteOptions{
+	uid := pod.UID
+	if err := runner.client.CoreV1().Pods(runner.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
 		GracePeriodSeconds: &grace,
 		PropagationPolicy:  &background,
+		Preconditions:      &metav1.Preconditions{UID: &uid},
 	}); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("delete completed session pod: %w", err)
 	}
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{}); err != nil {
+		current, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
 			return fmt.Errorf("wait for session pod deletion: %w", err)
 		}
+		if current.UID != uid {
+			return fmt.Errorf("session pod replacement appeared during deletion")
+		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return fmt.Errorf("session pod %s was not deleted before timeout", podName)
+	return fmt.Errorf("session pod %s was not deleted before timeout", pod.Name)
 }
 
 func (runner *Runner) deleteJobAndWait(ctx context.Context, jobName string, timeout time.Duration) error {
@@ -2024,6 +2130,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 	env := []corev1.EnvVar{
 		{Name: "MATTERCODEX_SESSION_KEY", Value: input.SessionKey},
 		{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Role},
+		{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: input.OpenAIAccountAlias},
 		{Name: "MATTERCODEX_KUBERNETES_ACCESS", Value: kubernetesAccess},
 		{Name: "MATTERCODEX_BOT_SERVICE_URL", Value: input.BotServiceURL},
 		{Name: "MATTERCODEX_SESSION_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
@@ -2103,10 +2210,15 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 			},
 		})
 	}
+	annotations := map[string]string{}
+	if strings.TrimSpace(input.RuntimeRevisionDigest) != "" {
+		annotations[annotationRuntimeRevisionDigest] = strings.TrimSpace(input.RuntimeRevisionDigest)
+	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   sessionPodName(input.SessionKey),
-			Labels: sessionLabels(input.SessionKey, input.Role),
+			Name:        sessionPodName(input.SessionKey),
+			Labels:      sessionLabels(input.SessionKey, input.Role),
+			Annotations: annotations,
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
@@ -2657,6 +2769,12 @@ func kubernetesLabelValue(value string) string {
 }
 
 func runtimeEnvVars(items []runtimerepo.RuntimeEnvVar) []corev1.EnvVar {
+	items = append([]runtimerepo.RuntimeEnvVar(nil), items...)
+	sort.Slice(items, func(left int, right int) bool {
+		leftIdentity := strings.Join([]string{strings.TrimSpace(items[left].Name), strings.TrimSpace(items[left].SecretName), defaultString(items[left].SecretKey, "value")}, "\x00")
+		rightIdentity := strings.Join([]string{strings.TrimSpace(items[right].Name), strings.TrimSpace(items[right].SecretName), defaultString(items[right].SecretKey, "value")}, "\x00")
+		return leftIdentity < rightIdentity
+	})
 	names := make(map[string]struct{}, len(items))
 	var env []corev1.EnvVar
 	for _, item := range items {
