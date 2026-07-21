@@ -41,34 +41,47 @@ func TestReturnToRequesterProductionDispatcherDoesNotSelfLockFrozenSource(t *tes
 	}
 }
 
+func TestReturnToRequesterRejectsBoundProcessWithoutRootInitiator(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := fixture.pool.Exec(ctx, `update matter_codex_process_runs set root_initiator_user_id = ''`); err != nil {
+		t.Fatalf("clear root initiator: %v", err)
+	}
+
+	if _, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетический результат."); err == nil || !strings.Contains(err.Error(), "missing for process") {
+		t.Fatalf("ReturnToRequester() error = %v", err)
+	}
+	assertPostgresDelegationCallbackState(t, ctx, fixture, 0)
+	if fixture.publisher.attempts.Load() != 0 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("publication attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+}
+
 func TestTerminalCompleteReconcilesProcessAndWorkWithMaxConnsOne(t *testing.T) {
 	for _, sourceAccess := range []string{"read-only", "cluster-admin"} {
 		t.Run(sourceAccess, func(t *testing.T) {
 			fixture := newPostgresDelegationFixtureWithSourceAccess(t, 1, sourceAccess)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			var projectID, policyID, roleID, turnID int64
+			var roleID, turnID, processID int64
 			if err := fixture.pool.QueryRow(ctx, `
-select session_row.project_id, policy.id, session_row.role_id, turn_row.id
+select session_row.role_id, turn_row.id, process.id
 from matter_codex_agent_sessions session_row
 join matter_codex_agent_session_turns turn_row on turn_row.session_id = session_row.id
-join matter_codex_policy_revisions policy on policy.project_id = session_row.project_id and policy.status = 'active'
+join matter_codex_process_turns process_turn on process_turn.turn_id = turn_row.id
+join matter_codex_process_runs process on process.id = process_turn.process_run_id
 where session_row.session_key = 'source-session' and turn_row.run_id = 'source-run'
-`).Scan(&projectID, &policyID, &roleID, &turnID); err != nil {
+`).Scan(&roleID, &turnID, &processID); err != nil {
 				t.Fatalf("read terminal fixture identities: %v", err)
 			}
-			var processID int64
-			if err := fixture.pool.QueryRow(ctx, `
-insert into matter_codex_process_runs(
-	public_id, project_id, policy_revision_id, root_role_id, root_initiator_user_id,
-	root_initiator_user_name, root_trigger_post_id, root_channel_id, root_thread_post_id, status
-) values ($1, $2, $3, $4, 'owner-user', 'owner', 'source-root', 'source-channel', 'source-root', 'running')
-returning id
-`, "terminal-"+strings.ReplaceAll(sourceAccess, "-", ""), projectID, policyID, roleID).Scan(&processID); err != nil {
-				t.Fatalf("seed terminal process: %v", err)
-			}
-			if _, err := fixture.pool.Exec(ctx, `insert into matter_codex_process_turns(turn_id, process_run_id, launch_post_id) values ($1, $2, 'source-root')`, turnID, processID); err != nil {
-				t.Fatalf("seed terminal process links: %v", err)
+			if _, err := fixture.pool.Exec(ctx, `
+update matter_codex_agent_session_turns target_turn
+set status = 'succeeded', finished_at = now(), updated_at = now()
+from matter_codex_agent_sessions target_session
+where target_session.id = target_turn.session_id and target_session.session_key = 'target-session'
+`); err != nil {
+				t.Fatalf("mark target turn terminal: %v", err)
 			}
 			if _, err := fixture.pool.Exec(ctx, `insert into matter_codex_work_claims(process_run_id, turn_id, role_id, summary, status) values ($1, $2, $3, 'terminal proof', 'active')`, processID, turnID, roleID); err != nil {
 				t.Fatalf("seed terminal work claim: %v", err)
@@ -938,6 +951,12 @@ where token_secret_ref = 'source-bot-secret'
 	if err := migrations.Run(ctx, dsn); err != nil {
 		t.Fatalf("migrations through v29: %v", err)
 	}
+	seedPool, err = pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open process seed pool: %v", err)
+	}
+	seedPostgresDelegationProcess(t, ctx, seedPool)
+	seedPool.Close()
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		t.Fatalf("parse delegation pool config: %v", err)
@@ -965,6 +984,46 @@ where token_secret_ref = 'source-bot-secret'
 		CallbackPublishConcurrency: 32,
 	})
 	return postgresDelegationFixture{pool: pool, service: service, dispatcher: chatRuns, publisher: publisher}
+}
+
+func seedPostgresDelegationProcess(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	var projectID, policyID, sourceRoleID, sourceTurnID, targetTurnID int64
+	if err := pool.QueryRow(ctx, `
+select source_session.project_id, policy.id, source_session.role_id, source_turn.id, target_turn.id
+from matter_codex_agent_sessions source_session
+join matter_codex_agent_session_turns source_turn on source_turn.session_id = source_session.id and source_turn.run_id = 'source-run'
+join matter_codex_agent_sessions target_session on target_session.session_key = 'target-session'
+join matter_codex_agent_session_turns target_turn on target_turn.session_id = target_session.id and target_turn.run_id = 'target-run'
+join matter_codex_policy_revisions policy on policy.project_id = source_session.project_id and policy.status = 'active'
+where source_session.session_key = 'source-session'
+`).Scan(&projectID, &policyID, &sourceRoleID, &sourceTurnID, &targetTurnID); err != nil {
+		t.Fatalf("read delegation process identities: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+update matter_codex_agent_session_turns
+set user_id = case id when $1 then 'owner-user' else 'worker-user' end,
+	user_name = case id when $1 then 'owner' else 'worker-proof' end
+where id in ($1, $2)
+`, sourceTurnID, targetTurnID); err != nil {
+		t.Fatalf("seed delegation turn actors: %v", err)
+	}
+	var processID int64
+	if err := pool.QueryRow(ctx, `
+insert into matter_codex_process_runs(
+	public_id, project_id, policy_revision_id, root_role_id, root_initiator_user_id,
+	root_initiator_user_name, root_trigger_post_id, root_channel_id, root_thread_post_id, status
+) values ('delegation-proof-process', $1, $2, $3, 'owner-user', 'owner', 'source-root', 'source-channel', 'source-root', 'running')
+returning id
+`, projectID, policyID, sourceRoleID).Scan(&processID); err != nil {
+		t.Fatalf("seed delegation process: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+insert into matter_codex_process_turns(turn_id, process_run_id, parent_turn_id, launch_post_id)
+values ($1, $3, null, 'source-root'), ($2, $3, $1, 'target-root')
+`, sourceTurnID, targetTurnID, processID); err != nil {
+		t.Fatalf("seed delegation process turns: %v", err)
+	}
 }
 
 func seedPostgresDelegation(t *testing.T, ctx context.Context, pool *pgxpool.Pool, sourceAccess string) {
@@ -1061,6 +1120,20 @@ where session_row.session_key = 'source-session' and turn_row.status = 'queued'
 	}
 	if callbackRows != expectedCallbacks || queuedTurns != expectedCallbacks || callbackRuns != expectedCallbacks {
 		t.Fatalf("callback state rows=%d turns=%d runs=%d, want=%d", callbackRows, queuedTurns, callbackRuns, expectedCallbacks)
+	}
+	if expectedCallbacks == 1 {
+		var userID string
+		if err := fixture.pool.QueryRow(ctx, `
+select turn_row.user_id
+from matter_codex_agent_session_turns turn_row
+join matter_codex_agent_sessions session_row on session_row.id = turn_row.session_id
+where session_row.session_key = 'source-session' and turn_row.status = 'queued'
+`).Scan(&userID); err != nil {
+			t.Fatalf("read callback root initiator: %v", err)
+		}
+		if userID != "owner-user" {
+			t.Fatalf("callback user id = %q", userID)
+		}
 	}
 }
 

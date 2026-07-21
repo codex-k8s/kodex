@@ -1946,6 +1946,7 @@ type fakeThreadPublisher struct {
 	updateWithTokenErr   error
 	postWithTokenCalls   int
 	updateWithTokenCalls int
+	beforeUpdate         func()
 }
 
 func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
@@ -1982,6 +1983,9 @@ func (publisher *fakeThreadPublisher) PostThreadMessageWithToken(_ context.Conte
 }
 
 func (publisher *fakeThreadPublisher) UpdateThreadMessage(_ context.Context, input MattermostThreadUpdateInput) (MattermostPostRef, error) {
+	if publisher.beforeUpdate != nil {
+		publisher.beforeUpdate()
+	}
 	publisher.updates = append(publisher.updates, input)
 	return MattermostPostRef{ChannelID: input.ChannelID, PostID: input.PostID}, nil
 }

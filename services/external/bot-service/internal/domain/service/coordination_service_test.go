@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -166,6 +167,7 @@ type fakeCoordinationStore struct {
 	relationships           map[string]bool
 	claims                  []entity.WorkClaim
 	processes               map[int64]entity.ProcessContext
+	processErr              error
 	listProcessRunID        int64
 	listProjectID           int64
 	updatedClaim            adminrepo.UpdateWorkClaimInput
@@ -184,6 +186,9 @@ func (store *fakeCoordinationStore) EnsureTurnProcess(context.Context, adminrepo
 }
 
 func (store *fakeCoordinationStore) GetTurnProcess(_ context.Context, turnID int64) (entity.ProcessContext, error) {
+	if store.processErr != nil {
+		return entity.ProcessContext{}, store.processErr
+	}
 	process, ok := store.processes[turnID]
 	if !ok {
 		return entity.ProcessContext{}, adminrepo.ErrNotFound
@@ -249,6 +254,77 @@ func (store *fakeCoordinationStore) SetOwnerAttentionPost(_ context.Context, _ i
 func (store *fakeCoordinationStore) ReconcileProcessRun(context.Context, int64) error {
 	store.reconcileCalls++
 	return store.reconcileErr
+}
+
+func TestRootInitiatorUserIDForTurnUsesAuthoritativeProcessBinding(t *testing.T) {
+	base := chatRuntimeStore()
+	base.sessionTurns = []entity.AgentSessionTurn{{ID: 7, UserID: "delegating-agent-user"}}
+	store := &fakeCoordinationStore{
+		fakeAdminStore: base,
+		processes: map[int64]entity.ProcessContext{
+			7: {RootInitiatorUserID: "owner-user"},
+		},
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{Store: store})
+
+	userID, err := svc.rootInitiatorUserIDForTurn(context.Background(), store, 7)
+	if err != nil || userID != "owner-user" {
+		t.Fatalf("root user id = %q, error = %v", userID, err)
+	}
+}
+
+func TestRootInitiatorUserIDForTurnRejectsInvalidAuthorityState(t *testing.T) {
+	tests := []struct {
+		name       string
+		processes  map[int64]entity.ProcessContext
+		processErr error
+		turnUserID string
+		want       string
+	}{
+		{
+			name: "bound process without root",
+			processes: map[int64]entity.ProcessContext{
+				7: {},
+			},
+			turnUserID: "delegating-agent-user",
+			want:       "missing for process",
+		},
+		{
+			name:       "repository failure",
+			processErr: errors.New("synthetic process read failure"),
+			turnUserID: "owner-user",
+			want:       "synthetic process read failure",
+		},
+		{
+			name:      "legacy turn without user",
+			processes: map[int64]entity.ProcessContext{},
+			want:      "missing for turn",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			base := chatRuntimeStore()
+			base.sessionTurns = []entity.AgentSessionTurn{{ID: 7, UserID: test.turnUserID}}
+			store := &fakeCoordinationStore{fakeAdminStore: base, processes: test.processes, processErr: test.processErr}
+			svc := NewAgentSessionService(AgentSessionServiceConfig{Store: store})
+
+			if _, err := svc.rootInitiatorUserIDForTurn(context.Background(), store, 7); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("root initiator error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestRootInitiatorUserIDForTurnSupportsLegacyTurnWithoutProcess(t *testing.T) {
+	base := chatRuntimeStore()
+	base.sessionTurns = []entity.AgentSessionTurn{{ID: 7, UserID: "legacy-owner-user"}}
+	store := &fakeCoordinationStore{fakeAdminStore: base, processes: map[int64]entity.ProcessContext{}}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{Store: store})
+
+	userID, err := svc.rootInitiatorUserIDForTurn(context.Background(), store, 7)
+	if err != nil || userID != "legacy-owner-user" {
+		t.Fatalf("legacy root user id = %q, error = %v", userID, err)
+	}
 }
 
 func coordinationRelationshipKey(action string, targetRoleID int64) string {

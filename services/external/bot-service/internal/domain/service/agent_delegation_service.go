@@ -279,6 +279,11 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	if session.ActiveTurnID == 0 {
 		return AgentSessionDelegationResult{}, fmt.Errorf("source session has no active turn")
 	}
+	sourceTurnID := session.ActiveTurnID
+	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, svc.cfg.Store, sourceTurnID)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
 	project, err := svc.cfg.Store.GetProject(ctx, session.ProjectID)
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
@@ -318,9 +323,12 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	var delegation entity.AgentDelegation
 	var created bool
 	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.delegation_create.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+		if current.ActiveTurnID != sourceTurnID {
+			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
+		}
 		var createErr error
 		delegation, created, createErr = guardedStore.CreateAgentDelegation(ctx, adminrepo.CreateAgentDelegationInput{
-			ProjectID: current.ProjectID, SourceSessionID: current.ID, SourceTurnID: current.ActiveTurnID,
+			ProjectID: current.ProjectID, SourceSessionID: current.ID, SourceTurnID: sourceTurnID,
 			TargetChatID: targetChat.ID, TargetRoleID: targetRole.ID, WorkItemKey: command.WorkItemKey, Title: command.Title,
 		})
 		return createErr
@@ -384,12 +392,16 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	}
 	var queued AgentTurnQueued
 	err = svc.withCurrentSessionRuntimeGuard(ctx, session, "agent_session.delegation_enqueue.side_effect", func(current entity.AgentSession) error {
+		if current.ActiveTurnID != sourceTurnID {
+			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
+		}
 		var enqueueErr error
 		queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
-			Project: project, Chat: targetChat, Role: targetRole, Repositories: repositories, UserName: requesterUserName,
+			Project: project, Chat: targetChat, Role: targetRole, Repositories: repositories,
+			UserID: rootInitiatorUserID, UserName: requesterUserName,
 			UserMessage:  crossChatDelegatedAgentRequestMessage(requesterUserName, targetRole.Name, command.Message),
 			SourcePostID: auditPost.PostID, ReplyRootID: rootPost.PostID, SessionRootID: rootPost.PostID,
-			SessionScope: agentSessionScopeThreadRole, TTLSeconds: defaultThreadSessionTTLSeconds, ParentTurnID: current.ActiveTurnID,
+			SessionScope: agentSessionScopeThreadRole, TTLSeconds: defaultThreadSessionTTLSeconds, ParentTurnID: sourceTurnID,
 		})
 		return enqueueErr
 	})
@@ -1263,9 +1275,13 @@ func (svc *AgentSessionService) enqueueDelegationCallbackWithStore(ctx context.C
 	if err != nil {
 		return entity.AgentSessionTurn{}, "", err
 	}
+	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, guardedStore, parentTurnID)
+	if err != nil {
+		return entity.AgentSessionTurn{}, "", err
+	}
 	queued, err := dispatcher.EnqueueExistingAgentTurn(ctx, guardedStore, sourceSession, AgentTurnRequest{
 		Project: project, Chat: sourceChat, Role: sourceRole, Repositories: repositories,
-		UserName: requesterUserName, UserMessage: message, PreparedPrompt: message,
+		UserID: rootInitiatorUserID, UserName: requesterUserName, UserMessage: message, PreparedPrompt: message,
 		SourcePostID: triggerPostID, ReplyRootID: sourceSession.MattermostRootPostID,
 		SessionRootID: sourceSession.MattermostRootPostID, SessionScope: sourceSession.SessionScope,
 		TTLSeconds: sourceSession.TTLSeconds, ParentTurnID: parentTurnID,

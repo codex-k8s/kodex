@@ -259,6 +259,32 @@ func (svc *AgentSessionService) queuedTurnForProcessWithStore(ctx context.Contex
 	return entity.AgentSessionTurn{}, false, nil
 }
 
+func (svc *AgentSessionService) rootInitiatorUserIDForTurn(ctx context.Context, repository adminrepo.Repository, turnID int64) (string, error) {
+	if repository == nil || turnID <= 0 {
+		return "", fmt.Errorf("active turn is required to resolve the root initiator")
+	}
+	if coordinationStore, ok := repository.(adminrepo.CoordinationRepository); ok {
+		process, err := coordinationStore.GetTurnProcess(ctx, turnID)
+		if err == nil {
+			if userID := strings.TrimSpace(process.RootInitiatorUserID); userID != "" {
+				return userID, nil
+			}
+			return "", fmt.Errorf("root initiator Mattermost user id is missing for process of turn %d", turnID)
+		} else if !errors.Is(err, adminrepo.ErrNotFound) {
+			return "", err
+		}
+	}
+	turn, err := repository.GetAgentSessionTurn(ctx, turnID)
+	if err != nil {
+		return "", err
+	}
+	userID := strings.TrimSpace(turn.UserID)
+	if userID == "" {
+		return "", fmt.Errorf("root initiator Mattermost user id is missing for turn %d", turnID)
+	}
+	return userID, nil
+}
+
 func (svc *AgentSessionService) RequestOwnerAttention(ctx context.Context, sessionKey string, token string, command AgentSessionOwnerAttentionCommand) (entity.OwnerAttentionRequest, error) {
 	session, err := svc.authorize(ctx, sessionKey, token)
 	if err != nil {

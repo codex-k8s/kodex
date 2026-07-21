@@ -118,6 +118,10 @@ func (store *sessionBarrierStore) GetAgentSessionTurn(context.Context, int64) (e
 	}, nil
 }
 
+func (store *sessionBarrierStore) GetTurnProcess(context.Context, int64) (entity.ProcessContext, error) {
+	return entity.ProcessContext{RootInitiatorUserID: "owner-user"}, nil
+}
+
 func (store *sessionBarrierStore) ListAgentDelegationsBySource(context.Context, int64, int) ([]entity.AgentDelegation, error) {
 	return nil, nil
 }

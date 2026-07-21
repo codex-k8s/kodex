@@ -261,6 +261,19 @@ func TestAgentSessionListsChatsAvailableToTargetAgent(t *testing.T) {
 
 func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	svc, store, dispatcher, publisher := agentDelegationTestService()
+	store.sessionTurns[0].UserID = "delegating-agent-user"
+	svc.cfg.Store = &fakeCoordinationStore{
+		fakeAdminStore: store,
+		capabilities: map[string]bool{
+			entity.CoordinationCapabilityStartAgents: true,
+		},
+		relationships: map[string]bool{
+			coordinationRelationshipKey(entity.CoordinationActionStart, 2): true,
+		},
+		processes: map[int64]entity.ProcessContext{
+			1: {RootInitiatorUserID: "owner-user"},
+		},
+	}
 	command := StartAgentThreadCommand{
 		TargetChat:  "architecture",
 		TargetAgent: "architect",
@@ -287,6 +300,9 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	}
 	if dispatcher.request.ParentTurnID != 1 {
 		t.Fatalf("parent turn = %d", dispatcher.request.ParentTurnID)
+	}
+	if dispatcher.request.UserID != "owner-user" {
+		t.Fatalf("root initiator user id = %q", dispatcher.request.UserID)
 	}
 	if dispatcher.request.SourcePostID != "reply-management-root" {
 		t.Fatalf("source launch post = %q", dispatcher.request.SourcePostID)
@@ -321,6 +337,27 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	}
 	if len(store.agentDelegations) != 1 {
 		t.Fatalf("stored delegations = %#v", store.agentDelegations)
+	}
+}
+
+func TestAgentSessionStartCrossChatThreadRejectsChangedSourceTurn(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	publisher.beforeUpdate = func() {
+		session := store.agentSessions["source-session"]
+		session.ActiveTurnID = 99
+		session.ActiveRunID = "new-source-run"
+		store.agentSessions["source-session"] = session
+	}
+
+	_, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Границы сервисов",
+		Message: "Подготовь предложение.", WorkItemKey: "issue-59-active-turn-race",
+	})
+	if err == nil || !strings.Contains(err.Error(), "active turn changed") {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	if dispatcher.calls != 0 {
+		t.Fatalf("dispatcher calls = %d", dispatcher.calls)
 	}
 }
 
@@ -539,6 +576,37 @@ func TestAgentSessionReturnsCrossChatResultToImmediateRequester(t *testing.T) {
 	}
 }
 
+func TestEnqueueDelegationCallbackUsesProcessRootWithoutCompatibleQueuedTurn(t *testing.T) {
+	svc, store, dispatcher, _ := agentDelegationTestService()
+	store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{
+		ID: 3, SessionID: 1, RunID: "callback-run", MattermostChannelID: "management-channel",
+		MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnRunning,
+	})
+	coordinationStore := &fakeCoordinationStore{
+		fakeAdminStore: store,
+		processes: map[int64]entity.ProcessContext{
+			2: {RootInitiatorUserID: "owner-user"},
+		},
+	}
+	svc.cfg.Store = coordinationStore
+	dispatcher.queued = AgentTurnQueued{RunID: "callback-run", TurnID: 3, SessionKey: "source-session"}
+	dispatcher.calls = 0
+
+	turn, runID, err := svc.enqueueDelegationCallbackWithStore(
+		context.Background(), coordinationStore, store.agentSessions["source-session"], store.projects[1],
+		store.chats[1], store.agentRoles[1], "architect", "Результат готов.", 2, "reply-",
+	)
+	if err != nil {
+		t.Fatalf("enqueueDelegationCallbackWithStore() error = %v", err)
+	}
+	if turn.ID != 3 || runID != "callback-run" || dispatcher.calls != 1 {
+		t.Fatalf("turn=%#v run=%q calls=%d", turn, runID, dispatcher.calls)
+	}
+	if dispatcher.request.UserID != "owner-user" || dispatcher.request.ParentTurnID != 2 {
+		t.Fatalf("dispatcher request = %#v", dispatcher.request)
+	}
+}
+
 func TestReturnToRequesterRejectsPublicationBoundsBeforeStorage(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -748,8 +816,8 @@ func agentDelegationTestService() (*AgentSessionService, *fakeAdminStore, *fakeA
 		},
 	}
 	store.sessionTurns = []entity.AgentSessionTurn{
-		{ID: 1, SessionID: 1, RunID: "source-run", MattermostChannelID: "management-channel", MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnRunning},
-		{ID: 2, SessionID: 2, RunID: "target-run", MattermostChannelID: "architecture-channel", MattermostRootPostID: "reply-", MattermostPostID: "reply-", Status: agentSessionTurnRunning},
+		{ID: 1, SessionID: 1, RunID: "source-run", MattermostChannelID: "management-channel", MattermostRootPostID: "management-root", MattermostPostID: "management-root", UserID: "owner-user", UserName: "owner", Status: agentSessionTurnRunning},
+		{ID: 2, SessionID: 2, RunID: "target-run", MattermostChannelID: "architecture-channel", MattermostRootPostID: "reply-", MattermostPostID: "reply-", UserID: "owner-user", UserName: "manager", Status: agentSessionTurnRunning},
 	}
 	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{
 		"source-secret": "source-token",
