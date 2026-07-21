@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
+	"github.com/codex-k8s/matter-codex/libs/go/artifacttype"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sys/unix"
 )
@@ -249,8 +249,8 @@ func validateManifestEntry(entry sessionArtifactManifestEntry, turnID string) (s
 	if entry.Source.Kind != "mattermost" || strings.TrimSpace(entry.Source.PostID) == "" || strings.TrimSpace(entry.Source.FileID) == "" {
 		return "", fmt.Errorf("источник элемента манифеста отклонён")
 	}
-	extension, ok := artifactMediaExtensions()[entry.MediaType]
-	if !ok {
+	extension, err := artifacttype.Extension(entry.MediaType)
+	if err != nil {
 		return "", fmt.Errorf("тип элемента манифеста не разрешён")
 	}
 	name := filepath.Base(entry.LocalPath)
@@ -429,40 +429,15 @@ func artifactSecretFileName(value string) bool {
 }
 
 func detectArtifactMediaType(body []byte) (string, error) {
-	if len(body) == 0 {
-		return "text/plain", nil
-	}
-	sample := body
-	if len(sample) > 512 {
-		sample = sample[:512]
-	}
-	detected := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(sample), ";")[0]))
-	if bytes.HasPrefix(sample, []byte("%PDF-")) {
-		detected = "application/pdf"
-	} else if len(sample) >= 12 && string(sample[:4]) == "RIFF" && string(sample[8:12]) == "WEBP" {
-		detected = "image/webp"
-	} else if utf8.Valid(body) && !bytes.ContainsRune(body, '\x00') {
-		if json.Valid(bytes.TrimSpace(body)) {
-			detected = "application/json"
-		} else {
-			detected = "text/plain"
-		}
-	}
-	if _, ok := artifactMediaExtensions()[detected]; !ok {
+	detected, err := artifacttype.DetectBytes(body)
+	if err != nil {
 		return "", fmt.Errorf("тип файла публикации не разрешён")
 	}
 	return detected, nil
 }
 
-func artifactMediaExtensions() map[string]string {
-	return map[string]string{
-		"text/plain": ".txt", "text/markdown": ".md", "text/csv": ".csv", "application/json": ".json",
-		"application/pdf": ".pdf", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif",
-	}
-}
-
 func artifactTextMediaType(value string) bool {
-	return value == "text/plain" || value == "text/markdown" || value == "text/csv" || value == "application/json"
+	return artifacttype.IsText(value)
 }
 
 func validArtifactHex(value string, length int) bool {

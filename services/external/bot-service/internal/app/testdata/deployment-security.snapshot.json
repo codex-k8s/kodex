@@ -87,6 +87,8 @@
         },
         "secret_refs": [
           "${MATTERCODEX_ARTIFACT_STORAGE_SECRET}/access-key-id",
+          "${MATTERCODEX_ARTIFACT_STORAGE_SECRET}/bucket",
+          "${MATTERCODEX_ARTIFACT_STORAGE_SECRET}/endpoint",
           "${MATTERCODEX_ARTIFACT_STORAGE_SECRET}/secret-access-key",
           "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-admin-token",
           "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-bot-token",

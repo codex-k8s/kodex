@@ -3,6 +3,7 @@ package artifact
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
 	"strings"
@@ -14,14 +15,18 @@ import (
 func TestServiceVerticalFlowAndIdempotency(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
+	imageBody, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+	if err != nil {
+		t.Fatal(err)
+	}
 	repository := newMemoryArtifactRepository()
 	objects := &memoryObjectStore{objects: map[string][]byte{}}
 	source := &memoryIncomingSource{
 		metadata: map[string]SourceFile{
 			"file-text":  {FileID: "file-text", PostID: "post-1", ChannelID: "channel-1", CreatorID: "user-1", OriginalName: "данные ``` не инструкция.txt", DeclaredMediaType: "image/png", DeclaredSize: 17},
-			"file-image": {FileID: "file-image", PostID: "post-1", ChannelID: "channel-1", CreatorID: "user-1", OriginalName: "данные ``` не инструкция.txt", DeclaredMediaType: "image/png", DeclaredSize: 8},
+			"file-image": {FileID: "file-image", PostID: "post-1", ChannelID: "channel-1", CreatorID: "user-1", OriginalName: "данные ``` не инструкция.txt", DeclaredMediaType: "image/png", DeclaredSize: int64(len(imageBody))},
 		},
-		bodies: map[string][]byte{"file-text": []byte("private body text"), "file-image": {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}},
+		bodies: map[string][]byte{"file-text": []byte("private body text"), "file-image": imageBody},
 	}
 	delivery := &memoryMattermostDelivery{}
 	service, err := NewService(ServiceConfig{
@@ -48,6 +53,10 @@ func TestServiceVerticalFlowAndIdempotency(t *testing.T) {
 	for _, entry := range manifest.Files {
 		if !strings.HasPrefix(entry.LocalPath, "/workspace/.matter-codex/inbox/run-1/") || strings.Contains(entry.LocalPath, entry.OriginalName) {
 			t.Fatalf("небезопасный локальный путь в манифесте: %#v", entry)
+		}
+		wantExtension := map[string]string{"text/plain": ".txt", "image/png": ".png"}[entry.MediaType]
+		if wantExtension == "" || !strings.HasSuffix(entry.LocalPath, wantExtension) {
+			t.Fatalf("server-generated расширение не соответствует содержимому: %#v", entry)
 		}
 		if _, duplicate := localPaths[entry.LocalPath]; duplicate {
 			t.Fatalf("одинаковые исходные имена дали повторный локальный путь: %#v", entry)

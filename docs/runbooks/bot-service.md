@@ -58,9 +58,9 @@
 - `MATTERCODEX_MATTERMOST_HTTP_TIMEOUT`, `MATTERCODEX_MATTERMOST_HTTP_DIAL_TIMEOUT`, `MATTERCODEX_MATTERMOST_HTTP_TLS_HANDSHAKE_TIMEOUT`, `MATTERCODEX_MATTERMOST_HTTP_RESPONSE_HEADER_TIMEOUT`, `MATTERCODEX_MATTERMOST_HTTP_IDLE_CONN_TIMEOUT` — обязательные положительные bounds промышленного Mattermost transport; значения задаются ConfigMap и проверяются до старта;
 - `MATTERCODEX_CALLBACK_MAX_BYTES`, `MATTERCODEX_CALLBACK_MAX_CHUNKS`, `MATTERCODEX_CALLBACK_MAX_CHUNK_BYTES`, `MATTERCODEX_CALLBACK_PUBLISH_CONCURRENCY`, `MATTERCODEX_CALLBACK_PUBLISH_DEADLINE` — server-owned bounds callback-публикации; значения задаются ConfigMap и проверяются до старта;
 - `MATTERCODEX_ARTIFACTS_ENABLED` — staged feature flag контура артефактов; по умолчанию `false`, включается только после применения миграции и подготовки S3-compatible backend;
-- `MATTERCODEX_ARTIFACT_S3_ENDPOINT`, `MATTERCODEX_ARTIFACT_S3_REGION`, `MATTERCODEX_ARTIFACT_S3_BUCKET`, `MATTERCODEX_ARTIFACT_S3_USE_PATH_STYLE` — несекретная конфигурация object storage;
-- `MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID`, `MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY` — учётные данные object storage из отдельного Kubernetes Secret, доступного только bot-service;
-- `MATTERCODEX_ARTIFACT_STORAGE_SECRET` — имя отдельного Kubernetes Secret object storage;
+- `MATTERCODEX_ARTIFACT_S3_REGION`, `MATTERCODEX_ARTIFACT_S3_USE_PATH_STYLE` — несекретная конфигурация object storage в ConfigMap;
+- `MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID`, `MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY`, `MATTERCODEX_ARTIFACT_S3_BUCKET`, `MATTERCODEX_ARTIFACT_S3_ENDPOINT` — четыре обязательных значения отдельного Kubernetes Secret, доступного только bot-service; при включённом контуре отсутствие любого значения закрыто прерывает запуск;
+- `MATTERCODEX_ARTIFACT_STORAGE_SECRET` — имя отдельного `Opaque` Kubernetes Secret object storage с точным набором data keys `access-key-id`, `secret-access-key`, `bucket`, `endpoint`; Deployment получает соответствующие четыре переменные только через `secretKeyRef`, а UID/resourceVersion этого Secret входит в pod-input revision;
 - `MATTERCODEX_ARTIFACT_MAX_FILES_PER_TURN`, `MATTERCODEX_ARTIFACT_MAX_OBJECT_BYTES`, `MATTERCODEX_ARTIFACT_MAX_TURN_BYTES`, `MATTERCODEX_ARTIFACT_RETENTION` — server-owned пределы и срок удержания; код не разрешает значения выше 8 файлов, 8 MiB на объект и 32 MiB на ход, а срок меньше 90 дней;
 - `MATTERCODEX_IMAGE_BUILD_STRATEGY` - optional, способ сборки image в remote deploy; default `kaniko`; legacy `docker` требует `docker` или `nerdctl` прямо на целевом сервере;
 - `MATTERCODEX_IMAGE_TAG` - optional, tag для bot-service и agent-runner image; при `kaniko` и `--apply` без явного значения deploy-скрипт генерирует уникальный tag из commit и UTC timestamp;
@@ -520,14 +520,109 @@ order by destination, publication;
 
 Ожидаемые стабильные состояния: все строки `delivered` для успеха; `pending` после подтверждённого сетевого отказа; `pending/confirmation_ambiguous` после потери DB mark, если БД доступна; временный `in_flight` только при действующей lease или недоступности БД; `blocked/final_binding_denied` после revoke/remap. Ручное изменение строк запрещено.
 
+## Разрешённые форматы артефактов
+
+Имя файла, расширение и заявленный Mattermost MIME являются недоверенной metadata и не участвуют в допуске. Формат определяется только по содержимому, а локальное имя и имя доставки получают server-generated расширение из следующего allowlist. Для архивов и документов сервер не извлекает файлы на диск, не рендерит и не исполняет документы, макросы, embedded objects или иной active content.
+
+Базовые форматы:
+
+| MIME | Расширение |
+|---|---|
+| `text/plain` | `.txt` |
+| `text/markdown` | `.md` |
+| `text/csv` | `.csv` |
+| `application/json` | `.json` |
+| `application/pdf` | `.pdf` |
+| `image/png` | `.png` |
+| `image/jpeg` | `.jpg` |
+| `image/webp` | `.webp` |
+| `image/gif` | `.gif` |
+| `application/zip` | `.zip` |
+| `application/x-tar` | `.tar` |
+| `application/gzip` | `.gz` |
+| `application/msword` | `.doc` |
+| `application/vnd.ms-excel` | `.xls` |
+| `application/vnd.ms-powerpoint` | `.ppt` |
+
+OpenDocument:
+
+| MIME | Расширение |
+|---|---|
+| `application/vnd.oasis.opendocument.text` | `.odt` |
+| `application/vnd.oasis.opendocument.text-template` | `.ott` |
+| `application/vnd.oasis.opendocument.text-master` | `.odm` |
+| `application/vnd.oasis.opendocument.text-master-template` | `.otm` |
+| `application/vnd.oasis.opendocument.text-web` | `.oth` |
+| `application/vnd.oasis.opendocument.spreadsheet` | `.ods` |
+| `application/vnd.oasis.opendocument.spreadsheet-template` | `.ots` |
+| `application/vnd.oasis.opendocument.presentation` | `.odp` |
+| `application/vnd.oasis.opendocument.presentation-template` | `.otp` |
+| `application/vnd.oasis.opendocument.graphics` | `.odg` |
+| `application/vnd.oasis.opendocument.graphics-template` | `.otg` |
+| `application/vnd.oasis.opendocument.chart` | `.odc` |
+| `application/vnd.oasis.opendocument.chart-template` | `.otc` |
+| `application/vnd.oasis.opendocument.image` | `.odi` |
+| `application/vnd.oasis.opendocument.image-template` | `.oti` |
+| `application/vnd.oasis.opendocument.formula` | `.odf` |
+| `application/vnd.oasis.opendocument.formula-template` | `.odft` |
+| `application/vnd.oasis.opendocument.base` | `.odb` |
+| `application/vnd.oasis.opendocument.database` | `.odb` |
+
+Legacy OpenOffice XML:
+
+| MIME | Расширение |
+|---|---|
+| `application/vnd.sun.xml.writer` | `.sxw` |
+| `application/vnd.sun.xml.writer.template` | `.stw` |
+| `application/vnd.sun.xml.writer.global` | `.sxg` |
+| `application/vnd.sun.xml.calc` | `.sxc` |
+| `application/vnd.sun.xml.calc.template` | `.stc` |
+| `application/vnd.sun.xml.impress` | `.sxi` |
+| `application/vnd.sun.xml.impress.template` | `.sti` |
+| `application/vnd.sun.xml.draw` | `.sxd` |
+| `application/vnd.sun.xml.draw.template` | `.std` |
+| `application/vnd.sun.xml.math` | `.sxm` |
+
+Microsoft Office Open XML, включая шаблоны и macro-enabled варианты:
+
+| MIME | Расширение |
+|---|---|
+| `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `.docx` |
+| `application/vnd.openxmlformats-officedocument.wordprocessingml.template` | `.dotx` |
+| `application/vnd.ms-word.document.macroenabled.12` | `.docm` |
+| `application/vnd.ms-word.template.macroenabled.12` | `.dotm` |
+| `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | `.xlsx` |
+| `application/vnd.openxmlformats-officedocument.spreadsheetml.template` | `.xltx` |
+| `application/vnd.ms-excel.sheet.macroenabled.12` | `.xlsm` |
+| `application/vnd.ms-excel.template.macroenabled.12` | `.xltm` |
+| `application/vnd.ms-excel.addin.macroenabled.12` | `.xlam` |
+| `application/vnd.ms-excel.sheet.binary.macroenabled.12` | `.xlsb` |
+| `application/vnd.openxmlformats-officedocument.presentationml.presentation` | `.pptx` |
+| `application/vnd.openxmlformats-officedocument.presentationml.template` | `.potx` |
+| `application/vnd.openxmlformats-officedocument.presentationml.slideshow` | `.ppsx` |
+| `application/vnd.openxmlformats-officedocument.presentationml.slide` | `.sldx` |
+| `application/vnd.ms-powerpoint.presentation.macroenabled.12` | `.pptm` |
+| `application/vnd.ms-powerpoint.template.macroenabled.12` | `.potm` |
+| `application/vnd.ms-powerpoint.slideshow.macroenabled.12` | `.ppsm` |
+| `application/vnd.ms-powerpoint.addin.macroenabled.12` | `.ppam` |
+| `application/vnd.ms-powerpoint.slide.macroenabled.12` | `.sldm` |
+
+Legacy binary Word, Excel и PowerPoint проверяются как структурно корректные CFB-контейнеры с характерным внутренним потоком и получают канонические `.doc`, `.xls` или `.ppt`. Исторические имена шаблонов `.dot`, `.xlt`, `.pot` не восстанавливаются из недоверенного имени: содержащий макросы или шаблонные данные CFB остаётся непрозрачным и получает безопасное расширение базового семейства.
+
+ZIP-based OpenDocument/OpenOffice должен содержать первым несжатый `mimetype` без extra fields и согласованный корневой MIME в `META-INF/manifest.xml`. OOXML должен содержать единственный поддержанный main content type, ожидаемую main part, `[Content_Types].xml` и `_rels/.rels`. Общая проверка ZIP ограничена 512 entries, 32 МиБ на entry, 64 МиБ суммарного распакованного размера, отношением распакованного размера к сжатому не более 100 и чтением идентификационной записи не более 1 МиБ. ZIP64, шифрование, неизвестный compression method, duplicate/case-fold duplicate, traversal, абсолютные и malformed names, несовпадающие local/central records, лишний префикс или хвост закрыто отклоняются. Проверка выполняется в памяти в пределах объекта 8 МиБ; содержимое пакета не извлекается на файловую систему.
+
+TAR допускает только регулярные файлы и каталоги с каноническими уникальными путями, корректной структурой и завершающими нулевыми блоками. GZIP проверяется потоково в памяти с пределом 32 members и 64 МиБ распакованных данных. Неоднозначные, polyglot, усечённые и malformed образцы закрыто отклоняются.
+
+RAR, 7z, XZ, bzip2, CAB и исторические бинарные StarOffice `.sdw`/`.sdc`/`.sdd` не поддерживаются: для них в текущем контуре нет исчерпывающего ограниченного валидатора, а signature- или extension-only допуск был бы ложным.
+
 ## Ручная проверка артефактов
 
-1. Сначала примените миграцию `000034`, подготовьте отдельный S3-compatible bucket и Kubernetes Secret, затем включите `MATTERCODEX_ARTIFACTS_ENABLED`. Значения учётных данных не выводите в render, журналы или отчёт.
-2. Отправьте в настроенный Mattermost thread один разрешённый текстовый файл и одно растровое изображение вместе с явной задачей. Убедитесь, что агент получает manifest с server-generated путями под `/workspace/.matter-codex/inbox/<turn_id>/`, а `manifest.json` и входные файлы доступны только для чтения.
+1. Сначала примените миграцию `000034`, подготовьте один отдельный `Opaque` Secret с именем из `MATTERCODEX_ARTIFACT_STORAGE_SECRET` и точными data keys `access-key-id`, `secret-access-key`, `bucket`, `endpoint`, затем включите `MATTERCODEX_ARTIFACTS_ENABLED`. Значения не выводите в render, журналы или отчёт. Проверьте, что endpoint/bucket отсутствуют в ConfigMap, четыре переменные bot-service используют только `secretKeyRef`, а изменение resourceVersion Secret меняет pod-input revision и вызывает один rollout Deployment. Фактическая кластерная операция выполняется SRE по Issue #112 после снятия admission gate #28.
+2. Отправьте в настроенный Mattermost thread один разрешённый текстовый файл, одно растровое изображение, один базовый архив и по одному документу ODF, legacy OpenOffice XML, legacy Microsoft Office и OOXML вместе с явной задачей. Убедитесь, что агент получает manifest с server-generated путями и расширениями из allowlist под `/workspace/.matter-codex/inbox/<turn_id>/`, а `manifest.json` и входные файлы доступны только для чтения.
 3. Создайте итоговый файл внутри `MATTERCODEX_OUTPUT_DIR` и вызовите MCP-инструмент `publish_artifact` с относительным путём и устойчивым `idempotency_key`. В исходном thread должен появиться ровно один post с ровно одним файлом от bot identity роли и маркером `#notrigger`.
 4. Повторите тот же вызов с тем же `idempotency_key`: новый Mattermost post и новая artifact version создаваться не должны.
 5. Создайте отдельный синтетический текстовый файл с заведомо тестовым шаблоном секрета и вызовите `publish_artifact`. Результат должен перейти в `quarantined`, объект и Mattermost post создаваться не должны. Не используйте реальные секреты.
-6. Проверьте отказ для абсолютного пути, `../`, symlink, hardlink, FIFO, неподдерживаемого типа, девятого файла, объекта больше 8 MiB и суммарного объёма больше 32 MiB. Также проверьте, что agent pod не содержит env/volume с Mattermost bot token или S3 credentials.
+6. Проверьте отказ для абсолютного пути, `../`, symlink, hardlink, FIFO, неподдерживаемого типа, девятого файла, объекта больше 8 MiB и суммарного объёма больше 32 MiB. Для контейнеров отдельно проверьте truncated/malformed ZIP, duplicate и traversal names, compression bomb, конфликт ODF manifest, отсутствующую OOXML main part, ambiguous/polyglot образец и несовпадение filename/extension/declared MIME. Также проверьте, что agent pod не содержит `env`, `envFrom` или volume с именем, ключами либо значениями artifact storage Secret или Mattermost bot token.
 
 ## Безопасность
 
@@ -535,7 +630,7 @@ order by destination, publication;
 - MCP POST с `Content-Length` выше server-owned предела и chunked body, фактически превысивший предел, получает `413` до `go-sdk`, чтения session/token, DB, dispatcher, locks и публикации. Полный `ReadTimeout` ограничивает slow chunked body; допустимые POST на точной границе и GET/SSE сохраняются.
 - Mattermost tokens не попадают в manifests render output.
 - Agent session pod не получает Mattermost bot token и S3 credentials. В pod передаётся только session token к bot-service; локальный MCP-мост `publish_artifact` открывает файл относительно точного outbox через `openat2` с запретом symlink/magic-link/path traversal и передаёт поток в server-side контур.
-- Вложение связывается с точными `project/chat/session/turn`, исходными Mattermost post/file и фактическим автором. Декларированный MIME не считается доверенным: тип определяется по содержимому, неподдерживаемые типы и превышения пределов отклоняются, а текст с признаками секрета сохраняется только как quarantine metadata без объекта и публикации.
+- Вложение связывается с точными `project/chat/session/turn`, исходными Mattermost post/file и фактическим автором. Декларированный MIME, filename и extension не считаются доверенными: тип определяется по содержимому с закрытой структурной проверкой, server-generated имена используют каноническое расширение allowlist, неподдерживаемые типы и превышения пределов отклоняются, а текст с признаками секрета сохраняется только как quarantine metadata без объекта и публикации.
 - Миграция `000034_artifacts_vertical.sql` forward-only: immutable triggers запрещают изменение metadata, terminal state и перепривязку scope; object key включает project/session/artifact/version, а S3 `PutObject` использует checksum и `If-None-Match: *`.
 - GitHub token, username, email и webhook secret хранятся в Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.

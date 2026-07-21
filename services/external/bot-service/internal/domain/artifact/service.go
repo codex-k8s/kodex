@@ -618,13 +618,7 @@ func stageReader(body io.Reader, maximum int64) (stagedIncoming, error) {
 		cleanup()
 		return stagedIncoming{}, err
 	}
-	sample := make([]byte, 512)
-	count, err := io.ReadFull(file, sample)
-	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		cleanup()
-		return stagedIncoming{}, err
-	}
-	mediaType, err := DetectMediaType(sample[:count])
+	mediaType, err := DetectMediaTypeReader(file, written)
 	if err != nil {
 		cleanup()
 		return stagedIncoming{}, err
@@ -639,9 +633,6 @@ func stageReader(body io.Reader, maximum int64) (stagedIncoming, error) {
 		if err != nil {
 			cleanup()
 			return stagedIncoming{}, err
-		}
-		if json.Valid(bytes.TrimSpace(textBody)) {
-			mediaType = "application/json"
 		}
 		secretFound = ContainsSyntheticSecret(mediaType, textBody)
 	}

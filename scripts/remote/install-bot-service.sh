@@ -119,6 +119,12 @@ apply_rendered_manifest_remote() {
   mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$output"
 }
 
+apply_secret_manifest_remote() {
+  local template="$1"
+  mattercodex_render_template "$template" - |
+    mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
+}
+
 remote_kubernetes_object_revision() {
   local kind="$1"
   local name="$2"
@@ -139,7 +145,8 @@ render_remote_deployment_with_live_pod_inputs() {
     "$(remote_kubernetes_object_revision configmap "$MATTERCODEX_BOT_SERVICE_CONFIG_CONFIGMAP")" \
     "$(remote_kubernetes_object_revision secret "$MATTERCODEX_BOT_SERVICE_SECRET")" \
     "$(remote_kubernetes_object_revision secret "$MATTERCODEX_POSTGRES_SECRET")" \
-    "$(remote_kubernetes_object_revision secret "$MATTERCODEX_GITHUB_SECRET")")"
+    "$(remote_kubernetes_object_revision secret "$MATTERCODEX_GITHUB_SECRET")" \
+    "$(remote_kubernetes_object_revision secret "$MATTERCODEX_ARTIFACT_STORAGE_SECRET")")"
   export MATTERCODEX_BOT_SERVICE_POD_INPUT_REVISION
   mattercodex_render_template \
     "$REPO_ROOT/deploy/k8s/bot-service/deployment.yaml.tpl" \
@@ -461,15 +468,21 @@ else
   mattercodex_log "Mattermost bot/slash token не заданы; bot-service secret не создается"
 fi
 
-if mattercodex_bool "${MATTERCODEX_ARTIFACTS_ENABLED:-false}" || [ -n "${MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID:-}" ] || [ -n "${MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY:-}" ]; then
+if mattercodex_bool "${MATTERCODEX_ARTIFACTS_ENABLED:-false}" || [ -n "${MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID:-}" ] || [ -n "${MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY:-}" ] || [ -n "${MATTERCODEX_ARTIFACT_S3_BUCKET:-}" ] || [ -n "${MATTERCODEX_ARTIFACT_S3_ENDPOINT:-}" ]; then
   [ -n "${MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID:-}" ] || mattercodex_die "для artifact storage не задан MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID"
   [ -n "${MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY:-}" ] || mattercodex_die "для artifact storage не задан MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY"
+  [ -n "${MATTERCODEX_ARTIFACT_S3_BUCKET:-}" ] || mattercodex_die "для artifact storage не задан MATTERCODEX_ARTIFACT_S3_BUCKET"
+  [ -n "${MATTERCODEX_ARTIFACT_S3_ENDPOINT:-}" ] || mattercodex_die "для artifact storage не задан MATTERCODEX_ARTIFACT_S3_ENDPOINT"
   export ARTIFACT_S3_ACCESS_KEY_ID_B64
   export ARTIFACT_S3_SECRET_ACCESS_KEY_B64
+  export ARTIFACT_S3_BUCKET_B64
+  export ARTIFACT_S3_ENDPOINT_B64
   ARTIFACT_S3_ACCESS_KEY_ID_B64="$(printf '%s' "$MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID" | base64 | tr -d '\n')"
   ARTIFACT_S3_SECRET_ACCESS_KEY_B64="$(printf '%s' "$MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY" | base64 | tr -d '\n')"
+  ARTIFACT_S3_BUCKET_B64="$(printf '%s' "$MATTERCODEX_ARTIFACT_S3_BUCKET" | base64 | tr -d '\n')"
+  ARTIFACT_S3_ENDPOINT_B64="$(printf '%s' "$MATTERCODEX_ARTIFACT_S3_ENDPOINT" | base64 | tr -d '\n')"
   mattercodex_log "применяется отдельный Secret artifact storage на целевом сервере"
-  apply_rendered_manifest_remote "$REPO_ROOT/deploy/k8s/bot-service/artifact-storage-secret.yaml.tpl" "$RENDER_DIR/05a-artifact-storage-secret.yaml"
+  apply_secret_manifest_remote "$REPO_ROOT/deploy/k8s/bot-service/artifact-storage-secret.yaml.tpl"
 fi
 
 GITHUB_TOKEN_VALUE="${MATTERCODEX_GITHUB_TOKEN:-${GITHUB_PAT:-${GIT_BOT_TOKEN:-}}}"

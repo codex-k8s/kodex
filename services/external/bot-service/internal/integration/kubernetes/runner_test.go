@@ -648,6 +648,9 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	assertRunnerPodSecurity(t, podSpec)
 	assertRunnerSessionResources(t, podSpec.Containers[0].Resources)
 	container := podSpec.Containers[0]
+	if len(container.EnvFrom) != 0 {
+		t.Fatalf("service credential envFrom reached agent pod: %#v", container.EnvFrom)
+	}
 	for _, item := range container.Env {
 		if strings.HasPrefix(item.Name, "MATTERCODEX_ARTIFACT_S3_") || item.Name == "MATTERCODEX_MATTERMOST_BOT_TOKEN" {
 			t.Fatalf("service credential env reached agent pod: %s", item.Name)
@@ -683,6 +686,10 @@ func TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects(t *testing.T) 
 		"Kubernetes":     "mc-sentinel-kubernetes-render-aba3e3c4",
 		"PostgreSQL DSN": "postgres://mc-sentinel-postgres-render-8c0777bf@127.0.0.1/disposable",
 		"session/MCP":    "mc-sentinel-session-mcp-render-a5fb2298",
+		"S3 access key":  "mc-sentinel-artifact-access-render-53a0ad76",
+		"S3 secret key":  "mc-sentinel-artifact-secret-render-64bc208f",
+		"S3 bucket":      "mc-sentinel-artifact-bucket-render-2f9ac835",
+		"S3 endpoint":    "https://mc-sentinel-artifact-endpoint-render-170f4f86.invalid",
 	}
 	client := fake.NewSimpleClientset(
 		&corev1.Secret{
@@ -701,6 +708,15 @@ func TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects(t *testing.T) 
 				"postgres":   []byte(secrets["PostgreSQL DSN"]),
 			},
 		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "matter-codex-artifact-storage", Namespace: "mattermost"},
+			Data: map[string][]byte{
+				"access-key-id":     []byte(secrets["S3 access key"]),
+				"secret-access-key": []byte(secrets["S3 secret key"]),
+				"bucket":            []byte(secrets["S3 bucket"]),
+				"endpoint":          []byte(secrets["S3 endpoint"]),
+			},
+		},
 	)
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
@@ -715,6 +731,8 @@ func TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects(t *testing.T) 
 		{Name: "SYNTHETIC_MATTERMOST_TOKEN", SecretName: "synthetic-runtime", SecretKey: "mattermost", Sensitive: true},
 		{Name: "SYNTHETIC_KUBERNETES_TOKEN", SecretName: "synthetic-runtime", SecretKey: "kubernetes", Sensitive: true},
 		{Name: "MATTERCODEX_DATABASE_DSN", SecretName: "synthetic-runtime", SecretKey: "postgres", Sensitive: true},
+		{Name: "SYNTHETIC_ARTIFACT_STORAGE", SecretName: "matter-codex-artifact-storage", SecretKey: "bucket", Sensitive: true},
+		{Name: "MATTERCODEX_ARTIFACT_S3_ENDPOINT", SecretName: "synthetic-runtime", SecretKey: "kubernetes", Sensitive: true},
 	}
 	started, err := runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
 		SessionKey: "secret-matrix", Role: "developer", BotServiceURL: "http://bot-service",
@@ -735,6 +753,20 @@ func TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects(t *testing.T) 
 	for class, value := range secrets {
 		if strings.Contains(string(renderedYAML), value) {
 			t.Fatalf("отрендерованный Pod содержит значение класса %s", class)
+		}
+	}
+	for _, forbidden := range []string{
+		"matter-codex-artifact-storage",
+		"MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID",
+		"MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY",
+		"MATTERCODEX_ARTIFACT_S3_BUCKET",
+		"MATTERCODEX_ARTIFACT_S3_ENDPOINT",
+		"SYNTHETIC_ARTIFACT_STORAGE",
+		"access-key-id",
+		"secret-access-key",
+	} {
+		if strings.Contains(string(renderedYAML), forbidden) {
+			t.Fatalf("отрендерованный Pod содержит artifact storage имя или ключ %q", forbidden)
 		}
 	}
 	if !strings.Contains(string(renderedYAML), "synthetic-runtime") ||

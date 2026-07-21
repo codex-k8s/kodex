@@ -94,6 +94,7 @@ type Config struct {
 	AgentRunnerClusterAdminServiceAccount string
 	CodexAuthSecretName                   string
 	GitHubSecretName                      string
+	ArtifactStorageSecretName             string
 }
 
 type Runner struct {
@@ -116,6 +117,7 @@ type Runner struct {
 	agentRunnerClusterAdminServiceAccount string
 	codexAuthSecretName                   string
 	gitHubSecretName                      string
+	artifactStorageSecretName             string
 }
 
 func (runner *Runner) InspectSecretIntegrity(ctx context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
@@ -233,6 +235,7 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		agentRunnerClusterAdminServiceAccount: defaultString(cfg.AgentRunnerClusterAdminServiceAccount, "matter-codex-agent-runner-cluster-admin"),
 		codexAuthSecretName:                   defaultString(cfg.CodexAuthSecretName, "matter-codex-codex-auth"),
 		gitHubSecretName:                      defaultString(cfg.GitHubSecretName, "matter-codex-github"),
+		artifactStorageSecretName:             defaultString(cfg.ArtifactStorageSecretName, "matter-codex-artifact-storage"),
 	}, nil
 }
 
@@ -1697,8 +1700,8 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
 	gitHubSecretName := defaultString(input.GitHubSecretName, runner.gitHubSecretName)
 	kubernetesAccess := normalizedKubernetesAccess(input.KubernetesAccess)
-	runtimeEnv := runtimeEnvVars(input.RuntimeEnv)
-	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv)
+	runtimeEnv := runtimeEnvVars(input.RuntimeEnv, runner.artifactStorageSecretName)
+	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv, runner.artifactStorageSecretName)
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   runnerJobName(input.RunID),
@@ -1801,8 +1804,8 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
 	gitHubSecretName := defaultString(input.GitHubSecretName, runner.gitHubSecretName)
 	kubernetesAccess := normalizedKubernetesAccess(input.KubernetesAccess)
-	runtimeEnv := runtimeEnvVars(input.RuntimeEnv)
-	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv)
+	runtimeEnv := runtimeEnvVars(input.RuntimeEnv, runner.artifactStorageSecretName)
+	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv, runner.artifactStorageSecretName)
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   runnerJobName(input.RunID),
@@ -1908,9 +1911,9 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 		{Name: "MATTERCODEX_KUBERNETES_ACCESS", Value: kubernetesAccess},
 		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 		{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
-		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv)},
+		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv, runner.artifactStorageSecretName)},
 	}
-	env = append(env, runtimeEnvVars(input.RuntimeEnv)...)
+	env = append(env, runtimeEnvVars(input.RuntimeEnv, runner.artifactStorageSecretName)...)
 	volumeMounts := []corev1.VolumeMount{
 		{Name: "workspace", MountPath: "/workspace"},
 		{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
@@ -2032,14 +2035,14 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 		}}},
 		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 		{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
-		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv)},
+		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv, runner.artifactStorageSecretName)},
 		{Name: "MATTERCODEX_MCP_URL", Value: strings.TrimRight(input.BotServiceURL, "/") + "/mcp/sessions/" + input.SessionKey},
 		{Name: "MATTERCODEX_MCP_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{Name: tokenSecretName},
 			Key:                  "token",
 		}}},
 	}
-	env = append(env, runtimeEnvVars(input.RuntimeEnv)...)
+	env = append(env, runtimeEnvVars(input.RuntimeEnv, runner.artifactStorageSecretName)...)
 	volumeMounts := []corev1.VolumeMount{
 		{Name: "workspace", MountPath: "/workspace"},
 		{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
@@ -2656,14 +2659,14 @@ func kubernetesLabelValue(value string) string {
 	return value
 }
 
-func runtimeEnvVars(items []runtimerepo.RuntimeEnvVar) []corev1.EnvVar {
+func runtimeEnvVars(items []runtimerepo.RuntimeEnvVar, artifactStorageSecretName string) []corev1.EnvVar {
 	names := make(map[string]struct{}, len(items))
 	var env []corev1.EnvVar
 	for _, item := range items {
 		name := strings.TrimSpace(item.Name)
 		secretName := strings.TrimSpace(item.SecretName)
 		secretKey := defaultString(item.SecretKey, "value")
-		if name == "" || secretName == "" || !runtimeEnvNameRE.MatchString(name) {
+		if name == "" || secretName == "" || !runtimeEnvNameRE.MatchString(name) || artifactStorageRuntimeEnvDenied(name, secretName, artifactStorageSecretName) {
 			continue
 		}
 		if _, exists := names[name]; exists {
@@ -2683,12 +2686,12 @@ func runtimeEnvVars(items []runtimerepo.RuntimeEnvVar) []corev1.EnvVar {
 	return env
 }
 
-func runtimeEnvAllowlistValue(items []runtimerepo.RuntimeEnvVar) string {
+func runtimeEnvAllowlistValue(items []runtimerepo.RuntimeEnvVar, artifactStorageSecretName string) string {
 	names := make(map[string]struct{}, len(items))
 	var values []string
 	for _, item := range items {
 		name := strings.TrimSpace(item.Name)
-		if name == "" || !runtimeEnvNameRE.MatchString(name) {
+		if name == "" || !runtimeEnvNameRE.MatchString(name) || artifactStorageRuntimeEnvDenied(name, strings.TrimSpace(item.SecretName), artifactStorageSecretName) {
 			continue
 		}
 		if _, exists := names[name]; exists {
@@ -2699,6 +2702,12 @@ func runtimeEnvAllowlistValue(items []runtimerepo.RuntimeEnvVar) string {
 	}
 	sort.Strings(values)
 	return strings.Join(values, ",")
+}
+
+func artifactStorageRuntimeEnvDenied(name string, secretName string, artifactStorageSecretName string) bool {
+	return strings.HasPrefix(name, "MATTERCODEX_ARTIFACT_S3_") ||
+		name == "MATTERCODEX_ARTIFACT_STORAGE_SECRET" ||
+		secretName == strings.TrimSpace(artifactStorageSecretName)
 }
 
 func normalizeDeveloperRunInput(input runtimerepo.DeveloperRunInput) runtimerepo.DeveloperRunInput {

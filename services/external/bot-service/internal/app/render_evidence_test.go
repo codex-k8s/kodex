@@ -56,9 +56,19 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 	}
 	renderDirectory := filepath.Join(temporaryDirectory, "render")
 	render := exec.Command("bash", filepath.Join(repositoryRoot, "scripts/k8s/render-bot-service.sh"), "--env-file", envFile, "--render-dir", renderDirectory)
+	artifactSentinels := []string{
+		"mc-sentinel-artifact-access-render-53a0ad76",
+		"mc-sentinel-artifact-secret-render-64bc208f",
+		"mc-sentinel-artifact-bucket-render-2f9ac835",
+		"https://mc-sentinel-artifact-endpoint-render-170f4f86.invalid",
+	}
 	render.Env = append(os.Environ(),
 		"MATTERCODEX_TEST_ENVSUBST_HELPER=1",
 		"PATH="+temporaryDirectory+":"+os.Getenv("PATH"),
+		"MATTERCODEX_ARTIFACT_S3_ACCESS_KEY_ID="+artifactSentinels[0],
+		"MATTERCODEX_ARTIFACT_S3_SECRET_ACCESS_KEY="+artifactSentinels[1],
+		"MATTERCODEX_ARTIFACT_S3_BUCKET="+artifactSentinels[2],
+		"MATTERCODEX_ARTIFACT_S3_ENDPOINT="+artifactSentinels[3],
 	)
 	if output, err := render.CombinedOutput(); err != nil {
 		t.Fatalf("synthetic render: %v; output=%s", err, output)
@@ -74,6 +84,15 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 	var runtimeQuota map[string]any
 	var runtimeLimitRange map[string]any
 	for _, yamlFile := range yamlFiles {
+		renderedBody, err := os.ReadFile(yamlFile)
+		if err != nil {
+			t.Fatalf("чтение %s: %v", filepath.Base(yamlFile), err)
+		}
+		for _, sentinel := range artifactSentinels {
+			if strings.Contains(string(renderedBody), sentinel) {
+				t.Fatalf("%s содержит plaintext artifact storage", filepath.Base(yamlFile))
+			}
+		}
 		file, err := os.Open(yamlFile)
 		if err != nil {
 			t.Fatalf("открытие %s: %v", filepath.Base(yamlFile), err)

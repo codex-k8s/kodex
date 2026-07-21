@@ -30,6 +30,7 @@ func TestBotServicePodInputRevisionIsStableAndSensitiveToEveryInput(t *testing.T
 		"secret/bot:uid-bot:20",
 		"secret/postgres:uid-postgres:30",
 		"secret/github:uid-github:40",
+		"secret/artifact-storage:uid-artifact-storage:50",
 	}
 	first := revision(base...)
 	if second := revision(base...); second != first {
@@ -89,6 +90,7 @@ func TestBotServiceInstallersRevisionAllReferencedPodInputs(t *testing.T) {
 			"MATTERCODEX_BOT_SERVICE_SECRET",
 			"MATTERCODEX_POSTGRES_SECRET",
 			"MATTERCODEX_GITHUB_SECRET",
+			"MATTERCODEX_ARTIFACT_STORAGE_SECRET",
 		} {
 			if !strings.Contains(body, name) {
 				t.Errorf("%s does not include %s in pod input revision", relativePath, name)

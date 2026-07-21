@@ -120,6 +120,18 @@ spec:
                   name: ${MATTERCODEX_ARTIFACT_STORAGE_SECRET}
                   key: secret-access-key
                   optional: true
+            - name: MATTERCODEX_ARTIFACT_S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: ${MATTERCODEX_ARTIFACT_STORAGE_SECRET}
+                  key: bucket
+                  optional: true
+            - name: MATTERCODEX_ARTIFACT_S3_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: ${MATTERCODEX_ARTIFACT_STORAGE_SECRET}
+                  key: endpoint
+                  optional: true
           startupProbe:
             httpGet:
               path: /healthz

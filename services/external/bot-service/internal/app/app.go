@@ -399,6 +399,7 @@ func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, boo
 		AgentRunnerClusterAdminServiceAccount: cfg.AgentClusterAdminServiceAccount,
 		CodexAuthSecretName:                   cfg.CodexAuthSecretName,
 		GitHubSecretName:                      cfg.GitHubSecretName,
+		ArtifactStorageSecretName:             cfg.ArtifactStorageSecretName,
 	})
 	if err != nil {
 		logger.Warn("kubernetes runtime disabled: client-go runner is not configured", "error", err)

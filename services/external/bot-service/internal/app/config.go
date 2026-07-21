@@ -83,6 +83,7 @@ type Config struct {
 	CallbackPublishConcurrency          int           `env:"MATTERCODEX_CALLBACK_PUBLISH_CONCURRENCY" envDefault:"4"`
 	CallbackPublishDeadline             time.Duration `env:"MATTERCODEX_CALLBACK_PUBLISH_DEADLINE" envDefault:"5s"`
 	ArtifactsEnabled                    bool          `env:"MATTERCODEX_ARTIFACTS_ENABLED" envDefault:"false"`
+	ArtifactStorageSecretName           string        `env:"MATTERCODEX_ARTIFACT_STORAGE_SECRET" envDefault:"matter-codex-artifact-storage"`
 	ArtifactS3Endpoint                  string        `env:"MATTERCODEX_ARTIFACT_S3_ENDPOINT"`
 	ArtifactS3Region                    string        `env:"MATTERCODEX_ARTIFACT_S3_REGION" envDefault:"us-east-1"`
 	ArtifactS3Bucket                    string        `env:"MATTERCODEX_ARTIFACT_S3_BUCKET"`

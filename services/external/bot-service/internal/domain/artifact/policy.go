@@ -1,14 +1,13 @@
 package artifact
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
+	"io"
 	"regexp"
 	"strings"
 	"unicode"
-	"unicode/utf8"
+
+	"github.com/codex-k8s/matter-codex/libs/go/artifacttype"
 )
 
 const (
@@ -19,43 +18,25 @@ const (
 
 var syntheticSecretPattern = regexp.MustCompile(`(?i)(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|secret)\s*[:=]\s*["']?[A-Za-z0-9_./+%:@-]{16,}`)
 
-var allowedMediaTypes = map[string]string{
-	"text/plain":       ".txt",
-	"text/markdown":    ".md",
-	"text/csv":         ".csv",
-	"application/json": ".json",
-	"application/pdf":  ".pdf",
-	"image/png":        ".png",
-	"image/jpeg":       ".jpg",
-	"image/webp":       ".webp",
-	"image/gif":        ".gif",
+func DetectMediaType(sample []byte) (string, error) {
+	detected, err := artifacttype.DetectBytes(sample)
+	if err != nil {
+		return "", ErrMediaTypeDenied
+	}
+	return detected, nil
 }
 
-func DetectMediaType(sample []byte) (string, error) {
-	if len(sample) == 0 {
-		return "text/plain", nil
-	}
-	detected := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(sample), ";")[0]))
-	if bytes.HasPrefix(sample, []byte("%PDF-")) {
-		detected = "application/pdf"
-	} else if len(sample) >= 12 && string(sample[:4]) == "RIFF" && string(sample[8:12]) == "WEBP" {
-		detected = "image/webp"
-	} else if utf8.Valid(sample) && !bytes.ContainsRune(sample, '\x00') {
-		if json.Valid(bytes.TrimSpace(sample)) {
-			detected = "application/json"
-		} else if textualSample(sample) {
-			detected = "text/plain"
-		}
-	}
-	if _, ok := allowedMediaTypes[detected]; !ok {
+func DetectMediaTypeReader(reader io.ReaderAt, size int64) (string, error) {
+	detected, err := artifacttype.Detect(reader, size)
+	if err != nil {
 		return "", ErrMediaTypeDenied
 	}
 	return detected, nil
 }
 
 func SafeExtension(mediaType string) (string, error) {
-	extension, ok := allowedMediaTypes[strings.ToLower(strings.TrimSpace(mediaType))]
-	if !ok {
+	extension, err := artifacttype.Extension(mediaType)
+	if err != nil {
 		return "", ErrMediaTypeDenied
 	}
 	return extension, nil
@@ -103,20 +84,10 @@ func SafeDeliveryName(versionID string, mediaType string) (string, error) {
 }
 
 func ContainsSyntheticSecret(mediaType string, body []byte) bool {
-	if mediaType != "text/plain" && mediaType != "text/markdown" && mediaType != "text/csv" && mediaType != "application/json" {
+	if !artifacttype.IsText(mediaType) {
 		return false
 	}
 	return syntheticSecretPattern.Match(body)
-}
-
-func textualSample(sample []byte) bool {
-	for _, r := range string(sample) {
-		if r == '\n' || r == '\r' || r == '\t' || !unicode.IsControl(r) {
-			continue
-		}
-		return false
-	}
-	return true
 }
 
 func validOpaqueID(value string) bool {

@@ -120,7 +120,7 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.ReadHeaderTimeout != 5*time.Second || cfg.ReadTimeout != 10*time.Second || cfg.IdleTimeout != time.Minute || cfg.MaxHeaderBytes != 1024*1024 || cfg.MaxMCPRequestBodyBytes != 1024*1024 {
 		t.Fatalf("HTTP boundary defaults = header:%s read:%s idle:%s max_header:%d max_mcp:%d", cfg.ReadHeaderTimeout, cfg.ReadTimeout, cfg.IdleTimeout, cfg.MaxHeaderBytes, cfg.MaxMCPRequestBodyBytes)
 	}
-	if cfg.ArtifactsEnabled || cfg.ArtifactMaxFilesPerTurn != 8 || cfg.ArtifactMaxObjectBytes != 8*1024*1024 || cfg.ArtifactMaxTurnBytes != 32*1024*1024 || cfg.ArtifactRetention != 90*24*time.Hour {
+	if cfg.ArtifactsEnabled || cfg.ArtifactStorageSecretName != "matter-codex-artifact-storage" || cfg.ArtifactMaxFilesPerTurn != 8 || cfg.ArtifactMaxObjectBytes != 8*1024*1024 || cfg.ArtifactMaxTurnBytes != 32*1024*1024 || cfg.ArtifactRetention != 90*24*time.Hour {
 		t.Fatalf("artifact defaults = enabled:%t files:%d object:%d turn:%d retention:%s", cfg.ArtifactsEnabled, cfg.ArtifactMaxFilesPerTurn, cfg.ArtifactMaxObjectBytes, cfg.ArtifactMaxTurnBytes, cfg.ArtifactRetention)
 	}
 }
