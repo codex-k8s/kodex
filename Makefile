@@ -1,4 +1,6 @@
-.PHONY: test-go test-go-postgres test-go-all test-render-evidence tidy-go
+GOVULNCHECK_VERSION := v1.6.0
+
+.PHONY: test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck
 
 test-go:
 	env -u GOFLAGS GOENV=off GOWORK=off go test -tags= ./...
@@ -15,3 +17,6 @@ test-render-evidence:
 
 tidy-go:
 	go mod tidy
+
+govulncheck:
+	env -u GOFLAGS GOENV=off GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...

@@ -18,11 +18,12 @@
 | `github.com/google/go-github/v88` | `v88.0.0` | GitHub SDK | repository access, branch/PR operations и webhook payload helpers без ручной REST-обвязки |
 | `github.com/jackc/pgx/v5` | `v5.10.0` | PostgreSQL | storage repositories через `pgxpool`; `stdlib` driver для goose |
 | `github.com/mattermost/mattermost/server/public` | `v0.4.2` | Mattermost SDK/model | typed `CommandResponse` и публичные модели Mattermost вместо ручных JSON-структур |
-| `github.com/modelcontextprotocol/go-sdk` | `v1.2.0` | MCP SDK | встроенный Streamable HTTP MCP server для ограниченного чтения/записи Mattermost thread context агентами |
+| `github.com/modelcontextprotocol/go-sdk` | `v1.4.1` | MCP SDK | встроенный Streamable HTTP MCP server для ограниченного чтения/записи контекста обсуждения Mattermost агентами; версия содержит исправления проверки `Origin`, разбора JSON-RPC и защиты от DNS rebinding |
 | `github.com/nicksnyder/go-i18n/v2` | `v2.6.1` | i18n | runtime `libs/go/i18n` для embedded JSON message catalogs, template variables и locale switching |
 | `github.com/pressly/goose/v3` | `v3.27.1` | PostgreSQL migrations | embedded SQL migrations с `-- +goose Up/Down` вместо самописного migration runner |
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics`, Go/process collectors и Prometheus HTTP handler |
-| `golang.org/x/sys` | `v0.44.0` | Linux filesystem | атомарная публикация восстановленного дерева сессий через `renameat2` без промежуточного изменения target |
+| `golang.org/x/net` | `v0.55.0` | Транзитивная зависимость транспорта HTTP/IDNA | исправленная нормализация Punycode-меток в графе зависимостей транспорта HTTP |
+| `golang.org/x/sys` | `v0.45.0` | Linux filesystem | атомарная публикация восстановленного дерева сессий через `renameat2` без промежуточного изменения target |
 | `k8s.io/api` | `v0.36.1` | Kubernetes typed API | typed `batch/v1` Job, `core/v1` Pod/PVC и `PodLogOptions` для runtime adapter |
 | `k8s.io/apimachinery` | `v0.36.1` | Kubernetes API machinery | typed meta/options, labels, resource quantities и Kubernetes API errors |
 | `k8s.io/client-go` | `v0.36.1` | Kubernetes SDK | in-cluster/kubeconfig client, Job/PVC/Secret operations, pod status/log tail и `remotecommand` exec для Codex auth handoff без shell-first runtime |
@@ -46,6 +47,12 @@
 | `gcr.io/kaniko-project/executor` | bot-service и agent-runner image build | default in-cluster image build без Docker daemon и без передачи готовых image с локальной машины |
 | `registry:2` | MatterCodex image registry | single-server локальный registry для Kaniko push и kubelet pull через hostPort |
 | `docker` или `nerdctl` | legacy remote image build | явный fallback только при `MATTERCODEX_IMAGE_BUILD_STRATEGY=docker` и наличии builder на целевом сервере |
+
+## Project checks - in use
+
+| Tool | Version | Scope | Why |
+|---|---:|---|---|
+| `govulncheck` | `v1.6.0` | Проверка уязвимостей Go | закреплённый сканер для воспроизводимого запуска `make govulncheck`; база уязвимостей обновляется при запуске |
 
 ## Agent runner tools - in use
 
