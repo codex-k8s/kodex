@@ -1421,6 +1421,58 @@ func TestPublicBoundaryMigrationUpgradePreservesConfiguredClusterAdmin(t *testin
 	if err != nil || !persistenceCallback {
 		t.Fatalf("существующая persistence binding: callback=%t error=%v", persistenceCallback, err)
 	}
+	const bootstrappedSessionKey = "bootstrapped-admin-session"
+	bootstrapped, created, err := repository.CreateFrozenClusterAdminSession(ctx, adminrepo.UpsertAgentSessionInput{
+		SessionKey:            bootstrappedSessionKey,
+		ProjectID:             projectID,
+		ChatID:                chatID,
+		RoleID:                roleID,
+		SessionScope:          "thread_role",
+		MattermostChannelID:   "channel-existing",
+		MattermostRootPostID:  "root-bootstrapped",
+		OpenAIAccountName:     "primary",
+		KubernetesNamespace:   "matter-kodex-prod",
+		PodName:               "mc-session-bootstrapped-admin-session",
+		PVCName:               "mc-session-ws-bootstrapped-admin-session",
+		TokenSecretRef:        "matter-codex-session-bootstrapped-admin-session",
+		SecretContentSHA256:   strings.Repeat("a", 64),
+		SecretResourceUID:     "synthetic-bootstrap-uid",
+		SecretResourceVersion: "1",
+		TTLSeconds:            3600,
+		Capabilities:          `{}`,
+	})
+	if err != nil || !created || bootstrapped.SessionKey != bootstrappedSessionKey {
+		t.Fatalf("atomic frozen session bootstrap: created=%t session=%q error=%v", created, bootstrapped.SessionKey, err)
+	}
+	if _, created, err = repository.CreateFrozenClusterAdminSession(ctx, adminrepo.UpsertAgentSessionInput{
+		SessionKey:            bootstrappedSessionKey,
+		ProjectID:             projectID,
+		ChatID:                chatID,
+		RoleID:                roleID,
+		SessionScope:          "thread_role",
+		MattermostChannelID:   "channel-existing",
+		MattermostRootPostID:  "root-bootstrapped",
+		OpenAIAccountName:     "primary",
+		KubernetesNamespace:   "matter-kodex-prod",
+		PodName:               "mc-session-bootstrapped-admin-session",
+		PVCName:               "mc-session-ws-bootstrapped-admin-session",
+		TokenSecretRef:        "matter-codex-session-bootstrapped-admin-session",
+		SecretContentSHA256:   strings.Repeat("a", 64),
+		SecretResourceUID:     "synthetic-bootstrap-uid",
+		SecretResourceVersion: "1",
+		TTLSeconds:            3600,
+		Capabilities:          `{}`,
+	}); err != nil || created {
+		t.Fatalf("idempotent frozen session bootstrap: created=%t error=%v", created, err)
+	}
+	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
+		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
+		MattermostChannelID: "channel-existing", SessionKey: bootstrappedSessionKey,
+		ActorUser: "test", Operation: "test.binding.bootstrapped-session",
+	})
+	if err != nil || !allowed {
+		t.Fatalf("bootstrapped session binding: allowed=%t error=%v", allowed, err)
+	}
 	allowed, err = repository.AdmitExistingClusterAdminBinding(ctx, securityrepo.ClusterAdminBindingInput{
 		RoleID: roleID, ProjectID: projectID, ChatID: chatID, ChatSlug: "existing-admin-chat",
 		MattermostChannelID: "channel-existing", SessionKey: blockedSessionKey, ActorUser: "test", Operation: "test.binding.blocked-session",

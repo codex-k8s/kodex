@@ -242,16 +242,23 @@ type UpsertMattermostBotIdentityInput struct {
 }
 
 type UpsertAgentSessionInput struct {
-	SessionKey           string
-	ProjectID            int64
-	ChatID               int64
-	RoleID               int64
-	SessionScope         string
-	MattermostChannelID  string
-	MattermostRootPostID string
-	OpenAIAccountName    string
-	TTLSeconds           int
-	Capabilities         string
+	SessionKey            string
+	ProjectID             int64
+	ChatID                int64
+	RoleID                int64
+	SessionScope          string
+	MattermostChannelID   string
+	MattermostRootPostID  string
+	OpenAIAccountName     string
+	KubernetesNamespace   string
+	PodName               string
+	PVCName               string
+	TokenSecretRef        string
+	SecretContentSHA256   string
+	SecretResourceUID     string
+	SecretResourceVersion string
+	TTLSeconds            int
+	Capabilities          string
 }
 
 type UpdateAgentSessionRuntimeInput struct {

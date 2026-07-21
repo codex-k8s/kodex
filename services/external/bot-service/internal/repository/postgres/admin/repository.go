@@ -547,6 +547,36 @@ func (repo *Repository) UpsertAgentSession(ctx context.Context, input adminrepo.
 	return item, created, nil
 }
 
+func (repo *Repository) CreateFrozenClusterAdminSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
+	var created bool
+	if err := repo.db.QueryRow(ctx, query("cluster_admin_session__create_frozen.sql"),
+		input.SessionKey,
+		input.ProjectID,
+		input.ChatID,
+		input.RoleID,
+		input.SessionScope,
+		input.MattermostChannelID,
+		input.MattermostRootPostID,
+		input.OpenAIAccountName,
+		input.KubernetesNamespace,
+		input.PodName,
+		input.PVCName,
+		input.TokenSecretRef,
+		input.SecretContentSHA256,
+		input.SecretResourceUID,
+		input.SecretResourceVersion,
+		input.TTLSeconds,
+		input.Capabilities,
+	).Scan(&created); err != nil {
+		return entity.AgentSession{}, false, fmt.Errorf("create frozen cluster-admin session: %w", err)
+	}
+	item, err := repo.GetAgentSession(ctx, input.SessionKey)
+	if err != nil {
+		return entity.AgentSession{}, false, err
+	}
+	return item, created, nil
+}
+
 func (repo *Repository) GetAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
 	item, err := scanAgentSession(repo.db.QueryRow(ctx, query("agent_sessions__get.sql"), sessionKey))
 	if err != nil {

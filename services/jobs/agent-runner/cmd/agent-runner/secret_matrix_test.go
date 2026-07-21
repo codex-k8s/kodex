@@ -184,6 +184,62 @@ func TestShortCredentialLikeRuntimeEnvironmentValueStillFailsClosed(t *testing.T
 	}
 }
 
+func TestNonSensitiveRuntimeEnvironmentUsesExactRedactionOnly(t *testing.T) {
+	const value = "staging.radar-auto.internal"
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=STAGING_SERVER_HOST",
+		"STAGING_SERVER_HOST=" + value,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fragmented := strings.Join(strings.Split(value, ""), " описание ")
+	if _, err := inventory.protect("Обычный диагностический текст: " + fragmented); err != nil {
+		t.Fatalf("несекретный runtime host вызвал fragmented-secret guard: %v", err)
+	}
+	protected, err := inventory.protect("host=" + value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(protected, value) {
+		t.Fatalf("точное значение runtime host не скрыто: %q", protected)
+	}
+}
+
+func TestExplicitSensitiveRuntimeEnvironmentKeepsFragmentGuard(t *testing.T) {
+	const value = "opaque-runtime-value-93f1c6b8"
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=EXTERNAL_ENDPOINT",
+		"MATTERCODEX_RUNTIME_SENSITIVE_ENV_ALLOWLIST=EXTERNAL_ENDPOINT",
+		"EXTERNAL_ENDPOINT=" + value,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	middle := len(value) / 2
+	var fragmentErr unsafeSecretFragmentError
+	if _, err := inventory.protect(value[:middle] + "<split>" + value[middle:]); !errors.As(err, &fragmentErr) {
+		t.Fatalf("явно sensitive runtime value не сохранило fragmented guard: %T", err)
+	}
+}
+
+func TestSensitiveSourceWinsWhenValueMatchesNonSensitiveRuntimeEnvironment(t *testing.T) {
+	const value = "shared-credential-value-71f08da2"
+	inventory, err := buildSecretInventory([]string{
+		"MATTERCODEX_RUNTIME_ENV_ALLOWLIST=STAGING_SERVER_HOST",
+		"STAGING_SERVER_HOST=" + value,
+		"OPENAI_API_KEY=" + value,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	middle := len(value) / 2
+	var fragmentErr unsafeSecretFragmentError
+	if _, err := inventory.protect(value[:middle] + "<split>" + value[middle:]); !errors.As(err, &fragmentErr) {
+		t.Fatalf("совпавший sensitive credential был ослаблен exact-only политикой: %T", err)
+	}
+}
+
 func TestSecretInventoryIndependentEncodingCorpusAndFragments(t *testing.T) {
 	const secret = "mc/independent%encoding-8a2f6107"
 	inventory, err := buildSecretInventory([]string{"OPENAI_API_KEY=" + secret}, nil)

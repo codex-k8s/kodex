@@ -463,7 +463,15 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	}
 	sessionRootID := strings.TrimSpace(request.SessionRootID)
 	sessionKey := agentSessionKey(request.Chat.ID, request.Role.ID, sessionScope, sessionRootID)
-	if err := svc.authorizeClusterAdminRole(ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID, sessionKey, "agent_turn.enqueue"); err != nil {
+	existingSession, sessionExists, err := svc.agentSessionExists(ctx, sessionKey)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	admissionSessionKey := sessionKey
+	if !sessionExists {
+		admissionSessionKey = ""
+	}
+	if err := svc.authorizeClusterAdminRole(ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID, admissionSessionKey, "agent_turn.enqueue"); err != nil {
 		return AgentTurnQueued{}, err
 	}
 	openAIAccount, ok := svc.openAIAccount(ctx, request.Role)
@@ -472,7 +480,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	}
 	if err := svc.withClusterAdminRuntimeGuard(
 		ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID,
-		sessionKey, "agent_auth.ensure.side_effect",
+		admissionSessionKey, "agent_auth.ensure.side_effect",
 		func() error { return svc.ensureCodexAuthSecretReady(ctx, openAIAccount, request.Role) },
 	); err != nil {
 		return AgentTurnQueued{}, err
@@ -488,9 +496,27 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
-	existingSession, sessionExists, err := svc.agentSessionExists(ctx, sessionKey)
-	if err != nil {
-		return AgentTurnQueued{}, err
+	var preparedAdminRuntime runtimerepo.PreparedClusterAdminSessionRuntime
+	if !sessionExists && strings.EqualFold(strings.TrimSpace(request.Role.KubernetesAccess), "cluster-admin") {
+		preparer, ok := svc.cfg.RuntimeRunner.(runtimerepo.ClusterAdminSessionRuntimePreparer)
+		if !ok {
+			return AgentTurnQueued{}, adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		proposedToken, tokenErr := newInternalToken()
+		if tokenErr != nil {
+			return AgentTurnQueued{}, tokenErr
+		}
+		if err := svc.withClusterAdminRuntimeGuard(
+			ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID,
+			"", "agent_session.bootstrap_token.side_effect",
+			func() error {
+				var prepareErr error
+				preparedAdminRuntime, prepareErr = preparer.PrepareClusterAdminSessionRuntime(ctx, sessionKey, proposedToken)
+				return prepareErr
+			},
+		); err != nil {
+			return AgentTurnQueued{}, err
+		}
 	}
 	if sessionExists {
 		if existingSession.Status == agentSessionStatusBlocked || existingSession.Status == agentSessionStatusClosed {
@@ -523,21 +549,37 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	var session entity.AgentSession
 	err = svc.withClusterAdminPersistenceGuard(
 		ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID,
-		sessionKey, "agent_session.persist.side_effect",
+		admissionSessionKey, "agent_session.persist.side_effect",
 		func(guardedStore adminrepo.Repository) error {
 			var persistErr error
-			session, _, persistErr = guardedStore.UpsertAgentSession(ctx, adminrepo.UpsertAgentSessionInput{
-				SessionKey:           sessionKey,
-				ProjectID:            request.Project.ID,
-				ChatID:               request.Chat.ID,
-				RoleID:               request.Role.ID,
-				SessionScope:         sessionScope,
-				MattermostChannelID:  request.Chat.MattermostChannelID,
-				MattermostRootPostID: sessionRootID,
-				OpenAIAccountName:    openAIAccount.Name,
-				TTLSeconds:           ttlSeconds,
-				Capabilities:         capabilities,
-			})
+			input := adminrepo.UpsertAgentSessionInput{
+				SessionKey:            sessionKey,
+				ProjectID:             request.Project.ID,
+				ChatID:                request.Chat.ID,
+				RoleID:                request.Role.ID,
+				SessionScope:          sessionScope,
+				MattermostChannelID:   request.Chat.MattermostChannelID,
+				MattermostRootPostID:  sessionRootID,
+				OpenAIAccountName:     openAIAccount.Name,
+				KubernetesNamespace:   preparedAdminRuntime.Namespace,
+				PodName:               preparedAdminRuntime.PodName,
+				PVCName:               preparedAdminRuntime.PVCName,
+				TokenSecretRef:        preparedAdminRuntime.TokenSecret.SecretName,
+				SecretContentSHA256:   preparedAdminRuntime.TokenSecret.Integrity.ContentSHA256,
+				SecretResourceUID:     preparedAdminRuntime.TokenSecret.Integrity.UID,
+				SecretResourceVersion: preparedAdminRuntime.TokenSecret.Integrity.ResourceVersion,
+				TTLSeconds:            ttlSeconds,
+				Capabilities:          capabilities,
+			}
+			if !sessionExists && strings.EqualFold(strings.TrimSpace(request.Role.KubernetesAccess), "cluster-admin") {
+				bootstrapStore, ok := guardedStore.(securityrepo.ClusterAdminSessionBootstrapRepository)
+				if !ok {
+					return adminrepo.ErrClusterAdminAdmissionDenied
+				}
+				session, _, persistErr = bootstrapStore.CreateFrozenClusterAdminSession(ctx, input)
+				return persistErr
+			}
+			session, _, persistErr = guardedStore.UpsertAgentSession(ctx, input)
 			return persistErr
 		},
 	)
@@ -552,7 +594,11 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	started := agentSessionStartedFromSession(session)
 	waitingForCapacity := false
 	if agentSessionRuntimeShouldBeEnsured(session) {
-		started, err = svc.startAgentSessionRuntime(ctx, session, existingSession, request.Role, openAIAccount.SecretRef, gitHubSecretName, repo, runtimeEnv)
+		tokenSession := existingSession
+		if !sessionExists {
+			tokenSession = session
+		}
+		started, err = svc.startAgentSessionRuntime(ctx, session, tokenSession, request.Role, openAIAccount.SecretRef, gitHubSecretName, repo, runtimeEnv)
 		if err != nil {
 			if !runtimerepo.IsAgentSessionCapacityError(err) {
 				return AgentTurnQueued{}, err

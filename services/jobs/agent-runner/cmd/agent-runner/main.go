@@ -730,9 +730,9 @@ func (r *runner) prepareEphemeralRuntime() error {
 		}
 	}
 	values := map[string]struct{}{}
-	permittedShortValues := map[string]struct{}{}
-	collectEnvironmentSecretValues(values, permittedShortValues, os.Environ())
-	inventory, err := compileSecretInventory(values, map[string]int64{}, permittedShortValues)
+	exactOnlyValues := map[string]struct{}{}
+	collectEnvironmentSecretValues(values, exactOnlyValues, os.Environ())
+	inventory, err := compileSecretInventory(values, map[string]int64{}, exactOnlyValues)
 	if err != nil {
 		r.cleanupEphemeralRuntime()
 		return err
@@ -1835,7 +1835,7 @@ type secretInventory struct {
 	hexCanonical                  []string
 	fragmentCandidates            []string
 	hasUnsupportedShortCredential bool
-	permittedShortValues          map[string]struct{}
+	exactOnlyValues               map[string]struct{}
 	values                        map[string]struct{}
 	sources                       map[string]int64
 }
@@ -1852,8 +1852,8 @@ func newSecretRedactor(environment []string) secretRedactor {
 func buildSecretInventory(environment []string, explicitFiles []string) (secretInventory, error) {
 	values := map[string]struct{}{}
 	sources := map[string]int64{}
-	permittedShortValues := map[string]struct{}{}
-	collectEnvironmentSecretValues(values, permittedShortValues, environment)
+	exactOnlyValues := map[string]struct{}{}
+	collectEnvironmentSecretValues(values, exactOnlyValues, environment)
 	files := append(credentialFileSources(environment), explicitFiles...)
 	seenFiles := map[string]struct{}{}
 	for _, path := range files {
@@ -1869,15 +1869,17 @@ func buildSecretInventory(environment []string, explicitFiles []string) (secretI
 			continue
 		}
 		seenFiles[cleaned] = struct{}{}
-		if err := addCredentialFileValues(values, sources, cleaned); err != nil {
+		if err := addCredentialFileValues(values, exactOnlyValues, sources, cleaned); err != nil {
 			return secretInventory{}, err
 		}
 	}
-	return compileSecretInventory(values, sources, permittedShortValues)
+	return compileSecretInventory(values, sources, exactOnlyValues)
 }
 
-func collectEnvironmentSecretValues(values map[string]struct{}, permittedShortValues map[string]struct{}, environment []string) {
+func collectEnvironmentSecretValues(values map[string]struct{}, exactOnlyValues map[string]struct{}, environment []string) {
 	runtimeNames := runtimeEnvironmentNames(environment)
+	sensitiveRuntimeNames := sensitiveRuntimeEnvironmentNames(environment)
+	strongValues := map[string]struct{}{}
 	for _, item := range environment {
 		name, value, ok := strings.Cut(item, "=")
 		if !ok || (!runtimeNames[name] && !sensitiveEnvironmentName(name)) {
@@ -1887,16 +1889,38 @@ func collectEnvironmentSecretValues(values map[string]struct{}, permittedShortVa
 			continue
 		}
 		addSecretValue(values, value)
-		if runtimeNames[name] && !credentialLikeEnvironmentName(name) {
-			addSecretValue(permittedShortValues, value)
+		strong := !runtimeNames[name] || sensitiveRuntimeNames[name] || credentialLikeEnvironmentName(name)
+		if strong {
+			addSecretValue(strongValues, value)
+			delete(exactOnlyValues, value)
+		} else if _, alreadyStrong := strongValues[value]; !alreadyStrong {
+			addSecretValue(exactOnlyValues, value)
 		}
 		if trimmed := strings.TrimSpace(value); trimmed != value {
 			addSecretValue(values, trimmed)
-			if runtimeNames[name] && !credentialLikeEnvironmentName(name) {
-				addSecretValue(permittedShortValues, trimmed)
+			if strong {
+				addSecretValue(strongValues, trimmed)
+				delete(exactOnlyValues, trimmed)
+			} else if _, alreadyStrong := strongValues[trimmed]; !alreadyStrong {
+				addSecretValue(exactOnlyValues, trimmed)
 			}
 		}
 	}
+}
+
+func sensitiveRuntimeEnvironmentNames(environment []string) map[string]bool {
+	names := map[string]bool{}
+	for _, item := range environment {
+		name, value, ok := strings.Cut(item, "=")
+		if ok && name == "MATTERCODEX_RUNTIME_SENSITIVE_ENV_ALLOWLIST" {
+			for _, raw := range strings.Split(value, ",") {
+				if candidate := strings.TrimSpace(raw); candidate != "" {
+					names[candidate] = true
+				}
+			}
+		}
+	}
+	return names
 }
 
 func runtimeEnvironmentNames(environment []string) map[string]bool {
@@ -1944,7 +1968,7 @@ func credentialFileEnvironmentSources(environment []string) []string {
 	return paths
 }
 
-func addCredentialFileValues(values map[string]struct{}, sources map[string]int64, path string) error {
+func addCredentialFileValues(values map[string]struct{}, exactOnlyValues map[string]struct{}, sources map[string]int64, path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1965,11 +1989,20 @@ func addCredentialFileValues(values map[string]struct{}, sources map[string]int6
 	if err != nil {
 		return fmt.Errorf("credential source не прочитан")
 	}
-	collectCredentialFileValues(values, body)
+	collectCredentialFileValues(values, exactOnlyValues, body)
 	return nil
 }
 
-func collectCredentialFileValues(values map[string]struct{}, body []byte) {
+func collectCredentialFileValues(values map[string]struct{}, exactOnlyValues map[string]struct{}, body []byte) {
+	credentialValues := map[string]struct{}{}
+	collectCredentialFileValuesInto(credentialValues, body)
+	for value := range credentialValues {
+		values[value] = struct{}{}
+		delete(exactOnlyValues, value)
+	}
+}
+
+func collectCredentialFileValuesInto(values map[string]struct{}, body []byte) {
 	trimmed := strings.TrimSpace(string(body))
 	if trimmed == "" {
 		return
@@ -2047,7 +2080,7 @@ func (budget *credentialRepresentationBudget) addSize(size int64) error {
 	return nil
 }
 
-func compileSecretInventory(values map[string]struct{}, sources map[string]int64, permittedShortValues map[string]struct{}) (secretInventory, error) {
+func compileSecretInventory(values map[string]struct{}, sources map[string]int64, exactOnlyValues map[string]struct{}) (secretInventory, error) {
 	exact := map[string]struct{}{}
 	percentCanonical := map[string]struct{}{}
 	hexCanonical := map[string]struct{}{}
@@ -2055,12 +2088,17 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 	budget := credentialRepresentationBudget{}
 	hasShort := false
 	for value := range values {
+		_, exactOnly := exactOnlyValues[value]
 		if len(value) < 16 {
-			if _, permitted := permittedShortValues[value]; !permitted {
+			if !exactOnly {
 				hasShort = true
 			}
 		}
-		for _, representation := range secretRepresentations(value) {
+		representations := secretRepresentations(value)
+		if exactOnly {
+			representations = []string{value}
+		}
+		for _, representation := range representations {
 			if _, exists := exact[representation]; !exists {
 				if err := budget.add(representation); err != nil {
 					return secretInventory{}, err
@@ -2068,7 +2106,7 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 				exact[representation] = struct{}{}
 			}
 		}
-		if len(value) >= 16 {
+		if !exactOnly && len(value) >= 16 {
 			if _, exists := fragmentCandidates[value]; !exists {
 				if err := budget.add(value); err != nil {
 					return secretInventory{}, err
@@ -2076,21 +2114,23 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 				fragmentCandidates[value] = struct{}{}
 			}
 		}
-		hexValue := hex.EncodeToString([]byte(value))
-		if _, exists := hexCanonical[hexValue]; !exists {
-			if err := budget.add(hexValue); err != nil {
-				return secretInventory{}, err
+		if !exactOnly {
+			hexValue := hex.EncodeToString([]byte(value))
+			if _, exists := hexCanonical[hexValue]; !exists {
+				if err := budget.add(hexValue); err != nil {
+					return secretInventory{}, err
+				}
+				hexCanonical[hexValue] = struct{}{}
 			}
-			hexCanonical[hexValue] = struct{}{}
-		}
-		for _, encoded := range []string{url.QueryEscape(value), url.PathEscape(value)} {
-			if strings.Contains(encoded, "%") {
-				canonical := normalizePercentEncoding(encoded)
-				if _, exists := percentCanonical[canonical]; !exists {
-					if err := budget.add(canonical); err != nil {
-						return secretInventory{}, err
+			for _, encoded := range []string{url.QueryEscape(value), url.PathEscape(value)} {
+				if strings.Contains(encoded, "%") {
+					canonical := normalizePercentEncoding(encoded)
+					if _, exists := percentCanonical[canonical]; !exists {
+						if err := budget.add(canonical); err != nil {
+							return secretInventory{}, err
+						}
+						percentCanonical[canonical] = struct{}{}
 					}
-					percentCanonical[canonical] = struct{}{}
 				}
 			}
 		}
@@ -2124,7 +2164,7 @@ func compileSecretInventory(values map[string]struct{}, sources map[string]int64
 		hexCanonical:                  orderedHex,
 		fragmentCandidates:            orderedFragments,
 		hasUnsupportedShortCredential: hasShort,
-		permittedShortValues:          permittedShortValues,
+		exactOnlyValues:               exactOnlyValues,
 		values:                        values,
 		sources:                       sources,
 	}
@@ -2163,18 +2203,28 @@ func secretRepresentations(value string) []string {
 func (inventory secretInventory) merge(other secretInventory) (secretInventory, error) {
 	values := make(map[string]struct{}, len(inventory.values)+len(other.values))
 	sources := make(map[string]int64, len(inventory.sources)+len(other.sources))
-	permittedShortValues := make(map[string]struct{}, len(inventory.permittedShortValues)+len(other.permittedShortValues))
+	exactOnlyValues := make(map[string]struct{}, len(inventory.exactOnlyValues)+len(other.exactOnlyValues))
 	for value := range inventory.values {
 		values[value] = struct{}{}
 	}
 	for value := range other.values {
 		values[value] = struct{}{}
 	}
-	for value := range inventory.permittedShortValues {
-		permittedShortValues[value] = struct{}{}
+	for value := range inventory.exactOnlyValues {
+		exactOnlyValues[value] = struct{}{}
 	}
-	for value := range other.permittedShortValues {
-		permittedShortValues[value] = struct{}{}
+	for value := range other.exactOnlyValues {
+		exactOnlyValues[value] = struct{}{}
+	}
+	for value := range inventory.values {
+		if _, exactOnly := inventory.exactOnlyValues[value]; !exactOnly {
+			delete(exactOnlyValues, value)
+		}
+	}
+	for value := range other.values {
+		if _, exactOnly := other.exactOnlyValues[value]; !exactOnly {
+			delete(exactOnlyValues, value)
+		}
 	}
 	for path, size := range inventory.sources {
 		sources[path] = size
@@ -2187,7 +2237,7 @@ func (inventory secretInventory) merge(other secretInventory) (secretInventory, 
 	if err := validateCredentialSourceBudget(sources); err != nil {
 		return secretInventory{}, err
 	}
-	return compileSecretInventory(values, sources, permittedShortValues)
+	return compileSecretInventory(values, sources, exactOnlyValues)
 
 }
 

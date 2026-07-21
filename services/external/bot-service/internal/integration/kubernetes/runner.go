@@ -54,6 +54,7 @@ const (
 	runnerTmpPath                = "/tmp"
 	runnerDevShmPath             = "/dev/shm"
 	runtimeEnvAllowlist          = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
+	runtimeSensitiveEnvAllowlist = "MATTERCODEX_RUNTIME_SENSITIVE_ENV_ALLOWLIST"
 	runnerInitPath               = "/sbin/tini"
 	runnerBinaryName             = "matter-codex-agent-runner"
 	runnerUID                    = int64(10001)
@@ -928,6 +929,57 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	}, nil
 }
 
+func (runner *Runner) PrepareClusterAdminSessionRuntime(ctx context.Context, sessionKey string, proposedToken string) (runtimerepo.PreparedClusterAdminSessionRuntime, error) {
+	sessionKey = strings.TrimSpace(sessionKey)
+	proposedToken = strings.TrimSpace(proposedToken)
+	if sessionKey == "" || proposedToken == "" {
+		return runtimerepo.PreparedClusterAdminSessionRuntime{}, fmt.Errorf("cluster-admin session key and token are required")
+	}
+	secretName := sessionSecretName(sessionKey)
+	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
+	secret, err := secretClient.Get(ctx, secretName, metav1.GetOptions{})
+	created := false
+	if apierrors.IsNotFound(err) {
+		secret, err = secretClient.Create(ctx, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: runner.namespace,
+				Labels: map[string]string{
+					"app.kubernetes.io/name":      "matter-codex-agent-runner",
+					"app.kubernetes.io/component": sessionTokenComponent,
+					labelSessionKey:               kubernetesLabelValue(sessionKey),
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{"token": []byte(proposedToken)},
+		}, metav1.CreateOptions{})
+		created = err == nil
+	}
+	if err != nil {
+		return runtimerepo.PreparedClusterAdminSessionRuntime{}, fmt.Errorf("prepare cluster-admin session token secret: %w", err)
+	}
+	token := secret.Data["token"]
+	if !exactManagedSessionTokenSecret(secret, runner.namespace, secretName, kubernetesLabelValue(sessionKey), token, false, false) {
+		return runtimerepo.PreparedClusterAdminSessionRuntime{}, fmt.Errorf("existing cluster-admin session token secret conflicts with the managed binding")
+	}
+	integrity := secretIntegrity(secret, "token", token)
+	if strings.TrimSpace(integrity.ContentSHA256) == "" || strings.TrimSpace(integrity.UID) == "" || strings.TrimSpace(integrity.ResourceVersion) == "" {
+		return runtimerepo.PreparedClusterAdminSessionRuntime{}, fmt.Errorf("cluster-admin session token secret has incomplete Kubernetes identity")
+	}
+	return runtimerepo.PreparedClusterAdminSessionRuntime{
+		Namespace: runner.namespace,
+		PodName:   sessionPodName(sessionKey),
+		PVCName:   sessionPVCName(sessionKey),
+		TokenSecret: runtimerepo.MattermostBotTokenSecret{
+			SecretName: secretName,
+			Namespace:  runner.namespace,
+			Created:    created,
+			Token:      string(token),
+			Integrity:  integrity,
+		},
+	}, nil
+}
+
 func (runner *Runner) materializeImmutableSessionTokenSecret(ctx context.Context, sessionKey string, token string, expected runtimerepo.SecretIntegrity) (string, error) {
 	if err := runner.verifyExistingSessionTokenSecret(ctx, expected.SecretName, token, expected); err != nil {
 		return "", err
@@ -1707,6 +1759,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 	kubernetesAccess := normalizedKubernetesAccess(input.KubernetesAccess)
 	runtimeEnv := runtimeEnvVars(input.RuntimeEnv)
 	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv)
+	sensitiveEnvAllowlist := runtimeSensitiveEnvAllowlistValue(input.RuntimeEnv)
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   runnerJobName(input.RunID),
@@ -1744,6 +1797,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 								{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 								{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
 								{Name: runtimeEnvAllowlist, Value: envAllowlist},
+								{Name: runtimeSensitiveEnvAllowlist, Value: sensitiveEnvAllowlist},
 							}, runtimeEnv...),
 							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
@@ -1811,6 +1865,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 	kubernetesAccess := normalizedKubernetesAccess(input.KubernetesAccess)
 	runtimeEnv := runtimeEnvVars(input.RuntimeEnv)
 	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv)
+	sensitiveEnvAllowlist := runtimeSensitiveEnvAllowlistValue(input.RuntimeEnv)
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   runnerJobName(input.RunID),
@@ -1846,6 +1901,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 								{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 								{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
 								{Name: runtimeEnvAllowlist, Value: envAllowlist},
+								{Name: runtimeSensitiveEnvAllowlist, Value: sensitiveEnvAllowlist},
 							}, runtimeEnv...),
 							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
@@ -1917,6 +1973,7 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 		{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
 		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv)},
+		{Name: runtimeSensitiveEnvAllowlist, Value: runtimeSensitiveEnvAllowlistValue(input.RuntimeEnv)},
 	}
 	env = append(env, runtimeEnvVars(input.RuntimeEnv)...)
 	volumeMounts := []corev1.VolumeMount{
@@ -2041,6 +2098,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 		{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
 		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv)},
+		{Name: runtimeSensitiveEnvAllowlist, Value: runtimeSensitiveEnvAllowlistValue(input.RuntimeEnv)},
 		{Name: "MATTERCODEX_MCP_URL", Value: strings.TrimRight(input.BotServiceURL, "/") + "/mcp/sessions/" + input.SessionKey},
 		{Name: "MATTERCODEX_MCP_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{Name: tokenSecretName},
@@ -2697,6 +2755,24 @@ func runtimeEnvAllowlistValue(items []runtimerepo.RuntimeEnvVar) string {
 	for _, item := range items {
 		name := strings.TrimSpace(item.Name)
 		if name == "" || !runtimeEnvNameRE.MatchString(name) {
+			continue
+		}
+		if _, exists := names[name]; exists {
+			continue
+		}
+		names[name] = struct{}{}
+		values = append(values, name)
+	}
+	sort.Strings(values)
+	return strings.Join(values, ",")
+}
+
+func runtimeSensitiveEnvAllowlistValue(items []runtimerepo.RuntimeEnvVar) string {
+	names := make(map[string]struct{}, len(items))
+	var values []string
+	for _, item := range items {
+		name := strings.TrimSpace(item.Name)
+		if !item.Sensitive || name == "" || !runtimeEnvNameRE.MatchString(name) {
 			continue
 		}
 		if _, exists := names[name]; exists {

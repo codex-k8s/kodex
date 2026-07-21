@@ -174,6 +174,17 @@ type StartedAgentSession struct {
 	Created    bool
 }
 
+type PreparedClusterAdminSessionRuntime struct {
+	Namespace   string
+	PodName     string
+	PVCName     string
+	TokenSecret MattermostBotTokenSecret
+}
+
+type ClusterAdminSessionRuntimePreparer interface {
+	PrepareClusterAdminSessionRuntime(ctx context.Context, sessionKey string, proposedToken string) (PreparedClusterAdminSessionRuntime, error)
+}
+
 type AgentSessionCleanupResult struct {
 	SessionKey string
 	Namespace  string

@@ -189,14 +189,14 @@ func (r *runner) readCredentialFileWithEventGuard(ctx context.Context, path stri
 		return nil, err
 	}
 	builder := &credentialSnapshotBuilder{
-		guard:                guard,
-		values:               map[string]struct{}{},
-		permittedShortValues: map[string]struct{}{},
-		sources:              map[string]int64{},
-		readSources:          map[string]credentialReadResult{},
-		snapshots:            map[string]string{},
-		rewrites:             map[string]string{},
-		kubeconfigSnapshots:  map[string]string{},
+		guard:               guard,
+		values:              map[string]struct{}{},
+		exactOnlyValues:     map[string]struct{}{},
+		sources:             map[string]int64{},
+		readSources:         map[string]credentialReadResult{},
+		snapshots:           map[string]string{},
+		rewrites:            map[string]string{},
+		kubeconfigSnapshots: map[string]string{},
 	}
 	result, err := builder.readSource(path)
 	if err != nil || !result.exists {
@@ -206,8 +206,8 @@ func (r *runner) readCredentialFileWithEventGuard(ctx context.Context, path stri
 		}
 		return nil, fmt.Errorf("credential source отсутствует")
 	}
-	collectCredentialFileValues(builder.values, result.body)
-	inventory, err := compileSecretInventory(builder.values, builder.sources, builder.permittedShortValues)
+	collectCredentialFileValues(builder.values, builder.exactOnlyValues, result.body)
+	inventory, err := compileSecretInventory(builder.values, builder.sources, builder.exactOnlyValues)
 	if err != nil {
 		guard.abort()
 		return nil, err
@@ -267,16 +267,16 @@ func (r *runner) newCredentialRunGuard(cancel context.CancelFunc, snapshotRoot s
 
 func (r *runner) snapshotCredentialEnvironment(environment []string, guard *credentialRunGuard) ([]string, secretInventory, error) {
 	builder := &credentialSnapshotBuilder{
-		guard:                guard,
-		values:               map[string]struct{}{},
-		permittedShortValues: map[string]struct{}{},
-		sources:              map[string]int64{},
-		readSources:          map[string]credentialReadResult{},
-		snapshots:            map[string]string{},
-		rewrites:             map[string]string{},
-		kubeconfigSnapshots:  map[string]string{},
+		guard:               guard,
+		values:              map[string]struct{}{},
+		exactOnlyValues:     map[string]struct{}{},
+		sources:             map[string]int64{},
+		readSources:         map[string]credentialReadResult{},
+		snapshots:           map[string]string{},
+		rewrites:            map[string]string{},
+		kubeconfigSnapshots: map[string]string{},
 	}
-	collectEnvironmentSecretValues(builder.values, builder.permittedShortValues, environment)
+	collectEnvironmentSecretValues(builder.values, builder.exactOnlyValues, environment)
 
 	kubePaths := kubeconfigFileSources(environment)
 	canonicalKubePaths := map[string]struct{}{}
@@ -334,7 +334,7 @@ func (r *runner) snapshotCredentialEnvironment(environment []string, guard *cred
 		guard.markRotated()
 		return nil, secretInventory{}, credentialRotationError{}
 	}
-	inventory, err := compileSecretInventory(builder.values, builder.sources, builder.permittedShortValues)
+	inventory, err := compileSecretInventory(builder.values, builder.sources, builder.exactOnlyValues)
 	if err != nil {
 		return nil, secretInventory{}, err
 	}
@@ -352,15 +352,15 @@ type credentialReadResult struct {
 }
 
 type credentialSnapshotBuilder struct {
-	guard                *credentialRunGuard
-	values               map[string]struct{}
-	permittedShortValues map[string]struct{}
-	sources              map[string]int64
-	readSources          map[string]credentialReadResult
-	snapshots            map[string]string
-	rewrites             map[string]string
-	kubeconfigSnapshots  map[string]string
-	nextSnapshot         int
+	guard               *credentialRunGuard
+	values              map[string]struct{}
+	exactOnlyValues     map[string]struct{}
+	sources             map[string]int64
+	readSources         map[string]credentialReadResult
+	snapshots           map[string]string
+	rewrites            map[string]string
+	kubeconfigSnapshots map[string]string
+	nextSnapshot        int
 }
 
 func (builder *credentialSnapshotBuilder) readSource(rawPath string) (credentialReadResult, error) {
@@ -422,7 +422,7 @@ func (builder *credentialSnapshotBuilder) snapshotFile(rawPath string, wholeValu
 	if wholeValue && result.exists {
 		addSecretValue(builder.values, strings.TrimSpace(string(result.body)))
 	} else if result.exists {
-		collectCredentialFileValues(builder.values, result.body)
+		collectCredentialFileValues(builder.values, builder.exactOnlyValues, result.body)
 	}
 	if snapshot, exists := builder.snapshots[result.canonical]; exists {
 		builder.rewrites[requested] = snapshot
@@ -585,7 +585,7 @@ func (builder *credentialSnapshotBuilder) snapshotRuntimeCodexHome(environment [
 	}
 	authTarget := filepath.Join(runtimeHome, "auth.json")
 	if auth.exists {
-		collectCredentialFileValues(builder.values, auth.body)
+		collectCredentialFileValues(builder.values, builder.exactOnlyValues, auth.body)
 		if err := os.WriteFile(authTarget, auth.body, 0o600); err != nil {
 			return "", false, fmt.Errorf("runtime auth snapshot не записан")
 		}

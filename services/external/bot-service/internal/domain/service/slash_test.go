@@ -1046,12 +1046,16 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 		"mattermost_return_to_requester(message=",
 		"конфигурация проекта в MatterCodex является источником истины",
 		"не зашивай имя чата",
-		"MatterCodex alias привязки `github-platform-owner`",
-		"ожидаемый аутентифицированный GitHub login `ai-da-stas`",
-		"Alias привязки не обязан совпадать с login",
+		"выбираются платформой отдельно для каждой роли",
+		"не требуй конкретный alias или login",
 	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
+		}
+	}
+	for _, forbidden := range []string{"github-platform-owner", "ai-da-stas", "GitHub identity:"} {
+		if strings.Contains(prompt, forbidden) {
+			t.Fatalf("prompt leaked platform-owned GitHub identity %q: %q", forbidden, prompt)
 		}
 	}
 	for _, expected := range []string{"заголовки и описания пул-реквестов", "строчные замечания ревью", "пиши на English"} {
@@ -3419,6 +3423,43 @@ type fakeRuntimeRunner struct {
 	runStatuses                 map[string]runtimerepo.RunStatus
 }
 
+func (runner *fakeRuntimeRunner) PrepareClusterAdminSessionRuntime(_ context.Context, sessionKey string, proposedToken string) (runtimerepo.PreparedClusterAdminSessionRuntime, error) {
+	secretName := "matter-codex-session-" + sessionKey
+	if runner.botTokenSecrets == nil {
+		runner.botTokenSecrets = map[string]string{}
+	}
+	token := runner.botTokenSecrets[secretName]
+	created := false
+	if token == "" {
+		token = proposedToken
+		runner.botTokenSecrets[secretName] = token
+		created = true
+	}
+	integrity := runtimerepo.SecretIntegrity{
+		SecretName:      secretName,
+		SecretKey:       "token",
+		ContentSHA256:   "synthetic-sha256",
+		UID:             "synthetic-uid",
+		ResourceVersion: "1",
+	}
+	if runner.secretIntegrity == nil {
+		runner.secretIntegrity = map[string]runtimerepo.SecretIntegrity{}
+	}
+	runner.secretIntegrity[secretName+"/token"] = integrity
+	return runtimerepo.PreparedClusterAdminSessionRuntime{
+		Namespace: "mattermost",
+		PodName:   "mc-session-" + sessionKey,
+		PVCName:   "mc-session-ws-" + sessionKey,
+		TokenSecret: runtimerepo.MattermostBotTokenSecret{
+			SecretName: secretName,
+			Namespace:  "mattermost",
+			Created:    created,
+			Token:      token,
+			Integrity:  integrity,
+		},
+	}, nil
+}
+
 func (runner *fakeRuntimeRunner) InspectSecretIntegrity(_ context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
 	runner.secretIntegrityReads++
 	if runner.secretIntegrityErr != nil {
@@ -4449,10 +4490,17 @@ func (store *fakeAdminStore) UpsertAgentSession(_ context.Context, input adminre
 			Status:     agentSessionStatusIdle,
 		}
 	}
-	session.ProjectID = input.ProjectID
-	session.ChatID = input.ChatID
-	session.RoleID = input.RoleID
-	session.SessionScope = input.SessionScope
+	if !exists {
+		session.ProjectID = input.ProjectID
+		session.ChatID = input.ChatID
+		session.RoleID = input.RoleID
+		session.SessionScope = input.SessionScope
+		session.OpenAIAccountName = input.OpenAIAccountName
+		session.KubernetesNamespace = input.KubernetesNamespace
+		session.PodName = input.PodName
+		session.PVCName = input.PVCName
+		session.TokenSecretRef = input.TokenSecretRef
+	}
 	session.MattermostChannelID = input.MattermostChannelID
 	session.MattermostRootPostID = input.MattermostRootPostID
 	session.TTLSeconds = input.TTLSeconds

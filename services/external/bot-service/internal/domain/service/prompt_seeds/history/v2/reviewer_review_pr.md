@@ -9,6 +9,8 @@
 - Язык владельца: {{.Locale.Language}} (`{{.Locale.Code}}`)
 {{if .Repository.FullName}}- Репозиторий: {{.Repository.FullName}}{{else}}- Репозиторий: не выбран{{end}}
 {{if .PullRequest.URL}}- Пул-реквест: #{{.PullRequest.Number}} {{.PullRequest.URL}}{{end}}
+{{if .GitHub.Account}}- GitHub-аккаунт: {{.GitHub.Account}}{{end}}
+{{if .GitHub.Username}}- Ожидаемый аутентифицированный GitHub login: {{.GitHub.Username}}{{end}}
 
 ## Задача пользователя
 
@@ -46,7 +48,6 @@
 ## GitHub
 
 - Используй `gh pr view`, `gh pr diff`, `gh api repos/.../pulls/.../comments`.
-- GitHub credentials назначает MatterCodex для этой роли. Не требуй alias/login, указанный в задаче другим агентом, и не сравнивай его с identity запускающей роли; критерием является достаточность фактических прав для ревью.
 - Состояние тредов получай через `gh api graphql` по `reviewThreads` и `resolved`; REST-список комментариев не заменяет эту проверку.
 - Markdown-тексты пиши во временный файл или heredoc и передавай через `--body-file`/файловый ввод.
 - Не печатай значения токенов.

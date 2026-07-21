@@ -358,19 +358,7 @@ func appendRoleRuntimeContract(prompt string, input RolePromptInput) string {
 
 func appendRoleRuntimeContractMarkdown(body *strings.Builder, input RolePromptInput) {
 	body.WriteString("# Контракт среды выполнения Matter-codex\n\n")
-	body.WriteString("- GitHub CLI: используй `gh`, если у роли есть GitHub-аккаунт. Токен, пользователь и email доступны через `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER` и `GITHUB_EMAIL`. Никогда не печатай значения токенов.\n")
-	githubAlias := defaultString(input.Role.GitHubAccountName, input.GitHubAccount.Name)
-	if strings.TrimSpace(githubAlias) != "" {
-		body.WriteString("- GitHub identity: MatterCodex alias привязки `")
-		body.WriteString(githubAlias)
-		body.WriteString("`")
-		if strings.TrimSpace(input.GitHubAccount.Username) != "" {
-			body.WriteString(", ожидаемый аутентифицированный GitHub login `")
-			body.WriteString(input.GitHubAccount.Username)
-			body.WriteString("`")
-		}
-		body.WriteString(". Alias привязки не обязан совпадать с login. Проверяй фактическую identity через `gh api user --jq .login` и сравнивай с ожидаемым login, а не с alias.\n")
-	}
+	body.WriteString("- GitHub CLI: используй `gh`, если роли выданы GitHub credentials. Они выбираются платформой отдельно для каждой роли; не требуй конкретный alias или login из текста задачи и не переноси identity запускающей роли в дочерний промпт. Токен, пользователь и email доступны через `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER` и `GITHUB_EMAIL`. Никогда не печатай их значения.\n")
 	body.WriteString("- Для Markdown-текста задач GitHub, пул-реквестов, ревью и комментариев записывай текст во временный файл или heredoc и передавай через `--body-file`/файловый ввод API. Не встраивай Markdown с обратными кавычками или shell-чувствительным текстом напрямую в одну командную строку shell.\n")
 	if strings.TrimSpace(input.Locale.Language) != "" {
 		body.WriteString("- Язык: все пользовательские ответы в Mattermost, заголовки и описания задач GitHub, заголовки и описания пул-реквестов, комментарии к задачам и пул-реквестам, тексты ревью, строчные замечания ревью, комментарии в коде, документацию и резюме поставки пиши на ")
@@ -561,7 +549,7 @@ func promptTemplateReferenceData() map[string]any {
 		"RepositoryPlaceholders":  "{{.Repository.Provider}}, {{.Repository.Owner}}, {{.Repository.Name}}, {{.Repository.FullName}}",
 		"TaskPlaceholders":        "{{.Task.Title}}, {{.Task.Body}}, {{.Task.BaseBranch}}, {{.Task.HeadBranch}}",
 		"PullRequestPlaceholders": "{{.PullRequest.Number}}, {{.PullRequest.URL}}, {{.PullRequest.Title}}, {{.PullRequest.BaseBranch}}, {{.PullRequest.HeadBranch}}",
-		"GitHubPlaceholders":      "{{.GitHub.Account}}, {{.GitHub.Username}}, {{.GitHub.TokenEnv}}, {{.GitHub.UsernameEnv}}, {{.GitHub.EmailEnv}}",
+		"GitHubPlaceholders":      "{{.GitHub.TokenEnv}}, {{.GitHub.UsernameEnv}}, {{.GitHub.EmailEnv}}",
 		"ToolsPlaceholders":       "{{range .Tools}}- {{.Command}} ({{.Name}}): {{.Purpose}}{{end}}",
 		"SecretPlaceholders":      "{{range .Secrets}}- {{.Name}} {{.Kind}} env={{.Env}} file={{.File}}: {{.Purpose}}{{end}}",
 		"LocalePlaceholders":      "{{.Locale.Code}}, {{.Locale.Language}}",
@@ -619,7 +607,6 @@ func samplePromptTemplateData(profileName string, templateKey string, locale pro
 			HeadBranch: "feature/sample",
 		},
 		GitHub: promptTemplateGitHubData{
-			Account:     "primary",
 			TokenEnv:    "GH_TOKEN / GITHUB_TOKEN",
 			UsernameEnv: "GITHUB_USERNAME / GITHUB_USER",
 			EmailEnv:    "GITHUB_EMAIL",
@@ -631,12 +618,10 @@ func samplePromptTemplateData(profileName string, templateKey string, locale pro
 	if templateKey == reviewPRTemplateKey {
 		data.Run.Role = "reviewer"
 		data.Agent.Role = "reviewer"
-		data.GitHub.Account = "primary"
 	}
 	if templateKey == developerImplementTaskKey {
 		data.Run.Role = "developer"
 		data.Agent.Role = "developer"
-		data.GitHub.Account = "agent"
 	}
 	return data
 }

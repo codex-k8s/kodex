@@ -20,13 +20,35 @@ func TestPromptSeedCatalogMarkdownRenders(t *testing.T) {
 			if !strings.Contains(body, "{{.Locale.Language}}") || !strings.Contains(body, "MatterCodex") || !strings.Contains(body, "MCP") {
 				t.Fatalf("seed is missing locale/MCP contract:\n%s", body)
 			}
-			if _, err := renderAgentPromptTemplate(body, samplePromptTemplateData(seed.SourceProfile, seed.TemplateKey, locale)); err != nil {
+			rendered, err := renderAgentPromptTemplate(body, samplePromptTemplateData(seed.SourceProfile, seed.TemplateKey, locale))
+			if err != nil {
 				t.Fatalf("renderAgentPromptTemplate() error = %v", err)
+			}
+			for _, forbidden := range []string{"GitHub-аккаунт: primary", "GitHub-аккаунт: agent", "Ожидаемый аутентифицированный GitHub login"} {
+				if strings.Contains(rendered, forbidden) {
+					t.Fatalf("active seed rendered platform-owned GitHub identity %q:\n%s", forbidden, rendered)
+				}
 			}
 			if _, err := RenderRolePromptTemplate(body, SampleRolePromptData(seed.SourceProfile, seed.Role, locale)); err != nil {
 				t.Fatalf("RenderRolePromptTemplate() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestLegacyCustomPromptCannotRenderPlatformGitHubIdentity(t *testing.T) {
+	data := rolePromptTemplateData(RolePromptInput{
+		Project:       entity.Project{ID: 1, Name: "Project", Slug: "project"},
+		Role:          entity.AgentRole{ID: 1, Name: "developer", RoleType: "worker", GitHubAccountName: "platform-owner"},
+		GitHubAccount: entity.GitHubAccount{Name: "platform-owner", Username: "owner-login"},
+		Locale:        promptTemplateLocaleData{Code: texti18n.RussianLocale, Language: "Russian"},
+	})
+	rendered, err := RenderRolePromptTemplate(`{{if .GitHub.Account}}account={{.GitHub.Account}}{{end}}{{if .GitHub.Username}} login={{.GitHub.Username}}{{end}} token={{.GitHub.TokenEnv}}`, data)
+	if err != nil {
+		t.Fatalf("renderAgentPromptTemplate() error = %v", err)
+	}
+	if strings.Contains(rendered, "platform-owner") || strings.Contains(rendered, "owner-login") || !strings.Contains(rendered, "GH_TOKEN") {
+		t.Fatalf("legacy prompt exposed platform identity or lost environment contract: %q", rendered)
 	}
 }
 
@@ -177,14 +199,14 @@ func TestSeedDefaultAgentPromptTemplateUpgradesOnlyUnmodifiedSeedCopies(t *testi
 	if err != nil {
 		t.Fatalf("promptSeedPreviousBodies() error = %v", err)
 	}
-	if len(previousBodies) != 1 {
-		t.Fatalf("previous bodies = %d, want 1", len(previousBodies))
+	if len(previousBodies) != 2 {
+		t.Fatalf("previous bodies = %d, want 2", len(previousBodies))
 	}
 	want, err := promptSeedMarkdown(seed)
 	if err != nil {
 		t.Fatalf("promptSeedMarkdown() error = %v", err)
 	}
-	previousBody := previousBodies[0]
+	previousBody := previousBodies[len(previousBodies)-1]
 	for _, profileState := range []string{"missing", "current", "custom"} {
 		t.Run(profileState, func(t *testing.T) {
 			store := &fakeAdminStore{

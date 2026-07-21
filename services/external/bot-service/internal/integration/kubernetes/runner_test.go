@@ -743,6 +743,7 @@ func TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects(t *testing.T) 
 		{Name: "SYNTHETIC_MATTERMOST_TOKEN", SecretName: "synthetic-runtime", SecretKey: "mattermost", Sensitive: true},
 		{Name: "SYNTHETIC_KUBERNETES_TOKEN", SecretName: "synthetic-runtime", SecretKey: "kubernetes", Sensitive: true},
 		{Name: "MATTERCODEX_DATABASE_DSN", SecretName: "synthetic-runtime", SecretKey: "postgres", Sensitive: true},
+		{Name: "STAGING_SERVER_HOST", SecretName: "synthetic-runtime", SecretKey: "host", Sensitive: false},
 	}
 	started, err := runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
 		SessionKey: "secret-matrix", Role: "developer", BotServiceURL: "http://bot-service",
@@ -769,6 +770,10 @@ func TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects(t *testing.T) 
 		!strings.Contains(string(renderedYAML), "mc-session-token-secret-matrix") ||
 		!strings.Contains(string(renderedYAML), "secretKeyRef") {
 		t.Fatal("отрендерованный Pod не сохранил ссылки на Secret и ключи")
+	}
+	containerEnv := pod.Spec.Containers[0].Env
+	if got := envValue(containerEnv, runtimeSensitiveEnvAllowlist); got != "MATTERCODEX_DATABASE_DSN,SYNTHETIC_KUBERNETES_TOKEN,SYNTHETIC_MATTERMOST_TOKEN" {
+		t.Fatalf("sensitive runtime allowlist = %q", got)
 	}
 	sessionSecret, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), started.SecretName, metav1.GetOptions{})
 	if err != nil || string(sessionSecret.Data["token"]) != secrets["session/MCP"] {
@@ -841,6 +846,41 @@ func TestStartAgentSessionFrozenTokenSecretUsesImmutableVersionBinding(t *testin
 	}
 	if !podUsesSessionTokenSecret(pod, input.PodTokenSecretName) {
 		t.Fatal("session pod does not use immutable token binding")
+	}
+}
+
+func TestPrepareClusterAdminSessionRuntimeCreatesAndReusesExactTokenBinding(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	client.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		secret := action.(k8stesting.CreateAction).GetObject().(*corev1.Secret).DeepCopy()
+		secret.Namespace = "mattermost"
+		secret.UID = "synthetic-prepared-secret-uid"
+		secret.ResourceVersion = "17"
+		if err := client.Tracker().Create(corev1.SchemeGroupVersion.WithResource("secrets"), secret, "mattermost"); err != nil {
+			return true, nil, err
+		}
+		return true, secret, nil
+	})
+	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost", WorkspaceStorageSize: "1Gi"})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	prepared, err := runner.PrepareClusterAdminSessionRuntime(context.Background(), "admin-session", "first-token")
+	if err != nil {
+		t.Fatalf("PrepareClusterAdminSessionRuntime() error = %v", err)
+	}
+	if !prepared.TokenSecret.Created || prepared.TokenSecret.Token != "first-token" || prepared.TokenSecret.Integrity.UID != "synthetic-prepared-secret-uid" {
+		t.Fatalf("prepared runtime = %#v", prepared)
+	}
+	if prepared.Namespace != "mattermost" || prepared.PodName != sessionPodName("admin-session") || prepared.PVCName != sessionPVCName("admin-session") {
+		t.Fatalf("prepared resource names = %#v", prepared)
+	}
+	reused, err := runner.PrepareClusterAdminSessionRuntime(context.Background(), "admin-session", "replacement-token")
+	if err != nil {
+		t.Fatalf("reused PrepareClusterAdminSessionRuntime() error = %v", err)
+	}
+	if reused.TokenSecret.Created || reused.TokenSecret.Token != "first-token" || reused.TokenSecret.Integrity != prepared.TokenSecret.Integrity {
+		t.Fatalf("reused runtime changed frozen token = %#v", reused)
 	}
 }
 

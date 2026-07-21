@@ -33,6 +33,7 @@ type admittedAdminStore struct {
 	allowed            bool
 	admission          securityrepo.ClusterAdminAdmissionInput
 	bindingAdmission   securityrepo.ClusterAdminBindingInput
+	bindingInputs      []securityrepo.ClusterAdminBindingInput
 	calls              int
 	bindingCalls       int
 	guardCalls         int
@@ -99,6 +100,17 @@ func (store *admittedAdminStore) WithExistingClusterAdminPersistenceGuard(_ cont
 	return store.withExistingClusterAdminGuard(input, func() error { return sideEffect(store) })
 }
 
+func (store *admittedAdminStore) CreateFrozenClusterAdminSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
+	session, created, err := store.fakeAdminStore.UpsertAgentSession(ctx, input)
+	if err == nil {
+		if store.frozenSessions == nil {
+			store.frozenSessions = map[string]bool{}
+		}
+		store.frozenSessions[input.SessionKey] = true
+	}
+	return session, created, err
+}
+
 func (store *admittedAdminStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
 	return store.fakeAdminStore.WithExactAgentSessionsRuntimeGuard(ctx, expected, func(adminrepo.Repository) error {
 		return sideEffect(store)
@@ -114,14 +126,18 @@ func (store *admittedAdminStore) withExistingClusterAdminGuard(input securityrep
 	return sideEffect()
 }
 
-func (store *admittedAdminStore) ListClusterAdminSecretIntegrity(context.Context, int64, string) ([]securityrepo.SecretIntegrityBinding, error) {
+func (store *admittedAdminStore) ListClusterAdminSecretIntegrity(_ context.Context, _ int64, sessionKey string) ([]securityrepo.SecretIntegrityBinding, error) {
+	sessionSecretRef := "session-secret"
+	if session, ok := store.fakeAdminStore.agentSessions[sessionKey]; ok && strings.TrimSpace(session.TokenSecretRef) != "" {
+		sessionSecretRef = session.TokenSecretRef
+	}
 	return []securityrepo.SecretIntegrityBinding{
 		{
 			Kind: "openai", SecretRef: "synthetic-openai-secret", SecretKey: "auth.json",
 			ContentSHA256: "synthetic-sha256", ResourceUID: "synthetic-uid", ResourceVersion: "1",
 		},
 		{
-			Kind: "session", SecretRef: "session-secret", SecretKey: "token",
+			Kind: "session", SecretRef: sessionSecretRef, SecretKey: "token",
 			ContentSHA256: "synthetic-sha256", ResourceUID: "synthetic-uid", ResourceVersion: "1",
 		},
 	}, nil
@@ -130,6 +146,7 @@ func (store *admittedAdminStore) ListClusterAdminSecretIntegrity(context.Context
 func (store *admittedAdminStore) AdmitExistingClusterAdminBinding(_ context.Context, input securityrepo.ClusterAdminBindingInput) (bool, error) {
 	store.bindingCalls++
 	store.bindingAdmission = input
+	store.bindingInputs = append(store.bindingInputs, input)
 	if store.denyBinding {
 		return false, nil
 	}
@@ -352,12 +369,55 @@ func TestClusterAdminNewSessionDeniedBeforeDatabaseAndRuntimeSideEffects(t *test
 	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
 		t.Fatalf("EnqueueAgentTurn() error = %v", err)
 	}
-	wantSessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-new")
-	if store.bindingAdmission.MattermostChannelID != "channel-existing" || store.bindingAdmission.SessionKey != wantSessionKey {
+	if store.bindingAdmission.MattermostChannelID != "channel-existing" || store.bindingAdmission.SessionKey != "" {
 		t.Fatalf("new session admission = %#v", store.bindingAdmission)
 	}
 	if len(baseStore.agentSessions) != 0 || len(baseStore.sessionTurns) != 0 || len(runner.sessionRuns) != 0 {
 		t.Fatalf("denied new session caused side effects: sessions=%#v turns=%#v runtime=%#v", baseStore.agentSessions, baseStore.sessionTurns, runner.sessionRuns)
+	}
+}
+
+func TestClusterAdminNewSessionUsesRoleChatAdmissionThenFreezesSession(t *testing.T) {
+	baseStore := chatRuntimeStore()
+	project := baseStore.projects[1]
+	role := entity.AgentRole{
+		ID: 1, ProjectID: project.ID, Name: "configured-admin", RoleType: "admin",
+		OpenAIAccountName: "main", KubernetesAccess: "cluster-admin", Enabled: true,
+	}
+	chat := entity.Chat{
+		ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Admin", Slug: "admin-chat", ChatType: "single_custom",
+	}
+	baseStore.agentRoles[role.ID] = role
+	baseStore.chats[chat.ID] = chat
+	baseStore.setChatBindings(chat.ID, []int64{role.ID}, nil)
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true}
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+	})
+	queued, err := svc.EnqueueAgentTurn(context.Background(), AgentTurnRequest{
+		Project: project, Chat: chat, Role: role, UserID: "owner-id", UserName: "owner",
+		UserMessage: "start", ReplyRootID: "root-new", SessionRootID: "root-new", SessionScope: agentSessionScopeThreadRole,
+	})
+	if err != nil {
+		t.Fatalf("EnqueueAgentTurn() error = %v; binding=%#v guards=%#v sessions=%#v runtime=%#v", err, store.bindingAdmission, store.guardInputs, baseStore.agentSessions, runner.sessionRuns)
+	}
+	wantSessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-new")
+	if queued.SessionKey != wantSessionKey || len(baseStore.agentSessions) != 1 || len(baseStore.sessionTurns) != 1 || len(runner.sessionRuns) != 1 {
+		t.Fatalf("new frozen session result=%#v sessions=%d turns=%d runtime=%d", queued, len(baseStore.agentSessions), len(baseStore.sessionTurns), len(runner.sessionRuns))
+	}
+	if len(store.bindingInputs) == 0 || store.bindingInputs[0].SessionKey != "" || len(store.guardInputs) == 0 || store.guardInputs[0].SessionKey != "" {
+		t.Fatalf("new session must begin with exact role/chat admission: bindings=%#v guards=%#v", store.bindingInputs, store.guardInputs)
+	}
+	foundSessionGuard := false
+	for _, input := range store.guardInputs {
+		if input.SessionKey == wantSessionKey {
+			foundSessionGuard = true
+			break
+		}
+	}
+	if !foundSessionGuard {
+		t.Fatalf("new session did not switch to immutable session guards: %#v", store.guardInputs)
 	}
 }
 
