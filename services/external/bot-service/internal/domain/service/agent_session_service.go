@@ -69,6 +69,7 @@ type AgentSessionServiceConfig struct {
 	ConversationReader         MattermostConversationReader
 	RoleBotManager             MattermostRoleBotManager
 	TurnDispatcher             AgentTurnDispatcher
+	AutomationCallbacks        AutomationCallbackCompleter
 	MenuActionURL              string
 	MattermostSiteURL          string
 	StorageReady               bool
@@ -78,6 +79,49 @@ type AgentSessionServiceConfig struct {
 	CallbackMaxChunkBytes      int
 	CallbackPublishConcurrency int
 	CallbackPublishDeadline    time.Duration
+}
+
+type CompleteAutomationCallbackCommand struct {
+	RunPublicID             string
+	CallbackContractVersion string
+	Outcome                 string
+	SafeSummary             string
+}
+
+func (svc *AgentSessionService) CompleteAutomationCallback(ctx context.Context, sessionKey string, token string, command CompleteAutomationCallbackCommand) (AutomationCallbackResult, error) {
+	if svc.cfg.AutomationCallbacks == nil {
+		return AutomationCallbackResult{}, errors.New("automation callbacks are not configured")
+	}
+	session, err := svc.authorize(ctx, sessionKey, token)
+	if err != nil {
+		return AutomationCallbackResult{}, err
+	}
+	var result AutomationCallbackResult
+	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "automation.callback.persist.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+		if current.ID != session.ID || current.ProjectID != session.ProjectID || current.ActiveTurnID <= 0 || strings.TrimSpace(current.ActiveRunID) == "" {
+			return errors.New("automation callback session binding is invalid")
+		}
+		turn, getErr := guardedStore.GetAgentSessionTurn(ctx, current.ActiveTurnID)
+		if getErr != nil {
+			return getErr
+		}
+		if turn.SessionID != current.ID || turn.ID != current.ActiveTurnID || turn.RunID != current.ActiveRunID || (turn.Status != agentSessionTurnRunning && turn.Status != agentSessionTurnQueued) {
+			return errors.New("automation callback turn binding is invalid")
+		}
+		var completeErr error
+		result, completeErr = svc.cfg.AutomationCallbacks.CompleteCallback(ctx, AutomationCallbackCommand{
+			RunPublicID:             command.RunPublicID,
+			ProjectID:               current.ProjectID,
+			RuntimeSessionID:        current.ID,
+			RuntimeTurnID:           turn.ID,
+			RuntimeRunID:            turn.RunID,
+			CallbackContractVersion: command.CallbackContractVersion,
+			Outcome:                 command.Outcome,
+			SafeSummary:             command.SafeSummary,
+		})
+		return completeErr
+	})
+	return result, err
 }
 
 type AgentSessionService struct {

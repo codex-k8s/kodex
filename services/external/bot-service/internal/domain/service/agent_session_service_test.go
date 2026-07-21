@@ -11,6 +11,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
@@ -90,6 +91,50 @@ func TestAgentSessionClaimReturnsAlreadyRunningTurnAfterLostResponse(t *testing.
 	}
 	if len(publisher.cards) != 1 {
 		t.Fatalf("status cards should not duplicate on retry: %#v", publisher.cards)
+	}
+}
+
+func TestAgentSessionAutomationCallbackUsesAuthenticatedExactBinding(t *testing.T) {
+	store, runner, _ := agentSessionStatusTestDeps()
+	store.agentSessions["session-1"] = withActiveTurn(store.agentSessions["session-1"], 1, "run-1")
+	store.sessionTurns[0].Status = agentSessionTurnRunning
+	completer := &fakeAutomationCallbackCompleter{result: AutomationCallbackResult{Run: entity.ScheduledRun{
+		PublicID: "scheduled-run-11111111111111111111111111111111",
+		Status:   string(value.AutomationRunStatusSucceeded),
+		Outcome:  string(value.AutomationRunOutcomeNoAction),
+	}}}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Store:               store,
+		RuntimeRunner:       runner,
+		AutomationCallbacks: completer,
+		StorageReady:        true,
+		RuntimeReady:        true,
+	})
+
+	result, err := svc.CompleteAutomationCallback(context.Background(), "session-1", "session-token", CompleteAutomationCallbackCommand{
+		RunPublicID:             "scheduled-run-11111111111111111111111111111111",
+		CallbackContractVersion: value.AutomationCallbackContractV1,
+		Outcome:                 string(value.AutomationRunOutcomeNoAction),
+		SafeSummary:             "Действия не требуются",
+	})
+	if err != nil || result.Run.PublicID == "" {
+		t.Fatalf("CompleteAutomationCallback() result=%#v error=%v", result, err)
+	}
+	if completer.calls != 1 || completer.command.ProjectID != 1 || completer.command.RuntimeSessionID != 1 || completer.command.RuntimeTurnID != 1 || completer.command.RuntimeRunID != "run-1" {
+		t.Fatalf("callback получил не серверную привязку: calls=%d command=%#v", completer.calls, completer.command)
+	}
+
+	store.sessionTurns[0].SessionID = 999
+	if _, err := svc.CompleteAutomationCallback(context.Background(), "session-1", "session-token", CompleteAutomationCallbackCommand{
+		RunPublicID:             "scheduled-run-11111111111111111111111111111111",
+		CallbackContractVersion: value.AutomationCallbackContractV1,
+		Outcome:                 string(value.AutomationRunOutcomeNoAction),
+		SafeSummary:             "Действия не требуются",
+	}); err == nil {
+		t.Fatal("callback с подменённой привязкой turn принят")
+	}
+	if completer.calls != 1 {
+		t.Fatalf("callback completer вызван после подмены scope: %d", completer.calls)
 	}
 }
 
@@ -1326,6 +1371,19 @@ type fakeAgentTurnDispatcher struct {
 	retryRequest AgentTurnRetryRequest
 	retryQueued  AgentTurnQueued
 	retryCalls   int
+}
+
+type fakeAutomationCallbackCompleter struct {
+	command AutomationCallbackCommand
+	result  AutomationCallbackResult
+	err     error
+	calls   int
+}
+
+func (completer *fakeAutomationCallbackCompleter) CompleteCallback(_ context.Context, command AutomationCallbackCommand) (AutomationCallbackResult, error) {
+	completer.calls++
+	completer.command = command
+	return completer.result, completer.err
 }
 
 func (dispatcher *fakeAgentTurnDispatcher) EnqueueAgentTurn(_ context.Context, request AgentTurnRequest) (AgentTurnQueued, error) {

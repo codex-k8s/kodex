@@ -97,6 +97,20 @@ type mcpOwnerAttentionInput struct {
 	IdempotencyKey string   `json:"idempotency_key" jsonschema:"stable key preventing duplicate notifications for the same decision"`
 }
 
+type mcpAutomationCallbackInput struct {
+	ScheduleRunID    string `json:"schedule_run_id" jsonschema:"public id of the scheduled automation run from the saved playbook"`
+	CallbackContract string `json:"callback_contract" jsonschema:"callback contract version from the saved playbook"`
+	Outcome          string `json:"outcome" jsonschema:"one of no_action, action_taken, requires_human, or failed"`
+	Summary          string `json:"summary" jsonschema:"brief safe result without secrets or raw prompts, max 1000 characters"`
+}
+
+type mcpAutomationCallbackOutput struct {
+	ScheduleRunID string `json:"schedule_run_id"`
+	Status        string `json:"status"`
+	Outcome       string `json:"outcome"`
+	Duplicate     bool   `json:"duplicate"`
+}
+
 func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBodyBytes int64) http.Handler {
 	if maximumBodyBytes <= 0 {
 		maximumBodyBytes = defaultMCPRequestBodyBytes
@@ -326,6 +340,30 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBod
 			return mcpToolError(err.Error()), emptyMCPWorkClaim(), nil
 		}
 		return nil, output, nil
+	})
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "mattermost_complete_automation",
+		Description: "Complete the currently bound scheduled automation run. The callback is accepted only for the authenticated current session and turn; an identical replay is idempotent.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpAutomationCallbackInput) (*mcp.CallToolResult, mcpAutomationCallbackOutput, error) {
+		sessionKey, token, ok := mcpSessionAuth(ctx)
+		if !ok {
+			return mcpToolError("session authorization is missing"), mcpAutomationCallbackOutput{}, nil
+		}
+		output, err := sessionService.CompleteAutomationCallback(ctx, sessionKey, token, statusservice.CompleteAutomationCallbackCommand{
+			RunPublicID:             input.ScheduleRunID,
+			CallbackContractVersion: input.CallbackContract,
+			Outcome:                 input.Outcome,
+			SafeSummary:             input.Summary,
+		})
+		if err != nil {
+			return mcpToolError("automation callback rejected"), mcpAutomationCallbackOutput{}, nil
+		}
+		return nil, mcpAutomationCallbackOutput{
+			ScheduleRunID: output.Run.PublicID,
+			Status:        output.Run.Status,
+			Outcome:       output.Run.Outcome,
+			Duplicate:     output.Duplicate,
+		}, nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_request_owner_attention",
