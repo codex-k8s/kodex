@@ -348,13 +348,15 @@ func TestAgentSessionCompleteUpdatesStatusWithCodexLimits(t *testing.T) {
 
 func TestAgentSessionProviderPolicyBlockStopsSessionWithoutRawProviderError(t *testing.T) {
 	store, runner, publisher := agentSessionStatusTestDeps()
+	reconciler := &fakeAutomationRuntimeReconciler{}
 	svc := NewAgentSessionService(AgentSessionServiceConfig{
-		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
-		Store:           store,
-		RuntimeRunner:   runner,
-		ThreadPublisher: publisher,
-		StorageReady:    true,
-		RuntimeReady:    true,
+		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
+		Store:                       store,
+		RuntimeRunner:               runner,
+		ThreadPublisher:             publisher,
+		AutomationRuntimeReconciler: reconciler,
+		StorageReady:                true,
+		RuntimeReady:                true,
 	})
 
 	claim, err := svc.ClaimNextTurn(context.Background(), "session-1", "session-token")
@@ -380,6 +382,9 @@ func TestAgentSessionProviderPolicyBlockStopsSessionWithoutRawProviderError(t *t
 	turn, err := store.GetAgentSessionTurn(context.Background(), claim.TurnID)
 	if err != nil || turn.Status != agentSessionTurnBlocked {
 		t.Fatalf("turn = %#v error=%v", turn, err)
+	}
+	if reconciler.calls != 1 || reconciler.commands[0].RuntimeSessionID != 1 || reconciler.commands[0].RuntimeTurnID != claim.TurnID || reconciler.commands[0].RuntimeRunID != claim.RunID || reconciler.commands[0].RuntimeStatus != agentSessionTurnBlocked {
+		t.Fatalf("blocked automation reconciliation = %#v", reconciler.commands)
 	}
 	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, "cyber safety") || strings.Contains(publisher.posts[0].Message, "raw provider response") {
 		t.Fatalf("posts = %#v", publisher.posts)
