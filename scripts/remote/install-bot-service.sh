@@ -119,6 +119,33 @@ apply_rendered_manifest_remote() {
   mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$output"
 }
 
+remote_kubernetes_object_revision() {
+  local kind="$1"
+  local name="$2"
+  local kind_q
+  local name_q
+  local identity
+  kind_q="$(mattercodex_shell_quote "$kind")"
+  name_q="$(mattercodex_shell_quote "$name")"
+  identity="$(mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q get $kind_q $name_q -o jsonpath='{.metadata.uid}:{.metadata.resourceVersion}' 2>/dev/null || true" </dev/null)"
+  if [ -z "$identity" ]; then
+    identity="missing"
+  fi
+  printf '%s/%s:%s\n' "$kind" "$name" "$identity"
+}
+
+render_remote_deployment_with_live_pod_inputs() {
+  MATTERCODEX_BOT_SERVICE_POD_INPUT_REVISION="$(mattercodex_pod_input_revision \
+    "$(remote_kubernetes_object_revision configmap "$MATTERCODEX_BOT_SERVICE_CONFIG_CONFIGMAP")" \
+    "$(remote_kubernetes_object_revision secret "$MATTERCODEX_BOT_SERVICE_SECRET")" \
+    "$(remote_kubernetes_object_revision secret "$MATTERCODEX_POSTGRES_SECRET")" \
+    "$(remote_kubernetes_object_revision secret "$MATTERCODEX_GITHUB_SECRET")")"
+  export MATTERCODEX_BOT_SERVICE_POD_INPUT_REVISION
+  mattercodex_render_template \
+    "$REPO_ROOT/deploy/k8s/bot-service/deployment.yaml.tpl" \
+    "$RENDER_DIR/30-deployment.yaml"
+}
+
 if [ "$DRY_RUN_MODE" = "server" ] && {
   ! mattercodex_ssh "$REMOTE_KUBECTL get namespace $NAMESPACE_Q >/dev/null 2>&1" ||
   ! mattercodex_ssh "$REMOTE_KUBECTL get namespace $RUNTIME_NAMESPACE_Q >/dev/null 2>&1"
@@ -502,7 +529,25 @@ for manifest in \
   "$RENDER_DIR/02-image-registry.yaml" \
   "$RENDER_DIR/03-kaniko-context-pvc.yaml" \
   "$RENDER_DIR/10-configmap.yaml" \
-  "$RENDER_DIR/20-rbac.yaml" \
+  "$RENDER_DIR/20-rbac.yaml"; do
+  if [ -f "$manifest" ]; then
+    manifest_dry_run_mode="$APPLY_DRY_RUN_MODE"
+    if [ "$APPLY_DRY_RUN_MODE" = "server" ]; then
+      case "$(basename "$manifest")" in
+        02-image-registry.yaml|03-kaniko-context-pvc.yaml)
+          manifest_dry_run_mode="client"
+          ;;
+      esac
+    fi
+    mattercodex_remote_kubectl_apply_stdin "$manifest_dry_run_mode" < "$manifest"
+  fi
+done
+
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  render_remote_deployment_with_live_pod_inputs
+fi
+
+for manifest in \
   "$RENDER_DIR/30-deployment.yaml" \
   "$RENDER_DIR/40-service.yaml" \
   "$RENDER_DIR/50-ingress.yaml"; do

@@ -477,6 +477,7 @@ type secretIntegrityStagingRow struct {
 	id         int64
 	secretName string
 	secretKey  string
+	sessionKey string
 }
 
 func prepareClusterAdminSecretIntegrity(ctx context.Context, dsn string, runtimeRunner runtimerepo.Runner) (int, error) {
@@ -487,7 +488,7 @@ func prepareClusterAdminSecretIntegrity(ctx context.Context, dsn string, runtime
 	defer db.Close()
 	rows, err := db.QueryContext(ctx, `
 select 'matter_codex_credentials', credential.id, credential.secret_ref,
-	case when account_kind = 'openai' then 'auth.json' else 'github-token' end
+	case when account_kind = 'openai' then 'auth.json' else 'github-token' end, ''
 from matter_codex_credentials credential
 join (
 	select distinct account.credential_id, 'openai' as account_kind
@@ -538,18 +539,18 @@ join (
 ) referenced on referenced.credential_id = credential.id
 where trim(credential.secret_ref) <> ''
 union all
-select 'matter_codex_project_runtime_variables', variable.id, variable.secret_ref, variable.secret_key
+select 'matter_codex_project_runtime_variables', variable.id, variable.secret_ref, variable.secret_key, ''
 from matter_codex_project_runtime_variables variable
 join matter_codex_agent_role_runtime_variables binding on binding.variable_id = variable.id
 join matter_codex_agent_roles role on role.id = binding.role_id
 where lower(trim(role.kubernetes_access)) = 'cluster-admin'
 union all
-select 'matter_codex_mattermost_bot_identities', binding.id, binding.token_secret_ref, 'token'
+select 'matter_codex_mattermost_bot_identities', binding.id, binding.token_secret_ref, 'token', ''
 from matter_codex_mattermost_bot_identities binding
 join matter_codex_agent_roles role on role.id = binding.role_id
 where lower(trim(role.kubernetes_access)) = 'cluster-admin'
 union all
-select 'matter_codex_agent_sessions', session.id, session.token_secret_ref, 'token'
+select 'matter_codex_agent_sessions', session.id, session.token_secret_ref, 'token', session.session_key
 from matter_codex_agent_sessions session
 join matter_codex_agent_roles role on role.id = session.role_id
 where lower(trim(role.kubernetes_access)) = 'cluster-admin'
@@ -562,7 +563,7 @@ where lower(trim(role.kubernetes_access)) = 'cluster-admin'
 	var bindings []secretIntegrityStagingRow
 	for rows.Next() {
 		var item secretIntegrityStagingRow
-		if err := rows.Scan(&item.tableName, &item.id, &item.secretName, &item.secretKey); err != nil {
+		if err := rows.Scan(&item.tableName, &item.id, &item.secretName, &item.secretKey, &item.sessionKey); err != nil {
 			return 0, fmt.Errorf("scan cluster-admin secret binding: %w", err)
 		}
 		bindings = append(bindings, item)
@@ -581,7 +582,18 @@ where lower(trim(role.kubernetes_access)) = 'cluster-admin'
 		})
 		if err != nil {
 			if binding.tableName == "matter_codex_agent_sessions" && errors.Is(err, runtimerepo.ErrSecretNotFound) {
-				if err := blockClusterAdminSessionWithMissingToken(ctx, db, binding.id); err != nil {
+				if err := isolateClusterAdminSessionWithMissingToken(
+					ctx,
+					binding.id,
+					binding.sessionKey,
+					func(ctx context.Context, sessionID int64, isolate func(context.Context) error) error {
+						return blockClusterAdminSessionWithMissingToken(ctx, db, sessionID, isolate)
+					},
+					func(ctx context.Context, sessionKey string) error {
+						_, cleanupErr := runtimeRunner.CleanupAgentSession(ctx, sessionKey)
+						return cleanupErr
+					},
+				); err != nil {
 					return blockedSessions, err
 				}
 				blockedSessions++
@@ -597,7 +609,31 @@ where lower(trim(role.kubernetes_access)) = 'cluster-admin'
 	return blockedSessions, nil
 }
 
-func blockClusterAdminSessionWithMissingToken(ctx context.Context, db *sql.DB, sessionID int64) error {
+func isolateClusterAdminSessionWithMissingToken(
+	ctx context.Context,
+	sessionID int64,
+	sessionKey string,
+	block func(context.Context, int64, func(context.Context) error) error,
+	cleanup func(context.Context, string) error,
+) error {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return fmt.Errorf("cluster-admin session %d with missing token has no session key", sessionID)
+	}
+	return block(ctx, sessionID, func(ctx context.Context) error {
+		if err := cleanup(ctx, sessionKey); err != nil {
+			return fmt.Errorf("delete cluster-admin session %d pod: %w", sessionID, err)
+		}
+		return nil
+	})
+}
+
+func blockClusterAdminSessionWithMissingToken(
+	ctx context.Context,
+	db *sql.DB,
+	sessionID int64,
+	isolate func(context.Context) error,
+) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin missing cluster-admin session token recovery: %w", err)
@@ -616,6 +652,9 @@ set status = 'failed',
 	finished_at = coalesce(finished_at, now()), updated_at = now()
 where session_id = $1 and status in ('queued', 'running')`, sessionID); err != nil {
 		return fmt.Errorf("fail unfinished turns for cluster-admin session %d with missing token: %w", sessionID, err)
+	}
+	if err := isolate(ctx); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit missing cluster-admin session token recovery: %w", err)

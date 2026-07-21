@@ -296,6 +296,12 @@ mattercodex_render_template() {
   envsubst < "$template" > "$output"
 }
 
+mattercodex_pod_input_revision() {
+  [ "$#" -gt 0 ] || mattercodex_die "для pod input revision нужен хотя бы один объект"
+  mattercodex_require_commands sha256sum
+  printf '%s\0' "$@" | sha256sum | awk '{print $1}'
+}
+
 mattercodex_kubectl_dry_run_arg() {
   local mode="${1:-server}"
   case "$mode" in

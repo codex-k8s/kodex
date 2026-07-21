@@ -139,6 +139,8 @@ bash scripts/k8s/verify-rendered-objects.sh --render-dir /tmp/matter-codex-bot-r
 
 При `--apply` remote deploy по умолчанию использует `MATTERCODEX_IMAGE_BUILD_STRATEGY=kaniko`: локально создается только tar build context, он передается по SSH во временный pod с PVC, а image собирается Kaniko Job внутри кластера и push'ится во встроенный MatterCodex registry. Kubelet тянет готовые image из этого registry через `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST`. Гигабайтные `docker save` archive через локальную сеть не передаются.
 
+Перед применением Deployment installer сначала применяет его ConfigMap и управляемые Secret, затем получает только Kubernetes `uid` и `resourceVersion` всех подключённых pod inputs: config ConfigMap, bot-service Secret, PostgreSQL Secret и GitHub Secret. Из этих безопасных идентификаторов вычисляется аннотация `matter-codex.kodex.works/pod-input-revision`; содержимое Secret в hash, манифест, лог или вывод не попадает. Неизменные inputs не меняют PodTemplate и не создают rollout. Ротация любого подключённого Secret или ConfigMap меняет одну revision-аннотацию, а смена image меняет штатное поле container image; в обоих случаях Kubernetes создаёт ровно один rollout без дополнительного `rollout restart`.
+
 Kaniko Job получает повышенные default resources для тяжелого `agent-runner` image и использует `--skip-unused-stages=true`, чтобы не строить нецелевые Dockerfile stages при `--target`.
 
 Для проверки сборки без изменения bot-service Deployment используйте `scripts/remote/install-bot-service.sh --env-file .env --apply --build-only` и выставьте `MATTERCODEX_BOT_SERVICE_BUILD_IMAGE=false` или `MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE=false`, если нужно собрать только один image.

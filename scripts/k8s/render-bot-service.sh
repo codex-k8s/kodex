@@ -48,8 +48,8 @@ if [ "$MATTERCODEX_IMAGE_BUILD_STRATEGY" = "kaniko" ]; then
 fi
 mattercodex_render_template "$TEMPLATE_DIR/configmap.yaml.tpl" "$RENDER_DIR/10-configmap.yaml"
 CONFIG_REVISION_OUTPUT="$(sha256sum "$RENDER_DIR/10-configmap.yaml")"
-MATTERCODEX_BOT_SERVICE_CONFIG_REVISION="${CONFIG_REVISION_OUTPUT%% *}"
-export MATTERCODEX_BOT_SERVICE_CONFIG_REVISION
+MATTERCODEX_BOT_SERVICE_POD_INPUT_REVISION="${CONFIG_REVISION_OUTPUT%% *}"
+export MATTERCODEX_BOT_SERVICE_POD_INPUT_REVISION
 if mattercodex_bool "$MATTERCODEX_RUNTIME_ENABLED" && mattercodex_bool "$MATTERCODEX_RUNTIME_LIMITS_ENABLED"; then
   mattercodex_render_template "$TEMPLATE_DIR/runtime-limits.yaml.tpl" "$RENDER_DIR/15-runtime-limits.yaml"
 fi
