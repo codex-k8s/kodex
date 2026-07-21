@@ -205,6 +205,9 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 	if err != nil {
 		return nil, err
 	}
+	if sessionMemoryRequest.Cmp(sessionMemoryLimit) > 0 {
+		return nil, fmt.Errorf("session memory request must not exceed session memory limit")
+	}
 	utilityMemoryLimit, err := parsePositiveResourceQuantity(cfg.UtilityMemoryLimit, runnerUtilityMemoryLimit, "utility memory limit")
 	if err != nil {
 		return nil, err

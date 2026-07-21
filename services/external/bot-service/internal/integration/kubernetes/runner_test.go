@@ -85,6 +85,15 @@ func TestInspectSecretIntegrityClassifiesMissingSecret(t *testing.T) {
 	}
 }
 
+func TestNewRunnerRejectsSessionMemoryRequestAboveLimit(t *testing.T) {
+	_, err := NewRunnerWithClient(fake.NewSimpleClientset(), Config{
+		Namespace: "mattermost", SessionMemoryRequest: "2Gi", SessionMemoryLimit: "1Gi",
+	})
+	if err == nil || !strings.Contains(err.Error(), "session memory request must not exceed") {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+}
+
 func TestStartSmokeRunCreatesPVCAndJob(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	runner, err := NewRunnerWithClient(client, Config{
