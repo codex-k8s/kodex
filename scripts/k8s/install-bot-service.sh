@@ -73,6 +73,29 @@ apply_rendered_manifest() {
   kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$output" >/dev/null
 }
 
+kubernetes_object_revision() {
+  local kind="$1"
+  local name="$2"
+  local identity
+  identity="$(kubectl -n "$MATTERCODEX_NAMESPACE" get "$kind" "$name" -o jsonpath='{.metadata.uid}:{.metadata.resourceVersion}' 2>/dev/null || true)"
+  if [ -z "$identity" ]; then
+    identity="missing"
+  fi
+  printf '%s/%s:%s\n' "$kind" "$name" "$identity"
+}
+
+render_deployment_with_live_pod_inputs() {
+  MATTERCODEX_BOT_SERVICE_POD_INPUT_REVISION="$(mattercodex_pod_input_revision \
+    "$(kubernetes_object_revision configmap "$MATTERCODEX_BOT_SERVICE_CONFIG_CONFIGMAP")" \
+    "$(kubernetes_object_revision secret "$MATTERCODEX_BOT_SERVICE_SECRET")" \
+    "$(kubernetes_object_revision secret "$MATTERCODEX_POSTGRES_SECRET")" \
+    "$(kubernetes_object_revision secret "$MATTERCODEX_GITHUB_SECRET")")"
+  export MATTERCODEX_BOT_SERVICE_POD_INPUT_REVISION
+  mattercodex_render_template \
+    "$REPO_ROOT/deploy/k8s/bot-service/deployment.yaml.tpl" \
+    "$RENDER_DIR/30-deployment.yaml"
+}
+
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE:-true}"; then
   mattercodex_require_commands docker
   mattercodex_log "сборка agent-runner image"
@@ -174,7 +197,17 @@ mattercodex_log "применяются манифесты bot-service"
 for manifest in \
   "$RENDER_DIR/10-configmap.yaml" \
   "$RENDER_DIR/15-runtime-limits.yaml" \
-  "$RENDER_DIR/20-rbac.yaml" \
+  "$RENDER_DIR/20-rbac.yaml"; do
+  if [ -f "$manifest" ]; then
+    kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$manifest" >/dev/null
+  fi
+done
+
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  render_deployment_with_live_pod_inputs
+fi
+
+for manifest in \
   "$RENDER_DIR/30-deployment.yaml" \
   "$RENDER_DIR/40-service.yaml" \
   "$RENDER_DIR/50-ingress.yaml"; do
@@ -187,8 +220,6 @@ if [ "$DRY_RUN_MODE" = "none" ]; then
   LEGACY_CODE_CONFIGMAP="${MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP:-matter-codex-bot-service-code}"
   mattercodex_log "удаляется legacy bot-service source ConfigMap, если он остался"
   kubectl -n "$MATTERCODEX_NAMESPACE" delete configmap "$LEGACY_CODE_CONFIGMAP" --ignore-not-found >/dev/null
-  mattercodex_log "перезапуск bot-service для применения image/config"
-  kubectl -n "$MATTERCODEX_NAMESPACE" rollout restart deployment/matter-codex-bot-service >/dev/null
   if mattercodex_bool "$WAIT"; then
     mattercodex_log "ожидание rollout bot-service"
     kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/matter-codex-bot-service --timeout=300s >/dev/null

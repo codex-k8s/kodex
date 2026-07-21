@@ -734,8 +734,8 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 		}
 	}
 	director := testRoleByName(t, store, 1, "director")
-	if !strings.Contains(director.PromptTemplate, "явное подтверждение") {
-		t.Fatalf("director prompt does not require owner approval: %q", director.PromptTemplate)
+	if !strings.Contains(director.PromptTemplate, "если инициатор ещё не одобрил режим и границы") || !strings.Contains(director.PromptTemplate, "Явное предварительное одобрение не дублируй") {
+		t.Fatalf("director prompt does not preserve approval without duplicate gates: %q", director.PromptTemplate)
 	}
 	director.Name = "руководитель"
 	store.agentRoles[director.ID] = director
@@ -5137,6 +5137,28 @@ func (store *fakeAdminStore) UpsertAgentPromptTemplate(_ context.Context, input 
 	}
 	store.promptTemplates[key] = item
 	return item, !exists, nil
+}
+
+func (store *fakeAdminStore) UpgradeUnmodifiedAgentPromptSeed(_ context.Context, input adminrepo.UpgradeAgentPromptSeedInput) (adminrepo.UpgradeAgentPromptSeedResult, error) {
+	store.ensurePromptTemplates()
+	store.ensureAgentRoles()
+	result := adminrepo.UpgradeAgentPromptSeedResult{}
+	key := promptTemplateMapKey(input.ProfileName, input.TemplateKey)
+	item, exists := store.promptTemplates[key]
+	if exists && item.Body == input.PreviousBody {
+		item.Body = input.Body
+		store.promptTemplates[key] = item
+		result.TemplatesUpdated = 1
+	}
+	for id, role := range store.agentRoles {
+		if role.PromptTemplate != input.PreviousBody || (!containsNormalized(input.RoleNames, role.Name) && !containsNormalized(input.RoleTypes, role.RoleType)) {
+			continue
+		}
+		role.PromptTemplate = input.Body
+		store.agentRoles[id] = role
+		result.RolesUpdated++
+	}
+	return result, nil
 }
 
 func (store *fakeAdminStore) ensurePromptTemplates() {

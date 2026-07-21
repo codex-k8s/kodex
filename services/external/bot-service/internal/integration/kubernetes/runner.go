@@ -62,7 +62,11 @@ const (
 	runnerGID                    = int64(10001)
 	runnerUtilityCPURequest      = "100m"
 	runnerUtilityMemoryRequest   = "128Mi"
-	runnerUtilityMemoryLimit     = "1Gi"
+	runnerSessionCPURequest      = "500m"
+	runnerSessionMemoryRequest   = "1Gi"
+	runnerSessionMemoryLimit     = "64Gi"
+	runnerUtilityMemoryLimit     = "4Gi"
+	runnerDevShmSizeLimit        = "8Gi"
 	kubernetesAccessReadOnly     = "read-only"
 	kubernetesAccessClusterAdmin = "cluster-admin"
 	sessionQuotaRetryRetention   = time.Hour
@@ -81,6 +85,11 @@ type Config struct {
 	AgentRunnerImage                      string
 	CodexPackage                          string
 	WorkspaceStorageSize                  string
+	SessionCPURequest                     string
+	SessionMemoryRequest                  string
+	SessionMemoryLimit                    string
+	UtilityMemoryLimit                    string
+	DevShmSizeLimit                       string
 	JobTTLSecondsAfterFinish              int32
 	AuthCheckJobTTLSecondsAfterFinish     int32
 	LogTailLines                          int64
@@ -98,6 +107,11 @@ type Runner struct {
 	agentRunnerImage                      string
 	codexPackage                          string
 	workspaceStorage                      resource.Quantity
+	sessionCPURequest                     resource.Quantity
+	sessionMemoryRequest                  resource.Quantity
+	sessionMemoryLimit                    resource.Quantity
+	utilityMemoryLimit                    resource.Quantity
+	devShmSizeLimit                       resource.Quantity
 	jobTTLSecondsAfterFinish              int32
 	authCheckJobTTLSecondsAfterFinish     int32
 	logTailLines                          int64
@@ -115,6 +129,9 @@ func (runner *Runner) InspectSecretIntegrity(ctx context.Context, input runtimer
 	}
 	secret, err := runner.client.CoreV1().Secrets(runner.namespace).Get(ctx, input.SecretName, metav1.GetOptions{})
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return runtimerepo.SecretIntegrity{}, fmt.Errorf("%w: %s", runtimerepo.ErrSecretNotFound, input.SecretName)
+		}
 		return runtimerepo.SecretIntegrity{}, fmt.Errorf("inspect secret metadata: %w", err)
 	}
 	value, ok := secret.Data[input.SecretKey]
@@ -176,6 +193,29 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 	if err != nil {
 		return nil, fmt.Errorf("parse workspace storage size: %w", err)
 	}
+	sessionCPURequest, err := parsePositiveResourceQuantity(cfg.SessionCPURequest, runnerSessionCPURequest, "session cpu request")
+	if err != nil {
+		return nil, err
+	}
+	sessionMemoryRequest, err := parsePositiveResourceQuantity(cfg.SessionMemoryRequest, runnerSessionMemoryRequest, "session memory request")
+	if err != nil {
+		return nil, err
+	}
+	sessionMemoryLimit, err := parsePositiveResourceQuantity(cfg.SessionMemoryLimit, runnerSessionMemoryLimit, "session memory limit")
+	if err != nil {
+		return nil, err
+	}
+	if sessionMemoryRequest.Cmp(sessionMemoryLimit) > 0 {
+		return nil, fmt.Errorf("session memory request must not exceed session memory limit")
+	}
+	utilityMemoryLimit, err := parsePositiveResourceQuantity(cfg.UtilityMemoryLimit, runnerUtilityMemoryLimit, "utility memory limit")
+	if err != nil {
+		return nil, err
+	}
+	devShmSizeLimit, err := parsePositiveResourceQuantity(cfg.DevShmSizeLimit, runnerDevShmSizeLimit, "dev shm size limit")
+	if err != nil {
+		return nil, err
+	}
 	return &Runner{
 		client:                                client,
 		restConfig:                            restConfig,
@@ -184,6 +224,11 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		agentRunnerImage:                      defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
 		codexPackage:                          defaultString(cfg.CodexPackage, "@openai/codex@0.144.1"),
 		workspaceStorage:                      storage,
+		sessionCPURequest:                     sessionCPURequest,
+		sessionMemoryRequest:                  sessionMemoryRequest,
+		sessionMemoryLimit:                    sessionMemoryLimit,
+		utilityMemoryLimit:                    utilityMemoryLimit,
+		devShmSizeLimit:                       devShmSizeLimit,
 		jobTTLSecondsAfterFinish:              defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
 		authCheckJobTTLSecondsAfterFinish:     defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),
 		logTailLines:                          defaultInt64(cfg.LogTailLines, 40),
@@ -1671,7 +1716,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 							Args:            []string{"smoke"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
-							Resources:       runnerUtilityResourceRequirements(),
+							Resources:       runner.runnerUtilityResourceRequirements(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: runID},
 								{Name: "MATTERCODEX_AGENT_ROLE", Value: role},
@@ -1690,7 +1735,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 								},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -1727,6 +1772,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 							Args:            []string{"developer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
+							Resources:       runner.runnerSessionResourceRequirements(),
 							Env: append([]corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
@@ -1793,7 +1839,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 								},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -1830,6 +1876,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 							Args:            []string{"reviewer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
+							Resources:       runner.runnerSessionResourceRequirements(),
 							Env: append([]corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
@@ -1894,7 +1941,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 								},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -1991,11 +2038,12 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 							Args:            []string{"chat"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
+							Resources:       runner.runnerSessionResourceRequirements(),
 							Env:             env,
 							VolumeMounts:    append(volumeMounts, runnerWritableVolumeMounts()...),
 						},
 					},
-					Volumes: append(volumes, runnerWritableVolumes()...),
+					Volumes: append(volumes, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -2123,11 +2171,12 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 					Args:            []string{"session"},
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					SecurityContext: runnerContainerSecurityContext(),
+					Resources:       runner.runnerSessionResourceRequirements(),
 					Env:             env,
 					VolumeMounts:    append(volumeMounts, runnerWritableVolumeMounts()...),
 				},
 			},
-			Volumes: append(volumes, runnerWritableVolumes()...),
+			Volumes: append(volumes, runner.runnerWritableVolumes()...),
 		},
 	}
 }
@@ -2158,7 +2207,7 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 							Args:            []string{"codex-auth"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
-							Resources:       runnerUtilityResourceRequirements(),
+							Resources:       runner.runnerUtilityResourceRequirements(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: accountName},
 								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: secretName},
@@ -2175,7 +2224,7 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -2208,7 +2257,7 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 							Args:            []string{"codex-auth-secret-check"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
-							Resources:       runnerUtilityResourceRequirements(),
+							Resources:       runner.runnerUtilityResourceRequirements(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: input.AccountName},
 								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: input.SecretName},
@@ -2237,7 +2286,7 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 								},
 							},
 						},
-					}, runnerWritableVolumes()...),
+					}, runner.runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -2827,6 +2876,17 @@ func defaultInt64(value int64, fallback int64) int64 {
 	return value
 }
 
+func parsePositiveResourceQuantity(value string, fallback string, field string) (resource.Quantity, error) {
+	quantity, err := resource.ParseQuantity(defaultString(value, fallback))
+	if err != nil {
+		return resource.Quantity{}, fmt.Errorf("parse %s: %w", field, err)
+	}
+	if quantity.Sign() <= 0 {
+		return resource.Quantity{}, fmt.Errorf("%s must be positive", field)
+	}
+	return quantity, nil
+}
+
 func runnerPodSecurityContext() *corev1.PodSecurityContext {
 	fsGroupChangePolicy := corev1.FSGroupChangeOnRootMismatch
 	return &corev1.PodSecurityContext{
@@ -2850,14 +2910,26 @@ func runnerContainerSecurityContext() *corev1.SecurityContext {
 	}
 }
 
-func runnerUtilityResourceRequirements() corev1.ResourceRequirements {
+func (runner *Runner) runnerUtilityResourceRequirements() corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse(runnerUtilityCPURequest),
 			corev1.ResourceMemory: resource.MustParse(runnerUtilityMemoryRequest),
 		},
 		Limits: corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse(runnerUtilityMemoryLimit),
+			corev1.ResourceMemory: runner.utilityMemoryLimit,
+		},
+	}
+}
+
+func (runner *Runner) runnerSessionResourceRequirements() corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    runner.sessionCPURequest,
+			corev1.ResourceMemory: runner.sessionMemoryRequest,
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: runner.sessionMemoryLimit,
 		},
 	}
 }
@@ -2870,11 +2942,11 @@ func runnerWritableVolumeMounts() []corev1.VolumeMount {
 	}
 }
 
-func runnerWritableVolumes() []corev1.Volume {
+func (runner *Runner) runnerWritableVolumes() []corev1.Volume {
 	return []corev1.Volume{
 		{Name: runnerHomeVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		{Name: runnerTmpVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-		{Name: runnerDevShmVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory}}},
+		{Name: runnerDevShmVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory, SizeLimit: &runner.devShmSizeLimit}}},
 	}
 }
 

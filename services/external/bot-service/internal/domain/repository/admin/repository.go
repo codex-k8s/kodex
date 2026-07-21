@@ -133,6 +133,24 @@ type UpsertAgentPromptTemplateInput struct {
 	Body        string
 }
 
+type UpgradeAgentPromptSeedInput struct {
+	ProfileName  string
+	TemplateKey  string
+	PreviousBody string
+	Body         string
+	RoleNames    []string
+	RoleTypes    []string
+}
+
+type UpgradeAgentPromptSeedResult struct {
+	TemplatesUpdated int
+	RolesUpdated     int
+}
+
+type AgentPromptSeedUpgradeRepository interface {
+	UpgradeUnmodifiedAgentPromptSeed(ctx context.Context, input UpgradeAgentPromptSeedInput) (UpgradeAgentPromptSeedResult, error)
+}
+
 type UpsertProjectInput struct {
 	Name              string
 	Slug              string

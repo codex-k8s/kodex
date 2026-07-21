@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -333,6 +334,11 @@ func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, boo
 		AgentRunnerImage:                      cfg.AgentRunnerImage,
 		CodexPackage:                          cfg.CodexPackage,
 		WorkspaceStorageSize:                  cfg.RuntimeWorkspaceSize,
+		SessionCPURequest:                     cfg.AgentSessionCPURequest,
+		SessionMemoryRequest:                  cfg.AgentSessionMemoryRequest,
+		SessionMemoryLimit:                    cfg.AgentSessionMemoryLimit,
+		UtilityMemoryLimit:                    cfg.AgentUtilityMemoryLimit,
+		DevShmSizeLimit:                       cfg.AgentDevShmSizeLimit,
 		JobTTLSecondsAfterFinish:              cfg.RuntimeJobTTLSeconds,
 		AuthCheckJobTTLSecondsAfterFinish:     cfg.AuthCheckJobTTLSeconds,
 		LogTailLines:                          cfg.RuntimeLogTailLines,
@@ -428,8 +434,12 @@ func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRu
 		if err := migrations.RunTo(ctx, cfg.MigrationsDatabaseDSN, 24); err != nil {
 			return nil, nil, fmt.Errorf("run storage migrations through integrity staging schema: %w", err)
 		}
-		if err := prepareClusterAdminSecretIntegrity(ctx, cfg.MigrationsDatabaseDSN, runtimeRunner); err != nil {
+		blockedSessions, err := prepareClusterAdminSecretIntegrity(ctx, cfg.MigrationsDatabaseDSN, runtimeRunner)
+		if err != nil {
 			return nil, nil, fmt.Errorf("prepare cluster-admin secret integrity: %w", err)
+		}
+		if blockedSessions > 0 {
+			logger.Warn("blocked cluster-admin sessions with missing runtime token secrets", "count", blockedSessions)
 		}
 		if err := migrations.RunForRuntimeRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User); err != nil {
 			return nil, nil, fmt.Errorf("run storage migrations: %w", err)
@@ -467,17 +477,18 @@ type secretIntegrityStagingRow struct {
 	id         int64
 	secretName string
 	secretKey  string
+	sessionKey string
 }
 
-func prepareClusterAdminSecretIntegrity(ctx context.Context, dsn string, runtimeRunner runtimerepo.Runner) error {
+func prepareClusterAdminSecretIntegrity(ctx context.Context, dsn string, runtimeRunner runtimerepo.Runner) (int, error) {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return fmt.Errorf("open integrity staging database: %w", err)
+		return 0, fmt.Errorf("open integrity staging database: %w", err)
 	}
 	defer db.Close()
 	rows, err := db.QueryContext(ctx, `
 select 'matter_codex_credentials', credential.id, credential.secret_ref,
-	case when account_kind = 'openai' then 'auth.json' else 'github-token' end
+	case when account_kind = 'openai' then 'auth.json' else 'github-token' end, ''
 from matter_codex_credentials credential
 join (
 	select distinct account.credential_id, 'openai' as account_kind
@@ -528,52 +539,125 @@ join (
 ) referenced on referenced.credential_id = credential.id
 where trim(credential.secret_ref) <> ''
 union all
-select 'matter_codex_project_runtime_variables', variable.id, variable.secret_ref, variable.secret_key
+select 'matter_codex_project_runtime_variables', variable.id, variable.secret_ref, variable.secret_key, ''
 from matter_codex_project_runtime_variables variable
 join matter_codex_agent_role_runtime_variables binding on binding.variable_id = variable.id
 join matter_codex_agent_roles role on role.id = binding.role_id
 where lower(trim(role.kubernetes_access)) = 'cluster-admin'
 union all
-select 'matter_codex_mattermost_bot_identities', binding.id, binding.token_secret_ref, 'token'
+select 'matter_codex_mattermost_bot_identities', binding.id, binding.token_secret_ref, 'token', ''
 from matter_codex_mattermost_bot_identities binding
 join matter_codex_agent_roles role on role.id = binding.role_id
 where lower(trim(role.kubernetes_access)) = 'cluster-admin'
 union all
-select 'matter_codex_agent_sessions', session.id, session.token_secret_ref, 'token'
+select 'matter_codex_agent_sessions', session.id, session.token_secret_ref, 'token', session.session_key
 from matter_codex_agent_sessions session
 join matter_codex_agent_roles role on role.id = session.role_id
 where lower(trim(role.kubernetes_access)) = 'cluster-admin'
-	and trim(session.token_secret_ref) <> ''`)
+	and trim(session.token_secret_ref) <> ''
+	and session.status not in ('blocked', 'closed')`)
 	if err != nil {
-		return fmt.Errorf("list cluster-admin secret bindings: %w", err)
+		return 0, fmt.Errorf("list cluster-admin secret bindings: %w", err)
 	}
 	defer rows.Close()
 	var bindings []secretIntegrityStagingRow
 	for rows.Next() {
 		var item secretIntegrityStagingRow
-		if err := rows.Scan(&item.tableName, &item.id, &item.secretName, &item.secretKey); err != nil {
-			return fmt.Errorf("scan cluster-admin secret binding: %w", err)
+		if err := rows.Scan(&item.tableName, &item.id, &item.secretName, &item.secretKey, &item.sessionKey); err != nil {
+			return 0, fmt.Errorf("scan cluster-admin secret binding: %w", err)
 		}
 		bindings = append(bindings, item)
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("read cluster-admin secret bindings: %w", err)
+		return 0, fmt.Errorf("read cluster-admin secret bindings: %w", err)
 	}
 	if len(bindings) > 0 && runtimeRunner == nil {
-		return fmt.Errorf("Kubernetes runtime is required to stage frozen secret integrity")
+		return 0, fmt.Errorf("Kubernetes runtime is required to stage frozen secret integrity")
 	}
+	blockedSessions := 0
 	for _, binding := range bindings {
 		integrity, err := runtimeRunner.InspectSecretIntegrity(ctx, runtimerepo.SecretIntegrityInput{
 			SecretName: binding.secretName,
 			SecretKey:  binding.secretKey,
 		})
 		if err != nil {
-			return fmt.Errorf("inspect frozen secret binding %s/%d: %w", binding.tableName, binding.id, err)
+			if binding.tableName == "matter_codex_agent_sessions" && errors.Is(err, runtimerepo.ErrSecretNotFound) {
+				if err := isolateClusterAdminSessionWithMissingToken(
+					ctx,
+					binding.id,
+					binding.sessionKey,
+					func(ctx context.Context, sessionID int64, isolate func(context.Context) error) error {
+						return blockClusterAdminSessionWithMissingToken(ctx, db, sessionID, isolate)
+					},
+					func(ctx context.Context, sessionKey string) error {
+						_, cleanupErr := runtimeRunner.CleanupAgentSession(ctx, sessionKey)
+						return cleanupErr
+					},
+				); err != nil {
+					return blockedSessions, err
+				}
+				blockedSessions++
+				continue
+			}
+			return blockedSessions, fmt.Errorf("inspect frozen secret binding %s/%d: %w", binding.tableName, binding.id, err)
 		}
 		statement := fmt.Sprintf(`update %s set secret_content_sha256 = $1, secret_resource_uid = $2, secret_resource_version = $3 where id = $4`, binding.tableName)
 		if _, err := db.ExecContext(ctx, statement, integrity.ContentSHA256, integrity.UID, integrity.ResourceVersion, binding.id); err != nil {
-			return fmt.Errorf("store frozen secret metadata for %s/%d: %w", binding.tableName, binding.id, err)
+			return blockedSessions, fmt.Errorf("store frozen secret metadata for %s/%d: %w", binding.tableName, binding.id, err)
 		}
+	}
+	return blockedSessions, nil
+}
+
+func isolateClusterAdminSessionWithMissingToken(
+	ctx context.Context,
+	sessionID int64,
+	sessionKey string,
+	block func(context.Context, int64, func(context.Context) error) error,
+	cleanup func(context.Context, string) error,
+) error {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return fmt.Errorf("cluster-admin session %d with missing token has no session key", sessionID)
+	}
+	return block(ctx, sessionID, func(ctx context.Context) error {
+		if err := cleanup(ctx, sessionKey); err != nil {
+			return fmt.Errorf("delete cluster-admin session %d pod: %w", sessionID, err)
+		}
+		return nil
+	})
+}
+
+func blockClusterAdminSessionWithMissingToken(
+	ctx context.Context,
+	db *sql.DB,
+	sessionID int64,
+	isolate func(context.Context) error,
+) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin missing cluster-admin session token recovery: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `
+update matter_codex_agent_sessions
+set status = 'blocked', active_turn_id = null, active_run_id = '', updated_at = now()
+where id = $1 and status not in ('blocked', 'closed')`, sessionID); err != nil {
+		return fmt.Errorf("block cluster-admin session %d with missing token: %w", sessionID, err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+update matter_codex_agent_session_turns
+set status = 'failed',
+	error_message = case when trim(error_message) = '' then 'cluster-admin session token secret is missing' else error_message end,
+	finished_at = coalesce(finished_at, now()), updated_at = now()
+where session_id = $1 and status in ('queued', 'running')`, sessionID); err != nil {
+		return fmt.Errorf("fail unfinished turns for cluster-admin session %d with missing token: %w", sessionID, err)
+	}
+	if err := isolate(ctx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit missing cluster-admin session token recovery: %w", err)
 	}
 	return nil
 }

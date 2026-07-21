@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -66,6 +67,30 @@ func TestInspectSecretIntegrityDetectsSameRefMutationWithoutReturningValue(t *te
 	}
 	if mutated.ContentSHA256 == integrity.ContentSHA256 || mutated.UID != integrity.UID {
 		t.Fatalf("same-ref mutation not represented safely: before=%#v after=%#v", integrity, mutated)
+	}
+}
+
+func TestInspectSecretIntegrityClassifiesMissingSecret(t *testing.T) {
+	runner, err := NewRunnerWithClient(fake.NewSimpleClientset(), Config{
+		Namespace: "mattermost", WorkspaceStorageSize: "1Gi",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	_, err = runner.InspectSecretIntegrity(context.Background(), runtimerepo.SecretIntegrityInput{
+		SecretName: "missing-runtime-secret", SecretKey: "token",
+	})
+	if !errors.Is(err, runtimerepo.ErrSecretNotFound) {
+		t.Fatalf("InspectSecretIntegrity() error = %v, want ErrSecretNotFound", err)
+	}
+}
+
+func TestNewRunnerRejectsSessionMemoryRequestAboveLimit(t *testing.T) {
+	_, err := NewRunnerWithClient(fake.NewSimpleClientset(), Config{
+		Namespace: "mattermost", SessionMemoryRequest: "2Gi", SessionMemoryLimit: "1Gi",
+	})
+	if err == nil || !strings.Contains(err.Error(), "session memory request must not exceed") {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
 	}
 }
 
@@ -408,6 +433,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 		t.Fatal("developer job should automount service account token for kubectl")
 	}
 	assertRunnerPodSecurity(t, podSpec)
+	assertRunnerSessionResources(t, podSpec.Containers[0].Resources)
 	if got := podSpec.Containers[0].Image; got != "matter-codex-agent-runner:test" {
 		t.Fatalf("runner image = %q", got)
 	}
@@ -494,6 +520,7 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 		t.Fatalf("args = %q", got)
 	}
 	assertRunnerPodSecurity(t, podSpec)
+	assertRunnerSessionResources(t, podSpec.Containers[0].Resources)
 	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_PR_NUMBER"); got != "12" {
 		t.Fatalf("MATTERCODEX_PR_NUMBER = %q", got)
 	}
@@ -550,6 +577,8 @@ func TestStartChatRunCreatesPVCAndJob(t *testing.T) {
 		t.Fatalf("Get job error = %v", err)
 	}
 	podSpec := job.Spec.Template.Spec
+	assertRunnerPodSecurity(t, podSpec)
+	assertRunnerSessionResources(t, podSpec.Containers[0].Resources)
 	if podSpec.AutomountServiceAccountToken == nil || !*podSpec.AutomountServiceAccountToken {
 		t.Fatal("chat job should automount service account token for kubectl")
 	}
@@ -617,6 +646,7 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 		t.Fatal("session pod should automount service account token for kubectl")
 	}
 	assertRunnerPodSecurity(t, podSpec)
+	assertRunnerSessionResources(t, podSpec.Containers[0].Resources)
 	container := podSpec.Containers[0]
 	if got := envValue(container.Env, "MATTERCODEX_MCP_URL"); got != "http://bot-service/mcp/sessions/project-1-chat-2-role-3" {
 		t.Fatalf("MATTERCODEX_MCP_URL = %q", got)
@@ -1908,7 +1938,7 @@ func assertRunnerPodSecurity(t *testing.T, podSpec corev1.PodSpec) {
 	if got := strings.Join(capabilitiesToStrings(container.SecurityContext.Capabilities.Drop), ","); got != "ALL" {
 		t.Fatalf("dropped capabilities = %q", got)
 	}
-	if !hasVolume(podSpec.Volumes, runnerHomeVolume) || !hasVolume(podSpec.Volumes, runnerTmpVolume) || !hasMemoryVolume(podSpec.Volumes, runnerDevShmVolume) {
+	if !hasVolume(podSpec.Volumes, runnerHomeVolume) || !hasVolume(podSpec.Volumes, runnerTmpVolume) || !hasMemoryVolumeWithSize(podSpec.Volumes, runnerDevShmVolume, runnerDevShmSizeLimit) {
 		t.Fatalf("writable volumes missing: %#v", podSpec.Volumes)
 	}
 	if !hasVolumeMount(container.VolumeMounts, runnerHomeVolume, runnerHomePath) || !hasVolumeMount(container.VolumeMounts, runnerTmpVolume, runnerTmpPath) || !hasVolumeMount(container.VolumeMounts, runnerDevShmVolume, runnerDevShmPath) {
@@ -1922,7 +1952,17 @@ func assertRunnerUtilityResources(t *testing.T, resources corev1.ResourceRequire
 	assertResourceQuantity(t, resources.Requests, corev1.ResourceMemory, runnerUtilityMemoryRequest)
 	assertResourceQuantity(t, resources.Limits, corev1.ResourceMemory, runnerUtilityMemoryLimit)
 	if _, exists := resources.Limits[corev1.ResourceCPU]; exists {
-		t.Fatalf("utility runner must not have CPU limit: %#v", resources.Limits)
+		t.Fatalf("utility runner must not have a cpu limit: %#v", resources.Limits)
+	}
+}
+
+func assertRunnerSessionResources(t *testing.T, resources corev1.ResourceRequirements) {
+	t.Helper()
+	assertResourceQuantity(t, resources.Requests, corev1.ResourceCPU, runnerSessionCPURequest)
+	assertResourceQuantity(t, resources.Requests, corev1.ResourceMemory, runnerSessionMemoryRequest)
+	assertResourceQuantity(t, resources.Limits, corev1.ResourceMemory, runnerSessionMemoryLimit)
+	if _, exists := resources.Limits[corev1.ResourceCPU]; exists {
+		t.Fatalf("session runner must not have a cpu limit: %#v", resources.Limits)
 	}
 }
 
@@ -1955,9 +1995,13 @@ func hasVolume(volumes []corev1.Volume, name string) bool {
 	return false
 }
 
-func hasMemoryVolume(volumes []corev1.Volume, name string) bool {
+func hasMemoryVolumeWithSize(volumes []corev1.Volume, name string, expected string) bool {
+	want := resource.MustParse(expected)
 	for _, volume := range volumes {
-		if volume.Name == name && volume.EmptyDir != nil && volume.EmptyDir.Medium == corev1.StorageMediumMemory {
+		if volume.Name != name || volume.EmptyDir == nil || volume.EmptyDir.Medium != corev1.StorageMediumMemory || volume.EmptyDir.SizeLimit == nil {
+			continue
+		}
+		if volume.EmptyDir.SizeLimit.Cmp(want) == 0 {
 			return true
 		}
 	}

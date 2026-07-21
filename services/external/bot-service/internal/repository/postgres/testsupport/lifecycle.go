@@ -283,7 +283,7 @@ from pg_control_system()
 	if localEndpoint(config.ConnConfig.Host) {
 		if identity.serverAddress != "" {
 			address := net.ParseIP(strings.TrimSpace(identity.serverAddress))
-			if address == nil || !address.IsLoopback() {
+			if address == nil || (!address.IsLoopback() && (!address.IsPrivate() || !explicitlyAllowedEndpoint(config))) {
 				return postgresServerIdentity{}, fmt.Errorf("локальный PostgreSQL endpoint разрешился во внешний endpoint")
 			}
 		}
@@ -1189,13 +1189,28 @@ func admitEndpoint(host string, port uint16) error {
 	if localEndpoint(host) {
 		return nil
 	}
-	endpoint := net.JoinHostPort(host, strconv.Itoa(int(port)))
-	for _, allowed := range strings.Split(os.Getenv("MATTERCODEX_POSTGRES_TEST_EPHEMERAL_ENDPOINTS"), ",") {
-		if strings.EqualFold(strings.TrimSpace(allowed), endpoint) && host != "" {
-			return nil
-		}
+	if explicitlyAllowedHostPort(host, port) {
+		return nil
 	}
 	return fmt.Errorf("PostgreSQL endpoint не входит в fail-closed ephemeral allowlist")
+}
+
+func explicitlyAllowedEndpoint(config *pgxpool.Config) bool {
+	return config != nil && explicitlyAllowedHostPort(config.ConnConfig.Host, config.ConnConfig.Port)
+}
+
+func explicitlyAllowedHostPort(host string, port uint16) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+	endpoint := net.JoinHostPort(host, strconv.Itoa(int(port)))
+	for _, allowed := range strings.Split(os.Getenv("MATTERCODEX_POSTGRES_TEST_EPHEMERAL_ENDPOINTS"), ",") {
+		if strings.EqualFold(strings.TrimSpace(allowed), endpoint) {
+			return true
+		}
+	}
+	return false
 }
 
 func localEndpoint(host string) bool {

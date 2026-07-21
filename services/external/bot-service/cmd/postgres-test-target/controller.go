@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/testsupport"
+	"github.com/jackc/pgx/v5/pgxpool"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -69,6 +70,18 @@ func startControllerPostgres(ctx context.Context, mode postgresTestMode, major s
 	if err != nil {
 		return nil, err
 	}
+	restoreAllowlist, err := allowControllerPostgresEndpoint(harness.bootstrapDSN)
+	if err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_ = harness.Close(cleanupCtx)
+		cancel()
+		return nil, err
+	}
+	closeController := harness.close
+	harness.close = func(closeCtx context.Context) error {
+		defer restoreAllowlist()
+		return closeController(closeCtx)
+	}
 	proof, err := testsupport.PrepareControllerOwnedPostgres(ctx, harness.bootstrapDSN, major)
 	if err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -78,6 +91,31 @@ func startControllerPostgres(ctx context.Context, mode postgresTestMode, major s
 	}
 	harness.bootstrapProof = proof
 	return harness, nil
+}
+
+func allowControllerPostgresEndpoint(dsn string) (func(), error) {
+	config, err := pgxpool.ParseConfig(dsn)
+	if err != nil || strings.TrimSpace(config.ConnConfig.Host) == "" || config.ConnConfig.Port == 0 {
+		return nil, fmt.Errorf("controller mode не получил exact PostgreSQL endpoint")
+	}
+	const variable = "MATTERCODEX_POSTGRES_TEST_EPHEMERAL_ENDPOINTS"
+	previous, existed := os.LookupEnv(variable)
+	endpoint := net.JoinHostPort(strings.TrimSpace(config.ConnConfig.Host), strconv.Itoa(int(config.ConnConfig.Port)))
+	values := make([]string, 0, 2)
+	if strings.TrimSpace(previous) != "" {
+		values = append(values, previous)
+	}
+	values = append(values, endpoint)
+	if err := os.Setenv(variable, strings.Join(values, ",")); err != nil {
+		return nil, fmt.Errorf("controller mode не зарегистрировал ephemeral PostgreSQL endpoint")
+	}
+	return func() {
+		if existed {
+			_ = os.Setenv(variable, previous)
+			return
+		}
+		_ = os.Unsetenv(variable)
+	}, nil
 }
 
 func postgresControllerImage(major string) (string, error) {

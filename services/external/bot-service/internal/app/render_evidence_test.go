@@ -71,6 +71,8 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 		t.Fatalf("число YAML-файлов = %d, ожидалось 8", len(yamlFiles))
 	}
 	objectCount := 0
+	var runtimeQuota map[string]any
+	var runtimeLimitRange map[string]any
 	for _, yamlFile := range yamlFiles {
 		file, err := os.Open(yamlFile)
 		if err != nil {
@@ -97,6 +99,12 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 				_ = file.Close()
 				t.Fatalf("%s содержит объект без kind/metadata.name", filepath.Base(yamlFile))
 			}
+			switch kind + "/" + name {
+			case "ResourceQuota/matter-codex-runtime-quota":
+				runtimeQuota = object
+			case "LimitRange/matter-codex-runtime-container-defaults":
+				runtimeLimitRange = object
+			}
 			objectCount++
 		}
 		if err := file.Close(); err != nil {
@@ -105,6 +113,51 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 	}
 	if objectCount != 18 {
 		t.Fatalf("число Kubernetes objects = %d, ожидалось 18", objectCount)
+	}
+	assertRenderedRuntimeResourcePolicy(t, runtimeQuota, runtimeLimitRange)
+}
+
+func assertRenderedRuntimeResourcePolicy(t *testing.T, quota map[string]any, limitRange map[string]any) {
+	t.Helper()
+	if quota == nil || limitRange == nil {
+		t.Fatalf("runtime ResourceQuota/LimitRange не найдены: quota=%t limitRange=%t", quota != nil, limitRange != nil)
+	}
+	hard := renderedNestedMap(t, renderedNestedMap(t, quota, "spec"), "hard")
+	if _, exists := hard["limits.memory"]; exists {
+		t.Fatalf("ResourceQuota не должна содержать aggregate limits.memory: %#v", hard)
+	}
+	assertNestedString(t, hard, "requests.cpu", "28")
+	assertNestedString(t, hard, "requests.memory", "96Gi")
+
+	limits, ok := renderedNestedMap(t, limitRange, "spec")["limits"].([]any)
+	if !ok || len(limits) != 1 {
+		t.Fatalf("LimitRange spec.limits = %#v", renderedNestedMap(t, limitRange, "spec")["limits"])
+	}
+	containerDefaults, ok := limits[0].(map[string]any)
+	if !ok {
+		t.Fatalf("LimitRange container defaults = %#v", limits[0])
+	}
+	if _, exists := containerDefaults["default"]; exists {
+		t.Fatalf("LimitRange не должна добавлять default limits: %#v", containerDefaults)
+	}
+	requests := renderedNestedMap(t, containerDefaults, "defaultRequest")
+	assertNestedString(t, requests, "cpu", "500m")
+	assertNestedString(t, requests, "memory", "1Gi")
+}
+
+func renderedNestedMap(t *testing.T, object map[string]any, key string) map[string]any {
+	t.Helper()
+	value, ok := object[key].(map[string]any)
+	if !ok {
+		t.Fatalf("поле %s = %#v, ожидался object", key, object[key])
+	}
+	return value
+}
+
+func assertNestedString(t *testing.T, object map[string]any, key string, expected string) {
+	t.Helper()
+	if got, ok := object[key].(string); !ok || got != expected {
+		t.Fatalf("поле %s = %#v, ожидалось %q", key, object[key], expected)
 	}
 }
 

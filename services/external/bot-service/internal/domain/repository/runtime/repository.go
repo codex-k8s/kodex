@@ -20,7 +20,10 @@ type SecretIntegrity struct {
 	ResourceVersion string
 }
 
-var ErrAgentSessionCapacity = errors.New("agent session runtime capacity unavailable")
+var (
+	ErrAgentSessionCapacity = errors.New("agent session runtime capacity unavailable")
+	ErrSecretNotFound       = errors.New("runtime secret not found")
+)
 
 type AgentSessionCapacityError struct {
 	Reason string

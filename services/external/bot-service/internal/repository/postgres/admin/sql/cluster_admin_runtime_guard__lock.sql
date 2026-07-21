@@ -29,4 +29,4 @@ where role.id = $1
 	and matter_codex_cluster_admin_binding_exact(role.id, chat.id)
 	and $5 <> ''
 	and chat.mattermost_channel_id = $5
-for share of project, role, subject, bot, frozen_bot, chat, binding, participant
+for share of project, role, bot, chat, participant

@@ -307,6 +307,33 @@ func (repo *Repository) UpsertAgentPromptTemplate(ctx context.Context, input adm
 	return item, created, nil
 }
 
+func (repo *Repository) UpgradeUnmodifiedAgentPromptSeed(ctx context.Context, input adminrepo.UpgradeAgentPromptSeedInput) (adminrepo.UpgradeAgentPromptSeedResult, error) {
+	var result adminrepo.UpgradeAgentPromptSeedResult
+	err := repo.db.QueryRow(ctx, query("agent_prompt_templates__upgrade_seed.sql"),
+		input.ProfileName,
+		input.TemplateKey,
+		input.PreviousBody,
+		input.Body,
+		normalizedPromptSeedKeys(input.RoleNames),
+		normalizedPromptSeedKeys(input.RoleTypes),
+	).Scan(&result.TemplatesUpdated, &result.RolesUpdated)
+	if err != nil {
+		return adminrepo.UpgradeAgentPromptSeedResult{}, fmt.Errorf("upgrade unmodified agent prompt seed: %w", err)
+	}
+	return result, nil
+}
+
+func normalizedPromptSeedKeys(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
 func (repo *Repository) UpsertOpenAIAccount(ctx context.Context, input adminrepo.UpsertOpenAIAccountInput) (entity.OpenAIAccount, bool, error) {
 	row := repo.db.QueryRow(ctx, query("openai_accounts__upsert.sql"),
 		input.Name,

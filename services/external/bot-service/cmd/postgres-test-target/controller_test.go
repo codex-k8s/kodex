@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -80,6 +81,22 @@ func TestParseLoopbackDockerPortRejectsBroadOrAmbiguousBinding(t *testing.T) {
 		if _, err := parseLoopbackDockerPort(value); err == nil {
 			t.Fatalf("небезопасный Docker port mapping принят: %q", value)
 		}
+	}
+}
+
+func TestAllowControllerPostgresEndpointRegistersAndRestoresExactEndpoint(t *testing.T) {
+	const variable = "MATTERCODEX_POSTGRES_TEST_EPHEMERAL_ENDPOINTS"
+	t.Setenv(variable, "10.0.0.8:15432")
+	restore, err := allowControllerPostgresEndpoint("host=127.0.0.1 port=25432 user=test dbname=postgres")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := os.Getenv(variable); got != "10.0.0.8:15432,127.0.0.1:25432" {
+		t.Fatalf("controller allowlist = %q", got)
+	}
+	restore()
+	if got := os.Getenv(variable); got != "10.0.0.8:15432" {
+		t.Fatalf("restored allowlist = %q", got)
 	}
 }
 
