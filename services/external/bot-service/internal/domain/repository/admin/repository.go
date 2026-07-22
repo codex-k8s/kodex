@@ -509,6 +509,10 @@ type ExactAgentSessionsRuntimeGuardRepository interface {
 	WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(Repository) error) error
 }
 
+type ExactAgentSessionsPublishGuardRepository interface {
+	WithExactAgentSessionsPublishGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(Repository) error) error
+}
+
 type ExactAgentSessionsPublishFenceRepository interface {
 	LockExactAgentSessionsPublishFence(ctx context.Context, expected []entity.AgentSession) error
 }

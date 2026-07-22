@@ -146,11 +146,11 @@ func (svc *AgentSessionService) withCurrentSessionsPublishGuard(ctx context.Cont
 }
 
 func (svc *AgentSessionService) withCurrentSessionsPublishStoreGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession, adminrepo.Repository) error) error {
-	repository, ok := svc.cfg.Store.(adminrepo.ExactAgentSessionsRuntimeGuardRepository)
+	repository, ok := svc.cfg.Store.(adminrepo.ExactAgentSessionsPublishGuardRepository)
 	if !ok {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
-	return repository.WithExactAgentSessionsRuntimeGuard(ctx, []entity.AgentSession{child, source}, func(lockedStore adminrepo.Repository) error {
+	return repository.WithExactAgentSessionsPublishGuard(ctx, []entity.AgentSession{child, source}, func(lockedStore adminrepo.Repository) error {
 		return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, lockedStore, child, source, operation+".dependencies", func(currentChild entity.AgentSession, currentSource entity.AgentSession, dependencyStore adminrepo.Repository) error {
 			fenceStore, ok := dependencyStore.(adminrepo.ExactAgentSessionsPublishFenceRepository)
 			if !ok {

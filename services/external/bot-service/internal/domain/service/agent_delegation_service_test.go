@@ -37,6 +37,10 @@ func (store *fakeAdminStore) WithExactAgentSessionsRuntimeGuard(_ context.Contex
 	return sideEffect(store)
 }
 
+func (store *fakeAdminStore) WithExactAgentSessionsPublishGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.WithExactAgentSessionsRuntimeGuard(ctx, expected, sideEffect)
+}
+
 func (store *fakeAdminStore) LockExactAgentSessionsPublishFence(_ context.Context, expected []entity.AgentSession) error {
 	if len(expected) == 0 {
 		return adminrepo.ErrClusterAdminAdmissionDenied
@@ -233,6 +237,14 @@ type delayedExactGuardFakeStore struct {
 }
 
 func (store *delayedExactGuardFakeStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.withExactAgentSessionsGuard(ctx, expected, false, sideEffect)
+}
+
+func (store *delayedExactGuardFakeStore) WithExactAgentSessionsPublishGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.withExactAgentSessionsGuard(ctx, expected, true, sideEffect)
+}
+
+func (store *delayedExactGuardFakeStore) withExactAgentSessionsGuard(ctx context.Context, expected []entity.AgentSession, publish bool, sideEffect func(adminrepo.Repository) error) error {
 	store.calls++
 	if store.calls == store.beforeAt && store.before != nil {
 		store.before()
@@ -245,6 +257,9 @@ func (store *delayedExactGuardFakeStore) WithExactAgentSessionsRuntimeGuard(ctx 
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+	}
+	if publish {
+		return store.fakeAdminStore.WithExactAgentSessionsPublishGuard(ctx, expected, sideEffect)
 	}
 	return store.fakeAdminStore.WithExactAgentSessionsRuntimeGuard(ctx, expected, sideEffect)
 }
@@ -286,6 +301,18 @@ func TestCallbackDeliveriesCompleteRequiresBothExactDestinations(t *testing.T) {
 	child.Status = callbackDeliveryStatusPending
 	if callbackDeliveriesComplete([]entity.AgentDelegationCallbackDelivery{source, child}) {
 		t.Fatal("partial delivered source+child plan принят как полный")
+	}
+}
+
+func TestCallbackDeliveryAttemptBudgetCoversSharedPreflightAndTransport(t *testing.T) {
+	preflightDeadline := 125 * time.Millisecond
+	publishDeadline := 75 * time.Millisecond
+	want := preflightDeadline + publishDeadline + callbackDeliveryLeaseSafetyMargin
+	if got := callbackDeliveryAttemptBudget(preflightDeadline, publishDeadline); got != want {
+		t.Fatalf("callback delivery attempt budget=%s, want %s", got, want)
+	}
+	if got := callbackDeliveryTransportBudget(publishDeadline); got != publishDeadline+callbackDeliveryLeaseSafetyMargin {
+		t.Fatalf("callback delivery transport budget=%s", got)
 	}
 }
 
@@ -409,7 +436,7 @@ func TestReturnToRequesterReclaimedLeaseFailsClosedBeforeTransport(t *testing.T)
 	if err == nil || !errors.Is(err, errCallbackDeliveryLeaseOwnershipLost) || result.CallbackRunID != "callback-run" {
 		t.Fatalf("stale owner result=%#v error=%v", result, err)
 	}
-	if len(publisher.posts) != 1 {
+	if len(publisher.posts) != 0 {
 		t.Fatalf("stale owner достиг transport: posts=%d", len(publisher.posts))
 	}
 
