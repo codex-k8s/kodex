@@ -674,7 +674,12 @@ func isMCPLoopbackAddress(address string) bool {
 }
 
 func hasDuplicateMCPMediaParameter(value string) bool {
-	seen := make(map[string]struct{})
+	type parameterRepresentation struct {
+		continuation      bool
+		continuationParts map[string]struct{}
+	}
+
+	seen := make(map[string]parameterRepresentation)
 	parameterStart := -1
 	inQuotes := false
 	escaped := false
@@ -701,16 +706,52 @@ func hasDuplicateMCPMediaParameter(value string) bool {
 			parameter := strings.TrimSpace(value[parameterStart:index])
 			if parameter != "" {
 				name, _, _ := strings.Cut(parameter, "=")
-				name = strings.ToLower(strings.TrimSpace(name))
-				if _, duplicate := seen[name]; duplicate {
+				baseName, continuationPart, continuation := canonicalMCPMediaParameterName(name)
+				representation, exists := seen[baseName]
+				if exists && (!continuation || !representation.continuation) {
 					return true
 				}
-				seen[name] = struct{}{}
+				if !exists {
+					representation = parameterRepresentation{continuation: continuation}
+					if continuation {
+						representation.continuationParts = make(map[string]struct{})
+					}
+				}
+				if continuation {
+					if _, duplicate := representation.continuationParts[continuationPart]; duplicate {
+						return true
+					}
+					representation.continuationParts[continuationPart] = struct{}{}
+				}
+				seen[baseName] = representation
 			}
 		}
 		parameterStart = index + 1
 	}
 	return false
+}
+
+func canonicalMCPMediaParameterName(name string) (string, string, bool) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	baseName, suffix, extended := strings.Cut(name, "*")
+	if !extended {
+		return name, "", false
+	}
+
+	continuationPart := strings.TrimSuffix(suffix, "*")
+	if continuationPart == "" {
+		return baseName, "", false
+	}
+	for index := range len(continuationPart) {
+		if continuationPart[index] < '0' || continuationPart[index] > '9' {
+			return baseName, "", false
+		}
+	}
+	continuationPart = strings.TrimLeft(continuationPart, "0")
+	if continuationPart == "" {
+		continuationPart = "0"
+	}
+	return baseName, continuationPart, true
 }
 
 func readBoundedMCPRequestBody(w http.ResponseWriter, r *http.Request, maximumBodyBytes int64) error {
