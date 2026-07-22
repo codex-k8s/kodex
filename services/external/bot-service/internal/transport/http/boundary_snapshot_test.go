@@ -110,8 +110,8 @@ func productionIngressPaths(ingress networkingv1.Ingress) ([]string, error) {
 			if path.Path == "/" {
 				return nil, fmt.Errorf("production Ingress публикует корневой маршрут")
 			}
-			if path.PathType == nil || *path.PathType != networkingv1.PathTypeExact {
-				return nil, fmt.Errorf("маршрут %q должен иметь pathType Exact", path.Path)
+			if path.PathType == nil || (*path.PathType != networkingv1.PathTypeExact && !(path.Path == pathControlCenter && *path.PathType == networkingv1.PathTypePrefix)) {
+				return nil, fmt.Errorf("маршрут %q имеет недопустимый pathType", path.Path)
 			}
 			if path.Backend.Service == nil || path.Backend.Service.Name != "matter-codex-bot-service" {
 				return nil, fmt.Errorf("маршрут %q направлен не в matter-codex-bot-service", path.Path)

@@ -161,10 +161,14 @@ type mcpAutomationCallbackInput struct {
 }
 
 type mcpAutomationCallbackOutput struct {
-	ScheduleRunID string `json:"schedule_run_id"`
-	Status        string `json:"status"`
-	Outcome       string `json:"outcome"`
-	Duplicate     bool   `json:"duplicate"`
+	ScheduleRunID       string `json:"schedule_run_id"`
+	Status              string `json:"status"`
+	Outcome             string `json:"outcome"`
+	Duplicate           bool   `json:"duplicate"`
+	OwnerAttentionID    int64  `json:"owner_attention_id,omitempty"`
+	HumanDecisionStatus string `json:"human_decision_status,omitempty"`
+	DeliveryStatus      string `json:"delivery_status,omitempty"`
+	NextAction          string `json:"next_action,omitempty"`
 }
 
 func automationCallbackInputSchema() map[string]any {
@@ -186,7 +190,7 @@ func automationCallbackInputSchema() map[string]any {
 			"outcome": map[string]any{
 				"type": "string", "minLength": 6, "maxLength": 14,
 				"enum":        []string{"no_action", "action_taken", "requires_human", "failed"},
-				"description": "terminal automation outcome",
+				"description": "automation outcome; requires_human remains pending until the root initiator replies",
 			},
 			"summary": map[string]any{
 				"type": "string", "minLength": 1, "maxLength": 1000,
@@ -438,7 +442,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_complete_automation",
-		Description: "Complete the exactly bound scheduled automation run. The first callback requires the authenticated live session and turn; an accepted identical replay uses the persisted binding and exact payload hash.",
+		Description: "Submit the outcome for the exactly bound scheduled automation run. The first callback requires the authenticated live session and turn; requires_human remains waiting for the saved root initiator, and an identical replay uses the persisted binding and exact payload hash.",
 		InputSchema: automationCallbackInputSchema(),
 	}, func(ctx context.Context, request *mcp.CallToolRequest, input mcpAutomationCallbackInput) (*mcp.CallToolResult, mcpAutomationCallbackOutput, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
@@ -455,12 +459,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 		if err != nil {
 			return mcpToolError("automation callback rejected"), mcpAutomationCallbackOutput{}, nil
 		}
-		return nil, mcpAutomationCallbackOutput{
-			ScheduleRunID: output.Run.PublicID,
-			Status:        output.Run.Status,
-			Outcome:       output.Run.Outcome,
-			Duplicate:     output.Duplicate,
-		}, nil
+		return nil, automationCallbackMCPOutput(output), nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_request_owner_attention",
@@ -672,6 +671,19 @@ func isMCPLoopbackAddress(address string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+func automationCallbackMCPOutput(output statusservice.AutomationCallbackResult) mcpAutomationCallbackOutput {
+	return mcpAutomationCallbackOutput{
+		ScheduleRunID:       output.Run.PublicID,
+		Status:              output.Run.Status,
+		Outcome:             output.Run.Outcome,
+		Duplicate:           output.Duplicate,
+		OwnerAttentionID:    output.OwnerAttentionID,
+		HumanDecisionStatus: output.HumanDecisionStatus,
+		DeliveryStatus:      output.DeliveryStatus,
+		NextAction:          output.NextAction,
+	}
 }
 
 type mcpMediaParameter struct {

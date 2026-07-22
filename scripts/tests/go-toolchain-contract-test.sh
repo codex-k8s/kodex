@@ -37,7 +37,45 @@ expect_failure() {
   fi
 }
 
-"$guard" --root "$repo_root" --static-only >/dev/null
+expect_failure_matching() {
+  local description="$1"
+  local expected="$2"
+  local actual_status
+  shift 2
+
+  if "$@" >"$temp_root/output" 2>&1; then
+    actual_status=0
+  else
+    actual_status=$?
+  fi
+  if [[ "$actual_status" == 0 ]]; then
+    echo "FAIL: $description не был отклонён" >&2
+    exit 1
+  fi
+  if [[ "$actual_status" != 1 ]]; then
+    echo "FAIL: $description завершился с exit $actual_status вместо 1" >&2
+    sed -n '1,80p' "$temp_root/output" >&2
+    exit 1
+  fi
+  if ! grep -Fq "$expected" "$temp_root/output"; then
+    echo "FAIL: $description отклонён не по ожидаемой причине" >&2
+    sed -n '1,80p' "$temp_root/output" >&2
+    exit 1
+  fi
+}
+
+expect_success() {
+  local description="$1"
+  shift
+
+  if ! "$@" >"$temp_root/output" 2>&1; then
+    echo "FAIL: $description завершился ошибкой" >&2
+    sed -n '1,80p' "$temp_root/output" >&2
+    exit 1
+  fi
+}
+
+expect_success "неизменённый GOTOOLCHAIN=local" "$guard" --root "$repo_root" --static-only
 
 below_floor="$temp_root/below-floor"
 copy_fixture "$below_floor"
@@ -63,6 +101,230 @@ runtime_check_missing="$temp_root/runtime-check-missing"
 copy_fixture "$runtime_check_missing"
 sed -i '/^RUN test "$(\/usr\/local\/go\/bin\/go env GOVERSION)" = "go1\.26\.5" && test "$(\/usr\/local\/go\/bin\/go env GOTOOLCHAIN)" = "local"$/d' "$runtime_check_missing/deploy/images/agent-runner/Dockerfile"
 expect_failure "точная проверка Go отсутствует в deploy final runtime stage" "$guard" --root "$runtime_check_missing" --static-only
+
+runtime_final_local="$temp_root/runtime-final-local"
+copy_fixture "$runtime_final_local"
+cat >>"$runtime_final_local/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN=auto
+ENV PATH=/usr/local/go/bin:/usr/local/bin \
+    GOTOOLCHAIN="local"
+EOF
+cat >>"$runtime_final_local/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN=auto
+ENV PATH=/usr/local/go/bin:/usr/local/bin \
+    GOTOOLCHAIN="local"
+EOF
+expect_success "последний GOTOOLCHAIN=local определяет эффективное значение" "$guard" --root "$runtime_final_local" --static-only
+
+legacy_runtime_final_local="$temp_root/legacy-runtime-final-local"
+copy_fixture "$legacy_runtime_final_local"
+cat >>"$legacy_runtime_final_local/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN auto
+ENV GOTOOLCHAIN local
+EOF
+expect_success "устаревший ENV сохраняет итоговый GOTOOLCHAIN=local" "$guard" --root "$legacy_runtime_final_local" --static-only
+
+services_runtime_override="$temp_root/services-runtime-override"
+copy_fixture "$services_runtime_override"
+printf '\nENV GOTOOLCHAIN=auto\n' >>"$services_runtime_override/services/jobs/agent-runner/Dockerfile"
+expect_failure_matching \
+  "поздний GOTOOLCHAIN=auto в services final runtime stage" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_runtime_override" --static-only
+
+deploy_runtime_override="$temp_root/deploy-runtime-override"
+copy_fixture "$deploy_runtime_override"
+printf '\nENV GOTOOLCHAIN=auto\n' >>"$deploy_runtime_override/deploy/images/agent-runner/Dockerfile"
+expect_failure_matching \
+  "поздний GOTOOLCHAIN=auto в deploy final runtime stage" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_runtime_override" --static-only
+
+services_multiline_override="$temp_root/services-multiline-override"
+copy_fixture "$services_multiline_override"
+cat >>"$services_multiline_override/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV PATH=/usr/local/go/bin:/usr/local/bin \
+    GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "многострочный GOTOOLCHAIN=auto в services final runtime stage" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_multiline_override" --static-only
+
+deploy_multiline_override="$temp_root/deploy-multiline-override"
+copy_fixture "$deploy_multiline_override"
+cat >>"$deploy_multiline_override/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+ENV PATH=/usr/local/go/bin:/usr/local/bin \
+    GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "многострочный GOTOOLCHAIN=auto в deploy final runtime stage" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_multiline_override" --static-only
+
+ambiguous_runtime_env="$temp_root/ambiguous-runtime-env"
+copy_fixture "$ambiguous_runtime_env"
+printf '\nENV PATH=/usr/local/bin GOTOOLCHAIN\n' >>"$ambiguous_runtime_env/services/jobs/agent-runner/Dockerfile"
+expect_failure_matching \
+  "неоднозначный ENV-синтаксис с GOTOOLCHAIN" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage содержит неоднозначный ENV-синтаксис" \
+  "$guard" --root "$ambiguous_runtime_env" --static-only
+
+services_lowercase_final_from="$temp_root/services-lowercase-final-from"
+copy_fixture "$services_lowercase_final_from"
+printf '\nfrom scratch\n' >>"$services_lowercase_final_from/services/jobs/agent-runner/Dockerfile"
+expect_failure_matching \
+  "строчная новая final stage в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-bookworm', найден 'FROM scratch'" \
+  "$guard" --root "$services_lowercase_final_from" --static-only
+
+deploy_indented_final_from="$temp_root/deploy-indented-final-from"
+copy_fixture "$deploy_indented_final_from"
+printf '\n  FROM scratch\n' >>"$deploy_indented_final_from/deploy/images/agent-runner/Dockerfile"
+expect_failure_matching \
+  "новая final stage с отступом в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-alpine', найден 'FROM scratch'" \
+  "$guard" --root "$deploy_indented_final_from" --static-only
+
+services_three_slash_final_from="$temp_root/services-three-slash-final-from"
+copy_fixture "$services_three_slash_final_from"
+cat >>"$services_three_slash_final_from/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+RUN true \\\
+FROM scratch
+EOF
+expect_failure_matching \
+  "три завершающих backslash перед новой final stage в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-bookworm', найден 'FROM scratch'" \
+  "$guard" --root "$services_three_slash_final_from" --static-only
+
+deploy_three_slash_final_from="$temp_root/deploy-three-slash-final-from"
+copy_fixture "$deploy_three_slash_final_from"
+cat >>"$deploy_three_slash_final_from/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+RUN true \\\
+FROM scratch
+EOF
+expect_failure_matching \
+  "три завершающих backslash перед новой final stage в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-alpine', найден 'FROM scratch'" \
+  "$guard" --root "$deploy_three_slash_final_from" --static-only
+
+services_split_instruction="$temp_root/services-split-instruction"
+copy_fixture "$services_split_instruction"
+cat >>"$services_split_instruction/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+EN\
+# строка комментария внутри продолжения
+V GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "разрыв имени ENV-инструкции в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_split_instruction" --static-only
+
+services_split_key="$temp_root/services-split-key"
+copy_fixture "$services_split_key"
+cat >>"$services_split_key/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOO\
+LCHAIN=auto
+EOF
+expect_failure_matching \
+  "разрыв имени GOTOOLCHAIN в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_split_key" --static-only
+
+deploy_split_instruction="$temp_root/deploy-split-instruction"
+copy_fixture "$deploy_split_instruction"
+cat >>"$deploy_split_instruction/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+EN\
+V GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "разрыв имени ENV-инструкции в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_split_instruction" --static-only
+
+deploy_split_key="$temp_root/deploy-split-key"
+copy_fixture "$deploy_split_key"
+cat >>"$deploy_split_key/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOO\
+LCHAIN=auto
+EOF
+expect_failure_matching \
+  "разрыв имени GOTOOLCHAIN в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_split_key" --static-only
+
+services_three_slash_override="$temp_root/services-three-slash-override"
+copy_fixture "$services_three_slash_override"
+cat >>"$services_three_slash_override/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+RUN true \\\
+ENV GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "три завершающих backslash перед поздним GOTOOLCHAIN=auto в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_three_slash_override" --static-only
+
+deploy_three_slash_override="$temp_root/deploy-three-slash-override"
+copy_fixture "$deploy_three_slash_override"
+cat >>"$deploy_three_slash_override/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+RUN true \\\
+ENV GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "три завершающих backslash перед поздним GOTOOLCHAIN=auto в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_three_slash_override" --static-only
+
+services_heredoc="$temp_root/services-heredoc"
+copy_fixture "$services_heredoc"
+cat >>"$services_heredoc/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN=auto
+COPY <<EOF_HEREDOC /tmp/gotoolchain-proof
+FROM scratch
+ENV GOTOOLCHAIN="local"
+EOF_HEREDOC
+EOF
+expect_failure_matching \
+  "heredoc с ложными FROM и ENV в services Dockerfile" \
+  "Dockerfile heredoc не поддерживается проверкой final runtime stage" \
+  "$guard" --root "$services_heredoc" --static-only
+
+deploy_heredoc="$temp_root/deploy-heredoc"
+copy_fixture "$deploy_heredoc"
+cat >>"$deploy_heredoc/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN=auto
+COPY <<EOF_HEREDOC /tmp/gotoolchain-proof
+FROM scratch
+ENV GOTOOLCHAIN="local"
+EOF_HEREDOC
+EOF
+expect_failure_matching \
+  "heredoc с ложными FROM и ENV в deploy Dockerfile" \
+  "Dockerfile heredoc не поддерживается проверкой final runtime stage" \
+  "$guard" --root "$deploy_heredoc" --static-only
+
+escape_parser_directive="$temp_root/escape-parser-directive"
+copy_fixture "$escape_parser_directive"
+sed -i '1i# escape=`' "$escape_parser_directive/services/jobs/agent-runner/Dockerfile"
+expect_failure_matching \
+  "нестандартный Dockerfile escape parser directive" \
+  "Dockerfile parser directive escape не поддерживается проверкой final runtime stage" \
+  "$guard" --root "$escape_parser_directive" --static-only
 
 govulncheck_version_desync="$temp_root/govulncheck-version-desync"
 copy_fixture "$govulncheck_version_desync"
@@ -118,4 +380,4 @@ expect_failure "GOVULNCHECK_VERSION command injection" env \
   exit 1
 }
 
-echo "PASS: Go toolchain contract отклоняет старую версию, runtime-stage drift и govulncheck injection"
+echo "PASS: Go toolchain contract отклоняет старую версию, итоговый runtime-stage drift и govulncheck injection"

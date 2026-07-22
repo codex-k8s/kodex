@@ -79,6 +79,53 @@ type ScheduledRun struct {
 	UpdatedAt               time.Time
 }
 
+type AutomationOwnerGateContext struct {
+	ScheduledRunID       int64
+	ScheduledRunPublicID string
+	ProjectID            int64
+	RuntimeTurnID        int64
+	ProcessRunID         int64
+	ProcessPublicID      string
+	PolicyRevisionID     int64
+	RootInitiatorUserID  string
+	RootInitiatorName    string
+	MattermostChannelID  string
+	MattermostRootPostID string
+}
+
+type AutomationOwnerAttentionDelivery struct {
+	AttentionID           int64
+	ScheduledRunID        int64
+	ScheduledRunPublicID  string
+	ProcessRunID          int64
+	PolicyRevisionID      int64
+	RootInitiatorUserID   string
+	MattermostChannelID   string
+	MattermostRootPostID  string
+	MattermostPostID      string
+	Status                string
+	DeliveryID            string
+	DeliveryMessage       string
+	DeliveryPropsJSON     []byte
+	DeliveryPayloadSHA256 []byte
+	ClaimToken            string
+	ClaimedAt             time.Time
+	LeaseExpiresAt        time.Time
+	ConfirmationPending   bool
+	Fence                 int64
+}
+
+type AutomationHistoryItem struct {
+	ScheduledRunPublicID string
+	Status               string
+	Outcome              string
+	OwnerAttentionID     int64
+	HumanDecisionStatus  string
+	DeliveryStatus       string
+	NextAction           string
+	UpdatedAt            time.Time
+}
+
 type AutomationAuditEvent struct {
 	ID             int64
 	ProjectID      int64

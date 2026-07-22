@@ -90,7 +90,78 @@ type CompleteCallbackInput struct {
 	Outcome                 string
 	SafeSummary             string
 	PayloadSHA256           []byte
+	OwnerGate               *OwnerGatePlanInput
 	Now                     time.Time
+}
+
+type OwnerGateContextInput struct {
+	RunPublicID             string
+	AuthenticatedProjectID  int64
+	AuthenticatedSessionID  int64
+	AuthenticatedSessionKey string
+}
+
+type OwnerGatePlanInput struct {
+	ProcessRunID            int64
+	PolicyRevisionID        int64
+	RootInitiatorUserID     string
+	RootInitiatorName       string
+	AttentionSummary        string
+	AttentionRecommendation string
+	DeliveryID              string
+	DeliveryMessage         string
+	DeliveryPropsJSON       []byte
+	DeliveryPayloadSHA256   []byte
+}
+
+type SetOwnerAttentionPostInput struct {
+	AttentionID          int64
+	ScheduledRunID       int64
+	DeliveryID           string
+	MattermostChannelID  string
+	MattermostRootPostID string
+	MattermostPostID     string
+	ClaimToken           string
+	Fence                int64
+	Now                  time.Time
+}
+
+type ClaimOwnerAttentionDeliveryInput struct {
+	ScheduledRunID int64
+	ClaimToken     string
+	Now            time.Time
+	LeaseUntil     time.Time
+	EligibleBefore time.Time
+}
+
+type DeferOwnerAttentionDeliveryInput struct {
+	AttentionID    int64
+	ScheduledRunID int64
+	DeliveryID     string
+	ClaimToken     string
+	Fence          int64
+	RetryAt        time.Time
+	Now            time.Time
+}
+
+type RetainOwnerAttentionDeliveryInput struct {
+	AttentionID    int64
+	ScheduledRunID int64
+	DeliveryID     string
+	ClaimToken     string
+	Fence          int64
+	LeaseUntil     time.Time
+	Now            time.Time
+}
+
+type ResolveOwnerGateInput struct {
+	ProjectID                int64
+	ActorUserID              string
+	ActorUserName            string
+	MattermostChannelID      string
+	MattermostRootPostID     string
+	MattermostResponsePostID string
+	Now                      time.Time
 }
 
 type ReconcileRuntimeTerminalInput struct {
@@ -113,7 +184,15 @@ type Repository interface {
 	FailRun(ctx context.Context, input FailRunInput) (entity.ScheduledRun, error)
 	GetRun(ctx context.Context, publicID string, projectID int64, ownerMattermostUserID string) (entity.ScheduledRun, error)
 	ListRuns(ctx context.Context, schedulePublicID string, projectID int64, ownerMattermostUserID string, limit int) ([]entity.ScheduledRun, error)
+	GetOwnerGateContext(ctx context.Context, input OwnerGateContextInput) (entity.AutomationOwnerGateContext, error)
 	CompleteCallback(ctx context.Context, input CompleteCallbackInput) (entity.ScheduledRun, bool, error)
+	GetOwnerAttentionDelivery(ctx context.Context, scheduledRunID int64) (entity.AutomationOwnerAttentionDelivery, error)
+	ClaimOwnerAttentionDelivery(ctx context.Context, input ClaimOwnerAttentionDeliveryInput) (entity.AutomationOwnerAttentionDelivery, error)
+	DeferOwnerAttentionDelivery(ctx context.Context, input DeferOwnerAttentionDeliveryInput) error
+	RetainOwnerAttentionDelivery(ctx context.Context, input RetainOwnerAttentionDeliveryInput) error
+	SetOwnerAttentionPost(ctx context.Context, input SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error)
+	ListHistory(ctx context.Context, ownerMattermostUsername string, limit int) ([]entity.AutomationHistoryItem, error)
+	ResolveOwnerGate(ctx context.Context, input ResolveOwnerGateInput) (entity.ScheduledRun, bool, error)
 	ReconcileRuntimeTerminal(ctx context.Context, input ReconcileRuntimeTerminalInput) (entity.ScheduledRun, bool, error)
 	RevokeCallback(ctx context.Context, runPublicID string, projectID int64, now time.Time) error
 }

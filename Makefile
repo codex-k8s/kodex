@@ -2,7 +2,7 @@ GOVULNCHECK_VERSION := v1.6.0
 GO_MIN_VERSION := 1.26.5
 GO_TOOLCHAIN := go1.26.5
 
-.PHONY: check-go-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck
+.PHONY: check-go-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -30,3 +30,11 @@ govulncheck: check-go-toolchain
 	$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(error GOVULNCHECK_VERSION нельзя переопределять))
 	@printf 'Проверенный Go toolchain: %s\n' "$$(env -u GOFLAGS GOENV=off GOWORK=off go env GOVERSION)"
 	env -u GOFLAGS GOENV=off GOWORK=off go run 'golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)' -mode=source -scan=symbol -show=traces,version ./...
+
+gen-openapi: gen-openapi-go gen-openapi-ts
+
+gen-openapi-go:
+	oapi-codegen -config tools/codegen/openapi/control-center-go.yaml specs/openapi/control-center.v1.yaml
+
+gen-openapi-ts:
+	openapi-ts -f tools/codegen/openapi/control-center-ts.config.mjs

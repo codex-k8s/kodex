@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-07-18
+version: 0.4.0
+updated: 2026-07-22
 ---
 
 # Границы сервисов и структура репозитория
@@ -87,6 +87,8 @@ docs/
 - политика пропусков и параллельности;
 - постановка `ScheduledRun` в очередь;
 - вычисление следующего запуска.
+
+До выделения самостоятельного сервиса текущий bot-service также владеет узким контрактом ручного шлюза автоматизации: отдельным namespace `automation` для `OwnerAttentionRequest`, атомарной записью `waiting_owner`, server-owned payload и долговечной публикацией с claim/lease/fence до внешнего POST. Ограниченный по параллельности reconciler непрерывно выбирает весь доступный backlog через `SKIP LOCKED`; ошибка одной строки и перезапуск не блокируют продвижение остальных. Решение допустимо только после сохранённого post binding точной карточки и атомарно закрывает связь `ScheduledRun → attention`. Общий watchdog, heartbeat/deadline/lease среды выполнения, callback outbox и Kubernetes health не входят в эту границу.
 
 ### agent-runner
 
