@@ -16,6 +16,7 @@ var _ securityrepo.Repository = (*Repository)(nil)
 var _ securityrepo.InteractionResourceAdmissionRepository = (*Repository)(nil)
 var _ securityrepo.AtomicDialogRepository = (*Repository)(nil)
 var _ securityrepo.ConsumedCapabilityReplayRepository = (*Repository)(nil)
+var _ securityrepo.PendingCapabilityRecoveryRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminBindingRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminRuntimeGuardRepository = (*Repository)(nil)
 var _ securityrepo.ClusterAdminSecretIntegrityRepository = (*Repository)(nil)
@@ -52,8 +53,16 @@ func (repo *Repository) IssueInteractionCapability(ctx context.Context, input se
 }
 
 func (repo *Repository) CheckInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	return repo.checkInteractionCapability(ctx, input, "interaction_capabilities__check.sql")
+}
+
+func (repo *Repository) CheckPendingInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	return repo.checkInteractionCapability(ctx, input, "interaction_capabilities__check_pending.sql")
+}
+
+func (repo *Repository) checkInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput, queryName string) (securityrepo.Capability, error) {
 	var capability securityrepo.Capability
-	err := repo.db.QueryRow(ctx, query("interaction_capabilities__check.sql"),
+	err := repo.db.QueryRow(ctx, query(queryName),
 		input.TokenHash,
 		input.Kind,
 		input.Operation,
@@ -90,9 +99,17 @@ func (repo *Repository) CheckInteractionCapability(ctx context.Context, input se
 }
 
 func (repo *Repository) ConsumeInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	return repo.consumeInteractionCapability(ctx, input, "interaction_capabilities__consume.sql")
+}
+
+func (repo *Repository) consumePendingInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	return repo.consumeInteractionCapability(ctx, input, "interaction_capabilities__consume_pending.sql")
+}
+
+func (repo *Repository) consumeInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput, queryName string) (securityrepo.Capability, error) {
 	var capability securityrepo.Capability
 	var consumedAt time.Time
-	err := repo.db.QueryRow(ctx, query("interaction_capabilities__consume.sql"),
+	err := repo.db.QueryRow(ctx, query(queryName),
 		input.TokenHash,
 		input.Kind,
 		input.Operation,
@@ -130,6 +147,37 @@ func (repo *Repository) ConsumeInteractionCapability(ctx context.Context, input 
 	}
 
 	return securityrepo.Capability{}, repo.interactionCapabilityStateError(ctx, input.TokenHash, input.Now)
+}
+
+func (repo *Repository) ConsumePendingInteractionCapabilityWithMutation(
+	ctx context.Context,
+	input securityrepo.ConsumeCapabilityInput,
+	mutation func(adminrepo.Repository) error,
+) (securityrepo.Capability, error) {
+	if mutation == nil {
+		return securityrepo.Capability{}, fmt.Errorf("pending capability recovery mutation is required")
+	}
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return securityrepo.Capability{}, fmt.Errorf("begin pending capability recovery: %w", err)
+	}
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
+	}()
+	txRepository := newTransactionalRepository(tx)
+	capability, err := txRepository.consumePendingInteractionCapability(ctx, input)
+	if err != nil {
+		return securityrepo.Capability{}, err
+	}
+	if err := mutation(txRepository); err != nil {
+		return securityrepo.Capability{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return securityrepo.Capability{}, fmt.Errorf("commit pending capability recovery: %w", err)
+	}
+	return capability, nil
 }
 
 func (repo *Repository) ConsumeInteractionCapabilityWithMutation(

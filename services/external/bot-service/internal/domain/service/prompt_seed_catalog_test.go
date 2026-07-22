@@ -72,6 +72,8 @@ func TestManagerPromptSeedDocumentsDynamicCrossChatRouting(t *testing.T) {
 		"mattermost_start_agent_thread(target_chat, target_agent, title, message, work_item_key)",
 		"Конфигурация проекта в MatterCodex является источником истины",
 		"Не угадывай и не зашивай имя чата",
+		"только если карточка текущего чата содержит эту роль среди включенных агентов",
+		"не повторяй его",
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("manager seed missing cross-chat routing contract %q:\n%s", expected, body)

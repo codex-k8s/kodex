@@ -1172,6 +1172,92 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	}
 }
 
+func TestAgentSessionRequestAgentRejectsRoleOutsideCurrentChatBeforeSideEffects(t *testing.T) {
+	now := time.Now().UTC()
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "manager", RoleType: "manager", Enabled: true}
+	store.agentRoles[2] = entity.AgentRole{ID: 2, ProjectID: 1, Name: "developer", RoleType: "worker", Enabled: true}
+	store.botIdentities = map[int64]entity.MattermostBotIdentity{
+		1: {ID: 1, ProjectID: 1, RoleID: 1, Username: "manager", MattermostUserID: "manager-user", Status: "configured"},
+		2: {ID: 2, ProjectID: 1, RoleID: 2, Username: "developer", MattermostUserID: "developer-user", Status: "configured"},
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "control-channel", Name: "Control", Slug: "control", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	store.agentSessions = map[string]entity.AgentSession{
+		"session-1": {
+			ID: 1, SessionKey: "session-1", ProjectID: 1, ChatID: 1, RoleID: 1,
+			SessionScope: agentSessionScopeThreadRole, MattermostChannelID: "control-channel",
+			MattermostRootPostID: "root-1", Status: agentSessionStatusRunning,
+			ActiveTurnID: 1, ActiveRunID: "run-manager-1", TokenSecretRef: "session-secret",
+			TTLSeconds: defaultThreadSessionTTLSeconds, LastActivityAt: now, ExpiresAt: now.Add(time.Hour),
+		},
+	}
+	store.sessionTurns = []entity.AgentSessionTurn{{
+		ID: 1, SessionID: 1, RunID: "run-manager-1", MattermostChannelID: "control-channel",
+		MattermostRootPostID: "root-1", MattermostPostID: "root-1",
+		UserID: "owner-user", UserName: "manager", Status: agentSessionTurnRunning,
+	}}
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
+	publisher := &fakeThreadPublisher{}
+	roleBotManager := &fakeRoleBotManager{}
+	dispatcher := &fakeAgentTurnDispatcher{}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer: testLocalizer(t, texti18n.RussianLocale), Store: store, RuntimeRunner: runner,
+		ThreadPublisher: publisher, RoleBotManager: roleBotManager, TurnDispatcher: dispatcher,
+		StorageReady: true, RuntimeReady: true,
+	})
+
+	_, err := svc.RequestAgent(context.Background(), "session-1", "session-token", "developer", "Исправь замечания.")
+	if err == nil || !strings.Contains(err.Error(), "not an enabled participant") || !strings.Contains(err.Error(), "mattermost_start_agent_thread") {
+		t.Fatalf("RequestAgent() error = %v", err)
+	}
+	if dispatcher.calls != 0 || roleBotManager.channelMemberUserID != "" || len(publisher.posts) != 0 {
+		t.Fatalf("rejected request caused side effects: dispatcher=%d membership=%q posts=%d", dispatcher.calls, roleBotManager.channelMemberUserID, len(publisher.posts))
+	}
+}
+
+func TestDelegatedPromptRequiresGitHubIdentity(t *testing.T) {
+	tests := []struct {
+		name     string
+		message  string
+		identity string
+		want     bool
+	}{
+		{name: "explicit identity", message: "GitHub identity должна быть ai-da-stas", identity: "ai-da-stas", want: true},
+		{name: "actual login", message: "Фактически авторизован kodex-agent, остановись при несовпадении.", identity: "kodex-agent", want: true},
+		{name: "account alias", message: "GitHub account: platform-owner", identity: "platform-owner", want: true},
+		{name: "repository owner", message: "Исправь https://github.com/ai-da-stas/project/issues/7", identity: "ai-da-stas"},
+		{name: "short alias", message: "GitHub account main должен иметь write.", identity: "main", want: true},
+		{name: "permission only", message: "Нужны права на push и review.", identity: "kodex-agent"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := delegatedPromptRequiresGitHubIdentity(test.message, test.identity); got != test.want {
+				t.Fatalf("delegatedPromptRequiresGitHubIdentity() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+func TestAgentSessionRejectsDifferentConfiguredGitHubIdentity(t *testing.T) {
+	store := chatRuntimeStore()
+	store.githubAccounts = map[string]entity.GitHubAccount{
+		"owner": {Name: "owner", Username: "ai-da-stas", Status: "configured"},
+		"agent": {Name: "agent", Username: "kodex-agent", Status: "configured"},
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{Store: store})
+
+	err := svc.rejectDelegatedGitHubIdentityRequirement(
+		context.Background(),
+		entity.Project{GitHubAccountName: "owner"},
+		entity.AgentRole{GitHubAccountName: "agent"},
+		"Используй GitHub identity ai-da-stas; при другом login остановись.",
+	)
+	if err == nil || !strings.Contains(err.Error(), "must not require") {
+		t.Fatalf("rejectDelegatedGitHubIdentityRequirement() error = %v", err)
+	}
+}
+
 func TestAgentSessionRequestAgentRejectsInvalidProcessRootBeforeMembership(t *testing.T) {
 	now := time.Now().UTC()
 	baseStore := chatRuntimeStore()

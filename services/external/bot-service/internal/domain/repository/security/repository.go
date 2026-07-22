@@ -150,6 +150,15 @@ type ConsumedCapabilityReplayRepository interface {
 	) (Capability, error)
 }
 
+type PendingCapabilityRecoveryRepository interface {
+	CheckPendingInteractionCapability(ctx context.Context, input ConsumeCapabilityInput) (Capability, error)
+	ConsumePendingInteractionCapabilityWithMutation(
+		ctx context.Context,
+		input ConsumeCapabilityInput,
+		mutation func(adminrepo.Repository) error,
+	) (Capability, error)
+}
+
 type ClusterAdminBindingRepository interface {
 	AdmitExistingClusterAdminBinding(ctx context.Context, input ClusterAdminBindingInput) (bool, error)
 }

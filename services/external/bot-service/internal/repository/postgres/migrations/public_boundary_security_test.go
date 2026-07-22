@@ -380,7 +380,7 @@ where subject_type = 'agent_profile'
 	}
 }
 
-func TestExactNMinusOneBinaryBootstrapsAfterV22V23V24V25V26V27V28V29V30V31V32V33V34V35Upgrade(t *testing.T) {
+func TestExactNMinusOneBinaryBootstrapsAfterV22ThroughV35Upgrade(t *testing.T) {
 	ownerDSN := isolatedMigrationDSN(t, "exact_n_minus_one")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -815,6 +815,63 @@ where profile_name = 'developer' and template_key = 'legacy_identity'
 	for _, expected := range []string{"before", "after", ".GitHub.TokenEnv", ".GitHub.UsernameEnv", ".GitHub.EmailEnv"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("v33 removed runtime environment placeholder %q from %q", expected, body)
+		}
+	}
+}
+
+func TestV34AlignsPersistedPromptDelegationRouting(t *testing.T) {
+	dsn := isolatedMigrationDSN(t, "v34_prompt_delegation_routing")
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	if err := migrations.RunTo(ctx, dsn, 33); err != nil {
+		t.Fatalf("migrate through v33: %v", err)
+	}
+	pool := openMigrationPool(t, ctx, dsn)
+	defer pool.Close()
+	const historical = "before\n- Для запуска другого агента в текущем треде используй `mattermost_request_agent(target_agent, message)`.\n- В дочернем промпте передавай требуемое действие и уровень доступа. Не указывай и не требуй конкретный GitHub account alias, login или identity, не копируй identity координатора и не делай имя владельца условием выполнения; целевой агент проверит фактическую возможность операции.\nafter\n"
+	var projectID int64
+	if err := pool.QueryRow(ctx, `
+insert into matter_codex_projects(name, slug) values ('Routing prompt', 'routing-prompt') returning id
+`).Scan(&projectID); err != nil {
+		t.Fatalf("insert project: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+insert into matter_codex_agent_roles(project_id, name, role_type, prompt_template)
+values ($1, 'manager-v34', 'manager', $2)
+`, projectID, historical); err != nil {
+		t.Fatalf("insert historical role prompt: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+insert into matter_codex_agent_prompt_templates(profile_name, template_key, body)
+values ('manager-v34', 'routing', $1)
+`, historical); err != nil {
+		t.Fatalf("insert historical catalog prompt: %v", err)
+	}
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("apply v34: %v", err)
+	}
+	queries := []struct {
+		query string
+		args  []any
+	}{
+		{query: `select prompt_template from matter_codex_agent_roles where project_id = $1 and name = 'manager-v34'`, args: []any{projectID}},
+		{query: `select body from matter_codex_agent_prompt_templates where profile_name = 'manager-v34' and template_key = 'routing'`},
+	}
+	for _, item := range queries {
+		var body string
+		if err := pool.QueryRow(ctx, item.query, item.args...).Scan(&body); err != nil {
+			t.Fatalf("read migrated routing prompt: %v", err)
+		}
+		for _, expected := range []string{
+			"только если карточка текущего чата содержит эту роль среди включенных агентов",
+			"создай отдельный дочерний тред",
+			"Если такое требование осталось в старом треде, callback или задаче, не повторяй его",
+			"before",
+			"after",
+		} {
+			if !strings.Contains(body, expected) {
+				t.Fatalf("v34 prompt misses %q in %q", expected, body)
+			}
 		}
 	}
 }

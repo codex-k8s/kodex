@@ -65,6 +65,29 @@ func TestDisableCodexConfigOverlayForAuthCheck(t *testing.T) {
 	}
 }
 
+func TestSameGitHubRepositoryRemote(t *testing.T) {
+	tests := []struct {
+		name  string
+		left  string
+		right string
+		want  bool
+	}{
+		{name: "same HTTPS remote", left: "https://github.com/codex-k8s/matter-codex.git\n", right: "https://github.com/codex-k8s/matter-codex.git", want: true},
+		{name: "same SSH remote", left: "git@github.com:codex-k8s/matter-codex.git", right: "https://github.com/codex-k8s/matter-codex.git", want: true},
+		{name: "same SSH URL remote", left: "ssh://git@github.com/codex-k8s/matter-codex.git", right: "https://github.com/codex-k8s/matter-codex.git", want: true},
+		{name: "different repository", left: "https://github.com/codex-k8s/kodex.git", right: "https://github.com/codex-k8s/matter-codex.git"},
+		{name: "missing remote", right: "https://github.com/codex-k8s/matter-codex.git"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := sameGitHubRepositoryRemote(test.left, test.right); got != test.want {
+				t.Fatalf("sameGitHubRepositoryRemote(%q, %q) = %t, want %t", test.left, test.right, got, test.want)
+			}
+		})
+	}
+}
+
 func TestWriteCodexConfigMergesRoleConfigWithoutDuplicateKeys(t *testing.T) {
 	t.Setenv("MATTERCODEX_MCP_URL", "http://matter-codex-mcp")
 	t.Setenv("MATTERCODEX_RUNTIME_ENV_ALLOWLIST", "RADAR_AUTO_KUBECONFIG")

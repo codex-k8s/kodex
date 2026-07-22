@@ -637,6 +637,80 @@ func TestAgentSessionReturnsCrossChatResultToImmediateRequester(t *testing.T) {
 	}
 }
 
+func TestAgentSessionReturnsLaterTurnToPersistedRequesterSession(t *testing.T) {
+	svc, store, dispatcher, _ := agentDelegationTestService()
+	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat:  "architecture",
+		TargetAgent: "architect",
+		Title:       "Границы сервисов",
+		Message:     "Подготовь предложение.",
+		WorkItemKey: "issue-59-architecture",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{
+		ID: 3, SessionID: 1, RunID: "callback-run", MattermostChannelID: "management-channel",
+		MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnQueued,
+	})
+	dispatcher.queued = AgentTurnQueued{RunID: "callback-run", TurnID: 3, SessionKey: "source-session"}
+	first, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", "Первый результат.")
+	if err != nil {
+		t.Fatalf("first ReturnToRequester() error = %v", err)
+	}
+	if first.DelegationID != started.DelegationID {
+		t.Fatalf("first callback = %#v", first)
+	}
+	for index := range store.sessionTurns {
+		if store.sessionTurns[index].ID == 3 {
+			store.sessionTurns[index].Status = agentSessionTurnSucceeded
+		}
+	}
+	target := store.agentSessions["target-session"]
+	target.ActiveTurnID = 4
+	target.ActiveRunID = "target-follow-up"
+	store.agentSessions[target.SessionKey] = target
+	store.sessionTurns = append(store.sessionTurns,
+		entity.AgentSessionTurn{
+			ID: 4, SessionID: 2, RunID: "target-follow-up", MattermostChannelID: "architecture-channel",
+			MattermostRootPostID: "reply-", MattermostPostID: "follow-up-post", Status: agentSessionTurnRunning,
+		},
+		entity.AgentSessionTurn{
+			ID: 5, SessionID: 1, RunID: "callback-run-2", MattermostChannelID: "management-channel",
+			MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnQueued,
+		},
+	)
+	dispatcher.queued = AgentTurnQueued{RunID: "callback-run-2", TurnID: 5, SessionKey: "source-session"}
+
+	second, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", "Уточненный результат после нового хода.")
+	if err != nil {
+		t.Fatalf("second-turn ReturnToRequester() error = %v", err)
+	}
+	if second.DelegationID == started.DelegationID || second.CallbackRunID != "callback-run-2" {
+		t.Fatalf("second callback = %#v", second)
+	}
+	if len(store.agentDelegations) != 2 {
+		t.Fatalf("delegations = %#v", store.agentDelegations)
+	}
+	continuation := store.agentDelegations[second.DelegationID]
+	if continuation.SourceSessionID != 1 || continuation.SourceTurnID != 3 || continuation.TargetSessionID != 2 || continuation.TargetTurnID != 4 ||
+		continuation.WorkItemKey != delegationCallbackContinuationWorkItemKey(started.DelegationID, 4) {
+		t.Fatalf("continuation = %#v", continuation)
+	}
+	callbackTurn, err := store.GetAgentSessionTurn(context.Background(), 5)
+	if err != nil || !strings.Contains(callbackTurn.Message, "Уточненный результат после нового хода") || !containsInt64(callbackTurn.ParentTurnIDs, 4) {
+		t.Fatalf("callback turn = %#v error=%v", callbackTurn, err)
+	}
+
+	repeated, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", "Повтор того же callback.")
+	if err != nil {
+		t.Fatalf("duplicate second-turn ReturnToRequester() error = %v", err)
+	}
+	if repeated.DelegationID != second.DelegationID || len(store.agentDelegations) != 2 {
+		t.Fatalf("duplicate callback=%#v delegations=%#v", repeated, store.agentDelegations)
+	}
+}
+
 func TestEnqueueDelegationCallbackUsesProcessRootWithoutCompatibleQueuedTurn(t *testing.T) {
 	svc, store, dispatcher, _ := agentDelegationTestService()
 	store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{

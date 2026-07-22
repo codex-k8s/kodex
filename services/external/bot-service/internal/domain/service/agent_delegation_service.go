@@ -295,6 +295,9 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	if !targetRole.Enabled {
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent role %q is disabled", targetRole.Name)
 	}
+	if err := svc.rejectDelegatedGitHubIdentityRequirement(ctx, project, targetRole, command.Message); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
 	if err := svc.requireCoordinationPermission(ctx, session, entity.CoordinationCapabilityStartAgents, entity.CoordinationActionStart, targetRole.ID); err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
@@ -529,8 +532,16 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 		return AgentSessionDelegationResult{}, err
 	}
 	if delegation.CallbackRunID != "" {
-		deliveryErr := svc.deliverAgentDelegationCallbackPublications(ctx, session, sourceSession, delegation)
-		return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), deliveryErr
+		if deliveryErr := svc.deliverAgentDelegationCallbackPublications(ctx, session, sourceSession, delegation); deliveryErr != nil {
+			return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), deliveryErr
+		}
+		if delegation.TargetTurnID == session.ActiveTurnID {
+			return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
+		}
+		delegation, sourceSession, err = svc.createDelegationCallbackContinuation(ctx, session, sourceSession, delegation)
+		if err != nil {
+			return AgentSessionDelegationResult{}, err
+		}
 	}
 	sourceChat, err := svc.cfg.Store.GetChat(ctx, sourceSession.ChatID)
 	if err != nil {
@@ -633,6 +644,87 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	}
 	deliveryErr := svc.deliverAgentDelegationCallbackPublications(ctx, session, sourceSession, delegation)
 	return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), deliveryErr
+}
+
+func (svc *AgentSessionService) createDelegationCallbackContinuation(
+	ctx context.Context,
+	child entity.AgentSession,
+	source entity.AgentSession,
+	previous entity.AgentDelegation,
+) (entity.AgentDelegation, entity.AgentSession, error) {
+	var continuation entity.AgentDelegation
+	var currentSource entity.AgentSession
+	err := svc.withCurrentSessionsPersistenceGuard(ctx, child, source, "agent_session.delegation_callback_continuation.side_effect", func(currentChild entity.AgentSession, lockedSource entity.AgentSession, guardedStore adminrepo.Repository) error {
+		latest, readErr := guardedStore.GetAgentDelegationForCallback(ctx, currentChild.ID)
+		if readErr != nil {
+			return readErr
+		}
+		if latest.SourceSessionID != lockedSource.ID || latest.ProjectID != currentChild.ProjectID ||
+			latest.TargetSessionID != currentChild.ID || latest.TargetChatID != currentChild.ChatID || latest.TargetRoleID != currentChild.RoleID {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		workItemKey := delegationCallbackContinuationWorkItemKey(previous.ID, currentChild.ActiveTurnID)
+		if latest.ID != previous.ID {
+			if latest.SourceTurnID != previous.CallbackTurnID || latest.TargetTurnID != currentChild.ActiveTurnID ||
+				latest.TargetRunID != currentChild.ActiveRunID || latest.WorkItemKey != workItemKey || latest.Title != previous.Title {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			continuation = latest
+			currentSource = lockedSource
+			return nil
+		}
+		if strings.TrimSpace(latest.CallbackRunID) == "" || latest.CallbackTurnID <= 0 {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		if currentChild.ActiveTurnID <= 0 || strings.TrimSpace(currentChild.ActiveRunID) == "" {
+			return fmt.Errorf("current child turn is not active")
+		}
+		if latest.TargetTurnID == currentChild.ActiveTurnID {
+			continuation = latest
+			currentSource = lockedSource
+			return nil
+		}
+
+		created, wasCreated, createErr := guardedStore.CreateAgentDelegation(ctx, adminrepo.CreateAgentDelegationInput{
+			ProjectID:       latest.ProjectID,
+			SourceSessionID: lockedSource.ID,
+			SourceTurnID:    latest.CallbackTurnID,
+			TargetChatID:    currentChild.ChatID,
+			TargetRoleID:    currentChild.RoleID,
+			WorkItemKey:     workItemKey,
+			Title:           latest.Title,
+		})
+		if createErr != nil {
+			return createErr
+		}
+		if wasCreated {
+			created, createErr = guardedStore.SetAgentDelegationRoot(ctx, created.ID, currentChild.MattermostRootPostID)
+			if createErr != nil {
+				return createErr
+			}
+			created, createErr = guardedStore.SetAgentDelegationTarget(ctx, created.ID, currentChild.ID, currentChild.ActiveTurnID, currentChild.ActiveRunID)
+			if createErr != nil {
+				return createErr
+			}
+		}
+		if created.ProjectID != latest.ProjectID || created.SourceSessionID != lockedSource.ID || created.SourceTurnID != latest.CallbackTurnID ||
+			created.TargetSessionID != currentChild.ID || created.TargetTurnID != currentChild.ActiveTurnID || created.TargetRunID != currentChild.ActiveRunID ||
+			created.TargetChatID != currentChild.ChatID || created.TargetRoleID != currentChild.RoleID ||
+			created.TargetRootPostID != currentChild.MattermostRootPostID || created.WorkItemKey != workItemKey || created.Title != latest.Title {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		continuation = created
+		currentSource = lockedSource
+		return nil
+	})
+	if err != nil {
+		return entity.AgentDelegation{}, entity.AgentSession{}, err
+	}
+	return continuation, currentSource, nil
+}
+
+func delegationCallbackContinuationWorkItemKey(previousDelegationID int64, childTurnID int64) string {
+	return fmt.Sprintf("callback-continuation-%d-%d", previousDelegationID, childTurnID)
 }
 
 func (svc *AgentSessionService) admitCallbackPublication(message string) (func(), error) {
@@ -1478,7 +1570,7 @@ func (svc *AgentSessionService) mattermostThreadURL(projectSlug string, rootPost
 func crossChatDelegatedAgentRequestMessage(requesterUserName string, targetRoleName string, message string) string {
 	var body strings.Builder
 	body.WriteString(delegatedAgentRequestMessage(requesterUserName, targetRoleName, message))
-	body.WriteString("\n\nЭта задача запущена в отдельном дочернем треде. По завершении обязательно вызови `mattermost_return_to_requester` с самодостаточным итогом; инструмент вернет управление непосредственному инициатору без упоминаний в Mattermost.")
+	body.WriteString("\n\nЭта задача запущена в отдельном дочернем треде. По завершении обязательно вызови напрямую `mattermost_return_to_requester` с самодостаточным итогом: инструмент использует сохраненную исходную сессию и точный тред. Для callback не требуется участие координатора в текущем канале; не заменяй callback запуском агента или упоминанием.")
 	return body.String()
 }
 

@@ -360,7 +360,7 @@ func TestStopTurnProductionActionRecoversTerminalReconciliationAfterRestart(t *t
 		t.Fatalf("exact replay status=%d cancel=%d replay=%d reconcile=%d cards=%d/%d body=%s", exactReplay.Code, store.cancelCalls, repository.replays, reconciler.callCount(), len(publisher.cardUpdates), cardUpdates, exactReplay.Body.String())
 	}
 	secondRecovery := serveStopTurnAction(restarted, recoveryBody)
-	if secondRecovery.Code != http.StatusUnauthorized || store.cancelCalls != 1 || repository.replays != 1 || reconciler.callCount() != 2 || len(publisher.cardUpdates) != cardUpdates {
+	if secondRecovery.Code != http.StatusUnauthorized || store.cancelCalls != 1 || repository.replays != 2 || reconciler.callCount() != 2 || len(publisher.cardUpdates) != cardUpdates {
 		t.Fatalf("second recovery status=%d cancel=%d replay=%d reconcile=%d cards=%d/%d body=%s", secondRecovery.Code, store.cancelCalls, repository.replays, reconciler.callCount(), len(publisher.cardUpdates), cardUpdates, secondRecovery.Body.String())
 	}
 }

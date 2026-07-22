@@ -682,8 +682,25 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 			}
 			if currentTurn.Status == agentSessionTurnCanceled {
 				state, stateErr := agentTurnStopStateFromArtifacts(currentTurn.Artifacts)
-				if stateErr != nil || strictCapabilityAction && !agentTurnStopRecoveryAllowed(command.CapabilityAction, state) {
+				if stateErr != nil || strictCapabilityAction && (!agentTurnStopRecoveryAllowed(command.CapabilityAction, state) || state.ActorUserID != strings.TrimSpace(command.UserID)) {
 					return adminrepo.ErrClusterAdminAdmissionDenied
+				}
+				if strictCapabilityAction && command.CapabilityAction == agentTurnStopRecoveryAction && !state.CardCompleted {
+					state.CardCompleted = true
+					artifacts, artifactsErr := agentTurnStopArtifacts(currentTurn.Artifacts, state)
+					if artifactsErr != nil {
+						return artifactsErr
+					}
+					artifactStore, ok := guardedStore.(adminrepo.AgentSessionTurnArtifactsRepository)
+					if !ok {
+						return adminrepo.ErrClusterAdminAdmissionDenied
+					}
+					currentTurn, readErr = artifactStore.CompareAndSwapAgentSessionTurnArtifacts(ctx, adminrepo.CompareAndSwapAgentSessionTurnArtifactsInput{
+						TurnID: currentTurn.ID, ExpectedArtifacts: currentTurn.Artifacts, Artifacts: artifacts,
+					})
+					if readErr != nil {
+						return fmt.Errorf("persist published agent turn recovery card: %w", readErr)
+					}
 				}
 				canceled = currentTurn
 				reconcileOnly = true
@@ -773,6 +790,68 @@ func (svc *AgentSessionService) FinalizeStopAgentSessionTurns(ctx context.Contex
 		}
 	}
 	return result, nil
+}
+
+func (svc *AgentSessionService) ReconcilePendingStopAgentSessionTurnCard(ctx context.Context, interaction AuthenticatedInteraction, callback ActionCallback) (bool, error) {
+	if svc == nil || svc.cfg.Store == nil || interaction.Action != agentTurnStopRecoveryAction ||
+		interaction.ResourceType != "agent_session_turn" || strings.TrimSpace(interaction.Scope.Session) == "" ||
+		strings.TrimSpace(interaction.Scope.Workspace) == "" || strings.TrimSpace(interaction.CallbackPostID) == "" ||
+		interaction.CallbackPostID != strings.TrimSpace(callback.PostID) || interaction.ChannelID != strings.TrimSpace(callback.ChannelID) {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	turnID, err := strconv.ParseInt(interaction.ResourceID, 10, 64)
+	if err != nil || turnID <= 0 {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	session, err := svc.cfg.Store.GetAgentSession(ctx, strings.TrimSpace(interaction.Scope.Session))
+	if err != nil {
+		return false, err
+	}
+	if strconv.FormatInt(session.ProjectID, 10) != strings.TrimSpace(interaction.Scope.Workspace) ||
+		session.MattermostChannelID != interaction.ChannelID {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	turn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, turnID)
+	if err != nil {
+		return false, err
+	}
+	if turn.SessionID != session.ID || turn.Status != agentSessionTurnCanceled ||
+		strings.TrimSpace(turn.MattermostStatusPostID) != interaction.CallbackPostID {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	state, err := agentTurnStopStateFromArtifacts(turn.Artifacts)
+	if err != nil || !agentTurnStopRecoveryAllowed(agentTurnStopRecoveryAction, state) ||
+		state.ActorUserID != interaction.Actor.UserID {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	channelID := defaultString(turn.MattermostChannelID, session.MattermostChannelID)
+	rootPostID := defaultString(turn.MattermostRootPostID, session.MattermostRootPostID)
+	if channelID != interaction.ChannelID || rootPostID == "" {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	recoveryTurn := turn
+	recoveryTurn.UserID = state.ActorUserID
+	recoveryTurn.UserName = state.ActorUserName
+	account := svc.sessionOpenAIAccountNameWithStore(ctx, svc.cfg.Store, session)
+	message := svc.turnStatusMessageWithStore(ctx, svc.cfg.Store, session, agentSessionTurnCanceled, turn.RunID, account, "")
+	card := svc.turnStatusCardWithStore(ctx, svc.cfg.Store, session, recoveryTurn, agentSessionTurnCanceled, channelID, rootPostID, truncateMattermostStatus(strings.TrimSpace(message)))
+	if len(card.Actions) != 1 {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	card.PostID = interaction.CallbackPostID
+	card.Actions[0].Context = cloneInteractionContext(callback.Context)
+	reconciler, ok := svc.cfg.ThreadPublisher.(MattermostThreadCardUpdateReconciler)
+	if !ok {
+		return false, fmt.Errorf("mattermost thread card reconciliation is not configured")
+	}
+	ref, applied, err := reconciler.ReconcileThreadCardUpdate(ctx, card)
+	if err != nil || !applied {
+		return false, err
+	}
+	if ref.ChannelID != card.ChannelID || ref.PostID != card.PostID {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return true, nil
 }
 
 type agentTurnStopPhase string
@@ -1187,7 +1266,13 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
+	if err := svc.rejectDelegatedGitHubIdentityRequirement(ctx, project, role, message); err != nil {
+		return AgentSessionAgentRequest{}, err
+	}
 	if err := svc.requireCoordinationPermission(ctx, session, capability, action, role.ID); err != nil {
+		return AgentSessionAgentRequest{}, err
+	}
+	if err := svc.requireRequestedRoleChatParticipant(ctx, chat, role); err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
 	repositories, err := svc.chatRepositories(ctx, chat)
@@ -1320,6 +1405,69 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 		TargetSessionKey:  queued.SessionKey,
 		AuditPostID:       auditPostID,
 	}, nil
+}
+
+func (svc *AgentSessionService) requireRequestedRoleChatParticipant(ctx context.Context, chat entity.Chat, role entity.AgentRole) error {
+	participants, err := svc.cfg.Store.ListChatParticipants(ctx, chat.ID)
+	if err != nil {
+		return err
+	}
+	for _, participant := range participants {
+		if participant.RoleID == role.ID && participant.Enabled {
+			return nil
+		}
+	}
+	return fmt.Errorf(
+		"target agent %q is not an enabled participant of current chat %q; use mattermost_list_chats and mattermost_start_agent_thread for cross-chat delegation",
+		role.Name,
+		defaultString(strings.TrimSpace(chat.Slug), strings.TrimSpace(chat.Name)),
+	)
+}
+
+func (svc *AgentSessionService) rejectDelegatedGitHubIdentityRequirement(ctx context.Context, project entity.Project, role entity.AgentRole, message string) error {
+	accountNames := []string{strings.TrimSpace(role.GitHubAccountName), strings.TrimSpace(project.GitHubAccountName)}
+	seen := make(map[string]struct{}, len(accountNames))
+	for _, accountName := range accountNames {
+		if accountName == "" {
+			continue
+		}
+		if _, ok := seen[accountName]; ok {
+			continue
+		}
+		seen[accountName] = struct{}{}
+		account, err := svc.cfg.Store.GetGitHubAccount(ctx, accountName)
+		if err != nil {
+			return err
+		}
+		for _, identity := range []string{account.Name, account.Username} {
+			if delegatedPromptRequiresGitHubIdentity(message, identity) {
+				return fmt.Errorf("delegated prompt must not require a configured GitHub account alias or login; describe only the required operation and permissions")
+			}
+		}
+	}
+	return nil
+}
+
+func delegatedPromptRequiresGitHubIdentity(message string, identity string) bool {
+	identity = strings.ToLower(strings.TrimSpace(identity))
+	if identity == "" {
+		return false
+	}
+	markers := []string{
+		"github account", "github identity", "github login", "github-аккаунт", "github аккаунт",
+		"учетная запись github", "учётная запись github", "фактически авторизован", "ожидается", "требуется",
+	}
+	for line := range strings.Lines(strings.ToLower(message)) {
+		if !strings.Contains(line, identity) {
+			continue
+		}
+		for _, marker := range markers {
+			if strings.Contains(line, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (svc *AgentSessionService) ensureRequestedRoleChannelMember(ctx context.Context, project entity.Project, chat entity.Chat, role entity.AgentRole, sessionKey string, actorUser string) error {
@@ -2094,7 +2242,7 @@ func agentTurnStopRecoveryAllowed(action string, state agentTurnStopState) bool 
 	case agentTurnStopAction:
 		return !state.CardCompleted
 	case agentTurnStopRecoveryAction:
-		return state.CardCompleted
+		return state.CleanupCompleted && state.ResetCompleted
 	default:
 		return false
 	}

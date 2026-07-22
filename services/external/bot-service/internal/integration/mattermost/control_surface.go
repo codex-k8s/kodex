@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -42,6 +43,11 @@ func DefaultHTTPClientConfig() HTTPClientConfig {
 
 var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
 var _ statusservice.MattermostIdempotentThreadPublisher = (*ControlSurface)(nil)
+var _ statusservice.MattermostThreadCardUpdateReconciler = (*ControlSurface)(nil)
+
+var exactThreadCardServerOwnedProps = map[string]any{
+	mattermostmodel.PostPropsFromBot: "true",
+}
 var _ statusservice.MattermostConversationReader = (*ControlSurface)(nil)
 var _ statusservice.MattermostRoleBotManager = (*ControlSurface)(nil)
 var _ statusservice.MattermostInteractionActorVerifier = (*ControlSurface)(nil)
@@ -414,6 +420,43 @@ func (surface *ControlSurface) UpdateThreadCard(ctx context.Context, card status
 	return statusservice.MattermostPostRef{ChannelID: updated.ChannelId, PostID: updated.Id}, nil
 }
 
+func (surface *ControlSurface) ReconcileThreadCardUpdate(ctx context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, bool, error) {
+	post, _, err := surface.client.GetPost(ctx, card.PostID, "")
+	if err != nil {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("reconcile Mattermost thread card update: %w", err)
+	}
+	if !exactThreadCardUpdate(post, card) {
+		return statusservice.MattermostPostRef{}, false, nil
+	}
+	return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, true, nil
+}
+
+func exactThreadCardUpdate(actual *mattermostmodel.Post, card statusservice.MattermostCard) bool {
+	if actual == nil || strings.TrimSpace(actual.Id) == "" || actual.Id != strings.TrimSpace(card.PostID) ||
+		actual.ChannelId != strings.TrimSpace(card.ChannelID) || actual.RootId != strings.TrimSpace(card.RootPostID) || actual.Message != card.Message {
+		return false
+	}
+	expectedProps := mattermostCardPost(card).GetProps()
+	actualProps := actual.GetProps()
+	for key, expected := range expectedProps {
+		value, exists := actualProps[key]
+		if !exists || !sameJSONValue(value, expected) {
+			return false
+		}
+	}
+	for key, value := range actualProps {
+		if _, expected := expectedProps[key]; expected {
+			continue
+		}
+		allowed, serverOwned := exactThreadCardServerOwnedProps[key]
+		if serverOwned && sameJSONValue(value, allowed) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func (surface *ControlSurface) AddPostReactionWithToken(ctx context.Context, token string, input statusservice.MattermostPostReactionInput) error {
 	client := surface.clientWithToken(token)
 	if _, _, err := client.SaveReaction(ctx, &mattermostmodel.Reaction{
@@ -559,7 +602,22 @@ func exactCallbackPostProps(actual map[string]any, clientOwned map[string]any) b
 func sameJSONValue(left any, right any) bool {
 	leftJSON, leftErr := json.Marshal(left)
 	rightJSON, rightErr := json.Marshal(right)
-	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	if bytes.Equal(leftJSON, rightJSON) {
+		return true
+	}
+	var leftValue any
+	var rightValue any
+	leftDecoder := json.NewDecoder(bytes.NewReader(leftJSON))
+	rightDecoder := json.NewDecoder(bytes.NewReader(rightJSON))
+	leftDecoder.UseNumber()
+	rightDecoder.UseNumber()
+	if leftDecoder.Decode(&leftValue) != nil || rightDecoder.Decode(&rightValue) != nil {
+		return false
+	}
+	return reflect.DeepEqual(leftValue, rightValue)
 }
 
 func updateThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {

@@ -312,6 +312,14 @@ func runAgentSessionRepairLoop(ctx context.Context, svc *statusservice.ChatRunSe
 			if err != nil {
 				logger.Warn("agent session repair failed", "error", err)
 			} else if agentSessionRepairDidWork(result) {
+				for _, failure := range result.Failures {
+					logger.Warn(
+						"agent session repair item failed",
+						"session_key", failure.SessionKey,
+						"phase", failure.Phase,
+						"error", failure.Error,
+					)
+				}
 				logger.Info(
 					"agent session repair applied",
 					"queued_sessions_ensured", result.QueuedSessionsEnsured,
