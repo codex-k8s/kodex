@@ -80,7 +80,7 @@
 - `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
 - `MATTERCODEX_RUNTIME_LOG_TAIL_LINES` - optional, число последних строк pod log для `/agents runtime status`;
 - `MATTERCODEX_RUNTIME_LIMITS_ENABLED` - optional, включает render/apply namespace `ResourceQuota` и `LimitRange` для runtime namespace; default `true`;
-- `MATTERCODEX_RUNTIME_QUOTA_PODS`, `MATTERCODEX_RUNTIME_QUOTA_JOBS`, `MATTERCODEX_RUNTIME_QUOTA_PVCS` - optional, object count quota для pod, batch Job и PVC в runtime namespace; default PVC quota `120` оставляет запас для сохранённых сессий и шести параллельных волн;
+- `MATTERCODEX_RUNTIME_QUOTA_PODS`, `MATTERCODEX_RUNTIME_QUOTA_JOBS`, `MATTERCODEX_RUNTIME_QUOTA_PVCS` - optional, object count quota для pod, batch Job и PVC в runtime namespace; default PVC quota `200` не становится преждевременным ограничителем перед суммарной storage quota для сохранённых сессий и параллельных волн;
 - `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_STORAGE` - optional, суммарная quota на requested PVC storage в runtime namespace;
 - `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_MEMORY` - optional, namespace quota на compute requests; дефолты для single-node owner-инсталляции: requests `28`/`96Gi`;
 - `MATTERCODEX_OWNER_MATTERMOST_USERNAME` - optional username владельца owner-инстанса, которого bootstrap добавляет в приватные системные каналы координации; значение не хранится в репозитории;
@@ -148,6 +148,8 @@ Kaniko Job получает повышенные default resources для тяж
 Legacy strategy `MATTERCODEX_IMAGE_BUILD_STRATEGY=docker` оставлена только для контуров, где `docker` или `nerdctl` есть прямо на целевом сервере. Remote installer не делает локальный Docker build/import fallback.
 
 Agent runner image содержит явный non-root user UID/GID `10001`. Runtime Job дополнительно задает pod/container `securityContext`: `runAsNonRoot`, `runAsUser`, `runAsGroup`, `fsGroup`, `seccompProfile: RuntimeDefault`, dropped capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`. Writable paths отдаются через volumes: `/workspace` для run PVC, `/codex-home` для device-code auth, `/home/matter-codex` для `gh`/npm/cache и `/tmp` для временных файлов.
+
+При первом запуске repository-backed сессии runner клонирует репозиторий и переключается на выбранную базовую ветку. При пересоздании pod возобновляемая сессия сохраняет текущую ветку и состояние рабочего дерева на PVC: runner обновляет `origin` и remote refs, но не выполняет `checkout -B` поверх существующего workspace. Поэтому незакоммиченные изменения и локальная ветка переживают рестарт и остаются доступны продолженной Codex-сессии.
 
 Runtime namespace получает `ResourceQuota` `matter-codex-runtime-quota` и `LimitRange` `matter-codex-runtime-container-defaults`. Quota ограничивает общее число pods, batch Jobs, PVC, суммарный requested storage и суммарные cpu/memory requests. LimitRange задает cpu/memory requests для containers без явных resources, чтобы quota admission не отклоняла agent Job.
 

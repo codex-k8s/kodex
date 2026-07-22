@@ -148,6 +148,13 @@ type AgentSessionRepairResult struct {
 	QueuedSessionsEnsured int
 	StaleSessionsReset    int
 	Failed                int
+	Failures              []AgentSessionRepairFailure
+}
+
+type AgentSessionRepairFailure struct {
+	SessionKey string
+	Phase      string
+	Error      string
 }
 
 type AgentTurnDispatcher interface {
@@ -1009,6 +1016,11 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 	for _, session := range queuedSessions {
 		if err := svc.ensureQueuedAgentSessionRuntime(ctx, session); err != nil {
 			result.Failed++
+			result.Failures = append(result.Failures, AgentSessionRepairFailure{
+				SessionKey: session.SessionKey,
+				Phase:      "ensure_queued_runtime",
+				Error:      err.Error(),
+			})
 			continue
 		}
 		result.QueuedSessionsEnsured++
