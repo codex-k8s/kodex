@@ -42,5 +42,17 @@
   {
     "path": "/mcp/sessions/",
     "boundary": "cluster"
+  },
+  {
+    "path": "/api/control-center/v1/automation-runs",
+    "boundary": "public"
+  },
+  {
+    "path": "/control-center",
+    "boundary": "public"
+  },
+  {
+    "path": "/control-center/",
+    "boundary": "public"
   }
 ]

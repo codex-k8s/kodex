@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -30,6 +33,34 @@ func TestEmptyMCPCollectionOutputsUseArrays(t *testing.T) {
 				t.Fatalf("structured MCP output contains null collection: %s", payload)
 			}
 		})
+	}
+}
+
+func TestMCPAutomationCallbackOutputKeepsHumanGatePending(t *testing.T) {
+	output := automationCallbackMCPOutput(statusservice.AutomationCallbackResult{
+		Run: entity.ScheduledRun{
+			PublicID: "scheduled-run-11111111111111111111111111111111",
+			Status:   string(value.AutomationRunStatusWaitingOwner),
+			Outcome:  string(value.AutomationRunOutcomeRequiresHuman),
+		},
+		Duplicate:           true,
+		OwnerAttentionID:    71,
+		HumanDecisionStatus: "open",
+		DeliveryStatus:      "pending",
+		NextAction:          "retry_same_callback",
+	})
+	payload, err := json.Marshal(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := string(payload)
+	for _, expected := range []string{`"status":"waiting_owner"`, `"outcome":"requires_human"`, `"owner_attention_id":71`, `"human_decision_status":"open"`, `"delivery_status":"pending"`, `"next_action":"retry_same_callback"`} {
+		if !strings.Contains(encoded, expected) {
+			t.Fatalf("pending MCP output не содержит %s: %s", expected, encoded)
+		}
+	}
+	if strings.Contains(encoded, `"status":"succeeded"`) {
+		t.Fatalf("pending MCP output ложно terminal: %s", encoded)
 	}
 }
 

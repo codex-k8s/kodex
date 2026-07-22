@@ -160,6 +160,7 @@ func (repo *Repository) EnsureTurnProcess(ctx context.Context, input adminrepo.E
 			join matter_codex_owner_attention_requests attention on attention.process_run_id = process.id
 			join matter_codex_agent_session_turns attention_turn on attention_turn.id = attention.turn_id
 			where process.project_id = $1
+				and attention.request_kind = 'generic'
 				and attention_turn.mattermost_channel_id = $2
 				and attention_turn.mattermost_root_post_id = $3
 				and process.root_initiator_user_id = $4
@@ -180,6 +181,7 @@ func (repo *Repository) EnsureTurnProcess(ctx context.Context, input adminrepo.E
 					resolved_by_post_id = $3, updated_at = now()
 				from matter_codex_agent_session_turns attention_turn
 				where attention.process_run_id = $1 and attention.status = 'open'
+					and attention.request_kind = 'generic'
 					and attention_turn.id = attention.turn_id
 					and attention_turn.mattermost_channel_id = $4
 					and attention_turn.mattermost_root_post_id = $5
@@ -483,10 +485,10 @@ func (repo *Repository) SearchMemory(ctx context.Context, input adminrepo.Search
 func (repo *Repository) CreateOwnerAttention(ctx context.Context, input adminrepo.CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error) {
 	row := repo.db.QueryRow(ctx, `
 		insert into matter_codex_owner_attention_requests (
-			process_run_id, turn_id, severity, summary, options, recommendation,
+			request_kind, process_run_id, turn_id, severity, summary, options, recommendation,
 			evidence_links, pause_scope, idempotency_key
-		) values ($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8,$9)
-		on conflict (process_run_id, idempotency_key) do nothing
+		) values ('generic',$1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8,$9)
+		on conflict (process_run_id, idempotency_key) where request_kind = 'generic' do nothing
 		returning id, process_run_id, turn_id, severity, summary, options, recommendation,
 			evidence_links, pause_scope, idempotency_key, mattermost_post_id, status
 	`, input.ProcessRunID, input.TurnID, input.Severity, input.Summary, marshalStrings(input.Options),
@@ -498,7 +500,7 @@ func (repo *Repository) CreateOwnerAttention(ctx context.Context, input adminrep
 			select id, process_run_id, turn_id, severity, summary, options, recommendation,
 				evidence_links, pause_scope, idempotency_key, mattermost_post_id, status
 			from matter_codex_owner_attention_requests
-			where process_run_id = $1 and idempotency_key = $2
+			where process_run_id = $1 and idempotency_key = $2 and request_kind = 'generic'
 		`, input.ProcessRunID, input.IdempotencyKey))
 	}
 	if err != nil {
@@ -517,7 +519,7 @@ func (repo *Repository) CreateOwnerAttention(ctx context.Context, input adminrep
 func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, id int64, postID string) (entity.OwnerAttentionRequest, error) {
 	item, err := scanOwnerAttention(repo.db.QueryRow(ctx, `
 		update matter_codex_owner_attention_requests set mattermost_post_id = $2, updated_at = now()
-		where id = $1
+		where id = $1 and request_kind = 'generic'
 		returning id, process_run_id, turn_id, severity, summary, options, recommendation,
 			evidence_links, pause_scope, idempotency_key, mattermost_post_id, status
 	`, id, postID))

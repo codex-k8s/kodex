@@ -110,6 +110,7 @@ func TestAutomationRunCardsExposeEveryStateWithoutColorOnly(t *testing.T) {
 	}{
 		{string(value.AutomationRunStatusQueued), "", "В очереди", "#5b667a"},
 		{string(value.AutomationRunStatusRunning), "", "Выполняется", "#1c58d9"},
+		{string(value.AutomationRunStatusWaitingOwner), string(value.AutomationRunOutcomeRequiresHuman), "Ожидается решение владельца", "#b7791f"},
 		{string(value.AutomationRunStatusSucceeded), string(value.AutomationRunOutcomeNoAction), "Завершено успешно", "#227a55"},
 		{string(value.AutomationRunStatusFailed), string(value.AutomationRunOutcomeFailed), "Завершено с ошибкой", "#c4314b"},
 	}
@@ -135,6 +136,9 @@ func TestAutomationRunCardsExposeEveryStateWithoutColorOnly(t *testing.T) {
 			}
 			if !strings.Contains(visible, test.label) {
 				t.Fatalf("карточка %s не содержит явное состояние %q: %s", test.status, test.label, visible)
+			}
+			if !strings.Contains(visible, "scheduled-run-11111111111111111111111111111111") {
+				t.Fatalf("карточка %s не содержит точный ScheduledRun: %s", test.status, visible)
 			}
 			if len(card.Actions) == 0 {
 				t.Fatalf("карточка %s не содержит навигации", test.status)
