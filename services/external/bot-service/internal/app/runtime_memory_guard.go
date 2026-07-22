@@ -3,12 +3,15 @@ package app
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-var kubernetesMemoryQuantityPattern = regexp.MustCompile(`^[1-9][0-9]{0,8}(Ki|Mi|Gi|Ti)$`)
+const maxRuntimeMemoryQuantityKi = int64(9_007_199_254_740_991)
+
+var kubernetesMemoryQuantityPattern = regexp.MustCompile(`^([1-9][0-9]{0,8})(Ki|Mi|Gi|Ti)$`)
 
 func (cfg Config) validateRuntimeMemoryGuard() error {
 	if !cfg.RuntimeEnabled {
@@ -68,8 +71,25 @@ func (cfg Config) validateRuntimeMemoryGuard() error {
 
 func parseRuntimeMemoryQuantity(name string, value string) (resource.Quantity, error) {
 	value = strings.TrimSpace(value)
-	if !kubernetesMemoryQuantityPattern.MatchString(value) {
+	matches := kubernetesMemoryQuantityPattern.FindStringSubmatch(value)
+	if matches == nil {
 		return resource.Quantity{}, fmt.Errorf("%s must be a positive Kubernetes memory quantity with Ki, Mi, Gi or Ti suffix", name)
+	}
+	amount, err := strconv.ParseInt(matches[1], 10, 64)
+	if err != nil {
+		return resource.Quantity{}, fmt.Errorf("%s is invalid", name)
+	}
+	factorKi := int64(1)
+	switch matches[2] {
+	case "Mi":
+		factorKi = 1024
+	case "Gi":
+		factorKi = 1024 * 1024
+	case "Ti":
+		factorKi = 1024 * 1024 * 1024
+	}
+	if amount > maxRuntimeMemoryQuantityKi/factorKi {
+		return resource.Quantity{}, fmt.Errorf("%s exceeds the supported memory quantity range", name)
 	}
 	quantity, err := resource.ParseQuantity(value)
 	if err != nil || quantity.Sign() <= 0 {

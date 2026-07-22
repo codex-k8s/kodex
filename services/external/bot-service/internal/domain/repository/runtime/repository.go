@@ -21,8 +21,9 @@ type SecretIntegrity struct {
 }
 
 var (
-	ErrAgentSessionCapacity = errors.New("agent session runtime capacity unavailable")
-	ErrSecretNotFound       = errors.New("runtime secret not found")
+	ErrAgentSessionCapacity        = errors.New("agent session runtime capacity unavailable")
+	ErrSecretNotFound              = errors.New("runtime secret not found")
+	ErrUntrustedClusterAdminAccess = errors.New("cluster-admin access is disabled for untrusted shared-node runtime")
 )
 
 type AgentSessionCapacityKind string

@@ -2,7 +2,7 @@ GOVULNCHECK_VERSION := v1.6.0
 GO_MIN_VERSION := 1.26.5
 GO_TOOLCHAIN := go1.26.5
 
-.PHONY: check-go-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts
+.PHONY: check-go-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-kubernetes-admission test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -19,6 +19,9 @@ test-go-postgres: check-go-toolchain
 test-go-all:
 	@$(MAKE) test-go
 	@$(MAKE) test-go-postgres
+
+test-kubernetes-admission: check-go-toolchain
+	@./scripts/tests/kubernetes-admission-test.sh
 
 test-render-evidence: check-go-toolchain
 	go test ./services/external/bot-service/internal/app -run TestBotServiceRenderCountsNonEmptyObjects -count=1

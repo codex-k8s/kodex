@@ -114,8 +114,8 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 			t.Fatalf("закрытие %s: %v", filepath.Base(yamlFile), err)
 		}
 	}
-	if objectCount != 20 {
-		t.Fatalf("число Kubernetes objects = %d, ожидалось 20", objectCount)
+	if objectCount != 18 {
+		t.Fatalf("число Kubernetes objects = %d, ожидалось 18", objectCount)
 	}
 	assertRenderedRuntimeResourcePolicy(t, runtimeQuota, runtimeLimitRange)
 }

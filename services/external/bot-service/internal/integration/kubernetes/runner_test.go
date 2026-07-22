@@ -714,6 +714,120 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	}
 }
 
+func TestStartAgentSessionReconcilesLegacyGuardByDeletingOnlyPod(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*corev1.Pod)
+	}{
+		{
+			name: "legacy memory",
+			mutate: func(pod *corev1.Pod) {
+				pod.Spec.PriorityClassName = ""
+				pod.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = resource.MustParse("1Gi")
+				pod.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory] = resource.MustParse("64Gi")
+			},
+		},
+		{
+			name: "renamed priority class",
+			mutate: func(pod *corev1.Pod) {
+				pod.Spec.PriorityClassName = "legacy-agent-workload"
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client := fake.NewSimpleClientset()
+			runner, err := NewRunnerWithClient(client, Config{
+				Namespace: "mattermost", AgentRunnerImage: "matter-codex-agent-runner:test", WorkspaceStorageSize: "1Gi",
+				AgentRunnerServiceAccount: "matter-codex-agent-runner", AgentWorkloadPriorityClass: "current-agent-workload",
+			})
+			if err != nil {
+				t.Fatalf("NewRunnerWithClient() error = %v", err)
+			}
+			input := runtimerepo.AgentSessionPodInput{
+				SessionKey: "legacy-session", Role: "developer", BotServiceURL: "http://bot-service",
+				InternalToken: "session-token", CodexAuthSecretName: "matter-codex-codex-auth-main",
+			}
+			if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Create(context.Background(), runner.sessionPVC(input.SessionKey, input.Role), metav1.CreateOptions{}); err != nil {
+				t.Fatalf("create PVC fixture: %v", err)
+			}
+			if _, err := client.CoreV1().Secrets("mattermost").Create(context.Background(), &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: sessionSecretName(input.SessionKey), Namespace: "mattermost"},
+				Data:       map[string][]byte{"token": []byte(input.InternalToken)},
+			}, metav1.CreateOptions{}); err != nil {
+				t.Fatalf("create Secret fixture: %v", err)
+			}
+			legacyPod := runner.sessionPod(input)
+			legacyPod.UID = "legacy-pod-uid"
+			legacyPod.ResourceVersion = "7"
+			test.mutate(legacyPod)
+			if _, err := client.CoreV1().Pods("mattermost").Create(context.Background(), legacyPod, metav1.CreateOptions{}); err != nil {
+				t.Fatalf("create Pod fixture: %v", err)
+			}
+			client.ClearActions()
+
+			started, err := runner.StartAgentSession(context.Background(), input)
+			if err != nil {
+				t.Fatalf("StartAgentSession() error = %v", err)
+			}
+			pod, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("get reconciled Pod: %v", err)
+			}
+			if pod.Spec.PriorityClassName != "current-agent-workload" || !memoryResourcesEqual(pod.Spec.Containers[0].Resources, runner.runnerSessionResourceRequirements()) {
+				t.Fatalf("reconciled Pod remains outside guard: %#v", pod.Spec)
+			}
+			deletedPods := 0
+			for _, action := range client.Actions() {
+				if action.GetVerb() != "delete" {
+					continue
+				}
+				if action.GetResource().Resource != "pods" {
+					t.Fatalf("legacy reconciliation deleted persistent resource: %s", action.GetResource().Resource)
+				}
+				deletedPods++
+			}
+			if deletedPods != 1 {
+				t.Fatalf("legacy reconciliation deleted pods = %d, want 1", deletedPods)
+			}
+			assertSessionPVCExists(t, client, input.SessionKey)
+			assertSessionSecretExists(t, client, input.SessionKey)
+		})
+	}
+}
+
+func TestStartSmokeRunRejectsLegacyUtilityJobWithoutDeletingData(t *testing.T) {
+	runnerConfig := Config{
+		Namespace: "mattermost", WorkspaceStorageSize: "1Gi", AgentRunnerServiceAccount: "matter-codex-agent-runner",
+		AgentWorkloadPriorityClass: "current-agent-workload",
+	}
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, runnerConfig)
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	legacyJob := runner.smokeJob("legacy-utility", "smoke")
+	legacyJob.Spec.Template.Spec.PriorityClassName = "legacy-agent-workload"
+	legacyJob.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = resource.MustParse("1Gi")
+	legacyJob.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory] = resource.MustParse("4Gi")
+	if _, err := client.BatchV1().Jobs("mattermost").Create(context.Background(), legacyJob, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create Job fixture: %v", err)
+	}
+	client.ClearActions()
+
+	if _, err := runner.StartSmokeRun(context.Background(), runtimerepo.SmokeRunInput{RunID: "legacy-utility", Role: "smoke"}); err == nil {
+		t.Fatal("StartSmokeRun() accepted legacy utility Job")
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() == "delete" {
+			t.Fatalf("legacy utility rejection deleted %s", action.GetResource().Resource)
+		}
+		if action.GetResource().Resource == "persistentvolumeclaims" || action.GetResource().Resource == "secrets" {
+			t.Fatalf("legacy utility rejection touched persistent data: %s %s", action.GetVerb(), action.GetResource().Resource)
+		}
+	}
+}
+
 func TestSyntheticSecretMatrixDoesNotReachRenderedWorkloadObjects(t *testing.T) {
 	secrets := map[string]string{
 		"OpenAI":         "mc-sentinel-openai-render-76c8b2a1",
@@ -808,7 +922,7 @@ func TestStartAgentSessionFrozenTokenSecretUsesImmutableVersionBinding(t *testin
 		t.Fatalf("NewRunnerWithClient() error = %v", err)
 	}
 	input := runtimerepo.AgentSessionPodInput{
-		SessionKey: sessionKey, Role: "mattercodex-admin", KubernetesAccess: "cluster-admin",
+		SessionKey: sessionKey, Role: "mattercodex-admin", KubernetesAccess: "read-only",
 		BotServiceURL: "http://bot-service", InternalToken: token, CodexAuthSecretName: "matter-codex-codex-auth-main",
 		TokenSecretIntegrity: &runtimerepo.SecretIntegrity{
 			SecretName: secretName, SecretKey: "token", ContentSHA256: hex.EncodeToString(digest[:]),
@@ -860,38 +974,18 @@ func TestStartAgentSessionFrozenTokenSecretUsesImmutableVersionBinding(t *testin
 	}
 }
 
-func TestPrepareClusterAdminSessionRuntimeCreatesAndReusesExactTokenBinding(t *testing.T) {
+func TestPrepareClusterAdminSessionRuntimeRejectsBeforeKubernetesEffects(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	client.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		secret := action.(k8stesting.CreateAction).GetObject().(*corev1.Secret).DeepCopy()
-		secret.Namespace = "mattermost"
-		secret.UID = "synthetic-prepared-secret-uid"
-		secret.ResourceVersion = "17"
-		if err := client.Tracker().Create(corev1.SchemeGroupVersion.WithResource("secrets"), secret, "mattermost"); err != nil {
-			return true, nil, err
-		}
-		return true, secret, nil
-	})
 	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost", WorkspaceStorageSize: "1Gi"})
 	if err != nil {
 		t.Fatalf("NewRunnerWithClient() error = %v", err)
 	}
-	prepared, err := runner.PrepareClusterAdminSessionRuntime(context.Background(), "admin-session", "first-token")
-	if err != nil {
+	_, err = runner.PrepareClusterAdminSessionRuntime(context.Background(), "admin-session", "first-token")
+	if !errors.Is(err, runtimerepo.ErrUntrustedClusterAdminAccess) {
 		t.Fatalf("PrepareClusterAdminSessionRuntime() error = %v", err)
 	}
-	if !prepared.TokenSecret.Created || prepared.TokenSecret.Token != "first-token" || prepared.TokenSecret.Integrity.UID != "synthetic-prepared-secret-uid" {
-		t.Fatalf("prepared runtime = %#v", prepared)
-	}
-	if prepared.Namespace != "mattermost" || prepared.PodName != sessionPodName("admin-session") || prepared.PVCName != sessionPVCName("admin-session") {
-		t.Fatalf("prepared resource names = %#v", prepared)
-	}
-	reused, err := runner.PrepareClusterAdminSessionRuntime(context.Background(), "admin-session", "replacement-token")
-	if err != nil {
-		t.Fatalf("reused PrepareClusterAdminSessionRuntime() error = %v", err)
-	}
-	if reused.TokenSecret.Created || reused.TokenSecret.Token != "first-token" || reused.TokenSecret.Integrity != prepared.TokenSecret.Integrity {
-		t.Fatalf("reused runtime changed frozen token = %#v", reused)
+	if actions := client.Actions(); len(actions) != 0 {
+		t.Fatalf("cluster-admin preparation performed Kubernetes actions: %#v", actions)
 	}
 }
 
@@ -932,7 +1026,7 @@ func TestStartAgentSessionFrozenTokenSecretDriftFailsBeforeEffects(t *testing.T)
 			}
 			client.ClearActions()
 			_, err = runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
-				SessionKey: "frozen-session", Role: "mattercodex-admin", KubernetesAccess: "cluster-admin",
+				SessionKey: "frozen-session", Role: "mattercodex-admin", KubernetesAccess: "read-only",
 				BotServiceURL: "http://bot-service", InternalToken: token, TokenSecretIntegrity: &expected,
 			})
 			if err == nil {
@@ -1245,7 +1339,7 @@ func frozenSessionBoundaryFixture(t *testing.T) (*fake.Clientset, *Runner, runti
 		t.Fatalf("NewRunnerWithClient() error = %v", err)
 	}
 	return client, runner, runtimerepo.AgentSessionPodInput{
-		SessionKey: "frozen-session", Role: "mattercodex-admin", KubernetesAccess: "cluster-admin",
+		SessionKey: "frozen-session", Role: "mattercodex-admin", KubernetesAccess: "read-only",
 		BotServiceURL: "http://bot-service", InternalToken: token, CodexAuthSecretName: "matter-codex-codex-auth-main", TokenSecretIntegrity: &expected,
 	}
 }
@@ -1388,21 +1482,20 @@ func TestSessionPodSchedulingCapacityErrorRecognizesInsufficientMemory(t *testin
 	}
 }
 
-func TestStartAgentSessionUsesClusterAdminServiceAccountWhenRequested(t *testing.T) {
+func TestStartAgentSessionRejectsClusterAdminBeforeKubernetesEffects(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	runner, err := NewRunnerWithClient(client, Config{
-		Namespace:                             "mattermost",
-		AgentRunnerImage:                      "matter-codex-agent-runner:test",
-		WorkspaceStorageSize:                  "1Gi",
-		AgentRunnerServiceAccount:             "matter-codex-agent-runner",
-		AgentRunnerClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
-		CodexAuthSecretName:                   "matter-codex-codex-auth",
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		WorkspaceStorageSize:      "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+		CodexAuthSecretName:       "matter-codex-codex-auth",
 	})
 	if err != nil {
 		t.Fatalf("NewRunnerWithClient() error = %v", err)
 	}
 
-	started, err := runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
+	_, err = runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
 		SessionKey:          "project-1-chat-2-role-9",
 		Role:                "sre",
 		KubernetesAccess:    "cluster-admin",
@@ -1410,21 +1503,61 @@ func TestStartAgentSessionUsesClusterAdminServiceAccountWhenRequested(t *testing
 		InternalToken:       "session-token",
 		CodexAuthSecretName: "matter-codex-codex-auth-main",
 	})
-	if err != nil {
+	if !errors.Is(err, runtimerepo.ErrUntrustedClusterAdminAccess) {
 		t.Fatalf("StartAgentSession() error = %v", err)
 	}
-	pod, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("Get session pod error = %v", err)
+	if actions := client.Actions(); len(actions) != 0 {
+		t.Fatalf("cluster-admin rejection performed Kubernetes actions: %#v", actions)
 	}
-	if pod.Spec.ServiceAccountName != "matter-codex-agent-runner-cluster-admin" {
-		t.Fatalf("ServiceAccountName = %q", pod.Spec.ServiceAccountName)
+}
+
+func TestJobRuntimePathsRejectClusterAdminBeforeKubernetesEffects(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*Runner) error
+	}{
+		{
+			name: "developer",
+			call: func(runner *Runner) error {
+				_, err := runner.StartDeveloperRun(context.Background(), runtimerepo.DeveloperRunInput{
+					RunID: "developer-admin", Prompt: "prompt", KubernetesAccess: "cluster-admin",
+				})
+				return err
+			},
+		},
+		{
+			name: "reviewer",
+			call: func(runner *Runner) error {
+				_, err := runner.StartReviewRun(context.Background(), runtimerepo.ReviewRunInput{
+					RunID: "reviewer-admin", Owner: "owner", Name: "repository", PRNumber: 1, Prompt: "prompt", KubernetesAccess: "cluster-admin",
+				})
+				return err
+			},
+		},
+		{
+			name: "chat",
+			call: func(runner *Runner) error {
+				_, err := runner.StartChatRun(context.Background(), runtimerepo.ChatRunInput{
+					RunID: "chat-admin", Prompt: "prompt", CodexAuthSecretName: "codex-auth", KubernetesAccess: "cluster-admin",
+				})
+				return err
+			},
+		},
 	}
-	if pod.Spec.AutomountServiceAccountToken == nil || !*pod.Spec.AutomountServiceAccountToken {
-		t.Fatal("cluster-admin session pod should automount service account token")
-	}
-	if got := envValue(pod.Spec.Containers[0].Env, "MATTERCODEX_KUBERNETES_ACCESS"); got != "cluster-admin" {
-		t.Fatalf("MATTERCODEX_KUBERNETES_ACCESS = %q", got)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client := fake.NewSimpleClientset()
+			runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost", WorkspaceStorageSize: "1Gi"})
+			if err != nil {
+				t.Fatalf("NewRunnerWithClient() error = %v", err)
+			}
+			if err := test.call(runner); !errors.Is(err, runtimerepo.ErrUntrustedClusterAdminAccess) {
+				t.Fatalf("runtime error = %v", err)
+			}
+			if actions := client.Actions(); len(actions) != 0 {
+				t.Fatalf("cluster-admin rejection performed Kubernetes actions: %#v", actions)
+			}
+		})
 	}
 }
 

@@ -17,16 +17,6 @@ metadata:
     app.kubernetes.io/component: agent-runner
 automountServiceAccountToken: false
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: ${MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT}
-  namespace: ${MATTERCODEX_NAMESPACE}
-  labels:
-    app.kubernetes.io/name: matter-codex-agent-runner
-    app.kubernetes.io/component: agent-runner-cluster-admin
-automountServiceAccountToken: false
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -113,19 +103,3 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: matter-codex-agent-runner-readonly
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: matter-codex-agent-runner-cluster-admin
-  labels:
-    app.kubernetes.io/name: matter-codex-agent-runner
-    app.kubernetes.io/component: agent-runner-cluster-admin-rbac
-subjects:
-  - kind: ServiceAccount
-    name: ${MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT}
-    namespace: ${MATTERCODEX_NAMESPACE}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin

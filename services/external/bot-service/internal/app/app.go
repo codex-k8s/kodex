@@ -380,25 +380,24 @@ func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, boo
 		return nil, false
 	}
 	runner, err := kubernetesintegration.NewRunner(kubernetesintegration.Config{
-		Namespace:                             cfg.RuntimeNamespace,
-		KubeconfigPath:                        cfg.RuntimeKubeconfigPath,
-		SmokeImage:                            cfg.RuntimeSmokeImage,
-		AgentRunnerImage:                      cfg.AgentRunnerImage,
-		CodexPackage:                          cfg.CodexPackage,
-		WorkspaceStorageSize:                  cfg.RuntimeWorkspaceSize,
-		SessionCPURequest:                     cfg.AgentSessionCPURequest,
-		SessionMemoryRequest:                  cfg.AgentSessionMemoryRequest,
-		SessionMemoryLimit:                    cfg.AgentSessionMemoryLimit,
-		UtilityMemoryLimit:                    cfg.AgentUtilityMemoryLimit,
-		DevShmSizeLimit:                       cfg.AgentDevShmSizeLimit,
-		AgentWorkloadPriorityClass:            cfg.AgentWorkloadPriorityClass,
-		JobTTLSecondsAfterFinish:              cfg.RuntimeJobTTLSeconds,
-		AuthCheckJobTTLSecondsAfterFinish:     cfg.AuthCheckJobTTLSeconds,
-		LogTailLines:                          cfg.RuntimeLogTailLines,
-		AgentRunnerServiceAccount:             cfg.AgentServiceAccount,
-		AgentRunnerClusterAdminServiceAccount: cfg.AgentClusterAdminServiceAccount,
-		CodexAuthSecretName:                   cfg.CodexAuthSecretName,
-		GitHubSecretName:                      cfg.GitHubSecretName,
+		Namespace:                         cfg.RuntimeNamespace,
+		KubeconfigPath:                    cfg.RuntimeKubeconfigPath,
+		SmokeImage:                        cfg.RuntimeSmokeImage,
+		AgentRunnerImage:                  cfg.AgentRunnerImage,
+		CodexPackage:                      cfg.CodexPackage,
+		WorkspaceStorageSize:              cfg.RuntimeWorkspaceSize,
+		SessionCPURequest:                 cfg.AgentSessionCPURequest,
+		SessionMemoryRequest:              cfg.AgentSessionMemoryRequest,
+		SessionMemoryLimit:                cfg.AgentSessionMemoryLimit,
+		UtilityMemoryLimit:                cfg.AgentUtilityMemoryLimit,
+		DevShmSizeLimit:                   cfg.AgentDevShmSizeLimit,
+		AgentWorkloadPriorityClass:        cfg.AgentWorkloadPriorityClass,
+		JobTTLSecondsAfterFinish:          cfg.RuntimeJobTTLSeconds,
+		AuthCheckJobTTLSecondsAfterFinish: cfg.AuthCheckJobTTLSeconds,
+		LogTailLines:                      cfg.RuntimeLogTailLines,
+		AgentRunnerServiceAccount:         cfg.AgentServiceAccount,
+		CodexAuthSecretName:               cfg.CodexAuthSecretName,
+		GitHubSecretName:                  cfg.GitHubSecretName,
 	})
 	if err != nil {
 		logger.Warn("kubernetes runtime disabled: client-go runner is not configured", "error", err)
@@ -625,7 +624,7 @@ where lower(trim(role.kubernetes_access)) = 'cluster-admin'
 		return 0, fmt.Errorf("read cluster-admin secret bindings: %w", err)
 	}
 	if len(bindings) > 0 && runtimeRunner == nil {
-		return 0, fmt.Errorf("Kubernetes runtime is required to stage frozen secret integrity")
+		return 0, fmt.Errorf("kubernetes runtime is required to stage frozen secret integrity")
 	}
 	blockedSessions := 0
 	for _, binding := range bindings {

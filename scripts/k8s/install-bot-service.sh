@@ -55,7 +55,7 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands kubectl envsubst base64
+mattercodex_require_commands kubectl envsubst base64 jq
 
 if [ -z "$RENDER_DIR" ]; then
   RENDER_DIR="$(mktemp -d)"
@@ -65,6 +65,14 @@ fi
 "$SCRIPT_DIR/render-bot-service.sh" --env-file "$ENV_FILE" --render-dir "$RENDER_DIR" >/dev/null
 
 DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
+
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  mattercodex_log "отзывается legacy cluster-admin credential agent runtime"
+  kubectl delete clusterrolebinding matter-codex-agent-runner-cluster-admin --ignore-not-found >/dev/null
+  kubectl -n "$MATTERCODEX_RUNTIME_NAMESPACE" delete serviceaccount "$MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT" --ignore-not-found >/dev/null
+  kubectl -n "$MATTERCODEX_RUNTIME_NAMESPACE" get pods -o json | mattercodex_validate_agent_workload_inventory
+  mattercodex_log "legacy agent workloads: reconciliation подтверждён"
+fi
 
 apply_rendered_manifest() {
   local template="$1"

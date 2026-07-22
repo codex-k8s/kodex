@@ -78,48 +78,46 @@ var (
 )
 
 type Config struct {
-	Namespace                             string
-	KubeconfigPath                        string
-	SmokeImage                            string
-	AgentRunnerImage                      string
-	CodexPackage                          string
-	WorkspaceStorageSize                  string
-	SessionCPURequest                     string
-	SessionMemoryRequest                  string
-	SessionMemoryLimit                    string
-	UtilityMemoryLimit                    string
-	DevShmSizeLimit                       string
-	AgentWorkloadPriorityClass            string
-	JobTTLSecondsAfterFinish              int32
-	AuthCheckJobTTLSecondsAfterFinish     int32
-	LogTailLines                          int64
-	AgentRunnerServiceAccount             string
-	AgentRunnerClusterAdminServiceAccount string
-	CodexAuthSecretName                   string
-	GitHubSecretName                      string
+	Namespace                         string
+	KubeconfigPath                    string
+	SmokeImage                        string
+	AgentRunnerImage                  string
+	CodexPackage                      string
+	WorkspaceStorageSize              string
+	SessionCPURequest                 string
+	SessionMemoryRequest              string
+	SessionMemoryLimit                string
+	UtilityMemoryLimit                string
+	DevShmSizeLimit                   string
+	AgentWorkloadPriorityClass        string
+	JobTTLSecondsAfterFinish          int32
+	AuthCheckJobTTLSecondsAfterFinish int32
+	LogTailLines                      int64
+	AgentRunnerServiceAccount         string
+	CodexAuthSecretName               string
+	GitHubSecretName                  string
 }
 
 type Runner struct {
-	client                                kubernetes.Interface
-	restConfig                            *rest.Config
-	namespace                             string
-	smokeImage                            string
-	agentRunnerImage                      string
-	codexPackage                          string
-	workspaceStorage                      resource.Quantity
-	sessionCPURequest                     resource.Quantity
-	sessionMemoryRequest                  resource.Quantity
-	sessionMemoryLimit                    resource.Quantity
-	utilityMemoryLimit                    resource.Quantity
-	devShmSizeLimit                       resource.Quantity
-	agentWorkloadPriorityClass            string
-	jobTTLSecondsAfterFinish              int32
-	authCheckJobTTLSecondsAfterFinish     int32
-	logTailLines                          int64
-	agentRunnerServiceAccount             string
-	agentRunnerClusterAdminServiceAccount string
-	codexAuthSecretName                   string
-	gitHubSecretName                      string
+	client                            kubernetes.Interface
+	restConfig                        *rest.Config
+	namespace                         string
+	smokeImage                        string
+	agentRunnerImage                  string
+	codexPackage                      string
+	workspaceStorage                  resource.Quantity
+	sessionCPURequest                 resource.Quantity
+	sessionMemoryRequest              resource.Quantity
+	sessionMemoryLimit                resource.Quantity
+	utilityMemoryLimit                resource.Quantity
+	devShmSizeLimit                   resource.Quantity
+	agentWorkloadPriorityClass        string
+	jobTTLSecondsAfterFinish          int32
+	authCheckJobTTLSecondsAfterFinish int32
+	logTailLines                      int64
+	agentRunnerServiceAccount         string
+	codexAuthSecretName               string
+	gitHubSecretName                  string
 }
 
 func (runner *Runner) InspectSecretIntegrity(ctx context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
@@ -222,26 +220,25 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		return nil, fmt.Errorf("agent workload priority class is invalid")
 	}
 	return &Runner{
-		client:                                client,
-		restConfig:                            restConfig,
-		namespace:                             namespace,
-		smokeImage:                            defaultString(cfg.SmokeImage, "busybox:1.36"),
-		agentRunnerImage:                      defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
-		codexPackage:                          defaultString(cfg.CodexPackage, "@openai/codex@0.144.1"),
-		workspaceStorage:                      storage,
-		sessionCPURequest:                     sessionCPURequest,
-		sessionMemoryRequest:                  sessionMemoryRequest,
-		sessionMemoryLimit:                    sessionMemoryLimit,
-		utilityMemoryLimit:                    utilityMemoryLimit,
-		devShmSizeLimit:                       devShmSizeLimit,
-		agentWorkloadPriorityClass:            agentWorkloadPriorityClass,
-		jobTTLSecondsAfterFinish:              defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
-		authCheckJobTTLSecondsAfterFinish:     defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),
-		logTailLines:                          defaultInt64(cfg.LogTailLines, 40),
-		agentRunnerServiceAccount:             defaultString(cfg.AgentRunnerServiceAccount, "matter-codex-agent-runner"),
-		agentRunnerClusterAdminServiceAccount: defaultString(cfg.AgentRunnerClusterAdminServiceAccount, "matter-codex-agent-runner-cluster-admin"),
-		codexAuthSecretName:                   defaultString(cfg.CodexAuthSecretName, "matter-codex-codex-auth"),
-		gitHubSecretName:                      defaultString(cfg.GitHubSecretName, "matter-codex-github"),
+		client:                            client,
+		restConfig:                        restConfig,
+		namespace:                         namespace,
+		smokeImage:                        defaultString(cfg.SmokeImage, "busybox:1.36"),
+		agentRunnerImage:                  defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
+		codexPackage:                      defaultString(cfg.CodexPackage, "@openai/codex@0.144.1"),
+		workspaceStorage:                  storage,
+		sessionCPURequest:                 sessionCPURequest,
+		sessionMemoryRequest:              sessionMemoryRequest,
+		sessionMemoryLimit:                sessionMemoryLimit,
+		utilityMemoryLimit:                utilityMemoryLimit,
+		devShmSizeLimit:                   devShmSizeLimit,
+		agentWorkloadPriorityClass:        agentWorkloadPriorityClass,
+		jobTTLSecondsAfterFinish:          defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
+		authCheckJobTTLSecondsAfterFinish: defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),
+		logTailLines:                      defaultInt64(cfg.LogTailLines, 40),
+		agentRunnerServiceAccount:         defaultString(cfg.AgentRunnerServiceAccount, "matter-codex-agent-runner"),
+		codexAuthSecretName:               defaultString(cfg.CodexAuthSecretName, "matter-codex-codex-auth"),
+		gitHubSecretName:                  defaultString(cfg.GitHubSecretName, "matter-codex-github"),
 	}, nil
 }
 
@@ -253,6 +250,10 @@ func (runner *Runner) StartSmokeRun(ctx context.Context, input runtimerepo.Smoke
 	role := defaultString(input.Role, "smoke")
 	pvcName := workspacePVCName(runID)
 	jobName := runnerJobName(runID)
+	desiredJob := runner.smokeJob(runID, role)
+	if err := runner.validateExistingJobMemoryGuard(ctx, desiredJob); err != nil {
+		return runtimerepo.StartedRun{}, err
+	}
 
 	created := false
 	if _, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, runner.smokePVC(runID, role), metav1.CreateOptions{}); err != nil {
@@ -262,9 +263,12 @@ func (runner *Runner) StartSmokeRun(ctx context.Context, input runtimerepo.Smoke
 	} else {
 		created = true
 	}
-	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.smokeJob(runID, role), metav1.CreateOptions{}); err != nil {
+	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, desiredJob, metav1.CreateOptions{}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return runtimerepo.StartedRun{}, fmt.Errorf("create runner job: %w", err)
+		}
+		if err := runner.validateExistingJobMemoryGuard(ctx, desiredJob); err != nil {
+			return runtimerepo.StartedRun{}, err
 		}
 	} else {
 		created = true
@@ -278,11 +282,11 @@ func (runner *Runner) StartSmokeRun(ctx context.Context, input runtimerepo.Smoke
 	}, nil
 }
 
-func (runner *Runner) agentRunnerServiceAccountForAccess(kubernetesAccess string) string {
+func rejectUntrustedClusterAdminAccess(kubernetesAccess string) error {
 	if normalizedKubernetesAccess(kubernetesAccess) == kubernetesAccessClusterAdmin {
-		return runner.agentRunnerClusterAdminServiceAccount
+		return runtimerepo.ErrUntrustedClusterAdminAccess
 	}
-	return runner.agentRunnerServiceAccount
+	return nil
 }
 
 func (runner *Runner) StartCodexAuthSession(ctx context.Context, input runtimerepo.CodexAuthSessionInput) (runtimerepo.CodexAuthSession, error) {
@@ -295,8 +299,9 @@ func (runner *Runner) StartCodexAuthSession(ctx context.Context, input runtimere
 		return runtimerepo.CodexAuthSession{}, fmt.Errorf("codex auth secret name is required")
 	}
 	jobName := codexAuthJobName(input.AccountName)
+	desiredJob := runner.codexAuthJob(input.AccountName, input.SecretName)
 	created := false
-	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.codexAuthJob(input.AccountName, input.SecretName), metav1.CreateOptions{}); err != nil {
+	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, desiredJob, metav1.CreateOptions{}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return runtimerepo.CodexAuthSession{}, fmt.Errorf("create codex auth job: %w", err)
 		}
@@ -308,10 +313,12 @@ func (runner *Runner) StartCodexAuthSession(ctx context.Context, input runtimere
 			if err := runner.deleteJobAndWait(ctx, jobName, 20*time.Second); err != nil {
 				return runtimerepo.CodexAuthSession{}, err
 			}
-			if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.codexAuthJob(input.AccountName, input.SecretName), metav1.CreateOptions{}); err != nil {
+			if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, desiredJob, metav1.CreateOptions{}); err != nil {
 				return runtimerepo.CodexAuthSession{}, fmt.Errorf("recreate codex auth job: %w", err)
 			}
 			created = true
+		} else if !podSpecMatchesRuntimeGuard(existing.Spec.Template.Spec, desiredJob.Spec.Template.Spec) {
+			return runtimerepo.CodexAuthSession{}, fmt.Errorf("existing agent utility job %s is outside the runtime memory guard; reconcile it before retry", jobName)
 		}
 	} else {
 		created = true
@@ -710,8 +717,15 @@ func (runner *Runner) StartDeveloperRun(ctx context.Context, input runtimerepo.D
 	if input.Prompt == "" {
 		return runtimerepo.StartedRun{}, fmt.Errorf("prompt is required")
 	}
+	if err := rejectUntrustedClusterAdminAccess(input.KubernetesAccess); err != nil {
+		return runtimerepo.StartedRun{}, err
+	}
 	pvcName := workspacePVCName(input.RunID)
 	jobName := runnerJobName(input.RunID)
+	desiredJob := runner.developerJob(input)
+	if err := runner.validateExistingJobMemoryGuard(ctx, desiredJob); err != nil {
+		return runtimerepo.StartedRun{}, err
+	}
 
 	created := false
 	if _, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, runner.smokePVC(input.RunID, input.Profile), metav1.CreateOptions{}); err != nil {
@@ -728,9 +742,12 @@ func (runner *Runner) StartDeveloperRun(ctx context.Context, input runtimerepo.D
 	} else {
 		created = true
 	}
-	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.developerJob(input), metav1.CreateOptions{}); err != nil {
+	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, desiredJob, metav1.CreateOptions{}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return runtimerepo.StartedRun{}, fmt.Errorf("create developer runner job: %w", err)
+		}
+		if err := runner.validateExistingJobMemoryGuard(ctx, desiredJob); err != nil {
+			return runtimerepo.StartedRun{}, err
 		}
 	} else {
 		created = true
@@ -758,8 +775,15 @@ func (runner *Runner) StartReviewRun(ctx context.Context, input runtimerepo.Revi
 	if input.Prompt == "" {
 		return runtimerepo.StartedRun{}, fmt.Errorf("prompt is required")
 	}
+	if err := rejectUntrustedClusterAdminAccess(input.KubernetesAccess); err != nil {
+		return runtimerepo.StartedRun{}, err
+	}
 	pvcName := workspacePVCName(input.RunID)
 	jobName := runnerJobName(input.RunID)
+	desiredJob := runner.reviewJob(input)
+	if err := runner.validateExistingJobMemoryGuard(ctx, desiredJob); err != nil {
+		return runtimerepo.StartedRun{}, err
+	}
 
 	created := false
 	if _, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, runner.smokePVC(input.RunID, input.Profile), metav1.CreateOptions{}); err != nil {
@@ -776,9 +800,12 @@ func (runner *Runner) StartReviewRun(ctx context.Context, input runtimerepo.Revi
 	} else {
 		created = true
 	}
-	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.reviewJob(input), metav1.CreateOptions{}); err != nil {
+	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, desiredJob, metav1.CreateOptions{}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return runtimerepo.StartedRun{}, fmt.Errorf("create reviewer runner job: %w", err)
+		}
+		if err := runner.validateExistingJobMemoryGuard(ctx, desiredJob); err != nil {
+			return runtimerepo.StartedRun{}, err
 		}
 	} else {
 		created = true
@@ -803,8 +830,15 @@ func (runner *Runner) StartChatRun(ctx context.Context, input runtimerepo.ChatRu
 	if input.CodexAuthSecretName == "" {
 		return runtimerepo.StartedRun{}, fmt.Errorf("codex auth secret name is required")
 	}
+	if err := rejectUntrustedClusterAdminAccess(input.KubernetesAccess); err != nil {
+		return runtimerepo.StartedRun{}, err
+	}
 	pvcName := workspacePVCName(input.RunID)
 	jobName := runnerJobName(input.RunID)
+	desiredJob := runner.chatJob(input)
+	if err := runner.validateExistingJobMemoryGuard(ctx, desiredJob); err != nil {
+		return runtimerepo.StartedRun{}, err
+	}
 
 	created := false
 	if _, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, runner.smokePVC(input.RunID, input.Profile), metav1.CreateOptions{}); err != nil {
@@ -821,9 +855,12 @@ func (runner *Runner) StartChatRun(ctx context.Context, input runtimerepo.ChatRu
 	} else {
 		created = true
 	}
-	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.chatJob(input), metav1.CreateOptions{}); err != nil {
+	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, desiredJob, metav1.CreateOptions{}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return runtimerepo.StartedRun{}, fmt.Errorf("create chat runner job: %w", err)
+		}
+		if err := runner.validateExistingJobMemoryGuard(ctx, desiredJob); err != nil {
+			return runtimerepo.StartedRun{}, err
 		}
 	} else {
 		created = true
@@ -862,6 +899,9 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	if input.CodexAuthSecretName == "" {
 		return runtimerepo.StartedAgentSession{}, fmt.Errorf("codex auth secret name is required")
 	}
+	if err := rejectUntrustedClusterAdminAccess(input.KubernetesAccess); err != nil {
+		return runtimerepo.StartedAgentSession{}, err
+	}
 	podName := sessionPodName(input.SessionKey)
 	pvcName := sessionPVCName(input.SessionKey)
 	secretName := sessionSecretName(input.SessionKey)
@@ -894,7 +934,8 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 			return runtimerepo.StartedAgentSession{}, err
 		}
 	}
-	recreatePod, err := runner.sessionPodShouldBeRecreated(ctx, podName, input.PodTokenSecretName)
+	desiredPod := runner.sessionPod(input)
+	recreatePod, err := runner.sessionPodShouldBeRecreated(ctx, podName, desiredPod, input.PodTokenSecretName)
 	if err != nil {
 		return runtimerepo.StartedAgentSession{}, err
 	}
@@ -914,7 +955,7 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 			return runtimerepo.StartedAgentSession{}, err
 		}
 	}
-	if _, err := runner.client.CoreV1().Pods(runner.namespace).Create(ctx, runner.sessionPod(input), metav1.CreateOptions{}); err != nil {
+	if _, err := runner.client.CoreV1().Pods(runner.namespace).Create(ctx, desiredPod, metav1.CreateOptions{}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			if quotaExceeded(err) {
 				return runtimerepo.StartedAgentSession{}, runtimerepo.NewAgentSessionCapacityError("Kubernetes resource quota rejected the session pod", err)
@@ -938,54 +979,7 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 }
 
 func (runner *Runner) PrepareClusterAdminSessionRuntime(ctx context.Context, sessionKey string, proposedToken string) (runtimerepo.PreparedClusterAdminSessionRuntime, error) {
-	sessionKey = strings.TrimSpace(sessionKey)
-	proposedToken = strings.TrimSpace(proposedToken)
-	if sessionKey == "" || proposedToken == "" {
-		return runtimerepo.PreparedClusterAdminSessionRuntime{}, fmt.Errorf("cluster-admin session key and token are required")
-	}
-	secretName := sessionSecretName(sessionKey)
-	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
-	secret, err := secretClient.Get(ctx, secretName, metav1.GetOptions{})
-	created := false
-	if apierrors.IsNotFound(err) {
-		secret, err = secretClient.Create(ctx, &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secretName,
-				Namespace: runner.namespace,
-				Labels: map[string]string{
-					"app.kubernetes.io/name":      "matter-codex-agent-runner",
-					"app.kubernetes.io/component": sessionTokenComponent,
-					labelSessionKey:               kubernetesLabelValue(sessionKey),
-				},
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{"token": []byte(proposedToken)},
-		}, metav1.CreateOptions{})
-		created = err == nil
-	}
-	if err != nil {
-		return runtimerepo.PreparedClusterAdminSessionRuntime{}, fmt.Errorf("prepare cluster-admin session token secret: %w", err)
-	}
-	token := secret.Data["token"]
-	if !exactManagedSessionTokenSecret(secret, runner.namespace, secretName, kubernetesLabelValue(sessionKey), token, false, false) {
-		return runtimerepo.PreparedClusterAdminSessionRuntime{}, fmt.Errorf("existing cluster-admin session token secret conflicts with the managed binding")
-	}
-	integrity := secretIntegrity(secret, "token", token)
-	if strings.TrimSpace(integrity.ContentSHA256) == "" || strings.TrimSpace(integrity.UID) == "" || strings.TrimSpace(integrity.ResourceVersion) == "" {
-		return runtimerepo.PreparedClusterAdminSessionRuntime{}, fmt.Errorf("cluster-admin session token secret has incomplete Kubernetes identity")
-	}
-	return runtimerepo.PreparedClusterAdminSessionRuntime{
-		Namespace: runner.namespace,
-		PodName:   sessionPodName(sessionKey),
-		PVCName:   sessionPVCName(sessionKey),
-		TokenSecret: runtimerepo.MattermostBotTokenSecret{
-			SecretName: secretName,
-			Namespace:  runner.namespace,
-			Created:    created,
-			Token:      string(token),
-			Integrity:  integrity,
-		},
-	}, nil
+	return runtimerepo.PreparedClusterAdminSessionRuntime{}, runtimerepo.ErrUntrustedClusterAdminAccess
 }
 
 func (runner *Runner) materializeImmutableSessionTokenSecret(ctx context.Context, sessionKey string, token string, expected runtimerepo.SecretIntegrity) (string, error) {
@@ -1144,7 +1138,27 @@ func (runner *Runner) ensureSessionPVC(ctx context.Context, sessionKey string, r
 	return true, nil
 }
 
-func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName string, tokenSecretName string) (bool, error) {
+func (runner *Runner) validateExistingJobMemoryGuard(ctx context.Context, desired *batchv1.Job) error {
+	if desired == nil || strings.TrimSpace(desired.Name) == "" {
+		return fmt.Errorf("desired guarded job is required")
+	}
+	existing, err := runner.client.BatchV1().Jobs(runner.namespace).Get(ctx, desired.Name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get existing guarded job: %w", err)
+	}
+	if !podSpecMatchesRuntimeGuard(existing.Spec.Template.Spec, desired.Spec.Template.Spec) {
+		return fmt.Errorf("existing agent utility job %s is outside the runtime memory guard; reconcile it before retry", desired.Name)
+	}
+	return nil
+}
+
+func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName string, desiredPod *corev1.Pod, tokenSecretName string) (bool, error) {
+	if desiredPod == nil {
+		return false, fmt.Errorf("desired guarded session pod is required")
+	}
 	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -1155,7 +1169,54 @@ func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName s
 	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 		return true, nil
 	}
-	return !podUsesSessionTokenSecret(pod, tokenSecretName), nil
+	return !podSpecMatchesRuntimeGuard(pod.Spec, desiredPod.Spec) || !podUsesSessionTokenSecret(pod, tokenSecretName), nil
+}
+
+func podSpecMatchesRuntimeGuard(actual corev1.PodSpec, desired corev1.PodSpec) bool {
+	if actual.PriorityClassName != desired.PriorityClassName || actual.ServiceAccountName != desired.ServiceAccountName ||
+		!equalOptionalBool(actual.AutomountServiceAccountToken, desired.AutomountServiceAccountToken) ||
+		len(actual.InitContainers) != len(desired.InitContainers) || len(actual.Containers) != len(desired.Containers) {
+		return false
+	}
+	for index := range desired.InitContainers {
+		if actual.InitContainers[index].Name != desired.InitContainers[index].Name ||
+			!memoryResourcesEqual(actual.InitContainers[index].Resources, desired.InitContainers[index].Resources) {
+			return false
+		}
+	}
+	for index := range desired.Containers {
+		if actual.Containers[index].Name != desired.Containers[index].Name ||
+			!memoryResourcesEqual(actual.Containers[index].Resources, desired.Containers[index].Resources) {
+			return false
+		}
+	}
+	return true
+}
+
+func memoryResourcesEqual(actual corev1.ResourceRequirements, desired corev1.ResourceRequirements) bool {
+	for _, resourceName := range []corev1.ResourceName{corev1.ResourceMemory} {
+		actualRequest, actualRequestExists := actual.Requests[resourceName]
+		desiredRequest, desiredRequestExists := desired.Requests[resourceName]
+		actualLimit, actualLimitExists := actual.Limits[resourceName]
+		desiredLimit, desiredLimitExists := desired.Limits[resourceName]
+		if actualRequestExists != desiredRequestExists || actualLimitExists != desiredLimitExists {
+			return false
+		}
+		if actualRequestExists && actualRequest.Cmp(desiredRequest) != 0 {
+			return false
+		}
+		if actualLimitExists && actualLimit.Cmp(desiredLimit) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func equalOptionalBool(left *bool, right *bool) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 func podUsesSessionTokenSecret(pod *corev1.Pod, tokenSecretName string) bool {
@@ -1257,21 +1318,39 @@ func (runner *Runner) CleanupAgentSession(ctx context.Context, sessionKey string
 }
 
 func (runner *Runner) deleteSessionPod(ctx context.Context, podName string) error {
+	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get session pod before deletion: %w", err)
+	}
 	grace := int64(0)
 	background := metav1.DeletePropagationBackground
-	if err := runner.client.CoreV1().Pods(runner.namespace).Delete(ctx, podName, metav1.DeleteOptions{
+	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &grace,
 		PropagationPolicy:  &background,
-	}); err != nil && !apierrors.IsNotFound(err) {
+	}
+	if pod.UID != "" {
+		deleteOptions.Preconditions = &metav1.Preconditions{UID: &pod.UID}
+		if pod.ResourceVersion != "" {
+			deleteOptions.Preconditions.ResourceVersion = &pod.ResourceVersion
+		}
+	}
+	if err := runner.client.CoreV1().Pods(runner.namespace).Delete(ctx, podName, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("delete completed session pod: %w", err)
 	}
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{}); err != nil {
+		current, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
+		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
 			return fmt.Errorf("wait for session pod deletion: %w", err)
+		}
+		if pod.UID != "" && current.UID != pod.UID {
+			return nil
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -1781,7 +1860,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
 					PriorityClassName:            runner.agentWorkloadPriorityClass,
-					ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
+					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
@@ -1888,7 +1967,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
 					PriorityClassName:            runner.agentWorkloadPriorityClass,
-					ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
+					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
@@ -2053,7 +2132,7 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
 					PriorityClassName:            runner.agentWorkloadPriorityClass,
-					ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
+					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
@@ -2188,7 +2267,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 		},
 		Spec: corev1.PodSpec{
 			PriorityClassName:            runner.agentWorkloadPriorityClass,
-			ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
+			ServiceAccountName:           runner.agentRunnerServiceAccount,
 			AutomountServiceAccountToken: boolPtr(true),
 			SecurityContext:              runnerPodSecurityContext(),
 			RestartPolicy:                corev1.RestartPolicyNever,

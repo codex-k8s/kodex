@@ -56,6 +56,8 @@
 | Tool | Version | Scope | Why |
 |---|---:|---|---|
 | `govulncheck` | `v1.6.0` | Проверка уязвимостей Go | закреплённый сканер для воспроизводимого запуска `make govulncheck`; база уязвимостей обновляется при запуске |
+| `kube-apiserver` | `v1.36.1` | Одноразовая Kubernetes admission-проверка | loopback API server для обязательной проверки реальной семантики PriorityClass, scoped ResourceQuota и RBAC; binary закреплён SHA-256 в `scripts/tests/kubernetes-admission-test.sh` |
+| `etcd` | `v3.6.6` | Одноразовая Kubernetes admission-проверка | временное loopback storage для тестового API server; release archive закреплён SHA-256 и удаляется вместе с временным test data |
 
 ## Agent runner tools - in use
 

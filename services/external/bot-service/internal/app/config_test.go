@@ -85,9 +85,6 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.AgentRunnerImage != "matter-codex-agent-runner:dev" {
 		t.Fatalf("AgentRunnerImage = %q", cfg.AgentRunnerImage)
 	}
-	if cfg.AgentClusterAdminServiceAccount != "matter-codex-agent-runner-cluster-admin" {
-		t.Fatalf("AgentClusterAdminServiceAccount = %q", cfg.AgentClusterAdminServiceAccount)
-	}
 	if cfg.CodexPackage != "@openai/codex@0.144.1" {
 		t.Fatalf("CodexPackage = %q", cfg.CodexPackage)
 	}
@@ -205,24 +202,23 @@ func setRuntimeMemoryGuardEnv(t *testing.T) {
 
 func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 	cfg := Config{
-		HTTPAddr:                        ":8080",
-		Locale:                          "en",
-		DefaultChannels:                 []string{"agents-control:Agents Control"},
-		ReadHeaderTimeout:               time.Second,
-		ShutdownTimeout:                 0,
-		MaxSlashFormBytes:               1024,
-		MaxGitHubWebhookBytes:           1024,
-		RuntimeSmokeImage:               "busybox:1.36",
-		AgentRunnerImage:                "matter-codex-agent-runner:dev",
-		CodexPackage:                    "@openai/codex@0.144.1",
-		RuntimeWorkspaceSize:            "1Gi",
-		RuntimeJobTTLSeconds:            86400,
-		AuthCheckJobTTLSeconds:          300,
-		RuntimeLogTailLines:             40,
-		AgentServiceAccount:             "matter-codex-agent-runner",
-		AgentClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
-		CodexAuthSecretName:             "matter-codex-codex-auth",
-		GitHubSecretName:                "matter-codex-github",
+		HTTPAddr:               ":8080",
+		Locale:                 "en",
+		DefaultChannels:        []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:      time.Second,
+		ShutdownTimeout:        0,
+		MaxSlashFormBytes:      1024,
+		MaxGitHubWebhookBytes:  1024,
+		RuntimeSmokeImage:      "busybox:1.36",
+		AgentRunnerImage:       "matter-codex-agent-runner:dev",
+		CodexPackage:           "@openai/codex@0.144.1",
+		RuntimeWorkspaceSize:   "1Gi",
+		RuntimeJobTTLSeconds:   86400,
+		AuthCheckJobTTLSeconds: 300,
+		RuntimeLogTailLines:    40,
+		AgentServiceAccount:    "matter-codex-agent-runner",
+		CodexAuthSecretName:    "matter-codex-codex-auth",
+		GitHubSecretName:       "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")
@@ -231,27 +227,26 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 
 func TestConfigValidationRejectsBadRuntimeRetention(t *testing.T) {
 	cfg := Config{
-		HTTPAddr:                        ":8080",
-		Locale:                          "en",
-		DefaultChannels:                 []string{"agents-control:Agents Control"},
-		ReadHeaderTimeout:               time.Second,
-		ShutdownTimeout:                 time.Second,
-		MaxSlashFormBytes:               1024,
-		MaxGitHubWebhookBytes:           1024,
-		RuntimeSmokeImage:               "busybox:1.36",
-		AgentRunnerImage:                "matter-codex-agent-runner:dev",
-		CodexPackage:                    "@openai/codex@0.144.1",
-		RuntimeWorkspaceSize:            "1Gi",
-		RuntimeJobTTLSeconds:            86400,
-		RuntimeRetentionEnabled:         true,
-		RuntimeRetentionInterval:        0,
-		RuntimeRetentionOlderThan:       24 * time.Hour,
-		AuthCheckJobTTLSeconds:          300,
-		RuntimeLogTailLines:             40,
-		AgentServiceAccount:             "matter-codex-agent-runner",
-		AgentClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
-		CodexAuthSecretName:             "matter-codex-codex-auth",
-		GitHubSecretName:                "matter-codex-github",
+		HTTPAddr:                  ":8080",
+		Locale:                    "en",
+		DefaultChannels:           []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:         time.Second,
+		ShutdownTimeout:           time.Second,
+		MaxSlashFormBytes:         1024,
+		MaxGitHubWebhookBytes:     1024,
+		RuntimeSmokeImage:         "busybox:1.36",
+		AgentRunnerImage:          "matter-codex-agent-runner:dev",
+		CodexPackage:              "@openai/codex@0.144.1",
+		RuntimeWorkspaceSize:      "1Gi",
+		RuntimeJobTTLSeconds:      86400,
+		RuntimeRetentionEnabled:   true,
+		RuntimeRetentionInterval:  0,
+		RuntimeRetentionOlderThan: 24 * time.Hour,
+		AuthCheckJobTTLSeconds:    300,
+		RuntimeLogTailLines:       40,
+		AgentServiceAccount:       "matter-codex-agent-runner",
+		CodexAuthSecretName:       "matter-codex-codex-auth",
+		GitHubSecretName:          "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")
@@ -260,24 +255,23 @@ func TestConfigValidationRejectsBadRuntimeRetention(t *testing.T) {
 
 func TestConfigValidationNormalizesLocale(t *testing.T) {
 	cfg := Config{
-		HTTPAddr:                        ":8080",
-		Locale:                          "ru-RU",
-		DefaultChannels:                 []string{"agents-control:Agents Control"},
-		ReadHeaderTimeout:               time.Second,
-		ShutdownTimeout:                 time.Second,
-		MaxSlashFormBytes:               1024,
-		MaxGitHubWebhookBytes:           1024,
-		RuntimeSmokeImage:               "busybox:1.36",
-		AgentRunnerImage:                "matter-codex-agent-runner:dev",
-		CodexPackage:                    "@openai/codex@0.144.1",
-		RuntimeWorkspaceSize:            "1Gi",
-		RuntimeJobTTLSeconds:            86400,
-		AuthCheckJobTTLSeconds:          300,
-		RuntimeLogTailLines:             40,
-		AgentServiceAccount:             "matter-codex-agent-runner",
-		AgentClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
-		CodexAuthSecretName:             "matter-codex-codex-auth",
-		GitHubSecretName:                "matter-codex-github",
+		HTTPAddr:               ":8080",
+		Locale:                 "ru-RU",
+		DefaultChannels:        []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:      time.Second,
+		ShutdownTimeout:        time.Second,
+		MaxSlashFormBytes:      1024,
+		MaxGitHubWebhookBytes:  1024,
+		RuntimeSmokeImage:      "busybox:1.36",
+		AgentRunnerImage:       "matter-codex-agent-runner:dev",
+		CodexPackage:           "@openai/codex@0.144.1",
+		RuntimeWorkspaceSize:   "1Gi",
+		RuntimeJobTTLSeconds:   86400,
+		AuthCheckJobTTLSeconds: 300,
+		RuntimeLogTailLines:    40,
+		AgentServiceAccount:    "matter-codex-agent-runner",
+		CodexAuthSecretName:    "matter-codex-codex-auth",
+		GitHubSecretName:       "matter-codex-github",
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
@@ -289,24 +283,23 @@ func TestConfigValidationNormalizesLocale(t *testing.T) {
 
 func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 	cfg := Config{
-		HTTPAddr:                        ":8080",
-		Locale:                          "fr",
-		DefaultChannels:                 []string{"agents-control:Agents Control"},
-		ReadHeaderTimeout:               time.Second,
-		ShutdownTimeout:                 time.Second,
-		MaxSlashFormBytes:               1024,
-		MaxGitHubWebhookBytes:           1024,
-		RuntimeSmokeImage:               "busybox:1.36",
-		AgentRunnerImage:                "matter-codex-agent-runner:dev",
-		CodexPackage:                    "@openai/codex@0.144.1",
-		RuntimeWorkspaceSize:            "1Gi",
-		RuntimeJobTTLSeconds:            86400,
-		AuthCheckJobTTLSeconds:          300,
-		RuntimeLogTailLines:             40,
-		AgentServiceAccount:             "matter-codex-agent-runner",
-		AgentClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
-		CodexAuthSecretName:             "matter-codex-codex-auth",
-		GitHubSecretName:                "matter-codex-github",
+		HTTPAddr:               ":8080",
+		Locale:                 "fr",
+		DefaultChannels:        []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:      time.Second,
+		ShutdownTimeout:        time.Second,
+		MaxSlashFormBytes:      1024,
+		MaxGitHubWebhookBytes:  1024,
+		RuntimeSmokeImage:      "busybox:1.36",
+		AgentRunnerImage:       "matter-codex-agent-runner:dev",
+		CodexPackage:           "@openai/codex@0.144.1",
+		RuntimeWorkspaceSize:   "1Gi",
+		RuntimeJobTTLSeconds:   86400,
+		AuthCheckJobTTLSeconds: 300,
+		RuntimeLogTailLines:    40,
+		AgentServiceAccount:    "matter-codex-agent-runner",
+		CodexAuthSecretName:    "matter-codex-codex-auth",
+		GitHubSecretName:       "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")
@@ -377,7 +370,7 @@ func TestInteractiveSurfaceRequiresValidInternalServiceOrigin(t *testing.T) {
 		ReadHeaderTimeout: time.Second, ShutdownTimeout: time.Second, MaxSlashFormBytes: 1024, MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage: "busybox:1.36", AgentRunnerImage: "matter-codex-agent-runner:dev", CodexPackage: "@openai/codex@0.144.1",
 		RuntimeWorkspaceSize: "1Gi", RuntimeJobTTLSeconds: 86400, AuthCheckJobTTLSeconds: 300, RuntimeLogTailLines: 40,
-		AgentServiceAccount: "matter-codex-agent-runner", AgentClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
+		AgentServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName: "matter-codex-codex-auth", GitHubSecretName: "matter-codex-github",
 	}
 	if err := valid.Validate(); err != nil {
@@ -417,7 +410,7 @@ func TestInteractionCapabilityCleanupValidation(t *testing.T) {
 		ReadHeaderTimeout: time.Second, ShutdownTimeout: time.Second, MaxSlashFormBytes: 1024, MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage: "busybox:1.36", AgentRunnerImage: "matter-codex-agent-runner:dev", CodexPackage: "@openai/codex@0.144.1",
 		RuntimeWorkspaceSize: "1Gi", RuntimeJobTTLSeconds: 86400, AuthCheckJobTTLSeconds: 300, RuntimeLogTailLines: 40,
-		AgentServiceAccount: "matter-codex-agent-runner", AgentClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
+		AgentServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName: "matter-codex-codex-auth", GitHubSecretName: "matter-codex-github",
 		InteractionCleanupEnabled: true, InteractionCleanupInterval: time.Minute, InteractionCleanupRetention: time.Hour, InteractionCleanupBatch: 100,
 	}

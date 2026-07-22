@@ -286,7 +286,11 @@ mattercodex_memory_quantity_kib() {
     Ti) factor=1073741824 ;;
     *) return 1 ;;
   esac
-  printf '%s\n' "$((10#$amount * factor))"
+  local amount_decimal value_kib
+  amount_decimal="$((10#$amount))"
+  [ "$amount_decimal" -le "$((9007199254740991 / factor))" ] || return 1
+  value_kib="$((amount_decimal * factor))"
+  printf '%s\n' "$value_kib"
 }
 
 mattercodex_validate_agent_memory_guard() {
@@ -318,6 +322,36 @@ mattercodex_validate_agent_memory_guard() {
   if [ "${#MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS}" -gt 63 ] || [[ ! "$MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]]; then
     mattercodex_die "MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS должен быть корректным DNS label"
   fi
+}
+
+mattercodex_validate_agent_workload_inventory() {
+  mattercodex_require_commands jq
+  local inventory agent_budget legacy_count
+  inventory="$(cat)"
+  jq -e '.items | type == "array"' >/dev/null <<<"$inventory" || mattercodex_die "Kubernetes inventory agent workloads имеет неверный формат"
+  agent_budget="$(mattercodex_memory_quantity_kib "$MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET")" || mattercodex_die "aggregate agent memory budget не прошёл проверку диапазона"
+  legacy_count="$(jq -r --arg service_account "$MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT" '[.items[] | select((.spec.serviceAccountName // "default") == $service_account)] | length' <<<"$inventory")"
+  [ "$legacy_count" -eq 0 ] || mattercodex_die "найдены pod с отозванным cluster-admin ServiceAccount; останови связанные workload и удали только их Pod/Job перед повтором"
+
+  local pod_name priority_class service_account init_count container_count request_memory limit_memory request_kib limit_kib
+  while IFS=$'\t' read -r pod_name priority_class service_account init_count container_count request_memory limit_memory; do
+    [ -n "$pod_name" ] || continue
+    [ "$priority_class" = "$MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS" ] || mattercodex_die "agent workload находится вне выбранного PriorityClass; выполни fail-closed reconciliation Pod/Job перед rollout"
+    [ "$service_account" = "$MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" ] || mattercodex_die "agent workload использует неподдерживаемый ServiceAccount; выполни fail-closed reconciliation Pod/Job перед rollout"
+    [ "$init_count" -eq 0 ] && [ "$container_count" -eq 1 ] || mattercodex_die "agent workload имеет неподдерживаемый состав контейнеров; выполни reconciliation перед rollout"
+    request_kib="$(mattercodex_memory_quantity_kib "$request_memory")" || mattercodex_die "agent workload не имеет проверяемого memory request"
+    limit_kib="$(mattercodex_memory_quantity_kib "$limit_memory")" || mattercodex_die "agent workload не имеет проверяемого memory limit"
+    [ "$request_kib" -eq "$limit_kib" ] || mattercodex_die "agent workload имеет legacy memory request/limit; выполни reconciliation Pod/Job перед rollout"
+    [ "$limit_kib" -le "$agent_budget" ] || mattercodex_die "agent workload превышает aggregate memory budget; выполни reconciliation перед rollout"
+  done < <(jq -r '.items[] | select(.metadata.labels["app.kubernetes.io/name"] == "matter-codex-agent-runner") | [
+    .metadata.name,
+    (.spec.priorityClassName // ""),
+    (.spec.serviceAccountName // "default"),
+    ((.spec.initContainers // []) | length),
+    ((.spec.containers // []) | length),
+    (.spec.containers[0].resources.requests.memory // ""),
+    (.spec.containers[0].resources.limits.memory // "")
+  ] | @tsv' <<<"$inventory")
 }
 
 mattercodex_validate_base_env() {

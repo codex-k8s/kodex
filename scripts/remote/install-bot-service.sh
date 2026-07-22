@@ -78,7 +78,7 @@ MATTERCODEX_AGENT_RUNNER_IMAGE_WAS_SET=false
 [ -n "${MATTERCODEX_BOT_SERVICE_IMAGE+x}" ] && MATTERCODEX_BOT_SERVICE_IMAGE_WAS_SET=true
 [ -n "${MATTERCODEX_AGENT_RUNNER_IMAGE+x}" ] && MATTERCODEX_AGENT_RUNNER_IMAGE_WAS_SET=true
 mattercodex_validate_base_env
-mattercodex_require_commands ssh envsubst base64 tar git
+mattercodex_require_commands ssh envsubst base64 tar git jq
 
 configure_image_defaults_for_remote_build() {
   if [ "$MATTERCODEX_IMAGE_BUILD_STRATEGY" != "kaniko" ]; then
@@ -152,6 +152,15 @@ if [ "$DRY_RUN_MODE" = "server" ] && {
 }; then
   mattercodex_log "namespace еще не создан; bot-service manifests проверяются через remote client dry-run"
   APPLY_DRY_RUN_MODE="client"
+fi
+
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  LEGACY_AGENT_SERVICE_ACCOUNT_Q="$(mattercodex_shell_quote "$MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT")"
+  mattercodex_log "отзывается legacy cluster-admin credential agent runtime на целевом сервере"
+  mattercodex_ssh "$REMOTE_KUBECTL delete clusterrolebinding matter-codex-agent-runner-cluster-admin --ignore-not-found >/dev/null" </dev/null
+  mattercodex_ssh "$REMOTE_KUBECTL -n $RUNTIME_NAMESPACE_Q delete serviceaccount $LEGACY_AGENT_SERVICE_ACCOUNT_Q --ignore-not-found >/dev/null" </dev/null
+  mattercodex_ssh "$REMOTE_KUBECTL -n $RUNTIME_NAMESPACE_Q get pods -o json" </dev/null | mattercodex_validate_agent_workload_inventory
+  mattercodex_log "legacy agent workloads: reconciliation подтверждён на целевом сервере"
 fi
 
 remote_container_builder() {

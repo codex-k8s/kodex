@@ -64,7 +64,6 @@ type Config struct {
 	AuthCheckJobTTLSeconds              int32         `env:"MATTERCODEX_CODEX_AUTH_CHECK_JOB_TTL_SECONDS" envDefault:"300"`
 	RuntimeLogTailLines                 int64         `env:"MATTERCODEX_RUNTIME_LOG_TAIL_LINES" envDefault:"40"`
 	AgentServiceAccount                 string        `env:"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" envDefault:"matter-codex-agent-runner"`
-	AgentClusterAdminServiceAccount     string        `env:"MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT" envDefault:"matter-codex-agent-runner-cluster-admin"`
 	CodexAuthSecretName                 string        `env:"MATTERCODEX_CODEX_AUTH_SECRET" envDefault:"matter-codex-codex-auth"`
 	StorageMigrations                   bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
 	ReadHeaderTimeout                   time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
@@ -242,9 +241,6 @@ func (cfg *Config) Validate() error {
 	}
 	if strings.TrimSpace(cfg.AgentServiceAccount) == "" {
 		return fmt.Errorf("MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT is required")
-	}
-	if strings.TrimSpace(cfg.AgentClusterAdminServiceAccount) == "" {
-		return fmt.Errorf("MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT is required")
 	}
 	if strings.TrimSpace(cfg.CodexAuthSecretName) == "" {
 		return fmt.Errorf("MATTERCODEX_CODEX_AUTH_SECRET is required")

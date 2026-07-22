@@ -38,14 +38,6 @@
       "subjects": [
         "ServiceAccount/${MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT}"
       ]
-    },
-    {
-      "kind": "ClusterRoleBinding",
-      "name": "matter-codex-agent-runner-cluster-admin",
-      "role_ref": "ClusterRole/cluster-admin",
-      "subjects": [
-        "ServiceAccount/${MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT}"
-      ]
     }
   ],
   "pod": {

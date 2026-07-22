@@ -1,7 +1,7 @@
 package app
 
 import (
-	"fmt"
+	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
@@ -9,9 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -28,6 +26,16 @@ func TestAgentMemoryGuardShellValidationFailsClosed(t *testing.T) {
 		{name: "aggregate budget отсутствует", overrides: []string{"MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET="}, wantError: true},
 		{name: "aggregate invariant нарушен", overrides: []string{"MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET=81Gi"}, wantError: true},
 		{name: "scheduler request ниже limit", overrides: []string{"MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST=4Gi"}, wantError: true},
+		{
+			name: "верхняя поддерживаемая граница",
+			overrides: []string{
+				"MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY=8388607Ti",
+				"MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET=8388606Ti",
+				"MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE=1Ti",
+			},
+		},
+		{name: "quantity выше единого предела", overrides: []string{"MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY=8388608Ti"}, wantError: true},
+		{name: "quantity не переполняет shell", overrides: []string{"MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY=999999999Ti"}, wantError: true},
 	}
 	baseEnvironment := []string{
 		"MATTERCODEX_RUNTIME_ENABLED=true",
@@ -53,6 +61,126 @@ func TestAgentMemoryGuardShellValidationFailsClosed(t *testing.T) {
 	}
 }
 
+func TestAgentMemoryGuardQuantityRangeRenderParity(t *testing.T) {
+	tests := []struct {
+		name      string
+		node      string
+		budget    string
+		reserve   string
+		wantError bool
+	}{
+		{name: "верхняя поддерживаемая граница", node: "8388607Ti", budget: "8388606Ti", reserve: "1Ti"},
+		{name: "выше единого предела", node: "8388608Ti", budget: "80Gi", reserve: "40Gi", wantError: true},
+		{name: "переполнение запрещено одинаково", node: "999999999Ti", budget: "80Gi", reserve: "40Gi", wantError: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := runSyntheticAgentMemoryGuardRender(t, test.node, test.budget, test.reserve)
+			if (err != nil) != test.wantError {
+				t.Fatalf("render error = %v, wantError=%t; output=%s", err, test.wantError, output)
+			}
+		})
+	}
+}
+
+func TestAgentWorkloadInventoryFailsClosedForLegacyPods(t *testing.T) {
+	repositoryRoot := testRepositoryRoot(t)
+	guardedPod := func(priorityClass string, serviceAccount string, request string, limit string, managed bool) map[string]any {
+		labels := map[string]any{}
+		if managed {
+			labels["app.kubernetes.io/name"] = "matter-codex-agent-runner"
+		}
+		return map[string]any{
+			"metadata": map[string]any{"name": "synthetic-agent-pod", "labels": labels},
+			"spec": map[string]any{
+				"priorityClassName":  priorityClass,
+				"serviceAccountName": serviceAccount,
+				"containers": []any{map[string]any{
+					"name": "runner",
+					"resources": map[string]any{
+						"requests": map[string]any{"memory": request},
+						"limits":   map[string]any{"memory": limit},
+					},
+				}},
+			},
+		}
+	}
+	tests := []struct {
+		name      string
+		items     []any
+		wantError bool
+	}{
+		{name: "пустой inventory", items: []any{}},
+		{name: "guarded session", items: []any{guardedPod("matter-codex-agent-workload", "matter-codex-agent-runner", "8Gi", "8Gi", true)}},
+		{name: "guarded utility", items: []any{guardedPod("matter-codex-agent-workload", "matter-codex-agent-runner", "4Gi", "4Gi", true)}},
+		{name: "legacy priority class", items: []any{guardedPod("legacy-agent-workload", "matter-codex-agent-runner", "8Gi", "8Gi", true)}, wantError: true},
+		{name: "legacy request limit", items: []any{guardedPod("matter-codex-agent-workload", "matter-codex-agent-runner", "1Gi", "64Gi", true)}, wantError: true},
+		{name: "cluster admin labeled", items: []any{guardedPod("matter-codex-agent-workload", "matter-codex-agent-runner-cluster-admin", "8Gi", "8Gi", true)}, wantError: true},
+		{name: "cluster admin unlabeled", items: []any{guardedPod("", "matter-codex-agent-runner-cluster-admin", "1Gi", "1Gi", false)}, wantError: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			payload, err := json.Marshal(map[string]any{"items": test.items})
+			if err != nil {
+				t.Fatalf("json.Marshal() error = %v", err)
+			}
+			command := exec.Command("bash", "-c", `. "$1"; mattercodex_validate_agent_workload_inventory`, "bash", filepath.Join(repositoryRoot, "scripts/lib/env.sh"))
+			command.Env = append(os.Environ(),
+				"MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET=80Gi",
+				"MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS=matter-codex-agent-workload",
+				"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT=matter-codex-agent-runner",
+				"MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT=matter-codex-agent-runner-cluster-admin",
+			)
+			command.Stdin = strings.NewReader(string(payload))
+			output, err := command.CombinedOutput()
+			if (err != nil) != test.wantError {
+				t.Fatalf("inventory error = %v, wantError=%t; output=%s", err, test.wantError, output)
+			}
+		})
+	}
+}
+
+func runSyntheticAgentMemoryGuardRender(t *testing.T, node string, budget string, reserve string) ([]byte, error) {
+	t.Helper()
+	repositoryRoot := testRepositoryRoot(t)
+	temporaryDirectory := t.TempDir()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("test executable: %v", err)
+	}
+	envsubstPath := filepath.Join(temporaryDirectory, "envsubst")
+	wrapper := "#!/usr/bin/env bash\nexec " + shellSingleQuote(executable) + " -test.run=TestEnvsubstHelperProcess --\n"
+	if err := os.WriteFile(envsubstPath, []byte(wrapper), 0o700); err != nil {
+		t.Fatalf("envsubst helper: %v", err)
+	}
+	envFile := filepath.Join(temporaryDirectory, "synthetic.env")
+	envPayload := strings.Join([]string{
+		"TARGET_HOST=synthetic.invalid",
+		"TARGET_PORT=22",
+		"TARGET_ROOT_USER=synthetic",
+		"TARGET_ROOT_SSH_KEY=/tmp/synthetic-key",
+		"OPERATOR_USER=synthetic",
+		"OPERATOR_SSH_PUBKEY_PATH=/tmp/synthetic-pubkey",
+		"PRODUCTION_NAMESPACE=mattermost",
+		"PRODUCTION_DOMAIN=synthetic.invalid",
+		"PUBLIC_BASE_URL=https://mattermost.synthetic.invalid",
+		"LETSENCRYPT_EMAIL=synthetic@example.invalid",
+		"MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY=" + node,
+		"MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET=" + budget,
+		"MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE=" + reserve,
+	}, "\n") + "\n"
+	if err := os.WriteFile(envFile, []byte(envPayload), 0o600); err != nil {
+		t.Fatalf("synthetic env: %v", err)
+	}
+	render := exec.Command("bash", filepath.Join(repositoryRoot, "scripts/k8s/render-bot-service.sh"), "--env-file", envFile, "--render-dir", filepath.Join(temporaryDirectory, "render"))
+	render.Env = append(os.Environ(),
+		"MATTERCODEX_TEST_ENVSUBST_HELPER=1",
+		"PATH="+temporaryDirectory+":"+os.Getenv("PATH"),
+	)
+	output, err := render.CombinedOutput()
+	return output, err
+}
+
 func TestRenderedAgentMemoryGuardAggregateAdmission(t *testing.T) {
 	objects := renderAgentMemoryGuardObjects(t)
 	agentQuota := objects["ResourceQuota/matter-codex-agent-memory-quota"]
@@ -75,7 +203,6 @@ func TestRenderedAgentMemoryGuardAggregateAdmission(t *testing.T) {
 	assertNestedString(t, config, "MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET", "80Gi")
 	assertNestedString(t, config, "MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE", "40Gi")
 	assertRenderedAggregateMemoryInvariant(t, config)
-	assertMultipleSessionPodAdmission(t, config, agentHard)
 }
 
 func renderAgentMemoryGuardObjects(t *testing.T) map[string]map[string]any {
@@ -181,61 +308,6 @@ func assertRenderedAggregateMemoryInvariant(t *testing.T, config map[string]any)
 	if total.Cmp(nodeMemory) > 0 {
 		t.Fatalf("aggregate invariant нарушен: agent=%s reserve=%s node=%s", agentBudget.String(), systemReserve.String(), nodeMemory.String())
 	}
-}
-
-func assertMultipleSessionPodAdmission(t *testing.T, config map[string]any, quotaHard map[string]any) {
-	t.Helper()
-	priorityClass := config["MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS"].(string)
-	sessionMemory := config["MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT"].(string)
-	utilityMemory := config["MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT"].(string)
-	budget := renderedMemoryQuantity(t, quotaHard, "limits.memory")
-
-	sessionPods := make([]corev1.Pod, 0, 10)
-	for index := 0; index < 9; index++ {
-		sessionPods = append(sessionPods, renderedAdmissionPod(fmt.Sprintf("session-%d", index), priorityClass, sessionMemory))
-	}
-	tenthSession := renderedAdmissionPod("session-9", priorityClass, sessionMemory)
-	if !scopedMemoryQuotaAdmits(sessionPods, tenthSession, priorityClass, budget) {
-		t.Fatal("aggregate admission отклонил десятый session pod, который заполняет бюджет ровно")
-	}
-	withUtility := append(append([]corev1.Pod(nil), sessionPods...), renderedAdmissionPod("utility", priorityClass, utilityMemory))
-	if scopedMemoryQuotaAdmits(withUtility, tenthSession, priorityClass, budget) {
-		t.Fatal("aggregate admission разрешил session pod, который превысил бы memory budget")
-	}
-}
-
-func renderedAdmissionPod(name string, priorityClass string, memory string) corev1.Pod {
-	quantity := resource.MustParse(memory)
-	return corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: corev1.PodSpec{
-			PriorityClassName: priorityClass,
-			Containers: []corev1.Container{{
-				Name: "runner",
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{corev1.ResourceMemory: quantity},
-					Limits:   corev1.ResourceList{corev1.ResourceMemory: quantity},
-				},
-			}},
-		},
-	}
-}
-
-func scopedMemoryQuotaAdmits(existing []corev1.Pod, candidate corev1.Pod, priorityClass string, budget resource.Quantity) bool {
-	totalRequests := resource.MustParse("0")
-	totalLimits := resource.MustParse("0")
-	for _, pod := range append(append([]corev1.Pod(nil), existing...), candidate) {
-		if pod.Spec.PriorityClassName != priorityClass {
-			continue
-		}
-		for _, container := range pod.Spec.Containers {
-			request := container.Resources.Requests[corev1.ResourceMemory]
-			limit := container.Resources.Limits[corev1.ResourceMemory]
-			totalRequests.Add(request)
-			totalLimits.Add(limit)
-		}
-	}
-	return totalRequests.Cmp(budget) <= 0 && totalLimits.Cmp(budget) <= 0
 }
 
 func renderedMemoryQuantity(t *testing.T, values map[string]any, key string) resource.Quantity {

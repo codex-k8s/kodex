@@ -44,3 +44,42 @@ func TestRuntimeMemoryGuardValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestRuntimeMemoryQuantityRangeBoundary(t *testing.T) {
+	tests := []struct {
+		value     string
+		wantError bool
+	}{
+		{value: "8388607Ti"},
+		{value: "8388608Ti", wantError: true},
+		{value: "999999999Ti", wantError: true},
+	}
+	for _, test := range tests {
+		t.Run(test.value, func(t *testing.T) {
+			_, err := parseRuntimeMemoryQuantity("MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY", test.value)
+			if (err != nil) != test.wantError {
+				t.Fatalf("parseRuntimeMemoryQuantity(%q) error = %v, wantError=%t", test.value, err, test.wantError)
+			}
+		})
+	}
+
+	boundary := Config{
+		RuntimeEnabled:               true,
+		RuntimeLimitsEnabled:         true,
+		RuntimeNodeAllocatableMemory: "8388607Ti",
+		RuntimeAgentMemoryBudget:     "8388606Ti",
+		RuntimeSystemMemoryReserve:   "1Ti",
+		AgentSessionMemoryRequest:    "1Ti",
+		AgentSessionMemoryLimit:      "1Ti",
+		AgentUtilityMemoryLimit:      "1Ti",
+		AgentDevShmSizeLimit:         "1Ti",
+		AgentWorkloadPriorityClass:   "matter-codex-agent-workload",
+	}
+	if err := boundary.validateRuntimeMemoryGuard(); err != nil {
+		t.Fatalf("boundary validateRuntimeMemoryGuard() error = %v", err)
+	}
+	boundary.RuntimeNodeAllocatableMemory = "8388608Ti"
+	if err := boundary.validateRuntimeMemoryGuard(); err == nil {
+		t.Fatal("validateRuntimeMemoryGuard() accepted quantity above the common range")
+	}
+}
