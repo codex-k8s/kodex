@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"mime"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -31,6 +32,7 @@ func TestMCPDependencyAcceptsCanonicalParameterizedAndSameOriginRequests(t *test
 		{name: "RFC 2231 US-ASCII extended parameter", contentType: "application/json; profile*=US-ASCII'en'mcp"},
 		{name: "RFC 2231 extended parameter with language and escape", contentType: "application/json; profile*=UTF-8'en'mcp%20batch"},
 		{name: "RFC 2231 continuation parameter", contentType: "application/json; profile*0*=UTF-8''mcp; profile*1=-batch"},
+		{name: "RFC 2231 split UTF-8 continuation parameter", contentType: "application/json; profile*0*=UTF-8'en'%D0; profile*1*=%90"},
 		{name: "RFC 2231 unencoded continuation parameter", contentType: "application/json; profile*0=mcp; profile*1=-batch"},
 		{name: "RFC 2231 mixed continuation parameter", contentType: "application/json; profile*0=mcp; profile*1*=%2Dbatch"},
 		{name: "casing and whitespace", contentType: ` Application/JSON ; Charset = UTF-8 ; boundary = "batch-1" `},
@@ -119,6 +121,12 @@ func TestMCPDependencyRejectsUnsafeHTTPRequestsBeforeSessionEffects(t *testing.T
 		{name: "RFC 2231 malformed percent escape", contentTypeValues: []string{"application/json; profile*=UTF-8''bad%ZZ"}, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "RFC 2231 malformed continuation percent escape", contentTypeValues: []string{"application/json; profile*0*=UTF-8''mcp; profile*1*=%ZZ"}, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "RFC 2231 malformed language", contentTypeValues: []string{"application/json; profile*=UTF-8'en--US'batch"}, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "RFC 2231 UTF-8 lone continuation byte", contentTypeValues: []string{"application/json; profile*=UTF-8''%80"}, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "RFC 2231 UTF-8 truncated sequence", contentTypeValues: []string{"application/json; profile*=UTF-8''%D0"}, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "RFC 2231 UTF-8 overlong sequence", contentTypeValues: []string{"application/json; profile*=UTF-8''%C0%AF"}, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "RFC 2231 UTF-8 surrogate", contentTypeValues: []string{"application/json; profile*=UTF-8''%ED%A0%80"}, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "RFC 2231 US-ASCII non-ASCII byte", contentTypeValues: []string{"application/json; profile*=US-ASCII''%80"}, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "RFC 2231 invalid split UTF-8 continuation", contentTypeValues: []string{"application/json; profile*0*=UTF-8''%D0; profile*1*=x"}, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "non-ASCII before media type", contentTypeValues: []string{"\u00a0application/json"}, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "non-ASCII after media type", contentTypeValues: []string{"application/json\u00a0; profile=value"}, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "non-ASCII before parameter name", contentTypeValues: []string{"application/json;\u00a0profile=value"}, wantStatus: http.StatusUnsupportedMediaType},
@@ -194,6 +202,36 @@ func TestMCPDependencyRejectsUnsafeHTTPRequestsBeforeSessionEffects(t *testing.T
 			}
 			if handler.transportAdmissionStateCount() != 0 || handler.sdkTransportSessionCount() != 0 {
 				t.Fatalf("unsafe request state: admission=%d sdk=%d", handler.transportAdmissionStateCount(), handler.sdkTransportSessionCount())
+			}
+		})
+	}
+}
+
+func TestMCPMediaParametersValidateDeclaredCharset(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		wantValid   bool
+	}{
+		{name: "UTF-8 single extended", contentType: "application/json; profile*=UTF-8''%D0%90", wantValid: true},
+		{name: "UTF-8 split continuation", contentType: "application/json; profile*0*=UTF-8'en'%D0; profile*1*=%90", wantValid: true},
+		{name: "US-ASCII single extended", contentType: "application/json; profile*=US-ASCII''mcp", wantValid: true},
+		{name: "UTF-8 lone continuation byte", contentType: "application/json; profile*=UTF-8''%80"},
+		{name: "UTF-8 truncated sequence", contentType: "application/json; profile*=UTF-8''%D0"},
+		{name: "UTF-8 overlong sequence", contentType: "application/json; profile*=UTF-8''%C0%AF"},
+		{name: "UTF-8 surrogate", contentType: "application/json; profile*=UTF-8''%ED%A0%80"},
+		{name: "US-ASCII non-ASCII byte", contentType: "application/json; profile*=US-ASCII''%80"},
+		{name: "UTF-8 invalid split continuation", contentType: "application/json; profile*0*=UTF-8''%D0; profile*1*=x"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, parameters, err := mime.ParseMediaType(test.contentType)
+			if err != nil {
+				t.Fatalf("parse media type: %v", err)
+			}
+			if got := hasValidMCPMediaParameters(test.contentType, parameters); got != test.wantValid {
+				t.Fatalf("hasValidMCPMediaParameters()=%t, want=%t", got, test.wantValid)
 			}
 		})
 	}
