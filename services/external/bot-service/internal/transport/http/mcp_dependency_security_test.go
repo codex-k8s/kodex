@@ -68,8 +68,9 @@ func TestMCPDependencyRejectsUnsafeHTTPRequestsBeforeSessionEffects(t *testing.T
 			if recorder.Code != test.wantStatus {
 				t.Fatalf("status=%d, want=%d body=%s", recorder.Code, test.wantStatus, recorder.Body.String())
 			}
-			if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
-				t.Fatalf("unsafe request effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, publisher.posts)
+			guards := store.guardSnapshot()
+			if store.sessionReads != 0 || guards.calls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
+				t.Fatalf("unsafe request effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, guards.calls, runner.secretReads, publisher.posts)
 			}
 			if handler.transportAdmissionStateCount() != 0 || handler.sdkTransportSessionCount() != 0 {
 				t.Fatalf("unsafe request state: admission=%d sdk=%d", handler.transportAdmissionStateCount(), handler.sdkTransportSessionCount())
