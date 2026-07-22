@@ -47,6 +47,168 @@ require_count() {
   [[ "$actual" == "$wanted" ]] || fail "$path содержит '$expected' $actual раз; ожидается $wanted"
 }
 
+effective_final_stage_gotoolchain() {
+  local dockerfile="$1"
+  local from_line="$2"
+
+  tail -n +"$from_line" "$dockerfile" | awk '
+    function parse_error(message) {
+      print message > "/dev/stderr"
+      parse_failed = 1
+      exit 2
+    }
+
+    function has_line_continuation(value, trimmed, position, slash_count) {
+      trimmed = value
+      sub(/[[:space:]]+$/, "", trimmed)
+      slash_count = 0
+      for (position = length(trimmed); position > 0 && substr(trimmed, position, 1) == "\\"; position--) {
+        slash_count++
+      }
+      return slash_count % 2 == 1
+    }
+
+    function strip_line_continuation(value, trimmed) {
+      trimmed = value
+      sub(/[[:space:]]+$/, "", trimmed)
+      sub(/\\$/, "", trimmed)
+      return trimmed
+    }
+
+    function tokenize_env(value, result, position, character, quote, escaped, token, count, started) {
+      quote = ""
+      escaped = 0
+      token = ""
+      count = 0
+      started = 0
+
+      for (position = 1; position <= length(value); position++) {
+        character = substr(value, position, 1)
+        if (escaped) {
+          token = token character
+          escaped = 0
+          started = 1
+          continue
+        }
+        if (quote == "") {
+          if (character == "\\") {
+            escaped = 1
+            started = 1
+          } else if (character == "\"" || character == "\047") {
+            quote = character
+            started = 1
+          } else if (character ~ /[[:space:]]/) {
+            if (started) {
+              result[++count] = token
+              token = ""
+              started = 0
+            }
+          } else {
+            token = token character
+            started = 1
+          }
+        } else if (character == quote) {
+          quote = ""
+        } else if (quote == "\"" && character == "\\") {
+          escaped = 1
+        } else {
+          token = token character
+        }
+      }
+
+      if (escaped || quote != "") {
+        return -1
+      }
+      if (started) {
+        result[++count] = token
+      }
+      return count
+    }
+
+    function process_instruction(value, line, instruction, body, token_count, modern, token_index, separator, key, assigned_value) {
+      line = value
+      sub(/^[[:space:]]+/, "", line)
+      if (!match(line, /^[^[:space:]]+/)) {
+        return
+      }
+
+      instruction = toupper(substr(line, 1, RLENGTH))
+      if (instruction != "ENV") {
+        return
+      }
+
+      body = substr(line, RLENGTH + 1)
+      sub(/^[[:space:]]+/, "", body)
+      token_count = tokenize_env(body, tokens)
+      if (token_count < 1) {
+        parse_error("не удалось однозначно разобрать ENV-инструкцию final runtime stage")
+      }
+
+      modern = index(tokens[1], "=") > 0
+      if (modern) {
+        for (token_index = 1; token_index <= token_count; token_index++) {
+          separator = index(tokens[token_index], "=")
+          if (separator < 2) {
+            parse_error("не удалось однозначно разобрать ENV key=value в final runtime stage")
+          }
+          key = substr(tokens[token_index], 1, separator - 1)
+          assigned_value = substr(tokens[token_index], separator + 1)
+          if (key !~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+            parse_error("ENV-инструкция final runtime stage содержит недопустимое имя переменной")
+          }
+          if (key == "GOTOOLCHAIN") {
+            effective_value = assigned_value
+            found = 1
+          }
+        }
+        return
+      }
+
+      key = tokens[1]
+      if (key !~ /^[A-Za-z_][A-Za-z0-9_]*$/ || token_count < 2) {
+        parse_error("не удалось однозначно разобрать устаревший ENV-синтаксис final runtime stage")
+      }
+      assigned_value = tokens[2]
+      for (token_index = 3; token_index <= token_count; token_index++) {
+        assigned_value = assigned_value " " tokens[token_index]
+      }
+      if (key == "GOTOOLCHAIN") {
+        effective_value = assigned_value
+        found = 1
+      }
+    }
+
+    {
+      line = $0
+      if (logical == "" && line ~ /^[[:space:]]*($|#)/) {
+        next
+      }
+      logical = logical == "" ? line : logical " " line
+      if (has_line_continuation(logical)) {
+        logical = strip_line_continuation(logical)
+        next
+      }
+      process_instruction(logical)
+      logical = ""
+    }
+
+    END {
+      if (parse_failed) {
+        exit 2
+      }
+      if (logical != "") {
+        print "незавершённая логическая Dockerfile-инструкция в final runtime stage" > "/dev/stderr"
+        exit 2
+      }
+      if (!found) {
+        print "final runtime stage не задаёт GOTOOLCHAIN" > "/dev/stderr"
+        exit 2
+      }
+      print effective_value
+    }
+  '
+}
+
 require_final_runtime_stage_contract() {
   local path="$1"
   local expected_from="$2"
@@ -54,7 +216,7 @@ require_final_runtime_stage_contract() {
   local last_from from_line actual_from runtime_stage
   local runtime_env runtime_copy runtime_check
   local env_count copy_count check_count
-  local env_line copy_line check_line
+  local env_line copy_line check_line effective_gotoolchain
 
   last_from="$(grep -n '^FROM ' "$dockerfile" | tail -n 1)" || fail "$path не содержит runtime stage"
   from_line="${last_from%%:*}"
@@ -78,6 +240,11 @@ require_final_runtime_stage_contract() {
   check_line="$(grep -nFx "$runtime_check" <<<"$runtime_stage" | cut -d: -f1)"
   ((env_line < copy_line)) || fail "$path должен задавать GOTOOLCHAIN=local до копирования Go в final runtime stage"
   ((copy_line < check_line)) || fail "$path должен проверять скопированный Go toolchain до выпуска final runtime stage"
+
+  if ! effective_gotoolchain="$(effective_final_stage_gotoolchain "$dockerfile" "$from_line")"; then
+    fail "$path final runtime stage содержит неоднозначный ENV-синтаксис"
+  fi
+  [[ "$effective_gotoolchain" == local ]] || fail "$path final runtime stage завершает GOTOOLCHAIN значением '$effective_gotoolchain' вместо 'local'"
 }
 
 while (($# > 0)); do

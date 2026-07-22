@@ -37,7 +37,34 @@ expect_failure() {
   fi
 }
 
-"$guard" --root "$repo_root" --static-only >/dev/null
+expect_failure_matching() {
+  local description="$1"
+  local expected="$2"
+  shift 2
+
+  if "$@" >"$temp_root/output" 2>&1; then
+    echo "FAIL: $description не был отклонён" >&2
+    exit 1
+  fi
+  if ! grep -Fq "$expected" "$temp_root/output"; then
+    echo "FAIL: $description отклонён не по ожидаемой причине" >&2
+    sed -n '1,80p' "$temp_root/output" >&2
+    exit 1
+  fi
+}
+
+expect_success() {
+  local description="$1"
+  shift
+
+  if ! "$@" >"$temp_root/output" 2>&1; then
+    echo "FAIL: $description завершился ошибкой" >&2
+    sed -n '1,80p' "$temp_root/output" >&2
+    exit 1
+  fi
+}
+
+expect_success "неизменённый GOTOOLCHAIN=local" "$guard" --root "$repo_root" --static-only
 
 below_floor="$temp_root/below-floor"
 copy_fixture "$below_floor"
@@ -63,6 +90,70 @@ runtime_check_missing="$temp_root/runtime-check-missing"
 copy_fixture "$runtime_check_missing"
 sed -i '/^RUN test "$(\/usr\/local\/go\/bin\/go env GOVERSION)" = "go1\.26\.5" && test "$(\/usr\/local\/go\/bin\/go env GOTOOLCHAIN)" = "local"$/d' "$runtime_check_missing/deploy/images/agent-runner/Dockerfile"
 expect_failure "точная проверка Go отсутствует в deploy final runtime stage" "$guard" --root "$runtime_check_missing" --static-only
+
+runtime_final_local="$temp_root/runtime-final-local"
+copy_fixture "$runtime_final_local"
+cat >>"$runtime_final_local/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN=auto
+ENV PATH=/usr/local/go/bin:/usr/local/bin \
+    GOTOOLCHAIN="local"
+EOF
+cat >>"$runtime_final_local/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN=auto
+ENV PATH=/usr/local/go/bin:/usr/local/bin \
+    GOTOOLCHAIN="local"
+EOF
+expect_success "последний GOTOOLCHAIN=local определяет эффективное значение" "$guard" --root "$runtime_final_local" --static-only
+
+services_runtime_override="$temp_root/services-runtime-override"
+copy_fixture "$services_runtime_override"
+printf '\nENV GOTOOLCHAIN=auto\n' >>"$services_runtime_override/services/jobs/agent-runner/Dockerfile"
+expect_failure_matching \
+  "поздний GOTOOLCHAIN=auto в services final runtime stage" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_runtime_override" --static-only
+
+deploy_runtime_override="$temp_root/deploy-runtime-override"
+copy_fixture "$deploy_runtime_override"
+printf '\nENV GOTOOLCHAIN=auto\n' >>"$deploy_runtime_override/deploy/images/agent-runner/Dockerfile"
+expect_failure_matching \
+  "поздний GOTOOLCHAIN=auto в deploy final runtime stage" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_runtime_override" --static-only
+
+services_multiline_override="$temp_root/services-multiline-override"
+copy_fixture "$services_multiline_override"
+cat >>"$services_multiline_override/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV PATH=/usr/local/go/bin:/usr/local/bin \
+    GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "многострочный GOTOOLCHAIN=auto в services final runtime stage" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_multiline_override" --static-only
+
+deploy_multiline_override="$temp_root/deploy-multiline-override"
+copy_fixture "$deploy_multiline_override"
+cat >>"$deploy_multiline_override/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+ENV PATH=/usr/local/go/bin:/usr/local/bin \
+    GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "многострочный GOTOOLCHAIN=auto в deploy final runtime stage" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_multiline_override" --static-only
+
+ambiguous_runtime_env="$temp_root/ambiguous-runtime-env"
+copy_fixture "$ambiguous_runtime_env"
+printf '\nENV PATH=/usr/local/bin GOTOOLCHAIN\n' >>"$ambiguous_runtime_env/services/jobs/agent-runner/Dockerfile"
+expect_failure_matching \
+  "неоднозначный ENV-синтаксис с GOTOOLCHAIN" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage содержит неоднозначный ENV-синтаксис" \
+  "$guard" --root "$ambiguous_runtime_env" --static-only
 
 govulncheck_version_desync="$temp_root/govulncheck-version-desync"
 copy_fixture "$govulncheck_version_desync"
@@ -118,4 +209,4 @@ expect_failure "GOVULNCHECK_VERSION command injection" env \
   exit 1
 }
 
-echo "PASS: Go toolchain contract отклоняет старую версию, runtime-stage drift и govulncheck injection"
+echo "PASS: Go toolchain contract отклоняет старую версию, итоговый runtime-stage drift и govulncheck injection"
