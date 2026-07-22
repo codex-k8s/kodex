@@ -41,6 +41,88 @@ func TestReturnToRequesterProductionDispatcherDoesNotSelfLockFrozenSource(t *tes
 	}
 }
 
+func TestReturnToRequesterLaterTurnUsesPersistedRequesterSessionPostgres(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	first, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Первый результат готов.")
+	if err != nil {
+		t.Fatalf("first ReturnToRequester() error = %v", err)
+	}
+	var targetSessionID, previousTargetTurnID, processID int64
+	if err := fixture.pool.QueryRow(ctx, `
+select target_session.id, target_turn.id, process_turn.process_run_id
+from matter_codex_agent_sessions target_session
+join matter_codex_agent_session_turns target_turn on target_turn.id = target_session.active_turn_id
+join matter_codex_process_turns process_turn on process_turn.turn_id = target_turn.id
+where target_session.session_key = 'target-session'
+`).Scan(&targetSessionID, &previousTargetTurnID, &processID); err != nil {
+		t.Fatalf("read target continuation identities: %v", err)
+	}
+	var followUpTurnID int64
+	if err := fixture.pool.QueryRow(ctx, `
+insert into matter_codex_agent_session_turns(
+	session_id, run_id, mattermost_channel_id, mattermost_root_post_id, mattermost_post_id,
+	user_id, user_name, message, status
+) values ($1, 'target-follow-up-run', 'target-channel', 'target-root', 'target-follow-up-post',
+	'owner-user', 'owner', 'follow-up work', 'running')
+returning id
+`, targetSessionID).Scan(&followUpTurnID); err != nil {
+		t.Fatalf("insert target follow-up turn: %v", err)
+	}
+	if _, err := fixture.pool.Exec(ctx, `
+insert into matter_codex_process_turns(turn_id, process_run_id, parent_turn_id, launch_post_id)
+values ($1, $2, $3, 'target-follow-up-post')
+`, followUpTurnID, processID, previousTargetTurnID); err != nil {
+		t.Fatalf("bind target follow-up process turn: %v", err)
+	}
+	if _, err := fixture.pool.Exec(ctx, `
+update matter_codex_agent_sessions
+set active_turn_id = $1, active_run_id = 'target-follow-up-run', status = 'running', updated_at = now()
+where id = $2
+`, followUpTurnID, targetSessionID); err != nil {
+		t.Fatalf("activate target follow-up turn: %v", err)
+	}
+
+	second, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Второй результат после нового хода готов.")
+	if err != nil {
+		t.Fatalf("second ReturnToRequester() error = %v", err)
+	}
+	if second.DelegationID == first.DelegationID || second.CallbackRunID == "" {
+		t.Fatalf("continuation callback = %#v, first = %#v", second, first)
+	}
+	var callbackRows, sourceSessions, sourceRoots, targetTurns, manifests, deliveries int
+	if err := fixture.pool.QueryRow(ctx, `
+select
+	count(*)::integer,
+	count(distinct source_session_id)::integer,
+	count(distinct source_session.mattermost_root_post_id)::integer,
+	count(distinct target_turn_id)::integer,
+	(select count(*)::integer from matter_codex_agent_delegation_callback_delivery_manifests),
+	(select count(*)::integer from matter_codex_agent_delegation_callback_deliveries)
+from matter_codex_agent_delegations delegation
+join matter_codex_agent_sessions source_session on source_session.id = delegation.source_session_id
+where delegation.callback_turn_id is not null and delegation.callback_run_id <> ''
+`).Scan(&callbackRows, &sourceSessions, &sourceRoots, &targetTurns, &manifests, &deliveries); err != nil {
+		t.Fatalf("inspect callback continuations: %v", err)
+	}
+	if callbackRows != 2 || sourceSessions != 1 || sourceRoots != 1 || targetTurns != 2 || manifests != 2 || deliveries != 4 {
+		t.Fatalf("callback continuations rows=%d source_sessions=%d roots=%d target_turns=%d manifests=%d deliveries=%d", callbackRows, sourceSessions, sourceRoots, targetTurns, manifests, deliveries)
+	}
+	postsBeforeRepeat := fixture.publisher.posts.Load()
+	repeated, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Повтор второго callback.")
+	if err != nil {
+		t.Fatalf("repeated ReturnToRequester() error = %v", err)
+	}
+	if repeated.DelegationID != second.DelegationID || repeated.CallbackRunID != second.CallbackRunID {
+		t.Fatalf("repeated callback = %#v, second = %#v", repeated, second)
+	}
+	if fixture.publisher.posts.Load() != postsBeforeRepeat {
+		t.Fatalf("repeat duplicated publications: before=%d after=%d", postsBeforeRepeat, fixture.publisher.posts.Load())
+	}
+}
+
 func TestReturnToRequesterRejectsBoundProcessWithoutRootInitiator(t *testing.T) {
 	fixture := newPostgresDelegationFixture(t, 2)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

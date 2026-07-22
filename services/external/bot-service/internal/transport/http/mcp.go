@@ -270,7 +270,7 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBod
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_return_to_requester",
-		Description: "Return a child thread result to the immediate requesting agent session. The callback is queued durably and is idempotent.",
+		Description: "Return this child session result to its persisted immediate requester session and exact source thread. Call this tool directly: the requester does not need to be a member of the child channel, and no agent mention, same-thread request, or cross-chat start is required. Each child turn creates at most one durable idempotent callback; a later turn in the same child session may return another result to the same requester session.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpReturnToRequesterInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
