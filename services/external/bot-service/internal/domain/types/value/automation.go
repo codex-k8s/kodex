@@ -14,10 +14,11 @@ const (
 type AutomationRunStatus string
 
 const (
-	AutomationRunStatusQueued    AutomationRunStatus = "queued"
-	AutomationRunStatusRunning   AutomationRunStatus = "running"
-	AutomationRunStatusSucceeded AutomationRunStatus = "succeeded"
-	AutomationRunStatusFailed    AutomationRunStatus = "failed"
+	AutomationRunStatusQueued       AutomationRunStatus = "queued"
+	AutomationRunStatusRunning      AutomationRunStatus = "running"
+	AutomationRunStatusWaitingOwner AutomationRunStatus = "waiting_owner"
+	AutomationRunStatusSucceeded    AutomationRunStatus = "succeeded"
+	AutomationRunStatusFailed       AutomationRunStatus = "failed"
 )
 
 type AutomationRunOutcome string

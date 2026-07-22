@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"embed"
+	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	automationsrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/automations"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
+	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
 const (
@@ -50,6 +52,7 @@ type AutomationThreadPublisher interface {
 }
 
 type AutomationServiceConfig struct {
+	Localizer               *texti18n.Localizer
 	Repository              automationsrepo.Repository
 	Catalog                 AutomationCatalog
 	Dispatcher              AutomationRunDispatcher
@@ -101,8 +104,12 @@ type AutomationCallbackCommand struct {
 }
 
 type AutomationCallbackResult struct {
-	Run       entity.ScheduledRun
-	Duplicate bool
+	Run                 entity.ScheduledRun
+	Duplicate           bool
+	OwnerAttentionID    int64
+	HumanDecisionStatus string
+	DeliveryStatus      string
+	NextAction          string
 }
 
 type AutomationCallbackCompleter interface {
@@ -119,6 +126,25 @@ type AutomationRuntimeTerminalCommand struct {
 
 type AutomationRuntimeTerminalReconciler interface {
 	ReconcileRuntimeTerminal(ctx context.Context, command AutomationRuntimeTerminalCommand) error
+}
+
+type AutomationOwnerDecisionCommand struct {
+	ProjectID                int64
+	ActorUserID              string
+	ActorUserName            string
+	MattermostChannelID      string
+	MattermostRootPostID     string
+	MattermostResponsePostID string
+}
+
+type AutomationOwnerDecisionResult struct {
+	Run       entity.ScheduledRun
+	Handled   bool
+	Duplicate bool
+}
+
+type AutomationOwnerDecisionResolver interface {
+	ResolveOwnerDecision(ctx context.Context, command AutomationOwnerDecisionCommand) (AutomationOwnerDecisionResult, error)
 }
 
 func NewAutomationService(cfg AutomationServiceConfig) *AutomationService {
@@ -260,7 +286,7 @@ func (svc *AutomationService) RunNow(ctx context.Context, command RunAutomationN
 		return RunAutomationNowResult{}, err
 	}
 	duplicate := !created
-	if automationRunTerminal(run.Status) || run.Status == string(value.AutomationRunStatusRunning) {
+	if automationRunTerminal(run.Status) || run.Status == string(value.AutomationRunStatusRunning) || run.Status == string(value.AutomationRunStatusWaitingOwner) {
 		return RunAutomationNowResult{Run: run, Duplicate: duplicate}, nil
 	}
 
@@ -383,7 +409,9 @@ func (svc *AutomationService) CompleteCallback(ctx context.Context, command Auto
 	}
 	status := string(value.AutomationRunStatusSucceeded)
 	switch value.AutomationRunOutcome(command.Outcome) {
-	case value.AutomationRunOutcomeNoAction, value.AutomationRunOutcomeActionTaken, value.AutomationRunOutcomeRequiresHuman:
+	case value.AutomationRunOutcomeNoAction, value.AutomationRunOutcomeActionTaken:
+	case value.AutomationRunOutcomeRequiresHuman:
+		status = string(value.AutomationRunStatusWaitingOwner)
 	case value.AutomationRunOutcomeFailed:
 		status = string(value.AutomationRunStatusFailed)
 	default:
@@ -400,6 +428,22 @@ func (svc *AutomationService) CompleteCallback(ctx context.Context, command Auto
 	if safeSummary == "" {
 		return AutomationCallbackResult{}, errors.New("automation callback summary is required")
 	}
+	var ownerGate *automationsrepo.OwnerGatePlanInput
+	if command.Outcome == string(value.AutomationRunOutcomeRequiresHuman) {
+		gateContext, err := svc.cfg.Repository.GetOwnerGateContext(ctx, automationsrepo.OwnerGateContextInput{
+			RunPublicID:             command.RunPublicID,
+			AuthenticatedProjectID:  command.AuthenticatedProjectID,
+			AuthenticatedSessionID:  command.AuthenticatedSessionID,
+			AuthenticatedSessionKey: command.AuthenticatedSessionKey,
+		})
+		if err != nil {
+			return AutomationCallbackResult{}, err
+		}
+		ownerGate, err = svc.ownerGatePlan(gateContext)
+		if err != nil {
+			return AutomationCallbackResult{}, err
+		}
+	}
 	run, duplicate, err := svc.cfg.Repository.CompleteCallback(ctx, automationsrepo.CompleteCallbackInput{
 		RunPublicID:             command.RunPublicID,
 		AuthenticatedProjectID:  command.AuthenticatedProjectID,
@@ -410,9 +454,167 @@ func (svc *AutomationService) CompleteCallback(ctx context.Context, command Auto
 		Outcome:                 command.Outcome,
 		SafeSummary:             safeSummary,
 		PayloadSHA256:           payloadHash,
+		OwnerGate:               ownerGate,
 		Now:                     svc.cfg.Now().UTC(),
 	})
-	return AutomationCallbackResult{Run: run, Duplicate: duplicate}, err
+	result := AutomationCallbackResult{Run: run, Duplicate: duplicate}
+	if err != nil || ownerGate == nil {
+		return result, err
+	}
+	delivery, deliveryErr := svc.cfg.Repository.GetOwnerAttentionDelivery(ctx, run.ID)
+	if deliveryErr != nil {
+		result.HumanDecisionStatus = "pending"
+		result.DeliveryStatus = "pending"
+		result.NextAction = "retry_same_callback"
+		return result, nil
+	}
+	result.OwnerAttentionID = delivery.AttentionID
+	result.HumanDecisionStatus = delivery.Status
+	if strings.TrimSpace(delivery.MattermostPostID) != "" {
+		result.DeliveryStatus = "delivered"
+		result.NextAction = "wait_for_owner_response"
+		if delivery.Status == "resolved" {
+			result.NextAction = "none"
+		}
+		return result, nil
+	}
+	if delivery.Status != "open" {
+		result.DeliveryStatus = "not_required"
+		result.NextAction = "none"
+		return result, nil
+	}
+	if _, deliveryErr = svc.deliverOwnerAttention(ctx, delivery); deliveryErr != nil {
+		result.DeliveryStatus = "pending"
+		result.NextAction = "retry_same_callback"
+		return result, nil
+	}
+	result.DeliveryStatus = "delivered"
+	result.NextAction = "wait_for_owner_response"
+	return result, nil
+}
+
+func (svc *AutomationService) ReconcileOwnerAttentionDeliveries(ctx context.Context, limit int) (int, error) {
+	if !svc.Available() || svc.cfg.Publisher == nil {
+		return 0, nil
+	}
+	deliveries, err := svc.cfg.Repository.ListPendingOwnerAttentionDeliveries(ctx, limit)
+	if err != nil {
+		return 0, err
+	}
+	delivered := 0
+	var resultErr error
+	for _, delivery := range deliveries {
+		if _, err := svc.deliverOwnerAttention(ctx, delivery); err != nil {
+			resultErr = errors.Join(resultErr, err)
+			continue
+		}
+		delivered++
+	}
+	return delivered, resultErr
+}
+
+func (svc *AutomationService) ResolveOwnerDecision(ctx context.Context, command AutomationOwnerDecisionCommand) (AutomationOwnerDecisionResult, error) {
+	if !svc.Available() {
+		return AutomationOwnerDecisionResult{}, errors.New("automation storage is not ready")
+	}
+	run, duplicate, err := svc.cfg.Repository.ResolveOwnerGate(ctx, automationsrepo.ResolveOwnerGateInput{
+		ProjectID:                command.ProjectID,
+		ActorUserID:              strings.TrimSpace(command.ActorUserID),
+		ActorUserName:            normalizeMattermostUsername(command.ActorUserName),
+		MattermostChannelID:      strings.TrimSpace(command.MattermostChannelID),
+		MattermostRootPostID:     strings.TrimSpace(command.MattermostRootPostID),
+		MattermostResponsePostID: strings.TrimSpace(command.MattermostResponsePostID),
+		Now:                      svc.cfg.Now().UTC(),
+	})
+	if errors.Is(err, automationsrepo.ErrNotFound) {
+		return AutomationOwnerDecisionResult{}, nil
+	}
+	if err != nil {
+		return AutomationOwnerDecisionResult{}, err
+	}
+	return AutomationOwnerDecisionResult{Run: run, Handled: true, Duplicate: duplicate}, nil
+}
+
+func (svc *AutomationService) ownerGatePlan(gateContext entity.AutomationOwnerGateContext) (*automationsrepo.OwnerGatePlanInput, error) {
+	deliveryID := automationOwnerAttentionDeliveryID(gateContext)
+	ownerMention := ""
+	if owner := mentionableMattermostUsername(gateContext.RootInitiatorName); owner != "" {
+		ownerMention = "@" + owner + " "
+	}
+	message := agentNoTriggerMessage(svc.t("automation.owner_gate.message", map[string]any{
+		"OwnerMention": ownerMention,
+		"RunID":        gateContext.ScheduledRunPublicID,
+	}))
+	props := map[string]any{
+		"matter_codex_event":                 "automation_owner_attention",
+		"matter_codex_callback_delivery_id":  deliveryID,
+		"matter_codex_automation_run_id":     gateContext.ScheduledRunPublicID,
+		"matter_codex_process_run_id":        gateContext.ProcessPublicID,
+		"matter_codex_human_decision_status": "pending",
+	}
+	payloadHash, err := callbackDeliveryPayloadHash(gateContext.MattermostChannelID, gateContext.MattermostRootPostID, message, props)
+	if err != nil {
+		return nil, err
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		return nil, fmt.Errorf("encode automation owner attention props: %w", err)
+	}
+	return &automationsrepo.OwnerGatePlanInput{
+		ProcessRunID:            gateContext.ProcessRunID,
+		PolicyRevisionID:        gateContext.PolicyRevisionID,
+		RootInitiatorUserID:     gateContext.RootInitiatorUserID,
+		RootInitiatorName:       gateContext.RootInitiatorName,
+		AttentionSummary:        svc.t("automation.owner_gate.summary", nil),
+		AttentionRecommendation: svc.t("automation.owner_gate.recommendation", nil),
+		DeliveryID:              deliveryID,
+		DeliveryMessage:         message,
+		DeliveryPropsJSON:       propsJSON,
+		DeliveryPayloadSHA256:   payloadHash,
+	}, nil
+}
+
+func (svc *AutomationService) deliverOwnerAttention(ctx context.Context, delivery entity.AutomationOwnerAttentionDelivery) (entity.AutomationOwnerAttentionDelivery, error) {
+	publisher, ok := svc.cfg.Publisher.(MattermostIdempotentThreadPublisher)
+	if !ok {
+		return entity.AutomationOwnerAttentionDelivery{}, errors.New("idempotent automation owner attention publisher is not configured")
+	}
+	var props map[string]any
+	if err := json.Unmarshal(delivery.DeliveryPropsJSON, &props); err != nil {
+		return entity.AutomationOwnerAttentionDelivery{}, fmt.Errorf("decode automation owner attention props: %w", err)
+	}
+	payloadHash, err := callbackDeliveryPayloadHash(delivery.MattermostChannelID, delivery.MattermostRootPostID, delivery.DeliveryMessage, props)
+	if err != nil || !bytes.Equal(payloadHash, delivery.DeliveryPayloadSHA256) {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrConflict
+	}
+	ref, err := publisher.ReconcileOrPostThreadMessage(ctx, MattermostThreadPostInput{
+		ChannelID:     delivery.MattermostChannelID,
+		RootPostID:    delivery.MattermostRootPostID,
+		Message:       delivery.DeliveryMessage,
+		Props:         props,
+		IdempotencyID: delivery.DeliveryID,
+	})
+	if err != nil {
+		return entity.AutomationOwnerAttentionDelivery{}, err
+	}
+	if strings.TrimSpace(ref.PostID) == "" || strings.TrimSpace(ref.ChannelID) != delivery.MattermostChannelID {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrForbidden
+	}
+	return svc.cfg.Repository.SetOwnerAttentionPost(ctx, automationsrepo.SetOwnerAttentionPostInput{
+		AttentionID:          delivery.AttentionID,
+		ScheduledRunID:       delivery.ScheduledRunID,
+		DeliveryID:           delivery.DeliveryID,
+		MattermostChannelID:  delivery.MattermostChannelID,
+		MattermostRootPostID: delivery.MattermostRootPostID,
+		MattermostPostID:     ref.PostID,
+		Now:                  svc.cfg.Now().UTC(),
+	})
+}
+
+func automationOwnerAttentionDeliveryID(gateContext entity.AutomationOwnerGateContext) string {
+	digest := sha256.Sum256([]byte(fmt.Sprintf("mattercodex-automation-owner-attention-v1\x00%d\x00%d\x00%d", gateContext.ScheduledRunID, gateContext.ProcessRunID, gateContext.RuntimeTurnID)))
+	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(digest[:])
+	return strings.ToLower(encoded[:26])
 }
 
 func (svc *AutomationService) ReconcileRuntimeTerminal(ctx context.Context, command AutomationRuntimeTerminalCommand) error {
@@ -561,7 +763,7 @@ func automationServerSummary(outcome string) string {
 	case value.AutomationRunOutcomeActionTaken:
 		return "Автоматизация завершена: действие выполнено."
 	case value.AutomationRunOutcomeRequiresHuman:
-		return "Автоматизация завершена: требуется решение человека."
+		return "Автоматизация ожидает решения владельца."
 	case value.AutomationRunOutcomeFailed:
 		return "Автоматизация завершилась ошибкой."
 	default:
@@ -640,4 +842,20 @@ func mustAutomationPlaybook() string {
 		panic(err)
 	}
 	return strings.TrimSpace(string(body))
+}
+
+func (svc *AutomationService) t(messageID string, data map[string]any) string {
+	if svc != nil && svc.cfg.Localizer != nil {
+		return svc.cfg.Localizer.T(messageID, data)
+	}
+	switch messageID {
+	case "automation.owner_gate.message":
+		return fmt.Sprintf("%vТребуется решение человека по автоматизации.\n\nЗапуск: `%v`\nСостояние: ожидается решение владельца.\nСледующее действие: ответьте в этом треде.", data["OwnerMention"], data["RunID"])
+	case "automation.owner_gate.summary":
+		return "Автоматизация ожидает решения владельца."
+	case "automation.owner_gate.recommendation":
+		return "Ответьте в точном треде запуска, чтобы завершить ручной шлюз."
+	default:
+		return messageID
+	}
 }

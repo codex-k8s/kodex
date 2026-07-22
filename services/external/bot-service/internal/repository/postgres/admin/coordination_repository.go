@@ -164,6 +164,7 @@ func (repo *Repository) EnsureTurnProcess(ctx context.Context, input adminrepo.E
 				and attention_turn.mattermost_root_post_id = $3
 				and process.root_initiator_user_id = $4
 				and attention.status = 'open'
+				and attention.automation_scheduled_run_id is null
 			order by attention.updated_at desc
 			limit 1
 			for update of process
@@ -180,6 +181,7 @@ func (repo *Repository) EnsureTurnProcess(ctx context.Context, input adminrepo.E
 					resolved_by_post_id = $3, updated_at = now()
 				from matter_codex_agent_session_turns attention_turn
 				where attention.process_run_id = $1 and attention.status = 'open'
+					and attention.automation_scheduled_run_id is null
 					and attention_turn.id = attention.turn_id
 					and attention_turn.mattermost_channel_id = $4
 					and attention_turn.mattermost_root_post_id = $5

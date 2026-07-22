@@ -457,6 +457,38 @@ func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) 
 	})
 }
 
+func TestControlSurfaceReconcilesAutomationOwnerAttentionIdentity(t *testing.T) {
+	input := statusservice.MattermostThreadPostInput{
+		ChannelID:     "channel-1",
+		RootPostID:    "root-1",
+		Message:       "immutable callback\n\n#notrigger",
+		IdempotencyID: "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Props: map[string]any{
+			"matter_codex_event":                 "automation_owner_attention",
+			"matter_codex_callback_delivery_id":  "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"matter_codex_automation_run_id":     "scheduled-run-11111111111111111111111111111111",
+			"matter_codex_process_run_id":        "process-1",
+			"matter_codex_human_decision_status": "pending",
+		},
+	}
+	exactPost := &mattermostmodel.Post{
+		Id: "attention-post-1", ChannelId: input.ChannelID, RootId: input.RootPostID,
+		Message: input.Message, Props: callbackServerProps(input.Props), PendingPostId: input.IdempotencyID,
+	}
+	server, postCalls := callbackMattermostServer(t, func(getCall int) []*mattermostmodel.Post {
+		if getCall == 1 {
+			return nil
+		}
+		return []*mattermostmodel.Post{exactPost}
+	}, true)
+	defer server.Close()
+	surface := NewControlSurface(server.URL, "synthetic-token", "")
+	ref, err := surface.ReconcileOrPostThreadMessage(context.Background(), input)
+	if err != nil || ref.PostID != exactPost.Id || postCalls.Load() != 1 {
+		t.Fatalf("owner attention reconcile ref=%#v error=%v create_calls=%d", ref, err, postCalls.Load())
+	}
+}
+
 func callbackMattermostServer(t *testing.T, threadPosts func(int) []*mattermostmodel.Post, failCreate bool) (*httptest.Server, *atomic.Int64) {
 	t.Helper()
 	var getCalls atomic.Int64

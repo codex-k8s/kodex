@@ -10,6 +10,7 @@ import (
 
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 	kubernetesruntime "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/kubernetes"
 	corev1 "k8s.io/api/core/v1"
@@ -364,6 +365,63 @@ func TestChatRunRetriesFailedCapacityTurnInSavedSession(t *testing.T) {
 	if !strings.Contains(retryPrompt, "Продолжи тот же turn") || strings.Contains(retryPrompt, "BOOTSTRAP TEMPLATE") || strings.Contains(retryPrompt, "Выполни задачу") {
 		t.Fatalf("retry prompt = %q", retryPrompt)
 	}
+}
+
+func TestChatRunClosesAutomationOwnerGateInExactThreadWithoutRuntime(t *testing.T) {
+	store := chatRuntimeStore()
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	publisher := &fakeThreadPublisher{}
+	resolver := &fakeAutomationOwnerDecisionResolver{
+		expectedActor: "owner-id",
+		expectedRoot:  "root-1",
+		result: AutomationOwnerDecisionResult{Handled: true, Run: entity.ScheduledRun{
+			PublicID:     "scheduled-run-11111111111111111111111111111111",
+			RuntimeRunID: "automation-runtime-1",
+			Status:       string(value.AutomationRunStatusSucceeded),
+		}},
+	}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer: testLocalizer(t, texti18n.RussianLocale), Store: store, ThreadPublisher: publisher,
+		StorageReady: true, RuntimeReady: false, AutomationOwnerDecisionResolver: resolver,
+	})
+
+	wrong := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1", PostID: "reply-wrong", RootPostID: "other-root",
+		UserID: "other-id", UserName: "other", Message: "Закрыть",
+	})
+	if wrong.Mode == chatRunModeAutomationOwnerGate {
+		t.Fatalf("неверный actor/thread закрыл gate: %#v", wrong)
+	}
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1", PostID: "reply-1", RootPostID: "root-1",
+		UserID: "owner-id", UserName: "owner", Message: "Продолжить",
+	})
+	if result.Mode != chatRunModeAutomationOwnerGate || result.RunID != "automation-runtime-1" {
+		t.Fatalf("result=%#v", result)
+	}
+	if resolver.calls != 2 || resolver.command.MattermostResponsePostID != "reply-1" || resolver.command.MattermostRootPostID != "root-1" || resolver.command.ProjectID != 1 {
+		t.Fatalf("resolver calls=%d command=%#v", resolver.calls, resolver.command)
+	}
+	if len(publisher.posts) == 0 || !strings.Contains(publisher.posts[len(publisher.posts)-1].Message, "scheduled-run-11111111111111111111111111111111") {
+		t.Fatalf("подтверждение закрытия не содержит точный ScheduledRun: %#v", publisher.posts)
+	}
+}
+
+type fakeAutomationOwnerDecisionResolver struct {
+	expectedActor string
+	expectedRoot  string
+	result        AutomationOwnerDecisionResult
+	command       AutomationOwnerDecisionCommand
+	calls         int
+}
+
+func (resolver *fakeAutomationOwnerDecisionResolver) ResolveOwnerDecision(_ context.Context, command AutomationOwnerDecisionCommand) (AutomationOwnerDecisionResult, error) {
+	resolver.calls++
+	resolver.command = command
+	if command.ActorUserID != resolver.expectedActor || command.MattermostRootPostID != resolver.expectedRoot {
+		return AutomationOwnerDecisionResult{}, nil
+	}
+	return resolver.result, nil
 }
 
 func TestChatRunQueuesFollowUpsForRunningThreadSessionWithoutRestart(t *testing.T) {

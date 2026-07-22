@@ -1,0 +1,227 @@
+:root {
+  color: #17201c;
+  background: #f4f1e8;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 90% 0%, #dbe8da 0, transparent 28rem), #f4f1e8;
+}
+button,
+input {
+  font: inherit;
+}
+
+.shell {
+  width: min(1080px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 48px 0 80px;
+}
+.masthead {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 32px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid #a9afa6;
+}
+.masthead h1,
+.history h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.masthead h1 {
+  font-size: clamp(2.5rem, 6vw, 5.5rem);
+  line-height: 0.94;
+}
+.masthead__note {
+  max-width: 300px;
+  margin: 0 0 8px;
+  color: #526059;
+  line-height: 1.5;
+  text-align: right;
+}
+.eyebrow {
+  margin: 0 0 12px;
+  color: #536159;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.history {
+  margin-top: 52px;
+}
+.history__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.history h2 {
+  font-size: clamp(2rem, 4vw, 3.4rem);
+}
+.history__count {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid #87928a;
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+}
+.empty {
+  margin: 0;
+  padding: 42px;
+  border: 1px dashed #9ca59e;
+  border-radius: 18px;
+  color: #526059;
+  background: rgba(255, 255, 255, 0.35);
+  text-align: center;
+}
+.timeline {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+}
+.run__rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.run__rail::after {
+  position: absolute;
+  top: 22px;
+  bottom: -22px;
+  width: 1px;
+  background: #a9afa6;
+  content: "";
+}
+.run:last-child .run__rail::after {
+  display: none;
+}
+.run__rail span {
+  z-index: 1;
+  width: 13px;
+  height: 13px;
+  margin-top: 22px;
+  border: 3px solid #f4f1e8;
+  border-radius: 50%;
+  background: #68766d;
+  box-shadow: 0 0 0 1px #68766d;
+}
+.run[data-state="waiting_owner"] .run__rail span {
+  background: #b06d18;
+  box-shadow: 0 0 0 1px #b06d18;
+}
+.run[data-state="succeeded"] .run__rail span {
+  background: #1d7650;
+  box-shadow: 0 0 0 1px #1d7650;
+}
+.run article {
+  margin: 0 0 18px;
+  padding: 20px 22px 22px;
+  border: 1px solid #c5c9c2;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 32px rgba(37, 48, 41, 0.05);
+}
+.run__topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.run__state {
+  font-weight: 750;
+}
+.run__replay {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #59645e;
+  background: #e5e7e1;
+  font-size: 0.75rem;
+}
+.run code {
+  display: block;
+  overflow: hidden;
+  color: #405048;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 22px 0 0;
+}
+.run dl div {
+  min-width: 0;
+}
+.run dt {
+  margin-bottom: 6px;
+  color: #68746d;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.run dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+@media (max-width: 700px) {
+  .shell {
+    width: min(100% - 28px, 1080px);
+    padding-top: 28px;
+  }
+  .masthead {
+    display: block;
+  }
+  .masthead__note {
+    margin-top: 20px;
+    text-align: left;
+  }
+  .history {
+    margin-top: 36px;
+  }
+  .run {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .run article {
+    padding: 18px;
+  }
+  .run dl {
+    grid-template-columns: 1fr;
+  }
+}

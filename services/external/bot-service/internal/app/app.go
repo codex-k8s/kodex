@@ -97,6 +97,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		RuntimeReady:      runtimeConfigured,
 	})
 	automationSvc := statusservice.NewAutomationService(statusservice.AutomationServiceConfig{
+		Localizer:               localizer,
 		Repository:              automationStorage,
 		Catalog:                 storage,
 		Dispatcher:              chatRunSvc,
@@ -106,6 +107,12 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		RuntimeReady:            runtimeConfigured,
 	})
 	chatRunSvc.SetAutomationRuntimeReconciler(automationSvc)
+	chatRunSvc.SetAutomationOwnerDecisionResolver(automationSvc)
+	if delivered, reconcileErr := automationSvc.ReconcileOwnerAttentionDeliveries(ctx, 100); reconcileErr != nil {
+		logger.Warn("automation owner attention recovery was incomplete", "delivered", delivered, "error", reconcileErr)
+	} else if delivered > 0 {
+		logger.Info("automation owner attention deliveries recovered", "delivered", delivered)
+	}
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
 		Localizer:                localizer,
 		StatusService:            statusSvc,

@@ -82,6 +82,14 @@ func TestAutomationRunNowDispatchesSavedPlaybookAndBindsRuntime(t *testing.T) {
 	if dispatcher.calls != 1 || publisher.calls != 1 {
 		t.Fatalf("неавторизованный запуск вызвал побочный эффект: dispatcher=%d publisher=%d", dispatcher.calls, publisher.calls)
 	}
+	repository.run.Status = string(value.AutomationRunStatusWaitingOwner)
+	waitingReplay, err := svc.RunNow(context.Background(), RunAutomationNowCommand{
+		Actor: AuthenticatedActor{UserID: "owner-id", UserName: "owner"}, ProjectID: 1,
+		ScheduleID: schedule.PublicID, IdempotencyKey: "command-1",
+	})
+	if err != nil || !waitingReplay.Duplicate || waitingReplay.Run.Status != string(value.AutomationRunStatusWaitingOwner) || dispatcher.calls != 1 || publisher.calls != 1 {
+		t.Fatalf("waiting_owner replay=%#v error=%v dispatcher=%d publisher=%d", waitingReplay, err, dispatcher.calls, publisher.calls)
+	}
 
 	if _, _, err := svc.CreateSchedule(context.Background(), CreateAutomationScheduleCommand{
 		Actor: AuthenticatedActor{UserID: "other-id", UserName: "developer"}, ProjectID: 1, TargetAgentRoleID: 2, TargetChatID: 3,
@@ -256,6 +264,103 @@ func TestAutomationCallbackRejectsLossyInputAndHashesExactPayload(t *testing.T) 
 	}
 }
 
+func TestAutomationRequiresHumanPersistsPendingGateAndPublishesServerOwnedCard(t *testing.T) {
+	runID := "scheduled-run-11111111111111111111111111111111"
+	repository := &fakeAutomationRepository{
+		run: entity.ScheduledRun{ID: 41, PublicID: runID, ProjectID: 1, RuntimeTurnID: 7},
+		gateContext: entity.AutomationOwnerGateContext{
+			ScheduledRunID: 41, ScheduledRunPublicID: runID, ProjectID: 1, RuntimeTurnID: 7,
+			ProcessRunID: 13, ProcessPublicID: "process-run-1", PolicyRevisionID: 17,
+			RootInitiatorUserID: "owner-id", RootInitiatorName: "owner",
+			MattermostChannelID: "channel-1", MattermostRootPostID: "root-1",
+		},
+	}
+	publisher := &fakeAutomationPublisher{ref: MattermostPostRef{ChannelID: "channel-1", PostID: "attention-1"}}
+	svc := NewAutomationService(AutomationServiceConfig{
+		Repository: repository, Catalog: &fakeAutomationCatalog{}, Publisher: publisher, StorageReady: true,
+		Now: func() time.Time { return time.Date(2026, time.July, 22, 10, 0, 0, 0, time.UTC) },
+	})
+	secretSummary := "Нужен владелец; synthetic-secret-must-not-leak"
+	command := AutomationCallbackCommand{
+		RunPublicID: runID, AuthenticatedProjectID: 1, AuthenticatedSessionID: 2, AuthenticatedSessionKey: "session-1",
+		CallbackContractVersion: value.AutomationCallbackContractV1, Outcome: string(value.AutomationRunOutcomeRequiresHuman),
+		AgentSummary: secretSummary, ExactPayload: []byte(`{"outcome":"requires_human","summary":"synthetic-secret-must-not-leak"}`),
+	}
+
+	result, err := svc.CompleteCallback(context.Background(), command)
+	if err != nil {
+		t.Fatalf("CompleteCallback() error=%v", err)
+	}
+	if result.Run.Status != string(value.AutomationRunStatusWaitingOwner) || result.Run.Outcome != string(value.AutomationRunOutcomeRequiresHuman) || result.HumanDecisionStatus != "open" || result.DeliveryStatus != "delivered" || result.NextAction != "wait_for_owner_response" {
+		t.Fatalf("pending result=%#v", result)
+	}
+	if result.OwnerAttentionID != 71 || publisher.reconcileCalls != 1 || repository.setPostCalls != 1 {
+		t.Fatalf("attention=%d reconcile=%d set_post=%d", result.OwnerAttentionID, publisher.reconcileCalls, repository.setPostCalls)
+	}
+	if strings.Contains(publisher.reconcileInput.Message, secretSummary) || strings.Contains(publisher.reconcileInput.Message, "synthetic-secret") {
+		t.Fatalf("карточка раскрыла агентское резюме: %q", publisher.reconcileInput.Message)
+	}
+	if !strings.Contains(publisher.reconcileInput.Message, runID) || publisher.reconcileInput.IdempotencyID == "" {
+		t.Fatalf("карточка не содержит точный запуск или delivery-id: %#v", publisher.reconcileInput)
+	}
+	if publisher.reconcileInput.Props["matter_codex_human_decision_status"] != "pending" || publisher.reconcileInput.Props["matter_codex_event"] != "automation_owner_attention" {
+		t.Fatalf("props карточки=%#v", publisher.reconcileInput.Props)
+	}
+}
+
+func TestAutomationRequiresHumanRestartAndReplayRepairFailedPublicationWithoutSecondPost(t *testing.T) {
+	runID := "scheduled-run-22222222222222222222222222222222"
+	repository := &fakeAutomationRepository{
+		run: entity.ScheduledRun{ID: 42, PublicID: runID, ProjectID: 1, RuntimeTurnID: 8},
+		gateContext: entity.AutomationOwnerGateContext{
+			ScheduledRunID: 42, ScheduledRunPublicID: runID, ProjectID: 1, RuntimeTurnID: 8,
+			ProcessRunID: 14, ProcessPublicID: "process-run-2", PolicyRevisionID: 18,
+			RootInitiatorUserID: "owner-id", RootInitiatorName: "owner",
+			MattermostChannelID: "channel-2", MattermostRootPostID: "root-2",
+		},
+	}
+	publisher := &fakeAutomationPublisher{
+		ref:             MattermostPostRef{ChannelID: "channel-2", PostID: "attention-2"},
+		reconcileErrors: []error{errors.New("synthetic publish failure"), errors.New("synthetic restart failure")},
+	}
+	newService := func() *AutomationService {
+		return NewAutomationService(AutomationServiceConfig{Repository: repository, Catalog: &fakeAutomationCatalog{}, Publisher: publisher, StorageReady: true})
+	}
+	command := AutomationCallbackCommand{
+		RunPublicID: runID, AuthenticatedProjectID: 1, AuthenticatedSessionID: 2, AuthenticatedSessionKey: "session-2",
+		CallbackContractVersion: value.AutomationCallbackContractV1, Outcome: string(value.AutomationRunOutcomeRequiresHuman),
+		AgentSummary: "Нужно решение", ExactPayload: []byte(`{"outcome":"requires_human","summary":"Нужно решение"}`),
+	}
+
+	first, err := newService().CompleteCallback(context.Background(), command)
+	if err != nil || first.Run.Status != string(value.AutomationRunStatusWaitingOwner) || first.DeliveryStatus != "pending" || first.NextAction != "retry_same_callback" {
+		t.Fatalf("first=%#v error=%v", first, err)
+	}
+	if delivered, reconcileErr := newService().ReconcileOwnerAttentionDeliveries(context.Background(), 20); reconcileErr == nil || delivered != 0 {
+		t.Fatalf("restart reconciliation delivered=%d error=%v", delivered, reconcileErr)
+	}
+	second, err := newService().CompleteCallback(context.Background(), command)
+	if err != nil || !second.Duplicate || second.DeliveryStatus != "delivered" {
+		t.Fatalf("replay=%#v error=%v", second, err)
+	}
+	third, err := newService().CompleteCallback(context.Background(), command)
+	if err != nil || !third.Duplicate || third.DeliveryStatus != "delivered" {
+		t.Fatalf("second replay=%#v error=%v", third, err)
+	}
+	if publisher.reconcileCalls != 3 || repository.setPostCalls != 1 {
+		t.Fatalf("reconcile=%d set_post=%d", publisher.reconcileCalls, repository.setPostCalls)
+	}
+	if repository.firstDeliveryID == "" || publisher.reconcileIDs[0] != repository.firstDeliveryID || publisher.reconcileIDs[1] != repository.firstDeliveryID || publisher.reconcileIDs[2] != repository.firstDeliveryID {
+		t.Fatalf("delivery identity changed: repository=%q calls=%#v", repository.firstDeliveryID, publisher.reconcileIDs)
+	}
+
+	mismatch := command
+	mismatch.ExactPayload = append(append([]byte(nil), command.ExactPayload...), ' ')
+	if _, err := newService().CompleteCallback(context.Background(), mismatch); !errors.Is(err, automationsrepo.ErrCallbackMismatch) {
+		t.Fatalf("mismatched replay error=%v", err)
+	}
+}
+
 func splitAutomationSecret(value string, size int) []string {
 	parts := make([]string, 0, (len(value)+size-1)/size)
 	for len(value) > 0 {
@@ -295,6 +400,12 @@ type fakeAutomationRepository struct {
 	completeInputs     []automationsrepo.CompleteCallbackInput
 	recordThreadErrors []error
 	bindErrors         []error
+	gateContext        entity.AutomationOwnerGateContext
+	delivery           entity.AutomationOwnerAttentionDelivery
+	gateAccepted       bool
+	gatePayloadHash    []byte
+	firstDeliveryID    string
+	setPostCalls       int
 }
 
 func (repository *fakeAutomationRepository) CreateManualRun(_ context.Context, _ automationsrepo.CreateManualRunInput) (entity.ScheduledRun, bool, error) {
@@ -335,12 +446,53 @@ func (repository *fakeAutomationRepository) BindRun(_ context.Context, input aut
 
 func (repository *fakeAutomationRepository) CompleteCallback(_ context.Context, input automationsrepo.CompleteCallbackInput) (entity.ScheduledRun, bool, error) {
 	repository.completeInputs = append(repository.completeInputs, input)
+	if input.OwnerGate != nil && repository.gateAccepted {
+		if !bytes.Equal(repository.gatePayloadHash, input.PayloadSHA256) {
+			return entity.ScheduledRun{}, false, automationsrepo.ErrCallbackMismatch
+		}
+		return repository.run, true, nil
+	}
 	completed := repository.run
 	completed.Status = input.Status
 	completed.Outcome = input.Outcome
 	completed.SafeSummary = input.SafeSummary
 	completed.CallbackPayloadSHA256 = append([]byte(nil), input.PayloadSHA256...)
+	repository.run = completed
+	if input.OwnerGate != nil {
+		repository.gateAccepted = true
+		repository.gatePayloadHash = append([]byte(nil), input.PayloadSHA256...)
+		repository.firstDeliveryID = input.OwnerGate.DeliveryID
+		repository.delivery = entity.AutomationOwnerAttentionDelivery{
+			AttentionID: 71, ScheduledRunID: completed.ID, ScheduledRunPublicID: completed.PublicID,
+			ProcessRunID: input.OwnerGate.ProcessRunID, PolicyRevisionID: input.OwnerGate.PolicyRevisionID,
+			RootInitiatorUserID: input.OwnerGate.RootInitiatorUserID,
+			MattermostChannelID: repository.gateContext.MattermostChannelID, MattermostRootPostID: repository.gateContext.MattermostRootPostID,
+			Status: "open", DeliveryID: input.OwnerGate.DeliveryID, DeliveryMessage: input.OwnerGate.DeliveryMessage,
+			DeliveryPropsJSON: append([]byte(nil), input.OwnerGate.DeliveryPropsJSON...), DeliveryPayloadSHA256: append([]byte(nil), input.OwnerGate.DeliveryPayloadSHA256...),
+		}
+	}
 	return completed, false, nil
+}
+
+func (repository *fakeAutomationRepository) GetOwnerGateContext(_ context.Context, _ automationsrepo.OwnerGateContextInput) (entity.AutomationOwnerGateContext, error) {
+	return repository.gateContext, nil
+}
+
+func (repository *fakeAutomationRepository) GetOwnerAttentionDelivery(_ context.Context, _ int64) (entity.AutomationOwnerAttentionDelivery, error) {
+	return repository.delivery, nil
+}
+
+func (repository *fakeAutomationRepository) ListPendingOwnerAttentionDeliveries(_ context.Context, _ int) ([]entity.AutomationOwnerAttentionDelivery, error) {
+	if repository.delivery.MattermostPostID != "" {
+		return nil, nil
+	}
+	return []entity.AutomationOwnerAttentionDelivery{repository.delivery}, nil
+}
+
+func (repository *fakeAutomationRepository) SetOwnerAttentionPost(_ context.Context, input automationsrepo.SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error) {
+	repository.setPostCalls++
+	repository.delivery.MattermostPostID = input.MattermostPostID
+	return repository.delivery, nil
 }
 
 func (repository *fakeAutomationRepository) FailRun(_ context.Context, _ automationsrepo.FailRunInput) (entity.ScheduledRun, error) {
@@ -396,11 +548,25 @@ func (dispatcher *fakeAutomationDispatcher) EnqueueAgentTurn(_ context.Context, 
 }
 
 type fakeAutomationPublisher struct {
-	input          MattermostThreadPostInput
-	ref            MattermostPostRef
-	calls          int
-	errors         []error
-	idempotencyIDs []string
+	input           MattermostThreadPostInput
+	ref             MattermostPostRef
+	calls           int
+	errors          []error
+	idempotencyIDs  []string
+	reconcileInput  MattermostThreadPostInput
+	reconcileCalls  int
+	reconcileErrors []error
+	reconcileIDs    []string
+}
+
+func (publisher *fakeAutomationPublisher) ReconcileOrPostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	publisher.reconcileCalls++
+	publisher.reconcileInput = input
+	publisher.reconcileIDs = append(publisher.reconcileIDs, input.IdempotencyID)
+	if err := popAutomationError(&publisher.reconcileErrors); err != nil {
+		return MattermostPostRef{}, err
+	}
+	return publisher.ref, nil
 }
 
 func (publisher *fakeAutomationPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
