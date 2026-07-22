@@ -481,7 +481,7 @@ func listOwnerRepositories(ctx context.Context, client *githubapi.Client, owner 
 		})
 		return repositories, err
 	case "user":
-		repositories, _, err := client.Repositories.List(ctx, owner, &githubapi.RepositoryListOptions{
+		repositories, _, err := client.Repositories.ListByUser(ctx, owner, &githubapi.RepositoryListByUserOptions{
 			Type:        "all",
 			Sort:        "pushed",
 			Direction:   "desc",
@@ -499,7 +499,7 @@ func listOwnerRepositories(ctx context.Context, client *githubapi.Client, owner 
 		if !githubNotFound(err) {
 			return nil, err
 		}
-		repositories, _, err = client.Repositories.List(ctx, owner, &githubapi.RepositoryListOptions{
+		repositories, _, err = client.Repositories.ListByUser(ctx, owner, &githubapi.RepositoryListByUserOptions{
 			Type:        "all",
 			Sort:        "pushed",
 			Direction:   "desc",
