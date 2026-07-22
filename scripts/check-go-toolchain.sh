@@ -302,11 +302,117 @@ final_runtime_stage() {
   ' "$dockerfile"
 }
 
-effective_final_stage_gotoolchain() {
+validate_go_tools_stage_contract() {
+  local dockerfile="$1"
+  local expected_from="$2"
+  local final_from_line="$3"
+
+  LC_ALL=C awk \
+    -v expected_from="$expected_from" \
+    -v final_from_line="$final_from_line" '
+    function has_line_continuation(value, trimmed, position, slash_count) {
+      trimmed = value
+      sub(/[ \t]+$/, "", trimmed)
+      slash_count = 0
+      for (position = length(trimmed); position > 0 && substr(trimmed, position, 1) == "\\"; position--) {
+        slash_count++
+      }
+      return slash_count == 1
+    }
+
+    function strip_line_continuation(value, trimmed) {
+      trimmed = value
+      sub(/[ \t]+$/, "", trimmed)
+      sub(/\\$/, "", trimmed)
+      return trimmed
+    }
+
+    function process_instruction(value, start_line, line, instruction, body, token_count) {
+      line = value
+      sub(/^[ \t]+/, "", line)
+      if (!match(line, /^[^ \t]+/)) {
+        return
+      }
+
+      instruction = toupper(substr(line, 1, RLENGTH))
+      if (instruction != "FROM") {
+        return
+      }
+
+      body = substr(line, RLENGTH + 1)
+      sub(/^[ \t]+/, "", body)
+      sub(/[ \t]+$/, "", body)
+      token_count = split(body, tokens, /[ \t]+/)
+
+      # BuildKit v0.29.0 приводит stage name к нижнему регистру и хранит
+      # привязку без учёта регистра. FROM flags извлекаются до этих аргументов,
+      # поэтому alias всегда остаётся последним токеном после AS.
+      if (token_count < 2 || toupper(tokens[token_count - 1]) != "AS" || \
+          toupper(tokens[token_count]) != "GO-TOOLS") {
+        return
+      }
+
+      alias_count++
+      alias_line = start_line
+      if ("FROM " body == expected_from) {
+        canonical_count++
+      }
+    }
+
+    {
+      line = $0
+      sub(/\r$/, "", line)
+      if (line ~ /^[ \t]*($|#)/) {
+        next
+      }
+      if (logical == "") {
+        logical_start = NR
+      }
+      if (has_line_continuation(line)) {
+        logical = logical strip_line_continuation(line)
+        next
+      }
+      logical = logical line
+      process_instruction(logical, logical_start)
+      logical = ""
+    }
+
+    END {
+      if (logical != "") {
+        print "незавершённая логическая Dockerfile-инструкция при проверке stage go-tools" > "/dev/stderr"
+        exit 2
+      }
+      if (alias_count != 1) {
+        print "Dockerfile должен объявлять логическую stage alias go-tools ровно один раз; найдено " (alias_count + 0) > "/dev/stderr"
+        exit 2
+      }
+      if (canonical_count != 1) {
+        print "stage alias go-tools должна иметь точную закреплённую форму \047" expected_from "\047 без FROM flags и переменного либо внешнего base" > "/dev/stderr"
+        exit 2
+      }
+      if (alias_line >= final_from_line) {
+        print "закреплённая stage alias go-tools должна быть объявлена до final runtime stage" > "/dev/stderr"
+        exit 2
+      }
+    }
+  ' "$dockerfile"
+}
+
+validate_final_runtime_stage_contract_instructions() {
   local dockerfile="$1"
   local from_line="$2"
+  local expected_env="$3"
+  local expected_copy="$4"
+  local expected_check="$5"
+  local required_go_tools_copy="$6"
+  local allowed_copy_two="$7"
 
-  tail -n +"$from_line" "$dockerfile" | LC_ALL=C awk '
+  tail -n +"$from_line" "$dockerfile" | LC_ALL=C awk \
+    -v expected_env="$expected_env" \
+    -v expected_copy="$expected_copy" \
+    -v expected_check="$expected_check" \
+    -v required_go_tools_copy="$required_go_tools_copy" \
+    -v allowed_copy_two="$allowed_copy_two" '
     function parse_error(message) {
       print message > "/dev/stderr"
       parse_failed = 1
@@ -386,7 +492,13 @@ effective_final_stage_gotoolchain() {
       return count
     }
 
-    function process_instruction(value, line, instruction, body, token_count, modern, token_index, separator, key, assigned_value) {
+    function contract_error(message) {
+      print message > "/dev/stderr"
+      contract_failed = 1
+      exit 2
+    }
+
+    function process_instruction(value, line, instruction, body, canonical, token_count, modern, token_index, separator, key, assigned_value) {
       line = value
       sub(/^[ \t]+/, "", line)
       if (!match(line, /^[^ \t]+/)) {
@@ -394,12 +506,40 @@ effective_final_stage_gotoolchain() {
       }
 
       instruction = toupper(substr(line, 1, RLENGTH))
+      body = substr(line, RLENGTH + 1)
+      sub(/^[ \t]+/, "", body)
+      sub(/[ \t]+$/, "", body)
+      canonical = instruction " " body
+      instruction_index++
+
+      if (canonical == expected_env) {
+        env_count++
+        env_index = instruction_index
+      }
+      if (canonical == expected_copy) {
+        copy_count++
+        copy_index = instruction_index
+      }
+      if (canonical == required_go_tools_copy) {
+        required_go_tools_copy_count++
+      }
+      if (canonical == expected_check) {
+        check_count++
+        check_index = instruction_index
+      }
+
+      if ((instruction == "COPY" || instruction == "ADD") && \
+          canonical != expected_copy && canonical != required_go_tools_copy && canonical != allowed_copy_two) {
+        if (index(body, "/usr/local/go") > 0) {
+          contract_error("final runtime stage содержит неразрешённую " instruction "-инструкцию с /usr/local/go")
+        }
+        contract_error("final runtime stage содержит неразрешённую " instruction "-инструкцию вне точного списка разрешённых источников")
+      }
+
       if (instruction != "ENV") {
         return
       }
 
-      body = substr(line, RLENGTH + 1)
-      sub(/^[ \t]+/, "", body)
       token_count = tokenize_env(body, tokens)
       if (token_count < 1) {
         parse_error("не удалось однозначно разобрать ENV-инструкцию final runtime stage")
@@ -455,11 +595,35 @@ effective_final_stage_gotoolchain() {
     }
 
     END {
-      if (parse_failed) {
+      if (parse_failed || contract_failed) {
         exit 2
       }
       if (logical != "") {
         print "незавершённая логическая Dockerfile-инструкция в final runtime stage" > "/dev/stderr"
+        exit 2
+      }
+      if (env_count != 1) {
+        print "final runtime stage должен содержать точную самостоятельную логическую инструкцию \047" expected_env "\047 ровно один раз" > "/dev/stderr"
+        exit 2
+      }
+      if (copy_count != 1) {
+        print "final runtime stage должен копировать закреплённый Go toolchain одной точной самостоятельной логической COPY-инструкцией" > "/dev/stderr"
+        exit 2
+      }
+      if (required_go_tools_copy_count != 1) {
+        print "final runtime stage должен копировать закреплённые Go tools одной точной самостоятельной логической COPY-инструкцией из stage alias go-tools" > "/dev/stderr"
+        exit 2
+      }
+      if (check_count != 1) {
+        print "final runtime stage должен закрыто проверять точные GOVERSION и GOTOOLCHAIN одной самостоятельной логической RUN-инструкцией" > "/dev/stderr"
+        exit 2
+      }
+      if (env_index >= copy_index) {
+        print "final runtime stage должен задавать GOTOOLCHAIN=local до логической COPY-инструкции Go toolchain" > "/dev/stderr"
+        exit 2
+      }
+      if (copy_index >= check_index) {
+        print "final runtime stage должен проверять скопированный Go toolchain после логической COPY-инструкции" > "/dev/stderr"
         exit 2
       }
       if (!found) {
@@ -474,11 +638,12 @@ effective_final_stage_gotoolchain() {
 require_final_runtime_stage_contract() {
   local path="$1"
   local expected_from="$2"
+  local required_go_tools_copy="$3"
+  local allowed_copy_two="${4:-}"
   local dockerfile="$repo_root/$path"
-  local stage_info from_line actual_from expected_from_body runtime_stage
+  local stage_info from_line actual_from expected_from_body
   local runtime_env runtime_copy runtime_check
-  local env_count copy_count check_count
-  local env_line copy_line check_line effective_gotoolchain
+  local go_tools_result contract_result effective_gotoolchain
 
   if ! validate_dockerfile_lexical_boundary "$dockerfile"; then
     fail "$path содержит неподдерживаемый байт Dockerfile"
@@ -492,30 +657,37 @@ require_final_runtime_stage_contract() {
     fail "$path содержит неподдерживаемую или неоднозначную Dockerfile-конструкцию"
   fi
   IFS=$'\t' read -r from_line actual_from <<<"$stage_info"
+
+  if ! go_tools_result="$(validate_go_tools_stage_contract \
+    "$dockerfile" \
+    "FROM $go_image AS go-tools" \
+    "$from_line" 2>&1)"; then
+    printf '%s: %s\n' "$path" "$go_tools_result" >&2
+    fail "$path не связывает final COPY с однозначной закреплённой stage alias go-tools"
+  fi
+
   expected_from_body="${expected_from#FROM }"
   [[ "$actual_from" == "$expected_from_body" ]] || fail "$path должен завершаться stage '$expected_from', найден 'FROM $actual_from'"
 
-  runtime_stage="$(tail -n +"$from_line" "$dockerfile")"
   runtime_env="ENV GOTOOLCHAIN=local"
   runtime_copy="COPY --from=go-tools /usr/local/go /usr/local/go"
   runtime_check="RUN test \"\$(/usr/local/go/bin/go env GOVERSION)\" = \"go$go_version\" && test \"\$(/usr/local/go/bin/go env GOTOOLCHAIN)\" = \"local\""
 
-  env_count="$(grep -Fxc "$runtime_env" <<<"$runtime_stage" || true)"
-  copy_count="$(grep -Fxc "$runtime_copy" <<<"$runtime_stage" || true)"
-  check_count="$(grep -Fxc "$runtime_check" <<<"$runtime_stage" || true)"
-  [[ "$env_count" == 1 ]] || fail "$path final runtime stage должен содержать точный '$runtime_env' ровно один раз"
-  [[ "$copy_count" == 1 ]] || fail "$path final runtime stage должен копировать закреплённый Go toolchain ровно один раз"
-  [[ "$check_count" == 1 ]] || fail "$path final runtime stage должен закрыто проверять точные GOVERSION и GOTOOLCHAIN"
-
-  env_line="$(grep -nFx "$runtime_env" <<<"$runtime_stage" | cut -d: -f1)"
-  copy_line="$(grep -nFx "$runtime_copy" <<<"$runtime_stage" | cut -d: -f1)"
-  check_line="$(grep -nFx "$runtime_check" <<<"$runtime_stage" | cut -d: -f1)"
-  ((env_line < copy_line)) || fail "$path должен задавать GOTOOLCHAIN=local до копирования Go в final runtime stage"
-  ((copy_line < check_line)) || fail "$path должен проверять скопированный Go toolchain до выпуска final runtime stage"
-
-  if ! effective_gotoolchain="$(effective_final_stage_gotoolchain "$dockerfile" "$from_line")"; then
-    fail "$path final runtime stage содержит неоднозначный ENV-синтаксис"
+  if ! contract_result="$(validate_final_runtime_stage_contract_instructions \
+    "$dockerfile" \
+    "$from_line" \
+    "$runtime_env" \
+    "$runtime_copy" \
+    "$runtime_check" \
+    "$required_go_tools_copy" \
+    "$allowed_copy_two" 2>&1)"; then
+    if grep -Eq 'ENV-инструкц|разобрать ENV' <<<"$contract_result"; then
+      fail "$path final runtime stage содержит неоднозначный ENV-синтаксис"
+    fi
+    printf '%s: %s\n' "$path" "$contract_result" >&2
+    fail "$path final runtime stage не соответствует контракту логических Dockerfile-инструкций"
   fi
+  effective_gotoolchain="$contract_result"
   [[ "$effective_gotoolchain" == local ]] || fail "$path final runtime stage завершает GOTOOLCHAIN значением '$effective_gotoolchain' вместо 'local'"
 }
 
@@ -568,8 +740,15 @@ require_line Makefile $'\tenv -u GOFLAGS GOENV=off GOWORK=off go run \'golang.or
 
 go_image="golang:$go_version-alpine"
 require_line services/external/bot-service/Dockerfile "ARG GOLANG_IMAGE=$go_image"
-require_final_runtime_stage_contract services/jobs/agent-runner/Dockerfile "FROM node:24-bookworm"
-require_final_runtime_stage_contract deploy/images/agent-runner/Dockerfile "FROM node:24-alpine"
+require_final_runtime_stage_contract \
+  services/jobs/agent-runner/Dockerfile \
+  "FROM node:24-bookworm" \
+  "COPY --from=go-tools /tool-bin/ /usr/local/bin/" \
+  "COPY --from=builder /out/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner"
+require_final_runtime_stage_contract \
+  deploy/images/agent-runner/Dockerfile \
+  "FROM node:24-alpine" \
+  "COPY --from=go-tools /tool-bin/ /usr/local/bin/"
 require_count services/jobs/agent-runner/Dockerfile "FROM $go_image" 2
 require_count deploy/images/agent-runner/Dockerfile "FROM $go_image" 1
 require_count services/external/bot-service/Dockerfile "ENV GOTOOLCHAIN=local" 2
