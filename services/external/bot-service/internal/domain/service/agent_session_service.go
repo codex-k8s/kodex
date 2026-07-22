@@ -1169,6 +1169,9 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 	if err := svc.requireCoordinationPermission(ctx, session, capability, action, role.ID); err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
+	if err := svc.requireRequestedRoleChatParticipant(ctx, chat, role); err != nil {
+		return AgentSessionAgentRequest{}, err
+	}
 	repositories, err := svc.chatRepositories(ctx, chat)
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
@@ -1299,6 +1302,23 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 		TargetSessionKey:  queued.SessionKey,
 		AuditPostID:       auditPostID,
 	}, nil
+}
+
+func (svc *AgentSessionService) requireRequestedRoleChatParticipant(ctx context.Context, chat entity.Chat, role entity.AgentRole) error {
+	participants, err := svc.cfg.Store.ListChatParticipants(ctx, chat.ID)
+	if err != nil {
+		return err
+	}
+	for _, participant := range participants {
+		if participant.RoleID == role.ID && participant.Enabled {
+			return nil
+		}
+	}
+	return fmt.Errorf(
+		"target agent %q is not an enabled participant of current chat %q; use mattermost_list_chats and mattermost_start_agent_thread for cross-chat delegation",
+		role.Name,
+		defaultString(strings.TrimSpace(chat.Slug), strings.TrimSpace(chat.Name)),
+	)
 }
 
 func (svc *AgentSessionService) ensureRequestedRoleChannelMember(ctx context.Context, project entity.Project, chat entity.Chat, role entity.AgentRole, sessionKey string, actorUser string) error {

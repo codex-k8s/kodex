@@ -1047,7 +1047,9 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 		"конфигурация проекта в MatterCodex является источником истины",
 		"не зашивай имя чата",
 		"Проверяй фактическую возможность выполнить требуемую операцию",
-		"не делай конкретный login или identity условием работы",
+		"не сравнивай их с ожидаемым значением",
+		"считай это устаревшими данными маршрутизации",
+		"только если целевая роль указана как включенный участник",
 	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
