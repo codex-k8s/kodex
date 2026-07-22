@@ -106,6 +106,60 @@ func TestMCPInvalidInitializeSeriesDoesNotGrowState(t *testing.T) {
 	}
 }
 
+func TestMCPInitializeBindsAdmissionBeforeResponsePublication(t *testing.T) {
+	handler := newMCPHandlerWithOptions(newSessionBarrierServiceOnly(), defaultMCPRequestBodyBytes, mcpHandlerOptions{
+		MaximumTransportSessions: 1,
+		SessionTimeout:           time.Second,
+	})
+	published := make(chan struct{})
+	release := make(chan struct{})
+	released := false
+	defer func() {
+		if !released {
+			close(release)
+		}
+	}()
+	response := &blockingMCPResponseWriter{
+		ResponseRecorder: httptest.NewRecorder(),
+		published:        published,
+		release:          release,
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handler.ServeHTTP(response, newMCPInitializeRequest("/mcp/sessions/session-admin", "session-token", mcpInitializePayload))
+	}()
+
+	select {
+	case <-published:
+	case <-time.After(2 * time.Second):
+		t.Fatal("initialize response did not reach publication")
+	}
+	sessionID := response.Header().Get("Mcp-Session-Id")
+	if sessionID == "" {
+		t.Fatal("published initialize response has no Mcp-Session-Id")
+	}
+	initialized := serveMCPTransportRequest(handler, http.MethodPost, "/mcp/sessions/session-admin", "session-token", sessionID, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	if initialized.Code != http.StatusAccepted {
+		t.Fatalf("immediate initialized status=%d body=%s", initialized.Code, initialized.Body.String())
+	}
+
+	close(release)
+	released = true
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("initialize handler did not finish after response publication")
+	}
+	if response.Code != http.StatusOK {
+		t.Fatalf("initialize status=%d body=%s", response.Code, response.Body.String())
+	}
+	closed := serveMCPTransportRequest(handler, http.MethodDelete, "/mcp/sessions/session-admin", "session-token", sessionID, "")
+	if closed.Code != http.StatusNoContent {
+		t.Fatalf("MCP cleanup status=%d body=%s", closed.Code, closed.Body.String())
+	}
+}
+
 func TestMCPTransportAdmissionBurstAndSlotRelease(t *testing.T) {
 	handler := newMCPHandlerWithOptions(newConcurrentMCPAuthorizationService(), defaultMCPRequestBodyBytes, mcpHandlerOptions{
 		MaximumTransportSessions: 2,
@@ -310,6 +364,30 @@ func waitMCPTransportCounts(t *testing.T, handler *mcpHTTPHandler, wantAdmission
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("counts admission=%d sdk=%d want=%d/%d", handler.transportAdmissionStateCount(), handler.sdkTransportSessionCount(), wantAdmission, wantSDK)
+}
+
+type blockingMCPResponseWriter struct {
+	*httptest.ResponseRecorder
+	published chan struct{}
+	release   <-chan struct{}
+	once      sync.Once
+}
+
+func (writer *blockingMCPResponseWriter) WriteHeader(statusCode int) {
+	writer.waitForRelease()
+	writer.ResponseRecorder.WriteHeader(statusCode)
+}
+
+func (writer *blockingMCPResponseWriter) Write(body []byte) (int, error) {
+	writer.waitForRelease()
+	return writer.ResponseRecorder.Write(body)
+}
+
+func (writer *blockingMCPResponseWriter) waitForRelease() {
+	writer.once.Do(func() {
+		close(writer.published)
+		<-writer.release
+	})
 }
 
 type concurrentMCPAuthorizationStore struct {

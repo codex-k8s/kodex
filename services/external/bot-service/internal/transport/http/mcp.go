@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -38,6 +39,40 @@ type mcpHTTPHandler struct {
 	admission        *mcpTransportAdmission
 	maximumBodyBytes int64
 	originProtection *http.CrossOriginProtection
+}
+
+type mcpAdmissionResponseWriter struct {
+	http.ResponseWriter
+	beforePublish func()
+	publishOnce   sync.Once
+}
+
+type mcpAdmissionFlushingResponseWriter struct {
+	*mcpAdmissionResponseWriter
+	flusher http.Flusher
+}
+
+func (writer *mcpAdmissionResponseWriter) WriteHeader(statusCode int) {
+	writer.publish()
+	writer.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (writer *mcpAdmissionResponseWriter) Write(body []byte) (int, error) {
+	writer.publish()
+	return writer.ResponseWriter.Write(body)
+}
+
+func (writer *mcpAdmissionResponseWriter) Unwrap() http.ResponseWriter {
+	return writer.ResponseWriter
+}
+
+func (writer *mcpAdmissionResponseWriter) publish() {
+	writer.publishOnce.Do(writer.beforePublish)
+}
+
+func (writer *mcpAdmissionFlushingResponseWriter) Flush() {
+	writer.publish()
+	writer.flusher.Flush()
 }
 
 type mcpLimitInput struct {
@@ -493,9 +528,31 @@ func (handler *mcpHTTPHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 			http.Error(writer, "MCP transport session capacity is exhausted", http.StatusServiceUnavailable)
 			return
 		}
-		handler.streamable.ServeHTTP(writer, request)
-		createdSessionID := strings.TrimSpace(writer.Header().Get("Mcp-Session-Id"))
-		handler.admission.finishReservation(createdSessionID, binding, createdSessionID != "" && handler.hasSDKSession(createdSessionID))
+		var createdSessionID string
+		var admitted *mcpAdmittedTransport
+		admissionWriter := &mcpAdmissionResponseWriter{
+			ResponseWriter: writer,
+			beforePublish: func() {
+				createdSessionID = strings.TrimSpace(writer.Header().Get("Mcp-Session-Id"))
+				admitted = handler.admission.finishReservation(
+					createdSessionID,
+					binding,
+					createdSessionID != "" && handler.hasSDKSession(createdSessionID),
+				)
+			},
+		}
+		var streamableWriter http.ResponseWriter = admissionWriter
+		if flusher, ok := writer.(http.Flusher); ok {
+			streamableWriter = &mcpAdmissionFlushingResponseWriter{
+				mcpAdmissionResponseWriter: admissionWriter,
+				flusher:                    flusher,
+			}
+		}
+		handler.streamable.ServeHTTP(streamableWriter, request)
+		admissionWriter.publish()
+		if admitted != nil {
+			handler.admission.end(createdSessionID, admitted, handler.hasSDKSession(createdSessionID))
+		}
 		return
 	}
 

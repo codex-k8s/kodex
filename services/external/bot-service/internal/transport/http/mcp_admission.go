@@ -49,21 +49,21 @@ func (admission *mcpTransportAdmission) reserve() bool {
 	return true
 }
 
-func (admission *mcpTransportAdmission) finishReservation(sessionID string, binding mcpCredentialBinding, live bool) {
+func (admission *mcpTransportAdmission) finishReservation(sessionID string, binding mcpCredentialBinding, live bool) *mcpAdmittedTransport {
 	admission.mu.Lock()
 	defer admission.mu.Unlock()
 	if admission.reserved > 0 {
 		admission.reserved--
 	}
 	if !live || sessionID == "" {
-		return
+		return nil
 	}
 	if _, exists := admission.active[sessionID]; exists {
-		return
+		return nil
 	}
-	item := &mcpAdmittedTransport{binding: binding}
+	item := &mcpAdmittedTransport{binding: binding, references: 1}
 	admission.active[sessionID] = item
-	admission.scheduleLocked(sessionID, item)
+	return item
 }
 
 func (admission *mcpTransportAdmission) begin(sessionID string, binding mcpCredentialBinding) (*mcpAdmittedTransport, bool) {

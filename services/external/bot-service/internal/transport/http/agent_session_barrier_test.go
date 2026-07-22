@@ -255,28 +255,38 @@ func TestInternalAgentSessionProductionTransportBarrierMatrix(t *testing.T) {
 
 func TestMCPSessionRevocationBarrierPreventsPublishAndSystemFallback(t *testing.T) {
 	service, store, runner, publisher := newSessionBarrierService(0)
-	server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
-	defer server.Close()
-	client := mcp.NewClient(&mcp.Implementation{Name: "barrier-test", Version: "1"}, nil)
-	transport := &mcp.StreamableClientTransport{
-		Endpoint:   server.URL + "/mcp/sessions/session-admin",
-		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: "session-token"}},
+	handler := newMCPHandlerWithOptions(service, defaultMCPRequestBodyBytes, mcpHandlerOptions{
+		MaximumTransportSessions: 2,
+		SessionTimeout:           time.Second,
+	})
+	initialize := httptest.NewRecorder()
+	handler.ServeHTTP(initialize, newMCPInitializeRequest("/mcp/sessions/session-admin", "session-token", mcpInitializePayload))
+	if initialize.Code != http.StatusOK {
+		t.Fatalf("MCP initialize status=%d body=%s", initialize.Code, initialize.Body.String())
 	}
-	session, err := client.Connect(context.Background(), transport, nil)
-	if err != nil {
-		t.Fatalf("MCP connect: %v", err)
+	sessionID := initialize.Header().Get("Mcp-Session-Id")
+	if sessionID == "" {
+		t.Fatal("MCP initialize returned no Mcp-Session-Id")
 	}
-	defer func() { _ = session.Close() }()
+	initialized := serveMCPTransportRequest(handler, http.MethodPost, "/mcp/sessions/session-admin", "session-token", sessionID, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	if initialized.Code != http.StatusAccepted {
+		t.Fatalf("MCP initialized status=%d body=%s", initialized.Code, initialized.Body.String())
+	}
+	defer func() {
+		store.session.Status = "running"
+		closed := serveMCPTransportRequest(handler, http.MethodDelete, "/mcp/sessions/session-admin", "session-token", sessionID, "")
+		if closed.Code != http.StatusNoContent {
+			t.Errorf("MCP cleanup status=%d body=%s", closed.Code, closed.Body.String())
+		}
+	}()
+
 	store.session.Status = "closed"
 	store.guardCalls = 0
 	runner.secretReads = 0
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "mattermost_post_thread_update", Arguments: map[string]any{"message": "synthetic progress"},
-	})
-	if err == nil {
-		t.Fatalf("MCP call result=%#v, want transport authorization error", result)
-	}
-	if store.guardCalls != 2 || runner.secretReads != 2 || publisher.posts != 0 {
+	publisher.posts = 0
+	revoked := serveMCPTransportRequest(handler, http.MethodPost, "/mcp/sessions/session-admin", "session-token", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"mattermost_post_thread_update","arguments":{"message":"synthetic progress"}}}`)
+	assertRejectedMCPBootstrap(t, revoked, http.StatusUnauthorized)
+	if store.guardCalls != 1 || runner.secretReads != 1 || publisher.posts != 0 {
 		t.Fatalf("MCP barrier guards=%d secret_reads=%d publishes=%d", store.guardCalls, runner.secretReads, publisher.posts)
 	}
 }
