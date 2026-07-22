@@ -47,10 +47,171 @@ require_count() {
   [[ "$actual" == "$wanted" ]] || fail "$path содержит '$expected' $actual раз; ожидается $wanted"
 }
 
+validate_dockerfile_lexical_boundary() {
+  local dockerfile="$1"
+
+  LC_ALL=C awk '
+    function lexical_error(message) {
+      print message > "/dev/stderr"
+      validation_failed = 1
+      exit 2
+    }
+
+    function contains_unicode_whitespace(value) {
+      # Байтовый список соответствует не-ASCII символам unicode.IsSpace в BuildKit v0.29.0.
+      return index(value, "\302\205") > 0 || \
+        index(value, "\302\240") > 0 || \
+        index(value, "\341\232\200") > 0 || \
+        index(value, "\342\200\200") > 0 || \
+        index(value, "\342\200\201") > 0 || \
+        index(value, "\342\200\202") > 0 || \
+        index(value, "\342\200\203") > 0 || \
+        index(value, "\342\200\204") > 0 || \
+        index(value, "\342\200\205") > 0 || \
+        index(value, "\342\200\206") > 0 || \
+        index(value, "\342\200\207") > 0 || \
+        index(value, "\342\200\210") > 0 || \
+        index(value, "\342\200\211") > 0 || \
+        index(value, "\342\200\212") > 0 || \
+        index(value, "\342\200\250") > 0 || \
+        index(value, "\342\200\251") > 0 || \
+        index(value, "\342\200\257") > 0 || \
+        index(value, "\342\201\237") > 0 || \
+        index(value, "\343\200\200") > 0
+    }
+
+    {
+      line = $0
+      if (substr(line, length(line), 1) == "\r") {
+        line = substr(line, 1, length(line) - 1)
+      }
+
+      if (index(line, "\357\273\277") > 0) {
+        lexical_error("строка " NR ": UTF-8 BOM в Dockerfile не поддерживается")
+      }
+
+      if (contains_unicode_whitespace(line)) {
+        lexical_error("строка " NR ": недопустимый Unicode-пробел в Dockerfile")
+      }
+
+      for (position = 1; position <= length(line); position++) {
+        character = substr(line, position, 1)
+        if (character ~ /[[:cntrl:]]/ && character != "\t") {
+          lexical_error("строка " NR ": недопустимый управляющий ASCII-байт в Dockerfile")
+        }
+      }
+    }
+
+    END {
+      if (validation_failed) {
+        exit 2
+      }
+    }
+  ' "$dockerfile"
+}
+
+validate_dockerfile_parser_boundary() {
+  local dockerfile="$1"
+
+  LC_ALL=C awk '
+    function parser_boundary_error(message) {
+      print message > "/dev/stderr"
+      validation_failed = 1
+      exit 2
+    }
+
+    function parser_directive_key(value, prefix, body, separator, name, directive_value, key) {
+      if (substr(value, 1, length(prefix)) != prefix) {
+        return ""
+      }
+
+      body = substr(value, length(prefix) + 1)
+      sub(/^[ \t]+/, "", body)
+      separator = index(body, "=")
+      if (separator == 0) {
+        return ""
+      }
+
+      name = substr(body, 1, separator - 1)
+      sub(/[ \t]+$/, "", name)
+      if (name !~ /^[A-Za-z][A-Za-z0-9]*$/) {
+        return ""
+      }
+
+      directive_value = substr(body, separator + 1)
+      sub(/^[ \t]+/, "", directive_value)
+      sub(/[ \t]+$/, "", directive_value)
+      if (directive_value == "") {
+        return ""
+      }
+
+      key = toupper(name)
+      if (key != "SYNTAX" && key != "ESCAPE" && key != "CHECK") {
+        return ""
+      }
+      return key
+    }
+
+    BEGIN {
+      hash_directives = 1
+      slash_directives = 1
+      json_candidate = 1
+    }
+
+    {
+      line = $0
+      sub(/\r$/, "", line)
+
+      # BuildKit DetectSyntax удаляет shebang первой строки перед поиском frontend.
+      if (NR == 1 && substr(line, 1, 2) == "#!") {
+        next
+      }
+
+      if (hash_directives) {
+        key = parser_directive_key(line, "#")
+        if (key == "") {
+          hash_directives = 0
+        } else if (key == "SYNTAX") {
+          parser_boundary_error("внешний Dockerfile syntax frontend не поддерживается")
+        }
+      }
+
+      if (slash_directives) {
+        key = parser_directive_key(line, "//")
+        if (key == "") {
+          slash_directives = 0
+        } else if (key == "SYNTAX") {
+          parser_boundary_error("внешний Dockerfile syntax frontend не поддерживается")
+        }
+      }
+
+      if (json_candidate) {
+        json_start = line
+        sub(/^[ \t]+/, "", json_start)
+        if (json_start == "") {
+          next
+        }
+        # Любой JSON-object здесь не является допустимым встроенным Dockerfile;
+        # закрытый отказ покрывает JSON-форму DetectSyntax без собственного JSON parser.
+        if (substr(json_start, 1, 1) == "{") {
+          parser_boundary_error("внешний Dockerfile syntax frontend не поддерживается")
+        }
+        json_candidate = 0
+      }
+    }
+
+    END {
+      if (validation_failed) {
+        exit 2
+      }
+    }
+  ' "$dockerfile"
+}
+
 final_runtime_stage() {
   local dockerfile="$1"
 
-  awk '
+  LC_ALL=C awk '
     function parse_error(message) {
       print message > "/dev/stderr"
       parse_failed = 1
@@ -59,7 +220,7 @@ final_runtime_stage() {
 
     function has_line_continuation(value, trimmed, position, slash_count) {
       trimmed = value
-      sub(/[[:space:]]+$/, "", trimmed)
+      sub(/[ \t]+$/, "", trimmed)
       slash_count = 0
       for (position = length(trimmed); position > 0 && substr(trimmed, position, 1) == "\\"; position--) {
         slash_count++
@@ -70,18 +231,18 @@ final_runtime_stage() {
 
     function strip_line_continuation(value, trimmed) {
       trimmed = value
-      sub(/[[:space:]]+$/, "", trimmed)
+      sub(/[ \t]+$/, "", trimmed)
       sub(/\\$/, "", trimmed)
       return trimmed
     }
 
     function process_instruction(value, start_line, line, instruction, body) {
       line = value
-      sub(/^[[:space:]]+/, "", line)
+      sub(/^[ \t]+/, "", line)
       if (index(line, "<<") > 0) {
         parse_error("Dockerfile heredoc не поддерживается проверкой final runtime stage")
       }
-      if (!match(line, /^[^[:space:]]+/)) {
+      if (!match(line, /^[^ \t]+/)) {
         return
       }
 
@@ -91,8 +252,8 @@ final_runtime_stage() {
       }
 
       body = substr(line, RLENGTH + 1)
-      sub(/^[[:space:]]+/, "", body)
-      sub(/[[:space:]]+$/, "", body)
+      sub(/^[ \t]+/, "", body)
+      sub(/[ \t]+$/, "", body)
       if (body == "") {
         parse_error("не удалось однозначно разобрать FROM-инструкцию")
       }
@@ -103,12 +264,13 @@ final_runtime_stage() {
 
     {
       line = $0
+      sub(/\r$/, "", line)
       directive = line
-      sub(/^[[:space:]]+/, "", directive)
-      if (toupper(directive) ~ /^#[[:space:]]*ESCAPE[[:space:]]*=/) {
+      sub(/^[ \t]+/, "", directive)
+      if (toupper(directive) ~ /^#[ \t]*ESCAPE[ \t]*=/) {
         parse_error("Dockerfile parser directive escape не поддерживается проверкой final runtime stage")
       }
-      if (line ~ /^[[:space:]]*($|#)/) {
+      if (line ~ /^[ \t]*($|#)/) {
         next
       }
       if (logical == "") {
@@ -144,7 +306,7 @@ effective_final_stage_gotoolchain() {
   local dockerfile="$1"
   local from_line="$2"
 
-  tail -n +"$from_line" "$dockerfile" | awk '
+  tail -n +"$from_line" "$dockerfile" | LC_ALL=C awk '
     function parse_error(message) {
       print message > "/dev/stderr"
       parse_failed = 1
@@ -153,7 +315,7 @@ effective_final_stage_gotoolchain() {
 
     function has_line_continuation(value, trimmed, position, slash_count) {
       trimmed = value
-      sub(/[[:space:]]+$/, "", trimmed)
+      sub(/[ \t]+$/, "", trimmed)
       slash_count = 0
       for (position = length(trimmed); position > 0 && substr(trimmed, position, 1) == "\\"; position--) {
         slash_count++
@@ -164,12 +326,12 @@ effective_final_stage_gotoolchain() {
 
     function strip_line_continuation(value, trimmed) {
       trimmed = value
-      sub(/[[:space:]]+$/, "", trimmed)
+      sub(/[ \t]+$/, "", trimmed)
       sub(/\\$/, "", trimmed)
       return trimmed
     }
 
-    function tokenize_env(value, result, position, character, quote, escaped, token, count, started) {
+    function tokenize_env(value, result, position, character, quote, escaped, token, count, started, next_character) {
       quote = ""
       escaped = 0
       token = ""
@@ -191,7 +353,7 @@ effective_final_stage_gotoolchain() {
           } else if (character == "\"" || character == "\047") {
             quote = character
             started = 1
-          } else if (character ~ /[[:space:]]/) {
+          } else if (character ~ /[ \t]/) {
             if (started) {
               result[++count] = token
               token = ""
@@ -204,7 +366,12 @@ effective_final_stage_gotoolchain() {
         } else if (character == quote) {
           quote = ""
         } else if (quote == "\"" && character == "\\") {
-          escaped = 1
+          next_character = substr(value, position + 1, 1)
+          if (next_character == "\"" || next_character == "$" || next_character == "\\") {
+            escaped = 1
+          } else {
+            token = token character
+          }
         } else {
           token = token character
         }
@@ -221,8 +388,8 @@ effective_final_stage_gotoolchain() {
 
     function process_instruction(value, line, instruction, body, token_count, modern, token_index, separator, key, assigned_value) {
       line = value
-      sub(/^[[:space:]]+/, "", line)
-      if (!match(line, /^[^[:space:]]+/)) {
+      sub(/^[ \t]+/, "", line)
+      if (!match(line, /^[^ \t]+/)) {
         return
       }
 
@@ -232,7 +399,7 @@ effective_final_stage_gotoolchain() {
       }
 
       body = substr(line, RLENGTH + 1)
-      sub(/^[[:space:]]+/, "", body)
+      sub(/^[ \t]+/, "", body)
       token_count = tokenize_env(body, tokens)
       if (token_count < 1) {
         parse_error("не удалось однозначно разобрать ENV-инструкцию final runtime stage")
@@ -274,7 +441,8 @@ effective_final_stage_gotoolchain() {
 
     {
       line = $0
-      if (line ~ /^[[:space:]]*($|#)/) {
+      sub(/\r$/, "", line)
+      if (line ~ /^[ \t]*($|#)/) {
         next
       }
       if (has_line_continuation(line)) {
@@ -311,6 +479,14 @@ require_final_runtime_stage_contract() {
   local runtime_env runtime_copy runtime_check
   local env_count copy_count check_count
   local env_line copy_line check_line effective_gotoolchain
+
+  if ! validate_dockerfile_lexical_boundary "$dockerfile"; then
+    fail "$path содержит неподдерживаемый байт Dockerfile"
+  fi
+
+  if ! validate_dockerfile_parser_boundary "$dockerfile"; then
+    fail "$path выходит за границу доверия встроенного Dockerfile parser"
+  fi
 
   if ! stage_info="$(final_runtime_stage "$dockerfile")"; then
     fail "$path содержит неподдерживаемую или неоднозначную Dockerfile-конструкцию"
@@ -392,6 +568,8 @@ require_line Makefile $'\tenv -u GOFLAGS GOENV=off GOWORK=off go run \'golang.or
 
 go_image="golang:$go_version-alpine"
 require_line services/external/bot-service/Dockerfile "ARG GOLANG_IMAGE=$go_image"
+require_final_runtime_stage_contract services/jobs/agent-runner/Dockerfile "FROM node:24-bookworm"
+require_final_runtime_stage_contract deploy/images/agent-runner/Dockerfile "FROM node:24-alpine"
 require_count services/jobs/agent-runner/Dockerfile "FROM $go_image" 2
 require_count deploy/images/agent-runner/Dockerfile "FROM $go_image" 1
 require_count services/external/bot-service/Dockerfile "ENV GOTOOLCHAIN=local" 2
@@ -400,8 +578,6 @@ require_count deploy/images/agent-runner/Dockerfile "ENV GOTOOLCHAIN=local" 2
 require_count services/external/bot-service/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 1
 require_count services/jobs/agent-runner/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 2
 require_count deploy/images/agent-runner/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 1
-require_final_runtime_stage_contract services/jobs/agent-runner/Dockerfile "FROM node:24-bookworm"
-require_final_runtime_stage_contract deploy/images/agent-runner/Dockerfile "FROM node:24-alpine"
 
 while IFS= read -r image; do
   [[ "$image" == "$go_image" ]] || fail "обнаружен рассинхронизированный или плавающий Go image: $image"
