@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -588,8 +589,12 @@ func (handler *mcpHTTPHandler) preflight(writer http.ResponseWriter, request *ht
 			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
 			return false
 		}
+		if !hasValidMCPASCIIMediaTypeGrammar(values[0]) {
+			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
+			return false
+		}
 		mediaType, _, err := mime.ParseMediaType(values[0])
-		if err != nil || mediaType != mcpJSONMediaType || hasDuplicateMCPMediaParameter(values[0]) {
+		if err != nil || mediaType != mcpJSONMediaType || !hasValidMCPMediaParameters(values[0]) {
 			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
 			return false
 		}
@@ -685,13 +690,39 @@ func automationCallbackMCPOutput(output statusservice.AutomationCallbackResult) 
 	}
 }
 
-func hasDuplicateMCPMediaParameter(value string) bool {
-	type parameterRepresentation struct {
-		continuation      bool
-		continuationParts map[string]struct{}
-	}
+type mcpMediaParameter struct {
+	baseName     string
+	value        string
+	continuation bool
+	extended     bool
+	section      int
+}
 
-	seen := make(map[string]parameterRepresentation)
+type mcpMediaParameterRepresentation struct {
+	continuation bool
+	sections     map[int]struct{}
+}
+
+// hasValidMCPASCIIMediaTypeGrammar запрещает Unicode-нормализацию сырого
+// Content-Type. В принятой HTTP-грамматике OWS состоит только из SP и HTAB;
+// остальные управляющие и все non-ASCII байты должны быть percent-encoded.
+func hasValidMCPASCIIMediaTypeGrammar(value string) bool {
+	for index := range len(value) {
+		character := value[index]
+		if character == '\t' || (character >= 0x20 && character <= 0x7e) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// hasValidMCPMediaParameters проверяет все сырые параметры, чтобы результат не
+// зависел от молчаливого пропуска частей в mime.ParseMediaType. Допустимы только
+// attribute=value, attribute*=charset'language'value и непрерывные continuation
+// attribute*0[*]..attribute*N[*]. Разные представления одного attribute запрещены.
+func hasValidMCPMediaParameters(value string) bool {
+	seen := make(map[string]mcpMediaParameterRepresentation)
 	parameterStart := -1
 	inQuotes := false
 	escaped := false
@@ -715,55 +746,186 @@ func hasDuplicateMCPMediaParameter(value string) bool {
 			}
 		}
 		if parameterStart >= 0 {
-			parameter := strings.TrimSpace(value[parameterStart:index])
-			if parameter != "" {
-				name, _, _ := strings.Cut(parameter, "=")
-				baseName, continuationPart, continuation := canonicalMCPMediaParameterName(name)
-				representation, exists := seen[baseName]
-				if exists && (!continuation || !representation.continuation) {
-					return true
-				}
-				if !exists {
-					representation = parameterRepresentation{continuation: continuation}
-					if continuation {
-						representation.continuationParts = make(map[string]struct{})
-					}
-				}
-				if continuation {
-					if _, duplicate := representation.continuationParts[continuationPart]; duplicate {
-						return true
-					}
-					representation.continuationParts[continuationPart] = struct{}{}
-				}
-				seen[baseName] = representation
+			rawParameter := strings.TrimSpace(value[parameterStart:index])
+			if rawParameter == "" {
+				return false
+			}
+			name, parameterValue, ok := strings.Cut(rawParameter, "=")
+			if !ok {
+				return false
+			}
+			parameter, ok := parseMCPMediaParameterName(strings.TrimSpace(name))
+			if !ok {
+				return false
+			}
+			parameter.value = strings.TrimSpace(parameterValue)
+			if !validMCPMediaParameterValue(parameter) || !recordMCPMediaParameter(seen, parameter) {
+				return false
 			}
 		}
 		parameterStart = index + 1
 	}
-	return false
+
+	return hasContinuousMCPMediaParameters(seen)
 }
 
-func canonicalMCPMediaParameterName(name string) (string, string, bool) {
-	name = strings.ToLower(strings.TrimSpace(name))
-	baseName, suffix, extended := strings.Cut(name, "*")
-	if !extended {
-		return name, "", false
+func recordMCPMediaParameter(seen map[string]mcpMediaParameterRepresentation, parameter mcpMediaParameter) bool {
+	representation, exists := seen[parameter.baseName]
+	if !parameter.continuation {
+		if exists {
+			return false
+		}
+		seen[parameter.baseName] = mcpMediaParameterRepresentation{}
+		return true
 	}
 
-	continuationPart := strings.TrimSuffix(suffix, "*")
-	if continuationPart == "" {
-		return baseName, "", false
+	if exists && !representation.continuation {
+		return false
 	}
-	for index := range len(continuationPart) {
-		if continuationPart[index] < '0' || continuationPart[index] > '9' {
-			return baseName, "", false
+	if !exists {
+		representation = mcpMediaParameterRepresentation{
+			continuation: true,
+			sections:     make(map[int]struct{}),
 		}
 	}
-	continuationPart = strings.TrimLeft(continuationPart, "0")
-	if continuationPart == "" {
-		continuationPart = "0"
+	if _, duplicate := representation.sections[parameter.section]; duplicate {
+		return false
 	}
-	return baseName, continuationPart, true
+	representation.sections[parameter.section] = struct{}{}
+	seen[parameter.baseName] = representation
+	return true
+}
+
+func hasContinuousMCPMediaParameters(seen map[string]mcpMediaParameterRepresentation) bool {
+	for _, representation := range seen {
+		if !representation.continuation {
+			continue
+		}
+		for section := range len(representation.sections) {
+			if _, exists := representation.sections[section]; !exists {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func parseMCPMediaParameterName(name string) (mcpMediaParameter, bool) {
+	name = strings.ToLower(name)
+	baseName, suffix, hasSuffix := strings.Cut(name, "*")
+	if !validMCPMediaAttribute(baseName) {
+		return mcpMediaParameter{}, false
+	}
+	if !hasSuffix {
+		return mcpMediaParameter{baseName: baseName}, true
+	}
+	if suffix == "" {
+		return mcpMediaParameter{baseName: baseName, extended: true}, true
+	}
+
+	extended := strings.HasSuffix(suffix, "*")
+	sectionValue := strings.TrimSuffix(suffix, "*")
+	if sectionValue == "" || (len(sectionValue) > 1 && sectionValue[0] == '0') {
+		return mcpMediaParameter{}, false
+	}
+	for index := range len(sectionValue) {
+		if sectionValue[index] < '0' || sectionValue[index] > '9' {
+			return mcpMediaParameter{}, false
+		}
+	}
+	section, err := strconv.Atoi(sectionValue)
+	if err != nil {
+		return mcpMediaParameter{}, false
+	}
+	return mcpMediaParameter{
+		baseName:     baseName,
+		continuation: true,
+		extended:     extended,
+		section:      section,
+	}, true
+}
+
+func validMCPMediaParameterValue(parameter mcpMediaParameter) bool {
+	if !parameter.extended {
+		return true
+	}
+	if strings.HasPrefix(parameter.value, "\"") {
+		return false
+	}
+	if parameter.continuation && parameter.section > 0 {
+		return validMCP2231EncodedOctets(parameter.value)
+	}
+
+	charset, rest, ok := strings.Cut(parameter.value, "'")
+	if !ok {
+		return false
+	}
+	language, encodedValue, ok := strings.Cut(rest, "'")
+	if !ok || !validMCP2231Language(language) {
+		return false
+	}
+	switch strings.ToLower(charset) {
+	case "us-ascii", "utf-8":
+	default:
+		return false
+	}
+	return validMCP2231EncodedOctets(encodedValue)
+}
+
+func validMCP2231Language(language string) bool {
+	if language == "" {
+		return true
+	}
+	for _, subtag := range strings.Split(language, "-") {
+		if len(subtag) == 0 || len(subtag) > 8 {
+			return false
+		}
+		for index := range len(subtag) {
+			if (subtag[index] < 'A' || subtag[index] > 'Z') && (subtag[index] < 'a' || subtag[index] > 'z') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validMCP2231EncodedOctets(value string) bool {
+	for index := 0; index < len(value); index++ {
+		if value[index] != '%' {
+			if !isMCPMediaAttributeCharacter(value[index]) {
+				return false
+			}
+			continue
+		}
+		if index+2 >= len(value) || !isMCPHexDigit(value[index+1]) || !isMCPHexDigit(value[index+2]) {
+			return false
+		}
+		index += 2
+	}
+	return true
+}
+
+func validMCPMediaAttribute(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index := range len(value) {
+		if !isMCPMediaAttributeCharacter(value[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+func isMCPMediaAttributeCharacter(character byte) bool {
+	if character <= ' ' || character >= 0x7f {
+		return false
+	}
+	return !strings.ContainsRune("()<>@,;:\\\"/[]?=*'%", rune(character))
+}
+
+func isMCPHexDigit(character byte) bool {
+	return character >= '0' && character <= '9' || character >= 'a' && character <= 'f' || character >= 'A' && character <= 'F'
 }
 
 func readBoundedMCPRequestBody(w http.ResponseWriter, r *http.Request, maximumBodyBytes int64) error {
