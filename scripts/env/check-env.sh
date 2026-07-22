@@ -28,6 +28,7 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
+mattercodex_validate_agent_memory_guard
 mattercodex_require_commands envsubst sed
 
 if mattercodex_bool "$CHECK_KUBECTL"; then
@@ -70,7 +71,7 @@ else
   mattercodex_log "Mattermost slash token: не задан, provisioning может получить его через Mattermost API"
 fi
 if mattercodex_bool "$MATTERCODEX_RUNTIME_ENABLED" && mattercodex_bool "$MATTERCODEX_RUNTIME_LIMITS_ENABLED"; then
-  mattercodex_log "runtime ResourceQuota/LimitRange: включены"
+  mattercodex_log "runtime ResourceQuota/LimitRange и aggregate memory guard: включены"
 else
   mattercodex_log "runtime ResourceQuota/LimitRange: выключены"
 fi

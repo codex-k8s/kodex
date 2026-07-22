@@ -43,10 +43,15 @@ type Config struct {
 	CodexPackage                        string        `env:"MATTERCODEX_CODEX_PACKAGE" envDefault:"@openai/codex@0.144.1"`
 	RuntimeWorkspaceSize                string        `env:"MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE" envDefault:"1Gi"`
 	AgentSessionCPURequest              string        `env:"MATTERCODEX_AGENT_SESSION_CPU_REQUEST" envDefault:"500m"`
-	AgentSessionMemoryRequest           string        `env:"MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST" envDefault:"1Gi"`
-	AgentSessionMemoryLimit             string        `env:"MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT" envDefault:"64Gi"`
+	AgentSessionMemoryRequest           string        `env:"MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST" envDefault:"8Gi"`
+	AgentSessionMemoryLimit             string        `env:"MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT" envDefault:"8Gi"`
 	AgentUtilityMemoryLimit             string        `env:"MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT" envDefault:"4Gi"`
-	AgentDevShmSizeLimit                string        `env:"MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT" envDefault:"8Gi"`
+	AgentDevShmSizeLimit                string        `env:"MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT" envDefault:"2Gi"`
+	AgentWorkloadPriorityClass          string        `env:"MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS" envDefault:"matter-codex-agent-workload"`
+	RuntimeLimitsEnabled                bool          `env:"MATTERCODEX_RUNTIME_LIMITS_ENABLED" envDefault:"true"`
+	RuntimeNodeAllocatableMemory        string        `env:"MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY"`
+	RuntimeAgentMemoryBudget            string        `env:"MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET"`
+	RuntimeSystemMemoryReserve          string        `env:"MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE"`
 	RuntimeJobTTLSeconds                int32         `env:"MATTERCODEX_RUNTIME_JOB_TTL_SECONDS" envDefault:"86400"`
 	RuntimeRetentionEnabled             bool          `env:"MATTERCODEX_RUNTIME_RETENTION_ENABLED" envDefault:"true"`
 	RuntimeRetentionInterval            time.Duration `env:"MATTERCODEX_RUNTIME_RETENTION_INTERVAL" envDefault:"30m"`
@@ -200,6 +205,9 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.RuntimeLogTailLines <= 0 {
 		return fmt.Errorf("MATTERCODEX_RUNTIME_LOG_TAIL_LINES is invalid")
+	}
+	if err := cfg.validateRuntimeMemoryGuard(); err != nil {
+		return err
 	}
 	if strings.TrimSpace(cfg.RuntimeSmokeImage) == "" {
 		return fmt.Errorf("MATTERCODEX_RUNTIME_SMOKE_IMAGE is required")

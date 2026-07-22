@@ -50,6 +50,9 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 		"PRODUCTION_DOMAIN=synthetic.invalid",
 		"PUBLIC_BASE_URL=https://mattermost.synthetic.invalid",
 		"LETSENCRYPT_EMAIL=synthetic@example.invalid",
+		"MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY=120Gi",
+		"MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET=80Gi",
+		"MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE=40Gi",
 	}, "\n") + "\n"
 	if err := os.WriteFile(envFile, []byte(envPayload), 0o600); err != nil {
 		t.Fatalf("synthetic env: %v", err)
@@ -111,8 +114,8 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 			t.Fatalf("закрытие %s: %v", filepath.Base(yamlFile), err)
 		}
 	}
-	if objectCount != 18 {
-		t.Fatalf("число Kubernetes objects = %d, ожидалось 18", objectCount)
+	if objectCount != 20 {
+		t.Fatalf("число Kubernetes objects = %d, ожидалось 20", objectCount)
 	}
 	assertRenderedRuntimeResourcePolicy(t, runtimeQuota, runtimeLimitRange)
 }

@@ -73,13 +73,17 @@
 - `MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE` - optional, при `true` install script собирает agent-runner image через выбранную `MATTERCODEX_IMAGE_BUILD_STRATEGY` перед deploy;
 - `MATTERCODEX_CODEX_PACKAGE` - optional, npm package spec Codex CLI, который устанавливается в agent-runner image при сборке;
 - `MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE` - optional, размер PVC рабочего каталога smoke-запуска;
-- `MATTERCODEX_AGENT_SESSION_CPU_REQUEST`, `MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST` - optional, явные requests полноценного agent session pod; defaults `500m`/`1Gi`, чтобы Kubernetes не приравнял memory request к высокому limit;
-- `MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT` - optional, индивидуальный memory ceiling полноценного agent session pod; default `64Gi` для single-node owner-инсталляции;
-- `MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT` - optional, индивидуальный memory ceiling коротких служебных Job; default `4Gi`;
-- `MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT` - optional, верхняя граница memory-backed `/dev/shm` каждого runner container; default `8Gi`;
+- `MATTERCODEX_AGENT_SESSION_CPU_REQUEST`, `MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST` - явные requests полноценного agent session pod; memory request обязан совпадать с `MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT`, чтобы scheduler резервировал полный индивидуальный ceiling;
+- `MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT` - индивидуальный memory ceiling полноценного agent session pod; не может превышать суммарный бюджет agent workloads;
+- `MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT` - индивидуальный memory ceiling и одновременно memory request коротких служебных Job;
+- `MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT` - верхняя граница memory-backed `/dev/shm` каждого runner container; не может превышать session memory limit;
+- `MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS` - имя отдельного `PriorityClass`, которым помечаются все session и utility pod для scoped quota;
 - `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
 - `MATTERCODEX_RUNTIME_LOG_TAIL_LINES` - optional, число последних строк pod log для `/agents runtime status`;
-- `MATTERCODEX_RUNTIME_LIMITS_ENABLED` - optional, включает render/apply namespace `ResourceQuota` и `LimitRange` для runtime namespace; default `true`;
+- `MATTERCODEX_RUNTIME_LIMITS_ENABLED` - включает `PriorityClass`, namespace `ResourceQuota` и `LimitRange`; при включённом runtime значение обязано оставаться истинным, иначе render и запуск bot-service завершаются ошибкой;
+- `MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY` - обязательный при включённом runtime консервативный allocatable memory budget целевого single-node контура;
+- `MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET` - обязательный суммарный потолок requests/limits всех agent workloads выбранного `PriorityClass`;
+- `MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE` - обязательный резерв памяти для Mattermost, bot-service, PostgreSQL, kubelet и соседних системных workloads;
 - `MATTERCODEX_RUNTIME_QUOTA_PODS`, `MATTERCODEX_RUNTIME_QUOTA_JOBS`, `MATTERCODEX_RUNTIME_QUOTA_PVCS` - optional, object count quota для pod, batch Job и PVC в runtime namespace; default PVC quota `200` не становится преждевременным ограничителем перед суммарной storage quota для сохранённых сессий и параллельных волн;
 - `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_STORAGE` - optional, суммарная quota на requested PVC storage в runtime namespace;
 - `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_MEMORY` - optional, namespace quota на compute requests; дефолты для single-node owner-инсталляции: requests `28`/`96Gi`;
@@ -119,17 +123,17 @@ Admission сначала без подключения разбирает URL и
 
 ```bash
 bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-codex-bot-render
-bash scripts/k8s/verify-rendered-objects.sh --render-dir /tmp/matter-codex-bot-render --expected-files 8 --expected-objects 18
+bash scripts/k8s/verify-rendered-objects.sh --render-dir /tmp/matter-codex-bot-render --expected-files 8 --expected-objects 20
 ```
 
-Проверка перечисляет каждый непустой YAML document как `Kind/name`, исключает пустые документы и сравнивает число объектов с результатами `kubectl create --dry-run=client --validate=false`. Для полного профиля с управляемым registry, Kaniko и runtime limits ожидаются 8 файлов и 18 объектов; число разделителей `---` доказательством не является. Команда не обращается к Kubernetes API и ничего не применяет.
+Проверка перечисляет каждый непустой YAML document как `Kind/name`, исключает пустые документы и сравнивает число объектов с результатами `kubectl create --dry-run=client --validate=false`. Для полного профиля с управляемым registry, Kaniko и runtime limits ожидаются 8 файлов и 20 объектов; число разделителей `---` доказательством не является. Команда не обращается к Kubernetes API и ничего не применяет.
 
 В render directory попадают:
 
 - встроенный registry manifest, если `MATTERCODEX_IMAGE_REGISTRY_MANAGED=true`;
 - PVC для Kaniko build context, если `MATTERCODEX_IMAGE_BUILD_STRATEGY=kaniko`;
 - config ConfigMap;
-- ResourceQuota/LimitRange для runtime namespace, если `MATTERCODEX_RUNTIME_LIMITS_ENABLED=true`;
+- отдельный `PriorityClass`, общая и scoped memory `ResourceQuota`, а также `LimitRange` для runtime namespace;
 - ServiceAccount/RBAC для bot-service runtime adapter и agent runner;
 - Deployment;
 - Service;
@@ -151,9 +155,20 @@ Agent runner image содержит явный non-root user UID/GID `10001`. Ru
 
 При первом запуске repository-backed сессии runner клонирует репозиторий и переключается на выбранную базовую ветку. При пересоздании pod возобновляемая сессия сохраняет текущую ветку и состояние рабочего дерева на PVC: runner обновляет `origin` и remote refs, но не выполняет `checkout -B` поверх существующего workspace. Поэтому незакоммиченные изменения и локальная ветка переживают рестарт и остаются доступны продолженной Codex-сессии.
 
-Runtime namespace получает `ResourceQuota` `matter-codex-runtime-quota` и `LimitRange` `matter-codex-runtime-container-defaults`. Quota ограничивает общее число pods, batch Jobs, PVC, суммарный requested storage и суммарные cpu/memory requests. LimitRange задает cpu/memory requests для containers без явных resources, чтобы quota admission не отклоняла agent Job.
+Runtime namespace получает общую `ResourceQuota` `matter-codex-runtime-quota`, scoped `ResourceQuota` `matter-codex-agent-memory-quota`, `PriorityClass` agent workloads и `LimitRange` `matter-codex-runtime-container-defaults`. Общая quota ограничивает число pods, batch Jobs, PVC, суммарный requested storage и суммарные cpu/memory requests. Scoped quota учитывает только pod с `MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS` и одинаково ограничивает сумму `requests.memory` и `limits.memory` значением `MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET`.
 
-Полноценные agent session pod явно задают requests `MATTERCODEX_AGENT_SESSION_CPU_REQUEST`/`MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST` и индивидуальный memory ceiling `MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT`. Явный request обязателен: иначе Kubernetes при заданном limit может приравнять request к `64Gi` и заблокировать параллельные волны. Короткие служебные `smoke`, Codex device-auth и auth-check Job задают requests `100m`/`128Mi` и ceiling `MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT`. CPU limits отсутствуют. Namespace-level `limits.memory` quota намеренно не задаётся, поэтому высокий ceiling одного pod не блокирует одновременное планирование до шести волн. Один runaway container при этом не может занять всю память узла, а memory-backed `/dev/shm` дополнительно ограничен `MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT`. Оператор сохраняет контроль requests, pod quota, node pressure и удаление старейших idle pod.
+Полноценные session pod и короткие utility Job запрашивают память в объёме своего индивидуального memory limit. Поэтому scheduler budget отражает максимально допустимое потребление каждого agent workload, а admission не принимает следующий pod, если сумма его limit с уже учтёнными agent pod превысила scoped quota. Конфигурация допустима только при инварианте `agent memory budget + system memory reserve <= node allocatable memory`; неверные или отсутствующие параметры, несовпадающие session request/limit и выключенный guard закрыто останавливают render и старт bot-service. Этот контракт ограничивает сумму недоверенных agent workloads, но не утверждает отдельную аппаратную изоляцию системных сервисов.
+
+Безопасное воспроизводимое доказательство без обращения к production API и без применения манифестов:
+
+```bash
+bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-codex-bot-render
+bash scripts/k8s/verify-rendered-objects.sh --render-dir /tmp/matter-codex-bot-render --expected-files 8 --expected-objects 20
+yq -e 'select(.kind == "ResourceQuota" and .metadata.name == "matter-codex-agent-memory-quota") | .spec.hard."requests.memory" == .spec.hard."limits.memory"' /tmp/matter-codex-bot-render/15-runtime-limits.yaml >/dev/null
+go test ./services/external/bot-service/internal/app -run 'TestAgentMemoryGuardShellValidationFailsClosed|TestBotServiceRenderCountsNonEmptyObjects'
+```
+
+Render-тест проверяет числовой aggregate invariant, scoped quota и сценарий admission с несколькими session pod: pod, который заполняет бюджет ровно, допускается, а следующий pod, выводящий сумму за бюджет, отклоняется. Это локальное доказательство не создаёт и не изменяет объекты Kubernetes.
 
 Если новый session pod отклонен ResourceQuota или не размещается scheduler из-за нехватки ресурсов, bot-service может удалить самый старый idle session pod без queued/running turn и повторить запуск. Перед внешним удалением кандидат повторно проверяется под блокировкой строки сессии; блокировка удерживается до очистки pod binding, поэтому конкурентная постановка turn либо выигрывает гонку и отменяет удаление, либо ждёт завершения безопасного вытеснения. PVC и snapshot сессии сохраняются. Сессии с текущей или сохранённой привилегией `cluster-admin` автоматический reclaim пропускает. Если безопасного кандидата нет, turn остается queued; активные agent pod механизм capacity reclaim не удаляет. Отказ ResourceQuota при создании самого session PVC отдельно возвращается из Kubernetes-адаптера как типизированная ошибка ёмкости без очистки PVC/Secret и без внутреннего повтора создания PVC.
 

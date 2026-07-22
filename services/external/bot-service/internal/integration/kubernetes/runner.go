@@ -60,12 +60,12 @@ const (
 	runnerUID                    = int64(10001)
 	runnerGID                    = int64(10001)
 	runnerUtilityCPURequest      = "100m"
-	runnerUtilityMemoryRequest   = "128Mi"
 	runnerSessionCPURequest      = "500m"
-	runnerSessionMemoryRequest   = "1Gi"
-	runnerSessionMemoryLimit     = "64Gi"
+	runnerSessionMemoryRequest   = "8Gi"
+	runnerSessionMemoryLimit     = "8Gi"
 	runnerUtilityMemoryLimit     = "4Gi"
-	runnerDevShmSizeLimit        = "8Gi"
+	runnerDevShmSizeLimit        = "2Gi"
+	runnerAgentPriorityClass     = "matter-codex-agent-workload"
 	kubernetesAccessReadOnly     = "read-only"
 	kubernetesAccessClusterAdmin = "cluster-admin"
 )
@@ -73,6 +73,7 @@ const (
 var (
 	codexDeviceCodeRE        = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
 	runtimeEnvNameRE         = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,127}$`)
+	priorityClassNameRE      = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 	codexAuthSecretCheckWait = 5 * time.Minute
 )
 
@@ -88,6 +89,7 @@ type Config struct {
 	SessionMemoryLimit                    string
 	UtilityMemoryLimit                    string
 	DevShmSizeLimit                       string
+	AgentWorkloadPriorityClass            string
 	JobTTLSecondsAfterFinish              int32
 	AuthCheckJobTTLSecondsAfterFinish     int32
 	LogTailLines                          int64
@@ -110,6 +112,7 @@ type Runner struct {
 	sessionMemoryLimit                    resource.Quantity
 	utilityMemoryLimit                    resource.Quantity
 	devShmSizeLimit                       resource.Quantity
+	agentWorkloadPriorityClass            string
 	jobTTLSecondsAfterFinish              int32
 	authCheckJobTTLSecondsAfterFinish     int32
 	logTailLines                          int64
@@ -203,8 +206,8 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 	if err != nil {
 		return nil, err
 	}
-	if sessionMemoryRequest.Cmp(sessionMemoryLimit) > 0 {
-		return nil, fmt.Errorf("session memory request must not exceed session memory limit")
+	if sessionMemoryRequest.Cmp(sessionMemoryLimit) != 0 {
+		return nil, fmt.Errorf("session memory request must equal session memory limit")
 	}
 	utilityMemoryLimit, err := parsePositiveResourceQuantity(cfg.UtilityMemoryLimit, runnerUtilityMemoryLimit, "utility memory limit")
 	if err != nil {
@@ -213,6 +216,10 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 	devShmSizeLimit, err := parsePositiveResourceQuantity(cfg.DevShmSizeLimit, runnerDevShmSizeLimit, "dev shm size limit")
 	if err != nil {
 		return nil, err
+	}
+	agentWorkloadPriorityClass := defaultString(cfg.AgentWorkloadPriorityClass, runnerAgentPriorityClass)
+	if len(agentWorkloadPriorityClass) > 63 || !priorityClassNameRE.MatchString(agentWorkloadPriorityClass) {
+		return nil, fmt.Errorf("agent workload priority class is invalid")
 	}
 	return &Runner{
 		client:                                client,
@@ -227,6 +234,7 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		sessionMemoryLimit:                    sessionMemoryLimit,
 		utilityMemoryLimit:                    utilityMemoryLimit,
 		devShmSizeLimit:                       devShmSizeLimit,
+		agentWorkloadPriorityClass:            agentWorkloadPriorityClass,
 		jobTTLSecondsAfterFinish:              defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
 		authCheckJobTTLSecondsAfterFinish:     defaultInt32(cfg.AuthCheckJobTTLSecondsAfterFinish, 300),
 		logTailLines:                          defaultInt64(cfg.LogTailLines, 40),
@@ -1714,6 +1722,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(runID, role)},
 				Spec: corev1.PodSpec{
+					PriorityClassName:            runner.agentWorkloadPriorityClass,
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(false),
 					SecurityContext:              runnerPodSecurityContext(),
@@ -1771,6 +1780,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
+					PriorityClassName:            runner.agentWorkloadPriorityClass,
 					ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
 					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
@@ -1877,6 +1887,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
+					PriorityClassName:            runner.agentWorkloadPriorityClass,
 					ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
 					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
@@ -2041,6 +2052,7 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
+					PriorityClassName:            runner.agentWorkloadPriorityClass,
 					ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
 					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
@@ -2175,6 +2187,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 			Labels: sessionLabels(input.SessionKey, input.Role),
 		},
 		Spec: corev1.PodSpec{
+			PriorityClassName:            runner.agentWorkloadPriorityClass,
 			ServiceAccountName:           runner.agentRunnerServiceAccountForAccess(kubernetesAccess),
 			AutomountServiceAccountToken: boolPtr(true),
 			SecurityContext:              runnerPodSecurityContext(),
@@ -2211,6 +2224,7 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
+					PriorityClassName:            runner.agentWorkloadPriorityClass,
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(false),
 					SecurityContext:              runnerPodSecurityContext(),
@@ -2261,6 +2275,7 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
+					PriorityClassName:            runner.agentWorkloadPriorityClass,
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(false),
 					SecurityContext:              runnerPodSecurityContext(),
@@ -2948,7 +2963,7 @@ func (runner *Runner) runnerUtilityResourceRequirements() corev1.ResourceRequire
 	return corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse(runnerUtilityCPURequest),
-			corev1.ResourceMemory: resource.MustParse(runnerUtilityMemoryRequest),
+			corev1.ResourceMemory: runner.utilityMemoryLimit,
 		},
 		Limits: corev1.ResourceList{
 			corev1.ResourceMemory: runner.utilityMemoryLimit,

@@ -85,11 +85,22 @@ func TestInspectSecretIntegrityClassifiesMissingSecret(t *testing.T) {
 	}
 }
 
-func TestNewRunnerRejectsSessionMemoryRequestAboveLimit(t *testing.T) {
+func TestNewRunnerRejectsSessionMemoryRequestDifferentFromLimit(t *testing.T) {
+	for _, request := range []string{"1Gi", "16Gi"} {
+		_, err := NewRunnerWithClient(fake.NewSimpleClientset(), Config{
+			Namespace: "mattermost", SessionMemoryRequest: request, SessionMemoryLimit: "8Gi",
+		})
+		if err == nil || !strings.Contains(err.Error(), "session memory request must equal") {
+			t.Fatalf("NewRunnerWithClient() request=%s error = %v", request, err)
+		}
+	}
+}
+
+func TestNewRunnerRejectsInvalidAgentWorkloadPriorityClass(t *testing.T) {
 	_, err := NewRunnerWithClient(fake.NewSimpleClientset(), Config{
-		Namespace: "mattermost", SessionMemoryRequest: "2Gi", SessionMemoryLimit: "1Gi",
+		Namespace: "mattermost", AgentWorkloadPriorityClass: "Invalid priority class",
 	})
-	if err == nil || !strings.Contains(err.Error(), "session memory request must not exceed") {
+	if err == nil || !strings.Contains(err.Error(), "agent workload priority class is invalid") {
 		t.Fatalf("NewRunnerWithClient() error = %v", err)
 	}
 }
@@ -1849,6 +1860,9 @@ func secretItemKeys(items []corev1.KeyToPath) string {
 
 func assertRunnerPodSecurity(t *testing.T, podSpec corev1.PodSpec) {
 	t.Helper()
+	if podSpec.PriorityClassName != runnerAgentPriorityClass {
+		t.Fatalf("pod PriorityClassName = %q", podSpec.PriorityClassName)
+	}
 	if podSpec.SecurityContext == nil {
 		t.Fatal("pod securityContext is nil")
 	}
@@ -1906,7 +1920,7 @@ func assertRunnerPodSecurity(t *testing.T, podSpec corev1.PodSpec) {
 func assertRunnerUtilityResources(t *testing.T, resources corev1.ResourceRequirements) {
 	t.Helper()
 	assertResourceQuantity(t, resources.Requests, corev1.ResourceCPU, runnerUtilityCPURequest)
-	assertResourceQuantity(t, resources.Requests, corev1.ResourceMemory, runnerUtilityMemoryRequest)
+	assertResourceQuantity(t, resources.Requests, corev1.ResourceMemory, runnerUtilityMemoryLimit)
 	assertResourceQuantity(t, resources.Limits, corev1.ResourceMemory, runnerUtilityMemoryLimit)
 	if _, exists := resources.Limits[corev1.ResourceCPU]; exists {
 		t.Fatalf("utility runner must not have a cpu limit: %#v", resources.Limits)

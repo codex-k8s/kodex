@@ -211,10 +211,11 @@ mattercodex_set_defaults() {
   export MATTERCODEX_CODEX_PACKAGE="${MATTERCODEX_CODEX_PACKAGE:-@openai/codex@0.144.1}"
   export MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE="${MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE:-1Gi}"
   export MATTERCODEX_AGENT_SESSION_CPU_REQUEST="${MATTERCODEX_AGENT_SESSION_CPU_REQUEST:-500m}"
-  export MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST="${MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST:-1Gi}"
-  export MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT="${MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT:-64Gi}"
+  export MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST="${MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST:-8Gi}"
+  export MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT="${MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT:-8Gi}"
   export MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT="${MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT:-4Gi}"
-  export MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT="${MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT:-8Gi}"
+  export MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT="${MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT:-2Gi}"
+  export MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS="${MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS:-matter-codex-agent-workload}"
   export MATTERCODEX_RUNTIME_JOB_TTL_SECONDS="${MATTERCODEX_RUNTIME_JOB_TTL_SECONDS:-86400}"
   export MATTERCODEX_RUNTIME_RETENTION_ENABLED="${MATTERCODEX_RUNTIME_RETENTION_ENABLED:-true}"
   export MATTERCODEX_RUNTIME_RETENTION_INTERVAL="${MATTERCODEX_RUNTIME_RETENTION_INTERVAL:-30m}"
@@ -225,6 +226,9 @@ mattercodex_set_defaults() {
   export MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_BATCH="${MATTERCODEX_INTERACTION_CAPABILITY_CLEANUP_BATCH:-500}"
   export MATTERCODEX_RUNTIME_LOG_TAIL_LINES="${MATTERCODEX_RUNTIME_LOG_TAIL_LINES:-40}"
   export MATTERCODEX_RUNTIME_LIMITS_ENABLED="${MATTERCODEX_RUNTIME_LIMITS_ENABLED:-true}"
+  export MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY="${MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY:-}"
+  export MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET="${MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET:-}"
+  export MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE="${MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE:-}"
   export MATTERCODEX_RUNTIME_QUOTA_PODS="${MATTERCODEX_RUNTIME_QUOTA_PODS:-80}"
   export MATTERCODEX_RUNTIME_QUOTA_JOBS="${MATTERCODEX_RUNTIME_QUOTA_JOBS:-120}"
   export MATTERCODEX_RUNTIME_QUOTA_PVCS="${MATTERCODEX_RUNTIME_QUOTA_PVCS:-200}"
@@ -262,6 +266,56 @@ mattercodex_set_defaults() {
   export MATTERCODEX_DEFAULT_TEAM_NAME="${MATTERCODEX_DEFAULT_TEAM_NAME:-agents}"
   export MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME="${MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME:-Agents}"
   export MATTERCODEX_DEFAULT_CHANNELS="${MATTERCODEX_DEFAULT_CHANNELS:-agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit}"
+}
+
+mattercodex_memory_quantity_kib() {
+  local raw="${1:-}"
+  if [[ ! "$raw" =~ ^([1-9][0-9]{0,8})(Ki|Mi|Gi|Ti)$ ]]; then
+    return 1
+  fi
+
+  local amount="${BASH_REMATCH[1]}"
+  local unit="${BASH_REMATCH[2]}"
+  local factor
+  case "$unit" in
+    Ki) factor=1 ;;
+    Mi) factor=1024 ;;
+    Gi) factor=1048576 ;;
+    Ti) factor=1073741824 ;;
+    *) return 1 ;;
+  esac
+  printf '%s\n' "$((10#$amount * factor))"
+}
+
+mattercodex_validate_agent_memory_guard() {
+  if ! mattercodex_bool "${MATTERCODEX_RUNTIME_ENABLED:-}"; then
+    return
+  fi
+  mattercodex_bool "${MATTERCODEX_RUNTIME_LIMITS_ENABLED:-}" || mattercodex_die "runtime memory guard нельзя выключать при включённом agent runtime"
+  mattercodex_require_env \
+    MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY \
+    MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET \
+    MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE \
+    MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS
+
+  local node_memory agent_budget system_reserve session_request session_limit utility_limit dev_shm_limit
+  node_memory="$(mattercodex_memory_quantity_kib "$MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY")" || mattercodex_die "MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY должен быть положительным Kubernetes memory quantity с суффиксом Ki, Mi, Gi или Ti"
+  agent_budget="$(mattercodex_memory_quantity_kib "$MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET")" || mattercodex_die "MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET должен быть положительным Kubernetes memory quantity с суффиксом Ki, Mi, Gi или Ti"
+  system_reserve="$(mattercodex_memory_quantity_kib "$MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE")" || mattercodex_die "MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE должен быть положительным Kubernetes memory quantity с суффиксом Ki, Mi, Gi или Ti"
+  session_request="$(mattercodex_memory_quantity_kib "$MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST")" || mattercodex_die "MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST должен быть положительным Kubernetes memory quantity с суффиксом Ki, Mi, Gi или Ti"
+  session_limit="$(mattercodex_memory_quantity_kib "$MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT")" || mattercodex_die "MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT должен быть положительным Kubernetes memory quantity с суффиксом Ki, Mi, Gi или Ti"
+  utility_limit="$(mattercodex_memory_quantity_kib "$MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT")" || mattercodex_die "MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT должен быть положительным Kubernetes memory quantity с суффиксом Ki, Mi, Gi или Ti"
+  dev_shm_limit="$(mattercodex_memory_quantity_kib "$MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT")" || mattercodex_die "MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT должен быть положительным Kubernetes memory quantity с суффиксом Ki, Mi, Gi или Ti"
+
+  [ "$session_request" -eq "$session_limit" ] || mattercodex_die "session memory request должен совпадать с memory limit для безопасного scheduler budget"
+  [ "$session_limit" -le "$agent_budget" ] || mattercodex_die "session memory limit превышает aggregate agent memory budget"
+  [ "$utility_limit" -le "$agent_budget" ] || mattercodex_die "utility memory limit превышает aggregate agent memory budget"
+  [ "$dev_shm_limit" -le "$session_limit" ] || mattercodex_die "agent dev shm size limit превышает session memory limit"
+  [ $((agent_budget + system_reserve)) -le "$node_memory" ] || mattercodex_die "aggregate agent memory budget вместе с системным резервом превышает allocatable memory узла"
+
+  if [ "${#MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS}" -gt 63 ] || [[ ! "$MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]]; then
+    mattercodex_die "MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS должен быть корректным DNS label"
+  fi
 }
 
 mattercodex_validate_base_env() {

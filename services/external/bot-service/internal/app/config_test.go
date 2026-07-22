@@ -34,6 +34,7 @@ func TestFoundationDSNBuilderSupportsReservedPassword(t *testing.T) {
 }
 
 func TestConfigDefaults(t *testing.T) {
+	setRuntimeMemoryGuardEnv(t)
 	t.Setenv("MATTERCODEX_MATTERMOST_SITE_URL", "")
 	t.Setenv("MATTERCODEX_BOT_SERVICE_SITE_URL", "")
 	t.Setenv("MATTERCODEX_LOCALE", "")
@@ -93,8 +94,11 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.RuntimeWorkspaceSize != "1Gi" {
 		t.Fatalf("RuntimeWorkspaceSize = %q", cfg.RuntimeWorkspaceSize)
 	}
-	if cfg.AgentSessionCPURequest != "500m" || cfg.AgentSessionMemoryRequest != "1Gi" || cfg.AgentSessionMemoryLimit != "64Gi" || cfg.AgentUtilityMemoryLimit != "4Gi" || cfg.AgentDevShmSizeLimit != "8Gi" {
+	if cfg.AgentSessionCPURequest != "500m" || cfg.AgentSessionMemoryRequest != "8Gi" || cfg.AgentSessionMemoryLimit != "8Gi" || cfg.AgentUtilityMemoryLimit != "4Gi" || cfg.AgentDevShmSizeLimit != "2Gi" {
 		t.Fatalf("agent resource defaults = cpu-request:%q memory-request:%q session-limit:%q utility-limit:%q dev-shm:%q", cfg.AgentSessionCPURequest, cfg.AgentSessionMemoryRequest, cfg.AgentSessionMemoryLimit, cfg.AgentUtilityMemoryLimit, cfg.AgentDevShmSizeLimit)
+	}
+	if !cfg.RuntimeLimitsEnabled || cfg.RuntimeNodeAllocatableMemory != "120Gi" || cfg.RuntimeAgentMemoryBudget != "80Gi" || cfg.RuntimeSystemMemoryReserve != "40Gi" || cfg.AgentWorkloadPriorityClass != "matter-codex-agent-workload" {
+		t.Fatalf("runtime memory guard defaults = enabled:%t node:%q agent:%q reserve:%q priority:%q", cfg.RuntimeLimitsEnabled, cfg.RuntimeNodeAllocatableMemory, cfg.RuntimeAgentMemoryBudget, cfg.RuntimeSystemMemoryReserve, cfg.AgentWorkloadPriorityClass)
 	}
 	if !cfg.RuntimeRetentionEnabled {
 		t.Fatal("RuntimeRetentionEnabled = false")
@@ -168,6 +172,7 @@ func TestConfigValidationDatabaseRoleBoundary(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			setRuntimeMemoryGuardEnv(t)
 			t.Setenv("MATTERCODEX_DATABASE_DSN", test.runtimeDSN)
 			t.Setenv("MATTERCODEX_MIGRATIONS_DATABASE_DSN", test.ownerDSN)
 			_, err := LoadConfig()
@@ -176,6 +181,19 @@ func TestConfigValidationDatabaseRoleBoundary(t *testing.T) {
 			}
 		})
 	}
+}
+
+func setRuntimeMemoryGuardEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("MATTERCODEX_RUNTIME_LIMITS_ENABLED", "true")
+	t.Setenv("MATTERCODEX_RUNTIME_NODE_ALLOCATABLE_MEMORY", "120Gi")
+	t.Setenv("MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET", "80Gi")
+	t.Setenv("MATTERCODEX_RUNTIME_SYSTEM_MEMORY_RESERVE", "40Gi")
+	t.Setenv("MATTERCODEX_AGENT_SESSION_MEMORY_REQUEST", "8Gi")
+	t.Setenv("MATTERCODEX_AGENT_SESSION_MEMORY_LIMIT", "8Gi")
+	t.Setenv("MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT", "4Gi")
+	t.Setenv("MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT", "2Gi")
+	t.Setenv("MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS", "matter-codex-agent-workload")
 }
 
 func TestConfigValidationRejectsBadTimeout(t *testing.T) {

@@ -34,6 +34,7 @@ fi
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
+mattercodex_validate_agent_memory_guard
 mattercodex_require_commands envsubst sha256sum
 
 TEMPLATE_DIR="$REPO_ROOT/deploy/k8s/bot-service"
