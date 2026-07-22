@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -20,6 +23,7 @@ const (
 	mcpSessionKeyContext       mcpContextKey = "matter-codex-session-key"
 	mcpTokenContext            mcpContextKey = "matter-codex-session-token"
 	defaultMCPRequestBodyBytes               = 1024 * 1024
+	mcpJSONMediaType                         = "application/json"
 )
 
 type mcpLimitInput struct {
@@ -414,10 +418,14 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBod
 		}
 		return nil, output, nil
 	})
+	crossOriginProtection := http.NewCrossOriginProtection()
 	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return server
-	}, nil)
+	}, &mcp.StreamableHTTPOptions{CrossOriginProtection: crossOriginProtection})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !validateMCPRequestHeaders(w, r, crossOriginProtection) {
+			return
+		}
 		if r.Method == http.MethodPost {
 			if err := readBoundedMCPRequestBody(w, r, maximumBodyBytes); err != nil {
 				writeMCPBodyBoundaryError(w, err)
@@ -430,6 +438,85 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBod
 		ctx = context.WithValue(ctx, mcpTokenContext, token)
 		streamable.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func validateMCPRequestHeaders(w http.ResponseWriter, r *http.Request, crossOriginProtection *http.CrossOriginProtection) bool {
+	if localAddr, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && localAddr != nil {
+		if isMCPLoopbackAddress(localAddr.String()) && !isMCPLoopbackAddress(r.Host) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return false
+		}
+	}
+	if err := crossOriginProtection.Check(r); err != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	if r.Method != http.MethodPost {
+		return true
+	}
+	values := r.Header.Values("Content-Type")
+	if len(values) != 1 {
+		http.Error(w, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(values[0])
+	if err != nil || mediaType != mcpJSONMediaType || hasDuplicateMCPMediaParameter(values[0]) {
+		http.Error(w, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
+		return false
+	}
+	return true
+}
+
+func isMCPLoopbackAddress(address string) bool {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		host = strings.Trim(address, "[]")
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.IsLoopback()
+}
+
+func hasDuplicateMCPMediaParameter(value string) bool {
+	seen := make(map[string]struct{})
+	parameterStart := -1
+	inQuotes := false
+	escaped := false
+	for index := 0; index <= len(value); index++ {
+		if index < len(value) {
+			character := value[index]
+			if escaped {
+				escaped = false
+				continue
+			}
+			if inQuotes && character == '\\' {
+				escaped = true
+				continue
+			}
+			if character == '"' {
+				inQuotes = !inQuotes
+				continue
+			}
+			if character != ';' || inQuotes {
+				continue
+			}
+		}
+		if parameterStart >= 0 {
+			parameter := strings.TrimSpace(value[parameterStart:index])
+			if parameter != "" {
+				name, _, _ := strings.Cut(parameter, "=")
+				name = strings.ToLower(strings.TrimSpace(name))
+				if _, duplicate := seen[name]; duplicate {
+					return true
+				}
+				seen[name] = struct{}{}
+			}
+		}
+		parameterStart = index + 1
+	}
+	return false
 }
 
 func readBoundedMCPRequestBody(w http.ResponseWriter, r *http.Request, maximumBodyBytes int64) error {
