@@ -33,7 +33,10 @@ func TestAutomationOwnerGateDurabilityAndBoundaries(t *testing.T) {
 	if err := migrations.RunTo(ctx, dsn, 35); err != nil {
 		t.Fatalf("последовательно обновить схему 34 -> 35: %v", err)
 	}
-	if version, err := migrations.Version(ctx, dsn); err != nil || version != 35 {
+	if err := migrations.RunTo(ctx, dsn, 36); err != nil {
+		t.Fatalf("последовательно обновить схему 35 -> 36: %v", err)
+	}
+	if version, err := migrations.Version(ctx, dsn); err != nil || version != 36 {
 		t.Fatalf("версия миграций=%d error=%v", version, err)
 	}
 	pool, err := pgxpool.New(ctx, dsn)
@@ -257,7 +260,8 @@ func TestAutomationOwnerGateDurabilityAndBoundaries(t *testing.T) {
 	prematureResolution := automationsrepo.ResolveOwnerGateInput{
 		ProjectID: projectID, ActorUserID: "root-owner-id", ActorUserName: "root-owner",
 		MattermostChannelID: "automation-channel", MattermostRootPostID: "owner-gate-root",
-		MattermostResponsePostID: "owner-response-before-delivery", Now: now.Add(2 * time.Minute),
+		MattermostResponsePostID: "owner-response-before-delivery", MattermostResponseCreateAt: 1_000,
+		Now: now.Add(2 * time.Minute),
 	}
 	if _, _, err := restarted.ResolveOwnerGate(ctx, prematureResolution); !errors.Is(err, automationsrepo.ErrNotFound) {
 		t.Fatalf("решение до delivery proof принято: %v", err)
@@ -309,47 +313,73 @@ func TestAutomationOwnerGateDurabilityAndBoundaries(t *testing.T) {
 	setPostInput := automationsrepo.SetOwnerAttentionPostInput{
 		AttentionID: delivery.AttentionID, ScheduledRunID: run.ID, DeliveryID: delivery.DeliveryID,
 		MattermostChannelID: "automation-channel", MattermostRootPostID: "owner-gate-root", MattermostPostID: "attention-post-1",
-		ClaimToken: confirmationClaim.ClaimToken, Fence: confirmationClaim.Fence, Now: now.Add(4*time.Minute + time.Second),
+		MattermostPostCreateAt: 2_000,
+		ClaimToken:             confirmationClaim.ClaimToken, Fence: confirmationClaim.Fence, Now: now.Add(4*time.Minute + time.Second),
+	}
+	if _, err := restarted.SetOwnerAttentionPost(ctx, setPostInput); err != nil {
+		t.Fatalf("сохранить delivery и ordering proof: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `update matter_codex_owner_attention_requests
+		set automation_mattermost_post_create_at = 2002
+		where id = $1`, delivery.AttentionID); err == nil {
+		t.Fatal("immutable ordering proof карточки изменён напрямую")
+	}
+	delayedPreBinding := prematureResolution
+	delayedPreBinding.Now = now.Add(5 * time.Minute)
+	if _, _, err := restarted.ResolveOwnerGate(ctx, delayedPreBinding); !errors.Is(err, automationsrepo.ErrNotFound) {
+		t.Fatalf("задержанный pre-binding post принят после binding: %v", err)
+	}
+	var openStatus, waitingRunStatus, waitingOccurrenceStatus, waitingProcessStatus string
+	if err := pool.QueryRow(ctx, `select attention.status, run.status, occurrence.status, process.status
+		from matter_codex_owner_attention_requests attention
+		join matter_codex_scheduled_runs run on run.id = attention.automation_scheduled_run_id
+		join matter_codex_schedule_occurrences occurrence on occurrence.id = run.occurrence_id
+		join matter_codex_process_runs process on process.id = attention.process_run_id
+		where attention.id = $1`, delivery.AttentionID).Scan(&openStatus, &waitingRunStatus, &waitingOccurrenceStatus, &waitingProcessStatus); err != nil {
+		t.Fatal(err)
+	}
+	if openStatus != "open" || waitingRunStatus != "waiting_owner" || waitingOccurrenceStatus != "waiting_owner" || waitingProcessStatus != "waiting_owner" {
+		t.Fatalf("pre-binding replay изменил gate: attention=%q run=%q occurrence=%q process=%q", openStatus, waitingRunStatus, waitingOccurrenceStatus, waitingProcessStatus)
 	}
 	resolution := automationsrepo.ResolveOwnerGateInput{
 		ProjectID: projectID, ActorUserID: "root-owner-id", ActorUserName: "root-owner",
 		MattermostChannelID: "automation-channel", MattermostRootPostID: "owner-gate-root",
-		MattermostResponsePostID: "owner-response-1", Now: now.Add(6 * time.Minute),
+		MattermostResponsePostID: "owner-response-1", MattermostResponseCreateAt: 2_001,
+		Now: now.Add(6 * time.Minute),
 	}
 	type decisionResult struct {
 		run       entity.ScheduledRun
 		duplicate bool
 		err       error
 	}
-	setResult := make(chan error, 1)
-	decisionResults := make(chan decisionResult, 1)
+	decisionResults := make(chan decisionResult, 2)
 	raceStart := make(chan struct{})
-	go func() {
-		<-raceStart
-		_, setErr := restarted.SetOwnerAttentionPost(ctx, setPostInput)
-		setResult <- setErr
-	}()
-	go func() {
-		<-raceStart
-		resolvedRun, duplicate, resolveErr := restarted.ResolveOwnerGate(ctx, resolution)
-		decisionResults <- decisionResult{run: resolvedRun, duplicate: duplicate, err: resolveErr}
-	}()
+	for range 2 {
+		go func() {
+			<-raceStart
+			resolvedRun, duplicate, resolveErr := restarted.ResolveOwnerGate(ctx, resolution)
+			decisionResults <- decisionResult{run: resolvedRun, duplicate: duplicate, err: resolveErr}
+		}()
+	}
 	close(raceStart)
-	if err := <-setResult; err != nil {
-		t.Fatalf("конкурентное сохранение delivery proof: %v", err)
+	decision := decisionResult{}
+	duplicateDecisions := 0
+	for range 2 {
+		candidate := <-decisionResults
+		if candidate.err != nil || candidate.run.Status != string(value.AutomationRunStatusSucceeded) || candidate.run.FinishedAt.IsZero() {
+			t.Fatalf("конкурентное resolution=%#v", candidate)
+		}
+		if candidate.duplicate {
+			duplicateDecisions++
+		} else {
+			decision = candidate
+		}
 	}
-	decision := <-decisionResults
-	if decision.err != nil && !errors.Is(decision.err, automationsrepo.ErrNotFound) {
-		t.Fatalf("конкурентное решение error=%v", decision.err)
-	}
-	if errors.Is(decision.err, automationsrepo.ErrNotFound) {
-		decision.run, decision.duplicate, decision.err = restarted.ResolveOwnerGate(ctx, resolution)
-	}
-	if decision.err != nil || decision.duplicate || decision.run.Status != string(value.AutomationRunStatusSucceeded) || decision.run.FinishedAt.IsZero() {
-		t.Fatalf("resolution run=%#v duplicate=%t error=%v", decision.run, decision.duplicate, decision.err)
+	if duplicateDecisions != 1 || decision.run.ID == 0 {
+		t.Fatalf("конкурентные решения: duplicate=%d result=%#v", duplicateDecisions, decision)
 	}
 	posted, err := restarted.GetOwnerAttentionDelivery(ctx, run.ID)
-	if err != nil || posted.MattermostPostID != "attention-post-1" {
+	if err != nil || posted.MattermostPostID != "attention-post-1" || posted.MattermostPostCreateAt != 2_000 {
 		t.Fatalf("delivery proof=%#v error=%v", posted, err)
 	}
 	if _, err := restarted.SetOwnerAttentionPost(ctx, setPostInput); !errors.Is(err, automationsrepo.ErrConflict) {
@@ -361,7 +391,8 @@ func TestAutomationOwnerGateDurabilityAndBoundaries(t *testing.T) {
 
 	wrongActor := automationsrepo.ResolveOwnerGateInput{
 		ProjectID: projectID, ActorUserID: "other-user", ActorUserName: "other",
-		MattermostChannelID: "automation-channel", MattermostRootPostID: "owner-gate-root", MattermostResponsePostID: "owner-response-1", Now: now.Add(4 * time.Minute),
+		MattermostChannelID: "automation-channel", MattermostRootPostID: "owner-gate-root", MattermostResponsePostID: "owner-response-1",
+		MattermostResponseCreateAt: 2_001, Now: now.Add(4 * time.Minute),
 	}
 	if _, _, err := restarted.ResolveOwnerGate(ctx, wrongActor); !errors.Is(err, automationsrepo.ErrNotFound) {
 		t.Fatalf("чужой actor resolution error=%v", err)
@@ -379,12 +410,18 @@ func TestAutomationOwnerGateDurabilityAndBoundaries(t *testing.T) {
 		t.Fatalf("resolution replay run=%#v duplicate=%t error=%v", replayed, duplicate, err)
 	}
 	var attentionStatus, resolvedUserID, resolvedPostID string
+	var responsePostCreateAt int64
 	var resolvedAt time.Time
-	if err := pool.QueryRow(ctx, `select status, resolved_at, resolved_by_user_id, resolved_by_post_id from matter_codex_owner_attention_requests where id = $1`, delivery.AttentionID).Scan(&attentionStatus, &resolvedAt, &resolvedUserID, &resolvedPostID); err != nil {
+	if err := pool.QueryRow(ctx, `select status, resolved_at, resolved_by_user_id, resolved_by_post_id, automation_response_post_create_at from matter_codex_owner_attention_requests where id = $1`, delivery.AttentionID).Scan(&attentionStatus, &resolvedAt, &resolvedUserID, &resolvedPostID, &responsePostCreateAt); err != nil {
 		t.Fatal(err)
 	}
-	if attentionStatus != "resolved" || resolvedAt.IsZero() || resolvedUserID != "root-owner-id" || resolvedPostID != "owner-response-1" {
-		t.Fatalf("attention status=%q resolved_at=%s actor=%q post=%q", attentionStatus, resolvedAt, resolvedUserID, resolvedPostID)
+	if attentionStatus != "resolved" || resolvedAt.IsZero() || resolvedUserID != "root-owner-id" || resolvedPostID != "owner-response-1" || responsePostCreateAt != 2_001 {
+		t.Fatalf("attention status=%q resolved_at=%s actor=%q post=%q create_at=%d", attentionStatus, resolvedAt, resolvedUserID, resolvedPostID, responsePostCreateAt)
+	}
+	if _, err := pool.Exec(ctx, `update matter_codex_owner_attention_requests
+		set automation_response_post_create_at = 2003
+		where id = $1`, delivery.AttentionID); err == nil {
+		t.Fatal("immutable ordering proof ответа изменён напрямую")
 	}
 	resolvedHistory, err := restarted.ListHistory(ctx, "schedule-owner", 10)
 	if err != nil || len(resolvedHistory) != 1 || resolvedHistory[0].Status != string(value.AutomationRunStatusSucceeded) || resolvedHistory[0].HumanDecisionStatus != "resolved" || resolvedHistory[0].DeliveryStatus != "delivered" || resolvedHistory[0].NextAction != "none" {

@@ -387,7 +387,8 @@ func TestChatRunClosesAutomationOwnerGateInExactThreadWithoutRuntime(t *testing.
 
 	wrong := svc.HandleChatPost(context.Background(), ChatPostCommand{
 		ChannelID: "channel-1", PostID: "reply-wrong", RootPostID: "other-root",
-		UserID: "other-id", UserName: "other", Message: "Закрыть",
+		CreateAt: 900,
+		UserID:   "other-id", UserName: "other", Message: "Закрыть",
 	})
 	if wrong.Mode == chatRunModeAutomationOwnerGate {
 		t.Fatalf("неверный actor/thread закрыл gate: %#v", wrong)
@@ -395,7 +396,8 @@ func TestChatRunClosesAutomationOwnerGateInExactThreadWithoutRuntime(t *testing.
 	resolver.result.Handled = false
 	premature := svc.HandleChatPost(context.Background(), ChatPostCommand{
 		ChannelID: "channel-1", PostID: "reply-before-delivery", RootPostID: "root-1",
-		UserID: "owner-id", UserName: "owner", Message: "Продолжить до доставки",
+		CreateAt: 1_000,
+		UserID:   "owner-id", UserName: "owner", Message: "Продолжить до доставки",
 	})
 	if premature.Mode == chatRunModeAutomationOwnerGate {
 		t.Fatalf("сообщение до сохранённого delivery proof закрыло gate: %#v", premature)
@@ -408,12 +410,13 @@ func TestChatRunClosesAutomationOwnerGateInExactThreadWithoutRuntime(t *testing.
 	resolver.result.Handled = true
 	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
 		ChannelID: "channel-1", PostID: "reply-1", RootPostID: "root-1",
-		UserID: "owner-id", UserName: "owner", Message: "Продолжить",
+		CreateAt: 2_001,
+		UserID:   "owner-id", UserName: "owner", Message: "Продолжить",
 	})
 	if result.Mode != chatRunModeAutomationOwnerGate || result.RunID != "automation-runtime-1" {
 		t.Fatalf("result=%#v", result)
 	}
-	if resolver.calls != 3 || resolver.command.MattermostResponsePostID != "reply-1" || resolver.command.MattermostRootPostID != "root-1" || resolver.command.ProjectID != 1 {
+	if resolver.calls != 3 || resolver.command.MattermostResponsePostID != "reply-1" || resolver.command.MattermostResponseCreateAt != 2_001 || resolver.command.MattermostRootPostID != "root-1" || resolver.command.ProjectID != 1 {
 		t.Fatalf("resolver calls=%d command=%#v", resolver.calls, resolver.command)
 	}
 	if len(publisher.posts) == 0 || !strings.Contains(publisher.posts[len(publisher.posts)-1].Message, "scheduled-run-11111111111111111111111111111111") {

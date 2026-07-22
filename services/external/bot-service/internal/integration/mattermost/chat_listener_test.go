@@ -4,8 +4,18 @@ import (
 	"context"
 	"testing"
 
+	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
 )
+
+type capturingChatPostHandler struct {
+	command statusservice.ChatPostCommand
+}
+
+func (handler *capturingChatPostHandler) HandleChatPost(_ context.Context, command statusservice.ChatPostCommand) statusservice.ChatRunResult {
+	handler.command = command
+	return statusservice.ChatRunResult{Ignored: true}
+}
 
 type fakeMattermostUserNameResolver struct {
 	userName string
@@ -55,6 +65,21 @@ func TestWebsocketEventPostIgnoresSystemPosts(t *testing.T) {
 
 	if ok {
 		t.Fatal("system post should be ignored")
+	}
+}
+
+func TestChatListenerCarriesServerOwnedPostCreateAt(t *testing.T) {
+	handler := &capturingChatPostHandler{}
+	listener := &ChatListener{handler: handler, botUserID: "bot-user"}
+	event := mattermostmodel.NewWebSocketEvent(mattermostmodel.WebsocketEventPosted, "", "channel-1", "owner-id", nil, "")
+	event = event.SetData(map[string]any{
+		"post": `{"id":"reply-1","channel_id":"channel-1","root_id":"root-1","user_id":"owner-id","create_at":2001,"message":"Продолжить"}`,
+	})
+
+	listener.handleEvent(context.Background(), event)
+
+	if handler.command.PostID != "reply-1" || handler.command.CreateAt != 2_001 {
+		t.Fatalf("transport command=%#v", handler.command)
 	}
 }
 

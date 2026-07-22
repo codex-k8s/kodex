@@ -64,6 +64,7 @@ type MattermostThreadUpdateInput struct {
 type MattermostPostRef struct {
 	ChannelID string
 	PostID    string
+	CreateAt  int64
 }
 
 type MattermostPostReactionInput struct {
@@ -102,6 +103,7 @@ type ChatPostCommand struct {
 	ChannelID  string
 	PostID     string
 	RootPostID string
+	CreateAt   int64
 	UserID     string
 	UserName   string
 	Message    string
@@ -283,12 +285,13 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 	}
 	if svc.cfg.AutomationOwnerDecisionResolver != nil {
 		decision, decisionErr := svc.cfg.AutomationOwnerDecisionResolver.ResolveOwnerDecision(ctx, AutomationOwnerDecisionCommand{
-			ProjectID:                chat.ProjectID,
-			ActorUserID:              command.UserID,
-			ActorUserName:            command.UserName,
-			MattermostChannelID:      command.ChannelID,
-			MattermostRootPostID:     commandRootPostID(command),
-			MattermostResponsePostID: command.PostID,
+			ProjectID:                  chat.ProjectID,
+			ActorUserID:                command.UserID,
+			ActorUserName:              command.UserName,
+			MattermostChannelID:        command.ChannelID,
+			MattermostRootPostID:       commandRootPostID(command),
+			MattermostResponsePostID:   command.PostID,
+			MattermostResponseCreateAt: command.CreateAt,
 		})
 		if decisionErr != nil {
 			svc.postThread(ctx, command, svc.t("automation.owner_gate.resolve_failed", nil))

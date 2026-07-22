@@ -115,15 +115,16 @@ type OwnerGatePlanInput struct {
 }
 
 type SetOwnerAttentionPostInput struct {
-	AttentionID          int64
-	ScheduledRunID       int64
-	DeliveryID           string
-	MattermostChannelID  string
-	MattermostRootPostID string
-	MattermostPostID     string
-	ClaimToken           string
-	Fence                int64
-	Now                  time.Time
+	AttentionID            int64
+	ScheduledRunID         int64
+	DeliveryID             string
+	MattermostChannelID    string
+	MattermostRootPostID   string
+	MattermostPostID       string
+	MattermostPostCreateAt int64
+	ClaimToken             string
+	Fence                  int64
+	Now                    time.Time
 }
 
 type ClaimOwnerAttentionDeliveryInput struct {
@@ -155,13 +156,14 @@ type RetainOwnerAttentionDeliveryInput struct {
 }
 
 type ResolveOwnerGateInput struct {
-	ProjectID                int64
-	ActorUserID              string
-	ActorUserName            string
-	MattermostChannelID      string
-	MattermostRootPostID     string
-	MattermostResponsePostID string
-	Now                      time.Time
+	ProjectID                  int64
+	ActorUserID                string
+	ActorUserName              string
+	MattermostChannelID        string
+	MattermostRootPostID       string
+	MattermostResponsePostID   string
+	MattermostResponseCreateAt int64
+	Now                        time.Time
 }
 
 type ReconcileRuntimeTerminalInput struct {

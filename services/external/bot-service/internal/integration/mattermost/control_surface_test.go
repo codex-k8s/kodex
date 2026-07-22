@@ -338,7 +338,7 @@ func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) 
 	}
 	exactPost := &mattermostmodel.Post{
 		Id: "post-1", ChannelId: input.ChannelID, RootId: input.RootPostID,
-		Message: input.Message, Props: callbackServerProps(input.Props), PendingPostId: input.IdempotencyID,
+		Message: input.Message, Props: callbackServerProps(input.Props), PendingPostId: input.IdempotencyID, CreateAt: 1_234,
 	}
 
 	for name, mutate := range map[string]func(*statusservice.MattermostThreadPostInput){
@@ -368,7 +368,7 @@ func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) 
 		defer server.Close()
 		surface := NewControlSurface(server.URL, "synthetic-token", "")
 		ref, err := surface.ReconcileOrPostThreadMessage(context.Background(), input)
-		if err != nil || ref.PostID != exactPost.Id || postCalls.Load() != 0 {
+		if err != nil || ref.PostID != exactPost.Id || ref.CreateAt != exactPost.CreateAt || postCalls.Load() != 0 {
 			t.Fatalf("reconcile ref=%#v error=%v create_calls=%d", ref, err, postCalls.Load())
 		}
 	})
@@ -483,7 +483,7 @@ func TestControlSurfaceReconcilesAutomationOwnerAttentionIdentity(t *testing.T) 
 	}
 	exactPost := &mattermostmodel.Post{
 		Id: "attention-post-1", ChannelId: input.ChannelID, RootId: input.RootPostID,
-		Message: input.Message, Props: callbackServerProps(input.Props), PendingPostId: input.IdempotencyID,
+		Message: input.Message, Props: callbackServerProps(input.Props), PendingPostId: input.IdempotencyID, CreateAt: 2_000,
 	}
 	server, postCalls := callbackMattermostServer(t, func(getCall int) []*mattermostmodel.Post {
 		if getCall == 1 {
@@ -494,7 +494,7 @@ func TestControlSurfaceReconcilesAutomationOwnerAttentionIdentity(t *testing.T) 
 	defer server.Close()
 	surface := NewControlSurface(server.URL, "synthetic-token", "")
 	ref, err := surface.ReconcileOrPostThreadMessage(context.Background(), input)
-	if err != nil || ref.PostID != exactPost.Id || postCalls.Load() != 1 {
+	if err != nil || ref.PostID != exactPost.Id || ref.CreateAt != exactPost.CreateAt || postCalls.Load() != 1 {
 		t.Fatalf("owner attention reconcile ref=%#v error=%v create_calls=%d", ref, err, postCalls.Load())
 	}
 }
@@ -533,6 +533,7 @@ func callbackMattermostServer(t *testing.T, threadPosts func(int) []*mattermostm
 				return
 			}
 			post.Id = "created-post"
+			post.CreateAt = 1_234
 			post.Props = callbackServerProps(post.GetProps())
 			if err := json.NewEncoder(writer).Encode(&post); err != nil {
 				t.Errorf("encode Mattermost create response: %v", err)

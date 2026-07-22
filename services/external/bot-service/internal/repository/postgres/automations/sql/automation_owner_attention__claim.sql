@@ -35,6 +35,7 @@ returning
 	attention.automation_mattermost_channel_id,
 	attention.automation_mattermost_root_post_id,
 	attention.mattermost_post_id,
+	attention.automation_mattermost_post_create_at,
 	attention.status,
 	attention.automation_delivery_id,
 	attention.automation_delivery_message,

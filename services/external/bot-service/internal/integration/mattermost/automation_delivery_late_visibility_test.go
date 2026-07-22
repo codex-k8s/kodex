@@ -64,6 +64,7 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 				return
 			}
 			post.Id = "late-attention-post"
+			post.CreateAt = start.UnixMilli()
 			post.Props = callbackServerProps(post.GetProps())
 			createdMu.Lock()
 			created = post.Clone()
@@ -103,7 +104,7 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 		t.Fatalf("первый transport contour: GET=%d POST=%d", getCalls.Load(), postCalls.Load())
 	}
 	retained := repository.snapshot()
-	if !retained.ConfirmationPending || retained.ClaimToken == "" || !retained.LeaseExpiresAt.Equal(start.Add(30*time.Second)) || repository.deferCalls != 0 || repository.retainCalls != 1 {
+	if !retained.ConfirmationPending || retained.ClaimToken == "" || !retained.LeaseExpiresAt.Equal(start.Add(30*time.Second)) || repository.deferCalls != 0 || repository.retainCalls != 2 {
 		t.Fatalf("неоднозначный claim не удержан: delivery=%#v defer=%d retain=%d", retained, repository.deferCalls, repository.retainCalls)
 	}
 
@@ -245,11 +246,12 @@ func (repository *lateVisibilityAutomationRepository) RetainOwnerAttentionDelive
 func (repository *lateVisibilityAutomationRepository) SetOwnerAttentionPost(_ context.Context, input automationsrepo.SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error) {
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
-	if repository.delivery.ClaimToken != input.ClaimToken || repository.delivery.Fence != input.Fence || repository.delivery.DeliveryID != input.DeliveryID || repository.delivery.MattermostChannelID != input.MattermostChannelID || repository.delivery.MattermostRootPostID != input.MattermostRootPostID {
+	if repository.delivery.ClaimToken != input.ClaimToken || repository.delivery.Fence != input.Fence || repository.delivery.DeliveryID != input.DeliveryID || repository.delivery.MattermostChannelID != input.MattermostChannelID || repository.delivery.MattermostRootPostID != input.MattermostRootPostID || !repository.delivery.ConfirmationPending || input.MattermostPostCreateAt <= 0 {
 		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrConflict
 	}
 	repository.setPostCalls++
 	repository.delivery.MattermostPostID = input.MattermostPostID
+	repository.delivery.MattermostPostCreateAt = input.MattermostPostCreateAt
 	repository.delivery.ClaimToken = ""
 	repository.delivery.ClaimedAt = time.Time{}
 	repository.delivery.LeaseExpiresAt = time.Time{}

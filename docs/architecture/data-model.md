@@ -77,7 +77,7 @@ updated: 2026-07-22
 | `ScheduledRun` | occurrence_id, runtime turn/session reference, status `queued|running|waiting_owner|succeeded|failed`, outcome, callback payload hash, finished_at |
 | `ProcessWave` | process_run_id, coordinator role/session, title, state |
 | `WorkClaim` | process/wave/turn, summary, domains, resource keys, state |
-| `OwnerAttentionRequest` | process/turn, optional exact ScheduledRun/project/policy/root snapshot, server-owned delivery id/payload/hash/post binding, state, resolved_at, resolved_by_user/post |
+| `OwnerAttentionRequest` | process/turn, optional exact ScheduledRun/project/policy/root snapshot, server-owned delivery id/payload/hash/post binding/CreateAt, state, resolved_at, resolved_by_user/post/CreateAt |
 
 Уникальный индекс `(schedule_id, scheduled_for)` исключает повторное создание экземпляра расписания.
 

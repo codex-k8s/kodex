@@ -122,6 +122,7 @@ func (listener *ChatListener) handleEvent(ctx context.Context, event *mattermost
 		ChannelID:  defaultString(post.ChannelId, broadcastChannelID),
 		PostID:     post.Id,
 		RootPostID: post.RootId,
+		CreateAt:   post.CreateAt,
 		UserID:     post.UserId,
 		UserName:   listener.resolveUserName(ctx, post.UserId, event.GetData()),
 		Message:    post.Message,
