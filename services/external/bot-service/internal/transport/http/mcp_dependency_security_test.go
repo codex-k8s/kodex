@@ -68,8 +68,11 @@ func TestMCPDependencyAcceptsCanonicalParameterizedAndSameOriginRequests(t *test
 			if body.readBytes == 0 {
 				t.Fatal("accepted request body was not read")
 			}
-			if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
-				t.Fatalf("initialize domain effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, publisher.posts)
+			if store.sessionReads == 0 || store.guardCalls == 0 || runner.secretReads == 0 {
+				t.Fatalf("initialize skipped pre-authorization: reads=%d guards=%d token_reads=%d", store.sessionReads, store.guardCalls, runner.secretReads)
+			}
+			if publisher.posts != 0 {
+				t.Fatalf("initialize published unexpected posts: %d", publisher.posts)
 			}
 		})
 	}
