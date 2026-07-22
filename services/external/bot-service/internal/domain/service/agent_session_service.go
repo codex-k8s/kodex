@@ -1325,20 +1325,24 @@ func (svc *AgentSessionService) requireRequestedRoleChatParticipant(ctx context.
 }
 
 func (svc *AgentSessionService) rejectDelegatedGitHubIdentityRequirement(ctx context.Context, project entity.Project, role entity.AgentRole, message string) error {
-	accountName := strings.TrimSpace(role.GitHubAccountName)
-	if accountName == "" {
-		accountName = strings.TrimSpace(project.GitHubAccountName)
-	}
-	if accountName == "" {
-		return nil
-	}
-	account, err := svc.cfg.Store.GetGitHubAccount(ctx, accountName)
-	if err != nil {
-		return err
-	}
-	for _, identity := range []string{account.Name, account.Username} {
-		if delegatedPromptRequiresGitHubIdentity(message, identity) {
-			return fmt.Errorf("delegated prompt must not require a configured GitHub account alias or login; describe only the required operation and permissions")
+	accountNames := []string{strings.TrimSpace(role.GitHubAccountName), strings.TrimSpace(project.GitHubAccountName)}
+	seen := make(map[string]struct{}, len(accountNames))
+	for _, accountName := range accountNames {
+		if accountName == "" {
+			continue
+		}
+		if _, ok := seen[accountName]; ok {
+			continue
+		}
+		seen[accountName] = struct{}{}
+		account, err := svc.cfg.Store.GetGitHubAccount(ctx, accountName)
+		if err != nil {
+			return err
+		}
+		for _, identity := range []string{account.Name, account.Username} {
+			if delegatedPromptRequiresGitHubIdentity(message, identity) {
+				return fmt.Errorf("delegated prompt must not require a configured GitHub account alias or login; describe only the required operation and permissions")
+			}
 		}
 	}
 	return nil
@@ -1346,7 +1350,7 @@ func (svc *AgentSessionService) rejectDelegatedGitHubIdentityRequirement(ctx con
 
 func delegatedPromptRequiresGitHubIdentity(message string, identity string) bool {
 	identity = strings.ToLower(strings.TrimSpace(identity))
-	if len(identity) < 6 {
+	if identity == "" {
 		return false
 	}
 	markers := []string{

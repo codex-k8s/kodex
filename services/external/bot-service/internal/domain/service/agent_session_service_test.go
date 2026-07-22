@@ -1227,7 +1227,7 @@ func TestDelegatedPromptRequiresGitHubIdentity(t *testing.T) {
 		{name: "actual login", message: "Фактически авторизован kodex-agent, остановись при несовпадении.", identity: "kodex-agent", want: true},
 		{name: "account alias", message: "GitHub account: platform-owner", identity: "platform-owner", want: true},
 		{name: "repository owner", message: "Исправь https://github.com/ai-da-stas/project/issues/7", identity: "ai-da-stas"},
-		{name: "generic short alias", message: "GitHub account main должен иметь write.", identity: "main"},
+		{name: "short alias", message: "GitHub account main должен иметь write.", identity: "main", want: true},
 		{name: "permission only", message: "Нужны права на push и review.", identity: "kodex-agent"},
 	}
 	for _, test := range tests {
@@ -1236,6 +1236,25 @@ func TestDelegatedPromptRequiresGitHubIdentity(t *testing.T) {
 				t.Fatalf("delegatedPromptRequiresGitHubIdentity() = %t, want %t", got, test.want)
 			}
 		})
+	}
+}
+
+func TestAgentSessionRejectsDifferentConfiguredGitHubIdentity(t *testing.T) {
+	store := chatRuntimeStore()
+	store.githubAccounts = map[string]entity.GitHubAccount{
+		"owner": {Name: "owner", Username: "ai-da-stas", Status: "configured"},
+		"agent": {Name: "agent", Username: "kodex-agent", Status: "configured"},
+	}
+	svc := NewAgentSessionService(AgentSessionServiceConfig{Store: store})
+
+	err := svc.rejectDelegatedGitHubIdentityRequirement(
+		context.Background(),
+		entity.Project{GitHubAccountName: "owner"},
+		entity.AgentRole{GitHubAccountName: "agent"},
+		"Используй GitHub identity ai-da-stas; при другом login остановись.",
+	)
+	if err == nil || !strings.Contains(err.Error(), "must not require") {
+		t.Fatalf("rejectDelegatedGitHubIdentityRequirement() error = %v", err)
 	}
 }
 
