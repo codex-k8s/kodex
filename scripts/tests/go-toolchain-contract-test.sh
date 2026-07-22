@@ -40,10 +40,21 @@ expect_failure() {
 expect_failure_matching() {
   local description="$1"
   local expected="$2"
+  local actual_status
   shift 2
 
   if "$@" >"$temp_root/output" 2>&1; then
+    actual_status=0
+  else
+    actual_status=$?
+  fi
+  if [[ "$actual_status" == 0 ]]; then
     echo "FAIL: $description не был отклонён" >&2
+    exit 1
+  fi
+  if [[ "$actual_status" != 1 ]]; then
+    echo "FAIL: $description завершился с exit $actual_status вместо 1" >&2
+    sed -n '1,80p' "$temp_root/output" >&2
     exit 1
   fi
   if ! grep -Fq "$expected" "$temp_root/output"; then
@@ -180,6 +191,30 @@ expect_failure_matching \
   "deploy/images/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-alpine', найден 'FROM scratch'" \
   "$guard" --root "$deploy_indented_final_from" --static-only
 
+services_three_slash_final_from="$temp_root/services-three-slash-final-from"
+copy_fixture "$services_three_slash_final_from"
+cat >>"$services_three_slash_final_from/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+RUN true \\\
+FROM scratch
+EOF
+expect_failure_matching \
+  "три завершающих backslash перед новой final stage в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-bookworm', найден 'FROM scratch'" \
+  "$guard" --root "$services_three_slash_final_from" --static-only
+
+deploy_three_slash_final_from="$temp_root/deploy-three-slash-final-from"
+copy_fixture "$deploy_three_slash_final_from"
+cat >>"$deploy_three_slash_final_from/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+RUN true \\\
+FROM scratch
+EOF
+expect_failure_matching \
+  "три завершающих backslash перед новой final stage в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-alpine', найден 'FROM scratch'" \
+  "$guard" --root "$deploy_three_slash_final_from" --static-only
+
 services_split_instruction="$temp_root/services-split-instruction"
 copy_fixture "$services_split_instruction"
 cat >>"$services_split_instruction/services/jobs/agent-runner/Dockerfile" <<'EOF'
@@ -228,6 +263,30 @@ expect_failure_matching \
   "разрыв имени GOTOOLCHAIN в deploy Dockerfile" \
   "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
   "$guard" --root "$deploy_split_key" --static-only
+
+services_three_slash_override="$temp_root/services-three-slash-override"
+copy_fixture "$services_three_slash_override"
+cat >>"$services_three_slash_override/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+RUN true \\\
+ENV GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "три завершающих backslash перед поздним GOTOOLCHAIN=auto в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_three_slash_override" --static-only
+
+deploy_three_slash_override="$temp_root/deploy-three-slash-override"
+copy_fixture "$deploy_three_slash_override"
+cat >>"$deploy_three_slash_override/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+RUN true \\\
+ENV GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "три завершающих backslash перед поздним GOTOOLCHAIN=auto в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_three_slash_override" --static-only
 
 services_heredoc="$temp_root/services-heredoc"
 copy_fixture "$services_heredoc"

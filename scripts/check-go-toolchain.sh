@@ -64,7 +64,8 @@ final_runtime_stage() {
       for (position = length(trimmed); position > 0 && substr(trimmed, position, 1) == "\\"; position--) {
         slash_count++
       }
-      return slash_count % 2 == 1
+      # BuildKit v0.29.0 продолжает строку только после единственного завершающего escape.
+      return slash_count == 1
     }
 
     function strip_line_continuation(value, trimmed) {
@@ -157,7 +158,8 @@ effective_final_stage_gotoolchain() {
       for (position = length(trimmed); position > 0 && substr(trimmed, position, 1) == "\\"; position--) {
         slash_count++
       }
-      return slash_count % 2 == 1
+      # BuildKit v0.29.0 продолжает строку только после единственного завершающего escape.
+      return slash_count == 1
     }
 
     function strip_line_continuation(value, trimmed) {
