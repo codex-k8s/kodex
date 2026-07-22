@@ -54,6 +54,31 @@ copy_fixture "$floating_image"
 sed -i '0,/golang:1\.26\.5-alpine/s//golang:1.26-alpine/' "$floating_image/services/jobs/agent-runner/Dockerfile"
 expect_failure "плавающий Go image" "$guard" --root "$floating_image" --static-only
 
+runtime_env_missing="$temp_root/runtime-env-missing"
+copy_fixture "$runtime_env_missing"
+sed -i '/^FROM node:24-bookworm$/,$ { /^ENV GOTOOLCHAIN=local$/d; }' "$runtime_env_missing/services/jobs/agent-runner/Dockerfile"
+expect_failure "GOTOOLCHAIN=local отсутствует в services final runtime stage" "$guard" --root "$runtime_env_missing" --static-only
+
+runtime_check_missing="$temp_root/runtime-check-missing"
+copy_fixture "$runtime_check_missing"
+sed -i '/^RUN test "$(\/usr\/local\/go\/bin\/go env GOVERSION)" = "go1\.26\.5" && test "$(\/usr\/local\/go\/bin\/go env GOTOOLCHAIN)" = "local"$/d' "$runtime_check_missing/deploy/images/agent-runner/Dockerfile"
+expect_failure "точная проверка Go отсутствует в deploy final runtime stage" "$guard" --root "$runtime_check_missing" --static-only
+
+govulncheck_version_desync="$temp_root/govulncheck-version-desync"
+copy_fixture "$govulncheck_version_desync"
+sed -i 's/^GOVULNCHECK_VERSION := v1\.6\.0$/GOVULNCHECK_VERSION := v1.6.1/' "$govulncheck_version_desync/Makefile"
+expect_failure "версия govulncheck рассинхронизирована с каталогом" "$guard" --root "$govulncheck_version_desync" --static-only
+
+govulncheck_validation_missing="$temp_root/govulncheck-validation-missing"
+copy_fixture "$govulncheck_validation_missing"
+sed -i '/origin GOVULNCHECK_VERSION/d' "$govulncheck_validation_missing/Makefile"
+expect_failure "Make override govulncheck не отклоняется" "$guard" --root "$govulncheck_validation_missing" --static-only
+
+govulncheck_argument_unquoted="$temp_root/govulncheck-argument-unquoted"
+copy_fixture "$govulncheck_argument_unquoted"
+sed -i "/govulncheck@/s/'//g" "$govulncheck_argument_unquoted/Makefile"
+expect_failure "module@version govulncheck передаётся без безопасных кавычек" "$guard" --root "$govulncheck_argument_unquoted" --static-only
+
 fake_bin="$temp_root/fake-bin"
 mkdir -p "$fake_bin"
 cat >"$fake_bin/go" <<'EOF'
@@ -67,4 +92,30 @@ EOF
 chmod +x "$fake_bin/go"
 expect_failure "runtime toolchain ниже 1.26.5" env PATH="$fake_bin:$PATH" "$guard" --root "$repo_root"
 
-echo "PASS: Go toolchain contract отклоняет старую версию, частичный bump и плавающий image"
+govulncheck_fake_bin="$temp_root/govulncheck-fake-bin"
+govulncheck_marker="$temp_root/govulncheck-started"
+mkdir -p "$govulncheck_fake_bin"
+cat >"$govulncheck_fake_bin/go" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "env" && "${2:-}" == "GOVERSION" ]]; then
+  echo "go1.26.5"
+  exit 0
+fi
+if [[ "${1:-}" == "run" ]]; then
+  : >"$GOVULNCHECK_TEST_MARKER"
+  exit 0
+fi
+exit 2
+EOF
+chmod +x "$govulncheck_fake_bin/go"
+injection_payload='v1.6.0 -h >/dev/null 2>&1; : #'
+expect_failure "GOVULNCHECK_VERSION command injection" env \
+  PATH="$govulncheck_fake_bin:$PATH" \
+  GOVULNCHECK_TEST_MARKER="$govulncheck_marker" \
+  make -C "$repo_root" GOVULNCHECK_VERSION="$injection_payload" govulncheck
+[[ ! -e "$govulncheck_marker" ]] || {
+  echo "FAIL: govulncheck был запущен после небезопасного Make override" >&2
+  exit 1
+}
+
+echo "PASS: Go toolchain contract отклоняет старую версию, runtime-stage drift и govulncheck injection"

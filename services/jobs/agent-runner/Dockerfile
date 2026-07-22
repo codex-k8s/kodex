@@ -51,6 +51,8 @@ RUN apk add --no-cache ca-certificates git \
 
 FROM node:24-bookworm
 
+ENV GOTOOLCHAIN=local
+
 ARG MATTERCODEX_CODEX_PACKAGE=@openai/codex@0.144.1
 ARG GH_CLI_VERSION=2.95.0
 ARG KUBECTL_VERSION=v1.36.2
@@ -79,6 +81,8 @@ ARG MATTERCODEX_AGENT_RUNNER_GID=10001
 
 COPY --from=go-tools /usr/local/go /usr/local/go
 COPY --from=go-tools /tool-bin/ /usr/local/bin/
+
+RUN test "$(/usr/local/go/bin/go env GOVERSION)" = "go1.26.5" && test "$(/usr/local/go/bin/go env GOTOOLCHAIN)" = "local"
 
 COPY --from=builder /out/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner
 

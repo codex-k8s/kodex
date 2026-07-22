@@ -47,6 +47,39 @@ require_count() {
   [[ "$actual" == "$wanted" ]] || fail "$path содержит '$expected' $actual раз; ожидается $wanted"
 }
 
+require_final_runtime_stage_contract() {
+  local path="$1"
+  local expected_from="$2"
+  local dockerfile="$repo_root/$path"
+  local last_from from_line actual_from runtime_stage
+  local runtime_env runtime_copy runtime_check
+  local env_count copy_count check_count
+  local env_line copy_line check_line
+
+  last_from="$(grep -n '^FROM ' "$dockerfile" | tail -n 1)" || fail "$path не содержит runtime stage"
+  from_line="${last_from%%:*}"
+  actual_from="${last_from#*:}"
+  [[ "$actual_from" == "$expected_from" ]] || fail "$path должен завершаться stage '$expected_from', найден '$actual_from'"
+
+  runtime_stage="$(tail -n +"$from_line" "$dockerfile")"
+  runtime_env="ENV GOTOOLCHAIN=local"
+  runtime_copy="COPY --from=go-tools /usr/local/go /usr/local/go"
+  runtime_check="RUN test \"\$(/usr/local/go/bin/go env GOVERSION)\" = \"go$go_version\" && test \"\$(/usr/local/go/bin/go env GOTOOLCHAIN)\" = \"local\""
+
+  env_count="$(grep -Fxc "$runtime_env" <<<"$runtime_stage" || true)"
+  copy_count="$(grep -Fxc "$runtime_copy" <<<"$runtime_stage" || true)"
+  check_count="$(grep -Fxc "$runtime_check" <<<"$runtime_stage" || true)"
+  [[ "$env_count" == 1 ]] || fail "$path final runtime stage должен содержать точный '$runtime_env' ровно один раз"
+  [[ "$copy_count" == 1 ]] || fail "$path final runtime stage должен копировать закреплённый Go toolchain ровно один раз"
+  [[ "$check_count" == 1 ]] || fail "$path final runtime stage должен закрыто проверять точные GOVERSION и GOTOOLCHAIN"
+
+  env_line="$(grep -nFx "$runtime_env" <<<"$runtime_stage" | cut -d: -f1)"
+  copy_line="$(grep -nFx "$runtime_copy" <<<"$runtime_stage" | cut -d: -f1)"
+  check_line="$(grep -nFx "$runtime_check" <<<"$runtime_stage" | cut -d: -f1)"
+  ((env_line < copy_line)) || fail "$path должен задавать GOTOOLCHAIN=local до копирования Go в final runtime stage"
+  ((copy_line < check_line)) || fail "$path должен проверять скопированный Go toolchain до выпуска final runtime stage"
+}
+
 while (($# > 0)); do
   case "$1" in
     --root)
@@ -87,16 +120,25 @@ version_at_least "$go_version" "$security_floor" || fail "минимальная
 require_line Makefile "GO_MIN_VERSION := $go_version"
 require_line Makefile "GO_TOOLCHAIN := go$go_version"
 
+govulncheck_version="$(awk '$1 == "GOVULNCHECK_VERSION" && $2 == ":=" { print $3 }' "$repo_root/Makefile")"
+[[ "$govulncheck_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Makefile должен закреплять точную версию GOVULNCHECK_VERSION"
+catalog_govulncheck_version="$(awk -F'`' '$0 ~ /^\| `govulncheck` \|/ { print $4 }' "$repo_root/docs/design-guidelines/common/external_dependencies_catalog.md")"
+[[ "$catalog_govulncheck_version" == "$govulncheck_version" ]] || fail "Makefile и каталог зависимостей закрепляют разные версии govulncheck"
+require_line Makefile $'\t$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(error GOVULNCHECK_VERSION нельзя переопределять))'
+require_line Makefile $'\tenv -u GOFLAGS GOENV=off GOWORK=off go run \'golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)\' -mode=source -scan=symbol -show=traces,version ./...'
+
 go_image="golang:$go_version-alpine"
 require_line services/external/bot-service/Dockerfile "ARG GOLANG_IMAGE=$go_image"
 require_count services/jobs/agent-runner/Dockerfile "FROM $go_image" 2
 require_count deploy/images/agent-runner/Dockerfile "FROM $go_image" 1
 require_count services/external/bot-service/Dockerfile "ENV GOTOOLCHAIN=local" 2
-require_count services/jobs/agent-runner/Dockerfile "ENV GOTOOLCHAIN=local" 2
-require_count deploy/images/agent-runner/Dockerfile "ENV GOTOOLCHAIN=local" 1
+require_count services/jobs/agent-runner/Dockerfile "ENV GOTOOLCHAIN=local" 3
+require_count deploy/images/agent-runner/Dockerfile "ENV GOTOOLCHAIN=local" 2
 require_count services/external/bot-service/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 1
 require_count services/jobs/agent-runner/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 2
 require_count deploy/images/agent-runner/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 1
+require_final_runtime_stage_contract services/jobs/agent-runner/Dockerfile "FROM node:24-bookworm"
+require_final_runtime_stage_contract deploy/images/agent-runner/Dockerfile "FROM node:24-alpine"
 
 while IFS= read -r image; do
   [[ "$image" == "$go_image" ]] || fail "обнаружен рассинхронизированный или плавающий Go image: $image"

@@ -37,6 +37,8 @@ RUN apk add --no-cache ca-certificates git \
 
 FROM node:24-alpine
 
+ENV GOTOOLCHAIN=local
+
 ARG CODEX_PACKAGE=@openai/codex@0.144.1
 ARG GH_CLI_VERSION=2.95.0
 ARG KUBECTL_VERSION=v1.36.2
@@ -60,6 +62,8 @@ ARG MATTERCODEX_AGENT_RUNNER_GID=10001
 
 COPY --from=go-tools /usr/local/go /usr/local/go
 COPY --from=go-tools /tool-bin/ /usr/local/bin/
+
+RUN test "$(/usr/local/go/bin/go env GOVERSION)" = "go1.26.5" && test "$(/usr/local/go/bin/go env GOTOOLCHAIN)" = "local"
 
 ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 

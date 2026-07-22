@@ -27,5 +27,6 @@ tidy-go: check-go-toolchain
 	go mod tidy
 
 govulncheck: check-go-toolchain
+	$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(error GOVULNCHECK_VERSION нельзя переопределять))
 	@printf 'Проверенный Go toolchain: %s\n' "$$(env -u GOFLAGS GOENV=off GOWORK=off go env GOVERSION)"
-	env -u GOFLAGS GOENV=off GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) -mode=source -scan=symbol -show=traces,version ./...
+	env -u GOFLAGS GOENV=off GOWORK=off go run 'golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)' -mode=source -scan=symbol -show=traces,version ./...
