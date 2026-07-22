@@ -27,6 +27,15 @@ copy_fixture() {
   done
 }
 
+prepend_lines() {
+  local target="$1"
+  shift
+
+  printf '%s\n' "$@" >"$target.tmp"
+  cat "$target" >>"$target.tmp"
+  mv "$target.tmp" "$target"
+}
+
 expect_failure() {
   local description="$1"
   shift
@@ -76,6 +85,197 @@ expect_success() {
 }
 
 expect_success "неизменённый GOTOOLCHAIN=local" "$guard" --root "$repo_root" --static-only
+
+agent_runner_paths=(
+  services/jobs/agent-runner/Dockerfile
+  deploy/images/agent-runner/Dockerfile
+)
+agent_runner_names=(services deploy)
+
+for index in "${!agent_runner_paths[@]}"; do
+  path="${agent_runner_paths[$index]}"
+  name="${agent_runner_names[$index]}"
+
+  unicode_nbsp_from="$temp_root/$name-unicode-nbsp-from"
+  copy_fixture "$unicode_nbsp_from"
+  printf '\n\302\240FROM scratch\n' >>"$unicode_nbsp_from/$path"
+  expect_failure_matching \
+    "NBSP перед новой final stage в $name Dockerfile" \
+    "недопустимый Unicode-пробел в Dockerfile" \
+    "$guard" --root "$unicode_nbsp_from" --static-only
+
+  unicode_em_space_from="$temp_root/$name-unicode-em-space-from"
+  copy_fixture "$unicode_em_space_from"
+  printf '\n\342\200\203FROM scratch\n' >>"$unicode_em_space_from/$path"
+  expect_failure_matching \
+    "EM SPACE перед новой final stage в $name Dockerfile" \
+    "недопустимый Unicode-пробел в Dockerfile" \
+    "$guard" --root "$unicode_em_space_from" --static-only
+
+  unicode_nbsp_env="$temp_root/$name-unicode-nbsp-env"
+  copy_fixture "$unicode_nbsp_env"
+  printf '\n\302\240ENV GOTOOLCHAIN=auto\n' >>"$unicode_nbsp_env/$path"
+  expect_failure_matching \
+    "NBSP перед поздним GOTOOLCHAIN=auto в $name Dockerfile" \
+    "недопустимый Unicode-пробел в Dockerfile" \
+    "$guard" --root "$unicode_nbsp_env" --static-only
+
+  modern_quoted_escape="$temp_root/$name-modern-quoted-escape"
+  copy_fixture "$modern_quoted_escape"
+  printf '%s\n' '' 'ENV GOTOOLCHAIN="loc\al"' >>"$modern_quoted_escape/$path"
+  expect_failure_matching \
+    "экранирование в кавычках современного ENV в $name Dockerfile" \
+    "$path final runtime stage завершает GOTOOLCHAIN значением 'loc\al' вместо 'local'" \
+    "$guard" --root "$modern_quoted_escape" --static-only
+
+  legacy_quoted_escape="$temp_root/$name-legacy-quoted-escape"
+  copy_fixture "$legacy_quoted_escape"
+  printf '%s\n' '' 'ENV GOTOOLCHAIN "loc\al"' >>"$legacy_quoted_escape/$path"
+  expect_failure_matching \
+    "экранирование в кавычках устаревшего ENV в $name Dockerfile" \
+    "$path final runtime stage завершает GOTOOLCHAIN значением 'loc\al' вместо 'local'" \
+    "$guard" --root "$legacy_quoted_escape" --static-only
+
+  control_whitespace_continuation="$temp_root/$name-control-whitespace-continuation"
+  copy_fixture "$control_whitespace_continuation"
+  printf '\nRUN true #\\\v\nENV GOTOOLCHAIN=auto\n' >>"$control_whitespace_continuation/$path"
+  expect_failure_matching \
+    "vertical tab после escape в $name Dockerfile" \
+    "недопустимый управляющий ASCII-байт в Dockerfile" \
+    "$guard" --root "$control_whitespace_continuation" --static-only
+
+  bom_escape_override="$temp_root/$name-bom-escape-override"
+  copy_fixture "$bom_escape_override"
+  sed -i 's/\\$/`/' "$bom_escape_override/$path"
+  {
+    printf '\357\273\277# escape=`\n'
+    cat "$bom_escape_override/$path"
+    printf '\nRUN true #\\\nENV GOTOOLCHAIN=auto\n'
+  } >"$bom_escape_override/$path.tmp"
+  mv "$bom_escape_override/$path.tmp" "$bom_escape_override/$path"
+  expect_failure_matching \
+    "BOM перед backtick escape и скрытым поздним ENV в $name Dockerfile" \
+    "UTF-8 BOM в Dockerfile не поддерживается" \
+    "$guard" --root "$bom_escape_override" --static-only
+
+  hash_syntax_frontend="$temp_root/$name-hash-syntax-frontend"
+  copy_fixture "$hash_syntax_frontend"
+  prepend_lines "$hash_syntax_frontend/$path" '# syntax=example.invalid/untrusted/frontend:latest'
+  expect_failure_matching \
+    "# syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$hash_syntax_frontend" --static-only
+
+  slash_syntax_frontend="$temp_root/$name-slash-syntax-frontend"
+  copy_fixture "$slash_syntax_frontend"
+  prepend_lines "$slash_syntax_frontend/$path" '// syntax=example.invalid/untrusted/frontend:latest'
+  expect_failure_matching \
+    "// syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$slash_syntax_frontend" --static-only
+
+  shebang_hash_syntax_frontend="$temp_root/$name-shebang-hash-syntax-frontend"
+  copy_fixture "$shebang_hash_syntax_frontend"
+  prepend_lines \
+    "$shebang_hash_syntax_frontend/$path" \
+    '#!/usr/bin/env dockerfile' \
+    '# syntax=example.invalid/untrusted/frontend:latest'
+  expect_failure_matching \
+    "shebang перед # syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$shebang_hash_syntax_frontend" --static-only
+
+  shebang_slash_syntax_frontend="$temp_root/$name-shebang-slash-syntax-frontend"
+  copy_fixture "$shebang_slash_syntax_frontend"
+  prepend_lines \
+    "$shebang_slash_syntax_frontend/$path" \
+    '#!/usr/bin/env dockerfile' \
+    '// syntax=example.invalid/untrusted/frontend:latest'
+  expect_failure_matching \
+    "shebang перед // syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$shebang_slash_syntax_frontend" --static-only
+
+  json_syntax_frontend="$temp_root/$name-json-syntax-frontend"
+  copy_fixture "$json_syntax_frontend"
+  printf '%s\n' '{"syntax":"example.invalid/untrusted/frontend:latest"}' >"$json_syntax_frontend/$path"
+  expect_failure_matching \
+    "JSON syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$json_syntax_frontend" --static-only
+
+  shebang_json_syntax_frontend="$temp_root/$name-shebang-json-syntax-frontend"
+  copy_fixture "$shebang_json_syntax_frontend"
+  printf '%s\n' \
+    '#!/usr/bin/env dockerfile' \
+    '{"syntax":"example.invalid/untrusted/frontend:latest"}' \
+    >"$shebang_json_syntax_frontend/$path"
+  expect_failure_matching \
+    "shebang перед JSON syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$shebang_json_syntax_frontend" --static-only
+
+  bom_hash_syntax_frontend="$temp_root/$name-bom-hash-syntax-frontend"
+  copy_fixture "$bom_hash_syntax_frontend"
+  {
+    printf '\357\273\277# syntax=example.invalid/untrusted/frontend:latest\n'
+    cat "$bom_hash_syntax_frontend/$path"
+  } >"$bom_hash_syntax_frontend/$path.tmp"
+  mv "$bom_hash_syntax_frontend/$path.tmp" "$bom_hash_syntax_frontend/$path"
+  expect_failure_matching \
+    "BOM перед # syntax в $name Dockerfile" \
+    "UTF-8 BOM в Dockerfile не поддерживается" \
+    "$guard" --root "$bom_hash_syntax_frontend" --static-only
+done
+
+allowed_shebang_comments="$temp_root/allowed-shebang-comments"
+copy_fixture "$allowed_shebang_comments"
+for path in "${agent_runner_paths[@]}"; do
+  prepend_lines \
+    "$allowed_shebang_comments/$path" \
+    '#!/usr/bin/env dockerfile' \
+    '# syntax is documented here without a parser directive' \
+    '# syntax=example.invalid/ignored-after-ordinary-comment'
+done
+expect_success \
+  "shebang и обычные комментарии не выбирают внешний frontend" \
+  "$guard" --root "$allowed_shebang_comments" --static-only
+
+ascii_indentation_local="$temp_root/ascii-indentation-local"
+copy_fixture "$ascii_indentation_local"
+for path in "${agent_runner_paths[@]}"; do
+  printf '\n \tENV GOTOOLCHAIN="local"\n' >>"$ascii_indentation_local/$path"
+done
+expect_success \
+  "ASCII-пробел и табуляция перед безопасным ENV поддерживаются в обоих agent-runner Dockerfile" \
+  "$guard" --root "$ascii_indentation_local" --static-only
+
+ascii_continuation_suffix="$temp_root/ascii-continuation-suffix"
+copy_fixture "$ascii_continuation_suffix"
+for path in "${agent_runner_paths[@]}"; do
+  printf '\nENV PATH=/usr/local/go/bin\\ \t\n    GOTOOLCHAIN="local"\n' >>"$ascii_continuation_suffix/$path"
+done
+expect_success \
+  "ASCII-пробел и табуляция после escape сохраняют Dockerfile continuation" \
+  "$guard" --root "$ascii_continuation_suffix" --static-only
+
+modern_quoted_local="$temp_root/modern-quoted-local"
+copy_fixture "$modern_quoted_local"
+for path in "${agent_runner_paths[@]}"; do
+  printf '%s\n' '' 'ENV GOTOOLCHAIN="local"' >>"$modern_quoted_local/$path"
+done
+expect_success \
+  "local в кавычках современного ENV поддерживается в обоих agent-runner Dockerfile" \
+  "$guard" --root "$modern_quoted_local" --static-only
+
+legacy_quoted_local="$temp_root/legacy-quoted-local"
+copy_fixture "$legacy_quoted_local"
+for path in "${agent_runner_paths[@]}"; do
+  printf '%s\n' '' 'ENV GOTOOLCHAIN "local"' >>"$legacy_quoted_local/$path"
+done
+expect_success \
+  "local в кавычках устаревшего ENV поддерживается в обоих agent-runner Dockerfile" \
+  "$guard" --root "$legacy_quoted_local" --static-only
 
 below_floor="$temp_root/below-floor"
 copy_fixture "$below_floor"
