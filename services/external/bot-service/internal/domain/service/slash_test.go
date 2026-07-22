@@ -1023,7 +1023,7 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 	if !strings.Contains(prompt, "Проект: Platform") || !strings.Contains(prompt, "github:codex-k8s/matter-codex") {
 		t.Fatalf("prompt = %q", prompt)
 	}
-	if !strings.Contains(prompt, "`gh` 2.95.0") || !strings.Contains(prompt, "`go` 1.26") || !strings.Contains(prompt, "`kubectl` 1.36.2") {
+	if !strings.Contains(prompt, "`gh` 2.95.0") || !strings.Contains(prompt, "`go` 1.26.5") || !strings.Contains(prompt, "`kubectl` 1.36.2") {
 		t.Fatalf("prompt runtime tools = %q", prompt)
 	}
 	for _, expected := range []string{"`node` 24.17.x", "`vite` 8.0.16", "`asyncapi` 6.0.2", "`wscat` 6.1.0", "`playwright` 1.61.1", "`chromium` distro package"} {
@@ -1118,7 +1118,7 @@ func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
 	for _, expected := range []string{
 		"codex=0.144.1",
 		"gh=2.95.0",
-		"go=1.26",
+		"go=1.26.5",
 		"goose=3.27.1",
 		"oapi-codegen=2.7.1",
 		"openapi-ts=0.98.2",

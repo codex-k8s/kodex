@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 const mcpInitializePayload = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"security-test","version":"1"}}}`
@@ -57,14 +58,21 @@ func TestMCPDependencyRejectsUnsafeHTTPRequestsBeforeSessionEffects(t *testing.T
 				request.Host = test.host
 			}
 			recorder := httptest.NewRecorder()
+			handler := newMCPHandlerWithOptions(service, defaultMCPRequestBodyBytes, mcpHandlerOptions{
+				MaximumTransportSessions: 2,
+				SessionTimeout:           time.Second,
+			})
 
-			newMCPHandler(service, defaultMCPRequestBodyBytes).ServeHTTP(recorder, request)
+			handler.ServeHTTP(recorder, request)
 
 			if recorder.Code != test.wantStatus {
 				t.Fatalf("status=%d, want=%d body=%s", recorder.Code, test.wantStatus, recorder.Body.String())
 			}
 			if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
 				t.Fatalf("unsafe request effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, publisher.posts)
+			}
+			if handler.transportAdmissionStateCount() != 0 || handler.sdkTransportSessionCount() != 0 {
+				t.Fatalf("unsafe request state: admission=%d sdk=%d", handler.transportAdmissionStateCount(), handler.sdkTransportSessionCount())
 			}
 		})
 	}

@@ -1,4 +1,4 @@
-ARG GOLANG_IMAGE=golang:1.26-alpine
+ARG GOLANG_IMAGE=golang:1.26.5-alpine
 ARG NODE_IMAGE=node:24-bookworm
 
 FROM ${NODE_IMAGE} AS control-center-build
@@ -12,16 +12,21 @@ RUN npm run build
 
 FROM ${GOLANG_IMAGE} AS build
 
+ENV GOTOOLCHAIN=local
+
 WORKDIR /workspace
 
 COPY go.mod go.sum ./
 COPY libs/go/i18n/ libs/go/i18n/
 COPY services/external/bot-service/ services/external/bot-service/
 
+RUN test "$(go env GOVERSION)" = "go1.26.5"
 RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/bot-service ./services/external/bot-service/cmd/bot-service
 
 FROM ${GOLANG_IMAGE} AS dev
+
+ENV GOTOOLCHAIN=local
 
 RUN addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app
 

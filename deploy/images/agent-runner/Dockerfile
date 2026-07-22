@@ -1,4 +1,6 @@
-FROM golang:1.26-alpine AS go-tools
+FROM golang:1.26.5-alpine AS go-tools
+
+ENV GOTOOLCHAIN=local
 
 ARG GOOSE_VERSION=v3.27.1
 ARG OAPI_CODEGEN_VERSION=v2.7.1
@@ -16,6 +18,7 @@ ARG MOCKGEN_VERSION=v0.6.0
 
 ENV GOBIN=/tool-bin
 
+RUN test "$(go env GOVERSION)" = "go1.26.5"
 RUN apk add --no-cache ca-certificates git \
   && mkdir -p "${GOBIN}" \
   && CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@"${GOOSE_VERSION}" \
@@ -33,6 +36,8 @@ RUN apk add --no-cache ca-certificates git \
   && CGO_ENABLED=0 go install go.uber.org/mock/mockgen@"${MOCKGEN_VERSION}"
 
 FROM node:24-alpine
+
+ENV GOTOOLCHAIN=local
 
 ARG CODEX_PACKAGE=@openai/codex@0.144.1
 ARG GH_CLI_VERSION=2.95.0
@@ -57,6 +62,8 @@ ARG MATTERCODEX_AGENT_RUNNER_GID=10001
 
 COPY --from=go-tools /usr/local/go /usr/local/go
 COPY --from=go-tools /tool-bin/ /usr/local/bin/
+
+RUN test "$(/usr/local/go/bin/go env GOVERSION)" = "go1.26.5" && test "$(/usr/local/go/bin/go env GOTOOLCHAIN)" = "local"
 
 ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 
