@@ -86,6 +86,10 @@ validate_dockerfile_lexical_boundary() {
         line = substr(line, 1, length(line) - 1)
       }
 
+      if (index(line, "\357\273\277") > 0) {
+        lexical_error("строка " NR ": UTF-8 BOM в Dockerfile не поддерживается")
+      }
+
       if (contains_unicode_whitespace(line)) {
         lexical_error("строка " NR ": недопустимый Unicode-пробел в Dockerfile")
       }
@@ -95,6 +99,104 @@ validate_dockerfile_lexical_boundary() {
         if (character ~ /[[:cntrl:]]/ && character != "\t") {
           lexical_error("строка " NR ": недопустимый управляющий ASCII-байт в Dockerfile")
         }
+      }
+    }
+
+    END {
+      if (validation_failed) {
+        exit 2
+      }
+    }
+  ' "$dockerfile"
+}
+
+validate_dockerfile_parser_boundary() {
+  local dockerfile="$1"
+
+  LC_ALL=C awk '
+    function parser_boundary_error(message) {
+      print message > "/dev/stderr"
+      validation_failed = 1
+      exit 2
+    }
+
+    function parser_directive_key(value, prefix, body, separator, name, directive_value, key) {
+      if (substr(value, 1, length(prefix)) != prefix) {
+        return ""
+      }
+
+      body = substr(value, length(prefix) + 1)
+      sub(/^[ \t]+/, "", body)
+      separator = index(body, "=")
+      if (separator == 0) {
+        return ""
+      }
+
+      name = substr(body, 1, separator - 1)
+      sub(/[ \t]+$/, "", name)
+      if (name !~ /^[A-Za-z][A-Za-z0-9]*$/) {
+        return ""
+      }
+
+      directive_value = substr(body, separator + 1)
+      sub(/^[ \t]+/, "", directive_value)
+      sub(/[ \t]+$/, "", directive_value)
+      if (directive_value == "") {
+        return ""
+      }
+
+      key = toupper(name)
+      if (key != "SYNTAX" && key != "ESCAPE" && key != "CHECK") {
+        return ""
+      }
+      return key
+    }
+
+    BEGIN {
+      hash_directives = 1
+      slash_directives = 1
+      json_candidate = 1
+    }
+
+    {
+      line = $0
+      sub(/\r$/, "", line)
+
+      # BuildKit DetectSyntax удаляет shebang первой строки перед поиском frontend.
+      if (NR == 1 && substr(line, 1, 2) == "#!") {
+        next
+      }
+
+      if (hash_directives) {
+        key = parser_directive_key(line, "#")
+        if (key == "") {
+          hash_directives = 0
+        } else if (key == "SYNTAX") {
+          parser_boundary_error("внешний Dockerfile syntax frontend не поддерживается")
+        }
+      }
+
+      if (slash_directives) {
+        key = parser_directive_key(line, "//")
+        if (key == "") {
+          slash_directives = 0
+        } else if (key == "SYNTAX") {
+          parser_boundary_error("внешний Dockerfile syntax frontend не поддерживается")
+        }
+      }
+
+      if (json_candidate) {
+        json_start = line
+        sub(/^[ \t]+/, "", json_start)
+        if (json_start == "") {
+          next
+        }
+        # Любой JSON-object здесь не является допустимым встроенным Dockerfile;
+        # закрытый отказ покрывает JSON-форму DetectSyntax без собственного JSON parser.
+        if (substr(json_start, 1, 1) == "{") {
+          parser_boundary_error("внешний Dockerfile syntax frontend не поддерживается")
+        }
+        json_candidate = 0
       }
     }
 
@@ -379,7 +481,11 @@ require_final_runtime_stage_contract() {
   local env_line copy_line check_line effective_gotoolchain
 
   if ! validate_dockerfile_lexical_boundary "$dockerfile"; then
-    fail "$path содержит неподдерживаемый пробельный или управляющий байт"
+    fail "$path содержит неподдерживаемый байт Dockerfile"
+  fi
+
+  if ! validate_dockerfile_parser_boundary "$dockerfile"; then
+    fail "$path выходит за границу доверия встроенного Dockerfile parser"
   fi
 
   if ! stage_info="$(final_runtime_stage "$dockerfile")"; then
@@ -462,6 +568,8 @@ require_line Makefile $'\tenv -u GOFLAGS GOENV=off GOWORK=off go run \'golang.or
 
 go_image="golang:$go_version-alpine"
 require_line services/external/bot-service/Dockerfile "ARG GOLANG_IMAGE=$go_image"
+require_final_runtime_stage_contract services/jobs/agent-runner/Dockerfile "FROM node:24-bookworm"
+require_final_runtime_stage_contract deploy/images/agent-runner/Dockerfile "FROM node:24-alpine"
 require_count services/jobs/agent-runner/Dockerfile "FROM $go_image" 2
 require_count deploy/images/agent-runner/Dockerfile "FROM $go_image" 1
 require_count services/external/bot-service/Dockerfile "ENV GOTOOLCHAIN=local" 2
@@ -470,8 +578,6 @@ require_count deploy/images/agent-runner/Dockerfile "ENV GOTOOLCHAIN=local" 2
 require_count services/external/bot-service/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 1
 require_count services/jobs/agent-runner/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 2
 require_count deploy/images/agent-runner/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 1
-require_final_runtime_stage_contract services/jobs/agent-runner/Dockerfile "FROM node:24-bookworm"
-require_final_runtime_stage_contract deploy/images/agent-runner/Dockerfile "FROM node:24-alpine"
 
 while IFS= read -r image; do
   [[ "$image" == "$go_image" ]] || fail "обнаружен рассинхронизированный или плавающий Go image: $image"

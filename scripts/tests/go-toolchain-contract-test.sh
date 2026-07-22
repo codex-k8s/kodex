@@ -27,6 +27,15 @@ copy_fixture() {
   done
 }
 
+prepend_lines() {
+  local target="$1"
+  shift
+
+  printf '%s\n' "$@" >"$target.tmp"
+  cat "$target" >>"$target.tmp"
+  mv "$target.tmp" "$target"
+}
+
 expect_failure() {
   local description="$1"
   shift
@@ -134,7 +143,103 @@ for index in "${!agent_runner_paths[@]}"; do
     "vertical tab после escape в $name Dockerfile" \
     "недопустимый управляющий ASCII-байт в Dockerfile" \
     "$guard" --root "$control_whitespace_continuation" --static-only
+
+  bom_escape_override="$temp_root/$name-bom-escape-override"
+  copy_fixture "$bom_escape_override"
+  sed -i 's/\\$/`/' "$bom_escape_override/$path"
+  {
+    printf '\357\273\277# escape=`\n'
+    cat "$bom_escape_override/$path"
+    printf '\nRUN true #\\\nENV GOTOOLCHAIN=auto\n'
+  } >"$bom_escape_override/$path.tmp"
+  mv "$bom_escape_override/$path.tmp" "$bom_escape_override/$path"
+  expect_failure_matching \
+    "BOM перед backtick escape и скрытым поздним ENV в $name Dockerfile" \
+    "UTF-8 BOM в Dockerfile не поддерживается" \
+    "$guard" --root "$bom_escape_override" --static-only
+
+  hash_syntax_frontend="$temp_root/$name-hash-syntax-frontend"
+  copy_fixture "$hash_syntax_frontend"
+  prepend_lines "$hash_syntax_frontend/$path" '# syntax=example.invalid/untrusted/frontend:latest'
+  expect_failure_matching \
+    "# syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$hash_syntax_frontend" --static-only
+
+  slash_syntax_frontend="$temp_root/$name-slash-syntax-frontend"
+  copy_fixture "$slash_syntax_frontend"
+  prepend_lines "$slash_syntax_frontend/$path" '// syntax=example.invalid/untrusted/frontend:latest'
+  expect_failure_matching \
+    "// syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$slash_syntax_frontend" --static-only
+
+  shebang_hash_syntax_frontend="$temp_root/$name-shebang-hash-syntax-frontend"
+  copy_fixture "$shebang_hash_syntax_frontend"
+  prepend_lines \
+    "$shebang_hash_syntax_frontend/$path" \
+    '#!/usr/bin/env dockerfile' \
+    '# syntax=example.invalid/untrusted/frontend:latest'
+  expect_failure_matching \
+    "shebang перед # syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$shebang_hash_syntax_frontend" --static-only
+
+  shebang_slash_syntax_frontend="$temp_root/$name-shebang-slash-syntax-frontend"
+  copy_fixture "$shebang_slash_syntax_frontend"
+  prepend_lines \
+    "$shebang_slash_syntax_frontend/$path" \
+    '#!/usr/bin/env dockerfile' \
+    '// syntax=example.invalid/untrusted/frontend:latest'
+  expect_failure_matching \
+    "shebang перед // syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$shebang_slash_syntax_frontend" --static-only
+
+  json_syntax_frontend="$temp_root/$name-json-syntax-frontend"
+  copy_fixture "$json_syntax_frontend"
+  printf '%s\n' '{"syntax":"example.invalid/untrusted/frontend:latest"}' >"$json_syntax_frontend/$path"
+  expect_failure_matching \
+    "JSON syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$json_syntax_frontend" --static-only
+
+  shebang_json_syntax_frontend="$temp_root/$name-shebang-json-syntax-frontend"
+  copy_fixture "$shebang_json_syntax_frontend"
+  printf '%s\n' \
+    '#!/usr/bin/env dockerfile' \
+    '{"syntax":"example.invalid/untrusted/frontend:latest"}' \
+    >"$shebang_json_syntax_frontend/$path"
+  expect_failure_matching \
+    "shebang перед JSON syntax выбирает внешний frontend в $name Dockerfile" \
+    "внешний Dockerfile syntax frontend не поддерживается" \
+    "$guard" --root "$shebang_json_syntax_frontend" --static-only
+
+  bom_hash_syntax_frontend="$temp_root/$name-bom-hash-syntax-frontend"
+  copy_fixture "$bom_hash_syntax_frontend"
+  {
+    printf '\357\273\277# syntax=example.invalid/untrusted/frontend:latest\n'
+    cat "$bom_hash_syntax_frontend/$path"
+  } >"$bom_hash_syntax_frontend/$path.tmp"
+  mv "$bom_hash_syntax_frontend/$path.tmp" "$bom_hash_syntax_frontend/$path"
+  expect_failure_matching \
+    "BOM перед # syntax в $name Dockerfile" \
+    "UTF-8 BOM в Dockerfile не поддерживается" \
+    "$guard" --root "$bom_hash_syntax_frontend" --static-only
 done
+
+allowed_shebang_comments="$temp_root/allowed-shebang-comments"
+copy_fixture "$allowed_shebang_comments"
+for path in "${agent_runner_paths[@]}"; do
+  prepend_lines \
+    "$allowed_shebang_comments/$path" \
+    '#!/usr/bin/env dockerfile' \
+    '# syntax is documented here without a parser directive' \
+    '# syntax=example.invalid/ignored-after-ordinary-comment'
+done
+expect_success \
+  "shebang и обычные комментарии не выбирают внешний frontend" \
+  "$guard" --root "$allowed_shebang_comments" --static-only
 
 ascii_indentation_local="$temp_root/ascii-indentation-local"
 copy_fixture "$ascii_indentation_local"
