@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
@@ -593,8 +594,8 @@ func (handler *mcpHTTPHandler) preflight(writer http.ResponseWriter, request *ht
 			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
 			return false
 		}
-		mediaType, _, err := mime.ParseMediaType(values[0])
-		if err != nil || mediaType != mcpJSONMediaType || !hasValidMCPMediaParameters(values[0]) {
+		mediaType, parameters, err := mime.ParseMediaType(values[0])
+		if err != nil || mediaType != mcpJSONMediaType || !hasValidMCPMediaParameters(values[0], parameters) {
 			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
 			return false
 		}
@@ -699,8 +700,9 @@ type mcpMediaParameter struct {
 }
 
 type mcpMediaParameterRepresentation struct {
-	continuation bool
-	sections     map[int]struct{}
+	continuation    bool
+	declaredCharset string
+	sections        map[int]struct{}
 }
 
 // hasValidMCPASCIIMediaTypeGrammar запрещает Unicode-нормализацию сырого
@@ -721,7 +723,7 @@ func hasValidMCPASCIIMediaTypeGrammar(value string) bool {
 // зависел от молчаливого пропуска частей в mime.ParseMediaType. Допустимы только
 // attribute=value, attribute*=charset'language'value и непрерывные continuation
 // attribute*0[*]..attribute*N[*]. Разные представления одного attribute запрещены.
-func hasValidMCPMediaParameters(value string) bool {
+func hasValidMCPMediaParameters(value string, decodedParameters map[string]string) bool {
 	seen := make(map[string]mcpMediaParameterRepresentation)
 	parameterStart := -1
 	inQuotes := false
@@ -766,7 +768,7 @@ func hasValidMCPMediaParameters(value string) bool {
 		parameterStart = index + 1
 	}
 
-	return hasContinuousMCPMediaParameters(seen)
+	return hasContinuousMCPMediaParameters(seen) && hasValidMCP2231Charsets(seen, decodedParameters)
 }
 
 func recordMCPMediaParameter(seen map[string]mcpMediaParameterRepresentation, parameter mcpMediaParameter) bool {
@@ -775,7 +777,9 @@ func recordMCPMediaParameter(seen map[string]mcpMediaParameterRepresentation, pa
 		if exists {
 			return false
 		}
-		seen[parameter.baseName] = mcpMediaParameterRepresentation{}
+		seen[parameter.baseName] = mcpMediaParameterRepresentation{
+			declaredCharset: declaredMCP2231Charset(parameter),
+		}
 		return true
 	}
 
@@ -791,9 +795,51 @@ func recordMCPMediaParameter(seen map[string]mcpMediaParameterRepresentation, pa
 	if _, duplicate := representation.sections[parameter.section]; duplicate {
 		return false
 	}
+	if parameter.section == 0 {
+		representation.declaredCharset = declaredMCP2231Charset(parameter)
+	}
 	representation.sections[parameter.section] = struct{}{}
 	seen[parameter.baseName] = representation
 	return true
+}
+
+// hasValidMCP2231Charsets проверяет результат полной сборки continuation и
+// percent-decoding, выполненных mime.ParseMediaType. Сырая проверка выше
+// гарантирует, что декодированное значение не было получено из неоднозначного
+// или молча пропущенного представления параметра.
+func hasValidMCP2231Charsets(seen map[string]mcpMediaParameterRepresentation, decodedParameters map[string]string) bool {
+	for baseName, representation := range seen {
+		if representation.declaredCharset == "" {
+			continue
+		}
+		decodedValue, exists := decodedParameters[baseName]
+		if !exists {
+			return false
+		}
+		switch representation.declaredCharset {
+		case "utf-8":
+			if !utf8.ValidString(decodedValue) {
+				return false
+			}
+		case "us-ascii":
+			for index := range len(decodedValue) {
+				if decodedValue[index] > 0x7f {
+					return false
+				}
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func declaredMCP2231Charset(parameter mcpMediaParameter) string {
+	if !parameter.extended || parameter.continuation && parameter.section > 0 {
+		return ""
+	}
+	charset, _, _ := strings.Cut(parameter.value, "'")
+	return strings.ToLower(charset)
 }
 
 func hasContinuousMCPMediaParameters(seen map[string]mcpMediaParameterRepresentation) bool {
