@@ -36,6 +36,9 @@
 - `MATTERCODEX_MATTERMOST_BOT_TOKEN` - нужен для provisioning Mattermost team/channels/slash command;
 - `MATTERCODEX_MATTERMOST_ADMIN_TOKEN` - отдельный административный PAT только для создания и обслуживания bot identity ролей; bootstrap хранит его в Kubernetes Secret и не использует для публикации сообщений;
 - `MATTERCODEX_MATTERMOST_SLASH_TOKEN` - optional, обычно заполняется provisioning script в Kubernetes Secret;
+- `MATTERCODEX_CONTROL_CENTER_READ_TOKEN` - optional read-only bearer token для серверной истории `/api/control-center/v1/automation-runs`; deploy-скрипты сохраняют его только в Kubernetes Secret и не печатают значение;
+- `MATTERCODEX_CONTROL_CENTER_ASSETS_DIR` - optional, каталог собранного Vue Control Center внутри bot-service image;
+- `MATTERCODEX_AUTOMATION_DELIVERY_INTERVAL` и `MATTERCODEX_AUTOMATION_DELIVERY_CONCURRENCY` - optional bounds непрерывного worker доставки automation owner-attention; worker использует PostgreSQL claim/lease/fence и продвигает весь доступный backlog;
 - `MATTERCODEX_GITHUB_SECRET` - optional, имя Kubernetes Secret для reviewer/user GitHub account;
 - `MATTERCODEX_AGENT_GITHUB_SECRET` - optional, имя Kubernetes Secret для developer/agent GitHub account;
 - `MATTERCODEX_GITHUB_TOKEN` - optional, GitHub token для bot-service и reviewer account; deploy-скрипты также принимают legacy `GITHUB_PAT`;
@@ -97,6 +100,14 @@
 - `MATTERCODEX_DEFAULT_CHANNELS` - optional, список `name:Display Name` через запятую.
 
 Скрипты печатают только статус наличия токенов, не значения.
+
+## Ручная проверка истории автоматизаций
+
+1. Проверить только факт наличия ключей `control-center-read-token` и `MATTERCODEX_OWNER_MATTERMOST_USERNAME`, не выводя их значения.
+2. Открыть `/control-center/`, ввести read-only token и убедиться, что запрос `GET /api/control-center/v1/automation-runs` возвращает сохранённую историю.
+3. Выполнить callback `requires_human` и дождаться состояния `waiting_owner/open` с доставленной карточкой.
+4. Ответить сохранённым корневым инициатором в точном Mattermost-треде; не позднее следующего пятисекундного обновления проверить `succeeded/resolved`.
+5. Перезагрузить страницу, повторно ввести token и подтвердить, что состояние восстановилось из PostgreSQL, а не из `window` или browser storage.
 
 Foundation создаёт в том же `${MATTERCODEX_POSTGRES_SECRET}` три runtime-ключа: `bot-service-runtime-user`, `bot-service-runtime-password`, `bot-service-runtime-datasource`. Для существующего Secret скрипт сохраняет четыре исходных migration-owner ключа, добавляет отсутствующую полную runtime-тройку и закрыто прекращает работу при частично заполненной тройке. `bot-service` через migration DSN создаёт или ужесточает отдельный login, затем `000025` выдаёт только точные DML/sequence/function grants. Совпадение login, другой endpoint или отсутствие явного runtime password отклоняются до запуска сервиса; fallback на owner DSN отсутствует.
 

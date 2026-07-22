@@ -126,6 +126,13 @@ func TestConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestConfigRejectsShortControlCenterReadToken(t *testing.T) {
+	t.Setenv("MATTERCODEX_CONTROL_CENTER_READ_TOKEN", "synthetic-short-token")
+	if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "MATTERCODEX_CONTROL_CENTER_READ_TOKEN") {
+		t.Fatalf("короткий Control Center token принят: %v", err)
+	}
+}
+
 func TestHTTPServerUsesBoundedReadAndConnectionSettings(t *testing.T) {
 	cfg := Config{
 		HTTPAddr:          ":9090",

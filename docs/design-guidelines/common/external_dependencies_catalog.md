@@ -18,7 +18,7 @@
 | `github.com/google/go-github/v88` | `v88.0.0` | GitHub SDK | repository access, branch/PR operations и webhook payload helpers без ручной REST-обвязки |
 | `github.com/jackc/pgx/v5` | `v5.10.0` | PostgreSQL | storage repositories через `pgxpool`; `stdlib` driver для goose |
 | `github.com/mattermost/mattermost/server/public` | `v0.4.2` | Mattermost SDK/model | typed `CommandResponse` и публичные модели Mattermost вместо ручных JSON-структур |
-| `github.com/modelcontextprotocol/go-sdk` | `v1.4.1` | MCP SDK | встроенный Streamable HTTP MCP server для ограниченного чтения/записи контекста обсуждения Mattermost агентами; версия содержит исправления проверки `Origin`, разбора JSON-RPC и защиты от DNS rebinding |
+| `github.com/modelcontextprotocol/go-sdk` | `v1.6.0` | MCP SDK | встроенный Streamable HTTP MCP server для ограниченного чтения/записи контекста обсуждения Mattermost агентами; версия канонически разбирает MIME-параметры `Content-Type`, а transport получает явную application-owned защиту `Origin` и DNS rebinding |
 | `github.com/nicksnyder/go-i18n/v2` | `v2.6.1` | i18n | runtime `libs/go/i18n` для embedded JSON message catalogs, template variables и locale switching |
 | `github.com/pressly/goose/v3` | `v3.27.1` | PostgreSQL migrations | embedded SQL migrations с `-- +goose Up/Down` вместо самописного migration runner |
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics`, Go/process collectors и Prometheus HTTP handler |
@@ -51,6 +51,8 @@
 
 ## Project checks - in use
 
+Строка `go 1.26.5` в `go.mod` одновременно задаёт обязательный минимум и подразумеваемый `toolchain go1.26.5`. Отдельная равная ей директива `toolchain` не хранится: Go 1.26.5 удаляет её при `go mod tidy`. `Makefile`, контейнерные стадии и `scripts/check-go-toolchain.sh` закрепляют тот же toolchain и закрыто отклоняют более старую или частично обновлённую конфигурацию.
+
 | Tool | Version | Scope | Why |
 |---|---:|---|---|
 | `govulncheck` | `v1.6.0` | Проверка уязвимостей Go | закреплённый сканер для воспроизводимого запуска `make govulncheck`; база уязвимостей обновляется при запуске |
@@ -75,7 +77,7 @@
 | `yq` | `v4.53.3` | Agent YAML diagnostics/scripts | обработка YAML manifests/config без строкового парсинга |
 | `rg`, `fd`, `nc`, `dig`, `tree` | distro packages | Agent development diagnostics | быстрый поиск, network/DNS diagnostics и обзор рабочих деревьев |
 | `just` | `1.55.1` | Agent task runner | запуск project tasks из justfile через pinned release binary, чтобы не зависеть от distro package availability |
-| `go` | `1.26` | Agent Go development | сборка и тестирование Go modules; Go 1.26 выбран, потому что свежий `sqlc` требует Go >= 1.26, при этом Go 1.25 modules проекта `kodex` остаются совместимыми |
+| `go` | `1.26.5` | Agent Go development | сборка и тестирование Go modules; Go 1.26.5 является минимальной безопасной версией MatterCodex и удовлетворяет требованию `sqlc` Go >= 1.26, при этом Go 1.25 modules проекта `kodex` остаются совместимыми |
 | `goimports` | `v0.46.0` | Agent Go formatting | форматирование импортов Go |
 | `gofumpt` | `v0.10.0` | Agent Go formatting | stricter Go formatting where requested |
 | `staticcheck` | `v0.7.0` | Agent Go static analysis | дополнительные проверки Go-кода |
@@ -111,8 +113,8 @@
 
 | Image | Scope | Why |
 |---|---|---|
-| `golang:1.26-alpine` | Go build stages | build layer для bot-service и agent-runner binaries; не используется как production runtime |
-| `golang:1.26-alpine` | agent-runner Go toolchain/tools stage | поставляет Go 1.26 и Go CLI tools в agent-runner runtime для свежего codegen/lint toolchain |
+| `golang:1.26.5-alpine` | Go build stages | закреплённый build layer для bot-service и agent-runner binaries; не используется как production runtime |
+| `golang:1.26.5-alpine` | agent-runner Go toolchain/tools stage | поставляет Go 1.26.5 и Go CLI tools в agent-runner runtime для свежего codegen/lint toolchain |
 | `alpine:3.22` | bot-service prod Dockerfile | минимальный runtime слой для собранного bot-service binary |
 | `localhost:5001/matter-codex/bot-service:<tag>` | bot-service MVP runtime | image, собранный Kaniko в кластере и опубликованный во встроенный MatterCodex registry |
 | `node:24-bookworm` | agent-runner Dockerfile base | glibc runtime слой с npm, Codex CLI, Vue/TS/OpenAPI/AsyncAPI tooling, operator/developer CLI tools и Playwright/Chromium browser tooling |

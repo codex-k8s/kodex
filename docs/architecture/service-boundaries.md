@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-07-18
+version: 0.4.0
+updated: 2026-07-22
 ---
 
 # Границы сервисов и структура репозитория
@@ -88,6 +88,8 @@ docs/
 - постановка `ScheduledRun` в очередь;
 - вычисление следующего запуска.
 
+До выделения самостоятельного сервиса текущий bot-service также владеет узким контрактом ручного шлюза автоматизации: отдельным namespace `automation` для `OwnerAttentionRequest`, атомарной записью `waiting_owner`, server-owned payload и долговечной публикацией с claim/lease/fence до внешнего POST. Ограниченный по параллельности reconciler непрерывно выбирает весь доступный backlog через `SKIP LOCKED`; ошибка одной строки и перезапуск не блокируют продвижение остальных. Решение допустимо только после сохранённого post binding точной карточки и атомарно закрывает связь `ScheduledRun → attention`. Общий watchdog, heartbeat/deadline/lease среды выполнения, callback outbox и Kubernetes health не входят в эту границу.
+
 ### agent-runner
 
 - получение и завершение хода;
@@ -118,6 +120,6 @@ docs/
 - Внутренняя потоковая передача с высокой пропускной способностью: Protobuf/gRPC только после измеренной необходимости.
 - MCP: официальный Model Context Protocol Go SDK.
 
-До выделения `integration-gateway` текущий bot-service владеет внешней HTTP-границей MCP. Для POST он ограничивает полный JSON envelope до передачи в `go-sdk`, чтения session/token и доменного допуска: oversized `Content-Length` и превысивший предел chunked body получают транспортный отказ. Полный server-owned `ReadTimeout`, `ReadHeaderTimeout`, `IdleTimeout` и `MaxHeaderBytes` ограничивают медленные неаутентифицированные соединения. GET/SSE и допустимый POST сохраняют семантику SDK.
+До выделения `integration-gateway` текущий bot-service владеет внешней HTTP-границей MCP. Для POST он ограничивает полный JSON envelope до передачи в `go-sdk`, чтения session/token и доменного допуска: oversized `Content-Length` и превысивший предел chunked body получают транспортный отказ. После проверки `Origin`, `Host`, `Content-Type` и тела каждый запрос проходит server-owned авторизацию непустых session key и Bearer token; недействительная, истекшая, отозванная или не совпадающая с transport session пара отклоняется до stateful SDK handler. Живые transport sessions имеют общий ограниченный допуск, конечный idle timeout и освобождают слот после `DELETE`, timeout или неудачной инициализации; привязка допуска хранит только SHA-256 session key и token. Полный server-owned `ReadTimeout`, `ReadHeaderTimeout`, `IdleTimeout` и `MaxHeaderBytes` ограничивают медленные неаутентифицированные соединения. GET/SSE и допустимый POST сохраняют семантику SDK.
 
 До выделения `interaction-gateway` текущий bot-service также владеет доставкой двух обязательных callback audit publications. Доменная транзакция владеет ровно двумя неизменяемыми строками outbox и манифестом их точного множества; `CallbackRunID` не фиксируется без одной публикации каждой обязательной destination и полного плана. Mattermost adapter владеет post-commit сетевой попыткой, детерминированной внешней identity и точной сверкой существующего post: client-owned payload сравнивается полностью, а из server-owned props разрешено только документированное Mattermost 11.6 поле `from_bot: "true"`. Нельзя считать `CallbackRunID`, непустое подмножество `delivered`, успешный HTTP-ответ без DB mark или кратковременный `pending_post_id` доказательством завершения всей доставки. Переход к отдельному gateway обязан сохранить ключ `(delegation, callback run, destination, publication)`, манифест, payload hash, lease, final binding fence и монотонное подтверждение `delivered`.

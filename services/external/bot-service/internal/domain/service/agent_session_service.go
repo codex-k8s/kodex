@@ -29,6 +29,7 @@ const (
 	agentSessionStatusError   = "error"
 	agentSessionStatusBlocked = "blocked"
 	agentSessionStatusClosed  = "closed"
+	agentSessionStatusExpired = "expired"
 
 	agentSessionTurnQueued    = "queued"
 	agentSessionTurnRunning   = "running"
@@ -74,6 +75,9 @@ const (
 	defaultCallbackPublishDeadline    = 5 * time.Second
 	maximumCallbackPublishDeadline    = 15 * time.Second
 )
+
+// ErrAgentSessionMCPUnauthorized скрывает причину отказа проверки учётных данных MCP.
+var ErrAgentSessionMCPUnauthorized = errors.New("agent session MCP credentials are unauthorized")
 
 type AgentSessionServiceConfig struct {
 	Localizer                   *texti18n.Localizer
@@ -127,6 +131,26 @@ func (svc *AgentSessionService) CompleteAutomationCallback(ctx context.Context, 
 type AgentSessionService struct {
 	cfg                  AgentSessionServiceConfig
 	callbackPublishSlots chan struct{}
+}
+
+// AuthorizeMCPTransport проверяет учётные данные до создания состояния транспорта MCP.
+func (svc *AgentSessionService) AuthorizeMCPTransport(ctx context.Context, sessionKey string, token string) error {
+	sessionKey = strings.TrimSpace(sessionKey)
+	token = strings.TrimSpace(token)
+	if sessionKey == "" || token == "" {
+		return ErrAgentSessionMCPUnauthorized
+	}
+	session, err := svc.authorize(ctx, sessionKey, token)
+	if err != nil {
+		return ErrAgentSessionMCPUnauthorized
+	}
+	if session.Status == agentSessionStatusBlocked || session.Status == agentSessionStatusClosed || session.Status == agentSessionStatusExpired {
+		return ErrAgentSessionMCPUnauthorized
+	}
+	if session.ExpiresAt.IsZero() || !time.Now().UTC().Before(session.ExpiresAt) {
+		return ErrAgentSessionMCPUnauthorized
+	}
+	return nil
 }
 
 type MattermostPostMessage struct {
@@ -1530,7 +1554,9 @@ func (svc *AgentSessionService) authorize(ctx context.Context, sessionKey string
 	if err != nil {
 		return entity.AgentSession{}, err
 	}
-	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(token)), []byte(strings.TrimSpace(secret.Token))) != 1 {
+	providedTokenSHA256 := sha256.Sum256([]byte(strings.TrimSpace(token)))
+	storedTokenSHA256 := sha256.Sum256([]byte(strings.TrimSpace(secret.Token)))
+	if subtle.ConstantTimeCompare(providedTokenSHA256[:], storedTokenSHA256[:]) != 1 {
 		return entity.AgentSession{}, fmt.Errorf("session token is invalid")
 	}
 	return authorized, nil

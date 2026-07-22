@@ -3,10 +3,12 @@ package http
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,14 +23,52 @@ import (
 type sessionBarrierStore struct {
 	adminrepo.Repository
 	adminrepo.CoordinationRepository
-	guardCalls   int
-	sessionReads int
-	guardInputs  []securityrepo.ClusterAdminBindingInput
-	denyAt       int
-	requireGuard bool
-	session      entity.AgentSession
-	role         entity.AgentRole
-	chat         entity.Chat
+	guardMu         sync.Mutex
+	guardCalls      int
+	sessionReads    int
+	guardInputs     []securityrepo.ClusterAdminBindingInput
+	denyAt          int
+	requireGuard    bool
+	session         entity.AgentSession
+	role            entity.AgentRole
+	chat            entity.Chat
+	attentions      []sessionBarrierAttention
+	nextAttentionID int64
+}
+
+type sessionBarrierAttention struct {
+	kind    string
+	request entity.OwnerAttentionRequest
+}
+
+type sessionBarrierGuardSnapshot struct {
+	calls  int
+	inputs []securityrepo.ClusterAdminBindingInput
+}
+
+func (store *sessionBarrierStore) recordGuard(input securityrepo.ClusterAdminBindingInput) bool {
+	store.guardMu.Lock()
+	defer store.guardMu.Unlock()
+	store.guardCalls++
+	store.guardInputs = append(store.guardInputs, input)
+	return store.denyAt > 0 && store.guardCalls >= store.denyAt
+}
+
+func (store *sessionBarrierStore) resetGuardObservations(denyAt int) {
+	store.guardMu.Lock()
+	defer store.guardMu.Unlock()
+	store.guardCalls = 0
+	store.guardInputs = nil
+	store.denyAt = denyAt
+}
+
+func (store *sessionBarrierStore) guardSnapshot() sessionBarrierGuardSnapshot {
+	store.guardMu.Lock()
+	defer store.guardMu.Unlock()
+	return sessionBarrierGuardSnapshot{
+		calls:  store.guardCalls,
+		inputs: append([]securityrepo.ClusterAdminBindingInput(nil), store.guardInputs...),
+	}
 }
 
 func (store *sessionBarrierStore) GetAgentSession(_ context.Context, sessionKey string) (entity.AgentSession, error) {
@@ -56,18 +96,14 @@ func (store *sessionBarrierStore) RequiresClusterAdminSessionGuard(context.Conte
 }
 
 func (store *sessionBarrierStore) WithExistingClusterAdminRuntimeGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func() error) error {
-	store.guardCalls++
-	store.guardInputs = append(store.guardInputs, input)
-	if store.guardCalls == store.denyAt {
+	if store.recordGuard(input) {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	return sideEffect()
 }
 
 func (store *sessionBarrierStore) WithExistingClusterAdminPersistenceGuard(_ context.Context, input securityrepo.ClusterAdminBindingInput, sideEffect func(adminrepo.Repository) error) error {
-	store.guardCalls++
-	store.guardInputs = append(store.guardInputs, input)
-	if store.guardCalls == store.denyAt {
+	if store.recordGuard(input) {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	return sideEffect(store)
@@ -126,7 +162,46 @@ func (store *sessionBarrierStore) GetAgentSessionTurn(context.Context, int64) (e
 }
 
 func (store *sessionBarrierStore) GetTurnProcess(context.Context, int64) (entity.ProcessContext, error) {
-	return entity.ProcessContext{RootInitiatorUserID: "owner-user"}, nil
+	return entity.ProcessContext{ProcessRunID: 91, ProcessPublicID: "process-run-91", RootInitiatorUserID: "owner-user", RootInitiatorUserName: "owner"}, nil
+}
+
+func (store *sessionBarrierStore) CreateOwnerAttention(_ context.Context, input adminrepo.CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error) {
+	for _, row := range store.attentions {
+		if row.kind == "generic" && row.request.ProcessRunID == input.ProcessRunID && row.request.IdempotencyKey == input.IdempotencyKey {
+			return row.request, false, nil
+		}
+	}
+	store.nextAttentionID++
+	request := entity.OwnerAttentionRequest{
+		ID: store.nextAttentionID, ProcessRunID: input.ProcessRunID, TurnID: input.TurnID,
+		Severity: input.Severity, Summary: input.Summary, Options: input.Options,
+		Recommendation: input.Recommendation, EvidenceLinks: input.EvidenceLinks,
+		PauseScope: input.PauseScope, IdempotencyKey: input.IdempotencyKey, Status: "open",
+	}
+	store.attentions = append(store.attentions, sessionBarrierAttention{kind: "generic", request: request})
+	return request, true, nil
+}
+
+func (store *sessionBarrierStore) SetOwnerAttentionPost(_ context.Context, attentionID int64, postID string) (entity.OwnerAttentionRequest, error) {
+	for index := range store.attentions {
+		row := &store.attentions[index]
+		if row.kind != "generic" || row.request.ID != attentionID {
+			continue
+		}
+		row.request.MattermostPostID = postID
+		return row.request, nil
+	}
+	return entity.OwnerAttentionRequest{}, adminrepo.ErrNotFound
+}
+
+func (store *sessionBarrierStore) addAutomationAttention(idempotencyKey string) int64 {
+	store.nextAttentionID++
+	store.attentions = append(store.attentions, sessionBarrierAttention{kind: "automation", request: entity.OwnerAttentionRequest{
+		ID: store.nextAttentionID, ProcessRunID: 91, TurnID: 1, Severity: "urgent",
+		Summary: "Server-owned automation gate", PauseScope: "process",
+		IdempotencyKey: idempotencyKey, Status: "open",
+	}})
+	return store.nextAttentionID
 }
 
 func (store *sessionBarrierStore) ListAgentDelegationsBySource(context.Context, int64, int) ([]entity.AgentDelegation, error) {
@@ -171,7 +246,8 @@ func (runner *sessionBarrierRunner) GetMattermostBotTokenSecret(context.Context,
 
 type sessionBarrierPublisher struct {
 	statusservice.MattermostThreadPublisher
-	posts int
+	posts      int
+	postErrors []error
 }
 
 type sessionBarrierConversationReader struct{}
@@ -199,13 +275,19 @@ func (dispatcher *sessionBarrierDispatcher) RetryAgentTurn(context.Context, stat
 }
 
 func (publisher *sessionBarrierPublisher) PostThreadMessage(context.Context, statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
-	publisher.posts++
-	return statusservice.MattermostPostRef{PostID: "unexpected-system-post"}, nil
+	return publisher.post("unexpected-system-post")
 }
 
 func (publisher *sessionBarrierPublisher) PostThreadMessageWithToken(context.Context, string, statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	return publisher.post("unexpected-role-post")
+}
+
+func (publisher *sessionBarrierPublisher) post(postID string) (statusservice.MattermostPostRef, error) {
 	publisher.posts++
-	return statusservice.MattermostPostRef{PostID: "unexpected-role-post"}, nil
+	if index := publisher.posts - 1; index < len(publisher.postErrors) && publisher.postErrors[index] != nil {
+		return statusservice.MattermostPostRef{}, publisher.postErrors[index]
+	}
+	return statusservice.MattermostPostRef{PostID: postID}, nil
 }
 
 func TestInternalAgentSessionHTTPRevocationBarrierPreventsTokenRead(t *testing.T) {
@@ -218,8 +300,9 @@ func TestInternalAgentSessionHTTPRevocationBarrierPreventsTokenRead(t *testing.T
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-	if store.guardCalls != 1 || runner.secretReads != 0 {
-		t.Fatalf("HTTP barrier guards=%d secret_reads=%d", store.guardCalls, runner.secretReads)
+	guards := store.guardSnapshot()
+	if guards.calls != 1 || runner.secretReads != 0 {
+		t.Fatalf("HTTP barrier guards=%d secret_reads=%d", guards.calls, runner.secretReads)
 	}
 }
 
@@ -247,37 +330,113 @@ func TestInternalAgentSessionProductionTransportBarrierMatrix(t *testing.T) {
 				if recorder.Code < http.StatusBadRequest {
 					t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 				}
-				assertSessionTransportBarrier(t, store, runner, publisher, boundary)
+				assertSessionTransportBarrier(t, store, runner, publisher, boundary, boundary)
 			})
 		}
 	}
 }
 
 func TestMCPSessionRevocationBarrierPreventsPublishAndSystemFallback(t *testing.T) {
-	service, store, runner, publisher := newSessionBarrierService(2)
-	server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
-	defer server.Close()
-	client := mcp.NewClient(&mcp.Implementation{Name: "barrier-test", Version: "1"}, nil)
-	transport := &mcp.StreamableClientTransport{
-		Endpoint:   server.URL + "/mcp/sessions/session-admin",
-		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: "session-token"}},
-	}
-	session, err := client.Connect(context.Background(), transport, nil)
-	if err != nil {
-		t.Fatalf("MCP connect: %v", err)
-	}
-	defer func() { _ = session.Close() }()
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "mattermost_post_thread_update", Arguments: map[string]any{"message": "synthetic progress"},
+	service, store, runner, publisher := newSessionBarrierService(0)
+	handler := newMCPHandlerWithOptions(service, defaultMCPRequestBodyBytes, mcpHandlerOptions{
+		MaximumTransportSessions: 2,
+		SessionTimeout:           time.Second,
 	})
-	if err != nil {
-		t.Fatalf("MCP call: %v", err)
+	initialize := httptest.NewRecorder()
+	handler.ServeHTTP(initialize, newMCPInitializeRequest("/mcp/sessions/session-admin", "session-token", mcpInitializePayload))
+	if initialize.Code != http.StatusOK {
+		t.Fatalf("MCP initialize status=%d body=%s", initialize.Code, initialize.Body.String())
 	}
-	if result == nil || !result.IsError {
-		t.Fatalf("MCP result=%#v", result)
+	sessionID := initialize.Header().Get("Mcp-Session-Id")
+	if sessionID == "" {
+		t.Fatal("MCP initialize returned no Mcp-Session-Id")
 	}
-	if store.guardCalls != 2 || runner.secretReads != 1 || publisher.posts != 0 {
-		t.Fatalf("MCP barrier guards=%d secret_reads=%d publishes=%d", store.guardCalls, runner.secretReads, publisher.posts)
+	initialized := serveMCPTransportRequest(handler, http.MethodPost, "/mcp/sessions/session-admin", "session-token", sessionID, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	if initialized.Code != http.StatusAccepted {
+		t.Fatalf("MCP initialized status=%d body=%s", initialized.Code, initialized.Body.String())
+	}
+	defer func() {
+		store.session.Status = "running"
+		closed := serveMCPTransportRequest(handler, http.MethodDelete, "/mcp/sessions/session-admin", "session-token", sessionID, "")
+		if closed.Code != http.StatusNoContent {
+			t.Errorf("MCP cleanup status=%d body=%s", closed.Code, closed.Body.String())
+		}
+	}()
+
+	store.session.Status = "closed"
+	store.resetGuardObservations(0)
+	runner.secretReads = 0
+	publisher.posts = 0
+	revoked := serveMCPTransportRequest(handler, http.MethodPost, "/mcp/sessions/session-admin", "session-token", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"mattermost_post_thread_update","arguments":{"message":"synthetic progress"}}}`)
+	assertRejectedMCPBootstrap(t, revoked, http.StatusUnauthorized)
+	guards := store.guardSnapshot()
+	if guards.calls != 1 || runner.secretReads != 1 || publisher.posts != 0 {
+		t.Fatalf("MCP barrier guards=%d secret_reads=%d publishes=%d", guards.calls, runner.secretReads, publisher.posts)
+	}
+}
+
+func TestMCPGenericOwnerAttentionDoesNotReuseAutomationNamespaceAfterLostResponse(t *testing.T) {
+	for _, test := range []struct {
+		name            string
+		automationFirst bool
+	}{
+		{name: "generic then automation", automationFirst: false},
+		{name: "automation then generic", automationFirst: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, store, _, publisher := newSessionBarrierService(0)
+			publisher.postErrors = []error{errors.New("synthetic lost Mattermost response")}
+			const idempotencyKey = "automation:scheduled-run-shared"
+			var automationID int64
+			if test.automationFirst {
+				automationID = store.addAutomationAttention(idempotencyKey)
+			}
+
+			server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
+			defer server.Close()
+			client := mcp.NewClient(&mcp.Implementation{Name: "owner-attention-namespace", Version: "1"}, nil)
+			session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
+				Endpoint:   server.URL + "/mcp/sessions/session-admin",
+				HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: "session-token"}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("MCP connect: %v", err)
+			}
+			defer func() { _ = session.Close() }()
+			arguments := map[string]any{
+				"severity": "normal", "summary": "Generic MCP attention",
+				"pause_scope": "turn", "idempotency_key": idempotencyKey,
+			}
+			first, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mattermost_request_owner_attention", Arguments: arguments})
+			if err != nil || first == nil || !first.IsError {
+				t.Fatalf("lost response result=%#v error=%v", first, err)
+			}
+			if !test.automationFirst {
+				automationID = store.addAutomationAttention(idempotencyKey)
+			}
+			second, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mattermost_request_owner_attention", Arguments: arguments})
+			if err != nil || second == nil || second.IsError {
+				t.Fatalf("MCP retry result=%#v error=%v", second, err)
+			}
+
+			var generic *entity.OwnerAttentionRequest
+			var automation *entity.OwnerAttentionRequest
+			for index := range store.attentions {
+				row := &store.attentions[index]
+				switch row.kind {
+				case "generic":
+					generic = &row.request
+				case "automation":
+					automation = &row.request
+				}
+			}
+			if generic == nil || generic.ID == automationID || generic.MattermostPostID == "" {
+				t.Fatalf("generic namespace row=%#v automation_id=%d", generic, automationID)
+			}
+			if automation == nil || automation.ID != automationID || automation.MattermostPostID != "" {
+				t.Fatalf("automation namespace row=%#v automation_id=%d", automation, automationID)
+			}
+		})
 	}
 }
 
@@ -306,33 +465,35 @@ func TestMCPSessionProductionTransportBarrierMatrix(t *testing.T) {
 	for _, boundary := range []int{1, 2} {
 		for _, test := range tests {
 			t.Run(test.name+" boundary "+string(rune('0'+boundary)), func(t *testing.T) {
-				service, store, runner, publisher := newSessionBarrierService(boundary)
+				service, store, runner, publisher := newSessionBarrierService(0)
 				server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
 				defer server.Close()
 				client := mcp.NewClient(&mcp.Implementation{Name: "barrier-matrix", Version: "1"}, nil)
 				transport := &mcp.StreamableClientTransport{
 					Endpoint:   server.URL + "/mcp/sessions/session-admin",
 					HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: "session-token"}},
+					// Матрица измеряет барьер одного CallTool; сквозные тесты оставляют фоновый GET включённым.
+					DisableStandaloneSSE: true,
 				}
 				session, err := client.Connect(context.Background(), transport, nil)
 				if err != nil {
 					t.Fatalf("MCP connect: %v", err)
 				}
 				defer func() { _ = session.Close() }()
+				store.resetGuardObservations(boundary)
+				runner.secretReads = 0
 				result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: test.name, Arguments: test.arguments})
-				if err != nil {
-					t.Fatalf("MCP call: %v", err)
-				}
-				if result == nil || !result.IsError {
+				if err == nil && (result == nil || !result.IsError) {
 					t.Fatalf("MCP result=%#v", result)
 				}
-				assertSessionTransportBarrier(t, store, runner, publisher, boundary)
+				// На первой границе вторая защитная проверка выполняет очистку клиента, на второй — барьер инструмента.
+				assertSessionTransportBarrier(t, store, runner, publisher, boundary, 2)
 			})
 		}
 	}
 }
 
-func TestMCPStartAgentThreadRejectsLongTitleBeforeDomainReads(t *testing.T) {
+func TestMCPStartAgentThreadRejectsLongTitleBeforeToolDomainReads(t *testing.T) {
 	service, store, runner, publisher := newSessionBarrierService(0)
 	server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
 	defer server.Close()
@@ -346,7 +507,7 @@ func TestMCPStartAgentThreadRejectsLongTitleBeforeDomainReads(t *testing.T) {
 	}
 	defer func() { _ = session.Close() }()
 	store.sessionReads = 0
-	store.guardCalls = 0
+	store.resetGuardObservations(0)
 	runner.secretReads = 0
 	runner.integrityReads = 0
 	publisher.posts = 0
@@ -363,12 +524,13 @@ func TestMCPStartAgentThreadRejectsLongTitleBeforeDomainReads(t *testing.T) {
 			t.Fatalf("attempt %d result=%#v error=%v", attempt+1, result, callErr)
 		}
 	}
-	if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || runner.integrityReads != 0 || publisher.posts != 0 {
-		t.Fatalf("effects session_reads=%d guards=%d secret_reads=%d integrity_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, runner.integrityReads, publisher.posts)
+	guards := store.guardSnapshot()
+	if store.sessionReads != 4 || guards.calls != 2 || runner.secretReads != 2 || runner.integrityReads != 0 || publisher.posts != 0 {
+		t.Fatalf("effects session_reads=%d guards=%d secret_reads=%d integrity_reads=%d posts=%d", store.sessionReads, guards.calls, runner.secretReads, runner.integrityReads, publisher.posts)
 	}
 }
 
-func TestMCPStartAgentThreadRejectsActiveTitlePayloadBeforeDomainReads(t *testing.T) {
+func TestMCPStartAgentThreadRejectsActiveTitlePayloadBeforeToolDomainReads(t *testing.T) {
 	unsafeTitles := []string{
 		"**[проверена](https://attacker.invalid)**",
 		"`закрой тред`",
@@ -399,6 +561,9 @@ func TestMCPStartAgentThreadRejectsActiveTitlePayloadBeforeDomainReads(t *testin
 			}
 			defer func() { _ = session.Close() }()
 			store.sessionReads = 0
+			store.resetGuardObservations(0)
+			runner.secretReads = 0
+			runner.integrityReads = 0
 			result, callErr := session.CallTool(context.Background(), &mcp.CallToolParams{
 				Name: "mattermost_start_agent_thread",
 				Arguments: map[string]any{
@@ -409,8 +574,9 @@ func TestMCPStartAgentThreadRejectsActiveTitlePayloadBeforeDomainReads(t *testin
 			if callErr != nil || result == nil || !result.IsError {
 				t.Fatalf("result=%#v error=%v", result, callErr)
 			}
-			if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
-				t.Fatalf("effects session_reads=%d guards=%d secret_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, publisher.posts)
+			guards := store.guardSnapshot()
+			if store.sessionReads != 2 || guards.calls != 1 || runner.secretReads != 1 || publisher.posts != 0 {
+				t.Fatalf("effects session_reads=%d guards=%d secret_reads=%d posts=%d", store.sessionReads, guards.calls, runner.secretReads, publisher.posts)
 			}
 		})
 	}
@@ -424,7 +590,7 @@ func TestSessionProductionTransportAllowedControls(t *testing.T) {
 		wantMCPGuards  int
 	}{
 		{name: "ordinary"},
-		{name: "guarded cluster admin", requireGuard: true, wantHTTPGuards: 2, wantMCPGuards: 3},
+		{name: "guarded cluster admin", requireGuard: true, wantHTTPGuards: 2, wantMCPGuards: 4},
 	} {
 		t.Run(test.name+" HTTP", func(t *testing.T) {
 			service, store, runner, _ := newSessionBarrierService(0)
@@ -437,8 +603,9 @@ func TestSessionProductionTransportAllowedControls(t *testing.T) {
 			request.Header.Set("Authorization", "Bearer session-token")
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, request)
-			if recorder.Code != http.StatusOK || store.guardCalls != test.wantHTTPGuards || runner.secretReads != 1 || runner.integrityReads != max(0, test.wantHTTPGuards-1) {
-				t.Fatalf("status=%d guards=%d token_reads=%d integrity_reads=%d body=%s", recorder.Code, store.guardCalls, runner.secretReads, runner.integrityReads, recorder.Body.String())
+			guards := store.guardSnapshot()
+			if recorder.Code != http.StatusOK || guards.calls != test.wantHTTPGuards || runner.secretReads != 1 || runner.integrityReads != max(0, test.wantHTTPGuards-1) {
+				t.Fatalf("status=%d guards=%d token_reads=%d integrity_reads=%d body=%s", recorder.Code, guards.calls, runner.secretReads, runner.integrityReads, recorder.Body.String())
 			}
 		})
 
@@ -459,20 +626,25 @@ func TestSessionProductionTransportAllowedControls(t *testing.T) {
 				t.Fatalf("MCP connect: %v", err)
 			}
 			defer func() { _ = session.Close() }()
+			store.resetGuardObservations(0)
+			runner.secretReads = 0
+			runner.integrityReads = 0
 			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mattermost_post_thread_update", Arguments: map[string]any{"message": "synthetic progress"}})
-			if err != nil || result == nil || result.IsError || store.guardCalls != test.wantMCPGuards || runner.secretReads != 1 || runner.integrityReads != max(0, test.wantMCPGuards-1) || publisher.posts != 1 {
-				t.Fatalf("result=%#v error=%v guards=%d token_reads=%d integrity_reads=%d posts=%d", result, err, store.guardCalls, runner.secretReads, runner.integrityReads, publisher.posts)
+			guards := store.guardSnapshot()
+			if err != nil || result == nil || result.IsError || guards.calls != test.wantMCPGuards || runner.secretReads != 2 || runner.integrityReads != max(0, test.wantMCPGuards-2) || publisher.posts != 1 {
+				t.Fatalf("result=%#v error=%v guards=%d token_reads=%d integrity_reads=%d posts=%d", result, err, guards.calls, runner.secretReads, runner.integrityReads, publisher.posts)
 			}
 		})
 	}
 }
 
-func assertSessionTransportBarrier(t *testing.T, store *sessionBarrierStore, runner *sessionBarrierRunner, publisher *sessionBarrierPublisher, boundary int) {
+func assertSessionTransportBarrier(t *testing.T, store *sessionBarrierStore, runner *sessionBarrierRunner, publisher *sessionBarrierPublisher, boundary int, wantGuardCalls int) {
 	t.Helper()
-	if store.guardCalls != boundary || runner.secretReads != boundary-1 || publisher.posts != 0 {
-		t.Fatalf("barrier=%d guards=%d secret_reads=%d publishes=%d", boundary, store.guardCalls, runner.secretReads, publisher.posts)
+	guards := store.guardSnapshot()
+	if guards.calls != wantGuardCalls || runner.secretReads != boundary-1 || publisher.posts != 0 {
+		t.Fatalf("barrier=%d guards=%d want_guards=%d secret_reads=%d publishes=%d", boundary, guards.calls, wantGuardCalls, runner.secretReads, publisher.posts)
 	}
-	for _, input := range store.guardInputs {
+	for _, input := range guards.inputs {
 		if input.SessionKey != "session-admin" || input.RoleID != 1 || input.ProjectID != 1 || input.ChatID != 1 || input.MattermostChannelID != "channel-admin" {
 			t.Fatalf("guard subject=%#v", input)
 		}

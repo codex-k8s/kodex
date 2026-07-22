@@ -26,9 +26,10 @@ const (
 	chatRunStatusSucceeded = "succeeded"
 	chatRunStatusFailed    = "failed"
 
-	chatRunModeChat      = "chat"
-	chatRunModeDeveloper = "developer"
-	chatRunModeReviewer  = "reviewer"
+	chatRunModeChat                = "chat"
+	chatRunModeDeveloper           = "developer"
+	chatRunModeReviewer            = "reviewer"
+	chatRunModeAutomationOwnerGate = "automation_owner_gate"
 
 	threadContextStatusPending    = "pending"
 	threadContextStatusConfigured = "configured"
@@ -41,6 +42,8 @@ const (
 var githubPullURLRE = regexp.MustCompile(`https://github\.com/([^/\s]+)/([^/\s]+)/pull/([0-9]+)`)
 
 var codexAuthDeviceCodeWait = 5 * time.Minute
+
+var ErrMattermostPostConfirmationAmbiguous = errors.New("mattermost post confirmation is ambiguous")
 
 type MattermostThreadPostInput struct {
 	ChannelID     string
@@ -81,6 +84,10 @@ type MattermostThreadPublisher interface {
 
 type MattermostIdempotentThreadPublisher interface {
 	ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error)
+}
+
+type MattermostIdempotentThreadReconciler interface {
+	ReconcileThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, bool, error)
 }
 
 type MattermostIdempotentCardPublisher interface {
@@ -183,20 +190,21 @@ type ThreadRepositorySelector interface {
 }
 
 type ChatRunServiceConfig struct {
-	Localizer                   *texti18n.Localizer
-	Store                       adminrepo.Repository
-	RuntimeRunner               runtimerepo.Runner
-	ThreadPublisher             MattermostThreadPublisher
-	BotServiceURL               string
-	MenuActionURL               string
-	MattermostSiteURL           string
-	StorageReady                bool
-	RuntimeReady                bool
-	DisableMonitor              bool
-	MonitorInterval             time.Duration
-	MonitorTimeout              time.Duration
-	CapacityRetryDelay          time.Duration
-	AutomationRuntimeReconciler AutomationRuntimeTerminalReconciler
+	Localizer                       *texti18n.Localizer
+	Store                           adminrepo.Repository
+	RuntimeRunner                   runtimerepo.Runner
+	ThreadPublisher                 MattermostThreadPublisher
+	BotServiceURL                   string
+	MenuActionURL                   string
+	MattermostSiteURL               string
+	StorageReady                    bool
+	RuntimeReady                    bool
+	DisableMonitor                  bool
+	MonitorInterval                 time.Duration
+	MonitorTimeout                  time.Duration
+	CapacityRetryDelay              time.Duration
+	AutomationRuntimeReconciler     AutomationRuntimeTerminalReconciler
+	AutomationOwnerDecisionResolver AutomationOwnerDecisionResolver
 }
 
 type ChatRunService struct {
@@ -241,6 +249,12 @@ func (svc *ChatRunService) SetAutomationRuntimeReconciler(reconciler AutomationR
 	}
 }
 
+func (svc *ChatRunService) SetAutomationOwnerDecisionResolver(resolver AutomationOwnerDecisionResolver) {
+	if svc != nil {
+		svc.cfg.AutomationOwnerDecisionResolver = resolver
+	}
+}
+
 func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostCommand) ChatRunResult {
 	command = normalizeChatPostCommand(command)
 	if command.ChannelID == "" || command.PostID == "" || command.Message == "" {
@@ -259,16 +273,34 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 		svc.postThread(ctx, command, svc.t("chat.run.storage_not_ready", nil))
 		return ChatRunResult{}
 	}
-	if !svc.cfg.RuntimeReady || svc.cfg.RuntimeRunner == nil {
-		svc.postThread(ctx, command, svc.t("runtime.not_configured", nil))
-		return ChatRunResult{}
-	}
 	chat, err := svc.cfg.Store.GetChatByMattermostChannelID(ctx, command.ChannelID)
 	if err != nil {
 		if errors.Is(err, adminrepo.ErrNotFound) {
 			return ChatRunResult{Ignored: true}
 		}
 		svc.postThread(ctx, command, svc.t("chat.run.chat_lookup_failed", map[string]any{"Error": safeError(err)}))
+		return ChatRunResult{}
+	}
+	if svc.cfg.AutomationOwnerDecisionResolver != nil {
+		decision, decisionErr := svc.cfg.AutomationOwnerDecisionResolver.ResolveOwnerDecision(ctx, AutomationOwnerDecisionCommand{
+			ProjectID:                chat.ProjectID,
+			ActorUserID:              command.UserID,
+			ActorUserName:            command.UserName,
+			MattermostChannelID:      command.ChannelID,
+			MattermostRootPostID:     commandRootPostID(command),
+			MattermostResponsePostID: command.PostID,
+		})
+		if decisionErr != nil {
+			svc.postThread(ctx, command, svc.t("automation.owner_gate.resolve_failed", nil))
+			return ChatRunResult{}
+		}
+		if decision.Handled {
+			svc.postThread(ctx, command, svc.t("automation.owner_gate.resolved", map[string]any{"RunID": decision.Run.PublicID}))
+			return ChatRunResult{RunID: decision.Run.RuntimeRunID, Mode: chatRunModeAutomationOwnerGate}
+		}
+	}
+	if !svc.cfg.RuntimeReady || svc.cfg.RuntimeRunner == nil {
+		svc.postThread(ctx, command, svc.t("runtime.not_configured", nil))
 		return ChatRunResult{}
 	}
 	senderIsAgentBot := false
