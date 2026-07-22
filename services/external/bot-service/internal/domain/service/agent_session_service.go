@@ -33,6 +33,7 @@ const (
 	agentSessionStatusClosed  = "closed"
 
 	agentSessionTurnQueued    = "queued"
+	agentSessionTurnAdmitting = "admitting"
 	agentSessionTurnRunning   = "running"
 	agentSessionTurnSucceeded = "succeeded"
 	agentSessionTurnFailed    = "failed"

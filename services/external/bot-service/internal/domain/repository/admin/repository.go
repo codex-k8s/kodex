@@ -293,6 +293,7 @@ type CreateAgentSessionTurnInput struct {
 	UserID               string
 	UserName             string
 	Message              string
+	InitialStatus        string
 }
 
 type CompleteAgentSessionTurnInput struct {

@@ -522,7 +522,7 @@ order by destination, publication;
 
 ## Разрешённые форматы артефактов
 
-Имя файла, расширение и заявленный Mattermost MIME являются недоверенной metadata и не участвуют в допуске. Формат определяется только по содержимому, а локальное имя и имя доставки получают server-generated расширение из следующего allowlist. Для архивов и документов сервер не извлекает файлы на диск, не рендерит и не исполняет документы, макросы, embedded objects или иной active content.
+Имя файла, расширение и заявленный Mattermost MIME являются недоверенной metadata и не участвуют в допуске. Формат определяется только по содержимому, а локальное имя и имя доставки получают server-generated расширение из следующего allowlist. Однозначный CSV требует согласованной табличной структуры, а Markdown — однозначных синтаксических признаков; неоднозначный UTF-8 остаётся `text/plain`. Для архивов и документов сервер не извлекает файлы на диск, не рендерит и не исполняет содержимое. Макросы, VBA, ActiveX, embedded/OLE objects, скрипты, внешние связи и иной active content закрыто отклоняются.
 
 Базовые форматы:
 
@@ -583,35 +583,24 @@ Legacy OpenOffice XML:
 | `application/vnd.sun.xml.draw.template` | `.std` |
 | `application/vnd.sun.xml.math` | `.sxm` |
 
-Microsoft Office Open XML, включая шаблоны и macro-enabled варианты:
+Microsoft Office Open XML без active content:
 
 | MIME | Расширение |
 |---|---|
 | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `.docx` |
 | `application/vnd.openxmlformats-officedocument.wordprocessingml.template` | `.dotx` |
-| `application/vnd.ms-word.document.macroenabled.12` | `.docm` |
-| `application/vnd.ms-word.template.macroenabled.12` | `.dotm` |
 | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | `.xlsx` |
 | `application/vnd.openxmlformats-officedocument.spreadsheetml.template` | `.xltx` |
-| `application/vnd.ms-excel.sheet.macroenabled.12` | `.xlsm` |
-| `application/vnd.ms-excel.template.macroenabled.12` | `.xltm` |
-| `application/vnd.ms-excel.addin.macroenabled.12` | `.xlam` |
-| `application/vnd.ms-excel.sheet.binary.macroenabled.12` | `.xlsb` |
 | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | `.pptx` |
 | `application/vnd.openxmlformats-officedocument.presentationml.template` | `.potx` |
 | `application/vnd.openxmlformats-officedocument.presentationml.slideshow` | `.ppsx` |
 | `application/vnd.openxmlformats-officedocument.presentationml.slide` | `.sldx` |
-| `application/vnd.ms-powerpoint.presentation.macroenabled.12` | `.pptm` |
-| `application/vnd.ms-powerpoint.template.macroenabled.12` | `.potm` |
-| `application/vnd.ms-powerpoint.slideshow.macroenabled.12` | `.ppsm` |
-| `application/vnd.ms-powerpoint.addin.macroenabled.12` | `.ppam` |
-| `application/vnd.ms-powerpoint.slide.macroenabled.12` | `.sldm` |
 
-Legacy binary Word, Excel и PowerPoint проверяются как структурно корректные CFB-контейнеры с характерным внутренним потоком и получают канонические `.doc`, `.xls` или `.ppt`. Исторические имена шаблонов `.dot`, `.xlt`, `.pot` не восстанавливаются из недоверенного имени: содержащий макросы или шаблонные данные CFB остаётся непрозрачным и получает безопасное расширение базового семейства.
+Legacy binary Word, Excel и PowerPoint допускаются только как структурно корректные CFB-контейнеры с обязательным внутренним потоком документа и без VBA, macro, embedded/OLE, ActiveX и иных storage/stream, которые нельзя доказать пассивными. Они получают канонические `.doc`, `.xls` или `.ppt`; неоднозначный CFB закрыто отклоняется. Исторические имена шаблонов `.dot`, `.xlt`, `.pot` из недоверенного имени не восстанавливаются.
 
-ZIP-based OpenDocument/OpenOffice должен содержать первым несжатый `mimetype` без extra fields и согласованный корневой MIME в `META-INF/manifest.xml`. OOXML должен содержать единственный поддержанный main content type, ожидаемую main part, `[Content_Types].xml` и `_rels/.rels`. Общая проверка ZIP ограничена 512 entries, 32 МиБ на entry, 64 МиБ суммарного распакованного размера, отношением распакованного размера к сжатому не более 100 и чтением идентификационной записи не более 1 МиБ. ZIP64, шифрование, неизвестный compression method, duplicate/case-fold duplicate, traversal, абсолютные и malformed names, несовпадающие local/central records, лишний префикс или хвост закрыто отклоняются. Проверка выполняется в памяти в пределах объекта 8 МиБ; содержимое пакета не извлекается на файловую систему.
+ZIP-based OpenDocument/OpenOffice должен содержать первым несжатый `mimetype` без extra fields и согласованный корневой MIME в `META-INF/manifest.xml`; каталоги скриптов и Basic запрещены. OOXML должен содержать единственный поддержанный main content type, ожидаемую main part, `[Content_Types].xml` и `_rels/.rels`; active content проверяется во всех content types, parts и relationships. Общая проверка ZIP ограничена 512 entries, 32 МиБ на entry, 64 МиБ суммарного распакованного размера, отношением распакованного размера к сжатому не более 100 и чтением идентификационной записи не более 1 МиБ. ZIP64, шифрование, неизвестный compression method, duplicate/case-fold duplicate, traversal, абсолютные и malformed names, несовпадающие local/central records, лишний префикс или хвост закрыто отклоняются. Проверка выполняется в памяти в пределах объекта 8 МиБ; содержимое пакета не извлекается на файловую систему.
 
-TAR допускает только регулярные файлы и каталоги с каноническими уникальными путями, корректной структурой и завершающими нулевыми блоками. GZIP проверяется потоково в памяти с пределом 32 members и 64 МиБ распакованных данных. Неоднозначные, polyglot, усечённые и malformed образцы закрыто отклоняются.
+TAR допускает только регулярные файлы и каталоги с каноническими уникальными путями, корректной структурой и первым каноническим terminator из двух нулевых блоков; весь raw-хвост после него обязан быть нулевым. GZIP проверяется потоково в памяти с пределом 32 members и 64 МиБ распакованных данных. Неоднозначные, polyglot, усечённые и malformed образцы закрыто отклоняются.
 
 RAR, 7z, XZ, bzip2, CAB и исторические бинарные StarOffice `.sdw`/`.sdc`/`.sdd` не поддерживаются: для них в текущем контуре нет исчерпывающего ограниченного валидатора, а signature- или extension-only допуск был бы ложным.
 
@@ -622,7 +611,7 @@ RAR, 7z, XZ, bzip2, CAB и исторические бинарные StarOffice 
 3. Создайте итоговый файл внутри `MATTERCODEX_OUTPUT_DIR` и вызовите MCP-инструмент `publish_artifact` с относительным путём и устойчивым `idempotency_key`. В исходном thread должен появиться ровно один post с ровно одним файлом от bot identity роли и маркером `#notrigger`.
 4. Повторите тот же вызов с тем же `idempotency_key`: новый Mattermost post и новая artifact version создаваться не должны.
 5. Создайте отдельный синтетический текстовый файл с заведомо тестовым шаблоном секрета и вызовите `publish_artifact`. Результат должен перейти в `quarantined`, объект и Mattermost post создаваться не должны. Не используйте реальные секреты.
-6. Проверьте отказ для абсолютного пути, `../`, symlink, hardlink, FIFO, неподдерживаемого типа, девятого файла, объекта больше 8 MiB и суммарного объёма больше 32 MiB. Для контейнеров отдельно проверьте truncated/malformed ZIP, duplicate и traversal names, compression bomb, конфликт ODF manifest, отсутствующую OOXML main part, ambiguous/polyglot образец и несовпадение filename/extension/declared MIME. Также проверьте, что agent pod не содержит `env`, `envFrom` или volume с именем, ключами либо значениями artifact storage Secret или Mattermost bot token.
+6. Проверьте отказ для абсолютного пути, `../`, symlink, hardlink, FIFO, неподдерживаемого типа, девятого файла, объекта больше 8 MiB и суммарного объёма больше 32 MiB. Для контейнеров отдельно проверьте truncated/malformed ZIP, duplicate и traversal names, compression bomb, конфликт ODF manifest, отсутствующую OOXML main part, все macro-enabled расширения Office, VBA/ActiveX/embedded/external OOXML, macro/embedded CFB, TAR с payload после первого terminator, ambiguous/polyglot образец и несовпадение filename/extension/declared MIME. Также проверьте, что agent pod не содержит `env`, `envFrom` или volume с именем, ключами либо значениями artifact storage Secret или Mattermost bot token.
 
 ## Безопасность
 

@@ -660,14 +660,35 @@ select
 
 	runtimePool := openMigrationPool(t, ctx, migrationDSNForRole(t, ownerDSN, roleName, rolePassword))
 	defer runtimePool.Close()
+	var projectID, chatID, roleID, sessionID, turnID int64
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_projects(name, slug) values ('V34 artifacts', 'v34-artifacts') returning id`).Scan(&projectID); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_agent_roles(project_id, name, role_type, enabled) values ($1, 'v34-worker', 'worker', true) returning id`, projectID).Scan(&roleID); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_chats(project_id, mattermost_channel_id, name, slug) values ($1, 'v34-channel', 'V34 chat', 'v34-chat') returning id`, projectID).Scan(&chatID); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_agent_sessions(
+		session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id,
+		mattermost_root_post_id, status, ttl_seconds, expires_at
+	) values ('v34-session', $1, $2, $3, 'v34-test', 'v34-channel', 'v34-root', 'running', 3600, now() + interval '1 hour') returning id`, projectID, chatID, roleID).Scan(&sessionID); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerPool.QueryRow(ctx, `insert into matter_codex_agent_session_turns(
+		session_id, run_id, mattermost_channel_id, mattermost_root_post_id, mattermost_post_id, message, status
+	) values ($1, 'run-1', 'v34-channel', 'v34-root', 'post-1', 'v34 artifact', 'running') returning id`, sessionID).Scan(&turnID); err != nil {
+		t.Fatal(err)
+	}
 	artifactID := strings.Repeat("a", 32)
 	versionID := strings.Repeat("b", 32)
 	if _, err := runtimePool.Exec(ctx, `
 insert into matter_codex_artifacts(
-	id, project_id, chat_id, session_id, turn_id, direction,
+	id, project_id, chat_id, session_id, role_id, runtime_turn_id, turn_id, direction,
 	mattermost_post_id, mattermost_file_id, retention_until
-) values ($1, 1, 2, 3, 'run-1', 'inbound', 'post-1', 'file-1', now() + interval '90 days')
-`, artifactID); err != nil {
+) values ($1, $2, $3, $4, $5, $6, 'run-1', 'inbound', 'post-1', 'file-1', now() + interval '90 days')
+	`, artifactID, projectID, chatID, sessionID, roleID, turnID); err != nil {
 		t.Fatalf("runtime insert v34 artifact: %v", err)
 	}
 	if _, err := runtimePool.Exec(ctx, `
@@ -675,15 +696,15 @@ insert into matter_codex_artifact_versions(
 	id, artifact_id, storage_key, original_name, safe_name, media_type,
 	declared_media_type, size_bytes, sha256, state
 ) values ($1, $2, $3, 'input.txt', $4, 'text/plain', 'text/plain', 4, $5, 'uploading')
-`, versionID, artifactID, "projects/1/sessions/3/artifacts/"+artifactID+"/versions/"+versionID, "1-"+versionID+".txt", strings.Repeat("c", 64)); err != nil {
+	`, versionID, artifactID, fmt.Sprintf("projects/%d/sessions/%d/artifacts/%s/versions/%s", projectID, sessionID, artifactID, versionID), "1-"+versionID+".txt", strings.Repeat("c", 64)); err != nil {
 		t.Fatalf("runtime insert v34 version: %v", err)
 	}
 	if _, err := runtimePool.Exec(ctx, `
 insert into matter_codex_message_artifact_bindings(
-	artifact_version_id, project_id, chat_id, session_id, turn_id,
+	artifact_version_id, project_id, chat_id, session_id, role_id, runtime_turn_id, turn_id,
 	mattermost_post_id, mattermost_file_id, direction, ordinal
-) values ($1, 1, 2, 3, 'run-1', 'post-1', 'file-1', 'inbound', 1)
-`, versionID); err != nil {
+) values ($1, $2, $3, $4, $5, $6, 'run-1', 'post-1', 'file-1', 'inbound', 1)
+	`, versionID, projectID, chatID, sessionID, roleID, turnID); err != nil {
 		t.Fatalf("runtime insert v34 binding: %v", err)
 	}
 	if _, err := runtimePool.Exec(ctx, `update matter_codex_artifact_versions set state = 'scanning', updated_at = now() where id = $1`, versionID); err != nil {
@@ -694,10 +715,10 @@ insert into matter_codex_message_artifact_bindings(
 	}
 	if _, err := runtimePool.Exec(ctx, `
 insert into matter_codex_message_artifact_bindings(
-	artifact_version_id, project_id, chat_id, session_id, turn_id,
+	artifact_version_id, project_id, chat_id, session_id, role_id, runtime_turn_id, turn_id,
 	mattermost_post_id, mattermost_file_id, direction, ordinal
-) values ($1, 99, 2, 3, 'run-foreign', 'post-1', 'file-1', 'inbound', 1)
-`, versionID); err == nil {
+) values ($1, 999999, $2, $3, $4, $5, 'run-1', 'post-1', 'file-1', 'inbound', 1)
+	`, versionID, chatID, sessionID, roleID, turnID); err == nil {
 		t.Fatal("runtime role создала cross-scope v34 binding")
 	}
 	if _, err := runtimePool.Exec(ctx, `delete from matter_codex_artifacts where id = $1`, artifactID); err == nil {

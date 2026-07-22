@@ -71,6 +71,9 @@ func detectCompoundOffice(body []byte) (string, error) {
 		return "", ErrDenied
 	}
 	for family, entry := range families {
+		if !passiveCompoundOfficeDirectory(file, family) {
+			return "", ErrDenied
+		}
 		prefix, readErr := file.readStreamPrefix(entry, 32)
 		if readErr != nil {
 			return "", ErrDenied
@@ -94,6 +97,38 @@ func detectCompoundOffice(body []byte) (string, error) {
 		}
 	}
 	return "", ErrDenied
+}
+
+func passiveCompoundOfficeDirectory(file *compoundFile, family string) bool {
+	allowed := map[string]map[string]struct{}{
+		"word": {
+			"root entry": {}, "worddocument": {}, "0table": {}, "1table": {}, "data": {},
+			"\x05summaryinformation": {}, "\x05documentsummaryinformation": {},
+		},
+		"excel": {
+			"root entry": {}, "workbook": {}, "book": {},
+			"\x05summaryinformation": {}, "\x05documentsummaryinformation": {},
+		},
+		"powerpoint": {
+			"root entry": {}, "powerpoint document": {}, "current user": {}, "pictures": {},
+			"\x05summaryinformation": {}, "\x05documentsummaryinformation": {},
+		},
+	}[family]
+	if len(allowed) == 0 {
+		return false
+	}
+	for _, entry := range file.directory {
+		if entry.objectType == 0 {
+			continue
+		}
+		if entry.objectType == 1 {
+			return false
+		}
+		if _, ok := allowed[strings.ToLower(entry.name)]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func parseCompoundFile(body []byte) (*compoundFile, error) {

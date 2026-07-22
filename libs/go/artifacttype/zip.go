@@ -51,6 +51,9 @@ func detectZIPPackage(body []byte) (string, error) {
 			if string(mimetype) != format.MediaType || len(container.localOrder) == 0 || container.localOrder[0] != "mimetype" || mimetypeFile.Method != zip.Store || container.localExtraLengths["mimetype"] != 0 {
 				return "", ErrDenied
 			}
+			if hasActivePackagePart(container) {
+				return "", ErrDenied
+			}
 			manifestFile, exists := container.files["META-INF/manifest.xml"]
 			if !exists {
 				return "", ErrDenied
@@ -73,6 +76,9 @@ func detectZIPPackage(body []byte) (string, error) {
 		}
 		format, identifyErr := identifyOOXML(container, contentTypes)
 		if identifyErr != nil {
+			return "", ErrDenied
+		}
+		if validateOOXMLPassivePackage(container) != nil {
 			return "", ErrDenied
 		}
 		return format.MediaType, nil
@@ -368,20 +374,24 @@ func identifyOOXML(container checkedZIP, body []byte) (Format, error) {
 			}
 			rootSeen = true
 		}
-		if start.Name.Local != "Override" {
+		if start.Name.Local != "Override" && start.Name.Local != "Default" {
 			continue
 		}
 		if start.Name.Space != "http://schemas.openxmlformats.org/package/2006/content-types" {
 			return Format{}, ErrDenied
 		}
+		contentType := normalizeMediaType(attributeValue(start.Attr, "ContentType"))
+		if activeOOXMLContentType(contentType) {
+			return Format{}, ErrDenied
+		}
+		if start.Name.Local == "Default" {
+			continue
+		}
 		partName := ""
-		contentType := ""
 		for _, attribute := range start.Attr {
 			switch attribute.Name.Local {
 			case "PartName":
 				partName = strings.TrimPrefix(attribute.Value, "/")
-			case "ContentType":
-				contentType = normalizeMediaType(attribute.Value)
 			}
 		}
 		if !strings.HasPrefix(attributeValue(start.Attr, "PartName"), "/") || !validContainerPath(partName, false) {
@@ -461,4 +471,108 @@ func attributeValue(attributes []xml.Attr, localName string) string {
 		}
 	}
 	return ""
+}
+
+func hasActivePackagePart(container checkedZIP) bool {
+	for name := range container.files {
+		lower := strings.ToLower(strings.TrimSuffix(name, "/"))
+		for _, prefix := range []string{"basic/", "scripts/", "meta-inf/scripts.xml", "meta-inf/basic-script-lc.xml"} {
+			if lower == strings.TrimSuffix(prefix, "/") || strings.HasPrefix(lower, prefix) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func validateOOXMLPassivePackage(container checkedZIP) error {
+	for name, file := range container.files {
+		if activeOOXMLPartName(name) {
+			return ErrDenied
+		}
+		if !strings.HasSuffix(strings.ToLower(name), ".rels") {
+			continue
+		}
+		body, err := readZIPEntry(file, maxIdentificationEntryBytes)
+		if err != nil || !validPassiveOOXMLRelationships(body) {
+			return ErrDenied
+		}
+	}
+	return nil
+}
+
+func activeOOXMLPartName(name string) bool {
+	lower := strings.ToLower(strings.TrimSuffix(name, "/"))
+	if strings.HasSuffix(lower, ".bin") {
+		return true
+	}
+	for _, marker := range []string{
+		"/activex/", "/embeddings/", "/externallinks/", "/macros/", "/customui/", "/webextensions/",
+		"/ctrlprops/", "/macrosheets/", "/dialogsheets/", "/querytables/", "/model/",
+	} {
+		if strings.Contains("/"+lower+"/", marker) {
+			return true
+		}
+	}
+	for _, suffix := range []string{"/connections.xml", "/attachedtoolbars.xml"} {
+		if strings.HasSuffix("/"+lower, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func activeOOXMLContentType(contentType string) bool {
+	for _, marker := range []string{"macroenabled", "vbaproject", "activex", "oleobject", "external", "ms-excel.sheet.binary", "x-msdownload"} {
+		if strings.Contains(contentType, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func validPassiveOOXMLRelationships(body []byte) bool {
+	decoder := xml.NewDecoder(bytes.NewReader(body))
+	tokens := 0
+	rootSeen := false
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil || tokens >= 20_000 {
+			return false
+		}
+		tokens++
+		start, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		if !rootSeen {
+			if start.Name.Local != "Relationships" || start.Name.Space != "http://schemas.openxmlformats.org/package/2006/relationships" {
+				return false
+			}
+			rootSeen = true
+		}
+		if start.Name.Local != "Relationship" {
+			continue
+		}
+		if start.Name.Space != "http://schemas.openxmlformats.org/package/2006/relationships" {
+			return false
+		}
+		if strings.TrimSpace(attributeValue(start.Attr, "TargetMode")) != "" {
+			return false
+		}
+		target := strings.ToLower(strings.TrimSpace(attributeValue(start.Attr, "Target")))
+		if target == "" || strings.Contains(target, "://") || strings.HasPrefix(target, "//") || strings.HasPrefix(target, "file:") || strings.HasPrefix(target, "data:") || strings.HasPrefix(target, "javascript:") || strings.HasPrefix(target, "mailto:") {
+			return false
+		}
+		relationshipType := strings.ToLower(attributeValue(start.Attr, "Type"))
+		for _, marker := range []string{"vbaproject", "activex", "oleobject", "external", "attachedtemplate", "hyperlink", "afchunk", "/package", "webextension", "control"} {
+			if strings.Contains(relationshipType, marker) {
+				return false
+			}
+		}
+	}
+	return rootSeen
 }

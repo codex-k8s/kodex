@@ -69,23 +69,12 @@ application/vnd.sun.xml.draw.template=.std
 application/vnd.sun.xml.math=.sxm
 application/vnd.openxmlformats-officedocument.wordprocessingml.document=.docx
 application/vnd.openxmlformats-officedocument.wordprocessingml.template=.dotx
-application/vnd.ms-word.document.macroenabled.12=.docm
-application/vnd.ms-word.template.macroenabled.12=.dotm
 application/vnd.openxmlformats-officedocument.spreadsheetml.sheet=.xlsx
 application/vnd.openxmlformats-officedocument.spreadsheetml.template=.xltx
-application/vnd.ms-excel.sheet.macroenabled.12=.xlsm
-application/vnd.ms-excel.template.macroenabled.12=.xltm
-application/vnd.ms-excel.addin.macroenabled.12=.xlam
-application/vnd.ms-excel.sheet.binary.macroenabled.12=.xlsb
 application/vnd.openxmlformats-officedocument.presentationml.presentation=.pptx
 application/vnd.openxmlformats-officedocument.presentationml.template=.potx
 application/vnd.openxmlformats-officedocument.presentationml.slideshow=.ppsx
 application/vnd.openxmlformats-officedocument.presentationml.slide=.sldx
-application/vnd.ms-powerpoint.presentation.macroenabled.12=.pptm
-application/vnd.ms-powerpoint.template.macroenabled.12=.potm
-application/vnd.ms-powerpoint.slideshow.macroenabled.12=.ppsm
-application/vnd.ms-powerpoint.addin.macroenabled.12=.ppam
-application/vnd.ms-powerpoint.slide.macroenabled.12=.sldm
 `)
 	actual := make(map[string]string, len(SupportedFormats()))
 	for _, format := range SupportedFormats() {
@@ -99,6 +88,32 @@ application/vnd.ms-powerpoint.slide.macroenabled.12=.sldm
 		if len(parts) != 2 || actual[parts[0]] != parts[1] {
 			t.Errorf("allowlist[%q] = %q, ожидалось %q", parts[0], actual[parts[0]], parts[1])
 		}
+	}
+}
+
+func TestDetectContentBasedTextFormats(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		body      string
+		mediaType string
+		extension string
+	}{
+		{name: "CSV", body: "name,count\nalpha,1\nbeta,2\n", mediaType: "text/csv", extension: ".csv"},
+		{name: "CSV Unicode", body: "имя,значение\nальфа,1\nбета,2\n", mediaType: "text/csv", extension: ".csv"},
+		{name: "Markdown heading", body: "# Заголовок\n\nПроверяемый текст.\n", mediaType: "text/markdown", extension: ".md"},
+		{name: "Markdown list Unicode", body: "- первый пункт\n- второй пункт\n", mediaType: "text/markdown", extension: ".md"},
+		{name: "ambiguous comma prose", body: "hello, world\ngoodbye, moon\n", mediaType: "text/plain", extension: ".txt"},
+		{name: "ambiguous heading", body: "#not-a-heading", mediaType: "text/plain", extension: ".txt"},
+		{name: "ordinary Unicode", body: "Обычный однозначно неструктурированный текст.", mediaType: "text/plain", extension: ".txt"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assertDetectedFormat(t, []byte(test.body), test.mediaType, test.extension)
+		})
+	}
+	if _, err := DetectBytes(bytes.Repeat([]byte("x"), int(MaxObjectBytes)+1)); err == nil {
+		t.Fatal("текст сверх server-owned предела принят")
 	}
 }
 
@@ -148,29 +163,51 @@ func TestDetectSupportedOOXMLPackages(t *testing.T) {
 	tests := []formatCase{
 		{mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", extension: ".docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml", mainPart: "word/document.xml"},
 		{mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.template", extension: ".dotx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml", mainPart: "word/document.xml"},
-		{mediaType: "application/vnd.ms-word.document.macroenabled.12", extension: ".docm", contentType: "application/vnd.ms-word.document.macroEnabled.main+xml", mainPart: "word/document.xml"},
-		{mediaType: "application/vnd.ms-word.template.macroenabled.12", extension: ".dotm", contentType: "application/vnd.ms-word.template.macroEnabledTemplate.main+xml", mainPart: "word/document.xml"},
 		{mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", extension: ".xlsx", contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml", mainPart: "xl/workbook.xml"},
 		{mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.template", extension: ".xltx", contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml", mainPart: "xl/workbook.xml"},
-		{mediaType: "application/vnd.ms-excel.sheet.macroenabled.12", extension: ".xlsm", contentType: "application/vnd.ms-excel.sheet.macroEnabled.main+xml", mainPart: "xl/workbook.xml"},
-		{mediaType: "application/vnd.ms-excel.template.macroenabled.12", extension: ".xltm", contentType: "application/vnd.ms-excel.template.macroEnabled.main+xml", mainPart: "xl/workbook.xml"},
-		{mediaType: "application/vnd.ms-excel.addin.macroenabled.12", extension: ".xlam", contentType: "application/vnd.ms-excel.addin.macroEnabled.main+xml", mainPart: "xl/workbook.xml"},
-		{mediaType: "application/vnd.ms-excel.sheet.binary.macroenabled.12", extension: ".xlsb", contentType: "application/vnd.ms-excel.sheet.binary.macroEnabled.main", mainPart: "xl/workbook.bin"},
 		{mediaType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", extension: ".pptx", contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml", mainPart: "ppt/presentation.xml"},
 		{mediaType: "application/vnd.openxmlformats-officedocument.presentationml.template", extension: ".potx", contentType: "application/vnd.openxmlformats-officedocument.presentationml.template.main+xml", mainPart: "ppt/presentation.xml"},
 		{mediaType: "application/vnd.openxmlformats-officedocument.presentationml.slideshow", extension: ".ppsx", contentType: "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml", mainPart: "ppt/presentation.xml"},
 		{mediaType: "application/vnd.openxmlformats-officedocument.presentationml.slide", extension: ".sldx", contentType: "application/vnd.openxmlformats-officedocument.presentationml.slide+xml", mainPart: "ppt/slides/slide1.xml"},
-		{mediaType: "application/vnd.ms-powerpoint.presentation.macroenabled.12", extension: ".pptm", contentType: "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml", mainPart: "ppt/presentation.xml"},
-		{mediaType: "application/vnd.ms-powerpoint.template.macroenabled.12", extension: ".potm", contentType: "application/vnd.ms-powerpoint.template.macroEnabled.main+xml", mainPart: "ppt/presentation.xml"},
-		{mediaType: "application/vnd.ms-powerpoint.slideshow.macroenabled.12", extension: ".ppsm", contentType: "application/vnd.ms-powerpoint.slideshow.macroEnabled.main+xml", mainPart: "ppt/presentation.xml"},
-		{mediaType: "application/vnd.ms-powerpoint.addin.macroenabled.12", extension: ".ppam", contentType: "application/vnd.ms-powerpoint.addin.macroEnabled.main+xml", mainPart: "ppt/presentation.xml"},
-		{mediaType: "application/vnd.ms-powerpoint.slide.macroenabled.12", extension: ".sldm", contentType: "application/vnd.ms-powerpoint.slide.macroEnabled.main+xml", mainPart: "ppt/slides/slide1.xml"},
 	}
 	for _, test := range tests {
 		t.Run(test.extension, func(t *testing.T) {
 			body := ooxmlFixture(t, test.contentType, test.mainPart, nil)
 			assertDetectedFormat(t, body, test.mediaType, test.extension)
 		})
+	}
+}
+
+func TestRejectsMacroEnabledAndActiveOOXML(t *testing.T) {
+	t.Parallel()
+	macroFormats := []formatCase{
+		{extension: ".docm", contentType: "application/vnd.ms-word.document.macroEnabled.main+xml", mainPart: "word/document.xml"},
+		{extension: ".dotm", contentType: "application/vnd.ms-word.template.macroEnabledTemplate.main+xml", mainPart: "word/document.xml"},
+		{extension: ".xlsm", contentType: "application/vnd.ms-excel.sheet.macroEnabled.main+xml", mainPart: "xl/workbook.xml"},
+		{extension: ".xltm", contentType: "application/vnd.ms-excel.template.macroEnabled.main+xml", mainPart: "xl/workbook.xml"},
+		{extension: ".xlam", contentType: "application/vnd.ms-excel.addin.macroEnabled.main+xml", mainPart: "xl/workbook.xml"},
+		{extension: ".xlsb", contentType: "application/vnd.ms-excel.sheet.binary.macroEnabled.main", mainPart: "xl/workbook.bin"},
+		{extension: ".pptm", contentType: "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml", mainPart: "ppt/presentation.xml"},
+		{extension: ".potm", contentType: "application/vnd.ms-powerpoint.template.macroEnabled.main+xml", mainPart: "ppt/presentation.xml"},
+		{extension: ".ppsm", contentType: "application/vnd.ms-powerpoint.slideshow.macroEnabled.main+xml", mainPart: "ppt/presentation.xml"},
+		{extension: ".ppam", contentType: "application/vnd.ms-powerpoint.addin.macroEnabled.main+xml", mainPart: "ppt/presentation.xml"},
+		{extension: ".sldm", contentType: "application/vnd.ms-powerpoint.slide.macroEnabled.main+xml", mainPart: "ppt/slides/slide1.xml"},
+	}
+	for _, test := range macroFormats {
+		t.Run(test.extension, func(t *testing.T) {
+			assertDenied(t, ooxmlFixture(t, test.contentType, test.mainPart, nil))
+		})
+	}
+	contentType := "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
+	mainPart := "word/document.xml"
+	externalRelationships := `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/" TargetMode="External"/></Relationships>`
+	for name, body := range map[string][]byte{
+		"VBA":      ooxmlFixture(t, contentType, mainPart, map[string][]byte{"word/vbaProject.bin": []byte("macro")}),
+		"ActiveX":  ooxmlFixture(t, contentType, mainPart, map[string][]byte{"word/activeX/activeX1.xml": []byte("control")}),
+		"embedded": ooxmlFixture(t, contentType, mainPart, map[string][]byte{"word/embeddings/oleObject1.bin": []byte("object")}),
+		"external": ooxmlFixture(t, contentType, mainPart, map[string][]byte{"_rels/.rels": []byte(externalRelationships)}),
+	} {
+		t.Run(name, func(t *testing.T) { assertDenied(t, body) })
 	}
 }
 
@@ -194,6 +231,16 @@ func TestDetectLegacyBinaryMicrosoftOffice(t *testing.T) {
 	}
 }
 
+func TestRejectsActiveOrAmbiguousCompoundOffice(t *testing.T) {
+	t.Parallel()
+	base := compoundFixture(t, "WordDocument", []byte{0xec, 0xa5, 0xc1, 0x00, 0, 0, 0, 0, 0, 0, 0, 0})
+	for _, name := range []string{"VBA", "Macros", "_VBA_PROJECT_CUR", "ObjectPool", "Embedded Objects", "ActiveX", "\x01Ole10Native"} {
+		t.Run(name, func(t *testing.T) {
+			assertDenied(t, compoundFixtureWithDirectoryEntry(t, base, name, 1))
+		})
+	}
+}
+
 func TestDetectSupportedArchiveContainers(t *testing.T) {
 	t.Parallel()
 	zipBody := zipFixture(t, []zipFixtureEntry{{name: "payload.txt", body: []byte("payload")}})
@@ -207,6 +254,7 @@ func TestDetectSupportedArchiveContainers(t *testing.T) {
 	}{
 		{name: "zip", body: zipBody, mediaType: "application/zip", extension: ".zip"},
 		{name: "tar", body: tarBody, mediaType: "application/x-tar", extension: ".tar"},
+		{name: "tar with zero content block", body: tarFixtureWithBody(t, make([]byte, 1024)), mediaType: "application/x-tar", extension: ".tar"},
 		{name: "gzip", body: gzipBody, mediaType: "application/gzip", extension: ".gz"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -243,6 +291,7 @@ func TestRejectsMalformedAmbiguousAndHostileContainers(t *testing.T) {
 		"odf without content":     packageFixture(t, "application/vnd.oasis.opendocument.text", map[string][]byte{"content.xml": nil}),
 		"odf manifest mismatch":   packageFixture(t, "application/vnd.oasis.opendocument.text", map[string][]byte{"META-INF/manifest.xml": []byte(packageManifest("application/vnd.oasis.opendocument.spreadsheet"))}),
 		"odf manifest namespace":  packageFixture(t, "application/vnd.oasis.opendocument.text", map[string][]byte{"META-INF/manifest.xml": []byte(strings.ReplaceAll(packageManifest("application/vnd.oasis.opendocument.text"), "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0", "urn:example:invalid"))}),
+		"odf active script":       packageFixture(t, "application/vnd.oasis.opendocument.text", map[string][]byte{"Scripts/python/macro.py": []byte("print('active')")}),
 		"ooxml missing main part": ooxmlFixture(t, "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml", "word/document.xml", map[string][]byte{"word/document.xml": nil}),
 		"ooxml malformed xml":     replaceZIPEntry(t, validOOXML, "[Content_Types].xml", []byte("<Types>")),
 		"ooxml missing root rel":  replaceZIPEntry(t, validOOXML, "_rels/.rels", []byte(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`)),
@@ -251,6 +300,9 @@ func TestRejectsMalformedAmbiguousAndHostileContainers(t *testing.T) {
 		"truncated compound":      compoundFixture(t, "WordDocument", []byte{0xec, 0xa5})[:512],
 		"truncated gzip":          gzipFixture(t)[:12],
 		"truncated tar":           tarFixture(t)[:700],
+		"prefixed tar polyglot":   append([]byte("prefix"), tarFixture(t)...),
+		"tar trailing payload":    append(append(append([]byte(nil), tarFixture(t)...), bytes.Repeat([]byte{0x41}, 512)...), make([]byte, 1024)...),
+		"tar trailing block":      append(append([]byte(nil), tarFixture(t)...), bytes.Repeat([]byte{0x42}, 512)...),
 	}
 	for name, body := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -258,6 +310,13 @@ func TestRejectsMalformedAmbiguousAndHostileContainers(t *testing.T) {
 				t.Fatalf("DetectBytes() = %q, ожидался закрытый отказ", mediaType)
 			}
 		})
+	}
+}
+
+func assertDenied(t *testing.T, body []byte) {
+	t.Helper()
+	if mediaType, err := DetectBytes(body); err == nil {
+		t.Fatalf("DetectBytes() = %q, ожидался закрытый отказ", mediaType)
 	}
 }
 
@@ -466,10 +525,13 @@ func manyZIPEntries(count int) []zipFixtureEntry {
 }
 
 func tarFixture(t *testing.T) []byte {
+	return tarFixtureWithBody(t, []byte("payload"))
+}
+
+func tarFixtureWithBody(t *testing.T, body []byte) []byte {
 	t.Helper()
 	var buffer bytes.Buffer
 	writer := tar.NewWriter(&buffer)
-	body := []byte("payload")
 	if err := writer.WriteHeader(&tar.Header{Name: "payload.txt", Mode: 0o600, Size: int64(len(body)), Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}); err != nil {
 		t.Fatal(err)
 	}
@@ -535,6 +597,15 @@ func compoundFixture(t *testing.T, streamName string, prefix []byte) []byte {
 	binary.LittleEndian.PutUint32(fat[9*4:9*4+4], cfbEndOfChain)
 	copy(body[3*sectorSize:], prefix)
 	return body
+}
+
+func compoundFixtureWithDirectoryEntry(t *testing.T, body []byte, name string, objectType byte) []byte {
+	t.Helper()
+	result := append([]byte(nil), body...)
+	directory := result[512:1024]
+	binary.LittleEndian.PutUint32(directory[128+72:128+76], 2)
+	writeCompoundDirectoryEntry(directory[256:384], name, objectType, cfbEndOfChain, 0)
+	return result
 }
 
 func writeCompoundDirectoryEntry(target []byte, name string, objectType byte, startSector uint32, size uint64) {

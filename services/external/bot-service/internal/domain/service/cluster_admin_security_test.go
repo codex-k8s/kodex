@@ -7,11 +7,26 @@ import (
 	"testing"
 	"time"
 
+	domainartifact "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/artifact"
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
+
+type recordingTurnArtifacts struct {
+	inputs     []domainartifact.IngestInput
+	failBefore int
+}
+
+func (artifacts *recordingTurnArtifacts) IngestIncoming(_ context.Context, input domainartifact.IngestInput) (domainartifact.Manifest, error) {
+	artifacts.inputs = append(artifacts.inputs, input)
+	if artifacts.failBefore > 0 {
+		artifacts.failBefore--
+		return domainartifact.Manifest{}, errors.New("synthetic artifact ingest failure")
+	}
+	return domainartifact.Manifest{SchemaVersion: domainartifact.ManifestSchemaVersion, TurnID: input.Scope.TurnID}, nil
+}
 
 type countingConversationReader struct {
 	threadCalls int
@@ -637,12 +652,14 @@ func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testi
 	}
 	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, denyGuardAt: 3}
 	runner := &fakeRuntimeRunner{}
+	artifacts := &recordingTurnArtifacts{}
 	svc := NewChatRunService(ChatRunServiceConfig{
-		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+		Store: store, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true, Artifacts: artifacts,
 	})
 	_, err := svc.EnqueueAgentTurn(context.Background(), AgentTurnRequest{
 		Project: project, Chat: chat, Role: role, UserID: "owner-id", UserName: "owner",
-		UserMessage: "continue", ReplyRootID: "root-existing", SessionRootID: "root-existing", SessionScope: agentSessionScopeThreadRole,
+		UserMessage: "continue", SourcePostID: "post-1", FileIDs: []string{"file-1"},
+		ReplyRootID: "root-existing", SessionRootID: "root-existing", SessionScope: agentSessionScopeThreadRole,
 	})
 	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
 		t.Fatalf("EnqueueAgentTurn() error = %v", err)
@@ -650,8 +667,98 @@ func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testi
 	if store.guardCalls != 3 || store.guardInputs[2].Operation != "agent_turn.persist.side_effect" || store.guardInputs[2].SessionKey != sessionKey {
 		t.Fatalf("final guard = %#v", store.guardInputs)
 	}
-	if len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 || len(runner.sessionRuns) != 0 {
-		t.Fatalf("denied final guard caused side effects: turns=%#v runs=%#v runtime=%#v", baseStore.sessionTurns, baseStore.agentRuns, runner.sessionRuns)
+	if len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 || len(runner.sessionRuns) != 0 || len(artifacts.inputs) != 0 {
+		t.Fatalf("denied final guard caused side effects: turns=%#v runs=%#v runtime=%#v artifacts=%#v", baseStore.sessionTurns, baseStore.agentRuns, runner.sessionRuns, artifacts.inputs)
+	}
+}
+
+func TestArtifactIngestStartsOnlyAfterDurableTurnAndRecoversWithSameIdentity(t *testing.T) {
+	baseStore := chatRuntimeStore()
+	project := baseStore.projects[1]
+	role := entity.AgentRole{ID: 1, ProjectID: project.ID, Name: "worker", RoleType: "worker", OpenAIAccountName: "main", Enabled: true}
+	chat := entity.Chat{
+		ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Admin", Slug: "admin-chat", ChatType: "single_custom",
+	}
+	sessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-existing")
+	baseStore.agentRoles[role.ID] = role
+	baseStore.chats[chat.ID] = chat
+	baseStore.setChatBindings(chat.ID, []int64{role.ID}, nil)
+	baseStore.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID: 1, SessionKey: sessionKey, ProjectID: project.ID, ChatID: chat.ID, RoleID: role.ID,
+			SessionScope: agentSessionScopeThreadRole, MattermostChannelID: chat.MattermostChannelID,
+			MattermostRootPostID: "root-existing", OpenAIAccountName: "main", Status: agentSessionStatusRunning,
+			KubernetesNamespace: "synthetic", PodName: "synthetic-pod", PVCName: "synthetic-pvc",
+			TokenSecretRef: "synthetic-session-token", TTLSeconds: defaultThreadSessionTTLSeconds,
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	artifacts := &recordingTurnArtifacts{failBefore: 1}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: baseStore, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true, Artifacts: artifacts,
+	})
+	request := AgentTurnRequest{
+		Project: project, Chat: chat, Role: role, UserID: "owner-id", UserName: "owner",
+		UserMessage: "continue", SourcePostID: "post-1", FileIDs: []string{"file-1"}, RequestedRunID: "artifact-retry",
+		ReplyRootID: "root-existing", SessionRootID: "root-existing", SessionScope: agentSessionScopeThreadRole,
+	}
+	if _, err := svc.EnqueueAgentTurn(context.Background(), request); err == nil {
+		t.Fatal("первая попытка должна вернуть ошибку сохранения артефакта")
+	} else if len(artifacts.inputs) == 0 {
+		t.Fatalf("первая попытка завершилась до artifact ingest: %v", err)
+	}
+	if len(baseStore.sessionTurns) != 1 || baseStore.sessionTurns[0].Status != agentSessionTurnAdmitting || len(artifacts.inputs) != 1 {
+		t.Fatalf("первая попытка не сохранила recoverable turn: turns=%#v artifacts=%#v", baseStore.sessionTurns, artifacts.inputs)
+	}
+	if artifacts.inputs[0].Scope.RuntimeTurnID != baseStore.sessionTurns[0].ID || artifacts.inputs[0].Scope.TurnID != baseStore.sessionTurns[0].RunID {
+		t.Fatalf("artifact scope не совпадает с durable turn: input=%#v turn=%#v", artifacts.inputs[0].Scope, baseStore.sessionTurns[0])
+	}
+	queued, err := svc.EnqueueAgentTurn(context.Background(), request)
+	if err != nil {
+		t.Fatalf("повтор EnqueueAgentTurn() error = %v", err)
+	}
+	if queued.TurnID != baseStore.sessionTurns[0].ID || len(baseStore.sessionTurns) != 1 || len(artifacts.inputs) != 2 {
+		t.Fatalf("повтор создал дубликат: queued=%#v turns=%#v artifacts=%d runtime=%d", queued, baseStore.sessionTurns, len(artifacts.inputs), len(runner.sessionRuns))
+	}
+	if baseStore.sessionTurns[0].Status != agentSessionTurnQueued || artifacts.inputs[1].Scope.RuntimeTurnID != artifacts.inputs[0].Scope.RuntimeTurnID {
+		t.Fatalf("повтор не завершил тот же admitted turn: turn=%#v inputs=%#v", baseStore.sessionTurns[0], artifacts.inputs)
+	}
+}
+
+func TestCreateAgentSessionTurnFailureHasNoArtifactSideEffects(t *testing.T) {
+	baseStore := chatRuntimeStore()
+	project := baseStore.projects[1]
+	role := entity.AgentRole{ID: 1, ProjectID: project.ID, Name: "worker", RoleType: "worker", OpenAIAccountName: "main", Enabled: true}
+	chat := entity.Chat{ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Worker", Slug: "worker-chat", ChatType: "single_custom"}
+	sessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-existing")
+	baseStore.agentRoles[role.ID] = role
+	baseStore.chats[chat.ID] = chat
+	baseStore.setChatBindings(chat.ID, []int64{role.ID}, nil)
+	baseStore.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID: 1, SessionKey: sessionKey, ProjectID: project.ID, ChatID: chat.ID, RoleID: role.ID,
+			SessionScope: agentSessionScopeThreadRole, MattermostChannelID: chat.MattermostChannelID,
+			MattermostRootPostID: "root-existing", OpenAIAccountName: "main", Status: agentSessionStatusRunning,
+			KubernetesNamespace: "synthetic", PodName: "synthetic-pod", PVCName: "synthetic-pvc",
+			TokenSecretRef: "synthetic-session-token", TTLSeconds: defaultThreadSessionTTLSeconds,
+		},
+	}
+	baseStore.createTurnErr = errors.New("synthetic create turn failure")
+	artifacts := &recordingTurnArtifacts{}
+	runner := &fakeRuntimeRunner{}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: baseStore, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true, Artifacts: artifacts,
+	})
+	_, err := svc.EnqueueAgentTurn(context.Background(), AgentTurnRequest{
+		Project: project, Chat: chat, Role: role, UserID: "owner-id", UserName: "owner",
+		UserMessage: "continue", SourcePostID: "post-1", FileIDs: []string{"file-1"},
+		ReplyRootID: "root-existing", SessionRootID: "root-existing", SessionScope: agentSessionScopeThreadRole,
+	})
+	if err == nil {
+		t.Fatal("ошибка CreateAgentSessionTurn должна быть возвращена")
+	}
+	if len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 || len(artifacts.inputs) != 0 {
+		t.Fatalf("ошибка turn оставила side effects: turns=%#v runs=%#v runtime=%#v artifacts=%#v", baseStore.sessionTurns, baseStore.agentRuns, runner.sessionRuns, artifacts.inputs)
 	}
 }
 

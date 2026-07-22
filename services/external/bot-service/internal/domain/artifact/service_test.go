@@ -118,6 +118,65 @@ func TestServiceVerticalFlowAndIdempotency(t *testing.T) {
 	}
 }
 
+func TestServiceUsesCanonicalMarkdownAndCSVForIngestAndPublish(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repository := newMemoryArtifactRepository()
+	objects := &memoryObjectStore{objects: map[string][]byte{}}
+	source := &memoryIncomingSource{
+		metadata: map[string]SourceFile{
+			"csv": {FileID: "csv", PostID: "post-1", ChannelID: "channel-1", CreatorID: "user-1", OriginalName: "неверное.exe", DeclaredMediaType: "application/octet-stream"},
+			"md":  {FileID: "md", PostID: "post-1", ChannelID: "channel-1", CreatorID: "user-1", OriginalName: "неверное.csv", DeclaredMediaType: "text/csv"},
+		},
+		bodies: map[string][]byte{
+			"csv": []byte("имя,значение\nальфа,1\nбета,2\n"),
+			"md":  []byte("# Отчёт\n\nПроверяемый текст.\n"),
+		},
+	}
+	delivery := &memoryMattermostDelivery{}
+	service, err := NewService(ServiceConfig{Repository: repository, Source: source, ObjectStore: objects, Delivery: delivery})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := testArtifactScope("run-content-text")
+	manifest, err := service.IngestIncoming(ctx, IngestInput{
+		Scope: scope, SourcePostID: "post-1", SourceUserID: "user-1", FileIDs: []string{"csv", "md"},
+	})
+	if err != nil {
+		t.Fatalf("IngestIncoming() error = %v", err)
+	}
+	wantExtensions := map[string]string{"text/csv": ".csv", "text/markdown": ".md"}
+	if len(manifest.Files) != len(wantExtensions) {
+		t.Fatalf("manifest = %#v", manifest)
+	}
+	for _, entry := range manifest.Files {
+		extension, ok := wantExtensions[entry.MediaType]
+		if !ok || !strings.HasSuffix(entry.LocalPath, extension) {
+			t.Fatalf("ingest не использовал канонический MIME/extension: %#v", entry)
+		}
+	}
+	for key, body := range map[string]string{
+		"csv-output": "имя,значение\nальфа,1\nбета,2\n",
+		"md-output":  "# Итог\n\nПроверяемый результат.\n",
+	} {
+		result, err := service.PublishOutgoing(ctx, PublishInput{
+			Scope: scope, IdempotencyKey: key, OriginalName: "недоверенное.bin", BotTokenSecretRef: "role-bot-secret", Body: strings.NewReader(body),
+		})
+		if err != nil || result.State != DeliveryDelivered {
+			t.Fatalf("PublishOutgoing(%s) result=%#v error=%v", key, result, err)
+		}
+	}
+	outboundTypes := map[string]bool{}
+	for _, version := range repository.versions {
+		if version.Direction == DirectionOutbound {
+			outboundTypes[version.MediaType] = true
+		}
+	}
+	if !outboundTypes["text/csv"] || !outboundTypes["text/markdown"] || delivery.uploads != 2 || delivery.publishes != 2 {
+		t.Fatalf("publish не сохранил канонические text formats: types=%#v uploads=%d publishes=%d", outboundTypes, delivery.uploads, delivery.publishes)
+	}
+}
+
 func TestServiceRejectsLimitsMediaAndQuarantinesSecrets(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -266,9 +325,55 @@ func TestServiceRecoversMissingImmutableObjectWithoutNewVersion(t *testing.T) {
 	}
 }
 
+func TestServiceRecoversPartialInboundBatchWithoutOrphanOrDuplicate(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repository := newMemoryArtifactRepository()
+	objects := &memoryObjectStore{objects: map[string][]byte{}, failAtAttempt: 2}
+	source := &memoryIncomingSource{
+		metadata: map[string]SourceFile{
+			"file-1": {FileID: "file-1", PostID: "post-1", ChannelID: "channel-1", CreatorID: "user-1", OriginalName: "one.txt", DeclaredSize: 3},
+			"file-2": {FileID: "file-2", PostID: "post-1", ChannelID: "channel-1", CreatorID: "user-1", OriginalName: "two.txt", DeclaredSize: 3},
+		},
+		bodies: map[string][]byte{"file-1": []byte("one"), "file-2": []byte("two")},
+	}
+	service, err := NewService(ServiceConfig{Repository: repository, Source: source, ObjectStore: objects, Delivery: &memoryMattermostDelivery{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := testArtifactScope("run-partial-batch")
+	input := IngestInput{Scope: scope, SourcePostID: "post-1", SourceUserID: "user-1", FileIDs: []string{"file-1", "file-2"}}
+	if _, err := service.IngestIncoming(ctx, input); err == nil {
+		t.Fatal("частичный batch должен вернуть ошибку второй object-store записи")
+	}
+	if len(repository.versions) != 2 || len(objects.objects) != 1 {
+		t.Fatalf("частичный batch потерял recoverable state: versions=%d objects=%d", len(repository.versions), len(objects.objects))
+	}
+	for versionID, version := range repository.versions {
+		if _, bound := repository.bindings[versionID][scope.TurnID]; !bound {
+			t.Fatalf("retention-held version осталась без durable turn binding: %#v", version)
+		}
+		if version.State != StateAvailable && version.State != StateScanning {
+			t.Fatalf("неожиданное recoverable state: %#v", version)
+		}
+	}
+	manifest, err := service.IngestIncoming(ctx, input)
+	if err != nil {
+		t.Fatalf("повтор partial batch error = %v", err)
+	}
+	if len(manifest.Files) != 2 || len(repository.versions) != 2 || len(objects.objects) != 2 || objects.puts != 2 {
+		t.Fatalf("повтор создал дубликат: manifest=%#v versions=%d objects=%d puts=%d", manifest, len(repository.versions), len(objects.objects), objects.puts)
+	}
+	for versionID, turns := range repository.bindings {
+		if len(turns) != 1 {
+			t.Fatalf("version %s имеет дублирующиеся bindings: %#v", versionID, turns)
+		}
+	}
+}
+
 func testArtifactScope(turnID string) Scope {
 	return Scope{
-		ProjectID: 1, ChatID: 2, SessionID: 3, RoleID: 4, TurnID: turnID, SessionKey: "session-1",
+		ProjectID: 1, ChatID: 2, SessionID: 3, RoleID: 4, RuntimeTurnID: 5, TurnID: turnID, SessionKey: "session-1",
 		MattermostChannelID: "channel-1", MattermostRootPostID: "root-1",
 	}
 }
@@ -295,18 +400,24 @@ func (source *memoryIncomingSource) Open(_ context.Context, fileID string) (io.R
 }
 
 type memoryObjectStore struct {
-	mu         sync.Mutex
-	objects    map[string][]byte
-	puts       int
-	failBefore int
+	mu            sync.Mutex
+	objects       map[string][]byte
+	puts          int
+	attempts      int
+	failBefore    int
+	failAtAttempt int
 }
 
 func (store *memoryObjectStore) PutImmutable(_ context.Context, key string, _ string, size int64, sha256Text string, body io.Reader) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	store.attempts++
 	if store.failBefore > 0 {
 		store.failBefore--
 		return errors.New("synthetic object store failure before write")
+	}
+	if store.failAtAttempt > 0 && store.attempts == store.failAtAttempt {
+		return errors.New("synthetic object store failure at exact attempt")
 	}
 	if _, exists := store.objects[key]; exists {
 		return ErrConflict

@@ -5,6 +5,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"hash/crc32"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -101,25 +103,14 @@ func init() {
 
 	registerOOXML("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml", "word/document.xml")
 	registerOOXML("application/vnd.openxmlformats-officedocument.wordprocessingml.template", ".dotx", "application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml", "word/document.xml")
-	registerOOXML("application/vnd.ms-word.document.macroenabled.12", ".docm", "application/vnd.ms-word.document.macroenabled.main+xml", "word/document.xml")
-	registerOOXML("application/vnd.ms-word.template.macroenabled.12", ".dotm", "application/vnd.ms-word.template.macroenabledtemplate.main+xml", "word/document.xml")
 
 	registerOOXML("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml", "xl/workbook.xml")
 	registerOOXML("application/vnd.openxmlformats-officedocument.spreadsheetml.template", ".xltx", "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml", "xl/workbook.xml")
-	registerOOXML("application/vnd.ms-excel.sheet.macroenabled.12", ".xlsm", "application/vnd.ms-excel.sheet.macroenabled.main+xml", "xl/workbook.xml")
-	registerOOXML("application/vnd.ms-excel.template.macroenabled.12", ".xltm", "application/vnd.ms-excel.template.macroenabled.main+xml", "xl/workbook.xml")
-	registerOOXML("application/vnd.ms-excel.addin.macroenabled.12", ".xlam", "application/vnd.ms-excel.addin.macroenabled.main+xml", "xl/workbook.xml")
-	registerOOXML("application/vnd.ms-excel.sheet.binary.macroenabled.12", ".xlsb", "application/vnd.ms-excel.sheet.binary.macroenabled.main", "xl/workbook.bin")
 
 	registerOOXML("application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml", "ppt/presentation.xml")
 	registerOOXML("application/vnd.openxmlformats-officedocument.presentationml.template", ".potx", "application/vnd.openxmlformats-officedocument.presentationml.template.main+xml", "ppt/presentation.xml")
 	registerOOXML("application/vnd.openxmlformats-officedocument.presentationml.slideshow", ".ppsx", "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml", "ppt/presentation.xml")
 	registerOOXML("application/vnd.openxmlformats-officedocument.presentationml.slide", ".sldx", "application/vnd.openxmlformats-officedocument.presentationml.slide+xml", "ppt/slides/slide1.xml")
-	registerOOXML("application/vnd.ms-powerpoint.presentation.macroenabled.12", ".pptm", "application/vnd.ms-powerpoint.presentation.macroenabled.main+xml", "ppt/presentation.xml")
-	registerOOXML("application/vnd.ms-powerpoint.template.macroenabled.12", ".potm", "application/vnd.ms-powerpoint.template.macroenabled.main+xml", "ppt/presentation.xml")
-	registerOOXML("application/vnd.ms-powerpoint.slideshow.macroenabled.12", ".ppsm", "application/vnd.ms-powerpoint.slideshow.macroenabled.main+xml", "ppt/presentation.xml")
-	registerOOXML("application/vnd.ms-powerpoint.addin.macroenabled.12", ".ppam", "application/vnd.ms-powerpoint.addin.macroenabled.main+xml", "ppt/presentation.xml")
-	registerOOXML("application/vnd.ms-powerpoint.slide.macroenabled.12", ".sldm", "application/vnd.ms-powerpoint.slide.macroenabled.main+xml", "ppt/slides/slide1.xml")
 }
 
 func register(mediaType string, extension string, family string, text bool) Format {
@@ -237,6 +228,12 @@ func Detect(reader io.ReaderAt, size int64) (string, error) {
 		if json.Valid(bytes.TrimSpace(body)) {
 			return "application/json", nil
 		}
+		if unambiguousCSV(body) {
+			return "text/csv", nil
+		}
+		if unambiguousMarkdown(body) {
+			return "text/markdown", nil
+		}
 		return "text/plain", nil
 	}
 	return "", ErrDenied
@@ -275,10 +272,14 @@ func isTAR(body []byte) bool {
 }
 
 func validateTAR(body []byte) error {
-	if len(body)%512 != 0 || len(body) < 1024 || !allZero(body[len(body)-1024:]) {
+	if len(body)%512 != 0 || len(body) < 1024 {
 		return ErrDenied
 	}
-	reader := tar.NewReader(bytes.NewReader(body))
+	terminator := tarTerminatorOffset(body)
+	if terminator < 0 || terminator+1024 > len(body) || !allZero(body[terminator:]) {
+		return ErrDenied
+	}
+	reader := tar.NewReader(bytes.NewReader(body[:terminator+1024]))
 	seen := map[string]struct{}{}
 	entries := 0
 	for {
@@ -303,6 +304,211 @@ func validateTAR(body []byte) error {
 		entries++
 	}
 	return nil
+}
+
+func tarTerminatorOffset(body []byte) int {
+	for offset := 0; offset+512 <= len(body); {
+		header := body[offset : offset+512]
+		if allZero(header) {
+			if offset+1024 > len(body) || !allZero(body[offset+512:offset+1024]) {
+				return -1
+			}
+			return offset
+		}
+		size, ok := parseTARSize(header[124:136])
+		if !ok || size > maxContainerEntryBytes {
+			return -1
+		}
+		paddedSize := (size + 511) / 512 * 512
+		if paddedSize > uint64(len(body)-offset-512) {
+			return -1
+		}
+		offset += 512 + int(paddedSize)
+	}
+	return -1
+}
+
+func parseTARSize(field []byte) (uint64, bool) {
+	value := strings.Trim(string(bytes.Trim(field, "\x00 ")), " ")
+	if value == "" {
+		return 0, true
+	}
+	for _, character := range value {
+		if character < '0' || character > '7' {
+			return 0, false
+		}
+	}
+	parsed, err := strconv.ParseUint(value, 8, 64)
+	return parsed, err == nil
+}
+
+func unambiguousCSV(body []byte) bool {
+	if len(body) == 0 || len(body) > int(MaxObjectBytes) || !bytes.ContainsRune(body, ',') {
+		return false
+	}
+	reader := csv.NewReader(bytes.NewReader(body))
+	reader.FieldsPerRecord = -1
+	reader.ReuseRecord = true
+	rows := 0
+	columns := 0
+	strongEvidence := false
+	for {
+		record, err := reader.Read()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil || len(record) < 2 || len(record) > 256 {
+			return false
+		}
+		if rows == 0 {
+			columns = len(record)
+			if !validCSVHeader(record) {
+				return false
+			}
+		} else {
+			if len(record) != columns {
+				return false
+			}
+			for _, field := range record {
+				if csvDataEvidence(strings.TrimSpace(field)) {
+					strongEvidence = true
+				}
+			}
+		}
+		rows++
+		if rows > 100_000 {
+			return false
+		}
+	}
+	return rows >= 2 && (rows >= 3 || strongEvidence || bytes.ContainsRune(body, '"'))
+}
+
+func validCSVHeader(record []string) bool {
+	seen := make(map[string]struct{}, len(record))
+	for _, field := range record {
+		field = strings.TrimSpace(field)
+		if field == "" || utf8.RuneCountInString(field) > 128 || strings.ContainsAny(field, "\r\n\t") {
+			return false
+		}
+		key := strings.ToLower(field)
+		if _, duplicate := seen[key]; duplicate {
+			return false
+		}
+		seen[key] = struct{}{}
+	}
+	return true
+}
+
+func csvDataEvidence(value string) bool {
+	if value == "" {
+		return true
+	}
+	lower := strings.ToLower(value)
+	if lower == "true" || lower == "false" || lower == "null" {
+		return true
+	}
+	digits := 0
+	for index, r := range value {
+		if unicode.IsDigit(r) {
+			digits++
+			continue
+		}
+		if (r == '+' || r == '-') && index == 0 || r == '.' || r == ':' || r == '/' {
+			continue
+		}
+		return false
+	}
+	return digits > 0
+}
+
+func unambiguousMarkdown(body []byte) bool {
+	if len(body) == 0 || len(body) > int(MaxObjectBytes) {
+		return false
+	}
+	lines := strings.Split(strings.ReplaceAll(string(body), "\r\n", "\n"), "\n")
+	if len(lines) > 100_000 {
+		return false
+	}
+	nonEmpty := 0
+	listItems := 0
+	heading := false
+	blockquote := 0
+	inFence := false
+	closedFence := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		nonEmpty++
+		if markdownHeading(trimmed) {
+			heading = true
+		}
+		if markdownListItem(trimmed) {
+			listItems++
+		}
+		if strings.HasPrefix(trimmed, "> ") {
+			blockquote++
+		}
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			if inFence {
+				closedFence = true
+			}
+			inFence = !inFence
+		}
+	}
+	if heading && nonEmpty >= 2 || listItems >= 2 || blockquote >= 2 || closedFence && !inFence {
+		return true
+	}
+	if len(lines) >= 2 && markdownTableRow(lines[0]) && markdownTableSeparator(lines[1]) {
+		return true
+	}
+	text := string(body)
+	return nonEmpty >= 1 && strings.Contains(text, "](") && strings.Contains(text, "[")
+}
+
+func markdownHeading(line string) bool {
+	count := 0
+	for count < len(line) && line[count] == '#' {
+		count++
+	}
+	return count >= 1 && count <= 6 && count < len(line) && line[count] == ' '
+}
+
+func markdownListItem(line string) bool {
+	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") || strings.HasPrefix(line, "+ ") {
+		return len(strings.TrimSpace(line[2:])) > 0
+	}
+	dot := strings.IndexByte(line, '.')
+	if dot <= 0 || dot+1 >= len(line) || line[dot+1] != ' ' {
+		return false
+	}
+	for _, r := range line[:dot] {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return len(strings.TrimSpace(line[dot+2:])) > 0
+}
+
+func markdownTableRow(line string) bool {
+	line = strings.TrimSpace(line)
+	return strings.Count(line, "|") >= 2
+}
+
+func markdownTableSeparator(line string) bool {
+	line = strings.Trim(strings.TrimSpace(line), "|")
+	parts := strings.Split(line, "|")
+	if len(parts) < 2 {
+		return false
+	}
+	for _, part := range parts {
+		part = strings.Trim(strings.TrimSpace(part), ":")
+		if len(part) < 3 || strings.Trim(part, "-") != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func validContainerPath(name string, directory bool) bool {

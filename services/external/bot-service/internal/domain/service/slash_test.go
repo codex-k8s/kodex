@@ -3871,6 +3871,7 @@ type fakeAdminStore struct {
 	resetSessionErrors    []error
 	completeTurnCalls     int
 	completeTurnInput     adminrepo.CompleteAgentSessionTurnInput
+	createTurnErr         error
 	exactGuardCalls       int
 	auditCalls            int
 	auditEvents           []adminrepo.AuditEventInput
@@ -4802,6 +4803,26 @@ func (store *fakeAdminStore) UpdateAgentSessionSnapshot(_ context.Context, input
 }
 
 func (store *fakeAdminStore) CreateAgentSessionTurn(_ context.Context, input adminrepo.CreateAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	if store.createTurnErr != nil {
+		return entity.AgentSessionTurn{}, store.createTurnErr
+	}
+	for _, existing := range store.sessionTurns {
+		if existing.RunID != input.RunID {
+			continue
+		}
+		if existing.SessionID == input.SessionID && existing.MattermostChannelID == input.MattermostChannelID &&
+			existing.MattermostRootPostID == input.MattermostRootPostID && existing.MattermostPostID == input.MattermostPostID &&
+			existing.UserID == input.UserID && existing.UserName == input.UserName &&
+			(existing.Message == input.Message || strings.HasPrefix(existing.Message, input.Message+"\n\n# Манифест вложений текущего хода\n")) &&
+			(existing.Status == agentSessionTurnAdmitting || existing.Status == agentSessionTurnQueued) {
+			return existing, nil
+		}
+		return entity.AgentSessionTurn{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	status := strings.TrimSpace(input.InitialStatus)
+	if status == "" {
+		status = agentSessionTurnQueued
+	}
 	turn := entity.AgentSessionTurn{
 		ID:                   int64(len(store.sessionTurns) + 1),
 		SessionID:            input.SessionID,
@@ -4812,7 +4833,7 @@ func (store *fakeAdminStore) CreateAgentSessionTurn(_ context.Context, input adm
 		UserID:               input.UserID,
 		UserName:             input.UserName,
 		Message:              input.Message,
-		Status:               agentSessionTurnQueued,
+		Status:               status,
 	}
 	if input.ParentTurnID > 0 {
 		turn.ParentTurnIDs = []int64{input.ParentTurnID}
@@ -4925,8 +4946,9 @@ func containsString(values []string, needle string) bool {
 
 func (store *fakeAdminStore) UpdateAgentSessionTurnMessage(_ context.Context, input adminrepo.UpdateAgentSessionTurnMessageInput) (entity.AgentSessionTurn, error) {
 	for index, turn := range store.sessionTurns {
-		if turn.ID == input.TurnID && turn.Status == agentSessionTurnQueued {
+		if turn.ID == input.TurnID && (turn.Status == agentSessionTurnAdmitting || turn.Status == agentSessionTurnQueued) {
 			turn.Message = input.Message
+			turn.Status = agentSessionTurnQueued
 			turn.UpdatedAt = time.Now().UTC()
 			store.sessionTurns[index] = turn
 			return turn, nil

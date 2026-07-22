@@ -46,6 +46,7 @@ type Scope struct {
 	ChatID               int64
 	SessionID            int64
 	RoleID               int64
+	RuntimeTurnID        int64
 	TurnID               string
 	SessionKey           string
 	MattermostChannelID  string

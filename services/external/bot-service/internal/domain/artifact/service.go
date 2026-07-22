@@ -683,7 +683,7 @@ func objectKey(scope Scope, artifactID string, versionID string) string {
 }
 
 func validateScope(scope Scope) error {
-	if scope.ProjectID <= 0 || scope.ChatID <= 0 || scope.SessionID <= 0 || scope.RoleID <= 0 ||
+	if scope.ProjectID <= 0 || scope.ChatID <= 0 || scope.SessionID <= 0 || scope.RoleID <= 0 || scope.RuntimeTurnID <= 0 ||
 		strings.TrimSpace(scope.TurnID) == "" || strings.TrimSpace(scope.SessionKey) == "" ||
 		strings.TrimSpace(scope.MattermostChannelID) == "" || strings.TrimSpace(scope.MattermostRootPostID) == "" {
 		return ErrScopeDenied

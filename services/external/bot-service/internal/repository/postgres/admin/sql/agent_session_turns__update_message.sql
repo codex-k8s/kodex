@@ -1,7 +1,8 @@
 update matter_codex_agent_session_turns set
 	message = $2,
+	status = 'queued',
 	updated_at = now()
-where id = $1 and status = 'queued'
+where id = $1 and status in ('admitting', 'queued')
 returning
 	id,
 	session_id,

@@ -9,7 +9,8 @@ insert into matter_codex_agent_session_turns (
 	initiator_user_names,
 	user_id,
 	user_name,
-	message
+	message,
+	status
 ) values (
 	$1,
 	$2,
@@ -21,7 +22,8 @@ insert into matter_codex_agent_session_turns (
 	case when btrim($8::text) <> '' then array[$8::text] else '{}'::text[] end,
 	$7,
 	$8,
-	$9
+	$9,
+	case when btrim($10::text) = 'admitting' then 'admitting' else 'queued' end
 )
 on conflict (run_id) do update
 set run_id = excluded.run_id
@@ -31,7 +33,13 @@ where matter_codex_agent_session_turns.session_id = excluded.session_id
 	and matter_codex_agent_session_turns.mattermost_post_id = excluded.mattermost_post_id
 	and matter_codex_agent_session_turns.user_id = excluded.user_id
 	and matter_codex_agent_session_turns.user_name = excluded.user_name
-	and matter_codex_agent_session_turns.message = excluded.message
+	and (
+		matter_codex_agent_session_turns.message = excluded.message
+		or (
+			starts_with(matter_codex_agent_session_turns.message, excluded.message || E'\n\n# Манифест вложений текущего хода\n')
+			and matter_codex_agent_session_turns.status in ('admitting', 'queued')
+		)
+	)
 returning
 	id,
 	session_id,

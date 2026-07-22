@@ -1011,6 +1011,7 @@ func (repo *Repository) CreateAgentSessionTurn(ctx context.Context, input adminr
 		input.UserID,
 		input.UserName,
 		input.Message,
+		input.InitialStatus,
 	))
 	if err != nil {
 		return entity.AgentSessionTurn{}, fmt.Errorf("create agent session turn: %w", err)

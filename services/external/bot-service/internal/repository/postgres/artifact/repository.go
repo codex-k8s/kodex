@@ -28,7 +28,7 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 
 func (repo *Repository) FindInbound(ctx context.Context, scope domainartifact.Scope, postID string, fileID string) (domainartifact.Version, error) {
 	return scanVersion(repo.pool.QueryRow(ctx, query("artifact_versions__find_inbound.sql"),
-		scope.ProjectID, scope.ChatID, scope.SessionID, scope.TurnID, postID, fileID,
+		scope.ProjectID, scope.ChatID, scope.SessionID, scope.RoleID, scope.RuntimeTurnID, scope.TurnID, postID, fileID,
 	))
 }
 
@@ -42,11 +42,11 @@ func (repo *Repository) BindInbound(ctx context.Context, versionID string, scope
 		return fmt.Errorf("begin artifact binding transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, query("artifact_turn__lock.sql"), scope.ProjectID, scope.ChatID, scope.SessionID, scope.TurnID); err != nil {
+	if _, err := tx.Exec(ctx, query("artifact_turn__lock.sql"), scope.ProjectID, scope.ChatID, scope.SessionID, scope.RoleID, scope.RuntimeTurnID, scope.TurnID); err != nil {
 		return mapError("lock artifact turn", err)
 	}
 	_, err = tx.Exec(ctx, query("message_artifact_bindings__insert.sql"),
-		versionID, scope.ProjectID, scope.ChatID, scope.SessionID, scope.TurnID,
+		versionID, scope.ProjectID, scope.ChatID, scope.SessionID, scope.RoleID, scope.RuntimeTurnID, scope.TurnID,
 		postID, fileID, domainartifact.DirectionInbound, ordinal,
 	)
 	if err != nil {
@@ -56,7 +56,7 @@ func (repo *Repository) BindInbound(ctx context.Context, versionID string, scope
 }
 
 func (repo *Repository) ListTurn(ctx context.Context, scope domainartifact.Scope) ([]domainartifact.Version, error) {
-	rows, err := repo.pool.Query(ctx, query("artifact_versions__list_turn.sql"), scope.ProjectID, scope.ChatID, scope.SessionID, scope.TurnID)
+	rows, err := repo.pool.Query(ctx, query("artifact_versions__list_turn.sql"), scope.ProjectID, scope.ChatID, scope.SessionID, scope.RoleID, scope.RuntimeTurnID, scope.TurnID)
 	if err != nil {
 		return nil, fmt.Errorf("list turn artifacts: %w", err)
 	}
@@ -77,7 +77,7 @@ func (repo *Repository) ListTurn(ctx context.Context, scope domainartifact.Scope
 
 func (repo *Repository) GetAvailable(ctx context.Context, scope domainartifact.Scope, versionID string) (domainartifact.Version, error) {
 	return scanVersion(repo.pool.QueryRow(ctx, query("artifact_versions__get_available.sql"),
-		scope.ProjectID, scope.ChatID, scope.SessionID, scope.TurnID, versionID,
+		scope.ProjectID, scope.ChatID, scope.SessionID, scope.RoleID, scope.RuntimeTurnID, scope.TurnID, versionID,
 	))
 }
 
@@ -91,14 +91,15 @@ func (repo *Repository) SetVersionState(ctx context.Context, versionID string, f
 }
 
 func (repo *Repository) FindDelivery(ctx context.Context, scope domainartifact.Scope, idempotencyKey string) (domainartifact.Delivery, error) {
-	row := repo.pool.QueryRow(ctx, query("artifact_deliveries__find.sql"), scope.ProjectID, scope.ChatID, scope.SessionID, scope.TurnID, idempotencyKey)
+	row := repo.pool.QueryRow(ctx, query("artifact_deliveries__find.sql"), scope.ProjectID, scope.ChatID, scope.SessionID, scope.RoleID, scope.RuntimeTurnID, scope.TurnID, idempotencyKey)
 	var delivery domainartifact.Delivery
 	err := row.Scan(
 		&delivery.DeliveryID, &delivery.IdempotencyKey, &delivery.BotTokenSecretRef, &delivery.State,
 		&delivery.MattermostFileID, &delivery.MattermostPostID, &delivery.ErrorCode, &delivery.Attempts,
 		&delivery.ArtifactVersion.ArtifactID, &delivery.ArtifactVersion.VersionID,
 		&delivery.ArtifactVersion.Scope.ProjectID, &delivery.ArtifactVersion.Scope.ChatID, &delivery.ArtifactVersion.Scope.SessionID,
-		&delivery.ArtifactVersion.Scope.TurnID, &delivery.ArtifactVersion.Direction,
+		&delivery.ArtifactVersion.Scope.RoleID, &delivery.ArtifactVersion.Scope.RuntimeTurnID, &delivery.ArtifactVersion.Scope.TurnID,
+		&delivery.ArtifactVersion.Direction,
 		&delivery.ArtifactVersion.State, &delivery.ArtifactVersion.ErrorCode, &delivery.ArtifactVersion.StorageKey, &delivery.ArtifactVersion.OriginalName,
 		&delivery.ArtifactVersion.SafeName, &delivery.ArtifactVersion.MediaType, &delivery.ArtifactVersion.DeclaredMediaType,
 		&delivery.ArtifactVersion.Size, &delivery.ArtifactVersion.SHA256, &delivery.ArtifactVersion.SourcePostID,
@@ -130,18 +131,21 @@ func (repo *Repository) SetDeliveryResult(ctx context.Context, deliveryID string
 }
 
 func (repo *Repository) createVersion(ctx context.Context, input domainartifact.CreateVersionInput, outbound bool) error {
+	version := input.Version
+	if _, err := domainartifact.SafeExtension(version.MediaType); err != nil {
+		return domainartifact.ErrMediaTypeDenied
+	}
 	tx, err := repo.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("begin artifact transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	version := input.Version
-	if _, err := tx.Exec(ctx, query("artifact_turn__lock.sql"), version.Scope.ProjectID, version.Scope.ChatID, version.Scope.SessionID, version.Scope.TurnID); err != nil {
+	if _, err := tx.Exec(ctx, query("artifact_turn__lock.sql"), version.Scope.ProjectID, version.Scope.ChatID, version.Scope.SessionID, version.Scope.RoleID, version.Scope.RuntimeTurnID, version.Scope.TurnID); err != nil {
 		return mapError("lock artifact turn", err)
 	}
 	if _, err := tx.Exec(ctx, query("artifacts__insert.sql"),
-		version.ArtifactID, version.Scope.ProjectID, version.Scope.ChatID, version.Scope.SessionID,
-		version.Scope.TurnID, version.Direction, version.SourcePostID, version.SourceFileID, version.RetentionUntil,
+		version.ArtifactID, version.Scope.ProjectID, version.Scope.ChatID, version.Scope.SessionID, version.Scope.RoleID,
+		version.Scope.RuntimeTurnID, version.Scope.TurnID, version.Direction, version.SourcePostID, version.SourceFileID, version.RetentionUntil,
 	); err != nil {
 		return mapError("insert artifact", err)
 	}
@@ -152,15 +156,15 @@ func (repo *Repository) createVersion(ctx context.Context, input domainartifact.
 		return mapError("insert artifact version", err)
 	}
 	if _, err := tx.Exec(ctx, query("message_artifact_bindings__insert.sql"),
-		version.VersionID, version.Scope.ProjectID, version.Scope.ChatID, version.Scope.SessionID,
-		version.Scope.TurnID, version.SourcePostID, version.SourceFileID, version.Direction, max(version.Ordinal, 1),
+		version.VersionID, version.Scope.ProjectID, version.Scope.ChatID, version.Scope.SessionID, version.Scope.RoleID,
+		version.Scope.RuntimeTurnID, version.Scope.TurnID, version.SourcePostID, version.SourceFileID, version.Direction, max(version.Ordinal, 1),
 	); err != nil {
 		return mapError("insert artifact binding", err)
 	}
 	if outbound {
 		if _, err := tx.Exec(ctx, query("artifact_deliveries__insert.sql"),
-			input.DeliveryID, version.VersionID, version.Scope.ProjectID, version.Scope.ChatID, version.Scope.SessionID,
-			version.Scope.TurnID, input.IdempotencyKey, input.BotTokenSecretRef, input.DeliveryState, version.ErrorCode,
+			input.DeliveryID, version.VersionID, version.Scope.ProjectID, version.Scope.ChatID, version.Scope.SessionID, version.Scope.RoleID,
+			version.Scope.RuntimeTurnID, version.Scope.TurnID, input.IdempotencyKey, input.BotTokenSecretRef, input.DeliveryState, version.ErrorCode,
 		); err != nil {
 			return mapError("insert artifact delivery", err)
 		}
@@ -179,7 +183,8 @@ func scanVersion(row rowScanner) (domainartifact.Version, error) {
 	var version domainartifact.Version
 	err := row.Scan(
 		&version.ArtifactID, &version.VersionID, &version.Scope.ProjectID, &version.Scope.ChatID,
-		&version.Scope.SessionID, &version.Scope.TurnID, &version.Direction, &version.State, &version.ErrorCode,
+		&version.Scope.SessionID, &version.Scope.RoleID, &version.Scope.RuntimeTurnID, &version.Scope.TurnID,
+		&version.Direction, &version.State, &version.ErrorCode,
 		&version.StorageKey, &version.OriginalName, &version.SafeName, &version.MediaType,
 		&version.DeclaredMediaType, &version.Size, &version.SHA256, &version.SourcePostID,
 		&version.SourceFileID, &version.Ordinal, &version.RetentionUntil, &version.CreatedAt,
@@ -208,6 +213,9 @@ func mapError(operation string, err error) error {
 	var postgresError *pgconn.PgError
 	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
 		return domainartifact.ErrConflict
+	}
+	if errors.As(err, &postgresError) && (postgresError.Code == "23503" || postgresError.Code == "23514" && strings.Contains(postgresError.Message, "artifact scope")) {
+		return domainartifact.ErrScopeDenied
 	}
 	if errors.As(err, &postgresError) && postgresError.Code == "23514" && strings.HasPrefix(postgresError.Message, "artifact turn ") {
 		return domainartifact.ErrLimitExceeded

@@ -5,6 +5,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
+COPY libs/go/artifacttype ./libs/go/artifacttype
 COPY services/jobs/agent-runner ./services/jobs/agent-runner
 
 RUN CGO_ENABLED=0 go build -trimpath -o /out/matter-codex-agent-runner ./services/jobs/agent-runner/cmd/agent-runner

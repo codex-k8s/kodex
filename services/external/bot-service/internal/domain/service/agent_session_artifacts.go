@@ -100,7 +100,8 @@ func activeArtifactScope(ctx context.Context, store adminrepo.Repository, sessio
 	if err != nil {
 		return entity.AgentSessionTurn{}, domainartifact.Scope{}, err
 	}
-	if turn.SessionID != session.ID || strings.TrimSpace(turn.RunID) != turnID || strings.TrimSpace(turn.MattermostChannelID) != strings.TrimSpace(session.MattermostChannelID) || strings.TrimSpace(turn.MattermostRootPostID) == "" {
+	if turn.SessionID != session.ID || strings.TrimSpace(turn.RunID) != turnID || turn.Status != agentSessionTurnRunning ||
+		strings.TrimSpace(turn.MattermostChannelID) != strings.TrimSpace(session.MattermostChannelID) || strings.TrimSpace(turn.MattermostRootPostID) == "" {
 		return entity.AgentSessionTurn{}, domainartifact.Scope{}, domainartifact.ErrScopeDenied
 	}
 	return turn, artifactScope(session, turn), nil
@@ -112,6 +113,7 @@ func artifactScope(session entity.AgentSession, turn entity.AgentSessionTurn) do
 		ChatID:               session.ChatID,
 		SessionID:            session.ID,
 		RoleID:               session.RoleID,
+		RuntimeTurnID:        turn.ID,
 		TurnID:               turn.RunID,
 		SessionKey:           session.SessionKey,
 		MattermostChannelID:  turn.MattermostChannelID,

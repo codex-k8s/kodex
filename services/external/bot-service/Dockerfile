@@ -5,6 +5,7 @@ FROM ${GOLANG_IMAGE} AS build
 WORKDIR /workspace
 
 COPY go.mod go.sum ./
+COPY libs/go/artifacttype/ libs/go/artifacttype/
 COPY libs/go/i18n/ libs/go/i18n/
 COPY services/external/bot-service/ services/external/bot-service/
 
@@ -21,6 +22,7 @@ COPY --from=build /go/pkg/mod /go/pkg/mod
 COPY --from=build /out/bot-service /usr/local/bin/bot-service
 COPY --from=build /root/.cache/go-build /tmp/.cache/go-build
 COPY --from=build /workspace/go.mod /workspace/go.sum ./
+COPY --from=build /workspace/libs/go/artifacttype/ libs/go/artifacttype/
 COPY --from=build /workspace/libs/go/i18n/ libs/go/i18n/
 COPY --from=build /workspace/services/external/bot-service/ services/external/bot-service/
 RUN chown -R app:app /tmp/.cache

@@ -611,23 +611,6 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	} else if len(runID) > 200 || strings.TrimSpace(runID) != runID || strings.ContainsAny(runID, "\x00\r\n") {
 		return AgentTurnQueued{}, fmt.Errorf("requested run id is invalid")
 	}
-	if len(request.FileIDs) > 0 {
-		manifest, ingestErr := svc.cfg.Artifacts.IngestIncoming(ctx, domainartifact.IngestInput{
-			Scope: domainartifact.Scope{
-				ProjectID: request.Project.ID, ChatID: request.Chat.ID, SessionID: session.ID, RoleID: request.Role.ID,
-				TurnID: runID, SessionKey: session.SessionKey, MattermostChannelID: request.Chat.MattermostChannelID,
-				MattermostRootPostID: request.ReplyRootID,
-			},
-			SourcePostID: request.SourcePostID, SourceUserID: request.UserID, FileIDs: request.FileIDs,
-		})
-		if ingestErr != nil {
-			return AgentTurnQueued{}, fmt.Errorf("ingest turn artifacts: %w", ingestErr)
-		}
-		prompt, err = domainartifact.AppendManifestToPrompt(prompt, manifest)
-		if err != nil {
-			return AgentTurnQueued{}, err
-		}
-	}
 	gitHubSecretName := ""
 	if gitHubOK {
 		gitHubSecretName = gitHubAccount.SecretRef
@@ -674,6 +657,10 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	var turn entity.AgentSessionTurn
 	err = svc.withClusterAdminRuntimeGuard(ctx, request.Role, request.Chat.ID, request.Chat.Slug, request.Chat.MattermostChannelID, session.SessionKey, "agent_turn.persist.side_effect", func() error {
 		var createErr error
+		initialTurnStatus := ""
+		if len(request.FileIDs) > 0 {
+			initialTurnStatus = agentSessionTurnAdmitting
+		}
 		turn, createErr = svc.cfg.Store.CreateAgentSessionTurn(ctx, adminrepo.CreateAgentSessionTurnInput{
 			SessionID:            session.ID,
 			RunID:                runID,
@@ -684,9 +671,32 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 			UserID:               request.UserID,
 			UserName:             request.UserName,
 			Message:              prompt,
+			InitialStatus:        initialTurnStatus,
 		})
 		if createErr != nil {
 			return createErr
+		}
+		if len(request.FileIDs) > 0 {
+			manifest, ingestErr := svc.cfg.Artifacts.IngestIncoming(ctx, domainartifact.IngestInput{
+				Scope: domainartifact.Scope{
+					ProjectID: request.Project.ID, ChatID: request.Chat.ID, SessionID: session.ID, RoleID: request.Role.ID,
+					RuntimeTurnID: turn.ID, TurnID: runID, SessionKey: session.SessionKey,
+					MattermostChannelID: request.Chat.MattermostChannelID, MattermostRootPostID: request.ReplyRootID,
+				},
+				SourcePostID: request.SourcePostID, SourceUserID: request.UserID, FileIDs: request.FileIDs,
+			})
+			if ingestErr != nil {
+				return fmt.Errorf("ingest turn artifacts: %w", ingestErr)
+			}
+			promptWithManifest, appendErr := domainartifact.AppendManifestToPrompt(prompt, manifest)
+			if appendErr != nil {
+				return appendErr
+			}
+			turn, createErr = svc.cfg.Store.UpdateAgentSessionTurnMessage(ctx, adminrepo.UpdateAgentSessionTurnMessageInput{TurnID: turn.ID, Message: promptWithManifest})
+			if createErr != nil {
+				return fmt.Errorf("finalize admitted artifact turn: %w", createErr)
+			}
+			prompt = promptWithManifest
 		}
 		if coordinationStore, ok := svc.cfg.Store.(adminrepo.CoordinationRepository); ok {
 			if _, createErr = coordinationStore.EnsureTurnProcess(ctx, adminrepo.EnsureTurnProcessInput{
