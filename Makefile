@@ -1,6 +1,6 @@
 GOVULNCHECK_VERSION := v1.6.0
 
-.PHONY: test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck
+.PHONY: test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts
 
 test-go:
 	env -u GOFLAGS GOENV=off GOWORK=off go test -tags= ./...
@@ -20,3 +20,11 @@ tidy-go:
 
 govulncheck:
 	env -u GOFLAGS GOENV=off GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+
+gen-openapi: gen-openapi-go gen-openapi-ts
+
+gen-openapi-go:
+	oapi-codegen -config tools/codegen/openapi/control-center-go.yaml specs/openapi/control-center.v1.yaml
+
+gen-openapi-ts:
+	openapi-ts -f tools/codegen/openapi/control-center-ts.config.mjs

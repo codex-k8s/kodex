@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import type { AutomationCallbackReceipt } from "./contract";
+import type { AutomationHistoryItem } from "../../generated/types.gen";
 
 const props = defineProps<{
-  items: readonly AutomationCallbackReceipt[];
+  items: readonly AutomationHistoryItem[];
 }>();
 
 const orderedItems = computed(() => [...props.items].reverse());
 
-function stateLabel(item: AutomationCallbackReceipt): string {
+function stateLabel(item: AutomationHistoryItem): string {
   if (item.status === "waiting_owner") return "Ожидается решение владельца";
   if (item.status === "succeeded" && item.outcome === "requires_human")
     return "Решение принято";
@@ -19,7 +19,7 @@ function stateLabel(item: AutomationCallbackReceipt): string {
   return "В очереди";
 }
 
-function nextActionLabel(item: AutomationCallbackReceipt): string {
+function nextActionLabel(item: AutomationHistoryItem): string {
   if (item.next_action === "retry_same_callback")
     return "Повторить тот же callback для восстановления карточки";
   if (item.next_action === "wait_for_owner_response")
@@ -56,7 +56,6 @@ function nextActionLabel(item: AutomationCallbackReceipt): string {
         <article>
           <div class="run__topline">
             <span class="run__state">{{ stateLabel(item) }}</span>
-            <span v-if="item.duplicate" class="run__replay">точный replay</span>
           </div>
           <code>{{ item.schedule_run_id }}</code>
           <dl>

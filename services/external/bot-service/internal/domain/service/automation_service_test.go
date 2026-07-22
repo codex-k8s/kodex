@@ -7,7 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -323,8 +325,12 @@ func TestAutomationRequiresHumanRestartAndReplayRepairFailedPublicationWithoutSe
 		ref:             MattermostPostRef{ChannelID: "channel-2", PostID: "attention-2"},
 		reconcileErrors: []error{errors.New("synthetic publish failure"), errors.New("synthetic restart failure")},
 	}
+	now := time.Date(2026, time.July, 22, 10, 0, 0, 0, time.UTC)
 	newService := func() *AutomationService {
-		return NewAutomationService(AutomationServiceConfig{Repository: repository, Catalog: &fakeAutomationCatalog{}, Publisher: publisher, StorageReady: true})
+		return NewAutomationService(AutomationServiceConfig{
+			Repository: repository, Catalog: &fakeAutomationCatalog{}, Publisher: publisher, StorageReady: true,
+			Now: func() time.Time { return now },
+		})
 	}
 	command := AutomationCallbackCommand{
 		RunPublicID: runID, AuthenticatedProjectID: 1, AuthenticatedSessionID: 2, AuthenticatedSessionKey: "session-2",
@@ -336,9 +342,11 @@ func TestAutomationRequiresHumanRestartAndReplayRepairFailedPublicationWithoutSe
 	if err != nil || first.Run.Status != string(value.AutomationRunStatusWaitingOwner) || first.DeliveryStatus != "pending" || first.NextAction != "retry_same_callback" {
 		t.Fatalf("first=%#v error=%v", first, err)
 	}
+	now = now.Add(automationDeliveryRetryDelay)
 	if delivered, reconcileErr := newService().ReconcileOwnerAttentionDeliveries(context.Background(), 20); reconcileErr == nil || delivered != 0 {
 		t.Fatalf("restart reconciliation delivered=%d error=%v", delivered, reconcileErr)
 	}
+	now = now.Add(automationDeliveryRetryDelay)
 	second, err := newService().CompleteCallback(context.Background(), command)
 	if err != nil || !second.Duplicate || second.DeliveryStatus != "delivered" {
 		t.Fatalf("replay=%#v error=%v", second, err)
@@ -358,6 +366,88 @@ func TestAutomationRequiresHumanRestartAndReplayRepairFailedPublicationWithoutSe
 	mismatch.ExactPayload = append(append([]byte(nil), command.ExactPayload...), ' ')
 	if _, err := newService().CompleteCallback(context.Background(), mismatch); !errors.Is(err, automationsrepo.ErrCallbackMismatch) {
 		t.Fatalf("mismatched replay error=%v", err)
+	}
+}
+
+func TestAutomationRequiresHumanConcurrentExactReplayPostsExactlyOnce(t *testing.T) {
+	runID := "scheduled-run-33333333333333333333333333333333"
+	repository := &fakeAutomationRepository{
+		run: entity.ScheduledRun{ID: 43, PublicID: runID, ProjectID: 1, RuntimeTurnID: 9},
+		gateContext: entity.AutomationOwnerGateContext{
+			ScheduledRunID: 43, ScheduledRunPublicID: runID, ProjectID: 1, RuntimeTurnID: 9,
+			ProcessRunID: 15, ProcessPublicID: "process-run-3", PolicyRevisionID: 19,
+			RootInitiatorUserID: "owner-id", RootInitiatorName: "owner",
+			MattermostChannelID: "channel-3", MattermostRootPostID: "root-3",
+		},
+	}
+	publishStarted := make(chan struct{})
+	publishRelease := make(chan struct{})
+	publisher := &fakeAutomationPublisher{
+		ref:              MattermostPostRef{ChannelID: "channel-3", PostID: "attention-3"},
+		reconcileStarted: publishStarted,
+		reconcileRelease: publishRelease,
+	}
+	svc := NewAutomationService(AutomationServiceConfig{
+		Repository: repository, Catalog: &fakeAutomationCatalog{}, Publisher: publisher, StorageReady: true,
+		Now: func() time.Time { return time.Date(2026, time.July, 22, 10, 0, 0, 0, time.UTC) },
+	})
+	command := AutomationCallbackCommand{
+		RunPublicID: runID, AuthenticatedProjectID: 1, AuthenticatedSessionID: 2, AuthenticatedSessionKey: "session-3",
+		CallbackContractVersion: value.AutomationCallbackContractV1, Outcome: string(value.AutomationRunOutcomeRequiresHuman),
+		AgentSummary: "Нужно решение", ExactPayload: []byte(`{"outcome":"requires_human","summary":"Нужно решение"}`),
+	}
+	type callbackResult struct {
+		result AutomationCallbackResult
+		err    error
+	}
+	firstDone := make(chan callbackResult, 1)
+	go func() {
+		result, err := svc.CompleteCallback(context.Background(), command)
+		firstDone <- callbackResult{result: result, err: err}
+	}()
+	<-publishStarted
+	second, err := svc.CompleteCallback(context.Background(), command)
+	if err != nil || !second.Duplicate || second.DeliveryStatus != "pending" {
+		t.Fatalf("concurrent replay=%#v error=%v", second, err)
+	}
+	close(publishRelease)
+	first := <-firstDone
+	if first.err != nil || first.result.DeliveryStatus != "delivered" {
+		t.Fatalf("first callback=%#v error=%v", first.result, first.err)
+	}
+	if publisher.reconcileCalls != 1 || repository.setPostCalls != 1 {
+		t.Fatalf("Mattermost posts=%d set_post=%d", publisher.reconcileCalls, repository.setPostCalls)
+	}
+}
+
+func TestAutomationDeliveryWorkerDrainsBacklogPastHundredSkipsFailureAndRestarts(t *testing.T) {
+	now := time.Date(2026, time.July, 22, 11, 0, 0, 0, time.UTC)
+	repository := newFakeDeliveryQueueRepository(t, 205)
+	publisher := &fakeDeliveryQueuePublisher{failDeliveryID: repository.deliveries[0].DeliveryID, calls: make(map[string]int)}
+	newService := func() *AutomationService {
+		return NewAutomationService(AutomationServiceConfig{
+			Repository: repository, Catalog: &fakeAutomationCatalog{}, Publisher: publisher, StorageReady: true,
+			Now: func() time.Time { return now },
+		})
+	}
+
+	delivered, err := newService().ReconcileOwnerAttentionDeliveries(context.Background(), 4)
+	if err == nil || delivered != 204 {
+		t.Fatalf("first worker pass delivered=%d error=%v", delivered, err)
+	}
+	if got := repository.deliveredCount(); got != 204 {
+		t.Fatalf("persisted deliveries after first pass=%d", got)
+	}
+	now = now.Add(automationDeliveryRetryDelay)
+	delivered, err = newService().ReconcileOwnerAttentionDeliveries(context.Background(), 4)
+	if err != nil || delivered != 1 || repository.deliveredCount() != 205 {
+		t.Fatalf("restart pass delivered=%d total=%d error=%v", delivered, repository.deliveredCount(), err)
+	}
+	if publisher.maxConcurrent > 4 {
+		t.Fatalf("publisher concurrency=%d", publisher.maxConcurrent)
+	}
+	if publisher.calls[publisher.failDeliveryID] != 2 {
+		t.Fatalf("failed head attempts=%d", publisher.calls[publisher.failDeliveryID])
 	}
 }
 
@@ -391,21 +481,23 @@ func TestNextDailyAutomationRunUsesIANAZone(t *testing.T) {
 
 type fakeAutomationRepository struct {
 	automationsrepo.Repository
-	schedule           entity.AutomationSchedule
-	run                entity.ScheduledRun
-	createRunCreated   bool
-	bindInput          automationsrepo.BindRunInput
-	bindCalls          int
-	recordThreadCalls  int
-	completeInputs     []automationsrepo.CompleteCallbackInput
-	recordThreadErrors []error
-	bindErrors         []error
-	gateContext        entity.AutomationOwnerGateContext
-	delivery           entity.AutomationOwnerAttentionDelivery
-	gateAccepted       bool
-	gatePayloadHash    []byte
-	firstDeliveryID    string
-	setPostCalls       int
+	mu                  sync.Mutex
+	schedule            entity.AutomationSchedule
+	run                 entity.ScheduledRun
+	createRunCreated    bool
+	bindInput           automationsrepo.BindRunInput
+	bindCalls           int
+	recordThreadCalls   int
+	completeInputs      []automationsrepo.CompleteCallbackInput
+	recordThreadErrors  []error
+	bindErrors          []error
+	gateContext         entity.AutomationOwnerGateContext
+	delivery            entity.AutomationOwnerAttentionDelivery
+	gateAccepted        bool
+	gatePayloadHash     []byte
+	firstDeliveryID     string
+	setPostCalls        int
+	deliveryNextAttempt time.Time
 }
 
 func (repository *fakeAutomationRepository) CreateManualRun(_ context.Context, _ automationsrepo.CreateManualRunInput) (entity.ScheduledRun, bool, error) {
@@ -445,6 +537,8 @@ func (repository *fakeAutomationRepository) BindRun(_ context.Context, input aut
 }
 
 func (repository *fakeAutomationRepository) CompleteCallback(_ context.Context, input automationsrepo.CompleteCallbackInput) (entity.ScheduledRun, bool, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
 	repository.completeInputs = append(repository.completeInputs, input)
 	if input.OwnerGate != nil && repository.gateAccepted {
 		if !bytes.Equal(repository.gatePayloadHash, input.PayloadSHA256) {
@@ -479,19 +573,48 @@ func (repository *fakeAutomationRepository) GetOwnerGateContext(_ context.Contex
 }
 
 func (repository *fakeAutomationRepository) GetOwnerAttentionDelivery(_ context.Context, _ int64) (entity.AutomationOwnerAttentionDelivery, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
 	return repository.delivery, nil
 }
 
-func (repository *fakeAutomationRepository) ListPendingOwnerAttentionDeliveries(_ context.Context, _ int) ([]entity.AutomationOwnerAttentionDelivery, error) {
-	if repository.delivery.MattermostPostID != "" {
-		return nil, nil
+func (repository *fakeAutomationRepository) ClaimOwnerAttentionDelivery(_ context.Context, input automationsrepo.ClaimOwnerAttentionDeliveryInput) (entity.AutomationOwnerAttentionDelivery, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	if repository.delivery.AttentionID == 0 || repository.delivery.MattermostPostID != "" || (input.ScheduledRunID > 0 && input.ScheduledRunID != repository.delivery.ScheduledRunID) || repository.deliveryNextAttempt.After(input.EligibleBefore) || (repository.delivery.ClaimToken != "" && repository.delivery.LeaseExpiresAt.After(input.Now)) {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrNotFound
 	}
-	return []entity.AutomationOwnerAttentionDelivery{repository.delivery}, nil
+	repository.delivery.ClaimToken = input.ClaimToken
+	repository.delivery.ClaimedAt = input.Now
+	repository.delivery.LeaseExpiresAt = input.LeaseUntil
+	repository.delivery.Fence++
+	return repository.delivery, nil
+}
+
+func (repository *fakeAutomationRepository) DeferOwnerAttentionDelivery(_ context.Context, input automationsrepo.DeferOwnerAttentionDeliveryInput) error {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	if repository.delivery.ClaimToken != input.ClaimToken || repository.delivery.Fence != input.Fence {
+		return automationsrepo.ErrConflict
+	}
+	repository.delivery.ClaimToken = ""
+	repository.delivery.ClaimedAt = time.Time{}
+	repository.delivery.LeaseExpiresAt = time.Time{}
+	repository.deliveryNextAttempt = input.RetryAt
+	return nil
 }
 
 func (repository *fakeAutomationRepository) SetOwnerAttentionPost(_ context.Context, input automationsrepo.SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	if repository.delivery.ClaimToken != input.ClaimToken || repository.delivery.Fence != input.Fence {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrConflict
+	}
 	repository.setPostCalls++
 	repository.delivery.MattermostPostID = input.MattermostPostID
+	repository.delivery.ClaimToken = ""
+	repository.delivery.ClaimedAt = time.Time{}
+	repository.delivery.LeaseExpiresAt = time.Time{}
 	return repository.delivery, nil
 }
 
@@ -548,25 +671,164 @@ func (dispatcher *fakeAutomationDispatcher) EnqueueAgentTurn(_ context.Context, 
 }
 
 type fakeAutomationPublisher struct {
-	input           MattermostThreadPostInput
-	ref             MattermostPostRef
-	calls           int
-	errors          []error
-	idempotencyIDs  []string
-	reconcileInput  MattermostThreadPostInput
-	reconcileCalls  int
-	reconcileErrors []error
-	reconcileIDs    []string
+	input            MattermostThreadPostInput
+	ref              MattermostPostRef
+	calls            int
+	errors           []error
+	idempotencyIDs   []string
+	reconcileInput   MattermostThreadPostInput
+	reconcileCalls   int
+	reconcileErrors  []error
+	reconcileIDs     []string
+	reconcileStarted chan struct{}
+	reconcileRelease chan struct{}
 }
 
 func (publisher *fakeAutomationPublisher) ReconcileOrPostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
 	publisher.reconcileCalls++
 	publisher.reconcileInput = input
 	publisher.reconcileIDs = append(publisher.reconcileIDs, input.IdempotencyID)
+	if publisher.reconcileStarted != nil {
+		close(publisher.reconcileStarted)
+		publisher.reconcileStarted = nil
+	}
+	if publisher.reconcileRelease != nil {
+		<-publisher.reconcileRelease
+	}
 	if err := popAutomationError(&publisher.reconcileErrors); err != nil {
 		return MattermostPostRef{}, err
 	}
 	return publisher.ref, nil
+}
+
+type fakeDeliveryQueueRepository struct {
+	automationsrepo.Repository
+	mu          sync.Mutex
+	deliveries  []entity.AutomationOwnerAttentionDelivery
+	nextAttempt map[int64]time.Time
+}
+
+func newFakeDeliveryQueueRepository(t *testing.T, count int) *fakeDeliveryQueueRepository {
+	t.Helper()
+	repository := &fakeDeliveryQueueRepository{deliveries: make([]entity.AutomationOwnerAttentionDelivery, 0, count), nextAttempt: make(map[int64]time.Time)}
+	for index := 1; index <= count; index++ {
+		runID := fmt.Sprintf("scheduled-run-%032x", index)
+		deliveryID := fmt.Sprintf("%026d", index)
+		message := fmt.Sprintf("Карточка %d\n\n#notrigger", index)
+		props := map[string]any{
+			"matter_codex_event":                 "automation_owner_attention",
+			"matter_codex_callback_delivery_id":  deliveryID,
+			"matter_codex_automation_run_id":     runID,
+			"matter_codex_process_run_id":        fmt.Sprintf("process-%d", index),
+			"matter_codex_human_decision_status": "pending",
+		}
+		propsJSON, err := json.Marshal(props)
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest, err := callbackDeliveryPayloadHash("channel", "root", message, props)
+		if err != nil {
+			t.Fatal(err)
+		}
+		repository.deliveries = append(repository.deliveries, entity.AutomationOwnerAttentionDelivery{
+			AttentionID: int64(index), ScheduledRunID: int64(index), ScheduledRunPublicID: runID,
+			MattermostChannelID: "channel", MattermostRootPostID: "root", Status: "open",
+			DeliveryID: deliveryID, DeliveryMessage: message, DeliveryPropsJSON: propsJSON, DeliveryPayloadSHA256: digest,
+		})
+	}
+	return repository
+}
+
+func (repository *fakeDeliveryQueueRepository) ClaimOwnerAttentionDelivery(_ context.Context, input automationsrepo.ClaimOwnerAttentionDeliveryInput) (entity.AutomationOwnerAttentionDelivery, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	for index := range repository.deliveries {
+		delivery := &repository.deliveries[index]
+		if delivery.MattermostPostID != "" || repository.nextAttempt[delivery.AttentionID].After(input.EligibleBefore) || (delivery.ClaimToken != "" && delivery.LeaseExpiresAt.After(input.Now)) || (input.ScheduledRunID > 0 && delivery.ScheduledRunID != input.ScheduledRunID) {
+			continue
+		}
+		delivery.ClaimToken = input.ClaimToken
+		delivery.ClaimedAt = input.Now
+		delivery.LeaseExpiresAt = input.LeaseUntil
+		delivery.Fence++
+		return *delivery, nil
+	}
+	return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrNotFound
+}
+
+func (repository *fakeDeliveryQueueRepository) DeferOwnerAttentionDelivery(_ context.Context, input automationsrepo.DeferOwnerAttentionDeliveryInput) error {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	delivery := &repository.deliveries[input.AttentionID-1]
+	if delivery.ClaimToken != input.ClaimToken || delivery.Fence != input.Fence {
+		return automationsrepo.ErrConflict
+	}
+	delivery.ClaimToken = ""
+	delivery.ClaimedAt = time.Time{}
+	delivery.LeaseExpiresAt = time.Time{}
+	repository.nextAttempt[delivery.AttentionID] = input.RetryAt
+	return nil
+}
+
+func (repository *fakeDeliveryQueueRepository) SetOwnerAttentionPost(_ context.Context, input automationsrepo.SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error) {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	delivery := &repository.deliveries[input.AttentionID-1]
+	if delivery.ClaimToken != input.ClaimToken || delivery.Fence != input.Fence || delivery.MattermostPostID != "" {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrConflict
+	}
+	delivery.MattermostPostID = input.MattermostPostID
+	delivery.ClaimToken = ""
+	delivery.ClaimedAt = time.Time{}
+	delivery.LeaseExpiresAt = time.Time{}
+	return *delivery, nil
+}
+
+func (repository *fakeDeliveryQueueRepository) deliveredCount() int {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	count := 0
+	for _, delivery := range repository.deliveries {
+		if delivery.MattermostPostID != "" {
+			count++
+		}
+	}
+	return count
+}
+
+type fakeDeliveryQueuePublisher struct {
+	mu                sync.Mutex
+	failDeliveryID    string
+	failed            bool
+	calls             map[string]int
+	currentConcurrent int
+	maxConcurrent     int
+}
+
+func (publisher *fakeDeliveryQueuePublisher) ReconcileOrPostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	publisher.mu.Lock()
+	publisher.calls[input.IdempotencyID]++
+	publisher.currentConcurrent++
+	if publisher.currentConcurrent > publisher.maxConcurrent {
+		publisher.maxConcurrent = publisher.currentConcurrent
+	}
+	shouldFail := input.IdempotencyID == publisher.failDeliveryID && !publisher.failed
+	if shouldFail {
+		publisher.failed = true
+	}
+	publisher.mu.Unlock()
+	time.Sleep(time.Millisecond)
+	publisher.mu.Lock()
+	publisher.currentConcurrent--
+	publisher.mu.Unlock()
+	if shouldFail {
+		return MattermostPostRef{}, errors.New("synthetic head delivery failure")
+	}
+	return MattermostPostRef{ChannelID: input.ChannelID, PostID: "post-" + input.IdempotencyID}, nil
+}
+
+func (publisher *fakeDeliveryQueuePublisher) PostThreadMessage(context.Context, MattermostThreadPostInput) (MattermostPostRef, error) {
+	return MattermostPostRef{}, errors.New("unexpected non-idempotent publish")
 }
 
 func (publisher *fakeAutomationPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {

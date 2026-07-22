@@ -108,11 +108,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	})
 	chatRunSvc.SetAutomationRuntimeReconciler(automationSvc)
 	chatRunSvc.SetAutomationOwnerDecisionResolver(automationSvc)
-	if delivered, reconcileErr := automationSvc.ReconcileOwnerAttentionDeliveries(ctx, 100); reconcileErr != nil {
-		logger.Warn("automation owner attention recovery was incomplete", "delivered", delivered, "error", reconcileErr)
-	} else if delivered > 0 {
-		logger.Info("automation owner attention deliveries recovered", "delivered", delivered)
-	}
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
 		Localizer:                localizer,
 		StatusService:            statusSvc,
@@ -181,6 +176,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		MattermostSiteURL:      cfg.MattermostSiteURL,
 		MattermostInternalURL:  cfg.MattermostInternalURL,
 		ThreadPublisher:        threadPublisher,
+		Automations:            automationSvc,
+		ControlCenterReadToken: cfg.ControlCenterReadToken,
+		ControlCenterAssetsDir: cfg.ControlCenterAssetsDir,
 		Logger:                 logger,
 	})
 	server := newHTTPServer(cfg, router)
@@ -220,6 +218,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if storage != nil && cfg.InteractionCleanupEnabled {
 		go runInteractionCapabilityCleanupLoop(ctx, storage, cfg.InteractionCleanupInterval, cfg.InteractionCleanupRetention, cfg.InteractionCleanupBatch, logger)
 	}
+	if automationStorage != nil && threadPublisher != nil {
+		go runAutomationOwnerAttentionDeliveryLoop(ctx, automationSvc, cfg.AutomationDeliveryInterval, cfg.AutomationDeliveryConcurrency, logger)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -228,6 +229,25 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return server.Shutdown(shutdownCtx)
 	case err := <-errCh:
 		return err
+	}
+}
+
+func runAutomationOwnerAttentionDeliveryLoop(ctx context.Context, svc *statusservice.AutomationService, interval time.Duration, concurrency int, logger *slog.Logger) {
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			delivered, err := svc.ReconcileOwnerAttentionDeliveries(ctx, concurrency)
+			if err != nil {
+				logger.Warn("automation owner attention recovery was incomplete", "delivered", delivered, "error", err)
+			} else if delivered > 0 {
+				logger.Info("automation owner attention deliveries recovered", "delivered", delivered)
+			}
+			timer.Reset(interval)
+		}
 	}
 }
 

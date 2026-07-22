@@ -1,5 +1,6 @@
 -- name: automation_owner_attention__insert :one
 insert into matter_codex_owner_attention_requests (
+	request_kind,
 	process_run_id,
 	turn_id,
 	severity,
@@ -22,7 +23,7 @@ insert into matter_codex_owner_attention_requests (
 	automation_delivery_payload_sha256
 )
 values (
-	$1, $2, 'normal', $3, '[]'::jsonb, $4, '[]'::jsonb, 'turn', $5, 'open',
+	'automation', $1, $2, 'normal', $3, '[]'::jsonb, $4, '[]'::jsonb, 'turn', $5, 'open',
 	$6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15
 )
 on conflict (automation_scheduled_run_id) do nothing

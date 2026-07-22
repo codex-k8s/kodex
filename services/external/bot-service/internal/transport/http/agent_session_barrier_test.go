@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -21,14 +22,21 @@ import (
 type sessionBarrierStore struct {
 	adminrepo.Repository
 	adminrepo.CoordinationRepository
-	guardCalls   int
-	sessionReads int
-	guardInputs  []securityrepo.ClusterAdminBindingInput
-	denyAt       int
-	requireGuard bool
-	session      entity.AgentSession
-	role         entity.AgentRole
-	chat         entity.Chat
+	guardCalls      int
+	sessionReads    int
+	guardInputs     []securityrepo.ClusterAdminBindingInput
+	denyAt          int
+	requireGuard    bool
+	session         entity.AgentSession
+	role            entity.AgentRole
+	chat            entity.Chat
+	attentions      []sessionBarrierAttention
+	nextAttentionID int64
+}
+
+type sessionBarrierAttention struct {
+	kind    string
+	request entity.OwnerAttentionRequest
 }
 
 func (store *sessionBarrierStore) GetAgentSession(_ context.Context, sessionKey string) (entity.AgentSession, error) {
@@ -126,7 +134,46 @@ func (store *sessionBarrierStore) GetAgentSessionTurn(context.Context, int64) (e
 }
 
 func (store *sessionBarrierStore) GetTurnProcess(context.Context, int64) (entity.ProcessContext, error) {
-	return entity.ProcessContext{RootInitiatorUserID: "owner-user"}, nil
+	return entity.ProcessContext{ProcessRunID: 91, ProcessPublicID: "process-run-91", RootInitiatorUserID: "owner-user", RootInitiatorUserName: "owner"}, nil
+}
+
+func (store *sessionBarrierStore) CreateOwnerAttention(_ context.Context, input adminrepo.CreateOwnerAttentionInput) (entity.OwnerAttentionRequest, bool, error) {
+	for _, row := range store.attentions {
+		if row.kind == "generic" && row.request.ProcessRunID == input.ProcessRunID && row.request.IdempotencyKey == input.IdempotencyKey {
+			return row.request, false, nil
+		}
+	}
+	store.nextAttentionID++
+	request := entity.OwnerAttentionRequest{
+		ID: store.nextAttentionID, ProcessRunID: input.ProcessRunID, TurnID: input.TurnID,
+		Severity: input.Severity, Summary: input.Summary, Options: input.Options,
+		Recommendation: input.Recommendation, EvidenceLinks: input.EvidenceLinks,
+		PauseScope: input.PauseScope, IdempotencyKey: input.IdempotencyKey, Status: "open",
+	}
+	store.attentions = append(store.attentions, sessionBarrierAttention{kind: "generic", request: request})
+	return request, true, nil
+}
+
+func (store *sessionBarrierStore) SetOwnerAttentionPost(_ context.Context, attentionID int64, postID string) (entity.OwnerAttentionRequest, error) {
+	for index := range store.attentions {
+		row := &store.attentions[index]
+		if row.kind != "generic" || row.request.ID != attentionID {
+			continue
+		}
+		row.request.MattermostPostID = postID
+		return row.request, nil
+	}
+	return entity.OwnerAttentionRequest{}, adminrepo.ErrNotFound
+}
+
+func (store *sessionBarrierStore) addAutomationAttention(idempotencyKey string) int64 {
+	store.nextAttentionID++
+	store.attentions = append(store.attentions, sessionBarrierAttention{kind: "automation", request: entity.OwnerAttentionRequest{
+		ID: store.nextAttentionID, ProcessRunID: 91, TurnID: 1, Severity: "urgent",
+		Summary: "Server-owned automation gate", PauseScope: "process",
+		IdempotencyKey: idempotencyKey, Status: "open",
+	}})
+	return store.nextAttentionID
 }
 
 func (store *sessionBarrierStore) ListAgentDelegationsBySource(context.Context, int64, int) ([]entity.AgentDelegation, error) {
@@ -171,7 +218,8 @@ func (runner *sessionBarrierRunner) GetMattermostBotTokenSecret(context.Context,
 
 type sessionBarrierPublisher struct {
 	statusservice.MattermostThreadPublisher
-	posts int
+	posts      int
+	postErrors []error
 }
 
 type sessionBarrierConversationReader struct{}
@@ -199,13 +247,19 @@ func (dispatcher *sessionBarrierDispatcher) RetryAgentTurn(context.Context, stat
 }
 
 func (publisher *sessionBarrierPublisher) PostThreadMessage(context.Context, statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
-	publisher.posts++
-	return statusservice.MattermostPostRef{PostID: "unexpected-system-post"}, nil
+	return publisher.post("unexpected-system-post")
 }
 
 func (publisher *sessionBarrierPublisher) PostThreadMessageWithToken(context.Context, string, statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	return publisher.post("unexpected-role-post")
+}
+
+func (publisher *sessionBarrierPublisher) post(postID string) (statusservice.MattermostPostRef, error) {
 	publisher.posts++
-	return statusservice.MattermostPostRef{PostID: "unexpected-role-post"}, nil
+	if index := publisher.posts - 1; index < len(publisher.postErrors) && publisher.postErrors[index] != nil {
+		return statusservice.MattermostPostRef{}, publisher.postErrors[index]
+	}
+	return statusservice.MattermostPostRef{PostID: postID}, nil
 }
 
 func TestInternalAgentSessionHTTPRevocationBarrierPreventsTokenRead(t *testing.T) {
@@ -278,6 +332,71 @@ func TestMCPSessionRevocationBarrierPreventsPublishAndSystemFallback(t *testing.
 	}
 	if store.guardCalls != 2 || runner.secretReads != 1 || publisher.posts != 0 {
 		t.Fatalf("MCP barrier guards=%d secret_reads=%d publishes=%d", store.guardCalls, runner.secretReads, publisher.posts)
+	}
+}
+
+func TestMCPGenericOwnerAttentionDoesNotReuseAutomationNamespaceAfterLostResponse(t *testing.T) {
+	for _, test := range []struct {
+		name            string
+		automationFirst bool
+	}{
+		{name: "generic then automation", automationFirst: false},
+		{name: "automation then generic", automationFirst: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, store, _, publisher := newSessionBarrierService(0)
+			publisher.postErrors = []error{errors.New("synthetic lost Mattermost response")}
+			const idempotencyKey = "automation:scheduled-run-shared"
+			var automationID int64
+			if test.automationFirst {
+				automationID = store.addAutomationAttention(idempotencyKey)
+			}
+
+			server := httptest.NewServer(newMCPHandler(service, defaultMCPRequestBodyBytes))
+			defer server.Close()
+			client := mcp.NewClient(&mcp.Implementation{Name: "owner-attention-namespace", Version: "1"}, nil)
+			session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
+				Endpoint:   server.URL + "/mcp/sessions/session-admin",
+				HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: "session-token"}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("MCP connect: %v", err)
+			}
+			defer func() { _ = session.Close() }()
+			arguments := map[string]any{
+				"severity": "normal", "summary": "Generic MCP attention",
+				"pause_scope": "turn", "idempotency_key": idempotencyKey,
+			}
+			first, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mattermost_request_owner_attention", Arguments: arguments})
+			if err != nil || first == nil || !first.IsError {
+				t.Fatalf("lost response result=%#v error=%v", first, err)
+			}
+			if !test.automationFirst {
+				automationID = store.addAutomationAttention(idempotencyKey)
+			}
+			second, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mattermost_request_owner_attention", Arguments: arguments})
+			if err != nil || second == nil || second.IsError {
+				t.Fatalf("MCP retry result=%#v error=%v", second, err)
+			}
+
+			var generic *entity.OwnerAttentionRequest
+			var automation *entity.OwnerAttentionRequest
+			for index := range store.attentions {
+				row := &store.attentions[index]
+				switch row.kind {
+				case "generic":
+					generic = &row.request
+				case "automation":
+					automation = &row.request
+				}
+			}
+			if generic == nil || generic.ID == automationID || generic.MattermostPostID == "" {
+				t.Fatalf("generic namespace row=%#v automation_id=%d", generic, automationID)
+			}
+			if automation == nil || automation.ID != automationID || automation.MattermostPostID != "" {
+				t.Fatalf("automation namespace row=%#v automation_id=%d", automation, automationID)
+			}
+		})
 	}
 }
 

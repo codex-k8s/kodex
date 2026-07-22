@@ -68,6 +68,57 @@ input {
   text-transform: uppercase;
 }
 
+.history-access {
+  display: grid;
+  gap: 10px;
+  max-width: 560px;
+  margin-top: 32px;
+  padding: 20px;
+  border: 1px solid #c5c9c2;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.history-access label {
+  font-weight: 700;
+}
+.history-access__controls {
+  display: flex;
+  gap: 10px;
+}
+.history-access input {
+  min-width: 0;
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #87928a;
+  border-radius: 10px;
+  color: inherit;
+  background: #fff;
+}
+.history-access button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  background: #315d48;
+  cursor: pointer;
+}
+.history-access button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.history-access__hint,
+.history-status {
+  margin: 0;
+  color: #526059;
+  font-size: 0.85rem;
+}
+.history-status {
+  margin-top: 16px;
+}
+.history-status--error {
+  color: #8c2f24;
+}
+
 .history {
   margin-top: 52px;
 }
@@ -162,13 +213,6 @@ input {
 .run__state {
   font-weight: 750;
 }
-.run__replay {
-  padding: 4px 8px;
-  border-radius: 999px;
-  color: #59645e;
-  background: #e5e7e1;
-  font-size: 0.75rem;
-}
 .run code {
   display: block;
   overflow: hidden;
@@ -214,6 +258,10 @@ input {
   }
   .history {
     margin-top: 36px;
+  }
+  .history-access__controls {
+    align-items: stretch;
+    flex-direction: column;
   }
   .run {
     grid-template-columns: 24px minmax(0, 1fr);

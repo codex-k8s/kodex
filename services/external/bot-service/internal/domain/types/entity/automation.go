@@ -108,6 +108,21 @@ type AutomationOwnerAttentionDelivery struct {
 	DeliveryMessage       string
 	DeliveryPropsJSON     []byte
 	DeliveryPayloadSHA256 []byte
+	ClaimToken            string
+	ClaimedAt             time.Time
+	LeaseExpiresAt        time.Time
+	Fence                 int64
+}
+
+type AutomationHistoryItem struct {
+	ScheduledRunPublicID string
+	Status               string
+	Outcome              string
+	OwnerAttentionID     int64
+	HumanDecisionStatus  string
+	DeliveryStatus       string
+	NextAction           string
+	UpdatedAt            time.Time
 }
 
 type AutomationAuditEvent struct {

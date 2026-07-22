@@ -539,28 +539,83 @@ func (repo *Repository) GetOwnerAttentionDelivery(ctx context.Context, scheduled
 	return item, nil
 }
 
-func (repo *Repository) ListPendingOwnerAttentionDeliveries(ctx context.Context, limit int) ([]entity.AutomationOwnerAttentionDelivery, error) {
-	rows, err := repo.db.Query(ctx, query("automation_owner_attention__list_pending.sql"), normalizedLimit(limit))
+func (repo *Repository) ListHistory(ctx context.Context, ownerMattermostUsername string, limit int) ([]entity.AutomationHistoryItem, error) {
+	ownerMattermostUsername = strings.TrimSpace(ownerMattermostUsername)
+	if ownerMattermostUsername == "" {
+		return nil, automationsrepo.ErrForbidden
+	}
+	rows, err := repo.db.Query(ctx, query("automation_history__list.sql"), ownerMattermostUsername, normalizedLimit(limit))
 	if err != nil {
-		return nil, fmt.Errorf("list pending automation owner attention deliveries: %w", err)
+		return nil, fmt.Errorf("list automation history: %w", err)
 	}
 	defer rows.Close()
-	items := make([]entity.AutomationOwnerAttentionDelivery, 0)
+	items := make([]entity.AutomationHistoryItem, 0)
 	for rows.Next() {
-		item, scanErr := scanOwnerAttentionDelivery(rows)
-		if scanErr != nil {
-			return nil, fmt.Errorf("scan pending automation owner attention delivery: %w", scanErr)
+		var item entity.AutomationHistoryItem
+		if err := rows.Scan(
+			&item.ScheduledRunPublicID,
+			&item.Status,
+			&item.Outcome,
+			&item.OwnerAttentionID,
+			&item.HumanDecisionStatus,
+			&item.DeliveryStatus,
+			&item.NextAction,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan automation history: %w", err)
 		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate pending automation owner attention deliveries: %w", err)
+		return nil, fmt.Errorf("iterate automation history: %w", err)
 	}
 	return items, nil
 }
 
+func (repo *Repository) ClaimOwnerAttentionDelivery(ctx context.Context, input automationsrepo.ClaimOwnerAttentionDeliveryInput) (entity.AutomationOwnerAttentionDelivery, error) {
+	if input.ScheduledRunID < 0 || len(strings.TrimSpace(input.ClaimToken)) < 16 || len(input.ClaimToken) > 128 || !input.LeaseUntil.After(input.Now) || input.EligibleBefore.IsZero() {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrForbidden
+	}
+	item, err := scanOwnerAttentionDelivery(repo.db.QueryRow(ctx, query("automation_owner_attention__claim.sql"),
+		input.ScheduledRunID,
+		input.ClaimToken,
+		input.Now,
+		input.LeaseUntil,
+		input.EligibleBefore,
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.AutomationOwnerAttentionDelivery{}, fmt.Errorf("claim automation owner attention delivery: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) DeferOwnerAttentionDelivery(ctx context.Context, input automationsrepo.DeferOwnerAttentionDeliveryInput) error {
+	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || len(strings.TrimSpace(input.ClaimToken)) < 16 || input.Fence <= 0 || input.RetryAt.Before(input.Now) {
+		return automationsrepo.ErrForbidden
+	}
+	tag, err := repo.db.Exec(ctx, query("automation_owner_attention__defer.sql"),
+		input.AttentionID,
+		input.ScheduledRunID,
+		input.DeliveryID,
+		input.ClaimToken,
+		input.Fence,
+		input.RetryAt,
+		input.Now,
+	)
+	if err != nil {
+		return fmt.Errorf("defer automation owner attention delivery: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return automationsrepo.ErrConflict
+	}
+	return nil
+}
+
 func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, input automationsrepo.SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error) {
-	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || strings.TrimSpace(input.MattermostPostID) == "" {
+	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || strings.TrimSpace(input.MattermostPostID) == "" || len(strings.TrimSpace(input.ClaimToken)) < 16 || input.Fence <= 0 {
 		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrForbidden
 	}
 	tag, err := repo.db.Exec(ctx, query("automation_owner_attention__set_post.sql"),
@@ -570,6 +625,8 @@ func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, input automat
 		input.MattermostChannelID,
 		input.MattermostRootPostID,
 		input.MattermostPostID,
+		input.ClaimToken,
+		input.Fence,
 		input.Now,
 	)
 	if err != nil {
@@ -994,6 +1051,9 @@ func scanRun(row pgx.Row) (entity.ScheduledRun, error) {
 
 func scanOwnerAttentionDelivery(row pgx.Row) (entity.AutomationOwnerAttentionDelivery, error) {
 	var item entity.AutomationOwnerAttentionDelivery
+	var claimToken *string
+	var claimedAt *time.Time
+	var leaseExpiresAt *time.Time
 	err := row.Scan(
 		&item.AttentionID,
 		&item.ScheduledRunID,
@@ -1009,7 +1069,20 @@ func scanOwnerAttentionDelivery(row pgx.Row) (entity.AutomationOwnerAttentionDel
 		&item.DeliveryMessage,
 		&item.DeliveryPropsJSON,
 		&item.DeliveryPayloadSHA256,
+		&claimToken,
+		&claimedAt,
+		&leaseExpiresAt,
+		&item.Fence,
 	)
+	if claimToken != nil {
+		item.ClaimToken = *claimToken
+	}
+	if claimedAt != nil {
+		item.ClaimedAt = claimedAt.UTC()
+	}
+	if leaseExpiresAt != nil {
+		item.LeaseExpiresAt = leaseExpiresAt.UTC()
+	}
 	return item, err
 }
 

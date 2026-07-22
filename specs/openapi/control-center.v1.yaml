@@ -1,0 +1,132 @@
+openapi: 3.0.3
+info:
+  title: MatterCodex Control Center API
+  version: 1.0.0
+  description: Типизированная read-only поверхность сохранённой истории автоматизаций.
+servers:
+  - url: /api/control-center/v1
+paths:
+  /automation-runs:
+    get:
+      operationId: listAutomationHistory
+      summary: Получить сохранённую историю запусков автоматизаций
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Сохранённые состояния запусков.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomationHistoryResponse"
+        "401":
+          description: Недействительный read-only token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Недопустимый limit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Метод не поддерживается.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: История или read-only доступ не настроены.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    AutomationHistoryResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomationHistoryItem"
+    AutomationHistoryItem:
+      type: object
+      additionalProperties: false
+      required:
+        - schedule_run_id
+        - status
+        - outcome
+        - delivery_status
+        - next_action
+        - updated_at
+      properties:
+        schedule_run_id:
+          type: string
+          pattern: ^scheduled-run-[a-f0-9]{32}$
+        status:
+          type: string
+          enum:
+            - queued
+            - running
+            - waiting_owner
+            - succeeded
+            - failed
+        outcome:
+          type: string
+          enum:
+            - ""
+            - no_action
+            - action_taken
+            - requires_human
+            - failed
+        owner_attention_id:
+          type: integer
+          format: int64
+          minimum: 1
+        human_decision_status:
+          type: string
+          enum:
+            - open
+            - resolved
+        delivery_status:
+          type: string
+          enum:
+            - pending
+            - delivered
+            - not_required
+        next_action:
+          type: string
+          enum:
+            - retry_same_callback
+            - wait_for_owner_response
+            - none
+        updated_at:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: string

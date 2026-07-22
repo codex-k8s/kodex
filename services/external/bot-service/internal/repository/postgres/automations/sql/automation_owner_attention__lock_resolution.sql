@@ -27,6 +27,8 @@ join matter_codex_process_runs process
 	and process.policy_revision_id = attention.automation_policy_revision_id
 	and process.root_initiator_user_id = attention.automation_root_initiator_user_id
 where run.project_id = $1
+	and attention.request_kind = 'automation'
+	and attention.mattermost_post_id <> ''
 	and process.root_initiator_user_id = $2
 	and attention.automation_mattermost_channel_id = $3
 	and attention.automation_mattermost_root_post_id = $4

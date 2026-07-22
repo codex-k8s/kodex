@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
+	controlcenterapi "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http/generated"
 	transportmodels "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http/models"
 	githubapi "github.com/google/go-github/v88/github"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
@@ -24,18 +26,20 @@ import (
 )
 
 const (
-	pathHealthz          = "/healthz"
-	pathHealthLivez      = "/health/livez"
-	pathHealthReady      = "/health/readyz"
-	pathReadyz           = "/readyz"
-	pathMetrics          = "/metrics"
-	pathAgentsSlash      = "/mattermost/slash/agents"
-	pathAgentsAction     = "/mattermost/actions/agents"
-	pathAgentsDialog     = "/mattermost/dialogs/agents"
-	pathGitHubWebhook    = "/github/webhook"
-	pathAgentSessions    = "/internal/agent-sessions/"
-	pathMCPSessions      = "/mcp/sessions/"
-	dialogCallbackResult = "agents_dialog_result"
+	pathHealthz           = "/healthz"
+	pathHealthLivez       = "/health/livez"
+	pathHealthReady       = "/health/readyz"
+	pathReadyz            = "/readyz"
+	pathMetrics           = "/metrics"
+	pathAgentsSlash       = "/mattermost/slash/agents"
+	pathAgentsAction      = "/mattermost/actions/agents"
+	pathAgentsDialog      = "/mattermost/dialogs/agents"
+	pathGitHubWebhook     = "/github/webhook"
+	pathAgentSessions     = "/internal/agent-sessions/"
+	pathMCPSessions       = "/mcp/sessions/"
+	pathControlCenter     = "/control-center/"
+	pathAutomationHistory = "/api/control-center/v1/automation-runs"
+	dialogCallbackResult  = "agents_dialog_result"
 )
 
 type RouteBoundary string
@@ -70,28 +74,34 @@ type RouterConfig struct {
 	MattermostSiteURL      string
 	MattermostInternalURL  string
 	ThreadPublisher        statusservice.MattermostThreadPublisher
+	Automations            *statusservice.AutomationService
+	ControlCenterReadToken string
+	ControlCenterAssetsDir string
 	MattermostResolver     mattermostDNSResolver
 	MattermostDialer       mattermostContextDialer
 	Logger                 *slog.Logger
 }
 
 type Router struct {
-	statusService         *statusservice.StatusService
-	slashService          *statusservice.SlashCommandService
-	sessionService        *statusservice.AgentSessionService
-	dialogOpener          DialogOpener
-	localizer             *texti18n.Localizer
-	slashToken            string
-	gitHubWebhookSecret   string
-	maxSlashFormBytes     int64
-	maxGitHubWebhookBytes int64
-	interactionSecurity   *statusservice.InteractionSecurityService
-	mattermostResponses   *mattermostResponseClient
-	threadPublisher       statusservice.MattermostThreadPublisher
-	logger                *slog.Logger
-	mcpHandler            http.Handler
-	mux                   *http.ServeMux
-	registeredRoutes      []RegisteredRoute
+	statusService              *statusservice.StatusService
+	slashService               *statusservice.SlashCommandService
+	sessionService             *statusservice.AgentSessionService
+	dialogOpener               DialogOpener
+	localizer                  *texti18n.Localizer
+	slashToken                 string
+	gitHubWebhookSecret        string
+	maxSlashFormBytes          int64
+	maxGitHubWebhookBytes      int64
+	interactionSecurity        *statusservice.InteractionSecurityService
+	mattermostResponses        *mattermostResponseClient
+	threadPublisher            statusservice.MattermostThreadPublisher
+	automations                *statusservice.AutomationService
+	controlCenterReadTokenHash [sha256.Size]byte
+	controlCenterConfigured    bool
+	logger                     *slog.Logger
+	mcpHandler                 http.Handler
+	mux                        *http.ServeMux
+	registeredRoutes           []RegisteredRoute
 }
 
 var _ http.Handler = (*Router)(nil)
@@ -110,8 +120,13 @@ func NewRouter(cfg RouterConfig) *Router {
 		interactionSecurity:   cfg.InteractionSecurity,
 		mattermostResponses:   newMattermostResponseClient(cfg.MattermostSiteURL, cfg.MattermostInternalURL, cfg.MattermostResolver, cfg.MattermostDialer),
 		threadPublisher:       cfg.ThreadPublisher,
+		automations:           cfg.Automations,
 		logger:                cfg.Logger,
 		mux:                   http.NewServeMux(),
+	}
+	if token := strings.TrimSpace(cfg.ControlCenterReadToken); token != "" {
+		router.controlCenterReadTokenHash = sha256.Sum256([]byte(token))
+		router.controlCenterConfigured = true
 	}
 	if cfg.SessionService != nil {
 		router.mcpHandler = newMCPHandler(cfg.SessionService, cfg.MaxMCPRequestBodyBytes)
@@ -133,6 +148,13 @@ func NewRouter(cfg RouterConfig) *Router {
 	if router.mcpHandler != nil {
 		router.register(pathMCPSessions, RouteBoundaryCluster, router.mcpHandler)
 	}
+	router.register(pathAutomationHistory, RouteBoundaryPublic, http.HandlerFunc(router.handleAutomationHistory))
+	assets := http.NotFoundHandler()
+	if assetsDir := strings.TrimSpace(cfg.ControlCenterAssetsDir); assetsDir != "" {
+		assets = http.StripPrefix(pathControlCenter, http.FileServer(http.Dir(assetsDir)))
+	}
+	router.register(strings.TrimSuffix(pathControlCenter, "/"), RouteBoundaryPublic, http.RedirectHandler(pathControlCenter, http.StatusTemporaryRedirect))
+	router.register(pathControlCenter, RouteBoundaryPublic, assets)
 	return router
 }
 
@@ -171,6 +193,60 @@ func (router *Router) handleReady(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, transportmodels.ReadyResponse{Status: "ready", Service: "matter-codex-bot-service"})
+}
+
+func (router *Router) handleAutomationHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, controlcenterapi.ErrorResponse{Error: "method_not_allowed"})
+		return
+	}
+	if !router.controlCenterConfigured || router.automations == nil {
+		writeJSON(w, http.StatusServiceUnavailable, controlcenterapi.ErrorResponse{Error: "control_center_unavailable"})
+		return
+	}
+	provided, bearer := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	provided = strings.TrimSpace(provided)
+	providedHash := sha256.Sum256([]byte(provided))
+	if !bearer || provided == "" || subtle.ConstantTimeCompare(providedHash[:], router.controlCenterReadTokenHash[:]) != 1 {
+		writeJSON(w, http.StatusUnauthorized, controlcenterapi.ErrorResponse{Error: "unauthorized"})
+		return
+	}
+	limit := 50
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed < 1 || parsed > 100 {
+			writeJSON(w, http.StatusBadRequest, controlcenterapi.ErrorResponse{Error: "invalid_limit"})
+			return
+		}
+		limit = parsed
+	}
+	items, err := router.automations.ListHistory(r.Context(), limit)
+	if err != nil {
+		router.logWarn("automation history read failed", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, controlcenterapi.ErrorResponse{Error: "automation_history_unavailable"})
+		return
+	}
+	response := controlcenterapi.AutomationHistoryResponse{Items: make([]controlcenterapi.AutomationHistoryItem, 0, len(items))}
+	for _, item := range items {
+		mapped := controlcenterapi.AutomationHistoryItem{
+			ScheduleRunId:  item.ScheduledRunPublicID,
+			Status:         controlcenterapi.AutomationHistoryItemStatus(item.Status),
+			Outcome:        controlcenterapi.AutomationHistoryItemOutcome(item.Outcome),
+			DeliveryStatus: controlcenterapi.AutomationHistoryItemDeliveryStatus(item.DeliveryStatus),
+			NextAction:     controlcenterapi.AutomationHistoryItemNextAction(item.NextAction),
+			UpdatedAt:      item.UpdatedAt.UTC(),
+		}
+		if item.OwnerAttentionID > 0 {
+			mapped.OwnerAttentionId = &item.OwnerAttentionID
+		}
+		if item.HumanDecisionStatus != "" {
+			status := controlcenterapi.AutomationHistoryItemHumanDecisionStatus(item.HumanDecisionStatus)
+			mapped.HumanDecisionStatus = &status
+		}
+		response.Items = append(response.Items, mapped)
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) {

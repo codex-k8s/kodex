@@ -36,6 +36,7 @@ alter table matter_codex_process_runs
 		unique (id, project_id, policy_revision_id, root_initiator_user_id);
 
 alter table matter_codex_owner_attention_requests
+	add column request_kind text not null default 'generic',
 	add column automation_scheduled_run_id bigint,
 	add column automation_project_id bigint,
 	add column automation_policy_revision_id bigint,
@@ -46,6 +47,13 @@ alter table matter_codex_owner_attention_requests
 	add column automation_delivery_message text,
 	add column automation_delivery_props jsonb,
 	add column automation_delivery_payload_sha256 bytea,
+	add column automation_delivery_claim_token text,
+	add column automation_delivery_claimed_at timestamptz,
+	add column automation_delivery_lease_expires_at timestamptz,
+	add column automation_delivery_next_attempt_at timestamptz not null default '-infinity',
+	add column automation_delivery_fence bigint not null default 0,
+	add constraint matter_codex_owner_attention_request_kind_check
+		check (request_kind in ('generic', 'automation')),
 	add constraint matter_codex_owner_attention_automation_run_key
 		unique (automation_scheduled_run_id),
 	add constraint matter_codex_owner_attention_automation_delivery_key
@@ -53,7 +61,8 @@ alter table matter_codex_owner_attention_requests
 	add constraint matter_codex_owner_attention_automation_shape_check
 		check (
 			(
-				automation_scheduled_run_id is null
+				request_kind = 'generic'
+				and automation_scheduled_run_id is null
 				and automation_project_id is null
 				and automation_policy_revision_id is null
 				and automation_root_initiator_user_id is null
@@ -63,9 +72,14 @@ alter table matter_codex_owner_attention_requests
 				and automation_delivery_message is null
 				and automation_delivery_props is null
 				and automation_delivery_payload_sha256 is null
+				and automation_delivery_claim_token is null
+				and automation_delivery_claimed_at is null
+				and automation_delivery_lease_expires_at is null
+				and automation_delivery_fence = 0
 			)
 			or (
-				automation_scheduled_run_id is not null
+				request_kind = 'automation'
+				and automation_scheduled_run_id is not null
 				and automation_project_id is not null
 				and automation_policy_revision_id is not null
 				and length(trim(automation_root_initiator_user_id)) > 0
@@ -80,6 +94,19 @@ alter table matter_codex_owner_attention_requests
 				and automation_delivery_props->>'matter_codex_automation_run_id' <> ''
 				and automation_delivery_props->>'matter_codex_human_decision_status' = 'pending'
 				and octet_length(automation_delivery_payload_sha256) = 32
+				and (
+					(
+						automation_delivery_claim_token is null
+						and automation_delivery_claimed_at is null
+						and automation_delivery_lease_expires_at is null
+					)
+					or (
+						length(trim(automation_delivery_claim_token)) between 16 and 128
+						and automation_delivery_claimed_at is not null
+						and automation_delivery_lease_expires_at > automation_delivery_claimed_at
+					)
+				)
+				and automation_delivery_fence >= 0
 			)
 		),
 	add constraint matter_codex_owner_attention_automation_run_fk
@@ -105,9 +132,33 @@ alter table matter_codex_owner_attention_requests
 		)
 		on delete cascade;
 
+-- Старую общую уникальность заменяют независимые namespace generic и automation.
+-- +goose StatementBegin
+do $$
+declare
+	unique_constraint_name text;
+begin
+	select candidate.conname
+	into unique_constraint_name
+	from pg_constraint candidate
+	where candidate.conrelid = 'matter_codex_owner_attention_requests'::regclass
+		and candidate.contype = 'u'
+		and pg_get_constraintdef(candidate.oid) = 'UNIQUE (process_run_id, idempotency_key)';
+	if unique_constraint_name is null then
+		raise exception 'generic owner attention uniqueness constraint was not found';
+	end if;
+	execute format('alter table matter_codex_owner_attention_requests drop constraint %I', unique_constraint_name);
+end
+$$;
+-- +goose StatementEnd
+
+create unique index matter_codex_owner_attention_generic_idempotency_key
+	on matter_codex_owner_attention_requests(process_run_id, idempotency_key)
+	where request_kind = 'generic';
+
 create index matter_codex_owner_attention_automation_pending_idx
-	on matter_codex_owner_attention_requests(id)
-	where automation_scheduled_run_id is not null
+	on matter_codex_owner_attention_requests(automation_delivery_next_attempt_at, id)
+	where request_kind = 'automation'
 		and status = 'open'
 		and mattermost_post_id = '';
 
@@ -120,7 +171,7 @@ begin
 	if runtime_role_name is not null then
 		execute format('grant select on table %I.matter_codex_owner_attention_requests, %I.matter_codex_process_runs, %I.matter_codex_process_turns to %I', trusted_schema, trusted_schema, trusted_schema, runtime_role_name);
 		execute format('grant insert on table %I.matter_codex_owner_attention_requests to %I', trusted_schema, runtime_role_name);
-		execute format('grant update (status, mattermost_post_id, resolved_at, resolved_by_user_id, resolved_by_post_id, updated_at) on table %I.matter_codex_owner_attention_requests to %I', trusted_schema, runtime_role_name);
+		execute format('grant update (status, mattermost_post_id, resolved_at, resolved_by_user_id, resolved_by_post_id, updated_at, automation_delivery_claim_token, automation_delivery_claimed_at, automation_delivery_lease_expires_at, automation_delivery_next_attempt_at, automation_delivery_fence) on table %I.matter_codex_owner_attention_requests to %I', trusted_schema, runtime_role_name);
 		execute format('grant update (status, updated_at, finished_at) on table %I.matter_codex_process_runs to %I', trusted_schema, runtime_role_name);
 	end if;
 end
@@ -131,7 +182,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 000037 is forward-only: automation human gates cannot be removed safely';
+	raise exception 'migration 000035 is forward-only: automation human gates cannot be removed safely';
 end
 $$;
 -- +goose StatementEnd
