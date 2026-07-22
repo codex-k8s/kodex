@@ -18,19 +18,19 @@ func TestArtifactMediaTypeConstraintExactlyMatchesApplicationPolicy(t *testing.T
 	if !ok {
 		t.Fatal("не удалось определить каталог миграции")
 	}
-	body, err := os.ReadFile(filepath.Join(filepath.Dir(currentFile), "000034_artifacts_vertical.sql"))
+	body, err := os.ReadFile(filepath.Join(filepath.Dir(currentFile), "000035_artifacts_vertical.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	startMarker := "media_type text not null check (media_type in ("
 	start := strings.Index(string(body), startMarker)
 	if start < 0 {
-		t.Fatal("в 000034 не найден media_type constraint")
+		t.Fatal("в 000035 не найден media_type constraint")
 	}
 	constraint := string(body)[start+len(startMarker):]
 	end := strings.Index(constraint, ")),\n\tdeclared_media_type")
 	if end < 0 {
-		t.Fatal("в 000034 не найден конец media_type constraint")
+		t.Fatal("в 000035 не найден конец media_type constraint")
 	}
 	matches := regexp.MustCompile(`'([^']+)'`).FindAllStringSubmatch(constraint[:end], -1)
 	databaseMediaTypes := make([]string, 0, len(matches))

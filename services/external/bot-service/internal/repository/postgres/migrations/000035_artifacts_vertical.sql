@@ -406,7 +406,7 @@ $$;
 -- +goose StatementBegin
 do $$
 begin
-	raise exception 'migration 000034 is forward-only: immutable artifact metadata and retention holds cannot be removed safely';
+	raise exception 'migration 000035 is forward-only: immutable artifact metadata and retention holds cannot be removed safely';
 end
 $$;
 -- +goose StatementEnd
