@@ -14,6 +14,7 @@ type securedMattermostThreadPublisher struct {
 
 var _ MattermostThreadPublisher = (*securedMattermostThreadPublisher)(nil)
 var _ MattermostIdempotentThreadPublisher = (*securedMattermostThreadPublisher)(nil)
+var _ MattermostThreadCardUpdateReconciler = (*securedMattermostThreadPublisher)(nil)
 
 func NewSecuredMattermostThreadPublisher(next MattermostThreadPublisher, security *InteractionSecurityService) MattermostThreadPublisher {
 	if next == nil {
@@ -142,6 +143,14 @@ func (publisher *securedMattermostThreadPublisher) reconcileThreadCardUpdate(ctx
 		return ref, nil
 	}
 	return MattermostPostRef{}, errors.Join(updateErr, publisher.security.RevokeCard(ctx, card))
+}
+
+func (publisher *securedMattermostThreadPublisher) ReconcileThreadCardUpdate(ctx context.Context, card MattermostCard) (MattermostPostRef, bool, error) {
+	reconciler, ok := publisher.next.(MattermostThreadCardUpdateReconciler)
+	if !ok {
+		return MattermostPostRef{}, false, fmt.Errorf("mattermost thread card reconciliation is not configured")
+	}
+	return reconciler.ReconcileThreadCardUpdate(ctx, card)
 }
 
 func (publisher *securedMattermostThreadPublisher) AddPostReactionWithToken(ctx context.Context, token string, input MattermostPostReactionInput) error {

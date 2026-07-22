@@ -44,6 +44,10 @@ func DefaultHTTPClientConfig() HTTPClientConfig {
 var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
 var _ statusservice.MattermostIdempotentThreadPublisher = (*ControlSurface)(nil)
 var _ statusservice.MattermostThreadCardUpdateReconciler = (*ControlSurface)(nil)
+
+var exactThreadCardServerOwnedProps = map[string]any{
+	mattermostmodel.PostPropsFromBot: "true",
+}
 var _ statusservice.MattermostConversationReader = (*ControlSurface)(nil)
 var _ statusservice.MattermostRoleBotManager = (*ControlSurface)(nil)
 var _ statusservice.MattermostInteractionActorVerifier = (*ControlSurface)(nil)
@@ -439,6 +443,16 @@ func exactThreadCardUpdate(actual *mattermostmodel.Post, card statusservice.Matt
 		if !exists || !sameJSONValue(value, expected) {
 			return false
 		}
+	}
+	for key, value := range actualProps {
+		if _, expected := expectedProps[key]; expected {
+			continue
+		}
+		allowed, serverOwned := exactThreadCardServerOwnedProps[key]
+		if serverOwned && sameJSONValue(value, allowed) {
+			continue
+		}
+		return false
 	}
 	return true
 }

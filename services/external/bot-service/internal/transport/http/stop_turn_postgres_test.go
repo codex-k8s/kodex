@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +38,14 @@ type postgresStopFaults struct {
 	cardCASErr                  error
 	cardCommitResponseLostErr   error
 	cardCommitResponseLostReady bool
+	recoveryConsumeResponseLost error
+	activationFaults            []postgresStopActivationFault
+	processErrors               []error
+}
+
+type postgresStopActivationFault struct {
+	apply bool
+	err   error
 }
 
 type postgresStopStore struct {
@@ -62,19 +71,30 @@ type postgresStopCommitBarrier struct {
 
 type postgresStopSecurityStore struct {
 	securityrepo.Repository
-	atomic securityrepo.AtomicDialogRepository
-	replay securityrepo.ConsumedCapabilityReplayRepository
-	store  *postgresStopStore
+	atomic  securityrepo.AtomicDialogRepository
+	replay  securityrepo.ConsumedCapabilityReplayRepository
+	pending securityrepo.PendingCapabilityRecoveryRepository
+	store   *postgresStopStore
 }
 
 func (store *postgresStopSecurityStore) ConsumeInteractionCapabilityWithMutation(ctx context.Context, input securityrepo.ConsumeCapabilityInput, mutation func(adminrepo.Repository) error) (securityrepo.Capability, error) {
-	return store.atomic.ConsumeInteractionCapabilityWithMutation(ctx, input, func(transactional adminrepo.Repository) error {
+	capability, err := store.atomic.ConsumeInteractionCapabilityWithMutation(ctx, input, func(transactional adminrepo.Repository) error {
 		wrapped, err := store.store.wrapTransactional(transactional)
 		if err != nil {
 			return err
 		}
 		return mutation(wrapped)
 	})
+	if err != nil || input.Operation != "action;kind=agent_turn;action=recover_stop_turn" {
+		return capability, err
+	}
+	store.store.faults.mu.Lock()
+	defer store.store.faults.mu.Unlock()
+	if store.store.faults.recoveryConsumeResponseLost != nil {
+		err = store.store.faults.recoveryConsumeResponseLost
+		store.store.faults.recoveryConsumeResponseLost = nil
+	}
+	return capability, err
 }
 
 func (store *postgresStopSecurityStore) ReplayConsumedInteractionCapabilityWithMutation(ctx context.Context, input securityrepo.ConsumeCapabilityInput, mutation func(securityrepo.Capability, adminrepo.Repository) error) (securityrepo.Capability, error) {
@@ -85,6 +105,42 @@ func (store *postgresStopSecurityStore) ReplayConsumedInteractionCapabilityWithM
 		}
 		return mutation(capability, wrapped)
 	})
+}
+
+func (store *postgresStopSecurityStore) CheckPendingInteractionCapability(ctx context.Context, input securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	return store.pending.CheckPendingInteractionCapability(ctx, input)
+}
+
+func (store *postgresStopSecurityStore) ConsumePendingInteractionCapabilityWithMutation(ctx context.Context, input securityrepo.ConsumeCapabilityInput, mutation func(adminrepo.Repository) error) (securityrepo.Capability, error) {
+	return store.pending.ConsumePendingInteractionCapabilityWithMutation(ctx, input, func(transactional adminrepo.Repository) error {
+		wrapped, err := store.store.wrapTransactional(transactional)
+		if err != nil {
+			return err
+		}
+		return mutation(wrapped)
+	})
+}
+
+func (store *postgresStopSecurityStore) TransitionInteractionCapabilities(ctx context.Context, input securityrepo.TransitionCapabilitiesInput) error {
+	if input.From != securityrepo.CapabilityStatePending || input.To != securityrepo.CapabilityStateUnused {
+		return store.Repository.TransitionInteractionCapabilities(ctx, input)
+	}
+	store.store.faults.mu.Lock()
+	var fault postgresStopActivationFault
+	if len(store.store.faults.activationFaults) > 0 {
+		fault = store.store.faults.activationFaults[0]
+		store.store.faults.activationFaults = store.store.faults.activationFaults[1:]
+	}
+	store.store.faults.mu.Unlock()
+	if fault.err == nil {
+		return store.Repository.TransitionInteractionCapabilities(ctx, input)
+	}
+	if fault.apply {
+		if err := store.Repository.TransitionInteractionCapabilities(ctx, input); err != nil {
+			return err
+		}
+	}
+	return fault.err
 }
 
 func newPostgresStopStore(repository *adminpostgres.Repository, faults *postgresStopFaults) *postgresStopStore {
@@ -210,6 +266,20 @@ func (store *postgresStopStore) ResetAgentSessionRuntime(ctx context.Context, se
 	return store.Repository.ResetAgentSessionRuntime(ctx, sessionKey, status)
 }
 
+func (store *postgresStopStore) ReconcileProcessRun(ctx context.Context, turnID int64) error {
+	store.faults.mu.Lock()
+	var fault error
+	if len(store.faults.processErrors) > 0 {
+		fault = store.faults.processErrors[0]
+		store.faults.processErrors = store.faults.processErrors[1:]
+	}
+	store.faults.mu.Unlock()
+	if fault != nil {
+		return fault
+	}
+	return store.CoordinationRepository.ReconcileProcessRun(ctx, turnID)
+}
+
 func (store *postgresStopStore) resetCallCount() int {
 	store.faults.mu.Lock()
 	defer store.faults.mu.Unlock()
@@ -257,6 +327,8 @@ type postgresStopPublisher struct {
 	cardUpdates            []statusservice.MattermostCard
 	updateErrors           []error
 	reconcileUpdateApplied bool
+	reconcileErrors        []error
+	visibleCard            *statusservice.MattermostCard
 }
 
 func (publisher *postgresStopPublisher) PostThreadCard(_ context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
@@ -273,15 +345,26 @@ func (publisher *postgresStopPublisher) UpdateThreadCard(_ context.Context, card
 	if len(publisher.updateErrors) > 0 {
 		err := publisher.updateErrors[0]
 		publisher.updateErrors = publisher.updateErrors[1:]
+		if publisher.reconcileUpdateApplied {
+			visible := card
+			publisher.visibleCard = &visible
+		}
 		return statusservice.MattermostPostRef{}, err
 	}
+	visible := card
+	publisher.visibleCard = &visible
 	return statusservice.MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, nil
 }
 
 func (publisher *postgresStopPublisher) ReconcileThreadCardUpdate(_ context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, bool, error) {
 	publisher.mu.Lock()
 	defer publisher.mu.Unlock()
-	if !publisher.reconcileUpdateApplied {
+	if len(publisher.reconcileErrors) > 0 {
+		err := publisher.reconcileErrors[0]
+		publisher.reconcileErrors = publisher.reconcileErrors[1:]
+		return statusservice.MattermostPostRef{}, false, err
+	}
+	if publisher.visibleCard == nil || !reflect.DeepEqual(*publisher.visibleCard, card) {
 		return statusservice.MattermostPostRef{}, false, nil
 	}
 	return statusservice.MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, true, nil
@@ -552,6 +635,172 @@ func TestStopTurnProductionRouterPostgresRecoversPublishedCardAfterPersistenceFa
 				response := serveStopTurnAction(restarted, body)
 				if response.Code != http.StatusUnauthorized {
 					t.Fatalf("second %s delivery status=%d body=%s", name, response.Code, response.Body.String())
+				}
+			}
+			fixture.assertTerminalExactlyOnce(t)
+		})
+	}
+}
+
+func TestStopTurnProductionRouterPostgresReplaysConsumedRecoveryUntilStopCompletes(t *testing.T) {
+	for _, test := range []struct {
+		name              string
+		configureRecovery func(*postgresStopHTTPFixture, *statusservice.AutomationService) statusservice.AutomationRuntimeTerminalReconciler
+		wantFirstStatus   int
+	}{
+		{
+			name: "consume commit applied response lost",
+			configureRecovery: func(fixture *postgresStopHTTPFixture, automation *statusservice.AutomationService) statusservice.AutomationRuntimeTerminalReconciler {
+				fixture.store.faults.recoveryConsumeResponseLost = errors.New("синтетический потерянный ответ commit recovery consume")
+				return automation
+			},
+			wantFirstStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "process phase fails after consume",
+			configureRecovery: func(fixture *postgresStopHTTPFixture, automation *statusservice.AutomationService) statusservice.AutomationRuntimeTerminalReconciler {
+				fixture.store.faults.processErrors = []error{errors.New("синтетическая ошибка process после recovery consume")}
+				return automation
+			},
+			wantFirstStatus: http.StatusBadGateway,
+		},
+		{
+			name: "automation phase fails after consume",
+			configureRecovery: func(_ *postgresStopHTTPFixture, automation *statusservice.AutomationService) statusservice.AutomationRuntimeTerminalReconciler {
+				return &failOnceTerminalReconciler{next: automation, err: errors.New("синтетическая ошибка automation после recovery consume")}
+			},
+			wantFirstStatus: http.StatusBadGateway,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newPostgresStopHTTPFixture(t, "router_consumed_recovery_"+strings.ReplaceAll(test.name, " ", "_"))
+			fixture.store.faults.cardCASErr = errors.New("синтетическая ошибка card CAS до применения")
+			automation := fixture.automationService()
+			router, security := fixture.router(t, automation, 30*time.Minute)
+			originalBody := fixture.issueActionBody(t, security, "stop_turn", fixture.projectID, fixture.sessionKey, fixture.turnID)
+
+			first := serveStopTurnAction(router, originalBody)
+			if first.Code != http.StatusBadGateway {
+				t.Fatalf("initial status=%d body=%s", first.Code, first.Body.String())
+			}
+			_, updates := fixture.publisher.snapshot()
+			if len(updates) != 1 || len(updates[0].Actions) != 1 {
+				t.Fatalf("recovery update=%#v", updates)
+			}
+			recoveryBody := stopTurnBodyFromCard(t, updates[0])
+			recoveryRouter, _ := fixture.router(t, test.configureRecovery(fixture, automation), 30*time.Minute)
+			failedRecovery := serveStopTurnAction(recoveryRouter, recoveryBody)
+			if failedRecovery.Code != test.wantFirstStatus {
+				t.Fatalf("first recovery status=%d/%d body=%s", failedRecovery.Code, test.wantFirstStatus, failedRecovery.Body.String())
+			}
+			fixture.assertRecoveryCapabilityState(t, "consumed")
+			fixture.assertCardCompleted(t, true)
+			fixture.assertPendingAutomation(t)
+
+			restarted, _ := fixture.router(t, automation, 30*time.Minute)
+			recovered := serveStopTurnAction(restarted, recoveryBody)
+			if recovered.Code != http.StatusOK {
+				t.Fatalf("replayed recovery status=%d body=%s", recovered.Code, recovered.Body.String())
+			}
+			fixture.assertTerminalExactlyOnce(t)
+			_, updates = fixture.publisher.snapshot()
+			if fixture.runner.cleanupCallCount() != 1 || fixture.store.resetCallCount() != 1 || len(updates) != 1 {
+				t.Fatalf("replayed effects cleanup=%d reset=%d updates=%d", fixture.runner.cleanupCallCount(), fixture.store.resetCallCount(), len(updates))
+			}
+			for name, body := range map[string]string{"initial": originalBody, "recovery": recoveryBody} {
+				response := serveStopTurnAction(restarted, body)
+				if response.Code != http.StatusUnauthorized {
+					t.Fatalf("completed %s replay status=%d body=%s", name, response.Code, response.Body.String())
+				}
+			}
+			fixture.assertTerminalExactlyOnce(t)
+		})
+	}
+}
+
+func TestStopTurnProductionRouterPostgresRecoversPotentiallyVisiblePendingCapability(t *testing.T) {
+	for _, test := range []struct {
+		name              string
+		configure         func(*postgresStopHTTPFixture)
+		wantPendingBefore bool
+		wantCallbackRetry bool
+	}{
+		{
+			name: "UpdatePost applied and exact read failed",
+			configure: func(fixture *postgresStopHTTPFixture) {
+				fixture.publisher.updateErrors = []error{errors.New("синтетический потерянный ответ UpdatePost")}
+				fixture.publisher.reconcileUpdateApplied = true
+				fixture.publisher.reconcileErrors = []error{
+					errors.New("синтетическая ошибка GetPost после UpdatePost"),
+					errors.New("синтетическая ошибка GetPost после restart"),
+				}
+			},
+			wantPendingBefore: true,
+			wantCallbackRetry: true,
+		},
+		{
+			name: "ActivateCard failed before apply",
+			configure: func(fixture *postgresStopHTTPFixture) {
+				fixture.store.faults.activationFaults = []postgresStopActivationFault{{err: errors.New("синтетическая ошибка ActivateCard до применения")}}
+			},
+			wantPendingBefore: true,
+		},
+		{
+			name: "ActivateCard commit applied response lost",
+			configure: func(fixture *postgresStopHTTPFixture) {
+				fixture.store.faults.activationFaults = []postgresStopActivationFault{{apply: true, err: errors.New("синтетический потерянный ответ commit ActivateCard")}}
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newPostgresStopHTTPFixture(t, "router_pending_recovery_"+strings.ReplaceAll(test.name, " ", "_"))
+			test.configure(fixture)
+			automation := fixture.automationService()
+			router, security := fixture.router(t, automation, 30*time.Minute)
+			originalBody := fixture.issueActionBody(t, security, "stop_turn", fixture.projectID, fixture.sessionKey, fixture.turnID)
+
+			first := serveStopTurnAction(router, originalBody)
+			if first.Code != http.StatusBadGateway {
+				t.Fatalf("initial status=%d body=%s", first.Code, first.Body.String())
+			}
+			_, updates := fixture.publisher.snapshot()
+			if len(updates) != 1 || len(updates[0].Actions) != 1 || updates[0].Actions[0].Context["action"] != "recover_stop_turn" {
+				t.Fatalf("potentially visible recovery update=%#v", updates)
+			}
+			recoveryBody := stopTurnBodyFromCard(t, updates[0])
+			if test.wantPendingBefore {
+				fixture.assertRecoveryCapabilityState(t, "pending")
+			} else {
+				fixture.assertRecoveryCapabilityState(t, "unused")
+			}
+			fixture.assertCardCompleted(t, false)
+			fixture.assertPendingAutomation(t)
+
+			restarted, _ := fixture.router(t, automation, 30*time.Minute)
+			if test.wantCallbackRetry {
+				retry := serveStopTurnAction(restarted, recoveryBody)
+				if retry.Code != http.StatusServiceUnavailable {
+					t.Fatalf("temporary reconciliation status=%d body=%s", retry.Code, retry.Body.String())
+				}
+				fixture.assertRecoveryCapabilityState(t, "pending")
+				fixture.assertCardCompleted(t, false)
+				fixture.assertPendingAutomation(t)
+				restarted, _ = fixture.router(t, automation, 30*time.Minute)
+			}
+			recovered := serveStopTurnAction(restarted, recoveryBody)
+			if recovered.Code != http.StatusOK {
+				t.Fatalf("visible recovery status=%d body=%s", recovered.Code, recovered.Body.String())
+			}
+			fixture.assertTerminalExactlyOnce(t)
+			fixture.assertRecoveryCapabilityState(t, "consumed")
+			_, updates = fixture.publisher.snapshot()
+			if fixture.runner.cleanupCallCount() != 1 || fixture.store.resetCallCount() != 1 || len(updates) != 1 {
+				t.Fatalf("visible recovery effects cleanup=%d reset=%d updates=%d", fixture.runner.cleanupCallCount(), fixture.store.resetCallCount(), len(updates))
+			}
+			for name, body := range map[string]string{"initial": originalBody, "recovery": recoveryBody} {
+				response := serveStopTurnAction(restarted, body)
+				if response.Code != http.StatusUnauthorized {
+					t.Fatalf("completed %s replay status=%d body=%s", name, response.Code, response.Body.String())
 				}
 			}
 			fixture.assertTerminalExactlyOnce(t)
@@ -952,7 +1201,7 @@ func (fixture *postgresStopHTTPFixture) automationService() *statusservice.Autom
 func (fixture *postgresStopHTTPFixture) router(t *testing.T, reconciler statusservice.AutomationRuntimeTerminalReconciler, ttl time.Duration) (*Router, *statusservice.InteractionSecurityService) {
 	t.Helper()
 	securityRepository := &postgresStopSecurityStore{
-		Repository: fixture.admin, atomic: fixture.admin, replay: fixture.admin, store: fixture.store,
+		Repository: fixture.admin, atomic: fixture.admin, replay: fixture.admin, pending: fixture.admin, store: fixture.store,
 	}
 	security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
 		Repository:    securityRepository,

@@ -164,3 +164,97 @@ func TestConsumedCapabilityReplayRequiresExactBindingPostgres(t *testing.T) {
 		}
 	}
 }
+
+func TestPendingCapabilityRecoveryConsumesExactBindingWithMutationPostgres(t *testing.T) {
+	dsn := isolatedPostgresTestDSN(t, "pending_capability_recovery")
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("migrate pending capability schema: %v", err)
+	}
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open pending capability pool: %v", err)
+	}
+	defer pool.Close()
+	repository := postgresrepo.NewRepository(pool)
+	now := time.Now().UTC()
+	tokenHash := make([]byte, 32)
+	contextHash := make([]byte, 32)
+	for index := range tokenHash {
+		tokenHash[index] = byte(index + 97)
+		contextHash[index] = byte(index + 129)
+	}
+	if err := repository.IssueInteractionCapability(ctx, securityrepo.IssueCapabilityInput{
+		TokenHash: tokenHash, Kind: "action", Operation: "action;kind=agent_turn;action=recover_stop_turn",
+		ResourceType: "agent_session_turn", ResourceID: "42", ChannelID: "channel",
+		PostBinding: "post", ActorUserID: "owner-id", ActorUserName: "owner",
+		InstallationScope: "single-installation", WorkspaceScope: "7", SessionScope: "session-7",
+		ContextHash: contextHash, IssuedAt: now, ExpiresAt: now.Add(time.Hour), State: securityrepo.CapabilityStatePending,
+	}); err != nil {
+		t.Fatalf("issue pending recovery capability: %v", err)
+	}
+	input := securityrepo.ConsumeCapabilityInput{
+		TokenHash: tokenHash, Kind: "action", Operation: "action;kind=agent_turn;action=recover_stop_turn",
+		ResourceType: "agent_session_turn", ResourceID: "42", ChannelID: "channel",
+		PostBinding: "post", ActorUserID: "owner-id", ContextHash: contextHash, Now: now.Add(time.Minute),
+	}
+	capability, err := repository.CheckPendingInteractionCapability(ctx, input)
+	if err != nil || capability.State != securityrepo.CapabilityStatePending || capability.WorkspaceScope != "7" || capability.SessionScope != "session-7" {
+		t.Fatalf("pending capability=%#v error=%v", capability, err)
+	}
+	for _, changed := range []securityrepo.ConsumeCapabilityInput{
+		func() securityrepo.ConsumeCapabilityInput {
+			value := input
+			value.ActorUserID = "other-user"
+			return value
+		}(),
+		func() securityrepo.ConsumeCapabilityInput {
+			value := input
+			value.ChannelID = "other-channel"
+			return value
+		}(),
+		func() securityrepo.ConsumeCapabilityInput {
+			value := input
+			value.PostBinding = "other-post"
+			return value
+		}(),
+		func() securityrepo.ConsumeCapabilityInput { value := input; value.ResourceID = "43"; return value }(),
+		func() securityrepo.ConsumeCapabilityInput {
+			value := input
+			value.ContextHash = append([]byte(nil), contextHash...)
+			value.ContextHash[0]++
+			return value
+		}(),
+	} {
+		called := false
+		if _, err := repository.ConsumePendingInteractionCapabilityWithMutation(ctx, changed, func(adminrepo.Repository) error {
+			called = true
+			return nil
+		}); err == nil || called {
+			t.Fatalf("changed pending recovery error=%v called=%t", err, called)
+		}
+	}
+	mutationErr := errors.New("synthetic pending mutation failure")
+	if _, err := repository.ConsumePendingInteractionCapabilityWithMutation(ctx, input, func(adminrepo.Repository) error {
+		return mutationErr
+	}); !errors.Is(err, mutationErr) {
+		t.Fatalf("rollback pending recovery error=%v", err)
+	}
+	if _, err := repository.CheckPendingInteractionCapability(ctx, input); err != nil {
+		t.Fatalf("pending capability was not retryable after rollback: %v", err)
+	}
+	consumed, err := repository.ConsumePendingInteractionCapabilityWithMutation(ctx, input, func(store adminrepo.Repository) error {
+		_, _, mutationErr := store.UpsertProject(ctx, adminrepo.UpsertProjectInput{Name: "Pending recovery", Slug: "pending-recovery", AdvancedSettings: "{}"})
+		return mutationErr
+	})
+	if err != nil || consumed.State != securityrepo.CapabilityStateConsumed {
+		t.Fatalf("consumed pending capability=%#v error=%v", consumed, err)
+	}
+	if _, err := repository.GetProjectBySlug(ctx, "pending-recovery"); err != nil {
+		t.Fatalf("pending recovery mutation missing: %v", err)
+	}
+	if _, err := repository.CheckPendingInteractionCapability(ctx, input); !errors.Is(err, securityrepo.ErrCapabilityConsumed) {
+		t.Fatalf("completed pending capability check error=%v", err)
+	}
+}

@@ -350,7 +350,9 @@ func (router *Router) handleAgentTurnStopAction(w http.ResponseWriter, r *http.R
 		ChannelID: strings.TrimSpace(request.ChannelId), PostID: strings.TrimSpace(request.PostId),
 	}
 	var plan statusservice.StopAgentSessionTurnsPlan
-	interaction, err := router.interactionSecurity.AuthenticateAgentTurnStopActionAtomic(r.Context(), callback, func(interaction statusservice.AuthenticatedInteraction, store adminrepo.Repository, consumedReplay bool) error {
+	interaction, err := router.interactionSecurity.AuthenticateAgentTurnStopActionAtomic(r.Context(), callback, func(interaction statusservice.AuthenticatedInteraction) (bool, error) {
+		return router.sessionService.ReconcilePendingStopAgentSessionTurnCard(r.Context(), interaction, callback)
+	}, func(interaction statusservice.AuthenticatedInteraction, store adminrepo.Repository, consumedReplay bool) error {
 		if interaction.ResourceType != "agent_session_turn" || interaction.ResourceID != strconv.FormatInt(resourceID, 10) || strings.TrimSpace(interaction.Scope.Session) == "" || strings.TrimSpace(interaction.Scope.Workspace) == "" {
 			return statusservice.ErrInteractionAuthentication
 		}
@@ -367,6 +369,10 @@ func (router *Router) handleAgentTurnStopAction(w http.ResponseWriter, r *http.R
 		return prepareErr
 	})
 	if err != nil {
+		if errors.Is(err, statusservice.ErrInteractionPreparation) {
+			writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "interaction_capability_unavailable"})
+			return
+		}
 		router.writeInteractionDenied(w, err)
 		return
 	}

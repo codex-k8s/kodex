@@ -342,6 +342,7 @@ func (svc *InteractionSecurityService) AuthenticateActionAtomic(ctx context.Cont
 func (svc *InteractionSecurityService) AuthenticateAgentTurnStopActionAtomic(
 	ctx context.Context,
 	callback ActionCallback,
+	reconcilePending func(AuthenticatedInteraction) (bool, error),
 	mutation func(AuthenticatedInteraction, adminrepo.Repository, bool) error,
 ) (AuthenticatedInteraction, error) {
 	if mutation == nil {
@@ -368,13 +369,73 @@ func (svc *InteractionSecurityService) AuthenticateAgentTurnStopActionAtomic(
 	interaction, err := svc.consumeAndAdmit(ctx, token, input, contextCopy, "mattermost.callback.action", callbackPostID, nil, func(interaction AuthenticatedInteraction, store adminrepo.Repository) error {
 		return mutation(interaction, store, false)
 	})
-	if err == nil || !errors.Is(err, securityrepo.ErrCapabilityConsumed) {
+	if err == nil {
 		return interaction, err
 	}
-	if action != agentTurnStopAction {
-		return AuthenticatedInteraction{}, ErrInteractionAuthentication
+	if errors.Is(err, securityrepo.ErrCapabilityInactive) && action == agentTurnStopRecoveryAction && reconcilePending != nil {
+		return svc.consumePendingActionAndAdmit(ctx, token, input, contextCopy, callbackPostID, reconcilePending, mutation)
+	}
+	if !errors.Is(err, securityrepo.ErrCapabilityConsumed) || (action != agentTurnStopAction && action != agentTurnStopRecoveryAction) {
+		return interaction, err
 	}
 	return svc.replayConsumedActionAndAdmit(ctx, token, input, contextCopy, callbackPostID, mutation)
+}
+
+func (svc *InteractionSecurityService) consumePendingActionAndAdmit(
+	ctx context.Context,
+	token string,
+	input securityrepo.ConsumeCapabilityInput,
+	safeContext map[string]any,
+	callbackPostID string,
+	reconcile func(AuthenticatedInteraction) (bool, error),
+	mutation func(AuthenticatedInteraction, adminrepo.Repository, bool) error,
+) (AuthenticatedInteraction, error) {
+	repository, ok := svc.repository.(securityrepo.PendingCapabilityRecoveryRepository)
+	if !ok {
+		return AuthenticatedInteraction{}, ErrInteractionAuthentication
+	}
+	tokenHash := sha256.Sum256([]byte(token))
+	contextHash, err := interactionContextHash(safeContext)
+	if err != nil {
+		return AuthenticatedInteraction{}, ErrInteractionAuthentication
+	}
+	input.TokenHash = tokenHash[:]
+	input.ContextHash = contextHash
+	input.Now = svc.now().UTC()
+	capability, err := repository.CheckPendingInteractionCapability(ctx, input)
+	if err != nil {
+		return AuthenticatedInteraction{}, fmt.Errorf("%w: %w", ErrInteractionAuthentication, err)
+	}
+	interaction := authenticatedInteraction(capability, callbackPostID)
+	interaction.Action = contextStringValue(safeContext, "action")
+	decision := svc.admission.Admit(ctx, InteractionAdmissionRequest{
+		ActionKey: "mattermost.callback.action", Operation: interaction.Operation,
+		ResourceType: interaction.ResourceType, ResourceID: interaction.ResourceID,
+		Actor: interaction.Actor, Scope: interaction.Scope,
+		ChannelID: interaction.ChannelID, PostID: callbackPostID,
+	})
+	switch decision.Status {
+	case AdmissionAllowed:
+		applied, reconcileErr := reconcile(interaction)
+		if reconcileErr != nil {
+			return AuthenticatedInteraction{}, fmt.Errorf("%w: %w", ErrInteractionPreparation, reconcileErr)
+		}
+		if !applied {
+			return AuthenticatedInteraction{}, ErrInteractionAuthentication
+		}
+		consumed, consumeErr := repository.ConsumePendingInteractionCapabilityWithMutation(ctx, input, func(store adminrepo.Repository) error {
+			return mutation(interaction, store, false)
+		})
+		if consumeErr != nil {
+			return AuthenticatedInteraction{}, fmt.Errorf("%w: %w", ErrInteractionAuthentication, consumeErr)
+		}
+		interaction.Actor = AuthenticatedActor{UserID: consumed.ActorUserID, UserName: consumed.ActorUserName}
+		return interaction, nil
+	case AdmissionDenied:
+		return AuthenticatedInteraction{}, fmt.Errorf("%w: %s", ErrInteractionAdmissionDenied, decision.Reason)
+	default:
+		return AuthenticatedInteraction{}, fmt.Errorf("%w: %s", ErrInteractionAdmissionUnknown, decision.Reason)
+	}
 }
 
 func (svc *InteractionSecurityService) authenticateAction(ctx context.Context, callback ActionCallback, mutation func(AuthenticatedInteraction, adminrepo.Repository) error) (AuthenticatedInteraction, error) {
