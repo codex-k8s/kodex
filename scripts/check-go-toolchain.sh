@@ -307,13 +307,13 @@ validate_toolchain_stage_contracts() {
   local expected_go_image="$2"
   local expected_work_run_count="$3"
   local expected_work_copy_count="$4"
-  local expected_verifier_run="$5"
+  local expected_protected_build_run="$5"
 
   LC_ALL=C awk \
     -v expected_go_image="$expected_go_image" \
     -v expected_work_run_count="$expected_work_run_count" \
     -v expected_work_copy_count="$expected_work_copy_count" \
-    -v expected_verifier_run="$expected_verifier_run" '
+    -v expected_protected_build_run="$expected_protected_build_run" '
     function contract_error(message) {
       print message > "/dev/stderr"
       contract_failed = 1
@@ -358,14 +358,17 @@ validate_toolchain_stage_contracts() {
 
       if (instruction != "FROM") {
         if (stage_index == 0) {
-          contract_error("immutable source stage 0 должна содержать только точную FROM-инструкцию")
+          protected_instruction_count++
+          protected_last_instruction = normalized
+          if (normalized == expected_protected_build_run) {
+            protected_build_count++
+          }
         }
         if (instruction == "RUN" && toupper(body) ~ /^--MOUNT([= \t]|$)/) {
           contract_error("Dockerfile не должен содержать BuildKit-only RUN mount: штатная сборка выполняется Kaniko")
         }
         if (stage_index == 1) {
-          work_instruction_count++
-          work_last_instruction = normalized
+          work_contract = work_contract (work_contract == "" ? "" : "\n") line
           if (instruction == "COPY") {
             work_copy_count++
             if (toupper(body) ~ /^--FROM([= \t]|$)/) {
@@ -380,9 +383,6 @@ validate_toolchain_stage_contracts() {
           }
           if (instruction == "RUN") {
             work_run_count++
-          }
-          if (normalized == expected_verifier_run) {
-            verifier_run_count++
           }
         }
         return
@@ -432,7 +432,11 @@ validate_toolchain_stage_contracts() {
         exit 2
       }
       if (canonical_source_count != 1) {
-        print "immutable source stage 0 должна иметь точную защищённую форму \047FROM " expected_go_image " AS scratch\047" > "/dev/stderr"
+        print "protected builder stage 0 должна иметь точную защищённую форму \047FROM " expected_go_image " AS scratch\047" > "/dev/stderr"
+        exit 2
+      }
+      if (protected_instruction_count != 1 || protected_build_count != 1 || protected_last_instruction != expected_protected_build_run) {
+        print "protected builder stage 0 должна первой и единственной инструкцией собирать trusted Go toolchain guard из exact source закреплённым compiler argv/environment" > "/dev/stderr"
         exit 2
       }
       if (stage_index != 2) {
@@ -451,10 +455,7 @@ validate_toolchain_stage_contracts() {
         print "work stage должна содержать точное число локальных COPY-инструкций; найдено " (work_copy_count + 0) ", ожидается " expected_work_copy_count > "/dev/stderr"
         exit 2
       }
-      if (verifier_run_count != 1 || work_last_instruction != expected_verifier_run) {
-        print "work stage должна завершаться точной сборкой trusted Go toolchain guard" > "/dev/stderr"
-        exit 2
-      }
+      printf "%s", work_contract
     }
   ' "$dockerfile"
 }
@@ -835,11 +836,12 @@ require_final_runtime_stage_contract() {
   local final_path_env="$9"
   local allowed_tail_two="${10:-}"
   local allowed_tail_three="${11:-}"
+  local expected_work_contract_sha256="${12}"
   local dockerfile="$repo_root/$path"
   local stage_info from_line actual_from expected_from_body
   local runtime_env runtime_bootstrap_copy runtime_guard_copy runtime_clean
   local runtime_trusted_copy runtime_verify
-  local toolchain_stages_result contract_result effective_gotoolchain
+  local toolchain_stages_result actual_work_contract_sha256 contract_result effective_gotoolchain
 
   if ! validate_dockerfile_lexical_boundary "$dockerfile"; then
     fail "$path содержит неподдерживаемый байт Dockerfile"
@@ -863,13 +865,16 @@ require_final_runtime_stage_contract() {
     printf '%s: %s\n' "$path" "$toolchain_stages_result" >&2
     fail "$path не связывает защищённые stages scratch/context и final runtime stage однозначным контрактом"
   fi
+  actual_work_contract_sha256="$(printf '%s' "$toolchain_stages_result" | sha256sum | awk '{print $1}')"
+  [[ "$actual_work_contract_sha256" == "$expected_work_contract_sha256" ]] || \
+    fail "$path work stage source-level contract изменён; install/build instructions и tool outputs не имеют закреплённого provenance"
 
   expected_from_body="${expected_from#FROM }"
   [[ "$actual_from" == "$expected_from_body" ]] || fail "$path должен завершаться stage '$expected_from', найден 'FROM $actual_from'"
 
   runtime_env="ENV GOTOOLCHAIN=local"
   runtime_bootstrap_copy="COPY --from=0 /usr/local/go/ /opt/mattercodex/bootstrap-go/"
-  runtime_guard_copy="COPY --from=1 /out/mattercodex-go-toolchain-guard /usr/local/libexec/mattercodex-go-toolchain-guard"
+  runtime_guard_copy="COPY --from=0 /out/mattercodex-go-toolchain-guard /usr/local/libexec/mattercodex-go-toolchain-guard"
   runtime_clean='RUN ["/usr/local/libexec/mattercodex-go-toolchain-guard", "clean"]'
   runtime_trusted_copy="COPY --from=0 /usr/local/go/ /usr/local/go/"
   runtime_verify='RUN ["/usr/local/libexec/mattercodex-go-toolchain-guard", "verify", "/usr/local/go/bin/go"]'
@@ -949,12 +954,12 @@ require_line Makefile $'\tenv -u GOFLAGS GOENV=off GOWORK=off go run \'golang.or
 
 go_image="golang:$go_version-alpine"
 trusted_guard_source_base64="cGFja2FnZSBtYWluCgppbXBvcnQgKAoJImJ5dGVzIgoJImZtdCIKCSJvcyIKCSJvcy9leGVjIgopCgpmdW5jIGZhaWwoZm9ybWF0IHN0cmluZywgdmFsdWVzIC4uLmFueSkgewoJZm10LkZwcmludGYob3MuU3RkZXJyLCBmb3JtYXQrIlxuIiwgdmFsdWVzLi4uKQoJb3MuRXhpdCgxKQp9CgpmdW5jIHZlcmlmeShnb0V4ZWN1dGFibGUgc3RyaW5nKSB7CgljaGVja3MgOj0gW11zdHJ1Y3QgewoJCXZhcmlhYmxlIHN0cmluZwoJCWV4cGVjdGVkIHN0cmluZwoJfXsKCQl7dmFyaWFibGU6ICJHT1ZFUlNJT04iLCBleHBlY3RlZDogImdvMS4yNi41XG4ifSwKCQl7dmFyaWFibGU6ICJHT1RPT0xDSEFJTiIsIGV4cGVjdGVkOiAibG9jYWxcbiJ9LAoJfQoJZm9yIF8sIGNoZWNrIDo9IHJhbmdlIGNoZWNrcyB7CgkJb3V0cHV0LCBlcnIgOj0gZXhlYy5Db21tYW5kKGdvRXhlY3V0YWJsZSwgImVudiIsIGNoZWNrLnZhcmlhYmxlKS5PdXRwdXQoKQoJCWlmIGVyciAhPSBuaWwgewoJCQlmYWlsKCIlcyBmYWlsZWQ6ICV2IiwgY2hlY2sudmFyaWFibGUsIGVycikKCQl9CgkJaWYgIWJ5dGVzLkVxdWFsKG91dHB1dCwgW11ieXRlKGNoZWNrLmV4cGVjdGVkKSkgewoJCQlmYWlsKCIlcyBtaXNtYXRjaDogZ290ICVxLCB3YW50ICVxIiwgY2hlY2sudmFyaWFibGUsIG91dHB1dCwgY2hlY2suZXhwZWN0ZWQpCgkJfQoJfQp9CgpmdW5jIG1haW4oKSB7CglpZiBsZW4ob3MuQXJncykgPT0gMiAmJiBvcy5BcmdzWzFdID09ICJjbGVhbiIgewoJCWlmIGVyciA6PSBvcy5SZW1vdmVBbGwoIi91c3IvbG9jYWwvZ28iKTsgZXJyICE9IG5pbCB7CgkJCWZhaWwoImNsZWFuIC91c3IvbG9jYWwvZ286ICV2IiwgZXJyKQoJCX0KCQlpZiBlcnIgOj0gb3MuUmVtb3ZlQWxsKCIvb3B0L21hdHRlcmNvZGV4L2Jvb3RzdHJhcC1nbyIpOyBlcnIgIT0gbmlsIHsKCQkJZmFpbCgiY2xlYW4gYm9vdHN0cmFwIEdvOiAldiIsIGVycikKCQl9CgkJcmV0dXJuCgl9CglpZiBsZW4ob3MuQXJncykgPT0gMyAmJiBvcy5BcmdzWzFdID09ICJ2ZXJpZnkiIHsKCQl2ZXJpZnkob3MuQXJnc1syXSkKCQlyZXR1cm4KCX0KCWZhaWwoInVuc3VwcG9ydGVkIGludm9jYXRpb24iKQp9Cg=="
-trusted_guard_build_run="RUN mkdir -p /out && printf '%s' '$trusted_guard_source_base64' | base64 -d > /tmp/mattercodex-go-toolchain-guard.go && CGO_ENABLED=0 go build -trimpath -o /out/mattercodex-go-toolchain-guard /tmp/mattercodex-go-toolchain-guard.go && rm -f /tmp/mattercodex-go-toolchain-guard.go"
+trusted_guard_build_run="RUN mkdir -p /out /tmp/mattercodex-go-build-cache && printf '%s' '$trusted_guard_source_base64' | base64 -d > /tmp/mattercodex-go-toolchain-guard.go && /usr/bin/env -i PATH=/usr/local/go/bin:/usr/bin:/bin HOME=/tmp GOCACHE=/tmp/mattercodex-go-build-cache GOENV=off GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0 /usr/local/go/bin/go build -trimpath -buildvcs=false -o /out/mattercodex-go-toolchain-guard /tmp/mattercodex-go-toolchain-guard.go && rm -rf /tmp/mattercodex-go-toolchain-guard.go /tmp/mattercodex-go-build-cache"
 require_line services/external/bot-service/Dockerfile "ARG GOLANG_IMAGE=$go_image"
 require_final_runtime_stage_contract \
   services/jobs/agent-runner/Dockerfile \
   "FROM node:24-bookworm" \
-  5 \
+  4 \
   2 \
   "COPY --from=1 /tool-bin/ /usr/local/bin/" \
   "COPY --from=1 /out/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner" \
@@ -962,11 +967,12 @@ require_final_runtime_stage_contract \
   5 \
   "ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" \
   'USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}' \
-  'ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/matter-codex-agent-runner"]'
+  'ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/matter-codex-agent-runner"]' \
+  "878b45ef727136c68399c0a430e175a12b78f90227e4104ef075285d650b55c6"
 require_final_runtime_stage_contract \
   deploy/images/agent-runner/Dockerfile \
   "FROM node:24-alpine" \
-  3 \
+  2 \
   0 \
   "COPY --from=1 /tool-bin/ /usr/local/bin/" \
   "" \
@@ -974,7 +980,8 @@ require_final_runtime_stage_contract \
   4 \
   "ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" \
   'USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}' \
-  'CMD ["sh"]'
+  'CMD ["sh"]' \
+  "a63c7a7047cb287d7448f8ef68852ac9cd8c2af1612c1fb0181601932fc04474"
 require_count services/jobs/agent-runner/Dockerfile "FROM $go_image" 2
 require_count deploy/images/agent-runner/Dockerfile "FROM $go_image" 2
 require_count services/external/bot-service/Dockerfile "ENV GOTOOLCHAIN=local" 2

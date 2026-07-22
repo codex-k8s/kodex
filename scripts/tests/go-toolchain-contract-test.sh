@@ -251,6 +251,32 @@ split_exact_instruction() {
   mv "$target.tmp" "$target"
 }
 
+poison_installer_run() {
+  local target="$1"
+  local payload="$2"
+
+  LC_ALL=C awk -v payload="$payload" '
+    {
+      if ($0 ~ /^[ \t]+&& CGO_ENABLED=0 go install go[.]uber[.]org\/mock\/mockgen@/) {
+        selected++
+        match($0, /^[ \t]*/)
+        indentation = substr($0, 1, RLENGTH)
+        print $0 " \\"
+        print indentation "&& printf \047%s\047 \047" payload "\047 | base64 -d > /usr/local/go/bin/go \\"
+        print indentation "&& chmod +x /usr/local/go/bin/go"
+      } else {
+        print
+      }
+    }
+    END {
+      if (selected != 1) {
+        exit 2
+      }
+    }
+  ' "$target" >"$target.tmp"
+  mv "$target.tmp" "$target"
+}
+
 expect_failure() {
   local description="$1"
   shift
@@ -313,13 +339,18 @@ source_stage='FROM golang:1.26.5-alpine AS scratch'
 work_stage='FROM golang:1.26.5-alpine AS context'
 runtime_env='ENV GOTOOLCHAIN=local'
 bootstrap_copy='COPY --from=0 /usr/local/go/ /opt/mattercodex/bootstrap-go/'
-guard_copy='COPY --from=1 /out/mattercodex-go-toolchain-guard /usr/local/libexec/mattercodex-go-toolchain-guard'
+guard_copy='COPY --from=0 /out/mattercodex-go-toolchain-guard /usr/local/libexec/mattercodex-go-toolchain-guard'
 clean_run='RUN ["/usr/local/libexec/mattercodex-go-toolchain-guard", "clean"]'
 runtime_copy='COPY --from=0 /usr/local/go/ /usr/local/go/'
 verify_run='RUN ["/usr/local/libexec/mattercodex-go-toolchain-guard", "verify", "/usr/local/go/bin/go"]'
 go_tools_copies=('COPY --from=1 /tool-bin/ /usr/local/bin/' 'COPY --from=1 /tool-bin/ /usr/local/bin/')
 fake_go_run='RUN echo IyEvYmluL3NoCmNhc2UgIiQqIiBpbgogICJlbnYgR09WRVJTSU9OIikgZWNobyBnbzEuMjYuNTs7CiAgImVudiBHT1RPT0xDSEFJTiIpIGVjaG8gbG9jYWw7OwogICopIGV4aXQgMDs7CmVzYWMK | base64 -d > /usr/local/go/bin/go && chmod +x /usr/local/go/bin/go'
 destination_only_run="RUN printf 'package runtime\\nvar matterCodexInjected = true\\n' > /usr/local/go/src/runtime/mattercodex_injected.go"
+fake_compiler_payloads=(
+  'IyEvYmluL3NoCm91dD0Kd2hpbGUgWyAiJCMiIC1ndCAwIF07IGRvCiAgaWYgWyAiJDEiID0gIi1vIiBdOyB0aGVuIHNoaWZ0OyBvdXQ9IiQxIjsgYnJlYWs7IGZpCiAgc2hpZnQKZG9uZQpbIC1uICIkb3V0IiBdIHx8IGV4aXQgMgpjcCAvYmluL3RydWUgIiRvdXQiCg=='
+  'IyEvYmluL3NoCm91dD0Kd2hpbGUgWyAiJCMiIC1ndCAwIF07IGRvCiAgaWYgWyAiJDEiID0gIi1vIiBdOyB0aGVuIHNoaWZ0OyBvdXQ9IiQxIjsgYnJlYWs7IGZpCiAgc2hpZnQKZG9uZQpbIC1uICIkb3V0IiBdIHx8IGV4aXQgMgpwcmludGYgIiMhL2Jpbi9zaFxcbmV4aXQgMFxcbiIgPiAiJG91dCIKY2htb2QgK3ggIiRvdXQiCg=='
+)
+fake_compiler_names=(reviewer security)
 
 for index in "${!agent_runner_paths[@]}"; do
   path="${agent_runner_paths[$index]}"
@@ -358,7 +389,7 @@ for index in "${!agent_runner_paths[@]}"; do
     'FROM ${GOLANG_IMAGE} AS scratch'
   expect_failure_matching \
     "immutable source использует переменный image в $name Dockerfile" \
-    "$path: immutable source stage 0 должна иметь точную защищённую форму 'FROM golang:1.26.5-alpine AS scratch'" \
+    "$path: protected builder stage 0 должна иметь точную защищённую форму 'FROM golang:1.26.5-alpine AS scratch'" \
     "$guard" --root "$variable_source" --static-only
 
   mutated_immutable_source="$temp_root/$name-mutated-immutable-source"
@@ -369,7 +400,7 @@ for index in "${!agent_runner_paths[@]}"; do
     'RUN rm -rf /usr/local/go'
   expect_failure_matching \
     "write-capable RUN изменяет immutable source stage в $name Dockerfile" \
-    "$path: immutable source stage 0 должна содержать только точную FROM-инструкцию" \
+    "$path: protected builder stage 0 должна первой и единственной инструкцией собирать trusted Go toolchain guard" \
     "$guard" --root "$mutated_immutable_source" --static-only
 
   mounted_immutable_source="$temp_root/$name-mounted-immutable-source"
@@ -380,7 +411,7 @@ for index in "${!agent_runner_paths[@]}"; do
     'RUN --mount=type=bind,source=.,target=/mnt true'
   expect_failure_matching \
     "RUN mount нарушает immutable source stage в $name Dockerfile" \
-    "$path: immutable source stage 0 должна содержать только точную FROM-инструкцию" \
+    "$path: Dockerfile не должен содержать BuildKit-only RUN mount" \
     "$guard" --root "$mounted_immutable_source" --static-only
 
   unexpected_stage="$temp_root/$name-unexpected-stage"
@@ -409,8 +440,48 @@ for index in "${!agent_runner_paths[@]}"; do
   sed -i '0,/cGFja2FnZSBtYWlu/s//cGFja2FnZSBtYWlo/' "$mutated_guard_source/$path"
   expect_failure_matching \
     "source trusted Go toolchain guard изменён в $name Dockerfile" \
-    "$path: work stage должна завершаться точной сборкой trusted Go toolchain guard" \
+    "$path: protected builder stage 0 должна первой и единственной инструкцией собирать trusted Go toolchain guard" \
     "$guard" --root "$mutated_guard_source" --static-only
+
+  mutated_protected_compiler="$temp_root/$name-mutated-protected-compiler"
+  copy_fixture "$mutated_protected_compiler"
+  sed -i '0,/\/usr\/local\/go\/bin\/go build/s//go build/' "$mutated_protected_compiler/$path"
+  expect_failure_matching \
+    "protected builder использует незакреплённый compiler path в $name Dockerfile" \
+    "$path: protected builder stage 0 должна первой и единственной инструкцией собирать trusted Go toolchain guard" \
+    "$guard" --root "$mutated_protected_compiler" --static-only
+
+  mutated_protected_environment="$temp_root/$name-mutated-protected-environment"
+  copy_fixture "$mutated_protected_environment"
+  sed -i '0,/GOENV=off/s//GOENV=\/tmp\/attacker-goenv/' "$mutated_protected_environment/$path"
+  expect_failure_matching \
+    "protected builder использует изменённый build environment в $name Dockerfile" \
+    "$path: protected builder stage 0 должна первой и единственной инструкцией собирать trusted Go toolchain guard" \
+    "$guard" --root "$mutated_protected_environment" --static-only
+
+  mutated_protected_output="$temp_root/$name-mutated-protected-output"
+  copy_fixture "$mutated_protected_output"
+  sed -i '0,/-o \/out\/mattercodex-go-toolchain-guard/s//-o \/tmp\/mattercodex-go-toolchain-guard/' "$mutated_protected_output/$path"
+  expect_failure_matching \
+    "protected builder использует изменённый output path в $name Dockerfile" \
+    "$path: protected builder stage 0 должна первой и единственной инструкцией собирать trusted Go toolchain guard" \
+    "$guard" --root "$mutated_protected_output" --static-only
+
+  for poison_index in "${!fake_compiler_payloads[@]}"; do
+    poisoned_work_compiler="$temp_root/$name-${fake_compiler_names[$poison_index]}-poisoned-work-compiler"
+    copy_fixture "$poisoned_work_compiler"
+    poison_installer_run \
+      "$poisoned_work_compiler/$path" \
+      "${fake_compiler_payloads[$poison_index]}"
+    expect_failure_matching \
+      "${fake_compiler_names[$poison_index]} fake compiler добавлен внутрь существующего installer RUN в $name Dockerfile" \
+      "$path work stage source-level contract изменён; install/build instructions и tool outputs не имеют закреплённого provenance" \
+      "$guard" --root "$poisoned_work_compiler" --static-only
+    expect_failure_matching \
+      "full guard отклоняет ${fake_compiler_names[$poison_index]} fake compiler внутри существующего installer RUN в $name Dockerfile" \
+      "$path work stage source-level contract изменён; install/build instructions и tool outputs не имеют закреплённого provenance" \
+      "$guard" --root "$poisoned_work_compiler"
+  done
 
   external_copy_in_tools_stage="$temp_root/$name-external-copy-in-tools-stage"
   copy_fixture "$external_copy_in_tools_stage"
@@ -969,8 +1040,12 @@ func parseContract(path string, data []byte) error {
 	if stages[0].Name != "scratch" || stages[1].Name != "context" || stages[2].Name != "" {
 		return fmt.Errorf("%s: aliases=%q,%q,%q вместо защищённых scratch/context", path, stages[0].Name, stages[1].Name, stages[2].Name)
 	}
-	if stages[0].BaseName != "golang:1.26.5-alpine" || len(stages[0].Commands) != 0 {
-		return fmt.Errorf("%s: stage 0 не является immutable source", path)
+	if stages[0].BaseName != "golang:1.26.5-alpine" || len(stages[0].Commands) != 1 {
+		return fmt.Errorf("%s: stage 0 не является exact protected builder", path)
+	}
+	protectedBuild, ok := stages[0].Commands[0].(*instructions.RunCommand)
+	if !ok || !protectedBuild.PrependShell || !strings.Contains(strings.Join(protectedBuild.CmdLine, " "), "/usr/local/go/bin/go build -trimpath -buildvcs=false") {
+		return fmt.Errorf("%s: stage 0 не содержит exact protected compiler path/argv", path)
 	}
 
 	lex := shell.NewLex(parsed.EscapeToken)
@@ -1018,11 +1093,11 @@ func parseContract(path string, data []byte) error {
 			}
 		}
 	}
-	expectedWorkCopies := 2
+	expectedWorkCopies := 1
 	if strings.Contains(path, "services/jobs") {
-		expectedWorkCopies = 3
+		expectedWorkCopies = 2
 	}
-	if sourceCopies != 2 || workCopies != expectedWorkCopies || cleanChecks != 1 || outputChecks != 1 {
+	if sourceCopies != 3 || workCopies != expectedWorkCopies || cleanChecks != 1 || outputChecks != 1 {
 		return fmt.Errorf("%s: parser contract source=%d work=%d clean=%d verify=%d", path, sourceCopies, workCopies, cleanChecks, outputChecks)
 	}
 	return nil
@@ -1180,11 +1255,11 @@ func verify(path string) error {
 			}
 		}
 	}
-	expectedWorkCopies := 2
+	expectedWorkCopies := 1
 	if strings.Contains(path, "services/jobs") {
-		expectedWorkCopies = 3
+		expectedWorkCopies = 2
 	}
-	if sourceCopies != 2 || workCopies != expectedWorkCopies {
+	if sourceCopies != 3 || workCopies != expectedWorkCopies {
 		return fmt.Errorf("%s: Kaniko dependencies source=%d work=%d", path, sourceCopies, workCopies)
 	}
 	return nil
@@ -1226,7 +1301,32 @@ trusted_guard_binary="$temp_root/mattercodex-go-toolchain-guard"
 printf '%s' "$trusted_guard_services_base64" | base64 -d >"$trusted_guard_source"
 expect_success \
   "trusted Go toolchain guard собирается из фактического Dockerfile source" \
-  env CGO_ENABLED=0 GOENV=off GOWORK=off go build -trimpath -o "$trusted_guard_binary" "$trusted_guard_source"
+  env CGO_ENABLED=0 GOENV=off GOTOOLCHAIN=local GOWORK=off go build -trimpath -buildvcs=false -o "$trusted_guard_binary" "$trusted_guard_source"
+expect_success \
+  "trusted Go toolchain guard является Go artifact, а не no-op compiler output" \
+  env GOENV=off GOTOOLCHAIN=local GOWORK=off go version -m "$trusted_guard_binary"
+
+cleanup_go_root="$temp_root/cleanup-root/usr/local/go"
+cleanup_bootstrap_root="$temp_root/cleanup-root/opt/mattercodex/bootstrap-go"
+cleanup_guard_source="$temp_root/mattercodex-go-toolchain-cleanup-guard.go"
+cleanup_guard_binary="$temp_root/mattercodex-go-toolchain-cleanup-guard"
+sed \
+  -e "s#/usr/local/go#$cleanup_go_root#g" \
+  -e "s#/opt/mattercodex/bootstrap-go#$cleanup_bootstrap_root#g" \
+  "$trusted_guard_source" >"$cleanup_guard_source"
+expect_success \
+  "trusted cleaner собирается с изолированными behavioral destinations" \
+  env CGO_ENABLED=0 GOENV=off GOTOOLCHAIN=local GOWORK=off go build -trimpath -buildvcs=false -o "$cleanup_guard_binary" "$cleanup_guard_source"
+mkdir -p "$cleanup_go_root/src/runtime" "$cleanup_bootstrap_root/src/runtime"
+printf '%s\n' contaminated >"$cleanup_go_root/src/runtime/mattercodex-injected.go"
+printf '%s\n' contaminated >"$cleanup_bootstrap_root/src/runtime/mattercodex-injected.go"
+expect_success \
+  "trusted cleaner удаляет destination-only GOROOT и bootstrap contamination" \
+  "$cleanup_guard_binary" clean
+[[ ! -e "$cleanup_go_root" && ! -e "$cleanup_bootstrap_root" ]] || {
+  echo "FAIL: trusted cleaner сохранил destination-only contamination" >&2
+  exit 1
+}
 
 correct_go="$temp_root/correct-go"
 cat >"$correct_go" <<'EOF'
@@ -1643,4 +1743,4 @@ expect_failure "GOVULNCHECK_VERSION command injection" env \
   exit 1
 }
 
-echo "PASS: Go toolchain contract проверяет Kaniko stages, trusted clean/copy, stdout verification и hostile mutations"
+echo "PASS: Go toolchain contract проверяет protected provenance, Kaniko stages, trusted clean/copy, stdout verification и hostile mutations"
