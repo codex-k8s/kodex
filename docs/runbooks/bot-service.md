@@ -80,7 +80,7 @@
 - `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
 - `MATTERCODEX_RUNTIME_LOG_TAIL_LINES` - optional, число последних строк pod log для `/agents runtime status`;
 - `MATTERCODEX_RUNTIME_LIMITS_ENABLED` - optional, включает render/apply namespace `ResourceQuota` и `LimitRange` для runtime namespace; default `true`;
-- `MATTERCODEX_RUNTIME_QUOTA_PODS`, `MATTERCODEX_RUNTIME_QUOTA_JOBS`, `MATTERCODEX_RUNTIME_QUOTA_PVCS` - optional, object count quota для pod, batch Job и PVC в runtime namespace; default PVC quota `120` оставляет запас для сохранённых сессий и шести параллельных волн;
+- `MATTERCODEX_RUNTIME_QUOTA_PODS`, `MATTERCODEX_RUNTIME_QUOTA_JOBS`, `MATTERCODEX_RUNTIME_QUOTA_PVCS` - optional, object count quota для pod, batch Job и PVC в runtime namespace; default PVC quota `200` не становится преждевременным ограничителем перед суммарной storage quota для сохранённых сессий и параллельных волн;
 - `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_STORAGE` - optional, суммарная quota на requested PVC storage в runtime namespace;
 - `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_MEMORY` - optional, namespace quota на compute requests; дефолты для single-node owner-инсталляции: requests `28`/`96Gi`;
 - `MATTERCODEX_OWNER_MATTERMOST_USERNAME` - optional username владельца owner-инстанса, которого bootstrap добавляет в приватные системные каналы координации; значение не хранится в репозитории;
