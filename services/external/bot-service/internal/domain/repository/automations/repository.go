@@ -144,6 +144,16 @@ type DeferOwnerAttentionDeliveryInput struct {
 	Now            time.Time
 }
 
+type RetainOwnerAttentionDeliveryInput struct {
+	AttentionID    int64
+	ScheduledRunID int64
+	DeliveryID     string
+	ClaimToken     string
+	Fence          int64
+	LeaseUntil     time.Time
+	Now            time.Time
+}
+
 type ResolveOwnerGateInput struct {
 	ProjectID                int64
 	ActorUserID              string
@@ -179,6 +189,7 @@ type Repository interface {
 	GetOwnerAttentionDelivery(ctx context.Context, scheduledRunID int64) (entity.AutomationOwnerAttentionDelivery, error)
 	ClaimOwnerAttentionDelivery(ctx context.Context, input ClaimOwnerAttentionDeliveryInput) (entity.AutomationOwnerAttentionDelivery, error)
 	DeferOwnerAttentionDelivery(ctx context.Context, input DeferOwnerAttentionDeliveryInput) error
+	RetainOwnerAttentionDelivery(ctx context.Context, input RetainOwnerAttentionDeliveryInput) error
 	SetOwnerAttentionPost(ctx context.Context, input SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error)
 	ListHistory(ctx context.Context, ownerMattermostUsername string, limit int) ([]entity.AutomationHistoryItem, error)
 	ResolveOwnerGate(ctx context.Context, input ResolveOwnerGateInput) (entity.ScheduledRun, bool, error)

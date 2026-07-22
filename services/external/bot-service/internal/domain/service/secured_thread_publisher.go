@@ -14,6 +14,7 @@ type securedMattermostThreadPublisher struct {
 
 var _ MattermostThreadPublisher = (*securedMattermostThreadPublisher)(nil)
 var _ MattermostIdempotentThreadPublisher = (*securedMattermostThreadPublisher)(nil)
+var _ MattermostIdempotentThreadReconciler = (*securedMattermostThreadPublisher)(nil)
 var _ MattermostThreadCardUpdateReconciler = (*securedMattermostThreadPublisher)(nil)
 
 func NewSecuredMattermostThreadPublisher(next MattermostThreadPublisher, security *InteractionSecurityService) MattermostThreadPublisher {
@@ -37,6 +38,14 @@ func (publisher *securedMattermostThreadPublisher) ReconcileOrPostThreadMessage(
 		return MattermostPostRef{}, fmt.Errorf("idempotent Mattermost thread publication is not configured")
 	}
 	return next.ReconcileOrPostThreadMessage(ctx, input)
+}
+
+func (publisher *securedMattermostThreadPublisher) ReconcileThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, bool, error) {
+	next, ok := publisher.next.(MattermostIdempotentThreadReconciler)
+	if !ok {
+		return MattermostPostRef{}, false, fmt.Errorf("idempotent Mattermost thread reconciliation is not configured")
+	}
+	return next.ReconcileThreadMessage(ctx, input)
 }
 
 func (publisher *securedMattermostThreadPublisher) UpdateThreadMessage(ctx context.Context, input MattermostThreadUpdateInput) (MattermostPostRef, error) {

@@ -43,6 +43,8 @@ var githubPullURLRE = regexp.MustCompile(`https://github\.com/([^/\s]+)/([^/\s]+
 
 var codexAuthDeviceCodeWait = 5 * time.Minute
 
+var ErrMattermostPostConfirmationAmbiguous = errors.New("mattermost post confirmation is ambiguous")
+
 type MattermostThreadPostInput struct {
 	ChannelID     string
 	RootPostID    string
@@ -82,6 +84,10 @@ type MattermostThreadPublisher interface {
 
 type MattermostIdempotentThreadPublisher interface {
 	ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error)
+}
+
+type MattermostIdempotentThreadReconciler interface {
+	ReconcileThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, bool, error)
 }
 
 type MattermostIdempotentCardPublisher interface {

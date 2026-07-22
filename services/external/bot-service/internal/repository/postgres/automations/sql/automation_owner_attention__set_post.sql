@@ -4,6 +4,7 @@ set mattermost_post_id = $6,
 	automation_delivery_claim_token = null,
 	automation_delivery_claimed_at = null,
 	automation_delivery_lease_expires_at = null,
+	automation_delivery_confirmation_pending = false,
 	updated_at = $9
 where id = $1
 	and request_kind = 'automation'

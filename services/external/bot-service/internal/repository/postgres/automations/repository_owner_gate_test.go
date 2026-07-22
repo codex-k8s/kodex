@@ -275,15 +275,46 @@ func TestAutomationOwnerGateDurabilityAndBoundaries(t *testing.T) {
 	}); !errors.Is(err, automationsrepo.ErrNotFound) {
 		t.Fatalf("конкурентный второй claim error=%v", err)
 	}
+	if err := restarted.RetainOwnerAttentionDelivery(ctx, automationsrepo.RetainOwnerAttentionDeliveryInput{
+		AttentionID: delivery.AttentionID, ScheduledRunID: run.ID, DeliveryID: delivery.DeliveryID,
+		ClaimToken: claimed.ClaimToken, Fence: claimed.Fence,
+		Now: now.Add(2*time.Minute + 10*time.Second), LeaseUntil: now.Add(4 * time.Minute),
+	}); err != nil {
+		t.Fatalf("удержать неоднозначный claim: %v", err)
+	}
+	retained, err := restarted.GetOwnerAttentionDelivery(ctx, run.ID)
+	if err != nil || !retained.ConfirmationPending || retained.ClaimToken != claimed.ClaimToken || !retained.LeaseExpiresAt.Equal(now.Add(4*time.Minute)) {
+		t.Fatalf("удержанный неоднозначный claim=%#v error=%v", retained, err)
+	}
+	if err := restarted.DeferOwnerAttentionDelivery(ctx, automationsrepo.DeferOwnerAttentionDeliveryInput{
+		AttentionID: delivery.AttentionID, ScheduledRunID: run.ID, DeliveryID: delivery.DeliveryID,
+		ClaimToken: claimed.ClaimToken, Fence: claimed.Fence,
+		RetryAt: now.Add(2*time.Minute + 20*time.Second), Now: now.Add(2*time.Minute + 15*time.Second),
+	}); !errors.Is(err, automationsrepo.ErrConflict) {
+		t.Fatalf("неоднозначный claim был очищен обычным defer: %v", err)
+	}
+	if _, err := restarted.ClaimOwnerAttentionDelivery(ctx, automationsrepo.ClaimOwnerAttentionDeliveryInput{
+		ScheduledRunID: run.ID, ClaimToken: "claim-cccccccccccccccccccccccccccccccc",
+		Now: now.Add(3 * time.Minute), LeaseUntil: now.Add(4 * time.Minute), EligibleBefore: now.Add(3 * time.Minute),
+	}); !errors.Is(err, automationsrepo.ErrNotFound) {
+		t.Fatalf("неоднозначный claim был перехвачен до истечения lease: %v", err)
+	}
+	confirmationClaim, err := restarted.ClaimOwnerAttentionDelivery(ctx, automationsrepo.ClaimOwnerAttentionDeliveryInput{
+		ScheduledRunID: run.ID, ClaimToken: "claim-dddddddddddddddddddddddddddddddd",
+		Now: now.Add(4*time.Minute + time.Second), LeaseUntil: now.Add(5 * time.Minute), EligibleBefore: now.Add(4*time.Minute + time.Second),
+	})
+	if err != nil || !confirmationClaim.ConfirmationPending || confirmationClaim.Fence != claimed.Fence+1 {
+		t.Fatalf("confirmation-only claim=%#v error=%v", confirmationClaim, err)
+	}
 	setPostInput := automationsrepo.SetOwnerAttentionPostInput{
 		AttentionID: delivery.AttentionID, ScheduledRunID: run.ID, DeliveryID: delivery.DeliveryID,
 		MattermostChannelID: "automation-channel", MattermostRootPostID: "owner-gate-root", MattermostPostID: "attention-post-1",
-		ClaimToken: claimed.ClaimToken, Fence: claimed.Fence, Now: now.Add(2 * time.Minute),
+		ClaimToken: confirmationClaim.ClaimToken, Fence: confirmationClaim.Fence, Now: now.Add(4*time.Minute + time.Second),
 	}
 	resolution := automationsrepo.ResolveOwnerGateInput{
 		ProjectID: projectID, ActorUserID: "root-owner-id", ActorUserName: "root-owner",
 		MattermostChannelID: "automation-channel", MattermostRootPostID: "owner-gate-root",
-		MattermostResponsePostID: "owner-response-1", Now: now.Add(4 * time.Minute),
+		MattermostResponsePostID: "owner-response-1", Now: now.Add(6 * time.Minute),
 	}
 	type decisionResult struct {
 		run       entity.ScheduledRun

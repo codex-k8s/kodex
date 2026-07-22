@@ -614,6 +614,28 @@ func (repo *Repository) DeferOwnerAttentionDelivery(ctx context.Context, input a
 	return nil
 }
 
+func (repo *Repository) RetainOwnerAttentionDelivery(ctx context.Context, input automationsrepo.RetainOwnerAttentionDeliveryInput) error {
+	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || len(strings.TrimSpace(input.ClaimToken)) < 16 || input.Fence <= 0 || !input.LeaseUntil.After(input.Now) {
+		return automationsrepo.ErrForbidden
+	}
+	tag, err := repo.db.Exec(ctx, query("automation_owner_attention__retain.sql"),
+		input.AttentionID,
+		input.ScheduledRunID,
+		input.DeliveryID,
+		input.ClaimToken,
+		input.Fence,
+		input.LeaseUntil,
+		input.Now,
+	)
+	if err != nil {
+		return fmt.Errorf("retain ambiguous automation owner attention delivery: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return automationsrepo.ErrConflict
+	}
+	return nil
+}
+
 func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, input automationsrepo.SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error) {
 	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || strings.TrimSpace(input.MattermostPostID) == "" || len(strings.TrimSpace(input.ClaimToken)) < 16 || input.Fence <= 0 {
 		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrForbidden
@@ -1072,6 +1094,7 @@ func scanOwnerAttentionDelivery(row pgx.Row) (entity.AutomationOwnerAttentionDel
 		&claimToken,
 		&claimedAt,
 		&leaseExpiresAt,
+		&item.ConfirmationPending,
 		&item.Fence,
 	)
 	if claimToken != nil {

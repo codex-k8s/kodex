@@ -50,6 +50,7 @@ alter table matter_codex_owner_attention_requests
 	add column automation_delivery_claim_token text,
 	add column automation_delivery_claimed_at timestamptz,
 	add column automation_delivery_lease_expires_at timestamptz,
+	add column automation_delivery_confirmation_pending boolean not null default false,
 	add column automation_delivery_next_attempt_at timestamptz not null default '-infinity',
 	add column automation_delivery_fence bigint not null default 0,
 	add constraint matter_codex_owner_attention_request_kind_check
@@ -75,6 +76,7 @@ alter table matter_codex_owner_attention_requests
 				and automation_delivery_claim_token is null
 				and automation_delivery_claimed_at is null
 				and automation_delivery_lease_expires_at is null
+				and not automation_delivery_confirmation_pending
 				and automation_delivery_fence = 0
 			)
 			or (
@@ -105,6 +107,10 @@ alter table matter_codex_owner_attention_requests
 						and automation_delivery_claimed_at is not null
 						and automation_delivery_lease_expires_at > automation_delivery_claimed_at
 					)
+				)
+				and (
+					not automation_delivery_confirmation_pending
+					or (mattermost_post_id = '' and automation_delivery_claim_token is not null)
 				)
 				and automation_delivery_fence >= 0
 			)
@@ -171,7 +177,7 @@ begin
 	if runtime_role_name is not null then
 		execute format('grant select on table %I.matter_codex_owner_attention_requests, %I.matter_codex_process_runs, %I.matter_codex_process_turns to %I', trusted_schema, trusted_schema, trusted_schema, runtime_role_name);
 		execute format('grant insert on table %I.matter_codex_owner_attention_requests to %I', trusted_schema, runtime_role_name);
-		execute format('grant update (status, mattermost_post_id, resolved_at, resolved_by_user_id, resolved_by_post_id, updated_at, automation_delivery_claim_token, automation_delivery_claimed_at, automation_delivery_lease_expires_at, automation_delivery_next_attempt_at, automation_delivery_fence) on table %I.matter_codex_owner_attention_requests to %I', trusted_schema, runtime_role_name);
+		execute format('grant update (status, mattermost_post_id, resolved_at, resolved_by_user_id, resolved_by_post_id, updated_at, automation_delivery_claim_token, automation_delivery_claimed_at, automation_delivery_lease_expires_at, automation_delivery_confirmation_pending, automation_delivery_next_attempt_at, automation_delivery_fence) on table %I.matter_codex_owner_attention_requests to %I', trusted_schema, runtime_role_name);
 		execute format('grant update (status, updated_at, finished_at) on table %I.matter_codex_process_runs to %I', trusted_schema, runtime_role_name);
 	end if;
 end

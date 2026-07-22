@@ -17,6 +17,7 @@ select
 	attention.automation_delivery_claim_token,
 	attention.automation_delivery_claimed_at,
 	attention.automation_delivery_lease_expires_at,
+	attention.automation_delivery_confirmation_pending,
 	attention.automation_delivery_fence
 from matter_codex_owner_attention_requests attention
 join matter_codex_scheduled_runs run

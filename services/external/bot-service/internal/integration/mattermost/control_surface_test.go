@@ -3,6 +3,7 @@ package mattermost
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -443,6 +444,15 @@ func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) 
 		ref, err := surface.ReconcileOrPostThreadMessage(context.Background(), input)
 		if err != nil || ref.PostID != exactPost.Id || postCalls.Load() != 1 {
 			t.Fatalf("ambiguous reconcile ref=%#v error=%v create_calls=%d", ref, err, postCalls.Load())
+		}
+	})
+
+	t.Run("late visibility remains confirmation ambiguous", func(t *testing.T) {
+		server, postCalls := callbackMattermostServer(t, func(int) []*mattermostmodel.Post { return nil }, true)
+		defer server.Close()
+		surface := NewControlSurface(server.URL, "synthetic-token", "")
+		if _, err := surface.ReconcileOrPostThreadMessage(context.Background(), input); !errors.Is(err, statusservice.ErrMattermostPostConfirmationAmbiguous) || postCalls.Load() != 1 {
+			t.Fatalf("late visibility error=%v create_calls=%d", err, postCalls.Load())
 		}
 	})
 

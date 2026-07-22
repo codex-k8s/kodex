@@ -111,6 +111,7 @@ type AutomationOwnerAttentionDelivery struct {
 	ClaimToken            string
 	ClaimedAt             time.Time
 	LeaseExpiresAt        time.Time
+	ConfirmationPending   bool
 	Fence                 int64
 }
 
