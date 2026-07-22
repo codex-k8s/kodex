@@ -24,6 +24,7 @@
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics`, Go/process collectors и Prometheus HTTP handler |
 | `golang.org/x/net` | `v0.55.0` | Транзитивная зависимость транспорта HTTP/IDNA | исправленная нормализация Punycode-меток в графе зависимостей транспорта HTTP |
 | `golang.org/x/sys` | `v0.45.0` | Linux filesystem | атомарная публикация восстановленного дерева сессий через `renameat2` без промежуточного изменения target |
+| `golang.org/x/text` | `v0.39.0` | Unicode и локализация | нормализация Unicode в доменных значениях и выбор локали; версия устраняет `GO-2026-5970` |
 | `k8s.io/api` | `v0.36.1` | Kubernetes typed API | typed `batch/v1` Job, `core/v1` Pod/PVC и `PodLogOptions` для runtime adapter |
 | `k8s.io/apimachinery` | `v0.36.1` | Kubernetes API machinery | typed meta/options, labels, resource quantities и Kubernetes API errors |
 | `k8s.io/client-go` | `v0.36.1` | Kubernetes SDK | in-cluster/kubeconfig client, Job/PVC/Secret operations, pod status/log tail и `remotecommand` exec для Codex auth handoff без shell-first runtime |
