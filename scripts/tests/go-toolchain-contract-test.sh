@@ -59,6 +59,32 @@ replace_exact_instruction() {
   mv "$target.tmp" "$target"
 }
 
+replace_nth_exact_instruction() {
+  local target="$1"
+  local expected="$2"
+  local occurrence="$3"
+  local replacement="$4"
+
+  LC_ALL=C awk -v expected="$expected" -v occurrence="$occurrence" -v replacement="$replacement" '
+    {
+      if ($0 == expected) {
+        selected++
+        if (selected == occurrence) {
+          print replacement
+          next
+        }
+      }
+      print
+    }
+    END {
+      if (selected < occurrence) {
+        exit 2
+      }
+    }
+  ' "$target" >"$target.tmp"
+  mv "$target.tmp" "$target"
+}
+
 insert_before_exact_instruction() {
   local target="$1"
   local expected="$2"
@@ -96,6 +122,32 @@ insert_after_exact_instruction() {
     }
     END {
       if (selected != 1) {
+        exit 2
+      }
+    }
+  ' "$target" >"$target.tmp"
+  mv "$target.tmp" "$target"
+}
+
+insert_after_nth_exact_instruction() {
+  local target="$1"
+  local expected="$2"
+  local occurrence="$3"
+  local inserted="$4"
+
+  LC_ALL=C awk -v expected="$expected" -v occurrence="$occurrence" -v inserted="$inserted" '
+    {
+      print
+      if ($0 == expected) {
+        selected++
+        if (selected == occurrence) {
+          print inserted
+          inserted_once = 1
+        }
+      }
+    }
+    END {
+      if (!inserted_once) {
         exit 2
       }
     }
@@ -248,7 +300,7 @@ expect_success() {
 }
 
 expect_success \
-  "canonical immutable source -> final COPY -> exact RUN test -> metadata tail" \
+  "canonical unnamed source -> Kaniko bootstrap -> final trusted COPY -> exec-form postconditions" \
   "$guard" --root "$repo_root" --static-only
 
 agent_runner_paths=(
@@ -257,12 +309,14 @@ agent_runner_paths=(
 )
 agent_runner_names=(services deploy)
 final_runtime_froms=('FROM node:24-bookworm' 'FROM node:24-alpine')
-pinned_source_from='FROM golang:1.26.5-alpine AS go-toolchain-source'
-pinned_go_tools_from='FROM go-toolchain-source AS go-tools'
+tools_from_occurrences=(3 2)
+pinned_go_image='FROM golang:1.26.5-alpine'
 runtime_env='ENV GOTOOLCHAIN=local'
-runtime_copy='COPY --from=go-toolchain-source /usr/local/go /usr/local/go'
-go_tools_copy='COPY --from=go-tools /tool-bin/ /usr/local/bin/'
-runtime_check='RUN test "$(/usr/local/go/bin/go env GOVERSION)" = "go1.26.5" && test "$(/usr/local/go/bin/go env GOTOOLCHAIN)" = "local"'
+bootstrap_copy='COPY --from=0 /usr/local/go/ /usr/local/go/'
+runtime_copy='COPY --from=0 /usr/local/go /usr/local/go'
+go_tools_copies=('COPY --from=2 /tool-bin/ /usr/local/bin/' 'COPY --from=1 /tool-bin/ /usr/local/bin/')
+version_check='RUN ["/usr/local/go/bin/go", "env", "GOVERSION"]'
+toolchain_check='RUN ["/usr/local/go/bin/go", "env", "GOTOOLCHAIN"]'
 fake_go_run='RUN echo IyEvYmluL3NoCmNhc2UgIiQqIiBpbgogICJlbnYgR09WRVJTSU9OIikgZWNobyBnbzEuMjYuNTs7CiAgImVudiBHT1RPT0xDSEFJTiIpIGVjaG8gbG9jYWw7OwogICopIGV4aXQgMDs7CmVzYWMK | base64 -d > /usr/local/go/bin/go && chmod +x /usr/local/go/bin/go'
 
 for index in "${!agent_runner_paths[@]}"; do
@@ -270,158 +324,79 @@ for index in "${!agent_runner_paths[@]}"; do
   name="${agent_runner_names[$index]}"
   final_runtime_from="${final_runtime_froms[$index]}"
 
-  reviewer_alias_rebound="$temp_root/$name-reviewer-alias-rebound"
-  copy_fixture "$reviewer_alias_rebound"
-  replace_exact_instruction \
-    "$reviewer_alias_rebound/$path" \
-    "$pinned_go_tools_from" \
-    'FROM golang:1.26.5-alpine AS pinned-go-tools'
-  insert_before_exact_instruction \
-    "$reviewer_alias_rebound/$path" \
-    "$final_runtime_from" \
-    'FROM attacker.invalid/go:latest AS go-tools'
-  expect_failure_matching \
-    "reviewer mutation перепривязывает alias go-tools в $name Dockerfile" \
-    "$path: stage alias go-tools должна иметь точную привязку '$pinned_go_tools_from' к immutable source" \
-    "$guard" --root "$reviewer_alias_rebound" --static-only
+  tools_from_occurrence="${tools_from_occurrences[$index]}"
+  go_tools_copy="${go_tools_copies[$index]}"
 
-  security_alias_rebound="$temp_root/$name-security-alias-rebound"
-  copy_fixture "$security_alias_rebound"
-  replace_exact_instruction \
-    "$security_alias_rebound/$path" \
-    "$pinned_go_tools_from" \
-    'FROM golang:1.26.5-alpine AS pinned-go-tools'
-  insert_before_exact_instruction \
-    "$security_alias_rebound/$path" \
-    "$final_runtime_from" \
-    'FROM example.invalid/untrusted/go-toolchain:latest AS go-tools'
+  named_source_stage="$temp_root/$name-named-source-stage"
+  copy_fixture "$named_source_stage"
+  replace_nth_exact_instruction \
+    "$named_source_stage/$path" \
+    "$pinned_go_image" \
+    1 \
+    'FROM golang:1.26.5-alpine AS go-toolchain-source'
   expect_failure_matching \
-    "security mutation перепривязывает alias go-tools в $name Dockerfile" \
-    "$path: stage alias go-tools должна иметь точную привязку '$pinned_go_tools_from' к immutable source" \
-    "$guard" --root "$security_alias_rebound" --static-only
+    "protected source получает подменяемый named-context alias в $name Dockerfile" \
+    "$path: Dockerfile stages должны оставаться безымянными: named context может подменить stage alias go-toolchain-source" \
+    "$guard" --root "$named_source_stage" --static-only
 
-  renamed_go_tools_alias="$temp_root/$name-renamed-go-tools-alias"
-  copy_fixture "$renamed_go_tools_alias"
-  replace_exact_instruction \
-    "$renamed_go_tools_alias/$path" \
-    "$pinned_go_tools_from" \
-    'FROM golang:1.26.5-alpine AS pinned-go-tools'
+  named_tools_stage="$temp_root/$name-named-tools-stage"
+  copy_fixture "$named_tools_stage"
+  replace_nth_exact_instruction \
+    "$named_tools_stage/$path" \
+    "$pinned_go_image" \
+    "$tools_from_occurrence" \
+    'FROM golang:1.26.5-alpine AS go-tools'
   expect_failure_matching \
-    "переименование alias оставляет COPY с неявным внешним source в $name Dockerfile" \
-    "$path: Dockerfile должен объявлять логическую stage alias go-tools ровно один раз; найдено 0" \
-    "$guard" --root "$renamed_go_tools_alias" --static-only
+    "numeric tools stage получает подменяемый named-context alias в $name Dockerfile" \
+    "$path: Dockerfile stages должны оставаться безымянными: named context может подменить stage alias go-tools" \
+    "$guard" --root "$named_tools_stage" --static-only
 
-  duplicate_go_tools_alias="$temp_root/$name-duplicate-go-tools-alias"
-  copy_fixture "$duplicate_go_tools_alias"
-  insert_before_exact_instruction \
-    "$duplicate_go_tools_alias/$path" \
-    "$final_runtime_from" \
-    'FROM attacker.invalid/go:latest AS GO-TOOLS'
+  variable_source="$temp_root/$name-variable-source"
+  copy_fixture "$variable_source"
+  replace_nth_exact_instruction \
+    "$variable_source/$path" \
+    "$pinned_go_image" \
+    1 \
+    'FROM ${GOLANG_IMAGE}'
   expect_failure_matching \
-    "alias go-tools продублирован с другим регистром в $name Dockerfile" \
-    "$path: Dockerfile должен объявлять логическую stage alias go-tools ровно один раз; найдено 2" \
-    "$guard" --root "$duplicate_go_tools_alias" --static-only
-
-  absorbed_go_tools_stage="$temp_root/$name-absorbed-go-tools-stage"
-  copy_fixture "$absorbed_go_tools_stage"
-  absorb_exact_instruction "$absorbed_go_tools_stage/$path" "$pinned_go_tools_from"
-  expect_failure_matching \
-    "continuation поглощает объявление stage alias go-tools в $name Dockerfile" \
-    "$path: immutable stage alias go-toolchain-source должна содержать только точную FROM-инструкцию" \
-    "$guard" --root "$absorbed_go_tools_stage" --static-only
-
-  variable_go_tools_base="$temp_root/$name-variable-go-tools-base"
-  copy_fixture "$variable_go_tools_base"
-  replace_exact_instruction \
-    "$variable_go_tools_base/$path" \
-    "$pinned_go_tools_from" \
-    'FROM $GOLANG_IMAGE AS go-tools'
-  expect_failure_matching \
-    "переменный base stage alias go-tools в $name Dockerfile" \
-    "$path: stage alias go-tools должна иметь точную привязку '$pinned_go_tools_from' к immutable source" \
-    "$guard" --root "$variable_go_tools_base" --static-only
-
-  flagged_go_tools_base="$temp_root/$name-flagged-go-tools-base"
-  copy_fixture "$flagged_go_tools_base"
-  replace_exact_instruction \
-    "$flagged_go_tools_base/$path" \
-    "$pinned_go_tools_from" \
-    'FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine AS GO-TOOLS'
-  expect_failure_matching \
-    "FROM flag и другой регистр alias меняют каноническую stage в $name Dockerfile" \
-    "$path: stage alias go-tools должна иметь точную привязку '$pinned_go_tools_from' к immutable source" \
-    "$guard" --root "$flagged_go_tools_base" --static-only
-
-  misplaced_go_tools_stage="$temp_root/$name-misplaced-go-tools-stage"
-  copy_fixture "$misplaced_go_tools_stage"
-  replace_exact_instruction \
-    "$misplaced_go_tools_stage/$path" \
-    "$pinned_go_tools_from" \
-    'FROM golang:1.26.5-alpine AS pinned-go-tools'
-  printf '\n%s\n' "$pinned_go_tools_from" >>"$misplaced_go_tools_stage/$path"
-  expect_failure_matching \
-    "stage alias go-tools объявлена после final runtime stage в $name Dockerfile" \
-    "$path: immutable source, go-tools и final runtime stage должны быть объявлены в каноническом порядке" \
-    "$guard" --root "$misplaced_go_tools_stage" --static-only
+    "immutable source использует переменный image в $name Dockerfile" \
+    "$path: immutable source stage 0 должна иметь точную безымянную форму '$pinned_go_image'" \
+    "$guard" --root "$variable_source" --static-only
 
   mutated_immutable_source="$temp_root/$name-mutated-immutable-source"
   copy_fixture "$mutated_immutable_source"
-  insert_after_exact_instruction \
+  insert_after_nth_exact_instruction \
     "$mutated_immutable_source/$path" \
-    "$pinned_source_from" \
+    "$pinned_go_image" \
+    1 \
     'RUN rm -rf /usr/local/go'
   expect_failure_matching \
     "write-capable RUN изменяет immutable source stage в $name Dockerfile" \
-    "$path: immutable stage alias go-toolchain-source должна содержать только точную FROM-инструкцию" \
+    "$path: immutable source stage 0 должна содержать только точную FROM-инструкцию" \
     "$guard" --root "$mutated_immutable_source" --static-only
 
   mounted_immutable_source="$temp_root/$name-mounted-immutable-source"
   copy_fixture "$mounted_immutable_source"
-  insert_after_exact_instruction \
+  insert_after_nth_exact_instruction \
     "$mounted_immutable_source/$path" \
-    "$pinned_source_from" \
+    "$pinned_go_image" \
+    1 \
     'RUN --mount=type=bind,source=.,target=/mnt true'
   expect_failure_matching \
     "RUN mount нарушает immutable source stage в $name Dockerfile" \
-    "$path: immutable stage alias go-toolchain-source должна содержать только точную FROM-инструкцию" \
+    "$path: immutable source stage 0 должна содержать только точную FROM-инструкцию" \
     "$guard" --root "$mounted_immutable_source" --static-only
 
-  duplicate_source_alias="$temp_root/$name-duplicate-source-alias"
-  copy_fixture "$duplicate_source_alias"
+  unexpected_stage="$temp_root/$name-unexpected-stage"
+  copy_fixture "$unexpected_stage"
   insert_before_exact_instruction \
-    "$duplicate_source_alias/$path" \
-    "$pinned_go_tools_from" \
-    'FROM attacker.invalid/go:latest AS GO-TOOLCHAIN-SOURCE'
+    "$unexpected_stage/$path" \
+    "$final_runtime_from" \
+    'FROM attacker.invalid/go:latest'
   expect_failure_matching \
-    "immutable source alias продублирован с другим регистром в $name Dockerfile" \
-    "$path: Dockerfile должен объявлять immutable stage alias go-toolchain-source ровно один раз; найдено 2" \
-    "$guard" --root "$duplicate_source_alias" --static-only
-
-  rebound_source_alias="$temp_root/$name-rebound-source-alias"
-  copy_fixture "$rebound_source_alias"
-  replace_exact_instruction \
-    "$rebound_source_alias/$path" \
-    "$pinned_source_from" \
-    'FROM golang:1.26.5-alpine AS pinned-go-toolchain-source'
-  insert_before_exact_instruction \
-    "$rebound_source_alias/$path" \
-    "$pinned_go_tools_from" \
-    'FROM attacker.invalid/go:latest AS go-toolchain-source'
-  expect_failure_matching \
-    "immutable source alias перепривязан к внешнему image в $name Dockerfile" \
-    "$path: immutable stage alias go-toolchain-source должна иметь точную закреплённую форму '$pinned_source_from'" \
-    "$guard" --root "$rebound_source_alias" --static-only
-
-  implicit_external_source="$temp_root/$name-implicit-external-source"
-  copy_fixture "$implicit_external_source"
-  replace_exact_instruction \
-    "$implicit_external_source/$path" \
-    "$pinned_source_from" \
-    'FROM golang:1.26.5-alpine AS pinned-go-toolchain-source'
-  expect_failure_matching \
-    "отсутствующий source alias превращает FROM/COPY в implicit external source в $name Dockerfile" \
-    "$path: Dockerfile должен объявлять immutable stage alias go-toolchain-source ровно один раз; найдено 0" \
-    "$guard" --root "$implicit_external_source" --static-only
+    "внешняя stage сдвигает numeric provenance в $name Dockerfile" \
+    "$path: Dockerfile должен содержать точное число безымянных stages" \
+    "$guard" --root "$unexpected_stage" --static-only
 
   fake_go_in_tools_stage="$temp_root/$name-fake-go-in-tools-stage"
   copy_fixture "$fake_go_in_tools_stage"
@@ -430,8 +405,8 @@ for index in "${!agent_runner_paths[@]}"; do
     "$final_runtime_from" \
     "$fake_go_run"
   expect_failure_matching \
-    "fake go executable добавлен внутри go-tools stage в $name Dockerfile" \
-    "$path: stage alias go-tools должна содержать ровно две самостоятельные RUN-инструкции закреплённого tools-контракта; найдено 3" \
+    "fake go executable добавлен внутри numeric tools stage в $name Dockerfile" \
+    "$path: tools stage должна содержать ровно две самостоятельные RUN-инструкции закреплённого tools-контракта; найдено 3" \
     "$guard" --root "$fake_go_in_tools_stage" --static-only
 
   external_copy_in_tools_stage="$temp_root/$name-external-copy-in-tools-stage"
@@ -441,16 +416,27 @@ for index in "${!agent_runner_paths[@]}"; do
     "$final_runtime_from" \
     'COPY --from=example.invalid/untrusted-go:latest /usr/local/go /usr/local/go'
   expect_failure_matching \
-    "external COPY добавлен внутри go-tools stage в $name Dockerfile" \
-    "$path: stage alias go-tools не должна содержать COPY или ADD; инструменты собираются только из закреплённого source" \
+    "external COPY добавлен внутри numeric tools stage в $name Dockerfile" \
+    "$path: tools stage не должна содержать COPY или ADD; инструменты собираются только из закреплённого Go image" \
     "$guard" --root "$external_copy_in_tools_stage" --static-only
+
+  buildkit_mount="$temp_root/$name-buildkit-mount"
+  copy_fixture "$buildkit_mount"
+  insert_after_exact_instruction \
+    "$buildkit_mount/$path" \
+    "$bootstrap_copy" \
+    'RUN --mount=from=0,source=/usr/local/go,target=/usr/local/go,readonly true'
+  expect_failure_matching \
+    "BuildKit-only mount возвращён в штатный Kaniko path $name Dockerfile" \
+    "$path: Dockerfile не должен содержать BuildKit-only RUN mount: штатная сборка выполняется Kaniko" \
+    "$guard" --root "$buildkit_mount" --static-only
 
   absorbed_go_tools_copy="$temp_root/$name-absorbed-go-tools-copy"
   copy_fixture "$absorbed_go_tools_copy"
   absorb_exact_instruction "$absorbed_go_tools_copy/$path" "$go_tools_copy"
   expect_failure_matching \
-    "continuation поглощает обязательный COPY Go tools из stage alias go-tools в $name Dockerfile" \
-    "$path: final runtime stage должен копировать закреплённые Go tools одной точной самостоятельной логической COPY-инструкцией из stage alias go-tools" \
+    "continuation поглощает обязательный COPY Go tools из numeric stage в $name Dockerfile" \
+    "$path: final runtime stage должен копировать закреплённые Go tools одной точной самостоятельной логической COPY-инструкцией из numeric tools stage" \
     "$guard" --root "$absorbed_go_tools_copy" --static-only
 
   absorbed_runtime_env="$temp_root/$name-absorbed-runtime-env"
@@ -480,16 +466,24 @@ for index in "${!agent_runner_paths[@]}"; do
   printf '%s\n' '' 'COPY --from=golang:latest /usr/local/g\o /usr/local/g\o' >>"$escaped_runtime_copy/$path"
   expect_failure_matching \
     "экранированный внешний COPY подменяет Go toolchain в $name Dockerfile" \
-    "$path: final runtime stage содержит write-capable COPY после обязательного RUN test" \
+    "$path: final runtime stage содержит write-capable COPY после обязательных exec-form postconditions" \
     "$guard" --root "$escaped_runtime_copy" --static-only
 
-  absorbed_runtime_check="$temp_root/$name-absorbed-runtime-check"
-  copy_fixture "$absorbed_runtime_check"
-  absorb_exact_instruction "$absorbed_runtime_check/$path" "$runtime_check"
+  absorbed_version_check="$temp_root/$name-absorbed-version-check"
+  copy_fixture "$absorbed_version_check"
+  absorb_exact_instruction "$absorbed_version_check/$path" "$version_check"
   expect_failure_matching \
-    "continuation поглощает обязательный RUN test в $name Dockerfile" \
-    "$path: final runtime stage должен закрыто проверять точные GOVERSION и GOTOOLCHAIN одной самостоятельной логической RUN-инструкцией" \
-    "$guard" --root "$absorbed_runtime_check" --static-only
+    "continuation поглощает обязательную exec-form проверку GOVERSION в $name Dockerfile" \
+    "$path: после final trusted COPY разрешены только две точные exec-form проверки Go toolchain" \
+    "$guard" --root "$absorbed_version_check" --static-only
+
+  absorbed_toolchain_check="$temp_root/$name-absorbed-toolchain-check"
+  copy_fixture "$absorbed_toolchain_check"
+  absorb_exact_instruction "$absorbed_toolchain_check/$path" "$toolchain_check"
+  expect_failure_matching \
+    "continuation поглощает обязательную exec-form проверку GOTOOLCHAIN в $name Dockerfile" \
+    "$path: после final trusted COPY разрешены только две точные exec-form проверки Go toolchain" \
+    "$guard" --root "$absorbed_toolchain_check" --static-only
 
   absorbed_runtime_contract="$temp_root/$name-absorbed-runtime-contract"
   copy_fixture "$absorbed_runtime_contract"
@@ -501,7 +495,7 @@ for index in "${!agent_runner_paths[@]}"; do
     "$absorbed_runtime_contract/$path" \
     "$runtime_copy" \
     'COPY --from=golang:latest /usr/local/go /usr/local/go'
-  absorb_exact_instruction "$absorbed_runtime_contract/$path" "$runtime_check"
+  absorb_exact_instruction "$absorbed_runtime_contract/$path" "$version_check"
   expect_failure_matching \
     "continuation поглощает весь обязательный runtime-контракт в $name Dockerfile" \
     "$path: final runtime stage содержит неразрешённую COPY-инструкцию с /usr/local/go" \
@@ -509,106 +503,116 @@ for index in "${!agent_runner_paths[@]}"; do
 
   runtime_env_after_copy="$temp_root/$name-runtime-env-after-copy"
   copy_fixture "$runtime_env_after_copy"
-  swap_exact_instructions "$runtime_env_after_copy/$path" "$runtime_env" "$runtime_copy"
+  swap_exact_instructions "$runtime_env_after_copy/$path" "$runtime_env" "$bootstrap_copy"
   expect_failure_matching \
-    "логический ENV расположен после COPY в $name Dockerfile" \
-    "$path: final runtime stage должен задавать GOTOOLCHAIN=local до логической COPY-инструкции Go toolchain" \
+    "логический ENV расположен после bootstrap COPY в $name Dockerfile" \
+    "$path: final runtime stage должен задавать GOTOOLCHAIN=local до bootstrap COPY Go toolchain" \
     "$guard" --root "$runtime_env_after_copy" --static-only
 
-  runtime_check_before_copy="$temp_root/$name-runtime-check-before-copy"
-  copy_fixture "$runtime_check_before_copy"
-  swap_exact_instructions "$runtime_check_before_copy/$path" "$runtime_copy" "$runtime_check"
+  version_check_before_copy="$temp_root/$name-version-check-before-copy"
+  copy_fixture "$version_check_before_copy"
+  swap_exact_instructions "$version_check_before_copy/$path" "$runtime_copy" "$version_check"
   expect_failure_matching \
-    "логический RUN test расположен до COPY в $name Dockerfile" \
-    "$path: final runtime stage должен проверять скопированный Go toolchain после логической COPY-инструкции" \
-    "$guard" --root "$runtime_check_before_copy" --static-only
+    "exec-form GOVERSION расположен до final trusted COPY в $name Dockerfile" \
+    "$path: final trusted COPY должен непосредственно предшествовать точным exec-form проверкам GOVERSION и GOTOOLCHAIN" \
+    "$guard" --root "$version_check_before_copy" --static-only
 
   shell_true_before_check="$temp_root/$name-shell-true-before-check"
   copy_fixture "$shell_true_before_check"
   insert_before_exact_instruction \
     "$shell_true_before_check/$path" \
-    "$runtime_check" \
+    "$version_check" \
     'SHELL ["/bin/true"]'
   expect_failure_matching \
-    "SHELL /bin/true нейтрализует exact RUN test в $name Dockerfile" \
-    "$path: final runtime stage не должна содержать SHELL: обязательный RUN test использует только canonical shell" \
+    "SHELL /bin/true добавлен перед exec-form postconditions в $name Dockerfile" \
+    "$path: после final trusted COPY разрешены только две точные exec-form проверки Go toolchain" \
     "$guard" --root "$shell_true_before_check" --static-only
 
   alternate_shell_before_check="$temp_root/$name-alternate-shell-before-check"
   copy_fixture "$alternate_shell_before_check"
   insert_before_exact_instruction \
     "$alternate_shell_before_check/$path" \
-    "$runtime_check" \
+    "$version_check" \
     'SHELL ["/bin/sh", "-c"]'
   expect_failure_matching \
-    "альтернативный SHELL меняет семантику exact RUN test в $name Dockerfile" \
-    "$path: final runtime stage не должна содержать SHELL: обязательный RUN test использует только canonical shell" \
+    "альтернативный SHELL добавлен перед exec-form postconditions в $name Dockerfile" \
+    "$path: после final trusted COPY разрешены только две точные exec-form проверки Go toolchain" \
     "$guard" --root "$alternate_shell_before_check" --static-only
+
+  replaced_runtime_shell="$temp_root/$name-replaced-runtime-shell"
+  copy_fixture "$replaced_runtime_shell"
+  insert_before_exact_instruction \
+    "$replaced_runtime_shell/$path" \
+    "$runtime_copy" \
+    'RUN rm -f /bin/sh && cp /bin/true /bin/sh'
+  expect_success \
+    "подмена /bin/sh до final trusted COPY не нейтрализует exec-form postconditions в $name Dockerfile" \
+    "$guard" --root "$replaced_runtime_shell" --static-only
 
   fake_go_between_copy_and_check="$temp_root/$name-fake-go-between-copy-and-check"
   copy_fixture "$fake_go_between_copy_and_check"
   insert_before_exact_instruction \
     "$fake_go_between_copy_and_check/$path" \
-    "$runtime_check" \
+    "$version_check" \
     "$fake_go_run"
   expect_failure_matching \
-    "fake go executable подменяет toolchain между trusted COPY и exact RUN test в $name Dockerfile" \
-    "$path: final runtime stage содержит write-capable RUN между trusted COPY Go toolchain и exact RUN test" \
+    "fake go executable подменяет toolchain между final trusted COPY и exec-form postconditions в $name Dockerfile" \
+    "$path: после final trusted COPY разрешены только две точные exec-form проверки Go toolchain" \
     "$guard" --root "$fake_go_between_copy_and_check" --static-only
 
   late_delete_after_check="$temp_root/$name-late-delete-after-check"
   copy_fixture "$late_delete_after_check"
   insert_after_exact_instruction \
     "$late_delete_after_check/$path" \
-    "$runtime_check" \
+    "$toolchain_check" \
     'RUN rm -rf /usr/local/go'
   expect_failure_matching \
-    "поздний RUN удаляет Go toolchain после exact test в $name Dockerfile" \
-    "$path: final runtime stage содержит write-capable RUN после обязательного RUN test" \
+    "поздний RUN удаляет Go toolchain после exec-form postconditions в $name Dockerfile" \
+    "$path: final runtime stage содержит write-capable RUN после обязательных exec-form postconditions" \
     "$guard" --root "$late_delete_after_check" --static-only
 
   late_replace_after_check="$temp_root/$name-late-replace-after-check"
   copy_fixture "$late_replace_after_check"
   insert_after_exact_instruction \
     "$late_replace_after_check/$path" \
-    "$runtime_check" \
+    "$toolchain_check" \
     "$fake_go_run"
   expect_failure_matching \
-    "поздний RUN заменяет Go executable после exact test в $name Dockerfile" \
-    "$path: final runtime stage содержит write-capable RUN после обязательного RUN test" \
+    "поздний RUN заменяет Go executable после exec-form postconditions в $name Dockerfile" \
+    "$path: final runtime stage содержит write-capable RUN после обязательных exec-form postconditions" \
     "$guard" --root "$late_replace_after_check" --static-only
 
   late_external_copy_after_check="$temp_root/$name-late-external-copy-after-check"
   copy_fixture "$late_external_copy_after_check"
   insert_after_exact_instruction \
     "$late_external_copy_after_check/$path" \
-    "$runtime_check" \
+    "$toolchain_check" \
     'COPY --from=example.invalid/untrusted-go:latest /usr/local/go /usr/local/go'
   expect_failure_matching \
-    "поздний external COPY заменяет Go toolchain после exact test в $name Dockerfile" \
-    "$path: final runtime stage содержит write-capable COPY после обязательного RUN test" \
+    "поздний external COPY заменяет Go toolchain после exec-form postconditions в $name Dockerfile" \
+    "$path: final runtime stage содержит write-capable COPY после обязательных exec-form postconditions" \
     "$guard" --root "$late_external_copy_after_check" --static-only
 
   late_external_add_after_check="$temp_root/$name-late-external-add-after-check"
   copy_fixture "$late_external_add_after_check"
   insert_after_exact_instruction \
     "$late_external_add_after_check/$path" \
-    "$runtime_check" \
+    "$toolchain_check" \
     'ADD https://example.invalid/untrusted-go.tar /usr/local/go/'
   expect_failure_matching \
-    "поздний external ADD заменяет Go toolchain после exact test в $name Dockerfile" \
-    "$path: final runtime stage содержит write-capable ADD после обязательного RUN test" \
+    "поздний external ADD заменяет Go toolchain после exec-form postconditions в $name Dockerfile" \
+    "$path: final runtime stage содержит write-capable ADD после обязательных exec-form postconditions" \
     "$guard" --root "$late_external_add_after_check" --static-only
 
   unlisted_metadata_after_check="$temp_root/$name-unlisted-metadata-after-check"
   copy_fixture "$unlisted_metadata_after_check"
   insert_after_exact_instruction \
     "$unlisted_metadata_after_check/$path" \
-    "$runtime_check" \
+    "$toolchain_check" \
     'LABEL security.proof=unlisted'
   expect_failure_matching \
-    "незаявленная metadata-инструкция добавлена после exact test в $name Dockerfile" \
-    "$path: после обязательного RUN test разрешён только точный metadata tail текущего Dockerfile" \
+    "незаявленная metadata-инструкция добавлена после exec-form postconditions в $name Dockerfile" \
+    "$path: после обязательных exec-form postconditions разрешён только точный metadata tail текущего Dockerfile" \
     "$guard" --root "$unlisted_metadata_after_check" --static-only
 
   duplicate_runtime_env="$temp_root/$name-duplicate-runtime-env"
@@ -619,21 +623,67 @@ for index in "${!agent_runner_paths[@]}"; do
     "$path: final runtime stage должен содержать точную самостоятельную логическую инструкцию '$runtime_env' ровно один раз" \
     "$guard" --root "$duplicate_runtime_env" --static-only
 
+  missing_bootstrap_copy="$temp_root/$name-missing-bootstrap-copy"
+  copy_fixture "$missing_bootstrap_copy"
+  replace_exact_instruction "$missing_bootstrap_copy/$path" "$bootstrap_copy" ""
+  expect_failure_matching \
+    "Kaniko-compatible bootstrap COPY отсутствует в $name Dockerfile" \
+    "$path: final runtime stage должен содержать ровно один Kaniko-compatible bootstrap COPY Go toolchain" \
+    "$guard" --root "$missing_bootstrap_copy" --static-only
+
+  missing_trusted_copy="$temp_root/$name-missing-trusted-copy"
+  copy_fixture "$missing_trusted_copy"
+  replace_exact_instruction "$missing_trusted_copy/$path" "$runtime_copy" ""
+  expect_failure_matching \
+    "final trusted COPY отсутствует в $name Dockerfile" \
+    "$path: final runtime stage должен содержать ровно один final trusted COPY Go toolchain" \
+    "$guard" --root "$missing_trusted_copy" --static-only
+
+  replaced_bootstrap_copy="$temp_root/$name-replaced-bootstrap-copy"
+  copy_fixture "$replaced_bootstrap_copy"
+  replace_exact_instruction \
+    "$replaced_bootstrap_copy/$path" \
+    "$bootstrap_copy" \
+    'COPY --from=1 /usr/local/go/ /usr/local/go/'
+  expect_failure_matching \
+    "bootstrap COPY использует не immutable numeric source в $name Dockerfile" \
+    "$path: final runtime stage содержит неразрешённую COPY-инструкцию с /usr/local/go" \
+    "$guard" --root "$replaced_bootstrap_copy" --static-only
+
+  duplicate_bootstrap_copy="$temp_root/$name-duplicate-bootstrap-copy"
+  copy_fixture "$duplicate_bootstrap_copy"
+  insert_before_exact_instruction \
+    "$duplicate_bootstrap_copy/$path" \
+    "$runtime_copy" \
+    "$bootstrap_copy"
+  expect_failure_matching \
+    "Kaniko-compatible bootstrap COPY продублирован в $name Dockerfile" \
+    "$path: final runtime stage должен содержать ровно один Kaniko-compatible bootstrap COPY Go toolchain" \
+    "$guard" --root "$duplicate_bootstrap_copy" --static-only
+
+  swapped_bootstrap_copy="$temp_root/$name-swapped-bootstrap-copy"
+  copy_fixture "$swapped_bootstrap_copy"
+  swap_exact_instructions "$swapped_bootstrap_copy/$path" "$bootstrap_copy" "$runtime_copy"
+  expect_failure_matching \
+    "bootstrap и final trusted COPY переставлены в $name Dockerfile" \
+    "$path: после final trusted COPY разрешены только две точные exec-form проверки Go toolchain" \
+    "$guard" --root "$swapped_bootstrap_copy" --static-only
+
   duplicate_runtime_copy="$temp_root/$name-duplicate-runtime-copy"
   copy_fixture "$duplicate_runtime_copy"
   printf '\n%s\n' "$runtime_copy" >>"$duplicate_runtime_copy/$path"
   expect_failure_matching \
-    "обязательный логический COPY продублирован в $name Dockerfile" \
-    "$path: final runtime stage должен копировать закреплённый Go toolchain одной точной самостоятельной логической COPY-инструкцией" \
+    "final trusted COPY продублирован в $name Dockerfile" \
+    "$path: final runtime stage должен содержать ровно один final trusted COPY Go toolchain" \
     "$guard" --root "$duplicate_runtime_copy" --static-only
 
-  duplicate_runtime_check="$temp_root/$name-duplicate-runtime-check"
-  copy_fixture "$duplicate_runtime_check"
-  printf '\n%s\n' "$runtime_check" >>"$duplicate_runtime_check/$path"
+  duplicate_version_check="$temp_root/$name-duplicate-version-check"
+  copy_fixture "$duplicate_version_check"
+  printf '\n%s\n' "$version_check" >>"$duplicate_version_check/$path"
   expect_failure_matching \
-    "обязательный логический RUN test продублирован в $name Dockerfile" \
-    "$path: final runtime stage должен закрыто проверять точные GOVERSION и GOTOOLCHAIN одной самостоятельной логической RUN-инструкцией" \
-    "$guard" --root "$duplicate_runtime_check" --static-only
+    "exec-form проверка GOVERSION продублирована в $name Dockerfile" \
+    "$path: final runtime stage должен выполнять точную shell-independent exec-form проверку GOVERSION ровно один раз" \
+    "$guard" --root "$duplicate_version_check" --static-only
 
   unicode_nbsp_from="$temp_root/$name-unicode-nbsp-from"
   copy_fixture "$unicode_nbsp_from"
@@ -767,22 +817,295 @@ for index in "${!agent_runner_paths[@]}"; do
     "$guard" --root "$bom_hash_syntax_frontend" --static-only
 done
 
+buildkit_probe_root="$temp_root/buildkit-probe"
+mkdir -p "$buildkit_probe_root"
+cat >"$buildkit_probe_root/go.mod" <<'EOF'
+module mattercodex.invalid/buildkit-probe
+
+go 1.26.0
+
+require github.com/moby/buildkit v0.29.0
+EOF
+cat >"$buildkit_probe_root/main.go" <<'EOF'
+package main
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
+	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
+	"github.com/moby/buildkit/frontend/dockerfile/instructions"
+	"github.com/moby/buildkit/frontend/dockerfile/parser"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/moby/buildkit/frontend/dockerui"
+	gateway "github.com/moby/buildkit/frontend/gateway/client"
+	gatewaypb "github.com/moby/buildkit/frontend/gateway/pb"
+	"github.com/moby/buildkit/solver/pb"
+	digest "github.com/opencontainers/go-digest"
+	fstypes "github.com/tonistiigi/fsutil/types"
+)
+
+var errAttackerImageRequested = errors.New("запрошен attacker image через named context")
+
+const imageConfig = `{"architecture":"amd64","os":"linux","config":{"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"]},"rootfs":{"type":"layers","diff_ids":[]}}`
+
+type gatewayProbe struct {
+	opts     gateway.BuildOpts
+	requests []string
+}
+
+type probeReference struct{}
+
+func (*probeReference) ToState() (llb.State, error) {
+	return llb.Scratch(), nil
+}
+
+func (*probeReference) Evaluate(context.Context) error {
+	return nil
+}
+
+func (*probeReference) ReadFile(context.Context, gateway.ReadRequest) ([]byte, error) {
+	return nil, os.ErrNotExist
+}
+
+func (*probeReference) StatFile(context.Context, gateway.StatRequest) (*fstypes.Stat, error) {
+	return nil, os.ErrNotExist
+}
+
+func (*probeReference) ReadDir(context.Context, gateway.ReadDirRequest) ([]*fstypes.Stat, error) {
+	return nil, os.ErrNotExist
+}
+
+func (p *gatewayProbe) ResolveSourceMetadata(context.Context, *pb.SourceOp, sourceresolver.Opt) (*sourceresolver.MetaResponse, error) {
+	return nil, errors.New("неожиданный ResolveSourceMetadata")
+}
+
+func (p *gatewayProbe) ResolveImageConfig(_ context.Context, ref string, _ sourceresolver.Opt) (string, digest.Digest, []byte, error) {
+	p.requests = append(p.requests, ref)
+	if strings.Contains(ref, "attacker.invalid") {
+		return "", "", nil, errAttackerImageRequested
+	}
+	return ref, digest.FromString(ref), []byte(imageConfig), nil
+}
+
+func (p *gatewayProbe) Solve(context.Context, gateway.SolveRequest) (*gateway.Result, error) {
+	result := gateway.NewResult()
+	result.SetRef(&probeReference{})
+	return result, nil
+}
+
+func (p *gatewayProbe) BuildOpts() gateway.BuildOpts {
+	return p.opts
+}
+
+func (p *gatewayProbe) Inputs(context.Context) (map[string]llb.State, error) {
+	return map[string]llb.State{}, nil
+}
+
+func (p *gatewayProbe) NewContainer(context.Context, gateway.NewContainerRequest) (gateway.Container, error) {
+	return nil, errors.New("неожиданный NewContainer")
+}
+
+func (p *gatewayProbe) Warn(context.Context, digest.Digest, string, gateway.WarnOpts) error {
+	return nil
+}
+
+type imageResolver struct{}
+
+func (imageResolver) ResolveImageConfig(_ context.Context, ref string, _ sourceresolver.Opt) (string, digest.Digest, []byte, error) {
+	return ref, digest.FromString(ref), []byte(imageConfig), nil
+}
+
+func parseContract(path string, data []byte, toolsStage int) error {
+	parsed, err := parser.Parse(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("parser.Parse %s: %w", path, err)
+	}
+	stages, _, err := instructions.Parse(parsed.AST, nil)
+	if err != nil {
+		return fmt.Errorf("instructions.Parse %s: %w", path, err)
+	}
+	if len(stages) == 0 {
+		return fmt.Errorf("%s: stages отсутствуют", path)
+	}
+	for index, stage := range stages {
+		if stage.Name != "" {
+			return fmt.Errorf("%s: stage %d имеет подменяемый alias %q", path, index, stage.Name)
+		}
+	}
+	if stages[0].BaseName != "golang:1.26.5-alpine" || len(stages[0].Commands) != 0 {
+		return fmt.Errorf("%s: stage 0 не является immutable source", path)
+	}
+
+	lex := shell.NewLex(parsed.EscapeToken)
+	finalStage := stages[len(stages)-1]
+	var sourceCopies, toolsCopies, versionChecks, toolchainChecks int
+	for _, stage := range stages {
+		for _, command := range stage.Commands {
+			switch typed := command.(type) {
+			case *instructions.CopyCommand:
+				if typed.From == "" {
+					continue
+				}
+				processed, err := lex.ProcessWordWithMatches(typed.From, shell.EnvsFromSlice(nil))
+				if err != nil || processed.Result != typed.From {
+					return fmt.Errorf("%s: shell resolver изменил COPY --from=%q", path, typed.From)
+				}
+				if _, err := strconv.Atoi(typed.From); err != nil {
+					return fmt.Errorf("%s: COPY --from=%q не является internal numeric stage", path, typed.From)
+				}
+			}
+			if run, ok := command.(*instructions.RunCommand); ok && len(instructions.GetMounts(run)) != 0 {
+				return fmt.Errorf("%s: BuildKit-only RUN mount нарушает Kaniko contract", path)
+			}
+		}
+	}
+	for _, command := range finalStage.Commands {
+		switch typed := command.(type) {
+		case *instructions.CopyCommand:
+			switch typed.From {
+			case "0":
+				sourceCopies++
+			case strconv.Itoa(toolsStage):
+				toolsCopies++
+			}
+		case *instructions.RunCommand:
+			if typed.PrependShell {
+				continue
+			}
+			joined := strings.Join(typed.CmdLine, "\x00")
+			switch joined {
+			case "/usr/local/go/bin/go\x00env\x00GOVERSION":
+				versionChecks++
+			case "/usr/local/go/bin/go\x00env\x00GOTOOLCHAIN":
+				toolchainChecks++
+			}
+		}
+	}
+	if sourceCopies != 2 || toolsCopies != 1 || versionChecks != 1 || toolchainChecks != 1 {
+		return fmt.Errorf("%s: parser contract source=%d tools=%d GOVERSION=%d GOTOOLCHAIN=%d", path, sourceCopies, toolsCopies, versionChecks, toolchainChecks)
+	}
+	return nil
+}
+
+func convertWithProtectedContexts(data []byte) ([]string, error) {
+	caps := pb.Caps.CapSet(pb.Caps.All())
+	probe := &gatewayProbe{opts: gateway.BuildOpts{
+		Opts: map[string]string{
+			"context:go-toolchain-source": "docker-image://attacker.invalid/go:latest",
+			"context:go-tools":            "docker-image://attacker.invalid/tools:latest",
+		},
+		LLBCaps: caps,
+		Caps:    gatewaypb.Caps.CapSet(gatewaypb.Caps.All()),
+	}}
+	client, err := dockerui.NewClient(probe)
+	if err != nil {
+		return nil, err
+	}
+	_, err = dockerfile2llb.Dockerfile2LLB(context.Background(), data, dockerfile2llb.ConvertOpt{
+		Client:       client,
+		MetaResolver: imageResolver{},
+		LLBCaps:      &caps,
+		AllStages:    true,
+	})
+	return probe.requests, err
+}
+
+func addAlias(data []byte, occurrence int, alias string) ([]byte, error) {
+	lines := strings.Split(string(data), "\n")
+	selected := 0
+	for index, line := range lines {
+		if line != "FROM golang:1.26.5-alpine" {
+			continue
+		}
+		selected++
+		if selected == occurrence {
+			lines[index] = line + " AS " + alias
+			return []byte(strings.Join(lines, "\n")), nil
+		}
+	}
+	return nil, fmt.Errorf("не найдена FROM occurrence %d", occurrence)
+}
+
+func verifyPath(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	toolsStage := 1
+	toolsOccurrence := 2
+	if strings.Contains(path, "services/jobs") {
+		toolsStage = 2
+		toolsOccurrence = 3
+	}
+	if err := parseContract(path, data, toolsStage); err != nil {
+		return err
+	}
+	requests, err := convertWithProtectedContexts(data)
+	if err != nil {
+		return fmt.Errorf("canonical Dockerfile2LLB %s: %w", path, err)
+	}
+	if len(requests) != 0 {
+		return fmt.Errorf("%s: canonical numeric stages вызвали external image requests: %v", path, requests)
+	}
+	for _, mutation := range []struct {
+		occurrence int
+		alias      string
+	}{{1, "go-toolchain-source"}, {toolsOccurrence, "go-tools"}} {
+		mutated, err := addAlias(data, mutation.occurrence, mutation.alias)
+		if err != nil {
+			return err
+		}
+		requests, err := convertWithProtectedContexts(mutated)
+		if !errors.Is(err, errAttackerImageRequested) || len(requests) != 1 || !strings.Contains(requests[0], "attacker.invalid") {
+			return fmt.Errorf("%s: ConvertOpt.Client не доказал substitution alias %s: requests=%v err=%v", path, mutation.alias, requests, err)
+		}
+	}
+	return nil
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, "нужны пути к двум Dockerfile")
+		os.Exit(2)
+	}
+	for _, path := range os.Args[1:] {
+		if err := verifyPath(path); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+}
+EOF
+expect_success \
+  "official BuildKit v0.29.0 parser/instructions/shell и Dockerfile2LLB ConvertOpt.Client contract" \
+  env GOENV=off GOWORK=off go -C "$buildkit_probe_root" run -mod=mod . \
+    "$repo_root/services/jobs/agent-runner/Dockerfile" \
+    "$repo_root/deploy/images/agent-runner/Dockerfile"
+
 logical_contract_continuations="$temp_root/logical-contract-continuations"
 copy_fixture "$logical_contract_continuations"
 for path in "${agent_runner_paths[@]}"; do
   split_exact_instruction \
     "$logical_contract_continuations/$path" \
     "$runtime_copy" \
-    'COPY --from=go-toolchain-source /usr/local/go \' \
+    'COPY --from=0 /usr/local/go \' \
     '/usr/local/go'
   split_exact_instruction \
     "$logical_contract_continuations/$path" \
-    "$runtime_check" \
-    'RUN test "$(/usr/local/go/bin/go env GOVERSION)" = "go1.26.5" && \' \
-    'test "$(/usr/local/go/bin/go env GOTOOLCHAIN)" = "local"'
+    "$version_check" \
+    'RUN ["/usr/local/go/bin/go", "env", \' \
+    '"GOVERSION"]'
 done
 expect_success \
-  "самостоятельные обязательные COPY и RUN поддерживают ordinary continuation" \
+  "самостоятельные обязательные COPY и exec-form RUN поддерживают ordinary continuation" \
   "$guard" --root "$logical_contract_continuations" --static-only
 
 allowed_shebang_comments="$temp_root/allowed-shebang-comments"
@@ -868,8 +1191,8 @@ expect_failure "GOTOOLCHAIN=local отсутствует в services final runti
 
 runtime_check_missing="$temp_root/runtime-check-missing"
 copy_fixture "$runtime_check_missing"
-sed -i '/^RUN test "$(\/usr\/local\/go\/bin\/go env GOVERSION)" = "go1\.26\.5" && test "$(\/usr\/local\/go\/bin\/go env GOTOOLCHAIN)" = "local"$/d' "$runtime_check_missing/deploy/images/agent-runner/Dockerfile"
-expect_failure "точная проверка Go отсутствует в deploy final runtime stage" "$guard" --root "$runtime_check_missing" --static-only
+sed -i '/^RUN \["\/usr\/local\/go\/bin\/go", "env", "GOVERSION"\]$/d' "$runtime_check_missing/deploy/images/agent-runner/Dockerfile"
+expect_failure "точная exec-form проверка GOVERSION отсутствует в deploy final runtime stage" "$guard" --root "$runtime_check_missing" --static-only
 
 runtime_final_local="$temp_root/runtime-final-local"
 copy_fixture "$runtime_final_local"
@@ -942,7 +1265,7 @@ copy_fixture "$services_lowercase_final_from"
 printf '\nfrom scratch\n' >>"$services_lowercase_final_from/services/jobs/agent-runner/Dockerfile"
 expect_failure_matching \
   "строчная новая final stage в services Dockerfile" \
-  "services/jobs/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-bookworm', найден 'FROM scratch'" \
+  "services/jobs/agent-runner/Dockerfile: Dockerfile должен содержать точное число безымянных stages" \
   "$guard" --root "$services_lowercase_final_from" --static-only
 
 deploy_indented_final_from="$temp_root/deploy-indented-final-from"
@@ -950,7 +1273,7 @@ copy_fixture "$deploy_indented_final_from"
 printf '\n  FROM scratch\n' >>"$deploy_indented_final_from/deploy/images/agent-runner/Dockerfile"
 expect_failure_matching \
   "новая final stage с отступом в deploy Dockerfile" \
-  "deploy/images/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-alpine', найден 'FROM scratch'" \
+  "deploy/images/agent-runner/Dockerfile: Dockerfile должен содержать точное число безымянных stages" \
   "$guard" --root "$deploy_indented_final_from" --static-only
 
 services_three_slash_final_from="$temp_root/services-three-slash-final-from"
@@ -962,7 +1285,7 @@ FROM scratch
 EOF
 expect_failure_matching \
   "три завершающих backslash перед новой final stage в services Dockerfile" \
-  "services/jobs/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-bookworm', найден 'FROM scratch'" \
+  "services/jobs/agent-runner/Dockerfile: Dockerfile должен содержать точное число безымянных stages" \
   "$guard" --root "$services_three_slash_final_from" --static-only
 
 deploy_three_slash_final_from="$temp_root/deploy-three-slash-final-from"
@@ -974,7 +1297,7 @@ FROM scratch
 EOF
 expect_failure_matching \
   "три завершающих backslash перед новой final stage в deploy Dockerfile" \
-  "deploy/images/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-alpine', найден 'FROM scratch'" \
+  "deploy/images/agent-runner/Dockerfile: Dockerfile должен содержать точное число безымянных stages" \
   "$guard" --root "$deploy_three_slash_final_from" --static-only
 
 services_split_instruction="$temp_root/services-split-instruction"
@@ -1035,7 +1358,7 @@ ENV GOTOOLCHAIN=auto
 EOF
 expect_failure_matching \
   "три завершающих backslash перед поздним GOTOOLCHAIN=auto в services Dockerfile" \
-  "services/jobs/agent-runner/Dockerfile: final runtime stage содержит write-capable RUN после обязательного RUN test" \
+  "services/jobs/agent-runner/Dockerfile: final runtime stage содержит write-capable RUN после обязательных exec-form postconditions" \
   "$guard" --root "$services_three_slash_override" --static-only
 
 deploy_three_slash_override="$temp_root/deploy-three-slash-override"
@@ -1047,7 +1370,7 @@ ENV GOTOOLCHAIN=auto
 EOF
 expect_failure_matching \
   "три завершающих backslash перед поздним GOTOOLCHAIN=auto в deploy Dockerfile" \
-  "deploy/images/agent-runner/Dockerfile: final runtime stage содержит write-capable RUN после обязательного RUN test" \
+  "deploy/images/agent-runner/Dockerfile: final runtime stage содержит write-capable RUN после обязательных exec-form postconditions" \
   "$guard" --root "$deploy_three_slash_override" --static-only
 
 services_heredoc="$temp_root/services-heredoc"
@@ -1142,4 +1465,4 @@ expect_failure "GOVULNCHECK_VERSION command injection" env \
   exit 1
 }
 
-echo "PASS: Go toolchain contract отклоняет старую версию, подмену provenance, SHELL, post-test mutation и govulncheck injection"
+echo "PASS: Go toolchain contract проверяет Kaniko bootstrap, numeric provenance, exec-form postconditions и hostile mutations"
