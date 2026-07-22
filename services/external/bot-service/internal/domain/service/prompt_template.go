@@ -656,7 +656,7 @@ func agentRuntimeTools() []promptTemplateToolData {
 		{Name: "just", Command: "just", Version: "1.55.1", Purpose: "запускать проектные команды из justfile"},
 		{Name: "netcat", Command: "nc", Version: "distro package", Purpose: "проверять raw TCP connectivity при отладке сервисов"},
 		{Name: "DNS tools", Command: "dig", Version: "distro package", Purpose: "отлаживать DNS-записи и service discovery"},
-		{Name: "Go toolchain", Command: "go", Version: "1.26", Purpose: "собирать, тестировать и инспектировать Go-модули, включая проекты, закрепленные на Go 1.25"},
+		{Name: "Go toolchain", Command: "go", Version: "1.26.5", Purpose: "собирать, тестировать и инспектировать Go-модули при минимальной безопасной версии MatterCodex, включая проекты, закрепленные на Go 1.25"},
 		{Name: "goimports", Command: "goimports", Version: "0.46.0", Purpose: "форматировать Go-импорты"},
 		{Name: "gofumpt", Command: "gofumpt", Version: "0.10.0", Purpose: "применять более строгое Go-форматирование, когда проект этого требует"},
 		{Name: "staticcheck", Command: "staticcheck", Version: "0.7.0", Purpose: "запускать статический Go-анализ"},
