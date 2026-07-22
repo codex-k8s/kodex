@@ -302,14 +302,24 @@ final_runtime_stage() {
   ' "$dockerfile"
 }
 
-validate_go_tools_stage_contract() {
+validate_toolchain_stage_contracts() {
   local dockerfile="$1"
-  local expected_from="$2"
-  local final_from_line="$3"
+  local expected_go_image="$2"
+  local expected_work_run_count="$3"
+  local expected_work_copy_count="$4"
+  local expected_protected_build_run="$5"
 
   LC_ALL=C awk \
-    -v expected_from="$expected_from" \
-    -v final_from_line="$final_from_line" '
+    -v expected_go_image="$expected_go_image" \
+    -v expected_work_run_count="$expected_work_run_count" \
+    -v expected_work_copy_count="$expected_work_copy_count" \
+    -v expected_protected_build_run="$expected_protected_build_run" '
+    function contract_error(message) {
+      print message > "/dev/stderr"
+      contract_failed = 1
+      exit 2
+    }
+
     function has_line_continuation(value, trimmed, position, slash_count) {
       trimmed = value
       sub(/[ \t]+$/, "", trimmed)
@@ -327,7 +337,11 @@ validate_go_tools_stage_contract() {
       return trimmed
     }
 
-    function process_instruction(value, start_line, line, instruction, body, token_count) {
+    BEGIN {
+      stage_index = -1
+    }
+
+    function process_instruction(value, start_line, line, instruction, body, canonical, normalized, token_count, alias) {
       line = value
       sub(/^[ \t]+/, "", line)
       if (!match(line, /^[^ \t]+/)) {
@@ -335,27 +349,59 @@ validate_go_tools_stage_contract() {
       }
 
       instruction = toupper(substr(line, 1, RLENGTH))
-      if (instruction != "FROM") {
-        return
-      }
-
       body = substr(line, RLENGTH + 1)
       sub(/^[ \t]+/, "", body)
       sub(/[ \t]+$/, "", body)
-      token_count = split(body, tokens, /[ \t]+/)
+      canonical = instruction " " body
+      normalized = canonical
+      gsub(/[ \t]+/, " ", normalized)
 
-      # BuildKit v0.29.0 приводит stage name к нижнему регистру и хранит
-      # привязку без учёта регистра. FROM flags извлекаются до этих аргументов,
-      # поэтому alias всегда остаётся последним токеном после AS.
-      if (token_count < 2 || toupper(tokens[token_count - 1]) != "AS" || \
-          toupper(tokens[token_count]) != "GO-TOOLS") {
+      if (instruction != "FROM") {
+        if (stage_index == 0) {
+          protected_instruction_count++
+          protected_last_instruction = normalized
+          if (normalized == expected_protected_build_run) {
+            protected_build_count++
+          }
+        }
+        if (instruction == "RUN" && toupper(body) ~ /^--MOUNT([= \t]|$)/) {
+          contract_error("Dockerfile не должен содержать BuildKit-only RUN mount: штатная сборка выполняется Kaniko")
+        }
+        if (stage_index == 1) {
+          work_contract = work_contract (work_contract == "" ? "" : "\n") line
+          if (instruction == "COPY") {
+            work_copy_count++
+            if (toupper(body) ~ /^--FROM([= \t]|$)/) {
+              contract_error("work stage не должна получать данные через COPY --from")
+            }
+          }
+          if (instruction == "ADD") {
+            contract_error("work stage не должна содержать ADD")
+          }
+          if (instruction == "SHELL") {
+            contract_error("work stage не должна переопределять SHELL")
+          }
+          if (instruction == "RUN") {
+            work_run_count++
+          }
+        }
         return
       }
 
-      alias_count++
-      alias_line = start_line
-      if ("FROM " body == expected_from) {
-        canonical_count++
+      stage_index++
+      token_count = split(body, tokens, /[ \t]+/)
+      alias = ""
+      if (token_count >= 3 && toupper(tokens[token_count - 1]) == "AS") {
+        alias = tokens[token_count]
+      }
+      if (stage_index == 0 && body == expected_go_image " AS scratch") {
+        canonical_source_count++
+      }
+      if (stage_index == 1 && body == expected_go_image " AS context") {
+        canonical_work_count++
+      }
+      if ((stage_index == 0 && alias != "scratch") || (stage_index == 1 && alias != "context") || (stage_index > 1 && alias != "")) {
+        contract_error("Dockerfile stages должны использовать только защищённые BuildKit aliases scratch/context на stages 0/1")
       }
     }
 
@@ -378,22 +424,38 @@ validate_go_tools_stage_contract() {
     }
 
     END {
+      if (contract_failed) {
+        exit 2
+      }
       if (logical != "") {
-        print "незавершённая логическая Dockerfile-инструкция при проверке stage go-tools" > "/dev/stderr"
+        print "незавершённая логическая Dockerfile-инструкция при проверке toolchain stages" > "/dev/stderr"
         exit 2
       }
-      if (alias_count != 1) {
-        print "Dockerfile должен объявлять логическую stage alias go-tools ровно один раз; найдено " (alias_count + 0) > "/dev/stderr"
+      if (canonical_source_count != 1) {
+        print "protected builder stage 0 должна иметь точную защищённую форму \047FROM " expected_go_image " AS scratch\047" > "/dev/stderr"
         exit 2
       }
-      if (canonical_count != 1) {
-        print "stage alias go-tools должна иметь точную закреплённую форму \047" expected_from "\047 без FROM flags и переменного либо внешнего base" > "/dev/stderr"
+      if (protected_instruction_count != 1 || protected_build_count != 1 || protected_last_instruction != expected_protected_build_run) {
+        print "protected builder stage 0 должна первой и единственной инструкцией собирать trusted Go toolchain guard из exact source закреплённым compiler argv/environment" > "/dev/stderr"
         exit 2
       }
-      if (alias_line >= final_from_line) {
-        print "закреплённая stage alias go-tools должна быть объявлена до final runtime stage" > "/dev/stderr"
+      if (stage_index != 2) {
+        print "Dockerfile должен содержать ровно три stages; последняя ожидаемая stage имеет индекс 2, найден " stage_index > "/dev/stderr"
         exit 2
       }
+      if (canonical_work_count != 1) {
+        print "work stage 1 должна иметь точную защищённую форму \047FROM " expected_go_image " AS context\047" > "/dev/stderr"
+        exit 2
+      }
+      if (work_run_count != expected_work_run_count) {
+        print "work stage должна содержать точное число RUN-инструкций; найдено " (work_run_count + 0) ", ожидается " expected_work_run_count > "/dev/stderr"
+        exit 2
+      }
+      if (work_copy_count != expected_work_copy_count) {
+        print "work stage должна содержать точное число локальных COPY-инструкций; найдено " (work_copy_count + 0) ", ожидается " expected_work_copy_count > "/dev/stderr"
+        exit 2
+      }
+      printf "%s", work_contract
     }
   ' "$dockerfile"
 }
@@ -402,17 +464,33 @@ validate_final_runtime_stage_contract_instructions() {
   local dockerfile="$1"
   local from_line="$2"
   local expected_env="$3"
-  local expected_copy="$4"
-  local expected_check="$5"
-  local required_go_tools_copy="$6"
-  local allowed_copy_two="$7"
+  local expected_bootstrap_copy="$4"
+  local expected_guard_copy="$5"
+  local expected_clean="$6"
+  local expected_trusted_copy="$7"
+  local expected_verify="$8"
+  local required_go_tools_copy="$9"
+  local allowed_copy_two="${10}"
+  local expected_run_count="${11}"
+  local expected_copy_count="${12}"
+  local allowed_tail_one="${13}"
+  local allowed_tail_two="${14}"
+  local allowed_tail_three="${15}"
 
   tail -n +"$from_line" "$dockerfile" | LC_ALL=C awk \
     -v expected_env="$expected_env" \
-    -v expected_copy="$expected_copy" \
-    -v expected_check="$expected_check" \
+    -v expected_bootstrap_copy="$expected_bootstrap_copy" \
+    -v expected_guard_copy="$expected_guard_copy" \
+    -v expected_clean="$expected_clean" \
+    -v expected_trusted_copy="$expected_trusted_copy" \
+    -v expected_verify="$expected_verify" \
     -v required_go_tools_copy="$required_go_tools_copy" \
-    -v allowed_copy_two="$allowed_copy_two" '
+    -v allowed_copy_two="$allowed_copy_two" \
+    -v expected_run_count="$expected_run_count" \
+    -v expected_copy_count="$expected_copy_count" \
+    -v allowed_tail_one="$allowed_tail_one" \
+    -v allowed_tail_two="$allowed_tail_two" \
+    -v allowed_tail_three="$allowed_tail_three" '
     function parse_error(message) {
       print message > "/dev/stderr"
       parse_failed = 1
@@ -498,7 +576,7 @@ validate_final_runtime_stage_contract_instructions() {
       exit 2
     }
 
-    function process_instruction(value, line, instruction, body, canonical, token_count, modern, token_index, separator, key, assigned_value) {
+    function process_instruction(value, line, instruction, body, canonical, token_count, modern, token_index, separator, key, assigned_value, was_after_check, is_clean, is_verify) {
       line = value
       sub(/^[ \t]+/, "", line)
       if (!match(line, /^[^ \t]+/)) {
@@ -510,26 +588,73 @@ validate_final_runtime_stage_contract_instructions() {
       sub(/^[ \t]+/, "", body)
       sub(/[ \t]+$/, "", body)
       canonical = instruction " " body
+      gsub(/[ \t]+/, " ", canonical)
       instruction_index++
+      instruction_types[instruction_index] = instruction
+      was_after_check = verification_complete
+      is_clean = canonical == expected_clean
+      is_verify = canonical == expected_verify
+
+      if (instruction == "RUN") {
+        final_run_count++
+      } else if (instruction == "COPY") {
+        final_copy_count++
+      } else if (instruction == "ADD") {
+        final_add_count++
+      }
 
       if (canonical == expected_env) {
         env_count++
         env_index = instruction_index
       }
-      if (canonical == expected_copy) {
-        copy_count++
-        copy_index = instruction_index
+      if (canonical == expected_bootstrap_copy) {
+        bootstrap_copy_count++
+        bootstrap_copy_index = instruction_index
+        bootstrap_seen = 1
+      }
+      if (canonical == expected_guard_copy) {
+        guard_copy_count++
+        guard_copy_index = instruction_index
+        guard_copy_seen = 1
+      }
+      if (is_clean) {
+        clean_count++
+        clean_index = instruction_index
+      }
+      if (canonical == expected_trusted_copy) {
+        trusted_copy_count++
+        trusted_copy_index = instruction_index
       }
       if (canonical == required_go_tools_copy) {
         required_go_tools_copy_count++
       }
-      if (canonical == expected_check) {
-        check_count++
-        check_index = instruction_index
+      if (is_verify) {
+        verify_count++
+        verify_index = instruction_index
+      }
+
+      if (was_after_check) {
+        tail_count++
+        tail_values[tail_count] = canonical
+        if (instruction == "RUN" || instruction == "COPY" || instruction == "ADD") {
+          post_check_write_instruction = instruction
+        }
+      }
+
+      if (is_verify) {
+        verification_complete = 1
+      }
+
+      if (instruction == "SHELL") {
+        shell_count++
+      }
+
+      if (bootstrap_seen && !guard_copy_seen && instruction == "RUN") {
+        installer_run_between_copies = 1
       }
 
       if ((instruction == "COPY" || instruction == "ADD") && \
-          canonical != expected_copy && canonical != required_go_tools_copy && canonical != allowed_copy_two) {
+          !was_after_check && canonical != expected_bootstrap_copy && canonical != expected_guard_copy && canonical != expected_trusted_copy && canonical != required_go_tools_copy && canonical != allowed_copy_two) {
         if (index(body, "/usr/local/go") > 0) {
           contract_error("final runtime stage содержит неразрешённую " instruction "-инструкцию с /usr/local/go")
         }
@@ -606,29 +731,93 @@ validate_final_runtime_stage_contract_instructions() {
         print "final runtime stage должен содержать точную самостоятельную логическую инструкцию \047" expected_env "\047 ровно один раз" > "/dev/stderr"
         exit 2
       }
-      if (copy_count != 1) {
-        print "final runtime stage должен копировать закреплённый Go toolchain одной точной самостоятельной логической COPY-инструкцией" > "/dev/stderr"
+      if (bootstrap_copy_count != 1) {
+        print "final runtime stage должен содержать ровно один Kaniko-compatible bootstrap COPY Go toolchain" > "/dev/stderr"
+        exit 2
+      }
+      if (guard_copy_count != 1) {
+        print "final runtime stage должен содержать ровно один trusted COPY Go toolchain guard" > "/dev/stderr"
+        exit 2
+      }
+      if (clean_count != 1) {
+        print "final runtime stage должен выполнять точное trusted очищение GOROOT ровно один раз" > "/dev/stderr"
+        exit 2
+      }
+      if (trusted_copy_count != 1) {
+        print "final runtime stage должен содержать ровно один final trusted COPY Go toolchain" > "/dev/stderr"
         exit 2
       }
       if (required_go_tools_copy_count != 1) {
-        print "final runtime stage должен копировать закреплённые Go tools одной точной самостоятельной логической COPY-инструкцией из stage alias go-tools" > "/dev/stderr"
+        print "final runtime stage должен копировать закреплённые Go tools одной точной самостоятельной логической COPY-инструкцией из numeric tools stage" > "/dev/stderr"
         exit 2
       }
-      if (check_count != 1) {
-        print "final runtime stage должен закрыто проверять точные GOVERSION и GOTOOLCHAIN одной самостоятельной логической RUN-инструкцией" > "/dev/stderr"
+      if (verify_count != 1) {
+        print "final runtime stage должен выполнять точную shell-independent проверку stdout GOVERSION/GOTOOLCHAIN ровно один раз" > "/dev/stderr"
         exit 2
       }
-      if (env_index >= copy_index) {
-        print "final runtime stage должен задавать GOTOOLCHAIN=local до логической COPY-инструкции Go toolchain" > "/dev/stderr"
+      if (post_check_write_instruction != "") {
+        print "final runtime stage содержит write-capable " post_check_write_instruction " после обязательной stdout verification" > "/dev/stderr"
         exit 2
       }
-      if (copy_index >= check_index) {
-        print "final runtime stage должен проверять скопированный Go toolchain после логической COPY-инструкции" > "/dev/stderr"
+      if (final_run_count != expected_run_count) {
+        print "final runtime stage содержит " (final_run_count + 0) " RUN-инструкций; ожидается ровно " expected_run_count > "/dev/stderr"
+        exit 2
+      }
+      if (final_copy_count != expected_copy_count) {
+        print "final runtime stage содержит " (final_copy_count + 0) " COPY-инструкций; ожидается ровно " expected_copy_count > "/dev/stderr"
+        exit 2
+      }
+      if (final_add_count != 0) {
+        print "final runtime stage не должна содержать ADD-инструкции" > "/dev/stderr"
+        exit 2
+      }
+      if (env_index >= bootstrap_copy_index) {
+        print "final runtime stage должен задавать GOTOOLCHAIN=local до bootstrap COPY Go toolchain" > "/dev/stderr"
+        exit 2
+      }
+      if (bootstrap_copy_index >= guard_copy_index) {
+        print "Kaniko-compatible bootstrap COPY должен предшествовать trusted COPY Go toolchain guard" > "/dev/stderr"
+        exit 2
+      }
+      if (!installer_run_between_copies) {
+        print "между bootstrap COPY и final trusted COPY должен выполняться установочный RUN" > "/dev/stderr"
+        exit 2
+      }
+      if (shell_count != 0) {
+        print "final runtime stage не должна содержать SHELL: trusted clean/verify закреплены точной exec-form" > "/dev/stderr"
+        exit 2
+      }
+      if (guard_copy_index + 1 != clean_index || clean_index + 1 != trusted_copy_index || trusted_copy_index + 1 != verify_index) {
+        print "trusted guard COPY, clean, final Go COPY и stdout verification должны идти непосредственно друг за другом" > "/dev/stderr"
         exit 2
       }
       if (!found) {
         print "final runtime stage не задаёт GOTOOLCHAIN" > "/dev/stderr"
         exit 2
+      }
+      if (effective_value != "local") {
+        print effective_value
+        exit 0
+      }
+      expected_tail_count = 0
+      if (allowed_tail_one != "") {
+        expected_tail_values[++expected_tail_count] = allowed_tail_one
+      }
+      if (allowed_tail_two != "") {
+        expected_tail_values[++expected_tail_count] = allowed_tail_two
+      }
+      if (allowed_tail_three != "") {
+        expected_tail_values[++expected_tail_count] = allowed_tail_three
+      }
+      if (tail_count != expected_tail_count) {
+        print "после обязательной stdout verification разрешён только точный metadata tail текущего Dockerfile" > "/dev/stderr"
+        exit 2
+      }
+      for (tail_index = 1; tail_index <= expected_tail_count; tail_index++) {
+        if (tail_values[tail_index] != expected_tail_values[tail_index]) {
+          print "после обязательной stdout verification разрешён только точный metadata tail текущего Dockerfile" > "/dev/stderr"
+          exit 2
+        }
       }
       print effective_value
     }
@@ -638,12 +827,21 @@ validate_final_runtime_stage_contract_instructions() {
 require_final_runtime_stage_contract() {
   local path="$1"
   local expected_from="$2"
-  local required_go_tools_copy="$3"
-  local allowed_copy_two="${4:-}"
+  local expected_work_run_count="$3"
+  local expected_work_copy_count="$4"
+  local required_go_tools_copy="$5"
+  local allowed_copy_two="${6:-}"
+  local expected_final_run_count="$7"
+  local expected_final_copy_count="$8"
+  local final_path_env="$9"
+  local allowed_tail_two="${10:-}"
+  local allowed_tail_three="${11:-}"
+  local expected_work_contract_sha256="${12}"
   local dockerfile="$repo_root/$path"
   local stage_info from_line actual_from expected_from_body
-  local runtime_env runtime_copy runtime_check
-  local go_tools_result contract_result effective_gotoolchain
+  local runtime_env runtime_bootstrap_copy runtime_guard_copy runtime_clean
+  local runtime_trusted_copy runtime_verify
+  local toolchain_stages_result actual_work_contract_sha256 contract_result effective_gotoolchain
 
   if ! validate_dockerfile_lexical_boundary "$dockerfile"; then
     fail "$path содержит неподдерживаемый байт Dockerfile"
@@ -658,29 +856,45 @@ require_final_runtime_stage_contract() {
   fi
   IFS=$'\t' read -r from_line actual_from <<<"$stage_info"
 
-  if ! go_tools_result="$(validate_go_tools_stage_contract \
+  if ! toolchain_stages_result="$(validate_toolchain_stage_contracts \
     "$dockerfile" \
-    "FROM $go_image AS go-tools" \
-    "$from_line" 2>&1)"; then
-    printf '%s: %s\n' "$path" "$go_tools_result" >&2
-    fail "$path не связывает final COPY с однозначной закреплённой stage alias go-tools"
+    "$go_image" \
+    "$expected_work_run_count" \
+    "$expected_work_copy_count" \
+    "$trusted_guard_build_run" 2>&1)"; then
+    printf '%s: %s\n' "$path" "$toolchain_stages_result" >&2
+    fail "$path не связывает защищённые stages scratch/context и final runtime stage однозначным контрактом"
   fi
+  actual_work_contract_sha256="$(printf '%s' "$toolchain_stages_result" | sha256sum | awk '{print $1}')"
+  [[ "$actual_work_contract_sha256" == "$expected_work_contract_sha256" ]] || \
+    fail "$path work stage source-level contract изменён; install/build instructions и tool outputs не имеют закреплённого provenance"
 
   expected_from_body="${expected_from#FROM }"
   [[ "$actual_from" == "$expected_from_body" ]] || fail "$path должен завершаться stage '$expected_from', найден 'FROM $actual_from'"
 
   runtime_env="ENV GOTOOLCHAIN=local"
-  runtime_copy="COPY --from=go-tools /usr/local/go /usr/local/go"
-  runtime_check="RUN test \"\$(/usr/local/go/bin/go env GOVERSION)\" = \"go$go_version\" && test \"\$(/usr/local/go/bin/go env GOTOOLCHAIN)\" = \"local\""
+  runtime_bootstrap_copy="COPY --from=0 /usr/local/go/ /opt/mattercodex/bootstrap-go/"
+  runtime_guard_copy="COPY --from=0 /out/mattercodex-go-toolchain-guard /usr/local/libexec/mattercodex-go-toolchain-guard"
+  runtime_clean='RUN ["/usr/local/libexec/mattercodex-go-toolchain-guard", "clean"]'
+  runtime_trusted_copy="COPY --from=0 /usr/local/go/ /usr/local/go/"
+  runtime_verify='RUN ["/usr/local/libexec/mattercodex-go-toolchain-guard", "verify", "/usr/local/go/bin/go"]'
 
   if ! contract_result="$(validate_final_runtime_stage_contract_instructions \
     "$dockerfile" \
     "$from_line" \
     "$runtime_env" \
-    "$runtime_copy" \
-    "$runtime_check" \
+    "$runtime_bootstrap_copy" \
+    "$runtime_guard_copy" \
+    "$runtime_clean" \
+    "$runtime_trusted_copy" \
+    "$runtime_verify" \
     "$required_go_tools_copy" \
-    "$allowed_copy_two" 2>&1)"; then
+    "$allowed_copy_two" \
+    "$expected_final_run_count" \
+    "$expected_final_copy_count" \
+    "$final_path_env" \
+    "$allowed_tail_two" \
+    "$allowed_tail_three" 2>&1)"; then
     if grep -Eq 'ENV-инструкц|разобрать ENV' <<<"$contract_result"; then
       fail "$path final runtime stage содержит неоднозначный ENV-синтаксис"
     fi
@@ -739,23 +953,42 @@ require_line Makefile $'\t$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(e
 require_line Makefile $'\tenv -u GOFLAGS GOENV=off GOWORK=off go run \'golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)\' -mode=source -scan=symbol -show=traces,version ./...'
 
 go_image="golang:$go_version-alpine"
+trusted_guard_source_base64="cGFja2FnZSBtYWluCgppbXBvcnQgKAoJImJ5dGVzIgoJImZtdCIKCSJvcyIKCSJvcy9leGVjIgopCgpmdW5jIGZhaWwoZm9ybWF0IHN0cmluZywgdmFsdWVzIC4uLmFueSkgewoJZm10LkZwcmludGYob3MuU3RkZXJyLCBmb3JtYXQrIlxuIiwgdmFsdWVzLi4uKQoJb3MuRXhpdCgxKQp9CgpmdW5jIHZlcmlmeShnb0V4ZWN1dGFibGUgc3RyaW5nKSB7CgljaGVja3MgOj0gW11zdHJ1Y3QgewoJCXZhcmlhYmxlIHN0cmluZwoJCWV4cGVjdGVkIHN0cmluZwoJfXsKCQl7dmFyaWFibGU6ICJHT1ZFUlNJT04iLCBleHBlY3RlZDogImdvMS4yNi41XG4ifSwKCQl7dmFyaWFibGU6ICJHT1RPT0xDSEFJTiIsIGV4cGVjdGVkOiAibG9jYWxcbiJ9LAoJfQoJZm9yIF8sIGNoZWNrIDo9IHJhbmdlIGNoZWNrcyB7CgkJb3V0cHV0LCBlcnIgOj0gZXhlYy5Db21tYW5kKGdvRXhlY3V0YWJsZSwgImVudiIsIGNoZWNrLnZhcmlhYmxlKS5PdXRwdXQoKQoJCWlmIGVyciAhPSBuaWwgewoJCQlmYWlsKCIlcyBmYWlsZWQ6ICV2IiwgY2hlY2sudmFyaWFibGUsIGVycikKCQl9CgkJaWYgIWJ5dGVzLkVxdWFsKG91dHB1dCwgW11ieXRlKGNoZWNrLmV4cGVjdGVkKSkgewoJCQlmYWlsKCIlcyBtaXNtYXRjaDogZ290ICVxLCB3YW50ICVxIiwgY2hlY2sudmFyaWFibGUsIG91dHB1dCwgY2hlY2suZXhwZWN0ZWQpCgkJfQoJfQp9CgpmdW5jIG1haW4oKSB7CglpZiBsZW4ob3MuQXJncykgPT0gMiAmJiBvcy5BcmdzWzFdID09ICJjbGVhbiIgewoJCWlmIGVyciA6PSBvcy5SZW1vdmVBbGwoIi91c3IvbG9jYWwvZ28iKTsgZXJyICE9IG5pbCB7CgkJCWZhaWwoImNsZWFuIC91c3IvbG9jYWwvZ286ICV2IiwgZXJyKQoJCX0KCQlpZiBlcnIgOj0gb3MuUmVtb3ZlQWxsKCIvb3B0L21hdHRlcmNvZGV4L2Jvb3RzdHJhcC1nbyIpOyBlcnIgIT0gbmlsIHsKCQkJZmFpbCgiY2xlYW4gYm9vdHN0cmFwIEdvOiAldiIsIGVycikKCQl9CgkJcmV0dXJuCgl9CglpZiBsZW4ob3MuQXJncykgPT0gMyAmJiBvcy5BcmdzWzFdID09ICJ2ZXJpZnkiIHsKCQl2ZXJpZnkob3MuQXJnc1syXSkKCQlyZXR1cm4KCX0KCWZhaWwoInVuc3VwcG9ydGVkIGludm9jYXRpb24iKQp9Cg=="
+trusted_guard_build_run="RUN mkdir -p /out /tmp/mattercodex-go-build-cache && printf '%s' '$trusted_guard_source_base64' | base64 -d > /tmp/mattercodex-go-toolchain-guard.go && /usr/bin/env -i PATH=/usr/local/go/bin:/usr/bin:/bin HOME=/tmp GOCACHE=/tmp/mattercodex-go-build-cache GOENV=off GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0 /usr/local/go/bin/go build -trimpath -buildvcs=false -o /out/mattercodex-go-toolchain-guard /tmp/mattercodex-go-toolchain-guard.go && rm -rf /tmp/mattercodex-go-toolchain-guard.go /tmp/mattercodex-go-build-cache"
 require_line services/external/bot-service/Dockerfile "ARG GOLANG_IMAGE=$go_image"
 require_final_runtime_stage_contract \
   services/jobs/agent-runner/Dockerfile \
   "FROM node:24-bookworm" \
-  "COPY --from=go-tools /tool-bin/ /usr/local/bin/" \
-  "COPY --from=builder /out/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner"
+  4 \
+  2 \
+  "COPY --from=1 /tool-bin/ /usr/local/bin/" \
+  "COPY --from=1 /out/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner" \
+  4 \
+  5 \
+  "ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" \
+  'USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}' \
+  'ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/matter-codex-agent-runner"]' \
+  "878b45ef727136c68399c0a430e175a12b78f90227e4104ef075285d650b55c6"
 require_final_runtime_stage_contract \
   deploy/images/agent-runner/Dockerfile \
   "FROM node:24-alpine" \
-  "COPY --from=go-tools /tool-bin/ /usr/local/bin/"
+  2 \
+  0 \
+  "COPY --from=1 /tool-bin/ /usr/local/bin/" \
+  "" \
+  4 \
+  4 \
+  "ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" \
+  'USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}' \
+  'CMD ["sh"]' \
+  "a63c7a7047cb287d7448f8ef68852ac9cd8c2af1612c1fb0181601932fc04474"
 require_count services/jobs/agent-runner/Dockerfile "FROM $go_image" 2
-require_count deploy/images/agent-runner/Dockerfile "FROM $go_image" 1
+require_count deploy/images/agent-runner/Dockerfile "FROM $go_image" 2
 require_count services/external/bot-service/Dockerfile "ENV GOTOOLCHAIN=local" 2
-require_count services/jobs/agent-runner/Dockerfile "ENV GOTOOLCHAIN=local" 3
+require_count services/jobs/agent-runner/Dockerfile "ENV GOTOOLCHAIN=local" 2
 require_count deploy/images/agent-runner/Dockerfile "ENV GOTOOLCHAIN=local" 2
 require_count services/external/bot-service/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 1
-require_count services/jobs/agent-runner/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 2
+require_count services/jobs/agent-runner/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 1
 require_count deploy/images/agent-runner/Dockerfile "RUN test \"\$(go env GOVERSION)\" = \"go$go_version\"" 1
 
 while IFS= read -r image; do
