@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
@@ -17,10 +19,26 @@ import (
 type mcpContextKey string
 
 const (
-	mcpSessionKeyContext       mcpContextKey = "matter-codex-session-key"
-	mcpTokenContext            mcpContextKey = "matter-codex-session-token"
-	defaultMCPRequestBodyBytes               = 1024 * 1024
+	mcpSessionKeyContext              mcpContextKey = "matter-codex-session-key"
+	mcpTokenContext                   mcpContextKey = "matter-codex-session-token"
+	defaultMCPRequestBodyBytes                      = 1024 * 1024
+	defaultMCPTransportSessions                     = 128
+	defaultMCPTransportSessionTimeout               = 15 * time.Minute
 )
+
+type mcpHandlerOptions struct {
+	MaximumTransportSessions int
+	SessionTimeout           time.Duration
+}
+
+type mcpHTTPHandler struct {
+	sessionService   *statusservice.AgentSessionService
+	server           *mcp.Server
+	streamable       *mcp.StreamableHTTPHandler
+	admission        *mcpTransportAdmission
+	maximumBodyBytes int64
+	originProtection *http.CrossOriginProtection
+}
 
 type mcpLimitInput struct {
 	Limit int `json:"limit" jsonschema:"maximum number of Mattermost posts to return, max 50"`
@@ -141,8 +159,18 @@ func automationCallbackInputSchema() map[string]any {
 }
 
 func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBodyBytes int64) http.Handler {
+	return newMCPHandlerWithOptions(sessionService, maximumBodyBytes, mcpHandlerOptions{})
+}
+
+func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService, maximumBodyBytes int64, options mcpHandlerOptions) *mcpHTTPHandler {
 	if maximumBodyBytes <= 0 {
 		maximumBodyBytes = defaultMCPRequestBodyBytes
+	}
+	if options.MaximumTransportSessions <= 0 {
+		options.MaximumTransportSessions = defaultMCPTransportSessions
+	}
+	if options.SessionTimeout <= 0 {
+		options.SessionTimeout = defaultMCPTransportSessionTimeout
 	}
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "matter-codex",
@@ -416,20 +444,162 @@ func newMCPHandler(sessionService *statusservice.AgentSessionService, maximumBod
 	})
 	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return server
-	}, nil)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			if err := readBoundedMCPRequestBody(w, r, maximumBodyBytes); err != nil {
-				writeMCPBodyBoundaryError(w, err)
-				return
-			}
+	}, &mcp.StreamableHTTPOptions{SessionTimeout: options.SessionTimeout})
+	handler := &mcpHTTPHandler{
+		sessionService:   sessionService,
+		server:           server,
+		streamable:       streamable,
+		maximumBodyBytes: maximumBodyBytes,
+		originProtection: &http.CrossOriginProtection{},
+	}
+	handler.admission = newMCPTransportAdmission(options.MaximumTransportSessions, options.SessionTimeout, handler.closeSDKSession)
+	return handler
+}
+
+func (handler *mcpHTTPHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	if !handler.preflight(writer, request) {
+		return
+	}
+	if request.Method == http.MethodPost {
+		if err := readBoundedMCPRequestBody(writer, request, handler.maximumBodyBytes); err != nil {
+			writeMCPBodyBoundaryError(writer, err)
+			return
 		}
-		sessionKey := strings.Trim(strings.TrimPrefix(r.URL.Path, pathMCPSessions), "/")
-		token := bearerToken(r.Header.Get("Authorization"))
-		ctx := context.WithValue(r.Context(), mcpSessionKeyContext, sessionKey)
-		ctx = context.WithValue(ctx, mcpTokenContext, token)
-		streamable.ServeHTTP(w, r.WithContext(ctx))
-	})
+	}
+	sessionKey := strings.Trim(strings.TrimPrefix(request.URL.Path, pathMCPSessions), "/")
+	token := mcpBearerToken(request)
+	if handler.sessionService == nil || handler.sessionService.AuthorizeMCPTransport(request.Context(), sessionKey, token) != nil {
+		writeMCPAuthorizationError(writer, http.StatusUnauthorized)
+		return
+	}
+
+	ctx := context.WithValue(request.Context(), mcpSessionKeyContext, sessionKey)
+	ctx = context.WithValue(ctx, mcpTokenContext, token)
+	request = request.WithContext(ctx)
+	binding := newMCPCredentialBinding(sessionKey, token)
+	transportSessionID, validTransportHeader := mcpTransportSessionID(request)
+	if !validTransportHeader {
+		writeMCPAuthorizationError(writer, http.StatusForbidden)
+		return
+	}
+
+	if transportSessionID == "" {
+		if request.Method != http.MethodPost {
+			handler.streamable.ServeHTTP(writer, request)
+			return
+		}
+		if !handler.admission.reserve() {
+			writer.Header().Set("Retry-After", "1")
+			http.Error(writer, "MCP transport session capacity is exhausted", http.StatusServiceUnavailable)
+			return
+		}
+		handler.streamable.ServeHTTP(writer, request)
+		createdSessionID := strings.TrimSpace(writer.Header().Get("Mcp-Session-Id"))
+		handler.admission.finishReservation(createdSessionID, binding, createdSessionID != "" && handler.hasSDKSession(createdSessionID))
+		return
+	}
+
+	admitted, ok := handler.admission.begin(transportSessionID, binding)
+	if !ok {
+		writeMCPAuthorizationError(writer, http.StatusForbidden)
+		return
+	}
+	handler.streamable.ServeHTTP(writer, request)
+	stillLive := request.Method != http.MethodDelete && handler.hasSDKSession(transportSessionID)
+	handler.admission.end(transportSessionID, admitted, stillLive)
+}
+
+func (handler *mcpHTTPHandler) preflight(writer http.ResponseWriter, request *http.Request) bool {
+	if localAddress, ok := request.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && localAddress != nil {
+		if isMCPLoopbackAddress(localAddress.String()) && !isMCPLoopbackAddress(request.Host) {
+			http.Error(writer, "Forbidden: invalid Host header", http.StatusForbidden)
+			return false
+		}
+	}
+	if err := handler.originProtection.Check(request); err != nil {
+		http.Error(writer, err.Error(), http.StatusForbidden)
+		return false
+	}
+	if request.Method == http.MethodPost && request.Header.Get("Content-Type") != "application/json" {
+		http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
+		return false
+	}
+	return true
+}
+
+func (handler *mcpHTTPHandler) activeTransportSessionCount() int {
+	return handler.admission.activeCount()
+}
+
+func (handler *mcpHTTPHandler) transportAdmissionStateCount() int {
+	return handler.admission.stateCount()
+}
+
+func (handler *mcpHTTPHandler) sdkTransportSessionCount() int {
+	count := 0
+	for range handler.server.Sessions() {
+		count++
+	}
+	return count
+}
+
+func (handler *mcpHTTPHandler) hasSDKSession(sessionID string) bool {
+	for session := range handler.server.Sessions() {
+		if session.ID() == sessionID {
+			return true
+		}
+	}
+	return false
+}
+
+func (handler *mcpHTTPHandler) closeSDKSession(sessionID string) {
+	for session := range handler.server.Sessions() {
+		if session.ID() == sessionID {
+			_ = session.Close()
+			return
+		}
+	}
+}
+
+func mcpBearerToken(request *http.Request) string {
+	values := request.Header.Values("Authorization")
+	if len(values) != 1 {
+		return ""
+	}
+	return bearerToken(values[0])
+}
+
+func mcpTransportSessionID(request *http.Request) (string, bool) {
+	values := request.Header.Values("Mcp-Session-Id")
+	if len(values) == 0 {
+		return "", true
+	}
+	if len(values) != 1 || strings.TrimSpace(values[0]) == "" {
+		return "", false
+	}
+	return strings.TrimSpace(values[0]), true
+}
+
+func writeMCPAuthorizationError(writer http.ResponseWriter, status int) {
+	if status == http.StatusUnauthorized {
+		writer.Header().Set("WWW-Authenticate", "Bearer")
+		http.Error(writer, "Unauthorized", status)
+		return
+	}
+	http.Error(writer, "Forbidden", status)
+}
+
+func isMCPLoopbackAddress(address string) bool {
+	host := strings.TrimSpace(address)
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(strings.TrimSuffix(host, "."), "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func readBoundedMCPRequestBody(w http.ResponseWriter, r *http.Request, maximumBodyBytes int64) error {
