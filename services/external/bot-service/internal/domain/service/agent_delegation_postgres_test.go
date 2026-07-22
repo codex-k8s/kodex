@@ -662,6 +662,42 @@ func TestReturnToRequesterHungPublicationsRemainPendingUntilCorrectedRetry(t *te
 	}
 }
 
+func TestReturnToRequesterSlowPostgresPreflightDoesNotConsumePublicationDeadline(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	fixture.service.cfg.CallbackPublishDeadline = 100 * time.Millisecond
+	fixture.publisher.blockUntilContext.Store(true)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	baseStore := fixture.service.cfg.Store.(*postgresrepo.Repository)
+	hooked := &exactGuardHookStore{Repository: baseStore, beforeFrom: 2}
+	hooked.before = func() {
+		if _, err := fixture.pool.Exec(ctx, `select pg_sleep(0.2)`); err != nil {
+			t.Fatalf("задержка PostgreSQL preflight: %v", err)
+		}
+	}
+	fixture.service.cfg.Store = hooked
+
+	result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетические публикации после медленного preflight.")
+	if err == nil || strings.TrimSpace(result.CallbackRunID) == "" {
+		t.Fatalf("hung outcome после медленного preflight не остался явным: result=%#v error=%v", result, err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 0, 2)
+	if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("медленный PostgreSQL preflight израсходовал publication budget: attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+
+	fixture.publisher.blockUntilContext.Store(false)
+	restarted := NewAgentSessionService(fixture.service.cfg)
+	if _, err := restarted.ReturnToRequester(ctx, "target-session", "target-token", "Исправленный повтор после медленного preflight."); err != nil {
+		t.Fatalf("исправленный повтор после медленного preflight: %v", err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 2, 0)
+	if fixture.publisher.attempts.Load() != 4 || fixture.publisher.posts.Load() != 2 || len(fixture.publisher.deliveries) != 2 {
+		t.Fatalf("исправленный повтор attempts=%d posts=%d external_ids=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load(), len(fixture.publisher.deliveries))
+	}
+}
+
 func TestReturnToRequesterHungPublishHasScopedBoundedFence(t *testing.T) {
 	fixture := newPostgresDelegationFixture(t, 4)
 	fixture.service.cfg.CallbackPublishDeadline = 350 * time.Millisecond
@@ -964,9 +1000,10 @@ func (publisher *postgresDelegationPublisher) ReconcileOrPostThreadMessage(ctx c
 
 type exactGuardHookStore struct {
 	*postgresrepo.Repository
-	beforeAt int64
-	calls    atomic.Int64
-	before   func()
+	beforeAt   int64
+	beforeFrom int64
+	calls      atomic.Int64
+	before     func()
 }
 
 type failOnceDeliveryStore struct {
@@ -982,7 +1019,8 @@ func (store *failOnceDeliveryStore) DeliverAgentDelegationCallbackDelivery(ctx c
 }
 
 func (store *exactGuardHookStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
-	if store.calls.Add(1) == store.beforeAt && store.before != nil {
+	call := store.calls.Add(1)
+	if (call == store.beforeAt || store.beforeFrom > 0 && call >= store.beforeFrom) && store.before != nil {
 		store.before()
 	}
 	return store.Repository.WithExactAgentSessionsRuntimeGuard(ctx, expected, sideEffect)

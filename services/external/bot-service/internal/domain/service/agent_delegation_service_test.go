@@ -210,6 +210,42 @@ func (store *fakeAdminStore) DeliverAgentDelegationCallbackDelivery(_ context.Co
 	return item, nil
 }
 
+type delayedExactGuardFakeStore struct {
+	*fakeAdminStore
+	calls     int
+	delayFrom int
+	delay     time.Duration
+}
+
+func (store *delayedExactGuardFakeStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	store.calls++
+	if store.delay > 0 && store.calls >= store.delayFrom {
+		timer := time.NewTimer(store.delay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return store.fakeAdminStore.WithExactAgentSessionsRuntimeGuard(ctx, expected, sideEffect)
+}
+
+type deadlineProbeThreadPublisher struct {
+	*fakeThreadPublisher
+	attempts          int
+	blockUntilContext bool
+}
+
+func (publisher *deadlineProbeThreadPublisher) ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	publisher.attempts++
+	if publisher.blockUntilContext {
+		<-ctx.Done()
+		return MattermostPostRef{}, ctx.Err()
+	}
+	return publisher.fakeThreadPublisher.ReconcileOrPostThreadMessage(ctx, input)
+}
+
 func TestCallbackDeliveriesCompleteRequiresBothExactDestinations(t *testing.T) {
 	delivered := func(destination string, publication string) entity.AgentDelegationCallbackDelivery {
 		return entity.AgentDelegationCallbackDelivery{Destination: destination, Publication: publication, Status: callbackDeliveryStatusDelivered}
@@ -232,6 +268,55 @@ func TestCallbackDeliveriesCompleteRequiresBothExactDestinations(t *testing.T) {
 	child.Status = callbackDeliveryStatusPending
 	if callbackDeliveriesComplete([]entity.AgentDelegationCallbackDelivery{source, child}) {
 		t.Fatal("partial delivered source+child plan принят как полный")
+	}
+}
+
+func TestReturnToRequesterPublicationDeadlineStartsAfterFinalGuardPreflight(t *testing.T) {
+	svc, baseStore, _, basePublisher := delegationReturnBarrierFixture()
+	store := &delayedExactGuardFakeStore{
+		fakeAdminStore: baseStore,
+		delayFrom:      2,
+		delay:          40 * time.Millisecond,
+	}
+	publisher := &deadlineProbeThreadPublisher{
+		fakeThreadPublisher: basePublisher,
+		blockUntilContext:   true,
+	}
+	svc.cfg.Store = store
+	svc.cfg.ThreadPublisher = publisher
+	svc.cfg.CallbackPublishDeadline = 10 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	result, err := svc.ReturnToRequester(ctx, "target-session", "target-token", "Синтетические зависшие публикации после preflight.")
+	if err == nil || result.CallbackRunID != "callback-run" {
+		t.Fatalf("результат зависшей публикации result=%#v error=%v", result, err)
+	}
+	deliveries, err := baseStore.ListAgentDelegationCallbackDeliveries(ctx, result.DelegationID, result.CallbackRunID)
+	if err != nil || len(deliveries) != 2 {
+		t.Fatalf("незавершённые доставки=%#v error=%v", deliveries, err)
+	}
+	for _, delivery := range deliveries {
+		if delivery.Status != callbackDeliveryStatusPending {
+			t.Fatalf("доставка после зависания=%#v", delivery)
+		}
+	}
+	if publisher.attempts != 2 || len(basePublisher.posts) != 0 {
+		t.Fatalf("preflight израсходовал срок публикации: attempts=%d posts=%d", publisher.attempts, len(basePublisher.posts))
+	}
+
+	publisher.blockUntilContext = false
+	store.delay = 0
+	restarted := NewAgentSessionService(svc.cfg)
+	if _, err := restarted.ReturnToRequester(ctx, "target-session", "target-token", "Исправленный повтор."); err != nil {
+		t.Fatalf("исправленный повтор: %v", err)
+	}
+	deliveries, err = baseStore.ListAgentDelegationCallbackDeliveries(ctx, result.DelegationID, result.CallbackRunID)
+	if err != nil || !callbackDeliveriesComplete(deliveries) {
+		t.Fatalf("завершённые доставки=%#v error=%v", deliveries, err)
+	}
+	if publisher.attempts != 4 || len(basePublisher.posts) != 2 {
+		t.Fatalf("исправленный повтор attempts=%d posts=%d", publisher.attempts, len(basePublisher.posts))
 	}
 }
 

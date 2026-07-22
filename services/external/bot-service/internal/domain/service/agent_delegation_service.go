@@ -1087,9 +1087,8 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 			attemptErrors = append(attemptErrors, svc.releaseCallbackDelivery(ctx, deliveryStore, item, callbackDeliveryStatusBlocked, "invalid_immutable_plan"))
 			continue
 		}
-		attemptCtx, cancelAttempt := context.WithTimeout(ctx, svc.cfg.CallbackPublishDeadline)
 		var postRef MattermostPostRef
-		publishErr := svc.withCurrentSessionsPublishGuard(attemptCtx, child, source, "agent_session.delegation_callback_delivery_final_guard", func(currentChild entity.AgentSession, currentSource entity.AgentSession) error {
+		publishErr := svc.withCurrentSessionsPublishGuard(ctx, child, source, "agent_session.delegation_callback_delivery_final_guard", func(currentChild entity.AgentSession, currentSource entity.AgentSession) error {
 			expectedChannelID := currentSource.MattermostChannelID
 			expectedRootPostID := currentSource.MattermostRootPostID
 			if item.Destination == callbackDeliveryDestinationChild {
@@ -1099,6 +1098,8 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 			if item.ChannelID != expectedChannelID || item.RootPostID != expectedRootPostID {
 				return adminrepo.ErrClusterAdminAdmissionDenied
 			}
+			attemptCtx, cancelAttempt := context.WithTimeout(ctx, svc.cfg.CallbackPublishDeadline)
+			defer cancelAttempt()
 			var deliveryErr error
 			postRef, deliveryErr = publisher.ReconcileOrPostThreadMessage(attemptCtx, MattermostThreadPostInput{
 				ChannelID: item.ChannelID, RootPostID: item.RootPostID,
@@ -1106,7 +1107,6 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 			})
 			return deliveryErr
 		})
-		cancelAttempt()
 		if publishErr != nil {
 			status := callbackDeliveryStatusPending
 			code := "mattermost_unconfirmed"
