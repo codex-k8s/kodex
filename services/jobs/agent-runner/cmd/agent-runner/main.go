@@ -484,7 +484,6 @@ func (r *runner) runSession(ctx context.Context) error {
 	if err := restoreCodexSessionArchive(snapshot.SessionArchiveGzipBase64, r.codexHome); err != nil {
 		return err
 	}
-	preserveRepositoryWorkspace := strings.TrimSpace(snapshot.CodexSessionID) != "" || strings.TrimSpace(snapshot.SessionArchiveGzipBase64) != ""
 	extraEnv := []string{}
 	workDir := workspaceDir
 	if os.Getenv("MATTERCODEX_GITHUB_ENABLED") == "true" {
@@ -494,7 +493,7 @@ func (r *runner) runSession(ctx context.Context) error {
 		}
 		extraEnv = account.env()
 		if os.Getenv("MATTERCODEX_SESSION_REPOSITORY_ENABLED") == "true" {
-			if err := r.prepareSessionRepository(ctx, account, extraEnv, preserveRepositoryWorkspace); err != nil {
+			if err := r.prepareSessionRepository(ctx, account, extraEnv); err != nil {
 				return err
 			}
 			workDir = repoDir
@@ -676,7 +675,7 @@ func (r *runner) createSessionArchive(root string) (string, error) {
 	return createCodexSessionArchive(root, r.secrets)
 }
 
-func (r *runner) prepareSessionRepository(ctx context.Context, account githubAccount, githubEnv []string, preserveExisting bool) error {
+func (r *runner) prepareSessionRepository(ctx context.Context, account githubAccount, githubEnv []string) error {
 	provider := defaultString(os.Getenv("MATTERCODEX_REPO_PROVIDER"), "github")
 	if provider != "github" {
 		return fmt.Errorf("unsupported session repository provider %q", provider)
@@ -685,10 +684,18 @@ func (r *runner) prepareSessionRepository(ctx context.Context, account githubAcc
 	name := requiredEnv("MATTERCODEX_REPO_NAME")
 	branch := defaultString(os.Getenv("MATTERCODEX_BASE_BRANCH"), "main")
 	repo := owner + "/" + name
+	expectedRemote := "https://github.com/" + repo + ".git"
 	repositoryExists := false
 	if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
 		repositoryExists = true
-		if err := r.runLogged(ctx, repoDir, githubEnv, "session-git-remote.log", "git", "remote", "set-url", "origin", "https://github.com/"+repo+".git"); err != nil {
+		actualRemote, err := r.capture(ctx, repoDir, githubEnv, "session-git-remote-get.log", "git", "remote", "get-url", "origin")
+		if err != nil {
+			return err
+		}
+		if !sameGitHubRepositoryRemote(actualRemote, expectedRemote) {
+			return fmt.Errorf("existing session workspace repository does not match requested repository; start a new thread session instead of replacing the workspace")
+		}
+		if err := r.runLogged(ctx, repoDir, githubEnv, "session-git-remote.log", "git", "remote", "set-url", "origin", expectedRemote); err != nil {
 			return err
 		}
 		if err := r.runLogged(ctx, repoDir, githubEnv, "session-git-fetch.log", "git", "fetch", "--prune", "origin"); err != nil {
@@ -701,7 +708,7 @@ func (r *runner) prepareSessionRepository(ctx context.Context, account githubAcc
 	} else {
 		return err
 	}
-	if sessionRepositoryCheckoutRequired(repositoryExists, preserveExisting) {
+	if !repositoryExists {
 		if err := r.runLogged(ctx, repoDir, githubEnv, "session-git-checkout.log", "git", "checkout", "-B", branch, "origin/"+branch); err != nil {
 			return err
 		}
@@ -717,8 +724,18 @@ func (r *runner) prepareSessionRepository(ctx context.Context, account githubAcc
 	return nil
 }
 
-func sessionRepositoryCheckoutRequired(repositoryExists bool, preserveExisting bool) bool {
-	return !repositoryExists || !preserveExisting
+func sameGitHubRepositoryRemote(left string, right string) bool {
+	return normalizedGitHubRepositoryRemote(left) == normalizedGitHubRepositoryRemote(right)
+}
+
+func normalizedGitHubRepositoryRemote(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	value = strings.TrimPrefix(value, "ssh://git@github.com/")
+	value = strings.TrimPrefix(value, "git@github.com:")
+	value = strings.TrimPrefix(value, "https://github.com/")
+	value = strings.TrimPrefix(value, "http://github.com/")
+	value = strings.TrimSuffix(value, ".git")
+	return strings.Trim(value, "/")
 }
 
 func (r *runner) prepareEphemeralRuntime() error {

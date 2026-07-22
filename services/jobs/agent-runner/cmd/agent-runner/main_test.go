@@ -65,23 +65,24 @@ func TestDisableCodexConfigOverlayForAuthCheck(t *testing.T) {
 	}
 }
 
-func TestSessionRepositoryCheckoutRequired(t *testing.T) {
+func TestSameGitHubRepositoryRemote(t *testing.T) {
 	tests := []struct {
-		name             string
-		repositoryExists bool
-		preserveExisting bool
-		want             bool
+		name  string
+		left  string
+		right string
+		want  bool
 	}{
-		{name: "new repository", repositoryExists: false, preserveExisting: false, want: true},
-		{name: "new repository with restored session", repositoryExists: false, preserveExisting: true, want: true},
-		{name: "existing first-run repository", repositoryExists: true, preserveExisting: false, want: true},
-		{name: "existing resumed workspace", repositoryExists: true, preserveExisting: true, want: false},
+		{name: "same HTTPS remote", left: "https://github.com/codex-k8s/matter-codex.git\n", right: "https://github.com/codex-k8s/matter-codex.git", want: true},
+		{name: "same SSH remote", left: "git@github.com:codex-k8s/matter-codex.git", right: "https://github.com/codex-k8s/matter-codex.git", want: true},
+		{name: "same SSH URL remote", left: "ssh://git@github.com/codex-k8s/matter-codex.git", right: "https://github.com/codex-k8s/matter-codex.git", want: true},
+		{name: "different repository", left: "https://github.com/codex-k8s/kodex.git", right: "https://github.com/codex-k8s/matter-codex.git"},
+		{name: "missing remote", right: "https://github.com/codex-k8s/matter-codex.git"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := sessionRepositoryCheckoutRequired(test.repositoryExists, test.preserveExisting); got != test.want {
-				t.Fatalf("sessionRepositoryCheckoutRequired(%t, %t) = %t, want %t", test.repositoryExists, test.preserveExisting, got, test.want)
+			if got := sameGitHubRepositoryRemote(test.left, test.right); got != test.want {
+				t.Fatalf("sameGitHubRepositoryRemote(%q, %q) = %t, want %t", test.left, test.right, got, test.want)
 			}
 		})
 	}
