@@ -140,6 +140,12 @@ func (svc *AgentSessionService) withCurrentSessionsPersistenceGuardUsingStore(ct
 }
 
 func (svc *AgentSessionService) withCurrentSessionsPublishGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession) error) error {
+	return svc.withCurrentSessionsPublishStoreGuard(ctx, child, source, operation, func(currentChild entity.AgentSession, currentSource entity.AgentSession, _ adminrepo.Repository) error {
+		return sideEffect(currentChild, currentSource)
+	})
+}
+
+func (svc *AgentSessionService) withCurrentSessionsPublishStoreGuard(ctx context.Context, child entity.AgentSession, source entity.AgentSession, operation string, sideEffect func(entity.AgentSession, entity.AgentSession, adminrepo.Repository) error) error {
 	repository, ok := svc.cfg.Store.(adminrepo.ExactAgentSessionsRuntimeGuardRepository)
 	if !ok {
 		return adminrepo.ErrClusterAdminAdmissionDenied
@@ -153,8 +159,8 @@ func (svc *AgentSessionService) withCurrentSessionsPublishGuard(ctx context.Cont
 			if err := fenceStore.LockExactAgentSessionsPublishFence(ctx, []entity.AgentSession{currentChild, currentSource}); err != nil {
 				return err
 			}
-			return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, dependencyStore, currentChild, currentSource, operation+".fenced_recheck", func(recheckedChild entity.AgentSession, recheckedSource entity.AgentSession, _ adminrepo.Repository) error {
-				return sideEffect(recheckedChild, recheckedSource)
+			return svc.withCurrentSessionsPersistenceGuardUsingStore(ctx, dependencyStore, currentChild, currentSource, operation+".fenced_recheck", func(recheckedChild entity.AgentSession, recheckedSource entity.AgentSession, finalStore adminrepo.Repository) error {
+				return sideEffect(recheckedChild, recheckedSource, finalStore)
 			})
 		})
 	})

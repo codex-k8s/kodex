@@ -126,6 +126,19 @@ func (repo *Repository) ClaimAgentDelegationCallbackDelivery(ctx context.Context
 	return item, nil
 }
 
+func (repo *Repository) RenewAgentDelegationCallbackDeliveryLease(ctx context.Context, input adminrepo.RenewAgentDelegationCallbackDeliveryLeaseInput) (entity.AgentDelegationCallbackDelivery, error) {
+	item, err := scanAgentDelegationCallbackDelivery(repo.db.QueryRow(ctx, query("agent_delegation_callback_deliveries__renew.sql"),
+		input.ID, input.LeaseOwner, input.Now, input.LeaseUntil,
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AgentDelegationCallbackDelivery{}, adminrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.AgentDelegationCallbackDelivery{}, fmt.Errorf("renew agent delegation callback delivery lease: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) ReleaseAgentDelegationCallbackDelivery(ctx context.Context, input adminrepo.ReleaseAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error) {
 	if input.Status != "pending" && input.Status != "blocked" {
 		return entity.AgentDelegationCallbackDelivery{}, fmt.Errorf("callback delivery release status is invalid")

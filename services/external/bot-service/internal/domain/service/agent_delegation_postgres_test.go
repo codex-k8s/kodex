@@ -698,6 +698,133 @@ func TestReturnToRequesterSlowPostgresPreflightDoesNotConsumePublicationDeadline
 	}
 }
 
+func TestReturnToRequesterExpiredPreflightLeaseIsReclaimedBeforeSinglePostPerDelivery(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 4)
+	fixture.service.cfg.CallbackPublishDeadline = 100 * time.Millisecond
+	fixture.service.callbackPreflightDeadline = 4 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+
+	baseStore := fixture.service.cfg.Store.(*postgresrepo.Repository)
+	firstPreflightEntered := make(chan struct{})
+	releaseFirstPreflight := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseFirst := func() {
+		releaseOnce.Do(func() { close(releaseFirstPreflight) })
+	}
+	defer releaseFirst()
+	hooked := &exactGuardHookStore{Repository: baseStore, beforeAt: 2}
+	hooked.before = func() {
+		close(firstPreflightEntered)
+		<-releaseFirstPreflight
+	}
+	fixture.service.cfg.Store = hooked
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := fixture.service.ReturnToRequester(context.Background(), "target-session", "target-token", "Первый callback с долгим preflight.")
+		firstDone <- err
+	}()
+	select {
+	case <-firstPreflightEntered:
+	case <-ctx.Done():
+		t.Fatal("первый callback не достиг задержанного final preflight")
+	}
+
+	var claimedAt, originalLeaseExpiresAt time.Time
+	if err := fixture.pool.QueryRow(ctx, `
+select last_attempt_at, lease_expires_at
+from matter_codex_agent_delegation_callback_deliveries
+where status = 'in_flight'
+order by id
+limit 1
+`).Scan(&claimedAt, &originalLeaseExpiresAt); err != nil {
+		t.Fatalf("прочитать исходную lease: %v", err)
+	}
+	if got := originalLeaseExpiresAt.Sub(claimedAt); got < 2*time.Second || got > 2300*time.Millisecond {
+		t.Fatalf("исходная lease=%s, ожидается publish deadline + grace", got)
+	}
+	for {
+		var expired bool
+		if err := fixture.pool.QueryRow(ctx, `
+select lease_expires_at <= now()
+from matter_codex_agent_delegation_callback_deliveries
+where status = 'in_flight'
+order by id
+limit 1
+`).Scan(&expired); err != nil {
+			t.Fatalf("проверить истечение исходной lease: %v", err)
+		}
+		if expired {
+			break
+		}
+		timer := time.NewTimer(20 * time.Millisecond)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			t.Fatal("исходная lease не истекла в ограниченный срок")
+		}
+	}
+
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Конкурентный reclaim до первого POST.")
+		secondDone <- err
+	}()
+	select {
+	case err := <-secondDone:
+		if err != nil {
+			t.Fatalf("конкурентный reclaim: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("конкурентный reclaim встретил deadlock")
+	}
+	if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 2 || len(fixture.publisher.deliveries) != 2 {
+		t.Fatalf("reclaim до первого POST attempts=%d posts=%d external_ids=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load(), len(fixture.publisher.deliveries))
+	}
+
+	releaseFirst()
+	select {
+	case err := <-firstDone:
+		if err != nil {
+			t.Fatalf("stale caller не сверил уже завершённый plan: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("stale caller не завершился ограниченно после reclaim")
+	}
+
+	var delivered, pending, inFlight, attempts, distinctExternalIDs, postBindings int
+	if err := fixture.pool.QueryRow(ctx, `
+select
+	count(*) filter (where status = 'delivered'),
+	count(*) filter (where status = 'pending'),
+	count(*) filter (where status = 'in_flight'),
+	coalesce(sum(attempt_count), 0),
+	count(distinct external_id),
+	count(*) filter (where mattermost_post_id <> '')
+from matter_codex_agent_delegation_callback_deliveries
+`).Scan(&delivered, &pending, &inFlight, &attempts, &distinctExternalIDs, &postBindings); err != nil {
+		t.Fatalf("прочитать итог reclaim: %v", err)
+	}
+	if delivered != 2 || pending != 0 || inFlight != 0 || attempts != 3 || distinctExternalIDs != 2 || postBindings != 2 {
+		t.Fatalf("итог reclaim delivered=%d pending=%d in_flight=%d attempts=%d external_ids=%d bindings=%d", delivered, pending, inFlight, attempts, distinctExternalIDs, postBindings)
+	}
+	if fixture.publisher.concurrentDuplicate.Load() {
+		t.Fatal("reclaim допустил параллельный физический POST одного external ID")
+	}
+
+	restartedConfig := fixture.service.cfg
+	restartedConfig.Store = baseStore
+	restarted := NewAgentSessionService(restartedConfig)
+	if _, err := restarted.ReturnToRequester(ctx, "target-session", "target-token", "Повтор после перезапуска."); err != nil {
+		t.Fatalf("повтор после перезапуска: %v", err)
+	}
+	if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 2 || len(fixture.publisher.deliveries) != 2 {
+		t.Fatalf("перезапуск изменил физические доставки attempts=%d posts=%d external_ids=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load(), len(fixture.publisher.deliveries))
+	}
+}
+
 func TestReturnToRequesterHungPublishHasScopedBoundedFence(t *testing.T) {
 	fixture := newPostgresDelegationFixture(t, 4)
 	fixture.service.cfg.CallbackPublishDeadline = 350 * time.Millisecond
