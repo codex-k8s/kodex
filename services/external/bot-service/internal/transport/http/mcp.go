@@ -589,6 +589,10 @@ func (handler *mcpHTTPHandler) preflight(writer http.ResponseWriter, request *ht
 			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
 			return false
 		}
+		if !hasValidMCPASCIIMediaTypeGrammar(values[0]) {
+			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
+			return false
+		}
 		mediaType, _, err := mime.ParseMediaType(values[0])
 		if err != nil || mediaType != mcpJSONMediaType || !hasValidMCPMediaParameters(values[0]) {
 			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
@@ -697,6 +701,20 @@ type mcpMediaParameter struct {
 type mcpMediaParameterRepresentation struct {
 	continuation bool
 	sections     map[int]struct{}
+}
+
+// hasValidMCPASCIIMediaTypeGrammar запрещает Unicode-нормализацию сырого
+// Content-Type. В принятой HTTP-грамматике OWS состоит только из SP и HTAB;
+// остальные управляющие и все non-ASCII байты должны быть percent-encoded.
+func hasValidMCPASCIIMediaTypeGrammar(value string) bool {
+	for index := range len(value) {
+		character := value[index]
+		if character == '\t' || (character >= 0x20 && character <= 0x7e) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // hasValidMCPMediaParameters проверяет все сырые параметры, чтобы результат не
