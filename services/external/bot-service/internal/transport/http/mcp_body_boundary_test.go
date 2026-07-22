@@ -41,8 +41,9 @@ func TestMCPRequestBodyBoundaryRejectsOversizedBeforeSessionEffects(t *testing.T
 			if recorder.Code != http.StatusRequestEntityTooLarge {
 				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 			}
-			if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
-				t.Fatalf("oversized effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, publisher.posts)
+			guards := store.guardSnapshot()
+			if store.sessionReads != 0 || guards.calls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
+				t.Fatalf("oversized effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, guards.calls, runner.secretReads, publisher.posts)
 			}
 		})
 	}
@@ -123,8 +124,9 @@ func TestMCPRequestBodyBoundaryTimesOutSlowChunkedBody(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("slow request writer remained blocked")
 	}
-	if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
-		t.Fatalf("slow-body effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, publisher.posts)
+	guards := store.guardSnapshot()
+	if store.sessionReads != 0 || guards.calls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
+		t.Fatalf("slow-body effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, guards.calls, runner.secretReads, publisher.posts)
 	}
 }
 

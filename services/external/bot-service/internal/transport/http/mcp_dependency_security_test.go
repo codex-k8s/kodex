@@ -70,8 +70,9 @@ func TestMCPDependencyAcceptsCanonicalParameterizedAndSameOriginRequests(t *test
 			if body.readBytes == 0 {
 				t.Fatal("accepted request body was not read")
 			}
-			if store.sessionReads == 0 || store.guardCalls == 0 || runner.secretReads == 0 {
-				t.Fatalf("initialize skipped pre-authorization: reads=%d guards=%d token_reads=%d", store.sessionReads, store.guardCalls, runner.secretReads)
+			guards := store.guardSnapshot()
+			if store.sessionReads == 0 || guards.calls == 0 || runner.secretReads == 0 {
+				t.Fatalf("initialize skipped pre-authorization: reads=%d guards=%d token_reads=%d", store.sessionReads, guards.calls, runner.secretReads)
 			}
 			if publisher.posts != 0 {
 				t.Fatalf("initialize published unexpected posts: %d", publisher.posts)
@@ -163,8 +164,9 @@ func TestMCPDependencyRejectsUnsafeHTTPRequestsBeforeSessionEffects(t *testing.T
 			if recorder.Header().Get("Mcp-Session-Id") != "" || strings.Contains(recorder.Body.String(), `"serverInfo"`) {
 				t.Fatalf("rejected request initialized a session: headers=%v body=%s", recorder.Header(), recorder.Body.String())
 			}
-			if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
-				t.Fatalf("unsafe request effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, publisher.posts)
+			guards := store.guardSnapshot()
+			if store.sessionReads != 0 || guards.calls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
+				t.Fatalf("unsafe request effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, guards.calls, runner.secretReads, publisher.posts)
 			}
 			if handler.transportAdmissionStateCount() != 0 || handler.sdkTransportSessionCount() != 0 {
 				t.Fatalf("unsafe request state: admission=%d sdk=%d", handler.transportAdmissionStateCount(), handler.sdkTransportSessionCount())
