@@ -1,4 +1,6 @@
-FROM golang:1.26-alpine AS go-tools
+FROM golang:1.26.5-alpine AS go-tools
+
+ENV GOTOOLCHAIN=local
 
 ARG GOOSE_VERSION=v3.27.1
 ARG OAPI_CODEGEN_VERSION=v2.7.1
@@ -16,6 +18,7 @@ ARG MOCKGEN_VERSION=v0.6.0
 
 ENV GOBIN=/tool-bin
 
+RUN test "$(go env GOVERSION)" = "go1.26.5"
 RUN apk add --no-cache ca-certificates git \
   && mkdir -p "${GOBIN}" \
   && CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@"${GOOSE_VERSION}" \

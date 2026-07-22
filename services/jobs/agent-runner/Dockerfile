@@ -1,4 +1,6 @@
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26.5-alpine AS builder
+
+ENV GOTOOLCHAIN=local
 
 WORKDIR /src
 
@@ -7,9 +9,12 @@ RUN go mod download
 
 COPY services/jobs/agent-runner ./services/jobs/agent-runner
 
+RUN test "$(go env GOVERSION)" = "go1.26.5"
 RUN CGO_ENABLED=0 go build -trimpath -o /out/matter-codex-agent-runner ./services/jobs/agent-runner/cmd/agent-runner
 
-FROM golang:1.26-alpine AS go-tools
+FROM golang:1.26.5-alpine AS go-tools
+
+ENV GOTOOLCHAIN=local
 
 ARG GOOSE_VERSION=v3.27.1
 ARG OAPI_CODEGEN_VERSION=v2.7.1
@@ -27,6 +32,7 @@ ARG MOCKGEN_VERSION=v0.6.0
 
 ENV GOBIN=/tool-bin
 
+RUN test "$(go env GOVERSION)" = "go1.26.5"
 RUN apk add --no-cache ca-certificates git \
 	&& mkdir -p "${GOBIN}" \
 	&& CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@"${GOOSE_VERSION}" \
