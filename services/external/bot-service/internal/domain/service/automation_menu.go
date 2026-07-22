@@ -180,6 +180,7 @@ func (svc *SlashCommandService) automationHistoryCard(ctx context.Context, comma
 		card.Fields = append(card.Fields, MattermostCardField{
 			Title: svc.t("automation.run.list_item.title", map[string]any{"Number": start + index + 1, "Schedule": run.ScheduleName}),
 			Value: svc.t("automation.run.list_item.value", map[string]any{
+				"RunID":   run.PublicID,
 				"Status":  svc.automationStatusText(run.Status),
 				"Outcome": svc.automationOutcomeText(run.Outcome),
 				"Created": formatAutomationTime(run.CreatedAt, "UTC"),
@@ -200,6 +201,7 @@ func (svc *SlashCommandService) automationRunCard(ctx context.Context, run entit
 	card.Color = automationStatusColor(run.Status)
 	card.Text = svc.t("automation.run.text", nil)
 	card.Fields = []MattermostCardField{
+		{Title: svc.t("automation.field.run_id", nil), Value: run.PublicID, Short: false},
 		{Title: svc.t("automation.field.state", nil), Value: svc.automationStatusText(run.Status), Short: true},
 		{Title: svc.t("automation.field.outcome", nil), Value: svc.automationOutcomeText(run.Outcome), Short: true},
 		{Title: svc.t("automation.field.project", nil), Value: run.ProjectName, Short: true},
@@ -404,6 +406,8 @@ func (svc *SlashCommandService) automationStatusText(status string) string {
 		return svc.t("automation.status.queued", nil)
 	case string(value.AutomationRunStatusRunning):
 		return svc.t("automation.status.running", nil)
+	case string(value.AutomationRunStatusWaitingOwner):
+		return svc.t("automation.status.waiting_owner", nil)
 	case string(value.AutomationRunStatusSucceeded):
 		return svc.t("automation.status.succeeded", nil)
 	case string(value.AutomationRunStatusFailed):
@@ -434,6 +438,8 @@ func automationStatusColor(status string) string {
 	switch status {
 	case string(value.AutomationRunStatusRunning):
 		return "#1c58d9"
+	case string(value.AutomationRunStatusWaitingOwner):
+		return "#b7791f"
 	case string(value.AutomationRunStatusSucceeded):
 		return "#227a55"
 	case string(value.AutomationRunStatusFailed):

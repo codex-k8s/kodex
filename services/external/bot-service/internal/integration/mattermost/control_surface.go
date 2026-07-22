@@ -43,6 +43,7 @@ func DefaultHTTPClientConfig() HTTPClientConfig {
 
 var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
 var _ statusservice.MattermostIdempotentThreadPublisher = (*ControlSurface)(nil)
+var _ statusservice.MattermostIdempotentThreadReconciler = (*ControlSurface)(nil)
 var _ statusservice.MattermostThreadCardUpdateReconciler = (*ControlSurface)(nil)
 
 var exactThreadCardServerOwnedProps = map[string]any{
@@ -275,14 +276,7 @@ func (surface *ControlSurface) PostThreadMessageWithToken(ctx context.Context, t
 }
 
 func (surface *ControlSurface) ReconcileOrPostThreadMessage(ctx context.Context, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
-	if strings.TrimSpace(input.IdempotencyID) == "" {
-		return statusservice.MattermostPostRef{}, fmt.Errorf("Mattermost idempotency identity is required")
-	}
-	plannedID, ok := input.Props["matter_codex_callback_delivery_id"].(string)
-	if !ok || plannedID != input.IdempotencyID || strings.TrimSpace(input.ChannelID) == "" || strings.TrimSpace(input.RootPostID) == "" || input.Message == "" {
-		return statusservice.MattermostPostRef{}, fmt.Errorf("Mattermost callback delivery plan is incomplete")
-	}
-	if ref, found, err := reconcileThreadPost(ctx, surface.client, input); err != nil || found {
+	if ref, found, err := surface.ReconcileThreadMessage(ctx, input); err != nil || found {
 		return ref, err
 	}
 	post, _, createErr := surface.client.CreatePost(ctx, &mattermostmodel.Post{
@@ -294,18 +288,29 @@ func (surface *ControlSurface) ReconcileOrPostThreadMessage(ctx context.Context,
 	})
 	if createErr == nil {
 		if err := verifyExactCallbackPost(post, input); err != nil {
-			return statusservice.MattermostPostRef{}, err
+			return statusservice.MattermostPostRef{}, errors.Join(statusservice.ErrMattermostPostConfirmationAmbiguous, err)
 		}
 		return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
 	}
-	ref, found, reconcileErr := reconcileThreadPost(ctx, surface.client, input)
+	ref, found, reconcileErr := surface.ReconcileThreadMessage(ctx, input)
 	if reconcileErr != nil {
-		return statusservice.MattermostPostRef{}, errors.Join(createErr, reconcileErr)
+		return statusservice.MattermostPostRef{}, errors.Join(statusservice.ErrMattermostPostConfirmationAmbiguous, createErr, reconcileErr)
 	}
 	if found {
 		return ref, nil
 	}
-	return statusservice.MattermostPostRef{}, createErr
+	return statusservice.MattermostPostRef{}, errors.Join(statusservice.ErrMattermostPostConfirmationAmbiguous, createErr)
+}
+
+func (surface *ControlSurface) ReconcileThreadMessage(ctx context.Context, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, bool, error) {
+	if strings.TrimSpace(input.IdempotencyID) == "" {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("Mattermost idempotency identity is required")
+	}
+	plannedID, ok := input.Props["matter_codex_callback_delivery_id"].(string)
+	if !ok || plannedID != input.IdempotencyID || strings.TrimSpace(input.ChannelID) == "" || strings.TrimSpace(input.RootPostID) == "" || input.Message == "" {
+		return statusservice.MattermostPostRef{}, false, fmt.Errorf("Mattermost callback delivery plan is incomplete")
+	}
+	return reconcileThreadPost(ctx, surface.client, input)
 }
 
 func (surface *ControlSurface) UpdateThreadMessage(ctx context.Context, input statusservice.MattermostThreadUpdateInput) (statusservice.MattermostPostRef, error) {

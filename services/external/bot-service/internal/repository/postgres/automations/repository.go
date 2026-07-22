@@ -3,9 +3,12 @@ package automations
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	automationsrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/automations"
@@ -374,6 +377,39 @@ func (repo *Repository) ListRuns(ctx context.Context, schedulePublicID string, p
 	return items, nil
 }
 
+func (repo *Repository) GetOwnerGateContext(ctx context.Context, input automationsrepo.OwnerGateContextInput) (entity.AutomationOwnerGateContext, error) {
+	return repo.getOwnerGateContext(ctx, input)
+}
+
+func (repo *Repository) getOwnerGateContext(ctx context.Context, input automationsrepo.OwnerGateContextInput) (entity.AutomationOwnerGateContext, error) {
+	var item entity.AutomationOwnerGateContext
+	err := repo.db.QueryRow(ctx, query("automation_owner_gate_context__get.sql"),
+		input.RunPublicID,
+		input.AuthenticatedProjectID,
+		input.AuthenticatedSessionID,
+		input.AuthenticatedSessionKey,
+	).Scan(
+		&item.ScheduledRunID,
+		&item.ScheduledRunPublicID,
+		&item.ProjectID,
+		&item.RuntimeTurnID,
+		&item.ProcessRunID,
+		&item.ProcessPublicID,
+		&item.PolicyRevisionID,
+		&item.RootInitiatorUserID,
+		&item.RootInitiatorName,
+		&item.MattermostChannelID,
+		&item.MattermostRootPostID,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AutomationOwnerGateContext{}, automationsrepo.ErrForbidden
+	}
+	if err != nil {
+		return entity.AutomationOwnerGateContext{}, fmt.Errorf("get automation owner gate context: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) CompleteCallback(ctx context.Context, input automationsrepo.CompleteCallbackInput) (entity.ScheduledRun, bool, error) {
 	tx, err := repo.db.Begin(ctx)
 	if err != nil {
@@ -388,7 +424,7 @@ func (repo *Repository) CompleteCallback(ctx context.Context, input automationsr
 	if item.ProjectID != input.AuthenticatedProjectID || item.RuntimeSessionID != input.AuthenticatedSessionID || item.RuntimeSessionKey != input.AuthenticatedSessionKey || item.CallbackContractVersion != input.CallbackContractVersion {
 		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
 	}
-	if automationRunIsTerminal(item.Status) {
+	if automationRunIsTerminal(item.Status) || item.Status == string(value.AutomationRunStatusWaitingOwner) {
 		if bytes.Equal(item.CallbackPayloadSHA256, input.PayloadSHA256) {
 			if err := tx.Commit(ctx); err != nil {
 				return entity.ScheduledRun{}, false, fmt.Errorf("commit duplicate automation callback: %w", err)
@@ -415,6 +451,67 @@ func (repo *Repository) CompleteCallback(ctx context.Context, input automationsr
 	if !item.CallbackRevokedAt.IsZero() || !input.Now.Before(item.CallbackExpiresAt) {
 		return entity.ScheduledRun{}, false, automationsrepo.ErrCallbackRevoked
 	}
+	if input.Outcome == string(value.AutomationRunOutcomeRequiresHuman) {
+		if input.OwnerGate == nil {
+			return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
+		}
+		gateContext, err := txRepo.getOwnerGateContext(ctx, automationsrepo.OwnerGateContextInput{
+			RunPublicID:             input.RunPublicID,
+			AuthenticatedProjectID:  input.AuthenticatedProjectID,
+			AuthenticatedSessionID:  input.AuthenticatedSessionID,
+			AuthenticatedSessionKey: input.AuthenticatedSessionKey,
+		})
+		if err != nil {
+			return entity.ScheduledRun{}, false, err
+		}
+		if err := validateOwnerGatePlan(item, gateContext, *input.OwnerGate); err != nil {
+			return entity.ScheduledRun{}, false, err
+		}
+		var attentionID int64
+		err = txRepo.db.QueryRow(ctx, query("automation_owner_attention__insert.sql"),
+			gateContext.ProcessRunID,
+			gateContext.RuntimeTurnID,
+			input.OwnerGate.AttentionSummary,
+			input.OwnerGate.AttentionRecommendation,
+			"automation:"+item.PublicID,
+			item.ID,
+			item.ProjectID,
+			gateContext.PolicyRevisionID,
+			gateContext.RootInitiatorUserID,
+			item.MattermostChannelID,
+			item.MattermostRootPostID,
+			input.OwnerGate.DeliveryID,
+			input.OwnerGate.DeliveryMessage,
+			input.OwnerGate.DeliveryPropsJSON,
+			input.OwnerGate.DeliveryPayloadSHA256,
+		).Scan(&attentionID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.ScheduledRun{}, false, automationsrepo.ErrConflict
+		}
+		if err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("create automation owner attention: %w", err)
+		}
+		if attentionID <= 0 {
+			return entity.ScheduledRun{}, false, automationsrepo.ErrConflict
+		}
+		if _, err := txRepo.db.Exec(ctx, query("scheduled_runs__wait_owner.sql"), item.ID, input.SafeSummary, input.PayloadSHA256, input.Now); err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("mark scheduled run waiting for owner: %w", err)
+		}
+		if _, err := txRepo.db.Exec(ctx, query("schedule_occurrences__status.sql"), item.OccurrenceID, string(value.AutomationRunStatusWaitingOwner), input.Now); err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("mark schedule occurrence waiting for owner: %w", err)
+		}
+		if _, err := txRepo.db.Exec(ctx, query("process_runs__wait_owner.sql"), gateContext.ProcessRunID, input.Now); err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("mark automation process waiting for owner: %w", err)
+		}
+		if err := txRepo.insertAudit(ctx, item.ProjectID, item.ScheduleID, item.ID, "run.waiting_owner", "", "", item.CorrelationID, input.SafeSummary); err != nil {
+			return entity.ScheduledRun{}, false, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("commit automation owner gate: %w", err)
+		}
+		result, err := repo.getRun(ctx, item.PublicID, item.ProjectID, item.OwnerMattermostUserID)
+		return result, false, err
+	}
 	if _, err := txRepo.db.Exec(ctx, query("scheduled_runs__complete.sql"), item.ID, input.Status, input.Outcome, input.SafeSummary, input.PayloadSHA256, input.Now); err != nil {
 		return entity.ScheduledRun{}, false, fmt.Errorf("complete scheduled run: %w", err)
 	}
@@ -429,6 +526,246 @@ func (repo *Repository) CompleteCallback(ctx context.Context, input automationsr
 	}
 	result, err := repo.getRun(ctx, item.PublicID, item.ProjectID, item.OwnerMattermostUserID)
 	return result, false, err
+}
+
+func (repo *Repository) GetOwnerAttentionDelivery(ctx context.Context, scheduledRunID int64) (entity.AutomationOwnerAttentionDelivery, error) {
+	item, err := scanOwnerAttentionDelivery(repo.db.QueryRow(ctx, query("automation_owner_attention__get.sql"), scheduledRunID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.AutomationOwnerAttentionDelivery{}, fmt.Errorf("get automation owner attention delivery: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) ListHistory(ctx context.Context, ownerMattermostUsername string, limit int) ([]entity.AutomationHistoryItem, error) {
+	ownerMattermostUsername = strings.TrimSpace(ownerMattermostUsername)
+	if ownerMattermostUsername == "" {
+		return nil, automationsrepo.ErrForbidden
+	}
+	rows, err := repo.db.Query(ctx, query("automation_history__list.sql"), ownerMattermostUsername, normalizedLimit(limit))
+	if err != nil {
+		return nil, fmt.Errorf("list automation history: %w", err)
+	}
+	defer rows.Close()
+	items := make([]entity.AutomationHistoryItem, 0)
+	for rows.Next() {
+		var item entity.AutomationHistoryItem
+		if err := rows.Scan(
+			&item.ScheduledRunPublicID,
+			&item.Status,
+			&item.Outcome,
+			&item.OwnerAttentionID,
+			&item.HumanDecisionStatus,
+			&item.DeliveryStatus,
+			&item.NextAction,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan automation history: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate automation history: %w", err)
+	}
+	return items, nil
+}
+
+func (repo *Repository) ClaimOwnerAttentionDelivery(ctx context.Context, input automationsrepo.ClaimOwnerAttentionDeliveryInput) (entity.AutomationOwnerAttentionDelivery, error) {
+	if input.ScheduledRunID < 0 || len(strings.TrimSpace(input.ClaimToken)) < 16 || len(input.ClaimToken) > 128 || !input.LeaseUntil.After(input.Now) || input.EligibleBefore.IsZero() {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrForbidden
+	}
+	item, err := scanOwnerAttentionDelivery(repo.db.QueryRow(ctx, query("automation_owner_attention__claim.sql"),
+		input.ScheduledRunID,
+		input.ClaimToken,
+		input.Now,
+		input.LeaseUntil,
+		input.EligibleBefore,
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.AutomationOwnerAttentionDelivery{}, fmt.Errorf("claim automation owner attention delivery: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) DeferOwnerAttentionDelivery(ctx context.Context, input automationsrepo.DeferOwnerAttentionDeliveryInput) error {
+	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || len(strings.TrimSpace(input.ClaimToken)) < 16 || input.Fence <= 0 || input.RetryAt.Before(input.Now) {
+		return automationsrepo.ErrForbidden
+	}
+	tag, err := repo.db.Exec(ctx, query("automation_owner_attention__defer.sql"),
+		input.AttentionID,
+		input.ScheduledRunID,
+		input.DeliveryID,
+		input.ClaimToken,
+		input.Fence,
+		input.RetryAt,
+		input.Now,
+	)
+	if err != nil {
+		return fmt.Errorf("defer automation owner attention delivery: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return automationsrepo.ErrConflict
+	}
+	return nil
+}
+
+func (repo *Repository) RetainOwnerAttentionDelivery(ctx context.Context, input automationsrepo.RetainOwnerAttentionDeliveryInput) error {
+	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || len(strings.TrimSpace(input.ClaimToken)) < 16 || input.Fence <= 0 || !input.LeaseUntil.After(input.Now) {
+		return automationsrepo.ErrForbidden
+	}
+	tag, err := repo.db.Exec(ctx, query("automation_owner_attention__retain.sql"),
+		input.AttentionID,
+		input.ScheduledRunID,
+		input.DeliveryID,
+		input.ClaimToken,
+		input.Fence,
+		input.LeaseUntil,
+		input.Now,
+	)
+	if err != nil {
+		return fmt.Errorf("retain ambiguous automation owner attention delivery: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return automationsrepo.ErrConflict
+	}
+	return nil
+}
+
+func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, input automationsrepo.SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error) {
+	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || strings.TrimSpace(input.MattermostPostID) == "" || len(strings.TrimSpace(input.ClaimToken)) < 16 || input.Fence <= 0 {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrForbidden
+	}
+	tag, err := repo.db.Exec(ctx, query("automation_owner_attention__set_post.sql"),
+		input.AttentionID,
+		input.ScheduledRunID,
+		input.DeliveryID,
+		input.MattermostChannelID,
+		input.MattermostRootPostID,
+		input.MattermostPostID,
+		input.ClaimToken,
+		input.Fence,
+		input.Now,
+	)
+	if err != nil {
+		return entity.AutomationOwnerAttentionDelivery{}, fmt.Errorf("set automation owner attention post: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrConflict
+	}
+	return repo.GetOwnerAttentionDelivery(ctx, input.ScheduledRunID)
+}
+
+func (repo *Repository) ResolveOwnerGate(ctx context.Context, input automationsrepo.ResolveOwnerGateInput) (entity.ScheduledRun, bool, error) {
+	if input.ProjectID <= 0 || strings.TrimSpace(input.ActorUserID) == "" || strings.TrimSpace(input.MattermostChannelID) == "" || strings.TrimSpace(input.MattermostRootPostID) == "" || strings.TrimSpace(input.MattermostResponsePostID) == "" {
+		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
+	}
+	tx, err := repo.db.Begin(ctx)
+	if err != nil {
+		return entity.ScheduledRun{}, false, fmt.Errorf("begin resolve automation owner gate: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	txRepo := newTransactionalRepository(tx)
+	rows, err := txRepo.db.Query(ctx, query("automation_owner_attention__lock_resolution.sql"),
+		input.ProjectID,
+		strings.TrimSpace(input.ActorUserID),
+		strings.TrimSpace(input.MattermostChannelID),
+		strings.TrimSpace(input.MattermostRootPostID),
+		strings.TrimSpace(input.MattermostResponsePostID),
+	)
+	if err != nil {
+		return entity.ScheduledRun{}, false, fmt.Errorf("lock automation owner gate resolution: %w", err)
+	}
+	type resolutionRow struct {
+		attentionID     int64
+		attentionStatus string
+		resolvedUserID  string
+		resolvedPostID  string
+		runID           int64
+		runPublicID     string
+		occurrenceID    int64
+		scheduleID      int64
+		ownerUserID     string
+		processRunID    int64
+	}
+	candidates := make([]resolutionRow, 0, 2)
+	for rows.Next() {
+		var candidate resolutionRow
+		if err := rows.Scan(
+			&candidate.attentionID,
+			&candidate.attentionStatus,
+			&candidate.resolvedUserID,
+			&candidate.resolvedPostID,
+			&candidate.runID,
+			&candidate.runPublicID,
+			&candidate.occurrenceID,
+			&candidate.scheduleID,
+			&candidate.ownerUserID,
+			&candidate.processRunID,
+		); err != nil {
+			rows.Close()
+			return entity.ScheduledRun{}, false, fmt.Errorf("scan automation owner gate resolution: %w", err)
+		}
+		candidates = append(candidates, candidate)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return entity.ScheduledRun{}, false, fmt.Errorf("iterate automation owner gate resolution: %w", err)
+	}
+	if len(candidates) == 0 {
+		return entity.ScheduledRun{}, false, automationsrepo.ErrNotFound
+	}
+	if len(candidates) != 1 {
+		return entity.ScheduledRun{}, false, automationsrepo.ErrConflict
+	}
+	candidate := candidates[0]
+	duplicate := candidate.attentionStatus == "resolved"
+	if duplicate {
+		if candidate.resolvedUserID != strings.TrimSpace(input.ActorUserID) || candidate.resolvedPostID != strings.TrimSpace(input.MattermostResponsePostID) {
+			return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
+		}
+	} else {
+		tag, err := txRepo.db.Exec(ctx, query("automation_owner_attention__resolve.sql"), candidate.attentionID, strings.TrimSpace(input.ActorUserID), strings.TrimSpace(input.MattermostResponsePostID), input.Now)
+		if err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("resolve automation owner attention: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return entity.ScheduledRun{}, false, automationsrepo.ErrConflict
+		}
+		tag, err = txRepo.db.Exec(ctx, query("scheduled_runs__resolve_owner.sql"), candidate.runID, input.Now)
+		if err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("complete scheduled run after owner decision: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return entity.ScheduledRun{}, false, automationsrepo.ErrConflict
+		}
+		tag, err = txRepo.db.Exec(ctx, query("schedule_occurrences__status.sql"), candidate.occurrenceID, string(value.AutomationRunStatusSucceeded), input.Now)
+		if err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("complete schedule occurrence after owner decision: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return entity.ScheduledRun{}, false, automationsrepo.ErrConflict
+		}
+		if err := txRepo.insertAudit(ctx, input.ProjectID, candidate.scheduleID, candidate.runID, "run.owner_resolved", strings.TrimSpace(input.ActorUserID), strings.TrimSpace(input.ActorUserName), candidate.runPublicID, ""); err != nil {
+			return entity.ScheduledRun{}, false, err
+		}
+		tag, err = txRepo.db.Exec(ctx, query("process_runs__reconcile_owner_gate.sql"), candidate.processRunID, input.Now)
+		if err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("reconcile process after automation owner decision: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return entity.ScheduledRun{}, false, automationsrepo.ErrConflict
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.ScheduledRun{}, false, fmt.Errorf("commit automation owner gate resolution: %w", err)
+	}
+	result, err := repo.getRun(ctx, candidate.runPublicID, input.ProjectID, candidate.ownerUserID)
+	return result, duplicate, err
 }
 
 func (repo *Repository) ReconcileRuntimeTerminal(ctx context.Context, input automationsrepo.ReconcileRuntimeTerminalInput) (entity.ScheduledRun, bool, error) {
@@ -450,6 +787,12 @@ func (repo *Repository) ReconcileRuntimeTerminal(ctx context.Context, input auto
 	}
 	if item.RuntimeSessionID != 0 && (item.RuntimeSessionID != input.RuntimeSessionID || item.RuntimeTurnID != input.RuntimeTurnID) {
 		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
+	}
+	if item.Status == string(value.AutomationRunStatusWaitingOwner) {
+		if err := tx.Commit(ctx); err != nil {
+			return entity.ScheduledRun{}, false, fmt.Errorf("commit waiting-owner automation reconciliation: %w", err)
+		}
+		return item, false, nil
 	}
 	if automationRunIsTerminal(item.Status) {
 		if err := tx.Commit(ctx); err != nil {
@@ -580,6 +923,55 @@ func automationRunIsTerminal(status string) bool {
 	return status == string(value.AutomationRunStatusSucceeded) || status == string(value.AutomationRunStatusFailed)
 }
 
+func validateOwnerGatePlan(run entity.ScheduledRun, gateContext entity.AutomationOwnerGateContext, plan automationsrepo.OwnerGatePlanInput) error {
+	if gateContext.ScheduledRunID != run.ID || gateContext.ScheduledRunPublicID != run.PublicID || gateContext.ProjectID != run.ProjectID || gateContext.RuntimeTurnID != run.RuntimeTurnID ||
+		plan.ProcessRunID != gateContext.ProcessRunID || plan.PolicyRevisionID != gateContext.PolicyRevisionID || strings.TrimSpace(plan.RootInitiatorUserID) != gateContext.RootInitiatorUserID || strings.TrimSpace(plan.RootInitiatorName) != gateContext.RootInitiatorName {
+		return automationsrepo.ErrForbidden
+	}
+	if strings.TrimSpace(plan.AttentionSummary) == "" || strings.TrimSpace(plan.AttentionRecommendation) == "" || !validOwnerAttentionDeliveryID(plan.DeliveryID) || !strings.Contains(plan.DeliveryMessage, "\n\n#notrigger") || len(plan.DeliveryPropsJSON) == 0 || len(plan.DeliveryPayloadSHA256) != sha256.Size {
+		return automationsrepo.ErrForbidden
+	}
+	var props map[string]any
+	if err := json.Unmarshal(plan.DeliveryPropsJSON, &props); err != nil {
+		return automationsrepo.ErrForbidden
+	}
+	if props["matter_codex_event"] != "automation_owner_attention" || props["matter_codex_callback_delivery_id"] != plan.DeliveryID || props["matter_codex_automation_run_id"] != run.PublicID || props["matter_codex_process_run_id"] != gateContext.ProcessPublicID || props["matter_codex_human_decision_status"] != "pending" {
+		return automationsrepo.ErrForbidden
+	}
+	payload := struct {
+		ChannelID  string         `json:"channel_id"`
+		RootPostID string         `json:"root_post_id"`
+		Message    string         `json:"message"`
+		Props      map[string]any `json:"props"`
+	}{
+		ChannelID:  gateContext.MattermostChannelID,
+		RootPostID: gateContext.MattermostRootPostID,
+		Message:    plan.DeliveryMessage,
+		Props:      props,
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return automationsrepo.ErrForbidden
+	}
+	digest := sha256.Sum256(encoded)
+	if !bytes.Equal(digest[:], plan.DeliveryPayloadSHA256) {
+		return automationsrepo.ErrForbidden
+	}
+	return nil
+}
+
+func validOwnerAttentionDeliveryID(deliveryID string) bool {
+	if len(deliveryID) != 26 {
+		return false
+	}
+	for _, char := range deliveryID {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') {
+			return false
+		}
+	}
+	return true
+}
+
 func (repo *Repository) insertAudit(ctx context.Context, projectID int64, scheduleID int64, runID int64, eventType string, actorUserID string, actorUserName string, correlationID string, safeSummary string) error {
 	var nullableScheduleID any
 	if scheduleID != 0 {
@@ -675,6 +1067,44 @@ func scanRun(row pgx.Row) (entity.ScheduledRun, error) {
 		if item.FinishedAt.Equal(epoch) {
 			item.FinishedAt = time.Time{}
 		}
+	}
+	return item, err
+}
+
+func scanOwnerAttentionDelivery(row pgx.Row) (entity.AutomationOwnerAttentionDelivery, error) {
+	var item entity.AutomationOwnerAttentionDelivery
+	var claimToken *string
+	var claimedAt *time.Time
+	var leaseExpiresAt *time.Time
+	err := row.Scan(
+		&item.AttentionID,
+		&item.ScheduledRunID,
+		&item.ScheduledRunPublicID,
+		&item.ProcessRunID,
+		&item.PolicyRevisionID,
+		&item.RootInitiatorUserID,
+		&item.MattermostChannelID,
+		&item.MattermostRootPostID,
+		&item.MattermostPostID,
+		&item.Status,
+		&item.DeliveryID,
+		&item.DeliveryMessage,
+		&item.DeliveryPropsJSON,
+		&item.DeliveryPayloadSHA256,
+		&claimToken,
+		&claimedAt,
+		&leaseExpiresAt,
+		&item.ConfirmationPending,
+		&item.Fence,
+	)
+	if claimToken != nil {
+		item.ClaimToken = *claimToken
+	}
+	if claimedAt != nil {
+		item.ClaimedAt = claimedAt.UTC()
+	}
+	if leaseExpiresAt != nil {
+		item.LeaseExpiresAt = leaseExpiresAt.UTC()
 	}
 	return item, err
 }
