@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
 )
@@ -96,6 +98,231 @@ func TestControlSurfaceReconcilesStatusCardAfterAmbiguousCreateAndRestart(t *tes
 	if err != nil || ref.PostID != "durable-status-post" || postCalls.Load() != 1 {
 		t.Fatalf("restart ref=%#v error=%v post_calls=%d", ref, err, postCalls.Load())
 	}
+}
+
+func TestControlSurfaceReconcilesBothAmbiguousUpdateOutcomes(t *testing.T) {
+	card := statusservice.MattermostCard{
+		ChannelID: "channel-1", RootPostID: "root-1", PostID: "status-post-1",
+		Message: "matter-codex agent turn status #notrigger",
+		Props:   map[string]any{"matter_codex_event": "agent_status", "session_key": "session-1", "turn_id": int64(2)},
+		Actions: []statusservice.MattermostCardAction{{
+			ID: "stopturn", Name: "Завершить остановку", Context: map[string]any{
+				"kind": "agent_turn", "action": "recover_stop_turn", "capability": "synthetic-capability",
+			},
+		}},
+	}
+	for _, test := range []struct {
+		name        string
+		applyUpdate bool
+	}{
+		{name: "update not applied", applyUpdate: false},
+		{name: "update applied response lost", applyUpdate: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			actual := &mattermostmodel.Post{
+				Id: card.PostID, ChannelId: card.ChannelID, RootId: card.RootPostID,
+				Message: "previous status card", Props: map[string]any{"matter_codex_event": "agent_status"},
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				writer.Header().Set("Content-Type", "application/json")
+				switch request.Method {
+				case http.MethodPut:
+					var attempted mattermostmodel.Post
+					if err := json.NewDecoder(request.Body).Decode(&attempted); err != nil {
+						t.Errorf("decode Mattermost update request: %v", err)
+					}
+					if test.applyUpdate {
+						actual = &attempted
+						actual.Id = card.PostID
+						actual.ChannelId = card.ChannelID
+						actual.RootId = card.RootPostID
+						actual.GetProps()[mattermostmodel.PostPropsFromBot] = "true"
+					}
+					writer.WriteHeader(http.StatusBadGateway)
+					_, _ = writer.Write([]byte(`{"id":"synthetic","message":"ambiguous update","status_code":502}`))
+				case http.MethodGet:
+					if err := json.NewEncoder(writer).Encode(actual); err != nil {
+						t.Errorf("encode Mattermost post response: %v", err)
+					}
+				default:
+					http.NotFound(writer, request)
+				}
+			}))
+			defer server.Close()
+
+			surface := NewControlSurface(server.URL, "synthetic-token", "")
+			if _, err := surface.UpdateThreadCard(context.Background(), card); err == nil {
+				t.Fatal("ambiguous UpdateThreadCard() error = nil")
+			}
+			ref, applied, err := surface.ReconcileThreadCardUpdate(context.Background(), card)
+			if err != nil || applied != test.applyUpdate {
+				t.Fatalf("reconcile ref=%#v applied=%t/%t error=%v", ref, applied, test.applyUpdate, err)
+			}
+			if applied && (ref.ChannelID != card.ChannelID || ref.PostID != card.PostID) {
+				t.Fatalf("reconciled binding=%#v", ref)
+			}
+		})
+	}
+}
+
+func TestControlSurfaceInexactUpdateNeverActivatesCapability(t *testing.T) {
+	mutateAttachments := func(post *mattermostmodel.Post, mutate func([]map[string]any)) {
+		t.Helper()
+		encoded, err := json.Marshal(post.GetProps()["attachments"])
+		if err != nil {
+			t.Fatalf("encode attachments: %v", err)
+		}
+		var attachments []map[string]any
+		if err := json.Unmarshal(encoded, &attachments); err != nil {
+			t.Fatalf("decode attachments: %v", err)
+		}
+		mutate(attachments)
+		post.GetProps()["attachments"] = attachments
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*mattermostmodel.Post)
+	}{
+		{name: "unexpected matter_codex prop", mutate: func(post *mattermostmodel.Post) {
+			post.GetProps()["matter_codex_unexpected"] = "foreign"
+		}},
+		{name: "missing prop", mutate: func(post *mattermostmodel.Post) {
+			delete(post.GetProps(), "status")
+		}},
+		{name: "changed prop", mutate: func(post *mattermostmodel.Post) {
+			post.GetProps()["session_key"] = "foreign-session"
+		}},
+		{name: "changed attachment", mutate: func(post *mattermostmodel.Post) {
+			mutateAttachments(post, func(attachments []map[string]any) { attachments[0]["text"] = "foreign text" })
+		}},
+		{name: "changed action", mutate: func(post *mattermostmodel.Post) {
+			mutateAttachments(post, func(attachments []map[string]any) {
+				actions := attachments[0]["actions"].([]any)
+				actions[0].(map[string]any)["name"] = "Foreign action"
+			})
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var actual *mattermostmodel.Post
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				writer.Header().Set("Content-Type", "application/json")
+				switch request.Method {
+				case http.MethodPut:
+					var attempted mattermostmodel.Post
+					if err := json.NewDecoder(request.Body).Decode(&attempted); err != nil {
+						t.Errorf("decode Mattermost update request: %v", err)
+					}
+					actual = attempted.Clone()
+					actual.Id = "status-post-1"
+					actual.ChannelId = "channel-1"
+					actual.RootId = "root-1"
+					test.mutate(actual)
+					writer.WriteHeader(http.StatusBadGateway)
+					_, _ = writer.Write([]byte(`{"id":"synthetic","message":"ambiguous update","status_code":502}`))
+				case http.MethodGet:
+					if actual == nil {
+						t.Error("GetPost called before UpdatePost")
+						writer.WriteHeader(http.StatusNotFound)
+						return
+					}
+					if err := json.NewEncoder(writer).Encode(actual); err != nil {
+						t.Errorf("encode Mattermost post response: %v", err)
+					}
+				default:
+					http.NotFound(writer, request)
+				}
+			}))
+			defer server.Close()
+
+			repository := newControlSurfaceCapabilityRepository()
+			security := statusservice.NewInteractionSecurityService(statusservice.InteractionSecurityConfig{
+				Repository: repository, Admission: controlSurfaceAllowedAdmission{},
+			})
+			publisher := statusservice.NewSecuredMattermostThreadPublisher(NewControlSurface(server.URL, "synthetic-token", ""), security)
+			card := statusservice.MattermostCard{
+				ChannelID: "channel-1", RootPostID: "root-1", PostID: "status-post-1",
+				ActionURL: "https://bot.example/actions", Message: "matter-codex agent turn status #notrigger",
+				Props: map[string]any{
+					"matter_codex_event": "agent_status", "session_key": "session-1", "turn_id": int64(2), "status": "canceled",
+				},
+				Color: "#9aa4b2", Title: "Agent", Text: "Canceled",
+				Interaction: statusservice.MattermostCardInteraction{
+					Actor: statusservice.AuthenticatedActor{UserID: "actor-1", UserName: "owner"},
+					Scope: statusservice.InteractionScope{Workspace: "1", Session: "session-1"},
+				},
+				Actions: []statusservice.MattermostCardAction{{
+					ID: "stopturn", Name: "Завершить остановку", Style: "danger",
+					Context: map[string]any{
+						"kind": "agent_turn", "action": "recover_stop_turn", "turn_ids": "2",
+						"resource_type": "agent_session_turn", "resource_id": "2",
+					},
+				}},
+			}
+			if _, err := publisher.UpdateThreadCard(context.Background(), card); err == nil {
+				t.Fatal("inexact UpdateThreadCard() error = nil")
+			}
+			if state := repository.onlyState(); state != securityrepo.CapabilityStateRevoked {
+				t.Fatalf("inexact capability state=%q", state)
+			}
+		})
+	}
+}
+
+type controlSurfaceCapabilityRepository struct {
+	mu     sync.Mutex
+	states map[string]securityrepo.CapabilityState
+}
+
+func newControlSurfaceCapabilityRepository() *controlSurfaceCapabilityRepository {
+	return &controlSurfaceCapabilityRepository{states: map[string]securityrepo.CapabilityState{}}
+}
+
+func (repository *controlSurfaceCapabilityRepository) IssueInteractionCapability(_ context.Context, input securityrepo.IssueCapabilityInput) error {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	repository.states[string(input.TokenHash)] = input.State
+	return nil
+}
+
+func (*controlSurfaceCapabilityRepository) CheckInteractionCapability(context.Context, securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	return securityrepo.Capability{}, securityrepo.ErrCapabilityInactive
+}
+
+func (*controlSurfaceCapabilityRepository) ConsumeInteractionCapability(context.Context, securityrepo.ConsumeCapabilityInput) (securityrepo.Capability, error) {
+	return securityrepo.Capability{}, securityrepo.ErrCapabilityInactive
+}
+
+func (repository *controlSurfaceCapabilityRepository) TransitionInteractionCapabilities(_ context.Context, input securityrepo.TransitionCapabilitiesInput) error {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	for _, tokenHash := range input.TokenHashes {
+		if repository.states[string(tokenHash)] != input.From {
+			return securityrepo.ErrCapabilityInactive
+		}
+	}
+	for _, tokenHash := range input.TokenHashes {
+		repository.states[string(tokenHash)] = input.To
+	}
+	return nil
+}
+
+func (*controlSurfaceCapabilityRepository) AdmitExistingClusterAdmin(context.Context, securityrepo.ClusterAdminAdmissionInput) (bool, error) {
+	return false, nil
+}
+
+func (repository *controlSurfaceCapabilityRepository) onlyState() securityrepo.CapabilityState {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	for _, state := range repository.states {
+		return state
+	}
+	return ""
+}
+
+type controlSurfaceAllowedAdmission struct{}
+
+func (controlSurfaceAllowedAdmission) Admit(context.Context, statusservice.InteractionAdmissionRequest) statusservice.InteractionAdmissionDecision {
+	return statusservice.InteractionAdmissionDecision{Status: statusservice.AdmissionAllowed}
 }
 
 func TestControlSurfaceReconcilesDeterministicCallbackPublication(t *testing.T) {

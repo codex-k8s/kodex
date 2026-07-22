@@ -87,6 +87,10 @@ type MattermostIdempotentCardPublisher interface {
 	ReconcileOrPostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
 }
 
+type MattermostThreadCardUpdateReconciler interface {
+	ReconcileThreadCardUpdate(ctx context.Context, card MattermostCard) (MattermostPostRef, bool, error)
+}
+
 type ChatPostCommand struct {
 	ChannelID  string
 	PostID     string

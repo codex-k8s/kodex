@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"sync"
 	"testing"
@@ -99,18 +100,27 @@ func (repository *publisherCapabilityRepository) TransitionInteractionCapabiliti
 	return nil
 }
 
+func (repository *publisherCapabilityRepository) stateForToken(token string) securityrepo.CapabilityState {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	hash := sha256.Sum256([]byte(token))
+	return repository.capabilities[string(hash[:])].State
+}
+
 func (*publisherCapabilityRepository) AdmitExistingClusterAdmin(context.Context, securityrepo.ClusterAdminAdmissionInput) (bool, error) {
 	return false, nil
 }
 
 type publisherBackend struct {
-	postRef     MattermostPostRef
-	postErr     error
-	updateErr   error
-	posts       []MattermostCard
-	updates     []MattermostCard
-	updateStart chan struct{}
-	updateGate  chan struct{}
+	postRef          MattermostPostRef
+	postErr          error
+	updateErr        error
+	reconcileApplied bool
+	reconcileErr     error
+	posts            []MattermostCard
+	updates          []MattermostCard
+	updateStart      chan struct{}
+	updateGate       chan struct{}
 }
 
 func (*publisherBackend) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
@@ -150,6 +160,16 @@ func (backend *publisherBackend) UpdateThreadCard(_ context.Context, card Matter
 		return MattermostPostRef{}, backend.updateErr
 	}
 	return MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, nil
+}
+
+func (backend *publisherBackend) ReconcileThreadCardUpdate(_ context.Context, card MattermostCard) (MattermostPostRef, bool, error) {
+	if backend.reconcileErr != nil {
+		return MattermostPostRef{}, false, backend.reconcileErr
+	}
+	if !backend.reconcileApplied {
+		return MattermostPostRef{}, false, nil
+	}
+	return MattermostPostRef{ChannelID: card.ChannelID, PostID: card.PostID}, true, nil
 }
 
 func (*publisherBackend) AddPostReactionWithToken(context.Context, string, MattermostPostReactionInput) error {
@@ -231,10 +251,56 @@ func TestSecuredThreadPublisherFailsClosedOnBindingSealAndUpdateErrors(t *testin
 				}
 				callback := ActionCallback{Context: backend.updates[0].Actions[0].Context, UserID: "actor-1", ChannelID: "channel-1", PostID: "post-1"}
 				if _, authErr := security.AuthenticateAction(context.Background(), callback); !errors.Is(authErr, ErrInteractionAuthentication) {
-					t.Fatalf("actions from applied-then-error update remained usable: %v", authErr)
+					t.Fatalf("action from a confirmed not-applied update remained usable: %v", authErr)
+				}
+				if state := repository.stateForToken(contextStringValue(callback.Context, interactionCapabilityContextKey)); state != securityrepo.CapabilityStateRevoked {
+					t.Fatalf("not-applied update capability state = %q", state)
 				}
 			}
 		})
+	}
+}
+
+func TestSecuredThreadPublisherDoesNotRevokeUnverifiedAmbiguousUpdate(t *testing.T) {
+	repository := newPublisherCapabilityRepository()
+	backend := &publisherBackend{
+		updateErr:    errors.New("synthetic lost update response"),
+		reconcileErr: errors.New("synthetic reconciliation failure"),
+	}
+	security := NewInteractionSecurityService(InteractionSecurityConfig{Repository: repository, Admission: fixedServiceAdmission(AdmissionAllowed)})
+	publisher := NewSecuredMattermostThreadPublisher(backend, security)
+	card := securedPublisherTestCard()
+	card.PostID = "post-1"
+
+	if _, err := publisher.UpdateThreadCard(context.Background(), card); err == nil || len(backend.updates) != 1 {
+		t.Fatalf("ambiguous update error=%v updates=%#v", err, backend.updates)
+	}
+	token := contextStringValue(backend.updates[0].Actions[0].Context, interactionCapabilityContextKey)
+	if state := repository.stateForToken(token); state != securityrepo.CapabilityStatePending {
+		t.Fatalf("unverified update capability state = %q", state)
+	}
+}
+
+func TestSecuredThreadPublisherActivatesExactCardAfterAppliedUpdateResponseIsLost(t *testing.T) {
+	repository := newPublisherCapabilityRepository()
+	backend := &publisherBackend{updateErr: errors.New("synthetic lost update response"), reconcileApplied: true}
+	security := NewInteractionSecurityService(InteractionSecurityConfig{Repository: repository, Admission: fixedServiceAdmission(AdmissionAllowed)})
+	publisher := NewSecuredMattermostThreadPublisher(backend, security)
+	card := securedPublisherTestCard()
+	card.PostID = "post-1"
+
+	ref, err := publisher.UpdateThreadCard(context.Background(), card)
+	if err != nil || ref.PostID != card.PostID || len(backend.updates) != 1 {
+		t.Fatalf("reconciled update ref=%#v error=%v updates=%#v", ref, err, backend.updates)
+	}
+	bound := backend.updates[0]
+	restarted := NewInteractionSecurityService(InteractionSecurityConfig{Repository: repository, Admission: fixedServiceAdmission(AdmissionAllowed)})
+	callback := ActionCallback{Context: bound.Actions[0].Context, UserID: "actor-1", ChannelID: "channel-1", PostID: "post-1"}
+	if _, err := restarted.AuthenticateAction(context.Background(), callback); err != nil {
+		t.Fatalf("AuthenticateAction() after reconciled response loss = %v", err)
+	}
+	if _, err := restarted.AuthenticateAction(context.Background(), callback); !errors.Is(err, ErrInteractionAuthentication) {
+		t.Fatalf("reconciled action replay error = %v", err)
 	}
 }
 

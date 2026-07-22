@@ -661,8 +661,25 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 			}
 			if currentTurn.Status == agentSessionTurnCanceled {
 				state, stateErr := agentTurnStopStateFromArtifacts(currentTurn.Artifacts)
-				if stateErr != nil || strictCapabilityAction && !agentTurnStopRecoveryAllowed(command.CapabilityAction, state) {
+				if stateErr != nil || strictCapabilityAction && (!agentTurnStopRecoveryAllowed(command.CapabilityAction, state) || state.ActorUserID != strings.TrimSpace(command.UserID)) {
 					return adminrepo.ErrClusterAdminAdmissionDenied
+				}
+				if strictCapabilityAction && command.CapabilityAction == agentTurnStopRecoveryAction && !state.CardCompleted {
+					state.CardCompleted = true
+					artifacts, artifactsErr := agentTurnStopArtifacts(currentTurn.Artifacts, state)
+					if artifactsErr != nil {
+						return artifactsErr
+					}
+					artifactStore, ok := guardedStore.(adminrepo.AgentSessionTurnArtifactsRepository)
+					if !ok {
+						return adminrepo.ErrClusterAdminAdmissionDenied
+					}
+					currentTurn, readErr = artifactStore.CompareAndSwapAgentSessionTurnArtifacts(ctx, adminrepo.CompareAndSwapAgentSessionTurnArtifactsInput{
+						TurnID: currentTurn.ID, ExpectedArtifacts: currentTurn.Artifacts, Artifacts: artifacts,
+					})
+					if readErr != nil {
+						return fmt.Errorf("persist published agent turn recovery card: %w", readErr)
+					}
 				}
 				canceled = currentTurn
 				reconcileOnly = true
@@ -752,6 +769,68 @@ func (svc *AgentSessionService) FinalizeStopAgentSessionTurns(ctx context.Contex
 		}
 	}
 	return result, nil
+}
+
+func (svc *AgentSessionService) ReconcilePendingStopAgentSessionTurnCard(ctx context.Context, interaction AuthenticatedInteraction, callback ActionCallback) (bool, error) {
+	if svc == nil || svc.cfg.Store == nil || interaction.Action != agentTurnStopRecoveryAction ||
+		interaction.ResourceType != "agent_session_turn" || strings.TrimSpace(interaction.Scope.Session) == "" ||
+		strings.TrimSpace(interaction.Scope.Workspace) == "" || strings.TrimSpace(interaction.CallbackPostID) == "" ||
+		interaction.CallbackPostID != strings.TrimSpace(callback.PostID) || interaction.ChannelID != strings.TrimSpace(callback.ChannelID) {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	turnID, err := strconv.ParseInt(interaction.ResourceID, 10, 64)
+	if err != nil || turnID <= 0 {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	session, err := svc.cfg.Store.GetAgentSession(ctx, strings.TrimSpace(interaction.Scope.Session))
+	if err != nil {
+		return false, err
+	}
+	if strconv.FormatInt(session.ProjectID, 10) != strings.TrimSpace(interaction.Scope.Workspace) ||
+		session.MattermostChannelID != interaction.ChannelID {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	turn, err := svc.cfg.Store.GetAgentSessionTurn(ctx, turnID)
+	if err != nil {
+		return false, err
+	}
+	if turn.SessionID != session.ID || turn.Status != agentSessionTurnCanceled ||
+		strings.TrimSpace(turn.MattermostStatusPostID) != interaction.CallbackPostID {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	state, err := agentTurnStopStateFromArtifacts(turn.Artifacts)
+	if err != nil || !agentTurnStopRecoveryAllowed(agentTurnStopRecoveryAction, state) ||
+		state.ActorUserID != interaction.Actor.UserID {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	channelID := defaultString(turn.MattermostChannelID, session.MattermostChannelID)
+	rootPostID := defaultString(turn.MattermostRootPostID, session.MattermostRootPostID)
+	if channelID != interaction.ChannelID || rootPostID == "" {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	recoveryTurn := turn
+	recoveryTurn.UserID = state.ActorUserID
+	recoveryTurn.UserName = state.ActorUserName
+	account := svc.sessionOpenAIAccountNameWithStore(ctx, svc.cfg.Store, session)
+	message := svc.turnStatusMessageWithStore(ctx, svc.cfg.Store, session, agentSessionTurnCanceled, turn.RunID, account, "")
+	card := svc.turnStatusCardWithStore(ctx, svc.cfg.Store, session, recoveryTurn, agentSessionTurnCanceled, channelID, rootPostID, truncateMattermostStatus(strings.TrimSpace(message)))
+	if len(card.Actions) != 1 {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	card.PostID = interaction.CallbackPostID
+	card.Actions[0].Context = cloneInteractionContext(callback.Context)
+	reconciler, ok := svc.cfg.ThreadPublisher.(MattermostThreadCardUpdateReconciler)
+	if !ok {
+		return false, fmt.Errorf("mattermost thread card reconciliation is not configured")
+	}
+	ref, applied, err := reconciler.ReconcileThreadCardUpdate(ctx, card)
+	if err != nil || !applied {
+		return false, err
+	}
+	if ref.ChannelID != card.ChannelID || ref.PostID != card.PostID {
+		return false, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return true, nil
 }
 
 type agentTurnStopPhase string
@@ -2073,7 +2152,7 @@ func agentTurnStopRecoveryAllowed(action string, state agentTurnStopState) bool 
 	case agentTurnStopAction:
 		return !state.CardCompleted
 	case agentTurnStopRecoveryAction:
-		return state.CardCompleted
+		return state.CleanupCompleted && state.ResetCompleted
 	default:
 		return false
 	}
