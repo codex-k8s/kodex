@@ -1166,6 +1166,9 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 	if err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
+	if err := svc.rejectDelegatedGitHubIdentityRequirement(ctx, project, role, message); err != nil {
+		return AgentSessionAgentRequest{}, err
+	}
 	if err := svc.requireCoordinationPermission(ctx, session, capability, action, role.ID); err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
@@ -1319,6 +1322,48 @@ func (svc *AgentSessionService) requireRequestedRoleChatParticipant(ctx context.
 		role.Name,
 		defaultString(strings.TrimSpace(chat.Slug), strings.TrimSpace(chat.Name)),
 	)
+}
+
+func (svc *AgentSessionService) rejectDelegatedGitHubIdentityRequirement(ctx context.Context, project entity.Project, role entity.AgentRole, message string) error {
+	accountName := strings.TrimSpace(role.GitHubAccountName)
+	if accountName == "" {
+		accountName = strings.TrimSpace(project.GitHubAccountName)
+	}
+	if accountName == "" {
+		return nil
+	}
+	account, err := svc.cfg.Store.GetGitHubAccount(ctx, accountName)
+	if err != nil {
+		return err
+	}
+	for _, identity := range []string{account.Name, account.Username} {
+		if delegatedPromptRequiresGitHubIdentity(message, identity) {
+			return fmt.Errorf("delegated prompt must not require a configured GitHub account alias or login; describe only the required operation and permissions")
+		}
+	}
+	return nil
+}
+
+func delegatedPromptRequiresGitHubIdentity(message string, identity string) bool {
+	identity = strings.ToLower(strings.TrimSpace(identity))
+	if len(identity) < 6 {
+		return false
+	}
+	markers := []string{
+		"github account", "github identity", "github login", "github-аккаунт", "github аккаунт",
+		"учетная запись github", "учётная запись github", "фактически авторизован", "ожидается", "требуется",
+	}
+	for line := range strings.Lines(strings.ToLower(message)) {
+		if !strings.Contains(line, identity) {
+			continue
+		}
+		for _, marker := range markers {
+			if strings.Contains(line, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (svc *AgentSessionService) ensureRequestedRoleChannelMember(ctx context.Context, project entity.Project, chat entity.Chat, role entity.AgentRole, sessionKey string, actorUser string) error {

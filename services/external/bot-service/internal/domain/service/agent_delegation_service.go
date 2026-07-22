@@ -295,6 +295,9 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	if !targetRole.Enabled {
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent role %q is disabled", targetRole.Name)
 	}
+	if err := svc.rejectDelegatedGitHubIdentityRequirement(ctx, project, targetRole, command.Message); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
 	if err := svc.requireCoordinationPermission(ctx, session, entity.CoordinationCapabilityStartAgents, entity.CoordinationActionStart, targetRole.ID); err != nil {
 		return AgentSessionDelegationResult{}, err
 	}

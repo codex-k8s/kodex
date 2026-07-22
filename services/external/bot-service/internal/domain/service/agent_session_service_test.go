@@ -1216,6 +1216,29 @@ func TestAgentSessionRequestAgentRejectsRoleOutsideCurrentChatBeforeSideEffects(
 	}
 }
 
+func TestDelegatedPromptRequiresGitHubIdentity(t *testing.T) {
+	tests := []struct {
+		name     string
+		message  string
+		identity string
+		want     bool
+	}{
+		{name: "explicit identity", message: "GitHub identity должна быть ai-da-stas", identity: "ai-da-stas", want: true},
+		{name: "actual login", message: "Фактически авторизован kodex-agent, остановись при несовпадении.", identity: "kodex-agent", want: true},
+		{name: "account alias", message: "GitHub account: platform-owner", identity: "platform-owner", want: true},
+		{name: "repository owner", message: "Исправь https://github.com/ai-da-stas/project/issues/7", identity: "ai-da-stas"},
+		{name: "generic short alias", message: "GitHub account main должен иметь write.", identity: "main"},
+		{name: "permission only", message: "Нужны права на push и review.", identity: "kodex-agent"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := delegatedPromptRequiresGitHubIdentity(test.message, test.identity); got != test.want {
+				t.Fatalf("delegatedPromptRequiresGitHubIdentity() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func TestAgentSessionRequestAgentRejectsInvalidProcessRootBeforeMembership(t *testing.T) {
 	now := time.Now().UTC()
 	baseStore := chatRuntimeStore()
