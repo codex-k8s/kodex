@@ -135,12 +135,13 @@ type AutomationRuntimeTerminalReconciler interface {
 }
 
 type AutomationOwnerDecisionCommand struct {
-	ProjectID                int64
-	ActorUserID              string
-	ActorUserName            string
-	MattermostChannelID      string
-	MattermostRootPostID     string
-	MattermostResponsePostID string
+	ProjectID                  int64
+	ActorUserID                string
+	ActorUserName              string
+	MattermostChannelID        string
+	MattermostRootPostID       string
+	MattermostResponsePostID   string
+	MattermostResponseCreateAt int64
 }
 
 type AutomationOwnerDecisionResult struct {
@@ -615,35 +616,54 @@ func (svc *AutomationService) deliverClaimedOwnerAttention(ctx context.Context, 
 	} else {
 		publisher, ok := svc.cfg.Publisher.(MattermostIdempotentThreadPublisher)
 		if !ok {
-			return entity.AutomationOwnerAttentionDelivery{}, svc.deferOwnerAttentionDelivery(ctx, delivery, errors.New("idempotent automation owner attention publisher is not configured"))
+			return entity.AutomationOwnerAttentionDelivery{}, errors.New("idempotent automation owner attention publisher is not configured")
 		}
+		// Confirmation-only состояние фиксируется до сетевой попытки. После этой записи
+		// любой новый процесс имеет право только сверять уже возможный внешний эффект.
+		if err := svc.fenceOwnerAttentionDelivery(ctx, delivery); err != nil {
+			return entity.AutomationOwnerAttentionDelivery{}, err
+		}
+		delivery.ConfirmationPending = true
 		var err error
 		ref, err = publisher.ReconcileOrPostThreadMessage(attemptCtx, postInput)
 		if err != nil {
-			if errors.Is(err, ErrMattermostPostConfirmationAmbiguous) {
-				return entity.AutomationOwnerAttentionDelivery{}, svc.retainOwnerAttentionDelivery(ctx, delivery, err)
-			}
-			return entity.AutomationOwnerAttentionDelivery{}, svc.deferOwnerAttentionDelivery(ctx, delivery, err)
+			return entity.AutomationOwnerAttentionDelivery{}, svc.retainOwnerAttentionDelivery(ctx, delivery, errors.Join(ErrMattermostPostConfirmationAmbiguous, err))
 		}
 	}
-	if strings.TrimSpace(ref.PostID) == "" || strings.TrimSpace(ref.ChannelID) != delivery.MattermostChannelID {
+	if strings.TrimSpace(ref.PostID) == "" || strings.TrimSpace(ref.ChannelID) != delivery.MattermostChannelID || ref.CreateAt <= 0 {
 		return entity.AutomationOwnerAttentionDelivery{}, svc.retainOwnerAttentionDelivery(ctx, delivery, automationsrepo.ErrForbidden)
 	}
 	stored, err := svc.cfg.Repository.SetOwnerAttentionPost(ctx, automationsrepo.SetOwnerAttentionPostInput{
-		AttentionID:          delivery.AttentionID,
-		ScheduledRunID:       delivery.ScheduledRunID,
-		DeliveryID:           delivery.DeliveryID,
-		MattermostChannelID:  delivery.MattermostChannelID,
-		MattermostRootPostID: delivery.MattermostRootPostID,
-		MattermostPostID:     ref.PostID,
-		ClaimToken:           delivery.ClaimToken,
-		Fence:                delivery.Fence,
-		Now:                  svc.cfg.Now().UTC(),
+		AttentionID:            delivery.AttentionID,
+		ScheduledRunID:         delivery.ScheduledRunID,
+		DeliveryID:             delivery.DeliveryID,
+		MattermostChannelID:    delivery.MattermostChannelID,
+		MattermostRootPostID:   delivery.MattermostRootPostID,
+		MattermostPostID:       ref.PostID,
+		MattermostPostCreateAt: ref.CreateAt,
+		ClaimToken:             delivery.ClaimToken,
+		Fence:                  delivery.Fence,
+		Now:                    svc.cfg.Now().UTC(),
 	})
 	if err != nil {
 		return entity.AutomationOwnerAttentionDelivery{}, svc.retainOwnerAttentionDelivery(ctx, delivery, err)
 	}
 	return stored, nil
+}
+
+func (svc *AutomationService) fenceOwnerAttentionDelivery(ctx context.Context, delivery entity.AutomationOwnerAttentionDelivery) error {
+	now := svc.cfg.Now().UTC()
+	fenceCtx, cancel := context.WithTimeout(ctx, automationDeliveryRetainTimeout)
+	defer cancel()
+	return svc.cfg.Repository.RetainOwnerAttentionDelivery(fenceCtx, automationsrepo.RetainOwnerAttentionDeliveryInput{
+		AttentionID:    delivery.AttentionID,
+		ScheduledRunID: delivery.ScheduledRunID,
+		DeliveryID:     delivery.DeliveryID,
+		ClaimToken:     delivery.ClaimToken,
+		Fence:          delivery.Fence,
+		LeaseUntil:     now.Add(automationDeliveryLease),
+		Now:            now,
+	})
 }
 
 func (svc *AutomationService) deferOwnerAttentionDelivery(ctx context.Context, delivery entity.AutomationOwnerAttentionDelivery, cause error) error {
@@ -681,13 +701,14 @@ func (svc *AutomationService) ResolveOwnerDecision(ctx context.Context, command 
 		return AutomationOwnerDecisionResult{}, errors.New("automation storage is not ready")
 	}
 	run, duplicate, err := svc.cfg.Repository.ResolveOwnerGate(ctx, automationsrepo.ResolveOwnerGateInput{
-		ProjectID:                command.ProjectID,
-		ActorUserID:              strings.TrimSpace(command.ActorUserID),
-		ActorUserName:            normalizeMattermostUsername(command.ActorUserName),
-		MattermostChannelID:      strings.TrimSpace(command.MattermostChannelID),
-		MattermostRootPostID:     strings.TrimSpace(command.MattermostRootPostID),
-		MattermostResponsePostID: strings.TrimSpace(command.MattermostResponsePostID),
-		Now:                      svc.cfg.Now().UTC(),
+		ProjectID:                  command.ProjectID,
+		ActorUserID:                strings.TrimSpace(command.ActorUserID),
+		ActorUserName:              normalizeMattermostUsername(command.ActorUserName),
+		MattermostChannelID:        strings.TrimSpace(command.MattermostChannelID),
+		MattermostRootPostID:       strings.TrimSpace(command.MattermostRootPostID),
+		MattermostResponsePostID:   strings.TrimSpace(command.MattermostResponsePostID),
+		MattermostResponseCreateAt: command.MattermostResponseCreateAt,
+		Now:                        svc.cfg.Now().UTC(),
 	})
 	if errors.Is(err, automationsrepo.ErrNotFound) {
 		return AutomationOwnerDecisionResult{}, nil

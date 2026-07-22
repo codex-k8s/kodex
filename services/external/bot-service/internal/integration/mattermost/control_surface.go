@@ -290,7 +290,7 @@ func (surface *ControlSurface) ReconcileOrPostThreadMessage(ctx context.Context,
 		if err := verifyExactCallbackPost(post, input); err != nil {
 			return statusservice.MattermostPostRef{}, errors.Join(statusservice.ErrMattermostPostConfirmationAmbiguous, err)
 		}
-		return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
+		return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id, CreateAt: post.CreateAt}, nil
 	}
 	ref, found, reconcileErr := surface.ReconcileThreadMessage(ctx, input)
 	if reconcileErr != nil {
@@ -540,7 +540,7 @@ func createThreadPost(ctx context.Context, client *mattermostmodel.Client4, inpu
 	if err != nil {
 		return statusservice.MattermostPostRef{}, fmt.Errorf("create Mattermost thread post: %w", err)
 	}
-	return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
+	return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id, CreateAt: post.CreateAt}, nil
 }
 
 func reconcileThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, bool, error) {
@@ -567,7 +567,7 @@ func reconcileThreadPost(ctx context.Context, client *mattermostmodel.Client4, i
 	if err := verifyExactCallbackPost(matched, input); err != nil {
 		return statusservice.MattermostPostRef{}, false, err
 	}
-	return statusservice.MattermostPostRef{ChannelID: matched.ChannelId, PostID: matched.Id}, true, nil
+	return statusservice.MattermostPostRef{ChannelID: matched.ChannelId, PostID: matched.Id, CreateAt: matched.CreateAt}, true, nil
 }
 
 func verifyExactCallbackPost(post *mattermostmodel.Post, input statusservice.MattermostThreadPostInput) error {

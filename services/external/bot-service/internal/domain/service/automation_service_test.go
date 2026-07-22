@@ -277,7 +277,7 @@ func TestAutomationRequiresHumanPersistsPendingGateAndPublishesServerOwnedCard(t
 			MattermostChannelID: "channel-1", MattermostRootPostID: "root-1",
 		},
 	}
-	publisher := &fakeAutomationPublisher{ref: MattermostPostRef{ChannelID: "channel-1", PostID: "attention-1"}}
+	publisher := &fakeAutomationPublisher{ref: MattermostPostRef{ChannelID: "channel-1", PostID: "attention-1", CreateAt: 1_000}}
 	svc := NewAutomationService(AutomationServiceConfig{
 		Repository: repository, Catalog: &fakeAutomationCatalog{}, Publisher: publisher, StorageReady: true,
 		Now: func() time.Time { return time.Date(2026, time.July, 22, 10, 0, 0, 0, time.UTC) },
@@ -296,8 +296,8 @@ func TestAutomationRequiresHumanPersistsPendingGateAndPublishesServerOwnedCard(t
 	if result.Run.Status != string(value.AutomationRunStatusWaitingOwner) || result.Run.Outcome != string(value.AutomationRunOutcomeRequiresHuman) || result.HumanDecisionStatus != "open" || result.DeliveryStatus != "delivered" || result.NextAction != "wait_for_owner_response" {
 		t.Fatalf("pending result=%#v", result)
 	}
-	if result.OwnerAttentionID != 71 || publisher.reconcileCalls != 1 || repository.setPostCalls != 1 {
-		t.Fatalf("attention=%d reconcile=%d set_post=%d", result.OwnerAttentionID, publisher.reconcileCalls, repository.setPostCalls)
+	if result.OwnerAttentionID != 71 || publisher.calls != 0 || publisher.reconcileCalls != 1 || repository.setPostCalls != 1 {
+		t.Fatalf("attention=%d post=%d reconcile_or_post=%d set_post=%d", result.OwnerAttentionID, publisher.calls, publisher.reconcileCalls, repository.setPostCalls)
 	}
 	if strings.Contains(publisher.reconcileInput.Message, secretSummary) || strings.Contains(publisher.reconcileInput.Message, "synthetic-secret") {
 		t.Fatalf("карточка раскрыла агентское резюме: %q", publisher.reconcileInput.Message)
@@ -322,8 +322,8 @@ func TestAutomationRequiresHumanRestartAndReplayRepairFailedPublicationWithoutSe
 		},
 	}
 	publisher := &fakeAutomationPublisher{
-		ref:             MattermostPostRef{ChannelID: "channel-2", PostID: "attention-2"},
-		reconcileErrors: []error{errors.New("synthetic publish failure"), errors.New("synthetic restart failure")},
+		ref:             MattermostPostRef{ChannelID: "channel-2", PostID: "attention-2", CreateAt: 2_000},
+		reconcileErrors: []error{errors.New("synthetic ambiguous publish failure"), errors.New("synthetic restart failure")},
 	}
 	now := time.Date(2026, time.July, 22, 10, 0, 0, 0, time.UTC)
 	newService := func() *AutomationService {
@@ -342,11 +342,11 @@ func TestAutomationRequiresHumanRestartAndReplayRepairFailedPublicationWithoutSe
 	if err != nil || first.Run.Status != string(value.AutomationRunStatusWaitingOwner) || first.DeliveryStatus != "pending" || first.NextAction != "retry_same_callback" {
 		t.Fatalf("first=%#v error=%v", first, err)
 	}
-	now = now.Add(automationDeliveryRetryDelay)
+	now = now.Add(automationDeliveryLease + time.Second)
 	if delivered, reconcileErr := newService().ReconcileOwnerAttentionDeliveries(context.Background(), 20); reconcileErr == nil || delivered != 0 {
 		t.Fatalf("restart reconciliation delivered=%d error=%v", delivered, reconcileErr)
 	}
-	now = now.Add(automationDeliveryRetryDelay)
+	now = now.Add(automationDeliveryLease + time.Second)
 	second, err := newService().CompleteCallback(context.Background(), command)
 	if err != nil || !second.Duplicate || second.DeliveryStatus != "delivered" {
 		t.Fatalf("replay=%#v error=%v", second, err)
@@ -355,8 +355,8 @@ func TestAutomationRequiresHumanRestartAndReplayRepairFailedPublicationWithoutSe
 	if err != nil || !third.Duplicate || third.DeliveryStatus != "delivered" {
 		t.Fatalf("second replay=%#v error=%v", third, err)
 	}
-	if publisher.reconcileCalls != 3 || repository.setPostCalls != 1 {
-		t.Fatalf("reconcile=%d set_post=%d", publisher.reconcileCalls, repository.setPostCalls)
+	if publisher.calls != 0 || publisher.reconcileCalls != 3 || repository.setPostCalls != 1 {
+		t.Fatalf("post=%d reconcile_or_post_or_confirm=%d set_post=%d", publisher.calls, publisher.reconcileCalls, repository.setPostCalls)
 	}
 	if repository.firstDeliveryID == "" || publisher.reconcileIDs[0] != repository.firstDeliveryID || publisher.reconcileIDs[1] != repository.firstDeliveryID || publisher.reconcileIDs[2] != repository.firstDeliveryID {
 		t.Fatalf("delivery identity changed: repository=%q calls=%#v", repository.firstDeliveryID, publisher.reconcileIDs)
@@ -383,7 +383,7 @@ func TestAutomationRequiresHumanConcurrentExactReplayPostsExactlyOnce(t *testing
 	publishStarted := make(chan struct{})
 	publishRelease := make(chan struct{})
 	publisher := &fakeAutomationPublisher{
-		ref:              MattermostPostRef{ChannelID: "channel-3", PostID: "attention-3"},
+		ref:              MattermostPostRef{ChannelID: "channel-3", PostID: "attention-3", CreateAt: 3_000},
 		reconcileStarted: publishStarted,
 		reconcileRelease: publishRelease,
 	}
@@ -415,8 +415,8 @@ func TestAutomationRequiresHumanConcurrentExactReplayPostsExactlyOnce(t *testing
 	if first.err != nil || first.result.DeliveryStatus != "delivered" {
 		t.Fatalf("first callback=%#v error=%v", first.result, first.err)
 	}
-	if publisher.reconcileCalls != 1 || repository.setPostCalls != 1 {
-		t.Fatalf("Mattermost posts=%d set_post=%d", publisher.reconcileCalls, repository.setPostCalls)
+	if publisher.calls != 0 || publisher.reconcileCalls != 1 || repository.setPostCalls != 1 {
+		t.Fatalf("Mattermost direct posts=%d reconcile_or_post=%d set_post=%d", publisher.calls, publisher.reconcileCalls, repository.setPostCalls)
 	}
 }
 
@@ -438,7 +438,7 @@ func TestAutomationDeliveryWorkerDrainsBacklogPastHundredSkipsFailureAndRestarts
 	if got := repository.deliveredCount(); got != 204 {
 		t.Fatalf("persisted deliveries after first pass=%d", got)
 	}
-	now = now.Add(automationDeliveryRetryDelay)
+	now = now.Add(automationDeliveryLease + time.Second)
 	delivered, err = newService().ReconcileOwnerAttentionDeliveries(context.Background(), 4)
 	if err != nil || delivered != 1 || repository.deliveredCount() != 205 {
 		t.Fatalf("restart pass delivered=%d total=%d error=%v", delivered, repository.deliveredCount(), err)
@@ -594,13 +594,24 @@ func (repository *fakeAutomationRepository) ClaimOwnerAttentionDelivery(_ contex
 func (repository *fakeAutomationRepository) DeferOwnerAttentionDelivery(_ context.Context, input automationsrepo.DeferOwnerAttentionDeliveryInput) error {
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
-	if repository.delivery.ClaimToken != input.ClaimToken || repository.delivery.Fence != input.Fence {
+	if repository.delivery.ClaimToken != input.ClaimToken || repository.delivery.Fence != input.Fence || repository.delivery.ConfirmationPending {
 		return automationsrepo.ErrConflict
 	}
 	repository.delivery.ClaimToken = ""
 	repository.delivery.ClaimedAt = time.Time{}
 	repository.delivery.LeaseExpiresAt = time.Time{}
 	repository.deliveryNextAttempt = input.RetryAt
+	return nil
+}
+
+func (repository *fakeAutomationRepository) RetainOwnerAttentionDelivery(_ context.Context, input automationsrepo.RetainOwnerAttentionDeliveryInput) error {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	if repository.delivery.ClaimToken != input.ClaimToken || repository.delivery.Fence != input.Fence || !input.LeaseUntil.After(input.Now) {
+		return automationsrepo.ErrConflict
+	}
+	repository.delivery.ConfirmationPending = true
+	repository.delivery.LeaseExpiresAt = input.LeaseUntil
 	return nil
 }
 
@@ -612,9 +623,11 @@ func (repository *fakeAutomationRepository) SetOwnerAttentionPost(_ context.Cont
 	}
 	repository.setPostCalls++
 	repository.delivery.MattermostPostID = input.MattermostPostID
+	repository.delivery.MattermostPostCreateAt = input.MattermostPostCreateAt
 	repository.delivery.ClaimToken = ""
 	repository.delivery.ClaimedAt = time.Time{}
 	repository.delivery.LeaseExpiresAt = time.Time{}
+	repository.delivery.ConfirmationPending = false
 	return repository.delivery, nil
 }
 
@@ -701,6 +714,16 @@ func (publisher *fakeAutomationPublisher) ReconcileOrPostThreadMessage(_ context
 	return publisher.ref, nil
 }
 
+func (publisher *fakeAutomationPublisher) ReconcileThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, bool, error) {
+	publisher.reconcileCalls++
+	publisher.reconcileInput = input
+	publisher.reconcileIDs = append(publisher.reconcileIDs, input.IdempotencyID)
+	if err := popAutomationError(&publisher.reconcileErrors); err != nil {
+		return MattermostPostRef{}, false, err
+	}
+	return publisher.ref, true, nil
+}
+
 type fakeDeliveryQueueRepository struct {
 	automationsrepo.Repository
 	mu          sync.Mutex
@@ -760,13 +783,25 @@ func (repository *fakeDeliveryQueueRepository) DeferOwnerAttentionDelivery(_ con
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
 	delivery := &repository.deliveries[input.AttentionID-1]
-	if delivery.ClaimToken != input.ClaimToken || delivery.Fence != input.Fence {
+	if delivery.ClaimToken != input.ClaimToken || delivery.Fence != input.Fence || delivery.ConfirmationPending {
 		return automationsrepo.ErrConflict
 	}
 	delivery.ClaimToken = ""
 	delivery.ClaimedAt = time.Time{}
 	delivery.LeaseExpiresAt = time.Time{}
 	repository.nextAttempt[delivery.AttentionID] = input.RetryAt
+	return nil
+}
+
+func (repository *fakeDeliveryQueueRepository) RetainOwnerAttentionDelivery(_ context.Context, input automationsrepo.RetainOwnerAttentionDeliveryInput) error {
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	delivery := &repository.deliveries[input.AttentionID-1]
+	if delivery.ClaimToken != input.ClaimToken || delivery.Fence != input.Fence || !input.LeaseUntil.After(input.Now) {
+		return automationsrepo.ErrConflict
+	}
+	delivery.ConfirmationPending = true
+	delivery.LeaseExpiresAt = input.LeaseUntil
 	return nil
 }
 
@@ -778,9 +813,11 @@ func (repository *fakeDeliveryQueueRepository) SetOwnerAttentionPost(_ context.C
 		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrConflict
 	}
 	delivery.MattermostPostID = input.MattermostPostID
+	delivery.MattermostPostCreateAt = input.MattermostPostCreateAt
 	delivery.ClaimToken = ""
 	delivery.ClaimedAt = time.Time{}
 	delivery.LeaseExpiresAt = time.Time{}
+	delivery.ConfirmationPending = false
 	return *delivery, nil
 }
 
@@ -824,17 +861,34 @@ func (publisher *fakeDeliveryQueuePublisher) ReconcileOrPostThreadMessage(_ cont
 	if shouldFail {
 		return MattermostPostRef{}, errors.New("synthetic head delivery failure")
 	}
-	return MattermostPostRef{ChannelID: input.ChannelID, PostID: "post-" + input.IdempotencyID}, nil
+	return MattermostPostRef{ChannelID: input.ChannelID, PostID: "post-" + input.IdempotencyID, CreateAt: 4_000}, nil
 }
 
 func (publisher *fakeDeliveryQueuePublisher) PostThreadMessage(context.Context, MattermostThreadPostInput) (MattermostPostRef, error) {
-	return MattermostPostRef{}, errors.New("unexpected non-idempotent publish")
+	return MattermostPostRef{}, errors.New("unexpected direct publish")
+}
+
+func (publisher *fakeDeliveryQueuePublisher) ReconcileThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, bool, error) {
+	publisher.mu.Lock()
+	defer publisher.mu.Unlock()
+	publisher.calls[input.IdempotencyID]++
+	if input.IdempotencyID != publisher.failDeliveryID || !publisher.failed {
+		return MattermostPostRef{}, false, nil
+	}
+	return MattermostPostRef{ChannelID: input.ChannelID, PostID: "post-" + input.IdempotencyID, CreateAt: 4_000}, true, nil
 }
 
 func (publisher *fakeAutomationPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
 	publisher.calls++
 	publisher.input = input
 	publisher.idempotencyIDs = append(publisher.idempotencyIDs, input.IdempotencyID)
+	if publisher.reconcileStarted != nil {
+		close(publisher.reconcileStarted)
+		publisher.reconcileStarted = nil
+	}
+	if publisher.reconcileRelease != nil {
+		<-publisher.reconcileRelease
+	}
 	if err := popAutomationError(&publisher.errors); err != nil {
 		return MattermostPostRef{}, err
 	}

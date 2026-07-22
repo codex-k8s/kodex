@@ -64,6 +64,7 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 				return
 			}
 			post.Id = "late-attention-post"
+			post.CreateAt = 1_000
 			post.Props = callbackServerProps(post.GetProps())
 			createdMu.Lock()
 			created = post.Clone()
@@ -103,7 +104,7 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 		t.Fatalf("первый transport contour: GET=%d POST=%d", getCalls.Load(), postCalls.Load())
 	}
 	retained := repository.snapshot()
-	if !retained.ConfirmationPending || retained.ClaimToken == "" || !retained.LeaseExpiresAt.Equal(start.Add(30*time.Second)) || repository.deferCalls != 0 || repository.retainCalls != 1 {
+	if !retained.ConfirmationPending || retained.ClaimToken == "" || !retained.LeaseExpiresAt.Equal(start.Add(30*time.Second)) || repository.deferCalls != 0 || repository.retainCalls != 2 {
 		t.Fatalf("неоднозначный claim не удержан: delivery=%#v defer=%d retain=%d", retained, repository.deferCalls, repository.retainCalls)
 	}
 
@@ -137,14 +138,24 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 		t.Fatalf("конкурентный retry пересёк внешний transport: GET=%d POST=%d", getCalls.Load(), postCalls.Load())
 	}
 
-	visible.Store(true)
 	now = start.Add(31 * time.Second)
 	delivered, err := newService().ReconcileOwnerAttentionDeliveries(context.Background(), 1)
+	if err == nil || delivered != 0 || postCalls.Load() != 1 || getCalls.Load() != 2 {
+		t.Fatalf("невидимый принятый post: delivered=%d error=%v GET=%d POST=%d", delivered, err, getCalls.Load(), postCalls.Load())
+	}
+	quarantined := repository.snapshot()
+	if !quarantined.ConfirmationPending || quarantined.MattermostPostID != "" {
+		t.Fatalf("невидимая доставка вышла из confirmation-only: %#v", quarantined)
+	}
+
+	visible.Store(true)
+	now = start.Add(62 * time.Second)
+	delivered, err = newService().ReconcileOwnerAttentionDeliveries(context.Background(), 1)
 	if err != nil || delivered != 1 {
 		t.Fatalf("позднее подтверждение: delivered=%d error=%v", delivered, err)
 	}
 	confirmed := repository.snapshot()
-	if confirmed.MattermostPostID != "late-attention-post" || confirmed.ConfirmationPending || confirmed.ClaimToken != "" || postCalls.Load() != 1 || getCalls.Load() != 2 {
+	if confirmed.MattermostPostID != "late-attention-post" || confirmed.MattermostPostCreateAt != 1_000 || confirmed.ConfirmationPending || confirmed.ClaimToken != "" || postCalls.Load() != 1 || getCalls.Load() != 3 {
 		t.Fatalf("итог позднего подтверждения: delivery=%#v GET=%d POST=%d", confirmed, getCalls.Load(), postCalls.Load())
 	}
 }
@@ -250,6 +261,7 @@ func (repository *lateVisibilityAutomationRepository) SetOwnerAttentionPost(_ co
 	}
 	repository.setPostCalls++
 	repository.delivery.MattermostPostID = input.MattermostPostID
+	repository.delivery.MattermostPostCreateAt = input.MattermostPostCreateAt
 	repository.delivery.ClaimToken = ""
 	repository.delivery.ClaimedAt = time.Time{}
 	repository.delivery.LeaseExpiresAt = time.Time{}

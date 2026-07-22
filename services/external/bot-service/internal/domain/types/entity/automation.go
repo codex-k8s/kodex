@@ -94,25 +94,26 @@ type AutomationOwnerGateContext struct {
 }
 
 type AutomationOwnerAttentionDelivery struct {
-	AttentionID           int64
-	ScheduledRunID        int64
-	ScheduledRunPublicID  string
-	ProcessRunID          int64
-	PolicyRevisionID      int64
-	RootInitiatorUserID   string
-	MattermostChannelID   string
-	MattermostRootPostID  string
-	MattermostPostID      string
-	Status                string
-	DeliveryID            string
-	DeliveryMessage       string
-	DeliveryPropsJSON     []byte
-	DeliveryPayloadSHA256 []byte
-	ClaimToken            string
-	ClaimedAt             time.Time
-	LeaseExpiresAt        time.Time
-	ConfirmationPending   bool
-	Fence                 int64
+	AttentionID            int64
+	ScheduledRunID         int64
+	ScheduledRunPublicID   string
+	ProcessRunID           int64
+	PolicyRevisionID       int64
+	RootInitiatorUserID    string
+	MattermostChannelID    string
+	MattermostRootPostID   string
+	MattermostPostID       string
+	MattermostPostCreateAt int64
+	Status                 string
+	DeliveryID             string
+	DeliveryMessage        string
+	DeliveryPropsJSON      []byte
+	DeliveryPayloadSHA256  []byte
+	ClaimToken             string
+	ClaimedAt              time.Time
+	LeaseExpiresAt         time.Time
+	ConfirmationPending    bool
+	Fence                  int64
 }
 
 type AutomationHistoryItem struct {

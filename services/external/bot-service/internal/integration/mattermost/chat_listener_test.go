@@ -2,14 +2,25 @@ package mattermost
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
+	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
 )
 
 type fakeMattermostUserNameResolver struct {
 	userName string
 	calls    int
+}
+
+type captureChatPostHandler struct {
+	command statusservice.ChatPostCommand
+}
+
+func (handler *captureChatPostHandler) HandleChatPost(_ context.Context, command statusservice.ChatPostCommand) statusservice.ChatRunResult {
+	handler.command = command
+	return statusservice.ChatRunResult{Ignored: true}
 }
 
 func (resolver *fakeMattermostUserNameResolver) ResolveMattermostUserName(_ context.Context, _ string) (string, error) {
@@ -84,5 +95,27 @@ func TestChatListenerUsesSenderNameFromWebSocketEvent(t *testing.T) {
 	}
 	if resolver.calls != 0 {
 		t.Fatalf("resolver calls = %d, want 0", resolver.calls)
+	}
+}
+
+func TestChatListenerCarriesServerOwnedPostCreateAt(t *testing.T) {
+	handler := &captureChatPostHandler{}
+	listener := &ChatListener{handler: handler, botUserID: "bot-user"}
+	post := &mattermostmodel.Post{
+		Id: "owner-response", ChannelId: "channel-1", RootId: "root-1", UserId: "owner-user",
+		Message: "Продолжить", CreateAt: 2_000,
+	}
+	raw, err := json.Marshal(post)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := mattermostmodel.NewWebSocketEvent(mattermostmodel.WebsocketEventPosted, "team-1", "channel-1", "owner-user", nil, "")
+	event.Add("post", string(raw))
+	event.Add("sender_name", "owner")
+
+	listener.handleEvent(context.Background(), event)
+
+	if handler.command.PostID != "owner-response" || handler.command.MattermostCreateAt != 2_000 || handler.command.ChannelID != "channel-1" || handler.command.RootPostID != "root-1" {
+		t.Fatalf("команда потеряла server-owned ordering proof: %#v", handler.command)
 	}
 }

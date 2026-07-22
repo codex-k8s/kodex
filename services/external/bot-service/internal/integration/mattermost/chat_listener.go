@@ -119,13 +119,14 @@ func (listener *ChatListener) handleEvent(ctx context.Context, event *mattermost
 		broadcastChannelID = event.GetBroadcast().ChannelId
 	}
 	command := statusservice.ChatPostCommand{
-		ChannelID:  defaultString(post.ChannelId, broadcastChannelID),
-		PostID:     post.Id,
-		RootPostID: post.RootId,
-		UserID:     post.UserId,
-		UserName:   listener.resolveUserName(ctx, post.UserId, event.GetData()),
-		Message:    post.Message,
-		Props:      post.Props,
+		ChannelID:          defaultString(post.ChannelId, broadcastChannelID),
+		PostID:             post.Id,
+		RootPostID:         post.RootId,
+		MattermostCreateAt: post.CreateAt,
+		UserID:             post.UserId,
+		UserName:           listener.resolveUserName(ctx, post.UserId, event.GetData()),
+		Message:            post.Message,
+		Props:              post.Props,
 	}
 	if command.ChannelID == "" || command.PostID == "" {
 		return

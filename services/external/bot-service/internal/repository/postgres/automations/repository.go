@@ -637,7 +637,7 @@ func (repo *Repository) RetainOwnerAttentionDelivery(ctx context.Context, input 
 }
 
 func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, input automationsrepo.SetOwnerAttentionPostInput) (entity.AutomationOwnerAttentionDelivery, error) {
-	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || strings.TrimSpace(input.MattermostPostID) == "" || len(strings.TrimSpace(input.ClaimToken)) < 16 || input.Fence <= 0 {
+	if input.AttentionID <= 0 || input.ScheduledRunID <= 0 || strings.TrimSpace(input.DeliveryID) == "" || strings.TrimSpace(input.MattermostPostID) == "" || input.MattermostPostCreateAt <= 0 || len(strings.TrimSpace(input.ClaimToken)) < 16 || input.Fence <= 0 {
 		return entity.AutomationOwnerAttentionDelivery{}, automationsrepo.ErrForbidden
 	}
 	tag, err := repo.db.Exec(ctx, query("automation_owner_attention__set_post.sql"),
@@ -647,6 +647,7 @@ func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, input automat
 		input.MattermostChannelID,
 		input.MattermostRootPostID,
 		input.MattermostPostID,
+		input.MattermostPostCreateAt,
 		input.ClaimToken,
 		input.Fence,
 		input.Now,
@@ -661,7 +662,7 @@ func (repo *Repository) SetOwnerAttentionPost(ctx context.Context, input automat
 }
 
 func (repo *Repository) ResolveOwnerGate(ctx context.Context, input automationsrepo.ResolveOwnerGateInput) (entity.ScheduledRun, bool, error) {
-	if input.ProjectID <= 0 || strings.TrimSpace(input.ActorUserID) == "" || strings.TrimSpace(input.MattermostChannelID) == "" || strings.TrimSpace(input.MattermostRootPostID) == "" || strings.TrimSpace(input.MattermostResponsePostID) == "" {
+	if input.ProjectID <= 0 || strings.TrimSpace(input.ActorUserID) == "" || strings.TrimSpace(input.MattermostChannelID) == "" || strings.TrimSpace(input.MattermostRootPostID) == "" || strings.TrimSpace(input.MattermostResponsePostID) == "" || input.MattermostResponseCreateAt <= 0 {
 		return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
 	}
 	tx, err := repo.db.Begin(ctx)
@@ -676,6 +677,7 @@ func (repo *Repository) ResolveOwnerGate(ctx context.Context, input automationsr
 		strings.TrimSpace(input.MattermostChannelID),
 		strings.TrimSpace(input.MattermostRootPostID),
 		strings.TrimSpace(input.MattermostResponsePostID),
+		input.MattermostResponseCreateAt,
 	)
 	if err != nil {
 		return entity.ScheduledRun{}, false, fmt.Errorf("lock automation owner gate resolution: %w", err)
@@ -729,7 +731,7 @@ func (repo *Repository) ResolveOwnerGate(ctx context.Context, input automationsr
 			return entity.ScheduledRun{}, false, automationsrepo.ErrForbidden
 		}
 	} else {
-		tag, err := txRepo.db.Exec(ctx, query("automation_owner_attention__resolve.sql"), candidate.attentionID, strings.TrimSpace(input.ActorUserID), strings.TrimSpace(input.MattermostResponsePostID), input.Now)
+		tag, err := txRepo.db.Exec(ctx, query("automation_owner_attention__resolve.sql"), candidate.attentionID, strings.TrimSpace(input.ActorUserID), strings.TrimSpace(input.MattermostResponsePostID), input.Now, input.MattermostResponseCreateAt)
 		if err != nil {
 			return entity.ScheduledRun{}, false, fmt.Errorf("resolve automation owner attention: %w", err)
 		}
@@ -1086,6 +1088,7 @@ func scanOwnerAttentionDelivery(row pgx.Row) (entity.AutomationOwnerAttentionDel
 		&item.MattermostChannelID,
 		&item.MattermostRootPostID,
 		&item.MattermostPostID,
+		&item.MattermostPostCreateAt,
 		&item.Status,
 		&item.DeliveryID,
 		&item.DeliveryMessage,

@@ -29,6 +29,8 @@ join matter_codex_process_runs process
 where run.project_id = $1
 	and attention.request_kind = 'automation'
 	and attention.mattermost_post_id <> ''
+	and attention.automation_mattermost_post_create_at is not null
+	and $6::bigint > attention.automation_mattermost_post_create_at
 	and process.root_initiator_user_id = $2
 	and attention.automation_mattermost_channel_id = $3
 	and attention.automation_mattermost_root_post_id = $4
@@ -37,6 +39,7 @@ where run.project_id = $1
 			attention.status = 'resolved'
 			and attention.resolved_by_user_id = $2
 			and attention.resolved_by_post_id = $5
+			and attention.automation_resolved_by_post_create_at = $6
 		)
 		or (
 			attention.status = 'open'

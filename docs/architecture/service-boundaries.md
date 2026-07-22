@@ -88,7 +88,7 @@ docs/
 - постановка `ScheduledRun` в очередь;
 - вычисление следующего запуска.
 
-До выделения самостоятельного сервиса текущий bot-service также владеет узким контрактом ручного шлюза автоматизации: отдельным namespace `automation` для `OwnerAttentionRequest`, атомарной записью `waiting_owner`, server-owned payload и долговечной публикацией с claim/lease/fence до внешнего POST. Ограниченный по параллельности reconciler непрерывно выбирает весь доступный backlog через `SKIP LOCKED`; ошибка одной строки и перезапуск не блокируют продвижение остальных. Решение допустимо только после сохранённого post binding точной карточки и атомарно закрывает связь `ScheduledRun → attention`. Общий watchdog, heartbeat/deadline/lease среды выполнения, callback outbox и Kubernetes health не входят в эту границу.
+До выделения самостоятельного сервиса текущий bot-service также владеет узким контрактом ручного шлюза автоматизации: отдельным namespace `automation` для `OwnerAttentionRequest`, атомарной записью `waiting_owner`, server-owned payload и долговечной публикацией с claim/lease/fence и обязательным `confirmation_pending` до внешнего POST. После этого fence перезапуск или ошибка БД разрешают только сверку, но не второй POST. Ограниченный по параллельности reconciler непрерывно выбирает весь доступный backlog через `SKIP LOCKED`; ошибка одной строки и перезапуск не блокируют продвижение остальных. Решение допустимо только после сохранённого post binding точной карточки, включает сравнение server-owned Mattermost `CreateAt(card) < CreateAt(response)` и атомарно закрывает связь `ScheduledRun → attention`. Общий watchdog, heartbeat/deadline/lease среды выполнения, callback outbox и Kubernetes health не входят в эту границу.
 
 ### agent-runner
 
