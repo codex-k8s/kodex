@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"strings"
@@ -25,6 +26,7 @@ const (
 	defaultMCPRequestBodyBytes                      = 1024 * 1024
 	defaultMCPTransportSessions                     = 128
 	defaultMCPTransportSessionTimeout               = 15 * time.Minute
+	mcpJSONMediaType                                = "application/json"
 )
 
 type mcpHandlerOptions struct {
@@ -476,15 +478,19 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 		}
 		return nil, output, nil
 	})
+	crossOriginProtection := http.NewCrossOriginProtection()
 	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return server
-	}, &mcp.StreamableHTTPOptions{SessionTimeout: options.SessionTimeout})
+	}, &mcp.StreamableHTTPOptions{
+		CrossOriginProtection: crossOriginProtection,
+		SessionTimeout:        options.SessionTimeout,
+	})
 	handler := &mcpHTTPHandler{
 		sessionService:   sessionService,
 		server:           server,
 		streamable:       streamable,
 		maximumBodyBytes: maximumBodyBytes,
-		originProtection: &http.CrossOriginProtection{},
+		originProtection: crossOriginProtection,
 	}
 	handler.admission = newMCPTransportAdmission(options.MaximumTransportSessions, options.SessionTimeout, handler.closeSDKSession)
 	return handler
@@ -576,9 +582,17 @@ func (handler *mcpHTTPHandler) preflight(writer http.ResponseWriter, request *ht
 		http.Error(writer, err.Error(), http.StatusForbidden)
 		return false
 	}
-	if request.Method == http.MethodPost && request.Header.Get("Content-Type") != "application/json" {
-		http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
-		return false
+	if request.Method == http.MethodPost {
+		values := request.Header.Values("Content-Type")
+		if len(values) != 1 {
+			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
+			return false
+		}
+		mediaType, _, err := mime.ParseMediaType(values[0])
+		if err != nil || mediaType != mcpJSONMediaType || hasDuplicateMCPMediaParameter(values[0]) {
+			http.Error(writer, "Content-Type must be 'application/json'", http.StatusUnsupportedMediaType)
+			return false
+		}
 	}
 	return true
 }
@@ -669,6 +683,87 @@ func automationCallbackMCPOutput(output statusservice.AutomationCallbackResult) 
 		DeliveryStatus:      output.DeliveryStatus,
 		NextAction:          output.NextAction,
 	}
+}
+
+func hasDuplicateMCPMediaParameter(value string) bool {
+	type parameterRepresentation struct {
+		continuation      bool
+		continuationParts map[string]struct{}
+	}
+
+	seen := make(map[string]parameterRepresentation)
+	parameterStart := -1
+	inQuotes := false
+	escaped := false
+	for index := 0; index <= len(value); index++ {
+		if index < len(value) {
+			character := value[index]
+			if escaped {
+				escaped = false
+				continue
+			}
+			if inQuotes && character == '\\' {
+				escaped = true
+				continue
+			}
+			if character == '"' {
+				inQuotes = !inQuotes
+				continue
+			}
+			if character != ';' || inQuotes {
+				continue
+			}
+		}
+		if parameterStart >= 0 {
+			parameter := strings.TrimSpace(value[parameterStart:index])
+			if parameter != "" {
+				name, _, _ := strings.Cut(parameter, "=")
+				baseName, continuationPart, continuation := canonicalMCPMediaParameterName(name)
+				representation, exists := seen[baseName]
+				if exists && (!continuation || !representation.continuation) {
+					return true
+				}
+				if !exists {
+					representation = parameterRepresentation{continuation: continuation}
+					if continuation {
+						representation.continuationParts = make(map[string]struct{})
+					}
+				}
+				if continuation {
+					if _, duplicate := representation.continuationParts[continuationPart]; duplicate {
+						return true
+					}
+					representation.continuationParts[continuationPart] = struct{}{}
+				}
+				seen[baseName] = representation
+			}
+		}
+		parameterStart = index + 1
+	}
+	return false
+}
+
+func canonicalMCPMediaParameterName(name string) (string, string, bool) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	baseName, suffix, extended := strings.Cut(name, "*")
+	if !extended {
+		return name, "", false
+	}
+
+	continuationPart := strings.TrimSuffix(suffix, "*")
+	if continuationPart == "" {
+		return baseName, "", false
+	}
+	for index := range len(continuationPart) {
+		if continuationPart[index] < '0' || continuationPart[index] > '9' {
+			return baseName, "", false
+		}
+	}
+	continuationPart = strings.TrimLeft(continuationPart, "0")
+	if continuationPart == "" {
+		continuationPart = "0"
+	}
+	return baseName, continuationPart, true
 }
 
 func readBoundedMCPRequestBody(w http.ResponseWriter, r *http.Request, maximumBodyBytes int64) error {
