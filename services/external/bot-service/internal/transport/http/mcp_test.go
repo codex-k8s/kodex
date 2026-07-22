@@ -3,11 +3,11 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -34,10 +34,13 @@ func TestEmptyMCPCollectionOutputsUseArrays(t *testing.T) {
 }
 
 func TestMCPAutomationCallbackContractIsDiscoverable(t *testing.T) {
-	server := httptest.NewServer(newMCPHandler(statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{}), defaultMCPRequestBodyBytes))
+	server := httptest.NewServer(newMCPHandler(newSessionBarrierServiceOnly(), defaultMCPRequestBodyBytes))
 	defer server.Close()
 	client := mcp.NewClient(&mcp.Implementation{Name: "automation-contract-test", Version: "1"}, nil)
-	session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: server.URL + "/mcp/sessions/contract-test"}, nil)
+	session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
+		Endpoint:   server.URL + "/mcp/sessions/session-admin",
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: "session-token"}},
+	}, nil)
 	if err != nil {
 		t.Fatalf("MCP connect: %v", err)
 	}
