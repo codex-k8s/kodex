@@ -38,6 +38,8 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 	var postCalls atomic.Int64
 	var createdMu sync.Mutex
 	var created *mattermostmodel.Post
+	requestCtx, cancelRequest := context.WithCancel(context.Background())
+	defer cancelRequest()
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -66,6 +68,7 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 			createdMu.Lock()
 			created = post.Clone()
 			createdMu.Unlock()
+			cancelRequest()
 			writer.WriteHeader(http.StatusInternalServerError)
 			_, _ = writer.Write([]byte(`{"id":"synthetic","message":"response lost after accept","status_code":500}`))
 		default:
@@ -89,11 +92,14 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 		AgentSummary: "Нужно решение", ExactPayload: []byte(`{"outcome":"requires_human","summary":"Нужно решение"}`),
 	}
 
-	first, err := newService().CompleteCallback(context.Background(), command)
+	first, err := newService().CompleteCallback(requestCtx, command)
 	if err != nil || first.DeliveryStatus != "pending" || first.NextAction != "retry_same_callback" {
 		t.Fatalf("первая неоднозначная доставка=%#v error=%v", first, err)
 	}
-	if postCalls.Load() != 1 || getCalls.Load() != 2 {
+	if !errors.Is(requestCtx.Err(), context.Canceled) {
+		t.Fatalf("request context не отменён после принятого POST: %v", requestCtx.Err())
+	}
+	if postCalls.Load() != 1 || getCalls.Load() != 1 {
 		t.Fatalf("первый transport contour: GET=%d POST=%d", getCalls.Load(), postCalls.Load())
 	}
 	retained := repository.snapshot()
@@ -127,7 +133,7 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 			t.Fatalf("конкурентный retry=%#v", result)
 		}
 	}
-	if postCalls.Load() != 1 || getCalls.Load() != 2 {
+	if postCalls.Load() != 1 || getCalls.Load() != 1 {
 		t.Fatalf("конкурентный retry пересёк внешний transport: GET=%d POST=%d", getCalls.Load(), postCalls.Load())
 	}
 
@@ -138,7 +144,7 @@ func TestAutomationDeliveryRetainsLeaseUntilLateMattermostPostIsConfirmed(t *tes
 		t.Fatalf("позднее подтверждение: delivered=%d error=%v", delivered, err)
 	}
 	confirmed := repository.snapshot()
-	if confirmed.MattermostPostID != "late-attention-post" || confirmed.ConfirmationPending || confirmed.ClaimToken != "" || postCalls.Load() != 1 || getCalls.Load() != 3 {
+	if confirmed.MattermostPostID != "late-attention-post" || confirmed.ConfirmationPending || confirmed.ClaimToken != "" || postCalls.Load() != 1 || getCalls.Load() != 2 {
 		t.Fatalf("итог позднего подтверждения: delivery=%#v GET=%d POST=%d", confirmed, getCalls.Load(), postCalls.Load())
 	}
 }
@@ -221,7 +227,10 @@ func (repository *lateVisibilityAutomationRepository) DeferOwnerAttentionDeliver
 	return nil
 }
 
-func (repository *lateVisibilityAutomationRepository) RetainOwnerAttentionDelivery(_ context.Context, input automationsrepo.RetainOwnerAttentionDeliveryInput) error {
+func (repository *lateVisibilityAutomationRepository) RetainOwnerAttentionDelivery(ctx context.Context, input automationsrepo.RetainOwnerAttentionDeliveryInput) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
 	if repository.delivery.ClaimToken != input.ClaimToken || repository.delivery.Fence != input.Fence || !input.LeaseUntil.After(input.Now) {

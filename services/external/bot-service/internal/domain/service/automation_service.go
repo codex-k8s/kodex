@@ -33,6 +33,7 @@ const (
 	automationSessionScope            = "automation-run"
 	automationDeliveryLease           = 30 * time.Second
 	automationDeliveryAttemptTimeout  = 10 * time.Second
+	automationDeliveryRetainTimeout   = 2 * time.Second
 	automationDeliveryRetryDelay      = 5 * time.Second
 	maxAutomationDeliveryConcurrency  = 16
 )
@@ -661,7 +662,9 @@ func (svc *AutomationService) deferOwnerAttentionDelivery(ctx context.Context, d
 
 func (svc *AutomationService) retainOwnerAttentionDelivery(ctx context.Context, delivery entity.AutomationOwnerAttentionDelivery, cause error) error {
 	now := svc.cfg.Now().UTC()
-	retainErr := svc.cfg.Repository.RetainOwnerAttentionDelivery(ctx, automationsrepo.RetainOwnerAttentionDeliveryInput{
+	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), automationDeliveryRetainTimeout)
+	defer cancel()
+	retainErr := svc.cfg.Repository.RetainOwnerAttentionDelivery(retainCtx, automationsrepo.RetainOwnerAttentionDeliveryInput{
 		AttentionID:    delivery.AttentionID,
 		ScheduledRunID: delivery.ScheduledRunID,
 		DeliveryID:     delivery.DeliveryID,
