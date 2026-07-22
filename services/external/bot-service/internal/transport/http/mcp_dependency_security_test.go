@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -54,8 +55,12 @@ func TestMCPDependencyAcceptsCanonicalParameterizedAndSameOriginRequests(t *test
 				request.Host = test.host
 			}
 			recorder := httptest.NewRecorder()
+			handler := newMCPHandlerWithOptions(service, defaultMCPRequestBodyBytes, mcpHandlerOptions{
+				MaximumTransportSessions: 2,
+				SessionTimeout:           time.Second,
+			})
 
-			newMCPHandler(service, defaultMCPRequestBodyBytes).ServeHTTP(recorder, request)
+			handler.ServeHTTP(recorder, request)
 
 			if recorder.Code != http.StatusOK || recorder.Header().Get("Mcp-Session-Id") == "" || !strings.Contains(recorder.Body.String(), `"serverInfo"`) {
 				t.Fatalf("request was not initialized: status=%d headers=%v body=%s", recorder.Code, recorder.Header(), recorder.Body.String())
@@ -133,8 +138,12 @@ func TestMCPDependencyRejectsUnsafeHTTPRequestsBeforeSessionEffects(t *testing.T
 				request.Host = test.host
 			}
 			recorder := httptest.NewRecorder()
+			handler := newMCPHandlerWithOptions(service, defaultMCPRequestBodyBytes, mcpHandlerOptions{
+				MaximumTransportSessions: 2,
+				SessionTimeout:           time.Second,
+			})
 
-			newMCPHandler(service, defaultMCPRequestBodyBytes).ServeHTTP(recorder, request)
+			handler.ServeHTTP(recorder, request)
 
 			if recorder.Code != test.wantStatus {
 				t.Fatalf("status=%d, want=%d body=%s", recorder.Code, test.wantStatus, recorder.Body.String())
@@ -147,6 +156,9 @@ func TestMCPDependencyRejectsUnsafeHTTPRequestsBeforeSessionEffects(t *testing.T
 			}
 			if store.sessionReads != 0 || store.guardCalls != 0 || runner.secretReads != 0 || publisher.posts != 0 {
 				t.Fatalf("unsafe request effects: reads=%d guards=%d token_reads=%d posts=%d", store.sessionReads, store.guardCalls, runner.secretReads, publisher.posts)
+			}
+			if handler.transportAdmissionStateCount() != 0 || handler.sdkTransportSessionCount() != 0 {
+				t.Fatalf("unsafe request state: admission=%d sdk=%d", handler.transportAdmissionStateCount(), handler.sdkTransportSessionCount())
 			}
 		})
 	}
@@ -170,6 +182,7 @@ func TestMCPGoStreamableClientTransportUsesCanonicalContentType(t *testing.T) {
 	session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
 		Endpoint:             server.URL + "/mcp/sessions/session-admin",
 		DisableStandaloneSSE: true,
+		HTTPClient:           &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: "session-token"}},
 	}, nil)
 	if err != nil {
 		t.Fatalf("MCP connect: %v", err)
