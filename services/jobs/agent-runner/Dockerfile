@@ -12,7 +12,9 @@ COPY services/jobs/agent-runner ./services/jobs/agent-runner
 RUN test "$(go env GOVERSION)" = "go1.26.5"
 RUN CGO_ENABLED=0 go build -trimpath -o /out/matter-codex-agent-runner ./services/jobs/agent-runner/cmd/agent-runner
 
-FROM golang:1.26.5-alpine AS go-tools
+FROM golang:1.26.5-alpine AS go-toolchain-source
+
+FROM go-toolchain-source AS go-tools
 
 ENV GOTOOLCHAIN=local
 
@@ -79,17 +81,14 @@ ARG WAIT_ON_VERSION=9.0.10
 ARG MATTERCODEX_AGENT_RUNNER_UID=10001
 ARG MATTERCODEX_AGENT_RUNNER_GID=10001
 
-COPY --from=go-tools /usr/local/go /usr/local/go
 COPY --from=go-tools /tool-bin/ /usr/local/bin/
-
-RUN test "$(/usr/local/go/bin/go env GOVERSION)" = "go1.26.5" && test "$(/usr/local/go/bin/go env GOTOOLCHAIN)" = "local"
-
 COPY --from=builder /out/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner
 
 ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin \
 	PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-RUN set -eu; \
+RUN --mount=from=go-toolchain-source,source=/usr/local/go,target=/usr/local/go,readonly \
+	set -eu; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends \
 		bash \
@@ -225,6 +224,9 @@ ENV HOME=/home/matter-codex \
 	NPM_CONFIG_CACHE=/home/matter-codex/.npm \
 	XDG_CONFIG_HOME=/home/matter-codex/.config \
 	XDG_CACHE_HOME=/home/matter-codex/.cache
+
+COPY --from=go-toolchain-source /usr/local/go /usr/local/go
+RUN test "$(/usr/local/go/bin/go env GOVERSION)" = "go1.26.5" && test "$(/usr/local/go/bin/go env GOTOOLCHAIN)" = "local"
 
 USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}
 

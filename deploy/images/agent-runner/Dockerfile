@@ -1,4 +1,6 @@
-FROM golang:1.26.5-alpine AS go-tools
+FROM golang:1.26.5-alpine AS go-toolchain-source
+
+FROM go-toolchain-source AS go-tools
 
 ENV GOTOOLCHAIN=local
 
@@ -60,14 +62,12 @@ ARG WSCAT_VERSION=6.1.0
 ARG MATTERCODEX_AGENT_RUNNER_UID=10001
 ARG MATTERCODEX_AGENT_RUNNER_GID=10001
 
-COPY --from=go-tools /usr/local/go /usr/local/go
 COPY --from=go-tools /tool-bin/ /usr/local/bin/
-
-RUN test "$(/usr/local/go/bin/go env GOVERSION)" = "go1.26.5" && test "$(/usr/local/go/bin/go env GOTOOLCHAIN)" = "local"
 
 ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 
-RUN apk add --no-cache \
+RUN --mount=from=go-toolchain-source,source=/usr/local/go,target=/usr/local/go,readonly \
+  apk add --no-cache \
     bash \
     build-base \
     bind-tools \
@@ -178,6 +178,9 @@ ENV HOME=/home/matter-codex \
   XDG_CACHE_HOME=/home/matter-codex/.cache
 
 WORKDIR /workspace
+
+COPY --from=go-toolchain-source /usr/local/go /usr/local/go
+RUN test "$(/usr/local/go/bin/go env GOVERSION)" = "go1.26.5" && test "$(/usr/local/go/bin/go env GOTOOLCHAIN)" = "local"
 
 USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}
 
