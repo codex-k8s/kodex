@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"slices"
 	"strconv"
@@ -121,6 +122,87 @@ func TestKubernetesPostgresJobHasKillSafeLifetimeWithoutPrivilegeExpansion(t *te
 	if len(pod.Containers[0].SecurityContext.Capabilities.Drop) != 1 || pod.Containers[0].SecurityContext.Capabilities.Drop[0] != "ALL" {
 		t.Fatal("disposable PostgreSQL Pod не удаляет Linux capabilities")
 	}
+	readiness := pod.Containers[0].ReadinessProbe
+	expectedReadinessCommand := []string{"pg_isready", "--host", "127.0.0.1", "--port", "5432", "--username", "mattercodex_test_owner", "--dbname", "postgres"}
+	if readiness == nil || readiness.Exec == nil || !slices.Equal(readiness.Exec.Command, expectedReadinessCommand) || readiness.PeriodSeconds != 1 || readiness.TimeoutSeconds != 1 {
+		t.Fatalf("PostgreSQL readiness probe = %#v", readiness)
+	}
+}
+
+func TestKubernetesPortForwardArgumentsUseCanonicalLoopbackForm(t *testing.T) {
+	arguments := kubernetesPortForwardArguments("disposable-tests", "mc-postgres-test-abc", 25432)
+	expected := []string{
+		"--namespace", "disposable-tests",
+		"port-forward",
+		"--address", "127.0.0.1",
+		"service/mc-postgres-test-abc",
+		"25432:5432",
+	}
+	if !slices.Equal(arguments, expected) {
+		t.Fatalf("kubectl port-forward argv = %#v, ожидалось %#v", arguments, expected)
+	}
+}
+
+func TestKubernetesPostgresReadinessRetriesEarlyConnectionAndRestartsDeadTunnel(t *testing.T) {
+	t.Run("ранняя неготовность сохраняет живой tunnel", func(t *testing.T) {
+		process := newFakePostgresPortForward()
+		starts := 0
+		probes := 0
+		ready, err := waitKubernetesPostgresReady(context.Background(), func() (postgresPortForward, error) {
+			starts++
+			return process, nil
+		}, func(context.Context) error {
+			probes++
+			if probes == 1 {
+				return errors.New("synthetic backend connection refused")
+			}
+			return nil
+		}, func(context.Context) error { return nil })
+		if err != nil || ready != process || starts != 1 || probes != 2 || process.stopCalls != 0 {
+			t.Fatalf("readiness retry: ready=%T starts=%d probes=%d stops=%d error=%v", ready, starts, probes, process.stopCalls, err)
+		}
+	})
+
+	t.Run("первое подключение завершает tunnel", func(t *testing.T) {
+		first := newFakePostgresPortForward()
+		second := newFakePostgresPortForward()
+		starts := 0
+		probes := 0
+		ready, err := waitKubernetesPostgresReady(context.Background(), func() (postgresPortForward, error) {
+			starts++
+			if starts == 1 {
+				return first, nil
+			}
+			return second, nil
+		}, func(context.Context) error {
+			probes++
+			if probes == 1 {
+				close(first.done)
+				return errors.New("synthetic backend connection refused")
+			}
+			return nil
+		}, func(context.Context) error { return nil })
+		if err != nil || ready != second || starts != 2 || probes != 2 || first.stopCalls != 1 || second.stopCalls != 0 {
+			t.Fatalf("tunnel restart: ready=%T starts=%d probes=%d first_stops=%d second_stops=%d error=%v", ready, starts, probes, first.stopCalls, second.stopCalls, err)
+		}
+	})
+}
+
+type fakePostgresPortForward struct {
+	done      chan struct{}
+	stopCalls int
+}
+
+func newFakePostgresPortForward() *fakePostgresPortForward {
+	return &fakePostgresPortForward{done: make(chan struct{})}
+}
+
+func (process *fakePostgresPortForward) Done() <-chan struct{} {
+	return process.done
+}
+
+func (process *fakePostgresPortForward) Stop() {
+	process.stopCalls++
 }
 
 func TestKubernetesPostgresServiceIsClusterInternalAndSelectsExactRun(t *testing.T) {

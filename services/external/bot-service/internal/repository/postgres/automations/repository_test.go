@@ -509,18 +509,22 @@ func TestAutomationCallbackConcurrentRuntimeFences(t *testing.T) {
 }
 
 func createRuntimeBinding(t *testing.T, ctx context.Context, pool *pgxpool.Pool, projectID int64, roleID int64, chatID int64, sessionKey string, runID string, expiresAt time.Time) (int64, int64) {
+	return createRuntimeBindingInChannel(t, ctx, pool, projectID, roleID, chatID, sessionKey, runID, "automation-channel", sessionKey, expiresAt)
+}
+
+func createRuntimeBindingInChannel(t *testing.T, ctx context.Context, pool *pgxpool.Pool, projectID int64, roleID int64, chatID int64, sessionKey string, runID string, channelID string, rootPostID string, expiresAt time.Time) (int64, int64) {
 	t.Helper()
 	var sessionID int64
 	if err := pool.QueryRow(ctx, `insert into matter_codex_agent_sessions(
 		session_key, project_id, chat_id, role_id, session_scope, mattermost_channel_id, mattermost_root_post_id,
 		status, ttl_seconds, expires_at
-	) values ($1, $2, $3, $4, 'automation-run', 'automation-channel', $1, 'running', 3600, $5) returning id`, sessionKey, projectID, chatID, roleID, expiresAt).Scan(&sessionID); err != nil {
+	) values ($1, $2, $3, $4, 'automation-run', $5, $6, 'running', 3600, $7) returning id`, sessionKey, projectID, chatID, roleID, channelID, rootPostID, expiresAt).Scan(&sessionID); err != nil {
 		t.Fatalf("создать runtime session: %v", err)
 	}
 	var turnID int64
 	if err := pool.QueryRow(ctx, `insert into matter_codex_agent_session_turns(
 		session_id, run_id, mattermost_channel_id, mattermost_root_post_id, mattermost_post_id, message, status
-	) values ($1, $2, 'automation-channel', $3, $3, 'saved playbook', 'running') returning id`, sessionID, runID, sessionKey).Scan(&turnID); err != nil {
+	) values ($1, $2, $3, $4, $4, 'saved playbook', 'running') returning id`, sessionID, runID, channelID, rootPostID).Scan(&turnID); err != nil {
 		t.Fatalf("создать runtime turn: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `update matter_codex_agent_sessions set active_turn_id = $2, active_run_id = $3 where id = $1`, sessionID, turnID, runID); err != nil {

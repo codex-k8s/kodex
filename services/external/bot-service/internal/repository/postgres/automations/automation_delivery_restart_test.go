@@ -263,13 +263,25 @@ func prepareRestartDeliveryGate(t *testing.T, ctx context.Context, pool *pgxpool
 	if err != nil || !created {
 		t.Fatalf("создать запуск: created=%t error=%v", created, err)
 	}
-	sessionID, turnID := createRuntimeBinding(t, ctx, pool, projectID, roleID, chatID, "restart-root", "runtime-restart-delivery", now.Add(time.Hour))
 	if _, err := repository.RecordRunThread(ctx, automationsrepo.RecordRunThreadInput{
 		RunPublicID: run.PublicID, ProjectID: projectID, OwnerMattermostUserID: "schedule-owner-id",
 		MattermostChannelID: "restart-channel", MattermostRootPostID: "restart-root", Now: now,
 	}); err != nil {
 		t.Fatal(err)
 	}
+	wrongSessionID, wrongTurnID := createRuntimeBindingInChannel(t, ctx, pool, projectID, roleID, chatID, "restart-wrong-scope", "runtime-restart-delivery", "wrong-restart-channel", "restart-root", now.Add(time.Hour))
+	if _, err := repository.BindRun(ctx, automationsrepo.BindRunInput{
+		RunPublicID: run.PublicID, ProjectID: projectID, OwnerMattermostUserID: "schedule-owner-id",
+		RuntimeSessionID: wrongSessionID, RuntimeSessionKey: "restart-wrong-scope", RuntimeTurnID: wrongTurnID, RuntimeRunID: "runtime-restart-delivery",
+		MattermostChannelID: "restart-channel", MattermostRootPostID: "restart-root", Now: now,
+	}); !errors.Is(err, automationsrepo.ErrForbidden) {
+		t.Fatalf("несовпадающий runtime channel scope принят: %v", err)
+	}
+	unbound, err := repository.GetRun(ctx, run.PublicID, projectID, "schedule-owner-id")
+	if err != nil || unbound.RuntimeSessionID != 0 || unbound.RuntimeTurnID != 0 {
+		t.Fatalf("отклонённый runtime scope частично привязал запуск: run=%#v error=%v", unbound, err)
+	}
+	sessionID, turnID := createRuntimeBindingInChannel(t, ctx, pool, projectID, roleID, chatID, "restart-root", "runtime-restart-delivery", "restart-channel", "restart-root", now.Add(time.Hour))
 	if _, err := repository.BindRun(ctx, automationsrepo.BindRunInput{
 		RunPublicID: run.PublicID, ProjectID: projectID, OwnerMattermostUserID: "schedule-owner-id",
 		RuntimeSessionID: sessionID, RuntimeSessionKey: "restart-root", RuntimeTurnID: turnID, RuntimeRunID: "runtime-restart-delivery",
