@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -662,6 +663,196 @@ func TestReturnToRequesterHungPublicationsRemainPendingUntilCorrectedRetry(t *te
 	}
 }
 
+func TestReturnToRequesterSlowPostgresPreflightDoesNotConsumePublicationDeadline(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 2)
+	fixture.service.cfg.CallbackPublishDeadline = 100 * time.Millisecond
+	fixture.publisher.blockUntilContext.Store(true)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	baseStore := fixture.service.cfg.Store.(*postgresrepo.Repository)
+	hooked := &exactGuardHookStore{Repository: baseStore, beforeFrom: 2}
+	hooked.before = func() {
+		if _, err := fixture.pool.Exec(ctx, `select pg_sleep(0.2)`); err != nil {
+			t.Fatalf("задержка PostgreSQL preflight: %v", err)
+		}
+	}
+	fixture.service.cfg.Store = hooked
+
+	result, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Синтетические публикации после медленного preflight.")
+	if err == nil || strings.TrimSpace(result.CallbackRunID) == "" {
+		t.Fatalf("hung outcome после медленного preflight не остался явным: result=%#v error=%v", result, err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 0, 2)
+	if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("медленный PostgreSQL preflight израсходовал publication budget: attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+
+	fixture.publisher.blockUntilContext.Store(false)
+	restarted := NewAgentSessionService(fixture.service.cfg)
+	if _, err := restarted.ReturnToRequester(ctx, "target-session", "target-token", "Исправленный повтор после медленного preflight."); err != nil {
+		t.Fatalf("исправленный повтор после медленного preflight: %v", err)
+	}
+	assertCallbackDeliveryCounts(t, ctx, fixture, 2, 0)
+	if fixture.publisher.attempts.Load() != 4 || fixture.publisher.posts.Load() != 2 || len(fixture.publisher.deliveries) != 2 {
+		t.Fatalf("исправленный повтор attempts=%d posts=%d external_ids=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load(), len(fixture.publisher.deliveries))
+	}
+}
+
+func TestReturnToRequesterExpiredPreflightLeaseIsReclaimedBeforeSinglePostPerDelivery(t *testing.T) {
+	fixture := newPostgresDelegationFixture(t, 4)
+	fixture.service.cfg.CallbackPublishDeadline = 100 * time.Millisecond
+	fixture.service.callbackPreflightDeadline = 2 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+
+	baseStore := fixture.service.cfg.Store.(*postgresrepo.Repository)
+	baseRunner := fixture.service.cfg.RuntimeRunner
+	firstPreflightEntered := make(chan struct{})
+	releaseFirstPreflight := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseFirst := func() {
+		releaseOnce.Do(func() { close(releaseFirstPreflight) })
+	}
+	defer releaseFirst()
+	blockingRunner := &callbackPreflightBlockingRunner{
+		Runner: baseRunner, entered: firstPreflightEntered, release: releaseFirstPreflight,
+	}
+	hooked := &exactGuardHookStore{Repository: baseStore, beforeAt: 2}
+	hooked.before = func() {
+		blockingRunner.armed.Store(true)
+	}
+	fixture.service.cfg.Store = hooked
+	fixture.service.cfg.RuntimeRunner = blockingRunner
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Первый callback с заблокированным final preflight.")
+		firstDone <- err
+	}()
+	select {
+	case <-firstPreflightEntered:
+	case <-ctx.Done():
+		t.Fatal("первый callback не удержал final guard до transport")
+	}
+
+	var deliveryID int64
+	var originalLeaseOwner string
+	var claimedAt, originalLeaseExpiresAt time.Time
+	if err := fixture.pool.QueryRow(ctx, `
+select id, lease_owner, last_attempt_at, lease_expires_at
+from matter_codex_agent_delegation_callback_deliveries
+where status = 'in_flight'
+order by id
+limit 1
+`).Scan(&deliveryID, &originalLeaseOwner, &claimedAt, &originalLeaseExpiresAt); err != nil {
+		t.Fatalf("прочитать исходную lease: %v", err)
+	}
+	wantLease := callbackDeliveryAttemptBudget(fixture.service.callbackPreflightDeadline, fixture.service.cfg.CallbackPublishDeadline)
+	if got := originalLeaseExpiresAt.Sub(claimedAt); got < wantLease-time.Millisecond || got > wantLease+time.Millisecond {
+		t.Fatalf("исходная lease=%s, ожидается общий attempt budget %s", got, wantLease)
+	}
+	tag, err := fixture.pool.Exec(ctx, `
+update matter_codex_agent_delegation_callback_deliveries
+set lease_expires_at = now() - interval '1 second'
+where id = $1 and status = 'in_flight' and lease_owner = $2
+`, deliveryID, originalLeaseOwner)
+	if err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("синтетически завершить исходную lease: rows=%d error=%v", tag.RowsAffected(), err)
+	}
+
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := fixture.service.ReturnToRequester(ctx, "target-session", "target-token", "Конкурентный reclaim до первого POST.")
+		secondDone <- err
+	}()
+	for {
+		var leaseOwner string
+		var attemptCount int
+		var activeLease bool
+		var retryClaimedAt, retryLeaseExpiresAt time.Time
+		if err := fixture.pool.QueryRow(ctx, `
+select lease_owner, attempt_count, lease_expires_at > now(), last_attempt_at, lease_expires_at
+from matter_codex_agent_delegation_callback_deliveries
+where id = $1 and status = 'in_flight'
+`, deliveryID).Scan(&leaseOwner, &attemptCount, &activeLease, &retryClaimedAt, &retryLeaseExpiresAt); err != nil {
+			t.Fatalf("проверить durable reclaim: %v", err)
+		}
+		if leaseOwner != originalLeaseOwner && attemptCount == 2 && activeLease {
+			if got := retryLeaseExpiresAt.Sub(retryClaimedAt); got < wantLease-time.Millisecond || got > wantLease+time.Millisecond {
+				t.Fatalf("reclaim lease=%s, ожидается общий attempt budget %s", got, wantLease)
+			}
+			break
+		}
+		timer := time.NewTimer(10 * time.Millisecond)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			t.Fatal("конкурентный caller не подтвердил durable reclaim")
+		}
+	}
+	if fixture.publisher.attempts.Load() != 0 || fixture.publisher.posts.Load() != 0 {
+		t.Fatalf("transport достигнут до освобождения stale final guard: attempts=%d posts=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load())
+	}
+
+	releaseFirst()
+	select {
+	case err := <-firstDone:
+		if !errors.Is(err, errCallbackDeliveryLeaseOwnershipLost) {
+			t.Fatalf("stale caller не завершился fail-closed: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("stale caller не завершился ограниченно после durable reclaim")
+	}
+	select {
+	case err := <-secondDone:
+		if err != nil {
+			t.Fatalf("конкурентный retry после освобождения locks: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("конкурентный retry встретил deadlock после освобождения locks")
+	}
+
+	var delivered, pending, inFlight, attempts, distinctExternalIDs, postBindings int
+	if err := fixture.pool.QueryRow(ctx, `
+select
+	count(*) filter (where status = 'delivered'),
+	count(*) filter (where status = 'pending'),
+	count(*) filter (where status = 'in_flight'),
+	coalesce(sum(attempt_count), 0),
+	count(distinct external_id),
+	count(*) filter (where mattermost_post_id <> '')
+from matter_codex_agent_delegation_callback_deliveries
+`).Scan(&delivered, &pending, &inFlight, &attempts, &distinctExternalIDs, &postBindings); err != nil {
+		t.Fatalf("прочитать итог reclaim: %v", err)
+	}
+	if delivered != 2 || pending != 0 || inFlight != 0 || attempts != 3 || distinctExternalIDs != 2 || postBindings != 2 {
+		t.Fatalf("итог reclaim delivered=%d pending=%d in_flight=%d attempts=%d external_ids=%d bindings=%d", delivered, pending, inFlight, attempts, distinctExternalIDs, postBindings)
+	}
+	if fixture.publisher.concurrentDuplicate.Load() {
+		t.Fatal("reclaim допустил параллельный физический POST одного external ID")
+	}
+
+	restartedConfig := fixture.service.cfg
+	restartedConfig.Store = baseStore
+	restartedConfig.RuntimeRunner = baseRunner
+	restarted := NewAgentSessionService(restartedConfig)
+	if _, err := restarted.ReturnToRequester(ctx, "target-session", "target-token", "Повтор после перезапуска."); err != nil {
+		t.Fatalf("повтор после перезапуска: %v", err)
+	}
+	if fixture.publisher.attempts.Load() != 2 || fixture.publisher.posts.Load() != 2 || len(fixture.publisher.deliveries) != 2 {
+		t.Fatalf("перезапуск изменил физические доставки attempts=%d posts=%d external_ids=%d", fixture.publisher.attempts.Load(), fixture.publisher.posts.Load(), len(fixture.publisher.deliveries))
+	}
+	var attemptsAfterRestart int
+	if err := fixture.pool.QueryRow(ctx, `
+select coalesce(sum(attempt_count), 0)
+from matter_codex_agent_delegation_callback_deliveries
+`).Scan(&attemptsAfterRestart); err != nil || attemptsAfterRestart != attempts {
+		t.Fatalf("перезапуск изменил durable attempts=%d, до перезапуска=%d error=%v", attemptsAfterRestart, attempts, err)
+	}
+}
+
 func TestReturnToRequesterHungPublishHasScopedBoundedFence(t *testing.T) {
 	fixture := newPostgresDelegationFixture(t, 4)
 	fixture.service.cfg.CallbackPublishDeadline = 350 * time.Millisecond
@@ -830,6 +1021,41 @@ type postgresDelegationRunner struct {
 	integrityReads atomic.Int64
 }
 
+type callbackPreflightBlockingRunner struct {
+	runtimerepo.Runner
+	armed   atomic.Bool
+	blocked atomic.Bool
+	entered chan struct{}
+	release <-chan struct{}
+}
+
+func (runner *callbackPreflightBlockingRunner) block(ctx context.Context) error {
+	if !runner.armed.Load() || !runner.blocked.CompareAndSwap(false, true) {
+		return nil
+	}
+	close(runner.entered)
+	select {
+	case <-runner.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (runner *callbackPreflightBlockingRunner) GetMattermostBotTokenSecret(ctx context.Context, secretName string) (runtimerepo.MattermostBotTokenSecret, error) {
+	if err := runner.block(ctx); err != nil {
+		return runtimerepo.MattermostBotTokenSecret{}, err
+	}
+	return runner.Runner.GetMattermostBotTokenSecret(ctx, secretName)
+}
+
+func (runner *callbackPreflightBlockingRunner) InspectSecretIntegrity(ctx context.Context, input runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
+	if err := runner.block(ctx); err != nil {
+		return runtimerepo.SecretIntegrity{}, err
+	}
+	return runner.Runner.InspectSecretIntegrity(ctx, input)
+}
+
 func (runner *postgresDelegationRunner) GetMattermostBotTokenSecret(_ context.Context, secretName string) (runtimerepo.MattermostBotTokenSecret, error) {
 	runner.tokenReads.Add(1)
 	token := ""
@@ -964,9 +1190,10 @@ func (publisher *postgresDelegationPublisher) ReconcileOrPostThreadMessage(ctx c
 
 type exactGuardHookStore struct {
 	*postgresrepo.Repository
-	beforeAt int64
-	calls    atomic.Int64
-	before   func()
+	beforeAt   int64
+	beforeFrom int64
+	calls      atomic.Int64
+	before     func()
 }
 
 type failOnceDeliveryStore struct {
@@ -982,8 +1209,20 @@ func (store *failOnceDeliveryStore) DeliverAgentDelegationCallbackDelivery(ctx c
 }
 
 func (store *exactGuardHookStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
-	if store.calls.Add(1) == store.beforeAt && store.before != nil {
+	return store.withExactAgentSessionsGuard(ctx, expected, false, sideEffect)
+}
+
+func (store *exactGuardHookStore) WithExactAgentSessionsPublishGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.withExactAgentSessionsGuard(ctx, expected, true, sideEffect)
+}
+
+func (store *exactGuardHookStore) withExactAgentSessionsGuard(ctx context.Context, expected []entity.AgentSession, publish bool, sideEffect func(adminrepo.Repository) error) error {
+	call := store.calls.Add(1)
+	if (call == store.beforeAt || store.beforeFrom > 0 && call >= store.beforeFrom) && store.before != nil {
 		store.before()
+	}
+	if publish {
+		return store.Repository.WithExactAgentSessionsPublishGuard(ctx, expected, sideEffect)
 	}
 	return store.Repository.WithExactAgentSessionsRuntimeGuard(ctx, expected, sideEffect)
 }

@@ -37,6 +37,10 @@ func (store *fakeAdminStore) WithExactAgentSessionsRuntimeGuard(_ context.Contex
 	return sideEffect(store)
 }
 
+func (store *fakeAdminStore) WithExactAgentSessionsPublishGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.WithExactAgentSessionsRuntimeGuard(ctx, expected, sideEffect)
+}
+
 func (store *fakeAdminStore) LockExactAgentSessionsPublishFence(_ context.Context, expected []entity.AgentSession) error {
 	if len(expected) == 0 {
 		return adminrepo.ErrClusterAdminAdmissionDenied
@@ -177,6 +181,19 @@ func (store *fakeAdminStore) ClaimAgentDelegationCallbackDelivery(_ context.Cont
 	return entity.AgentDelegationCallbackDelivery{}, adminrepo.ErrNotFound
 }
 
+func (store *fakeAdminStore) RenewAgentDelegationCallbackDeliveryLease(_ context.Context, input adminrepo.RenewAgentDelegationCallbackDeliveryLeaseInput) (entity.AgentDelegationCallbackDelivery, error) {
+	store.deliveryMu.Lock()
+	defer store.deliveryMu.Unlock()
+	item, ok := store.callbackDeliveries[input.ID]
+	if !ok || item.Status != callbackDeliveryStatusInFlight || item.LeaseOwner != input.LeaseOwner || !item.LeaseExpiresAt.After(input.Now) || !input.LeaseUntil.After(input.Now) {
+		return entity.AgentDelegationCallbackDelivery{}, adminrepo.ErrNotFound
+	}
+	item.LeaseExpiresAt = input.LeaseUntil
+	item.UpdatedAt = input.Now
+	store.callbackDeliveries[item.ID] = item
+	return item, nil
+}
+
 func (store *fakeAdminStore) ReleaseAgentDelegationCallbackDelivery(_ context.Context, input adminrepo.ReleaseAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error) {
 	store.deliveryMu.Lock()
 	defer store.deliveryMu.Unlock()
@@ -210,6 +227,58 @@ func (store *fakeAdminStore) DeliverAgentDelegationCallbackDelivery(_ context.Co
 	return item, nil
 }
 
+type delayedExactGuardFakeStore struct {
+	*fakeAdminStore
+	calls     int
+	beforeAt  int
+	before    func()
+	delayFrom int
+	delay     time.Duration
+}
+
+func (store *delayedExactGuardFakeStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.withExactAgentSessionsGuard(ctx, expected, false, sideEffect)
+}
+
+func (store *delayedExactGuardFakeStore) WithExactAgentSessionsPublishGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return store.withExactAgentSessionsGuard(ctx, expected, true, sideEffect)
+}
+
+func (store *delayedExactGuardFakeStore) withExactAgentSessionsGuard(ctx context.Context, expected []entity.AgentSession, publish bool, sideEffect func(adminrepo.Repository) error) error {
+	store.calls++
+	if store.calls == store.beforeAt && store.before != nil {
+		store.before()
+	}
+	if store.delay > 0 && store.calls >= store.delayFrom {
+		timer := time.NewTimer(store.delay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if publish {
+		return store.fakeAdminStore.WithExactAgentSessionsPublishGuard(ctx, expected, sideEffect)
+	}
+	return store.fakeAdminStore.WithExactAgentSessionsRuntimeGuard(ctx, expected, sideEffect)
+}
+
+type deadlineProbeThreadPublisher struct {
+	*fakeThreadPublisher
+	attempts          int
+	blockUntilContext bool
+}
+
+func (publisher *deadlineProbeThreadPublisher) ReconcileOrPostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	publisher.attempts++
+	if publisher.blockUntilContext {
+		<-ctx.Done()
+		return MattermostPostRef{}, ctx.Err()
+	}
+	return publisher.fakeThreadPublisher.ReconcileOrPostThreadMessage(ctx, input)
+}
+
 func TestCallbackDeliveriesCompleteRequiresBothExactDestinations(t *testing.T) {
 	delivered := func(destination string, publication string) entity.AgentDelegationCallbackDelivery {
 		return entity.AgentDelegationCallbackDelivery{Destination: destination, Publication: publication, Status: callbackDeliveryStatusDelivered}
@@ -232,6 +301,173 @@ func TestCallbackDeliveriesCompleteRequiresBothExactDestinations(t *testing.T) {
 	child.Status = callbackDeliveryStatusPending
 	if callbackDeliveriesComplete([]entity.AgentDelegationCallbackDelivery{source, child}) {
 		t.Fatal("partial delivered source+child plan принят как полный")
+	}
+}
+
+func TestCallbackDeliveryAttemptBudgetCoversSharedPreflightAndTransport(t *testing.T) {
+	preflightDeadline := 125 * time.Millisecond
+	publishDeadline := 75 * time.Millisecond
+	want := preflightDeadline + publishDeadline + callbackDeliveryLeaseSafetyMargin
+	if got := callbackDeliveryAttemptBudget(preflightDeadline, publishDeadline); got != want {
+		t.Fatalf("callback delivery attempt budget=%s, want %s", got, want)
+	}
+	if got := callbackDeliveryTransportBudget(publishDeadline); got != publishDeadline+callbackDeliveryLeaseSafetyMargin {
+		t.Fatalf("callback delivery transport budget=%s", got)
+	}
+}
+
+func TestReturnToRequesterPublicationDeadlineStartsAfterFinalGuardPreflight(t *testing.T) {
+	svc, baseStore, _, basePublisher := delegationReturnBarrierFixture()
+	store := &delayedExactGuardFakeStore{
+		fakeAdminStore: baseStore,
+		delayFrom:      2,
+		delay:          40 * time.Millisecond,
+	}
+	publisher := &deadlineProbeThreadPublisher{
+		fakeThreadPublisher: basePublisher,
+		blockUntilContext:   true,
+	}
+	svc.cfg.Store = store
+	svc.cfg.ThreadPublisher = publisher
+	svc.cfg.CallbackPublishDeadline = 10 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	result, err := svc.ReturnToRequester(ctx, "target-session", "target-token", "Синтетические зависшие публикации после preflight.")
+	if err == nil || result.CallbackRunID != "callback-run" {
+		t.Fatalf("результат зависшей публикации result=%#v error=%v", result, err)
+	}
+	deliveries, err := baseStore.ListAgentDelegationCallbackDeliveries(ctx, result.DelegationID, result.CallbackRunID)
+	if err != nil || len(deliveries) != 2 {
+		t.Fatalf("незавершённые доставки=%#v error=%v", deliveries, err)
+	}
+	for _, delivery := range deliveries {
+		if delivery.Status != callbackDeliveryStatusPending {
+			t.Fatalf("доставка после зависания=%#v", delivery)
+		}
+	}
+	if publisher.attempts != 2 || len(basePublisher.posts) != 0 {
+		t.Fatalf("preflight израсходовал срок публикации: attempts=%d posts=%d", publisher.attempts, len(basePublisher.posts))
+	}
+
+	publisher.blockUntilContext = false
+	store.delay = 0
+	restarted := NewAgentSessionService(svc.cfg)
+	if _, err := restarted.ReturnToRequester(ctx, "target-session", "target-token", "Исправленный повтор."); err != nil {
+		t.Fatalf("исправленный повтор: %v", err)
+	}
+	deliveries, err = baseStore.ListAgentDelegationCallbackDeliveries(ctx, result.DelegationID, result.CallbackRunID)
+	if err != nil || !callbackDeliveriesComplete(deliveries) {
+		t.Fatalf("завершённые доставки=%#v error=%v", deliveries, err)
+	}
+	if publisher.attempts != 4 || len(basePublisher.posts) != 2 {
+		t.Fatalf("исправленный повтор attempts=%d posts=%d", publisher.attempts, len(basePublisher.posts))
+	}
+}
+
+func TestReturnToRequesterFinalGuardPreflightHasServerOwnedDeadline(t *testing.T) {
+	svc, baseStore, _, basePublisher := delegationReturnBarrierFixture()
+	store := &delayedExactGuardFakeStore{
+		fakeAdminStore: baseStore,
+		delayFrom:      2,
+		delay:          100 * time.Millisecond,
+	}
+	publisher := &deadlineProbeThreadPublisher{fakeThreadPublisher: basePublisher}
+	svc.cfg.Store = store
+	svc.cfg.ThreadPublisher = publisher
+	svc.cfg.CallbackPublishDeadline = 10 * time.Millisecond
+	svc.callbackPreflightDeadline = 20 * time.Millisecond
+
+	startedAt := time.Now()
+	result, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", "Синтетический preflight без внешнего срока.")
+	if err == nil || !errors.Is(err, errCallbackDeliveryPreflightDeadline) || result.CallbackRunID != "callback-run" {
+		t.Fatalf("bounded preflight result=%#v error=%v", result, err)
+	}
+	if elapsed := time.Since(startedAt); elapsed > time.Second {
+		t.Fatalf("server-owned preflight deadline не освободил callback slot: %s", elapsed)
+	}
+	if publisher.attempts != 0 || len(basePublisher.posts) != 0 {
+		t.Fatalf("publisher достигнут после истечения preflight: attempts=%d posts=%d", publisher.attempts, len(basePublisher.posts))
+	}
+	deliveries, listErr := baseStore.ListAgentDelegationCallbackDeliveries(context.Background(), result.DelegationID, result.CallbackRunID)
+	if listErr != nil || len(deliveries) != 2 {
+		t.Fatalf("незавершённые доставки=%#v error=%v", deliveries, listErr)
+	}
+	for _, delivery := range deliveries {
+		if delivery.Status != callbackDeliveryStatusPending || delivery.LastErrorCode != "preflight_deadline_exceeded" {
+			t.Fatalf("доставка после bounded preflight=%#v", delivery)
+		}
+	}
+
+	store.delay = 0
+	restarted := NewAgentSessionService(svc.cfg)
+	if _, err := restarted.ReturnToRequester(context.Background(), "target-session", "target-token", "Исправленный повтор после bounded preflight."); err != nil {
+		t.Fatalf("повтор после bounded preflight: %v", err)
+	}
+	if publisher.attempts != 2 || len(basePublisher.posts) != 2 {
+		t.Fatalf("повтор после bounded preflight attempts=%d posts=%d", publisher.attempts, len(basePublisher.posts))
+	}
+}
+
+func TestReturnToRequesterReclaimedLeaseFailsClosedBeforeTransport(t *testing.T) {
+	svc, baseStore, _, publisher := delegationReturnBarrierFixture()
+	store := &delayedExactGuardFakeStore{fakeAdminStore: baseStore, beforeAt: 2}
+	store.before = func() {
+		now := time.Now().UTC()
+		baseStore.deliveryMu.Lock()
+		for id, delivery := range baseStore.callbackDeliveries {
+			if delivery.Status == callbackDeliveryStatusInFlight {
+				delivery.LeaseExpiresAt = now.Add(-time.Second)
+				baseStore.callbackDeliveries[id] = delivery
+				break
+			}
+		}
+		baseStore.deliveryMu.Unlock()
+		if _, err := baseStore.ClaimAgentDelegationCallbackDelivery(context.Background(), adminrepo.ClaimAgentDelegationCallbackDeliveryInput{
+			DelegationID: 1, CallbackRunID: "callback-run", Now: now,
+			LeaseOwner: "competing-owner", LeaseUntil: now.Add(time.Minute),
+		}); err != nil {
+			t.Fatalf("синтетический reclaim: %v", err)
+		}
+	}
+	svc.cfg.Store = store
+
+	result, err := svc.ReturnToRequester(context.Background(), "target-session", "target-token", "Синтетический reclaim перед transport.")
+	if err == nil || !errors.Is(err, errCallbackDeliveryLeaseOwnershipLost) || result.CallbackRunID != "callback-run" {
+		t.Fatalf("stale owner result=%#v error=%v", result, err)
+	}
+	if len(publisher.posts) != 0 {
+		t.Fatalf("stale owner достиг transport: posts=%d", len(publisher.posts))
+	}
+
+	deliveries, listErr := baseStore.ListAgentDelegationCallbackDeliveries(context.Background(), result.DelegationID, result.CallbackRunID)
+	if listErr != nil || len(deliveries) != 2 {
+		t.Fatalf("доставки после reclaim=%#v error=%v", deliveries, listErr)
+	}
+	var reclaimed entity.AgentDelegationCallbackDelivery
+	for _, delivery := range deliveries {
+		if delivery.Status == callbackDeliveryStatusInFlight {
+			reclaimed = delivery
+		}
+	}
+	if reclaimed.ID == 0 || reclaimed.LeaseOwner != "competing-owner" || reclaimed.AttemptCount != 2 {
+		t.Fatalf("reclaimed delivery=%#v", reclaimed)
+	}
+	if _, err := baseStore.ReleaseAgentDelegationCallbackDelivery(context.Background(), adminrepo.ReleaseAgentDelegationCallbackDeliveryInput{
+		ID: reclaimed.ID, LeaseOwner: reclaimed.LeaseOwner, Status: callbackDeliveryStatusPending,
+		LastErrorCode: "synthetic_competitor_exit", Now: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("освободить синтетический reclaim: %v", err)
+	}
+
+	restartedConfig := svc.cfg
+	restartedConfig.Store = baseStore
+	restarted := NewAgentSessionService(restartedConfig)
+	if _, err := restarted.ReturnToRequester(context.Background(), "target-session", "target-token", "Повтор после reclaim."); err != nil {
+		t.Fatalf("повтор после reclaim: %v", err)
+	}
+	if len(publisher.posts) != 2 {
+		t.Fatalf("повтор после reclaim posts=%d", len(publisher.posts))
 	}
 }
 
