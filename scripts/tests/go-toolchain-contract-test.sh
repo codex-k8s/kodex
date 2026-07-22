@@ -107,6 +107,15 @@ ENV PATH=/usr/local/go/bin:/usr/local/bin \
 EOF
 expect_success "последний GOTOOLCHAIN=local определяет эффективное значение" "$guard" --root "$runtime_final_local" --static-only
 
+legacy_runtime_final_local="$temp_root/legacy-runtime-final-local"
+copy_fixture "$legacy_runtime_final_local"
+cat >>"$legacy_runtime_final_local/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN auto
+ENV GOTOOLCHAIN local
+EOF
+expect_success "устаревший ENV сохраняет итоговый GOTOOLCHAIN=local" "$guard" --root "$legacy_runtime_final_local" --static-only
+
 services_runtime_override="$temp_root/services-runtime-override"
 copy_fixture "$services_runtime_override"
 printf '\nENV GOTOOLCHAIN=auto\n' >>"$services_runtime_override/services/jobs/agent-runner/Dockerfile"
@@ -154,6 +163,109 @@ expect_failure_matching \
   "неоднозначный ENV-синтаксис с GOTOOLCHAIN" \
   "services/jobs/agent-runner/Dockerfile final runtime stage содержит неоднозначный ENV-синтаксис" \
   "$guard" --root "$ambiguous_runtime_env" --static-only
+
+services_lowercase_final_from="$temp_root/services-lowercase-final-from"
+copy_fixture "$services_lowercase_final_from"
+printf '\nfrom scratch\n' >>"$services_lowercase_final_from/services/jobs/agent-runner/Dockerfile"
+expect_failure_matching \
+  "строчная новая final stage в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-bookworm', найден 'FROM scratch'" \
+  "$guard" --root "$services_lowercase_final_from" --static-only
+
+deploy_indented_final_from="$temp_root/deploy-indented-final-from"
+copy_fixture "$deploy_indented_final_from"
+printf '\n  FROM scratch\n' >>"$deploy_indented_final_from/deploy/images/agent-runner/Dockerfile"
+expect_failure_matching \
+  "новая final stage с отступом в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile должен завершаться stage 'FROM node:24-alpine', найден 'FROM scratch'" \
+  "$guard" --root "$deploy_indented_final_from" --static-only
+
+services_split_instruction="$temp_root/services-split-instruction"
+copy_fixture "$services_split_instruction"
+cat >>"$services_split_instruction/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+EN\
+# строка комментария внутри продолжения
+V GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "разрыв имени ENV-инструкции в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_split_instruction" --static-only
+
+services_split_key="$temp_root/services-split-key"
+copy_fixture "$services_split_key"
+cat >>"$services_split_key/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOO\
+LCHAIN=auto
+EOF
+expect_failure_matching \
+  "разрыв имени GOTOOLCHAIN в services Dockerfile" \
+  "services/jobs/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$services_split_key" --static-only
+
+deploy_split_instruction="$temp_root/deploy-split-instruction"
+copy_fixture "$deploy_split_instruction"
+cat >>"$deploy_split_instruction/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+EN\
+V GOTOOLCHAIN=auto
+EOF
+expect_failure_matching \
+  "разрыв имени ENV-инструкции в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_split_instruction" --static-only
+
+deploy_split_key="$temp_root/deploy-split-key"
+copy_fixture "$deploy_split_key"
+cat >>"$deploy_split_key/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOO\
+LCHAIN=auto
+EOF
+expect_failure_matching \
+  "разрыв имени GOTOOLCHAIN в deploy Dockerfile" \
+  "deploy/images/agent-runner/Dockerfile final runtime stage завершает GOTOOLCHAIN значением 'auto' вместо 'local'" \
+  "$guard" --root "$deploy_split_key" --static-only
+
+services_heredoc="$temp_root/services-heredoc"
+copy_fixture "$services_heredoc"
+cat >>"$services_heredoc/services/jobs/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN=auto
+COPY <<EOF_HEREDOC /tmp/gotoolchain-proof
+FROM scratch
+ENV GOTOOLCHAIN="local"
+EOF_HEREDOC
+EOF
+expect_failure_matching \
+  "heredoc с ложными FROM и ENV в services Dockerfile" \
+  "Dockerfile heredoc не поддерживается проверкой final runtime stage" \
+  "$guard" --root "$services_heredoc" --static-only
+
+deploy_heredoc="$temp_root/deploy-heredoc"
+copy_fixture "$deploy_heredoc"
+cat >>"$deploy_heredoc/deploy/images/agent-runner/Dockerfile" <<'EOF'
+
+ENV GOTOOLCHAIN=auto
+COPY <<EOF_HEREDOC /tmp/gotoolchain-proof
+FROM scratch
+ENV GOTOOLCHAIN="local"
+EOF_HEREDOC
+EOF
+expect_failure_matching \
+  "heredoc с ложными FROM и ENV в deploy Dockerfile" \
+  "Dockerfile heredoc не поддерживается проверкой final runtime stage" \
+  "$guard" --root "$deploy_heredoc" --static-only
+
+escape_parser_directive="$temp_root/escape-parser-directive"
+copy_fixture "$escape_parser_directive"
+sed -i '1i# escape=`' "$escape_parser_directive/services/jobs/agent-runner/Dockerfile"
+expect_failure_matching \
+  "нестандартный Dockerfile escape parser directive" \
+  "Dockerfile parser directive escape не поддерживается проверкой final runtime stage" \
+  "$guard" --root "$escape_parser_directive" --static-only
 
 govulncheck_version_desync="$temp_root/govulncheck-version-desync"
 copy_fixture "$govulncheck_version_desync"

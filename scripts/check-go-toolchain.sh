@@ -47,6 +47,98 @@ require_count() {
   [[ "$actual" == "$wanted" ]] || fail "$path содержит '$expected' $actual раз; ожидается $wanted"
 }
 
+final_runtime_stage() {
+  local dockerfile="$1"
+
+  awk '
+    function parse_error(message) {
+      print message > "/dev/stderr"
+      parse_failed = 1
+      exit 2
+    }
+
+    function has_line_continuation(value, trimmed, position, slash_count) {
+      trimmed = value
+      sub(/[[:space:]]+$/, "", trimmed)
+      slash_count = 0
+      for (position = length(trimmed); position > 0 && substr(trimmed, position, 1) == "\\"; position--) {
+        slash_count++
+      }
+      return slash_count % 2 == 1
+    }
+
+    function strip_line_continuation(value, trimmed) {
+      trimmed = value
+      sub(/[[:space:]]+$/, "", trimmed)
+      sub(/\\$/, "", trimmed)
+      return trimmed
+    }
+
+    function process_instruction(value, start_line, line, instruction, body) {
+      line = value
+      sub(/^[[:space:]]+/, "", line)
+      if (index(line, "<<") > 0) {
+        parse_error("Dockerfile heredoc не поддерживается проверкой final runtime stage")
+      }
+      if (!match(line, /^[^[:space:]]+/)) {
+        return
+      }
+
+      instruction = toupper(substr(line, 1, RLENGTH))
+      if (instruction != "FROM") {
+        return
+      }
+
+      body = substr(line, RLENGTH + 1)
+      sub(/^[[:space:]]+/, "", body)
+      sub(/[[:space:]]+$/, "", body)
+      if (body == "") {
+        parse_error("не удалось однозначно разобрать FROM-инструкцию")
+      }
+      from_line = start_line
+      from_body = body
+      found_from = 1
+    }
+
+    {
+      line = $0
+      directive = line
+      sub(/^[[:space:]]+/, "", directive)
+      if (toupper(directive) ~ /^#[[:space:]]*ESCAPE[[:space:]]*=/) {
+        parse_error("Dockerfile parser directive escape не поддерживается проверкой final runtime stage")
+      }
+      if (line ~ /^[[:space:]]*($|#)/) {
+        next
+      }
+      if (logical == "") {
+        logical_start = NR
+      }
+      if (has_line_continuation(line)) {
+        logical = logical strip_line_continuation(line)
+        next
+      }
+      logical = logical line
+      process_instruction(logical, logical_start)
+      logical = ""
+    }
+
+    END {
+      if (parse_failed) {
+        exit 2
+      }
+      if (logical != "") {
+        print "незавершённая логическая Dockerfile-инструкция" > "/dev/stderr"
+        exit 2
+      }
+      if (!found_from) {
+        print "Dockerfile не содержит runtime stage" > "/dev/stderr"
+        exit 2
+      }
+      print from_line "\t" from_body
+    }
+  ' "$dockerfile"
+}
+
 effective_final_stage_gotoolchain() {
   local dockerfile="$1"
   local from_line="$2"
@@ -180,14 +272,14 @@ effective_final_stage_gotoolchain() {
 
     {
       line = $0
-      if (logical == "" && line ~ /^[[:space:]]*($|#)/) {
+      if (line ~ /^[[:space:]]*($|#)/) {
         next
       }
-      logical = logical == "" ? line : logical " " line
-      if (has_line_continuation(logical)) {
-        logical = strip_line_continuation(logical)
+      if (has_line_continuation(line)) {
+        logical = logical strip_line_continuation(line)
         next
       }
+      logical = logical line
       process_instruction(logical)
       logical = ""
     }
@@ -213,15 +305,17 @@ require_final_runtime_stage_contract() {
   local path="$1"
   local expected_from="$2"
   local dockerfile="$repo_root/$path"
-  local last_from from_line actual_from runtime_stage
+  local stage_info from_line actual_from expected_from_body runtime_stage
   local runtime_env runtime_copy runtime_check
   local env_count copy_count check_count
   local env_line copy_line check_line effective_gotoolchain
 
-  last_from="$(grep -n '^FROM ' "$dockerfile" | tail -n 1)" || fail "$path не содержит runtime stage"
-  from_line="${last_from%%:*}"
-  actual_from="${last_from#*:}"
-  [[ "$actual_from" == "$expected_from" ]] || fail "$path должен завершаться stage '$expected_from', найден '$actual_from'"
+  if ! stage_info="$(final_runtime_stage "$dockerfile")"; then
+    fail "$path содержит неподдерживаемую или неоднозначную Dockerfile-конструкцию"
+  fi
+  IFS=$'\t' read -r from_line actual_from <<<"$stage_info"
+  expected_from_body="${expected_from#FROM }"
+  [[ "$actual_from" == "$expected_from_body" ]] || fail "$path должен завершаться stage '$expected_from', найден 'FROM $actual_from'"
 
   runtime_stage="$(tail -n +"$from_line" "$dockerfile")"
   runtime_env="ENV GOTOOLCHAIN=local"
