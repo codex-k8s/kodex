@@ -12,6 +12,7 @@ canonical_files=(
   scripts/build-agent-runner-image.sh
   scripts/internal/go-toolchain-guard.go
   scripts/k8s/install-bot-service.sh
+  scripts/k8s/render-bot-service.sh
   scripts/lib/env.sh
   scripts/remote/install-bot-service.sh
   deploy/k8s/bot-service/kaniko-job.yaml.tpl
@@ -415,7 +416,7 @@ final_artifact_copies=(
 )
 protected_runtime_copies=(
   'COPY --from=0 /out/mattercodex-go-toolchain-guard /opt/mattercodex/protected-artifacts/mattercodex-init'
-  'COPY --from=0 /bin/busybox /opt/mattercodex/protected-artifacts/mattercodex-shell'
+  'COPY --from=0 /bin/busybox /opt/mattercodex/protected-artifacts/busybox'
 )
 goose_version_lines=($'\tgoose --version >/dev/null; \\' $'  && goose --version >/dev/null \\')
 goose_mutation_lines=($'\tcp /bin/true /usr/local/bin/goose; \\' $'  && cp /bin/true /usr/local/bin/goose \\')
@@ -1238,7 +1239,7 @@ for hostile_cmd in 'CMD ["sh"]' 'CMD ["/usr/local/bin/sh"]'; do
   copy_fixture "$deploy_hostile_cmd"
   replace_exact_instruction \
     "$deploy_hostile_cmd/deploy/images/agent-runner/Dockerfile" \
-    'CMD ["/usr/local/bin/mattercodex-shell", "sh"]' \
+    'CMD ["/usr/local/bin/busybox", "sh"]' \
     "$hostile_cmd"
   expect_failure_matching \
     "deploy effective CMD не допускает PATH lookup или uncommitted absolute shell" \
@@ -1300,6 +1301,32 @@ mutated_build_wrapper="$temp_root/mutated-build-wrapper"
 copy_fixture "$mutated_build_wrapper"
 printf '\n# unsafe pass-through\n' >>"$mutated_build_wrapper/scripts/build-agent-runner-image.sh"
 expect_failure_matching "защищённый BuildKit input wrapper изменён без обновления контракта" "scripts/build-agent-runner-image.sh изменён без обновления полного source commitment" "$guard" --root "$mutated_build_wrapper" --static-only
+
+hostile_env_helper="$temp_root/hostile-env-helper"
+copy_fixture "$hostile_env_helper"
+insert_after_exact_instruction \
+  "$hostile_env_helper/scripts/lib/env.sh" \
+  'set -euo pipefail' \
+  $'builtin printf "hostile env helper executed before installer recheck\\n" >"${MATTERCODEX_BOOTSTRAP_PAYLOAD_MARKER:-/tmp/mattercodex-bootstrap-payload}"\ndocker build --build-context golang:1.26.5-alpine=docker-image://attacker.invalid/golang:latest .'
+for guard_mode in static full; do
+  if [ "$guard_mode" = static ]; then
+    guard_args=(--static-only)
+  else
+    guard_args=()
+  fi
+  expect_failure_matching \
+    "полный $guard_mode guard отклоняет active direct builder payload в sourced env.sh" \
+    "scripts/lib/env.sh изменён без обновления полного source commitment" \
+    "$guard" --root "$hostile_env_helper" "${guard_args[@]}"
+done
+
+hostile_render_helper="$temp_root/hostile-render-helper"
+copy_fixture "$hostile_render_helper"
+printf '\ndocker build --build-context golang:1.26.5-alpine=docker-image://attacker.invalid/golang:latest .\n' >>"$hostile_render_helper/scripts/k8s/render-bot-service.sh"
+expect_failure_matching \
+  "полный source commitment включает единственный executable render helper bootstrap closure" \
+  "scripts/k8s/render-bot-service.sh изменён без обновления полного source commitment" \
+  "$guard" --root "$hostile_render_helper" --static-only
 
 build_wrapper="$repo_root/scripts/build-agent-runner-image.sh"
 fake_builder_bin="$temp_root/fake-builder-bin"
@@ -1433,7 +1460,15 @@ expect_failure_matching \
 
 cat >"$fake_builder_bin/envsubst" <<'EOF'
 #!/usr/bin/env bash
-cat
+rendered="$(cat)"
+variable_pattern='\$\{([A-Za-z_][A-Za-z0-9_]*)\}'
+while [[ "$rendered" =~ $variable_pattern ]]; do
+  token="${BASH_REMATCH[0]}"
+  name="${BASH_REMATCH[1]}"
+  replacement="${!name-}"
+  rendered="${rendered//"$token"/"$replacement"}"
+done
+printf '%s\n' "$rendered"
 EOF
 cat >"$fake_builder_bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
@@ -1464,6 +1499,38 @@ MATTERCODEX_CODEX_PACKAGE=@openai/codex@0.144.1
 MATTERCODEX_IMAGE_BUILD_STRATEGY=docker
 MATTERCODEX_RUNTIME_ENABLED=false
 EOF
+
+bootstrap_payload_bin="$temp_root/bootstrap-payload-bin"
+mkdir -p "$bootstrap_payload_bin"
+for bootstrap_command in dirname pwd realpath readlink env bash; do
+  mkdir -p "$bootstrap_payload_bin/$bootstrap_command-bin"
+  cat >"$bootstrap_payload_bin/$bootstrap_command-bin/$bootstrap_command" <<'EOF'
+#!/bin/bash
+builtin printf 'PATH bootstrap payload executed\n' >"$MATTERCODEX_BOOTSTRAP_PAYLOAD_MARKER"
+exit 97
+EOF
+  chmod +x "$bootstrap_payload_bin/$bootstrap_command-bin/$bootstrap_command"
+done
+for bootstrap_target in \
+  scripts/k8s/install-bot-service.sh \
+  scripts/remote/install-bot-service.sh \
+  scripts/k8s/render-bot-service.sh; do
+  for bootstrap_command in dirname pwd realpath readlink env bash; do
+    bootstrap_marker="$temp_root/bootstrap-${bootstrap_target//\//-}-$bootstrap_command"
+    expect_failure_matching \
+      "$bootstrap_target не выполняет PATH-first $bootstrap_command до trusted repository boundary" \
+      "env-файл не найден" \
+      /usr/bin/env -i \
+      PATH="$bootstrap_payload_bin/$bootstrap_command-bin:/usr/bin:/bin" \
+      HOME="$temp_root" \
+      MATTERCODEX_BOOTSTRAP_PAYLOAD_MARKER="$bootstrap_marker" \
+      "$repo_root/$bootstrap_target" --env-file "$temp_root/missing-bootstrap.env"
+    [[ ! -e "$bootstrap_marker" ]] || {
+      echo "FAIL: $bootstrap_target выполнил PATH-first $bootstrap_command до trusted repository boundary" >&2
+      exit 1
+    }
+  done
+done
 
 local_installer_capture="$temp_root/local-installer-builder-argv"
 local_render_dir="$temp_root/local-render"
@@ -1510,6 +1577,9 @@ fi
 
 cat >"$fake_builder_bin/ssh" <<'EOF'
 #!/usr/bin/env bash
+if [[ -n "${MATTERCODEX_FAKE_REMOTE_TRACE:-}" ]]; then
+  : >"$MATTERCODEX_FAKE_REMOTE_TRACE"
+fi
 remote_command="${!#}"
 case "$remote_command" in
   *'if command -v docker'*'command -v nerdctl'*)
@@ -1533,7 +1603,10 @@ case "$remote_command" in
     ;;
   *)
     if [[ -n "${MATTERCODEX_FAKE_KANIKO_MANIFEST_CAPTURE:-}" ]]; then
-      cat >>"$MATTERCODEX_FAKE_KANIKO_MANIFEST_CAPTURE" || true
+      manifest="$(cat || true)"
+      if [[ "$manifest" == *'kind: Job'* ]]; then
+        printf '%s\n---\n' "$manifest" >>"$MATTERCODEX_FAKE_KANIKO_MANIFEST_CAPTURE"
+      fi
     else
       cat >/dev/null || true
     fi
@@ -1608,7 +1681,11 @@ done
 
 kaniko_env="$temp_root/kaniko-installer.env"
 cp "$installer_env" "$kaniko_env"
-printf '%s\n' 'MATTERCODEX_IMAGE_BUILD_STRATEGY=kaniko' 'MATTERCODEX_IMAGE_REGISTRY_MANAGED=false' >>"$kaniko_env"
+printf '%s\n' \
+  'MATTERCODEX_IMAGE_BUILD_STRATEGY=kaniko' \
+  'MATTERCODEX_IMAGE_REGISTRY_MANAGED=false' \
+  'MATTERCODEX_BOT_SERVICE_BUILD_IMAGE=true' \
+  >>"$kaniko_env"
 kaniko_marker="$temp_root/kaniko-functional-marker"
 kaniko_builder_capture="$temp_root/kaniko-builder-must-not-run"
 kaniko_manifest_capture="$temp_root/kaniko-rendered-manifests"
@@ -1630,6 +1707,63 @@ for hostile_kaniko_input in \
     MATTERCODEX_FAKE_KANIKO_MARKER="$temp_root/kaniko-hostile-marker" \
     "$repo_root/scripts/remote/install-bot-service.sh" --env-file "$kaniko_env" --apply --build-only --render-dir "$temp_root/kaniko-hostile-render"
 done
+
+hostile_kaniko_variables=(
+  MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST
+  MATTERCODEX_NAMESPACE
+  MATTERCODEX_KANIKO_IMAGE
+  MATTERCODEX_KANIKO_CONTEXT_PVC
+  MATTERCODEX_KANIKO_JOB_TTL_SECONDS
+  MATTERCODEX_KANIKO_ACTIVE_DEADLINE_SECONDS
+  MATTERCODEX_KANIKO_CPU_REQUEST
+  MATTERCODEX_KANIKO_MEMORY_REQUEST
+  MATTERCODEX_AGENT_RUNNER_IMAGE
+  MATTERCODEX_BOT_SERVICE_IMAGE
+  MATTERCODEX_CODEX_PACKAGE
+  MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST
+)
+hostile_kaniko_values=(
+  $'registry.mattermost.svc:5000\n            - "--cache=true"\n            - "--cache-run-layers=true"\n            - "--cache-copy-layers=true"\n            - "--cache-repo=attacker.invalid/cache"'
+  'mattermost" # comment'
+  'gcr.io/kaniko-project/executor:{map}'
+  '[matter-codex-kaniko-context]'
+  '{cache: true}'
+  '%0A--cache=true'
+  $'2000m\t# comment'
+  $'2Gi\r--cache=true'
+  'mattercodex.invalid/agent-runner:test\'
+  'mattercodex.invalid/bot-service:[list]'
+  $'@openai/codex@0.144.1\x1b'
+  'registry.mattermost.svc:5000\n--cache=true'
+)
+for hostile_index in "${!hostile_kaniko_variables[@]}"; do
+  hostile_variable="${hostile_kaniko_variables[$hostile_index]}"
+  hostile_value="${hostile_kaniko_values[$hostile_index]}"
+  hostile_case_env="$temp_root/kaniko-scalar-$hostile_index.env"
+  hostile_trace="$temp_root/kaniko-scalar-$hostile_index.remote"
+  hostile_render_capture="$temp_root/kaniko-scalar-$hostile_index.yaml"
+  grep -v "^${hostile_variable}=" "$kaniko_env" >"$hostile_case_env"
+  expect_failure_matching \
+    "Kaniko YAML scalar matrix отклоняет $hostile_variable до render и remote executor" \
+    "строгую проверку Kaniko YAML scalar" \
+    env -i PATH="$fake_builder_bin:$PATH" HOME="$temp_root" \
+    "$hostile_variable=$hostile_value" \
+    MATTERCODEX_FAKE_REMOTE_BUILDER=none \
+    MATTERCODEX_FAKE_REMOTE_DIR="$temp_root/kaniko-scalar-$hostile_index-root" \
+    MATTERCODEX_FAKE_KANIKO_MARKER="$temp_root/kaniko-scalar-$hostile_index-marker" \
+    MATTERCODEX_FAKE_KANIKO_MANIFEST_CAPTURE="$hostile_render_capture" \
+    MATTERCODEX_FAKE_REMOTE_TRACE="$hostile_trace" \
+    "$repo_root/scripts/remote/install-bot-service.sh" \
+      --env-file "$hostile_case_env" \
+      --apply \
+      --build-only \
+      --render-dir "$temp_root/kaniko-scalar-$hostile_index-render"
+  [[ ! -e "$hostile_trace" && ! -e "$hostile_render_capture" && ! -e "$temp_root/kaniko-scalar-$hostile_index-marker" ]] || {
+    echo "FAIL: hostile $hostile_variable достиг render или remote executor" >&2
+    exit 1
+  }
+done
+
 expect_success \
   "default Kaniko installer flow остаётся исполняемым и не требует Docker/nerdctl wrapper" \
   env -i PATH="$fake_builder_bin:$PATH" HOME="$temp_root" \
@@ -1653,6 +1787,137 @@ if grep -Eq -- '(^|[=\" ])--cache=true([\" ]|$)|--cache-repo' "$kaniko_manifest_
   echo "FAIL: canonical rendered Kaniko job сохранил mutable cache input" >&2
   exit 1
 fi
+
+kaniko_yaml_probe="$temp_root/kaniko-yaml-probe.go"
+cat >"$kaniko_yaml_probe" <<'EOF'
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"reflect"
+	"strings"
+
+	batchv1 "k8s.io/api/batch/v1"
+	kubernetesyaml "k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/yaml"
+)
+
+type jobContract struct {
+	dockerfile  string
+	destination string
+	extraArg    string
+}
+
+func fail(format string, values ...any) {
+	fmt.Fprintf(os.Stderr, format+"\n", values...)
+	os.Exit(1)
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fail("нужен путь к capture")
+	}
+	file, err := os.Open(os.Args[1])
+	if err != nil {
+		fail("open capture: %v", err)
+	}
+	defer file.Close()
+
+	contracts := map[string]jobContract{
+		"agent-runner": {
+			dockerfile:  "services/jobs/agent-runner/Dockerfile",
+			destination: "matter-codex-registry.mattermost.svc.cluster.local:5000/agent-runner:test",
+			extraArg:    "--build-arg=MATTERCODEX_CODEX_PACKAGE=@openai/codex@0.144.1",
+		},
+		"bot-service": {
+			dockerfile:  "services/external/bot-service/Dockerfile",
+			destination: "matter-codex-registry.mattermost.svc.cluster.local:5000/bot-service:test",
+			extraArg:    "--target=prod",
+		},
+	}
+	seen := make(map[string]bool, len(contracts))
+	reader := kubernetesyaml.NewYAMLReader(bufio.NewReader(file))
+	for {
+		document, readErr := reader.Read()
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			fail("read YAML document: %v", readErr)
+		}
+		if len(strings.TrimSpace(string(document))) == 0 {
+			continue
+		}
+		var job batchv1.Job
+		if err := yaml.UnmarshalStrict(document, &job); err != nil {
+			fail("strict parse Kaniko Job: %v", err)
+		}
+		if job.APIVersion != "batch/v1" || job.Kind != "Job" {
+			fail("unexpected object %s %s", job.APIVersion, job.Kind)
+		}
+		component := job.Labels["matter-codex.dev/build-component"]
+		contract, ok := contracts[component]
+		if !ok || seen[component] {
+			fail("unexpected or duplicate component %q", component)
+		}
+		seen[component] = true
+		if job.Namespace != "mattermost" || !strings.HasPrefix(job.Name, "mc-kaniko-"+component+"-") {
+			fail("unexpected Job identity %s/%s", job.Namespace, job.Name)
+		}
+		if len(job.Spec.Template.Spec.Containers) != 1 {
+			fail("%s: expected one container", component)
+		}
+		container := job.Spec.Template.Spec.Containers[0]
+		expectedArgs := []string{
+			"--context=dir:///workspace/" + job.Name,
+			"--dockerfile=/workspace/" + job.Name + "/" + contract.dockerfile,
+			"--destination=" + contract.destination,
+			"--cache=false",
+			"--cache-run-layers=false",
+			"--cache-copy-layers=false",
+			"--insecure",
+			"--insecure-registry=matter-codex-registry.mattermost.svc.cluster.local:5000",
+			"--skip-unused-stages=true",
+			"--cleanup",
+			contract.extraArg,
+		}
+		if !reflect.DeepEqual(container.Args, expectedArgs) {
+			fail("%s: final args mismatch\ngot:  %#v\nwant: %#v", component, container.Args, expectedArgs)
+		}
+		cacheCounts := map[string]int{
+			"--cache=false":             0,
+			"--cache-run-layers=false":  0,
+			"--cache-copy-layers=false": 0,
+		}
+		for _, argument := range container.Args {
+			if strings.HasPrefix(argument, "--cache-repo") {
+				fail("%s: cache-repo присутствует в final args", component)
+			}
+			for expected := range cacheCounts {
+				if argument == expected {
+					cacheCounts[expected]++
+				}
+			}
+		}
+		for argument, count := range cacheCounts {
+			if count != 1 {
+				fail("%s: %s встречается %d раз", component, argument, count)
+			}
+		}
+	}
+	for component := range contracts {
+		if !seen[component] {
+			fail("missing parsed Kaniko Job for %s", component)
+		}
+	}
+}
+EOF
+expect_success \
+  "реальный strict YAML parser подтверждает exact Kaniko args/order/единственность без cache-repo" \
+  env GOENV=off GOWORK=off go -C "$repo_root" run "$kaniko_yaml_probe" "$kaniko_manifest_capture"
 
 buildkit_probe_root="$temp_root/buildkit-probe"
 mkdir -p "$buildkit_probe_root"
@@ -1840,7 +2105,7 @@ func parseContract(path string, data []byte) error {
 				if profile == "services" && typed.From == "0" && len(typed.SourcePaths) == 1 && typed.SourcePaths[0] == "/out/mattercodex-go-toolchain-guard" && typed.DestPath == "/opt/mattercodex/protected-artifacts/mattercodex-init" {
 					protectedRuntimeCopyIndex = commandIndex
 				}
-				if profile == "deploy" && typed.From == "0" && len(typed.SourcePaths) == 1 && typed.SourcePaths[0] == "/bin/busybox" && typed.DestPath == "/opt/mattercodex/protected-artifacts/mattercodex-shell" {
+				if profile == "deploy" && typed.From == "0" && len(typed.SourcePaths) == 1 && typed.SourcePaths[0] == "/bin/busybox" && typed.DestPath == "/opt/mattercodex/protected-artifacts/busybox" {
 					protectedRuntimeCopyIndex = commandIndex
 				}
 		case *instructions.RunCommand:
@@ -1966,7 +2231,7 @@ func verifyPath(path string) error {
 			return fmt.Errorf("%s: BuildKit effective entrypoint=%q cmd=%q", path, effective.entrypoint, effective.cmd)
 		}
 	} else {
-		expectedCmd := []string{"/usr/local/bin/mattercodex-shell", "sh"}
+		expectedCmd := []string{"/usr/local/bin/busybox", "sh"}
 		if !slices.Equal(effective.cmd, expectedCmd) || len(effective.entrypoint) != 0 {
 			return fmt.Errorf("%s: BuildKit effective entrypoint=%q cmd=%q", path, effective.entrypoint, effective.cmd)
 		}
@@ -2117,7 +2382,7 @@ func verify(path string) error {
 			return fmt.Errorf("%s: Kaniko effective entrypoint=%q cmd=%q", path, imageConfig.Entrypoint, imageConfig.Cmd)
 		}
 	} else {
-		expectedCmd := []string{"/usr/local/bin/mattercodex-shell", "sh"}
+		expectedCmd := []string{"/usr/local/bin/busybox", "sh"}
 		if !slices.Equal(imageConfig.Cmd, expectedCmd) || len(imageConfig.Entrypoint) != 0 {
 			return fmt.Errorf("%s: Kaniko effective entrypoint=%q cmd=%q", path, imageConfig.Entrypoint, imageConfig.Cmd)
 		}
@@ -2224,12 +2489,59 @@ func TestMatterCodexCacheDisabledPreservesProtectedRun(t *testing.T) {
 	}
 }
 EOF
+cat >"$kaniko_cache_probe_root/cmd/executor/cmd/mattercodex_pflag_contract_test.go" <<'EOF'
+package cmd
+
+import "testing"
+
+func TestMatterCodexCachePflagUsesLastValue(t *testing.T) {
+	flags := RootCmd.PersistentFlags()
+	opts.Cache = false
+	opts.CacheRunLayers = false
+	opts.CacheCopyLayers = false
+	opts.CacheRepo = ""
+	hostileArgs := []string{
+		"--cache=false",
+		"--cache-run-layers=false",
+		"--cache-copy-layers=false",
+		"--cache=true",
+		"--cache-run-layers=true",
+		"--cache-copy-layers=true",
+		"--cache-repo=attacker.invalid/cache",
+	}
+	if err := flags.Parse(hostileArgs); err != nil {
+		t.Fatal(err)
+	}
+	if !opts.Cache || !opts.CacheRunLayers || !opts.CacheCopyLayers || opts.CacheRepo != "attacker.invalid/cache" {
+		t.Fatalf("later hostile flags did not win: cache=%t run=%t copy=%t repo=%q", opts.Cache, opts.CacheRunLayers, opts.CacheCopyLayers, opts.CacheRepo)
+	}
+
+	opts.Cache = true
+	opts.CacheRunLayers = true
+	opts.CacheCopyLayers = true
+	opts.CacheRepo = ""
+	canonicalArgs := []string{
+		"--cache=false",
+		"--cache-run-layers=false",
+		"--cache-copy-layers=false",
+	}
+	if err := flags.Parse(canonicalArgs); err != nil {
+		t.Fatal(err)
+	}
+	if opts.Cache || opts.CacheRunLayers || opts.CacheCopyLayers || opts.CacheRepo != "" {
+		t.Fatalf("canonical flags are not cache-disabled: cache=%t run=%t copy=%t repo=%q", opts.Cache, opts.CacheRunLayers, opts.CacheCopyLayers, opts.CacheRepo)
+	}
+}
+EOF
 expect_success \
   "exact Kaniko v1.24.0 cache=false не заменяет protected guard через hostile CachingRunCommand" \
   env GOENV=off GOWORK=off go -C "$kaniko_cache_probe_root" test ./pkg/executor -run '^TestMatterCodexCacheDisabledPreservesProtectedRun$' -count=1
 expect_success \
   "exact Kaniko v1.24.0 upstream CachingRunCommand извлекает cached layer вместо RUN" \
   env GOENV=off GOWORK=off go -C "$kaniko_cache_probe_root" test ./pkg/commands -run '^Test_CachingRunCommand_ExecuteCommand$' -count=1
+expect_success \
+  "exact Kaniko v1.24.0 pflag подтверждает last-value-wins и canonical cache-disabled args" \
+  env GOENV=off GOWORK=off go -C "$kaniko_cache_probe_root" test ./cmd/executor/cmd -run '^TestMatterCodexCachePflagUsesLastValue$' -count=1
 
 trusted_guard_services_base64="$(sed -n "s/^[[:space:]]*&& printf '%s' '\([^']*\)'.*/\1/p" "$repo_root/services/jobs/agent-runner/Dockerfile")"
 trusted_guard_deploy_base64="$(sed -n "s/^[[:space:]]*&& printf '%s' '\([^']*\)'.*/\1/p" "$repo_root/deploy/images/agent-runner/Dockerfile")"
@@ -2250,6 +2562,57 @@ expect_success \
 expect_success \
   "trusted Go toolchain guard является Go artifact, а не no-op compiler output" \
   env GOENV=off GOTOOLCHAIN=local GOWORK=off go version -m "$trusted_guard_binary"
+signal_set_probe_root="$temp_root/signal-set-probe"
+mkdir -p "$signal_set_probe_root"
+cp "$trusted_guard_source" "$signal_set_probe_root/main.go"
+cat >"$signal_set_probe_root/go.mod" <<'EOF'
+module mattercodex.invalid/signal-set-probe
+
+go 1.26.0
+EOF
+cat >"$signal_set_probe_root/main_test.go" <<'EOF'
+package main
+
+import (
+	"syscall"
+	"testing"
+)
+
+func TestProxySignalsCoverLinuxSetExactly(t *testing.T) {
+	actual := proxySignals()
+	seen := make(map[syscall.Signal]int, len(actual))
+	for _, signal := range actual {
+		typed, ok := signal.(syscall.Signal)
+		if !ok {
+			t.Fatalf("unexpected signal type %T", signal)
+		}
+		seen[typed]++
+	}
+	for number := 1; number <= maxLinuxSignal; number++ {
+		current := syscall.Signal(number)
+		want := 1
+		switch current {
+		case syscall.SIGKILL,
+			syscall.SIGSTOP,
+			syscall.SIGCHLD,
+			syscall.SIGURG,
+			syscall.SIGPROF,
+			syscall.Signal(glibcSignalCancel),
+			syscall.Signal(glibcSignalSetXID):
+			want = 0
+		}
+		if seen[current] != want {
+			t.Fatalf("signal %d count=%d want=%d", number, seen[current], want)
+		}
+	}
+	if len(actual) != maxLinuxSignal-7 {
+		t.Fatalf("signal set length=%d want=%d", len(actual), maxLinuxSignal-7)
+	}
+}
+EOF
+expect_success \
+  "init proxy set содержит все Linux signals 1..64 кроме uncatchable/reaper/runtime-reserved signals без дублей" \
+  env GOENV=off GOTOOLCHAIN=local GOWORK=off go -C "$signal_set_probe_root" test
 expect_success \
   "production guard закрепляет literal root UID" \
   grep -Fqx $'\ttrustedUID          = 0' "$trusted_guard_source"
@@ -2396,7 +2759,87 @@ protected_artifact_names=(
   staticcheck
   yq
 )
-deploy_protected_artifact_names=("${protected_artifact_names[@]}" mattercodex-shell)
+exact_golang_index_digest="sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2"
+exact_busybox_root="$temp_root/exact-golang-base-root"
+exact_busybox_elf="$exact_busybox_root/bin/busybox"
+exact_busybox_manifest="$temp_root/exact-golang-platform-manifest.json"
+exact_busybox_layer="$temp_root/exact-golang-layer.tar.gz"
+case "$(uname -m)" in
+  x86_64)
+    exact_busybox_architecture=amd64
+    exact_musl_loader_name=ld-musl-x86_64.so.1
+    ;;
+  aarch64)
+    exact_busybox_architecture=arm64
+    exact_musl_loader_name=ld-musl-aarch64.so.1
+    ;;
+  *)
+    echo "FAIL: exact BusyBox functional probe не поддерживает architecture $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+docker_registry_token="$(
+  curl -fsS 'https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/golang:pull' |
+    jq -r .token
+)"
+exact_index_headers="$temp_root/exact-golang-index.headers"
+exact_index_manifest="$temp_root/exact-golang-index.json"
+curl -fsS \
+  -D "$exact_index_headers" \
+  -o "$exact_index_manifest" \
+  -H "Authorization: Bearer $docker_registry_token" \
+  -H 'Accept: application/vnd.oci.image.index.v1+json' \
+  'https://registry-1.docker.io/v2/library/golang/manifests/1.26.5-alpine'
+resolved_index_digest="$(
+  awk 'BEGIN { IGNORECASE=1 } /^docker-content-digest:/ { gsub("\r", "", $2); print $2 }' "$exact_index_headers"
+)"
+[[ "$resolved_index_digest" == "$exact_golang_index_digest" ]] || {
+  echo "FAIL: golang:1.26.5-alpine больше не соответствует exact committed index $exact_golang_index_digest" >&2
+  exit 1
+}
+exact_platform_digest="$(
+  jq -r \
+    --arg architecture "$exact_busybox_architecture" \
+    '.manifests[] | select(.platform.os == "linux" and .platform.architecture == $architecture) | .digest' \
+    "$exact_index_manifest"
+)"
+[[ "$exact_platform_digest" == sha256:* ]] || {
+  echo "FAIL: exact golang base не содержит linux/$exact_busybox_architecture manifest" >&2
+  exit 1
+}
+curl -fsS \
+  -o "$exact_busybox_manifest" \
+  -H "Authorization: Bearer $docker_registry_token" \
+  -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+  "https://registry-1.docker.io/v2/library/golang/manifests/$exact_platform_digest"
+mkdir -p "$exact_busybox_root"
+exact_busybox_found=false
+while IFS= read -r exact_layer_digest; do
+  curl -fLsS \
+    -o "$exact_busybox_layer" \
+    -H "Authorization: Bearer $docker_registry_token" \
+    "https://registry-1.docker.io/v2/library/golang/blobs/$exact_layer_digest"
+  [[ "sha256:$(sha256sum "$exact_busybox_layer" | awk '{print $1}')" == "$exact_layer_digest" ]] || {
+    echo "FAIL: exact golang base layer digest mismatch" >&2
+    exit 1
+  }
+  if tar -tzf "$exact_busybox_layer" | grep -Fx 'bin/busybox' >/dev/null; then
+    tar -xzf "$exact_busybox_layer" -C "$exact_busybox_root"
+    exact_busybox_found=true
+    break
+  fi
+done < <(jq -r '.layers[].digest' "$exact_busybox_manifest")
+[[ "$exact_busybox_found" == true && -f "$exact_busybox_elf" ]] || {
+  echo "FAIL: /bin/busybox не найден в exact golang base" >&2
+  exit 1
+}
+exact_musl_loader="$exact_busybox_root/lib/$exact_musl_loader_name"
+[[ -e "$exact_musl_loader" ]] || {
+  echo "FAIL: musl loader для exact BusyBox не найден: $exact_musl_loader_name" >&2
+  exit 1
+}
+
+deploy_protected_artifact_names=("${protected_artifact_names[@]}" busybox)
 services_protected_artifact_names=("${protected_artifact_names[@]}" matter-codex-agent-runner mattercodex-init)
 
 populate_protected_staging() {
@@ -2408,19 +2851,74 @@ populate_protected_staging() {
   done
   case "$profile" in
     deploy)
-      cat >"$cleanup_staging_root/mattercodex-shell" <<'EOF'
-#!/bin/sh
-[ "$1" = sh ] || exit 96
-shift
-exec /bin/sh "$@"
-EOF
-      chmod 0755 "$cleanup_staging_root/mattercodex-shell"
+      cp "$exact_busybox_elf" "$cleanup_staging_root/busybox"
+      chmod 0755 "$cleanup_staging_root/busybox"
       ;;
     services)
       cat >"$cleanup_staging_root/matter-codex-agent-runner" <<'EOF'
 #!/bin/sh
-printf '%s\n' "$*" >"$MATTERCODEX_ENTRYPOINT_CAPTURE"
-exit "${MATTERCODEX_ENTRYPOINT_EXIT_CODE:-0}"
+case "${MATTERCODEX_ENTRYPOINT_MODE:-argv}" in
+  argv)
+    printf '%s\n' "$*" >"$MATTERCODEX_ENTRYPOINT_CAPTURE"
+    exit "${MATTERCODEX_ENTRYPOINT_EXIT_CODE:-0}"
+    ;;
+  signal)
+    trap 'printf "%s\n" "$MATTERCODEX_SIGNAL_NAME" >"$MATTERCODEX_SIGNAL_CAPTURE"; exit 0' "$MATTERCODEX_SIGNAL_NAME"
+    : >"$MATTERCODEX_SIGNAL_READY"
+    while :; do
+      sleep 1
+    done
+    ;;
+  immediate-signal)
+    trap 'printf "ALRM\n" >"$MATTERCODEX_SIGNAL_CAPTURE"; exit 0' ALRM
+    kill -ALRM "$PPID"
+    while :; do
+      sleep 1
+    done
+    ;;
+  process-group)
+    trap 'printf "parent\n" >"$MATTERCODEX_SIGNAL_PARENT_CAPTURE"; exit 0' TERM
+    sh -c '
+      trap '\''printf "descendant\n" >"$MATTERCODEX_SIGNAL_DESCENDANT_CAPTURE"; exit 0'\'' TERM
+      : >"$MATTERCODEX_SIGNAL_DESCENDANT_READY"
+      while :; do
+        sleep 1
+      done
+    ' &
+    : >"$MATTERCODEX_SIGNAL_READY"
+    wait
+    ;;
+  exit-signal)
+    kill "-$MATTERCODEX_SIGNAL_NAME" "$$"
+    exit 99
+    ;;
+  orphan-reaping)
+    expected_init="$PPID"
+    sh -c 'sleep 0.2 & printf "%s\n" "$!" >"$MATTERCODEX_ORPHAN_PID_FILE"; exit 0'
+    orphan_pid="$(cat "$MATTERCODEX_ORPHAN_PID_FILE")"
+    attempt=0
+    actual_parent=""
+    while [ "$attempt" -lt 200 ]; do
+      if [ -r "/proc/$orphan_pid/status" ]; then
+        actual_parent="$(awk '/^PPid:/ { print $2 }' "/proc/$orphan_pid/status")"
+        [ "$actual_parent" = "$expected_init" ] && break
+      fi
+      attempt=$((attempt + 1))
+      sleep 0.01
+    done
+    [ "$actual_parent" = "$expected_init" ] || exit 94
+    attempt=0
+    while [ -e "/proc/$orphan_pid" ] && [ "$attempt" -lt 500 ]; do
+      attempt=$((attempt + 1))
+      sleep 0.01
+    done
+    [ ! -e "/proc/$orphan_pid" ] || exit 95
+    printf '%s:%s:reaped\n' "$expected_init" "$actual_parent" >"$MATTERCODEX_ORPHAN_CAPTURE"
+    ;;
+  *)
+    exit 93
+    ;;
+esac
 EOF
       cp "$cleanup_guard_binary" "$cleanup_staging_root/mattercodex-init"
       chmod 0755 "$cleanup_staging_root/matter-codex-agent-runner" "$cleanup_staging_root/mattercodex-init"
@@ -2473,13 +2971,24 @@ default_command_capture="$topology_tmp/default-command-capture"
 cp /bin/true "$topology_tmp/sh"
 chmod 0755 "$topology_tmp/sh"
 expect_success \
-  "protected absolute deploy CMD запускает exact shell artifact без PATH lookup" \
+  "protected absolute deploy CMD запускает фактический staged BusyBox ELF exact base без PATH lookup" \
   env PATH="$topology_tmp:/usr/local/bin:/usr/bin:/bin" MATTERCODEX_DEFAULT_COMMAND_CAPTURE="$default_command_capture" \
-  "$cleanup_target_root/mattercodex-shell" sh -c 'printf "protected default command\n" >"$MATTERCODEX_DEFAULT_COMMAND_CAPTURE"'
+  "$exact_musl_loader" \
+    --library-path "$exact_busybox_root/lib:$exact_busybox_root/usr/lib" \
+    "$cleanup_target_root/busybox" \
+    sh -c 'printf "protected default command\n" >"$MATTERCODEX_DEFAULT_COMMAND_CAPTURE"'
 [[ "$(cat "$default_command_capture")" == "protected default command" ]] || {
   echo "FAIL: protected absolute deploy CMD не выполнил default shell probe" >&2
   exit 1
 }
+cp "$cleanup_target_root/busybox" "$topology_tmp/mattercodex-shell"
+expect_status \
+  "exact staged BusyBox подтверждает exit 127 для нераспознаваемого старого basename mattercodex-shell" \
+  127 \
+  "$exact_musl_loader" \
+    --library-path "$exact_busybox_root/lib:$exact_busybox_root/usr/lib" \
+    "$topology_tmp/mattercodex-shell" \
+    sh -c true
 
 expect_success "trusted prepare для services runner provenance" "$cleanup_guard_binary" prepare services
 mkdir -p "$cleanup_go_root/bin"
@@ -2508,6 +3017,149 @@ expect_status \
   23 \
   env MATTERCODEX_ENTRYPOINT_CAPTURE="$entrypoint_capture" MATTERCODEX_ENTRYPOINT_EXIT_CODE=23 \
   "$cleanup_target_root/mattercodex-init" entrypoint "$cleanup_target_root/matter-codex-agent-runner"
+
+wait_for_probe_file() {
+  local path="$1"
+  local attempt=0
+
+  while [ "$attempt" -lt 500 ]; do
+    [ -e "$path" ] && return
+    attempt=$((attempt + 1))
+    sleep 0.01
+  done
+  return 1
+}
+
+run_signal_proxy_probe() {
+  local signal_name="$1"
+  local signal_slug="${signal_name,,}"
+  local ready="$topology_tmp/signal-$signal_slug-ready"
+  local capture="$topology_tmp/signal-$signal_slug-capture"
+  local init_pid
+  local init_status
+  local watchdog_pid
+
+  env \
+    MATTERCODEX_ENTRYPOINT_MODE=signal \
+    MATTERCODEX_SIGNAL_NAME="$signal_name" \
+    MATTERCODEX_SIGNAL_READY="$ready" \
+    MATTERCODEX_SIGNAL_CAPTURE="$capture" \
+    "$cleanup_target_root/mattercodex-init" \
+      entrypoint "$cleanup_target_root/matter-codex-agent-runner" \
+      >"$topology_tmp/signal-$signal_slug-output" 2>&1 &
+  init_pid=$!
+  (
+    sleep 10
+    kill -KILL "$init_pid" 2>/dev/null || true
+  ) &
+  watchdog_pid=$!
+  if ! wait_for_probe_file "$ready"; then
+    kill -KILL "$init_pid" 2>/dev/null || true
+    wait "$init_pid" 2>/dev/null || true
+    kill "$watchdog_pid" 2>/dev/null || true
+    wait "$watchdog_pid" 2>/dev/null || true
+    echo "FAIL: init signal probe $signal_name не достиг runner readiness" >&2
+    exit 1
+  fi
+  kill "-$signal_name" "$init_pid"
+  set +e
+  wait "$init_pid"
+  init_status=$?
+  set -e
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+  [[ "$init_status" == 0 && "$(cat "$capture")" == "$signal_name" ]] || {
+    echo "FAIL: init не переслал $signal_name exact runner process group: exit=$init_status" >&2
+    exit 1
+  }
+}
+
+for signal_name in ALRM HUP INT QUIT USR1 USR2 TERM; do
+  run_signal_proxy_probe "$signal_name"
+done
+
+immediate_signal_capture="$topology_tmp/immediate-signal-capture"
+expect_status \
+  "signal.Notify регистрируется до command.Start и закрывает immediate-start SIGALRM race" \
+  0 \
+  env \
+    MATTERCODEX_ENTRYPOINT_MODE=immediate-signal \
+    MATTERCODEX_SIGNAL_CAPTURE="$immediate_signal_capture" \
+    timeout 10s "$cleanup_target_root/mattercodex-init" \
+      entrypoint "$cleanup_target_root/matter-codex-agent-runner"
+[[ "$(cat "$immediate_signal_capture")" == ALRM ]] || {
+  echo "FAIL: immediate-start SIGALRM не был доставлен exact runner" >&2
+  exit 1
+}
+
+group_ready="$topology_tmp/process-group-ready"
+group_descendant_ready="$topology_tmp/process-group-descendant-ready"
+group_parent_capture="$topology_tmp/process-group-parent"
+group_descendant_capture="$topology_tmp/process-group-descendant"
+env \
+  MATTERCODEX_ENTRYPOINT_MODE=process-group \
+  MATTERCODEX_SIGNAL_READY="$group_ready" \
+  MATTERCODEX_SIGNAL_DESCENDANT_READY="$group_descendant_ready" \
+  MATTERCODEX_SIGNAL_PARENT_CAPTURE="$group_parent_capture" \
+  MATTERCODEX_SIGNAL_DESCENDANT_CAPTURE="$group_descendant_capture" \
+  "$cleanup_target_root/mattercodex-init" \
+    entrypoint "$cleanup_target_root/matter-codex-agent-runner" \
+    >"$topology_tmp/process-group-output" 2>&1 &
+group_init_pid=$!
+(
+  sleep 10
+  kill -KILL "$group_init_pid" 2>/dev/null || true
+) &
+group_watchdog_pid=$!
+if ! wait_for_probe_file "$group_ready" || ! wait_for_probe_file "$group_descendant_ready"; then
+  kill -KILL "$group_init_pid" 2>/dev/null || true
+  wait "$group_init_pid" 2>/dev/null || true
+  kill "$group_watchdog_pid" 2>/dev/null || true
+  wait "$group_watchdog_pid" 2>/dev/null || true
+  echo "FAIL: process-group signal probe не достиг readiness" >&2
+  exit 1
+fi
+kill -TERM "$group_init_pid"
+set +e
+wait "$group_init_pid"
+group_status=$?
+set -e
+kill "$group_watchdog_pid" 2>/dev/null || true
+wait "$group_watchdog_pid" 2>/dev/null || true
+if ! wait_for_probe_file "$group_parent_capture" || ! wait_for_probe_file "$group_descendant_capture"; then
+  echo "FAIL: process-group signal markers не были записаны" >&2
+  exit 1
+fi
+[[ "$group_status" == 0 && "$(cat "$group_parent_capture")" == parent && "$(cat "$group_descendant_capture")" == descendant ]] || {
+  echo "FAIL: SIGTERM не был доставлен runner и descendant process group: exit=$group_status" >&2
+  exit 1
+}
+
+expect_status \
+  "protected init сохраняет exact child exit-by-signal mapping 128+SIGUSR1" \
+  138 \
+  env \
+    MATTERCODEX_ENTRYPOINT_MODE=exit-signal \
+    MATTERCODEX_SIGNAL_NAME=USR1 \
+    timeout 10s "$cleanup_target_root/mattercodex-init" \
+      entrypoint "$cleanup_target_root/matter-codex-agent-runner"
+
+orphan_capture="$topology_tmp/orphan-capture"
+orphan_pid_file="$topology_tmp/orphan-pid"
+expect_status \
+  "protected init действует как subreaper и reap-ит adopted orphan до выхода runner" \
+  0 \
+  env \
+    MATTERCODEX_ENTRYPOINT_MODE=orphan-reaping \
+    MATTERCODEX_ORPHAN_CAPTURE="$orphan_capture" \
+    MATTERCODEX_ORPHAN_PID_FILE="$orphan_pid_file" \
+    timeout 10s "$cleanup_target_root/mattercodex-init" \
+      entrypoint "$cleanup_target_root/matter-codex-agent-runner"
+IFS=: read -r orphan_expected_parent orphan_actual_parent orphan_state <"$orphan_capture"
+[[ "$orphan_expected_parent" == "$orphan_actual_parent" && "$orphan_state" == reaped ]] || {
+  echo "FAIL: protected init не доказал subreaper adoption/reaping orphan" >&2
+  exit 1
+}
 
 for source_topology in symlink hardlink directory writable extra; do
   expect_success "trusted prepare для negative source topology $source_topology" "$cleanup_guard_binary" prepare deploy

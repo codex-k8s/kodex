@@ -23,6 +23,9 @@ const (
 	trustedUID          = 0
 	trustedGID          = 0
 	prSetChildSubreaper = 36
+	maxLinuxSignal      = 64
+	glibcSignalCancel   = 32
+	glibcSignalSetXID   = 33
 )
 
 var protectedTools = []string{
@@ -95,7 +98,7 @@ func protectedNames(profile string) []string {
 	case "services":
 		names = append(names, "matter-codex-agent-runner", "mattercodex-init")
 	case "deploy":
-		names = append(names, "mattercodex-shell")
+		names = append(names, "busybox")
 	default:
 		fail("unsupported profile %q", profile)
 	}
@@ -352,31 +355,65 @@ func enableSubreaper() {
 	}
 }
 
-func forwardSignals(processGroup int, stop <-chan struct{}) {
-	signals := make(chan os.Signal, 16)
-	signal.Notify(
-		signals,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-		syscall.SIGTERM,
-		syscall.SIGUSR1,
-		syscall.SIGUSR2,
-		syscall.SIGTSTP,
-		syscall.SIGCONT,
-		syscall.SIGWINCH,
-	)
-	defer signal.Stop(signals)
+func proxySignals() []os.Signal {
+	signals := make([]os.Signal, 0, maxLinuxSignal-7)
+	for number := 1; number <= maxLinuxSignal; number++ {
+		current := syscall.Signal(number)
+		switch current {
+		case syscall.SIGKILL,
+			syscall.SIGSTOP,
+			syscall.SIGCHLD,
+			syscall.SIGURG,
+			syscall.SIGPROF,
+			syscall.Signal(glibcSignalCancel),
+			syscall.Signal(glibcSignalSetXID):
+			continue
+		default:
+			signals = append(signals, current)
+		}
+	}
+	return signals
+}
+
+func forwardSignals(signals <-chan os.Signal, processGroup int, stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
 	for {
+		select {
+		case <-stop:
+			return
+		default:
+		}
 		select {
 		case received := <-signals:
 			if received == nil {
 				continue
 			}
 			if typed, ok := received.(syscall.Signal); ok {
+				select {
+				case <-stop:
+					return
+				default:
+				}
 				_ = syscall.Kill(-processGroup, typed)
 			}
 		case <-stop:
+			return
+		}
+	}
+}
+
+func reapExitedChildren() {
+	for {
+		var status syscall.WaitStatus
+		pid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
+		switch {
+		case err == syscall.EINTR:
+			continue
+		case err == syscall.ECHILD:
+			return
+		case err != nil:
+			fail("reap exited child: %v", err)
+		case pid == 0:
 			return
 		}
 	}
@@ -409,12 +446,18 @@ func runServicesEntrypoint(runner string, arguments []string) {
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	proxiedSignals := proxySignals()
+	signals := make(chan os.Signal, len(proxiedSignals)*2)
+	signal.Notify(signals, proxiedSignals...)
 	if err := command.Start(); err != nil {
+		signal.Stop(signals)
 		fail("start protected runner: %v", err)
 	}
 
 	stopForwarding := make(chan struct{})
-	go forwardSignals(command.Process.Pid, stopForwarding)
+	forwardingDone := make(chan struct{})
+	go forwardSignals(signals, command.Process.Pid, stopForwarding, forwardingDone)
 	var runnerStatus syscall.WaitStatus
 	for {
 		var status syscall.WaitStatus
@@ -424,6 +467,8 @@ func runServicesEntrypoint(runner string, arguments []string) {
 		}
 		if err != nil {
 			close(stopForwarding)
+			signal.Stop(signals)
+			<-forwardingDone
 			fail("wait for protected runner: %v", err)
 		}
 		if pid == command.Process.Pid {
@@ -432,6 +477,9 @@ func runServicesEntrypoint(runner string, arguments []string) {
 		}
 	}
 	close(stopForwarding)
+	signal.Stop(signals)
+	<-forwardingDone
+	reapExitedChildren()
 	os.Exit(exitCode(runnerStatus))
 }
 

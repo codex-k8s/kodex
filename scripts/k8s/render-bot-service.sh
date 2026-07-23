@@ -1,9 +1,56 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+mattercodex_require_protected_shell_startup() {
+  local environment_entry environment_key
+
+  if [[ "$-" != *p* ]]; then
+    builtin printf 'FAIL: render-bot-service.sh нужно запускать напрямую, чтобы Bash privileged mode действовал до startup hooks\n' >&2
+    exit 1
+  fi
+  if [[ -n "${BASH_ENV+x}" || -n "${ENV+x}" ]]; then
+    builtin printf 'FAIL: BASH_ENV и ENV запрещены для render-bot-service.sh\n' >&2
+    exit 1
+  fi
+  while IFS= read -r -d '' environment_entry; do
+    environment_key="${environment_entry%%=*}"
+    case "$environment_key" in
+      BASH_FUNC_*%%)
+        builtin printf 'FAIL: экспортированные shell functions запрещены для render-bot-service.sh\n' >&2
+        exit 1
+        ;;
+    esac
+  done < <(/usr/bin/env -0)
+}
+
+mattercodex_require_protected_shell_startup
+builtin unset BASH_ENV ENV
+
+mattercodex_resolve_bootstrap_paths() {
+  local script_path="${BASH_SOURCE[0]}"
+  local script_dir
+
+  case "$script_path" in
+    /*) ;;
+    */*) script_path="$(builtin pwd -P)/$script_path" ;;
+    *)
+      builtin printf 'FAIL: невозможно определить абсолютный путь render-bot-service.sh без PATH lookup\n' >&2
+      exit 1
+      ;;
+  esac
+  script_dir="${script_path%/*}"
+  SCRIPT_DIR="$(builtin cd -P -- "$script_dir" && builtin pwd -P)" || {
+    builtin printf 'FAIL: невозможно определить trusted script directory render-bot-service.sh\n' >&2
+    exit 1
+  }
+  REPO_ROOT="$(builtin cd -P -- "$SCRIPT_DIR/../.." && builtin pwd -P)" || {
+    builtin printf 'FAIL: невозможно определить trusted repository root render-bot-service.sh\n' >&2
+    exit 1
+  }
+}
+
+mattercodex_resolve_bootstrap_paths
 # shellcheck disable=SC1091
 . "$REPO_ROOT/scripts/lib/env.sh"
 
@@ -33,6 +80,7 @@ else
 fi
 
 mattercodex_load_env_file "$ENV_FILE"
+mattercodex_require_protected_shell_startup
 mattercodex_validate_base_env
 mattercodex_require_commands envsubst sha256sum
 

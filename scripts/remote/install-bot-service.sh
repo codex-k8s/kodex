@@ -25,10 +25,32 @@ mattercodex_require_protected_shell_startup() {
 }
 
 mattercodex_require_protected_shell_startup
-unset BASH_ENV ENV
+builtin unset BASH_ENV ENV
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+mattercodex_resolve_bootstrap_paths() {
+  local script_path="${BASH_SOURCE[0]}"
+  local script_dir
+
+  case "$script_path" in
+    /*) ;;
+    */*) script_path="$(builtin pwd -P)/$script_path" ;;
+    *)
+      builtin printf 'FAIL: невозможно определить абсолютный путь install-bot-service.sh без PATH lookup\n' >&2
+      exit 1
+      ;;
+  esac
+  script_dir="${script_path%/*}"
+  SCRIPT_DIR="$(builtin cd -P -- "$script_dir" && builtin pwd -P)" || {
+    builtin printf 'FAIL: невозможно определить trusted script directory install-bot-service.sh\n' >&2
+    exit 1
+  }
+  REPO_ROOT="$(builtin cd -P -- "$SCRIPT_DIR/../.." && builtin pwd -P)" || {
+    builtin printf 'FAIL: невозможно определить trusted repository root install-bot-service.sh\n' >&2
+    exit 1
+  }
+}
+
+mattercodex_resolve_bootstrap_paths
 # shellcheck disable=SC1091
 . "$REPO_ROOT/scripts/lib/env.sh"
 
@@ -134,7 +156,129 @@ configure_image_defaults_for_remote_build() {
   fi
 }
 
+image_push_destination_for_pull_image() {
+  local image="$1"
+  local image_path
+  if [ "$image" = "${image#*/}" ]; then
+    image_path="${MATTERCODEX_IMAGE_REPOSITORY_PREFIX}/${image}"
+  else
+    image_path="${image#*/}"
+  fi
+  printf '%s/%s\n' "$MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST" "$image_path"
+}
+
+kaniko_require_ascii_pattern() {
+  local label="$1"
+  local value="$2"
+  local pattern="$3"
+  local LC_ALL=C
+
+  if [ -z "$value" ] || [[ ! "$value" =~ $pattern ]]; then
+    mattercodex_die "$label не прошёл строгую проверку Kaniko YAML scalar"
+  fi
+}
+
+kaniko_validate_kubernetes_name() {
+  local label="$1"
+  local value="$2"
+  local pattern='^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+
+  kaniko_require_ascii_pattern "$label" "$value" "$pattern"
+  [ "${#value}" -le 63 ] || mattercodex_die "$label длиннее 63 ASCII-символов"
+}
+
+kaniko_validate_positive_integer() {
+  local label="$1"
+  local value="$2"
+  local pattern='^[1-9][0-9]*$'
+
+  kaniko_require_ascii_pattern "$label" "$value" "$pattern"
+}
+
+kaniko_validate_registry_host() {
+  local label="$1"
+  local value="$2"
+  local pattern='^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]{1,5})?$'
+  local port
+
+  kaniko_require_ascii_pattern "$label" "$value" "$pattern"
+  if [[ "$value" == *:* ]]; then
+    port="${value##*:}"
+    ((10#$port >= 1 && 10#$port <= 65535)) || mattercodex_die "$label содержит недопустимый TCP port"
+  fi
+}
+
+kaniko_validate_image_reference() {
+  local label="$1"
+  local value="$2"
+  local pattern='^[a-z0-9]+([.-][a-z0-9]+)*(:[0-9]{1,5})?(/[a-z0-9]+([._-][a-z0-9]+)*)+(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(@sha256:[a-f0-9]{64})?$'
+  local registry
+
+  kaniko_require_ascii_pattern "$label" "$value" "$pattern"
+  registry="${value%%/*}"
+  kaniko_validate_registry_host "$label registry host" "$registry"
+}
+
+kaniko_validate_relative_path() {
+  local label="$1"
+  local value="$2"
+  local pattern='^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$'
+
+  kaniko_require_ascii_pattern "$label" "$value" "$pattern"
+  case "/$value/" in
+    */./* | */../*) mattercodex_die "$label содержит недопустимый path component" ;;
+  esac
+}
+
+kaniko_validate_extra_arg() {
+  local value="$1"
+  local package
+  local package_pattern='^@[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*@[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?$'
+
+  case "$value" in
+    --target=prod)
+      return
+      ;;
+    --build-arg=MATTERCODEX_CODEX_PACKAGE=*)
+      package="${value#--build-arg=MATTERCODEX_CODEX_PACKAGE=}"
+      kaniko_require_ascii_pattern "MATTERCODEX_CODEX_PACKAGE" "$package" "$package_pattern"
+      ;;
+    *)
+      mattercodex_die "Kaniko extra arg не входит в закрытый allowlist"
+      ;;
+  esac
+}
+
+validate_kaniko_configuration() {
+  local cpu_pattern='^([1-9][0-9]*m|[1-9][0-9]*(\.[0-9]+)?)$'
+  local memory_pattern='^[1-9][0-9]*(Ki|Mi|Gi|Ti|Pi|Ei)$'
+
+  if [ "$MATTERCODEX_IMAGE_BUILD_STRATEGY" != "kaniko" ]; then
+    return
+  fi
+  kaniko_validate_kubernetes_name "MATTERCODEX_NAMESPACE" "$MATTERCODEX_NAMESPACE"
+  kaniko_validate_kubernetes_name "MATTERCODEX_KANIKO_CONTEXT_PVC" "$MATTERCODEX_KANIKO_CONTEXT_PVC"
+  kaniko_validate_positive_integer "MATTERCODEX_KANIKO_JOB_TTL_SECONDS" "$MATTERCODEX_KANIKO_JOB_TTL_SECONDS"
+  kaniko_validate_positive_integer "MATTERCODEX_KANIKO_ACTIVE_DEADLINE_SECONDS" "$MATTERCODEX_KANIKO_ACTIVE_DEADLINE_SECONDS"
+  kaniko_require_ascii_pattern "MATTERCODEX_KANIKO_CPU_REQUEST" "$MATTERCODEX_KANIKO_CPU_REQUEST" "$cpu_pattern"
+  kaniko_require_ascii_pattern "MATTERCODEX_KANIKO_MEMORY_REQUEST" "$MATTERCODEX_KANIKO_MEMORY_REQUEST" "$memory_pattern"
+  kaniko_require_ascii_pattern "MATTERCODEX_KANIKO_MEMORY_LIMIT" "$MATTERCODEX_KANIKO_MEMORY_LIMIT" "$memory_pattern"
+  kaniko_validate_registry_host "MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST" "$MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST"
+  kaniko_validate_image_reference "MATTERCODEX_KANIKO_IMAGE" "$MATTERCODEX_KANIKO_IMAGE"
+  kaniko_validate_image_reference "MATTERCODEX_AGENT_RUNNER_IMAGE" "$MATTERCODEX_AGENT_RUNNER_IMAGE"
+  kaniko_validate_image_reference "MATTERCODEX_BOT_SERVICE_IMAGE" "$MATTERCODEX_BOT_SERVICE_IMAGE"
+  kaniko_validate_image_reference \
+    "agent-runner Kaniko destination" \
+    "$(image_push_destination_for_pull_image "$MATTERCODEX_AGENT_RUNNER_IMAGE")"
+  kaniko_validate_image_reference \
+    "bot-service Kaniko destination" \
+    "$(image_push_destination_for_pull_image "$MATTERCODEX_BOT_SERVICE_IMAGE")"
+  kaniko_validate_extra_arg "--build-arg=MATTERCODEX_CODEX_PACKAGE=$MATTERCODEX_CODEX_PACKAGE"
+  kaniko_validate_extra_arg "--target=prod"
+}
+
 configure_image_defaults_for_remote_build
+validate_kaniko_configuration
 
 if [ -z "$RENDER_DIR" ]; then
   RENDER_DIR="$(mktemp -d)"
@@ -229,17 +373,6 @@ remote_container_image_exists() {
     exit 1" </dev/null
 }
 
-image_push_destination_for_pull_image() {
-  local image="$1"
-  local image_path
-  if [ "$image" = "${image#*/}" ]; then
-    image_path="${MATTERCODEX_IMAGE_REPOSITORY_PREFIX}/${image}"
-  else
-    image_path="${image#*/}"
-  fi
-  printf '%s/%s\n' "$MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST" "$image_path"
-}
-
 remote_registry_image_exists() {
   local image="$1"
   local image_path
@@ -260,19 +393,6 @@ remote_registry_image_exists() {
   accept_header="application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json"
   registry_url_q="$(mattercodex_shell_quote "http://${MATTERCODEX_IMAGE_REGISTRY_PULL_HOST}/v2/${repository}/manifests/${tag}")"
   mattercodex_ssh "curl -fsS -H 'Accept: $accept_header' $registry_url_q >/dev/null" </dev/null
-}
-
-kaniko_arg_yaml_line() {
-  local arg="$1"
-  local escaped
-
-  case "$arg" in
-    --cache | --cache=* | --cache-run-layers | --cache-run-layers=* | --cache-copy-layers | --cache-copy-layers=* | --cache-repo | --cache-repo=*)
-      mattercodex_die "Kaniko cache args запрещены для поддерживаемого build path"
-      ;;
-  esac
-  escaped="$(printf '%s' "$arg" | sed 's/\\/\\\\/g; s/"/\\"/g')"
-  printf '            - "%s"\n' "$escaped"
 }
 
 apply_kaniko_build_infra_remote() {
@@ -356,7 +476,7 @@ run_kaniko_build_remote() {
   local archive="$2"
   local dockerfile="$3"
   local pull_image="$4"
-  local extra_args_yaml="$5"
+  local extra_arg="$5"
   local job_name
   local destination
   local job_manifest
@@ -367,16 +487,22 @@ run_kaniko_build_remote() {
   destination="$(image_push_destination_for_pull_image "$pull_image")"
   job_manifest="$(mattercodex_temp_file)"
 
-  upload_kaniko_context_remote "$archive" "$job_name"
-
   MATTERCODEX_KANIKO_JOB_NAME="$job_name"
   MATTERCODEX_KANIKO_COMPONENT="$component"
   MATTERCODEX_KANIKO_CONTEXT_SUBDIR="$job_name"
   MATTERCODEX_KANIKO_DOCKERFILE="$dockerfile"
   MATTERCODEX_KANIKO_DESTINATION="$destination"
-  MATTERCODEX_KANIKO_EXTRA_ARGS_YAML="$extra_args_yaml"
-  export MATTERCODEX_KANIKO_JOB_NAME MATTERCODEX_KANIKO_COMPONENT MATTERCODEX_KANIKO_CONTEXT_SUBDIR MATTERCODEX_KANIKO_DOCKERFILE MATTERCODEX_KANIKO_DESTINATION MATTERCODEX_KANIKO_EXTRA_ARGS_YAML
+  MATTERCODEX_KANIKO_EXTRA_ARG="$extra_arg"
+  export MATTERCODEX_KANIKO_JOB_NAME MATTERCODEX_KANIKO_COMPONENT MATTERCODEX_KANIKO_CONTEXT_SUBDIR MATTERCODEX_KANIKO_DOCKERFILE MATTERCODEX_KANIKO_DESTINATION MATTERCODEX_KANIKO_EXTRA_ARG
 
+  kaniko_validate_kubernetes_name "MATTERCODEX_KANIKO_JOB_NAME" "$MATTERCODEX_KANIKO_JOB_NAME"
+  kaniko_validate_kubernetes_name "MATTERCODEX_KANIKO_COMPONENT" "$MATTERCODEX_KANIKO_COMPONENT"
+  kaniko_validate_kubernetes_name "MATTERCODEX_KANIKO_CONTEXT_SUBDIR" "$MATTERCODEX_KANIKO_CONTEXT_SUBDIR"
+  kaniko_validate_relative_path "MATTERCODEX_KANIKO_DOCKERFILE" "$MATTERCODEX_KANIKO_DOCKERFILE"
+  kaniko_validate_image_reference "MATTERCODEX_KANIKO_DESTINATION" "$MATTERCODEX_KANIKO_DESTINATION"
+  kaniko_validate_extra_arg "$MATTERCODEX_KANIKO_EXTRA_ARG"
+
+  upload_kaniko_context_remote "$archive" "$job_name"
   mattercodex_render_template "$REPO_ROOT/deploy/k8s/bot-service/kaniko-job.yaml.tpl" "$job_manifest"
   mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q delete job $job_name_q --ignore-not-found --wait=true >/dev/null" </dev/null
   mattercodex_log "Kaniko сборка $component image"
@@ -417,7 +543,7 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$SHOULD_BUILD_AGENT_RUNNER"
       "$AGENT_RUNNER_ARCHIVE" \
       "services/jobs/agent-runner/Dockerfile" \
       "$MATTERCODEX_AGENT_RUNNER_IMAGE" \
-      "$(kaniko_arg_yaml_line "--build-arg=MATTERCODEX_CODEX_PACKAGE=$MATTERCODEX_CODEX_PACKAGE")"
+      "--build-arg=MATTERCODEX_CODEX_PACKAGE=$MATTERCODEX_CODEX_PACKAGE"
   elif [ "$MATTERCODEX_IMAGE_BUILD_STRATEGY" = "docker" ]; then
     REMOTE_AGENT_RUNNER_DIR="/tmp/matter-codex-agent-runner-build"
     REMOTE_AGENT_RUNNER_DIR_Q="$(mattercodex_shell_quote "$REMOTE_AGENT_RUNNER_DIR")"
@@ -462,7 +588,7 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_BOT_SERVICE_B
       "$BOT_SERVICE_ARCHIVE" \
       "services/external/bot-service/Dockerfile" \
       "$MATTERCODEX_BOT_SERVICE_IMAGE" \
-      "$(kaniko_arg_yaml_line "--target=prod")"
+      "--target=prod"
   elif [ "$MATTERCODEX_IMAGE_BUILD_STRATEGY" = "docker" ]; then
     REMOTE_BOT_SERVICE_DIR="/tmp/matter-codex-bot-service-build"
     REMOTE_BOT_SERVICE_DIR_Q="$(mattercodex_shell_quote "$REMOTE_BOT_SERVICE_DIR")"

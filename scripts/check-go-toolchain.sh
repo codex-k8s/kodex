@@ -1050,6 +1050,7 @@ canonical_files=(
   scripts/build-agent-runner-image.sh
   scripts/internal/go-toolchain-guard.go
   scripts/k8s/install-bot-service.sh
+  scripts/k8s/render-bot-service.sh
   scripts/lib/env.sh
   scripts/remote/install-bot-service.sh
   deploy/k8s/bot-service/kaniko-job.yaml.tpl
@@ -1065,13 +1066,23 @@ for path in "${canonical_files[@]}"; do
 done
 [[ -x "$repo_root/scripts/build-agent-runner-image.sh" ]] || fail "scripts/build-agent-runner-image.sh должен быть исполняемым"
 [[ -x "$repo_root/scripts/k8s/install-bot-service.sh" ]] || fail "scripts/k8s/install-bot-service.sh должен быть исполняемым"
+[[ -x "$repo_root/scripts/k8s/render-bot-service.sh" ]] || fail "scripts/k8s/render-bot-service.sh должен быть исполняемым"
 [[ -x "$repo_root/scripts/remote/install-bot-service.sh" ]] || fail "scripts/remote/install-bot-service.sh должен быть исполняемым"
 require_line scripts/build-agent-runner-image.sh '#!/bin/bash -p'
 require_line scripts/k8s/install-bot-service.sh '#!/bin/bash -p'
+require_line scripts/k8s/render-bot-service.sh '#!/bin/bash -p'
 require_line scripts/remote/install-bot-service.sh '#!/bin/bash -p'
 require_source_commitment scripts/build-agent-runner-image.sh 6397eb2ba01d19ad9e197b7922c5f0ecad6987ef3db3b24bc66402408c0c941e
-require_source_commitment scripts/k8s/install-bot-service.sh f6e380b9167b45d5034790fc6993c6d9fe0dfd38392a3df128fb7a4ac134ef39
-require_source_commitment scripts/remote/install-bot-service.sh db1044cb493beabbf402874746105efaf7a794abffb730d3b6d3574dca0ec1d5
+require_source_commitment scripts/k8s/install-bot-service.sh 26266ea3ef5b4e4a0a0e38831595b91d524477e5efcf346b453f626fa42fd192
+require_source_commitment scripts/k8s/render-bot-service.sh 12e55045dcd482424adc605ad7ae330ff042e2c17ec1d93278b4e94cb41a0095
+require_source_commitment scripts/lib/env.sh eeb924a711e07aec19d1c01a12d69cfbf0ff3af5d3bd902d0ecc780b1f2e394f
+require_source_commitment scripts/remote/install-bot-service.sh fcf790df937960fba835ed062a62f32b5b5012e86b4f45593d725ba9355839f9
+require_source_commitment deploy/k8s/bot-service/kaniko-job.yaml.tpl f5c0cd3e8ca1ec00bdccbed16fcb02651b88902cdd6ce10d87f4f23d5ab6e741
+require_count scripts/k8s/install-bot-service.sh '. "$REPO_ROOT/scripts/' 1
+require_count scripts/k8s/render-bot-service.sh '. "$REPO_ROOT/scripts/' 1
+require_count scripts/remote/install-bot-service.sh '. "$REPO_ROOT/scripts/' 1
+require_count scripts/k8s/install-bot-service.sh '"$SCRIPT_DIR/render-bot-service.sh"' 1
+require_count scripts/remote/install-bot-service.sh '"$REPO_ROOT/scripts/k8s/render-bot-service.sh"' 1
 require_line deploy/k8s/bot-service/kaniko-job.yaml.tpl '            - "--cache=false"'
 require_line deploy/k8s/bot-service/kaniko-job.yaml.tpl '            - "--cache-run-layers=false"'
 require_line deploy/k8s/bot-service/kaniko-job.yaml.tpl '            - "--cache-copy-layers=false"'
@@ -1120,13 +1131,13 @@ require_final_runtime_stage_contract \
   0 \
   "COPY --from=1 /out/mattercodex-protected/ /usr/local/bin/" \
   "COPY --from=1 /out/mattercodex-protected/ /opt/mattercodex/protected-artifacts/" \
-  "COPY --from=0 /bin/busybox /opt/mattercodex/protected-artifacts/mattercodex-shell" \
+  "COPY --from=0 /bin/busybox /opt/mattercodex/protected-artifacts/busybox" \
   4 \
   6 \
   "WORKDIR /workspace" \
   "ENV GOROOT=/usr/local/go GOENV=off GOFLAGS= GOTOOLCHAIN=local PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" \
   'USER 10001:10001' \
-  'CMD ["/usr/local/bin/mattercodex-shell", "sh"]' \
+  'CMD ["/usr/local/bin/busybox", "sh"]' \
   "b6e7b6fb8a7b52891a9cfc39d2220975a9be8e7a056dd8cf6c58b51dadf302b4"
 require_count services/jobs/agent-runner/Dockerfile "FROM $go_image" 2
 require_count deploy/images/agent-runner/Dockerfile "FROM $go_image" 2

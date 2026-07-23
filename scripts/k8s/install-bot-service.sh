@@ -25,10 +25,32 @@ mattercodex_require_protected_shell_startup() {
 }
 
 mattercodex_require_protected_shell_startup
-unset BASH_ENV ENV
+builtin unset BASH_ENV ENV
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+mattercodex_resolve_bootstrap_paths() {
+  local script_path="${BASH_SOURCE[0]}"
+  local script_dir
+
+  case "$script_path" in
+    /*) ;;
+    */*) script_path="$(builtin pwd -P)/$script_path" ;;
+    *)
+      builtin printf 'FAIL: невозможно определить абсолютный путь install-bot-service.sh без PATH lookup\n' >&2
+      exit 1
+      ;;
+  esac
+  script_dir="${script_path%/*}"
+  SCRIPT_DIR="$(builtin cd -P -- "$script_dir" && builtin pwd -P)" || {
+    builtin printf 'FAIL: невозможно определить trusted script directory install-bot-service.sh\n' >&2
+    exit 1
+  }
+  REPO_ROOT="$(builtin cd -P -- "$SCRIPT_DIR/../.." && builtin pwd -P)" || {
+    builtin printf 'FAIL: невозможно определить trusted repository root install-bot-service.sh\n' >&2
+    exit 1
+  }
+}
+
+mattercodex_resolve_bootstrap_paths
 # shellcheck disable=SC1091
 . "$REPO_ROOT/scripts/lib/env.sh"
 

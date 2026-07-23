@@ -34,7 +34,7 @@ spec:
             - "--insecure-registry=${MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST}"
             - "--skip-unused-stages=true"
             - "--cleanup"
-${MATTERCODEX_KANIKO_EXTRA_ARGS_YAML}
+            - "${MATTERCODEX_KANIKO_EXTRA_ARG}"
           volumeMounts:
             - name: context
               mountPath: /workspace
