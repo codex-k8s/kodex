@@ -463,22 +463,26 @@ validate_toolchain_stage_contracts() {
 validate_final_runtime_stage_contract_instructions() {
   local dockerfile="$1"
   local from_line="$2"
-  local expected_env="$3"
-  local expected_bootstrap_copy="$4"
-  local expected_guard_copy="$5"
-  local expected_clean="$6"
-  local expected_trusted_copy="$7"
-  local expected_verify="$8"
-  local required_go_tools_copy="$9"
-  local allowed_copy_two="${10}"
-  local expected_run_count="${11}"
-  local expected_copy_count="${12}"
-  local allowed_tail_one="${13}"
-  local allowed_tail_two="${14}"
-  local allowed_tail_three="${15}"
+  local expected_bootstrap_env="$3"
+  local expected_final_env="$4"
+  local expected_workdir="$5"
+  local expected_bootstrap_copy="$6"
+  local expected_guard_copy="$7"
+  local expected_clean="$8"
+  local expected_trusted_copy="$9"
+  local expected_verify="${10}"
+  local required_go_tools_copy="${11}"
+  local allowed_copy_two="${12}"
+  local expected_run_count="${13}"
+  local expected_copy_count="${14}"
+  local allowed_tail_one="${15}"
+  local allowed_tail_two="${16}"
+  local allowed_tail_three="${17}"
 
   tail -n +"$from_line" "$dockerfile" | LC_ALL=C awk \
-    -v expected_env="$expected_env" \
+    -v expected_bootstrap_env="$expected_bootstrap_env" \
+    -v expected_final_env="$expected_final_env" \
+    -v expected_workdir="$expected_workdir" \
     -v expected_bootstrap_copy="$expected_bootstrap_copy" \
     -v expected_guard_copy="$expected_guard_copy" \
     -v expected_clean="$expected_clean" \
@@ -603,9 +607,13 @@ validate_final_runtime_stage_contract_instructions() {
         final_add_count++
       }
 
-      if (canonical == expected_env) {
-        env_count++
-        env_index = instruction_index
+      if (canonical == expected_bootstrap_env) {
+        bootstrap_env_count++
+        bootstrap_env_index = instruction_index
+      }
+      if (canonical == expected_final_env) {
+        final_env_count++
+        final_env_index = instruction_index
       }
       if (canonical == expected_bootstrap_copy) {
         bootstrap_copy_count++
@@ -627,6 +635,12 @@ validate_final_runtime_stage_contract_instructions() {
       }
       if (canonical == required_go_tools_copy) {
         required_go_tools_copy_count++
+        if (required_go_tools_copy_count == 1) {
+          bootstrap_tools_copy_index = instruction_index
+        } else if (required_go_tools_copy_count == 2) {
+          final_tools_copy_index = instruction_index
+          final_tools_copy_seen = 1
+        }
       }
       if (is_verify) {
         verify_count++
@@ -649,8 +663,15 @@ validate_final_runtime_stage_contract_instructions() {
         shell_count++
       }
 
-      if (bootstrap_seen && !guard_copy_seen && instruction == "RUN") {
+      if (bootstrap_seen && !final_tools_copy_seen && instruction == "RUN") {
         installer_run_between_copies = 1
+      }
+
+      if (instruction == "WORKDIR") {
+        workdir_count++
+        if (canonical == expected_workdir) {
+          expected_workdir_count++
+        }
       }
 
       if ((instruction == "COPY" || instruction == "ADD") && \
@@ -684,7 +705,16 @@ validate_final_runtime_stage_contract_instructions() {
           }
           if (key == "GOTOOLCHAIN") {
             effective_value = assigned_value
-            found = 1
+            gotoolchain_count++
+          } else if (key == "GOROOT") {
+            effective_goroot = assigned_value
+            goroot_count++
+          } else if (key == "GOENV") {
+            effective_goenv = assigned_value
+            goenv_count++
+          } else if (key == "GOFLAGS") {
+            effective_goflags = assigned_value
+            goflags_count++
           }
         }
         return
@@ -700,7 +730,16 @@ validate_final_runtime_stage_contract_instructions() {
       }
       if (key == "GOTOOLCHAIN") {
         effective_value = assigned_value
-        found = 1
+        gotoolchain_count++
+      } else if (key == "GOROOT") {
+        effective_goroot = assigned_value
+        goroot_count++
+      } else if (key == "GOENV") {
+        effective_goenv = assigned_value
+        goenv_count++
+      } else if (key == "GOFLAGS") {
+        effective_goflags = assigned_value
+        goflags_count++
       }
     }
 
@@ -727,8 +766,12 @@ validate_final_runtime_stage_contract_instructions() {
         print "незавершённая логическая Dockerfile-инструкция в final runtime stage" > "/dev/stderr"
         exit 2
       }
-      if (env_count != 1) {
-        print "final runtime stage должен содержать точную самостоятельную логическую инструкцию \047" expected_env "\047 ровно один раз" > "/dev/stderr"
+      if (bootstrap_env_count != 1) {
+        print "final runtime stage должен содержать точную самостоятельную bootstrap ENV-инструкцию \047" expected_bootstrap_env "\047 ровно один раз" > "/dev/stderr"
+        exit 2
+      }
+      if (final_env_count != 1) {
+        print "final runtime stage должен содержать точную самостоятельную final ENV-инструкцию \047" expected_final_env "\047 ровно один раз" > "/dev/stderr"
         exit 2
       }
       if (bootstrap_copy_count != 1) {
@@ -747,12 +790,12 @@ validate_final_runtime_stage_contract_instructions() {
         print "final runtime stage должен содержать ровно один final trusted COPY Go toolchain" > "/dev/stderr"
         exit 2
       }
-      if (required_go_tools_copy_count != 1) {
-        print "final runtime stage должен копировать закреплённые Go tools одной точной самостоятельной логической COPY-инструкцией из numeric tools stage" > "/dev/stderr"
+      if (required_go_tools_copy_count != 2) {
+        print "final runtime stage должен дважды копировать закреплённые Go tools точной самостоятельной логической COPY-инструкцией из numeric tools stage" > "/dev/stderr"
         exit 2
       }
       if (verify_count != 1) {
-        print "final runtime stage должен выполнять точную shell-independent проверку stdout GOVERSION/GOTOOLCHAIN ровно один раз" > "/dev/stderr"
+        print "final runtime stage должен выполнять точную shell-independent проверку GOVERSION/GOTOOLCHAIN/GOROOT и compiler probe ровно один раз" > "/dev/stderr"
         exit 2
       }
       if (post_check_write_instruction != "") {
@@ -771,8 +814,12 @@ validate_final_runtime_stage_contract_instructions() {
         print "final runtime stage не должна содержать ADD-инструкции" > "/dev/stderr"
         exit 2
       }
-      if (env_index >= bootstrap_copy_index) {
+      if (bootstrap_env_index >= bootstrap_copy_index) {
         print "final runtime stage должен задавать GOTOOLCHAIN=local до bootstrap COPY Go toolchain" > "/dev/stderr"
+        exit 2
+      }
+      if (bootstrap_tools_copy_index >= bootstrap_copy_index) {
+        print "первичный COPY Go tools должен предшествовать Kaniko-compatible bootstrap COPY" > "/dev/stderr"
         exit 2
       }
       if (bootstrap_copy_index >= guard_copy_index) {
@@ -787,17 +834,34 @@ validate_final_runtime_stage_contract_instructions() {
         print "final runtime stage не должна содержать SHELL: trusted clean/verify закреплены точной exec-form" > "/dev/stderr"
         exit 2
       }
-      if (guard_copy_index + 1 != clean_index || clean_index + 1 != trusted_copy_index || trusted_copy_index + 1 != verify_index) {
-        print "trusted guard COPY, clean, final Go COPY и stdout verification должны идти непосредственно друг за другом" > "/dev/stderr"
+      if (final_tools_copy_index + 1 != guard_copy_index || guard_copy_index + 1 != clean_index || clean_index + 1 != trusted_copy_index || trusted_copy_index + 1 != final_env_index || final_env_index + 1 != verify_index) {
+        print "final Go tools COPY, trusted guard COPY, clean, final Go COPY, final ENV и verification должны идти непосредственно друг за другом" > "/dev/stderr"
         exit 2
       }
-      if (!found) {
-        print "final runtime stage не задаёт GOTOOLCHAIN" > "/dev/stderr"
+      if (expected_workdir == "") {
+        if (workdir_count != 0) {
+          print "final runtime stage не должна содержать WORKDIR" > "/dev/stderr"
+          exit 2
+        }
+      } else if (workdir_count != 1 || expected_workdir_count != 1) {
+        print "final runtime stage должна содержать ровно одну точную инструкцию \047" expected_workdir "\047" > "/dev/stderr"
         exit 2
       }
-      if (effective_value != "local") {
-        print effective_value
-        exit 0
+      if (gotoolchain_count != 2 || effective_value != "local") {
+        print "final runtime stage должен задавать GOTOOLCHAIN=local только в bootstrap и final ENV" > "/dev/stderr"
+        exit 2
+      }
+      if (goroot_count != 1 || effective_goroot != "/usr/local/go") {
+        print "final runtime stage должен задавать GOROOT=/usr/local/go ровно один раз в final ENV" > "/dev/stderr"
+        exit 2
+      }
+      if (goenv_count != 1 || effective_goenv != "off") {
+        print "final runtime stage должен задавать GOENV=off ровно один раз в final ENV" > "/dev/stderr"
+        exit 2
+      }
+      if (goflags_count != 1 || effective_goflags != "") {
+        print "final runtime stage должен очищать GOFLAGS ровно один раз в final ENV" > "/dev/stderr"
+        exit 2
       }
       expected_tail_count = 0
       if (allowed_tail_one != "") {
@@ -819,7 +883,7 @@ validate_final_runtime_stage_contract_instructions() {
           exit 2
         }
       }
-      print effective_value
+      print effective_value "\t" effective_goroot "\t" effective_goenv "\t" effective_goflags
     }
   '
 }
@@ -833,15 +897,16 @@ require_final_runtime_stage_contract() {
   local allowed_copy_two="${6:-}"
   local expected_final_run_count="$7"
   local expected_final_copy_count="$8"
-  local final_path_env="$9"
-  local allowed_tail_two="${10:-}"
-  local allowed_tail_three="${11:-}"
-  local expected_work_contract_sha256="${12}"
+  local expected_workdir="$9"
+  local final_runtime_env="${10}"
+  local allowed_tail_one="${11:-}"
+  local allowed_tail_two="${12:-}"
+  local expected_work_contract_sha256="${13}"
   local dockerfile="$repo_root/$path"
   local stage_info from_line actual_from expected_from_body
-  local runtime_env runtime_bootstrap_copy runtime_guard_copy runtime_clean
+  local runtime_bootstrap_env runtime_bootstrap_copy runtime_guard_copy runtime_clean
   local runtime_trusted_copy runtime_verify
-  local toolchain_stages_result actual_work_contract_sha256 contract_result effective_gotoolchain
+  local toolchain_stages_result actual_work_contract_sha256 contract_result
 
   if ! validate_dockerfile_lexical_boundary "$dockerfile"; then
     fail "$path содержит неподдерживаемый байт Dockerfile"
@@ -872,7 +937,7 @@ require_final_runtime_stage_contract() {
   expected_from_body="${expected_from#FROM }"
   [[ "$actual_from" == "$expected_from_body" ]] || fail "$path должен завершаться stage '$expected_from', найден 'FROM $actual_from'"
 
-  runtime_env="ENV GOTOOLCHAIN=local"
+  runtime_bootstrap_env="ENV GOTOOLCHAIN=local"
   runtime_bootstrap_copy="COPY --from=0 /usr/local/go/ /opt/mattercodex/bootstrap-go/"
   runtime_guard_copy="COPY --from=0 /out/mattercodex-go-toolchain-guard /usr/local/libexec/mattercodex-go-toolchain-guard"
   runtime_clean='RUN ["/usr/local/libexec/mattercodex-go-toolchain-guard", "clean"]'
@@ -882,7 +947,9 @@ require_final_runtime_stage_contract() {
   if ! contract_result="$(validate_final_runtime_stage_contract_instructions \
     "$dockerfile" \
     "$from_line" \
-    "$runtime_env" \
+    "$runtime_bootstrap_env" \
+    "$final_runtime_env" \
+    "$expected_workdir" \
     "$runtime_bootstrap_copy" \
     "$runtime_guard_copy" \
     "$runtime_clean" \
@@ -892,17 +959,17 @@ require_final_runtime_stage_contract() {
     "$allowed_copy_two" \
     "$expected_final_run_count" \
     "$expected_final_copy_count" \
-    "$final_path_env" \
+    "$allowed_tail_one" \
     "$allowed_tail_two" \
-    "$allowed_tail_three" 2>&1)"; then
-    if grep -Eq 'ENV-инструкц|разобрать ENV' <<<"$contract_result"; then
+    "" 2>&1)"; then
+    if grep -Eq 'не удалось однозначно разобрать (ENV|устаревший ENV)|ENV-инструкция final runtime stage содержит недопустимое имя переменной' <<<"$contract_result"; then
       fail "$path final runtime stage содержит неоднозначный ENV-синтаксис"
     fi
     printf '%s: %s\n' "$path" "$contract_result" >&2
     fail "$path final runtime stage не соответствует контракту логических Dockerfile-инструкций"
   fi
-  effective_gotoolchain="$contract_result"
-  [[ "$effective_gotoolchain" == local ]] || fail "$path final runtime stage завершает GOTOOLCHAIN значением '$effective_gotoolchain' вместо 'local'"
+  [[ "$contract_result" == $'local\t/usr/local/go\toff\t' ]] || \
+    fail "$path final runtime environment не закрепляет GOTOOLCHAIN=local, GOROOT=/usr/local/go, GOENV=off и пустой GOFLAGS"
 }
 
 while (($# > 0)); do
@@ -925,6 +992,9 @@ done
 canonical_files=(
   go.mod
   Makefile
+  scripts/build-agent-runner-image.sh
+  scripts/k8s/install-bot-service.sh
+  scripts/remote/install-bot-service.sh
   services/external/bot-service/Dockerfile
   services/jobs/agent-runner/Dockerfile
   deploy/images/agent-runner/Dockerfile
@@ -935,6 +1005,21 @@ canonical_files=(
 for path in "${canonical_files[@]}"; do
   require_file "$path"
 done
+[[ -x "$repo_root/scripts/build-agent-runner-image.sh" ]] || fail "scripts/build-agent-runner-image.sh должен быть исполняемым"
+build_wrapper_sha256="$(sha256sum "$repo_root/scripts/build-agent-runner-image.sh" | awk '{print $1}')"
+[[ "$build_wrapper_sha256" == "261545b2312a55a31c0d01493454d80dadc9f83c86e1bcbba390f796ca3cc3a5" ]] || \
+  fail "scripts/build-agent-runner-image.sh изменён без обновления защищённого BuildKit input contract"
+
+require_count scripts/k8s/install-bot-service.sh '"$REPO_ROOT/scripts/build-agent-runner-image.sh" \' 1
+require_count scripts/k8s/install-bot-service.sh 'services/jobs/agent-runner/Dockerfile' 1
+require_count scripts/k8s/install-bot-service.sh '    --dockerfile "$REPO_ROOT/services/jobs/agent-runner/Dockerfile" \' 1
+require_count scripts/k8s/install-bot-service.sh "    --frontend-attrs-json '{}'" 1
+require_count scripts/remote/install-bot-service.sh '    scripts/build-agent-runner-image.sh \' 1
+require_count scripts/remote/install-bot-service.sh 'services/jobs/agent-runner/Dockerfile' 2
+require_count scripts/remote/install-bot-service.sh '      "services/jobs/agent-runner/Dockerfile" \' 1
+require_count scripts/remote/install-bot-service.sh '      ./scripts/build-agent-runner-image.sh \' 1
+require_count scripts/remote/install-bot-service.sh '        --dockerfile services/jobs/agent-runner/Dockerfile \' 1
+require_count scripts/remote/install-bot-service.sh "        --frontend-attrs-json '{}'\" </dev/null" 1
 
 go_version="$(awk '$1 == "go" { print $2 }' "$repo_root/go.mod")"
 explicit_toolchain="$(awk '$1 == "toolchain" { print $2 }' "$repo_root/go.mod")"
@@ -953,7 +1038,7 @@ require_line Makefile $'\t$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(e
 require_line Makefile $'\tenv -u GOFLAGS GOENV=off GOWORK=off go run \'golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)\' -mode=source -scan=symbol -show=traces,version ./...'
 
 go_image="golang:$go_version-alpine"
-trusted_guard_source_base64="cGFja2FnZSBtYWluCgppbXBvcnQgKAoJImJ5dGVzIgoJImZtdCIKCSJvcyIKCSJvcy9leGVjIgopCgpmdW5jIGZhaWwoZm9ybWF0IHN0cmluZywgdmFsdWVzIC4uLmFueSkgewoJZm10LkZwcmludGYob3MuU3RkZXJyLCBmb3JtYXQrIlxuIiwgdmFsdWVzLi4uKQoJb3MuRXhpdCgxKQp9CgpmdW5jIHZlcmlmeShnb0V4ZWN1dGFibGUgc3RyaW5nKSB7CgljaGVja3MgOj0gW11zdHJ1Y3QgewoJCXZhcmlhYmxlIHN0cmluZwoJCWV4cGVjdGVkIHN0cmluZwoJfXsKCQl7dmFyaWFibGU6ICJHT1ZFUlNJT04iLCBleHBlY3RlZDogImdvMS4yNi41XG4ifSwKCQl7dmFyaWFibGU6ICJHT1RPT0xDSEFJTiIsIGV4cGVjdGVkOiAibG9jYWxcbiJ9LAoJfQoJZm9yIF8sIGNoZWNrIDo9IHJhbmdlIGNoZWNrcyB7CgkJb3V0cHV0LCBlcnIgOj0gZXhlYy5Db21tYW5kKGdvRXhlY3V0YWJsZSwgImVudiIsIGNoZWNrLnZhcmlhYmxlKS5PdXRwdXQoKQoJCWlmIGVyciAhPSBuaWwgewoJCQlmYWlsKCIlcyBmYWlsZWQ6ICV2IiwgY2hlY2sudmFyaWFibGUsIGVycikKCQl9CgkJaWYgIWJ5dGVzLkVxdWFsKG91dHB1dCwgW11ieXRlKGNoZWNrLmV4cGVjdGVkKSkgewoJCQlmYWlsKCIlcyBtaXNtYXRjaDogZ290ICVxLCB3YW50ICVxIiwgY2hlY2sudmFyaWFibGUsIG91dHB1dCwgY2hlY2suZXhwZWN0ZWQpCgkJfQoJfQp9CgpmdW5jIG1haW4oKSB7CglpZiBsZW4ob3MuQXJncykgPT0gMiAmJiBvcy5BcmdzWzFdID09ICJjbGVhbiIgewoJCWlmIGVyciA6PSBvcy5SZW1vdmVBbGwoIi91c3IvbG9jYWwvZ28iKTsgZXJyICE9IG5pbCB7CgkJCWZhaWwoImNsZWFuIC91c3IvbG9jYWwvZ286ICV2IiwgZXJyKQoJCX0KCQlpZiBlcnIgOj0gb3MuUmVtb3ZlQWxsKCIvb3B0L21hdHRlcmNvZGV4L2Jvb3RzdHJhcC1nbyIpOyBlcnIgIT0gbmlsIHsKCQkJZmFpbCgiY2xlYW4gYm9vdHN0cmFwIEdvOiAldiIsIGVycikKCQl9CgkJcmV0dXJuCgl9CglpZiBsZW4ob3MuQXJncykgPT0gMyAmJiBvcy5BcmdzWzFdID09ICJ2ZXJpZnkiIHsKCQl2ZXJpZnkob3MuQXJnc1syXSkKCQlyZXR1cm4KCX0KCWZhaWwoInVuc3VwcG9ydGVkIGludm9jYXRpb24iKQp9Cg=="
+trusted_guard_source_base64="cGFja2FnZSBtYWluCgppbXBvcnQgKAoJImJ5dGVzIgoJImZtdCIKCSJvcyIKCSJvcy9leGVjIgopCgpjb25zdCB0cnVzdGVkR09ST09UID0gIi91c3IvbG9jYWwvZ28iCgpmdW5jIGZhaWwoZm9ybWF0IHN0cmluZywgdmFsdWVzIC4uLmFueSkgewoJZm10LkZwcmludGYob3MuU3RkZXJyLCBmb3JtYXQrIlxuIiwgdmFsdWVzLi4uKQoJb3MuRXhpdCgxKQp9CgpmdW5jIHRydXN0ZWRHb0NvbW1hbmQoZ29FeGVjdXRhYmxlIHN0cmluZywgYXJndW1lbnRzIC4uLnN0cmluZykgKmV4ZWMuQ21kIHsKCWNvbW1hbmQgOj0gZXhlYy5Db21tYW5kKGdvRXhlY3V0YWJsZSwgYXJndW1lbnRzLi4uKQoJY29tbWFuZC5FbnYgPSBbXXN0cmluZ3sKCQkiUEFUSD0vdXNyL2xvY2FsL2dvL2JpbjovdXNyL2JpbjovYmluIiwKCQkiSE9NRT0vdG1wIiwKCQkiR09ST09UPSIgKyB0cnVzdGVkR09ST09ULAoJCSJHT0VOVj1vZmYiLAoJCSJHT0ZMQUdTPSIsCgkJIkdPVE9PTENIQUlOPWxvY2FsIiwKCQkiR09XT1JLPW9mZiIsCgl9CglyZXR1cm4gY29tbWFuZAp9CgpmdW5jIGV4cGVjdE91dHB1dChnb0V4ZWN1dGFibGUsIGxhYmVsLCBleHBlY3RlZCBzdHJpbmcsIGFyZ3VtZW50cyAuLi5zdHJpbmcpIHsKCW91dHB1dCwgZXJyIDo9IHRydXN0ZWRHb0NvbW1hbmQoZ29FeGVjdXRhYmxlLCBhcmd1bWVudHMuLi4pLk91dHB1dCgpCglpZiBlcnIgIT0gbmlsIHsKCQlmYWlsKCIlcyBmYWlsZWQ6ICV2IiwgbGFiZWwsIGVycikKCX0KCWlmICFieXRlcy5FcXVhbChvdXRwdXQsIFtdYnl0ZShleHBlY3RlZCkpIHsKCQlmYWlsKCIlcyBtaXNtYXRjaDogZ290ICVxLCB3YW50ICVxIiwgbGFiZWwsIG91dHB1dCwgZXhwZWN0ZWQpCgl9Cn0KCmZ1bmMgdmVyaWZ5KGdvRXhlY3V0YWJsZSBzdHJpbmcpIHsKCWV4cGVjdE91dHB1dChnb0V4ZWN1dGFibGUsICJHT1ZFUlNJT04iLCAiZ28xLjI2LjVcbiIsICJlbnYiLCAiR09WRVJTSU9OIikKCWV4cGVjdE91dHB1dChnb0V4ZWN1dGFibGUsICJHT1RPT0xDSEFJTiIsICJsb2NhbFxuIiwgImVudiIsICJHT1RPT0xDSEFJTiIpCglleHBlY3RPdXRwdXQoZ29FeGVjdXRhYmxlLCAiR09ST09UIiwgdHJ1c3RlZEdPUk9PVCsiXG4iLCAiZW52IiwgIkdPUk9PVCIpCglleHBlY3RPdXRwdXQoZ29FeGVjdXRhYmxlLCAiZ28gdG9vbCBjb21waWxlIiwgImNvbXBpbGUgdmVyc2lvbiBnbzEuMjYuNVxuIiwgInRvb2wiLCAiY29tcGlsZSIsICItVj1mdWxsIikKfQoKZnVuYyBtYWluKCkgewoJaWYgbGVuKG9zLkFyZ3MpID09IDIgJiYgb3MuQXJnc1sxXSA9PSAiY2xlYW4iIHsKCQlpZiBlcnIgOj0gb3MuUmVtb3ZlQWxsKCIvdXNyL2xvY2FsL2dvIik7IGVyciAhPSBuaWwgewoJCQlmYWlsKCJjbGVhbiAvdXNyL2xvY2FsL2dvOiAldiIsIGVycikKCQl9CgkJaWYgZXJyIDo9IG9zLlJlbW92ZUFsbCgiL29wdC9tYXR0ZXJjb2RleC9ib290c3RyYXAtZ28iKTsgZXJyICE9IG5pbCB7CgkJCWZhaWwoImNsZWFuIGJvb3RzdHJhcCBHbzogJXYiLCBlcnIpCgkJfQoJCXJldHVybgoJfQoJaWYgbGVuKG9zLkFyZ3MpID09IDMgJiYgb3MuQXJnc1sxXSA9PSAidmVyaWZ5IiB7CgkJdmVyaWZ5KG9zLkFyZ3NbMl0pCgkJcmV0dXJuCgl9CglmYWlsKCJ1bnN1cHBvcnRlZCBpbnZvY2F0aW9uIikKfQo="
 trusted_guard_build_run="RUN mkdir -p /out /tmp/mattercodex-go-build-cache && printf '%s' '$trusted_guard_source_base64' | base64 -d > /tmp/mattercodex-go-toolchain-guard.go && /usr/bin/env -i PATH=/usr/local/go/bin:/usr/bin:/bin HOME=/tmp GOCACHE=/tmp/mattercodex-go-build-cache GOENV=off GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0 /usr/local/go/bin/go build -trimpath -buildvcs=false -o /out/mattercodex-go-toolchain-guard /tmp/mattercodex-go-toolchain-guard.go && rm -rf /tmp/mattercodex-go-toolchain-guard.go /tmp/mattercodex-go-build-cache"
 require_line services/external/bot-service/Dockerfile "ARG GOLANG_IMAGE=$go_image"
 require_final_runtime_stage_contract \
@@ -964,8 +1049,9 @@ require_final_runtime_stage_contract \
   "COPY --from=1 /tool-bin/ /usr/local/bin/" \
   "COPY --from=1 /out/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner" \
   4 \
-  5 \
-  "ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" \
+  6 \
+  "" \
+  "ENV GOROOT=/usr/local/go GOENV=off GOFLAGS= GOTOOLCHAIN=local PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" \
   'USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}' \
   'ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/matter-codex-agent-runner"]' \
   "878b45ef727136c68399c0a430e175a12b78f90227e4104ef075285d650b55c6"
@@ -977,8 +1063,9 @@ require_final_runtime_stage_contract \
   "COPY --from=1 /tool-bin/ /usr/local/bin/" \
   "" \
   4 \
-  4 \
-  "ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" \
+  5 \
+  "WORKDIR /workspace" \
+  "ENV GOROOT=/usr/local/go GOENV=off GOFLAGS= GOTOOLCHAIN=local PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" \
   'USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}' \
   'CMD ["sh"]' \
   "a63c7a7047cb287d7448f8ef68852ac9cd8c2af1612c1fb0181601932fc04474"
