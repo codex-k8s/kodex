@@ -162,7 +162,21 @@ const (
 	callbackDeliveryStatusPending     = "pending"
 	callbackDeliveryStatusInFlight    = "in_flight"
 	callbackDeliveryStatusBlocked     = "blocked"
+	callbackDeliveryLeaseSafetyMargin = 2 * time.Second
 )
+
+var (
+	errCallbackDeliveryPreflightDeadline  = errors.New("callback delivery preflight deadline exceeded")
+	errCallbackDeliveryLeaseOwnershipLost = errors.New("callback delivery lease ownership is lost")
+)
+
+func callbackDeliveryAttemptBudget(preflightDeadline time.Duration, publishDeadline time.Duration) time.Duration {
+	return preflightDeadline + publishDeadline + callbackDeliveryLeaseSafetyMargin
+}
+
+func callbackDeliveryTransportBudget(publishDeadline time.Duration) time.Duration {
+	return publishDeadline + callbackDeliveryLeaseSafetyMargin
+}
 
 func (svc *AgentSessionService) ListAvailableChats(ctx context.Context, sessionKey string, token string, targetAgent string) (AgentSessionChatCatalog, error) {
 	session, err := svc.authorize(ctx, sessionKey, token)
@@ -1046,10 +1060,13 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 	if !ok {
 		return fmt.Errorf("idempotent Mattermost callback publisher is not configured")
 	}
-	if err := deliveryStore.ValidateAgentDelegationCallbackDeliveryPlan(ctx, delegation.ID, delegation.CallbackRunID); err != nil {
+	preflightCtx, cancelPreflight := context.WithTimeout(ctx, svc.callbackPreflightDeadline)
+	if err := deliveryStore.ValidateAgentDelegationCallbackDeliveryPlan(preflightCtx, delegation.ID, delegation.CallbackRunID); err != nil {
+		cancelPreflight()
 		return err
 	}
-	deliveries, err := deliveryStore.ListAgentDelegationCallbackDeliveries(ctx, delegation.ID, delegation.CallbackRunID)
+	deliveries, err := deliveryStore.ListAgentDelegationCallbackDeliveries(preflightCtx, delegation.ID, delegation.CallbackRunID)
+	cancelPreflight()
 	if err != nil {
 		return err
 	}
@@ -1066,13 +1083,17 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 	excludedIDs := make([]int64, 0, len(deliveries))
 	attemptErrors := make([]error, 0)
 	for len(excludedIDs) < len(deliveries) {
-		now := time.Now().UTC()
-		item, claimErr := deliveryStore.ClaimAgentDelegationCallbackDelivery(ctx, adminrepo.ClaimAgentDelegationCallbackDeliveryInput{
+		attemptStartedAt := time.Now().UTC()
+		preflightExpiresAt := attemptStartedAt.Add(svc.callbackPreflightDeadline)
+		attemptExpiresAt := attemptStartedAt.Add(callbackDeliveryAttemptBudget(svc.callbackPreflightDeadline, svc.cfg.CallbackPublishDeadline))
+		claimCtx, cancelClaim := context.WithDeadline(ctx, preflightExpiresAt)
+		item, claimErr := deliveryStore.ClaimAgentDelegationCallbackDelivery(claimCtx, adminrepo.ClaimAgentDelegationCallbackDeliveryInput{
 			DelegationID: delegation.ID, CallbackRunID: delegation.CallbackRunID,
-			Now: now, LeaseOwner: leaseOwner,
-			LeaseUntil:  now.Add(svc.cfg.CallbackPublishDeadline + 2*time.Second),
+			Now: attemptStartedAt, LeaseOwner: leaseOwner,
+			LeaseUntil:  attemptExpiresAt,
 			ExcludedIDs: excludedIDs,
 		})
+		cancelClaim()
 		if errors.Is(claimErr, adminrepo.ErrNotFound) {
 			break
 		}
@@ -1087,9 +1108,10 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 			attemptErrors = append(attemptErrors, svc.releaseCallbackDelivery(ctx, deliveryStore, item, callbackDeliveryStatusBlocked, "invalid_immutable_plan"))
 			continue
 		}
-		attemptCtx, cancelAttempt := context.WithTimeout(ctx, svc.cfg.CallbackPublishDeadline)
 		var postRef MattermostPostRef
-		publishErr := svc.withCurrentSessionsPublishGuard(attemptCtx, child, source, "agent_session.delegation_callback_delivery_final_guard", func(currentChild entity.AgentSession, currentSource entity.AgentSession) error {
+		transportStarted := false
+		guardCtx, cancelGuard := context.WithDeadline(ctx, preflightExpiresAt)
+		publishErr := svc.withCurrentSessionsPublishStoreGuard(guardCtx, child, source, "agent_session.delegation_callback_delivery_final_guard", func(currentChild entity.AgentSession, currentSource entity.AgentSession, guardedStore adminrepo.Repository) error {
 			expectedChannelID := currentSource.MattermostChannelID
 			expectedRootPostID := currentSource.MattermostRootPostID
 			if item.Destination == callbackDeliveryDestinationChild {
@@ -1099,6 +1121,33 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 			if item.ChannelID != expectedChannelID || item.RootPostID != expectedRootPostID {
 				return adminrepo.ErrClusterAdminAdmissionDenied
 			}
+			renewedAt := time.Now().UTC()
+			if !renewedAt.Before(preflightExpiresAt) {
+				return errCallbackDeliveryPreflightDeadline
+			}
+			guardedDeliveryStore, ok := guardedStore.(adminrepo.AgentDelegationCallbackDeliveryRepository)
+			if !ok {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			requiredLeaseUntil := attemptExpiresAt
+			renewedDelivery, renewErr := guardedDeliveryStore.RenewAgentDelegationCallbackDeliveryLease(guardCtx, adminrepo.RenewAgentDelegationCallbackDeliveryLeaseInput{
+				ID: item.ID, LeaseOwner: item.LeaseOwner, Now: renewedAt,
+				LeaseUntil: requiredLeaseUntil,
+			})
+			if errors.Is(renewErr, adminrepo.ErrNotFound) {
+				return errCallbackDeliveryLeaseOwnershipLost
+			}
+			if renewErr != nil {
+				return renewErr
+			}
+			transportStartsAt := time.Now().UTC()
+			minimumLeaseUntil := transportStartsAt.Add(callbackDeliveryTransportBudget(svc.cfg.CallbackPublishDeadline))
+			if renewedDelivery.ID != item.ID || renewedDelivery.LeaseOwner != item.LeaseOwner || renewedDelivery.LeaseExpiresAt.Before(minimumLeaseUntil) {
+				return errCallbackDeliveryLeaseOwnershipLost
+			}
+			transportStarted = true
+			attemptCtx, cancelAttempt := context.WithTimeout(ctx, svc.cfg.CallbackPublishDeadline)
+			defer cancelAttempt()
 			var deliveryErr error
 			postRef, deliveryErr = publisher.ReconcileOrPostThreadMessage(attemptCtx, MattermostThreadPostInput{
 				ChannelID: item.ChannelID, RootPostID: item.RootPostID,
@@ -1106,13 +1155,25 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 			})
 			return deliveryErr
 		})
-		cancelAttempt()
+		cancelGuard()
 		if publishErr != nil {
+			if !transportStarted && errors.Is(publishErr, context.DeadlineExceeded) {
+				publishErr = errors.Join(errCallbackDeliveryPreflightDeadline, publishErr)
+			}
+			if errors.Is(publishErr, errCallbackDeliveryLeaseOwnershipLost) {
+				attemptErrors = append(attemptErrors, publishErr)
+				return errors.Join(attemptErrors...)
+			}
 			status := callbackDeliveryStatusPending
 			code := "mattermost_unconfirmed"
-			if errors.Is(publishErr, adminrepo.ErrClusterAdminAdmissionDenied) {
+			switch {
+			case errors.Is(publishErr, adminrepo.ErrClusterAdminAdmissionDenied):
 				status = callbackDeliveryStatusBlocked
 				code = "final_binding_denied"
+			case errors.Is(publishErr, errCallbackDeliveryPreflightDeadline):
+				code = "preflight_deadline_exceeded"
+			case errors.Is(publishErr, errCallbackDeliveryLeaseOwnershipLost):
+				code = "lease_ownership_lost"
 			}
 			attemptErrors = append(attemptErrors, publishErr)
 			attemptErrors = append(attemptErrors, svc.releaseCallbackDelivery(ctx, deliveryStore, item, status, code))
@@ -1123,7 +1184,7 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 			attemptErrors = append(attemptErrors, svc.releaseCallbackDelivery(ctx, deliveryStore, item, callbackDeliveryStatusPending, "invalid_mattermost_binding"))
 			continue
 		}
-		markCtx, cancelMark := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		markCtx, cancelMark := context.WithTimeout(context.WithoutCancel(ctx), callbackDeliveryLeaseSafetyMargin)
 		_, markErr := deliveryStore.DeliverAgentDelegationCallbackDelivery(markCtx, adminrepo.DeliverAgentDelegationCallbackDeliveryInput{
 			ID: item.ID, LeaseOwner: item.LeaseOwner, MattermostPostID: postRef.PostID, Now: time.Now().UTC(),
 		})
@@ -1133,13 +1194,15 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 			attemptErrors = append(attemptErrors, svc.releaseCallbackDelivery(ctx, deliveryStore, item, callbackDeliveryStatusPending, "confirmation_ambiguous"))
 		}
 	}
-	finalDeliveries, listErr := deliveryStore.ListAgentDelegationCallbackDeliveries(ctx, delegation.ID, delegation.CallbackRunID)
+	finalListCtx, cancelFinalList := context.WithTimeout(ctx, svc.callbackPreflightDeadline)
+	finalDeliveries, listErr := deliveryStore.ListAgentDelegationCallbackDeliveries(finalListCtx, delegation.ID, delegation.CallbackRunID)
+	cancelFinalList()
 	if listErr != nil {
 		attemptErrors = append(attemptErrors, listErr)
 	} else if callbackDeliveriesComplete(finalDeliveries) {
 		return nil
 	} else if len(attemptErrors) == 0 && callbackDeliveriesInFlight(finalDeliveries, time.Now().UTC()) {
-		waitCtx, cancelWait := context.WithTimeout(ctx, svc.cfg.CallbackPublishDeadline+2*time.Second)
+		waitCtx, cancelWait := context.WithTimeout(ctx, callbackDeliveryTransportBudget(svc.cfg.CallbackPublishDeadline))
 		defer cancelWait()
 		for callbackDeliveriesInFlight(finalDeliveries, time.Now().UTC()) {
 			timer := time.NewTimer(10 * time.Millisecond)
@@ -1177,7 +1240,7 @@ func (svc *AgentSessionService) deliverAgentDelegationCallbackPublications(ctx c
 }
 
 func (svc *AgentSessionService) releaseCallbackDelivery(ctx context.Context, store adminrepo.AgentDelegationCallbackDeliveryRepository, item entity.AgentDelegationCallbackDelivery, status string, code string) error {
-	releaseCtx, cancelRelease := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	releaseCtx, cancelRelease := context.WithTimeout(context.WithoutCancel(ctx), callbackDeliveryLeaseSafetyMargin)
 	defer cancelRelease()
 	_, err := store.ReleaseAgentDelegationCallbackDelivery(releaseCtx, adminrepo.ReleaseAgentDelegationCallbackDeliveryInput{
 		ID: item.ID, LeaseOwner: item.LeaseOwner, Status: status,

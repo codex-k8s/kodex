@@ -107,12 +107,14 @@ render_deployment_with_live_pod_inputs() {
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE:-true}"; then
   mattercodex_require_commands docker
   mattercodex_log "сборка agent-runner image"
-  docker build \
-    --network=host \
+  "$REPO_ROOT/scripts/build-agent-runner-image.sh" \
+    --builder docker \
+    --context "$REPO_ROOT" \
+    --dockerfile "$REPO_ROOT/services/jobs/agent-runner/Dockerfile" \
+    --tag "$MATTERCODEX_AGENT_RUNNER_IMAGE" \
+    --network host \
     --build-arg "MATTERCODEX_CODEX_PACKAGE=$MATTERCODEX_CODEX_PACKAGE" \
-    -f "$REPO_ROOT/services/jobs/agent-runner/Dockerfile" \
-    -t "$MATTERCODEX_AGENT_RUNNER_IMAGE" \
-    "$REPO_ROOT"
+    --frontend-attrs-json '{}'
 fi
 
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_BOT_SERVICE_BUILD_IMAGE:-true}"; then

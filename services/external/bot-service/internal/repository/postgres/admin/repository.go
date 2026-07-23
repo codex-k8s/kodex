@@ -36,6 +36,7 @@ type repositoryDB interface {
 
 var _ adminrepo.Repository = (*Repository)(nil)
 var _ adminrepo.ExactAgentSessionsRuntimeGuardRepository = (*Repository)(nil)
+var _ adminrepo.ExactAgentSessionsPublishGuardRepository = (*Repository)(nil)
 var _ adminrepo.ExactAgentSessionsPublishFenceRepository = (*Repository)(nil)
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
@@ -589,6 +590,14 @@ func (repo *Repository) GetAgentSession(ctx context.Context, sessionKey string) 
 }
 
 func (repo *Repository) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return repo.withExactAgentSessionsGuard(ctx, expected, false, sideEffect)
+}
+
+func (repo *Repository) WithExactAgentSessionsPublishGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
+	return repo.withExactAgentSessionsGuard(ctx, expected, true, sideEffect)
+}
+
+func (repo *Repository) withExactAgentSessionsGuard(ctx context.Context, expected []entity.AgentSession, finalizeAfterDeadline bool, sideEffect func(adminrepo.Repository) error) error {
 	if sideEffect == nil {
 		return fmt.Errorf("exact agent sessions runtime side effect is required")
 	}
@@ -636,7 +645,13 @@ func (repo *Repository) WithExactAgentSessionsRuntimeGuard(ctx context.Context, 
 	if err := sideEffect(newTransactionalRepository(tx)); err != nil {
 		return err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	commitCtx := ctx
+	cancelCommit := func() {}
+	if finalizeAfterDeadline {
+		commitCtx, cancelCommit = context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	}
+	defer cancelCommit()
+	if err := tx.Commit(commitCtx); err != nil {
 		return fmt.Errorf("commit exact agent sessions runtime guard: %w", err)
 	}
 	return nil

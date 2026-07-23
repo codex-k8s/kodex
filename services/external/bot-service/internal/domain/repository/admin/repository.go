@@ -395,6 +395,13 @@ type ReleaseAgentDelegationCallbackDeliveryInput struct {
 	Now           time.Time
 }
 
+type RenewAgentDelegationCallbackDeliveryLeaseInput struct {
+	ID         int64
+	LeaseOwner string
+	Now        time.Time
+	LeaseUntil time.Time
+}
+
 type DeliverAgentDelegationCallbackDeliveryInput struct {
 	ID               int64
 	LeaseOwner       string
@@ -502,6 +509,10 @@ type ExactAgentSessionsRuntimeGuardRepository interface {
 	WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(Repository) error) error
 }
 
+type ExactAgentSessionsPublishGuardRepository interface {
+	WithExactAgentSessionsPublishGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(Repository) error) error
+}
+
 type ExactAgentSessionsPublishFenceRepository interface {
 	LockExactAgentSessionsPublishFence(ctx context.Context, expected []entity.AgentSession) error
 }
@@ -512,6 +523,7 @@ type AgentDelegationCallbackDeliveryRepository interface {
 	ValidateAgentDelegationCallbackDeliveryPlan(ctx context.Context, delegationID int64, callbackRunID string) error
 	ListAgentDelegationCallbackDeliveries(ctx context.Context, delegationID int64, callbackRunID string) ([]entity.AgentDelegationCallbackDelivery, error)
 	ClaimAgentDelegationCallbackDelivery(ctx context.Context, input ClaimAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error)
+	RenewAgentDelegationCallbackDeliveryLease(ctx context.Context, input RenewAgentDelegationCallbackDeliveryLeaseInput) (entity.AgentDelegationCallbackDelivery, error)
 	ReleaseAgentDelegationCallbackDelivery(ctx context.Context, input ReleaseAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error)
 	DeliverAgentDelegationCallbackDelivery(ctx context.Context, input DeliverAgentDelegationCallbackDeliveryInput) (entity.AgentDelegationCallbackDelivery, error)
 }

@@ -377,6 +377,7 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$SHOULD_BUILD_AGENT_RUNNER"
   tar -C "$REPO_ROOT" -czf "$AGENT_RUNNER_ARCHIVE" \
     go.mod \
     go.sum \
+    scripts/build-agent-runner-image.sh \
     services/jobs/agent-runner
   if [ "$MATTERCODEX_IMAGE_BUILD_STRATEGY" = "kaniko" ]; then
     run_kaniko_build_remote \
@@ -399,11 +400,13 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$SHOULD_BUILD_AGENT_RUNNER"
       cd $REMOTE_AGENT_RUNNER_DIR_Q
       image=$AGENT_RUNNER_IMAGE_Q
       codex_package=$CODEX_PACKAGE_Q
-      if [ '$REMOTE_AGENT_RUNNER_BUILDER' = 'docker' ]; then
-        docker build --build-arg MATTERCODEX_CODEX_PACKAGE=\"\$codex_package\" -f services/jobs/agent-runner/Dockerfile -t \"\$image\" .
-      else
-        nerdctl -n k8s.io build --build-arg MATTERCODEX_CODEX_PACKAGE=\"\$codex_package\" -f services/jobs/agent-runner/Dockerfile -t \"\$image\" .
-      fi" </dev/null
+      ./scripts/build-agent-runner-image.sh \\
+        --builder '$REMOTE_AGENT_RUNNER_BUILDER' \\
+        --context . \\
+        --dockerfile services/jobs/agent-runner/Dockerfile \\
+        --tag \"\$image\" \\
+        --build-arg \"MATTERCODEX_CODEX_PACKAGE=\$codex_package\" \\
+        --frontend-attrs-json '{}'" </dev/null
   else
     mattercodex_die "неподдерживаемая MATTERCODEX_IMAGE_BUILD_STRATEGY: $MATTERCODEX_IMAGE_BUILD_STRATEGY"
   fi

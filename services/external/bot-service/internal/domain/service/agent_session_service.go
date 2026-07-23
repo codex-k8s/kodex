@@ -74,6 +74,7 @@ const (
 	maximumCallbackPublishConcurrency = 32
 	defaultCallbackPublishDeadline    = 5 * time.Second
 	maximumCallbackPublishDeadline    = 15 * time.Second
+	defaultCallbackPreflightDeadline  = 15 * time.Second
 )
 
 // ErrAgentSessionMCPUnauthorized скрывает причину отказа проверки учётных данных MCP.
@@ -129,8 +130,9 @@ func (svc *AgentSessionService) CompleteAutomationCallback(ctx context.Context, 
 }
 
 type AgentSessionService struct {
-	cfg                  AgentSessionServiceConfig
-	callbackPublishSlots chan struct{}
+	cfg                       AgentSessionServiceConfig
+	callbackPublishSlots      chan struct{}
+	callbackPreflightDeadline time.Duration
 }
 
 // AuthorizeMCPTransport проверяет учётные данные до создания состояния транспорта MCP.
@@ -318,8 +320,9 @@ func NewAgentSessionService(cfg AgentSessionServiceConfig) *AgentSessionService 
 		cfg.CallbackPublishDeadline = maximumCallbackPublishDeadline
 	}
 	return &AgentSessionService{
-		cfg:                  cfg,
-		callbackPublishSlots: make(chan struct{}, cfg.CallbackPublishConcurrency),
+		cfg:                       cfg,
+		callbackPublishSlots:      make(chan struct{}, cfg.CallbackPublishConcurrency),
+		callbackPreflightDeadline: defaultCallbackPreflightDeadline,
 	}
 }
 

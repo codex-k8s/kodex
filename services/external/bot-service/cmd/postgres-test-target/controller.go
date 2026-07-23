@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -12,6 +11,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/testsupport"
@@ -36,7 +36,38 @@ const (
 	postgres16ControllerImage        = "pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb"
 	postgresControllerLifetime       = 12 * time.Minute
 	postgresControllerTTLSeconds     = int32(60)
+	postgresControllerProbeInterval  = 200 * time.Millisecond
+	postgresControllerProbeTimeout   = time.Second
 )
+
+type postgresPortForward interface {
+	Done() <-chan struct{}
+	Stop()
+}
+
+type execPostgresPortForward struct {
+	command  *exec.Cmd
+	done     chan struct{}
+	stopOnce sync.Once
+}
+
+func (process *execPostgresPortForward) Done() <-chan struct{} {
+	return process.done
+}
+
+func (process *execPostgresPortForward) Stop() {
+	process.stopOnce.Do(func() {
+		select {
+		case <-process.done:
+			return
+		default:
+			if process.command.Process != nil {
+				_ = process.command.Process.Kill()
+			}
+		}
+	})
+	<-process.done
+}
 
 type controllerPostgresHarness struct {
 	bootstrapDSN   string
@@ -316,12 +347,11 @@ func startKubernetesPostgres(ctx context.Context, major string) (*controllerPost
 		return nil, fmt.Errorf("kubernetes mode не создал disposable Job")
 	}
 	harness := &controllerPostgresHarness{}
-	var portForward *exec.Cmd
+	var portForward postgresPortForward
 	var service *corev1.Service
 	harness.close = func(closeCtx context.Context) error {
-		if portForward != nil && portForward.Process != nil {
-			_ = portForward.Process.Kill()
-			_, _ = portForward.Process.Wait()
+		if portForward != nil {
+			portForward.Stop()
 		}
 		if service != nil {
 			currentService, err := client.CoreV1().Services(namespace).Get(closeCtx, service.Name, metav1.GetOptions{})
@@ -379,19 +409,124 @@ func startKubernetesPostgres(ctx context.Context, major string) (*controllerPost
 	if err != nil {
 		return cleanupOnError(err)
 	}
-	var portForwardOutput bytes.Buffer
-	portForward = exec.CommandContext(ctx, "kubectl", "--namespace", namespace, "port-forward", "service/"+service.Name,
-		fmt.Sprintf("127.0.0.1:%d:5432", port))
-	portForward.Stdout = &portForwardOutput
-	portForward.Stderr = &portForwardOutput
-	if err := portForward.Start(); err != nil {
-		return cleanupOnError(fmt.Errorf("kubernetes mode не запустил loopback port-forward"))
+	bootstrapDSN := fmt.Sprintf("host=127.0.0.1 port=%d user=mattercodex_test_owner dbname=postgres connect_timeout=5", port)
+	portForward, err = waitKubernetesPostgresReady(ctx, func() (postgresPortForward, error) {
+		return startKubernetesPortForward(ctx, kubernetesPortForwardArgv(namespace, service.Name, port))
+	}, func(probeCtx context.Context) error {
+		return probeControllerPostgres(probeCtx, bootstrapDSN)
+	}, waitControllerPostgresRetry)
+	if err != nil {
+		return cleanupOnError(fmt.Errorf("kubernetes PostgreSQL port-forward не дождался готовой базы"))
 	}
-	if err := waitTCP(ctx, net.JoinHostPort("127.0.0.1", strconv.Itoa(port))); err != nil {
-		return cleanupOnError(fmt.Errorf("kubernetes PostgreSQL port-forward не стал готов"))
-	}
-	harness.bootstrapDSN = fmt.Sprintf("host=127.0.0.1 port=%d user=mattercodex_test_owner dbname=postgres connect_timeout=5", port)
+	harness.bootstrapDSN = bootstrapDSN
 	return harness, nil
+}
+
+func kubernetesPortForwardArgv(namespace string, serviceName string, localPort int) []string {
+	return []string{
+		"kubectl",
+		"--namespace", namespace,
+		"port-forward",
+		"--address", "127.0.0.1",
+		"service/" + serviceName,
+		fmt.Sprintf("%d:%d", localPort, postgresContainerPort),
+	}
+}
+
+func startKubernetesPortForward(ctx context.Context, argv []string) (postgresPortForward, error) {
+	if len(argv) == 0 {
+		return nil, fmt.Errorf("kubernetes mode не получил port-forward argv")
+	}
+	command := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	if err := command.Start(); err != nil {
+		return nil, fmt.Errorf("kubernetes mode не запустил loopback port-forward")
+	}
+	process := &execPostgresPortForward{command: command, done: make(chan struct{})}
+	go func() {
+		_ = command.Wait()
+		close(process.done)
+	}()
+	return process, nil
+}
+
+func waitKubernetesPostgresReady(
+	ctx context.Context,
+	start func() (postgresPortForward, error),
+	probe func(context.Context) error,
+	waitRetry func(context.Context) error,
+) (postgresPortForward, error) {
+	for {
+		process, err := start()
+		if err != nil {
+			return nil, err
+		}
+		for {
+			if err := probe(ctx); err == nil {
+				select {
+				case <-process.Done():
+					process.Stop()
+					if err := waitRetry(ctx); err != nil {
+						return nil, err
+					}
+					break
+				default:
+					return process, nil
+				}
+				break
+			}
+			exited := false
+			select {
+			case <-process.Done():
+				exited = true
+				process.Stop()
+			default:
+			}
+			if err := waitRetry(ctx); err != nil {
+				if !exited {
+					process.Stop()
+				}
+				return nil, err
+			}
+			if !exited {
+				select {
+				case <-process.Done():
+					exited = true
+					process.Stop()
+				default:
+				}
+			}
+			if exited {
+				break
+			}
+		}
+	}
+}
+
+func waitControllerPostgresRetry(ctx context.Context) error {
+	timer := time.NewTimer(postgresControllerProbeInterval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func probeControllerPostgres(ctx context.Context, dsn string) error {
+	probeCtx, cancel := context.WithTimeout(ctx, postgresControllerProbeTimeout)
+	defer cancel()
+	config, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return err
+	}
+	config.MaxConns = 1
+	pool, err := pgxpool.NewWithConfig(probeCtx, config)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	return pool.Ping(probeCtx)
 }
 
 func waitKubernetesServiceDeleted(ctx context.Context, client kubernetes.Interface, namespace string, name string, uid types.UID) error {
@@ -474,6 +609,12 @@ func kubernetesPostgresJob(identity string, image string) *batchv1.Job {
 						Name: "postgres", Image: image, ImagePullPolicy: corev1.PullIfNotPresent,
 						Env:   []corev1.EnvVar{{Name: "POSTGRES_HOST_AUTH_METHOD", Value: "trust"}, {Name: "POSTGRES_USER", Value: "mattercodex_test_owner"}, {Name: "POSTGRES_DB", Value: "postgres"}},
 						Ports: []corev1.ContainerPort{{Name: "postgres", ContainerPort: postgresContainerPort, Protocol: corev1.ProtocolTCP}},
+						ReadinessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{
+								"pg_isready", "--host", "127.0.0.1", "--port", "5432", "--username", "mattercodex_test_owner", "--dbname", "postgres",
+							}}},
+							PeriodSeconds: 1, TimeoutSeconds: 1, SuccessThreshold: 1, FailureThreshold: 120,
+						},
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("256Mi")},
 							Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2"), corev1.ResourceMemory: resource.MustParse("2Gi")},
