@@ -578,6 +578,7 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_BOT_SERVICE_B
   mattercodex_log "сборка bot-service image на целевом сервере"
   BOT_SERVICE_ARCHIVE="$(mattercodex_temp_file)"
   tar -C "$REPO_ROOT" -czf "$BOT_SERVICE_ARCHIVE" \
+    apps/control-center \
     go.mod \
     go.sum \
     libs/go/i18n \

@@ -102,6 +102,10 @@ for variable in SMOKE_SLASH_STATUS SMOKE_GITHUB_STATUS; do
 done
 
 INSTALLER="$REPO_ROOT/scripts/remote/install-bot-service.sh"
+if ! grep -A8 'BOT_SERVICE_ARCHIVE=.*mattercodex_temp_file' "$INSTALLER" | grep -Fq 'apps/control-center'; then
+  printf 'remote bot-service build context не содержит Control Center\n' >&2
+  exit 1
+fi
 for manifest_media_type in \
   'application/vnd.oci.image.manifest.v1+json' \
   'application/vnd.docker.distribution.manifest.v2+json' \
