@@ -95,9 +95,10 @@ done
 ((build_arg_count <= 1)) || fail "разрешённый agent-runner build arg нельзя передавать повторно"
 
 [[ -f "$dockerfile" || -f "$context/$dockerfile" ]] || fail "Dockerfile не найден: $dockerfile"
-command -v "$builder" >/dev/null 2>&1 || fail "builder $builder не найден"
+builder_path="$(type -P -- "$builder" || true)"
+[[ -n "$builder_path" && -x "$builder_path" ]] || fail "builder $builder не найден как исполняемый файл в PATH"
 
-command=("$builder")
+command=("$builder_path")
 if [[ "$builder" == nerdctl ]]; then
   command+=(-n k8s.io)
 fi
@@ -110,4 +111,5 @@ for build_arg in "${build_args[@]}"; do
 done
 command+=(-f "$dockerfile" -t "$tag" -- "$context")
 
+unset BUILDKIT_SYNTAX
 exec "${command[@]}"

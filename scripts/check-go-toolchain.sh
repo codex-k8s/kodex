@@ -47,6 +47,16 @@ require_count() {
   [[ "$actual" == "$wanted" ]] || fail "$path содержит '$expected' $actual раз; ожидается $wanted"
 }
 
+require_source_commitment() {
+  local path="$1"
+  local expected_sha256="$2"
+  local actual_sha256
+
+  actual_sha256="$(sha256sum "$repo_root/$path" | awk '{print $1}')"
+  [[ "$actual_sha256" == "$expected_sha256" ]] || \
+    fail "$path изменён без обновления полного source commitment защищённого agent-runner build flow"
+}
+
 validate_dockerfile_lexical_boundary() {
   local dockerfile="$1"
 
@@ -635,12 +645,12 @@ validate_final_runtime_stage_contract_instructions() {
       }
       if (canonical == required_go_tools_copy) {
         required_go_tools_copy_count++
-        if (required_go_tools_copy_count == 1) {
-          bootstrap_tools_copy_index = instruction_index
-        } else if (required_go_tools_copy_count == 2) {
-          final_tools_copy_index = instruction_index
-          final_tools_copy_seen = 1
-        }
+        bootstrap_tools_copy_index = instruction_index
+      }
+      if (canonical == allowed_copy_two) {
+        final_tools_copy_count++
+        final_tools_copy_index = instruction_index
+        final_tools_copy_seen = 1
       }
       if (is_verify) {
         verify_count++
@@ -671,6 +681,29 @@ validate_final_runtime_stage_contract_instructions() {
         workdir_count++
         if (canonical == expected_workdir) {
           expected_workdir_count++
+        }
+      }
+
+      if (instruction == "ARG" && index(body, "MATTERCODEX_AGENT_RUNNER_UID") > 0) {
+        if (canonical != "ARG MATTERCODEX_AGENT_RUNNER_UID=10001") {
+          contract_error("MATTERCODEX_AGENT_RUNNER_UID должен иметь единственное точное значение 10001")
+        }
+        runner_uid_arg_count++
+      }
+      if (instruction == "ARG" && index(body, "MATTERCODEX_AGENT_RUNNER_GID") > 0) {
+        if (canonical != "ARG MATTERCODEX_AGENT_RUNNER_GID=10001") {
+          contract_error("MATTERCODEX_AGENT_RUNNER_GID должен иметь единственное точное значение 10001")
+        }
+        runner_gid_arg_count++
+      }
+      if (instruction == "ENV" && (index(body, "MATTERCODEX_AGENT_RUNNER_UID") > 0 || index(body, "MATTERCODEX_AGENT_RUNNER_GID") > 0)) {
+        contract_error("effective runtime UID/GID нельзя переопределять через ENV")
+      }
+      if (instruction == "USER") {
+        runtime_user_count++
+        if (canonical == "USER 10001:10001") {
+          literal_runtime_user_count++
+          runtime_user_index = instruction_index
         }
       }
 
@@ -790,8 +823,8 @@ validate_final_runtime_stage_contract_instructions() {
         print "final runtime stage должен содержать ровно один final trusted COPY Go toolchain" > "/dev/stderr"
         exit 2
       }
-      if (required_go_tools_copy_count != 2) {
-        print "final runtime stage должен дважды копировать закреплённые Go tools точной самостоятельной логической COPY-инструкцией из numeric tools stage" > "/dev/stderr"
+      if (required_go_tools_copy_count != 1 || final_tools_copy_count != 1) {
+        print "final runtime stage должен копировать единый committed набор runner/tools сначала для installer, затем в trusted staging" > "/dev/stderr"
         exit 2
       }
       if (verify_count != 1) {
@@ -834,8 +867,8 @@ validate_final_runtime_stage_contract_instructions() {
         print "final runtime stage не должна содержать SHELL: trusted clean/verify закреплены точной exec-form" > "/dev/stderr"
         exit 2
       }
-      if (final_tools_copy_index + 1 != guard_copy_index || guard_copy_index + 1 != clean_index || clean_index + 1 != trusted_copy_index || trusted_copy_index + 1 != final_env_index || final_env_index + 1 != verify_index) {
-        print "final Go tools COPY, trusted guard COPY, clean, final Go COPY, final ENV и verification должны идти непосредственно друг за другом" > "/dev/stderr"
+      if (guard_copy_index + 1 != clean_index || clean_index + 1 != trusted_copy_index || trusted_copy_index + 1 != final_tools_copy_index || final_tools_copy_index + 1 != final_env_index || final_env_index + 1 != verify_index) {
+        print "trusted guard COPY, topology prepare, final Go COPY, protected staging COPY, final ENV и install/verification должны идти непосредственно друг за другом" > "/dev/stderr"
         exit 2
       }
       if (expected_workdir == "") {
@@ -861,6 +894,14 @@ validate_final_runtime_stage_contract_instructions() {
       }
       if (goflags_count != 1 || effective_goflags != "") {
         print "final runtime stage должен очищать GOFLAGS ровно один раз в final ENV" > "/dev/stderr"
+        exit 2
+      }
+      if (runner_uid_arg_count != 1 || runner_gid_arg_count != 1) {
+        print "final runtime stage должен содержать единственные точные ARG UID/GID со значением 10001" > "/dev/stderr"
+        exit 2
+      }
+      if (runtime_user_count != 1 || literal_runtime_user_count != 1 || runtime_user_index != verify_index + 1) {
+        print "final runtime stage должен закреплять effective USER точной literal инструкцией USER 10001:10001 сразу после trusted install/verification" > "/dev/stderr"
         exit 2
       }
       expected_tail_count = 0
@@ -906,6 +947,7 @@ require_final_runtime_stage_contract() {
   local stage_info from_line actual_from expected_from_body
   local runtime_bootstrap_env runtime_bootstrap_copy runtime_guard_copy runtime_clean
   local runtime_trusted_copy runtime_verify
+  local protected_profile
   local toolchain_stages_result actual_work_contract_sha256 contract_result
 
   if ! validate_dockerfile_lexical_boundary "$dockerfile"; then
@@ -939,10 +981,15 @@ require_final_runtime_stage_contract() {
 
   runtime_bootstrap_env="ENV GOTOOLCHAIN=local"
   runtime_bootstrap_copy="COPY --from=0 /usr/local/go/ /opt/mattercodex/bootstrap-go/"
-  runtime_guard_copy="COPY --from=0 /out/mattercodex-go-toolchain-guard /usr/local/libexec/mattercodex-go-toolchain-guard"
-  runtime_clean='RUN ["/usr/local/libexec/mattercodex-go-toolchain-guard", "clean"]'
+  if [[ "$path" == services/jobs/agent-runner/Dockerfile ]]; then
+    protected_profile=services
+  else
+    protected_profile=deploy
+  fi
+  runtime_guard_copy="COPY --from=0 /out/mattercodex-go-toolchain-guard /mattercodex-go-toolchain-guard"
+  runtime_clean="RUN [\"/mattercodex-go-toolchain-guard\", \"prepare\", \"$protected_profile\"]"
   runtime_trusted_copy="COPY --from=0 /usr/local/go/ /usr/local/go/"
-  runtime_verify='RUN ["/usr/local/libexec/mattercodex-go-toolchain-guard", "verify", "/usr/local/go/bin/go"]'
+  runtime_verify="RUN [\"/mattercodex-go-toolchain-guard\", \"install\", \"$protected_profile\", \"/usr/local/go/bin/go\"]"
 
   if ! contract_result="$(validate_final_runtime_stage_contract_instructions \
     "$dockerfile" \
@@ -1006,20 +1053,9 @@ for path in "${canonical_files[@]}"; do
   require_file "$path"
 done
 [[ -x "$repo_root/scripts/build-agent-runner-image.sh" ]] || fail "scripts/build-agent-runner-image.sh должен быть исполняемым"
-build_wrapper_sha256="$(sha256sum "$repo_root/scripts/build-agent-runner-image.sh" | awk '{print $1}')"
-[[ "$build_wrapper_sha256" == "261545b2312a55a31c0d01493454d80dadc9f83c86e1bcbba390f796ca3cc3a5" ]] || \
-  fail "scripts/build-agent-runner-image.sh изменён без обновления защищённого BuildKit input contract"
-
-require_count scripts/k8s/install-bot-service.sh '"$REPO_ROOT/scripts/build-agent-runner-image.sh" \' 1
-require_count scripts/k8s/install-bot-service.sh 'services/jobs/agent-runner/Dockerfile' 1
-require_count scripts/k8s/install-bot-service.sh '    --dockerfile "$REPO_ROOT/services/jobs/agent-runner/Dockerfile" \' 1
-require_count scripts/k8s/install-bot-service.sh "    --frontend-attrs-json '{}'" 1
-require_count scripts/remote/install-bot-service.sh '    scripts/build-agent-runner-image.sh \' 1
-require_count scripts/remote/install-bot-service.sh 'services/jobs/agent-runner/Dockerfile' 2
-require_count scripts/remote/install-bot-service.sh '      "services/jobs/agent-runner/Dockerfile" \' 1
-require_count scripts/remote/install-bot-service.sh '      ./scripts/build-agent-runner-image.sh \' 1
-require_count scripts/remote/install-bot-service.sh '        --dockerfile services/jobs/agent-runner/Dockerfile \' 1
-require_count scripts/remote/install-bot-service.sh "        --frontend-attrs-json '{}'\" </dev/null" 1
+require_source_commitment scripts/build-agent-runner-image.sh 4523f3b7c484d6b7caea5c64827e358a39452d698f602663a9a75c17be7251a6
+require_source_commitment scripts/k8s/install-bot-service.sh 559cf6bcd710cb6b4aa0a1ebec80c9fa988c22f101bb59adab12630f1a15cd34
+require_source_commitment scripts/remote/install-bot-service.sh c947d5f1e20090670de6a520b72e9ae9fe10a7bcc0d261f2934a48439258a94e
 
 go_version="$(awk '$1 == "go" { print $2 }' "$repo_root/go.mod")"
 explicit_toolchain="$(awk '$1 == "toolchain" { print $2 }' "$repo_root/go.mod")"
@@ -1038,7 +1074,7 @@ require_line Makefile $'\t$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(e
 require_line Makefile $'\tenv -u GOFLAGS GOENV=off GOWORK=off go run \'golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)\' -mode=source -scan=symbol -show=traces,version ./...'
 
 go_image="golang:$go_version-alpine"
-trusted_guard_source_base64="cGFja2FnZSBtYWluCgppbXBvcnQgKAoJImJ5dGVzIgoJImZtdCIKCSJvcyIKCSJvcy9leGVjIgopCgpjb25zdCB0cnVzdGVkR09ST09UID0gIi91c3IvbG9jYWwvZ28iCgpmdW5jIGZhaWwoZm9ybWF0IHN0cmluZywgdmFsdWVzIC4uLmFueSkgewoJZm10LkZwcmludGYob3MuU3RkZXJyLCBmb3JtYXQrIlxuIiwgdmFsdWVzLi4uKQoJb3MuRXhpdCgxKQp9CgpmdW5jIHRydXN0ZWRHb0NvbW1hbmQoZ29FeGVjdXRhYmxlIHN0cmluZywgYXJndW1lbnRzIC4uLnN0cmluZykgKmV4ZWMuQ21kIHsKCWNvbW1hbmQgOj0gZXhlYy5Db21tYW5kKGdvRXhlY3V0YWJsZSwgYXJndW1lbnRzLi4uKQoJY29tbWFuZC5FbnYgPSBbXXN0cmluZ3sKCQkiUEFUSD0vdXNyL2xvY2FsL2dvL2JpbjovdXNyL2JpbjovYmluIiwKCQkiSE9NRT0vdG1wIiwKCQkiR09ST09UPSIgKyB0cnVzdGVkR09ST09ULAoJCSJHT0VOVj1vZmYiLAoJCSJHT0ZMQUdTPSIsCgkJIkdPVE9PTENIQUlOPWxvY2FsIiwKCQkiR09XT1JLPW9mZiIsCgl9CglyZXR1cm4gY29tbWFuZAp9CgpmdW5jIGV4cGVjdE91dHB1dChnb0V4ZWN1dGFibGUsIGxhYmVsLCBleHBlY3RlZCBzdHJpbmcsIGFyZ3VtZW50cyAuLi5zdHJpbmcpIHsKCW91dHB1dCwgZXJyIDo9IHRydXN0ZWRHb0NvbW1hbmQoZ29FeGVjdXRhYmxlLCBhcmd1bWVudHMuLi4pLk91dHB1dCgpCglpZiBlcnIgIT0gbmlsIHsKCQlmYWlsKCIlcyBmYWlsZWQ6ICV2IiwgbGFiZWwsIGVycikKCX0KCWlmICFieXRlcy5FcXVhbChvdXRwdXQsIFtdYnl0ZShleHBlY3RlZCkpIHsKCQlmYWlsKCIlcyBtaXNtYXRjaDogZ290ICVxLCB3YW50ICVxIiwgbGFiZWwsIG91dHB1dCwgZXhwZWN0ZWQpCgl9Cn0KCmZ1bmMgdmVyaWZ5KGdvRXhlY3V0YWJsZSBzdHJpbmcpIHsKCWV4cGVjdE91dHB1dChnb0V4ZWN1dGFibGUsICJHT1ZFUlNJT04iLCAiZ28xLjI2LjVcbiIsICJlbnYiLCAiR09WRVJTSU9OIikKCWV4cGVjdE91dHB1dChnb0V4ZWN1dGFibGUsICJHT1RPT0xDSEFJTiIsICJsb2NhbFxuIiwgImVudiIsICJHT1RPT0xDSEFJTiIpCglleHBlY3RPdXRwdXQoZ29FeGVjdXRhYmxlLCAiR09ST09UIiwgdHJ1c3RlZEdPUk9PVCsiXG4iLCAiZW52IiwgIkdPUk9PVCIpCglleHBlY3RPdXRwdXQoZ29FeGVjdXRhYmxlLCAiZ28gdG9vbCBjb21waWxlIiwgImNvbXBpbGUgdmVyc2lvbiBnbzEuMjYuNVxuIiwgInRvb2wiLCAiY29tcGlsZSIsICItVj1mdWxsIikKfQoKZnVuYyBtYWluKCkgewoJaWYgbGVuKG9zLkFyZ3MpID09IDIgJiYgb3MuQXJnc1sxXSA9PSAiY2xlYW4iIHsKCQlpZiBlcnIgOj0gb3MuUmVtb3ZlQWxsKCIvdXNyL2xvY2FsL2dvIik7IGVyciAhPSBuaWwgewoJCQlmYWlsKCJjbGVhbiAvdXNyL2xvY2FsL2dvOiAldiIsIGVycikKCQl9CgkJaWYgZXJyIDo9IG9zLlJlbW92ZUFsbCgiL29wdC9tYXR0ZXJjb2RleC9ib290c3RyYXAtZ28iKTsgZXJyICE9IG5pbCB7CgkJCWZhaWwoImNsZWFuIGJvb3RzdHJhcCBHbzogJXYiLCBlcnIpCgkJfQoJCXJldHVybgoJfQoJaWYgbGVuKG9zLkFyZ3MpID09IDMgJiYgb3MuQXJnc1sxXSA9PSAidmVyaWZ5IiB7CgkJdmVyaWZ5KG9zLkFyZ3NbMl0pCgkJcmV0dXJuCgl9CglmYWlsKCJ1bnN1cHBvcnRlZCBpbnZvY2F0aW9uIikKfQo="
+trusted_guard_source_base64="cGFja2FnZSBtYWluCgppbXBvcnQgKAoJImJ5dGVzIgoJImNyeXB0by9zaGEyNTYiCgkiZm10IgoJImlvIgoJIm9zIgoJIm9zL2V4ZWMiCgkicGF0aC9maWxlcGF0aCIKCSJzb3J0IgoJInN0cmluZ3MiCgkic3lzY2FsbCIKKQoKY29uc3QgKAoJdHJ1c3RlZEdPUk9PVCAgICAgID0gIi91c3IvbG9jYWwvZ28iCglib290c3RyYXBHT1JPT1QgICAgPSAiL29wdC9tYXR0ZXJjb2RleC9ib290c3RyYXAtZ28iCglwcm90ZWN0ZWRTdGFnaW5nICAgPSAiL29wdC9tYXR0ZXJjb2RleC9wcm90ZWN0ZWQtYXJ0aWZhY3RzIgoJcHJvdGVjdGVkVGFyZ2V0RGlyID0gIi91c3IvbG9jYWwvYmluIgoJcHJvdGVjdGVkUm9vdCAgICAgID0gIi8iCgl0cnVzdGVkVUlEICAgICAgICAgPSAwCgl0cnVzdGVkR0lEICAgICAgICAgPSAwCikKCnZhciBwcm90ZWN0ZWRUb29scyA9IFtdc3RyaW5newoJImJ1ZiIsCgkiZ29mdW1wdCIsCgkiZ29pbXBvcnRzIiwKCSJnb2xhbmdjaS1saW50IiwKCSJnb29zZSIsCgkiZ3JwY3VybCIsCgkibW9ja2dlbiIsCgkib2FwaS1jb2RlZ2VuIiwKCSJwcm90b2MtZ2VuLWdvIiwKCSJwcm90b2MtZ2VuLWdvLWdycGMiLAoJInNxbGMiLAoJInN0YXRpY2NoZWNrIiwKCSJ5cSIsCn0KCmZ1bmMgZmFpbChmb3JtYXQgc3RyaW5nLCB2YWx1ZXMgLi4uYW55KSB7CglmbXQuRnByaW50Zihvcy5TdGRlcnIsIGZvcm1hdCsiXG4iLCB2YWx1ZXMuLi4pCglvcy5FeGl0KDEpCn0KCmZ1bmMgdHJ1c3RlZEdvQ29tbWFuZChnb0V4ZWN1dGFibGUgc3RyaW5nLCBhcmd1bWVudHMgLi4uc3RyaW5nKSAqZXhlYy5DbWQgewoJY29tbWFuZCA6PSBleGVjLkNvbW1hbmQoZ29FeGVjdXRhYmxlLCBhcmd1bWVudHMuLi4pCgljb21tYW5kLkVudiA9IFtdc3RyaW5newoJCSJQQVRIPS91c3IvbG9jYWwvZ28vYmluOi91c3IvYmluOi9iaW4iLAoJCSJIT01FPS90bXAiLAoJCSJHT1JPT1Q9IiArIHRydXN0ZWRHT1JPT1QsCgkJIkdPRU5WPW9mZiIsCgkJIkdPRkxBR1M9IiwKCQkiR09UT09MQ0hBSU49bG9jYWwiLAoJCSJHT1dPUks9b2ZmIiwKCX0KCXJldHVybiBjb21tYW5kCn0KCmZ1bmMgZXhwZWN0T3V0cHV0KGdvRXhlY3V0YWJsZSwgbGFiZWwsIGV4cGVjdGVkIHN0cmluZywgYXJndW1lbnRzIC4uLnN0cmluZykgewoJb3V0cHV0LCBlcnIgOj0gdHJ1c3RlZEdvQ29tbWFuZChnb0V4ZWN1dGFibGUsIGFyZ3VtZW50cy4uLikuT3V0cHV0KCkKCWlmIGVyciAhPSBuaWwgewoJCWZhaWwoIiVzIGZhaWxlZDogJXYiLCBsYWJlbCwgZXJyKQoJfQoJaWYgIWJ5dGVzLkVxdWFsKG91dHB1dCwgW11ieXRlKGV4cGVjdGVkKSkgewoJCWZhaWwoIiVzIG1pc21hdGNoOiBnb3QgJXEsIHdhbnQgJXEiLCBsYWJlbCwgb3V0cHV0LCBleHBlY3RlZCkKCX0KfQoKZnVuYyB2ZXJpZnlHbyhnb0V4ZWN1dGFibGUgc3RyaW5nKSB7CglleHBlY3RPdXRwdXQoZ29FeGVjdXRhYmxlLCAiR09WRVJTSU9OIiwgImdvMS4yNi41XG4iLCAiZW52IiwgIkdPVkVSU0lPTiIpCglleHBlY3RPdXRwdXQoZ29FeGVjdXRhYmxlLCAiR09UT09MQ0hBSU4iLCAibG9jYWxcbiIsICJlbnYiLCAiR09UT09MQ0hBSU4iKQoJZXhwZWN0T3V0cHV0KGdvRXhlY3V0YWJsZSwgIkdPUk9PVCIsIHRydXN0ZWRHT1JPT1QrIlxuIiwgImVudiIsICJHT1JPT1QiKQoJZXhwZWN0T3V0cHV0KGdvRXhlY3V0YWJsZSwgImdvIHRvb2wgY29tcGlsZSIsICJjb21waWxlIHZlcnNpb24gZ28xLjI2LjVcbiIsICJ0b29sIiwgImNvbXBpbGUiLCAiLVY9ZnVsbCIpCn0KCmZ1bmMgcHJvdGVjdGVkTmFtZXMocHJvZmlsZSBzdHJpbmcpIFtdc3RyaW5nIHsKCW5hbWVzIDo9IGFwcGVuZChbXXN0cmluZyhuaWwpLCBwcm90ZWN0ZWRUb29scy4uLikKCXN3aXRjaCBwcm9maWxlIHsKCWNhc2UgInNlcnZpY2VzIjoKCQluYW1lcyA9IGFwcGVuZChuYW1lcywgIm1hdHRlci1jb2RleC1hZ2VudC1ydW5uZXIiKQoJY2FzZSAiZGVwbG95IjoKCWRlZmF1bHQ6CgkJZmFpbCgidW5zdXBwb3J0ZWQgcHJvZmlsZSAlcSIsIHByb2ZpbGUpCgl9Cglzb3J0LlN0cmluZ3MobmFtZXMpCglyZXR1cm4gbmFtZXMKfQoKZnVuYyByZXF1aXJlVHJ1c3RlZElkZW50aXR5KCkgewoJaWYgb3MuR2V0ZXVpZCgpICE9IHRydXN0ZWRVSUQgfHwgb3MuR2V0ZWdpZCgpICE9IHRydXN0ZWRHSUQgewoJCWZhaWwoInRydXN0ZWQgZ3VhcmQgcmVxdWlyZXMgdWlkOmdpZCAlZDolZCIsIHRydXN0ZWRVSUQsIHRydXN0ZWRHSUQpCgl9Cn0KCmZ1bmMgc3RhdChwYXRoIHN0cmluZykgKG9zLkZpbGVJbmZvLCAqc3lzY2FsbC5TdGF0X3QpIHsKCWluZm8sIGVyciA6PSBvcy5Mc3RhdChwYXRoKQoJaWYgZXJyICE9IG5pbCB7CgkJZmFpbCgibHN0YXQgJXM6ICV2IiwgcGF0aCwgZXJyKQoJfQoJc3RhdHVzLCBvayA6PSBpbmZvLlN5cygpLigqc3lzY2FsbC5TdGF0X3QpCglpZiAhb2sgewoJCWZhaWwoInN0YXQgJXM6IHVuc3VwcG9ydGVkIHBsYXRmb3JtIiwgcGF0aCkKCX0KCXJldHVybiBpbmZvLCBzdGF0dXMKfQoKZnVuYyBlbnN1cmVEaXJlY3RvcnkocGF0aCBzdHJpbmcpIHsKCXBhdGggPSBmaWxlcGF0aC5DbGVhbihwYXRoKQoJcm9vdCA6PSBmaWxlcGF0aC5DbGVhbihwcm90ZWN0ZWRSb290KQoJaWYgcGF0aCA9PSByb290IHsKCQl2ZXJpZnlEaXJlY3RvcnkocGF0aCkKCQlyZXR1cm4KCX0KCWlmIHJvb3QgIT0gIi8iICYmICFzdHJpbmdzLkhhc1ByZWZpeChwYXRoLCByb290K3N0cmluZyhvcy5QYXRoU2VwYXJhdG9yKSkgewoJCWZhaWwoInByb3RlY3RlZCBwYXRoICVzIGVzY2FwZXMgcm9vdCAlcyIsIHBhdGgsIHJvb3QpCgl9CglwYXJlbnQgOj0gZmlsZXBhdGguRGlyKHBhdGgpCgllbnN1cmVEaXJlY3RvcnkocGFyZW50KQoJaW5mbywgZXJyIDo9IG9zLkxzdGF0KHBhdGgpCglpZiBlcnIgPT0gbmlsICYmICFpbmZvLklzRGlyKCkgewoJCWlmIGVyciA6PSBvcy5SZW1vdmVBbGwocGF0aCk7IGVyciAhPSBuaWwgewoJCQlmYWlsKCJyZW1vdmUgdW5zYWZlIHBhdGggJXM6ICV2IiwgcGF0aCwgZXJyKQoJCX0KCQlpbmZvID0gbmlsCgl9IGVsc2UgaWYgZXJyICE9IG5pbCAmJiAhb3MuSXNOb3RFeGlzdChlcnIpIHsKCQlmYWlsKCJsc3RhdCAlczogJXYiLCBwYXRoLCBlcnIpCgl9CglpZiBpbmZvID09IG5pbCB7CgkJaWYgZXJyIDo9IG9zLk1rZGlyKHBhdGgsIDBvNzU1KTsgZXJyICE9IG5pbCAmJiAhb3MuSXNFeGlzdChlcnIpIHsKCQkJZmFpbCgibWtkaXIgJXM6ICV2IiwgcGF0aCwgZXJyKQoJCX0KCX0KCWlmIGVyciA6PSBvcy5DaG93bihwYXRoLCB0cnVzdGVkVUlELCB0cnVzdGVkR0lEKTsgZXJyICE9IG5pbCB7CgkJZmFpbCgiY2hvd24gJXM6ICV2IiwgcGF0aCwgZXJyKQoJfQoJaWYgZXJyIDo9IG9zLkNobW9kKHBhdGgsIDBvNzU1KTsgZXJyICE9IG5pbCB7CgkJZmFpbCgiY2htb2QgJXM6ICV2IiwgcGF0aCwgZXJyKQoJfQoJdmVyaWZ5RGlyZWN0b3J5KHBhdGgpCn0KCmZ1bmMgdmVyaWZ5RGlyZWN0b3J5KHBhdGggc3RyaW5nKSB7CglpbmZvLCBzdGF0dXMgOj0gc3RhdChwYXRoKQoJaWYgIWluZm8uSXNEaXIoKSB8fCBpbmZvLk1vZGUoKSZvcy5Nb2RlU3ltbGluayAhPSAwIHsKCQlmYWlsKCJwcm90ZWN0ZWQgZGlyZWN0b3J5ICVzIGlzIG5vdCBhIHJlYWwgZGlyZWN0b3J5IiwgcGF0aCkKCX0KCWlmIHN0YXR1cy5VaWQgIT0gdWludDMyKHRydXN0ZWRVSUQpIHx8IHN0YXR1cy5HaWQgIT0gdWludDMyKHRydXN0ZWRHSUQpIHsKCQlmYWlsKCJwcm90ZWN0ZWQgZGlyZWN0b3J5ICVzIGlzIG5vdCByb290LW93bmVkIiwgcGF0aCkKCX0KCWlmIGluZm8uTW9kZSgpLlBlcm0oKSYwbzAyMiAhPSAwIHsKCQlmYWlsKCJwcm90ZWN0ZWQgZGlyZWN0b3J5ICVzIGlzIGdyb3VwL3dvcmxkLXdyaXRhYmxlIiwgcGF0aCkKCX0KfQoKZnVuYyB2ZXJpZnlQYXJlbnRzKHBhdGggc3RyaW5nKSB7Cglyb290IDo9IGZpbGVwYXRoLkNsZWFuKHByb3RlY3RlZFJvb3QpCglmb3IgY3VycmVudCA6PSBmaWxlcGF0aC5DbGVhbihwYXRoKTsgOyBjdXJyZW50ID0gZmlsZXBhdGguRGlyKGN1cnJlbnQpIHsKCQl2ZXJpZnlEaXJlY3RvcnkoY3VycmVudCkKCQlpZiBjdXJyZW50ID09IHJvb3QgewoJCQlyZXR1cm4KCQl9Cgl9Cn0KCmZ1bmMgcmVtb3ZlUHJvdGVjdGVkTGVhdmVzKHByb2ZpbGUgc3RyaW5nKSB7Cglmb3IgXywgbmFtZSA6PSByYW5nZSBwcm90ZWN0ZWROYW1lcyhwcm9maWxlKSB7CgkJcGF0aCA6PSBmaWxlcGF0aC5Kb2luKHByb3RlY3RlZFRhcmdldERpciwgbmFtZSkKCQlpZiBlcnIgOj0gb3MuUmVtb3ZlQWxsKHBhdGgpOyBlcnIgIT0gbmlsIHsKCQkJZmFpbCgicmVtb3ZlIHByb3RlY3RlZCBkZXN0aW5hdGlvbiAlczogJXYiLCBwYXRoLCBlcnIpCgkJfQoJfQp9CgpmdW5jIHByZXBhcmUocHJvZmlsZSBzdHJpbmcpIHsKCXJlcXVpcmVUcnVzdGVkSWRlbnRpdHkoKQoJZW5zdXJlRGlyZWN0b3J5KGZpbGVwYXRoLkRpcih0cnVzdGVkR09ST09UKSkKCWVuc3VyZURpcmVjdG9yeShmaWxlcGF0aC5EaXIoYm9vdHN0cmFwR09ST09UKSkKCWVuc3VyZURpcmVjdG9yeShmaWxlcGF0aC5EaXIocHJvdGVjdGVkU3RhZ2luZykpCgllbnN1cmVEaXJlY3RvcnkocHJvdGVjdGVkVGFyZ2V0RGlyKQoJaWYgZXJyIDo9IG9zLlJlbW92ZUFsbCh0cnVzdGVkR09ST09UKTsgZXJyICE9IG5pbCB7CgkJZmFpbCgiY2xlYW4gJXM6ICV2IiwgdHJ1c3RlZEdPUk9PVCwgZXJyKQoJfQoJaWYgZXJyIDo9IG9zLlJlbW92ZUFsbChib290c3RyYXBHT1JPT1QpOyBlcnIgIT0gbmlsIHsKCQlmYWlsKCJjbGVhbiAlczogJXYiLCBib290c3RyYXBHT1JPT1QsIGVycikKCX0KCWlmIGVyciA6PSBvcy5SZW1vdmVBbGwocHJvdGVjdGVkU3RhZ2luZyk7IGVyciAhPSBuaWwgewoJCWZhaWwoImNsZWFuICVzOiAldiIsIHByb3RlY3RlZFN0YWdpbmcsIGVycikKCX0KCWVuc3VyZURpcmVjdG9yeSh0cnVzdGVkR09ST09UKQoJZW5zdXJlRGlyZWN0b3J5KHByb3RlY3RlZFN0YWdpbmcpCglyZW1vdmVQcm90ZWN0ZWRMZWF2ZXMocHJvZmlsZSkKCXZlcmlmeVBhcmVudHModHJ1c3RlZEdPUk9PVCkKCXZlcmlmeVBhcmVudHMocHJvdGVjdGVkU3RhZ2luZykKCXZlcmlmeVBhcmVudHMocHJvdGVjdGVkVGFyZ2V0RGlyKQp9CgpmdW5jIHZlcmlmeVJlZ3VsYXIocGF0aCBzdHJpbmcpIChvcy5GaWxlSW5mbywgKnN5c2NhbGwuU3RhdF90KSB7CglpbmZvLCBzdGF0dXMgOj0gc3RhdChwYXRoKQoJaWYgIWluZm8uTW9kZSgpLklzUmVndWxhcigpIHx8IGluZm8uTW9kZSgpJm9zLk1vZGVTeW1saW5rICE9IDAgewoJCWZhaWwoInByb3RlY3RlZCBhcnRpZmFjdCAlcyBpcyBub3QgYSByZWd1bGFyIG5vbi1zeW1saW5rIGZpbGUiLCBwYXRoKQoJfQoJaWYgc3RhdHVzLlVpZCAhPSB1aW50MzIodHJ1c3RlZFVJRCkgfHwgc3RhdHVzLkdpZCAhPSB1aW50MzIodHJ1c3RlZEdJRCkgewoJCWZhaWwoInByb3RlY3RlZCBhcnRpZmFjdCAlcyBpcyBub3Qgcm9vdC1vd25lZCIsIHBhdGgpCgl9CglpZiBzdGF0dXMuTmxpbmsgIT0gMSB7CgkJZmFpbCgicHJvdGVjdGVkIGFydGlmYWN0ICVzIGhhcyAlZCBoYXJkbGlua3MiLCBwYXRoLCBzdGF0dXMuTmxpbmspCgl9CglpZiBpbmZvLk1vZGUoKS5QZXJtKCkmMG8wMjIgIT0gMCB7CgkJZmFpbCgicHJvdGVjdGVkIGFydGlmYWN0ICVzIGlzIGdyb3VwL3dvcmxkLXdyaXRhYmxlIiwgcGF0aCkKCX0KCXJldHVybiBpbmZvLCBzdGF0dXMKfQoKZnVuYyBkaWdlc3QocGF0aCBzdHJpbmcpIFtzaGEyNTYuU2l6ZV1ieXRlIHsKCWZpbGUsIGVyciA6PSBvcy5PcGVuKHBhdGgpCglpZiBlcnIgIT0gbmlsIHsKCQlmYWlsKCJvcGVuICVzOiAldiIsIHBhdGgsIGVycikKCX0KCWRlZmVyIGZpbGUuQ2xvc2UoKQoJaGFzaCA6PSBzaGEyNTYuTmV3KCkKCWlmIF8sIGVyciA6PSBpby5Db3B5KGhhc2gsIGZpbGUpOyBlcnIgIT0gbmlsIHsKCQlmYWlsKCJoYXNoICVzOiAldiIsIHBhdGgsIGVycikKCX0KCXZhciByZXN1bHQgW3NoYTI1Ni5TaXplXWJ5dGUKCWNvcHkocmVzdWx0WzpdLCBoYXNoLlN1bShuaWwpKQoJcmV0dXJuIHJlc3VsdAp9CgpmdW5jIGNvcHlQcm90ZWN0ZWQoc291cmNlLCB0YXJnZXQgc3RyaW5nKSB7Cglzb3VyY2VGaWxlLCBlcnIgOj0gb3MuT3Blbihzb3VyY2UpCglpZiBlcnIgIT0gbmlsIHsKCQlmYWlsKCJvcGVuIHByb3RlY3RlZCBzb3VyY2UgJXM6ICV2Iiwgc291cmNlLCBlcnIpCgl9CglkZWZlciBzb3VyY2VGaWxlLkNsb3NlKCkKCXRhcmdldEZpbGUsIGVyciA6PSBvcy5PcGVuRmlsZSh0YXJnZXQsIG9zLk9fV1JPTkxZfG9zLk9fQ1JFQVRFfG9zLk9fRVhDTCwgMG81NTUpCglpZiBlcnIgIT0gbmlsIHsKCQlmYWlsKCJjcmVhdGUgcHJvdGVjdGVkIGRlc3RpbmF0aW9uICVzOiAldiIsIHRhcmdldCwgZXJyKQoJfQoJaWYgXywgZXJyIDo9IGlvLkNvcHkodGFyZ2V0RmlsZSwgc291cmNlRmlsZSk7IGVyciAhPSBuaWwgewoJCXRhcmdldEZpbGUuQ2xvc2UoKQoJCWZhaWwoImNvcHkgcHJvdGVjdGVkIGFydGlmYWN0ICVzOiAldiIsIHRhcmdldCwgZXJyKQoJfQoJaWYgZXJyIDo9IHRhcmdldEZpbGUuU3luYygpOyBlcnIgIT0gbmlsIHsKCQl0YXJnZXRGaWxlLkNsb3NlKCkKCQlmYWlsKCJzeW5jIHByb3RlY3RlZCBhcnRpZmFjdCAlczogJXYiLCB0YXJnZXQsIGVycikKCX0KCWlmIGVyciA6PSB0YXJnZXRGaWxlLkNobW9kKDBvNTU1KTsgZXJyICE9IG5pbCB7CgkJdGFyZ2V0RmlsZS5DbG9zZSgpCgkJZmFpbCgiY2htb2QgcHJvdGVjdGVkIGFydGlmYWN0ICVzOiAldiIsIHRhcmdldCwgZXJyKQoJfQoJaWYgZXJyIDo9IHRhcmdldEZpbGUuQ2xvc2UoKTsgZXJyICE9IG5pbCB7CgkJZmFpbCgiY2xvc2UgcHJvdGVjdGVkIGFydGlmYWN0ICVzOiAldiIsIHRhcmdldCwgZXJyKQoJfQp9CgpmdW5jIHZlcmlmeUV4YWN0U3RhZ2luZyhuYW1lcyBbXXN0cmluZykgewoJZW50cmllcywgZXJyIDo9IG9zLlJlYWREaXIocHJvdGVjdGVkU3RhZ2luZykKCWlmIGVyciAhPSBuaWwgewoJCWZhaWwoInJlYWQgcHJvdGVjdGVkIHN0YWdpbmc6ICV2IiwgZXJyKQoJfQoJaWYgbGVuKGVudHJpZXMpICE9IGxlbihuYW1lcykgewoJCWZhaWwoInByb3RlY3RlZCBzdGFnaW5nIGhhcyAlZCBhcnRpZmFjdHMsIHdhbnQgJWQiLCBsZW4oZW50cmllcyksIGxlbihuYW1lcykpCgl9Cglmb3IgaW5kZXgsIGVudHJ5IDo9IHJhbmdlIGVudHJpZXMgewoJCWlmIGVudHJ5Lk5hbWUoKSAhPSBuYW1lc1tpbmRleF0gewoJCQlmYWlsKCJwcm90ZWN0ZWQgc3RhZ2luZyBhcnRpZmFjdCAlcSwgd2FudCAlcSIsIGVudHJ5Lk5hbWUoKSwgbmFtZXNbaW5kZXhdKQoJCX0KCX0KfQoKZnVuYyBpbnN0YWxsKHByb2ZpbGUsIGdvRXhlY3V0YWJsZSBzdHJpbmcpIHsKCXJlcXVpcmVUcnVzdGVkSWRlbnRpdHkoKQoJbmFtZXMgOj0gcHJvdGVjdGVkTmFtZXMocHJvZmlsZSkKCXZlcmlmeVBhcmVudHMocHJvdGVjdGVkU3RhZ2luZykKCXZlcmlmeVBhcmVudHMocHJvdGVjdGVkVGFyZ2V0RGlyKQoJdmVyaWZ5UGFyZW50cyh0cnVzdGVkR09ST09UKQoJdmVyaWZ5RXhhY3RTdGFnaW5nKG5hbWVzKQoJc291cmNlRGlnZXN0cyA6PSBtYWtlKG1hcFtzdHJpbmddW3NoYTI1Ni5TaXplXWJ5dGUsIGxlbihuYW1lcykpCglmb3IgXywgbmFtZSA6PSByYW5nZSBuYW1lcyB7CgkJc291cmNlIDo9IGZpbGVwYXRoLkpvaW4ocHJvdGVjdGVkU3RhZ2luZywgbmFtZSkKCQl2ZXJpZnlSZWd1bGFyKHNvdXJjZSkKCQlzb3VyY2VEaWdlc3RzW25hbWVdID0gZGlnZXN0KHNvdXJjZSkKCX0KCXJlbW92ZVByb3RlY3RlZExlYXZlcyhwcm9maWxlKQoJZm9yIF8sIG5hbWUgOj0gcmFuZ2UgbmFtZXMgewoJCXNvdXJjZSA6PSBmaWxlcGF0aC5Kb2luKHByb3RlY3RlZFN0YWdpbmcsIG5hbWUpCgkJdGFyZ2V0IDo9IGZpbGVwYXRoLkpvaW4ocHJvdGVjdGVkVGFyZ2V0RGlyLCBuYW1lKQoJCWNvcHlQcm90ZWN0ZWQoc291cmNlLCB0YXJnZXQpCgkJdmVyaWZ5UmVndWxhcih0YXJnZXQpCgkJaWYgZGlnZXN0KHRhcmdldCkgIT0gc291cmNlRGlnZXN0c1tuYW1lXSB7CgkJCWZhaWwoInByb3RlY3RlZCBhcnRpZmFjdCBkaWdlc3QgbWlzbWF0Y2ggZm9yICVzIiwgbmFtZSkKCQl9Cgl9CglpZiBlcnIgOj0gb3MuUmVtb3ZlQWxsKHByb3RlY3RlZFN0YWdpbmcpOyBlcnIgIT0gbmlsIHsKCQlmYWlsKCJyZW1vdmUgcHJvdGVjdGVkIHN0YWdpbmc6ICV2IiwgZXJyKQoJfQoJdmVyaWZ5UGFyZW50cyhwcm90ZWN0ZWRUYXJnZXREaXIpCglmb3IgXywgbmFtZSA6PSByYW5nZSBuYW1lcyB7CgkJdGFyZ2V0IDo9IGZpbGVwYXRoLkpvaW4ocHJvdGVjdGVkVGFyZ2V0RGlyLCBuYW1lKQoJCXZlcmlmeVJlZ3VsYXIodGFyZ2V0KQoJCWlmIGRpZ2VzdCh0YXJnZXQpICE9IHNvdXJjZURpZ2VzdHNbbmFtZV0gewoJCQlmYWlsKCJmaW5hbCBwcm90ZWN0ZWQgYXJ0aWZhY3QgZGlnZXN0IG1pc21hdGNoIGZvciAlcyIsIG5hbWUpCgkJfQoJfQoJdmVyaWZ5UmVndWxhcihnb0V4ZWN1dGFibGUpCgl2ZXJpZnlHbyhnb0V4ZWN1dGFibGUpCn0KCmZ1bmMgbWFpbigpIHsKCWlmIGxlbihvcy5BcmdzKSA9PSAzICYmIG9zLkFyZ3NbMV0gPT0gInByZXBhcmUiIHsKCQlwcmVwYXJlKG9zLkFyZ3NbMl0pCgkJcmV0dXJuCgl9CglpZiBsZW4ob3MuQXJncykgPT0gNCAmJiBvcy5BcmdzWzFdID09ICJpbnN0YWxsIiB7CgkJaW5zdGFsbChvcy5BcmdzWzJdLCBvcy5BcmdzWzNdKQoJCXJldHVybgoJfQoJaWYgbGVuKG9zLkFyZ3MpID09IDMgJiYgb3MuQXJnc1sxXSA9PSAidmVyaWZ5IiB7CgkJdmVyaWZ5R28ob3MuQXJnc1syXSkKCQlyZXR1cm4KCX0KCWZhaWwoInVuc3VwcG9ydGVkIGludm9jYXRpb24iKQp9Cg=="
 trusted_guard_build_run="RUN mkdir -p /out /tmp/mattercodex-go-build-cache && printf '%s' '$trusted_guard_source_base64' | base64 -d > /tmp/mattercodex-go-toolchain-guard.go && /usr/bin/env -i PATH=/usr/local/go/bin:/usr/bin:/bin HOME=/tmp GOCACHE=/tmp/mattercodex-go-build-cache GOENV=off GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0 /usr/local/go/bin/go build -trimpath -buildvcs=false -o /out/mattercodex-go-toolchain-guard /tmp/mattercodex-go-toolchain-guard.go && rm -rf /tmp/mattercodex-go-toolchain-guard.go /tmp/mattercodex-go-build-cache"
 require_line services/external/bot-service/Dockerfile "ARG GOLANG_IMAGE=$go_image"
 require_final_runtime_stage_contract \
@@ -1046,29 +1082,29 @@ require_final_runtime_stage_contract \
   "FROM node:24-bookworm" \
   4 \
   2 \
-  "COPY --from=1 /tool-bin/ /usr/local/bin/" \
-  "COPY --from=1 /out/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner" \
+  "COPY --from=1 /out/mattercodex-protected/ /usr/local/bin/" \
+  "COPY --from=1 /out/mattercodex-protected/ /opt/mattercodex/protected-artifacts/" \
   4 \
-  6 \
+  5 \
   "" \
   "ENV GOROOT=/usr/local/go GOENV=off GOFLAGS= GOTOOLCHAIN=local PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" \
-  'USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}' \
+  'USER 10001:10001' \
   'ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/matter-codex-agent-runner"]' \
-  "878b45ef727136c68399c0a430e175a12b78f90227e4104ef075285d650b55c6"
+  "aa16a5700a0367ec702edc2954d5c79274eab96f86511e92256e4e6a63a7c804"
 require_final_runtime_stage_contract \
   deploy/images/agent-runner/Dockerfile \
   "FROM node:24-alpine" \
   2 \
   0 \
-  "COPY --from=1 /tool-bin/ /usr/local/bin/" \
-  "" \
+  "COPY --from=1 /out/mattercodex-protected/ /usr/local/bin/" \
+  "COPY --from=1 /out/mattercodex-protected/ /opt/mattercodex/protected-artifacts/" \
   4 \
   5 \
   "WORKDIR /workspace" \
   "ENV GOROOT=/usr/local/go GOENV=off GOFLAGS= GOTOOLCHAIN=local PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" \
-  'USER ${MATTERCODEX_AGENT_RUNNER_UID}:${MATTERCODEX_AGENT_RUNNER_GID}' \
+  'USER 10001:10001' \
   'CMD ["sh"]' \
-  "a63c7a7047cb287d7448f8ef68852ac9cd8c2af1612c1fb0181601932fc04474"
+  "b6e7b6fb8a7b52891a9cfc39d2220975a9be8e7a056dd8cf6c58b51dadf302b4"
 require_count services/jobs/agent-runner/Dockerfile "FROM $go_image" 2
 require_count deploy/images/agent-runner/Dockerfile "FROM $go_image" 2
 require_count services/external/bot-service/Dockerfile "ENV GOTOOLCHAIN=local" 2
