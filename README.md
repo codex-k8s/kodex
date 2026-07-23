@@ -55,7 +55,7 @@ Bot-service при этом все равно режет исходящие thre
 Health-only deploy без Mattermost token:
 
 ```bash
-bash scripts/remote/install-bot-service.sh --env-file .env --apply --wait
+scripts/remote/install-bot-service.sh --env-file .env --apply --wait
 bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 ```
 

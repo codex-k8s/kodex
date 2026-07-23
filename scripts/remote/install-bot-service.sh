@@ -1,6 +1,31 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 
 set -euo pipefail
+
+mattercodex_require_protected_shell_startup() {
+  local environment_entry environment_key
+
+  if [[ "$-" != *p* ]]; then
+    printf 'FAIL: install-bot-service.sh нужно запускать напрямую, чтобы Bash privileged mode действовал до startup hooks\n' >&2
+    exit 1
+  fi
+  if [[ -n "${BASH_ENV+x}" || -n "${ENV+x}" ]]; then
+    printf 'FAIL: BASH_ENV и ENV запрещены для install-bot-service.sh\n' >&2
+    exit 1
+  fi
+  while IFS= read -r -d '' environment_entry; do
+    environment_key="${environment_entry%%=*}"
+    case "$environment_key" in
+      BASH_FUNC_*%%)
+        printf 'FAIL: экспортированные shell functions запрещены для install-bot-service.sh\n' >&2
+        exit 1
+        ;;
+    esac
+  done < <(/usr/bin/env -0)
+}
+
+mattercodex_require_protected_shell_startup
+unset BASH_ENV ENV
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -71,6 +96,17 @@ while [ "$#" -gt 0 ]; do
 done
 
 mattercodex_load_env_file "$ENV_FILE"
+mattercodex_require_protected_shell_startup
+for forbidden_kaniko_input in \
+  MATTERCODEX_KANIKO_EXTRA_ARGS_YAML \
+  MATTERCODEX_KANIKO_CACHE \
+  MATTERCODEX_KANIKO_CACHE_RUN_LAYERS \
+  MATTERCODEX_KANIKO_CACHE_COPY_LAYERS \
+  MATTERCODEX_KANIKO_CACHE_REPO; do
+  if [[ -n "${!forbidden_kaniko_input+x}" ]]; then
+    mattercodex_die "$forbidden_kaniko_input не поддерживается: Kaniko cache для этой сборки отключён fail-closed"
+  fi
+done
 MATTERCODEX_IMAGE_TAG_WAS_SET=false
 MATTERCODEX_BOT_SERVICE_IMAGE_WAS_SET=false
 MATTERCODEX_AGENT_RUNNER_IMAGE_WAS_SET=false
@@ -229,6 +265,12 @@ remote_registry_image_exists() {
 kaniko_arg_yaml_line() {
   local arg="$1"
   local escaped
+
+  case "$arg" in
+    --cache | --cache=* | --cache-run-layers | --cache-run-layers=* | --cache-copy-layers | --cache-copy-layers=* | --cache-repo | --cache-repo=*)
+      mattercodex_die "Kaniko cache args запрещены для поддерживаемого build path"
+      ;;
+  esac
   escaped="$(printf '%s' "$arg" | sed 's/\\/\\\\/g; s/"/\\"/g')"
   printf '            - "%s"\n' "$escaped"
 }
@@ -332,9 +374,8 @@ run_kaniko_build_remote() {
   MATTERCODEX_KANIKO_CONTEXT_SUBDIR="$job_name"
   MATTERCODEX_KANIKO_DOCKERFILE="$dockerfile"
   MATTERCODEX_KANIKO_DESTINATION="$destination"
-  MATTERCODEX_KANIKO_CACHE_REPO="${MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST}/${MATTERCODEX_IMAGE_REPOSITORY_PREFIX}/kaniko-cache/${component}"
   MATTERCODEX_KANIKO_EXTRA_ARGS_YAML="$extra_args_yaml"
-  export MATTERCODEX_KANIKO_JOB_NAME MATTERCODEX_KANIKO_COMPONENT MATTERCODEX_KANIKO_CONTEXT_SUBDIR MATTERCODEX_KANIKO_DOCKERFILE MATTERCODEX_KANIKO_DESTINATION MATTERCODEX_KANIKO_CACHE_REPO MATTERCODEX_KANIKO_EXTRA_ARGS_YAML
+  export MATTERCODEX_KANIKO_JOB_NAME MATTERCODEX_KANIKO_COMPONENT MATTERCODEX_KANIKO_CONTEXT_SUBDIR MATTERCODEX_KANIKO_DOCKERFILE MATTERCODEX_KANIKO_DESTINATION MATTERCODEX_KANIKO_EXTRA_ARGS_YAML
 
   mattercodex_render_template "$REPO_ROOT/deploy/k8s/bot-service/kaniko-job.yaml.tpl" "$job_manifest"
   mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q delete job $job_name_q --ignore-not-found --wait=true >/dev/null" </dev/null

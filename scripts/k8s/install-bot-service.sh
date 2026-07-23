@@ -1,6 +1,31 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 
 set -euo pipefail
+
+mattercodex_require_protected_shell_startup() {
+  local environment_entry environment_key
+
+  if [[ "$-" != *p* ]]; then
+    printf 'FAIL: install-bot-service.sh нужно запускать напрямую, чтобы Bash privileged mode действовал до startup hooks\n' >&2
+    exit 1
+  fi
+  if [[ -n "${BASH_ENV+x}" || -n "${ENV+x}" ]]; then
+    printf 'FAIL: BASH_ENV и ENV запрещены для install-bot-service.sh\n' >&2
+    exit 1
+  fi
+  while IFS= read -r -d '' environment_entry; do
+    environment_key="${environment_entry%%=*}"
+    case "$environment_key" in
+      BASH_FUNC_*%%)
+        printf 'FAIL: экспортированные shell functions запрещены для install-bot-service.sh\n' >&2
+        exit 1
+        ;;
+    esac
+  done < <(/usr/bin/env -0)
+}
+
+mattercodex_require_protected_shell_startup
+unset BASH_ENV ENV
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -54,6 +79,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 mattercodex_load_env_file "$ENV_FILE"
+mattercodex_require_protected_shell_startup
 mattercodex_validate_base_env
 mattercodex_require_commands kubectl envsubst base64
 
