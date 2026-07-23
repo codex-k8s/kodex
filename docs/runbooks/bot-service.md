@@ -66,7 +66,7 @@
 - `MATTERCODEX_IMAGE_REGISTRY_NAME`, `MATTERCODEX_IMAGE_REGISTRY_IMAGE`, `MATTERCODEX_IMAGE_REGISTRY_STORAGE_SIZE`, `MATTERCODEX_IMAGE_REGISTRY_HOST_PORT` - optional, параметры встроенного registry;
 - `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST` - optional, registry host, через который kubelet тянет image; default `localhost:<host-port>` для single-server контура;
 - `MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST` - optional, registry host, в который Kaniko push'ит image изнутри кластера; default Kubernetes service DNS;
-- `MATTERCODEX_KANIKO_IMAGE`, `MATTERCODEX_KANIKO_CONTEXT_PVC`, `MATTERCODEX_KANIKO_CONTEXT_STORAGE_SIZE` - optional, параметры Kaniko executor и PVC build context;
+- `MATTERCODEX_KANIKO_IMAGE`, `MATTERCODEX_KANIKO_CONTEXT_PVC`, `MATTERCODEX_KANIKO_CONTEXT_STORAGE_SIZE` - optional, параметры Kaniko executor и PVC build context; registry cache для этого build path закрыто отключён, а внешние cache args не поддерживаются;
 - `MATTERCODEX_KANIKO_CPU_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_REQUEST`, `MATTERCODEX_KANIKO_MEMORY_LIMIT` - optional, ресурсы Kaniko Job; defaults `2000m`/`2Gi`/`24Gi`, CPU limit отсутствует; повышенный лимит нужен для snapshot большого agent-runner image и применяется только к временной build-job;
 - `MATTERCODEX_KANIKO_JOB_TTL_SECONDS`, `MATTERCODEX_KANIKO_ACTIVE_DEADLINE_SECONDS` - optional, lifecycle limits Kaniko Job. Успешный remote build удаляет Job сразу после push, чтобы завершённый pod не удерживал memory quota; TTL остается страховкой при прерывании deploy-клиента;
 - `MATTERCODEX_RUNTIME_ENABLED` - optional, включает Kubernetes runtime adapter;
@@ -129,7 +129,7 @@ Admission сначала без подключения разбирает URL и
 ## Render
 
 ```bash
-bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-codex-bot-render
+scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-codex-bot-render
 bash scripts/k8s/verify-rendered-objects.sh --render-dir /tmp/matter-codex-bot-render --expected-files 8 --expected-objects 18
 ```
 
@@ -150,9 +150,15 @@ bash scripts/k8s/verify-rendered-objects.sh --render-dir /tmp/matter-codex-bot-r
 
 При `--apply` remote deploy по умолчанию использует `MATTERCODEX_IMAGE_BUILD_STRATEGY=kaniko`: локально создается только tar build context, он передается по SSH во временный pod с PVC, а image собирается Kaniko Job внутри кластера и push'ится во встроенный MatterCodex registry. Kubelet тянет готовые image из этого registry через `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST`. Гигабайтные `docker save` archive через локальную сеть не передаются.
 
+Kaniko Job явно получает `--cache=false`, `--cache-run-layers=false` и `--cache-copy-layers=false`. До отдельного решения об аутентифицированном неизменяемом cache поддерживаемые render/install paths отклоняют `MATTERCODEX_KANIKO_EXTRA_ARGS_YAML`, `MATTERCODEX_KANIKO_CACHE`, `MATTERCODEX_KANIKO_CACHE_RUN_LAYERS`, `MATTERCODEX_KANIKO_CACHE_COPY_LAYERS` и `MATTERCODEX_KANIKO_CACHE_REPO`.
+
+Перед render и любым remote действием все динамические значения Kaniko Job проходят закрытую ASCII-грамматику для Kubernetes names, OCI image references, registry `host[:port]`, относительных путей, resource quantities, положительных сроков и единственного разрешённого дополнительного аргумента. Переводы строк, управляющие байты, кавычки, YAML comments/list/map syntax, backslash-escape и percent-encoded представления не поддерживаются. Канонические DNS registry names и TCP ports сохраняются.
+
 Перед применением Deployment installer сначала применяет его ConfigMap и управляемые Secret, затем получает только Kubernetes `uid` и `resourceVersion` всех подключённых pod inputs: config ConfigMap, bot-service Secret, PostgreSQL Secret и GitHub Secret. Из этих безопасных идентификаторов вычисляется аннотация `matter-codex.kodex.works/pod-input-revision`; содержимое Secret в hash, манифест, лог или вывод не попадает. Неизменные inputs не меняют PodTemplate и не создают rollout. Ротация любого подключённого Secret или ConfigMap меняет одну revision-аннотацию, а смена image меняет штатное поле container image; в обоих случаях Kubernetes создаёт ровно один rollout без дополнительного `rollout restart`.
 
 Kaniko Job получает повышенные default resources для тяжелого `agent-runner` image и использует `--skip-unused-stages=true`, чтобы не строить нецелевые Dockerfile stages при `--target`.
+
+Финальный deploy image устанавливает BusyBox из trusted build stage как защищённый `/usr/local/bin/busybox` и запускает абсолютный `CMD ["/usr/local/bin/busybox", "sh"]`; basename остаётся распознаваемым BusyBox dispatcher. Services image запускает защищённый Go init до exact runner. Init регистрирует signal proxy до старта runner и пересылает его process group полный Linux-набор `1..64`, кроме неперехватываемых `SIGKILL`/`SIGSTOP` и служебных для самого init `SIGCHLD`, `SIGURG`, `SIGPROF`, `32`/`33`. `SIGCHLD` обрабатывается через subreaper/reaping path, `SIGURG` остаётся сигналом асинхронного preemption Go runtime, `SIGPROF` — профилирования Go runtime, а `32`/`33` зарезервированы glibc. Код выхода runner и завершение сигналом сохраняются как exact `status` и `128+signal`.
 
 Для проверки сборки без изменения bot-service Deployment используйте `scripts/remote/install-bot-service.sh --env-file .env --apply --build-only` и выставьте `MATTERCODEX_BOT_SERVICE_BUILD_IMAGE=false` или `MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE=false`, если нужно собрать только один image.
 
@@ -171,8 +177,10 @@ Runtime namespace получает `ResourceQuota` `matter-codex-runtime-quota` 
 ## Remote dry-run
 
 ```bash
-bash scripts/remote/install-bot-service.sh --env-file .env --dry-run=server
+scripts/remote/install-bot-service.sh --env-file .env --dry-run=server
 ```
+
+Установщики, render helper и защищённый agent-runner build wrapper запускаются напрямую: их `#!/bin/bash -p` создаёт границу до `BASH_ENV`, `ENV` и импортированных shell functions. До определения абсолютного repository root bootstrap использует только Bash builtins и явно абсолютный `/usr/bin/env`, не выполняя команды из `PATH`. Полный ранний closure `env.sh` → `render-bot-service.sh` → installer/wrapper закреплён статическими SHA-256 commitments. Явный запуск через `bash script.sh` не является поддерживаемым защищённым entrypoint.
 
 Если Mattermost token еще не задан, Secret не создается, а Deployment использует optional secret refs.
 
@@ -241,7 +249,7 @@ GitHub token создается владельцем с нужными scopes и
 Этот режим можно раскатать без Mattermost bot token:
 
 ```bash
-bash scripts/remote/install-bot-service.sh --env-file .env --apply --wait
+scripts/remote/install-bot-service.sh --env-file .env --apply --wait
 bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 ```
 

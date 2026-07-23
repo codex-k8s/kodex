@@ -27,13 +27,14 @@ spec:
             - "--context=dir:///workspace/${MATTERCODEX_KANIKO_CONTEXT_SUBDIR}"
             - "--dockerfile=/workspace/${MATTERCODEX_KANIKO_CONTEXT_SUBDIR}/${MATTERCODEX_KANIKO_DOCKERFILE}"
             - "--destination=${MATTERCODEX_KANIKO_DESTINATION}"
-            - "--cache=true"
-            - "--cache-repo=${MATTERCODEX_KANIKO_CACHE_REPO}"
+            - "--cache=false"
+            - "--cache-run-layers=false"
+            - "--cache-copy-layers=false"
             - "--insecure"
             - "--insecure-registry=${MATTERCODEX_IMAGE_REGISTRY_PUSH_HOST}"
             - "--skip-unused-stages=true"
             - "--cleanup"
-${MATTERCODEX_KANIKO_EXTRA_ARGS_YAML}
+            - "${MATTERCODEX_KANIKO_EXTRA_ARG}"
           volumeMounts:
             - name: context
               mountPath: /workspace

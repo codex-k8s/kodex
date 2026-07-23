@@ -1,10 +1,29 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
 
 fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
+
+require_protected_shell_startup() {
+  local environment_entry environment_key
+
+  [[ "$-" == *p* ]] || fail "защищённый wrapper нужно запускать напрямую, чтобы Bash privileged mode действовал до startup hooks"
+  [[ -z "${BASH_ENV+x}" && -z "${ENV+x}" ]] || \
+    fail "BASH_ENV и ENV запрещены для защищённого agent-runner build entrypoint"
+  while IFS= read -r -d '' environment_entry; do
+    environment_key="${environment_entry%%=*}"
+    case "$environment_key" in
+      BASH_FUNC_*%%)
+        fail "экспортированные shell functions запрещены для защищённого agent-runner build entrypoint"
+        ;;
+    esac
+  done < <(/usr/bin/env -0)
+}
+
+require_protected_shell_startup
+unset BASH_ENV ENV
 
 builder=""
 context=""

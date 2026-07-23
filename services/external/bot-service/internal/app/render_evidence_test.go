@@ -24,9 +24,6 @@ func TestEnvsubstHelperProcess(t *testing.T) {
 }
 
 func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
-	if _, err := exec.LookPath("bash"); err != nil {
-		t.Fatal("для render regression обязательна команда bash")
-	}
 	repositoryRoot := testRepositoryRoot(t)
 	temporaryDirectory := t.TempDir()
 	executable, err := os.Executable()
@@ -34,7 +31,7 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 		t.Fatalf("test executable: %v", err)
 	}
 	envsubstPath := filepath.Join(temporaryDirectory, "envsubst")
-	wrapper := "#!/usr/bin/env bash\nexec " + shellSingleQuote(executable) + " -test.run=TestEnvsubstHelperProcess --\n"
+	wrapper := "#!/bin/bash\nexec " + shellSingleQuote(executable) + " -test.run=TestEnvsubstHelperProcess --\n"
 	if err := os.WriteFile(envsubstPath, []byte(wrapper), 0o700); err != nil {
 		t.Fatalf("envsubst helper: %v", err)
 	}
@@ -55,7 +52,7 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 		t.Fatalf("synthetic env: %v", err)
 	}
 	renderDirectory := filepath.Join(temporaryDirectory, "render")
-	render := exec.Command("bash", filepath.Join(repositoryRoot, "scripts/k8s/render-bot-service.sh"), "--env-file", envFile, "--render-dir", renderDirectory)
+	render := exec.Command(filepath.Join(repositoryRoot, "scripts/k8s/render-bot-service.sh"), "--env-file", envFile, "--render-dir", renderDirectory)
 	render.Env = append(os.Environ(),
 		"MATTERCODEX_TEST_ENVSUBST_HELPER=1",
 		"PATH="+temporaryDirectory+":"+os.Getenv("PATH"),
