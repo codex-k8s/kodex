@@ -2,6 +2,25 @@
 
 set -euo pipefail
 
+mattercodex_require_supported_entrypoint_leaf() {
+  local script_path="${BASH_SOURCE[0]}"
+
+  case "$script_path" in
+    /*) ;;
+    */*) script_path="$(builtin pwd -P)/$script_path" ;;
+    *)
+      builtin printf 'FAIL: невозможно определить абсолютный путь render-bot-service.sh без PATH lookup\n' >&2
+      exit 1
+      ;;
+  esac
+  if [[ ! -f "$script_path" || -L "$script_path" ]]; then
+    builtin printf 'FAIL: защищённая точка входа render-bot-service.sh должна быть обычным файлом, а не symlink\n' >&2
+    exit 1
+  fi
+}
+
+mattercodex_require_supported_entrypoint_leaf
+
 mattercodex_require_protected_shell_startup() {
   local environment_entry environment_key
 
@@ -29,7 +48,7 @@ builtin unset BASH_ENV ENV
 
 mattercodex_resolve_bootstrap_paths() {
   local script_path="${BASH_SOURCE[0]}"
-  local script_dir
+  local script_dir canonical_script_path
 
   case "$script_path" in
     /*) ;;
@@ -44,15 +63,25 @@ mattercodex_resolve_bootstrap_paths() {
     builtin printf 'FAIL: невозможно определить trusted script directory render-bot-service.sh\n' >&2
     exit 1
   }
+  canonical_script_path="$SCRIPT_DIR/render-bot-service.sh"
+  if [[ ! -f "$canonical_script_path" || -L "$canonical_script_path" || ! "$script_path" -ef "$canonical_script_path" ]]; then
+    builtin printf 'FAIL: render-bot-service.sh не совпадает с canonical protected entrypoint текущего checkout\n' >&2
+    exit 1
+  fi
   REPO_ROOT="$(builtin cd -P -- "$SCRIPT_DIR/../.." && builtin pwd -P)" || {
     builtin printf 'FAIL: невозможно определить trusted repository root render-bot-service.sh\n' >&2
     exit 1
   }
+  ENV_HELPER_PATH="$REPO_ROOT/scripts/lib/env.sh"
+  if [[ ! -f "$ENV_HELPER_PATH" || -L "$ENV_HELPER_PATH" ]]; then
+    builtin printf 'FAIL: trusted env helper текущего checkout должен быть обычным файлом, а не symlink\n' >&2
+    exit 1
+  fi
 }
 
 mattercodex_resolve_bootstrap_paths
 # shellcheck disable=SC1091
-. "$REPO_ROOT/scripts/lib/env.sh"
+. "$ENV_HELPER_PATH"
 
 ENV_FILE="$REPO_ROOT/.env"
 RENDER_DIR=""

@@ -55,8 +55,9 @@ const (
 	runnerDevShmPath             = "/dev/shm"
 	runtimeEnvAllowlist          = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
 	runtimeSensitiveEnvAllowlist = "MATTERCODEX_RUNTIME_SENSITIVE_ENV_ALLOWLIST"
-	runnerInitPath               = "/sbin/tini"
-	runnerBinaryName             = "matter-codex-agent-runner"
+	runnerInitPath               = "/usr/local/bin/mattercodex-init"
+	runnerInitMode               = "entrypoint"
+	runnerBinaryPath             = "/usr/local/bin/matter-codex-agent-runner"
 	runnerUID                    = int64(10001)
 	runnerGID                    = int64(10001)
 	runnerUtilityCPURequest      = "100m"
@@ -149,7 +150,7 @@ func secretIntegrity(secret *corev1.Secret, secretKey string, value []byte) runt
 }
 
 func runnerCommand() []string {
-	return []string{runnerInitPath, "--", runnerBinaryName}
+	return []string{runnerInitPath, runnerInitMode, runnerBinaryPath}
 }
 
 func normalizedKubernetesAccess(value string) string {
@@ -453,7 +454,7 @@ func (runner *Runner) CompleteCodexAuthSession(ctx context.Context, input runtim
 	if !ok {
 		return runtimerepo.CodexAuthCompleteResult{}, fmt.Errorf("codex auth pod not found")
 	}
-	authJSON, err := runner.execPod(ctx, pod.Name, []string{"matter-codex-agent-runner", "print-auth-json"})
+	authJSON, err := runner.execPod(ctx, pod.Name, []string{runnerBinaryPath, "print-auth-json"})
 	if err != nil {
 		return runtimerepo.CodexAuthCompleteResult{}, fmt.Errorf("read codex auth.json: %w", err)
 	}
@@ -2347,7 +2348,7 @@ func (runner *Runner) codexAuthJSONReady(ctx context.Context, podName string) bo
 	if runner.restConfig == nil {
 		return false
 	}
-	_, err := runner.execPod(ctx, podName, []string{"matter-codex-agent-runner", "auth-ready-check"})
+	_, err := runner.execPod(ctx, podName, []string{runnerBinaryPath, "auth-ready-check"})
 	return err == nil
 }
 

@@ -21,7 +21,7 @@ spec:
     - name: codex-device-auth
       image: ${MATTERCODEX_AGENT_RUNNER_IMAGE}
       imagePullPolicy: IfNotPresent
-      command: ["/sbin/tini", "--", "matter-codex-agent-runner"]
+      command: ["/usr/local/bin/mattercodex-init", "entrypoint", "/usr/local/bin/matter-codex-agent-runner"]
       args: ["codex-auth"]
       volumeMounts:
         - name: codex-home

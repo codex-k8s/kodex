@@ -15,10 +15,12 @@ canonical_files=(
   scripts/k8s/render-bot-service.sh
   scripts/lib/env.sh
   scripts/remote/install-bot-service.sh
+  deploy/k8s/bot-service/codex-device-auth-pod.yaml.tpl
   deploy/k8s/bot-service/kaniko-job.yaml.tpl
   services/external/bot-service/Dockerfile
   services/jobs/agent-runner/Dockerfile
   deploy/images/agent-runner/Dockerfile
+  services/external/bot-service/internal/integration/kubernetes/runner.go
   services/external/bot-service/internal/domain/service/prompt_template.go
   services/external/bot-service/internal/domain/service/slash_test.go
   docs/design-guidelines/common/external_dependencies_catalog.md
@@ -515,6 +517,12 @@ for index in "${!agent_runner_paths[@]}"; do
     expect_success \
       "protected Go init удаляет mutable tini из effective entrypoint chain" \
       "$guard" --root "$poisoned_tini" --static-only
+    expect_success \
+      "при /sbin/tini -> /bin/true все typed runner workload specs достигают protected init с exact mode args" \
+      env -u GOFLAGS GOENV=off GOWORK=off go -C "$repo_root" test \
+        ./services/external/bot-service/internal/integration/kubernetes \
+        -run '^(TestStartSmokeRunCreatesPVCAndJob|TestStartCodexAuthSessionCreatesHardenedJob|TestCodexAuthSecretCheckJobMountsSavedAuthSecret|TestStartDeveloperRunCreatesPVCAndJob|TestStartReviewRunCreatesPVCAndJob|TestStartChatRunCreatesPVCAndJob|TestStartAgentSessionCreatesPodWithRuntimeCredentials)$' \
+        -count=1
 
     symlinked_bootstrap_guard="$temp_root/services-symlinked-bootstrap-guard"
     copy_fixture "$symlinked_bootstrap_guard"
@@ -1532,6 +1540,134 @@ for bootstrap_target in \
   done
 done
 
+symlink_alias_bin="$temp_root/symlink-alias-bin"
+mkdir -p "$symlink_alias_bin"
+cat >"$symlink_alias_bin/docker" <<'EOF'
+#!/bin/bash
+builtin printf 'hostile builder executed\n' >"$MATTERCODEX_SYMLINK_BUILDER_MARKER"
+exit 79
+EOF
+cat >"$symlink_alias_bin/ssh" <<'EOF'
+#!/bin/bash
+builtin printf 'hostile ssh executed\n' >"$MATTERCODEX_SYMLINK_SSH_MARKER"
+exit 80
+EOF
+chmod +x "$symlink_alias_bin/docker" "$symlink_alias_bin/ssh"
+
+run_hostile_entrypoint_alias() {
+  local invocation_kind="$1"
+  local fixture_root="$2"
+  local alias_path="$3"
+  local external_env_marker="$4"
+  local builder_marker="$5"
+  local ssh_marker="$6"
+  local invoked_path
+
+  if [[ "$invocation_kind" == absolute ]]; then
+    invoked_path="$alias_path"
+  else
+    invoked_path="./${alias_path#"$fixture_root"/}"
+  fi
+  (
+    builtin cd -- "$fixture_root"
+    /usr/bin/env -i \
+      PATH="$symlink_alias_bin:/usr/bin:/bin" \
+      HOME="$fixture_root" \
+      MATTERCODEX_EXTERNAL_ENV_MARKER="$external_env_marker" \
+      MATTERCODEX_SYMLINK_BUILDER_MARKER="$builder_marker" \
+      MATTERCODEX_SYMLINK_SSH_MARKER="$ssh_marker" \
+      "$invoked_path" --env-file "$fixture_root/missing.env"
+  )
+}
+
+protected_entrypoints=(
+  scripts/k8s/install-bot-service.sh
+  scripts/remote/install-bot-service.sh
+  scripts/k8s/render-bot-service.sh
+)
+for entrypoint in "${protected_entrypoints[@]}"; do
+  entrypoint_file="${entrypoint##*/}"
+  entrypoint_dir="${entrypoint%/*}"
+  entrypoint_subdir="${entrypoint_dir#scripts/}"
+  expected_leaf_error="защищённая точка входа $entrypoint_file должна быть обычным файлом, а не symlink"
+  for target_kind in absolute relative; do
+    for basename_kind in same different; do
+      for parent_kind in direct nested-directory-link; do
+        for invocation_kind in absolute relative; do
+          case_slug="${entrypoint//\//-}-$target_kind-$basename_kind-$parent_kind-$invocation_kind"
+          fixture_root="$temp_root/symlink-alias-$case_slug"
+          if [[ "$parent_kind" == direct ]]; then
+            physical_scripts_dir="$fixture_root/scripts"
+            mkdir -p "$physical_scripts_dir/$entrypoint_subdir" "$physical_scripts_dir/lib"
+          else
+            physical_scripts_dir="$fixture_root/scripts-real"
+            mkdir -p "$physical_scripts_dir/$entrypoint_subdir" "$physical_scripts_dir/lib"
+            ln -s scripts-real "$fixture_root/scripts"
+          fi
+          physical_alias_dir="$physical_scripts_dir/$entrypoint_subdir"
+          if [[ "$basename_kind" == same ]]; then
+            alias_file="$entrypoint_file"
+          else
+            alias_file="${entrypoint_file%.sh}-alias.sh"
+          fi
+          alias_path="$fixture_root/scripts/$entrypoint_subdir/$alias_file"
+          physical_alias_path="$physical_alias_dir/$alias_file"
+          if [[ "$target_kind" == absolute ]]; then
+            symlink_target="$repo_root/$entrypoint"
+          else
+            symlink_target="$(realpath --relative-to="$physical_alias_dir" "$repo_root/$entrypoint")"
+          fi
+          ln -s "$symlink_target" "$physical_alias_path"
+
+          external_env_marker="$fixture_root/external-env-marker"
+          builder_marker="$fixture_root/builder-marker"
+          ssh_marker="$fixture_root/ssh-marker"
+          cat >"$physical_scripts_dir/lib/env.sh" <<'EOF'
+#!/bin/bash
+builtin printf 'external env helper executed\n' >"$MATTERCODEX_EXTERNAL_ENV_MARKER"
+docker
+ssh
+exit 73
+EOF
+          expect_failure_matching \
+            "$entrypoint отклоняет $target_kind leaf symlink с $basename_kind basename через $parent_kind при $invocation_kind invocation" \
+            "$expected_leaf_error" \
+            run_hostile_entrypoint_alias \
+              "$invocation_kind" \
+              "$fixture_root" \
+              "$alias_path" \
+              "$external_env_marker" \
+              "$builder_marker" \
+              "$ssh_marker"
+          if [[ -e "$external_env_marker" || -e "$builder_marker" || -e "$ssh_marker" ]]; then
+            echo "FAIL: $entrypoint symlink alias выполнил внешний env helper, builder или SSH: $case_slug" >&2
+            exit 1
+          fi
+        done
+      done
+    done
+  done
+
+  for directory_target_kind in absolute relative; do
+    physical_path_fixture="$temp_root/physical-directory-path-${entrypoint//\//-}-$directory_target_kind"
+    mkdir -p "$physical_path_fixture/aliases"
+    if [[ "$directory_target_kind" == absolute ]]; then
+      directory_target="$repo_root"
+    else
+      directory_target="$(realpath --relative-to="$physical_path_fixture/aliases" "$repo_root")"
+    fi
+    ln -s "$directory_target" "$physical_path_fixture/aliases/checkout"
+    expect_failure_matching \
+      "$entrypoint допускает $directory_target_kind physical directory path к canonical regular leaf" \
+      "env-файл не найден" \
+      bash -c \
+        'builtin cd -- "$1"; exec "./aliases/checkout/$2" --env-file "$1/missing.env"' \
+        mattercodex-physical-path \
+        "$physical_path_fixture" \
+        "$entrypoint"
+  done
+done
+
 local_installer_capture="$temp_root/local-installer-builder-argv"
 local_render_dir="$temp_root/local-render"
 mkdir -p "$local_render_dir"
@@ -1918,6 +2054,66 @@ EOF
 expect_success \
   "реальный strict YAML parser подтверждает exact Kaniko args/order/единственность без cache-repo" \
   env GOENV=off GOWORK=off go -C "$repo_root" run "$kaniko_yaml_probe" "$kaniko_manifest_capture"
+
+device_auth_manifest="$temp_root/codex-device-auth-pod.yaml"
+while IFS= read -r device_auth_line || [[ -n "$device_auth_line" ]]; do
+  device_auth_line="${device_auth_line//\$\{POD_NAME\}/matter-codex-device-auth-test}"
+  device_auth_line="${device_auth_line//\$\{MATTERCODEX_NAMESPACE\}/mattermost}"
+  device_auth_line="${device_auth_line//\$\{MATTERCODEX_AGENT_RUNNER_IMAGE\}/mattercodex.invalid\/agent-runner:test}"
+  printf '%s\n' "$device_auth_line"
+done <"$repo_root/deploy/k8s/bot-service/codex-device-auth-pod.yaml.tpl" >"$device_auth_manifest"
+device_auth_yaml_probe="$temp_root/device-auth-yaml-probe.go"
+cat >"$device_auth_yaml_probe" <<'EOF'
+package main
+
+import (
+	"fmt"
+	"os"
+	"slices"
+	"strings"
+
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/yaml"
+)
+
+func fail(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	os.Exit(1)
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fail("usage: device-auth-yaml-probe <manifest>")
+	}
+	document, err := os.ReadFile(os.Args[1])
+	if err != nil {
+		fail("read manifest: %v", err)
+	}
+	var pod corev1.Pod
+	if err := yaml.UnmarshalStrict(document, &pod); err != nil {
+		fail("strict parse device auth Pod: %v", err)
+	}
+	if pod.APIVersion != "v1" || pod.Kind != "Pod" || len(pod.Spec.Containers) != 1 {
+		fail("unexpected device auth object: apiVersion=%q kind=%q containers=%d", pod.APIVersion, pod.Kind, len(pod.Spec.Containers))
+	}
+	container := pod.Spec.Containers[0]
+	expectedCommand := []string{
+		"/usr/local/bin/mattercodex-init",
+		"entrypoint",
+		"/usr/local/bin/matter-codex-agent-runner",
+	}
+	expectedArgs := []string{"codex-auth"}
+	if !slices.Equal(container.Command, expectedCommand) || !slices.Equal(container.Args, expectedArgs) {
+		fail("device auth command=%q args=%q", container.Command, container.Args)
+	}
+	if strings.Contains(string(document), "/sbin/tini") {
+		fail("device auth manifest сохранил production /sbin/tini override")
+	}
+}
+EOF
+expect_success \
+  "реальный strict YAML parser подтверждает protected init/runner command и codex-auth args статического Pod template" \
+  env GOENV=off GOWORK=off go -C "$repo_root" run "$device_auth_yaml_probe" "$device_auth_manifest"
 
 buildkit_probe_root="$temp_root/buildkit-probe"
 mkdir -p "$buildkit_probe_root"

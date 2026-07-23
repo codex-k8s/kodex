@@ -110,9 +110,7 @@ RUN set -eu; \
 		redis-tools \
 		ripgrep \
 		tar \
-		tini \
 		tree; \
-	ln -sf /usr/bin/tini /sbin/tini; \
 	ln -sf /usr/bin/fdfind /usr/local/bin/fd; \
 	ln -sf /usr/bin/chromium /usr/local/bin/chromium; \
 	ln -sf /usr/local/go/bin/go /usr/local/bin/go; \

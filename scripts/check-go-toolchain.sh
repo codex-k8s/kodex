@@ -1053,10 +1053,12 @@ canonical_files=(
   scripts/k8s/render-bot-service.sh
   scripts/lib/env.sh
   scripts/remote/install-bot-service.sh
+  deploy/k8s/bot-service/codex-device-auth-pod.yaml.tpl
   deploy/k8s/bot-service/kaniko-job.yaml.tpl
   services/external/bot-service/Dockerfile
   services/jobs/agent-runner/Dockerfile
   deploy/images/agent-runner/Dockerfile
+  services/external/bot-service/internal/integration/kubernetes/runner.go
   services/external/bot-service/internal/domain/service/prompt_template.go
   services/external/bot-service/internal/domain/service/slash_test.go
   docs/design-guidelines/common/external_dependencies_catalog.md
@@ -1073,16 +1075,26 @@ require_line scripts/k8s/install-bot-service.sh '#!/bin/bash -p'
 require_line scripts/k8s/render-bot-service.sh '#!/bin/bash -p'
 require_line scripts/remote/install-bot-service.sh '#!/bin/bash -p'
 require_source_commitment scripts/build-agent-runner-image.sh 6397eb2ba01d19ad9e197b7922c5f0ecad6987ef3db3b24bc66402408c0c941e
-require_source_commitment scripts/k8s/install-bot-service.sh 26266ea3ef5b4e4a0a0e38831595b91d524477e5efcf346b453f626fa42fd192
-require_source_commitment scripts/k8s/render-bot-service.sh 12e55045dcd482424adc605ad7ae330ff042e2c17ec1d93278b4e94cb41a0095
+require_source_commitment scripts/k8s/install-bot-service.sh a46e30b751e80f428b604fc6b0b9bcfb7594c87e4ba6af0eb508d6774dda2cb1
+require_source_commitment scripts/k8s/render-bot-service.sh fa23939bc8f46c99b55829d2687e5ae38892d3302a323387fc55fdf81b9dfc19
 require_source_commitment scripts/lib/env.sh eeb924a711e07aec19d1c01a12d69cfbf0ff3af5d3bd902d0ecc780b1f2e394f
-require_source_commitment scripts/remote/install-bot-service.sh fcf790df937960fba835ed062a62f32b5b5012e86b4f45593d725ba9355839f9
+require_source_commitment scripts/remote/install-bot-service.sh 5e937686fb0e8f85ea52d4b99ae2a85898754d3ad99267648866e8468a76db94
+require_source_commitment deploy/k8s/bot-service/codex-device-auth-pod.yaml.tpl 74859c1419de18d1d6e4eb4392d616b14d56e04b6af8d4a523e69b94e7c2840f
 require_source_commitment deploy/k8s/bot-service/kaniko-job.yaml.tpl f5c0cd3e8ca1ec00bdccbed16fcb02651b88902cdd6ce10d87f4f23d5ab6e741
-require_count scripts/k8s/install-bot-service.sh '. "$REPO_ROOT/scripts/' 1
-require_count scripts/k8s/render-bot-service.sh '. "$REPO_ROOT/scripts/' 1
-require_count scripts/remote/install-bot-service.sh '. "$REPO_ROOT/scripts/' 1
+require_count scripts/k8s/install-bot-service.sh '. "$ENV_HELPER_PATH"' 1
+require_count scripts/k8s/render-bot-service.sh '. "$ENV_HELPER_PATH"' 1
+require_count scripts/remote/install-bot-service.sh '. "$ENV_HELPER_PATH"' 1
 require_count scripts/k8s/install-bot-service.sh '"$SCRIPT_DIR/render-bot-service.sh"' 1
 require_count scripts/remote/install-bot-service.sh '"$REPO_ROOT/scripts/k8s/render-bot-service.sh"' 1
+require_line deploy/k8s/bot-service/codex-device-auth-pod.yaml.tpl '      command: ["/usr/local/bin/mattercodex-init", "entrypoint", "/usr/local/bin/matter-codex-agent-runner"]'
+require_count deploy/k8s/bot-service/codex-device-auth-pod.yaml.tpl '/sbin/tini' 0
+require_count services/external/bot-service/internal/integration/kubernetes/runner.go '/sbin/tini' 0
+require_line services/external/bot-service/internal/integration/kubernetes/runner.go $'\trunnerInitPath               = "/usr/local/bin/mattercodex-init"'
+require_line services/external/bot-service/internal/integration/kubernetes/runner.go $'\trunnerInitMode               = "entrypoint"'
+require_line services/external/bot-service/internal/integration/kubernetes/runner.go $'\trunnerBinaryPath             = "/usr/local/bin/matter-codex-agent-runner"'
+require_line services/external/bot-service/internal/integration/kubernetes/runner.go $'\treturn []string{runnerInitPath, runnerInitMode, runnerBinaryPath}'
+require_count deploy/images/agent-runner/Dockerfile 'tini' 0
+require_count docs/design-guidelines/common/external_dependencies_catalog.md '| `tini` |' 0
 require_line deploy/k8s/bot-service/kaniko-job.yaml.tpl '            - "--cache=false"'
 require_line deploy/k8s/bot-service/kaniko-job.yaml.tpl '            - "--cache-run-layers=false"'
 require_line deploy/k8s/bot-service/kaniko-job.yaml.tpl '            - "--cache-copy-layers=false"'

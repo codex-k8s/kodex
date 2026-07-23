@@ -68,7 +68,6 @@
 | `yarn` | `1.22.22` | Agent JS package runner | поддержка проектов на Yarn classic |
 | `gh` | `2.95.0` | Agent PR publish/review | подготовленный agent-runner image вызывает `gh` из Go runner binary, а Codex agent получает `gh` для inline review comments и review-thread replies |
 | `git` | distro package | Agent checkout/push | подготовленный agent-runner image выполняет clone/branch/commit/push из Go runner binary без shell-скриптов в bot-service |
-| `tini` | distro package | Agent container init | PID 1 init для agent-runner pods/jobs; reaps orphaned/zombie child processes от `codex`, `gh`, `git`, `npm` и прокидывает сигналы |
 | `kubectl` | `1.36.2` | Agent Kubernetes diagnostics/deploy | роли с Kubernetes-доступом могут читать логи, проверять ресурсы и выполнять deploy через Kubernetes CLI |
 | `helm` | `4.2.1` | Agent Kubernetes diagnostics/deploy | inspect/render Helm releases and charts |
 | `psql` | distro package | Agent PostgreSQL diagnostics | диагностика PostgreSQL и ручная проверка данных по разрешению владельца |

@@ -123,6 +123,7 @@ func TestStartSmokeRunCreatesPVCAndJob(t *testing.T) {
 	if job.Spec.Template.Spec.AutomountServiceAccountToken == nil || *job.Spec.Template.Spec.AutomountServiceAccountToken {
 		t.Fatal("agent job should not automount service account token")
 	}
+	assertProtectedRunnerInvocation(t, job.Spec.Template.Spec.Containers[0], "smoke")
 	assertRunnerPodSecurity(t, job.Spec.Template.Spec)
 	assertRunnerUtilityResources(t, job.Spec.Template.Spec.Containers[0].Resources)
 	if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Get(context.Background(), "mc-ws-smoke-test", metav1.GetOptions{}); err != nil {
@@ -158,9 +159,7 @@ func TestStartCodexAuthSessionCreatesHardenedJob(t *testing.T) {
 	podSpec := job.Spec.Template.Spec
 	assertRunnerPodSecurity(t, podSpec)
 	assertRunnerUtilityResources(t, podSpec.Containers[0].Resources)
-	if got := podSpec.Containers[0].Args[0]; got != "codex-auth" {
-		t.Fatalf("args = %q", got)
-	}
+	assertProtectedRunnerInvocation(t, podSpec.Containers[0], "codex-auth")
 	if len(podSpec.Volumes) != 4 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
@@ -191,9 +190,7 @@ func TestCodexAuthSecretCheckJobMountsSavedAuthSecret(t *testing.T) {
 	podSpec := job.Spec.Template.Spec
 	assertRunnerPodSecurity(t, podSpec)
 	assertRunnerUtilityResources(t, podSpec.Containers[0].Resources)
-	if got := podSpec.Containers[0].Args[0]; got != "codex-auth-secret-check" {
-		t.Fatalf("args = %q", got)
-	}
+	assertProtectedRunnerInvocation(t, podSpec.Containers[0], "codex-auth-secret-check")
 	if !hasVolume(podSpec.Volumes, "workspace") || !hasSecretVolume(podSpec.Volumes, codexAuthSecretVolume, "matter-codex-codex-auth-primary") {
 		t.Fatalf("volumes = %#v", podSpec.Volumes)
 	}
@@ -475,12 +472,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	if got := podSpec.Containers[0].Image; got != "matter-codex-agent-runner:test" {
 		t.Fatalf("runner image = %q", got)
 	}
-	if got := podSpec.Containers[0].Command; !slices.Equal(got, runnerCommand()) {
-		t.Fatalf("command = %#v", got)
-	}
-	if got := podSpec.Containers[0].Args[0]; got != "developer" {
-		t.Fatalf("args = %q", got)
-	}
+	assertProtectedRunnerInvocation(t, podSpec.Containers[0], "developer")
 	if len(podSpec.Volumes) != 7 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
@@ -551,12 +543,7 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 	if got := podSpec.Containers[0].Image; got != "matter-codex-agent-runner:test" {
 		t.Fatalf("runner image = %q", got)
 	}
-	if got := podSpec.Containers[0].Command; !slices.Equal(got, runnerCommand()) {
-		t.Fatalf("command = %#v", got)
-	}
-	if got := podSpec.Containers[0].Args[0]; got != "reviewer" {
-		t.Fatalf("args = %q", got)
-	}
+	assertProtectedRunnerInvocation(t, podSpec.Containers[0], "reviewer")
 	assertRunnerPodSecurity(t, podSpec)
 	assertRunnerSessionResources(t, podSpec.Containers[0].Resources)
 	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_PR_NUMBER"); got != "12" {
@@ -620,9 +607,7 @@ func TestStartChatRunCreatesPVCAndJob(t *testing.T) {
 	if podSpec.AutomountServiceAccountToken == nil || !*podSpec.AutomountServiceAccountToken {
 		t.Fatal("chat job should automount service account token for kubectl")
 	}
-	if got := podSpec.Containers[0].Args[0]; got != "chat" {
-		t.Fatalf("args = %q", got)
-	}
+	assertProtectedRunnerInvocation(t, podSpec.Containers[0], "chat")
 	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_GITHUB_ENABLED"); got != "true" {
 		t.Fatalf("MATTERCODEX_GITHUB_ENABLED = %q", got)
 	}
@@ -686,6 +671,7 @@ func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
 	assertRunnerPodSecurity(t, podSpec)
 	assertRunnerSessionResources(t, podSpec.Containers[0].Resources)
 	container := podSpec.Containers[0]
+	assertProtectedRunnerInvocation(t, container, "session")
 	if got := envValue(container.Env, "MATTERCODEX_MCP_URL"); got != "http://bot-service/mcp/sessions/project-1-chat-2-role-3" {
 		t.Fatalf("MATTERCODEX_MCP_URL = %q", got)
 	}
@@ -1845,6 +1831,27 @@ func secretItemKeys(items []corev1.KeyToPath) string {
 		keys = append(keys, item.Key)
 	}
 	return strings.Join(keys, ",")
+}
+
+func assertProtectedRunnerInvocation(t *testing.T, container corev1.Container, mode string) {
+	t.Helper()
+	expectedCommand := []string{
+		"/usr/local/bin/mattercodex-init",
+		"entrypoint",
+		"/usr/local/bin/matter-codex-agent-runner",
+	}
+	if !slices.Equal(container.Command, expectedCommand) {
+		t.Fatalf("runner command = %#v, want %#v", container.Command, expectedCommand)
+	}
+	expectedArgs := []string{mode}
+	if !slices.Equal(container.Args, expectedArgs) {
+		t.Fatalf("runner args = %#v, want %#v", container.Args, expectedArgs)
+	}
+	for _, value := range append(slices.Clone(container.Command), container.Args...) {
+		if strings.Contains(value, "tini") {
+			t.Fatalf("runner invocation содержит mutable tini reference: command=%#v args=%#v", container.Command, container.Args)
+		}
+	}
 }
 
 func assertRunnerPodSecurity(t *testing.T, podSpec corev1.PodSpec) {
