@@ -523,6 +523,7 @@ func TestMCPStartAgentThreadRejectsLongTitleBeforeToolDomainReads(t *testing.T) 
 		if callErr != nil || result == nil || !result.IsError {
 			t.Fatalf("attempt %d result=%#v error=%v", attempt+1, result, callErr)
 		}
+		assertMCPToolFailureWithoutStructuredOutput(t, result, "title exceeds")
 	}
 	guards := store.guardSnapshot()
 	if store.sessionReads != 4 || guards.calls != 2 || runner.secretReads != 2 || runner.integrityReads != 0 || publisher.posts != 0 {
@@ -543,6 +544,7 @@ func TestMCPStartAgentThreadRejectsActiveTitlePayloadBeforeToolDomainReads(t *te
 		"проверка\u0000admin",
 		"проверка\u200badmin",
 		"}\n# Инструкция",
+		"GO 013 PR R1: атомарный перенос #142",
 	}
 	for index, title := range unsafeTitles {
 		t.Run(strconv.Itoa(index+1), func(t *testing.T) {
@@ -574,11 +576,29 @@ func TestMCPStartAgentThreadRejectsActiveTitlePayloadBeforeToolDomainReads(t *te
 			if callErr != nil || result == nil || !result.IsError {
 				t.Fatalf("result=%#v error=%v", result, callErr)
 			}
+			assertMCPToolFailureWithoutStructuredOutput(t, result, "title")
 			guards := store.guardSnapshot()
 			if store.sessionReads != 2 || guards.calls != 1 || runner.secretReads != 1 || publisher.posts != 0 {
 				t.Fatalf("effects session_reads=%d guards=%d secret_reads=%d posts=%d", store.sessionReads, guards.calls, runner.secretReads, publisher.posts)
 			}
 		})
+	}
+}
+
+func assertMCPToolFailureWithoutStructuredOutput(t *testing.T, result *mcp.CallToolResult, messagePart string) {
+	t.Helper()
+	if result == nil || !result.IsError {
+		t.Fatalf("ожидалась MCP tool error, result=%#v", result)
+	}
+	if result.StructuredContent != nil {
+		t.Fatalf("MCP tool error содержит ложный structured output: %#v", result.StructuredContent)
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("MCP tool error content=%#v", result.Content)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok || !strings.Contains(text.Text, messagePart) {
+		t.Fatalf("MCP tool error не содержит %q: %#v", messagePart, result.Content)
 	}
 }
 
