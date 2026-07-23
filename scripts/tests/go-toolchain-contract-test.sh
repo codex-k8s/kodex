@@ -1512,7 +1512,7 @@ EOF
 
 bootstrap_payload_bin="$temp_root/bootstrap-payload-bin"
 mkdir -p "$bootstrap_payload_bin"
-for bootstrap_command in dirname pwd realpath readlink env bash; do
+for bootstrap_command in dirname pwd realpath readlink env bash git stat; do
   mkdir -p "$bootstrap_payload_bin/$bootstrap_command-bin"
   cat >"$bootstrap_payload_bin/$bootstrap_command-bin/$bootstrap_command" <<'EOF'
 #!/bin/bash
@@ -1525,7 +1525,7 @@ for bootstrap_target in \
   scripts/k8s/install-bot-service.sh \
   scripts/remote/install-bot-service.sh \
   scripts/k8s/render-bot-service.sh; do
-  for bootstrap_command in dirname pwd realpath readlink env bash; do
+  for bootstrap_command in dirname pwd realpath readlink env bash git stat; do
     bootstrap_marker="$temp_root/bootstrap-${bootstrap_target//\//-}-$bootstrap_command"
     expect_failure_matching \
       "$bootstrap_target не выполняет PATH-first $bootstrap_command до trusted repository boundary" \
