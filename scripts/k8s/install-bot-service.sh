@@ -67,10 +67,11 @@ fi
 DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
 
 if [ "$DRY_RUN_MODE" = "none" ]; then
-  mattercodex_log "отзывается legacy cluster-admin credential agent runtime"
+  mattercodex_log "проверяется закрытая инвентаризация рабочих нагрузок до изменений Kubernetes"
+  kubectl -n "$MATTERCODEX_RUNTIME_NAMESPACE" get pods,replicasets.apps,deployments.apps,statefulsets.apps -o json | mattercodex_validate_agent_workload_inventory
+  mattercodex_log "инвентаризация рабочих нагрузок подтверждена; отзывается legacy cluster-admin credential agent runtime"
   kubectl delete clusterrolebinding matter-codex-agent-runner-cluster-admin --ignore-not-found >/dev/null
   kubectl -n "$MATTERCODEX_RUNTIME_NAMESPACE" delete serviceaccount "$MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT" --ignore-not-found >/dev/null
-  kubectl -n "$MATTERCODEX_RUNTIME_NAMESPACE" get pods -o json | mattercodex_validate_agent_workload_inventory
   mattercodex_log "legacy agent workloads: reconciliation подтверждён"
 fi
 

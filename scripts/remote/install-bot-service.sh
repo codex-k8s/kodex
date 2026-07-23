@@ -156,10 +156,11 @@ fi
 
 if [ "$DRY_RUN_MODE" = "none" ]; then
   LEGACY_AGENT_SERVICE_ACCOUNT_Q="$(mattercodex_shell_quote "$MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT")"
-  mattercodex_log "отзывается legacy cluster-admin credential agent runtime на целевом сервере"
+  mattercodex_log "проверяется закрытая инвентаризация рабочих нагрузок до изменений Kubernetes на целевом сервере"
+  mattercodex_ssh "$REMOTE_KUBECTL -n $RUNTIME_NAMESPACE_Q get pods,replicasets.apps,deployments.apps,statefulsets.apps -o json" </dev/null | mattercodex_validate_agent_workload_inventory
+  mattercodex_log "инвентаризация рабочих нагрузок подтверждена; отзывается legacy cluster-admin credential agent runtime на целевом сервере"
   mattercodex_ssh "$REMOTE_KUBECTL delete clusterrolebinding matter-codex-agent-runner-cluster-admin --ignore-not-found >/dev/null" </dev/null
   mattercodex_ssh "$REMOTE_KUBECTL -n $RUNTIME_NAMESPACE_Q delete serviceaccount $LEGACY_AGENT_SERVICE_ACCOUNT_Q --ignore-not-found >/dev/null" </dev/null
-  mattercodex_ssh "$REMOTE_KUBECTL -n $RUNTIME_NAMESPACE_Q get pods -o json" </dev/null | mattercodex_validate_agent_workload_inventory
   mattercodex_log "legacy agent workloads: reconciliation подтверждён на целевом сервере"
 fi
 

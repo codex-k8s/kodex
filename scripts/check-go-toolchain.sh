@@ -1054,8 +1054,8 @@ for path in "${canonical_files[@]}"; do
 done
 [[ -x "$repo_root/scripts/build-agent-runner-image.sh" ]] || fail "scripts/build-agent-runner-image.sh должен быть исполняемым"
 require_source_commitment scripts/build-agent-runner-image.sh 4523f3b7c484d6b7caea5c64827e358a39452d698f602663a9a75c17be7251a6
-require_source_commitment scripts/k8s/install-bot-service.sh 559cf6bcd710cb6b4aa0a1ebec80c9fa988c22f101bb59adab12630f1a15cd34
-require_source_commitment scripts/remote/install-bot-service.sh c947d5f1e20090670de6a520b72e9ae9fe10a7bcc0d261f2934a48439258a94e
+require_source_commitment scripts/k8s/install-bot-service.sh bc01460065ee048bc9c6fc417300f254e3d4fa77acc9b041853f86526c07a1f8
+require_source_commitment scripts/remote/install-bot-service.sh c2ac311b2396950515749bcddd1960511169121e1a09c7893ce92fe99e11bb1a
 
 go_version="$(awk '$1 == "go" { print $2 }' "$repo_root/go.mod")"
 explicit_toolchain="$(awk '$1 == "toolchain" { print $2 }' "$repo_root/go.mod")"

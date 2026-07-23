@@ -326,32 +326,157 @@ mattercodex_validate_agent_memory_guard() {
 
 mattercodex_validate_agent_workload_inventory() {
   mattercodex_require_commands jq
-  local inventory agent_budget legacy_count
+  local inventory unknown_pods
   inventory="$(cat)"
-  jq -e '.items | type == "array"' >/dev/null <<<"$inventory" || mattercodex_die "Kubernetes inventory agent workloads имеет неверный формат"
-  agent_budget="$(mattercodex_memory_quantity_kib "$MATTERCODEX_RUNTIME_AGENT_MEMORY_BUDGET")" || mattercodex_die "aggregate agent memory budget не прошёл проверку диапазона"
-  legacy_count="$(jq -r --arg service_account "$MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT" '[.items[] | select((.spec.serviceAccountName // "default") == $service_account)] | length' <<<"$inventory")"
-  [ "$legacy_count" -eq 0 ] || mattercodex_die "найдены pod с отозванным cluster-admin ServiceAccount; останови связанные workload и удали только их Pod/Job перед повтором"
+  jq -e '
+    .kind == "List" and
+    (.items | type == "array") and
+    all(.items[];
+      (.kind == "Pod" or .kind == "ReplicaSet" or .kind == "Deployment" or .kind == "StatefulSet") and
+      (.metadata.name | type == "string") and
+      (.metadata.uid | type == "string") and
+      (.metadata.uid | length > 0) and
+      (.metadata.resourceVersion | type == "string") and
+      (.metadata.resourceVersion | length > 0)
+    )
+  ' >/dev/null <<<"$inventory" || mattercodex_die "инвентаризация рабочих нагрузок Kubernetes имеет неверный формат"
 
-  local pod_name priority_class service_account init_count container_count request_memory limit_memory request_kib limit_kib
-  while IFS=$'\t' read -r pod_name priority_class service_account init_count container_count request_memory limit_memory; do
-    [ -n "$pod_name" ] || continue
-    [ "$priority_class" = "$MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS" ] || mattercodex_die "agent workload находится вне выбранного PriorityClass; выполни fail-closed reconciliation Pod/Job перед rollout"
-    [ "$service_account" = "$MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" ] || mattercodex_die "agent workload использует неподдерживаемый ServiceAccount; выполни fail-closed reconciliation Pod/Job перед rollout"
-    [ "$init_count" -eq 0 ] && [ "$container_count" -eq 1 ] || mattercodex_die "agent workload имеет неподдерживаемый состав контейнеров; выполни reconciliation перед rollout"
-    request_kib="$(mattercodex_memory_quantity_kib "$request_memory")" || mattercodex_die "agent workload не имеет проверяемого memory request"
-    limit_kib="$(mattercodex_memory_quantity_kib "$limit_memory")" || mattercodex_die "agent workload не имеет проверяемого memory limit"
-    [ "$request_kib" -eq "$limit_kib" ] || mattercodex_die "agent workload имеет legacy memory request/limit; выполни reconciliation Pod/Job перед rollout"
-    [ "$limit_kib" -le "$agent_budget" ] || mattercodex_die "agent workload превышает aggregate memory budget; выполни reconciliation перед rollout"
-  done < <(jq -r '.items[] | select(.metadata.labels["app.kubernetes.io/name"] == "matter-codex-agent-runner") | [
-    .metadata.name,
-    (.spec.priorityClassName // ""),
-    (.spec.serviceAccountName // "default"),
-    ((.spec.initContainers // []) | length),
-    ((.spec.containers // []) | length),
-    (.spec.containers[0].resources.requests.memory // ""),
-    (.spec.containers[0].resources.limits.memory // "")
-  ] | @tsv' <<<"$inventory")
+  unknown_pods="$(
+    jq -r --arg registry_name "${MATTERCODEX_IMAGE_REGISTRY_NAME:-matter-codex-registry}" '
+      .items as $items
+      |
+      def controller_reference:
+        [.metadata.ownerReferences[]? | select(.controller == true)]
+        | if length == 1 then .[0] else null end;
+      def exact_item($kind; $reference):
+        [
+          $items[]
+          | select(
+              .kind == $kind and
+              .metadata.name == ($reference.name // null) and
+              .metadata.uid == ($reference.uid // null)
+            )
+        ]
+        | if length == 1 then .[0] else null end;
+      def selector_matches($workload; $pod):
+        all(
+          (($workload.spec.selector.matchLabels // {}) | to_entries[]);
+          ($pod.metadata.labels[.key] // null) == .value
+        );
+      def normalized_mounts:
+        [
+          .[]?
+          | select(((.name // "") | startswith("kube-api-access-")) | not)
+        ];
+      def normalized_container:
+        {
+          name: (.name // ""),
+          image: (.image // ""),
+          imagePullPolicy: (.imagePullPolicy // ""),
+          command: (.command // []),
+          args: (.args // []),
+          workingDir: (.workingDir // ""),
+          env: (.env // []),
+          envFrom: (.envFrom // []),
+          ports: (.ports // []),
+          securityContext: (.securityContext // {}),
+          volumeMounts: ((.volumeMounts // []) | normalized_mounts),
+          volumeDevices: (.volumeDevices // []),
+          lifecycle: (.lifecycle // null),
+          stdin: (.stdin // false),
+          stdinOnce: (.stdinOnce // false),
+          tty: (.tty // false)
+        };
+      def normalized_spec($ignored_volumes):
+        {
+          serviceAccountName: (.serviceAccountName // "default"),
+          automountServiceAccountToken: (.automountServiceAccountToken // null),
+          containers: [(.containers // [])[] | normalized_container],
+          initContainers: [(.initContainers // [])[] | normalized_container],
+          ephemeralContainers: [(.ephemeralContainers // [])[] | normalized_container],
+          volumes: [
+            (.volumes // [])[]
+            | select(((.name // "") | startswith("kube-api-access-")) | not)
+            | . as $volume
+            | select(($ignored_volumes | index($volume.name)) == null)
+          ],
+          securityContext: (.securityContext // {}),
+          hostNetwork: (.hostNetwork // false),
+          hostPID: (.hostPID // false),
+          hostIPC: (.hostIPC // false),
+          shareProcessNamespace: (.shareProcessNamespace // false),
+          dnsPolicy: (.dnsPolicy // "ClusterFirst"),
+          dnsConfig: (.dnsConfig // null),
+          restartPolicy: (.restartPolicy // "Always"),
+          terminationGracePeriodSeconds: (.terminationGracePeriodSeconds // 30),
+          activeDeadlineSeconds: (.activeDeadlineSeconds // null),
+          priorityClassName: (.priorityClassName // ""),
+          runtimeClassName: (.runtimeClassName // "")
+        };
+      def trusted_deployment_pod($pod; $deployment_name; $service_account):
+        ($pod | controller_reference) as $replica_set_reference
+        | ($items | exact_item("ReplicaSet"; $replica_set_reference)) as $replica_set
+        | ($replica_set | controller_reference) as $deployment_reference
+        | ($items | exact_item("Deployment"; $deployment_reference)) as $deployment
+        | $replica_set_reference != null
+        and $replica_set_reference.apiVersion == "apps/v1"
+        and $replica_set_reference.kind == "ReplicaSet"
+        and $replica_set != null
+        and $deployment_reference != null
+        and $deployment_reference.apiVersion == "apps/v1"
+        and $deployment_reference.kind == "Deployment"
+        and $deployment != null
+        and $deployment.metadata.name == $deployment_name
+        and ($deployment.metadata.labels["app.kubernetes.io/name"] // "") == $deployment_name
+        and ($deployment.spec.template.metadata.labels["app.kubernetes.io/name"] // "") == $deployment_name
+        and ($replica_set.metadata.labels["app.kubernetes.io/name"] // "") == $deployment_name
+        and ($replica_set.spec.template.metadata.labels["app.kubernetes.io/name"] // "") == $deployment_name
+        and ($pod.metadata.labels["app.kubernetes.io/name"] // "") == $deployment_name
+        and ($replica_set.spec.template.spec.serviceAccountName // "default") == $service_account
+        and ($pod.spec.serviceAccountName // "default") == $service_account
+        and ($pod.metadata.generateName // "") == ($replica_set.metadata.name + "-")
+        and selector_matches($deployment; $pod)
+        and selector_matches($replica_set; $pod)
+        and (($pod.spec | normalized_spec([])) == ($replica_set.spec.template.spec | normalized_spec([])));
+      def trusted_stateful_set_pod($pod):
+        ($pod | controller_reference) as $stateful_set_reference
+        | ($items | exact_item("StatefulSet"; $stateful_set_reference)) as $stateful_set
+        | ($stateful_set.spec.volumeClaimTemplates // [] | map(.metadata.name)) as $claim_names
+        | $stateful_set_reference != null
+        and $stateful_set_reference.apiVersion == "apps/v1"
+        and $stateful_set_reference.kind == "StatefulSet"
+        and $stateful_set != null
+        and $stateful_set.metadata.name == "mattermost-postgres"
+        and ($stateful_set.metadata.labels["app.kubernetes.io/name"] // "") == "mattermost-postgres"
+        and ($stateful_set.spec.template.metadata.labels["app.kubernetes.io/name"] // "") == "mattermost-postgres"
+        and ($pod.metadata.labels["app.kubernetes.io/name"] // "") == "mattermost-postgres"
+        and ($stateful_set.spec.template.spec.serviceAccountName // "default") == "default"
+        and ($pod.spec.serviceAccountName // "default") == "default"
+        and ($pod.metadata.name | test("^mattermost-postgres-[0-9]+$"))
+        and selector_matches($stateful_set; $pod)
+        and (($pod.spec | normalized_spec($claim_names)) == ($stateful_set.spec.template.spec | normalized_spec($claim_names)));
+      [
+        $items[]
+        | select(.kind == "Pod")
+        | . as $pod
+        | select(
+            (
+              trusted_deployment_pod($pod; "mattermost"; "mattermost") or
+              trusted_deployment_pod($pod; "matter-codex-bot-service"; "matter-codex-bot-service") or
+              trusted_deployment_pod($pod; "mattermost-oauth2-proxy"; "mattermost-oauth2-proxy") or
+              trusted_deployment_pod($pod; $registry_name; "default") or
+              trusted_stateful_set_pod($pod)
+            )
+            | not
+          )
+        | .metadata.name
+      ]
+      | sort
+      | join(", ")
+    ' <<<"$inventory"
+  )" || mattercodex_die "инвентаризация рабочих нагрузок Kubernetes не прошла закрытую проверку владельцев"
+
+  [ -z "$unknown_pods" ] || mattercodex_die "найдены неизвестные pod вне доверенного списка владельцев платформы: $unknown_pods; останови связанные рабочие нагрузки и удали только их Pod/Job перед повтором"
 }
 
 mattercodex_validate_base_env() {

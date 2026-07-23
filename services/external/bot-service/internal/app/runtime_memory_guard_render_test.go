@@ -83,20 +83,145 @@ func TestAgentMemoryGuardQuantityRangeRenderParity(t *testing.T) {
 	}
 }
 
-func TestAgentWorkloadInventoryFailsClosedForLegacyPods(t *testing.T) {
+func TestAgentWorkloadInventoryFailsClosedForUnknownPods(t *testing.T) {
 	repositoryRoot := testRepositoryRoot(t)
-	guardedPod := func(priorityClass string, serviceAccount string, request string, limit string, managed bool) map[string]any {
-		labels := map[string]any{}
-		if managed {
-			labels["app.kubernetes.io/name"] = "matter-codex-agent-runner"
-		}
+	labels := func(name string) map[string]any {
+		return map[string]any{"app.kubernetes.io/name": name}
+	}
+	ownerReference := func(kind string, name string, uid string) map[string]any {
 		return map[string]any{
-			"metadata": map[string]any{"name": "synthetic-agent-pod", "labels": labels},
+			"apiVersion":         "apps/v1",
+			"kind":               kind,
+			"name":               name,
+			"uid":                uid,
+			"controller":         true,
+			"blockOwnerDeletion": true,
+		}
+	}
+	metadata := func(name string, uid string, objectLabels map[string]any) map[string]any {
+		return map[string]any{
+			"name":            name,
+			"uid":             uid,
+			"resourceVersion": "1",
+			"labels":          objectLabels,
+		}
+	}
+	container := func(name string, image string) map[string]any {
+		return map[string]any{
+			"name":            name,
+			"image":           image,
+			"imagePullPolicy": "IfNotPresent",
+		}
+	}
+	podSpec := func(serviceAccount string, containerName string, image string) map[string]any {
+		return map[string]any{
+			"serviceAccountName": serviceAccount,
+			"containers":         []any{container(containerName, image)},
+		}
+	}
+	deploymentPodInventory := func(name string, serviceAccount string, containerName string, image string) []any {
+		deploymentUID := "uid-deployment-" + name
+		replicaSetName := name + "-7d9f6d8f5"
+		replicaSetUID := "uid-replicaset-" + name
+		deploymentMetadata := metadata(name, deploymentUID, labels(name))
+		replicaSetMetadata := metadata(replicaSetName, replicaSetUID, labels(name))
+		replicaSetMetadata["ownerReferences"] = []any{ownerReference("Deployment", name, deploymentUID)}
+		podMetadata := metadata(replicaSetName+"-abcde", "uid-pod-"+name, labels(name))
+		podMetadata["generateName"] = replicaSetName + "-"
+		podMetadata["ownerReferences"] = []any{ownerReference("ReplicaSet", replicaSetName, replicaSetUID)}
+		selector := map[string]any{"matchLabels": labels(name)}
+		template := map[string]any{
+			"metadata": map[string]any{"labels": labels(name)},
+			"spec":     podSpec(serviceAccount, containerName, image),
+		}
+		return []any{
+			map[string]any{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata":   deploymentMetadata,
+				"spec": map[string]any{
+					"selector": selector,
+					"template": template,
+				},
+			},
+			map[string]any{
+				"apiVersion": "apps/v1",
+				"kind":       "ReplicaSet",
+				"metadata":   replicaSetMetadata,
+				"spec": map[string]any{
+					"selector": selector,
+					"template": template,
+				},
+			},
+			map[string]any{
+				"apiVersion": "v1",
+				"kind":       "Pod",
+				"metadata":   podMetadata,
+				"spec":       podSpec(serviceAccount, containerName, image),
+			},
+		}
+	}
+	postgresInventory := func() []any {
+		statefulSetUID := "uid-statefulset-mattermost-postgres"
+		statefulSetMetadata := metadata("mattermost-postgres", statefulSetUID, labels("mattermost-postgres"))
+		statefulSetContainer := container("postgres", "postgres:16")
+		statefulSetContainer["volumeMounts"] = []any{
+			map[string]any{"name": "postgres-data", "mountPath": "/var/lib/postgresql/data"},
+		}
+		templateSpec := map[string]any{
+			"containers": []any{statefulSetContainer},
+		}
+		podMetadata := metadata("mattermost-postgres-0", "uid-pod-mattermost-postgres", labels("mattermost-postgres"))
+		podMetadata["ownerReferences"] = []any{ownerReference("StatefulSet", "mattermost-postgres", statefulSetUID)}
+		podContainer := container("postgres", "postgres:16")
+		podContainer["volumeMounts"] = []any{
+			map[string]any{"name": "postgres-data", "mountPath": "/var/lib/postgresql/data"},
+		}
+		return []any{
+			map[string]any{
+				"apiVersion": "apps/v1",
+				"kind":       "StatefulSet",
+				"metadata":   statefulSetMetadata,
+				"spec": map[string]any{
+					"selector": map[string]any{"matchLabels": labels("mattermost-postgres")},
+					"template": map[string]any{
+						"metadata": map[string]any{"labels": labels("mattermost-postgres")},
+						"spec":     templateSpec,
+					},
+					"volumeClaimTemplates": []any{
+						map[string]any{"metadata": map[string]any{"name": "postgres-data"}},
+					},
+				},
+			},
+			map[string]any{
+				"apiVersion": "v1",
+				"kind":       "Pod",
+				"metadata":   podMetadata,
+				"spec": map[string]any{
+					"containers": []any{podContainer},
+					"volumes": []any{
+						map[string]any{
+							"name": "postgres-data",
+							"persistentVolumeClaim": map[string]any{
+								"claimName": "postgres-data-mattermost-postgres-0",
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+	unknownPod := func(name string, podLabels map[string]any, serviceAccount string, priorityClass string, request string, limit string) map[string]any {
+		return map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata":   metadata(name, "uid-pod-"+name, podLabels),
 			"spec": map[string]any{
 				"priorityClassName":  priorityClass,
 				"serviceAccountName": serviceAccount,
 				"containers": []any{map[string]any{
-					"name": "runner",
+					"name":  "runner",
+					"image": "synthetic.invalid/runner:test",
 					"resources": map[string]any{
 						"requests": map[string]any{"memory": request},
 						"limits":   map[string]any{"memory": limit},
@@ -105,22 +230,92 @@ func TestAgentWorkloadInventoryFailsClosedForLegacyPods(t *testing.T) {
 			},
 		}
 	}
+	mattermostInventory := deploymentPodInventory("mattermost", "mattermost", "mattermost", "mattermost/mattermost-team-edition:latest")
+	botServiceInventory := deploymentPodInventory("matter-codex-bot-service", "matter-codex-bot-service", "bot-service", "synthetic.invalid/bot-service:test")
+	oauthProxyInventory := deploymentPodInventory("mattermost-oauth2-proxy", "mattermost-oauth2-proxy", "oauth2-proxy", "quay.io/oauth2-proxy/oauth2-proxy:v7")
+	registryInventory := deploymentPodInventory("matter-codex-registry", "default", "registry", "registry:2")
+	mattermostPod := mattermostInventory[len(mattermostInventory)-1].(map[string]any)
+	mattermostContainer := mattermostPod["spec"].(map[string]any)["containers"].([]any)[0].(map[string]any)
+	mattermostContainer["resources"] = map[string]any{
+		"requests": map[string]any{"memory": "1Gi"},
+		"limits":   map[string]any{"memory": "64Gi"},
+	}
 	tests := []struct {
 		name      string
 		items     []any
 		wantError bool
 	}{
 		{name: "пустой inventory", items: []any{}},
-		{name: "guarded session", items: []any{guardedPod("matter-codex-agent-workload", "matter-codex-agent-runner", "8Gi", "8Gi", true)}},
-		{name: "guarded utility", items: []any{guardedPod("matter-codex-agent-workload", "matter-codex-agent-runner", "4Gi", "4Gi", true)}},
-		{name: "legacy priority class", items: []any{guardedPod("legacy-agent-workload", "matter-codex-agent-runner", "8Gi", "8Gi", true)}, wantError: true},
-		{name: "legacy request limit", items: []any{guardedPod("matter-codex-agent-workload", "matter-codex-agent-runner", "1Gi", "64Gi", true)}, wantError: true},
-		{name: "cluster admin labeled", items: []any{guardedPod("matter-codex-agent-workload", "matter-codex-agent-runner-cluster-admin", "8Gi", "8Gi", true)}, wantError: true},
-		{name: "cluster admin unlabeled", items: []any{guardedPod("", "matter-codex-agent-runner-cluster-admin", "1Gi", "1Gi", false)}, wantError: true},
+		{name: "Mattermost из доверенного Deployment", items: mattermostInventory},
+		{name: "bot-service из доверенного Deployment", items: botServiceInventory},
+		{name: "PostgreSQL из доверенного StatefulSet", items: postgresInventory()},
+		{name: "OAuth2 proxy из доверенного Deployment", items: oauthProxyInventory},
+		{name: "registry из доверенного Deployment", items: registryInventory},
+		{
+			name: "точный residual repro без label с ordinary ServiceAccount",
+			items: []any{
+				unknownPod("synthetic-unknown-pod", map[string]any{}, "ordinary-service-account", "", "1Gi", "64Gi"),
+			},
+			wantError: true,
+		},
+		{
+			name: "residual repro с неверным PriorityClass",
+			items: []any{
+				unknownPod("synthetic-wrong-priority-pod", map[string]any{}, "default", "legacy-agent-workload", "1Gi", "64Gi"),
+			},
+			wantError: true,
+		},
+		{
+			name: "agent label и ServiceAccount не являются доказательством ownership",
+			items: []any{
+				unknownPod("synthetic-agent-spoof-pod", labels("matter-codex-agent-runner"), "matter-codex-agent-runner", "matter-codex-agent-workload", "8Gi", "8Gi"),
+			},
+			wantError: true,
+		},
+		{
+			name: "platform label и ServiceAccount не являются доказательством ownership",
+			items: []any{
+				unknownPod("synthetic-platform-spoof-pod", labels("mattermost"), "mattermost", "", "1Gi", "64Gi"),
+			},
+			wantError: true,
+		},
+		{
+			name:      "неизвестный Deployment не входит в allowlist",
+			items:     deploymentPodInventory("unknown-platform", "default", "unknown", "synthetic.invalid/unknown:test"),
+			wantError: true,
+		},
+		{
+			name: "заявленный ReplicaSet отсутствует в inventory",
+			items: []any{
+				deploymentPodInventory("mattermost", "mattermost", "mattermost", "mattermost/mattermost-team-edition:latest")[2],
+			},
+			wantError: true,
+		},
+		{
+			name: "Pod не соответствует шаблону доверенного ReplicaSet",
+			items: func() []any {
+				items := deploymentPodInventory("mattermost", "mattermost", "mattermost", "mattermost/mattermost-team-edition:latest")
+				pod := items[2].(map[string]any)
+				pod["spec"].(map[string]any)["containers"].([]any)[0].(map[string]any)["image"] = "synthetic.invalid/unknown:test"
+				return items
+			}(),
+			wantError: true,
+		},
+		{
+			name: "legacy cluster admin Pod",
+			items: []any{
+				unknownPod("synthetic-cluster-admin-pod", labels("matter-codex-agent-runner"), "matter-codex-agent-runner-cluster-admin", "", "1Gi", "1Gi"),
+			},
+			wantError: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			payload, err := json.Marshal(map[string]any{"items": test.items})
+			payload, err := json.Marshal(map[string]any{
+				"apiVersion": "v1",
+				"kind":       "List",
+				"items":      test.items,
+			})
 			if err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)
 			}
@@ -130,11 +325,37 @@ func TestAgentWorkloadInventoryFailsClosedForLegacyPods(t *testing.T) {
 				"MATTERCODEX_AGENT_WORKLOAD_PRIORITY_CLASS=matter-codex-agent-workload",
 				"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT=matter-codex-agent-runner",
 				"MATTERCODEX_AGENT_RUNNER_CLUSTER_ADMIN_SERVICE_ACCOUNT=matter-codex-agent-runner-cluster-admin",
+				"MATTERCODEX_IMAGE_REGISTRY_NAME=matter-codex-registry",
 			)
 			command.Stdin = strings.NewReader(string(payload))
 			output, err := command.CombinedOutput()
 			if (err != nil) != test.wantError {
 				t.Fatalf("inventory error = %v, wantError=%t; output=%s", err, test.wantError, output)
+			}
+		})
+	}
+}
+
+func TestBotServiceInstallersValidateInventoryBeforeKubernetesMutation(t *testing.T) {
+	repositoryRoot := testRepositoryRoot(t)
+	for _, relativePath := range []string{
+		"scripts/k8s/install-bot-service.sh",
+		"scripts/remote/install-bot-service.sh",
+	} {
+		t.Run(relativePath, func(t *testing.T) {
+			content, err := os.ReadFile(filepath.Join(repositoryRoot, relativePath))
+			if err != nil {
+				t.Fatalf("os.ReadFile() error = %v", err)
+			}
+			script := string(content)
+			inventoryIndex := strings.Index(script, "mattercodex_validate_agent_workload_inventory")
+			clusterRoleBindingDeleteIndex := strings.Index(script, "delete clusterrolebinding matter-codex-agent-runner-cluster-admin")
+			serviceAccountDeleteIndex := strings.Index(script, `delete serviceaccount`)
+			if inventoryIndex < 0 || clusterRoleBindingDeleteIndex < 0 || serviceAccountDeleteIndex < 0 {
+				t.Fatalf("installer не содержит полный переходный guard: inventory=%d clusterRoleBindingDelete=%d serviceAccountDelete=%d", inventoryIndex, clusterRoleBindingDeleteIndex, serviceAccountDeleteIndex)
+			}
+			if inventoryIndex > clusterRoleBindingDeleteIndex || inventoryIndex > serviceAccountDeleteIndex {
+				t.Fatalf("инвентаризация выполняется после Kubernetes mutation: inventory=%d clusterRoleBindingDelete=%d serviceAccountDelete=%d", inventoryIndex, clusterRoleBindingDeleteIndex, serviceAccountDeleteIndex)
 			}
 		})
 	}
