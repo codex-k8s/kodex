@@ -17,7 +17,7 @@ updated: 2026-07-22
 | `Organization` | id, name, slug, status, settings_revision |
 | `Membership` | organization_id, subject_id, platform_role |
 | `Workspace` | organization_id, name, slug, mattermost_team_id, managed_by |
-| `Room` | workspace_id, mattermost_channel_id, room_type, default_agent_id |
+| `Room` | workspace_id, mattermost_channel_id, room_type, default_agent_id, lifecycle_status, archived_at |
 | `ConversationBinding` | room_id, root_post_id, session/process reference, lifecycle_state, deletion_requested_at |
 
 ## Агенты и инструкции

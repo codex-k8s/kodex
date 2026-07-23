@@ -97,6 +97,8 @@ type Chat struct {
 	WorkPolicy          string
 	Settings            string
 	SystemPurpose       string
+	Status              string
+	ArchivedAt          *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }

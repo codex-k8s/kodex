@@ -5192,8 +5192,20 @@ func (store *fakeAdminStore) GetAgentDelegationBySourceTurnKey(_ context.Context
 func (store *fakeAdminStore) GetAgentDelegationForCallback(_ context.Context, targetSessionID int64) (entity.AgentDelegation, error) {
 	store.ensureAgentDelegations()
 	var selected entity.AgentDelegation
+	activeTurnID := int64(0)
+	for _, session := range store.agentSessions {
+		if session.ID == targetSessionID {
+			activeTurnID = session.ActiveTurnID
+			break
+		}
+	}
 	for _, item := range store.agentDelegations {
-		if item.TargetSessionID == targetSessionID && (selected.ID == 0 || item.ID > selected.ID) {
+		if item.TargetSessionID != targetSessionID {
+			continue
+		}
+		if selected.ID == 0 ||
+			item.TargetTurnID == activeTurnID && selected.TargetTurnID != activeTurnID ||
+			item.TargetTurnID == selected.TargetTurnID && item.ID > selected.ID {
 			selected = item
 		}
 	}

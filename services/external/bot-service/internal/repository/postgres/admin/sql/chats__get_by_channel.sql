@@ -11,8 +11,11 @@ select
 	work_policy,
 	settings::text,
 	system_purpose,
+	status,
+	archived_at,
 	created_at,
 	updated_at
 from matter_codex_chats
 where mattermost_channel_id = $1
+	and status = 'active'
 limit 1;

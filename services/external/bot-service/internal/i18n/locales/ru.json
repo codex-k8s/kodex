@@ -783,6 +783,8 @@
   {"id": "chat.run.monitor_timeout", "translation": "matter-codex: run `{{.RunID}}` все еще не завершен после monitor timeout. Откройте Runtime и проверьте его."},
   {"id": "chat.run.status_failed", "translation": "matter-codex: status run `{{.RunID}}` не прочитан: {{.Error}}"},
   {"id": "chat.run.final_empty", "translation": "Агент завершился, но финальное сообщение не попало в прочитанный log tail."},
+  {"id": "chat.run.callback_truncated", "translation": "[MatterCodex сократил результат до допустимого размера обратного вызова.]"},
+  {"id": "chat.delegation.same_thread_title", "translation": "Работа в общем треде"},
   {"id": "chat.run.failed_short", "translation": "Agent run `{{.RunID}}` завершился с ошибкой без подробного сообщения."},
   {"id": "chat.run.succeeded", "translation": "matter-codex agent run завершен:\n- run: `{{.RunID}}`\n- mode: `{{.Mode}}`\n\nArtifacts:\n{{.Artifacts}}\n\nФинальный ответ:\n{{.Final}}"},
   {"id": "chat.run.failed", "translation": "matter-codex agent run завершился с ошибкой:\n- run: `{{.RunID}}`\n- mode: `{{.Mode}}`\n\nLog tail:\n```text\n{{.Log}}\n```"},

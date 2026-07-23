@@ -9,6 +9,9 @@ select delegations.id, delegations.project_id, delegations.source_session_id, de
 	delegations.created_at, delegations.updated_at
 from matter_codex_agent_delegations delegations
 left join matter_codex_agent_session_turns turns on turns.id = delegations.target_turn_id
+join matter_codex_agent_sessions target_session on target_session.id = delegations.target_session_id
 where delegations.target_session_id = $1
-order by delegations.created_at desc
+order by
+	case when delegations.target_turn_id = target_session.active_turn_id then 0 else 1 end,
+	delegations.created_at desc
 limit 1;

@@ -31,5 +31,7 @@ on conflict (project_id, slug) do update set
 	work_policy = excluded.work_policy,
 	settings = excluded.settings,
 	system_purpose = excluded.system_purpose,
+	status = 'active',
+	archived_at = null,
 	updated_at = now()
-returning id, project_id, mattermost_channel_id, name, slug, description, chat_type, root_github_issue, work_policy, settings::text, system_purpose, created_at, updated_at, (xmax = 0) as created;
+returning id, project_id, mattermost_channel_id, name, slug, description, chat_type, root_github_issue, work_policy, settings::text, system_purpose, status, archived_at, created_at, updated_at, (xmax = 0) as created;

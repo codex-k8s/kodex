@@ -632,7 +632,7 @@ func scanAgentRoleWithCreated(row pgx.Row) (entity.AgentRole, bool, error) {
 
 func scanChat(row accountRow) (entity.Chat, error) {
 	var item entity.Chat
-	if err := row.Scan(&item.ID, &item.ProjectID, &item.MattermostChannelID, &item.Name, &item.Slug, &item.Description, &item.ChatType, &item.RootGitHubIssue, &item.WorkPolicy, &item.Settings, &item.SystemPurpose, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := row.Scan(&item.ID, &item.ProjectID, &item.MattermostChannelID, &item.Name, &item.Slug, &item.Description, &item.ChatType, &item.RootGitHubIssue, &item.WorkPolicy, &item.Settings, &item.SystemPurpose, &item.Status, &item.ArchivedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return entity.Chat{}, err
 	}
 	return item, nil
@@ -641,7 +641,7 @@ func scanChat(row accountRow) (entity.Chat, error) {
 func scanChatWithCreated(row pgx.Row) (entity.Chat, bool, error) {
 	var item entity.Chat
 	var created bool
-	if err := row.Scan(&item.ID, &item.ProjectID, &item.MattermostChannelID, &item.Name, &item.Slug, &item.Description, &item.ChatType, &item.RootGitHubIssue, &item.WorkPolicy, &item.Settings, &item.SystemPurpose, &item.CreatedAt, &item.UpdatedAt, &created); err != nil {
+	if err := row.Scan(&item.ID, &item.ProjectID, &item.MattermostChannelID, &item.Name, &item.Slug, &item.Description, &item.ChatType, &item.RootGitHubIssue, &item.WorkPolicy, &item.Settings, &item.SystemPurpose, &item.Status, &item.ArchivedAt, &item.CreatedAt, &item.UpdatedAt, &created); err != nil {
 		return entity.Chat{}, false, err
 	}
 	return item, created, nil
