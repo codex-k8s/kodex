@@ -1683,6 +1683,58 @@ exit 73
 EOF
 }
 
+prepare_git_replace_bootstrap_fixture() {
+  local fixture_root="$1"
+  local replacement_index="$fixture_root/.git/mattercodex-replacement-index"
+  local trusted_head env_mode hostile_object replacement_tree replacement_commit
+  local trusted_env_object replacement_env_object
+
+  /usr/bin/git clone --quiet --shared "$repo_root" "$fixture_root"
+  trusted_head="$(GIT_NO_REPLACE_OBJECTS=1 /usr/bin/git -C "$fixture_root" rev-parse --verify 'HEAD^{commit}')"
+  write_hostile_bootstrap_env "$fixture_root/scripts/lib/env.sh"
+  env_mode="$(GIT_NO_REPLACE_OBJECTS=1 /usr/bin/git -C "$fixture_root" ls-tree "$trusted_head" -- scripts/lib/env.sh | awk '{print $1}')"
+  hostile_object="$(/usr/bin/git -C "$fixture_root" hash-object -w -- scripts/lib/env.sh)"
+  GIT_INDEX_FILE="$replacement_index" /usr/bin/git -C "$fixture_root" read-tree "$trusted_head"
+  GIT_INDEX_FILE="$replacement_index" /usr/bin/git -C "$fixture_root" update-index \
+    --cacheinfo "$env_mode" "$hostile_object" scripts/lib/env.sh
+  replacement_tree="$(GIT_INDEX_FILE="$replacement_index" /usr/bin/git -C "$fixture_root" write-tree)"
+  replacement_commit="$(
+    builtin printf 'hostile env replacement\n' |
+      /usr/bin/env -i \
+        PATH=/usr/bin:/bin \
+        HOME="$fixture_root" \
+        LC_ALL=C \
+        GIT_AUTHOR_NAME=MatterCodex \
+        GIT_AUTHOR_EMAIL=mattercodex@example.invalid \
+        GIT_COMMITTER_NAME=MatterCodex \
+        GIT_COMMITTER_EMAIL=mattercodex@example.invalid \
+        /usr/bin/git -C "$fixture_root" commit-tree "$replacement_tree" -p "$trusted_head"
+  )"
+  /usr/bin/git -C "$fixture_root" replace "$trusted_head" "$replacement_commit"
+  /usr/bin/git -C "$fixture_root" config core.useReplaceRefs true
+  rm -f "$replacement_index"
+
+  trusted_env_object="$(
+    GIT_NO_REPLACE_OBJECTS=1 \
+      /usr/bin/git -c core.useReplaceRefs=false -C "$fixture_root" \
+        rev-parse --verify "$trusted_head:scripts/lib/env.sh"
+  )"
+  replacement_env_object="$(
+    /usr/bin/git -C "$fixture_root" rev-parse --verify 'HEAD:scripts/lib/env.sh'
+  )"
+  if [[ "$trusted_env_object" == "$replacement_env_object" ||
+        "$replacement_env_object" != "$hostile_object" ]]; then
+    echo "FAIL: refs/replace fixture не подменила env.sh при сохранении exact HEAD" >&2
+    exit 1
+  fi
+
+  mkdir -p "$fixture_root/hostile-object-store"
+  cat >"$fixture_root/hostile.gitconfig" <<'EOF'
+[core]
+	useReplaceRefs = true
+EOF
+}
+
 run_bootstrap_fixture() {
   local invocation_kind="$1"
   local fixture_root="$2"
@@ -1705,6 +1757,45 @@ run_bootstrap_fixture() {
       MATTERCODEX_EXTERNAL_ENV_MARKER="$external_env_marker" \
       MATTERCODEX_SYMLINK_BUILDER_MARKER="$builder_marker" \
       MATTERCODEX_SYMLINK_SSH_MARKER="$ssh_marker" \
+      "$invoked_path" --env-file "$fixture_root/missing.env"
+  )
+}
+
+run_git_replace_bootstrap_fixture() {
+  local invocation_kind="$1"
+  local fixture_root="$2"
+  local entrypoint="$3"
+  local external_env_marker="$4"
+  local builder_marker="$5"
+  local ssh_marker="$6"
+  local invoked_path
+
+  if [[ "$invocation_kind" == absolute ]]; then
+    invoked_path="$fixture_root/$entrypoint"
+  else
+    invoked_path="./$entrypoint"
+  fi
+  (
+    builtin cd -- "$fixture_root"
+    /usr/bin/env -i \
+      PATH="$symlink_alias_bin:/usr/bin:/bin" \
+      HOME="$fixture_root" \
+      MATTERCODEX_EXTERNAL_ENV_MARKER="$external_env_marker" \
+      MATTERCODEX_SYMLINK_BUILDER_MARKER="$builder_marker" \
+      MATTERCODEX_SYMLINK_SSH_MARKER="$ssh_marker" \
+      MATTERCODEX_TRUSTED_HEAD=attacker-controlled \
+      MATTERCODEX_BOOTSTRAP_HANDOFF_TRUSTED_HEAD=attacker-controlled \
+      GIT_NO_REPLACE_OBJECTS=0 \
+      GIT_DIR="$fixture_root/.git" \
+      GIT_WORK_TREE="$fixture_root" \
+      GIT_OBJECT_DIRECTORY="$fixture_root/hostile-object-store" \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES="$fixture_root/.git/objects:$repo_root/.git/objects" \
+      GIT_CONFIG_NOSYSTEM=0 \
+      GIT_CONFIG_SYSTEM="$fixture_root/hostile.gitconfig" \
+      GIT_CONFIG_GLOBAL="$fixture_root/hostile.gitconfig" \
+      GIT_CONFIG_COUNT=1 \
+      GIT_CONFIG_KEY_0=core.useReplaceRefs \
+      GIT_CONFIG_VALUE_0=true \
       "$invoked_path" --env-file "$fixture_root/missing.env"
   )
 }
@@ -1848,6 +1939,25 @@ for entrypoint in "${protected_entrypoints[@]}"; do
         "$ssh_marker"
     require_no_bootstrap_markers \
       "$entrypoint copied checkout hostile helper" \
+      "$external_env_marker" \
+      "$bootstrap_marker" \
+      "$builder_marker" \
+      "$ssh_marker"
+
+    replace_ref_root="$temp_root/bootstrap-replace-ref-$case_slug"
+    prepare_git_replace_bootstrap_fixture "$replace_ref_root"
+    expect_failure_matching \
+      "$entrypoint отклоняет refs/replace exact HEAD с hostile regular env.sh и hostile Git environment при $invocation_kind invocation" \
+      "trusted env helper не совпадает с content commitment HEAD trusted checkout" \
+      run_git_replace_bootstrap_fixture \
+        "$invocation_kind" \
+        "$replace_ref_root" \
+        "$entrypoint" \
+        "$external_env_marker" \
+        "$builder_marker" \
+        "$ssh_marker"
+    require_no_bootstrap_markers \
+      "$entrypoint refs/replace exact HEAD" \
       "$external_env_marker" \
       "$bootstrap_marker" \
       "$builder_marker" \

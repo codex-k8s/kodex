@@ -40,7 +40,9 @@ mattercodex_initial_git() {
     LC_ALL=C \
     GIT_CONFIG_NOSYSTEM=1 \
     GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
     /usr/bin/git \
+      -c core.useReplaceRefs=false \
       -c "safe.directory=$MATTERCODEX_PHYSICAL_REPO_ROOT" \
       -c core.hooksPath=/dev/null \
       -C "$MATTERCODEX_PHYSICAL_REPO_ROOT" \
@@ -54,7 +56,11 @@ mattercodex_initial_require_committed_fd() {
   local expected_object actual_object object_type
   local fd_path="/proc/$$/fd/$fd"
 
-  expected_object="$(mattercodex_initial_git rev-parse --verify "HEAD:$relative_path")" || {
+  if [[ -z "${MATTERCODEX_TRUSTED_HEAD:-}" ]]; then
+    builtin printf 'FAIL: exact trusted Git HEAD не закреплён для initial commitment\n' >&2
+    exit 1
+  fi
+  expected_object="$(mattercodex_initial_git rev-parse --verify "$MATTERCODEX_TRUSTED_HEAD:$relative_path")" || {
     builtin printf 'FAIL: %s отсутствует в HEAD trusted checkout\n' "$label" >&2
     exit 1
   }
@@ -79,7 +85,7 @@ mattercodex_initial_require_committed_fd() {
 mattercodex_resolve_bootstrap_paths() {
   local script_path="${BASH_SOURCE[0]}"
   local script_dir canonical_script_path bootstrap_path
-  local topology committed_root actual_root
+  local topology committed_root actual_root current_head
 
   if [[ "$MATTERCODEX_BOOTSTRAP_HANDOFF" == true ]]; then
     REPO_ROOT="${MATTERCODEX_BOOTSTRAP_HANDOFF_REPO_ROOT:-}"
@@ -169,10 +175,19 @@ mattercodex_resolve_bootstrap_paths() {
     builtin printf 'FAIL: render-bot-service.sh не принадлежит trusted Git checkout root\n' >&2
     exit 1
   fi
-  mattercodex_initial_git rev-parse --verify 'HEAD^{commit}' >/dev/null || {
+  current_head="$(mattercodex_initial_git rev-parse --verify 'HEAD^{commit}')" || {
     builtin printf 'FAIL: trusted Git checkout не содержит HEAD commit\n' >&2
     exit 1
   }
+  if [[ "$MATTERCODEX_BOOTSTRAP_HANDOFF" == true ]]; then
+    MATTERCODEX_TRUSTED_HEAD="${MATTERCODEX_BOOTSTRAP_HANDOFF_TRUSTED_HEAD:-}"
+    if [[ -z "$MATTERCODEX_TRUSTED_HEAD" || "$current_head" != "$MATTERCODEX_TRUSTED_HEAD" ]]; then
+      builtin printf 'FAIL: trusted Git HEAD изменён до internal render handoff\n' >&2
+      exit 1
+    fi
+  else
+    MATTERCODEX_TRUSTED_HEAD="$current_head"
+  fi
   mattercodex_initial_require_committed_fd \
     scripts/k8s/render-bot-service.sh \
     "$MATTERCODEX_ENTRYPOINT_FD" \

@@ -1076,11 +1076,11 @@ require_line scripts/k8s/install-bot-service.sh '#!/bin/bash -p'
 require_line scripts/k8s/render-bot-service.sh '#!/bin/bash -p'
 require_line scripts/remote/install-bot-service.sh '#!/bin/bash -p'
 require_source_commitment scripts/build-agent-runner-image.sh 6397eb2ba01d19ad9e197b7922c5f0ecad6987ef3db3b24bc66402408c0c941e
-require_source_commitment scripts/k8s/install-bot-service.sh 5662fb488515cad76e3891207cd2bd66c808eacf3ba833f5d260ea518852c814
-require_source_commitment scripts/k8s/render-bot-service.sh a4cf4292d3cb91254a42082b2bb2b708221625b181e630c7697dea7921c5c9c7
-require_source_commitment scripts/lib/bootstrap.sh 75b563c78f617cf7a535a58541bff42425412a4fd342c9b696527c97ec810fd9
+require_source_commitment scripts/k8s/install-bot-service.sh 922a0a7eaa98cc197b44b92c16580274c26c6307b3befc5bfbfebcf591e64925
+require_source_commitment scripts/k8s/render-bot-service.sh e167edf1f94c2e644903ee69181aa02adf485a6c5474b5ff5cd6280907ab52a9
+require_source_commitment scripts/lib/bootstrap.sh 7f2cc2bf39dd0f61fdd551db9d5513418a2fc3dc4d8f0748d642c0c30e889053
 require_source_commitment scripts/lib/env.sh eeb924a711e07aec19d1c01a12d69cfbf0ff3af5d3bd902d0ecc780b1f2e394f
-require_source_commitment scripts/remote/install-bot-service.sh c2f248a2ffb7f99f2e4255305e198d11e9ce640bd1d1c881724435c432f0bc58
+require_source_commitment scripts/remote/install-bot-service.sh aa429530b1e0aa3234e3614feccd9f444baae1d747ed9477fea810ce1d1379f6
 require_source_commitment deploy/k8s/bot-service/codex-device-auth-pod.yaml.tpl 74859c1419de18d1d6e4eb4392d616b14d56e04b6af8d4a523e69b94e7c2840f
 require_source_commitment deploy/k8s/bot-service/kaniko-job.yaml.tpl f5c0cd3e8ca1ec00bdccbed16fcb02651b88902cdd6ce10d87f4f23d5ab6e741
 require_count scripts/lib/bootstrap.sh '. "$ENV_HELPER_PATH"' 1
@@ -1092,6 +1092,19 @@ require_count scripts/remote/install-bot-service.sh 'mattercodex_run_render_help
 require_count scripts/k8s/install-bot-service.sh 'mattercodex_run_build_wrapper \' 1
 require_count scripts/k8s/install-bot-service.sh '"$REPO_ROOT/scripts/build-agent-runner-image.sh"' 0
 require_line scripts/remote/install-bot-service.sh '    --transform="s|^$BUILD_WRAPPER_FD$|scripts/build-agent-runner-image.sh|" \'
+require_count scripts/k8s/install-bot-service.sh '    GIT_NO_REPLACE_OBJECTS=1 \' 1
+require_count scripts/k8s/render-bot-service.sh '    GIT_NO_REPLACE_OBJECTS=1 \' 1
+require_count scripts/remote/install-bot-service.sh '    GIT_NO_REPLACE_OBJECTS=1 \' 1
+require_count scripts/lib/bootstrap.sh '    GIT_NO_REPLACE_OBJECTS=1 \' 1
+require_count scripts/k8s/install-bot-service.sh '      -c core.useReplaceRefs=false \' 1
+require_count scripts/k8s/render-bot-service.sh '      -c core.useReplaceRefs=false \' 1
+require_count scripts/remote/install-bot-service.sh '      -c core.useReplaceRefs=false \' 1
+require_count scripts/lib/bootstrap.sh '      -c core.useReplaceRefs=false \' 1
+require_line scripts/k8s/install-bot-service.sh '  expected_object="$(mattercodex_initial_git rev-parse --verify "$MATTERCODEX_TRUSTED_HEAD:$relative_path")" || {'
+require_line scripts/k8s/render-bot-service.sh '  expected_object="$(mattercodex_initial_git rev-parse --verify "$MATTERCODEX_TRUSTED_HEAD:$relative_path")" || {'
+require_line scripts/remote/install-bot-service.sh '  expected_object="$(mattercodex_initial_git rev-parse --verify "$MATTERCODEX_TRUSTED_HEAD:$relative_path")" || {'
+require_line scripts/lib/bootstrap.sh '  expected_object="$(mattercodex_bootstrap_git rev-parse --verify "$MATTERCODEX_TRUSTED_HEAD:$relative_path")" ||'
+require_line scripts/lib/bootstrap.sh '  MATTERCODEX_BOOTSTRAP_HANDOFF_TRUSTED_HEAD="$MATTERCODEX_TRUSTED_HEAD" \'
 require_line scripts/lib/bootstrap.sh '  actual_object="$(mattercodex_bootstrap_git hash-object --no-filters "$fd_path")" ||'
 require_line scripts/lib/bootstrap.sh '    mattercodex_bootstrap_fail "trusted bootstrap topology изменена после validation: $label"'
 require_line scripts/lib/bootstrap.sh '  /bin/bash -p "$(mattercodex_bootstrap_fd_path "$BUILD_WRAPPER_FD")" "$@"'

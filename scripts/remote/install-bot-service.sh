@@ -34,7 +34,9 @@ mattercodex_initial_git() {
     LC_ALL=C \
     GIT_CONFIG_NOSYSTEM=1 \
     GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
     /usr/bin/git \
+      -c core.useReplaceRefs=false \
       -c "safe.directory=$MATTERCODEX_PHYSICAL_REPO_ROOT" \
       -c core.hooksPath=/dev/null \
       -C "$MATTERCODEX_PHYSICAL_REPO_ROOT" \
@@ -48,7 +50,11 @@ mattercodex_initial_require_committed_fd() {
   local expected_object actual_object object_type
   local fd_path="/proc/$$/fd/$fd"
 
-  expected_object="$(mattercodex_initial_git rev-parse --verify "HEAD:$relative_path")" || {
+  if [[ -z "${MATTERCODEX_TRUSTED_HEAD:-}" ]]; then
+    builtin printf 'FAIL: exact trusted Git HEAD не закреплён для initial commitment\n' >&2
+    exit 1
+  fi
+  expected_object="$(mattercodex_initial_git rev-parse --verify "$MATTERCODEX_TRUSTED_HEAD:$relative_path")" || {
     builtin printf 'FAIL: %s отсутствует в HEAD trusted checkout\n' "$label" >&2
     exit 1
   }
@@ -142,7 +148,7 @@ mattercodex_resolve_bootstrap_paths() {
     builtin printf 'FAIL: install-bot-service.sh не принадлежит trusted Git checkout root\n' >&2
     exit 1
   fi
-  mattercodex_initial_git rev-parse --verify 'HEAD^{commit}' >/dev/null || {
+  MATTERCODEX_TRUSTED_HEAD="$(mattercodex_initial_git rev-parse --verify 'HEAD^{commit}')" || {
     builtin printf 'FAIL: trusted Git checkout не содержит HEAD commit\n' >&2
     exit 1
   }

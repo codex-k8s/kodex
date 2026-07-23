@@ -10,7 +10,9 @@ mattercodex_bootstrap_git() {
     LC_ALL=C \
     GIT_CONFIG_NOSYSTEM=1 \
     GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
     /usr/bin/git \
+      -c core.useReplaceRefs=false \
       -c "safe.directory=$MATTERCODEX_PHYSICAL_REPO_ROOT" \
       -c core.hooksPath=/dev/null \
       -C "$MATTERCODEX_PHYSICAL_REPO_ROOT" \
@@ -29,7 +31,9 @@ mattercodex_bootstrap_require_committed_fd() {
   local fd_path
 
   fd_path="$(mattercodex_bootstrap_fd_path "$fd")"
-  expected_object="$(mattercodex_bootstrap_git rev-parse --verify "HEAD:$relative_path")" ||
+  [[ -n "${MATTERCODEX_TRUSTED_HEAD:-}" ]] ||
+    mattercodex_bootstrap_fail "exact trusted Git HEAD не закреплён для bootstrap commitment"
+  expected_object="$(mattercodex_bootstrap_git rev-parse --verify "$MATTERCODEX_TRUSTED_HEAD:$relative_path")" ||
     mattercodex_bootstrap_fail "$label отсутствует в HEAD trusted checkout"
   object_type="$(mattercodex_bootstrap_git cat-file -t "$expected_object")" ||
     mattercodex_bootstrap_fail "не удалось определить Git object type для $label"
@@ -127,7 +131,7 @@ mattercodex_establish_bootstrap() {
   local entrypoint_relative_path="$1"
   local require_render_helper="$2"
   local require_build_wrapper="$3"
-  local committed_root current_root entrypoint_dir_relative entrypoint_file
+  local committed_root current_head current_root entrypoint_dir_relative entrypoint_file
   local root_fd_path scripts_fd_path lib_fd_path k8s_fd_path remote_fd_path
   local entrypoint_dir_fd canonical_entrypoint_path canonical_bootstrap_path
   local env_helper_path render_helper_path build_wrapper_path
@@ -146,8 +150,10 @@ mattercodex_establish_bootstrap() {
     mattercodex_bootstrap_fail "не удалось определить physical Git checkout root"
   [[ "$committed_root" == "$MATTERCODEX_PHYSICAL_REPO_ROOT" ]] ||
     mattercodex_bootstrap_fail "entrypoint не принадлежит trusted Git checkout root"
-  mattercodex_bootstrap_git rev-parse --verify 'HEAD^{commit}' >/dev/null ||
+  current_head="$(mattercodex_bootstrap_git rev-parse --verify 'HEAD^{commit}')" ||
     mattercodex_bootstrap_fail "trusted Git checkout не содержит HEAD commit"
+  [[ -n "${MATTERCODEX_TRUSTED_HEAD:-}" && "$current_head" == "$MATTERCODEX_TRUSTED_HEAD" ]] ||
+    mattercodex_bootstrap_fail "trusted Git HEAD изменён до bootstrap commitment"
 
   mattercodex_bootstrap_open_directory \
     "$MATTERCODEX_PHYSICAL_REPO_ROOT" \
@@ -296,6 +302,7 @@ mattercodex_run_render_helper() {
     mattercodex_bootstrap_fail "trusted render helper descriptor не установлен"
   MATTERCODEX_BOOTSTRAP_HANDOFF_REPO_ROOT="$MATTERCODEX_PHYSICAL_REPO_ROOT" \
   MATTERCODEX_BOOTSTRAP_HANDOFF_HELPER_PATH="$(mattercodex_bootstrap_fd_path "$MATTERCODEX_BOOTSTRAP_HELPER_FD")" \
+  MATTERCODEX_BOOTSTRAP_HANDOFF_TRUSTED_HEAD="$MATTERCODEX_TRUSTED_HEAD" \
     /bin/bash -p \
       "$(mattercodex_bootstrap_fd_path "$RENDER_HELPER_FD")" \
       --mattercodex-bootstrap-handoff \
