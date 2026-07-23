@@ -4,7 +4,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 guard="$repo_root/scripts/check-go-toolchain.sh"
 temp_root="$(mktemp -d)"
-trap 'rm -rf "$temp_root"' EXIT
+hardlink_temp_root="$(mktemp -d "$repo_root/.git/mattercodex-bootstrap-hardlink.XXXXXX")"
+trap 'rm -rf "$temp_root" "$hardlink_temp_root"' EXIT
 
 canonical_files=(
   go.mod
@@ -13,6 +14,7 @@ canonical_files=(
   scripts/internal/go-toolchain-guard.go
   scripts/k8s/install-bot-service.sh
   scripts/k8s/render-bot-service.sh
+  scripts/lib/bootstrap.sh
   scripts/lib/env.sh
   scripts/remote/install-bot-service.sh
   deploy/k8s/bot-service/codex-device-auth-pod.yaml.tpl
@@ -1665,6 +1667,288 @@ EOF
         mattercodex-physical-path \
         "$physical_path_fixture" \
         "$entrypoint"
+  done
+done
+
+write_hostile_bootstrap_env() {
+  local target="$1"
+
+  mkdir -p "$(dirname "$target")"
+  cat >"$target" <<'EOF'
+#!/bin/bash
+builtin printf 'hostile env helper executed\n' >"$MATTERCODEX_EXTERNAL_ENV_MARKER"
+docker
+ssh
+exit 73
+EOF
+}
+
+run_bootstrap_fixture() {
+  local invocation_kind="$1"
+  local fixture_root="$2"
+  local entrypoint="$3"
+  local external_env_marker="$4"
+  local builder_marker="$5"
+  local ssh_marker="$6"
+  local invoked_path
+
+  if [[ "$invocation_kind" == absolute ]]; then
+    invoked_path="$fixture_root/$entrypoint"
+  else
+    invoked_path="./$entrypoint"
+  fi
+  (
+    builtin cd -- "$fixture_root"
+    /usr/bin/env -i \
+      PATH="$symlink_alias_bin:/usr/bin:/bin" \
+      HOME="$fixture_root" \
+      MATTERCODEX_EXTERNAL_ENV_MARKER="$external_env_marker" \
+      MATTERCODEX_SYMLINK_BUILDER_MARKER="$builder_marker" \
+      MATTERCODEX_SYMLINK_SSH_MARKER="$ssh_marker" \
+      "$invoked_path" --env-file "$fixture_root/missing.env"
+  )
+}
+
+require_no_bootstrap_markers() {
+  local description="$1"
+  shift
+  local marker
+
+  for marker in "$@"; do
+    if [[ -e "$marker" ]]; then
+      echo "FAIL: $description выполнил внешний env helper, bootstrap helper, builder или SSH" >&2
+      exit 1
+    fi
+  done
+}
+
+run_bootstrap_replacement_race() {
+  local invocation_kind="$1"
+  local fixture_root="$2"
+  local entrypoint="$3"
+  local external_env_marker="$4"
+  local bootstrap_marker="$5"
+  local builder_marker="$6"
+  local ssh_marker="$7"
+  local ready_fifo="$fixture_root/bootstrap-ready"
+  local continue_fifo="$fixture_root/bootstrap-continue"
+  local invoked_path child_pid validation_signal child_status
+
+  mkfifo "$ready_fifo" "$continue_fifo"
+  if [[ "$invocation_kind" == absolute ]]; then
+    invoked_path="$fixture_root/$entrypoint"
+  else
+    invoked_path="./$entrypoint"
+  fi
+  (
+    exec 8<>"$ready_fifo"
+    exec 9<>"$continue_fifo"
+    builtin cd -- "$fixture_root"
+    /usr/bin/env -i \
+      PATH="$symlink_alias_bin:/usr/bin:/bin" \
+      HOME="$fixture_root" \
+      MATTERCODEX_EXTERNAL_ENV_MARKER="$external_env_marker" \
+      MATTERCODEX_BOOTSTRAP_REPLACEMENT_MARKER="$bootstrap_marker" \
+      MATTERCODEX_SYMLINK_BUILDER_MARKER="$builder_marker" \
+      MATTERCODEX_SYMLINK_SSH_MARKER="$ssh_marker" \
+      MATTERCODEX_BOOTSTRAP_TEST_READY_FD=8 \
+      MATTERCODEX_BOOTSTRAP_TEST_CONTINUE_FD=9 \
+      "$invoked_path" --env-file "$fixture_root/missing.env" &
+    child_pid=$!
+    IFS= read -r validation_signal <&8
+    if [[ "$validation_signal" != validated ]]; then
+      builtin printf 'FAIL: bootstrap race не получил validation signal\n' >&2
+      kill "$child_pid" 2>/dev/null || true
+      wait "$child_pid" || true
+      return 1
+    fi
+    mv "$fixture_root/scripts/lib" "$fixture_root/scripts/lib-validated"
+    mkdir -p "$fixture_root/scripts/lib"
+    cat >"$fixture_root/scripts/lib/bootstrap.sh" <<'EOF'
+builtin printf 'hostile bootstrap helper executed\n' >"$MATTERCODEX_BOOTSTRAP_REPLACEMENT_MARKER"
+exit 72
+EOF
+    write_hostile_bootstrap_env "$fixture_root/scripts/lib/env.sh"
+    builtin printf 'continue\n' >&9
+    if wait "$child_pid"; then
+      child_status=0
+    else
+      child_status=$?
+    fi
+    return "$child_status"
+  )
+}
+
+for entrypoint in "${protected_entrypoints[@]}"; do
+  entrypoint_dir="${entrypoint%/*}"
+  for invocation_kind in absolute relative; do
+    case_slug="${entrypoint//\//-}-$invocation_kind"
+    external_env_marker="$temp_root/bootstrap-matrix-$case_slug-env"
+    bootstrap_marker="$temp_root/bootstrap-matrix-$case_slug-bootstrap"
+    builder_marker="$temp_root/bootstrap-matrix-$case_slug-builder"
+    ssh_marker="$temp_root/bootstrap-matrix-$case_slug-ssh"
+
+    hardlink_root="$hardlink_temp_root/bootstrap-hardlink-$case_slug"
+    mkdir -p "$hardlink_root/$entrypoint_dir" "$hardlink_root/scripts/lib"
+    ln "$repo_root/$entrypoint" "$hardlink_root/$entrypoint"
+    cp "$repo_root/scripts/lib/bootstrap.sh" "$hardlink_root/scripts/lib/bootstrap.sh"
+    write_hostile_bootstrap_env "$hardlink_root/scripts/lib/env.sh"
+    expect_failure_matching \
+      "$entrypoint отклоняет external same-basename hardlink при $invocation_kind invocation" \
+      "protected entrypoint ${entrypoint##*/} должен быть regular file с link count 1" \
+      run_bootstrap_fixture \
+        "$invocation_kind" \
+        "$hardlink_root" \
+        "$entrypoint" \
+        "$external_env_marker" \
+        "$builder_marker" \
+        "$ssh_marker"
+    require_no_bootstrap_markers \
+      "$entrypoint hardlink case" \
+      "$external_env_marker" \
+      "$bootstrap_marker" \
+      "$builder_marker" \
+      "$ssh_marker"
+    rm -rf "$hardlink_root"
+
+    copied_root="$temp_root/bootstrap-copy-$case_slug"
+    mkdir -p "$copied_root/$entrypoint_dir" "$copied_root/scripts/lib"
+    cp "$repo_root/$entrypoint" "$copied_root/$entrypoint"
+    cp "$repo_root/scripts/lib/bootstrap.sh" "$copied_root/scripts/lib/bootstrap.sh"
+    write_hostile_bootstrap_env "$copied_root/scripts/lib/env.sh"
+    expect_failure_matching \
+      "$entrypoint отклоняет external copied closure при $invocation_kind invocation" \
+      "trusted repository root должен иметь physical .git/scripts/lib topology без symlink" \
+      run_bootstrap_fixture \
+        "$invocation_kind" \
+        "$copied_root" \
+        "$entrypoint" \
+        "$external_env_marker" \
+        "$builder_marker" \
+        "$ssh_marker"
+    require_no_bootstrap_markers \
+      "$entrypoint copied closure" \
+      "$external_env_marker" \
+      "$bootstrap_marker" \
+      "$builder_marker" \
+      "$ssh_marker"
+
+    copied_checkout_root="$temp_root/bootstrap-copied-checkout-$case_slug"
+    /usr/bin/git clone --quiet --shared "$repo_root" "$copied_checkout_root"
+    write_hostile_bootstrap_env "$copied_checkout_root/scripts/lib/env.sh"
+    expect_failure_matching \
+      "$entrypoint отклоняет copied exact checkout entrypoint с hostile regular env.sh при $invocation_kind invocation" \
+      "trusted env helper не совпадает с content commitment HEAD trusted checkout" \
+      run_bootstrap_fixture \
+        "$invocation_kind" \
+        "$copied_checkout_root" \
+        "$entrypoint" \
+        "$external_env_marker" \
+        "$builder_marker" \
+        "$ssh_marker"
+    require_no_bootstrap_markers \
+      "$entrypoint copied checkout hostile helper" \
+      "$external_env_marker" \
+      "$bootstrap_marker" \
+      "$builder_marker" \
+      "$ssh_marker"
+
+    intermediate_root="$temp_root/bootstrap-intermediate-$case_slug"
+    mkdir -p \
+      "$intermediate_root/aliases" \
+      "$intermediate_root/external/$entrypoint_dir" \
+      "$intermediate_root/external/scripts/lib"
+    cp "$repo_root/$entrypoint" "$intermediate_root/external/$entrypoint"
+    cp "$repo_root/scripts/lib/bootstrap.sh" "$intermediate_root/external/scripts/lib/bootstrap.sh"
+    write_hostile_bootstrap_env "$intermediate_root/external/scripts/lib/env.sh"
+    ln -s ../external "$intermediate_root/aliases/checkout"
+    expect_failure_matching \
+      "$entrypoint отклоняет external intermediate directory symlink при $invocation_kind invocation" \
+      "trusted repository root должен иметь physical .git/scripts/lib topology без symlink" \
+      run_bootstrap_fixture \
+        "$invocation_kind" \
+        "$intermediate_root" \
+        "aliases/checkout/$entrypoint" \
+        "$external_env_marker" \
+        "$builder_marker" \
+        "$ssh_marker"
+    require_no_bootstrap_markers \
+      "$entrypoint intermediate symlink" \
+      "$external_env_marker" \
+      "$bootstrap_marker" \
+      "$builder_marker" \
+      "$ssh_marker"
+
+    parent_symlink_root="$temp_root/bootstrap-parent-symlink-$case_slug"
+    /usr/bin/git clone --quiet --shared "$repo_root" "$parent_symlink_root"
+    mv "$parent_symlink_root/scripts/lib" "$parent_symlink_root/scripts/lib-trusted"
+    mkdir -p "$parent_symlink_root/external-lib"
+    cp "$repo_root/scripts/lib/bootstrap.sh" "$parent_symlink_root/external-lib/bootstrap.sh"
+    write_hostile_bootstrap_env "$parent_symlink_root/external-lib/env.sh"
+    ln -s ../external-lib "$parent_symlink_root/scripts/lib"
+    expect_failure_matching \
+      "$entrypoint отклоняет canonical leaf с external scripts/lib parent symlink при $invocation_kind invocation" \
+      "trusted repository root должен иметь physical .git/scripts/lib topology без symlink" \
+      run_bootstrap_fixture \
+        "$invocation_kind" \
+        "$parent_symlink_root" \
+        "$entrypoint" \
+        "$external_env_marker" \
+        "$builder_marker" \
+        "$ssh_marker"
+    require_no_bootstrap_markers \
+      "$entrypoint parent symlink" \
+      "$external_env_marker" \
+      "$bootstrap_marker" \
+      "$builder_marker" \
+      "$ssh_marker"
+
+    for broken_topology in dangling loop; do
+      broken_root="$temp_root/bootstrap-$broken_topology-$case_slug"
+      /usr/bin/git clone --quiet --shared "$repo_root" "$broken_root"
+      mv "$broken_root/scripts/lib" "$broken_root/scripts/lib-trusted"
+      if [[ "$broken_topology" == dangling ]]; then
+        ln -s ../missing-lib "$broken_root/scripts/lib"
+      else
+        ln -s lib "$broken_root/scripts/lib"
+      fi
+      expect_failure_matching \
+        "$entrypoint отклоняет $broken_topology helper-parent topology при $invocation_kind invocation" \
+        "trusted repository root должен иметь physical .git/scripts/lib topology без symlink" \
+        run_bootstrap_fixture \
+          "$invocation_kind" \
+          "$broken_root" \
+          "$entrypoint" \
+          "$external_env_marker" \
+          "$builder_marker" \
+          "$ssh_marker"
+      require_no_bootstrap_markers \
+        "$entrypoint $broken_topology topology" \
+        "$external_env_marker" \
+        "$bootstrap_marker" \
+        "$builder_marker" \
+        "$ssh_marker"
+    done
+
+    race_root="$temp_root/bootstrap-race-$case_slug"
+    /usr/bin/git clone --quiet --shared "$repo_root" "$race_root"
+    expect_failure_matching \
+      "$entrypoint отклоняет deterministic scripts/lib pathname replacement после validation при $invocation_kind invocation" \
+      "trusted bootstrap topology изменена после validation: scripts/lib" \
+      run_bootstrap_replacement_race \
+        "$invocation_kind" \
+        "$race_root" \
+        "$entrypoint" \
+        "$external_env_marker" \
+        "$bootstrap_marker" \
+        "$builder_marker" \
+        "$ssh_marker"
+    require_no_bootstrap_markers \
+      "$entrypoint replacement race" \
+      "$external_env_marker" \
+      "$bootstrap_marker" \
+      "$builder_marker" \
+      "$ssh_marker"
   done
 done
 

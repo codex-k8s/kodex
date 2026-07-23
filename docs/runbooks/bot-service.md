@@ -180,7 +180,9 @@ Runtime namespace получает `ResourceQuota` `matter-codex-runtime-quota` 
 scripts/remote/install-bot-service.sh --env-file .env --dry-run=server
 ```
 
-Установщики, render helper и защищённый agent-runner build wrapper запускаются напрямую: их `#!/bin/bash -p` создаёт границу до `BASH_ENV`, `ENV` и импортированных shell functions. До определения абсолютного repository root bootstrap использует только Bash builtins и явно абсолютный `/usr/bin/env`, не выполняя команды из `PATH`. Полный ранний closure `env.sh` → `render-bot-service.sh` → installer/wrapper закреплён статическими SHA-256 commitments. Явный запуск через `bash script.sh` не является поддерживаемым защищённым entrypoint.
+Установщики и прямой render helper запускаются через `#!/bin/bash -p`: эта граница действует до `BASH_ENV`, `ENV` и импортированных shell functions. До установления доверия bootstrap использует Bash builtins и только явно проверенные абсолютные системные примитивы `/usr/bin/env`, `/usr/bin/git`, `/usr/bin/stat` и `/bin/bash`; команды из `PATH` на этом этапе не выполняются. Поддерживается физический Git checkout с обычным каталогом `.git`; directory symlink допускается только как путь к этому фактическому checkout, а leaf и внутренние `scripts/{k8s,remote,lib}` symlink, hardlink entrypoint и скопированный внешний root закрыто отклоняются.
+
+Entrypoint, `bootstrap.sh`, `env.sh`, render helper и agent-runner build wrapper сверяются с blob текущего `HEAD`. Исполняемые helper-файлы открываются один раз, их topology и content commitment проверяются через удержанные descriptors, а `source` и локальный запуск выполняются через те же `/proc/<pid>/fd/<n>`. Remote archive также получает build wrapper из проверенного descriptor, а не через повторное разрешение pathname. Статический guard дополнительно закрепляет SHA-256 всего раннего closure. Явный запуск через `bash script.sh` не является поддерживаемым защищённым entrypoint.
 
 Если Mattermost token еще не задан, Secret не создается, а Deployment использует optional secret refs.
 

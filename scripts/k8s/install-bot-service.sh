@@ -2,25 +2,6 @@
 
 set -euo pipefail
 
-mattercodex_require_supported_entrypoint_leaf() {
-  local script_path="${BASH_SOURCE[0]}"
-
-  case "$script_path" in
-    /*) ;;
-    */*) script_path="$(builtin pwd -P)/$script_path" ;;
-    *)
-      builtin printf 'FAIL: невозможно определить абсолютный путь install-bot-service.sh без PATH lookup\n' >&2
-      exit 1
-      ;;
-  esac
-  if [[ ! -f "$script_path" || -L "$script_path" ]]; then
-    builtin printf 'FAIL: защищённая точка входа install-bot-service.sh должна быть обычным файлом, а не symlink\n' >&2
-    exit 1
-  fi
-}
-
-mattercodex_require_supported_entrypoint_leaf
-
 mattercodex_require_protected_shell_startup() {
   local environment_entry environment_key
 
@@ -46,9 +27,53 @@ mattercodex_require_protected_shell_startup() {
 mattercodex_require_protected_shell_startup
 builtin unset BASH_ENV ENV
 
+mattercodex_initial_git() {
+  /usr/bin/env -i \
+    PATH=/usr/bin:/bin \
+    HOME=/nonexistent \
+    LC_ALL=C \
+    GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    /usr/bin/git \
+      -c "safe.directory=$MATTERCODEX_PHYSICAL_REPO_ROOT" \
+      -c core.hooksPath=/dev/null \
+      -C "$MATTERCODEX_PHYSICAL_REPO_ROOT" \
+      "$@"
+}
+
+mattercodex_initial_require_committed_fd() {
+  local relative_path="$1"
+  local fd="$2"
+  local label="$3"
+  local expected_object actual_object object_type
+  local fd_path="/proc/$$/fd/$fd"
+
+  expected_object="$(mattercodex_initial_git rev-parse --verify "HEAD:$relative_path")" || {
+    builtin printf 'FAIL: %s отсутствует в HEAD trusted checkout\n' "$label" >&2
+    exit 1
+  }
+  object_type="$(mattercodex_initial_git cat-file -t "$expected_object")" || {
+    builtin printf 'FAIL: не удалось определить Git object type для %s\n' "$label" >&2
+    exit 1
+  }
+  if [[ "$object_type" != blob ]]; then
+    builtin printf 'FAIL: %s в HEAD trusted checkout не является blob\n' "$label" >&2
+    exit 1
+  fi
+  actual_object="$(mattercodex_initial_git hash-object --no-filters "$fd_path")" || {
+    builtin printf 'FAIL: не удалось вычислить content commitment для %s\n' "$label" >&2
+    exit 1
+  }
+  if [[ "$actual_object" != "$expected_object" ]]; then
+    builtin printf 'FAIL: %s не совпадает с content commitment HEAD trusted checkout\n' "$label" >&2
+    exit 1
+  fi
+}
+
 mattercodex_resolve_bootstrap_paths() {
   local script_path="${BASH_SOURCE[0]}"
-  local script_dir canonical_script_path
+  local script_dir canonical_script_path bootstrap_path
+  local topology committed_root actual_root
 
   case "$script_path" in
     /*) ;;
@@ -58,6 +83,32 @@ mattercodex_resolve_bootstrap_paths() {
       exit 1
       ;;
   esac
+  if [[ ! -f "$script_path" || -L "$script_path" ]]; then
+    builtin printf 'FAIL: защищённая точка входа install-bot-service.sh должна быть обычным файлом, а не symlink\n' >&2
+    exit 1
+  fi
+  for trusted_primitive in /usr/bin/env /usr/bin/git /usr/bin/stat /bin/bash; do
+    if [[ ! -x "$trusted_primitive" || -L "$trusted_primitive" ]]; then
+      builtin printf 'FAIL: обязательный absolute system primitive недоступен как regular executable: %s\n' "$trusted_primitive" >&2
+      exit 1
+    fi
+  done
+  if [[ ! -d "/proc/$$/fd" ]]; then
+    builtin printf 'FAIL: /proc descriptor boundary недоступна для protected bootstrap\n' >&2
+    exit 1
+  fi
+  exec {MATTERCODEX_ENTRYPOINT_FD}<"$script_path" || {
+    builtin printf 'FAIL: невозможно удержать descriptor install-bot-service.sh\n' >&2
+    exit 1
+  }
+  topology="$(LC_ALL=C /usr/bin/stat -Lc '%h:%F' "/proc/$$/fd/$MATTERCODEX_ENTRYPOINT_FD")" || {
+    builtin printf 'FAIL: невозможно проверить topology install-bot-service.sh\n' >&2
+    exit 1
+  }
+  if [[ "$topology" != "1:regular file" ]]; then
+    builtin printf 'FAIL: protected entrypoint install-bot-service.sh должен быть regular file с link count 1\n' >&2
+    exit 1
+  fi
   script_dir="${script_path%/*}"
   SCRIPT_DIR="$(builtin cd -P -- "$script_dir" && builtin pwd -P)" || {
     builtin printf 'FAIL: невозможно определить trusted script directory install-bot-service.sh\n' >&2
@@ -72,16 +123,66 @@ mattercodex_resolve_bootstrap_paths() {
     builtin printf 'FAIL: невозможно определить trusted repository root install-bot-service.sh\n' >&2
     exit 1
   }
-  ENV_HELPER_PATH="$REPO_ROOT/scripts/lib/env.sh"
-  if [[ ! -f "$ENV_HELPER_PATH" || -L "$ENV_HELPER_PATH" ]]; then
-    builtin printf 'FAIL: trusted env helper текущего checkout должен быть обычным файлом, а не symlink\n' >&2
+  MATTERCODEX_PHYSICAL_REPO_ROOT="$REPO_ROOT"
+  if [[ ! -d "$REPO_ROOT/.git" || -L "$REPO_ROOT/.git" ||
+        ! -d "$REPO_ROOT/scripts" || -L "$REPO_ROOT/scripts" ||
+        ! -d "$REPO_ROOT/scripts/lib" || -L "$REPO_ROOT/scripts/lib" ]]; then
+    builtin printf 'FAIL: trusted repository root должен иметь physical .git/scripts/lib topology без symlink\n' >&2
+    exit 1
+  fi
+  committed_root="$(mattercodex_initial_git rev-parse --show-toplevel)" || {
+    builtin printf 'FAIL: trusted repository root не является поддерживаемым Git checkout\n' >&2
+    exit 1
+  }
+  actual_root="$(builtin cd -P -- "$committed_root" && builtin pwd -P)" || {
+    builtin printf 'FAIL: невозможно определить physical Git checkout root\n' >&2
+    exit 1
+  }
+  if [[ "$actual_root" != "$REPO_ROOT" ]]; then
+    builtin printf 'FAIL: install-bot-service.sh не принадлежит trusted Git checkout root\n' >&2
+    exit 1
+  fi
+  mattercodex_initial_git rev-parse --verify 'HEAD^{commit}' >/dev/null || {
+    builtin printf 'FAIL: trusted Git checkout не содержит HEAD commit\n' >&2
+    exit 1
+  }
+  mattercodex_initial_require_committed_fd \
+    scripts/k8s/install-bot-service.sh \
+    "$MATTERCODEX_ENTRYPOINT_FD" \
+    "protected entrypoint install-bot-service.sh"
+
+  bootstrap_path="$REPO_ROOT/scripts/lib/bootstrap.sh"
+  if [[ ! -f "$bootstrap_path" || -L "$bootstrap_path" ]]; then
+    builtin printf 'FAIL: trusted bootstrap helper должен быть обычным файлом без symlink\n' >&2
+    exit 1
+  fi
+  exec {MATTERCODEX_BOOTSTRAP_HELPER_FD}<"$bootstrap_path" || {
+    builtin printf 'FAIL: невозможно удержать descriptor trusted bootstrap helper\n' >&2
+    exit 1
+  }
+  topology="$(LC_ALL=C /usr/bin/stat -Lc '%h:%F' "/proc/$$/fd/$MATTERCODEX_BOOTSTRAP_HELPER_FD")" || {
+    builtin printf 'FAIL: невозможно проверить topology trusted bootstrap helper\n' >&2
+    exit 1
+  }
+  if [[ "$topology" != "1:regular file" || ! "$bootstrap_path" -ef "/proc/$$/fd/$MATTERCODEX_BOOTSTRAP_HELPER_FD" ]]; then
+    builtin printf 'FAIL: trusted bootstrap helper должен быть stable regular file с link count 1\n' >&2
+    exit 1
+  fi
+  mattercodex_initial_require_committed_fd \
+    scripts/lib/bootstrap.sh \
+    "$MATTERCODEX_BOOTSTRAP_HELPER_FD" \
+    "trusted bootstrap helper"
+  if [[ ! "$canonical_script_path" -ef "/proc/$$/fd/$MATTERCODEX_ENTRYPOINT_FD" ||
+        ! "$bootstrap_path" -ef "/proc/$$/fd/$MATTERCODEX_BOOTSTRAP_HELPER_FD" ]]; then
+    builtin printf 'FAIL: trusted bootstrap pathname изменён до descriptor-bound source\n' >&2
     exit 1
   fi
 }
 
 mattercodex_resolve_bootstrap_paths
 # shellcheck disable=SC1091
-. "$ENV_HELPER_PATH"
+. "/proc/$$/fd/$MATTERCODEX_BOOTSTRAP_HELPER_FD"
+mattercodex_establish_bootstrap scripts/k8s/install-bot-service.sh true true
 
 ENV_FILE="$REPO_ROOT/.env"
 DRY_RUN_MODE="server"
@@ -139,7 +240,7 @@ if [ -z "$RENDER_DIR" ]; then
   RENDER_DIR_CREATED=true
 fi
 
-"$SCRIPT_DIR/render-bot-service.sh" --env-file "$ENV_FILE" --render-dir "$RENDER_DIR" >/dev/null
+mattercodex_run_render_helper --env-file "$ENV_FILE" --render-dir "$RENDER_DIR" >/dev/null
 
 DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
 
@@ -176,7 +277,7 @@ render_deployment_with_live_pod_inputs() {
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE:-true}"; then
   mattercodex_require_commands docker
   mattercodex_log "сборка agent-runner image"
-  "$REPO_ROOT/scripts/build-agent-runner-image.sh" \
+  mattercodex_run_build_wrapper \
     --builder docker \
     --context "$REPO_ROOT" \
     --dockerfile "$REPO_ROOT/services/jobs/agent-runner/Dockerfile" \
