@@ -517,7 +517,7 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	})
 	if err != nil {
 		if errors.Is(err, adminrepo.ErrNotFound) {
-			return AgentSessionDelegationResult{}, fmt.Errorf("current session was not started by a cross-chat delegation")
+			return AgentSessionDelegationResult{}, fmt.Errorf("current session was not started by an agent delegation")
 		}
 		return AgentSessionDelegationResult{}, err
 	}
@@ -658,6 +658,82 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	}
 	deliveryErr := svc.deliverAgentDelegationCallbackPublications(ctx, session, sourceSession, delegation)
 	return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), deliveryErr
+}
+
+func (svc *AgentSessionService) returnCompletedDelegationToRequester(
+	ctx context.Context,
+	sessionKey string,
+	token string,
+	session entity.AgentSession,
+	turn entity.AgentSessionTurn,
+	status string,
+	command CompleteAgentSessionTurnCommand,
+) error {
+	current, err := svc.cfg.Store.GetAgentSession(ctx, sessionKey)
+	if err != nil {
+		return err
+	}
+	if current.ID != session.ID || current.ActiveTurnID != turn.ID {
+		return nil
+	}
+	delegation, err := svc.cfg.Store.GetAgentDelegationForCallback(ctx, current.ID)
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if delegation.TargetTurnID != turn.ID || strings.TrimSpace(delegation.CallbackRunID) != "" {
+		return nil
+	}
+	message := strings.TrimSpace(command.FinalMessage)
+	if status == agentSessionTurnFailed {
+		message = strings.TrimSpace(command.ErrorMessage)
+	}
+	if status == agentSessionTurnBlocked {
+		message = svc.t("chat.session.provider_policy_blocked", nil)
+	}
+	if message == "" {
+		message = svc.t("chat.run.final_empty", nil)
+	}
+	message = truncateDelegationCallbackMessage(message, svc.t("chat.run.callback_truncated", nil), svc.cfg.CallbackMaxBytes)
+	_, err = svc.ReturnToRequester(ctx, sessionKey, token, message)
+	if err != nil {
+		return fmt.Errorf("return completed agent delegation: %w", err)
+	}
+	return nil
+}
+
+func truncateDelegationCallbackMessage(message string, suffix string, maximumBytes int) string {
+	message = strings.TrimSpace(message)
+	if maximumBytes <= 0 || len(message) <= maximumBytes {
+		return message
+	}
+	suffix = "\n\n" + strings.TrimSpace(suffix)
+	limit := maximumBytes - len(suffix)
+	if limit <= 0 {
+		return truncateUTF8ByBytes(strings.TrimSpace(suffix), maximumBytes)
+	}
+	return strings.TrimSpace(truncateUTF8ByBytes(message, limit)) + suffix
+}
+
+func truncateUTF8ByBytes(value string, maximumBytes int) string {
+	if maximumBytes <= 0 {
+		return ""
+	}
+	if len(value) <= maximumBytes {
+		return value
+	}
+	var result strings.Builder
+	result.Grow(maximumBytes)
+	for _, symbol := range value {
+		size := utf8.RuneLen(symbol)
+		if size <= 0 || result.Len()+size > maximumBytes {
+			break
+		}
+		result.WriteRune(symbol)
+	}
+	return result.String()
 }
 
 func (svc *AgentSessionService) createDelegationCallbackContinuation(

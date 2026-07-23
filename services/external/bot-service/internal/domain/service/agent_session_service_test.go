@@ -1123,6 +1123,7 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	dispatcher := &fakeAgentTurnDispatcher{queued: AgentTurnQueued{
 		RunID:      "run-sre-1",
 		TurnID:     7,
+		SessionID:  2,
 		SessionKey: "session-sre",
 		Role:       store.agentRoles[2],
 	}}
@@ -1143,6 +1144,12 @@ func TestAgentSessionRequestAgentPostsSystemAuditMessage(t *testing.T) {
 	}
 	if result.RequestedRunID != "run-sre-1" || result.RequestedRoleName != "sre" || result.AuditPostID == "" {
 		t.Fatalf("result = %#v", result)
+	}
+	delegation := store.agentDelegations[result.DelegationID]
+	if delegation.SourceSessionID != 1 || delegation.SourceTurnID != 1 || delegation.TargetChatID != 1 ||
+		delegation.TargetRoleID != 2 || delegation.TargetSessionID != 2 || delegation.TargetTurnID != 7 ||
+		delegation.TargetRunID != "run-sre-1" || delegation.TargetRootPostID != "root-1" {
+		t.Fatalf("same-thread delegation = %#v", delegation)
 	}
 	if dispatcher.calls != 1 || dispatcher.request.Role.Name != "sre" || dispatcher.request.UserName != "manager" || dispatcher.request.UserID != "owner-user" {
 		t.Fatalf("dispatcher request = %#v", dispatcher.request)
@@ -1305,8 +1312,10 @@ func TestAgentSessionRequestAgentGuardsEveryClusterAdminSideEffect(t *testing.T)
 		wantSessionKeys []string
 	}{
 		{name: "membership", denyAt: 1, wantGuardOps: []string{"agent_request.membership.side_effect"}, wantSessionKeys: []string{"target"}},
-		{name: "enqueue", denyAt: 2, wantMembership: true, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.enqueue.side_effect"}, wantSessionKeys: []string{"target", ""}},
-		{name: "audit post", denyAt: 3, wantMembership: true, wantDispatches: 1, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.enqueue.side_effect", "agent_request.audit.side_effect"}, wantSessionKeys: []string{"target", "", "target"}},
+		{name: "delegation create", denyAt: 2, wantMembership: true, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect"}, wantSessionKeys: []string{"target", ""}},
+		{name: "enqueue", denyAt: 3, wantMembership: true, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect", "agent_request.enqueue.side_effect"}, wantSessionKeys: []string{"target", "", ""}},
+		{name: "delegation target", denyAt: 4, wantMembership: true, wantDispatches: 1, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect", "agent_request.enqueue.side_effect", "agent_request.delegation_target.side_effect"}, wantSessionKeys: []string{"target", "", "", "target"}},
+		{name: "audit post", denyAt: 5, wantMembership: true, wantDispatches: 1, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect", "agent_request.enqueue.side_effect", "agent_request.delegation_target.side_effect", "agent_request.audit.side_effect"}, wantSessionKeys: []string{"target", "", "", "target", "target"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1341,7 +1350,7 @@ func TestAgentSessionRequestAgentGuardsEveryClusterAdminSideEffect(t *testing.T)
 			roleBotManager := &fakeRoleBotManager{}
 			targetSessionKey := agentSessionKey(1, 2, agentSessionScopeThreadRole, "root-1")
 			dispatcher := &fakeAgentTurnDispatcher{queued: AgentTurnQueued{
-				RunID: "run-admin-1", TurnID: 7, SessionKey: targetSessionKey, Role: baseStore.agentRoles[2],
+				RunID: "run-admin-1", TurnID: 7, SessionID: 2, SessionKey: targetSessionKey, Role: baseStore.agentRoles[2],
 			}}
 			svc := NewAgentSessionService(AgentSessionServiceConfig{
 				Localizer: testLocalizer(t, texti18n.RussianLocale), Store: store, RuntimeRunner: runner,
@@ -1861,8 +1870,8 @@ func TestDelegatedAgentRequestMessageDoesNotStartRequesterAsCallback(t *testing.
 	if strings.Contains(message, "используй только `mattermost_request_agent`") {
 		t.Fatalf("delegated request contains the obsolete callback instruction: %q", message)
 	}
-	if !strings.Contains(message, "Для запуска в текущем треде отдельный callback не требуется") {
-		t.Fatalf("delegated request does not distinguish same-thread work: %q", message)
+	if !strings.Contains(message, "долговечный callback точной исходной сессии координатора в этом же треде") {
+		t.Fatalf("delegated request does not explain same-thread callback: %q", message)
 	}
 }
 

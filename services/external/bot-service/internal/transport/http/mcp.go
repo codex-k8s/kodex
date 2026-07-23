@@ -112,7 +112,7 @@ type mcpGetChatInput struct {
 type mcpStartAgentThreadInput struct {
 	TargetChat  string `json:"target_chat" jsonschema:"project-local destination chat slug or name"`
 	TargetAgent string `json:"target_agent" jsonschema:"role name or Mattermost @username of the target agent"`
-	Title       string `json:"title" jsonschema:"concise title for the new Mattermost thread"`
+	Title       string `json:"title" jsonschema:"plain single-line title for the new Mattermost thread; do not use Markdown, links, mentions, HTML, backslashes, or delimiter characters such as #, :, /, and -; put issue identifiers in work_item_key and message"`
 	Message     string `json:"message" jsonschema:"self-contained task message for the target agent"`
 	WorkItemKey string `json:"work_item_key" jsonschema:"stable idempotency key unique within the current source session, for example issue-59-architecture"`
 }
@@ -227,11 +227,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpLimitInput) (*mcp.CallToolResult, statusservice.AgentSessionThreadHistory, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), emptyMCPThreadHistory(), nil
+			return nil, emptyMCPThreadHistory(), mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.ThreadHistory(ctx, sessionKey, token, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), emptyMCPThreadHistory(), nil
+			return nil, emptyMCPThreadHistory(), mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -241,11 +241,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpSearchInput) (*mcp.CallToolResult, statusservice.AgentSessionChatSearch, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), emptyMCPChatSearch(), nil
+			return nil, emptyMCPChatSearch(), mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.SearchChat(ctx, sessionKey, token, input.Query, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), emptyMCPChatSearch(), nil
+			return nil, emptyMCPChatSearch(), mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -255,11 +255,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpPostInput) (*mcp.CallToolResult, statusservice.AgentSessionPostResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionPostResult{}, nil
+			return nil, statusservice.AgentSessionPostResult{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.PostThreadUpdate(ctx, sessionKey, token, input.Message)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionPostResult{}, nil
+			return nil, statusservice.AgentSessionPostResult{}, mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -269,11 +269,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpStatusInput) (*mcp.CallToolResult, statusservice.AgentSessionPostResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionPostResult{}, nil
+			return nil, statusservice.AgentSessionPostResult{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.UpdateTurnStatus(ctx, sessionKey, token, input.Message)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionPostResult{}, nil
+			return nil, statusservice.AgentSessionPostResult{}, mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -283,11 +283,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpListChatsInput) (*mcp.CallToolResult, statusservice.AgentSessionChatCatalog, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), emptyMCPChatCatalog(), nil
+			return nil, emptyMCPChatCatalog(), mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.ListAvailableChats(ctx, sessionKey, token, input.TargetAgent)
 		if err != nil {
-			return mcpToolError(err.Error()), emptyMCPChatCatalog(), nil
+			return nil, emptyMCPChatCatalog(), mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -297,11 +297,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpGetChatInput) (*mcp.CallToolResult, statusservice.AgentSessionChatDetails, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), emptyMCPChatDetails(), nil
+			return nil, emptyMCPChatDetails(), mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.ChatDetails(ctx, sessionKey, token, input.Chat)
 		if err != nil {
-			return mcpToolError(err.Error()), emptyMCPChatDetails(), nil
+			return nil, emptyMCPChatDetails(), mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -311,7 +311,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpStartAgentThreadInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionDelegationResult{}, nil
+			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.StartAgentThread(ctx, sessionKey, token, statusservice.StartAgentThreadCommand{
 			TargetChat:  input.TargetChat,
@@ -321,7 +321,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 			WorkItemKey: input.WorkItemKey,
 		})
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionDelegationResult{}, nil
+			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -331,11 +331,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpListDelegationsInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationList, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), emptyMCPDelegationList(), nil
+			return nil, emptyMCPDelegationList(), mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.ListDelegations(ctx, sessionKey, token, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), emptyMCPDelegationList(), nil
+			return nil, emptyMCPDelegationList(), mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -345,11 +345,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpReturnToRequesterInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionDelegationResult{}, nil
+			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.ReturnToRequester(ctx, sessionKey, token, input.Message)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionDelegationResult{}, nil
+			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -359,11 +359,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpRequestAgentInput) (*mcp.CallToolResult, statusservice.AgentSessionAgentRequest, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionAgentRequest{}, nil
+			return nil, statusservice.AgentSessionAgentRequest{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.RequestAgent(ctx, sessionKey, token, input.TargetAgent, input.Message)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionAgentRequest{}, nil
+			return nil, statusservice.AgentSessionAgentRequest{}, mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -373,11 +373,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpRequestAgentInput) (*mcp.CallToolResult, statusservice.AgentSessionAgentRequest, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionAgentRequest{}, nil
+			return nil, statusservice.AgentSessionAgentRequest{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.RequestSync(ctx, sessionKey, token, input.TargetAgent, input.Message)
 		if err != nil {
-			return mcpToolError(err.Error()), statusservice.AgentSessionAgentRequest{}, nil
+			return nil, statusservice.AgentSessionAgentRequest{}, mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -387,11 +387,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpMemorySearchInput) (*mcp.CallToolResult, statusservice.AgentSessionMemorySearch, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionMemorySearch{}, nil
+			return nil, statusservice.AgentSessionMemorySearch{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.SearchMemory(ctx, sessionKey, token, input.Query, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), emptyMCPMemorySearch(), nil
+			return nil, emptyMCPMemorySearch(), mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -401,13 +401,13 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpMemoryRememberInput) (*mcp.CallToolResult, entity.MemoryRecord, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), entity.MemoryRecord{}, nil
+			return nil, entity.MemoryRecord{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.RememberMemory(ctx, sessionKey, token, statusservice.AgentSessionMemoryRememberCommand{
 			Scope: input.Scope, Title: input.Title, Content: input.Content, Importance: input.Importance,
 		})
 		if err != nil {
-			return mcpToolError(err.Error()), entity.MemoryRecord{}, nil
+			return nil, entity.MemoryRecord{}, mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -417,11 +417,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpLimitInput) (*mcp.CallToolResult, statusservice.AgentSessionActiveWork, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), statusservice.AgentSessionActiveWork{}, nil
+			return nil, statusservice.AgentSessionActiveWork{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.ListActiveWork(ctx, sessionKey, token, input.Limit)
 		if err != nil {
-			return mcpToolError(err.Error()), emptyMCPActiveWork(), nil
+			return nil, emptyMCPActiveWork(), mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -431,13 +431,13 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpWorkContextInput) (*mcp.CallToolResult, entity.WorkClaim, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), entity.WorkClaim{}, nil
+			return nil, entity.WorkClaim{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.UpdateWorkContext(ctx, sessionKey, token, statusservice.AgentSessionWorkContextCommand{
 			Summary: input.Summary, Domains: input.Domains, ResourceKeys: input.ResourceKeys, Links: input.Links,
 		})
 		if err != nil {
-			return mcpToolError(err.Error()), emptyMCPWorkClaim(), nil
+			return nil, emptyMCPWorkClaim(), mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -448,7 +448,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, request *mcp.CallToolRequest, input mcpAutomationCallbackInput) (*mcp.CallToolResult, mcpAutomationCallbackOutput, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), mcpAutomationCallbackOutput{}, nil
+			return nil, mcpAutomationCallbackOutput{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.CompleteAutomationCallback(ctx, sessionKey, token, statusservice.CompleteAutomationCallbackCommand{
 			RunPublicID:             input.ScheduleRunID,
@@ -458,7 +458,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 			ExactPayload:            append([]byte(nil), request.Params.Arguments...),
 		})
 		if err != nil {
-			return mcpToolError("automation callback rejected"), mcpAutomationCallbackOutput{}, nil
+			return nil, mcpAutomationCallbackOutput{}, mcpToolError("automation callback rejected")
 		}
 		return nil, automationCallbackMCPOutput(output), nil
 	})
@@ -468,7 +468,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpOwnerAttentionInput) (*mcp.CallToolResult, entity.OwnerAttentionRequest, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
-			return mcpToolError("session authorization is missing"), entity.OwnerAttentionRequest{}, nil
+			return nil, entity.OwnerAttentionRequest{}, mcpToolError("session authorization is missing")
 		}
 		output, err := sessionService.RequestOwnerAttention(ctx, sessionKey, token, statusservice.AgentSessionOwnerAttentionCommand{
 			Severity: input.Severity, Summary: input.Summary, Options: input.Options,
@@ -476,7 +476,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 			PauseScope: input.PauseScope, IdempotencyKey: input.IdempotencyKey,
 		})
 		if err != nil {
-			return mcpToolError(err.Error()), emptyMCPOwnerAttention(), nil
+			return nil, emptyMCPOwnerAttention(), mcpToolError(err.Error())
 		}
 		return nil, output, nil
 	})
@@ -1016,15 +1016,12 @@ func mcpSessionAuth(ctx context.Context) (string, string, bool) {
 	return sessionKey, token, sessionKey != "" && token != ""
 }
 
-func mcpToolError(message string) *mcp.CallToolResult {
+func mcpToolError(message string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		message = "tool failed"
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: message}},
-		IsError: true,
-	}
+	return errors.New(message)
 }
 
 func emptyMCPThreadHistory() statusservice.AgentSessionThreadHistory {

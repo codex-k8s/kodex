@@ -947,6 +947,55 @@ func TestAgentSessionReturnsLaterTurnToPersistedRequesterSession(t *testing.T) {
 	}
 }
 
+func TestAgentSessionCompletionAutomaticallyReturnsDelegatedResult(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat:  "architecture",
+		TargetAgent: "architect",
+		Title:       "Границы сервисов",
+		Message:     "Подготовь предложение.",
+		WorkItemKey: "issue-59-architecture",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{
+		ID: 3, SessionID: 1, RunID: "callback-run", MattermostChannelID: "management-channel",
+		MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnQueued,
+	})
+	dispatcher.queued = AgentTurnQueued{RunID: "callback-run", TurnID: 3, SessionID: 1, SessionKey: "source-session"}
+
+	err = svc.CompleteTurn(context.Background(), "target-session", "target-token", CompleteAgentSessionTurnCommand{
+		TurnID:       2,
+		RunID:        "target-run",
+		Status:       agentSessionTurnSucceeded,
+		FinalMessage: "Архитектурное предложение готово.",
+		Artifacts:    map[string]string{},
+	})
+	if err != nil {
+		t.Fatalf("CompleteTurn() error = %v", err)
+	}
+	delegation := store.agentDelegations[started.DelegationID]
+	if delegation.CallbackTurnID != 3 || delegation.CallbackRunID != "callback-run" {
+		t.Fatalf("delegation = %#v", delegation)
+	}
+	callbackTurn, err := store.GetAgentSessionTurn(context.Background(), 3)
+	if err != nil || !strings.Contains(callbackTurn.Message, "Архитектурное предложение готово") {
+		t.Fatalf("callback turn = %#v error=%v", callbackTurn, err)
+	}
+	if len(publisher.posts) < 4 {
+		t.Fatalf("automatic callback audit was not published: %#v", publisher.posts)
+	}
+}
+
+func TestTruncateDelegationCallbackMessagePreservesUTF8AndLimit(t *testing.T) {
+	message := strings.Repeat("результат ", 20)
+	got := truncateDelegationCallbackMessage(message, "[сокращено]", 64)
+	if !utf8.ValidString(got) || len(got) > 64 || !strings.HasSuffix(got, "[сокращено]") {
+		t.Fatalf("truncated callback = %q bytes=%d", got, len(got))
+	}
+}
+
 func TestEnqueueDelegationCallbackUsesProcessRootWithoutCompatibleQueuedTurn(t *testing.T) {
 	svc, store, dispatcher, _ := agentDelegationTestService()
 	store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{

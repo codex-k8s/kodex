@@ -783,6 +783,8 @@
   {"id": "chat.run.monitor_timeout", "translation": "matter-codex: run `{{.RunID}}` is still not finished after the monitor timeout. Open Runtime to inspect it."},
   {"id": "chat.run.status_failed", "translation": "matter-codex: run `{{.RunID}}` status was not read: {{.Error}}"},
   {"id": "chat.run.final_empty", "translation": "The agent finished but did not provide a final message in the captured log tail."},
+  {"id": "chat.run.callback_truncated", "translation": "[MatterCodex shortened the result to fit the callback size limit.]"},
+  {"id": "chat.delegation.same_thread_title", "translation": "Shared thread task"},
   {"id": "chat.run.failed_short", "translation": "Agent run `{{.RunID}}` failed without a detailed error message."},
   {"id": "chat.run.succeeded", "translation": "matter-codex agent run finished:\n- run: `{{.RunID}}`\n- mode: `{{.Mode}}`\n\nArtifacts:\n{{.Artifacts}}\n\nFinal answer:\n{{.Final}}"},
   {"id": "chat.run.failed", "translation": "matter-codex agent run failed:\n- run: `{{.RunID}}`\n- mode: `{{.Mode}}`\n\nLog tail:\n```text\n{{.Log}}\n```"},
