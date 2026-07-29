@@ -18,6 +18,6 @@ updated: 2026-07-29
 | `ROAD-MC-004` | `docs/roadmap/dogfooding-bootstrap.md` | Создание рабочей области MatterCodex. |
 | `ROAD-MC-005` | `docs/roadmap/manager-kickoff-prompt.md` | Стартовый промпт корневого manager для Epic 1. |
 
-GitHub umbrella #179 и sub-issues #180-#197 являются источником фактического
+GitHub umbrella #179 и work items #180-#198 являются источником фактического
 состояния. Документ не разрешает автоматическое слияние или deploy: каждый
 unit проходит human gate, а cutover требует отдельного owner OK.
