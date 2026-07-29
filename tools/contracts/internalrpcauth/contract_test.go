@@ -44,6 +44,36 @@ func TestJSONSchemasAreClosed(t *testing.T) {
 	}
 }
 
+func TestRestoreEvidenceCarriesQuarantineBarrier(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "contracts/authorization/v1/restore-fence-evidence.schema.json")
+	var schema map[string]any
+	decodeJSONStrict(t, path, &schema)
+	required := stringSet(schema["required"].([]any))
+	for _, field := range []string{
+		"anchor_revision",
+		"restore_epoch",
+		"predecessor",
+		"workload_set_revision",
+		"expected_workload_role_generations_sha256",
+		"quiescence_ack_set_sha256",
+		"expected_ack_count",
+		"accepted_ack_count",
+		"semantic_transition",
+	} {
+		if !required[field] {
+			t.Fatalf("restore evidence does not require %s", field)
+		}
+	}
+	properties := schema["properties"].(map[string]any)
+	requireEqual(
+		t,
+		properties["semantic_transition"].(map[string]any),
+		"const",
+		"EXACT_INCREMENT_WITH_PREDECESSOR_DIGEST",
+	)
+}
+
 func TestProtectedHeaderContract(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "contracts/authorization/v1/jws-protected-header.schema.json")
@@ -170,21 +200,39 @@ func TestSnapshotSchemaCriticalCardinality(t *testing.T) {
 
 	operationBinding := definitions["operationBinding"].(map[string]any)
 	required := stringSet(operationBinding["required"].([]any))
-	for _, field := range []string{
-		"authority_proof_issuer",
-		"authority_proof_audience",
-		"authority_proof_trust_bundle_id",
-		"authority_proof_max_age_seconds",
-	} {
+	for _, field := range []string{"authority_proof_producer_id"} {
 		if !required[field] {
 			t.Fatalf("operation binding does not require %s", field)
 		}
 	}
-	bindingProperties := operationBinding["properties"].(map[string]any)
-	maxAge := bindingProperties["authority_proof_max_age_seconds"].(map[string]any)
+	producer := definitions["authorityProofProducer"].(map[string]any)
+	producerRequired := stringSet(producer["required"].([]any))
+	for _, field := range []string{
+		"caller_workload_id",
+		"caller_spiffe_id",
+		"full_method",
+		"application_credential",
+		"application_credential_issuer",
+		"application_credential_audience",
+		"application_credential_trust_bundle_id",
+		"authority_proof_issuer",
+		"authority_proof_audience",
+		"authority_proof_trust_bundle_id",
+		"authority_proof_max_age_seconds",
+		"allowed_operation_ids",
+		"server_resolved_fields",
+	} {
+		if !producerRequired[field] {
+			t.Fatalf("authority proof producer does not require %s", field)
+		}
+	}
+	producerProperties := producer["properties"].(map[string]any)
+	maxAge := producerProperties["authority_proof_max_age_seconds"].(map[string]any)
 	if maxAge["const"] != float64(15) {
 		t.Fatalf("authority proof max age = %v, want 15", maxAge["const"])
 	}
+	requireEqual(t, producerProperties["deadline_milliseconds"].(map[string]any), "const", float64(2000))
+	requireEqual(t, producerProperties["max_attempts"].(map[string]any), "const", float64(2))
 }
 
 func TestBootstrapPolicyIsDenyAll(t *testing.T) {
@@ -196,6 +244,7 @@ func TestBootstrapPolicyIsDenyAll(t *testing.T) {
 		TokenTTLSeconds         int    `json:"token_ttl_seconds"`
 		AllowedClockSkewSeconds int    `json:"allowed_clock_skew_seconds"`
 		MaxCompactJWSBytes      int    `json:"max_compact_jws_bytes"`
+		AuthorityProofProducers []any  `json:"authority_proof_producers"`
 		OperationBindings       []any  `json:"operation_bindings"`
 	}
 	decodeJSONStrict(t, path, &policy)
@@ -205,6 +254,7 @@ func TestBootstrapPolicyIsDenyAll(t *testing.T) {
 		policy.TokenTTLSeconds != 30 ||
 		policy.AllowedClockSkewSeconds != 5 ||
 		policy.MaxCompactJWSBytes != 8192 ||
+		len(policy.AuthorityProofProducers) != 0 ||
 		len(policy.OperationBindings) != 0 {
 		t.Fatalf("bootstrap policy is not the exact deny-all contract: %+v", policy)
 	}
@@ -253,7 +303,8 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	issuer := requiredMap(t, deployables, "issuer")
 	requireEqual(t, issuer, "manifestTrustSecretName", "internal-rpc-authority-manifest-trust")
 	requireEqual(t, issuer, "manifestTrustBundleId", "internal-rpc-authority-manifest-signers")
-	requireEqual(t, issuer, "snapshotDatabaseRole", "internal_rpc_authority_issuer")
+	requireEqual(t, issuer, "databaseLoginPrincipal", "FROM_EXACT_WORKLOAD_ROLE_REGISTRY")
+	requireEqual(t, issuer, "databaseGroupRole", "internal_rpc_authority_issuer")
 	issuerVerification := requiredMap(t, issuer, "snapshotVerification")
 	for _, field := range []string{
 		"requireIndependentManifestTrust",
@@ -267,19 +318,43 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 		requireEqual(t, issuerVerification, field, true)
 	}
 
+	resolver := requiredMap(t, deployables, "authority-proof-resolver")
+	requireEqual(t, resolver, "owner", "control-plane")
+	requireEqual(t, resolver, "implementationIssue", "187")
+	requireEqual(
+		t,
+		resolver,
+		"fullMethod",
+		"/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+	)
+	requireEqual(t, resolver, "firstCallInternalAuthorizationContext", "FORBIDDEN")
+	resolverCredential := requiredMap(t, resolver, "applicationCredential")
+	requireEqual(t, resolverCredential, "type", "OIDC_BEARER")
+	requireEqual(t, resolverCredential, "requestIdentityFieldsAllowed", false)
+	resolution := requiredMap(t, resolver, "resolution")
+	requireEqual(t, resolution, "crossTenantPolicy", "DENY_BEFORE_SIGN")
+
 	publisher := requiredMap(t, deployables, "publisher")
 	rotation := requiredMap(t, publisher, "rotationOwnership")
 	requireEqual(t, rotation, "authKeyGenerationOwner", "internal-rpc-authority-publisher")
 	requireEqual(t, rotation, "authPrivateKeyWriteOwner", "internal-rpc-authority-publisher")
+	requireEqual(t, rotation, "authorityProofPrivateKeyWriteOwner", "internal-rpc-authority-publisher")
 	requireEqual(t, rotation, "manifestTrustOverlapWriteOwner", "internal-rpc-authority-publisher")
+	requireEqual(t, rotation, "authorityProofTrustOverlapWriteOwner", "internal-rpc-authority-publisher")
 	requireEqual(t, rotation, "compareAndSwapRequired", true)
-	requireEqual(t, rotation, "perWorkloadFanOutRequired", true)
+	requireEqual(t, rotation, "perWorkloadRoleFanOutRequired", true)
+	requireEqual(t, rotation, "requiredRoleUnion", "CALLER_ISSUER_TARGET_VERIFIER_PROOF_RESOLVER")
+	requireEqual(t, rotation, "readbackCardinality", "EXACTLY_ONE_PER_REQUIRED_WORKLOAD_ROLE")
 	requireEqual(t, rotation, "wildcardVaultPathsAllowed", false)
+	proofRotation := requiredMap(t, rotation, "authorityProofSignerRotation")
+	requireEqual(t, proofRotation, "resolverPrivateToPublicReadbackRequired", true)
+	requireEqual(t, proofRotation, "everyCallerIssuerTrustReadbackRequired", true)
+	requireEqual(t, proofRotation, "promotionBeforeAllReadbacks", false)
 	requireStringSliceEqual(t, rotation, "sequence", []string{
 		"persist-rotation-intent",
 		"generate-key-or-certificate",
 		"vault-cas-deliver-exact-targets",
-		"issuer-verifier-cryptographic-readback",
+		"workload-role-cryptographic-readback",
 		"publish-snapshot-cas",
 		"publisher-cryptographic-readback",
 		"promote-after-overlap-window",
@@ -288,9 +363,9 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	recoveryName := "internal-rpc-authority-recovery-job"
 	recovery := requiredMap(t, deployables, recoveryName)
 	for key, want := range map[string]any{
-		"kind":           "Job",
+		"kind":           "JobStep",
 		"artifactBinary": "/usr/local/bin/internal-rpc-authority-recovery",
-		"serviceAccount": "internal-rpc-authority-recovery",
+		"serviceAccount": "internal-rpc-authority-restore-operator",
 		"databaseRole":   "internal_rpc_authority_recovery",
 		"failurePolicy":  "KEEP_TRAFFIC_QUARANTINED",
 	} {
@@ -315,20 +390,52 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	requireEqual(t, restore, "watermarkResetAllowed", false)
 	requireEqual(t, restore, "replayReservationResetAllowed", false)
 	requireStringSliceEqual(t, restore, "startupOrder", []string{
-		"consuming-workloads-readiness-false-and-quiesced",
+		"controller-enters-quiescing",
+		"every-current-workload-role-generation-stops-and-acks",
 		"signed-external-anchor-prepared",
 		"database-restore",
 		"signed-external-anchor-completed",
 		"recovery-job-validates-and-commits-fence",
 		"database-safe-window-elapses",
-		"issuer-verifier-external-anchor-readback",
+		"every-workload-role-external-anchor-readback",
 		"application-readiness",
 	})
 
 	anchor := requiredMap(t, deployables, "restore-evidence-anchor")
 	requireEqual(t, anchor, "outsideRestoredPostgreSQL", true)
-	requireEqual(t, anchor, "updateProtocol", "RESOURCE_VERSION_CAS")
+	requireEqual(t, anchor, "updateProtocol", "SEMANTIC_REVISION_PREDECESSOR_CAS")
+	requireEqual(t, anchor, "resourceVersionUse", "LOST_UPDATE_GUARD_ONLY")
 	requireEqual(t, anchor, "failurePolicy", "FAIL_CLOSED")
+	admission := requiredMap(t, anchor, "admission")
+	requireEqual(t, admission, "failurePolicy", "Fail")
+	requireEqual(t, admission, "exactResourceName", "internal-rpc-authority-restore-evidence")
+
+	controller := requiredMap(t, deployables, "internal-rpc-authority-restore-controller")
+	requireEqual(t, controller, "kind", "Deployment")
+	requireEqual(t, controller, "artifactBinary", "/usr/local/bin/internal-rpc-authority-restore-controller")
+	requireEqual(t, controller, "serviceAccount", "internal-rpc-authority-restore-controller")
+	controllerInterface := requiredMap(t, controller, "interface")
+	requireEqual(
+		t,
+		controllerInterface,
+		"prepareMethod",
+		"/internalrpcauthority.v1.RestoreControllerService/PrepareRestore",
+	)
+	barrier := requiredMap(t, controller, "quarantineBarrier")
+	requireEqual(t, barrier, "requireEveryCurrentGenerationAck", true)
+	requireEqual(t, barrier, "closeOnEveryIssuanceAndReservationPath", true)
+	requireEqual(t, barrier, "publishPreparedBeforeCompleteAckSet", false)
+
+	store := requiredMap(t, deployables, "replay-store")
+	databaseIdentity := requiredMap(t, store, "workloadRoleDatabaseIdentity")
+	requireEqual(t, databaseIdentity, "cardinality", "EXACTLY_ONE_ACTIVE_LOGIN_PRINCIPAL_PER_WORKLOAD_ROLE_GENERATION")
+	requireEqual(t, databaseIdentity, "sharedCapabilityRoles", "NOLOGIN")
+	rowLevelSecurity := requiredMap(t, databaseIdentity, "rowLevelSecurity")
+	requireEqual(t, rowLevelSecurity, "forcedForTableOwner", true)
+	requireEqual(t, rowLevelSecurity, "principalSource", "session_user")
+	readbackFunction := requiredMap(t, databaseIdentity, "readbackFunction")
+	requireEqual(t, readbackFunction, "security", "SECURITY_DEFINER")
+	requireEqual(t, readbackFunction, "callerProvidedWorkloadOrRoleAllowed", false)
 
 	for name, raw := range deployables {
 		deployable, ok := raw.(map[string]any)
@@ -430,6 +537,10 @@ func TestRegistryOwnership(t *testing.T) {
 			t.Fatalf("registry entry %s is missing or inconsistent: %+v", id, entry)
 		}
 	}
+	restoreEntry := entries["internal-rpc-authority-restore-evidence-v1"]
+	if restoreEntry.Owner != "internal-rpc-authority-restore-controller" {
+		t.Fatalf("restore evidence has unresolved owner: %+v", restoreEntry)
+	}
 }
 
 func TestAuthorityProofNegativeFixtures(t *testing.T) {
@@ -452,6 +563,7 @@ func TestAuthorityProofNegativeFixtures(t *testing.T) {
 	expected := map[string]string{
 		"caller-controlled-syntactic-authority-tuple": "AUTHORITY_PROOF_REQUIRED",
 		"untrusted-proof-signer":                      "AUTHORITY_PROOF_INVALID",
+		"trusted-signer-cross-tenant":                 "AUTHORITY_SCOPE_MISMATCH",
 		"wrong-caller-workload":                       "AUTHORITY_PROOF_BINDING_MISMATCH",
 		"wrong-operation":                             "AUTHORITY_PROOF_BINDING_MISMATCH",
 		"wrong-downstream-audience":                   "AUTHORITY_PROOF_BINDING_MISMATCH",
@@ -473,6 +585,100 @@ func TestAuthorityProofNegativeFixtures(t *testing.T) {
 			t.Fatalf("unexpected authority proof fixture: %+v", fixture)
 		}
 		seen[fixture.Name] = true
+	}
+}
+
+func TestAuthorityProofFirstCallIsNonCyclic(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(
+		root,
+		"contracts/authorization/v1/fixtures/authority-proof-first-call.json",
+	)
+	var fixture struct {
+		Version  int    `json:"v"`
+		Scenario string `json:"scenario"`
+		Steps    []struct {
+			Order                        int      `json:"order"`
+			Caller                       string   `json:"caller"`
+			Target                       string   `json:"target"`
+			FullMethod                   string   `json:"full_method"`
+			Transport                    string   `json:"transport"`
+			ApplicationCredential        string   `json:"application_credential"`
+			InternalAuthorizationContext string   `json:"internal_authorization_context"`
+			RequestFields                []string `json:"request_fields"`
+			ServerResolves               []string `json:"server_resolves"`
+		} `json:"steps"`
+		TerminalResult string `json:"terminal_result"`
+	}
+	decodeJSONStrict(t, path, &fixture)
+	if fixture.Version != 1 || len(fixture.Steps) != 3 {
+		t.Fatalf("unexpected first-call fixture: %+v", fixture)
+	}
+	first := fixture.Steps[0]
+	if first.Caller != "control-api-gateway" ||
+		first.Target != "control-plane" ||
+		first.FullMethod != "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof" ||
+		first.Transport != "MTLS" ||
+		first.ApplicationCredential != "OIDC_BEARER_METADATA" ||
+		first.InternalAuthorizationContext != "FORBIDDEN" ||
+		containsString(first.RequestFields, "actor") ||
+		containsString(first.RequestFields, "tenant") ||
+		containsString(first.RequestFields, "project") ||
+		strings.Join(first.ServerResolves, ",") != "actor,tenant,project,ownership,provenance" {
+		t.Fatalf("first call is cyclic or caller-authoritative: %+v", first)
+	}
+}
+
+func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
+	root := repositoryRoot(t)
+	fixtures := map[string]map[string]string{
+		"delivery-negative.json": {
+			"missing-target-verifier": "MISSING_REQUIRED_ROLE",
+			"missing-target-readback": "MISSING_CRYPTOGRAPHIC_READBACK",
+			"target-private-auth-key": "OPPOSITE_ROLE_MATERIAL",
+			"duplicate-target-role":   "AMBIGUOUS_WORKLOAD_ROLE",
+			"wildcard-vault-path":     "NON_EXACT_DELIVERY_PATH",
+		},
+		"readback-authority-negative.json": {
+			"cross-target-write":          "DATABASE_IDENTITY_MISMATCH",
+			"opposite-role-write":         "DATABASE_ROLE_MISMATCH",
+			"caller-supplied-workload":    "CALLER_IDENTITY_FIELD_FORBIDDEN",
+			"stale-credential-generation": "DATABASE_CREDENTIAL_GENERATION_REJECTED",
+			"shared-group-login":          "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
+		},
+		"restore-negative.json": {
+			"lower-anchor-revision":        "RESTORE_ANCHOR_REJECTED",
+			"same-revision-mutation":       "RESTORE_ANCHOR_REJECTED",
+			"missing-quiescence-ack":       "RESTORE_BARRIER_INCOMPLETE",
+			"stale-workload-generation":    "RESTORE_BARRIER_INCOMPLETE",
+			"controller-signature-failure": "RESTORE_ANCHOR_REJECTED",
+			"controller-unavailable":       "RESTORE_CONTROLLER_UNAVAILABLE",
+			"restore-without-prepared":     "RESTORE_BARRIER_INCOMPLETE",
+		},
+	}
+	for name, expected := range fixtures {
+		name, expected := name, expected
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(root, "contracts/authorization/v1/fixtures", name)
+			var fixture struct {
+				Version int `json:"v"`
+				Cases   []struct {
+					Name     string `json:"name"`
+					Mutation string `json:"mutation"`
+					Reason   string `json:"reason"`
+				} `json:"cases"`
+			}
+			decodeJSONStrict(t, path, &fixture)
+			if fixture.Version != 1 || len(fixture.Cases) != len(expected) {
+				t.Fatalf("unexpected fixture cardinality: %+v", fixture)
+			}
+			for _, item := range fixture.Cases {
+				want, ok := expected[item.Name]
+				if !ok || want != item.Reason || item.Mutation == "" {
+					t.Fatalf("unexpected negative fixture: %+v", item)
+				}
+			}
+		})
 	}
 }
 
@@ -502,16 +708,44 @@ func TestOperationBindingsAndKeyDeliveryAreOneToOne(t *testing.T) {
 			mutated.OperationBindings = append(mutated.OperationBindings, duplicate)
 			return mutated
 		},
-		"missing-key-delivery": func(mutated operationBindingFixture) operationBindingFixture {
-			mutated.KeyDeliveryTargets = nil
+		"missing-target-verifier": func(mutated operationBindingFixture) operationBindingFixture {
+			mutated.KeyDeliveryTargets = append(
+				mutated.KeyDeliveryTargets[:1],
+				mutated.KeyDeliveryTargets[2:]...,
+			)
 			return mutated
 		},
-		"duplicate-key-delivery": func(mutated operationBindingFixture) operationBindingFixture {
-			mutated.KeyDeliveryTargets = append(mutated.KeyDeliveryTargets, mutated.KeyDeliveryTargets[0])
+		"missing-target-readback": func(mutated operationBindingFixture) operationBindingFixture {
+			mutated.KeyDeliveryTargets[1].Readback = readback{}
+			return mutated
+		},
+		"missing-proof-resolver": func(mutated operationBindingFixture) operationBindingFixture {
+			mutated.KeyDeliveryTargets = mutated.KeyDeliveryTargets[:2]
+			return mutated
+		},
+		"extra-opposite-role": func(mutated operationBindingFixture) operationBindingFixture {
+			extra := mutated.KeyDeliveryTargets[1]
+			extra.Role = "AUTHORIZATION_ISSUER"
+			extra.Readback.ExpectedRole = extra.Role
+			extra.Readback.ReadbackID = "control-plane-extra-issuer"
+			extra.DatabaseIdentity.LoginPrincipal = "ira_control_plane_issuer_g1"
+			mutated.KeyDeliveryTargets = append(mutated.KeyDeliveryTargets, extra)
+			return mutated
+		},
+		"duplicate-ambiguous-target": func(mutated operationBindingFixture) operationBindingFixture {
+			mutated.KeyDeliveryTargets = append(mutated.KeyDeliveryTargets, mutated.KeyDeliveryTargets[1])
 			return mutated
 		},
 		"wildcard-vault-path": func(mutated operationBindingFixture) operationBindingFixture {
 			mutated.KeyDeliveryTargets[0].AuthPrivateKey.VaultPath += "/*"
+			return mutated
+		},
+		"unknown-proof-producer": func(mutated operationBindingFixture) operationBindingFixture {
+			mutated.OperationBindings[0].AuthorityProofProducerID = "missing.producer"
+			return mutated
+		},
+		"producer-operation-gap": func(mutated operationBindingFixture) operationBindingFixture {
+			mutated.AuthorityProofProducers[0].AllowedOperationIDs = []string{"control.project.list"}
 			return mutated
 		},
 	}
@@ -577,6 +811,12 @@ func TestApprovedContractCoversFailureBoundary(t *testing.T) {
 		"AUTHORIZATION_CONTEXT_REQUIRED",
 		"AUTHORITY_PROOF_REQUIRED",
 		"AUTHORITY_PROOF_REPLAY_DETECTED",
+		"AUTHORITY_SCOPE_MISMATCH",
+		"AuthorityProofResolverService",
+		"internal-rpc-authority-restore-controller",
+		"ValidatingAdmissionPolicy",
+		"session_user",
+		"SECURITY DEFINER",
 		"READBACK_MISMATCH",
 		"authority_key_delivery_readbacks",
 		"внешний монотонный restore evidence anchor",
@@ -625,40 +865,78 @@ func decodeJSONStrict(t *testing.T, path string, target any) {
 }
 
 type operationBindingFixture struct {
-	Version            int                 `json:"v"`
-	OperationBindings  []operationBinding  `json:"operation_bindings"`
-	KeyDeliveryTargets []keyDeliveryTarget `json:"key_delivery_targets"`
+	Version                 int                      `json:"v"`
+	AuthorityProofProducers []authorityProofProducer `json:"authority_proof_producers"`
+	OperationBindings       []operationBinding       `json:"operation_bindings"`
+	KeyDeliveryTargets      []keyDeliveryTarget      `json:"key_delivery_targets"`
+}
+
+type authorityProofProducer struct {
+	ProducerID                    string   `json:"producer_id"`
+	CallerWorkloadID              string   `json:"caller_workload_id"`
+	CallerSPIFFEID                string   `json:"caller_spiffe_id"`
+	OwnerWorkloadID               string   `json:"owner_workload_id"`
+	OwnerSPIFFEID                 string   `json:"owner_spiffe_id"`
+	FullMethod                    string   `json:"full_method"`
+	TLSServerName                 string   `json:"tls_server_name"`
+	TransportTrustBundleID        string   `json:"transport_trust_bundle_id"`
+	ApplicationCredential         string   `json:"application_credential"`
+	ApplicationCredentialMetadata string   `json:"application_credential_metadata"`
+	ApplicationCredentialIssuer   string   `json:"application_credential_issuer"`
+	ApplicationCredentialAudience string   `json:"application_credential_audience"`
+	ApplicationCredentialTrustID  string   `json:"application_credential_trust_bundle_id"`
+	AuthorityProofIssuer          string   `json:"authority_proof_issuer"`
+	AuthorityProofAudience        string   `json:"authority_proof_audience"`
+	AuthorityProofTrustBundleID   string   `json:"authority_proof_trust_bundle_id"`
+	AuthorityProofMaxAgeSeconds   int      `json:"authority_proof_max_age_seconds"`
+	DeadlineMilliseconds          int      `json:"deadline_milliseconds"`
+	MaxAttempts                   int      `json:"max_attempts"`
+	RetryableGRPCCodes            []string `json:"retryable_grpc_codes"`
+	IdempotencyScope              string   `json:"idempotency_scope"`
+	AuthoritySources              []string `json:"authority_sources"`
+	AllowedOperationIDs           []string `json:"allowed_operation_ids"`
+	ServerResolvedFields          []string `json:"server_resolved_fields"`
 }
 
 type operationBinding struct {
-	OperationID                 string   `json:"operation_id"`
-	CallerWorkloadID            string   `json:"caller_workload_id"`
-	CallerSPIFFEID              string   `json:"caller_spiffe_id"`
-	Issuer                      string   `json:"issuer"`
-	TargetWorkloadID            string   `json:"target_workload_id"`
-	TargetSPIFFEID              string   `json:"target_spiffe_id"`
-	Audience                    string   `json:"audience"`
-	FullMethod                  string   `json:"full_method"`
-	TargetTLSServerName         string   `json:"target_tls_server_name"`
-	TargetTrustBundleID         string   `json:"target_trust_bundle_id"`
-	Permission                  string   `json:"permission"`
-	AuthorityProofIssuer        string   `json:"authority_proof_issuer"`
-	AuthorityProofAudience      string   `json:"authority_proof_audience"`
-	AuthorityProofTrustBundleID string   `json:"authority_proof_trust_bundle_id"`
-	AuthorityProofMaxAgeSeconds int      `json:"authority_proof_max_age_seconds"`
-	AuthoritySources            []string `json:"authority_sources"`
-	ProjectRequired             bool     `json:"project_required"`
+	OperationID              string    `json:"operation_id"`
+	CallerWorkloadID         string    `json:"caller_workload_id"`
+	CallerSPIFFEID           string    `json:"caller_spiffe_id"`
+	Issuer                   string    `json:"issuer"`
+	TargetWorkloadID         string    `json:"target_workload_id"`
+	TargetSPIFFEID           string    `json:"target_spiffe_id"`
+	Audience                 string    `json:"audience"`
+	FullMethod               string    `json:"full_method"`
+	TargetTLSServerName      string    `json:"target_tls_server_name"`
+	TargetTrustBundleID      string    `json:"target_trust_bundle_id"`
+	Permission               string    `json:"permission"`
+	AuthorityProofProducerID string    `json:"authority_proof_producer_id"`
+	AuthoritySources         []string  `json:"authority_sources"`
+	ProjectRequired          bool      `json:"project_required"`
+	LocalCaller              localPeer `json:"local_caller"`
+	LocalTarget              localPeer `json:"local_target"`
+}
+
+type localPeer struct {
+	UID         int `json:"uid"`
+	PrimaryGID  int `json:"primary_gid"`
+	SharedFSGID int `json:"shared_fs_gid"`
 }
 
 type keyDeliveryTarget struct {
-	WorkloadID         string   `json:"workload_id"`
-	IssuerSPIFFEID     string   `json:"issuer_spiffe_id"`
-	Namespace          string   `json:"namespace"`
-	ServiceAccount     string   `json:"service_account"`
-	AuthPrivateKey     delivery `json:"auth_private_key"`
-	ManifestTrust      delivery `json:"manifest_trust"`
-	IssuerReadbackID   string   `json:"issuer_readback_id"`
-	VerifierReadbackID string   `json:"verifier_readback_id"`
+	WorkloadID               string           `json:"workload_id"`
+	Role                     string           `json:"role"`
+	SPIFFEID                 string           `json:"spiffe_id"`
+	Namespace                string           `json:"namespace"`
+	ServiceAccount           string           `json:"service_account"`
+	WorkloadGeneration       int              `json:"workload_generation"`
+	AuthoritySnapshot        projection       `json:"authority_snapshot"`
+	AuthPrivateKey           *delivery        `json:"auth_private_key,omitempty"`
+	AuthorityProofPrivateKey *delivery        `json:"authority_proof_private_key,omitempty"`
+	ManifestTrust            delivery         `json:"manifest_trust"`
+	AuthorityProofTrust      *delivery        `json:"authority_proof_trust,omitempty"`
+	DatabaseIdentity         databaseIdentity `json:"database_identity"`
+	Readback                 readback         `json:"readback"`
 }
 
 type delivery struct {
@@ -667,14 +945,80 @@ type delivery struct {
 	MountPath  string `json:"mount_path"`
 }
 
+type projection struct {
+	SecretName string `json:"secret_name"`
+	MountPath  string `json:"mount_path"`
+}
+
+type databaseIdentity struct {
+	LoginPrincipal       string `json:"login_principal"`
+	VaultDatabaseRole    string `json:"vault_database_role"`
+	DSNMountPath         string `json:"dsn_mount_path"`
+	CredentialGeneration int    `json:"credential_generation"`
+}
+
+type readback struct {
+	ReadbackID       string `json:"readback_id"`
+	DatabaseFunction string `json:"database_function"`
+	ExpectedRole     string `json:"expected_role"`
+}
+
 func validateOperationBindingFixture(fixture operationBindingFixture) error {
-	if fixture.Version != 1 || len(fixture.OperationBindings) == 0 {
-		return fmt.Errorf("invalid fixture version or empty bindings")
+	if fixture.Version != 1 ||
+		len(fixture.AuthorityProofProducers) == 0 ||
+		len(fixture.OperationBindings) == 0 {
+		return fmt.Errorf("invalid fixture version, producers or bindings")
+	}
+
+	producers := make(map[string]authorityProofProducer, len(fixture.AuthorityProofProducers))
+	producerOperations := make(map[string]map[string]bool, len(fixture.AuthorityProofProducers))
+	boundProducerOperations := make(map[string]map[string]bool, len(fixture.AuthorityProofProducers))
+	requiredRoles := make(map[string]string)
+	for _, producer := range fixture.AuthorityProofProducers {
+		if producer.ProducerID == "" || producers[producer.ProducerID].ProducerID != "" {
+			return fmt.Errorf("duplicate or empty authority proof producer")
+		}
+		if producer.CallerWorkloadID == "" ||
+			producer.CallerSPIFFEID == "" ||
+			producer.OwnerWorkloadID == "" ||
+			producer.OwnerSPIFFEID == "" ||
+			producer.FullMethod != "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof" ||
+			producer.ApplicationCredentialMetadata != "authorization" ||
+			!strings.HasPrefix(producer.ApplicationCredentialIssuer, "https://") ||
+			producer.ApplicationCredentialAudience == "" ||
+			producer.ApplicationCredentialTrustID == "" ||
+			producer.AuthorityProofIssuer != producer.OwnerSPIFFEID ||
+			producer.AuthorityProofMaxAgeSeconds != 15 ||
+			producer.DeadlineMilliseconds != 2000 ||
+			producer.MaxAttempts != 2 ||
+			strings.Join(producer.RetryableGRPCCodes, ",") != "UNAVAILABLE,DEADLINE_EXCEEDED" ||
+			len(producer.AuthoritySources) == 0 ||
+			len(producer.AllowedOperationIDs) == 0 ||
+			strings.Join(producer.ServerResolvedFields, ",") !=
+				"actor,tenant,project,ownership,provenance" {
+			return fmt.Errorf("incomplete authority proof producer")
+		}
+		producers[producer.ProducerID] = producer
+		producerOperations[producer.ProducerID] = make(map[string]bool, len(producer.AllowedOperationIDs))
+		for _, operationID := range producer.AllowedOperationIDs {
+			if operationID == "" || producerOperations[producer.ProducerID][operationID] {
+				return fmt.Errorf("duplicate or empty producer operation")
+			}
+			producerOperations[producer.ProducerID][operationID] = true
+		}
+		boundProducerOperations[producer.ProducerID] = make(map[string]bool)
+		if err := addRequiredRole(
+			requiredRoles,
+			producer.OwnerWorkloadID,
+			"AUTHORITY_PROOF_RESOLVER",
+			producer.OwnerSPIFFEID,
+		); err != nil {
+			return err
+		}
 	}
 
 	operationIDs := make(map[string]bool, len(fixture.OperationBindings))
 	methodPermissions := make(map[string]string, len(fixture.OperationBindings))
-	bindingsPerCaller := make(map[string][]operationBinding)
 	for _, binding := range fixture.OperationBindings {
 		if binding.OperationID == "" || operationIDs[binding.OperationID] {
 			return fmt.Errorf("duplicate or empty operation_id")
@@ -684,29 +1028,68 @@ func validateOperationBindingFixture(fixture operationBindingFixture) error {
 			return fmt.Errorf("ambiguous permission for full method")
 		}
 		methodPermissions[binding.FullMethod] = binding.Permission
-		if binding.AuthorityProofIssuer == "" ||
-			binding.AuthorityProofAudience == "" ||
-			binding.AuthorityProofTrustBundleID == "" ||
-			binding.AuthorityProofMaxAgeSeconds != 15 ||
-			len(binding.AuthoritySources) == 0 {
+		producer, exists := producers[binding.AuthorityProofProducerID]
+		if !exists ||
+			producer.CallerWorkloadID != binding.CallerWorkloadID ||
+			producer.CallerSPIFFEID != binding.CallerSPIFFEID ||
+			!containsString(producer.AllowedOperationIDs, binding.OperationID) ||
+			strings.Join(producer.AuthoritySources, ",") != strings.Join(binding.AuthoritySources, ",") ||
+			binding.LocalCaller != (localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000}) ||
+			binding.LocalTarget != (localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000}) {
 			return fmt.Errorf("incomplete authority proof binding")
 		}
-		bindingsPerCaller[binding.CallerWorkloadID] = append(
-			bindingsPerCaller[binding.CallerWorkloadID],
-			binding,
-		)
+		if err := addRequiredRole(
+			requiredRoles,
+			binding.CallerWorkloadID,
+			"AUTHORIZATION_ISSUER",
+			binding.CallerSPIFFEID,
+		); err != nil {
+			return err
+		}
+		if err := addRequiredRole(
+			requiredRoles,
+			binding.TargetWorkloadID,
+			"AUTHORIZATION_VERIFIER",
+			binding.TargetSPIFFEID,
+		); err != nil {
+			return err
+		}
+		boundProducerOperations[binding.AuthorityProofProducerID][binding.OperationID] = true
+	}
+	for producerID, allowed := range producerOperations {
+		bound := boundProducerOperations[producerID]
+		if len(allowed) != len(bound) {
+			return fmt.Errorf("unused or unlisted producer operation")
+		}
+		for operationID := range allowed {
+			if !bound[operationID] {
+				return fmt.Errorf("producer operation coverage gap")
+			}
+		}
 	}
 
 	targets := make(map[string]keyDeliveryTarget, len(fixture.KeyDeliveryTargets))
-	vaultPaths := make(map[string]bool, len(fixture.KeyDeliveryTargets)*2)
+	vaultPaths := make(map[string]bool, len(fixture.KeyDeliveryTargets)*4)
+	databasePrincipals := make(map[string]bool, len(fixture.KeyDeliveryTargets))
 	for _, target := range fixture.KeyDeliveryTargets {
-		if target.WorkloadID == "" {
-			return fmt.Errorf("empty key delivery workload")
+		key := target.WorkloadID + "|" + target.Role
+		if target.WorkloadID == "" || target.Role == "" || target.WorkloadGeneration < 1 {
+			return fmt.Errorf("empty key delivery workload role")
 		}
-		if _, exists := targets[target.WorkloadID]; exists {
-			return fmt.Errorf("duplicate key delivery target")
+		if _, exists := targets[key]; exists {
+			return fmt.Errorf("duplicate workload role target")
 		}
-		for _, item := range []delivery{target.AuthPrivateKey, target.ManifestTrust} {
+		items := []*delivery{&target.ManifestTrust}
+		for _, item := range []*delivery{
+			target.AuthPrivateKey,
+			target.AuthorityProofPrivateKey,
+			target.AuthorityProofTrust,
+		} {
+			if item != nil {
+				items = append(items, item)
+			}
+		}
+		for _, item := range items {
 			if item.VaultPath == "" ||
 				!strings.HasPrefix(item.VaultPath, "kv/data/mattercodex/") ||
 				strings.ContainsAny(item.VaultPath, "*?[]") ||
@@ -718,29 +1101,69 @@ func validateOperationBindingFixture(fixture operationBindingFixture) error {
 			}
 			vaultPaths[item.VaultPath] = true
 		}
-		if target.IssuerReadbackID == "" ||
-			target.VerifierReadbackID == "" ||
-			target.IssuerReadbackID == target.VerifierReadbackID {
-			return fmt.Errorf("invalid cryptographic readback ids")
+		if target.Readback.ReadbackID == "" ||
+			target.Readback.DatabaseFunction != "record_authority_key_delivery_readback" ||
+			target.Readback.ExpectedRole != target.Role ||
+			target.DatabaseIdentity.LoginPrincipal == "" ||
+			databasePrincipals[target.DatabaseIdentity.LoginPrincipal] ||
+			target.DatabaseIdentity.CredentialGeneration < 1 {
+			return fmt.Errorf("invalid workload role database readback identity")
 		}
-		targets[target.WorkloadID] = target
-	}
-
-	for caller, bindings := range bindingsPerCaller {
-		target, exists := targets[caller]
-		if !exists {
-			return fmt.Errorf("missing key delivery target for caller %s", caller)
+		if target.AuthoritySnapshot.SecretName != "internal-rpc-authority-snapshot" ||
+			!strings.HasPrefix(target.AuthoritySnapshot.MountPath, "/") {
+			return fmt.Errorf("invalid authority snapshot projection")
 		}
-		for _, binding := range bindings {
-			if target.IssuerSPIFFEID != binding.Issuer {
-				return fmt.Errorf("key delivery issuer mismatch for caller %s", caller)
+		databasePrincipals[target.DatabaseIdentity.LoginPrincipal] = true
+		switch target.Role {
+		case "AUTHORIZATION_ISSUER":
+			if target.AuthPrivateKey == nil ||
+				target.AuthorityProofTrust == nil ||
+				target.AuthorityProofPrivateKey != nil {
+				return fmt.Errorf("invalid issuer role material")
 			}
+		case "AUTHORIZATION_VERIFIER":
+			if target.AuthPrivateKey != nil ||
+				target.AuthorityProofPrivateKey != nil ||
+				target.AuthorityProofTrust != nil {
+				return fmt.Errorf("invalid verifier role material")
+			}
+		case "AUTHORITY_PROOF_RESOLVER":
+			if target.AuthPrivateKey != nil ||
+				target.AuthorityProofPrivateKey == nil ||
+				target.AuthorityProofTrust == nil {
+				return fmt.Errorf("invalid resolver role material")
+			}
+		default:
+			return fmt.Errorf("unknown target role")
 		}
-		delete(targets, caller)
+		wantSPIFFEID, required := requiredRoles[key]
+		if !required || wantSPIFFEID != target.SPIFFEID {
+			return fmt.Errorf("extra or mismatched workload role target")
+		}
+		targets[key] = target
+		delete(requiredRoles, key)
 	}
-	if len(targets) != 0 {
-		return fmt.Errorf("unreferenced key delivery targets")
+	if len(requiredRoles) != 0 {
+		return fmt.Errorf("missing workload role target")
 	}
+	return nil
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func addRequiredRole(required map[string]string, workloadID, role, spiffeID string) error {
+	key := workloadID + "|" + role
+	if existing, ok := required[key]; ok && existing != spiffeID {
+		return fmt.Errorf("ambiguous workload role identity")
+	}
+	required[key] = spiffeID
 	return nil
 }
 

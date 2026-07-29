@@ -14,6 +14,12 @@
       "reason": "AUTHORITY_PROOF_INVALID"
     },
     {
+      "name": "trusted-signer-cross-tenant",
+      "mutation": "valid control-plane signer attempts to bind an actor resolved in tenant A to a project owned by tenant B",
+      "grpc_code": "PERMISSION_DENIED",
+      "reason": "AUTHORITY_SCOPE_MISMATCH"
+    },
+    {
       "name": "wrong-caller-workload",
       "mutation": "change caller workload or SPIFFE while retaining a valid proof signature",
       "grpc_code": "PERMISSION_DENIED",

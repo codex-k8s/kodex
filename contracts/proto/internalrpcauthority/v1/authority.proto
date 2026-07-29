@@ -31,6 +31,31 @@ service AuthorizationVerifierService {
   rpc CheckReadiness(AuthorizationVerifierServiceCheckReadinessRequest) returns (AuthorizationVerifierServiceCheckReadinessResponse);
 }
 
+// AuthorityProofResolverService — versioned preflight boundary доменного
+// владельца. Его первый вызов не требует internal authorization context:
+// transport interceptor проверяет exact mTLS caller, а application credential
+// поступает только в metadata и разрешается сервером в actor/tenant/project.
+service AuthorityProofResolverService {
+  // ResolveAuthorityProof возвращает proof только после server-side проверки
+  // actor membership и ownership целевого tenant/project. Request не содержит
+  // actor, tenant, project, SPIFFE ID, audience или permission.
+  rpc ResolveAuthorityProof(ResolveAuthorityProofRequest) returns (ResolveAuthorityProofResponse);
+
+  // CheckReadiness криптографически проверяет фактически обслуживаемые policy,
+  // proof signer и trust readback, а также доменный read path.
+  rpc CheckReadiness(AuthorityProofResolverServiceCheckReadinessRequest) returns (AuthorityProofResolverServiceCheckReadinessResponse);
+}
+
+// RestoreControllerService — исполняемый интерфейс quarantine/PITR capability.
+// Он доступен только exact operator и workload mTLS identities и никогда не
+// принимает internal authorization context как замену transport binding.
+service RestoreControllerService {
+  rpc PrepareRestore(PrepareRestoreRequest) returns (PrepareRestoreResponse);
+  rpc AcknowledgeQuiescence(AcknowledgeQuiescenceRequest) returns (AcknowledgeQuiescenceResponse);
+  rpc CompleteRestore(CompleteRestoreRequest) returns (CompleteRestoreResponse);
+  rpc CheckReadiness(RestoreControllerServiceCheckReadinessRequest) returns (RestoreControllerServiceCheckReadinessResponse);
+}
+
 // ActorKind является закрытым техническим классом actor. Бизнесовые роли в
 // этом enum отсутствуют.
 enum ActorKind {
@@ -52,6 +77,27 @@ enum AuthoritySource {
   AUTHORITY_SOURCE_AGENT_SESSION = 4;
   AUTHORITY_SOURCE_PROCESS_RUN = 5;
   AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE = 6;
+}
+
+// WorkloadAuthorityRole задаёт закрытую роль одного authority sidecar либо
+// resolver. Каждая роль получает отдельную workload-bound identity.
+enum WorkloadAuthorityRole {
+  WORKLOAD_AUTHORITY_ROLE_UNSPECIFIED = 0;
+  WORKLOAD_AUTHORITY_ROLE_AUTHORIZATION_ISSUER = 1;
+  WORKLOAD_AUTHORITY_ROLE_AUTHORIZATION_VERIFIER = 2;
+  WORKLOAD_AUTHORITY_ROLE_AUTHORITY_PROOF_RESOLVER = 3;
+}
+
+// RestorePhase — закрытое состояние controller; переходы задаёт capability
+// registry, а не caller.
+enum RestorePhase {
+  RESTORE_PHASE_UNSPECIFIED = 0;
+  RESTORE_PHASE_OPEN = 1;
+  RESTORE_PHASE_QUIESCING = 2;
+  RESTORE_PHASE_PREPARED = 3;
+  RESTORE_PHASE_RESTORING = 4;
+  RESTORE_PHASE_COMPLETED = 5;
+  RESTORE_PHASE_FENCED_SAFE_WINDOW = 6;
 }
 
 // AuthorityProvenance связывает идентификатор с immutable snapshot,
@@ -106,6 +152,37 @@ message IssueAuthorizationContextResponse {
   uint64 key_set_revision = 5;
   uint64 policy_revision = 6;
   uint64 signer_generation = 7;
+}
+
+message ResolveAuthorityProofRequest {
+  // operation_id выбирает exact preflight policy. application credential
+  // передаётся interceptor через metadata; его значение не дублируется здесь.
+  string operation_id = 1;
+  // resource_reference — lookup key доменного владельца, а не authority.
+  // tenant/project/owner всегда выводятся server-side.
+  string resource_reference = 2;
+  string idempotency_key = 3;
+  string correlation_id = 4;
+}
+
+message ResolveAuthorityProofResponse {
+  string authority_proof_compact_jws = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  uint64 proof_revision = 3;
+  string proof_digest_sha256 = 4;
+  uint64 policy_revision = 5;
+  uint64 signer_generation = 6;
+}
+
+message AuthorityProofResolverServiceCheckReadinessRequest {}
+
+message AuthorityProofResolverServiceCheckReadinessResponse {
+  bool ready = 1;
+  uint64 policy_revision = 2;
+  string policy_digest_sha256 = 3;
+  uint64 signer_generation = 4;
+  string served_public_jwk_thumbprint_sha256 = 5;
+  bool domain_read_path_ready = 6;
 }
 
 // DownstreamTransportPeer формируется target gRPC interceptor только после
@@ -183,6 +260,63 @@ message AuthorizationVerifierServiceCheckReadinessResponse {
   bool replay_store_ready = 7;
 }
 
+message PrepareRestoreRequest {
+  string restore_id = 1;
+  string database_cluster_id = 2;
+  string backup_manifest_digest_sha256 = 3;
+  google.protobuf.Timestamp recovery_target_time = 4;
+  string idempotency_key = 5;
+  string correlation_id = 6;
+}
+
+message AcknowledgeQuiescenceRequest {
+  string restore_id = 1;
+  uint64 workload_generation = 2;
+  string served_snapshot_digest_sha256 = 3;
+  string correlation_id = 4;
+}
+
+message CompleteRestoreRequest {
+  string restore_id = 1;
+  string database_cluster_id = 2;
+  string backup_manifest_digest_sha256 = 3;
+  google.protobuf.Timestamp recovery_target_time = 4;
+  string idempotency_key = 5;
+  string correlation_id = 6;
+}
+
+message RestoreTransition {
+  string restore_id = 1;
+  RestorePhase phase = 2;
+  uint64 anchor_revision = 3;
+  uint64 restore_epoch = 4;
+  string evidence_digest_sha256 = 5;
+  google.protobuf.Timestamp safe_window_not_before = 6;
+}
+
+message PrepareRestoreResponse {
+  RestoreTransition transition = 1;
+}
+
+message AcknowledgeQuiescenceResponse {
+  RestoreTransition transition = 1;
+}
+
+message CompleteRestoreResponse {
+  RestoreTransition transition = 1;
+}
+
+message RestoreControllerServiceCheckReadinessRequest {}
+
+message RestoreControllerServiceCheckReadinessResponse {
+  bool ready = 1;
+  uint64 anchor_revision = 2;
+  uint64 restore_epoch = 3;
+  string served_evidence_digest_sha256 = 4;
+  uint64 signer_generation = 5;
+  bool admission_policy_observed = 6;
+}
+
 // AuthorizationFailureStage ограничивает наблюдаемую стадию отказа.
 enum AuthorizationFailureStage {
   AUTHORIZATION_FAILURE_STAGE_UNSPECIFIED = 0;
@@ -198,6 +332,8 @@ enum AuthorizationFailureStage {
   AUTHORIZATION_FAILURE_STAGE_PERSISTENCE = 10;
   AUTHORIZATION_FAILURE_STAGE_INTERNAL = 11;
   AUTHORIZATION_FAILURE_STAGE_AUTHORITY_PROOF = 12;
+  AUTHORIZATION_FAILURE_STAGE_AUTHORITY_RESOLUTION = 13;
+  AUTHORIZATION_FAILURE_STAGE_RESTORE = 14;
 }
 
 // AuthorizationErrorReason является закрытым машинным кодом detail.
@@ -240,6 +376,12 @@ enum AuthorizationErrorReason {
   AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED = 35;
   AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED = 36;
   AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE = 37;
+  AUTHORIZATION_ERROR_REASON_APPLICATION_CREDENTIAL_INVALID = 38;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_SCOPE_MISMATCH = 39;
+  AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT = 40;
+  AUTHORIZATION_ERROR_REASON_RESTORE_BARRIER_INCOMPLETE = 41;
+  AUTHORIZATION_ERROR_REASON_RESTORE_ANCHOR_REJECTED = 42;
+  AUTHORIZATION_ERROR_REASON_RESTORE_CONTROLLER_UNAVAILABLE = 43;
 }
 
 // AuthorizationErrorDetail добавляется к google.rpc.Status. Диагностика не

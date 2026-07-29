@@ -329,3 +329,389 @@ var AuthorizationVerifierService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "internalrpcauthority/v1/authority.proto",
 }
+
+const (
+	AuthorityProofResolverService_ResolveAuthorityProof_FullMethodName = "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof"
+	AuthorityProofResolverService_CheckReadiness_FullMethodName        = "/internalrpcauthority.v1.AuthorityProofResolverService/CheckReadiness"
+)
+
+// AuthorityProofResolverServiceClient is the client API for AuthorityProofResolverService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// AuthorityProofResolverService — versioned preflight boundary доменного
+// владельца. Его первый вызов не требует internal authorization context:
+// transport interceptor проверяет exact mTLS caller, а application credential
+// поступает только в metadata и разрешается сервером в actor/tenant/project.
+type AuthorityProofResolverServiceClient interface {
+	// ResolveAuthorityProof возвращает proof только после server-side проверки
+	// actor membership и ownership целевого tenant/project. Request не содержит
+	// actor, tenant, project, SPIFFE ID, audience или permission.
+	ResolveAuthorityProof(ctx context.Context, in *ResolveAuthorityProofRequest, opts ...grpc.CallOption) (*ResolveAuthorityProofResponse, error)
+	// CheckReadiness криптографически проверяет фактически обслуживаемые policy,
+	// proof signer и trust readback, а также доменный read path.
+	CheckReadiness(ctx context.Context, in *AuthorityProofResolverServiceCheckReadinessRequest, opts ...grpc.CallOption) (*AuthorityProofResolverServiceCheckReadinessResponse, error)
+}
+
+type authorityProofResolverServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAuthorityProofResolverServiceClient(cc grpc.ClientConnInterface) AuthorityProofResolverServiceClient {
+	return &authorityProofResolverServiceClient{cc}
+}
+
+func (c *authorityProofResolverServiceClient) ResolveAuthorityProof(ctx context.Context, in *ResolveAuthorityProofRequest, opts ...grpc.CallOption) (*ResolveAuthorityProofResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveAuthorityProofResponse)
+	err := c.cc.Invoke(ctx, AuthorityProofResolverService_ResolveAuthorityProof_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authorityProofResolverServiceClient) CheckReadiness(ctx context.Context, in *AuthorityProofResolverServiceCheckReadinessRequest, opts ...grpc.CallOption) (*AuthorityProofResolverServiceCheckReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorityProofResolverServiceCheckReadinessResponse)
+	err := c.cc.Invoke(ctx, AuthorityProofResolverService_CheckReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AuthorityProofResolverServiceServer is the server API for AuthorityProofResolverService service.
+// All implementations must embed UnimplementedAuthorityProofResolverServiceServer
+// for forward compatibility.
+//
+// AuthorityProofResolverService — versioned preflight boundary доменного
+// владельца. Его первый вызов не требует internal authorization context:
+// transport interceptor проверяет exact mTLS caller, а application credential
+// поступает только в metadata и разрешается сервером в actor/tenant/project.
+type AuthorityProofResolverServiceServer interface {
+	// ResolveAuthorityProof возвращает proof только после server-side проверки
+	// actor membership и ownership целевого tenant/project. Request не содержит
+	// actor, tenant, project, SPIFFE ID, audience или permission.
+	ResolveAuthorityProof(context.Context, *ResolveAuthorityProofRequest) (*ResolveAuthorityProofResponse, error)
+	// CheckReadiness криптографически проверяет фактически обслуживаемые policy,
+	// proof signer и trust readback, а также доменный read path.
+	CheckReadiness(context.Context, *AuthorityProofResolverServiceCheckReadinessRequest) (*AuthorityProofResolverServiceCheckReadinessResponse, error)
+	mustEmbedUnimplementedAuthorityProofResolverServiceServer()
+}
+
+// UnimplementedAuthorityProofResolverServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAuthorityProofResolverServiceServer struct{}
+
+func (UnimplementedAuthorityProofResolverServiceServer) ResolveAuthorityProof(context.Context, *ResolveAuthorityProofRequest) (*ResolveAuthorityProofResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveAuthorityProof not implemented")
+}
+func (UnimplementedAuthorityProofResolverServiceServer) CheckReadiness(context.Context, *AuthorityProofResolverServiceCheckReadinessRequest) (*AuthorityProofResolverServiceCheckReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
+}
+func (UnimplementedAuthorityProofResolverServiceServer) mustEmbedUnimplementedAuthorityProofResolverServiceServer() {
+}
+func (UnimplementedAuthorityProofResolverServiceServer) testEmbeddedByValue() {}
+
+// UnsafeAuthorityProofResolverServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AuthorityProofResolverServiceServer will
+// result in compilation errors.
+type UnsafeAuthorityProofResolverServiceServer interface {
+	mustEmbedUnimplementedAuthorityProofResolverServiceServer()
+}
+
+func RegisterAuthorityProofResolverServiceServer(s grpc.ServiceRegistrar, srv AuthorityProofResolverServiceServer) {
+	// If the following call panics, it indicates UnimplementedAuthorityProofResolverServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AuthorityProofResolverService_ServiceDesc, srv)
+}
+
+func _AuthorityProofResolverService_ResolveAuthorityProof_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveAuthorityProofRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorityProofResolverServiceServer).ResolveAuthorityProof(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorityProofResolverService_ResolveAuthorityProof_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorityProofResolverServiceServer).ResolveAuthorityProof(ctx, req.(*ResolveAuthorityProofRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthorityProofResolverService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorityProofResolverServiceCheckReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorityProofResolverServiceServer).CheckReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorityProofResolverService_CheckReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorityProofResolverServiceServer).CheckReadiness(ctx, req.(*AuthorityProofResolverServiceCheckReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AuthorityProofResolverService_ServiceDesc is the grpc.ServiceDesc for AuthorityProofResolverService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AuthorityProofResolverService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "internalrpcauthority.v1.AuthorityProofResolverService",
+	HandlerType: (*AuthorityProofResolverServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ResolveAuthorityProof",
+			Handler:    _AuthorityProofResolverService_ResolveAuthorityProof_Handler,
+		},
+		{
+			MethodName: "CheckReadiness",
+			Handler:    _AuthorityProofResolverService_CheckReadiness_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "internalrpcauthority/v1/authority.proto",
+}
+
+const (
+	RestoreControllerService_PrepareRestore_FullMethodName        = "/internalrpcauthority.v1.RestoreControllerService/PrepareRestore"
+	RestoreControllerService_AcknowledgeQuiescence_FullMethodName = "/internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence"
+	RestoreControllerService_CompleteRestore_FullMethodName       = "/internalrpcauthority.v1.RestoreControllerService/CompleteRestore"
+	RestoreControllerService_CheckReadiness_FullMethodName        = "/internalrpcauthority.v1.RestoreControllerService/CheckReadiness"
+)
+
+// RestoreControllerServiceClient is the client API for RestoreControllerService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// RestoreControllerService — исполняемый интерфейс quarantine/PITR capability.
+// Он доступен только exact operator и workload mTLS identities и никогда не
+// принимает internal authorization context как замену transport binding.
+type RestoreControllerServiceClient interface {
+	PrepareRestore(ctx context.Context, in *PrepareRestoreRequest, opts ...grpc.CallOption) (*PrepareRestoreResponse, error)
+	AcknowledgeQuiescence(ctx context.Context, in *AcknowledgeQuiescenceRequest, opts ...grpc.CallOption) (*AcknowledgeQuiescenceResponse, error)
+	CompleteRestore(ctx context.Context, in *CompleteRestoreRequest, opts ...grpc.CallOption) (*CompleteRestoreResponse, error)
+	CheckReadiness(ctx context.Context, in *RestoreControllerServiceCheckReadinessRequest, opts ...grpc.CallOption) (*RestoreControllerServiceCheckReadinessResponse, error)
+}
+
+type restoreControllerServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRestoreControllerServiceClient(cc grpc.ClientConnInterface) RestoreControllerServiceClient {
+	return &restoreControllerServiceClient{cc}
+}
+
+func (c *restoreControllerServiceClient) PrepareRestore(ctx context.Context, in *PrepareRestoreRequest, opts ...grpc.CallOption) (*PrepareRestoreResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareRestoreResponse)
+	err := c.cc.Invoke(ctx, RestoreControllerService_PrepareRestore_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *restoreControllerServiceClient) AcknowledgeQuiescence(ctx context.Context, in *AcknowledgeQuiescenceRequest, opts ...grpc.CallOption) (*AcknowledgeQuiescenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcknowledgeQuiescenceResponse)
+	err := c.cc.Invoke(ctx, RestoreControllerService_AcknowledgeQuiescence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *restoreControllerServiceClient) CompleteRestore(ctx context.Context, in *CompleteRestoreRequest, opts ...grpc.CallOption) (*CompleteRestoreResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteRestoreResponse)
+	err := c.cc.Invoke(ctx, RestoreControllerService_CompleteRestore_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *restoreControllerServiceClient) CheckReadiness(ctx context.Context, in *RestoreControllerServiceCheckReadinessRequest, opts ...grpc.CallOption) (*RestoreControllerServiceCheckReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreControllerServiceCheckReadinessResponse)
+	err := c.cc.Invoke(ctx, RestoreControllerService_CheckReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RestoreControllerServiceServer is the server API for RestoreControllerService service.
+// All implementations must embed UnimplementedRestoreControllerServiceServer
+// for forward compatibility.
+//
+// RestoreControllerService — исполняемый интерфейс quarantine/PITR capability.
+// Он доступен только exact operator и workload mTLS identities и никогда не
+// принимает internal authorization context как замену transport binding.
+type RestoreControllerServiceServer interface {
+	PrepareRestore(context.Context, *PrepareRestoreRequest) (*PrepareRestoreResponse, error)
+	AcknowledgeQuiescence(context.Context, *AcknowledgeQuiescenceRequest) (*AcknowledgeQuiescenceResponse, error)
+	CompleteRestore(context.Context, *CompleteRestoreRequest) (*CompleteRestoreResponse, error)
+	CheckReadiness(context.Context, *RestoreControllerServiceCheckReadinessRequest) (*RestoreControllerServiceCheckReadinessResponse, error)
+	mustEmbedUnimplementedRestoreControllerServiceServer()
+}
+
+// UnimplementedRestoreControllerServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRestoreControllerServiceServer struct{}
+
+func (UnimplementedRestoreControllerServiceServer) PrepareRestore(context.Context, *PrepareRestoreRequest) (*PrepareRestoreResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareRestore not implemented")
+}
+func (UnimplementedRestoreControllerServiceServer) AcknowledgeQuiescence(context.Context, *AcknowledgeQuiescenceRequest) (*AcknowledgeQuiescenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcknowledgeQuiescence not implemented")
+}
+func (UnimplementedRestoreControllerServiceServer) CompleteRestore(context.Context, *CompleteRestoreRequest) (*CompleteRestoreResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteRestore not implemented")
+}
+func (UnimplementedRestoreControllerServiceServer) CheckReadiness(context.Context, *RestoreControllerServiceCheckReadinessRequest) (*RestoreControllerServiceCheckReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
+}
+func (UnimplementedRestoreControllerServiceServer) mustEmbedUnimplementedRestoreControllerServiceServer() {
+}
+func (UnimplementedRestoreControllerServiceServer) testEmbeddedByValue() {}
+
+// UnsafeRestoreControllerServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RestoreControllerServiceServer will
+// result in compilation errors.
+type UnsafeRestoreControllerServiceServer interface {
+	mustEmbedUnimplementedRestoreControllerServiceServer()
+}
+
+func RegisterRestoreControllerServiceServer(s grpc.ServiceRegistrar, srv RestoreControllerServiceServer) {
+	// If the following call panics, it indicates UnimplementedRestoreControllerServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RestoreControllerService_ServiceDesc, srv)
+}
+
+func _RestoreControllerService_PrepareRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareRestoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RestoreControllerServiceServer).PrepareRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RestoreControllerService_PrepareRestore_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RestoreControllerServiceServer).PrepareRestore(ctx, req.(*PrepareRestoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RestoreControllerService_AcknowledgeQuiescence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcknowledgeQuiescenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RestoreControllerServiceServer).AcknowledgeQuiescence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RestoreControllerService_AcknowledgeQuiescence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RestoreControllerServiceServer).AcknowledgeQuiescence(ctx, req.(*AcknowledgeQuiescenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RestoreControllerService_CompleteRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteRestoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RestoreControllerServiceServer).CompleteRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RestoreControllerService_CompleteRestore_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RestoreControllerServiceServer).CompleteRestore(ctx, req.(*CompleteRestoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RestoreControllerService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreControllerServiceCheckReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RestoreControllerServiceServer).CheckReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RestoreControllerService_CheckReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RestoreControllerServiceServer).CheckReadiness(ctx, req.(*RestoreControllerServiceCheckReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RestoreControllerService_ServiceDesc is the grpc.ServiceDesc for RestoreControllerService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RestoreControllerService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "internalrpcauthority.v1.RestoreControllerService",
+	HandlerType: (*RestoreControllerServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "PrepareRestore",
+			Handler:    _RestoreControllerService_PrepareRestore_Handler,
+		},
+		{
+			MethodName: "AcknowledgeQuiescence",
+			Handler:    _RestoreControllerService_AcknowledgeQuiescence_Handler,
+		},
+		{
+			MethodName: "CompleteRestore",
+			Handler:    _RestoreControllerService_CompleteRestore_Handler,
+		},
+		{
+			MethodName: "CheckReadiness",
+			Handler:    _RestoreControllerService_CheckReadiness_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "internalrpcauthority/v1/authority.proto",
+}

@@ -259,6 +259,48 @@
       "stage": "AUTHORITY_PROOF",
       "retryable": true,
       "message": "authority proof verification unavailable"
+    },
+    {
+      "reason": "APPLICATION_CREDENTIAL_INVALID",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "application credential invalid"
+    },
+    {
+      "reason": "AUTHORITY_SCOPE_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "authority scope mismatch"
+    },
+    {
+      "reason": "IDEMPOTENCY_CONFLICT",
+      "grpc_code": "ALREADY_EXISTS",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "authority resolution idempotency conflict"
+    },
+    {
+      "reason": "RESTORE_BARRIER_INCOMPLETE",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore quarantine barrier incomplete"
+    },
+    {
+      "reason": "RESTORE_ANCHOR_REJECTED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore semantic anchor rejected"
+    },
+    {
+      "reason": "RESTORE_CONTROLLER_UNAVAILABLE",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "RESTORE",
+      "retryable": true,
+      "message": "restore controller unavailable"
     }
   ]
 }

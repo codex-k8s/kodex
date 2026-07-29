@@ -4,7 +4,7 @@ title: Доверенный контекст внутренних RPC
 type: contract
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.2.0
 updated: 2026-07-29
 ---
 
@@ -54,13 +54,13 @@ authorization context; синтаксически корректный tuple и�
 
 | Артефакт | Назначение |
 | --- | --- |
-| `contracts/proto/internalrpcauthority/v1/authority.proto` | UDS issuer/verifier RPC и typed error detail |
+| `contracts/proto/internalrpcauthority/v1/authority.proto` | UDS issuer/verifier, preflight resolver, restore controller RPC и typed error detail |
 | `contracts/authorization/v1/jws-protected-header.schema.json` | закрытый protected header |
 | `contracts/authorization/v1/authority-proof.schema.json` | signed actor/tenant/project authority proof |
 | `contracts/authorization/v1/authorization-context.schema.json` | canonical authorization claims |
 | `contracts/authorization/v1/authority-snapshot.schema.json` | signed JWKS + machine policy snapshot |
 | `contracts/authorization/v1/restore-fence-evidence.schema.json` | внешнее монотонное PITR evidence |
-| `contracts/authorization/v1/key-delivery-targets.schema.json` | exact per-workload key/trust fan-out |
+| `contracts/authorization/v1/key-delivery-targets.schema.json` | exact `(workload,role)` key/trust/database-identity fan-out |
 | `contracts/authorization/v1/authorization-error-matrix.json` | полная reason/code/stage/retryable/message matrix |
 | `contracts/authorization/v1/bootstrap-deny-all-policy.json` | безопасное начальное состояние без business bindings |
 | `contracts/authorization/v1/bootstrap-key-delivery-targets.json` | безопасное начальное состояние без key delivery targets |
@@ -105,17 +105,53 @@ authority до полной криптографической проверки 
 
 ### Авторитетное разрешение actor/tenant/project
 
-Authority proof выпускает сервис-владелец либо его отдельный resolver, который
-имеет право читать авторитетное состояние actor/tenant/project. Authority unit
-не назначает business identity и не принимает proof signer по имени из
-request. Для каждой operation binding snapshot задает одну точную четверку:
+Authority proof выпускает только versioned resolver доменного владельца.
+Первый достижимый путь не зависит от уже выпущенного internal context:
 
 ```text
-authority_proof_issuer
-authority_proof_audience
-authority_proof_trust_bundle_id
-authority_proof_max_age_seconds = 15
+control-api-gateway
+  -- mTLS exact gateway SPIFFE + OIDC bearer metadata -->
+/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof
+  -- server-side subject -> actor -> tenant -> project/ownership -->
+signed authority proof
+  -- local UDS SO_PEERCRED -->
+/internalrpcauthority.v1.AuthorizationIssuerService/IssueAuthorizationContext
+  -- mTLS + internal context -->
+/controlplane.v1.ProjectService/GetProject
 ```
+
+`AuthorityProofResolverService` реализует `control-plane` как business owner;
+#186 владеет wire schema, proof verification, key/trust delivery и machine
+policy. Gateway не выбирает business identity. Resolver request содержит
+только `operation_id`, неавторитетный `resource_reference`, idempotency key и
+correlation ID. Actor, tenant, project, ownership, provenance, caller SPIFFE,
+audience и permission в request отсутствуют. OIDC credential находится только
+в metadata `authorization`; interceptor сначала проверяет exact gateway mTLS,
+затем resolver проверяет signature/issuer/audience/time credential, получает
+subject и разрешает subject→actor→tenant→resource внутри состояния
+`control-plane`.
+
+Для каждой operation binding snapshot задаёт один
+`authority_proof_producer_id`. Producer profile фиксирует exact resolver
+SPIFFE/full method/TLS server/trust bundle, тип и metadata application
+credential, proof issuer/audience/trust, 15-second max age, authority sources,
+allowed operation IDs, deadline 2000 ms и не более двух попыток только для
+`Unavailable`/`DeadlineExceeded`. Повтор использует тот же idempotency key.
+Receipt scoped по digest проверенного credential subject, caller workload,
+operation и idempotency key; другой semantic request возвращает
+`AlreadyExists/IDEMPOTENCY_CONFLICT`.
+После двух одинаковых попыток `Unavailable`/`DeadlineExceeded` client adapter
+возвращает bounded `Unavailable/AUTHORITY_PROOF_UNAVAILABLE`; другие коды не
+повторяются.
+
+Credential обычного клиента доказывает только subject. Resolver подписывает
+proof лишь после положительного server-side membership/ownership resolution.
+Даже trusted signer не может связать actor tenant A с tenant/project B:
+проверка закрывается `PermissionDenied/AUTHORITY_SCOPE_MISMATCH` до подписи.
+Неизвестный или скрытый ресурс имеет одинаковый `NotFound` domain outcome без
+утечки tenant. First-call и cross-tenant contracts находятся в
+`fixtures/authority-proof-first-call.json` и
+`fixtures/authority-proof-negative.json`.
 
 Proof имеет `typ=mattercodex-internal-rpc-authority-proof+jws`, проверяется
 только ключом exact issuer/trust generation и содержит semantic model
@@ -155,6 +191,13 @@ proof trust/persistence состояние закрыто отклоняются
 негативных случаев находится в
 `fixtures/authority-proof-negative.json`.
 
+Bootstrap policy имеет одновременно пустые `authority_proof_producers` и
+`operation_bindings`; поэтому ни resolver preflight, ни business RPC не
+разрешён до атомарной публикации связанной policy. Каждый authority source
+operation обязан принадлежать её единственному producer profile, а каждая
+operation — его `allowed_operation_ids`; неиспользуемый producer либо source
+отклоняет snapshot.
+
 ### Проверка и one-time reservation
 
 | Этап | Точный контракт |
@@ -188,14 +231,14 @@ RPC всегда получает новый context/JTI. Бизнесовая c
 
 | Этап | Владелец и переход |
 | --- | --- |
-| Intent | Publisher под PostgreSQL lease CAS-фиксирует один immutable rotation intent с exact generation, digest и множеством targets из `bootstrap-key-delivery-targets.json` либо его утвержденной замены |
-| Подготовка | Publisher генерирует auth key как `NEXT`; private part и manifest trust overlap пишет через Vault KV v2 CAS только в exact paths зарегистрированных targets; wildcard/list/delete запрещены |
-| Доставка | Vault CSI доставляет auth private key только issuer, а manifest trust независимо от snapshot/private key — каждому issuer и verifier; Secret/mount не является доказательством применения |
-| Cryptographic readback | Каждый issuer проверяет private→public JWK, каждый issuer/verifier проверяет certificate chain/generation; exact readbacks фиксируются в `authority_key_delivery_readbacks`, publisher требует ровно issuer+verifier каждого target |
+| Intent | Publisher под PostgreSQL lease CAS-фиксирует один immutable rotation intent с exact generation, digest и union обязательных `(workload,role)` targets из всех operation bindings и producer profiles |
+| Подготовка | Publisher генерирует auth/proof key как `NEXT`; private parts и trust overlap пишет через Vault KV v2 CAS только в exact role paths зарегистрированных targets; wildcard/list/delete запрещены |
+| Доставка | Caller `AUTHORIZATION_ISSUER` получает auth private key, manifest trust и proof trust; target `AUTHORIZATION_VERIFIER` получает только snapshot/manifest trust; `AUTHORITY_PROOF_RESOLVER` получает proof private key и trust. Target-only workload допустим и auth private key не получает |
+| Cryptographic readback | Каждая обязательная `(workload,role)` identity проверяет только свой private→public/trust material; exact readback фиксируется отдельным workload/role-bound PostgreSQL login principal, publisher требует ровно одну строку на каждую требуемую роль |
 | Публикация | Только после всех delivery readbacks publisher строит следующий signed snapshot с `source_revision + 1`, применимым key/policy/signer counter, predecessor и bounded history |
 | Kubernetes CAS | Publisher может `get/update/patch` только заранее созданный Secret `internal-rpc-authority-snapshot`; `create/delete` запрещены |
 | Readback publisher | После CAS publisher перечитывает exact Secret, проверяет compact JWS, signer certificate, canonical payload и digest; только затем финализирует revision в PostgreSQL |
-| Readback consumers | Issuer и verifier независимо проверяют snapshot signature, certificate validity/generation, canonical payload, predecessor/history и persistent high-watermark; затем CAS-продвигают собственные watermarks и записывают exact `(workload,role,revision,digest,generations)` readback |
+| Readback consumers | Issuer, verifier и proof resolver независимо проверяют относящийся к роли served state; затем server-derived DB mapping фиксирует exact `(workload,role,workload_generation,revision,digest,key_generation,credential_generation)` readback |
 | Readiness | Application UID вызывает оба реальных UDS `CheckReadiness`; readiness положительна только при совпадении фактически обслуживаемого digest, publisher-finalized revision и persistent store |
 | Promotion | Не ранее 40 секунд после readback `NEXT` становится `CURRENT`, прежний current — `PREVIOUS`, а новый ключ создается как `NEXT` |
 | Retirement | `PREVIOUS` удаляется отдельной revision не ранее ещё одного окна 40 секунд после подтвержденной promotion |
@@ -210,8 +253,11 @@ publisher readback. До однозначного завершения либо 
 publisher не создает новую generation. Порядок
 `prepare → deliver → cryptographic readback → publish → promote` одинаков для
 auth key и manifest signer; для signer новый public certificate сначала
-доставляется всем issuer и verifier в overlap bundle, и лишь затем новая
-snapshot revision подписывается новым private signer.
+доставляется всем требуемым issuer/verifier/resolver ролям в overlap bundle, и
+лишь затем новая snapshot revision подписывается новым private signer. Proof
+signer проходит тот же `CURRENT/NEXT/PREVIOUS` overlap: resolver подтверждает
+private→public, caller issuer — proof trust, и promotion запрещена без обеих
+role-bound readback строк.
 
 ### Restart, пропущенные revisions и PITR
 
@@ -226,7 +272,7 @@ snapshot revision подписывается новым private signer.
 | Crash до Kubernetes CAS | Новая revision не видима; прежний snapshot остаётся current |
 | Crash после CAS до DB finalize | На restart publisher exact readback совпадающей revision/digest идемпотентно завершает finalize; другой digest блокирует readiness |
 | Crash после verifier CAS до pointer swap | На restart pointer строится из persistent watermark и того же signed snapshot; более старый snapshot не обслуживается |
-| PITR replay database | Environment restore controller до restore CAS-публикует signed external `PREPARED` anchor вне PostgreSQL и закрывает traffic; после restore публикует `COMPLETED`, recovery job проверяет evidence и атомарно фиксирует DB fence; issuer/verifier остаются unready до exact epoch/digest match и 40-second safe window |
+| PITR replay database | `internal-rpc-authority-restore-controller` сначала закрывает каждый issuance/reservation path и собирает ack всех текущих workload/role generations; только затем semantic-CAS публикует `PREPARED`. После restore публикует `COMPLETED`, recovery step фиксирует DB fence; все роли unready до exact external readback и 40-second safe window |
 | PITR publisher database | Publisher не переиспользует revision; exact Kubernetes readback и persistent history должны доказать следующий номер/digest, иначе публикация блокируется |
 
 Удалять или обнулять watermark/replay rows для recovery запрещено. Rejoin
@@ -234,29 +280,56 @@ snapshot revision подписывается новым private signer.
 принадлежит recovery job, не caller и не application pod. Сам fence в
 восстановленной PostgreSQL не является достаточным доказательством: текущий
 signed external anchor `internal-rpc-authority-restore-evidence` хранится в
-Kubernetes, принадлежит environment restore controller и не входит в PITR
-authority database.
+Kubernetes, принадлежит deployable
+`internal-rpc-authority-restore-controller` из артефакта #186 и не входит в
+PITR authority database.
 
 Нормативный порядок restore закрыт:
 
 ```text
-readiness false + consuming workloads quiesced
+controller OPEN -> QUIESCING
+-> every active (workload,role,generation) stops issuance/reservation,
+   drains inflight and acks through exact mTLS identity
 -> signed external PREPARED anchor
--> database restore
+-> restore-operator Job verifies PREPARED readback and performs exact DB restore
 -> signed external COMPLETED evidence
--> recovery Job exact read + signature/predecessor/high-watermark checks
+-> recovery step exact read + signature/predecessor/semantic-anchor checks
 -> atomic database fence CAS
 -> database-clock safe window 40 seconds
--> issuer/verifier external-anchor cryptographic readback
+-> every workload/role external-anchor cryptographic readback
 -> application readiness
 ```
 
-Пропуск шага, stale/missing evidence, mismatch external
+`PREPARED` содержит revision и digest реестра ожидаемых
+`(workload,role,generation)`, digest полного ack set и равные
+`expected_ack_count`/`accepted_ack_count`. Missing ack, stale generation,
+неостановленный рабочий issuance/reservation path или ошибка signer/controller
+запрещают `PREPARED`. Пропуск шага, stale/missing evidence, mismatch external
 `(restore_epoch,anchor_revision,digest)` с database fence, ошибка Job либо
 неистекшее окно держат traffic закрытым. Startup issuer/verifier зависит от
 завершенной recovery capability, а каждый переход readiness повторно сверяет
 external anchor; restored database row не может самостоятельно открыть
 traffic.
+
+Kubernetes `resourceVersion` используется только как lost-update CAS и не
+является semantic high-watermark. Forward-only anchor задают signed
+`anchor_revision`, `restore_epoch` и exact predecessor revision/digest.
+`ValidatingAdmissionPolicy`
+`internal-rpc-authority-restore-anchor-forward-only` с `failurePolicy: Fail`
+и exact binding разрешает только `old.anchor_revision + 1`, неизбывающий epoch
+и predecessor, равный фактически обслуживаемому old digest; lower,
+same-revision mutation, delete и запись не controller ServiceAccount
+отклоняются. Одновременная потеря authority DB и внешнего Kubernetes anchor
+не восстанавливается автоматически и оставляет traffic в quarantine до
+отдельной disaster-recovery процедуры владельца.
+
+Чтобы admission был исполняем без разбора JWS внутри CEL, controller атомарно
+проецирует revision/epoch/evidence digest/predecessor в пять exact
+`mattercodex.dev/restore-*` annotations того же Secret. Policy сравнивает
+`oldObject`/`object` annotations. После API write controller и каждый consumer
+перечитывают Secret, проверяют JWS и требуют полного равенства annotations
+подписанным claims и SHA-256 compact JWS; annotation сама по себе authority не
+является.
 
 ## UDS ownership и lifecycle
 
@@ -330,6 +403,12 @@ internalrpcauthority.v1
 /internalrpcauthority.v1.AuthorizationIssuerService/CheckReadiness
 /internalrpcauthority.v1.AuthorizationVerifierService/VerifyAuthorizationContext
 /internalrpcauthority.v1.AuthorizationVerifierService/CheckReadiness
+/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof
+/internalrpcauthority.v1.AuthorityProofResolverService/CheckReadiness
+/internalrpcauthority.v1.RestoreControllerService/PrepareRestore
+/internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence
+/internalrpcauthority.v1.RestoreControllerService/CompleteRestore
+/internalrpcauthority.v1.RestoreControllerService/CheckReadiness
 ```
 
 Source расположен в `contracts/proto/internalrpcauthority/v1`. Go package
@@ -342,6 +421,8 @@ numbers и names не переиспользуются; удаление рез�
 | --- | --- |
 | Decoded Proto message | не более 16 KiB |
 | `operation_id` | 3–128 bytes, lowercase dotted/hyphenated identifier |
+| Resolver `resource_reference` | 1–256 bytes, operation-specific lookup key; не authority |
+| Idempotency key | canonical lowercase UUID, 36 bytes |
 | ID/reference/JTI/correlation | canonical lowercase UUID, 36 bytes |
 | SHA-256 digest | ровно 64 lowercase hex |
 | SPIFFE ID | 12–512 bytes, absolute `spiffe://` |
@@ -359,6 +440,14 @@ required semantic field дают `InvalidArgument`.
 
 UDS использует только binary Proto. ProtoJSON на UDS запрещен. CLI/import JSON
 проходит те же правила unknown/duplicate/null до преобразования в Proto.
+Resolver и restore controller также используют binary Proto поверх mTLS.
+Application credential resolver находится только в bounded transport metadata
+и не сериализуется в Proto. `ResolveAuthorityProofRequest` содержит ровно
+`operation_id`, `resource_reference`, `idempotency_key`, `correlation_id`;
+actor/tenant/project/ownership/SPIFFE/audience/permission/token/internal
+context fields запрещены. Restore ack не принимает workload/role: controller
+выводит их из проверенного mTLS peer и сопоставляет request generation с
+активным registry.
 
 ### Нормативный caster Proto → proof/policy → JWS → verified Proto
 
@@ -569,19 +658,28 @@ y=<43-char unpadded base64url>
 - exact full RPC;
 - exact downstream TLS server name и trust bundle ID;
 - одну machine permission;
-- exact authority proof issuer, proof audience, proof trust bundle ID и
-  maximum age 15 seconds;
+- ровно один `authority_proof_producer_id`, который разрешает эту operation;
 - закрытый allowlist authority sources;
 - признак обязательности project;
 - exact local caller/target UID, primary GID и shared fsGroup.
 
-Wildcard workload, SPIFFE, proof issuer, TLS server name, trust bundle,
-audience, RPC или permission запрещен. Client adapter проверяет TLS с exact
-SNI/hostname, указанным binding, exact trust bundle и target SPIFFE. Issuer
-проверяет authority proof только по exact proof issuer/audience/trust bundle
-из той же binding. Duplicate `operation_id`, duplicate full binding, один full
-RPC с неоднозначными permissions либо binding без ровно одного key delivery
-target для caller workload отклоняют snapshot целиком.
+Producer profile содержит exact resolver workload/SPIFFE/full method/TLS
+server/trust, application credential, proof issuer/audience/trust/max age,
+authority sources, allowed operation IDs, timeout/retry и server-resolved
+fields. Wildcard workload, SPIFFE, proof issuer, TLS server name, trust
+bundle, audience, RPC, permission или delivery path запрещен. Client adapter
+проверяет TLS с exact SNI/hostname, trust bundle и target SPIFFE. Issuer
+проверяет proof по profile, на который ссылается binding. Duplicate
+`operation_id`, неоднозначный full RPC, отсутствующий/лишний producer либо
+несовпадение operation/source с producer отклоняют snapshot целиком.
+
+Validator строит union ролей: caller каждой binding требует ровно одну
+`AUTHORIZATION_ISSUER`, target — ровно одну `AUTHORIZATION_VERIFIER`, owner
+каждого producer — ровно одну `AUTHORITY_PROOF_RESOLVER`. Одна
+`(workload,role)` строка может покрыть несколько operations, но duplicate,
+missing или extra/opposite role запрещены. Поэтому target-only workload
+валиден без issuer и private auth key; отсутствие verifier/readback либо
+появление auth private key у verifier закрывает snapshot.
 
 Machine permission обозначает право конкретного workload вызвать точный RPC.
 Она не является business role и не разрешает aggregate ownership. Actor kind
@@ -591,23 +689,27 @@ Trust graph закрыт следующими ребрами:
 
 | Caller | Target | Обязательное доказательство |
 | --- | --- | --- |
+| Gateway | Authority proof resolver | exact mTLS gateway SPIFFE + проверенный application credential; resolver server-side выводит actor/tenant/project/ownership |
 | Application | Local issuer | private UDS, socket owner/mode, `SO_PEERCRED`, exact caller workload binding |
 | Authoritative owner/resolver | Issuer | signed authority proof, exact proof issuer/trust generation, caller workload, operation, audiences, 15-second freshness, revision watermark и one-time proof JTI |
 | Issuer | Signed snapshot | independently delivered manifest trust, signature/certificate validity+generation, canonical payload, predecessor/high-watermark, exact cryptographic readback |
 | Issuer client adapter | Downstream target | exact TLS SNI/hostname, trust bundle, target SPIFFE и один compact JWS |
 | Downstream target interceptor | Local verifier | private UDS, `SO_PEERCRED`, фактический full method и проверенный mTLS peer |
 | Verifier | Signed snapshot | independently delivered manifest trust overlap, signature/certificate generation, persistent target watermark и served digest |
-| Verifier | Replay store | отдельная PostgreSQL runtime role, TLS hostname/CA и одна transaction reservation |
+| Issuer/verifier/resolver | Readback store | отдельный login principal exact `(workload,role,generation)`, TLS hostname/CA, server-derived mapping и одна transaction |
+| Verifier | Replay store | workload/role-bound PostgreSQL login, TLS hostname/CA и одна transaction reservation |
 | Target adapter | Domain owner | только neutral verified context; owner заново проверяет tenant/project/resource state |
 
 Других доверительных ребер нет. В частности, issuer не доверяет target claims
 caller, verifier не доверяет full method из JWS без фактического transport
 method, а domain owner не доверяет permission как доказательству ownership.
 
-`bootstrap-deny-all-policy.json` имеет пустой `operation_bindings` и
-`default_decision=DENY`. Это рабочее безопасное начальное состояние, а не
-пример или fallback. Unit #187 добавляет exact bindings одновременно со своим
-versioned Proto; до этого ни один business RPC к control-plane не разрешен.
+`bootstrap-deny-all-policy.json` имеет пустые `authority_proof_producers` и
+`operation_bindings`, а также `default_decision=DENY`.
+`bootstrap-key-delivery-targets.json` имеет пустой `targets`. Это рабочее
+безопасное начальное состояние, а не fallback. Unit #187 добавляет exact
+producer/bindings одновременно со своим versioned Proto; до этого ни
+preflight, ни business RPC к control-plane не разрешены.
 
 ## Persistent replay и high-watermarks
 
@@ -676,14 +778,57 @@ write access к таблице.
 cache может хранить только immutable accepted snapshot pointer и не заменяет
 reservation/watermark.
 
+### Workload/role-bound readback
+
+Shared capability roles `internal_rpc_authority_issuer` и
+`internal_rpc_authority_verifier` имеют `NOLOGIN` и не могут использоваться
+как session identity. Publisher для каждой активной
+`(workload_id,role,workload_generation,credential_generation)` создаёт
+отдельный PostgreSQL login principal из exact delivery registry. Vault
+database secret доставляет его только соответствующему sidecar/resolver;
+current и next principals кратко перекрываются, а previous отзывается лишь
+после promotion и readback.
+
+Таблица `authority_workload_database_identities` имеет unique active keys по
+`session_user` и `(workload_id,role,workload_generation)`. Каждая readback row
+имеет FK на эту identity и unique
+`(workload_id,role,workload_generation,source_revision,digest_sha256)`.
+`ENABLE ROW LEVEL SECURITY` и `FORCE ROW LEVEL SECURITY` применяют
+default-deny policy по `session_user`.
+
+Клиент не получает `INSERT/UPDATE` таблиц. Он вызывает только
+`SECURITY DEFINER` function
+`record_authority_key_delivery_readback(revision,digest,generations,served_proof)`;
+параметров `workload_id` и `role` у функции нет. Function имеет fixed
+`search_path=pg_catalog,internal_rpc_authority`, `EXECUTE` для `PUBLIC`
+отозван, server-side разрешает `session_user`, блокирует exact registry row,
+проверяет active credential/workload generation и role-specific
+cryptographic proof, затем атомарно пишет и перечитывает строку. Readiness
+проверяет тот же transaction/readback path.
+Результат хранится в `authority_key_delivery_readbacks`; сама таблица не
+принимает прямой caller-controlled workload или role.
+
+Principal одного target не пишет за другой target или opposite role; retired
+generation и shared group principal закрыто отклоняются. Негативный
+integration contract находится в
+`fixtures/readback-authority-negative.json`. Эти identity и readbacks входят
+в тот же rotation intent, поэтому promotion невозможна при missing,
+ambiguous либо cross-role row.
+
 ### PITR fence
 
-До любого restore environment restore controller CAS-повышает внешний
-`anchor_revision`/`restore_epoch`, публикует signed `PREPARED` evidence в exact
-Kubernetes Secret и quiesce подтверждает закрытый traffic. После restore тот
-же controller публикует следующий signed `COMPLETED` evidence с predecessor,
-backup manifest digest и completion time. Реальный deployable
-`internal-rpc-authority-recovery-job`:
+До любого restore двухрепличный
+`internal-rpc-authority-restore-controller` из digest-only artifact #186
+получает ручной code-first запрос только от
+`internal-rpc-authority-restore-operator` по mTLS с projected ServiceAccount
+token exact audience. Controller переводит состояние в `QUIESCING`; каждый
+sidecar/resolver на каждом рабочем issuance/reservation пути читает external
+quarantine, прекращает приём, дожидается inflight и подтверждает текущую
+generation по собственной mTLS workload/role identity. Только полный ack set
+разрешает signed `PREPARED`. Restore operator перечитывает exact served
+evidence, выполняет TLS restore exact PostgreSQL cluster, вызывает
+`CompleteRestore`, перечитывает `COMPLETED` и запускает recovery step того же
+Job. Реальный `internal-rpc-authority-recovery-job` step:
 
 1. читает exact Secret через resourceNames-limited `get`;
 2. проверяет JCS, signature, controller certificate generation, predecessor,
@@ -701,10 +846,21 @@ backup manifest digest и completion time. Реальный deployable
 - cleanup replay rows не выполняется.
 
 Это исключает повтор context, reservation которого исчезла из-за PITR.
-Отсутствующий/stale restore evidence, ошибка recovery Job, восстановленная
+Отсутствующий/stale restore evidence, missing/stale ack, ошибка controller,
+signer/admission/readback либо recovery step, восстановленная
 старая fence row или неистекшее safe window являются операционным блокером;
 автоматический watermark reset запрещен. Внешний anchor не хранится в
 authority PostgreSQL и потому не откатывается вместе с PITR.
+
+Controller использует отдельные ServiceAccount, bounded config, exact
+Kubernetes Secret/Lease RBAC и egress только к exact Kubernetes API/Vault.
+Restore operator не имеет Kubernetes write RBAC; его PostgreSQL restore
+credential доставляется Job через Vault и ограничен exact cluster. Controller
+signer и trust ротируются `CURRENT/NEXT/PREVIOUS`, проходят
+private→public/served-evidence readback, а readiness требует фактически
+наблюдаемую admission policy/binding и semantic anchor. Негативный contract
+lower/same anchor, missing ack, stale generation, signature/controller failure
+и restore без `PREPARED` находится в `fixtures/restore-negative.json`.
 
 ## Forward-only rotation protocol
 
@@ -731,14 +887,15 @@ Verifier отклоняет snapshot с другой длительностью,
 
 1. Publisher фиксирует immutable rotation intent и генерирует новый key pair.
 2. Через Vault KV v2 CAS пишет private key только в exact path каждого
-   зарегистрированного issuer target; wildcard/list/delete запрещены.
+   зарегистрированного `AUTHORIZATION_ISSUER`; wildcard/list/delete запрещены.
 3. Каждый issuer проверяет mounted private key против intended `NEXT` public
    JWK и фиксирует cryptographic readback; publisher требует полный
-   per-workload fan-out.
+   per-workload/role fan-out.
 4. Publisher публикует public key как `NEXT`, выполняет Kubernetes CAS и exact
    cryptographic readback.
-5. Issuer и verifier независимо проверяют snapshot, продвигают собственные
-   watermarks и подтверждают served tuple.
+5. Все требуемые issuer/verifier/resolver роли независимо проверяют относящийся
+   к ним snapshot/trust, продвигают собственные watermarks и подтверждают
+   served tuple.
 6. Не ранее 40 секунд publisher повышает revision и меняет
    `NEXT -> CURRENT`, `CURRENT -> PREVIOUS`, добавляя новый `NEXT`.
 7. Issuer подписывает новым current только после readback этого snapshot.
@@ -752,13 +909,13 @@ revision до readback неопределенного предыдущего CAS
 Manifest signer certificate имеет отдельный generation. Ротация:
 
 1. Publisher через exact Vault targets и CAS добавляет новый signer public
-   certificate в независимые manifest trust bundles всех issuer и verifier;
+   certificate в независимые manifest trust bundles всех требуемых ролей;
    старый остается.
-2. Каждый issuer и verifier криптографически подтверждает bundle overlap,
+2. Каждая issuer/verifier/resolver role криптографически подтверждает overlap,
    certificate validity/generation и записывает readback.
 3. Publisher подписывает следующую revision новым signer и повышает
    `signer_generation`.
-4. Каждый issuer/verifier проверяет новую signature, canonical payload,
+4. Каждая зарегистрированная role проверяет новую signature, canonical payload,
    predecessor/high-watermark и served readback.
 5. После accepted snapshot и overlap window старый certificate удаляется
    отдельным CAS-изменением всех exact trust targets.
@@ -770,7 +927,7 @@ issuer/verifier readiness false.
 
 ## Success, errors и negative paths
 
-Каждый non-OK UDS status содержит ровно один
+Каждый non-OK authority UDS либо mTLS RPC status содержит ровно один
 `internalrpcauthority.v1.AuthorizationErrorDetail`. Detail
 содержит только reason, stage, retryable и canonical correlation UUID. Status
 message является фиксированной английской строкой по reason и не содержит
@@ -789,6 +946,9 @@ diagnostics или PII.
 | Proof rollback/same-revision mutation | `FailedPrecondition` | `AUTHORITY_PROOF_REVISION_REJECTED` | false |
 | Proof JTI уже зарезервирован | `Unauthenticated` | `AUTHORITY_PROOF_REPLAY_DETECTED` | false |
 | Proof trust/watermark/reservation path недоступен | `Unavailable` | `AUTHORITY_PROOF_UNAVAILABLE` | true |
+| Resolver application credential недействителен | `Unauthenticated` | `APPLICATION_CREDENTIAL_INVALID` | false |
+| Actor tenant A запрошен для tenant/project B | `PermissionDenied` | `AUTHORITY_SCOPE_MISMATCH` | false |
+| Idempotency key повторён с другим semantic request | `AlreadyExists` | `IDEMPOTENCY_CONFLICT` | false |
 | Unknown operation или provenance source | `PermissionDenied` | `OPERATION_NOT_ALLOWED` / `AUTHORITY_PROVENANCE_REJECTED` | false |
 | Не три JWS segments, bad base64url, duplicate/null/unknown JSON | `Unauthenticated` | `MALFORMED_JWS` | false |
 | Wrong `alg/typ/kid/crit/mcxv` | `Unauthenticated` | `INVALID_PROTECTED_HEADER` | false |
@@ -805,6 +965,9 @@ diagnostics или PII.
 | Snapshot lower/same-mutation/history gap | `FailedPrecondition` | `SNAPSHOT_ROLLBACK` / `SNAPSHOT_MUTATION` / `SNAPSHOT_HISTORY_GAP` | false |
 | PostgreSQL/replay store недоступен | `Unavailable` | `PERSISTENCE_UNAVAILABLE` | true |
 | Snapshot file/trust/readback временно недоступен | `Unavailable` | `SNAPSHOT_UNAVAILABLE` / `READBACK_MISMATCH` | true |
+| Missing/stale workload generation ack или restore без `PREPARED` | `FailedPrecondition` | `RESTORE_BARRIER_INCOMPLETE` | false |
+| Lower/same-mutation/predecessor/signature anchor | `FailedPrecondition` | `RESTORE_ANCHOR_REJECTED` | false |
+| Controller/admission/served anchor временно недоступен | `Unavailable` | `RESTORE_CONTROLLER_UNAVAILABLE` | true |
 | Непредвиденный дефект | `Internal` | `INTERNAL` | false |
 
 Target transport до локального verifier использует тот же detail для
@@ -826,20 +989,23 @@ Descriptor test требует one-to-one coverage enum↔matrix; неизвес
 
 Capability registry фиксирует:
 
-- один digest-only OCI artifact с init/issuer/verifier/publisher/CLI binaries;
+- один digest-only OCI artifact с init/issuer/verifier/publisher,
+  restore-controller/restore-operator/recovery и CLI binaries;
 - issuer/verifier как sidecars consuming workload и recovery binary в том же
   artifact contract;
 - publisher как отдельный двухрепличный Deployment с PostgreSQL lease;
-- recovery Job как отдельный deployable с exact ServiceAccount, binary,
-  signed evidence interface, минимальной DB role и default-closed ordering;
+- двухрепличный restore controller с exact Proto, ServiceAccount, signer,
+  admission readback, minimal Secret/Lease RBAC и default-closed policy;
+- ручной code-first restore-operator Job с exact mTLS interface, bounded
+  PostgreSQL restore credential и recovery step того же Job;
 - внешний монотонный restore evidence anchor, который не восстанавливается
   вместе с PostgreSQL;
-- PostgreSQL source of truth и отдельные issuer/verifier/publisher/recovery/
-  migrator roles;
+- PostgreSQL source of truth, `NOLOGIN` capability groups и отдельные login
+  principals на каждую `(workload,role,generation)`;
 - publisher ownership генерации и Vault KV v2 CAS-write auth private keys и
-  manifest trust overlap по exact per-workload target registry;
+  manifest/proof trust overlap по exact per-workload/role target registry;
 - Vault CSI delivery private keys/trust без secret values и cryptographic
-  issuer/verifier readback;
+  role-bound issuer/verifier/resolver readback;
 - exact pre-created Kubernetes Secret и resourceNames-limited RBAC publisher;
 - UDS-only ingress sidecars;
 - exact PostgreSQL/Kubernetes API destinations без wildcard egress;
@@ -858,8 +1024,11 @@ Readiness положительна только если:
   high-watermark и exact readback;
 - issuer проверил authority proof trust, proof watermark/reservation path и
   exact proof operation binding;
+- proof resolver проверил application credential/domain read path,
+  private→public proof signer и served policy readback;
 - publisher финализировал exact readback revision/digest;
-- issuer и verifier обслуживают тот же source/policy/key-set/signer tuple;
+- issuer, verifier и proof resolver обслуживают согласованный
+  source/policy/key-set/signer tuple;
 - verifier persistent watermark, replay reservation и restore fence доступны;
 - external restore anchor имеет `COMPLETED`, совпадает по epoch/digest с
   database fence и safe window истекло;
@@ -894,9 +1063,10 @@ version и exact remote plugin version+revision. Contract tests проверяю
 compiled Proto descriptors, exact fields/numbers/types/reserved authority,
 binary round-trip/presence/time/safe-integer mapping, mutation regressions
 запрещенных caller fields, RFC 8785 UTF-8/base64url golden, proof negative
-fixtures, registry ownership, schema closure, deny-all bootstrap, one-to-one
-operation/key-delivery bindings, UDS identities/modes, issuer manifest trust,
-rotation fan-out/readback, recovery deployable/external fence ordering и
+fixtures, registry ownership, schema closure, deny-all bootstrap, producer
+coverage, union caller/target/resolver roles, one-to-one workload/role
+delivery/readback, UDS identities/modes, rotation fan-out, executable restore
+controller/semantic anchor/quarantine ordering, DB principal isolation и
 полную enum↔error matrix.
 
 ## Ручная проверка contract milestone
@@ -904,14 +1074,22 @@ rotation fan-out/readback, recovery deployable/external fence ordering и
 1. Открыть compiled Proto descriptor и убедиться, что issuer request содержит
    только fields `1 operation_id`, `3 correlation_id`,
    `4 authority_proof_compact_jws`, а number/name `2/authority` reserved.
-2. Сопоставить четыре full methods с UDS paths и capability registry.
+2. Сопоставить issuer/verifier UDS, resolver preflight и restore controller
+   full methods с capability registry.
 3. Проверить JSON Schemas: `additionalProperties=false`, ES256/typ/crit/mcxv,
    exact claims, JWK P-256 и max history 32.
-4. Проверить bootstrap policy: empty bindings и default deny.
+4. Проверить bootstrap policy: empty producers/bindings, empty delivery
+   targets и default deny.
 5. Проверить, что proof/replay/watermark принадлежат PostgreSQL, внешний PITR
    anchor находится вне restored DB, а `emptyDir` — только sockets.
-6. Выполнить Buf lint/build/codegen diff и targeted contract tests.
-7. Убедиться, что PR не содержит secret values, private keys, DSN, tokens или
+6. По `authority-proof-first-call.json` пройти preflight без internal context,
+   local issuance и первый `control-api-gateway → control-plane` RPC; затем
+   подтвердить, что trusted-signer cross-tenant fixture отклоняется до подписи.
+7. По delivery/restore/readback negative fixtures проверить missing target
+   verifier, opposite role/private key, lower/same anchor, missing/stale ack и
+   cross-target DB write.
+8. Выполнить Buf lint/build/codegen diff и targeted contract tests.
+9. Убедиться, что PR не содержит secret values, private keys, DSN, tokens или
    production credentials.
 
 ## Проверенная внешняя документация
@@ -919,7 +1097,9 @@ rotation fan-out/readback, recovery deployable/external fence ordering и
 Context7 повторно вызван для gRPC-Go, go-jose и pgx. Все три resolve-запроса
 29 июля 2026 года вернули `Monthly quota exceeded`; документация через
 Context7 недоступна. В fix-cycle раунда 1 отдельно повторен resolve Buf CLI с
-тем же результатом `Monthly quota exceeded`.
+тем же результатом `Monthly quota exceeded`. В fix-cycle раунда 2 отдельно
+повторены resolve PostgreSQL, Kubernetes, HashiCorp Vault, Buf CLI и Protocol
+Buffers; каждый запрос вернул тот же `Monthly quota exceeded`.
 
 Проверены только официальные первичные источники:
 
@@ -946,11 +1126,30 @@ Context7 недоступна. В fix-cycle раунда 1 отдельно по
 - Vault KV v2:
   `https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v2` — exact
   data paths, `create/read/update`, version metadata и CAS;
+- Vault database secrets:
+  `https://developer.hashicorp.com/vault/docs/secrets/databases` — уникальные
+  auditable credentials, static-role one-to-one username и rotation;
+- Vault Kubernetes/CSI:
+  `https://developer.hashicorp.com/vault/docs/auth`,
+  `https://developer.hashicorp.com/vault/docs/deploy/kubernetes` и
+  `https://developer.hashicorp.com/vault/docs/deploy/kubernetes/csi/configurations`
+  — workload authentication и file delivery;
+- PostgreSQL row security:
+  `https://www.postgresql.org/docs/current/ddl-rowsecurity.html` — default
+  deny, policy по database role, `ENABLE`/`FORCE ROW LEVEL SECURITY`;
+- PostgreSQL `CREATE FUNCTION` и session identity:
+  `https://www.postgresql.org/docs/current/sql-createfunction.html` и
+  `https://www.postgresql.org/docs/current/functions-info.html` —
+  `SECURITY DEFINER`, безопасный `search_path`, `session_user`/`current_user`;
 - Kubernetes API/Secret:
   `https://kubernetes.io/docs/reference/using-api/api-concepts/` и
   `https://kubernetes.io/docs/concepts/configuration/secret/` —
   resourceVersion lost-update protection и eventually consistent projection,
   из-за которой file delivery требует cryptographic runtime readback;
+- Kubernetes `ValidatingAdmissionPolicy` и RBAC:
+  `https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/`
+  и `https://kubernetes.io/docs/reference/access-authn-authz/rbac/` —
+  fail-closed admission transition checks и минимальные exact permissions;
 - RFC 7515, RFC 7517, RFC 7518 — compact JWS, JWK/JWKS и ES256/P-256;
 - RFC 8725 — algorithm verification, audience/issuer validation и explicit
   typing;

@@ -109,6 +109,12 @@
       "maxLength": 142,
       "pattern": "^urn:mattercodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
+    "producerId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$"
+    },
     "operationId": {
       "type": "string",
       "minLength": 3,
@@ -366,10 +372,7 @@
         "target_tls_server_name",
         "target_trust_bundle_id",
         "permission",
-        "authority_proof_issuer",
-        "authority_proof_audience",
-        "authority_proof_trust_bundle_id",
-        "authority_proof_max_age_seconds",
+        "authority_proof_producer_id",
         "authority_sources",
         "project_required",
         "local_caller",
@@ -409,17 +412,8 @@
         "permission": {
           "$ref": "#/$defs/permission"
         },
-        "authority_proof_issuer": {
-          "$ref": "#/$defs/spiffeId"
-        },
-        "authority_proof_audience": {
-          "$ref": "#/$defs/authorityProofAudience"
-        },
-        "authority_proof_trust_bundle_id": {
-          "$ref": "#/$defs/trustBundleId"
-        },
-        "authority_proof_max_age_seconds": {
-          "const": 15
+        "authority_proof_producer_id": {
+          "$ref": "#/$defs/producerId"
         },
         "authority_sources": {
           "type": "array",
@@ -448,6 +442,172 @@
         }
       }
     },
+    "authorityProofProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "producer_id",
+        "caller_workload_id",
+        "caller_spiffe_id",
+        "owner_workload_id",
+        "owner_spiffe_id",
+        "full_method",
+        "tls_server_name",
+        "transport_trust_bundle_id",
+        "application_credential",
+        "application_credential_metadata",
+        "application_credential_issuer",
+        "application_credential_audience",
+        "application_credential_trust_bundle_id",
+        "authority_proof_issuer",
+        "authority_proof_audience",
+        "authority_proof_trust_bundle_id",
+        "authority_proof_max_age_seconds",
+        "deadline_milliseconds",
+        "max_attempts",
+        "retryable_grpc_codes",
+        "idempotency_scope",
+        "authority_sources",
+        "allowed_operation_ids",
+        "server_resolved_fields"
+      ],
+      "properties": {
+        "producer_id": {
+          "$ref": "#/$defs/producerId"
+        },
+        "caller_workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "caller_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "owner_workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "owner_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "full_method": {
+          "const": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof"
+        },
+        "tls_server_name": {
+          "$ref": "#/$defs/tlsServerName"
+        },
+        "transport_trust_bundle_id": {
+          "$ref": "#/$defs/trustBundleId"
+        },
+        "application_credential": {
+          "enum": [
+            "OIDC_BEARER",
+            "MATTERMOST_SIGNED_EVENT",
+            "AGENT_SESSION_GRANT",
+            "PROCESS_RUN_GRANT",
+            "AUTOMATION_OCCURRENCE_GRANT"
+          ]
+        },
+        "application_credential_metadata": {
+          "const": "authorization"
+        },
+        "application_credential_issuer": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 512,
+          "pattern": "^https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?:/[A-Za-z0-9._~-]+)*$"
+        },
+        "application_credential_audience": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9._:-]{1,126}[A-Za-z0-9])$"
+        },
+        "application_credential_trust_bundle_id": {
+          "$ref": "#/$defs/trustBundleId"
+        },
+        "authority_proof_issuer": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "authority_proof_audience": {
+          "$ref": "#/$defs/authorityProofAudience"
+        },
+        "authority_proof_trust_bundle_id": {
+          "$ref": "#/$defs/trustBundleId"
+        },
+        "authority_proof_max_age_seconds": {
+          "const": 15
+        },
+        "deadline_milliseconds": {
+          "const": 2000
+        },
+        "max_attempts": {
+          "const": 2
+        },
+        "retryable_grpc_codes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "UNAVAILABLE"
+            },
+            {
+              "const": "DEADLINE_EXCEEDED"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "idempotency_scope": {
+          "const": "credential-subject-digest+caller-workload+operation+idempotency-key"
+        },
+        "authority_sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "OIDC_SESSION",
+              "MATTERMOST_EVENT",
+              "DOMAIN_STATE",
+              "AGENT_SESSION",
+              "PROCESS_RUN",
+              "AUTOMATION_OCCURRENCE"
+            ]
+          }
+        },
+        "allowed_operation_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/operationId"
+          }
+        },
+        "server_resolved_fields": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "actor"
+            },
+            {
+              "const": "tenant"
+            },
+            {
+              "const": "project"
+            },
+            {
+              "const": "ownership"
+            },
+            {
+              "const": "provenance"
+            }
+          ],
+          "items": false,
+          "minItems": 5,
+          "maxItems": 5
+        }
+      }
+    },
     "policy": {
       "type": "object",
       "additionalProperties": false,
@@ -457,6 +617,7 @@
         "token_ttl_seconds",
         "allowed_clock_skew_seconds",
         "max_compact_jws_bytes",
+        "authority_proof_producers",
         "operation_bindings"
       ],
       "properties": {
@@ -477,6 +638,15 @@
         },
         "max_compact_jws_bytes": {
           "const": 8192
+        },
+        "authority_proof_producers": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/authorityProofProducer"
+          }
         },
         "operation_bindings": {
           "type": "array",

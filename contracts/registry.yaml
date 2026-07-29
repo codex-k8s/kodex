@@ -37,9 +37,11 @@ packages:
       - control-plane
   - id: internal-rpc-authority-restore-evidence-v1
     format: json-schema
-    owner: environment-database-restore-controller
+    owner: internal-rpc-authority-restore-controller
     source: contracts/authorization/v1/restore-fence-evidence.schema.json
     consumers:
+      - internal-rpc-authority-restore-controller
+      - internal-rpc-authority-restore-operator
       - internal-rpc-authority-recovery
       - internal-rpc-authority
   - id: internal-rpc-authority-key-delivery-v1
@@ -50,6 +52,7 @@ packages:
       - internal-rpc-authority-publisher
       - internal-rpc-authority-issuer
       - internal-rpc-authority-verifier
+      - control-plane
   - id: internal-rpc-authority-error-matrix-v1
     format: json
     owner: internal-rpc-authority

@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "cases": [
+    {
+      "name": "cross-target-write",
+      "mutation": "control-api-gateway issuer principal attempts a control-plane readback",
+      "reason": "DATABASE_IDENTITY_MISMATCH"
+    },
+    {
+      "name": "opposite-role-write",
+      "mutation": "control-plane verifier principal attempts an issuer readback",
+      "reason": "DATABASE_ROLE_MISMATCH"
+    },
+    {
+      "name": "caller-supplied-workload",
+      "mutation": "pass workload_id or role to the SECURITY DEFINER function",
+      "reason": "CALLER_IDENTITY_FIELD_FORBIDDEN"
+    },
+    {
+      "name": "stale-credential-generation",
+      "mutation": "use a retired login principal after generation promotion",
+      "reason": "DATABASE_CREDENTIAL_GENERATION_REJECTED"
+    },
+    {
+      "name": "shared-group-login",
+      "mutation": "connect using the shared NOLOGIN group role",
+      "reason": "DATABASE_LOGIN_PRINCIPAL_REQUIRED"
+    }
+  ]
+}

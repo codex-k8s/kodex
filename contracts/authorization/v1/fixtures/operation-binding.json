@@ -1,5 +1,47 @@
 {
   "v": 1,
+  "authority_proof_producers": [
+    {
+      "producer_id": "control-plane.oidc",
+      "caller_workload_id": "control-api-gateway",
+      "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+      "owner_workload_id": "control-plane",
+      "owner_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+      "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+      "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+      "transport_trust_bundle_id": "mattercodex-internal-ca-g1",
+      "application_credential": "OIDC_BEARER",
+      "application_credential_metadata": "authorization",
+      "application_credential_issuer": "https://sso.mattercodex.local/realms/mattercodex",
+      "application_credential_audience": "mattercodex-control-api",
+      "application_credential_trust_bundle_id": "mattercodex-oidc-signers-g1",
+      "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+      "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:control-api-gateway",
+      "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+      "authority_proof_max_age_seconds": 15,
+      "deadline_milliseconds": 2000,
+      "max_attempts": 2,
+      "retryable_grpc_codes": [
+        "UNAVAILABLE",
+        "DEADLINE_EXCEEDED"
+      ],
+      "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+      "authority_sources": [
+        "OIDC_SESSION",
+        "DOMAIN_STATE"
+      ],
+      "allowed_operation_ids": [
+        "control.project.get"
+      ],
+      "server_resolved_fields": [
+        "actor",
+        "tenant",
+        "project",
+        "ownership",
+        "provenance"
+      ]
+    }
+  ],
   "operation_bindings": [
     {
       "operation_id": "control.project.get",
@@ -13,35 +55,128 @@
       "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
       "target_trust_bundle_id": "mattercodex-internal-ca-g1",
       "permission": "control.project.get",
-      "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-      "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:control-api-gateway",
-      "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
-      "authority_proof_max_age_seconds": 15,
+      "authority_proof_producer_id": "control-plane.oidc",
       "authority_sources": [
         "OIDC_SESSION",
         "DOMAIN_STATE"
       ],
-      "project_required": true
+      "project_required": true,
+      "local_caller": {
+        "uid": 10001,
+        "primary_gid": 10001,
+        "shared_fs_gid": 29000
+      },
+      "local_target": {
+        "uid": 10001,
+        "primary_gid": 10001,
+        "shared_fs_gid": 29000
+      }
     }
   ],
   "key_delivery_targets": [
     {
       "workload_id": "control-api-gateway",
-      "issuer_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+      "role": "AUTHORIZATION_ISSUER",
+      "spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
       "namespace": "mattercodex-system",
       "service_account": "control-api-gateway",
+      "workload_generation": 1,
+      "authority_snapshot": {
+        "secret_name": "internal-rpc-authority-snapshot",
+        "mount_path": "/var/run/config/mattercodex/internal-rpc-authority/snapshot"
+      },
       "auth_private_key": {
-        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/auth-key",
+        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/auth-key",
         "secret_name": "internal-rpc-authority-issuer-key",
         "mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/issuer"
       },
       "manifest_trust": {
-        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/manifest-trust",
+        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/manifest-trust",
         "secret_name": "internal-rpc-authority-manifest-trust",
         "mount_path": "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust"
       },
-      "issuer_readback_id": "control-api-gateway-issuer",
-      "verifier_readback_id": "control-api-gateway-verifier"
+      "authority_proof_trust": {
+        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/proof-trust",
+        "secret_name": "internal-rpc-authority-proof-trust",
+        "mount_path": "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust"
+      },
+      "database_identity": {
+        "login_principal": "ira_control_api_gateway_issuer_g1",
+        "vault_database_role": "ira-control-api-gateway-issuer",
+        "dsn_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/issuer-dsn",
+        "credential_generation": 1
+      },
+      "readback": {
+        "readback_id": "control-api-gateway-issuer",
+        "database_function": "record_authority_key_delivery_readback",
+        "expected_role": "AUTHORIZATION_ISSUER"
+      }
+    },
+    {
+      "workload_id": "control-plane",
+      "role": "AUTHORIZATION_VERIFIER",
+      "spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+      "namespace": "mattercodex-system",
+      "service_account": "control-plane",
+      "workload_generation": 1,
+      "authority_snapshot": {
+        "secret_name": "internal-rpc-authority-snapshot",
+        "mount_path": "/var/run/config/mattercodex/internal-rpc-authority/snapshot"
+      },
+      "manifest_trust": {
+        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/manifest-trust",
+        "secret_name": "internal-rpc-authority-manifest-trust",
+        "mount_path": "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust"
+      },
+      "database_identity": {
+        "login_principal": "ira_control_plane_verifier_g1",
+        "vault_database_role": "ira-control-plane-verifier",
+        "dsn_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/verifier-dsn",
+        "credential_generation": 1
+      },
+      "readback": {
+        "readback_id": "control-plane-verifier",
+        "database_function": "record_authority_key_delivery_readback",
+        "expected_role": "AUTHORIZATION_VERIFIER"
+      }
+    },
+    {
+      "workload_id": "control-plane",
+      "role": "AUTHORITY_PROOF_RESOLVER",
+      "spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+      "namespace": "mattercodex-system",
+      "service_account": "control-plane",
+      "workload_generation": 1,
+      "authority_snapshot": {
+        "secret_name": "internal-rpc-authority-snapshot",
+        "mount_path": "/var/run/config/mattercodex/internal-rpc-authority/snapshot"
+      },
+      "authority_proof_private_key": {
+        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/proof-key",
+        "secret_name": "internal-rpc-authority-proof-signer-key",
+        "mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer"
+      },
+      "manifest_trust": {
+        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/manifest-trust",
+        "secret_name": "internal-rpc-authority-manifest-trust",
+        "mount_path": "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust"
+      },
+      "authority_proof_trust": {
+        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/proof-trust",
+        "secret_name": "internal-rpc-authority-proof-trust",
+        "mount_path": "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust"
+      },
+      "database_identity": {
+        "login_principal": "ira_control_plane_resolver_g1",
+        "vault_database_role": "ira-control-plane-resolver",
+        "dsn_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/resolver-dsn",
+        "credential_generation": 1
+      },
+      "readback": {
+        "readback_id": "control-plane-resolver",
+        "database_function": "record_authority_key_delivery_readback",
+        "expected_role": "AUTHORITY_PROOF_RESOLVER"
+      }
     }
   ]
 }

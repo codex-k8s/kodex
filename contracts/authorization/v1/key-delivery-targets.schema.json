@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mattercodex.dev/contracts/authorization/v1/key-delivery-targets.schema.json",
-  "title": "Точные targets доставки ключей internal-rpc-authority",
+  "title": "Точные workload/role targets internal-rpc-authority",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,7 @@
     "targets": {
       "type": "array",
       "minItems": 0,
-      "maxItems": 128,
+      "maxItems": 384,
       "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/target"
@@ -40,6 +40,12 @@
       "minLength": 1,
       "maxLength": 63,
       "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,61}[a-z0-9])?$"
+    },
+    "databasePrincipal": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 63,
+      "pattern": "^ira_[a-z0-9_]+_(issuer|verifier|resolver)_g[1-9][0-9]*$"
     },
     "vaultPath": {
       "type": "string",
@@ -73,24 +79,99 @@
         }
       }
     },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "secret_name",
+        "mount_path"
+      ],
+      "properties": {
+        "secret_name": {
+          "$ref": "#/$defs/kubernetesName"
+        },
+        "mount_path": {
+          "$ref": "#/$defs/absolutePath"
+        }
+      }
+    },
+    "databaseIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "login_principal",
+        "vault_database_role",
+        "dsn_mount_path",
+        "credential_generation"
+      ],
+      "properties": {
+        "login_principal": {
+          "$ref": "#/$defs/databasePrincipal"
+        },
+        "vault_database_role": {
+          "$ref": "#/$defs/kubernetesName"
+        },
+        "dsn_mount_path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "credential_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "readback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "readback_id",
+        "database_function",
+        "expected_role"
+      ],
+      "properties": {
+        "readback_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "database_function": {
+          "const": "record_authority_key_delivery_readback"
+        },
+        "expected_role": {
+          "enum": [
+            "AUTHORIZATION_ISSUER",
+            "AUTHORIZATION_VERIFIER",
+            "AUTHORITY_PROOF_RESOLVER"
+          ]
+        }
+      }
+    },
     "target": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "workload_id",
-        "issuer_spiffe_id",
+        "role",
+        "spiffe_id",
         "namespace",
         "service_account",
-        "auth_private_key",
+        "workload_generation",
+        "authority_snapshot",
         "manifest_trust",
-        "issuer_readback_id",
-        "verifier_readback_id"
+        "database_identity",
+        "readback"
       ],
       "properties": {
         "workload_id": {
           "$ref": "#/$defs/workloadId"
         },
-        "issuer_spiffe_id": {
+        "role": {
+          "enum": [
+            "AUTHORIZATION_ISSUER",
+            "AUTHORIZATION_VERIFIER",
+            "AUTHORITY_PROOF_RESOLVER"
+          ]
+        },
+        "spiffe_id": {
           "$ref": "#/$defs/spiffeId"
         },
         "namespace": {
@@ -99,19 +180,132 @@
         "service_account": {
           "$ref": "#/$defs/kubernetesName"
         },
+        "workload_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "authority_snapshot": {
+          "$ref": "#/$defs/projection"
+        },
         "auth_private_key": {
+          "$ref": "#/$defs/delivery"
+        },
+        "authority_proof_private_key": {
           "$ref": "#/$defs/delivery"
         },
         "manifest_trust": {
           "$ref": "#/$defs/delivery"
         },
-        "issuer_readback_id": {
-          "$ref": "#/$defs/workloadId"
+        "authority_proof_trust": {
+          "$ref": "#/$defs/delivery"
         },
-        "verifier_readback_id": {
-          "$ref": "#/$defs/workloadId"
+        "database_identity": {
+          "$ref": "#/$defs/databaseIdentity"
+        },
+        "readback": {
+          "$ref": "#/$defs/readback"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "AUTHORIZATION_ISSUER"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "auth_private_key",
+              "authority_proof_trust"
+            ],
+            "properties": {
+              "readback": {
+                "properties": {
+                  "expected_role": {
+                    "const": "AUTHORIZATION_ISSUER"
+                  }
+                }
+              }
+            },
+            "not": {
+              "required": [
+                "authority_proof_private_key"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "AUTHORIZATION_VERIFIER"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "readback": {
+                "properties": {
+                  "expected_role": {
+                    "const": "AUTHORIZATION_VERIFIER"
+                  }
+                }
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "auth_private_key"
+                  ]
+                },
+                {
+                  "required": [
+                    "authority_proof_private_key"
+                  ]
+                },
+                {
+                  "required": [
+                    "authority_proof_trust"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "AUTHORITY_PROOF_RESOLVER"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "authority_proof_private_key",
+              "authority_proof_trust"
+            ],
+            "properties": {
+              "readback": {
+                "properties": {
+                  "expected_role": {
+                    "const": "AUTHORITY_PROOF_RESOLVER"
+                  }
+                }
+              }
+            },
+            "not": {
+              "required": [
+                "auth_private_key"
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

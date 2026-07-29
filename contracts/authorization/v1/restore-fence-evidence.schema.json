@@ -16,6 +16,12 @@
     "backup_manifest_digest_sha256",
     "recovery_target_time",
     "controller_signer_generation",
+    "workload_set_revision",
+    "expected_workload_role_generations_sha256",
+    "quiescence_ack_set_sha256",
+    "expected_ack_count",
+    "accepted_ack_count",
+    "semantic_transition",
     "predecessor",
     "issued_at"
   ],
@@ -55,6 +61,28 @@
     },
     "controller_signer_generation": {
       "$ref": "#/$defs/revision"
+    },
+    "workload_set_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "expected_workload_role_generations_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "quiescence_ack_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "expected_ack_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 384
+    },
+    "accepted_ack_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 384
+    },
+    "semantic_transition": {
+      "const": "EXACT_INCREMENT_WITH_PREDECESSOR_DIGEST"
     },
     "predecessor": {
       "$ref": "#/$defs/predecessor"

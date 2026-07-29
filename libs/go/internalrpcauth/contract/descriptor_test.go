@@ -86,6 +86,44 @@ func TestIssuerRequestForbiddenFieldMutations(t *testing.T) {
 	}
 }
 
+func TestResolverRequestCompiledDescriptor(t *testing.T) {
+	message := requiredMessage(
+		t,
+		internalrpcauthorityv1.File_internalrpcauthority_v1_authority_proto,
+		"ResolveAuthorityProofRequest",
+	)
+	want := map[protoreflect.FieldNumber]protoreflect.Name{
+		1: "operation_id",
+		2: "resource_reference",
+		3: "idempotency_key",
+		4: "correlation_id",
+	}
+	if message.Fields().Len() != len(want) {
+		t.Fatalf("resolver request field cardinality = %d, want %d", message.Fields().Len(), len(want))
+	}
+	for number, name := range want {
+		field := message.Fields().ByNumber(number)
+		if field == nil || field.Name() != name || field.Kind() != protoreflect.StringKind {
+			t.Fatalf("resolver request field %d = %v, want string %s", number, field, name)
+		}
+	}
+	for _, forbidden := range []protoreflect.Name{
+		"actor",
+		"tenant",
+		"project",
+		"ownership",
+		"caller_spiffe_id",
+		"audience",
+		"permission",
+		"application_credential",
+		"internal_authorization_context",
+	} {
+		if message.Fields().ByName(forbidden) != nil {
+			t.Fatalf("resolver request contains caller-authoritative field %s", forbidden)
+		}
+	}
+}
+
 func TestCompiledServiceMethods(t *testing.T) {
 	file := internalrpcauthorityv1.File_internalrpcauthority_v1_authority_proto
 	want := map[string]bool{
@@ -93,6 +131,12 @@ func TestCompiledServiceMethods(t *testing.T) {
 		"/internalrpcauthority.v1.AuthorizationIssuerService/CheckReadiness":               true,
 		"/internalrpcauthority.v1.AuthorizationVerifierService/VerifyAuthorizationContext": true,
 		"/internalrpcauthority.v1.AuthorizationVerifierService/CheckReadiness":             true,
+		"/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof":     true,
+		"/internalrpcauthority.v1.AuthorityProofResolverService/CheckReadiness":            true,
+		"/internalrpcauthority.v1.RestoreControllerService/PrepareRestore":                 true,
+		"/internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence":          true,
+		"/internalrpcauthority.v1.RestoreControllerService/CompleteRestore":                true,
+		"/internalrpcauthority.v1.RestoreControllerService/CheckReadiness":                 true,
 	}
 	got := make(map[string]bool)
 	services := file.Services()
@@ -278,6 +322,7 @@ func TestAuthorizationErrorMatrixCoversCompiledEnums(t *testing.T) {
 		"UNAUTHENTICATED":     true,
 		"PERMISSION_DENIED":   true,
 		"FAILED_PRECONDITION": true,
+		"ALREADY_EXISTS":      true,
 		"UNAVAILABLE":         true,
 		"INTERNAL":            true,
 	}
