@@ -813,11 +813,15 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 	if err != nil {
 		return AgentSessionDelegationResult{}, err
 	}
+	return svc.returnToRequesterForSession(ctx, session, message)
+}
+
+func (svc *AgentSessionService) returnToRequesterForSession(ctx context.Context, session entity.AgentSession, message string) (AgentSessionDelegationResult, error) {
 	if svc.cfg.TurnDispatcher == nil || svc.cfg.ThreadPublisher == nil {
 		return AgentSessionDelegationResult{}, fmt.Errorf("agent delegation callback is not configured")
 	}
 	var delegation entity.AgentDelegation
-	err = svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.delegation_callback_lookup.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+	err := svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.delegation_callback_lookup.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
 		var readErr error
 		delegation, readErr = guardedStore.GetAgentDelegationForCallback(ctx, current.ID)
 		return readErr
@@ -969,14 +973,12 @@ func (svc *AgentSessionService) ReturnToRequester(ctx context.Context, sessionKe
 
 func (svc *AgentSessionService) returnCompletedDelegationToRequester(
 	ctx context.Context,
-	sessionKey string,
-	token string,
 	session entity.AgentSession,
 	turn entity.AgentSessionTurn,
 	status string,
 	command CompleteAgentSessionTurnCommand,
 ) error {
-	current, err := svc.cfg.Store.GetAgentSession(ctx, sessionKey)
+	current, err := svc.cfg.Store.GetAgentSession(ctx, session.SessionKey)
 	if err != nil {
 		return err
 	}
@@ -1004,7 +1006,12 @@ func (svc *AgentSessionService) returnCompletedDelegationToRequester(
 		message = svc.t("chat.run.final_empty", nil)
 	}
 	message = truncateDelegationCallbackMessage(message, svc.t("chat.run.callback_truncated", nil), svc.cfg.CallbackMaxBytes)
-	_, err = svc.ReturnToRequester(ctx, sessionKey, token, message)
+	releasePublishSlot, err := svc.admitCallbackPublication(message)
+	if err != nil {
+		return err
+	}
+	defer releasePublishSlot()
+	_, err = svc.returnToRequesterForSession(ctx, current, message)
 	if err != nil {
 		return fmt.Errorf("return completed agent delegation: %w", err)
 	}

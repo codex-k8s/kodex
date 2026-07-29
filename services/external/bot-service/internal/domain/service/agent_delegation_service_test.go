@@ -1108,6 +1108,7 @@ func TestAgentSessionCompletionAutomaticallyReturnsDelegatedResult(t *testing.T)
 		MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnQueued,
 	})
 	dispatcher.queued = AgentTurnQueued{RunID: "callback-run", TurnID: 3, SessionID: 1, SessionKey: "source-session"}
+	dispatcher.calls = 0
 
 	err = svc.CompleteTurn(context.Background(), "target-session", "target-token", CompleteAgentSessionTurnCommand{
 		TurnID:       2,
@@ -1129,6 +1130,85 @@ func TestAgentSessionCompletionAutomaticallyReturnsDelegatedResult(t *testing.T)
 	}
 	if len(publisher.posts) < 4 {
 		t.Fatalf("automatic callback audit was not published: %#v", publisher.posts)
+	}
+}
+
+func TestAgentSessionRepairFailureReturnsDelegationAndFinalizesRun(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat:  "architecture",
+		TargetAgent: "architect",
+		Title:       "Границы сервисов",
+		Message:     "Подготовь предложение.",
+		WorkItemKey: "issue-59-architecture",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	for index := range store.sessionTurns {
+		if store.sessionTurns[index].ID == 2 {
+			store.sessionTurns[index].Status = agentSessionTurnFailed
+			store.sessionTurns[index].ErrorMessage = "agent runtime pod is terminal: Error exit=1"
+		}
+	}
+	store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{
+		ID: 3, SessionID: 1, RunID: "callback-run", MattermostChannelID: "management-channel",
+		MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnQueued,
+	})
+	dispatcher.queued = AgentTurnQueued{RunID: "callback-run", TurnID: 3, SessionID: 1, SessionKey: "source-session"}
+	dispatcher.calls = 0
+	coordinationStore := &fakeCoordinationStore{
+		fakeAdminStore: store,
+		capabilities: map[string]bool{
+			entity.CoordinationCapabilityReturnCallback: true,
+		},
+		relationships: map[string]bool{
+			coordinationRelationshipKey(entity.CoordinationActionCallback, 1): true,
+		},
+		processes: map[int64]entity.ProcessContext{
+			2: {
+				ProcessRunID:          1,
+				ProcessPublicID:       "process-1",
+				ProjectID:             1,
+				RootInitiatorUserID:   "owner-user",
+				RootInitiatorUserName: "owner",
+				RootChannelID:         "management-channel",
+				RootThreadPostID:      "management-root",
+			},
+		},
+	}
+	svc.cfg.Store = coordinationStore
+	targetSession := store.agentSessions["target-session"]
+	targetTurn, err := store.GetAgentSessionTurn(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("GetAgentSessionTurn() error = %v", err)
+	}
+
+	err = svc.ReconcileTerminalAgentSessionFailure(
+		context.Background(),
+		targetSession,
+		targetTurn,
+		"agent runtime pod is terminal: Error exit=1",
+		`{"runtime_repair":{"phase":"Failed","reason":"container runner terminated: Error exit=1"}}`,
+	)
+	if err != nil {
+		t.Fatalf("ReconcileTerminalAgentSessionFailure() error = %v", err)
+	}
+	delegation := store.agentDelegations[started.DelegationID]
+	if delegation.CallbackTurnID != 3 || delegation.CallbackRunID != "callback-run" {
+		t.Fatalf("delegation = %#v", delegation)
+	}
+	if dispatcher.calls != 1 || !strings.Contains(dispatcher.request.PreparedPrompt, "Error exit=1") {
+		t.Fatalf("callback dispatch calls=%d request=%#v", dispatcher.calls, dispatcher.request)
+	}
+	if store.updatedRunStatus != agentSessionTurnFailed || coordinationStore.updatedClaim.Status != agentSessionTurnFailed {
+		t.Fatalf("run status=%q work claim=%#v", store.updatedRunStatus, coordinationStore.updatedClaim)
+	}
+	if current := store.agentSessions["target-session"]; current.ActiveTurnID != 0 || current.Status != agentSessionStatusError {
+		t.Fatalf("target session = %#v", current)
+	}
+	if len(publisher.posts) < 3 {
+		t.Fatalf("failure publications = %#v", publisher.posts)
 	}
 }
 

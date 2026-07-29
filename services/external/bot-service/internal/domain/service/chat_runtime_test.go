@@ -1003,6 +1003,7 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 		},
 	}
 	reconciler := &fakeAutomationRuntimeReconciler{}
+	terminalReconciler := &fakeTerminalFailureReconciler{automation: reconciler}
 	svc := NewChatRunService(ChatRunServiceConfig{
 		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
 		Store:                       store,
@@ -1011,6 +1012,7 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 		RuntimeReady:                true,
 		DisableMonitor:              true,
 		AutomationRuntimeReconciler: reconciler,
+		TerminalFailureReconciler:   terminalReconciler,
 	})
 
 	result, err := svc.RepairAgentSessions(context.Background(), 10)
@@ -1031,6 +1033,10 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 	}
 	if runner.cleanedSessionKey != sessionKey {
 		t.Fatalf("cleanedSessionKey = %q", runner.cleanedSessionKey)
+	}
+	if terminalReconciler.calls != 1 || terminalReconciler.session.ID != 1 || terminalReconciler.turn.ID != 1 ||
+		!strings.Contains(terminalReconciler.errorMessage, "OOMKilled") || !strings.Contains(terminalReconciler.artifacts, `"runtime_repair"`) {
+		t.Fatalf("terminal failure reconciliation = %#v", terminalReconciler)
 	}
 	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].SessionKey != sessionKey {
 		t.Fatalf("session runs = %#v", runner.sessionRuns)
@@ -2292,6 +2298,39 @@ func (publisher *fakeThreadPublisher) AddPostReactionWithToken(_ context.Context
 	publisher.reactionTokens = append(publisher.reactionTokens, token)
 	publisher.reactions = append(publisher.reactions, input)
 	return nil
+}
+
+type fakeTerminalFailureReconciler struct {
+	calls        int
+	session      entity.AgentSession
+	turn         entity.AgentSessionTurn
+	errorMessage string
+	artifacts    string
+	automation   AutomationRuntimeTerminalReconciler
+}
+
+func (reconciler *fakeTerminalFailureReconciler) ReconcileTerminalAgentSessionFailure(
+	ctx context.Context,
+	session entity.AgentSession,
+	turn entity.AgentSessionTurn,
+	errorMessage string,
+	artifacts string,
+) error {
+	reconciler.calls++
+	reconciler.session = session
+	reconciler.turn = turn
+	reconciler.errorMessage = errorMessage
+	reconciler.artifacts = artifacts
+	if reconciler.automation == nil {
+		return nil
+	}
+	return reconciler.automation.ReconcileRuntimeTerminal(ctx, AutomationRuntimeTerminalCommand{
+		ProjectID:        session.ProjectID,
+		RuntimeSessionID: session.ID,
+		RuntimeTurnID:    turn.ID,
+		RuntimeRunID:     turn.RunID,
+		RuntimeStatus:    turn.Status,
+	})
 }
 
 var _ runtimerepo.Runner = (*fakeRuntimeRunner)(nil)

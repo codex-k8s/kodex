@@ -489,7 +489,7 @@ func (svc *AgentSessionService) CompleteTurn(ctx context.Context, sessionKey str
 	if canceledNoop {
 		return nil
 	}
-	callbackErr := svc.returnCompletedDelegationToRequester(ctx, sessionKey, token, session, turn, status, command)
+	callbackErr := svc.returnCompletedDelegationToRequester(ctx, session, turn, status, command)
 	if terminalRetry {
 		return errors.Join(callbackErr, svc.reconcileCompletedTurnSnapshot(ctx, session, turn, command, turn.Status))
 	}
@@ -591,6 +591,47 @@ func (svc *AgentSessionService) reconcileCompletedTurnSnapshot(ctx context.Conte
 	}
 	completionErr = errors.Join(completionErr, svc.reconcileTerminalProcessRun(ctx, session, turn.ID, status, "agent_session.reconcile_completed_turn.side_effect"))
 	completionErr = errors.Join(completionErr, svc.reconcileAutomationRuntimeTerminal(ctx, session, turn, status))
+	return completionErr
+}
+
+func (svc *AgentSessionService) ReconcileTerminalAgentSessionFailure(
+	ctx context.Context,
+	session entity.AgentSession,
+	turn entity.AgentSessionTurn,
+	errorMessage string,
+	rawArtifacts string,
+) error {
+	if session.ID <= 0 || turn.ID <= 0 || turn.SessionID != session.ID || turn.RunID == "" || turn.Status != agentSessionTurnFailed {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	artifacts := map[string]string{
+		"runtime-repair": "true",
+	}
+	var runtimeArtifacts map[string]any
+	if strings.TrimSpace(rawArtifacts) != "" && json.Unmarshal([]byte(rawArtifacts), &runtimeArtifacts) == nil {
+		if repair, ok := runtimeArtifacts["runtime_repair"].(map[string]any); ok {
+			for _, key := range []string{"phase", "reason"} {
+				if value, ok := repair[key].(string); ok && strings.TrimSpace(value) != "" {
+					artifacts["runtime-repair-"+key] = strings.TrimSpace(value)
+				}
+			}
+		}
+	}
+	command := CompleteAgentSessionTurnCommand{
+		TurnID:       turn.ID,
+		RunID:        turn.RunID,
+		Status:       agentSessionTurnFailed,
+		ErrorMessage: safeFailureSummary(defaultString(errorMessage, svc.t("coordination.failure.unknown", nil))),
+		Artifacts:    artifacts,
+	}
+	completionErr := svc.returnCompletedDelegationToRequester(ctx, session, turn, agentSessionTurnFailed, command)
+	completionErr = errors.Join(completionErr, svc.reconcileCompletedTurnSnapshot(ctx, session, turn, command, agentSessionTurnFailed))
+	completionErr = errors.Join(completionErr, svc.withCurrentSessionPersistenceGuard(ctx, session, "agent_session.repair_status_publish.side_effect", func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+		message := svc.turnCompletionStatusMessageWithStore(ctx, guardedStore, current, agentSessionTurnFailed, turn.RunID, artifacts)
+		_, publishErr := svc.upsertTurnStatusCardWithStore(ctx, guardedStore, current, turn, agentSessionTurnFailed, message, "")
+		return publishErr
+	}))
+	completionErr = errors.Join(completionErr, svc.postTurnResult(ctx, session, turn, agentSessionTurnFailed, command))
 	return completionErr
 }
 
