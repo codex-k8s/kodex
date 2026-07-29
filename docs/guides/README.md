@@ -4,8 +4,8 @@ title: Руководства разработки MatterCodex
 type: guide-index
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-07-20
+version: 1.0.0
+updated: 2026-07-29
 ---
 
 # Руководства разработки MatterCodex
@@ -13,15 +13,26 @@ updated: 2026-07-20
 | Код | Файл | Назначение |
 | --- | --- | --- |
 | `GUIDE-MC-001` | `docs/guides/README.md` | Индекс. |
-| `GUIDE-MC-002` | `docs/guides/repository-structure.md` | Структура монорепозитория. |
-| `GUIDE-MC-003` | `docs/guides/backend-go.md` | Правила Go backend. |
-| `GUIDE-MC-004` | `docs/guides/frontend-vue.md` | Правила Vue Control Center. |
-| `GUIDE-MC-005` | `docs/guides/infrastructure.md` | Kubernetes, images и GitOps. |
+| `REPO-DOC-001` | `docs/guides/repository-structure.md` | Структура монорепозитория и полного unit. |
+| `GO-DOC-001` | `docs/guides/backend-go.md` | Каноническая структура Go service/gateway/job. |
+| `GO-DOC-002` | `docs/guides/postgresql-goose.md` | PostgreSQL, goose, named SQL и repository adapter. |
+| `GO-DOC-003` | `docs/guides/observability-go.md` | Lifecycle, logs, metrics, traces и Sentry. |
+| `GO-DOC-004` | `docs/guides/event-delivery-go.md` | Transactional outbox, relay, NATS и inbox. |
+| `GO-DOC-005` | `docs/guides/interservice-communication.md` | Proto/gRPC и межсервисные события. |
+| `GO-DOC-006` | `docs/guides/shared-go-libraries.md` | Правила общих Go libraries. |
+| `FE-DOC-001` | `docs/guides/frontend-vue.md` | Правила Vue Control Center. |
+| `INFRA-DOC-001` | `docs/guides/infrastructure.md` | Kubernetes, images и GitOps. |
+| `GUIDE-DOC-003` | `docs/guides/distributed-security.md` | mTLS, JWS/JWKS, replay и secrets. |
+| `GUIDE-DOC-004` | `docs/guides/delivery-waves.md` | Один unit на PR, три review и human gate. |
+| `GUIDE-DOC-005` | `docs/guides/rpc-http-error-contract.md` | Единый error contract RPC/HTTP. |
 | `GUIDE-MC-006` | `docs/guides/ci-baseline.md` | Минимальные CI gates. |
 | `GUIDE-MC-007` | `docs/guides/contract-quality.md` | OpenAPI/AsyncAPI/Proto. |
 | `GUIDE-MC-008` | `docs/guides/documentation.md` | Правила документации и agent instructions. |
 | `GUIDE-MC-009` | `docs/guides/go-test-contours.md` | Герметичный и обязательный PostgreSQL-контуры, внесение отказов и матрица синтетических секретов. |
 
-Детальные языковые требования из `docs/design-guidelines/**` действуют, если не противоречат новому architecture baseline. В ходе структурной волны они должны быть перенесены либо явно сопоставлены с этими guides.
+Эти документы являются адаптированной локальной копией технического профиля,
+зафиксированного в `GOV-DOC-004`. Детальные старые правила
+`docs/design-guidelines/**` применяются только в непротиворечащей части и не
+переопределяют этот индекс.
 
 Если реализация требует нарушить руководство, автор останавливается и готовит ADR либо решение владельца до написания кода.

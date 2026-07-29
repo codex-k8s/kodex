@@ -123,9 +123,9 @@
 - Каждый Go сервис имеет Dockerfile и воспроизводимую сборку по общим правилам
   `docs/design-guidelines/common/project_architecture.md`.
 - Стадия `build` компилирует Go-бинарник из исходников сервиса и получает нужные входы:
-  `go.mod`, `go.sum`, `proto/**`, `libs/go/**` и сгенерированные контракты, если сервис их использует.
+  `go.mod`, `go.sum`, `contracts/proto/**`, `libs/go/**` и сгенерированные контракты, если сервис их использует.
 - Стадия `dev` содержит Go hot reload инструмент, например `CompileDaemon`, исходники сервиса,
-  `proto/**`, `libs/go/**`, `GOCACHE=/tmp/.cache/go-build` и поддерживает dev-слоты
+  `contracts/proto/**`, `libs/go/**`, `GOCACHE=/tmp/.cache/go-build` и поддерживает dev-слоты
   без пересборки production-образа.
 - Стадия `prod` запускает готовый бинарник в минимальном runtime без исходников и инструментов разработки.
 - Kubernetes Deployment для Go-сервиса использует `prod` image. Запрещено доставлять исходники сервиса через

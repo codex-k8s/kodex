@@ -1,0 +1,9 @@
+version: 1
+packages: []
+# Пример записи после удаления комментария:
+# - id: example-service-v1
+#   format: proto
+#   owner: example-service
+#   source: contracts/proto/example-service/v1
+#   consumers:
+#     - example-gateway

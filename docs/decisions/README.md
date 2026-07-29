@@ -4,15 +4,15 @@ title: Реестр архитектурных решений
 type: decision-index
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-07-16
+version: 1.0.0
+updated: 2026-07-29
 ---
 
 # Реестр архитектурных решений
 
 | ADR | Решение | Статус |
 | --- | --- | --- |
-| `ADR-MC-001` | Эволюционный модульный монолит и поэтапное выделение сервисов | approved |
+| `ADR-MC-001` | Эволюционный модульный монолит и поэтапное выделение сервисов | superseded by ADR-MC-015 |
 | `ADR-MC-002` | Универсальная модель `Organization`, `Workspace` и `Agent` | approved |
 | `ADR-MC-003` | Совместное управление через UI и GitOps | approved |
 | `ADR-MC-004` | `RuntimeRevision` и неизменяемая привязка учетной записи поставщика | approved |
@@ -25,5 +25,7 @@ updated: 2026-07-16
 | `ADR-MC-011` | Настраиваемые политики координации и внимания инициатора | approved |
 | `ADR-MC-012` | Локальная память проекта и ролей | approved |
 | `ADR-MC-013` | Реестр активной работы и управляемая синхронизация | approved |
+| `ADR-DOC-004` | Transactional outbox, broker-neutral relay, NATS и durable inbox | approved |
+| `ADR-MC-015` | Полные unit и контролируемый cutover legacy | approved |
 
 Статус `approved` фиксирует принятое владельцем направление. Для `ADR-MC-009` юридическая проверка текстов лицензий и CLA остается обязательным условием выпуска, но повторный выбор модели не требуется.

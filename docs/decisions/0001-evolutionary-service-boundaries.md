@@ -2,13 +2,16 @@
 id: ADR-MC-001
 title: Эволюционные границы сервисов
 type: decision
-status: approved
+status: superseded
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 0.2.0
+updated: 2026-07-29
 ---
 
 # ADR-MC-001. Эволюционные границы сервисов
+
+Решение заменено `ADR-MC-015`. Документ сохраняется как история первоначальной
+стратегии.
 
 ## Контекст
 
