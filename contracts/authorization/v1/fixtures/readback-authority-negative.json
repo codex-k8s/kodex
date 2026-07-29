@@ -25,6 +25,16 @@
       "name": "shared-group-login",
       "mutation": "connect using the shared NOLOGIN group role",
       "reason": "DATABASE_LOGIN_PRINCIPAL_REQUIRED"
+    },
+    {
+      "name": "direct-key-delivery-table-write",
+      "mutation": "attempt INSERT or UPDATE on authority_key_delivery_readbacks without the exact function",
+      "reason": "DIRECT_READBACK_WRITE_FORBIDDEN"
+    },
+    {
+      "name": "direct-snapshot-table-write",
+      "mutation": "attempt INSERT or UPDATE on authority_snapshot_readbacks without the exact function",
+      "reason": "DIRECT_READBACK_WRITE_FORBIDDEN"
     }
   ]
 }

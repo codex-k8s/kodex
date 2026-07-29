@@ -433,9 +433,49 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	rowLevelSecurity := requiredMap(t, databaseIdentity, "rowLevelSecurity")
 	requireEqual(t, rowLevelSecurity, "forcedForTableOwner", true)
 	requireEqual(t, rowLevelSecurity, "principalSource", "session_user")
-	readbackFunction := requiredMap(t, databaseIdentity, "readbackFunction")
-	requireEqual(t, readbackFunction, "security", "SECURITY_DEFINER")
-	requireEqual(t, readbackFunction, "callerProvidedWorkloadOrRoleAllowed", false)
+	protectedReadbackTables := []string{
+		"authority_key_delivery_readbacks",
+		"authority_snapshot_readbacks",
+	}
+	requireStringSliceEqual(t, databaseIdentity, "protectedReadbackTables", protectedReadbackTables)
+	readbackFunctions := requiredMap(t, databaseIdentity, "readbackFunctions")
+	for functionKey, want := range map[string]struct {
+		name  string
+		table string
+	}{
+		"keyDelivery": {
+			name:  "record_authority_key_delivery_readback",
+			table: "authority_key_delivery_readbacks",
+		},
+		"snapshot": {
+			name:  "record_authority_snapshot_readback",
+			table: "authority_snapshot_readbacks",
+		},
+	} {
+		readbackFunction := requiredMap(t, readbackFunctions, functionKey)
+		requireEqual(t, readbackFunction, "name", want.name)
+		requireEqual(t, readbackFunction, "targetTable", want.table)
+		requireEqual(t, readbackFunction, "security", "SECURITY_DEFINER")
+		requireEqual(t, readbackFunction, "callerProvidedWorkloadOrRoleAllowed", false)
+	}
+	minimumRights := requiredMap(t, store, "minimumDatabaseRights")
+	for _, role := range []string{
+		"internal_rpc_authority_issuer",
+		"internal_rpc_authority_verifier",
+		"internal_rpc_authority_proof_resolver",
+	} {
+		rights := requiredMap(t, minimumRights, role)
+		requireStringSliceEqual(t, rights, "execute", []string{
+			"record_authority_key_delivery_readback",
+			"record_authority_snapshot_readback",
+		})
+		insertUpdate := stringSet(rights["insertUpdate"].([]any))
+		for _, table := range protectedReadbackTables {
+			if insertUpdate[table] {
+				t.Fatalf("%s retains direct write authority on %s", role, table)
+			}
+		}
+	}
 
 	for name, raw := range deployables {
 		deployable, ok := raw.(map[string]any)
@@ -640,11 +680,13 @@ func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
 			"wildcard-vault-path":     "NON_EXACT_DELIVERY_PATH",
 		},
 		"readback-authority-negative.json": {
-			"cross-target-write":          "DATABASE_IDENTITY_MISMATCH",
-			"opposite-role-write":         "DATABASE_ROLE_MISMATCH",
-			"caller-supplied-workload":    "CALLER_IDENTITY_FIELD_FORBIDDEN",
-			"stale-credential-generation": "DATABASE_CREDENTIAL_GENERATION_REJECTED",
-			"shared-group-login":          "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
+			"cross-target-write":              "DATABASE_IDENTITY_MISMATCH",
+			"opposite-role-write":             "DATABASE_ROLE_MISMATCH",
+			"caller-supplied-workload":        "CALLER_IDENTITY_FIELD_FORBIDDEN",
+			"stale-credential-generation":     "DATABASE_CREDENTIAL_GENERATION_REJECTED",
+			"shared-group-login":              "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
+			"direct-key-delivery-table-write": "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"direct-snapshot-table-write":     "DIRECT_READBACK_WRITE_FORBIDDEN",
 		},
 		"restore-negative.json": {
 			"lower-anchor-revision":        "RESTORE_ANCHOR_REJECTED",

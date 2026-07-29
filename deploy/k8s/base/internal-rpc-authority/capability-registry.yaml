@@ -270,6 +270,7 @@ spec:
       sourceOfTruth: true
       issuerRole: internal_rpc_authority_issuer
       runtimeRole: internal_rpc_authority_verifier
+      proofResolverRole: internal_rpc_authority_proof_resolver
       publisherRole: internal_rpc_authority_publisher
       recoveryRole: internal_rpc_authority_recovery
       migrationRole: internal_rpc_authority_migrator
@@ -294,8 +295,9 @@ spec:
             - authority_snapshot_watermarks
             - authority_proof_watermarks
             - authority_proof_reservations
-            - authority_snapshot_readbacks
-            - authority_key_delivery_readbacks
+          execute:
+            - record_authority_key_delivery_readback
+            - record_authority_snapshot_readback
           delete: []
         internal_rpc_authority_verifier:
           select:
@@ -304,8 +306,19 @@ spec:
           insertUpdate:
             - authority_snapshot_watermarks
             - authority_replay_reservations
-            - authority_snapshot_readbacks
-            - authority_key_delivery_readbacks
+          execute:
+            - record_authority_key_delivery_readback
+            - record_authority_snapshot_readback
+          delete: []
+        internal_rpc_authority_proof_resolver:
+          select:
+            - authority_snapshot_history
+            - authority_restore_fences
+            - authority_rotation_intents
+          insertUpdate: []
+          execute:
+            - record_authority_key_delivery_readback
+            - record_authority_snapshot_readback
           delete: []
         internal_rpc_authority_publisher:
           selectInsertUpdate:
@@ -360,18 +373,36 @@ spec:
           forcedForTableOwner: true
           principalSource: session_user
           defaultPolicy: DENY
-        readbackFunction:
-          name: record_authority_key_delivery_readback
-          security: SECURITY_DEFINER
-          fixedSearchPath: pg_catalog,internal_rpc_authority
-          publicExecuteRevoked: true
-          callerProvidedWorkloadOrRoleAllowed: false
-          locksRegisteredTarget: true
-          atomicChecks:
-            - active-session-user-mapping
-            - exact-workload-role-generation
-            - exact-revision-and-digest
-            - role-specific-cryptographic-readback
+        protectedReadbackTables:
+          - authority_key_delivery_readbacks
+          - authority_snapshot_readbacks
+        readbackFunctions:
+          keyDelivery:
+            name: record_authority_key_delivery_readback
+            targetTable: authority_key_delivery_readbacks
+            security: SECURITY_DEFINER
+            fixedSearchPath: pg_catalog,internal_rpc_authority
+            publicExecuteRevoked: true
+            callerProvidedWorkloadOrRoleAllowed: false
+            locksRegisteredTarget: true
+            atomicChecks:
+              - active-session-user-mapping
+              - exact-workload-role-generation
+              - exact-revision-and-digest
+              - role-specific-cryptographic-readback
+          snapshot:
+            name: record_authority_snapshot_readback
+            targetTable: authority_snapshot_readbacks
+            security: SECURITY_DEFINER
+            fixedSearchPath: pg_catalog,internal_rpc_authority
+            publicExecuteRevoked: true
+            callerProvidedWorkloadOrRoleAllowed: false
+            locksRegisteredTarget: true
+            atomicChecks:
+              - active-session-user-mapping
+              - exact-workload-role-generation
+              - exact-revision-and-digest
+              - role-specific-served-snapshot-readback
         credentialLifecycle:
           owner: internal-rpc-authority-publisher
           delivery: vault-database-secret

@@ -780,9 +780,10 @@ reservation/watermark.
 
 ### Workload/role-bound readback
 
-Shared capability roles `internal_rpc_authority_issuer` и
-`internal_rpc_authority_verifier` имеют `NOLOGIN` и не могут использоваться
-как session identity. Publisher для каждой активной
+Shared capability roles `internal_rpc_authority_issuer`,
+`internal_rpc_authority_verifier` и
+`internal_rpc_authority_proof_resolver` имеют `NOLOGIN` и не могут
+использоваться как session identity. Publisher для каждой активной
 `(workload_id,role,workload_generation,credential_generation)` создаёт
 отдельный PostgreSQL login principal из exact delivery registry. Vault
 database secret доставляет его только соответствующему sidecar/resolver;
@@ -796,17 +797,20 @@ current и next principals кратко перекрываются, а previous 
 `ENABLE ROW LEVEL SECURITY` и `FORCE ROW LEVEL SECURITY` применяют
 default-deny policy по `session_user`.
 
-Клиент не получает `INSERT/UPDATE` таблиц. Он вызывает только
-`SECURITY DEFINER` function
-`record_authority_key_delivery_readback(revision,digest,generations,served_proof)`;
-параметров `workload_id` и `role` у функции нет. Function имеет fixed
+Клиент не получает `INSERT/UPDATE` таблиц
+`authority_key_delivery_readbacks` и `authority_snapshot_readbacks`. Он
+вызывает только одну из двух exact `SECURITY DEFINER` functions:
+
+- `record_authority_key_delivery_readback(revision,digest,generations,served_proof)`;
+- `record_authority_snapshot_readback(revision,digest,generations,served_proof)`.
+
+Параметров `workload_id` и `role` у функций нет. Обе имеют fixed
 `search_path=pg_catalog,internal_rpc_authority`, `EXECUTE` для `PUBLIC`
-отозван, server-side разрешает `session_user`, блокирует exact registry row,
-проверяет active credential/workload generation и role-specific
-cryptographic proof, затем атомарно пишет и перечитывает строку. Readiness
-проверяет тот же transaction/readback path.
-Результат хранится в `authority_key_delivery_readbacks`; сама таблица не
-принимает прямой caller-controlled workload или role.
+отозван, server-side разрешают `session_user`, блокируют exact registry row,
+проверяют active credential/workload generation и соответствующий роли
+cryptographic proof, затем атомарно пишут и перечитывают строку своей таблицы.
+Readiness проверяет тот же transaction/readback path. Ни одна readback table
+не принимает прямой caller-controlled workload или role.
 
 Principal одного target не пишет за другой target или opposite role; retired
 generation и shared group principal закрыто отклоняются. Негативный
