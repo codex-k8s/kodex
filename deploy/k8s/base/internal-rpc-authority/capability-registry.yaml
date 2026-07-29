@@ -241,6 +241,7 @@ spec:
         perWorkloadRoleFanOutRequired: true
         readbackTable: authority_key_delivery_readbacks
         readbackCardinality: EXACTLY_ONE_PER_REQUIRED_WORKLOAD_ROLE
+        protectedReadbackWriteAllowed: false
         requiredRoleUnion: CALLER_ISSUER_TARGET_VERIFIER_PROOF_RESOLVER
         sequence:
           - persist-rotation-intent
@@ -250,6 +251,20 @@ spec:
           - publish-snapshot-cas
           - publisher-cryptographic-readback
           - promote-after-overlap-window
+        promotionTransaction:
+          isolation: SERIALIZABLE
+          lock: authority_rotation_intents-current-generation-for-update
+          reads:
+            - authority_key_delivery_readbacks
+            - authority_snapshot_readbacks
+          expectedSet: EXACT_ACTIVE_WORKLOAD_ROLE_GENERATIONS_FROM_PINNED_INTENT
+          requireExactRevisionDigestAndGenerationTuple: true
+          consumerReadbackWrites: FORBIDDEN
+          effects:
+            - compare-and-set-rotation-intent-promoted
+            - append-authority-snapshot-history
+            - advance-current-next-previous
+          partialCommitAllowed: false
         crashRecovery:
           resumeSameIntentGenerationAndDigest: true
           requireVaultMetadataReadback: true
@@ -296,8 +311,8 @@ spec:
             - authority_proof_watermarks
             - authority_proof_reservations
           execute:
-            - record_authority_key_delivery_readback
-            - record_authority_snapshot_readback
+            - internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)
+            - internal_rpc_authority.record_authority_snapshot_readback(bigint,text,bigint,bigint,bigint,text)
           delete: []
         internal_rpc_authority_verifier:
           select:
@@ -307,8 +322,8 @@ spec:
             - authority_snapshot_watermarks
             - authority_replay_reservations
           execute:
-            - record_authority_key_delivery_readback
-            - record_authority_snapshot_readback
+            - internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)
+            - internal_rpc_authority.record_authority_snapshot_readback(bigint,text,bigint,bigint,bigint,text)
           delete: []
         internal_rpc_authority_proof_resolver:
           select:
@@ -317,17 +332,18 @@ spec:
             - authority_rotation_intents
           insertUpdate: []
           execute:
-            - record_authority_key_delivery_readback
-            - record_authority_snapshot_readback
+            - internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)
+            - internal_rpc_authority.record_authority_snapshot_readback(bigint,text,bigint,bigint,bigint,text)
           delete: []
         internal_rpc_authority_publisher:
           selectInsertUpdate:
             - authority_snapshot_history
             - authority_rotation_intents
-            - authority_snapshot_readbacks
           select:
             - authority_key_delivery_readbacks
+            - authority_snapshot_readbacks
             - authority_restore_fences
+          execute: []
           delete: []
         internal_rpc_authority_recovery:
           select:
@@ -347,6 +363,20 @@ spec:
         - DIRECT_KEY_DELIVERY_READBACK_WRITE
         - LOGIN_AS_SHARED_GROUP_ROLE
       workloadRoleDatabaseIdentity:
+        executableContract: contracts/authorization/v1/postgresql-readback-boundary.sql
+        schema: internal_rpc_authority
+        schemaOwner: internal_rpc_authority_readback_owner
+        tableOwner: internal_rpc_authority_readback_owner
+        functionOwner: internal_rpc_authority_readback_owner
+        ownerAttributes:
+          login: false
+          superuser: false
+          bypassRls: false
+          createDb: false
+          createRole: false
+          inherit: false
+        ownerRuntimeMembershipAllowed: false
+        schemaCreatePolicy: OWNER_ONLY
         registry: contracts/authorization/v1/bootstrap-key-delivery-targets.json
         cardinality: EXACTLY_ONE_ACTIVE_LOGIN_PRINCIPAL_PER_WORKLOAD_ROLE_GENERATION
         mappingTable: authority_workload_database_identities
@@ -378,11 +408,17 @@ spec:
           - authority_snapshot_readbacks
         readbackFunctions:
           keyDelivery:
-            name: record_authority_key_delivery_readback
+            name: internal_rpc_authority.record_authority_key_delivery_readback
+            identityArguments: bigint,text,bigint,bigint,text
+            exactSignature: internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)
+            returns: bigint
             targetTable: authority_key_delivery_readbacks
             security: SECURITY_DEFINER
-            fixedSearchPath: pg_catalog,internal_rpc_authority
+            fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
             publicExecuteRevoked: true
+            unsafeOverloadAllowed: false
+            executeGrantsFromExactTargetRegistry: true
+            publisherExecuteAllowed: false
             callerProvidedWorkloadOrRoleAllowed: false
             locksRegisteredTarget: true
             atomicChecks:
@@ -391,11 +427,17 @@ spec:
               - exact-revision-and-digest
               - role-specific-cryptographic-readback
           snapshot:
-            name: record_authority_snapshot_readback
+            name: internal_rpc_authority.record_authority_snapshot_readback
+            identityArguments: bigint,text,bigint,bigint,bigint,text
+            exactSignature: internal_rpc_authority.record_authority_snapshot_readback(bigint,text,bigint,bigint,bigint,text)
+            returns: bigint
             targetTable: authority_snapshot_readbacks
             security: SECURITY_DEFINER
-            fixedSearchPath: pg_catalog,internal_rpc_authority
+            fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
             publicExecuteRevoked: true
+            unsafeOverloadAllowed: false
+            executeGrantsFromExactTargetRegistry: true
+            publisherExecuteAllowed: false
             callerProvidedWorkloadOrRoleAllowed: false
             locksRegisteredTarget: true
             atomicChecks:
@@ -460,6 +502,27 @@ spec:
       requireMonotonicRestoreEpoch: true
       requirePredecessorDigest: true
       failurePolicy: FAIL_CLOSED
+    restore-coordination-state:
+      kind: ExternalMonotonicKubernetesSecret
+      owner: internal-rpc-authority-restore-controller
+      namespace: mattercodex-system
+      resourceName: internal-rpc-authority-restore-coordination
+      outsideRestoredPostgreSQL: true
+      updateProtocol: SEMANTIC_REVISION_CAS
+      persistedFields:
+        - restore_id
+        - restore_epoch
+        - coordination_revision
+        - phase
+        - expected_workload_role_generation_set_digest_sha256
+        - issued_directive_jti_digests
+        - accepted_ack_jti_digests
+        - accepted_workload_role_generation_set_digest_sha256
+      multiReplicaBehavior: RESOURCE_VERSION_CAS_WITH_SEMANTIC_PREDECESSOR
+      restartBehavior: RELOAD_AND_VERIFY_BEFORE_SERVING
+      replayRetention: UNTIL_COMPLETED_SAFE_WINDOW_AND_TOKEN_EXPIRY
+      rollbackPolicy: REJECT_LOWER_OR_SAME_REVISION_MUTATION
+      failurePolicy: KEEP_TRAFFIC_QUARANTINED
     internal-rpc-authority-restore-controller:
       kind: Deployment
       canonicalPath: deploy/k8s/base/internal-rpc-authority-restore-controller
@@ -471,13 +534,54 @@ spec:
       interface:
         protoService: internalrpcauthority.v1.RestoreControllerService
         prepareMethod: /internalrpcauthority.v1.RestoreControllerService/PrepareRestore
+        directiveMethod: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
         acknowledgeMethod: /internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence
         completeMethod: /internalrpcauthority.v1.RestoreControllerService/CompleteRestore
         readinessMethod: /internalrpcauthority.v1.RestoreControllerService/CheckReadiness
         operatorTransport: MTLS_SPIFFE_PLUS_PROJECTED_SERVICE_ACCOUNT_TOKEN
         operatorSpiffeId: spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-operator
         projectedTokenAudience: urn:mattercodex:internal-rpc-authority-restore-controller
-        workloadAckIdentity: MTLS_SPIFFE_TO_REGISTERED_WORKLOAD_ROLE
+        workloadAckIdentity: MTLS_SPIFFE_PLUS_ROLE_CREDENTIAL_PLUS_ACK_PROOF
+        workloadRoleCredential:
+          protectedType: mattercodex-internal-rpc-restore-role-credential+jws
+          schema: contracts/authorization/v1/restore-coordination.schema.json#/$defs/roleCredential
+          signer: internal-rpc-authority-publisher
+          controllerAudience: urn:mattercodex:internal-rpc-authority-restore-controller
+          maxTtlSeconds: 300
+          exactTargetSource: contracts/authorization/v1/bootstrap-key-delivery-targets.json
+          serverDerivedBinding:
+            - workload_id
+            - role
+            - workload_generation
+            - credential_generation
+            - workload_spiffe_id
+            - ack_key_thumbprint_sha256
+          duplicateSpiffeDifferentRolesAllowed: true
+          credentialOrRoleFromRequestAuthority: false
+        coordinationPoll:
+          method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+          observedVersionField: observed_coordination_revision
+          maxLongPollSeconds: 5
+          currentStateSource: restore-coordination-state
+          noChangeIsSuccessful: true
+          directiveBeforePreparedRequired: true
+        directive:
+          protectedType: mattercodex-internal-rpc-restore-directive+jws
+          schema: contracts/authorization/v1/restore-coordination.schema.json#/$defs/directive
+          phase: QUIESCING
+          maxTtlSeconds: 30
+          bindsExactRoleCredentialDigest: true
+          bindsRestoreIdEpochAndCoordinationRevision: true
+        acknowledgement:
+          protectedType: mattercodex-internal-rpc-restore-ack+jws
+          schema: contracts/authorization/v1/restore-coordination.schema.json#/$defs/quiescenceAck
+          signatureKey: ROLE_CREDENTIAL_BOUND_ACK_KEY
+          requiresAcceptingStopped: true
+          requiresInflightDrained: true
+          requiredInflightCount: 0
+          directiveAndAckJtiOneTime: true
+          persistentReplayStore: restore-coordination-state
+          atomicCasWithExpectedSet: true
       quarantineBarrier:
         stateSequence:
           - OPEN
@@ -503,12 +607,14 @@ spec:
       exactWritableResources:
         secrets:
           - internal-rpc-authority-restore-evidence
+          - internal-rpc-authority-restore-coordination
         leases:
           - internal-rpc-authority-restore-controller
       kubernetesRbac:
         secrets:
           resourceNames:
             - internal-rpc-authority-restore-evidence
+            - internal-rpc-authority-restore-coordination
           verbs:
             - get
             - update
@@ -525,6 +631,7 @@ spec:
         requireAdmissionPolicyAndBindingReadback: true
         requireExactServedAnchorReadback: true
         requireSignerAndTrustGenerationReadback: true
+        requireCoordinationStateReadback: true
       failurePolicy: KEEP_TRAFFIC_QUARANTINED
     internal-rpc-authority-restore-operator-job:
       kind: Job
@@ -722,6 +829,13 @@ spec:
           port: 5432
           tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
+        - destination: internal-rpc-authority-restore-controller
+          namespace: mattercodex-system
+          service: internal-rpc-authority-restore-controller
+          port: 8443
+          tlsServerName: internal-rpc-authority-restore-controller.mattercodex-system.svc.cluster.local
+          exactTrustBundleId: mattercodex-restore-controller-ca-g1
+          environmentRenderMustPinClusterIP: true
     verifier:
       ingress: UDS_ONLY
       egress:
@@ -730,6 +844,23 @@ spec:
           service: internal-rpc-authority-postgresql
           port: 5432
           tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          environmentRenderMustPinClusterIP: true
+        - destination: internal-rpc-authority-restore-controller
+          namespace: mattercodex-system
+          service: internal-rpc-authority-restore-controller
+          port: 8443
+          tlsServerName: internal-rpc-authority-restore-controller.mattercodex-system.svc.cluster.local
+          exactTrustBundleId: mattercodex-restore-controller-ca-g1
+          environmentRenderMustPinClusterIP: true
+    authorityProofResolver:
+      ingress: APPLICATION_OWNED
+      egress:
+        - destination: internal-rpc-authority-restore-controller
+          namespace: mattercodex-system
+          service: internal-rpc-authority-restore-controller
+          port: 8443
+          tlsServerName: internal-rpc-authority-restore-controller.mattercodex-system.svc.cluster.local
+          exactTrustBundleId: mattercodex-restore-controller-ca-g1
           environmentRenderMustPinClusterIP: true
     publisher:
       ingress: NONE
@@ -759,6 +890,9 @@ spec:
           protocol: MTLS
         - source: registered-workload-role-generations
           protocol: MTLS
+          exactTargetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.json
+          applicationCredential: ROLE_BOUND_ES256_JWS
+          port: 8443
       egress:
         - destination: kubernetes-api
           namespace: default
@@ -772,6 +906,34 @@ spec:
           port: 8200
           tlsServerName: vault.mattercodex-system.svc.cluster.local
           exactPublicCaFileRequired: true
+    restoreCoordinationNetworkPolicies:
+      controllerIngressPolicy: internal-rpc-authority-restore-controller-ingress
+      controllerPodSelector:
+        matchLabels:
+          app.kubernetes.io/name: internal-rpc-authority-restore-controller
+      controllerPort: 8443
+      protocol: TCP
+      sourceNamespace: mattercodex-system
+      exactClients:
+        - workloadId: control-api-gateway
+          roles:
+            - AUTHORIZATION_ISSUER
+          serviceAccountName: control-api-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-api-gateway
+          egressPolicy: internal-rpc-authority-restore-egress-control-api-gateway
+        - workloadId: control-plane
+          roles:
+            - AUTHORIZATION_VERIFIER
+            - AUTHORITY_PROOF_RESOLVER
+          serviceAccountName: control-plane
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-plane
+          egressPolicy: internal-rpc-authority-restore-egress-control-plane
+      requireBothSourceEgressAndControllerIngress: true
+      missingEitherDirectionPolicy: FAIL_CLOSED
     restoreOperator:
       ingress: NONE
       egress:
@@ -832,8 +994,13 @@ spec:
     issuanceAndReservationDuringRestore: CLOSED_ON_EVERY_WORK_PATH
     preparedBarrier:
       expectedSet: EVERY_ACTIVE_WORKLOAD_ROLE_GENERATION
-      ackIdentity: MTLS_SPIFFE_AND_ROLE
+      ackIdentity: MTLS_SPIFFE_ROLE_CREDENTIAL_AND_BOUND_ACK_SIGNATURE
+      discoveryMethod: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      discoveryVersion: coordination_revision
+      directivePhase: QUIESCING
+      roleCredentialAudience: urn:mattercodex:internal-rpc-authority-restore-controller
       ackCondition: READINESS_FALSE_ACCEPT_STOPPED_INFLIGHT_DRAINED
+      directiveAndAckReplayState: EXTERNAL_COORDINATION_SECRET_CAS
       missingOrStaleAckPolicy: DENY_PREPARED
     startupOrder:
       - controller-enters-quiescing

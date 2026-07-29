@@ -35,6 +35,16 @@
       "name": "restore-without-prepared",
       "mutation": "operator starts database restore without exact signed PREPARED evidence",
       "reason": "RESTORE_BARRIER_INCOMPLETE"
+    },
+    {
+      "name": "missing-role-bound-directive",
+      "mutation": "acknowledge quiescence without a current role-bound signed QUIESCING directive",
+      "reason": "RESTORE_DIRECTIVE_REJECTED"
+    },
+    {
+      "name": "replayed-quiescence-ack",
+      "mutation": "reuse a directive or ACK JTI already reserved in external coordination state",
+      "reason": "RESTORE_ACK_REPLAY_DETECTED"
     }
   ]
 }

@@ -35,6 +35,26 @@
       "name": "direct-snapshot-table-write",
       "mutation": "attempt INSERT or UPDATE on authority_snapshot_readbacks without the exact function",
       "reason": "DIRECT_READBACK_WRITE_FORBIDDEN"
+    },
+    {
+      "name": "publisher-direct-key-delivery-write",
+      "mutation": "internal_rpc_authority_publisher attempts INSERT or UPDATE on authority_key_delivery_readbacks",
+      "reason": "DIRECT_READBACK_WRITE_FORBIDDEN"
+    },
+    {
+      "name": "publisher-direct-snapshot-write",
+      "mutation": "internal_rpc_authority_publisher attempts INSERT or UPDATE on authority_snapshot_readbacks",
+      "reason": "DIRECT_READBACK_WRITE_FORBIDDEN"
+    },
+    {
+      "name": "publisher-key-delivery-function-execute",
+      "mutation": "internal_rpc_authority_publisher attempts the exact key delivery SECURITY DEFINER function",
+      "reason": "DATABASE_FUNCTION_EXECUTE_FORBIDDEN"
+    },
+    {
+      "name": "publisher-snapshot-function-execute",
+      "mutation": "internal_rpc_authority_publisher attempts the exact snapshot SECURITY DEFINER function",
+      "reason": "DATABASE_FUNCTION_EXECUTE_FORBIDDEN"
     }
   ]
 }

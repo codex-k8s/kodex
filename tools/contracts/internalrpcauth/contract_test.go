@@ -44,6 +44,18 @@ func TestJSONSchemasAreClosed(t *testing.T) {
 	}
 }
 
+func TestRestoreCoordinationSchemasAreClosed(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "contracts/authorization/v1/restore-coordination.schema.json")
+	var schema map[string]any
+	decodeJSONStrict(t, path, &schema)
+	definitions := requiredMap(t, schema, "$defs")
+	for _, name := range []string{"roleCredential", "directive", "quiescenceAck"} {
+		definition := requiredMap(t, definitions, name)
+		requireEqual(t, definition, "additionalProperties", false)
+	}
+}
+
 func TestRestoreEvidenceCarriesQuarantineBarrier(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "contracts/authorization/v1/restore-fence-evidence.schema.json")
@@ -92,7 +104,10 @@ func TestProtectedHeaderContract(t *testing.T) {
 	wantTypes := []string{
 		"mattercodex-internal-rpc-auth+jws",
 		"mattercodex-internal-rpc-authority-proof+jws",
+		"mattercodex-internal-rpc-restore-ack+jws",
+		"mattercodex-internal-rpc-restore-directive+jws",
 		"mattercodex-internal-rpc-restore-evidence+jws",
+		"mattercodex-internal-rpc-restore-role-credential+jws",
 		"mattercodex-internal-rpc-snapshot+jws",
 	}
 	typ := properties["typ"].(map[string]any)
@@ -421,6 +436,18 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 		"prepareMethod",
 		"/internalrpcauthority.v1.RestoreControllerService/PrepareRestore",
 	)
+	requireEqual(
+		t,
+		controllerInterface,
+		"directiveMethod",
+		"/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective",
+	)
+	coordinationPoll := requiredMap(t, controllerInterface, "coordinationPoll")
+	requireEqual(t, coordinationPoll, "directiveBeforePreparedRequired", true)
+	requireEqual(t, coordinationPoll, "observedVersionField", "observed_coordination_revision")
+	acknowledgement := requiredMap(t, controllerInterface, "acknowledgement")
+	requireEqual(t, acknowledgement, "directiveAndAckJtiOneTime", true)
+	requireEqual(t, acknowledgement, "persistentReplayStore", "restore-coordination-state")
 	barrier := requiredMap(t, controller, "quarantineBarrier")
 	requireEqual(t, barrier, "requireEveryCurrentGenerationAck", true)
 	requireEqual(t, barrier, "closeOnEveryIssuanceAndReservationPath", true)
@@ -444,11 +471,11 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 		table string
 	}{
 		"keyDelivery": {
-			name:  "record_authority_key_delivery_readback",
+			name:  "internal_rpc_authority.record_authority_key_delivery_readback",
 			table: "authority_key_delivery_readbacks",
 		},
 		"snapshot": {
-			name:  "record_authority_snapshot_readback",
+			name:  "internal_rpc_authority.record_authority_snapshot_readback",
 			table: "authority_snapshot_readbacks",
 		},
 	} {
@@ -457,8 +484,23 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 		requireEqual(t, readbackFunction, "targetTable", want.table)
 		requireEqual(t, readbackFunction, "security", "SECURITY_DEFINER")
 		requireEqual(t, readbackFunction, "callerProvidedWorkloadOrRoleAllowed", false)
+		requireEqual(t, readbackFunction, "unsafeOverloadAllowed", false)
+		requireEqual(t, readbackFunction, "publisherExecuteAllowed", false)
 	}
 	minimumRights := requiredMap(t, store, "minimumDatabaseRights")
+	publisherRights := requiredMap(t, minimumRights, "internal_rpc_authority_publisher")
+	requireStringSliceEqual(t, publisherRights, "select", []string{
+		"authority_key_delivery_readbacks",
+		"authority_snapshot_readbacks",
+		"authority_restore_fences",
+	})
+	requireStringSliceEqual(t, publisherRights, "execute", []string{})
+	publisherWrites := stringSet(publisherRights["selectInsertUpdate"].([]any))
+	for _, table := range protectedReadbackTables {
+		if publisherWrites[table] {
+			t.Fatalf("publisher retains direct write authority on %s", table)
+		}
+	}
 	for _, role := range []string{
 		"internal_rpc_authority_issuer",
 		"internal_rpc_authority_verifier",
@@ -466,8 +508,8 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	} {
 		rights := requiredMap(t, minimumRights, role)
 		requireStringSliceEqual(t, rights, "execute", []string{
-			"record_authority_key_delivery_readback",
-			"record_authority_snapshot_readback",
+			"internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)",
+			"internal_rpc_authority.record_authority_snapshot_readback(bigint,text,bigint,bigint,bigint,text)",
 		})
 		insertUpdate := stringSet(rights["insertUpdate"].([]any))
 		for _, table := range protectedReadbackTables {
@@ -503,6 +545,12 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	requireEqual(t, probe, "verifierFullMethod", verifierReady)
 
 	network := requiredMap(t, spec, "network")
+	coordinationNetwork := requiredMap(t, network, "restoreCoordinationNetworkPolicies")
+	requireEqual(t, coordinationNetwork, "controllerPort", float64(8443))
+	requireEqual(t, coordinationNetwork, "requireBothSourceEgressAndControllerIngress", true)
+	if len(coordinationNetwork["exactClients"].([]any)) != 2 {
+		t.Fatal("restore coordination network registry is incomplete")
+	}
 	mtls := requiredMap(t, network, "mtlsDownstreamRpc")
 	requireEqual(t, mtls, "exactServerName", "REQUIRED_PER_OPERATION_BINDING")
 	requireEqual(t, mtls, "exactTrustBundleId", "REQUIRED_PER_OPERATION_BINDING")
@@ -567,10 +615,12 @@ func TestRegistryOwnership(t *testing.T) {
 	}
 
 	for id, source := range map[string]string{
-		"internal-rpc-authority-proof-v1":            "contracts/authorization/v1/authority-proof.schema.json",
-		"internal-rpc-authority-restore-evidence-v1": "contracts/authorization/v1/restore-fence-evidence.schema.json",
-		"internal-rpc-authority-key-delivery-v1":     "contracts/authorization/v1/key-delivery-targets.schema.json",
-		"internal-rpc-authority-error-matrix-v1":     "contracts/authorization/v1/authorization-error-matrix.json",
+		"internal-rpc-authority-proof-v1":                "contracts/authorization/v1/authority-proof.schema.json",
+		"internal-rpc-authority-restore-evidence-v1":     "contracts/authorization/v1/restore-fence-evidence.schema.json",
+		"internal-rpc-authority-restore-coordination-v1": "contracts/authorization/v1/restore-coordination.schema.json",
+		"internal-rpc-authority-readback-postgresql-v1":  "contracts/authorization/v1/postgresql-readback-boundary.sql",
+		"internal-rpc-authority-key-delivery-v1":         "contracts/authorization/v1/key-delivery-targets.schema.json",
+		"internal-rpc-authority-error-matrix-v1":         "contracts/authorization/v1/authorization-error-matrix.json",
 	} {
 		entry, exists := entries[id]
 		if !exists || entry.Source != source || len(entry.Consumers) == 0 {
@@ -669,6 +719,128 @@ func TestAuthorityProofFirstCallIsNonCyclic(t *testing.T) {
 	}
 }
 
+func TestAuthorityResolutionNotFoundIsIndistinguishable(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "contracts/authorization/v1/fixtures/authority-resolution-negative.json")
+	var fixture struct {
+		Version int `json:"v"`
+		Cases   []struct {
+			Name      string `json:"name"`
+			Mutation  string `json:"mutation"`
+			GRPCCode  string `json:"grpc_code"`
+			Reason    string `json:"reason"`
+			Stage     string `json:"stage"`
+			Retryable bool   `json:"retryable"`
+			Message   string `json:"message"`
+		} `json:"cases"`
+	}
+	decodeJSONStrict(t, path, &fixture)
+	if fixture.Version != 1 || len(fixture.Cases) != 2 {
+		t.Fatalf("unexpected authority resolution fixture: %+v", fixture)
+	}
+	for _, item := range fixture.Cases {
+		if item.Mutation == "" ||
+			item.GRPCCode != "NOT_FOUND" ||
+			item.Reason != "AUTHORITY_RESOURCE_NOT_FOUND" ||
+			item.Stage != "AUTHORITY_RESOLUTION" ||
+			item.Retryable ||
+			item.Message != "authority resource not found" {
+			t.Fatalf("hidden and missing outcomes are distinguishable: %+v", item)
+		}
+	}
+}
+
+func TestRestoreCoordinationSameWorkloadTwoRoles(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "contracts/authorization/v1/fixtures/restore-coordination.json")
+	var fixture struct {
+		Version  int `json:"v"`
+		Positive struct {
+			Name             string `json:"name"`
+			WorkloadID       string `json:"workload_id"`
+			WorkloadSPIFFEID string `json:"workload_spiffe_id"`
+			Roles            []struct {
+				Role                 string `json:"role"`
+				WorkloadGeneration   int    `json:"workload_generation"`
+				CredentialGeneration int    `json:"credential_generation"`
+				CredentialID         string `json:"role_credential_id"`
+				AckKeyID             string `json:"ack_key_id"`
+				NetworkPolicy        string `json:"network_policy"`
+			} `json:"roles"`
+			ExpectedAckCount                 int  `json:"expected_ack_count"`
+			PreparedAfterDistinctOneTimeAcks bool `json:"prepared_after_distinct_one_time_acks"`
+		} `json:"positive"`
+		Negative []struct {
+			Name     string `json:"name"`
+			Mutation string `json:"mutation"`
+			Reason   string `json:"reason"`
+		} `json:"negative"`
+	}
+	decodeJSONStrict(t, path, &fixture)
+	if fixture.Version != 1 ||
+		fixture.Positive.WorkloadID != "control-plane" ||
+		len(fixture.Positive.Roles) != 2 ||
+		fixture.Positive.ExpectedAckCount != 2 ||
+		!fixture.Positive.PreparedAfterDistinctOneTimeAcks {
+		t.Fatalf("same-workload two-role fixture is incomplete: %+v", fixture.Positive)
+	}
+	first, second := fixture.Positive.Roles[0], fixture.Positive.Roles[1]
+	if first.Role == second.Role ||
+		first.CredentialID == second.CredentialID ||
+		first.AckKeyID == second.AckKeyID ||
+		first.WorkloadGeneration != second.WorkloadGeneration ||
+		first.NetworkPolicy == "" ||
+		second.NetworkPolicy == "" {
+		t.Fatal("shared SPIFFE roles do not have distinct application identities")
+	}
+	expected := map[string]string{
+		"duplicate-spiffe-opposite-role-credential": "RESTORE_ROLE_CREDENTIAL_REJECTED",
+		"missing-quiescing-directive":               "RESTORE_DIRECTIVE_REJECTED",
+		"stale-role-generation":                     "RESTORE_ROLE_CREDENTIAL_REJECTED",
+		"replayed-directive-or-ack-jti":             "RESTORE_ACK_REPLAY_DETECTED",
+		"missing-client-egress-network-policy":      "RESTORE_COORDINATION_UNAVAILABLE",
+		"missing-controller-ingress-network-policy": "RESTORE_COORDINATION_UNAVAILABLE",
+	}
+	if len(fixture.Negative) != len(expected) {
+		t.Fatal("restore coordination negative coverage is incomplete")
+	}
+	for _, item := range fixture.Negative {
+		if item.Mutation == "" || expected[item.Name] != item.Reason {
+			t.Fatalf("unexpected restore coordination fixture: %+v", item)
+		}
+	}
+}
+
+func TestPostgreSQLReadbackBoundaryIsExact(t *testing.T) {
+	root := repositoryRoot(t)
+	sql := readFile(t, filepath.Join(
+		root,
+		"contracts/authorization/v1/postgresql-readback-boundary.sql",
+	))
+	for _, want := range []string{
+		"CREATE ROLE internal_rpc_authority_readback_owner",
+		"NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS",
+		"CREATE SCHEMA internal_rpc_authority",
+		"FORCE ROW LEVEL SECURITY",
+		"SET search_path = pg_catalog, internal_rpc_authority, pg_temp",
+		"internal_rpc_authority.record_authority_key_delivery_readback(\n  bigint, text, bigint, bigint, text\n)",
+		"internal_rpc_authority.record_authority_snapshot_readback(\n  bigint, text, bigint, bigint, bigint, text\n)",
+		"TO internal_rpc_authority_publisher;",
+	} {
+		if !strings.Contains(sql, want) {
+			t.Fatalf("PostgreSQL readback contract does not contain %q", want)
+		}
+	}
+	if strings.Contains(sql, "GRANT EXECUTE ON FUNCTION internal_rpc_authority.record_authority_snapshot_readback(\n  bigint, text, bigint, bigint, bigint, text\n) TO internal_rpc_authority_publisher") ||
+		strings.Contains(sql, "GRANT INSERT") ||
+		strings.Contains(sql, "GRANT UPDATE") {
+		t.Fatal("publisher or runtime retained direct readback write authority")
+	}
+	if count := strings.Count(sql, "CREATE FUNCTION internal_rpc_authority.record_authority_"); count != 2 {
+		t.Fatalf("unsafe function overload count = %d", count)
+	}
+}
+
 func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
 	root := repositoryRoot(t)
 	fixtures := map[string]map[string]string{
@@ -680,13 +852,17 @@ func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
 			"wildcard-vault-path":     "NON_EXACT_DELIVERY_PATH",
 		},
 		"readback-authority-negative.json": {
-			"cross-target-write":              "DATABASE_IDENTITY_MISMATCH",
-			"opposite-role-write":             "DATABASE_ROLE_MISMATCH",
-			"caller-supplied-workload":        "CALLER_IDENTITY_FIELD_FORBIDDEN",
-			"stale-credential-generation":     "DATABASE_CREDENTIAL_GENERATION_REJECTED",
-			"shared-group-login":              "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
-			"direct-key-delivery-table-write": "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"direct-snapshot-table-write":     "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"cross-target-write":                      "DATABASE_IDENTITY_MISMATCH",
+			"opposite-role-write":                     "DATABASE_ROLE_MISMATCH",
+			"caller-supplied-workload":                "CALLER_IDENTITY_FIELD_FORBIDDEN",
+			"stale-credential-generation":             "DATABASE_CREDENTIAL_GENERATION_REJECTED",
+			"shared-group-login":                      "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
+			"direct-key-delivery-table-write":         "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"direct-snapshot-table-write":             "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"publisher-direct-key-delivery-write":     "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"publisher-direct-snapshot-write":         "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"publisher-key-delivery-function-execute": "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
+			"publisher-snapshot-function-execute":     "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
 		},
 		"restore-negative.json": {
 			"lower-anchor-revision":        "RESTORE_ANCHOR_REJECTED",
@@ -696,6 +872,8 @@ func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
 			"controller-signature-failure": "RESTORE_ANCHOR_REJECTED",
 			"controller-unavailable":       "RESTORE_CONTROLLER_UNAVAILABLE",
 			"restore-without-prepared":     "RESTORE_BARRIER_INCOMPLETE",
+			"missing-role-bound-directive": "RESTORE_DIRECTIVE_REJECTED",
+			"replayed-quiescence-ack":      "RESTORE_ACK_REPLAY_DETECTED",
 		},
 	}
 	for name, expected := range fixtures {
@@ -776,6 +954,11 @@ func TestOperationBindingsAndKeyDeliveryAreOneToOne(t *testing.T) {
 		},
 		"duplicate-ambiguous-target": func(mutated operationBindingFixture) operationBindingFixture {
 			mutated.KeyDeliveryTargets = append(mutated.KeyDeliveryTargets, mutated.KeyDeliveryTargets[1])
+			return mutated
+		},
+		"duplicate-spiffe-opposite-role-credential": func(mutated operationBindingFixture) operationBindingFixture {
+			mutated.KeyDeliveryTargets[2].RestoreCoordination.RoleCredentialID =
+				mutated.KeyDeliveryTargets[1].RestoreCoordination.RoleCredentialID
 			return mutated
 		},
 		"wildcard-vault-path": func(mutated operationBindingFixture) operationBindingFixture {
@@ -966,19 +1149,20 @@ type localPeer struct {
 }
 
 type keyDeliveryTarget struct {
-	WorkloadID               string           `json:"workload_id"`
-	Role                     string           `json:"role"`
-	SPIFFEID                 string           `json:"spiffe_id"`
-	Namespace                string           `json:"namespace"`
-	ServiceAccount           string           `json:"service_account"`
-	WorkloadGeneration       int              `json:"workload_generation"`
-	AuthoritySnapshot        projection       `json:"authority_snapshot"`
-	AuthPrivateKey           *delivery        `json:"auth_private_key,omitempty"`
-	AuthorityProofPrivateKey *delivery        `json:"authority_proof_private_key,omitempty"`
-	ManifestTrust            delivery         `json:"manifest_trust"`
-	AuthorityProofTrust      *delivery        `json:"authority_proof_trust,omitempty"`
-	DatabaseIdentity         databaseIdentity `json:"database_identity"`
-	Readback                 readback         `json:"readback"`
+	WorkloadID               string              `json:"workload_id"`
+	Role                     string              `json:"role"`
+	SPIFFEID                 string              `json:"spiffe_id"`
+	Namespace                string              `json:"namespace"`
+	ServiceAccount           string              `json:"service_account"`
+	WorkloadGeneration       int                 `json:"workload_generation"`
+	AuthoritySnapshot        projection          `json:"authority_snapshot"`
+	AuthPrivateKey           *delivery           `json:"auth_private_key,omitempty"`
+	AuthorityProofPrivateKey *delivery           `json:"authority_proof_private_key,omitempty"`
+	ManifestTrust            delivery            `json:"manifest_trust"`
+	AuthorityProofTrust      *delivery           `json:"authority_proof_trust,omitempty"`
+	DatabaseIdentity         databaseIdentity    `json:"database_identity"`
+	RestoreCoordination      restoreCoordination `json:"restore_coordination"`
+	Readback                 readback            `json:"readback"`
 }
 
 type delivery struct {
@@ -997,6 +1181,18 @@ type databaseIdentity struct {
 	VaultDatabaseRole    string `json:"vault_database_role"`
 	DSNMountPath         string `json:"dsn_mount_path"`
 	CredentialGeneration int    `json:"credential_generation"`
+}
+
+type restoreCoordination struct {
+	RoleCredentialID        string `json:"role_credential_id"`
+	RoleCredentialVaultPath string `json:"role_credential_vault_path"`
+	RoleCredentialMountPath string `json:"role_credential_mount_path"`
+	AckKeyID                string `json:"ack_key_id"`
+	AckKeyVaultPath         string `json:"ack_key_vault_path"`
+	AckKeyMountPath         string `json:"ack_key_mount_path"`
+	ControllerAudience      string `json:"controller_audience"`
+	ControllerFullMethod    string `json:"controller_full_method"`
+	NetworkPolicy           string `json:"network_policy"`
 }
 
 type readback struct {
@@ -1113,6 +1309,8 @@ func validateOperationBindingFixture(fixture operationBindingFixture) error {
 	targets := make(map[string]keyDeliveryTarget, len(fixture.KeyDeliveryTargets))
 	vaultPaths := make(map[string]bool, len(fixture.KeyDeliveryTargets)*4)
 	databasePrincipals := make(map[string]bool, len(fixture.KeyDeliveryTargets))
+	restoreCredentialIDs := make(map[string]bool, len(fixture.KeyDeliveryTargets))
+	restoreAckKeyIDs := make(map[string]bool, len(fixture.KeyDeliveryTargets))
 	for _, target := range fixture.KeyDeliveryTargets {
 		key := target.WorkloadID + "|" + target.Role
 		if target.WorkloadID == "" || target.Role == "" || target.WorkloadGeneration < 1 {
@@ -1144,13 +1342,30 @@ func validateOperationBindingFixture(fixture operationBindingFixture) error {
 			vaultPaths[item.VaultPath] = true
 		}
 		if target.Readback.ReadbackID == "" ||
-			target.Readback.DatabaseFunction != "record_authority_key_delivery_readback" ||
+			target.Readback.DatabaseFunction != "internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)" ||
 			target.Readback.ExpectedRole != target.Role ||
 			target.DatabaseIdentity.LoginPrincipal == "" ||
 			databasePrincipals[target.DatabaseIdentity.LoginPrincipal] ||
 			target.DatabaseIdentity.CredentialGeneration < 1 {
 			return fmt.Errorf("invalid workload role database readback identity")
 		}
+		coordination := target.RestoreCoordination
+		if coordination.RoleCredentialID == "" ||
+			coordination.AckKeyID == "" ||
+			coordination.RoleCredentialID == coordination.AckKeyID ||
+			restoreCredentialIDs[coordination.RoleCredentialID] ||
+			restoreAckKeyIDs[coordination.AckKeyID] ||
+			!strings.HasPrefix(coordination.RoleCredentialVaultPath, "kv/data/mattercodex/") ||
+			!strings.HasPrefix(coordination.AckKeyVaultPath, "kv/data/mattercodex/") ||
+			!strings.HasPrefix(coordination.RoleCredentialMountPath, "/") ||
+			!strings.HasPrefix(coordination.AckKeyMountPath, "/") ||
+			coordination.ControllerAudience != "urn:mattercodex:internal-rpc-authority-restore-controller" ||
+			coordination.ControllerFullMethod != "/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective" ||
+			coordination.NetworkPolicy == "" {
+			return fmt.Errorf("invalid workload role restore coordination identity")
+		}
+		restoreCredentialIDs[coordination.RoleCredentialID] = true
+		restoreAckKeyIDs[coordination.AckKeyID] = true
 		if target.AuthoritySnapshot.SecretName != "internal-rpc-authority-snapshot" ||
 			!strings.HasPrefix(target.AuthoritySnapshot.MountPath, "/") {
 			return fmt.Errorf("invalid authority snapshot projection")

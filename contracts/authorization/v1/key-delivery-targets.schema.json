@@ -134,7 +134,7 @@
           "$ref": "#/$defs/workloadId"
         },
         "database_function": {
-          "const": "record_authority_key_delivery_readback"
+          "const": "internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)"
         },
         "expected_role": {
           "enum": [
@@ -142,6 +142,50 @@
             "AUTHORIZATION_VERIFIER",
             "AUTHORITY_PROOF_RESOLVER"
           ]
+        }
+      }
+    },
+    "restoreCoordination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role_credential_id",
+        "role_credential_vault_path",
+        "role_credential_mount_path",
+        "ack_key_id",
+        "ack_key_vault_path",
+        "ack_key_mount_path",
+        "controller_audience",
+        "controller_full_method",
+        "network_policy"
+      ],
+      "properties": {
+        "role_credential_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "role_credential_vault_path": {
+          "$ref": "#/$defs/vaultPath"
+        },
+        "role_credential_mount_path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "ack_key_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "ack_key_vault_path": {
+          "$ref": "#/$defs/vaultPath"
+        },
+        "ack_key_mount_path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "controller_audience": {
+          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+        },
+        "controller_full_method": {
+          "const": "/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective"
+        },
+        "network_policy": {
+          "$ref": "#/$defs/kubernetesName"
         }
       }
     },
@@ -158,6 +202,7 @@
         "authority_snapshot",
         "manifest_trust",
         "database_identity",
+        "restore_coordination",
         "readback"
       ],
       "properties": {
@@ -202,6 +247,9 @@
         },
         "database_identity": {
           "$ref": "#/$defs/databaseIdentity"
+        },
+        "restore_coordination": {
+          "$ref": "#/$defs/restoreCoordination"
         },
         "readback": {
           "$ref": "#/$defs/readback"

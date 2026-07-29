@@ -7,7 +7,7 @@ PROTOBUF_GO_PLUGIN_REVISION := 1
 GRPC_GO_PLUGIN_REMOTE := buf.build/grpc/go:v1.6.2
 GRPC_GO_PLUGIN_REVISION := 1
 
-.PHONY: check-go-toolchain check-proto-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen test-contract-authority
+.PHONY: check-go-toolchain check-proto-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen test-contract-authority test-contract-authority-postgres
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -67,3 +67,6 @@ check-proto-codegen: check-proto-toolchain
 test-contract-authority: lint-proto build-proto check-proto-codegen
 	env -u GOFLAGS GOENV=off GOWORK=off go test ./tools/contracts/internalrpcauth -count=1
 	cd libs/go/internalrpcauth && env -u GOFLAGS GOENV=off GOWORK=off go test ./... -count=1
+
+test-contract-authority-postgres:
+	@./scripts/test-internal-rpc-authority-postgres-contract.sh

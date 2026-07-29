@@ -60,6 +60,8 @@ authorization context; синтаксически корректный tuple и�
 | `contracts/authorization/v1/authorization-context.schema.json` | canonical authorization claims |
 | `contracts/authorization/v1/authority-snapshot.schema.json` | signed JWKS + machine policy snapshot |
 | `contracts/authorization/v1/restore-fence-evidence.schema.json` | внешнее монотонное PITR evidence |
+| `contracts/authorization/v1/restore-coordination.schema.json` | role credential, QUIESCING directive и one-time ACK claims |
+| `contracts/authorization/v1/postgresql-readback-boundary.sql` | исполняемый exact PostgreSQL privilege/RLS/function contract |
 | `contracts/authorization/v1/key-delivery-targets.schema.json` | exact `(workload,role)` key/trust/database-identity fan-out |
 | `contracts/authorization/v1/authorization-error-matrix.json` | полная reason/code/stage/retryable/message matrix |
 | `contracts/authorization/v1/bootstrap-deny-all-policy.json` | безопасное начальное состояние без business bindings |
@@ -148,10 +150,14 @@ Credential обычного клиента доказывает только sub
 proof лишь после положительного server-side membership/ownership resolution.
 Даже trusted signer не может связать actor tenant A с tenant/project B:
 проверка закрывается `PermissionDenied/AUTHORITY_SCOPE_MISMATCH` до подписи.
-Неизвестный или скрытый ресурс имеет одинаковый `NotFound` domain outcome без
-утечки tenant. First-call и cross-tenant contracts находятся в
-`fixtures/authority-proof-first-call.json` и
-`fixtures/authority-proof-negative.json`.
+Неизвестный или скрытый ресурс имеет одинаковый `NotFound` domain outcome с
+ровно одним `AuthorizationErrorDetail`: reason
+`AUTHORITY_RESOURCE_NOT_FOUND`, stage `AUTHORITY_RESOLUTION`, retryable
+`false` и сообщением `authority resource not found`. Missing и cross-tenant
+hidden resource неразличимы по status/detail. First-call и negative contracts
+находятся в `fixtures/authority-proof-first-call.json`,
+`fixtures/authority-proof-negative.json` и
+`fixtures/authority-resolution-negative.json`.
 
 Proof имеет `typ=mattercodex-internal-rpc-authority-proof+jws`, проверяется
 только ключом exact issuer/trust generation и содержит semantic model
@@ -243,6 +249,13 @@ RPC всегда получает новый context/JTI. Бизнесовая c
 | Promotion | Не ранее 40 секунд после readback `NEXT` становится `CURRENT`, прежний current — `PREVIOUS`, а новый ключ создается как `NEXT` |
 | Retirement | `PREVIOUS` удаляется отдельной revision не ранее ещё одного окна 40 секунд после подтвержденной promotion |
 | Consumers | Issuers подписывают только exact `CURRENT`; verifiers принимают listed `CURRENT/NEXT/PREVIOUS` только для exact issuer; target workloads получают atomic snapshot |
+
+Promotion выполняется одной `SERIALIZABLE` PostgreSQL transaction: publisher
+блокирует pinned rotation intent `FOR UPDATE`, читает exact expected set обеих
+consumer readback tables, проверяет revision/digest/generation каждого target
+и атомарно обновляет intent, append-only snapshot history и
+`CURRENT/NEXT/PREVIOUS`. Publisher не пишет readback rows и не исполняет
+readback functions; неполный set откатывает всю transaction.
 
 Окно 40 секунд равно TTL 30 секунд плюс двум допустимым clock-skew окнам по
 5 секунд. Сокращать его runtime-настройкой запрещено.
@@ -406,6 +419,7 @@ internalrpcauthority.v1
 /internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof
 /internalrpcauthority.v1.AuthorityProofResolverService/CheckReadiness
 /internalrpcauthority.v1.RestoreControllerService/PrepareRestore
+/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
 /internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence
 /internalrpcauthority.v1.RestoreControllerService/CompleteRestore
 /internalrpcauthority.v1.RestoreControllerService/CheckReadiness
@@ -801,16 +815,26 @@ default-deny policy по `session_user`.
 `authority_key_delivery_readbacks` и `authority_snapshot_readbacks`. Он
 вызывает только одну из двух exact `SECURITY DEFINER` functions:
 
-- `record_authority_key_delivery_readback(revision,digest,generations,served_proof)`;
-- `record_authority_snapshot_readback(revision,digest,generations,served_proof)`.
+- `internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text) RETURNS bigint`;
+- `internal_rpc_authority.record_authority_snapshot_readback(bigint,text,bigint,bigint,bigint,text) RETURNS bigint`.
 
 Параметров `workload_id` и `role` у функций нет. Обе имеют fixed
-`search_path=pg_catalog,internal_rpc_authority`, `EXECUTE` для `PUBLIC`
+`search_path=pg_catalog,internal_rpc_authority,pg_temp`, `EXECUTE` для `PUBLIC`
 отозван, server-side разрешают `session_user`, блокируют exact registry row,
 проверяют active credential/workload generation и соответствующий роли
 cryptographic proof, затем атомарно пишут и перечитывают строку своей таблицы.
 Readiness проверяет тот же transaction/readback path. Ни одна readback table
 не принимает прямой caller-controlled workload или role.
+
+Schema, обе таблицы и обе функции принадлежат отдельному
+`internal_rpc_authority_readback_owner` с
+`NOLOGIN/NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOCREATEROLE/NOINHERIT`; runtime
+principals не имеют membership этой роли. Обе таблицы используют `ENABLE` и
+`FORCE ROW LEVEL SECURITY`; `CREATE` в schema доступен только owner.
+`REVOKE/GRANT EXECUTE` всегда указывают schema и полный список типов, unsafe
+overload запрещён. Publisher имеет только `SELECT` обеих readback tables, но
+не `INSERT/UPDATE` и не `EXECUTE`. Исполняемый catalog/RLS/privilege contract
+зафиксирован в `postgresql-readback-boundary.sql`.
 
 Principal одного target не пишет за другой target или opposite role; retired
 generation и shared group principal закрыто отклоняются. Негативный
@@ -825,11 +849,21 @@ ambiguous либо cross-role row.
 `internal-rpc-authority-restore-controller` из digest-only artifact #186
 получает ручной code-first запрос только от
 `internal-rpc-authority-restore-operator` по mTLS с projected ServiceAccount
-token exact audience. Controller переводит состояние в `QUIESCING`; каждый
-sidecar/resolver на каждом рабочем issuance/reservation пути читает external
-quarantine, прекращает приём, дожидается inflight и подтверждает текущую
-generation по собственной mTLS workload/role identity. Только полный ack set
-разрешает signed `PREPARED`. Restore operator перечитывает exact served
+token exact audience. Controller переводит состояние в `QUIESCING` и
+CAS-записывает versioned `internal-rpc-authority-restore-coordination` вне
+восстанавливаемой БД. Каждый sidecar/resolver выполняет versioned poll
+`GetRestoreDirective`, получая exact `restore_id`, epoch и signed QUIESCING
+directive до `PREPARED`.
+
+ES256 role credential server-side связывает
+`(workload,role,workload_generation,credential_generation)`, workload SPIFFE,
+controller audience и thumbprint отдельного ACK key. Поэтому verifier и
+resolver одного `control-plane` с одинаковым SPIFFE получают разные
+application identities. После stop accepting и drain до `inflight_count=0`
+роль подписывает ACK bound key. Controller проверяет credential, actual mTLS
+SPIFFE, current generation, directive/restore/revision и атомарно резервирует
+directive/ACK JTI во внешнем coordination state. Только полный distinct ack
+set разрешает signed `PREPARED`. Restore operator перечитывает exact served
 evidence, выполняет TLS restore exact PostgreSQL cluster, вызывает
 `CompleteRestore`, перечитывает `COMPLETED` и запускает recovery step того же
 Job. Реальный `internal-rpc-authority-recovery-job` step:
@@ -951,6 +985,7 @@ diagnostics или PII.
 | Proof JTI уже зарезервирован | `Unauthenticated` | `AUTHORITY_PROOF_REPLAY_DETECTED` | false |
 | Proof trust/watermark/reservation path недоступен | `Unavailable` | `AUTHORITY_PROOF_UNAVAILABLE` | true |
 | Resolver application credential недействителен | `Unauthenticated` | `APPLICATION_CREDENTIAL_INVALID` | false |
+| Resolver resource отсутствует либо скрыт другим tenant | `NotFound` | `AUTHORITY_RESOURCE_NOT_FOUND` | false |
 | Actor tenant A запрошен для tenant/project B | `PermissionDenied` | `AUTHORITY_SCOPE_MISMATCH` | false |
 | Idempotency key повторён с другим semantic request | `AlreadyExists` | `IDEMPOTENCY_CONFLICT` | false |
 | Unknown operation или provenance source | `PermissionDenied` | `OPERATION_NOT_ALLOWED` / `AUTHORITY_PROVENANCE_REJECTED` | false |
@@ -972,6 +1007,10 @@ diagnostics или PII.
 | Missing/stale workload generation ack или restore без `PREPARED` | `FailedPrecondition` | `RESTORE_BARRIER_INCOMPLETE` | false |
 | Lower/same-mutation/predecessor/signature anchor | `FailedPrecondition` | `RESTORE_ANCHOR_REJECTED` | false |
 | Controller/admission/served anchor временно недоступен | `Unavailable` | `RESTORE_CONTROLLER_UNAVAILABLE` | true |
+| Role credential либо workload/role/generation/SPIFFE binding неверен | `Unauthenticated` | `RESTORE_ROLE_CREDENTIAL_REJECTED` | false |
+| Current QUIESCING directive отсутствует или не совпадает | `FailedPrecondition` | `RESTORE_DIRECTIVE_REJECTED` | false |
+| Directive/ACK JTI уже принят | `Unauthenticated` | `RESTORE_ACK_REPLAY_DETECTED` | false |
+| Coordination state или exact network path недоступен | `Unavailable` | `RESTORE_COORDINATION_UNAVAILABLE` | true |
 | Непредвиденный дефект | `Internal` | `INTERNAL` | false |
 
 Target transport до локального verifier использует тот же detail для
@@ -1089,9 +1128,10 @@ controller/semantic anchor/quarantine ordering, DB principal isolation и
 6. По `authority-proof-first-call.json` пройти preflight без internal context,
    local issuance и первый `control-api-gateway → control-plane` RPC; затем
    подтвердить, что trusted-signer cross-tenant fixture отклоняется до подписи.
-7. По delivery/restore/readback negative fixtures проверить missing target
-   verifier, opposite role/private key, lower/same anchor, missing/stale ack и
-   cross-target DB write.
+7. По delivery/restore/readback negative fixtures проверить missing target,
+   opposite role/private key, lower/same anchor, missing/stale/replay ACK,
+   exact NetworkPolicy и cross-target/publisher DB write. Positive
+   same-workload two-role fixture обязан дать два distinct ACK до `PREPARED`.
 8. Выполнить Buf lint/build/codegen diff и targeted contract tests.
 9. Убедиться, что PR не содержит secret values, private keys, DSN, tokens или
    production credentials.
@@ -1104,6 +1144,8 @@ Context7 недоступна. В fix-cycle раунда 1 отдельно по
 тем же результатом `Monthly quota exceeded`. В fix-cycle раунда 2 отдельно
 повторены resolve PostgreSQL, Kubernetes, HashiCorp Vault, Buf CLI и Protocol
 Buffers; каждый запрос вернул тот же `Monthly quota exceeded`.
+В fix-cycle раунда 3 повторены resolve PostgreSQL, Kubernetes и объединённый
+gRPC/Protocol Buffers; все три вернули `Monthly quota exceeded`.
 
 Проверены только официальные первичные источники:
 
@@ -1145,6 +1187,15 @@ Buffers; каждый запрос вернул тот же `Monthly quota excee
   `https://www.postgresql.org/docs/current/sql-createfunction.html` и
   `https://www.postgresql.org/docs/current/functions-info.html` —
   `SECURITY DEFINER`, безопасный `search_path`, `session_user`/`current_user`;
+- PostgreSQL privileges:
+  `https://www.postgresql.org/docs/current/ddl-priv.html` и
+  `https://www.postgresql.org/docs/current/sql-revoke.html` — schema/function
+  privileges и exact overloaded signature;
+- gRPC status codes:
+  `https://grpc.io/docs/guides/status-codes/` — canonical `NOT_FOUND`;
+- Kubernetes `NetworkPolicy`:
+  `https://kubernetes.io/docs/concepts/services-networking/network-policies/`
+  — source egress и destination ingress обязательны одновременно;
 - Kubernetes API/Secret:
   `https://kubernetes.io/docs/reference/using-api/api-concepts/` и
   `https://kubernetes.io/docs/concepts/configuration/secret/` —

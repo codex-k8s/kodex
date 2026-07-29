@@ -106,9 +106,20 @@
         "dsn_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/issuer-dsn",
         "credential_generation": 1
       },
+      "restore_coordination": {
+        "role_credential_id": "control-api-gateway-issuer-restore-g1",
+        "role_credential_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/restore-role-credential",
+        "role_credential_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/restore/issuer/credential",
+        "ack_key_id": "control-api-gateway-issuer-restore-ack-g1",
+        "ack_key_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/restore-ack-key",
+        "ack_key_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/restore/issuer/ack-key",
+        "controller_audience": "urn:mattercodex:internal-rpc-authority-restore-controller",
+        "controller_full_method": "/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective",
+        "network_policy": "internal-rpc-authority-restore-egress-control-api-gateway"
+      },
       "readback": {
         "readback_id": "control-api-gateway-issuer",
-        "database_function": "record_authority_key_delivery_readback",
+        "database_function": "internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)",
         "expected_role": "AUTHORIZATION_ISSUER"
       }
     },
@@ -134,9 +145,20 @@
         "dsn_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/verifier-dsn",
         "credential_generation": 1
       },
+      "restore_coordination": {
+        "role_credential_id": "control-plane-verifier-restore-g1",
+        "role_credential_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-role-credential",
+        "role_credential_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/restore/verifier/credential",
+        "ack_key_id": "control-plane-verifier-restore-ack-g1",
+        "ack_key_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack-key",
+        "ack_key_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/restore/verifier/ack-key",
+        "controller_audience": "urn:mattercodex:internal-rpc-authority-restore-controller",
+        "controller_full_method": "/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective",
+        "network_policy": "internal-rpc-authority-restore-egress-control-plane"
+      },
       "readback": {
         "readback_id": "control-plane-verifier",
-        "database_function": "record_authority_key_delivery_readback",
+        "database_function": "internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)",
         "expected_role": "AUTHORIZATION_VERIFIER"
       }
     },
@@ -172,9 +194,20 @@
         "dsn_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/resolver-dsn",
         "credential_generation": 1
       },
+      "restore_coordination": {
+        "role_credential_id": "control-plane-resolver-restore-g1",
+        "role_credential_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/restore-role-credential",
+        "role_credential_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/restore/resolver/credential",
+        "ack_key_id": "control-plane-resolver-restore-ack-g1",
+        "ack_key_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/restore-ack-key",
+        "ack_key_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/restore/resolver/ack-key",
+        "controller_audience": "urn:mattercodex:internal-rpc-authority-restore-controller",
+        "controller_full_method": "/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective",
+        "network_policy": "internal-rpc-authority-restore-egress-control-plane"
+      },
       "readback": {
         "readback_id": "control-plane-resolver",
-        "database_function": "record_authority_key_delivery_readback",
+        "database_function": "internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)",
         "expected_role": "AUTHORITY_PROOF_RESOLVER"
       }
     }

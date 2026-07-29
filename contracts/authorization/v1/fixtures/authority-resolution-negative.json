@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "cases": [
+    {
+      "name": "missing-resource",
+      "mutation": "resolve a syntactically valid resource_reference that is absent inside the authenticated actor tenant boundary",
+      "grpc_code": "NOT_FOUND",
+      "reason": "AUTHORITY_RESOURCE_NOT_FOUND",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "authority resource not found"
+    },
+    {
+      "name": "cross-tenant-hidden-resource",
+      "mutation": "resolve an existing resource owned by another tenant through the authenticated actor tenant boundary",
+      "grpc_code": "NOT_FOUND",
+      "reason": "AUTHORITY_RESOURCE_NOT_FOUND",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "authority resource not found"
+    }
+  ]
+}

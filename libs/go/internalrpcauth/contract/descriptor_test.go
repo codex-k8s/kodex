@@ -134,6 +134,7 @@ func TestCompiledServiceMethods(t *testing.T) {
 		"/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof":     true,
 		"/internalrpcauthority.v1.AuthorityProofResolverService/CheckReadiness":            true,
 		"/internalrpcauthority.v1.RestoreControllerService/PrepareRestore":                 true,
+		"/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective":            true,
 		"/internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence":          true,
 		"/internalrpcauthority.v1.RestoreControllerService/CompleteRestore":                true,
 		"/internalrpcauthority.v1.RestoreControllerService/CheckReadiness":                 true,
@@ -323,6 +324,7 @@ func TestAuthorizationErrorMatrixCoversCompiledEnums(t *testing.T) {
 		"PERMISSION_DENIED":   true,
 		"FAILED_PRECONDITION": true,
 		"ALREADY_EXISTS":      true,
+		"NOT_FOUND":           true,
 		"UNAVAILABLE":         true,
 		"INTERNAL":            true,
 	}

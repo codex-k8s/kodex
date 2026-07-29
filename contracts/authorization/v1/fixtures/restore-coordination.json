@@ -1,0 +1,60 @@
+{
+  "v": 1,
+  "positive": {
+    "name": "same-workload-two-role-quiescence",
+    "workload_id": "control-plane",
+    "workload_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+    "roles": [
+      {
+        "role": "AUTHORIZATION_VERIFIER",
+        "workload_generation": 1,
+        "credential_generation": 1,
+        "role_credential_id": "control-plane-verifier-restore-g1",
+        "ack_key_id": "control-plane-verifier-restore-ack-g1",
+        "network_policy": "internal-rpc-authority-restore-egress-control-plane"
+      },
+      {
+        "role": "AUTHORITY_PROOF_RESOLVER",
+        "workload_generation": 1,
+        "credential_generation": 1,
+        "role_credential_id": "control-plane-resolver-restore-g1",
+        "ack_key_id": "control-plane-resolver-restore-ack-g1",
+        "network_policy": "internal-rpc-authority-restore-egress-control-plane"
+      }
+    ],
+    "expected_ack_count": 2,
+    "prepared_after_distinct_one_time_acks": true
+  },
+  "negative": [
+    {
+      "name": "duplicate-spiffe-opposite-role-credential",
+      "mutation": "present the resolver role credential with a verifier ACK key under the shared control-plane SPIFFE ID",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "missing-quiescing-directive",
+      "mutation": "send an ACK without a current signed QUIESCING directive from GetRestoreDirective",
+      "reason": "RESTORE_DIRECTIVE_REJECTED"
+    },
+    {
+      "name": "stale-role-generation",
+      "mutation": "use a role credential or directive for a non-current workload generation",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "replayed-directive-or-ack-jti",
+      "mutation": "reuse a directive JTI or accepted quiescence ACK JTI after persistent CAS reservation",
+      "reason": "RESTORE_ACK_REPLAY_DETECTED"
+    },
+    {
+      "name": "missing-client-egress-network-policy",
+      "mutation": "remove the exact role workload egress policy to restore controller port 8443",
+      "reason": "RESTORE_COORDINATION_UNAVAILABLE"
+    },
+    {
+      "name": "missing-controller-ingress-network-policy",
+      "mutation": "remove controller ingress from a registered workload selector on port 8443",
+      "reason": "RESTORE_COORDINATION_UNAVAILABLE"
+    }
+  ]
+}

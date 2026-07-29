@@ -51,6 +51,10 @@ service AuthorityProofResolverService {
 // принимает internal authorization context как замену transport binding.
 service RestoreControllerService {
   rpc PrepareRestore(PrepareRestoreRequest) returns (PrepareRestoreResponse);
+  // GetRestoreDirective позволяет каждой role-bound workload identity узнать
+  // exact QUIESCING epoch/restore ID до PREPARED. Роль выводится только из
+  // проверенных mTLS peer и отдельного signed role credential.
+  rpc GetRestoreDirective(GetRestoreDirectiveRequest) returns (GetRestoreDirectiveResponse);
   rpc AcknowledgeQuiescence(AcknowledgeQuiescenceRequest) returns (AcknowledgeQuiescenceResponse);
   rpc CompleteRestore(CompleteRestoreRequest) returns (CompleteRestoreResponse);
   rpc CheckReadiness(RestoreControllerServiceCheckReadinessRequest) returns (RestoreControllerServiceCheckReadinessResponse);
@@ -269,11 +273,51 @@ message PrepareRestoreRequest {
   string correlation_id = 6;
 }
 
+message GetRestoreDirectiveRequest {
+  // role_credential_compact_jws доставляется отдельно для точной
+  // (workload,role,generation) и связывается с фактическим workload SPIFFE.
+  // Request не переносит caller-controlled workload, role или generation.
+  string role_credential_compact_jws = 1;
+  // observed_coordination_revision позволяет идемпотентный versioned poll.
+  // Значение не является authority и только выбирает no-change response.
+  uint64 observed_coordination_revision = 2;
+  string correlation_id = 3;
+}
+
+message NoRestoreDirective {
+  uint64 coordination_revision = 1;
+  uint64 restore_epoch = 2;
+  google.protobuf.Timestamp retry_not_before = 3;
+}
+
+message RoleBoundRestoreDirective {
+  // directive_compact_jws выпущен controller для одной проверенной
+  // (workload,role,generation), exact role credential digest и restore ID.
+  string directive_compact_jws = 1;
+  RestoreTransition transition = 2;
+  uint64 coordination_revision = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+message GetRestoreDirectiveResponse {
+  oneof result {
+    NoRestoreDirective no_directive = 1;
+    RoleBoundRestoreDirective directive = 2;
+  }
+}
+
 message AcknowledgeQuiescenceRequest {
-  string restore_id = 1;
-  uint64 workload_generation = 2;
-  string served_snapshot_digest_sha256 = 3;
+  reserved 1, 2, 3;
+  reserved "restore_id", "workload_generation", "served_snapshot_digest_sha256";
   string correlation_id = 4;
+  // Controller выводит ровно одну роль из mTLS peer + role credential, затем
+  // проверяет signed directive, связанный с credential digest и restore ID.
+  string role_credential_compact_jws = 5;
+  string directive_compact_jws = 6;
+  // quiescence_ack_compact_jws подписан ES256-ключом роли, thumbprint
+  // которого связан role credential. Claims доказывают exact directive JTI,
+  // stop-accepting, inflight=0 и served snapshot digest.
+  string quiescence_ack_compact_jws = 7;
 }
 
 message CompleteRestoreRequest {
@@ -382,6 +426,11 @@ enum AuthorizationErrorReason {
   AUTHORIZATION_ERROR_REASON_RESTORE_BARRIER_INCOMPLETE = 41;
   AUTHORIZATION_ERROR_REASON_RESTORE_ANCHOR_REJECTED = 42;
   AUTHORIZATION_ERROR_REASON_RESTORE_CONTROLLER_UNAVAILABLE = 43;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_RESOURCE_NOT_FOUND = 44;
+  AUTHORIZATION_ERROR_REASON_RESTORE_ROLE_CREDENTIAL_REJECTED = 45;
+  AUTHORIZATION_ERROR_REASON_RESTORE_DIRECTIVE_REJECTED = 46;
+  AUTHORIZATION_ERROR_REASON_RESTORE_ACK_REPLAY_DETECTED = 47;
+  AUTHORIZATION_ERROR_REASON_RESTORE_COORDINATION_UNAVAILABLE = 48;
 }
 
 // AuthorizationErrorDetail добавляется к google.rpc.Status. Диагностика не

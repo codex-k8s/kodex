@@ -301,6 +301,41 @@
       "stage": "RESTORE",
       "retryable": true,
       "message": "restore controller unavailable"
+    },
+    {
+      "reason": "AUTHORITY_RESOURCE_NOT_FOUND",
+      "grpc_code": "NOT_FOUND",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "authority resource not found"
+    },
+    {
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore role credential rejected"
+    },
+    {
+      "reason": "RESTORE_DIRECTIVE_REJECTED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore directive rejected"
+    },
+    {
+      "reason": "RESTORE_ACK_REPLAY_DETECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore acknowledgement replay detected"
+    },
+    {
+      "reason": "RESTORE_COORDINATION_UNAVAILABLE",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "RESTORE",
+      "retryable": true,
+      "message": "restore coordination unavailable"
     }
   ]
 }

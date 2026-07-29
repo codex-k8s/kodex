@@ -493,6 +493,7 @@ var AuthorityProofResolverService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	RestoreControllerService_PrepareRestore_FullMethodName        = "/internalrpcauthority.v1.RestoreControllerService/PrepareRestore"
+	RestoreControllerService_GetRestoreDirective_FullMethodName   = "/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective"
 	RestoreControllerService_AcknowledgeQuiescence_FullMethodName = "/internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence"
 	RestoreControllerService_CompleteRestore_FullMethodName       = "/internalrpcauthority.v1.RestoreControllerService/CompleteRestore"
 	RestoreControllerService_CheckReadiness_FullMethodName        = "/internalrpcauthority.v1.RestoreControllerService/CheckReadiness"
@@ -507,6 +508,10 @@ const (
 // принимает internal authorization context как замену transport binding.
 type RestoreControllerServiceClient interface {
 	PrepareRestore(ctx context.Context, in *PrepareRestoreRequest, opts ...grpc.CallOption) (*PrepareRestoreResponse, error)
+	// GetRestoreDirective позволяет каждой role-bound workload identity узнать
+	// exact QUIESCING epoch/restore ID до PREPARED. Роль выводится только из
+	// проверенных mTLS peer и отдельного signed role credential.
+	GetRestoreDirective(ctx context.Context, in *GetRestoreDirectiveRequest, opts ...grpc.CallOption) (*GetRestoreDirectiveResponse, error)
 	AcknowledgeQuiescence(ctx context.Context, in *AcknowledgeQuiescenceRequest, opts ...grpc.CallOption) (*AcknowledgeQuiescenceResponse, error)
 	CompleteRestore(ctx context.Context, in *CompleteRestoreRequest, opts ...grpc.CallOption) (*CompleteRestoreResponse, error)
 	CheckReadiness(ctx context.Context, in *RestoreControllerServiceCheckReadinessRequest, opts ...grpc.CallOption) (*RestoreControllerServiceCheckReadinessResponse, error)
@@ -524,6 +529,16 @@ func (c *restoreControllerServiceClient) PrepareRestore(ctx context.Context, in 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PrepareRestoreResponse)
 	err := c.cc.Invoke(ctx, RestoreControllerService_PrepareRestore_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *restoreControllerServiceClient) GetRestoreDirective(ctx context.Context, in *GetRestoreDirectiveRequest, opts ...grpc.CallOption) (*GetRestoreDirectiveResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRestoreDirectiveResponse)
+	err := c.cc.Invoke(ctx, RestoreControllerService_GetRestoreDirective_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -569,6 +584,10 @@ func (c *restoreControllerServiceClient) CheckReadiness(ctx context.Context, in 
 // принимает internal authorization context как замену transport binding.
 type RestoreControllerServiceServer interface {
 	PrepareRestore(context.Context, *PrepareRestoreRequest) (*PrepareRestoreResponse, error)
+	// GetRestoreDirective позволяет каждой role-bound workload identity узнать
+	// exact QUIESCING epoch/restore ID до PREPARED. Роль выводится только из
+	// проверенных mTLS peer и отдельного signed role credential.
+	GetRestoreDirective(context.Context, *GetRestoreDirectiveRequest) (*GetRestoreDirectiveResponse, error)
 	AcknowledgeQuiescence(context.Context, *AcknowledgeQuiescenceRequest) (*AcknowledgeQuiescenceResponse, error)
 	CompleteRestore(context.Context, *CompleteRestoreRequest) (*CompleteRestoreResponse, error)
 	CheckReadiness(context.Context, *RestoreControllerServiceCheckReadinessRequest) (*RestoreControllerServiceCheckReadinessResponse, error)
@@ -584,6 +603,9 @@ type UnimplementedRestoreControllerServiceServer struct{}
 
 func (UnimplementedRestoreControllerServiceServer) PrepareRestore(context.Context, *PrepareRestoreRequest) (*PrepareRestoreResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareRestore not implemented")
+}
+func (UnimplementedRestoreControllerServiceServer) GetRestoreDirective(context.Context, *GetRestoreDirectiveRequest) (*GetRestoreDirectiveResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRestoreDirective not implemented")
 }
 func (UnimplementedRestoreControllerServiceServer) AcknowledgeQuiescence(context.Context, *AcknowledgeQuiescenceRequest) (*AcknowledgeQuiescenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AcknowledgeQuiescence not implemented")
@@ -630,6 +652,24 @@ func _RestoreControllerService_PrepareRestore_Handler(srv interface{}, ctx conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RestoreControllerServiceServer).PrepareRestore(ctx, req.(*PrepareRestoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RestoreControllerService_GetRestoreDirective_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRestoreDirectiveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RestoreControllerServiceServer).GetRestoreDirective(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RestoreControllerService_GetRestoreDirective_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RestoreControllerServiceServer).GetRestoreDirective(ctx, req.(*GetRestoreDirectiveRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -698,6 +738,10 @@ var RestoreControllerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PrepareRestore",
 			Handler:    _RestoreControllerService_PrepareRestore_Handler,
+		},
+		{
+			MethodName: "GetRestoreDirective",
+			Handler:    _RestoreControllerService_GetRestoreDirective_Handler,
 		},
 		{
 			MethodName: "AcknowledgeQuiescence",
