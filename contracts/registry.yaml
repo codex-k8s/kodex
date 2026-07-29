@@ -1,9 +1,30 @@
 version: 1
-packages: []
-# Пример записи после удаления комментария:
-# - id: example-service-v1
-#   format: proto
-#   owner: example-service
-#   source: contracts/proto/example-service/v1
-#   consumers:
-#     - example-gateway
+packages:
+  - id: internal-rpc-authority-v1
+    format: proto
+    owner: internal-rpc-authority
+    source: contracts/proto/internalrpcauthority/v1
+    generated:
+      go: libs/go/internalrpcauth/gen/internalrpcauthority/v1
+    consumers:
+      - internal-rpc-authority
+      - control-plane
+      - control-api-gateway
+      - interaction-gateway
+      - integration-gateway
+      - runtime-controller
+      - agent-runner
+      - automation-scheduler
+  - id: internal-rpc-authorization-policy-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1
+    consumers:
+      - internal-rpc-authority
+      - control-plane
+      - control-api-gateway
+      - interaction-gateway
+      - integration-gateway
+      - runtime-controller
+      - agent-runner
+      - automation-scheduler

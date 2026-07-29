@@ -80,6 +80,7 @@ updated: 2026-07-28
 | `GOV-DOC-004`      | `docs/governance/project-template-adoption.md`          |
 | `CONTRACT-DOC-002` | `contracts/proto/README.md`                             |
 | `CONTRACT-DOC-003` | `contracts/asyncapi/README.md`                          |
+| `CONTRACT-MC-004`  | `contracts/authorization/README.md`                     |
 | `SVC-DOC-002`      | `contracts/README.md`                                   |
 | `PRD-MC-001`       | `docs/product/README.md`                                |
 | `PRD-MC-002`       | `docs/product/personas.md`                              |

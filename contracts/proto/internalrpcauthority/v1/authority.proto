@@ -1,0 +1,230 @@
+syntax = "proto3";
+
+package internalrpcauthority.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1;internalrpcauthorityv1";
+
+// AuthorizationIssuerService выпускает один короткоживущий authorization
+// context для одной попытки точного downstream RPC.
+service AuthorizationIssuerService {
+  // IssueAuthorizationContext выводит workload, RPC, audience, permission,
+  // TTL и ревизии из загруженной машинной policy. Request не может
+  // переопределить эти значения.
+  rpc IssueAuthorizationContext(IssueAuthorizationContextRequest) returns (IssueAuthorizationContextResponse);
+
+  // CheckReadiness проверяет тот же UDS peer-binding и фактически загруженный
+  // signing/policy snapshot, которые использует рабочий выпуск.
+  rpc CheckReadiness(AuthorizationIssuerServiceCheckReadinessRequest) returns (AuthorizationIssuerServiceCheckReadinessResponse);
+}
+
+// AuthorizationVerifierService проверяет JWS и атомарно резервирует jti до
+// возврата проверенного нейтрального контекста целевому workload.
+service AuthorizationVerifierService {
+  // VerifyAuthorizationContext связывает token с локальным target workload,
+  // фактическим full RPC и уже проверенным downstream mTLS peer.
+  rpc VerifyAuthorizationContext(VerifyAuthorizationContextRequest) returns (VerifyAuthorizationContextResponse);
+
+  // CheckReadiness проверяет тот же UDS peer-binding, snapshot и persistent
+  // replay path, которые использует рабочая проверка.
+  rpc CheckReadiness(AuthorizationVerifierServiceCheckReadinessRequest) returns (AuthorizationVerifierServiceCheckReadinessResponse);
+}
+
+// ActorKind является закрытым техническим классом actor. Бизнесовые роли в
+// этом enum отсутствуют.
+enum ActorKind {
+  ACTOR_KIND_UNSPECIFIED = 0;
+  ACTOR_KIND_HUMAN = 1;
+  ACTOR_KIND_AGENT = 2;
+  ACTOR_KIND_SERVICE = 3;
+  ACTOR_KIND_AUTOMATION = 4;
+}
+
+// AuthoritySource фиксирует вид уже проверенного источника полномочия.
+// Issuer не разрешает и не перечитывает этот источник самостоятельно.
+enum AuthoritySource {
+  AUTHORITY_SOURCE_UNSPECIFIED = 0;
+  AUTHORITY_SOURCE_OIDC_SESSION = 1;
+  AUTHORITY_SOURCE_MATTERMOST_EVENT = 2;
+  AUTHORITY_SOURCE_DOMAIN_STATE = 3;
+  AUTHORITY_SOURCE_AGENT_SESSION = 4;
+  AUTHORITY_SOURCE_PROCESS_RUN = 5;
+  AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE = 6;
+}
+
+// AuthorityProvenance связывает идентификатор с immutable snapshot,
+// проверенным локальным caller до вызова issuer.
+message AuthorityProvenance {
+  AuthoritySource source = 1;
+  string reference = 2;
+  uint64 revision = 3;
+  string digest_sha256 = 4;
+}
+
+// AuthorityIdentity переносит нейтральный идентификатор и его происхождение.
+message AuthorityIdentity {
+  string id = 1;
+  AuthorityProvenance provenance = 2;
+}
+
+// CallerAuthority содержит actor и tenant, а также project, когда exact
+// operation policy требует project scope. Значения являются утверждениями
+// доверенного локального workload, а не самостоятельной authority.
+message CallerAuthority {
+  ActorKind actor_kind = 1;
+  AuthorityIdentity actor = 2;
+  AuthorityIdentity tenant = 3;
+  AuthorityIdentity project = 4;
+}
+
+message IssueAuthorizationContextRequest {
+  // operation_id выбирает ровно одну зарегистрированную policy binding.
+  // Неизвестное значение закрыто отклоняется; full RPC и permission request
+  // не принимает.
+  string operation_id = 1;
+  CallerAuthority authority = 2;
+  string correlation_id = 3;
+}
+
+message IssueAuthorizationContextResponse {
+  string compact_jws = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  uint64 source_revision = 3;
+  string source_digest_sha256 = 4;
+  uint64 key_set_revision = 5;
+  uint64 policy_revision = 6;
+  uint64 signer_generation = 7;
+}
+
+// DownstreamTransportPeer формируется target gRPC interceptor только после
+// успешной mTLS-проверки. Verifier дополнительно связывает assertion с
+// локальным UDS peer и машинной policy.
+message DownstreamTransportPeer {
+  string spiffe_id = 1;
+  string certificate_sha256 = 2;
+}
+
+message VerifyAuthorizationContextRequest {
+  string compact_jws = 1;
+  string observed_full_method = 2;
+  DownstreamTransportPeer downstream_peer = 3;
+  string correlation_id = 4;
+}
+
+message VerifyAuthorizationContextResponse {
+  VerifiedAuthorizationContext context = 1;
+}
+
+// VerifiedAuthorizationContext является transport-neutral результатом.
+// Domain adapter отдельно разрешает aggregate ownership и бизнесовые правила.
+message VerifiedAuthorizationContext {
+  uint32 contract_version = 1;
+  string issuer = 2;
+  string audience = 3;
+  string subject = 4;
+  string caller_workload_id = 5;
+  string caller_spiffe_id = 6;
+  string target_workload_id = 7;
+  string target_spiffe_id = 8;
+  string full_method = 9;
+  string operation_id = 10;
+  CallerAuthority authority = 11;
+  string permission = 12;
+  string jti = 13;
+  google.protobuf.Timestamp issued_at = 14;
+  google.protobuf.Timestamp not_before = 15;
+  google.protobuf.Timestamp expires_at = 16;
+  uint64 source_revision = 17;
+  string source_digest_sha256 = 18;
+  uint64 key_set_revision = 19;
+  uint64 policy_revision = 20;
+  uint64 signer_generation = 21;
+}
+
+message AuthorizationIssuerServiceCheckReadinessRequest {}
+
+// AuthorizationIssuerServiceCheckReadinessResponse не содержит key material. snapshot_digest_sha256
+// нужен для exact readback фактически обслуживаемого snapshot.
+message AuthorizationIssuerServiceCheckReadinessResponse {
+  bool ready = 1;
+  uint64 source_revision = 2;
+  string snapshot_digest_sha256 = 3;
+  uint64 key_set_revision = 4;
+  uint64 policy_revision = 5;
+  uint64 signer_generation = 6;
+}
+
+message AuthorizationVerifierServiceCheckReadinessRequest {}
+
+// AuthorizationVerifierServiceCheckReadinessResponse дополнительно подтверждает рабочий
+// persistent replay path и restore fence.
+message AuthorizationVerifierServiceCheckReadinessResponse {
+  bool ready = 1;
+  uint64 source_revision = 2;
+  string snapshot_digest_sha256 = 3;
+  uint64 key_set_revision = 4;
+  uint64 policy_revision = 5;
+  uint64 signer_generation = 6;
+  bool replay_store_ready = 7;
+}
+
+// AuthorizationFailureStage ограничивает наблюдаемую стадию отказа.
+enum AuthorizationFailureStage {
+  AUTHORIZATION_FAILURE_STAGE_UNSPECIFIED = 0;
+  AUTHORIZATION_FAILURE_STAGE_UDS = 1;
+  AUTHORIZATION_FAILURE_STAGE_REQUEST = 2;
+  AUTHORIZATION_FAILURE_STAGE_JWS_HEADER = 3;
+  AUTHORIZATION_FAILURE_STAGE_JWS_SIGNATURE = 4;
+  AUTHORIZATION_FAILURE_STAGE_CLAIMS = 5;
+  AUTHORIZATION_FAILURE_STAGE_POLICY = 6;
+  AUTHORIZATION_FAILURE_STAGE_MTLS_BINDING = 7;
+  AUTHORIZATION_FAILURE_STAGE_REPLAY = 8;
+  AUTHORIZATION_FAILURE_STAGE_SNAPSHOT = 9;
+  AUTHORIZATION_FAILURE_STAGE_PERSISTENCE = 10;
+  AUTHORIZATION_FAILURE_STAGE_INTERNAL = 11;
+}
+
+// AuthorizationErrorReason является закрытым машинным кодом detail.
+enum AuthorizationErrorReason {
+  AUTHORIZATION_ERROR_REASON_UNSPECIFIED = 0;
+  AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST = 1;
+  AUTHORIZATION_ERROR_REASON_UDS_PEER_REJECTED = 2;
+  AUTHORIZATION_ERROR_REASON_UDS_ENDPOINT_INVALID = 3;
+  AUTHORIZATION_ERROR_REASON_OPERATION_NOT_ALLOWED = 4;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_PROVENANCE_REJECTED = 5;
+  AUTHORIZATION_ERROR_REASON_MALFORMED_JWS = 6;
+  AUTHORIZATION_ERROR_REASON_INVALID_PROTECTED_HEADER = 7;
+  AUTHORIZATION_ERROR_REASON_INVALID_SIGNATURE = 8;
+  AUTHORIZATION_ERROR_REASON_UNKNOWN_KEY = 9;
+  AUTHORIZATION_ERROR_REASON_ISSUER_MISMATCH = 10;
+  AUTHORIZATION_ERROR_REASON_AUDIENCE_MISMATCH = 11;
+  AUTHORIZATION_ERROR_REASON_CALLER_WORKLOAD_MISMATCH = 12;
+  AUTHORIZATION_ERROR_REASON_TARGET_WORKLOAD_MISMATCH = 13;
+  AUTHORIZATION_ERROR_REASON_RPC_MISMATCH = 14;
+  AUTHORIZATION_ERROR_REASON_PERMISSION_MISMATCH = 15;
+  AUTHORIZATION_ERROR_REASON_TOKEN_EXPIRED = 16;
+  AUTHORIZATION_ERROR_REASON_TOKEN_NOT_YET_VALID = 17;
+  AUTHORIZATION_ERROR_REASON_TOKEN_TTL_EXCEEDED = 18;
+  AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED = 19;
+  AUTHORIZATION_ERROR_REASON_MTLS_REQUIRED = 20;
+  AUTHORIZATION_ERROR_REASON_MTLS_PEER_MISMATCH = 21;
+  AUTHORIZATION_ERROR_REASON_POLICY_REVISION_REJECTED = 22;
+  AUTHORIZATION_ERROR_REASON_SNAPSHOT_ROLLBACK = 23;
+  AUTHORIZATION_ERROR_REASON_SNAPSHOT_MUTATION = 24;
+  AUTHORIZATION_ERROR_REASON_SNAPSHOT_HISTORY_GAP = 25;
+  AUTHORIZATION_ERROR_REASON_PERSISTENCE_UNAVAILABLE = 26;
+  AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE = 27;
+  AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH = 28;
+  AUTHORIZATION_ERROR_REASON_INTERNAL = 29;
+  AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED = 30;
+}
+
+// AuthorizationErrorDetail добавляется к google.rpc.Status. Диагностика не
+// содержит token, claims, kid, SPIFFE ID, certificate digest или PII.
+message AuthorizationErrorDetail {
+  AuthorizationErrorReason reason = 1;
+  AuthorizationFailureStage stage = 2;
+  bool retryable = 3;
+  string correlation_id = 4;
+}

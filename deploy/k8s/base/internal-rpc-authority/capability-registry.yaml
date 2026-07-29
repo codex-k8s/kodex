@@ -1,0 +1,236 @@
+apiVersion: mattercodex.dev/v1alpha1
+kind: InternalRPCAuthorityCapabilityRegistry
+metadata:
+  name: internal-rpc-authority
+  owner: internal-rpc-authority
+  issue: "186"
+spec:
+  artifact:
+    repository: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority
+    imageReferencePolicy: DIGEST_ONLY
+    binaries:
+      socketInit: /usr/local/bin/internal-rpc-authority-socket-init
+      issuer: /usr/local/bin/internal-rpc-authority-issuer
+      verifier: /usr/local/bin/internal-rpc-authority-verifier
+      publisher: /usr/local/bin/internal-rpc-authority-publisher
+      cli: /usr/local/bin/internal-rpc-authority-cli
+  unixDomainSockets:
+    volume:
+      name: internal-rpc-authority-sockets
+      type: emptyDir
+      medium: Filesystem
+      sizeLimit: 8Mi
+      mountPath: /run/mattercodex/internal-rpc-authority
+    identity:
+      applicationUid: 10001
+      applicationPrimaryGid: 10001
+      socketInitUid: 29000
+      issuerUid: 29001
+      verifierUid: 29002
+      sharedFsGid: 29000
+      fsGroupChangePolicy: OnRootMismatch
+    rootDirectory:
+      path: /run/mattercodex/internal-rpc-authority
+      mode: "1770"
+      ownerUid: 29000
+      ownerGid: 29000
+      sticky: true
+    issuer:
+      path: /run/mattercodex/internal-rpc-authority/issuer.sock
+      mode: "0660"
+      ownerUid: 29001
+      ownerGid: 29000
+      listener: internal-rpc-authority-issuer
+      client: application
+    verifier:
+      path: /run/mattercodex/internal-rpc-authority/verifier.sock
+      mode: "0660"
+      ownerUid: 29002
+      ownerGid: 29000
+      listener: internal-rpc-authority-verifier
+      client: application
+    peerBinding:
+      mechanism: LINUX_SO_PEERCRED
+      expectedApplicationUid: 10001
+      expectedApplicationPrimaryGid: 10001
+      requirePrivatePodVolume: true
+      rejectSymlink: true
+      rejectNonSocket: true
+  deployables:
+    socket-init:
+      kind: initContainer
+      owner: consuming-workload
+      serviceAccount: consuming-workload
+      requiredBefore:
+        - issuer
+        - verifier
+    issuer:
+      kind: sidecar
+      owner: consuming-workload
+      serviceAccount: consuming-workload
+      privateKeyDelivery: vault-csi
+      privateKeySecretName: internal-rpc-authority-issuer-key
+      privateKeyMountPath: /var/run/secrets/mattercodex/internal-rpc-authority/issuer
+      authoritySnapshotSecretName: internal-rpc-authority-snapshot
+      authoritySnapshotMountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+      readinessOwner: application
+      failurePolicy: FAIL_CLOSED
+    verifier:
+      kind: sidecar
+      owner: consuming-workload
+      serviceAccount: consuming-workload
+      authoritySnapshotSecretName: internal-rpc-authority-snapshot
+      authoritySnapshotMountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+      manifestTrustSecretName: internal-rpc-authority-manifest-trust
+      manifestTrustMountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
+      replayDatabaseRole: internal_rpc_authority_verifier
+      readinessOwner: application
+      failurePolicy: FAIL_CLOSED
+    publisher:
+      kind: Deployment
+      canonicalPath: deploy/k8s/base/internal-rpc-authority-publisher
+      owner: internal-rpc-authority
+      serviceAccount: internal-rpc-authority-publisher
+      replicas: 2
+      leaderElection: POSTGRESQL_LEASE
+      manifestSignerDelivery: vault-csi
+      manifestSignerSecretName: internal-rpc-authority-manifest-signer-key
+      exactWritableSecretNames:
+        - internal-rpc-authority-snapshot
+      kubernetesRbac:
+        apiGroups:
+          - ""
+        resources:
+          - secrets
+        resourceNames:
+          - internal-rpc-authority-snapshot
+        verbs:
+          - get
+          - update
+          - patch
+      forbiddenKubernetesVerbs:
+        - create
+        - delete
+        - deletecollection
+      readiness:
+        requireCurrentSignerValid: true
+        requireDatabase: true
+        requireCryptographicSecretReadback: true
+        requireSourceRevisionFinalized: true
+      failurePolicy: FAIL_CLOSED
+    replay-store:
+      kind: PostgreSQL
+      canonicalPath: deploy/k8s/base/internal-rpc-authority-data
+      owner: internal-rpc-authority
+      sourceOfTruth: true
+      runtimeRole: internal_rpc_authority_verifier
+      publisherRole: internal_rpc_authority_publisher
+      migrationRole: internal_rpc_authority_migrator
+      requiredTables:
+        - authority_snapshot_history
+        - authority_snapshot_watermarks
+        - authority_replay_reservations
+        - authority_snapshot_readbacks
+        - authority_restore_fences
+      backupPitr: REQUIRED
+  configuration:
+    environmentKeys:
+      issuer:
+        - INTERNAL_RPC_AUTHORITY_WORKLOAD_ID
+        - INTERNAL_RPC_AUTHORITY_SPIFFE_ID
+        - INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET
+        - INTERNAL_RPC_AUTHORITY_ISSUER_KEY_FILE
+        - INTERNAL_RPC_AUTHORITY_SNAPSHOT_FILE
+      verifier:
+        - INTERNAL_RPC_AUTHORITY_WORKLOAD_ID
+        - INTERNAL_RPC_AUTHORITY_SPIFFE_ID
+        - INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET
+        - INTERNAL_RPC_AUTHORITY_SNAPSHOT_FILE
+        - INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_FILE
+        - INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
+        - INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME
+        - INTERNAL_RPC_AUTHORITY_POSTGRES_CA_FILE
+      publisher:
+        - INTERNAL_RPC_AUTHORITY_MANIFEST_SIGNER_KEY_FILE
+        - INTERNAL_RPC_AUTHORITY_MANIFEST_SIGNER_CERT_FILE
+        - INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
+        - INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME
+        - INTERNAL_RPC_AUTHORITY_POSTGRES_CA_FILE
+        - INTERNAL_RPC_AUTHORITY_TARGET_NAMESPACE
+    forbiddenSettings:
+      - skipTLSVerify
+      - plaintextFallback
+      - wildcardEgress
+      - inMemoryReplayStore
+      - emptyDirReplayStore
+  readiness:
+    applicationProbe:
+      callerUid: 10001
+      issuerFullMethod: /internalrpcauthority.v1.AuthorizationIssuerService/CheckReadiness
+      verifierFullMethod: /internalrpcauthority.v1.AuthorizationVerifierService/CheckReadiness
+      requireExactServedSnapshotDigest: true
+      requireReplayStore: true
+    issuer:
+      requirePrivateKeyMatchesCurrentJwk: true
+      requirePublishedSnapshotReadback: true
+      requirePolicyBinding: true
+    verifier:
+      requireSignedSnapshot: true
+      requirePersistentWatermark: true
+      requirePersistentReplayReservation: true
+      requireRestoreFenceOpen: true
+  network:
+    issuer:
+      ingress: UDS_ONLY
+      egress:
+        - vault-csi-files
+    verifier:
+      ingress: UDS_ONLY
+      egress:
+        - destination: postgresql
+          namespace: mattercodex-system
+          service: internal-rpc-authority-postgresql
+          port: 5432
+          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          environmentRenderMustPinClusterIP: true
+    publisher:
+      ingress: NONE
+      egress:
+        - destination: postgresql
+          namespace: mattercodex-system
+          service: internal-rpc-authority-postgresql
+          port: 5432
+          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          environmentRenderMustPinClusterIP: true
+        - destination: kubernetes-api
+          namespace: default
+          service: kubernetes
+          port: 443
+          tlsServerName: kubernetes.default.svc
+          environmentRenderMustPinServiceAndReadyEndpoints: true
+        - destination: vault-csi-files
+    mtlsDownstreamRpc:
+      required: true
+      exactServerName: REQUIRED_PER_OPERATION_BINDING
+      exactTrustBundleId: REQUIRED_PER_OPERATION_BINDING
+      trustedCaFile: REQUIRED_FOR_EXACT_TRUST_BUNDLE
+      plaintextFallback: FORBIDDEN
+  shutdown:
+    order:
+      - application-readiness-false
+      - issuer-verifier-readiness-false
+      - application-stop-accepting
+      - uds-stop-accepting
+      - uds-inflight-join
+      - uds-socket-inode-checked-cleanup
+      - database-close
+    bounded: true
+  restore:
+    pitrBehavior: QUARANTINE
+    fenceOwner: internal-rpc-authority-recovery-job
+    fenceDurationSeconds: 40
+    calculation: TOKEN_TTL_30_PLUS_TWO_CLOCK_SKEW_WINDOWS_5
+    issuerReadyDuringFence: false
+    verifierReadyDuringFence: false
+    watermarkResetAllowed: false
+    replayReservationResetAllowed: false

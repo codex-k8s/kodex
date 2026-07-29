@@ -1,11 +1,15 @@
 GOVULNCHECK_VERSION := v1.6.0
 GO_MIN_VERSION := 1.26.5
 GO_TOOLCHAIN := go1.26.5
+BUF_VERSION := 1.71.0
 
-.PHONY: check-go-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts
+.PHONY: check-go-toolchain check-proto-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen test-contract-authority
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
+
+check-proto-toolchain:
+	@BUF_VERSION='$(BUF_VERSION)' ./scripts/check-proto-toolchain.sh
 
 test-go-toolchain-contract: check-go-toolchain
 	@./scripts/tests/go-toolchain-contract-test.sh
@@ -38,3 +42,19 @@ gen-openapi-go:
 
 gen-openapi-ts:
 	openapi-ts -f tools/codegen/openapi/control-center-ts.config.mjs
+
+lint-proto: check-proto-toolchain
+	buf lint
+
+build-proto: check-proto-toolchain
+	buf build
+
+gen-proto: check-proto-toolchain
+	buf generate
+
+check-proto-codegen: check-proto-toolchain
+	@./scripts/check-proto-codegen.sh
+
+test-contract-authority: lint-proto build-proto check-proto-codegen
+	env -u GOFLAGS GOENV=off GOWORK=off go test ./tools/contracts/internalrpcauth -count=1
+	cd libs/go/internalrpcauth && env -u GOFLAGS GOENV=off GOWORK=off go test ./... -count=1

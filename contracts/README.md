@@ -34,4 +34,6 @@ Gateway не владеет чужим бизнес-состоянием. Соб
 - `CONTRACT-DOC-002` - Proto/gRPC package, authority, mutation и errors;
 - `CONTRACT-DOC-003` - AsyncAPI envelope, NATS subject, ordering и consumer
   effect;
+- `CONTRACT-MC-004` - workload-local UDS, ES256 JWS/JWKS, machine policy,
+  persistent replay и forward-only rotation;
 - `GO-DOC-005` - runtime-путь синхронной и асинхронной коммуникации.
