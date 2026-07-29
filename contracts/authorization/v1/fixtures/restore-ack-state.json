@@ -1,0 +1,177 @@
+{
+  "v": 1,
+  "credential_signer_trust": {
+    "source_revision": 41,
+    "key_set_revision": 12,
+    "source_digest_sha256": "4141414141414141414141414141414141414141414141414141414141414141",
+    "predecessor_revision": 40,
+    "predecessor_digest_sha256": "4040404040404040404040404040404040404040404040404040404040404040",
+    "manifest_signer_generation": 7,
+    "keys": [
+      {
+        "status": "CURRENT",
+        "credential_signer_generation": 9,
+        "kid": "restore-role-credential-g9",
+        "jwk_thumbprint_sha256": "0909090909090909090909090909090909090909090909090909090909090909"
+      },
+      {
+        "status": "NEXT",
+        "credential_signer_generation": 10,
+        "kid": "restore-role-credential-g10",
+        "jwk_thumbprint_sha256": "1010101010101010101010101010101010101010101010101010101010101010"
+      },
+      {
+        "status": "PREVIOUS",
+        "credential_signer_generation": 8,
+        "kid": "restore-role-credential-g8",
+        "jwk_thumbprint_sha256": "0808080808080808080808080808080808080808080808080808080808080808"
+      }
+    ],
+    "controller_owned_readback_required": true
+  },
+  "issuance_delivery": {
+    "method": "/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential",
+    "publisher_address": "internal-rpc-authority-publisher.mattercodex-system.svc:8444",
+    "publisher_tls_server_name": "internal-rpc-authority-publisher.mattercodex-system.svc",
+    "publisher_trust_bundle_id": "internal-rpc-authority-publisher-ca",
+    "request_authority": "CONTROLLER_SIGNED_EXACT_ROLE_ISSUANCE_DIRECTIVE",
+    "private_ack_key_destination": "EXACT_ROLE_VAULT_PATH_FROM_TARGET_REGISTRY",
+    "public_ack_jwk_destination": "SIGNED_ROLE_CREDENTIAL",
+    "controller_persists_delivery_receipt_before_directive": true
+  },
+  "restore": {
+    "restore_id": "70000000-0000-4000-8000-000000000007",
+    "restore_epoch": 17,
+    "coordination_revision": 23,
+    "directive_digest_sha256": "2323232323232323232323232323232323232323232323232323232323232323",
+    "expected_roles": [
+      {
+        "workload_id": "control-plane",
+        "role": "AUTHORIZATION_VERIFIER",
+        "workload_generation": 1,
+        "credential_generation": 3,
+        "ack_key_generation": 11,
+        "ack_key_kid": "control-plane-verifier-ack-g11",
+        "ack_key_thumbprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "workload_id": "control-plane",
+        "role": "AUTHORITY_PROOF_RESOLVER",
+        "workload_generation": 1,
+        "credential_generation": 5,
+        "ack_key_generation": 13,
+        "ack_key_kid": "control-plane-resolver-ack-g13",
+        "ack_key_thumbprint_sha256": "1313131313131313131313131313131313131313131313131313131313131313"
+      }
+    ],
+    "partial_subsets": [
+      {
+        "accepted_roles": [],
+        "resulting_phase": "QUIESCING"
+      },
+      {
+        "accepted_roles": [
+          "AUTHORIZATION_VERIFIER"
+        ],
+        "resulting_phase": "QUIESCING"
+      },
+      {
+        "accepted_roles": [
+          "AUTHORIZATION_VERIFIER",
+          "AUTHORITY_PROOF_RESOLVER"
+        ],
+        "resulting_phase": "PREPARED"
+      }
+    ],
+    "persisted_ack_record_fields": [
+      "restore_id",
+      "restore_epoch",
+      "coordination_revision",
+      "workload_id",
+      "role",
+      "workload_generation",
+      "credential_generation",
+      "ack_key_generation",
+      "directive_digest_sha256",
+      "ack_digest_sha256",
+      "ack_jti",
+      "idempotency_key",
+      "semantic_request_digest_sha256",
+      "receipt_id",
+      "accepted_resulting_phase"
+    ]
+  },
+  "semantic_retry": {
+    "idempotency_key": "71000000-0000-4000-8000-000000000007",
+    "ack_jti": "72000000-0000-4000-8000-000000000007",
+    "semantic_request_digest_sha256": "7373737373737373737373737373737373737373737373737373737373737373",
+    "accepted_ack_digest_sha256": "7474747474747474747474747474747474747474747474747474747474747474",
+    "receipt_id": "75000000-0000-4000-8000-000000000007",
+    "lost_response_retry_returns_same_receipt": true,
+    "concurrent_duplicate_returns_same_receipt": true,
+    "different_digest_is_replay": true,
+    "retention": "UNTIL_COMPLETED_SAFE_WINDOW_PLUS_ACK_EXPIRY_PLUS_10_MINUTES"
+  },
+  "negative": [
+    {
+      "name": "unknown-credential-signer",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "expired-credential-signer",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "wrong-credential-signer-generation",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "substituted-ack-public-jwk",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "substituted-ack-kid-or-thumbprint",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "shared-spiffe-opposite-role-ack",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "missing-controller-trust-readback",
+      "reason": "RESTORE_COORDINATION_UNAVAILABLE"
+    },
+    {
+      "name": "missing-publisher-ingress-or-controller-egress",
+      "reason": "RESTORE_COORDINATION_UNAVAILABLE"
+    },
+    {
+      "name": "caller-supplied-ack-private-key-or-vault-path",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "stale-role-credential-or-ack-generation",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "same-idempotency-key-different-digest",
+      "reason": "RESTORE_ACK_REPLAY_DETECTED"
+    },
+    {
+      "name": "same-ack-jti-different-idempotency-key",
+      "reason": "RESTORE_ACK_REPLAY_DETECTED"
+    },
+    {
+      "name": "expired-idempotency-receipt",
+      "reason": "RESTORE_ACK_RECEIPT_EXPIRED"
+    },
+    {
+      "name": "leader-crash-after-verifier-ack",
+      "reason": "RECONSTRUCT_PARTIAL_SET_AND_REMAIN_QUIESCING"
+    },
+    {
+      "name": "concurrent-leader-cas-loser",
+      "reason": "RELOAD_EXACT_WINNING_STATE"
+    }
+  ]
+}

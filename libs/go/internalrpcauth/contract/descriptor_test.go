@@ -127,17 +127,21 @@ func TestResolverRequestCompiledDescriptor(t *testing.T) {
 func TestCompiledServiceMethods(t *testing.T) {
 	file := internalrpcauthorityv1.File_internalrpcauthority_v1_authority_proto
 	want := map[string]bool{
-		"/internalrpcauthority.v1.AuthorizationIssuerService/IssueAuthorizationContext":    true,
-		"/internalrpcauthority.v1.AuthorizationIssuerService/CheckReadiness":               true,
-		"/internalrpcauthority.v1.AuthorizationVerifierService/VerifyAuthorizationContext": true,
-		"/internalrpcauthority.v1.AuthorizationVerifierService/CheckReadiness":             true,
-		"/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof":     true,
-		"/internalrpcauthority.v1.AuthorityProofResolverService/CheckReadiness":            true,
-		"/internalrpcauthority.v1.RestoreControllerService/PrepareRestore":                 true,
-		"/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective":            true,
-		"/internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence":          true,
-		"/internalrpcauthority.v1.RestoreControllerService/CompleteRestore":                true,
-		"/internalrpcauthority.v1.RestoreControllerService/CheckReadiness":                 true,
+		"/internalrpcauthority.v1.AuthorizationIssuerService/IssueAuthorizationContext":        true,
+		"/internalrpcauthority.v1.AuthorizationIssuerService/CheckReadiness":                   true,
+		"/internalrpcauthority.v1.AuthorizationVerifierService/VerifyAuthorizationContext":     true,
+		"/internalrpcauthority.v1.AuthorizationVerifierService/CheckReadiness":                 true,
+		"/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof":         true,
+		"/internalrpcauthority.v1.AuthorityProofResolverService/CheckReadiness":                true,
+		"/internalrpcauthority.v1.RestoreControllerService/PrepareRestore":                     true,
+		"/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective":                true,
+		"/internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence":              true,
+		"/internalrpcauthority.v1.RestoreControllerService/CompleteRestore":                    true,
+		"/internalrpcauthority.v1.RestoreControllerService/CheckReadiness":                     true,
+		"/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState":          true,
+		"/internalrpcauthority.v1.AuthorityReadbackAttestorService/CheckReadiness":             true,
+		"/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential": true,
+		"/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/CheckReadiness":        true,
 	}
 	got := make(map[string]bool)
 	services := file.Services()
@@ -156,6 +160,41 @@ func TestCompiledServiceMethods(t *testing.T) {
 	for method := range want {
 		if !got[method] {
 			t.Fatalf("compiled descriptor does not contain %s", method)
+		}
+	}
+}
+
+func TestRestoreAckIdempotencyCompiledDescriptor(t *testing.T) {
+	file := internalrpcauthorityv1.File_internalrpcauthority_v1_authority_proto
+	request := requiredMessage(t, file, "AcknowledgeQuiescenceRequest")
+	idempotency := request.Fields().ByNumber(8)
+	if idempotency == nil ||
+		idempotency.Name() != "idempotency_key" ||
+		idempotency.Kind() != protoreflect.StringKind {
+		t.Fatal("restore ACK request lacks exact idempotency key field 8")
+	}
+	response := requiredMessage(t, file, "AcknowledgeQuiescenceResponse")
+	receipt := response.Fields().ByNumber(2)
+	if receipt == nil ||
+		receipt.Name() != "receipt" ||
+		receipt.Kind() != protoreflect.MessageKind ||
+		receipt.Message().Name() != "QuiescenceAckReceipt" {
+		t.Fatal("restore ACK response lacks saved receipt field 2")
+	}
+	receiptMessage := requiredMessage(t, file, "QuiescenceAckReceipt")
+	for number, name := range map[protoreflect.FieldNumber]protoreflect.Name{
+		1: "receipt_id",
+		2: "idempotency_key",
+		3: "ack_jti",
+		4: "semantic_request_digest_sha256",
+		5: "accepted_ack_digest_sha256",
+		6: "coordination_revision",
+		7: "resulting_phase",
+		8: "accepted_at",
+	} {
+		field := receiptMessage.Fields().ByNumber(number)
+		if field == nil || field.Name() != name {
+			t.Fatalf("restore ACK receipt field %d = %v, want %s", number, field, name)
 		}
 	}
 }

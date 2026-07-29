@@ -19,3 +19,5 @@ psql "$dsn" -X -q -v ON_ERROR_STOP=1 \
   -f "$repo_root/contracts/authorization/v1/postgresql-readback-boundary.sql"
 psql "$dsn" -X -q -v ON_ERROR_STOP=1 \
   -f "$repo_root/contracts/authorization/v1/postgresql-readback-assertions.sql"
+psql "$dsn" -X -q -v ON_ERROR_STOP=1 \
+  -f "$repo_root/contracts/authorization/v1/postgresql-readback-behavior.sql"

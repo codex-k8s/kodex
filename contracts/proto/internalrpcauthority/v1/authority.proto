@@ -60,6 +60,24 @@ service RestoreControllerService {
   rpc CheckReadiness(RestoreControllerServiceCheckReadinessRequest) returns (RestoreControllerServiceCheckReadinessResponse);
 }
 
+// AuthorityReadbackAttestorService независимо проверяет role-bound
+// cryptographic possession и фактически обслуживаемое pinned state. Он
+// возвращает immutable одноразовый receipt; publisher не может вызвать этот
+// интерфейс или создать receipt.
+service AuthorityReadbackAttestorService {
+  rpc AttestServedState(AttestServedStateRequest) returns (AttestServedStateResponse);
+  rpc CheckReadiness(AuthorityReadbackAttestorServiceCheckReadinessRequest) returns (AuthorityReadbackAttestorServiceCheckReadinessResponse);
+}
+
+// RestoreRoleCredentialPublisherService — controller-authenticated issuance
+// boundary publisher. Controller передаёт только signed issuance directive;
+// publisher server-side разрешает exact target registry, генерирует ACK key,
+// доставляет private часть exact role и возвращает signed delivery receipt.
+service RestoreRoleCredentialPublisherService {
+  rpc PublishRoleCredential(PublishRoleCredentialRequest) returns (PublishRoleCredentialResponse);
+  rpc CheckReadiness(RestoreRoleCredentialPublisherServiceCheckReadinessRequest) returns (RestoreRoleCredentialPublisherServiceCheckReadinessResponse);
+}
+
 // ActorKind является закрытым техническим классом actor. Бизнесовые роли в
 // этом enum отсутствуют.
 enum ActorKind {
@@ -102,6 +120,12 @@ enum RestorePhase {
   RESTORE_PHASE_RESTORING = 4;
   RESTORE_PHASE_COMPLETED = 5;
   RESTORE_PHASE_FENCED_SAFE_WINDOW = 6;
+}
+
+enum ReadbackAttestationKind {
+  READBACK_ATTESTATION_KIND_UNSPECIFIED = 0;
+  READBACK_ATTESTATION_KIND_KEY_DELIVERY = 1;
+  READBACK_ATTESTATION_KIND_SNAPSHOT = 2;
 }
 
 // AuthorityProvenance связывает идентификатор с immutable snapshot,
@@ -318,6 +342,10 @@ message AcknowledgeQuiescenceRequest {
   // которого связан role credential. Claims доказывают exact directive JTI,
   // stop-accepting, inflight=0 и served snapshot digest.
   string quiescence_ack_compact_jws = 7;
+  // idempotency_key сохраняется вместе с canonical semantic digest, JTI и
+  // принятым результатом. Повтор exact request возвращает тот же receipt;
+  // тот же ключ либо JTI с другим digest является security replay.
+  string idempotency_key = 8;
 }
 
 message CompleteRestoreRequest {
@@ -344,6 +372,21 @@ message PrepareRestoreResponse {
 
 message AcknowledgeQuiescenceResponse {
   RestoreTransition transition = 1;
+  QuiescenceAckReceipt receipt = 2;
+}
+
+// QuiescenceAckReceipt — сохранённый controller-owned результат одной
+// semantic ACK transaction. Он не является credential и не заменяет
+// проверку publisher credential, directive и ACK signatures.
+message QuiescenceAckReceipt {
+  string receipt_id = 1;
+  string idempotency_key = 2;
+  string ack_jti = 3;
+  string semantic_request_digest_sha256 = 4;
+  string accepted_ack_digest_sha256 = 5;
+  uint64 coordination_revision = 6;
+  RestorePhase resulting_phase = 7;
+  google.protobuf.Timestamp accepted_at = 8;
 }
 
 message CompleteRestoreResponse {
@@ -359,6 +402,67 @@ message RestoreControllerServiceCheckReadinessResponse {
   string served_evidence_digest_sha256 = 4;
   uint64 signer_generation = 5;
   bool admission_policy_observed = 6;
+  uint64 role_credential_trust_source_revision = 7;
+  string role_credential_trust_digest_sha256 = 8;
+  uint64 role_credential_trust_signer_generation = 9;
+  bool role_credential_trust_readback_ready = 10;
+  bool ack_verification_registry_ready = 11;
+  uint64 role_credential_trust_key_set_revision = 12;
+}
+
+message AttestServedStateRequest {
+  // pinned_intent_id — lookup reference controller-owned immutable intent, а
+  // не authority. Workload, role, revisions и generations выводятся после
+  // проверки mTLS, role credential и signed attestation.
+  string pinned_intent_id = 1;
+  string role_credential_compact_jws = 2;
+  string served_state_attestation_compact_jws = 3;
+  string idempotency_key = 4;
+  string correlation_id = 5;
+}
+
+message AttestServedStateResponse {
+  string attestation_receipt_id = 1;
+  ReadbackAttestationKind kind = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  string evidence_digest_sha256 = 4;
+  uint64 verifier_generation = 5;
+}
+
+message AuthorityReadbackAttestorServiceCheckReadinessRequest {}
+
+message AuthorityReadbackAttestorServiceCheckReadinessResponse {
+  bool ready = 1;
+  uint64 pinned_intent_revision = 2;
+  string pinned_intent_digest_sha256 = 3;
+  uint64 role_credential_trust_source_revision = 4;
+  string role_credential_trust_digest_sha256 = 5;
+  uint64 verifier_generation = 6;
+  bool receipt_store_ready = 7;
+}
+
+message PublishRoleCredentialRequest {
+  string issuance_directive_compact_jws = 1;
+  string idempotency_key = 2;
+  string correlation_id = 3;
+}
+
+message PublishRoleCredentialResponse {
+  string delivery_receipt_compact_jws = 1;
+  string role_credential_digest_sha256 = 2;
+  uint64 credential_generation = 3;
+  uint64 ack_key_generation = 4;
+}
+
+message RestoreRoleCredentialPublisherServiceCheckReadinessRequest {}
+
+message RestoreRoleCredentialPublisherServiceCheckReadinessResponse {
+  bool ready = 1;
+  uint64 target_registry_revision = 2;
+  string target_registry_digest_sha256 = 3;
+  uint64 controller_trust_generation = 4;
+  uint64 credential_signer_generation = 5;
+  bool vault_exact_target_readback_ready = 6;
 }
 
 // AuthorizationFailureStage ограничивает наблюдаемую стадию отказа.
@@ -431,6 +535,7 @@ enum AuthorizationErrorReason {
   AUTHORIZATION_ERROR_REASON_RESTORE_DIRECTIVE_REJECTED = 46;
   AUTHORIZATION_ERROR_REASON_RESTORE_ACK_REPLAY_DETECTED = 47;
   AUTHORIZATION_ERROR_REASON_RESTORE_COORDINATION_UNAVAILABLE = 48;
+  AUTHORIZATION_ERROR_REASON_RESTORE_ACK_RECEIPT_EXPIRED = 49;
 }
 
 // AuthorizationErrorDetail добавляется к google.rpc.Status. Диагностика не

@@ -759,3 +759,305 @@ var RestoreControllerService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "internalrpcauthority/v1/authority.proto",
 }
+
+const (
+	AuthorityReadbackAttestorService_AttestServedState_FullMethodName = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState"
+	AuthorityReadbackAttestorService_CheckReadiness_FullMethodName    = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/CheckReadiness"
+)
+
+// AuthorityReadbackAttestorServiceClient is the client API for AuthorityReadbackAttestorService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// AuthorityReadbackAttestorService независимо проверяет role-bound
+// cryptographic possession и фактически обслуживаемое pinned state. Он
+// возвращает immutable одноразовый receipt; publisher не может вызвать этот
+// интерфейс или создать receipt.
+type AuthorityReadbackAttestorServiceClient interface {
+	AttestServedState(ctx context.Context, in *AttestServedStateRequest, opts ...grpc.CallOption) (*AttestServedStateResponse, error)
+	CheckReadiness(ctx context.Context, in *AuthorityReadbackAttestorServiceCheckReadinessRequest, opts ...grpc.CallOption) (*AuthorityReadbackAttestorServiceCheckReadinessResponse, error)
+}
+
+type authorityReadbackAttestorServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAuthorityReadbackAttestorServiceClient(cc grpc.ClientConnInterface) AuthorityReadbackAttestorServiceClient {
+	return &authorityReadbackAttestorServiceClient{cc}
+}
+
+func (c *authorityReadbackAttestorServiceClient) AttestServedState(ctx context.Context, in *AttestServedStateRequest, opts ...grpc.CallOption) (*AttestServedStateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AttestServedStateResponse)
+	err := c.cc.Invoke(ctx, AuthorityReadbackAttestorService_AttestServedState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authorityReadbackAttestorServiceClient) CheckReadiness(ctx context.Context, in *AuthorityReadbackAttestorServiceCheckReadinessRequest, opts ...grpc.CallOption) (*AuthorityReadbackAttestorServiceCheckReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorityReadbackAttestorServiceCheckReadinessResponse)
+	err := c.cc.Invoke(ctx, AuthorityReadbackAttestorService_CheckReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AuthorityReadbackAttestorServiceServer is the server API for AuthorityReadbackAttestorService service.
+// All implementations must embed UnimplementedAuthorityReadbackAttestorServiceServer
+// for forward compatibility.
+//
+// AuthorityReadbackAttestorService независимо проверяет role-bound
+// cryptographic possession и фактически обслуживаемое pinned state. Он
+// возвращает immutable одноразовый receipt; publisher не может вызвать этот
+// интерфейс или создать receipt.
+type AuthorityReadbackAttestorServiceServer interface {
+	AttestServedState(context.Context, *AttestServedStateRequest) (*AttestServedStateResponse, error)
+	CheckReadiness(context.Context, *AuthorityReadbackAttestorServiceCheckReadinessRequest) (*AuthorityReadbackAttestorServiceCheckReadinessResponse, error)
+	mustEmbedUnimplementedAuthorityReadbackAttestorServiceServer()
+}
+
+// UnimplementedAuthorityReadbackAttestorServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAuthorityReadbackAttestorServiceServer struct{}
+
+func (UnimplementedAuthorityReadbackAttestorServiceServer) AttestServedState(context.Context, *AttestServedStateRequest) (*AttestServedStateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttestServedState not implemented")
+}
+func (UnimplementedAuthorityReadbackAttestorServiceServer) CheckReadiness(context.Context, *AuthorityReadbackAttestorServiceCheckReadinessRequest) (*AuthorityReadbackAttestorServiceCheckReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
+}
+func (UnimplementedAuthorityReadbackAttestorServiceServer) mustEmbedUnimplementedAuthorityReadbackAttestorServiceServer() {
+}
+func (UnimplementedAuthorityReadbackAttestorServiceServer) testEmbeddedByValue() {}
+
+// UnsafeAuthorityReadbackAttestorServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AuthorityReadbackAttestorServiceServer will
+// result in compilation errors.
+type UnsafeAuthorityReadbackAttestorServiceServer interface {
+	mustEmbedUnimplementedAuthorityReadbackAttestorServiceServer()
+}
+
+func RegisterAuthorityReadbackAttestorServiceServer(s grpc.ServiceRegistrar, srv AuthorityReadbackAttestorServiceServer) {
+	// If the following call panics, it indicates UnimplementedAuthorityReadbackAttestorServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AuthorityReadbackAttestorService_ServiceDesc, srv)
+}
+
+func _AuthorityReadbackAttestorService_AttestServedState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttestServedStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorityReadbackAttestorServiceServer).AttestServedState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorityReadbackAttestorService_AttestServedState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorityReadbackAttestorServiceServer).AttestServedState(ctx, req.(*AttestServedStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthorityReadbackAttestorService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorityReadbackAttestorServiceCheckReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorityReadbackAttestorServiceServer).CheckReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorityReadbackAttestorService_CheckReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorityReadbackAttestorServiceServer).CheckReadiness(ctx, req.(*AuthorityReadbackAttestorServiceCheckReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AuthorityReadbackAttestorService_ServiceDesc is the grpc.ServiceDesc for AuthorityReadbackAttestorService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AuthorityReadbackAttestorService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "internalrpcauthority.v1.AuthorityReadbackAttestorService",
+	HandlerType: (*AuthorityReadbackAttestorServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "AttestServedState",
+			Handler:    _AuthorityReadbackAttestorService_AttestServedState_Handler,
+		},
+		{
+			MethodName: "CheckReadiness",
+			Handler:    _AuthorityReadbackAttestorService_CheckReadiness_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "internalrpcauthority/v1/authority.proto",
+}
+
+const (
+	RestoreRoleCredentialPublisherService_PublishRoleCredential_FullMethodName = "/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential"
+	RestoreRoleCredentialPublisherService_CheckReadiness_FullMethodName        = "/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/CheckReadiness"
+)
+
+// RestoreRoleCredentialPublisherServiceClient is the client API for RestoreRoleCredentialPublisherService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// RestoreRoleCredentialPublisherService — controller-authenticated issuance
+// boundary publisher. Controller передаёт только signed issuance directive;
+// publisher server-side разрешает exact target registry, генерирует ACK key,
+// доставляет private часть exact role и возвращает signed delivery receipt.
+type RestoreRoleCredentialPublisherServiceClient interface {
+	PublishRoleCredential(ctx context.Context, in *PublishRoleCredentialRequest, opts ...grpc.CallOption) (*PublishRoleCredentialResponse, error)
+	CheckReadiness(ctx context.Context, in *RestoreRoleCredentialPublisherServiceCheckReadinessRequest, opts ...grpc.CallOption) (*RestoreRoleCredentialPublisherServiceCheckReadinessResponse, error)
+}
+
+type restoreRoleCredentialPublisherServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRestoreRoleCredentialPublisherServiceClient(cc grpc.ClientConnInterface) RestoreRoleCredentialPublisherServiceClient {
+	return &restoreRoleCredentialPublisherServiceClient{cc}
+}
+
+func (c *restoreRoleCredentialPublisherServiceClient) PublishRoleCredential(ctx context.Context, in *PublishRoleCredentialRequest, opts ...grpc.CallOption) (*PublishRoleCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishRoleCredentialResponse)
+	err := c.cc.Invoke(ctx, RestoreRoleCredentialPublisherService_PublishRoleCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *restoreRoleCredentialPublisherServiceClient) CheckReadiness(ctx context.Context, in *RestoreRoleCredentialPublisherServiceCheckReadinessRequest, opts ...grpc.CallOption) (*RestoreRoleCredentialPublisherServiceCheckReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreRoleCredentialPublisherServiceCheckReadinessResponse)
+	err := c.cc.Invoke(ctx, RestoreRoleCredentialPublisherService_CheckReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RestoreRoleCredentialPublisherServiceServer is the server API for RestoreRoleCredentialPublisherService service.
+// All implementations must embed UnimplementedRestoreRoleCredentialPublisherServiceServer
+// for forward compatibility.
+//
+// RestoreRoleCredentialPublisherService — controller-authenticated issuance
+// boundary publisher. Controller передаёт только signed issuance directive;
+// publisher server-side разрешает exact target registry, генерирует ACK key,
+// доставляет private часть exact role и возвращает signed delivery receipt.
+type RestoreRoleCredentialPublisherServiceServer interface {
+	PublishRoleCredential(context.Context, *PublishRoleCredentialRequest) (*PublishRoleCredentialResponse, error)
+	CheckReadiness(context.Context, *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) (*RestoreRoleCredentialPublisherServiceCheckReadinessResponse, error)
+	mustEmbedUnimplementedRestoreRoleCredentialPublisherServiceServer()
+}
+
+// UnimplementedRestoreRoleCredentialPublisherServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRestoreRoleCredentialPublisherServiceServer struct{}
+
+func (UnimplementedRestoreRoleCredentialPublisherServiceServer) PublishRoleCredential(context.Context, *PublishRoleCredentialRequest) (*PublishRoleCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishRoleCredential not implemented")
+}
+func (UnimplementedRestoreRoleCredentialPublisherServiceServer) CheckReadiness(context.Context, *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) (*RestoreRoleCredentialPublisherServiceCheckReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
+}
+func (UnimplementedRestoreRoleCredentialPublisherServiceServer) mustEmbedUnimplementedRestoreRoleCredentialPublisherServiceServer() {
+}
+func (UnimplementedRestoreRoleCredentialPublisherServiceServer) testEmbeddedByValue() {}
+
+// UnsafeRestoreRoleCredentialPublisherServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RestoreRoleCredentialPublisherServiceServer will
+// result in compilation errors.
+type UnsafeRestoreRoleCredentialPublisherServiceServer interface {
+	mustEmbedUnimplementedRestoreRoleCredentialPublisherServiceServer()
+}
+
+func RegisterRestoreRoleCredentialPublisherServiceServer(s grpc.ServiceRegistrar, srv RestoreRoleCredentialPublisherServiceServer) {
+	// If the following call panics, it indicates UnimplementedRestoreRoleCredentialPublisherServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RestoreRoleCredentialPublisherService_ServiceDesc, srv)
+}
+
+func _RestoreRoleCredentialPublisherService_PublishRoleCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishRoleCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RestoreRoleCredentialPublisherServiceServer).PublishRoleCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RestoreRoleCredentialPublisherService_PublishRoleCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RestoreRoleCredentialPublisherServiceServer).PublishRoleCredential(ctx, req.(*PublishRoleCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RestoreRoleCredentialPublisherService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreRoleCredentialPublisherServiceCheckReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RestoreRoleCredentialPublisherServiceServer).CheckReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RestoreRoleCredentialPublisherService_CheckReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RestoreRoleCredentialPublisherServiceServer).CheckReadiness(ctx, req.(*RestoreRoleCredentialPublisherServiceCheckReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RestoreRoleCredentialPublisherService_ServiceDesc is the grpc.ServiceDesc for RestoreRoleCredentialPublisherService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RestoreRoleCredentialPublisherService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "internalrpcauthority.v1.RestoreRoleCredentialPublisherService",
+	HandlerType: (*RestoreRoleCredentialPublisherServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "PublishRoleCredential",
+			Handler:    _RestoreRoleCredentialPublisherService_PublishRoleCredential_Handler,
+		},
+		{
+			MethodName: "CheckReadiness",
+			Handler:    _RestoreRoleCredentialPublisherService_CheckReadiness_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "internalrpcauthority/v1/authority.proto",
+}

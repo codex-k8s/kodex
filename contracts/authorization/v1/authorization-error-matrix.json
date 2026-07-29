@@ -336,6 +336,13 @@
       "stage": "RESTORE",
       "retryable": true,
       "message": "restore coordination unavailable"
+    },
+    {
+      "reason": "RESTORE_ACK_RECEIPT_EXPIRED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore acknowledgement receipt expired"
     }
   ]
 }

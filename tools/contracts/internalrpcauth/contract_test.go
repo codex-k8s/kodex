@@ -31,7 +31,9 @@ func TestJSONSchemasAreClosed(t *testing.T) {
 		"authorization-context.schema.json",
 		"authority-snapshot.schema.json",
 		"key-delivery-targets.schema.json",
+		"readback-attestation.schema.json",
 		"restore-fence-evidence.schema.json",
+		"restore-role-trust.schema.json",
 	} {
 		path := filepath.Join(root, "contracts/authorization/v1", name)
 		var schema map[string]any
@@ -50,9 +52,76 @@ func TestRestoreCoordinationSchemasAreClosed(t *testing.T) {
 	var schema map[string]any
 	decodeJSONStrict(t, path, &schema)
 	definitions := requiredMap(t, schema, "$defs")
-	for _, name := range []string{"roleCredential", "directive", "quiescenceAck"} {
+	for _, name := range []string{
+		"credentialIssuanceDirective",
+		"credentialDeliveryReceipt",
+		"roleCredential",
+		"directive",
+		"quiescenceAck",
+	} {
 		definition := requiredMap(t, definitions, name)
 		requireEqual(t, definition, "additionalProperties", false)
+	}
+}
+
+func TestRestoreRoleTrustAndReadbackAttestationSchemasAreBound(t *testing.T) {
+	root := repositoryRoot(t)
+	var trust map[string]any
+	decodeJSONStrict(
+		t,
+		filepath.Join(
+			root,
+			"contracts/authorization/v1/restore-role-trust.schema.json",
+		),
+		&trust,
+	)
+	required := stringSet(trust["required"].([]any))
+	for _, field := range []string{
+		"source_revision",
+		"key_set_revision",
+		"trust_set_digest_sha256",
+		"predecessor",
+		"history",
+		"manifest_signer_generation",
+		"keys",
+	} {
+		if !required[field] {
+			t.Fatalf("restore role trust does not require %s", field)
+		}
+	}
+	properties := requiredMap(t, trust, "properties")
+	keys := requiredMap(t, properties, "keys")
+	if keys["minItems"] != float64(2) || keys["maxItems"] != float64(3) {
+		t.Fatal("restore role trust does not bound CURRENT NEXT PREVIOUS")
+	}
+
+	var attestation map[string]any
+	decodeJSONStrict(
+		t,
+		filepath.Join(
+			root,
+			"contracts/authorization/v1/readback-attestation.schema.json",
+		),
+		&attestation,
+	)
+	attestationRequired := stringSet(attestation["required"].([]any))
+	for _, field := range []string{
+		"intent_id",
+		"intent_revision",
+		"workload_id",
+		"role",
+		"workload_generation",
+		"credential_generation",
+		"ack_key_generation",
+		"ack_key_thumbprint_sha256",
+		"served_state_digest_sha256",
+		"challenge_nonce",
+		"challenge_digest_sha256",
+		"jti",
+	} {
+		if !attestationRequired[field] {
+			t.Fatalf("readback attestation does not bind %s", field)
+		}
 	}
 }
 
@@ -104,10 +173,14 @@ func TestProtectedHeaderContract(t *testing.T) {
 	wantTypes := []string{
 		"mattercodex-internal-rpc-auth+jws",
 		"mattercodex-internal-rpc-authority-proof+jws",
+		"mattercodex-internal-rpc-readback-attestation+jws",
 		"mattercodex-internal-rpc-restore-ack+jws",
+		"mattercodex-internal-rpc-restore-role-delivery-receipt+jws",
 		"mattercodex-internal-rpc-restore-directive+jws",
 		"mattercodex-internal-rpc-restore-evidence+jws",
+		"mattercodex-internal-rpc-restore-role-issuance+jws",
 		"mattercodex-internal-rpc-restore-role-credential+jws",
+		"mattercodex-internal-rpc-restore-role-trust+jws",
 		"mattercodex-internal-rpc-snapshot+jws",
 	}
 	typ := properties["typ"].(map[string]any)
@@ -350,6 +423,17 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	requireEqual(t, resolution, "crossTenantPolicy", "DENY_BEFORE_SIGN")
 
 	publisher := requiredMap(t, deployables, "publisher")
+	publisherRestoreInterface := requiredMap(t, publisher, "restoreRoleCredentialInterface")
+	requireEqual(
+		t,
+		publisherRestoreInterface,
+		"publishMethod",
+		"/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential",
+	)
+	publisherDelivery := requiredMap(t, publisherRestoreInterface, "delivery")
+	requireEqual(t, publisherDelivery, "generateDistinctEs256AckKeyPerExactRole", true)
+	requireEqual(t, publisherDelivery, "publicAckJwkDestination", "SIGNED_ROLE_CREDENTIAL")
+	requireEqual(t, publisherDelivery, "privateKeyInResponseOrLog", "FORBIDDEN")
 	rotation := requiredMap(t, publisher, "rotationOwnership")
 	requireEqual(t, rotation, "authKeyGenerationOwner", "internal-rpc-authority-publisher")
 	requireEqual(t, rotation, "authPrivateKeyWriteOwner", "internal-rpc-authority-publisher")
@@ -436,6 +520,14 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 		"prepareMethod",
 		"/internalrpcauthority.v1.RestoreControllerService/PrepareRestore",
 	)
+	issuance := requiredMap(t, controllerInterface, "roleCredentialIssuance")
+	requireEqual(
+		t,
+		issuance,
+		"method",
+		"/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential",
+	)
+	requireEqual(t, issuance, "persistDeliveryReceiptBeforeDirectivePublication", true)
 	requireEqual(
 		t,
 		controllerInterface,
@@ -448,19 +540,82 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	acknowledgement := requiredMap(t, controllerInterface, "acknowledgement")
 	requireEqual(t, acknowledgement, "directiveAndAckJtiOneTime", true)
 	requireEqual(t, acknowledgement, "persistentReplayStore", "restore-coordination-state")
+	requireEqual(t, acknowledgement, "publicKeySource", "SIGNED_ROLE_CREDENTIAL_ONLY")
+	requireEqual(t, acknowledgement, "requireRfc7638ThumbprintMatch", true)
+	idempotency := requiredMap(t, acknowledgement, "idempotency")
+	requireEqual(t, idempotency, "sameKeyJtiAndDigest", "RETURN_SAVED_RECEIPT_AND_RESULT")
+	requireEqual(t, idempotency, "sameKeyOrJtiDifferentDigest", "RESTORE_ACK_REPLAY_DETECTED")
+	roleCredential := requiredMap(t, controllerInterface, "workloadRoleCredential")
+	signerTrust := requiredMap(t, roleCredential, "signerTrust")
+	requireEqual(t, signerTrust, "controllerOwnedServedReadback", true)
+	requireEqual(t, signerTrust, "sameRevisionMutationOrRollback", "REJECT")
 	barrier := requiredMap(t, controller, "quarantineBarrier")
 	requireEqual(t, barrier, "requireEveryCurrentGenerationAck", true)
 	requireEqual(t, barrier, "closeOnEveryIssuanceAndReservationPath", true)
 	requireEqual(t, barrier, "publishPreparedBeforeCompleteAckSet", false)
 
+	coordinationState := requiredMap(t, deployables, "restore-coordination-state")
+	acceptedRecord := requiredMap(t, coordinationState, "acceptedAckRecord")
+	fields := stringSet(acceptedRecord["exactFields"].([]any))
+	for _, field := range []string{
+		"workload_id",
+		"role",
+		"workload_generation",
+		"credential_generation",
+		"directive_digest_sha256",
+		"ack_digest_sha256",
+		"ack_jti",
+		"idempotency_key",
+		"semantic_request_digest_sha256",
+		"receipt_id",
+	} {
+		if !fields[field] {
+			t.Fatalf("coordination accepted ACK record lacks %s", field)
+		}
+	}
+	coordinationRecovery := requiredMap(t, coordinationState, "leaderRecovery")
+	requireEqual(t, coordinationRecovery, "reconstructExpectedAndAcceptedDistinctSets", true)
+	requireEqual(t, coordinationRecovery, "partialSetRemainsQuiescing", true)
+	requireEqual(t, coordinationRecovery, "preparedOnlyOnExactCurrentFullSet", true)
+
+	restoreRoleTrust := requiredMap(t, deployables, "restore-role-credential-trust-snapshot")
+	requireEqual(t, restoreRoleTrust, "resourceName", "internal-rpc-authority-restore-role-trust")
+	requireEqual(
+		t,
+		restoreRoleTrust,
+		"updateProtocol",
+		"SIGNED_SOURCE_REVISION_KEY_SET_REVISION_PREDECESSOR_CAS",
+	)
+	requireEqual(t, restoreRoleTrust, "readinessRequiresActuallyServedSnapshotReadback", true)
+
+	attestor := requiredMap(t, deployables, "internal-rpc-authority-readback-attestor")
+	requireEqual(t, attestor, "artifactBinary", "/usr/local/bin/internal-rpc-authority-readback-attestor")
+	attestorInterface := requiredMap(t, attestor, "interface")
+	requireEqual(
+		t,
+		attestorInterface,
+		"attestMethod",
+		"/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState",
+	)
+	receipt := requiredMap(t, attestorInterface, "receipt")
+	requireEqual(t, receipt, "publisherMayCreateOrUpdate", false)
+	requireEqual(t, receipt, "consumersMayCreateOrUpdate", false)
+
 	store := requiredMap(t, deployables, "replay-store")
 	databaseIdentity := requiredMap(t, store, "workloadRoleDatabaseIdentity")
-	requireEqual(t, databaseIdentity, "cardinality", "EXACTLY_ONE_ACTIVE_LOGIN_PRINCIPAL_PER_WORKLOAD_ROLE_GENERATION")
+	requireEqual(
+		t,
+		databaseIdentity,
+		"cardinality",
+		"BOUNDED_ONE_CURRENT_ONE_NEXT_ONE_PREVIOUS_PER_WORKLOAD_ROLE_GENERATION",
+	)
 	requireEqual(t, databaseIdentity, "sharedCapabilityRoles", "NOLOGIN")
 	rowLevelSecurity := requiredMap(t, databaseIdentity, "rowLevelSecurity")
 	requireEqual(t, rowLevelSecurity, "forcedForTableOwner", true)
 	requireEqual(t, rowLevelSecurity, "principalSource", "session_user")
 	protectedReadbackTables := []string{
+		"authority_readback_intents",
+		"authority_readback_attestation_receipts",
 		"authority_key_delivery_readbacks",
 		"authority_snapshot_readbacks",
 	}
@@ -486,6 +641,8 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 		requireEqual(t, readbackFunction, "callerProvidedWorkloadOrRoleAllowed", false)
 		requireEqual(t, readbackFunction, "unsafeOverloadAllowed", false)
 		requireEqual(t, readbackFunction, "publisherExecuteAllowed", false)
+		requireEqual(t, readbackFunction, "callerProvidedRevisionDigestGenerationAllowed", false)
+		requireEqual(t, readbackFunction, "identityArguments", "uuid")
 	}
 	minimumRights := requiredMap(t, store, "minimumDatabaseRights")
 	publisherRights := requiredMap(t, minimumRights, "internal_rpc_authority_publisher")
@@ -508,8 +665,8 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	} {
 		rights := requiredMap(t, minimumRights, role)
 		requireStringSliceEqual(t, rights, "execute", []string{
-			"internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)",
-			"internal_rpc_authority.record_authority_snapshot_readback(bigint,text,bigint,bigint,bigint,text)",
+			"internal_rpc_authority.record_authority_key_delivery_readback(uuid)",
+			"internal_rpc_authority.record_authority_snapshot_readback(uuid)",
 		})
 		insertUpdate := stringSet(rights["insertUpdate"].([]any))
 		for _, table := range protectedReadbackTables {
@@ -618,7 +775,9 @@ func TestRegistryOwnership(t *testing.T) {
 		"internal-rpc-authority-proof-v1":                "contracts/authorization/v1/authority-proof.schema.json",
 		"internal-rpc-authority-restore-evidence-v1":     "contracts/authorization/v1/restore-fence-evidence.schema.json",
 		"internal-rpc-authority-restore-coordination-v1": "contracts/authorization/v1/restore-coordination.schema.json",
+		"internal-rpc-authority-restore-role-trust-v1":   "contracts/authorization/v1/restore-role-trust.schema.json",
 		"internal-rpc-authority-readback-postgresql-v1":  "contracts/authorization/v1/postgresql-readback-boundary.sql",
+		"internal-rpc-authority-readback-attestation-v1": "contracts/authorization/v1/readback-attestation.schema.json",
 		"internal-rpc-authority-key-delivery-v1":         "contracts/authorization/v1/key-delivery-targets.schema.json",
 		"internal-rpc-authority-error-matrix-v1":         "contracts/authorization/v1/authorization-error-matrix.json",
 	} {
@@ -764,11 +923,16 @@ func TestRestoreCoordinationSameWorkloadTwoRoles(t *testing.T) {
 				WorkloadGeneration   int    `json:"workload_generation"`
 				CredentialGeneration int    `json:"credential_generation"`
 				CredentialID         string `json:"role_credential_id"`
+				SignerGeneration     int    `json:"credential_signer_generation"`
+				SignerKeyID          string `json:"credential_signer_kid"`
 				AckKeyID             string `json:"ack_key_id"`
+				AckKeyGeneration     int    `json:"ack_key_generation"`
+				AckKeyThumbprint     string `json:"ack_key_thumbprint_sha256"`
 				NetworkPolicy        string `json:"network_policy"`
 			} `json:"roles"`
 			ExpectedAckCount                 int  `json:"expected_ack_count"`
 			PreparedAfterDistinctOneTimeAcks bool `json:"prepared_after_distinct_one_time_acks"`
+			ControllerVerifiesTwoSignatures  bool `json:"controller_verifies_publisher_signature_then_ack_signature"`
 		} `json:"positive"`
 		Negative []struct {
 			Name     string `json:"name"`
@@ -781,13 +945,16 @@ func TestRestoreCoordinationSameWorkloadTwoRoles(t *testing.T) {
 		fixture.Positive.WorkloadID != "control-plane" ||
 		len(fixture.Positive.Roles) != 2 ||
 		fixture.Positive.ExpectedAckCount != 2 ||
-		!fixture.Positive.PreparedAfterDistinctOneTimeAcks {
+		!fixture.Positive.PreparedAfterDistinctOneTimeAcks ||
+		!fixture.Positive.ControllerVerifiesTwoSignatures {
 		t.Fatalf("same-workload two-role fixture is incomplete: %+v", fixture.Positive)
 	}
 	first, second := fixture.Positive.Roles[0], fixture.Positive.Roles[1]
 	if first.Role == second.Role ||
 		first.CredentialID == second.CredentialID ||
 		first.AckKeyID == second.AckKeyID ||
+		first.AckKeyGeneration == second.AckKeyGeneration ||
+		first.AckKeyThumbprint == second.AckKeyThumbprint ||
 		first.WorkloadGeneration != second.WorkloadGeneration ||
 		first.NetworkPolicy == "" ||
 		second.NetworkPolicy == "" {
@@ -798,6 +965,9 @@ func TestRestoreCoordinationSameWorkloadTwoRoles(t *testing.T) {
 		"missing-quiescing-directive":               "RESTORE_DIRECTIVE_REJECTED",
 		"stale-role-generation":                     "RESTORE_ROLE_CREDENTIAL_REJECTED",
 		"replayed-directive-or-ack-jti":             "RESTORE_ACK_REPLAY_DETECTED",
+		"unknown-or-expired-credential-signer":      "RESTORE_ROLE_CREDENTIAL_REJECTED",
+		"substituted-ack-public-jwk":                "RESTORE_ROLE_CREDENTIAL_REJECTED",
+		"missing-controller-trust-readback":         "RESTORE_COORDINATION_UNAVAILABLE",
 		"missing-client-egress-network-policy":      "RESTORE_COORDINATION_UNAVAILABLE",
 		"missing-controller-ingress-network-policy": "RESTORE_COORDINATION_UNAVAILABLE",
 	}
@@ -807,6 +977,214 @@ func TestRestoreCoordinationSameWorkloadTwoRoles(t *testing.T) {
 	for _, item := range fixture.Negative {
 		if item.Mutation == "" || expected[item.Name] != item.Reason {
 			t.Fatalf("unexpected restore coordination fixture: %+v", item)
+		}
+	}
+}
+
+func TestRestoreTrustSemanticRetryAndCrashRecovery(t *testing.T) {
+	root := repositoryRoot(t)
+	var fixture map[string]any
+	decodeJSONStrict(
+		t,
+		filepath.Join(
+			root,
+			"contracts/authorization/v1/fixtures/restore-ack-state.json",
+		),
+		&fixture,
+	)
+	trust := requiredMap(t, fixture, "credential_signer_trust")
+	requireEqual(t, trust, "controller_owned_readback_required", true)
+	keys := trust["keys"].([]any)
+	if len(keys) != 3 {
+		t.Fatalf("restore role trust key cardinality = %d, want 3", len(keys))
+	}
+	statuses := make(map[string]bool, 3)
+	for _, raw := range keys {
+		key := raw.(map[string]any)
+		statuses[requiredString(t, key, "status")] = true
+		if requiredString(t, key, "kid") == "" ||
+			len(requiredString(t, key, "jwk_thumbprint_sha256")) != 64 {
+			t.Fatal("restore role trust key lacks kid or thumbprint")
+		}
+	}
+	for _, status := range []string{"CURRENT", "NEXT", "PREVIOUS"} {
+		if !statuses[status] {
+			t.Fatalf("restore role trust does not contain %s", status)
+		}
+	}
+	issuance := requiredMap(t, fixture, "issuance_delivery")
+	requireEqual(
+		t,
+		issuance,
+		"method",
+		"/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential",
+	)
+	requireEqual(t, issuance, "private_ack_key_destination", "EXACT_ROLE_VAULT_PATH_FROM_TARGET_REGISTRY")
+	requireEqual(t, issuance, "public_ack_jwk_destination", "SIGNED_ROLE_CREDENTIAL")
+	requireEqual(t, issuance, "controller_persists_delivery_receipt_before_directive", true)
+
+	restore := requiredMap(t, fixture, "restore")
+	expectedRoles := restore["expected_roles"].([]any)
+	if len(expectedRoles) != 2 {
+		t.Fatalf("expected restore role cardinality = %d, want 2", len(expectedRoles))
+	}
+	expectedRoleSet := make(map[string]bool, len(expectedRoles))
+	for _, raw := range expectedRoles {
+		role := raw.(map[string]any)
+		key := fmt.Sprintf(
+			"%s|%s|%.0f|%.0f",
+			requiredString(t, role, "workload_id"),
+			requiredString(t, role, "role"),
+			role["workload_generation"].(float64),
+			role["credential_generation"].(float64),
+		)
+		if expectedRoleSet[key] {
+			t.Fatal("expected restore set contains duplicate role tuple")
+		}
+		expectedRoleSet[key] = true
+	}
+	subsets := restore["partial_subsets"].([]any)
+	wantPhases := []string{"QUIESCING", "QUIESCING", "PREPARED"}
+	if len(subsets) != len(wantPhases) {
+		t.Fatal("partial ACK crash subsets are incomplete")
+	}
+	for index, raw := range subsets {
+		subset := raw.(map[string]any)
+		acceptedRoles := subset["accepted_roles"].([]any)
+		phase := requiredString(t, subset, "resulting_phase")
+		if phase != wantPhases[index] {
+			t.Fatalf("partial subset %d has unsafe phase", index)
+		}
+		if (phase == "PREPARED") != (len(acceptedRoles) == len(expectedRoles)) {
+			t.Fatalf("partial subset %d violates exact full-set PREPARED rule", index)
+		}
+		seen := make(map[string]bool, len(acceptedRoles))
+		for _, rawRole := range acceptedRoles {
+			role := rawRole.(string)
+			if seen[role] {
+				t.Fatalf("partial subset %d accepts duplicate role %s", index, role)
+			}
+			seen[role] = true
+		}
+	}
+	persistedFields := stringSet(restore["persisted_ack_record_fields"].([]any))
+	for _, field := range []string{
+		"restore_id",
+		"coordination_revision",
+		"workload_id",
+		"role",
+		"workload_generation",
+		"credential_generation",
+		"directive_digest_sha256",
+		"ack_digest_sha256",
+		"ack_jti",
+		"idempotency_key",
+		"semantic_request_digest_sha256",
+		"receipt_id",
+		"accepted_resulting_phase",
+	} {
+		if !persistedFields[field] {
+			t.Fatalf("durable ACK record does not contain %s", field)
+		}
+	}
+	retry := requiredMap(t, fixture, "semantic_retry")
+	for _, field := range []string{
+		"lost_response_retry_returns_same_receipt",
+		"concurrent_duplicate_returns_same_receipt",
+		"different_digest_is_replay",
+	} {
+		requireEqual(t, retry, field, true)
+	}
+	type acceptedReceipt struct {
+		digest  string
+		jti     string
+		receipt string
+	}
+	receiptsByKey := map[string]acceptedReceipt{}
+	accept := func(key, jti, digest, receipt string) (string, error) {
+		if accepted, exists := receiptsByKey[key]; exists {
+			if accepted.jti == jti && accepted.digest == digest {
+				return accepted.receipt, nil
+			}
+			return "", fmt.Errorf("RESTORE_ACK_REPLAY_DETECTED")
+		}
+		for _, accepted := range receiptsByKey {
+			if accepted.jti == jti {
+				return "", fmt.Errorf("RESTORE_ACK_REPLAY_DETECTED")
+			}
+		}
+		receiptsByKey[key] = acceptedReceipt{
+			digest:  digest,
+			jti:     jti,
+			receipt: receipt,
+		}
+		return receipt, nil
+	}
+	key := requiredString(t, retry, "idempotency_key")
+	jti := requiredString(t, retry, "ack_jti")
+	digest := requiredString(t, retry, "semantic_request_digest_sha256")
+	receiptID := requiredString(t, retry, "receipt_id")
+	first, err := accept(key, jti, digest, receiptID)
+	if err != nil {
+		t.Fatalf("first semantic ACK rejected: %v", err)
+	}
+	repeated, err := accept(key, jti, digest, "ignored-new-receipt")
+	if err != nil || repeated != first {
+		t.Fatalf("lost-response retry did not return saved receipt: %q/%v", repeated, err)
+	}
+	if _, err := accept(key, jti, strings.Repeat("f", 64), receiptID); err == nil {
+		t.Fatal("same ACK idempotency key and JTI with a different digest was accepted")
+	}
+}
+
+func TestReadbackAttestationAndCredentialLifecycleAreExecutable(t *testing.T) {
+	root := repositoryRoot(t)
+	boundary := readFile(t, filepath.Join(
+		root,
+		"contracts/authorization/v1/postgresql-readback-boundary.sql",
+	))
+	for _, want := range []string{
+		"authority_readback_intents",
+		"authority_readback_attestation_receipts",
+		"p_attestation_receipt_id uuid",
+		"credential_status IN ('CURRENT', 'NEXT')",
+		"credential_status = 'PREVIOUS'",
+		"attestation.consumed_at IS NULL",
+		"attestation.served_state_digest_sha256 = pinned.digest_sha256",
+		"promote_authority_workload_database_identity",
+		"current_setting('transaction_isolation') <> 'serializable'",
+	} {
+		if !strings.Contains(boundary, want) {
+			t.Fatalf("readback boundary does not contain %q", want)
+		}
+	}
+	for _, forbidden := range []string{
+		"p_source_revision bigint",
+		"p_digest_sha256 text",
+		"p_served_proof_sha256 text",
+		"UNIQUE (workload_id, role, workload_generation, active)",
+	} {
+		if strings.Contains(boundary, forbidden) {
+			t.Fatalf("readback boundary still trusts or blocks lifecycle via %q", forbidden)
+		}
+	}
+	behavior := readFile(t, filepath.Join(
+		root,
+		"contracts/authorization/v1/postgresql-readback-behavior.sql",
+	))
+	for _, want := range []string{
+		"'CURRENT'",
+		"'NEXT'",
+		"record_authority_key_delivery_readback",
+		"record_authority_snapshot_readback",
+		"BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+		"'PREVIOUS'",
+		"'RETIRED'",
+		"reused attestation receipt was accepted",
+		"retired principal was accepted",
+	} {
+		if !strings.Contains(behavior, want) {
+			t.Fatalf("PostgreSQL behavior contour does not contain %q", want)
 		}
 	}
 }
@@ -823,15 +1201,19 @@ func TestPostgreSQLReadbackBoundaryIsExact(t *testing.T) {
 		"CREATE SCHEMA internal_rpc_authority",
 		"FORCE ROW LEVEL SECURITY",
 		"SET search_path = pg_catalog, internal_rpc_authority, pg_temp",
-		"internal_rpc_authority.record_authority_key_delivery_readback(\n  bigint, text, bigint, bigint, text\n)",
-		"internal_rpc_authority.record_authority_snapshot_readback(\n  bigint, text, bigint, bigint, bigint, text\n)",
+		"internal_rpc_authority.record_authority_key_delivery_readback(\n  p_attestation_receipt_id uuid\n)",
+		"internal_rpc_authority.record_authority_snapshot_readback(\n  p_attestation_receipt_id uuid\n)",
+		"CREATE UNIQUE INDEX authority_identity_one_current",
+		"CREATE UNIQUE INDEX authority_identity_one_next",
+		"CREATE UNIQUE INDEX authority_identity_one_previous",
+		"ES256_ROLE_BOUND_SERVED_STATE_CHALLENGE_V1",
 		"TO internal_rpc_authority_publisher;",
 	} {
 		if !strings.Contains(sql, want) {
 			t.Fatalf("PostgreSQL readback contract does not contain %q", want)
 		}
 	}
-	if strings.Contains(sql, "GRANT EXECUTE ON FUNCTION internal_rpc_authority.record_authority_snapshot_readback(\n  bigint, text, bigint, bigint, bigint, text\n) TO internal_rpc_authority_publisher") ||
+	if strings.Contains(sql, "GRANT EXECUTE ON FUNCTION\n  internal_rpc_authority.record_authority_snapshot_readback(uuid)\n  TO internal_rpc_authority_publisher") ||
 		strings.Contains(sql, "GRANT INSERT") ||
 		strings.Contains(sql, "GRANT UPDATE") {
 		t.Fatal("publisher or runtime retained direct readback write authority")
@@ -852,17 +1234,24 @@ func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
 			"wildcard-vault-path":     "NON_EXACT_DELIVERY_PATH",
 		},
 		"readback-authority-negative.json": {
-			"cross-target-write":                      "DATABASE_IDENTITY_MISMATCH",
-			"opposite-role-write":                     "DATABASE_ROLE_MISMATCH",
-			"caller-supplied-workload":                "CALLER_IDENTITY_FIELD_FORBIDDEN",
-			"stale-credential-generation":             "DATABASE_CREDENTIAL_GENERATION_REJECTED",
-			"shared-group-login":                      "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
-			"direct-key-delivery-table-write":         "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"direct-snapshot-table-write":             "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"publisher-direct-key-delivery-write":     "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"publisher-direct-snapshot-write":         "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"publisher-key-delivery-function-execute": "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
-			"publisher-snapshot-function-execute":     "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
+			"cross-target-write":                         "DATABASE_IDENTITY_MISMATCH",
+			"opposite-role-write":                        "DATABASE_ROLE_MISMATCH",
+			"caller-supplied-workload":                   "CALLER_IDENTITY_FIELD_FORBIDDEN",
+			"stale-credential-generation":                "DATABASE_CREDENTIAL_GENERATION_REJECTED",
+			"shared-group-login":                         "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
+			"direct-key-delivery-table-write":            "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"direct-snapshot-table-write":                "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"publisher-direct-key-delivery-write":        "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"publisher-direct-snapshot-write":            "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"publisher-key-delivery-function-execute":    "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
+			"publisher-snapshot-function-execute":        "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
+			"caller-supplied-revision-digest-generation": "CALLER_STATE_FIELD_FORBIDDEN",
+			"arbitrary-proof-hash":                       "ATTESTATION_RECEIPT_REQUIRED",
+			"stale-pinned-intent":                        "PINNED_INTENT_REJECTED",
+			"opposite-role-attestation":                  "ATTESTATION_ROLE_BINDING_REJECTED",
+			"missing-served-state":                       "SERVED_STATE_ATTESTATION_REJECTED",
+			"reused-attestation-receipt":                 "ATTESTATION_RECEIPT_REPLAY",
+			"concurrent-promotion":                       "SERIALIZATION_RETRY",
 		},
 		"restore-negative.json": {
 			"lower-anchor-revision":        "RESTORE_ANCHOR_REJECTED",
@@ -1188,17 +1577,30 @@ type restoreCoordination struct {
 	RoleCredentialVaultPath string `json:"role_credential_vault_path"`
 	RoleCredentialMountPath string `json:"role_credential_mount_path"`
 	AckKeyID                string `json:"ack_key_id"`
+	AckKeyGeneration        int    `json:"ack_key_generation"`
 	AckKeyVaultPath         string `json:"ack_key_vault_path"`
 	AckKeyMountPath         string `json:"ack_key_mount_path"`
+	AckPublicJWKSource      string `json:"ack_public_jwk_source"`
+	ControllerAddress       string `json:"controller_address"`
+	ControllerTLSServerName string `json:"controller_tls_server_name"`
+	ControllerTrustBundleID string `json:"controller_trust_bundle_id"`
+	ControllerCAMountPath   string `json:"controller_ca_mount_path"`
 	ControllerAudience      string `json:"controller_audience"`
 	ControllerFullMethod    string `json:"controller_full_method"`
 	NetworkPolicy           string `json:"network_policy"`
 }
 
 type readback struct {
-	ReadbackID       string `json:"readback_id"`
-	DatabaseFunction string `json:"database_function"`
-	ExpectedRole     string `json:"expected_role"`
+	ReadbackID               string `json:"readback_id"`
+	DatabaseFunction         string `json:"database_function"`
+	SnapshotDatabaseFunction string `json:"snapshot_database_function"`
+	AttestorAddress          string `json:"attestor_address"`
+	AttestorTLSServerName    string `json:"attestor_tls_server_name"`
+	AttestorTrustBundleID    string `json:"attestor_trust_bundle_id"`
+	AttestorCAMountPath      string `json:"attestor_ca_mount_path"`
+	AttestorAudience         string `json:"attestor_audience"`
+	AttestorFullMethod       string `json:"attestor_full_method"`
+	ExpectedRole             string `json:"expected_role"`
 }
 
 func validateOperationBindingFixture(fixture operationBindingFixture) error {
@@ -1342,7 +1744,14 @@ func validateOperationBindingFixture(fixture operationBindingFixture) error {
 			vaultPaths[item.VaultPath] = true
 		}
 		if target.Readback.ReadbackID == "" ||
-			target.Readback.DatabaseFunction != "internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)" ||
+			target.Readback.DatabaseFunction != "internal_rpc_authority.record_authority_key_delivery_readback(uuid)" ||
+			target.Readback.SnapshotDatabaseFunction != "internal_rpc_authority.record_authority_snapshot_readback(uuid)" ||
+			target.Readback.AttestorAddress != "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443" ||
+			target.Readback.AttestorTLSServerName != "internal-rpc-authority-readback-attestor.mattercodex-system.svc" ||
+			target.Readback.AttestorTrustBundleID != "internal-rpc-authority-readback-attestor-ca" ||
+			!strings.HasPrefix(target.Readback.AttestorCAMountPath, "/") ||
+			target.Readback.AttestorAudience != "urn:mattercodex:internal-rpc-authority-readback-attestor" ||
+			target.Readback.AttestorFullMethod != "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState" ||
 			target.Readback.ExpectedRole != target.Role ||
 			target.DatabaseIdentity.LoginPrincipal == "" ||
 			databasePrincipals[target.DatabaseIdentity.LoginPrincipal] ||
@@ -1359,6 +1768,12 @@ func validateOperationBindingFixture(fixture operationBindingFixture) error {
 			!strings.HasPrefix(coordination.AckKeyVaultPath, "kv/data/mattercodex/") ||
 			!strings.HasPrefix(coordination.RoleCredentialMountPath, "/") ||
 			!strings.HasPrefix(coordination.AckKeyMountPath, "/") ||
+			coordination.AckKeyGeneration < 1 ||
+			coordination.AckPublicJWKSource != "SIGNED_ROLE_CREDENTIAL" ||
+			coordination.ControllerAddress != "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443" ||
+			coordination.ControllerTLSServerName != "internal-rpc-authority-restore-controller.mattercodex-system.svc" ||
+			coordination.ControllerTrustBundleID != "internal-rpc-authority-restore-controller-ca" ||
+			!strings.HasPrefix(coordination.ControllerCAMountPath, "/") ||
 			coordination.ControllerAudience != "urn:mattercodex:internal-rpc-authority-restore-controller" ||
 			coordination.ControllerFullMethod != "/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective" ||
 			coordination.NetworkPolicy == "" {

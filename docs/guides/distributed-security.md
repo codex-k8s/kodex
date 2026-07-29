@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.0.1
+version: 1.0.2
 updated: 2026-07-28
 ---
 
@@ -137,6 +137,34 @@ Verifier хранит target-owned high-watermark revision и digest вне эф
 pod volume. Состояние переживает restart и обновляется атомарным CAS между
 репликами. Caller не может создавать, удалять или изменять этот watermark.
 Пустой локальный snapshot не разрешает принять более старое состояние.
+
+## Проверяемый readback и повтор служебной mutation
+
+Readback security state не принимает revision, digest, generation или
+произвольный proof hash caller как доказательство фактически обслуживаемого
+состояния. Точная workload/role identity выводится из transport/session
+identity. Значения состояния разрешаются server-side из immutable pinned
+intent, а cryptographic possession и served state проверяет независимая
+boundary до выдачи одноразового immutable receipt. Publisher не может
+выпустить consumer receipt, записать protected readback или сам подтвердить
+собственную публикацию. Promotion блокирует pinned intent и полный набор
+receipts/readbacks в одной transaction.
+
+Credential rotation, которая использует отдельные login principals либо
+application keys, допускает bounded `CURRENT`+`NEXT` и не более одного
+`PREVIOUS`. `NEXT` обязан пройти независимый readback, пока `CURRENT`
+продолжает обслуживать запросы. Promotion атомарно меняет статусы; revoke
+прежнего principal происходит только после commit, overlap и readback нового
+current. Boolean active-флаг с uniqueness, запрещающей overlap, недопустим.
+
+One-time signature/JTI не отменяет semantic idempotency state-changing RPC.
+Одна durable CAS transaction хранит idempotency key, canonical request digest,
+JTI и полный принятый result/receipt. Exact retry после потерянного ответа
+возвращает сохранённый результат без повторного effect; тот же key либо JTI с
+другим digest является replay/security incident. Multi-replica coordinator
+хранит canonical записи каждого принятого элемента, достаточные для
+детерминированного восстановления partial set после смены leader; digest либо
+count без состава set недостаточен.
 
 ## Ротация, пропуск обновлений и forward recovery
 

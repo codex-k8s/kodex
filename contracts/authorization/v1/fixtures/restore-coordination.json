@@ -10,7 +10,11 @@
         "workload_generation": 1,
         "credential_generation": 1,
         "role_credential_id": "control-plane-verifier-restore-g1",
+        "credential_signer_generation": 9,
+        "credential_signer_kid": "restore-role-credential-g9",
         "ack_key_id": "control-plane-verifier-restore-ack-g1",
+        "ack_key_generation": 11,
+        "ack_key_thumbprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
         "network_policy": "internal-rpc-authority-restore-egress-control-plane"
       },
       {
@@ -18,12 +22,17 @@
         "workload_generation": 1,
         "credential_generation": 1,
         "role_credential_id": "control-plane-resolver-restore-g1",
+        "credential_signer_generation": 9,
+        "credential_signer_kid": "restore-role-credential-g9",
         "ack_key_id": "control-plane-resolver-restore-ack-g1",
+        "ack_key_generation": 13,
+        "ack_key_thumbprint_sha256": "1313131313131313131313131313131313131313131313131313131313131313",
         "network_policy": "internal-rpc-authority-restore-egress-control-plane"
       }
     ],
     "expected_ack_count": 2,
-    "prepared_after_distinct_one_time_acks": true
+    "prepared_after_distinct_one_time_acks": true,
+    "controller_verifies_publisher_signature_then_ack_signature": true
   },
   "negative": [
     {
@@ -43,8 +52,23 @@
     },
     {
       "name": "replayed-directive-or-ack-jti",
-      "mutation": "reuse a directive JTI or accepted quiescence ACK JTI after persistent CAS reservation",
+      "mutation": "reuse an ACK JTI with a different canonical semantic digest or idempotency key",
       "reason": "RESTORE_ACK_REPLAY_DETECTED"
+    },
+    {
+      "name": "unknown-or-expired-credential-signer",
+      "mutation": "verify the role credential with a signer outside the controller-served CURRENT/NEXT/PREVIOUS trust snapshot",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "substituted-ack-public-jwk",
+      "mutation": "replace the signed role credential ACK public JWK, kid, generation or RFC 7638 thumbprint",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "missing-controller-trust-readback",
+      "mutation": "accept a role credential before controller-owned trust snapshot signature, predecessor and served readback",
+      "reason": "RESTORE_COORDINATION_UNAVAILABLE"
     },
     {
       "name": "missing-client-egress-network-policy",

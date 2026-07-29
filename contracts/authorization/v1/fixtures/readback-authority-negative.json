@@ -55,6 +55,41 @@
       "name": "publisher-snapshot-function-execute",
       "mutation": "internal_rpc_authority_publisher attempts the exact snapshot SECURITY DEFINER function",
       "reason": "DATABASE_FUNCTION_EXECUTE_FORBIDDEN"
+    },
+    {
+      "name": "caller-supplied-revision-digest-generation",
+      "mutation": "attempt to pass revision, digest or generation instead of an immutable attestation receipt UUID",
+      "reason": "CALLER_STATE_FIELD_FORBIDDEN"
+    },
+    {
+      "name": "arbitrary-proof-hash",
+      "mutation": "present an arbitrary 64-hex hash without a controller-verified role-bound served-state receipt",
+      "reason": "ATTESTATION_RECEIPT_REQUIRED"
+    },
+    {
+      "name": "stale-pinned-intent",
+      "mutation": "use a receipt for a promoted, retired or mutated pinned intent",
+      "reason": "PINNED_INTENT_REJECTED"
+    },
+    {
+      "name": "opposite-role-attestation",
+      "mutation": "use verifier evidence or ACK public key for a resolver session identity",
+      "reason": "ATTESTATION_ROLE_BINDING_REJECTED"
+    },
+    {
+      "name": "missing-served-state",
+      "mutation": "attestor cannot independently match the challenge response to the pinned served digest",
+      "reason": "SERVED_STATE_ATTESTATION_REJECTED"
+    },
+    {
+      "name": "reused-attestation-receipt",
+      "mutation": "invoke either SECURITY DEFINER function with a consumed receipt",
+      "reason": "ATTESTATION_RECEIPT_REPLAY"
+    },
+    {
+      "name": "concurrent-promotion",
+      "mutation": "promotion changes the pinned intent while the readback function holds its receipt and intent locks",
+      "reason": "SERIALIZATION_RETRY"
     }
   ]
 }

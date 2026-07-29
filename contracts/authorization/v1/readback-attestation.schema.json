@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/readback-attestation.schema.json",
+  "title": "Role-bound evidence фактически обслуживаемого authority state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "iss",
+    "aud",
+    "sub",
+    "jti",
+    "intent_id",
+    "intent_kind",
+    "intent_revision",
+    "workload_id",
+    "workload_spiffe_id",
+    "role",
+    "workload_generation",
+    "credential_generation",
+    "ack_key_generation",
+    "ack_key_thumbprint_sha256",
+    "source_revision",
+    "served_state_digest_sha256",
+    "challenge_nonce",
+    "challenge_digest_sha256",
+    "iat",
+    "nbf",
+    "exp"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "iss": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 512,
+      "pattern": "^spiffe://mattercodex[.]local/"
+    },
+    "aud": {
+      "const": "urn:mattercodex:internal-rpc-authority-readback-attestor"
+    },
+    "sub": {
+      "$ref": "#/$defs/boundedIdentity"
+    },
+    "jti": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "intent_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "intent_kind": {
+      "enum": [
+        "KEY_DELIVERY",
+        "SNAPSHOT"
+      ]
+    },
+    "intent_revision": {
+      "$ref": "#/$defs/positiveRevision"
+    },
+    "workload_id": {
+      "$ref": "#/$defs/boundedIdentity"
+    },
+    "workload_spiffe_id": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 512,
+      "pattern": "^spiffe://mattercodex[.]local/"
+    },
+    "role": {
+      "enum": [
+        "AUTHORIZATION_ISSUER",
+        "AUTHORIZATION_VERIFIER",
+        "AUTHORITY_PROOF_RESOLVER"
+      ]
+    },
+    "workload_generation": {
+      "$ref": "#/$defs/positiveRevision"
+    },
+    "credential_generation": {
+      "$ref": "#/$defs/positiveRevision"
+    },
+    "ack_key_generation": {
+      "$ref": "#/$defs/positiveRevision"
+    },
+    "ack_key_thumbprint_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "source_revision": {
+      "$ref": "#/$defs/positiveRevision"
+    },
+    "served_state_digest_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "challenge_nonce": {
+      "type": "string",
+      "minLength": 22,
+      "maxLength": 86,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "challenge_digest_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "iat": {
+      "type": "integer"
+    },
+    "nbf": {
+      "type": "integer"
+    },
+    "exp": {
+      "type": "integer"
+    }
+  },
+  "$defs": {
+    "boundedIdentity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$"
+    },
+    "positiveRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

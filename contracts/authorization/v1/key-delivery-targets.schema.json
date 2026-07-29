@@ -127,6 +127,13 @@
       "required": [
         "readback_id",
         "database_function",
+        "snapshot_database_function",
+        "attestor_address",
+        "attestor_tls_server_name",
+        "attestor_trust_bundle_id",
+        "attestor_ca_mount_path",
+        "attestor_audience",
+        "attestor_full_method",
         "expected_role"
       ],
       "properties": {
@@ -134,7 +141,28 @@
           "$ref": "#/$defs/workloadId"
         },
         "database_function": {
-          "const": "internal_rpc_authority.record_authority_key_delivery_readback(bigint,text,bigint,bigint,text)"
+          "const": "internal_rpc_authority.record_authority_key_delivery_readback(uuid)"
+        },
+        "snapshot_database_function": {
+          "const": "internal_rpc_authority.record_authority_snapshot_readback(uuid)"
+        },
+        "attestor_address": {
+          "const": "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443"
+        },
+        "attestor_tls_server_name": {
+          "const": "internal-rpc-authority-readback-attestor.mattercodex-system.svc"
+        },
+        "attestor_trust_bundle_id": {
+          "const": "internal-rpc-authority-readback-attestor-ca"
+        },
+        "attestor_ca_mount_path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "attestor_audience": {
+          "const": "urn:mattercodex:internal-rpc-authority-readback-attestor"
+        },
+        "attestor_full_method": {
+          "const": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState"
         },
         "expected_role": {
           "enum": [
@@ -153,8 +181,14 @@
         "role_credential_vault_path",
         "role_credential_mount_path",
         "ack_key_id",
+        "ack_key_generation",
         "ack_key_vault_path",
         "ack_key_mount_path",
+        "ack_public_jwk_source",
+        "controller_address",
+        "controller_tls_server_name",
+        "controller_trust_bundle_id",
+        "controller_ca_mount_path",
         "controller_audience",
         "controller_full_method",
         "network_policy"
@@ -172,10 +206,30 @@
         "ack_key_id": {
           "$ref": "#/$defs/workloadId"
         },
+        "ack_key_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
         "ack_key_vault_path": {
           "$ref": "#/$defs/vaultPath"
         },
         "ack_key_mount_path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "ack_public_jwk_source": {
+          "const": "SIGNED_ROLE_CREDENTIAL"
+        },
+        "controller_address": {
+          "const": "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443"
+        },
+        "controller_tls_server_name": {
+          "const": "internal-rpc-authority-restore-controller.mattercodex-system.svc"
+        },
+        "controller_trust_bundle_id": {
+          "const": "internal-rpc-authority-restore-controller-ca"
+        },
+        "controller_ca_mount_path": {
           "$ref": "#/$defs/absolutePath"
         },
         "controller_audience": {

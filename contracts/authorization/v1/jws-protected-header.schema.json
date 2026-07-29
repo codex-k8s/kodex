@@ -39,10 +39,14 @@
       "enum": [
         "mattercodex-internal-rpc-auth+jws",
         "mattercodex-internal-rpc-authority-proof+jws",
+        "mattercodex-internal-rpc-readback-attestation+jws",
         "mattercodex-internal-rpc-restore-ack+jws",
+        "mattercodex-internal-rpc-restore-role-delivery-receipt+jws",
         "mattercodex-internal-rpc-restore-directive+jws",
         "mattercodex-internal-rpc-restore-evidence+jws",
+        "mattercodex-internal-rpc-restore-role-issuance+jws",
         "mattercodex-internal-rpc-restore-role-credential+jws",
+        "mattercodex-internal-rpc-restore-role-trust+jws",
         "mattercodex-internal-rpc-snapshot+jws"
       ]
     }
