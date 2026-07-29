@@ -22,6 +22,7 @@ import (
 )
 
 type MattermostChannelManager interface {
+	BotUserID(ctx context.Context) (string, error)
 	EnsureRepositoryChannel(ctx context.Context, teamName string, channelName string, displayName string) (bool, error)
 	EnsureProjectTeam(ctx context.Context, teamName string, displayName string, memberUserID string) (MattermostTeamBinding, bool, error)
 	EnsureProjectChannel(ctx context.Context, teamName string, channelName string, displayName string, private bool, memberUserIDs []string) (MattermostChannelBinding, bool, error)

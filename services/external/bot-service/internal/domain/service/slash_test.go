@@ -692,12 +692,14 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 		},
 	}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	channelManager := &fakeChannelManager{}
+	roleBotManager := &fakeRoleBotManager{}
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
 		Localizer:      localizer,
 		StatusService:  testStatusService(localizer),
 		Store:          store,
-		ChannelManager: &fakeChannelManager{},
-		RoleBotManager: &fakeRoleBotManager{},
+		ChannelManager: channelManager,
+		RoleBotManager: roleBotManager,
 		RuntimeRunner:  &fakeRuntimeRunner{},
 		StorageReady:   true,
 	})
@@ -726,6 +728,16 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 	}
 	if _, err := store.GetMattermostBotIdentityByRoleID(context.Background(), myQRImprover.ID); err != nil {
 		t.Fatalf("bootstrap did not create second safe improver bot identity: %v", err)
+	}
+	controlBotInRadarChat := false
+	for _, member := range roleBotManager.channelMembers {
+		if member.TeamName == "radar-auto" && member.ChannelID == "channel-radar" && member.UserID == "control-bot-user" {
+			controlBotInRadarChat = true
+			break
+		}
+	}
+	if !controlBotInRadarChat {
+		t.Fatalf("bootstrap did not reconcile control bot membership: %#v", roleBotManager.channelMembers)
 	}
 
 	if _, err := store.GetProjectBySlug(context.Background(), "agents"); !errors.Is(err, adminrepo.ErrNotFound) {
@@ -5757,6 +5769,10 @@ type fakeChannelManager struct {
 	projectChannelType string
 }
 
+func (manager *fakeChannelManager) BotUserID(context.Context) (string, error) {
+	return "control-bot-user", nil
+}
+
 func (manager *fakeChannelManager) ResolveMattermostUserID(_ context.Context, username string) (string, error) {
 	return "user-" + strings.TrimPrefix(username, "@"), nil
 }
@@ -5793,6 +5809,13 @@ type fakeRoleBotManager struct {
 	channelMemberTeam      string
 	channelMemberChannelID string
 	channelMemberUserID    string
+	channelMembers         []fakeChannelMember
+}
+
+type fakeChannelMember struct {
+	TeamName  string
+	ChannelID string
+	UserID    string
 }
 
 func (manager *fakeRoleBotManager) EnsureRoleBot(_ context.Context, input MattermostRoleBotInput) (MattermostRoleBotBinding, error) {
@@ -5812,6 +5835,7 @@ func (manager *fakeRoleBotManager) EnsureProjectChannelMember(_ context.Context,
 	manager.channelMemberTeam = teamName
 	manager.channelMemberChannelID = channelID
 	manager.channelMemberUserID = userID
+	manager.channelMembers = append(manager.channelMembers, fakeChannelMember{TeamName: teamName, ChannelID: channelID, UserID: userID})
 	return nil
 }
 
