@@ -1535,7 +1535,7 @@ func rejectCurrentThreadRequestForExistingAffinity(ctx context.Context, store ad
 	if err != nil {
 		return err
 	}
-	previous, err := threadStore.GetLatestAgentDelegationBySourceTarget(ctx, source.ID, targetChatID, targetRoleID)
+	previous, err := threadStore.GetCanonicalAgentDelegationBySourceTarget(ctx, source.ID, targetChatID, targetRoleID)
 	if errors.Is(err, adminrepo.ErrNotFound) {
 		return nil
 	}

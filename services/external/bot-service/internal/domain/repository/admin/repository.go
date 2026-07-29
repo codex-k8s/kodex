@@ -530,6 +530,6 @@ type AgentDelegationCallbackDeliveryRepository interface {
 
 type AgentDelegationThreadRepository interface {
 	GetAgentDelegation(ctx context.Context, id int64) (entity.AgentDelegation, error)
-	GetLatestAgentDelegationBySourceTarget(ctx context.Context, sourceSessionID int64, targetChatID int64, targetRoleID int64) (entity.AgentDelegation, error)
+	GetCanonicalAgentDelegationBySourceTarget(ctx context.Context, sourceSessionID int64, targetChatID int64, targetRoleID int64) (entity.AgentDelegation, error)
 	FailAgentDelegationsByTargetTurn(ctx context.Context, targetTurnID int64) (int64, error)
 }

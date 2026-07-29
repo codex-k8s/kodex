@@ -1223,13 +1223,13 @@ func (repo *Repository) GetAgentDelegation(ctx context.Context, id int64) (entit
 	return item, nil
 }
 
-func (repo *Repository) GetLatestAgentDelegationBySourceTarget(ctx context.Context, sourceSessionID int64, targetChatID int64, targetRoleID int64) (entity.AgentDelegation, error) {
-	item, err := scanAgentDelegation(repo.db.QueryRow(ctx, query("agent_delegations__get_latest_by_source_target.sql"), sourceSessionID, targetChatID, targetRoleID))
+func (repo *Repository) GetCanonicalAgentDelegationBySourceTarget(ctx context.Context, sourceSessionID int64, targetChatID int64, targetRoleID int64) (entity.AgentDelegation, error) {
+	item, err := scanAgentDelegation(repo.db.QueryRow(ctx, query("agent_delegations__get_canonical_by_source_target.sql"), sourceSessionID, targetChatID, targetRoleID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AgentDelegation{}, adminrepo.ErrNotFound
 		}
-		return entity.AgentDelegation{}, fmt.Errorf("get latest agent delegation by source target: %w", err)
+		return entity.AgentDelegation{}, fmt.Errorf("get canonical agent delegation by source target: %w", err)
 	}
 	return item, nil
 }

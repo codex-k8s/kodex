@@ -679,6 +679,48 @@ func TestContinueAgentThreadRejectsForeignSourceSession(t *testing.T) {
 	}
 }
 
+func TestContinueAgentThreadRejectsLegacyDuplicateRoleThread(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Первичное ревью",
+		Message: "Проверь первую версию.", WorkItemKey: "issue-201-review-round-1",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	canonical := store.agentDelegations[started.DelegationID]
+	duplicateRoot := "legacy-duplicate-root"
+	duplicateSessionKey := agentSessionKey(2, 2, agentSessionScopeThreadRole, duplicateRoot)
+	store.agentSessions[duplicateSessionKey] = entity.AgentSession{
+		ID: 99, SessionKey: duplicateSessionKey, ProjectID: 1, ChatID: 2, RoleID: 2,
+		SessionScope: agentSessionScopeThreadRole, MattermostChannelID: "architecture-channel", MattermostRootPostID: duplicateRoot,
+		Status: agentSessionStatusIdle, TokenSecretRef: "target-secret",
+	}
+	duplicate := canonical
+	duplicate.ID = canonical.ID + 1
+	duplicate.TargetRootPostID = duplicateRoot
+	duplicate.TargetSessionID = 99
+	duplicate.TargetTurnID = 99
+	duplicate.TargetRunID = "legacy-duplicate-run"
+	duplicate.WorkItemKey = "issue-201-review-round-2-legacy"
+	duplicate.CreatedAt = canonical.CreatedAt.Add(time.Second)
+	store.agentDelegations[duplicate.ID] = duplicate
+	dispatcher.calls = 0
+	publisher.posts = nil
+
+	_, err = svc.ContinueAgentThread(context.Background(), "source-session", "source-token", ContinueAgentThreadCommand{
+		DelegationID: duplicate.ID,
+		Message:      "Не продолжай ошибочный исторический дубль.",
+		WorkItemKey:  "issue-201-review-round-3",
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("ContinueAgentThread() error = %v", err)
+	}
+	if dispatcher.calls != 0 || len(publisher.posts) != 0 {
+		t.Fatalf("legacy duplicate continuation caused effects: calls=%d posts=%#v", dispatcher.calls, publisher.posts)
+	}
+}
+
 func TestAgentSessionStartsFrozenClusterAdminCrossChatThread(t *testing.T) {
 	svc, baseStore, dispatcher, publisher := agentDelegationTestService()
 	targetRole := baseStore.agentRoles[2]

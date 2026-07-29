@@ -5231,7 +5231,7 @@ func (store *fakeAdminStore) GetAgentDelegation(_ context.Context, id int64) (en
 	return item, nil
 }
 
-func (store *fakeAdminStore) GetLatestAgentDelegationBySourceTarget(_ context.Context, sourceSessionID int64, targetChatID int64, targetRoleID int64) (entity.AgentDelegation, error) {
+func (store *fakeAdminStore) GetCanonicalAgentDelegationBySourceTarget(_ context.Context, sourceSessionID int64, targetChatID int64, targetRoleID int64) (entity.AgentDelegation, error) {
 	store.ensureAgentDelegations()
 	var selected entity.AgentDelegation
 	for _, item := range store.agentDelegations {
@@ -5239,7 +5239,7 @@ func (store *fakeAdminStore) GetLatestAgentDelegationBySourceTarget(_ context.Co
 			item.TargetSessionID == 0 || strings.TrimSpace(item.TargetRootPostID) == "" {
 			continue
 		}
-		if selected.ID == 0 || item.CreatedAt.After(selected.CreatedAt) || item.CreatedAt.Equal(selected.CreatedAt) && item.ID > selected.ID {
+		if selected.ID == 0 || item.CreatedAt.Before(selected.CreatedAt) || item.CreatedAt.Equal(selected.CreatedAt) && item.ID < selected.ID {
 			selected = item
 		}
 	}

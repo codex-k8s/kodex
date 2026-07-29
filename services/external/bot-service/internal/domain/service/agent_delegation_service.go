@@ -679,7 +679,7 @@ func rejectNewAgentThreadForExistingAffinity(ctx context.Context, store adminrep
 	if err != nil {
 		return err
 	}
-	previous, err := threadStore.GetLatestAgentDelegationBySourceTarget(ctx, source.ID, targetChatID, targetRoleID)
+	previous, err := threadStore.GetCanonicalAgentDelegationBySourceTarget(ctx, source.ID, targetChatID, targetRoleID)
 	if errors.Is(err, adminrepo.ErrNotFound) {
 		return nil
 	}
@@ -693,6 +693,20 @@ func rejectNewAgentThreadForExistingAffinity(ctx context.Context, store adminrep
 }
 
 func (svc *AgentSessionService) resolveAgentThreadContinuation(ctx context.Context, source entity.AgentSession, previous entity.AgentDelegation) (entity.Project, entity.Chat, entity.AgentRole, entity.AgentSession, error) {
+	if previous.ProjectID != source.ProjectID || previous.SourceSessionID != source.ID {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	threadStore, err := agentDelegationThreadStore(svc.cfg.Store)
+	if err != nil {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, err
+	}
+	canonical, err := threadStore.GetCanonicalAgentDelegationBySourceTarget(ctx, source.ID, previous.TargetChatID, previous.TargetRoleID)
+	if err != nil {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, err
+	}
+	if canonical.TargetSessionID != previous.TargetSessionID || canonical.TargetRootPostID != previous.TargetRootPostID {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
 	project, err := svc.cfg.Store.GetProject(ctx, previous.ProjectID)
 	if err != nil {
 		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, err
