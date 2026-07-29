@@ -1,31 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/authorization-context.schema.json",
-  "title": "Контекст авторизации внутреннего RPC MatterCodex",
-  "$comment": "authority переносится только из криптографически проверенного authority proof; request issuer не задает actor, tenant, project или provenance",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-proof.schema.json",
+  "title": "Авторитетное доказательство actor/tenant/project MatterCodex",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "v",
     "iss",
     "aud",
-    "sub",
     "caller",
-    "target",
-    "rpc",
     "operation_id",
+    "authorization_context_audience",
     "authority",
-    "permission",
+    "proof_revision",
+    "signer_generation",
     "jti",
     "iat",
     "nbf",
-    "exp",
-    "replay_mode",
-    "source_revision",
-    "source_digest_sha256",
-    "key_set_revision",
-    "policy_revision",
-    "signer_generation"
+    "exp"
   ],
   "properties": {
     "v": {
@@ -35,28 +27,25 @@
       "$ref": "#/$defs/spiffeId"
     },
     "aud": {
-      "$ref": "#/$defs/audience"
-    },
-    "sub": {
-      "$ref": "#/$defs/spiffeId"
+      "$ref": "#/$defs/proofAudience"
     },
     "caller": {
       "$ref": "#/$defs/workload"
     },
-    "target": {
-      "$ref": "#/$defs/workload"
-    },
-    "rpc": {
-      "$ref": "#/$defs/fullMethod"
-    },
     "operation_id": {
       "$ref": "#/$defs/operationId"
+    },
+    "authorization_context_audience": {
+      "$ref": "#/$defs/contextAudience"
     },
     "authority": {
       "$ref": "#/$defs/authority"
     },
-    "permission": {
-      "$ref": "#/$defs/permission"
+    "proof_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "signer_generation": {
+      "$ref": "#/$defs/revision"
     },
     "jti": {
       "$ref": "#/$defs/uuid"
@@ -69,24 +58,6 @@
     },
     "exp": {
       "$ref": "#/$defs/unixTime"
-    },
-    "replay_mode": {
-      "const": "ONE_TIME"
-    },
-    "source_revision": {
-      "$ref": "#/$defs/revision"
-    },
-    "source_digest_sha256": {
-      "$ref": "#/$defs/sha256"
-    },
-    "key_set_revision": {
-      "$ref": "#/$defs/revision"
-    },
-    "policy_revision": {
-      "$ref": "#/$defs/revision"
-    },
-    "signer_generation": {
-      "$ref": "#/$defs/revision"
     }
   },
   "$defs": {
@@ -124,25 +95,19 @@
       "maxLength": 96,
       "pattern": "^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
-    "audience": {
+    "proofAudience": {
+      "type": "string",
+      "minLength": 49,
+      "maxLength": 142,
+      "pattern": "^urn:mattercodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "contextAudience": {
       "type": "string",
       "minLength": 32,
       "maxLength": 125,
       "pattern": "^urn:mattercodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
-    "fullMethod": {
-      "type": "string",
-      "minLength": 5,
-      "maxLength": 256,
-      "pattern": "^/[A-Za-z][A-Za-z0-9_.]{0,190}/[A-Za-z][A-Za-z0-9_]{0,62}$"
-    },
     "operationId": {
-      "type": "string",
-      "minLength": 3,
-      "maxLength": 128,
-      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$"
-    },
-    "permission": {
       "type": "string",
       "minLength": 3,
       "maxLength": 128,
@@ -175,7 +140,6 @@
       ],
       "properties": {
         "source": {
-          "$comment": "Нормативное отображение Proto AuthoritySource задано CONTRACT-MC-004; prefixed enum.String() запрещен",
           "enum": [
             "OIDC_SESSION",
             "MATTERMOST_EVENT",
@@ -222,7 +186,6 @@
       ],
       "properties": {
         "actor_kind": {
-          "$comment": "Нормативное отображение Proto ActorKind задано CONTRACT-MC-004; prefixed enum.String() запрещен",
           "enum": [
             "HUMAN",
             "AGENT",

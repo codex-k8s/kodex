@@ -1,0 +1,47 @@
+{
+  "v": 1,
+  "operation_bindings": [
+    {
+      "operation_id": "control.project.get",
+      "caller_workload_id": "control-api-gateway",
+      "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+      "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+      "target_workload_id": "control-plane",
+      "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+      "audience": "urn:mattercodex:internal-rpc:control-plane",
+      "full_method": "/controlplane.v1.ProjectService/GetProject",
+      "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+      "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+      "permission": "control.project.get",
+      "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+      "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:control-api-gateway",
+      "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+      "authority_proof_max_age_seconds": 15,
+      "authority_sources": [
+        "OIDC_SESSION",
+        "DOMAIN_STATE"
+      ],
+      "project_required": true
+    }
+  ],
+  "key_delivery_targets": [
+    {
+      "workload_id": "control-api-gateway",
+      "issuer_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+      "namespace": "mattercodex-system",
+      "service_account": "control-api-gateway",
+      "auth_private_key": {
+        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/auth-key",
+        "secret_name": "internal-rpc-authority-issuer-key",
+        "mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/issuer"
+      },
+      "manifest_trust": {
+        "vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/manifest-trust",
+        "secret_name": "internal-rpc-authority-manifest-trust",
+        "mount_path": "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust"
+      },
+      "issuer_readback_id": "control-api-gateway-issuer",
+      "verifier_readback_id": "control-api-gateway-verifier"
+    }
+  ]
+}

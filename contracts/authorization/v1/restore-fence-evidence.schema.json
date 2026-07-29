@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/restore-fence-evidence.schema.json",
+  "title": "Внешнее монотонное доказательство PITR MatterCodex",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "iss",
+    "aud",
+    "anchor_revision",
+    "restore_epoch",
+    "phase",
+    "database_cluster_id",
+    "restore_id",
+    "backup_manifest_digest_sha256",
+    "recovery_target_time",
+    "controller_signer_generation",
+    "predecessor",
+    "issued_at"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "iss": {
+      "$ref": "#/$defs/spiffeId"
+    },
+    "aud": {
+      "$ref": "#/$defs/audience"
+    },
+    "anchor_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "restore_epoch": {
+      "$ref": "#/$defs/revision"
+    },
+    "phase": {
+      "enum": [
+        "PREPARED",
+        "COMPLETED"
+      ]
+    },
+    "database_cluster_id": {
+      "$ref": "#/$defs/databaseClusterId"
+    },
+    "restore_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "backup_manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "recovery_target_time": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "controller_signer_generation": {
+      "$ref": "#/$defs/revision"
+    },
+    "predecessor": {
+      "$ref": "#/$defs/predecessor"
+    },
+    "issued_at": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "restore_completed_at": {
+      "$ref": "#/$defs/unixTime"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "phase": {
+          "const": "PREPARED"
+        }
+      },
+      "not": {
+        "required": [
+          "restore_completed_at"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "phase": {
+          "const": "COMPLETED"
+        }
+      },
+      "required": [
+        "restore_completed_at"
+      ]
+    }
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "unixTime": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 253402300799
+    },
+    "spiffeId": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 512,
+      "pattern": "^spiffe://[a-z0-9.-]+(?:/[A-Za-z0-9._~-]+)+$"
+    },
+    "databaseClusterId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "audience": {
+      "type": "string",
+      "minLength": 51,
+      "maxLength": 144,
+      "pattern": "^urn:mattercodex:internal-rpc-authority-recovery:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "revisionDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "digest_sha256"
+      ],
+      "properties": {
+        "revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "digest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "predecessor": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/revisionDigest"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "revision",
+            "digest_sha256"
+          ],
+          "properties": {
+            "revision": {
+              "const": 0
+            },
+            "digest_sha256": {
+              "const": "0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

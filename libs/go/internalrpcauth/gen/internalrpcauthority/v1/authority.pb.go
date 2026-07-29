@@ -79,8 +79,9 @@ func (ActorKind) EnumDescriptor() ([]byte, []int) {
 	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{0}
 }
 
-// AuthoritySource фиксирует вид уже проверенного источника полномочия.
-// Issuer не разрешает и не перечитывает этот источник самостоятельно.
+// AuthoritySource фиксирует вид источника полномочия, подтвержденного
+// авторитетным issuer authority proof. Само значение enum не является
+// доказательством полномочия.
 type AuthoritySource int32
 
 const (
@@ -146,18 +147,19 @@ func (AuthoritySource) EnumDescriptor() ([]byte, []int) {
 type AuthorizationFailureStage int32
 
 const (
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_UNSPECIFIED   AuthorizationFailureStage = 0
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_UDS           AuthorizationFailureStage = 1
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_REQUEST       AuthorizationFailureStage = 2
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_JWS_HEADER    AuthorizationFailureStage = 3
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_JWS_SIGNATURE AuthorizationFailureStage = 4
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_CLAIMS        AuthorizationFailureStage = 5
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_POLICY        AuthorizationFailureStage = 6
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_MTLS_BINDING  AuthorizationFailureStage = 7
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_REPLAY        AuthorizationFailureStage = 8
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_SNAPSHOT      AuthorizationFailureStage = 9
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_PERSISTENCE   AuthorizationFailureStage = 10
-	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_INTERNAL      AuthorizationFailureStage = 11
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_UNSPECIFIED     AuthorizationFailureStage = 0
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_UDS             AuthorizationFailureStage = 1
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_REQUEST         AuthorizationFailureStage = 2
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_JWS_HEADER      AuthorizationFailureStage = 3
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_JWS_SIGNATURE   AuthorizationFailureStage = 4
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_CLAIMS          AuthorizationFailureStage = 5
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_POLICY          AuthorizationFailureStage = 6
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_MTLS_BINDING    AuthorizationFailureStage = 7
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_REPLAY          AuthorizationFailureStage = 8
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_SNAPSHOT        AuthorizationFailureStage = 9
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_PERSISTENCE     AuthorizationFailureStage = 10
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_INTERNAL        AuthorizationFailureStage = 11
+	AuthorizationFailureStage_AUTHORIZATION_FAILURE_STAGE_AUTHORITY_PROOF AuthorizationFailureStage = 12
 )
 
 // Enum value maps for AuthorizationFailureStage.
@@ -175,20 +177,22 @@ var (
 		9:  "AUTHORIZATION_FAILURE_STAGE_SNAPSHOT",
 		10: "AUTHORIZATION_FAILURE_STAGE_PERSISTENCE",
 		11: "AUTHORIZATION_FAILURE_STAGE_INTERNAL",
+		12: "AUTHORIZATION_FAILURE_STAGE_AUTHORITY_PROOF",
 	}
 	AuthorizationFailureStage_value = map[string]int32{
-		"AUTHORIZATION_FAILURE_STAGE_UNSPECIFIED":   0,
-		"AUTHORIZATION_FAILURE_STAGE_UDS":           1,
-		"AUTHORIZATION_FAILURE_STAGE_REQUEST":       2,
-		"AUTHORIZATION_FAILURE_STAGE_JWS_HEADER":    3,
-		"AUTHORIZATION_FAILURE_STAGE_JWS_SIGNATURE": 4,
-		"AUTHORIZATION_FAILURE_STAGE_CLAIMS":        5,
-		"AUTHORIZATION_FAILURE_STAGE_POLICY":        6,
-		"AUTHORIZATION_FAILURE_STAGE_MTLS_BINDING":  7,
-		"AUTHORIZATION_FAILURE_STAGE_REPLAY":        8,
-		"AUTHORIZATION_FAILURE_STAGE_SNAPSHOT":      9,
-		"AUTHORIZATION_FAILURE_STAGE_PERSISTENCE":   10,
-		"AUTHORIZATION_FAILURE_STAGE_INTERNAL":      11,
+		"AUTHORIZATION_FAILURE_STAGE_UNSPECIFIED":     0,
+		"AUTHORIZATION_FAILURE_STAGE_UDS":             1,
+		"AUTHORIZATION_FAILURE_STAGE_REQUEST":         2,
+		"AUTHORIZATION_FAILURE_STAGE_JWS_HEADER":      3,
+		"AUTHORIZATION_FAILURE_STAGE_JWS_SIGNATURE":   4,
+		"AUTHORIZATION_FAILURE_STAGE_CLAIMS":          5,
+		"AUTHORIZATION_FAILURE_STAGE_POLICY":          6,
+		"AUTHORIZATION_FAILURE_STAGE_MTLS_BINDING":    7,
+		"AUTHORIZATION_FAILURE_STAGE_REPLAY":          8,
+		"AUTHORIZATION_FAILURE_STAGE_SNAPSHOT":        9,
+		"AUTHORIZATION_FAILURE_STAGE_PERSISTENCE":     10,
+		"AUTHORIZATION_FAILURE_STAGE_INTERNAL":        11,
+		"AUTHORIZATION_FAILURE_STAGE_AUTHORITY_PROOF": 12,
 	}
 )
 
@@ -223,37 +227,44 @@ func (AuthorizationFailureStage) EnumDescriptor() ([]byte, []int) {
 type AuthorizationErrorReason int32
 
 const (
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UNSPECIFIED                    AuthorizationErrorReason = 0
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST              AuthorizationErrorReason = 1
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UDS_PEER_REJECTED              AuthorizationErrorReason = 2
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UDS_ENDPOINT_INVALID           AuthorizationErrorReason = 3
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_OPERATION_NOT_ALLOWED          AuthorizationErrorReason = 4
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROVENANCE_REJECTED  AuthorizationErrorReason = 5
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MALFORMED_JWS                  AuthorizationErrorReason = 6
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID_PROTECTED_HEADER       AuthorizationErrorReason = 7
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID_SIGNATURE              AuthorizationErrorReason = 8
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UNKNOWN_KEY                    AuthorizationErrorReason = 9
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_ISSUER_MISMATCH                AuthorizationErrorReason = 10
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUDIENCE_MISMATCH              AuthorizationErrorReason = 11
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_CALLER_WORKLOAD_MISMATCH       AuthorizationErrorReason = 12
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TARGET_WORKLOAD_MISMATCH       AuthorizationErrorReason = 13
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RPC_MISMATCH                   AuthorizationErrorReason = 14
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_PERMISSION_MISMATCH            AuthorizationErrorReason = 15
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_EXPIRED                  AuthorizationErrorReason = 16
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_NOT_YET_VALID            AuthorizationErrorReason = 17
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_TTL_EXCEEDED             AuthorizationErrorReason = 18
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED                AuthorizationErrorReason = 19
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MTLS_REQUIRED                  AuthorizationErrorReason = 20
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MTLS_PEER_MISMATCH             AuthorizationErrorReason = 21
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_POLICY_REVISION_REJECTED       AuthorizationErrorReason = 22
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_ROLLBACK              AuthorizationErrorReason = 23
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_MUTATION              AuthorizationErrorReason = 24
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_HISTORY_GAP           AuthorizationErrorReason = 25
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_PERSISTENCE_UNAVAILABLE        AuthorizationErrorReason = 26
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE           AuthorizationErrorReason = 27
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH              AuthorizationErrorReason = 28
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INTERNAL                       AuthorizationErrorReason = 29
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED AuthorizationErrorReason = 30
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UNSPECIFIED                       AuthorizationErrorReason = 0
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST                 AuthorizationErrorReason = 1
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UDS_PEER_REJECTED                 AuthorizationErrorReason = 2
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UDS_ENDPOINT_INVALID              AuthorizationErrorReason = 3
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_OPERATION_NOT_ALLOWED             AuthorizationErrorReason = 4
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROVENANCE_REJECTED     AuthorizationErrorReason = 5
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MALFORMED_JWS                     AuthorizationErrorReason = 6
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID_PROTECTED_HEADER          AuthorizationErrorReason = 7
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID_SIGNATURE                 AuthorizationErrorReason = 8
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UNKNOWN_KEY                       AuthorizationErrorReason = 9
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_ISSUER_MISMATCH                   AuthorizationErrorReason = 10
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUDIENCE_MISMATCH                 AuthorizationErrorReason = 11
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_CALLER_WORKLOAD_MISMATCH          AuthorizationErrorReason = 12
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TARGET_WORKLOAD_MISMATCH          AuthorizationErrorReason = 13
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RPC_MISMATCH                      AuthorizationErrorReason = 14
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_PERMISSION_MISMATCH               AuthorizationErrorReason = 15
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_EXPIRED                     AuthorizationErrorReason = 16
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_NOT_YET_VALID               AuthorizationErrorReason = 17
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_TTL_EXCEEDED                AuthorizationErrorReason = 18
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED                   AuthorizationErrorReason = 19
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MTLS_REQUIRED                     AuthorizationErrorReason = 20
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MTLS_PEER_MISMATCH                AuthorizationErrorReason = 21
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_POLICY_REVISION_REJECTED          AuthorizationErrorReason = 22
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_ROLLBACK                 AuthorizationErrorReason = 23
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_MUTATION                 AuthorizationErrorReason = 24
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_HISTORY_GAP              AuthorizationErrorReason = 25
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_PERSISTENCE_UNAVAILABLE           AuthorizationErrorReason = 26
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE              AuthorizationErrorReason = 27
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH                 AuthorizationErrorReason = 28
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INTERNAL                          AuthorizationErrorReason = 29
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED    AuthorizationErrorReason = 30
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REQUIRED          AuthorizationErrorReason = 31
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_INVALID           AuthorizationErrorReason = 32
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_BINDING_MISMATCH  AuthorizationErrorReason = 33
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_EXPIRED           AuthorizationErrorReason = 34
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED AuthorizationErrorReason = 35
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED   AuthorizationErrorReason = 36
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE       AuthorizationErrorReason = 37
 )
 
 // Enum value maps for AuthorizationErrorReason.
@@ -290,39 +301,53 @@ var (
 		28: "AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH",
 		29: "AUTHORIZATION_ERROR_REASON_INTERNAL",
 		30: "AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED",
+		31: "AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REQUIRED",
+		32: "AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_INVALID",
+		33: "AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_BINDING_MISMATCH",
+		34: "AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_EXPIRED",
+		35: "AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED",
+		36: "AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED",
+		37: "AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE",
 	}
 	AuthorizationErrorReason_value = map[string]int32{
-		"AUTHORIZATION_ERROR_REASON_UNSPECIFIED":                    0,
-		"AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST":              1,
-		"AUTHORIZATION_ERROR_REASON_UDS_PEER_REJECTED":              2,
-		"AUTHORIZATION_ERROR_REASON_UDS_ENDPOINT_INVALID":           3,
-		"AUTHORIZATION_ERROR_REASON_OPERATION_NOT_ALLOWED":          4,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROVENANCE_REJECTED":  5,
-		"AUTHORIZATION_ERROR_REASON_MALFORMED_JWS":                  6,
-		"AUTHORIZATION_ERROR_REASON_INVALID_PROTECTED_HEADER":       7,
-		"AUTHORIZATION_ERROR_REASON_INVALID_SIGNATURE":              8,
-		"AUTHORIZATION_ERROR_REASON_UNKNOWN_KEY":                    9,
-		"AUTHORIZATION_ERROR_REASON_ISSUER_MISMATCH":                10,
-		"AUTHORIZATION_ERROR_REASON_AUDIENCE_MISMATCH":              11,
-		"AUTHORIZATION_ERROR_REASON_CALLER_WORKLOAD_MISMATCH":       12,
-		"AUTHORIZATION_ERROR_REASON_TARGET_WORKLOAD_MISMATCH":       13,
-		"AUTHORIZATION_ERROR_REASON_RPC_MISMATCH":                   14,
-		"AUTHORIZATION_ERROR_REASON_PERMISSION_MISMATCH":            15,
-		"AUTHORIZATION_ERROR_REASON_TOKEN_EXPIRED":                  16,
-		"AUTHORIZATION_ERROR_REASON_TOKEN_NOT_YET_VALID":            17,
-		"AUTHORIZATION_ERROR_REASON_TOKEN_TTL_EXCEEDED":             18,
-		"AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED":                19,
-		"AUTHORIZATION_ERROR_REASON_MTLS_REQUIRED":                  20,
-		"AUTHORIZATION_ERROR_REASON_MTLS_PEER_MISMATCH":             21,
-		"AUTHORIZATION_ERROR_REASON_POLICY_REVISION_REJECTED":       22,
-		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_ROLLBACK":              23,
-		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_MUTATION":              24,
-		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_HISTORY_GAP":           25,
-		"AUTHORIZATION_ERROR_REASON_PERSISTENCE_UNAVAILABLE":        26,
-		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE":           27,
-		"AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH":              28,
-		"AUTHORIZATION_ERROR_REASON_INTERNAL":                       29,
-		"AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED": 30,
+		"AUTHORIZATION_ERROR_REASON_UNSPECIFIED":                       0,
+		"AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST":                 1,
+		"AUTHORIZATION_ERROR_REASON_UDS_PEER_REJECTED":                 2,
+		"AUTHORIZATION_ERROR_REASON_UDS_ENDPOINT_INVALID":              3,
+		"AUTHORIZATION_ERROR_REASON_OPERATION_NOT_ALLOWED":             4,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROVENANCE_REJECTED":     5,
+		"AUTHORIZATION_ERROR_REASON_MALFORMED_JWS":                     6,
+		"AUTHORIZATION_ERROR_REASON_INVALID_PROTECTED_HEADER":          7,
+		"AUTHORIZATION_ERROR_REASON_INVALID_SIGNATURE":                 8,
+		"AUTHORIZATION_ERROR_REASON_UNKNOWN_KEY":                       9,
+		"AUTHORIZATION_ERROR_REASON_ISSUER_MISMATCH":                   10,
+		"AUTHORIZATION_ERROR_REASON_AUDIENCE_MISMATCH":                 11,
+		"AUTHORIZATION_ERROR_REASON_CALLER_WORKLOAD_MISMATCH":          12,
+		"AUTHORIZATION_ERROR_REASON_TARGET_WORKLOAD_MISMATCH":          13,
+		"AUTHORIZATION_ERROR_REASON_RPC_MISMATCH":                      14,
+		"AUTHORIZATION_ERROR_REASON_PERMISSION_MISMATCH":               15,
+		"AUTHORIZATION_ERROR_REASON_TOKEN_EXPIRED":                     16,
+		"AUTHORIZATION_ERROR_REASON_TOKEN_NOT_YET_VALID":               17,
+		"AUTHORIZATION_ERROR_REASON_TOKEN_TTL_EXCEEDED":                18,
+		"AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED":                   19,
+		"AUTHORIZATION_ERROR_REASON_MTLS_REQUIRED":                     20,
+		"AUTHORIZATION_ERROR_REASON_MTLS_PEER_MISMATCH":                21,
+		"AUTHORIZATION_ERROR_REASON_POLICY_REVISION_REJECTED":          22,
+		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_ROLLBACK":                 23,
+		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_MUTATION":                 24,
+		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_HISTORY_GAP":              25,
+		"AUTHORIZATION_ERROR_REASON_PERSISTENCE_UNAVAILABLE":           26,
+		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE":              27,
+		"AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH":                 28,
+		"AUTHORIZATION_ERROR_REASON_INTERNAL":                          29,
+		"AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED":    30,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REQUIRED":          31,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_INVALID":           32,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_BINDING_MISMATCH":  33,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_EXPIRED":           34,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED": 35,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED":   36,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE":       37,
 	}
 )
 
@@ -354,13 +379,14 @@ func (AuthorizationErrorReason) EnumDescriptor() ([]byte, []int) {
 }
 
 // AuthorityProvenance связывает идентификатор с immutable snapshot,
-// проверенным локальным caller до вызова issuer.
+// подписанным авторитетным issuer authority proof.
 type AuthorityProvenance struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Source        AuthoritySource        `protobuf:"varint,1,opt,name=source,proto3,enum=internalrpcauthority.v1.AuthoritySource" json:"source,omitempty"`
-	Reference     string                 `protobuf:"bytes,2,opt,name=reference,proto3" json:"reference,omitempty"`
-	Revision      uint64                 `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
-	DigestSha256  string                 `protobuf:"bytes,4,opt,name=digest_sha256,json=digestSha256,proto3" json:"digest_sha256,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Source    AuthoritySource        `protobuf:"varint,1,opt,name=source,proto3,enum=internalrpcauthority.v1.AuthoritySource" json:"source,omitempty"`
+	Reference string                 `protobuf:"bytes,2,opt,name=reference,proto3" json:"reference,omitempty"`
+	// revision ограничена JSON safe integer: 1..9007199254740991.
+	Revision      uint64 `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
+	DigestSha256  string `protobuf:"bytes,4,opt,name=digest_sha256,json=digestSha256,proto3" json:"digest_sha256,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -477,8 +503,9 @@ func (x *AuthorityIdentity) GetProvenance() *AuthorityProvenance {
 }
 
 // CallerAuthority содержит actor и tenant, а также project, когда exact
-// operation policy требует project scope. Значения являются утверждениями
-// доверенного локального workload, а не самостоятельной authority.
+// operation policy требует project scope. Issuer заполняет сообщение только
+// из строго проверенного authority proof; application не передает эти поля
+// напрямую.
 type CallerAuthority struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ActorKind     ActorKind              `protobuf:"varint,1,opt,name=actor_kind,json=actorKind,proto3,enum=internalrpcauthority.v1.ActorKind" json:"actor_kind,omitempty"`
@@ -552,11 +579,15 @@ type IssueAuthorizationContextRequest struct {
 	// operation_id выбирает ровно одну зарегистрированную policy binding.
 	// Неизвестное значение закрыто отклоняется; full RPC и permission request
 	// не принимает.
-	OperationId   string           `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
-	Authority     *CallerAuthority `protobuf:"bytes,2,opt,name=authority,proto3" json:"authority,omitempty"`
-	CorrelationId string           `protobuf:"bytes,3,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	OperationId   string `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	CorrelationId string `protobuf:"bytes,3,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	// authority_proof_compact_jws выпущен зарегистрированным авторитетным
+	// resolver и криптографически связан с caller workload, operation_id,
+	// downstream audience, actor/tenant/project и коротким сроком действия.
+	// Синтаксически корректные claims без допустимой подписи не принимаются.
+	AuthorityProofCompactJws string `protobuf:"bytes,4,opt,name=authority_proof_compact_jws,json=authorityProofCompactJws,proto3" json:"authority_proof_compact_jws,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *IssueAuthorizationContextRequest) Reset() {
@@ -596,13 +627,6 @@ func (x *IssueAuthorizationContextRequest) GetOperationId() string {
 	return ""
 }
 
-func (x *IssueAuthorizationContextRequest) GetAuthority() *CallerAuthority {
-	if x != nil {
-		return x.Authority
-	}
-	return nil
-}
-
 func (x *IssueAuthorizationContextRequest) GetCorrelationId() string {
 	if x != nil {
 		return x.CorrelationId
@@ -610,15 +634,24 @@ func (x *IssueAuthorizationContextRequest) GetCorrelationId() string {
 	return ""
 }
 
+func (x *IssueAuthorizationContextRequest) GetAuthorityProofCompactJws() string {
+	if x != nil {
+		return x.AuthorityProofCompactJws
+	}
+	return ""
+}
+
 type IssueAuthorizationContextResponse struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	CompactJws         string                 `protobuf:"bytes,1,opt,name=compact_jws,json=compactJws,proto3" json:"compact_jws,omitempty"`
-	ExpiresAt          *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	SourceRevision     uint64                 `protobuf:"varint,3,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
-	SourceDigestSha256 string                 `protobuf:"bytes,4,opt,name=source_digest_sha256,json=sourceDigestSha256,proto3" json:"source_digest_sha256,omitempty"`
-	KeySetRevision     uint64                 `protobuf:"varint,5,opt,name=key_set_revision,json=keySetRevision,proto3" json:"key_set_revision,omitempty"`
-	PolicyRevision     uint64                 `protobuf:"varint,6,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
-	SignerGeneration   uint64                 `protobuf:"varint,7,opt,name=signer_generation,json=signerGeneration,proto3" json:"signer_generation,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	CompactJws string                 `protobuf:"bytes,1,opt,name=compact_jws,json=compactJws,proto3" json:"compact_jws,omitempty"`
+	ExpiresAt  *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	// Все revision/generation ограничены JSON safe integer:
+	// 1..9007199254740991.
+	SourceRevision     uint64 `protobuf:"varint,3,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	SourceDigestSha256 string `protobuf:"bytes,4,opt,name=source_digest_sha256,json=sourceDigestSha256,proto3" json:"source_digest_sha256,omitempty"`
+	KeySetRevision     uint64 `protobuf:"varint,5,opt,name=key_set_revision,json=keySetRevision,proto3" json:"key_set_revision,omitempty"`
+	PolicyRevision     uint64 `protobuf:"varint,6,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	SignerGeneration   uint64 `protobuf:"varint,7,opt,name=signer_generation,json=signerGeneration,proto3" json:"signer_generation,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -872,28 +905,31 @@ func (x *VerifyAuthorizationContextResponse) GetContext() *VerifiedAuthorization
 // VerifiedAuthorizationContext является transport-neutral результатом.
 // Domain adapter отдельно разрешает aggregate ownership и бизнесовые правила.
 type VerifiedAuthorizationContext struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	ContractVersion    uint32                 `protobuf:"varint,1,opt,name=contract_version,json=contractVersion,proto3" json:"contract_version,omitempty"`
-	Issuer             string                 `protobuf:"bytes,2,opt,name=issuer,proto3" json:"issuer,omitempty"`
-	Audience           string                 `protobuf:"bytes,3,opt,name=audience,proto3" json:"audience,omitempty"`
-	Subject            string                 `protobuf:"bytes,4,opt,name=subject,proto3" json:"subject,omitempty"`
-	CallerWorkloadId   string                 `protobuf:"bytes,5,opt,name=caller_workload_id,json=callerWorkloadId,proto3" json:"caller_workload_id,omitempty"`
-	CallerSpiffeId     string                 `protobuf:"bytes,6,opt,name=caller_spiffe_id,json=callerSpiffeId,proto3" json:"caller_spiffe_id,omitempty"`
-	TargetWorkloadId   string                 `protobuf:"bytes,7,opt,name=target_workload_id,json=targetWorkloadId,proto3" json:"target_workload_id,omitempty"`
-	TargetSpiffeId     string                 `protobuf:"bytes,8,opt,name=target_spiffe_id,json=targetSpiffeId,proto3" json:"target_spiffe_id,omitempty"`
-	FullMethod         string                 `protobuf:"bytes,9,opt,name=full_method,json=fullMethod,proto3" json:"full_method,omitempty"`
-	OperationId        string                 `protobuf:"bytes,10,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
-	Authority          *CallerAuthority       `protobuf:"bytes,11,opt,name=authority,proto3" json:"authority,omitempty"`
-	Permission         string                 `protobuf:"bytes,12,opt,name=permission,proto3" json:"permission,omitempty"`
-	Jti                string                 `protobuf:"bytes,13,opt,name=jti,proto3" json:"jti,omitempty"`
-	IssuedAt           *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=issued_at,json=issuedAt,proto3" json:"issued_at,omitempty"`
-	NotBefore          *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
-	ExpiresAt          *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	SourceRevision     uint64                 `protobuf:"varint,17,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
-	SourceDigestSha256 string                 `protobuf:"bytes,18,opt,name=source_digest_sha256,json=sourceDigestSha256,proto3" json:"source_digest_sha256,omitempty"`
-	KeySetRevision     uint64                 `protobuf:"varint,19,opt,name=key_set_revision,json=keySetRevision,proto3" json:"key_set_revision,omitempty"`
-	PolicyRevision     uint64                 `protobuf:"varint,20,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
-	SignerGeneration   uint64                 `protobuf:"varint,21,opt,name=signer_generation,json=signerGeneration,proto3" json:"signer_generation,omitempty"`
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ContractVersion  uint32                 `protobuf:"varint,1,opt,name=contract_version,json=contractVersion,proto3" json:"contract_version,omitempty"`
+	Issuer           string                 `protobuf:"bytes,2,opt,name=issuer,proto3" json:"issuer,omitempty"`
+	Audience         string                 `protobuf:"bytes,3,opt,name=audience,proto3" json:"audience,omitempty"`
+	Subject          string                 `protobuf:"bytes,4,opt,name=subject,proto3" json:"subject,omitempty"`
+	CallerWorkloadId string                 `protobuf:"bytes,5,opt,name=caller_workload_id,json=callerWorkloadId,proto3" json:"caller_workload_id,omitempty"`
+	CallerSpiffeId   string                 `protobuf:"bytes,6,opt,name=caller_spiffe_id,json=callerSpiffeId,proto3" json:"caller_spiffe_id,omitempty"`
+	TargetWorkloadId string                 `protobuf:"bytes,7,opt,name=target_workload_id,json=targetWorkloadId,proto3" json:"target_workload_id,omitempty"`
+	TargetSpiffeId   string                 `protobuf:"bytes,8,opt,name=target_spiffe_id,json=targetSpiffeId,proto3" json:"target_spiffe_id,omitempty"`
+	FullMethod       string                 `protobuf:"bytes,9,opt,name=full_method,json=fullMethod,proto3" json:"full_method,omitempty"`
+	OperationId      string                 `protobuf:"bytes,10,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	Authority        *CallerAuthority       `protobuf:"bytes,11,opt,name=authority,proto3" json:"authority,omitempty"`
+	Permission       string                 `protobuf:"bytes,12,opt,name=permission,proto3" json:"permission,omitempty"`
+	Jti              string                 `protobuf:"bytes,13,opt,name=jti,proto3" json:"jti,omitempty"`
+	// JSON integer seconds преобразуются без потери; nanos всегда равны 0.
+	IssuedAt  *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=issued_at,json=issuedAt,proto3" json:"issued_at,omitempty"`
+	NotBefore *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
+	ExpiresAt *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	// Все revision/generation ограничены JSON safe integer:
+	// 1..9007199254740991.
+	SourceRevision     uint64 `protobuf:"varint,17,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	SourceDigestSha256 string `protobuf:"bytes,18,opt,name=source_digest_sha256,json=sourceDigestSha256,proto3" json:"source_digest_sha256,omitempty"`
+	KeySetRevision     uint64 `protobuf:"varint,19,opt,name=key_set_revision,json=keySetRevision,proto3" json:"key_set_revision,omitempty"`
+	PolicyRevision     uint64 `protobuf:"varint,20,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	SignerGeneration   uint64 `protobuf:"varint,21,opt,name=signer_generation,json=signerGeneration,proto3" json:"signer_generation,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1417,11 +1453,11 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"actor_kind\x18\x01 \x01(\x0e2\".internalrpcauthority.v1.ActorKindR\tactorKind\x12@\n" +
 	"\x05actor\x18\x02 \x01(\v2*.internalrpcauthority.v1.AuthorityIdentityR\x05actor\x12B\n" +
 	"\x06tenant\x18\x03 \x01(\v2*.internalrpcauthority.v1.AuthorityIdentityR\x06tenant\x12D\n" +
-	"\aproject\x18\x04 \x01(\v2*.internalrpcauthority.v1.AuthorityIdentityR\aproject\"\xb4\x01\n" +
+	"\aproject\x18\x04 \x01(\v2*.internalrpcauthority.v1.AuthorityIdentityR\aproject\"\xbc\x01\n" +
 	" IssueAuthorizationContextRequest\x12!\n" +
-	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12F\n" +
-	"\tauthority\x18\x02 \x01(\v2(.internalrpcauthority.v1.CallerAuthorityR\tauthority\x12%\n" +
-	"\x0ecorrelation_id\x18\x03 \x01(\tR\rcorrelationId\"\xda\x02\n" +
+	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12%\n" +
+	"\x0ecorrelation_id\x18\x03 \x01(\tR\rcorrelationId\x12=\n" +
+	"\x1bauthority_proof_compact_jws\x18\x04 \x01(\tR\x18authorityProofCompactJwsJ\x04\b\x02\x10\x03R\tauthority\"\xda\x02\n" +
 	"!IssueAuthorizationContextResponse\x12\x1f\n" +
 	"\vcompact_jws\x18\x01 \x01(\tR\n" +
 	"compactJws\x129\n" +
@@ -1506,7 +1542,7 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x1dAUTHORITY_SOURCE_DOMAIN_STATE\x10\x03\x12\"\n" +
 	"\x1eAUTHORITY_SOURCE_AGENT_SESSION\x10\x04\x12 \n" +
 	"\x1cAUTHORITY_SOURCE_PROCESS_RUN\x10\x05\x12*\n" +
-	"&AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE\x10\x06*\x98\x04\n" +
+	"&AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE\x10\x06*\xc9\x04\n" +
 	"\x19AuthorizationFailureStage\x12+\n" +
 	"'AUTHORIZATION_FAILURE_STAGE_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fAUTHORIZATION_FAILURE_STAGE_UDS\x10\x01\x12'\n" +
@@ -1520,7 +1556,8 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"$AUTHORIZATION_FAILURE_STAGE_SNAPSHOT\x10\t\x12+\n" +
 	"'AUTHORIZATION_FAILURE_STAGE_PERSISTENCE\x10\n" +
 	"\x12(\n" +
-	"$AUTHORIZATION_FAILURE_STAGE_INTERNAL\x10\v*\xcc\f\n" +
+	"$AUTHORIZATION_FAILURE_STAGE_INTERNAL\x10\v\x12/\n" +
+	"+AUTHORIZATION_FAILURE_STAGE_AUTHORITY_PROOF\x10\f*\xf4\x0f\n" +
 	"\x18AuthorizationErrorReason\x12*\n" +
 	"&AUTHORIZATION_ERROR_REASON_UNSPECIFIED\x10\x00\x120\n" +
 	",AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST\x10\x01\x120\n" +
@@ -1553,7 +1590,14 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"/AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE\x10\x1b\x120\n" +
 	",AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH\x10\x1c\x12'\n" +
 	"#AUTHORIZATION_ERROR_REASON_INTERNAL\x10\x1d\x12=\n" +
-	"9AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED\x10\x1e2\xd9\x02\n" +
+	"9AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED\x10\x1e\x127\n" +
+	"3AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REQUIRED\x10\x1f\x126\n" +
+	"2AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_INVALID\x10 \x12?\n" +
+	";AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_BINDING_MISMATCH\x10!\x126\n" +
+	"2AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_EXPIRED\x10\"\x12@\n" +
+	"<AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED\x10#\x12>\n" +
+	":AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED\x10$\x12:\n" +
+	"6AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE\x10%2\xd9\x02\n" +
 	"\x1aAuthorizationIssuerService\x12\x92\x01\n" +
 	"\x19IssueAuthorizationContext\x129.internalrpcauthority.v1.IssueAuthorizationContextRequest\x1a:.internalrpcauthority.v1.IssueAuthorizationContextResponse\x12\xa5\x01\n" +
 	"\x0eCheckReadiness\x12H.internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest\x1aI.internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse2\xe2\x02\n" +
@@ -1603,29 +1647,28 @@ var file_internalrpcauthority_v1_authority_proto_depIdxs = []int32{
 	5,  // 3: internalrpcauthority.v1.CallerAuthority.actor:type_name -> internalrpcauthority.v1.AuthorityIdentity
 	5,  // 4: internalrpcauthority.v1.CallerAuthority.tenant:type_name -> internalrpcauthority.v1.AuthorityIdentity
 	5,  // 5: internalrpcauthority.v1.CallerAuthority.project:type_name -> internalrpcauthority.v1.AuthorityIdentity
-	6,  // 6: internalrpcauthority.v1.IssueAuthorizationContextRequest.authority:type_name -> internalrpcauthority.v1.CallerAuthority
-	18, // 7: internalrpcauthority.v1.IssueAuthorizationContextResponse.expires_at:type_name -> google.protobuf.Timestamp
-	9,  // 8: internalrpcauthority.v1.VerifyAuthorizationContextRequest.downstream_peer:type_name -> internalrpcauthority.v1.DownstreamTransportPeer
-	12, // 9: internalrpcauthority.v1.VerifyAuthorizationContextResponse.context:type_name -> internalrpcauthority.v1.VerifiedAuthorizationContext
-	6,  // 10: internalrpcauthority.v1.VerifiedAuthorizationContext.authority:type_name -> internalrpcauthority.v1.CallerAuthority
-	18, // 11: internalrpcauthority.v1.VerifiedAuthorizationContext.issued_at:type_name -> google.protobuf.Timestamp
-	18, // 12: internalrpcauthority.v1.VerifiedAuthorizationContext.not_before:type_name -> google.protobuf.Timestamp
-	18, // 13: internalrpcauthority.v1.VerifiedAuthorizationContext.expires_at:type_name -> google.protobuf.Timestamp
-	3,  // 14: internalrpcauthority.v1.AuthorizationErrorDetail.reason:type_name -> internalrpcauthority.v1.AuthorizationErrorReason
-	2,  // 15: internalrpcauthority.v1.AuthorizationErrorDetail.stage:type_name -> internalrpcauthority.v1.AuthorizationFailureStage
-	7,  // 16: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:input_type -> internalrpcauthority.v1.IssueAuthorizationContextRequest
-	13, // 17: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
-	10, // 18: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:input_type -> internalrpcauthority.v1.VerifyAuthorizationContextRequest
-	15, // 19: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
-	8,  // 20: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:output_type -> internalrpcauthority.v1.IssueAuthorizationContextResponse
-	14, // 21: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
-	11, // 22: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:output_type -> internalrpcauthority.v1.VerifyAuthorizationContextResponse
-	16, // 23: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
-	20, // [20:24] is the sub-list for method output_type
-	16, // [16:20] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	18, // 6: internalrpcauthority.v1.IssueAuthorizationContextResponse.expires_at:type_name -> google.protobuf.Timestamp
+	9,  // 7: internalrpcauthority.v1.VerifyAuthorizationContextRequest.downstream_peer:type_name -> internalrpcauthority.v1.DownstreamTransportPeer
+	12, // 8: internalrpcauthority.v1.VerifyAuthorizationContextResponse.context:type_name -> internalrpcauthority.v1.VerifiedAuthorizationContext
+	6,  // 9: internalrpcauthority.v1.VerifiedAuthorizationContext.authority:type_name -> internalrpcauthority.v1.CallerAuthority
+	18, // 10: internalrpcauthority.v1.VerifiedAuthorizationContext.issued_at:type_name -> google.protobuf.Timestamp
+	18, // 11: internalrpcauthority.v1.VerifiedAuthorizationContext.not_before:type_name -> google.protobuf.Timestamp
+	18, // 12: internalrpcauthority.v1.VerifiedAuthorizationContext.expires_at:type_name -> google.protobuf.Timestamp
+	3,  // 13: internalrpcauthority.v1.AuthorizationErrorDetail.reason:type_name -> internalrpcauthority.v1.AuthorizationErrorReason
+	2,  // 14: internalrpcauthority.v1.AuthorizationErrorDetail.stage:type_name -> internalrpcauthority.v1.AuthorizationFailureStage
+	7,  // 15: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:input_type -> internalrpcauthority.v1.IssueAuthorizationContextRequest
+	13, // 16: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
+	10, // 17: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:input_type -> internalrpcauthority.v1.VerifyAuthorizationContextRequest
+	15, // 18: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
+	8,  // 19: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:output_type -> internalrpcauthority.v1.IssueAuthorizationContextResponse
+	14, // 20: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
+	11, // 21: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:output_type -> internalrpcauthority.v1.VerifyAuthorizationContextResponse
+	16, // 22: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
+	19, // [19:23] is the sub-list for method output_type
+	15, // [15:19] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_internalrpcauthority_v1_authority_proto_init() }

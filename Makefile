@@ -2,6 +2,10 @@ GOVULNCHECK_VERSION := v1.6.0
 GO_MIN_VERSION := 1.26.5
 GO_TOOLCHAIN := go1.26.5
 BUF_VERSION := 1.71.0
+PROTOBUF_GO_PLUGIN_REMOTE := buf.build/protocolbuffers/go:v1.36.11
+PROTOBUF_GO_PLUGIN_REVISION := 1
+GRPC_GO_PLUGIN_REMOTE := buf.build/grpc/go:v1.6.2
+GRPC_GO_PLUGIN_REVISION := 1
 
 .PHONY: check-go-toolchain check-proto-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen test-contract-authority
 
@@ -9,7 +13,12 @@ check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
 
 check-proto-toolchain:
-	@BUF_VERSION='$(BUF_VERSION)' ./scripts/check-proto-toolchain.sh
+	@BUF_VERSION='$(BUF_VERSION)' \
+		PROTOBUF_GO_PLUGIN_REMOTE='$(PROTOBUF_GO_PLUGIN_REMOTE)' \
+		PROTOBUF_GO_PLUGIN_REVISION='$(PROTOBUF_GO_PLUGIN_REVISION)' \
+		GRPC_GO_PLUGIN_REMOTE='$(GRPC_GO_PLUGIN_REMOTE)' \
+		GRPC_GO_PLUGIN_REVISION='$(GRPC_GO_PLUGIN_REVISION)' \
+		./scripts/check-proto-toolchain.sh
 
 test-go-toolchain-contract: check-go-toolchain
 	@./scripts/tests/go-toolchain-contract-test.sh

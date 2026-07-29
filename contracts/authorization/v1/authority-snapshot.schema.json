@@ -103,6 +103,12 @@
       "maxLength": 125,
       "pattern": "^urn:mattercodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
+    "authorityProofAudience": {
+      "type": "string",
+      "minLength": 49,
+      "maxLength": 142,
+      "pattern": "^urn:mattercodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
     "operationId": {
       "type": "string",
       "minLength": 3,
@@ -360,6 +366,10 @@
         "target_tls_server_name",
         "target_trust_bundle_id",
         "permission",
+        "authority_proof_issuer",
+        "authority_proof_audience",
+        "authority_proof_trust_bundle_id",
+        "authority_proof_max_age_seconds",
         "authority_sources",
         "project_required",
         "local_caller",
@@ -398,6 +408,18 @@
         },
         "permission": {
           "$ref": "#/$defs/permission"
+        },
+        "authority_proof_issuer": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "authority_proof_audience": {
+          "$ref": "#/$defs/authorityProofAudience"
+        },
+        "authority_proof_trust_bundle_id": {
+          "$ref": "#/$defs/trustBundleId"
+        },
+        "authority_proof_max_age_seconds": {
+          "const": 15
         },
         "authority_sources": {
           "type": "array",

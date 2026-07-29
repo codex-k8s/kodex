@@ -41,8 +41,9 @@ enum ActorKind {
   ACTOR_KIND_AUTOMATION = 4;
 }
 
-// AuthoritySource фиксирует вид уже проверенного источника полномочия.
-// Issuer не разрешает и не перечитывает этот источник самостоятельно.
+// AuthoritySource фиксирует вид источника полномочия, подтвержденного
+// авторитетным issuer authority proof. Само значение enum не является
+// доказательством полномочия.
 enum AuthoritySource {
   AUTHORITY_SOURCE_UNSPECIFIED = 0;
   AUTHORITY_SOURCE_OIDC_SESSION = 1;
@@ -54,10 +55,11 @@ enum AuthoritySource {
 }
 
 // AuthorityProvenance связывает идентификатор с immutable snapshot,
-// проверенным локальным caller до вызова issuer.
+// подписанным авторитетным issuer authority proof.
 message AuthorityProvenance {
   AuthoritySource source = 1;
   string reference = 2;
+  // revision ограничена JSON safe integer: 1..9007199254740991.
   uint64 revision = 3;
   string digest_sha256 = 4;
 }
@@ -69,8 +71,9 @@ message AuthorityIdentity {
 }
 
 // CallerAuthority содержит actor и tenant, а также project, когда exact
-// operation policy требует project scope. Значения являются утверждениями
-// доверенного локального workload, а не самостоятельной authority.
+// operation policy требует project scope. Issuer заполняет сообщение только
+// из строго проверенного authority proof; application не передает эти поля
+// напрямую.
 message CallerAuthority {
   ActorKind actor_kind = 1;
   AuthorityIdentity actor = 2;
@@ -83,13 +86,21 @@ message IssueAuthorizationContextRequest {
   // Неизвестное значение закрыто отклоняется; full RPC и permission request
   // не принимает.
   string operation_id = 1;
-  CallerAuthority authority = 2;
+  reserved 2;
+  reserved "authority";
   string correlation_id = 3;
+  // authority_proof_compact_jws выпущен зарегистрированным авторитетным
+  // resolver и криптографически связан с caller workload, operation_id,
+  // downstream audience, actor/tenant/project и коротким сроком действия.
+  // Синтаксически корректные claims без допустимой подписи не принимаются.
+  string authority_proof_compact_jws = 4;
 }
 
 message IssueAuthorizationContextResponse {
   string compact_jws = 1;
   google.protobuf.Timestamp expires_at = 2;
+  // Все revision/generation ограничены JSON safe integer:
+  // 1..9007199254740991.
   uint64 source_revision = 3;
   string source_digest_sha256 = 4;
   uint64 key_set_revision = 5;
@@ -132,9 +143,12 @@ message VerifiedAuthorizationContext {
   CallerAuthority authority = 11;
   string permission = 12;
   string jti = 13;
+  // JSON integer seconds преобразуются без потери; nanos всегда равны 0.
   google.protobuf.Timestamp issued_at = 14;
   google.protobuf.Timestamp not_before = 15;
   google.protobuf.Timestamp expires_at = 16;
+  // Все revision/generation ограничены JSON safe integer:
+  // 1..9007199254740991.
   uint64 source_revision = 17;
   string source_digest_sha256 = 18;
   uint64 key_set_revision = 19;
@@ -183,6 +197,7 @@ enum AuthorizationFailureStage {
   AUTHORIZATION_FAILURE_STAGE_SNAPSHOT = 9;
   AUTHORIZATION_FAILURE_STAGE_PERSISTENCE = 10;
   AUTHORIZATION_FAILURE_STAGE_INTERNAL = 11;
+  AUTHORIZATION_FAILURE_STAGE_AUTHORITY_PROOF = 12;
 }
 
 // AuthorizationErrorReason является закрытым машинным кодом detail.
@@ -218,6 +233,13 @@ enum AuthorizationErrorReason {
   AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH = 28;
   AUTHORIZATION_ERROR_REASON_INTERNAL = 29;
   AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED = 30;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REQUIRED = 31;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_INVALID = 32;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_BINDING_MISMATCH = 33;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_EXPIRED = 34;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED = 35;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED = 36;
+  AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE = 37;
 }
 
 // AuthorizationErrorDetail добавляется к google.rpc.Status. Диагностика не

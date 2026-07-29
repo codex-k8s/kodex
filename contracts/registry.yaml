@@ -28,3 +28,32 @@ packages:
       - runtime-controller
       - agent-runner
       - automation-scheduler
+  - id: internal-rpc-authority-proof-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authority-proof.schema.json
+    consumers:
+      - internal-rpc-authority
+      - control-plane
+  - id: internal-rpc-authority-restore-evidence-v1
+    format: json-schema
+    owner: environment-database-restore-controller
+    source: contracts/authorization/v1/restore-fence-evidence.schema.json
+    consumers:
+      - internal-rpc-authority-recovery
+      - internal-rpc-authority
+  - id: internal-rpc-authority-key-delivery-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/key-delivery-targets.schema.json
+    consumers:
+      - internal-rpc-authority-publisher
+      - internal-rpc-authority-issuer
+      - internal-rpc-authority-verifier
+  - id: internal-rpc-authority-error-matrix-v1
+    format: json
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authorization-error-matrix.json
+    consumers:
+      - internal-rpc-authority
+      - control-plane

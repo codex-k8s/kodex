@@ -11,3 +11,8 @@ API, strict JOSE wrapper и persistent adapters этим SHA не заявлен
 Сгенерированные файлы не редактируются вручную. Гарантии wire contract, UDS,
 policy, rotation и failure semantics задает `CONTRACT-MC-004`
 (`contracts/authorization/README.md`).
+
+Пакет `contract` проверяет compiled descriptors, exact request fields и
+reserved authority field, binary round-trip, enum mapping, JSON safe-integer
+revisions и полную error matrix. Эти тесты являются contract evidence и не
+подменяют будущую runtime-реализацию caster/issuer/verifier.

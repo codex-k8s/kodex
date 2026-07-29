@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/key-delivery-targets.schema.json",
+  "title": "Точные targets доставки ключей internal-rpc-authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "targets"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/target"
+      }
+    }
+  },
+  "$defs": {
+    "workloadId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "spiffeId": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 512,
+      "pattern": "^spiffe://[a-z0-9.-]+(?:/[A-Za-z0-9._~-]+)+$"
+    },
+    "kubernetesName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,61}[a-z0-9])?$"
+    },
+    "vaultPath": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 512,
+      "pattern": "^kv/data/mattercodex/[a-z0-9][a-z0-9./_-]*[a-z0-9]$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 512,
+      "pattern": "^/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$"
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vault_path",
+        "secret_name",
+        "mount_path"
+      ],
+      "properties": {
+        "vault_path": {
+          "$ref": "#/$defs/vaultPath"
+        },
+        "secret_name": {
+          "$ref": "#/$defs/kubernetesName"
+        },
+        "mount_path": {
+          "$ref": "#/$defs/absolutePath"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workload_id",
+        "issuer_spiffe_id",
+        "namespace",
+        "service_account",
+        "auth_private_key",
+        "manifest_trust",
+        "issuer_readback_id",
+        "verifier_readback_id"
+      ],
+      "properties": {
+        "workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "issuer_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "namespace": {
+          "$ref": "#/$defs/kubernetesName"
+        },
+        "service_account": {
+          "$ref": "#/$defs/kubernetesName"
+        },
+        "auth_private_key": {
+          "$ref": "#/$defs/delivery"
+        },
+        "manifest_trust": {
+          "$ref": "#/$defs/delivery"
+        },
+        "issuer_readback_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "verifier_readback_id": {
+          "$ref": "#/$defs/workloadId"
+        }
+      }
+    }
+  }
+}
