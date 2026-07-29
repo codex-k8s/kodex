@@ -1212,6 +1212,36 @@ func (repo *Repository) GetAgentDelegationBySourceTurnKey(ctx context.Context, s
 	return item, nil
 }
 
+func (repo *Repository) GetAgentDelegation(ctx context.Context, id int64) (entity.AgentDelegation, error) {
+	item, err := scanAgentDelegation(repo.db.QueryRow(ctx, query("agent_delegations__get.sql"), id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentDelegation{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentDelegation{}, fmt.Errorf("get agent delegation: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) GetLatestAgentDelegationBySourceTarget(ctx context.Context, sourceSessionID int64, targetChatID int64, targetRoleID int64) (entity.AgentDelegation, error) {
+	item, err := scanAgentDelegation(repo.db.QueryRow(ctx, query("agent_delegations__get_latest_by_source_target.sql"), sourceSessionID, targetChatID, targetRoleID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentDelegation{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentDelegation{}, fmt.Errorf("get latest agent delegation by source target: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) FailAgentDelegationsByTargetTurn(ctx context.Context, targetTurnID int64) (int64, error) {
+	result, err := repo.db.Exec(ctx, query("agent_delegations__fail_by_target_turn.sql"), targetTurnID)
+	if err != nil {
+		return 0, fmt.Errorf("fail agent delegations by target turn: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
 func (repo *Repository) GetAgentDelegationForCallback(ctx context.Context, targetSessionID int64) (entity.AgentDelegation, error) {
 	item, err := scanAgentDelegation(repo.db.QueryRow(ctx, query("agent_delegations__get_for_callback.sql"), targetSessionID))
 	if err != nil {

@@ -452,6 +452,7 @@ func TestMCPSessionProductionTransportBarrierMatrix(t *testing.T) {
 		{name: "mattermost_list_chats", arguments: map[string]any{}},
 		{name: "mattermost_get_chat", arguments: map[string]any{"chat": "admin-chat"}},
 		{name: "mattermost_start_agent_thread", arguments: map[string]any{"target_chat": "admin-chat", "target_agent": "worker", "title": "Synthetic", "message": "Synthetic task", "work_item_key": "synthetic-work"}},
+		{name: "mattermost_continue_agent_thread", arguments: map[string]any{"delegation_id": 1, "message": "Synthetic continuation", "work_item_key": "synthetic-continuation"}},
 		{name: "mattermost_list_delegations", arguments: map[string]any{"limit": 10}},
 		{name: "mattermost_return_to_requester", arguments: map[string]any{"message": "synthetic result"}},
 		{name: "mattermost_request_agent", arguments: map[string]any{"target_agent": "worker", "message": "synthetic task"}},

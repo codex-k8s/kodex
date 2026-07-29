@@ -30,6 +30,18 @@ updated: 2026-07-16
 - Совместимые делегирования из очереди могут объединяться, но промпт сохраняет каждого инициатора и исходную инструкцию.
 - Ход имеет ключ идемпотентности и не выполняется параллельно двумя runners.
 
+## Привязка role-thread/session
+
+- Первый запуск роли внутри процесса фиксирует `AgentDelegation`, Mattermost
+  root post, `AgentSession` и Codex session.
+- Следующий пакет исправлений или повторной проверки передает исходный
+  `delegation_id` в `mattermost_continue_agent_thread`.
+- Продолжение повторно проверяет project, relationship policy, chat
+  membership и точную identity целевой сессии, затем ставит ход в ее FIFO.
+- Новый Mattermost thread и новая Codex session при продолжении не создаются.
+- Остановка target turn переводит связанные незавершенные делегирования в
+  terminal `failed`, чтобы их нельзя было принять за ожидающий callback.
+
 ## RuntimeRevision
 
 Перед каждым ходом вычисляются канонический манифест и хеш из:

@@ -5222,6 +5222,48 @@ func (store *fakeAdminStore) GetAgentDelegationBySourceTurnKey(_ context.Context
 	return entity.AgentDelegation{}, adminrepo.ErrNotFound
 }
 
+func (store *fakeAdminStore) GetAgentDelegation(_ context.Context, id int64) (entity.AgentDelegation, error) {
+	store.ensureAgentDelegations()
+	item, ok := store.agentDelegations[id]
+	if !ok {
+		return entity.AgentDelegation{}, adminrepo.ErrNotFound
+	}
+	return item, nil
+}
+
+func (store *fakeAdminStore) GetLatestAgentDelegationBySourceTarget(_ context.Context, sourceSessionID int64, targetChatID int64, targetRoleID int64) (entity.AgentDelegation, error) {
+	store.ensureAgentDelegations()
+	var selected entity.AgentDelegation
+	for _, item := range store.agentDelegations {
+		if item.SourceSessionID != sourceSessionID || item.TargetChatID != targetChatID || item.TargetRoleID != targetRoleID ||
+			item.TargetSessionID == 0 || strings.TrimSpace(item.TargetRootPostID) == "" {
+			continue
+		}
+		if selected.ID == 0 || item.CreatedAt.After(selected.CreatedAt) || item.CreatedAt.Equal(selected.CreatedAt) && item.ID > selected.ID {
+			selected = item
+		}
+	}
+	if selected.ID == 0 {
+		return entity.AgentDelegation{}, adminrepo.ErrNotFound
+	}
+	return selected, nil
+}
+
+func (store *fakeAdminStore) FailAgentDelegationsByTargetTurn(_ context.Context, targetTurnID int64) (int64, error) {
+	store.ensureAgentDelegations()
+	var affected int64
+	for id, item := range store.agentDelegations {
+		if item.TargetTurnID != targetTurnID || item.CallbackTurnID != 0 || item.Status == agentDelegationStatusFailed {
+			continue
+		}
+		item.Status = agentDelegationStatusFailed
+		item.UpdatedAt = time.Now().UTC()
+		store.agentDelegations[id] = item
+		affected++
+	}
+	return affected, nil
+}
+
 func (store *fakeAdminStore) GetAgentDelegationForCallback(_ context.Context, targetSessionID int64) (entity.AgentDelegation, error) {
 	store.ensureAgentDelegations()
 	var selected entity.AgentDelegation

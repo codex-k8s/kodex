@@ -127,6 +127,12 @@ type StartAgentThreadCommand struct {
 	WorkItemKey string
 }
 
+type ContinueAgentThreadCommand struct {
+	DelegationID int64
+	Message      string
+	WorkItemKey  string
+}
+
 type AgentSessionDelegationResult struct {
 	DelegationID    int64  `json:"delegation_id"`
 	WorkItemKey     string `json:"work_item_key"`
@@ -341,6 +347,9 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 			if current.ActiveTurnID != sourceTurnID {
 				return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
 			}
+			if err := rejectNewAgentThreadForExistingAffinity(ctx, guardedStore, current, targetChat.ID, targetRole.ID, command.WorkItemKey); err != nil {
+				return err
+			}
 			var createErr error
 			delegation, created, createErr = guardedStore.CreateAgentDelegation(ctx, adminrepo.CreateAgentDelegationInput{
 				ProjectID: current.ProjectID, SourceSessionID: current.ID, SourceTurnID: sourceTurnID,
@@ -454,6 +463,290 @@ func (svc *AgentSessionService) StartAgentThread(ctx context.Context, sessionKey
 	}
 	result := svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation)
 	return result, nil
+}
+
+func (svc *AgentSessionService) ContinueAgentThread(ctx context.Context, sessionKey string, token string, command ContinueAgentThreadCommand) (AgentSessionDelegationResult, error) {
+	command.Message = strings.TrimSpace(command.Message)
+	command.WorkItemKey = strings.TrimSpace(command.WorkItemKey)
+	if command.DelegationID <= 0 {
+		return AgentSessionDelegationResult{}, fmt.Errorf("delegation id is required")
+	}
+	if err := validateDelegationText("message", command.Message, svc.cfg.CallbackMaxBytes, svc.cfg.CallbackMaxBytes, false); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	if err := validateDelegationText("work item key", command.WorkItemKey, delegationWorkKeyMaxBytes, delegationWorkKeyMaxRunes, true); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	sourceSession, err := svc.authorize(ctx, sessionKey, token)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	if svc.cfg.TurnDispatcher == nil || svc.cfg.ThreadPublisher == nil {
+		return AgentSessionDelegationResult{}, fmt.Errorf("agent thread continuation is not configured")
+	}
+	if sourceSession.ActiveTurnID == 0 {
+		return AgentSessionDelegationResult{}, fmt.Errorf("source session has no active turn")
+	}
+	sourceTurnID := sourceSession.ActiveTurnID
+	rootInitiatorUserID, err := svc.rootInitiatorUserIDForTurn(ctx, svc.cfg.Store, sourceTurnID)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	threadStore, err := agentDelegationThreadStore(svc.cfg.Store)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	previous, err := threadStore.GetAgentDelegation(ctx, command.DelegationID)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	project, targetChat, targetRole, targetSession, err := svc.resolveAgentThreadContinuation(ctx, sourceSession, previous)
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	if err := svc.rejectDelegatedGitHubIdentityRequirement(ctx, project, targetRole, command.Message); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	if err := svc.requireCoordinationPermission(ctx, sourceSession, entity.CoordinationCapabilityStartAgents, entity.CoordinationActionStart, targetRole.ID); err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	requesterUserName := svc.sessionMattermostUsername(ctx, sourceSession)
+
+	var delegation entity.AgentDelegation
+	var created bool
+	err = svc.withRequestedClusterAdminPersistenceGuard(ctx, targetRole, targetChat, targetSession.SessionKey, requesterUserName, "agent_thread.continuation_create.side_effect", func(targetStore adminrepo.Repository) error {
+		return svc.withCurrentSessionGuardUsingStore(ctx, targetStore, sourceSession, "agent_session.continuation_create.side_effect", true, func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+			if current.ActiveTurnID != sourceTurnID {
+				return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
+			}
+			guardedThreadStore, storeErr := agentDelegationThreadStore(guardedStore)
+			if storeErr != nil {
+				return storeErr
+			}
+			currentPrevious, readErr := guardedThreadStore.GetAgentDelegation(ctx, command.DelegationID)
+			if readErr != nil {
+				return readErr
+			}
+			if err := validateAgentThreadContinuationIdentity(current, currentPrevious, project, targetChat, targetRole, targetSession); err != nil {
+				return err
+			}
+			var createErr error
+			delegation, created, createErr = guardedStore.CreateAgentDelegation(ctx, adminrepo.CreateAgentDelegationInput{
+				ProjectID:       current.ProjectID,
+				SourceSessionID: current.ID,
+				SourceTurnID:    sourceTurnID,
+				TargetChatID:    targetChat.ID,
+				TargetRoleID:    targetRole.ID,
+				WorkItemKey:     command.WorkItemKey,
+				Title:           currentPrevious.Title,
+			})
+			if createErr != nil {
+				return createErr
+			}
+			if created {
+				delegation, createErr = guardedStore.SetAgentDelegationRoot(ctx, delegation.ID, targetSession.MattermostRootPostID)
+			}
+			return createErr
+		})
+	})
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	if !created {
+		if delegation.TargetRunID == "" {
+			return AgentSessionDelegationResult{}, fmt.Errorf("delegation %q already exists with status %q", delegation.WorkItemKey, delegation.Status)
+		}
+		return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
+	}
+
+	if err := svc.withCurrentSessionRuntimeGuard(ctx, sourceSession, "agent_session.continuation_membership.side_effect", func(current entity.AgentSession) error {
+		if current.ActiveTurnID != sourceTurnID {
+			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
+		}
+		return svc.ensureRequestedRoleChannelMember(ctx, project, targetChat, targetRole, targetSession.SessionKey, requesterUserName)
+	}); err != nil {
+		_ = svc.setCurrentSessionDelegationFailed(ctx, sourceSession, delegation.ID)
+		return AgentSessionDelegationResult{}, err
+	}
+
+	targetThreadURL := svc.mattermostThreadURL(project.Slug, targetSession.MattermostRootPostID)
+	var sourceAudit MattermostPostRef
+	err = svc.withCurrentSessionRuntimeGuard(ctx, sourceSession, "agent_session.continuation_source_audit.side_effect", func(current entity.AgentSession) error {
+		var publishErr error
+		sourceAudit, publishErr = svc.postAgentThreadContinuationAudit(
+			ctx, current.MattermostChannelID, current.MattermostRootPostID, delegation.ID,
+			requesterUserName, targetRole.Name, targetThreadURL, "", command.Message, "agent_thread_continuation_source",
+		)
+		return publishErr
+	})
+	if err != nil {
+		_ = svc.setCurrentSessionDelegationFailed(ctx, sourceSession, delegation.ID)
+		return AgentSessionDelegationResult{}, err
+	}
+	sourceLaunchURL := svc.mattermostThreadURL(project.Slug, sourceAudit.PostID)
+	if sourceSession.MattermostChannelID != targetSession.MattermostChannelID || sourceSession.MattermostRootPostID != targetSession.MattermostRootPostID {
+		err = svc.withCurrentSessionRuntimeGuard(ctx, sourceSession, "agent_session.continuation_target_audit.side_effect", func(entity.AgentSession) error {
+			return svc.withRequestedClusterAdminGuard(ctx, targetRole, targetChat, targetSession.SessionKey, requesterUserName, "agent_thread.continuation_target_audit.side_effect", func() error {
+				_, publishErr := svc.postAgentThreadContinuationAudit(
+					ctx, targetSession.MattermostChannelID, targetSession.MattermostRootPostID, delegation.ID,
+					requesterUserName, targetRole.Name, targetThreadURL, sourceLaunchURL, command.Message, "agent_thread_continuation_target",
+				)
+				return publishErr
+			})
+		})
+		if err != nil {
+			_ = svc.setCurrentSessionDelegationFailed(ctx, sourceSession, delegation.ID)
+			return AgentSessionDelegationResult{}, err
+		}
+	}
+
+	repositories, err := svc.chatRepositories(ctx, targetChat)
+	if err != nil {
+		_ = svc.setCurrentSessionDelegationFailed(ctx, sourceSession, delegation.ID)
+		return AgentSessionDelegationResult{}, err
+	}
+	var queued AgentTurnQueued
+	err = svc.withCurrentSessionRuntimeGuard(ctx, sourceSession, "agent_session.continuation_enqueue.side_effect", func(current entity.AgentSession) error {
+		if current.ActiveTurnID != sourceTurnID {
+			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
+		}
+		return svc.withRequestedClusterAdminGuard(ctx, targetRole, targetChat, targetSession.SessionKey, requesterUserName, "agent_thread.continuation_enqueue.side_effect", func() error {
+			var enqueueErr error
+			queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
+				Project:       project,
+				Chat:          targetChat,
+				Role:          targetRole,
+				Repositories:  repositories,
+				UserID:        rootInitiatorUserID,
+				UserName:      requesterUserName,
+				UserMessage:   continuedAgentRequestMessage(requesterUserName, targetRole.Name, previous.ID, command.Message),
+				SourcePostID:  sourceAudit.PostID,
+				ReplyRootID:   targetSession.MattermostRootPostID,
+				SessionRootID: targetSession.MattermostRootPostID,
+				SessionScope:  agentSessionScopeThreadRole,
+				TTLSeconds:    defaultThreadSessionTTLSeconds,
+				ParentTurnID:  sourceTurnID,
+			})
+			return enqueueErr
+		})
+	})
+	if err != nil {
+		_ = svc.setCurrentSessionDelegationFailed(ctx, sourceSession, delegation.ID)
+		return AgentSessionDelegationResult{}, err
+	}
+	if queued.SessionKey != targetSession.SessionKey || queued.SessionID > 0 && queued.SessionID != targetSession.ID {
+		_ = svc.setCurrentSessionDelegationFailed(ctx, sourceSession, delegation.ID)
+		return AgentSessionDelegationResult{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	err = svc.withRequestedClusterAdminPersistenceGuard(ctx, targetRole, targetChat, targetSession.SessionKey, requesterUserName, "agent_thread.continuation_target_persist.side_effect", func(targetStore adminrepo.Repository) error {
+		return svc.withCurrentSessionGuardUsingStore(ctx, targetStore, sourceSession, "agent_session.continuation_target_persist.side_effect", true, func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
+			if current.ActiveTurnID != sourceTurnID {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			currentTarget, readErr := guardedStore.GetAgentSession(ctx, targetSession.SessionKey)
+			if readErr != nil || !sameAgentSessionThreadBinding(currentTarget, targetSession) {
+				return adminrepo.ErrClusterAdminAdmissionDenied
+			}
+			var persistErr error
+			delegation, persistErr = guardedStore.SetAgentDelegationTarget(ctx, delegation.ID, targetSession.ID, queued.TurnID, queued.RunID)
+			return persistErr
+		})
+	})
+	if err != nil {
+		return AgentSessionDelegationResult{}, err
+	}
+	return svc.agentDelegationResult(ctx, project, targetChat, targetRole, delegation), nil
+}
+
+func agentDelegationThreadStore(store adminrepo.Repository) (adminrepo.AgentDelegationThreadRepository, error) {
+	threadStore, ok := store.(adminrepo.AgentDelegationThreadRepository)
+	if !ok {
+		return nil, fmt.Errorf("agent delegation thread repository is not configured")
+	}
+	return threadStore, nil
+}
+
+func rejectNewAgentThreadForExistingAffinity(ctx context.Context, store adminrepo.Repository, source entity.AgentSession, targetChatID int64, targetRoleID int64, workItemKey string) error {
+	if source.RoleID == targetRoleID {
+		return nil
+	}
+	if _, err := store.GetAgentDelegationBySourceTurnKey(ctx, source.ActiveTurnID, workItemKey); err == nil {
+		return nil
+	} else if !errors.Is(err, adminrepo.ErrNotFound) {
+		return err
+	}
+	threadStore, err := agentDelegationThreadStore(store)
+	if err != nil {
+		return err
+	}
+	previous, err := threadStore.GetLatestAgentDelegationBySourceTarget(ctx, source.ID, targetChatID, targetRoleID)
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf(
+		"agent role already has thread affinity through delegation %d; continue the original role thread with mattermost_continue_agent_thread",
+		previous.ID,
+	)
+}
+
+func (svc *AgentSessionService) resolveAgentThreadContinuation(ctx context.Context, source entity.AgentSession, previous entity.AgentDelegation) (entity.Project, entity.Chat, entity.AgentRole, entity.AgentSession, error) {
+	project, err := svc.cfg.Store.GetProject(ctx, previous.ProjectID)
+	if err != nil {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, err
+	}
+	chat, err := svc.cfg.Store.GetChat(ctx, previous.TargetChatID)
+	if err != nil {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, err
+	}
+	role, err := svc.cfg.Store.GetAgentRole(ctx, previous.TargetRoleID)
+	if err != nil {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, err
+	}
+	target, err := svc.cfg.Store.GetAgentSessionByID(ctx, previous.TargetSessionID)
+	if err != nil {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, err
+	}
+	if err := validateAgentThreadContinuationIdentity(source, previous, project, chat, role, target); err != nil {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, err
+	}
+	if !role.Enabled {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, fmt.Errorf("agent role %q is disabled", role.Name)
+	}
+	participants, err := svc.cfg.Store.ListChatParticipants(ctx, chat.ID)
+	if err != nil {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, err
+	}
+	if !chatParticipantEnabled(participants, role.ID) {
+		return entity.Project{}, entity.Chat{}, entity.AgentRole{}, entity.AgentSession{}, fmt.Errorf("agent %q is not available in chat %q", role.Name, chat.Slug)
+	}
+	return project, chat, role, target, nil
+}
+
+func validateAgentThreadContinuationIdentity(source entity.AgentSession, previous entity.AgentDelegation, project entity.Project, chat entity.Chat, role entity.AgentRole, target entity.AgentSession) error {
+	expectedSessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, previous.TargetRootPostID)
+	if previous.ID <= 0 || previous.ProjectID != source.ProjectID || previous.SourceSessionID != source.ID ||
+		previous.TargetChatID != chat.ID || previous.TargetRoleID != role.ID || previous.TargetSessionID != target.ID ||
+		project.ID != source.ProjectID || chat.ProjectID != project.ID || role.ProjectID != project.ID ||
+		target.ProjectID != project.ID || target.ChatID != chat.ID || target.RoleID != role.ID ||
+		strings.TrimSpace(previous.TargetRootPostID) == "" || target.MattermostRootPostID != previous.TargetRootPostID ||
+		target.MattermostChannelID != chat.MattermostChannelID || target.SessionScope != agentSessionScopeThreadRole ||
+		target.SessionKey != expectedSessionKey {
+		return adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return nil
+}
+
+func sameAgentSessionThreadBinding(left entity.AgentSession, right entity.AgentSession) bool {
+	return left.ID == right.ID && left.SessionKey == right.SessionKey &&
+		left.ProjectID == right.ProjectID && left.ChatID == right.ChatID && left.RoleID == right.RoleID &&
+		strings.TrimSpace(left.SessionScope) == strings.TrimSpace(right.SessionScope) &&
+		strings.TrimSpace(left.MattermostChannelID) == strings.TrimSpace(right.MattermostChannelID) &&
+		strings.TrimSpace(left.MattermostRootPostID) == strings.TrimSpace(right.MattermostRootPostID) &&
+		strings.TrimSpace(left.OpenAIAccountName) == strings.TrimSpace(right.OpenAIAccountName) &&
+		strings.TrimSpace(left.CodexSessionID) == strings.TrimSpace(right.CodexSessionID)
 }
 
 func (svc *AgentSessionService) setCurrentSessionDelegationFailed(ctx context.Context, session entity.AgentSession, delegationID int64) error {
@@ -1638,6 +1931,41 @@ func (svc *AgentSessionService) postCrossChatDelegationAudit(ctx context.Context
 	return svc.postSystemThreadMessage(ctx, session.MattermostChannelID, session.MattermostRootPostID, body, "agent_cross_chat_request")
 }
 
+func (svc *AgentSessionService) postAgentThreadContinuationAudit(
+	ctx context.Context,
+	channelID string,
+	rootPostID string,
+	delegationID int64,
+	requester string,
+	targetAgent string,
+	targetThreadURL string,
+	sourceLaunchURL string,
+	message string,
+	event string,
+) (MattermostPostRef, error) {
+	body := agentThreadContinuationAuditMessage(requester, targetAgent, targetThreadURL, sourceLaunchURL, message)
+	chunks := svc.splitMattermostThreadMessage(ctx, body)
+	var first MattermostPostRef
+	for _, chunk := range chunks {
+		ref, err := svc.cfg.ThreadPublisher.PostThreadMessage(ctx, MattermostThreadPostInput{
+			ChannelID:  channelID,
+			RootPostID: rootPostID,
+			Message:    agentNoTriggerMessage(chunk),
+			Props: map[string]any{
+				"matter_codex_event": event,
+				"delegation_id":      delegationID,
+			},
+		})
+		if err != nil {
+			return MattermostPostRef{}, err
+		}
+		if strings.TrimSpace(first.PostID) == "" {
+			first = ref
+		}
+	}
+	return first, nil
+}
+
 func (svc *AgentSessionService) postDelegationCallbackAudit(ctx context.Context, sourceSession entity.AgentSession, requester string, title string, targetURL string, message string) (MattermostPostRef, error) {
 	opaqueTitle, err := normalizeOpaqueDelegationTitle(title)
 	if err != nil {
@@ -1710,6 +2038,42 @@ func crossChatDelegatedAgentRequestMessage(requesterUserName string, targetRoleN
 	var body strings.Builder
 	body.WriteString(delegatedAgentRequestMessage(requesterUserName, targetRoleName, message))
 	body.WriteString("\n\nЭта задача запущена в отдельном дочернем треде. По завершении обязательно вызови напрямую `mattermost_return_to_requester` с самодостаточным итогом: инструмент использует сохраненную исходную сессию и точный тред. Для callback не требуется участие координатора в текущем канале; не заменяй callback запуском агента или упоминанием.")
+	return body.String()
+}
+
+func continuedAgentRequestMessage(requesterUserName string, targetRoleName string, previousDelegationID int64, message string) string {
+	var body strings.Builder
+	body.WriteString(delegatedAgentRequestMessage(requesterUserName, targetRoleName, message))
+	body.WriteString("\n\nЭто продолжение исходной role-thread/session, закрепленной делегированием `")
+	body.WriteString(fmt.Sprintf("%d", previousDelegationID))
+	body.WriteString("`. Используй сохраненный контекст этой Codex-сессии. По завершении обязательно вызови напрямую `mattermost_return_to_requester` с самодостаточным итогом.")
+	return body.String()
+}
+
+func agentThreadContinuationAuditMessage(requester string, target string, targetThreadURL string, sourceLaunchURL string, message string) string {
+	requester = strings.TrimPrefix(mentionableMattermostUsername(requester), "@")
+	target = strings.TrimPrefix(mentionableMattermostUsername(target), "@")
+	fence := markdownFence(message)
+	var body strings.Builder
+	body.WriteString("matter-codex: @")
+	body.WriteString(requester)
+	body.WriteString(" продолжил @")
+	body.WriteString(target)
+	body.WriteString(" в исходной role-thread/session")
+	if strings.TrimSpace(targetThreadURL) != "" {
+		body.WriteString(": ")
+		body.WriteString(targetThreadURL)
+	}
+	if strings.TrimSpace(sourceLaunchURL) != "" {
+		body.WriteString("\n\nСообщение запуска: ")
+		body.WriteString(sourceLaunchURL)
+	}
+	body.WriteString("\n\n")
+	body.WriteString(fence)
+	body.WriteString("markdown\n")
+	body.WriteString(strings.TrimSpace(message))
+	body.WriteString("\n")
+	body.WriteString(fence)
 	return body.String()
 }
 

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -574,6 +575,107 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	}
 	if len(store.agentDelegations) != 1 {
 		t.Fatalf("stored delegations = %#v", store.agentDelegations)
+	}
+}
+
+func TestStartAgentThreadRejectsSecondThreadForExistingRoleAffinity(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	first, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Первичное ревью",
+		Message: "Проверь первую версию.", WorkItemKey: "issue-201-review-round-1",
+	})
+	if err != nil {
+		t.Fatalf("first StartAgentThread() error = %v", err)
+	}
+	initialCalls := dispatcher.calls
+	initialPosts := len(publisher.posts)
+
+	_, err = svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Повторное ревью",
+		Message: "Перепроверь исправления.", WorkItemKey: "issue-201-review-round-2",
+	})
+	if err == nil || !strings.Contains(err.Error(), "mattermost_continue_agent_thread") || !strings.Contains(err.Error(), fmt.Sprintf("%d", first.DelegationID)) {
+		t.Fatalf("second StartAgentThread() error = %v", err)
+	}
+	if dispatcher.calls != initialCalls || len(publisher.posts) != initialPosts || len(store.agentDelegations) != 1 {
+		t.Fatalf("rejected recurrence caused effects: calls=%d posts=%d delegations=%#v", dispatcher.calls, len(publisher.posts), store.agentDelegations)
+	}
+}
+
+func TestContinueAgentThreadReusesExactRoleThreadAndSession(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Ревью сервиса",
+		Message: "Проверь первую версию.", WorkItemKey: "issue-201-review-round-1",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	previous := store.agentDelegations[started.DelegationID]
+	targetSession := store.agentSessions["target-session"]
+	targetSessionKey := agentSessionKey(2, 2, agentSessionScopeThreadRole, previous.TargetRootPostID)
+	delete(store.agentSessions, "target-session")
+	targetSession.SessionKey = targetSessionKey
+	targetSession.Status = agentSessionStatusIdle
+	targetSession.ActiveTurnID = 0
+	targetSession.ActiveRunID = ""
+	store.agentSessions[targetSessionKey] = targetSession
+	dispatcher.calls = 0
+	dispatcher.queued = AgentTurnQueued{RunID: "target-run-2", TurnID: 3, SessionID: targetSession.ID, SessionKey: targetSessionKey}
+	publisher.posts = nil
+	publisher.updates = nil
+
+	result, err := svc.ContinueAgentThread(context.Background(), "source-session", "source-token", ContinueAgentThreadCommand{
+		DelegationID: started.DelegationID,
+		Message:      "Перепроверь исправления на новом SHA.",
+		WorkItemKey:  "issue-201-review-round-2",
+	})
+	if err != nil {
+		t.Fatalf("ContinueAgentThread() error = %v", err)
+	}
+	if result.DelegationID == started.DelegationID || result.TargetThreadURL != started.TargetThreadURL || result.TargetRunID != "target-run-2" {
+		t.Fatalf("continuation result = %#v; started=%#v", result, started)
+	}
+	if dispatcher.calls != 1 || dispatcher.request.SessionRootID != previous.TargetRootPostID ||
+		dispatcher.request.ReplyRootID != previous.TargetRootPostID || dispatcher.request.ParentTurnID != 1 ||
+		!strings.Contains(dispatcher.request.UserMessage, fmt.Sprintf("`%d`", started.DelegationID)) {
+		t.Fatalf("continuation dispatch = %#v", dispatcher)
+	}
+	persisted := store.agentDelegations[result.DelegationID]
+	if persisted.TargetSessionID != targetSession.ID || persisted.TargetRootPostID != previous.TargetRootPostID ||
+		persisted.TargetTurnID != 3 || persisted.TargetRunID != "target-run-2" {
+		t.Fatalf("persisted continuation = %#v", persisted)
+	}
+	if len(publisher.posts) != 2 {
+		t.Fatalf("continuation audit posts = %#v", publisher.posts)
+	}
+	for _, post := range publisher.posts {
+		if post.RootPostID == "" || !strings.Contains(post.Message, "#notrigger") {
+			t.Fatalf("continuation created a root or triggerable post: %#v", post)
+		}
+	}
+	if publisher.posts[0].RootPostID != "management-root" || publisher.posts[1].RootPostID != previous.TargetRootPostID {
+		t.Fatalf("continuation audit roots = %#v", publisher.posts)
+	}
+}
+
+func TestContinueAgentThreadRejectsForeignSourceSession(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	store.agentDelegations = map[int64]entity.AgentDelegation{1: {
+		ID: 1, ProjectID: 1, SourceSessionID: 99, SourceTurnID: 99,
+		TargetChatID: 2, TargetRoleID: 2, TargetRootPostID: "reply-",
+		TargetSessionID: 2, TargetTurnID: 2, TargetRunID: "target-run",
+		WorkItemKey: "foreign", Title: "Чужая работа", Status: agentSessionTurnQueued,
+	}}
+
+	_, err := svc.ContinueAgentThread(context.Background(), "source-session", "source-token", ContinueAgentThreadCommand{
+		DelegationID: 1, Message: "Попытка продолжения.", WorkItemKey: "foreign-retry",
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("ContinueAgentThread() error = %v", err)
+	}
+	if dispatcher.calls != 0 || len(publisher.posts) != 0 {
+		t.Fatalf("foreign continuation caused effects: calls=%d posts=%#v", dispatcher.calls, publisher.posts)
 	}
 }
 

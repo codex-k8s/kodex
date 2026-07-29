@@ -713,6 +713,9 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 				canceled = currentTurn
 				reconcileOnly = true
 				cleanupRuntime = state.CleanupRequired && !state.ResetCompleted
+				if readErr = failAgentDelegationsForCanceledTurn(ctx, guardedStore, currentTurn.ID); readErr != nil {
+					return readErr
+				}
 				session = current
 				return nil
 			}
@@ -752,6 +755,9 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 					return readErr
 				}
 			}
+			if readErr = failAgentDelegationsForCanceledTurn(ctx, guardedStore, canceled.ID); readErr != nil {
+				return readErr
+			}
 			session = current
 			return nil
 		})
@@ -770,6 +776,15 @@ func (svc *AgentSessionService) PrepareStopAgentSessionTurns(ctx context.Context
 		}
 	}
 	return plan, nil
+}
+
+func failAgentDelegationsForCanceledTurn(ctx context.Context, store adminrepo.Repository, turnID int64) error {
+	threadStore, ok := store.(adminrepo.AgentDelegationThreadRepository)
+	if !ok {
+		return nil
+	}
+	_, err := threadStore.FailAgentDelegationsByTargetTurn(ctx, turnID)
+	return err
 }
 
 func (svc *AgentSessionService) FinalizeStopAgentSessionTurns(ctx context.Context, plan StopAgentSessionTurnsPlan) (StopAgentSessionTurnsResult, error) {
@@ -1313,6 +1328,9 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 			if current.ActiveTurnID != sourceTurnID {
 				return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
 			}
+			if err := rejectCurrentThreadRequestForExistingAffinity(ctx, guardedStore, current, chat.ID, role.ID, rootPostID); err != nil {
+				return err
+			}
 			var createErr error
 			delegation, delegationCreated, createErr = guardedStore.CreateAgentDelegation(ctx, adminrepo.CreateAgentDelegationInput{
 				ProjectID: current.ProjectID, SourceSessionID: current.ID, SourceTurnID: sourceTurnID,
@@ -1507,6 +1525,30 @@ func (svc *AgentSessionService) persistSameThreadDelegationTarget(
 		return entity.AgentDelegation{}, err
 	}
 	return persisted, nil
+}
+
+func rejectCurrentThreadRequestForExistingAffinity(ctx context.Context, store adminrepo.Repository, source entity.AgentSession, targetChatID int64, targetRoleID int64, currentRootPostID string) error {
+	if source.RoleID == targetRoleID {
+		return nil
+	}
+	threadStore, err := agentDelegationThreadStore(store)
+	if err != nil {
+		return err
+	}
+	previous, err := threadStore.GetLatestAgentDelegationBySourceTarget(ctx, source.ID, targetChatID, targetRoleID)
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(previous.TargetRootPostID) == strings.TrimSpace(currentRootPostID) {
+		return nil
+	}
+	return fmt.Errorf(
+		"agent role already has thread affinity through delegation %d; continue the original role thread with mattermost_continue_agent_thread",
+		previous.ID,
+	)
 }
 
 func sameThreadDelegationWorkItemKey(targetRoleID int64, message string) string {

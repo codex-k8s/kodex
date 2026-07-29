@@ -10,7 +10,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 )
 
-//go:embed prompt_seeds/*.md prompt_seeds/history/v1/*.md prompt_seeds/history/v2/*.md prompt_seeds/history/v3/*.md
+//go:embed prompt_seeds/*.md prompt_seeds/history/v1/*.md prompt_seeds/history/v2/*.md prompt_seeds/history/v3/*.md prompt_seeds/history/v4/*.md
 var promptSeedFiles embed.FS
 
 const (
@@ -74,8 +74,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "manager_coordinate_task.md",
 			RoleNames:     []string{"manager"},
 			RoleTypes:     []string{"manager"},
-			Version:       4,
-			PreviousFiles: []string{"history/v1/manager_coordinate_task.md", "history/v2/manager_coordinate_task.md", "history/v3/manager_coordinate_task.md"},
+			Version:       5,
+			PreviousFiles: []string{"history/v1/manager_coordinate_task.md", "history/v2/manager_coordinate_task.md", "history/v3/manager_coordinate_task.md", "history/v4/manager_coordinate_task.md"},
 		},
 		{
 			SourceProfile: "architect",
