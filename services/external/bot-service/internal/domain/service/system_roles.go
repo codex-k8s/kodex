@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ const (
 	systemMatterCodexChatSlug     = "agents-control"
 	systemProjectRunsChannelSlug  = "runs"
 	systemCoordinationChannelSlug = "coordination"
+	coordinationModeManagerOnly   = "manager-only"
 )
 
 func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) error {
@@ -44,8 +46,14 @@ func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) e
 		if err := svc.bootstrapImproverRole(ctx, project, gitHubAccounts, manageOpenAIAccountName); err != nil {
 			return err
 		}
-		if err := svc.bootstrapDirectorRole(ctx, project, gitHubAccounts, manageOpenAIAccountName); err != nil {
-			return err
+		if projectCoordinationMode(project) == coordinationModeManagerOnly {
+			if err := svc.bootstrapManagerCoordinationRole(ctx, project); err != nil {
+				return err
+			}
+		} else {
+			if err := svc.bootstrapDirectorRole(ctx, project, gitHubAccounts, manageOpenAIAccountName); err != nil {
+				return err
+			}
 		}
 		if err := svc.reconcileProjectRoleBotIdentities(ctx, project); err != nil {
 			return err
@@ -64,10 +72,26 @@ func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) e
 	if err := svc.bootstrapImproverRole(ctx, matterCodexProject, gitHubAccounts, manageOpenAIAccountName); err != nil {
 		return err
 	}
-	if err := svc.bootstrapDirectorRole(ctx, matterCodexProject, gitHubAccounts, manageOpenAIAccountName); err != nil {
-		return err
+	if projectCoordinationMode(matterCodexProject) == coordinationModeManagerOnly {
+		if err := svc.bootstrapManagerCoordinationRole(ctx, matterCodexProject); err != nil {
+			return err
+		}
+	} else {
+		if err := svc.bootstrapDirectorRole(ctx, matterCodexProject, gitHubAccounts, manageOpenAIAccountName); err != nil {
+			return err
+		}
 	}
 	return svc.reconcileProjectRoleBotIdentities(ctx, matterCodexProject)
+}
+
+func projectCoordinationMode(project entity.Project) string {
+	var settings struct {
+		CoordinationMode string `json:"coordination_mode"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(project.AdvancedSettings)), &settings); err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(settings.CoordinationMode))
 }
 
 func (svc *SlashCommandService) ensureProjectRunsChannel(ctx context.Context, project entity.Project) (entity.Project, error) {
@@ -162,6 +186,62 @@ func (svc *SlashCommandService) bootstrapDirectorRole(ctx context.Context, proje
 		}
 	}
 	return policyStore.ApplyCoordinationPolicyPreset(ctx, project.ID, role.ID, waveCoordinators)
+}
+
+func (svc *SlashCommandService) bootstrapManagerCoordinationRole(ctx context.Context, project entity.Project) error {
+	role, err := svc.systemRoleByTypeOrName(ctx, project.ID, "manager", "manager")
+	if err != nil {
+		return err
+	}
+	if role.ID == 0 || !role.Enabled {
+		return nil
+	}
+	channelID := ""
+	if svc.cfg.ChannelManager != nil {
+		memberUserIDs := make([]string, 0, 1)
+		if ownerUsername := strings.TrimSpace(svc.cfg.OwnerMattermostUsername); ownerUsername != "" {
+			ownerUserID, err := svc.cfg.ChannelManager.ResolveMattermostUserID(ctx, ownerUsername)
+			if err != nil {
+				return err
+			}
+			memberUserIDs = append(memberUserIDs, ownerUserID)
+		}
+		channel, _, err := svc.cfg.ChannelManager.EnsureProjectChannel(
+			ctx,
+			project.Slug,
+			systemCoordinationChannelSlug,
+			svc.t("system.channel.coordination.name", nil),
+			true,
+			memberUserIDs,
+		)
+		if err != nil {
+			return err
+		}
+		channelID = channel.ID
+	}
+	if err := svc.ensureSystemRoleBotIdentity(ctx, project, role, channelID); err != nil {
+		return err
+	}
+	_, _, err = svc.cfg.Store.CreateChat(ctx, adminrepo.CreateChatInput{
+		ProjectID:           project.ID,
+		MattermostChannelID: channelID,
+		Name:                svc.t("system.channel.coordination.name", nil),
+		Slug:                systemCoordinationChannelSlug,
+		Description:         svc.t("system.channel.coordination.description", nil),
+		ChatType:            "coordination",
+		WorkPolicy:          "manager_unit_coordination",
+		Settings:            "{}",
+		SystemPurpose:       "coordination",
+		RoleIDs:             []int64{role.ID},
+	})
+	if err != nil {
+		return err
+	}
+	policyStore, ok := svc.cfg.Store.(adminrepo.CoordinationPolicyPresetRepository)
+	if !ok {
+		return nil
+	}
+	return policyStore.ApplyManagerCoordinationPolicyPreset(ctx, project.ID, role.ID)
 }
 
 func (svc *SlashCommandService) systemRoleByTypeOrName(ctx context.Context, projectID int64, roleType string, roleName string) (entity.AgentRole, error) {

@@ -75,4 +75,5 @@ type CoordinationRepository interface {
 
 type CoordinationPolicyPresetRepository interface {
 	ApplyCoordinationPolicyPreset(ctx context.Context, projectID int64, topCoordinatorRoleID int64, waveCoordinatorRoleIDs []int64) error
+	ApplyManagerCoordinationPolicyPreset(ctx context.Context, projectID int64, managerRoleID int64) error
 }

@@ -626,7 +626,7 @@ func TestAgentRoleDialogSeedsKnownRolePromptTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("role not stored: %v", err)
 	}
-	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "Ты агент developer проекта") || !strings.Contains(role.PromptTemplate, "MatterCodex MCP") {
+	if role.PromptMode != "template" || !strings.Contains(role.PromptTemplate, "Ты агент-разработчик проекта") || !strings.Contains(role.PromptTemplate, "MatterCodex MCP") {
 		t.Fatalf("prompt mode/template = %q/%q", role.PromptMode, role.PromptTemplate)
 	}
 	if role.OpenAIAccountName != "primary" || role.GitHubAccountName != "agent" {
@@ -651,7 +651,11 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
 			1: {ID: 1, Name: "Radar", Slug: "radar-auto", GitHubAccountName: "github-radar-owner-manager"},
-			2: {ID: 2, Name: "My QR Contact", Slug: "myqrcontact", GitHubAccountName: "github-myqrcontact-owner"},
+			2: {
+				ID: 2, Name: "My QR Contact", Slug: "myqrcontact",
+				GitHubAccountName: "github-myqrcontact-owner",
+				AdvancedSettings:  `{"coordination_mode":"manager-only"}`,
+			},
 		},
 		openAIAccounts: map[string]entity.OpenAIAccount{
 			"openai-codex-main":   {Name: "openai-codex-main", Status: "authorized"},
@@ -734,8 +738,24 @@ func TestBootstrapSystemAgentRolesCreatesImproverButDoesNotCreateClusterAdmin(t 
 		}
 	}
 	director := testRoleByName(t, store, 1, "director")
-	if !strings.Contains(director.PromptTemplate, "если инициатор ещё не одобрил режим и границы") || !strings.Contains(director.PromptTemplate, "Явное предварительное одобрение не дублируй") {
-		t.Fatalf("director prompt does not preserve approval without duplicate gates: %q", director.PromptTemplate)
+	if !strings.Contains(director.PromptTemplate, "необязательным настраиваемым архетипом") || !strings.Contains(director.PromptTemplate, "не сливай PR автоматически") {
+		t.Fatalf("director prompt does not preserve optional coordinator boundaries: %q", director.PromptTemplate)
+	}
+	if role := testRoleByNameOptional(store, 2, "director"); role.ID != 0 {
+		t.Fatalf("manager-only project unexpectedly bootstrapped director: %#v", role)
+	}
+	var managerCoordination entity.Chat
+	for _, chat := range store.chats {
+		if chat.ProjectID == 2 && chat.Slug == systemCoordinationChannelSlug {
+			managerCoordination = chat
+			break
+		}
+	}
+	if managerCoordination.ID == 0 || managerCoordination.WorkPolicy != "manager_unit_coordination" {
+		t.Fatalf("manager-only coordination chat = %#v", managerCoordination)
+	}
+	if participants, _ := store.ListChatParticipants(context.Background(), managerCoordination.ID); !testParticipantsContainRole(participants, 20) {
+		t.Fatalf("manager-only coordination participants = %#v", participants)
 	}
 	director.Name = "руководитель"
 	store.agentRoles[director.ID] = director
@@ -1084,6 +1104,19 @@ func testRoleByName(t *testing.T, store *fakeAdminStore, projectID int64, name s
 		}
 	}
 	t.Fatalf("role %q not found in project %d: %#v", name, projectID, roles)
+	return entity.AgentRole{}
+}
+
+func testRoleByNameOptional(store *fakeAdminStore, projectID int64, name string) entity.AgentRole {
+	roles, err := store.ListAgentRoles(context.Background(), projectID)
+	if err != nil {
+		return entity.AgentRole{}
+	}
+	for _, role := range roles {
+		if role.Name == name {
+			return role
+		}
+	}
 	return entity.AgentRole{}
 }
 

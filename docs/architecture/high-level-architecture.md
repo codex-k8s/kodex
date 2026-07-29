@@ -4,8 +4,8 @@ title: Высокоуровневая архитектура
 type: architecture
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 1.0.0
+updated: 2026-07-29
 ---
 
 # Высокоуровневая архитектура
@@ -13,35 +13,50 @@ updated: 2026-07-16
 ```mermaid
 flowchart LR
     U[Пользователь] --> MM[Mattermost]
-    U --> CC[Центр управления]
+    U --> CC[Control Center]
     MM --> IG[Шлюз взаимодействия]
-    CC --> CP[Платформа управления]
+    CC --> CAG[Control API Gateway]
+    CAG --> CP[Control Plane]
     IG --> CP
+    IRA[Internal RPC Authority] -. authorization context .-> CAG
+    IRA -. authorization context .-> IG
+    IRA -. authorization context .-> RC
+    IRA -. authorization context .-> MG
     CP --> PG[(PostgreSQL)]
-    CP --> OB[(Транзакционный исходящий журнал)]
+    CP --> OB[(Transactional Outbox)]
+    OB --> NATS[NATS JetStream]
     AS[Планировщик автоматизаций] --> PG
-    AS --> OB
-    OB --> RC[Контроллер среды выполнения]
+    NATS --> RC[Контроллер среды выполнения]
     RC --> K8S[Kubernetes API]
     K8S --> AR[Pod агента]
     AR --> AI[Поставщик среды выполнения ИИ]
     AR --> MG[Шлюз интеграций MCP]
     MG --> EXT[Внешние системы]
     MG --> AP[Ручное согласование]
-    AR --> S3[(Хранилище файлов S3)]
+    AR --> S3[(S3)]
     IG --> S3
     IG --> MM
+    RIB[Role Image Builder] --> REG[(OCI Registry)]
+    REG --> RC
     CP --> OT[OpenTelemetry]
     IG --> OT
     RC --> OT
     MG --> OT
 ```
 
-## Платформа управления
+## Control Plane
 
 Хранит желаемое состояние и бизнес-модель: организации, рабочие области, агенты, поставщики моделей, интеграции, инструкции, управляемые процессы, расписания, сессии, метаданные файлов, согласования и аудит.
 
-Платформа управления не создает pod Kubernetes напрямую из HTTP-обработчика. Она фиксирует транзакционное изменение и публикует долговечную команду через исходящий журнал.
+Control Plane не публикует внешний HTTP API и не создает pod Kubernetes
+напрямую. Он фиксирует business state, idempotency receipt, audit и обязательные
+events одной PostgreSQL-транзакцией.
+
+## Control API Gateway
+
+Предоставляет owner-facing OpenAPI и WebSocket API для Control Center,
+аутентифицирует пользователя и преобразует запросы в generated gRPC clients.
+Gateway не читает PostgreSQL Control Plane напрямую.
 
 ## Шлюз взаимодействия
 
@@ -83,6 +98,13 @@ flowchart LR
 
 Опасные учетные данные остаются в шлюзе или хранилище секретов и не передаются в pod агента.
 
+## Internal RPC Authority
+
+Workload-local issuer формирует короткоживущий signed authorization context
+после проверки transport identity. Workload-local verifier проверяет exact RPC,
+issuer, audience, actor, project, срок и replay по локальному UDS. Компонент не
+становится владельцем пользователей или business permissions.
+
 ## Планировщик автоматизаций
 
 Выбирает наступившие `AutomationSchedule`, создает уникальные экземпляры и ставит `ScheduledRun` в общую очередь. Планировщик не запускает pod напрямую и не использует Kubernetes CronJob как бизнес-модель.
@@ -90,6 +112,9 @@ flowchart LR
 ## Модель согласованности
 
 - Внутри доменного контекста используется транзакция PostgreSQL.
-- Между контекстами используются транзакционный исходящий журнал и идемпотентные обработчики.
+- Между контекстами используются transactional outbox, broker-neutral relay,
+  NATS JetStream, durable PostgreSQL inbox/cursor и идемпотентные consumers.
+- Синхронный путь использует Proto/gRPC с deadline, mTLS/SPIFFE и подписанным
+  authorization context.
 - Kubernetes, Mattermost и внешние API согласуются асинхронно с явным состоянием и повторами.
 - Ручное согласование является долговечным состоянием ожидания, а не удержанием HTTP-запроса.

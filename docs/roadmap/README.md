@@ -4,8 +4,8 @@ title: План преобразования платформы
 type: roadmap-index
 status: approved
 owner: manager
-version: 0.1.0
-updated: 2026-07-16
+version: 1.0.0
+updated: 2026-07-29
 ---
 
 # План преобразования платформы
@@ -13,11 +13,11 @@ updated: 2026-07-16
 | Код | Файл | Назначение |
 | --- | --- | --- |
 | `ROAD-MC-001` | `docs/roadmap/README.md` | Индекс. |
-| `ROAD-MC-002` | `docs/roadmap/epics-and-waves.md` | Волны, эпики и зависимости. |
-| `ROAD-MC-003` | `docs/roadmap/result-human-gates.md` | Цикл результата, рецензирования и приемки владельцем. |
+| `ROAD-MC-002` | `docs/roadmap/epics-and-waves.md` | Шесть новых эпиков, десять unit и cutover. |
+| `ROAD-MC-003` | `docs/roadmap/result-human-gates.md` | Три review направления, до пяти циклов и human gate. |
 | `ROAD-MC-004` | `docs/roadmap/dogfooding-bootstrap.md` | Создание рабочей области MatterCodex. |
-| `ROAD-MC-005` | `docs/roadmap/manager-kickoff-prompt.md` | Стартовый промпт менеджера. |
-| `ROAD-MC-006` | `docs/roadmap/wave-1-structural-foundation-proposal.md` | Предложение по структурному фундаменту волны 1. |
-| `ROAD-MC-007` | `docs/roadmap/accelerated-mvp-prototype.md` | Временный форсированный режим прототипа до 27 июля 2026 года. |
+| `ROAD-MC-005` | `docs/roadmap/manager-kickoff-prompt.md` | Стартовый промпт корневого manager для Epic 1. |
 
-План задает направление, а не разрешение на автоматическое слияние и развертывание. Каждая волна уточняется по фактическому состоянию `main`, действующих данных и результатам предыдущей ручной приемки.
+GitHub umbrella #179 и work items #180-#198 являются источником фактического
+состояния. Документ не разрешает автоматическое слияние или deploy: каждый
+unit проходит human gate, а cutover требует отдельного owner OK.

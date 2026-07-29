@@ -67,13 +67,12 @@ func TestManagerPromptSeedDocumentsDynamicCrossChatRouting(t *testing.T) {
 		t.Fatalf("promptSeedMarkdown() error = %v", err)
 	}
 	for _, expected := range []string{
-		"mattermost_list_chats(target_agent)",
-		"mattermost_get_chat(chat)",
-		"mattermost_start_agent_thread(target_chat, target_agent, title, message, work_item_key)",
-		"Конфигурация проекта в MatterCodex является источником истины",
-		"Не угадывай и не зашивай имя чата",
-		"только если карточка текущего чата содержит эту роль среди включенных агентов",
-		"не повторяй его",
+		"mattermost_list_chats",
+		"mattermost_get_chat",
+		"mattermost_start_agent_thread",
+		"Корневой менеджер",
+		"отдельным дочерним тредом на менеджера",
+		"устойчивый `work_item_key`",
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("manager seed missing cross-chat routing contract %q:\n%s", expected, body)
@@ -81,7 +80,7 @@ func TestManagerPromptSeedDocumentsDynamicCrossChatRouting(t *testing.T) {
 	}
 }
 
-func TestManagedReviewTriagePromptContract(t *testing.T) {
+func TestManagedUnitReviewPromptContract(t *testing.T) {
 	managerSeed, ok := promptSeedForProfileTemplate("manager", managerCoordinateTaskKey)
 	if !ok {
 		t.Fatal("manager prompt seed is missing")
@@ -91,17 +90,18 @@ func TestManagedReviewTriagePromptContract(t *testing.T) {
 		t.Fatalf("promptSeedMarkdown(manager) error = %v", err)
 	}
 	for _, expected := range []string{
-		"Merge blocker",
-		"MVP follow-up",
-		"Informational",
-		"GitHub GraphQL `reviewThreads`",
-		"labels `mvp-follow-up`",
-		"prototype-accelerated",
-		"один reviewer pass и один security pass",
-		"post-merge reviewer и security",
+		"до двух параллельных unit",
+		"один PR на один целостный unit",
+		"три независимых ревью",
+		"продукт, пользовательские сценарии",
+		"безопасность и trust boundaries",
+		"архитектура, поддерживаемость",
+		"не более пяти полных циклов",
+		"human gate",
+		"Не сливай автоматически",
 	} {
 		if !strings.Contains(managerBody, expected) {
-			t.Fatalf("manager seed missing review triage contract %q:\n%s", expected, managerBody)
+			t.Fatalf("manager seed missing unit review contract %q:\n%s", expected, managerBody)
 		}
 	}
 
@@ -114,23 +114,15 @@ func TestManagedReviewTriagePromptContract(t *testing.T) {
 		t.Fatalf("promptSeedMarkdown(reviewer) error = %v", err)
 	}
 	for _, expected := range []string{
-		"Merge blocker",
-		"MVP follow-up",
-		"Informational",
-		"labels `mvp-follow-up`",
-		"URL Issue",
-		"почему замечание не является blocker",
+		"High/Medium",
+		"exact SHA",
+		"Параллельно работают другие профильные reviewer",
 		"GitHub GraphQL `reviewThreads`",
+		"не выполняй merge",
 	} {
 		if !strings.Contains(reviewBody, expected) {
-			t.Fatalf("review seed missing review triage contract %q:\n%s", expected, reviewBody)
+			t.Fatalf("review seed missing focused review contract %q:\n%s", expected, reviewBody)
 		}
-	}
-	issueURLIndex := strings.Index(reviewBody, "URL Issue")
-	reasonIndex := strings.Index(reviewBody, "почему замечание не является blocker")
-	resolveIndex := strings.Index(reviewBody, "только после этого разреши thread")
-	if issueURLIndex < 0 || reasonIndex < 0 || resolveIndex < 0 || issueURLIndex > resolveIndex || reasonIndex > resolveIndex {
-		t.Fatalf("review seed must require Issue URL and non-blocker reason before resolving the thread:\n%s", reviewBody)
 	}
 
 	securitySeed, ok := promptSeedForAgentRole("security-reviewer", "security")
@@ -146,9 +138,9 @@ func TestManagedReviewTriagePromptContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("promptSeedMarkdown(director) error = %v", err)
 	}
-	for _, expected := range []string{"mvp-follow-up", "до шести независимых manager-волн", "merged PR без label `improved`"} {
+	for _, expected := range []string{"необязательным настраиваемым архетипом", "mattermost_return_to_requester", "не сливай PR автоматически"} {
 		if !strings.Contains(directorBody, expected) {
-			t.Fatalf("director seed missing follow-up contract %q:\n%s", expected, directorBody)
+			t.Fatalf("director seed missing optional coordinator contract %q:\n%s", expected, directorBody)
 		}
 	}
 
@@ -160,9 +152,9 @@ func TestManagedReviewTriagePromptContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("promptSeedMarkdown(improver) error = %v", err)
 	}
-	for _, expected := range []string{"merged PR за период без label `improved`", "добавь ему `improved`", "очередным ежедневным batch"} {
+	for _, expected := range []string{"повторяющиеся замечания", "устойчивые правила", "не запускай себя рекурсивно"} {
 		if !strings.Contains(improverBody, expected) {
-			t.Fatalf("improver seed missing daily batch contract %q:\n%s", expected, improverBody)
+			t.Fatalf("improver seed missing feedback improvement contract %q:\n%s", expected, improverBody)
 		}
 	}
 }
@@ -206,8 +198,8 @@ func TestSeedDefaultAgentPromptTemplateUpgradesOnlyUnmodifiedSeedCopies(t *testi
 	if err != nil {
 		t.Fatalf("promptSeedPreviousBodies() error = %v", err)
 	}
-	if len(previousBodies) != 2 {
-		t.Fatalf("previous bodies = %d, want 2", len(previousBodies))
+	if len(previousBodies) != 3 {
+		t.Fatalf("previous bodies = %d, want 3", len(previousBodies))
 	}
 	want, err := promptSeedMarkdown(seed)
 	if err != nil {

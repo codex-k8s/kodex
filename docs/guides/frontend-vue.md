@@ -1,60 +1,157 @@
 ---
-id: GUIDE-MC-004
-title: Центр управления на Vue
+id: FE-DOC-001
+title: PWA на Vue и TypeScript
 type: guide
 status: approved
-owner: architect
-version: 0.1.0
-updated: 2026-07-16
+owner: developer
+version: 1.0.0
+updated: 2026-07-28
 ---
 
-# Центр управления на Vue
+# PWA на Vue и TypeScript
 
-## Назначение
+`FE-DOC-001` задает структуру и границы служебной PWA MatterCodex. Полное
+дерево с комментариями приведено в `REPO-DOC-001`.
 
-Центр управления закрывает сложную настройку организаций, рабочих областей, агентов, поставщиков, интеграций, расписаний, управляемых процессов, среды выполнения, файлов и аудита. Mattermost остается основным интерфейсом диалога.
+## Размещение
 
-## Стек
+PWA владельца и операторов размещается в
+`services/staff/control-center`.
 
-- Vue 3 Composition API;
-- строгий режим TypeScript;
-- сгенерированный клиент OpenAPI;
-- Pinia только для состояния между страницами;
-- Vue Router;
-- выбранная и зафиксированная библиотека компонентов либо собственная малая дизайн-система;
-- Playwright для критичных сквозных сценариев.
+## Базовый стек
 
-Версии утверждаются каталогом зависимостей на момент реализации.
+- Vue 3 и Composition API.
+- TypeScript в строгом режиме.
+- Vite.
+- Pinia для состояния сценария.
+- Vue Router для маршрутов.
+- vue-i18n для пользовательских текстов.
+- Сгенерированный TypeScript client из OpenAPI.
+- AsyncAPI-generated types/client boundary для WebSocket, если сценарий
+  использует события.
 
-## UX
+Актуальные версии и API проверяются через Context7 перед изменением
+зависимостей.
 
-- Список, панель и редактор сущности вместо командной консоли.
-- Технические идентификаторы скрыты либо доступны только для чтения в расширенной диагностике.
-- Готовые варианты настройки расписания, роли и интеграции.
-- Поле секрета очищается после отправки и не возвращается API.
-- Итоговая конфигурация объясняет наследование и `managed_by`.
-- Опасное действие показывает цель и эффект и требует явного подтверждения.
-- Состояние ошибки сохраняет введенные несекретные данные и предлагает следующее действие.
-
-## Архитектура
+## Направление зависимостей
 
 ```text
-apps/control-center/src/
-  app/
-  pages/
-  features/
-  entities/
-  shared/
-  generated/
+main/App -> app
+app router -> pages
+pages -> features + shared/ui
+features -> shared/api + shared/lib + shared/ui
+shared/api adapter -> shared/api/generated
 ```
 
-Сгенерированный клиент не импортирует интерфейс. Прикладные composable-функции живут в `features` и `entities`, а не в глобальном хранилище.
+Обратные зависимости запрещены:
 
-## Качество
+- `shared` не импортирует `features` или `pages`;
+- одна feature не импортирует внутренности другой feature;
+- `generated` ни от чего не зависит и не редактируется вручную;
+- page не реализует API orchestration и бизнес-состояние;
+- Vue component не вызывает `fetch`, `axios` или generated client напрямую.
 
-- ESLint, форматирование, проверка типов и модульные тесты;
-- тесты компонентов для сложных редакторов;
-- Playwright для успешных сценариев, ошибок и прав доступа;
-- проверки доступности клавиатуры, подписей, фокуса и контраста;
-- снимки экранов на настольном и мобильном разрешении для критичных сценариев;
-- отсутствие секретов и токенов в хранилище браузера и телеметрии.
+## `app`
+
+`src/app` содержит только сборку приложения:
+
+- router и route metadata;
+- i18n setup;
+- UI/plugins registration;
+- global styles и design tokens;
+- верхнеуровневые providers.
+
+Бизнес-сценарий и API state в `app` не размещаются.
+
+## `pages`
+
+Page:
+
+- собирает одну route surface из feature-компонентов;
+- обрабатывает route params через типизированную boundary;
+- задает layout страницы;
+- показывает loading/empty/error/ready states через feature state.
+
+Page не содержит дублированные DTO, SQL-like filtering, произвольные network
+requests и общую библиотеку компонентов.
+
+## `features`
+
+Каждый пользовательский сценарий находится в `src/features/<feature>`:
+
+```text
+features/resources/
+├── api.ts                  # вызовы общего API adapter для сценария
+├── model.ts                # UI model и преобразования из API DTO
+├── store.ts                # Pinia state, actions и конкурентность запросов
+├── components/             # UI только этого сценария
+```
+
+Feature:
+
+- не экспортирует внутреннюю структуру без необходимости;
+- отделяет API DTO от UI model;
+- отменяет или игнорирует устаревший async result;
+- нормализует ошибки через `shared/api/errors`;
+- имеет явные loading, empty, error, forbidden и ready states, если они
+  применимы.
+
+## `shared/api`
+
+- `generated/` полностью создается из утвержденного контракта.
+- `<gateway>.ts` является типизированной оболочкой generated client:
+  configuration, auth transport, timeout, correlation id и safe error mapping.
+- `errors.ts` превращает transport problem details в устойчивые UI errors.
+- Feature adapter не строит URL вручную, если операция есть в generated client.
+- Секреты и server-only credentials не попадают в frontend config.
+
+При изменении OpenAPI сначала меняется источник контракта, затем запускается
+codegen, после чего адаптируется handwritten boundary.
+
+## State и конкурентность
+
+- Длительное состояние сценария хранится в Pinia store, локальное визуальное
+  состояние - в component.
+- Store не хранит сырой client instance в serializable state.
+- Повторный request не позволяет более старому response перезаписать новое
+  состояние.
+- Pagination, sorting и filters имеют типизированную model.
+- Cache invalidation задается явно после mutation.
+
+## Компоненты и UI
+
+- `shared/ui` содержит только действительно переиспользуемые primitives.
+- Feature components отражают предметный сценарий и остаются рядом с feature.
+- Компонент имеет стабильные размеры для toolbar, table, card, dialog и
+  controls, чтобы динамический текст не сдвигал интерфейс.
+- Для форм используются подходящие controls: select, checkbox, switch,
+  segmented control, stepper и field validation.
+- Кнопки с общеизвестным действием используют иконку и tooltip.
+- Интерфейс проверяется на desktop и mobile без пересечения текста и controls.
+- Пользователь не видит сырой backend error, stack trace, secret или внутренний
+  identifier вместо понятного имени.
+
+## Локализация
+
+- Пользовательские строки не пишутся напрямую в component/store.
+- Ключи находятся в `src/i18n/<locale>.ts`.
+- Русский является обязательной локалью проекта; английский сохраняется как
+  дополнительная локаль для устойчивых интерфейсных терминов.
+- Идентификаторы, protocol names и неизмененный внешний вывод не переводятся.
+
+## PWA и runtime
+
+- Service worker и offline policy добавляются только с явной моделью
+  обновления, cache invalidation и ошибочного offline state.
+- Runtime config отделяется от build-time secrets.
+- Nginx fallback поддерживает Vue Router без скрытия отсутствующих static
+  assets.
+- Security headers и CSP согласуются с gateway/auth контуром.
+
+## Проверки
+
+Обязательный профиль lint, typecheck, build, component и browser checks
+определяется `GOV-DOC-003`. Для пользовательского изменения ручная проверка
+охватывает desktop/mobile, loading, empty, error, forbidden и ready states.
+
+Связанные документы: `REPO-DOC-001`, `ARCH-DOC-001`.

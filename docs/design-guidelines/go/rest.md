@@ -9,8 +9,8 @@
 - Конкретный HTTP framework добавляется только после записи в `docs/design-guidelines/common/external_dependencies_catalog.md`.
 
 ## Где хранится OpenAPI
-- Спека gateway-поверхности: `specs/openapi/<gateway-surface>.v<major>.yaml`.
-- JSON schema/примеры можно держать рядом в `specs/openapi/**`, но источником правды остаётся OpenAPI YAML.
+- Спека gateway-поверхности: `contracts/openapi/<gateway-surface>.v<major>.yaml`.
+- JSON schema/примеры можно держать рядом в `contracts/openapi/**`, но источником правды остаётся OpenAPI YAML.
 - Внутренние доменные сервисы не создают прямой OpenAPI для бизнес-ручек. Их HTTP-поверхность ограничена служебными `/health/*` и `/metrics`.
 - Если доменный API-контракт уже согласован, стабильный OpenAPI `v1` gateway-сервиса покрывает все согласованные HTTP-сценарии выбранной поверхности: команды, чтения, модель ошибок и пользовательские/администраторские/операторские пути.
 - Частичный HTTP-контракт нельзя выдавать за стабильный `v1`. Для раннего прототипа используется явный предварительный статус и отдельное описание ограничений.
@@ -21,7 +21,7 @@
 
 ## Как используем `kin-openapi`
 Флоу (по смыслу):
-1) На старте загружаем соответствующую спецификацию из `specs/openapi/**` (разрешая external refs при необходимости) и валидируем документ.
+1) На старте загружаем соответствующую спецификацию из `contracts/openapi/**` (разрешая external refs при необходимости) и валидируем документ.
 2) На входе запроса валидируем request по операции:
    - `openapi3.Loader` -> `doc.Validate(ctx)` -> `router.FindRoute(req)` -> `openapi3filter.ValidateRequest(...)`.
 3) На выходе (опционально, минимум в dev/stage) валидируем response:
@@ -47,5 +47,5 @@ make gen-openapi-go SVC=services/<zone>/<service>
 
 ## Документация API
 
-- Для gateway API спецификация лежит в `specs/openapi/**`.
+- Для gateway API спецификация лежит в `contracts/openapi/**`.
 - Swagger UI или аналогичный viewer включается только осознанным отдельным решением; для Mattermost slash callback на MVP это не требуется.

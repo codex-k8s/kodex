@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 0.4.0
-updated: 2026-07-22
+version: 1.0.0
+updated: 2026-07-29
 ---
 
 # Границы сервисов и структура репозитория
@@ -13,113 +13,83 @@ updated: 2026-07-22
 ## Целевая структура
 
 ```text
-apps/
-  control-center/
-services/
-  external/
-    interaction-gateway/
-  internal/
-    control-plane/
-    runtime-controller/
-    integration-gateway/
-  jobs/
-    automation-scheduler/
-    agent-runner/
-  dev/
-libs/go/
-proto/
-specs/
+contracts/
+  proto/
   openapi/
   asyncapi/
+  authorization/
+  errors/
+services/
+  internal/
+    internal-rpc-authority/
+    control-plane/
+    runtime-controller/
+  external/
+    control-api-gateway/
+    interaction-gateway/
+    integration-gateway/
+  jobs/
+    agent-runner/
+    automation-scheduler/
+    role-image-builder/
+  staff/
+    control-center/
+libs/go/
 config/catalog/
-  roles/
-  integrations/
-  playbooks/
-deploy/
-  helm/
-  gitops/
+deploy/k8s/
+infra/
+tools/
 docs/
 ```
 
-Каждый сервис Go использует локальные `cmd`, `internal/app`, `internal/domain`, `internal/repository`, `internal/clients` и `internal/transport`. `libs/go/**` содержит только наблюдаемость, контекст авторизации, типизированные идентификаторы, часы и другие действительно сквозные примитивы с несколькими реальными потребителями. Подробная структура определена в `docs/design-guidelines/go/services_design_requirements.md`.
+Каждый unit реализуется целиком по `REPO-DOC-001` и `GUIDE-DOC-004`: contracts,
+domain, storage, integrations, lifecycle, observability, deploy, README,
+runbook и ручная проверка входят в один Issue и один PR.
 
-## Границы компонентов
+## Реестр компонентов
 
-### control-plane
+| Компонент | Тип | Владеет | Не владеет |
+| --- | --- | --- | --- |
+| `internal-rpc-authority` | workload-local internal sidecar | короткоживущие authorization contexts, signing key lifecycle, JWKS manifest и verifier snapshot | пользователи, роли, проекты, permissions и transport identity caller |
+| `control-plane` | internal service | проекты, чаты, роли, bindings, integrations metadata, runtime revisions, sessions, processes, schedules, memory, gates и artifact metadata | Mattermost transport, Kubernetes resources, MCP execution и AI process |
+| `runtime-controller` | internal controller | reconciliation pod/PVC/Secret/ConfigMap, capacity, TTL, archive/restore и runtime health | бизнесовая конфигурация, Codex process и пользовательские сообщения |
+| `control-api-gateway` | external gateway | HTTP/WebSocket transport state и owner session boundary | domain state и прямой доступ к PostgreSQL |
+| `interaction-gateway` | external gateway | Mattermost transport, idempotency, cards, bot identities и file delivery | sessions, processes, schedules и Kubernetes state |
+| `integration-gateway` | external gateway | MCP/API/CLI integration execution, grants, approvals и credential isolation | чужое domain state и agent orchestration |
+| `agent-runner` | job/runtime process | один claimed turn, локальный process lifecycle, workspace и session materialization | authoritative session state и orchestration decisions |
+| `automation-scheduler` | job | due occurrence selection, overlap/misfire policy и enqueue | AI execution, Mattermost transport и aggregate state других доменов |
+| `role-image-builder` | job | build specification hash, BuildKit execution, SBOM, provenance, signature и registry artifact | runtime admission и role business state |
+| `control-center` | staff PWA | UI state | business authority, secrets и прямой доступ к внутренним RPC |
 
-- CRUD и проверка бизнес-сущностей;
-- вычисление итоговой конфигурации и политик;
-- OpenAPI для Control Center;
-- транзакционный исходящий журнал;
-- миграции собственных схем.
+Один aggregate имеет одного авторитетного владельца. Gateway, runner, cache,
+search projection и UI не читают БД другого компонента и не изменяют его
+состояние напрямую.
 
-Не выполняет сверку Kubernetes, запуск ИИ и внешние изменения.
+## Контракты
 
-### interaction-gateway
+- внутренние синхронные вызовы: versioned Proto/gRPC;
+- административный HTTP API: OpenAPI в `control-api-gateway`;
+- realtime Control Center: AsyncAPI/WebSocket;
+- доменные события: AsyncAPI, PostgreSQL transactional outbox,
+  broker-neutral relay, NATS JetStream и durable inbox;
+- Mattermost: typed adapter официального API/SDK;
+- интеграции агентов: официальный MCP Go SDK и типизированные adapters.
 
-- Mattermost WebSocket/REST;
-- карточки, диалоги, реакции и учетные записи ботов;
-- входные файлы и исходящие доставки;
-- преобразование сообщений и обсуждений в команды платформы;
-- идемпотентность входных событий.
+Внутренний RPC использует mTLS/SPIFFE transport identity и authorization
+context от workload-local `internal-rpc-authority`. Payload и caller-provided
+identifier не являются источником полномочий.
 
-Не владеет сессиями, расписаниями и интеграциями.
+## Работа с legacy
 
-### runtime-controller
+`services/external/bot-service`, текущий `services/jobs/agent-runner`,
+`apps/control-center` и `specs/**` остаются только действующим legacy-контуром
+до cutover. Они:
 
-- сверка pod, PVC, секретов и конфигурационных ресурсов сессий;
-- применение `RuntimeRevision`;
-- контроль ресурсов, допуск, вытеснение простаивающих pod и TTL;
-- жизненный цикл и состояние ресурсов Kubernetes.
+- не являются примером структуры нового кода;
+- не получают новые продуктовые возможности;
+- меняются только для критического сохранения работоспособности dogfooding;
+- не требуют постоянного compatibility facade в новых unit.
 
-### integration-gateway
-
-- транспорт MCP;
-- выбор соединения;
-- права, риски и согласования;
-- изоляция учетных данных;
-- идемпотентное выполнение инструментов.
-
-### automation-scheduler
-
-- получение наступивших расписаний;
-- идемпотентность экземпляров расписания;
-- политика пропусков и параллельности;
-- постановка `ScheduledRun` в очередь;
-- вычисление следующего запуска.
-
-До выделения самостоятельного сервиса текущий bot-service также владеет узким контрактом ручного шлюза автоматизации: отдельным namespace `automation` для `OwnerAttentionRequest`, атомарной записью `waiting_owner`, server-owned payload и долговечной публикацией с claim/lease/fence до внешнего POST. Ограниченный по параллельности reconciler непрерывно выбирает весь доступный backlog через `SKIP LOCKED`; ошибка одной строки и перезапуск не блокируют продвижение остальных. Решение допустимо только после сохранённого post binding точной карточки и атомарно закрывает связь `ScheduledRun → attention`. Общий watchdog, heartbeat/deadline/lease среды выполнения, callback outbox и Kubernetes health не входят в эту границу.
-
-### agent-runner
-
-- получение и завершение хода;
-- жизненный цикл процесса среды выполнения ИИ;
-- восстановление и снимок сессии;
-- материализация рабочей области;
-- локальный мост публикации файлов.
-
-## Переход от текущего bot-service
-
-1. Зафиксировать характеристические тесты существующих сценариев.
-2. Ввести пакеты доменных контекстов и отдельные интерфейсы репозиториев внутри текущего процесса.
-3. Разделить общий `admin.Repository` по владельцам данных.
-4. Вынести транспорт Mattermost из доменных сервисов.
-5. Ввести исходящий журнал и идемпотентные обработчики команд.
-6. Первым самостоятельным сервисом выделить `runtime-controller`.
-7. Выделить `integration-gateway` после появления модели интеграций.
-8. Выделить interaction-gateway и control-plane после стабилизации OpenAPI.
-9. Удалить фасад совместимости только после миграции интерфейса и рабочих данных.
-
-Нельзя одновременно менять модель данных, транспорт, границы сервисов и пользовательское поведение без промежуточного совместимого состояния.
-
-## Внутренние контракты
-
-- Внешний API и API управления: OpenAPI.
-- Обратные вызовы Mattermost: типизированные HTTP-модели на основе официального SDK.
-- Доменные события и команды: AsyncAPI и версионируемые конверты.
-- Внутренняя потоковая передача с высокой пропускной способностью: Protobuf/gRPC только после измеренной необходимости.
-- MCP: официальный Model Context Protocol Go SDK.
-
-До выделения `integration-gateway` текущий bot-service владеет внешней HTTP-границей MCP. Для POST он ограничивает полный JSON envelope до передачи в `go-sdk`, чтения session/token и доменного допуска: oversized `Content-Length` и превысивший предел chunked body получают транспортный отказ. После проверки `Origin`, `Host`, `Content-Type` и тела каждый запрос проходит server-owned авторизацию непустых session key и Bearer token; недействительная, истекшая, отозванная или не совпадающая с transport session пара отклоняется до stateful SDK handler. Живые transport sessions имеют общий ограниченный допуск, конечный idle timeout и освобождают слот после `DELETE`, timeout или неудачной инициализации; привязка допуска хранит только SHA-256 session key и token. Полный server-owned `ReadTimeout`, `ReadHeaderTimeout`, `IdleTimeout` и `MaxHeaderBytes` ограничивают медленные неаутентифицированные соединения. GET/SSE и допустимый POST сохраняют семантику SDK.
-
-До выделения `interaction-gateway` текущий bot-service также владеет доставкой двух обязательных callback audit publications. Доменная транзакция владеет ровно двумя неизменяемыми строками outbox и манифестом их точного множества; `CallbackRunID` не фиксируется без одной публикации каждой обязательной destination и полного плана. Mattermost adapter владеет post-commit сетевой попыткой, детерминированной внешней identity и точной сверкой существующего post: client-owned payload сравнивается полностью, а из server-owned props разрешено только документированное Mattermost 11.6 поле `from_bot: "true"`. Нельзя считать `CallbackRunID`, непустое подмножество `delivered`, успешный HTTP-ответ без DB mark или кратковременный `pending_post_id` доказательством завершения всей доставки. Переход к отдельному gateway обязан сохранить ключ `(delegation, callback run, destination, publication)`, манифест, payload hash, lease, final binding fence и монотонное подтверждение `delivered`.
+После готовности новых компонентов выполняются backup, dry-run и one-shot
+forward migration из #196, затем staging acceptance и переключение из #197.
+Старый контур удаляется только после проверенного rollback window.

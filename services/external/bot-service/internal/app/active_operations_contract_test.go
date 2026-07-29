@@ -12,7 +12,6 @@ func TestActiveDocumentsKeepV28ForwardOnlyContract(t *testing.T) {
 	for _, relativePath := range []string{
 		"docs/operations/deployment-rollbacks.md",
 		"docs/runbooks/bot-service.md",
-		"docs/roadmap/wave-1-structural-foundation-proposal.md",
 	} {
 		body := readActiveContractDocument(t, repositoryRoot, relativePath)
 		for _, required := range []string{"000025", "000026", "000027", "000028", "000029", "manifest", "forward-only", "exact N-1"} {
@@ -31,7 +30,6 @@ func TestActiveDocumentsKeepPendingCapabilityRetentionContract(t *testing.T) {
 	for _, relativePath := range []string{
 		"docs/operations/interaction-capability-retention.md",
 		"docs/runbooks/bot-service.md",
-		"docs/roadmap/wave-1-structural-foundation-proposal.md",
 	} {
 		body := readActiveContractDocument(t, repositoryRoot, relativePath)
 		for _, required := range []string{"pending", "unused", "consumed", "revoked", "expires_at <"} {
