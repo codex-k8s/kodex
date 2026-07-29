@@ -10,7 +10,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 )
 
-//go:embed prompt_seeds/*.md prompt_seeds/history/v1/*.md prompt_seeds/history/v2/*.md
+//go:embed prompt_seeds/*.md prompt_seeds/history/v1/*.md prompt_seeds/history/v2/*.md prompt_seeds/history/v3/*.md
 var promptSeedFiles embed.FS
 
 const (
@@ -41,8 +41,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "director_coordinate_portfolio.md",
 			RoleNames:     []string{"director", "coordinator"},
 			RoleTypes:     []string{"director", "coordinator"},
-			Version:       2,
-			PreviousFiles: []string{"history/v1/director_coordinate_portfolio.md"},
+			Version:       3,
+			PreviousFiles: []string{"history/v1/director_coordinate_portfolio.md", "history/v2/director_coordinate_portfolio.md"},
 		},
 		{
 			SourceProfile: "developer",
@@ -52,8 +52,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "developer_implement_task.md",
 			RoleNames:     []string{"developer", "worker", "backend-developer", "frontend-developer", "deployer"},
 			RoleTypes:     []string{"worker", "deployer"},
-			Version:       2,
-			PreviousFiles: []string{"history/v1/developer_implement_task.md"},
+			Version:       3,
+			PreviousFiles: []string{"history/v1/developer_implement_task.md", "history/v2/developer_implement_task.md"},
 		},
 		{
 			SourceProfile: "reviewer",
@@ -63,8 +63,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "reviewer_review_pr.md",
 			RoleNames:     []string{"reviewer", "technical-reviewer", "technical_reviewer", "security", "security-reviewer", "security_reviewer", "lexical-guard", "lexical_guard"},
 			RoleTypes:     []string{"reviewer", "security", "security_reviewer", "lexical_guard"},
-			Version:       3,
-			PreviousFiles: []string{"history/v1/reviewer_review_pr.md", "history/v2/reviewer_review_pr.md"},
+			Version:       4,
+			PreviousFiles: []string{"history/v1/reviewer_review_pr.md", "history/v2/reviewer_review_pr.md", "history/v3/reviewer_review_pr.md"},
 		},
 		{
 			SourceProfile: "manager",
@@ -74,8 +74,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "manager_coordinate_task.md",
 			RoleNames:     []string{"manager"},
 			RoleTypes:     []string{"manager"},
-			Version:       3,
-			PreviousFiles: []string{"history/v1/manager_coordinate_task.md", "history/v2/manager_coordinate_task.md"},
+			Version:       4,
+			PreviousFiles: []string{"history/v1/manager_coordinate_task.md", "history/v2/manager_coordinate_task.md", "history/v3/manager_coordinate_task.md"},
 		},
 		{
 			SourceProfile: "architect",
@@ -85,6 +85,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "architect_architecture_task.md",
 			RoleNames:     []string{"architect"},
 			RoleTypes:     []string{"architect"},
+			Version:       2,
+			PreviousFiles: []string{"history/v1/architect_architecture_task.md"},
 		},
 		{
 			SourceProfile: "docs",
@@ -94,6 +96,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "docs_documentation_task.md",
 			RoleNames:     []string{"docs", "writer", "documentation"},
 			RoleTypes:     []string{"writer"},
+			Version:       2,
+			PreviousFiles: []string{"history/v1/docs_documentation_task.md"},
 		},
 		{
 			SourceProfile: "sre",
@@ -103,6 +107,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "sre_operations_task.md",
 			RoleNames:     []string{"sre"},
 			RoleTypes:     []string{"sre"},
+			Version:       2,
+			PreviousFiles: []string{"history/v1/sre_operations_task.md"},
 		},
 		{
 			SourceProfile: "qa-bot",
@@ -111,6 +117,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			Description:   "Generic QA regression prompt seed",
 			FileName:      "qa_bot_regression_task.md",
 			RoleNames:     []string{"qa-bot", "qa", "tester"},
+			Version:       2,
+			PreviousFiles: []string{"history/v1/qa_bot_regression_task.md"},
 		},
 		{
 			SourceProfile: "ui-designer",
@@ -120,6 +128,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "ui_designer_task.md",
 			RoleNames:     []string{"ui-designer", "ui-ux", "uiux", "designer", "ux", "ux-designer", "product-designer"},
 			RoleTypes:     []string{"designer", "ui_ux", "ux"},
+			Version:       2,
+			PreviousFiles: []string{"history/v1/ui_designer_task.md"},
 		},
 		{
 			SourceProfile: "improver",
@@ -129,8 +139,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "improver_feedback_improvement.md",
 			RoleNames:     []string{"improver"},
 			RoleTypes:     []string{"improver"},
-			Version:       2,
-			PreviousFiles: []string{"history/v1/improver_feedback_improvement.md"},
+			Version:       3,
+			PreviousFiles: []string{"history/v1/improver_feedback_improvement.md", "history/v2/improver_feedback_improvement.md"},
 		},
 		{
 			SourceProfile: "pm-delivery",
@@ -140,6 +150,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "pm_delivery_status.md",
 			RoleNames:     []string{"pm", "delivery", "pm-delivery", "pm_delivery"},
 			RoleTypes:     []string{"pm_delivery"},
+			Version:       2,
+			PreviousFiles: []string{"history/v1/pm_delivery_status.md"},
 		},
 		{
 			SourceProfile: "analyst",
@@ -149,6 +161,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			FileName:      "analyst_analysis_task.md",
 			RoleNames:     []string{"analyst"},
 			RoleTypes:     []string{"analyst"},
+			Version:       2,
+			PreviousFiles: []string{"history/v1/analyst_analysis_task.md"},
 		},
 		{
 			SourceProfile: "mattercodex-admin",
@@ -157,6 +171,8 @@ func promptSeedCatalog() []promptTemplateSeed {
 			Description:   "Generic MatterCodex platform admin prompt seed",
 			FileName:      "mattercodex_admin_task.md",
 			RoleNames:     []string{"mattercodex-admin", "matter-codex-admin"},
+			Version:       2,
+			PreviousFiles: []string{"history/v1/mattercodex_admin_task.md"},
 		},
 	}
 	for index := range seeds {

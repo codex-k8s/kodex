@@ -180,11 +180,91 @@ func TestCoordinationRepositoryLifecycle(t *testing.T) {
 		t.Fatalf("archive policy revision: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `insert into matter_codex_policy_revisions(project_id, version, status, activated_at)
-		values ($1, 2, 'active', now())`, projectID); err != nil {
+		select $1, coalesce(max(version), 0) + 1, 'active', now()
+		from matter_codex_policy_revisions where project_id = $1`, projectID); err != nil {
 		t.Fatalf("create replacement policy revision: %v", err)
 	}
 	assertCapability(t, ctx, repository, rootTurnID, projectID, directorID, entity.CoordinationCapabilityStartAgents, true)
 	assertCapability(t, ctx, repository, 0, projectID, directorID, entity.CoordinationCapabilityStartAgents, false)
+}
+
+func TestManagerCoordinationPresetPublishesImmutableRevision(t *testing.T) {
+	dsn := isolatedPostgresTestDSN(t, "manager_coordination")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := migrations.Run(ctx, dsn); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("create pool: %v", err)
+	}
+	defer pool.Close()
+
+	suffix := time.Now().UTC().UnixNano()
+	var projectID int64
+	if err := pool.QueryRow(ctx, "insert into matter_codex_projects(name, slug) values ($1, $2) returning id",
+		"Manager Coordination Test", fmt.Sprintf("manager-coordination-test-%d", suffix)).Scan(&projectID); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), "delete from matter_codex_projects where id = $1", projectID)
+	})
+
+	directorID := insertCoordinationTestRole(t, ctx, pool, projectID, "director", "director")
+	managerID := insertCoordinationTestRole(t, ctx, pool, projectID, "manager", "manager")
+	workerID := insertCoordinationTestRole(t, ctx, pool, projectID, "developer", "worker")
+	repository := postgresrepo.NewRepository(pool)
+
+	if err := repository.ApplyCoordinationPolicyPreset(ctx, projectID, directorID, []int64{managerID}); err != nil {
+		t.Fatalf("ApplyCoordinationPolicyPreset() error = %v", err)
+	}
+	var previousRevisionID int64
+	if err := pool.QueryRow(ctx, `
+		select id from matter_codex_policy_revisions
+		where project_id = $1 and status = 'active'
+	`, projectID).Scan(&previousRevisionID); err != nil {
+		t.Fatalf("read director policy revision: %v", err)
+	}
+
+	if err := repository.ApplyManagerCoordinationPolicyPreset(ctx, projectID, managerID); err != nil {
+		t.Fatalf("ApplyManagerCoordinationPolicyPreset() error = %v", err)
+	}
+	var activeRevisionID int64
+	var activePreset string
+	if err := pool.QueryRow(ctx, `
+		select id, settings->>'preset' from matter_codex_policy_revisions
+		where project_id = $1 and status = 'active'
+	`, projectID).Scan(&activeRevisionID, &activePreset); err != nil {
+		t.Fatalf("read manager policy revision: %v", err)
+	}
+	if activeRevisionID == previousRevisionID || activePreset != "manager-unit-v1" {
+		t.Fatalf("active revision id=%d preset=%q, previous=%d", activeRevisionID, activePreset, previousRevisionID)
+	}
+	var previousStatus string
+	if err := pool.QueryRow(ctx, `select status from matter_codex_policy_revisions where id = $1`, previousRevisionID).Scan(&previousStatus); err != nil {
+		t.Fatalf("read previous policy status: %v", err)
+	}
+	if previousStatus != "archived" {
+		t.Fatalf("previous policy status = %q, want archived", previousStatus)
+	}
+
+	assertCapability(t, ctx, repository, 0, projectID, managerID, entity.CoordinationCapabilityStartAgents, true)
+	assertCapability(t, ctx, repository, 0, projectID, directorID, entity.CoordinationCapabilityStartAgents, false)
+	assertRelationship(t, ctx, repository, 0, projectID, managerID, entity.CoordinationActionStart, managerID, true)
+	assertRelationship(t, ctx, repository, 0, projectID, managerID, entity.CoordinationActionStart, workerID, true)
+	assertRelationship(t, ctx, repository, 0, projectID, workerID, entity.CoordinationActionCallback, managerID, true)
+
+	if err := repository.ApplyManagerCoordinationPolicyPreset(ctx, projectID, managerID); err != nil {
+		t.Fatalf("idempotent ApplyManagerCoordinationPolicyPreset() error = %v", err)
+	}
+	var revisionCount int
+	if err := pool.QueryRow(ctx, `select count(*) from matter_codex_policy_revisions where project_id = $1`, projectID).Scan(&revisionCount); err != nil {
+		t.Fatalf("count policy revisions: %v", err)
+	}
+	if revisionCount != 2 {
+		t.Fatalf("policy revision count = %d, want 2", revisionCount)
+	}
 }
 
 func assertCoordinationTransactionRepository(

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
@@ -18,6 +19,20 @@ var _ adminrepo.CoordinationRepository = (*Repository)(nil)
 var _ adminrepo.CoordinationPolicyPresetRepository = (*Repository)(nil)
 
 func (repo *Repository) ApplyCoordinationPolicyPreset(ctx context.Context, projectID int64, topCoordinatorRoleID int64, waveCoordinatorRoleIDs []int64) error {
+	return repo.applyCoordinationPolicyPreset(ctx, projectID, topCoordinatorRoleID, waveCoordinatorRoleIDs, "director-manager-v1")
+}
+
+func (repo *Repository) ApplyManagerCoordinationPolicyPreset(ctx context.Context, projectID int64, managerRoleID int64) error {
+	return repo.applyCoordinationPolicyPreset(ctx, projectID, managerRoleID, []int64{managerRoleID}, "manager-unit-v1")
+}
+
+func (repo *Repository) applyCoordinationPolicyPreset(
+	ctx context.Context,
+	projectID int64,
+	topCoordinatorRoleID int64,
+	waveCoordinatorRoleIDs []int64,
+	preset string,
+) error {
 	tx, err := repo.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin apply coordination policy preset: %w", err)
@@ -26,31 +41,57 @@ func (repo *Repository) ApplyCoordinationPolicyPreset(ctx context.Context, proje
 	if _, err := tx.Exec(ctx, "select pg_advisory_xact_lock($1)", projectID); err != nil {
 		return fmt.Errorf("lock project policy: %w", err)
 	}
-	var revisionID int64
-	var presetApplied bool
+	waveRoleIDs := append([]int64(nil), waveCoordinatorRoleIDs...)
+	sort.Slice(waveRoleIDs, func(left, right int) bool {
+		return waveRoleIDs[left] < waveRoleIDs[right]
+	})
+	var enabledRoleIDs []int64
+	if err := tx.QueryRow(ctx, `
+		select coalesce(array_agg(id order by id), '{}'::bigint[])
+		from matter_codex_agent_roles
+		where project_id = $1 and enabled
+	`, projectID).Scan(&enabledRoleIDs); err != nil {
+		return fmt.Errorf("list enabled roles for policy preset: %w", err)
+	}
+	fingerprintBytes := sha256.Sum256([]byte(fmt.Sprintf(
+		"%s:%d:%v:%v",
+		preset,
+		topCoordinatorRoleID,
+		waveRoleIDs,
+		enabledRoleIDs,
+	)))
+	fingerprint := hex.EncodeToString(fingerprintBytes[:])
+	var activeRevisionID int64
+	var activePreset string
+	var activeFingerprint string
 	err = tx.QueryRow(ctx, `
-			select id, coalesce(settings->>'preset', '') = 'director-manager-v1'
+			select id, coalesce(settings->>'preset', ''), coalesce(settings->>'fingerprint', '')
 			from matter_codex_policy_revisions where project_id = $1 and status = 'active'
-		`, projectID).Scan(&revisionID, &presetApplied)
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = tx.QueryRow(ctx, `
-			insert into matter_codex_policy_revisions (project_id, version, status, activated_at)
-			select $1, coalesce(max(version), 0) + 1, 'active', now()
-			from matter_codex_policy_revisions where project_id = $1
-			returning id
-		`, projectID).Scan(&revisionID)
+		`, projectID).Scan(&activeRevisionID, &activePreset, &activeFingerprint)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("get active policy revision for preset: %w", err)
 	}
-	if err != nil {
-		return fmt.Errorf("get policy revision for preset: %w", err)
-	}
-	if presetApplied {
+	if activePreset == preset && activeFingerprint == fingerprint {
 		return tx.Commit(ctx)
 	}
-	if _, err := tx.Exec(ctx, `delete from matter_codex_role_capabilities where policy_revision_id = $1`, revisionID); err != nil {
-		return fmt.Errorf("clear role capabilities: %w", err)
+	if activeRevisionID > 0 {
+		if _, err := tx.Exec(ctx, `
+			update matter_codex_policy_revisions
+			set status = 'archived'
+			where id = $1 and status = 'active'
+		`, activeRevisionID); err != nil {
+			return fmt.Errorf("archive previous policy revision: %w", err)
+		}
 	}
-	if _, err := tx.Exec(ctx, `delete from matter_codex_role_relationship_policies where policy_revision_id = $1`, revisionID); err != nil {
-		return fmt.Errorf("clear role relationships: %w", err)
+	var revisionID int64
+	if err := tx.QueryRow(ctx, `
+		insert into matter_codex_policy_revisions (project_id, version, status, settings, activated_at)
+		select $1, coalesce(max(version), 0) + 1, 'active',
+			jsonb_build_object('preset', $2::text, 'fingerprint', $3::text), now()
+		from matter_codex_policy_revisions where project_id = $1
+		returning id
+	`, projectID, preset, fingerprint).Scan(&revisionID); err != nil {
+		return fmt.Errorf("create policy revision for preset: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into matter_codex_role_capabilities (policy_revision_id, role_id, capability)
@@ -64,7 +105,7 @@ func (repo *Repository) ApplyCoordinationPolicyPreset(ctx context.Context, proje
 	`, revisionID, projectID); err != nil {
 		return fmt.Errorf("insert baseline role capabilities: %w", err)
 	}
-	coordinators := append([]int64{topCoordinatorRoleID}, waveCoordinatorRoleIDs...)
+	coordinators := append([]int64{topCoordinatorRoleID}, waveRoleIDs...)
 	if _, err := tx.Exec(ctx, `
 		insert into matter_codex_role_capabilities (policy_revision_id, role_id, capability)
 		select $1, r.id, c.capability
@@ -77,17 +118,17 @@ func (repo *Repository) ApplyCoordinationPolicyPreset(ctx context.Context, proje
 	`, revisionID, projectID, coordinators); err != nil {
 		return fmt.Errorf("insert coordinator capabilities: %w", err)
 	}
-	if len(waveCoordinatorRoleIDs) > 0 {
+	if len(waveRoleIDs) > 0 {
 		if _, err := tx.Exec(ctx, `
 			insert into matter_codex_role_relationship_policies (policy_revision_id, source_role_id, action, target_role_id)
 			select $1, $2, 'start', unnest($3::bigint[])
-		`, revisionID, topCoordinatorRoleID, waveCoordinatorRoleIDs); err != nil {
+		`, revisionID, topCoordinatorRoleID, waveRoleIDs); err != nil {
 			return fmt.Errorf("insert top coordinator start relationships: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
 			insert into matter_codex_role_relationship_policies (policy_revision_id, source_role_id, action, target_role_id)
 			select $1, unnest($2::bigint[]), 'callback', $3
-		`, revisionID, waveCoordinatorRoleIDs, topCoordinatorRoleID); err != nil {
+		`, revisionID, waveRoleIDs, topCoordinatorRoleID); err != nil {
 			return fmt.Errorf("insert wave coordinator callbacks: %w", err)
 		}
 	}
@@ -107,10 +148,10 @@ func (repo *Repository) ApplyCoordinationPolicyPreset(ctx context.Context, proje
 		join matter_codex_agent_roles target on target.project_id = source.project_id and target.enabled
 		where source.project_id = $2 and source.id = any($3::bigint[])
 			and target.id <> $4 and not (target.id = any($3::bigint[]))
-	`, revisionID, projectID, waveCoordinatorRoleIDs, topCoordinatorRoleID); err != nil {
+	`, revisionID, projectID, waveRoleIDs, topCoordinatorRoleID); err != nil {
 		return fmt.Errorf("insert wave coordinator start relationships: %w", err)
 	}
-	if len(waveCoordinatorRoleIDs) > 0 {
+	if len(waveRoleIDs) > 0 {
 		if _, err := tx.Exec(ctx, `
 			insert into matter_codex_role_relationship_policies (policy_revision_id, source_role_id, action, target_role_id)
 			select $1, worker.id, 'callback', coordinator.id
@@ -119,16 +160,9 @@ func (repo *Repository) ApplyCoordinationPolicyPreset(ctx context.Context, proje
 			join matter_codex_agent_roles coordinator on coordinator.id = c.role_id
 			where worker.project_id = $2 and worker.enabled
 				and worker.id <> $4 and not (worker.id = any($3::bigint[]))
-		`, revisionID, projectID, waveCoordinatorRoleIDs, topCoordinatorRoleID); err != nil {
+		`, revisionID, projectID, waveRoleIDs, topCoordinatorRoleID); err != nil {
 			return fmt.Errorf("insert worker callback relationships: %w", err)
 		}
-	}
-	if _, err := tx.Exec(ctx, `
-		update matter_codex_policy_revisions
-		set settings = settings || '{"preset":"director-manager-v1"}'::jsonb
-		where id = $1
-	`, revisionID); err != nil {
-		return fmt.Errorf("mark coordination policy preset: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit coordination policy preset: %w", err)
