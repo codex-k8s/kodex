@@ -22,6 +22,8 @@ const (
 	restoreControllerIssuer      = restoreControllerSPIFFE
 	restoreWorkloadAudience      = "urn:mattercodex:internal-rpc-authority-restore-workload"
 	restoreRoleCredentialPurpose = "RESTORE_ROLE_CREDENTIAL"
+	restoreOperatorSubject       = "system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-operator"
+	restoreOperatorAudience      = "urn:mattercodex:internal-rpc-authority-restore-controller"
 )
 
 // RestorePeer описывает проверенную mTLS-идентичность caller.
@@ -55,6 +57,50 @@ type RestoreDirectiveResult struct {
 type RestoreACKResult struct {
 	State   model.RestoreState
 	Receipt model.RestoreACKRecord
+}
+
+// AuthorizeOperator связывает проверенный TokenReview result с exact command.
+func (controller *RestoreController) AuthorizeOperator(
+	ctx context.Context,
+	credential model.RestoreOperatorCredential,
+	fullMethod string,
+	idempotencyKey string,
+	semanticDigest string,
+) error {
+	if credential.Subject != restoreOperatorSubject ||
+		credential.Namespace != "mattercodex-system" ||
+		credential.ServiceAccount != "internal-rpc-authority-restore-operator" ||
+		credential.Audience != restoreOperatorAudience ||
+		!digestPattern.MatchString(credential.TokenDigestSHA256) ||
+		(fullMethod !=
+			"/internalrpcauthority.v1.RestoreControllerService/PrepareRestore" &&
+			fullMethod !=
+				"/internalrpcauthority.v1.RestoreControllerService/CompleteRestore") ||
+		!uuidPattern.MatchString(idempotencyKey) ||
+		!digestPattern.MatchString(semanticDigest) {
+		return failure.New(
+			failure.Unauthenticated,
+			"restore operator application credential binding rejected",
+		)
+	}
+	err := controller.coordination.AuthorizeOperator(
+		ctx,
+		model.RestoreOperatorAuthorizationRecord{
+			TokenDigestSHA256:    credential.TokenDigestSHA256,
+			Subject:              credential.Subject,
+			FullMethod:           fullMethod,
+			IdempotencyKey:       idempotencyKey,
+			SemanticDigestSHA256: semanticDigest,
+			AuthorizedAt:         controller.now().UTC().Unix(),
+		},
+	)
+	if err != nil {
+		return mapRestorePersistence(
+			"reserve restore operator application credential",
+			err,
+		)
+	}
+	return nil
 }
 
 // NewRestoreController создаёт контроллер из устойчивых границ состояния.

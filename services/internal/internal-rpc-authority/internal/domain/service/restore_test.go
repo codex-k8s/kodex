@@ -249,6 +249,77 @@ func TestRestoreControllerPrepareDirectiveACKAndSemanticRetry(t *testing.T) {
 	}
 }
 
+func TestRestoreOperatorCredentialСвязанСТочнымRPCИОдноразовойСемантикой(
+	t *testing.T,
+) {
+	t.Parallel()
+	now := time.Unix(1_800_000_000, 0).UTC()
+	controllerKey := testKey(t, "controller-tls-operator-binding")
+	roleSigner := testKey(t, "restore-role-operator-binding")
+	store := newMemoryRestoreCoordination()
+	controller, err := NewRestoreController(
+		"internal-rpc-authority-primary",
+		controllerKey,
+		1,
+		testPublisherRegistry(),
+		map[string]VerificationKeyRecord{
+			roleSigner.KeyID: {
+				Key: roleSigner.PublicOnly(), Issuer: restorePublisherSPIFFE,
+				Generation: 1, Status: "CURRENT",
+				Purpose:   restoreRoleCredentialPurpose,
+				Audiences: map[string]struct{}{restoreControllerAudience: {}},
+				NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour),
+			},
+		},
+		model.RestoreRoleTrustMetadata{
+			SourceRevision: 1, SourceDigest: strings.Repeat("d", 64),
+			KeySetRevision: 1, SignerGeneration: 1,
+		},
+		store,
+		&memoryRestoreFence{},
+		&memoryRestorePublisher{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.now = func() time.Time { return now }
+	credential := model.RestoreOperatorCredential{
+		Subject:           "system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-operator",
+		Namespace:         "mattercodex-system",
+		ServiceAccount:    "internal-rpc-authority-restore-operator",
+		Audience:          restoreOperatorAudience,
+		TokenDigestSHA256: strings.Repeat("a", 64),
+	}
+	idempotencyKey := "11111111-1111-4111-8111-111111111111"
+	semanticDigest := strings.Repeat("b", 64)
+	method := "/internalrpcauthority.v1.RestoreControllerService/PrepareRestore"
+	if err := controller.AuthorizeOperator(
+		context.Background(), credential, method, idempotencyKey, semanticDigest,
+	); err != nil {
+		t.Fatalf("authorize exact operator command: %v", err)
+	}
+	if err := controller.AuthorizeOperator(
+		context.Background(), credential, method, idempotencyKey, semanticDigest,
+	); err != nil {
+		t.Fatalf("semantic retry rejected: %v", err)
+	}
+	if err := controller.AuthorizeOperator(
+		context.Background(),
+		credential,
+		"/internalrpcauthority.v1.RestoreControllerService/CompleteRestore",
+		idempotencyKey,
+		semanticDigest,
+	); !failure.IsKind(err, failure.ReplayDetected) {
+		t.Fatalf("cross-RPC token replay accepted: %v", err)
+	}
+	if len(store.state.OperatorAuthorizations) != 1 {
+		t.Fatalf(
+			"operator authorization records = %d",
+			len(store.state.OperatorAuthorizations),
+		)
+	}
+}
+
 type memoryRestoreCoordination struct {
 	mu    sync.Mutex
 	state model.RestoreState
@@ -363,6 +434,24 @@ func (store *memoryRestoreCoordination) RecordACK(
 	store.state.Phase = "PREPARED"
 	store.state.CoordinationRevision++
 	return store.state, record, nil
+}
+
+func (store *memoryRestoreCoordination) AuthorizeOperator(
+	_ context.Context,
+	record model.RestoreOperatorAuthorizationRecord,
+) error {
+	if store.state.OperatorAuthorizations == nil {
+		store.state.OperatorAuthorizations =
+			make(map[string]model.RestoreOperatorAuthorizationRecord)
+	}
+	if existing, ok := store.state.OperatorAuthorizations[record.TokenDigestSHA256]; ok &&
+		(existing.FullMethod != record.FullMethod ||
+			existing.IdempotencyKey != record.IdempotencyKey ||
+			existing.SemanticDigestSHA256 != record.SemanticDigestSHA256) {
+		return repository.ErrReplay
+	}
+	store.state.OperatorAuthorizations[record.TokenDigestSHA256] = record
+	return nil
 }
 
 func (store *memoryRestoreCoordination) Complete(

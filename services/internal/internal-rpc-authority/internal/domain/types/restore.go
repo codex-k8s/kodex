@@ -7,27 +7,49 @@ import (
 
 // RestoreState содержит каноническое устойчивое состояние восстановления.
 type RestoreState struct {
-	Version                int                               `json:"v"`
-	RestoreID              string                            `json:"restore_id"`
-	DatabaseClusterID      string                            `json:"database_cluster_id"`
-	BackupManifestDigest   string                            `json:"backup_manifest_digest_sha256"`
-	RecoveryTargetUnix     int64                             `json:"recovery_target_unix"`
-	Phase                  string                            `json:"phase"`
-	RestoreEpoch           uint64                            `json:"restore_epoch"`
-	CoordinationRevision   uint64                            `json:"coordination_revision"`
-	AnchorRevision         uint64                            `json:"anchor_revision"`
-	EvidenceDigest         string                            `json:"evidence_digest_sha256"`
-	SafeWindowNotBefore    int64                             `json:"safe_window_not_before,omitempty"`
-	PrepareIdempotencyKey  string                            `json:"prepare_idempotency_key"`
-	PrepareSemanticDigest  string                            `json:"prepare_semantic_digest_sha256"`
-	CompleteIdempotencyKey string                            `json:"complete_idempotency_key,omitempty"`
-	CompleteSemanticDigest string                            `json:"complete_semantic_digest_sha256,omitempty"`
-	ExpectedTargets        map[string]RestoreExpectedTarget  `json:"expected_targets"`
-	Issuances              map[string]RestoreIssuanceRecord  `json:"issuances"`
-	Deliveries             map[string]RestoreDeliveryRecord  `json:"deliveries"`
-	Directives             map[string]RestoreDirectiveRecord `json:"directives"`
-	ACKs                   map[string]RestoreACKRecord       `json:"acks"`
-	UpdatedAt              int64                             `json:"updated_at"`
+	Version                int                                           `json:"v"`
+	RestoreID              string                                        `json:"restore_id"`
+	DatabaseClusterID      string                                        `json:"database_cluster_id"`
+	BackupManifestDigest   string                                        `json:"backup_manifest_digest_sha256"`
+	RecoveryTargetUnix     int64                                         `json:"recovery_target_unix"`
+	Phase                  string                                        `json:"phase"`
+	RestoreEpoch           uint64                                        `json:"restore_epoch"`
+	CoordinationRevision   uint64                                        `json:"coordination_revision"`
+	AnchorRevision         uint64                                        `json:"anchor_revision"`
+	EvidenceDigest         string                                        `json:"evidence_digest_sha256"`
+	SafeWindowNotBefore    int64                                         `json:"safe_window_not_before,omitempty"`
+	PrepareIdempotencyKey  string                                        `json:"prepare_idempotency_key"`
+	PrepareSemanticDigest  string                                        `json:"prepare_semantic_digest_sha256"`
+	CompleteIdempotencyKey string                                        `json:"complete_idempotency_key,omitempty"`
+	CompleteSemanticDigest string                                        `json:"complete_semantic_digest_sha256,omitempty"`
+	ExpectedTargets        map[string]RestoreExpectedTarget              `json:"expected_targets"`
+	Issuances              map[string]RestoreIssuanceRecord              `json:"issuances"`
+	Deliveries             map[string]RestoreDeliveryRecord              `json:"deliveries"`
+	Directives             map[string]RestoreDirectiveRecord             `json:"directives"`
+	ACKs                   map[string]RestoreACKRecord                   `json:"acks"`
+	OperatorAuthorizations map[string]RestoreOperatorAuthorizationRecord `json:"operator_authorizations"`
+	UpdatedAt              int64                                         `json:"updated_at"`
+}
+
+// RestoreOperatorCredential — результат server-side TokenReview projected
+// ServiceAccount token; само значение bearer token в модель не попадает.
+type RestoreOperatorCredential struct {
+	Subject           string
+	Namespace         string
+	ServiceAccount    string
+	Audience          string
+	TokenDigestSHA256 string
+}
+
+// RestoreOperatorAuthorizationRecord связывает одноразовый application
+// credential с exact RPC, idempotency и canonical semantic digest.
+type RestoreOperatorAuthorizationRecord struct {
+	TokenDigestSHA256    string `json:"token_digest_sha256"`
+	Subject              string `json:"subject"`
+	FullMethod           string `json:"full_method"`
+	IdempotencyKey       string `json:"idempotency_key"`
+	SemanticDigestSHA256 string `json:"semantic_digest_sha256"`
+	AuthorizedAt         int64  `json:"authorized_at"`
 }
 
 // RestoreExpectedTarget задаёт точную ожидаемую роль восстановления.

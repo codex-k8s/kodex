@@ -30,8 +30,22 @@ type RestoreCoordinationStore interface {
 		string,
 		model.RestoreACKRecord,
 	) (model.RestoreState, model.RestoreACKRecord, error)
+	AuthorizeOperator(
+		context.Context,
+		model.RestoreOperatorAuthorizationRecord,
+	) error
 	Complete(context.Context, model.CompleteRestoreCommand) (model.RestoreState, error)
 	CoordinationReady(context.Context) error
+}
+
+// RestoreOperatorCredentialVerifier проверяет projected ServiceAccount token
+// через Kubernetes TokenReview с exact audience и subject.
+type RestoreOperatorCredentialVerifier interface {
+	VerifyOperatorCredential(
+		context.Context,
+		string,
+		string,
+	) (model.RestoreOperatorCredential, error)
 }
 
 // RestoreFenceStore применяет и проверяет рабочий fence восстановления.

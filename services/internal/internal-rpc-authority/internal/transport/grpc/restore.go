@@ -3,6 +3,7 @@ package authoritygrpc
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
@@ -10,27 +11,37 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/failure"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const restoreOperatorSPIFFE = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-operator"
+const (
+	restoreOperatorSPIFFE              = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-operator"
+	restoreOperatorApplicationAudience = "urn:mattercodex:internal-rpc-authority-restore-controller"
+)
 
 // RestoreControllerServer адаптирует координацию восстановления к gRPC.
 type RestoreControllerServer struct {
 	internalrpcauthorityv1.UnimplementedRestoreControllerServiceServer
-	application *application.RestoreController
+	application        *application.RestoreController
+	credentialVerifier repository.RestoreOperatorCredentialVerifier
 }
 
 // NewRestoreControllerServer создаёт сервер контроллера восстановления.
 func NewRestoreControllerServer(
 	applicationValue *application.RestoreController,
+	credentialVerifier repository.RestoreOperatorCredentialVerifier,
 ) *RestoreControllerServer {
-	return &RestoreControllerServer{application: applicationValue}
+	return &RestoreControllerServer{
+		application:        applicationValue,
+		credentialVerifier: credentialVerifier,
+	}
 }
 
 // PrepareRestore начинает координацию для проверенного operator peer.
@@ -57,6 +68,14 @@ func (server *RestoreControllerServer) PrepareRestore(
 	)
 	if err != nil {
 		return nil, authorizationError(errorSpecMalformedRequest, correlationID)
+	}
+	if err := server.authorizeRestoreOperator(
+		ctx,
+		internalrpcauthorityv1.RestoreControllerService_PrepareRestore_FullMethodName,
+		request.GetIdempotencyKey(),
+		semanticDigest,
+	); err != nil {
+		return nil, mapRestoreError(err, correlationID)
 	}
 	state, err := server.application.Prepare(
 		ctx,
@@ -204,6 +223,14 @@ func (server *RestoreControllerServer) CompleteRestore(
 	if err != nil {
 		return nil, authorizationError(errorSpecMalformedRequest, correlationID)
 	}
+	if err := server.authorizeRestoreOperator(
+		ctx,
+		internalrpcauthorityv1.RestoreControllerService_CompleteRestore_FullMethodName,
+		request.GetIdempotencyKey(),
+		semanticDigest,
+	); err != nil {
+		return nil, mapRestoreError(err, correlationID)
+	}
 	state, err := server.application.Complete(
 		ctx,
 		model.CompleteRestoreCommand{
@@ -234,6 +261,9 @@ func (server *RestoreControllerServer) CheckReadiness(
 	if err := requireRestoreOperator(ctx); err != nil {
 		return nil, authorizationError(restoreOperatorErrorSpec, "")
 	}
+	if _, err := server.reviewOperatorCredential(ctx); err != nil {
+		return nil, authorizationError(restoreOperatorErrorSpec, "")
+	}
 	state, err := server.application.Ready(ctx)
 	if err != nil {
 		return &internalrpcauthorityv1.RestoreControllerServiceCheckReadinessResponse{
@@ -255,6 +285,52 @@ func (server *RestoreControllerServer) CheckReadiness(
 		AckVerificationRegistryReady:        true,
 		RoleCredentialTrustKeySetRevision:   trust.KeySetRevision,
 	}, nil
+}
+
+func (server *RestoreControllerServer) authorizeRestoreOperator(
+	ctx context.Context,
+	fullMethod string,
+	idempotencyKey string,
+	semanticDigest string,
+) error {
+	credential, err := server.reviewOperatorCredential(ctx)
+	if err != nil {
+		return failure.Wrap(
+			failure.Unauthenticated,
+			"restore operator application credential rejected",
+			err,
+		)
+	}
+	return server.application.AuthorizeOperator(
+		ctx,
+		credential,
+		fullMethod,
+		idempotencyKey,
+		semanticDigest,
+	)
+}
+
+func (server *RestoreControllerServer) reviewOperatorCredential(
+	ctx context.Context,
+) (model.RestoreOperatorCredential, error) {
+	if server.credentialVerifier == nil {
+		return model.RestoreOperatorCredential{}, errors.New(
+			"restore operator credential verifier is unavailable",
+		)
+	}
+	values := metadata.ValueFromIncomingContext(ctx, "authorization")
+	if len(values) != 1 ||
+		!strings.HasPrefix(values[0], "Bearer ") ||
+		len(values[0]) <= len("Bearer ") {
+		return model.RestoreOperatorCredential{}, errors.New(
+			"restore operator bearer credential is absent",
+		)
+	}
+	return server.credentialVerifier.VerifyOperatorCredential(
+		ctx,
+		strings.TrimPrefix(values[0], "Bearer "),
+		restoreOperatorApplicationAudience,
+	)
 }
 
 func requireRestoreOperator(ctx context.Context) error {

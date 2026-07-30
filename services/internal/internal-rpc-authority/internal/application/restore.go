@@ -25,6 +25,23 @@ func (application *RestoreController) Prepare(
 	return application.domain.Prepare(ctx, command)
 }
 
+// AuthorizeOperator резервирует проверенный projected application credential.
+func (application *RestoreController) AuthorizeOperator(
+	ctx context.Context,
+	credential model.RestoreOperatorCredential,
+	fullMethod string,
+	idempotencyKey string,
+	semanticDigest string,
+) error {
+	return application.domain.AuthorizeOperator(
+		ctx,
+		credential,
+		fullMethod,
+		idempotencyKey,
+		semanticDigest,
+	)
+}
+
 // GetDirective выдаёт точную role-bound директиву.
 func (application *RestoreController) GetDirective(
 	ctx context.Context,

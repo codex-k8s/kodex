@@ -3,8 +3,10 @@ package restore
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,6 +57,36 @@ type objectMetadata struct {
 	Name            string `json:"name"`
 	Namespace       string `json:"namespace"`
 	ResourceVersion string `json:"resourceVersion,omitempty"`
+}
+
+type tokenReviewRequest struct {
+	APIVersion string          `json:"apiVersion"`
+	Kind       string          `json:"kind"`
+	Spec       tokenReviewSpec `json:"spec"`
+}
+
+type tokenReviewSpec struct {
+	Token     string   `json:"token"`
+	Audiences []string `json:"audiences"`
+}
+
+type tokenReviewResponse struct {
+	APIVersion string            `json:"apiVersion"`
+	Kind       string            `json:"kind"`
+	Metadata   json.RawMessage   `json:"metadata"`
+	Status     tokenReviewStatus `json:"status"`
+}
+
+type tokenReviewStatus struct {
+	Authenticated bool     `json:"authenticated"`
+	Audiences     []string `json:"audiences"`
+	User          struct {
+		Username string              `json:"username"`
+		UID      string              `json:"uid"`
+		Groups   []string            `json:"groups"`
+		Extra    map[string][]string `json:"extra"`
+	} `json:"user"`
+	Error string `json:"error"`
 }
 
 // New создаёт хранилище с закреплёнными namespace и resource name.
@@ -138,24 +170,25 @@ func (store *Store) Prepare(
 			anchorRevision = 1
 		}
 		next := model.RestoreState{
-			Version:               model.ContractVersion,
-			RestoreID:             command.RestoreID,
-			DatabaseClusterID:     command.DatabaseClusterID,
-			BackupManifestDigest:  command.BackupManifestDigest,
-			RecoveryTargetUnix:    command.RecoveryTarget.Unix(),
-			Phase:                 "QUIESCING",
-			RestoreEpoch:          restoreEpoch,
-			CoordinationRevision:  current.CoordinationRevision + 1,
-			AnchorRevision:        anchorRevision,
-			EvidenceDigest:        command.SemanticDigest,
-			PrepareIdempotencyKey: command.IdempotencyKey,
-			PrepareSemanticDigest: command.SemanticDigest,
-			ExpectedTargets:       command.ExpectedTargets,
-			Issuances:             make(map[string]model.RestoreIssuanceRecord),
-			Deliveries:            make(map[string]model.RestoreDeliveryRecord),
-			Directives:            make(map[string]model.RestoreDirectiveRecord),
-			ACKs:                  make(map[string]model.RestoreACKRecord),
-			UpdatedAt:             command.Now.Unix(),
+			Version:                model.ContractVersion,
+			RestoreID:              command.RestoreID,
+			DatabaseClusterID:      command.DatabaseClusterID,
+			BackupManifestDigest:   command.BackupManifestDigest,
+			RecoveryTargetUnix:     command.RecoveryTarget.Unix(),
+			Phase:                  "QUIESCING",
+			RestoreEpoch:           restoreEpoch,
+			CoordinationRevision:   current.CoordinationRevision + 1,
+			AnchorRevision:         anchorRevision,
+			EvidenceDigest:         command.SemanticDigest,
+			PrepareIdempotencyKey:  command.IdempotencyKey,
+			PrepareSemanticDigest:  command.SemanticDigest,
+			ExpectedTargets:        command.ExpectedTargets,
+			Issuances:              make(map[string]model.RestoreIssuanceRecord),
+			Deliveries:             make(map[string]model.RestoreDeliveryRecord),
+			Directives:             make(map[string]model.RestoreDirectiveRecord),
+			ACKs:                   make(map[string]model.RestoreACKRecord),
+			OperatorAuthorizations: current.OperatorAuthorizations,
+			UpdatedAt:              command.Now.Unix(),
 		}
 		result = next
 		return next, nil
@@ -170,6 +203,95 @@ func (store *Store) Load(ctx context.Context) (model.RestoreState, error) {
 		return model.RestoreState{}, err
 	}
 	return decodeState(envelope.Data[stateDataKey])
+}
+
+// VerifyOperatorCredential проверяет projected ServiceAccount token через
+// Kubernetes TokenReview. Bearer value не возвращается и не логируется.
+func (store *Store) VerifyOperatorCredential(
+	ctx context.Context,
+	token string,
+	audience string,
+) (model.RestoreOperatorCredential, error) {
+	const (
+		expectedAudience = "urn:mattercodex:internal-rpc-authority-restore-controller"
+		expectedSubject  = "system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-operator"
+		podNameExtraKey  = "authentication.kubernetes.io/pod-name"
+		podUIDExtraKey   = "authentication.kubernetes.io/pod-uid"
+	)
+	if token == "" || len(token) > 16<<10 || audience != expectedAudience {
+		return model.RestoreOperatorCredential{}, errors.New(
+			"restore operator application credential is invalid",
+		)
+	}
+	body, err := json.Marshal(tokenReviewRequest{
+		APIVersion: "authentication.k8s.io/v1",
+		Kind:       "TokenReview",
+		Spec: tokenReviewSpec{
+			Token: token, Audiences: []string{audience},
+		},
+	})
+	if err != nil {
+		return model.RestoreOperatorCredential{}, errors.New(
+			"encode restore operator TokenReview",
+		)
+	}
+	request, err := store.apiRequest(
+		ctx,
+		http.MethodPost,
+		store.config.Address+"/apis/authentication.k8s.io/v1/tokenreviews",
+		body,
+	)
+	if err != nil {
+		return model.RestoreOperatorCredential{}, err
+	}
+	response, err := store.client.Do(request)
+	if err != nil {
+		return model.RestoreOperatorCredential{}, errors.New(
+			"perform restore operator TokenReview",
+		)
+	}
+	defer response.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(
+		response.Body,
+		maxKubernetesResponseBytes+1,
+	))
+	if err != nil ||
+		response.StatusCode != http.StatusCreated ||
+		len(raw) == 0 ||
+		len(raw) > maxKubernetesResponseBytes {
+		return model.RestoreOperatorCredential{}, errors.New(
+			"restore operator TokenReview response rejected",
+		)
+	}
+	var reviewed tokenReviewResponse
+	if err := decodeStrictJSON(raw, &reviewed); err != nil ||
+		reviewed.APIVersion != "authentication.k8s.io/v1" ||
+		reviewed.Kind != "TokenReview" ||
+		!reviewed.Status.Authenticated ||
+		reviewed.Status.Error != "" ||
+		reviewed.Status.User.Username != expectedSubject ||
+		reviewed.Status.User.UID == "" ||
+		len(reviewed.Status.User.Extra[podNameExtraKey]) != 1 ||
+		!strings.HasPrefix(
+			reviewed.Status.User.Extra[podNameExtraKey][0],
+			"internal-rpc-authority-restore-operator-",
+		) ||
+		len(reviewed.Status.User.Extra[podUIDExtraKey]) != 1 ||
+		reviewed.Status.User.Extra[podUIDExtraKey][0] == "" ||
+		len(reviewed.Status.Audiences) != 1 ||
+		reviewed.Status.Audiences[0] != audience {
+		return model.RestoreOperatorCredential{}, errors.New(
+			"restore operator TokenReview binding rejected",
+		)
+	}
+	digest := sha256.Sum256([]byte(token))
+	return model.RestoreOperatorCredential{
+		Subject:           expectedSubject,
+		Namespace:         "mattercodex-system",
+		ServiceAccount:    "internal-rpc-authority-restore-operator",
+		Audience:          audience,
+		TokenDigestSHA256: hex.EncodeToString(digest[:]),
+	}, nil
 }
 
 // EnsureIssuance сохраняет выдачу роли восстановления ровно один раз.
@@ -298,6 +420,40 @@ func (store *Store) RecordACK(
 		return current, nil
 	})
 	return result, saved, err
+}
+
+// AuthorizeOperator устойчиво связывает одноразовый token digest с exact
+// RPC/idempotency/semantic request до изменения restore phase.
+func (store *Store) AuthorizeOperator(
+	ctx context.Context,
+	record model.RestoreOperatorAuthorizationRecord,
+) error {
+	return store.mutate(ctx, func(current model.RestoreState) (model.RestoreState, error) {
+		if current.OperatorAuthorizations == nil {
+			current.OperatorAuthorizations =
+				make(map[string]model.RestoreOperatorAuthorizationRecord)
+		}
+		if existing, ok := current.OperatorAuthorizations[record.TokenDigestSHA256]; ok {
+			if existing.Subject != record.Subject ||
+				existing.FullMethod != record.FullMethod ||
+				existing.IdempotencyKey != record.IdempotencyKey ||
+				existing.SemanticDigestSHA256 != record.SemanticDigestSHA256 {
+				return model.RestoreState{}, domainrepository.ErrReplay
+			}
+			return current, nil
+		}
+		for digest, existing := range current.OperatorAuthorizations {
+			if record.AuthorizedAt-existing.AuthorizedAt > 3600 {
+				delete(current.OperatorAuthorizations, digest)
+			}
+		}
+		if len(current.OperatorAuthorizations) >= 64 {
+			return model.RestoreState{}, domainrepository.ErrReplay
+		}
+		current.OperatorAuthorizations[record.TokenDigestSHA256] = record
+		current.UpdatedAt = record.AuthorizedAt
+		return current, nil
+	})
 }
 
 // Complete завершает подготовленный цикл восстановления идемпотентно.
@@ -465,6 +621,15 @@ func (store *Store) request(
 	method string,
 	body []byte,
 ) (*http.Request, error) {
+	return store.apiRequest(ctx, method, store.resourceURL, body)
+}
+
+func (store *Store) apiRequest(
+	ctx context.Context,
+	method string,
+	endpoint string,
+	body []byte,
+) (*http.Request, error) {
 	token, err := readBoundToken(store.config.TokenFile)
 	if err != nil {
 		return nil, errors.New("read Kubernetes API workload token")
@@ -472,7 +637,7 @@ func (store *Store) request(
 	request, err := http.NewRequestWithContext(
 		ctx,
 		method,
-		store.resourceURL,
+		endpoint,
 		bytes.NewReader(body),
 	)
 	if err != nil {

@@ -282,7 +282,10 @@ func RunRestoreController(
 	)
 	internalrpcauthorityv1.RegisterRestoreControllerServiceServer(
 		grpcRuntime,
-		authoritygrpc.NewRestoreControllerServer(restoreApplication),
+		authoritygrpc.NewRestoreControllerServer(
+			restoreApplication,
+			coordination,
+		),
 	)
 	grpcListener, err := net.Listen("tcp", config.Listen)
 	if err != nil {

@@ -259,6 +259,7 @@ spec:
                 - {name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.crt}
                 - {name: INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.key}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/restore-operator/controller-ca.pem}
+                - {name: INTERNAL_RPC_AUTHORITY_RESTORE_OPERATOR_TOKEN_FILE, value: /var/run/secrets/tokens/restore-operator/token}
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -268,6 +269,7 @@ spec:
                 - {name: controller-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-operator, readOnly: true}
                 - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
                 - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: restore-operator-token, mountPath: /var/run/secrets/tokens/restore-operator, readOnly: true}
           volumes:
             - name: operator-tls
               secret: {secretName: internal-rpc-authority-restore-operator-tls, defaultMode: 0440}
@@ -283,6 +285,14 @@ spec:
                 secretName: internal-rpc-authority-sentry
                 defaultMode: 0440
                 items: [{key: dsn, path: sentry-dsn}]
+            - name: restore-operator-token
+              projected:
+                defaultMode: 0400
+                sources:
+                  - serviceAccountToken:
+                      path: token
+                      audience: urn:mattercodex:internal-rpc-authority-restore-controller
+                      expirationSeconds: 600
 ---
 apiVersion: batch/v1
 kind: CronJob

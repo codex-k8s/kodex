@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
@@ -15,6 +16,7 @@ import (
 	postgresrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/restore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -26,6 +28,7 @@ type RestoreOperatorConfig struct {
 	ControllerCAFile        string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE"`
 	ClientCertificateFile   string        `env:"INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE"`
 	ClientPrivateKeyFile    string        `env:"INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE"`
+	ApplicationTokenFile    string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_OPERATOR_TOKEN_FILE"`
 	RestoreID               string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ID"`
 	DatabaseClusterID       string        `env:"INTERNAL_RPC_AUTHORITY_DATABASE_CLUSTER_ID"`
 	BackupManifestDigest    string        `env:"INTERNAL_RPC_AUTHORITY_BACKUP_MANIFEST_DIGEST_SHA256"`
@@ -43,6 +46,7 @@ func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 		ControllerCAFile:        "/var/run/config/mattercodex/internal-rpc-authority/restore-operator/controller-ca.pem",
 		ClientCertificateFile:   "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.crt",
 		ClientPrivateKeyFile:    "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.key",
+		ApplicationTokenFile:    "/var/run/secrets/tokens/restore-operator/token",
 		DatabaseClusterID:       "internal-rpc-authority-primary",
 		Timeout:                 20 * time.Second,
 	}
@@ -59,6 +63,7 @@ func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 		config.RestoreID == "" ||
 		config.RecoveryTarget.IsZero() ||
 		config.DatabaseClusterID != "internal-rpc-authority-primary" ||
+		config.ApplicationTokenFile == "" ||
 		len(config.BackupManifestDigest) != 64 ||
 		config.IdempotencyKey == "" ||
 		config.CorrelationID == "" {
@@ -113,6 +118,15 @@ func RunRestoreOperator(
 	client := internalrpcauthorityv1.NewRestoreControllerServiceClient(connection)
 	callContext, cancel := context.WithTimeout(ctx, config.Timeout)
 	defer cancel()
+	tokenRaw, err := readPrivateFile(config.ApplicationTokenFile, 16<<10)
+	if err != nil || strings.TrimSpace(string(tokenRaw)) == "" {
+		return errors.New("read restore operator application credential")
+	}
+	callContext = metadata.AppendToOutgoingContext(
+		callContext,
+		"authorization",
+		"Bearer "+strings.TrimSpace(string(tokenRaw)),
+	)
 	if config.Action == "prepare" {
 		response, callErr := client.PrepareRestore(
 			callContext,
