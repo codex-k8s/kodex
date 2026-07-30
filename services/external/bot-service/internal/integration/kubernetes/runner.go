@@ -71,9 +71,10 @@ const (
 )
 
 var (
-	codexDeviceCodeRE        = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
-	runtimeEnvNameRE         = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,127}$`)
-	codexAuthSecretCheckWait = 5 * time.Minute
+	codexDeviceCodeRE         = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
+	codexAuthRevisionSuffixRE = regexp.MustCompile(`-rev-[a-f0-9]{12}$`)
+	runtimeEnvNameRE          = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,127}$`)
+	codexAuthSecretCheckWait  = 5 * time.Minute
 )
 
 type Config struct {
@@ -460,13 +461,16 @@ func (runner *Runner) CompleteCodexAuthSession(ctx context.Context, input runtim
 	if len(bytes.TrimSpace(authJSON)) == 0 {
 		return runtimerepo.CodexAuthCompleteResult{}, fmt.Errorf("codex auth.json is empty")
 	}
-	if err := runner.upsertCodexAuthSecret(ctx, input.AccountName, input.SecretName, authJSON); err != nil {
+	revisionSecretName := codexAuthRevisionSecretName(input.SecretName, authJSON)
+	integrity, err := runner.createCodexAuthRevisionSecret(ctx, input.AccountName, revisionSecretName, authJSON)
+	if err != nil {
 		return runtimerepo.CodexAuthCompleteResult{}, err
 	}
 	return runtimerepo.CodexAuthCompleteResult{
 		AccountName: input.AccountName,
-		SecretName:  input.SecretName,
+		SecretName:  revisionSecretName,
 		Namespace:   runner.namespace,
+		Integrity:   integrity,
 		Saved:       true,
 	}, nil
 }
@@ -886,7 +890,13 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 			return runtimerepo.StartedAgentSession{}, err
 		}
 	}
-	recreatePod, err := runner.sessionPodShouldBeRecreated(ctx, podName, input.PodTokenSecretName)
+	recreatePod, err := runner.sessionPodShouldBeRecreated(
+		ctx,
+		podName,
+		input.PodTokenSecretName,
+		input.CodexAuthSecretName,
+		input.GitHubSecretName,
+	)
 	if err != nil {
 		return runtimerepo.StartedAgentSession{}, err
 	}
@@ -1136,7 +1146,13 @@ func (runner *Runner) ensureSessionPVC(ctx context.Context, sessionKey string, r
 	return true, nil
 }
 
-func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName string, tokenSecretName string) (bool, error) {
+func (runner *Runner) sessionPodShouldBeRecreated(
+	ctx context.Context,
+	podName string,
+	tokenSecretName string,
+	codexAuthSecretName string,
+	gitHubSecretName string,
+) (bool, error) {
 	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -1147,7 +1163,64 @@ func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName s
 	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 		return true, nil
 	}
-	return !podUsesSessionTokenSecret(pod, tokenSecretName), nil
+	return !podUsesSessionRuntimeSecrets(pod, tokenSecretName, codexAuthSecretName, gitHubSecretName), nil
+}
+
+func podUsesSessionRuntimeSecrets(
+	pod *corev1.Pod,
+	tokenSecretName string,
+	codexAuthSecretName string,
+	gitHubSecretName string,
+) bool {
+	tokenSecretName = strings.TrimSpace(tokenSecretName)
+	codexAuthSecretName = strings.TrimSpace(codexAuthSecretName)
+	gitHubSecretName = strings.TrimSpace(gitHubSecretName)
+	if pod == nil || tokenSecretName == "" || codexAuthSecretName == "" {
+		return false
+	}
+	requiredVolumes := map[string]string{
+		sessionSecretVolume:   tokenSecretName,
+		codexAuthSecretVolume: codexAuthSecretName,
+	}
+	if gitHubSecretName != "" {
+		requiredVolumes[gitHubSecretVolume] = gitHubSecretName
+	}
+	matchedVolumes := make(map[string]bool, len(requiredVolumes))
+	for _, volume := range pod.Spec.Volumes {
+		expectedSecret, required := requiredVolumes[volume.Name]
+		if !required || volume.Secret == nil || volume.Secret.SecretName != expectedSecret {
+			continue
+		}
+		matchedVolumes[volume.Name] = true
+	}
+	for volumeName := range requiredVolumes {
+		if !matchedVolumes[volumeName] {
+			return false
+		}
+	}
+	if gitHubSecretName == "" {
+		for _, volume := range pod.Spec.Volumes {
+			if volume.Name == gitHubSecretVolume {
+				return false
+			}
+		}
+	}
+	requiredEnvironment := map[string]bool{
+		"MATTERCODEX_SESSION_TOKEN": false,
+		"MATTERCODEX_MCP_TOKEN":     false,
+	}
+	for _, container := range pod.Spec.Containers {
+		for _, env := range container.Env {
+			if _, required := requiredEnvironment[env.Name]; !required {
+				continue
+			}
+			if env.ValueFrom == nil || env.ValueFrom.SecretKeyRef == nil || env.ValueFrom.SecretKeyRef.Name != tokenSecretName || env.ValueFrom.SecretKeyRef.Key != "token" {
+				return false
+			}
+			requiredEnvironment[env.Name] = true
+		}
+	}
+	return requiredEnvironment["MATTERCODEX_SESSION_TOKEN"] && requiredEnvironment["MATTERCODEX_MCP_TOKEN"]
 }
 
 func podUsesSessionTokenSecret(pod *corev1.Pod, tokenSecretName string) bool {
@@ -1174,7 +1247,9 @@ func podUsesSessionTokenSecret(pod *corev1.Pod, tokenSecretName string) bool {
 			if _, required := requiredEnvironment[env.Name]; !required {
 				continue
 			}
-			if env.ValueFrom == nil || env.ValueFrom.SecretKeyRef == nil || env.ValueFrom.SecretKeyRef.Name != tokenSecretName || env.ValueFrom.SecretKeyRef.Key != "token" {
+			if env.ValueFrom == nil || env.ValueFrom.SecretKeyRef == nil ||
+				env.ValueFrom.SecretKeyRef.Name != tokenSecretName ||
+				env.ValueFrom.SecretKeyRef.Key != "token" {
 				return false
 			}
 			requiredEnvironment[env.Name] = true
@@ -2379,14 +2454,19 @@ func (runner *Runner) execPod(ctx context.Context, podName string, command []str
 	return stdout.Bytes(), nil
 }
 
-func (runner *Runner) upsertCodexAuthSecret(ctx context.Context, accountName string, secretName string, authJSON []byte) error {
+func (runner *Runner) createCodexAuthRevisionSecret(
+	ctx context.Context,
+	accountName string,
+	secretName string,
+	authJSON []byte,
+) (runtimerepo.SecretIntegrity, error) {
 	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
 	secret, err := secretClient.Get(ctx, secretName, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("get codex auth secret: %w", err)
+			return runtimerepo.SecretIntegrity{}, fmt.Errorf("get Codex auth revision Secret: %w", err)
 		}
-		_, err = secretClient.Create(ctx, &corev1.Secret{
+		secret, err = secretClient.Create(ctx, &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: secretName,
 				Labels: map[string]string{
@@ -2395,28 +2475,23 @@ func (runner *Runner) upsertCodexAuthSecret(ctx context.Context, accountName str
 					labelOpenAIAccount:            accountName,
 				},
 			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{"auth.json": authJSON},
+			Immutable: boolPtr(true),
+			Type:      corev1.SecretTypeOpaque,
+			Data:      map[string][]byte{"auth.json": authJSON},
 		}, metav1.CreateOptions{})
 		if err != nil {
-			return fmt.Errorf("create codex auth secret: %w", err)
+			return runtimerepo.SecretIntegrity{}, fmt.Errorf("create Codex auth revision Secret: %w", err)
 		}
-		return nil
+		return secretIntegrity(secret, "auth.json", authJSON), nil
 	}
-	if secret.Data == nil {
-		secret.Data = make(map[string][]byte)
+	existingAuthJSON := secret.Data["auth.json"]
+	if secret.Immutable == nil || !*secret.Immutable || !bytes.Equal(existingAuthJSON, authJSON) {
+		return runtimerepo.SecretIntegrity{}, fmt.Errorf("Codex auth revision Secret conflicts with existing immutable revision")
 	}
-	if secret.Labels == nil {
-		secret.Labels = make(map[string]string)
+	if secret.Labels[labelOpenAIAccount] != accountName {
+		return runtimerepo.SecretIntegrity{}, fmt.Errorf("Codex auth revision Secret belongs to a different account")
 	}
-	secret.Labels["app.kubernetes.io/name"] = "matter-codex-agent-runner"
-	secret.Labels["app.kubernetes.io/component"] = "codex-auth-secret"
-	secret.Labels[labelOpenAIAccount] = accountName
-	secret.Data["auth.json"] = authJSON
-	if _, err := secretClient.Update(ctx, secret, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update codex auth secret: %w", err)
-	}
-	return nil
+	return secretIntegrity(secret, "auth.json", existingAuthJSON), nil
 }
 
 func (runner *Runner) upsertGitHubTokenSecret(ctx context.Context, input runtimerepo.GitHubTokenSecretInput) (bool, error) {
@@ -2679,6 +2754,17 @@ func codexAuthJobName(accountName string) string {
 
 func codexAuthCheckJobName(accountName string) string {
 	return kubernetesName("mc-codex-auth-check-", accountName+"-"+strconv.FormatInt(time.Now().UnixNano(), 36))
+}
+
+func codexAuthRevisionSecretName(currentSecretName string, authJSON []byte) string {
+	baseName := kubernetesName("", codexAuthRevisionSuffixRE.ReplaceAllString(strings.TrimSpace(currentSecretName), ""))
+	digest := sha256.Sum256(authJSON)
+	suffix := "-rev-" + hex.EncodeToString(digest[:6])
+	maximumBaseLength := 63 - len(suffix)
+	if len(baseName) > maximumBaseLength {
+		baseName = strings.TrimRight(baseName[:maximumBaseLength], "-")
+	}
+	return baseName + suffix
 }
 
 func workspacePVCName(runID string) string {

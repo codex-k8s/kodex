@@ -13,6 +13,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
@@ -2998,7 +2999,7 @@ func TestSlashOpenAIAuthStatusAndList(t *testing.T) {
 	}
 }
 
-func TestFrozenClusterAdminAccountsDenyProviderAndSecretSideEffects(t *testing.T) {
+func TestFrozenClusterAdminOpenAIAccountAllowsOnlyOwnerReauthorization(t *testing.T) {
 	store := &fakeAdminStore{
 		frozenOpenAIAccount: "primary",
 		openAIAccounts: map[string]entity.OpenAIAccount{
@@ -3016,18 +3017,38 @@ func TestFrozenClusterAdminAccountsDenyProviderAndSecretSideEffects(t *testing.T
 		Localizer: localizer, StatusService: testStatusService(localizer), Store: store,
 		RuntimeRunner: runner, GitHubAccountInspector: inspector, StorageReady: true, RuntimeConfigured: true,
 		CodexAuthSecretName: "matter-codex-codex-auth", GitHubSecretName: "matter-codex-github",
+		OwnerMattermostUsername: "owner",
 	})
-	for _, command := range []string{
-		"openai auth primary", "openai status primary", "openai cleanup primary", "openai delete primary",
+	for _, commandText := range []string{
+		"openai auth primary", "openai status primary", "openai cleanup primary",
 	} {
-		text := svc.Handle(context.Background(), SlashCommand{Text: command, UserName: "owner"})
-		if !strings.Contains(text, "cluster-admin") {
-			t.Fatalf("%s result = %q", command, text)
+		text := svc.Handle(context.Background(), SlashCommand{Text: commandText, UserName: "other-user"})
+		if !strings.Contains(text, "only be reauthorized") {
+			t.Fatalf("%s result = %q", commandText, text)
 		}
 	}
 	if runner.authAccount != "" || runner.authStatusChecks != 0 || runner.authCompleteCalls != 0 || runner.authCleanupCalls != 0 || runner.deletedAuthAccount != "" {
-		t.Fatalf("frozen OpenAI side effects: %#v", runner)
+		t.Fatalf("non-owner frozen OpenAI side effects: %#v", runner)
 	}
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "openai auth primary", UserID: "owner-id", UserName: "owner"})
+	if !strings.Contains(text, "OpenAI account updated") || runner.authAccount != "primary" {
+		t.Fatalf("owner auth result=%q runner=%#v", text, runner)
+	}
+	runner.authReady = true
+	text = svc.Handle(context.Background(), SlashCommand{Text: "openai status primary", UserID: "owner-id", UserName: "owner"})
+	if !strings.Contains(text, "OpenAI account authorized") || store.frozenOpenAIRotation.AccountName != "primary" {
+		t.Fatalf("owner status result=%q rotation=%#v", text, store.frozenOpenAIRotation)
+	}
+	if store.frozenOpenAIRotation.ActorUserID != "owner-id" ||
+		store.frozenOpenAIRotation.SecretContentSHA256 != "synthetic-sha256" {
+		t.Fatalf("rotation = %#v", store.frozenOpenAIRotation)
+	}
+	text = svc.Handle(context.Background(), SlashCommand{Text: "openai delete primary", UserName: "owner"})
+	if !strings.Contains(text, "cluster-admin") || runner.deletedAuthAccount != "" {
+		t.Fatalf("owner delete result=%q runner=%#v", text, runner)
+	}
+
 	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
 		CallbackID: dialogCallbackGitHubAccountEdit,
 		State:      encodeDialogState(MenuActionCommand{View: menuViewGitHub, Resource: menuResourceGitHubAccount, ID: "agent"}),
@@ -3449,6 +3470,8 @@ type fakeRuntimeRunner struct {
 	authSecret                  string
 	authReady                   bool
 	authSecretNotReady          bool
+	authCompletedSecret         string
+	authReadySecret             string
 	authStatusWithoutDeviceCode bool
 	authSecretChecks            int
 	authStatusChecks            int
@@ -3584,17 +3607,25 @@ func (runner *fakeRuntimeRunner) CheckCodexAuthSecret(_ context.Context, input r
 		Namespace:   "mattermost",
 		JobName:     "mc-codex-auth-check-" + input.AccountName,
 		PodName:     "mc-codex-auth-check-" + input.AccountName + "-pod",
-		Ready:       !runner.authSecretNotReady,
+		Ready:       !runner.authSecretNotReady || input.SecretName == runner.authReadySecret,
 	}, nil
 }
 
 func (runner *fakeRuntimeRunner) CompleteCodexAuthSession(_ context.Context, input runtimerepo.CodexAuthCompleteInput) (runtimerepo.CodexAuthCompleteResult, error) {
 	runner.authCompleteCalls++
+	secretName := input.SecretName
+	if runner.authCompletedSecret != "" {
+		secretName = runner.authCompletedSecret
+	}
 	return runtimerepo.CodexAuthCompleteResult{
 		AccountName: input.AccountName,
-		SecretName:  input.SecretName,
+		SecretName:  secretName,
 		Namespace:   "mattermost",
-		Saved:       true,
+		Integrity: runtimerepo.SecretIntegrity{
+			SecretName: secretName, SecretKey: "auth.json",
+			ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1",
+		},
+		Saved: true,
 	}, nil
 }
 
@@ -3911,6 +3942,7 @@ type fakeAdminStore struct {
 	callbackManifests     map[string]adminrepo.CreateAgentDelegationCallbackDeliveryManifestInput
 	postMessageMaxRunes   int
 	frozenOpenAIAccount   string
+	frozenOpenAIRotation  securityrepo.RotateFrozenOpenAIAccountInput
 	frozenGitHubAccount   string
 	beforeIdlePodEviction func()
 	clearIdleCalls        int
@@ -3934,6 +3966,21 @@ func (store *fakeAdminStore) IsFrozenClusterAdminOpenAIAccount(_ context.Context
 
 func (store *fakeAdminStore) IsFrozenClusterAdminGitHubAccount(_ context.Context, accountName string) (bool, error) {
 	return accountName != "" && accountName == store.frozenGitHubAccount, nil
+}
+
+func (store *fakeAdminStore) RotateFrozenOpenAIAccount(
+	_ context.Context,
+	input securityrepo.RotateFrozenOpenAIAccountInput,
+) (entity.OpenAIAccount, error) {
+	store.frozenOpenAIRotation = input
+	if store.openAIAccounts == nil {
+		store.openAIAccounts = make(map[string]entity.OpenAIAccount)
+	}
+	account := store.openAIAccounts[input.AccountName]
+	account.SecretRef = input.SecretRef
+	account.Status = "authorized"
+	store.openAIAccounts[input.AccountName] = account
+	return account, nil
 }
 
 func (store *fakeAdminStore) MattermostPostMessageMaxRunes(context.Context) (int, error) {

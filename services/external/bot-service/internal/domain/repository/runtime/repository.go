@@ -260,6 +260,7 @@ type CodexAuthCompleteResult struct {
 	AccountName string
 	SecretName  string
 	Namespace   string
+	Integrity   SecretIntegrity
 	Saved       bool
 }
 

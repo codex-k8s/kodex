@@ -2,8 +2,13 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+
+	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func (repo *Repository) IsFrozenClusterAdminOpenAIAccount(ctx context.Context, accountName string) (bool, error) {
@@ -38,4 +43,27 @@ select exists (
 		return false, fmt.Errorf("check frozen cluster-admin account dependency: %w", err)
 	}
 	return frozen, nil
+}
+
+func (repo *Repository) RotateFrozenOpenAIAccount(
+	ctx context.Context,
+	input securityrepo.RotateFrozenOpenAIAccountInput,
+) (entity.OpenAIAccount, error) {
+	item, err := scanOpenAIAccount(repo.db.QueryRow(ctx, query("cluster_admin_openai_account__rotate.sql"),
+		input.AccountName,
+		input.SecretRef,
+		input.SecretContentSHA256,
+		input.SecretResourceUID,
+		input.SecretResourceVersion,
+		input.ActorUserID,
+		input.ActorUserName,
+	))
+	if err == nil {
+		return item, nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "55006" {
+		return entity.OpenAIAccount{}, securityrepo.ErrOpenAIAccountRotationBusy
+	}
+	return entity.OpenAIAccount{}, fmt.Errorf("rotate frozen OpenAI account: %w", err)
 }
