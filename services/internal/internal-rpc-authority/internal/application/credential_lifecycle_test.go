@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/model"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 )
 
 func TestDatabaseCredentialLifecycleReconcilesServerDerivedSet(t *testing.T) {
@@ -124,10 +125,13 @@ func (store *credentialStoreStub) ReadCredentialGenerations(
 }
 
 type vaultRoleStub struct {
-	roles []string
+	roles []repository.VaultStaticRoleExpectation
 }
 
-func (vault *vaultRoleStub) VerifyStaticRoles(_ context.Context, roles []string) error {
-	vault.roles = append([]string(nil), roles...)
+func (vault *vaultRoleStub) VerifyStaticRoles(
+	_ context.Context,
+	roles []repository.VaultStaticRoleExpectation,
+) error {
+	vault.roles = append([]repository.VaultStaticRoleExpectation(nil), roles...)
 	return nil
 }

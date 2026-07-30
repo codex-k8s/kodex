@@ -24,6 +24,7 @@ import (
 	vaultclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/vault"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/model"
 	credentialrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/credentiallifecycle"
+	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -290,18 +291,12 @@ func openCredentialPostgres(
 	poolConfig.ConnConfig.RuntimeParams["application_name"] =
 		"internal_rpc_authority_database_credential_reconciler"
 	poolConfig.AfterConnect = func(ctx context.Context, connection *pgx.Conn) error {
-		var sessionUser string
-		if err := connection.QueryRow(ctx, "SELECT session_user").Scan(&sessionUser); err != nil ||
-			sessionUser != config.PostgresExpectedSessionUser {
-			return errors.New("database credential PostgreSQL session identity rejected")
-		}
-		if _, err := connection.Exec(
+		return sessionrepository.Configure(
 			ctx,
-			"SET ROLE internal_rpc_authority_database_credential_reconciler",
-		); err != nil {
-			return errors.New("activate database credential PostgreSQL capability")
-		}
-		return nil
+			connection,
+			config.PostgresExpectedSessionUser,
+			sessionrepository.CapabilityDatabaseCredentialReconciler,
+		)
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

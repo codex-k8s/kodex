@@ -69,9 +69,16 @@ func (lifecycle *DatabaseCredentialLifecycle) Reconcile(
 	if err != nil {
 		return DatabaseCredentialReconcileResult{}, err
 	}
-	roles := make([]string, 0, len(lifecycle.registered.Generations))
+	roles := make(
+		[]repository.VaultStaticRoleExpectation,
+		0,
+		len(lifecycle.registered.Generations),
+	)
 	for _, generation := range lifecycle.registered.Generations {
-		roles = append(roles, generation.VaultStaticRole)
+		roles = append(roles, repository.VaultStaticRoleExpectation{
+			Role:      generation.VaultStaticRole,
+			Principal: generation.Principal,
+		})
 	}
 	if err := lifecycle.vault.VerifyStaticRoles(ctx, roles); err != nil {
 		return DatabaseCredentialReconcileResult{}, err
@@ -106,9 +113,16 @@ func (lifecycle *DatabaseCredentialLifecycle) Ready(ctx context.Context) (
 	[]model.DatabaseCredentialGeneration,
 	error,
 ) {
-	roles := make([]string, 0, len(lifecycle.registered.Generations))
+	roles := make(
+		[]repository.VaultStaticRoleExpectation,
+		0,
+		len(lifecycle.registered.Generations),
+	)
 	for _, generation := range lifecycle.registered.Generations {
-		roles = append(roles, generation.VaultStaticRole)
+		roles = append(roles, repository.VaultStaticRoleExpectation{
+			Role:      generation.VaultStaticRole,
+			Principal: generation.Principal,
+		})
 	}
 	if err := lifecycle.vault.VerifyStaticRoles(ctx, roles); err != nil {
 		return nil, err

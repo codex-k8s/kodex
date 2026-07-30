@@ -44,6 +44,7 @@ type Config struct {
 	StartupTimeout              time.Duration
 	ReadinessTimeout            time.Duration
 	ShutdownTimeout             time.Duration
+	SnapshotReloadInterval      time.Duration
 	ReplayCleanupInterval       time.Duration
 	ReplayRetentionAfterExpiry  time.Duration
 }
@@ -68,6 +69,7 @@ func LoadConfig(mode Mode) (Config, error) {
 		StartupTimeout:              15 * time.Second,
 		ReadinessTimeout:            2 * time.Second,
 		ShutdownTimeout:             10 * time.Second,
+		SnapshotReloadInterval:      5 * time.Second,
 		ReplayCleanupInterval:       time.Minute,
 		ReplayRetentionAfterExpiry:  10 * time.Minute,
 	}
@@ -129,6 +131,14 @@ func LoadConfig(mode Mode) (Config, error) {
 		config.ShutdownTimeout,
 		time.Second,
 		30*time.Second,
+	); err != nil {
+		return Config{}, err
+	}
+	if config.SnapshotReloadInterval, err = durationEnv(
+		"INTERNAL_RPC_AUTHORITY_SNAPSHOT_RELOAD_INTERVAL",
+		config.SnapshotReloadInterval,
+		time.Second,
+		time.Minute,
 	); err != nil {
 		return Config{}, err
 	}

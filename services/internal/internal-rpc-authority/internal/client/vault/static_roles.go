@@ -16,6 +16,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 )
 
 const maxVaultResponseBytes = 1 << 20
@@ -76,7 +78,7 @@ func NewStaticRoleClient(config Config) (*StaticRoleClient, error) {
 
 func (client *StaticRoleClient) VerifyStaticRoles(
 	ctx context.Context,
-	roles []string,
+	roles []repository.VaultStaticRoleExpectation,
 ) error {
 	if len(roles) != 4 {
 		return errors.New("Vault static role registered set must contain four roles")
@@ -86,18 +88,19 @@ func (client *StaticRoleClient) VerifyStaticRoles(
 		return err
 	}
 	seen := make(map[string]struct{}, len(roles))
-	for _, role := range roles {
-		if !vaultNamePattern.MatchString(role) {
+	for _, expected := range roles {
+		if !vaultNamePattern.MatchString(expected.Role) ||
+			!vaultNamePattern.MatchString(expected.Principal) {
 			return errors.New("Vault static role name is outside the registry boundary")
 		}
-		if _, duplicate := seen[role]; duplicate {
+		if _, duplicate := seen[expected.Role]; duplicate {
 			return errors.New("duplicate Vault static role")
 		}
-		seen[role] = struct{}{}
+		seen[expected.Role] = struct{}{}
 		request, err := http.NewRequestWithContext(
 			ctx,
 			http.MethodGet,
-			client.config.Address+"/v1/database/static-roles/"+url.PathEscape(role),
+			client.config.Address+"/v1/database/static-roles/"+url.PathEscape(expected.Role),
 			nil,
 		)
 		if err != nil {
@@ -108,7 +111,7 @@ func (client *StaticRoleClient) VerifyStaticRoles(
 		if err != nil {
 			return errors.New("read Vault static role")
 		}
-		if err := consumeVaultResponse(response, http.StatusOK); err != nil {
+		if err := verifyStaticRoleResponse(response, expected); err != nil {
 			return err
 		}
 	}
@@ -163,20 +166,42 @@ func (client *StaticRoleClient) login(ctx context.Context) (string, error) {
 	return envelope.Auth.ClientToken, nil
 }
 
-func consumeVaultResponse(response *http.Response, expectedStatus int) error {
+func verifyStaticRoleResponse(
+	response *http.Response,
+	expected repository.VaultStaticRoleExpectation,
+) error {
 	defer response.Body.Close()
-	if response.StatusCode != expectedStatus {
+	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
 		return errors.New("Vault static role read rejected")
 	}
-	var envelope struct {
-		Data json.RawMessage `json:"data"`
-	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, maxVaultResponseBytes))
-	if err := decoder.Decode(&envelope); err != nil ||
-		len(envelope.Data) == 0 ||
-		string(envelope.Data) == "null" {
+	raw, err := io.ReadAll(io.LimitReader(response.Body, maxVaultResponseBytes+1))
+	if err != nil || len(raw) == 0 || len(raw) > maxVaultResponseBytes {
 		return errors.New("Vault static role response is invalid")
+	}
+	var envelope struct {
+		Data struct {
+			CredentialType   string `json:"credential_type"`
+			DatabaseName     string `json:"db_name"`
+			Username         string `json:"username"`
+			RotationPeriod   int64  `json:"rotation_period"`
+			RotationSchedule string `json:"rotation_schedule"`
+		} `json:"data"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if err := decoder.Decode(&envelope); err != nil {
+		return errors.New("Vault static role response is invalid")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return errors.New("Vault static role response is invalid")
+	}
+	if envelope.Data.CredentialType != "password" ||
+		envelope.Data.DatabaseName == "" ||
+		envelope.Data.Username != expected.Principal ||
+		envelope.Data.RotationPeriod < 30 && envelope.Data.RotationSchedule == "" ||
+		envelope.Data.RotationPeriod != 0 && envelope.Data.RotationSchedule != "" {
+		return errors.New("Vault static role binding is invalid")
 	}
 	return nil
 }

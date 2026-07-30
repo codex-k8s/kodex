@@ -28,5 +28,10 @@ type CredentialLifecycleStore interface {
 }
 
 type VaultStaticRoleReader interface {
-	VerifyStaticRoles(ctx context.Context, roles []string) error
+	VerifyStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
+}
+
+type VaultStaticRoleExpectation struct {
+	Role      string
+	Principal string
 }

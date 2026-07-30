@@ -20,6 +20,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	authorityrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/authority"
+	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
 	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
 	"github.com/jackc/pgx/v5"
@@ -136,6 +137,25 @@ func Run(
 		metrics,
 		authorityApplication,
 	)
+	workers := serviceruntime.StartWorkers(
+		lifecycle,
+		func(ctx context.Context) error {
+			runSnapshotReload(
+				ctx,
+				config,
+				store,
+				authorityApplication,
+				readiness,
+				metrics,
+				logger,
+			)
+			return nil
+		},
+		func(ctx context.Context) error {
+			runReplayCleanup(ctx, config, store, readiness, metrics, logger)
+			return nil
+		},
+	)
 	serveErrors := make(chan error, 2)
 	go func() {
 		if serveErr := grpcRuntime.Serve(unixListener); serveErr != nil {
@@ -168,6 +188,14 @@ func Run(
 			},
 		},
 		serviceruntime.ShutdownOperation{
+			Name:    "workers",
+			Timeout: config.ShutdownTimeout,
+			Run: func(ctx context.Context) error {
+				workers.Stop()
+				return workers.Wait(ctx)
+			},
+		},
+		serviceruntime.ShutdownOperation{
 			Name:    "technical-http",
 			Timeout: config.ShutdownTimeout,
 			Run:     technicalServer.Shutdown,
@@ -183,6 +211,125 @@ func Run(
 	)
 	logger.Info(logMessageStop, "mode", string(mode))
 	return errors.Join(runtimeErr, shutdownErr)
+}
+
+type reservationCleaner interface {
+	DeleteExpired(context.Context, time.Time) error
+}
+
+func runReplayCleanup(
+	ctx context.Context,
+	config Config,
+	cleaner reservationCleaner,
+	readiness *serviceruntime.Readiness,
+	metrics *observability.Metrics,
+	logger *slog.Logger,
+) {
+	ticker := time.NewTicker(config.ReplayCleanupInterval)
+	defer ticker.Stop()
+	for {
+		cleanupCtx, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
+		err := cleaner.DeleteExpired(
+			cleanupCtx,
+			time.Now().UTC().Add(-config.ReplayRetentionAfterExpiry),
+		)
+		cancel()
+		if err != nil {
+			readiness.Set(false, "replay-cleanup-failed")
+			metrics.SetReady(false)
+			logger.Error("replay reservation cleanup failed")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func runSnapshotReload(
+	ctx context.Context,
+	config Config,
+	store *authorityrepository.Store,
+	authorityApplication *application.Authority,
+	readiness *serviceruntime.Readiness,
+	metrics *observability.Metrics,
+	logger *slog.Logger,
+) {
+	ticker := time.NewTicker(config.SnapshotReloadInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		current := authorityApplication.SnapshotState()
+		loaded, err := snapshot.Load(snapshot.LoadOptions{
+			Role:                   snapshot.Role(config.Mode),
+			WorkloadID:             config.WorkloadID,
+			SnapshotJWSFile:        config.SnapshotJWSFile,
+			ManifestPublicJWKFile:  config.ManifestPublicJWKFile,
+			ContextPrivateJWKFile:  config.ContextPrivateJWKFile,
+			ProofTrustJWKFile:      config.ProofTrustJWKFile,
+			ReadbackPrivateJWKFile: config.ReadbackPrivateJWKFile,
+			Now:                    time.Now(),
+		})
+		if err != nil {
+			authorityApplication.SetAvailable(false)
+			readiness.Set(false, "snapshot-reload-rejected")
+			metrics.SetReady(false)
+			logger.Error("authority snapshot reload rejected")
+			continue
+		}
+		if loaded.Policy.SourceRevision == current.SourceRevision &&
+			loaded.Policy.SourceDigestSHA256 == current.SourceDigestSHA256 &&
+			loaded.Policy.KeySetRevision == current.KeySetRevision &&
+			loaded.Policy.PolicyRevision == current.PolicyRevision &&
+			loaded.Policy.SignerGeneration == current.SignerGeneration {
+			probeCtx, probeCancel := context.WithTimeout(ctx, config.ReadinessTimeout)
+			readyErr := authorityApplication.ServedStateReady(probeCtx)
+			probeCancel()
+			if readyErr == nil {
+				authorityApplication.SetAvailable(true)
+				readiness.Set(true, "ready")
+				metrics.SetReady(true)
+			} else {
+				authorityApplication.SetAvailable(false)
+				readiness.Set(false, "served-snapshot-readback-failed")
+				metrics.SetReady(false)
+			}
+			continue
+		}
+		next, err := service.NewAuthority(loaded.Policy, loaded.Keys, store)
+		activationCtx, activationCancel := context.WithTimeout(
+			ctx,
+			config.ReadinessTimeout,
+		)
+		if err == nil {
+			err = next.ActivateSnapshot(activationCtx)
+		}
+		activationCancel()
+		if err == nil {
+			err = authorityApplication.ReplaceActivatedSnapshot(next)
+		}
+		if err != nil {
+			authorityApplication.SetAvailable(false)
+			readiness.Set(false, "snapshot-reload-rejected")
+			metrics.SetReady(false)
+			logger.Error("authority snapshot activation rejected")
+			continue
+		}
+		readiness.Set(true, "ready")
+		metrics.SetReady(true)
+		logger.Info(
+			"authority snapshot activated",
+			"source_revision", loaded.Policy.SourceRevision,
+			"key_set_revision", loaded.Policy.KeySetRevision,
+			"policy_revision", loaded.Policy.PolicyRevision,
+			"signer_generation", loaded.Policy.SignerGeneration,
+		)
+	}
 }
 
 func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
@@ -203,26 +350,12 @@ func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	poolConfig.MaxConns = config.PostgresMaxConnections
 	poolConfig.ConnConfig.RuntimeParams["application_name"] = config.ServiceName
 	poolConfig.AfterConnect = func(ctx context.Context, connection *pgx.Conn) error {
-		var sessionUser string
-		if err := connection.QueryRow(ctx, "SELECT session_user").Scan(&sessionUser); err != nil {
-			return errors.New("read PostgreSQL session identity")
-		}
-		if sessionUser != config.PostgresExpectedSessionUser {
-			return errors.New("PostgreSQL session identity mismatch")
-		}
-		var roleErr error
-		switch config.DatabaseCapabilityRole {
-		case "internal_rpc_authority_issuer":
-			_, roleErr = connection.Exec(ctx, "SET ROLE internal_rpc_authority_issuer")
-		case "internal_rpc_authority_verifier":
-			_, roleErr = connection.Exec(ctx, "SET ROLE internal_rpc_authority_verifier")
-		default:
-			return errors.New("PostgreSQL capability role is not registered")
-		}
-		if roleErr != nil {
-			return errors.New("activate PostgreSQL capability role")
-		}
-		return nil
+		return sessionrepository.Configure(
+			ctx,
+			connection,
+			config.PostgresExpectedSessionUser,
+			config.DatabaseCapabilityRole,
+		)
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
