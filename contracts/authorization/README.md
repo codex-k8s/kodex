@@ -4,7 +4,7 @@ title: Доверенный контекст внутренних RPC
 type: contract
 status: approved
 owner: architect
-version: 1.3.1
+version: 1.3.2
 updated: 2026-07-30
 ---
 
@@ -80,15 +80,14 @@ workload/SPIFFE вызывающей стороны, операцией, цел�
 | `contracts/authorization/v1/bootstrap-key-delivery-targets.yaml` | читаемый человеком пустой реестр key delivery targets |
 | `contracts/authorization/v1/readback-root-verification-material.schema.json` | точный independently delivered public JWK корня normal-readback |
 | `contracts/authorization/v1/readback-root-rotation.schema.json` | взаимно подписанный однонаправленный переход старого и нового root |
-| `contracts/authorization/v1/fixtures` | RFC 8785 golden и negative contract fixtures |
 | `contracts/registry.yaml` | owner, source, generated path и consumers |
 | `buf.yaml`, `buf.gen.yaml` | lint/build и воспроизводимый Go codegen |
 | `libs/go/internalrpcauth/gen/internalrpcauthority/v1` | сгенерированный Go wire package |
 | `deploy/k8s/base/internal-rpc-authority/capability-registry.yaml` | deploy ownership, identity, volumes, key delivery и готовность |
 
 JSON Schema сохранён как стандартный машиночитаемый язык валидации, а
-подписанные полезные нагрузки JWS/JCS и контрактные примеры сохранены в JSON,
-потому что подпись проверяет точные байты UTF-8 по RFC 8785. Для человека
+подписанные полезные нагрузки JWS/JCS используют JSON, потому что подпись
+проверяет точные байты UTF-8 по RFC 8785. Для человека
 редактируются только
 `bootstrap-deny-all-policy.yaml`, `bootstrap-key-delivery-targets.yaml`,
 `contracts/registry.yaml` и capability registry. Они проходят строгий YAML
@@ -179,10 +178,8 @@ proof лишь после положительного на стороне се�
 ровно одним `AuthorizationErrorDetail`: reason
 `AUTHORITY_RESOURCE_NOT_FOUND`, stage `AUTHORITY_RESOLUTION`, retryable
 `false` и сообщением `authority resource not found`. Missing и cross-tenant
-hidden resource неразличимы по status/detail. First-call и negative contracts
-находятся в `fixtures/authority-proof-first-call.json`,
-`fixtures/authority-proof-negative.json` и
-`fixtures/authority-resolution-negative.json`.
+hidden resource неразличимы по status/detail. Первый вызов и все негативные
+исходы определяются этой закрытой матрицей, Proto и схемой authority proof.
 
 Proof имеет `typ=mattercodex-internal-rpc-authority-proof+jws`, проверяется
 только ключом точный issuer/trust generation и содержит semantic model
@@ -218,9 +215,8 @@ Lower revision, без увеличения ревизии mutation, reused JTI,
 просроченный proof, несовпавший workload/operation/audience и недоступное
 proof trust/persistence состояние закрыто отклоняются. Произвольный
 синтаксически корректный `CallerAuthority` без proof получает
-`InvalidArgument/AUTHORITY_PROOF_REQUIRED`. Полный набор обязательных
-негативных случаев находится в
-`fixtures/authority-proof-negative.json`.
+`InvalidArgument/AUTHORITY_PROOF_REQUIRED`. Обязательные негативные исходы
+перечислены в закрытой матрице ошибок и шагах проверки выше.
 
 Bootstrap policy имеет одновременно пустые `authority_proof_producers` и
 `operation_bindings`; поэтому ни resolver preflight, ни business RPC не
@@ -612,10 +608,10 @@ Unprotected header, `b64=false`, padding base64url, empty segment, больше 
 JSON отклоняются до signature use. Algorithm inference по типу ключа
 запрещен.
 
-`fixtures/protected-header-golden.json` фиксирует точный UTF-8 и unpadded
-base64url bytes для authorization context и snapshot. Обе прежние
-перестановки `alg,typ,kid,crit,mcxv` являются обязательными negative fixtures
-и отклоняются до signature use даже при тех же semantic values.
+Каноническая сериализация фиксирует точный UTF-8 и unpadded base64url bytes
+для authorization context и snapshot. Любая другая перестановка
+`alg,typ,kid,crit,mcxv` отклоняется до signature use даже при тех же semantic
+values.
 
 Криптография реализуется поддерживаемой `github.com/go-jose/go-jose/v4`
 версии 4.1.4. Project wrapper задает strict parsing/header/key policy, но не
@@ -1040,11 +1036,9 @@ crash до commit сохраняет прежний current, crash после co
 role-specific DSN и не использует superuser `SET SESSION AUTHORIZATION`.
 
 Principal одного target не пишет за другой target или opposite role; retired
-generation и shared group principal закрыто отклоняются. Негативный
-integration contract находится в
-`fixtures/readback-authority-negative.json`. Эти identity и readbacks входят
-в тот же rotation intent, поэтому promotion невозможна при missing,
-ambiguous либо cross-role row.
+generation и shared group principal закрыто отклоняются. Эти identity и
+readbacks входят в тот же rotation intent, поэтому promotion невозможна при
+missing, ambiguous либо cross-role row.
 
 ### PITR fence
 
@@ -1160,11 +1154,9 @@ Restore operator не имеет Kubernetes write RBAC; его PostgreSQL restor
 credential доставляется Job через Vault и ограничен точный cluster. Controller
 signer и trust ротируются `CURRENT/NEXT/PREVIOUS`, проходят
 private→public/served-evidence readback, а готовность требует фактически
-наблюдаемую admission policy/binding и semantic anchor. Негативный contract
-lower/same anchor, missing ack, stale generation, signature/controller failure
-и restore без `PREPARED` находится в `fixtures/restore-negative.json`;
-trust, semantic retry и crash/rejoin — в
-`fixtures/restore-ack-state.json`.
+наблюдаемую admission policy/binding и semantic anchor. Lower/same anchor,
+missing ack, stale generation, signature/controller failure, crash/rejoin и
+restore без `PREPARED` закрыто отклоняются протоколом.
 
 ## Forward-only rotation protocol
 
@@ -1383,20 +1375,13 @@ buf lint
 buf build
 buf generate
 make check-proto-codegen
-make test-contract-authority
 ```
 
 `check-proto-codegen` генерирует код в отдельный temporary output и требует
-нулевой diff с committed files. Toolchain contract отдельно проверяет Buf
-version и точный remote plugin version+revision. Contract tests проверяют
-compiled Proto descriptors, точный fields/numbers/types/reserved authority,
-binary round-trip/presence/time/безопасный целочисленный mapping, mutation regressions
-запрещенных caller fields, RFC 8785 UTF-8/base64url golden, proof negative
-fixtures, registry ownership, schema closure, deny-all bootstrap, producer
-coverage, union caller/target/resolver roles, one-to-one workload/role
-delivery/readback, UDS identities/modes, rotation fan-out, executable restore
-controller/semantic anchor/quarantine ordering, DB principal isolation и
-полную enum↔error matrix.
+нулевой diff с committed files. В активной фазе прототипа отдельная тяжёлая
+contract/deploy/integration suite не является обязательной и не входит в этот
+PR. Полный поддерживаемый контур будет спроектирован после прототипа в
+[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
 
 ## Ручная проверка контрактный этап
 
@@ -1411,30 +1396,16 @@ controller/semantic anchor/quarantine ordering, DB principal isolation и
    targets и default deny.
 5. Проверить, что proof/replay/watermark принадлежат PostgreSQL, внешний PITR
    anchor находится вне restored DB, а `emptyDir` — только sockets.
-6. По `authority-proof-first-call.json` пройти preflight без internal context,
-   local issuance и первый `control-api-gateway → control-plane` RPC; затем
-   подтвердить, что trusted-signer cross-tenant fixture отклоняется до подписи.
-7. По delivery/restore/readback negative fixtures проверить missing target,
-   opposite role/private key, unknown credential signer, substituted ACK JWK,
-   lower/same anchor, missing/stale ACK, mutated semantic retry, точный
-   NetworkPolicy, missing/expired/replayed normal-readback challenge,
-   restore↔readback cross-audience credential и cross-target/publisher DB
-   write, а также direct challenge/receipt write от attestor login. Positive
-   same-workload
-   two-role fixture обязан дать два independently verified ACK; lost-response
-   retry возвращает тот же receipt, а crash после первого ACK восстанавливает
-   partial set и остаётся `QUIESCING`.
-8. На disposable PostgreSQL выполнить
-   `make test-contract-authority-postgres`: `CURRENT` и `NEXT` независимо
-   фиксируют обе readback rows, promotion оставляет ограниченный `PREVIOUS`, receipt
-   reuse и `RETIRED` principal отклоняются. Передать отдельные DSN admin,
-   `ira_readback_attestor_g1`, `ira_readback_attestor_g2`, `ira_publisher_g1`,
-   `ira_control_plane_verifier_g1` и
-   `ira_control_plane_verifier_g2`; behavior не использует superuser
-   impersonation. Отдельные live-session contracts удерживают publisher и
-   attestor соединения открытыми до retirement и проверяют на стороне сервера отказ
-   promotion/challenge и RLS read без `SET SESSION AUTHORIZATION`.
-9. Выполнить Buf lint/build/codegen diff и targeted contract tests.
+6. Вручную пройти preflight без internal context, local issuance и первый
+   `control-api-gateway → control-plane` RPC; затем подтвердить закрытый отказ
+   cross-tenant и неизвестного ресурса до подписи.
+7. Вручную проверить missing target, opposite role/private key, unknown
+   credential signer, substituted ACK JWK, lower/same anchor, missing/stale
+   ACK, replay challenge, cross-audience credential и cross-target DB write.
+8. На отдельно разрешённом disposable PostgreSQL проверить `CURRENT/NEXT`,
+   promotion в ограниченный `PREVIOUS`, receipt reuse и закрытый отказ
+   `RETIRED` principal без superuser impersonation.
+9. Выполнить только быстрые Buf format/build/codegen diff текущего профиля.
 10. Убедиться, что PR не содержит secret values, private keys, DSN, tokens или
    production credentials.
 
@@ -1482,7 +1453,7 @@ JOSE audience/type separation.
   plugin version и BSR revision, pinned remote plugins и reproducible output;
 - Go Protobuf reflection:
   `https://pkg.go.dev/google.golang.org/protobuf` — generated descriptors,
-  `protoreflect` и `protodesc` для structural contract tests;
+  `protoreflect` и `protodesc` для анализа сгенерированного контракта;
 - Vault KV v2:
   `https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v2` — точный
   data paths, `create/read/update`, version metadata и CAS;

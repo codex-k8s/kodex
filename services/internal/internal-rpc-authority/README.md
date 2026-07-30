@@ -4,7 +4,7 @@ title: Внутренний сервис internal-rpc-authority
 type: service
 status: approved
 owner: developer
-version: 1.1.2
+version: 1.1.3
 updated: 2026-07-30
 ---
 
@@ -132,21 +132,25 @@ Reconciler дополнительно использует точные mTLS-с�
 только для чтения, и
 использовать `sslmode=verify-full`.
 
-## Локальная проверка
+## Быстрая проверка прототипа
 
 ```bash
-make test-contract-authority
-make test-internal-rpc-authority
-make test-internal-rpc-authority-deploy
+find services/internal/internal-rpc-authority libs/go -name '*.go' -print0 \
+  | xargs -0 gofmt -d
+(cd services/internal/internal-rpc-authority && go build ./cmd/...)
+buf format --diff --exit-code contracts/proto
+buf build
+git diff --check
 ```
 
-Интеграционная проверка PostgreSQL запускается отдельно только с одноразовым DSN:
+Полные integration/E2E/contract/deploy/render/lifecycle suites и общий
+baseline намеренно не входят в активный прототипный профиль. Их отсутствие не
+блокирует PR. Полный поддерживаемый контур будет отдельной owner-approved
+волной:
+[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
 
-```bash
-make test-contract-authority-postgres
-```
-
-Для итогового render необходим фактически опубликованный неизменяемый образ:
+Для ручного операционного render, а не автоматической test suite, необходим
+фактически опубликованный неизменяемый образ:
 
 ```bash
 scripts/render-internal-rpc-authority.sh \
