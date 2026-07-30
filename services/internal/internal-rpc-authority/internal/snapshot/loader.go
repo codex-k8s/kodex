@@ -280,7 +280,12 @@ func Load(options LoadOptions) (Loaded, error) {
 	}
 	proofKeys := make(map[string]service.VerificationKeyRecord)
 	if options.Role == RoleIssuer {
-		proofKeys, err = loadProofTrust(options.ProofTrustJWKFile, now)
+		proofKeys, err = loadProofTrust(
+			options.ProofTrustJWKFile,
+			now,
+			snapshot.SourceRevision,
+			sourceDigest,
+		)
 		if err != nil {
 			return Loaded{}, fmt.Errorf("load authority proof trust: %w", err)
 		}
@@ -658,6 +663,8 @@ func loadIssuerKeys(
 func loadProofTrust(
 	path string,
 	now time.Time,
+	expectedSourceRevision uint64,
+	expectedSourceDigest string,
 ) (map[string]service.VerificationKeyRecord, error) {
 	raw, err := readRegularFile(path, maxKeyFileBytes, 0)
 	if err != nil {
@@ -669,6 +676,8 @@ func loadProofTrust(
 		document.Purpose != "AUTHORITY_PROOF_VERIFICATION" ||
 		document.SourceRevision == 0 ||
 		!snapshotDigestPattern.MatchString(document.SourceDigest) ||
+		document.SourceRevision != expectedSourceRevision ||
+		document.SourceDigest != expectedSourceDigest ||
 		len(document.Keys) == 0 ||
 		len(document.Keys) > 32 {
 		return nil, errors.New("authority proof trust document is invalid")

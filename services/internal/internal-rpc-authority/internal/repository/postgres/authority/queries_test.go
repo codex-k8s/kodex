@@ -1,6 +1,8 @@
 package authority
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -48,5 +50,27 @@ func TestSnapshotQueriesUseSignedHistoryAnchor(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSnapshotActivationRequiresPromotedPublisherIntent(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(
+		"..", "..", "..", "..",
+		"cmd", "cli", "migrations",
+		"20260730000800_internal_rpc_authority_snapshot_publication.sql",
+	))
+	if err != nil {
+		t.Fatalf("read snapshot publication migration: %v", err)
+	}
+	migration := string(raw)
+	for _, fragment := range []string{
+		"validate_snapshot_attestation_receipt",
+		"JOIN internal_rpc_authority.authority_snapshot_history AS history",
+		"JOIN internal_rpc_authority.authority_rotation_intents AS rotation",
+		"rotation.status = 'PROMOTED'",
+	} {
+		if !strings.Contains(migration, fragment) {
+			t.Fatalf("snapshot promotion gate lacks %q", fragment)
+		}
 	}
 }

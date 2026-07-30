@@ -14,8 +14,11 @@ func TestLoadRegistryПринимаетФактическийProductionConfigMap
 	if err != nil {
 		t.Fatalf("LoadRegistry() error = %v", err)
 	}
-	if len(registry.Targets) != 2 {
-		t.Fatalf("targets = %d, want 2", len(registry.Targets))
+	if len(registry.Targets) != 3 {
+		t.Fatalf("targets = %d, want 3", len(registry.Targets))
+	}
+	if registry.SourceRevision != 1 {
+		t.Fatalf("source revision = %d, want 1", registry.SourceRevision)
 	}
 	issuer := registry.Targets["control-api-gateway.authorization-issuer"]
 	if issuer.Namespace != "mattercodex-system" ||
@@ -23,7 +26,9 @@ func TestLoadRegistryПринимаетФактическийProductionConfigMap
 		issuer.AuthPrivateKeyVaultPath == "" ||
 		issuer.ProofTrustVaultPath == "" ||
 		issuer.RestoreACKKeyGeneration != 1 ||
-		issuer.ReadbackChallengeMethod == "" {
+		issuer.ReadbackChallengeMethod == "" ||
+		issuer.ReadbackSourceRevision != 0 ||
+		issuer.ReadbackServedStateDigest != "" {
 		t.Fatalf("issuer target is incomplete: %#v", issuer)
 	}
 	verifier := registry.Targets["control-plane.authorization-verifier"]
@@ -33,6 +38,13 @@ func TestLoadRegistryПринимаетФактическийProductionConfigMap
 		verifier.AuthoritySnapshotSecret == "" ||
 		verifier.ReadbackAttestationMethod == "" {
 		t.Fatalf("verifier target is incomplete: %#v", verifier)
+	}
+	resolver := registry.Targets["control-plane.authority-proof-resolver"]
+	if resolver.ProofPrivateKeyVaultPath == "" ||
+		resolver.ProofTrustVaultPath == "" ||
+		resolver.AuthPrivateKeyVaultPath != "" ||
+		resolver.ReadbackAttestationMethod == "" {
+		t.Fatalf("resolver target is incomplete: %#v", resolver)
 	}
 }
 

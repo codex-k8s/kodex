@@ -3,6 +3,7 @@ kind: Component
 resources:
   - podmonitor.yaml
   - networkpolicy.yaml
+  - vault-secret-provider-classes.yaml
 patches:
   - path: issuer-patch.yaml
     target:

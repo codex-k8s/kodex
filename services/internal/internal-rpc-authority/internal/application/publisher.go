@@ -44,6 +44,13 @@ func (application *Publisher) PublishReadbackMaterials(
 	return application.service.PublishReadbackMaterials(ctx)
 }
 
+// PublishAuthorityGraph публикует полный снимок и все ключевые роли.
+func (application *Publisher) PublishAuthorityGraph(
+	ctx context.Context,
+) (model.AuthoritySnapshotPublication, error) {
+	return application.service.PublishAuthorityGraph(ctx)
+}
+
 // Registry возвращает проверенный неизменяемый реестр целей.
 func (application *Publisher) Registry() model.DeliveryTargetRegistry {
 	return application.service.Registry()

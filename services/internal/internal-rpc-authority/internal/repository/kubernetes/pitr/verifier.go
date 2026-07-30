@@ -84,7 +84,7 @@ func NewVerifier(config Config) (*Verifier, error) {
 	}
 	rootCAs := x509.NewCertPool()
 	if !rootCAs.AppendCertsFromPEM(caRaw) {
-		return nil, errors.New("Kubernetes API CA is invalid")
+		return nil, errors.New("kubernetes API CA is invalid")
 	}
 	publicRaw, err := os.ReadFile(config.PublicJWKFile)
 	if err != nil || len(publicRaw) == 0 || len(publicRaw) > 4096 {
@@ -108,7 +108,7 @@ func NewVerifier(config Config) (*Verifier, error) {
 			Transport: transport,
 			Timeout:   config.Timeout,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return errors.New("Kubernetes API redirect is forbidden")
+				return errors.New("kubernetes API redirect is forbidden")
 			},
 		},
 		evidenceURL: config.Address + "/api/v1/namespaces/" +
@@ -151,7 +151,7 @@ func (verifier *Verifier) VerifyCompletedEvidence(
 		)
 	}
 	var secret secretEnvelope
-	if err := json.Unmarshal(raw, &secret); err != nil ||
+	if err := decodeStrictJSON(raw, &secret); err != nil ||
 		secret.APIVersion != "v1" ||
 		secret.Kind != "Secret" ||
 		secret.Metadata.Name != verifier.config.EvidenceSecretName ||

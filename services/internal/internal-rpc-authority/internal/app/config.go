@@ -53,6 +53,10 @@ type Config struct {
 	VaultAuthFile                    string `env:"INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE"`
 	ReadbackCredentialVaultPath      string
 	ReadbackPossessionVaultPath      string
+	ResolverReadbackCredentialPath   string `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_READBACK_CREDENTIAL_VAULT_PATH"`
+	ResolverReadbackPossessionPath   string `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_READBACK_POSSESSION_VAULT_PATH"`
+	ResolverProofPrivateJWKFile      string `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_PRIVATE_JWK_FILE"`
+	ResolverProofTrustJWKFile        string `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_TRUST_JWK_FILE"`
 	ReadbackAttestorAddress          string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS"`
 	ReadbackAttestorTLSServerName    string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME"`
 	ReadbackAttestorCAFile           string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE"`
@@ -70,6 +74,9 @@ type Config struct {
 	WorkloadGeneration               uint64        `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_GENERATION"`
 	CredentialGeneration             uint64        `env:"INTERNAL_RPC_AUTHORITY_CREDENTIAL_GENERATION"`
 	PossessionKeyGeneration          uint64        `env:"INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_GENERATION"`
+	ResolverCredentialGeneration     uint64        `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_CREDENTIAL_GENERATION"`
+	ResolverPossessionKeyGeneration  uint64        `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_POSSESSION_KEY_GENERATION"`
+	ResolverProofSignerGeneration    uint64        `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_SIGNER_GENERATION"`
 	RestoreACKKeyGeneration          uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ACK_KEY_GENERATION"`
 	StartupTimeout                   time.Duration `env:"INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT"`
 	ReadinessTimeout                 time.Duration `env:"INTERNAL_RPC_AUTHORITY_READINESS_TIMEOUT"`
@@ -145,6 +152,13 @@ func LoadConfig(mode Mode) (Config, error) {
 		config.VaultAuthRole = "internal-rpc-authority-control-plane"
 		config.ReadbackCredentialVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-credential"
 		config.ReadbackPossessionVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-possession"
+		config.ResolverReadbackCredentialPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/readback-credential"
+		config.ResolverReadbackPossessionPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/readback-possession"
+		config.ResolverProofPrivateJWKFile = "/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer/private.jwk"
+		config.ResolverProofTrustJWKFile = "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json"
+		config.ResolverCredentialGeneration = 1
+		config.ResolverPossessionKeyGeneration = 1
+		config.ResolverProofSignerGeneration = 1
 		config.RestoreRoleCredentialVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-credential"
 		config.RestoreACKVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack"
 	default:
@@ -215,6 +229,19 @@ func (config Config) Validate() error {
 		config.RestoreACKKeyGeneration == 0 ||
 		config.RestoreACKKeyGeneration > maximumSafeInteger {
 		return errors.New("authority generation or connection bound is invalid")
+	}
+	if config.Mode == ModeVerifier &&
+		(config.ResolverReadbackCredentialPath == "" ||
+			config.ResolverReadbackPossessionPath == "" ||
+			!filepath.IsAbs(config.ResolverProofPrivateJWKFile) ||
+			!filepath.IsAbs(config.ResolverProofTrustJWKFile) ||
+			config.ResolverCredentialGeneration == 0 ||
+			config.ResolverCredentialGeneration > maximumSafeInteger ||
+			config.ResolverPossessionKeyGeneration == 0 ||
+			config.ResolverPossessionKeyGeneration > maximumSafeInteger ||
+			config.ResolverProofSignerGeneration == 0 ||
+			config.ResolverProofSignerGeneration > maximumSafeInteger) {
+		return errors.New("authority proof resolver readback boundary is invalid")
 	}
 	if config.StartupTimeout < time.Second ||
 		config.StartupTimeout > time.Minute ||

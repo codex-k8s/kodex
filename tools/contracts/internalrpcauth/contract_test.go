@@ -521,11 +521,14 @@ func TestBootstrapKeyDeliveryTargetsAreEmpty(t *testing.T) {
 		"contracts/authorization/v1/bootstrap-key-delivery-targets.yaml",
 	)
 	var targets struct {
-		Version int   `json:"version"`
-		Targets []any `json:"targets"`
+		Version        int    `json:"version"`
+		SourceRevision uint64 `json:"source_revision"`
+		Targets        []any  `json:"targets"`
 	}
 	decodeYAMLStrict(t, path, &targets)
-	if targets.Version != 1 || len(targets.Targets) != 0 {
+	if targets.Version != 1 ||
+		targets.SourceRevision != 1 ||
+		len(targets.Targets) != 0 {
 		t.Fatalf("bootstrap key delivery targets are not deny-all: %+v", targets)
 	}
 }
@@ -703,14 +706,32 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	requireEqual(t, proofRotation, "everyCallerIssuerTrustReadbackRequired", true)
 	requireEqual(t, proofRotation, "promotionBeforeAllReadbacks", false)
 	requireStringSliceEqual(t, rotation, "sequence", []string{
-		"persist-rotation-intent",
-		"generate-key-or-certificate",
+		"load-and-verify-forward-history-and-same-input-publication",
+		"reconcile-current-next-bounded-previous-key-lifecycle",
 		"vault-cas-deliver-exact-targets",
-		"workload-role-cryptographic-readback",
-		"publish-snapshot-cas",
-		"publisher-cryptographic-readback",
-		"promote-after-overlap-window",
+		"verify-independent-root-to-manifest-signer-chain",
+		"build-full-auth-proof-manifest-policy-snapshot",
+		"append-immutable-history-and-prepared-intent",
+		"kubernetes-resource-version-cas-and-served-readback",
+		"workload-role-independent-attestation-readbacks",
+		"promote-after-exact-full-role-readback-set",
 	})
+	prepare := requiredMap(t, rotation, "prepareTransaction")
+	requireEqual(
+		t,
+		prepare,
+		"function",
+		"internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer)",
+	)
+	requireEqual(t, prepare, "sameInputRetry", "RETURN_PERSISTED_COMPACT_JWS")
+	promotion := requiredMap(t, rotation, "promotionTransaction")
+	requireEqual(
+		t,
+		promotion,
+		"function",
+		"internal_rpc_authority.publisher_promote_snapshot(uuid,bigint,text,integer)",
+	)
+	requireEqual(t, promotion, "partialCommitAllowed", false)
 
 	recoveryName := "internal-rpc-authority-recovery-job"
 	pitrName := "internal-rpc-authority-restore-pitr-job"
@@ -1139,11 +1160,14 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	minimumRights := requiredMap(t, store, "minimumDatabaseRights")
 	publisherRights := requiredMap(t, minimumRights, "internal_rpc_authority_publisher")
 	requireStringSliceEqual(t, publisherRights, "select", []string{
+		"authority_snapshot_history",
+		"authority_rotation_intents",
 		"authority_key_delivery_readbacks",
 		"authority_snapshot_readbacks",
 	})
 	requireStringSliceEqual(t, publisherRights, "execute", []string{
-		"internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text)",
+		"internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer)",
+		"internal_rpc_authority.publisher_promote_snapshot(uuid,bigint,text,integer)",
 		"internal_rpc_authority.publisher_record_rotation_intent(uuid,bigint,text,bigint,uuid)",
 		"internal_rpc_authority.publisher_read_restore_fence()",
 		"internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)",

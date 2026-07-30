@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	domainrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
@@ -15,6 +16,158 @@ import (
 // Repository реализует устойчивое состояние publisher в PostgreSQL.
 type Repository struct {
 	pool *pgxpool.Pool
+}
+
+// LoadSnapshotHistory читает ограниченную forward-only цепочку.
+func (repository *Repository) LoadSnapshotHistory(
+	ctx context.Context,
+) (model.AuthoritySnapshotHistory, error) {
+	rows, err := repository.pool.Query(ctx, loadSnapshotHistorySQL)
+	if err != nil {
+		return model.AuthoritySnapshotHistory{}, fmt.Errorf(
+			"load publisher snapshot history: %w",
+			err,
+		)
+	}
+	defer rows.Close()
+	result := model.AuthoritySnapshotHistory{}
+	for rows.Next() {
+		var item model.RevisionDigest
+		if err := rows.Scan(&item.Revision, &item.DigestSHA256); err != nil {
+			return model.AuthoritySnapshotHistory{}, fmt.Errorf(
+				"scan publisher snapshot history: %w",
+				err,
+			)
+		}
+		result.Current = append(result.Current, item)
+	}
+	if err := rows.Err(); err != nil {
+		return model.AuthoritySnapshotHistory{}, fmt.Errorf(
+			"iterate publisher snapshot history: %w",
+			err,
+		)
+	}
+	sort.Slice(result.Current, func(left, right int) bool {
+		return result.Current[left].Revision < result.Current[right].Revision
+	})
+	return result, nil
+}
+
+// LoadSnapshotPublication возвращает immutable same-input publication.
+func (repository *Repository) LoadSnapshotPublication(
+	ctx context.Context,
+	sourceRevision uint64,
+	inputDigest string,
+) (model.AuthoritySnapshotPublication, bool, error) {
+	var result model.AuthoritySnapshotPublication
+	err := repository.pool.QueryRow(
+		ctx,
+		loadSnapshotPublicationSQL,
+		pgx.StrictNamedArgs{
+			"source_revision":                 sourceRevision,
+			"publication_input_digest_sha256": inputDigest,
+		},
+	).Scan(
+		&result.IntentID,
+		&result.InputDigestSHA256,
+		&result.SourceRevision,
+		&result.SourceDigestSHA256,
+		&result.KeySetRevision,
+		&result.PolicyRevision,
+		&result.SignerGeneration,
+		&result.PredecessorRevision,
+		&result.PredecessorDigestSHA256,
+		&result.SnapshotCompactJWS,
+		&result.PublishedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.AuthoritySnapshotPublication{}, false, nil
+	}
+	if err != nil {
+		return model.AuthoritySnapshotPublication{}, false, fmt.Errorf(
+			"load publisher snapshot publication: %w",
+			err,
+		)
+	}
+	return result, true, nil
+}
+
+// AppendSnapshot фиксирует immutable publication intent и payload.
+func (repository *Repository) AppendSnapshot(
+	ctx context.Context,
+	value model.AuthoritySnapshotPublication,
+	expectedReadbacks int,
+) (model.AuthoritySnapshotPublication, error) {
+	var accepted bool
+	if err := repository.pool.QueryRow(
+		ctx,
+		appendSnapshotSQL,
+		pgx.StrictNamedArgs{
+			"source_revision":                 value.SourceRevision,
+			"source_digest_sha256":            value.SourceDigestSHA256,
+			"key_set_revision":                value.KeySetRevision,
+			"policy_revision":                 value.PolicyRevision,
+			"signer_generation":               value.SignerGeneration,
+			"predecessor_revision":            value.PredecessorRevision,
+			"predecessor_digest_sha256":       value.PredecessorDigestSHA256,
+			"snapshot_compact_jws":            value.SnapshotCompactJWS,
+			"publication_intent_id":           value.IntentID,
+			"publication_input_digest_sha256": value.InputDigestSHA256,
+			"expected_readback_count":         expectedReadbacks,
+		},
+	).Scan(&accepted); err != nil {
+		return model.AuthoritySnapshotPublication{}, fmt.Errorf(
+			"append publisher snapshot history: %w",
+			err,
+		)
+	}
+	if !accepted {
+		existing, found, loadErr := repository.LoadSnapshotPublication(
+			ctx,
+			value.SourceRevision,
+			value.InputDigestSHA256,
+		)
+		if loadErr != nil {
+			return model.AuthoritySnapshotPublication{}, loadErr
+		}
+		if found &&
+			existing.IntentID == value.IntentID &&
+			existing.SourceDigestSHA256 == value.SourceDigestSHA256 &&
+			existing.KeySetRevision == value.KeySetRevision &&
+			existing.PolicyRevision == value.PolicyRevision &&
+			existing.SignerGeneration == value.SignerGeneration &&
+			existing.PredecessorRevision == value.PredecessorRevision &&
+			existing.PredecessorDigestSHA256 == value.PredecessorDigestSHA256 {
+			return existing, nil
+		}
+		return model.AuthoritySnapshotPublication{}, domainrepository.ErrSnapshotRollback
+	}
+	return value, nil
+}
+
+// SnapshotPublicationReady продвигает intent только после полного readback set.
+func (repository *Repository) SnapshotPublicationReady(
+	ctx context.Context,
+	value model.AuthoritySnapshotPublication,
+	expectedReadbacks int,
+) error {
+	var ready bool
+	if err := repository.pool.QueryRow(
+		ctx,
+		promoteSnapshotSQL,
+		pgx.StrictNamedArgs{
+			"publication_intent_id":   value.IntentID,
+			"source_revision":         value.SourceRevision,
+			"source_digest_sha256":    value.SourceDigestSHA256,
+			"expected_readback_count": expectedReadbacks,
+		},
+	).Scan(&ready); err != nil {
+		return fmt.Errorf("promote publisher snapshot: %w", err)
+	}
+	if !ready {
+		return errors.New("publisher snapshot readback set is incomplete")
+	}
+	return nil
 }
 
 // New создаёт репозиторий поверх проверенного пула PostgreSQL.

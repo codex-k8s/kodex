@@ -135,6 +135,12 @@ spec:
             - name: internal-rpc-authority-manifest-trust
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
               readOnly: true
+            - name: internal-rpc-authority-resolver-key
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/proof-signer
+              readOnly: true
+            - name: internal-rpc-authority-resolver-trust
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust
+              readOnly: true
             - name: internal-rpc-authority-workload-tls
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/workload-tls
               readOnly: true
@@ -178,9 +184,23 @@ spec:
             secretName: internal-rpc-authority-snapshot
             defaultMode: 0440
         - name: internal-rpc-authority-manifest-trust
-          secret:
-            secretName: internal-rpc-authority-manifest-trust
-            defaultMode: 0440
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-control-plane-manifest-trust
+        - name: internal-rpc-authority-resolver-key
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-control-plane-resolver-key
+        - name: internal-rpc-authority-resolver-trust
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-control-plane-resolver-trust
         - name: internal-rpc-authority-workload-tls
           secret:
             secretName: internal-rpc-authority-control-plane-workload-tls

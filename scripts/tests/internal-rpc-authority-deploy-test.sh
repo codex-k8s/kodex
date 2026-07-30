@@ -56,13 +56,16 @@ for environment_name in staging production; do
   grep -Fq 'name: SENTRY_DSN_FILE' <<<"$rendered"
   grep -Fq 'name: internal-rpc-authority-dashboard' <<<"$rendered"
   grep -Fq 'runbook_url: https://docs.mattercodex.dev/runbooks/internal-rpc-authority' <<<"$rendered"
-  [[ "$(grep -Fc 'kind: SecretProviderClass' <<<"$rendered")" == "11" ]]
+  [[ "$(grep -Fc 'kind: SecretProviderClass' <<<"$rendered")" == "13" ]]
   grep -Fq 'name: internal-rpc-authority-publisher-database-g5' <<<"$rendered"
   grep -Fq 'name: internal-rpc-authority-readback-database-g5' <<<"$rendered"
   grep -Fq 'name: internal-rpc-authority-database-credential-kubernetes-api' <<<"$rendered"
   ! grep -Fq 'secretName: internal-rpc-authority-publisher-postgresql' <<<"$rendered"
   ! grep -Fq 'secretName: internal-rpc-authority-readback-attestor-postgresql' <<<"$rendered"
-  [[ "$(grep -Fc 'vaultSkipTLSVerify: "false"' <<<"$rendered")" == "11" ]]
+  [[ "$(grep -Fc 'vaultSkipTLSVerify: "false"' <<<"$rendered")" == "13" ]]
+  grep -Fq 'name: internal-rpc-authority-publisher-manifest-signer' <<<"$rendered"
+  grep -Fq 'name: internal-rpc-authority-publisher-manifest-trust' <<<"$rendered"
+  grep -Fq 'name: internal-rpc-authority-snapshot' <<<"$rendered"
   ! grep -Eq 'vaultSkipTLSVerify: "?true"?' <<<"$rendered"
   runtime_database_sources="$(
     yq eval-all '
@@ -198,6 +201,12 @@ grep -Fq 'name: OTEL_EXPORTER_OTLP_ENDPOINT' <<<"$consumer_render"
 grep -Fq 'name: internal-rpc-authority-observability' <<<"$consumer_render"
 grep -Fq 'app.kubernetes.io/name: opentelemetry-collector' <<<"$consumer_render"
 grep -Fq 'app.kubernetes.io/name: sentry-relay' <<<"$consumer_render"
+[[ "$(grep -Fc 'kind: SecretProviderClass' <<<"$consumer_render")" == "6" ]]
+grep -Fq 'name: internal-rpc-authority-control-api-gateway-issuer-key' \
+  <<<"$consumer_render"
+grep -Fq 'name: internal-rpc-authority-control-plane-resolver-key' \
+  <<<"$consumer_render"
+grep -Fq 'name: internal-rpc-authority-resolver-trust' <<<"$consumer_render"
 ! grep -Fq 'name: internal-rpc-authority-readback-key' <<<"$consumer_render"
 ! grep -Fq 'name: internal-rpc-authority-readback-credential' <<<"$consumer_render"
 

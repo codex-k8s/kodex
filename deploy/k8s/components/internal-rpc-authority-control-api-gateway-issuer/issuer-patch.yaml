@@ -184,17 +184,23 @@ spec:
             secretName: internal-rpc-authority-snapshot
             defaultMode: 0440
         - name: internal-rpc-authority-manifest-trust
-          secret:
-            secretName: internal-rpc-authority-manifest-trust
-            defaultMode: 0440
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-control-api-gateway-manifest-trust
         - name: internal-rpc-authority-proof-trust
-          secret:
-            secretName: internal-rpc-authority-proof-trust
-            defaultMode: 0440
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-control-api-gateway-proof-trust
         - name: internal-rpc-authority-issuer-key
-          secret:
-            secretName: internal-rpc-authority-control-api-gateway-issuer-key
-            defaultMode: 0440
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-control-api-gateway-issuer-key
         - name: internal-rpc-authority-workload-tls
           secret:
             secretName: internal-rpc-authority-control-api-gateway-workload-tls

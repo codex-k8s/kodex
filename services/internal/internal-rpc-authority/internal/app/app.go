@@ -138,9 +138,47 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct readback attestor client: %w", err)
 	}
+	var activationAttestor repository.SnapshotAttestor = snapshotAttestor
+	if config.Mode == ModeVerifier {
+		resolverAttestor, resolverErr := readbackclient.NewVaultAttestor(
+			readbackclient.VaultConfig{
+				Address: config.ReadbackAttestorAddress, TLS: readbackTLS,
+				CredentialPath:          config.ResolverReadbackCredentialPath,
+				PossessionPath:          config.ResolverReadbackPossessionPath,
+				Delivery:                vault,
+				WorkloadID:              config.WorkloadID,
+				WorkloadSPIFFEID:        config.WorkloadSPIFFEID,
+				Role:                    "AUTHORITY_PROOF_RESOLVER",
+				WorkloadGeneration:      config.WorkloadGeneration,
+				CredentialGeneration:    config.ResolverCredentialGeneration,
+				PossessionKeyGeneration: config.ResolverPossessionKeyGeneration,
+				UnaryInterceptor: telemetry.UnaryClientInterceptor(map[string]string{
+					internalrpcauthorityv1.AuthorityReadbackAttestorService_IssueAttestationChallenge_FullMethodName: "issue_attestation_challenge",
+					internalrpcauthorityv1.AuthorityReadbackAttestorService_AttestServedState_FullMethodName:         "attest_served_state",
+				}),
+			},
+		)
+		if resolverErr != nil {
+			vault.Close()
+			store.Close()
+			return fmt.Errorf(
+				"construct authority proof resolver readback client: %w",
+				resolverErr,
+			)
+		}
+		activationAttestor = &proofResolverAttestor{
+			primary:          snapshotAttestor,
+			resolver:         resolverAttestor,
+			privateJWKFile:   config.ResolverProofPrivateJWKFile,
+			proofTrustFile:   config.ResolverProofTrustJWKFile,
+			issuer:           config.WorkloadSPIFFEID,
+			signerGeneration: config.ResolverProofSignerGeneration,
+			now:              time.Now,
+		}
+	}
 	authorityApplication, err := application.NewAuthority(
 		domainService,
-		snapshotAttestor,
+		activationAttestor,
 	)
 	if err != nil {
 		vault.Close()
@@ -182,7 +220,7 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct restore workload agent: %w", err)
 	}
-	if err := authorityApplication.ActivateSnapshot(startupCtx); err != nil {
+	if err := activateSnapshotUntilReady(startupCtx, authorityApplication); err != nil {
 		vault.Close()
 		store.Close()
 		return fmt.Errorf("activate served authority snapshot: %w", err)
@@ -420,6 +458,26 @@ func runReplayCleanup(
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		}
+	}
+}
+
+func activateSnapshotUntilReady(
+	ctx context.Context,
+	authorityApplication *application.Authority,
+) error {
+	const retryInterval = 250 * time.Millisecond
+	for {
+		err := authorityApplication.ActivateSnapshot(ctx)
+		if err == nil {
+			return nil
+		}
+		timer := time.NewTimer(retryInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(err, ctx.Err())
+		case <-timer.C:
 		}
 	}
 }

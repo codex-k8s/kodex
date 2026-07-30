@@ -169,7 +169,7 @@ func NewExecutor(config ExecutorConfig) (*Executor, error) {
 	}
 	rootCAs := x509.NewCertPool()
 	if !rootCAs.AppendCertsFromPEM(caRaw) {
-		return nil, errors.New("Kubernetes API CA is invalid")
+		return nil, errors.New("kubernetes API CA is invalid")
 	}
 	privateRaw, err := os.ReadFile(config.PrivateJWKFile)
 	if err != nil || len(privateRaw) == 0 || len(privateRaw) > 4096 {
@@ -195,7 +195,7 @@ func NewExecutor(config ExecutorConfig) (*Executor, error) {
 			Transport: transport,
 			Timeout:   config.Timeout,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return errors.New("Kubernetes API redirect is forbidden")
+				return errors.New("kubernetes API redirect is forbidden")
 			},
 		},
 		privateKey:  privateKey,
@@ -652,7 +652,7 @@ func (executor *Executor) do(
 	defer response.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil || len(raw) > maxResponseBytes {
-		return nil, nil, errors.New("Kubernetes PITR response rejected")
+		return nil, nil, errors.New("kubernetes PITR response rejected")
 	}
 	return response, raw, nil
 }

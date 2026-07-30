@@ -16,6 +16,7 @@ import (
 	vaultclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/vault"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/publisher"
+	snapshotdelivery "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/snapshot"
 	publisherrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/publisher"
 	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
@@ -52,6 +53,16 @@ type PublisherConfig struct {
 	ReadbackSignerSourceDigest   string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_DIGEST_SHA256"`
 	ReadbackSignerKeySetRevision uint64        `env:"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_KEY_SET_REVISION"`
 	ReadbackSignerGeneration     uint64        `env:"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_GENERATION"`
+	ManifestSignerPrivateJWKFile string        `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_SIGNER_PRIVATE_JWK_FILE"`
+	ManifestSignerGeneration     uint64        `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_SIGNER_GENERATION"`
+	ManifestRootPublicJWKFile    string        `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_PUBLIC_JWK_FILE"`
+	ManifestRootMetadataFile     string        `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_METADATA_FILE"`
+	ManifestTrustBundleJWSFile   string        `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_JWS_FILE"`
+	AuthorityPolicyFile          string        `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_POLICY_FILE"`
+	KubernetesAPIAddress         string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_API_ADDRESS"`
+	KubernetesAPITLSServerName   string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_API_TLS_SERVER_NAME"`
+	KubernetesAPICAFile          string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_API_CA_FILE"`
+	KubernetesAPITokenFile       string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_API_TOKEN_FILE"`
 	ControllerGeneration         uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_GENERATION"`
 	ShutdownTimeout              time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
@@ -74,6 +85,15 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 		TargetRegistryFile:           "/usr/local/share/internal-rpc-authority/bootstrap-key-delivery-targets.yaml",
 		SignerPrivateJWKFile:         "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/restore-signer/private.jwk",
 		ReadbackSignerPrivateJWKFile: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/readback-signer/private.jwk",
+		ManifestSignerPrivateJWKFile: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/manifest-signer/private.jwk",
+		ManifestRootPublicJWKFile:    "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk",
+		ManifestRootMetadataFile:     "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-metadata.json",
+		ManifestTrustBundleJWSFile:   "/var/run/config/mattercodex/internal-rpc-authority/publisher/manifest-trust/manifest-trust.jws",
+		AuthorityPolicyFile:          "/var/run/config/mattercodex/internal-rpc-authority/publisher-targets/authority-policy.json",
+		KubernetesAPIAddress:         "https://kubernetes.default.svc:443",
+		KubernetesAPITLSServerName:   "kubernetes.default.svc",
+		KubernetesAPICAFile:          "/var/run/config/kubernetes.io/serviceaccount/ca.crt",
+		KubernetesAPITokenFile:       "/var/run/secrets/tokens/kubernetes-api/token",
 		ShutdownTimeout:              10 * time.Second,
 	}
 	if err := parseEnvironment(&config); err != nil {
@@ -92,6 +112,7 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 		config.ReadbackSignerSourceRevision == 0 ||
 		config.ReadbackSignerKeySetRevision == 0 ||
 		config.ReadbackSignerGeneration == 0 ||
+		config.ManifestSignerGeneration == 0 ||
 		config.ControllerGeneration == 0 ||
 		!digestPattern.MatchString(config.SignerSourceDigest) ||
 		!digestPattern.MatchString(config.ReadbackSignerSourceDigest) {
@@ -163,6 +184,19 @@ func RunPublisher(
 		pool.Close()
 		return errors.New("parse readback credential signer key")
 	}
+	manifestSignerRaw, err := readPrivateFile(
+		config.ManifestSignerPrivateJWKFile,
+		64<<10,
+	)
+	if err != nil {
+		pool.Close()
+		return errors.New("read authority manifest signer key")
+	}
+	manifestSignerKey, err := internalrpcauth.ParsePrivateJWK(manifestSignerRaw)
+	if err != nil {
+		pool.Close()
+		return errors.New("parse authority manifest signer key")
+	}
 	vault, err := vaultclient.NewStaticRoleClient(vaultclient.Config{
 		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName,
 		CAFile: config.VaultCAFile, AuthMount: "kubernetes",
@@ -171,6 +205,20 @@ func RunPublisher(
 		Timeout:                 5 * time.Second,
 	})
 	if err != nil {
+		pool.Close()
+		return err
+	}
+	snapshotDelivery, err := snapshotdelivery.New(snapshotdelivery.Config{
+		Address:       config.KubernetesAPIAddress,
+		TLSServerName: config.KubernetesAPITLSServerName,
+		CAFile:        config.KubernetesAPICAFile,
+		TokenFile:     config.KubernetesAPITokenFile,
+		Namespace:     "mattercodex-system",
+		SecretName:    "internal-rpc-authority-snapshot",
+		Timeout:       5 * time.Second,
+	})
+	if err != nil {
+		vault.Close()
 		pool.Close()
 		return err
 	}
@@ -193,20 +241,47 @@ func RunPublisher(
 		vault,
 	)
 	if err != nil {
+		snapshotDelivery.Close()
+		vault.Close()
+		pool.Close()
+		return err
+	}
+	graph, err := publisher.NewGraph(publisher.GraphConfig{
+		Registry:                   targetRegistry,
+		Store:                      store,
+		Vault:                      vault,
+		Snapshot:                   snapshotDelivery,
+		ManifestSigner:             manifestSignerKey,
+		ManifestSignerGeneration:   config.ManifestSignerGeneration,
+		ManifestRootPublicJWKFile:  config.ManifestRootPublicJWKFile,
+		ManifestRootMetadataFile:   config.ManifestRootMetadataFile,
+		ManifestTrustBundleJWSFile: config.ManifestTrustBundleJWSFile,
+		PolicyFile:                 config.AuthorityPolicyFile,
+	})
+	if err != nil {
+		snapshotDelivery.Close()
+		vault.Close()
+		pool.Close()
+		return err
+	}
+	if err := domainService.AttachAuthorityGraph(graph); err != nil {
+		snapshotDelivery.Close()
 		vault.Close()
 		pool.Close()
 		return err
 	}
 	publisherApplication := application.NewPublisher(domainService)
+	if _, err := publisherApplication.PublishAuthorityGraph(startup); err != nil {
+		snapshotDelivery.Close()
+		vault.Close()
+		pool.Close()
+		return errors.New("publish startup authority graph")
+	}
 	if _, err := publisherApplication.PublishReadbackMaterials(startup); err != nil {
+		snapshotDelivery.Close()
 		vault.Close()
 		pool.Close()
 		return errors.New("publish startup readback materials")
-	}
-	if err := publisherApplication.Ready(startup); err != nil {
-		vault.Close()
-		pool.Close()
-		return err
 	}
 	serverTLS, err := loadMTLSServerConfig(
 		config.TLSCertificateFile,
@@ -214,6 +289,7 @@ func RunPublisher(
 		config.ClientCAFile,
 	)
 	if err != nil {
+		snapshotDelivery.Close()
 		vault.Close()
 		pool.Close()
 		return err
@@ -259,12 +335,14 @@ func RunPublisher(
 	)
 	grpcListener, err := net.Listen("tcp", config.Listen)
 	if err != nil {
+		snapshotDelivery.Close()
 		vault.Close()
 		pool.Close()
 		return errors.New("listen on publisher endpoint")
 	}
 	technicalListener, err := net.Listen("tcp", config.TechnicalListen)
 	if err != nil {
+		snapshotDelivery.Close()
 		_ = grpcListener.Close()
 		vault.Close()
 		pool.Close()
@@ -275,11 +353,16 @@ func RunPublisher(
 		metrics,
 		publisherApplication,
 	)
+	readiness.Set(false, "waiting-for-authority-graph-readback")
+	metrics.SetReady(false)
 	workers := serviceruntime.StartWorkers(lifecycle, func(ctx context.Context) error {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for {
-			if _, publishErr := publisherApplication.PublishReadbackMaterials(ctx); publishErr != nil {
+			_, graphErr := publisherApplication.PublishAuthorityGraph(ctx)
+			_, publishErr := publisherApplication.PublishReadbackMaterials(ctx)
+			readyErr := publisherApplication.Ready(ctx)
+			if graphErr != nil || publishErr != nil || readyErr != nil {
 				readiness.Set(false, "readback-publication-failed")
 				metrics.SetReady(false)
 			} else {
@@ -305,8 +388,6 @@ func RunPublisher(
 			serveErrors <- errors.New("serve publisher technical HTTP")
 		}
 	}()
-	readiness.Set(true, "ready")
-	metrics.SetReady(true)
 	logger.Info("authority publisher started")
 	var runtimeErr error
 	select {
@@ -331,6 +412,13 @@ func RunPublisher(
 		serviceruntime.ShutdownOperation{
 			Name: "technical-http", Timeout: config.ShutdownTimeout,
 			Run: technicalServer.Shutdown,
+		},
+		serviceruntime.ShutdownOperation{
+			Name: "kubernetes-api", Timeout: config.ShutdownTimeout,
+			Run: func(context.Context) error {
+				snapshotDelivery.Close()
+				return nil
+			},
 		},
 		serviceruntime.ShutdownOperation{
 			Name: "vault-http", Timeout: config.ShutdownTimeout,

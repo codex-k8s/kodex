@@ -26,6 +26,9 @@ type DeliveryTarget struct {
 	ProofTrustVaultPath        string
 	ProofTrustSecret           string
 	ProofTrustMountPath        string
+	ProofPrivateKeyVaultPath   string
+	ProofPrivateKeySecret      string
+	ProofPrivateKeyMountPath   string
 	DatabaseLoginPrincipal     string
 	DatabaseVaultRole          string
 	DatabaseDSNMountPath       string
@@ -169,4 +172,25 @@ type PublishedReadbackMaterial struct {
 	PossessionPrivateJWK   string
 	CredentialVaultVersion uint64
 	PossessionVaultVersion uint64
+}
+
+// AuthoritySnapshotPublication описывает атомарно опубликованный полный граф.
+type AuthoritySnapshotPublication struct {
+	IntentID                string
+	InputDigestSHA256       string
+	SourceRevision          uint64
+	SourceDigestSHA256      string
+	KeySetRevision          uint64
+	PolicyRevision          uint64
+	SignerGeneration        uint64
+	PredecessorRevision     uint64
+	PredecessorDigestSHA256 string
+	SnapshotCompactJWS      string
+	SnapshotResourceVersion string
+	PublishedAt             time.Time
+}
+
+// AuthoritySnapshotHistory содержит ограниченную forward-only цепочку.
+type AuthoritySnapshotHistory struct {
+	Current []RevisionDigest
 }

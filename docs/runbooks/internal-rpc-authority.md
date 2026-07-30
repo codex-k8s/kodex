@@ -4,7 +4,7 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.1.1
+version: 1.1.2
 updated: 2026-07-30
 ---
 
@@ -102,6 +102,13 @@ kubectl -n mattercodex-system get endpoints \
 - закрытый ключ issuer соответствует обслуживаемому открытому JWK;
 - verifier не получает закрытый ключ issuer;
 - доверие proof и относящийся к роли ключ владения readback доставлены отдельно;
+- resolver-sidecar сверил proof private key с exact `CURRENT` записью
+  independently delivered proof trust и получил отдельный receipt;
+- publisher promotion видит полный набор issuer/verifier/resolver readback для
+  той же source revision/digest, а обслуживаемый Kubernetes Secret имеет
+  совпадающий `resourceVersion` readback;
+- до конца 24-часового validity window текущего snapshot опубликована следующая
+  source revision; истечение окна без полной promotion закрывает readiness;
 - верхняя отметка PostgreSQL не выше предлагаемой ревизии.
 
 Изменение без увеличения ревизии и откат не обходить. При пропущенной ревизии

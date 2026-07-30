@@ -21,8 +21,9 @@ var (
 )
 
 type registryDocument struct {
-	Version int              `yaml:"version"`
-	Targets []registryTarget `yaml:"targets"`
+	Version        int              `yaml:"version"`
+	SourceRevision uint64           `yaml:"source_revision"`
+	Targets        []registryTarget `yaml:"targets"`
 }
 
 type registryTarget struct {
@@ -51,6 +52,11 @@ type registryTarget struct {
 		SecretName string `yaml:"secret_name"`
 		MountPath  string `yaml:"mount_path"`
 	} `yaml:"authority_proof_trust"`
+	AuthorityProofPrivateKey struct {
+		VaultPath  string `yaml:"vault_path"`
+		SecretName string `yaml:"secret_name"`
+		MountPath  string `yaml:"mount_path"`
+	} `yaml:"authority_proof_private_key"`
 	DatabaseIdentity struct {
 		LoginPrincipal       string `yaml:"login_principal"`
 		VaultDatabaseRole    string `yaml:"vault_database_role"`
@@ -99,8 +105,6 @@ type registryTarget struct {
 		NetworkPolicy           string `yaml:"network_policy"`
 		IntentRevision          uint64 `yaml:"intent_revision"`
 		MaterialGeneration      uint64 `yaml:"material_generation"`
-		SourceRevision          uint64 `yaml:"source_revision"`
-		ServedStateDigestSHA256 string `yaml:"served_state_digest_sha256"`
 	} `yaml:"readback"`
 }
 
@@ -117,13 +121,15 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 	var document registryDocument
 	if err := yaml.UnmarshalStrict(raw, &document); err != nil ||
 		document.Version != model.ContractVersion ||
+		document.SourceRevision == 0 ||
+		document.SourceRevision > 9_007_199_254_740_991 ||
 		len(document.Targets) == 0 ||
 		len(document.Targets) > 384 {
 		return model.DeliveryTargetRegistry{}, errors.New("publisher target registry is invalid")
 	}
 	digest := sha256.Sum256(raw)
 	registry := model.DeliveryTargetRegistry{
-		Version: model.ContractVersion, SourceRevision: uint64(document.Version),
+		Version: model.ContractVersion, SourceRevision: document.SourceRevision,
 		SourceDigest: hex.EncodeToString(digest[:]),
 		Targets:      make(map[string]model.DeliveryTarget, len(document.Targets)),
 	}
@@ -151,6 +157,7 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			entry.ManifestTrust.MountPath !=
 				"/var/run/config/mattercodex/internal-rpc-authority/manifest-trust" ||
 			!validOptionalProofTrust(entry) ||
+			!validOptionalProofPrivateKey(entry) ||
 			!registryPrincipalPattern.MatchString(entry.DatabaseIdentity.LoginPrincipal) ||
 			entry.DatabaseIdentity.VaultDatabaseRole == "" ||
 			entry.DatabaseIdentity.DSNMountPath !=
@@ -185,7 +192,6 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			entry.Readback.IntentRevision == 0 ||
 			entry.Readback.MaterialGeneration == 0 ||
 			entry.Readback.PossessionKeyGeneration != entry.Readback.MaterialGeneration ||
-			entry.Readback.SourceRevision == 0 ||
 			entry.Readback.CredentialID == "" ||
 			entry.Readback.PossessionKeyID == "" ||
 			entry.Readback.CredentialMountPath !=
@@ -217,10 +223,7 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			entry.Readback.AttestorFullMethod !=
 				"/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState" ||
 			entry.Readback.ExpectedRole != entry.Role ||
-			entry.Readback.NetworkPolicy == "" ||
-			!registryDigestPattern.MatchString(
-				entry.Readback.ServedStateDigestSHA256,
-			) {
+			entry.Readback.NetworkPolicy == "" {
 			return model.DeliveryTargetRegistry{}, fmt.Errorf(
 				"publisher target %q is outside the registry boundary",
 				targetID,
@@ -238,6 +241,7 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			entry.ManifestTrust.VaultPath,
 			entry.AuthPrivateKey.VaultPath,
 			entry.AuthorityProofTrust.VaultPath,
+			entry.AuthorityProofPrivateKey.VaultPath,
 		} {
 			if pathValue == "" {
 				continue
@@ -270,6 +274,9 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			ProofTrustVaultPath:        entry.AuthorityProofTrust.VaultPath,
 			ProofTrustSecret:           entry.AuthorityProofTrust.SecretName,
 			ProofTrustMountPath:        entry.AuthorityProofTrust.MountPath,
+			ProofPrivateKeyVaultPath:   entry.AuthorityProofPrivateKey.VaultPath,
+			ProofPrivateKeySecret:      entry.AuthorityProofPrivateKey.SecretName,
+			ProofPrivateKeyMountPath:   entry.AuthorityProofPrivateKey.MountPath,
 			DatabaseLoginPrincipal:     entry.DatabaseIdentity.LoginPrincipal,
 			DatabaseVaultRole:          entry.DatabaseIdentity.VaultDatabaseRole,
 			DatabaseDSNMountPath:       entry.DatabaseIdentity.DSNMountPath,
@@ -295,8 +302,6 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			ReadbackPossessionKeyMount: entry.Readback.PossessionKeyMountPath,
 			ReadbackIntentRevision:     entry.Readback.IntentRevision,
 			ReadbackMaterialGeneration: entry.Readback.MaterialGeneration,
-			ReadbackSourceRevision:     entry.Readback.SourceRevision,
-			ReadbackServedStateDigest:  entry.Readback.ServedStateDigestSHA256,
 			ReadbackAttestorAddress:    entry.Readback.AttestorAddress,
 			ReadbackAttestorSNI:        entry.Readback.AttestorTLSServerName,
 			ReadbackAttestorCAPath:     entry.Readback.AttestorCAMountPath,
@@ -322,7 +327,7 @@ func validOptionalAuthKey(entry registryTarget) bool {
 }
 
 func validOptionalProofTrust(entry registryTarget) bool {
-	if entry.Role != "AUTHORIZATION_ISSUER" {
+	if entry.Role == "AUTHORIZATION_VERIFIER" {
 		return entry.AuthorityProofTrust.VaultPath == "" &&
 			entry.AuthorityProofTrust.SecretName == "" &&
 			entry.AuthorityProofTrust.MountPath == ""
@@ -331,6 +336,21 @@ func validOptionalProofTrust(entry registryTarget) bool {
 		entry.AuthorityProofTrust.SecretName == "internal-rpc-authority-proof-trust" &&
 		entry.AuthorityProofTrust.MountPath ==
 			"/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust"
+}
+
+func validOptionalProofPrivateKey(entry registryTarget) bool {
+	if entry.Role != "AUTHORITY_PROOF_RESOLVER" {
+		return entry.AuthorityProofPrivateKey.VaultPath == "" &&
+			entry.AuthorityProofPrivateKey.SecretName == "" &&
+			entry.AuthorityProofPrivateKey.MountPath == ""
+	}
+	return registryVaultPathPattern.MatchString(
+		entry.AuthorityProofPrivateKey.VaultPath,
+	) &&
+		entry.AuthorityProofPrivateKey.SecretName ==
+			"internal-rpc-authority-proof-signer-key" &&
+		entry.AuthorityProofPrivateKey.MountPath ==
+			"/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer"
 }
 
 func targetID(workloadID, role string) string {

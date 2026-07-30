@@ -183,7 +183,7 @@ spec:
       artifactBinary: /usr/local/bin/internal-rpc-authority-publisher
       serviceAccount: internal-rpc-authority-publisher
       replicas: 2
-      leaderElection: POSTGRESQL_LEASE
+      leaderElection: NONE_MULTI_REPLICA_POSTGRESQL_VAULT_KUBERNETES_CAS
       databaseIdentity:
         capabilityRole: internal_rpc_authority_publisher
         capabilityRoleLogin: false
@@ -475,7 +475,8 @@ spec:
           exactProducerPolicyRevisionReadbackRequired: true
           promotionBeforeAllReadbacks: false
           retirementAfterOverlapWindowOnly: true
-        targetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
+        targetRegistry: deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml
+        contractFixture: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
         targetRegistrySchema: contracts/authorization/v1/key-delivery-targets.schema.json
         vaultAuthResource: internal-rpc-authority-publisher
         vaultKvVersion: 2
@@ -504,16 +505,27 @@ spec:
         protectedReadbackWriteAllowed: false
         requiredRoleUnion: CALLER_ISSUER_TARGET_VERIFIER_PROOF_RESOLVER
         sequence:
-          - persist-rotation-intent
-          - generate-key-or-certificate
+          - load-and-verify-forward-history-and-same-input-publication
+          - reconcile-current-next-bounded-previous-key-lifecycle
           - vault-cas-deliver-exact-targets
-          - workload-role-cryptographic-readback
-          - publish-snapshot-cas
-          - publisher-cryptographic-readback
-          - promote-after-overlap-window
+          - verify-independent-root-to-manifest-signer-chain
+          - build-full-auth-proof-manifest-policy-snapshot
+          - append-immutable-history-and-prepared-intent
+          - kubernetes-resource-version-cas-and-served-readback
+          - workload-role-independent-attestation-readbacks
+          - promote-after-exact-full-role-readback-set
+        prepareTransaction:
+          function: internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer)
+          isolation: ADVISORY_XACT_LOCK_AND_ROW_CAS
+          effects:
+            - append-immutable-authority-snapshot-history
+            - persist-prepared-rotation-intent
+          sameInputRetry: RETURN_PERSISTED_COMPACT_JWS
+          sameRevisionMutationOrHistoryGap: REJECT
         promotionTransaction:
-          isolation: SERIALIZABLE
-          lock: authority_rotation_intents-current-generation-for-update
+          function: internal_rpc_authority.publisher_promote_snapshot(uuid,bigint,text,integer)
+          isolation: ROW_LOCKED_CAS
+          lock: exact-authority-snapshot-history-publication-intent-for-update
           reads:
             - authority_key_delivery_readbacks
             - authority_snapshot_readbacks
@@ -522,8 +534,6 @@ spec:
           consumerReadbackWrites: FORBIDDEN
           effects:
             - compare-and-set-rotation-intent-promoted
-            - append-authority-snapshot-history
-            - advance-current-next-previous
           partialCommitAllowed: false
         crashRecovery:
           resumeSameIntentGenerationAndDigest: true
@@ -1028,17 +1038,20 @@ spec:
           delete: []
         internal_rpc_authority_publisher:
           select:
+            - authority_snapshot_history
+            - authority_rotation_intents
             - authority_key_delivery_readbacks
             - authority_snapshot_readbacks
           execute:
-            - internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text)
+            - internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer)
+            - internal_rpc_authority.publisher_promote_snapshot(uuid,bigint,text,integer)
             - internal_rpc_authority.publisher_record_rotation_intent(uuid,bigint,text,bigint,uuid)
             - internal_rpc_authority.publisher_read_restore_fence()
             - internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
             - internal_rpc_authority.is_active_runtime_database_session(text)
           forbidden:
-            - DIRECT_AUTHORITY_SNAPSHOT_HISTORY_SELECT_INSERT_UPDATE
-            - DIRECT_AUTHORITY_ROTATION_INTENTS_SELECT_INSERT_UPDATE
+            - DIRECT_AUTHORITY_SNAPSHOT_HISTORY_INSERT_UPDATE_DELETE
+            - DIRECT_AUTHORITY_ROTATION_INTENTS_INSERT_UPDATE_DELETE
             - DIRECT_AUTHORITY_RESTORE_FENCES_SELECT
           delete: []
         internal_rpc_authority_readback_attestor:
@@ -1127,14 +1140,17 @@ spec:
           ownerOrAttestorMembership: FORBIDDEN
           effectiveAllowedPrivileges:
             select:
+              - authority_snapshot_history
+              - authority_rotation_intents
               - authority_key_delivery_readbacks
               - authority_snapshot_readbacks
             execute:
-              - internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text)
+              - internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer)
+              - internal_rpc_authority.publisher_promote_snapshot(uuid,bigint,text,integer)
               - internal_rpc_authority.publisher_record_rotation_intent(uuid,bigint,text,bigint,uuid)
               - internal_rpc_authority.publisher_read_restore_fence()
               - internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
-          directSnapshotHistoryRotationIntentOrRestoreFencePrivileges: FORBIDDEN
+          directSnapshotHistoryOrRotationIntentDmlAndRestoreFenceRead: FORBIDDEN
           consumerEvidenceInsertUpdateOrFunctionExecute: FORBIDDEN
         rowLevelSecurity:
           enabled: true

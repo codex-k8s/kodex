@@ -1,12 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
@@ -60,7 +62,57 @@ type Publisher struct {
 	readbackSigner ReadbackCredentialSigner
 	store          repository.PublisherStore
 	vault          repository.SecretDelivery
+	graph          repository.AuthorityGraphLifecycle
+	graphMu        sync.RWMutex
+	graphState     model.AuthoritySnapshotPublication
 	now            func() time.Time
+}
+
+// AttachAuthorityGraph присоединяет обязательный полный publish/readback path.
+func (publisher *Publisher) AttachAuthorityGraph(
+	graph repository.AuthorityGraphLifecycle,
+) error {
+	if graph == nil {
+		return errors.New("authority publisher graph is nil")
+	}
+	publisher.graphMu.Lock()
+	defer publisher.graphMu.Unlock()
+	if publisher.graph != nil {
+		return errors.New("authority publisher graph is already attached")
+	}
+	publisher.graph = graph
+	return nil
+}
+
+// PublishAuthorityGraph публикует snapshot, auth/proof keys и trust bundles.
+func (publisher *Publisher) PublishAuthorityGraph(
+	ctx context.Context,
+) (model.AuthoritySnapshotPublication, error) {
+	if err := publisher.ensureWritable(ctx); err != nil {
+		return model.AuthoritySnapshotPublication{}, err
+	}
+	publisher.graphMu.RLock()
+	graph := publisher.graph
+	publisher.graphMu.RUnlock()
+	if graph == nil {
+		return model.AuthoritySnapshotPublication{}, failure.New(
+			failure.PersistenceUnavailable,
+			"authority publisher graph is unavailable",
+		)
+	}
+	publication, err := graph.Publish(ctx)
+	if err != nil {
+		return model.AuthoritySnapshotPublication{}, err
+	}
+	publisher.graphMu.Lock()
+	publisher.graphState = publication
+	for targetID, target := range publisher.registry.Targets {
+		target.ReadbackSourceRevision = publication.SourceRevision
+		target.ReadbackServedStateDigest = publication.SourceDigestSHA256
+		publisher.registry.Targets[targetID] = target
+	}
+	publisher.graphMu.Unlock()
+	return publication, nil
 }
 
 // NewPublisher создаёт publisher из реестра, независимых ключей и хранилищ.
@@ -104,10 +156,20 @@ func NewPublisher(
 func (publisher *Publisher) PublishReadbackMaterials(
 	ctx context.Context,
 ) ([]model.PublishedReadbackMaterial, error) {
-	now := publisher.now().UTC().Truncate(time.Second)
-	bucket := uint64(now.Unix() / 10)
-	results := make([]model.PublishedReadbackMaterial, 0, len(publisher.registry.Targets))
+	if err := publisher.ensureWritable(ctx); err != nil {
+		return nil, err
+	}
+	observedNow := publisher.now().UTC()
+	bucket := uint64(observedNow.Unix() / 10)
+	now := time.Unix(int64(bucket*10), 0).UTC()
+	publisher.graphMu.RLock()
+	targets := make([]model.DeliveryTarget, 0, len(publisher.registry.Targets))
 	for _, target := range publisher.registry.Targets {
+		targets = append(targets, target)
+	}
+	publisher.graphMu.RUnlock()
+	results := make([]model.PublishedReadbackMaterial, 0, len(targets))
+	for _, target := range targets {
 		result, err := publisher.publishReadbackMaterial(ctx, target, now, bucket)
 		if err != nil {
 			return nil, err
@@ -123,6 +185,13 @@ func (publisher *Publisher) publishReadbackMaterial(
 	now time.Time,
 	bucket uint64,
 ) (model.PublishedReadbackMaterial, error) {
+	if target.ReadbackSourceRevision == 0 ||
+		!digestPattern.MatchString(target.ReadbackServedStateDigest) {
+		return model.PublishedReadbackMaterial{}, failure.New(
+			failure.PersistenceUnavailable,
+			"authority graph readback source is unavailable",
+		)
+	}
 	possession, err := publisher.ensureReadbackPossession(ctx, target)
 	if err != nil {
 		return model.PublishedReadbackMaterial{}, err
@@ -299,22 +368,47 @@ func (publisher *Publisher) publishReadbackMaterial(
 		)
 	}
 	if err != nil {
-		return model.PublishedReadbackMaterial{}, failure.Wrap(
-			failure.PersistenceUnavailable,
-			"deliver readback credential",
-			err,
+		credentialMaterial, found, err = publisher.vault.ReadKV2(
+			ctx,
+			target.ReadbackCredentialPath,
 		)
+		if err != nil ||
+			!found ||
+			credentialMaterial.Data["intent_digest_sha256"] != intentDigest {
+			return model.PublishedReadbackMaterial{}, failure.New(
+				failure.PersistenceUnavailable,
+				"recover concurrent readback credential delivery",
+			)
+		}
 	}
+	servedCompact := credentialMaterial.Data["readback_credential_compact_jws"]
+	verified, verifyErr := internalrpcauth.VerifyCanonicalJSON(
+		servedCompact,
+		publisher.readbackSigner.Key.PublicOnly(),
+		internalrpcauth.ProtectedHeaderExpectation{
+			Type:  readbackCredentialType,
+			KeyID: publisher.readbackSigner.Key.KeyID,
+		},
+	)
+	expectedPayload, payloadErr := internalrpcauth.CanonicalJSON(claims)
+	servedDigest := sha256.Sum256([]byte(servedCompact))
 	if credentialMaterial.Data["pinned_intent_id"] != intentID ||
-		credentialMaterial.Data["readback_credential_compact_jws"] != credentialCompact ||
-		credentialMaterial.Data["intent_digest_sha256"] != intentDigest {
+		credentialMaterial.Data["intent_digest_sha256"] != intentDigest ||
+		credentialMaterial.Data["readback_credential_jti"] != credentialJTI ||
+		credentialMaterial.Data["expires_at"] !=
+			strconv.FormatInt(claims.ExpiresAt, 10) ||
+		credentialMaterial.Data["readback_credential_digest_sha256"] !=
+			hex.EncodeToString(servedDigest[:]) ||
+		verifyErr != nil ||
+		payloadErr != nil ||
+		!bytes.Equal(verified.CanonicalPayload, expectedPayload) {
 		return model.PublishedReadbackMaterial{}, failure.New(
 			failure.PersistenceUnavailable,
 			"readback credential delivery readback rejected",
 		)
 	}
 	return model.PublishedReadbackMaterial{
-		Intent: pinned, ReadbackCredentialJWS: credentialCompact,
+		Intent: pinned, ReadbackCredentialJWS: servedCompact,
 		PossessionPrivateJWK:   possession.Data["possession_private_jwk"],
 		CredentialVaultVersion: credentialMaterial.Version,
 		PossessionVaultVersion: possession.Version,
@@ -325,17 +419,37 @@ func (publisher *Publisher) ensureReadbackPossession(
 	ctx context.Context,
 	target model.DeliveryTarget,
 ) (repository.SecretMaterial, error) {
-	if existing, found, err := publisher.vault.ReadKV2(
+	existing, found, err := publisher.vault.ReadKV2(
 		ctx,
 		target.ReadbackPossessionKeyPath,
-	); err != nil {
+	)
+	if err != nil {
 		return repository.SecretMaterial{}, failure.Wrap(
 			failure.PersistenceUnavailable,
 			"read readback possession key delivery",
 			err,
 		)
-	} else if found {
-		return existing, nil
+	}
+	if found {
+		storedGeneration, parseErr := strconv.ParseUint(
+			existing.Data["possession_key_generation"],
+			10,
+			64,
+		)
+		if parseErr != nil ||
+			storedGeneration > target.ReadbackMaterialGeneration ||
+			storedGeneration+1 < target.ReadbackMaterialGeneration {
+			return repository.SecretMaterial{}, failure.New(
+				failure.PersistenceUnavailable,
+				"readback possession key generation rollback or gap rejected",
+			)
+		}
+		if storedGeneration == target.ReadbackMaterialGeneration {
+			if err := validateReadbackPossession(existing, target); err != nil {
+				return repository.SecretMaterial{}, err
+			}
+			return existing, nil
+		}
 	}
 	keyID := target.TargetID + "-readback-g" + strconv.FormatUint(
 		target.ReadbackMaterialGeneration,
@@ -365,19 +479,84 @@ func (publisher *Publisher) ensureReadbackPossession(
 			err,
 		)
 	}
-	return publisher.vault.CreateKV2(
-		ctx,
-		target.ReadbackPossessionKeyPath,
-		map[string]string{
-			"possession_private_jwk": string(privateJWK),
-			"possession_key_kid":     key.KeyID,
-			"possession_key_generation": strconv.FormatUint(
-				target.ReadbackMaterialGeneration,
-				10,
-			),
-			"possession_key_thumbprint_sha256": thumbprint,
-		},
+	data := map[string]string{
+		"possession_private_jwk": string(privateJWK),
+		"possession_key_kid":     key.KeyID,
+		"possession_key_generation": strconv.FormatUint(
+			target.ReadbackMaterialGeneration,
+			10,
+		),
+		"possession_key_thumbprint_sha256": thumbprint,
+	}
+	var delivered repository.SecretMaterial
+	if found {
+		delivered, err = publisher.vault.WriteKV2CAS(
+			ctx,
+			target.ReadbackPossessionKeyPath,
+			existing.Version,
+			data,
+		)
+	} else {
+		delivered, err = publisher.vault.CreateKV2(
+			ctx,
+			target.ReadbackPossessionKeyPath,
+			data,
+		)
+	}
+	if err != nil {
+		delivered, found, err = publisher.vault.ReadKV2(
+			ctx,
+			target.ReadbackPossessionKeyPath,
+		)
+		if err != nil || !found {
+			return repository.SecretMaterial{}, failure.New(
+				failure.PersistenceUnavailable,
+				"recover concurrent readback possession key delivery",
+			)
+		}
+	}
+	if err := validateReadbackPossession(delivered, target); err != nil {
+		return repository.SecretMaterial{}, err
+	}
+	return delivered, nil
+}
+
+func validateReadbackPossession(
+	material repository.SecretMaterial,
+	target model.DeliveryTarget,
+) error {
+	generation, generationErr := strconv.ParseUint(
+		material.Data["possession_key_generation"],
+		10,
+		64,
 	)
+	key, keyErr := internalrpcauth.ParsePrivateJWK(
+		[]byte(material.Data["possession_private_jwk"]),
+	)
+	thumbprint := ""
+	var thumbprintErr error
+	if keyErr == nil {
+		thumbprint, thumbprintErr = internalrpcauth.PublicJWKThumbprintSHA256(
+			key.PublicOnly(),
+		)
+	}
+	expectedKeyID := target.TargetID + "-readback-g" + strconv.FormatUint(
+		target.ReadbackMaterialGeneration,
+		10,
+	)
+	if generationErr != nil ||
+		keyErr != nil ||
+		thumbprintErr != nil ||
+		generation != target.ReadbackMaterialGeneration ||
+		key.KeyID != expectedKeyID ||
+		material.Data["possession_key_kid"] != expectedKeyID ||
+		material.Data["possession_key_thumbprint_sha256"] != thumbprint {
+		return failure.New(
+			failure.PersistenceUnavailable,
+			"readback possession key cryptographic readback rejected",
+		)
+	}
+	return nil
 }
 
 func deterministicUUID(parts ...string) string {
@@ -397,6 +576,9 @@ func (publisher *Publisher) Publish(
 	directiveCompact string,
 	idempotencyKey string,
 ) (model.PublishedCredential, error) {
+	if err := publisher.ensureWritable(ctx); err != nil {
+		return model.PublishedCredential{}, err
+	}
 	if !uuidPattern.MatchString(idempotencyKey) ||
 		controller.SPIFFEID != restoreControllerSPIFFE ||
 		controller.Key.Public == nil ||
@@ -630,15 +812,36 @@ func (publisher *Publisher) Publish(
 
 // Ready сверяет хранилище, Vault и фактически опубликованные материалы.
 func (publisher *Publisher) Ready(ctx context.Context) error {
-	if err := publisher.store.PublisherReady(ctx); err != nil {
+	if err := publisher.ensureWritable(ctx); err != nil {
+		return err
+	}
+	publisher.graphMu.RLock()
+	graph := publisher.graph
+	graphState := publisher.graphState
+	publisher.graphMu.RUnlock()
+	if publisher.signer.Key.Private == nil ||
+		len(publisher.registry.Targets) == 0 ||
+		graph == nil ||
+		graphState.SourceRevision == 0 {
+		return failure.New(failure.PersistenceUnavailable, "publisher signer or target registry is unavailable")
+	}
+	if err := graph.Ready(ctx, graphState); err != nil {
 		return failure.Wrap(
 			failure.PersistenceUnavailable,
-			"publisher persistence is unavailable",
+			"authority publisher graph is not ready",
 			err,
 		)
 	}
-	if publisher.signer.Key.Private == nil || len(publisher.registry.Targets) == 0 {
-		return failure.New(failure.PersistenceUnavailable, "publisher signer or target registry is unavailable")
+	return nil
+}
+
+func (publisher *Publisher) ensureWritable(ctx context.Context) error {
+	if err := publisher.store.PublisherReady(ctx); err != nil {
+		return failure.Wrap(
+			failure.PersistenceUnavailable,
+			"publisher persistence or restore fence is unavailable",
+			err,
+		)
 	}
 	return nil
 }

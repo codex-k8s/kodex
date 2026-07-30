@@ -5,12 +5,18 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "v",
+    "version",
+    "source_revision",
     "targets"
   ],
   "properties": {
-    "v": {
+    "version": {
       "const": 1
+    },
+    "source_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
     },
     "targets": {
       "type": "array",
@@ -133,6 +139,8 @@
         "credential_schema",
         "possession_key_id",
         "possession_key_generation",
+        "intent_revision",
+        "material_generation",
         "possession_key_vault_path",
         "possession_key_mount_path",
         "possession_public_jwk_source",
@@ -171,6 +179,16 @@
           "$ref": "#/$defs/workloadId"
         },
         "possession_key_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "intent_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "material_generation": {
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991

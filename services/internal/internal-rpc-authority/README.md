@@ -4,7 +4,7 @@ title: Внутренний сервис internal-rpc-authority
 type: service
 status: approved
 owner: developer
-version: 1.1.1
+version: 1.1.2
 updated: 2026-07-30
 ---
 
@@ -44,9 +44,11 @@ proof от домена-владельца и связывается с зара
   `uid=29000`, `gid=29000`, режимом `1770`;
 - `internal-rpc-authority-issuer` слушает только именованный issuer UDS;
 - `internal-rpc-authority-verifier` слушает только именованный verifier UDS;
-- `internal-rpc-authority-publisher` публикует подписанные снимки, обычные
-  readback credentials и относящиеся к роли restore credentials из
-  версионированного реестра целей;
+- `internal-rpc-authority-publisher` по одному устойчивому publication intent
+  публикует полный `auth/proof/manifest/snapshot` graph, обычные readback
+  credentials и относящиеся к роли restore credentials из версионированного
+  реестра целей; PostgreSQL фиксирует predecessor/history и promotion только
+  после точного readback всех ролей;
 - `internal-rpc-authority-readback-attestor` выдаёт устойчивый одноразовый
   challenge и атомарно сохраняет неизменяемое подтверждение аттестации;
 - `internal-rpc-authority-restore-controller` координирует
@@ -91,13 +93,25 @@ Issuer дополнительно требует
 соответствующие Kustomize components. Значения DSN, token и private keys нельзя
 передавать через окружение или выводить в лог.
 
+Verifier того же workload `control-plane` дополнительно подтверждает роль
+`AUTHORITY_PROOF_RESOLVER`: перед отдельным readback receipt он связывает
+доставленный через CSI proof private key с exact `CURRENT` JWK, issuer,
+аудиторией, поколением и source revision/digest proof trust. Receipt verifier
+не заменяет resolver receipt, а publisher остаётся неготовым до полного набора.
+
 Обычные readback credential, ключ владения, restore role credential и restore
 ACK key issuer/verifier читают непосредственно из точных путей Vault KV,
 разрешённых только их роли workload. Вызывающая сторона не передаёт путь,
 workload, роль, поколение, аудиторию или TTL. Материал ключа publisher и снимки
 доверия attestor/controller доставляются через Vault `SecretProviderClass` в
 пространстве имён с аудиторией `vault`, точным TLS SNI и
-`vaultSkipTLSVerify=false`.
+`vaultSkipTLSVerify=false`. Snapshot создаётся заранее пустым ресурсом без
+секретного материала; publisher имеет только `get/update/patch`, выполняет
+`resourceVersion` CAS через exact Kubernetes API destination и после каждого
+изменения читает фактически обслуживаемый JWS. Один snapshot действует не
+более 24 часов; новая source revision должна быть опубликована и полностью
+подтверждена до истечения этого окна, иначе publisher и consumers закрывают
+readiness.
 
 Тайм-ауты и ограниченный опрос задаются
 `INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT`,

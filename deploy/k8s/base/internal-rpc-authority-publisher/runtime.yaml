@@ -24,6 +24,7 @@ data:
   INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_DIGEST_SHA256: 4db3e3028dc1da2550014812ff082d462dae2f75a7cf27101d75734609e10749
   INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_KEY_SET_REVISION: "1"
   INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_GENERATION: "1"
+  INTERNAL_RPC_AUTHORITY_MANIFEST_SIGNER_GENERATION: "1"
   INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_GENERATION: "1"
   OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.observability.svc:4317
   OTEL_EXPORTER_OTLP_TLS_SERVER_NAME: otel-collector.observability.svc.cluster.local
@@ -108,6 +109,10 @@ spec:
               value: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/restore-signer/private.jwk
             - name: INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_PRIVATE_JWK_FILE
               value: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/readback-signer/private.jwk
+            - name: INTERNAL_RPC_AUTHORITY_MANIFEST_SIGNER_PRIVATE_JWK_FILE
+              value: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/manifest-signer/private.jwk
+            - name: INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_JWS_FILE
+              value: /var/run/config/mattercodex/internal-rpc-authority/publisher/manifest-trust/manifest-trust.jws
             - name: INTERNAL_RPC_AUTHORITY_TARGET_REGISTRY_FILE
               value: /var/run/config/mattercodex/internal-rpc-authority/publisher-targets/key-delivery-targets.yaml
           ports:
@@ -170,11 +175,23 @@ spec:
             - name: readback-signer
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/readback-signer
               readOnly: true
+            - name: manifest-signer
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/manifest-signer
+              readOnly: true
+            - name: manifest-trust
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher/manifest-trust
+              readOnly: true
             - name: target-registry
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher-targets
               readOnly: true
             - name: vault-token
               mountPath: /var/run/secrets/tokens/vault
+              readOnly: true
+            - name: kubernetes-api-token
+              mountPath: /var/run/secrets/tokens/kubernetes-api
+              readOnly: true
+            - name: kubernetes-api-ca
+              mountPath: /var/run/config/kubernetes.io/serviceaccount
               readOnly: true
             - name: observability
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability
@@ -244,6 +261,18 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: internal-rpc-authority-publisher-readback-signer
+        - name: manifest-signer
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-publisher-manifest-signer
+        - name: manifest-trust
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-publisher-manifest-trust
         - name: target-registry
           configMap:
             name: internal-rpc-authority-publisher-target-registry
@@ -256,6 +285,21 @@ spec:
                   path: token
                   audience: vault
                   expirationSeconds: 600
+        - name: kubernetes-api-token
+          projected:
+            defaultMode: 0400
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: https://kubernetes.default.svc
+                  expirationSeconds: 600
+        - name: kubernetes-api-ca
+          configMap:
+            name: kube-root-ca.crt
+            defaultMode: 0440
+            items:
+              - key: ca.crt
+                path: ca.crt
         - name: observability
           configMap:
             name: internal-rpc-authority-otel-ca

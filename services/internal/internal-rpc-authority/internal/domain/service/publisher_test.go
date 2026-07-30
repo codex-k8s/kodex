@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -136,6 +137,36 @@ func TestPublisherRejectsWrongTargetAndAudience(t *testing.T) {
 	}
 }
 
+func TestPublisherRestoreFenceRejectsExternalWrites(t *testing.T) {
+	t.Parallel()
+	store := &memoryPublisherStore{readyErr: errors.New("restore fence closed")}
+	vault := newMemorySecretDelivery()
+	publisher, err := NewPublisher(
+		testPublisherRegistry(),
+		RestoreCredentialSigner{
+			Key:            testKey(t, "restore-credential-signer-g1"),
+			SourceRevision: 1, SourceDigest: strings.Repeat("b", 64),
+			KeySetRevision: 1, Generation: 1,
+		},
+		ReadbackCredentialSigner{
+			Key:            testKey(t, "readback-credential-signer-g1"),
+			SourceRevision: 1, SourceDigest: strings.Repeat("c", 64),
+			KeySetRevision: 1, Generation: 1,
+		},
+		store,
+		vault,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := publisher.PublishReadbackMaterials(context.Background()); err == nil {
+		t.Fatal("restore fence accepted readback material publication")
+	}
+	if len(vault.values) != 0 {
+		t.Fatal("restore fence rejection happened after external Vault mutation")
+	}
+}
+
 func TestPublisherPinsAndRotatesIndependentReadbackMaterial(t *testing.T) {
 	t.Parallel()
 	now := time.Unix(1_800_000_000, 0).UTC()
@@ -204,6 +235,92 @@ func TestPublisherPinsAndRotatesIndependentReadbackMaterial(t *testing.T) {
 		second[0].PossessionVaultVersion != 1 ||
 		second[0].PossessionPrivateJWK != first[0].PossessionPrivateJWK {
 		t.Fatalf("readback rotation did not preserve possession and advance credential: %#v", second[0])
+	}
+	target := publisher.registry.Targets["control-plane.authorization-verifier"]
+	target.ReadbackMaterialGeneration = 2
+	publisher.registry.Targets[target.TargetID] = target
+	now = now.Add(11 * time.Second)
+	third, err := publisher.PublishReadbackMaterials(context.Background())
+	if err != nil {
+		t.Fatalf("rotate possession generation: %v", err)
+	}
+	if third[0].PossessionVaultVersion != 2 ||
+		third[0].PossessionPrivateJWK == second[0].PossessionPrivateJWK {
+		t.Fatal("readback possession generation did not advance by CAS")
+	}
+	target.ReadbackMaterialGeneration = 4
+	publisher.registry.Targets[target.TargetID] = target
+	if _, err := publisher.PublishReadbackMaterials(context.Background()); err == nil {
+		t.Fatal("gapped readback possession generation was accepted")
+	}
+	stored, found, err := vault.ReadKV2(
+		context.Background(),
+		target.ReadbackPossessionKeyPath,
+	)
+	if err != nil || !found || stored.Version != 2 {
+		t.Fatal("rejected possession generation gap mutated Vault state")
+	}
+}
+
+func TestPublisherConcurrentReadbackReturnsPersistedCredential(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1_800_000_000, 0).UTC()
+	store := &memoryPublisherStore{}
+	vault := newMemorySecretDelivery()
+	publisher, err := NewPublisher(
+		testPublisherRegistry(),
+		RestoreCredentialSigner{
+			Key:            testKey(t, "restore-credential-signer-g1"),
+			SourceRevision: 1, SourceDigest: strings.Repeat("b", 64),
+			KeySetRevision: 1, Generation: 1,
+		},
+		ReadbackCredentialSigner{
+			Key:            testKey(t, "readback-credential-signer-g1"),
+			SourceRevision: 1, SourceDigest: strings.Repeat("c", 64),
+			KeySetRevision: 1, Generation: 1,
+		},
+		store,
+		vault,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher.now = func() time.Time { return now.Add(7 * time.Second) }
+	const replicas = 8
+	results := make(chan model.PublishedReadbackMaterial, replicas)
+	failures := make(chan error, replicas)
+	var group sync.WaitGroup
+	for replica := 0; replica < replicas; replica++ {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			values, publishErr := publisher.PublishReadbackMaterials(
+				context.Background(),
+			)
+			if publishErr != nil {
+				failures <- publishErr
+				return
+			}
+			results <- values[0]
+		}()
+	}
+	group.Wait()
+	close(results)
+	close(failures)
+	for publishErr := range failures {
+		t.Fatalf("concurrent readback publication failed: %v", publishErr)
+	}
+	var expected model.PublishedReadbackMaterial
+	for value := range results {
+		if expected.ReadbackCredentialJWS == "" {
+			expected = value
+			continue
+		}
+		if value.ReadbackCredentialJWS != expected.ReadbackCredentialJWS ||
+			value.PossessionPrivateJWK != expected.PossessionPrivateJWK ||
+			value.Intent.IntentDigestSHA256 != expected.Intent.IntentDigestSHA256 {
+			t.Fatal("concurrent publisher did not return persisted material")
+		}
 	}
 }
 
@@ -275,9 +392,11 @@ func signIssuanceDirective(
 }
 
 type memoryPublisherStore struct {
-	mu      sync.Mutex
-	value   *model.PublishedCredential
-	intents map[string]model.ReadbackIntent
+	mu          sync.Mutex
+	value       *model.PublishedCredential
+	intents     map[string]model.ReadbackIntent
+	publication *model.AuthoritySnapshotPublication
+	readyErr    error
 }
 
 func (store *memoryPublisherStore) PinReadbackIntent(
@@ -327,7 +446,52 @@ func (store *memoryPublisherStore) SavePublishedCredential(
 	return value, nil
 }
 
-func (*memoryPublisherStore) PublisherReady(context.Context) error { return nil }
+func (store *memoryPublisherStore) PublisherReady(context.Context) error {
+	return store.readyErr
+}
+
+func (*memoryPublisherStore) LoadSnapshotHistory(
+	context.Context,
+) (model.AuthoritySnapshotHistory, error) {
+	return model.AuthoritySnapshotHistory{}, nil
+}
+
+func (store *memoryPublisherStore) LoadSnapshotPublication(
+	_ context.Context,
+	sourceRevision uint64,
+	inputDigest string,
+) (model.AuthoritySnapshotPublication, bool, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.publication == nil ||
+		store.publication.SourceRevision != sourceRevision ||
+		store.publication.InputDigestSHA256 != inputDigest {
+		return model.AuthoritySnapshotPublication{}, false, nil
+	}
+	return *store.publication, true, nil
+}
+
+func (store *memoryPublisherStore) AppendSnapshot(
+	_ context.Context,
+	value model.AuthoritySnapshotPublication,
+	_ int,
+) (model.AuthoritySnapshotPublication, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.publication != nil {
+		return *store.publication, nil
+	}
+	store.publication = &value
+	return value, nil
+}
+
+func (*memoryPublisherStore) SnapshotPublicationReady(
+	context.Context,
+	model.AuthoritySnapshotPublication,
+	int,
+) error {
+	return nil
+}
 
 type memorySecretDelivery struct {
 	mu     sync.Mutex
@@ -355,8 +519,8 @@ func (delivery *memorySecretDelivery) CreateKV2(
 ) (repository.SecretMaterial, error) {
 	delivery.mu.Lock()
 	defer delivery.mu.Unlock()
-	if existing, ok := delivery.values[path]; ok {
-		return existing, nil
+	if _, ok := delivery.values[path]; ok {
+		return repository.SecretMaterial{}, repository.ErrIdempotencyConflict
 	}
 	digest, err := internalrpcauth.CanonicalJSONSHA256(data)
 	if err != nil {

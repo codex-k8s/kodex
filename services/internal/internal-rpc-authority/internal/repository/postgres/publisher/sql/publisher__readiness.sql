@@ -2,6 +2,7 @@
 SELECT
     pg_catalog.current_user = 'internal_rpc_authority_publisher'
     AND pg_catalog.session_user <> pg_catalog.current_user
+    AND internal_rpc_authority.runtime_restore_fence_allows_work()
     AND pg_catalog.has_table_privilege(
         pg_catalog.current_user,
         'internal_rpc_authority.authority_publisher_delivery_receipts',

@@ -57,7 +57,7 @@ func New(config Config) (*Rollout, error) {
 	}
 	rootCAs := x509.NewCertPool()
 	if !rootCAs.AppendCertsFromPEM(caRaw) {
-		return nil, errors.New("Kubernetes API CA is invalid")
+		return nil, errors.New("kubernetes API CA is invalid")
 	}
 	return &Rollout{
 		config: config,
@@ -72,7 +72,7 @@ func New(config Config) (*Rollout, error) {
 				ForceAttemptHTTP2: true,
 			},
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return errors.New("Kubernetes API redirect is forbidden")
+				return errors.New("kubernetes API redirect is forbidden")
 			},
 		},
 	}, nil
