@@ -35,6 +35,37 @@ for environment_name in staging production; do
   [[ "$(grep -Fc 'kind: SecretProviderClass' <<<"$rendered")" == "4" ]]
   [[ "$(grep -Fc 'vaultSkipTLSVerify: "false"' <<<"$rendered")" == "4" ]]
   ! grep -Eq 'vaultSkipTLSVerify: "?true"?' <<<"$rendered"
+  runtime_database_sources="$(
+    yq eval-all '
+      select(.kind == "NetworkPolicy" and
+        .metadata.name == "internal-rpc-authority-postgresql-from-runtime") |
+      .spec.ingress[].from[].podSelector.matchLabels["app.kubernetes.io/name"]
+    ' <<<"$rendered"
+  )"
+  for source_name in \
+    internal-rpc-authority-publisher \
+    internal-rpc-authority-readback-attestor \
+    internal-rpc-authority-restore-controller \
+    internal-rpc-authority-restore-recovery; do
+    grep -Fxq "$source_name" <<<"$runtime_database_sources"
+  done
+  vault_sources="$(
+    yq eval-all '
+      select(.kind == "NetworkPolicy" and
+        .metadata.name == "vault-from-internal-rpc-authority-reconciler") |
+      .spec.ingress[].from[].podSelector.matchLabels["app.kubernetes.io/name"]
+    ' <<<"$rendered"
+  )"
+  grep -Fxq 'internal-rpc-authority-publisher' <<<"$vault_sources"
+  readback_egress="$(
+    yq eval-all '
+      select(.kind == "NetworkPolicy" and
+        .metadata.name == "internal-rpc-authority-readback-attestor-exact-paths") |
+      .spec.egress
+    ' <<<"$rendered"
+  )"
+  grep -Fq 'k8s-app: kube-dns' <<<"$readback_egress"
+  ! grep -Fq 'app.kubernetes.io/name: vault' <<<"$readback_egress"
   grep -A3 -F '/usr/local/bin/internal-rpc-authority-cli' <<<"$rendered" |
     grep -Fq -- '- expand'
 done

@@ -179,6 +179,7 @@ spec:
       kind: Deployment
       canonicalPath: deploy/k8s/base/internal-rpc-authority-publisher
       owner: internal-rpc-authority
+      artifactBinary: /usr/local/bin/internal-rpc-authority-publisher
       serviceAccount: internal-rpc-authority-publisher
       replicas: 2
       leaderElection: POSTGRESQL_LEASE
@@ -626,6 +627,7 @@ spec:
           - vault.mattercodex-system.svc:8200
           - internal-rpc-authority-postgresql.mattercodex-system.svc:5432
           - otel-collector.observability.svc:4317
+          - sentry-relay.observability.svc:8443
         wildcardDestinationAllowed: false
       failurePolicy: FAIL_CLOSED
     internal-rpc-authority-readback-attestor:
@@ -1580,12 +1582,12 @@ spec:
       failurePolicy: KEEP_TRAFFIC_QUARANTINED
     internal-rpc-authority-restore-controller:
       kind: Deployment
-      canonicalPath: deploy/k8s/base/internal-rpc-authority-restore-controller
+      canonicalPath: deploy/k8s/base/internal-rpc-authority-restore
       owner: internal-rpc-authority
       artifactBinary: /usr/local/bin/internal-rpc-authority-restore-controller
       serviceAccount: internal-rpc-authority-restore-controller
       replicas: 2
-      leaderElection: KUBERNETES_LEASE
+      leaderElection: KUBERNETES_RESOURCE_VERSION_SEMANTIC_CAS
       interface:
         protoService: internalrpcauthority.v1.RestoreControllerService
         prepareMethod: /internalrpcauthority.v1.RestoreControllerService/PrepareRestore
@@ -1714,10 +1716,10 @@ spec:
         staleGenerationAckAllowed: false
         publishPreparedBeforeCompleteAckSet: false
       signer:
-        delivery: vault-csi
-        secretName: internal-rpc-authority-restore-controller-signer
-        trustSecretName: internal-rpc-authority-restore-evidence-trust
-        rotation: CURRENT_NEXT_PREVIOUS
+        delivery: SERVER_TLS_SECRET_WITH_EXACT_ECDSA_LEAF
+        secretName: internal-rpc-authority-restore-controller-tls
+        trustSecretName: internal-rpc-authority-restore-controller-tls
+        rotation: FORWARD_ONLY_CERTIFICATE_GENERATION
         requirePrivateToPublicReadback: true
         requireServedEvidenceReadback: true
       roleCredentialTrustDelivery:
@@ -1740,23 +1742,12 @@ spec:
         startupPolicy: FAIL_CLOSED
         missedUpdateRejoin: SIGNED_HISTORY_MAX_32_FROM_PERSISTENT_ANCHOR
       exactWritableResources:
-        secrets:
-          - internal-rpc-authority-restore-evidence
+        configMaps:
           - internal-rpc-authority-restore-coordination
-        leases:
-          - internal-rpc-authority-restore-controller
       kubernetesRbac:
-        secrets:
+        configMaps:
           resourceNames:
-            - internal-rpc-authority-restore-evidence
             - internal-rpc-authority-restore-coordination
-          verbs:
-            - get
-            - update
-            - patch
-        leases:
-          resourceNames:
-            - internal-rpc-authority-restore-controller
           verbs:
             - get
             - update
@@ -1771,8 +1762,8 @@ spec:
         requireAckPublicKeyVerificationPath: true
       failurePolicy: KEEP_TRAFFIC_QUARANTINED
     internal-rpc-authority-restore-operator-job:
-      kind: Job
-      canonicalPath: deploy/k8s/base/internal-rpc-authority-restore-operator
+      kind: CronJob
+      canonicalPath: deploy/k8s/base/internal-rpc-authority-restore
       owner: internal-rpc-authority
       artifactBinary: /usr/local/bin/internal-rpc-authority-restore-operator
       serviceAccount: internal-rpc-authority-restore-operator
@@ -1810,13 +1801,13 @@ spec:
         - verify-every-role-readback-before-open
       failurePolicy: KEEP_TRAFFIC_QUARANTINED
     internal-rpc-authority-recovery-job:
-      kind: JobStep
-      canonicalPath: deploy/k8s/base/internal-rpc-authority-restore-operator
+      kind: CronJob
+      canonicalPath: deploy/k8s/base/internal-rpc-authority-restore
       owner: internal-rpc-authority
-      artifactBinary: /usr/local/bin/internal-rpc-authority-recovery
-      parentJob: internal-rpc-authority-restore-operator-job
-      serviceAccount: internal-rpc-authority-restore-operator
-      triggerOwner: internal-rpc-authority-restore-operator-job
+      artifactBinary: /usr/local/bin/internal-rpc-authority-restore-recovery
+      parentJob: null
+      serviceAccount: internal-rpc-authority-restore-recovery
+      triggerOwner: internal-rpc-authority-restore-controller
       trigger: AFTER_SIGNED_COMPLETED_EVIDENCE
       restoreEvidenceResourceName: internal-rpc-authority-restore-evidence
       restoreEvidenceTrustSecretName: internal-rpc-authority-restore-evidence-trust
@@ -2302,6 +2293,42 @@ spec:
       exactTrustBundleId: REQUIRED_PER_OPERATION_BINDING
       trustedCaFile: REQUIRED_FOR_EXACT_TRUST_BUNDLE
       plaintextFallback: FORBIDDEN
+  observability:
+    owner: internal-rpc-authority
+    traceTransport:
+      protocol: OTLP_GRPC_TLS
+      endpoint: otel-collector.observability.svc:4317
+      tlsServerName: otel-collector.observability.svc.cluster.local
+      caConfigMap: internal-rpc-authority-otel-ca
+      plaintextOrUnpinnedDestinationAllowed: false
+    errorTransport:
+      protocol: SENTRY_HTTPS_RELAY
+      endpoint: sentry-relay.observability.svc:8443
+      expectedDsnHost: sentry-relay.observability.svc:8443
+      dsnSecret: internal-rpc-authority-sentry
+      delivery: READ_ONLY_FILE
+      arbitraryInternetEgressAllowed: false
+    instrumentation:
+      grpcServerAndClient: CLOSED_FULL_METHOD_OPERATION_SET
+      postgresql: OTELPGX_WITHOUT_SQL_OR_CONNECTION_DETAILS
+      logs: TRACE_AWARE_JSON_SLOG
+      unexpectedGrpcCodes:
+        - Internal
+        - Unavailable
+        - Unknown
+        - DataLoss
+      metricLabels:
+        - operation
+        - code
+        - ready
+        - version
+      arbitraryLabelValuesAllowed: false
+    operations:
+      dashboard: internal-rpc-authority-dashboard
+      prometheusRule: internal-rpc-authority
+      runbookUrl: https://docs.mattercodex.dev/runbooks/internal-rpc-authority
+      tracingShutdownBudgetIndependent: true
+      sentryFlushBudgetIndependent: true
   shutdown:
     order:
       - application-readiness-false

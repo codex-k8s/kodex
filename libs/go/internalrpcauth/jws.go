@@ -313,10 +313,10 @@ func ValidateTimes(now time.Time, issuedAt, notBefore, expiresAt time.Time, maxT
 		!expiresAt.Equal(issuedAt.Add(maxTTL)) {
 		return errors.New("invalid token lifetime")
 	}
-	if issuedAt.Before(now.Add(-skew)) || issuedAt.After(now.Add(skew)) {
-		return errors.New("token issued-at is outside the allowed clock skew")
+	if issuedAt.After(now) {
+		return errors.New("token issued-at is in the future")
 	}
-	if now.Add(skew).Before(issuedAt) {
+	if now.Add(skew).Before(notBefore) {
 		return errors.New("token is not yet valid")
 	}
 	if !now.Add(-skew).Before(expiresAt) {

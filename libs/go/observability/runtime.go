@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
 	"github.com/getsentry/sentry-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -187,7 +188,9 @@ func (runtime *Runtime) UnaryServerInterceptor(
 		if err != nil {
 			span.RecordError(err)
 			span.SetAttributes(attribute.String("rpc.grpc.status_code", status.Code(err).String()))
-			runtime.CaptureException(traceCtx, err)
+			if grpcserver.IsUnexpectedCode(status.Code(err)) {
+				runtime.CaptureException(traceCtx, err)
+			}
 		}
 		span.End()
 		return response, err
@@ -224,7 +227,9 @@ func (runtime *Runtime) UnaryClientInterceptor(
 		if err != nil {
 			span.RecordError(err)
 			span.SetAttributes(attribute.String("rpc.grpc.status_code", status.Code(err).String()))
-			runtime.CaptureException(traceCtx, err)
+			if grpcserver.IsUnexpectedCode(status.Code(err)) {
+				runtime.CaptureException(traceCtx, err)
+			}
 		}
 		span.End()
 		return err

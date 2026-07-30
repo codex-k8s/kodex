@@ -4,7 +4,7 @@ title: Внутренний сервис internal-rpc-authority
 type: service
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-07-30
 ---
 
@@ -41,6 +41,15 @@ authority.
   `uid=29000`, `gid=29000`, mode `1770`;
 - `internal-rpc-authority-issuer` слушает только именованный issuer UDS;
 - `internal-rpc-authority-verifier` слушает только именованный verifier UDS;
+- `internal-rpc-authority-publisher` публикует подписанные snapshot, normal
+  readback credentials и role-specific restore credentials из versioned
+  target registry;
+- `internal-rpc-authority-readback-attestor` выдаёт persistent single-use
+  challenge и атомарно сохраняет immutable attestation receipt;
+- `internal-rpc-authority-restore-controller` координирует
+  `OPEN → QUIESCING → PREPARED → RESTORING → COMPLETED`, а отдельные
+  `restore-operator` и `restore-recovery` исполняют owner-triggered command и
+  server-side fence recovery;
 - `internal-rpc-authority-database-credential-reconciler` поддерживает
   server-derived `CURRENT`/`NEXT` PostgreSQL principals publisher и readback
   attestor через Vault Kubernetes auth;
@@ -66,14 +75,24 @@ atomic pointer переключает рабочий RPC на новую immutab
 | `INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME` | Exact TLS SNI/hostname |
 | `INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER` | Exact login principal текущего поколения |
 | `INTERNAL_RPC_AUTHORITY_SNAPSHOT_JWS_FILE` | Подписанный authority snapshot |
-| `INTERNAL_RPC_AUTHORITY_MANIFEST_PUBLIC_JWK_FILE` | Независимый public manifest key |
-| `INTERNAL_RPC_AUTHORITY_READBACK_PRIVATE_JWK_FILE` | Role-specific possession key |
+| `INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_PUBLIC_JWK_FILE` | Immutable bootstrap public key независимого manifest root |
+| `INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_JWS_FILE` | Forward-only подписанный manifest signer trust bundle |
+| `INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE` | Projected audience-bound Vault token; значение читается только из файла |
+| `INTERNAL_RPC_AUTHORITY_WORKLOAD_CERTIFICATE_FILE` | Exact workload mTLS certificate для attestor/controller |
 
 Issuer дополнительно требует
 `INTERNAL_RPC_AUTHORITY_CONTEXT_PRIVATE_JWK_FILE` и
 `INTERNAL_RPC_AUTHORITY_PROOF_TRUST_JWK_FILE`. Пути имеют безопасные defaults,
 соответствующие Kustomize components. Значения DSN, token и private keys нельзя
 передавать через env или выводить в лог.
+
+Normal readback credential, possession key, restore role credential и restore
+ACK key issuer/verifier читают непосредственно из exact Vault KV paths,
+разрешённых только их workload role. Caller не передаёт path, workload,
+role, generation, audience или TTL. Publisher signer material и attestor/
+controller trust snapshots доставляются через namespaced Vault
+`SecretProviderClass` с audience `vault`, exact TLS SNI и
+`vaultSkipTLSVerify=false`.
 
 Тайм-ауты и bounded polling задаются
 `INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT`,
@@ -130,6 +149,14 @@ consumer unit обязан включить issuer/verifier PostgreSQL, DNS и P
 Readiness проверяет тот же persistent served snapshot/replay path, который
 использует рабочий RPC. gRPC metric labels ограничены registry методов и
 canonical codes; произвольные значения нормализуются.
+
+Каждый runtime и восстановительная job создаёт OTel trace provider, включает
+server/client gRPC spans и `otelpgx` hooks без SQL/connection details.
+Структурные `slog` records получают `trace_id`/`span_id`. OTLP разрешён только
+к `otel-collector.observability.svc:4317` с TLS 1.3, exact SNI и отдельной CA.
+Sentry DSN читается только из read-only файла и допускает только
+`sentry-relay.observability.svc:8443`; прямой internet egress запрещён.
+Dashboard, alerts и абсолютный `runbook_url` входят в тот же deployable unit.
 
 При `SIGTERM` readiness закрывается до остановки, затем независимо и в
 ограниченные сроки завершаются gRPC, workers, technical HTTP и PostgreSQL.

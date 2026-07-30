@@ -68,14 +68,9 @@ func TestValidateTimes(t *testing.T) {
 	}
 	for name, times := range map[string][3]time.Time{
 		"future-issued-at": {
-			now.Add(6 * time.Second),
-			now.Add(6 * time.Second),
-			now.Add(36 * time.Second),
-		},
-		"past-issued-at": {
-			now.Add(-6 * time.Second),
-			now.Add(-6 * time.Second),
-			now.Add(24 * time.Second),
+			now.Add(time.Second),
+			now.Add(time.Second),
+			now.Add(31 * time.Second),
 		},
 		"not-before-differs": {
 			now,
@@ -105,6 +100,26 @@ func TestValidateTimes(t *testing.T) {
 				t.Fatal("invalid time binding accepted")
 			}
 		})
+	}
+	if err := ValidateTimes(
+		now,
+		now.Add(-6*time.Second),
+		now.Add(-6*time.Second),
+		now.Add(24*time.Second),
+		30*time.Second,
+		5*time.Second,
+	); err != nil {
+		t.Fatalf("unexpired past-issued token rejected: %v", err)
+	}
+	if err := ValidateTimes(
+		now,
+		now.Add(-35*time.Second),
+		now.Add(-35*time.Second),
+		now.Add(-5*time.Second),
+		30*time.Second,
+		5*time.Second,
+	); err == nil {
+		t.Fatal("token at the expired skew boundary was accepted")
 	}
 }
 

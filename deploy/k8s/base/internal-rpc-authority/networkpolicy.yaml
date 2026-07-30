@@ -99,6 +99,18 @@ spec:
         - podSelector:
             matchLabels:
               mattercodex.dev/internal-rpc-authority-verifier: enabled
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: internal-rpc-authority-publisher
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: internal-rpc-authority-readback-attestor
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: internal-rpc-authority-restore-controller
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: internal-rpc-authority-restore-recovery
       ports:
         - port: 5432
           protocol: TCP
@@ -125,6 +137,9 @@ spec:
         - podSelector:
             matchLabels:
               mattercodex.dev/internal-rpc-authority-verifier: enabled
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: internal-rpc-authority-publisher
       ports:
         - port: 8200
           protocol: TCP

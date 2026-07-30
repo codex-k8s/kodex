@@ -646,8 +646,10 @@ exp = iat + 30 seconds
 ```
 
 Verifier использует trusted database time и допускает clock skew не более
-5 секунд в обе стороны. Он дополнительно требует `exp - iat == 30`,
-`nbf == iat`, `iat <= now + 5`, `nbf <= now + 5` и `exp > now - 5`.
+5 секунд только на границах `nbf`/`exp`. Он дополнительно требует
+`exp - iat == 30`, `nbf == iat`, `iat <= now`, `nbf <= now + 5` и
+`exp > now - 5`. Любой будущий `iat`, включая активный по skew `nbf`,
+отклоняется закрыто и не продлевает credential window.
 Overlong/shortened TTL, дробные JSON numbers и число вне safe integer range
 отклоняются. Clock-skew не продлевает publisher rotation window менее 40
 секунд.
