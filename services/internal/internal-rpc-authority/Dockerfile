@@ -13,6 +13,8 @@ COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
+COPY contracts/authorization/v1/bootstrap-key-delivery-targets.yaml \
+    contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
 COPY services/internal/internal-rpc-authority/ services/internal/internal-rpc-authority/
 
 WORKDIR /workspace/services/internal/internal-rpc-authority
@@ -37,6 +39,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     ./cmd/internal-rpc-authority-database-credential-reconciler \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/internal-rpc-authority-publisher \
+    ./cmd/internal-rpc-authority-publisher \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/internal-rpc-authority-readback-attestor \
     ./cmd/internal-rpc-authority-readback-attestor \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
@@ -57,6 +63,9 @@ COPY --from=build --chmod=0444 \
 COPY --from=build --chmod=0444 \
     /workspace/services/internal/internal-rpc-authority/internal/bootstrap/readback-root/ \
     /usr/local/share/internal-rpc-authority/readback-root/
+COPY --from=build --chmod=0444 \
+    /workspace/contracts/authorization/v1/bootstrap-key-delivery-targets.yaml \
+    /usr/local/share/internal-rpc-authority/bootstrap-key-delivery-targets.yaml
 
 USER 65532:65532
 

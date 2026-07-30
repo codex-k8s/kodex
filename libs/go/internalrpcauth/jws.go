@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -187,14 +188,24 @@ func DecodeCanonicalJSON(data []byte, target any) error {
 	return nil
 }
 
-func CanonicalJSONSHA256(value any) (string, error) {
+// CanonicalJSON возвращает JCS-представление JSON для устойчивого хранения
+// подписываемого или сравниваемого состояния.
+func CanonicalJSON(value any) ([]byte, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
-		return "", fmt.Errorf("marshal canonical digest input: %w", err)
+		return nil, fmt.Errorf("marshal canonical JSON input: %w", err)
 	}
 	canonical, err := jcs.Transform(raw)
 	if err != nil {
-		return "", fmt.Errorf("canonicalize digest input: %w", err)
+		return nil, fmt.Errorf("canonicalize JSON input: %w", err)
+	}
+	return canonical, nil
+}
+
+func CanonicalJSONSHA256(value any) (string, error) {
+	canonical, err := CanonicalJSON(value)
+	if err != nil {
+		return "", err
 	}
 	digest := crypto.SHA256.New()
 	if _, err := digest.Write(canonical); err != nil {
@@ -209,6 +220,29 @@ func ParsePublicJWK(data []byte) (ES256Key, error) {
 
 func ParsePrivateJWK(data []byte) (ES256Key, error) {
 	return parseJWK(data, true)
+}
+
+func GenerateES256Key(keyID string) (ES256Key, error) {
+	if keyID == "" || len(keyID) > 64 {
+		return ES256Key{}, ErrKey
+	}
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return ES256Key{}, fmt.Errorf("generate ES256 key: %w", err)
+	}
+	return ES256Key{
+		KeyID:   keyID,
+		Public:  &privateKey.PublicKey,
+		Private: privateKey,
+	}, nil
+}
+
+func MarshalPublicJWK(key ES256Key) ([]byte, error) {
+	return marshalJWK(key, false)
+}
+
+func MarshalPrivateJWK(key ES256Key) ([]byte, error) {
+	return marshalJWK(key, true)
 }
 
 func PublicJWKThumbprintSHA256(key ES256Key) (string, error) {
@@ -232,6 +266,41 @@ func PublicJWKThumbprintSHA256(key ES256Key) (string, error) {
 		return "", fmt.Errorf("hash JWK thumbprint input: %w", err)
 	}
 	return hex.EncodeToString(digest.Sum(nil)), nil
+}
+
+func marshalJWK(key ES256Key, includePrivate bool) ([]byte, error) {
+	if err := validateES256Key(key, key.KeyID, includePrivate); err != nil {
+		return nil, err
+	}
+	publicBytes, err := key.Public.Bytes()
+	if err != nil || len(publicBytes) != 65 || publicBytes[0] != 4 {
+		return nil, ErrKey
+	}
+	encoded := encodedJWK{
+		KTY: "EC", Curve: "P-256", Use: "sig", Alg: AlgorithmES256,
+		KeyID: key.KeyID,
+		X:     base64.RawURLEncoding.EncodeToString(publicBytes[1:33]),
+		Y:     base64.RawURLEncoding.EncodeToString(publicBytes[33:65]),
+	}
+	if includePrivate {
+		encoded.KeyOps = []string{"sign"}
+		privateBytes, privateErr := key.Private.Bytes()
+		if privateErr != nil || len(privateBytes) != 32 {
+			return nil, ErrKey
+		}
+		encoded.D = base64.RawURLEncoding.EncodeToString(privateBytes)
+	} else {
+		encoded.KeyOps = []string{"verify"}
+	}
+	raw, err := json.Marshal(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("marshal ES256 JWK: %w", err)
+	}
+	canonical, err := jcs.Transform(raw)
+	if err != nil {
+		return nil, fmt.Errorf("canonicalize ES256 JWK: %w", err)
+	}
+	return canonical, nil
 }
 
 func ValidateTimes(now time.Time, issuedAt, notBefore, expiresAt time.Time, maxTTL, skew time.Duration) error {

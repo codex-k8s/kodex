@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: mattercodex-system
 resources:
   - ../../../base/internal-rpc-authority
+  - ../../../base/internal-rpc-authority-publisher
   - ../../../base/internal-rpc-authority-readback-attestor
   - ../../../base/internal-rpc-authority-data
 patches:

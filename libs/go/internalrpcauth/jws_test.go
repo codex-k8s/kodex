@@ -135,6 +135,41 @@ func TestParsePrivateJWKValidatesDerivedPublicKey(t *testing.T) {
 	}
 }
 
+func TestGenerateMarshalAndParseES256Key(t *testing.T) {
+	t.Parallel()
+	generated, err := GenerateES256Key("generated-g1")
+	if err != nil {
+		t.Fatalf("GenerateES256Key() error = %v", err)
+	}
+	privateRaw, err := MarshalPrivateJWK(generated)
+	if err != nil {
+		t.Fatalf("MarshalPrivateJWK() error = %v", err)
+	}
+	parsedPrivate, err := ParsePrivateJWK(privateRaw)
+	if err != nil {
+		t.Fatalf("ParsePrivateJWK() error = %v", err)
+	}
+	publicRaw, err := MarshalPublicJWK(parsedPrivate.PublicOnly())
+	if err != nil {
+		t.Fatalf("MarshalPublicJWK() error = %v", err)
+	}
+	parsedPublic, err := ParsePublicJWK(publicRaw)
+	if err != nil {
+		t.Fatalf("ParsePublicJWK() error = %v", err)
+	}
+	expected, err := PublicJWKThumbprintSHA256(generated.PublicOnly())
+	if err != nil {
+		t.Fatalf("PublicJWKThumbprintSHA256(generated) error = %v", err)
+	}
+	actual, err := PublicJWKThumbprintSHA256(parsedPublic)
+	if err != nil {
+		t.Fatalf("PublicJWKThumbprintSHA256(parsed) error = %v", err)
+	}
+	if actual != expected {
+		t.Fatalf("thumbprint = %q, expected %q", actual, expected)
+	}
+}
+
 func testJWK(t *testing.T, keyID string) ES256Key {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

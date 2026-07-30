@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - runtime.yaml
+  - networkpolicy.yaml
+  - rbac.yaml
+configMapGenerator:
+  - name: internal-rpc-authority-publisher-target-registry
+    files:
+      - key-delivery-targets.yaml
+generatorOptions:
+  disableNameSuffixHash: true

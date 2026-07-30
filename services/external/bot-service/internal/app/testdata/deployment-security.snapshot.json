@@ -101,6 +101,8 @@
   },
   "network_policies": [
     "base/internal-rpc-authority-data/networkpolicy.yaml",
+    "base/internal-rpc-authority-publisher/networkpolicy.yaml",
+    "base/internal-rpc-authority-readback-attestor/networkpolicy.yaml",
     "base/internal-rpc-authority/networkpolicy.yaml"
   ]
 }
