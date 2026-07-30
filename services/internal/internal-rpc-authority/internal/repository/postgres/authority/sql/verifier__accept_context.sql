@@ -1,6 +1,6 @@
 -- name: verifier__accept_context :one
 WITH accepted_snapshot AS (
-    INSERT INTO internal_rpc_authority.verifier_served_snapshots (
+    INSERT INTO internal_rpc_authority.authority_snapshot_watermarks (
         target_workload_id,
         source_revision,
         source_digest_sha256,
@@ -24,7 +24,7 @@ WITH accepted_snapshot AS (
     )
     OR EXISTS (
         SELECT 1
-        FROM internal_rpc_authority.verifier_served_snapshots AS current
+        FROM internal_rpc_authority.authority_snapshot_watermarks AS current
         WHERE current.target_workload_id = @target_workload_id
           AND current.key_set_revision <= @key_set_revision
           AND current.policy_revision <= @policy_revision
@@ -48,34 +48,34 @@ WITH accepted_snapshot AS (
         policy_revision = EXCLUDED.policy_revision,
         signer_generation = EXCLUDED.signer_generation,
         served_at = EXCLUDED.served_at
-    WHERE internal_rpc_authority.verifier_served_snapshots.source_revision <= EXCLUDED.source_revision
-      AND internal_rpc_authority.verifier_served_snapshots.key_set_revision <= EXCLUDED.key_set_revision
-      AND internal_rpc_authority.verifier_served_snapshots.policy_revision <= EXCLUDED.policy_revision
-      AND internal_rpc_authority.verifier_served_snapshots.signer_generation <= EXCLUDED.signer_generation
+    WHERE internal_rpc_authority.authority_snapshot_watermarks.source_revision <= EXCLUDED.source_revision
+      AND internal_rpc_authority.authority_snapshot_watermarks.key_set_revision <= EXCLUDED.key_set_revision
+      AND internal_rpc_authority.authority_snapshot_watermarks.policy_revision <= EXCLUDED.policy_revision
+      AND internal_rpc_authority.authority_snapshot_watermarks.signer_generation <= EXCLUDED.signer_generation
       AND (
           (
-              internal_rpc_authority.verifier_served_snapshots.source_revision + 1 = EXCLUDED.source_revision
-              AND @predecessor_revision = internal_rpc_authority.verifier_served_snapshots.source_revision
-              AND @predecessor_digest_sha256 = internal_rpc_authority.verifier_served_snapshots.source_digest_sha256
+              internal_rpc_authority.authority_snapshot_watermarks.source_revision + 1 = EXCLUDED.source_revision
+              AND @predecessor_revision = internal_rpc_authority.authority_snapshot_watermarks.source_revision
+              AND @predecessor_digest_sha256 = internal_rpc_authority.authority_snapshot_watermarks.source_digest_sha256
           )
-          OR internal_rpc_authority.verifier_served_snapshots.source_digest_sha256 = EXCLUDED.source_digest_sha256
+          OR internal_rpc_authority.authority_snapshot_watermarks.source_digest_sha256 = EXCLUDED.source_digest_sha256
       )
     RETURNING true
 ),
 reserved AS (
-    INSERT INTO internal_rpc_authority.replay_reservations (
-        reservation_kind,
+    INSERT INTO internal_rpc_authority.authority_replay_reservations (
+        target_workload_id,
         jti,
         canonical_digest_sha256,
         expires_at
     )
     SELECT
-        @reservation_kind,
+        @target_workload_id,
         @jti,
         @canonical_digest_sha256,
         @expires_at
     FROM accepted_snapshot
-    ON CONFLICT (reservation_kind, jti) DO NOTHING
+    ON CONFLICT (target_workload_id, jti) DO NOTHING
     RETURNING true
 )
 SELECT

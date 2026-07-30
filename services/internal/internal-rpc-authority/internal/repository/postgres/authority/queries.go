@@ -6,8 +6,11 @@ import (
 	"strings"
 )
 
-//go:embed sql/replay__reserve.sql
-var replayReserveSQL string
+//go:embed sql/proof__reserve.sql
+var proofReserveSQL string
+
+//go:embed sql/context__reserve.sql
+var contextReserveSQL string
 
 //go:embed sql/verifier__activate_snapshot.sql
 var verifierActivateSnapshotSQL string
@@ -18,35 +21,38 @@ var verifierAcceptContextSQL string
 //go:embed sql/verifier__readiness.sql
 var verifierReadinessSQL string
 
-//go:embed sql/replay__delete_expired.sql
-var replayDeleteExpiredSQL string
+//go:embed sql/reservations__delete_expired.sql
+var reservationsDeleteExpiredSQL string
 
 type querySet struct {
-	replayReserve            string
-	verifierActivateSnapshot string
-	verifierAcceptContext    string
-	verifierReadiness        string
-	replayDeleteExpired      string
+	proofReserve              string
+	contextReserve            string
+	verifierActivateSnapshot  string
+	verifierAcceptContext     string
+	verifierReadiness         string
+	reservationsDeleteExpired string
 }
 
 func loadQueries() (querySet, error) {
 	queries := querySet{
-		replayReserve:            replayReserveSQL,
-		verifierActivateSnapshot: verifierActivateSnapshotSQL,
-		verifierAcceptContext:    verifierAcceptContextSQL,
-		verifierReadiness:        verifierReadinessSQL,
-		replayDeleteExpired:      replayDeleteExpiredSQL,
+		proofReserve:              proofReserveSQL,
+		contextReserve:            contextReserveSQL,
+		verifierActivateSnapshot:  verifierActivateSnapshotSQL,
+		verifierAcceptContext:     verifierAcceptContextSQL,
+		verifierReadiness:         verifierReadinessSQL,
+		reservationsDeleteExpired: reservationsDeleteExpiredSQL,
 	}
 	for _, definition := range []struct {
 		name        string
 		cardinality string
 		body        string
 	}{
-		{"replay__reserve", "one", queries.replayReserve},
+		{"proof__reserve", "one", queries.proofReserve},
+		{"context__reserve", "one", queries.contextReserve},
 		{"verifier__activate_snapshot", "one", queries.verifierActivateSnapshot},
 		{"verifier__accept_context", "one", queries.verifierAcceptContext},
 		{"verifier__readiness", "one", queries.verifierReadiness},
-		{"replay__delete_expired", "exec", queries.replayDeleteExpired},
+		{"reservations__delete_expired", "exec", queries.reservationsDeleteExpired},
 	} {
 		header := fmt.Sprintf("-- name: %s :%s", definition.name, definition.cardinality)
 		if strings.TrimSpace(definition.body) == "" ||

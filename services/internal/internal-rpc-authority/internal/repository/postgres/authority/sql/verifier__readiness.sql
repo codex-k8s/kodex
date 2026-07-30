@@ -1,7 +1,7 @@
 -- name: verifier__readiness :one
 SELECT EXISTS (
     SELECT 1
-    FROM internal_rpc_authority.verifier_served_snapshots
+    FROM internal_rpc_authority.authority_snapshot_watermarks
     WHERE target_workload_id = @target_workload_id
       AND source_revision = @source_revision
       AND source_digest_sha256 = @source_digest_sha256

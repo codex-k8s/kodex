@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
@@ -391,11 +392,20 @@ func readRegularFile(path string, limit int64, forbiddenMode os.FileMode) ([]byt
 	if path == "" {
 		return nil, errors.New("file path is empty")
 	}
-	info, err := os.Lstat(path)
+	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return nil, err
 	}
-	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+	relative, err := filepath.Rel(filepath.Dir(path), resolved)
+	if err != nil || relative == ".." || filepath.IsAbs(relative) ||
+		len(relative) >= 3 && relative[:3] == "../" {
+		return nil, errors.New("file symlink escapes its mounted directory")
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
 		return nil, errors.New("path is not a regular file")
 	}
 	if info.Size() <= 0 || info.Size() > limit {
@@ -404,7 +414,7 @@ func readRegularFile(path string, limit int64, forbiddenMode os.FileMode) ([]byt
 	if forbiddenMode != 0 && info.Mode().Perm()&forbiddenMode != 0 {
 		return nil, errors.New("file permissions are too broad")
 	}
-	return os.ReadFile(path)
+	return os.ReadFile(resolved)
 }
 
 func trimSingleTrailingNewline(value []byte) []byte {

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	authorityrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/authority"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
 	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -134,8 +136,6 @@ func Run(
 		metrics,
 		authorityApplication,
 	)
-	runCtx, cancel := context.WithCancel(lifecycle)
-	defer cancel()
 	serveErrors := make(chan error, 2)
 	go func() {
 		if serveErr := grpcRuntime.Serve(unixListener); serveErr != nil {
@@ -148,9 +148,6 @@ func Run(
 			serveErrors <- fmt.Errorf("serve technical HTTP: %w", serveErr)
 		}
 	}()
-	workers := serviceruntime.StartWorkers(runCtx, func(workerCtx context.Context) error {
-		return runReplayCleanup(workerCtx, config, store)
-	})
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
 	logger.Info(logMessageStart, "mode", string(mode), "workload", config.WorkloadID)
@@ -158,7 +155,6 @@ func Run(
 	select {
 	case <-lifecycle.Done():
 	case runtimeErr = <-serveErrors:
-		cancel()
 	}
 	readiness.Set(false, "shutting-down")
 	metrics.SetReady(false)
@@ -169,14 +165,6 @@ func Run(
 			Timeout: config.ShutdownTimeout,
 			Run: func(ctx context.Context) error {
 				return stopGRPC(ctx, grpcRuntime)
-			},
-		},
-		serviceruntime.ShutdownOperation{
-			Name:    "workers",
-			Timeout: config.ShutdownTimeout,
-			Run: func(ctx context.Context) error {
-				workers.Stop()
-				return workers.Wait(ctx)
 			},
 		},
 		serviceruntime.ShutdownOperation{
@@ -214,6 +202,28 @@ func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	}
 	poolConfig.MaxConns = config.PostgresMaxConnections
 	poolConfig.ConnConfig.RuntimeParams["application_name"] = config.ServiceName
+	poolConfig.AfterConnect = func(ctx context.Context, connection *pgx.Conn) error {
+		var sessionUser string
+		if err := connection.QueryRow(ctx, "SELECT session_user").Scan(&sessionUser); err != nil {
+			return errors.New("read PostgreSQL session identity")
+		}
+		if sessionUser != config.PostgresExpectedSessionUser {
+			return errors.New("PostgreSQL session identity mismatch")
+		}
+		var roleErr error
+		switch config.DatabaseCapabilityRole {
+		case "internal_rpc_authority_issuer":
+			_, roleErr = connection.Exec(ctx, "SET ROLE internal_rpc_authority_issuer")
+		case "internal_rpc_authority_verifier":
+			_, roleErr = connection.Exec(ctx, "SET ROLE internal_rpc_authority_verifier")
+		default:
+			return errors.New("PostgreSQL capability role is not registered")
+		}
+		if roleErr != nil {
+			return errors.New("activate PostgreSQL capability role")
+		}
+		return nil
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, errors.New("open PostgreSQL pool")
@@ -262,28 +272,6 @@ func newTechnicalServer(
 	}
 }
 
-func runReplayCleanup(
-	ctx context.Context,
-	config Config,
-	store *authorityrepository.Store,
-) error {
-	ticker := time.NewTicker(config.ReplayCleanupInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case now := <-ticker.C:
-			if err := store.DeleteExpired(
-				ctx,
-				now.UTC().Add(-config.ReplayRetentionAfterExpiry),
-			); err != nil {
-				return err
-			}
-		}
-	}
-}
-
 func stopGRPC(ctx context.Context, server *grpc.Server) error {
 	done := make(chan struct{})
 	go func() {
@@ -300,18 +288,26 @@ func stopGRPC(ctx context.Context, server *grpc.Server) error {
 }
 
 func readPrivateFile(path string, limit int64) ([]byte, error) {
-	info, err := os.Lstat(path)
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return nil, err
+	}
+	relative, err := filepath.Rel(filepath.Dir(path), resolved)
+	if err != nil || relative == ".." || filepath.IsAbs(relative) ||
+		len(relative) >= 3 && relative[:3] == "../" {
+		return nil, errors.New("secret file symlink escapes its mounted directory")
+	}
+	info, err := os.Stat(resolved)
 	if err != nil {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() ||
-		info.Mode()&os.ModeSymlink != 0 ||
 		info.Mode().Perm()&0o007 != 0 ||
 		info.Size() <= 0 ||
 		info.Size() > limit {
 		return nil, errors.New("secret file type, mode or size is invalid")
 	}
-	return os.ReadFile(path)
+	return os.ReadFile(resolved)
 }
 
 func allowedMethods(mode Mode) map[string]string {

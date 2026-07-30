@@ -39,11 +39,17 @@ func (store *Store) Reserve(
 	ctx context.Context,
 	reservation repository.Reservation,
 ) error {
+	query := store.queries.contextReserve
+	args := contextReservationArgs(reservation)
+	if reservation.Kind == repository.ReservationAuthorityProof {
+		query = store.queries.proofReserve
+		args = proofReservationArgs(reservation)
+	}
 	var accepted bool
 	err := store.pool.QueryRow(
 		ctx,
-		store.queries.replayReserve,
-		reservationArgs(reservation),
+		query,
+		args,
 	).Scan(&accepted)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && !accepted {
 		return repository.ErrReplay
@@ -78,7 +84,7 @@ func (store *Store) AcceptVerification(
 	reservation repository.Reservation,
 ) error {
 	args := snapshotArgs(store.targetWorkloadID, state)
-	for key, value := range reservationArgs(reservation) {
+	for key, value := range contextReservationArgs(reservation) {
 		args[key] = value
 	}
 	var snapshotAccepted bool
@@ -131,9 +137,9 @@ func (store *Store) Ready(
 	var accepted bool
 	if err := transaction.QueryRow(
 		ctx,
-		store.queries.replayReserve,
+		store.queries.contextReserve,
 		pgx.StrictNamedArgs{
-			"reservation_kind":        string(repository.ReservationAuthorizationContext),
+			"target_workload_id":      store.targetWorkloadID,
 			"jti":                     probeID,
 			"canonical_digest_sha256": strings.Repeat("0", 64),
 			"expires_at":              time.Now().UTC().Add(time.Minute),
@@ -153,7 +159,7 @@ func (store *Store) Ready(
 func (store *Store) DeleteExpired(ctx context.Context, deleteBefore time.Time) error {
 	if _, err := store.pool.Exec(
 		ctx,
-		store.queries.replayDeleteExpired,
+		store.queries.reservationsDeleteExpired,
 		pgx.StrictNamedArgs{"delete_before": deleteBefore},
 	); err != nil {
 		return fmt.Errorf("delete expired replay reservations: %w", err)
@@ -165,9 +171,21 @@ func (store *Store) Close() {
 	store.pool.Close()
 }
 
-func reservationArgs(value repository.Reservation) pgx.StrictNamedArgs {
+func proofReservationArgs(value repository.Reservation) pgx.StrictNamedArgs {
 	return pgx.StrictNamedArgs{
-		"reservation_kind":        string(value.Kind),
+		"caller_workload_id":      value.ScopeID,
+		"operation_id":            value.OperationID,
+		"authority_proof_issuer":  value.Issuer,
+		"proof_revision":          value.Revision,
+		"jti":                     value.JTI,
+		"canonical_digest_sha256": value.Digest,
+		"expires_at":              value.ExpiresAt.UTC(),
+	}
+}
+
+func contextReservationArgs(value repository.Reservation) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"target_workload_id":      value.ScopeID,
 		"jti":                     value.JTI,
 		"canonical_digest_sha256": value.Digest,
 		"expires_at":              value.ExpiresAt.UTC(),

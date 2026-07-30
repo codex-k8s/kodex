@@ -207,10 +207,14 @@ func (authority *Authority) Issue(
 	}
 	proofDigest := sha256.Sum256([]byte(proofCompact))
 	if err := authority.store.Reserve(ctx, repository.Reservation{
-		Kind:      repository.ReservationAuthorityProof,
-		JTI:       proof.JTI,
-		Digest:    hex.EncodeToString(proofDigest[:]),
-		ExpiresAt: time.Unix(proof.ExpiresAt, 0),
+		Kind:        repository.ReservationAuthorityProof,
+		ScopeID:     binding.CallerWorkloadID,
+		OperationID: binding.OperationID,
+		Issuer:      proof.Issuer,
+		Revision:    proof.ProofRevision,
+		JTI:         proof.JTI,
+		Digest:      hex.EncodeToString(proofDigest[:]),
+		ExpiresAt:   time.Unix(proof.ExpiresAt, 0),
 	}); err != nil {
 		if !errors.Is(err, repository.ErrReplay) {
 			return "", model.AuthorizationClaims{}, failure.Wrap(
@@ -374,6 +378,7 @@ func (authority *Authority) Verify(
 		authority.SnapshotState(),
 		repository.Reservation{
 			Kind:      repository.ReservationAuthorizationContext,
+			ScopeID:   binding.TargetWorkloadID,
 			JTI:       claims.JTI,
 			Digest:    hex.EncodeToString(tokenDigest[:]),
 			ExpiresAt: claims.ExpiryTime(),

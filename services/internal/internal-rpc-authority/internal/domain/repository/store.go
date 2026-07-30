@@ -20,10 +20,14 @@ const (
 )
 
 type Reservation struct {
-	Kind      ReservationKind
-	JTI       string
-	Digest    string
-	ExpiresAt time.Time
+	Kind        ReservationKind
+	ScopeID     string
+	OperationID string
+	Issuer      string
+	Revision    uint64
+	JTI         string
+	Digest      string
+	ExpiresAt   time.Time
 }
 
 type SnapshotState struct {
