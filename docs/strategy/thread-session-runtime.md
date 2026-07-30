@@ -95,4 +95,12 @@ Snapshot хранится в БД в поле `session_archive_gzip_base64` ка
 Превышение границы является явной ошибкой сохранения сессии и не должно
 маскироваться как успешный durable resume.
 
+Если Codex отклоняет `resume` точной ошибкой `no rollout found`, runner один
+раз выполняет controlled recovery внутри той же Mattermost thread-role
+session, PVC и workspace: сбрасывает только недействительный Codex thread ID,
+запускает новую Codex-сессию и перед исходной инструкцией требует восстановить
+ограниченную историю через `mattermost_get_thread` и проверить сохраненный
+worktree. Другие ошибки не включают этот fallback. Повторная ошибка recovery
+завершает turn как failed без бесконечных перезапусков.
+
 Если размер snapshot станет слишком большим для одной записи БД или HTTP payload, следующий шаг - заменить payload на object storage/blob endpoint, сохранив БД как source of truth для metadata.

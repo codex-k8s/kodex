@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -324,6 +325,182 @@ func TestCodexCapacityRetryScheduleAndArtifacts(t *testing.T) {
 			t.Fatalf("retry prompt misses %q: %q", expected, prompt)
 		}
 	}
+}
+
+func TestMissingRolloutStartsReplacementCodexSessionInSameTurn(t *testing.T) {
+	useTestWorkspace(t)
+
+	const (
+		sessionKey       = "missing-rollout-session"
+		sessionToken     = "synthetic-missing-rollout-token"
+		turnID           = int64(510079)
+		missingSessionID = "019faebb-74bd-7023-b2fd-9e02c023b7e5"
+		newSessionID     = "replacement-thread-id"
+	)
+	if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	promptCapture := filepath.Join(t.TempDir(), "replacement-prompt")
+	invocations := []bool{}
+	testRunner := &runner{
+		sessionArchiveCreator: func(string, secretInventory) (string, error) {
+			return "synthetic-archive", nil
+		},
+		commandContext: func(ctx context.Context, _ string, args ...string) *exec.Cmd {
+			resume := false
+			finalPath := ""
+			for index, argument := range args {
+				if argument == "resume" {
+					resume = true
+				}
+				if argument == "--output-last-message" && index+1 < len(args) {
+					finalPath = args[index+1]
+				}
+			}
+			invocations = append(invocations, resume)
+			mode := "success"
+			if resume {
+				mode = "missing"
+			}
+			return exec.CommandContext(
+				ctx,
+				os.Args[0],
+				"-test.run=TestMissingRolloutCommandHelper",
+				"--",
+				mode,
+				finalPath,
+			)
+		},
+	}
+	if err := testRunner.prepareEphemeralRuntime(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(testRunner.cleanupEphemeralRuntime)
+
+	claims := 0
+	var completion sessionTurnCompleteRequest
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+sessionToken {
+			t.Error("session API получил неверную авторизацию")
+			response.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/internal/agent-sessions/" + sessionKey + "/turns/claim":
+			claims++
+			response.Header().Set("Content-Type", "application/json")
+			if claims == 1 {
+				_ = json.NewEncoder(response).Encode(sessionTurnClaimResponse{
+					HasTurn: true, TurnID: turnID, RunID: "run-missing-rollout",
+					Prompt: "continue the original owner task", CodexSessionID: missingSessionID,
+				})
+				return
+			}
+			_ = json.NewEncoder(response).Encode(sessionTurnClaimResponse{Exit: true})
+		case "/internal/agent-sessions/" + sessionKey + "/turns/status":
+			response.WriteHeader(http.StatusNoContent)
+		case "/internal/agent-sessions/" + sessionKey + "/turns/complete":
+			if err := json.NewDecoder(request.Body).Decode(&completion); err != nil {
+				t.Errorf("декодирование завершения хода: %v", err)
+				response.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			response.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("неожиданный session API path: %s", request.URL.Path)
+			response.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := testRunner.runSessionTurns(
+		ctx,
+		server.Client(),
+		server.URL,
+		sessionKey,
+		sessionToken,
+		"synthetic-openai-account",
+		t.TempDir(),
+		[]string{
+			"MATTERCODEX_TEST_MISSING_ROLLOUT_HELPER=1",
+			"MATTERCODEX_TEST_MISSING_ROLLOUT_PROMPT=" + promptCapture,
+			"MATTERCODEX_TEST_MISSING_ROLLOUT_SESSION=" + newSessionID,
+		},
+		missingSessionID,
+	); err != nil {
+		t.Fatalf("missing rollout recovery: %v", err)
+	}
+
+	if len(invocations) != 2 || !invocations[0] || invocations[1] {
+		t.Fatalf("Codex invocations resume flags = %#v, want [true false]", invocations)
+	}
+	if completion.Status != "succeeded" || completion.CodexSessionID != newSessionID ||
+		completion.FinalMessage != "replacement completed" ||
+		completion.SessionArchiveGzipBase64 != "synthetic-archive" ||
+		completion.Artifacts[sessionRecoveryKey] != "succeeded" {
+		t.Fatalf("recovery completion = %#v", completion)
+	}
+	prompt, err := os.ReadFile(promptCapture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"mattermost_get_thread",
+		"same Mattermost thread, PVC, and workspace",
+		"continue the original owner task",
+	} {
+		if !strings.Contains(string(prompt), expected) {
+			t.Fatalf("recovery prompt misses %q: %s", expected, string(prompt))
+		}
+	}
+	for _, path := range []string{
+		sessionTurnStderrPath(turnID, 0),
+		sessionTurnEventsPath(turnID, 1),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("recovery artifact %s: %v", filepath.Base(path), err)
+		}
+	}
+}
+
+func TestMissingRolloutCommandHelper(t *testing.T) {
+	if os.Getenv("MATTERCODEX_TEST_MISSING_ROLLOUT_HELPER") != "1" {
+		return
+	}
+	separator := -1
+	for index, argument := range os.Args {
+		if argument == "--" {
+			separator = index
+			break
+		}
+	}
+	if separator < 0 || len(os.Args) <= separator+2 {
+		os.Exit(2)
+	}
+	mode := os.Args[separator+1]
+	finalPath := os.Args[separator+2]
+	prompt, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		os.Exit(2)
+	}
+	if mode == "missing" {
+		_, _ = fmt.Fprintln(os.Stderr, "Error: thread/resume: thread/resume failed: no rollout found for thread id 019faebb-74bd-7023-b2fd-9e02c023b7e5 (code -32600)")
+		os.Exit(1)
+	}
+	if err := os.WriteFile(os.Getenv("MATTERCODEX_TEST_MISSING_ROLLOUT_PROMPT"), prompt, 0o600); err != nil {
+		os.Exit(2)
+	}
+	if err := os.WriteFile(finalPath, []byte("replacement completed"), 0o600); err != nil {
+		os.Exit(2)
+	}
+	_, _ = fmt.Fprintf(
+		os.Stdout,
+		"{\"type\":\"thread.started\",\"thread_id\":%q}\n",
+		os.Getenv("MATTERCODEX_TEST_MISSING_ROLLOUT_SESSION"),
+	)
+	os.Exit(0)
 }
 
 func TestMatterCodexMCPBootstrapFailureBaselineRemainsFailedAfterDependencyRecovery(t *testing.T) {
