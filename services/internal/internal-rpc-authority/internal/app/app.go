@@ -19,6 +19,8 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	readbackclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/readback"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/restoreagent"
+	vaultclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/vault"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	authorityrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/authority"
@@ -68,7 +70,6 @@ func Run(
 		ManifestTrustBundleJWSFile: config.ManifestTrustBundleJWSFile,
 		ContextPrivateJWKFile:      config.ContextPrivateJWKFile,
 		ProofTrustJWKFile:          config.ProofTrustJWKFile,
-		ReadbackPrivateJWKFile:     config.ReadbackPrivateJWKFile,
 		Now:                        time.Now(),
 	})
 	if err != nil {
@@ -80,30 +81,42 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct authority domain service: %w", err)
 	}
+	vault, err := vaultclient.NewStaticRoleClient(vaultclient.Config{
+		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName,
+		CAFile: config.VaultCAFile, AuthMount: "kubernetes",
+		AuthRole:                config.VaultAuthRole,
+		ServiceAccountTokenFile: config.VaultAuthFile,
+		Timeout:                 5 * time.Second,
+	})
+	if err != nil {
+		store.Close()
+		return fmt.Errorf("construct Vault authority material client: %w", err)
+	}
 	readbackTLS, err := loadRestoreClientTLS(
 		config.ReadbackAttestorCAFile,
-		config.ReadbackClientCertificateFile,
-		config.ReadbackClientPrivateKeyFile,
+		config.WorkloadCertificateFile,
+		config.WorkloadPrivateKeyFile,
 		config.ReadbackAttestorTLSServerName,
 	)
 	if err != nil {
+		vault.Close()
 		store.Close()
 		return fmt.Errorf("load readback attestor mTLS client: %w", err)
 	}
-	snapshotAttestor, err := readbackclient.NewFileAttestor(readbackclient.FileConfig{
+	snapshotAttestor, err := readbackclient.NewVaultAttestor(readbackclient.VaultConfig{
 		Address: config.ReadbackAttestorAddress, TLS: readbackTLS,
-		IntentIDFile:             config.ReadbackIntentIDFile,
-		CredentialCompactFile:    config.ReadbackCredentialJWSFile,
-		CredentialJTIFile:        config.ReadbackCredentialJTIFile,
-		PossessionPrivateJWKFile: config.ReadbackPrivateJWKFile,
-		WorkloadID:               config.WorkloadID,
-		WorkloadSPIFFEID:         config.WorkloadSPIFFEID,
-		Role:                     config.ReadbackRole,
-		WorkloadGeneration:       config.WorkloadGeneration,
-		CredentialGeneration:     config.CredentialGeneration,
-		PossessionKeyGeneration:  config.PossessionKeyGeneration,
+		CredentialPath:          config.ReadbackCredentialVaultPath,
+		PossessionPath:          config.ReadbackPossessionVaultPath,
+		Delivery:                vault,
+		WorkloadID:              config.WorkloadID,
+		WorkloadSPIFFEID:        config.WorkloadSPIFFEID,
+		Role:                    config.ReadbackRole,
+		WorkloadGeneration:      config.WorkloadGeneration,
+		CredentialGeneration:    config.CredentialGeneration,
+		PossessionKeyGeneration: config.PossessionKeyGeneration,
 	})
 	if err != nil {
+		vault.Close()
 		store.Close()
 		return fmt.Errorf("construct readback attestor client: %w", err)
 	}
@@ -112,10 +125,43 @@ func Run(
 		snapshotAttestor,
 	)
 	if err != nil {
+		vault.Close()
 		store.Close()
 		return fmt.Errorf("construct authority application: %w", err)
 	}
+	restoreTLS, err := loadRestoreClientTLS(
+		config.RestoreControllerCAFile,
+		config.WorkloadCertificateFile,
+		config.WorkloadPrivateKeyFile,
+		config.RestoreControllerTLSServerName,
+	)
+	if err != nil {
+		vault.Close()
+		store.Close()
+		return fmt.Errorf("load restore controller mTLS client: %w", err)
+	}
+	restoreWorkloadAgent, err := restoreagent.New(restoreagent.Config{
+		Address: config.RestoreControllerAddress, TLS: restoreTLS,
+		RoleCredentialVaultPath:    config.RestoreRoleCredentialVaultPath,
+		ACKPrivateJWKVaultPath:     config.RestoreACKVaultPath,
+		Delivery:                   vault,
+		ControllerCertificateFile:  config.RestoreControllerCertificateFile,
+		ManifestRootPublicJWKFile:  config.ManifestRootPublicJWKFile,
+		ManifestRootMetadataFile:   config.ManifestRootMetadataFile,
+		ManifestTrustBundleJWSFile: config.ManifestTrustBundleJWSFile,
+		RestoreRoleTrustJWSFile:    config.RestoreRoleTrustJWSFile,
+		WorkloadID:                 config.WorkloadID, WorkloadSPIFFEID: config.WorkloadSPIFFEID,
+		Role: config.ReadbackRole, WorkloadGeneration: config.WorkloadGeneration,
+		CredentialGeneration: config.CredentialGeneration,
+		ACKKeyGeneration:     config.RestoreACKKeyGeneration,
+	})
+	if err != nil {
+		vault.Close()
+		store.Close()
+		return fmt.Errorf("construct restore workload agent: %w", err)
+	}
 	if err := authorityApplication.ActivateSnapshot(startupCtx); err != nil {
+		vault.Close()
 		store.Close()
 		return fmt.Errorf("activate served authority snapshot: %w", err)
 	}
@@ -162,12 +208,14 @@ func Run(
 	unixListener, err := listenUnix(config)
 	if err != nil {
 		store.Close()
+		vault.Close()
 		return err
 	}
 	technicalListener, err := net.Listen("tcp", config.TechnicalListen)
 	if err != nil {
 		_ = unixListener.Close()
 		store.Close()
+		vault.Close()
 		return fmt.Errorf("listen on technical HTTP endpoint: %w", err)
 	}
 	technicalServer := newTechnicalServer(
@@ -192,6 +240,18 @@ func Run(
 		},
 		func(ctx context.Context) error {
 			runReplayCleanup(ctx, config, store, readiness, metrics, logger)
+			return nil
+		},
+		func(ctx context.Context) error {
+			runRestoreWorkloadAgent(
+				ctx,
+				config,
+				restoreWorkloadAgent,
+				authorityApplication,
+				readiness,
+				metrics,
+				logger,
+			)
 			return nil
 		},
 	)
@@ -240,6 +300,14 @@ func Run(
 			Run:     technicalServer.Shutdown,
 		},
 		serviceruntime.ShutdownOperation{
+			Name:    "vault-http",
+			Timeout: config.ShutdownTimeout,
+			Run: func(context.Context) error {
+				vault.Close()
+				return nil
+			},
+		},
+		serviceruntime.ShutdownOperation{
 			Name:    "postgresql",
 			Timeout: config.ShutdownTimeout,
 			Run: func(context.Context) error {
@@ -254,6 +322,37 @@ func Run(
 
 type reservationCleaner interface {
 	DeleteExpired(context.Context, repository.ReservationKind, time.Time) error
+}
+
+func runRestoreWorkloadAgent(
+	ctx context.Context,
+	config Config,
+	agent *restoreagent.Agent,
+	authorityApplication *application.Authority,
+	readiness *serviceruntime.Readiness,
+	metrics *observability.Metrics,
+	logger *slog.Logger,
+) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		pollCtx, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
+		err := agent.Poll(pollCtx, authorityApplication)
+		cancel()
+		if err != nil {
+			if agent.Quiescing() {
+				authorityApplication.SetRestoreBlocked(true)
+				readiness.Set(false, "restore-coordination-failed")
+				metrics.SetReady(false)
+			}
+			logger.Error("restore coordination poll failed")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func runReplayCleanup(
@@ -318,7 +417,6 @@ func runSnapshotReload(
 			ManifestTrustBundleJWSFile: config.ManifestTrustBundleJWSFile,
 			ContextPrivateJWKFile:      config.ContextPrivateJWKFile,
 			ProofTrustJWKFile:          config.ProofTrustJWKFile,
-			ReadbackPrivateJWKFile:     config.ReadbackPrivateJWKFile,
 			Now:                        time.Now(),
 		})
 		if err != nil {

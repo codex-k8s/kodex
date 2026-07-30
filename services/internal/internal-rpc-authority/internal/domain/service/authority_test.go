@@ -258,7 +258,6 @@ func testKeyMaterial(
 				NotAfter:  time.Unix(math.MaxInt32, 0),
 			},
 		},
-		ReadbackKey: signingKey,
 	}
 }
 

@@ -53,6 +53,17 @@ func TestRestoreControllerPrepareDirectiveACKAndSemanticRetry(t *testing.T) {
 		t.Fatalf("construct restore controller: %v", err)
 	}
 	controller.now = func() time.Time { return now }
+	discovery, err := controller.GetDirective(
+		context.Background(),
+		RestorePeer{
+			SPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+		},
+		"",
+		0,
+	)
+	if err != nil || !discovery.NoDirective || discovery.State.Phase != "OPEN" {
+		t.Fatalf("OPEN discovery must not require a role credential: %#v %v", discovery, err)
+	}
 	state, err := controller.Prepare(
 		context.Background(),
 		model.PrepareRestoreCommand{
@@ -72,6 +83,16 @@ func TestRestoreControllerPrepareDirectiveACKAndSemanticRetry(t *testing.T) {
 		fence.last.Phase != "QUIESCING" ||
 		publisher.calls != 1 {
 		t.Fatalf("prepare did not reach durable QUIESCING: %#v", state)
+	}
+	if _, err := controller.GetDirective(
+		context.Background(),
+		RestorePeer{
+			SPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+		},
+		"",
+		0,
+	); err == nil {
+		t.Fatal("QUIESCING directive was disclosed without role credential")
 	}
 	target := registry.Targets["control-plane.authorization-verifier"]
 	ackKey := testKey(t, "control-plane-ack-g1")

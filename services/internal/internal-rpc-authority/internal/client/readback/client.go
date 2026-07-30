@@ -64,6 +64,88 @@ type FileAttestor struct {
 	config FileConfig
 }
 
+type VaultConfig struct {
+	Address                 string
+	TLS                     *tls.Config
+	CredentialPath          string
+	PossessionPath          string
+	Delivery                SecretReader
+	WorkloadID              string
+	WorkloadSPIFFEID        string
+	Role                    string
+	WorkloadGeneration      uint64
+	CredentialGeneration    uint64
+	PossessionKeyGeneration uint64
+}
+
+type SecretReader interface {
+	ReadKV2(context.Context, string) (repository.SecretMaterial, bool, error)
+}
+
+type VaultAttestor struct {
+	config VaultConfig
+}
+
+func NewVaultAttestor(config VaultConfig) (*VaultAttestor, error) {
+	if config.Address == "" ||
+		config.TLS == nil ||
+		config.CredentialPath == "" ||
+		config.PossessionPath == "" ||
+		config.Delivery == nil ||
+		config.WorkloadID == "" ||
+		config.WorkloadSPIFFEID == "" ||
+		config.Role == "" ||
+		config.WorkloadGeneration == 0 ||
+		config.CredentialGeneration == 0 ||
+		config.PossessionKeyGeneration == 0 {
+		return nil, errors.New("invalid readback Vault client configuration")
+	}
+	return &VaultAttestor{config: config}, nil
+}
+
+func (attestor *VaultAttestor) Attest(
+	ctx context.Context,
+	state repository.SnapshotState,
+) (string, error) {
+	credentialMaterial, found, err := attestor.config.Delivery.ReadKV2(
+		ctx,
+		attestor.config.CredentialPath,
+	)
+	if err != nil || !found {
+		return "", errors.New("read normal readback credential from Vault")
+	}
+	possessionMaterial, found, err := attestor.config.Delivery.ReadKV2(
+		ctx,
+		attestor.config.PossessionPath,
+	)
+	if err != nil || !found {
+		return "", errors.New("read readback possession key from Vault")
+	}
+	key, err := internalrpcauth.ParsePrivateJWK(
+		[]byte(possessionMaterial.Data["possession_private_jwk"]),
+	)
+	if err != nil {
+		return "", errors.New("parse readback possession private key")
+	}
+	client, err := New(Config{
+		Address: attestor.config.Address, TLS: attestor.config.TLS,
+		IntentID:                credentialMaterial.Data["pinned_intent_id"],
+		CredentialCompact:       credentialMaterial.Data["readback_credential_compact_jws"],
+		CredentialJTI:           credentialMaterial.Data["readback_credential_jti"],
+		WorkloadID:              attestor.config.WorkloadID,
+		WorkloadSPIFFEID:        attestor.config.WorkloadSPIFFEID,
+		Role:                    attestor.config.Role,
+		WorkloadGeneration:      attestor.config.WorkloadGeneration,
+		CredentialGeneration:    attestor.config.CredentialGeneration,
+		PossessionKeyGeneration: attestor.config.PossessionKeyGeneration,
+		PossessionKey:           key,
+	})
+	if err != nil {
+		return "", err
+	}
+	return client.Attest(ctx, state)
+}
+
 func NewFileAttestor(config FileConfig) (*FileAttestor, error) {
 	if config.IntentIDFile == "" ||
 		config.CredentialCompactFile == "" ||

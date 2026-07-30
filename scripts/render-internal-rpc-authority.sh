@@ -60,15 +60,13 @@ overlay="$repo_root/deploy/k8s/overlays/$environment_name/internal-rpc-authority
 placeholder="${expected_repository}@sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
 rendered="$(kubectl kustomize "$overlay")" || fail "kustomize render failed"
-occurrences="$(grep -Fxc "        image: $placeholder" <<<"$rendered" || true)"
-[[ "$occurrences" == "2" ]] || fail "render must contain exactly two registered image placeholders"
+occurrences="$(grep -Fc "image: $placeholder" <<<"$rendered" || true)"
+[[ "$occurrences" == "7" ]] ||
+  fail "render must contain exactly seven registered deployable image placeholders"
 
 awk -v placeholder="$placeholder" -v replacement="$image_ref" '
   {
-    if ($0 == "        image: " placeholder) {
-      print "        image: " replacement
-      next
-    }
+    sub("image: " placeholder "$", "image: " replacement)
     print
   }
 ' <<<"$rendered"

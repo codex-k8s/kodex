@@ -85,7 +85,6 @@ func (server *RestoreControllerServer) GetRestoreDirective(
 	}
 	if request == nil ||
 		grpcserver.HasMalformedProto(request) ||
-		request.GetRoleCredentialCompactJws() == "" ||
 		len(request.GetRoleCredentialCompactJws()) > internalrpcauth.MaxCompactJWSBytes ||
 		!validCorrelation(correlationID) {
 		return nil, authorizationError(errorSpecMalformedRequest, correlationID)

@@ -99,6 +99,12 @@ spec:
             matchLabels:
               app.kubernetes.io/name: internal-rpc-authority
               app.kubernetes.io/component: database-credential-reconciler
+        - podSelector:
+            matchLabels:
+              mattercodex.dev/internal-rpc-authority-issuer: enabled
+        - podSelector:
+            matchLabels:
+              mattercodex.dev/internal-rpc-authority-verifier: enabled
       ports:
         - port: 8200
           protocol: TCP

@@ -42,7 +42,6 @@ type LoadOptions struct {
 	ManifestTrustBundleJWSFile string
 	ContextPrivateJWKFile      string
 	ProofTrustJWKFile          string
-	ReadbackPrivateJWKFile     string
 	Now                        time.Time
 }
 
@@ -281,14 +280,6 @@ func Load(options LoadOptions) (Loaded, error) {
 			return Loaded{}, fmt.Errorf("load authority proof trust: %w", err)
 		}
 	}
-	readbackRaw, err := readRegularFile(options.ReadbackPrivateJWKFile, maxKeyFileBytes, 0o007)
-	if err != nil {
-		return Loaded{}, fmt.Errorf("read readback private key: %w", err)
-	}
-	readbackKey, err := internalrpcauth.ParsePrivateJWK(readbackRaw)
-	if err != nil {
-		return Loaded{}, fmt.Errorf("parse readback private key: %w", err)
-	}
 	var signingKey internalrpcauth.ES256Key
 	if options.Role == RoleIssuer {
 		signingRaw, err := readRegularFile(options.ContextPrivateJWKFile, maxKeyFileBytes, 0o007)
@@ -368,7 +359,6 @@ func Load(options LoadOptions) (Loaded, error) {
 			SigningKey:       signingKey,
 			VerificationKeys: verificationKeys,
 			ProofKeys:        proofKeys,
-			ReadbackKey:      readbackKey,
 		},
 	}, nil
 }

@@ -59,6 +59,12 @@ spec:
               value: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443
             - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME
               value: internal-rpc-authority-readback-attestor.mattercodex-system.svc
+            - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE
+              value: /var/run/config/mattercodex/internal-rpc-authority/readback/ca.pem
+            - name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE
+              value: internal-rpc-authority-control-plane
+            - name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE
+              value: /var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem
             - name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN
               value: ":9092"
             - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID
@@ -113,17 +119,26 @@ spec:
             - name: internal-rpc-authority-manifest-trust
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
               readOnly: true
-            - name: internal-rpc-authority-readback-key
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback
-              readOnly: true
-            - name: internal-rpc-authority-readback-credential
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback/credential
-              readOnly: true
-            - name: internal-rpc-authority-readback-client-tls
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback/client-tls
+            - name: internal-rpc-authority-workload-tls
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/workload-tls
               readOnly: true
             - name: internal-rpc-authority-readback-attestor-ca
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback
+              readOnly: true
+            - name: internal-rpc-authority-vault-ca
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/vault
+              readOnly: true
+            - name: internal-rpc-authority-vault-token
+              mountPath: /var/run/secrets/tokens/vault
+              readOnly: true
+            - name: internal-rpc-authority-restore-controller-ca
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore
+              readOnly: true
+            - name: internal-rpc-authority-restore-controller-certificate
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust
+              readOnly: true
+            - name: internal-rpc-authority-restore-role-trust
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/role-trust
               readOnly: true
             - name: internal-rpc-authority-postgresql
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres
@@ -144,22 +159,44 @@ spec:
           secret:
             secretName: internal-rpc-authority-manifest-trust
             defaultMode: 0440
-        - name: internal-rpc-authority-readback-key
+        - name: internal-rpc-authority-workload-tls
           secret:
-            secretName: internal-rpc-authority-control-plane-verifier-readback-key
-            defaultMode: 0440
-        - name: internal-rpc-authority-readback-credential
-          secret:
-            secretName: internal-rpc-authority-control-plane-verifier-readback-credential
-            defaultMode: 0440
-        - name: internal-rpc-authority-readback-client-tls
-          secret:
-            secretName: internal-rpc-authority-control-plane-verifier-readback-client-tls
+            secretName: internal-rpc-authority-control-plane-workload-tls
             defaultMode: 0440
         - name: internal-rpc-authority-readback-attestor-ca
           configMap:
             name: internal-rpc-authority-readback-attestor-ca
             defaultMode: 0440
+        - name: internal-rpc-authority-vault-ca
+          configMap:
+            name: internal-rpc-authority-vault-ca
+            defaultMode: 0440
+        - name: internal-rpc-authority-vault-token
+          projected:
+            defaultMode: 0400
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: vault
+                  expirationSeconds: 600
+        - name: internal-rpc-authority-restore-controller-ca
+          configMap:
+            name: internal-rpc-authority-restore-controller-ca
+            defaultMode: 0440
+        - name: internal-rpc-authority-restore-controller-certificate
+          secret:
+            secretName: internal-rpc-authority-restore-controller-tls
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+        - name: internal-rpc-authority-restore-role-trust
+          secret:
+            secretName: internal-rpc-authority-restore-role-trust
+            defaultMode: 0440
+            items:
+              - key: restore-role-trust.jws
+                path: restore-role-trust.jws
         - name: internal-rpc-authority-postgresql
           secret:
             secretName: internal-rpc-authority-control-plane-verifier-postgresql

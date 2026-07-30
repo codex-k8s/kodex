@@ -50,7 +50,6 @@ type KeyMaterial struct {
 	SigningKey       internalrpcauth.ES256Key
 	VerificationKeys map[string]VerificationKeyRecord
 	ProofKeys        map[string]VerificationKeyRecord
-	ReadbackKey      internalrpcauth.ES256Key
 }
 
 type VerificationKeyRecord struct {
@@ -90,8 +89,7 @@ func NewAuthority(
 		policy.SignerKeyID == "" ||
 		store == nil ||
 		len(keys.VerificationKeys) == 0 ||
-		(keys.SigningKey.Private != nil && len(keys.ProofKeys) == 0) ||
-		keys.ReadbackKey.Private == nil {
+		(keys.SigningKey.Private != nil && len(keys.ProofKeys) == 0) {
 		return nil, failure.New(failure.SnapshotRejected, "invalid authority policy snapshot")
 	}
 	if keys.SigningKey.Private != nil && keys.SigningKey.KeyID != policy.SignerKeyID {
