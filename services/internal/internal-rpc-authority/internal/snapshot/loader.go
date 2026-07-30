@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -383,9 +384,12 @@ func bindingApplies(role Role, workloadID string, binding operationBinding) bool
 }
 
 func samePublicKey(left, right internalrpcauth.ES256Key) bool {
-	return left.Public != nil && right.Public != nil &&
-		left.Public.X.Cmp(right.Public.X) == 0 &&
-		left.Public.Y.Cmp(right.Public.Y) == 0
+	if left.Public == nil || right.Public == nil {
+		return false
+	}
+	leftBytes, leftErr := left.Public.Bytes()
+	rightBytes, rightErr := right.Public.Bytes()
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftBytes, rightBytes)
 }
 
 func readRegularFile(path string, limit int64, forbiddenMode os.FileMode) ([]byte, error) {

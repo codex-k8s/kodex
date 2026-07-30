@@ -57,7 +57,7 @@ func NewStaticRoleClient(config Config) (*StaticRoleClient, error) {
 		!vaultNamePattern.MatchString(config.AuthRole) ||
 		config.Timeout < time.Second ||
 		config.Timeout > 15*time.Second {
-		return nil, errors.New("invalid Vault static role client configuration")
+		return nil, errors.New("invalid vault static role client configuration")
 	}
 	certificatePool, err := loadCertificatePool(config.CAFile)
 	if err != nil {
@@ -77,7 +77,7 @@ func NewStaticRoleClient(config Config) (*StaticRoleClient, error) {
 			Transport: transport,
 			Timeout:   config.Timeout,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return errors.New("Vault redirect is forbidden")
+				return errors.New("vault redirect is forbidden")
 			},
 		},
 	}, nil
@@ -92,7 +92,7 @@ func (client *StaticRoleClient) VerifyStaticRoles(
 	roles []repository.VaultStaticRoleExpectation,
 ) error {
 	if len(roles) != 4 {
-		return errors.New("Vault static role registered set must contain four roles")
+		return errors.New("vault static role registered set must contain four roles")
 	}
 	token, err := client.login(ctx)
 	if err != nil {
@@ -103,10 +103,10 @@ func (client *StaticRoleClient) VerifyStaticRoles(
 		if !vaultNamePattern.MatchString(expected.Role) ||
 			!vaultNamePattern.MatchString(expected.Principal) ||
 			!vaultNamePattern.MatchString(expected.DatabaseName) {
-			return errors.New("Vault static role name is outside the registry boundary")
+			return errors.New("vault static role name is outside the registry boundary")
 		}
 		if _, duplicate := seen[expected.Role]; duplicate {
-			return errors.New("duplicate Vault static role")
+			return errors.New("duplicate vault static role")
 		}
 		seen[expected.Role] = struct{}{}
 		request, err := http.NewRequestWithContext(
@@ -159,11 +159,11 @@ func (client *StaticRoleClient) login(ctx context.Context) (string, error) {
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
-		return "", errors.New("Vault Kubernetes login rejected")
+		return "", errors.New("vault Kubernetes login rejected")
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxVaultResponseBytes+1))
 	if err != nil || len(raw) == 0 || len(raw) > maxVaultResponseBytes {
-		return "", errors.New("Vault Kubernetes login response is invalid")
+		return "", errors.New("vault Kubernetes login response is invalid")
 	}
 	var envelope struct {
 		Auth struct {
@@ -179,11 +179,11 @@ func (client *StaticRoleClient) login(ctx context.Context) (string, error) {
 		envelope.Auth.LeaseDuration < 30 ||
 		envelope.Auth.LeaseDuration > 3600 ||
 		!envelope.Auth.Renewable {
-		return "", errors.New("Vault Kubernetes login response is invalid")
+		return "", errors.New("vault Kubernetes login response is invalid")
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return "", errors.New("Vault Kubernetes login response is invalid")
+		return "", errors.New("vault Kubernetes login response is invalid")
 	}
 	return envelope.Auth.ClientToken, nil
 }
@@ -195,11 +195,11 @@ func verifyStaticRoleResponse(
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
-		return errors.New("Vault static role read rejected")
+		return errors.New("vault static role read rejected")
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxVaultResponseBytes+1))
 	if err != nil || len(raw) == 0 || len(raw) > maxVaultResponseBytes {
-		return errors.New("Vault static role response is invalid")
+		return errors.New("vault static role response is invalid")
 	}
 	var envelope struct {
 		Data struct {
@@ -212,11 +212,11 @@ func verifyStaticRoleResponse(
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	if err := decoder.Decode(&envelope); err != nil {
-		return errors.New("Vault static role response is invalid")
+		return errors.New("vault static role response is invalid")
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return errors.New("Vault static role response is invalid")
+		return errors.New("vault static role response is invalid")
 	}
 	if envelope.Data.CredentialType != "password" ||
 		envelope.Data.DatabaseName != expected.DatabaseName ||
@@ -224,7 +224,7 @@ func verifyStaticRoleResponse(
 		envelope.Data.RotationPeriod < minimumRotationPeriodSeconds ||
 		envelope.Data.RotationPeriod > maximumRotationPeriodSeconds ||
 		envelope.Data.RotationSchedule != "" {
-		return errors.New("Vault static role binding is invalid")
+		return errors.New("vault static role binding is invalid")
 	}
 	return nil
 }
@@ -240,7 +240,7 @@ func loadCertificatePool(path string) (*x509.CertPool, error) {
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(raw) {
-		return nil, errors.New("Vault CA bundle contains no certificate")
+		return nil, errors.New("vault CA bundle contains no certificate")
 	}
 	return pool, nil
 }
@@ -258,7 +258,7 @@ func readTokenFile(path string) ([]byte, error) {
 		info.Mode().Perm()&0o007 != 0 ||
 		info.Size() <= 0 ||
 		info.Size() > 16<<10 {
-		return nil, errors.New("Vault Kubernetes auth token file is unsafe")
+		return nil, errors.New("vault Kubernetes auth token file is unsafe")
 	}
 	raw, err := os.ReadFile(resolved)
 	if err != nil {
