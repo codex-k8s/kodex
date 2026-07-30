@@ -1,10 +1,12 @@
 package internalrpcauth
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -69,6 +71,33 @@ func TestValidateTimes(t *testing.T) {
 	}
 }
 
+func TestParsePrivateJWKValidatesDerivedPublicKey(t *testing.T) {
+	key := testJWK(t, "signer-g1")
+	encoded := encodePrivateJWK(t, key)
+
+	parsed, err := ParsePrivateJWK(encoded)
+	if err != nil {
+		t.Fatalf("parse private JWK: %v", err)
+	}
+	gotPublic, err := parsed.Public.Bytes()
+	if err != nil {
+		t.Fatalf("encode parsed public key: %v", err)
+	}
+	wantPublic, err := key.Public.Bytes()
+	if err != nil {
+		t.Fatalf("encode source public key: %v", err)
+	}
+	if !bytes.Equal(gotPublic, wantPublic) {
+		t.Fatal("parsed public key differs from the JWK coordinates")
+	}
+
+	mismatched := key
+	mismatched.Private = testJWK(t, key.KeyID).Private
+	if _, err := ParsePrivateJWK(encodePrivateJWK(t, mismatched)); !errors.Is(err, ErrKey) {
+		t.Fatalf("mismatched private/public JWK error = %v", err)
+	}
+}
+
 func testJWK(t *testing.T, keyID string) ES256Key {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -76,4 +105,31 @@ func testJWK(t *testing.T, keyID string) ES256Key {
 		t.Fatalf("generate key: %v", err)
 	}
 	return ES256Key{KeyID: keyID, Public: &key.PublicKey, Private: key}
+}
+
+func encodePrivateJWK(t *testing.T, key ES256Key) []byte {
+	t.Helper()
+	publicBytes, err := key.Public.Bytes()
+	if err != nil {
+		t.Fatalf("encode public key: %v", err)
+	}
+	privateBytes, err := key.Private.Bytes()
+	if err != nil {
+		t.Fatalf("encode private key: %v", err)
+	}
+	encoded, err := json.Marshal(encodedJWK{
+		KTY:    "EC",
+		Curve:  "P-256",
+		Use:    "sig",
+		KeyOps: []string{"sign"},
+		Alg:    AlgorithmES256,
+		KeyID:  key.KeyID,
+		X:      base64.RawURLEncoding.EncodeToString(publicBytes[1:33]),
+		Y:      base64.RawURLEncoding.EncodeToString(publicBytes[33:65]),
+		D:      base64.RawURLEncoding.EncodeToString(privateBytes),
+	})
+	if err != nil {
+		t.Fatalf("marshal private JWK: %v", err)
+	}
+	return encoded
 }

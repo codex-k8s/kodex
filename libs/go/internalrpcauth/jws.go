@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -200,10 +199,14 @@ func PublicJWKThumbprintSHA256(key ES256Key) (string, error) {
 	if err := validateES256Key(key, key.KeyID, false); err != nil {
 		return "", err
 	}
+	publicBytes, err := key.Public.Bytes()
+	if err != nil || len(publicBytes) != 65 || publicBytes[0] != 4 {
+		return "", ErrKey
+	}
 	canonical, err := jcs.Transform([]byte(fmt.Sprintf(
 		`{"crv":"P-256","kty":"EC","x":"%s","y":"%s"}`,
-		base64.RawURLEncoding.EncodeToString(key.Public.X.FillBytes(make([]byte, 32))),
-		base64.RawURLEncoding.EncodeToString(key.Public.Y.FillBytes(make([]byte, 32))),
+		base64.RawURLEncoding.EncodeToString(publicBytes[1:33]),
+		base64.RawURLEncoding.EncodeToString(publicBytes[33:65]),
 	)))
 	if err != nil {
 		return "", fmt.Errorf("canonicalize JWK thumbprint input: %w", err)
@@ -269,12 +272,12 @@ func parseJWK(data []byte, requirePrivate bool) (ES256Key, error) {
 	if err != nil || len(yBytes) != 32 {
 		return ES256Key{}, ErrKey
 	}
-	publicKey := &ecdsa.PublicKey{
-		Curve: elliptic.P256(),
-		X:     new(big.Int).SetBytes(xBytes),
-		Y:     new(big.Int).SetBytes(yBytes),
-	}
-	if !publicKey.Curve.IsOnCurve(publicKey.X, publicKey.Y) {
+	encodedPublic := make([]byte, 1+len(xBytes)+len(yBytes))
+	encodedPublic[0] = 4
+	copy(encodedPublic[1:33], xBytes)
+	copy(encodedPublic[33:], yBytes)
+	publicKey, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), encodedPublic)
+	if err != nil {
 		return ES256Key{}, ErrKey
 	}
 	result := ES256Key{KeyID: encoded.KeyID, Public: publicKey}
@@ -283,12 +286,14 @@ func parseJWK(data []byte, requirePrivate bool) (ES256Key, error) {
 		if err != nil || len(dBytes) == 0 || len(dBytes) > 32 {
 			return ES256Key{}, ErrKey
 		}
-		privateKey := &ecdsa.PrivateKey{
-			PublicKey: *publicKey,
-			D:         new(big.Int).SetBytes(dBytes),
+		rawPrivate := make([]byte, 32)
+		copy(rawPrivate[len(rawPrivate)-len(dBytes):], dBytes)
+		privateKey, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), rawPrivate)
+		if err != nil {
+			return ES256Key{}, ErrKey
 		}
-		if privateKey.D.Sign() <= 0 ||
-			privateKey.D.Cmp(privateKey.Curve.Params().N) >= 0 {
+		derivedPublic, err := privateKey.PublicKey.Bytes()
+		if err != nil || !bytes.Equal(derivedPublic, encodedPublic) {
 			return ES256Key{}, ErrKey
 		}
 		result.Private = privateKey
@@ -297,14 +302,25 @@ func parseJWK(data []byte, requirePrivate bool) (ES256Key, error) {
 }
 
 func validateES256Key(key ES256Key, expectedKeyID string, requirePrivate bool) error {
-	if key.Public == nil || key.Public.Curve == nil ||
-		key.Public.Curve.Params().Name != "P-256" ||
-		key.KeyID != expectedKeyID || key.KeyID == "" ||
-		!key.Public.Curve.IsOnCurve(key.Public.X, key.Public.Y) {
+	if key.Public == nil || key.Public.Curve != elliptic.P256() ||
+		key.KeyID != expectedKeyID || key.KeyID == "" {
 		return ErrKey
 	}
-	if requirePrivate && key.Private == nil {
+	publicBytes, err := key.Public.Bytes()
+	if err != nil {
 		return ErrKey
+	}
+	if requirePrivate {
+		if key.Private == nil {
+			return ErrKey
+		}
+		if _, err := key.Private.Bytes(); err != nil {
+			return ErrKey
+		}
+		privatePublicBytes, err := key.Private.PublicKey.Bytes()
+		if err != nil || !bytes.Equal(privatePublicBytes, publicBytes) {
+			return ErrKey
+		}
 	}
 	return nil
 }
