@@ -2999,6 +2999,32 @@ func TestSlashOpenAIAuthStatusAndList(t *testing.T) {
 	}
 }
 
+func TestSlashOpenAIStatusReportsExpiredCollectionWindow(t *testing.T) {
+	store := &fakeAdminStore{
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", SecretRef: "matter-codex-codex-auth-primary", Status: "awaiting_user"},
+		},
+	}
+	runner := &fakeRuntimeRunner{authJobSucceeded: true}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     runner,
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "openai status primary", UserName: "owner"})
+	if !strings.Contains(text, "result collection window") || !strings.Contains(text, "`primary`") {
+		t.Fatalf("Handle(openai status expired) text = %q", text)
+	}
+	if strings.Contains(text, "ABCD-12345") {
+		t.Fatalf("Handle(openai status expired) exposes stale device code: %q", text)
+	}
+}
+
 func TestFrozenClusterAdminOpenAIAccountAllowsOnlyOwnerReauthorization(t *testing.T) {
 	store := &fakeAdminStore{
 		frozenOpenAIAccount: "primary",
@@ -3469,6 +3495,7 @@ type fakeRuntimeRunner struct {
 	authAccount                 string
 	authSecret                  string
 	authReady                   bool
+	authJobSucceeded            bool
 	authSecretNotReady          bool
 	authCompletedSecret         string
 	authReadySecret             string
@@ -3581,6 +3608,11 @@ func (runner *fakeRuntimeRunner) GetCodexAuthStatus(_ context.Context, accountNa
 		DeviceURL:   "https://auth.openai.com/codex/device",
 		DeviceCode:  "ABCD-12345",
 		AuthReady:   runner.authReady,
+	}
+	if runner.authJobSucceeded {
+		status.JobActive = 0
+		status.JobSucceeded = 1
+		status.PodPhase = "Succeeded"
 	}
 	if runner.authStatusWithoutDeviceCode {
 		status.DeviceURL = ""

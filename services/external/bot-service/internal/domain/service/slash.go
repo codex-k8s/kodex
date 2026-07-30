@@ -1115,6 +1115,12 @@ func (svc *SlashCommandService) handleOpenAIStatus(ctx context.Context, args []s
 		text += svc.invalidateIdleAgentSessionsForRolesText(ctx, svc.roleIDsUsingOpenAIAccount(ctx, account.Name))
 		return text
 	}
+	if status.JobSucceeded > 0 {
+		return svc.t("openai.status.collection_expired", map[string]any{
+			"Account": account.Name,
+			"Job":     status.JobName,
+		})
+	}
 	if status.DeviceURL != "" && status.DeviceCode != "" {
 		if !frozen {
 			_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: account.SecretRef, Status: "awaiting_user"})

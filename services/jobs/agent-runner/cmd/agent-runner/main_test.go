@@ -66,6 +66,18 @@ func TestDisableCodexConfigOverlayForAuthCheck(t *testing.T) {
 	}
 }
 
+func TestCodexAuthCollectionWindow(t *testing.T) {
+	if codexAuthCollectionWindow != 24*time.Hour {
+		t.Fatalf("codexAuthCollectionWindow = %s, want 24h", codexAuthCollectionWindow)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := waitCodexAuthCollection(ctx, time.Hour); !errors.Is(err, context.Canceled) {
+		t.Fatalf("waitCodexAuthCollection() error = %v, want context canceled", err)
+	}
+}
+
 func TestSameGitHubRepositoryRemote(t *testing.T) {
 	tests := []struct {
 		name  string

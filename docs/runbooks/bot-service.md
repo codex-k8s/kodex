@@ -207,6 +207,7 @@ Developer runner не использует raw API key. Для Codex CLI соз�
 - `status primary` показывает ссылку `https://auth.openai.com/codex/device` и одноразовый code;
 - владелец открывает ссылку в браузере, вводит code и подтверждает account;
 - повторный `/agents openai status primary` сохраняет `auth.json` в Secret `${MATTERCODEX_CODEX_AUTH_SECRET}-primary`, помечает account как `authorized` и удаляет auth Job;
+- после подтверждения auth Job сохраняет доступ к `auth.json` в течение 24 часов; если окно истекло, авторизацию нужно запустить заново;
 - содержимое `auth.json` не выводится в Mattermost, логи, PR или prompt;
 - `cleanup primary` удаляет только временный auth Job;
 - `delete primary` удаляет OpenAI account metadata, временный auth Job и созданный auth Secret. Удаление блокируется, если account используется agent profile.
