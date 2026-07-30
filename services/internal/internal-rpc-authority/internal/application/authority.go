@@ -2,10 +2,12 @@ package application
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/failure"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/model"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 )
 
@@ -28,12 +30,19 @@ type VerifyCommand struct {
 type Authority struct {
 	domain    atomic.Pointer[service.Authority]
 	available atomic.Bool
+	attestor  repository.SnapshotAttestor
 }
 
-func NewAuthority(domain *service.Authority) *Authority {
-	application := &Authority{}
+func NewAuthority(
+	domain *service.Authority,
+	attestor repository.SnapshotAttestor,
+) (*Authority, error) {
+	if domain == nil || attestor == nil {
+		return nil, errors.New("authority activation boundary is invalid")
+	}
+	application := &Authority{attestor: attestor}
 	application.domain.Store(domain)
-	return application
+	return application, nil
 }
 
 func (application *Authority) Issue(
@@ -76,7 +85,25 @@ func (application *Authority) ActivateSnapshot(ctx context.Context) error {
 	if domain == nil {
 		return failure.New(failure.SnapshotRejected, "authority snapshot is unavailable")
 	}
-	if err := domain.ActivateSnapshot(ctx); err != nil {
+	state := domain.SnapshotState()
+	receiptID, err := application.attestor.Attest(ctx, repository.SnapshotState{
+		SourceRevision:          state.SourceRevision,
+		SourceDigestSHA256:      state.SourceDigestSHA256,
+		PredecessorRevision:     state.PredecessorRevision,
+		PredecessorDigestSHA256: state.PredecessorDigestSHA256,
+		KeySetRevision:          state.KeySetRevision,
+		PolicyRevision:          state.PolicyRevision,
+		SignerGeneration:        state.SignerGeneration,
+		History:                 state.History,
+	})
+	if err != nil {
+		return failure.Wrap(
+			failure.SnapshotRejected,
+			"obtain independent snapshot readback receipt",
+			err,
+		)
+	}
+	if err := domain.ActivateSnapshot(ctx, receiptID); err != nil {
 		return err
 	}
 	application.available.Store(true)
@@ -90,6 +117,28 @@ func (application *Authority) ReplaceActivatedSnapshot(domain *service.Authority
 	application.domain.Store(domain)
 	application.available.Store(true)
 	return nil
+}
+
+func (application *Authority) ActivateReplacement(
+	ctx context.Context,
+	domain *service.Authority,
+) error {
+	if domain == nil {
+		return failure.New(failure.SnapshotRejected, "authority snapshot is unavailable")
+	}
+	state := domain.SnapshotState()
+	receiptID, err := application.attestor.Attest(ctx, state)
+	if err != nil {
+		return failure.Wrap(
+			failure.SnapshotRejected,
+			"obtain independent replacement snapshot readback receipt",
+			err,
+		)
+	}
+	if err := domain.ActivateSnapshot(ctx, receiptID); err != nil {
+		return err
+	}
+	return application.ReplaceActivatedSnapshot(domain)
 }
 
 func (application *Authority) SetAvailable(available bool) {

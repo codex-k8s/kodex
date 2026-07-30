@@ -6,14 +6,20 @@ import (
 )
 
 type DeliveryTarget struct {
-	TargetID              string
-	WorkloadID            string
-	WorkloadSPIFFEID      string
-	Role                  string
-	WorkloadGeneration    uint64
-	CredentialGeneration  uint64
-	RestoreCredentialPath string
-	RestoreACKKeyPath     string
+	TargetID                   string
+	WorkloadID                 string
+	WorkloadSPIFFEID           string
+	Role                       string
+	WorkloadGeneration         uint64
+	CredentialGeneration       uint64
+	RestoreCredentialPath      string
+	RestoreACKKeyPath          string
+	ReadbackCredentialPath     string
+	ReadbackPossessionKeyPath  string
+	ReadbackIntentRevision     uint64
+	ReadbackMaterialGeneration uint64
+	ReadbackSourceRevision     uint64
+	ReadbackServedStateDigest  string
 }
 
 type DeliveryTargetRegistry struct {
@@ -109,4 +115,12 @@ type PublishedCredential struct {
 	CredentialGeneration uint64
 	ACKKeyGeneration     uint64
 	AcceptedAt           time.Time
+}
+
+type PublishedReadbackMaterial struct {
+	Intent                 ReadbackIntent
+	ReadbackCredentialJWS  string
+	PossessionPrivateJWK   string
+	CredentialVaultVersion uint64
+	PossessionVaultVersion uint64
 }

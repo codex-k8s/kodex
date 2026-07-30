@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
@@ -34,14 +35,15 @@ var (
 )
 
 type Authority struct {
-	policy           model.PolicySnapshot
-	bindings         map[string]model.OperationBinding
-	signingKey       internalrpcauth.ES256Key
-	verificationKeys map[string]VerificationKeyRecord
-	proofKeys        map[string]VerificationKeyRecord
-	readbackKey      internalrpcauth.ES256Key
-	store            repository.Store
-	now              func() time.Time
+	policy               model.PolicySnapshot
+	bindings             map[string]model.OperationBinding
+	signingKey           internalrpcauth.ES256Key
+	verificationKeys     map[string]VerificationKeyRecord
+	proofKeys            map[string]VerificationKeyRecord
+	store                repository.Store
+	now                  func() time.Time
+	activationMu         sync.RWMutex
+	attestationReceiptID string
 }
 
 type KeyMaterial struct {
@@ -134,7 +136,6 @@ func NewAuthority(
 		signingKey:       keys.SigningKey,
 		verificationKeys: publicKeyRecords(keys.VerificationKeys),
 		proofKeys:        publicKeyRecords(keys.ProofKeys),
-		readbackKey:      keys.ReadbackKey,
 		store:            store,
 		now:              time.Now,
 	}, nil
@@ -495,65 +496,19 @@ func keyAllowsAudience(record VerificationKeyRecord, audience string) bool {
 	return ok
 }
 
-func (authority *Authority) ActivateSnapshot(ctx context.Context) error {
-	probe := struct {
-		Version            int    `json:"v"`
-		SourceRevision     uint64 `json:"source_revision"`
-		SourceDigestSHA256 string `json:"source_digest_sha256"`
-		KeySetRevision     uint64 `json:"key_set_revision"`
-		PolicyRevision     uint64 `json:"policy_revision"`
-		SignerGeneration   uint64 `json:"signer_generation"`
-	}{
-		Version:            model.ContractVersion,
-		SourceRevision:     authority.policy.SourceRevision,
-		SourceDigestSHA256: authority.policy.SourceDigestSHA256,
-		KeySetRevision:     authority.policy.KeySetRevision,
-		PolicyRevision:     authority.policy.PolicyRevision,
-		SignerGeneration:   authority.policy.SignerGeneration,
+func (authority *Authority) ActivateSnapshot(
+	ctx context.Context,
+	attestationReceiptID string,
+) error {
+	if !uuidPattern.MatchString(attestationReceiptID) {
+		return failure.New(
+			failure.SnapshotRejected,
+			"snapshot readback receipt is invalid",
+		)
 	}
-	const probeType = "mattercodex-internal-rpc-served-snapshot-readback+jws"
-	compact, err := internalrpcauth.SignCanonicalJSON(
-		probe,
-		authority.readbackKey,
-		internalrpcauth.ProtectedHeaderExpectation{
-			Type:  probeType,
-			KeyID: authority.readbackKey.KeyID,
-		},
-	)
-	if err != nil {
-		return failure.Wrap(failure.SnapshotRejected, "sign served snapshot readback", err)
-	}
-	verified, err := internalrpcauth.VerifyCanonicalJSON(
-		compact,
-		authority.readbackKey.PublicOnly(),
-		internalrpcauth.ProtectedHeaderExpectation{
-			Type:  probeType,
-			KeyID: authority.readbackKey.KeyID,
-		},
-	)
-	if err != nil {
-		return failure.Wrap(failure.SnapshotRejected, "verify served snapshot readback", err)
-	}
-	var observed struct {
-		Version            int    `json:"v"`
-		SourceRevision     uint64 `json:"source_revision"`
-		SourceDigestSHA256 string `json:"source_digest_sha256"`
-		KeySetRevision     uint64 `json:"key_set_revision"`
-		PolicyRevision     uint64 `json:"policy_revision"`
-		SignerGeneration   uint64 `json:"signer_generation"`
-	}
-	if err := internalrpcauth.DecodeCanonicalJSON(verified.CanonicalPayload, &observed); err != nil {
-		return failure.Wrap(failure.SnapshotRejected, "decode served snapshot readback", err)
-	}
-	if observed.Version != probe.Version ||
-		observed.SourceRevision != probe.SourceRevision ||
-		observed.SourceDigestSHA256 != probe.SourceDigestSHA256 ||
-		observed.KeySetRevision != probe.KeySetRevision ||
-		observed.PolicyRevision != probe.PolicyRevision ||
-		observed.SignerGeneration != probe.SignerGeneration {
-		return failure.New(failure.SnapshotRejected, "served snapshot readback mismatch")
-	}
-	if err := authority.store.ActivateSnapshot(ctx, authority.SnapshotState()); err != nil {
+	state := authority.SnapshotState()
+	state.AttestationReceiptID = attestationReceiptID
+	if err := authority.store.ActivateSnapshot(ctx, state); err != nil {
 		if errors.Is(err, repository.ErrSnapshotRollback) {
 			return failure.Wrap(
 				failure.SnapshotRejected,
@@ -567,10 +522,16 @@ func (authority *Authority) ActivateSnapshot(ctx context.Context) error {
 			err,
 		)
 	}
+	authority.activationMu.Lock()
+	authority.attestationReceiptID = attestationReceiptID
+	authority.activationMu.Unlock()
 	return nil
 }
 
 func (authority *Authority) SnapshotState() repository.SnapshotState {
+	authority.activationMu.RLock()
+	receiptID := authority.attestationReceiptID
+	authority.activationMu.RUnlock()
 	return repository.SnapshotState{
 		SourceRevision:          authority.policy.SourceRevision,
 		SourceDigestSHA256:      authority.policy.SourceDigestSHA256,
@@ -580,6 +541,7 @@ func (authority *Authority) SnapshotState() repository.SnapshotState {
 		PolicyRevision:          authority.policy.PolicyRevision,
 		SignerGeneration:        authority.policy.SignerGeneration,
 		History:                 repositoryHistory(authority.policy.History),
+		AttestationReceiptID:    receiptID,
 	}
 }
 

@@ -2,6 +2,7 @@ package publisher
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -85,6 +86,67 @@ func (repository *Repository) PublisherReady(ctx context.Context) error {
 		return errors.New("publisher persistence boundary is not ready")
 	}
 	return nil
+}
+
+func (repository *Repository) PinReadbackIntent(
+	ctx context.Context,
+	value model.ReadbackIntent,
+) (model.ReadbackIntent, error) {
+	var result model.ReadbackIntent
+	var publicJWK []byte
+	err := repository.pool.QueryRow(
+		ctx,
+		pinReadbackIntentSQL,
+		pgx.StrictNamedArgs{
+			"intent_id":                        value.IntentID,
+			"kind":                             value.Kind,
+			"intent_revision":                  value.IntentRevision,
+			"intent_digest_sha256":             value.IntentDigestSHA256,
+			"workload_id":                      value.WorkloadID,
+			"workload_spiffe_id":               value.WorkloadSPIFFEID,
+			"role":                             value.Role,
+			"workload_generation":              value.WorkloadGeneration,
+			"credential_generation":            value.CredentialGeneration,
+			"material_generation":              value.MaterialGeneration,
+			"possession_key_generation":        value.PossessionKeyGeneration,
+			"possession_key_kid":               value.PossessionKeyID,
+			"possession_public_jwk":            value.PossessionPublicJWK,
+			"possession_key_thumbprint_sha256": value.PossessionKeyThumbprint,
+			"source_revision":                  value.SourceRevision,
+			"served_state_digest_sha256":       value.ServedStateDigestSHA256,
+			"expires_at":                       value.ExpiresAt,
+		},
+	).Scan(
+		&result.IntentID,
+		&result.Kind,
+		&result.IntentRevision,
+		&result.IntentDigestSHA256,
+		&result.WorkloadID,
+		&result.WorkloadSPIFFEID,
+		&result.Role,
+		&result.WorkloadGeneration,
+		&result.CredentialGeneration,
+		&result.MaterialGeneration,
+		&result.PossessionKeyID,
+		&result.PossessionKeyGeneration,
+		&publicJWK,
+		&result.PossessionKeyThumbprint,
+		&result.SourceRevision,
+		&result.ServedStateDigestSHA256,
+		&result.Status,
+		&result.ExpiresAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.ReadbackIntent{}, domainrepository.ErrIdempotencyConflict
+	}
+	if err != nil {
+		return model.ReadbackIntent{}, fmt.Errorf("pin publisher readback intent: %w", err)
+	}
+	if !json.Valid(publicJWK) {
+		return model.ReadbackIntent{}, errors.New("pinned readback public JWK is invalid")
+	}
+	result.PossessionPublicJWK = append(result.PossessionPublicJWK[:0], publicJWK...)
+	return result, nil
 }
 
 type rowScanner interface {

@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
+	readbackclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/readback"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	authorityrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/authority"
@@ -79,7 +80,41 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct authority domain service: %w", err)
 	}
-	authorityApplication := application.NewAuthority(domainService)
+	readbackTLS, err := loadRestoreClientTLS(
+		config.ReadbackAttestorCAFile,
+		config.ReadbackClientCertificateFile,
+		config.ReadbackClientPrivateKeyFile,
+		config.ReadbackAttestorTLSServerName,
+	)
+	if err != nil {
+		store.Close()
+		return fmt.Errorf("load readback attestor mTLS client: %w", err)
+	}
+	snapshotAttestor, err := readbackclient.NewFileAttestor(readbackclient.FileConfig{
+		Address: config.ReadbackAttestorAddress, TLS: readbackTLS,
+		IntentIDFile:             config.ReadbackIntentIDFile,
+		CredentialCompactFile:    config.ReadbackCredentialJWSFile,
+		CredentialJTIFile:        config.ReadbackCredentialJTIFile,
+		PossessionPrivateJWKFile: config.ReadbackPrivateJWKFile,
+		WorkloadID:               config.WorkloadID,
+		WorkloadSPIFFEID:         config.WorkloadSPIFFEID,
+		Role:                     config.ReadbackRole,
+		WorkloadGeneration:       config.WorkloadGeneration,
+		CredentialGeneration:     config.CredentialGeneration,
+		PossessionKeyGeneration:  config.PossessionKeyGeneration,
+	})
+	if err != nil {
+		store.Close()
+		return fmt.Errorf("construct readback attestor client: %w", err)
+	}
+	authorityApplication, err := application.NewAuthority(
+		domainService,
+		snapshotAttestor,
+	)
+	if err != nil {
+		store.Close()
+		return fmt.Errorf("construct authority application: %w", err)
+	}
 	if err := authorityApplication.ActivateSnapshot(startupCtx); err != nil {
 		store.Close()
 		return fmt.Errorf("activate served authority snapshot: %w", err)
@@ -318,12 +353,9 @@ func runSnapshotReload(
 			config.ReadinessTimeout,
 		)
 		if err == nil {
-			err = next.ActivateSnapshot(activationCtx)
+			err = authorityApplication.ActivateReplacement(activationCtx, next)
 		}
 		activationCancel()
-		if err == nil {
-			err = authorityApplication.ReplaceActivatedSnapshot(next)
-		}
 		if err != nil {
 			authorityApplication.SetAvailable(false)
 			readiness.Set(false, "snapshot-reload-rejected")

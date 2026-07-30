@@ -224,6 +224,7 @@ func snapshotArgs(
 		"key_set_revision":          value.KeySetRevision,
 		"policy_revision":           value.PolicyRevision,
 		"signer_generation":         value.SignerGeneration,
+		"attestation_receipt_id":    value.AttestationReceiptID,
 		"history_revisions":         historyRevisions,
 		"history_digests":           historyDigests,
 	}

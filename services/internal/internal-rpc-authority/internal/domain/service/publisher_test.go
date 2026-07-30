@@ -28,6 +28,11 @@ func TestPublisherDeliveryRetryAndConflict(t *testing.T) {
 			SourceDigest:   strings.Repeat("b", 64),
 			KeySetRevision: 1, Generation: 1,
 		},
+		ReadbackCredentialSigner{
+			Key:            testKey(t, "readback-credential-signer-g1"),
+			SourceRevision: 1, SourceDigest: strings.Repeat("c", 64),
+			KeySetRevision: 1, Generation: 1,
+		},
 		store,
 		vault,
 	)
@@ -92,6 +97,11 @@ func TestPublisherRejectsWrongTargetAndAudience(t *testing.T) {
 			SourceDigest:   strings.Repeat("b", 64),
 			KeySetRevision: 1, Generation: 1,
 		},
+		ReadbackCredentialSigner{
+			Key:            testKey(t, "readback-credential-signer-g1"),
+			SourceRevision: 1, SourceDigest: strings.Repeat("c", 64),
+			KeySetRevision: 1, Generation: 1,
+		},
 		&memoryPublisherStore{},
 		newMemorySecretDelivery(),
 	)
@@ -126,16 +136,93 @@ func TestPublisherRejectsWrongTargetAndAudience(t *testing.T) {
 	}
 }
 
+func TestPublisherPinsAndRotatesIndependentReadbackMaterial(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1_800_000_000, 0).UTC()
+	restoreSigner := testKey(t, "restore-credential-signer-g1")
+	readbackSigner := testKey(t, "readback-credential-signer-g1")
+	store := &memoryPublisherStore{}
+	vault := newMemorySecretDelivery()
+	publisher, err := NewPublisher(
+		testPublisherRegistry(),
+		RestoreCredentialSigner{
+			Key: restoreSigner, SourceRevision: 1,
+			SourceDigest:   strings.Repeat("b", 64),
+			KeySetRevision: 1, Generation: 1,
+		},
+		ReadbackCredentialSigner{
+			Key: readbackSigner, SourceRevision: 2,
+			SourceDigest:   strings.Repeat("c", 64),
+			KeySetRevision: 2, Generation: 2,
+		},
+		store,
+		vault,
+	)
+	if err != nil {
+		t.Fatalf("construct publisher: %v", err)
+	}
+	publisher.now = func() time.Time { return now }
+	first, err := publisher.PublishReadbackMaterials(context.Background())
+	if err != nil {
+		t.Fatalf("publish readback material: %v", err)
+	}
+	if len(first) != 1 ||
+		first[0].Intent.Kind != "SNAPSHOT" ||
+		first[0].CredentialVaultVersion != 1 ||
+		first[0].PossessionVaultVersion != 1 {
+		t.Fatalf("unexpected first readback publication: %#v", first)
+	}
+	verified, err := internalrpcauth.VerifyCanonicalJSON(
+		first[0].ReadbackCredentialJWS,
+		readbackSigner.PublicOnly(),
+		internalrpcauth.ProtectedHeaderExpectation{
+			Type:  readbackCredentialType,
+			KeyID: readbackSigner.KeyID,
+		},
+	)
+	if err != nil {
+		t.Fatalf("verify independently signed readback credential: %v", err)
+	}
+	var claims model.ReadbackCredentialClaims
+	if err := internalrpcauth.DecodeCanonicalJSON(
+		verified.CanonicalPayload,
+		&claims,
+	); err != nil {
+		t.Fatalf("decode readback credential: %v", err)
+	}
+	if claims.IntentID != first[0].Intent.IntentID ||
+		claims.PossessionKeyThumbprint != first[0].Intent.PossessionKeyThumbprint {
+		t.Fatal("readback credential does not bind the persisted intent")
+	}
+	now = now.Add(11 * time.Second)
+	second, err := publisher.PublishReadbackMaterials(context.Background())
+	if err != nil {
+		t.Fatalf("rotate readback material: %v", err)
+	}
+	if second[0].Intent.IntentID == first[0].Intent.IntentID ||
+		second[0].CredentialVaultVersion != 2 ||
+		second[0].PossessionVaultVersion != 1 ||
+		second[0].PossessionPrivateJWK != first[0].PossessionPrivateJWK {
+		t.Fatalf("readback rotation did not preserve possession and advance credential: %#v", second[0])
+	}
+}
+
 func testPublisherRegistry() model.DeliveryTargetRegistry {
 	target := model.DeliveryTarget{
-		TargetID:              "control-plane.authorization-verifier",
-		WorkloadID:            "control-plane",
-		WorkloadSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-		Role:                  "AUTHORIZATION_VERIFIER",
-		WorkloadGeneration:    1,
-		CredentialGeneration:  1,
-		RestoreCredentialPath: "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-credential",
-		RestoreACKKeyPath:     "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack",
+		TargetID:                   "control-plane.authorization-verifier",
+		WorkloadID:                 "control-plane",
+		WorkloadSPIFFEID:           "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+		Role:                       "AUTHORIZATION_VERIFIER",
+		WorkloadGeneration:         1,
+		CredentialGeneration:       1,
+		RestoreCredentialPath:      "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-credential",
+		RestoreACKKeyPath:          "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack",
+		ReadbackCredentialPath:     "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-credential",
+		ReadbackPossessionKeyPath:  "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-possession",
+		ReadbackIntentRevision:     1,
+		ReadbackMaterialGeneration: 1,
+		ReadbackSourceRevision:     1,
+		ReadbackServedStateDigest:  strings.Repeat("d", 64),
 	}
 	return model.DeliveryTargetRegistry{
 		Version: model.ContractVersion, SourceRevision: 1,
@@ -188,8 +275,28 @@ func signIssuanceDirective(
 }
 
 type memoryPublisherStore struct {
-	mu    sync.Mutex
-	value *model.PublishedCredential
+	mu      sync.Mutex
+	value   *model.PublishedCredential
+	intents map[string]model.ReadbackIntent
+}
+
+func (store *memoryPublisherStore) PinReadbackIntent(
+	_ context.Context,
+	value model.ReadbackIntent,
+) (model.ReadbackIntent, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.intents == nil {
+		store.intents = make(map[string]model.ReadbackIntent)
+	}
+	if existing, ok := store.intents[value.IntentID]; ok {
+		if existing.IntentDigestSHA256 != value.IntentDigestSHA256 {
+			return model.ReadbackIntent{}, repository.ErrIdempotencyConflict
+		}
+		return existing, nil
+	}
+	store.intents[value.IntentID] = value
+	return value, nil
 }
 
 func (store *memoryPublisherStore) LoadPublishedCredential(
@@ -257,6 +364,31 @@ func (delivery *memorySecretDelivery) CreateKV2(
 	}
 	value := repository.SecretMaterial{
 		Version: 1, Data: data, Digest: digest,
+	}
+	delivery.values[path] = value
+	return value, nil
+}
+
+func (delivery *memorySecretDelivery) WriteKV2CAS(
+	_ context.Context,
+	path string,
+	expectedVersion uint64,
+	data map[string]string,
+) (repository.SecretMaterial, error) {
+	delivery.mu.Lock()
+	defer delivery.mu.Unlock()
+	existing, ok := delivery.values[path]
+	if !ok || existing.Version != expectedVersion {
+		return repository.SecretMaterial{}, repository.ErrIdempotencyConflict
+	}
+	digest, err := internalrpcauth.CanonicalJSONSHA256(data)
+	if err != nil {
+		return repository.SecretMaterial{}, err
+	}
+	value := repository.SecretMaterial{
+		Version: existing.Version + 1,
+		Data:    data,
+		Digest:  digest,
 	}
 	delivery.values[path] = value
 	return value, nil

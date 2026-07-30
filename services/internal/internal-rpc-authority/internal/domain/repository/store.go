@@ -58,3 +58,7 @@ type Store interface {
 	Ready(ctx context.Context, expected SnapshotState) error
 	Close()
 }
+
+type SnapshotAttestor interface {
+	Attest(context.Context, SnapshotState) (string, error)
+}

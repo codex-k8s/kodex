@@ -99,6 +99,75 @@ func (client *StaticRoleClient) CreateKV2(
 	return stored, nil
 }
 
+func (client *StaticRoleClient) WriteKV2CAS(
+	ctx context.Context,
+	path string,
+	expectedVersion uint64,
+	data map[string]string,
+) (repository.SecretMaterial, error) {
+	if !kvDataPathPattern.MatchString(path) ||
+		expectedVersion == 0 ||
+		len(data) == 0 ||
+		len(data) > 16 {
+		return repository.SecretMaterial{}, errors.New(
+			"Vault KV rotation input is outside the target registry boundary",
+		)
+	}
+	for key, value := range data {
+		if key == "" || len(key) > 64 || value == "" || len(value) > 1<<20 {
+			return repository.SecretMaterial{}, errors.New("Vault KV rotation field is invalid")
+		}
+	}
+	token, err := client.login(ctx)
+	if err != nil {
+		return repository.SecretMaterial{}, err
+	}
+	body, err := json.Marshal(struct {
+		Data    map[string]string `json:"data"`
+		Options struct {
+			CAS uint64 `json:"cas"`
+		} `json:"options"`
+	}{
+		Data: data,
+		Options: struct {
+			CAS uint64 `json:"cas"`
+		}{CAS: expectedVersion},
+	})
+	if err != nil {
+		return repository.SecretMaterial{}, errors.New("encode Vault KV rotation")
+	}
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		client.config.Address+"/v1/"+escapeVaultPath(path),
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return repository.SecretMaterial{}, errors.New("construct Vault KV rotation")
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Vault-Token", token)
+	response, err := client.client.Do(request)
+	if err != nil {
+		return repository.SecretMaterial{}, errors.New("write Vault KV rotation")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK &&
+		response.StatusCode != http.StatusNoContent {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
+		return repository.SecretMaterial{}, errors.New("Vault KV rotation CAS rejected")
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
+	stored, found, err := client.readKV2WithToken(ctx, token, path)
+	if err != nil {
+		return repository.SecretMaterial{}, err
+	}
+	if !found || stored.Version != expectedVersion+1 {
+		return repository.SecretMaterial{}, errors.New("Vault KV rotation readback is invalid")
+	}
+	return stored, nil
+}
+
 func (client *StaticRoleClient) readKV2WithToken(
 	ctx context.Context,
 	token string,

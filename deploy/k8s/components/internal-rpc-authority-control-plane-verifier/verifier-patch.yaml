@@ -53,6 +53,12 @@ spec:
           env:
             - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID
               value: control-plane
+            - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID
+              value: spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane
+            - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS
+              value: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443
+            - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME
+              value: internal-rpc-authority-readback-attestor.mattercodex-system.svc
             - name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN
               value: ":9092"
             - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID
@@ -110,6 +116,15 @@ spec:
             - name: internal-rpc-authority-readback-key
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback
               readOnly: true
+            - name: internal-rpc-authority-readback-credential
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback/credential
+              readOnly: true
+            - name: internal-rpc-authority-readback-client-tls
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback/client-tls
+              readOnly: true
+            - name: internal-rpc-authority-readback-attestor-ca
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback
+              readOnly: true
             - name: internal-rpc-authority-postgresql
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres
               readOnly: true
@@ -132,6 +147,18 @@ spec:
         - name: internal-rpc-authority-readback-key
           secret:
             secretName: internal-rpc-authority-control-plane-verifier-readback-key
+            defaultMode: 0440
+        - name: internal-rpc-authority-readback-credential
+          secret:
+            secretName: internal-rpc-authority-control-plane-verifier-readback-credential
+            defaultMode: 0440
+        - name: internal-rpc-authority-readback-client-tls
+          secret:
+            secretName: internal-rpc-authority-control-plane-verifier-readback-client-tls
+            defaultMode: 0440
+        - name: internal-rpc-authority-readback-attestor-ca
+          configMap:
+            name: internal-rpc-authority-readback-attestor-ca
             defaultMode: 0440
         - name: internal-rpc-authority-postgresql
           secret:

@@ -33,6 +33,12 @@ func (application *Publisher) Ready(ctx context.Context) error {
 	return application.service.Ready(ctx)
 }
 
+func (application *Publisher) PublishReadbackMaterials(
+	ctx context.Context,
+) ([]model.PublishedReadbackMaterial, error) {
+	return application.service.PublishReadbackMaterials(ctx)
+}
+
 func (application *Publisher) Registry() model.DeliveryTargetRegistry {
 	return application.service.Registry()
 }

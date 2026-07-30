@@ -16,6 +16,7 @@ import (
 var (
 	registryWorkloadPattern  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$`)
 	registryVaultPathPattern = regexp.MustCompile(`^kv/data/mattercodex/[a-z0-9][a-z0-9./_-]*[a-z0-9]$`)
+	registryDigestPattern    = regexp.MustCompile(`^[a-f0-9]{64}$`)
 )
 
 type registryDocument struct {
@@ -39,8 +40,12 @@ type registryTarget struct {
 		ACKKeyVaultPath         string `yaml:"ack_key_vault_path"`
 	} `yaml:"restore_coordination"`
 	Readback struct {
-		CredentialVaultPath    string `yaml:"credential_vault_path"`
-		PossessionKeyVaultPath string `yaml:"possession_key_vault_path"`
+		CredentialVaultPath     string `yaml:"credential_vault_path"`
+		PossessionKeyVaultPath  string `yaml:"possession_key_vault_path"`
+		IntentRevision          uint64 `yaml:"intent_revision"`
+		MaterialGeneration      uint64 `yaml:"material_generation"`
+		SourceRevision          uint64 `yaml:"source_revision"`
+		ServedStateDigestSHA256 string `yaml:"served_state_digest_sha256"`
 	} `yaml:"readback"`
 }
 
@@ -84,7 +89,13 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			entry.RestoreCoordination.RoleCredentialVaultPath ==
 				entry.RestoreCoordination.ACKKeyVaultPath ||
 			entry.RestoreCoordination.RoleCredentialID == "" ||
-			entry.RestoreCoordination.ACKKeyID == "" {
+			entry.RestoreCoordination.ACKKeyID == "" ||
+			entry.Readback.IntentRevision == 0 ||
+			entry.Readback.MaterialGeneration == 0 ||
+			entry.Readback.SourceRevision == 0 ||
+			!registryDigestPattern.MatchString(
+				entry.Readback.ServedStateDigestSHA256,
+			) {
 			return model.DeliveryTargetRegistry{}, fmt.Errorf(
 				"publisher target %q is outside the registry boundary",
 				targetID,
@@ -112,14 +123,20 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			seenPath[pathValue] = struct{}{}
 		}
 		registry.Targets[targetID] = model.DeliveryTarget{
-			TargetID:              targetID,
-			WorkloadID:            entry.WorkloadID,
-			WorkloadSPIFFEID:      entry.SPIFFEID,
-			Role:                  entry.Role,
-			WorkloadGeneration:    entry.WorkloadGeneration,
-			CredentialGeneration:  entry.DatabaseIdentity.CredentialGeneration,
-			RestoreCredentialPath: entry.RestoreCoordination.RoleCredentialVaultPath,
-			RestoreACKKeyPath:     entry.RestoreCoordination.ACKKeyVaultPath,
+			TargetID:                   targetID,
+			WorkloadID:                 entry.WorkloadID,
+			WorkloadSPIFFEID:           entry.SPIFFEID,
+			Role:                       entry.Role,
+			WorkloadGeneration:         entry.WorkloadGeneration,
+			CredentialGeneration:       entry.DatabaseIdentity.CredentialGeneration,
+			RestoreCredentialPath:      entry.RestoreCoordination.RoleCredentialVaultPath,
+			RestoreACKKeyPath:          entry.RestoreCoordination.ACKKeyVaultPath,
+			ReadbackCredentialPath:     entry.Readback.CredentialVaultPath,
+			ReadbackPossessionKeyPath:  entry.Readback.PossessionKeyVaultPath,
+			ReadbackIntentRevision:     entry.Readback.IntentRevision,
+			ReadbackMaterialGeneration: entry.Readback.MaterialGeneration,
+			ReadbackSourceRevision:     entry.Readback.SourceRevision,
+			ReadbackServedStateDigest:  entry.Readback.ServedStateDigestSHA256,
 		}
 	}
 	return registry, nil

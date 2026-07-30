@@ -34,7 +34,10 @@ func TestIssueVerifyAndReplay(t *testing.T) {
 		t.Fatalf("construct authority: %v", err)
 	}
 	authority.now = func() time.Time { return now }
-	if err := authority.ActivateSnapshot(context.Background()); err != nil {
+	if err := authority.ActivateSnapshot(
+		context.Background(),
+		"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+	); err != nil {
 		t.Fatalf("activate snapshot: %v", err)
 	}
 	proof := testProof(now)

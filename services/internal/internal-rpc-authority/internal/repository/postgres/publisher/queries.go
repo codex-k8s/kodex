@@ -15,11 +15,15 @@ var saveDeliverySQL string
 //go:embed sql/publisher__readiness.sql
 var readinessSQL string
 
+//go:embed sql/publisher__pin_readback_intent.sql
+var pinReadbackIntentSQL string
+
 func validateQueries() error {
 	for name, query := range map[string]string{
-		"publisher__load_delivery": loadDeliverySQL,
-		"publisher__save_delivery": saveDeliverySQL,
-		"publisher__readiness":     readinessSQL,
+		"publisher__load_delivery":       loadDeliverySQL,
+		"publisher__save_delivery":       saveDeliverySQL,
+		"publisher__readiness":           readinessSQL,
+		"publisher__pin_readback_intent": pinReadbackIntentSQL,
 	} {
 		if strings.TrimSpace(query) == "" ||
 			!strings.HasPrefix(strings.TrimSpace(query), "-- name: "+name+" ") {

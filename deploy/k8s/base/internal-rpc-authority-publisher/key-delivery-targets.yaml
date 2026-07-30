@@ -45,6 +45,10 @@ targets:
       network_policy: control-api-gateway-to-internal-rpc-authority-restore-controller
     readback:
       readback_id: control-api-gateway-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      source_revision: 1
+      served_state_digest_sha256: 4db3e3028dc1da2550014812ff082d462dae2f75a7cf27101d75734609e10749
       credential_id: control-api-gateway-issuer-readback-credential
       credential_vault_path: kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/readback-credential
       credential_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/readback/credential
@@ -102,6 +106,10 @@ targets:
       network_policy: control-plane-to-internal-rpc-authority-restore-controller
     readback:
       readback_id: control-plane-verifier-readback
+      intent_revision: 1
+      material_generation: 1
+      source_revision: 1
+      served_state_digest_sha256: 4db3e3028dc1da2550014812ff082d462dae2f75a7cf27101d75734609e10749
       credential_id: control-plane-verifier-readback-credential
       credential_vault_path: kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-credential
       credential_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/readback/credential

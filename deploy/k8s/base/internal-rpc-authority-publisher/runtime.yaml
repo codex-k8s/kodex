@@ -17,9 +17,13 @@ data:
   INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME: vault.mattercodex-system.svc.cluster.local
   INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_ROLE: internal-rpc-authority-publisher
   INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_SOURCE_REVISION: "1"
-  INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_SOURCE_DIGEST_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_SOURCE_DIGEST_SHA256: 8eaf74ff4a12c87cd68b1fbc3828010c7ee7f5f0c262d07441091f09d3cb8f55
   INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_KEY_SET_REVISION: "1"
   INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_GENERATION: "1"
+  INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_REVISION: "1"
+  INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_DIGEST_SHA256: 4db3e3028dc1da2550014812ff082d462dae2f75a7cf27101d75734609e10749
+  INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_KEY_SET_REVISION: "1"
+  INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_GENERATION: "1"
   INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_GENERATION: "1"
 ---
 apiVersion: apps/v1
@@ -81,6 +85,8 @@ spec:
               value: /var/run/secrets/tokens/vault/token
             - name: INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_PRIVATE_JWK_FILE
               value: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/restore-signer/private.jwk
+            - name: INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_PRIVATE_JWK_FILE
+              value: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/readback-signer/private.jwk
             - name: INTERNAL_RPC_AUTHORITY_TARGET_REGISTRY_FILE
               value: /var/run/config/mattercodex/internal-rpc-authority/publisher-targets/key-delivery-targets.yaml
           ports:
@@ -128,6 +134,9 @@ spec:
             - name: restore-signer
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/restore-signer
               readOnly: true
+            - name: readback-signer
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/readback-signer
+              readOnly: true
             - name: target-registry
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher-targets
               readOnly: true
@@ -165,6 +174,12 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: internal-rpc-authority-publisher-signers
+        - name: readback-signer
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-publisher-readback-signer
         - name: target-registry
           configMap:
             name: internal-rpc-authority-publisher-target-registry

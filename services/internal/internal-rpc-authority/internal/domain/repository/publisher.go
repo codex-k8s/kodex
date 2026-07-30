@@ -15,6 +15,7 @@ type PublisherStore interface {
 		context.Context,
 		model.PublishedCredential,
 	) (model.PublishedCredential, error)
+	PinReadbackIntent(context.Context, model.ReadbackIntent) (model.ReadbackIntent, error)
 	PublisherReady(context.Context) error
 }
 
@@ -27,4 +28,10 @@ type SecretMaterial struct {
 type SecretDelivery interface {
 	ReadKV2(context.Context, string) (SecretMaterial, bool, error)
 	CreateKV2(context.Context, string, map[string]string) (SecretMaterial, error)
+	WriteKV2CAS(
+		context.Context,
+		string,
+		uint64,
+		map[string]string,
+	) (SecretMaterial, error)
 }

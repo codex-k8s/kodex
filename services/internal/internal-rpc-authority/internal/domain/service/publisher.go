@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
@@ -24,9 +25,18 @@ const (
 	restoreControllerAudience  = "urn:mattercodex:internal-rpc-authority-restore-controller"
 	restoreIssuanceTTL         = 30 * time.Second
 	restoreRoleCredentialTTL   = 5 * time.Minute
+	publishedReadbackIntentTTL = 2 * time.Minute
 )
 
 type RestoreCredentialSigner struct {
+	Key            internalrpcauth.ES256Key
+	SourceRevision uint64
+	SourceDigest   string
+	KeySetRevision uint64
+	Generation     uint64
+}
+
+type ReadbackCredentialSigner struct {
 	Key            internalrpcauth.ES256Key
 	SourceRevision uint64
 	SourceDigest   string
@@ -41,16 +51,18 @@ type ControllerIdentity struct {
 }
 
 type Publisher struct {
-	registry model.DeliveryTargetRegistry
-	signer   RestoreCredentialSigner
-	store    repository.PublisherStore
-	vault    repository.SecretDelivery
-	now      func() time.Time
+	registry       model.DeliveryTargetRegistry
+	signer         RestoreCredentialSigner
+	readbackSigner ReadbackCredentialSigner
+	store          repository.PublisherStore
+	vault          repository.SecretDelivery
+	now            func() time.Time
 }
 
 func NewPublisher(
 	registry model.DeliveryTargetRegistry,
 	signer RestoreCredentialSigner,
+	readbackSigner ReadbackCredentialSigner,
 	store repository.PublisherStore,
 	vault repository.SecretDelivery,
 ) (*Publisher, error) {
@@ -63,17 +75,313 @@ func NewPublisher(
 		!digestPattern.MatchString(signer.SourceDigest) ||
 		signer.KeySetRevision == 0 ||
 		signer.Generation == 0 ||
+		readbackSigner.Key.Private == nil ||
+		readbackSigner.SourceRevision == 0 ||
+		!digestPattern.MatchString(readbackSigner.SourceDigest) ||
+		readbackSigner.KeySetRevision == 0 ||
+		readbackSigner.Generation == 0 ||
+		readbackSigner.Key.KeyID == signer.Key.KeyID ||
 		store == nil ||
 		vault == nil {
 		return nil, errors.New("invalid publisher configuration")
 	}
 	return &Publisher{
-		registry: registry,
-		signer:   signer,
-		store:    store,
-		vault:    vault,
-		now:      time.Now,
+		registry:       registry,
+		signer:         signer,
+		readbackSigner: readbackSigner,
+		store:          store,
+		vault:          vault,
+		now:            time.Now,
 	}, nil
+}
+
+func (publisher *Publisher) PublishReadbackMaterials(
+	ctx context.Context,
+) ([]model.PublishedReadbackMaterial, error) {
+	now := publisher.now().UTC().Truncate(time.Second)
+	bucket := uint64(now.Unix() / 10)
+	results := make([]model.PublishedReadbackMaterial, 0, len(publisher.registry.Targets))
+	for _, target := range publisher.registry.Targets {
+		result, err := publisher.publishReadbackMaterial(ctx, target, now, bucket)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+func (publisher *Publisher) publishReadbackMaterial(
+	ctx context.Context,
+	target model.DeliveryTarget,
+	now time.Time,
+	bucket uint64,
+) (model.PublishedReadbackMaterial, error) {
+	possession, err := publisher.ensureReadbackPossession(ctx, target)
+	if err != nil {
+		return model.PublishedReadbackMaterial{}, err
+	}
+	possessionKey, err := internalrpcauth.ParsePrivateJWK(
+		[]byte(possession.Data["possession_private_jwk"]),
+	)
+	if err != nil {
+		return model.PublishedReadbackMaterial{}, failure.New(
+			failure.PersistenceUnavailable,
+			"stored readback possession key rejected",
+		)
+	}
+	publicJWK, err := internalrpcauth.MarshalPublicJWK(possessionKey.PublicOnly())
+	if err != nil {
+		return model.PublishedReadbackMaterial{}, failure.Wrap(
+			failure.Internal,
+			"encode readback possession public key",
+			err,
+		)
+	}
+	thumbprint, err := internalrpcauth.PublicJWKThumbprintSHA256(
+		possessionKey.PublicOnly(),
+	)
+	if err != nil || thumbprint != possession.Data["possession_key_thumbprint_sha256"] {
+		return model.PublishedReadbackMaterial{}, failure.New(
+			failure.PersistenceUnavailable,
+			"stored readback possession key thumbprint rejected",
+		)
+	}
+	effectiveRevision := target.ReadbackIntentRevision*1_000_000_000 + bucket
+	intentID := deterministicUUID(
+		"readback-intent",
+		target.TargetID,
+		strconv.FormatUint(effectiveRevision, 10),
+	)
+	expiresAt := now.Add(publishedReadbackIntentTTL)
+	intentDigest, err := internalrpcauth.CanonicalJSONSHA256(struct {
+		Version                 int    `json:"v"`
+		IntentID                string `json:"intent_id"`
+		Kind                    string `json:"kind"`
+		IntentRevision          uint64 `json:"intent_revision"`
+		WorkloadID              string `json:"workload_id"`
+		WorkloadSPIFFEID        string `json:"workload_spiffe_id"`
+		Role                    string `json:"role"`
+		WorkloadGeneration      uint64 `json:"workload_generation"`
+		CredentialGeneration    uint64 `json:"credential_generation"`
+		MaterialGeneration      uint64 `json:"material_generation"`
+		PossessionKeyID         string `json:"possession_key_kid"`
+		PossessionKeyGeneration uint64 `json:"possession_key_generation"`
+		PossessionPublicJWK     []byte `json:"possession_public_jwk"`
+		PossessionThumbprint    string `json:"possession_key_thumbprint_sha256"`
+		SourceRevision          uint64 `json:"source_revision"`
+		ServedStateDigest       string `json:"served_state_digest_sha256"`
+		ExpiresAt               int64  `json:"expires_at"`
+	}{
+		Version: model.ContractVersion, IntentID: intentID, Kind: "SNAPSHOT",
+		IntentRevision: effectiveRevision, WorkloadID: target.WorkloadID,
+		WorkloadSPIFFEID: target.WorkloadSPIFFEID, Role: target.Role,
+		WorkloadGeneration:      target.WorkloadGeneration,
+		CredentialGeneration:    target.CredentialGeneration,
+		MaterialGeneration:      target.ReadbackMaterialGeneration,
+		PossessionKeyID:         possessionKey.KeyID,
+		PossessionKeyGeneration: target.ReadbackMaterialGeneration,
+		PossessionPublicJWK:     publicJWK, PossessionThumbprint: thumbprint,
+		SourceRevision:    target.ReadbackSourceRevision,
+		ServedStateDigest: target.ReadbackServedStateDigest,
+		ExpiresAt:         expiresAt.Unix(),
+	})
+	if err != nil {
+		return model.PublishedReadbackMaterial{}, failure.Wrap(
+			failure.Internal,
+			"digest pinned readback intent",
+			err,
+		)
+	}
+	intent := model.ReadbackIntent{
+		IntentID: intentID, Kind: "SNAPSHOT", IntentRevision: effectiveRevision,
+		IntentDigestSHA256: intentDigest, WorkloadID: target.WorkloadID,
+		WorkloadSPIFFEID: target.WorkloadSPIFFEID, Role: target.Role,
+		WorkloadGeneration:      target.WorkloadGeneration,
+		CredentialGeneration:    target.CredentialGeneration,
+		MaterialGeneration:      target.ReadbackMaterialGeneration,
+		PossessionKeyID:         possessionKey.KeyID,
+		PossessionKeyGeneration: target.ReadbackMaterialGeneration,
+		PossessionPublicJWK:     publicJWK, PossessionKeyThumbprint: thumbprint,
+		SourceRevision:          target.ReadbackSourceRevision,
+		ServedStateDigestSHA256: target.ReadbackServedStateDigest,
+		Status:                  "PINNED", ExpiresAt: expiresAt,
+	}
+	pinned, err := publisher.store.PinReadbackIntent(ctx, intent)
+	if err != nil {
+		return model.PublishedReadbackMaterial{}, failure.Wrap(
+			failure.PersistenceUnavailable,
+			"pin readback intent",
+			err,
+		)
+	}
+	credentialJTI := deterministicUUID(
+		"readback-credential",
+		intentID,
+		publisher.readbackSigner.Key.KeyID,
+	)
+	claims := model.ReadbackCredentialClaims{
+		Version: model.ContractVersion, Issuer: readbackPublisherIssuer,
+		Audience: readbackAudience, Subject: target.WorkloadID,
+		JTI: credentialJTI, Purpose: "SNAPSHOT_READBACK",
+		IntentID: intentID, IntentKind: "SNAPSHOT",
+		IntentRevision: effectiveRevision, IntentDigestSHA256: intentDigest,
+		WorkloadID: target.WorkloadID, WorkloadSPIFFEID: target.WorkloadSPIFFEID,
+		Role: target.Role, WorkloadGeneration: target.WorkloadGeneration,
+		CredentialGeneration:    target.CredentialGeneration,
+		MaterialGeneration:      target.ReadbackMaterialGeneration,
+		PossessionKeyID:         possessionKey.KeyID,
+		PossessionKeyGeneration: target.ReadbackMaterialGeneration,
+		PossessionPublicJWK:     publicJWK, PossessionKeyThumbprint: thumbprint,
+		SignerSourceRevision:     publisher.readbackSigner.SourceRevision,
+		SignerSourceDigestSHA256: publisher.readbackSigner.SourceDigest,
+		SignerKeySetRevision:     publisher.readbackSigner.KeySetRevision,
+		SignerGeneration:         publisher.readbackSigner.Generation,
+		IssuedAt:                 now.Unix(), NotBefore: now.Unix(),
+		ExpiresAt: now.Add(readbackCredentialTTL).Unix(),
+	}
+	credentialCompact, err := internalrpcauth.SignCanonicalJSON(
+		claims,
+		publisher.readbackSigner.Key,
+		internalrpcauth.ProtectedHeaderExpectation{
+			Type:  readbackCredentialType,
+			KeyID: publisher.readbackSigner.Key.KeyID,
+		},
+	)
+	if err != nil {
+		return model.PublishedReadbackMaterial{}, failure.Wrap(
+			failure.Internal,
+			"sign readback credential",
+			err,
+		)
+	}
+	credentialDigestRaw := sha256.Sum256([]byte(credentialCompact))
+	credentialData := map[string]string{
+		"pinned_intent_id":                  intentID,
+		"readback_credential_compact_jws":   credentialCompact,
+		"readback_credential_jti":           credentialJTI,
+		"readback_credential_digest_sha256": hex.EncodeToString(credentialDigestRaw[:]),
+		"intent_digest_sha256":              intentDigest,
+		"expires_at":                        strconv.FormatInt(claims.ExpiresAt, 10),
+	}
+	existing, found, err := publisher.vault.ReadKV2(
+		ctx,
+		target.ReadbackCredentialPath,
+	)
+	if err != nil {
+		return model.PublishedReadbackMaterial{}, failure.Wrap(
+			failure.PersistenceUnavailable,
+			"read readback credential delivery",
+			err,
+		)
+	}
+	var credentialMaterial repository.SecretMaterial
+	if !found {
+		credentialMaterial, err = publisher.vault.CreateKV2(
+			ctx,
+			target.ReadbackCredentialPath,
+			credentialData,
+		)
+	} else if existing.Data["intent_digest_sha256"] == intentDigest {
+		credentialMaterial = existing
+	} else {
+		credentialMaterial, err = publisher.vault.WriteKV2CAS(
+			ctx,
+			target.ReadbackCredentialPath,
+			existing.Version,
+			credentialData,
+		)
+	}
+	if err != nil {
+		return model.PublishedReadbackMaterial{}, failure.Wrap(
+			failure.PersistenceUnavailable,
+			"deliver readback credential",
+			err,
+		)
+	}
+	if credentialMaterial.Data["pinned_intent_id"] != intentID ||
+		credentialMaterial.Data["readback_credential_compact_jws"] != credentialCompact ||
+		credentialMaterial.Data["intent_digest_sha256"] != intentDigest {
+		return model.PublishedReadbackMaterial{}, failure.New(
+			failure.PersistenceUnavailable,
+			"readback credential delivery readback rejected",
+		)
+	}
+	return model.PublishedReadbackMaterial{
+		Intent: pinned, ReadbackCredentialJWS: credentialCompact,
+		PossessionPrivateJWK:   possession.Data["possession_private_jwk"],
+		CredentialVaultVersion: credentialMaterial.Version,
+		PossessionVaultVersion: possession.Version,
+	}, nil
+}
+
+func (publisher *Publisher) ensureReadbackPossession(
+	ctx context.Context,
+	target model.DeliveryTarget,
+) (repository.SecretMaterial, error) {
+	if existing, found, err := publisher.vault.ReadKV2(
+		ctx,
+		target.ReadbackPossessionKeyPath,
+	); err != nil {
+		return repository.SecretMaterial{}, failure.Wrap(
+			failure.PersistenceUnavailable,
+			"read readback possession key delivery",
+			err,
+		)
+	} else if found {
+		return existing, nil
+	}
+	keyID := target.TargetID + "-readback-g" + strconv.FormatUint(
+		target.ReadbackMaterialGeneration,
+		10,
+	)
+	key, err := internalrpcauth.GenerateES256Key(keyID)
+	if err != nil {
+		return repository.SecretMaterial{}, failure.Wrap(
+			failure.Internal,
+			"generate readback possession key",
+			err,
+		)
+	}
+	privateJWK, err := internalrpcauth.MarshalPrivateJWK(key)
+	if err != nil {
+		return repository.SecretMaterial{}, failure.Wrap(
+			failure.Internal,
+			"encode readback possession private key",
+			err,
+		)
+	}
+	thumbprint, err := internalrpcauth.PublicJWKThumbprintSHA256(key.PublicOnly())
+	if err != nil {
+		return repository.SecretMaterial{}, failure.Wrap(
+			failure.Internal,
+			"fingerprint readback possession key",
+			err,
+		)
+	}
+	return publisher.vault.CreateKV2(
+		ctx,
+		target.ReadbackPossessionKeyPath,
+		map[string]string{
+			"possession_private_jwk": string(privateJWK),
+			"possession_key_kid":     key.KeyID,
+			"possession_key_generation": strconv.FormatUint(
+				target.ReadbackMaterialGeneration,
+				10,
+			),
+			"possession_key_thumbprint_sha256": thumbprint,
+		},
+	)
+}
+
+func deterministicUUID(parts ...string) string {
+	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	value := digest[:16]
+	value[6] = (value[6] & 0x0f) | 0x50
+	value[8] = (value[8] & 0x3f) | 0x80
+	encoded := hex.EncodeToString(value)
+	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
+		encoded[16:20] + "-" + encoded[20:32]
 }
 
 func (publisher *Publisher) Publish(

@@ -31,27 +31,32 @@ import (
 )
 
 type PublisherConfig struct {
-	Listen                string
-	TechnicalListen       string
-	TLSCertificateFile    string
-	TLSPrivateKeyFile     string
-	ClientCAFile          string
-	PostgresDSNFile       string
-	PostgresTLSServerName string
-	PostgresExpectedUser  string
-	VaultAddress          string
-	VaultTLSServerName    string
-	VaultCAFile           string
-	VaultAuthRole         string
-	VaultAuthFile         string
-	TargetRegistryFile    string
-	SignerPrivateJWKFile  string
-	SignerSourceRevision  uint64
-	SignerSourceDigest    string
-	SignerKeySetRevision  uint64
-	SignerGeneration      uint64
-	ControllerGeneration  uint64
-	ShutdownTimeout       time.Duration
+	Listen                       string
+	TechnicalListen              string
+	TLSCertificateFile           string
+	TLSPrivateKeyFile            string
+	ClientCAFile                 string
+	PostgresDSNFile              string
+	PostgresTLSServerName        string
+	PostgresExpectedUser         string
+	VaultAddress                 string
+	VaultTLSServerName           string
+	VaultCAFile                  string
+	VaultAuthRole                string
+	VaultAuthFile                string
+	TargetRegistryFile           string
+	SignerPrivateJWKFile         string
+	SignerSourceRevision         uint64
+	SignerSourceDigest           string
+	SignerKeySetRevision         uint64
+	SignerGeneration             uint64
+	ReadbackSignerPrivateJWKFile string
+	ReadbackSignerSourceRevision uint64
+	ReadbackSignerSourceDigest   string
+	ReadbackSignerKeySetRevision uint64
+	ReadbackSignerGeneration     uint64
+	ControllerGeneration         uint64
+	ShutdownTimeout              time.Duration
 }
 
 func LoadPublisherConfig() (PublisherConfig, error) {
@@ -86,6 +91,24 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 	if err != nil {
 		return PublisherConfig{}, err
 	}
+	readbackSignerSourceRevision, err := parseRevision(
+		"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_REVISION",
+	)
+	if err != nil {
+		return PublisherConfig{}, err
+	}
+	readbackSignerKeySetRevision, err := parseRevision(
+		"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_KEY_SET_REVISION",
+	)
+	if err != nil {
+		return PublisherConfig{}, err
+	}
+	readbackSignerGeneration, err := parseRevision(
+		"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_GENERATION",
+	)
+	if err != nil {
+		return PublisherConfig{}, err
+	}
 	config := PublisherConfig{
 		Listen:                envOrDefault("INTERNAL_RPC_AUTHORITY_PUBLISHER_LISTEN", ":8444"),
 		TechnicalListen:       envOrDefault("INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN", ":9090"),
@@ -106,8 +129,18 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 		SignerSourceDigest:    strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_SOURCE_DIGEST_SHA256")),
 		SignerKeySetRevision:  signerKeySetRevision,
 		SignerGeneration:      signerGeneration,
-		ControllerGeneration:  controllerGeneration,
-		ShutdownTimeout:       10 * time.Second,
+		ReadbackSignerPrivateJWKFile: envOrDefault(
+			"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_PRIVATE_JWK_FILE",
+			"/var/run/secrets/mattercodex/internal-rpc-authority/publisher/readback-signer/private.jwk",
+		),
+		ReadbackSignerSourceRevision: readbackSignerSourceRevision,
+		ReadbackSignerSourceDigest: strings.TrimSpace(
+			os.Getenv("INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_DIGEST_SHA256"),
+		),
+		ReadbackSignerKeySetRevision: readbackSignerKeySetRevision,
+		ReadbackSignerGeneration:     readbackSignerGeneration,
+		ControllerGeneration:         controllerGeneration,
+		ShutdownTimeout:              10 * time.Second,
 	}
 	if _, _, err := net.SplitHostPort(config.Listen); err != nil {
 		return PublisherConfig{}, errors.New("publisher listen address is invalid")
@@ -116,7 +149,8 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 		return PublisherConfig{}, errors.New("publisher technical listen address is invalid")
 	}
 	if config.PostgresExpectedUser == "" ||
-		!digestPattern.MatchString(config.SignerSourceDigest) {
+		!digestPattern.MatchString(config.SignerSourceDigest) ||
+		!digestPattern.MatchString(config.ReadbackSignerSourceDigest) {
 		return PublisherConfig{}, errors.New("publisher database or signer identity is invalid")
 	}
 	return config, nil
@@ -158,6 +192,19 @@ func RunPublisher(
 		pool.Close()
 		return errors.New("parse restore credential signer key")
 	}
+	readbackSignerRaw, err := readPrivateFile(
+		config.ReadbackSignerPrivateJWKFile,
+		64<<10,
+	)
+	if err != nil {
+		pool.Close()
+		return errors.New("read readback credential signer key")
+	}
+	readbackSignerKey, err := internalrpcauth.ParsePrivateJWK(readbackSignerRaw)
+	if err != nil {
+		pool.Close()
+		return errors.New("parse readback credential signer key")
+	}
 	vault, err := vaultclient.NewStaticRoleClient(vaultclient.Config{
 		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName,
 		CAFile: config.VaultCAFile, AuthMount: "kubernetes",
@@ -177,6 +224,13 @@ func RunPublisher(
 			KeySetRevision: config.SignerKeySetRevision,
 			Generation:     config.SignerGeneration,
 		},
+		service.ReadbackCredentialSigner{
+			Key:            readbackSignerKey,
+			SourceRevision: config.ReadbackSignerSourceRevision,
+			SourceDigest:   config.ReadbackSignerSourceDigest,
+			KeySetRevision: config.ReadbackSignerKeySetRevision,
+			Generation:     config.ReadbackSignerGeneration,
+		},
 		store,
 		vault,
 	)
@@ -186,6 +240,11 @@ func RunPublisher(
 		return err
 	}
 	publisherApplication := application.NewPublisher(domainService)
+	if _, err := publisherApplication.PublishReadbackMaterials(startup); err != nil {
+		vault.Close()
+		pool.Close()
+		return errors.New("publish startup readback materials")
+	}
 	if err := publisherApplication.Ready(startup); err != nil {
 		vault.Close()
 		pool.Close()
@@ -256,6 +315,24 @@ func RunPublisher(
 		metrics,
 		publisherApplication,
 	)
+	workers := serviceruntime.StartWorkers(lifecycle, func(ctx context.Context) error {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			if _, publishErr := publisherApplication.PublishReadbackMaterials(ctx); publishErr != nil {
+				readiness.Set(false, "readback-publication-failed")
+				metrics.SetReady(false)
+			} else {
+				readiness.Set(true, "ready")
+				metrics.SetReady(true)
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-ticker.C:
+			}
+		}
+	})
 	serveErrors := make(chan error, 2)
 	go func() {
 		if serveErr := grpcRuntime.Serve(grpcListener); serveErr != nil {
@@ -280,6 +357,13 @@ func RunPublisher(
 	metrics.SetReady(false)
 	shutdownErr := serviceruntime.RunShutdown(
 		shutdownBase,
+		serviceruntime.ShutdownOperation{
+			Name: "workers", Timeout: config.ShutdownTimeout,
+			Run: func(ctx context.Context) error {
+				workers.Stop()
+				return workers.Wait(ctx)
+			},
+		},
 		serviceruntime.ShutdownOperation{
 			Name: "grpc-server", Timeout: config.ShutdownTimeout,
 			Run: func(ctx context.Context) error { return stopGRPC(ctx, grpcRuntime) },

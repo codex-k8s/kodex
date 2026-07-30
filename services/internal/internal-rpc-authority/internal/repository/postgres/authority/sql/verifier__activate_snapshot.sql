@@ -7,6 +7,7 @@ WITH accepted_snapshot AS (
         key_set_revision,
         policy_revision,
         signer_generation,
+        readback_attestation_receipt_id,
         served_at
     )
     SELECT
@@ -16,8 +17,15 @@ WITH accepted_snapshot AS (
         @key_set_revision,
         @policy_revision,
         @signer_generation,
+        @attestation_receipt_id,
         clock_timestamp()
     WHERE internal_rpc_authority.runtime_restore_fence_allows_work()
+      AND internal_rpc_authority.validate_snapshot_attestation_receipt(
+          @attestation_receipt_id,
+          @target_workload_id,
+          @source_revision,
+          @source_digest_sha256
+      )
       AND (
           (
               @source_revision = 1
@@ -58,11 +66,21 @@ WITH accepted_snapshot AS (
         key_set_revision = EXCLUDED.key_set_revision,
         policy_revision = EXCLUDED.policy_revision,
         signer_generation = EXCLUDED.signer_generation,
+        readback_attestation_receipt_id =
+            EXCLUDED.readback_attestation_receipt_id,
         served_at = EXCLUDED.served_at
     WHERE internal_rpc_authority.authority_snapshot_watermarks.source_revision <= EXCLUDED.source_revision
       AND internal_rpc_authority.authority_snapshot_watermarks.key_set_revision <= EXCLUDED.key_set_revision
       AND internal_rpc_authority.authority_snapshot_watermarks.policy_revision <= EXCLUDED.policy_revision
       AND internal_rpc_authority.authority_snapshot_watermarks.signer_generation <= EXCLUDED.signer_generation
+      AND (
+          internal_rpc_authority.authority_snapshot_watermarks.readback_attestation_receipt_id
+              IS NULL
+          OR internal_rpc_authority.authority_snapshot_watermarks.readback_attestation_receipt_id =
+              EXCLUDED.readback_attestation_receipt_id
+          OR internal_rpc_authority.authority_snapshot_watermarks.source_revision
+              < EXCLUDED.source_revision
+      )
       AND (
           (
               internal_rpc_authority.authority_snapshot_watermarks.source_revision < EXCLUDED.source_revision
