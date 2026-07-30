@@ -11,11 +11,11 @@ func TestIssuanceVerificationAndReadinessUseDurableRestoreFence(t *testing.T) {
 		t.Fatalf("load queries: %v", err)
 	}
 	for name, query := range map[string]string{
-		"proof reservation":       queries.proofReserve,
-		"context reservation":     queries.contextReserve,
-		"snapshot activation":     queries.verifierActivateSnapshot,
-		"context acceptance":      queries.verifierAcceptContext,
-		"verifier readiness":      queries.verifierReadiness,
+		"proof reservation":   queries.proofReserve,
+		"context reservation": queries.contextReserve,
+		"snapshot activation": queries.verifierActivateSnapshot,
+		"context acceptance":  queries.verifierAcceptContext,
+		"verifier readiness":  queries.verifierReadiness,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if strings.Count(
