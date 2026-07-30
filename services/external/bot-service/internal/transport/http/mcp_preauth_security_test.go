@@ -257,12 +257,14 @@ func TestMCPTransportRejectsForeignBindingAndReplay(t *testing.T) {
 	}
 	waitMCPTransportCounts(t, handler, 0, 0)
 	replay := serveMCPTransportRequest(handler, http.MethodPost, "/mcp/sessions/session-admin", "session-token", sessionID, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
-	assertRejectedMCPBootstrap(t, replay, http.StatusForbidden)
+	assertRejectedMCPBootstrap(t, replay, http.StatusNotFound)
 }
 
-func TestMCPTransportIdleCleanupReleasesAdmissionAndSDKState(t *testing.T) {
+func TestMCPTransportIdleCleanupAllowsFreshInitialization(t *testing.T) {
 	const timeout = 40 * time.Millisecond
-	handler := newMCPHandlerWithOptions(newSessionBarrierServiceOnly(), defaultMCPRequestBodyBytes, mcpHandlerOptions{
+	service, store, _, _ := newSessionBarrierService(0)
+	store.requireGuard = false
+	handler := newMCPHandlerWithOptions(service, defaultMCPRequestBodyBytes, mcpHandlerOptions{
 		MaximumTransportSessions: 1,
 		SessionTimeout:           timeout,
 	})
@@ -283,8 +285,29 @@ func TestMCPTransportIdleCleanupReleasesAdmissionAndSDKState(t *testing.T) {
 
 	waitMCPTransportCounts(t, handler, 0, 0)
 	replay := serveMCPTransportRequest(handler, http.MethodPost, "/mcp/sessions/session-admin", "session-token", sessionID, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
-	assertRejectedMCPBootstrap(t, replay, http.StatusForbidden)
+	assertRejectedMCPBootstrap(t, replay, http.StatusNotFound)
 	_ = session.Close()
+
+	replacement, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
+		Endpoint:   server.URL + "/mcp/sessions/session-admin",
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: "session-token"}},
+	}, nil)
+	if err != nil {
+		t.Fatalf("reinitialize MCP session: %v", err)
+	}
+	if replacement.ID() == "" || replacement.ID() == sessionID {
+		t.Fatalf("replacement session id=%q expired=%q", replacement.ID(), sessionID)
+	}
+	result, err := replacement.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "mattermost_get_thread", Arguments: map[string]any{"limit": 5},
+	})
+	if err != nil || result == nil || result.IsError {
+		t.Fatalf("replacement CallTool() result=%#v error=%v", result, err)
+	}
+	if err := replacement.Close(); err != nil {
+		t.Fatalf("close replacement MCP session: %v", err)
+	}
+	waitMCPTransportCounts(t, handler, 0, 0)
 }
 
 func TestMCPValidClientConnectListToolsAndToolCall(t *testing.T) {
