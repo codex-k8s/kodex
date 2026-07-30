@@ -853,6 +853,7 @@
   {"id": "openai.status.failed", "translation": "matter-codex: OpenAI auth status was not read: {{.Error}}"},
   {"id": "openai.status.session_not_found", "translation": "matter-codex: auth session for `{{.Account}}` was not found. Current status: `{{.Status}}`."},
   {"id": "openai.status.device_code", "translation": "matter-codex OpenAI device-code authorization:\n- account: `{{.Account}}`\n- open: {{.URL}}\n- code: `{{.Code}}`\n- job: `{{.Job}}`\n- pod: `{{.Pod}}`, phase `{{.Phase}}`\n\nAfter confirming in the browser, press account status again to save the auth secret."},
+  {"id": "openai.status.collection_expired", "translation": "matter-codex: the authorization result collection window for OpenAI account `{{.Account}}` has expired (`{{.Job}}`). Start authorization again and confirm it within 24 hours."},
   {"id": "openai.status.waiting", "translation": "matter-codex: device code for `{{.Account}}` is still being prepared.\n- job: `{{.Job}}`\n- pod: `{{.Pod}}`, phase `{{.Phase}}`\nPress account status again in a few seconds."},
   {"id": "openai.status.job_failed", "translation": "matter-codex: auth job for `{{.Account}}` failed or timed out: `{{.Job}}`. Press cleanup auth, then start authorization again."},
   {"id": "openai.status.complete_failed", "translation": "matter-codex: auth secret was not saved: {{.Error}}"},

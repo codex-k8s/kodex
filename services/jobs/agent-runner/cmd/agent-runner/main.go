@@ -46,6 +46,7 @@ const (
 
 const (
 	codexAuthCheckPrompt             = "ping: answer with exactly one word, pong. Do not use tools."
+	codexAuthCollectionWindow        = 24 * time.Hour
 	sessionAPIMaxAttempts            = 30
 	sessionAPIInitialRetryDelay      = time.Second
 	sessionAPIMaxRetryDelay          = 10 * time.Second
@@ -250,8 +251,7 @@ func (r *runner) runCodexAuth(ctx context.Context) error {
 		return err
 	}
 	fmt.Println("matter-codex codex auth ready")
-	time.Sleep(15 * time.Minute)
-	return nil
+	return waitCodexAuthCollection(ctx, codexAuthCollectionWindow)
 }
 
 func (r *runner) runCodexAuthSecretCheck(ctx context.Context) error {
@@ -1286,6 +1286,20 @@ func codexCapacityRetryPrompt(attempt int, maxAttempts int) string {
 }
 
 func waitCodexCapacityRetry(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func waitCodexAuthCollection(ctx context.Context, delay time.Duration) error {
 	if delay <= 0 {
 		return nil
 	}
