@@ -832,6 +832,30 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 
 	attestor := requiredMap(t, deployables, "internal-rpc-authority-readback-attestor")
 	requireEqual(t, attestor, "artifactBinary", "/usr/local/bin/internal-rpc-authority-readback-attestor")
+	attestorDatabaseIdentity := requiredMap(t, attestor, "databaseIdentity")
+	requireEqual(
+		t,
+		attestorDatabaseIdentity,
+		"capabilityRole",
+		"internal_rpc_authority_readback_attestor",
+	)
+	requireEqual(t, attestorDatabaseIdentity, "capabilityRoleLogin", false)
+	attestorVault := requiredMap(t, attestorDatabaseIdentity, "vaultDatabaseCredentials")
+	requireEqual(t, attestorVault, "currentPrincipal", "ira_readback_attestor_g1")
+	requireEqual(t, attestorVault, "nextPrincipal", "ira_readback_attestor_g2")
+	requireEqual(
+		t,
+		attestorVault,
+		"boundServiceAccount",
+		"internal-rpc-authority-readback-attestor",
+	)
+	requireEqual(t, attestorVault, "postgresqlSslMode", "verify-full")
+	requireEqual(
+		t,
+		requiredMap(t, attestorDatabaseIdentity, "runtimeSessionFence"),
+		"retiredOpenSessionPolicy",
+		"FAIL_CLOSED",
+	)
 	attestorInterface := requiredMap(t, attestor, "interface")
 	requireEqual(
 		t,
@@ -982,6 +1006,7 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	})
 	requireStringSliceEqual(t, publisherRights, "execute", []string{
 		"internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)",
+		"internal_rpc_authority.is_active_runtime_database_session(text)",
 	})
 	publisherWrites := stringSet(publisherRights["selectInsertUpdate"].([]any))
 	for _, table := range protectedReadbackTables {
@@ -1017,7 +1042,18 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	requireStringSliceEqual(t, attestorRights, "execute", []string{
 		"internal_rpc_authority.issue_authority_readback_attestation_challenge(uuid,uuid,uuid,text,text,uuid,text,uuid,text)",
 		"internal_rpc_authority.consume_authority_readback_attestation_challenge(uuid,uuid,uuid,text,bigint,uuid,text)",
+		"internal_rpc_authority.is_active_runtime_database_session(text)",
 	})
+	runtimeIdentity := requiredMap(t, store, "runtimeCapabilityDatabaseIdentity")
+	requireEqual(t, runtimeIdentity, "mappingTable", "authority_runtime_database_identities")
+	requireEqual(t, runtimeIdentity, "callerKey", "session_user")
+	requireEqual(t, runtimeIdentity, "retirementFenceAppliesToAlreadyOpenSession", true)
+	requireEqual(
+		t,
+		requiredMap(t, runtimeIdentity, "retiredOpenSession"),
+		"publisherPromotion",
+		"DENIED",
+	)
 
 	for name, raw := range deployables {
 		deployable, ok := raw.(map[string]any)
@@ -1074,6 +1110,42 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	requireEqual(t, publisherDependencyNetwork, "destinationIngressPolicyRequired", true)
 	requireEqual(t, publisherDependencyNetwork, "wildcardDestinationAllowed", false)
 	requireEqual(t, publisherDependencyNetwork, "missingEitherDirectionPolicy", "FAIL_CLOSED")
+	attestorDependencyNetwork := requiredMap(
+		t,
+		network,
+		"attestorDatabaseCredentialNetworkPolicies",
+	)
+	requireEqual(
+		t,
+		attestorDependencyNetwork,
+		"exactSourceServiceAccount",
+		"internal-rpc-authority-readback-attestor",
+	)
+	requireEqual(t, attestorDependencyNetwork, "sourceEgressPolicyRequired", true)
+	requireEqual(t, attestorDependencyNetwork, "destinationIngressPolicyRequired", true)
+	requireEqual(t, attestorDependencyNetwork, "wildcardDestinationAllowed", false)
+	requireEqual(t, attestorDependencyNetwork, "missingEitherDirectionPolicy", "FAIL_CLOSED")
+	configuration := requiredMap(t, spec, "configuration")
+	environmentKeys := requiredMap(t, configuration, "environmentKeys")
+	requireStringSliceEqual(t, environmentKeys, "readbackAttestor", []string{
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_LISTEN_ADDRESS",
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_CERT_FILE",
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_KEY_FILE",
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CLIENT_CA_FILE",
+		"INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_TRUST_FILE",
+		"INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_ROOT_FILE",
+		"INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_ROOT_FINGERPRINT_SHA256",
+		"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE",
+		"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME",
+		"INTERNAL_RPC_AUTHORITY_POSTGRES_CA_FILE",
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_DATABASE_USERNAME_FILE",
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_DATABASE_PASSWORD_FILE",
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_ROLE",
+		"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS",
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_AUTH_FILE",
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_TLS_SERVER_NAME",
+		"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_CA_FILE",
+	})
 	mtls := requiredMap(t, network, "mtlsDownstreamRpc")
 	requireEqual(t, mtls, "exactServerName", "REQUIRED_PER_OPERATION_BINDING")
 	requireEqual(t, mtls, "exactTrustBundleId", "REQUIRED_PER_OPERATION_BINDING")
@@ -1630,7 +1702,9 @@ func TestReadbackAttestationAndCredentialLifecycleAreExecutable(t *testing.T) {
 		"publisher consumer readback function was accepted",
 		"\\connect :verifier_g1_dsn",
 		"\\connect :publisher_dsn",
+		"\\connect :attestor_g2_dsn",
 		"SET LOCAL ROLE internal_rpc_authority_publisher",
+		"SET LOCAL ROLE internal_rpc_authority_readback_attestor",
 	} {
 		if !strings.Contains(behavior, want) {
 			t.Fatalf("PostgreSQL behavior contour does not contain %q", want)
@@ -1651,7 +1725,14 @@ func TestPostgreSQLReadbackBoundaryIsExact(t *testing.T) {
 		"CREATE ROLE internal_rpc_authority_readback_owner",
 		"CREATE ROLE ira_publisher_g1",
 		"CREATE ROLE ira_publisher_g2",
+		"CREATE ROLE ira_readback_attestor_g1",
+		"CREATE ROLE ira_readback_attestor_g2",
 		"GRANT internal_rpc_authority_publisher TO ira_publisher_g1, ira_publisher_g2",
+		"CREATE TABLE internal_rpc_authority.authority_runtime_database_identities",
+		"CREATE FUNCTION internal_rpc_authority.is_active_runtime_database_session(",
+		"session_login = session_user",
+		"publisher runtime database identity rejected",
+		"readback attestor runtime database identity rejected",
 		"NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS",
 		"LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS",
 		"CREATE SCHEMA internal_rpc_authority",
@@ -1711,6 +1792,41 @@ func TestPostgreSQLReadbackBoundaryIsExact(t *testing.T) {
 	); count != 1 {
 		t.Fatalf("unsafe challenge consume function overload count = %d", count)
 	}
+	for _, liveContract := range []struct {
+		path string
+		want []string
+	}{
+		{
+			path: "postgresql-publisher-live-session-retirement.sql",
+			want: []string{
+				"SET ROLE internal_rpc_authority_publisher",
+				"publisher runtime database identity rejected",
+				"retired open publisher session retained evidence read",
+			},
+		},
+		{
+			path: "postgresql-attestor-live-session-retirement.sql",
+			want: []string{
+				"SET ROLE internal_rpc_authority_readback_attestor",
+				"readback attestor runtime database identity rejected",
+				"retired open attestor session retained protected reads",
+			},
+		},
+	} {
+		contract := readFile(t, filepath.Join(
+			root,
+			"contracts/authorization/v1",
+			liveContract.path,
+		))
+		for _, want := range liveContract.want {
+			if !strings.Contains(contract, want) {
+				t.Fatalf("%s does not contain %q", liveContract.path, want)
+			}
+		}
+		if strings.Contains(contract, "SESSION AUTHORIZATION") {
+			t.Fatalf("%s depends on superuser session impersonation", liveContract.path)
+		}
+	}
 }
 
 func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
@@ -1724,41 +1840,45 @@ func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
 			"wildcard-vault-path":     "NON_EXACT_DELIVERY_PATH",
 		},
 		"readback-authority-negative.json": {
-			"cross-target-write":                              "DATABASE_IDENTITY_MISMATCH",
-			"opposite-role-write":                             "DATABASE_ROLE_MISMATCH",
-			"caller-supplied-workload":                        "CALLER_IDENTITY_FIELD_FORBIDDEN",
-			"stale-credential-generation":                     "DATABASE_CREDENTIAL_GENERATION_REJECTED",
-			"shared-group-login":                              "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
-			"direct-key-delivery-table-write":                 "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"direct-snapshot-table-write":                     "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"publisher-direct-key-delivery-write":             "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"publisher-direct-snapshot-write":                 "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"publisher-key-delivery-function-execute":         "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
-			"publisher-snapshot-function-execute":             "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
-			"caller-supplied-revision-digest-generation":      "CALLER_STATE_FIELD_FORBIDDEN",
-			"arbitrary-proof-hash":                            "ATTESTATION_RECEIPT_REQUIRED",
-			"stale-pinned-intent":                             "PINNED_INTENT_REJECTED",
-			"opposite-role-attestation":                       "ATTESTATION_ROLE_BINDING_REJECTED",
-			"missing-served-state":                            "SERVED_STATE_ATTESTATION_REJECTED",
-			"reused-attestation-receipt":                      "ATTESTATION_RECEIPT_REPLAY",
-			"concurrent-promotion":                            "SERIALIZATION_RETRY",
-			"missing-server-challenge":                        "READBACK_CHALLENGE_REJECTED",
-			"attestor-direct-challenge-write":                 "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"attestor-direct-receipt-write":                   "DIRECT_READBACK_WRITE_FORBIDDEN",
-			"expired-server-challenge":                        "READBACK_CHALLENGE_REJECTED",
-			"replayed-server-challenge":                       "READBACK_CHALLENGE_REPLAY_DETECTED",
-			"lost-response-exact-retry":                       "RETURN_PERSISTED_RECEIPT",
-			"restore-credential-at-readback-attestor":         "READBACK_CREDENTIAL_REJECTED",
-			"readback-credential-at-restore-controller":       "RESTORE_ROLE_CREDENTIAL_REJECTED",
-			"multi-audience-readback-credential":              "READBACK_CREDENTIAL_REJECTED",
-			"restore-ack-key-for-normal-readback":             "ATTESTATION_ROLE_BINDING_REJECTED",
-			"missing-readback-network-policy":                 "READBACK_CHALLENGE_UNAVAILABLE",
-			"co-delivered-readback-manifest-signer":           "READBACK_CREDENTIAL_REJECTED",
-			"readback-manifest-root-fingerprint-mismatch":     "READBACK_CREDENTIAL_REJECTED",
-			"readback-manifest-bundle-same-revision-mutation": "SNAPSHOT_MUTATION",
-			"readback-manifest-bundle-rollback-or-gap":        "SNAPSHOT_ROLLBACK",
-			"readback-manifest-root-expired":                  "READBACK_CREDENTIAL_REJECTED",
-			"restore-trust-as-readback-manifest-root":         "READBACK_CREDENTIAL_REJECTED",
+			"cross-target-write":                                  "DATABASE_IDENTITY_MISMATCH",
+			"opposite-role-write":                                 "DATABASE_ROLE_MISMATCH",
+			"caller-supplied-workload":                            "CALLER_IDENTITY_FIELD_FORBIDDEN",
+			"stale-credential-generation":                         "DATABASE_CREDENTIAL_GENERATION_REJECTED",
+			"shared-group-login":                                  "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
+			"direct-key-delivery-table-write":                     "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"direct-snapshot-table-write":                         "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"publisher-direct-key-delivery-write":                 "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"publisher-direct-snapshot-write":                     "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"publisher-key-delivery-function-execute":             "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
+			"publisher-snapshot-function-execute":                 "DATABASE_FUNCTION_EXECUTE_FORBIDDEN",
+			"caller-supplied-revision-digest-generation":          "CALLER_STATE_FIELD_FORBIDDEN",
+			"arbitrary-proof-hash":                                "ATTESTATION_RECEIPT_REQUIRED",
+			"stale-pinned-intent":                                 "PINNED_INTENT_REJECTED",
+			"opposite-role-attestation":                           "ATTESTATION_ROLE_BINDING_REJECTED",
+			"missing-served-state":                                "SERVED_STATE_ATTESTATION_REJECTED",
+			"reused-attestation-receipt":                          "ATTESTATION_RECEIPT_REPLAY",
+			"concurrent-promotion":                                "SERIALIZATION_RETRY",
+			"missing-server-challenge":                            "READBACK_CHALLENGE_REJECTED",
+			"attestor-direct-challenge-write":                     "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"attestor-direct-receipt-write":                       "DIRECT_READBACK_WRITE_FORBIDDEN",
+			"expired-server-challenge":                            "READBACK_CHALLENGE_REJECTED",
+			"replayed-server-challenge":                           "READBACK_CHALLENGE_REPLAY_DETECTED",
+			"lost-response-exact-retry":                           "RETURN_PERSISTED_RECEIPT",
+			"restore-credential-at-readback-attestor":             "READBACK_CREDENTIAL_REJECTED",
+			"readback-credential-at-restore-controller":           "RESTORE_ROLE_CREDENTIAL_REJECTED",
+			"multi-audience-readback-credential":                  "READBACK_CREDENTIAL_REJECTED",
+			"restore-ack-key-for-normal-readback":                 "ATTESTATION_ROLE_BINDING_REJECTED",
+			"missing-readback-network-policy":                     "READBACK_CHALLENGE_UNAVAILABLE",
+			"co-delivered-readback-manifest-signer":               "READBACK_CREDENTIAL_REJECTED",
+			"readback-manifest-root-fingerprint-mismatch":         "READBACK_CREDENTIAL_REJECTED",
+			"readback-manifest-bundle-same-revision-mutation":     "SNAPSHOT_MUTATION",
+			"readback-manifest-bundle-rollback-or-gap":            "SNAPSHOT_ROLLBACK",
+			"readback-manifest-root-expired":                      "READBACK_CREDENTIAL_REJECTED",
+			"restore-trust-as-readback-manifest-root":             "READBACK_CREDENTIAL_REJECTED",
+			"missing-attestor-database-credential-delivery":       "DATABASE_LOGIN_PRINCIPAL_REQUIRED",
+			"missing-attestor-vault-or-postgresql-network-policy": "READBACK_CHALLENGE_UNAVAILABLE",
+			"retired-open-attestor-database-session":              "DATABASE_CREDENTIAL_GENERATION_REJECTED",
+			"retired-open-publisher-database-session":             "DATABASE_CREDENTIAL_GENERATION_REJECTED",
 		},
 		"restore-negative.json": {
 			"lower-anchor-revision":        "RESTORE_ANCHOR_REJECTED",

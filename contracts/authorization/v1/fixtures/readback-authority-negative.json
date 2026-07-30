@@ -175,6 +175,26 @@
       "name": "restore-trust-as-readback-manifest-root",
       "mutation": "attestor uses restore role trust or the removed role_credential_trust readiness fields for normal readback",
       "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "missing-attestor-database-credential-delivery",
+      "mutation": "attestor replica starts without the exact Vault Kubernetes auth role, username or password file for its CURRENT database generation",
+      "reason": "DATABASE_LOGIN_PRINCIPAL_REQUIRED"
+    },
+    {
+      "name": "missing-attestor-vault-or-postgresql-network-policy",
+      "mutation": "attestor ServiceAccount lacks exact source egress or destination ingress for Vault 8200 or PostgreSQL 5432",
+      "reason": "READBACK_CHALLENGE_UNAVAILABLE"
+    },
+    {
+      "name": "retired-open-attestor-database-session",
+      "mutation": "already authenticated retired attestor generation attempts challenge issue, consume or protected RLS read",
+      "reason": "DATABASE_CREDENTIAL_GENERATION_REJECTED"
+    },
+    {
+      "name": "retired-open-publisher-database-session",
+      "mutation": "already authenticated retired publisher generation attempts promotion or evidence RLS read",
+      "reason": "DATABASE_CREDENTIAL_GENERATION_REJECTED"
     }
   ]
 }

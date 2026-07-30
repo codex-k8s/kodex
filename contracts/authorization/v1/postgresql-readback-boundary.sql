@@ -12,6 +12,8 @@ CREATE ROLE ira_publisher_g2
   LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 CREATE ROLE ira_readback_attestor_g1
   LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+CREATE ROLE ira_readback_attestor_g2
+  LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 CREATE ROLE ira_control_api_gateway_issuer_g1
   LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 CREATE ROLE ira_control_api_gateway_issuer_g2
@@ -26,7 +28,8 @@ CREATE ROLE ira_control_plane_resolver_g2
   LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 
 GRANT internal_rpc_authority_publisher TO ira_publisher_g1, ira_publisher_g2;
-GRANT internal_rpc_authority_readback_attestor TO ira_readback_attestor_g1;
+GRANT internal_rpc_authority_readback_attestor
+  TO ira_readback_attestor_g1, ira_readback_attestor_g2;
 
 CREATE SCHEMA internal_rpc_authority
   AUTHORIZATION internal_rpc_authority_readback_owner;
@@ -37,6 +40,7 @@ GRANT USAGE ON SCHEMA internal_rpc_authority TO
   ira_publisher_g1,
   ira_publisher_g2,
   ira_readback_attestor_g1,
+  ira_readback_attestor_g2,
   ira_control_api_gateway_issuer_g1,
   ira_control_api_gateway_issuer_g2,
   ira_control_plane_verifier_g1,
@@ -84,6 +88,45 @@ CREATE UNIQUE INDEX authority_identity_one_next
 CREATE UNIQUE INDEX authority_identity_one_previous
   ON internal_rpc_authority.authority_workload_database_identities
     (workload_id, role, workload_generation)
+  WHERE credential_status = 'PREVIOUS';
+
+CREATE TABLE internal_rpc_authority.authority_runtime_database_identities (
+  session_login name PRIMARY KEY,
+  capability_role text NOT NULL CHECK (capability_role IN (
+    'PUBLISHER',
+    'READBACK_ATTESTOR'
+  )),
+  credential_generation bigint NOT NULL CHECK (credential_generation > 0),
+  credential_status text NOT NULL CHECK (credential_status IN (
+    'CURRENT',
+    'NEXT',
+    'PREVIOUS',
+    'RETIRED'
+  )),
+  overlap_not_after timestamptz,
+  retired_at timestamptz,
+  CHECK (
+    (credential_status = 'PREVIOUS' AND overlap_not_after IS NOT NULL
+      AND retired_at IS NULL)
+    OR (credential_status IN ('CURRENT', 'NEXT')
+      AND overlap_not_after IS NULL AND retired_at IS NULL)
+    OR (credential_status = 'RETIRED' AND retired_at IS NOT NULL)
+  ),
+  UNIQUE (capability_role, credential_generation)
+);
+ALTER TABLE internal_rpc_authority.authority_runtime_database_identities
+  OWNER TO internal_rpc_authority_readback_owner;
+CREATE UNIQUE INDEX authority_runtime_identity_one_current
+  ON internal_rpc_authority.authority_runtime_database_identities
+    (capability_role)
+  WHERE credential_status = 'CURRENT';
+CREATE UNIQUE INDEX authority_runtime_identity_one_next
+  ON internal_rpc_authority.authority_runtime_database_identities
+    (capability_role)
+  WHERE credential_status = 'NEXT';
+CREATE UNIQUE INDEX authority_runtime_identity_one_previous
+  ON internal_rpc_authority.authority_runtime_database_identities
+    (capability_role)
   WHERE credential_status = 'PREVIOUS';
 
 CREATE TABLE internal_rpc_authority.authority_readback_intents (
@@ -319,6 +362,28 @@ ALTER TABLE internal_rpc_authority.authority_snapshot_readbacks
 ALTER TABLE internal_rpc_authority.authority_snapshot_readbacks
   FORCE ROW LEVEL SECURITY;
 
+CREATE FUNCTION internal_rpc_authority.is_active_runtime_database_session(
+  p_capability_role text
+) RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = pg_catalog, internal_rpc_authority, pg_temp
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+      FROM internal_rpc_authority.authority_runtime_database_identities
+     WHERE session_login = session_user
+       AND capability_role = p_capability_role
+       AND (
+         credential_status IN ('CURRENT', 'NEXT')
+         OR (
+           credential_status = 'PREVIOUS'
+           AND overlap_not_after >= pg_catalog.clock_timestamp()
+         )
+       )
+  )
+$function$;
+
 CREATE POLICY readback_owner_intents
   ON internal_rpc_authority.authority_readback_intents
   FOR ALL TO internal_rpc_authority_readback_owner
@@ -341,22 +406,49 @@ CREATE POLICY readback_owner_snapshot
   USING (true) WITH CHECK (true);
 CREATE POLICY readback_attestor_insert_intent
   ON internal_rpc_authority.authority_readback_intents
-  FOR INSERT TO ira_readback_attestor_g1 WITH CHECK (intent_status = 'PINNED');
+  FOR INSERT TO internal_rpc_authority_readback_attestor
+  WITH CHECK (
+    intent_status = 'PINNED'
+    AND internal_rpc_authority.is_active_runtime_database_session(
+      'READBACK_ATTESTOR'
+    )
+  );
 CREATE POLICY readback_attestor_select_intent
   ON internal_rpc_authority.authority_readback_intents
-  FOR SELECT TO ira_readback_attestor_g1 USING (true);
+  FOR SELECT TO internal_rpc_authority_readback_attestor
+  USING (
+    internal_rpc_authority.is_active_runtime_database_session(
+      'READBACK_ATTESTOR'
+    )
+  );
 CREATE POLICY readback_attestor_select_challenge
   ON internal_rpc_authority.authority_readback_attestation_challenges
-  FOR SELECT TO ira_readback_attestor_g1 USING (true);
+  FOR SELECT TO internal_rpc_authority_readback_attestor
+  USING (
+    internal_rpc_authority.is_active_runtime_database_session(
+      'READBACK_ATTESTOR'
+    )
+  );
 CREATE POLICY readback_attestor_select_receipt
   ON internal_rpc_authority.authority_readback_attestation_receipts
-  FOR SELECT TO ira_readback_attestor_g1 USING (true);
+  FOR SELECT TO internal_rpc_authority_readback_attestor
+  USING (
+    internal_rpc_authority.is_active_runtime_database_session(
+      'READBACK_ATTESTOR'
+    )
+  );
 CREATE POLICY key_delivery_publisher_read
   ON internal_rpc_authority.authority_key_delivery_readbacks
-  FOR SELECT TO internal_rpc_authority_publisher USING (true);
+  FOR SELECT TO internal_rpc_authority_publisher
+  USING (
+    internal_rpc_authority.is_active_runtime_database_session('PUBLISHER')
+  );
 CREATE POLICY snapshot_publisher_read
   ON internal_rpc_authority.authority_snapshot_readbacks
-  FOR SELECT TO internal_rpc_authority_publisher USING (true);
+  FOR SELECT TO internal_rpc_authority_publisher
+  USING (
+    internal_rpc_authority.is_active_runtime_database_session('PUBLISHER')
+  );
 
 -- Параметры challenge_id/JTI/nonce/digest создаёт серверный
 -- AuthorityReadbackAttestorService после проверки mTLS и credential; клиентский
@@ -382,6 +474,12 @@ DECLARE
   saved internal_rpc_authority.authority_readback_attestation_challenges%ROWTYPE;
   issued_at timestamptz;
 BEGIN
+  IF NOT internal_rpc_authority.is_active_runtime_database_session(
+    'READBACK_ATTESTOR'
+  ) THEN
+    RAISE EXCEPTION 'readback attestor runtime database identity rejected';
+  END IF;
+
   SELECT * INTO saved
     FROM internal_rpc_authority.authority_readback_attestation_challenges
    WHERE idempotency_key = p_idempotency_key
@@ -571,6 +669,12 @@ DECLARE
   saved internal_rpc_authority.authority_readback_attestation_receipts%ROWTYPE;
   verified_at timestamptz;
 BEGIN
+  IF NOT internal_rpc_authority.is_active_runtime_database_session(
+    'READBACK_ATTESTOR'
+  ) THEN
+    RAISE EXCEPTION 'readback attestor runtime database identity rejected';
+  END IF;
+
   SELECT * INTO saved
     FROM internal_rpc_authority.authority_readback_attestation_receipts
    WHERE idempotency_key = p_idempotency_key
@@ -837,6 +941,11 @@ BEGIN
   IF pg_catalog.current_setting('transaction_isolation') <> 'serializable' THEN
     RAISE EXCEPTION 'credential promotion requires serializable transaction';
   END IF;
+  IF NOT internal_rpc_authority.is_active_runtime_database_session(
+    'PUBLISHER'
+  ) THEN
+    RAISE EXCEPTION 'publisher runtime database identity rejected';
+  END IF;
 
   UPDATE internal_rpc_authority.authority_workload_database_identities
      SET credential_status = 'RETIRED',
@@ -921,6 +1030,8 @@ $function$;
 
 ALTER FUNCTION internal_rpc_authority.record_authority_key_delivery_readback(uuid)
   OWNER TO internal_rpc_authority_readback_owner;
+ALTER FUNCTION internal_rpc_authority.is_active_runtime_database_session(text)
+  OWNER TO internal_rpc_authority_readback_owner;
 ALTER FUNCTION internal_rpc_authority.enforce_readback_challenge_consumption()
   OWNER TO internal_rpc_authority_readback_owner;
 ALTER FUNCTION internal_rpc_authority.issue_authority_readback_attestation_challenge(
@@ -934,6 +1045,9 @@ ALTER FUNCTION internal_rpc_authority.record_authority_snapshot_readback(uuid)
 ALTER FUNCTION internal_rpc_authority.promote_authority_workload_database_identity(
   text, text, bigint, bigint, uuid, uuid
 ) OWNER TO internal_rpc_authority_readback_owner;
+REVOKE ALL ON FUNCTION
+  internal_rpc_authority.is_active_runtime_database_session(text)
+  FROM PUBLIC;
 REVOKE ALL ON FUNCTION
   internal_rpc_authority.enforce_readback_challenge_consumption()
   FROM PUBLIC;
@@ -956,13 +1070,17 @@ REVOKE ALL ON FUNCTION
     text, text, bigint, bigint, uuid, uuid
   ) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION
+  internal_rpc_authority.is_active_runtime_database_session(text)
+  TO internal_rpc_authority_publisher,
+    internal_rpc_authority_readback_attestor;
+GRANT EXECUTE ON FUNCTION
   internal_rpc_authority.issue_authority_readback_attestation_challenge(
     uuid, uuid, uuid, text, text, uuid, text, uuid, text
-  ) TO ira_readback_attestor_g1;
+  ) TO internal_rpc_authority_readback_attestor;
 GRANT EXECUTE ON FUNCTION
   internal_rpc_authority.consume_authority_readback_attestation_challenge(
     uuid, uuid, uuid, text, bigint, uuid, text
-  ) TO ira_readback_attestor_g1;
+  ) TO internal_rpc_authority_readback_attestor;
 GRANT EXECUTE ON FUNCTION
   internal_rpc_authority.record_authority_key_delivery_readback(uuid)
   TO
@@ -987,6 +1105,15 @@ GRANT EXECUTE ON FUNCTION
   ) TO internal_rpc_authority_publisher;
 
 REVOKE ALL ON
+  internal_rpc_authority.authority_runtime_database_identities
+FROM PUBLIC,
+  internal_rpc_authority_publisher,
+  internal_rpc_authority_readback_attestor,
+  ira_publisher_g1,
+  ira_publisher_g2,
+  ira_readback_attestor_g1,
+  ira_readback_attestor_g2;
+REVOKE ALL ON
   internal_rpc_authority.authority_readback_intents,
   internal_rpc_authority.authority_readback_attestation_challenges,
   internal_rpc_authority.authority_readback_attestation_receipts,
@@ -1005,10 +1132,10 @@ GRANT SELECT ON
 TO internal_rpc_authority_publisher;
 GRANT SELECT, INSERT ON
   internal_rpc_authority.authority_readback_intents
-TO ira_readback_attestor_g1;
+TO internal_rpc_authority_readback_attestor;
 GRANT SELECT ON
   internal_rpc_authority.authority_readback_attestation_challenges,
   internal_rpc_authority.authority_readback_attestation_receipts
-TO ira_readback_attestor_g1;
+TO internal_rpc_authority_readback_attestor;
 
 COMMIT;

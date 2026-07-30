@@ -10,6 +10,7 @@ if [[ -z "$dsn" ]]; then
 fi
 for role_dsn_name in \
   INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_DSN \
+  INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_G2_DSN \
   INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_DSN \
   INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G1_DSN \
   INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G2_DSN
@@ -30,6 +31,7 @@ psql "$dsn" -X -q -v ON_ERROR_STOP=1 \
   -f "$repo_root/contracts/authorization/v1/postgresql-readback-boundary.sql"
 for role_check in \
   "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_DSN:ira_readback_attestor_g1" \
+  "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_G2_DSN:ira_readback_attestor_g2" \
   "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_DSN:ira_publisher_g1" \
   "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G1_DSN:ira_control_plane_verifier_g1" \
   "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G2_DSN:ira_control_plane_verifier_g2"
@@ -49,3 +51,128 @@ psql "$dsn" -X -q -v ON_ERROR_STOP=1 \
   -f "$repo_root/contracts/authorization/v1/postgresql-readback-assertions.sql"
 psql "$dsn" -X -q -v ON_ERROR_STOP=1 \
   -f "$repo_root/contracts/authorization/v1/postgresql-readback-behavior.sql"
+
+publisher_log="$(mktemp)"
+attestor_log="$(mktemp)"
+publisher_pid=""
+attestor_pid=""
+cleanup() {
+  if [[ -n "$publisher_pid" ]] && kill -0 "$publisher_pid" 2>/dev/null; then
+    kill "$publisher_pid" 2>/dev/null || true
+    wait "$publisher_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$attestor_pid" ]] && kill -0 "$attestor_pid" 2>/dev/null; then
+    kill "$attestor_pid" 2>/dev/null || true
+    wait "$attestor_pid" 2>/dev/null || true
+  fi
+  rm -f "$publisher_log" "$attestor_log"
+}
+trap cleanup EXIT
+
+psql "$INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_DSN" \
+  -X -q -v ON_ERROR_STOP=1 \
+  -f "$repo_root/contracts/authorization/v1/postgresql-publisher-live-session-retirement.sql" \
+  >"$publisher_log" 2>&1 &
+publisher_pid="$!"
+
+lock_ready="false"
+for _ in $(seq 1 50); do
+  lock_ready="$(
+    psql "$dsn" -X -Atq -v ON_ERROR_STOP=1 -c \
+      "select exists (
+         select 1
+           from pg_catalog.pg_locks
+          where locktype = 'advisory'
+            and objid = 186200
+            and granted
+       )"
+  )"
+  if [[ "$lock_ready" == "t" ]]; then
+    break
+  fi
+  sleep 0.1
+done
+if [[ "$lock_ready" != "t" ]]; then
+  echo "publisher live session did not reach retirement barrier" >&2
+  exit 1
+fi
+
+psql "$dsn" -X -q -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+DO $assertion$
+BEGIN
+  UPDATE internal_rpc_authority.authority_runtime_database_identities
+     SET credential_status = 'RETIRED',
+         retired_at = pg_catalog.clock_timestamp()
+   WHERE session_login = 'ira_publisher_g1'
+     AND capability_role = 'PUBLISHER'
+     AND credential_status = 'CURRENT';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'publisher runtime retirement state transition failed';
+  END IF;
+END
+$assertion$;
+ALTER ROLE ira_publisher_g1 NOLOGIN;
+COMMIT;
+SQL
+
+if ! wait "$publisher_pid"; then
+  cat "$publisher_log" >&2
+  publisher_pid=""
+  exit 1
+fi
+publisher_pid=""
+
+psql "$INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_DSN" \
+  -X -q -v ON_ERROR_STOP=1 \
+  -f "$repo_root/contracts/authorization/v1/postgresql-attestor-live-session-retirement.sql" \
+  >"$attestor_log" 2>&1 &
+attestor_pid="$!"
+
+lock_ready="false"
+for _ in $(seq 1 50); do
+  lock_ready="$(
+    psql "$dsn" -X -Atq -v ON_ERROR_STOP=1 -c \
+      "select exists (
+         select 1
+           from pg_catalog.pg_locks
+          where locktype = 'advisory'
+            and objid = 186201
+            and granted
+       )"
+  )"
+  if [[ "$lock_ready" == "t" ]]; then
+    break
+  fi
+  sleep 0.1
+done
+if [[ "$lock_ready" != "t" ]]; then
+  echo "attestor live session did not reach retirement barrier" >&2
+  exit 1
+fi
+
+psql "$dsn" -X -q -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+DO $assertion$
+BEGIN
+  UPDATE internal_rpc_authority.authority_runtime_database_identities
+     SET credential_status = 'RETIRED',
+         retired_at = pg_catalog.clock_timestamp()
+   WHERE session_login = 'ira_readback_attestor_g1'
+     AND capability_role = 'READBACK_ATTESTOR'
+     AND credential_status = 'CURRENT';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'attestor runtime retirement state transition failed';
+  END IF;
+END
+$assertion$;
+ALTER ROLE ira_readback_attestor_g1 NOLOGIN;
+COMMIT;
+SQL
+
+if ! wait "$attestor_pid"; then
+  cat "$attestor_log" >&2
+  attestor_pid=""
+  exit 1
+fi
+attestor_pid=""

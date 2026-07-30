@@ -1,9 +1,21 @@
 \set ON_ERROR_STOP on
 \getenv admin_dsn INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_DSN
 \getenv attestor_dsn INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_DSN
+\getenv attestor_g2_dsn INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_G2_DSN
 \getenv publisher_dsn INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_DSN
 \getenv verifier_g1_dsn INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G1_DSN
 \getenv verifier_g2_dsn INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G2_DSN
+
+INSERT INTO internal_rpc_authority.authority_runtime_database_identities (
+  session_login,
+  capability_role,
+  credential_generation,
+  credential_status
+) VALUES
+  ('ira_publisher_g1', 'PUBLISHER', 1, 'CURRENT'),
+  ('ira_publisher_g2', 'PUBLISHER', 2, 'NEXT'),
+  ('ira_readback_attestor_g1', 'READBACK_ATTESTOR', 1, 'CURRENT'),
+  ('ira_readback_attestor_g2', 'READBACK_ATTESTOR', 2, 'NEXT');
 
 INSERT INTO internal_rpc_authority.authority_workload_database_identities (
   session_login,
@@ -165,6 +177,8 @@ INSERT INTO internal_rpc_authority.authority_readback_intents (
   );
 
 \connect :attestor_dsn
+BEGIN;
+SET LOCAL ROLE internal_rpc_authority_readback_attestor;
 DO $expected_rejection$
 BEGIN
   BEGIN
@@ -287,6 +301,32 @@ SELECT internal_rpc_authority.consume_authority_readback_attestation_challenge(
   '54000000-0000-4000-8000-000000000001',
   repeat('d', 64)
 );
+COMMIT;
+
+\connect :attestor_g2_dsn
+BEGIN;
+SET LOCAL ROLE internal_rpc_authority_readback_attestor;
+SELECT internal_rpc_authority.issue_authority_readback_attestation_challenge(
+  '84000000-0000-4000-8000-000000000001',
+  '6d000000-0000-4000-8000-000000000001',
+  '6e000000-0000-4000-8000-000000000001',
+  'FFFFFFFFFFFFFFFFFFFFFF',
+  repeat('f', 64),
+  '74000000-0000-4000-8000-000000000001',
+  repeat('0', 64),
+  '6f000000-0000-4000-8000-000000000001',
+  repeat('5', 64)
+);
+SELECT internal_rpc_authority.consume_authority_readback_attestation_challenge(
+  '6d000000-0000-4000-8000-000000000001',
+  '95000000-0000-4000-8000-000000000001',
+  'a5000000-0000-4000-8000-000000000001',
+  repeat('1', 64),
+  2,
+  '55000000-0000-4000-8000-000000000001',
+  repeat('e', 64)
+);
+COMMIT;
 
 \connect :verifier_g1_dsn
 SELECT internal_rpc_authority.record_authority_key_delivery_readback(

@@ -45,12 +45,37 @@ BEGIN
       RAISE EXCEPTION 'publisher login membership is not exact';
     END IF;
   END LOOP;
+  FOREACH role_name IN ARRAY ARRAY[
+    'ira_readback_attestor_g1',
+    'ira_readback_attestor_g2'
+  ]
+  LOOP
+    SELECT * INTO STRICT owner_row
+      FROM pg_catalog.pg_roles
+     WHERE rolname = role_name;
+    IF NOT owner_row.rolcanlogin OR owner_row.rolsuper
+       OR owner_row.rolbypassrls OR owner_row.rolcreatedb
+       OR owner_row.rolcreaterole OR owner_row.rolinherit THEN
+      RAISE EXCEPTION 'attestor login principal privileges are not minimal';
+    END IF;
+    IF NOT pg_catalog.pg_has_role(
+      role_name,
+      'internal_rpc_authority_readback_attestor',
+      'MEMBER'
+    ) OR pg_catalog.pg_has_role(
+      role_name,
+      'internal_rpc_authority_readback_owner',
+      'MEMBER'
+    ) THEN
+      RAISE EXCEPTION 'attestor login membership is not exact';
+    END IF;
+  END LOOP;
   IF pg_catalog.has_schema_privilege(
     'internal_rpc_authority_publisher',
     'internal_rpc_authority',
     'CREATE'
   ) OR pg_catalog.has_schema_privilege(
-    'ira_readback_attestor_g1',
+    'internal_rpc_authority_readback_attestor',
     'internal_rpc_authority',
     'CREATE'
   ) THEN
@@ -61,7 +86,7 @@ BEGIN
     'internal_rpc_authority_readback_owner',
     'MEMBER'
   ) OR pg_catalog.pg_has_role(
-    'ira_readback_attestor_g1',
+    'internal_rpc_authority_readback_attestor',
     'internal_rpc_authority_readback_owner',
     'MEMBER'
   ) OR pg_catalog.pg_has_role(
@@ -110,6 +135,38 @@ BEGIN
      AND indexdef LIKE '%credential_status%';
   IF lifecycle_index_count <> 3 THEN
     RAISE EXCEPTION 'bounded CURRENT NEXT PREVIOUS indexes are missing';
+  END IF;
+  SELECT count(*) INTO lifecycle_index_count
+    FROM pg_catalog.pg_indexes
+   WHERE schemaname = 'internal_rpc_authority'
+     AND indexname IN (
+       'authority_runtime_identity_one_current',
+       'authority_runtime_identity_one_next',
+       'authority_runtime_identity_one_previous'
+     )
+     AND indexdef LIKE '%UNIQUE INDEX%'
+     AND indexdef LIKE '%credential_status%';
+  IF lifecycle_index_count <> 3 THEN
+    RAISE EXCEPTION 'runtime identity lifecycle indexes are missing';
+  END IF;
+
+  SELECT count(*) INTO function_count
+    FROM pg_catalog.pg_proc AS function
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = function.pronamespace
+   WHERE namespace.nspname = 'internal_rpc_authority'
+     AND function.proname = 'is_active_runtime_database_session'
+     AND function.prosecdef
+     AND pg_catalog.pg_get_userbyid(function.proowner) =
+       'internal_rpc_authority_readback_owner'
+     AND function.proconfig @> ARRAY[
+       'search_path=pg_catalog, internal_rpc_authority, pg_temp'
+     ]
+     AND pg_catalog.pg_get_function_result(function.oid) = 'boolean'
+     AND pg_catalog.pg_get_function_identity_arguments(function.oid) =
+       'p_capability_role text';
+  IF function_count <> 1 THEN
+    RAISE EXCEPTION 'runtime identity function signature or boundary mismatch';
   END IF;
 
   SELECT count(*) INTO function_count
@@ -236,19 +293,19 @@ BEGIN
     RAISE EXCEPTION 'publisher can execute consumer readback function';
   END IF;
   IF NOT pg_catalog.has_function_privilege(
-    'ira_readback_attestor_g1',
+    'internal_rpc_authority_readback_attestor',
     'internal_rpc_authority.issue_authority_readback_attestation_challenge(uuid,uuid,uuid,text,text,uuid,text,uuid,text)',
     'EXECUTE'
   ) OR NOT pg_catalog.has_function_privilege(
-    'ira_readback_attestor_g1',
+    'internal_rpc_authority_readback_attestor',
     'internal_rpc_authority.consume_authority_readback_attestation_challenge(uuid,uuid,uuid,text,bigint,uuid,text)',
     'EXECUTE'
   ) OR pg_catalog.has_table_privilege(
-    'ira_readback_attestor_g1',
+    'internal_rpc_authority_readback_attestor',
     'internal_rpc_authority.authority_readback_attestation_challenges',
     'INSERT,UPDATE'
   ) OR pg_catalog.has_table_privilege(
-    'ira_readback_attestor_g1',
+    'internal_rpc_authority_readback_attestor',
     'internal_rpc_authority.authority_readback_attestation_receipts',
     'INSERT,UPDATE'
   ) THEN
@@ -279,6 +336,43 @@ BEGIN
     'SELECT'
   ) THEN
     RAISE EXCEPTION 'publisher cannot read promotion evidence';
+  END IF;
+  IF pg_catalog.has_table_privilege(
+    'internal_rpc_authority_publisher',
+    'internal_rpc_authority.authority_runtime_database_identities',
+    'SELECT,INSERT,UPDATE,DELETE'
+  ) OR pg_catalog.has_table_privilege(
+    'internal_rpc_authority_readback_attestor',
+    'internal_rpc_authority.authority_runtime_database_identities',
+    'SELECT,INSERT,UPDATE,DELETE'
+  ) THEN
+    RAISE EXCEPTION 'runtime role can mutate its server-side lifecycle fence';
+  END IF;
+  IF NOT pg_catalog.has_function_privilege(
+    'internal_rpc_authority_publisher',
+    'internal_rpc_authority.is_active_runtime_database_session(text)',
+    'EXECUTE'
+  ) OR NOT pg_catalog.has_function_privilege(
+    'internal_rpc_authority_readback_attestor',
+    'internal_rpc_authority.is_active_runtime_database_session(text)',
+    'EXECUTE'
+  ) OR EXISTS (
+    SELECT 1
+      FROM pg_catalog.pg_proc AS function
+      JOIN pg_catalog.pg_namespace AS namespace
+        ON namespace.oid = function.pronamespace
+      CROSS JOIN LATERAL pg_catalog.aclexplode(
+        COALESCE(
+          function.proacl,
+          pg_catalog.acldefault('f', function.proowner)
+        )
+      ) AS privilege
+     WHERE namespace.nspname = 'internal_rpc_authority'
+       AND function.proname = 'is_active_runtime_database_session'
+       AND privilege.grantee = 0
+       AND privilege.privilege_type = 'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'runtime session fence execute boundary is not exact';
   END IF;
 END
 $assertion$;

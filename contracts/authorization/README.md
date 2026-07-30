@@ -69,6 +69,8 @@ authorization context; синтаксически корректный tuple и�
 | `contracts/authorization/v1/readback-attestation.schema.json` | role-bound challenge evidence фактически обслуживаемого pinned state |
 | `contracts/authorization/v1/postgresql-readback-boundary.sql` | исполняемый exact PostgreSQL privilege/RLS/function contract |
 | `contracts/authorization/v1/postgresql-readback-behavior.sql` | исполняемый CURRENT+NEXT/readback/promotion/retired contour |
+| `contracts/authorization/v1/postgresql-publisher-live-session-retirement.sql` | отказ promotion/evidence read для уже открытой retired publisher session |
+| `contracts/authorization/v1/postgresql-attestor-live-session-retirement.sql` | отказ challenge/read для уже открытой retired attestor session |
 | `contracts/authorization/v1/key-delivery-targets.schema.json` | exact `(workload,role)` key/trust/database-identity fan-out |
 | `contracts/authorization/v1/authorization-error-matrix.json` | полная reason/code/stage/retryable/message matrix |
 | `contracts/authorization/v1/bootstrap-deny-all-policy.json` | безопасное начальное состояние без business bindings |
@@ -952,6 +954,31 @@ wildcard destination. Readiness реальным
 non-superuser session проверяет exact `session_user`, `SET ROLE`, только
 promotion/SELECT и отказ direct consumer evidence writes.
 
+Readback attestor использует симметричную runtime boundary: shared
+`internal_rpc_authority_readback_attestor` остаётся `NOLOGIN`, а
+`ira_readback_attestor_g1` (`CURRENT`) и `ira_readback_attestor_g2` (`NEXT`)
+имеют только минимальные login attributes и membership capability role.
+Контроллер database credentials владеет двумя Vault PostgreSQL static roles;
+ServiceAccount `internal-rpc-authority-readback-attestor` аутентифицируется
+через Vault Kubernetes auth, получает username/password только в файлах и
+подключается с exact PostgreSQL SNI/CA. Для Vault:8200 и PostgreSQL:5432
+обязательны отдельные source egress и destination ingress policies без
+wildcard destination. Readiness подтверждает свежий CURRENT credential,
+`session_user`, явный `SET ROLE`, issue/consume/RLS read и отказ прямых
+challenge/receipt writes; replica после пропущенной rotation перечитывает
+server-side lifecycle и Vault credential до возврата в ready.
+
+Таблица `authority_runtime_database_identities`, принадлежащая отдельному
+owner, хранит bounded `CURRENT/NEXT/PREVIOUS/RETIRED` lifecycle publisher и
+attestor login principals. Runtime roles не читают и не меняют её напрямую.
+Каждый challenge issue/consume, publisher promotion и защищённый RLS read
+повторно проверяет неизменяемый `session_user` через exact `SECURITY DEFINER`
+boundary. Retirement сначала commit-ит серверный `RETIRED` fence, затем
+выполняет `ALTER ROLE ... NOLOGIN`, Vault password rotation и bounded
+drain/termination старых backends. Поэтому как новое соединение, так и уже
+открытая retired session закрыто теряют promotion/challenge/read capability;
+`NOLOGIN` и readiness сами по себе authority fence не считаются.
+
 Promotion выполняет exact function
 `internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)`
 в одной `SERIALIZABLE` transaction. Она блокирует `CURRENT`, `NEXT`, оба
@@ -1355,10 +1382,12 @@ controller/semantic anchor/quarantine ordering, DB principal isolation и
    `make test-contract-authority-postgres`: `CURRENT` и `NEXT` независимо
    фиксируют обе readback rows, promotion оставляет bounded `PREVIOUS`, receipt
    reuse и `RETIRED` principal отклоняются. Передать отдельные DSN admin,
-   `ira_readback_attestor_g1`, `ira_publisher_g1`,
+   `ira_readback_attestor_g1`, `ira_readback_attestor_g2`, `ira_publisher_g1`,
    `ira_control_plane_verifier_g1` и
    `ira_control_plane_verifier_g2`; behavior не использует superuser
-   impersonation.
+   impersonation. Отдельные live-session contracts удерживают publisher и
+   attestor соединения открытыми до retirement и проверяют server-side отказ
+   promotion/challenge и RLS read без `SET SESSION AUTHORIZATION`.
 9. Выполнить Buf lint/build/codegen diff и targeted contract tests.
 10. Убедиться, что PR не содержит secret values, private keys, DSN, tokens или
    production credentials.
@@ -1381,6 +1410,10 @@ gRPC/Protocol Buffers/JOSE снова вернули `Monthly quota exceeded`; �
 fallback повторно проверен для role membership/runtime login, Vault database
 credential rotation, exact NetworkPolicy, versioned RPC/descriptor и строгого
 JOSE audience/type separation.
+В recovery fix-cycle раунда 7 resolve PostgreSQL, Kubernetes и go-jose также
+вернули `Monthly quota exceeded`; официальный fallback повторно проверен для
+`session_user` и уже открытых role sessions, role membership/`SET ROLE`,
+двусторонней NetworkPolicy и независимой ES256/JWK trust boundary.
 
 Проверены только официальные первичные источники:
 

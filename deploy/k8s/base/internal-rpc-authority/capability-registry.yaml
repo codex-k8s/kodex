@@ -222,8 +222,9 @@ spec:
           renewal: RENEW_WORKLOAD_TOKEN_AND_REREAD_BEFORE_ROTATION
           rotation: VAULT_STATIC_ROLE_PASSWORD_ROTATION_WITH_CURRENT_NEXT_OVERLAP
           revocation: RETIRED_PRINCIPAL_NOLOGIN_AND_VAULT_ROTATION
-          vaultAddressEnv: VAULT_ADDR
+          vaultAddressEnv: INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS
           vaultRoleEnv: INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_ROLE
+          vaultAuthFileEnv: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE
           usernameFileEnv: INTERNAL_RPC_AUTHORITY_PUBLISHER_DATABASE_USERNAME_FILE
           passwordFileEnv: INTERNAL_RPC_AUTHORITY_PUBLISHER_DATABASE_PASSWORD_FILE
           credentialMountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/database
@@ -257,6 +258,26 @@ spec:
           requireSetRoleExactCapability: true
           requirePromotionExecuteAndEvidenceSelect: true
           requireConsumerEvidenceWriteDenied: true
+        runtimeSessionFence:
+          stateTable: authority_runtime_database_identities
+          capability: PUBLISHER
+          identityKey: session_user
+          checkedOnEveryPromotionCall: true
+          checkedByEvidenceReadRls: true
+          allowedStatuses:
+            - CURRENT
+            - NEXT
+            - PREVIOUS_BEFORE_OVERLAP_NOT_AFTER
+          retiredStatus: DENY_OPEN_AND_NEW_SESSIONS
+          retirementTransaction:
+            - cas-current-or-previous-to-retired
+            - set-retired-at
+            - commit-server-side-fence-before-nologin
+            - alter-login-principal-nologin
+            - rotate-vault-static-role-password
+            - drain-or-terminate-old-backends
+            - verify-open-session-promotion-and-evidence-read-denied
+          noLoginAloneIsAuthorizationFence: false
       restoreRoleCredentialInterface:
         protoService: internalrpcauthority.v1.RestoreRoleCredentialPublisherService
         publishMethod: /internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential
@@ -492,6 +513,90 @@ spec:
       artifactBinary: /usr/local/bin/internal-rpc-authority-readback-attestor
       serviceAccount: internal-rpc-authority-readback-attestor
       replicas: 2
+      databaseIdentity:
+        capabilityRole: internal_rpc_authority_readback_attestor
+        capabilityRoleLogin: false
+        roleActivation: SET_ROLE_EXACT_CAPABILITY_AFTER_TLS_LOGIN
+        runtimePrincipals:
+          - principal: ira_readback_attestor_g1
+            generation: 1
+            lifecycleStatus: CURRENT
+          - principal: ira_readback_attestor_g2
+            generation: 2
+            lifecycleStatus: NEXT
+        runtimePrincipalAttributes:
+          login: true
+          superuser: false
+          bypassRls: false
+          createDb: false
+          createRole: false
+          inherit: false
+        exactMembership:
+          memberOf:
+            - internal_rpc_authority_readback_attestor
+          ownerOrPublisherMembershipAllowed: false
+          directProtectedTableWriteGrantsAllowed: false
+        vaultDatabaseCredentials:
+          engine: database
+          plugin: postgresql-database-plugin
+          mode: STATIC_ROLE_CURRENT_NEXT_PASSWORD_ROTATION
+          owner: internal-rpc-authority-database-credential-controller
+          authMethod: kubernetes
+          boundServiceAccount: internal-rpc-authority-readback-attestor
+          boundNamespace: mattercodex-system
+          currentVaultRole: internal-rpc-authority-readback-attestor-g1
+          nextVaultRole: internal-rpc-authority-readback-attestor-g2
+          currentPrincipal: ira_readback_attestor_g1
+          nextPrincipal: ira_readback_attestor_g2
+          credentialReadPaths:
+            - database/static-creds/internal-rpc-authority-readback-attestor-g1
+            - database/static-creds/internal-rpc-authority-readback-attestor-g2
+          issuance: READ_EXACT_STATIC_CREDS_PATH_AFTER_KUBERNETES_AUTH
+          renewal: RENEW_WORKLOAD_TOKEN_AND_REREAD_BEFORE_ROTATION
+          rotation: VAULT_STATIC_ROLE_PASSWORD_ROTATION_WITH_CURRENT_NEXT_OVERLAP
+          revocation: SERVER_SIDE_RETIRED_FENCE_THEN_NOLOGIN_PASSWORD_ROTATION_AND_BACKEND_DRAIN
+          vaultAddressEnv: INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS
+          vaultRoleEnv: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_ROLE
+          vaultAuthFileEnv: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_AUTH_FILE
+          usernameFileEnv: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_DATABASE_USERNAME_FILE
+          passwordFileEnv: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_DATABASE_PASSWORD_FILE
+          credentialMountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database
+          vaultCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor/vault-ca.pem
+          postgresqlCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor/postgresql-ca.pem
+          vaultTlsServerName: vault.mattercodex-system.svc.cluster.local
+          postgresqlTlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          postgresqlSslMode: verify-full
+          workloadTokenRenewalRequired: true
+          credentialRefreshBeforeRotationRequired: true
+          currentNextOverlapRequired: true
+          missedUpdateOrReplicaRejoin: REREAD_SERVER_SIDE_FENCE_AND_VAULT_STATIC_CREDENTIAL_BEFORE_READY
+          secretValueInEnvOrLogAllowed: false
+        runtimeSessionFence:
+          stateTable: authority_runtime_database_identities
+          capability: READBACK_ATTESTOR
+          identityKey: session_user
+          checkedOnEveryChallengeIssueAndConsume: true
+          checkedByIntentChallengeReceiptRls: true
+          retiredOpenSessionPolicy: FAIL_CLOSED
+        databaseCredentialNetwork:
+          egress:
+            - destination: vault.mattercodex-system.svc
+              port: 8200
+              protocol: TCP
+              policy: internal-rpc-authority-readback-attestor-to-vault
+            - destination: internal-rpc-authority-postgresql.mattercodex-system.svc
+              port: 5432
+              protocol: TCP
+              policy: internal-rpc-authority-readback-attestor-to-postgresql
+          wildcardDestinationAllowed: false
+        databaseReadiness:
+          requireVaultKubernetesAuthAndTokenRenewal: true
+          requireCurrentCredentialFileFresh: true
+          requireTlsVerifyFullWithExactSniAndCa: true
+          requireSessionUserExactCurrentPrincipal: true
+          requireSetRoleExactCapability: true
+          requireChallengeIssueConsumeAndRlsRead: true
+          requireDirectChallengeAndReceiptWritesDenied: true
       interface:
         protoService: internalrpcauthority.v1.AuthorityReadbackAttestorService
         challengeMethod: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
@@ -619,8 +724,6 @@ spec:
             - evidence-jti-and-digest
           publisherMayCreateOrUpdate: false
           consumersMayCreateOrUpdate: false
-      databaseRole: internal_rpc_authority_readback_attestor
-      databaseLoginPrincipal: FROM_CONTROLLER_OWNED_EXACT_IDENTITY
       pinnedIntentSource: authority_rotation_intents
       persistedPinnedIntentTable: authority_readback_intents
       readbackManifestTrustRoot:
@@ -710,6 +813,7 @@ spec:
         - authority_readback_attestation_challenges
         - authority_readback_attestation_receipts
         - authority_workload_database_identities
+        - authority_runtime_database_identities
         - authority_rotation_intents
         - authority_restore_fences
       minimumDatabaseRights:
@@ -757,6 +861,7 @@ spec:
             - authority_restore_fences
           execute:
             - internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
+            - internal_rpc_authority.is_active_runtime_database_session(text)
           delete: []
         internal_rpc_authority_readback_attestor:
           selectInsert:
@@ -767,10 +872,12 @@ spec:
           execute:
             - internal_rpc_authority.issue_authority_readback_attestation_challenge(uuid,uuid,uuid,text,text,uuid,text,uuid,text)
             - internal_rpc_authority.consume_authority_readback_attestation_challenge(uuid,uuid,uuid,text,bigint,uuid,text)
+            - internal_rpc_authority.is_active_runtime_database_session(text)
           forbidden:
             - authority_key_delivery_readbacks
             - authority_snapshot_readbacks
             - authority_workload_database_identities
+            - authority_runtime_database_identities
           delete: []
         internal_rpc_authority_recovery:
           select:
@@ -869,7 +976,7 @@ spec:
             fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
             publicExecuteRevoked: true
             unsafeOverloadAllowed: false
-            executeGrant: ira_readback_attestor_g1
+            executeGrant: internal_rpc_authority_readback_attestor
             directChallengeInsertGrantAllowed: false
             sameIdempotencyKeyAndCanonicalRequestDigest: RETURN_PERSISTED_CHALLENGE
             sameKeyDifferentDigest: IDEMPOTENCY_CONFLICT
@@ -884,7 +991,7 @@ spec:
             fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
             publicExecuteRevoked: true
             unsafeOverloadAllowed: false
-            executeGrant: ira_readback_attestor_g1
+            executeGrant: internal_rpc_authority_readback_attestor
             directReceiptInsertGrantAllowed: false
             sameIdempotencyKeyAndEvidenceDigest: RETURN_PERSISTED_RECEIPT
             sameKeyOrChallengeDifferentDigest: READBACK_CHALLENGE_REPLAY_DETECTED
@@ -954,6 +1061,61 @@ spec:
           revokeRetiredLoginAfterStateCommit: true
           staleOrRetiredFunctionCallPolicy: FAIL_CLOSED
           readinessRequiresSessionUserReadback: true
+      runtimeCapabilityDatabaseIdentity:
+        mappingTable: authority_runtime_database_identities
+        owner: internal_rpc_authority_readback_owner
+        callerKey: session_user
+        capabilities:
+          - PUBLISHER
+          - READBACK_ATTESTOR
+        cardinality: BOUNDED_ONE_CURRENT_ONE_NEXT_ONE_PREVIOUS_PER_CAPABILITY
+        checkedByFunction: internal_rpc_authority.is_active_runtime_database_session(text)
+        runtimeMutationAllowed: false
+        retirementFenceAppliesToAlreadyOpenSession: true
+        constraints:
+          sessionLoginUnique: true
+          capabilityGenerationUnique: true
+          currentPerCapabilityUnique: true
+          nextPerCapabilityUnique: true
+          previousPerCapabilityUnique: true
+          previousRequiresBoundedOverlap: true
+          retiredRequiresRetiredAt: true
+        lifecycle:
+          statuses:
+            CURRENT: exactly-one
+            NEXT: at-most-one
+            PREVIOUS: at-most-one-bounded-by-overlap-not-after
+            RETIRED: terminal
+          promoteCurrentNextInControllerTransaction: true
+          commitRetiredFenceBeforeNoLoginAndCredentialRotation: true
+          drainOrTerminateRetiredBackends: true
+          missedUpdateOrReplicaRejoin: REREAD_FENCE_AND_CREDENTIAL_BEFORE_READY
+        publisher:
+          loginPrincipals:
+            CURRENT: ira_publisher_g1
+            NEXT: ira_publisher_g2
+          capabilityRole: internal_rpc_authority_publisher
+        readbackAttestor:
+          loginPrincipals:
+            CURRENT: ira_readback_attestor_g1
+            NEXT: ira_readback_attestor_g2
+          capabilityRole: internal_rpc_authority_readback_attestor
+        exactPrivileges:
+          mappingTableDirectRuntimeAccess: FORBIDDEN
+          helperExecute:
+            - internal_rpc_authority_publisher
+            - internal_rpc_authority_readback_attestor
+          publisherEvidenceRead: RLS_REQUIRES_ACTIVE_PUBLISHER_SESSION
+          attestorIntentAndReceiptRead: RLS_REQUIRES_ACTIVE_ATTESTOR_SESSION
+          attestorChallengeFunctions: REQUIRE_ACTIVE_ATTESTOR_SESSION
+          publisherPromotionFunction: REQUIRE_ACTIVE_PUBLISHER_SESSION
+        retiredOpenSession:
+          newLogin: DENIED_BY_NOLOGIN
+          alreadyAuthenticatedSession: DENIED_BY_SERVER_SIDE_FENCE
+          publisherPromotion: DENIED
+          publisherEvidenceRead: EMPTY_BY_RLS
+          attestorChallengeIssueOrConsume: DENIED
+          readiness: NOT_READY
       backupPitr: REQUIRED
     restore-evidence-anchor:
       kind: ExternalMonotonicKubernetesSecret
@@ -1615,10 +1777,18 @@ spec:
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_KEY_FILE
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CLIENT_CA_FILE
         - INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_TRUST_FILE
-        - INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_ROOT_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_ROOT_FINGERPRINT_SHA256
         - INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
         - INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME
         - INTERNAL_RPC_AUTHORITY_POSTGRES_CA_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_DATABASE_USERNAME_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_DATABASE_PASSWORD_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_ROLE
+        - INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS
+        - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_AUTH_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_TLS_SERVER_NAME
+        - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_CA_FILE
       restoreOperator:
         - INTERNAL_RPC_AUTHORITY_RESTORE_REQUEST_FILE
         - INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS
@@ -1701,6 +1871,13 @@ spec:
           service: internal-rpc-authority-postgresql
           port: 5432
           tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          environmentRenderMustPinClusterIP: true
+        - destination: vault
+          namespace: mattercodex-system
+          service: vault
+          port: 8200
+          tlsServerName: vault.mattercodex-system.svc.cluster.local
+          exactPublicCaFileRequired: true
           environmentRenderMustPinClusterIP: true
         - destination: internal-rpc-authority-restore-controller
           namespace: mattercodex-system
@@ -1849,6 +2026,33 @@ spec:
       sourceEgressPolicies:
         vault: internal-rpc-authority-publisher-to-vault
         postgresql: internal-rpc-authority-publisher-to-postgresql
+      destinationIngressPolicies:
+        vault: vault-from-internal-rpc-authority-publisher
+        postgresql: internal-rpc-authority-postgresql-from-publisher
+      exactDestinations:
+        vault:
+          namespace: mattercodex-system
+          service: vault
+          port: 8200
+          tlsServerName: vault.mattercodex-system.svc.cluster.local
+        postgresql:
+          namespace: mattercodex-system
+          service: internal-rpc-authority-postgresql
+          port: 5432
+          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+      sourceEgressPolicyRequired: true
+      destinationIngressPolicyRequired: true
+      environmentRenderMustPinServiceClusterIp: true
+      wildcardDestinationAllowed: false
+      missingEitherDirectionPolicy: FAIL_CLOSED
+    attestorDatabaseCredentialNetworkPolicies:
+      exactSourceServiceAccount: internal-rpc-authority-readback-attestor
+      sourceEgressPolicies:
+        vault: internal-rpc-authority-readback-attestor-to-vault
+        postgresql: internal-rpc-authority-readback-attestor-to-postgresql
+      destinationIngressPolicies:
+        vault: vault-from-internal-rpc-authority-readback-attestor
+        postgresql: internal-rpc-authority-postgresql-from-readback-attestor
       exactDestinations:
         vault:
           namespace: mattercodex-system
