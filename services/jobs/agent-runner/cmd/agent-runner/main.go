@@ -92,6 +92,7 @@ type runner struct {
 	secrets                  secretInventory
 	safety                   runSafety
 	credentialFiles          []string
+	rotatingCredentialFiles  []string
 	credentialWatcherFactory func() (credentialEventWatcher, error)
 }
 
@@ -2052,9 +2053,12 @@ func defaultCredentialFileSources() []string {
 		codexAuthPath,
 		filepath.Join(codexAuthDir, "auth.json"),
 		gitHubTokenPath,
-		kubernetesServiceAccountTokenPath,
 		matterCodexSessionTokenPath,
 	}
+}
+
+func defaultRotatingCredentialFileSources() []string {
+	return []string{kubernetesServiceAccountTokenPath}
 }
 
 func credentialFileEnvironmentSources(environment []string) []string {
