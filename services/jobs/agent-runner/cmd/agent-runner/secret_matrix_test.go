@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type syntheticSecretFixture struct {
@@ -358,6 +359,73 @@ func TestSessionArchiveSanitizesSourceAndRejectsLimitsBeforeAllocation(t *testin
 	}
 	if _, statErr := os.Stat(filepath.Join(oversizeRoot, "sessions")); !os.IsNotExist(statErr) {
 		t.Fatalf("oversize source tree не удалён: %v", statErr)
+	}
+}
+
+func TestSessionArchiveRejectsSourceMutationAfterSanitization(t *testing.T) {
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions", "run")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(sessionDir, "rollout.jsonl")
+	if err := os.WriteFile(source, []byte("safe session"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	proof, err := sanitizeSessionSourcesWithProof(root, secretInventory{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("changed session"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := createCodexSessionArchiveFromSanitizedSources(root, proof); err == nil ||
+		!strings.Contains(err.Error(), "изменился после санитизации") {
+		t.Fatalf("изменённый source принят: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "sessions")); !os.IsNotExist(err) {
+		t.Fatalf("изменённый source tree не удалён: %v", err)
+	}
+}
+
+func TestLargeSessionSecretScanCompletesWithinBoundedTime(t *testing.T) {
+	secret := "mc-long-session-secret-" + strings.Repeat("A7", 1024)
+	inventory, err := buildSecretInventory([]string{"OPENAI_API_KEY=" + secret}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := strings.Repeat(`{"type":"event","message":"ordinary safe session output"}`+"\n", 150_000)
+	result := make(chan error, 1)
+	go func() {
+		protected, protectErr := inventory.protect(value)
+		if protectErr == nil && protected != value {
+			protectErr = errors.New("безопасный session output неожиданно изменён")
+		}
+		result <- protectErr
+	}()
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("защитная проверка большого session output превысила bounded budget")
+	}
+}
+
+func TestFragmentedSecretDetectionCoversSingleInsertionBoundaries(t *testing.T) {
+	const secret = "mc-fragment-boundary-8a10f7b2"
+	inventory, err := buildSecretInventory([]string{"OPENAI_API_KEY=" + secret}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, split := range []int{1, 7, len(secret)/2 - 1, len(secret) / 2, len(secret)/2 + 1, len(secret) - 1} {
+		for _, separator := range []string{"|", strings.Repeat("x", 64)} {
+			value := secret[:split] + separator + secret[split:]
+			if _, err := inventory.protect(value); err == nil {
+				t.Fatalf("split=%d separator=%d принят", split, len(separator))
+			}
+		}
 	}
 }
 

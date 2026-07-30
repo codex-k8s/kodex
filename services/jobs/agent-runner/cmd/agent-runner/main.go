@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -95,6 +96,12 @@ type runner struct {
 	credentialFiles          []string
 	rotatingCredentialFiles  []string
 	credentialWatcherFactory func() (credentialEventWatcher, error)
+	sessionArchiveProof      map[string]sessionSourceProof
+}
+
+type sessionSourceProof struct {
+	Size   int64
+	Digest [sha256.Size]byte
 }
 
 type githubAccount struct {
@@ -712,13 +719,30 @@ func (r *runner) executeSessionTurn(
 
 func (r *runner) createSessionArchive(root string) (string, error) {
 	if r.safety.isUnsafe() {
+		r.sessionArchiveProof = nil
 		_ = os.RemoveAll(filepath.Join(root, "sessions"))
 		return "", credentialRotationError{}
 	}
 	if r.sessionArchiveCreator != nil {
+		r.sessionArchiveProof = nil
 		return r.sessionArchiveCreator(root, r.secrets)
 	}
+	if r.sessionArchiveProof != nil {
+		proof := r.sessionArchiveProof
+		r.sessionArchiveProof = nil
+		return createCodexSessionArchiveFromSanitizedSources(root, proof)
+	}
 	return createCodexSessionArchive(root, r.secrets)
+}
+
+func (r *runner) sanitizeSessionSources() error {
+	proof, err := sanitizeSessionSourcesWithProof(r.codexHome, r.secrets)
+	if err != nil {
+		r.sessionArchiveProof = nil
+		return err
+	}
+	r.sessionArchiveProof = proof
+	return nil
 }
 
 func (r *runner) prepareSessionRepository(ctx context.Context, account githubAccount, githubEnv []string) error {
@@ -829,6 +853,7 @@ func (r *runner) cleanupEphemeralRuntime() {
 	r.ephemeralRoot = ""
 	r.codexHome = ""
 	r.rawArtifacts = ""
+	r.sessionArchiveProof = nil
 }
 
 func (r *runner) command(ctx context.Context, name string, args ...string) *exec.Cmd {
@@ -1011,7 +1036,7 @@ func (r *runner) runCodexExec(ctx context.Context, workDir string, finalFile str
 			}
 		}
 	}
-	if err := sanitizeSessionSources(r.codexHome, r.secrets); err != nil {
+	if err := r.sanitizeSessionSources(); err != nil {
 		runErr = errors.Join(runErr, err)
 	}
 	return runErr
@@ -1094,7 +1119,7 @@ func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaim
 			}
 		}
 	}
-	if err := sanitizeSessionSources(r.codexHome, r.secrets); err != nil {
+	if err := r.sanitizeSessionSources(); err != nil {
 		runErr = errors.Join(runErr, err)
 	}
 	if discovered := readCodexSessionID(eventsPath); discovered != "" {
@@ -2457,80 +2482,170 @@ func containsBoundedFragmentedSecret(value string, secret string) bool {
 	if len(secret) < 16 || len(value) < len(secret) {
 		return false
 	}
+	frequencies := byteFrequencies(value)
 	for fragmentLength := 1; fragmentLength <= 7; fragmentLength++ {
-		if containsRepeatedSecretFragmentSeparator(value, secret, fragmentLength) {
+		if containsRepeatedSecretFragmentSeparator(value, secret, fragmentLength, frequencies) {
 			return true
 		}
 	}
-	for split := 1; split < len(secret); split++ {
-		if containsTwoSecretFragments(value, secret[:split], secret[split:]) {
-			return true
-		}
-	}
-	return false
+	return containsSingleBoundedSecretInsertion(value, secret)
 }
 
-func containsRepeatedSecretFragmentSeparator(value string, secret string, fragmentLength int) bool {
+func byteFrequencies(value string) [256]int {
+	var frequencies [256]int
+	for index := 0; index < len(value); index++ {
+		frequencies[value[index]]++
+	}
+	return frequencies
+}
+
+func containsRepeatedSecretFragmentSeparator(
+	value string,
+	secret string,
+	fragmentLength int,
+	frequencies [256]int,
+) bool {
 	if fragmentLength <= 0 || len(secret) <= fragmentLength {
 		return false
 	}
-	first := secret[:fragmentLength]
-	secondEnd := min(fragmentLength*2, len(secret))
-	second := secret[fragmentLength:secondEnd]
-	for start := strings.Index(value, first); start >= 0; {
-		firstEnd := start + len(first)
-		searchEnd := min(len(value), firstEnd+64+len(second))
-		for secondOffset := strings.Index(value[firstEnd:searchEnd], second); secondOffset >= 0; {
-			secondStart := firstEnd + secondOffset
-			if secondStart > firstEnd && matchesRepeatedSecretFragments(value, secret, fragmentLength, start, value[firstEnd:secondStart]) {
-				return true
-			}
-			next := strings.Index(value[secondStart+1:searchEnd], second)
-			if next < 0 {
-				break
-			}
-			secondOffset = secondStart + 1 + next - firstEnd
-		}
-		next := strings.Index(value[start+1:], first)
-		if next < 0 {
+	chunkIndex, anchor := rarestSecretChunk(secret, fragmentLength, frequencies)
+	for searchStart := 0; searchStart < len(value); {
+		offset := strings.Index(value[searchStart:], anchor)
+		if offset < 0 {
 			break
 		}
-		start += next + 1
+		anchorStart := searchStart + offset
+		for separatorLength := 1; separatorLength <= 64; separatorLength++ {
+			start := anchorStart - chunkIndex*(fragmentLength+separatorLength)
+			if matchesRepeatedSecretFragments(value, secret, fragmentLength, start, separatorLength) {
+				return true
+			}
+		}
+		if anchorStart+1 >= len(value) {
+			break
+		}
+		searchStart = anchorStart + 1
 	}
 	return false
 }
 
-func matchesRepeatedSecretFragments(value string, secret string, fragmentLength int, start int, separator string) bool {
-	position := start
-	for offset := 0; offset < len(secret); offset += fragmentLength {
-		if offset > 0 {
-			if !strings.HasPrefix(value[position:], separator) {
-				return false
-			}
-			position += len(separator)
+func rarestSecretChunk(secret string, fragmentLength int, frequencies [256]int) (int, string) {
+	bestIndex := 0
+	bestStart := 0
+	bestEnd := min(fragmentLength, len(secret))
+	bestScore := frequencies[secret[0]]
+	chunkIndex := 0
+	for start := 0; start < len(secret); start += fragmentLength {
+		end := min(start+fragmentLength, len(secret))
+		if end-start < fragmentLength && start > 0 {
+			break
 		}
+		score := frequencies[secret[start]]
+		for offset := start + 1; offset < end; offset++ {
+			score = min(score, frequencies[secret[offset]])
+		}
+		if score < bestScore {
+			bestIndex = chunkIndex
+			bestStart = start
+			bestEnd = end
+			bestScore = score
+		}
+		chunkIndex++
+	}
+	return bestIndex, secret[bestStart:bestEnd]
+}
+
+func matchesRepeatedSecretFragments(
+	value string,
+	secret string,
+	fragmentLength int,
+	start int,
+	separatorLength int,
+) bool {
+	if start < 0 || separatorLength <= 0 || separatorLength > 64 {
+		return false
+	}
+	chunkCount := (len(secret) + fragmentLength - 1) / fragmentLength
+	required := len(secret) + (chunkCount-1)*separatorLength
+	if start+required > len(value) {
+		return false
+	}
+	position := start
+	separator := ""
+	for offset := 0; offset < len(secret); offset += fragmentLength {
 		end := min(offset+fragmentLength, len(secret))
-		fragment := secret[offset:end]
-		if !strings.HasPrefix(value[position:], fragment) {
+		if !strings.HasPrefix(value[position:], secret[offset:end]) {
 			return false
 		}
-		position += len(fragment)
+		position += end - offset
+		if end == len(secret) {
+			break
+		}
+		candidate := value[position : position+separatorLength]
+		if separator == "" {
+			separator = candidate
+		} else if candidate != separator {
+			return false
+		}
+		position += separatorLength
 	}
 	return true
 }
 
-func containsTwoSecretFragments(value string, first string, second string) bool {
-	for start := strings.Index(value, first); start >= 0; {
-		firstEnd := start + len(first)
-		searchEnd := min(len(value), firstEnd+64+len(second))
-		if secondOffset := strings.Index(value[firstEnd:searchEnd], second); secondOffset > 0 {
-			return true
-		}
-		next := strings.Index(value[start+1:], first)
-		if next < 0 {
+func containsSingleBoundedSecretInsertion(value string, secret string) bool {
+	half := len(secret) / 2
+	prefixAnchor := secret[:half]
+	for searchStart := 0; searchStart < len(value); {
+		offset := strings.Index(value[searchStart:], prefixAnchor)
+		if offset < 0 {
 			break
 		}
-		start += next + 1
+		start := searchStart + offset
+		if matchesSecretWithSingleBoundedInsertion(value, secret, start) {
+			return true
+		}
+		searchStart = start + 1
+	}
+
+	suffixAnchor := secret[half:]
+	for searchStart := 0; searchStart < len(value); {
+		offset := strings.Index(value[searchStart:], suffixAnchor)
+		if offset < 0 {
+			break
+		}
+		anchorStart := searchStart + offset
+		for insertionLength := 1; insertionLength <= 64; insertionLength++ {
+			start := anchorStart - half - insertionLength
+			if matchesSecretWithSingleBoundedInsertion(value, secret, start) {
+				return true
+			}
+		}
+		searchStart = anchorStart + 1
+	}
+	return false
+}
+
+func matchesSecretWithSingleBoundedInsertion(value string, secret string, start int) bool {
+	if start < 0 || start+len(secret)+1 > len(value) {
+		return false
+	}
+	prefixLength := 0
+	for prefixLength < len(secret) &&
+		start+prefixLength < len(value) &&
+		value[start+prefixLength] == secret[prefixLength] {
+		prefixLength++
+	}
+	prefixLength = min(prefixLength, len(secret)-1)
+	for split := 1; split <= prefixLength; split++ {
+		for insertionLength := 1; insertionLength <= 64; insertionLength++ {
+			suffixStart := start + split + insertionLength
+			if suffixStart+len(secret)-split > len(value) {
+				break
+			}
+			if strings.HasPrefix(value[suffixStart:], secret[split:]) {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -2738,16 +2853,22 @@ func readCodexSessionID(eventsPath string) string {
 }
 
 func sanitizeSessionSources(root string, inventory secretInventory) error {
+	_, err := sanitizeSessionSourcesWithProof(root, inventory)
+	return err
+}
+
+func sanitizeSessionSourcesWithProof(root string, inventory secretInventory) (map[string]sessionSourceProof, error) {
+	proof := map[string]sessionSourceProof{}
 	sessionsRoot := filepath.Join(root, "sessions")
 	info, err := os.Stat(sessionsRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return proof, nil
 		}
-		return err
+		return nil, err
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("каталог сессий имеет недопустимый тип")
+		return nil, fmt.Errorf("каталог сессий имеет недопустимый тип")
 	}
 	fileCount := 0
 	entryCount := 0
@@ -2813,19 +2934,38 @@ func sanitizeSessionSources(root string, inventory secretInventory) error {
 		if err := os.Rename(temporaryPath, path); err != nil {
 			return err
 		}
-		return os.Chmod(path, 0o600)
+		if err := os.Chmod(path, 0o600); err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		proof[filepath.ToSlash(relative)] = sessionSourceProof{
+			Size:   int64(len(protected)),
+			Digest: sha256.Sum256([]byte(protected)),
+		}
+		return nil
 	})
 	if err != nil {
 		_ = os.RemoveAll(sessionsRoot)
-		return err
+		return nil, err
 	}
-	return nil
+	return proof, nil
 }
 
 func createCodexSessionArchive(root string, inventory secretInventory) (string, error) {
-	if err := sanitizeSessionSources(root, inventory); err != nil {
+	proof, err := sanitizeSessionSourcesWithProof(root, inventory)
+	if err != nil {
 		return "", err
 	}
+	return createCodexSessionArchiveFromSanitizedSources(root, proof)
+}
+
+func createCodexSessionArchiveFromSanitizedSources(
+	root string,
+	proof map[string]sessionSourceProof,
+) (string, error) {
 	sessionsRoot := filepath.Join(root, "sessions")
 	info, err := os.Stat(sessionsRoot)
 	if err != nil {
@@ -2842,6 +2982,7 @@ func createCodexSessionArchive(root string, inventory secretInventory) (string, 
 	tarWriter := tar.NewWriter(gzipWriter)
 	fileCount := 0
 	entryCount := 0
+	verifiedFiles := 0
 	totalBytes := int64(0)
 	err = filepath.WalkDir(sessionsRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -2859,11 +3000,12 @@ func createCodexSessionArchive(root string, inventory secretInventory) (string, 
 		if err != nil {
 			return err
 		}
+		relative = filepath.ToSlash(relative)
 		header, err := tar.FileInfoHeader(info, "")
 		if err != nil {
 			return err
 		}
-		header.Name = filepath.ToSlash(relative)
+		header.Name = relative
 		header.Format = tar.FormatUSTAR
 		header.ModTime = header.ModTime.Truncate(time.Second)
 		header.AccessTime = time.Time{}
@@ -2887,11 +3029,11 @@ func createCodexSessionArchive(root string, inventory secretInventory) (string, 
 		if err != nil {
 			return err
 		}
-		protected, err := inventory.protect(string(body))
-		if err != nil {
-			return err
+		expected, exists := proof[relative]
+		if !exists || expected.Size != int64(len(body)) || expected.Digest != sha256.Sum256(body) {
+			return fmt.Errorf("источник сессии изменился после санитизации")
 		}
-		body = []byte(protected)
+		verifiedFiles++
 		header.Mode = 0o600
 		header.Size = int64(len(body))
 		if err := tarWriter.WriteHeader(header); err != nil {
@@ -2905,6 +3047,12 @@ func createCodexSessionArchive(root string, inventory secretInventory) (string, 
 		_ = gzipWriter.Close()
 		_ = os.RemoveAll(sessionsRoot)
 		return "", err
+	}
+	if verifiedFiles != len(proof) {
+		_ = tarWriter.Close()
+		_ = gzipWriter.Close()
+		_ = os.RemoveAll(sessionsRoot)
+		return "", fmt.Errorf("набор источников сессии изменился после санитизации")
 	}
 	if err := tarWriter.Close(); err != nil {
 		_ = gzipWriter.Close()
