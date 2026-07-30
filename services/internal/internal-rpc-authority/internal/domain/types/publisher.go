@@ -11,16 +11,55 @@ type DeliveryTarget struct {
 	WorkloadID                 string
 	WorkloadSPIFFEID           string
 	Role                       string
+	Namespace                  string
+	ServiceAccount             string
 	WorkloadGeneration         uint64
 	CredentialGeneration       uint64
+	AuthoritySnapshotSecret    string
+	AuthoritySnapshotMountPath string
+	AuthPrivateKeyVaultPath    string
+	AuthPrivateKeySecret       string
+	AuthPrivateKeyMountPath    string
+	ManifestTrustVaultPath     string
+	ManifestTrustSecret        string
+	ManifestTrustMountPath     string
+	ProofTrustVaultPath        string
+	ProofTrustSecret           string
+	ProofTrustMountPath        string
+	DatabaseLoginPrincipal     string
+	DatabaseVaultRole          string
+	DatabaseDSNMountPath       string
+	RestoreCredentialID        string
 	RestoreCredentialPath      string
+	RestoreCredentialMountPath string
+	RestoreACKKeyID            string
+	RestoreACKKeyGeneration    uint64
 	RestoreACKKeyPath          string
+	RestoreACKKeyMountPath     string
+	RestoreControllerAddress   string
+	RestoreControllerSNI       string
+	RestoreControllerCAPath    string
+	RestoreControllerAudience  string
+	RestoreControllerMethod    string
+	RestoreNetworkPolicy       string
+	ReadbackID                 string
 	ReadbackCredentialPath     string
+	ReadbackCredentialMount    string
+	ReadbackCredentialID       string
 	ReadbackPossessionKeyPath  string
+	ReadbackPossessionKeyMount string
+	ReadbackPossessionKeyID    string
 	ReadbackIntentRevision     uint64
 	ReadbackMaterialGeneration uint64
 	ReadbackSourceRevision     uint64
 	ReadbackServedStateDigest  string
+	ReadbackAttestorAddress    string
+	ReadbackAttestorSNI        string
+	ReadbackAttestorCAPath     string
+	ReadbackAttestorAudience   string
+	ReadbackChallengeMethod    string
+	ReadbackAttestationMethod  string
+	ReadbackNetworkPolicy      string
 }
 
 // DeliveryTargetRegistry содержит versioned закрытый набор целей доставки.

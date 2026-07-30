@@ -2120,8 +2120,12 @@ type NoRestoreDirective struct {
 	CoordinationRevision uint64                 `protobuf:"varint,1,opt,name=coordination_revision,json=coordinationRevision,proto3" json:"coordination_revision,omitempty"`
 	RestoreEpoch         uint64                 `protobuf:"varint,2,opt,name=restore_epoch,json=restoreEpoch,proto3" json:"restore_epoch,omitempty"`
 	RetryNotBefore       *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=retry_not_before,json=retryNotBefore,proto3" json:"retry_not_before,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// verified_transition — controller-owned внешний restore state. Отсутствие,
+	// unknown phase, stale epoch/revision либо небезопасная фаза запрещают
+	// workload открывать admission после startup/replacement.
+	VerifiedTransition *RestoreTransition `protobuf:"bytes,4,opt,name=verified_transition,json=verifiedTransition,proto3" json:"verified_transition,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *NoRestoreDirective) Reset() {
@@ -2171,6 +2175,13 @@ func (x *NoRestoreDirective) GetRestoreEpoch() uint64 {
 func (x *NoRestoreDirective) GetRetryNotBefore() *timestamppb.Timestamp {
 	if x != nil {
 		return x.RetryNotBefore
+	}
+	return nil
+}
+
+func (x *NoRestoreDirective) GetVerifiedTransition() *RestoreTransition {
+	if x != nil {
+		return x.VerifiedTransition
 	}
 	return nil
 }
@@ -4313,11 +4324,12 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x1aGetRestoreDirectiveRequest\x12=\n" +
 	"\x1brole_credential_compact_jws\x18\x01 \x01(\tR\x18roleCredentialCompactJws\x12D\n" +
 	"\x1eobserved_coordination_revision\x18\x02 \x01(\x04R\x1cobservedCoordinationRevision\x12%\n" +
-	"\x0ecorrelation_id\x18\x03 \x01(\tR\rcorrelationId\"\xb4\x01\n" +
+	"\x0ecorrelation_id\x18\x03 \x01(\tR\rcorrelationId\"\x91\x02\n" +
 	"\x12NoRestoreDirective\x123\n" +
 	"\x15coordination_revision\x18\x01 \x01(\x04R\x14coordinationRevision\x12#\n" +
 	"\rrestore_epoch\x18\x02 \x01(\x04R\frestoreEpoch\x12D\n" +
-	"\x10retry_not_before\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0eretryNotBefore\"\x8b\x02\n" +
+	"\x10retry_not_before\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0eretryNotBefore\x12[\n" +
+	"\x13verified_transition\x18\x04 \x01(\v2*.internalrpcauthority.v1.RestoreTransitionR\x12verifiedTransition\"\x8b\x02\n" +
 	"\x19RoleBoundRestoreDirective\x122\n" +
 	"\x15directive_compact_jws\x18\x01 \x01(\tR\x13directiveCompactJws\x12J\n" +
 	"\n" +
@@ -4725,71 +4737,72 @@ var file_internalrpcauthority_v1_authority_proto_depIdxs = []int32{
 	56, // 13: internalrpcauthority.v1.VerifiedAuthorizationContext.expires_at:type_name -> google.protobuf.Timestamp
 	56, // 14: internalrpcauthority.v1.PrepareRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
 	56, // 15: internalrpcauthority.v1.NoRestoreDirective.retry_not_before:type_name -> google.protobuf.Timestamp
-	33, // 16: internalrpcauthority.v1.RoleBoundRestoreDirective.transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	56, // 17: internalrpcauthority.v1.RoleBoundRestoreDirective.expires_at:type_name -> google.protobuf.Timestamp
-	28, // 18: internalrpcauthority.v1.GetRestoreDirectiveResponse.no_directive:type_name -> internalrpcauthority.v1.NoRestoreDirective
-	29, // 19: internalrpcauthority.v1.GetRestoreDirectiveResponse.directive:type_name -> internalrpcauthority.v1.RoleBoundRestoreDirective
-	56, // 20: internalrpcauthority.v1.CompleteRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
-	3,  // 21: internalrpcauthority.v1.RestoreTransition.phase:type_name -> internalrpcauthority.v1.RestorePhase
-	56, // 22: internalrpcauthority.v1.RestoreTransition.safe_window_not_before:type_name -> google.protobuf.Timestamp
-	33, // 23: internalrpcauthority.v1.PrepareRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	33, // 24: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	36, // 25: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.receipt:type_name -> internalrpcauthority.v1.QuiescenceAckReceipt
-	3,  // 26: internalrpcauthority.v1.QuiescenceAckReceipt.resulting_phase:type_name -> internalrpcauthority.v1.RestorePhase
-	56, // 27: internalrpcauthority.v1.QuiescenceAckReceipt.accepted_at:type_name -> google.protobuf.Timestamp
-	33, // 28: internalrpcauthority.v1.CompleteRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	4,  // 29: internalrpcauthority.v1.AttestServedStateResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
-	56, // 30: internalrpcauthority.v1.AttestServedStateResponse.expires_at:type_name -> google.protobuf.Timestamp
-	56, // 31: internalrpcauthority.v1.IssueAttestationChallengeResponse.issued_at:type_name -> google.protobuf.Timestamp
-	56, // 32: internalrpcauthority.v1.IssueAttestationChallengeResponse.expires_at:type_name -> google.protobuf.Timestamp
-	4,  // 33: internalrpcauthority.v1.IssueAttestationChallengeResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
-	5,  // 34: internalrpcauthority.v1.DatabaseCredentialGeneration.capability:type_name -> internalrpcauthority.v1.DatabaseCredentialCapability
-	6,  // 35: internalrpcauthority.v1.DatabaseCredentialGeneration.status:type_name -> internalrpcauthority.v1.DatabaseCredentialLifecycleStatus
-	51, // 36: internalrpcauthority.v1.ReconcileDatabaseCredentialsResponse.generations:type_name -> internalrpcauthority.v1.DatabaseCredentialGeneration
-	51, // 37: internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessResponse.generations:type_name -> internalrpcauthority.v1.DatabaseCredentialGeneration
-	8,  // 38: internalrpcauthority.v1.AuthorizationErrorDetail.reason:type_name -> internalrpcauthority.v1.AuthorizationErrorReason
-	7,  // 39: internalrpcauthority.v1.AuthorizationErrorDetail.stage:type_name -> internalrpcauthority.v1.AuthorizationFailureStage
-	12, // 40: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:input_type -> internalrpcauthority.v1.IssueAuthorizationContextRequest
-	22, // 41: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
-	19, // 42: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:input_type -> internalrpcauthority.v1.VerifyAuthorizationContextRequest
-	24, // 43: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
-	14, // 44: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:input_type -> internalrpcauthority.v1.ResolveAuthorityProofRequest
-	16, // 45: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessRequest
-	26, // 46: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:input_type -> internalrpcauthority.v1.PrepareRestoreRequest
-	27, // 47: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:input_type -> internalrpcauthority.v1.GetRestoreDirectiveRequest
-	31, // 48: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:input_type -> internalrpcauthority.v1.AcknowledgeQuiescenceRequest
-	32, // 49: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:input_type -> internalrpcauthority.v1.CompleteRestoreRequest
-	38, // 50: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest
-	42, // 51: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:input_type -> internalrpcauthority.v1.IssueAttestationChallengeRequest
-	40, // 52: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:input_type -> internalrpcauthority.v1.AttestServedStateRequest
-	44, // 53: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
-	46, // 54: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:input_type -> internalrpcauthority.v1.PublishRoleCredentialRequest
-	48, // 55: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
-	50, // 56: internalrpcauthority.v1.DatabaseCredentialLifecycleService.ReconcileDatabaseCredentials:input_type -> internalrpcauthority.v1.ReconcileDatabaseCredentialsRequest
-	53, // 57: internalrpcauthority.v1.DatabaseCredentialLifecycleService.CheckReadiness:input_type -> internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessRequest
-	13, // 58: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:output_type -> internalrpcauthority.v1.IssueAuthorizationContextResponse
-	23, // 59: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
-	20, // 60: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:output_type -> internalrpcauthority.v1.VerifyAuthorizationContextResponse
-	25, // 61: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
-	15, // 62: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:output_type -> internalrpcauthority.v1.ResolveAuthorityProofResponse
-	17, // 63: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessResponse
-	34, // 64: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:output_type -> internalrpcauthority.v1.PrepareRestoreResponse
-	30, // 65: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:output_type -> internalrpcauthority.v1.GetRestoreDirectiveResponse
-	35, // 66: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:output_type -> internalrpcauthority.v1.AcknowledgeQuiescenceResponse
-	37, // 67: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:output_type -> internalrpcauthority.v1.CompleteRestoreResponse
-	39, // 68: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse
-	43, // 69: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:output_type -> internalrpcauthority.v1.IssueAttestationChallengeResponse
-	41, // 70: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:output_type -> internalrpcauthority.v1.AttestServedStateResponse
-	45, // 71: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
-	47, // 72: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:output_type -> internalrpcauthority.v1.PublishRoleCredentialResponse
-	49, // 73: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
-	52, // 74: internalrpcauthority.v1.DatabaseCredentialLifecycleService.ReconcileDatabaseCredentials:output_type -> internalrpcauthority.v1.ReconcileDatabaseCredentialsResponse
-	54, // 75: internalrpcauthority.v1.DatabaseCredentialLifecycleService.CheckReadiness:output_type -> internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessResponse
-	58, // [58:76] is the sub-list for method output_type
-	40, // [40:58] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	33, // 16: internalrpcauthority.v1.NoRestoreDirective.verified_transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	33, // 17: internalrpcauthority.v1.RoleBoundRestoreDirective.transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	56, // 18: internalrpcauthority.v1.RoleBoundRestoreDirective.expires_at:type_name -> google.protobuf.Timestamp
+	28, // 19: internalrpcauthority.v1.GetRestoreDirectiveResponse.no_directive:type_name -> internalrpcauthority.v1.NoRestoreDirective
+	29, // 20: internalrpcauthority.v1.GetRestoreDirectiveResponse.directive:type_name -> internalrpcauthority.v1.RoleBoundRestoreDirective
+	56, // 21: internalrpcauthority.v1.CompleteRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
+	3,  // 22: internalrpcauthority.v1.RestoreTransition.phase:type_name -> internalrpcauthority.v1.RestorePhase
+	56, // 23: internalrpcauthority.v1.RestoreTransition.safe_window_not_before:type_name -> google.protobuf.Timestamp
+	33, // 24: internalrpcauthority.v1.PrepareRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	33, // 25: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	36, // 26: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.receipt:type_name -> internalrpcauthority.v1.QuiescenceAckReceipt
+	3,  // 27: internalrpcauthority.v1.QuiescenceAckReceipt.resulting_phase:type_name -> internalrpcauthority.v1.RestorePhase
+	56, // 28: internalrpcauthority.v1.QuiescenceAckReceipt.accepted_at:type_name -> google.protobuf.Timestamp
+	33, // 29: internalrpcauthority.v1.CompleteRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	4,  // 30: internalrpcauthority.v1.AttestServedStateResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
+	56, // 31: internalrpcauthority.v1.AttestServedStateResponse.expires_at:type_name -> google.protobuf.Timestamp
+	56, // 32: internalrpcauthority.v1.IssueAttestationChallengeResponse.issued_at:type_name -> google.protobuf.Timestamp
+	56, // 33: internalrpcauthority.v1.IssueAttestationChallengeResponse.expires_at:type_name -> google.protobuf.Timestamp
+	4,  // 34: internalrpcauthority.v1.IssueAttestationChallengeResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
+	5,  // 35: internalrpcauthority.v1.DatabaseCredentialGeneration.capability:type_name -> internalrpcauthority.v1.DatabaseCredentialCapability
+	6,  // 36: internalrpcauthority.v1.DatabaseCredentialGeneration.status:type_name -> internalrpcauthority.v1.DatabaseCredentialLifecycleStatus
+	51, // 37: internalrpcauthority.v1.ReconcileDatabaseCredentialsResponse.generations:type_name -> internalrpcauthority.v1.DatabaseCredentialGeneration
+	51, // 38: internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessResponse.generations:type_name -> internalrpcauthority.v1.DatabaseCredentialGeneration
+	8,  // 39: internalrpcauthority.v1.AuthorizationErrorDetail.reason:type_name -> internalrpcauthority.v1.AuthorizationErrorReason
+	7,  // 40: internalrpcauthority.v1.AuthorizationErrorDetail.stage:type_name -> internalrpcauthority.v1.AuthorizationFailureStage
+	12, // 41: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:input_type -> internalrpcauthority.v1.IssueAuthorizationContextRequest
+	22, // 42: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
+	19, // 43: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:input_type -> internalrpcauthority.v1.VerifyAuthorizationContextRequest
+	24, // 44: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
+	14, // 45: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:input_type -> internalrpcauthority.v1.ResolveAuthorityProofRequest
+	16, // 46: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessRequest
+	26, // 47: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:input_type -> internalrpcauthority.v1.PrepareRestoreRequest
+	27, // 48: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:input_type -> internalrpcauthority.v1.GetRestoreDirectiveRequest
+	31, // 49: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:input_type -> internalrpcauthority.v1.AcknowledgeQuiescenceRequest
+	32, // 50: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:input_type -> internalrpcauthority.v1.CompleteRestoreRequest
+	38, // 51: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest
+	42, // 52: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:input_type -> internalrpcauthority.v1.IssueAttestationChallengeRequest
+	40, // 53: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:input_type -> internalrpcauthority.v1.AttestServedStateRequest
+	44, // 54: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
+	46, // 55: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:input_type -> internalrpcauthority.v1.PublishRoleCredentialRequest
+	48, // 56: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
+	50, // 57: internalrpcauthority.v1.DatabaseCredentialLifecycleService.ReconcileDatabaseCredentials:input_type -> internalrpcauthority.v1.ReconcileDatabaseCredentialsRequest
+	53, // 58: internalrpcauthority.v1.DatabaseCredentialLifecycleService.CheckReadiness:input_type -> internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessRequest
+	13, // 59: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:output_type -> internalrpcauthority.v1.IssueAuthorizationContextResponse
+	23, // 60: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
+	20, // 61: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:output_type -> internalrpcauthority.v1.VerifyAuthorizationContextResponse
+	25, // 62: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
+	15, // 63: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:output_type -> internalrpcauthority.v1.ResolveAuthorityProofResponse
+	17, // 64: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessResponse
+	34, // 65: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:output_type -> internalrpcauthority.v1.PrepareRestoreResponse
+	30, // 66: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:output_type -> internalrpcauthority.v1.GetRestoreDirectiveResponse
+	35, // 67: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:output_type -> internalrpcauthority.v1.AcknowledgeQuiescenceResponse
+	37, // 68: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:output_type -> internalrpcauthority.v1.CompleteRestoreResponse
+	39, // 69: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse
+	43, // 70: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:output_type -> internalrpcauthority.v1.IssueAttestationChallengeResponse
+	41, // 71: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:output_type -> internalrpcauthority.v1.AttestServedStateResponse
+	45, // 72: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
+	47, // 73: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:output_type -> internalrpcauthority.v1.PublishRoleCredentialResponse
+	49, // 74: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
+	52, // 75: internalrpcauthority.v1.DatabaseCredentialLifecycleService.ReconcileDatabaseCredentials:output_type -> internalrpcauthority.v1.ReconcileDatabaseCredentialsResponse
+	54, // 76: internalrpcauthority.v1.DatabaseCredentialLifecycleService.CheckReadiness:output_type -> internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessResponse
+	59, // [59:77] is the sub-list for method output_type
+	41, // [41:59] is the sub-list for method input_type
+	41, // [41:41] is the sub-list for extension type_name
+	41, // [41:41] is the sub-list for extension extendee
+	0,  // [0:41] is the sub-list for field type_name
 }
 
 func init() { file_internalrpcauthority_v1_authority_proto_init() }

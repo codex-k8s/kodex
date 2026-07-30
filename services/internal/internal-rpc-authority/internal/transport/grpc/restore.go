@@ -112,6 +112,7 @@ func (server *RestoreControllerServer) GetRestoreDirective(
 					CoordinationRevision: result.State.CoordinationRevision,
 					RestoreEpoch:         result.State.RestoreEpoch,
 					RetryNotBefore:       timestamppb.New(time.Now().UTC().Add(2 * time.Second)),
+					VerifiedTransition:   restoreTransition(result.State),
 				},
 			},
 		}, nil

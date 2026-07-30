@@ -324,6 +324,10 @@ message NoRestoreDirective {
   uint64 coordination_revision = 1;
   uint64 restore_epoch = 2;
   google.protobuf.Timestamp retry_not_before = 3;
+  // verified_transition — controller-owned внешний restore state. Отсутствие,
+  // unknown phase, stale epoch/revision либо небезопасная фаза запрещают
+  // workload открывать admission после startup/replacement.
+  RestoreTransition verified_transition = 4;
 }
 
 message RoleBoundRestoreDirective {

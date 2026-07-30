@@ -115,6 +115,10 @@ func (agent *Agent) Poll(
 	if admission == nil {
 		return errors.New("restore workload admission boundary is nil")
 	}
+	// Каждый startup/rejoin начинается закрыто. Только проверенный ответ
+	// внешнего controller и совпадающее durable served state могут снять fence.
+	admission.SetRestoreBlocked(true)
+	admission.SetAvailable(false)
 	roleMaterial, found, err := agent.config.Delivery.ReadKV2(
 		ctx,
 		agent.config.RoleCredentialVaultPath,
@@ -156,11 +160,17 @@ func (agent *Agent) Poll(
 		return errors.New("poll restore directive")
 	}
 	if noDirective := response.GetNoDirective(); noDirective != nil {
+		transition := noDirective.GetVerifiedTransition()
+		if err := agent.verifySafeNoDirective(noDirective, transition); err != nil {
+			return err
+		}
 		agent.observed.Store(noDirective.GetCoordinationRevision())
 		if err := admission.ServedStateReady(ctx); err == nil {
 			admission.SetRestoreBlocked(false)
 			admission.SetAvailable(true)
 			agent.quiescing.Store(false)
+		} else {
+			return errors.New("served state is not ready after verified restore poll")
 		}
 		return nil
 	}
@@ -268,6 +278,39 @@ func (agent *Agent) Poll(
 		return errors.New("restore quiescence receipt binding rejected")
 	}
 	agent.observed.Store(ackResponse.GetReceipt().GetCoordinationRevision())
+	return nil
+}
+
+func (agent *Agent) verifySafeNoDirective(
+	result *internalrpcauthorityv1.NoRestoreDirective,
+	transition *internalrpcauthorityv1.RestoreTransition,
+) error {
+	if result == nil ||
+		transition == nil ||
+		result.GetCoordinationRevision() == 0 ||
+		result.GetRestoreEpoch() == 0 ||
+		transition.GetRestoreEpoch() != result.GetRestoreEpoch() ||
+		transition.GetAnchorRevision() == 0 ||
+		len(transition.GetEvidenceDigestSha256()) != sha256.Size*2 {
+		return errors.New("restore external state proof is incomplete")
+	}
+	switch transition.GetPhase() {
+	case internalrpcauthorityv1.RestorePhase_RESTORE_PHASE_OPEN:
+		if transition.GetRestoreId() == "" ||
+			transition.GetSafeWindowNotBefore() != nil {
+			return errors.New("restore OPEN state binding rejected")
+		}
+	case internalrpcauthorityv1.RestorePhase_RESTORE_PHASE_COMPLETED:
+		safeAt := transition.GetSafeWindowNotBefore()
+		if transition.GetRestoreId() == "" ||
+			safeAt == nil ||
+			safeAt.CheckValid() != nil ||
+			agent.now().UTC().Before(safeAt.AsTime().UTC()) {
+			return errors.New("restore completion safe window is not open")
+		}
+	default:
+		return errors.New("restore external phase keeps workload fenced")
+	}
 	return nil
 }
 
