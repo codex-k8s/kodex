@@ -1150,6 +1150,52 @@ func TestChatRunPostsOpenAIReauthInThreadWhenAuthSecretIsInvalid(t *testing.T) {
 	}
 }
 
+func TestChatRunUsesNewCredentialRevisionImmediatelyAfterCompletedReauth(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{
+		authSecretNotReady:  true,
+		authReady:           true,
+		authCompletedSecret: "matter-codex-codex-auth-main-rev-123456789abc",
+		authReadySecret:     "matter-codex-codex-auth-main-rev-123456789abc",
+	}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Continue the work.",
+	})
+
+	if result.RunID == "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.sessionCodexSecret != runner.authCompletedSecret {
+		t.Fatalf("session Codex Secret = %q, want %q", runner.sessionCodexSecret, runner.authCompletedSecret)
+	}
+	if account := store.openAIAccounts["main"]; account.SecretRef != runner.authCompletedSecret {
+		t.Fatalf("account = %#v", account)
+	}
+}
+
 func TestChatRunDoesNotStartReauthWhenAuthCheckInfrastructureFails(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{

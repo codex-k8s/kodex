@@ -1013,22 +1013,38 @@ func (svc *SlashCommandService) handleOpenAIAuth(ctx context.Context, args []str
 	if err != nil {
 		return svc.validationErrorText(err)
 	}
-	if err := svc.ensureOpenAIAccountNotFrozen(ctx, accountName); err != nil {
-		return svc.t("openai.auth.store_failed", map[string]any{"Error": safeError(err)})
+	frozen, err := svc.ensureFrozenOpenAIAccountReauthAllowed(ctx, accountName, command)
+	if err != nil {
+		if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+			return svc.t("openai.auth.store_failed", map[string]any{"Error": safeError(err)})
+		}
+		return svc.t("openai.auth.owner_required", nil)
 	}
 	secretName := codexAuthSecretName(svc.cfg.CodexAuthSecretName, accountName)
-	account, created, err := svc.cfg.Store.UpsertOpenAIAccount(ctx, adminrepo.UpsertOpenAIAccountInput{
-		Name:           accountName,
-		CredentialName: openAICredentialName(accountName),
-		SecretRef:      secretName,
-		Status:         "auth_pending",
-	})
-	if err != nil {
-		return svc.t("openai.auth.store_failed", map[string]any{"Error": safeError(err)})
+	account := entity.OpenAIAccount{Name: accountName, SecretRef: secretName}
+	created := false
+	if frozen {
+		var ok bool
+		account, ok = svc.openAIAccount(ctx, accountName)
+		if !ok {
+			return svc.t("openai.status.account_not_found", map[string]any{"Account": accountName})
+		}
+	} else {
+		account, created, err = svc.cfg.Store.UpsertOpenAIAccount(ctx, adminrepo.UpsertOpenAIAccountInput{
+			Name:           accountName,
+			CredentialName: openAICredentialName(accountName),
+			SecretRef:      secretName,
+			Status:         "auth_pending",
+		})
+		if err != nil {
+			return svc.t("openai.auth.store_failed", map[string]any{"Error": safeError(err)})
+		}
 	}
 	session, err := svc.cfg.RuntimeRunner.StartCodexAuthSession(ctx, runtimerepo.CodexAuthSessionInput{AccountName: account.Name, SecretName: account.SecretRef})
 	if err != nil {
-		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: accountName, SecretRef: secretName, Status: "auth_failed"})
+		if !frozen {
+			_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: accountName, SecretRef: secretName, Status: "auth_failed"})
+		}
 		return svc.t("openai.auth.failed", map[string]any{"Error": safeError(err)})
 	}
 	svc.recordOpenAIAudit(ctx, command, "openai.account.auth_started", account.Name, "openai account device-code auth session started from Mattermost slash command")
@@ -1057,8 +1073,12 @@ func (svc *SlashCommandService) handleOpenAIStatus(ctx context.Context, args []s
 	if err != nil {
 		return svc.validationErrorText(err)
 	}
-	if err := svc.ensureOpenAIAccountNotFrozen(ctx, accountName); err != nil {
-		return svc.t("openai.status.failed", map[string]any{"Error": safeError(err)})
+	frozen, err := svc.ensureFrozenOpenAIAccountReauthAllowed(ctx, accountName, command)
+	if err != nil {
+		if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+			return svc.t("openai.status.failed", map[string]any{"Error": safeError(err)})
+		}
+		return svc.t("openai.auth.owner_required", nil)
 	}
 	account, ok := svc.openAIAccount(ctx, accountName)
 	if !ok {
@@ -1072,11 +1092,19 @@ func (svc *SlashCommandService) handleOpenAIStatus(ctx context.Context, args []s
 		return svc.t("openai.status.session_not_found", map[string]any{"Account": account.Name, "Status": account.Status})
 	}
 	if status.AuthReady {
-		completed, err := svc.cfg.RuntimeRunner.CompleteCodexAuthSession(ctx, runtimerepo.CodexAuthCompleteInput{AccountName: account.Name, SecretName: account.SecretRef})
+		account, completed, _, err := completeOpenAIAccountAuthorization(
+			ctx,
+			svc.cfg.Store,
+			svc.cfg.RuntimeRunner,
+			account,
+			openAIAuthActor{UserID: command.UserID, UserName: command.UserName},
+		)
 		if err != nil {
+			if errors.Is(err, securityrepo.ErrOpenAIAccountRotationBusy) {
+				return svc.t("openai.status.rotation_busy", nil)
+			}
 			return svc.t("openai.status.complete_failed", map[string]any{"Error": safeError(err)})
 		}
-		account, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: completed.SecretName, Status: "authorized"})
 		_, _ = svc.cfg.RuntimeRunner.CleanupCodexAuthSession(ctx, account.Name)
 		svc.recordOpenAIAudit(ctx, command, "openai.account.authorized", account.Name, "openai account auth.json saved to Kubernetes Secret")
 		text := svc.t("openai.status.authorized", map[string]any{
@@ -1088,7 +1116,9 @@ func (svc *SlashCommandService) handleOpenAIStatus(ctx context.Context, args []s
 		return text
 	}
 	if status.DeviceURL != "" && status.DeviceCode != "" {
-		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: account.SecretRef, Status: "awaiting_user"})
+		if !frozen {
+			_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: account.SecretRef, Status: "awaiting_user"})
+		}
 		return svc.t("openai.status.device_code", map[string]any{
 			"Account": account.Name,
 			"URL":     status.DeviceURL,
@@ -1099,7 +1129,9 @@ func (svc *SlashCommandService) handleOpenAIStatus(ctx context.Context, args []s
 		})
 	}
 	if status.JobFailed > 0 {
-		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: account.SecretRef, Status: "auth_failed"})
+		if !frozen {
+			_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: account.SecretRef, Status: "auth_failed"})
+		}
 		return svc.t("openai.status.job_failed", map[string]any{"Account": account.Name, "Job": status.JobName})
 	}
 	return svc.t("openai.status.waiting", map[string]any{
@@ -1140,8 +1172,11 @@ func (svc *SlashCommandService) handleOpenAICleanup(ctx context.Context, args []
 	if err != nil {
 		return svc.validationErrorText(err)
 	}
-	if err := svc.ensureOpenAIAccountNotFrozen(ctx, accountName); err != nil {
-		return svc.t("openai.cleanup.failed", map[string]any{"Error": safeError(err)})
+	if _, err := svc.ensureFrozenOpenAIAccountReauthAllowed(ctx, accountName, command); err != nil {
+		if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+			return svc.t("openai.cleanup.failed", map[string]any{"Error": safeError(err)})
+		}
+		return svc.t("openai.auth.owner_required", nil)
 	}
 	result, err := svc.cfg.RuntimeRunner.CleanupCodexAuthSession(ctx, accountName)
 	if err != nil {
@@ -3518,11 +3553,7 @@ func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Cont
 }
 
 func (svc *SlashCommandService) ensureOpenAIAccountNotFrozen(ctx context.Context, accountName string) error {
-	repository, ok := svc.cfg.Store.(securityrepo.ClusterAdminAccountDependencyRepository)
-	if !ok {
-		return fmt.Errorf("cluster-admin account dependency guard is unavailable")
-	}
-	frozen, err := repository.IsFrozenClusterAdminOpenAIAccount(ctx, accountName)
+	frozen, err := isFrozenOpenAIAccount(ctx, svc.cfg.Store, accountName)
 	if err != nil {
 		return err
 	}
@@ -3530,6 +3561,23 @@ func (svc *SlashCommandService) ensureOpenAIAccountNotFrozen(ctx context.Context
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
 	return nil
+}
+
+func (svc *SlashCommandService) ensureFrozenOpenAIAccountReauthAllowed(
+	ctx context.Context,
+	accountName string,
+	command SlashCommand,
+) (bool, error) {
+	frozen, err := isFrozenOpenAIAccount(ctx, svc.cfg.Store, accountName)
+	if err != nil || !frozen {
+		return frozen, err
+	}
+	owner := normalizeMattermostUsername(svc.cfg.OwnerMattermostUsername)
+	actor := normalizeMattermostUsername(command.UserName)
+	if owner == "" || actor == "" || actor != owner {
+		return true, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return true, nil
 }
 
 func (svc *SlashCommandService) ensureGitHubAccountNotFrozen(ctx context.Context, accountName string) error {

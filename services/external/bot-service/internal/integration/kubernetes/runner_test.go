@@ -85,6 +85,82 @@ func TestInspectSecretIntegrityClassifiesMissingSecret(t *testing.T) {
 	}
 }
 
+func TestCreateCodexAuthRevisionSecretIsImmutableAndIdempotent(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace: "mattermost", WorkspaceStorageSize: "1Gi",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	const accountName = "main"
+	authJSON := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"synthetic"}}`)
+	secretName := codexAuthRevisionSecretName("matter-codex-codex-auth-main", authJSON)
+
+	first, err := runner.createCodexAuthRevisionSecret(context.Background(), accountName, secretName, authJSON)
+	if err != nil {
+		t.Fatalf("createCodexAuthRevisionSecret() error = %v", err)
+	}
+	second, err := runner.createCodexAuthRevisionSecret(context.Background(), accountName, secretName, authJSON)
+	if err != nil {
+		t.Fatalf("idempotent createCodexAuthRevisionSecret() error = %v", err)
+	}
+	if first.ContentSHA256 == "" || first.ContentSHA256 != second.ContentSHA256 {
+		t.Fatalf("integrity first=%#v second=%#v", first, second)
+	}
+	secret, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), secretName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get Secret error = %v", err)
+	}
+	if secret.Immutable == nil || !*secret.Immutable || secret.Labels[labelOpenAIAccount] != accountName {
+		t.Fatalf("secret = %#v", secret)
+	}
+	if _, err := runner.createCodexAuthRevisionSecret(
+		context.Background(),
+		accountName,
+		secretName,
+		[]byte(`{"different":true}`),
+	); err == nil || !strings.Contains(err.Error(), "conflicts") {
+		t.Fatalf("conflicting create error = %v", err)
+	}
+}
+
+func TestCodexAuthRevisionSecretNameReplacesPreviousRevision(t *testing.T) {
+	authJSON := []byte(`{"synthetic":true}`)
+	first := codexAuthRevisionSecretName("matter-codex-codex-auth-main", authJSON)
+	second := codexAuthRevisionSecretName(first, authJSON)
+	if first != second || strings.Count(second, "-rev-") != 1 || len(second) > 63 {
+		t.Fatalf("revision names first=%q second=%q", first, second)
+	}
+}
+
+func TestPodUsesSessionRuntimeSecretsRequiresCurrentCredentialRevisions(t *testing.T) {
+	pod := &corev1.Pod{Spec: corev1.PodSpec{
+		Volumes: []corev1.Volume{
+			{Name: sessionSecretVolume, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "session-token"}}},
+			{Name: codexAuthSecretVolume, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "openai-rev-1"}}},
+			{Name: gitHubSecretVolume, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "github-rev-1"}}},
+		},
+		Containers: []corev1.Container{{Env: []corev1.EnvVar{
+			{Name: "MATTERCODEX_SESSION_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "session-token"}, Key: "token",
+			}}},
+			{Name: "MATTERCODEX_MCP_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "session-token"}, Key: "token",
+			}}},
+		}}},
+	}}
+	if !podUsesSessionRuntimeSecrets(pod, "session-token", "openai-rev-1", "github-rev-1") {
+		t.Fatal("current runtime revisions were not accepted")
+	}
+	if podUsesSessionRuntimeSecrets(pod, "session-token", "openai-rev-2", "github-rev-1") {
+		t.Fatal("stale OpenAI credential revision was accepted")
+	}
+	if podUsesSessionRuntimeSecrets(pod, "session-token", "openai-rev-1", "github-rev-2") {
+		t.Fatal("stale GitHub credential revision was accepted")
+	}
+}
+
 func TestNewRunnerRejectsSessionMemoryRequestAboveLimit(t *testing.T) {
 	_, err := NewRunnerWithClient(fake.NewSimpleClientset(), Config{
 		Namespace: "mattermost", SessionMemoryRequest: "2Gi", SessionMemoryLimit: "1Gi",

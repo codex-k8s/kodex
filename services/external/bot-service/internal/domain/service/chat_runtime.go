@@ -539,6 +539,10 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	); err != nil {
 		return AgentTurnQueued{}, err
 	}
+	openAIAccount, err = svc.cfg.Store.GetOpenAIAccount(ctx, openAIAccount.Name)
+	if err != nil {
+		return AgentTurnQueued{}, fmt.Errorf("reload ready OpenAI account: %w", err)
+	}
 	gitHubAccount, gitHubOK := svc.gitHubAccount(ctx, request.Project, request.Role, firstRepository(request.Repositories))
 	runtimeVariableBindings, err := svc.cfg.Store.ListAgentRoleRuntimeVariables(ctx, request.Role.ID)
 	if err != nil {
@@ -1215,6 +1219,10 @@ func (svc *ChatRunService) ensureQueuedAgentSessionRuntime(ctx context.Context, 
 	); err != nil {
 		return err
 	}
+	openAIAccount, err = svc.cfg.Store.GetOpenAIAccount(ctx, openAIAccount.Name)
+	if err != nil {
+		return fmt.Errorf("reload ready OpenAI account: %w", err)
+	}
 	repositories, err := svc.chatRepositories(ctx, chat)
 	if err != nil {
 		return err
@@ -1686,6 +1694,10 @@ func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, accou
 		return authErr
 	}
 	if completed {
+		account, err = svc.cfg.Store.GetOpenAIAccount(ctx, account.Name)
+		if err != nil {
+			return fmt.Errorf("reload authorized OpenAI account: %w", err)
+		}
 		check, err = svc.checkCodexAuthSecretWithCapacityReclaim(ctx, runtimerepo.CodexAuthSecretCheckInput{
 			AccountName: account.Name,
 			SecretName:  account.SecretRef,
@@ -1788,15 +1800,16 @@ func (svc *ChatRunService) startCodexReauthSession(ctx context.Context, account 
 }
 
 func (svc *ChatRunService) completeCodexAuthSession(ctx context.Context, account entity.OpenAIAccount) error {
-	completed, err := svc.cfg.RuntimeRunner.CompleteCodexAuthSession(ctx, runtimerepo.CodexAuthCompleteInput{AccountName: account.Name, SecretName: account.SecretRef})
+	_, _, _, err := completeOpenAIAccountAuthorization(
+		ctx,
+		svc.cfg.Store,
+		svc.cfg.RuntimeRunner,
+		account,
+		openAIAuthActor{UserID: "matter-codex", UserName: "matter-codex"},
+	)
 	if err != nil {
 		return err
 	}
-	_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{
-		Name:      account.Name,
-		SecretRef: completed.SecretName,
-		Status:    "authorized",
-	})
 	_, _ = svc.cfg.RuntimeRunner.CleanupCodexAuthSession(ctx, account.Name)
 	return nil
 }

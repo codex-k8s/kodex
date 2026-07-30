@@ -10,11 +10,12 @@ import (
 )
 
 var (
-	ErrCapabilityNotFound = errors.New("interaction capability not found")
-	ErrCapabilityExpired  = errors.New("interaction capability expired")
-	ErrCapabilityConsumed = errors.New("interaction capability consumed")
-	ErrCapabilityBinding  = errors.New("interaction capability binding mismatch")
-	ErrCapabilityInactive = errors.New("interaction capability inactive")
+	ErrCapabilityNotFound        = errors.New("interaction capability not found")
+	ErrCapabilityExpired         = errors.New("interaction capability expired")
+	ErrCapabilityConsumed        = errors.New("interaction capability consumed")
+	ErrCapabilityBinding         = errors.New("interaction capability binding mismatch")
+	ErrCapabilityInactive        = errors.New("interaction capability inactive")
+	ErrOpenAIAccountRotationBusy = errors.New("OpenAI account is used by an active agent turn")
 )
 
 type CapabilityState string
@@ -195,6 +196,20 @@ type ClusterAdminSessionSubjectRepository interface {
 type ClusterAdminAccountDependencyRepository interface {
 	IsFrozenClusterAdminOpenAIAccount(ctx context.Context, accountName string) (bool, error)
 	IsFrozenClusterAdminGitHubAccount(ctx context.Context, accountName string) (bool, error)
+}
+
+type RotateFrozenOpenAIAccountInput struct {
+	AccountName           string
+	SecretRef             string
+	SecretContentSHA256   string
+	SecretResourceUID     string
+	SecretResourceVersion string
+	ActorUserID           string
+	ActorUserName         string
+}
+
+type ClusterAdminOpenAIAccountRotationRepository interface {
+	RotateFrozenOpenAIAccount(ctx context.Context, input RotateFrozenOpenAIAccountInput) (entity.OpenAIAccount, error)
 }
 
 type CapabilityCleanupRepository interface {
