@@ -42,6 +42,7 @@
         "mattercodex-internal-rpc-readback-attestation+jws",
         "mattercodex-internal-rpc-readback-credential+jws",
         "mattercodex-internal-rpc-readback-credential-trust+jws",
+        "mattercodex-internal-rpc-readback-manifest-root+jws",
         "mattercodex-internal-rpc-restore-ack+jws",
         "mattercodex-internal-rpc-restore-role-delivery-receipt+jws",
         "mattercodex-internal-rpc-restore-directive+jws",

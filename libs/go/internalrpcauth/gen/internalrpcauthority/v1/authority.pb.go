@@ -3308,8 +3308,6 @@ type AuthorityReadbackAttestorServiceCheckReadinessResponse struct {
 	Ready                                   bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
 	PinnedIntentRevision                    uint64                 `protobuf:"varint,2,opt,name=pinned_intent_revision,json=pinnedIntentRevision,proto3" json:"pinned_intent_revision,omitempty"`
 	PinnedIntentDigestSha256                string                 `protobuf:"bytes,3,opt,name=pinned_intent_digest_sha256,json=pinnedIntentDigestSha256,proto3" json:"pinned_intent_digest_sha256,omitempty"`
-	RoleCredentialTrustSourceRevision       uint64                 `protobuf:"varint,4,opt,name=role_credential_trust_source_revision,json=roleCredentialTrustSourceRevision,proto3" json:"role_credential_trust_source_revision,omitempty"`
-	RoleCredentialTrustDigestSha256         string                 `protobuf:"bytes,5,opt,name=role_credential_trust_digest_sha256,json=roleCredentialTrustDigestSha256,proto3" json:"role_credential_trust_digest_sha256,omitempty"`
 	VerifierGeneration                      uint64                 `protobuf:"varint,6,opt,name=verifier_generation,json=verifierGeneration,proto3" json:"verifier_generation,omitempty"`
 	ReceiptStoreReady                       bool                   `protobuf:"varint,7,opt,name=receipt_store_ready,json=receiptStoreReady,proto3" json:"receipt_store_ready,omitempty"`
 	ChallengeStoreReady                     bool                   `protobuf:"varint,8,opt,name=challenge_store_ready,json=challengeStoreReady,proto3" json:"challenge_store_ready,omitempty"`
@@ -3318,6 +3316,12 @@ type AuthorityReadbackAttestorServiceCheckReadinessResponse struct {
 	ReadbackCredentialTrustKeySetRevision   uint64                 `protobuf:"varint,11,opt,name=readback_credential_trust_key_set_revision,json=readbackCredentialTrustKeySetRevision,proto3" json:"readback_credential_trust_key_set_revision,omitempty"`
 	ReadbackCredentialTrustSignerGeneration uint64                 `protobuf:"varint,12,opt,name=readback_credential_trust_signer_generation,json=readbackCredentialTrustSignerGeneration,proto3" json:"readback_credential_trust_signer_generation,omitempty"`
 	ReadbackCredentialTrustReadbackReady    bool                   `protobuf:"varint,13,opt,name=readback_credential_trust_readback_ready,json=readbackCredentialTrustReadbackReady,proto3" json:"readback_credential_trust_readback_ready,omitempty"`
+	ReadbackManifestRootId                  string                 `protobuf:"bytes,14,opt,name=readback_manifest_root_id,json=readbackManifestRootId,proto3" json:"readback_manifest_root_id,omitempty"`
+	ReadbackManifestRootFingerprintSha256   string                 `protobuf:"bytes,15,opt,name=readback_manifest_root_fingerprint_sha256,json=readbackManifestRootFingerprintSha256,proto3" json:"readback_manifest_root_fingerprint_sha256,omitempty"`
+	ReadbackManifestBundleRevision          uint64                 `protobuf:"varint,16,opt,name=readback_manifest_bundle_revision,json=readbackManifestBundleRevision,proto3" json:"readback_manifest_bundle_revision,omitempty"`
+	ReadbackManifestBundleDigestSha256      string                 `protobuf:"bytes,17,opt,name=readback_manifest_bundle_digest_sha256,json=readbackManifestBundleDigestSha256,proto3" json:"readback_manifest_bundle_digest_sha256,omitempty"`
+	ReadbackManifestSignerGeneration        uint64                 `protobuf:"varint,18,opt,name=readback_manifest_signer_generation,json=readbackManifestSignerGeneration,proto3" json:"readback_manifest_signer_generation,omitempty"`
+	ReadbackManifestRootServedReadbackReady bool                   `protobuf:"varint,19,opt,name=readback_manifest_root_served_readback_ready,json=readbackManifestRootServedReadbackReady,proto3" json:"readback_manifest_root_served_readback_ready,omitempty"`
 	unknownFields                           protoimpl.UnknownFields
 	sizeCache                               protoimpl.SizeCache
 }
@@ -3369,20 +3373,6 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetPinnedIntent
 func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetPinnedIntentDigestSha256() string {
 	if x != nil {
 		return x.PinnedIntentDigestSha256
-	}
-	return ""
-}
-
-func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetRoleCredentialTrustSourceRevision() uint64 {
-	if x != nil {
-		return x.RoleCredentialTrustSourceRevision
-	}
-	return 0
-}
-
-func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetRoleCredentialTrustDigestSha256() string {
-	if x != nil {
-		return x.RoleCredentialTrustDigestSha256
 	}
 	return ""
 }
@@ -3439,6 +3429,48 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackCred
 func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackCredentialTrustReadbackReady() bool {
 	if x != nil {
 		return x.ReadbackCredentialTrustReadbackReady
+	}
+	return false
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackManifestRootId() string {
+	if x != nil {
+		return x.ReadbackManifestRootId
+	}
+	return ""
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackManifestRootFingerprintSha256() string {
+	if x != nil {
+		return x.ReadbackManifestRootFingerprintSha256
+	}
+	return ""
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackManifestBundleRevision() uint64 {
+	if x != nil {
+		return x.ReadbackManifestBundleRevision
+	}
+	return 0
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackManifestBundleDigestSha256() string {
+	if x != nil {
+		return x.ReadbackManifestBundleDigestSha256
+	}
+	return ""
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackManifestSignerGeneration() uint64 {
+	if x != nil {
+		return x.ReadbackManifestSignerGeneration
+	}
+	return 0
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackManifestRootServedReadbackReady() bool {
+	if x != nil {
+		return x.ReadbackManifestRootServedReadbackReady
 	}
 	return false
 }
@@ -3998,13 +4030,12 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x15credential_generation\x18\v \x01(\x04R\x14credentialGeneration\x12:\n" +
 	"\x19possession_key_generation\x18\f \x01(\x04R\x17possessionKeyGeneration\x12I\n" +
 	"!readback_credential_digest_sha256\x18\r \x01(\tR\x1ereadbackCredentialDigestSha256\"7\n" +
-	"5AuthorityReadbackAttestorServiceCheckReadinessRequest\"\xb9\a\n" +
+	"5AuthorityReadbackAttestorServiceCheckReadinessRequest\"\xd3\n" +
+	"\n" +
 	"6AuthorityReadbackAttestorServiceCheckReadinessResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\x124\n" +
 	"\x16pinned_intent_revision\x18\x02 \x01(\x04R\x14pinnedIntentRevision\x12=\n" +
-	"\x1bpinned_intent_digest_sha256\x18\x03 \x01(\tR\x18pinnedIntentDigestSha256\x12P\n" +
-	"%role_credential_trust_source_revision\x18\x04 \x01(\x04R!roleCredentialTrustSourceRevision\x12L\n" +
-	"#role_credential_trust_digest_sha256\x18\x05 \x01(\tR\x1froleCredentialTrustDigestSha256\x12/\n" +
+	"\x1bpinned_intent_digest_sha256\x18\x03 \x01(\tR\x18pinnedIntentDigestSha256\x12/\n" +
 	"\x13verifier_generation\x18\x06 \x01(\x04R\x12verifierGeneration\x12.\n" +
 	"\x13receipt_store_ready\x18\a \x01(\bR\x11receiptStoreReady\x122\n" +
 	"\x15challenge_store_ready\x18\b \x01(\bR\x13challengeStoreReady\x12X\n" +
@@ -4013,7 +4044,13 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	" \x01(\tR#readbackCredentialTrustDigestSha256\x12Y\n" +
 	"*readback_credential_trust_key_set_revision\x18\v \x01(\x04R%readbackCredentialTrustKeySetRevision\x12\\\n" +
 	"+readback_credential_trust_signer_generation\x18\f \x01(\x04R'readbackCredentialTrustSignerGeneration\x12V\n" +
-	"(readback_credential_trust_readback_ready\x18\r \x01(\bR$readbackCredentialTrustReadbackReady\"\xb3\x01\n" +
+	"(readback_credential_trust_readback_ready\x18\r \x01(\bR$readbackCredentialTrustReadbackReady\x129\n" +
+	"\x19readback_manifest_root_id\x18\x0e \x01(\tR\x16readbackManifestRootId\x12X\n" +
+	")readback_manifest_root_fingerprint_sha256\x18\x0f \x01(\tR%readbackManifestRootFingerprintSha256\x12I\n" +
+	"!readback_manifest_bundle_revision\x18\x10 \x01(\x04R\x1ereadbackManifestBundleRevision\x12R\n" +
+	"&readback_manifest_bundle_digest_sha256\x18\x11 \x01(\tR\"readbackManifestBundleDigestSha256\x12M\n" +
+	"#readback_manifest_signer_generation\x18\x12 \x01(\x04R readbackManifestSignerGeneration\x12]\n" +
+	",readback_manifest_root_served_readback_ready\x18\x13 \x01(\bR'readbackManifestRootServedReadbackReadyJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R%role_credential_trust_source_revisionR#role_credential_trust_digest_sha256\"\xb3\x01\n" +
 	"\x1cPublishRoleCredentialRequest\x12C\n" +
 	"\x1eissuance_directive_compact_jws\x18\x01 \x01(\tR\x1bissuanceDirectiveCompactJws\x12'\n" +
 	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12%\n" +

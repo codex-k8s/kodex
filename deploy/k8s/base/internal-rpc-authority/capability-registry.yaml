@@ -623,17 +623,66 @@ spec:
       databaseLoginPrincipal: FROM_CONTROLLER_OWNED_EXACT_IDENTITY
       pinnedIntentSource: authority_rotation_intents
       persistedPinnedIntentTable: authority_readback_intents
+      readbackManifestTrustRoot:
+        authorityOwner: internal-rpc-authority-readback-trust-root-controller
+        bootstrapRootId: internal-rpc-authority-readback-manifest-root-v1
+        bootstrapFingerprintConfig: INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_ROOT_FINGERPRINT_SHA256
+        signedBundleSchema: contracts/authorization/v1/readback-manifest-trust-root.schema.json
+        protectedType: mattercodex-internal-rpc-readback-manifest-root+jws
+        exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor:manifest-root
+        secretName: internal-rpc-authority-readback-manifest-trust-root
+        bundleResourceName: internal-rpc-authority-readback-manifest-signers
+        csiDriver: secrets-store.csi.k8s.io
+        csiProvider: vault
+        vaultRole: internal-rpc-authority-readback-trust-reader
+        vaultPath: pki/internal-rpc-authority/readback-manifest-root/bundle
+        exactMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root/root.jws
+        serviceAccount: internal-rpc-authority-readback-attestor
+        publisherReadOrWriteAllowed: false
+        restoreTrustAccepted: false
+        verificationOrder:
+          - verify-pinned-bootstrap-root-fingerprint
+          - verify-root-jws-alg-typ-kid-audience-and-purpose
+          - verify-bundle-revision-digest-predecessor-history-and-validity
+          - select-exact-current-next-or-bounded-previous-manifest-key
+          - verify-readback-credential-trust-jws-and-jcs-payload
+          - advance-persistent-high-watermark
+          - publish-cryptographic-served-readback
+        persistentHighWatermark:
+          store: internal-rpc-authority-data
+          key: READBACK_MANIFEST_TRUST_ROOT
+          multiReplicaCas: SERIALIZABLE_REVISION_DIGEST_PREDECESSOR_CAS
+          sameRevisionMutationOrRollback: REJECT
+          historyGap: REJECT_AND_REQUIRE_SIGNED_REJOIN_CHAIN
+        failureCases:
+          - CO_DELIVERED_SUBSTITUTE_SIGNER
+          - WRONG_ROOT_ID_OR_FINGERPRINT
+          - WRONG_KID_OR_SIGNER_GENERATION
+          - SAME_REVISION_MUTATION
+          - ROLLBACK_OR_HISTORY_GAP
+          - MISSING_OR_EXPIRED_ROOT
+          - MISSING_OR_EXPIRED_MANIFEST_SIGNER
+          - RESTORE_TRUST_AT_READBACK_ATTESTOR
+          - READINESS_ON_UNSERVED_TRUST
+        readinessRequiresCryptographicServedBundleReadback: true
       readbackCredentialTrust:
         source: internal-rpc-authority-readback-credential-trust
         schema: contracts/authorization/v1/readback-credential-trust.schema.json
         protectedType: mattercodex-internal-rpc-readback-credential-trust+jws
         exactMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust
+        requiredManifestRootId: internal-rpc-authority-readback-manifest-root-v1
+        requiredManifestRootFingerprintField: readback_manifest_root_fingerprint_sha256
+        requiredManifestBundleRevisionField: readback_manifest_bundle_revision
+        requiredManifestSignerKidField: readback_manifest_signer_kid
+        restoreRoleTrustFieldOrConfigFallbackAllowed: false
         persistentHighWatermark: internal-rpc-authority-data
         servedReadbackOwner: internal-rpc-authority-readback-attestor
         sameRevisionMutationOrRollback: REJECT
       readiness:
         requireDatabase: true
         requirePinnedIntentProjectionReadback: true
+        requirePinnedReadbackManifestRootFingerprint: true
+        requireReadbackManifestRootServedReadback: true
         requireNormalReadbackCredentialTrustServedReadback: true
         requireChallengeInsertLockConsumeProbe: true
         requireReceiptInsertAndReadback: true
@@ -993,6 +1042,78 @@ spec:
           - served_readback_at
       readinessRequiresActuallyServedSnapshotReadback: true
       failurePolicy: FAIL_CLOSED
+    readback-manifest-trust-root:
+      kind: OfflineRootManagedExternalMonotonicSecret
+      owner: internal-rpc-authority-readback-trust-root-controller
+      namespace: mattercodex-system
+      serviceAccount: internal-rpc-authority-readback-trust-root-controller
+      bootstrapRootId: internal-rpc-authority-readback-manifest-root-v1
+      bootstrapPublicKeyFingerprintSource: PINNED_IMMUTABLE_IMAGE_CONFIG_FROM_OWNER_CEREMONY
+      bootstrapPrivateKeyCustody: OFFLINE_HSM_OR_VAULT_TRANSIT_NO_WORKLOAD_EXPORT
+      resourceName: internal-rpc-authority-readback-manifest-trust-root
+      bundleResourceName: internal-rpc-authority-readback-manifest-signers
+      immutableBootstrapSecret: true
+      signedPayloadSchema: contracts/authorization/v1/readback-manifest-trust-root.schema.json
+      protectedType: mattercodex-internal-rpc-readback-manifest-root+jws
+      exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor:manifest-root
+      exactPurpose: NORMAL_READBACK_CREDENTIAL_TRUST_VERIFICATION
+      updateProtocol: OFFLINE_ROOT_SIGNED_BUNDLE_REVISION_PREDECESSOR_CAS
+      keyStatuses:
+        - CURRENT
+        - NEXT
+        - PREVIOUS
+      rootRotationCeremony:
+        approval: SEPARATE_OWNER_GATE
+        requireOldAndNewRootCrossSignedOverlap: true
+        overlapMinimum: MAX_SNAPSHOT_TTL_PLUS_REJOIN_WINDOW
+        pinNewFingerprintBeforeSignerUse: true
+        retireOldRootAfterEveryAttestorServedReadback: true
+        rollback: FORWARD_ONLY_NEW_REVISION_SIGNED_BY_OVERLAPPING_ROOT
+      publisherPermissions:
+        verbs: []
+        readWriteOrMountAllowed: false
+      attestorPermissions:
+        verbs:
+          - get
+          - watch
+        resourceNames:
+          - internal-rpc-authority-readback-manifest-trust-root
+          - internal-rpc-authority-readback-manifest-signers
+        writeAllowed: false
+      delivery:
+        csiDriver: secrets-store.csi.k8s.io
+        provider: vault
+        vaultKubernetesAuthRole: internal-rpc-authority-readback-trust-reader
+        vaultPath: pki/internal-rpc-authority/readback-manifest-root/bundle
+        tlsServerName: vault.mattercodex-system.svc.cluster.local
+        trustBundleMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/vault-ca.pem
+        destinationMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root/root.jws
+        serviceAccount: internal-rpc-authority-readback-attestor
+        networkPolicy:
+          name: internal-rpc-authority-readback-attestor-to-vault
+          destination: vault.mattercodex-system.svc
+          port: 8200
+          protocol: TCP
+          wildcardDestinationAllowed: false
+      attestorOwnedState:
+        store: internal-rpc-authority-data
+        fields:
+          - bootstrap_root_id
+          - bootstrap_root_fingerprint_sha256
+          - bundle_revision
+          - bundle_digest_sha256
+          - manifest_signer_generation
+          - predecessor_revision
+          - predecessor_digest_sha256
+          - served_readback_at
+      crashOrMissedUpdate:
+        crashBeforePersist: RELOAD_LAST_SERVED_BUNDLE
+        crashAfterPersistBeforeServe: READINESS_FALSE_UNTIL_CRYPTOGRAPHIC_READBACK
+        missedUpdate: VERIFY_COMPLETE_BOUNDED_PREDECESSOR_CHAIN
+        rejoin: LOAD_PERSISTED_HIGH_WATERMARK_THEN_VERIFY_AND_SERVE
+        expiredRootOrSigner: READINESS_FALSE_AND_NO_CREDENTIAL_ACCEPTANCE
+      readinessRequiresActuallyServedSnapshotReadback: true
+      failurePolicy: FAIL_CLOSED
     readback-credential-trust-snapshot:
       kind: ExternalMonotonicKubernetesSecret
       owner: internal-rpc-authority-publisher
@@ -1002,6 +1123,10 @@ spec:
       createOwner: cluster-bootstrap
       signedPayloadSchema: contracts/authorization/v1/readback-credential-trust.schema.json
       protectedType: mattercodex-internal-rpc-readback-credential-trust+jws
+      manifestTrustRootResource: internal-rpc-authority-readback-manifest-trust-root
+      manifestTrustBundleResource: internal-rpc-authority-readback-manifest-signers
+      requirePinnedRootFingerprintBeforeSnapshotSignature: true
+      coDeliveredPublisherSignerAccepted: false
       exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor
       restoreControllerAudienceAllowed: false
       updateProtocol: SIGNED_SOURCE_REVISION_KEY_SET_REVISION_PREDECESSOR_CAS
@@ -1027,6 +1152,9 @@ spec:
           - key_set_revision
           - canonical_payload_digest_sha256
           - manifest_signer_generation
+          - readback_manifest_root_id
+          - readback_manifest_root_fingerprint_sha256
+          - readback_manifest_bundle_revision
           - predecessor_revision
           - predecessor_digest_sha256
           - served_readback_at

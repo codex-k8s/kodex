@@ -1,23 +1,19 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/readback-credential-trust.schema.json",
-  "title": "Независимый trust snapshot signer ключей normal-readback credential",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/readback-manifest-trust-root.schema.json",
+  "title": "Независимый корень доверия manifest signer normal-readback",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "v",
+    "root_id",
+    "purpose",
     "iss",
     "aud",
-    "readback_manifest_root_id",
-    "readback_manifest_root_fingerprint_sha256",
-    "readback_manifest_bundle_revision",
-    "readback_manifest_signer_kid",
-    "source_revision",
-    "key_set_revision",
-    "trust_set_digest_sha256",
+    "bundle_revision",
+    "bundle_digest_sha256",
     "predecessor",
     "history",
-    "manifest_signer_generation",
     "keys",
     "published_at",
     "valid_until"
@@ -26,34 +22,22 @@
     "v": {
       "const": 1
     },
-    "iss": {
-      "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
-    },
-    "aud": {
-      "const": "urn:mattercodex:internal-rpc-authority-readback-attestor"
-    },
-    "readback_manifest_root_id": {
+    "root_id": {
       "const": "internal-rpc-authority-readback-manifest-root-v1"
     },
-    "readback_manifest_root_fingerprint_sha256": {
-      "$ref": "#/$defs/digest"
+    "purpose": {
+      "const": "NORMAL_READBACK_CREDENTIAL_TRUST_VERIFICATION"
     },
-    "readback_manifest_bundle_revision": {
+    "iss": {
+      "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-readback-trust-root-controller"
+    },
+    "aud": {
+      "const": "urn:mattercodex:internal-rpc-authority-readback-attestor:manifest-root"
+    },
+    "bundle_revision": {
       "$ref": "#/$defs/positiveRevision"
     },
-    "readback_manifest_signer_kid": {
-      "type": "string",
-      "minLength": 3,
-      "maxLength": 64,
-      "pattern": "^[A-Za-z0-9._-]+$"
-    },
-    "source_revision": {
-      "$ref": "#/$defs/positiveRevision"
-    },
-    "key_set_revision": {
-      "$ref": "#/$defs/positiveRevision"
-    },
-    "trust_set_digest_sha256": {
+    "bundle_digest_sha256": {
       "$ref": "#/$defs/digest"
     },
     "predecessor": {
@@ -66,9 +50,6 @@
       "items": {
         "$ref": "#/$defs/historyEntry"
       }
-    },
-    "manifest_signer_generation": {
-      "$ref": "#/$defs/positiveRevision"
     },
     "keys": {
       "type": "array",
@@ -210,7 +191,7 @@
       "additionalProperties": false,
       "required": [
         "status",
-        "credential_signer_generation",
+        "manifest_signer_generation",
         "kid",
         "public_jwk",
         "jwk_thumbprint_sha256",
@@ -225,7 +206,7 @@
             "PREVIOUS"
           ]
         },
-        "credential_signer_generation": {
+        "manifest_signer_generation": {
           "$ref": "#/$defs/positiveRevision"
         },
         "kid": {

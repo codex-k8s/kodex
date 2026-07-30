@@ -64,6 +64,7 @@ authorization context; синтаксически корректный tuple и�
 | `contracts/authorization/v1/restore-role-trust.schema.json` | controller-verified CURRENT/NEXT/PREVIOUS public trust signer role credential |
 | `contracts/authorization/v1/readback-credential.schema.json` | отдельный normal-readback credential с exact purpose/audience и possession JWK |
 | `contracts/authorization/v1/readback-credential-trust.schema.json` | attestor-owned CURRENT/NEXT/PREVIOUS trust signer normal-readback credential |
+| `contracts/authorization/v1/readback-manifest-trust-root.schema.json` | независимо управляемый offline-root bundle signer normal-readback credential trust |
 | `contracts/authorization/v1/readback-attestation.schema.json` | role-bound served-state evidence для server-owned durable challenge |
 | `contracts/authorization/v1/readback-attestation.schema.json` | role-bound challenge evidence фактически обслуживаемого pinned state |
 | `contracts/authorization/v1/postgresql-readback-boundary.sql` | исполняемый exact PostgreSQL privilege/RLS/function contract |
@@ -852,8 +853,21 @@ paths, key IDs и material не совпадают с restore-only credential/AC
 Signer normal-readback credential имеет отдельный forward-only trust snapshot
 `mattercodex-internal-rpc-readback-credential-trust+jws` с
 `CURRENT/NEXT/PREVIOUS`, source/key-set revisions, predecessor/history и
-manifest signer generation. Attestor, а не publisher, хранит persistent
-high-watermark и cryptographic readback фактически обслуживаемого snapshot.
+manifest signer generation. До проверки этого snapshot attestor обязан
+проверить отдельный
+`mattercodex-internal-rpc-readback-manifest-root+jws`: его offline root,
+идентификатор и SHA-256 fingerprint закреплены owner ceremony в immutable
+image config, а signed bundle signer keys доставляется attestor через
+отдельные Secret/CSI/Vault role, mount и `NetworkPolicy`, недоступные
+publisher. Bundle содержит ровно один `CURRENT`, один `NEXT` и не более одного
+bounded `PREVIOUS`, revision/digest/predecessor/history и validity. Root
+rotation сначала cross-signs old/new roots, закрепляет новый fingerprint и
+держит overlap до cryptographic served readback каждой attestor replica.
+Attestor, а не publisher, хранит persistent high-watermark обоих уровней и
+cryptographic readback фактически обслуживаемых bundle и credential-trust
+snapshot. Co-delivered signer, restore trust, same-revision mutation,
+rollback/history gap, expired root/signer и readiness по не обслуживаемому
+bundle закрыто отклоняются.
 Restore-controller typ/audience, multi-audience token и permissive fallback
 закрыто отклоняются; normal-readback credential симметрично не принимается
 restore controller.

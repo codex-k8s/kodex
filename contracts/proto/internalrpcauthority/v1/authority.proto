@@ -470,11 +470,12 @@ message IssueAttestationChallengeResponse {
 message AuthorityReadbackAttestorServiceCheckReadinessRequest {}
 
 message AuthorityReadbackAttestorServiceCheckReadinessResponse {
+  reserved 4, 5;
+  reserved "role_credential_trust_source_revision", "role_credential_trust_digest_sha256";
+
   bool ready = 1;
   uint64 pinned_intent_revision = 2;
   string pinned_intent_digest_sha256 = 3;
-  uint64 role_credential_trust_source_revision = 4;
-  string role_credential_trust_digest_sha256 = 5;
   uint64 verifier_generation = 6;
   bool receipt_store_ready = 7;
   bool challenge_store_ready = 8;
@@ -483,6 +484,12 @@ message AuthorityReadbackAttestorServiceCheckReadinessResponse {
   uint64 readback_credential_trust_key_set_revision = 11;
   uint64 readback_credential_trust_signer_generation = 12;
   bool readback_credential_trust_readback_ready = 13;
+  string readback_manifest_root_id = 14;
+  string readback_manifest_root_fingerprint_sha256 = 15;
+  uint64 readback_manifest_bundle_revision = 16;
+  string readback_manifest_bundle_digest_sha256 = 17;
+  uint64 readback_manifest_signer_generation = 18;
+  bool readback_manifest_root_served_readback_ready = 19;
 }
 
 message PublishRoleCredentialRequest {

@@ -145,6 +145,36 @@
       "name": "missing-readback-network-policy",
       "mutation": "source egress or attestor ingress for either challenge or attestation RPC is absent",
       "reason": "READBACK_CHALLENGE_UNAVAILABLE"
+    },
+    {
+      "name": "co-delivered-readback-manifest-signer",
+      "mutation": "attestor accepts a credential-trust signer delivered by the publisher instead of the pinned independent root bundle",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "readback-manifest-root-fingerprint-mismatch",
+      "mutation": "signed manifest bundle root fingerprint differs from the immutable owner-ceremony fingerprint",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "readback-manifest-bundle-same-revision-mutation",
+      "mutation": "manifest bundle reuses the served revision with a different canonical digest or signer set",
+      "reason": "SNAPSHOT_MUTATION"
+    },
+    {
+      "name": "readback-manifest-bundle-rollback-or-gap",
+      "mutation": "manifest bundle revision is below the attestor high-watermark or omits the bounded signed predecessor chain",
+      "reason": "SNAPSHOT_ROLLBACK"
+    },
+    {
+      "name": "readback-manifest-root-expired",
+      "mutation": "bootstrap root or selected CURRENT NEXT PREVIOUS manifest signer is outside its validity window",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "restore-trust-as-readback-manifest-root",
+      "mutation": "attestor uses restore role trust or the removed role_credential_trust readiness fields for normal readback",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
     }
   ]
 }
