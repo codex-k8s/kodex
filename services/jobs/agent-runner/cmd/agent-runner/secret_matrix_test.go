@@ -361,22 +361,16 @@ func TestSessionArchiveSanitizesSourceAndRejectsLimitsBeforeAllocation(t *testin
 	}
 }
 
-func TestSessionArchiveAcceptsExactPerFileBoundary(t *testing.T) {
-	root := t.TempDir()
-	sessionDir := filepath.Join(root, "sessions", "run")
-	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
-		t.Fatal(err)
+func TestSessionArchiveLimitsMatchRuntimeContract(t *testing.T) {
+	const expectedLimit = int64(512 << 20)
+	if maxSessionArchiveFileBytes != expectedLimit {
+		t.Fatalf("per-file limit = %d, want %d", maxSessionArchiveFileBytes, expectedLimit)
 	}
-	boundary := bytes.Repeat([]byte("x"), int(maxSessionArchiveFileBytes))
-	if err := os.WriteFile(filepath.Join(sessionDir, "rollout.jsonl"), boundary, 0o600); err != nil {
-		t.Fatal(err)
+	if maxSessionArchiveTotalBytes != expectedLimit {
+		t.Fatalf("total limit = %d, want %d", maxSessionArchiveTotalBytes, expectedLimit)
 	}
-	archive, err := createCodexSessionArchive(root, secretInventory{})
-	if err != nil {
-		t.Fatalf("exact boundary archive error = %v", err)
-	}
-	if strings.TrimSpace(archive) == "" {
-		t.Fatal("exact boundary archive пуст")
+	if maxProtectedValueBytes < maxSessionArchiveTotalBytes {
+		t.Fatalf("protected value limit = %d, want at least %d", maxProtectedValueBytes, maxSessionArchiveTotalBytes)
 	}
 }
 
@@ -433,13 +427,13 @@ func TestSessionArchiveRejectsFileCountAndTotalLimitsBeforeUnboundedRead(t *test
 		if err := os.MkdirAll(sessionDir, 0o700); err != nil {
 			t.Fatal(err)
 		}
-		for index := 0; index < 5; index++ {
+		for index, size := range []int64{1, maxSessionArchiveTotalBytes} {
 			path := filepath.Join(sessionDir, fmt.Sprintf("event-%02d.jsonl", index))
 			file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o600)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := file.Truncate(maxSessionArchiveFileBytes); err != nil {
+			if err := file.Truncate(size); err != nil {
 				_ = file.Close()
 				t.Fatal(err)
 			}

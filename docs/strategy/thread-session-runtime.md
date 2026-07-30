@@ -89,10 +89,10 @@ MCP endpoint доступен только внутри runtime через beare
 
 Snapshot хранится в БД в поле `session_archive_gzip_base64` как gzip+tar архива `$CODEX_HOME/sessions`. Runner получает snapshot через internal HTTP endpoint bot-service и после каждого turn отправляет обновленный snapshot обратно.
 
-Архив ограничен 32 MiB на один файл Codex rollout и 64 MiB суммарно до
-сжатия. Эти границы допускают длительные сессии, но сохраняют ограниченный
-объем памяти runner и bot-service при проверке, сериализации и восстановлении
-snapshot. Превышение границы является явной ошибкой сохранения сессии и не
-должно маскироваться как успешный durable resume.
+Архив ограничен 512 MiB на один файл Codex rollout и 512 MiB суммарно до
+сжатия. Граница рассчитана на длительные сессии; runner и bot-service должны
+учитывать этот предел при проверке, сериализации и восстановлении snapshot.
+Превышение границы является явной ошибкой сохранения сессии и не должно
+маскироваться как успешный durable resume.
 
 Если размер snapshot станет слишком большим для одной записи БД или HTTP payload, следующий шаг - заменить payload на object storage/blob endpoint, сохранив БД как source of truth для metadata.
