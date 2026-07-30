@@ -36,6 +36,31 @@ func TestEmptyMCPCollectionOutputsUseArrays(t *testing.T) {
 	}
 }
 
+func TestMCPDelegationOutputsRequireCurrentTurnCompletion(t *testing.T) {
+	delegation := mcpDelegationAccepted(statusservice.AgentSessionDelegationResult{
+		DelegationID: 41,
+		TargetRunID:  "run-41",
+	})
+	if delegation.DelegationID != 41 || delegation.TargetRunID != "run-41" || delegation.NextAction != mcpNextActionFinishAfterDelegations {
+		t.Fatalf("delegation output = %#v", delegation)
+	}
+
+	request := mcpAgentRequestAccepted(statusservice.AgentSessionAgentRequest{
+		DelegationID:     42,
+		RequestedRunID:   "run-42",
+		TargetSessionKey: "session-42",
+	})
+	if request.DelegationID != 42 || request.RequestedRunID != "run-42" || request.TargetSessionKey != "session-42" ||
+		request.NextAction != mcpNextActionFinishAfterDelegations {
+		t.Fatalf("agent request output = %#v", request)
+	}
+
+	callback := mcpCallbackAccepted(statusservice.AgentSessionDelegationResult{CallbackRunID: "callback-43"})
+	if callback.CallbackRunID != "callback-43" || callback.NextAction != mcpNextActionFinishAfterCallback {
+		t.Fatalf("callback output = %#v", callback)
+	}
+}
+
 func TestMCPAutomationCallbackOutputKeepsHumanGatePending(t *testing.T) {
 	output := automationCallbackMCPOutput(statusservice.AutomationCallbackResult{
 		Run: entity.ScheduledRun{

@@ -308,6 +308,7 @@ type AgentSessionAgentRequest struct {
 	TargetSessionKey  string `json:"target_session_key"`
 	DelegationID      int64  `json:"delegation_id"`
 	AuditPostID       string `json:"audit_post_id,omitempty"`
+	NextAction        string `json:"next_action,omitempty"`
 }
 
 func NewAgentSessionService(cfg AgentSessionServiceConfig) *AgentSessionService {
