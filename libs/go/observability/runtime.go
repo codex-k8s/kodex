@@ -37,6 +37,7 @@ const (
 	maxDSNFileBytes   = 16 << 10
 )
 
+// RuntimeConfig задаёт OTel, Sentry и идентичность сервиса.
 type RuntimeConfig struct {
 	ServiceName        string
 	ServiceVersion     string
@@ -49,6 +50,7 @@ type RuntimeConfig struct {
 	SentryExpectedHost string
 }
 
+// Runtime владеет tracer provider и отдельным клиентом Sentry.
 type Runtime struct {
 	serviceName string
 	tracer      trace.Tracer
@@ -56,6 +58,7 @@ type Runtime struct {
 	sentry      *sentry.Client
 }
 
+// RuntimeConfigFromEnv читает и проверяет настройки телеметрии.
 func RuntimeConfigFromEnv(serviceName, serviceVersion string) (RuntimeConfig, error) {
 	ratio := defaultTraceRatio
 	if raw := strings.TrimSpace(os.Getenv("OTEL_TRACES_SAMPLER_ARG")); raw != "" {
@@ -90,6 +93,7 @@ func RuntimeConfigFromEnv(serviceName, serviceVersion string) (RuntimeConfig, er
 	return config, nil
 }
 
+// NewRuntime создаёт OTel exporter и Sentry client с точным TLS.
 func NewRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
 	if err := validateRuntimeConfig(config); err != nil {
 		return nil, err
@@ -155,12 +159,14 @@ func NewRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
 	}, nil
 }
 
+// Logger создаёт JSON-logger, связанный с trace/span.
 func (runtime *Runtime) Logger(writer io.Writer) *slog.Logger {
 	return slog.New(&traceHandler{
 		delegate: slog.NewJSONHandler(writer, &slog.HandlerOptions{}),
 	})
 }
 
+// UnaryServerInterceptor создаёт server span и сообщает неожиданные ошибки.
 func (runtime *Runtime) UnaryServerInterceptor(
 	allowedMethods map[string]string,
 ) grpc.UnaryServerInterceptor {
@@ -197,6 +203,7 @@ func (runtime *Runtime) UnaryServerInterceptor(
 	}
 }
 
+// UnaryClientInterceptor создаёт client span и сообщает неожиданные ошибки.
 func (runtime *Runtime) UnaryClientInterceptor(
 	allowedMethods map[string]string,
 ) grpc.UnaryClientInterceptor {
@@ -236,6 +243,7 @@ func (runtime *Runtime) UnaryClientInterceptor(
 	}
 }
 
+// CaptureException отправляет ошибку в Sentry с trace/span tags.
 func (runtime *Runtime) CaptureException(ctx context.Context, err error) {
 	if runtime == nil || runtime.sentry == nil || err == nil {
 		return
@@ -249,6 +257,7 @@ func (runtime *Runtime) CaptureException(ctx context.Context, err error) {
 	runtime.sentry.CaptureException(err, &sentry.EventHint{Context: ctx}, scope)
 }
 
+// ShutdownTracing завершает OTel exporter в пределах переданного бюджета.
 func (runtime *Runtime) ShutdownTracing(ctx context.Context) error {
 	if runtime == nil || runtime.provider == nil {
 		return nil
@@ -256,6 +265,7 @@ func (runtime *Runtime) ShutdownTracing(ctx context.Context) error {
 	return runtime.provider.Shutdown(ctx)
 }
 
+// FlushSentry независимо сбрасывает очередь Sentry в пределах бюджета.
 func (runtime *Runtime) FlushSentry(ctx context.Context) error {
 	if runtime == nil || runtime.sentry == nil {
 		return nil

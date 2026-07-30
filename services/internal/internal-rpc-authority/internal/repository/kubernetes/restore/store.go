@@ -26,6 +26,7 @@ const (
 	stateDataKey               = "state.json"
 )
 
+// Config задаёт точную TLS- и resource-конфигурацию хранилища.
 type Config struct {
 	Address       string
 	TLSServerName string
@@ -36,6 +37,7 @@ type Config struct {
 	Timeout       time.Duration
 }
 
+// Store реализует версионированное CAS-хранилище координации.
 type Store struct {
 	config      Config
 	client      *http.Client
@@ -55,6 +57,7 @@ type objectMetadata struct {
 	ResourceVersion string `json:"resourceVersion,omitempty"`
 }
 
+// New создаёт хранилище с закреплёнными namespace и resource name.
 func New(config Config) (*Store, error) {
 	address, err := url.Parse(config.Address)
 	if err != nil ||
@@ -101,10 +104,12 @@ func New(config Config) (*Store, error) {
 	}, nil
 }
 
+// Close закрывает простаивающие соединения клиента Kubernetes API.
 func (store *Store) Close() {
 	store.client.CloseIdleConnections()
 }
 
+// Prepare начинает новую координацию восстановления идемпотентно.
 func (store *Store) Prepare(
 	ctx context.Context,
 	command model.PrepareRestoreCommand,
@@ -158,6 +163,7 @@ func (store *Store) Prepare(
 	return result, err
 }
 
+// Load читает и строго декодирует текущее состояние координации.
 func (store *Store) Load(ctx context.Context) (model.RestoreState, error) {
 	envelope, err := store.read(ctx)
 	if err != nil {
@@ -166,6 +172,7 @@ func (store *Store) Load(ctx context.Context) (model.RestoreState, error) {
 	return decodeState(envelope.Data[stateDataKey])
 }
 
+// EnsureIssuance сохраняет выдачу роли восстановления ровно один раз.
 func (store *Store) EnsureIssuance(
 	ctx context.Context,
 	restoreID string,
@@ -191,6 +198,7 @@ func (store *Store) EnsureIssuance(
 	return result, err
 }
 
+// RecordDelivery фиксирует подтверждённую доставку роли.
 func (store *Store) RecordDelivery(
 	ctx context.Context,
 	restoreID string,
@@ -220,6 +228,7 @@ func (store *Store) RecordDelivery(
 	return result, err
 }
 
+// SaveDirective сохраняет директиву остановки и дренирования.
 func (store *Store) SaveDirective(
 	ctx context.Context,
 	restoreID string,
@@ -246,6 +255,7 @@ func (store *Store) SaveDirective(
 	return result, err
 }
 
+// RecordACK атомарно фиксирует одноразовое подтверждение workload.
 func (store *Store) RecordACK(
 	ctx context.Context,
 	restoreID string,
@@ -290,6 +300,7 @@ func (store *Store) RecordACK(
 	return result, saved, err
 }
 
+// Complete завершает подготовленный цикл восстановления идемпотентно.
 func (store *Store) Complete(
 	ctx context.Context,
 	command model.CompleteRestoreCommand,
@@ -322,6 +333,7 @@ func (store *Store) Complete(
 	return result, err
 }
 
+// CoordinationReady проверяет доступность и корректность обслуживаемого состояния.
 func (store *Store) CoordinationReady(ctx context.Context) error {
 	envelope, err := store.read(ctx)
 	if err != nil {

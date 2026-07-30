@@ -6,14 +6,17 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 )
 
+// ReadbackAttestor предоставляет варианты использования независимой проверки.
 type ReadbackAttestor struct {
 	service *service.ReadbackAttestor
 }
 
+// NewReadbackAttestor создаёт прикладную границу attestor.
 func NewReadbackAttestor(serviceValue *service.ReadbackAttestor) *ReadbackAttestor {
 	return &ReadbackAttestor{service: serviceValue}
 }
 
+// IssueChallenge выпускает устойчивый одноразовый challenge.
 func (application *ReadbackAttestor) IssueChallenge(
 	ctx context.Context,
 	peerSPIFFEID string,
@@ -30,6 +33,7 @@ func (application *ReadbackAttestor) IssueChallenge(
 	)
 }
 
+// Attest проверяет evidence и сохраняет неизменяемый receipt.
 func (application *ReadbackAttestor) Attest(
 	ctx context.Context,
 	peerSPIFFEID string,
@@ -50,6 +54,7 @@ func (application *ReadbackAttestor) Attest(
 	)
 }
 
+// Ready проверяет полный путь attestor.
 func (application *ReadbackAttestor) Ready(ctx context.Context) error {
 	return application.service.Ready(ctx)
 }

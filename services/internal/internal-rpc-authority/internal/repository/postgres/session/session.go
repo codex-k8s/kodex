@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// Зарегистрированные capability-роли PostgreSQL.
 const (
 	CapabilityIssuer                       = "internal_rpc_authority_issuer"
 	CapabilityVerifier                     = "internal_rpc_authority_verifier"
@@ -16,6 +17,7 @@ const (
 	CapabilityRestoreController            = "internal_rpc_authority_restore_controller"
 )
 
+// Configure проверяет LOGIN principal и активирует точную NOLOGIN-роль.
 func Configure(
 	ctx context.Context,
 	connection *pgx.Conn,

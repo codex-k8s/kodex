@@ -1,10 +1,12 @@
 # `grpcserver`
 
-Общая gRPC error/recovery boundary MatterCodex. Она содержит единственный
-предикат unexpected codes и ровно один error-observer вызов на transport
-boundary. Service-specific domain mapping остаётся в сервисе.
+Общая граница обработки ошибок и восстановления gRPC MatterCodex. Она
+содержит единый предикат неожиданных кодов и ровно один вызов наблюдателя
+ошибок на транспортной границе. Относящееся к сервису доменное преобразование
+остаётся в сервисе.
 
-`StrictProtoCodec` до handler отклоняет unknown fields, повтор singular/oneof
-и malformed wire. Codec помечает request, а профильный transport возвращает
-свой canonical `InvalidArgument`/detail; last-one-wins не используется как
-authority.
+`StrictProtoCodec` до обработчика отклоняет неизвестные поля, повтор
+singular/oneof и повреждённое транспортное представление. Кодек помечает
+запрос, а профильный транспорт возвращает свой канонический
+`InvalidArgument`/detail; правило last-one-wins не используется как источник
+полномочий.

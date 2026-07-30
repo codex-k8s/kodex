@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// ReadbackConfig задаёт независимый сервис проверки обслуживаемого снимка.
 type ReadbackConfig struct {
 	Listen                 string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_LISTEN"`
 	TechnicalListen        string        `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
@@ -46,6 +47,7 @@ type ReadbackConfig struct {
 	ShutdownTimeout        time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
+// LoadReadbackConfig читает и проверяет окружение сервиса проверки.
 func LoadReadbackConfig() (ReadbackConfig, error) {
 	config := ReadbackConfig{
 		Listen:                 ":8443",
@@ -78,6 +80,7 @@ func LoadReadbackConfig() (ReadbackConfig, error) {
 	return config, nil
 }
 
+// RunReadbackAttestor запускает независимую проверку обслуживаемого снимка.
 func RunReadbackAttestor(
 	lifecycle context.Context,
 	shutdownBase context.Context,

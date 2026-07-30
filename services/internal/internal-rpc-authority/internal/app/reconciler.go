@@ -40,6 +40,7 @@ var (
 	)
 )
 
+// ReconcilerConfig задаёт жизненный цикл учётных данных PostgreSQL и Vault.
 type ReconcilerConfig struct {
 	HolderID                     string        `env:"POD_UID"`
 	Listen                       string        `env:"INTERNAL_RPC_AUTHORITY_RECONCILER_LISTEN"`
@@ -63,6 +64,7 @@ type ReconcilerConfig struct {
 	ShutdownTimeout              time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
+// LoadReconcilerConfig читает и проверяет окружение согласователя.
 func LoadReconcilerConfig() (ReconcilerConfig, error) {
 	config := ReconcilerConfig{
 		Listen:                       ":8443",
@@ -100,6 +102,7 @@ func LoadReconcilerConfig() (ReconcilerConfig, error) {
 	return config, nil
 }
 
+// RunDatabaseCredentialReconciler запускает продвижение и отзыв поколений.
 func RunDatabaseCredentialReconciler(
 	lifecycle context.Context,
 	shutdownBase context.Context,
@@ -492,7 +495,7 @@ func requireExactMTLSPeer(expectedSPIFFEID string) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		request any,
-		info *grpc.UnaryServerInfo,
+		_ *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (any, error) {
 		peerValue, ok := peer.FromContext(ctx)

@@ -12,8 +12,10 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
+// Mode выбирает назначение локального authority-компонента.
 type Mode string
 
+// Поддерживаемые режимы локального authority-компонента.
 const (
 	ModeIssuer   Mode = "issuer"
 	ModeVerifier Mode = "verifier"
@@ -21,6 +23,7 @@ const (
 
 const socketRoot = "/run/mattercodex/internal-rpc-authority"
 
+// Config задаёт полностью проверенную конфигурацию issuer или verifier.
 type Config struct {
 	Mode                             Mode
 	ServiceName                      string
@@ -76,6 +79,7 @@ type Config struct {
 	ReplayRetentionAfterExpiry       time.Duration
 }
 
+// LoadConfig читает типизированное окружение и проверяет конфигурацию режима.
 func LoadConfig(mode Mode) (Config, error) {
 	config := Config{
 		Mode:                             mode,
@@ -155,6 +159,7 @@ func LoadConfig(mode Mode) (Config, error) {
 	return config, nil
 }
 
+// Validate проверяет точные пути, идентичности и ограниченные интервалы.
 func (config Config) Validate() error {
 	if config.WorkloadID == "" || len(config.WorkloadID) > 96 {
 		return errors.New("INTERNAL_RPC_AUTHORITY_WORKLOAD_ID is required and bounded")

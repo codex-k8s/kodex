@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// AuthorityReadbackAttestorServer адаптирует независимую проверку к gRPC.
 type AuthorityReadbackAttestorServer struct {
 	internalrpcauthorityv1.UnimplementedAuthorityReadbackAttestorServiceServer
 	application        *application.ReadbackAttestor
@@ -24,6 +25,7 @@ type AuthorityReadbackAttestorServer struct {
 	verifierGeneration uint64
 }
 
+// NewAuthorityReadbackAttestorServer создаёт сервер независимой проверки.
 func NewAuthorityReadbackAttestorServer(
 	applicationValue *application.ReadbackAttestor,
 	metadata snapshot.ReadbackTrustMetadata,
@@ -36,6 +38,7 @@ func NewAuthorityReadbackAttestorServer(
 	}
 }
 
+// IssueAttestationChallenge выдаёт устойчивый одноразовый запрос.
 func (server *AuthorityReadbackAttestorServer) IssueAttestationChallenge(
 	ctx context.Context,
 	request *internalrpcauthorityv1.IssueAttestationChallengeRequest,
@@ -88,6 +91,7 @@ func (server *AuthorityReadbackAttestorServer) IssueAttestationChallenge(
 	}, nil
 }
 
+// AttestServedState проверяет владение ключом и фиксирует подтверждение.
 func (server *AuthorityReadbackAttestorServer) AttestServedState(
 	ctx context.Context,
 	request *internalrpcauthorityv1.AttestServedStateRequest,
@@ -137,6 +141,7 @@ func (server *AuthorityReadbackAttestorServer) AttestServedState(
 	}, nil
 }
 
+// CheckReadiness проверяет доступность устойчивого хранилища.
 func (server *AuthorityReadbackAttestorServer) CheckReadiness(
 	ctx context.Context,
 	request *internalrpcauthorityv1.AuthorityReadbackAttestorServiceCheckReadinessRequest,

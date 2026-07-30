@@ -13,6 +13,7 @@ import (
 
 const restoreRoleTrustType = "mattercodex-internal-rpc-restore-role-trust+jws"
 
+// RestoreRoleTrustOptions задаёт цепочку доверия роли восстановления.
 type RestoreRoleTrustOptions struct {
 	ManifestRootPublicJWKFile  string
 	ManifestRootMetadataFile   string
@@ -46,6 +47,7 @@ type restoreRoleTrustKey struct {
 	NotAfter   int64           `json:"not_after"`
 }
 
+// LoadRestoreRoleTrust проверяет корневую подпись и ключ роли восстановления.
 func LoadRestoreRoleTrust(options RestoreRoleTrustOptions) (
 	map[string]service.VerificationKeyRecord,
 	model.RestoreRoleTrustMetadata,

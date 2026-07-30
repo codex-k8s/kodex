@@ -2,16 +2,19 @@ package model
 
 import "time"
 
+// Версия контракта и максимальный размер подписанного контекста.
 const (
 	ContractVersion   = 1
 	ReplayModeOneTime = "ONE_TIME"
 )
 
+// Workload описывает проверенную workload-идентичность.
 type Workload struct {
 	WorkloadID string `json:"workload_id"`
 	SPIFFEID   string `json:"spiffe_id"`
 }
 
+// Provenance фиксирует источник проверенного полномочия.
 type Provenance struct {
 	Source       string `json:"source"`
 	Reference    string `json:"reference"`
@@ -19,11 +22,13 @@ type Provenance struct {
 	DigestSHA256 string `json:"digest_sha256"`
 }
 
+// Identity связывает actor с подтверждённым происхождением.
 type Identity struct {
 	ID         string     `json:"id"`
 	Provenance Provenance `json:"provenance"`
 }
 
+// Authority описывает tenant/project boundary и точное разрешение.
 type Authority struct {
 	ActorKind string    `json:"actor_kind"`
 	Actor     Identity  `json:"actor"`
@@ -31,6 +36,7 @@ type Authority struct {
 	Project   *Identity `json:"project,omitempty"`
 }
 
+// AuthorityProof содержит краткоживущее доказательство caller.
 type AuthorityProof struct {
 	Version                      int       `json:"v"`
 	Issuer                       string    `json:"iss"`
@@ -47,6 +53,7 @@ type AuthorityProof struct {
 	ExpiresAt                    int64     `json:"exp"`
 }
 
+// AuthorizationClaims содержит подписанный контекст внутреннего RPC.
 type AuthorizationClaims struct {
 	Version            int       `json:"v"`
 	Issuer             string    `json:"iss"`
@@ -70,18 +77,22 @@ type AuthorizationClaims struct {
 	SignerGeneration   uint64    `json:"signer_generation"`
 }
 
+// IssuedTime возвращает время выпуска в UTC.
 func (claims AuthorizationClaims) IssuedTime() time.Time {
 	return time.Unix(claims.IssuedAt, 0)
 }
 
+// NotBeforeTime возвращает нижнюю границу действия в UTC.
 func (claims AuthorizationClaims) NotBeforeTime() time.Time {
 	return time.Unix(claims.NotBefore, 0)
 }
 
+// ExpiryTime возвращает время окончания действия в UTC.
 func (claims AuthorizationClaims) ExpiryTime() time.Time {
 	return time.Unix(claims.ExpiresAt, 0)
 }
 
+// OperationBinding связывает операцию, workload, RPC и разрешение.
 type OperationBinding struct {
 	OperationID            string   `yaml:"operation_id"`
 	CallerWorkloadID       string   `yaml:"caller_workload_id"`
@@ -99,6 +110,7 @@ type OperationBinding struct {
 	TokenTTLSeconds        int64    `yaml:"token_ttl_seconds"`
 }
 
+// PolicySnapshot задаёт версионированную машинную политику authority.
 type PolicySnapshot struct {
 	Version                 int                `yaml:"version"`
 	TrustDomain             string             `yaml:"trust_domain"`
@@ -120,11 +132,13 @@ type PolicySnapshot struct {
 	OperationBindings       []OperationBinding `yaml:"operation_bindings"`
 }
 
+// RevisionDigest связывает ревизию истории с её SHA-256.
 type RevisionDigest struct {
 	Revision     uint64 `yaml:"revision"`
 	DigestSHA256 string `yaml:"digest_sha256"`
 }
 
+// SnapshotState описывает фактически обслуживаемый снимок и историю.
 type SnapshotState struct {
 	SourceRevision          uint64
 	SourceDigestSHA256      string

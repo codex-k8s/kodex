@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// PublisherConfig задаёт соединения, ключи и реестр publisher.
 type PublisherConfig struct {
 	Listen                       string        `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_LISTEN"`
 	TechnicalListen              string        `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
@@ -56,6 +57,7 @@ type PublisherConfig struct {
 	ShutdownTimeout              time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
+// LoadPublisherConfig читает и проверяет типизированное окружение publisher.
 func LoadPublisherConfig() (PublisherConfig, error) {
 	config := PublisherConfig{
 		Listen:                       ":8444",
@@ -99,6 +101,7 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 	return config, nil
 }
 
+// RunPublisher запускает доставку ключей и сервер выдачи ролей восстановления.
 func RunPublisher(
 	lifecycle context.Context,
 	shutdownBase context.Context,

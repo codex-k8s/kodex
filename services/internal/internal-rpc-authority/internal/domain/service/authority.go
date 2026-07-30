@@ -34,6 +34,7 @@ var (
 	uuidPattern      = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
+// Authority выпускает и проверяет контекст авторизации по снимку политики.
 type Authority struct {
 	policy               model.PolicySnapshot
 	bindings             map[string]model.OperationBinding
@@ -46,12 +47,14 @@ type Authority struct {
 	attestationReceiptID string
 }
 
+// KeyMaterial объединяет ключ подписи и доверенные ключи проверки.
 type KeyMaterial struct {
 	SigningKey       internalrpcauth.ES256Key
 	VerificationKeys map[string]VerificationKeyRecord
 	ProofKeys        map[string]VerificationKeyRecord
 }
 
+// VerificationKeyRecord связывает ключ с назначением и жизненным циклом.
 type VerificationKeyRecord struct {
 	Key        internalrpcauth.ES256Key
 	Issuer     string
@@ -63,6 +66,7 @@ type VerificationKeyRecord struct {
 	NotAfter   time.Time
 }
 
+// NewAuthority создаёт authority только из согласованного снимка и ключей.
 func NewAuthority(
 	policy model.PolicySnapshot,
 	keys KeyMaterial,
@@ -139,6 +143,7 @@ func NewAuthority(
 	}, nil
 }
 
+// Issue выпускает контекст авторизации после проверки доказательства caller.
 func (authority *Authority) Issue(
 	ctx context.Context,
 	operationID string,
@@ -314,6 +319,7 @@ func (authority *Authority) Issue(
 	return compact, claims, nil
 }
 
+// Verify проверяет контекст, peer, RPC, разрешение и защиту от повтора.
 func (authority *Authority) Verify(
 	ctx context.Context,
 	compact string,
@@ -494,6 +500,7 @@ func keyAllowsAudience(record VerificationKeyRecord, audience string) bool {
 	return ok
 }
 
+// ActivateSnapshot активирует снимок только по независимому подтверждению.
 func (authority *Authority) ActivateSnapshot(
 	ctx context.Context,
 	attestationReceiptID string,
@@ -526,6 +533,7 @@ func (authority *Authority) ActivateSnapshot(
 	return nil
 }
 
+// SnapshotState возвращает фактически обслуживаемое состояние снимка.
 func (authority *Authority) SnapshotState() repository.SnapshotState {
 	authority.activationMu.RLock()
 	receiptID := authority.attestationReceiptID
@@ -593,6 +601,7 @@ func validateAuthority(authority model.Authority, binding model.OperationBinding
 	return nil
 }
 
+// Ready подтверждает готовность хранилища и активированного снимка.
 func (authority *Authority) Ready(ctx context.Context) error {
 	return authority.store.Ready(ctx, authority.SnapshotState())
 }

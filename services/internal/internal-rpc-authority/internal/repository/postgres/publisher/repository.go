@@ -12,10 +12,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Repository реализует устойчивое состояние publisher в PostgreSQL.
 type Repository struct {
 	pool *pgxpool.Pool
 }
 
+// New создаёт репозиторий поверх проверенного пула PostgreSQL.
 func New(pool *pgxpool.Pool) (*Repository, error) {
 	if pool == nil {
 		return nil, errors.New("publisher PostgreSQL pool is nil")
@@ -26,6 +28,7 @@ func New(pool *pgxpool.Pool) (*Repository, error) {
 	return &Repository{pool: pool}, nil
 }
 
+// LoadPublishedCredential читает ранее опубликованное удостоверение.
 func (repository *Repository) LoadPublishedCredential(
 	ctx context.Context,
 	idempotencyKey string,
@@ -47,6 +50,7 @@ func (repository *Repository) LoadPublishedCredential(
 	return result, true, nil
 }
 
+// SavePublishedCredential идемпотентно сохраняет опубликованное удостоверение.
 func (repository *Repository) SavePublishedCredential(
 	ctx context.Context,
 	value model.PublishedCredential,
@@ -77,6 +81,7 @@ func (repository *Repository) SavePublishedCredential(
 	return result, nil
 }
 
+// PublisherReady проверяет доступность чтения и записи publisher.
 func (repository *Repository) PublisherReady(ctx context.Context) error {
 	var ready bool
 	if err := repository.pool.QueryRow(ctx, readinessSQL).Scan(&ready); err != nil {
@@ -88,6 +93,7 @@ func (repository *Repository) PublisherReady(ctx context.Context) error {
 	return nil
 }
 
+// PinReadbackIntent фиксирует ожидаемое состояние для независимой проверки.
 func (repository *Repository) PinReadbackIntent(
 	ctx context.Context,
 	value model.ReadbackIntent,

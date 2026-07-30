@@ -15,6 +15,7 @@ import (
 
 const unknownMethod = "unknown"
 
+// Metrics хранит ограниченные Prometheus-метрики gRPC и готовности.
 type Metrics struct {
 	registry       *prometheus.Registry
 	allowedMethods map[string]string
@@ -23,6 +24,7 @@ type Metrics struct {
 	readiness      *prometheus.GaugeVec
 }
 
+// NewMetrics создаёт изолированный registry с закрытыми метками операций.
 func NewMetrics(
 	serviceName string,
 	buildVersion string,
@@ -76,10 +78,12 @@ func NewMetrics(
 	}
 }
 
+// PrometheusHandler возвращает HTTP handler для registry.
 func (metrics *Metrics) PrometheusHandler() http.Handler {
 	return promhttp.HandlerFor(metrics.registry, promhttp.HandlerOpts{})
 }
 
+// UnaryServerInterceptor учитывает длительность и код завершённого RPC.
 func (metrics *Metrics) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
@@ -96,6 +100,7 @@ func (metrics *Metrics) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
+// SetReady обновляет ограниченную метрику готовности.
 func (metrics *Metrics) SetReady(ready bool) {
 	metrics.readiness.Reset()
 	metrics.readiness.WithLabelValues(strconv.FormatBool(ready)).Set(1)

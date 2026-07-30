@@ -13,22 +13,26 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// IssueCommand содержит минимальный ввод выпуска контекста.
 type IssueCommand struct {
 	OperationID  string
 	ProofCompact string
 }
 
+// IssueResult содержит compact JWS и проверенные claims.
 type IssueResult struct {
 	Compact string
 	Claims  model.AuthorizationClaims
 }
 
+// VerifyCommand содержит наблюдаемую целевую границу проверки.
 type VerifyCommand struct {
 	Compact            string
 	ObservedFullMethod string
 	DownstreamSPIFFEID string
 }
 
+// Authority управляет активным доменным снимком и допуском запросов.
 type Authority struct {
 	domain         atomic.Pointer[service.Authority]
 	available      atomic.Bool
@@ -38,6 +42,7 @@ type Authority struct {
 	inflight       atomic.Int64
 }
 
+// NewAuthority создаёт приложение с обязательным независимым attestor.
 func NewAuthority(
 	domain *service.Authority,
 	attestor repository.SnapshotAttestor,
@@ -50,6 +55,7 @@ func NewAuthority(
 	return application, nil
 }
 
+// Issue выпускает контекст через текущий доступный доменный снимок.
 func (application *Authority) Issue(
 	ctx context.Context,
 	command IssueCommand,
@@ -70,6 +76,7 @@ func (application *Authority) Issue(
 	return IssueResult{Compact: compact, Claims: claims}, nil
 }
 
+// Verify проверяет контекст через текущий доступный доменный снимок.
 func (application *Authority) Verify(
 	ctx context.Context,
 	command VerifyCommand,
@@ -87,6 +94,7 @@ func (application *Authority) Verify(
 	)
 }
 
+// ActivateSnapshot подтверждает и открывает исходный снимок.
 func (application *Authority) ActivateSnapshot(ctx context.Context) error {
 	domain := application.domain.Load()
 	if domain == nil {
@@ -117,6 +125,7 @@ func (application *Authority) ActivateSnapshot(ctx context.Context) error {
 	return nil
 }
 
+// ReplaceActivatedSnapshot атомарно заменяет уже подтверждённый снимок.
 func (application *Authority) ReplaceActivatedSnapshot(domain *service.Authority) error {
 	if domain == nil {
 		return failure.New(failure.SnapshotRejected, "authority snapshot is unavailable")
@@ -126,6 +135,7 @@ func (application *Authority) ReplaceActivatedSnapshot(domain *service.Authority
 	return nil
 }
 
+// ActivateReplacement подтверждает новый снимок до атомарной замены.
 func (application *Authority) ActivateReplacement(
 	ctx context.Context,
 	domain *service.Authority,
@@ -148,6 +158,7 @@ func (application *Authority) ActivateReplacement(
 	return application.ReplaceActivatedSnapshot(domain)
 }
 
+// SetAvailable изменяет доступность с учётом restore fence.
 func (application *Authority) SetAvailable(available bool) {
 	application.admissionMu.Lock()
 	defer application.admissionMu.Unlock()
@@ -157,6 +168,7 @@ func (application *Authority) SetAvailable(available bool) {
 	application.available.Store(available)
 }
 
+// SetRestoreBlocked закрывает либо открывает допуск восстановления.
 func (application *Authority) SetRestoreBlocked(blocked bool) {
 	application.admissionMu.Lock()
 	defer application.admissionMu.Unlock()
@@ -166,6 +178,7 @@ func (application *Authority) SetRestoreBlocked(blocked bool) {
 	}
 }
 
+// WaitDrained ожидает завершения уже допущенных запросов.
 func (application *Authority) WaitDrained(ctx context.Context) error {
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
@@ -181,10 +194,12 @@ func (application *Authority) WaitDrained(ctx context.Context) error {
 	}
 }
 
+// Inflight возвращает число уже допущенных незавершённых запросов.
 func (application *Authority) Inflight() int64 {
 	return application.inflight.Load()
 }
 
+// Ready проверяет полный рабочий путь текущего снимка.
 func (application *Authority) Ready(ctx context.Context) error {
 	domain, err := application.current()
 	if err != nil {
@@ -193,6 +208,7 @@ func (application *Authority) Ready(ctx context.Context) error {
 	return domain.Ready(ctx)
 }
 
+// ServedStateReady проверяет обслуживаемое состояние без открытия допуска.
 func (application *Authority) ServedStateReady(ctx context.Context) error {
 	domain := application.domain.Load()
 	if domain == nil {
@@ -201,6 +217,7 @@ func (application *Authority) ServedStateReady(ctx context.Context) error {
 	return domain.Ready(ctx)
 }
 
+// SnapshotState возвращает копию метаданных текущего снимка.
 func (application *Authority) SnapshotState() model.SnapshotState {
 	domain := application.domain.Load()
 	if domain == nil {

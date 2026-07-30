@@ -6,6 +6,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// RestoreCoordinationStore владеет устойчивой координацией восстановления.
 type RestoreCoordinationStore interface {
 	Prepare(context.Context, model.PrepareRestoreCommand) (model.RestoreState, error)
 	Load(context.Context) (model.RestoreState, error)
@@ -33,11 +34,13 @@ type RestoreCoordinationStore interface {
 	CoordinationReady(context.Context) error
 }
 
+// RestoreFenceStore применяет и проверяет рабочий fence восстановления.
 type RestoreFenceStore interface {
 	ApplyRestoreFence(context.Context, model.RestoreState) error
 	RestoreFenceReady(context.Context, model.RestoreState) error
 }
 
+// RestoreCredentialPublisher доставляет role-bound credential восстановления.
 type RestoreCredentialPublisher interface {
 	PublishRoleCredential(
 		context.Context,

@@ -28,6 +28,7 @@ const (
 	publishedReadbackIntentTTL = 2 * time.Minute
 )
 
+// RestoreCredentialSigner описывает ключ удостоверений восстановления.
 type RestoreCredentialSigner struct {
 	Key            internalrpcauth.ES256Key
 	SourceRevision uint64
@@ -36,6 +37,7 @@ type RestoreCredentialSigner struct {
 	Generation     uint64
 }
 
+// ReadbackCredentialSigner описывает независимый ключ проверки выдачи.
 type ReadbackCredentialSigner struct {
 	Key            internalrpcauth.ES256Key
 	SourceRevision uint64
@@ -44,12 +46,14 @@ type ReadbackCredentialSigner struct {
 	Generation     uint64
 }
 
+// ControllerIdentity связывает workload контроллера с его поколением и ключом.
 type ControllerIdentity struct {
 	SPIFFEID   string
 	Key        internalrpcauth.ES256Key
 	Generation uint64
 }
 
+// Publisher доставляет назначенные ключи и удостоверения через Vault.
 type Publisher struct {
 	registry       model.DeliveryTargetRegistry
 	signer         RestoreCredentialSigner
@@ -59,6 +63,7 @@ type Publisher struct {
 	now            func() time.Time
 }
 
+// NewPublisher создаёт publisher из реестра, независимых ключей и хранилищ.
 func NewPublisher(
 	registry model.DeliveryTargetRegistry,
 	signer RestoreCredentialSigner,
@@ -95,6 +100,7 @@ func NewPublisher(
 	}, nil
 }
 
+// PublishReadbackMaterials доставляет отдельные материалы проверки выдачи.
 func (publisher *Publisher) PublishReadbackMaterials(
 	ctx context.Context,
 ) ([]model.PublishedReadbackMaterial, error) {
@@ -384,6 +390,7 @@ func deterministicUUID(parts ...string) string {
 		encoded[16:20] + "-" + encoded[20:32]
 }
 
+// Publish выпускает и доставляет роль восстановления для целевого workload.
 func (publisher *Publisher) Publish(
 	ctx context.Context,
 	controller ControllerIdentity,
@@ -621,6 +628,7 @@ func (publisher *Publisher) Publish(
 	return saved, nil
 }
 
+// Ready сверяет хранилище, Vault и фактически опубликованные материалы.
 func (publisher *Publisher) Ready(ctx context.Context) error {
 	if err := publisher.store.PublisherReady(ctx); err != nil {
 		return failure.Wrap(
@@ -635,10 +643,12 @@ func (publisher *Publisher) Ready(ctx context.Context) error {
 	return nil
 }
 
+// Registry возвращает проверенный реестр целей доставки.
 func (publisher *Publisher) Registry() model.DeliveryTargetRegistry {
 	return publisher.registry
 }
 
+// SignerGeneration возвращает обслуживаемое поколение ключа восстановления.
 func (publisher *Publisher) SignerGeneration() uint64 {
 	return publisher.signer.Generation
 }

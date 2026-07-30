@@ -7,14 +7,17 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// Publisher предоставляет прикладные операции публикации credentials.
 type Publisher struct {
 	service *service.Publisher
 }
 
+// NewPublisher создаёт прикладную границу publisher.
 func NewPublisher(serviceValue *service.Publisher) *Publisher {
 	return &Publisher{service: serviceValue}
 }
 
+// Publish выпускает и доставляет один credential восстановления.
 func (application *Publisher) Publish(
 	ctx context.Context,
 	controller service.ControllerIdentity,
@@ -29,20 +32,24 @@ func (application *Publisher) Publish(
 	)
 }
 
+// Ready проверяет полный путь publisher.
 func (application *Publisher) Ready(ctx context.Context) error {
 	return application.service.Ready(ctx)
 }
 
+// PublishReadbackMaterials публикует материалы обычной проверки доставки.
 func (application *Publisher) PublishReadbackMaterials(
 	ctx context.Context,
 ) ([]model.PublishedReadbackMaterial, error) {
 	return application.service.PublishReadbackMaterials(ctx)
 }
 
+// Registry возвращает проверенный неизменяемый реестр целей.
 func (application *Publisher) Registry() model.DeliveryTargetRegistry {
 	return application.service.Registry()
 }
 
+// SignerGeneration возвращает обслуживаемое поколение signer.
 func (application *Publisher) SignerGeneration() uint64 {
 	return application.service.SignerGeneration()
 }

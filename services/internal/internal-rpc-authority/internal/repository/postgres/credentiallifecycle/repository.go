@@ -14,10 +14,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Repository реализует устойчивый жизненный цикл поколений учётных данных.
 type Repository struct {
 	pool *pgxpool.Pool
 }
 
+// New создаёт репозиторий поверх проверенного пула PostgreSQL.
 func New(pool *pgxpool.Pool) (*Repository, error) {
 	if pool == nil {
 		return nil, errors.New("database credential lifecycle pool is nil")
@@ -28,6 +30,7 @@ func New(pool *pgxpool.Pool) (*Repository, error) {
 	return &Repository{pool: pool}, nil
 }
 
+// AcquireLease получает ограниченную аренду с новым fencing token.
 func (repository *Repository) AcquireLease(
 	ctx context.Context,
 	holderID string,
@@ -51,6 +54,7 @@ func (repository *Repository) AcquireLease(
 	return fencingToken, nil
 }
 
+// ReconcileCredentials атомарно продвигает зарегистрированные поколения.
 func (repository *Repository) ReconcileCredentials(
 	ctx context.Context,
 	holderID string,
@@ -114,6 +118,7 @@ func (repository *Repository) ReconcileCredentials(
 	return repository.ReadCredentialGenerations(ctx, registered)
 }
 
+// ReadCredentialGenerations сверяет обслуживаемые поколения с реестром.
 func (repository *Repository) ReadCredentialGenerations(
 	ctx context.Context,
 	registered model.DatabaseCredentialRegisteredSet,

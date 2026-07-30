@@ -26,13 +26,16 @@ const (
 	maxKeyFileBytes       = 64 << 10
 )
 
+// Role выбирает назначение загружаемого снимка.
 type Role string
 
+// Поддерживаемые роли локального authority-компонента.
 const (
 	RoleIssuer   Role = "issuer"
 	RoleVerifier Role = "verifier"
 )
 
+// LoadOptions задаёт доверенные корни и пути подписанного снимка.
 type LoadOptions struct {
 	Role                       Role
 	WorkloadID                 string
@@ -45,6 +48,7 @@ type LoadOptions struct {
 	Now                        time.Time
 }
 
+// Loaded содержит проверенный снимок и разделённые наборы ключей.
 type Loaded struct {
 	Policy model.PolicySnapshot
 	Keys   service.KeyMaterial
@@ -208,6 +212,7 @@ type localPeer struct {
 	SharedFSGID uint32 `json:"shared_fs_gid"`
 }
 
+// Load проверяет цепочку корня, signer и истории, затем загружает снимок.
 func Load(options LoadOptions) (Loaded, error) {
 	if options.Role != RoleIssuer && options.Role != RoleVerifier {
 		return Loaded{}, errors.New("invalid authority snapshot role")

@@ -49,6 +49,7 @@ type registryTarget struct {
 	} `yaml:"readback"`
 }
 
+// LoadRegistry читает и строго проверяет реестр целей доставки.
 func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 1<<20 {

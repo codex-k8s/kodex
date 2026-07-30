@@ -28,6 +28,7 @@ const (
 	readbackAttestationFullMethod = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState"
 )
 
+// ReadbackAttestor независимо подтверждает фактически обслуживаемый снимок.
 type ReadbackAttestor struct {
 	trust              map[string]VerificationKeyRecord
 	store              repository.ReadbackStore
@@ -35,14 +36,17 @@ type ReadbackAttestor struct {
 	now                func() time.Time
 }
 
+// ReadbackChallengeResult содержит созданный сервером одноразовый запрос.
 type ReadbackChallengeResult struct {
 	Challenge model.ReadbackChallenge
 }
 
+// ReadbackAttestationResult содержит неизменяемое подтверждение проверки.
 type ReadbackAttestationResult struct {
 	Receipt model.ReadbackReceipt
 }
 
+// NewReadbackAttestor создаёт проверяющий сервис из отдельного набора доверия.
 func NewReadbackAttestor(
 	trust map[string]VerificationKeyRecord,
 	store repository.ReadbackStore,
@@ -62,6 +66,7 @@ func NewReadbackAttestor(
 	}, nil
 }
 
+// IssueChallenge создаёт устойчивый одноразовый запрос для закреплённого намерения.
 func (attestor *ReadbackAttestor) IssueChallenge(
 	ctx context.Context,
 	peerSPIFFEID string,
@@ -219,6 +224,7 @@ func (attestor *ReadbackAttestor) IssueChallenge(
 	return ReadbackChallengeResult{Challenge: challenge}, nil
 }
 
+// Attest проверяет владение ключом и атомарно фиксирует подтверждение.
 func (attestor *ReadbackAttestor) Attest(
 	ctx context.Context,
 	peerSPIFFEID string,
@@ -383,6 +389,7 @@ func (attestor *ReadbackAttestor) Attest(
 	return ReadbackAttestationResult{Receipt: receipt}, nil
 }
 
+// Ready подтверждает доступность устойчивого хранилища проверок.
 func (attestor *ReadbackAttestor) Ready(ctx context.Context) error {
 	if err := attestor.store.ReadbackReady(ctx); err != nil {
 		return failure.Wrap(

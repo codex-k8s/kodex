@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// RestoreState содержит каноническое устойчивое состояние восстановления.
 type RestoreState struct {
 	Version                int                               `json:"v"`
 	RestoreID              string                            `json:"restore_id"`
@@ -29,6 +30,7 @@ type RestoreState struct {
 	UpdatedAt              int64                             `json:"updated_at"`
 }
 
+// RestoreExpectedTarget задаёт точную ожидаемую роль восстановления.
 type RestoreExpectedTarget struct {
 	TargetID             string `json:"target_id"`
 	WorkloadID           string `json:"workload_id"`
@@ -39,6 +41,7 @@ type RestoreExpectedTarget struct {
 	ACKKeyGeneration     uint64 `json:"ack_key_generation"`
 }
 
+// RestoreIssuanceRecord фиксирует идемпотентный выпуск для одной цели.
 type RestoreIssuanceRecord struct {
 	TargetID       string `json:"target_id"`
 	JTI            string `json:"jti"`
@@ -46,6 +49,7 @@ type RestoreIssuanceRecord struct {
 	IssuedAt       int64  `json:"issued_at"`
 }
 
+// RestoreDeliveryRecord фиксирует криптографический readback доставки.
 type RestoreDeliveryRecord struct {
 	TargetID                   string `json:"target_id"`
 	DeliveryReceiptCompactJWS  string `json:"delivery_receipt_compact_jws"`
@@ -54,6 +58,7 @@ type RestoreDeliveryRecord struct {
 	ACKKeyGeneration           uint64 `json:"ack_key_generation"`
 }
 
+// RestoreDirectiveRecord фиксирует точную директиву остановки и drain.
 type RestoreDirectiveRecord struct {
 	TargetID     string `json:"target_id"`
 	JTI          string `json:"jti"`
@@ -62,6 +67,7 @@ type RestoreDirectiveRecord struct {
 	ExpiresAt    int64  `json:"expires_at"`
 }
 
+// RestoreACKRecord фиксирует одноразовый подтверждённый ACK.
 type RestoreACKRecord struct {
 	TargetID              string `json:"target_id"`
 	ReceiptID             string `json:"receipt_id"`
@@ -73,6 +79,7 @@ type RestoreACKRecord struct {
 	ResultingPhase        string `json:"resulting_phase"`
 }
 
+// PrepareRestoreCommand задаёт pinned intent подготовки восстановления.
 type PrepareRestoreCommand struct {
 	RestoreID            string
 	DatabaseClusterID    string
@@ -84,6 +91,7 @@ type PrepareRestoreCommand struct {
 	Now                  time.Time
 }
 
+// CompleteRestoreCommand задаёт завершение и открытие безопасного окна.
 type CompleteRestoreCommand struct {
 	RestoreID            string
 	DatabaseClusterID    string
@@ -94,6 +102,7 @@ type CompleteRestoreCommand struct {
 	Now                  time.Time
 }
 
+// RoleBoundRestoreDirectiveClaims связывает directive с ролью и поколением.
 type RoleBoundRestoreDirectiveClaims struct {
 	Version                    int    `json:"v"`
 	Issuer                     string `json:"iss"`
@@ -117,6 +126,7 @@ type RoleBoundRestoreDirectiveClaims struct {
 	ExpiresAt                  int64  `json:"exp"`
 }
 
+// QuiescenceACKClaims доказывает остановку и дренирование workload.
 type QuiescenceACKClaims struct {
 	Version                    int    `json:"v"`
 	Issuer                     string `json:"iss"`
@@ -145,6 +155,7 @@ type QuiescenceACKClaims struct {
 	ExpiresAt                  int64  `json:"exp"`
 }
 
+// RestoreRoleTrustMetadata закрепляет доверие к ключу роли восстановления.
 type RestoreRoleTrustMetadata struct {
 	SourceRevision   uint64
 	SourceDigest     string
@@ -152,4 +163,5 @@ type RestoreRoleTrustMetadata struct {
 	SignerGeneration uint64
 }
 
+// JSONDocument хранит строго проверенный исходный документ JSON.
 type JSONDocument = json.RawMessage

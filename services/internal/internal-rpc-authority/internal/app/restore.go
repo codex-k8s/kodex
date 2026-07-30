@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// RestoreControllerConfig задаёт контроллер координации восстановления.
 type RestoreControllerConfig struct {
 	Listen                   string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_LISTEN"`
 	TechnicalListen          string `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
@@ -63,6 +64,7 @@ type RestoreControllerConfig struct {
 	ShutdownTimeout          time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
+// LoadRestoreControllerConfig читает и проверяет окружение контроллера.
 func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 	config := RestoreControllerConfig{
 		Listen:                   ":8443",
@@ -112,6 +114,7 @@ func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 	return config, nil
 }
 
+// RunRestoreController запускает сервер координации и устойчивое ограждение.
 func RunRestoreController(
 	lifecycle context.Context,
 	shutdownBase context.Context,

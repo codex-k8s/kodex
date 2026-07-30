@@ -11,17 +11,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// DatabaseCredentialLifecycleServer адаптирует согласование поколений к gRPC.
 type DatabaseCredentialLifecycleServer struct {
 	internalrpcauthorityv1.UnimplementedDatabaseCredentialLifecycleServiceServer
 	application *application.DatabaseCredentialLifecycle
 }
 
+// NewDatabaseCredentialLifecycleServer создаёт сервер жизненного цикла.
 func NewDatabaseCredentialLifecycleServer(
 	applicationValue *application.DatabaseCredentialLifecycle,
 ) *DatabaseCredentialLifecycleServer {
 	return &DatabaseCredentialLifecycleServer{application: applicationValue}
 }
 
+// ReconcileDatabaseCredentials атомарно согласует зарегистрированный набор.
 func (server *DatabaseCredentialLifecycleServer) ReconcileDatabaseCredentials(
 	ctx context.Context,
 	request *internalrpcauthorityv1.ReconcileDatabaseCredentialsRequest,
@@ -42,6 +45,7 @@ func (server *DatabaseCredentialLifecycleServer) ReconcileDatabaseCredentials(
 	}, nil
 }
 
+// CheckReadiness проверяет аренду и фактически обслуживаемые поколения.
 func (server *DatabaseCredentialLifecycleServer) CheckReadiness(
 	ctx context.Context,
 	request *internalrpcauthorityv1.DatabaseCredentialLifecycleServiceCheckReadinessRequest,

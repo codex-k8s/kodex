@@ -14,27 +14,33 @@ import (
 
 const authType = "uds-peercred"
 
+// ErrPeerIdentity означает отклонение локальной идентичности peer.
 var ErrPeerIdentity = errors.New("UDS peer identity rejected")
 
+// Identity содержит uid, gid и pid проверенного Unix peer.
 type Identity struct {
 	UID uint32
 	GID uint32
 	PID int32
 }
 
+// AuthInfo переносит проверенную UDS-идентичность в gRPC.
 type AuthInfo struct {
 	Identity Identity
 }
 
+// AuthType возвращает устойчивое имя механизма.
 func (AuthInfo) AuthType() string {
 	return authType
 }
 
+// Credentials проверяет ожидаемые uid/gid на обоих концах UDS.
 type Credentials struct {
 	expectedPeerUID uint32
 	expectedPeerGID uint32
 }
 
+// New создаёт UDS credentials для точных uid/gid peer.
 func New(expectedPeerUID, expectedPeerGID uint32) credentials.TransportCredentials {
 	return &Credentials{
 		expectedPeerUID: expectedPeerUID,
@@ -42,6 +48,7 @@ func New(expectedPeerUID, expectedPeerGID uint32) credentials.TransportCredentia
 	}
 }
 
+// ClientHandshake проверяет server peer через SO_PEERCRED.
 func (credentialsValue *Credentials) ClientHandshake(
 	_ context.Context,
 	_ string,
@@ -50,20 +57,24 @@ func (credentialsValue *Credentials) ClientHandshake(
 	return credentialsValue.handshake(connection)
 }
 
+// ServerHandshake проверяет client peer через SO_PEERCRED.
 func (credentialsValue *Credentials) ServerHandshake(
 	connection net.Conn,
 ) (net.Conn, credentials.AuthInfo, error) {
 	return credentialsValue.handshake(connection)
 }
 
+// Info описывает UDS peer credentials для gRPC.
 func (credentialsValue *Credentials) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{SecurityProtocol: authType}
 }
 
+// Clone возвращает независимую копию credentials.
 func (credentialsValue *Credentials) Clone() credentials.TransportCredentials {
 	return New(credentialsValue.expectedPeerUID, credentialsValue.expectedPeerGID)
 }
 
+// OverrideServerName закрыто отклоняет неприменимую настройку.
 func (*Credentials) OverrideServerName(string) error {
 	return errors.New("server name is not applicable to UDS peer credentials")
 }

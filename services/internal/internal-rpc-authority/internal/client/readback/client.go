@@ -25,6 +25,7 @@ const (
 	attestationTTL           = 30 * time.Second
 )
 
+// Config задаёт один проход проверки обслуживаемого состояния.
 type Config struct {
 	Address                 string
 	TLS                     *tls.Config
@@ -41,11 +42,13 @@ type Config struct {
 	UnaryInterceptor        grpc.UnaryClientInterceptor
 }
 
+// Client выполняет протокол одноразового запроса и подтверждения.
 type Client struct {
 	config Config
 	now    func() time.Time
 }
 
+// FileConfig задаёт материал проверки, доставленный через файлы.
 type FileConfig struct {
 	Address                  string
 	TLS                      *tls.Config
@@ -62,10 +65,12 @@ type FileConfig struct {
 	UnaryInterceptor         grpc.UnaryClientInterceptor
 }
 
+// FileAttestor читает материал из закреплённых файлов перед проверкой.
 type FileAttestor struct {
 	config FileConfig
 }
 
+// VaultConfig задаёт материал проверки, доставленный через Vault.
 type VaultConfig struct {
 	Address                 string
 	TLS                     *tls.Config
@@ -81,14 +86,17 @@ type VaultConfig struct {
 	UnaryInterceptor        grpc.UnaryClientInterceptor
 }
 
+// SecretReader читает версионированный материал из Vault KV v2.
 type SecretReader interface {
 	ReadKV2(context.Context, string) (repository.SecretMaterial, bool, error)
 }
 
+// VaultAttestor получает материал из Vault перед каждой проверкой.
 type VaultAttestor struct {
 	config VaultConfig
 }
 
+// NewVaultAttestor создаёт клиент только из полной конфигурации доверия.
 func NewVaultAttestor(config VaultConfig) (*VaultAttestor, error) {
 	if config.Address == "" ||
 		config.TLS == nil ||
@@ -107,6 +115,7 @@ func NewVaultAttestor(config VaultConfig) (*VaultAttestor, error) {
 	return &VaultAttestor{config: config}, nil
 }
 
+// Attest читает актуальный материал и выполняет независимую проверку.
 func (attestor *VaultAttestor) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
@@ -151,6 +160,7 @@ func (attestor *VaultAttestor) Attest(
 	return client.Attest(ctx, state)
 }
 
+// NewFileAttestor создаёт клиент для закреплённых файлов материала.
 func NewFileAttestor(config FileConfig) (*FileAttestor, error) {
 	if config.IntentIDFile == "" ||
 		config.CredentialCompactFile == "" ||
@@ -172,6 +182,7 @@ func NewFileAttestor(config FileConfig) (*FileAttestor, error) {
 	return &FileAttestor{config: config}, nil
 }
 
+// Attest читает файлы и выполняет независимую проверку.
 func (attestor *FileAttestor) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
@@ -249,6 +260,7 @@ func readMountedValue(path string, maximum int) (string, error) {
 	return value, nil
 }
 
+// New создаёт клиент протокола проверки обслуживаемого состояния.
 func New(config Config) (*Client, error) {
 	if config.Address == "" ||
 		config.TLS == nil ||
@@ -270,6 +282,7 @@ func New(config Config) (*Client, error) {
 	return &Client{config: config, now: time.Now}, nil
 }
 
+// Attest запрашивает одноразовый challenge и отправляет доказательство владения.
 func (client *Client) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,

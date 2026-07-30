@@ -11,10 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Repository применяет и читает durable restore fence.
 type Repository struct {
 	pool *pgxpool.Pool
 }
 
+// New создаёт адаптер только с заданным PostgreSQL pool.
 func New(pool *pgxpool.Pool) (*Repository, error) {
 	if pool == nil {
 		return nil, errors.New("restore fence PostgreSQL pool is required")
@@ -22,6 +24,7 @@ func New(pool *pgxpool.Pool) (*Repository, error) {
 	return &Repository{pool: pool}, nil
 }
 
+// ApplyRestoreFence атомарно применяет следующий допустимый fence.
 func (repository *Repository) ApplyRestoreFence(
 	ctx context.Context,
 	state model.RestoreState,
@@ -52,6 +55,7 @@ func (repository *Repository) ApplyRestoreFence(
 	return nil
 }
 
+// RestoreFenceReady сверяет фактически сохранённый fence с ожидаемым.
 func (repository *Repository) RestoreFenceReady(
 	ctx context.Context,
 	state model.RestoreState,

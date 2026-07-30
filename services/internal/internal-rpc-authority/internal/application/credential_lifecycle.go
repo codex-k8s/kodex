@@ -19,6 +19,7 @@ var lifecycleUUIDPattern = regexp.MustCompile(
 
 const vaultDatabaseName = "internal-rpc-authority"
 
+// DatabaseCredentialLifecycle координирует поколения PostgreSQL и Vault.
 type DatabaseCredentialLifecycle struct {
 	holderID      string
 	leaseDuration time.Duration
@@ -27,12 +28,14 @@ type DatabaseCredentialLifecycle struct {
 	vault         repository.VaultStaticRoleManager
 }
 
+// DatabaseCredentialReconcileResult содержит устойчивый результат сверки.
 type DatabaseCredentialReconcileResult struct {
 	ReceiptID       string
 	CanonicalDigest string
 	Generations     []model.DatabaseCredentialGeneration
 }
 
+// NewDatabaseCredentialLifecycle проверяет реестр и создаёт вариант использования.
 func NewDatabaseCredentialLifecycle(
 	holderID string,
 	leaseDuration time.Duration,
@@ -64,6 +67,7 @@ func NewDatabaseCredentialLifecycle(
 	}, nil
 }
 
+// Reconcile выполняет fenced переход поколений и действия Vault.
 func (lifecycle *DatabaseCredentialLifecycle) Reconcile(
 	ctx context.Context,
 	idempotencyKey string,
@@ -134,6 +138,7 @@ func (lifecycle *DatabaseCredentialLifecycle) Reconcile(
 	}, nil
 }
 
+// Ready сверяет роли Vault и фактически сохранённые поколения.
 func (lifecycle *DatabaseCredentialLifecycle) Ready(ctx context.Context) (
 	[]model.DatabaseCredentialGeneration,
 	error,
@@ -241,6 +246,7 @@ func registeredSetDigest(registered model.DatabaseCredentialRegisteredSet) (stri
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// RegisteredSet возвращает неизменяемый зарегистрированный набор.
 func (lifecycle *DatabaseCredentialLifecycle) RegisteredSet() model.DatabaseCredentialRegisteredSet {
 	return lifecycle.registered
 }

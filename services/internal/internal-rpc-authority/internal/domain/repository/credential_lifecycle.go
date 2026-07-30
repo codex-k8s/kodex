@@ -7,6 +7,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// CredentialLifecycleStore сохраняет поколения и координирует fenced lease.
 type CredentialLifecycleStore interface {
 	AcquireLease(
 		ctx context.Context,
@@ -27,6 +28,7 @@ type CredentialLifecycleStore interface {
 	) ([]model.DatabaseCredentialGeneration, error)
 }
 
+// VaultStaticRoleManager управляет жизненным циклом статических ролей Vault.
 type VaultStaticRoleManager interface {
 	VerifyStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
 	RotateStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
@@ -34,6 +36,7 @@ type VaultStaticRoleManager interface {
 	VerifyRevokedStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
 }
 
+// VaultStaticRoleExpectation задаёт точную связь роли Vault и principal.
 type VaultStaticRoleExpectation struct {
 	Role         string
 	Principal    string

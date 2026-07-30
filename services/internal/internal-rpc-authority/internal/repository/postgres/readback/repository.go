@@ -12,10 +12,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Repository сохраняет challenge и неизменяемые receipt проверки доставки.
 type Repository struct {
 	pool *pgxpool.Pool
 }
 
+// New создаёт адаптер и проверяет набор named SQL.
 func New(pool *pgxpool.Pool) (*Repository, error) {
 	if pool == nil {
 		return nil, errors.New("readback PostgreSQL pool is nil")
@@ -26,6 +28,7 @@ func New(pool *pgxpool.Pool) (*Repository, error) {
 	return &Repository{pool: pool}, nil
 }
 
+// ResolveReadbackIntent разрешает intent внутри peer boundary.
 func (repository *Repository) ResolveReadbackIntent(
 	ctx context.Context,
 	intentID string,
@@ -48,6 +51,7 @@ func (repository *Repository) ResolveReadbackIntent(
 	return intent, nil
 }
 
+// IssueReadbackChallenge атомарно выпускает либо повторяет challenge.
 func (repository *Repository) IssueReadbackChallenge(
 	ctx context.Context,
 	command domainrepository.IssueReadbackChallengeCommand,
@@ -80,6 +84,7 @@ func (repository *Repository) IssueReadbackChallenge(
 	return repository.LoadReadbackChallenge(ctx, challengeID, command.PeerSPIFFEID)
 }
 
+// LoadReadbackChallenge читает challenge внутри peer boundary.
 func (repository *Repository) LoadReadbackChallenge(
 	ctx context.Context,
 	challengeID string,
@@ -102,6 +107,7 @@ func (repository *Repository) LoadReadbackChallenge(
 	return challenge, nil
 }
 
+// ConsumeReadbackChallenge атомарно потребляет challenge и сохраняет receipt.
 func (repository *Repository) ConsumeReadbackChallenge(
 	ctx context.Context,
 	command domainrepository.ConsumeReadbackChallengeCommand,
@@ -194,6 +200,7 @@ func (repository *Repository) ConsumeReadbackChallenge(
 	return receipt, nil
 }
 
+// ReadbackReady проверяет доступность устойчивой границы attestor.
 func (repository *Repository) ReadbackReady(ctx context.Context) error {
 	var ready bool
 	if err := repository.pool.QueryRow(ctx, readinessSQL).Scan(&ready); err != nil {

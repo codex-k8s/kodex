@@ -16,6 +16,7 @@ const (
 	readbackCredentialTrustType = "mattercodex-internal-rpc-readback-credential-trust+jws"
 )
 
+// ReadbackTrustOptions задаёт независимую цепочку доверия проверки выдачи.
 type ReadbackTrustOptions struct {
 	RootPublicJWKFile      string
 	RootMetadataFile       string
@@ -24,6 +25,7 @@ type ReadbackTrustOptions struct {
 	Now                    time.Time
 }
 
+// ReadbackTrustMetadata фиксирует назначение и поколение доверенного ключа.
 type ReadbackTrustMetadata struct {
 	RootID                   string
 	RootFingerprintSHA256    string
@@ -104,6 +106,7 @@ type readbackCredentialKey struct {
 	NotAfter   int64           `json:"not_after"`
 }
 
+// LoadReadbackTrust проверяет корневую подпись и назначение ключа.
 func LoadReadbackTrust(options ReadbackTrustOptions) (
 	map[string]service.VerificationKeyRecord,
 	ReadbackTrustMetadata,

@@ -22,15 +22,18 @@ var (
 	certificatePattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 )
 
+// IssuerServer адаптирует выпуск контекста к gRPC.
 type IssuerServer struct {
 	internalrpcauthorityv1.UnimplementedAuthorizationIssuerServiceServer
 	application *application.Authority
 }
 
+// NewIssuerServer создаёт сервер выпуска контекста.
 func NewIssuerServer(applicationValue *application.Authority) *IssuerServer {
 	return &IssuerServer{application: applicationValue}
 }
 
+// IssueAuthorizationContext выпускает контекст для проверенного UDS peer.
 func (server *IssuerServer) IssueAuthorizationContext(
 	ctx context.Context,
 	request *internalrpcauthorityv1.IssueAuthorizationContextRequest,
@@ -63,6 +66,7 @@ func (server *IssuerServer) IssueAuthorizationContext(
 	}, nil
 }
 
+// CheckReadiness проверяет тот же путь хранилища, что и рабочий RPC.
 func (server *IssuerServer) CheckReadiness(
 	ctx context.Context,
 	request *internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessRequest,
@@ -86,15 +90,18 @@ func (server *IssuerServer) CheckReadiness(
 	}, nil
 }
 
+// VerifierServer адаптирует проверку контекста к gRPC.
 type VerifierServer struct {
 	internalrpcauthorityv1.UnimplementedAuthorizationVerifierServiceServer
 	application *application.Authority
 }
 
+// NewVerifierServer создаёт сервер проверки контекста.
 func NewVerifierServer(applicationValue *application.Authority) *VerifierServer {
 	return &VerifierServer{application: applicationValue}
 }
 
+// VerifyAuthorizationContext проверяет контекст для точного RPC и mTLS peer.
 func (server *VerifierServer) VerifyAuthorizationContext(
 	ctx context.Context,
 	request *internalrpcauthorityv1.VerifyAuthorizationContextRequest,
@@ -126,6 +133,7 @@ func (server *VerifierServer) VerifyAuthorizationContext(
 	}, nil
 }
 
+// CheckReadiness проверяет обслуживаемый снимок и хранилище повторов.
 func (server *VerifierServer) CheckReadiness(
 	ctx context.Context,
 	request *internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest,

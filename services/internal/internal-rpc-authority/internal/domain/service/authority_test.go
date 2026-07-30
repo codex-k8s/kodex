@@ -301,7 +301,7 @@ func (store *memoryStore) ActivateSnapshot(
 }
 
 func (store *memoryStore) AcceptVerification(
-	ctx context.Context,
+	_ context.Context,
 	state repository.SnapshotState,
 	reservation repository.Reservation,
 ) error {

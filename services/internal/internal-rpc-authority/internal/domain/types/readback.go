@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// ReadbackIntent закрепляет ожидаемое обслуживаемое состояние за workload.
 type ReadbackIntent struct {
 	IntentID                string
 	Kind                    string
@@ -26,6 +27,7 @@ type ReadbackIntent struct {
 	ExpiresAt               time.Time
 }
 
+// ReadbackCredentialClaims разрешает конкретную независимую проверку.
 type ReadbackCredentialClaims struct {
 	Version                  int             `json:"v"`
 	Issuer                   string          `json:"iss"`
@@ -56,6 +58,7 @@ type ReadbackCredentialClaims struct {
 	ExpiresAt                int64           `json:"exp"`
 }
 
+// ReadbackAttestationClaims доказывает владение ключом и обслуживаемое состояние.
 type ReadbackAttestationClaims struct {
 	Version                  int    `json:"v"`
 	Issuer                   string `json:"iss"`
@@ -87,6 +90,7 @@ type ReadbackAttestationClaims struct {
 	ExpiresAt                int64  `json:"exp"`
 }
 
+// ReadbackChallenge содержит созданный сервером одноразовый запрос.
 type ReadbackChallenge struct {
 	ChallengeID              string
 	ChallengeJTI             string
@@ -102,6 +106,7 @@ type ReadbackChallenge struct {
 	ConsumedAt               *time.Time
 }
 
+// ReadbackReceipt неизменяемо фиксирует принятую независимую проверку.
 type ReadbackReceipt struct {
 	ReceiptID             string
 	ChallengeID           string

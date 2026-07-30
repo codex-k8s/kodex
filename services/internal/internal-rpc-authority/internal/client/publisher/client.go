@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// Config задаёт точную mTLS-границу и идентичность publisher.
 type Config struct {
 	Address               string
 	TLSServerName         string
@@ -28,12 +29,14 @@ type Config struct {
 	UnaryInterceptor      grpc.UnaryClientInterceptor
 }
 
+// Client вызывает publisher через точную mTLS-границу.
 type Client struct {
 	timeout    time.Duration
 	connection *grpc.ClientConn
 	client     internalrpcauthorityv1.RestoreRoleCredentialPublisherServiceClient
 }
 
+// New создаёт клиент с обязательной проверкой TLS и SPIFFE.
 func New(config Config) (*Client, error) {
 	host, _, err := net.SplitHostPort(config.Address)
 	if err != nil ||
@@ -85,6 +88,7 @@ func New(config Config) (*Client, error) {
 	}, nil
 }
 
+// PublishRoleCredential запрашивает связанную с целью роль восстановления.
 func (client *Client) PublishRoleCredential(
 	ctx context.Context,
 	directiveCompact string,
@@ -119,6 +123,7 @@ func (client *Client) PublishRoleCredential(
 	}, nil
 }
 
+// PublisherReady проверяет рабочий путь publisher.
 func (client *Client) PublisherReady(ctx context.Context) error {
 	callContext, cancel := context.WithTimeout(ctx, client.timeout)
 	defer cancel()
@@ -138,6 +143,7 @@ func (client *Client) PublisherReady(ctx context.Context) error {
 	return nil
 }
 
+// Close закрывает gRPC-соединение.
 func (client *Client) Close() error {
 	return client.connection.Close()
 }

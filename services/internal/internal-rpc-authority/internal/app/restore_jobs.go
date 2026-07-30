@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// RestoreOperatorConfig задаёт одну операторскую команду восстановления.
 type RestoreOperatorConfig struct {
 	Action                  string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ACTION"`
 	ControllerAddress       string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS"`
@@ -34,6 +35,7 @@ type RestoreOperatorConfig struct {
 	Timeout                 time.Duration `env:"INTERNAL_RPC_AUTHORITY_RESTORE_TIMEOUT"`
 }
 
+// LoadRestoreOperatorConfig читает и проверяет окружение операторской команды.
 func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 	config := RestoreOperatorConfig{
 		ControllerAddress:       "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443",
@@ -67,6 +69,7 @@ func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 	return config, nil
 }
 
+// RunRestoreOperator выполняет подготовку или завершение восстановления.
 func RunRestoreOperator(
 	ctx context.Context,
 	shutdownBase context.Context,
@@ -152,6 +155,7 @@ func RunRestoreOperator(
 	return nil
 }
 
+// RunRestoreRecovery сверяет координацию и ограждение после перезапуска.
 func RunRestoreRecovery(
 	ctx context.Context,
 	shutdownBase context.Context,

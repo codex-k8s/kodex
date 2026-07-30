@@ -29,6 +29,7 @@ const (
 
 var vaultNamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{1,94}[a-z0-9])$`)
 
+// Config задаёт проверенную конфигурацию клиента Vault.
 type Config struct {
 	Address                 string
 	TLSServerName           string
@@ -39,11 +40,13 @@ type Config struct {
 	Timeout                 time.Duration
 }
 
+// StaticRoleClient управляет жизненным циклом статических ролей и KV v2.
 type StaticRoleClient struct {
 	config Config
 	client *http.Client
 }
 
+// NewStaticRoleClient создаёт клиент с обязательной проверкой TLS и адреса.
 func NewStaticRoleClient(config Config) (*StaticRoleClient, error) {
 	address, err := url.Parse(config.Address)
 	if err != nil ||
@@ -83,10 +86,12 @@ func NewStaticRoleClient(config Config) (*StaticRoleClient, error) {
 	}, nil
 }
 
+// Close закрывает простаивающие соединения клиента.
 func (client *StaticRoleClient) Close() {
 	client.client.CloseIdleConnections()
 }
 
+// VerifyStaticRoles сверяет зарегистрированный набор статических ролей.
 func (client *StaticRoleClient) VerifyStaticRoles(
 	ctx context.Context,
 	roles []repository.VaultStaticRoleExpectation,
@@ -130,6 +135,7 @@ func (client *StaticRoleClient) VerifyStaticRoles(
 	return nil
 }
 
+// RotateStaticRoles запускает ротацию зарегистрированных статических ролей.
 func (client *StaticRoleClient) RotateStaticRoles(
 	ctx context.Context,
 	roles []repository.VaultStaticRoleExpectation,
@@ -137,6 +143,7 @@ func (client *StaticRoleClient) RotateStaticRoles(
 	return client.mutateStaticRoles(ctx, roles, "rotate", http.MethodPost)
 }
 
+// RevokeStaticRoles отзывает выведенные из обращения статические роли.
 func (client *StaticRoleClient) RevokeStaticRoles(
 	ctx context.Context,
 	roles []repository.VaultStaticRoleExpectation,
@@ -144,6 +151,7 @@ func (client *StaticRoleClient) RevokeStaticRoles(
 	return client.mutateStaticRoles(ctx, roles, "revoke", http.MethodDelete)
 }
 
+// VerifyRevokedStaticRoles подтверждает недоступность отозванных ролей.
 func (client *StaticRoleClient) VerifyRevokedStaticRoles(
 	ctx context.Context,
 	roles []repository.VaultStaticRoleExpectation,

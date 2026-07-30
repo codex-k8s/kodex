@@ -14,12 +14,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Store реализует устойчивое резервирование и high-watermark снимка.
 type Store struct {
 	pool             *pgxpool.Pool
 	targetWorkloadID string
 	queries          querySet
 }
 
+// New создаёт хранилище для точного целевого workload.
 func New(pool *pgxpool.Pool, targetWorkloadID string) (*Store, error) {
 	if pool == nil || targetWorkloadID == "" {
 		return nil, errors.New("invalid authority store configuration")
@@ -35,6 +37,7 @@ func New(pool *pgxpool.Pool, targetWorkloadID string) (*Store, error) {
 	}, nil
 }
 
+// Reserve атомарно резервирует одноразовый идентификатор.
 func (store *Store) Reserve(
 	ctx context.Context,
 	reservation repository.Reservation,
@@ -60,6 +63,7 @@ func (store *Store) Reserve(
 	return nil
 }
 
+// ActivateSnapshot продвигает high-watermark обслуживаемого снимка.
 func (store *Store) ActivateSnapshot(
 	ctx context.Context,
 	state repository.SnapshotState,
@@ -78,6 +82,7 @@ func (store *Store) ActivateSnapshot(
 	return nil
 }
 
+// AcceptVerification атомарно принимает снимок и резервирование контекста.
 func (store *Store) AcceptVerification(
 	ctx context.Context,
 	state repository.SnapshotState,
@@ -105,6 +110,7 @@ func (store *Store) AcceptVerification(
 	return nil
 }
 
+// Ready проверяет соединение, обслуживаемый снимок и запись резервирования.
 func (store *Store) Ready(
 	ctx context.Context,
 	expected repository.SnapshotState,
@@ -156,6 +162,7 @@ func (store *Store) Ready(
 	return nil
 }
 
+// DeleteExpired удаляет истёкшие резервирования указанного назначения.
 func (store *Store) DeleteExpired(
 	ctx context.Context,
 	kind repository.ReservationKind,
@@ -180,6 +187,7 @@ func (store *Store) DeleteExpired(
 	return nil
 }
 
+// Close закрывает пул PostgreSQL.
 func (store *Store) Close() {
 	store.pool.Close()
 }

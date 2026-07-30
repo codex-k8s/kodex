@@ -39,6 +39,7 @@ const (
 	logMessageStop  = "internal-rpc-authority runtime stopped"
 )
 
+// Run запускает локальный issuer или verifier и управляет его жизненным циклом.
 func Run(
 	lifecycle context.Context,
 	shutdownBase context.Context,

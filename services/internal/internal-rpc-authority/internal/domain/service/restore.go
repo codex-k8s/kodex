@@ -24,10 +24,12 @@ const (
 	restoreRoleCredentialPurpose = "RESTORE_ROLE_CREDENTIAL"
 )
 
+// RestorePeer описывает проверенную mTLS-идентичность caller.
 type RestorePeer struct {
 	SPIFFEID string
 }
 
+// RestoreController координирует остановку workload и устойчивое ограждение.
 type RestoreController struct {
 	databaseClusterID    string
 	controllerKey        internalrpcauth.ES256Key
@@ -41,6 +43,7 @@ type RestoreController struct {
 	now                  func() time.Time
 }
 
+// RestoreDirectiveResult содержит директиву и текущее состояние.
 type RestoreDirectiveResult struct {
 	NoDirective      bool
 	State            model.RestoreState
@@ -48,11 +51,13 @@ type RestoreDirectiveResult struct {
 	ExpiresAt        time.Time
 }
 
+// RestoreACKResult содержит принятую запись и новое состояние.
 type RestoreACKResult struct {
 	State   model.RestoreState
 	Receipt model.RestoreACKRecord
 }
 
+// NewRestoreController создаёт контроллер из устойчивых границ состояния.
 func NewRestoreController(
 	databaseClusterID string,
 	controllerKey internalrpcauth.ES256Key,
@@ -95,6 +100,7 @@ func NewRestoreController(
 	}, nil
 }
 
+// Prepare начинает цикл восстановления и переводит его в QUIESCING.
 func (controller *RestoreController) Prepare(
 	ctx context.Context,
 	command model.PrepareRestoreCommand,
@@ -202,6 +208,7 @@ func (controller *RestoreController) Prepare(
 	return state, nil
 }
 
+// GetDirective возвращает workload только его действующую директиву.
 func (controller *RestoreController) GetDirective(
 	ctx context.Context,
 	peer RestorePeer,
@@ -303,6 +310,7 @@ func (controller *RestoreController) GetDirective(
 	}, nil
 }
 
+// Acknowledge проверяет и резервирует подтверждение остановки workload.
 func (controller *RestoreController) Acknowledge(
 	ctx context.Context,
 	peer RestorePeer,
@@ -399,6 +407,7 @@ func (controller *RestoreController) Acknowledge(
 	return RestoreACKResult{State: next, Receipt: receipt}, nil
 }
 
+// Complete завершает восстановление только после полного набора подтверждений.
 func (controller *RestoreController) Complete(
 	ctx context.Context,
 	command model.CompleteRestoreCommand,
@@ -430,6 +439,7 @@ func (controller *RestoreController) Complete(
 	return state, nil
 }
 
+// Recover восстанавливает согласованность ограждения после перезапуска.
 func (controller *RestoreController) Recover(ctx context.Context) error {
 	state, err := controller.coordination.Load(ctx)
 	if err != nil {
@@ -441,6 +451,7 @@ func (controller *RestoreController) Recover(ctx context.Context) error {
 	return controller.fence.RestoreFenceReady(ctx, state)
 }
 
+// Ready сверяет устойчивое состояние координации и ограждения.
 func (controller *RestoreController) Ready(ctx context.Context) (model.RestoreState, error) {
 	if err := controller.coordination.CoordinationReady(ctx); err != nil {
 		return model.RestoreState{}, err
@@ -458,10 +469,12 @@ func (controller *RestoreController) Ready(ctx context.Context) (model.RestoreSt
 	return state, nil
 }
 
+// RoleTrustMetadata возвращает обслуживаемую метаинформацию доверия.
 func (controller *RestoreController) RoleTrustMetadata() model.RestoreRoleTrustMetadata {
 	return controller.roleTrustMetadata
 }
 
+// SignerGeneration возвращает поколение ключа директив контроллера.
 func (controller *RestoreController) SignerGeneration() uint64 {
 	return controller.controllerGeneration
 }

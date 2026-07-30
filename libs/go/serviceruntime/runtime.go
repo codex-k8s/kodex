@@ -9,17 +9,20 @@ import (
 	"time"
 )
 
+// Readiness потокобезопасно хранит статус и ограниченную причину.
 type Readiness struct {
 	ready  atomic.Bool
 	reason atomic.Value
 }
 
+// NewReadiness создаёт неготовое начальное состояние.
 func NewReadiness() *Readiness {
 	readiness := &Readiness{}
 	readiness.reason.Store("starting")
 	return readiness
 }
 
+// Set атомарно обновляет готовность и причину.
 func (readiness *Readiness) Set(ready bool, reason string) {
 	if reason == "" {
 		reason = "unspecified"
@@ -28,12 +31,15 @@ func (readiness *Readiness) Set(ready bool, reason string) {
 	readiness.ready.Store(ready)
 }
 
+// Ready возвращает согласованный снимок готовности.
 func (readiness *Readiness) Ready() (bool, string) {
 	return readiness.ready.Load(), readiness.reason.Load().(string)
 }
 
+// Worker выполняет фоновую работу до отмены контекста.
 type Worker func(context.Context) error
 
+// WorkerGroup владеет отменой и объединением результатов workers.
 type WorkerGroup struct {
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -41,6 +47,7 @@ type WorkerGroup struct {
 	once   sync.Once
 }
 
+// StartWorkers запускает workers под общим контекстом и cancel/join boundary.
 func StartWorkers(parent context.Context, workers ...Worker) *WorkerGroup {
 	ctx, cancel := context.WithCancel(parent)
 	group := &WorkerGroup{
@@ -67,10 +74,12 @@ func StartWorkers(parent context.Context, workers ...Worker) *WorkerGroup {
 	return group
 }
 
+// Stop отменяет workers ровно один раз.
 func (group *WorkerGroup) Stop() {
 	group.once.Do(group.cancel)
 }
 
+// Wait ожидает завершение и объединяет ошибки workers.
 func (group *WorkerGroup) Wait(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -84,12 +93,14 @@ func (group *WorkerGroup) Wait(ctx context.Context) error {
 	}
 }
 
+// ShutdownOperation задаёт независимую cleanup-операцию и её бюджет.
 type ShutdownOperation struct {
 	Name    string
 	Timeout time.Duration
 	Run     func(context.Context) error
 }
 
+// RunShutdown последовательно выполняет cleanup с независимыми контекстами.
 func RunShutdown(
 	background context.Context,
 	operations ...ShutdownOperation,

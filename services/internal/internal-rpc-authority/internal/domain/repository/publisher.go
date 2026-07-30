@@ -6,6 +6,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
+// PublisherStore сохраняет выданные материалы и намерения проверки доставки.
 type PublisherStore interface {
 	LoadPublishedCredential(
 		context.Context,
@@ -19,12 +20,14 @@ type PublisherStore interface {
 	PublisherReady(context.Context) error
 }
 
+// SecretMaterial содержит версию и digest фактически прочитанного секрета.
 type SecretMaterial struct {
 	Version uint64
 	Data    map[string]string
 	Digest  string
 }
 
+// SecretDelivery доставляет versioned KV-материал с CAS.
 type SecretDelivery interface {
 	ReadKV2(context.Context, string) (SecretMaterial, bool, error)
 	CreateKV2(context.Context, string, map[string]string) (SecretMaterial, error)

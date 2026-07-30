@@ -19,6 +19,7 @@ var kvDataPathPattern = regexp.MustCompile(
 	`^kv/data/mattercodex/[a-z0-9][a-z0-9./_-]{14,500}[a-z0-9]$`,
 )
 
+// ReadKV2 читает материал KV v2 только из разрешённого реестром пути.
 func (client *StaticRoleClient) ReadKV2(
 	ctx context.Context,
 	path string,
@@ -33,6 +34,7 @@ func (client *StaticRoleClient) ReadKV2(
 	return client.readKV2WithToken(ctx, token, path)
 }
 
+// CreateKV2 атомарно создаёт отсутствующий материал KV v2.
 func (client *StaticRoleClient) CreateKV2(
 	ctx context.Context,
 	path string,
@@ -99,6 +101,7 @@ func (client *StaticRoleClient) CreateKV2(
 	return stored, nil
 }
 
+// WriteKV2CAS заменяет материал KV v2 при совпадении версии.
 func (client *StaticRoleClient) WriteKV2CAS(
 	ctx context.Context,
 	path string,

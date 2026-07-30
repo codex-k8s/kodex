@@ -1,10 +1,11 @@
 # Внутренние сервисы
 
-Сервис владеет доменными инвариантами и своим PostgreSQL source of truth.
-Внешние клиенты обращаются к нему через gateway и versioned Proto/gRPC.
+Сервис владеет доменными инвариантами и своим единым источником истины в
+PostgreSQL. Внешние клиенты обращаются к нему через шлюз и версионированный
+Proto/gRPC.
 
-## Реализованные unit
+## Реализованные компоненты
 
-- [`internal-rpc-authority`](internal-rpc-authority/README.md) — workload-local
-  issuer/verifier, persistent replay boundary и lifecycle технических
-  PostgreSQL credentials.
+- [`internal-rpc-authority`](internal-rpc-authority/README.md) — локальные для
+  workload issuer/verifier, устойчивая граница защиты от повтора и жизненный
+  цикл технических учётных данных PostgreSQL.

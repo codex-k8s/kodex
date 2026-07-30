@@ -20,17 +20,20 @@ import (
 
 const restoreOperatorSPIFFE = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-operator"
 
+// RestoreControllerServer адаптирует координацию восстановления к gRPC.
 type RestoreControllerServer struct {
 	internalrpcauthorityv1.UnimplementedRestoreControllerServiceServer
 	application *application.RestoreController
 }
 
+// NewRestoreControllerServer создаёт сервер контроллера восстановления.
 func NewRestoreControllerServer(
 	applicationValue *application.RestoreController,
 ) *RestoreControllerServer {
 	return &RestoreControllerServer{application: applicationValue}
 }
 
+// PrepareRestore начинает координацию для проверенного operator peer.
 func (server *RestoreControllerServer) PrepareRestore(
 	ctx context.Context,
 	request *internalrpcauthorityv1.PrepareRestoreRequest,
@@ -74,6 +77,7 @@ func (server *RestoreControllerServer) PrepareRestore(
 	}, nil
 }
 
+// GetRestoreDirective возвращает связанную с workload директиву.
 func (server *RestoreControllerServer) GetRestoreDirective(
 	ctx context.Context,
 	request *internalrpcauthorityv1.GetRestoreDirectiveRequest,
@@ -124,6 +128,7 @@ func (server *RestoreControllerServer) GetRestoreDirective(
 	}, nil
 }
 
+// AcknowledgeQuiescence принимает одноразовое доказательство дренирования.
 func (server *RestoreControllerServer) AcknowledgeQuiescence(
 	ctx context.Context,
 	request *internalrpcauthorityv1.AcknowledgeQuiescenceRequest,
@@ -173,6 +178,7 @@ func (server *RestoreControllerServer) AcknowledgeQuiescence(
 	}, nil
 }
 
+// CompleteRestore завершает подготовленный цикл восстановления.
 func (server *RestoreControllerServer) CompleteRestore(
 	ctx context.Context,
 	request *internalrpcauthorityv1.CompleteRestoreRequest,
@@ -216,6 +222,7 @@ func (server *RestoreControllerServer) CompleteRestore(
 	}, nil
 }
 
+// CheckReadiness сверяет координацию и устойчивое ограждение.
 func (server *RestoreControllerServer) CheckReadiness(
 	ctx context.Context,
 	request *internalrpcauthorityv1.RestoreControllerServiceCheckReadinessRequest,

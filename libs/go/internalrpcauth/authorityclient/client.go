@@ -21,12 +21,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Канонические UDS-пути и имя метаданных контекста авторизации.
 const (
 	IssuerSocketPath      = "/run/mattercodex/internal-rpc-authority/issuer.sock"
 	VerifierSocketPath    = "/run/mattercodex/internal-rpc-authority/verifier.sock"
 	AuthorizationMetadata = "x-mattercodex-authorization"
 )
 
+// LocalConfig задаёт проверяемую идентичность локального authority-сервера.
 type LocalConfig struct {
 	SocketPath        string
 	ExpectedServerUID uint32
@@ -34,10 +36,12 @@ type LocalConfig struct {
 	DialTimeout       time.Duration
 }
 
+// LocalConnection владеет gRPC-соединением через проверенный UDS.
 type LocalConnection struct {
 	connection *grpc.ClientConn
 }
 
+// DialLocal подключается к именованному UDS с проверкой uid/gid сервера.
 func DialLocal(ctx context.Context, config LocalConfig) (*LocalConnection, error) {
 	if err := validateLocalConfig(config); err != nil {
 		return nil, err
@@ -64,14 +68,17 @@ func DialLocal(ctx context.Context, config LocalConfig) (*LocalConnection, error
 	return &LocalConnection{connection: connection}, nil
 }
 
+// Issuer возвращает клиент локального issuer.
 func (connection *LocalConnection) Issuer() internalrpcauthorityv1.AuthorizationIssuerServiceClient {
 	return internalrpcauthorityv1.NewAuthorizationIssuerServiceClient(connection.connection)
 }
 
+// Verifier возвращает клиент локального verifier.
 func (connection *LocalConnection) Verifier() internalrpcauthorityv1.AuthorizationVerifierServiceClient {
 	return internalrpcauthorityv1.NewAuthorizationVerifierServiceClient(connection.connection)
 }
 
+// Close закрывает локальное gRPC-соединение.
 func (connection *LocalConnection) Close() error {
 	return connection.connection.Close()
 }
@@ -96,6 +103,7 @@ func validateLocalConfig(config LocalConfig) error {
 	return nil
 }
 
+// ProofProvider получает краткоживущее доказательство для точной операции.
 type ProofProvider interface {
 	AuthorityProof(
 		ctx context.Context,
@@ -104,10 +112,12 @@ type ProofProvider interface {
 	) (compactJWS string, correlationID string, err error)
 }
 
+// OperationResolver разрешает полный RPC-метод в зарегистрированную операцию.
 type OperationResolver interface {
 	OperationID(fullMethod string) (string, bool)
 }
 
+// IssuerUnaryClientInterceptor выпускает и добавляет контекст перед downstream RPC.
 func IssuerUnaryClientInterceptor(
 	issuer internalrpcauthorityv1.AuthorizationIssuerServiceClient,
 	operations OperationResolver,
@@ -152,6 +162,7 @@ func IssuerUnaryClientInterceptor(
 
 type verifiedContextKey struct{}
 
+// VerifiedAuthorizationContext возвращает проверенный серверным interceptor контекст.
 func VerifiedAuthorizationContext(
 	ctx context.Context,
 ) (*internalrpcauthorityv1.VerifiedAuthorizationContext, bool) {
@@ -159,6 +170,7 @@ func VerifiedAuthorizationContext(
 	return value, ok && value != nil
 }
 
+// VerifierUnaryServerInterceptor проверяет mTLS peer и подписанный контекст.
 func VerifierUnaryServerInterceptor(
 	verifier internalrpcauthorityv1.AuthorizationVerifierServiceClient,
 ) grpc.UnaryServerInterceptor {

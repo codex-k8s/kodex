@@ -19,12 +19,14 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
+// RestoreRoleCredentialPublisherServer адаптирует выдачу ролей к gRPC.
 type RestoreRoleCredentialPublisherServer struct {
 	internalrpcauthorityv1.UnimplementedRestoreRoleCredentialPublisherServiceServer
 	application                  *application.Publisher
 	expectedControllerGeneration uint64
 }
 
+// NewRestoreRoleCredentialPublisherServer создаёт сервер publisher.
 func NewRestoreRoleCredentialPublisherServer(
 	applicationValue *application.Publisher,
 	expectedControllerGeneration uint64,
@@ -35,6 +37,7 @@ func NewRestoreRoleCredentialPublisherServer(
 	}
 }
 
+// PublishRoleCredential выпускает роль для проверенного controller peer.
 func (server *RestoreRoleCredentialPublisherServer) PublishRoleCredential(
 	ctx context.Context,
 	request *internalrpcauthorityv1.PublishRoleCredentialRequest,
@@ -75,6 +78,7 @@ func (server *RestoreRoleCredentialPublisherServer) PublishRoleCredential(
 	}, nil
 }
 
+// CheckReadiness сверяет реестр, хранилище и Vault.
 func (server *RestoreRoleCredentialPublisherServer) CheckReadiness(
 	ctx context.Context,
 	request *internalrpcauthorityv1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest,

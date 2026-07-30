@@ -37,6 +37,7 @@ const (
 	clockSkew            = 5 * time.Second
 )
 
+// AuthorityAdmission управляет приёмом запросов и дренированием workload.
 type AuthorityAdmission interface {
 	SetAvailable(bool)
 	SetRestoreBlocked(bool)
@@ -46,6 +47,7 @@ type AuthorityAdmission interface {
 	ServedStateReady(context.Context) error
 }
 
+// Config задаёт идентичность, доверие и материал роли восстановления.
 type Config struct {
 	Address                    string
 	TLS                        *tls.Config
@@ -66,10 +68,12 @@ type Config struct {
 	UnaryInterceptor           grpc.UnaryClientInterceptor
 }
 
+// SecretReader читает версионированный материал из Vault KV v2.
 type SecretReader interface {
 	ReadKV2(context.Context, string) (repository.SecretMaterial, bool, error)
 }
 
+// Agent обрабатывает директиву и отправляет одноразовое подтверждение.
 type Agent struct {
 	config    Config
 	observed  atomic.Uint64
@@ -77,6 +81,7 @@ type Agent struct {
 	now       func() time.Time
 }
 
+// New создаёт агент только из полностью связанной конфигурации.
 func New(config Config) (*Agent, error) {
 	if config.Address == "" ||
 		config.TLS == nil ||
@@ -102,6 +107,7 @@ func New(config Config) (*Agent, error) {
 	return &Agent{config: config, now: time.Now}, nil
 }
 
+// Poll выполняет один цикл обнаружения, остановки, дренирования и подтверждения.
 func (agent *Agent) Poll(
 	ctx context.Context,
 	admission AuthorityAdmission,
@@ -265,6 +271,7 @@ func (agent *Agent) Poll(
 	return nil
 }
 
+// Quiescing сообщает, действует ли сейчас ограждение восстановления.
 func (agent *Agent) Quiescing() bool {
 	return agent.quiescing.Load()
 }

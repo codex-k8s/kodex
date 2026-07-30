@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// DeliveryTarget задаёт один зарегистрированный workload и его пути доставки.
 type DeliveryTarget struct {
 	TargetID                   string
 	WorkloadID                 string
@@ -22,6 +23,7 @@ type DeliveryTarget struct {
 	ReadbackServedStateDigest  string
 }
 
+// DeliveryTargetRegistry содержит versioned закрытый набор целей доставки.
 type DeliveryTargetRegistry struct {
 	Version        int
 	SourceRevision uint64
@@ -29,6 +31,7 @@ type DeliveryTargetRegistry struct {
 	Targets        map[string]DeliveryTarget
 }
 
+// CredentialIssuanceDirective связывает выпуск с restore coordination.
 type CredentialIssuanceDirective struct {
 	Version                int    `json:"v"`
 	Issuer                 string `json:"iss"`
@@ -52,6 +55,7 @@ type CredentialIssuanceDirective struct {
 	ExpiresAt              int64  `json:"exp"`
 }
 
+// RestoreRoleCredentialClaims задаёт role-bound credential восстановления.
 type RestoreRoleCredentialClaims struct {
 	Version                  int             `json:"v"`
 	Issuer                   string          `json:"iss"`
@@ -80,6 +84,7 @@ type RestoreRoleCredentialClaims struct {
 	ExpiresAt                int64           `json:"exp"`
 }
 
+// CredentialDeliveryReceiptClaims подтверждает точную доставку credential.
 type CredentialDeliveryReceiptClaims struct {
 	Version                    int    `json:"v"`
 	Issuer                     string `json:"iss"`
@@ -106,6 +111,7 @@ type CredentialDeliveryReceiptClaims struct {
 	ExpiresAt                  int64  `json:"exp"`
 }
 
+// PublishedCredential хранит устойчивый результат идемпотентного выпуска.
 type PublishedCredential struct {
 	IdempotencyKey       string
 	DirectiveJTI         string
@@ -117,6 +123,7 @@ type PublishedCredential struct {
 	AcceptedAt           time.Time
 }
 
+// PublishedReadbackMaterial содержит credential и possession key проверки.
 type PublishedReadbackMaterial struct {
 	Intent                 ReadbackIntent
 	ReadbackCredentialJWS  string

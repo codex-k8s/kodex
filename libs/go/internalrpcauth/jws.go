@@ -19,6 +19,7 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jws"
 )
 
+// Поддерживаемый алгоритм, критический header и ограничения контракта.
 const (
 	AlgorithmES256     = "ES256"
 	CriticalHeader     = "mcxv"
@@ -26,6 +27,7 @@ const (
 	MaxCompactJWSBytes = 8192
 )
 
+// Канонические причины отклонения JWS/JWK.
 var (
 	ErrMalformedJWS     = errors.New("malformed compact JWS")
 	ErrProtectedHeader  = errors.New("invalid protected header")
@@ -34,31 +36,37 @@ var (
 	ErrKey              = errors.New("invalid ES256 key")
 )
 
+// ProtectedHeaderExpectation задаёт ожидаемые typ и kid.
 type ProtectedHeaderExpectation struct {
 	Type  string
 	KeyID string
 }
 
+// ProtectedHeader содержит строго разобранные typ и kid.
 type ProtectedHeader struct {
 	Type  string
 	KeyID string
 }
 
+// VerifiedJWS содержит проверенный канонический payload и kid.
 type VerifiedJWS struct {
 	CanonicalPayload []byte
 	KeyID            string
 }
 
+// ES256Key связывает kid с публичной и необязательной приватной частью P-256.
 type ES256Key struct {
 	KeyID   string
 	Public  *ecdsa.PublicKey
 	Private *ecdsa.PrivateKey
 }
 
+// PublicOnly возвращает копию без приватного материала.
 func (key ES256Key) PublicOnly() ES256Key {
 	return ES256Key{KeyID: key.KeyID, Public: key.Public}
 }
 
+// SignCanonicalJSON канонизирует JSON и создаёт compact ES256 JWS.
 func SignCanonicalJSON(
 	value any,
 	key ES256Key,
@@ -104,6 +112,7 @@ func SignCanonicalJSON(
 	return compact, nil
 }
 
+// VerifyCanonicalJSON строго проверяет header, подпись и JCS payload.
 func VerifyCanonicalJSON(
 	compact string,
 	key ES256Key,
@@ -202,6 +211,7 @@ func CanonicalJSON(value any) ([]byte, error) {
 	return canonical, nil
 }
 
+// CanonicalJSONSHA256 вычисляет SHA-256 канонического JSON.
 func CanonicalJSONSHA256(value any) (string, error) {
 	canonical, err := CanonicalJSON(value)
 	if err != nil {
@@ -214,14 +224,17 @@ func CanonicalJSONSHA256(value any) (string, error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
+// ParsePublicJWK строго разбирает публичный ES256 JWK.
 func ParsePublicJWK(data []byte) (ES256Key, error) {
 	return parseJWK(data, false)
 }
 
+// ParsePrivateJWK строго разбирает приватный ES256 JWK.
 func ParsePrivateJWK(data []byte) (ES256Key, error) {
 	return parseJWK(data, true)
 }
 
+// GenerateES256Key создаёт новый P-256 ключ с заданным kid.
 func GenerateES256Key(keyID string) (ES256Key, error) {
 	if keyID == "" || len(keyID) > 64 {
 		return ES256Key{}, ErrKey
@@ -237,14 +250,17 @@ func GenerateES256Key(keyID string) (ES256Key, error) {
 	}, nil
 }
 
+// MarshalPublicJWK возвращает канонический публичный JWK.
 func MarshalPublicJWK(key ES256Key) ([]byte, error) {
 	return marshalJWK(key, false)
 }
 
+// MarshalPrivateJWK возвращает канонический приватный JWK.
 func MarshalPrivateJWK(key ES256Key) ([]byte, error) {
 	return marshalJWK(key, true)
 }
 
+// PublicJWKThumbprintSHA256 вычисляет RFC 7638 thumbprint публичного ключа.
 func PublicJWKThumbprintSHA256(key ES256Key) (string, error) {
 	if err := validateES256Key(key, key.KeyID, false); err != nil {
 		return "", err
@@ -303,6 +319,7 @@ func marshalJWK(key ES256Key, includePrivate bool) ([]byte, error) {
 	return canonical, nil
 }
 
+// ValidateTimes проверяет точный TTL, future iat, nbf, exp и bounded skew.
 func ValidateTimes(now time.Time, issuedAt, notBefore, expiresAt time.Time, maxTTL, skew time.Duration) error {
 	now = now.UTC().Truncate(time.Second)
 	issuedAt = issuedAt.UTC().Truncate(time.Second)
