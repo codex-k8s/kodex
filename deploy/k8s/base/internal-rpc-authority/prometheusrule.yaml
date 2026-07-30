@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: internal-rpc-authority
+  labels:
+    app.kubernetes.io/name: internal-rpc-authority
+spec:
+  groups:
+    - name: internal-rpc-authority
+      rules:
+        - alert: InternalRPCAuthorityReconcilerUnavailable
+          expr: absent(mattercodex_internal_rpc_authority_database_credential_reconciler_readiness{ready="true"}) or max(mattercodex_internal_rpc_authority_database_credential_reconciler_readiness{ready="true"}) < 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Internal RPC authority credential reconciler is unavailable"
+            runbook_url: "https://docs.mattercodex.dev/runbooks/internal-rpc-authority"
+        - alert: InternalRPCAuthorityUnexpectedGRPCFailures
+          expr: sum(rate(mattercodex_internal_rpc_authority_database_credential_reconciler_grpc_requests_total{code=~"Internal|Unavailable|Unknown|DataLoss"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Internal RPC authority reports unexpected gRPC failures"
+            runbook_url: "https://docs.mattercodex.dev/runbooks/internal-rpc-authority"

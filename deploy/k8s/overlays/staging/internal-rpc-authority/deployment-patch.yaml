@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: internal-rpc-authority-database-credential-reconciler
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: reconciler
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

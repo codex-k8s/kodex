@@ -65,8 +65,10 @@ func run(ctx context.Context, arguments []string) error {
 		os.Getenv("INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"),
 	)
 	if expectedServerName == "" ||
+		len(config.Fallbacks) != 0 ||
 		config.Host != expectedServerName ||
 		config.TLSConfig == nil ||
+		config.TLSConfig.RootCAs == nil ||
 		config.TLSConfig.ServerName != expectedServerName ||
 		config.TLSConfig.InsecureSkipVerify {
 		return errors.New("PostgreSQL DSN must use verify-full TLS with exact server name")

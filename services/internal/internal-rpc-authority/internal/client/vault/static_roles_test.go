@@ -3,6 +3,8 @@ package vault
 import (
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -52,5 +54,15 @@ func TestVerifyStaticRoleResponseBindsPrincipalAndRotation(t *testing.T) {
 	)
 	if err := verifyStaticRoleResponse(response(ambiguousRotation), expected); err == nil {
 		t.Fatal("ambiguous static role rotation accepted")
+	}
+}
+
+func TestReadTokenFileAcceptsProjectedGroupReadableMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(path, []byte("bounded-projected-token"), 0o440); err != nil {
+		t.Fatalf("write projected token: %v", err)
+	}
+	if _, err := readTokenFile(path); err != nil {
+		t.Fatalf("readTokenFile() error = %v", err)
 	}
 }

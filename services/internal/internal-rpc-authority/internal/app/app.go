@@ -348,8 +348,10 @@ func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, errors.New("parse PostgreSQL DSN")
 	}
-	if poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
+	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
+		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
 		poolConfig.ConnConfig.TLSConfig == nil ||
+		poolConfig.ConnConfig.TLSConfig.RootCAs == nil ||
 		poolConfig.ConnConfig.TLSConfig.ServerName != config.PostgresTLSServerName ||
 		poolConfig.ConnConfig.TLSConfig.InsecureSkipVerify {
 		return nil, errors.New("PostgreSQL DSN must use verify-full TLS with exact server name")

@@ -64,7 +64,6 @@ func NewStaticRoleClient(config Config) (*StaticRoleClient, error) {
 		return nil, err
 	}
 	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{
 			MinVersion: tls.VersionTLS13,
 			RootCAs:    certificatePool,
@@ -77,8 +76,15 @@ func NewStaticRoleClient(config Config) (*StaticRoleClient, error) {
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   config.Timeout,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return errors.New("Vault redirect is forbidden")
+			},
 		},
 	}, nil
+}
+
+func (client *StaticRoleClient) Close() {
+	client.client.CloseIdleConnections()
 }
 
 func (client *StaticRoleClient) VerifyStaticRoles(
@@ -155,6 +161,10 @@ func (client *StaticRoleClient) login(ctx context.Context) (string, error) {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
 		return "", errors.New("Vault Kubernetes login rejected")
 	}
+	raw, err := io.ReadAll(io.LimitReader(response.Body, maxVaultResponseBytes+1))
+	if err != nil || len(raw) == 0 || len(raw) > maxVaultResponseBytes {
+		return "", errors.New("Vault Kubernetes login response is invalid")
+	}
 	var envelope struct {
 		Auth struct {
 			ClientToken   string `json:"client_token"`
@@ -162,11 +172,17 @@ func (client *StaticRoleClient) login(ctx context.Context) (string, error) {
 			Renewable     bool   `json:"renewable"`
 		} `json:"auth"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, maxVaultResponseBytes))
+	decoder := json.NewDecoder(bytes.NewReader(raw))
 	if err := decoder.Decode(&envelope); err != nil ||
 		envelope.Auth.ClientToken == "" ||
+		len(envelope.Auth.ClientToken) > 4096 ||
 		envelope.Auth.LeaseDuration < 30 ||
+		envelope.Auth.LeaseDuration > 3600 ||
 		!envelope.Auth.Renewable {
+		return "", errors.New("Vault Kubernetes login response is invalid")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		return "", errors.New("Vault Kubernetes login response is invalid")
 	}
 	return envelope.Auth.ClientToken, nil
@@ -239,7 +255,7 @@ func readTokenFile(path string) ([]byte, error) {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() ||
-		info.Mode().Perm()&0o077 != 0 ||
+		info.Mode().Perm()&0o007 != 0 ||
 		info.Size() <= 0 ||
 		info.Size() > 16<<10 {
 		return nil, errors.New("Vault Kubernetes auth token file is unsafe")

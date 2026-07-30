@@ -258,6 +258,14 @@ func RunDatabaseCredentialReconciler(
 			Run:     technicalServer.Shutdown,
 		},
 		serviceruntime.ShutdownOperation{
+			Name:    "vault-http",
+			Timeout: config.ShutdownTimeout,
+			Run: func(context.Context) error {
+				vault.Close()
+				return nil
+			},
+		},
+		serviceruntime.ShutdownOperation{
 			Name:    "postgresql",
 			Timeout: config.ShutdownTimeout,
 			Run: func(context.Context) error {
@@ -282,8 +290,10 @@ func openCredentialPostgres(
 	if err != nil {
 		return nil, errors.New("parse database credential PostgreSQL DSN")
 	}
-	if poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
+	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
+		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
 		poolConfig.ConnConfig.TLSConfig == nil ||
+		poolConfig.ConnConfig.TLSConfig.RootCAs == nil ||
 		poolConfig.ConnConfig.TLSConfig.ServerName != config.PostgresTLSServerName ||
 		poolConfig.ConnConfig.TLSConfig.InsecureSkipVerify {
 		return nil, errors.New("database credential PostgreSQL TLS boundary rejected")

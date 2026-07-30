@@ -1,0 +1,129 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane
+spec:
+  template:
+    metadata:
+      labels:
+        mattercodex.dev/internal-rpc-authority-verifier: enabled
+    spec:
+      securityContext:
+        fsGroup: 29000
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: internal-rpc-authority-socket-init
+          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command:
+            - /usr/local/bin/internal-rpc-authority-socket-init
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 29000
+            runAsGroup: 29000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: internal-rpc-authority-sockets
+              mountPath: /run/mattercodex
+      containers:
+        - name: internal-rpc-authority-verifier
+          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command:
+            - /usr/local/bin/internal-rpc-authority-verifier
+          env:
+            - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID
+              value: control-plane
+            - name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN
+              value: ":9092"
+            - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID
+              value: "10001"
+            - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID
+              value: "10001"
+            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
+              value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
+            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: internal-rpc-authority-control-plane-verifier-postgresql
+                  key: username
+          ports:
+            - name: authority-metrics
+              containerPort: 9092
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: authority-metrics
+            timeoutSeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: authority-metrics
+            timeoutSeconds: 2
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 29002
+            runAsGroup: 29000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: internal-rpc-authority-sockets
+              mountPath: /run/mattercodex
+            - name: internal-rpc-authority-snapshot
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+              readOnly: true
+            - name: internal-rpc-authority-manifest-trust
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
+              readOnly: true
+            - name: internal-rpc-authority-readback-key
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback
+              readOnly: true
+            - name: internal-rpc-authority-postgresql
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres
+              readOnly: true
+            - name: internal-rpc-authority-postgresql-ca
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql
+              readOnly: true
+      volumes:
+        - name: internal-rpc-authority-sockets
+          emptyDir:
+            medium: ""
+            sizeLimit: 8Mi
+        - name: internal-rpc-authority-snapshot
+          secret:
+            secretName: internal-rpc-authority-snapshot
+            defaultMode: 0440
+        - name: internal-rpc-authority-manifest-trust
+          secret:
+            secretName: internal-rpc-authority-manifest-trust
+            defaultMode: 0440
+        - name: internal-rpc-authority-readback-key
+          secret:
+            secretName: internal-rpc-authority-control-plane-verifier-readback-key
+            defaultMode: 0440
+        - name: internal-rpc-authority-postgresql
+          secret:
+            secretName: internal-rpc-authority-control-plane-verifier-postgresql
+            defaultMode: 0440
+            items:
+              - key: dsn
+                path: dsn
+        - name: internal-rpc-authority-postgresql-ca
+          configMap:
+            name: internal-rpc-authority-postgresql-ca
+            defaultMode: 0440
