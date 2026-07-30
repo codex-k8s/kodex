@@ -48,6 +48,14 @@ type RestoreOperatorCredentialVerifier interface {
 	) (model.RestoreOperatorCredential, error)
 }
 
+// RestoreEvidenceVerifier проверяет independently signed PITR evidence.
+type RestoreEvidenceVerifier interface {
+	VerifyCompletedEvidence(
+		context.Context,
+		model.RestoreState,
+	) (model.RestoreCompletionEvidence, error)
+}
+
 // RestoreFenceStore применяет и проверяет рабочий fence восстановления.
 type RestoreFenceStore interface {
 	ApplyRestoreFence(context.Context, model.RestoreState) error

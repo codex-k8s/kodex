@@ -5,6 +5,7 @@ repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 renderer="$repo_root/scripts/render-internal-rpc-authority.sh"
 test_digest="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 image_ref="ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:$test_digest"
+kubernetes_api_cidrs="192.0.2.10/32,2001:db8::10/128"
 registry="$repo_root/deploy/k8s/base/internal-rpc-authority/capability-registry.yaml"
 config_map="$repo_root/deploy/k8s/base/internal-rpc-authority/configmap.yaml"
 registered_digest="$(sha256sum "$registry" | awk '{print $1}')"
@@ -14,7 +15,12 @@ configured_digest="$(
 [[ "$registered_digest" == "$configured_digest" ]]
 
 for environment_name in staging production; do
-  rendered="$(bash "$renderer" --environment "$environment_name" --image-ref "$image_ref")"
+  rendered="$(
+    bash "$renderer" \
+      --environment "$environment_name" \
+      --image-ref "$image_ref" \
+      --kubernetes-api-cidrs "$kubernetes_api_cidrs"
+  )"
   grep -Fq "image: $image_ref" <<<"$rendered"
   ! grep -Fq 'sha256:0000000000000000000000000000000000000000000000000000000000000000' <<<"$rendered"
   object_count="$(yq eval-all '[.] | length' <<<"$rendered")"
@@ -24,6 +30,10 @@ for environment_name in staging production; do
   grep -Fq 'name: internal-rpc-authority-postgresql-from-migrator' <<<"$rendered"
   grep -Fq 'name: internal-rpc-authority-postgresql-from-runtime' <<<"$rendered"
   grep -Fq 'name: vault-from-internal-rpc-authority-reconciler' <<<"$rendered"
+  grep -Fq 'name: internal-rpc-authority-kubernetes-api-exact-endpoints' <<<"$rendered"
+  grep -Fq 'cidr: 192.0.2.10/32' <<<"$rendered"
+  grep -Fq 'cidr: 2001:db8::10/128' <<<"$rendered"
+  ! grep -Fq 'component: kube-apiserver' <<<"$rendered"
   grep -Fq 'absent(mattercodex_internal_rpc_authority_database_credential_reconciler_readiness' <<<"$rendered"
   grep -Fq 'port: 4317' <<<"$rendered"
   grep -Fq 'app.kubernetes.io/name: opentelemetry-collector' <<<"$rendered"
@@ -32,8 +42,8 @@ for environment_name in staging production; do
   grep -Fq 'name: SENTRY_DSN_FILE' <<<"$rendered"
   grep -Fq 'name: internal-rpc-authority-dashboard' <<<"$rendered"
   grep -Fq 'runbook_url: https://docs.mattercodex.dev/runbooks/internal-rpc-authority' <<<"$rendered"
-  [[ "$(grep -Fc 'kind: SecretProviderClass' <<<"$rendered")" == "4" ]]
-  [[ "$(grep -Fc 'vaultSkipTLSVerify: "false"' <<<"$rendered")" == "4" ]]
+  [[ "$(grep -Fc 'kind: SecretProviderClass' <<<"$rendered")" == "5" ]]
+  [[ "$(grep -Fc 'vaultSkipTLSVerify: "false"' <<<"$rendered")" == "5" ]]
   ! grep -Eq 'vaultSkipTLSVerify: "?true"?' <<<"$rendered"
   runtime_database_sources="$(
     yq eval-all '
@@ -73,6 +83,7 @@ done
 if bash "$renderer" \
   --environment staging \
   --image-ref 'ghcr.io/codex-k8s/matter-codex/internal-rpc-authority:latest' \
+  --kubernetes-api-cidrs "$kubernetes_api_cidrs" \
   >/dev/null 2>&1; then
   printf 'FAIL: mutable image tag was accepted\n' >&2
   exit 1
@@ -81,8 +92,18 @@ fi
 if bash "$renderer" \
   --environment production \
   --image-ref 'ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000' \
+  --kubernetes-api-cidrs "$kubernetes_api_cidrs" \
   >/dev/null 2>&1; then
   printf 'FAIL: zero image digest was accepted\n' >&2
+  exit 1
+fi
+
+if bash "$renderer" \
+  --environment staging \
+  --image-ref "$image_ref" \
+  --kubernetes-api-cidrs '0.0.0.0/0' \
+  >/dev/null 2>&1; then
+  printf 'FAIL: non-exact Kubernetes API destination was accepted\n' >&2
   exit 1
 fi
 

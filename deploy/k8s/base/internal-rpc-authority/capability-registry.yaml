@@ -17,7 +17,8 @@ spec:
       databaseCredentialReconciler: /usr/local/bin/internal-rpc-authority-database-credential-reconciler
       restoreController: /usr/local/bin/internal-rpc-authority-restore-controller
       restoreOperator: /usr/local/bin/internal-rpc-authority-restore-operator
-      recovery: /usr/local/bin/internal-rpc-authority-recovery
+      restorePitr: /usr/local/bin/internal-rpc-authority-restore-pitr
+      recovery: /usr/local/bin/internal-rpc-authority-restore-recovery
       cli: /usr/local/bin/internal-rpc-authority-cli
   unixDomainSockets:
     volume:
@@ -1283,7 +1284,7 @@ spec:
       backupPitr: REQUIRED
     restore-evidence-anchor:
       kind: ExternalMonotonicKubernetesSecret
-      owner: internal-rpc-authority-restore-controller
+      owner: internal-rpc-authority-restore-pitr
       namespace: mattercodex-system
       resourceName: internal-rpc-authority-restore-evidence
       outsideRestoredPostgreSQL: true
@@ -1319,7 +1320,7 @@ spec:
           - predecessor-revision-and-digest-equal-old-served-state
           - same-revision-mutation-denied
           - lower-revision-denied
-          - only-controller-service-account-may-update
+          - only-pitr-executor-service-account-may-update
         createOwner: cluster-bootstrap
         deleteAllowed: false
       signedPayloadSchema: contracts/authorization/v1/restore-fence-evidence.schema.json
@@ -1799,6 +1800,57 @@ spec:
         - verify-signed-completed-served-readback
         - verify-recovery-fence-cas-and-40-second-safe-window
         - verify-every-role-readback-before-open
+      failurePolicy: KEEP_TRAFFIC_QUARANTINED
+    internal-rpc-authority-restore-pitr-job:
+      kind: CronJob
+      canonicalPath: deploy/k8s/base/internal-rpc-authority-restore
+      owner: internal-rpc-authority
+      artifactBinary: /usr/local/bin/internal-rpc-authority-restore-pitr
+      serviceAccount: internal-rpc-authority-restore-pitr
+      trigger: DURABLE_PREPARED_COORDINATION
+      execution:
+        provider: CloudNativePG
+        apiVersion: postgresql.cnpg.io/v1
+        recoveryMethod: BARMAN_CLOUD_PLUGIN_PITR_NEW_CLUSTER
+        immutableIntent:
+          - restore_id
+          - restore_epoch
+          - backup_manifest_digest_sha256
+          - recovery_target_time
+          - source_server_name
+          - barman_object_name
+          - postgres_image_digest
+        exactReadback:
+          - metadata.uid
+          - metadata.resourceVersion
+          - metadata.generation
+          - status.observedGeneration
+          - status.phase
+          - status.readyInstances
+          - status.currentPrimary
+          - status.timelineID
+          - status.instancesReportedState.currentPrimary
+          - status.conditions.Ready
+        crashRetry: GET_AND_COMPARE_IMMUTABLE_INTENT_BEFORE_CREATE
+      evidence:
+        signerDelivery: vault-csi
+        signerOwner: internal-rpc-authority-restore-pitr
+        publicVerificationKeyDelivery: vault-csi-distinct-controller-read-only
+        privateKeyDeliveredToControllerOrOperator: false
+        protectedType: mattercodex-internal-rpc-restore-evidence+jws
+        exactSecret: internal-rpc-authority-restore-evidence
+        updateProtocol: RESOURCE_VERSION_AND_SEMANTIC_PREDECESSOR_CAS
+        servedReadbackRequired: true
+        operatorCanSignOrWrite: false
+      kubernetesRbac:
+        coordinationConfigMap: GET
+        restoreEvidenceSecret: GET_UPDATE
+        cloudNativePGClusters: GET_CREATE
+        listWatchPatchDeleteAllowed: false
+      admission:
+        clusterCreateOwner: internal-rpc-authority-restore-pitr
+        evidenceUpdateOwner: internal-rpc-authority-restore-pitr
+        failurePolicy: Fail
       failurePolicy: KEEP_TRAFFIC_QUARANTINED
     internal-rpc-authority-recovery-job:
       kind: CronJob
@@ -2345,7 +2397,8 @@ spec:
     externalMonotonicAnchor: internal-rpc-authority-restore-evidence
     controller: internal-rpc-authority-restore-controller
     operator: internal-rpc-authority-restore-operator-job
-    externalAnchorOwner: internal-rpc-authority-restore-controller
+    pitrExecutor: internal-rpc-authority-restore-pitr-job
+    externalAnchorOwner: internal-rpc-authority-restore-pitr
     externalAnchorOutsideRestoredDatabase: true
     preparedEvidenceRequiredBeforeDatabaseRestore: true
     completedEvidenceRequiredAfterDatabaseRestore: true

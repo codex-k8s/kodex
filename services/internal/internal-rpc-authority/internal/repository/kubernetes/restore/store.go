@@ -178,6 +178,8 @@ func (store *Store) Prepare(
 			Phase:                  "QUIESCING",
 			RestoreEpoch:           restoreEpoch,
 			CoordinationRevision:   current.CoordinationRevision + 1,
+			ControllerGeneration:   command.ControllerGeneration,
+			WorkloadSetRevision:    command.WorkloadSetRevision,
 			AnchorRevision:         anchorRevision,
 			EvidenceDigest:         command.SemanticDigest,
 			PrepareIdempotencyKey:  command.IdempotencyKey,
@@ -473,15 +475,30 @@ func (store *Store) Complete(
 			current.BackupManifestDigest != command.BackupManifestDigest ||
 			current.RecoveryTargetUnix != command.RecoveryTarget.Unix() ||
 			current.Phase != "PREPARED" ||
-			len(current.ACKs) != len(current.ExpectedTargets) {
+			len(current.ACKs) != len(current.ExpectedTargets) ||
+			!validSHA256(command.EvidenceDigest) ||
+			command.EvidenceAnchor <= current.AnchorRevision ||
+			command.EvidenceRestoreEpoch != current.RestoreEpoch ||
+			command.RestoredClusterUID == "" ||
+			command.RestoredTimelineID == 0 ||
+			command.RestoreCompletedAt.IsZero() ||
+			command.RestoreCompletedAt.After(command.Now) {
 			return model.RestoreState{}, domainrepository.ErrIdempotencyConflict
 		}
 		current.Phase = "COMPLETED"
 		current.CoordinationRevision++
+		current.AnchorRevision = command.EvidenceAnchor
 		current.CompleteIdempotencyKey = command.IdempotencyKey
 		current.CompleteSemanticDigest = command.SemanticDigest
-		current.EvidenceDigest = command.SemanticDigest
-		current.SafeWindowNotBefore = command.Now.Add(40 * time.Second).Unix()
+		current.EvidenceDigest = command.EvidenceDigest
+		current.EvidenceAnchorRevision = command.EvidenceAnchor
+		current.RestoredClusterUID = command.RestoredClusterUID
+		current.RestoredTimelineID = command.RestoredTimelineID
+		safeWindow := command.RestoreCompletedAt.Add(40 * time.Second)
+		if safeWindow.Before(command.Now.Add(40 * time.Second)) {
+			safeWindow = command.Now.Add(40 * time.Second)
+		}
+		current.SafeWindowNotBefore = safeWindow.Unix()
 		current.UpdatedAt = command.Now.Unix()
 		result = current
 		return current, nil
@@ -686,6 +703,14 @@ func decodeState(raw string) (model.RestoreState, error) {
 		return model.RestoreState{}, errors.New("restore coordination state is invalid")
 	}
 	return state, nil
+}
+
+func validSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 
 func decodeStrictJSON(raw []byte, destination any) error {

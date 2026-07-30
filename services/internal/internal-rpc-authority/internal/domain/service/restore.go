@@ -42,6 +42,7 @@ type RestoreController struct {
 	coordination         repository.RestoreCoordinationStore
 	fence                repository.RestoreFenceStore
 	publisher            repository.RestoreCredentialPublisher
+	evidence             repository.RestoreEvidenceVerifier
 	now                  func() time.Time
 }
 
@@ -114,6 +115,7 @@ func NewRestoreController(
 	coordination repository.RestoreCoordinationStore,
 	fence repository.RestoreFenceStore,
 	publisher repository.RestoreCredentialPublisher,
+	evidence repository.RestoreEvidenceVerifier,
 ) (*RestoreController, error) {
 	if databaseClusterID != "internal-rpc-authority-primary" ||
 		controllerKey.Private == nil ||
@@ -129,7 +131,8 @@ func NewRestoreController(
 		roleTrustMetadata.SignerGeneration == 0 ||
 		coordination == nil ||
 		fence == nil ||
-		publisher == nil {
+		publisher == nil ||
+		evidence == nil {
 		return nil, errors.New("invalid restore controller configuration")
 	}
 	return &RestoreController{
@@ -142,6 +145,7 @@ func NewRestoreController(
 		coordination:         coordination,
 		fence:                fence,
 		publisher:            publisher,
+		evidence:             evidence,
 		now:                  time.Now,
 	}, nil
 }
@@ -175,6 +179,8 @@ func (controller *RestoreController) Prepare(
 		}
 	}
 	command.ExpectedTargets = expected
+	command.ControllerGeneration = controller.controllerGeneration
+	command.WorkloadSetRevision = controller.targetRegistry.SourceRevision
 	state, err := controller.coordination.Prepare(ctx, command)
 	if err != nil {
 		return model.RestoreState{}, mapRestorePersistence("prepare durable restore coordination", err)
@@ -469,6 +475,37 @@ func (controller *RestoreController) Complete(
 		)
 	}
 	command.Now = controller.now().UTC().Truncate(time.Second)
+	current, err := controller.coordination.Load(ctx)
+	if err != nil {
+		return model.RestoreState{}, mapRestorePersistence(
+			"load restore state before evidence verification",
+			err,
+		)
+	}
+	if current.RestoreID != command.RestoreID ||
+		current.DatabaseClusterID != command.DatabaseClusterID ||
+		current.BackupManifestDigest != command.BackupManifestDigest ||
+		current.RecoveryTargetUnix != command.RecoveryTarget.Unix() ||
+		current.Phase != "PREPARED" {
+		return model.RestoreState{}, failure.New(
+			failure.OperationNotAllowed,
+			"restore completion intent does not match prepared state",
+		)
+	}
+	evidence, err := controller.evidence.VerifyCompletedEvidence(ctx, current)
+	if err != nil {
+		return model.RestoreState{}, failure.Wrap(
+			failure.OperationNotAllowed,
+			"independent PITR completion evidence rejected",
+			err,
+		)
+	}
+	command.EvidenceDigest = evidence.CompactJWSDigestSHA256
+	command.EvidenceAnchor = evidence.AnchorRevision
+	command.EvidenceRestoreEpoch = evidence.RestoreEpoch
+	command.RestoredClusterUID = evidence.RestoredClusterUID
+	command.RestoredTimelineID = evidence.RestoredTimelineID
+	command.RestoreCompletedAt = evidence.RestoreCompletedAt
 	state, err := controller.coordination.Complete(ctx, command)
 	if err != nil {
 		return model.RestoreState{}, mapRestorePersistence(

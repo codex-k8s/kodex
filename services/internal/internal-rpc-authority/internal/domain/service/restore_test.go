@@ -48,6 +48,7 @@ func TestRestoreControllerPrepareDirectiveACKAndSemanticRetry(t *testing.T) {
 		coordination,
 		fence,
 		publisher,
+		&memoryRestoreEvidence{now: now},
 	)
 	if err != nil {
 		t.Fatalf("construct restore controller: %v", err)
@@ -278,6 +279,7 @@ func TestRestoreOperatorCredentialСвязанСТочнымRPCИОднораз�
 		store,
 		&memoryRestoreFence{},
 		&memoryRestorePublisher{},
+		&memoryRestoreEvidence{now: now},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -323,6 +325,24 @@ func TestRestoreOperatorCredentialСвязанСТочнымRPCИОднораз�
 type memoryRestoreCoordination struct {
 	mu    sync.Mutex
 	state model.RestoreState
+}
+
+type memoryRestoreEvidence struct {
+	now time.Time
+}
+
+func (evidence *memoryRestoreEvidence) VerifyCompletedEvidence(
+	_ context.Context,
+	state model.RestoreState,
+) (model.RestoreCompletionEvidence, error) {
+	return model.RestoreCompletionEvidence{
+		CompactJWSDigestSHA256: strings.Repeat("e", 64),
+		AnchorRevision:         state.AnchorRevision + 1,
+		RestoreEpoch:           state.RestoreEpoch,
+		RestoredClusterUID:     "restored-cluster-uid",
+		RestoredTimelineID:     2,
+		RestoreCompletedAt:     evidence.now,
+	}, nil
 }
 
 func newMemoryRestoreCoordination() *memoryRestoreCoordination {

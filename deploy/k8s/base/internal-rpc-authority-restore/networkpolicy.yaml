@@ -10,6 +10,7 @@ spec:
         values:
           - internal-rpc-authority-restore-controller
           - internal-rpc-authority-restore-operator
+          - internal-rpc-authority-restore-pitr
           - internal-rpc-authority-restore-recovery
   policyTypes: [Ingress, Egress]
 ---
@@ -48,12 +49,6 @@ spec:
         - podSelector:
             matchLabels: {app.kubernetes.io/name: internal-rpc-authority-postgresql}
       ports: [{protocol: TCP, port: 5432}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: default}
-          podSelector:
-            matchLabels: {component: kube-apiserver}
-      ports: [{protocol: TCP, port: 443}]
     - to:
         - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: kube-system}
@@ -99,10 +94,35 @@ spec:
       ports: [{protocol: TCP, port: 5432}]
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: default}
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
           podSelector:
-            matchLabels: {component: kube-apiserver}
-      ports: [{protocol: TCP, port: 443}]
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
+      ports: [{protocol: TCP, port: 4317}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: sentry-relay}
+      ports: [{protocol: TCP, port: 8443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internal-rpc-authority-restore-pitr-telemetry
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: internal-rpc-authority-restore-pitr
+  policyTypes: [Egress]
+  egress:
     - to:
         - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: kube-system}

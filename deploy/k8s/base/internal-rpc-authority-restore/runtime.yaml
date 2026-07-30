@@ -17,6 +17,28 @@ metadata:
 automountServiceAccountToken: false
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: internal-rpc-authority-restore-pitr
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: internal-rpc-authority-restore-evidence
+  annotations:
+    mattercodex.dev/restore-anchor-revision: "1"
+    mattercodex.dev/restore-epoch: "1"
+    mattercodex.dev/restore-evidence-digest-sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+    mattercodex.dev/restore-predecessor-revision: "0"
+    mattercodex.dev/restore-predecessor-digest-sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+    mattercodex.dev/restored-cluster-uid: bootstrap
+    mattercodex.dev/restored-timeline-id: "0"
+type: Opaque
+data:
+  evidence.jws: ""
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: internal-rpc-authority-restore-coordination
@@ -293,6 +315,92 @@ spec:
                       path: token
                       audience: urn:mattercodex:internal-rpc-authority-restore-controller
                       expirationSeconds: 600
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: internal-rpc-authority-restore-pitr
+  labels: {app.kubernetes.io/name: internal-rpc-authority-restore-pitr}
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 50
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: internal-rpc-authority-restore-pitr}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: internal-rpc-authority-restore-pitr
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 29008
+            runAsGroup: 29008
+            fsGroup: 29008
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: pitr
+              image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              command: [/usr/local/bin/internal-rpc-authority-restore-pitr]
+              env:
+                - {name: DEPLOYMENT_ENVIRONMENT, valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}}
+                - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS, value: "https://kubernetes.default.svc:443"}
+                - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME, value: kubernetes.default.svc}
+                - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE, value: /var/run/secrets/tokens/kubernetes/token}
+                - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE, value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
+                - {name: INTERNAL_RPC_AUTHORITY_RESTORE_EVIDENCE_PRIVATE_JWK_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-pitr/evidence-private.jwk}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_OBJECT_NAME, value: internal-rpc-authority-backup}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_SERVER_NAME, value: internal-rpc-authority-primary}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_POSTGRES_IMAGE, value: "ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie@sha256:660141d8ac12d783f12a3f6bb5ca6c3b1412ea18881f73b9853cfb1eeb9cf128"}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_STORAGE_CLASS, value: mattercodex-postgresql}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_STORAGE_SIZE, value: 20Gi}
+                - {name: INTERNAL_RPC_AUTHORITY_RESTORE_TIMEOUT, value: 10s}
+                - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
+                - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: "otel-collector.observability.svc.cluster.local"}
+                - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem}
+                - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
+                - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
+                - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: evidence-signer, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-pitr, readOnly: true}
+                - {name: kubernetes-token, mountPath: /var/run/secrets/tokens/kubernetes, readOnly: true}
+                - {name: kubernetes-ca, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
+                - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+          volumes:
+            - name: evidence-signer
+              csi:
+                driver: secrets-store.csi.k8s.io
+                readOnly: true
+                volumeAttributes: {secretProviderClass: internal-rpc-authority-restore-pitr-evidence-signer}
+            - name: kubernetes-token
+              projected:
+                defaultMode: 0400
+                sources:
+                  - serviceAccountToken: {path: token, audience: "https://kubernetes.default.svc", expirationSeconds: 600}
+            - name: kubernetes-ca
+              configMap:
+                name: kube-root-ca.crt
+                items: [{key: ca.crt, path: ca.crt}]
+            - name: observability
+              configMap:
+                name: internal-rpc-authority-otel-ca
+                defaultMode: 0440
+                items: [{key: ca.pem, path: otel-ca.pem}]
+            - name: sentry-dsn
+              secret:
+                secretName: internal-rpc-authority-sentry
+                defaultMode: 0440
+                items: [{key: dsn, path: sentry-dsn}]
 ---
 apiVersion: batch/v1
 kind: CronJob

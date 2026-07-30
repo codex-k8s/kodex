@@ -713,6 +713,29 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	})
 
 	recoveryName := "internal-rpc-authority-recovery-job"
+	pitrName := "internal-rpc-authority-restore-pitr-job"
+	pitr := requiredMap(t, deployables, pitrName)
+	for key, want := range map[string]any{
+		"kind":           "CronJob",
+		"canonicalPath":  "deploy/k8s/base/internal-rpc-authority-restore",
+		"artifactBinary": "/usr/local/bin/internal-rpc-authority-restore-pitr",
+		"serviceAccount": "internal-rpc-authority-restore-pitr",
+		"failurePolicy":  "KEEP_TRAFFIC_QUARANTINED",
+	} {
+		requireEqual(t, pitr, key, want)
+	}
+	pitrExecution := requiredMap(t, pitr, "execution")
+	requireEqual(t, pitrExecution, "provider", "CloudNativePG")
+	requireEqual(
+		t,
+		pitrExecution,
+		"recoveryMethod",
+		"BARMAN_CLOUD_PLUGIN_PITR_NEW_CLUSTER",
+	)
+	pitrEvidence := requiredMap(t, pitr, "evidence")
+	requireEqual(t, pitrEvidence, "operatorCanSignOrWrite", false)
+	requireEqual(t, pitrEvidence, "servedReadbackRequired", true)
+
 	recovery := requiredMap(t, deployables, recoveryName)
 	for key, want := range map[string]any{
 		"kind":           "CronJob",

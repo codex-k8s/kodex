@@ -15,8 +15,13 @@ type RestoreState struct {
 	Phase                  string                                        `json:"phase"`
 	RestoreEpoch           uint64                                        `json:"restore_epoch"`
 	CoordinationRevision   uint64                                        `json:"coordination_revision"`
+	ControllerGeneration   uint64                                        `json:"controller_signer_generation"`
+	WorkloadSetRevision    uint64                                        `json:"workload_set_revision"`
 	AnchorRevision         uint64                                        `json:"anchor_revision"`
 	EvidenceDigest         string                                        `json:"evidence_digest_sha256"`
+	EvidenceAnchorRevision uint64                                        `json:"evidence_anchor_revision,omitempty"`
+	RestoredClusterUID     string                                        `json:"restored_cluster_uid,omitempty"`
+	RestoredTimelineID     uint64                                        `json:"restored_timeline_id,omitempty"`
 	SafeWindowNotBefore    int64                                         `json:"safe_window_not_before,omitempty"`
 	PrepareIdempotencyKey  string                                        `json:"prepare_idempotency_key"`
 	PrepareSemanticDigest  string                                        `json:"prepare_semantic_digest_sha256"`
@@ -110,6 +115,8 @@ type PrepareRestoreCommand struct {
 	IdempotencyKey       string
 	SemanticDigest       string
 	ExpectedTargets      map[string]RestoreExpectedTarget
+	ControllerGeneration uint64
+	WorkloadSetRevision  uint64
 	Now                  time.Time
 }
 
@@ -121,7 +128,59 @@ type CompleteRestoreCommand struct {
 	RecoveryTarget       time.Time
 	IdempotencyKey       string
 	SemanticDigest       string
+	EvidenceDigest       string
+	EvidenceAnchor       uint64
+	EvidenceRestoreEpoch uint64
+	RestoredClusterUID   string
+	RestoredTimelineID   uint64
+	RestoreCompletedAt   time.Time
 	Now                  time.Time
+}
+
+// RestoreCompletionEvidence — проверенное независимое доказательство
+// фактического PITR, сформированное отдельным executor workload.
+type RestoreCompletionEvidence struct {
+	CompactJWSDigestSHA256 string
+	AnchorRevision         uint64
+	RestoreEpoch           uint64
+	RestoredClusterUID     string
+	RestoredTimelineID     uint64
+	RestoreCompletedAt     time.Time
+}
+
+// RestoreFenceEvidenceClaims — канонический payload внешнего evidence.
+type RestoreFenceEvidenceClaims struct {
+	Version                               int                    `json:"v"`
+	Issuer                                string                 `json:"iss"`
+	Audience                              string                 `json:"aud"`
+	AnchorRevision                        uint64                 `json:"anchor_revision"`
+	RestoreEpoch                          uint64                 `json:"restore_epoch"`
+	Phase                                 string                 `json:"phase"`
+	DatabaseClusterID                     string                 `json:"database_cluster_id"`
+	RestoreID                             string                 `json:"restore_id"`
+	BackupManifestDigestSHA256            string                 `json:"backup_manifest_digest_sha256"`
+	RecoveryTargetTime                    int64                  `json:"recovery_target_time"`
+	ControllerSignerGeneration            uint64                 `json:"controller_signer_generation"`
+	WorkloadSetRevision                   uint64                 `json:"workload_set_revision"`
+	ExpectedWorkloadRoleGenerationsSHA256 string                 `json:"expected_workload_role_generations_sha256"`
+	QuiescenceACKSetSHA256                string                 `json:"quiescence_ack_set_sha256"`
+	ExpectedACKCount                      uint32                 `json:"expected_ack_count"`
+	AcceptedACKCount                      uint32                 `json:"accepted_ack_count"`
+	SemanticTransition                    string                 `json:"semantic_transition"`
+	Predecessor                           RestoreEvidencePointer `json:"predecessor"`
+	IssuedAt                              int64                  `json:"issued_at"`
+	RestoreCompletedAt                    int64                  `json:"restore_completed_at"`
+	RestoredClusterUID                    string                 `json:"restored_cluster_uid"`
+	RestoredClusterResourceVersion        string                 `json:"restored_cluster_resource_version"`
+	RestoredPrimary                       string                 `json:"restored_primary"`
+	RestoredTimelineID                    uint64                 `json:"restored_timeline_id"`
+	ProviderObservedGeneration            uint64                 `json:"provider_observed_generation"`
+}
+
+// RestoreEvidencePointer связывает evidence с точным predecessor.
+type RestoreEvidencePointer struct {
+	Revision     uint64 `json:"revision"`
+	DigestSHA256 string `json:"digest_sha256"`
 }
 
 // RoleBoundRestoreDirectiveClaims связывает directive с ролью и поколением.

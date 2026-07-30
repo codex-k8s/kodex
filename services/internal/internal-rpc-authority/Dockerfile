@@ -26,6 +26,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -o /out/internal-rpc-authority-socket-init \
     ./cmd/internal-rpc-authority-socket-init \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/internal-rpc-authority-restore-pitr \
+    ./cmd/internal-rpc-authority-restore-pitr \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
     -o /out/internal-rpc-authority-local-readiness \
     ./cmd/internal-rpc-authority-local-readiness \

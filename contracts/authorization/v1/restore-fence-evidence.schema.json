@@ -23,7 +23,12 @@
     "accepted_ack_count",
     "semantic_transition",
     "predecessor",
-    "issued_at"
+    "issued_at",
+    "restored_cluster_uid",
+    "restored_cluster_resource_version",
+    "restored_primary",
+    "restored_timeline_id",
+    "provider_observed_generation"
   ],
   "properties": {
     "v": {
@@ -92,6 +97,29 @@
     },
     "restore_completed_at": {
       "$ref": "#/$defs/unixTime"
+    },
+    "restored_cluster_uid": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128
+    },
+    "restored_cluster_resource_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[1-9][0-9]{0,63}$"
+    },
+    "restored_primary": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 253,
+      "pattern": "^[a-z0-9](?:[-a-z0-9.]*[a-z0-9])?$"
+    },
+    "restored_timeline_id": {
+      "$ref": "#/$defs/revision"
+    },
+    "provider_observed_generation": {
+      "$ref": "#/$defs/revision"
     }
   },
   "oneOf": [

@@ -23,6 +23,7 @@ import (
 	publisherclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/publisher"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/publisher"
+	kubernetespitr "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
 	kubernetesrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
 	postgresrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/restore"
 	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
@@ -59,6 +60,7 @@ type RestoreControllerConfig struct {
 	KubernetesTLSServerName  string `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME"`
 	KubernetesCAFile         string `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE"`
 	KubernetesTokenFile      string `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE"`
+	RestoreEvidencePublicJWK string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_EVIDENCE_PUBLIC_JWK_FILE"`
 	KubernetesNamespace      string
 	KubernetesResourceName   string
 	ShutdownTimeout          time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
@@ -87,6 +89,7 @@ func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 		KubernetesTLSServerName:  "kubernetes.default.svc",
 		KubernetesCAFile:         "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
 		KubernetesTokenFile:      "/var/run/secrets/tokens/kubernetes/token",
+		RestoreEvidencePublicJWK: "/var/run/config/mattercodex/internal-rpc-authority/restore-trust/evidence-public.jwk",
 		KubernetesNamespace:      "mattercodex-system",
 		KubernetesResourceName:   "internal-rpc-authority-restore-coordination",
 		ShutdownTimeout:          10 * time.Second,
@@ -162,6 +165,21 @@ func RunRestoreController(
 		pool.Close()
 		return err
 	}
+	evidence, err := kubernetespitr.NewVerifier(kubernetespitr.Config{
+		Address:            config.KubernetesAddress,
+		TLSServerName:      config.KubernetesTLSServerName,
+		CAFile:             config.KubernetesCAFile,
+		TokenFile:          config.KubernetesTokenFile,
+		Namespace:          config.KubernetesNamespace,
+		EvidenceSecretName: "internal-rpc-authority-restore-evidence",
+		PublicJWKFile:      config.RestoreEvidencePublicJWK,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		coordination.Close()
+		pool.Close()
+		return err
+	}
 	publisherConnection, err := publisherclient.New(publisherclient.Config{
 		Address:               config.PublisherAddress,
 		TLSServerName:         config.PublisherTLSServerName,
@@ -175,6 +193,7 @@ func RunRestoreController(
 		}),
 	})
 	if err != nil {
+		evidence.Close()
 		coordination.Close()
 		pool.Close()
 		return err
@@ -182,6 +201,7 @@ func RunRestoreController(
 	targetRegistry, err := publisher.LoadRegistry(config.TargetRegistryFile)
 	if err != nil {
 		_ = publisherConnection.Close()
+		evidence.Close()
 		coordination.Close()
 		pool.Close()
 		return err
@@ -196,6 +216,7 @@ func RunRestoreController(
 	)
 	if err != nil {
 		_ = publisherConnection.Close()
+		evidence.Close()
 		coordination.Close()
 		pool.Close()
 		return err
@@ -206,6 +227,7 @@ func RunRestoreController(
 	)
 	if err != nil {
 		_ = publisherConnection.Close()
+		evidence.Close()
 		coordination.Close()
 		pool.Close()
 		return err
@@ -220,9 +242,11 @@ func RunRestoreController(
 		coordination,
 		fence,
 		publisherConnection,
+		evidence,
 	)
 	if err != nil {
 		_ = publisherConnection.Close()
+		evidence.Close()
 		coordination.Close()
 		pool.Close()
 		return err
@@ -230,6 +254,7 @@ func RunRestoreController(
 	restoreApplication := application.NewRestoreController(domain)
 	if err := restoreApplication.Recover(startup); err != nil {
 		_ = publisherConnection.Close()
+		evidence.Close()
 		coordination.Close()
 		pool.Close()
 		return err
@@ -241,6 +266,7 @@ func RunRestoreController(
 	)
 	if err != nil {
 		_ = publisherConnection.Close()
+		evidence.Close()
 		coordination.Close()
 		pool.Close()
 		return err
@@ -290,6 +316,7 @@ func RunRestoreController(
 	grpcListener, err := net.Listen("tcp", config.Listen)
 	if err != nil {
 		_ = publisherConnection.Close()
+		evidence.Close()
 		coordination.Close()
 		pool.Close()
 		return errors.New("listen on restore controller endpoint")
@@ -298,6 +325,7 @@ func RunRestoreController(
 	if err != nil {
 		_ = grpcListener.Close()
 		_ = publisherConnection.Close()
+		evidence.Close()
 		coordination.Close()
 		pool.Close()
 		return errors.New("listen on restore controller technical endpoint")
@@ -345,6 +373,14 @@ func RunRestoreController(
 			Name:    "publisher-client",
 			Timeout: config.ShutdownTimeout,
 			Run:     func(context.Context) error { return publisherConnection.Close() },
+		},
+		serviceruntime.ShutdownOperation{
+			Name:    "restore-evidence-client",
+			Timeout: config.ShutdownTimeout,
+			Run: func(context.Context) error {
+				evidence.Close()
+				return nil
+			},
 		},
 		serviceruntime.ShutdownOperation{
 			Name:    "kubernetes-client",
