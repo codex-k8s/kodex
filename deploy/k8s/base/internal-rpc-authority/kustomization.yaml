@@ -9,4 +9,5 @@ resources:
   - poddisruptionbudget.yaml
   - networkpolicy.yaml
   - prometheusrule.yaml
+  - dashboard.yaml
   - servicemonitor.yaml

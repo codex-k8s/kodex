@@ -38,6 +38,7 @@ type Config struct {
 	CredentialGeneration    uint64
 	PossessionKeyGeneration uint64
 	PossessionKey           internalrpcauth.ES256Key
+	UnaryInterceptor        grpc.UnaryClientInterceptor
 }
 
 type Client struct {
@@ -58,6 +59,7 @@ type FileConfig struct {
 	WorkloadGeneration       uint64
 	CredentialGeneration     uint64
 	PossessionKeyGeneration  uint64
+	UnaryInterceptor         grpc.UnaryClientInterceptor
 }
 
 type FileAttestor struct {
@@ -76,6 +78,7 @@ type VaultConfig struct {
 	WorkloadGeneration      uint64
 	CredentialGeneration    uint64
 	PossessionKeyGeneration uint64
+	UnaryInterceptor        grpc.UnaryClientInterceptor
 }
 
 type SecretReader interface {
@@ -97,7 +100,8 @@ func NewVaultAttestor(config VaultConfig) (*VaultAttestor, error) {
 		config.Role == "" ||
 		config.WorkloadGeneration == 0 ||
 		config.CredentialGeneration == 0 ||
-		config.PossessionKeyGeneration == 0 {
+		config.PossessionKeyGeneration == 0 ||
+		config.UnaryInterceptor == nil {
 		return nil, errors.New("invalid readback Vault client configuration")
 	}
 	return &VaultAttestor{config: config}, nil
@@ -139,6 +143,7 @@ func (attestor *VaultAttestor) Attest(
 		CredentialGeneration:    attestor.config.CredentialGeneration,
 		PossessionKeyGeneration: attestor.config.PossessionKeyGeneration,
 		PossessionKey:           key,
+		UnaryInterceptor:        attestor.config.UnaryInterceptor,
 	})
 	if err != nil {
 		return "", err
@@ -160,7 +165,8 @@ func NewFileAttestor(config FileConfig) (*FileAttestor, error) {
 		config.Role == "" ||
 		config.WorkloadGeneration == 0 ||
 		config.CredentialGeneration == 0 ||
-		config.PossessionKeyGeneration == 0 {
+		config.PossessionKeyGeneration == 0 ||
+		config.UnaryInterceptor == nil {
 		return nil, errors.New("invalid readback file client configuration")
 	}
 	return &FileAttestor{config: config}, nil
@@ -204,6 +210,7 @@ func (attestor *FileAttestor) Attest(
 		CredentialGeneration:    attestor.config.CredentialGeneration,
 		PossessionKeyGeneration: attestor.config.PossessionKeyGeneration,
 		PossessionKey:           key,
+		UnaryInterceptor:        attestor.config.UnaryInterceptor,
 	})
 	if err != nil {
 		return "", err
@@ -256,7 +263,8 @@ func New(config Config) (*Client, error) {
 		config.WorkloadGeneration == 0 ||
 		config.CredentialGeneration == 0 ||
 		config.PossessionKeyGeneration == 0 ||
-		config.PossessionKey.Private == nil {
+		config.PossessionKey.Private == nil ||
+		config.UnaryInterceptor == nil {
 		return nil, errors.New("invalid readback client configuration")
 	}
 	return &Client{config: config, now: time.Now}, nil
@@ -278,6 +286,7 @@ func (client *Client) Attest(
 		ctx,
 		client.config.Address,
 		grpc.WithTransportCredentials(credentials.NewTLS(client.config.TLS.Clone())),
+		grpc.WithUnaryInterceptor(client.config.UnaryInterceptor),
 		grpc.WithBlock(),
 	)
 	if err != nil {

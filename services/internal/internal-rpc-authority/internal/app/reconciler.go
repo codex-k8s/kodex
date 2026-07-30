@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -121,7 +120,20 @@ func RunDatabaseCredentialReconciler(
 	if err != nil {
 		return err
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	telemetry, logger, err := startTelemetry(
+		lifecycle,
+		"internal_rpc_authority_database_credential_reconciler",
+		buildVersion,
+	)
+	if err != nil {
+		return err
+	}
+	telemetryFinished := false
+	defer func() {
+		if !telemetryFinished {
+			telemetry.cleanupAfterStartupFailure(shutdownBase, config.ShutdownTimeout)
+		}
+	}()
 	pool, err := openCredentialPostgres(lifecycle, config)
 	if err != nil {
 		return err
@@ -161,13 +173,14 @@ func RunDatabaseCredentialReconciler(
 		pool.Close()
 		return err
 	}
+	methods := map[string]string{
+		internalrpcauthorityv1.DatabaseCredentialLifecycleService_ReconcileDatabaseCredentials_FullMethodName: "reconcile_database_credentials",
+		internalrpcauthorityv1.DatabaseCredentialLifecycleService_CheckReadiness_FullMethodName:               "check_readiness",
+	}
 	metrics := observability.NewMetrics(
 		"internal_rpc_authority_database_credential_reconciler",
 		buildVersion,
-		map[string]string{
-			internalrpcauthorityv1.DatabaseCredentialLifecycleService_ReconcileDatabaseCredentials_FullMethodName: "reconcile_database_credentials",
-			internalrpcauthorityv1.DatabaseCredentialLifecycleService_CheckReadiness_FullMethodName:               "check_readiness",
-		},
+		methods,
 	)
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "starting")
@@ -178,6 +191,7 @@ func RunDatabaseCredentialReconciler(
 		grpc.ChainUnaryInterceptor(
 			requireExactMTLSPeer(config.AllowedCallerSPIFFEID),
 			metrics.UnaryServerInterceptor(),
+			telemetry.UnaryServerInterceptor(methods),
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(
 				_ context.Context,
 				method string,
@@ -273,7 +287,18 @@ func RunDatabaseCredentialReconciler(
 				return nil
 			},
 		},
+		serviceruntime.ShutdownOperation{
+			Name:    "otel-tracing",
+			Timeout: config.ShutdownTimeout,
+			Run:     telemetry.shutdownTracing,
+		},
+		serviceruntime.ShutdownOperation{
+			Name:    "sentry-flush",
+			Timeout: config.ShutdownTimeout,
+			Run:     telemetry.flushSentry,
+		},
 	)
+	telemetryFinished = true
 	logger.Info("database credential reconciler stopped")
 	return errors.Join(runtimeErr, shutdownErr)
 }
@@ -290,6 +315,10 @@ func openCredentialPostgres(
 	if err != nil {
 		return nil, errors.New("parse database credential PostgreSQL DSN")
 	}
+	instrumentPGX(
+		poolConfig,
+		"internal_rpc_authority_database_credential_reconciler",
+	)
 	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
 		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
 		poolConfig.ConnConfig.TLSConfig == nil ||

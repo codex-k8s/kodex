@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -95,7 +94,20 @@ func RunReadbackAttestor(
 	if err != nil {
 		return err
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	telemetry, logger, err := startTelemetry(
+		lifecycle,
+		"internal_rpc_authority_readback_attestor",
+		buildVersion,
+	)
+	if err != nil {
+		return err
+	}
+	telemetryFinished := false
+	defer func() {
+		if !telemetryFinished {
+			telemetry.cleanupAfterStartupFailure(shutdownBase, config.ShutdownTimeout)
+		}
+	}()
 	startup, cancel := context.WithTimeout(lifecycle, 15*time.Second)
 	defer cancel()
 	pool, err := openReadbackPostgres(startup, config)
@@ -141,14 +153,15 @@ func RunReadbackAttestor(
 		pool.Close()
 		return err
 	}
+	methods := map[string]string{
+		internalrpcauthorityv1.AuthorityReadbackAttestorService_IssueAttestationChallenge_FullMethodName: "issue_attestation_challenge",
+		internalrpcauthorityv1.AuthorityReadbackAttestorService_AttestServedState_FullMethodName:         "attest_served_state",
+		internalrpcauthorityv1.AuthorityReadbackAttestorService_CheckReadiness_FullMethodName:            "check_readiness",
+	}
 	metrics := observability.NewMetrics(
 		"internal_rpc_authority_readback_attestor",
 		buildVersion,
-		map[string]string{
-			internalrpcauthorityv1.AuthorityReadbackAttestorService_IssueAttestationChallenge_FullMethodName: "issue_attestation_challenge",
-			internalrpcauthorityv1.AuthorityReadbackAttestorService_AttestServedState_FullMethodName:         "attest_served_state",
-			internalrpcauthorityv1.AuthorityReadbackAttestorService_CheckReadiness_FullMethodName:            "check_readiness",
-		},
+		methods,
 	)
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "starting")
@@ -158,6 +171,7 @@ func RunReadbackAttestor(
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			metrics.UnaryServerInterceptor(),
+			telemetry.UnaryServerInterceptor(methods),
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(
 				_ context.Context,
 				method string,
@@ -235,7 +249,16 @@ func RunReadbackAttestor(
 				return nil
 			},
 		},
+		serviceruntime.ShutdownOperation{
+			Name: "otel-tracing", Timeout: config.ShutdownTimeout,
+			Run: telemetry.shutdownTracing,
+		},
+		serviceruntime.ShutdownOperation{
+			Name: "sentry-flush", Timeout: config.ShutdownTimeout,
+			Run: telemetry.flushSentry,
+		},
 	)
+	telemetryFinished = true
 	logger.Info("readback attestor stopped")
 	return errors.Join(runtimeErr, shutdownErr)
 }
@@ -252,6 +275,7 @@ func openReadbackPostgres(
 	if err != nil {
 		return nil, errors.New("parse readback PostgreSQL DSN")
 	}
+	instrumentPGX(poolConfig, "internal_rpc_authority_readback_attestor")
 	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
 		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
 		poolConfig.ConnConfig.TLSConfig == nil ||

@@ -9,7 +9,6 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -134,7 +133,20 @@ func RunRestoreController(
 	if err != nil {
 		return err
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	telemetry, logger, err := startTelemetry(
+		lifecycle,
+		"internal_rpc_authority_restore_controller",
+		buildVersion,
+	)
+	if err != nil {
+		return err
+	}
+	telemetryFinished := false
+	defer func() {
+		if !telemetryFinished {
+			telemetry.cleanupAfterStartupFailure(shutdownBase, config.ShutdownTimeout)
+		}
+	}()
 	startup, cancel := context.WithTimeout(lifecycle, 20*time.Second)
 	defer cancel()
 	pool, err := openRestorePostgres(startup, config)
@@ -166,6 +178,10 @@ func RunRestoreController(
 		ClientCertificateFile: config.TLSCertificateFile,
 		ClientPrivateKeyFile:  config.TLSPrivateKeyFile,
 		Timeout:               5 * time.Second,
+		UnaryInterceptor: telemetry.UnaryClientInterceptor(map[string]string{
+			internalrpcauthorityv1.RestoreRoleCredentialPublisherService_PublishRoleCredential_FullMethodName: "publish_role_credential",
+			internalrpcauthorityv1.RestoreRoleCredentialPublisherService_CheckReadiness_FullMethodName:        "check_readiness",
+		}),
 	})
 	if err != nil {
 		coordination.Close()
@@ -238,16 +254,17 @@ func RunRestoreController(
 		pool.Close()
 		return err
 	}
+	methods := map[string]string{
+		internalrpcauthorityv1.RestoreControllerService_PrepareRestore_FullMethodName:        "prepare_restore",
+		internalrpcauthorityv1.RestoreControllerService_GetRestoreDirective_FullMethodName:   "get_restore_directive",
+		internalrpcauthorityv1.RestoreControllerService_AcknowledgeQuiescence_FullMethodName: "acknowledge_quiescence",
+		internalrpcauthorityv1.RestoreControllerService_CompleteRestore_FullMethodName:       "complete_restore",
+		internalrpcauthorityv1.RestoreControllerService_CheckReadiness_FullMethodName:        "check_readiness",
+	}
 	metrics := observability.NewMetrics(
 		"internal_rpc_authority_restore_controller",
 		buildVersion,
-		map[string]string{
-			internalrpcauthorityv1.RestoreControllerService_PrepareRestore_FullMethodName:        "prepare_restore",
-			internalrpcauthorityv1.RestoreControllerService_GetRestoreDirective_FullMethodName:   "get_restore_directive",
-			internalrpcauthorityv1.RestoreControllerService_AcknowledgeQuiescence_FullMethodName: "acknowledge_quiescence",
-			internalrpcauthorityv1.RestoreControllerService_CompleteRestore_FullMethodName:       "complete_restore",
-			internalrpcauthorityv1.RestoreControllerService_CheckReadiness_FullMethodName:        "check_readiness",
-		},
+		methods,
 	)
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "starting")
@@ -257,6 +274,7 @@ func RunRestoreController(
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			metrics.UnaryServerInterceptor(),
+			telemetry.UnaryServerInterceptor(methods),
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(
 				_ context.Context,
 				method string,
@@ -350,7 +368,18 @@ func RunRestoreController(
 				return nil
 			},
 		},
+		serviceruntime.ShutdownOperation{
+			Name:    "otel-tracing",
+			Timeout: config.ShutdownTimeout,
+			Run:     telemetry.shutdownTracing,
+		},
+		serviceruntime.ShutdownOperation{
+			Name:    "sentry-flush",
+			Timeout: config.ShutdownTimeout,
+			Run:     telemetry.flushSentry,
+		},
 	)
+	telemetryFinished = true
 	logger.Info("restore controller stopped")
 	return errors.Join(runtimeErr, shutdownErr)
 }
@@ -367,6 +396,7 @@ func openRestorePostgres(
 	if err != nil {
 		return nil, errors.New("parse restore controller PostgreSQL DSN")
 	}
+	instrumentPGX(poolConfig, "internal_rpc_authority_restore_controller")
 	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
 		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
 		poolConfig.ConnConfig.TLSConfig == nil ||

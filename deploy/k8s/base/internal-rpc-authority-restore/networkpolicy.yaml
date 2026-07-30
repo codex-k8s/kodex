@@ -62,6 +62,18 @@ spec:
       ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
+      ports: [{protocol: TCP, port: 4317}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: sentry-relay}
+      ports: [{protocol: TCP, port: 8443}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -99,3 +111,15 @@ spec:
       ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
+      ports: [{protocol: TCP, port: 4317}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: sentry-relay}
+      ports: [{protocol: TCP, port: 8443}]

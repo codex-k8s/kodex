@@ -42,6 +42,12 @@ data:
   INTERNAL_RPC_AUTHORITY_PUBLISHER_TLS_SERVER_NAME: internal-rpc-authority-publisher.mattercodex-system.svc
   INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS: https://kubernetes.default.svc:443
   INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME: kubernetes.default.svc
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.observability.svc:4317
+  OTEL_EXPORTER_OTLP_TLS_SERVER_NAME: otel-collector.observability.svc.cluster.local
+  OTEL_EXPORTER_OTLP_CA_FILE: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+  SENTRY_DSN_FILE: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn
+  SENTRY_EXPECTED_HOST: sentry-relay.observability.svc:8443
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -87,6 +93,10 @@ spec:
             - configMapRef:
                 name: internal-rpc-authority-restore-controller
           env:
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['mattercodex.dev/environment']
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
               value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database/dsn
             - name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE
@@ -137,6 +147,8 @@ spec:
             - {name: target-registry, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-targets, readOnly: true}
             - {name: kubernetes-token, mountPath: /var/run/secrets/tokens/kubernetes, readOnly: true}
             - {name: kubernetes-ca, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
+            - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
+            - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
             - {name: tmp, mountPath: /tmp}
       volumes:
         - name: database-credentials
@@ -169,6 +181,16 @@ spec:
           configMap:
             name: kube-root-ca.crt
             items: [{key: ca.crt, path: ca.crt}]
+        - name: observability
+          configMap:
+            name: internal-rpc-authority-otel-ca
+            defaultMode: 0440
+            items: [{key: ca.pem, path: otel-ca.pem}]
+        - name: sentry-dsn
+          secret:
+            secretName: internal-rpc-authority-sentry
+            defaultMode: 0440
+            items: [{key: dsn, path: sentry-dsn}]
         - name: tmp
           emptyDir: {sizeLimit: 16Mi}
 ---
@@ -221,6 +243,13 @@ spec:
               image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
               command: [/usr/local/bin/internal-rpc-authority-restore-operator]
               env:
+                - {name: DEPLOYMENT_ENVIRONMENT, valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}}
+                - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
+                - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: "otel-collector.observability.svc.cluster.local"}
+                - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem}
+                - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
+                - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
+                - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_ACTION, value: owner-must-set-prepare-or-complete}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_ID, value: owner-must-set-uuid}
                 - {name: INTERNAL_RPC_AUTHORITY_BACKUP_MANIFEST_DIGEST_SHA256, value: owner-must-set-digest}
@@ -237,11 +266,23 @@ spec:
               volumeMounts:
                 - {name: operator-tls, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls, readOnly: true}
                 - {name: controller-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-operator, readOnly: true}
+                - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
           volumes:
             - name: operator-tls
               secret: {secretName: internal-rpc-authority-restore-operator-tls, defaultMode: 0440}
             - name: controller-ca
               configMap: {name: internal-rpc-authority-restore-controller-ca, defaultMode: 0440}
+            - name: observability
+              configMap:
+                name: internal-rpc-authority-otel-ca
+                defaultMode: 0440
+                items: [{key: ca.pem, path: otel-ca.pem}]
+            - name: sentry-dsn
+              secret:
+                secretName: internal-rpc-authority-sentry
+                defaultMode: 0440
+                items: [{key: dsn, path: sentry-dsn}]
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -277,6 +318,7 @@ spec:
               envFrom:
                 - configMapRef: {name: internal-rpc-authority-restore-controller}
               env:
+                - {name: DEPLOYMENT_ENVIRONMENT, valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}}
                 - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database/dsn}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE, value: /var/run/secrets/tokens/kubernetes/token}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE, value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
@@ -288,6 +330,8 @@ spec:
                 - {name: database-credentials, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database, readOnly: true}
                 - {name: kubernetes-token, mountPath: /var/run/secrets/tokens/kubernetes, readOnly: true}
                 - {name: kubernetes-ca, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
+                - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
           volumes:
             - name: database-credentials
               secret: {secretName: internal-rpc-authority-restore-controller-postgresql, defaultMode: 0440}
@@ -300,3 +344,13 @@ spec:
               configMap:
                 name: kube-root-ca.crt
                 items: [{key: ca.crt, path: ca.crt}]
+            - name: observability
+              configMap:
+                name: internal-rpc-authority-otel-ca
+                defaultMode: 0440
+                items: [{key: ca.pem, path: otel-ca.pem}]
+            - name: sentry-dsn
+              secret:
+                secretName: internal-rpc-authority-sentry
+                defaultMode: 0440
+                items: [{key: dsn, path: sentry-dsn}]

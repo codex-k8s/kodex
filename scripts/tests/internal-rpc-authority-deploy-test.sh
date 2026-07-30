@@ -25,7 +25,16 @@ for environment_name in staging production; do
   grep -Fq 'name: internal-rpc-authority-postgresql-from-runtime' <<<"$rendered"
   grep -Fq 'name: vault-from-internal-rpc-authority-reconciler' <<<"$rendered"
   grep -Fq 'absent(mattercodex_internal_rpc_authority_database_credential_reconciler_readiness' <<<"$rendered"
-  ! grep -Fq 'port: 4317' <<<"$rendered"
+  grep -Fq 'port: 4317' <<<"$rendered"
+  grep -Fq 'app.kubernetes.io/name: opentelemetry-collector' <<<"$rendered"
+  grep -Fq 'app.kubernetes.io/name: sentry-relay' <<<"$rendered"
+  grep -Fq 'name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME' <<<"$rendered"
+  grep -Fq 'name: SENTRY_DSN_FILE' <<<"$rendered"
+  grep -Fq 'name: internal-rpc-authority-dashboard' <<<"$rendered"
+  grep -Fq 'runbook_url: https://docs.mattercodex.dev/runbooks/internal-rpc-authority' <<<"$rendered"
+  [[ "$(grep -Fc 'kind: SecretProviderClass' <<<"$rendered")" == "4" ]]
+  [[ "$(grep -Fc 'vaultSkipTLSVerify: "false"' <<<"$rendered")" == "4" ]]
+  ! grep -Eq 'vaultSkipTLSVerify: "?true"?' <<<"$rendered"
   grep -A3 -F '/usr/local/bin/internal-rpc-authority-cli' <<<"$rendered" |
     grep -Fq -- '- expand'
 done
@@ -114,6 +123,10 @@ grep -Fq 'audience: vault' <<<"$consumer_render"
 grep -Fq 'name: internal-rpc-authority-workload-tls' <<<"$consumer_render"
 grep -Fq 'name: internal-rpc-authority-restore-controller-certificate' <<<"$consumer_render"
 grep -Fq 'name: internal-rpc-authority-restore-role-trust' <<<"$consumer_render"
+grep -Fq 'name: OTEL_EXPORTER_OTLP_ENDPOINT' <<<"$consumer_render"
+grep -Fq 'name: internal-rpc-authority-observability' <<<"$consumer_render"
+grep -Fq 'app.kubernetes.io/name: opentelemetry-collector' <<<"$consumer_render"
+grep -Fq 'app.kubernetes.io/name: sentry-relay' <<<"$consumer_render"
 ! grep -Fq 'name: internal-rpc-authority-readback-key' <<<"$consumer_render"
 ! grep -Fq 'name: internal-rpc-authority-readback-credential' <<<"$consumer_render"
 

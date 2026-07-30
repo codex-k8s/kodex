@@ -63,6 +63,7 @@ type Config struct {
 	WorkloadGeneration         uint64
 	CredentialGeneration       uint64
 	ACKKeyGeneration           uint64
+	UnaryInterceptor           grpc.UnaryClientInterceptor
 }
 
 type SecretReader interface {
@@ -94,7 +95,8 @@ func New(config Config) (*Agent, error) {
 		config.Role == "" ||
 		config.WorkloadGeneration == 0 ||
 		config.CredentialGeneration == 0 ||
-		config.ACKKeyGeneration == 0 {
+		config.ACKKeyGeneration == 0 ||
+		config.UnaryInterceptor == nil {
 		return nil, errors.New("invalid restore workload agent configuration")
 	}
 	return &Agent{config: config, now: time.Now}, nil
@@ -125,6 +127,7 @@ func (agent *Agent) Poll(
 		ctx,
 		agent.config.Address,
 		grpc.WithTransportCredentials(credentials.NewTLS(agent.config.TLS.Clone())),
+		grpc.WithUnaryInterceptor(agent.config.UnaryInterceptor),
 		grpc.WithBlock(),
 	)
 	if err != nil {

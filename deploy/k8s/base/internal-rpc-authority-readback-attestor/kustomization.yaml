@@ -4,3 +4,4 @@ namespace: mattercodex-system
 resources:
   - runtime.yaml
   - networkpolicy.yaml
+  - vault-secret-provider-class.yaml

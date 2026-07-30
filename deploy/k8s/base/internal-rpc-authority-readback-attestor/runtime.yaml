@@ -14,6 +14,14 @@ data:
   INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
   INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER: ira_readback_attestor_g3
   INTERNAL_RPC_AUTHORITY_READBACK_VERIFIER_GENERATION: "1"
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.observability.svc:4317
+  OTEL_EXPORTER_OTLP_TLS_SERVER_NAME: otel-collector.observability.svc.cluster.local
+  OTEL_EXPORTER_OTLP_CA_FILE: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+  SENTRY_DSN_FILE: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn
+  SENTRY_EXPECTED_HOST: sentry-relay.observability.svc:8443
+  INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_BUNDLE_JWS_FILE: /var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root.jws
+  INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_TRUST_JWS_FILE: /var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust.jws
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -60,6 +68,10 @@ spec:
             - configMapRef:
                 name: internal-rpc-authority-readback-attestor
           env:
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['mattercodex.dev/environment']
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
               value: /var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/dsn
             - name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE
@@ -113,6 +125,12 @@ spec:
             - name: readback-trust
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback
               readOnly: true
+            - name: observability
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability
+              readOnly: true
+            - name: sentry-dsn
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability
+              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
@@ -134,6 +152,20 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: internal-rpc-authority-readback-trust
+        - name: observability
+          configMap:
+            name: internal-rpc-authority-otel-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: otel-ca.pem
+        - name: sentry-dsn
+          secret:
+            secretName: internal-rpc-authority-sentry
+            defaultMode: 0440
+            items:
+              - key: dsn
+                path: sentry-dsn
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi

@@ -49,7 +49,20 @@ func Run(
 	if err != nil {
 		return fmt.Errorf("load runtime configuration: %w", err)
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	telemetry, logger, err := startTelemetry(
+		lifecycle,
+		config.ServiceName,
+		buildVersion,
+	)
+	if err != nil {
+		return fmt.Errorf("start observability runtime: %w", err)
+	}
+	telemetryFinished := false
+	defer func() {
+		if !telemetryFinished {
+			telemetry.cleanupAfterStartupFailure(shutdownBase, config.ShutdownTimeout)
+		}
+	}()
 	startupCtx, startupCancel := context.WithTimeout(lifecycle, config.StartupTimeout)
 	defer startupCancel()
 	pool, err := openPostgres(startupCtx, config)
@@ -114,6 +127,10 @@ func Run(
 		WorkloadGeneration:      config.WorkloadGeneration,
 		CredentialGeneration:    config.CredentialGeneration,
 		PossessionKeyGeneration: config.PossessionKeyGeneration,
+		UnaryInterceptor: telemetry.UnaryClientInterceptor(map[string]string{
+			internalrpcauthorityv1.AuthorityReadbackAttestorService_IssueAttestationChallenge_FullMethodName: "issue_attestation_challenge",
+			internalrpcauthorityv1.AuthorityReadbackAttestorService_AttestServedState_FullMethodName:         "attest_served_state",
+		}),
 	})
 	if err != nil {
 		vault.Close()
@@ -154,6 +171,10 @@ func Run(
 		Role: config.ReadbackRole, WorkloadGeneration: config.WorkloadGeneration,
 		CredentialGeneration: config.CredentialGeneration,
 		ACKKeyGeneration:     config.RestoreACKKeyGeneration,
+		UnaryInterceptor: telemetry.UnaryClientInterceptor(map[string]string{
+			internalrpcauthorityv1.RestoreControllerService_GetRestoreDirective_FullMethodName:   "get_restore_directive",
+			internalrpcauthorityv1.RestoreControllerService_AcknowledgeQuiescence_FullMethodName: "acknowledge_quiescence",
+		}),
 	})
 	if err != nil {
 		vault.Close()
@@ -190,6 +211,7 @@ func Run(
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			metrics.UnaryServerInterceptor(),
+			telemetry.UnaryServerInterceptor(allowedMethods(mode)),
 			grpcserver.ErrorBoundary(errorObserver),
 		),
 	)
@@ -315,7 +337,18 @@ func Run(
 				return nil
 			},
 		},
+		serviceruntime.ShutdownOperation{
+			Name:    "otel-tracing",
+			Timeout: config.ShutdownTimeout,
+			Run:     telemetry.shutdownTracing,
+		},
+		serviceruntime.ShutdownOperation{
+			Name:    "sentry-flush",
+			Timeout: config.ShutdownTimeout,
+			Run:     telemetry.flushSentry,
+		},
 	)
+	telemetryFinished = true
 	logger.Info(logMessageStop, "mode", string(mode))
 	return errors.Join(runtimeErr, shutdownErr)
 }
@@ -482,6 +515,7 @@ func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, errors.New("parse PostgreSQL DSN")
 	}
+	instrumentPGX(poolConfig, config.ServiceName)
 	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
 		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
 		poolConfig.ConnConfig.TLSConfig == nil ||

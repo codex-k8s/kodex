@@ -4,7 +4,7 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.1.0
 updated: 2026-07-30
 ---
 
@@ -48,6 +48,32 @@ kubectl -n mattercodex-system get endpoints \
    публиковать technical endpoint наружу.
 
 ## Классы отказа
+
+### Telemetry не готова
+
+Все runtime и восстановительные job закрыто отказываются стартовать без
+доверенного OTLP TLS endpoint и файловой доставки Sentry DSN. Проверить:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` указывает ровно на
+  `otel-collector.observability.svc:4317`;
+- TLS SNI равен
+  `otel-collector.observability.svc.cluster.local`, CA читается из
+  `internal-rpc-authority-otel-ca`;
+- host Sentry DSN равен `sentry-relay.observability.svc:8443`, DSN
+  доставлен файлом из `internal-rpc-authority-sentry`;
+- `NetworkPolicy` разрешает только соответствующие pod и namespace selectors,
+  а не произвольный destination на портах `4317` или `8443`.
+
+Не выводить Sentry DSN при диагностике. Проверять только имя Secret, file mode,
+размер файла и совпадение ожидаемого host. Dashboard
+`mattercodex-internal-rpc-authority` показывает served-state readiness,
+ограниченные gRPC outcomes и p99 latency. Alerts
+`InternalRPCAuthorityServedStateUnavailable`,
+`InternalRPCAuthorityUnexpectedGRPCFailures` и
+`InternalRPCAuthorityGRPCLatencyHigh` ведут в этот runbook.
+
+При остановке OTel trace provider и Sentry flush получают независимые
+ограниченные context. Исчерпание одного бюджета не отменяет второй cleanup.
 
 ### UDS не готов
 

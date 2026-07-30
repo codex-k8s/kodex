@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -165,7 +164,20 @@ func RunPublisher(
 	if err != nil {
 		return err
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	telemetry, logger, err := startTelemetry(
+		lifecycle,
+		"internal_rpc_authority_publisher",
+		buildVersion,
+	)
+	if err != nil {
+		return err
+	}
+	telemetryFinished := false
+	defer func() {
+		if !telemetryFinished {
+			telemetry.cleanupAfterStartupFailure(shutdownBase, config.ShutdownTimeout)
+		}
+	}()
 	startup, cancel := context.WithTimeout(lifecycle, 15*time.Second)
 	defer cancel()
 	pool, err := openPublisherPostgres(startup, config)
@@ -260,13 +272,14 @@ func RunPublisher(
 		pool.Close()
 		return err
 	}
+	methods := map[string]string{
+		internalrpcauthorityv1.RestoreRoleCredentialPublisherService_PublishRoleCredential_FullMethodName: "publish_role_credential",
+		internalrpcauthorityv1.RestoreRoleCredentialPublisherService_CheckReadiness_FullMethodName:        "check_readiness",
+	}
 	metrics := observability.NewMetrics(
 		"internal_rpc_authority_publisher",
 		buildVersion,
-		map[string]string{
-			internalrpcauthorityv1.RestoreRoleCredentialPublisherService_PublishRoleCredential_FullMethodName: "publish_role_credential",
-			internalrpcauthorityv1.RestoreRoleCredentialPublisherService_CheckReadiness_FullMethodName:        "check_readiness",
-		},
+		methods,
 	)
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "starting")
@@ -276,6 +289,7 @@ func RunPublisher(
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			metrics.UnaryServerInterceptor(),
+			telemetry.UnaryServerInterceptor(methods),
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(
 				_ context.Context,
 				method string,
@@ -386,7 +400,16 @@ func RunPublisher(
 				return nil
 			},
 		},
+		serviceruntime.ShutdownOperation{
+			Name: "otel-tracing", Timeout: config.ShutdownTimeout,
+			Run: telemetry.shutdownTracing,
+		},
+		serviceruntime.ShutdownOperation{
+			Name: "sentry-flush", Timeout: config.ShutdownTimeout,
+			Run: telemetry.flushSentry,
+		},
 	)
+	telemetryFinished = true
 	logger.Info("authority publisher stopped")
 	return errors.Join(runtimeErr, shutdownErr)
 }
@@ -403,6 +426,7 @@ func openPublisherPostgres(
 	if err != nil {
 		return nil, errors.New("parse publisher PostgreSQL DSN")
 	}
+	instrumentPGX(poolConfig, "internal_rpc_authority_publisher")
 	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
 		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
 		poolConfig.ConnConfig.TLSConfig == nil ||

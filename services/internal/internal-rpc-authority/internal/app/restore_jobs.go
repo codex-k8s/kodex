@@ -78,11 +78,24 @@ func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 	return config, nil
 }
 
-func RunRestoreOperator(ctx context.Context) error {
+func RunRestoreOperator(
+	ctx context.Context,
+	shutdownBase context.Context,
+	buildVersion string,
+) error {
 	config, err := LoadRestoreOperatorConfig()
 	if err != nil {
 		return err
 	}
+	telemetry, _, err := startTelemetry(
+		ctx,
+		"internal_rpc_authority_restore_operator",
+		buildVersion,
+	)
+	if err != nil {
+		return err
+	}
+	defer telemetry.cleanupAfterStartupFailure(shutdownBase, config.Timeout)
 	tlsConfig, err := loadRestoreClientTLS(
 		config.ControllerCAFile,
 		config.ClientCertificateFile,
@@ -95,6 +108,10 @@ func RunRestoreOperator(ctx context.Context) error {
 	connection, err := grpc.NewClient(
 		config.ControllerAddress,
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithUnaryInterceptor(telemetry.UnaryClientInterceptor(map[string]string{
+			internalrpcauthorityv1.RestoreControllerService_PrepareRestore_FullMethodName:  "prepare_restore",
+			internalrpcauthorityv1.RestoreControllerService_CompleteRestore_FullMethodName: "complete_restore",
+		})),
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(grpcserver.StrictProtoCodec())),
 	)
 	if err != nil {
@@ -146,11 +163,24 @@ func RunRestoreOperator(ctx context.Context) error {
 	return nil
 }
 
-func RunRestoreRecovery(ctx context.Context) error {
+func RunRestoreRecovery(
+	ctx context.Context,
+	shutdownBase context.Context,
+	buildVersion string,
+) error {
 	config, err := LoadRestoreControllerConfig()
 	if err != nil {
 		return err
 	}
+	telemetry, _, err := startTelemetry(
+		ctx,
+		"internal_rpc_authority_restore_recovery",
+		buildVersion,
+	)
+	if err != nil {
+		return err
+	}
+	defer telemetry.cleanupAfterStartupFailure(shutdownBase, config.ShutdownTimeout)
 	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	pool, err := openRestorePostgres(startup, config)

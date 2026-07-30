@@ -48,6 +48,22 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.uid
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['mattercodex.dev/environment']
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: otel-collector.observability.svc:4317
+            - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
+              value: otel-collector.observability.svc.cluster.local
+            - name: OTEL_EXPORTER_OTLP_CA_FILE
+              value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.1"
+            - name: SENTRY_DSN_FILE
+              value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn
+            - name: SENTRY_EXPECTED_HOST
+              value: sentry-relay.observability.svc:8443
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
               value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
             - name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE
@@ -113,6 +129,12 @@ spec:
             - name: vault-token
               mountPath: /var/run/secrets/tokens/vault
               readOnly: true
+            - name: observability
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability
+              readOnly: true
+            - name: sentry-dsn
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability
+              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
@@ -147,6 +169,20 @@ spec:
                   path: token
                   audience: vault
                   expirationSeconds: 600
+        - name: observability
+          configMap:
+            name: internal-rpc-authority-otel-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: otel-ca.pem
+        - name: sentry-dsn
+          secret:
+            secretName: internal-rpc-authority-sentry
+            defaultMode: 0440
+            items:
+              - key: dsn
+                path: sentry-dsn
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi

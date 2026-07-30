@@ -25,6 +25,7 @@ type Config struct {
 	ClientCertificateFile string
 	ClientPrivateKeyFile  string
 	Timeout               time.Duration
+	UnaryInterceptor      grpc.UnaryClientInterceptor
 }
 
 type Client struct {
@@ -40,7 +41,8 @@ func New(config Config) (*Client, error) {
 		config.TLSServerName !=
 			"internal-rpc-authority-publisher.mattercodex-system.svc" ||
 		config.Timeout < time.Second ||
-		config.Timeout > 10*time.Second {
+		config.Timeout > 10*time.Second ||
+		config.UnaryInterceptor == nil {
 		return nil, errors.New("invalid restore publisher client configuration")
 	}
 	caRaw, err := os.ReadFile(config.CACertificateFile)
@@ -67,6 +69,7 @@ func New(config Config) (*Client, error) {
 	connection, err := grpc.NewClient(
 		config.Address,
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithUnaryInterceptor(config.UnaryInterceptor),
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(grpcserver.StrictProtoCodec())),
 	)
 	if err != nil {
