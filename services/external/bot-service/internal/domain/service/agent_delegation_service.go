@@ -142,6 +142,7 @@ type AgentSessionDelegationResult struct {
 	TargetThreadURL string `json:"target_thread_url,omitempty"`
 	TargetRunID     string `json:"target_run_id,omitempty"`
 	CallbackRunID   string `json:"callback_run_id,omitempty"`
+	NextAction      string `json:"next_action,omitempty"`
 }
 
 type AgentSessionDelegationList struct {

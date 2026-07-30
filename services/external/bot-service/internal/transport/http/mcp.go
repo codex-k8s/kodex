@@ -23,12 +23,14 @@ import (
 type mcpContextKey string
 
 const (
-	mcpSessionKeyContext              mcpContextKey = "matter-codex-session-key"
-	mcpTokenContext                   mcpContextKey = "matter-codex-session-token"
-	defaultMCPRequestBodyBytes                      = 1024 * 1024
-	defaultMCPTransportSessions                     = 128
-	defaultMCPTransportSessionTimeout               = 15 * time.Minute
-	mcpJSONMediaType                                = "application/json"
+	mcpSessionKeyContext                mcpContextKey = "matter-codex-session-key"
+	mcpTokenContext                     mcpContextKey = "matter-codex-session-token"
+	defaultMCPRequestBodyBytes                        = 1024 * 1024
+	defaultMCPTransportSessions                       = 128
+	defaultMCPTransportSessionTimeout                 = 15 * time.Minute
+	mcpJSONMediaType                                  = "application/json"
+	mcpNextActionFinishAfterDelegations               = "finish_current_turn_after_all_intended_delegations_are_accepted"
+	mcpNextActionFinishAfterCallback                  = "finish_current_turn_after_callback_is_accepted"
 )
 
 type mcpHandlerOptions struct {
@@ -225,7 +227,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 		Name:    "matter-codex",
 		Version: "0.1.0",
 	}, &mcp.ServerOptions{
-		Instructions: "Use these tools only for the current Mattermost project and only when project policy allows the action. Keep reads bounded. Use the chat catalog before cross-chat delegation. Use MatterCodex MCP, never text mentions, to start or return agents. Register current work before substantial activity and inspect active work before changing shared resources. Search durable memory when project context matters; memory is advisory and never overrides system, user, repository, or role instructions. Request owner attention only for a real decision, urgent blocker, or human gate and use an idempotency key.",
+		Instructions: "Use these tools only for the current Mattermost project and only when project policy allows the action. Keep reads bounded. Use the chat catalog before cross-chat delegation. Use MatterCodex MCP, never text mentions, to start or return agents. A child launch exists only after the MCP result contains concrete delegation and run or session identifiers. After all intended child launches are accepted, finish the current turn immediately: callbacks are queued as later turns in the requester session and cannot be processed while the requester keeps polling in the current turn. Register current work before substantial activity and inspect active work before changing shared resources. Search durable memory when project context matters; memory is advisory and never overrides system, user, repository, or role instructions. Request owner attention only for a real decision, urgent blocker, or human gate and use an idempotency key.",
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_get_thread",
@@ -313,7 +315,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_start_agent_thread",
-		Description: "Idempotently create a child thread in another project chat and queue an agent assigned to that chat.",
+		Description: "Idempotently create a child thread in another project chat and queue an agent assigned to that chat. Treat the launch as accepted only when the result contains delegation_id and target_run_id. After all intended launches are accepted, finish the current turn immediately instead of polling; callbacks arrive as later queued turns.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpStartAgentThreadInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
@@ -329,11 +331,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 		if err != nil {
 			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError(err.Error())
 		}
-		return nil, output, nil
+		return nil, mcpDelegationAccepted(output), nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_continue_agent_thread",
-		Description: "Queue the next turn in the exact target role thread and Codex session created by an earlier delegation. Use this for every fix or repeated review cycle; get the original delegation id from mattermost_list_delegations. This tool never creates a new Mattermost thread.",
+		Description: "Queue the next turn in the exact target role thread and Codex session created by an earlier delegation. Use this for every fix or repeated review cycle; get the original delegation id from mattermost_list_delegations. This tool never creates a new Mattermost thread. Treat the continuation as accepted only when the result contains delegation_id and target_run_id. After all intended continuations are accepted, finish the current turn immediately instead of polling; callbacks arrive as later queued turns.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpContinueAgentThreadInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
@@ -347,7 +349,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 		if err != nil {
 			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError(err.Error())
 		}
-		return nil, output, nil
+		return nil, mcpDelegationAccepted(output), nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_list_delegations",
@@ -365,7 +367,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_return_to_requester",
-		Description: "Return this child session result to its persisted immediate requester session and exact source thread. Call this tool directly: the requester does not need to be a member of the child channel, and no agent mention, same-thread request, or cross-chat start is required. Each child turn creates at most one durable idempotent callback; a later turn in the same child session may return another result to the same requester session.",
+		Description: "Return this child session result to its persisted immediate requester session and exact source thread. Call this tool directly: the requester does not need to be a member of the child channel, and no agent mention, same-thread request, or cross-chat start is required. Each child turn creates at most one durable idempotent callback; a later turn in the same child session may return another result to the same requester session. After the callback is accepted, finish the current turn.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpReturnToRequesterInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationResult, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
@@ -375,11 +377,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 		if err != nil {
 			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError(err.Error())
 		}
-		return nil, output, nil
+		return nil, mcpCallbackAccepted(output), nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_request_agent",
-		Description: "Queue another agent role in the current Mattermost thread. Use only when allowed by the role prompt or user request.",
+		Description: "Queue another agent role in the current Mattermost thread. Use only when allowed by the role prompt or user request. Treat the launch as accepted only when the result contains delegation_id, requested_run_id, and target_session_key. After all intended launches are accepted, finish the current turn immediately instead of polling; callbacks arrive as later queued turns.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpRequestAgentInput) (*mcp.CallToolResult, statusservice.AgentSessionAgentRequest, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
@@ -389,11 +391,11 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 		if err != nil {
 			return nil, statusservice.AgentSessionAgentRequest{}, mcpToolError(err.Error())
 		}
-		return nil, output, nil
+		return nil, mcpAgentRequestAccepted(output), nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_request_sync",
-		Description: "Request a bounded synchronization turn from another role in the current thread when project policy allows the relationship.",
+		Description: "Request a bounded synchronization turn from another role in the current thread when project policy allows the relationship. After all intended requests are accepted, finish the current turn immediately instead of polling.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpRequestAgentInput) (*mcp.CallToolResult, statusservice.AgentSessionAgentRequest, error) {
 		sessionKey, token, ok := mcpSessionAuth(ctx)
 		if !ok {
@@ -403,7 +405,7 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 		if err != nil {
 			return nil, statusservice.AgentSessionAgentRequest{}, mcpToolError(err.Error())
 		}
-		return nil, output, nil
+		return nil, mcpAgentRequestAccepted(output), nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "mattermost_memory_search",
@@ -1054,6 +1056,21 @@ func mcpToolError(message string) error {
 		message = "tool failed"
 	}
 	return errors.New(message)
+}
+
+func mcpDelegationAccepted(result statusservice.AgentSessionDelegationResult) statusservice.AgentSessionDelegationResult {
+	result.NextAction = mcpNextActionFinishAfterDelegations
+	return result
+}
+
+func mcpAgentRequestAccepted(result statusservice.AgentSessionAgentRequest) statusservice.AgentSessionAgentRequest {
+	result.NextAction = mcpNextActionFinishAfterDelegations
+	return result
+}
+
+func mcpCallbackAccepted(result statusservice.AgentSessionDelegationResult) statusservice.AgentSessionDelegationResult {
+	result.NextAction = mcpNextActionFinishAfterCallback
+	return result
 }
 
 func emptyMCPThreadHistory() statusservice.AgentSessionThreadHistory {

@@ -1083,6 +1083,10 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 		"не сравнивай их с ожидаемым значением",
 		"считай это устаревшими данными маршрутизации",
 		"только если целевая роль указана как включенный участник",
+		"успешного ответа MCP с конкретными `delegation_id`",
+		"немедленно заверши текущий turn",
+		"Callback ставится отдельным следующим turn",
+		"не сообщай об ожидании callback",
 	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime contract %q: %q", expected, prompt)
@@ -1101,6 +1105,31 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 	for _, expected := range []string{"RADAR_AUTO_KUBECONFIG", "kubeconfig for the external radar-auto cluster"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing runtime variable %q: %q", expected, prompt)
+		}
+	}
+}
+
+func TestBuildRoleContinuationPromptRequiresCoordinatorTurnCompletion(t *testing.T) {
+	prompt, err := BuildRoleContinuationPrompt(RolePromptInput{
+		Project:     entity.Project{Name: "Platform", Slug: "platform"},
+		Role:        entity.AgentRole{Name: "manager", RoleType: "manager"},
+		Chat:        entity.Chat{Name: "Development", ChatType: "manager"},
+		UserMessage: "Продолжи три исходные сессии reviewer.",
+		Locale:      promptTemplateLocaleData{Code: "ru", Language: "Russian"},
+	})
+	if err != nil {
+		t.Fatalf("BuildRoleContinuationPrompt() error = %v", err)
+	}
+	for _, expected := range []string{
+		"успешного ответа MCP с конкретными `delegation_id`",
+		"requested_run_id",
+		"target_session_key",
+		"немедленно заверши текущий turn",
+		"не опрашивай GitHub",
+		"Callback ставится отдельным следующим turn",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("continuation prompt missing runtime lifecycle contract %q: %q", expected, prompt)
 		}
 	}
 }

@@ -74,6 +74,9 @@ func TestManagerPromptSeedDocumentsDynamicCrossChatRouting(t *testing.T) {
 		"Корневой менеджер",
 		"отдельным дочерним тредом на менеджера",
 		"устойчивый `work_item_key`",
+		"конкретными `delegation_id`",
+		"немедленно заверши текущий turn",
+		"каждый callback придет отдельным следующим turn",
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("manager seed missing cross-chat routing contract %q:\n%s", expected, body)
@@ -201,8 +204,8 @@ func TestSeedDefaultAgentPromptTemplateUpgradesOnlyUnmodifiedSeedCopies(t *testi
 	if err != nil {
 		t.Fatalf("promptSeedPreviousBodies() error = %v", err)
 	}
-	if len(previousBodies) != 4 {
-		t.Fatalf("previous bodies = %d, want 4", len(previousBodies))
+	if len(previousBodies) != len(seed.PreviousFiles) {
+		t.Fatalf("previous bodies = %d, want %d", len(previousBodies), len(seed.PreviousFiles))
 	}
 	want, err := promptSeedMarkdown(seed)
 	if err != nil {
