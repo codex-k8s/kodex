@@ -30,6 +30,18 @@ spec:
               mountPath: /run/mattercodex
       containers:
         - name: control-plane
+          env:
+            - name: INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET
+              value: /run/mattercodex/internal-rpc-authority/verifier.sock
+            - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
+              value: verifier
+          readinessProbe:
+            exec:
+              command:
+                - /run/mattercodex/internal-rpc-authority/local-readiness
+            timeoutSeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: internal-rpc-authority-sockets
               mountPath: /run/mattercodex/internal-rpc-authority

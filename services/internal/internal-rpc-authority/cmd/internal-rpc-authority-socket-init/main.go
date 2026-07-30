@@ -9,9 +9,11 @@ import (
 )
 
 const (
-	socketRoot = "/run/mattercodex/internal-rpc-authority"
-	socketUID  = 29000
-	socketGID  = 29000
+	socketRoot      = "/run/mattercodex/internal-rpc-authority"
+	socketUID       = 29000
+	socketGID       = 29000
+	readinessSource = "/usr/local/bin/internal-rpc-authority-local-readiness"
+	readinessTarget = "/run/mattercodex/internal-rpc-authority/local-readiness"
 )
 
 func main() {
@@ -55,7 +57,7 @@ func prepareSocketRoot() error {
 			return err
 		}
 	}
-	return nil
+	return installReadinessProbe()
 }
 
 func validateRoot() error {
@@ -87,6 +89,61 @@ func removeStale(path string) error {
 	}
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("remove stale socket: %w", err)
+	}
+	return nil
+}
+
+func installReadinessProbe() error {
+	sourceInfo, err := os.Lstat(readinessSource)
+	if err != nil ||
+		!sourceInfo.Mode().IsRegular() ||
+		sourceInfo.Mode()&os.ModeSymlink != 0 ||
+		sourceInfo.Size() <= 0 ||
+		sourceInfo.Size() > 64<<20 {
+		return errors.New("local readiness source binary is unsafe")
+	}
+	if targetInfo, targetErr := os.Lstat(readinessTarget); targetErr == nil {
+		if !targetInfo.Mode().IsRegular() ||
+			targetInfo.Mode()&os.ModeSymlink != 0 {
+			return errors.New("local readiness target is unsafe")
+		}
+		if err := os.Remove(readinessTarget); err != nil {
+			return fmt.Errorf("remove stale local readiness binary: %w", err)
+		}
+	} else if !errors.Is(targetErr, os.ErrNotExist) {
+		return fmt.Errorf("inspect local readiness target: %w", targetErr)
+	}
+	source, err := os.Open(readinessSource)
+	if err != nil {
+		return fmt.Errorf("open local readiness source: %w", err)
+	}
+	defer source.Close()
+	temporary := readinessTarget + ".starting"
+	target, err := os.OpenFile(
+		temporary,
+		os.O_CREATE|os.O_EXCL|os.O_WRONLY,
+		0o550,
+	)
+	if err != nil {
+		return fmt.Errorf("create local readiness target: %w", err)
+	}
+	if _, err := target.ReadFrom(source); err != nil {
+		_ = target.Close()
+		_ = os.Remove(temporary)
+		return fmt.Errorf("copy local readiness binary: %w", err)
+	}
+	if err := target.Sync(); err != nil {
+		_ = target.Close()
+		_ = os.Remove(temporary)
+		return fmt.Errorf("sync local readiness binary: %w", err)
+	}
+	if err := target.Close(); err != nil {
+		_ = os.Remove(temporary)
+		return fmt.Errorf("close local readiness binary: %w", err)
+	}
+	if err := os.Rename(temporary, readinessTarget); err != nil {
+		_ = os.Remove(temporary)
+		return fmt.Errorf("publish local readiness binary: %w", err)
 	}
 	return nil
 }
