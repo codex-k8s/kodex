@@ -761,8 +761,9 @@ var RestoreControllerService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AuthorityReadbackAttestorService_AttestServedState_FullMethodName = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState"
-	AuthorityReadbackAttestorService_CheckReadiness_FullMethodName    = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/CheckReadiness"
+	AuthorityReadbackAttestorService_IssueAttestationChallenge_FullMethodName = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge"
+	AuthorityReadbackAttestorService_AttestServedState_FullMethodName         = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState"
+	AuthorityReadbackAttestorService_CheckReadiness_FullMethodName            = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/CheckReadiness"
 )
 
 // AuthorityReadbackAttestorServiceClient is the client API for AuthorityReadbackAttestorService service.
@@ -774,6 +775,10 @@ const (
 // возвращает immutable одноразовый receipt; publisher не может вызвать этот
 // интерфейс или создать receipt.
 type AuthorityReadbackAttestorServiceClient interface {
+	// IssueAttestationChallenge после mTLS и проверки отдельного normal-readback
+	// credential атомарно выпускает durable single-use challenge. Request не
+	// принимает workload, role, generation, audience, nonce или TTL.
+	IssueAttestationChallenge(ctx context.Context, in *IssueAttestationChallengeRequest, opts ...grpc.CallOption) (*IssueAttestationChallengeResponse, error)
 	AttestServedState(ctx context.Context, in *AttestServedStateRequest, opts ...grpc.CallOption) (*AttestServedStateResponse, error)
 	CheckReadiness(ctx context.Context, in *AuthorityReadbackAttestorServiceCheckReadinessRequest, opts ...grpc.CallOption) (*AuthorityReadbackAttestorServiceCheckReadinessResponse, error)
 }
@@ -784,6 +789,16 @@ type authorityReadbackAttestorServiceClient struct {
 
 func NewAuthorityReadbackAttestorServiceClient(cc grpc.ClientConnInterface) AuthorityReadbackAttestorServiceClient {
 	return &authorityReadbackAttestorServiceClient{cc}
+}
+
+func (c *authorityReadbackAttestorServiceClient) IssueAttestationChallenge(ctx context.Context, in *IssueAttestationChallengeRequest, opts ...grpc.CallOption) (*IssueAttestationChallengeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IssueAttestationChallengeResponse)
+	err := c.cc.Invoke(ctx, AuthorityReadbackAttestorService_IssueAttestationChallenge_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *authorityReadbackAttestorServiceClient) AttestServedState(ctx context.Context, in *AttestServedStateRequest, opts ...grpc.CallOption) (*AttestServedStateResponse, error) {
@@ -815,6 +830,10 @@ func (c *authorityReadbackAttestorServiceClient) CheckReadiness(ctx context.Cont
 // возвращает immutable одноразовый receipt; publisher не может вызвать этот
 // интерфейс или создать receipt.
 type AuthorityReadbackAttestorServiceServer interface {
+	// IssueAttestationChallenge после mTLS и проверки отдельного normal-readback
+	// credential атомарно выпускает durable single-use challenge. Request не
+	// принимает workload, role, generation, audience, nonce или TTL.
+	IssueAttestationChallenge(context.Context, *IssueAttestationChallengeRequest) (*IssueAttestationChallengeResponse, error)
 	AttestServedState(context.Context, *AttestServedStateRequest) (*AttestServedStateResponse, error)
 	CheckReadiness(context.Context, *AuthorityReadbackAttestorServiceCheckReadinessRequest) (*AuthorityReadbackAttestorServiceCheckReadinessResponse, error)
 	mustEmbedUnimplementedAuthorityReadbackAttestorServiceServer()
@@ -827,6 +846,9 @@ type AuthorityReadbackAttestorServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAuthorityReadbackAttestorServiceServer struct{}
 
+func (UnimplementedAuthorityReadbackAttestorServiceServer) IssueAttestationChallenge(context.Context, *IssueAttestationChallengeRequest) (*IssueAttestationChallengeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IssueAttestationChallenge not implemented")
+}
 func (UnimplementedAuthorityReadbackAttestorServiceServer) AttestServedState(context.Context, *AttestServedStateRequest) (*AttestServedStateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AttestServedState not implemented")
 }
@@ -853,6 +875,24 @@ func RegisterAuthorityReadbackAttestorServiceServer(s grpc.ServiceRegistrar, srv
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&AuthorityReadbackAttestorService_ServiceDesc, srv)
+}
+
+func _AuthorityReadbackAttestorService_IssueAttestationChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueAttestationChallengeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorityReadbackAttestorServiceServer).IssueAttestationChallenge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorityReadbackAttestorService_IssueAttestationChallenge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorityReadbackAttestorServiceServer).IssueAttestationChallenge(ctx, req.(*IssueAttestationChallengeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _AuthorityReadbackAttestorService_AttestServedState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -898,6 +938,10 @@ var AuthorityReadbackAttestorService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "internalrpcauthority.v1.AuthorityReadbackAttestorService",
 	HandlerType: (*AuthorityReadbackAttestorServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "IssueAttestationChallenge",
+			Handler:    _AuthorityReadbackAttestorService_IssueAttestationChallenge_Handler,
+		},
 		{
 			MethodName: "AttestServedState",
 			Handler:    _AuthorityReadbackAttestorService_AttestServedState_Handler,

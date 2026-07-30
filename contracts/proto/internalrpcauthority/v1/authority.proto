@@ -65,6 +65,10 @@ service RestoreControllerService {
 // возвращает immutable одноразовый receipt; publisher не может вызвать этот
 // интерфейс или создать receipt.
 service AuthorityReadbackAttestorService {
+  // IssueAttestationChallenge после mTLS и проверки отдельного normal-readback
+  // credential атомарно выпускает durable single-use challenge. Request не
+  // принимает workload, role, generation, audience, nonce или TTL.
+  rpc IssueAttestationChallenge(IssueAttestationChallengeRequest) returns (IssueAttestationChallengeResponse);
   rpc AttestServedState(AttestServedStateRequest) returns (AttestServedStateResponse);
   rpc CheckReadiness(AuthorityReadbackAttestorServiceCheckReadinessRequest) returns (AuthorityReadbackAttestorServiceCheckReadinessResponse);
 }
@@ -411,14 +415,19 @@ message RestoreControllerServiceCheckReadinessResponse {
 }
 
 message AttestServedStateRequest {
-  // pinned_intent_id — lookup reference controller-owned immutable intent, а
+  // pinned_intent_id — lookup reference publisher-owned immutable intent, а
   // не authority. Workload, role, revisions и generations выводятся после
-  // проверки mTLS, role credential и signed attestation.
+  // проверки mTLS, normal-readback credential, durable challenge и signed
+  // attestation.
   string pinned_intent_id = 1;
-  string role_credential_compact_jws = 2;
+  string readback_credential_compact_jws = 2;
   string served_state_attestation_compact_jws = 3;
   string idempotency_key = 4;
   string correlation_id = 5;
+  // challenge_id получен через IssueAttestationChallenge. Сам идентификатор
+  // не является authority: attestor server-side блокирует и проверяет
+  // сохранённую exact binding до атомарного consume+receipt.
+  string challenge_id = 6;
 }
 
 message AttestServedStateResponse {
@@ -427,6 +436,35 @@ message AttestServedStateResponse {
   google.protobuf.Timestamp expires_at = 3;
   string evidence_digest_sha256 = 4;
   uint64 verifier_generation = 5;
+}
+
+message IssueAttestationChallengeRequest {
+  // pinned_intent_id — только lookup key. Exact intent kind/revision/digest,
+  // workload, role и generations разрешаются server-side.
+  string pinned_intent_id = 1;
+  // Credential имеет отдельный typ/audience/purpose для normal readback и
+  // никогда не принимается RestoreControllerService.
+  string readback_credential_compact_jws = 2;
+  // Повтор того же key с тем же canonical request digest возвращает
+  // сохранённый challenge; иной digest закрыто отклоняется.
+  string idempotency_key = 3;
+  string correlation_id = 4;
+}
+
+message IssueAttestationChallengeResponse {
+  string challenge_id = 1;
+  string challenge_jti = 2;
+  string challenge_nonce = 3;
+  string challenge_digest_sha256 = 4;
+  google.protobuf.Timestamp issued_at = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  ReadbackAttestationKind kind = 7;
+  uint64 pinned_intent_revision = 8;
+  string pinned_intent_digest_sha256 = 9;
+  uint64 workload_generation = 10;
+  uint64 credential_generation = 11;
+  uint64 possession_key_generation = 12;
+  string readback_credential_digest_sha256 = 13;
 }
 
 message AuthorityReadbackAttestorServiceCheckReadinessRequest {}
@@ -439,6 +477,12 @@ message AuthorityReadbackAttestorServiceCheckReadinessResponse {
   string role_credential_trust_digest_sha256 = 5;
   uint64 verifier_generation = 6;
   bool receipt_store_ready = 7;
+  bool challenge_store_ready = 8;
+  uint64 readback_credential_trust_source_revision = 9;
+  string readback_credential_trust_digest_sha256 = 10;
+  uint64 readback_credential_trust_key_set_revision = 11;
+  uint64 readback_credential_trust_signer_generation = 12;
+  bool readback_credential_trust_readback_ready = 13;
 }
 
 message PublishRoleCredentialRequest {
@@ -536,6 +580,11 @@ enum AuthorizationErrorReason {
   AUTHORIZATION_ERROR_REASON_RESTORE_ACK_REPLAY_DETECTED = 47;
   AUTHORIZATION_ERROR_REASON_RESTORE_COORDINATION_UNAVAILABLE = 48;
   AUTHORIZATION_ERROR_REASON_RESTORE_ACK_RECEIPT_EXPIRED = 49;
+  AUTHORIZATION_ERROR_REASON_READBACK_CREDENTIAL_REJECTED = 50;
+  AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REJECTED = 51;
+  AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REPLAY_DETECTED = 52;
+  AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_UNAVAILABLE = 53;
+  AUTHORIZATION_ERROR_REASON_READBACK_RECEIPT_EXPIRED = 54;
 }
 
 // AuthorizationErrorDetail добавляется к google.rpc.Status. Диагностика не

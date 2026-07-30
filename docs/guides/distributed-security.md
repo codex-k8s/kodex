@@ -150,12 +150,38 @@ boundary до выдачи одноразового immutable receipt. Publisher
 собственную публикацию. Promotion блокирует pinned intent и полный набор
 receipts/readbacks в одной transaction.
 
+Если possession proof требуется по сети, verifier сначала выпускает
+server-owned durable single-use challenge через отдельный versioned endpoint.
+Request не задаёт workload, role, generations, audience, nonce или TTL.
+Challenge до ответа CAS-сохраняется с exact pinned intent, transport identity,
+credential JTI/digest, purpose, key generation/thumbprint, bounded TTL,
+idempotency key и canonical request digest. Consume challenge и immutable
+receipt выполняются атомарно. Exact retry после потерянного ответа возвращает
+сохранённый challenge/receipt; другой digest, concurrent reuse, restart либо
+смена replica не позволяют второй effect.
+
+Credential разных control-plane purposes не переиспользуются. Restore
+controller credential/ACK key и обычный readback credential/possession key
+имеют разные explicit `typ`, единственный exact audience, signer trust,
+delivery paths и lifecycle. Multi-audience token, cross-audience replay,
+совпавший workload SPIFFE и permissive fallback не заменяют проверку purpose.
+Каждый trust snapshot имеет собственные `CURRENT/NEXT/PREVIOUS`,
+high-watermark, cryptographic served readback и readiness.
+
 Credential rotation, которая использует отдельные login principals либо
 application keys, допускает bounded `CURRENT`+`NEXT` и не более одного
 `PREVIOUS`. `NEXT` обязан пройти независимый readback, пока `CURRENT`
 продолжает обслуживать запросы. Promotion атомарно меняет статусы; revoke
 прежнего principal происходит только после commit, overlap и readback нового
 current. Boolean active-флаг с uniqueness, запрещающей overlap, недопустим.
+
+Runtime process не подключается к PostgreSQL через shared `NOLOGIN`
+capability role. Нужен exact non-superuser `LOGIN` principal с минимальным
+membership, явным `SET ROLE` при `NOINHERIT`, Vault-owned выдачей/обновлением/
+rotation/revocation credential, TLS `verify-full` с exact SNI/CA и
+destination-pinned NetworkPolicy. Readiness проверяет effective privileges
+реальным runtime principal; `SET SESSION AUTHORIZATION` superuser в behavior
+contract не доказывает достижимость production boundary.
 
 One-time signature/JTI не отменяет semantic idempotency state-changing RPC.
 Одна durable CAS transaction хранит idempotency key, canonical request digest,

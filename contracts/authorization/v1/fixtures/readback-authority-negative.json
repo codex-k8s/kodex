@@ -90,6 +90,61 @@
       "name": "concurrent-promotion",
       "mutation": "promotion changes the pinned intent while the readback function holds its receipt and intent locks",
       "reason": "SERIALIZATION_RETRY"
+    },
+    {
+      "name": "missing-server-challenge",
+      "mutation": "AttestServedState omits challenge_id or presents evidence without prior durable challenge issuance",
+      "reason": "READBACK_CHALLENGE_REJECTED"
+    },
+    {
+      "name": "attestor-direct-challenge-write",
+      "mutation": "runtime attestor login attempts INSERT or UPDATE instead of the exact challenge issue function",
+      "reason": "DIRECT_READBACK_WRITE_FORBIDDEN"
+    },
+    {
+      "name": "attestor-direct-receipt-write",
+      "mutation": "runtime attestor login attempts INSERT or UPDATE instead of atomic challenge consume",
+      "reason": "DIRECT_READBACK_WRITE_FORBIDDEN"
+    },
+    {
+      "name": "expired-server-challenge",
+      "mutation": "evidence is presented after the exact 30 second server challenge TTL",
+      "reason": "READBACK_CHALLENGE_REJECTED"
+    },
+    {
+      "name": "replayed-server-challenge",
+      "mutation": "a consumed challenge or challenge JTI is reused with a different canonical evidence digest",
+      "reason": "READBACK_CHALLENGE_REPLAY_DETECTED"
+    },
+    {
+      "name": "lost-response-exact-retry",
+      "mutation": "same attestation idempotency key and canonical evidence digest is retried after commit",
+      "reason": "RETURN_PERSISTED_RECEIPT"
+    },
+    {
+      "name": "restore-credential-at-readback-attestor",
+      "mutation": "restore role credential typ and restore-controller audience are replayed to either readback method",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "readback-credential-at-restore-controller",
+      "mutation": "normal-readback credential typ and attestor audience are replayed to GetRestoreDirective",
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "multi-audience-readback-credential",
+      "mutation": "readback credential carries both restore-controller and readback-attestor audiences",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "restore-ack-key-for-normal-readback",
+      "mutation": "normal readback evidence is signed with the restore-only ACK key",
+      "reason": "ATTESTATION_ROLE_BINDING_REJECTED"
+    },
+    {
+      "name": "missing-readback-network-policy",
+      "mutation": "source egress or attestor ingress for either challenge or attestation RPC is absent",
+      "reason": "READBACK_CHALLENGE_UNAVAILABLE"
     }
   ]
 }

@@ -181,6 +181,82 @@ spec:
       serviceAccount: internal-rpc-authority-publisher
       replicas: 2
       leaderElection: POSTGRESQL_LEASE
+      databaseIdentity:
+        capabilityRole: internal_rpc_authority_publisher
+        capabilityRoleLogin: false
+        roleActivation: SET_ROLE_EXACT_CAPABILITY_AFTER_TLS_LOGIN
+        runtimePrincipals:
+          - principal: ira_publisher_g1
+            generation: 1
+            lifecycleStatus: CURRENT
+          - principal: ira_publisher_g2
+            generation: 2
+            lifecycleStatus: NEXT
+        runtimePrincipalAttributes:
+          login: true
+          superuser: false
+          bypassRls: false
+          createDb: false
+          createRole: false
+          inherit: false
+        exactMembership:
+          memberOf:
+            - internal_rpc_authority_publisher
+          ownerOrAttestorMembershipAllowed: false
+          directTableOrFunctionGrantsAllowed: false
+        vaultDatabaseCredentials:
+          engine: database
+          plugin: postgresql-database-plugin
+          mode: STATIC_ROLE_CURRENT_NEXT_PASSWORD_ROTATION
+          authMethod: kubernetes
+          boundServiceAccount: internal-rpc-authority-publisher
+          boundNamespace: mattercodex-system
+          currentVaultRole: internal-rpc-authority-publisher-g1
+          nextVaultRole: internal-rpc-authority-publisher-g2
+          currentPrincipal: ira_publisher_g1
+          nextPrincipal: ira_publisher_g2
+          credentialReadPaths:
+            - database/static-creds/internal-rpc-authority-publisher-g1
+            - database/static-creds/internal-rpc-authority-publisher-g2
+          issuance: READ_EXACT_STATIC_CREDS_PATH_AFTER_KUBERNETES_AUTH
+          renewal: RENEW_WORKLOAD_TOKEN_AND_REREAD_BEFORE_ROTATION
+          rotation: VAULT_STATIC_ROLE_PASSWORD_ROTATION_WITH_CURRENT_NEXT_OVERLAP
+          revocation: RETIRED_PRINCIPAL_NOLOGIN_AND_VAULT_ROTATION
+          vaultAddressEnv: VAULT_ADDR
+          vaultRoleEnv: INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_ROLE
+          usernameFileEnv: INTERNAL_RPC_AUTHORITY_PUBLISHER_DATABASE_USERNAME_FILE
+          passwordFileEnv: INTERNAL_RPC_AUTHORITY_PUBLISHER_DATABASE_PASSWORD_FILE
+          credentialMountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/database
+          vaultCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher/vault-ca.pem
+          postgresqlCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher/postgresql-ca.pem
+          vaultTlsServerName: vault.mattercodex-system.svc.cluster.local
+          postgresqlTlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          postgresqlSslMode: verify-full
+          workloadTokenRenewalRequired: true
+          credentialRefreshBeforeRotationRequired: true
+          currentNextOverlapRequired: true
+          retiredPrincipalRevocation: ALTER_ROLE_NOLOGIN_AFTER_PROMOTION_AND_OVERLAP
+          revokedCredentialReuse: FAIL_CLOSED
+          secretValueInEnvOrLogAllowed: false
+        databaseCredentialNetwork:
+          egress:
+            - destination: vault.mattercodex-system.svc
+              port: 8200
+              protocol: TCP
+              policy: internal-rpc-authority-publisher-to-vault
+            - destination: internal-rpc-authority-postgresql.mattercodex-system.svc
+              port: 5432
+              protocol: TCP
+              policy: internal-rpc-authority-publisher-to-postgresql
+          wildcardDestinationAllowed: false
+        databaseReadiness:
+          requireVaultKubernetesAuthAndTokenRenewal: true
+          requireCurrentCredentialFileFresh: true
+          requireTlsVerifyFullWithExactSniAndCa: true
+          requireSessionUserExactCurrentPrincipal: true
+          requireSetRoleExactCapability: true
+          requirePromotionExecuteAndEvidenceSelect: true
+          requireConsumerEvidenceWriteDenied: true
       restoreRoleCredentialInterface:
         protoService: internalrpcauthority.v1.RestoreRoleCredentialPublisherService
         publishMethod: /internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential
@@ -212,12 +288,89 @@ spec:
           sameKeyAndDirectiveDigest: RETURN_SAVED_DELIVERY_RECEIPT
           sameKeyDifferentDigest: IDEMPOTENCY_CONFLICT
           retention: UNTIL_RESTORE_COMPLETED_SAFE_WINDOW
+      normalReadbackCredential:
+        lifecycleOwner: internal-rpc-authority-publisher
+        purpose: NORMAL_ROTATION_READBACK_ONLY
+        pitrCoordinationScope: OUTSIDE_RESTORE_COORDINATION
+        restoreUseAllowed: false
+        credentialSchema: contracts/authorization/v1/readback-credential.schema.json
+        credentialProtectedType: mattercodex-internal-rpc-readback-credential+jws
+        credentialAudience: urn:mattercodex:internal-rpc-authority-readback-attestor
+        credentialMaxTtlSeconds: 300
+        possessionKeyAlgorithm: ES256
+        possessionKeyPurpose: NORMAL_READBACK_ATTESTATION_ONLY
+        possessionKeyReuseForRestoreAck: FORBIDDEN
+        targetSource: contracts/authorization/v1/key-delivery-targets.schema.json#/$defs/readback
+        serverDerivedBinding:
+          - intent_id
+          - intent_kind
+          - intent_revision
+          - intent_digest_sha256
+          - workload_id
+          - workload_spiffe_id
+          - role
+          - workload_generation
+          - credential_generation
+          - material_generation
+          - possession_key_kid
+          - possession_key_generation
+          - possession_public_jwk
+          - possession_key_thumbprint_sha256
+          - credential_signer_source_revision
+          - credential_signer_source_digest_sha256
+          - credential_signer_key_set_revision
+          - credential_signer_generation
+        exactClientInputs:
+          issueChallenge:
+            - pinned_intent_id
+            - readback_credential_compact_jws
+            - idempotency_key
+            - correlation_id
+          attestServedState:
+            - pinned_intent_id
+            - readback_credential_compact_jws
+            - served_state_attestation_compact_jws
+            - idempotency_key
+            - correlation_id
+            - challenge_id
+          callerProvidedWorkloadRoleGenerationAudienceOrTtlAllowed: false
+        delivery:
+          credentialAndPossessionKeyVaultPathsFromExactTargetRegistry: true
+          distinctFromRestoreRoleCredentialAndAckKeyPaths: true
+          vaultKvV2CasRequired: true
+          privateToPublicReadbackRequired: true
+          challengeBeforeDeliveryReadbackAllowed: false
+        trustSnapshot:
+          schema: contracts/authorization/v1/readback-credential-trust.schema.json
+          protectedType: mattercodex-internal-rpc-readback-credential-trust+jws
+          exactSecretName: internal-rpc-authority-readback-credential-trust
+          exactMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust
+          statuses:
+            - CURRENT
+            - NEXT
+            - PREVIOUS
+          independentManifestTrustSignatureRequired: true
+          sourceRevisionDigestPredecessorAndHistoryRequired: true
+          attestorOwnedHighWatermarkAndCryptographicReadbackRequired: true
+          currentNextOverlapBeforeUseRequired: true
+          previousRetirementAfterAttestorReadbackAndMaxTtlOnly: true
+          sameRevisionMutationOrRollback: REJECT
+        crashRecovery:
+          resumeSameIntentCredentialAndPossessionGeneration: true
+          crashBeforeDelivery: REDELIVER_SAME_GENERATION
+          crashAfterDeliveryBeforeReadback: REQUIRE_EXACT_CRYPTOGRAPHIC_READBACK
+          crashAfterReadbackBeforePromotion: RELOAD_PERSISTED_INTENT_AND_READBACK
+          missedUpdateOrReplicaRejoin: RELOAD_VERIFY_PREDECESSOR_AND_SERVED_STATE
+          expiredSigner: READINESS_FALSE_AND_NO_NEW_CREDENTIAL
       manifestSignerDelivery: vault-csi
       manifestSignerSecretName: internal-rpc-authority-manifest-signer-key
       restoreRoleCredentialSignerDelivery: vault-csi
       restoreRoleCredentialSignerSecretName: internal-rpc-authority-restore-role-credential-signer
+      readbackCredentialSignerDelivery: vault-csi
+      readbackCredentialSignerSecretName: internal-rpc-authority-readback-credential-signer
       exactWritableSecretNames:
         - internal-rpc-authority-snapshot
+        - internal-rpc-authority-readback-credential-trust
         - internal-rpc-authority-restore-role-trust
       kubernetesRbac:
         apiGroups:
@@ -226,6 +379,7 @@ spec:
           - secrets
         resourceNames:
           - internal-rpc-authority-snapshot
+          - internal-rpc-authority-readback-credential-trust
           - internal-rpc-authority-restore-role-trust
         verbs:
           - get
@@ -242,6 +396,7 @@ spec:
         manifestTrustOverlapWriteOwner: internal-rpc-authority-publisher
         authorityProofTrustOverlapWriteOwner: internal-rpc-authority-publisher
         restoreRoleCredentialSignerOwner: internal-rpc-authority-publisher
+        normalReadbackCredentialSignerOwner: internal-rpc-authority-publisher
         restoreRoleCredentialTrustSnapshot:
           schema: contracts/authorization/v1/restore-role-trust.schema.json
           protectedType: mattercodex-internal-rpc-restore-role-trust+jws
@@ -325,6 +480,8 @@ spec:
         requireDatabase: true
         requireVaultTlsAndExactTargetAuthorization: true
         requireKeyDeliveryReadbacks: true
+        requireNormalReadbackCredentialAndPossessionKeyReadbacks: true
+        requireReadbackCredentialTrustServedReadback: true
         requireCryptographicSecretReadback: true
         requireSourceRevisionFinalized: true
       failurePolicy: FAIL_CLOSED
@@ -337,20 +494,112 @@ spec:
       replicas: 2
       interface:
         protoService: internalrpcauthority.v1.AuthorityReadbackAttestorService
+        challengeMethod: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
         attestMethod: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
         readinessMethod: /internalrpcauthority.v1.AuthorityReadbackAttestorService/CheckReadiness
         listenAddress: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443
         tlsServerName: internal-rpc-authority-readback-attestor.mattercodex-system.svc
         clientTrustBundleId: internal-rpc-authority-readback-attestor-ca
         actualWorkloadIdentity: MTLS_SPIFFE
-        applicationCredential: PUBLISHER_SIGNED_ROLE_CREDENTIAL
+        applicationCredential: PUBLISHER_SIGNED_NORMAL_READBACK_CREDENTIAL
+        applicationCredentialContract:
+          schema: contracts/authorization/v1/readback-credential.schema.json
+          protectedType: mattercodex-internal-rpc-readback-credential+jws
+          exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor
+          exactPurposeByIntentKind:
+            KEY_DELIVERY: KEY_DELIVERY_READBACK
+            SNAPSHOT: SNAPSHOT_READBACK
+          restoreCredentialProtectedTypeAccepted: false
+          restoreControllerAudienceAccepted: false
+          multiAudienceAccepted: false
+          permissiveFallbackAccepted: false
+          bindActualMtlsSpiffeWorkloadRoleAndGenerations: true
+          bindKidJwkThumbprintAndPossessionGeneration: true
+          requireCurrentNextOrBoundedPreviousTrustKey: true
+          requireExactJtiAndMaxTtlSeconds: 300
+          crossAudienceReplayPolicy: READBACK_CREDENTIAL_REJECTED
+        challenge:
+          owner: internal-rpc-authority-readback-attestor
+          persistence: internal-rpc-authority-data
+          table: authority_readback_attestation_challenges
+          ttlSeconds: 30
+          clockSkewSeconds: 5
+          entropyBitsMinimum: 128
+          statuses:
+            - ISSUED
+            - CONSUMED
+            - EXPIRED
+          serverGeneratedFields:
+            - challenge_id
+            - challenge_jti
+            - challenge_nonce
+            - challenge_digest_sha256
+            - issued_at
+            - expires_at
+          bindsFromVerifiedCredentialAndPinnedIntent:
+            - exact-intent-id-kind-revision-digest
+            - actual-mtls-workload-spiffe
+            - workload-role-workload-generation-credential-generation
+            - material-generation
+            - readback-credential-jti-and-digest
+            - possession-key-kid-generation-and-thumbprint
+            - exact-attestor-audience
+          requestAuthorityFieldsAllowed: false
+          canonicalDigests:
+            algorithm: SHA256_RFC8785_LOWERCASE_HEX
+            challengeRequestFields:
+              - v
+              - full-method
+              - pinned-intent-id
+              - readback-credential-compact-jws-digest
+              - actual-mtls-spiffe
+            challengeFields:
+              - challenge-id-jti-nonce
+              - exact-attestor-audience
+              - intent-id-revision-digest
+              - readback-credential-jti-digest
+              - workload-role-and-generations
+              - material-and-possession-key-generations
+              - possession-kid-and-thumbprint
+              - issued-at-and-expires-at
+            attestSemanticFields:
+              - full-method
+              - challenge-digest
+              - readback-credential-digest
+              - evidence-compact-jws-digest
+            idempotencyOrCorrelationIncluded: false
+          issuanceTransaction:
+            isolation: SERIALIZABLE
+            lock: exact-pinned-intent-for-update
+            idempotencyUniqueKey: idempotency_key
+            sameKeyAndCanonicalRequestDigest: RETURN_PERSISTED_CHALLENGE
+            sameKeyDifferentDigest: IDEMPOTENCY_CONFLICT
+            multiReplicaCas: UNIQUE_IDEMPOTENCY_AND_CHALLENGE_JTI_ONE_WINNER
+            persistBeforeResponse: true
+          consumeTransaction:
+            isolation: SERIALIZABLE
+            lock: exact-challenge-for-update
+            effects:
+              - compare-issued-and-unexpired
+              - verify-evidence-signature-and-exact-binding
+              - mark-challenge-consumed
+              - insert-immutable-attestation-receipt
+            atomic: true
+            sameAttestKeyAndEvidenceDigestAfterLostResponse: RETURN_PERSISTED_RECEIPT
+            sameChallengeOrJtiDifferentDigest: READBACK_CHALLENGE_REPLAY_DETECTED
+            concurrentUse: ONE_COMMIT_OTHERS_RETURN_SAVED_OR_SERIALIZATION_RETRY_THEN_SAVED_BY_DIGEST
+            crashBeforeCommit: CHALLENGE_REMAINS_ISSUED
+            crashAfterCommitBeforeResponse: RETRY_RETURNS_PERSISTED_RECEIPT
+          replayRetention: RECEIPT_EXPIRY_PLUS_10_MINUTES
         evidence:
           protectedType: mattercodex-internal-rpc-readback-attestation+jws
           schema: contracts/authorization/v1/readback-attestation.schema.json
-          signatureKey: ROLE_CREDENTIAL_EMBEDDED_ACK_PUBLIC_JWK
-          verifyAckJwkKidGenerationAndRfc7638Thumbprint: true
-          verifyControllerOwnedPinnedIntent: true
-          verifyFreshSingleUseChallenge: true
+          signatureKey: NORMAL_READBACK_CREDENTIAL_EMBEDDED_POSSESSION_PUBLIC_JWK
+          verifyPossessionJwkKidGenerationAndRfc7638Thumbprint: true
+          verifyPublisherOwnedPinnedIntent: true
+          verifyServerOwnedFreshSingleUseChallenge: true
+          requireChallengeIdJtiNonceAndDigest: true
+          requireReadbackCredentialJtiAndDigest: true
           verifyServedStateAgainstPinnedDigest: true
           callerProvidedRevisionDigestGenerationIsAuthority: false
         receipt:
@@ -363,7 +612,9 @@ spec:
             - pinned-intent-id-and-revision
             - actual-workload-spiffe
             - workload-role-workload-generation-credential-generation
-            - ack-key-generation-and-thumbprint
+            - readback-credential-jti-and-digest
+            - possession-key-kid-generation-and-thumbprint
+            - challenge-id-jti-and-digest
             - served-state-digest
             - evidence-jti-and-digest
           publisherMayCreateOrUpdate: false
@@ -372,10 +623,19 @@ spec:
       databaseLoginPrincipal: FROM_CONTROLLER_OWNED_EXACT_IDENTITY
       pinnedIntentSource: authority_rotation_intents
       persistedPinnedIntentTable: authority_readback_intents
+      readbackCredentialTrust:
+        source: internal-rpc-authority-readback-credential-trust
+        schema: contracts/authorization/v1/readback-credential-trust.schema.json
+        protectedType: mattercodex-internal-rpc-readback-credential-trust+jws
+        exactMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust
+        persistentHighWatermark: internal-rpc-authority-data
+        servedReadbackOwner: internal-rpc-authority-readback-attestor
+        sameRevisionMutationOrRollback: REJECT
       readiness:
         requireDatabase: true
         requirePinnedIntentProjectionReadback: true
-        requireRoleCredentialTrustServedReadback: true
+        requireNormalReadbackCredentialTrustServedReadback: true
+        requireChallengeInsertLockConsumeProbe: true
         requireReceiptInsertAndReadback: true
       failurePolicy: FAIL_CLOSED
     replay-store:
@@ -398,6 +658,7 @@ spec:
         - authority_snapshot_readbacks
         - authority_key_delivery_readbacks
         - authority_readback_intents
+        - authority_readback_attestation_challenges
         - authority_readback_attestation_receipts
         - authority_workload_database_identities
         - authority_rotation_intents
@@ -445,17 +706,22 @@ spec:
             - authority_key_delivery_readbacks
             - authority_snapshot_readbacks
             - authority_restore_fences
-          execute: []
+          execute:
+            - internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
           delete: []
         internal_rpc_authority_readback_attestor:
           selectInsert:
             - authority_readback_intents
+          select:
+            - authority_readback_attestation_challenges
             - authority_readback_attestation_receipts
+          execute:
+            - internal_rpc_authority.issue_authority_readback_attestation_challenge(uuid,uuid,uuid,text,text,uuid,text,uuid,text)
+            - internal_rpc_authority.consume_authority_readback_attestation_challenge(uuid,uuid,uuid,text,bigint,uuid,text)
           forbidden:
             - authority_key_delivery_readbacks
             - authority_snapshot_readbacks
             - authority_workload_database_identities
-          execute: []
           delete: []
         internal_rpc_authority_recovery:
           select:
@@ -475,6 +741,8 @@ spec:
         - DIRECT_KEY_DELIVERY_READBACK_WRITE
         - DIRECT_SNAPSHOT_READBACK_WRITE
         - PUBLISHER_ATTESTATION_RECEIPT_WRITE
+        - PUBLISHER_ATTESTATION_CHALLENGE_WRITE
+        - RESET_READBACK_CHALLENGE
         - LOGIN_AS_SHARED_GROUP_ROLE
       workloadRoleDatabaseIdentity:
         executableContract: contracts/authorization/v1/postgresql-readback-boundary.sql
@@ -514,6 +782,23 @@ spec:
             - source_revision
             - digest_sha256
         sharedCapabilityRoles: NOLOGIN
+        publisherRuntimeIdentity:
+          loginPrincipals:
+            CURRENT: ira_publisher_g1
+            NEXT: ira_publisher_g2
+          capabilityRole: internal_rpc_authority_publisher
+          membershipOnly: true
+          activation: SET_ROLE
+          directPrivilegeGrants: FORBIDDEN
+          ownerOrAttestorMembership: FORBIDDEN
+          effectiveAllowedPrivileges:
+            select:
+              - authority_key_delivery_readbacks
+              - authority_snapshot_readbacks
+              - authority_restore_fences
+            execute:
+              - internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
+          consumerEvidenceInsertUpdateOrFunctionExecute: FORBIDDEN
         rowLevelSecurity:
           enabled: true
           forcedForTableOwner: true
@@ -521,10 +806,40 @@ spec:
           defaultPolicy: DENY
         protectedReadbackTables:
           - authority_readback_intents
+          - authority_readback_attestation_challenges
           - authority_readback_attestation_receipts
           - authority_key_delivery_readbacks
           - authority_snapshot_readbacks
         readbackFunctions:
+          challengeIssue:
+            name: internal_rpc_authority.issue_authority_readback_attestation_challenge
+            exactSignature: internal_rpc_authority.issue_authority_readback_attestation_challenge(uuid,uuid,uuid,text,text,uuid,text,uuid,text)
+            returns: uuid
+            targetTable: authority_readback_attestation_challenges
+            security: SECURITY_DEFINER
+            fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
+            publicExecuteRevoked: true
+            unsafeOverloadAllowed: false
+            executeGrant: ira_readback_attestor_g1
+            directChallengeInsertGrantAllowed: false
+            sameIdempotencyKeyAndCanonicalRequestDigest: RETURN_PERSISTED_CHALLENGE
+            sameKeyDifferentDigest: IDEMPOTENCY_CONFLICT
+            serverGeneratedChallengeFieldsOnly: true
+            multiReplicaCas: UNIQUE_IDEMPOTENCY_AND_CHALLENGE_JTI_ONE_WINNER
+          challengeConsume:
+            name: internal_rpc_authority.consume_authority_readback_attestation_challenge
+            exactSignature: internal_rpc_authority.consume_authority_readback_attestation_challenge(uuid,uuid,uuid,text,bigint,uuid,text)
+            returns: uuid
+            targetTable: authority_readback_attestation_receipts
+            security: SECURITY_DEFINER
+            fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
+            publicExecuteRevoked: true
+            unsafeOverloadAllowed: false
+            executeGrant: ira_readback_attestor_g1
+            directReceiptInsertGrantAllowed: false
+            sameIdempotencyKeyAndEvidenceDigest: RETURN_PERSISTED_RECEIPT
+            sameKeyOrChallengeDifferentDigest: READBACK_CHALLENGE_REPLAY_DETECTED
+            atomicChallengeConsumeAndReceiptInsert: true
           keyDelivery:
             name: internal_rpc_authority.record_authority_key_delivery_readback
             identityArguments: uuid
@@ -678,6 +993,46 @@ spec:
           - served_readback_at
       readinessRequiresActuallyServedSnapshotReadback: true
       failurePolicy: FAIL_CLOSED
+    readback-credential-trust-snapshot:
+      kind: ExternalMonotonicKubernetesSecret
+      owner: internal-rpc-authority-publisher
+      consumerOwner: internal-rpc-authority-readback-attestor
+      namespace: mattercodex-system
+      resourceName: internal-rpc-authority-readback-credential-trust
+      createOwner: cluster-bootstrap
+      signedPayloadSchema: contracts/authorization/v1/readback-credential-trust.schema.json
+      protectedType: mattercodex-internal-rpc-readback-credential-trust+jws
+      exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor
+      restoreControllerAudienceAllowed: false
+      updateProtocol: SIGNED_SOURCE_REVISION_KEY_SET_REVISION_PREDECESSOR_CAS
+      resourceVersionUse: LOST_UPDATE_GUARD_ONLY
+      keyStatuses:
+        - CURRENT
+        - NEXT
+        - PREVIOUS
+      publisherPermissions:
+        verbs:
+          - get
+          - update
+          - patch
+        createDeleteListAllowed: false
+      attestorPermissions:
+        verbs:
+          - get
+        writeAllowed: false
+      attestorOwnedState:
+        store: internal-rpc-authority-data
+        fields:
+          - source_revision
+          - key_set_revision
+          - canonical_payload_digest_sha256
+          - manifest_signer_generation
+          - predecessor_revision
+          - predecessor_digest_sha256
+          - served_readback_at
+      readinessRequiresActuallyServedSnapshotReadback: true
+      crashOrMissedUpdate: RELOAD_VERIFY_PREDECESSOR_CURRENT_NEXT_PREVIOUS
+      failurePolicy: FAIL_CLOSED
     restore-coordination-state:
       kind: ExternalMonotonicKubernetesSecret
       owner: internal-rpc-authority-restore-controller
@@ -801,6 +1156,10 @@ spec:
             controllerOwnedServedReadback: true
             sameRevisionMutationOrRollback: REJECT
           controllerAudience: urn:mattercodex:internal-rpc-authority-restore-controller
+          readbackAttestorAudienceAccepted: false
+          normalReadbackCredentialProtectedTypeAccepted: false
+          multiAudienceAccepted: false
+          permissiveSpiffeOnlyFallbackAccepted: false
           maxTtlSeconds: 300
           exactTargetSource: contracts/authorization/v1/bootstrap-key-delivery-targets.json
           serverDerivedBinding:
@@ -1050,6 +1409,8 @@ spec:
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_FILE
       verifier:
         - INTERNAL_RPC_AUTHORITY_WORKLOAD_ID
         - INTERNAL_RPC_AUTHORITY_SPIFFE_ID
@@ -1069,6 +1430,8 @@ spec:
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_FILE
       authorityProofResolver:
         - INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS
         - INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_SERVER_NAME
@@ -1078,6 +1441,8 @@ spec:
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_FILE
       publisher:
         - INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_PUBLISHER_LISTEN_ADDRESS
         - INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_PUBLISHER_TLS_CERT_FILE
@@ -1090,12 +1455,16 @@ spec:
         - INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
         - INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME
         - INTERNAL_RPC_AUTHORITY_POSTGRES_CA_FILE
+        - INTERNAL_RPC_AUTHORITY_PUBLISHER_DATABASE_USERNAME_FILE
+        - INTERNAL_RPC_AUTHORITY_PUBLISHER_DATABASE_PASSWORD_FILE
+        - INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_ROLE
         - INTERNAL_RPC_AUTHORITY_TARGET_NAMESPACE
         - INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS
         - INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME
         - INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE
         - INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE
         - INTERNAL_RPC_AUTHORITY_KEY_DELIVERY_TARGETS_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_SIGNER_KEY_FILE
       restoreController:
         - INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_LISTEN_ADDRESS
         - INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_CERT_FILE
@@ -1117,7 +1486,7 @@ spec:
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_CERT_FILE
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_KEY_FILE
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CLIENT_CA_FILE
-        - INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_CREDENTIAL_TRUST_FILE
+        - INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_TRUST_FILE
         - INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_FILE
         - INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
         - INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME
@@ -1240,7 +1609,12 @@ spec:
       ingress:
         - source: registered-workload-role-generations
           protocol: MTLS
-          applicationCredential: PUBLISHER_SIGNED_ROLE_CREDENTIAL
+          applicationCredential: PUBLISHER_SIGNED_NORMAL_READBACK_CREDENTIAL
+          exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor
+          allowedFullMethods:
+            - /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+            - /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+          restoreControllerAudienceAllowed: false
           port: 8443
           exactTargetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.json
       egress:
@@ -1342,6 +1716,27 @@ spec:
       protocol: TCP
       requireBothSourceEgressAndPublisherIngress: true
       missingEitherDirectionPolicy: FAIL_CLOSED
+    publisherDatabaseCredentialNetworkPolicies:
+      exactSourceServiceAccount: internal-rpc-authority-publisher
+      sourceEgressPolicies:
+        vault: internal-rpc-authority-publisher-to-vault
+        postgresql: internal-rpc-authority-publisher-to-postgresql
+      exactDestinations:
+        vault:
+          namespace: mattercodex-system
+          service: vault
+          port: 8200
+          tlsServerName: vault.mattercodex-system.svc.cluster.local
+        postgresql:
+          namespace: mattercodex-system
+          service: internal-rpc-authority-postgresql
+          port: 5432
+          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+      sourceEgressPolicyRequired: true
+      destinationIngressPolicyRequired: true
+      environmentRenderMustPinServiceClusterIp: true
+      wildcardDestinationAllowed: false
+      missingEitherDirectionPolicy: FAIL_CLOSED
     readbackAttestationNetworkPolicies:
       attestorIngressPolicy: internal-rpc-authority-readback-attestor-ingress
       attestorPodSelector:
@@ -1350,6 +1745,10 @@ spec:
       attestorPort: 8443
       protocol: TCP
       exactClientsFrom: contracts/authorization/v1/bootstrap-key-delivery-targets.json
+      exactClientReadbackSubdocument: "#/$defs/readback"
+      exactAllowedMethods:
+        - /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+        - /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
       sourceEgressPolicyPerWorkloadRoleRequired: true
       destinationIngressPolicyRequired: true
       missingEitherDirectionPolicy: FAIL_CLOSED

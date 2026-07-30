@@ -78,6 +78,23 @@ packages:
       - internal-rpc-authority-verifier
       - internal-rpc-authority-readback-attestor
       - control-plane
+  - id: internal-rpc-authority-readback-credential-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/readback-credential.schema.json
+    consumers:
+      - internal-rpc-authority-publisher
+      - internal-rpc-authority-issuer
+      - internal-rpc-authority-verifier
+      - internal-rpc-authority-readback-attestor
+      - control-plane
+  - id: internal-rpc-authority-readback-credential-trust-v1
+    format: json-schema
+    owner: internal-rpc-authority-readback-attestor
+    source: contracts/authorization/v1/readback-credential-trust.schema.json
+    consumers:
+      - internal-rpc-authority-publisher
+      - internal-rpc-authority-readback-attestor
   - id: internal-rpc-authority-key-delivery-v1
     format: json-schema
     owner: internal-rpc-authority

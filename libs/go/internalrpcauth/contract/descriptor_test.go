@@ -138,6 +138,7 @@ func TestCompiledServiceMethods(t *testing.T) {
 		"/internalrpcauthority.v1.RestoreControllerService/AcknowledgeQuiescence":              true,
 		"/internalrpcauthority.v1.RestoreControllerService/CompleteRestore":                    true,
 		"/internalrpcauthority.v1.RestoreControllerService/CheckReadiness":                     true,
+		"/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge":  true,
 		"/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState":          true,
 		"/internalrpcauthority.v1.AuthorityReadbackAttestorService/CheckReadiness":             true,
 		"/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential": true,
@@ -161,6 +162,69 @@ func TestCompiledServiceMethods(t *testing.T) {
 		if !got[method] {
 			t.Fatalf("compiled descriptor does not contain %s", method)
 		}
+	}
+}
+
+func TestReadbackChallengeCompiledDescriptor(t *testing.T) {
+	file := internalrpcauthorityv1.File_internalrpcauthority_v1_authority_proto
+	request := requiredMessage(t, file, "IssueAttestationChallengeRequest")
+	for number, name := range map[protoreflect.FieldNumber]protoreflect.Name{
+		1: "pinned_intent_id",
+		2: "readback_credential_compact_jws",
+		3: "idempotency_key",
+		4: "correlation_id",
+	} {
+		field := request.Fields().ByNumber(number)
+		if field == nil || field.Name() != name {
+			t.Fatalf("readback challenge request field %d = %v, want %s", number, field, name)
+		}
+	}
+	for _, forbidden := range []protoreflect.Name{
+		"workload_id",
+		"workload_spiffe_id",
+		"role",
+		"workload_generation",
+		"credential_generation",
+		"possession_key_generation",
+		"audience",
+		"ttl_seconds",
+		"challenge_nonce",
+	} {
+		if request.Fields().ByName(forbidden) != nil {
+			t.Fatalf("challenge request contains caller-authoritative field %s", forbidden)
+		}
+	}
+
+	response := requiredMessage(t, file, "IssueAttestationChallengeResponse")
+	for number, name := range map[protoreflect.FieldNumber]protoreflect.Name{
+		1:  "challenge_id",
+		2:  "challenge_jti",
+		3:  "challenge_nonce",
+		4:  "challenge_digest_sha256",
+		5:  "issued_at",
+		6:  "expires_at",
+		7:  "kind",
+		8:  "pinned_intent_revision",
+		9:  "pinned_intent_digest_sha256",
+		10: "workload_generation",
+		11: "credential_generation",
+		12: "possession_key_generation",
+		13: "readback_credential_digest_sha256",
+	} {
+		field := response.Fields().ByNumber(number)
+		if field == nil || field.Name() != name {
+			t.Fatalf("readback challenge response field %d = %v, want %s", number, field, name)
+		}
+	}
+
+	attest := requiredMessage(t, file, "AttestServedStateRequest")
+	if field := attest.Fields().ByNumber(2); field == nil ||
+		field.Name() != "readback_credential_compact_jws" {
+		t.Fatal("served-state request does not use separate normal-readback credential")
+	}
+	if field := attest.Fields().ByNumber(6); field == nil ||
+		field.Name() != "challenge_id" {
+		t.Fatal("served-state request does not bind durable challenge id")
 	}
 }
 

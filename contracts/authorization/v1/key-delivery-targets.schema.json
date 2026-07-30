@@ -126,6 +126,16 @@
       "additionalProperties": false,
       "required": [
         "readback_id",
+        "credential_id",
+        "credential_vault_path",
+        "credential_mount_path",
+        "credential_protected_type",
+        "credential_schema",
+        "possession_key_id",
+        "possession_key_generation",
+        "possession_key_vault_path",
+        "possession_key_mount_path",
+        "possession_public_jwk_source",
         "database_function",
         "snapshot_database_function",
         "attestor_address",
@@ -133,12 +143,46 @@
         "attestor_trust_bundle_id",
         "attestor_ca_mount_path",
         "attestor_audience",
+        "attestor_challenge_full_method",
         "attestor_full_method",
-        "expected_role"
+        "expected_role",
+        "network_policy"
       ],
       "properties": {
         "readback_id": {
           "$ref": "#/$defs/workloadId"
+        },
+        "credential_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "credential_vault_path": {
+          "$ref": "#/$defs/vaultPath"
+        },
+        "credential_mount_path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "credential_protected_type": {
+          "const": "mattercodex-internal-rpc-readback-credential+jws"
+        },
+        "credential_schema": {
+          "const": "contracts/authorization/v1/readback-credential.schema.json"
+        },
+        "possession_key_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "possession_key_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "possession_key_vault_path": {
+          "$ref": "#/$defs/vaultPath"
+        },
+        "possession_key_mount_path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "possession_public_jwk_source": {
+          "const": "SIGNED_NORMAL_READBACK_CREDENTIAL"
         },
         "database_function": {
           "const": "internal_rpc_authority.record_authority_key_delivery_readback(uuid)"
@@ -161,6 +205,9 @@
         "attestor_audience": {
           "const": "urn:mattercodex:internal-rpc-authority-readback-attestor"
         },
+        "attestor_challenge_full_method": {
+          "const": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge"
+        },
         "attestor_full_method": {
           "const": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState"
         },
@@ -170,6 +217,9 @@
             "AUTHORIZATION_VERIFIER",
             "AUTHORITY_PROOF_RESOLVER"
           ]
+        },
+        "network_policy": {
+          "$ref": "#/$defs/kubernetesName"
         }
       }
     },

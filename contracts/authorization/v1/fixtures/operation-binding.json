@@ -125,15 +125,27 @@
       },
       "readback": {
         "readback_id": "control-api-gateway-issuer",
-      "database_function": "internal_rpc_authority.record_authority_key_delivery_readback(uuid)",
+        "credential_id": "control-api-gateway-issuer-readback-credential",
+        "credential_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/readback-credential",
+        "credential_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/readback/credential.jws",
+        "credential_protected_type": "mattercodex-internal-rpc-readback-credential+jws",
+        "credential_schema": "contracts/authorization/v1/readback-credential.schema.json",
+        "possession_key_id": "control-api-gateway-issuer-readback-possession",
+        "possession_key_generation": 1,
+        "possession_key_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/readback-possession-key",
+        "possession_key_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/readback/possession-key.jwk",
+        "possession_public_jwk_source": "SIGNED_NORMAL_READBACK_CREDENTIAL",
+        "database_function": "internal_rpc_authority.record_authority_key_delivery_readback(uuid)",
       "snapshot_database_function": "internal_rpc_authority.record_authority_snapshot_readback(uuid)",
       "attestor_address": "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443",
       "attestor_tls_server_name": "internal-rpc-authority-readback-attestor.mattercodex-system.svc",
       "attestor_trust_bundle_id": "internal-rpc-authority-readback-attestor-ca",
-      "attestor_ca_mount_path": "/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem",
-      "attestor_audience": "urn:mattercodex:internal-rpc-authority-readback-attestor",
-      "attestor_full_method": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState",
-        "expected_role": "AUTHORIZATION_ISSUER"
+        "attestor_ca_mount_path": "/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem",
+        "attestor_audience": "urn:mattercodex:internal-rpc-authority-readback-attestor",
+        "attestor_challenge_full_method": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge",
+        "attestor_full_method": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState",
+        "expected_role": "AUTHORIZATION_ISSUER",
+        "network_policy": "control-api-gateway-authority-readback"
       }
     },
     {
@@ -177,15 +189,27 @@
       },
       "readback": {
         "readback_id": "control-plane-verifier",
-      "database_function": "internal_rpc_authority.record_authority_key_delivery_readback(uuid)",
+        "credential_id": "control-plane-verifier-readback-credential",
+        "credential_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-credential",
+        "credential_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/readback/verifier-credential.jws",
+        "credential_protected_type": "mattercodex-internal-rpc-readback-credential+jws",
+        "credential_schema": "contracts/authorization/v1/readback-credential.schema.json",
+        "possession_key_id": "control-plane-verifier-readback-possession",
+        "possession_key_generation": 1,
+        "possession_key_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-possession-key",
+        "possession_key_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/readback/verifier-possession-key.jwk",
+        "possession_public_jwk_source": "SIGNED_NORMAL_READBACK_CREDENTIAL",
+        "database_function": "internal_rpc_authority.record_authority_key_delivery_readback(uuid)",
       "snapshot_database_function": "internal_rpc_authority.record_authority_snapshot_readback(uuid)",
       "attestor_address": "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443",
       "attestor_tls_server_name": "internal-rpc-authority-readback-attestor.mattercodex-system.svc",
       "attestor_trust_bundle_id": "internal-rpc-authority-readback-attestor-ca",
-      "attestor_ca_mount_path": "/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem",
-      "attestor_audience": "urn:mattercodex:internal-rpc-authority-readback-attestor",
-      "attestor_full_method": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState",
-        "expected_role": "AUTHORIZATION_VERIFIER"
+        "attestor_ca_mount_path": "/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem",
+        "attestor_audience": "urn:mattercodex:internal-rpc-authority-readback-attestor",
+        "attestor_challenge_full_method": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge",
+        "attestor_full_method": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState",
+        "expected_role": "AUTHORIZATION_VERIFIER",
+        "network_policy": "control-plane-verifier-authority-readback"
       }
     },
     {
@@ -239,15 +263,27 @@
       },
       "readback": {
         "readback_id": "control-plane-resolver",
-      "database_function": "internal_rpc_authority.record_authority_key_delivery_readback(uuid)",
+        "credential_id": "control-plane-resolver-readback-credential",
+        "credential_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/readback-credential",
+        "credential_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/readback/resolver-credential.jws",
+        "credential_protected_type": "mattercodex-internal-rpc-readback-credential+jws",
+        "credential_schema": "contracts/authorization/v1/readback-credential.schema.json",
+        "possession_key_id": "control-plane-resolver-readback-possession",
+        "possession_key_generation": 1,
+        "possession_key_vault_path": "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/readback-possession-key",
+        "possession_key_mount_path": "/var/run/secrets/mattercodex/internal-rpc-authority/readback/resolver-possession-key.jwk",
+        "possession_public_jwk_source": "SIGNED_NORMAL_READBACK_CREDENTIAL",
+        "database_function": "internal_rpc_authority.record_authority_key_delivery_readback(uuid)",
       "snapshot_database_function": "internal_rpc_authority.record_authority_snapshot_readback(uuid)",
       "attestor_address": "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443",
       "attestor_tls_server_name": "internal-rpc-authority-readback-attestor.mattercodex-system.svc",
       "attestor_trust_bundle_id": "internal-rpc-authority-readback-attestor-ca",
-      "attestor_ca_mount_path": "/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem",
-      "attestor_audience": "urn:mattercodex:internal-rpc-authority-readback-attestor",
-      "attestor_full_method": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState",
-        "expected_role": "AUTHORITY_PROOF_RESOLVER"
+        "attestor_ca_mount_path": "/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem",
+        "attestor_audience": "urn:mattercodex:internal-rpc-authority-readback-attestor",
+        "attestor_challenge_full_method": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge",
+        "attestor_full_method": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState",
+        "expected_role": "AUTHORITY_PROOF_RESOLVER",
+        "network_policy": "control-plane-resolver-authority-readback"
       }
     }
   ]

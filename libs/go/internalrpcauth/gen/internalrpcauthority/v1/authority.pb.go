@@ -399,56 +399,61 @@ func (AuthorizationFailureStage) EnumDescriptor() ([]byte, []int) {
 type AuthorizationErrorReason int32
 
 const (
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UNSPECIFIED                       AuthorizationErrorReason = 0
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST                 AuthorizationErrorReason = 1
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UDS_PEER_REJECTED                 AuthorizationErrorReason = 2
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UDS_ENDPOINT_INVALID              AuthorizationErrorReason = 3
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_OPERATION_NOT_ALLOWED             AuthorizationErrorReason = 4
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROVENANCE_REJECTED     AuthorizationErrorReason = 5
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MALFORMED_JWS                     AuthorizationErrorReason = 6
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID_PROTECTED_HEADER          AuthorizationErrorReason = 7
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID_SIGNATURE                 AuthorizationErrorReason = 8
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UNKNOWN_KEY                       AuthorizationErrorReason = 9
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_ISSUER_MISMATCH                   AuthorizationErrorReason = 10
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUDIENCE_MISMATCH                 AuthorizationErrorReason = 11
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_CALLER_WORKLOAD_MISMATCH          AuthorizationErrorReason = 12
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TARGET_WORKLOAD_MISMATCH          AuthorizationErrorReason = 13
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RPC_MISMATCH                      AuthorizationErrorReason = 14
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_PERMISSION_MISMATCH               AuthorizationErrorReason = 15
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_EXPIRED                     AuthorizationErrorReason = 16
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_NOT_YET_VALID               AuthorizationErrorReason = 17
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_TTL_EXCEEDED                AuthorizationErrorReason = 18
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED                   AuthorizationErrorReason = 19
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MTLS_REQUIRED                     AuthorizationErrorReason = 20
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MTLS_PEER_MISMATCH                AuthorizationErrorReason = 21
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_POLICY_REVISION_REJECTED          AuthorizationErrorReason = 22
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_ROLLBACK                 AuthorizationErrorReason = 23
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_MUTATION                 AuthorizationErrorReason = 24
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_HISTORY_GAP              AuthorizationErrorReason = 25
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_PERSISTENCE_UNAVAILABLE           AuthorizationErrorReason = 26
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE              AuthorizationErrorReason = 27
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH                 AuthorizationErrorReason = 28
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INTERNAL                          AuthorizationErrorReason = 29
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED    AuthorizationErrorReason = 30
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REQUIRED          AuthorizationErrorReason = 31
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_INVALID           AuthorizationErrorReason = 32
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_BINDING_MISMATCH  AuthorizationErrorReason = 33
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_EXPIRED           AuthorizationErrorReason = 34
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED AuthorizationErrorReason = 35
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED   AuthorizationErrorReason = 36
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE       AuthorizationErrorReason = 37
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_APPLICATION_CREDENTIAL_INVALID    AuthorizationErrorReason = 38
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_SCOPE_MISMATCH          AuthorizationErrorReason = 39
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT              AuthorizationErrorReason = 40
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_BARRIER_INCOMPLETE        AuthorizationErrorReason = 41
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_ANCHOR_REJECTED           AuthorizationErrorReason = 42
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_CONTROLLER_UNAVAILABLE    AuthorizationErrorReason = 43
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_RESOURCE_NOT_FOUND      AuthorizationErrorReason = 44
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_ROLE_CREDENTIAL_REJECTED  AuthorizationErrorReason = 45
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_DIRECTIVE_REJECTED        AuthorizationErrorReason = 46
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_ACK_REPLAY_DETECTED       AuthorizationErrorReason = 47
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_COORDINATION_UNAVAILABLE  AuthorizationErrorReason = 48
-	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_ACK_RECEIPT_EXPIRED       AuthorizationErrorReason = 49
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UNSPECIFIED                        AuthorizationErrorReason = 0
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST                  AuthorizationErrorReason = 1
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UDS_PEER_REJECTED                  AuthorizationErrorReason = 2
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UDS_ENDPOINT_INVALID               AuthorizationErrorReason = 3
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_OPERATION_NOT_ALLOWED              AuthorizationErrorReason = 4
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROVENANCE_REJECTED      AuthorizationErrorReason = 5
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MALFORMED_JWS                      AuthorizationErrorReason = 6
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID_PROTECTED_HEADER           AuthorizationErrorReason = 7
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID_SIGNATURE                  AuthorizationErrorReason = 8
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UNKNOWN_KEY                        AuthorizationErrorReason = 9
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_ISSUER_MISMATCH                    AuthorizationErrorReason = 10
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUDIENCE_MISMATCH                  AuthorizationErrorReason = 11
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_CALLER_WORKLOAD_MISMATCH           AuthorizationErrorReason = 12
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TARGET_WORKLOAD_MISMATCH           AuthorizationErrorReason = 13
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RPC_MISMATCH                       AuthorizationErrorReason = 14
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_PERMISSION_MISMATCH                AuthorizationErrorReason = 15
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_EXPIRED                      AuthorizationErrorReason = 16
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_NOT_YET_VALID                AuthorizationErrorReason = 17
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_TOKEN_TTL_EXCEEDED                 AuthorizationErrorReason = 18
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED                    AuthorizationErrorReason = 19
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MTLS_REQUIRED                      AuthorizationErrorReason = 20
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_MTLS_PEER_MISMATCH                 AuthorizationErrorReason = 21
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_POLICY_REVISION_REJECTED           AuthorizationErrorReason = 22
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_ROLLBACK                  AuthorizationErrorReason = 23
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_MUTATION                  AuthorizationErrorReason = 24
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_HISTORY_GAP               AuthorizationErrorReason = 25
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_PERSISTENCE_UNAVAILABLE            AuthorizationErrorReason = 26
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE               AuthorizationErrorReason = 27
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH                  AuthorizationErrorReason = 28
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INTERNAL                           AuthorizationErrorReason = 29
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED     AuthorizationErrorReason = 30
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REQUIRED           AuthorizationErrorReason = 31
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_INVALID            AuthorizationErrorReason = 32
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_BINDING_MISMATCH   AuthorizationErrorReason = 33
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_EXPIRED            AuthorizationErrorReason = 34
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED  AuthorizationErrorReason = 35
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED    AuthorizationErrorReason = 36
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE        AuthorizationErrorReason = 37
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_APPLICATION_CREDENTIAL_INVALID     AuthorizationErrorReason = 38
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_SCOPE_MISMATCH           AuthorizationErrorReason = 39
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT               AuthorizationErrorReason = 40
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_BARRIER_INCOMPLETE         AuthorizationErrorReason = 41
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_ANCHOR_REJECTED            AuthorizationErrorReason = 42
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_CONTROLLER_UNAVAILABLE     AuthorizationErrorReason = 43
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_AUTHORITY_RESOURCE_NOT_FOUND       AuthorizationErrorReason = 44
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_ROLE_CREDENTIAL_REJECTED   AuthorizationErrorReason = 45
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_DIRECTIVE_REJECTED         AuthorizationErrorReason = 46
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_ACK_REPLAY_DETECTED        AuthorizationErrorReason = 47
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_COORDINATION_UNAVAILABLE   AuthorizationErrorReason = 48
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_RESTORE_ACK_RECEIPT_EXPIRED        AuthorizationErrorReason = 49
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_READBACK_CREDENTIAL_REJECTED       AuthorizationErrorReason = 50
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REJECTED        AuthorizationErrorReason = 51
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REPLAY_DETECTED AuthorizationErrorReason = 52
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_UNAVAILABLE     AuthorizationErrorReason = 53
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_READBACK_RECEIPT_EXPIRED           AuthorizationErrorReason = 54
 )
 
 // Enum value maps for AuthorizationErrorReason.
@@ -504,58 +509,68 @@ var (
 		47: "AUTHORIZATION_ERROR_REASON_RESTORE_ACK_REPLAY_DETECTED",
 		48: "AUTHORIZATION_ERROR_REASON_RESTORE_COORDINATION_UNAVAILABLE",
 		49: "AUTHORIZATION_ERROR_REASON_RESTORE_ACK_RECEIPT_EXPIRED",
+		50: "AUTHORIZATION_ERROR_REASON_READBACK_CREDENTIAL_REJECTED",
+		51: "AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REJECTED",
+		52: "AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REPLAY_DETECTED",
+		53: "AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_UNAVAILABLE",
+		54: "AUTHORIZATION_ERROR_REASON_READBACK_RECEIPT_EXPIRED",
 	}
 	AuthorizationErrorReason_value = map[string]int32{
-		"AUTHORIZATION_ERROR_REASON_UNSPECIFIED":                       0,
-		"AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST":                 1,
-		"AUTHORIZATION_ERROR_REASON_UDS_PEER_REJECTED":                 2,
-		"AUTHORIZATION_ERROR_REASON_UDS_ENDPOINT_INVALID":              3,
-		"AUTHORIZATION_ERROR_REASON_OPERATION_NOT_ALLOWED":             4,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROVENANCE_REJECTED":     5,
-		"AUTHORIZATION_ERROR_REASON_MALFORMED_JWS":                     6,
-		"AUTHORIZATION_ERROR_REASON_INVALID_PROTECTED_HEADER":          7,
-		"AUTHORIZATION_ERROR_REASON_INVALID_SIGNATURE":                 8,
-		"AUTHORIZATION_ERROR_REASON_UNKNOWN_KEY":                       9,
-		"AUTHORIZATION_ERROR_REASON_ISSUER_MISMATCH":                   10,
-		"AUTHORIZATION_ERROR_REASON_AUDIENCE_MISMATCH":                 11,
-		"AUTHORIZATION_ERROR_REASON_CALLER_WORKLOAD_MISMATCH":          12,
-		"AUTHORIZATION_ERROR_REASON_TARGET_WORKLOAD_MISMATCH":          13,
-		"AUTHORIZATION_ERROR_REASON_RPC_MISMATCH":                      14,
-		"AUTHORIZATION_ERROR_REASON_PERMISSION_MISMATCH":               15,
-		"AUTHORIZATION_ERROR_REASON_TOKEN_EXPIRED":                     16,
-		"AUTHORIZATION_ERROR_REASON_TOKEN_NOT_YET_VALID":               17,
-		"AUTHORIZATION_ERROR_REASON_TOKEN_TTL_EXCEEDED":                18,
-		"AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED":                   19,
-		"AUTHORIZATION_ERROR_REASON_MTLS_REQUIRED":                     20,
-		"AUTHORIZATION_ERROR_REASON_MTLS_PEER_MISMATCH":                21,
-		"AUTHORIZATION_ERROR_REASON_POLICY_REVISION_REJECTED":          22,
-		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_ROLLBACK":                 23,
-		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_MUTATION":                 24,
-		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_HISTORY_GAP":              25,
-		"AUTHORIZATION_ERROR_REASON_PERSISTENCE_UNAVAILABLE":           26,
-		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE":              27,
-		"AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH":                 28,
-		"AUTHORIZATION_ERROR_REASON_INTERNAL":                          29,
-		"AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED":    30,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REQUIRED":          31,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_INVALID":           32,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_BINDING_MISMATCH":  33,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_EXPIRED":           34,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED": 35,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED":   36,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE":       37,
-		"AUTHORIZATION_ERROR_REASON_APPLICATION_CREDENTIAL_INVALID":    38,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_SCOPE_MISMATCH":          39,
-		"AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT":              40,
-		"AUTHORIZATION_ERROR_REASON_RESTORE_BARRIER_INCOMPLETE":        41,
-		"AUTHORIZATION_ERROR_REASON_RESTORE_ANCHOR_REJECTED":           42,
-		"AUTHORIZATION_ERROR_REASON_RESTORE_CONTROLLER_UNAVAILABLE":    43,
-		"AUTHORIZATION_ERROR_REASON_AUTHORITY_RESOURCE_NOT_FOUND":      44,
-		"AUTHORIZATION_ERROR_REASON_RESTORE_ROLE_CREDENTIAL_REJECTED":  45,
-		"AUTHORIZATION_ERROR_REASON_RESTORE_DIRECTIVE_REJECTED":        46,
-		"AUTHORIZATION_ERROR_REASON_RESTORE_ACK_REPLAY_DETECTED":       47,
-		"AUTHORIZATION_ERROR_REASON_RESTORE_COORDINATION_UNAVAILABLE":  48,
-		"AUTHORIZATION_ERROR_REASON_RESTORE_ACK_RECEIPT_EXPIRED":       49,
+		"AUTHORIZATION_ERROR_REASON_UNSPECIFIED":                        0,
+		"AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST":                  1,
+		"AUTHORIZATION_ERROR_REASON_UDS_PEER_REJECTED":                  2,
+		"AUTHORIZATION_ERROR_REASON_UDS_ENDPOINT_INVALID":               3,
+		"AUTHORIZATION_ERROR_REASON_OPERATION_NOT_ALLOWED":              4,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROVENANCE_REJECTED":      5,
+		"AUTHORIZATION_ERROR_REASON_MALFORMED_JWS":                      6,
+		"AUTHORIZATION_ERROR_REASON_INVALID_PROTECTED_HEADER":           7,
+		"AUTHORIZATION_ERROR_REASON_INVALID_SIGNATURE":                  8,
+		"AUTHORIZATION_ERROR_REASON_UNKNOWN_KEY":                        9,
+		"AUTHORIZATION_ERROR_REASON_ISSUER_MISMATCH":                    10,
+		"AUTHORIZATION_ERROR_REASON_AUDIENCE_MISMATCH":                  11,
+		"AUTHORIZATION_ERROR_REASON_CALLER_WORKLOAD_MISMATCH":           12,
+		"AUTHORIZATION_ERROR_REASON_TARGET_WORKLOAD_MISMATCH":           13,
+		"AUTHORIZATION_ERROR_REASON_RPC_MISMATCH":                       14,
+		"AUTHORIZATION_ERROR_REASON_PERMISSION_MISMATCH":                15,
+		"AUTHORIZATION_ERROR_REASON_TOKEN_EXPIRED":                      16,
+		"AUTHORIZATION_ERROR_REASON_TOKEN_NOT_YET_VALID":                17,
+		"AUTHORIZATION_ERROR_REASON_TOKEN_TTL_EXCEEDED":                 18,
+		"AUTHORIZATION_ERROR_REASON_REPLAY_DETECTED":                    19,
+		"AUTHORIZATION_ERROR_REASON_MTLS_REQUIRED":                      20,
+		"AUTHORIZATION_ERROR_REASON_MTLS_PEER_MISMATCH":                 21,
+		"AUTHORIZATION_ERROR_REASON_POLICY_REVISION_REJECTED":           22,
+		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_ROLLBACK":                  23,
+		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_MUTATION":                  24,
+		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_HISTORY_GAP":               25,
+		"AUTHORIZATION_ERROR_REASON_PERSISTENCE_UNAVAILABLE":            26,
+		"AUTHORIZATION_ERROR_REASON_SNAPSHOT_UNAVAILABLE":               27,
+		"AUTHORIZATION_ERROR_REASON_READBACK_MISMATCH":                  28,
+		"AUTHORIZATION_ERROR_REASON_INTERNAL":                           29,
+		"AUTHORIZATION_ERROR_REASON_AUTHORIZATION_CONTEXT_REQUIRED":     30,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REQUIRED":           31,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_INVALID":            32,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_BINDING_MISMATCH":   33,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_EXPIRED":            34,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REVISION_REJECTED":  35,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_REPLAY_DETECTED":    36,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_PROOF_UNAVAILABLE":        37,
+		"AUTHORIZATION_ERROR_REASON_APPLICATION_CREDENTIAL_INVALID":     38,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_SCOPE_MISMATCH":           39,
+		"AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT":               40,
+		"AUTHORIZATION_ERROR_REASON_RESTORE_BARRIER_INCOMPLETE":         41,
+		"AUTHORIZATION_ERROR_REASON_RESTORE_ANCHOR_REJECTED":            42,
+		"AUTHORIZATION_ERROR_REASON_RESTORE_CONTROLLER_UNAVAILABLE":     43,
+		"AUTHORIZATION_ERROR_REASON_AUTHORITY_RESOURCE_NOT_FOUND":       44,
+		"AUTHORIZATION_ERROR_REASON_RESTORE_ROLE_CREDENTIAL_REJECTED":   45,
+		"AUTHORIZATION_ERROR_REASON_RESTORE_DIRECTIVE_REJECTED":         46,
+		"AUTHORIZATION_ERROR_REASON_RESTORE_ACK_REPLAY_DETECTED":        47,
+		"AUTHORIZATION_ERROR_REASON_RESTORE_COORDINATION_UNAVAILABLE":   48,
+		"AUTHORIZATION_ERROR_REASON_RESTORE_ACK_RECEIPT_EXPIRED":        49,
+		"AUTHORIZATION_ERROR_REASON_READBACK_CREDENTIAL_REJECTED":       50,
+		"AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REJECTED":        51,
+		"AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REPLAY_DETECTED": 52,
+		"AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_UNAVAILABLE":     53,
+		"AUTHORIZATION_ERROR_REASON_READBACK_RECEIPT_EXPIRED":           54,
 	}
 )
 
@@ -2873,16 +2888,21 @@ func (x *RestoreControllerServiceCheckReadinessResponse) GetRoleCredentialTrustK
 
 type AttestServedStateRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// pinned_intent_id — lookup reference controller-owned immutable intent, а
+	// pinned_intent_id — lookup reference publisher-owned immutable intent, а
 	// не authority. Workload, role, revisions и generations выводятся после
-	// проверки mTLS, role credential и signed attestation.
+	// проверки mTLS, normal-readback credential, durable challenge и signed
+	// attestation.
 	PinnedIntentId                   string `protobuf:"bytes,1,opt,name=pinned_intent_id,json=pinnedIntentId,proto3" json:"pinned_intent_id,omitempty"`
-	RoleCredentialCompactJws         string `protobuf:"bytes,2,opt,name=role_credential_compact_jws,json=roleCredentialCompactJws,proto3" json:"role_credential_compact_jws,omitempty"`
+	ReadbackCredentialCompactJws     string `protobuf:"bytes,2,opt,name=readback_credential_compact_jws,json=readbackCredentialCompactJws,proto3" json:"readback_credential_compact_jws,omitempty"`
 	ServedStateAttestationCompactJws string `protobuf:"bytes,3,opt,name=served_state_attestation_compact_jws,json=servedStateAttestationCompactJws,proto3" json:"served_state_attestation_compact_jws,omitempty"`
 	IdempotencyKey                   string `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	CorrelationId                    string `protobuf:"bytes,5,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
-	unknownFields                    protoimpl.UnknownFields
-	sizeCache                        protoimpl.SizeCache
+	// challenge_id получен через IssueAttestationChallenge. Сам идентификатор
+	// не является authority: attestor server-side блокирует и проверяет
+	// сохранённую exact binding до атомарного consume+receipt.
+	ChallengeId   string `protobuf:"bytes,6,opt,name=challenge_id,json=challengeId,proto3" json:"challenge_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AttestServedStateRequest) Reset() {
@@ -2922,9 +2942,9 @@ func (x *AttestServedStateRequest) GetPinnedIntentId() string {
 	return ""
 }
 
-func (x *AttestServedStateRequest) GetRoleCredentialCompactJws() string {
+func (x *AttestServedStateRequest) GetReadbackCredentialCompactJws() string {
 	if x != nil {
-		return x.RoleCredentialCompactJws
+		return x.ReadbackCredentialCompactJws
 	}
 	return ""
 }
@@ -2946,6 +2966,13 @@ func (x *AttestServedStateRequest) GetIdempotencyKey() string {
 func (x *AttestServedStateRequest) GetCorrelationId() string {
 	if x != nil {
 		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *AttestServedStateRequest) GetChallengeId() string {
+	if x != nil {
+		return x.ChallengeId
 	}
 	return ""
 }
@@ -3026,6 +3053,220 @@ func (x *AttestServedStateResponse) GetVerifierGeneration() uint64 {
 	return 0
 }
 
+type IssueAttestationChallengeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// pinned_intent_id — только lookup key. Exact intent kind/revision/digest,
+	// workload, role и generations разрешаются server-side.
+	PinnedIntentId string `protobuf:"bytes,1,opt,name=pinned_intent_id,json=pinnedIntentId,proto3" json:"pinned_intent_id,omitempty"`
+	// Credential имеет отдельный typ/audience/purpose для normal readback и
+	// никогда не принимается RestoreControllerService.
+	ReadbackCredentialCompactJws string `protobuf:"bytes,2,opt,name=readback_credential_compact_jws,json=readbackCredentialCompactJws,proto3" json:"readback_credential_compact_jws,omitempty"`
+	// Повтор того же key с тем же canonical request digest возвращает
+	// сохранённый challenge; иной digest закрыто отклоняется.
+	IdempotencyKey string `protobuf:"bytes,3,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	CorrelationId  string `protobuf:"bytes,4,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *IssueAttestationChallengeRequest) Reset() {
+	*x = IssueAttestationChallengeRequest{}
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueAttestationChallengeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueAttestationChallengeRequest) ProtoMessage() {}
+
+func (x *IssueAttestationChallengeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueAttestationChallengeRequest.ProtoReflect.Descriptor instead.
+func (*IssueAttestationChallengeRequest) Descriptor() ([]byte, []int) {
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *IssueAttestationChallengeRequest) GetPinnedIntentId() string {
+	if x != nil {
+		return x.PinnedIntentId
+	}
+	return ""
+}
+
+func (x *IssueAttestationChallengeRequest) GetReadbackCredentialCompactJws() string {
+	if x != nil {
+		return x.ReadbackCredentialCompactJws
+	}
+	return ""
+}
+
+func (x *IssueAttestationChallengeRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *IssueAttestationChallengeRequest) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+type IssueAttestationChallengeResponse struct {
+	state                          protoimpl.MessageState  `protogen:"open.v1"`
+	ChallengeId                    string                  `protobuf:"bytes,1,opt,name=challenge_id,json=challengeId,proto3" json:"challenge_id,omitempty"`
+	ChallengeJti                   string                  `protobuf:"bytes,2,opt,name=challenge_jti,json=challengeJti,proto3" json:"challenge_jti,omitempty"`
+	ChallengeNonce                 string                  `protobuf:"bytes,3,opt,name=challenge_nonce,json=challengeNonce,proto3" json:"challenge_nonce,omitempty"`
+	ChallengeDigestSha256          string                  `protobuf:"bytes,4,opt,name=challenge_digest_sha256,json=challengeDigestSha256,proto3" json:"challenge_digest_sha256,omitempty"`
+	IssuedAt                       *timestamppb.Timestamp  `protobuf:"bytes,5,opt,name=issued_at,json=issuedAt,proto3" json:"issued_at,omitempty"`
+	ExpiresAt                      *timestamppb.Timestamp  `protobuf:"bytes,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Kind                           ReadbackAttestationKind `protobuf:"varint,7,opt,name=kind,proto3,enum=internalrpcauthority.v1.ReadbackAttestationKind" json:"kind,omitempty"`
+	PinnedIntentRevision           uint64                  `protobuf:"varint,8,opt,name=pinned_intent_revision,json=pinnedIntentRevision,proto3" json:"pinned_intent_revision,omitempty"`
+	PinnedIntentDigestSha256       string                  `protobuf:"bytes,9,opt,name=pinned_intent_digest_sha256,json=pinnedIntentDigestSha256,proto3" json:"pinned_intent_digest_sha256,omitempty"`
+	WorkloadGeneration             uint64                  `protobuf:"varint,10,opt,name=workload_generation,json=workloadGeneration,proto3" json:"workload_generation,omitempty"`
+	CredentialGeneration           uint64                  `protobuf:"varint,11,opt,name=credential_generation,json=credentialGeneration,proto3" json:"credential_generation,omitempty"`
+	PossessionKeyGeneration        uint64                  `protobuf:"varint,12,opt,name=possession_key_generation,json=possessionKeyGeneration,proto3" json:"possession_key_generation,omitempty"`
+	ReadbackCredentialDigestSha256 string                  `protobuf:"bytes,13,opt,name=readback_credential_digest_sha256,json=readbackCredentialDigestSha256,proto3" json:"readback_credential_digest_sha256,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
+}
+
+func (x *IssueAttestationChallengeResponse) Reset() {
+	*x = IssueAttestationChallengeResponse{}
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueAttestationChallengeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueAttestationChallengeResponse) ProtoMessage() {}
+
+func (x *IssueAttestationChallengeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueAttestationChallengeResponse.ProtoReflect.Descriptor instead.
+func (*IssueAttestationChallengeResponse) Descriptor() ([]byte, []int) {
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *IssueAttestationChallengeResponse) GetChallengeId() string {
+	if x != nil {
+		return x.ChallengeId
+	}
+	return ""
+}
+
+func (x *IssueAttestationChallengeResponse) GetChallengeJti() string {
+	if x != nil {
+		return x.ChallengeJti
+	}
+	return ""
+}
+
+func (x *IssueAttestationChallengeResponse) GetChallengeNonce() string {
+	if x != nil {
+		return x.ChallengeNonce
+	}
+	return ""
+}
+
+func (x *IssueAttestationChallengeResponse) GetChallengeDigestSha256() string {
+	if x != nil {
+		return x.ChallengeDigestSha256
+	}
+	return ""
+}
+
+func (x *IssueAttestationChallengeResponse) GetIssuedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.IssuedAt
+	}
+	return nil
+}
+
+func (x *IssueAttestationChallengeResponse) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+func (x *IssueAttestationChallengeResponse) GetKind() ReadbackAttestationKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ReadbackAttestationKind_READBACK_ATTESTATION_KIND_UNSPECIFIED
+}
+
+func (x *IssueAttestationChallengeResponse) GetPinnedIntentRevision() uint64 {
+	if x != nil {
+		return x.PinnedIntentRevision
+	}
+	return 0
+}
+
+func (x *IssueAttestationChallengeResponse) GetPinnedIntentDigestSha256() string {
+	if x != nil {
+		return x.PinnedIntentDigestSha256
+	}
+	return ""
+}
+
+func (x *IssueAttestationChallengeResponse) GetWorkloadGeneration() uint64 {
+	if x != nil {
+		return x.WorkloadGeneration
+	}
+	return 0
+}
+
+func (x *IssueAttestationChallengeResponse) GetCredentialGeneration() uint64 {
+	if x != nil {
+		return x.CredentialGeneration
+	}
+	return 0
+}
+
+func (x *IssueAttestationChallengeResponse) GetPossessionKeyGeneration() uint64 {
+	if x != nil {
+		return x.PossessionKeyGeneration
+	}
+	return 0
+}
+
+func (x *IssueAttestationChallengeResponse) GetReadbackCredentialDigestSha256() string {
+	if x != nil {
+		return x.ReadbackCredentialDigestSha256
+	}
+	return ""
+}
+
 type AuthorityReadbackAttestorServiceCheckReadinessRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -3034,7 +3275,7 @@ type AuthorityReadbackAttestorServiceCheckReadinessRequest struct {
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessRequest) Reset() {
 	*x = AuthorityReadbackAttestorServiceCheckReadinessRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[33]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3046,7 +3287,7 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessRequest) String() string 
 func (*AuthorityReadbackAttestorServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[33]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3059,25 +3300,31 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessRequest) ProtoReflect() p
 
 // Deprecated: Use AuthorityReadbackAttestorServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*AuthorityReadbackAttestorServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{33}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{35}
 }
 
 type AuthorityReadbackAttestorServiceCheckReadinessResponse struct {
-	state                             protoimpl.MessageState `protogen:"open.v1"`
-	Ready                             bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
-	PinnedIntentRevision              uint64                 `protobuf:"varint,2,opt,name=pinned_intent_revision,json=pinnedIntentRevision,proto3" json:"pinned_intent_revision,omitempty"`
-	PinnedIntentDigestSha256          string                 `protobuf:"bytes,3,opt,name=pinned_intent_digest_sha256,json=pinnedIntentDigestSha256,proto3" json:"pinned_intent_digest_sha256,omitempty"`
-	RoleCredentialTrustSourceRevision uint64                 `protobuf:"varint,4,opt,name=role_credential_trust_source_revision,json=roleCredentialTrustSourceRevision,proto3" json:"role_credential_trust_source_revision,omitempty"`
-	RoleCredentialTrustDigestSha256   string                 `protobuf:"bytes,5,opt,name=role_credential_trust_digest_sha256,json=roleCredentialTrustDigestSha256,proto3" json:"role_credential_trust_digest_sha256,omitempty"`
-	VerifierGeneration                uint64                 `protobuf:"varint,6,opt,name=verifier_generation,json=verifierGeneration,proto3" json:"verifier_generation,omitempty"`
-	ReceiptStoreReady                 bool                   `protobuf:"varint,7,opt,name=receipt_store_ready,json=receiptStoreReady,proto3" json:"receipt_store_ready,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	state                                   protoimpl.MessageState `protogen:"open.v1"`
+	Ready                                   bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
+	PinnedIntentRevision                    uint64                 `protobuf:"varint,2,opt,name=pinned_intent_revision,json=pinnedIntentRevision,proto3" json:"pinned_intent_revision,omitempty"`
+	PinnedIntentDigestSha256                string                 `protobuf:"bytes,3,opt,name=pinned_intent_digest_sha256,json=pinnedIntentDigestSha256,proto3" json:"pinned_intent_digest_sha256,omitempty"`
+	RoleCredentialTrustSourceRevision       uint64                 `protobuf:"varint,4,opt,name=role_credential_trust_source_revision,json=roleCredentialTrustSourceRevision,proto3" json:"role_credential_trust_source_revision,omitempty"`
+	RoleCredentialTrustDigestSha256         string                 `protobuf:"bytes,5,opt,name=role_credential_trust_digest_sha256,json=roleCredentialTrustDigestSha256,proto3" json:"role_credential_trust_digest_sha256,omitempty"`
+	VerifierGeneration                      uint64                 `protobuf:"varint,6,opt,name=verifier_generation,json=verifierGeneration,proto3" json:"verifier_generation,omitempty"`
+	ReceiptStoreReady                       bool                   `protobuf:"varint,7,opt,name=receipt_store_ready,json=receiptStoreReady,proto3" json:"receipt_store_ready,omitempty"`
+	ChallengeStoreReady                     bool                   `protobuf:"varint,8,opt,name=challenge_store_ready,json=challengeStoreReady,proto3" json:"challenge_store_ready,omitempty"`
+	ReadbackCredentialTrustSourceRevision   uint64                 `protobuf:"varint,9,opt,name=readback_credential_trust_source_revision,json=readbackCredentialTrustSourceRevision,proto3" json:"readback_credential_trust_source_revision,omitempty"`
+	ReadbackCredentialTrustDigestSha256     string                 `protobuf:"bytes,10,opt,name=readback_credential_trust_digest_sha256,json=readbackCredentialTrustDigestSha256,proto3" json:"readback_credential_trust_digest_sha256,omitempty"`
+	ReadbackCredentialTrustKeySetRevision   uint64                 `protobuf:"varint,11,opt,name=readback_credential_trust_key_set_revision,json=readbackCredentialTrustKeySetRevision,proto3" json:"readback_credential_trust_key_set_revision,omitempty"`
+	ReadbackCredentialTrustSignerGeneration uint64                 `protobuf:"varint,12,opt,name=readback_credential_trust_signer_generation,json=readbackCredentialTrustSignerGeneration,proto3" json:"readback_credential_trust_signer_generation,omitempty"`
+	ReadbackCredentialTrustReadbackReady    bool                   `protobuf:"varint,13,opt,name=readback_credential_trust_readback_ready,json=readbackCredentialTrustReadbackReady,proto3" json:"readback_credential_trust_readback_ready,omitempty"`
+	unknownFields                           protoimpl.UnknownFields
+	sizeCache                               protoimpl.SizeCache
 }
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) Reset() {
 	*x = AuthorityReadbackAttestorServiceCheckReadinessResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[34]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3089,7 +3336,7 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) String() string
 func (*AuthorityReadbackAttestorServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[34]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3102,7 +3349,7 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) ProtoReflect() 
 
 // Deprecated: Use AuthorityReadbackAttestorServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*AuthorityReadbackAttestorServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{34}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReady() bool {
@@ -3154,6 +3401,48 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReceiptStore
 	return false
 }
 
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetChallengeStoreReady() bool {
+	if x != nil {
+		return x.ChallengeStoreReady
+	}
+	return false
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackCredentialTrustSourceRevision() uint64 {
+	if x != nil {
+		return x.ReadbackCredentialTrustSourceRevision
+	}
+	return 0
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackCredentialTrustDigestSha256() string {
+	if x != nil {
+		return x.ReadbackCredentialTrustDigestSha256
+	}
+	return ""
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackCredentialTrustKeySetRevision() uint64 {
+	if x != nil {
+		return x.ReadbackCredentialTrustKeySetRevision
+	}
+	return 0
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackCredentialTrustSignerGeneration() uint64 {
+	if x != nil {
+		return x.ReadbackCredentialTrustSignerGeneration
+	}
+	return 0
+}
+
+func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReadbackCredentialTrustReadbackReady() bool {
+	if x != nil {
+		return x.ReadbackCredentialTrustReadbackReady
+	}
+	return false
+}
+
 type PublishRoleCredentialRequest struct {
 	state                       protoimpl.MessageState `protogen:"open.v1"`
 	IssuanceDirectiveCompactJws string                 `protobuf:"bytes,1,opt,name=issuance_directive_compact_jws,json=issuanceDirectiveCompactJws,proto3" json:"issuance_directive_compact_jws,omitempty"`
@@ -3165,7 +3454,7 @@ type PublishRoleCredentialRequest struct {
 
 func (x *PublishRoleCredentialRequest) Reset() {
 	*x = PublishRoleCredentialRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[35]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3177,7 +3466,7 @@ func (x *PublishRoleCredentialRequest) String() string {
 func (*PublishRoleCredentialRequest) ProtoMessage() {}
 
 func (x *PublishRoleCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[35]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3190,7 +3479,7 @@ func (x *PublishRoleCredentialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishRoleCredentialRequest.ProtoReflect.Descriptor instead.
 func (*PublishRoleCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{35}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *PublishRoleCredentialRequest) GetIssuanceDirectiveCompactJws() string {
@@ -3226,7 +3515,7 @@ type PublishRoleCredentialResponse struct {
 
 func (x *PublishRoleCredentialResponse) Reset() {
 	*x = PublishRoleCredentialResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[36]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3238,7 +3527,7 @@ func (x *PublishRoleCredentialResponse) String() string {
 func (*PublishRoleCredentialResponse) ProtoMessage() {}
 
 func (x *PublishRoleCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[36]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3251,7 +3540,7 @@ func (x *PublishRoleCredentialResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishRoleCredentialResponse.ProtoReflect.Descriptor instead.
 func (*PublishRoleCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{36}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *PublishRoleCredentialResponse) GetDeliveryReceiptCompactJws() string {
@@ -3290,7 +3579,7 @@ type RestoreRoleCredentialPublisherServiceCheckReadinessRequest struct {
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) Reset() {
 	*x = RestoreRoleCredentialPublisherServiceCheckReadinessRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[37]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3302,7 +3591,7 @@ func (x *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) String() st
 func (*RestoreRoleCredentialPublisherServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[37]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3315,7 +3604,7 @@ func (x *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) ProtoReflec
 
 // Deprecated: Use RestoreRoleCredentialPublisherServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*RestoreRoleCredentialPublisherServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{37}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{39}
 }
 
 type RestoreRoleCredentialPublisherServiceCheckReadinessResponse struct {
@@ -3332,7 +3621,7 @@ type RestoreRoleCredentialPublisherServiceCheckReadinessResponse struct {
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) Reset() {
 	*x = RestoreRoleCredentialPublisherServiceCheckReadinessResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[38]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3344,7 +3633,7 @@ func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) String() s
 func (*RestoreRoleCredentialPublisherServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[38]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3357,7 +3646,7 @@ func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) ProtoRefle
 
 // Deprecated: Use RestoreRoleCredentialPublisherServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*RestoreRoleCredentialPublisherServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{38}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) GetReady() bool {
@@ -3416,7 +3705,7 @@ type AuthorizationErrorDetail struct {
 
 func (x *AuthorizationErrorDetail) Reset() {
 	*x = AuthorizationErrorDetail{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[39]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3428,7 +3717,7 @@ func (x *AuthorizationErrorDetail) String() string {
 func (*AuthorizationErrorDetail) ProtoMessage() {}
 
 func (x *AuthorizationErrorDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[39]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3441,7 +3730,7 @@ func (x *AuthorizationErrorDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizationErrorDetail.ProtoReflect.Descriptor instead.
 func (*AuthorizationErrorDetail) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{39}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *AuthorizationErrorDetail) GetReason() AuthorizationErrorReason {
@@ -3673,21 +3962,43 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"$role_credential_trust_readback_ready\x18\n" +
 	" \x01(\bR roleCredentialTrustReadbackReady\x12E\n" +
 	"\x1fack_verification_registry_ready\x18\v \x01(\bR\x1cackVerificationRegistryReady\x12Q\n" +
-	"&role_credential_trust_key_set_revision\x18\f \x01(\x04R!roleCredentialTrustKeySetRevision\"\xa3\x02\n" +
+	"&role_credential_trust_key_set_revision\x18\f \x01(\x04R!roleCredentialTrustKeySetRevision\"\xce\x02\n" +
 	"\x18AttestServedStateRequest\x12(\n" +
-	"\x10pinned_intent_id\x18\x01 \x01(\tR\x0epinnedIntentId\x12=\n" +
-	"\x1brole_credential_compact_jws\x18\x02 \x01(\tR\x18roleCredentialCompactJws\x12N\n" +
+	"\x10pinned_intent_id\x18\x01 \x01(\tR\x0epinnedIntentId\x12E\n" +
+	"\x1freadback_credential_compact_jws\x18\x02 \x01(\tR\x1creadbackCredentialCompactJws\x12N\n" +
 	"$served_state_attestation_compact_jws\x18\x03 \x01(\tR servedStateAttestationCompactJws\x12'\n" +
 	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12%\n" +
-	"\x0ecorrelation_id\x18\x05 \x01(\tR\rcorrelationId\"\xb9\x02\n" +
+	"\x0ecorrelation_id\x18\x05 \x01(\tR\rcorrelationId\x12!\n" +
+	"\fchallenge_id\x18\x06 \x01(\tR\vchallengeId\"\xb9\x02\n" +
 	"\x19AttestServedStateResponse\x124\n" +
 	"\x16attestation_receipt_id\x18\x01 \x01(\tR\x14attestationReceiptId\x12D\n" +
 	"\x04kind\x18\x02 \x01(\x0e20.internalrpcauthority.v1.ReadbackAttestationKindR\x04kind\x129\n" +
 	"\n" +
 	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x124\n" +
 	"\x16evidence_digest_sha256\x18\x04 \x01(\tR\x14evidenceDigestSha256\x12/\n" +
-	"\x13verifier_generation\x18\x05 \x01(\x04R\x12verifierGeneration\"7\n" +
-	"5AuthorityReadbackAttestorServiceCheckReadinessRequest\"\xc4\x03\n" +
+	"\x13verifier_generation\x18\x05 \x01(\x04R\x12verifierGeneration\"\xe3\x01\n" +
+	" IssueAttestationChallengeRequest\x12(\n" +
+	"\x10pinned_intent_id\x18\x01 \x01(\tR\x0epinnedIntentId\x12E\n" +
+	"\x1freadback_credential_compact_jws\x18\x02 \x01(\tR\x1creadbackCredentialCompactJws\x12'\n" +
+	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x12%\n" +
+	"\x0ecorrelation_id\x18\x04 \x01(\tR\rcorrelationId\"\xe8\x05\n" +
+	"!IssueAttestationChallengeResponse\x12!\n" +
+	"\fchallenge_id\x18\x01 \x01(\tR\vchallengeId\x12#\n" +
+	"\rchallenge_jti\x18\x02 \x01(\tR\fchallengeJti\x12'\n" +
+	"\x0fchallenge_nonce\x18\x03 \x01(\tR\x0echallengeNonce\x126\n" +
+	"\x17challenge_digest_sha256\x18\x04 \x01(\tR\x15challengeDigestSha256\x127\n" +
+	"\tissued_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\bissuedAt\x129\n" +
+	"\n" +
+	"expires_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12D\n" +
+	"\x04kind\x18\a \x01(\x0e20.internalrpcauthority.v1.ReadbackAttestationKindR\x04kind\x124\n" +
+	"\x16pinned_intent_revision\x18\b \x01(\x04R\x14pinnedIntentRevision\x12=\n" +
+	"\x1bpinned_intent_digest_sha256\x18\t \x01(\tR\x18pinnedIntentDigestSha256\x12/\n" +
+	"\x13workload_generation\x18\n" +
+	" \x01(\x04R\x12workloadGeneration\x123\n" +
+	"\x15credential_generation\x18\v \x01(\x04R\x14credentialGeneration\x12:\n" +
+	"\x19possession_key_generation\x18\f \x01(\x04R\x17possessionKeyGeneration\x12I\n" +
+	"!readback_credential_digest_sha256\x18\r \x01(\tR\x1ereadbackCredentialDigestSha256\"7\n" +
+	"5AuthorityReadbackAttestorServiceCheckReadinessRequest\"\xb9\a\n" +
 	"6AuthorityReadbackAttestorServiceCheckReadinessResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\x124\n" +
 	"\x16pinned_intent_revision\x18\x02 \x01(\x04R\x14pinnedIntentRevision\x12=\n" +
@@ -3695,7 +4006,14 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"%role_credential_trust_source_revision\x18\x04 \x01(\x04R!roleCredentialTrustSourceRevision\x12L\n" +
 	"#role_credential_trust_digest_sha256\x18\x05 \x01(\tR\x1froleCredentialTrustDigestSha256\x12/\n" +
 	"\x13verifier_generation\x18\x06 \x01(\x04R\x12verifierGeneration\x12.\n" +
-	"\x13receipt_store_ready\x18\a \x01(\bR\x11receiptStoreReady\"\xb3\x01\n" +
+	"\x13receipt_store_ready\x18\a \x01(\bR\x11receiptStoreReady\x122\n" +
+	"\x15challenge_store_ready\x18\b \x01(\bR\x13challengeStoreReady\x12X\n" +
+	")readback_credential_trust_source_revision\x18\t \x01(\x04R%readbackCredentialTrustSourceRevision\x12T\n" +
+	"'readback_credential_trust_digest_sha256\x18\n" +
+	" \x01(\tR#readbackCredentialTrustDigestSha256\x12Y\n" +
+	"*readback_credential_trust_key_set_revision\x18\v \x01(\x04R%readbackCredentialTrustKeySetRevision\x12\\\n" +
+	"+readback_credential_trust_signer_generation\x18\f \x01(\x04R'readbackCredentialTrustSignerGeneration\x12V\n" +
+	"(readback_credential_trust_readback_ready\x18\r \x01(\bR$readbackCredentialTrustReadbackReady\"\xb3\x01\n" +
 	"\x1cPublishRoleCredentialRequest\x12C\n" +
 	"\x1eissuance_directive_compact_jws\x18\x01 \x01(\tR\x1bissuanceDirectiveCompactJws\x12'\n" +
 	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12%\n" +
@@ -3765,7 +4083,7 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"$AUTHORIZATION_FAILURE_STAGE_INTERNAL\x10\v\x12/\n" +
 	"+AUTHORIZATION_FAILURE_STAGE_AUTHORITY_PROOF\x10\f\x124\n" +
 	"0AUTHORIZATION_FAILURE_STAGE_AUTHORITY_RESOLUTION\x10\r\x12'\n" +
-	"#AUTHORIZATION_FAILURE_STAGE_RESTORE\x10\x0e*\xc5\x15\n" +
+	"#AUTHORIZATION_FAILURE_STAGE_RESTORE\x10\x0e*\xf9\x17\n" +
 	"\x18AuthorizationErrorReason\x12*\n" +
 	"&AUTHORIZATION_ERROR_REASON_UNSPECIFIED\x10\x00\x120\n" +
 	",AUTHORIZATION_ERROR_REASON_MALFORMED_REQUEST\x10\x01\x120\n" +
@@ -3817,7 +4135,12 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"5AUTHORIZATION_ERROR_REASON_RESTORE_DIRECTIVE_REJECTED\x10.\x12:\n" +
 	"6AUTHORIZATION_ERROR_REASON_RESTORE_ACK_REPLAY_DETECTED\x10/\x12?\n" +
 	";AUTHORIZATION_ERROR_REASON_RESTORE_COORDINATION_UNAVAILABLE\x100\x12:\n" +
-	"6AUTHORIZATION_ERROR_REASON_RESTORE_ACK_RECEIPT_EXPIRED\x1012\xd9\x02\n" +
+	"6AUTHORIZATION_ERROR_REASON_RESTORE_ACK_RECEIPT_EXPIRED\x101\x12;\n" +
+	"7AUTHORIZATION_ERROR_REASON_READBACK_CREDENTIAL_REJECTED\x102\x12:\n" +
+	"6AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REJECTED\x103\x12A\n" +
+	"=AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REPLAY_DETECTED\x104\x12=\n" +
+	"9AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_UNAVAILABLE\x105\x127\n" +
+	"3AUTHORIZATION_ERROR_REASON_READBACK_RECEIPT_EXPIRED\x1062\xd9\x02\n" +
 	"\x1aAuthorizationIssuerService\x12\x92\x01\n" +
 	"\x19IssueAuthorizationContext\x129.internalrpcauthority.v1.IssueAuthorizationContextRequest\x1a:.internalrpcauthority.v1.IssueAuthorizationContextResponse\x12\xa5\x01\n" +
 	"\x0eCheckReadiness\x12H.internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest\x1aI.internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse2\xe2\x02\n" +
@@ -3832,8 +4155,9 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x13GetRestoreDirective\x123.internalrpcauthority.v1.GetRestoreDirectiveRequest\x1a4.internalrpcauthority.v1.GetRestoreDirectiveResponse\x12\x86\x01\n" +
 	"\x15AcknowledgeQuiescence\x125.internalrpcauthority.v1.AcknowledgeQuiescenceRequest\x1a6.internalrpcauthority.v1.AcknowledgeQuiescenceResponse\x12t\n" +
 	"\x0fCompleteRestore\x12/.internalrpcauthority.v1.CompleteRestoreRequest\x1a0.internalrpcauthority.v1.CompleteRestoreResponse\x12\xa1\x01\n" +
-	"\x0eCheckReadiness\x12F.internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest\x1aG.internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse2\xd2\x02\n" +
-	" AuthorityReadbackAttestorService\x12z\n" +
+	"\x0eCheckReadiness\x12F.internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest\x1aG.internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse2\xe7\x03\n" +
+	" AuthorityReadbackAttestorService\x12\x92\x01\n" +
+	"\x19IssueAttestationChallenge\x129.internalrpcauthority.v1.IssueAttestationChallengeRequest\x1a:.internalrpcauthority.v1.IssueAttestationChallengeResponse\x12z\n" +
 	"\x11AttestServedState\x121.internalrpcauthority.v1.AttestServedStateRequest\x1a2.internalrpcauthority.v1.AttestServedStateResponse\x12\xb1\x01\n" +
 	"\x0eCheckReadiness\x12N.internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest\x1aO.internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse2\xee\x02\n" +
 	"%RestoreRoleCredentialPublisherService\x12\x86\x01\n" +
@@ -3853,7 +4177,7 @@ func file_internalrpcauthority_v1_authority_proto_rawDescGZIP() []byte {
 }
 
 var file_internalrpcauthority_v1_authority_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_internalrpcauthority_v1_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_internalrpcauthority_v1_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_internalrpcauthority_v1_authority_proto_goTypes = []any{
 	(ActorKind)(0),                                                      // 0: internalrpcauthority.v1.ActorKind
 	(AuthoritySource)(0),                                                // 1: internalrpcauthority.v1.AuthoritySource
@@ -3895,14 +4219,16 @@ var file_internalrpcauthority_v1_authority_proto_goTypes = []any{
 	(*RestoreControllerServiceCheckReadinessResponse)(nil),              // 37: internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse
 	(*AttestServedStateRequest)(nil),                                    // 38: internalrpcauthority.v1.AttestServedStateRequest
 	(*AttestServedStateResponse)(nil),                                   // 39: internalrpcauthority.v1.AttestServedStateResponse
-	(*AuthorityReadbackAttestorServiceCheckReadinessRequest)(nil),       // 40: internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
-	(*AuthorityReadbackAttestorServiceCheckReadinessResponse)(nil),      // 41: internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
-	(*PublishRoleCredentialRequest)(nil),                                // 42: internalrpcauthority.v1.PublishRoleCredentialRequest
-	(*PublishRoleCredentialResponse)(nil),                               // 43: internalrpcauthority.v1.PublishRoleCredentialResponse
-	(*RestoreRoleCredentialPublisherServiceCheckReadinessRequest)(nil),  // 44: internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
-	(*RestoreRoleCredentialPublisherServiceCheckReadinessResponse)(nil), // 45: internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
-	(*AuthorizationErrorDetail)(nil),                                    // 46: internalrpcauthority.v1.AuthorizationErrorDetail
-	(*timestamppb.Timestamp)(nil),                                       // 47: google.protobuf.Timestamp
+	(*IssueAttestationChallengeRequest)(nil),                            // 40: internalrpcauthority.v1.IssueAttestationChallengeRequest
+	(*IssueAttestationChallengeResponse)(nil),                           // 41: internalrpcauthority.v1.IssueAttestationChallengeResponse
+	(*AuthorityReadbackAttestorServiceCheckReadinessRequest)(nil),       // 42: internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
+	(*AuthorityReadbackAttestorServiceCheckReadinessResponse)(nil),      // 43: internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
+	(*PublishRoleCredentialRequest)(nil),                                // 44: internalrpcauthority.v1.PublishRoleCredentialRequest
+	(*PublishRoleCredentialResponse)(nil),                               // 45: internalrpcauthority.v1.PublishRoleCredentialResponse
+	(*RestoreRoleCredentialPublisherServiceCheckReadinessRequest)(nil),  // 46: internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
+	(*RestoreRoleCredentialPublisherServiceCheckReadinessResponse)(nil), // 47: internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
+	(*AuthorizationErrorDetail)(nil),                                    // 48: internalrpcauthority.v1.AuthorizationErrorDetail
+	(*timestamppb.Timestamp)(nil),                                       // 49: google.protobuf.Timestamp
 }
 var file_internalrpcauthority_v1_authority_proto_depIdxs = []int32{
 	1,  // 0: internalrpcauthority.v1.AuthorityProvenance.source:type_name -> internalrpcauthority.v1.AuthoritySource
@@ -3911,68 +4237,73 @@ var file_internalrpcauthority_v1_authority_proto_depIdxs = []int32{
 	8,  // 3: internalrpcauthority.v1.CallerAuthority.actor:type_name -> internalrpcauthority.v1.AuthorityIdentity
 	8,  // 4: internalrpcauthority.v1.CallerAuthority.tenant:type_name -> internalrpcauthority.v1.AuthorityIdentity
 	8,  // 5: internalrpcauthority.v1.CallerAuthority.project:type_name -> internalrpcauthority.v1.AuthorityIdentity
-	47, // 6: internalrpcauthority.v1.IssueAuthorizationContextResponse.expires_at:type_name -> google.protobuf.Timestamp
-	47, // 7: internalrpcauthority.v1.ResolveAuthorityProofResponse.expires_at:type_name -> google.protobuf.Timestamp
+	49, // 6: internalrpcauthority.v1.IssueAuthorizationContextResponse.expires_at:type_name -> google.protobuf.Timestamp
+	49, // 7: internalrpcauthority.v1.ResolveAuthorityProofResponse.expires_at:type_name -> google.protobuf.Timestamp
 	16, // 8: internalrpcauthority.v1.VerifyAuthorizationContextRequest.downstream_peer:type_name -> internalrpcauthority.v1.DownstreamTransportPeer
 	19, // 9: internalrpcauthority.v1.VerifyAuthorizationContextResponse.context:type_name -> internalrpcauthority.v1.VerifiedAuthorizationContext
 	9,  // 10: internalrpcauthority.v1.VerifiedAuthorizationContext.authority:type_name -> internalrpcauthority.v1.CallerAuthority
-	47, // 11: internalrpcauthority.v1.VerifiedAuthorizationContext.issued_at:type_name -> google.protobuf.Timestamp
-	47, // 12: internalrpcauthority.v1.VerifiedAuthorizationContext.not_before:type_name -> google.protobuf.Timestamp
-	47, // 13: internalrpcauthority.v1.VerifiedAuthorizationContext.expires_at:type_name -> google.protobuf.Timestamp
-	47, // 14: internalrpcauthority.v1.PrepareRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
-	47, // 15: internalrpcauthority.v1.NoRestoreDirective.retry_not_before:type_name -> google.protobuf.Timestamp
+	49, // 11: internalrpcauthority.v1.VerifiedAuthorizationContext.issued_at:type_name -> google.protobuf.Timestamp
+	49, // 12: internalrpcauthority.v1.VerifiedAuthorizationContext.not_before:type_name -> google.protobuf.Timestamp
+	49, // 13: internalrpcauthority.v1.VerifiedAuthorizationContext.expires_at:type_name -> google.protobuf.Timestamp
+	49, // 14: internalrpcauthority.v1.PrepareRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
+	49, // 15: internalrpcauthority.v1.NoRestoreDirective.retry_not_before:type_name -> google.protobuf.Timestamp
 	31, // 16: internalrpcauthority.v1.RoleBoundRestoreDirective.transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	47, // 17: internalrpcauthority.v1.RoleBoundRestoreDirective.expires_at:type_name -> google.protobuf.Timestamp
+	49, // 17: internalrpcauthority.v1.RoleBoundRestoreDirective.expires_at:type_name -> google.protobuf.Timestamp
 	26, // 18: internalrpcauthority.v1.GetRestoreDirectiveResponse.no_directive:type_name -> internalrpcauthority.v1.NoRestoreDirective
 	27, // 19: internalrpcauthority.v1.GetRestoreDirectiveResponse.directive:type_name -> internalrpcauthority.v1.RoleBoundRestoreDirective
-	47, // 20: internalrpcauthority.v1.CompleteRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
+	49, // 20: internalrpcauthority.v1.CompleteRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
 	3,  // 21: internalrpcauthority.v1.RestoreTransition.phase:type_name -> internalrpcauthority.v1.RestorePhase
-	47, // 22: internalrpcauthority.v1.RestoreTransition.safe_window_not_before:type_name -> google.protobuf.Timestamp
+	49, // 22: internalrpcauthority.v1.RestoreTransition.safe_window_not_before:type_name -> google.protobuf.Timestamp
 	31, // 23: internalrpcauthority.v1.PrepareRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
 	31, // 24: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
 	34, // 25: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.receipt:type_name -> internalrpcauthority.v1.QuiescenceAckReceipt
 	3,  // 26: internalrpcauthority.v1.QuiescenceAckReceipt.resulting_phase:type_name -> internalrpcauthority.v1.RestorePhase
-	47, // 27: internalrpcauthority.v1.QuiescenceAckReceipt.accepted_at:type_name -> google.protobuf.Timestamp
+	49, // 27: internalrpcauthority.v1.QuiescenceAckReceipt.accepted_at:type_name -> google.protobuf.Timestamp
 	31, // 28: internalrpcauthority.v1.CompleteRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
 	4,  // 29: internalrpcauthority.v1.AttestServedStateResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
-	47, // 30: internalrpcauthority.v1.AttestServedStateResponse.expires_at:type_name -> google.protobuf.Timestamp
-	6,  // 31: internalrpcauthority.v1.AuthorizationErrorDetail.reason:type_name -> internalrpcauthority.v1.AuthorizationErrorReason
-	5,  // 32: internalrpcauthority.v1.AuthorizationErrorDetail.stage:type_name -> internalrpcauthority.v1.AuthorizationFailureStage
-	10, // 33: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:input_type -> internalrpcauthority.v1.IssueAuthorizationContextRequest
-	20, // 34: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
-	17, // 35: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:input_type -> internalrpcauthority.v1.VerifyAuthorizationContextRequest
-	22, // 36: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
-	12, // 37: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:input_type -> internalrpcauthority.v1.ResolveAuthorityProofRequest
-	14, // 38: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessRequest
-	24, // 39: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:input_type -> internalrpcauthority.v1.PrepareRestoreRequest
-	25, // 40: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:input_type -> internalrpcauthority.v1.GetRestoreDirectiveRequest
-	29, // 41: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:input_type -> internalrpcauthority.v1.AcknowledgeQuiescenceRequest
-	30, // 42: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:input_type -> internalrpcauthority.v1.CompleteRestoreRequest
-	36, // 43: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest
-	38, // 44: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:input_type -> internalrpcauthority.v1.AttestServedStateRequest
-	40, // 45: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
-	42, // 46: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:input_type -> internalrpcauthority.v1.PublishRoleCredentialRequest
-	44, // 47: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
-	11, // 48: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:output_type -> internalrpcauthority.v1.IssueAuthorizationContextResponse
-	21, // 49: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
-	18, // 50: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:output_type -> internalrpcauthority.v1.VerifyAuthorizationContextResponse
-	23, // 51: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
-	13, // 52: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:output_type -> internalrpcauthority.v1.ResolveAuthorityProofResponse
-	15, // 53: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessResponse
-	32, // 54: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:output_type -> internalrpcauthority.v1.PrepareRestoreResponse
-	28, // 55: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:output_type -> internalrpcauthority.v1.GetRestoreDirectiveResponse
-	33, // 56: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:output_type -> internalrpcauthority.v1.AcknowledgeQuiescenceResponse
-	35, // 57: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:output_type -> internalrpcauthority.v1.CompleteRestoreResponse
-	37, // 58: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse
-	39, // 59: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:output_type -> internalrpcauthority.v1.AttestServedStateResponse
-	41, // 60: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
-	43, // 61: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:output_type -> internalrpcauthority.v1.PublishRoleCredentialResponse
-	45, // 62: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
-	48, // [48:63] is the sub-list for method output_type
-	33, // [33:48] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	49, // 30: internalrpcauthority.v1.AttestServedStateResponse.expires_at:type_name -> google.protobuf.Timestamp
+	49, // 31: internalrpcauthority.v1.IssueAttestationChallengeResponse.issued_at:type_name -> google.protobuf.Timestamp
+	49, // 32: internalrpcauthority.v1.IssueAttestationChallengeResponse.expires_at:type_name -> google.protobuf.Timestamp
+	4,  // 33: internalrpcauthority.v1.IssueAttestationChallengeResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
+	6,  // 34: internalrpcauthority.v1.AuthorizationErrorDetail.reason:type_name -> internalrpcauthority.v1.AuthorizationErrorReason
+	5,  // 35: internalrpcauthority.v1.AuthorizationErrorDetail.stage:type_name -> internalrpcauthority.v1.AuthorizationFailureStage
+	10, // 36: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:input_type -> internalrpcauthority.v1.IssueAuthorizationContextRequest
+	20, // 37: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
+	17, // 38: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:input_type -> internalrpcauthority.v1.VerifyAuthorizationContextRequest
+	22, // 39: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
+	12, // 40: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:input_type -> internalrpcauthority.v1.ResolveAuthorityProofRequest
+	14, // 41: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessRequest
+	24, // 42: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:input_type -> internalrpcauthority.v1.PrepareRestoreRequest
+	25, // 43: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:input_type -> internalrpcauthority.v1.GetRestoreDirectiveRequest
+	29, // 44: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:input_type -> internalrpcauthority.v1.AcknowledgeQuiescenceRequest
+	30, // 45: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:input_type -> internalrpcauthority.v1.CompleteRestoreRequest
+	36, // 46: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest
+	40, // 47: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:input_type -> internalrpcauthority.v1.IssueAttestationChallengeRequest
+	38, // 48: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:input_type -> internalrpcauthority.v1.AttestServedStateRequest
+	42, // 49: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
+	44, // 50: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:input_type -> internalrpcauthority.v1.PublishRoleCredentialRequest
+	46, // 51: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
+	11, // 52: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:output_type -> internalrpcauthority.v1.IssueAuthorizationContextResponse
+	21, // 53: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
+	18, // 54: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:output_type -> internalrpcauthority.v1.VerifyAuthorizationContextResponse
+	23, // 55: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
+	13, // 56: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:output_type -> internalrpcauthority.v1.ResolveAuthorityProofResponse
+	15, // 57: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessResponse
+	32, // 58: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:output_type -> internalrpcauthority.v1.PrepareRestoreResponse
+	28, // 59: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:output_type -> internalrpcauthority.v1.GetRestoreDirectiveResponse
+	33, // 60: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:output_type -> internalrpcauthority.v1.AcknowledgeQuiescenceResponse
+	35, // 61: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:output_type -> internalrpcauthority.v1.CompleteRestoreResponse
+	37, // 62: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse
+	41, // 63: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:output_type -> internalrpcauthority.v1.IssueAttestationChallengeResponse
+	39, // 64: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:output_type -> internalrpcauthority.v1.AttestServedStateResponse
+	43, // 65: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
+	45, // 66: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:output_type -> internalrpcauthority.v1.PublishRoleCredentialResponse
+	47, // 67: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
+	52, // [52:68] is the sub-list for method output_type
+	36, // [36:52] is the sub-list for method input_type
+	36, // [36:36] is the sub-list for extension type_name
+	36, // [36:36] is the sub-list for extension extendee
+	0,  // [0:36] is the sub-list for field type_name
 }
 
 func init() { file_internalrpcauthority_v1_authority_proto_init() }
@@ -3990,7 +4321,7 @@ func file_internalrpcauthority_v1_authority_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internalrpcauthority_v1_authority_proto_rawDesc), len(file_internalrpcauthority_v1_authority_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   40,
+			NumMessages:   42,
 			NumExtensions: 0,
 			NumServices:   6,
 		},

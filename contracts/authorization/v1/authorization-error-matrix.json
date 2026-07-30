@@ -343,6 +343,41 @@
       "stage": "RESTORE",
       "retryable": false,
       "message": "restore acknowledgement receipt expired"
+    },
+    {
+      "reason": "READBACK_CREDENTIAL_REJECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "SNAPSHOT",
+      "retryable": false,
+      "message": "readback credential rejected"
+    },
+    {
+      "reason": "READBACK_CHALLENGE_REJECTED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "SNAPSHOT",
+      "retryable": false,
+      "message": "readback attestation challenge rejected"
+    },
+    {
+      "reason": "READBACK_CHALLENGE_REPLAY_DETECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "REPLAY",
+      "retryable": false,
+      "message": "readback attestation challenge replay detected"
+    },
+    {
+      "reason": "READBACK_CHALLENGE_UNAVAILABLE",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "PERSISTENCE",
+      "retryable": true,
+      "message": "readback attestation challenge unavailable"
+    },
+    {
+      "reason": "READBACK_RECEIPT_EXPIRED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "SNAPSHOT",
+      "retryable": false,
+      "message": "readback attestation receipt expired"
     }
   ]
 }
