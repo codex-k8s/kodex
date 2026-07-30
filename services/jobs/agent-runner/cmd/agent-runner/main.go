@@ -62,12 +62,12 @@ const (
 	maxCredentialRepresentations     = 8192
 	maxCredentialRepresentationBytes = int64(96 << 20)
 	maxPublishedArtifactBytes        = int64(8 << 20)
-	maxSessionArchiveFileBytes       = int64(32 << 20)
-	maxSessionArchiveTotalBytes      = int64(64 << 20)
+	maxSessionArchiveFileBytes       = int64(512 << 20)
+	maxSessionArchiveTotalBytes      = int64(512 << 20)
 	maxSessionArchiveFiles           = 512
 	maxSessionArchiveEntries         = 1024
 	maxSessionArchiveTarBytes        = maxSessionArchiveTotalBytes + int64(maxSessionArchiveEntries*512+maxSessionArchiveFiles*511+1024)
-	maxProtectedValueBytes           = int64(64 << 20)
+	maxProtectedValueBytes           = maxSessionArchiveTotalBytes
 )
 
 var codexCapacityRetryDelays = []time.Duration{time.Minute, 3 * time.Minute, 5 * time.Minute}
