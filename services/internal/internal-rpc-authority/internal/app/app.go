@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	authorityrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/authority"
 	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
@@ -214,7 +215,7 @@ func Run(
 }
 
 type reservationCleaner interface {
-	DeleteExpired(context.Context, time.Time) error
+	DeleteExpired(context.Context, repository.ReservationKind, time.Time) error
 }
 
 func runReplayCleanup(
@@ -225,12 +226,17 @@ func runReplayCleanup(
 	metrics *observability.Metrics,
 	logger *slog.Logger,
 ) {
+	kind := repository.ReservationAuthorizationContext
+	if config.Mode == ModeIssuer {
+		kind = repository.ReservationAuthorityProof
+	}
 	ticker := time.NewTicker(config.ReplayCleanupInterval)
 	defer ticker.Stop()
 	for {
 		cleanupCtx, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
 		err := cleaner.DeleteExpired(
 			cleanupCtx,
+			kind,
 			time.Now().UTC().Add(-config.ReplayRetentionAfterExpiry),
 		)
 		cancel()

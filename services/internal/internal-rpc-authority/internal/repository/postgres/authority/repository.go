@@ -156,10 +156,23 @@ func (store *Store) Ready(
 	return nil
 }
 
-func (store *Store) DeleteExpired(ctx context.Context, deleteBefore time.Time) error {
+func (store *Store) DeleteExpired(
+	ctx context.Context,
+	kind repository.ReservationKind,
+	deleteBefore time.Time,
+) error {
+	var query string
+	switch kind {
+	case repository.ReservationAuthorityProof:
+		query = store.queries.proofReservationsDeleteExpired
+	case repository.ReservationAuthorizationContext:
+		query = store.queries.contextReservationsDeleteExpired
+	default:
+		return errors.New("replay reservation kind is not registered")
+	}
 	if _, err := store.pool.Exec(
 		ctx,
-		store.queries.reservationsDeleteExpired,
+		query,
 		pgx.StrictNamedArgs{"delete_before": deleteBefore},
 	); err != nil {
 		return fmt.Errorf("delete expired replay reservations: %w", err)

@@ -302,7 +302,7 @@ CREATE POLICY database_credential_reconciler_leases_runtime
 GRANT SELECT, INSERT, UPDATE
     ON internal_rpc_authority.authority_snapshot_watermarks
     TO internal_rpc_authority_issuer, internal_rpc_authority_verifier;
-GRANT SELECT, INSERT
+GRANT SELECT, INSERT, DELETE
     ON internal_rpc_authority.authority_replay_reservations
     TO internal_rpc_authority_verifier;
 GRANT SELECT, INSERT, UPDATE
@@ -311,7 +311,7 @@ GRANT SELECT, INSERT, UPDATE
 GRANT SELECT, INSERT, UPDATE
     ON internal_rpc_authority.database_credential_reconciler_leases
     TO internal_rpc_authority_database_credential_reconciler;
-GRANT SELECT, INSERT
+GRANT SELECT, INSERT, DELETE
     ON internal_rpc_authority.authority_proof_reservations
     TO internal_rpc_authority_issuer;
 

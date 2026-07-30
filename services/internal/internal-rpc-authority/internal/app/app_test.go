@@ -10,15 +10,22 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 )
 
 type cleanerStub struct {
 	cancel       context.CancelFunc
 	deleteBefore time.Time
+	kind         repository.ReservationKind
 	err          error
 }
 
-func (stub *cleanerStub) DeleteExpired(_ context.Context, deleteBefore time.Time) error {
+func (stub *cleanerStub) DeleteExpired(
+	_ context.Context,
+	kind repository.ReservationKind,
+	deleteBefore time.Time,
+) error {
+	stub.kind = kind
 	stub.deleteBefore = deleteBefore
 	stub.cancel()
 	return stub.err
@@ -39,6 +46,7 @@ func TestReplayCleanupClosesReadinessOnFailure(t *testing.T) {
 	runReplayCleanup(
 		ctx,
 		Config{
+			Mode:                       ModeVerifier,
 			ReplayCleanupInterval:      time.Hour,
 			ReplayRetentionAfterExpiry: retention,
 			ReadinessTimeout:           time.Second,
@@ -52,6 +60,9 @@ func TestReplayCleanupClosesReadinessOnFailure(t *testing.T) {
 	ready, reason := readiness.Ready()
 	if ready || reason != "replay-cleanup-failed" {
 		t.Fatalf("readiness = %v, %q", ready, reason)
+	}
+	if cleaner.kind != repository.ReservationAuthorizationContext {
+		t.Fatalf("cleanup kind = %q", cleaner.kind)
 	}
 	minimum := started.Add(-retention)
 	maximum := time.Now().UTC().Add(-retention)
