@@ -11,6 +11,9 @@ const (
 	CapabilityIssuer                       = "internal_rpc_authority_issuer"
 	CapabilityVerifier                     = "internal_rpc_authority_verifier"
 	CapabilityDatabaseCredentialReconciler = "internal_rpc_authority_database_credential_reconciler"
+	CapabilityPublisher                    = "internal_rpc_authority_publisher"
+	CapabilityReadbackAttestor             = "internal_rpc_authority_readback_attestor"
+	CapabilityRestoreController            = "internal_rpc_authority_restore_controller"
 )
 
 func Configure(
@@ -69,6 +72,12 @@ func assumeQuery(queries querySet, capability string) (string, error) {
 		return queries.verifierAssume, nil
 	case CapabilityDatabaseCredentialReconciler:
 		return queries.databaseCredentialReconcilerAssume, nil
+	case CapabilityPublisher:
+		return queries.publisherAssume, nil
+	case CapabilityReadbackAttestor:
+		return queries.readbackAttestorAssume, nil
+	case CapabilityRestoreController:
+		return queries.restoreControllerAssume, nil
 	default:
 		return "", errors.New("PostgreSQL capability role is not registered")
 	}

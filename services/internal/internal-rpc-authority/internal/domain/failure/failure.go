@@ -6,6 +6,7 @@ type Kind string
 
 const (
 	InvalidRequest         Kind = "INVALID_REQUEST"
+	NotFound               Kind = "NOT_FOUND"
 	Unauthenticated        Kind = "UNAUTHENTICATED"
 	PermissionDenied       Kind = "PERMISSION_DENIED"
 	OperationNotAllowed    Kind = "OPERATION_NOT_ALLOWED"

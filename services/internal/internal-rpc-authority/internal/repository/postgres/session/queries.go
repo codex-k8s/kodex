@@ -18,11 +18,23 @@ var verifierAssumeSQL string
 //go:embed sql/database_credential_reconciler__assume.sql
 var databaseCredentialReconcilerAssumeSQL string
 
+//go:embed sql/publisher__assume.sql
+var publisherAssumeSQL string
+
+//go:embed sql/readback_attestor__assume.sql
+var readbackAttestorAssumeSQL string
+
+//go:embed sql/restore_controller__assume.sql
+var restoreControllerAssumeSQL string
+
 type querySet struct {
 	sessionIdentity                    string
 	issuerAssume                       string
 	verifierAssume                     string
 	databaseCredentialReconcilerAssume string
+	publisherAssume                    string
+	readbackAttestorAssume             string
+	restoreControllerAssume            string
 }
 
 func loadQueries() (querySet, error) {
@@ -31,6 +43,9 @@ func loadQueries() (querySet, error) {
 		issuerAssume:                       issuerAssumeSQL,
 		verifierAssume:                     verifierAssumeSQL,
 		databaseCredentialReconcilerAssume: databaseCredentialReconcilerAssumeSQL,
+		publisherAssume:                    publisherAssumeSQL,
+		readbackAttestorAssume:             readbackAttestorAssumeSQL,
+		restoreControllerAssume:            restoreControllerAssumeSQL,
 	}
 	for _, definition := range []struct {
 		name        string
@@ -45,6 +60,9 @@ func loadQueries() (querySet, error) {
 			"exec",
 			queries.databaseCredentialReconcilerAssume,
 		},
+		{"publisher__assume", "exec", queries.publisherAssume},
+		{"readback_attestor__assume", "exec", queries.readbackAttestorAssume},
+		{"restore_controller__assume", "exec", queries.restoreControllerAssume},
 	} {
 		header := fmt.Sprintf("-- name: %s :%s", definition.name, definition.cardinality)
 		if strings.TrimSpace(definition.body) == "" ||

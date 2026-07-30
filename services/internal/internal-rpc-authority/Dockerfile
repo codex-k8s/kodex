@@ -36,6 +36,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -o /out/internal-rpc-authority-database-credential-reconciler \
     ./cmd/internal-rpc-authority-database-credential-reconciler \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/internal-rpc-authority-readback-attestor \
+    ./cmd/internal-rpc-authority-readback-attestor \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
     -o /out/internal-rpc-authority-cli \
     ./cmd/cli
@@ -50,6 +54,9 @@ COPY --from=build --chmod=0555 /out/ /usr/local/bin/
 COPY --from=build --chmod=0444 \
     /workspace/services/internal/internal-rpc-authority/internal/bootstrap/manifest-root/ \
     /usr/local/share/internal-rpc-authority/manifest-root/
+COPY --from=build --chmod=0444 \
+    /workspace/services/internal/internal-rpc-authority/internal/bootstrap/readback-root/ \
+    /usr/local/share/internal-rpc-authority/readback-root/
 
 USER 65532:65532
 

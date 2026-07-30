@@ -187,6 +187,22 @@ func DecodeCanonicalJSON(data []byte, target any) error {
 	return nil
 }
 
+func CanonicalJSONSHA256(value any) (string, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", fmt.Errorf("marshal canonical digest input: %w", err)
+	}
+	canonical, err := jcs.Transform(raw)
+	if err != nil {
+		return "", fmt.Errorf("canonicalize digest input: %w", err)
+	}
+	digest := crypto.SHA256.New()
+	if _, err := digest.Write(canonical); err != nil {
+		return "", fmt.Errorf("hash canonical digest input: %w", err)
+	}
+	return hex.EncodeToString(digest.Sum(nil)), nil
+}
+
 func ParsePublicJWK(data []byte) (ES256Key, error) {
 	return parseJWK(data, false)
 }
