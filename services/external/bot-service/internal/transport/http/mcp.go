@@ -117,6 +117,12 @@ type mcpStartAgentThreadInput struct {
 	WorkItemKey string `json:"work_item_key" jsonschema:"stable idempotency key unique within the current source session, for example issue-59-architecture"`
 }
 
+type mcpContinueAgentThreadInput struct {
+	DelegationID int64  `json:"delegation_id" jsonschema:"original delegation id whose exact target role thread and Codex session must be continued"`
+	Message      string `json:"message" jsonschema:"self-contained next task for the target agent in its existing role session"`
+	WorkItemKey  string `json:"work_item_key" jsonschema:"stable idempotency key unique within the current source turn, for example issue-59-review-round-2"`
+}
+
 type mcpListDelegationsInput struct {
 	Limit int `json:"limit" jsonschema:"maximum number of child delegations to return, max 50"`
 }
@@ -319,6 +325,24 @@ func newMCPHandlerWithOptions(sessionService *statusservice.AgentSessionService,
 			Title:       input.Title,
 			Message:     input.Message,
 			WorkItemKey: input.WorkItemKey,
+		})
+		if err != nil {
+			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError(err.Error())
+		}
+		return nil, output, nil
+	})
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "mattermost_continue_agent_thread",
+		Description: "Queue the next turn in the exact target role thread and Codex session created by an earlier delegation. Use this for every fix or repeated review cycle; get the original delegation id from mattermost_list_delegations. This tool never creates a new Mattermost thread.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpContinueAgentThreadInput) (*mcp.CallToolResult, statusservice.AgentSessionDelegationResult, error) {
+		sessionKey, token, ok := mcpSessionAuth(ctx)
+		if !ok {
+			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError("session authorization is missing")
+		}
+		output, err := sessionService.ContinueAgentThread(ctx, sessionKey, token, statusservice.ContinueAgentThreadCommand{
+			DelegationID: input.DelegationID,
+			Message:      input.Message,
+			WorkItemKey:  input.WorkItemKey,
 		})
 		if err != nil {
 			return nil, statusservice.AgentSessionDelegationResult{}, mcpToolError(err.Error())

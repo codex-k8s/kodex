@@ -64,7 +64,10 @@ human gate.
 `mattermost_start_agent_thread` запускает дочернего manager в отдельном треде
 `development`.
 
-Дочерний manager запускает исполнителя и reviewer в своём треде через
-`mattermost_request_agent`. Все дочерние роли возвращают результат через
+Дочерний manager выполняет первый запуск исполнителя и каждого reviewer через
+MCP и сохраняет их `delegation_id`. Исправления продолжают исходную сессию
+исполнителя, а повторные проверки — исходные сессии соответствующих reviewer
+через `mattermost_continue_agent_thread`. Новый тред для следующего review-цикла
+не создается. Все дочерние роли возвращают результат через
 `mattermost_return_to_requester`; дочерний manager возвращает консолидированный
 результат корневому manager. Упоминания не заменяют MCP delegation.

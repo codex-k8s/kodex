@@ -55,6 +55,9 @@ func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) e
 				return err
 			}
 		}
+		if err := svc.reconcileProjectControlBotMemberships(ctx, project); err != nil {
+			return err
+		}
 		if err := svc.reconcileProjectRoleBotIdentities(ctx, project); err != nil {
 			return err
 		}
@@ -80,6 +83,9 @@ func (svc *SlashCommandService) BootstrapSystemAgentRoles(ctx context.Context) e
 		if err := svc.bootstrapDirectorRole(ctx, matterCodexProject, gitHubAccounts, manageOpenAIAccountName); err != nil {
 			return err
 		}
+	}
+	if err := svc.reconcileProjectControlBotMemberships(ctx, matterCodexProject); err != nil {
+		return err
 	}
 	return svc.reconcileProjectRoleBotIdentities(ctx, matterCodexProject)
 }
@@ -469,6 +475,29 @@ func (svc *SlashCommandService) reconcileProjectRoleBotIdentities(ctx context.Co
 			continue
 		}
 		if _, err := svc.ensureRoleBotIdentity(ctx, project, role, ""); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (svc *SlashCommandService) reconcileProjectControlBotMemberships(ctx context.Context, project entity.Project) error {
+	if svc.cfg.ChannelManager == nil || svc.cfg.RoleBotManager == nil {
+		return nil
+	}
+	botUserID, err := svc.cfg.ChannelManager.BotUserID(ctx)
+	if err != nil {
+		return err
+	}
+	chats, err := svc.cfg.Store.ListChats(ctx, project.ID)
+	if err != nil {
+		return err
+	}
+	for _, chat := range chats {
+		if strings.TrimSpace(chat.MattermostChannelID) == "" {
+			continue
+		}
+		if err := svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, chat.MattermostChannelID, botUserID); err != nil {
 			return err
 		}
 	}

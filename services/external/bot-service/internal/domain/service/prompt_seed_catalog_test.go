@@ -70,6 +70,7 @@ func TestManagerPromptSeedDocumentsDynamicCrossChatRouting(t *testing.T) {
 		"mattermost_list_chats",
 		"mattermost_get_chat",
 		"mattermost_start_agent_thread",
+		"mattermost_continue_agent_thread",
 		"Корневой менеджер",
 		"отдельным дочерним тредом на менеджера",
 		"устойчивый `work_item_key`",
@@ -96,6 +97,8 @@ func TestManagedUnitReviewPromptContract(t *testing.T) {
 		"продукт, пользовательские сценарии",
 		"безопасность и trust boundaries",
 		"архитектура, поддерживаемость",
+		"исходную сессию исполнителя",
+		"исходные сессии затронутых reviewer",
 		"не более пяти полных циклов",
 		"human gate",
 		"Не сливай автоматически",
@@ -198,8 +201,8 @@ func TestSeedDefaultAgentPromptTemplateUpgradesOnlyUnmodifiedSeedCopies(t *testi
 	if err != nil {
 		t.Fatalf("promptSeedPreviousBodies() error = %v", err)
 	}
-	if len(previousBodies) != 3 {
-		t.Fatalf("previous bodies = %d, want 3", len(previousBodies))
+	if len(previousBodies) != 4 {
+		t.Fatalf("previous bodies = %d, want 4", len(previousBodies))
 	}
 	want, err := promptSeedMarkdown(seed)
 	if err != nil {

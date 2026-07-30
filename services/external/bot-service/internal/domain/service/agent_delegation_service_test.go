@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -577,6 +578,149 @@ func TestAgentSessionStartsCrossChatThreadIdempotently(t *testing.T) {
 	}
 }
 
+func TestStartAgentThreadRejectsSecondThreadForExistingRoleAffinity(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	first, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Первичное ревью",
+		Message: "Проверь первую версию.", WorkItemKey: "issue-201-review-round-1",
+	})
+	if err != nil {
+		t.Fatalf("first StartAgentThread() error = %v", err)
+	}
+	initialCalls := dispatcher.calls
+	initialPosts := len(publisher.posts)
+
+	_, err = svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Повторное ревью",
+		Message: "Перепроверь исправления.", WorkItemKey: "issue-201-review-round-2",
+	})
+	if err == nil || !strings.Contains(err.Error(), "mattermost_continue_agent_thread") || !strings.Contains(err.Error(), fmt.Sprintf("%d", first.DelegationID)) {
+		t.Fatalf("second StartAgentThread() error = %v", err)
+	}
+	if dispatcher.calls != initialCalls || len(publisher.posts) != initialPosts || len(store.agentDelegations) != 1 {
+		t.Fatalf("rejected recurrence caused effects: calls=%d posts=%d delegations=%#v", dispatcher.calls, len(publisher.posts), store.agentDelegations)
+	}
+}
+
+func TestContinueAgentThreadReusesExactRoleThreadAndSession(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Ревью сервиса",
+		Message: "Проверь первую версию.", WorkItemKey: "issue-201-review-round-1",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	previous := store.agentDelegations[started.DelegationID]
+	targetSession := store.agentSessions["target-session"]
+	targetSessionKey := agentSessionKey(2, 2, agentSessionScopeThreadRole, previous.TargetRootPostID)
+	delete(store.agentSessions, "target-session")
+	targetSession.SessionKey = targetSessionKey
+	targetSession.Status = agentSessionStatusIdle
+	targetSession.ActiveTurnID = 0
+	targetSession.ActiveRunID = ""
+	store.agentSessions[targetSessionKey] = targetSession
+	dispatcher.calls = 0
+	dispatcher.queued = AgentTurnQueued{RunID: "target-run-2", TurnID: 3, SessionID: targetSession.ID, SessionKey: targetSessionKey}
+	publisher.posts = nil
+	publisher.updates = nil
+
+	result, err := svc.ContinueAgentThread(context.Background(), "source-session", "source-token", ContinueAgentThreadCommand{
+		DelegationID: started.DelegationID,
+		Message:      "Перепроверь исправления на новом SHA.",
+		WorkItemKey:  "issue-201-review-round-2",
+	})
+	if err != nil {
+		t.Fatalf("ContinueAgentThread() error = %v", err)
+	}
+	if result.DelegationID == started.DelegationID || result.TargetThreadURL != started.TargetThreadURL || result.TargetRunID != "target-run-2" {
+		t.Fatalf("continuation result = %#v; started=%#v", result, started)
+	}
+	if dispatcher.calls != 1 || dispatcher.request.SessionRootID != previous.TargetRootPostID ||
+		dispatcher.request.ReplyRootID != previous.TargetRootPostID || dispatcher.request.ParentTurnID != 1 ||
+		!strings.Contains(dispatcher.request.UserMessage, fmt.Sprintf("`%d`", started.DelegationID)) {
+		t.Fatalf("continuation dispatch = %#v", dispatcher)
+	}
+	persisted := store.agentDelegations[result.DelegationID]
+	if persisted.TargetSessionID != targetSession.ID || persisted.TargetRootPostID != previous.TargetRootPostID ||
+		persisted.TargetTurnID != 3 || persisted.TargetRunID != "target-run-2" {
+		t.Fatalf("persisted continuation = %#v", persisted)
+	}
+	if len(publisher.posts) != 2 {
+		t.Fatalf("continuation audit posts = %#v", publisher.posts)
+	}
+	for _, post := range publisher.posts {
+		if post.RootPostID == "" || !strings.Contains(post.Message, "#notrigger") {
+			t.Fatalf("continuation created a root or triggerable post: %#v", post)
+		}
+	}
+	if publisher.posts[0].RootPostID != "management-root" || publisher.posts[1].RootPostID != previous.TargetRootPostID {
+		t.Fatalf("continuation audit roots = %#v", publisher.posts)
+	}
+}
+
+func TestContinueAgentThreadRejectsForeignSourceSession(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	store.agentDelegations = map[int64]entity.AgentDelegation{1: {
+		ID: 1, ProjectID: 1, SourceSessionID: 99, SourceTurnID: 99,
+		TargetChatID: 2, TargetRoleID: 2, TargetRootPostID: "reply-",
+		TargetSessionID: 2, TargetTurnID: 2, TargetRunID: "target-run",
+		WorkItemKey: "foreign", Title: "Чужая работа", Status: agentSessionTurnQueued,
+	}}
+
+	_, err := svc.ContinueAgentThread(context.Background(), "source-session", "source-token", ContinueAgentThreadCommand{
+		DelegationID: 1, Message: "Попытка продолжения.", WorkItemKey: "foreign-retry",
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("ContinueAgentThread() error = %v", err)
+	}
+	if dispatcher.calls != 0 || len(publisher.posts) != 0 {
+		t.Fatalf("foreign continuation caused effects: calls=%d posts=%#v", dispatcher.calls, publisher.posts)
+	}
+}
+
+func TestContinueAgentThreadRejectsLegacyDuplicateRoleThread(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Первичное ревью",
+		Message: "Проверь первую версию.", WorkItemKey: "issue-201-review-round-1",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	canonical := store.agentDelegations[started.DelegationID]
+	duplicateRoot := "legacy-duplicate-root"
+	duplicateSessionKey := agentSessionKey(2, 2, agentSessionScopeThreadRole, duplicateRoot)
+	store.agentSessions[duplicateSessionKey] = entity.AgentSession{
+		ID: 99, SessionKey: duplicateSessionKey, ProjectID: 1, ChatID: 2, RoleID: 2,
+		SessionScope: agentSessionScopeThreadRole, MattermostChannelID: "architecture-channel", MattermostRootPostID: duplicateRoot,
+		Status: agentSessionStatusIdle, TokenSecretRef: "target-secret",
+	}
+	duplicate := canonical
+	duplicate.ID = canonical.ID + 1
+	duplicate.TargetRootPostID = duplicateRoot
+	duplicate.TargetSessionID = 99
+	duplicate.TargetTurnID = 99
+	duplicate.TargetRunID = "legacy-duplicate-run"
+	duplicate.WorkItemKey = "issue-201-review-round-2-legacy"
+	duplicate.CreatedAt = canonical.CreatedAt.Add(time.Second)
+	store.agentDelegations[duplicate.ID] = duplicate
+	dispatcher.calls = 0
+	publisher.posts = nil
+
+	_, err = svc.ContinueAgentThread(context.Background(), "source-session", "source-token", ContinueAgentThreadCommand{
+		DelegationID: duplicate.ID,
+		Message:      "Не продолжай ошибочный исторический дубль.",
+		WorkItemKey:  "issue-201-review-round-3",
+	})
+	if !errors.Is(err, adminrepo.ErrClusterAdminAdmissionDenied) {
+		t.Fatalf("ContinueAgentThread() error = %v", err)
+	}
+	if dispatcher.calls != 0 || len(publisher.posts) != 0 {
+		t.Fatalf("legacy duplicate continuation caused effects: calls=%d posts=%#v", dispatcher.calls, publisher.posts)
+	}
+}
+
 func TestAgentSessionStartsFrozenClusterAdminCrossChatThread(t *testing.T) {
 	svc, baseStore, dispatcher, publisher := agentDelegationTestService()
 	targetRole := baseStore.agentRoles[2]
@@ -964,6 +1108,7 @@ func TestAgentSessionCompletionAutomaticallyReturnsDelegatedResult(t *testing.T)
 		MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnQueued,
 	})
 	dispatcher.queued = AgentTurnQueued{RunID: "callback-run", TurnID: 3, SessionID: 1, SessionKey: "source-session"}
+	dispatcher.calls = 0
 
 	err = svc.CompleteTurn(context.Background(), "target-session", "target-token", CompleteAgentSessionTurnCommand{
 		TurnID:       2,
@@ -985,6 +1130,85 @@ func TestAgentSessionCompletionAutomaticallyReturnsDelegatedResult(t *testing.T)
 	}
 	if len(publisher.posts) < 4 {
 		t.Fatalf("automatic callback audit was not published: %#v", publisher.posts)
+	}
+}
+
+func TestAgentSessionRepairFailureReturnsDelegationAndFinalizesRun(t *testing.T) {
+	svc, store, dispatcher, publisher := agentDelegationTestService()
+	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat:  "architecture",
+		TargetAgent: "architect",
+		Title:       "Границы сервисов",
+		Message:     "Подготовь предложение.",
+		WorkItemKey: "issue-59-architecture",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	for index := range store.sessionTurns {
+		if store.sessionTurns[index].ID == 2 {
+			store.sessionTurns[index].Status = agentSessionTurnFailed
+			store.sessionTurns[index].ErrorMessage = "agent runtime pod is terminal: Error exit=1"
+		}
+	}
+	store.sessionTurns = append(store.sessionTurns, entity.AgentSessionTurn{
+		ID: 3, SessionID: 1, RunID: "callback-run", MattermostChannelID: "management-channel",
+		MattermostRootPostID: "management-root", MattermostPostID: "management-root", Status: agentSessionTurnQueued,
+	})
+	dispatcher.queued = AgentTurnQueued{RunID: "callback-run", TurnID: 3, SessionID: 1, SessionKey: "source-session"}
+	dispatcher.calls = 0
+	coordinationStore := &fakeCoordinationStore{
+		fakeAdminStore: store,
+		capabilities: map[string]bool{
+			entity.CoordinationCapabilityReturnCallback: true,
+		},
+		relationships: map[string]bool{
+			coordinationRelationshipKey(entity.CoordinationActionCallback, 1): true,
+		},
+		processes: map[int64]entity.ProcessContext{
+			2: {
+				ProcessRunID:          1,
+				ProcessPublicID:       "process-1",
+				ProjectID:             1,
+				RootInitiatorUserID:   "owner-user",
+				RootInitiatorUserName: "owner",
+				RootChannelID:         "management-channel",
+				RootThreadPostID:      "management-root",
+			},
+		},
+	}
+	svc.cfg.Store = coordinationStore
+	targetSession := store.agentSessions["target-session"]
+	targetTurn, err := store.GetAgentSessionTurn(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("GetAgentSessionTurn() error = %v", err)
+	}
+
+	err = svc.ReconcileTerminalAgentSessionFailure(
+		context.Background(),
+		targetSession,
+		targetTurn,
+		"agent runtime pod is terminal: Error exit=1",
+		`{"runtime_repair":{"phase":"Failed","reason":"container runner terminated: Error exit=1"}}`,
+	)
+	if err != nil {
+		t.Fatalf("ReconcileTerminalAgentSessionFailure() error = %v", err)
+	}
+	delegation := store.agentDelegations[started.DelegationID]
+	if delegation.CallbackTurnID != 3 || delegation.CallbackRunID != "callback-run" {
+		t.Fatalf("delegation = %#v", delegation)
+	}
+	if dispatcher.calls != 1 || !strings.Contains(dispatcher.request.PreparedPrompt, "Error exit=1") {
+		t.Fatalf("callback dispatch calls=%d request=%#v", dispatcher.calls, dispatcher.request)
+	}
+	if store.updatedRunStatus != agentSessionTurnFailed || coordinationStore.updatedClaim.Status != agentSessionTurnFailed {
+		t.Fatalf("run status=%q work claim=%#v", store.updatedRunStatus, coordinationStore.updatedClaim)
+	}
+	if current := store.agentSessions["target-session"]; current.ActiveTurnID != 0 || current.Status != agentSessionStatusError {
+		t.Fatalf("target session = %#v", current)
+	}
+	if len(publisher.posts) < 3 {
+		t.Fatalf("failure publications = %#v", publisher.posts)
 	}
 }
 

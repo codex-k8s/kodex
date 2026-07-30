@@ -380,6 +380,33 @@ func TestSessionArchiveAcceptsExactPerFileBoundary(t *testing.T) {
 	}
 }
 
+func TestSessionArchiveAcceptsLongCodexRolloutAboveLegacyLimit(t *testing.T) {
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions", "run")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	const legacyLimit = int64(8 << 20)
+	file, err := os.OpenFile(filepath.Join(sessionDir, "rollout.jsonl"), os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(legacyLimit + 1); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := createCodexSessionArchive(root, secretInventory{})
+	if err != nil {
+		t.Fatalf("long rollout archive error = %v", err)
+	}
+	if strings.TrimSpace(archive) == "" {
+		t.Fatal("long rollout archive пуст")
+	}
+}
+
 func TestSessionArchiveRejectsFileCountAndTotalLimitsBeforeUnboundedRead(t *testing.T) {
 	t.Run("file count", func(t *testing.T) {
 		root := t.TempDir()

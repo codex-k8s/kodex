@@ -1496,6 +1496,14 @@ func TestAgentSessionStopRunningTurnCancelsAndDeletesPod(t *testing.T) {
 	store.agentSessions["session-1"] = session
 	store.sessionTurns[0].Status = agentSessionTurnRunning
 	store.sessionTurns[0].MattermostStatusPostID = "status-post-1"
+	store.agentDelegations = map[int64]entity.AgentDelegation{
+		1: {
+			ID: 1, ProjectID: 1, SourceSessionID: 2, SourceTurnID: 2,
+			TargetChatID: 1, TargetRoleID: 1, TargetRootPostID: "root-1",
+			TargetSessionID: 1, TargetTurnID: 1, TargetRunID: "run-1",
+			WorkItemKey: "issue-201-fix", Title: "Исправление", Status: agentSessionTurnRunning,
+		},
+	}
 	svc := NewAgentSessionService(AgentSessionServiceConfig{
 		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
 		Store:           store,
@@ -1531,6 +1539,9 @@ func TestAgentSessionStopRunningTurnCancelsAndDeletesPod(t *testing.T) {
 	}
 	if len(publisher.cardUpdates) != 1 || !strings.Contains(publisher.cardUpdates[0].Text, "turn stopped") {
 		t.Fatalf("cardUpdates = %#v", publisher.cardUpdates)
+	}
+	if delegation := store.agentDelegations[1]; delegation.Status != agentDelegationStatusFailed {
+		t.Fatalf("canceled target delegation status = %q", delegation.Status)
 	}
 }
 

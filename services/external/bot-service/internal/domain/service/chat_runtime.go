@@ -173,6 +173,10 @@ type TransactionalAgentTurnDispatcher interface {
 	EnqueueExistingAgentTurn(ctx context.Context, store adminrepo.Repository, expectedSession entity.AgentSession, request AgentTurnRequest) (AgentTurnQueued, error)
 }
 
+type AgentSessionTerminalFailureReconciler interface {
+	ReconcileTerminalAgentSessionFailure(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, errorMessage string, artifacts string) error
+}
+
 type ThreadRepositorySelectionInput struct {
 	ThreadContextID int64
 	RepositoryID    int64
@@ -205,6 +209,7 @@ type ChatRunServiceConfig struct {
 	CapacityRetryDelay              time.Duration
 	AutomationRuntimeReconciler     AutomationRuntimeTerminalReconciler
 	AutomationOwnerDecisionResolver AutomationOwnerDecisionResolver
+	TerminalFailureReconciler       AgentSessionTerminalFailureReconciler
 }
 
 type ChatRunService struct {
@@ -252,6 +257,12 @@ func (svc *ChatRunService) SetAutomationRuntimeReconciler(reconciler AutomationR
 func (svc *ChatRunService) SetAutomationOwnerDecisionResolver(resolver AutomationOwnerDecisionResolver) {
 	if svc != nil {
 		svc.cfg.AutomationOwnerDecisionResolver = resolver
+	}
+}
+
+func (svc *ChatRunService) SetTerminalFailureReconciler(reconciler AgentSessionTerminalFailureReconciler) {
+	if svc != nil {
+		svc.cfg.TerminalFailureReconciler = reconciler
 	}
 }
 
@@ -1096,6 +1107,9 @@ func (svc *ChatRunService) completeAndReconcileRepairTurn(ctx context.Context, s
 	}
 	if canceledNoop {
 		return nil
+	}
+	if svc.cfg.TerminalFailureReconciler != nil {
+		return svc.cfg.TerminalFailureReconciler.ReconcileTerminalAgentSessionFailure(ctx, session, turn, errorMessage, artifacts)
 	}
 	if svc.cfg.AutomationRuntimeReconciler == nil {
 		return nil
