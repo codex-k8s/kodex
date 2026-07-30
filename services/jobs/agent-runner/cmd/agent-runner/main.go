@@ -52,6 +52,7 @@ const (
 	capacityRetryPhase               = "capacity_retry"
 	capacityRetryExhaustedKey        = "codex-capacity-retries-exhausted"
 	capacityRetryCountKey            = "codex-capacity-retry-count"
+	sessionRecoveryKey               = "codex-session-recovered"
 	failureCodeKey                   = "failure-code"
 	providerPolicyBlockedCode        = "provider-policy-blocked"
 	providerPolicyBlockedStatus      = "blocked"
@@ -541,13 +542,39 @@ func (r *runner) runSessionTurns(
 			fmt.Printf("matter-codex session status update skipped: %v\n", err)
 		}
 		finalFile := fmt.Sprintf("session-turn-%d-final.md", claim.TurnID)
+		executionClaim := claim
+		executionAttempt := 0
 		retryCount := 0
-		nextSessionID, finalMessage, runErr := r.executeSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
+		sessionRecoveryAttempted := false
+		nextSessionID, finalMessage, runErr := r.executeSessionTurn(
+			ctx, executionClaim, codexSessionID, finalFile, workDir, extraEnv, executionAttempt,
+		)
 		if strings.TrimSpace(nextSessionID) != "" {
 			codexSessionID = strings.TrimSpace(nextSessionID)
 		}
+		if strings.TrimSpace(codexSessionID) != "" &&
+			codexMissingRolloutFailure(
+				sessionTurnStderrPath(claim.TurnID, executionAttempt),
+				runErr,
+			) {
+			sessionRecoveryAttempted = true
+			codexSessionID = ""
+			executionAttempt++
+			executionClaim = claim
+			executionClaim.Prompt = codexMissingRolloutRecoveryPrompt(claim.Prompt)
+			nextSessionID, finalMessage, runErr = r.executeSessionTurn(
+				ctx, executionClaim, codexSessionID, finalFile, workDir, extraEnv, executionAttempt,
+			)
+			if strings.TrimSpace(nextSessionID) != "" {
+				codexSessionID = strings.TrimSpace(nextSessionID)
+			}
+		}
 		for retryIndex, delay := range codexCapacityRetryDelays {
-			if !codexTransientCapacityFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr) {
+			if !codexTransientCapacityFailure(
+				sessionTurnEventsPath(claim.TurnID, executionAttempt),
+				sessionTurnStderrPath(claim.TurnID, executionAttempt),
+				runErr,
+			) {
 				break
 			}
 			retryCount = retryIndex + 1
@@ -574,18 +601,29 @@ func (r *runner) runSessionTurns(
 			}); err != nil {
 				fmt.Printf("matter-codex capacity retry start status update skipped: %v\n", err)
 			}
-			retryClaim := claim
+			retryClaim := executionClaim
 			if strings.TrimSpace(codexSessionID) != "" {
 				retryClaim.Prompt = codexCapacityRetryPrompt(retryCount, len(codexCapacityRetryDelays))
 			}
-			nextSessionID, finalMessage, runErr = r.executeSessionTurn(ctx, retryClaim, codexSessionID, finalFile, workDir, extraEnv, retryCount)
+			executionAttempt++
+			nextSessionID, finalMessage, runErr = r.executeSessionTurn(
+				ctx, retryClaim, codexSessionID, finalFile, workDir, extraEnv, executionAttempt,
+			)
 			if strings.TrimSpace(nextSessionID) != "" {
 				codexSessionID = strings.TrimSpace(nextSessionID)
 			}
 		}
 		capacityRetriesExhausted := runErr != nil && retryCount == len(codexCapacityRetryDelays) &&
-			codexTransientCapacityFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr)
-		providerPolicyBlocked := codexProviderPolicyFailure(sessionTurnEventsPath(claim.TurnID, retryCount), sessionTurnStderrPath(claim.TurnID, retryCount), runErr)
+			codexTransientCapacityFailure(
+				sessionTurnEventsPath(claim.TurnID, executionAttempt),
+				sessionTurnStderrPath(claim.TurnID, executionAttempt),
+				runErr,
+			)
+		providerPolicyBlocked := codexProviderPolicyFailure(
+			sessionTurnEventsPath(claim.TurnID, executionAttempt),
+			sessionTurnStderrPath(claim.TurnID, executionAttempt),
+			runErr,
+		)
 		archive, snapshotErr := r.createSessionArchive(r.codexHome)
 		status := "succeeded"
 		errorMessage := ""
@@ -609,6 +647,13 @@ func (r *runner) runSessionTurns(
 		}
 		if retryCount > 0 {
 			artifacts[capacityRetryCountKey] = strconv.Itoa(retryCount)
+		}
+		if sessionRecoveryAttempted {
+			recoveryStatus := "failed"
+			if runErr == nil && strings.TrimSpace(codexSessionID) != "" {
+				recoveryStatus = "succeeded"
+			}
+			artifacts[sessionRecoveryKey] = recoveryStatus
 		}
 		if capacityRetriesExhausted {
 			artifacts[capacityRetryExhaustedKey] = "true"
@@ -1085,6 +1130,35 @@ func codexTransientCapacityFailure(eventsPath string, stderrPath string, runErr 
 	}
 	body, err := os.ReadFile(stderrPath)
 	return err == nil && codexTransientCapacityMessage(string(body))
+}
+
+func codexMissingRolloutFailure(stderrPath string, runErr error) bool {
+	if runErr == nil {
+		return false
+	}
+	body, err := os.ReadFile(stderrPath)
+	if err != nil {
+		return false
+	}
+	return codexMissingRolloutMessage(string(body))
+}
+
+func codexMissingRolloutMessage(message string) bool {
+	message = strings.ToLower(strings.TrimSpace(message))
+	return strings.Contains(message, "thread/resume failed: no rollout found for thread id")
+}
+
+func codexMissingRolloutRecoveryPrompt(original string) string {
+	return strings.TrimSpace(`MatterCodex could not restore the previous Codex rollout and has started a replacement Codex session in the same Mattermost thread, PVC, and workspace.
+
+Before making changes:
+1. Use the mattermost_get_thread MCP tool to read the bounded current thread history.
+2. Inspect the existing workspace, Git branch, local changes, remote state, and task/review links.
+3. Preserve all existing work. Do not reset, discard, overwrite, or recreate the branch, worktree, Issue, PR, or Mattermost thread.
+4. Then execute the original instruction below and return the result through the normal MatterCodex callback contract.
+
+Original instruction:
+` + strings.TrimSpace(original))
 }
 
 func codexEventFileContainsTransientCapacity(path string) bool {
