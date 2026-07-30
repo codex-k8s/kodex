@@ -36,57 +36,44 @@ func TestDatabaseCredentialLifecycleReconcilesServerDerivedSet(t *testing.T) {
 		t.Fatalf("reconcile credential lifecycle: %v", err)
 	}
 	if result.ReceiptID != "22222222-2222-4222-8222-222222222222" ||
-		len(result.Generations) != 4 ||
+		len(result.Generations) != 8 ||
 		len(result.CanonicalDigest) != 64 ||
 		store.fencingToken != 7 ||
-		len(vault.roles) != 4 {
+		len(vault.verified) != 6 ||
+		len(vault.rotated) != 4 ||
+		len(vault.revoked) != 2 {
 		t.Fatalf("unexpected credential reconciliation result: %#v", result)
 	}
 }
 
 func testRegisteredSet() model.DatabaseCredentialRegisteredSet {
 	sourceDigest := strings.Repeat("a", 64)
+	generation := func(
+		capability model.DatabaseCredentialCapability,
+		number uint64,
+		status model.DatabaseCredentialStatus,
+		principal string,
+		role string,
+	) model.DatabaseCredentialGeneration {
+		return model.DatabaseCredentialGeneration{
+			Capability: capability, Generation: number, Status: status,
+			Principal: principal, VaultStaticRole: role,
+			SourceRevision: 3, SourceDigest: sourceDigest,
+		}
+	}
 	return model.DatabaseCredentialRegisteredSet{
 		Version:        model.ContractVersion,
 		SourceRevision: 3,
 		SourceDigest:   sourceDigest,
 		Generations: []model.DatabaseCredentialGeneration{
-			{
-				Capability:      model.DatabaseCredentialPublisher,
-				Generation:      1,
-				Status:          model.DatabaseCredentialCurrent,
-				Principal:       "ira_publisher_g1",
-				VaultStaticRole: "internal-rpc-authority-publisher-g1",
-				SourceRevision:  3,
-				SourceDigest:    sourceDigest,
-			},
-			{
-				Capability:      model.DatabaseCredentialPublisher,
-				Generation:      2,
-				Status:          model.DatabaseCredentialNext,
-				Principal:       "ira_publisher_g2",
-				VaultStaticRole: "internal-rpc-authority-publisher-g2",
-				SourceRevision:  3,
-				SourceDigest:    sourceDigest,
-			},
-			{
-				Capability:      model.DatabaseCredentialAttestor,
-				Generation:      1,
-				Status:          model.DatabaseCredentialCurrent,
-				Principal:       "ira_readback_attestor_g1",
-				VaultStaticRole: "internal-rpc-authority-readback-attestor-g1",
-				SourceRevision:  3,
-				SourceDigest:    sourceDigest,
-			},
-			{
-				Capability:      model.DatabaseCredentialAttestor,
-				Generation:      2,
-				Status:          model.DatabaseCredentialNext,
-				Principal:       "ira_readback_attestor_g2",
-				VaultStaticRole: "internal-rpc-authority-readback-attestor-g2",
-				SourceRevision:  3,
-				SourceDigest:    sourceDigest,
-			},
+			generation(model.DatabaseCredentialPublisher, 1, model.DatabaseCredentialRetired, "ira_publisher_g1", "internal-rpc-authority-publisher-g1"),
+			generation(model.DatabaseCredentialPublisher, 2, model.DatabaseCredentialPrevious, "ira_publisher_g2", "internal-rpc-authority-publisher-g2"),
+			generation(model.DatabaseCredentialPublisher, 3, model.DatabaseCredentialCurrent, "ira_publisher_g3", "internal-rpc-authority-publisher-g3"),
+			generation(model.DatabaseCredentialPublisher, 4, model.DatabaseCredentialNext, "ira_publisher_g4", "internal-rpc-authority-publisher-g4"),
+			generation(model.DatabaseCredentialAttestor, 1, model.DatabaseCredentialRetired, "ira_readback_attestor_g1", "internal-rpc-authority-readback-attestor-g1"),
+			generation(model.DatabaseCredentialAttestor, 2, model.DatabaseCredentialPrevious, "ira_readback_attestor_g2", "internal-rpc-authority-readback-attestor-g2"),
+			generation(model.DatabaseCredentialAttestor, 3, model.DatabaseCredentialCurrent, "ira_readback_attestor_g3", "internal-rpc-authority-readback-attestor-g3"),
+			generation(model.DatabaseCredentialAttestor, 4, model.DatabaseCredentialNext, "ira_readback_attestor_g4", "internal-rpc-authority-readback-attestor-g4"),
 		},
 	}
 }
@@ -125,13 +112,38 @@ func (store *credentialStoreStub) ReadCredentialGenerations(
 }
 
 type vaultRoleStub struct {
-	roles []repository.VaultStaticRoleExpectation
+	verified []repository.VaultStaticRoleExpectation
+	rotated  []repository.VaultStaticRoleExpectation
+	revoked  []repository.VaultStaticRoleExpectation
 }
 
 func (vault *vaultRoleStub) VerifyStaticRoles(
 	_ context.Context,
 	roles []repository.VaultStaticRoleExpectation,
 ) error {
-	vault.roles = append([]repository.VaultStaticRoleExpectation(nil), roles...)
+	vault.verified = append([]repository.VaultStaticRoleExpectation(nil), roles...)
+	return nil
+}
+
+func (vault *vaultRoleStub) RotateStaticRoles(
+	_ context.Context,
+	roles []repository.VaultStaticRoleExpectation,
+) error {
+	vault.rotated = append([]repository.VaultStaticRoleExpectation(nil), roles...)
+	return nil
+}
+
+func (vault *vaultRoleStub) RevokeStaticRoles(
+	_ context.Context,
+	roles []repository.VaultStaticRoleExpectation,
+) error {
+	vault.revoked = append([]repository.VaultStaticRoleExpectation(nil), roles...)
+	return nil
+}
+
+func (*vaultRoleStub) VerifyRevokedStaticRoles(
+	context.Context,
+	[]repository.VaultStaticRoleExpectation,
+) error {
 	return nil
 }

@@ -24,7 +24,7 @@ type DatabaseCredentialLifecycle struct {
 	leaseDuration time.Duration
 	registered    model.DatabaseCredentialRegisteredSet
 	store         repository.CredentialLifecycleStore
-	vault         repository.VaultStaticRoleReader
+	vault         repository.VaultStaticRoleManager
 }
 
 type DatabaseCredentialReconcileResult struct {
@@ -38,7 +38,7 @@ func NewDatabaseCredentialLifecycle(
 	leaseDuration time.Duration,
 	registered model.DatabaseCredentialRegisteredSet,
 	store repository.CredentialLifecycleStore,
-	vault repository.VaultStaticRoleReader,
+	vault repository.VaultStaticRoleManager,
 ) (*DatabaseCredentialLifecycle, error) {
 	if !lifecycleUUIDPattern.MatchString(holderID) ||
 		leaseDuration < 5*time.Second ||
@@ -46,10 +46,14 @@ func NewDatabaseCredentialLifecycle(
 		registered.Version != model.ContractVersion ||
 		registered.SourceRevision == 0 ||
 		len(registered.SourceDigest) != 64 ||
-		len(registered.Generations) != 4 ||
+		len(registered.Generations) < 6 ||
+		len(registered.Generations) > 16 ||
 		store == nil ||
 		vault == nil {
 		return nil, errors.New("invalid database credential lifecycle configuration")
+	}
+	if err := validateRegisteredLifecycle(registered); err != nil {
+		return nil, err
 	}
 	return &DatabaseCredentialLifecycle{
 		holderID:      holderID,
@@ -71,19 +75,22 @@ func (lifecycle *DatabaseCredentialLifecycle) Reconcile(
 	if err != nil {
 		return DatabaseCredentialReconcileResult{}, err
 	}
-	roles := make(
+	activeRoles := make(
 		[]repository.VaultStaticRoleExpectation,
 		0,
 		len(lifecycle.registered.Generations),
 	)
 	for _, generation := range lifecycle.registered.Generations {
-		roles = append(roles, repository.VaultStaticRoleExpectation{
+		if generation.Status == model.DatabaseCredentialRetired {
+			continue
+		}
+		activeRoles = append(activeRoles, repository.VaultStaticRoleExpectation{
 			Role:         generation.VaultStaticRole,
 			Principal:    generation.Principal,
 			DatabaseName: vaultDatabaseName,
 		})
 	}
-	if err := lifecycle.vault.VerifyStaticRoles(ctx, roles); err != nil {
+	if err := lifecycle.vault.VerifyStaticRoles(ctx, activeRoles); err != nil {
 		return DatabaseCredentialReconcileResult{}, err
 	}
 	fencingToken, err := lifecycle.store.AcquireLease(
@@ -92,6 +99,14 @@ func (lifecycle *DatabaseCredentialLifecycle) Reconcile(
 		lifecycle.leaseDuration,
 	)
 	if err != nil {
+		return DatabaseCredentialReconcileResult{}, err
+	}
+	rotateRoles := filterVaultRoles(
+		lifecycle.registered,
+		model.DatabaseCredentialCurrent,
+		model.DatabaseCredentialNext,
+	)
+	if err := lifecycle.vault.RotateStaticRoles(ctx, rotateRoles); err != nil {
 		return DatabaseCredentialReconcileResult{}, err
 	}
 	generations, err := lifecycle.store.ReconcileCredentials(
@@ -105,6 +120,13 @@ func (lifecycle *DatabaseCredentialLifecycle) Reconcile(
 	if err != nil {
 		return DatabaseCredentialReconcileResult{}, err
 	}
+	retiredRoles := filterVaultRoles(
+		lifecycle.registered,
+		model.DatabaseCredentialRetired,
+	)
+	if err := lifecycle.vault.RevokeStaticRoles(ctx, retiredRoles); err != nil {
+		return DatabaseCredentialReconcileResult{}, err
+	}
 	return DatabaseCredentialReconcileResult{
 		ReceiptID:       idempotencyKey,
 		CanonicalDigest: canonicalDigest,
@@ -116,22 +138,98 @@ func (lifecycle *DatabaseCredentialLifecycle) Ready(ctx context.Context) (
 	[]model.DatabaseCredentialGeneration,
 	error,
 ) {
-	roles := make(
-		[]repository.VaultStaticRoleExpectation,
-		0,
-		len(lifecycle.registered.Generations),
+	roles := filterVaultRoles(
+		lifecycle.registered,
+		model.DatabaseCredentialCurrent,
+		model.DatabaseCredentialNext,
+		model.DatabaseCredentialPrevious,
 	)
-	for _, generation := range lifecycle.registered.Generations {
+	if err := lifecycle.vault.VerifyStaticRoles(ctx, roles); err != nil {
+		return nil, err
+	}
+	retired := filterVaultRoles(
+		lifecycle.registered,
+		model.DatabaseCredentialRetired,
+	)
+	if err := lifecycle.vault.VerifyRevokedStaticRoles(ctx, retired); err != nil {
+		return nil, err
+	}
+	return lifecycle.store.ReadCredentialGenerations(ctx, lifecycle.registered)
+}
+
+func filterVaultRoles(
+	registered model.DatabaseCredentialRegisteredSet,
+	statuses ...model.DatabaseCredentialStatus,
+) []repository.VaultStaticRoleExpectation {
+	allowed := make(map[model.DatabaseCredentialStatus]struct{}, len(statuses))
+	for _, status := range statuses {
+		allowed[status] = struct{}{}
+	}
+	roles := make([]repository.VaultStaticRoleExpectation, 0, len(registered.Generations))
+	for _, generation := range registered.Generations {
+		if _, ok := allowed[generation.Status]; !ok {
+			continue
+		}
 		roles = append(roles, repository.VaultStaticRoleExpectation{
 			Role:         generation.VaultStaticRole,
 			Principal:    generation.Principal,
 			DatabaseName: vaultDatabaseName,
 		})
 	}
-	if err := lifecycle.vault.VerifyStaticRoles(ctx, roles); err != nil {
-		return nil, err
+	return roles
+}
+
+func validateRegisteredLifecycle(
+	registered model.DatabaseCredentialRegisteredSet,
+) error {
+	type counts struct {
+		current  int
+		next     int
+		previous int
 	}
-	return lifecycle.store.ReadCredentialGenerations(ctx, lifecycle.registered)
+	byCapability := make(map[model.DatabaseCredentialCapability]*counts)
+	seenTuple := make(map[string]struct{}, len(registered.Generations))
+	for _, generation := range registered.Generations {
+		if generation.SourceRevision != registered.SourceRevision ||
+			generation.SourceDigest != registered.SourceDigest ||
+			generation.Generation == 0 ||
+			generation.Principal == "" ||
+			generation.VaultStaticRole == "" {
+			return errors.New("database credential generation registry binding is invalid")
+		}
+		key := string(generation.Capability) + "\x00" +
+			generation.Principal + "\x00" +
+			generation.VaultStaticRole
+		if _, duplicate := seenTuple[key]; duplicate {
+			return errors.New("duplicate database credential generation")
+		}
+		seenTuple[key] = struct{}{}
+		count := byCapability[generation.Capability]
+		if count == nil {
+			count = &counts{}
+			byCapability[generation.Capability] = count
+		}
+		switch generation.Status {
+		case model.DatabaseCredentialCurrent:
+			count.current++
+		case model.DatabaseCredentialNext:
+			count.next++
+		case model.DatabaseCredentialPrevious:
+			count.previous++
+		case model.DatabaseCredentialRetired:
+		default:
+			return errors.New("database credential lifecycle status is invalid")
+		}
+	}
+	if len(byCapability) != 2 {
+		return errors.New("database credential capabilities are incomplete")
+	}
+	for _, count := range byCapability {
+		if count.current != 1 || count.next != 1 || count.previous > 1 {
+			return errors.New("database credential overlap is outside the bounded lifecycle")
+		}
+	}
+	return nil
 }
 
 func registeredSetDigest(registered model.DatabaseCredentialRegisteredSet) (string, error) {

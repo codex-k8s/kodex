@@ -10,8 +10,10 @@ const (
 type DatabaseCredentialStatus string
 
 const (
-	DatabaseCredentialCurrent DatabaseCredentialStatus = "CURRENT"
-	DatabaseCredentialNext    DatabaseCredentialStatus = "NEXT"
+	DatabaseCredentialCurrent  DatabaseCredentialStatus = "CURRENT"
+	DatabaseCredentialNext     DatabaseCredentialStatus = "NEXT"
+	DatabaseCredentialPrevious DatabaseCredentialStatus = "PREVIOUS"
+	DatabaseCredentialRetired  DatabaseCredentialStatus = "RETIRED"
 )
 
 type DatabaseCredentialGeneration struct {

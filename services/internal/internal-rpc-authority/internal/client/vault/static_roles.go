@@ -91,8 +91,8 @@ func (client *StaticRoleClient) VerifyStaticRoles(
 	ctx context.Context,
 	roles []repository.VaultStaticRoleExpectation,
 ) error {
-	if len(roles) != 4 {
-		return errors.New("vault static role registered set must contain four roles")
+	if len(roles) == 0 || len(roles) > 16 {
+		return errors.New("vault static role registered set is outside the bounded lifecycle")
 	}
 	token, err := client.login(ctx)
 	if err != nil {
@@ -126,6 +126,117 @@ func (client *StaticRoleClient) VerifyStaticRoles(
 		if err := verifyStaticRoleResponse(response, expected); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (client *StaticRoleClient) RotateStaticRoles(
+	ctx context.Context,
+	roles []repository.VaultStaticRoleExpectation,
+) error {
+	return client.mutateStaticRoles(ctx, roles, "rotate", http.MethodPost)
+}
+
+func (client *StaticRoleClient) RevokeStaticRoles(
+	ctx context.Context,
+	roles []repository.VaultStaticRoleExpectation,
+) error {
+	return client.mutateStaticRoles(ctx, roles, "revoke", http.MethodDelete)
+}
+
+func (client *StaticRoleClient) VerifyRevokedStaticRoles(
+	ctx context.Context,
+	roles []repository.VaultStaticRoleExpectation,
+) error {
+	if len(roles) == 0 {
+		return nil
+	}
+	token, err := client.login(ctx)
+	if err != nil {
+		return err
+	}
+	for _, expected := range roles {
+		if err := validateStaticRoleExpectation(expected); err != nil {
+			return err
+		}
+		request, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodGet,
+			client.config.Address+"/v1/database/static-roles/"+url.PathEscape(expected.Role),
+			nil,
+		)
+		if err != nil {
+			return errors.New("construct Vault retired static role read")
+		}
+		request.Header.Set("X-Vault-Token", token)
+		response, err := client.client.Do(request)
+		if err != nil {
+			return errors.New("read Vault retired static role")
+		}
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			return errors.New("Vault retired static role remains reachable")
+		}
+	}
+	return nil
+}
+
+func (client *StaticRoleClient) mutateStaticRoles(
+	ctx context.Context,
+	roles []repository.VaultStaticRoleExpectation,
+	operation string,
+	method string,
+) error {
+	if len(roles) == 0 {
+		return nil
+	}
+	if len(roles) > 16 {
+		return errors.New("Vault static role mutation set is unbounded")
+	}
+	token, err := client.login(ctx)
+	if err != nil {
+		return err
+	}
+	for _, expected := range roles {
+		if err := validateStaticRoleExpectation(expected); err != nil {
+			return err
+		}
+		path := "/v1/database/rotate-role/"
+		if operation == "revoke" {
+			path = "/v1/database/static-roles/"
+		}
+		request, err := http.NewRequestWithContext(
+			ctx,
+			method,
+			client.config.Address+path+url.PathEscape(expected.Role),
+			nil,
+		)
+		if err != nil {
+			return errors.New("construct Vault static role lifecycle request")
+		}
+		request.Header.Set("X-Vault-Token", token)
+		response, err := client.client.Do(request)
+		if err != nil {
+			return errors.New("perform Vault static role lifecycle request")
+		}
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusOK &&
+			response.StatusCode != http.StatusNoContent {
+			return errors.New("Vault static role lifecycle request rejected")
+		}
+	}
+	return nil
+}
+
+func validateStaticRoleExpectation(
+	expected repository.VaultStaticRoleExpectation,
+) error {
+	if !vaultNamePattern.MatchString(expected.Role) ||
+		!vaultNamePattern.MatchString(expected.Principal) ||
+		!vaultNamePattern.MatchString(expected.DatabaseName) {
+		return errors.New("vault static role name is outside the registry boundary")
 	}
 	return nil
 }

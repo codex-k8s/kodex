@@ -84,17 +84,23 @@ func (repository *Repository) ReconcileCredentials(
 	}
 	for _, desired := range registered.Generations {
 		var accepted bool
+		query := reconcileIdentitySQL
+		arguments := pgx.StrictNamedArgs{
+			"capability":                   string(desired.Capability),
+			"principal":                    desired.Principal,
+			"generation":                   desired.Generation,
+			"request_id":                   requestID,
+			"registered_set_digest_sha256": canonicalDigest,
+		}
+		if desired.Status == model.DatabaseCredentialRetired {
+			query = retireIdentitySQL
+		} else {
+			arguments["status"] = string(desired.Status)
+		}
 		if err := transaction.QueryRow(
 			ctx,
-			reconcileIdentitySQL,
-			pgx.StrictNamedArgs{
-				"capability":                   string(desired.Capability),
-				"principal":                    desired.Principal,
-				"generation":                   desired.Generation,
-				"status":                       string(desired.Status),
-				"request_id":                   requestID,
-				"registered_set_digest_sha256": canonicalDigest,
-			},
+			query,
+			arguments,
 		).Scan(&accepted); err != nil {
 			return nil, fmt.Errorf("reconcile database credential identity: %w", err)
 		}

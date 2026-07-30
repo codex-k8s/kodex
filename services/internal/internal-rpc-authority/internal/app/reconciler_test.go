@@ -9,7 +9,7 @@ func TestCredentialRegisteredSetIsClosedAndDeterministic(t *testing.T) {
 	t.Parallel()
 
 	registered := credentialRegisteredSet(9, strings.Repeat("b", 64))
-	if len(registered.Generations) != 4 {
+	if len(registered.Generations) != 8 {
 		t.Fatalf("unexpected registered generation count: %d", len(registered.Generations))
 	}
 	first := deterministicLifecycleRequestID(registered.SourceDigest)

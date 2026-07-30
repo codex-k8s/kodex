@@ -27,8 +27,11 @@ type CredentialLifecycleStore interface {
 	) ([]model.DatabaseCredentialGeneration, error)
 }
 
-type VaultStaticRoleReader interface {
+type VaultStaticRoleManager interface {
 	VerifyStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
+	RotateStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
+	RevokeStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
+	VerifyRevokedStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
 }
 
 type VaultStaticRoleExpectation struct {
