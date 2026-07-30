@@ -50,12 +50,86 @@ BEGIN
         CREATE ROLE ira_readback_attestor_g2
             LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
     END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_roles
+        WHERE rolname = 'ira_control_api_gateway_issuer_g1'
+    ) THEN
+        CREATE ROLE ira_control_api_gateway_issuer_g1
+            LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_roles
+        WHERE rolname = 'ira_control_api_gateway_issuer_g2'
+    ) THEN
+        CREATE ROLE ira_control_api_gateway_issuer_g2
+            LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_roles
+        WHERE rolname = 'ira_control_plane_verifier_g1'
+    ) THEN
+        CREATE ROLE ira_control_plane_verifier_g1
+            LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_roles
+        WHERE rolname = 'ira_control_plane_verifier_g2'
+    ) THEN
+        CREATE ROLE ira_control_plane_verifier_g2
+            LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_roles
+        WHERE rolname = 'ira_database_credential_reconciler'
+    ) THEN
+        CREATE ROLE ira_database_credential_reconciler
+            LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+    END IF;
 END
 $roles$;
+
+ALTER ROLE internal_rpc_authority_readback_owner
+    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE internal_rpc_authority_issuer
+    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE internal_rpc_authority_verifier
+    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE internal_rpc_authority_publisher
+    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE internal_rpc_authority_readback_attestor
+    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE internal_rpc_authority_database_credential_reconciler
+    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE internal_rpc_authority_recovery
+    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE ira_publisher_g1
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE ira_publisher_g2
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE ira_readback_attestor_g1
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE ira_readback_attestor_g2
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE ira_control_api_gateway_issuer_g1
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE ira_control_api_gateway_issuer_g2
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE ira_control_plane_verifier_g1
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE ira_control_plane_verifier_g2
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE ira_database_credential_reconciler
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 
 GRANT internal_rpc_authority_publisher TO ira_publisher_g1, ira_publisher_g2;
 GRANT internal_rpc_authority_readback_attestor
     TO ira_readback_attestor_g1, ira_readback_attestor_g2;
+GRANT internal_rpc_authority_issuer
+    TO ira_control_api_gateway_issuer_g1, ira_control_api_gateway_issuer_g2;
+GRANT internal_rpc_authority_verifier
+    TO ira_control_plane_verifier_g1, ira_control_plane_verifier_g2;
+GRANT internal_rpc_authority_database_credential_reconciler
+    TO ira_database_credential_reconciler;
 
 REVOKE ALL ON SCHEMA internal_rpc_authority FROM PUBLIC;
 GRANT USAGE ON SCHEMA internal_rpc_authority TO
@@ -287,6 +361,12 @@ CREATE POLICY authority_runtime_database_identities_owner
     USING (true)
     WITH CHECK (true);
 
+CREATE POLICY authority_runtime_database_identities_reconciler_read
+    ON internal_rpc_authority.authority_runtime_database_identities
+    FOR SELECT
+    TO internal_rpc_authority_database_credential_reconciler
+    USING (true);
+
 CREATE POLICY database_credential_reconciliation_receipts_owner
     ON internal_rpc_authority.database_credential_reconciliation_receipts
     TO internal_rpc_authority_readback_owner
@@ -310,6 +390,9 @@ GRANT SELECT, INSERT, UPDATE
     TO internal_rpc_authority_issuer;
 GRANT SELECT, INSERT, UPDATE
     ON internal_rpc_authority.database_credential_reconciler_leases
+    TO internal_rpc_authority_database_credential_reconciler;
+GRANT SELECT
+    ON internal_rpc_authority.authority_runtime_database_identities
     TO internal_rpc_authority_database_credential_reconciler;
 GRANT SELECT, INSERT, DELETE
     ON internal_rpc_authority.authority_proof_reservations

@@ -17,6 +17,8 @@ var lifecycleUUIDPattern = regexp.MustCompile(
 	`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`,
 )
 
+const vaultDatabaseName = "internal-rpc-authority"
+
 type DatabaseCredentialLifecycle struct {
 	holderID      string
 	leaseDuration time.Duration
@@ -76,8 +78,9 @@ func (lifecycle *DatabaseCredentialLifecycle) Reconcile(
 	)
 	for _, generation := range lifecycle.registered.Generations {
 		roles = append(roles, repository.VaultStaticRoleExpectation{
-			Role:      generation.VaultStaticRole,
-			Principal: generation.Principal,
+			Role:         generation.VaultStaticRole,
+			Principal:    generation.Principal,
+			DatabaseName: vaultDatabaseName,
 		})
 	}
 	if err := lifecycle.vault.VerifyStaticRoles(ctx, roles); err != nil {
@@ -120,8 +123,9 @@ func (lifecycle *DatabaseCredentialLifecycle) Ready(ctx context.Context) (
 	)
 	for _, generation := range lifecycle.registered.Generations {
 		roles = append(roles, repository.VaultStaticRoleExpectation{
-			Role:      generation.VaultStaticRole,
-			Principal: generation.Principal,
+			Role:         generation.VaultStaticRole,
+			Principal:    generation.Principal,
+			DatabaseName: vaultDatabaseName,
 		})
 	}
 	if err := lifecycle.vault.VerifyStaticRoles(ctx, roles); err != nil {

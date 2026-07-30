@@ -22,6 +22,11 @@ import (
 
 const maxVaultResponseBytes = 1 << 20
 
+const (
+	minimumRotationPeriodSeconds = 5 * 60
+	maximumRotationPeriodSeconds = 24 * 60 * 60
+)
+
 var vaultNamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{1,94}[a-z0-9])$`)
 
 type Config struct {
@@ -90,7 +95,8 @@ func (client *StaticRoleClient) VerifyStaticRoles(
 	seen := make(map[string]struct{}, len(roles))
 	for _, expected := range roles {
 		if !vaultNamePattern.MatchString(expected.Role) ||
-			!vaultNamePattern.MatchString(expected.Principal) {
+			!vaultNamePattern.MatchString(expected.Principal) ||
+			!vaultNamePattern.MatchString(expected.DatabaseName) {
 			return errors.New("Vault static role name is outside the registry boundary")
 		}
 		if _, duplicate := seen[expected.Role]; duplicate {
@@ -197,10 +203,11 @@ func verifyStaticRoleResponse(
 		return errors.New("Vault static role response is invalid")
 	}
 	if envelope.Data.CredentialType != "password" ||
-		envelope.Data.DatabaseName == "" ||
+		envelope.Data.DatabaseName != expected.DatabaseName ||
 		envelope.Data.Username != expected.Principal ||
-		envelope.Data.RotationPeriod < 30 && envelope.Data.RotationSchedule == "" ||
-		envelope.Data.RotationPeriod != 0 && envelope.Data.RotationSchedule != "" {
+		envelope.Data.RotationPeriod < minimumRotationPeriodSeconds ||
+		envelope.Data.RotationPeriod > maximumRotationPeriodSeconds ||
+		envelope.Data.RotationSchedule != "" {
 		return errors.New("Vault static role binding is invalid")
 	}
 	return nil

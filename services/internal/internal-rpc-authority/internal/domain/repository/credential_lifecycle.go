@@ -32,6 +32,7 @@ type VaultStaticRoleReader interface {
 }
 
 type VaultStaticRoleExpectation struct {
-	Role      string
-	Principal string
+	Role         string
+	Principal    string
+	DatabaseName string
 }

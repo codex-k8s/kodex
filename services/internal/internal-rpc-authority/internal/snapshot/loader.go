@@ -156,7 +156,7 @@ func Load(options LoadOptions) (Loaded, error) {
 	if err != nil {
 		return Loaded{}, fmt.Errorf("parse manifest verification key: %w", err)
 	}
-	compactRaw, err := readRegularFile(options.SnapshotJWSFile, maxSnapshotBytes, 0o044)
+	compactRaw, err := readRegularFile(options.SnapshotJWSFile, maxSnapshotBytes, 0o004)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("read signed authority snapshot: %w", err)
 	}
@@ -203,7 +203,7 @@ func Load(options LoadOptions) (Loaded, error) {
 			return Loaded{}, fmt.Errorf("load authority proof trust: %w", err)
 		}
 	}
-	readbackRaw, err := readRegularFile(options.ReadbackPrivateJWKFile, maxKeyFileBytes, 0o077)
+	readbackRaw, err := readRegularFile(options.ReadbackPrivateJWKFile, maxKeyFileBytes, 0o007)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("read readback private key: %w", err)
 	}
@@ -213,7 +213,7 @@ func Load(options LoadOptions) (Loaded, error) {
 	}
 	var signingKey internalrpcauth.ES256Key
 	if options.Role == RoleIssuer {
-		signingRaw, err := readRegularFile(options.ContextPrivateJWKFile, maxKeyFileBytes, 0o077)
+		signingRaw, err := readRegularFile(options.ContextPrivateJWKFile, maxKeyFileBytes, 0o007)
 		if err != nil {
 			return Loaded{}, fmt.Errorf("read authorization signing key: %w", err)
 		}

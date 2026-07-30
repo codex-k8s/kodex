@@ -174,6 +174,7 @@ func RunDatabaseCredentialReconciler(
 	metrics.SetReady(false)
 	grpcRuntime := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(serverTLS)),
+		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			requireExactMTLSPeer(config.AllowedCallerSPIFFEID),
 			metrics.UnaryServerInterceptor(),

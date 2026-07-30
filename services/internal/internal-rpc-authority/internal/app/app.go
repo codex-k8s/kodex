@@ -104,6 +104,7 @@ func Run(
 	})
 	grpcRuntime := grpc.NewServer(
 		grpc.Creds(udscred.New(config.ExpectedPeerUID, config.ExpectedPeerGID)),
+		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			metrics.UnaryServerInterceptor(),
 			grpcserver.ErrorBoundary(errorObserver),

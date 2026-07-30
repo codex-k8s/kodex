@@ -208,6 +208,8 @@ spec:
         vaultDatabaseCredentials:
           engine: database
           plugin: postgresql-database-plugin
+          databaseConnectionName: internal-rpc-authority
+          rotationPeriodSeconds: 3600
           mode: STATIC_ROLE_CURRENT_NEXT_PASSWORD_ROTATION
           owner: internal-rpc-authority-database-credential-reconciler
           authMethod: kubernetes
@@ -563,6 +565,8 @@ spec:
         authMethod: kubernetes
         authRole: internal-rpc-authority-database-credential-reconciler
         tlsServerName: vault.mattercodex-system.svc.cluster.local
+        databaseConnectionName: internal-rpc-authority
+        rotationPeriodSeconds: 3600
         exactPaths:
           - database/static-roles/internal-rpc-authority-publisher-g1
           - database/static-roles/internal-rpc-authority-publisher-g2
@@ -638,6 +642,8 @@ spec:
         vaultDatabaseCredentials:
           engine: database
           plugin: postgresql-database-plugin
+          databaseConnectionName: internal-rpc-authority
+          rotationPeriodSeconds: 3600
           mode: STATIC_ROLE_CURRENT_NEXT_PASSWORD_ROTATION
           owner: internal-rpc-authority-database-credential-reconciler
           authMethod: kubernetes

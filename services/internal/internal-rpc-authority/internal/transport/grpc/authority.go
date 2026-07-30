@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
@@ -36,6 +37,7 @@ func (server *IssuerServer) IssueAuthorizationContext(
 ) (*internalrpcauthorityv1.IssueAuthorizationContextResponse, error) {
 	correlationID := correlationFromIssuer(request)
 	if request == nil ||
+		grpcserver.HasMalformedProto(request) ||
 		request.GetOperationId() == "" ||
 		len(request.GetOperationId()) > 128 ||
 		request.GetAuthorityProofCompactJws() == "" ||
@@ -63,8 +65,11 @@ func (server *IssuerServer) IssueAuthorizationContext(
 
 func (server *IssuerServer) CheckReadiness(
 	ctx context.Context,
-	_ *internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessRequest,
+	request *internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessRequest,
 ) (*internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessResponse, error) {
+	if request == nil || grpcserver.HasMalformedProto(request) {
+		return nil, authorizationError(errorSpecMalformedRequest, "")
+	}
 	state := server.application.SnapshotState()
 	if err := server.application.Ready(ctx); err != nil {
 		return &internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessResponse{
@@ -96,6 +101,7 @@ func (server *VerifierServer) VerifyAuthorizationContext(
 ) (*internalrpcauthorityv1.VerifyAuthorizationContextResponse, error) {
 	correlationID := correlationFromVerifier(request)
 	if request == nil ||
+		grpcserver.HasMalformedProto(request) ||
 		request.GetCompactJws() == "" ||
 		len(request.GetCompactJws()) > internalrpcauth.MaxCompactJWSBytes ||
 		request.GetObservedFullMethod() == "" ||
@@ -122,8 +128,11 @@ func (server *VerifierServer) VerifyAuthorizationContext(
 
 func (server *VerifierServer) CheckReadiness(
 	ctx context.Context,
-	_ *internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest,
+	request *internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest,
 ) (*internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessResponse, error) {
+	if request == nil || grpcserver.HasMalformedProto(request) {
+		return nil, authorizationError(errorSpecMalformedRequest, "")
+	}
 	state := server.application.SnapshotState()
 	if err := server.application.Ready(ctx); err != nil {
 		return &internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessResponse{

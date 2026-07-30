@@ -3,6 +3,7 @@ package authoritygrpc
 import (
 	"context"
 
+	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/model"
@@ -25,7 +26,9 @@ func (server *DatabaseCredentialLifecycleServer) ReconcileDatabaseCredentials(
 	ctx context.Context,
 	request *internalrpcauthorityv1.ReconcileDatabaseCredentialsRequest,
 ) (*internalrpcauthorityv1.ReconcileDatabaseCredentialsResponse, error) {
-	if request == nil || request.GetIdempotencyKey() == "" {
+	if request == nil ||
+		grpcserver.HasMalformedProto(request) ||
+		request.GetIdempotencyKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "malformed database credential request")
 	}
 	result, err := server.application.Reconcile(ctx, request.GetIdempotencyKey())
@@ -41,8 +44,11 @@ func (server *DatabaseCredentialLifecycleServer) ReconcileDatabaseCredentials(
 
 func (server *DatabaseCredentialLifecycleServer) CheckReadiness(
 	ctx context.Context,
-	_ *internalrpcauthorityv1.DatabaseCredentialLifecycleServiceCheckReadinessRequest,
+	request *internalrpcauthorityv1.DatabaseCredentialLifecycleServiceCheckReadinessRequest,
 ) (*internalrpcauthorityv1.DatabaseCredentialLifecycleServiceCheckReadinessResponse, error) {
+	if request == nil || grpcserver.HasMalformedProto(request) {
+		return nil, status.Error(codes.InvalidArgument, "malformed database credential request")
+	}
 	generations, err := server.application.Ready(ctx)
 	registered := server.application.RegisteredSet()
 	if err != nil {

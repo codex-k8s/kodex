@@ -13,8 +13,9 @@ func TestVerifyStaticRoleResponseBindsPrincipalAndRotation(t *testing.T) {
 	t.Parallel()
 
 	expected := repository.VaultStaticRoleExpectation{
-		Role:      "internal-rpc-authority-publisher-g1",
-		Principal: "ira_publisher_g1",
+		Role:         "internal-rpc-authority-publisher-g1",
+		Principal:    "ira_publisher_g1",
+		DatabaseName: "internal-rpc-authority",
 	}
 	response := func(body string) *http.Response {
 		return &http.Response{
@@ -38,6 +39,10 @@ func TestVerifyStaticRoleResponseBindsPrincipalAndRotation(t *testing.T) {
 	wrongPrincipal := strings.ReplaceAll(valid, "ira_publisher_g1", "ira_publisher_g2")
 	if err := verifyStaticRoleResponse(response(wrongPrincipal), expected); err == nil {
 		t.Fatal("wrong static role principal accepted")
+	}
+	wrongDatabase := strings.ReplaceAll(valid, "internal-rpc-authority", "other")
+	if err := verifyStaticRoleResponse(response(wrongDatabase), expected); err == nil {
+		t.Fatal("wrong static role database accepted")
 	}
 	ambiguousRotation := strings.Replace(
 		valid,
