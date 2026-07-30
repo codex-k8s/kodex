@@ -13,6 +13,14 @@ type mcpCredentialBinding struct {
 	tokenSHA256      [sha256.Size]byte
 }
 
+type mcpTransportAdmissionResult uint8
+
+const (
+	mcpTransportAdmissionAccepted mcpTransportAdmissionResult = iota
+	mcpTransportAdmissionMissing
+	mcpTransportAdmissionForbidden
+)
+
 type mcpAdmittedTransport struct {
 	binding    mcpCredentialBinding
 	references int
@@ -66,12 +74,15 @@ func (admission *mcpTransportAdmission) finishReservation(sessionID string, bind
 	return item
 }
 
-func (admission *mcpTransportAdmission) begin(sessionID string, binding mcpCredentialBinding) (*mcpAdmittedTransport, bool) {
+func (admission *mcpTransportAdmission) begin(sessionID string, binding mcpCredentialBinding) (*mcpAdmittedTransport, mcpTransportAdmissionResult) {
 	admission.mu.Lock()
 	defer admission.mu.Unlock()
 	item := admission.active[sessionID]
-	if item == nil || item.closing || !item.binding.equal(binding) {
-		return nil, false
+	if item == nil || item.closing {
+		return nil, mcpTransportAdmissionMissing
+	}
+	if !item.binding.equal(binding) {
+		return nil, mcpTransportAdmissionForbidden
 	}
 	item.references++
 	item.generation++
@@ -79,7 +90,7 @@ func (admission *mcpTransportAdmission) begin(sessionID string, binding mcpCrede
 		item.timer.Stop()
 		item.timer = nil
 	}
-	return item, true
+	return item, mcpTransportAdmissionAccepted
 }
 
 func (admission *mcpTransportAdmission) end(sessionID string, item *mcpAdmittedTransport, live bool) {

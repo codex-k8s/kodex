@@ -587,9 +587,17 @@ func (handler *mcpHTTPHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		return
 	}
 
-	admitted, ok := handler.admission.begin(transportSessionID, binding)
-	if !ok {
+	admitted, admissionResult := handler.admission.begin(transportSessionID, binding)
+	switch admissionResult {
+	case mcpTransportAdmissionMissing:
+		http.Error(writer, "MCP session not found", http.StatusNotFound)
+		return
+	case mcpTransportAdmissionForbidden:
 		writeMCPAuthorizationError(writer, http.StatusForbidden)
+		return
+	case mcpTransportAdmissionAccepted:
+	default:
+		http.Error(writer, "MCP transport admission failed", http.StatusInternalServerError)
 		return
 	}
 	handler.streamable.ServeHTTP(writer, request)
