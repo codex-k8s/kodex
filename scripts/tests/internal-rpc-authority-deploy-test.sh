@@ -8,11 +8,25 @@ image_ref="ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:$test_di
 kubernetes_api_cidrs="192.0.2.10/32,2001:db8::10/128"
 registry="$repo_root/deploy/k8s/base/internal-rpc-authority/capability-registry.yaml"
 config_map="$repo_root/deploy/k8s/base/internal-rpc-authority/configmap.yaml"
+dockerfile="$repo_root/services/internal/internal-rpc-authority/Dockerfile"
 registered_digest="$(sha256sum "$registry" | awk '{print $1}')"
 configured_digest="$(
   yq '.data.INTERNAL_RPC_AUTHORITY_REGISTERED_SET_SOURCE_DIGEST_SHA256' "$config_map"
 )"
 [[ "$registered_digest" == "$configured_digest" ]]
+grep -Fxq \
+  '# syntax=docker.io/docker/dockerfile:1.19.0@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6' \
+  "$dockerfile"
+grep -Eq '^FROM docker\.io/library/golang:1\.26\.5-alpine@sha256:[a-f0-9]{64} AS build$' \
+  "$dockerfile"
+grep -Eq '^FROM gcr\.io/distroless/static-debian12:nonroot@sha256:[a-f0-9]{64} AS runtime$' \
+  "$dockerfile"
+! grep -Eq '^(ARG (GOLANG|RUNTIME)_IMAGE=|FROM [^[:space:]]+:[^@[:space:]]+ AS)' \
+  "$dockerfile"
+grep -Fxq 'USER 65532:65532' "$dockerfile"
+! grep -Eq '^[[:space:]]*RUN[[:space:]]' <(
+  sed -n '/^FROM gcr\.io\/distroless\/static-debian12:nonroot@sha256:/,$p' "$dockerfile"
+)
 
 for environment_name in staging production; do
   rendered="$(
