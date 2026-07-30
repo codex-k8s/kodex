@@ -221,7 +221,7 @@ spec:
           issuance: READ_EXACT_STATIC_CREDS_PATH_AFTER_KUBERNETES_AUTH
           renewal: RENEW_WORKLOAD_TOKEN_AND_REREAD_BEFORE_ROTATION
           rotation: VAULT_STATIC_ROLE_PASSWORD_ROTATION_WITH_CURRENT_NEXT_OVERLAP
-          revocation: RETIRED_PRINCIPAL_NOLOGIN_AND_VAULT_ROTATION
+          revocation: SERVER_SIDE_RETIRED_FENCE_THEN_NOLOGIN_MEMBERSHIP_REVOKE_VAULT_ROTATION_AND_BACKEND_DRAIN
           vaultAddressEnv: INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS
           vaultRoleEnv: INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_ROLE
           vaultAuthFileEnv: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE
@@ -264,6 +264,7 @@ spec:
           identityKey: session_user
           checkedOnEveryPromotionCall: true
           checkedByEvidenceReadRls: true
+          guardRowLock: FOR_SHARE_UNTIL_TRANSACTION_END
           allowedStatuses:
             - CURRENT
             - NEXT
@@ -274,9 +275,17 @@ spec:
             - set-retired-at
             - commit-server-side-fence-before-nologin
             - alter-login-principal-nologin
+            - revoke-exact-capability-membership
             - rotate-vault-static-role-password
             - drain-or-terminate-old-backends
             - verify-open-session-promotion-and-evidence-read-denied
+            - verify-next-session-promotion-capability-and-evidence-read
+          concurrency:
+            actionAcquiresFenceFirst: ACTION_MAY_COMMIT_THEN_RETIREMENT_PROCEEDS
+            retirementCommitsFirst: ACTION_AND_RETRY_REJECTED
+            actionCrashBeforeCommit: ROW_LOCK_RELEASED_RETIREMENT_PROCEEDS_RETRY_REJECTED
+            rawReadStartedBeforeFence: STATEMENT_MAY_COMPLETE_BEFORE_RETIREMENT_COMMIT
+            rawReadAfterFence: EMPTY_BY_RLS
           noLoginAloneIsAuthorizationFence: false
       restoreRoleCredentialInterface:
         protoService: internalrpcauthority.v1.RestoreRoleCredentialPublisherService
@@ -577,7 +586,19 @@ spec:
           identityKey: session_user
           checkedOnEveryChallengeIssueAndConsume: true
           checkedByIntentChallengeReceiptRls: true
+          guardRowLock: FOR_SHARE_UNTIL_TRANSACTION_END
           retiredOpenSessionPolicy: FAIL_CLOSED
+          retirementOrder:
+            - commit-server-side-retired-fence
+            - alter-login-principal-nologin
+            - revoke-exact-capability-membership
+            - rotate-vault-static-role-password
+            - drain-or-terminate-old-backends
+            - verify-existing-session-denied-and-next-session-accepted
+          concurrency:
+            actionAcquiresFenceFirst: ACTION_MAY_COMMIT_THEN_RETIREMENT_PROCEEDS
+            retirementCommitsFirst: ACTION_AND_RETRY_REJECTED
+            actionCrashBeforeCommit: ROW_LOCK_RELEASED_RETIREMENT_PROCEEDS_RETRY_REJECTED
         databaseCredentialNetwork:
           egress:
             - destination: vault.mattercodex-system.svc
@@ -1070,6 +1091,7 @@ spec:
           - READBACK_ATTESTOR
         cardinality: BOUNDED_ONE_CURRENT_ONE_NEXT_ONE_PREVIOUS_PER_CAPABILITY
         checkedByFunction: internal_rpc_authority.is_active_runtime_database_session(text)
+        guardRowLock: FOR_SHARE_UNTIL_TRANSACTION_END
         runtimeMutationAllowed: false
         retirementFenceAppliesToAlreadyOpenSession: true
         constraints:
@@ -1088,8 +1110,13 @@ spec:
             RETIRED: terminal
           promoteCurrentNextInControllerTransaction: true
           commitRetiredFenceBeforeNoLoginAndCredentialRotation: true
+          revokeCapabilityMembershipAfterFenceCommit: true
           drainOrTerminateRetiredBackends: true
           missedUpdateOrReplicaRejoin: REREAD_FENCE_AND_CREDENTIAL_BEFORE_READY
+          concurrentActionAndRetirement:
+            actionLocksFirst: ACTION_MAY_COMMIT_BEFORE_RETIREMENT
+            retirementCommitsFirst: ACTION_AND_RETRY_REJECTED
+            actionCrash: LOCK_RELEASED_RETIREMENT_PROCEEDS_RETRY_REJECTED
         publisher:
           loginPrincipals:
             CURRENT: ira_publisher_g1
@@ -1116,6 +1143,9 @@ spec:
           publisherEvidenceRead: EMPTY_BY_RLS
           attestorChallengeIssueOrConsume: DENIED
           readiness: NOT_READY
+        nextSession:
+          publisherPromotionCapabilityAndEvidenceRead: ALLOWED
+          attestorChallengeIssueConsumeAndProtectedRead: ALLOWED
       backupPitr: REQUIRED
     restore-evidence-anchor:
       kind: ExternalMonotonicKubernetesSecret

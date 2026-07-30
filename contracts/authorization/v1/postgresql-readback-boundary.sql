@@ -365,23 +365,27 @@ ALTER TABLE internal_rpc_authority.authority_snapshot_readbacks
 CREATE FUNCTION internal_rpc_authority.is_active_runtime_database_session(
   p_capability_role text
 ) RETURNS boolean
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, internal_rpc_authority, pg_temp
 AS $function$
-  SELECT EXISTS (
-    SELECT 1
-      FROM internal_rpc_authority.authority_runtime_database_identities
-     WHERE session_login = session_user
-       AND capability_role = p_capability_role
-       AND (
-         credential_status IN ('CURRENT', 'NEXT')
-         OR (
-           credential_status = 'PREVIOUS'
-           AND overlap_not_after >= pg_catalog.clock_timestamp()
-         )
-       )
-  )
+DECLARE
+  identity internal_rpc_authority.authority_runtime_database_identities%ROWTYPE;
+BEGIN
+  SELECT * INTO identity
+    FROM internal_rpc_authority.authority_runtime_database_identities
+   WHERE session_login = session_user
+     AND capability_role = p_capability_role
+   FOR SHARE;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+  RETURN identity.credential_status IN ('CURRENT', 'NEXT')
+    OR (
+      identity.credential_status = 'PREVIOUS'
+      AND identity.overlap_not_after >= pg_catalog.clock_timestamp()
+    );
+END
 $function$;
 
 CREATE POLICY readback_owner_intents

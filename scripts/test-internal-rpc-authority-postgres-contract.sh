@@ -12,6 +12,7 @@ for role_dsn_name in \
   INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_DSN \
   INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_G2_DSN \
   INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_DSN \
+  INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_G2_DSN \
   INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G1_DSN \
   INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G2_DSN
 do
@@ -33,6 +34,7 @@ for role_check in \
   "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_DSN:ira_readback_attestor_g1" \
   "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_G2_DSN:ira_readback_attestor_g2" \
   "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_DSN:ira_publisher_g1" \
+  "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_G2_DSN:ira_publisher_g2" \
   "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G1_DSN:ira_control_plane_verifier_g1" \
   "INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_VERIFIER_G2_DSN:ira_control_plane_verifier_g2"
 do
@@ -112,8 +114,9 @@ BEGIN
   END IF;
 END
 $assertion$;
-ALTER ROLE ira_publisher_g1 NOLOGIN;
 COMMIT;
+ALTER ROLE ira_publisher_g1 NOLOGIN;
+REVOKE internal_rpc_authority_publisher FROM ira_publisher_g1;
 SQL
 
 if ! wait "$publisher_pid"; then
@@ -122,6 +125,26 @@ if ! wait "$publisher_pid"; then
   exit 1
 fi
 publisher_pid=""
+
+psql "$INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_G2_DSN" \
+  -X -q -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+SET LOCAL ROLE internal_rpc_authority_publisher;
+DO $assertion$
+BEGIN
+  IF NOT internal_rpc_authority.is_active_runtime_database_session(
+    'PUBLISHER'
+  ) THEN
+    RAISE EXCEPTION 'next publisher runtime database identity was rejected';
+  END IF;
+  PERFORM 1
+    FROM internal_rpc_authority.authority_key_delivery_readbacks;
+  PERFORM 1
+    FROM internal_rpc_authority.authority_snapshot_readbacks;
+END
+$assertion$;
+COMMIT;
+SQL
 
 psql "$INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_DSN" \
   -X -q -v ON_ERROR_STOP=1 \
@@ -166,8 +189,9 @@ BEGIN
   END IF;
 END
 $assertion$;
-ALTER ROLE ira_readback_attestor_g1 NOLOGIN;
 COMMIT;
+ALTER ROLE ira_readback_attestor_g1 NOLOGIN;
+REVOKE internal_rpc_authority_readback_attestor FROM ira_readback_attestor_g1;
 SQL
 
 if ! wait "$attestor_pid"; then
@@ -176,3 +200,25 @@ if ! wait "$attestor_pid"; then
   exit 1
 fi
 attestor_pid=""
+
+psql "$INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_ATTESTOR_G2_DSN" \
+  -X -q -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+SET LOCAL ROLE internal_rpc_authority_readback_attestor;
+DO $assertion$
+BEGIN
+  IF NOT internal_rpc_authority.is_active_runtime_database_session(
+    'READBACK_ATTESTOR'
+  ) THEN
+    RAISE EXCEPTION 'next attestor runtime database identity was rejected';
+  END IF;
+  PERFORM 1
+    FROM internal_rpc_authority.authority_readback_intents;
+  PERFORM 1
+    FROM internal_rpc_authority.authority_readback_attestation_challenges;
+  PERFORM 1
+    FROM internal_rpc_authority.authority_readback_attestation_receipts;
+END
+$assertion$;
+COMMIT;
+SQL

@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.0.2
-updated: 2026-07-28
+version: 1.0.3
+updated: 2026-07-30
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -182,6 +182,25 @@ rotation/revocation credential, TLS `verify-full` с exact SNI/CA и
 destination-pinned NetworkPolicy. Readiness проверяет effective privileges
 реальным runtime principal; `SET SESSION AUTHORIZATION` superuser в behavior
 contract не доказывает достижимость production boundary.
+
+Независимый verifier подписанного snapshot не получает его trust signer из
+того же publisher-controlled канала. Отдельный владелец доставляет pinned
+fingerprint корня и подписанный bounded `CURRENT/NEXT/PREVIOUS` bundle по
+собственному Secret/CSI/Vault path и ServiceAccount boundary. Verifier сначала
+проверяет root, затем snapshot signer и только затем snapshot JWS; purpose,
+audience, config и high-watermark не переиспользуются между restore и обычным
+readback. Readiness проверяет реально обслуживаемый cryptographic readback,
+rotation, пропущенное обновление и rejoin от target-owned anchor.
+
+`NOLOGIN`, отзыв membership и смена пароля не прекращают уже открытую
+PostgreSQL session. Поэтому каждая привилегированная function, RLS read path и
+readiness probe связывает неизменяемый `session_user` с durable
+generation/status и удерживает строку identity до завершения statement либо
+transaction. Retirement сначала commit-ит server-side `RETIRED` fence, затем
+выполняет `NOLOGIN`, отзыв membership, rotation и bounded drain/termination.
+Если action захватил fence первым, он может commit до retirement; если первым
+commit-нулся retirement, action и retry закрыто отклоняются. Crash action
+освобождает lock, после чего retirement завершается, а retry видит `RETIRED`.
 
 One-time signature/JTI не отменяет semantic idempotency state-changing RPC.
 Одна durable CAS transaction хранит idempotency key, canonical request digest,

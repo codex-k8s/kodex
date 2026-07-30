@@ -69,8 +69,8 @@ authorization context; синтаксически корректный tuple и�
 | `contracts/authorization/v1/readback-attestation.schema.json` | role-bound challenge evidence фактически обслуживаемого pinned state |
 | `contracts/authorization/v1/postgresql-readback-boundary.sql` | исполняемый exact PostgreSQL privilege/RLS/function contract |
 | `contracts/authorization/v1/postgresql-readback-behavior.sql` | исполняемый CURRENT+NEXT/readback/promotion/retired contour |
-| `contracts/authorization/v1/postgresql-publisher-live-session-retirement.sql` | отказ promotion/evidence read для уже открытой retired publisher session |
-| `contracts/authorization/v1/postgresql-attestor-live-session-retirement.sql` | отказ challenge/read для уже открытой retired attestor session |
+| `contracts/authorization/v1/postgresql-publisher-live-session-retirement.sql` | отказ promotion/evidence read для уже открытой retired publisher session после commit fence, `NOLOGIN` и отзыва membership |
+| `contracts/authorization/v1/postgresql-attestor-live-session-retirement.sql` | отказ challenge/read для уже открытой retired attestor session после commit fence, `NOLOGIN` и отзыва membership |
 | `contracts/authorization/v1/key-delivery-targets.schema.json` | exact `(workload,role)` key/trust/database-identity fan-out |
 | `contracts/authorization/v1/authorization-error-matrix.json` | полная reason/code/stage/retryable/message matrix |
 | `contracts/authorization/v1/bootstrap-deny-all-policy.json` | безопасное начальное состояние без business bindings |
@@ -974,10 +974,16 @@ attestor login principals. Runtime roles не читают и не меняют 
 Каждый challenge issue/consume, publisher promotion и защищённый RLS read
 повторно проверяет неизменяемый `session_user` через exact `SECURITY DEFINER`
 boundary. Retirement сначала commit-ит серверный `RETIRED` fence, затем
-выполняет `ALTER ROLE ... NOLOGIN`, Vault password rotation и bounded
-drain/termination старых backends. Поэтому как новое соединение, так и уже
-открытая retired session закрыто теряют promotion/challenge/read capability;
-`NOLOGIN` и readiness сами по себе authority fence не считаются.
+выполняет `ALTER ROLE ... NOLOGIN`, отзыв capability membership, Vault password
+rotation и bounded drain/termination старых backends. Проверка удерживает
+строку runtime identity через `FOR SHARE` до конца statement/transaction:
+action, первым получивший lock, может commit до retirement; после commit
+retirement любая новая попытка и retry закрыто отклоняются. Crash action
+освобождает lock, после чего retirement завершается. Поэтому как новое
+соединение, так и уже открытая retired session закрыто теряют
+promotion/challenge/read capability, а минимальный `NEXT` principal продолжает
+обслуживать overlap; `NOLOGIN` и readiness сами по себе authority fence не
+считаются.
 
 Promotion выполняет exact function
 `internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)`

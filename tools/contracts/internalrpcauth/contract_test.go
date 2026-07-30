@@ -1731,6 +1731,7 @@ func TestPostgreSQLReadbackBoundaryIsExact(t *testing.T) {
 		"CREATE TABLE internal_rpc_authority.authority_runtime_database_identities",
 		"CREATE FUNCTION internal_rpc_authority.is_active_runtime_database_session(",
 		"session_login = session_user",
+		"FOR SHARE",
 		"publisher runtime database identity rejected",
 		"readback attestor runtime database identity rejected",
 		"NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS",
@@ -1825,6 +1826,41 @@ func TestPostgreSQLReadbackBoundaryIsExact(t *testing.T) {
 		}
 		if strings.Contains(contract, "SESSION AUTHORIZATION") {
 			t.Fatalf("%s depends on superuser session impersonation", liveContract.path)
+		}
+	}
+
+	postgresTest := readFile(t, filepath.Join(
+		root,
+		"scripts/test-internal-rpc-authority-postgres-contract.sh",
+	))
+	for _, want := range []string{
+		"INTERNAL_RPC_AUTHORITY_CONTRACT_POSTGRES_PUBLISHER_G2_DSN",
+		"REVOKE internal_rpc_authority_publisher FROM ira_publisher_g1",
+		"REVOKE internal_rpc_authority_readback_attestor FROM ira_readback_attestor_g1",
+		"next publisher runtime database identity was rejected",
+		"next attestor runtime database identity was rejected",
+	} {
+		if !strings.Contains(postgresTest, want) {
+			t.Fatalf("PostgreSQL integration contour does not contain %q", want)
+		}
+	}
+}
+
+func TestApprovedGuideCoversIndependentTrustAndLiveSessionFence(t *testing.T) {
+	guide := readFile(t, filepath.Join(
+		repositoryRoot(t),
+		"docs/guides/distributed-security.md",
+	))
+	for _, want := range []string{
+		"Отдельный владелец доставляет pinned",
+		"проверяет root, затем snapshot signer",
+		"`NOLOGIN`, отзыв membership и смена пароля не прекращают уже открытую",
+		"неизменяемый `session_user`",
+		"удерживает строку identity",
+		"Crash action\nосвобождает lock",
+	} {
+		if !strings.Contains(guide, want) {
+			t.Fatalf("GUIDE-DOC-003 does not contain %q", want)
 		}
 	}
 }
