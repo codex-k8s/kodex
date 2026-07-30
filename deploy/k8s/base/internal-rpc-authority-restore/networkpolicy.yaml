@@ -1,0 +1,101 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internal-rpc-authority-restore-deny-by-default
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - internal-rpc-authority-restore-controller
+          - internal-rpc-authority-restore-operator
+          - internal-rpc-authority-restore-recovery
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internal-rpc-authority-restore-controller-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: internal-rpc-authority-restore-controller
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - control-api-gateway
+                  - control-plane
+                  - internal-rpc-authority-restore-operator
+      ports: [{protocol: TCP, port: 8443}]
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: monitoring}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: prometheus}
+      ports: [{protocol: TCP, port: 9090}]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-publisher}
+      ports: [{protocol: TCP, port: 8444}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-postgresql}
+      ports: [{protocol: TCP, port: 5432}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: default}
+          podSelector:
+            matchLabels: {component: kube-apiserver}
+      ports: [{protocol: TCP, port: 443}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internal-rpc-authority-restore-jobs-exact-paths
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - internal-rpc-authority-restore-operator
+          - internal-rpc-authority-restore-recovery
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-restore-controller}
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-postgresql}
+      ports: [{protocol: TCP, port: 5432}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: default}
+          podSelector:
+            matchLabels: {component: kube-apiserver}
+      ports: [{protocol: TCP, port: 443}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}

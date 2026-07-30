@@ -5,6 +5,7 @@ resources:
   - ../../../base/internal-rpc-authority
   - ../../../base/internal-rpc-authority-publisher
   - ../../../base/internal-rpc-authority-readback-attestor
+  - ../../../base/internal-rpc-authority-restore
   - ../../../base/internal-rpc-authority-data
 patches:
   - path: deployment-patch.yaml

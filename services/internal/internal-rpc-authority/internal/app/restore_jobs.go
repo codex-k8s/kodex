@@ -1,0 +1,212 @@
+package app
+
+import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"net"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
+	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	kubernetesrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
+	postgresrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/restore"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+type RestoreOperatorConfig struct {
+	Action                  string
+	ControllerAddress       string
+	ControllerTLSServerName string
+	ControllerCAFile        string
+	ClientCertificateFile   string
+	ClientPrivateKeyFile    string
+	RestoreID               string
+	DatabaseClusterID       string
+	BackupManifestDigest    string
+	RecoveryTarget          time.Time
+	IdempotencyKey          string
+	CorrelationID           string
+	Timeout                 time.Duration
+}
+
+func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
+	recoveryTarget, err := time.Parse(
+		time.RFC3339,
+		strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_RECOVERY_TARGET")),
+	)
+	if err != nil {
+		return RestoreOperatorConfig{}, errors.New(
+			"restore operator recovery target is invalid",
+		)
+	}
+	config := RestoreOperatorConfig{
+		Action:                  strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_RESTORE_ACTION")),
+		ControllerAddress:       envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS", "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443"),
+		ControllerTLSServerName: envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_SERVER_NAME", "internal-rpc-authority-restore-controller.mattercodex-system.svc"),
+		ControllerCAFile:        envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore-operator/controller-ca.pem"),
+		ClientCertificateFile:   envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.crt"),
+		ClientPrivateKeyFile:    envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.key"),
+		RestoreID:               strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_RESTORE_ID")),
+		DatabaseClusterID:       envOrDefault("INTERNAL_RPC_AUTHORITY_DATABASE_CLUSTER_ID", "internal-rpc-authority-primary"),
+		BackupManifestDigest:    strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_BACKUP_MANIFEST_DIGEST_SHA256")),
+		RecoveryTarget:          recoveryTarget.UTC().Truncate(time.Second),
+		IdempotencyKey:          strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_IDEMPOTENCY_KEY")),
+		CorrelationID:           strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_CORRELATION_ID")),
+		Timeout:                 20 * time.Second,
+	}
+	host, _, splitErr := net.SplitHostPort(config.ControllerAddress)
+	if splitErr != nil ||
+		host != config.ControllerTLSServerName ||
+		config.ControllerTLSServerName !=
+			"internal-rpc-authority-restore-controller.mattercodex-system.svc" ||
+		(config.Action != "prepare" && config.Action != "complete") ||
+		config.RestoreID == "" ||
+		config.DatabaseClusterID != "internal-rpc-authority-primary" ||
+		len(config.BackupManifestDigest) != 64 ||
+		config.IdempotencyKey == "" ||
+		config.CorrelationID == "" {
+		return RestoreOperatorConfig{}, errors.New(
+			"restore operator command binding is invalid",
+		)
+	}
+	return config, nil
+}
+
+func RunRestoreOperator(ctx context.Context) error {
+	config, err := LoadRestoreOperatorConfig()
+	if err != nil {
+		return err
+	}
+	tlsConfig, err := loadRestoreClientTLS(
+		config.ControllerCAFile,
+		config.ClientCertificateFile,
+		config.ClientPrivateKeyFile,
+		config.ControllerTLSServerName,
+	)
+	if err != nil {
+		return err
+	}
+	connection, err := grpc.NewClient(
+		config.ControllerAddress,
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(grpcserver.StrictProtoCodec())),
+	)
+	if err != nil {
+		return errors.New("create restore controller client")
+	}
+	defer connection.Close()
+	client := internalrpcauthorityv1.NewRestoreControllerServiceClient(connection)
+	callContext, cancel := context.WithTimeout(ctx, config.Timeout)
+	defer cancel()
+	if config.Action == "prepare" {
+		response, callErr := client.PrepareRestore(
+			callContext,
+			&internalrpcauthorityv1.PrepareRestoreRequest{
+				RestoreId:                  config.RestoreID,
+				DatabaseClusterId:          config.DatabaseClusterID,
+				BackupManifestDigestSha256: config.BackupManifestDigest,
+				RecoveryTargetTime:         timestamppb.New(config.RecoveryTarget),
+				IdempotencyKey:             config.IdempotencyKey,
+				CorrelationId:              config.CorrelationID,
+			},
+		)
+		if callErr != nil {
+			return callErr
+		}
+		if response.GetTransition().GetPhase() !=
+			internalrpcauthorityv1.RestorePhase_RESTORE_PHASE_QUIESCING {
+			return errors.New("restore prepare transition is not QUIESCING")
+		}
+		return nil
+	}
+	response, err := client.CompleteRestore(
+		callContext,
+		&internalrpcauthorityv1.CompleteRestoreRequest{
+			RestoreId:                  config.RestoreID,
+			DatabaseClusterId:          config.DatabaseClusterID,
+			BackupManifestDigestSha256: config.BackupManifestDigest,
+			RecoveryTargetTime:         timestamppb.New(config.RecoveryTarget),
+			IdempotencyKey:             config.IdempotencyKey,
+			CorrelationId:              config.CorrelationID,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	if response.GetTransition().GetPhase() !=
+		internalrpcauthorityv1.RestorePhase_RESTORE_PHASE_COMPLETED {
+		return errors.New("restore completion transition is not COMPLETED")
+	}
+	return nil
+}
+
+func RunRestoreRecovery(ctx context.Context) error {
+	config, err := LoadRestoreControllerConfig()
+	if err != nil {
+		return err
+	}
+	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	pool, err := openRestorePostgres(startup, config)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	fence, err := postgresrestore.New(pool)
+	if err != nil {
+		return err
+	}
+	coordination, err := kubernetesrestore.New(kubernetesrestore.Config{
+		Address:       config.KubernetesAddress,
+		TLSServerName: config.KubernetesTLSServerName,
+		CAFile:        config.KubernetesCAFile,
+		TokenFile:     config.KubernetesTokenFile,
+		Namespace:     config.KubernetesNamespace,
+		ResourceName:  config.KubernetesResourceName,
+		Timeout:       5 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	defer coordination.Close()
+	state, err := coordination.Load(startup)
+	if err != nil {
+		return err
+	}
+	if err := fence.ApplyRestoreFence(startup, state); err != nil {
+		return err
+	}
+	return fence.RestoreFenceReady(startup, state)
+}
+
+func loadRestoreClientTLS(
+	caFile string,
+	certificateFile string,
+	privateKeyFile string,
+	serverName string,
+) (*tls.Config, error) {
+	caRaw, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, errors.New("read restore controller CA")
+	}
+	rootCAs := x509.NewCertPool()
+	if !rootCAs.AppendCertsFromPEM(caRaw) {
+		return nil, errors.New("restore controller CA is invalid")
+	}
+	certificate, err := tls.LoadX509KeyPair(certificateFile, privateKeyFile)
+	if err != nil {
+		return nil, errors.New("load restore operator client certificate")
+	}
+	return &tls.Config{
+		MinVersion:   tls.VersionTLS13,
+		RootCAs:      rootCAs,
+		ServerName:   serverName,
+		Certificates: []tls.Certificate{certificate},
+	}, nil
+}

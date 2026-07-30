@@ -46,6 +46,18 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -o /out/internal-rpc-authority-readback-attestor \
     ./cmd/internal-rpc-authority-readback-attestor \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/internal-rpc-authority-restore-controller \
+    ./cmd/internal-rpc-authority-restore-controller \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" \
+    -o /out/internal-rpc-authority-restore-operator \
+    ./cmd/internal-rpc-authority-restore-operator \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" \
+    -o /out/internal-rpc-authority-restore-recovery \
+    ./cmd/internal-rpc-authority-restore-recovery \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
     -o /out/internal-rpc-authority-cli \
     ./cmd/cli

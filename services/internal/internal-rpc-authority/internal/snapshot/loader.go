@@ -378,6 +378,20 @@ func loadManifestVerificationKey(
 	snapshotCompact string,
 	now time.Time,
 ) (internalrpcauth.ES256Key, uint64, error) {
+	return loadManifestVerificationKeyForType(
+		options,
+		snapshotCompact,
+		now,
+		snapshotProtectedType,
+	)
+}
+
+func loadManifestVerificationKeyForType(
+	options LoadOptions,
+	signedCompact string,
+	now time.Time,
+	expectedProtectedType string,
+) (internalrpcauth.ES256Key, uint64, error) {
 	rootRaw, err := readRegularFile(
 		options.ManifestRootPublicJWKFile,
 		maxKeyFileBytes,
@@ -468,9 +482,9 @@ func loadManifestVerificationKey(
 	); err != nil {
 		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("manifest trust bundle history rejected: %w", err)
 	}
-	snapshotHeader, err := internalrpcauth.ParseProtectedHeader(snapshotCompact)
-	if err != nil || snapshotHeader.Type != snapshotProtectedType {
-		return internalrpcauth.ES256Key{}, 0, errors.New("snapshot protected header rejected before manifest key resolution")
+	snapshotHeader, err := internalrpcauth.ParseProtectedHeader(signedCompact)
+	if err != nil || snapshotHeader.Type != expectedProtectedType {
+		return internalrpcauth.ES256Key{}, 0, errors.New("signed document header rejected before manifest key resolution")
 	}
 	currentCount := 0
 	var selected internalrpcauth.ES256Key
