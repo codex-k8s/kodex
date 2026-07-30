@@ -1935,13 +1935,13 @@ func TestApprovedGuideCoversIndependentTrustAndLiveSessionFence(t *testing.T) {
 		"docs/guides/distributed-security.md",
 	))
 	for _, want := range []string{
-		"Отдельный владелец доставляет exact",
-		"Fingerprint без открытого\nключа не позволяет проверить подпись",
-		"старый root\nподписывает exact новый public key",
-		"`NOLOGIN`, отзыв membership и смена пароля не прекращают уже открытую",
+		"Отдельный владелец\nдоставляет точный открытый JWK/сертификат корня",
+		"Fingerprint без открытого ключа не позволяет проверить\nподпись",
+		"старый корень подписывает точный\nновый открытый ключ",
+		"`NOLOGIN`, отзыв членства и смена пароля не прекращают уже открытую",
 		"неизменяемый `session_user`",
-		"удерживает строку identity",
-		"Crash action\nосвобождает lock",
+		"удерживают строку идентичности",
+		"Аварийное завершение действия освобождает\nблокировку",
 	} {
 		if !strings.Contains(guide, want) {
 			t.Fatalf("GUIDE-DOC-003 does not contain %q", want)
