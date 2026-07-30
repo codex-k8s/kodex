@@ -220,10 +220,26 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct restore workload agent: %w", err)
 	}
+	if err := restoreWorkloadAgent.VerifyStartup(
+		startupCtx,
+		authorityApplication,
+	); err != nil {
+		vault.Close()
+		store.Close()
+		return fmt.Errorf("verify external restore startup barrier: %w", err)
+	}
 	if err := activateSnapshotUntilReady(startupCtx, authorityApplication); err != nil {
 		vault.Close()
 		store.Close()
 		return fmt.Errorf("activate served authority snapshot: %w", err)
+	}
+	if err := restoreWorkloadAgent.Poll(
+		startupCtx,
+		authorityApplication,
+	); err != nil {
+		vault.Close()
+		store.Close()
+		return fmt.Errorf("open external restore startup barrier: %w", err)
 	}
 	metrics := observability.NewMetrics(
 		config.ServiceName,
@@ -412,11 +428,9 @@ func runRestoreWorkloadAgent(
 		err := agent.Poll(pollCtx, authorityApplication)
 		cancel()
 		if err != nil {
-			if agent.Quiescing() {
-				authorityApplication.SetRestoreBlocked(true)
-				readiness.Set(false, "restore-coordination-failed")
-				metrics.SetReady(false)
-			}
+			authorityApplication.SetRestoreBlocked(true)
+			readiness.Set(false, "restore-coordination-failed")
+			metrics.SetReady(false)
 			logger.Error("restore coordination poll failed")
 		}
 		select {

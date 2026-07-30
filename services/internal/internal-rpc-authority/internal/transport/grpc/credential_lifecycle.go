@@ -5,7 +5,7 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -14,14 +14,14 @@ import (
 // DatabaseCredentialLifecycleServer адаптирует согласование поколений к gRPC.
 type DatabaseCredentialLifecycleServer struct {
 	internalrpcauthorityv1.UnimplementedDatabaseCredentialLifecycleServiceServer
-	application *application.DatabaseCredentialLifecycle
+	service *service.DatabaseCredentialLifecycle
 }
 
 // NewDatabaseCredentialLifecycleServer создаёт сервер жизненного цикла.
 func NewDatabaseCredentialLifecycleServer(
-	applicationValue *application.DatabaseCredentialLifecycle,
+	serviceValue *service.DatabaseCredentialLifecycle,
 ) *DatabaseCredentialLifecycleServer {
-	return &DatabaseCredentialLifecycleServer{application: applicationValue}
+	return &DatabaseCredentialLifecycleServer{service: serviceValue}
 }
 
 // ReconcileDatabaseCredentials атомарно согласует зарегистрированный набор.
@@ -34,7 +34,7 @@ func (server *DatabaseCredentialLifecycleServer) ReconcileDatabaseCredentials(
 		request.GetIdempotencyKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "malformed database credential request")
 	}
-	result, err := server.application.Reconcile(ctx, request.GetIdempotencyKey())
+	result, err := server.service.Reconcile(ctx, request.GetIdempotencyKey())
 	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, "database credential reconciliation failed")
 	}
@@ -53,8 +53,8 @@ func (server *DatabaseCredentialLifecycleServer) CheckReadiness(
 	if request == nil || grpcserver.HasMalformedProto(request) {
 		return nil, status.Error(codes.InvalidArgument, "malformed database credential request")
 	}
-	generations, err := server.application.Ready(ctx)
-	registered := server.application.RegisteredSet()
+	generations, err := server.service.Ready(ctx)
+	registered := server.service.RegisteredSet()
 	if err != nil {
 		return &internalrpcauthorityv1.DatabaseCredentialLifecycleServiceCheckReadinessResponse{
 			Ready: false,

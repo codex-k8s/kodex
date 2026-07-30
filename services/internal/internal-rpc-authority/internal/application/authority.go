@@ -52,6 +52,9 @@ func NewAuthority(
 	}
 	application := &Authority{attestor: attestor}
 	application.domain.Store(domain)
+	// Admission закрыт с момента создания. Его открывает только синхронно
+	// проверенное внешнее restore-состояние после активации served snapshot.
+	application.restoreBlocked.Store(true)
 	return application, nil
 }
 

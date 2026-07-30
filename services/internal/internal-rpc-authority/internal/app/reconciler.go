@@ -18,8 +18,8 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	vaultclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/vault"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	credentialrollout "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/credentialrollout"
 	credentialrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/credentiallifecycle"
@@ -178,7 +178,7 @@ func RunDatabaseCredentialReconciler(
 		config.SourceRevision,
 		config.SourceDigest,
 	)
-	credentialApplication, err := application.NewDatabaseCredentialLifecycle(
+	credentialService, err := service.NewDatabaseCredentialLifecycle(
 		config.HolderID,
 		config.LeaseDuration,
 		baseline,
@@ -233,7 +233,7 @@ func RunDatabaseCredentialReconciler(
 	)
 	internalrpcauthorityv1.RegisterDatabaseCredentialLifecycleServiceServer(
 		grpcRuntime,
-		authoritygrpc.NewDatabaseCredentialLifecycleServer(credentialApplication),
+		authoritygrpc.NewDatabaseCredentialLifecycleServer(credentialService),
 	)
 	grpcListener, err := net.Listen("tcp", config.Listen)
 	if err != nil {
@@ -249,10 +249,10 @@ func RunDatabaseCredentialReconciler(
 	technicalServer := newCredentialTechnicalServer(
 		readiness,
 		metrics,
-		credentialApplication,
+		credentialService,
 	)
 	workers := serviceruntime.StartWorkers(lifecycle, func(ctx context.Context) error {
-		return runCredentialReconciliation(ctx, config, credentialApplication, readiness, metrics)
+		return runCredentialReconciliation(ctx, config, credentialService, readiness, metrics)
 	})
 	serveErrors := make(chan error, 2)
 	go func() {
@@ -489,7 +489,7 @@ func credentialRegisteredSets(
 func runCredentialReconciliation(
 	ctx context.Context,
 	config ReconcilerConfig,
-	credentialApplication *application.DatabaseCredentialLifecycle,
+	credentialService *service.DatabaseCredentialLifecycle,
 	readiness *serviceruntime.Readiness,
 	metrics *observability.Metrics,
 ) error {
@@ -497,9 +497,9 @@ func runCredentialReconciliation(
 	defer ticker.Stop()
 	for {
 		idempotencyKey := deterministicLifecycleRequestID(config.SourceDigest)
-		_, err := credentialApplication.Reconcile(ctx, idempotencyKey)
+		_, err := credentialService.Reconcile(ctx, idempotencyKey)
 		if err != nil {
-			_, err = credentialApplication.Ready(ctx)
+			_, err = credentialService.Ready(ctx)
 		}
 		if err == nil {
 			readiness.Set(true, "ready")
@@ -577,7 +577,7 @@ func requireExactMTLSPeer(expectedSPIFFEID string) grpc.UnaryServerInterceptor {
 func newCredentialTechnicalServer(
 	readiness *serviceruntime.Readiness,
 	metrics *observability.Metrics,
-	credentialApplication *application.DatabaseCredentialLifecycle,
+	credentialService *service.DatabaseCredentialLifecycle,
 ) *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", metrics.PrometheusHandler())
@@ -591,7 +591,7 @@ func newCredentialTechnicalServer(
 		}
 		ctx, cancel := context.WithTimeout(request.Context(), 5*time.Second)
 		defer cancel()
-		if _, err := credentialApplication.Ready(ctx); err != nil {
+		if _, err := credentialService.Ready(ctx); err != nil {
 			metrics.SetReady(false)
 			http.Error(response, "not ready", http.StatusServiceUnavailable)
 			return

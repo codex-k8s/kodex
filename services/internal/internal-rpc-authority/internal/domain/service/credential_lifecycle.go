@@ -1,4 +1,4 @@
-package application
+package service
 
 import (
 	"context"
@@ -19,7 +19,8 @@ var lifecycleUUIDPattern = regexp.MustCompile(
 
 const vaultDatabaseName = "internal-rpc-authority"
 
-// DatabaseCredentialLifecycle координирует поколения PostgreSQL и Vault.
+// DatabaseCredentialLifecycle координирует доменный переход поколений
+// PostgreSQL и Vault через переданные repository/client ports.
 type DatabaseCredentialLifecycle struct {
 	holderID      string
 	leaseDuration time.Duration
@@ -37,7 +38,7 @@ type DatabaseCredentialReconcileResult struct {
 	Generations     []model.DatabaseCredentialGeneration
 }
 
-// NewDatabaseCredentialLifecycle проверяет реестр и создаёт вариант использования.
+// NewDatabaseCredentialLifecycle проверяет реестр и создаёт доменный сервис.
 func NewDatabaseCredentialLifecycle(
 	holderID string,
 	leaseDuration time.Duration,

@@ -119,45 +119,9 @@ func (agent *Agent) Poll(
 	// внешнего controller и совпадающее durable served state могут снять fence.
 	admission.SetRestoreBlocked(true)
 	admission.SetAvailable(false)
-	roleMaterial, found, err := agent.config.Delivery.ReadKV2(
-		ctx,
-		agent.config.RoleCredentialVaultPath,
-	)
+	response, roleCompact, err := agent.getDirective(ctx)
 	if err != nil {
-		return errors.New("read restore role credential")
-	}
-	roleCompact := ""
-	if found {
-		roleCompact = roleMaterial.Data["role_credential_compact_jws"]
-	}
-	if found && roleCompact == "" {
-		return errors.New("restore role credential material is invalid")
-	}
-	connection, err := grpc.NewClient(
-		agent.config.Address,
-		grpc.WithTransportCredentials(credentials.NewTLS(agent.config.TLS.Clone())),
-		grpc.WithUnaryInterceptor(agent.config.UnaryInterceptor),
-	)
-	if err != nil {
-		return errors.New("connect to restore controller")
-	}
-	defer connection.Close()
-	api := internalrpcauthorityv1.NewRestoreControllerServiceClient(connection)
-	correlationID := deterministicUUID(
-		"restore-poll",
-		agent.config.WorkloadID,
-		roleCompact,
-	)
-	response, err := api.GetRestoreDirective(
-		ctx,
-		&internalrpcauthorityv1.GetRestoreDirectiveRequest{
-			RoleCredentialCompactJws:     roleCompact,
-			ObservedCoordinationRevision: agent.observed.Load(),
-			CorrelationId:                correlationID,
-		},
-	)
-	if err != nil {
-		return errors.New("poll restore directive")
+		return err
 	}
 	if noDirective := response.GetNoDirective(); noDirective != nil {
 		transition := noDirective.GetVerifiedTransition()
@@ -258,6 +222,17 @@ func (agent *Agent) Poll(
 		directive.JTI,
 		ackJTI,
 	)
+	connection, err := agent.newConnection()
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	api := internalrpcauthorityv1.NewRestoreControllerServiceClient(connection)
+	correlationID := deterministicUUID(
+		"restore-poll",
+		agent.config.WorkloadID,
+		roleCompact,
+	)
 	ackResponse, err := api.AcknowledgeQuiescence(
 		ctx,
 		&internalrpcauthorityv1.AcknowledgeQuiescenceRequest{
@@ -279,6 +254,89 @@ func (agent *Agent) Poll(
 	}
 	agent.observed.Store(ackResponse.GetReceipt().GetCoordinationRevision())
 	return nil
+}
+
+// VerifyStartup синхронно доказывает безопасную внешнюю restore-фазу, не
+// открывая admission. Метод обязан завершиться до активации snapshot и bind.
+func (agent *Agent) VerifyStartup(
+	ctx context.Context,
+	admission AuthorityAdmission,
+) error {
+	if admission == nil {
+		return errors.New("restore workload admission boundary is nil")
+	}
+	admission.SetRestoreBlocked(true)
+	admission.SetAvailable(false)
+	response, _, err := agent.getDirective(ctx)
+	if err != nil {
+		return err
+	}
+	noDirective := response.GetNoDirective()
+	if noDirective == nil {
+		return errors.New("restore external phase keeps startup fenced")
+	}
+	if err := agent.verifySafeNoDirective(
+		noDirective,
+		noDirective.GetVerifiedTransition(),
+	); err != nil {
+		return err
+	}
+	agent.observed.Store(noDirective.GetCoordinationRevision())
+	return nil
+}
+
+func (agent *Agent) getDirective(
+	ctx context.Context,
+) (*internalrpcauthorityv1.GetRestoreDirectiveResponse, string, error) {
+	roleMaterial, found, err := agent.config.Delivery.ReadKV2(
+		ctx,
+		agent.config.RoleCredentialVaultPath,
+	)
+	if err != nil {
+		return nil, "", errors.New("read restore role credential")
+	}
+	roleCompact := ""
+	if found {
+		roleCompact = roleMaterial.Data["role_credential_compact_jws"]
+	}
+	if found && roleCompact == "" {
+		return nil, "", errors.New("restore role credential material is invalid")
+	}
+	connection, err := agent.newConnection()
+	if err != nil {
+		return nil, "", err
+	}
+	defer connection.Close()
+	api := internalrpcauthorityv1.NewRestoreControllerServiceClient(connection)
+	correlationID := deterministicUUID(
+		"restore-poll",
+		agent.config.WorkloadID,
+		roleCompact,
+	)
+	response, err := api.GetRestoreDirective(
+		ctx,
+		&internalrpcauthorityv1.GetRestoreDirectiveRequest{
+			RoleCredentialCompactJws:     roleCompact,
+			ObservedCoordinationRevision: agent.observed.Load(),
+			CorrelationId:                correlationID,
+		},
+	)
+	if err != nil {
+		return nil, "", errors.New("poll restore directive")
+	}
+	return response, roleCompact, nil
+}
+
+func (agent *Agent) newConnection() (*grpc.ClientConn, error) {
+	connection, err := grpc.NewClient(
+		agent.config.Address,
+		grpc.WithTransportCredentials(credentials.NewTLS(agent.config.TLS.Clone())),
+		grpc.WithUnaryInterceptor(agent.config.UnaryInterceptor),
+	)
+	if err != nil {
+		return nil, errors.New("connect to restore controller")
+	}
+	return connection, nil
 }
 
 func (agent *Agent) verifySafeNoDirective(
