@@ -157,6 +157,36 @@
       "reason": "READBACK_CREDENTIAL_REJECTED"
     },
     {
+      "name": "missing-root-public-verification-material",
+      "mutation": "root JWS is present but the image-pinned public JWK or its metadata is missing",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "same-channel-root-public-key-substitution",
+      "mutation": "Vault bundle adds a replacement root JWK whose RFC 7638 thumbprint is not the image-pinned fingerprint",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "root-kid-public-key-mismatch",
+      "mutation": "root JWS kid differs from the image-pinned metadata kid or the public JWK kid",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "root-rotation-missing-current-cross-signature",
+      "mutation": "candidate next root has no current-root signature over its exact public JWK, generation, audience and predecessor",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "root-rotation-missing-next-proof-of-possession",
+      "mutation": "candidate next root does not sign the exact current-root transition payload",
+      "reason": "READBACK_CREDENTIAL_REJECTED"
+    },
+    {
+      "name": "root-rotation-rollback-or-gap",
+      "mutation": "root transition source revision rolls back, mutates in place or skips the persisted predecessor digest",
+      "reason": "SNAPSHOT_ROLLBACK"
+    },
+    {
       "name": "readback-manifest-bundle-same-revision-mutation",
       "mutation": "manifest bundle reuses the served revision with a different canonical digest or signer set",
       "reason": "SNAPSHOT_MUTATION"

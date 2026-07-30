@@ -14,6 +14,7 @@ spec:
       verifier: /usr/local/bin/internal-rpc-authority-verifier
       publisher: /usr/local/bin/internal-rpc-authority-publisher
       readbackAttestor: /usr/local/bin/internal-rpc-authority-readback-attestor
+      databaseCredentialReconciler: /usr/local/bin/internal-rpc-authority-database-credential-reconciler
       restoreController: /usr/local/bin/internal-rpc-authority-restore-controller
       restoreOperator: /usr/local/bin/internal-rpc-authority-restore-operator
       recovery: /usr/local/bin/internal-rpc-authority-recovery
@@ -208,6 +209,7 @@ spec:
           engine: database
           plugin: postgresql-database-plugin
           mode: STATIC_ROLE_CURRENT_NEXT_PASSWORD_ROTATION
+          owner: internal-rpc-authority-database-credential-reconciler
           authMethod: kubernetes
           boundServiceAccount: internal-rpc-authority-publisher
           boundNamespace: mattercodex-system
@@ -450,7 +452,7 @@ spec:
           exactProducerPolicyRevisionReadbackRequired: true
           promotionBeforeAllReadbacks: false
           retirementAfterOverlapWindowOnly: true
-        targetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.json
+        targetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
         targetRegistrySchema: contracts/authorization/v1/key-delivery-targets.schema.json
         vaultAuthResource: internal-rpc-authority-publisher
         vaultKvVersion: 2
@@ -515,6 +517,94 @@ spec:
         requireCryptographicSecretReadback: true
         requireSourceRevisionFinalized: true
       failurePolicy: FAIL_CLOSED
+    internal-rpc-authority-database-credential-reconciler:
+      kind: Deployment
+      canonicalPath: deploy/k8s/base/internal-rpc-authority
+      owner: internal-rpc-authority
+      artifactBinary: /usr/local/bin/internal-rpc-authority-database-credential-reconciler
+      serviceAccount: internal-rpc-authority-database-credential-reconciler
+      replicas: 2
+      leaderElection: POSTGRESQL_LEASE_WITH_FENCING_TOKEN
+      interface:
+        protoService: internalrpcauthority.v1.DatabaseCredentialLifecycleService
+        reconcileMethod: /internalrpcauthority.v1.DatabaseCredentialLifecycleService/ReconcileDatabaseCredentials
+        readinessMethod: /internalrpcauthority.v1.DatabaseCredentialLifecycleService/CheckReadiness
+        callerProvidedPrincipalGenerationOrStatusAllowed: false
+        desiredSetSource: VERSIONED_CAPABILITY_REGISTRY
+      scope:
+        capabilities:
+          - PUBLISHER
+          - READBACK_ATTESTOR
+        exactPrincipals:
+          PUBLISHER:
+            CURRENT: ira_publisher_g1
+            NEXT: ira_publisher_g2
+          READBACK_ATTESTOR:
+            CURRENT: ira_readback_attestor_g1
+            NEXT: ira_readback_attestor_g2
+        lifecycle:
+          - CURRENT
+          - NEXT
+          - PREVIOUS
+          - RETIRED
+      postgres:
+        tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+        sslMode: verify-full
+        migratorMembershipAllowed: false
+        tableOwnerMembershipAllowed: false
+        exactFunctionExecute:
+          - internal_rpc_authority.reconcile_runtime_database_identity(text,text,bigint,text,uuid,text)
+          - internal_rpc_authority.retire_runtime_database_identity(text,text,bigint,uuid,text)
+        directTableDmlAllowed: false
+        createRoleAttribute: false
+        superuser: false
+        bypassRls: false
+      vault:
+        authMethod: kubernetes
+        authRole: internal-rpc-authority-database-credential-reconciler
+        tlsServerName: vault.mattercodex-system.svc.cluster.local
+        exactPaths:
+          - database/static-roles/internal-rpc-authority-publisher-g1
+          - database/static-roles/internal-rpc-authority-publisher-g2
+          - database/static-roles/internal-rpc-authority-readback-attestor-g1
+          - database/static-roles/internal-rpc-authority-readback-attestor-g2
+          - database/rotate-role/internal-rpc-authority-publisher-g1
+          - database/rotate-role/internal-rpc-authority-publisher-g2
+          - database/rotate-role/internal-rpc-authority-readback-attestor-g1
+          - database/rotate-role/internal-rpc-authority-readback-attestor-g2
+        arbitraryDatabasePathAllowed: false
+      reconciliation:
+        idempotency: PERSISTED_CANONICAL_REGISTERED_SET_DIGEST
+        concurrency: SERIALIZABLE_CAS_AND_FENCED_LEADER
+        crashBeforeVaultRotation: RETRY_SAME_REGISTERED_SET
+        crashAfterVaultRotationBeforeDatabaseFence: READBACK_VAULT_ROLE_AND_DATABASE_SESSION_THEN_COMPLETE
+        crashAfterFenceBeforeRetirement: RESUME_NOLOGIN_REVOKE_ROTATE_DRAIN
+        missedUpdateOrRejoin: REREAD_DATABASE_LIFECYCLE_AND_ALL_EXACT_VAULT_STATIC_ROLES
+        retirementOrder:
+          - commit-server-side-retired-fence
+          - alter-login-principal-nologin
+          - revoke-exact-capability-membership
+          - rotate-vault-static-role-password
+          - drain-or-terminate-old-backends
+          - verify-old-session-denied-and-next-session-accepted
+      readiness:
+        requireFencedLeaderOrFollowerReadback: true
+        requireCurrentAndNextExactPrincipalReadback: true
+        requireVaultStaticRoleReadback: true
+        requireTlsVerifyFull: true
+        requireRetiredOpenSessionDeniedForEveryPrivilege: true
+        requireServedSourceRevisionAndDigest: true
+      rbac:
+        kubernetesApiReadAllowed: false
+        secretReadAllowed: false
+        tokenRequestForOwnServiceAccountOnly: true
+      network:
+        exactDestinations:
+          - vault.mattercodex-system.svc:8200
+          - internal-rpc-authority-postgresql.mattercodex-system.svc:5432
+          - otel-collector.observability.svc:4317
+        wildcardDestinationAllowed: false
+      failurePolicy: FAIL_CLOSED
     internal-rpc-authority-readback-attestor:
       kind: Deployment
       canonicalPath: deploy/k8s/base/internal-rpc-authority-readback-attestor
@@ -549,7 +639,7 @@ spec:
           engine: database
           plugin: postgresql-database-plugin
           mode: STATIC_ROLE_CURRENT_NEXT_PASSWORD_ROTATION
-          owner: internal-rpc-authority-database-credential-controller
+          owner: internal-rpc-authority-database-credential-reconciler
           authMethod: kubernetes
           boundServiceAccount: internal-rpc-authority-readback-attestor
           boundNamespace: mattercodex-system
@@ -873,16 +963,19 @@ spec:
             - internal_rpc_authority.record_authority_snapshot_readback(uuid)
           delete: []
         internal_rpc_authority_publisher:
-          selectInsertUpdate:
-            - authority_snapshot_history
-            - authority_rotation_intents
           select:
             - authority_key_delivery_readbacks
             - authority_snapshot_readbacks
-            - authority_restore_fences
           execute:
+            - internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text)
+            - internal_rpc_authority.publisher_record_rotation_intent(uuid,bigint,text,bigint,uuid)
+            - internal_rpc_authority.publisher_read_restore_fence()
             - internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
             - internal_rpc_authority.is_active_runtime_database_session(text)
+          forbidden:
+            - DIRECT_AUTHORITY_SNAPSHOT_HISTORY_SELECT_INSERT_UPDATE
+            - DIRECT_AUTHORITY_ROTATION_INTENTS_SELECT_INSERT_UPDATE
+            - DIRECT_AUTHORITY_RESTORE_FENCES_SELECT
           delete: []
         internal_rpc_authority_readback_attestor:
           selectInsert:
@@ -936,7 +1029,7 @@ spec:
           inherit: false
         ownerRuntimeMembershipAllowed: false
         schemaCreatePolicy: OWNER_ONLY
-        registry: contracts/authorization/v1/bootstrap-key-delivery-targets.json
+        registry: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
         cardinality: BOUNDED_ONE_CURRENT_ONE_NEXT_ONE_PREVIOUS_PER_WORKLOAD_ROLE_GENERATION
         mappingTable: authority_workload_database_identities
         mappingKey:
@@ -972,9 +1065,12 @@ spec:
             select:
               - authority_key_delivery_readbacks
               - authority_snapshot_readbacks
-              - authority_restore_fences
             execute:
+              - internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text)
+              - internal_rpc_authority.publisher_record_rotation_intent(uuid,bigint,text,bigint,uuid)
+              - internal_rpc_authority.publisher_read_restore_fence()
               - internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
+          directSnapshotHistoryRotationIntentOrRestoreFencePrivileges: FORBIDDEN
           consumerEvidenceInsertUpdateOrFunctionExecute: FORBIDDEN
         rowLevelSecurity:
           enabled: true
@@ -1240,7 +1336,14 @@ spec:
       namespace: mattercodex-system
       serviceAccount: internal-rpc-authority-readback-trust-root-controller
       bootstrapRootId: internal-rpc-authority-readback-manifest-root-v1
-      bootstrapPublicKeyFingerprintSource: PINNED_IMMUTABLE_IMAGE_CONFIG_FROM_OWNER_CEREMONY
+      bootstrapVerificationMaterialSchema: contracts/authorization/v1/readback-root-verification-material.schema.json
+      rootRotationSchema: contracts/authorization/v1/readback-root-rotation.schema.json
+      bootstrapPublicJwkPath: /usr/local/share/internal-rpc-authority/readback-root/bootstrap-public.jwk
+      bootstrapMetadataPath: /usr/local/share/internal-rpc-authority/readback-root/bootstrap-metadata.json
+      bootstrapPublicKeyFingerprintSource: IMAGE_EMBEDDED_PUBLIC_JWK_THUMBPRINT_PIN_FROM_OWNER_CEREMONY
+      bootstrapKidBinding: EXACT_METADATA_KID_EQUALS_PUBLIC_JWK_KID_EQUALS_ROOT_JWS_KID
+      bootstrapFingerprintBinding: RFC7638_PUBLIC_JWK_THUMBPRINT_EQUALS_PINNED_SHA256
+      sameChannelVaultRootKeyAccepted: false
       bootstrapPrivateKeyCustody: OFFLINE_HSM_OR_VAULT_TRANSIT_NO_WORKLOAD_EXPORT
       resourceName: internal-rpc-authority-readback-manifest-trust-root
       bundleResourceName: internal-rpc-authority-readback-manifest-signers
@@ -1257,6 +1360,13 @@ spec:
       rootRotationCeremony:
         approval: SEPARATE_OWNER_GATE
         requireOldAndNewRootCrossSignedOverlap: true
+        currentSignsNextProtectedType: mattercodex-internal-rpc-readback-root-transition-current+jws
+        nextSignsCurrentProtectedType: mattercodex-internal-rpc-readback-root-transition-next+jws
+        exactRotationAudience: urn:mattercodex:internal-rpc-authority-readback-attestor:root-rotation
+        verifyCurrentSignatureWithPersistedTrustedRoot: true
+        verifyNextSignatureWithCandidateRoot: true
+        sourceRevisionAndPredecessorCas: true
+        sameRevisionMutationRollbackOrGap: REJECT
         overlapMinimum: MAX_SNAPSHOT_TTL_PLUS_REJOIN_WINDOW
         pinNewFingerprintBeforeSignerUse: true
         retireOldRootAfterEveryAttestorServedReadback: true
@@ -1280,6 +1390,9 @@ spec:
         tlsServerName: vault.mattercodex-system.svc.cluster.local
         trustBundleMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/vault-ca.pem
         destinationMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root/root.jws
+        publicVerificationMaterialSource: READ_ONLY_IMAGE_LAYER_FROM_OWNER_APPROVED_BUILD_INPUT
+        publicVerificationMaterialMountPath: /usr/local/share/internal-rpc-authority/readback-root
+        vaultMayOverridePublicVerificationMaterial: false
         serviceAccount: internal-rpc-authority-readback-attestor
         networkPolicy:
           name: internal-rpc-authority-readback-attestor-to-vault
@@ -1292,6 +1405,9 @@ spec:
         fields:
           - bootstrap_root_id
           - bootstrap_root_fingerprint_sha256
+          - bootstrap_root_kid
+          - trusted_root_generation
+          - trusted_root_public_jwk_thumbprint_sha256
           - bundle_revision
           - bundle_digest_sha256
           - manifest_signer_generation
@@ -1481,7 +1597,7 @@ spec:
           multiAudienceAccepted: false
           permissiveSpiffeOnlyFallbackAccepted: false
           maxTtlSeconds: 300
-          exactTargetSource: contracts/authorization/v1/bootstrap-key-delivery-targets.json
+          exactTargetSource: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
           serverDerivedBinding:
             - workload_id
             - role
@@ -1951,7 +2067,7 @@ spec:
             - /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
           restoreControllerAudienceAllowed: false
           port: 8443
-          exactTargetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.json
+          exactTargetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
       egress:
         - destination: postgresql
           namespace: mattercodex-system
@@ -1991,7 +2107,7 @@ spec:
           protocol: MTLS
         - source: registered-workload-role-generations
           protocol: MTLS
-          exactTargetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.json
+          exactTargetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
           applicationCredential: ROLE_BOUND_ES256_JWS
           port: 8443
       egress:
@@ -2106,7 +2222,7 @@ spec:
           app.kubernetes.io/name: internal-rpc-authority-readback-attestor
       attestorPort: 8443
       protocol: TCP
-      exactClientsFrom: contracts/authorization/v1/bootstrap-key-delivery-targets.json
+      exactClientsFrom: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
       exactClientReadbackSubdocument: "#/$defs/readback"
       exactAllowedMethods:
         - /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge

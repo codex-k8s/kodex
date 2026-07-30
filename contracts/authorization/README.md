@@ -73,13 +73,23 @@ authorization context; синтаксически корректный tuple и�
 | `contracts/authorization/v1/postgresql-attestor-live-session-retirement.sql` | отказ challenge/read для уже открытой retired attestor session после commit fence, `NOLOGIN` и отзыва membership |
 | `contracts/authorization/v1/key-delivery-targets.schema.json` | exact `(workload,role)` key/trust/database-identity fan-out |
 | `contracts/authorization/v1/authorization-error-matrix.json` | полная reason/code/stage/retryable/message matrix |
-| `contracts/authorization/v1/bootstrap-deny-all-policy.json` | безопасное начальное состояние без business bindings |
-| `contracts/authorization/v1/bootstrap-key-delivery-targets.json` | безопасное начальное состояние без key delivery targets |
+| `contracts/authorization/v1/bootstrap-deny-all-policy.yaml` | читаемая человеком deny-all machine policy |
+| `contracts/authorization/v1/bootstrap-key-delivery-targets.yaml` | читаемый человеком пустой реестр key delivery targets |
+| `contracts/authorization/v1/readback-root-verification-material.schema.json` | exact independently delivered public JWK корня normal-readback |
+| `contracts/authorization/v1/readback-root-rotation.schema.json` | взаимно подписанный forward-only переход старого и нового root |
 | `contracts/authorization/v1/fixtures` | RFC 8785 golden и negative contract fixtures |
 | `contracts/registry.yaml` | owner, source, generated path и consumers |
 | `buf.yaml`, `buf.gen.yaml` | lint/build и воспроизводимый Go codegen |
 | `libs/go/internalrpcauth/gen/internalrpcauthority/v1` | сгенерированный Go wire package |
 | `deploy/k8s/base/internal-rpc-authority/capability-registry.yaml` | deploy ownership, identity, volumes, key delivery и readiness |
+
+JSON Schema сохранён как стандартный машиночитаемый язык валидации, а signed
+JWS/JCS payloads и contract fixtures сохранены в JSON, потому что подпись
+проверяет exact RFC 8785 UTF-8 bytes. Для человека редактируются только
+`bootstrap-deny-all-policy.yaml`, `bootstrap-key-delivery-targets.yaml`,
+`contracts/registry.yaml` и capability registry. Они проходят строгий YAML
+decode с отклонением duplicate и unknown fields и не дублируют signed payload.
+Конвертировать YAML в подписываемый payload не требуется и запрещено.
 
 JSON Schema описывает semantic model. На wire header и payload сериализуются
 по JSON Canonicalization Scheme RFC 8785 в UTF-8 без BOM. Verifier сначала
@@ -736,9 +746,9 @@ Trust graph закрыт следующими ребрами:
 caller, verifier не доверяет full method из JWS без фактического transport
 method, а domain owner не доверяет permission как доказательству ownership.
 
-`bootstrap-deny-all-policy.json` имеет пустые `authority_proof_producers` и
+`bootstrap-deny-all-policy.yaml` имеет пустые `authority_proof_producers` и
 `operation_bindings`, а также `default_decision=DENY`.
-`bootstrap-key-delivery-targets.json` имеет пустой `targets`. Это рабочее
+`bootstrap-key-delivery-targets.yaml` имеет пустой `targets`. Это рабочее
 безопасное начальное состояние, а не fallback. Unit #187 добавляет exact
 producer/bindings одновременно со своим versioned Proto; до этого ни
 preflight, ни business RPC к control-plane не разрешены.
@@ -858,8 +868,16 @@ Signer normal-readback credential имеет отдельный forward-only tru
 manifest signer generation. До проверки этого snapshot attestor обязан
 проверить отдельный
 `mattercodex-internal-rpc-readback-manifest-root+jws`: его offline root,
-идентификатор и SHA-256 fingerprint закреплены owner ceremony в immutable
-image config, а signed bundle signer keys доставляется attestor через
+идентификатор, exact public JWK, `kid` и RFC 7638 SHA-256 fingerprint
+закреплены owner ceremony в immutable image config. Fingerprint не заменяет
+public verification key, а JWK из изменяемого Vault bundle не принимается.
+Схема `readback-root-verification-material.schema.json` фиксирует exact
+material и validity. Forward-only root transition использует
+`readback-root-rotation.schema.json`: старый root подписывает новый exact JWK,
+новый root встречной подписью доказывает possession, обе подписи связывают
+purpose/audience/revision/predecessor и overlap. Rollback, gap, missing
+cross-signature либо same-channel substitution закрыто отклоняются. Signed
+bundle signer keys доставляется attestor через
 отдельные Secret/CSI/Vault role, mount и `NetworkPolicy`, недоступные
 publisher. Bundle содержит ровно один `CURRENT`, один `NEXT` и не более одного
 bounded `PREVIOUS`, revision/digest/predecessor/history и validity. Root
@@ -927,7 +945,11 @@ principals не имеют membership этой роли. Protected таблиц�
 `FORCE ROW LEVEL SECURITY`; `CREATE` в schema доступен только owner.
 `REVOKE/GRANT EXECUTE` всегда указывают schema и полный список типов, unsafe
 overload запрещён. Publisher имеет только `SELECT` обеих итоговых readback
-tables и exact promotion function, но не создаёт challenge/receipt, не пишет
+tables и exact functions для append snapshot history, создания rotation
+intent, чтения restore fence и promotion. Прямые `SELECT/INSERT/UPDATE` на
+`authority_snapshot_history`, `authority_rotation_intents` и
+`authority_restore_fences` отсутствуют: каждая function сначала проверяет
+immutable `session_user` lifecycle fence. Publisher не создаёт challenge/receipt, не пишет
 protected tables и не исполняет consumer readback functions. Attestor может
 создать только verified pinned projection, challenge и receipt; owner trigger
 выводит session/workload/role/generations из persistent intent/identity и не
@@ -958,7 +980,17 @@ Readback attestor использует симметричную runtime boundary
 `internal_rpc_authority_readback_attestor` остаётся `NOLOGIN`, а
 `ira_readback_attestor_g1` (`CURRENT`) и `ira_readback_attestor_g2` (`NEXT`)
 имеют только минимальные login attributes и membership capability role.
-Контроллер database credentials владеет двумя Vault PostgreSQL static roles;
+Реальный deployable
+`internal-rpc-authority-database-credential-reconciler` владеет четырьмя exact
+Vault PostgreSQL static roles publisher/attestor. Он имеет отдельный binary,
+ServiceAccount, versioned
+`internalrpcauthority.v1.DatabaseCredentialLifecycleService`, fenced
+PostgreSQL leader lease, exact Vault/PostgreSQL network и только закрытые
+reconcile/retire functions. Desired principals и generations выводятся из
+versioned capability registry, а caller может передать только idempotency key.
+Reconciler сохраняет canonical registered-set digest, восстанавливается после
+crash на каждой границе Vault rotation/DB fence/revoke/drain и подтверждает
+CURRENT+NEXT/readback до readiness. ServiceAccount attestor
 ServiceAccount `internal-rpc-authority-readback-attestor` аутентифицируется
 через Vault Kubernetes auth, получает username/password только в файлах и
 подключается с exact PostgreSQL SNI/CA. Для Vault:8200 и PostgreSQL:5432

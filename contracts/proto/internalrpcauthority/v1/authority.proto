@@ -82,6 +82,14 @@ service RestoreRoleCredentialPublisherService {
   rpc CheckReadiness(RestoreRoleCredentialPublisherServiceCheckReadinessRequest) returns (RestoreRoleCredentialPublisherServiceCheckReadinessResponse);
 }
 
+// DatabaseCredentialLifecycleService управляет только техническими
+// PostgreSQL principals publisher/attestor. Состав principals и поколения
+// выводятся сервером из versioned registry, а не принимаются от caller.
+service DatabaseCredentialLifecycleService {
+  rpc ReconcileDatabaseCredentials(ReconcileDatabaseCredentialsRequest) returns (ReconcileDatabaseCredentialsResponse);
+  rpc CheckReadiness(DatabaseCredentialLifecycleServiceCheckReadinessRequest) returns (DatabaseCredentialLifecycleServiceCheckReadinessResponse);
+}
+
 // ActorKind является закрытым техническим классом actor. Бизнесовые роли в
 // этом enum отсутствуют.
 enum ActorKind {
@@ -514,6 +522,49 @@ message RestoreRoleCredentialPublisherServiceCheckReadinessResponse {
   uint64 controller_trust_generation = 4;
   uint64 credential_signer_generation = 5;
   bool vault_exact_target_readback_ready = 6;
+}
+
+enum DatabaseCredentialCapability {
+  DATABASE_CREDENTIAL_CAPABILITY_UNSPECIFIED = 0;
+  DATABASE_CREDENTIAL_CAPABILITY_PUBLISHER = 1;
+  DATABASE_CREDENTIAL_CAPABILITY_READBACK_ATTESTOR = 2;
+}
+
+enum DatabaseCredentialLifecycleStatus {
+  DATABASE_CREDENTIAL_LIFECYCLE_STATUS_UNSPECIFIED = 0;
+  DATABASE_CREDENTIAL_LIFECYCLE_STATUS_CURRENT = 1;
+  DATABASE_CREDENTIAL_LIFECYCLE_STATUS_NEXT = 2;
+  DATABASE_CREDENTIAL_LIFECYCLE_STATUS_PREVIOUS = 3;
+  DATABASE_CREDENTIAL_LIFECYCLE_STATUS_RETIRED = 4;
+}
+
+message ReconcileDatabaseCredentialsRequest {
+  // Идемпотентность относится ко всему server-derived registered set.
+  string idempotency_key = 1;
+}
+
+message DatabaseCredentialGeneration {
+  DatabaseCredentialCapability capability = 1;
+  uint64 generation = 2;
+  DatabaseCredentialLifecycleStatus status = 3;
+  string principal = 4;
+  uint64 source_revision = 5;
+  string source_digest_sha256 = 6;
+}
+
+message ReconcileDatabaseCredentialsResponse {
+  repeated DatabaseCredentialGeneration generations = 1;
+  string receipt_id = 2;
+  string canonical_request_digest_sha256 = 3;
+}
+
+message DatabaseCredentialLifecycleServiceCheckReadinessRequest {}
+
+message DatabaseCredentialLifecycleServiceCheckReadinessResponse {
+  bool ready = 1;
+  uint64 served_source_revision = 2;
+  string served_source_digest_sha256 = 3;
+  repeated DatabaseCredentialGeneration generations = 4;
 }
 
 // AuthorizationFailureStage ограничивает наблюдаемую стадию отказа.

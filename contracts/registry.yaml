@@ -101,6 +101,18 @@ packages:
     source: contracts/authorization/v1/readback-manifest-trust-root.schema.json
     consumers:
       - internal-rpc-authority-readback-attestor
+  - id: internal-rpc-authority-readback-root-verification-material-v1
+    format: json-schema
+    owner: internal-rpc-authority-readback-trust-root-controller
+    source: contracts/authorization/v1/readback-root-verification-material.schema.json
+    consumers:
+      - internal-rpc-authority-readback-attestor
+  - id: internal-rpc-authority-readback-root-rotation-v1
+    format: json-schema
+    owner: internal-rpc-authority-readback-trust-root-controller
+    source: contracts/authorization/v1/readback-root-rotation.schema.json
+    consumers:
+      - internal-rpc-authority-readback-attestor
   - id: internal-rpc-authority-key-delivery-v1
     format: json-schema
     owner: internal-rpc-authority

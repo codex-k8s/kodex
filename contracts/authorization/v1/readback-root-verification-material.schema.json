@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/readback-root-verification-material.schema.json",
+  "title": "Независимо доставляемый открытый корень normal-readback",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "root_id",
+    "root_generation",
+    "purpose",
+    "aud",
+    "kid",
+    "public_jwk",
+    "jwk_thumbprint_sha256",
+    "source_revision",
+    "source_digest_sha256",
+    "not_before",
+    "not_after"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "root_id": {
+      "const": "internal-rpc-authority-readback-manifest-root-v1"
+    },
+    "root_generation": {
+      "$ref": "#/$defs/positiveRevision"
+    },
+    "purpose": {
+      "const": "NORMAL_READBACK_ROOT_VERIFICATION"
+    },
+    "aud": {
+      "const": "urn:mattercodex:internal-rpc-authority-readback-attestor:root-verification"
+    },
+    "kid": {
+      "$ref": "#/$defs/kid"
+    },
+    "public_jwk": {
+      "$ref": "#/$defs/publicJwk"
+    },
+    "jwk_thumbprint_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "source_revision": {
+      "$ref": "#/$defs/positiveRevision"
+    },
+    "source_digest_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "not_before": {
+      "type": "integer"
+    },
+    "not_after": {
+      "type": "integer"
+    }
+  },
+  "$defs": {
+    "positiveRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "kid": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "publicJwk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kty",
+        "crv",
+        "use",
+        "key_ops",
+        "alg",
+        "kid",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "kty": {
+          "const": "EC"
+        },
+        "crv": {
+          "const": "P-256"
+        },
+        "use": {
+          "const": "sig"
+        },
+        "key_ops": {
+          "const": [
+            "verify"
+          ]
+        },
+        "alg": {
+          "const": "ES256"
+        },
+        "kid": {
+          "$ref": "#/$defs/kid"
+        },
+        "x": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "y": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        }
+      }
+    }
+  }
+}

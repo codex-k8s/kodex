@@ -129,6 +129,57 @@ CREATE UNIQUE INDEX authority_runtime_identity_one_previous
     (capability_role)
   WHERE credential_status = 'PREVIOUS';
 
+CREATE TABLE internal_rpc_authority.authority_snapshot_history (
+  source_revision bigint PRIMARY KEY CHECK (source_revision > 0),
+  digest_sha256 text NOT NULL UNIQUE CHECK (digest_sha256 ~ '^[a-f0-9]{64}$'),
+  key_set_revision bigint NOT NULL CHECK (key_set_revision > 0),
+  policy_revision bigint NOT NULL CHECK (policy_revision > 0),
+  signer_generation bigint NOT NULL CHECK (signer_generation > 0),
+  predecessor_revision bigint NOT NULL CHECK (predecessor_revision >= 0),
+  predecessor_digest_sha256 text NOT NULL
+    CHECK (predecessor_digest_sha256 ~ '^[a-f0-9]{64}$'),
+  snapshot_jws text NOT NULL CHECK (octet_length(snapshot_jws) BETWEEN 64 AND 65536),
+  published_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp()
+);
+ALTER TABLE internal_rpc_authority.authority_snapshot_history
+  OWNER TO internal_rpc_authority_readback_owner;
+
+CREATE TABLE internal_rpc_authority.authority_rotation_intents (
+  intent_id uuid PRIMARY KEY,
+  source_revision bigint NOT NULL CHECK (source_revision > 0),
+  canonical_digest_sha256 text NOT NULL
+    CHECK (canonical_digest_sha256 ~ '^[a-f0-9]{64}$'),
+  target_signer_generation bigint NOT NULL CHECK (target_signer_generation > 0),
+  lifecycle_status text NOT NULL CHECK (lifecycle_status IN (
+    'PREPARED',
+    'PUBLISHED',
+    'READBACK_VERIFIED',
+    'PROMOTED',
+    'RETIRED'
+  )),
+  idempotency_key uuid NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp(),
+  UNIQUE (source_revision, canonical_digest_sha256)
+);
+ALTER TABLE internal_rpc_authority.authority_rotation_intents
+  OWNER TO internal_rpc_authority_readback_owner;
+
+CREATE TABLE internal_rpc_authority.authority_restore_fences (
+  fence_revision bigint PRIMARY KEY CHECK (fence_revision > 0),
+  restore_id uuid NOT NULL UNIQUE,
+  phase text NOT NULL CHECK (phase IN (
+    'PREPARED',
+    'RESTORING',
+    'READBACK_PENDING',
+    'COMPLETED'
+  )),
+  evidence_digest_sha256 text NOT NULL
+    CHECK (evidence_digest_sha256 ~ '^[a-f0-9]{64}$'),
+  updated_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp()
+);
+ALTER TABLE internal_rpc_authority.authority_restore_fences
+  OWNER TO internal_rpc_authority_readback_owner;
+
 CREATE TABLE internal_rpc_authority.authority_readback_intents (
   intent_id uuid PRIMARY KEY,
   intent_kind text NOT NULL CHECK (intent_kind IN ('KEY_DELIVERY', 'SNAPSHOT')),
@@ -385,6 +436,111 @@ BEGIN
       identity.credential_status = 'PREVIOUS'
       AND identity.overlap_not_after >= pg_catalog.clock_timestamp()
     );
+END
+$function$;
+
+CREATE FUNCTION internal_rpc_authority.publisher_append_snapshot_history(
+  p_source_revision bigint,
+  p_digest_sha256 text,
+  p_key_set_revision bigint,
+  p_policy_revision bigint,
+  p_signer_generation bigint,
+  p_predecessor_revision bigint,
+  p_predecessor_digest_sha256 text,
+  p_snapshot_jws text
+) RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, internal_rpc_authority, pg_temp
+AS $function$
+BEGIN
+  IF NOT internal_rpc_authority.is_active_runtime_database_session('PUBLISHER') THEN
+    RAISE EXCEPTION 'publisher runtime database identity rejected';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+      FROM internal_rpc_authority.authority_snapshot_history
+     WHERE source_revision = p_source_revision
+       AND digest_sha256 <> p_digest_sha256
+  ) THEN
+    RAISE EXCEPTION 'snapshot same-revision mutation rejected';
+  END IF;
+  INSERT INTO internal_rpc_authority.authority_snapshot_history (
+    source_revision, digest_sha256, key_set_revision, policy_revision,
+    signer_generation, predecessor_revision, predecessor_digest_sha256,
+    snapshot_jws
+  ) VALUES (
+    p_source_revision, p_digest_sha256, p_key_set_revision, p_policy_revision,
+    p_signer_generation, p_predecessor_revision, p_predecessor_digest_sha256,
+    p_snapshot_jws
+  )
+  ON CONFLICT (source_revision) DO NOTHING;
+  RETURN p_source_revision;
+END
+$function$;
+
+CREATE FUNCTION internal_rpc_authority.publisher_record_rotation_intent(
+  p_intent_id uuid,
+  p_source_revision bigint,
+  p_canonical_digest_sha256 text,
+  p_target_signer_generation bigint,
+  p_idempotency_key uuid
+) RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, internal_rpc_authority, pg_temp
+AS $function$
+DECLARE
+  saved internal_rpc_authority.authority_rotation_intents%ROWTYPE;
+BEGIN
+  IF NOT internal_rpc_authority.is_active_runtime_database_session('PUBLISHER') THEN
+    RAISE EXCEPTION 'publisher runtime database identity rejected';
+  END IF;
+  SELECT * INTO saved
+    FROM internal_rpc_authority.authority_rotation_intents
+   WHERE idempotency_key = p_idempotency_key
+   FOR UPDATE;
+  IF FOUND THEN
+    IF saved.source_revision = p_source_revision
+       AND saved.canonical_digest_sha256 = p_canonical_digest_sha256
+       AND saved.target_signer_generation = p_target_signer_generation THEN
+      RETURN saved.intent_id;
+    END IF;
+    RAISE EXCEPTION 'rotation intent idempotency conflict';
+  END IF;
+  INSERT INTO internal_rpc_authority.authority_rotation_intents (
+    intent_id, source_revision, canonical_digest_sha256,
+    target_signer_generation, lifecycle_status, idempotency_key
+  ) VALUES (
+    p_intent_id, p_source_revision, p_canonical_digest_sha256,
+    p_target_signer_generation, 'PREPARED', p_idempotency_key
+  );
+  RETURN p_intent_id;
+END
+$function$;
+
+CREATE FUNCTION internal_rpc_authority.publisher_read_restore_fence()
+RETURNS TABLE (
+  fence_revision bigint,
+  restore_id uuid,
+  phase text,
+  evidence_digest_sha256 text,
+  updated_at timestamptz
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, internal_rpc_authority, pg_temp
+AS $function$
+BEGIN
+  IF NOT internal_rpc_authority.is_active_runtime_database_session('PUBLISHER') THEN
+    RAISE EXCEPTION 'publisher runtime database identity rejected';
+  END IF;
+  RETURN QUERY
+  SELECT fence.fence_revision, fence.restore_id, fence.phase,
+         fence.evidence_digest_sha256, fence.updated_at
+    FROM internal_rpc_authority.authority_restore_fences AS fence
+   ORDER BY fence.fence_revision DESC
+   LIMIT 1;
 END
 $function$;
 
@@ -1049,6 +1205,14 @@ ALTER FUNCTION internal_rpc_authority.record_authority_snapshot_readback(uuid)
 ALTER FUNCTION internal_rpc_authority.promote_authority_workload_database_identity(
   text, text, bigint, bigint, uuid, uuid
 ) OWNER TO internal_rpc_authority_readback_owner;
+ALTER FUNCTION internal_rpc_authority.publisher_append_snapshot_history(
+  bigint, text, bigint, bigint, bigint, bigint, text, text
+) OWNER TO internal_rpc_authority_readback_owner;
+ALTER FUNCTION internal_rpc_authority.publisher_record_rotation_intent(
+  uuid, bigint, text, bigint, uuid
+) OWNER TO internal_rpc_authority_readback_owner;
+ALTER FUNCTION internal_rpc_authority.publisher_read_restore_fence()
+  OWNER TO internal_rpc_authority_readback_owner;
 REVOKE ALL ON FUNCTION
   internal_rpc_authority.is_active_runtime_database_session(text)
   FROM PUBLIC;
@@ -1073,6 +1237,17 @@ REVOKE ALL ON FUNCTION
   internal_rpc_authority.promote_authority_workload_database_identity(
     text, text, bigint, bigint, uuid, uuid
   ) FROM PUBLIC;
+REVOKE ALL ON FUNCTION
+  internal_rpc_authority.publisher_append_snapshot_history(
+    bigint, text, bigint, bigint, bigint, bigint, text, text
+  ) FROM PUBLIC;
+REVOKE ALL ON FUNCTION
+  internal_rpc_authority.publisher_record_rotation_intent(
+    uuid, bigint, text, bigint, uuid
+  ) FROM PUBLIC;
+REVOKE ALL ON FUNCTION
+  internal_rpc_authority.publisher_read_restore_fence()
+  FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION
   internal_rpc_authority.is_active_runtime_database_session(text)
   TO internal_rpc_authority_publisher,
@@ -1107,8 +1282,22 @@ GRANT EXECUTE ON FUNCTION
   internal_rpc_authority.promote_authority_workload_database_identity(
     text, text, bigint, bigint, uuid, uuid
   ) TO internal_rpc_authority_publisher;
+GRANT EXECUTE ON FUNCTION
+  internal_rpc_authority.publisher_append_snapshot_history(
+    bigint, text, bigint, bigint, bigint, bigint, text, text
+  ) TO internal_rpc_authority_publisher;
+GRANT EXECUTE ON FUNCTION
+  internal_rpc_authority.publisher_record_rotation_intent(
+    uuid, bigint, text, bigint, uuid
+  ) TO internal_rpc_authority_publisher;
+GRANT EXECUTE ON FUNCTION
+  internal_rpc_authority.publisher_read_restore_fence()
+  TO internal_rpc_authority_publisher;
 
 REVOKE ALL ON
+  internal_rpc_authority.authority_snapshot_history,
+  internal_rpc_authority.authority_rotation_intents,
+  internal_rpc_authority.authority_restore_fences,
   internal_rpc_authority.authority_runtime_database_identities
 FROM PUBLIC,
   internal_rpc_authority_publisher,

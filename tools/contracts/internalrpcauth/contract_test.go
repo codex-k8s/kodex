@@ -35,6 +35,8 @@ func TestJSONSchemasAreClosed(t *testing.T) {
 		"readback-credential.schema.json",
 		"readback-credential-trust.schema.json",
 		"readback-manifest-trust-root.schema.json",
+		"readback-root-verification-material.schema.json",
+		"readback-root-rotation.schema.json",
 		"restore-fence-evidence.schema.json",
 		"restore-role-trust.schema.json",
 	} {
@@ -451,8 +453,9 @@ func TestSnapshotSchemaCriticalCardinality(t *testing.T) {
 
 func TestBootstrapPolicyIsDenyAll(t *testing.T) {
 	root := repositoryRoot(t)
-	path := filepath.Join(root, "contracts/authorization/v1/bootstrap-deny-all-policy.json")
+	path := filepath.Join(root, "contracts/authorization/v1/bootstrap-deny-all-policy.yaml")
 	var policy struct {
+		Version                 int    `json:"version"`
 		TrustDomain             string `json:"trust_domain"`
 		DefaultDecision         string `json:"default_decision"`
 		TokenTTLSeconds         int    `json:"token_ttl_seconds"`
@@ -461,9 +464,10 @@ func TestBootstrapPolicyIsDenyAll(t *testing.T) {
 		AuthorityProofProducers []any  `json:"authority_proof_producers"`
 		OperationBindings       []any  `json:"operation_bindings"`
 	}
-	decodeJSONStrict(t, path, &policy)
+	decodeYAMLStrict(t, path, &policy)
 
-	if policy.TrustDomain != "mattercodex.local" ||
+	if policy.Version != 1 ||
+		policy.TrustDomain != "mattercodex.local" ||
 		policy.DefaultDecision != "DENY" ||
 		policy.TokenTTLSeconds != 30 ||
 		policy.AllowedClockSkewSeconds != 5 ||
@@ -478,15 +482,32 @@ func TestBootstrapKeyDeliveryTargetsAreEmpty(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(
 		root,
-		"contracts/authorization/v1/bootstrap-key-delivery-targets.json",
+		"contracts/authorization/v1/bootstrap-key-delivery-targets.yaml",
 	)
 	var targets struct {
-		Version int   `json:"v"`
+		Version int   `json:"version"`
 		Targets []any `json:"targets"`
 	}
-	decodeJSONStrict(t, path, &targets)
+	decodeYAMLStrict(t, path, &targets)
 	if targets.Version != 1 || len(targets.Targets) != 0 {
 		t.Fatalf("bootstrap key delivery targets are not deny-all: %+v", targets)
+	}
+}
+
+func TestHumanAuthoredYAMLRejectsUnknownAndDuplicateFields(t *testing.T) {
+	type bootstrap struct {
+		Version int `json:"version"`
+	}
+	for name, document := range map[string]string{
+		"unknown":   "version: 1\nunexpected: true\n",
+		"duplicate": "version: 1\nversion: 2\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			var decoded bootstrap
+			if err := yaml.UnmarshalStrict([]byte(document), &decoded); err == nil {
+				t.Fatal("strict YAML decoder accepted an unsafe document")
+			}
+		})
 	}
 }
 
@@ -820,8 +841,20 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 		t,
 		readbackRoot,
 		"bootstrapPublicKeyFingerprintSource",
-		"PINNED_IMMUTABLE_IMAGE_CONFIG_FROM_OWNER_CEREMONY",
+		"IMAGE_EMBEDDED_PUBLIC_JWK_THUMBPRINT_PIN_FROM_OWNER_CEREMONY",
 	)
+	requireEqual(
+		t,
+		readbackRoot,
+		"bootstrapPublicJwkPath",
+		"/usr/local/share/internal-rpc-authority/readback-root/bootstrap-public.jwk",
+	)
+	requireEqual(t, readbackRoot, "sameChannelVaultRootKeyAccepted", false)
+	rootRotation := requiredMap(t, readbackRoot, "rootRotationCeremony")
+	requireEqual(t, rootRotation, "requireOldAndNewRootCrossSignedOverlap", true)
+	requireEqual(t, rootRotation, "verifyCurrentSignatureWithPersistedTrustedRoot", true)
+	requireEqual(t, rootRotation, "verifyNextSignatureWithCandidateRoot", true)
+	requireEqual(t, rootRotation, "sameRevisionMutationRollbackOrGap", "REJECT")
 	requireEqual(
 		t,
 		requiredMap(t, readbackRoot, "publisherPermissions"),
@@ -829,6 +862,33 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 		false,
 	)
 	requireEqual(t, readbackRoot, "readinessRequiresActuallyServedSnapshotReadback", true)
+
+	credentialReconciler := requiredMap(
+		t,
+		deployables,
+		"internal-rpc-authority-database-credential-reconciler",
+	)
+	requireEqual(
+		t,
+		credentialReconciler,
+		"artifactBinary",
+		"/usr/local/bin/internal-rpc-authority-database-credential-reconciler",
+	)
+	requireEqual(t, credentialReconciler, "leaderElection", "POSTGRESQL_LEASE_WITH_FENCING_TOKEN")
+	reconcilerInterface := requiredMap(t, credentialReconciler, "interface")
+	requireEqual(
+		t,
+		reconcilerInterface,
+		"reconcileMethod",
+		"/internalrpcauthority.v1.DatabaseCredentialLifecycleService/ReconcileDatabaseCredentials",
+	)
+	requireEqual(t, reconcilerInterface, "callerProvidedPrincipalGenerationOrStatusAllowed", false)
+	requireEqual(
+		t,
+		requiredMap(t, credentialReconciler, "reconciliation"),
+		"missedUpdateOrRejoin",
+		"REREAD_DATABASE_LIFECYCLE_AND_ALL_EXACT_VAULT_STATIC_ROLES",
+	)
 
 	attestor := requiredMap(t, deployables, "internal-rpc-authority-readback-attestor")
 	requireEqual(t, attestor, "artifactBinary", "/usr/local/bin/internal-rpc-authority-readback-attestor")
@@ -843,6 +903,12 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	attestorVault := requiredMap(t, attestorDatabaseIdentity, "vaultDatabaseCredentials")
 	requireEqual(t, attestorVault, "currentPrincipal", "ira_readback_attestor_g1")
 	requireEqual(t, attestorVault, "nextPrincipal", "ira_readback_attestor_g2")
+	requireEqual(
+		t,
+		attestorVault,
+		"owner",
+		"internal-rpc-authority-database-credential-reconciler",
+	)
 	requireEqual(
 		t,
 		attestorVault,
@@ -1002,13 +1068,18 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	requireStringSliceEqual(t, publisherRights, "select", []string{
 		"authority_key_delivery_readbacks",
 		"authority_snapshot_readbacks",
-		"authority_restore_fences",
 	})
 	requireStringSliceEqual(t, publisherRights, "execute", []string{
+		"internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text)",
+		"internal_rpc_authority.publisher_record_rotation_intent(uuid,bigint,text,bigint,uuid)",
+		"internal_rpc_authority.publisher_read_restore_fence()",
 		"internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)",
 		"internal_rpc_authority.is_active_runtime_database_session(text)",
 	})
-	publisherWrites := stringSet(publisherRights["selectInsertUpdate"].([]any))
+	publisherWrites := map[string]bool{}
+	if direct, ok := publisherRights["selectInsertUpdate"].([]any); ok {
+		publisherWrites = stringSet(direct)
+	}
 	for _, table := range protectedReadbackTables {
 		if publisherWrites[table] {
 			t.Fatalf("publisher retains direct write authority on %s", table)
@@ -1210,17 +1281,19 @@ func TestRegistryOwnership(t *testing.T) {
 	}
 
 	for id, source := range map[string]string{
-		"internal-rpc-authority-proof-v1":                        "contracts/authorization/v1/authority-proof.schema.json",
-		"internal-rpc-authority-restore-evidence-v1":             "contracts/authorization/v1/restore-fence-evidence.schema.json",
-		"internal-rpc-authority-restore-coordination-v1":         "contracts/authorization/v1/restore-coordination.schema.json",
-		"internal-rpc-authority-restore-role-trust-v1":           "contracts/authorization/v1/restore-role-trust.schema.json",
-		"internal-rpc-authority-readback-postgresql-v1":          "contracts/authorization/v1/postgresql-readback-boundary.sql",
-		"internal-rpc-authority-readback-attestation-v1":         "contracts/authorization/v1/readback-attestation.schema.json",
-		"internal-rpc-authority-readback-credential-v1":          "contracts/authorization/v1/readback-credential.schema.json",
-		"internal-rpc-authority-readback-credential-trust-v1":    "contracts/authorization/v1/readback-credential-trust.schema.json",
-		"internal-rpc-authority-readback-manifest-trust-root-v1": "contracts/authorization/v1/readback-manifest-trust-root.schema.json",
-		"internal-rpc-authority-key-delivery-v1":                 "contracts/authorization/v1/key-delivery-targets.schema.json",
-		"internal-rpc-authority-error-matrix-v1":                 "contracts/authorization/v1/authorization-error-matrix.json",
+		"internal-rpc-authority-proof-v1":                               "contracts/authorization/v1/authority-proof.schema.json",
+		"internal-rpc-authority-restore-evidence-v1":                    "contracts/authorization/v1/restore-fence-evidence.schema.json",
+		"internal-rpc-authority-restore-coordination-v1":                "contracts/authorization/v1/restore-coordination.schema.json",
+		"internal-rpc-authority-restore-role-trust-v1":                  "contracts/authorization/v1/restore-role-trust.schema.json",
+		"internal-rpc-authority-readback-postgresql-v1":                 "contracts/authorization/v1/postgresql-readback-boundary.sql",
+		"internal-rpc-authority-readback-attestation-v1":                "contracts/authorization/v1/readback-attestation.schema.json",
+		"internal-rpc-authority-readback-credential-v1":                 "contracts/authorization/v1/readback-credential.schema.json",
+		"internal-rpc-authority-readback-credential-trust-v1":           "contracts/authorization/v1/readback-credential-trust.schema.json",
+		"internal-rpc-authority-readback-manifest-trust-root-v1":        "contracts/authorization/v1/readback-manifest-trust-root.schema.json",
+		"internal-rpc-authority-readback-root-verification-material-v1": "contracts/authorization/v1/readback-root-verification-material.schema.json",
+		"internal-rpc-authority-readback-root-rotation-v1":              "contracts/authorization/v1/readback-root-rotation.schema.json",
+		"internal-rpc-authority-key-delivery-v1":                        "contracts/authorization/v1/key-delivery-targets.schema.json",
+		"internal-rpc-authority-error-matrix-v1":                        "contracts/authorization/v1/authorization-error-matrix.json",
 	} {
 		entry, exists := entries[id]
 		if !exists || entry.Source != source || len(entry.Consumers) == 0 {
@@ -1672,8 +1745,6 @@ func TestReadbackAttestationAndCredentialLifecycleAreExecutable(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		"p_source_revision bigint",
-		"p_digest_sha256 text",
 		"p_served_proof_sha256 text",
 		"UNIQUE (workload_id, role, workload_generation, active)",
 	} {
@@ -1803,6 +1874,9 @@ func TestPostgreSQLReadbackBoundaryIsExact(t *testing.T) {
 				"SET ROLE internal_rpc_authority_publisher",
 				"publisher runtime database identity rejected",
 				"retired open publisher session retained evidence read",
+				"retired publisher retained direct snapshot read",
+				"retired publisher retained direct rotation insert",
+				"retired publisher retained direct restore fence read",
 			},
 		},
 		{
@@ -1852,8 +1926,9 @@ func TestApprovedGuideCoversIndependentTrustAndLiveSessionFence(t *testing.T) {
 		"docs/guides/distributed-security.md",
 	))
 	for _, want := range []string{
-		"Отдельный владелец доставляет pinned",
-		"проверяет root, затем snapshot signer",
+		"Отдельный владелец доставляет exact",
+		"Fingerprint без открытого\nключа не позволяет проверить подпись",
+		"старый root\nподписывает exact новый public key",
 		"`NOLOGIN`, отзыв membership и смена пароля не прекращают уже открытую",
 		"неизменяемый `session_user`",
 		"удерживает строку identity",
@@ -1969,6 +2044,12 @@ func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
 			"missing-readback-network-policy":                     "READBACK_CHALLENGE_UNAVAILABLE",
 			"co-delivered-readback-manifest-signer":               "READBACK_CREDENTIAL_REJECTED",
 			"readback-manifest-root-fingerprint-mismatch":         "READBACK_CREDENTIAL_REJECTED",
+			"missing-root-public-verification-material":           "READBACK_CREDENTIAL_REJECTED",
+			"same-channel-root-public-key-substitution":           "READBACK_CREDENTIAL_REJECTED",
+			"root-kid-public-key-mismatch":                        "READBACK_CREDENTIAL_REJECTED",
+			"root-rotation-missing-current-cross-signature":       "READBACK_CREDENTIAL_REJECTED",
+			"root-rotation-missing-next-proof-of-possession":      "READBACK_CREDENTIAL_REJECTED",
+			"root-rotation-rollback-or-gap":                       "SNAPSHOT_ROLLBACK",
 			"readback-manifest-bundle-same-revision-mutation":     "SNAPSHOT_MUTATION",
 			"readback-manifest-bundle-rollback-or-gap":            "SNAPSHOT_ROLLBACK",
 			"readback-manifest-root-expired":                      "READBACK_CREDENTIAL_REJECTED",
@@ -2214,6 +2295,17 @@ func decodeJSONStrict(t *testing.T, path string, target any) {
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
 		t.Fatalf("%s contains more than one JSON value or trailing data: %v", path, err)
+	}
+}
+
+func decodeYAMLStrict(t *testing.T, path string, target any) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if err := yaml.UnmarshalStrict(data, target); err != nil {
+		t.Fatalf("strictly decode %s: %v", path, err)
 	}
 }
 

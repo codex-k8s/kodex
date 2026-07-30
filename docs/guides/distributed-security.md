@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.0.3
+version: 1.0.4
 updated: 2026-07-30
 ---
 
@@ -184,13 +184,20 @@ destination-pinned NetworkPolicy. Readiness проверяет effective privile
 contract не доказывает достижимость production boundary.
 
 Независимый verifier подписанного snapshot не получает его trust signer из
-того же publisher-controlled канала. Отдельный владелец доставляет pinned
-fingerprint корня и подписанный bounded `CURRENT/NEXT/PREVIOUS` bundle по
-собственному Secret/CSI/Vault path и ServiceAccount boundary. Verifier сначала
-проверяет root, затем snapshot signer и только затем snapshot JWS; purpose,
-audience, config и high-watermark не переиспользуются между restore и обычным
-readback. Readiness проверяет реально обслуживаемый cryptographic readback,
-rotation, пропущенное обновление и rejoin от target-owned anchor.
+того же publisher-controlled канала. Отдельный владелец доставляет exact
+public JWK/certificate корня и его pinned RFC 7638 fingerprint независимо от
+подписанного bounded `CURRENT/NEXT/PREVIOUS` bundle. Fingerprint без открытого
+ключа не позволяет проверить подпись; public key из того же изменяемого
+Secret, что и JWS, не является bootstrap trust. Verifier проверяет exact
+`kid`/fingerprint/public key, затем root JWS, snapshot signer и только затем
+snapshot JWS. Root rotation использует bounded overlap: доверенный старый root
+подписывает exact новый public key и predecessor, новый root доказывает
+possession встречной подписью, а target хранит source revision/digest
+high-watermark. Пропущенная cross-signature, rollback, same-revision mutation
+или gap отклоняются. Purpose, audience, config и high-watermark не
+переиспользуются между restore и обычным readback. Readiness проверяет реально
+обслуживаемый cryptographic readback, rotation, пропущенное обновление и rejoin
+от target-owned anchor.
 
 `NOLOGIN`, отзыв membership и смена пароля не прекращают уже открытую
 PostgreSQL session. Поэтому каждая привилегированная function, RLS read path и
@@ -198,9 +205,21 @@ readiness probe связывает неизменяемый `session_user` с du
 generation/status и удерживает строку identity до завершения statement либо
 transaction. Retirement сначала commit-ит server-side `RETIRED` fence, затем
 выполняет `NOLOGIN`, отзыв membership, rotation и bounded drain/termination.
+Прямое право на таблицу не может обходить fence: каждое чтение и изменение
+security state либо выполняется через exact-signature `SECURITY DEFINER` API
+с тем же `session_user` check, либо защищено `FORCE RLS`. Список проверяется
+по effective grants, включая уже открытые sessions, а не только по startup
+principal attributes.
 Если action захватил fence первым, он может commit до retirement; если первым
 commit-нулся retirement, action и retry закрыто отклоняются. Crash action
 освобождает lock, после чего retirement завершается, а retry видит `RETIRED`.
+
+Владелец lifecycle database credentials является реальным deployable, а не
+строковой меткой. Он имеет versioned interface или детерминированный
+reconciliation job, отдельный ServiceAccount, exact Vault/PostgreSQL rights,
+fenced leader/CAS, crash recovery, served readback и readiness. Он получает
+desired principals/generations из versioned registry и не принимает их как
+authority из RPC request.
 
 One-time signature/JTI не отменяет semantic idempotency state-changing RPC.
 Одна durable CAS transaction хранит idempotency key, canonical request digest,

@@ -141,6 +141,24 @@ BEGIN
     FROM internal_rpc_authority.authority_key_delivery_readbacks;
   PERFORM 1
     FROM internal_rpc_authority.authority_snapshot_readbacks;
+  PERFORM internal_rpc_authority.publisher_append_snapshot_history(
+    2,
+    repeat('a', 64),
+    2,
+    2,
+    2,
+    1,
+    repeat('b', 64),
+    'header.payload.signature'
+  );
+  PERFORM internal_rpc_authority.publisher_record_rotation_intent(
+    '85000000-0000-4000-8000-000000000001',
+    2,
+    repeat('c', 64),
+    2,
+    '86000000-0000-4000-8000-000000000001'
+  );
+  PERFORM * FROM internal_rpc_authority.publisher_read_restore_fence();
 END
 $assertion$;
 COMMIT;
