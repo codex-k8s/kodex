@@ -30,18 +30,28 @@ var (
 )
 
 type Authority struct {
-	policy     model.PolicySnapshot
-	bindings   map[string]model.OperationBinding
-	signingKey internalrpcauth.ES256Key
-	proofKey   internalrpcauth.ES256Key
-	store      repository.Store
-	now        func() time.Time
+	policy           model.PolicySnapshot
+	bindings         map[string]model.OperationBinding
+	signingKey       internalrpcauth.ES256Key
+	verificationKeys map[string]internalrpcauth.ES256Key
+	keyIssuers       map[string]string
+	proofKeys        map[string]internalrpcauth.ES256Key
+	readbackKey      internalrpcauth.ES256Key
+	store            repository.Store
+	now              func() time.Time
+}
+
+type KeyMaterial struct {
+	SigningKey       internalrpcauth.ES256Key
+	VerificationKeys map[string]internalrpcauth.ES256Key
+	KeyIssuers       map[string]string
+	ProofKeys        map[string]internalrpcauth.ES256Key
+	ReadbackKey      internalrpcauth.ES256Key
 }
 
 func NewAuthority(
 	policy model.PolicySnapshot,
-	signingKey internalrpcauth.ES256Key,
-	proofKey internalrpcauth.ES256Key,
+	keys KeyMaterial,
 	store repository.Store,
 ) (*Authority, error) {
 	if policy.Version != model.ContractVersion ||
@@ -62,15 +72,25 @@ func NewAuthority(
 		policy.SignerGeneration == 0 ||
 		!digestPattern.MatchString(policy.SourceDigestSHA256) ||
 		policy.Issuer == "" ||
-		policy.SignerKeyID != signingKey.KeyID {
+		policy.SignerKeyID == "" ||
+		store == nil ||
+		len(keys.VerificationKeys) == 0 ||
+		len(keys.KeyIssuers) != len(keys.VerificationKeys) ||
+		(keys.SigningKey.Private != nil && len(keys.ProofKeys) == 0) ||
+		keys.ReadbackKey.Private == nil {
 		return nil, failure.New(failure.SnapshotRejected, "invalid authority policy snapshot")
+	}
+	if keys.SigningKey.Private != nil && keys.SigningKey.KeyID != policy.SignerKeyID {
+		return nil, failure.New(failure.SnapshotRejected, "signing key does not match policy")
+	}
+	if _, ok := keys.VerificationKeys[policy.SignerKeyID]; !ok {
+		return nil, failure.New(failure.SnapshotRejected, "policy signing key is not trusted")
 	}
 	bindings := make(map[string]model.OperationBinding, len(policy.OperationBindings))
 	for _, binding := range policy.OperationBindings {
 		if !operationPattern.MatchString(binding.OperationID) ||
 			binding.TokenTTLSeconds <= 0 ||
 			binding.TokenTTLSeconds > policy.TokenTTLSeconds ||
-			binding.Issuer != policy.Issuer ||
 			binding.FullMethod == "" ||
 			binding.Permission == "" ||
 			binding.CallerSPIFFEID == "" ||
@@ -86,12 +106,15 @@ func NewAuthority(
 		bindings[binding.OperationID] = binding
 	}
 	return &Authority{
-		policy:     policy,
-		bindings:   bindings,
-		signingKey: signingKey,
-		proofKey:   proofKey.PublicOnly(),
-		store:      store,
-		now:        time.Now,
+		policy:           policy,
+		bindings:         bindings,
+		signingKey:       keys.SigningKey,
+		verificationKeys: publicKeyMap(keys.VerificationKeys),
+		keyIssuers:       keys.KeyIssuers,
+		proofKeys:        publicKeyMap(keys.ProofKeys),
+		readbackKey:      keys.ReadbackKey,
+		store:            store,
+		now:              time.Now,
 	}, nil
 }
 
@@ -107,12 +130,27 @@ func (authority *Authority) Issue(
 			"operation is not allowed",
 		)
 	}
+	header, err := internalrpcauth.ParseProtectedHeader(proofCompact)
+	if err != nil || header.Type != proofProtectedType {
+		return "", model.AuthorizationClaims{}, failure.Wrap(
+			failure.Unauthenticated,
+			"authority proof protected header failed",
+			err,
+		)
+	}
+	proofKey, ok := authority.proofKeys[header.KeyID]
+	if !ok {
+		return "", model.AuthorizationClaims{}, failure.New(
+			failure.Unauthenticated,
+			"authority proof key is not trusted",
+		)
+	}
 	verified, err := internalrpcauth.VerifyCanonicalJSON(
 		proofCompact,
-		authority.proofKey,
+		proofKey,
 		internalrpcauth.ProtectedHeaderExpectation{
 			Type:  proofProtectedType,
-			KeyID: authority.proofKey.KeyID,
+			KeyID: header.KeyID,
 		},
 	)
 	if err != nil {
@@ -198,7 +236,7 @@ func (authority *Authority) Issue(
 	expiresAt := now.Add(time.Duration(binding.TokenTTLSeconds) * time.Second)
 	claims := model.AuthorizationClaims{
 		Version:  model.ContractVersion,
-		Issuer:   authority.policy.Issuer,
+		Issuer:   binding.Issuer,
 		Audience: binding.Audience,
 		Subject:  binding.CallerSPIFFEID,
 		Caller:   proof.Caller,
@@ -245,12 +283,27 @@ func (authority *Authority) Verify(
 	observedFullMethod string,
 	downstreamSPIFFEID string,
 ) (model.AuthorizationClaims, error) {
+	header, err := internalrpcauth.ParseProtectedHeader(compact)
+	if err != nil || header.Type != contextProtectedType {
+		return model.AuthorizationClaims{}, failure.Wrap(
+			failure.Unauthenticated,
+			"authorization context protected header failed",
+			err,
+		)
+	}
+	verificationKey, ok := authority.verificationKeys[header.KeyID]
+	if !ok {
+		return model.AuthorizationClaims{}, failure.New(
+			failure.Unauthenticated,
+			"authorization context key is not trusted",
+		)
+	}
 	verified, err := internalrpcauth.VerifyCanonicalJSON(
 		compact,
-		authority.signingKey.PublicOnly(),
+		verificationKey,
 		internalrpcauth.ProtectedHeaderExpectation{
 			Type:  contextProtectedType,
-			KeyID: authority.policy.SignerKeyID,
+			KeyID: header.KeyID,
 		},
 	)
 	if err != nil {
@@ -292,7 +345,8 @@ func (authority *Authority) Verify(
 	}
 	if claims.Version != model.ContractVersion ||
 		claims.ReplayMode != model.ReplayModeOneTime ||
-		claims.Issuer != authority.policy.Issuer ||
+		claims.Issuer != binding.Issuer ||
+		authority.keyIssuers[header.KeyID] != claims.Issuer ||
 		claims.Audience != binding.Audience ||
 		claims.Subject != binding.CallerSPIFFEID ||
 		claims.Caller.WorkloadID != binding.CallerWorkloadID ||
@@ -368,10 +422,10 @@ func (authority *Authority) ActivateSnapshot(ctx context.Context) error {
 	const probeType = "mattercodex-internal-rpc-served-snapshot-readback+jws"
 	compact, err := internalrpcauth.SignCanonicalJSON(
 		probe,
-		authority.signingKey,
+		authority.readbackKey,
 		internalrpcauth.ProtectedHeaderExpectation{
 			Type:  probeType,
-			KeyID: authority.policy.SignerKeyID,
+			KeyID: authority.readbackKey.KeyID,
 		},
 	)
 	if err != nil {
@@ -379,10 +433,10 @@ func (authority *Authority) ActivateSnapshot(ctx context.Context) error {
 	}
 	verified, err := internalrpcauth.VerifyCanonicalJSON(
 		compact,
-		authority.signingKey.PublicOnly(),
+		authority.readbackKey.PublicOnly(),
 		internalrpcauth.ProtectedHeaderExpectation{
 			Type:  probeType,
-			KeyID: authority.policy.SignerKeyID,
+			KeyID: authority.readbackKey.KeyID,
 		},
 	)
 	if err != nil {
@@ -489,4 +543,12 @@ func newUUID() (string, error) {
 	encoded := hex.EncodeToString(value[:])
 	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
 		encoded[16:20] + "-" + encoded[20:32], nil
+}
+
+func publicKeyMap(values map[string]internalrpcauth.ES256Key) map[string]internalrpcauth.ES256Key {
+	result := make(map[string]internalrpcauth.ES256Key, len(values))
+	for keyID, key := range values {
+		result[keyID] = key.PublicOnly()
+	}
+	return result
 }

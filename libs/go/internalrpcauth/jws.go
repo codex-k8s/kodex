@@ -39,6 +39,11 @@ type ProtectedHeaderExpectation struct {
 	KeyID string
 }
 
+type ProtectedHeader struct {
+	Type  string
+	KeyID string
+}
+
 type VerifiedJWS struct {
 	CanonicalPayload []byte
 	KeyID            string
@@ -104,31 +109,11 @@ func VerifyCanonicalJSON(
 	key ES256Key,
 	expect ProtectedHeaderExpectation,
 ) (VerifiedJWS, error) {
-	if len(compact) == 0 || len(compact) > MaxCompactJWSBytes {
-		return VerifiedJWS{}, ErrMalformedJWS
-	}
-	parts := strings.Split(compact, ".")
-	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
-		return VerifiedJWS{}, ErrMalformedJWS
-	}
-	protected, err := base64.RawURLEncoding.DecodeString(parts[0])
+	header, err := ParseProtectedHeader(compact)
 	if err != nil {
-		return VerifiedJWS{}, ErrMalformedJWS
+		return VerifiedJWS{}, err
 	}
-	var header strictProtectedHeader
-	if err := decodeStrictJSON(protected, &header); err != nil {
-		return VerifiedJWS{}, fmt.Errorf("%w: %v", ErrProtectedHeader, err)
-	}
-	if header.Alg != AlgorithmES256 ||
-		header.Type != expect.Type ||
-		header.KeyID != expect.KeyID ||
-		header.Version != ContractVersion ||
-		len(header.Critical) != 1 ||
-		header.Critical[0] != CriticalHeader {
-		return VerifiedJWS{}, ErrProtectedHeader
-	}
-	canonicalHeader, err := jcs.Transform(protected)
-	if err != nil || !bytes.Equal(canonicalHeader, protected) {
+	if header.Type != expect.Type || header.KeyID != expect.KeyID {
 		return VerifiedJWS{}, ErrProtectedHeader
 	}
 	if err := validateES256Key(key, expect.KeyID, false); err != nil {
@@ -151,6 +136,40 @@ func VerifyCanonicalJSON(
 		return VerifiedJWS{}, ErrCanonicalPayload
 	}
 	return VerifiedJWS{CanonicalPayload: payload, KeyID: header.KeyID}, nil
+}
+
+// ParseProtectedHeader строго разбирает только канонический защищённый header.
+// Результат не подтверждает подпись и используется лишь для выбора заранее
+// доверенного ключа перед VerifyCanonicalJSON.
+func ParseProtectedHeader(compact string) (ProtectedHeader, error) {
+	if len(compact) == 0 || len(compact) > MaxCompactJWSBytes {
+		return ProtectedHeader{}, ErrMalformedJWS
+	}
+	parts := strings.Split(compact, ".")
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return ProtectedHeader{}, ErrMalformedJWS
+	}
+	protected, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return ProtectedHeader{}, ErrMalformedJWS
+	}
+	var header strictProtectedHeader
+	if err := decodeStrictJSON(protected, &header); err != nil {
+		return ProtectedHeader{}, fmt.Errorf("%w: %v", ErrProtectedHeader, err)
+	}
+	if header.Alg != AlgorithmES256 ||
+		header.Type == "" ||
+		header.KeyID == "" ||
+		header.Version != ContractVersion ||
+		len(header.Critical) != 1 ||
+		header.Critical[0] != CriticalHeader {
+		return ProtectedHeader{}, ErrProtectedHeader
+	}
+	canonicalHeader, err := jcs.Transform(protected)
+	if err != nil || !bytes.Equal(canonicalHeader, protected) {
+		return ProtectedHeader{}, ErrProtectedHeader
+	}
+	return ProtectedHeader{Type: header.Type, KeyID: header.KeyID}, nil
 }
 
 // DecodeCanonicalJSON декодирует уже проверенный JWS payload и повторно

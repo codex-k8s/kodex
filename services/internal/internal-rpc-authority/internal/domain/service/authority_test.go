@@ -23,7 +23,11 @@ func TestIssueVerifyAndReplay(t *testing.T) {
 	signingKey := testKey(t, "issuer-signing-g1")
 	proofKey := testKey(t, "proof-signing-g1")
 	store := newMemoryStore()
-	authority, err := NewAuthority(testPolicy(signingKey.KeyID), signingKey, proofKey, store)
+	authority, err := NewAuthority(
+		testPolicy(signingKey.KeyID),
+		testKeyMaterial(signingKey, proofKey),
+		store,
+	)
 	if err != nil {
 		t.Fatalf("construct authority: %v", err)
 	}
@@ -87,8 +91,7 @@ func TestIssueRejectsAuthorityOutsidePolicy(t *testing.T) {
 	proofKey := testKey(t, "proof-signing-g1")
 	authority, err := NewAuthority(
 		testPolicy(signingKey.KeyID),
-		signingKey,
-		proofKey,
+		testKeyMaterial(signingKey, proofKey),
 		newMemoryStore(),
 	)
 	if err != nil {
@@ -213,6 +216,25 @@ func testKey(t *testing.T, keyID string) internalrpcauth.ES256Key {
 		KeyID:   keyID,
 		Public:  &privateKey.PublicKey,
 		Private: privateKey,
+	}
+}
+
+func testKeyMaterial(
+	signingKey internalrpcauth.ES256Key,
+	proofKey internalrpcauth.ES256Key,
+) KeyMaterial {
+	return KeyMaterial{
+		SigningKey: signingKey,
+		VerificationKeys: map[string]internalrpcauth.ES256Key{
+			signingKey.KeyID: signingKey.PublicOnly(),
+		},
+		KeyIssuers: map[string]string{
+			signingKey.KeyID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+		},
+		ProofKeys: map[string]internalrpcauth.ES256Key{
+			proofKey.KeyID: proofKey.PublicOnly(),
+		},
+		ReadbackKey: signingKey,
 	}
 }
 
