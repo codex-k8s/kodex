@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/model"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"go.yaml.in/yaml/v2"
 )
 

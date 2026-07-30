@@ -9,12 +9,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ErrorObserver получает неожиданные ошибки единожды на серверной границе.
 type ErrorObserver interface {
 	ObserveUnexpected(context.Context, string, codes.Code, error)
 }
 
+// ErrorObserverFunc адаптирует функцию к ErrorObserver.
 type ErrorObserverFunc func(context.Context, string, codes.Code, error)
 
+// ObserveUnexpected передаёт неожиданную ошибку функции-наблюдателю.
 func (observer ErrorObserverFunc) ObserveUnexpected(
 	ctx context.Context,
 	method string,
@@ -24,6 +27,7 @@ func (observer ErrorObserverFunc) ObserveUnexpected(
 	observer(ctx, method, code, err)
 }
 
+// IsUnexpectedCode определяет закрытый набор неожиданных кодов gRPC.
 func IsUnexpectedCode(code codes.Code) bool {
 	switch code {
 	case codes.Internal, codes.Unavailable, codes.Unknown, codes.DataLoss:
@@ -33,6 +37,7 @@ func IsUnexpectedCode(code codes.Code) bool {
 	}
 }
 
+// ErrorBoundary перехватывает panic и уведомляет о неожиданных ошибках один раз.
 func ErrorBoundary(observer ErrorObserver) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,

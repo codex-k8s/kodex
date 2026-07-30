@@ -13,8 +13,8 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/model"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )

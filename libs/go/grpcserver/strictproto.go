@@ -13,6 +13,7 @@ const malformedMarkerField protowire.Number = 536870911
 
 type strictProtoCodec struct{}
 
+// StrictProtoCodec возвращает codec со строгой проверкой входного wire format.
 func StrictProtoCodec() encoding.Codec {
 	return strictProtoCodec{}
 }
@@ -46,6 +47,7 @@ func (strictProtoCodec) Unmarshal(raw []byte, value any) error {
 	return nil
 }
 
+// HasMalformedProto сообщает, что strict codec отметил сообщение как некорректное.
 func HasMalformedProto(value any) bool {
 	message, ok := value.(proto.Message)
 	return !ok || len(message.ProtoReflect().GetUnknown()) != 0

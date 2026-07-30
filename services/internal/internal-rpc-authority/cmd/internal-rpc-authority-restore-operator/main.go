@@ -14,13 +14,14 @@ import (
 var version = "dev"
 
 func main() {
+	root := context.Background()
 	ctx, stop := signal.NotifyContext(
-		context.Background(),
+		root,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 	)
 	defer stop()
-	if err := app.RunRestoreOperator(ctx, context.Background(), version); err != nil &&
+	if err := app.RunRestoreOperator(ctx, root, version); err != nil &&
 		!errors.Is(err, context.Canceled) {
 		slog.Error("restore operator failed", "error", err)
 		os.Exit(1)

@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/model"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 var lifecycleUUIDPattern = regexp.MustCompile(

@@ -13,13 +13,14 @@ import (
 var version = "dev"
 
 func main() {
+	root := context.Background()
 	lifecycle, stop := signal.NotifyContext(
-		context.Background(),
+		root,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 	)
 	defer stop()
-	if err := app.Run(lifecycle, context.Background(), app.ModeIssuer, version); err != nil {
+	if err := app.Run(lifecycle, root, app.ModeIssuer, version); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "internal-rpc-authority issuer failed: %v\n", err)
 		os.Exit(1)
 	}

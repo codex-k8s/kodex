@@ -13,13 +13,14 @@ import (
 var version = "dev"
 
 func main() {
+	root := context.Background()
 	lifecycle, stop := signal.NotifyContext(
-		context.Background(),
+		root,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 	)
 	defer stop()
-	if err := app.Run(lifecycle, context.Background(), app.ModeVerifier, version); err != nil {
+	if err := app.Run(lifecycle, root, app.ModeVerifier, version); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "internal-rpc-authority verifier failed: %v\n", err)
 		os.Exit(1)
 	}

@@ -14,13 +14,14 @@ import (
 var version = "dev"
 
 func main() {
+	root := context.Background()
 	ctx, stop := signal.NotifyContext(
-		context.Background(),
+		root,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 	)
 	defer stop()
-	if err := app.RunRestoreRecovery(ctx, context.Background(), version); err != nil &&
+	if err := app.RunRestoreRecovery(ctx, root, version); err != nil &&
 		!errors.Is(err, context.Canceled) {
 		slog.Error("restore recovery failed", "error", err)
 		os.Exit(1)

@@ -13,15 +13,16 @@ import (
 var version = "dev"
 
 func main() {
+	root := context.Background()
 	lifecycle, stop := signal.NotifyContext(
-		context.Background(),
+		root,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 	)
 	defer stop()
 	if err := app.RunReadbackAttestor(
 		lifecycle,
-		context.Background(),
+		root,
 		version,
 	); err != nil {
 		_, _ = fmt.Fprintf(

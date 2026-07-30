@@ -13,13 +13,14 @@ import (
 var version = "dev"
 
 func main() {
+	root := context.Background()
 	lifecycle, stop := signal.NotifyContext(
-		context.Background(),
+		root,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 	)
 	defer stop()
-	if err := app.RunPublisher(lifecycle, context.Background(), version); err != nil {
+	if err := app.RunPublisher(lifecycle, root, version); err != nil {
 		_, _ = fmt.Fprintf(
 			os.Stderr,
 			"internal-rpc-authority publisher failed: %v\n",
