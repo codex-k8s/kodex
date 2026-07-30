@@ -1,3 +1,4 @@
+// Package credentialrollout управляет ограниченным перезапуском потребителей.
 package credentialrollout
 
 import (

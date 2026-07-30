@@ -198,7 +198,7 @@ func (repository *Repository) ConsumeReadbackChallenge(
 	return receipt, nil
 }
 
-// ReadbackReady проверяет доступность устойчивой границы attestor.
+// ActivateReadbackTrust активирует независимо подтверждённый served trust.
 func (repository *Repository) ActivateReadbackTrust(
 	ctx context.Context,
 	state model.ReadbackTrustState,

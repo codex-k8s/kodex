@@ -1,3 +1,4 @@
+// Package pitr реализует Kubernetes-адаптер исполнения и проверки PostgreSQL PITR.
 package pitr
 
 import (

@@ -1,3 +1,4 @@
+// Пакет main запускает исполняемый владелец фактического PostgreSQL PITR.
 package main
 
 import (
