@@ -1865,6 +1865,68 @@ func TestApprovedGuideCoversIndependentTrustAndLiveSessionFence(t *testing.T) {
 	}
 }
 
+func TestRuntimeSessionFenceRetirementOrderAndCrashRetry(t *testing.T) {
+	type runtimeFence struct {
+		status string
+		locked bool
+	}
+	beginAction := func(fence *runtimeFence) error {
+		if fence.locked {
+			return fmt.Errorf("SERIALIZATION_RETRY")
+		}
+		if fence.status != "CURRENT" && fence.status != "NEXT" {
+			return fmt.Errorf("RUNTIME_DATABASE_IDENTITY_REJECTED")
+		}
+		fence.locked = true
+		return nil
+	}
+	finishAction := func(fence *runtimeFence) {
+		fence.locked = false
+	}
+	retire := func(fence *runtimeFence) error {
+		if fence.locked {
+			return fmt.Errorf("SERIALIZATION_RETRY")
+		}
+		fence.status = "RETIRED"
+		return nil
+	}
+
+	actionFirst := &runtimeFence{status: "CURRENT"}
+	if err := beginAction(actionFirst); err != nil {
+		t.Fatalf("active action did not acquire the runtime fence: %v", err)
+	}
+	if err := retire(actionFirst); err == nil {
+		t.Fatal("retirement bypassed an in-flight runtime fence")
+	}
+	finishAction(actionFirst)
+	if err := retire(actionFirst); err != nil {
+		t.Fatalf("retirement did not proceed after action commit: %v", err)
+	}
+	if err := beginAction(actionFirst); err == nil {
+		t.Fatal("action retry after committed retirement was accepted")
+	}
+
+	crashedAction := &runtimeFence{status: "NEXT"}
+	if err := beginAction(crashedAction); err != nil {
+		t.Fatalf("NEXT action did not acquire the runtime fence: %v", err)
+	}
+	finishAction(crashedAction)
+	if err := retire(crashedAction); err != nil {
+		t.Fatalf("retirement did not proceed after action crash: %v", err)
+	}
+	if err := beginAction(crashedAction); err == nil {
+		t.Fatal("crashed action retry after retirement was accepted")
+	}
+
+	retirementFirst := &runtimeFence{status: "CURRENT"}
+	if err := retire(retirementFirst); err != nil {
+		t.Fatalf("retirement-first transition failed: %v", err)
+	}
+	if err := beginAction(retirementFirst); err == nil {
+		t.Fatal("action started after committed retirement")
+	}
+}
+
 func TestRoundTwoNegativeFixtureCoverage(t *testing.T) {
 	root := repositoryRoot(t)
 	fixtures := map[string]map[string]string{
