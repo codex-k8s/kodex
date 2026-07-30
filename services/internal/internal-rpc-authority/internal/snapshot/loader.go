@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
@@ -16,8 +17,11 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 )
 
+var snapshotDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
 const (
 	snapshotProtectedType = "mattercodex-internal-rpc-snapshot+jws"
+	manifestBundleType    = "mattercodex-internal-rpc-manifest-trust+jws"
 	maxSnapshotBytes      = 1 << 20
 	maxKeyFileBytes       = 64 << 10
 )
@@ -30,14 +34,16 @@ const (
 )
 
 type LoadOptions struct {
-	Role                   Role
-	WorkloadID             string
-	SnapshotJWSFile        string
-	ManifestPublicJWKFile  string
-	ContextPrivateJWKFile  string
-	ProofTrustJWKFile      string
-	ReadbackPrivateJWKFile string
-	Now                    time.Time
+	Role                       Role
+	WorkloadID                 string
+	SnapshotJWSFile            string
+	ManifestRootPublicJWKFile  string
+	ManifestRootMetadataFile   string
+	ManifestTrustBundleJWSFile string
+	ContextPrivateJWKFile      string
+	ProofTrustJWKFile          string
+	ReadbackPrivateJWKFile     string
+	Now                        time.Time
 }
 
 type Loaded struct {
@@ -72,8 +78,73 @@ type issuerKeySet struct {
 }
 
 type keyEntry struct {
-	Status string          `json:"status"`
-	JWK    json.RawMessage `json:"jwk"`
+	Status     string          `json:"status"`
+	Generation uint64          `json:"generation"`
+	Purpose    string          `json:"purpose"`
+	Audiences  []string        `json:"audiences"`
+	NotBefore  int64           `json:"not_before"`
+	NotAfter   int64           `json:"not_after"`
+	JWK        json.RawMessage `json:"jwk"`
+}
+
+type manifestRootMetadata struct {
+	Version        int    `json:"v"`
+	RootID         string `json:"root_id"`
+	RootGeneration uint64 `json:"root_generation"`
+	Purpose        string `json:"purpose"`
+	Audience       string `json:"aud"`
+	KeyID          string `json:"kid"`
+	JWKThumbprint  string `json:"jwk_thumbprint_sha256"`
+	SourceRevision uint64 `json:"source_revision"`
+	SourceDigest   string `json:"source_digest_sha256"`
+	NotBefore      int64  `json:"not_before"`
+	NotAfter       int64  `json:"not_after"`
+}
+
+type manifestTrustBundle struct {
+	Version        int                 `json:"v"`
+	RootID         string              `json:"root_id"`
+	RootGeneration uint64              `json:"root_generation"`
+	Purpose        string              `json:"purpose"`
+	Audience       string              `json:"aud"`
+	BundleRevision uint64              `json:"bundle_revision"`
+	BundleDigest   string              `json:"bundle_digest_sha256"`
+	Predecessor    revisionDigest      `json:"predecessor"`
+	History        []revisionDigest    `json:"history"`
+	Keys           []manifestSignerKey `json:"keys"`
+	PublishedAt    int64               `json:"published_at"`
+	ValidUntil     int64               `json:"valid_until"`
+}
+
+type manifestSignerKey struct {
+	Status     string          `json:"status"`
+	Generation uint64          `json:"generation"`
+	KeyID      string          `json:"kid"`
+	PublicJWK  json.RawMessage `json:"public_jwk"`
+	Thumbprint string          `json:"jwk_thumbprint_sha256"`
+	NotBefore  int64           `json:"not_before"`
+	NotAfter   int64           `json:"not_after"`
+}
+
+type proofTrustDocument struct {
+	Version        int              `json:"v"`
+	Purpose        string           `json:"purpose"`
+	SourceRevision uint64           `json:"source_revision"`
+	SourceDigest   string           `json:"source_digest_sha256"`
+	Predecessor    revisionDigest   `json:"predecessor"`
+	History        []revisionDigest `json:"history"`
+	Keys           []proofTrustKey  `json:"keys"`
+}
+
+type proofTrustKey struct {
+	Issuer     string          `json:"issuer"`
+	Generation uint64          `json:"generation"`
+	Status     string          `json:"status"`
+	Purpose    string          `json:"purpose"`
+	Audiences  []string        `json:"audiences"`
+	NotBefore  int64           `json:"not_before"`
+	NotAfter   int64           `json:"not_after"`
+	JWK        json.RawMessage `json:"jwk"`
 }
 
 type policy struct {
@@ -149,19 +220,19 @@ func Load(options LoadOptions) (Loaded, error) {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	manifestRaw, err := readRegularFile(options.ManifestPublicJWKFile, maxKeyFileBytes, 0)
-	if err != nil {
-		return Loaded{}, fmt.Errorf("read manifest verification key: %w", err)
-	}
-	manifestKey, err := internalrpcauth.ParsePublicJWK(manifestRaw)
-	if err != nil {
-		return Loaded{}, fmt.Errorf("parse manifest verification key: %w", err)
-	}
 	compactRaw, err := readRegularFile(options.SnapshotJWSFile, maxSnapshotBytes, 0o004)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("read signed authority snapshot: %w", err)
 	}
 	compact := string(trimSingleTrailingNewline(compactRaw))
+	manifestKey, manifestGeneration, err := loadManifestVerificationKey(
+		options,
+		compact,
+		now,
+	)
+	if err != nil {
+		return Loaded{}, err
+	}
 	verified, err := internalrpcauth.VerifyCanonicalJSON(
 		compact,
 		manifestKey,
@@ -182,24 +253,30 @@ func Load(options LoadOptions) (Loaded, error) {
 		snapshot.KeySetRevision == 0 ||
 		snapshot.PolicyRevision == 0 ||
 		snapshot.SignerGeneration == 0 ||
+		snapshot.SignerGeneration != manifestGeneration ||
 		snapshot.ValidUntil <= snapshot.ValidFrom ||
 		now.Before(time.Unix(snapshot.ValidFrom, 0)) ||
 		!now.Before(time.Unix(snapshot.ValidUntil, 0)) {
 		return Loaded{}, errors.New("signed authority snapshot is outside its validity or revision boundary")
 	}
+	if err := validateHistory(snapshot.SourceRevision, snapshot.Predecessor, snapshot.History); err != nil {
+		return Loaded{}, err
+	}
 	digest := sha256.Sum256(verified.CanonicalPayload)
 	sourceDigest := hex.EncodeToString(digest[:])
-	verificationKeys, keyIssuers, ownCurrent, err := loadIssuerKeys(
+	verificationKeys, ownCurrent, err := loadIssuerKeys(
 		snapshot.Issuers,
+		snapshot.Policy.OperationBindings,
 		options.WorkloadID,
 		options.Role == RoleIssuer,
+		now,
 	)
 	if err != nil {
 		return Loaded{}, err
 	}
-	proofKeys := make(map[string]internalrpcauth.ES256Key)
+	proofKeys := make(map[string]service.VerificationKeyRecord)
 	if options.Role == RoleIssuer {
-		proofKeys, err = loadPublicKeySet(options.ProofTrustJWKFile)
+		proofKeys, err = loadProofTrust(options.ProofTrustJWKFile, now)
 		if err != nil {
 			return Loaded{}, fmt.Errorf("load authority proof trust: %w", err)
 		}
@@ -222,8 +299,8 @@ func Load(options LoadOptions) (Loaded, error) {
 		if err != nil {
 			return Loaded{}, fmt.Errorf("parse authorization signing key: %w", err)
 		}
-		if signingKey.KeyID != ownCurrent.KeyID ||
-			!samePublicKey(signingKey, ownCurrent) {
+		if signingKey.KeyID != ownCurrent.Key.KeyID ||
+			!samePublicKey(signingKey, ownCurrent.Key) {
 			return Loaded{}, errors.New("authorization signing key does not match CURRENT snapshot key")
 		}
 	}
@@ -266,7 +343,7 @@ func Load(options LoadOptions) (Loaded, error) {
 	if len(bindings) == 0 && len(snapshot.Policy.OperationBindings) != 0 {
 		return Loaded{}, errors.New("signed authority snapshot has no binding for configured workload role")
 	}
-	issuer := keyIssuers[ownCurrent.KeyID]
+	issuer := ownCurrent.Issuer
 	return Loaded{
 		Policy: model.PolicySnapshot{
 			Version:                 snapshot.Version,
@@ -276,7 +353,7 @@ func Load(options LoadOptions) (Loaded, error) {
 			AllowedClockSkewSeconds: snapshot.Policy.AllowedClockSkewSeconds,
 			MaxCompactJWSBytes:      snapshot.Policy.MaxCompactJWSBytes,
 			Issuer:                  issuer,
-			SignerKeyID:             ownCurrent.KeyID,
+			SignerKeyID:             ownCurrent.Key.KeyID,
 			SourceRevision:          snapshot.SourceRevision,
 			SourceDigestSHA256:      sourceDigest,
 			PredecessorRevision:     snapshot.Predecessor.Revision,
@@ -284,50 +361,271 @@ func Load(options LoadOptions) (Loaded, error) {
 			KeySetRevision:          snapshot.KeySetRevision,
 			PolicyRevision:          snapshot.PolicyRevision,
 			SignerGeneration:        snapshot.SignerGeneration,
+			History:                 modelHistory(snapshot.History),
 			OperationBindings:       bindings,
 		},
 		Keys: service.KeyMaterial{
 			SigningKey:       signingKey,
 			VerificationKeys: verificationKeys,
-			KeyIssuers:       keyIssuers,
 			ProofKeys:        proofKeys,
 			ReadbackKey:      readbackKey,
 		},
 	}, nil
 }
 
+func loadManifestVerificationKey(
+	options LoadOptions,
+	snapshotCompact string,
+	now time.Time,
+) (internalrpcauth.ES256Key, uint64, error) {
+	rootRaw, err := readRegularFile(
+		options.ManifestRootPublicJWKFile,
+		maxKeyFileBytes,
+		0o022,
+	)
+	if err != nil {
+		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("read pinned manifest root key: %w", err)
+	}
+	rootKey, err := internalrpcauth.ParsePublicJWK(rootRaw)
+	if err != nil {
+		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("parse pinned manifest root key: %w", err)
+	}
+	metadataRaw, err := readRegularFile(
+		options.ManifestRootMetadataFile,
+		maxKeyFileBytes,
+		0o022,
+	)
+	if err != nil {
+		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("read pinned manifest root metadata: %w", err)
+	}
+	var metadata manifestRootMetadata
+	if err := internalrpcauth.DecodeCanonicalJSON(metadataRaw, &metadata); err != nil {
+		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("decode pinned manifest root metadata: %w", err)
+	}
+	thumbprint, err := internalrpcauth.PublicJWKThumbprintSHA256(rootKey)
+	if err != nil {
+		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("derive pinned manifest root thumbprint: %w", err)
+	}
+	if metadata.Version != model.ContractVersion ||
+		metadata.RootID != "internal-rpc-authority-manifest-root-v1" ||
+		metadata.RootGeneration == 0 ||
+		metadata.Purpose != "AUTHORITY_SNAPSHOT_MANIFEST_ROOT" ||
+		metadata.Audience !=
+			"urn:mattercodex:internal-rpc-authority:manifest-root" ||
+		metadata.KeyID != rootKey.KeyID ||
+		metadata.JWKThumbprint != thumbprint ||
+		metadata.SourceRevision == 0 ||
+		!snapshotDigestPattern.MatchString(metadata.SourceDigest) ||
+		now.Before(time.Unix(metadata.NotBefore, 0)) ||
+		!now.Before(time.Unix(metadata.NotAfter, 0)) {
+		return internalrpcauth.ES256Key{}, 0, errors.New("pinned manifest root metadata rejected")
+	}
+	bundleRaw, err := readRegularFile(
+		options.ManifestTrustBundleJWSFile,
+		maxSnapshotBytes,
+		0o004,
+	)
+	if err != nil {
+		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("read manifest trust bundle: %w", err)
+	}
+	bundleCompact := string(trimSingleTrailingNewline(bundleRaw))
+	verified, err := internalrpcauth.VerifyCanonicalJSON(
+		bundleCompact,
+		rootKey,
+		internalrpcauth.ProtectedHeaderExpectation{
+			Type:  manifestBundleType,
+			KeyID: rootKey.KeyID,
+		},
+	)
+	if err != nil {
+		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("verify manifest trust bundle root signature: %w", err)
+	}
+	var bundle manifestTrustBundle
+	if err := internalrpcauth.DecodeCanonicalJSON(
+		verified.CanonicalPayload,
+		&bundle,
+	); err != nil {
+		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("decode manifest trust bundle: %w", err)
+	}
+	if bundle.Version != model.ContractVersion ||
+		bundle.RootID != metadata.RootID ||
+		bundle.RootGeneration != metadata.RootGeneration ||
+		bundle.Purpose != "AUTHORITY_SNAPSHOT_MANIFEST_VERIFICATION" ||
+		bundle.Audience !=
+			"urn:mattercodex:internal-rpc-authority:manifest-bundle" ||
+		bundle.BundleRevision == 0 ||
+		bundle.BundleRevision < metadata.SourceRevision ||
+		!snapshotDigestPattern.MatchString(bundle.BundleDigest) ||
+		bundle.PublishedAt > now.Add(5*time.Second).Unix() ||
+		bundle.ValidUntil != bundle.PublishedAt+86400 ||
+		!now.Before(time.Unix(bundle.ValidUntil, 0)) {
+		return internalrpcauth.ES256Key{}, 0, errors.New("manifest trust bundle metadata rejected")
+	}
+	if err := validateHistory(
+		bundle.BundleRevision,
+		bundle.Predecessor,
+		bundle.History,
+	); err != nil {
+		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("manifest trust bundle history rejected: %w", err)
+	}
+	snapshotHeader, err := internalrpcauth.ParseProtectedHeader(snapshotCompact)
+	if err != nil || snapshotHeader.Type != snapshotProtectedType {
+		return internalrpcauth.ES256Key{}, 0, errors.New("snapshot protected header rejected before manifest key resolution")
+	}
+	currentCount := 0
+	var selected internalrpcauth.ES256Key
+	var selectedGeneration uint64
+	for _, entry := range bundle.Keys {
+		key, parseErr := internalrpcauth.ParsePublicJWK(entry.PublicJWK)
+		if parseErr != nil {
+			return internalrpcauth.ES256Key{}, 0, fmt.Errorf("parse manifest signer key: %w", parseErr)
+		}
+		entryThumbprint, thumbErr := internalrpcauth.PublicJWKThumbprintSHA256(key)
+		if thumbErr != nil ||
+			key.KeyID != entry.KeyID ||
+			entry.Thumbprint != entryThumbprint ||
+			entry.Generation == 0 ||
+			(entry.Status != "CURRENT" &&
+				entry.Status != "NEXT" &&
+				entry.Status != "PREVIOUS") ||
+			entry.NotAfter <= entry.NotBefore {
+			return internalrpcauth.ES256Key{}, 0, errors.New("manifest signer record rejected")
+		}
+		if entry.Status == "CURRENT" {
+			currentCount++
+		}
+		if entry.KeyID == snapshotHeader.KeyID {
+			if entry.Status != "CURRENT" ||
+				now.Before(time.Unix(entry.NotBefore, 0)) ||
+				!now.Before(time.Unix(entry.NotAfter, 0)) ||
+				selected.Public != nil {
+				return internalrpcauth.ES256Key{}, 0, errors.New("snapshot manifest signer is ambiguous or inactive")
+			}
+			selected = key
+			selectedGeneration = entry.Generation
+		}
+	}
+	if currentCount != 1 || selected.Public == nil {
+		return internalrpcauth.ES256Key{}, 0, errors.New("exact CURRENT snapshot manifest signer is unavailable")
+	}
+	return selected, selectedGeneration, nil
+}
+
+func validateHistory(
+	sourceRevision uint64,
+	predecessor revisionDigest,
+	history []revisionDigest,
+) error {
+	const zeroDigest = "0000000000000000000000000000000000000000000000000000000000000000"
+	if len(history) > 32 {
+		return errors.New("signed authority snapshot history exceeds the bounded window")
+	}
+	if sourceRevision == 1 {
+		if predecessor.Revision != 0 || predecessor.DigestSHA256 != zeroDigest || len(history) != 0 {
+			return errors.New("bootstrap authority snapshot predecessor or history is invalid")
+		}
+		return nil
+	}
+	if predecessor.Revision != sourceRevision-1 ||
+		!snapshotDigestPattern.MatchString(predecessor.DigestSHA256) ||
+		len(history) == 0 {
+		return errors.New("signed authority snapshot predecessor is invalid")
+	}
+	firstRevision := sourceRevision - uint64(len(history))
+	seen := make(map[uint64]struct{}, len(history))
+	for index, entry := range history {
+		expectedRevision := firstRevision + uint64(index)
+		if entry.Revision != expectedRevision ||
+			!snapshotDigestPattern.MatchString(entry.DigestSHA256) {
+			return errors.New("signed authority snapshot history is gapped or malformed")
+		}
+		if _, duplicate := seen[entry.Revision]; duplicate {
+			return errors.New("signed authority snapshot history contains a duplicate revision")
+		}
+		seen[entry.Revision] = struct{}{}
+	}
+	last := history[len(history)-1]
+	if last.Revision != predecessor.Revision ||
+		last.DigestSHA256 != predecessor.DigestSHA256 {
+		return errors.New("signed authority snapshot history does not end at the predecessor")
+	}
+	return nil
+}
+
+func modelHistory(values []revisionDigest) []model.RevisionDigest {
+	result := make([]model.RevisionDigest, 0, len(values))
+	for _, value := range values {
+		result = append(result, model.RevisionDigest{
+			Revision:     value.Revision,
+			DigestSHA256: value.DigestSHA256,
+		})
+	}
+	return result
+}
+
 func loadIssuerKeys(
 	keySets []issuerKeySet,
+	bindings []operationBinding,
 	workloadID string,
 	requireOwnCurrent bool,
-) (map[string]internalrpcauth.ES256Key, map[string]string, internalrpcauth.ES256Key, error) {
-	keys := make(map[string]internalrpcauth.ES256Key)
-	issuers := make(map[string]string)
-	var ownCurrent internalrpcauth.ES256Key
+	now time.Time,
+) (
+	map[string]service.VerificationKeyRecord,
+	service.VerificationKeyRecord,
+	error,
+) {
+	keys := make(map[string]service.VerificationKeyRecord)
+	var ownCurrent service.VerificationKeyRecord
+	audiencesByIssuer := make(map[string]map[string]struct{})
+	for _, binding := range bindings {
+		if audiencesByIssuer[binding.Issuer] == nil {
+			audiencesByIssuer[binding.Issuer] = make(map[string]struct{})
+		}
+		audiencesByIssuer[binding.Issuer][binding.Audience] = struct{}{}
+	}
 	for _, keySet := range keySets {
 		currentCount := 0
 		for _, entry := range keySet.Keys {
 			key, err := internalrpcauth.ParsePublicJWK(entry.JWK)
 			if err != nil {
-				return nil, nil, internalrpcauth.ES256Key{}, fmt.Errorf("parse snapshot public key: %w", err)
+				return nil, service.VerificationKeyRecord{}, fmt.Errorf("parse snapshot public key: %w", err)
 			}
-			if existingIssuer, duplicate := issuers[key.KeyID]; duplicate && existingIssuer != keySet.Issuer {
-				return nil, nil, internalrpcauth.ES256Key{}, errors.New("snapshot key id is shared by different issuers")
+			if _, duplicate := keys[key.KeyID]; duplicate {
+				return nil, service.VerificationKeyRecord{}, errors.New("snapshot key id is not globally unique")
 			}
-			keys[key.KeyID] = key
-			issuers[key.KeyID] = keySet.Issuer
+			audiences := stringSet(entry.Audiences)
+			record := service.VerificationKeyRecord{
+				Key:        key,
+				Issuer:     keySet.Issuer,
+				Generation: entry.Generation,
+				Status:     entry.Status,
+				Purpose:    entry.Purpose,
+				Audiences:  audiences,
+				NotBefore:  time.Unix(entry.NotBefore, 0).UTC(),
+				NotAfter:   time.Unix(entry.NotAfter, 0).UTC(),
+			}
+			if record.Generation == 0 ||
+				record.Purpose != "AUTHORIZATION_CONTEXT" ||
+				len(record.Audiences) == 0 ||
+				!sameStringSet(record.Audiences, audiencesByIssuer[keySet.Issuer]) ||
+				!record.NotBefore.Before(record.NotAfter) ||
+				now.Before(record.NotBefore) ||
+				!now.Before(record.NotAfter) {
+				return nil, service.VerificationKeyRecord{}, errors.New("snapshot key metadata is invalid")
+			}
+			keys[key.KeyID] = record
 			if entry.Status == "CURRENT" {
 				currentCount++
-				if ownCurrent.Public == nil {
-					ownCurrent = key
+				if ownCurrent.Key.Public == nil {
+					ownCurrent = record
 				}
 				if keySet.WorkloadID == workloadID {
-					ownCurrent = key
+					ownCurrent = record
 				}
 			}
 		}
 		if currentCount != 1 {
-			return nil, nil, internalrpcauth.ES256Key{}, errors.New("issuer key set must contain exactly one CURRENT key")
+			return nil, service.VerificationKeyRecord{}, errors.New("issuer key set must contain exactly one CURRENT key")
 		}
 	}
 	if requireOwnCurrent {
@@ -339,41 +637,106 @@ func loadIssuerKeys(
 			}
 		}
 		if !matched {
-			return nil, nil, internalrpcauth.ES256Key{}, errors.New("configured issuer workload has no CURRENT key")
+			return nil, service.VerificationKeyRecord{}, errors.New("configured issuer workload has no CURRENT key")
 		}
 	}
-	if ownCurrent.Public == nil {
-		return nil, nil, internalrpcauth.ES256Key{}, errors.New("configured workload has no CURRENT issuer key")
+	if ownCurrent.Key.Public == nil {
+		return nil, service.VerificationKeyRecord{}, errors.New("configured workload has no CURRENT issuer key")
 	}
-	return keys, issuers, ownCurrent, nil
+	return keys, ownCurrent, nil
 }
 
-func loadPublicKeySet(path string) (map[string]internalrpcauth.ES256Key, error) {
+func loadProofTrust(
+	path string,
+	now time.Time,
+) (map[string]service.VerificationKeyRecord, error) {
 	raw, err := readRegularFile(path, maxKeyFileBytes, 0)
 	if err != nil {
 		return nil, err
 	}
-	if key, parseErr := internalrpcauth.ParsePublicJWK(raw); parseErr == nil {
-		return map[string]internalrpcauth.ES256Key{key.KeyID: key}, nil
+	var document proofTrustDocument
+	if err := internalrpcauth.DecodeCanonicalJSON(raw, &document); err != nil ||
+		document.Version != model.ContractVersion ||
+		document.Purpose != "AUTHORITY_PROOF_VERIFICATION" ||
+		document.SourceRevision == 0 ||
+		!snapshotDigestPattern.MatchString(document.SourceDigest) ||
+		len(document.Keys) == 0 ||
+		len(document.Keys) > 32 {
+		return nil, errors.New("authority proof trust document is invalid")
 	}
-	var set struct {
-		Keys []json.RawMessage `json:"keys"`
+	if err := validateHistory(
+		document.SourceRevision,
+		document.Predecessor,
+		document.History,
+	); err != nil {
+		return nil, fmt.Errorf("authority proof trust history rejected: %w", err)
 	}
-	if err := json.Unmarshal(raw, &set); err != nil || len(set.Keys) == 0 || len(set.Keys) > 32 {
-		return nil, errors.New("authority proof trust is not a supported JWK set")
-	}
-	result := make(map[string]internalrpcauth.ES256Key, len(set.Keys))
-	for _, encoded := range set.Keys {
-		key, err := internalrpcauth.ParsePublicJWK(encoded)
+	result := make(map[string]service.VerificationKeyRecord, len(document.Keys))
+	currentByIssuer := make(map[string]int)
+	for _, entry := range document.Keys {
+		key, err := internalrpcauth.ParsePublicJWK(entry.JWK)
 		if err != nil {
 			return nil, err
 		}
 		if _, duplicate := result[key.KeyID]; duplicate {
 			return nil, errors.New("duplicate authority proof key id")
 		}
-		result[key.KeyID] = key
+		record := service.VerificationKeyRecord{
+			Key:        key,
+			Issuer:     entry.Issuer,
+			Generation: entry.Generation,
+			Status:     entry.Status,
+			Purpose:    entry.Purpose,
+			Audiences:  stringSet(entry.Audiences),
+			NotBefore:  time.Unix(entry.NotBefore, 0).UTC(),
+			NotAfter:   time.Unix(entry.NotAfter, 0).UTC(),
+		}
+		if record.Issuer == "" ||
+			record.Generation == 0 ||
+			record.Purpose != "AUTHORITY_PROOF" ||
+			len(record.Audiences) == 0 ||
+			(record.Status != "CURRENT" &&
+				record.Status != "NEXT" &&
+				record.Status != "PREVIOUS") ||
+			!record.NotBefore.Before(record.NotAfter) ||
+			now.Before(record.NotBefore) ||
+			!now.Before(record.NotAfter) {
+			return nil, errors.New("authority proof key metadata is invalid")
+		}
+		if record.Status == "CURRENT" {
+			currentByIssuer[record.Issuer]++
+		}
+		result[key.KeyID] = record
+	}
+	for issuer, count := range currentByIssuer {
+		if issuer == "" || count != 1 {
+			return nil, errors.New("authority proof issuer must have exactly one CURRENT key")
+		}
 	}
 	return result, nil
+}
+
+func stringSet(values []string) map[string]struct{} {
+	result := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		result[value] = struct{}{}
+	}
+	return result
+}
+
+func sameStringSet(left, right map[string]struct{}) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for value := range left {
+		if _, ok := right[value]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func bindingApplies(role Role, workloadID string, binding operationBinding) bool {

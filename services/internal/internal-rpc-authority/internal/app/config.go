@@ -37,7 +37,9 @@ type Config struct {
 	DatabaseCapabilityRole      string
 	PostgresMaxConnections      int32
 	SnapshotJWSFile             string
-	ManifestPublicJWKFile       string
+	ManifestRootPublicJWKFile   string
+	ManifestRootMetadataFile    string
+	ManifestTrustBundleJWSFile  string
 	ContextPrivateJWKFile       string
 	ProofTrustJWKFile           string
 	ReadbackPrivateJWKFile      string
@@ -62,7 +64,9 @@ func LoadConfig(mode Mode) (Config, error) {
 		PostgresExpectedSessionUser: strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER")),
 		PostgresMaxConnections:      8,
 		SnapshotJWSFile:             envOrDefault("INTERNAL_RPC_AUTHORITY_SNAPSHOT_JWS_FILE", "/var/run/config/mattercodex/internal-rpc-authority/snapshot/snapshot.jws"),
-		ManifestPublicJWKFile:       envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_PUBLIC_JWK_FILE", "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust/current.jwk"),
+		ManifestRootPublicJWKFile:   envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_PUBLIC_JWK_FILE", "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk"),
+		ManifestRootMetadataFile:    envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_METADATA_FILE", "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-metadata.json"),
+		ManifestTrustBundleJWSFile:  envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_JWS_FILE", "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust/bundle.jws"),
 		ContextPrivateJWKFile:       envOrDefault("INTERNAL_RPC_AUTHORITY_CONTEXT_PRIVATE_JWK_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/issuer/private.jwk"),
 		ProofTrustJWKFile:           envOrDefault("INTERNAL_RPC_AUTHORITY_PROOF_TRUST_JWK_FILE", "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json"),
 		ReadbackPrivateJWKFile:      envOrDefault("INTERNAL_RPC_AUTHORITY_READBACK_PRIVATE_JWK_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/readback/possession-key.jwk"),
@@ -191,10 +195,12 @@ func (config Config) Validate() error {
 		return fmt.Errorf("invalid technical listen address: %w", err)
 	}
 	for name, path := range map[string]string{
-		"PostgresDSNFile":        config.PostgresDSNFile,
-		"SnapshotJWSFile":        config.SnapshotJWSFile,
-		"ManifestPublicJWKFile":  config.ManifestPublicJWKFile,
-		"ReadbackPrivateJWKFile": config.ReadbackPrivateJWKFile,
+		"PostgresDSNFile":            config.PostgresDSNFile,
+		"SnapshotJWSFile":            config.SnapshotJWSFile,
+		"ManifestRootPublicJWKFile":  config.ManifestRootPublicJWKFile,
+		"ManifestRootMetadataFile":   config.ManifestRootMetadataFile,
+		"ManifestTrustBundleJWSFile": config.ManifestTrustBundleJWSFile,
+		"ReadbackPrivateJWKFile":     config.ReadbackPrivateJWKFile,
 	} {
 		if !filepath.IsAbs(path) {
 			return fmt.Errorf("%s must be an absolute path", name)

@@ -35,6 +35,25 @@ packages:
     consumers:
       - internal-rpc-authority
       - control-plane
+  - id: internal-rpc-authority-proof-trust-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authority-proof-trust.schema.json
+    consumers:
+      - internal-rpc-authority
+      - control-plane
+  - id: internal-rpc-authority-manifest-root-metadata-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authority-manifest-root-metadata.schema.json
+    consumers:
+      - internal-rpc-authority
+  - id: internal-rpc-authority-manifest-trust-bundle-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authority-manifest-trust-bundle.schema.json
+    consumers:
+      - internal-rpc-authority
   - id: internal-rpc-authority-restore-evidence-v1
     format: json-schema
     owner: internal-rpc-authority-restore-controller

@@ -115,8 +115,14 @@ type PolicySnapshot struct {
 	KeySetRevision          uint64             `yaml:"key_set_revision"`
 	PolicyRevision          uint64             `yaml:"policy_revision"`
 	SignerGeneration        uint64             `yaml:"signer_generation"`
+	History                 []RevisionDigest   `yaml:"history"`
 	AuthorityProofProducers []string           `yaml:"authority_proof_producers"`
 	OperationBindings       []OperationBinding `yaml:"operation_bindings"`
+}
+
+type RevisionDigest struct {
+	Revision     uint64 `yaml:"revision"`
+	DigestSHA256 string `yaml:"digest_sha256"`
 }
 
 type SnapshotState struct {
@@ -127,4 +133,5 @@ type SnapshotState struct {
 	KeySetRevision          uint64
 	PolicyRevision          uint64
 	SignerGeneration        uint64
+	History                 []RevisionDigest
 }

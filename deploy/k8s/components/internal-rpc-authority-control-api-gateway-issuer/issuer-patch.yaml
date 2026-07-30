@@ -29,6 +29,11 @@ spec:
             - name: internal-rpc-authority-sockets
               mountPath: /run/mattercodex
       containers:
+        - name: control-api-gateway
+          volumeMounts:
+            - name: internal-rpc-authority-sockets
+              mountPath: /run/mattercodex/internal-rpc-authority
+              readOnly: true
         - name: internal-rpc-authority-issuer
           image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command:

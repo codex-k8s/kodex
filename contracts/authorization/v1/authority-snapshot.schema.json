@@ -249,6 +249,11 @@
       "additionalProperties": false,
       "required": [
         "status",
+        "generation",
+        "purpose",
+        "audiences",
+        "not_before",
+        "not_after",
         "jwk"
       ],
       "properties": {
@@ -258,6 +263,27 @@
             "NEXT",
             "PREVIOUS"
           ]
+        },
+        "generation": {
+          "$ref": "#/$defs/revision"
+        },
+        "purpose": {
+          "const": "AUTHORIZATION_CONTEXT"
+        },
+        "audiences": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/audience"
+          }
+        },
+        "not_before": {
+          "$ref": "#/$defs/unixTime"
+        },
+        "not_after": {
+          "$ref": "#/$defs/unixTime"
         },
         "jwk": {
           "$ref": "#/$defs/jwk"

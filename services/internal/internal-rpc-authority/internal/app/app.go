@@ -59,14 +59,16 @@ func Run(
 		return fmt.Errorf("construct authority repository: %w", err)
 	}
 	loaded, err := snapshot.Load(snapshot.LoadOptions{
-		Role:                   snapshot.Role(config.Mode),
-		WorkloadID:             config.WorkloadID,
-		SnapshotJWSFile:        config.SnapshotJWSFile,
-		ManifestPublicJWKFile:  config.ManifestPublicJWKFile,
-		ContextPrivateJWKFile:  config.ContextPrivateJWKFile,
-		ProofTrustJWKFile:      config.ProofTrustJWKFile,
-		ReadbackPrivateJWKFile: config.ReadbackPrivateJWKFile,
-		Now:                    time.Now(),
+		Role:                       snapshot.Role(config.Mode),
+		WorkloadID:                 config.WorkloadID,
+		SnapshotJWSFile:            config.SnapshotJWSFile,
+		ManifestRootPublicJWKFile:  config.ManifestRootPublicJWKFile,
+		ManifestRootMetadataFile:   config.ManifestRootMetadataFile,
+		ManifestTrustBundleJWSFile: config.ManifestTrustBundleJWSFile,
+		ContextPrivateJWKFile:      config.ContextPrivateJWKFile,
+		ProofTrustJWKFile:          config.ProofTrustJWKFile,
+		ReadbackPrivateJWKFile:     config.ReadbackPrivateJWKFile,
+		Now:                        time.Now(),
 	})
 	if err != nil {
 		store.Close()
@@ -273,14 +275,16 @@ func runSnapshotReload(
 		}
 		current := authorityApplication.SnapshotState()
 		loaded, err := snapshot.Load(snapshot.LoadOptions{
-			Role:                   snapshot.Role(config.Mode),
-			WorkloadID:             config.WorkloadID,
-			SnapshotJWSFile:        config.SnapshotJWSFile,
-			ManifestPublicJWKFile:  config.ManifestPublicJWKFile,
-			ContextPrivateJWKFile:  config.ContextPrivateJWKFile,
-			ProofTrustJWKFile:      config.ProofTrustJWKFile,
-			ReadbackPrivateJWKFile: config.ReadbackPrivateJWKFile,
-			Now:                    time.Now(),
+			Role:                       snapshot.Role(config.Mode),
+			WorkloadID:                 config.WorkloadID,
+			SnapshotJWSFile:            config.SnapshotJWSFile,
+			ManifestRootPublicJWKFile:  config.ManifestRootPublicJWKFile,
+			ManifestRootMetadataFile:   config.ManifestRootMetadataFile,
+			ManifestTrustBundleJWSFile: config.ManifestTrustBundleJWSFile,
+			ContextPrivateJWKFile:      config.ContextPrivateJWKFile,
+			ProofTrustJWKFile:          config.ProofTrustJWKFile,
+			ReadbackPrivateJWKFile:     config.ReadbackPrivateJWKFile,
+			Now:                        time.Now(),
 		})
 		if err != nil {
 			authorityApplication.SetAvailable(false)

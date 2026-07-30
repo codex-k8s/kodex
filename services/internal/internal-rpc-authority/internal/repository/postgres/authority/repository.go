@@ -209,6 +209,12 @@ func snapshotArgs(
 	targetWorkloadID string,
 	value repository.SnapshotState,
 ) pgx.StrictNamedArgs {
+	historyRevisions := make([]int64, 0, len(value.History))
+	historyDigests := make([]string, 0, len(value.History))
+	for _, entry := range value.History {
+		historyRevisions = append(historyRevisions, int64(entry.Revision))
+		historyDigests = append(historyDigests, entry.DigestSHA256)
+	}
 	return pgx.StrictNamedArgs{
 		"target_workload_id":        targetWorkloadID,
 		"source_revision":           value.SourceRevision,
@@ -218,6 +224,8 @@ func snapshotArgs(
 		"key_set_revision":          value.KeySetRevision,
 		"policy_revision":           value.PolicyRevision,
 		"signer_generation":         value.SignerGeneration,
+		"history_revisions":         historyRevisions,
+		"history_digests":           historyDigests,
 	}
 }
 

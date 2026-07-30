@@ -5,6 +5,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"math"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -201,8 +203,8 @@ func testProof(now time.Time) model.AuthorityProof {
 		SignerGeneration: 1,
 		JTI:              "33333333-3333-4333-8333-333333333333",
 		IssuedAt:         now.Unix(),
-		NotBefore:        now.Add(-time.Second).Unix(),
-		ExpiresAt:        now.Add(10 * time.Second).Unix(),
+		NotBefore:        now.Unix(),
+		ExpiresAt:        now.Add(maxProofTTL).Unix(),
 	}
 }
 
@@ -225,14 +227,33 @@ func testKeyMaterial(
 ) KeyMaterial {
 	return KeyMaterial{
 		SigningKey: signingKey,
-		VerificationKeys: map[string]internalrpcauth.ES256Key{
-			signingKey.KeyID: signingKey.PublicOnly(),
+		VerificationKeys: map[string]VerificationKeyRecord{
+			signingKey.KeyID: {
+				Key:        signingKey.PublicOnly(),
+				Issuer:     "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+				Generation: 6,
+				Status:     keyStatusCurrent,
+				Purpose:    contextKeyPurpose,
+				Audiences: map[string]struct{}{
+					"urn:mattercodex:internal-rpc:control-plane": {},
+				},
+				NotBefore: time.Unix(0, 0),
+				NotAfter:  time.Unix(math.MaxInt32, 0),
+			},
 		},
-		KeyIssuers: map[string]string{
-			signingKey.KeyID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-		},
-		ProofKeys: map[string]internalrpcauth.ES256Key{
-			proofKey.KeyID: proofKey.PublicOnly(),
+		ProofKeys: map[string]VerificationKeyRecord{
+			proofKey.KeyID: {
+				Key:        proofKey.PublicOnly(),
+				Issuer:     "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+				Generation: 1,
+				Status:     keyStatusCurrent,
+				Purpose:    proofKeyPurpose,
+				Audiences: map[string]struct{}{
+					"urn:mattercodex:internal-rpc-authority-issuer:control-api-gateway": {},
+				},
+				NotBefore: time.Unix(0, 0),
+				NotAfter:  time.Unix(math.MaxInt32, 0),
+			},
 		},
 		ReadbackKey: signingKey,
 	}
@@ -303,7 +324,7 @@ func (store *memoryStore) Ready(
 ) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	if !store.active || store.snapshot != expected {
+	if !store.active || !reflect.DeepEqual(store.snapshot, expected) {
 		return repository.ErrNotReady
 	}
 	return nil

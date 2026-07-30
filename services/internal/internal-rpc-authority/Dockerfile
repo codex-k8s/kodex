@@ -47,6 +47,9 @@ RUN apk add --no-cache ca-certificates \
     && adduser -S -D -H -u 65532 -G authority authority
 
 COPY --from=build --chmod=0555 /out/ /usr/local/bin/
+COPY --from=build --chmod=0444 \
+    /workspace/services/internal/internal-rpc-authority/internal/bootstrap/manifest-root/ \
+    /usr/local/share/internal-rpc-authority/manifest-root/
 
 USER 65532:65532
 

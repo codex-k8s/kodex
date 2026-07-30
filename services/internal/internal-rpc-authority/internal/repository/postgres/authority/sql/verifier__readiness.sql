@@ -8,4 +8,5 @@ SELECT EXISTS (
       AND key_set_revision = @key_set_revision
       AND policy_revision = @policy_revision
       AND signer_generation = @signer_generation
-);
+)
+AND internal_rpc_authority.runtime_restore_fence_allows_work();

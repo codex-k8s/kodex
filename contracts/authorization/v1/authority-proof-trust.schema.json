@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-proof-trust.schema.json",
+  "title": "Доверие к issuer authority proof",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "purpose",
+    "source_revision",
+    "source_digest_sha256",
+    "predecessor",
+    "history",
+    "keys"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "purpose": {
+      "const": "AUTHORITY_PROOF_VERIFICATION"
+    },
+    "source_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "source_digest_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "predecessor": {
+      "$ref": "#/$defs/revisionDigest"
+    },
+    "history": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/revisionDigest"
+      }
+    },
+    "keys": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/key"
+      }
+    }
+  },
+  "$defs": {
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "revisionDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "digest_sha256"
+      ],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "digest_sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "jwk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kty",
+        "crv",
+        "use",
+        "key_ops",
+        "alg",
+        "kid",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "kty": {
+          "const": "EC"
+        },
+        "crv": {
+          "const": "P-256"
+        },
+        "use": {
+          "const": "sig"
+        },
+        "key_ops": {
+          "const": [
+            "verify"
+          ]
+        },
+        "alg": {
+          "const": "ES256"
+        },
+        "kid": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "x": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "y": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        }
+      }
+    },
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "generation",
+        "status",
+        "purpose",
+        "audiences",
+        "not_before",
+        "not_after",
+        "jwk"
+      ],
+      "properties": {
+        "issuer": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 512,
+          "pattern": "^spiffe://[a-z0-9.-]+(?:/[A-Za-z0-9._~-]+)+$"
+        },
+        "generation": {
+          "$ref": "#/$defs/revision"
+        },
+        "status": {
+          "enum": [
+            "CURRENT",
+            "NEXT",
+            "PREVIOUS"
+          ]
+        },
+        "purpose": {
+          "const": "AUTHORITY_PROOF"
+        },
+        "audiences": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 160,
+            "pattern": "^urn:mattercodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+          }
+        },
+        "not_before": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 253402300799
+        },
+        "not_after": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 253402300799
+        },
+        "jwk": {
+          "$ref": "#/$defs/jwk"
+        }
+      }
+    }
+  }
+}

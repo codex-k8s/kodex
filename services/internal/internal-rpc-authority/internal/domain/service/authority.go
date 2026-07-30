@@ -20,6 +20,10 @@ import (
 const (
 	contextProtectedType = "mattercodex-internal-rpc-auth+jws"
 	proofProtectedType   = "mattercodex-internal-rpc-authority-proof+jws"
+	contextKeyPurpose    = "AUTHORIZATION_CONTEXT"
+	proofKeyPurpose      = "AUTHORITY_PROOF"
+	keyStatusCurrent     = "CURRENT"
+	keyStatusPrevious    = "PREVIOUS"
 	maxProofTTL          = 15 * time.Second
 )
 
@@ -33,9 +37,8 @@ type Authority struct {
 	policy           model.PolicySnapshot
 	bindings         map[string]model.OperationBinding
 	signingKey       internalrpcauth.ES256Key
-	verificationKeys map[string]internalrpcauth.ES256Key
-	keyIssuers       map[string]string
-	proofKeys        map[string]internalrpcauth.ES256Key
+	verificationKeys map[string]VerificationKeyRecord
+	proofKeys        map[string]VerificationKeyRecord
 	readbackKey      internalrpcauth.ES256Key
 	store            repository.Store
 	now              func() time.Time
@@ -43,10 +46,20 @@ type Authority struct {
 
 type KeyMaterial struct {
 	SigningKey       internalrpcauth.ES256Key
-	VerificationKeys map[string]internalrpcauth.ES256Key
-	KeyIssuers       map[string]string
-	ProofKeys        map[string]internalrpcauth.ES256Key
+	VerificationKeys map[string]VerificationKeyRecord
+	ProofKeys        map[string]VerificationKeyRecord
 	ReadbackKey      internalrpcauth.ES256Key
+}
+
+type VerificationKeyRecord struct {
+	Key        internalrpcauth.ES256Key
+	Issuer     string
+	Generation uint64
+	Status     string
+	Purpose    string
+	Audiences  map[string]struct{}
+	NotBefore  time.Time
+	NotAfter   time.Time
 }
 
 func NewAuthority(
@@ -75,7 +88,6 @@ func NewAuthority(
 		policy.SignerKeyID == "" ||
 		store == nil ||
 		len(keys.VerificationKeys) == 0 ||
-		len(keys.KeyIssuers) != len(keys.VerificationKeys) ||
 		(keys.SigningKey.Private != nil && len(keys.ProofKeys) == 0) ||
 		keys.ReadbackKey.Private == nil {
 		return nil, failure.New(failure.SnapshotRejected, "invalid authority policy snapshot")
@@ -83,8 +95,19 @@ func NewAuthority(
 	if keys.SigningKey.Private != nil && keys.SigningKey.KeyID != policy.SignerKeyID {
 		return nil, failure.New(failure.SnapshotRejected, "signing key does not match policy")
 	}
-	if _, ok := keys.VerificationKeys[policy.SignerKeyID]; !ok {
+	signerRecord, ok := keys.VerificationKeys[policy.SignerKeyID]
+	if !ok ||
+		signerRecord.Status != keyStatusCurrent ||
+		signerRecord.Generation != policy.SignerGeneration ||
+		signerRecord.Issuer != policy.Issuer ||
+		signerRecord.Purpose != contextKeyPurpose {
 		return nil, failure.New(failure.SnapshotRejected, "policy signing key is not trusted")
+	}
+	if err := validateKeyRecords(keys.VerificationKeys, contextKeyPurpose); err != nil {
+		return nil, failure.Wrap(failure.SnapshotRejected, "authorization key registry rejected", err)
+	}
+	if err := validateKeyRecords(keys.ProofKeys, proofKeyPurpose); err != nil {
+		return nil, failure.Wrap(failure.SnapshotRejected, "authority proof key registry rejected", err)
 	}
 	bindings := make(map[string]model.OperationBinding, len(policy.OperationBindings))
 	for _, binding := range policy.OperationBindings {
@@ -109,9 +132,8 @@ func NewAuthority(
 		policy:           policy,
 		bindings:         bindings,
 		signingKey:       keys.SigningKey,
-		verificationKeys: publicKeyMap(keys.VerificationKeys),
-		keyIssuers:       keys.KeyIssuers,
-		proofKeys:        publicKeyMap(keys.ProofKeys),
+		verificationKeys: publicKeyRecords(keys.VerificationKeys),
+		proofKeys:        publicKeyRecords(keys.ProofKeys),
 		readbackKey:      keys.ReadbackKey,
 		store:            store,
 		now:              time.Now,
@@ -147,7 +169,7 @@ func (authority *Authority) Issue(
 	}
 	verified, err := internalrpcauth.VerifyCanonicalJSON(
 		proofCompact,
-		proofKey,
+		proofKey.Key,
 		internalrpcauth.ProtectedHeaderExpectation{
 			Type:  proofProtectedType,
 			KeyID: header.KeyID,
@@ -196,6 +218,18 @@ func (authority *Authority) Issue(
 		return "", model.AuthorizationClaims{}, failure.New(
 			failure.BindingMismatch,
 			"authority proof binding failed",
+		)
+	}
+	if proofKey.Issuer != proof.Issuer ||
+		proofKey.Generation != proof.SignerGeneration ||
+		proofKey.Status != keyStatusCurrent ||
+		proofKey.Purpose != proofKeyPurpose ||
+		!keyAllowsAudience(proofKey, proof.Audience) ||
+		now.Before(proofKey.NotBefore) ||
+		!now.Before(proofKey.NotAfter) {
+		return "", model.AuthorizationClaims{}, failure.New(
+			failure.BindingMismatch,
+			"authority proof signer binding failed",
 		)
 	}
 	if err := validateAuthority(proof.Authority, binding); err != nil {
@@ -254,7 +288,7 @@ func (authority *Authority) Issue(
 		Permission:         binding.Permission,
 		JTI:                jti,
 		IssuedAt:           now.Unix(),
-		NotBefore:          now.Add(-time.Second).Unix(),
+		NotBefore:          now.Unix(),
 		ExpiresAt:          expiresAt.Unix(),
 		ReplayMode:         model.ReplayModeOneTime,
 		SourceRevision:     authority.policy.SourceRevision,
@@ -304,7 +338,7 @@ func (authority *Authority) Verify(
 	}
 	verified, err := internalrpcauth.VerifyCanonicalJSON(
 		compact,
-		verificationKey,
+		verificationKey.Key,
 		internalrpcauth.ProtectedHeaderExpectation{
 			Type:  contextProtectedType,
 			KeyID: header.KeyID,
@@ -350,7 +384,14 @@ func (authority *Authority) Verify(
 	if claims.Version != model.ContractVersion ||
 		claims.ReplayMode != model.ReplayModeOneTime ||
 		claims.Issuer != binding.Issuer ||
-		authority.keyIssuers[header.KeyID] != claims.Issuer ||
+		verificationKey.Issuer != claims.Issuer ||
+		verificationKey.Generation != claims.SignerGeneration ||
+		(verificationKey.Status != keyStatusCurrent &&
+			verificationKey.Status != keyStatusPrevious) ||
+		verificationKey.Purpose != contextKeyPurpose ||
+		!keyAllowsAudience(verificationKey, claims.Audience) ||
+		now.Before(verificationKey.NotBefore) ||
+		!now.Before(verificationKey.NotAfter) ||
 		claims.Audience != binding.Audience ||
 		claims.Subject != binding.CallerSPIFFEID ||
 		claims.Caller.WorkloadID != binding.CallerWorkloadID ||
@@ -406,6 +447,52 @@ func (authority *Authority) Verify(
 		}
 	}
 	return claims, nil
+}
+
+func validateKeyRecords(
+	records map[string]VerificationKeyRecord,
+	expectedPurpose string,
+) error {
+	for keyID, record := range records {
+		if keyID == "" ||
+			record.Key.KeyID != keyID ||
+			record.Key.Public == nil ||
+			record.Key.Private != nil ||
+			record.Issuer == "" ||
+			record.Generation == 0 ||
+			record.Purpose != expectedPurpose ||
+			(record.Status != "CURRENT" &&
+				record.Status != "NEXT" &&
+				record.Status != "PREVIOUS") ||
+			len(record.Audiences) == 0 ||
+			record.NotBefore.IsZero() ||
+			record.NotAfter.IsZero() ||
+			!record.NotBefore.Before(record.NotAfter) {
+			return errors.New("invalid verification key record")
+		}
+	}
+	return nil
+}
+
+func publicKeyRecords(
+	values map[string]VerificationKeyRecord,
+) map[string]VerificationKeyRecord {
+	result := make(map[string]VerificationKeyRecord, len(values))
+	for keyID, value := range values {
+		value.Key = value.Key.PublicOnly()
+		audiences := make(map[string]struct{}, len(value.Audiences))
+		for audience := range value.Audiences {
+			audiences[audience] = struct{}{}
+		}
+		value.Audiences = audiences
+		result[keyID] = value
+	}
+	return result
+}
+
+func keyAllowsAudience(record VerificationKeyRecord, audience string) bool {
+	_, ok := record.Audiences[audience]
+	return ok
 }
 
 func (authority *Authority) ActivateSnapshot(ctx context.Context) error {
@@ -492,7 +579,19 @@ func (authority *Authority) SnapshotState() repository.SnapshotState {
 		KeySetRevision:          authority.policy.KeySetRevision,
 		PolicyRevision:          authority.policy.PolicyRevision,
 		SignerGeneration:        authority.policy.SignerGeneration,
+		History:                 repositoryHistory(authority.policy.History),
 	}
+}
+
+func repositoryHistory(values []model.RevisionDigest) []repository.RevisionDigest {
+	result := make([]repository.RevisionDigest, 0, len(values))
+	for _, value := range values {
+		result = append(result, repository.RevisionDigest{
+			Revision:     value.Revision,
+			DigestSHA256: value.DigestSHA256,
+		})
+	}
+	return result
 }
 
 func validateAuthority(authority model.Authority, binding model.OperationBinding) error {
@@ -548,12 +647,4 @@ func newUUID() (string, error) {
 	encoded := hex.EncodeToString(value[:])
 	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
 		encoded[16:20] + "-" + encoded[20:32], nil
-}
-
-func publicKeyMap(values map[string]internalrpcauth.ES256Key) map[string]internalrpcauth.ES256Key {
-	result := make(map[string]internalrpcauth.ES256Key, len(values))
-	for keyID, key := range values {
-		result[keyID] = key.PublicOnly()
-	}
-	return result
 }

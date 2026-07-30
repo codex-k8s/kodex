@@ -63,11 +63,48 @@ func TestStrictJSONRejectsDuplicateFields(t *testing.T) {
 
 func TestValidateTimes(t *testing.T) {
 	now := time.Unix(100, 0)
-	if err := ValidateTimes(now, now.Add(-time.Second), now.Add(-time.Second), now.Add(20*time.Second), 30*time.Second, 5*time.Second); err != nil {
+	if err := ValidateTimes(now, now, now, now.Add(30*time.Second), 30*time.Second, 5*time.Second); err != nil {
 		t.Fatalf("valid time rejected: %v", err)
 	}
-	if err := ValidateTimes(now, now, now, now.Add(31*time.Second), 30*time.Second, 5*time.Second); err == nil {
-		t.Fatal("overlong lifetime accepted")
+	for name, times := range map[string][3]time.Time{
+		"future-issued-at": {
+			now.Add(6 * time.Second),
+			now.Add(6 * time.Second),
+			now.Add(36 * time.Second),
+		},
+		"past-issued-at": {
+			now.Add(-6 * time.Second),
+			now.Add(-6 * time.Second),
+			now.Add(24 * time.Second),
+		},
+		"not-before-differs": {
+			now,
+			now.Add(-time.Second),
+			now.Add(30 * time.Second),
+		},
+		"shortened-lifetime": {
+			now,
+			now,
+			now.Add(29 * time.Second),
+		},
+		"extended-lifetime": {
+			now,
+			now,
+			now.Add(31 * time.Second),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := ValidateTimes(
+				now,
+				times[0],
+				times[1],
+				times[2],
+				30*time.Second,
+				5*time.Second,
+			); err == nil {
+				t.Fatal("invalid time binding accepted")
+			}
+		})
 	}
 }
 

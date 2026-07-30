@@ -118,6 +118,13 @@ func (application *Authority) SnapshotState() model.SnapshotState {
 		return model.SnapshotState{}
 	}
 	state := domain.SnapshotState()
+	history := make([]model.RevisionDigest, 0, len(state.History))
+	for _, entry := range state.History {
+		history = append(history, model.RevisionDigest{
+			Revision:     entry.Revision,
+			DigestSHA256: entry.DigestSHA256,
+		})
+	}
 	return model.SnapshotState{
 		SourceRevision:          state.SourceRevision,
 		SourceDigestSHA256:      state.SourceDigestSHA256,
@@ -126,6 +133,7 @@ func (application *Authority) SnapshotState() model.SnapshotState {
 		KeySetRevision:          state.KeySetRevision,
 		PolicyRevision:          state.PolicyRevision,
 		SignerGeneration:        state.SignerGeneration,
+		History:                 history,
 	}
 }
 

@@ -1,5 +1,8 @@
 -- name: proof__reserve :one
-WITH watermark AS (
+WITH fence AS (
+    SELECT internal_rpc_authority.runtime_restore_fence_allows_work() AS open
+),
+watermark AS (
     INSERT INTO internal_rpc_authority.authority_proof_watermarks (
         caller_workload_id,
         operation_id,
@@ -8,14 +11,15 @@ WITH watermark AS (
         canonical_payload_digest_sha256,
         updated_at
     )
-    VALUES (
+    SELECT
         @caller_workload_id,
         @operation_id,
         @authority_proof_issuer,
         @proof_revision,
         @canonical_digest_sha256,
         clock_timestamp()
-    )
+    FROM fence
+    WHERE fence.open
     ON CONFLICT (
         caller_workload_id,
         operation_id,

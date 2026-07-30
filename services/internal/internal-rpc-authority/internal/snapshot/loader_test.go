@@ -40,3 +40,52 @@ func TestReadRegularFileRejectsEscapingSymlink(t *testing.T) {
 		t.Fatal("escaping projected-file symlink accepted")
 	}
 }
+
+func TestValidateHistoryAllowsBoundedCatchUp(t *testing.T) {
+	history := []revisionDigest{
+		{Revision: 8, DigestSHA256: repeatedDigest("8")},
+		{Revision: 9, DigestSHA256: repeatedDigest("9")},
+	}
+	if err := validateHistory(
+		10,
+		revisionDigest{Revision: 9, DigestSHA256: repeatedDigest("9")},
+		history,
+	); err != nil {
+		t.Fatalf("valid catch-up history rejected: %v", err)
+	}
+}
+
+func TestValidateHistoryRejectsGapMutationAndMissingPredecessor(t *testing.T) {
+	for name, history := range map[string][]revisionDigest{
+		"gap": {
+			{Revision: 7, DigestSHA256: repeatedDigest("7")},
+			{Revision: 9, DigestSHA256: repeatedDigest("9")},
+		},
+		"duplicate": {
+			{Revision: 8, DigestSHA256: repeatedDigest("8")},
+			{Revision: 8, DigestSHA256: repeatedDigest("8")},
+		},
+		"wrong-predecessor-digest": {
+			{Revision: 8, DigestSHA256: repeatedDigest("8")},
+			{Revision: 9, DigestSHA256: repeatedDigest("a")},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateHistory(
+				10,
+				revisionDigest{Revision: 9, DigestSHA256: repeatedDigest("9")},
+				history,
+			); err == nil {
+				t.Fatal("invalid signed history accepted")
+			}
+		})
+	}
+}
+
+func repeatedDigest(value string) string {
+	result := ""
+	for len(result) < 64 {
+		result += value
+	}
+	return result[:64]
+}

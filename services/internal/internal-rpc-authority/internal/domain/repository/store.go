@@ -38,6 +38,13 @@ type SnapshotState struct {
 	KeySetRevision          uint64
 	PolicyRevision          uint64
 	SignerGeneration        uint64
+	History                 []RevisionDigest
+	AttestationReceiptID    string
+}
+
+type RevisionDigest struct {
+	Revision     uint64
+	DigestSHA256 string
 }
 
 type Store interface {

@@ -219,11 +219,19 @@ func PublicJWKThumbprintSHA256(key ES256Key) (string, error) {
 }
 
 func ValidateTimes(now time.Time, issuedAt, notBefore, expiresAt time.Time, maxTTL, skew time.Duration) error {
-	if maxTTL <= 0 || skew < 0 || expiresAt.Sub(issuedAt) <= 0 ||
-		expiresAt.Sub(issuedAt) > maxTTL {
+	now = now.UTC().Truncate(time.Second)
+	issuedAt = issuedAt.UTC().Truncate(time.Second)
+	notBefore = notBefore.UTC().Truncate(time.Second)
+	expiresAt = expiresAt.UTC().Truncate(time.Second)
+	if maxTTL <= 0 || skew < 0 ||
+		!notBefore.Equal(issuedAt) ||
+		!expiresAt.Equal(issuedAt.Add(maxTTL)) {
 		return errors.New("invalid token lifetime")
 	}
-	if now.Add(skew).Before(notBefore) {
+	if issuedAt.Before(now.Add(-skew)) || issuedAt.After(now.Add(skew)) {
+		return errors.New("token issued-at is outside the allowed clock skew")
+	}
+	if now.Add(skew).Before(issuedAt) {
 		return errors.New("token is not yet valid")
 	}
 	if !now.Add(-skew).Before(expiresAt) {

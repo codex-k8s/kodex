@@ -4,9 +4,14 @@
 `internalrpcauthority.v1`. Исходный Proto находится в
 `contracts/proto/internalrpcauthority/v1` и изменяется только там.
 
-Public surface этого contract SHA намеренно ограничен wire contract. Runtime
-API, strict JOSE wrapper и persistent adapters этим SHA не заявлены готовыми и
-не представлены заглушками.
+Пакет `authorityclient` предоставляет общий transport boundary для
+application-контейнеров: проверяемое подключение к каноническим UDS,
+issuer client interceptor и target server interceptor. Target interceptor
+требует одновременно проверенный mTLS peer и ровно один authorization context,
+передаёт локальному verifier фактический full method и SHA-256 сертификата и
+допускает handler только с нейтральным verified context. Соответствие
+operation ID конкретному RPC и получение authority proof остаются
+service-specific wiring и не входят в общую библиотеку.
 
 Сгенерированные файлы не редактируются вручную. Гарантии wire contract, UDS,
 policy, rotation и failure semantics задает `CONTRACT-MC-004`
