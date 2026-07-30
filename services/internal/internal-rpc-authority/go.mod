@@ -3,6 +3,7 @@ module github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authorit
 go 1.26.5
 
 require (
+	github.com/caarlos0/env/v11 v11.3.1
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0

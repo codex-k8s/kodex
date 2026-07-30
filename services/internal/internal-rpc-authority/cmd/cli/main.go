@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/caarlos0/env/v11"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -49,11 +50,14 @@ func run(ctx context.Context, arguments []string) error {
 	if err != nil {
 		return err
 	}
-	dsnFile := strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"))
-	if dsnFile == "" {
-		return errors.New("INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE is required")
+	environment := struct {
+		DSNFile       string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE,required,notEmpty"`
+		TLSServerName string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME,required,notEmpty"`
+	}{}
+	if err := env.Parse(&environment); err != nil {
+		return errors.New("parse migration environment configuration")
 	}
-	raw, err := os.ReadFile(dsnFile)
+	raw, err := os.ReadFile(environment.DSNFile)
 	if err != nil {
 		return errors.New("read PostgreSQL DSN file")
 	}
@@ -61,9 +65,7 @@ func run(ctx context.Context, arguments []string) error {
 	if err != nil {
 		return errors.New("parse PostgreSQL DSN")
 	}
-	expectedServerName := strings.TrimSpace(
-		os.Getenv("INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"),
-	)
+	expectedServerName := environment.TLSServerName
 	if expectedServerName == "" ||
 		len(config.Fallbacks) != 0 ||
 		config.Host != expectedServerName ||

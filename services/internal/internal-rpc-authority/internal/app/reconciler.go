@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -42,58 +41,48 @@ var (
 )
 
 type ReconcilerConfig struct {
-	HolderID                     string
-	Listen                       string
-	TechnicalListen              string
-	AllowedCallerSPIFFEID        string
-	TLSCertificateFile           string
-	TLSPrivateKeyFile            string
-	ClientCAFile                 string
-	PostgresDSNFile              string
-	PostgresTLSServerName        string
-	PostgresExpectedSessionUser  string
-	VaultAddress                 string
-	VaultTLSServerName           string
-	VaultCAFile                  string
-	VaultAuthRole                string
-	VaultServiceAccountTokenFile string
-	SourceRevision               uint64
-	SourceDigest                 string
-	LeaseDuration                time.Duration
-	ReconcileInterval            time.Duration
-	ShutdownTimeout              time.Duration
+	HolderID                     string        `env:"POD_UID"`
+	Listen                       string        `env:"INTERNAL_RPC_AUTHORITY_RECONCILER_LISTEN"`
+	TechnicalListen              string        `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
+	AllowedCallerSPIFFEID        string        `env:"INTERNAL_RPC_AUTHORITY_RECONCILER_CALLER_SPIFFE_ID"`
+	TLSCertificateFile           string        `env:"INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE"`
+	TLSPrivateKeyFile            string        `env:"INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE"`
+	ClientCAFile                 string        `env:"INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE"`
+	PostgresDSNFile              string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
+	PostgresTLSServerName        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
+	PostgresExpectedSessionUser  string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
+	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
+	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
+	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
+	VaultAuthRole                string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE"`
+	VaultServiceAccountTokenFile string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE"`
+	SourceRevision               uint64        `env:"INTERNAL_RPC_AUTHORITY_REGISTERED_SET_SOURCE_REVISION"`
+	SourceDigest                 string        `env:"INTERNAL_RPC_AUTHORITY_REGISTERED_SET_SOURCE_DIGEST_SHA256"`
+	LeaseDuration                time.Duration `env:"INTERNAL_RPC_AUTHORITY_LEASE_DURATION"`
+	ReconcileInterval            time.Duration `env:"INTERNAL_RPC_AUTHORITY_RECONCILE_INTERVAL"`
+	ShutdownTimeout              time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
 func LoadReconcilerConfig() (ReconcilerConfig, error) {
-	sourceRevision, err := strconv.ParseUint(
-		strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_REGISTERED_SET_SOURCE_REVISION")),
-		10,
-		64,
-	)
-	if err != nil {
-		return ReconcilerConfig{}, errors.New("registered set source revision is invalid")
-	}
 	config := ReconcilerConfig{
-		HolderID:                     strings.TrimSpace(os.Getenv("POD_UID")),
-		Listen:                       envOrDefault("INTERNAL_RPC_AUTHORITY_RECONCILER_LISTEN", ":8443"),
-		TechnicalListen:              envOrDefault("INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN", ":9090"),
-		AllowedCallerSPIFFEID:        strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_RECONCILER_CALLER_SPIFFE_ID")),
-		TLSCertificateFile:           envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/tls/tls.crt"),
-		TLSPrivateKeyFile:            envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/tls/tls.key"),
-		ClientCAFile:                 envOrDefault("INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/tls/client-ca.pem"),
-		PostgresDSNFile:              envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn"),
-		PostgresTLSServerName:        envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME", "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local"),
-		PostgresExpectedSessionUser:  strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER")),
-		VaultAddress:                 envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS", "https://vault.mattercodex-system.svc:8200"),
-		VaultTLSServerName:           envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME", "vault.mattercodex-system.svc.cluster.local"),
-		VaultCAFile:                  envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/vault/ca.pem"),
-		VaultAuthRole:                envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE", "internal-rpc-authority-database-credential-reconciler"),
-		VaultServiceAccountTokenFile: envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE", "/var/run/secrets/tokens/vault/token"),
-		SourceRevision:               sourceRevision,
-		SourceDigest:                 strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_REGISTERED_SET_SOURCE_DIGEST_SHA256")),
+		Listen:                       ":8443",
+		TechnicalListen:              ":9090",
+		TLSCertificateFile:           "/var/run/secrets/mattercodex/internal-rpc-authority/tls/tls.crt",
+		TLSPrivateKeyFile:            "/var/run/secrets/mattercodex/internal-rpc-authority/tls/tls.key",
+		ClientCAFile:                 "/var/run/config/mattercodex/internal-rpc-authority/tls/client-ca.pem",
+		PostgresDSNFile:              "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn",
+		PostgresTLSServerName:        "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		VaultAddress:                 "https://vault.mattercodex-system.svc:8200",
+		VaultTLSServerName:           "vault.mattercodex-system.svc.cluster.local",
+		VaultCAFile:                  "/var/run/config/mattercodex/internal-rpc-authority/vault/ca.pem",
+		VaultAuthRole:                "internal-rpc-authority-database-credential-reconciler",
+		VaultServiceAccountTokenFile: "/var/run/secrets/tokens/vault/token",
 		LeaseDuration:                20 * time.Second,
 		ReconcileInterval:            10 * time.Second,
 		ShutdownTimeout:              10 * time.Second,
+	}
+	if err := parseEnvironment(&config); err != nil {
+		return ReconcilerConfig{}, err
 	}
 	if !runtimeUUIDPattern.MatchString(config.HolderID) ||
 		config.AllowedCallerSPIFFEID == "" ||

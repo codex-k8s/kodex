@@ -11,8 +11,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -38,72 +36,61 @@ import (
 )
 
 type RestoreControllerConfig struct {
-	Listen                   string
-	TechnicalListen          string
-	TLSCertificateFile       string
-	TLSPrivateKeyFile        string
-	ClientCAFile             string
-	PostgresDSNFile          string
-	PostgresTLSServerName    string
-	PostgresExpectedUser     string
-	DatabaseClusterID        string
-	ControllerGeneration     uint64
-	TargetRegistryFile       string
-	ManifestRootJWKFile      string
-	ManifestRootMetadataFile string
-	ManifestTrustBundleFile  string
-	RestoreRoleTrustFile     string
-	PublisherAddress         string
-	PublisherTLSServerName   string
-	PublisherCAFile          string
-	KubernetesAddress        string
-	KubernetesTLSServerName  string
-	KubernetesCAFile         string
-	KubernetesTokenFile      string
+	Listen                   string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_LISTEN"`
+	TechnicalListen          string `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
+	TLSCertificateFile       string `env:"INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE"`
+	TLSPrivateKeyFile        string `env:"INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE"`
+	ClientCAFile             string `env:"INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE"`
+	PostgresDSNFile          string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
+	PostgresTLSServerName    string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
+	PostgresExpectedUser     string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
+	DatabaseClusterID        string `env:"INTERNAL_RPC_AUTHORITY_DATABASE_CLUSTER_ID"`
+	ControllerGeneration     uint64 `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_GENERATION"`
+	TargetRegistryFile       string `env:"INTERNAL_RPC_AUTHORITY_TARGET_REGISTRY_FILE"`
+	ManifestRootJWKFile      string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_JWK_FILE"`
+	ManifestRootMetadataFile string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_METADATA_FILE"`
+	ManifestTrustBundleFile  string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_FILE"`
+	RestoreRoleTrustFile     string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_TRUST_FILE"`
+	PublisherAddress         string `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_ADDRESS"`
+	PublisherTLSServerName   string `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_TLS_SERVER_NAME"`
+	PublisherCAFile          string `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_CA_FILE"`
+	KubernetesAddress        string `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS"`
+	KubernetesTLSServerName  string `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME"`
+	KubernetesCAFile         string `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE"`
+	KubernetesTokenFile      string `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE"`
 	KubernetesNamespace      string
 	KubernetesResourceName   string
-	ShutdownTimeout          time.Duration
+	ShutdownTimeout          time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
 func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
-	generation, err := strconv.ParseUint(
-		strings.TrimSpace(
-			os.Getenv("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_GENERATION"),
-		),
-		10,
-		64,
-	)
-	if err != nil || generation == 0 {
-		return RestoreControllerConfig{}, errors.New(
-			"restore controller generation is invalid",
-		)
-	}
 	config := RestoreControllerConfig{
-		Listen:                   envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_LISTEN", ":8443"),
-		TechnicalListen:          envOrDefault("INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN", ":9090"),
-		TLSCertificateFile:       envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls/tls.crt"),
-		TLSPrivateKeyFile:        envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls/tls.key"),
-		ClientCAFile:             envOrDefault("INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/client-ca.pem"),
-		PostgresDSNFile:          envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database/dsn"),
-		PostgresTLSServerName:    envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME", "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local"),
-		PostgresExpectedUser:     strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER")),
-		DatabaseClusterID:        envOrDefault("INTERNAL_RPC_AUTHORITY_DATABASE_CLUSTER_ID", "internal-rpc-authority-primary"),
-		ControllerGeneration:     generation,
-		TargetRegistryFile:       envOrDefault("INTERNAL_RPC_AUTHORITY_TARGET_REGISTRY_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/key-delivery-targets.yaml"),
-		ManifestRootJWKFile:      envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_JWK_FILE", "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk"),
-		ManifestRootMetadataFile: envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_METADATA_FILE", "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-metadata.json"),
-		ManifestTrustBundleFile:  envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/manifest-trust.jws"),
-		RestoreRoleTrustFile:     envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_TRUST_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/restore-role-trust.jws"),
-		PublisherAddress:         envOrDefault("INTERNAL_RPC_AUTHORITY_PUBLISHER_ADDRESS", "internal-rpc-authority-publisher.mattercodex-system.svc:8444"),
-		PublisherTLSServerName:   envOrDefault("INTERNAL_RPC_AUTHORITY_PUBLISHER_TLS_SERVER_NAME", "internal-rpc-authority-publisher.mattercodex-system.svc"),
-		PublisherCAFile:          envOrDefault("INTERNAL_RPC_AUTHORITY_PUBLISHER_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/publisher-ca.pem"),
-		KubernetesAddress:        envOrDefault("INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS", "https://kubernetes.default.svc:443"),
-		KubernetesTLSServerName:  envOrDefault("INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME", "kubernetes.default.svc"),
-		KubernetesCAFile:         envOrDefault("INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"),
-		KubernetesTokenFile:      envOrDefault("INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE", "/var/run/secrets/tokens/kubernetes/token"),
+		Listen:                   ":8443",
+		TechnicalListen:          ":9090",
+		TLSCertificateFile:       "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls/tls.crt",
+		TLSPrivateKeyFile:        "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls/tls.key",
+		ClientCAFile:             "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/client-ca.pem",
+		PostgresDSNFile:          "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database/dsn",
+		PostgresTLSServerName:    "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		DatabaseClusterID:        "internal-rpc-authority-primary",
+		TargetRegistryFile:       "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/key-delivery-targets.yaml",
+		ManifestRootJWKFile:      "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk",
+		ManifestRootMetadataFile: "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-metadata.json",
+		ManifestTrustBundleFile:  "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/manifest-trust.jws",
+		RestoreRoleTrustFile:     "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/restore-role-trust.jws",
+		PublisherAddress:         "internal-rpc-authority-publisher.mattercodex-system.svc:8444",
+		PublisherTLSServerName:   "internal-rpc-authority-publisher.mattercodex-system.svc",
+		PublisherCAFile:          "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/publisher-ca.pem",
+		KubernetesAddress:        "https://kubernetes.default.svc:443",
+		KubernetesTLSServerName:  "kubernetes.default.svc",
+		KubernetesCAFile:         "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+		KubernetesTokenFile:      "/var/run/secrets/tokens/kubernetes/token",
 		KubernetesNamespace:      "mattercodex-system",
 		KubernetesResourceName:   "internal-rpc-authority-restore-coordination",
 		ShutdownTimeout:          10 * time.Second,
+	}
+	if err := parseEnvironment(&config); err != nil {
+		return RestoreControllerConfig{}, err
 	}
 	if _, _, err := net.SplitHostPort(config.Listen); err != nil {
 		return RestoreControllerConfig{}, errors.New(
@@ -115,7 +102,8 @@ func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 			"restore controller technical listen address is invalid",
 		)
 	}
-	if config.PostgresExpectedUser == "" ||
+	if config.ControllerGeneration == 0 ||
+		config.PostgresExpectedUser == "" ||
 		config.DatabaseClusterID != "internal-rpc-authority-primary" {
 		return RestoreControllerConfig{}, errors.New(
 			"restore controller database identity is invalid",

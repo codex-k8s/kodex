@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
+	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 )
@@ -21,7 +20,14 @@ func main() {
 }
 
 func run() error {
-	role := strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_LOCAL_ROLE"))
+	config := struct {
+		Role        string `env:"INTERNAL_RPC_AUTHORITY_LOCAL_ROLE,required,notEmpty"`
+		ExpectedUID uint32 `env:"INTERNAL_RPC_AUTHORITY_LOCAL_EXPECTED_SERVER_UID"`
+	}{}
+	if err := env.Parse(&config); err != nil {
+		return errors.New("parse local authority readiness configuration")
+	}
+	role := config.Role
 	socketPath := authorityclient.IssuerSocketPath
 	expectedUID := uint64(29001)
 	if role == "verifier" {
@@ -30,14 +36,8 @@ func run() error {
 	} else if role != "issuer" {
 		return errors.New("local authority role is invalid")
 	}
-	if configured := strings.TrimSpace(
-		os.Getenv("INTERNAL_RPC_AUTHORITY_LOCAL_EXPECTED_SERVER_UID"),
-	); configured != "" {
-		value, err := strconv.ParseUint(configured, 10, 32)
-		if err != nil || value == 0 {
-			return errors.New("local authority server UID is invalid")
-		}
-		expectedUID = value
+	if config.ExpectedUID != 0 {
+		expectedUID = uint64(config.ExpectedUID)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

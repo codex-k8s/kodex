@@ -6,9 +6,10 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/caarlos0/env/v11"
 )
 
 type Mode string
@@ -23,91 +24,89 @@ const socketRoot = "/run/mattercodex/internal-rpc-authority"
 type Config struct {
 	Mode                             Mode
 	ServiceName                      string
-	WorkloadID                       string
+	WorkloadID                       string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_ID"`
 	SocketPath                       string
 	ExpectedProcessUID               uint32
 	ExpectedProcessGID               uint32
-	ExpectedPeerUID                  uint32
-	ExpectedPeerGID                  uint32
+	ExpectedPeerUID                  uint32 `env:"INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID"`
+	ExpectedPeerGID                  uint32 `env:"INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID"`
 	SocketMode                       os.FileMode
-	TechnicalListen                  string
-	PostgresDSNFile                  string
-	PostgresTLSServerName            string
-	PostgresExpectedSessionUser      string
+	TechnicalListen                  string `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
+	PostgresDSNFile                  string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
+	PostgresTLSServerName            string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
+	PostgresExpectedSessionUser      string `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
 	DatabaseCapabilityRole           string
-	PostgresMaxConnections           int32
-	SnapshotJWSFile                  string
-	ManifestRootPublicJWKFile        string
-	ManifestRootMetadataFile         string
-	ManifestTrustBundleJWSFile       string
-	ContextPrivateJWKFile            string
-	ProofTrustJWKFile                string
-	VaultAddress                     string
-	VaultTLSServerName               string
-	VaultCAFile                      string
+	PostgresMaxConnections           int32  `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_MAX_CONNECTIONS"`
+	SnapshotJWSFile                  string `env:"INTERNAL_RPC_AUTHORITY_SNAPSHOT_JWS_FILE"`
+	ManifestRootPublicJWKFile        string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_PUBLIC_JWK_FILE"`
+	ManifestRootMetadataFile         string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_METADATA_FILE"`
+	ManifestTrustBundleJWSFile       string `env:"INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_JWS_FILE"`
+	ContextPrivateJWKFile            string `env:"INTERNAL_RPC_AUTHORITY_CONTEXT_PRIVATE_JWK_FILE"`
+	ProofTrustJWKFile                string `env:"INTERNAL_RPC_AUTHORITY_PROOF_TRUST_JWK_FILE"`
+	VaultAddress                     string `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
+	VaultTLSServerName               string `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
+	VaultCAFile                      string `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
 	VaultAuthRole                    string
-	VaultAuthFile                    string
+	VaultAuthFile                    string `env:"INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE"`
 	ReadbackCredentialVaultPath      string
 	ReadbackPossessionVaultPath      string
-	ReadbackAttestorAddress          string
-	ReadbackAttestorTLSServerName    string
-	ReadbackAttestorCAFile           string
-	WorkloadCertificateFile          string
-	WorkloadPrivateKeyFile           string
+	ReadbackAttestorAddress          string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS"`
+	ReadbackAttestorTLSServerName    string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME"`
+	ReadbackAttestorCAFile           string `env:"INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE"`
+	WorkloadCertificateFile          string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_CERTIFICATE_FILE"`
+	WorkloadPrivateKeyFile           string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_PRIVATE_KEY_FILE"`
 	RestoreRoleCredentialVaultPath   string
 	RestoreACKVaultPath              string
-	RestoreControllerAddress         string
-	RestoreControllerTLSServerName   string
-	RestoreControllerCAFile          string
-	RestoreControllerCertificateFile string
-	RestoreRoleTrustJWSFile          string
-	WorkloadSPIFFEID                 string
+	RestoreControllerAddress         string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS"`
+	RestoreControllerTLSServerName   string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_SERVER_NAME"`
+	RestoreControllerCAFile          string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE"`
+	RestoreControllerCertificateFile string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CERTIFICATE_FILE"`
+	RestoreRoleTrustJWSFile          string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_TRUST_JWS_FILE"`
+	WorkloadSPIFFEID                 string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID"`
 	ReadbackRole                     string
-	WorkloadGeneration               uint64
-	CredentialGeneration             uint64
-	PossessionKeyGeneration          uint64
-	RestoreACKKeyGeneration          uint64
-	StartupTimeout                   time.Duration
-	ReadinessTimeout                 time.Duration
-	ShutdownTimeout                  time.Duration
-	SnapshotReloadInterval           time.Duration
-	ReplayCleanupInterval            time.Duration
+	WorkloadGeneration               uint64        `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_GENERATION"`
+	CredentialGeneration             uint64        `env:"INTERNAL_RPC_AUTHORITY_CREDENTIAL_GENERATION"`
+	PossessionKeyGeneration          uint64        `env:"INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_GENERATION"`
+	RestoreACKKeyGeneration          uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ACK_KEY_GENERATION"`
+	StartupTimeout                   time.Duration `env:"INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT"`
+	ReadinessTimeout                 time.Duration `env:"INTERNAL_RPC_AUTHORITY_READINESS_TIMEOUT"`
+	ShutdownTimeout                  time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
+	SnapshotReloadInterval           time.Duration `env:"INTERNAL_RPC_AUTHORITY_SNAPSHOT_RELOAD_INTERVAL"`
+	ReplayCleanupInterval            time.Duration `env:"INTERNAL_RPC_AUTHORITY_REPLAY_CLEANUP_INTERVAL"`
 	ReplayRetentionAfterExpiry       time.Duration
 }
 
 func LoadConfig(mode Mode) (Config, error) {
 	config := Config{
 		Mode:                             mode,
-		WorkloadID:                       strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_WORKLOAD_ID")),
+		WorkloadID:                       "",
 		ExpectedPeerUID:                  10001,
 		ExpectedPeerGID:                  10001,
 		SocketMode:                       0o660,
-		TechnicalListen:                  envOrDefault("INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN", ":9090"),
-		PostgresDSNFile:                  envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn"),
-		PostgresTLSServerName:            envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME", "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local"),
-		PostgresExpectedSessionUser:      strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER")),
+		TechnicalListen:                  ":9090",
+		PostgresDSNFile:                  "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn",
+		PostgresTLSServerName:            "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
 		PostgresMaxConnections:           8,
-		SnapshotJWSFile:                  envOrDefault("INTERNAL_RPC_AUTHORITY_SNAPSHOT_JWS_FILE", "/var/run/config/mattercodex/internal-rpc-authority/snapshot/snapshot.jws"),
-		ManifestRootPublicJWKFile:        envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_PUBLIC_JWK_FILE", "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk"),
-		ManifestRootMetadataFile:         envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_METADATA_FILE", "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-metadata.json"),
-		ManifestTrustBundleJWSFile:       envOrDefault("INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_JWS_FILE", "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust/bundle.jws"),
-		ContextPrivateJWKFile:            envOrDefault("INTERNAL_RPC_AUTHORITY_CONTEXT_PRIVATE_JWK_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/issuer/private.jwk"),
-		ProofTrustJWKFile:                envOrDefault("INTERNAL_RPC_AUTHORITY_PROOF_TRUST_JWK_FILE", "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json"),
-		VaultAddress:                     envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS", "https://vault.mattercodex-system.svc:8200"),
-		VaultTLSServerName:               envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME", "vault.mattercodex-system.svc.cluster.local"),
-		VaultCAFile:                      envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/vault/ca.pem"),
-		VaultAuthFile:                    envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE", "/var/run/secrets/tokens/vault/token"),
-		ReadbackAttestorAddress:          envOrDefault("INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS", "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443"),
-		ReadbackAttestorTLSServerName:    envOrDefault("INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME", "internal-rpc-authority-readback-attestor.mattercodex-system.svc"),
-		ReadbackAttestorCAFile:           envOrDefault("INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem"),
-		WorkloadCertificateFile:          envOrDefault("INTERNAL_RPC_AUTHORITY_WORKLOAD_CERTIFICATE_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/workload-tls/tls.crt"),
-		WorkloadPrivateKeyFile:           envOrDefault("INTERNAL_RPC_AUTHORITY_WORKLOAD_PRIVATE_KEY_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/workload-tls/tls.key"),
-		RestoreControllerAddress:         envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS", "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443"),
-		RestoreControllerTLSServerName:   envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_SERVER_NAME", "internal-rpc-authority-restore-controller.mattercodex-system.svc"),
-		RestoreControllerCAFile:          envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore/controller-ca.pem"),
-		RestoreControllerCertificateFile: envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CERTIFICATE_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust/tls.crt"),
-		RestoreRoleTrustJWSFile:          envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_TRUST_JWS_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore/role-trust/restore-role-trust.jws"),
-		WorkloadSPIFFEID:                 strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID")),
+		SnapshotJWSFile:                  "/var/run/config/mattercodex/internal-rpc-authority/snapshot/snapshot.jws",
+		ManifestRootPublicJWKFile:        "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk",
+		ManifestRootMetadataFile:         "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-metadata.json",
+		ManifestTrustBundleJWSFile:       "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust/bundle.jws",
+		ContextPrivateJWKFile:            "/var/run/secrets/mattercodex/internal-rpc-authority/issuer/private.jwk",
+		ProofTrustJWKFile:                "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json",
+		VaultAddress:                     "https://vault.mattercodex-system.svc:8200",
+		VaultTLSServerName:               "vault.mattercodex-system.svc.cluster.local",
+		VaultCAFile:                      "/var/run/config/mattercodex/internal-rpc-authority/vault/ca.pem",
+		VaultAuthFile:                    "/var/run/secrets/tokens/vault/token",
+		ReadbackAttestorAddress:          "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443",
+		ReadbackAttestorTLSServerName:    "internal-rpc-authority-readback-attestor.mattercodex-system.svc",
+		ReadbackAttestorCAFile:           "/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem",
+		WorkloadCertificateFile:          "/var/run/secrets/mattercodex/internal-rpc-authority/workload-tls/tls.crt",
+		WorkloadPrivateKeyFile:           "/var/run/secrets/mattercodex/internal-rpc-authority/workload-tls/tls.key",
+		RestoreControllerAddress:         "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443",
+		RestoreControllerTLSServerName:   "internal-rpc-authority-restore-controller.mattercodex-system.svc",
+		RestoreControllerCAFile:          "/var/run/config/mattercodex/internal-rpc-authority/restore/controller-ca.pem",
+		RestoreControllerCertificateFile: "/var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust/tls.crt",
+		RestoreRoleTrustJWSFile:          "/var/run/config/mattercodex/internal-rpc-authority/restore/role-trust/restore-role-trust.jws",
 		WorkloadGeneration:               1,
 		CredentialGeneration:             1,
 		PossessionKeyGeneration:          1,
@@ -147,89 +146,7 @@ func LoadConfig(mode Mode) (Config, error) {
 	default:
 		return Config{}, errors.New("unsupported internal-rpc-authority mode")
 	}
-	var err error
-	if config.ExpectedPeerUID, err = uint32Env(
-		"INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID",
-		config.ExpectedPeerUID,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.ExpectedPeerGID, err = uint32Env(
-		"INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID",
-		config.ExpectedPeerGID,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.PostgresMaxConnections, err = int32Env(
-		"INTERNAL_RPC_AUTHORITY_POSTGRES_MAX_CONNECTIONS",
-		config.PostgresMaxConnections,
-		1,
-		32,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.WorkloadGeneration, err = uint64Env(
-		"INTERNAL_RPC_AUTHORITY_WORKLOAD_GENERATION",
-		config.WorkloadGeneration,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.CredentialGeneration, err = uint64Env(
-		"INTERNAL_RPC_AUTHORITY_CREDENTIAL_GENERATION",
-		config.CredentialGeneration,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.PossessionKeyGeneration, err = uint64Env(
-		"INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_GENERATION",
-		config.PossessionKeyGeneration,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.RestoreACKKeyGeneration, err = uint64Env(
-		"INTERNAL_RPC_AUTHORITY_RESTORE_ACK_KEY_GENERATION",
-		config.RestoreACKKeyGeneration,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.StartupTimeout, err = durationEnv(
-		"INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT",
-		config.StartupTimeout,
-		time.Second,
-		time.Minute,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.ReadinessTimeout, err = durationEnv(
-		"INTERNAL_RPC_AUTHORITY_READINESS_TIMEOUT",
-		config.ReadinessTimeout,
-		100*time.Millisecond,
-		5*time.Second,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.ShutdownTimeout, err = durationEnv(
-		"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT",
-		config.ShutdownTimeout,
-		time.Second,
-		30*time.Second,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.SnapshotReloadInterval, err = durationEnv(
-		"INTERNAL_RPC_AUTHORITY_SNAPSHOT_RELOAD_INTERVAL",
-		config.SnapshotReloadInterval,
-		time.Second,
-		time.Minute,
-	); err != nil {
-		return Config{}, err
-	}
-	if config.ReplayCleanupInterval, err = durationEnv(
-		"INTERNAL_RPC_AUTHORITY_REPLAY_CLEANUP_INTERVAL",
-		config.ReplayCleanupInterval,
-		10*time.Second,
-		10*time.Minute,
-	); err != nil {
+	if err := parseEnvironment(&config); err != nil {
 		return Config{}, err
 	}
 	if err := config.Validate(); err != nil {
@@ -281,6 +198,31 @@ func (config Config) Validate() error {
 	if config.ExpectedPeerUID == 0 || config.ExpectedPeerGID == 0 {
 		return errors.New("root UDS peer is forbidden")
 	}
+	const maximumSafeInteger = uint64(9_007_199_254_740_991)
+	if config.PostgresMaxConnections < 1 ||
+		config.PostgresMaxConnections > 32 ||
+		config.WorkloadGeneration == 0 ||
+		config.WorkloadGeneration > maximumSafeInteger ||
+		config.CredentialGeneration == 0 ||
+		config.CredentialGeneration > maximumSafeInteger ||
+		config.PossessionKeyGeneration == 0 ||
+		config.PossessionKeyGeneration > maximumSafeInteger ||
+		config.RestoreACKKeyGeneration == 0 ||
+		config.RestoreACKKeyGeneration > maximumSafeInteger {
+		return errors.New("authority generation or connection bound is invalid")
+	}
+	if config.StartupTimeout < time.Second ||
+		config.StartupTimeout > time.Minute ||
+		config.ReadinessTimeout < 100*time.Millisecond ||
+		config.ReadinessTimeout > 5*time.Second ||
+		config.ShutdownTimeout < time.Second ||
+		config.ShutdownTimeout > 30*time.Second ||
+		config.SnapshotReloadInterval < time.Second ||
+		config.SnapshotReloadInterval > time.Minute ||
+		config.ReplayCleanupInterval < 10*time.Second ||
+		config.ReplayCleanupInterval > 10*time.Minute {
+		return errors.New("authority duration is outside the allowed boundary")
+	}
 	if config.SocketMode != 0o660 {
 		return errors.New("authority UDS mode must be 0660")
 	}
@@ -325,62 +267,9 @@ func (config Config) Validate() error {
 	return nil
 }
 
-func uint64Env(name string, fallback uint64) (uint64, error) {
-	raw := strings.TrimSpace(os.Getenv(name))
-	if raw == "" {
-		return fallback, nil
+func parseEnvironment(target any) error {
+	if err := env.Parse(target); err != nil {
+		return errors.New("parse environment configuration")
 	}
-	value, err := strconv.ParseUint(raw, 10, 64)
-	if err != nil || value == 0 || value > 9_007_199_254_740_991 {
-		return 0, fmt.Errorf("%s is outside the allowed boundary", name)
-	}
-	return value, nil
-}
-
-func envOrDefault(name, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
-		return value
-	}
-	return fallback
-}
-
-func uint32Env(name string, fallback uint32) (uint32, error) {
-	raw := strings.TrimSpace(os.Getenv(name))
-	if raw == "" {
-		return fallback, nil
-	}
-	value, err := strconv.ParseUint(raw, 10, 32)
-	if err != nil {
-		return 0, fmt.Errorf("%s must be uint32: %w", name, err)
-	}
-	return uint32(value), nil
-}
-
-func int32Env(name string, fallback, minimum, maximum int32) (int32, error) {
-	raw := strings.TrimSpace(os.Getenv(name))
-	if raw == "" {
-		return fallback, nil
-	}
-	value, err := strconv.ParseInt(raw, 10, 32)
-	if err != nil || value < int64(minimum) || value > int64(maximum) {
-		return 0, fmt.Errorf("%s is outside the allowed boundary", name)
-	}
-	return int32(value), nil
-}
-
-func durationEnv(
-	name string,
-	fallback time.Duration,
-	minimum time.Duration,
-	maximum time.Duration,
-) (time.Duration, error) {
-	raw := strings.TrimSpace(os.Getenv(name))
-	if raw == "" {
-		return fallback, nil
-	}
-	value, err := time.ParseDuration(raw)
-	if err != nil || value < minimum || value > maximum {
-		return 0, fmt.Errorf("%s is outside the allowed duration boundary", name)
-	}
-	return value, nil
+	return nil
 }

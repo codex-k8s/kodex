@@ -5,8 +5,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -30,116 +28,55 @@ import (
 )
 
 type PublisherConfig struct {
-	Listen                       string
-	TechnicalListen              string
-	TLSCertificateFile           string
-	TLSPrivateKeyFile            string
-	ClientCAFile                 string
-	PostgresDSNFile              string
-	PostgresTLSServerName        string
-	PostgresExpectedUser         string
-	VaultAddress                 string
-	VaultTLSServerName           string
-	VaultCAFile                  string
-	VaultAuthRole                string
-	VaultAuthFile                string
-	TargetRegistryFile           string
-	SignerPrivateJWKFile         string
-	SignerSourceRevision         uint64
-	SignerSourceDigest           string
-	SignerKeySetRevision         uint64
-	SignerGeneration             uint64
-	ReadbackSignerPrivateJWKFile string
-	ReadbackSignerSourceRevision uint64
-	ReadbackSignerSourceDigest   string
-	ReadbackSignerKeySetRevision uint64
-	ReadbackSignerGeneration     uint64
-	ControllerGeneration         uint64
-	ShutdownTimeout              time.Duration
+	Listen                       string        `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_LISTEN"`
+	TechnicalListen              string        `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
+	TLSCertificateFile           string        `env:"INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE"`
+	TLSPrivateKeyFile            string        `env:"INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE"`
+	ClientCAFile                 string        `env:"INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE"`
+	PostgresDSNFile              string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
+	PostgresTLSServerName        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
+	PostgresExpectedUser         string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
+	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
+	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
+	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
+	VaultAuthRole                string        `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_ROLE"`
+	VaultAuthFile                string        `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_AUTH_FILE"`
+	TargetRegistryFile           string        `env:"INTERNAL_RPC_AUTHORITY_TARGET_REGISTRY_FILE"`
+	SignerPrivateJWKFile         string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_PRIVATE_JWK_FILE"`
+	SignerSourceRevision         uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_SOURCE_REVISION"`
+	SignerSourceDigest           string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_SOURCE_DIGEST_SHA256"`
+	SignerKeySetRevision         uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_KEY_SET_REVISION"`
+	SignerGeneration             uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_GENERATION"`
+	ReadbackSignerPrivateJWKFile string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_PRIVATE_JWK_FILE"`
+	ReadbackSignerSourceRevision uint64        `env:"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_REVISION"`
+	ReadbackSignerSourceDigest   string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_DIGEST_SHA256"`
+	ReadbackSignerKeySetRevision uint64        `env:"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_KEY_SET_REVISION"`
+	ReadbackSignerGeneration     uint64        `env:"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_GENERATION"`
+	ControllerGeneration         uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_GENERATION"`
+	ShutdownTimeout              time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
 func LoadPublisherConfig() (PublisherConfig, error) {
-	parseRevision := func(name string) (uint64, error) {
-		value, err := strconv.ParseUint(strings.TrimSpace(os.Getenv(name)), 10, 64)
-		if err != nil || value == 0 {
-			return 0, errors.New(name + " is invalid")
-		}
-		return value, nil
-	}
-	signerSourceRevision, err := parseRevision(
-		"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_SOURCE_REVISION",
-	)
-	if err != nil {
-		return PublisherConfig{}, err
-	}
-	signerKeySetRevision, err := parseRevision(
-		"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_KEY_SET_REVISION",
-	)
-	if err != nil {
-		return PublisherConfig{}, err
-	}
-	signerGeneration, err := parseRevision(
-		"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_GENERATION",
-	)
-	if err != nil {
-		return PublisherConfig{}, err
-	}
-	controllerGeneration, err := parseRevision(
-		"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_GENERATION",
-	)
-	if err != nil {
-		return PublisherConfig{}, err
-	}
-	readbackSignerSourceRevision, err := parseRevision(
-		"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_REVISION",
-	)
-	if err != nil {
-		return PublisherConfig{}, err
-	}
-	readbackSignerKeySetRevision, err := parseRevision(
-		"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_KEY_SET_REVISION",
-	)
-	if err != nil {
-		return PublisherConfig{}, err
-	}
-	readbackSignerGeneration, err := parseRevision(
-		"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_GENERATION",
-	)
-	if err != nil {
-		return PublisherConfig{}, err
-	}
 	config := PublisherConfig{
-		Listen:                envOrDefault("INTERNAL_RPC_AUTHORITY_PUBLISHER_LISTEN", ":8444"),
-		TechnicalListen:       envOrDefault("INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN", ":9090"),
-		TLSCertificateFile:    envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/tls/tls.crt"),
-		TLSPrivateKeyFile:     envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/tls/tls.key"),
-		ClientCAFile:          envOrDefault("INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/publisher/client-ca.pem"),
-		PostgresDSNFile:       envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/dsn"),
-		PostgresTLSServerName: envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME", "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local"),
-		PostgresExpectedUser:  strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER")),
-		VaultAddress:          envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS", "https://vault.mattercodex-system.svc:8200"),
-		VaultTLSServerName:    envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME", "vault.mattercodex-system.svc.cluster.local"),
-		VaultCAFile:           envOrDefault("INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/publisher/vault-ca.pem"),
-		VaultAuthRole:         envOrDefault("INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_ROLE", "internal-rpc-authority-publisher"),
-		VaultAuthFile:         envOrDefault("INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_AUTH_FILE", "/var/run/secrets/tokens/vault/token"),
-		TargetRegistryFile:    envOrDefault("INTERNAL_RPC_AUTHORITY_TARGET_REGISTRY_FILE", "/usr/local/share/internal-rpc-authority/bootstrap-key-delivery-targets.yaml"),
-		SignerPrivateJWKFile:  envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_PRIVATE_JWK_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/restore-signer/private.jwk"),
-		SignerSourceRevision:  signerSourceRevision,
-		SignerSourceDigest:    strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_SOURCE_DIGEST_SHA256")),
-		SignerKeySetRevision:  signerKeySetRevision,
-		SignerGeneration:      signerGeneration,
-		ReadbackSignerPrivateJWKFile: envOrDefault(
-			"INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_PRIVATE_JWK_FILE",
-			"/var/run/secrets/mattercodex/internal-rpc-authority/publisher/readback-signer/private.jwk",
-		),
-		ReadbackSignerSourceRevision: readbackSignerSourceRevision,
-		ReadbackSignerSourceDigest: strings.TrimSpace(
-			os.Getenv("INTERNAL_RPC_AUTHORITY_READBACK_SIGNER_SOURCE_DIGEST_SHA256"),
-		),
-		ReadbackSignerKeySetRevision: readbackSignerKeySetRevision,
-		ReadbackSignerGeneration:     readbackSignerGeneration,
-		ControllerGeneration:         controllerGeneration,
+		Listen:                       ":8444",
+		TechnicalListen:              ":9090",
+		TLSCertificateFile:           "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/tls/tls.crt",
+		TLSPrivateKeyFile:            "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/tls/tls.key",
+		ClientCAFile:                 "/var/run/config/mattercodex/internal-rpc-authority/publisher/client-ca.pem",
+		PostgresDSNFile:              "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/dsn",
+		PostgresTLSServerName:        "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		VaultAddress:                 "https://vault.mattercodex-system.svc:8200",
+		VaultTLSServerName:           "vault.mattercodex-system.svc.cluster.local",
+		VaultCAFile:                  "/var/run/config/mattercodex/internal-rpc-authority/publisher/vault-ca.pem",
+		VaultAuthRole:                "internal-rpc-authority-publisher",
+		VaultAuthFile:                "/var/run/secrets/tokens/vault/token",
+		TargetRegistryFile:           "/usr/local/share/internal-rpc-authority/bootstrap-key-delivery-targets.yaml",
+		SignerPrivateJWKFile:         "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/restore-signer/private.jwk",
+		ReadbackSignerPrivateJWKFile: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/readback-signer/private.jwk",
 		ShutdownTimeout:              10 * time.Second,
+	}
+	if err := parseEnvironment(&config); err != nil {
+		return PublisherConfig{}, err
 	}
 	if _, _, err := net.SplitHostPort(config.Listen); err != nil {
 		return PublisherConfig{}, errors.New("publisher listen address is invalid")
@@ -148,6 +85,13 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 		return PublisherConfig{}, errors.New("publisher technical listen address is invalid")
 	}
 	if config.PostgresExpectedUser == "" ||
+		config.SignerSourceRevision == 0 ||
+		config.SignerKeySetRevision == 0 ||
+		config.SignerGeneration == 0 ||
+		config.ReadbackSignerSourceRevision == 0 ||
+		config.ReadbackSignerKeySetRevision == 0 ||
+		config.ReadbackSignerGeneration == 0 ||
+		config.ControllerGeneration == 0 ||
 		!digestPattern.MatchString(config.SignerSourceDigest) ||
 		!digestPattern.MatchString(config.ReadbackSignerSourceDigest) {
 		return PublisherConfig{}, errors.New("publisher database or signer identity is invalid")

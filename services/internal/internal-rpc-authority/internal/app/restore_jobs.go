@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
@@ -20,46 +19,35 @@ import (
 )
 
 type RestoreOperatorConfig struct {
-	Action                  string
-	ControllerAddress       string
-	ControllerTLSServerName string
-	ControllerCAFile        string
-	ClientCertificateFile   string
-	ClientPrivateKeyFile    string
-	RestoreID               string
-	DatabaseClusterID       string
-	BackupManifestDigest    string
-	RecoveryTarget          time.Time
-	IdempotencyKey          string
-	CorrelationID           string
-	Timeout                 time.Duration
+	Action                  string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ACTION"`
+	ControllerAddress       string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS"`
+	ControllerTLSServerName string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_SERVER_NAME"`
+	ControllerCAFile        string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE"`
+	ClientCertificateFile   string        `env:"INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE"`
+	ClientPrivateKeyFile    string        `env:"INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE"`
+	RestoreID               string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ID"`
+	DatabaseClusterID       string        `env:"INTERNAL_RPC_AUTHORITY_DATABASE_CLUSTER_ID"`
+	BackupManifestDigest    string        `env:"INTERNAL_RPC_AUTHORITY_BACKUP_MANIFEST_DIGEST_SHA256"`
+	RecoveryTarget          time.Time     `env:"INTERNAL_RPC_AUTHORITY_RECOVERY_TARGET"`
+	IdempotencyKey          string        `env:"INTERNAL_RPC_AUTHORITY_IDEMPOTENCY_KEY"`
+	CorrelationID           string        `env:"INTERNAL_RPC_AUTHORITY_CORRELATION_ID"`
+	Timeout                 time.Duration `env:"INTERNAL_RPC_AUTHORITY_RESTORE_TIMEOUT"`
 }
 
 func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
-	recoveryTarget, err := time.Parse(
-		time.RFC3339,
-		strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_RECOVERY_TARGET")),
-	)
-	if err != nil {
-		return RestoreOperatorConfig{}, errors.New(
-			"restore operator recovery target is invalid",
-		)
-	}
 	config := RestoreOperatorConfig{
-		Action:                  strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_RESTORE_ACTION")),
-		ControllerAddress:       envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS", "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443"),
-		ControllerTLSServerName: envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_SERVER_NAME", "internal-rpc-authority-restore-controller.mattercodex-system.svc"),
-		ControllerCAFile:        envOrDefault("INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/restore-operator/controller-ca.pem"),
-		ClientCertificateFile:   envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.crt"),
-		ClientPrivateKeyFile:    envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.key"),
-		RestoreID:               strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_RESTORE_ID")),
-		DatabaseClusterID:       envOrDefault("INTERNAL_RPC_AUTHORITY_DATABASE_CLUSTER_ID", "internal-rpc-authority-primary"),
-		BackupManifestDigest:    strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_BACKUP_MANIFEST_DIGEST_SHA256")),
-		RecoveryTarget:          recoveryTarget.UTC().Truncate(time.Second),
-		IdempotencyKey:          strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_IDEMPOTENCY_KEY")),
-		CorrelationID:           strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_CORRELATION_ID")),
+		ControllerAddress:       "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443",
+		ControllerTLSServerName: "internal-rpc-authority-restore-controller.mattercodex-system.svc",
+		ControllerCAFile:        "/var/run/config/mattercodex/internal-rpc-authority/restore-operator/controller-ca.pem",
+		ClientCertificateFile:   "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.crt",
+		ClientPrivateKeyFile:    "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.key",
+		DatabaseClusterID:       "internal-rpc-authority-primary",
 		Timeout:                 20 * time.Second,
 	}
+	if err := parseEnvironment(&config); err != nil {
+		return RestoreOperatorConfig{}, err
+	}
+	config.RecoveryTarget = config.RecoveryTarget.UTC().Truncate(time.Second)
 	host, _, splitErr := net.SplitHostPort(config.ControllerAddress)
 	if splitErr != nil ||
 		host != config.ControllerTLSServerName ||
@@ -67,6 +55,7 @@ func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 			"internal-rpc-authority-restore-controller.mattercodex-system.svc" ||
 		(config.Action != "prepare" && config.Action != "complete") ||
 		config.RestoreID == "" ||
+		config.RecoveryTarget.IsZero() ||
 		config.DatabaseClusterID != "internal-rpc-authority-primary" ||
 		len(config.BackupManifestDigest) != 64 ||
 		config.IdempotencyKey == "" ||

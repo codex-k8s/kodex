@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -31,46 +30,39 @@ import (
 )
 
 type ReadbackConfig struct {
-	Listen                 string
-	TechnicalListen        string
-	TLSCertificateFile     string
-	TLSPrivateKeyFile      string
-	ClientCAFile           string
-	PostgresDSNFile        string
-	PostgresTLSServerName  string
-	PostgresExpectedUser   string
-	RootPublicJWKFile      string
-	RootMetadataFile       string
-	ManifestBundleJWSFile  string
-	CredentialTrustJWSFile string
-	VerifierGeneration     uint64
-	ShutdownTimeout        time.Duration
+	Listen                 string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_LISTEN"`
+	TechnicalListen        string        `env:"INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN"`
+	TLSCertificateFile     string        `env:"INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE"`
+	TLSPrivateKeyFile      string        `env:"INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE"`
+	ClientCAFile           string        `env:"INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE"`
+	PostgresDSNFile        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
+	PostgresTLSServerName  string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
+	PostgresExpectedUser   string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
+	RootPublicJWKFile      string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_ROOT_PUBLIC_JWK_FILE"`
+	RootMetadataFile       string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_ROOT_METADATA_FILE"`
+	ManifestBundleJWSFile  string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_BUNDLE_JWS_FILE"`
+	CredentialTrustJWSFile string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_TRUST_JWS_FILE"`
+	VerifierGeneration     uint64        `env:"INTERNAL_RPC_AUTHORITY_READBACK_VERIFIER_GENERATION"`
+	ShutdownTimeout        time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
 func LoadReadbackConfig() (ReadbackConfig, error) {
-	verifierGeneration, err := strconv.ParseUint(
-		strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_READBACK_VERIFIER_GENERATION")),
-		10,
-		64,
-	)
-	if err != nil || verifierGeneration == 0 {
-		return ReadbackConfig{}, errors.New("readback verifier generation is invalid")
-	}
 	config := ReadbackConfig{
-		Listen:                 envOrDefault("INTERNAL_RPC_AUTHORITY_READBACK_LISTEN", ":8443"),
-		TechnicalListen:        envOrDefault("INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN", ":9090"),
-		TLSCertificateFile:     envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls/tls.crt"),
-		TLSPrivateKeyFile:      envOrDefault("INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls/tls.key"),
-		ClientCAFile:           envOrDefault("INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE", "/var/run/config/mattercodex/internal-rpc-authority/readback-attestor/client-ca.pem"),
-		PostgresDSNFile:        envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE", "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/dsn"),
-		PostgresTLSServerName:  envOrDefault("INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME", "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local"),
-		PostgresExpectedUser:   strings.TrimSpace(os.Getenv("INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER")),
-		RootPublicJWKFile:      envOrDefault("INTERNAL_RPC_AUTHORITY_READBACK_ROOT_PUBLIC_JWK_FILE", "/usr/local/share/internal-rpc-authority/readback-root/bootstrap-public.jwk"),
-		RootMetadataFile:       envOrDefault("INTERNAL_RPC_AUTHORITY_READBACK_ROOT_METADATA_FILE", "/usr/local/share/internal-rpc-authority/readback-root/bootstrap-metadata.json"),
-		ManifestBundleJWSFile:  envOrDefault("INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_BUNDLE_JWS_FILE", "/var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root/root.jws"),
-		CredentialTrustJWSFile: envOrDefault("INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_TRUST_JWS_FILE", "/var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust/trust.jws"),
-		VerifierGeneration:     verifierGeneration,
+		Listen:                 ":8443",
+		TechnicalListen:        ":9090",
+		TLSCertificateFile:     "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls/tls.crt",
+		TLSPrivateKeyFile:      "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls/tls.key",
+		ClientCAFile:           "/var/run/config/mattercodex/internal-rpc-authority/readback-attestor/client-ca.pem",
+		PostgresDSNFile:        "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/dsn",
+		PostgresTLSServerName:  "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		RootPublicJWKFile:      "/usr/local/share/internal-rpc-authority/readback-root/bootstrap-public.jwk",
+		RootMetadataFile:       "/usr/local/share/internal-rpc-authority/readback-root/bootstrap-metadata.json",
+		ManifestBundleJWSFile:  "/var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root/root.jws",
+		CredentialTrustJWSFile: "/var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust/trust.jws",
 		ShutdownTimeout:        10 * time.Second,
+	}
+	if err := parseEnvironment(&config); err != nil {
+		return ReadbackConfig{}, err
 	}
 	if _, _, err := net.SplitHostPort(config.Listen); err != nil {
 		return ReadbackConfig{}, errors.New("readback listen address is invalid")
@@ -79,7 +71,8 @@ func LoadReadbackConfig() (ReadbackConfig, error) {
 		return ReadbackConfig{}, errors.New("readback technical listen address is invalid")
 	}
 	if config.PostgresExpectedUser == "" ||
-		config.PostgresTLSServerName == "" {
+		config.PostgresTLSServerName == "" ||
+		config.VerifierGeneration == 0 {
 		return ReadbackConfig{}, errors.New("readback PostgreSQL identity is invalid")
 	}
 	return config, nil
