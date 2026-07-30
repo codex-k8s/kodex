@@ -76,7 +76,7 @@ func New(config Config) (*Store, error) {
 	}
 	rootCAs := x509.NewCertPool()
 	if !rootCAs.AppendCertsFromPEM(caRaw) {
-		return nil, errors.New("Kubernetes API CA is invalid")
+		return nil, errors.New("kubernetes API CA is invalid")
 	}
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
@@ -92,7 +92,7 @@ func New(config Config) (*Store, error) {
 			Transport: transport,
 			Timeout:   config.Timeout,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return errors.New("Kubernetes API redirect is forbidden")
+				return errors.New("kubernetes API redirect is forbidden")
 			},
 		},
 		resourceURL: config.Address +
@@ -375,14 +375,14 @@ func (store *Store) mutate(
 			return err
 		}
 		if updated.Metadata.ResourceVersion == "" {
-			return errors.New("Kubernetes coordination CAS returned no resource version")
+			return errors.New("kubernetes coordination CAS returned no resource version")
 		}
 		return nil
 	}
-	return errors.New("Kubernetes coordination CAS retry budget exhausted")
+	return errors.New("kubernetes coordination CAS retry budget exhausted")
 }
 
-var errConflict = errors.New("Kubernetes coordination resource version conflict")
+var errConflict = errors.New("kubernetes coordination resource version conflict")
 
 func (store *Store) read(ctx context.Context) (configMapEnvelope, error) {
 	request, err := store.request(ctx, http.MethodGet, nil)

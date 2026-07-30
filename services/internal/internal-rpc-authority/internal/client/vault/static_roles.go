@@ -176,7 +176,7 @@ func (client *StaticRoleClient) VerifyRevokedStaticRoles(
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
 		_ = response.Body.Close()
 		if response.StatusCode != http.StatusNotFound {
-			return errors.New("Vault retired static role remains reachable")
+			return errors.New("vault retired static role remains reachable")
 		}
 	}
 	return nil
@@ -192,7 +192,7 @@ func (client *StaticRoleClient) mutateStaticRoles(
 		return nil
 	}
 	if len(roles) > 16 {
-		return errors.New("Vault static role mutation set is unbounded")
+		return errors.New("vault static role mutation set is unbounded")
 	}
 	token, err := client.login(ctx)
 	if err != nil {
@@ -224,7 +224,7 @@ func (client *StaticRoleClient) mutateStaticRoles(
 		_ = response.Body.Close()
 		if response.StatusCode != http.StatusOK &&
 			response.StatusCode != http.StatusNoContent {
-			return errors.New("Vault static role lifecycle request rejected")
+			return errors.New("vault static role lifecycle request rejected")
 		}
 	}
 	return nil

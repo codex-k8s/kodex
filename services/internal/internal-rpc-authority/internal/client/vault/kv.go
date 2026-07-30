@@ -24,7 +24,7 @@ func (client *StaticRoleClient) ReadKV2(
 	path string,
 ) (repository.SecretMaterial, bool, error) {
 	if !kvDataPathPattern.MatchString(path) {
-		return repository.SecretMaterial{}, false, errors.New("Vault KV path is outside the target registry boundary")
+		return repository.SecretMaterial{}, false, errors.New("vault KV path is outside the target registry boundary")
 	}
 	token, err := client.login(ctx)
 	if err != nil {
@@ -41,11 +41,11 @@ func (client *StaticRoleClient) CreateKV2(
 	if !kvDataPathPattern.MatchString(path) ||
 		len(data) == 0 ||
 		len(data) > 16 {
-		return repository.SecretMaterial{}, errors.New("Vault KV delivery input is outside the target registry boundary")
+		return repository.SecretMaterial{}, errors.New("vault KV delivery input is outside the target registry boundary")
 	}
 	for key, value := range data {
 		if key == "" || len(key) > 64 || value == "" || len(value) > 1<<20 {
-			return repository.SecretMaterial{}, errors.New("Vault KV delivery field is invalid")
+			return repository.SecretMaterial{}, errors.New("vault KV delivery field is invalid")
 		}
 	}
 	token, err := client.login(ctx)
@@ -86,7 +86,7 @@ func (client *StaticRoleClient) CreateKV2(
 		response.StatusCode != http.StatusNoContent &&
 		response.StatusCode != http.StatusBadRequest {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
-		return repository.SecretMaterial{}, errors.New("Vault KV delivery rejected")
+		return repository.SecretMaterial{}, errors.New("vault KV delivery rejected")
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
 	stored, found, err := client.readKV2WithToken(ctx, token, path)
@@ -94,7 +94,7 @@ func (client *StaticRoleClient) CreateKV2(
 		return repository.SecretMaterial{}, err
 	}
 	if !found {
-		return repository.SecretMaterial{}, errors.New("Vault KV delivery readback is absent")
+		return repository.SecretMaterial{}, errors.New("vault KV delivery readback is absent")
 	}
 	return stored, nil
 }
@@ -110,12 +110,12 @@ func (client *StaticRoleClient) WriteKV2CAS(
 		len(data) == 0 ||
 		len(data) > 16 {
 		return repository.SecretMaterial{}, errors.New(
-			"Vault KV rotation input is outside the target registry boundary",
+			"vault KV rotation input is outside the target registry boundary",
 		)
 	}
 	for key, value := range data {
 		if key == "" || len(key) > 64 || value == "" || len(value) > 1<<20 {
-			return repository.SecretMaterial{}, errors.New("Vault KV rotation field is invalid")
+			return repository.SecretMaterial{}, errors.New("vault KV rotation field is invalid")
 		}
 	}
 	token, err := client.login(ctx)
@@ -155,7 +155,7 @@ func (client *StaticRoleClient) WriteKV2CAS(
 	if response.StatusCode != http.StatusOK &&
 		response.StatusCode != http.StatusNoContent {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
-		return repository.SecretMaterial{}, errors.New("Vault KV rotation CAS rejected")
+		return repository.SecretMaterial{}, errors.New("vault KV rotation CAS rejected")
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
 	stored, found, err := client.readKV2WithToken(ctx, token, path)
@@ -163,7 +163,7 @@ func (client *StaticRoleClient) WriteKV2CAS(
 		return repository.SecretMaterial{}, err
 	}
 	if !found || stored.Version != expectedVersion+1 {
-		return repository.SecretMaterial{}, errors.New("Vault KV rotation readback is invalid")
+		return repository.SecretMaterial{}, errors.New("vault KV rotation readback is invalid")
 	}
 	return stored, nil
 }
@@ -194,11 +194,11 @@ func (client *StaticRoleClient) readKV2WithToken(
 	}
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxVaultResponseBytes))
-		return repository.SecretMaterial{}, false, errors.New("Vault KV readback rejected")
+		return repository.SecretMaterial{}, false, errors.New("vault KV readback rejected")
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxVaultResponseBytes+1))
 	if err != nil || len(raw) == 0 || len(raw) > maxVaultResponseBytes {
-		return repository.SecretMaterial{}, false, errors.New("Vault KV readback response is invalid")
+		return repository.SecretMaterial{}, false, errors.New("vault KV readback response is invalid")
 	}
 	var envelope struct {
 		Data struct {
@@ -217,11 +217,11 @@ func (client *StaticRoleClient) readKV2WithToken(
 		envelope.Data.Metadata.DeletionTime != "" ||
 		len(envelope.Data.Data) == 0 ||
 		len(envelope.Data.Data) > 16 {
-		return repository.SecretMaterial{}, false, errors.New("Vault KV readback response is invalid")
+		return repository.SecretMaterial{}, false, errors.New("vault KV readback response is invalid")
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return repository.SecretMaterial{}, false, errors.New("Vault KV readback response is invalid")
+		return repository.SecretMaterial{}, false, errors.New("vault KV readback response is invalid")
 	}
 	digest, err := internalrpcauth.CanonicalJSONSHA256(envelope.Data.Data)
 	if err != nil {

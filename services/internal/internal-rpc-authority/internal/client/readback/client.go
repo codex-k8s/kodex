@@ -282,12 +282,10 @@ func (client *Client) Attest(
 		credentialDigest,
 		state.SourceDigestSHA256,
 	)
-	connection, err := grpc.DialContext(
-		ctx,
+	connection, err := grpc.NewClient(
 		client.config.Address,
 		grpc.WithTransportCredentials(credentials.NewTLS(client.config.TLS.Clone())),
 		grpc.WithUnaryInterceptor(client.config.UnaryInterceptor),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		return "", errors.New("connect to readback attestor")

@@ -123,12 +123,10 @@ func (agent *Agent) Poll(
 	if found && roleCompact == "" {
 		return errors.New("restore role credential material is invalid")
 	}
-	connection, err := grpc.DialContext(
-		ctx,
+	connection, err := grpc.NewClient(
 		agent.config.Address,
 		grpc.WithTransportCredentials(credentials.NewTLS(agent.config.TLS.Clone())),
 		grpc.WithUnaryInterceptor(agent.config.UnaryInterceptor),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		return errors.New("connect to restore controller")

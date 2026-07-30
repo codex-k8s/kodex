@@ -449,8 +449,7 @@ func loadControllerSigningKey(
 		!publicOK ||
 		privateKey.Curve != elliptic.P256() ||
 		publicKey.Curve != elliptic.P256() ||
-		privateKey.PublicKey.X.Cmp(publicKey.X) != 0 ||
-		privateKey.PublicKey.Y.Cmp(publicKey.Y) != 0 {
+		!privateKey.PublicKey.Equal(publicKey) {
 		return internalrpcauth.ES256Key{}, errors.New(
 			"restore controller TLS key is not exact ES256",
 		)

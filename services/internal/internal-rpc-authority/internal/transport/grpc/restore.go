@@ -2,7 +2,6 @@ package authoritygrpc
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
 	"time"
 
@@ -270,10 +269,6 @@ func restorePeerSPIFFE(ctx context.Context) (string, error) {
 		return "", errors.New("restore verified mTLS chain is absent")
 	}
 	return exactSPIFFEURI(tlsInfo.State.VerifiedChains[0][0])
-}
-
-func exactRestoreSPIFFE(certificate *x509.Certificate) (string, error) {
-	return exactSPIFFEURI(certificate)
 }
 
 func restoreCommandDigest(

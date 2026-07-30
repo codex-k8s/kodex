@@ -261,7 +261,7 @@ func (runtime *Runtime) FlushSentry(ctx context.Context) error {
 		return nil
 	}
 	if !runtime.sentry.FlushWithContext(ctx) {
-		return errors.New("Sentry flush deadline exceeded")
+		return errors.New("sentry flush deadline exceeded")
 	}
 	return nil
 }
@@ -293,7 +293,7 @@ func validateRuntimeConfig(config RuntimeConfig) error {
 		dsn.User.Username() == "" ||
 		dsn.RawQuery != "" ||
 		dsn.Fragment != "" {
-		return errors.New("Sentry DSN is invalid")
+		return errors.New("sentry DSN is invalid")
 	}
 	if !filepath.IsAbs(config.OTLPCAFile) {
 		return errors.New("OTLP CA path must be absolute")
