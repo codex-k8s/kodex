@@ -99,5 +99,8 @@
     ],
     "secret_volumes": null
   },
-  "network_policies": []
+  "network_policies": [
+    "base/internal-rpc-authority-data/networkpolicy.yaml",
+    "base/internal-rpc-authority/networkpolicy.yaml"
+  ]
 }
