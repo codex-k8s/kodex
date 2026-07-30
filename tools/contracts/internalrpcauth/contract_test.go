@@ -583,7 +583,7 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 		t,
 		publisherVaultDatabase,
 		"revocation",
-		"RETIRED_PRINCIPAL_NOLOGIN_AND_VAULT_ROTATION",
+		"SERVER_SIDE_RETIRED_FENCE_THEN_NOLOGIN_MEMBERSHIP_REVOKE_VAULT_ROTATION_AND_BACKEND_DRAIN",
 	)
 	requireEqual(t, publisherVaultDatabase, "workloadTokenRenewalRequired", true)
 	requireEqual(t, publisherVaultDatabase, "currentNextOverlapRequired", true)
