@@ -103,6 +103,9 @@
     "base/internal-rpc-authority-data/networkpolicy.yaml",
     "base/internal-rpc-authority-publisher/networkpolicy.yaml",
     "base/internal-rpc-authority-readback-attestor/networkpolicy.yaml",
-    "base/internal-rpc-authority/networkpolicy.yaml"
+    "base/internal-rpc-authority-restore/networkpolicy.yaml",
+    "base/internal-rpc-authority/networkpolicy.yaml",
+    "components/internal-rpc-authority-control-api-gateway-issuer/networkpolicy.yaml",
+    "components/internal-rpc-authority-control-plane-verifier/networkpolicy.yaml"
   ]
 }

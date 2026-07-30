@@ -679,9 +679,10 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	recoveryName := "internal-rpc-authority-recovery-job"
 	recovery := requiredMap(t, deployables, recoveryName)
 	for key, want := range map[string]any{
-		"kind":           "JobStep",
-		"artifactBinary": "/usr/local/bin/internal-rpc-authority-recovery",
-		"serviceAccount": "internal-rpc-authority-restore-operator",
+		"kind":           "CronJob",
+		"canonicalPath":  "deploy/k8s/base/internal-rpc-authority-restore",
+		"artifactBinary": "/usr/local/bin/internal-rpc-authority-restore-recovery",
+		"serviceAccount": "internal-rpc-authority-restore-recovery",
 		"databaseRole":   "internal_rpc_authority_recovery",
 		"failurePolicy":  "KEEP_TRAFFIC_QUARANTINED",
 	} {
@@ -728,6 +729,12 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 
 	controller := requiredMap(t, deployables, "internal-rpc-authority-restore-controller")
 	requireEqual(t, controller, "kind", "Deployment")
+	requireEqual(
+		t,
+		controller,
+		"canonicalPath",
+		"deploy/k8s/base/internal-rpc-authority-restore",
+	)
 	requireEqual(t, controller, "artifactBinary", "/usr/local/bin/internal-rpc-authority-restore-controller")
 	requireEqual(t, controller, "serviceAccount", "internal-rpc-authority-restore-controller")
 	controllerInterface := requiredMap(t, controller, "interface")
