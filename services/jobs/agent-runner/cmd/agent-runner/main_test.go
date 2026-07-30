@@ -767,7 +767,7 @@ func TestCredentialSourcesAreSnapshottedAndRotationCancelsWithoutPublication(t *
 		credentialEnv    string
 		additionalSource bool
 	}{
-		{name: "ServiceAccount", additionalSource: true},
+		{name: "explicit static credential", additionalSource: true},
 		{name: "KUBECONFIG", credentialEnv: "KUBECONFIG"},
 		{name: "scoped _FILE", credentialEnv: "SCOPED_CREDENTIAL_FILE"},
 	} {
@@ -891,6 +891,101 @@ func TestCredentialSourcesAreSnapshottedAndRotationCancelsWithoutPublication(t *
 				t.Fatalf("после rotation выполнены network requests: %d", requests)
 			}
 		})
+	}
+}
+
+func TestProjectedServiceAccountRotationDoesNotCancelAndRedactsAllObservedValues(t *testing.T) {
+	useTestWorkspace(t)
+	const (
+		oldCredential = "mc-service-account-before-834b97c0"
+		newCredential = "mc-service-account-after--834b97c1"
+		turnID        = int64(780100)
+	)
+	directory := t.TempDir()
+	source := filepath.Join(directory, "projected-service-account-token")
+	if err := os.WriteFile(source, []byte(oldCredential), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	started := filepath.Join(directory, "started")
+	finalName := "service-account-rotation-final.md"
+	persistentPaths := []string{
+		sessionTurnEventsPath(turnID, 0),
+		sessionTurnStderrPath(turnID, 0),
+		filepath.Join(artifactsDir, finalName),
+	}
+	for _, path := range persistentPaths {
+		_ = os.Remove(path)
+		path := path
+		t.Cleanup(func() { _ = os.Remove(path) })
+	}
+	testRunner := &runner{
+		credentialFiles:         []string{},
+		rotatingCredentialFiles: []string{source},
+		commandContext: func(ctx context.Context, _ string, args ...string) *exec.Cmd {
+			finalPath := ""
+			for index, argument := range args {
+				if argument == "--output-last-message" && index+1 < len(args) {
+					finalPath = args[index+1]
+				}
+			}
+			return exec.CommandContext(ctx, os.Args[0], "-test.run=^$", "--", finalPath)
+		},
+	}
+	t.Cleanup(testRunner.cleanupEphemeralRuntime)
+	resultChannel := make(chan error, 1)
+	workDir := t.TempDir()
+	go func() {
+		_, _, err := testRunner.runCodexSessionTurn(context.Background(), sessionTurnClaimResponse{
+			TurnID: turnID,
+			Prompt: "synthetic projected service account rotation",
+		}, "", finalName, workDir, []string{
+			"MATTERCODEX_TEST_CREDENTIAL_ROTATION_HELPER=1",
+			"MATTERCODEX_TEST_ROTATION_SOURCE=" + source,
+			"MATTERCODEX_TEST_ROTATION_STARTED=" + started,
+		}, 0)
+		resultChannel <- err
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(started); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("subprocess не достиг production start boundary")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := os.WriteFile(source, []byte(newCredential), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-resultChannel:
+		if err != nil {
+			t.Fatalf("штатная ротация projected token отменила subprocess: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("subprocess не завершился после штатной ротации")
+	}
+	if testRunner.safety.isUnsafe() {
+		t.Fatal("штатная ротация projected token пометила turn небезопасным")
+	}
+	for _, credential := range []string{oldCredential, newCredential} {
+		protected, err := testRunner.secrets.protect("credential=" + credential)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(protected, credential) || !strings.Contains(protected, redactedSecretValue) {
+			t.Fatalf("observed projected token отсутствует в итоговом redaction inventory")
+		}
+	}
+	for _, path := range persistentPaths {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("санитизированный output %s отсутствует: %v", filepath.Base(path), err)
+		}
+		if strings.Contains(string(body), oldCredential) || strings.Contains(string(body), newCredential) {
+			t.Fatalf("санитизированный output %s содержит projected token", filepath.Base(path))
+		}
 	}
 }
 

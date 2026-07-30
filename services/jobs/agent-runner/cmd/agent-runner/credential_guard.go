@@ -20,7 +20,12 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-const credentialEventSyncTimeout = 2 * time.Second
+const (
+	credentialEventSyncTimeout          = 2 * time.Second
+	rotatingCredentialPollInterval      = 100 * time.Millisecond
+	rotatingCredentialFinalReadAttempts = 20
+	rotatingCredentialFinalReadDelay    = 25 * time.Millisecond
+)
 
 type runSafety struct {
 	unsafe atomic.Bool
@@ -50,6 +55,12 @@ type unsupportedCredentialProviderError struct{}
 
 func (unsupportedCredentialProviderError) Error() string {
 	return "kubeconfig содержит неподдерживаемый динамический источник авторизации; запуск отклонён"
+}
+
+type rotatingCredentialCaptureError struct{}
+
+func (rotatingCredentialCaptureError) Error() string {
+	return "rotating credential source could not be captured safely"
 }
 
 type credentialSourceSnapshot struct {
@@ -120,6 +131,18 @@ type credentialRunGuard struct {
 	relevantPaths map[string]struct{}
 	strictDirs    map[string]struct{}
 	syncWaiters   map[string]chan struct{}
+
+	rotatingMutex      sync.Mutex
+	rotatingPaths      map[string]struct{}
+	rotatingValues     map[string]struct{}
+	rotatingExactOnly  map[string]struct{}
+	rotatingSources    map[string]int64
+	rotatingDigests    map[string][sha256.Size]byte
+	rotatingCaptureErr error
+	rotatingStop       chan struct{}
+	rotatingDone       chan struct{}
+	rotatingStarted    atomic.Bool
+	rotatingCloseOnce  sync.Once
 }
 
 func (r *runner) guardedCommand(
@@ -246,16 +269,23 @@ func (r *runner) newCredentialRunGuard(cancel context.CancelFunc, snapshotRoot s
 		return nil, fmt.Errorf("event guard credential sources не подготовлен")
 	}
 	guard := &credentialRunGuard{
-		runner:        r,
-		cancel:        cancel,
-		snapshotRoot:  snapshotRoot,
-		watcher:       watcher,
-		barrierRoot:   barrierRoot,
-		done:          make(chan struct{}),
-		watchedDirs:   map[string]bool{},
-		relevantPaths: map[string]struct{}{},
-		strictDirs:    map[string]struct{}{},
-		syncWaiters:   map[string]chan struct{}{},
+		runner:            r,
+		cancel:            cancel,
+		snapshotRoot:      snapshotRoot,
+		watcher:           watcher,
+		barrierRoot:       barrierRoot,
+		done:              make(chan struct{}),
+		watchedDirs:       map[string]bool{},
+		relevantPaths:     map[string]struct{}{},
+		strictDirs:        map[string]struct{}{},
+		syncWaiters:       map[string]chan struct{}{},
+		rotatingPaths:     map[string]struct{}{},
+		rotatingValues:    map[string]struct{}{},
+		rotatingExactOnly: map[string]struct{}{},
+		rotatingSources:   map[string]int64{},
+		rotatingDigests:   map[string][sha256.Size]byte{},
+		rotatingStop:      make(chan struct{}),
+		rotatingDone:      make(chan struct{}),
 	}
 	if err := guard.addWatchDirectory(barrierRoot, false); err != nil {
 		_ = watcher.Close()
@@ -323,6 +353,18 @@ func (r *runner) snapshotCredentialEnvironment(environment []string, guard *cred
 			return nil, secretInventory{}, err
 		}
 	}
+	rotatingPaths := defaultRotatingCredentialFileSources()
+	if r.rotatingCredentialFiles != nil {
+		rotatingPaths = r.rotatingCredentialFiles
+	}
+	for _, path := range rotatingPaths {
+		if strings.TrimSpace(path) == "" {
+			continue
+		}
+		if err := guard.registerRotatingCredentialPath(path); err != nil {
+			return nil, secretInventory{}, err
+		}
+	}
 
 	runtimeHome, syncRuntimeSessions, err := builder.snapshotRuntimeCodexHome(environment)
 	if err != nil {
@@ -335,6 +377,14 @@ func (r *runner) snapshotCredentialEnvironment(environment []string, guard *cred
 		return nil, secretInventory{}, credentialRotationError{}
 	}
 	inventory, err := compileSecretInventory(builder.values, builder.sources, builder.exactOnlyValues)
+	if err != nil {
+		return nil, secretInventory{}, err
+	}
+	rotatingInventory, err := guard.rotatingCredentialInventory()
+	if err != nil {
+		return nil, secretInventory{}, err
+	}
+	inventory, err = inventory.merge(rotatingInventory)
 	if err != nil {
 		return nil, secretInventory{}, err
 	}
@@ -805,6 +855,186 @@ func credentialFileEnvironmentName(name string, runtimeNames map[string]bool) bo
 		(strings.HasSuffix(name, "_FILE") && (sensitiveEnvironmentName(strings.TrimSuffix(name, "_FILE")) || runtimeNames[name] || runtimeNames[strings.TrimSuffix(name, "_FILE")]))
 }
 
+func (guard *credentialRunGuard) registerRotatingCredentialPath(rawPath string) error {
+	path, err := absoluteCredentialPath(rawPath)
+	if err != nil {
+		return err
+	}
+	body, exists, err := readCredentialSource(path)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	guard.rotatingMutex.Lock()
+	guard.rotatingPaths[path] = struct{}{}
+	guard.rotatingMutex.Unlock()
+	return guard.captureRotatingCredential(path, body)
+}
+
+func (guard *credentialRunGuard) captureRotatingCredential(path string, body []byte) error {
+	if strings.TrimSpace(string(body)) == "" {
+		return rotatingCredentialCaptureError{}
+	}
+	digest := sha256.Sum256(body)
+	guard.rotatingMutex.Lock()
+	defer guard.rotatingMutex.Unlock()
+	if previous, exists := guard.rotatingDigests[path]; exists && previous == digest {
+		return nil
+	}
+	values := make(map[string]struct{}, len(guard.rotatingValues)+1)
+	exactOnly := make(map[string]struct{}, len(guard.rotatingExactOnly))
+	sources := make(map[string]int64, len(guard.rotatingSources)+1)
+	for value := range guard.rotatingValues {
+		values[value] = struct{}{}
+	}
+	for value := range guard.rotatingExactOnly {
+		exactOnly[value] = struct{}{}
+	}
+	for source, size := range guard.rotatingSources {
+		sources[source] = size
+	}
+	collectCredentialFileValues(values, exactOnly, body)
+	if size := int64(len(body)); size > sources[path] {
+		sources[path] = size
+	}
+	if err := validateCredentialSourceBudget(sources); err != nil {
+		return err
+	}
+	inventory, err := compileSecretInventory(values, sources, exactOnly)
+	if err != nil {
+		return err
+	}
+	if err := inventory.validateForExecution(); err != nil {
+		return err
+	}
+	guard.rotatingValues = values
+	guard.rotatingExactOnly = exactOnly
+	guard.rotatingSources = sources
+	guard.rotatingDigests[path] = digest
+	return nil
+}
+
+func (guard *credentialRunGuard) rotatingCredentialInventory() (secretInventory, error) {
+	guard.rotatingMutex.Lock()
+	defer guard.rotatingMutex.Unlock()
+	values := make(map[string]struct{}, len(guard.rotatingValues))
+	exactOnly := make(map[string]struct{}, len(guard.rotatingExactOnly))
+	sources := make(map[string]int64, len(guard.rotatingSources))
+	for value := range guard.rotatingValues {
+		values[value] = struct{}{}
+	}
+	for value := range guard.rotatingExactOnly {
+		exactOnly[value] = struct{}{}
+	}
+	for source, size := range guard.rotatingSources {
+		sources[source] = size
+	}
+	inventory, err := compileSecretInventory(values, sources, exactOnly)
+	if err != nil {
+		return secretInventory{}, err
+	}
+	if err := inventory.validateForExecution(); err != nil {
+		return secretInventory{}, err
+	}
+	return inventory, nil
+}
+
+func (guard *credentialRunGuard) rotatingCredentialPaths() []string {
+	guard.rotatingMutex.Lock()
+	defer guard.rotatingMutex.Unlock()
+	paths := make([]string, 0, len(guard.rotatingPaths))
+	for path := range guard.rotatingPaths {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func (guard *credentialRunGuard) captureCurrentRotatingCredentials(final bool) error {
+	for _, path := range guard.rotatingCredentialPaths() {
+		var lastErr error
+		attempts := 1
+		if final {
+			attempts = rotatingCredentialFinalReadAttempts
+		}
+		for attempt := 0; attempt < attempts; attempt++ {
+			body, exists, err := readCredentialSource(path)
+			if err == nil && exists {
+				if err := guard.captureRotatingCredential(path, body); err != nil {
+					return err
+				}
+				lastErr = nil
+				break
+			}
+			lastErr = err
+			if lastErr == nil {
+				lastErr = rotatingCredentialCaptureError{}
+			}
+			if attempt+1 < attempts {
+				time.Sleep(rotatingCredentialFinalReadDelay)
+			}
+		}
+		if final && lastErr != nil {
+			return rotatingCredentialCaptureError{}
+		}
+	}
+	return nil
+}
+
+func (guard *credentialRunGuard) startRotatingCredentialCapture() {
+	if len(guard.rotatingCredentialPaths()) == 0 || guard.rotatingStarted.Swap(true) {
+		return
+	}
+	go func() {
+		defer close(guard.rotatingDone)
+		ticker := time.NewTicker(rotatingCredentialPollInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := guard.captureCurrentRotatingCredentials(false); err != nil {
+					guard.markRotatingCredentialCaptureFailed(err)
+					return
+				}
+			case <-guard.rotatingStop:
+				return
+			}
+		}
+	}()
+}
+
+func (guard *credentialRunGuard) stopRotatingCredentialCapture() {
+	if !guard.rotatingStarted.Load() {
+		return
+	}
+	guard.rotatingCloseOnce.Do(func() {
+		close(guard.rotatingStop)
+		<-guard.rotatingDone
+	})
+}
+
+func (guard *credentialRunGuard) markRotatingCredentialCaptureFailed(err error) {
+	if err == nil {
+		err = rotatingCredentialCaptureError{}
+	}
+	guard.rotatingMutex.Lock()
+	if guard.rotatingCaptureErr == nil {
+		guard.rotatingCaptureErr = err
+	}
+	guard.rotatingMutex.Unlock()
+	guard.runner.safety.markUnsafe()
+	guard.cancel()
+	guard.runner.discardUnsafeRunData()
+}
+
+func (guard *credentialRunGuard) rotatingCredentialError() error {
+	guard.rotatingMutex.Lock()
+	defer guard.rotatingMutex.Unlock()
+	return guard.rotatingCaptureErr
+}
+
 func (guard *credentialRunGuard) watchCredentialPath(rawPath string) (string, string, error) {
 	requested, err := absoluteCredentialPath(rawPath)
 	if err != nil {
@@ -1001,12 +1231,28 @@ func (guard *credentialRunGuard) start() error {
 		guard.markRotated()
 		return credentialRotationError{}
 	}
+	guard.startRotatingCredentialCapture()
 	return nil
 }
 
 func (guard *credentialRunGuard) finish(runErr error) error {
 	if guard == nil {
 		return runErr
+	}
+	guard.stopRotatingCredentialCapture()
+	if err := guard.captureCurrentRotatingCredentials(true); err != nil {
+		guard.markRotatingCredentialCaptureFailed(err)
+	}
+	rotatingInventory, err := guard.rotatingCredentialInventory()
+	if err != nil {
+		guard.markRotatingCredentialCaptureFailed(err)
+	} else {
+		merged, mergeErr := guard.runner.secrets.merge(rotatingInventory)
+		if mergeErr != nil {
+			guard.markRotatingCredentialCaptureFailed(mergeErr)
+		} else {
+			guard.runner.secrets = merged
+		}
 	}
 	if guard.started.Load() {
 		if err := guard.syncEvents(); err != nil {
@@ -1018,6 +1264,11 @@ func (guard *credentialRunGuard) finish(runErr error) error {
 	}
 	guard.closeWatcher()
 	guard.cancel()
+	if captureErr := guard.rotatingCredentialError(); captureErr != nil {
+		guard.runner.discardUnsafeRunData()
+		_ = os.RemoveAll(guard.snapshotRoot)
+		return errors.Join(runErr, captureErr)
+	}
 	if guard.rotated.Load() {
 		guard.runner.discardUnsafeRunData()
 		_ = os.RemoveAll(guard.snapshotRoot)
@@ -1041,6 +1292,7 @@ func (guard *credentialRunGuard) abort() {
 	if guard == nil {
 		return
 	}
+	guard.stopRotatingCredentialCapture()
 	guard.closeWatcher()
 	guard.cancel()
 	_ = os.RemoveAll(guard.snapshotRoot)
