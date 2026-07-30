@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	readbackrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/readback"
 	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
@@ -136,6 +137,14 @@ func RunReadbackAttestor(
 		return err
 	}
 	readbackApplication := application.NewReadbackAttestor(domainService)
+	if err := readbackApplication.ActivateTrust(
+		startup,
+		trust,
+		readbackTrustState(trustMetadata, time.Now()),
+	); err != nil {
+		pool.Close()
+		return fmt.Errorf("activate durable readback trust: %w", err)
+	}
 	if err := readbackApplication.Ready(startup); err != nil {
 		pool.Close()
 		return fmt.Errorf("verify readback startup path: %w", err)
@@ -186,7 +195,6 @@ func RunReadbackAttestor(
 		grpcRuntime,
 		authoritygrpc.NewAuthorityReadbackAttestorServer(
 			readbackApplication,
-			trustMetadata,
 			config.VerifierGeneration,
 		),
 	)
@@ -206,6 +214,42 @@ func RunReadbackAttestor(
 		metrics,
 		readbackApplication,
 	)
+	workers := serviceruntime.StartWorkers(lifecycle, func(ctx context.Context) error {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-ticker.C:
+			}
+			nextTrust, nextMetadata, loadErr := snapshot.LoadReadbackTrust(
+				snapshot.ReadbackTrustOptions{
+					RootPublicJWKFile:      config.RootPublicJWKFile,
+					RootMetadataFile:       config.RootMetadataFile,
+					ManifestBundleJWSFile:  config.ManifestBundleJWSFile,
+					CredentialTrustJWSFile: config.CredentialTrustJWSFile,
+					Now:                    time.Now(),
+				},
+			)
+			if loadErr != nil {
+				readiness.Set(false, "readback-trust-reload-failed")
+				metrics.SetReady(false)
+				continue
+			}
+			if activateErr := readbackApplication.ActivateTrust(
+				ctx,
+				nextTrust,
+				readbackTrustState(nextMetadata, time.Now()),
+			); activateErr != nil {
+				readiness.Set(false, "readback-trust-watermark-rejected")
+				metrics.SetReady(false)
+				continue
+			}
+			readiness.Set(true, "ready")
+			metrics.SetReady(true)
+		}
+	})
 	serveErrors := make(chan error, 2)
 	go func() {
 		if serveErr := grpcRuntime.Serve(grpcListener); serveErr != nil {
@@ -230,6 +274,13 @@ func RunReadbackAttestor(
 	metrics.SetReady(false)
 	shutdownErr := serviceruntime.RunShutdown(
 		shutdownBase,
+		serviceruntime.ShutdownOperation{
+			Name: "workers", Timeout: config.ShutdownTimeout,
+			Run: func(ctx context.Context) error {
+				workers.Stop()
+				return workers.Wait(ctx)
+			},
+		},
 		serviceruntime.ShutdownOperation{
 			Name: "grpc-server", Timeout: config.ShutdownTimeout,
 			Run: func(ctx context.Context) error { return stopGRPC(ctx, grpcRuntime) },
@@ -257,6 +308,25 @@ func RunReadbackAttestor(
 	telemetryFinished = true
 	logger.Info("readback attestor stopped")
 	return errors.Join(runtimeErr, shutdownErr)
+}
+
+func readbackTrustState(
+	metadata snapshot.ReadbackTrustMetadata,
+	now time.Time,
+) model.ReadbackTrustState {
+	return model.ReadbackTrustState{
+		RootID:                       metadata.RootID,
+		RootFingerprintSHA256:        metadata.RootFingerprintSHA256,
+		ManifestBundleRevision:       metadata.ManifestBundleRevision,
+		ManifestBundleDigestSHA256:   metadata.ManifestBundleDigest,
+		TrustSourceRevision:          metadata.TrustSourceRevision,
+		TrustSetDigestSHA256:         metadata.TrustSetDigest,
+		TrustKeySetRevision:          metadata.TrustKeySetRevision,
+		SignerGeneration:             metadata.ManifestSignerGeneration,
+		PredecessorStateDigestSHA256: metadata.PredecessorStateDigest,
+		ServedStateDigestSHA256:      metadata.ServedStateDigest,
+		ServedAt:                     now.UTC().Truncate(time.Second),
+	}
 }
 
 func openReadbackPostgres(

@@ -24,6 +24,12 @@ var consumeChallengeSQL string
 //go:embed sql/readback__readiness.sql
 var readinessSQL string
 
+//go:embed sql/readback__activate_trust.sql
+var activateTrustSQL string
+
+//go:embed sql/readback__trust_readiness.sql
+var trustReadinessSQL string
+
 func validateQueries() error {
 	for name, query := range map[string]string{
 		"readback__resolve_intent":    resolveIntentSQL,
@@ -32,6 +38,8 @@ func validateQueries() error {
 		"readback__load_receipt":      loadReceiptSQL,
 		"readback__consume_challenge": consumeChallengeSQL,
 		"readback__readiness":         readinessSQL,
+		"readback__activate_trust":    activateTrustSQL,
+		"readback__trust_readiness":   trustReadinessSQL,
 	} {
 		if strings.TrimSpace(query) == "" ||
 			!strings.HasPrefix(strings.TrimSpace(query), "-- name: "+name+" ") {

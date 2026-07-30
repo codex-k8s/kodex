@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"math"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -153,6 +154,49 @@ func TestReadbackRejectsCrossAudienceAndHiddenIntent(t *testing.T) {
 		"22222222-2222-4222-8222-222222222222",
 	); !failure.IsKind(err, failure.BindingMismatch) {
 		t.Fatalf("expected cross-audience rejection, got %v", err)
+	}
+}
+
+func TestReadbackTrustWatermarkПереживаетReplacementИОтклоняетRollback(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1_800_000_000, 0).UTC()
+	signer := testKey(t, "readback-credential-g1")
+	store := newMemoryReadbackStore(model.ReadbackIntent{})
+	first, err := NewReadbackAttestor(testReadbackTrust(signer), store, 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state1 := testReadbackTrustState(now, 10, strings.Repeat("1", 64))
+	if err := first.ActivateTrust(
+		context.Background(),
+		testReadbackTrust(signer),
+		state1,
+	); err != nil {
+		t.Fatalf("activate first trust: %v", err)
+	}
+	replacement, err := NewReadbackAttestor(testReadbackTrust(signer), store, 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollback := testReadbackTrustState(now, 9, strings.Repeat("0", 64))
+	if err := replacement.ActivateTrust(
+		context.Background(),
+		testReadbackTrust(signer),
+		rollback,
+	); !failure.IsKind(err, failure.SnapshotRejected) {
+		t.Fatalf("replacement accepted trust rollback: %v", err)
+	}
+	next := testReadbackTrustState(now.Add(time.Second), 11, strings.Repeat("2", 64))
+	next.PredecessorStateDigestSHA256 = state1.ServedStateDigestSHA256
+	if err := replacement.ActivateTrust(
+		context.Background(),
+		testReadbackTrust(signer),
+		next,
+	); err != nil {
+		t.Fatalf("activate forward trust: %v", err)
+	}
+	if err := replacement.Ready(context.Background()); err != nil {
+		t.Fatalf("replacement readiness: %v", err)
 	}
 }
 
@@ -329,6 +373,7 @@ type memoryReadbackStore struct {
 	challenges         map[string]model.ReadbackChallenge
 	challengeByRequest map[string]string
 	receipts           map[string]model.ReadbackReceipt
+	trustState         model.ReadbackTrustState
 }
 
 func newMemoryReadbackStore(intent model.ReadbackIntent) *memoryReadbackStore {
@@ -432,6 +477,59 @@ func (store *memoryReadbackStore) ConsumeReadbackChallenge(
 	return receipt, nil
 }
 
-func (*memoryReadbackStore) ReadbackReady(context.Context) error { return nil }
+func (store *memoryReadbackStore) ActivateReadbackTrust(
+	_ context.Context,
+	state model.ReadbackTrustState,
+) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.trustState.ServedStateDigestSHA256 == "" {
+		store.trustState = state
+		return nil
+	}
+	if state.TrustSourceRevision < store.trustState.TrustSourceRevision ||
+		state.ManifestBundleRevision < store.trustState.ManifestBundleRevision ||
+		(state.TrustSourceRevision == store.trustState.TrustSourceRevision &&
+			state.ServedStateDigestSHA256 != store.trustState.ServedStateDigestSHA256) ||
+		(state.TrustSourceRevision > store.trustState.TrustSourceRevision &&
+			state.PredecessorStateDigestSHA256 !=
+				store.trustState.ServedStateDigestSHA256) {
+		return repository.ErrSnapshotRollback
+	}
+	store.trustState = state
+	return nil
+}
+
+func (store *memoryReadbackStore) ReadbackReady(
+	_ context.Context,
+	state model.ReadbackTrustState,
+) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if state.ServedStateDigestSHA256 != store.trustState.ServedStateDigestSHA256 {
+		return repository.ErrSnapshotRollback
+	}
+	return nil
+}
+
+func testReadbackTrustState(
+	now time.Time,
+	revision uint64,
+	digest string,
+) model.ReadbackTrustState {
+	return model.ReadbackTrustState{
+		RootID:                       "internal-rpc-authority-readback-manifest-root-v1",
+		RootFingerprintSHA256:        strings.Repeat("a", 64),
+		ManifestBundleRevision:       revision,
+		ManifestBundleDigestSHA256:   digest,
+		TrustSourceRevision:          revision,
+		TrustSetDigestSHA256:         digest,
+		TrustKeySetRevision:          revision,
+		SignerGeneration:             revision,
+		PredecessorStateDigestSHA256: strings.Repeat("0", 64),
+		ServedStateDigestSHA256:      digest,
+		ServedAt:                     now,
+	}
+}
 
 var _ repository.ReadbackStore = (*memoryReadbackStore)(nil)

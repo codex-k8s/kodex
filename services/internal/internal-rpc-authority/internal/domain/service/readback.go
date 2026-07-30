@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
@@ -30,10 +31,59 @@ const (
 
 // ReadbackAttestor независимо подтверждает фактически обслуживаемый снимок.
 type ReadbackAttestor struct {
+	mu                 sync.RWMutex
 	trust              map[string]VerificationKeyRecord
+	trustState         model.ReadbackTrustState
 	store              repository.ReadbackStore
 	verifierGeneration uint64
 	now                func() time.Time
+}
+
+// ActivateTrust атомарно сохраняет forward-only watermark до замены
+// фактически используемого набора ключей.
+func (attestor *ReadbackAttestor) ActivateTrust(
+	ctx context.Context,
+	trust map[string]VerificationKeyRecord,
+	state model.ReadbackTrustState,
+) error {
+	if err := validateKeyRecords(trust, readbackCredentialPurpose); err != nil {
+		return err
+	}
+	if state.RootID == "" ||
+		!digestPattern.MatchString(state.RootFingerprintSHA256) ||
+		state.ManifestBundleRevision == 0 ||
+		!digestPattern.MatchString(state.ManifestBundleDigestSHA256) ||
+		state.TrustSourceRevision == 0 ||
+		!digestPattern.MatchString(state.TrustSetDigestSHA256) ||
+		state.TrustKeySetRevision == 0 ||
+		state.SignerGeneration == 0 ||
+		!digestPattern.MatchString(state.PredecessorStateDigestSHA256) ||
+		!digestPattern.MatchString(state.ServedStateDigestSHA256) ||
+		state.ServedAt.IsZero() {
+		return failure.New(
+			failure.SnapshotRejected,
+			"readback trust state is invalid",
+		)
+	}
+	if err := attestor.store.ActivateReadbackTrust(ctx, state); err != nil {
+		return failure.Wrap(
+			failure.SnapshotRejected,
+			"readback trust watermark rejected",
+			err,
+		)
+	}
+	attestor.mu.Lock()
+	attestor.trust = publicKeyRecords(trust)
+	attestor.trustState = state
+	attestor.mu.Unlock()
+	return nil
+}
+
+// TrustState возвращает копию фактически обслуживаемого durable state.
+func (attestor *ReadbackAttestor) TrustState() model.ReadbackTrustState {
+	attestor.mu.RLock()
+	defer attestor.mu.RUnlock()
+	return attestor.trustState
 }
 
 // ReadbackChallengeResult содержит созданный сервером одноразовый запрос.
@@ -391,7 +441,14 @@ func (attestor *ReadbackAttestor) Attest(
 
 // Ready подтверждает доступность устойчивого хранилища проверок.
 func (attestor *ReadbackAttestor) Ready(ctx context.Context) error {
-	if err := attestor.store.ReadbackReady(ctx); err != nil {
+	state := attestor.TrustState()
+	if state.ServedStateDigestSHA256 == "" {
+		return failure.New(
+			failure.PersistenceUnavailable,
+			"readback trust is not activated",
+		)
+	}
+	if err := attestor.store.ReadbackReady(ctx, state); err != nil {
 		return failure.Wrap(
 			failure.PersistenceUnavailable,
 			"readback attestor persistence is unavailable",
@@ -412,7 +469,9 @@ func (attestor *ReadbackAttestor) verifyCredential(
 			err,
 		)
 	}
+	attestor.mu.RLock()
 	record, ok := attestor.trust[header.KeyID]
+	attestor.mu.RUnlock()
 	if !ok {
 		return model.ReadbackCredentialClaims{}, "", failure.New(
 			failure.Unauthenticated,

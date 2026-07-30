@@ -35,5 +35,4 @@ JOIN internal_rpc_authority.authority_readback_intents AS intent
 WHERE challenge.challenge_id = @challenge_id
   AND challenge.peer_spiffe_id = @peer_spiffe_id
   AND intent.workload_spiffe_id = @peer_spiffe_id
-  AND internal_rpc_authority.runtime_restore_fence_allows_work()
-FOR UPDATE OF challenge;
+  AND internal_rpc_authority.runtime_restore_fence_allows_work();

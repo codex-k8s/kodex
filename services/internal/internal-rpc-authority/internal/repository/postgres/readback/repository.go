@@ -64,15 +64,12 @@ func (repository *Repository) IssueReadbackChallenge(
 			"challenge_id":                      command.ChallengeID,
 			"challenge_jti":                     command.ChallengeJTI,
 			"intent_id":                         command.IntentID,
-			"peer_spiffe_id":                    command.PeerSPIFFEID,
 			"readback_credential_jti":           command.ReadbackCredentialJTI,
 			"readback_credential_digest_sha256": command.ReadbackCredentialDigest,
 			"idempotency_key":                   command.IdempotencyKey,
 			"semantic_request_digest_sha256":    command.SemanticRequestDigest,
 			"challenge_nonce":                   command.ChallengeNonce,
 			"challenge_digest_sha256":           command.ChallengeDigestSHA256,
-			"issued_at":                         command.IssuedAt,
-			"expires_at":                        command.ExpiresAt,
 		},
 	).Scan(&challengeID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -166,15 +163,12 @@ func (repository *Repository) ConsumeReadbackChallenge(
 		consumeChallengeSQL,
 		pgx.StrictNamedArgs{
 			"challenge_id":                   command.ChallengeID,
-			"peer_spiffe_id":                 command.PeerSPIFFEID,
 			"receipt_id":                     command.ReceiptID,
 			"evidence_jti":                   command.EvidenceJTI,
 			"evidence_digest_sha256":         command.EvidenceDigestSHA256,
 			"idempotency_key":                command.IdempotencyKey,
 			"semantic_request_digest_sha256": command.SemanticRequestDigest,
 			"verifier_generation":            command.VerifierGeneration,
-			"accepted_at":                    command.AcceptedAt,
-			"expires_at":                     command.ExpiresAt,
 		},
 	).Scan(&receiptID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -183,17 +177,21 @@ func (repository *Repository) ConsumeReadbackChallenge(
 	if err != nil {
 		return model.ReadbackReceipt{}, fmt.Errorf("consume durable readback challenge: %w", err)
 	}
-	receipt = model.ReadbackReceipt{
-		ReceiptID:             receiptID,
-		ChallengeID:           command.ChallengeID,
-		EvidenceJTI:           command.EvidenceJTI,
-		EvidenceDigestSHA256:  command.EvidenceDigestSHA256,
-		SemanticRequestDigest: command.SemanticRequestDigest,
-		VerifierGeneration:    command.VerifierGeneration,
-		AcceptedAt:            command.AcceptedAt,
-		ExpiresAt:             command.ExpiresAt,
-		Intent:                challenge.Intent,
+	receipt, found, err = loadReceipt(
+		ctx,
+		transaction,
+		command.PeerSPIFFEID,
+		command.IdempotencyKey,
+	)
+	if err != nil {
+		return model.ReadbackReceipt{}, err
 	}
+	if !found || receipt.ReceiptID != receiptID {
+		return model.ReadbackReceipt{}, errors.New(
+			"readback consume function returned no immutable receipt",
+		)
+	}
+	receipt.Intent = challenge.Intent
 	if err := transaction.Commit(ctx); err != nil {
 		return model.ReadbackReceipt{}, fmt.Errorf("commit readback consume transaction: %w", err)
 	}
@@ -201,7 +199,29 @@ func (repository *Repository) ConsumeReadbackChallenge(
 }
 
 // ReadbackReady проверяет доступность устойчивой границы attestor.
-func (repository *Repository) ReadbackReady(ctx context.Context) error {
+func (repository *Repository) ActivateReadbackTrust(
+	ctx context.Context,
+	state model.ReadbackTrustState,
+) error {
+	var accepted bool
+	if err := repository.pool.QueryRow(
+		ctx,
+		activateTrustSQL,
+		readbackTrustArgs(state),
+	).Scan(&accepted); err != nil {
+		return fmt.Errorf("activate durable readback trust: %w", err)
+	}
+	if !accepted {
+		return domainrepository.ErrSnapshotRollback
+	}
+	return nil
+}
+
+// ReadbackReady проверяет доступность и точный durable served trust.
+func (repository *Repository) ReadbackReady(
+	ctx context.Context,
+	state model.ReadbackTrustState,
+) error {
 	var ready bool
 	if err := repository.pool.QueryRow(ctx, readinessSQL).Scan(&ready); err != nil {
 		return fmt.Errorf("verify readback persistence boundary: %w", err)
@@ -209,7 +229,33 @@ func (repository *Repository) ReadbackReady(ctx context.Context) error {
 	if !ready {
 		return errors.New("readback persistence boundary is not ready")
 	}
+	if err := repository.pool.QueryRow(
+		ctx,
+		trustReadinessSQL,
+		readbackTrustArgs(state),
+	).Scan(&ready); err != nil {
+		return fmt.Errorf("verify readback trust watermark: %w", err)
+	}
+	if !ready {
+		return errors.New("readback trust watermark is not ready")
+	}
 	return nil
+}
+
+func readbackTrustArgs(state model.ReadbackTrustState) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"root_id":                         state.RootID,
+		"root_fingerprint_sha256":         state.RootFingerprintSHA256,
+		"manifest_bundle_revision":        state.ManifestBundleRevision,
+		"manifest_bundle_digest_sha256":   state.ManifestBundleDigestSHA256,
+		"trust_source_revision":           state.TrustSourceRevision,
+		"trust_set_digest_sha256":         state.TrustSetDigestSHA256,
+		"trust_key_set_revision":          state.TrustKeySetRevision,
+		"signer_generation":               state.SignerGeneration,
+		"predecessor_state_digest_sha256": state.PredecessorStateDigestSHA256,
+		"served_state_digest_sha256":      state.ServedStateDigestSHA256,
+		"served_at":                       state.ServedAt,
+	}
 }
 
 type rowScanner interface {

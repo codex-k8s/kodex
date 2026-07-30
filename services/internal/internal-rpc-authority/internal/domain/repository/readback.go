@@ -67,5 +67,6 @@ type ReadbackStore interface {
 		context.Context,
 		ConsumeReadbackChallengeCommand,
 	) (model.ReadbackReceipt, error)
-	ReadbackReady(context.Context) error
+	ActivateReadbackTrust(context.Context, model.ReadbackTrustState) error
+	ReadbackReady(context.Context, model.ReadbackTrustState) error
 }

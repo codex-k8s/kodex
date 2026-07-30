@@ -51,6 +51,42 @@ func TestJSONSchemasAreClosed(t *testing.T) {
 	}
 }
 
+func TestExecutableReadbackMigrationУбираетDirectDML(t *testing.T) {
+	root := repositoryRoot(t)
+	raw, err := os.ReadFile(filepath.Join(
+		root,
+		"services/internal/internal-rpc-authority/cmd/cli/migrations",
+		"20260730000600_internal_rpc_authority_owner_bound_readback.sql",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql := string(raw)
+	for _, required := range []string{
+		"REVOKE INSERT, UPDATE, DELETE",
+		"issue_authority_readback_attestation_challenge(",
+		"consume_authority_readback_attestation_challenge(",
+		"SECURITY DEFINER",
+		"SET search_path = pg_catalog, internal_rpc_authority, pg_temp",
+		"OWNER TO internal_rpc_authority_readback_owner",
+		"authority_readback_trust_watermarks",
+		"activate_readback_trust(",
+	} {
+		if !strings.Contains(sql, required) {
+			t.Fatalf("owner-bound migration misses %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"GRANT INSERT, UPDATE\n    ON internal_rpc_authority.authority_readback_attestation_challenges",
+		"GRANT INSERT\n    ON internal_rpc_authority.authority_readback_attestation_receipts",
+		"TO internal_rpc_authority_publisher;\nGRANT EXECUTE ON FUNCTION\ninternal_rpc_authority.consume_authority_readback",
+	} {
+		if strings.Contains(sql, forbidden) {
+			t.Fatalf("owner-bound migration retains unsafe privilege %q", forbidden)
+		}
+	}
+}
+
 func TestRestoreCoordinationSchemasAreClosed(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "contracts/authorization/v1/restore-coordination.schema.json")

@@ -35,6 +35,8 @@ type ReadbackTrustMetadata struct {
 	TrustSourceRevision      uint64
 	TrustSetDigest           string
 	TrustKeySetRevision      uint64
+	PredecessorStateDigest   string
+	ServedStateDigest        string
 }
 
 type readbackRootMaterial struct {
@@ -308,6 +310,44 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 	if credentialCurrentCount != 1 {
 		return nil, ReadbackTrustMetadata{}, errors.New("readback credential trust must contain one CURRENT key")
 	}
+	predecessorStateDigest, err := internalrpcauth.CanonicalJSONSHA256(struct {
+		RootID              string `json:"root_id"`
+		RootFingerprint     string `json:"root_fingerprint_sha256"`
+		ManifestRevision    uint64 `json:"manifest_bundle_revision"`
+		ManifestDigest      string `json:"manifest_bundle_digest_sha256"`
+		TrustSourceRevision uint64 `json:"trust_source_revision"`
+		TrustSetDigest      string `json:"trust_set_digest_sha256"`
+	}{
+		RootID: root.RootID, RootFingerprint: rootThumbprint,
+		ManifestRevision:    bundle.Predecessor.Revision,
+		ManifestDigest:      bundle.Predecessor.DigestSHA256,
+		TrustSourceRevision: trust.Predecessor.Revision,
+		TrustSetDigest:      trust.Predecessor.DigestSHA256,
+	})
+	if err != nil {
+		return nil, ReadbackTrustMetadata{}, errors.New(
+			"digest readback predecessor trust state",
+		)
+	}
+	servedStateDigest, err := internalrpcauth.CanonicalJSONSHA256(struct {
+		RootID              string `json:"root_id"`
+		RootFingerprint     string `json:"root_fingerprint_sha256"`
+		ManifestRevision    uint64 `json:"manifest_bundle_revision"`
+		ManifestDigest      string `json:"manifest_bundle_digest_sha256"`
+		TrustSourceRevision uint64 `json:"trust_source_revision"`
+		TrustSetDigest      string `json:"trust_set_digest_sha256"`
+	}{
+		RootID: root.RootID, RootFingerprint: rootThumbprint,
+		ManifestRevision:    bundle.BundleRevision,
+		ManifestDigest:      bundle.BundleDigest,
+		TrustSourceRevision: trust.SourceRevision,
+		TrustSetDigest:      trust.TrustSetDigest,
+	})
+	if err != nil {
+		return nil, ReadbackTrustMetadata{}, errors.New(
+			"digest served readback trust state",
+		)
+	}
 	return records, ReadbackTrustMetadata{
 		RootID:                   root.RootID,
 		RootFingerprintSHA256:    rootThumbprint,
@@ -317,5 +357,7 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 		TrustSourceRevision:      trust.SourceRevision,
 		TrustSetDigest:           trust.TrustSetDigest,
 		TrustKeySetRevision:      trust.KeySetRevision,
+		PredecessorStateDigest:   predecessorStateDigest,
+		ServedStateDigest:        servedStateDigest,
 	}, nil
 }

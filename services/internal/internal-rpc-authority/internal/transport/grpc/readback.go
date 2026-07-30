@@ -10,7 +10,6 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/failure"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
@@ -21,19 +20,16 @@ import (
 type AuthorityReadbackAttestorServer struct {
 	internalrpcauthorityv1.UnimplementedAuthorityReadbackAttestorServiceServer
 	application        *application.ReadbackAttestor
-	metadata           snapshot.ReadbackTrustMetadata
 	verifierGeneration uint64
 }
 
 // NewAuthorityReadbackAttestorServer создаёт сервер независимой проверки.
 func NewAuthorityReadbackAttestorServer(
 	applicationValue *application.ReadbackAttestor,
-	metadata snapshot.ReadbackTrustMetadata,
 	verifierGeneration uint64,
 ) *AuthorityReadbackAttestorServer {
 	return &AuthorityReadbackAttestorServer{
 		application:        applicationValue,
-		metadata:           metadata,
 		verifierGeneration: verifierGeneration,
 	}
 }
@@ -157,21 +153,22 @@ func (server *AuthorityReadbackAttestorServer) CheckReadiness(
 			Ready: false,
 		}, nil
 	}
+	state := server.application.TrustState()
 	return &internalrpcauthorityv1.AuthorityReadbackAttestorServiceCheckReadinessResponse{
 		Ready:                                   true,
 		VerifierGeneration:                      server.verifierGeneration,
 		ReceiptStoreReady:                       true,
 		ChallengeStoreReady:                     true,
-		ReadbackCredentialTrustSourceRevision:   server.metadata.TrustSourceRevision,
-		ReadbackCredentialTrustDigestSha256:     server.metadata.TrustSetDigest,
-		ReadbackCredentialTrustKeySetRevision:   server.metadata.TrustKeySetRevision,
-		ReadbackCredentialTrustSignerGeneration: server.metadata.ManifestSignerGeneration,
+		ReadbackCredentialTrustSourceRevision:   state.TrustSourceRevision,
+		ReadbackCredentialTrustDigestSha256:     state.TrustSetDigestSHA256,
+		ReadbackCredentialTrustKeySetRevision:   state.TrustKeySetRevision,
+		ReadbackCredentialTrustSignerGeneration: state.SignerGeneration,
 		ReadbackCredentialTrustReadbackReady:    true,
-		ReadbackManifestRootId:                  server.metadata.RootID,
-		ReadbackManifestRootFingerprintSha256:   server.metadata.RootFingerprintSHA256,
-		ReadbackManifestBundleRevision:          server.metadata.ManifestBundleRevision,
-		ReadbackManifestBundleDigestSha256:      server.metadata.ManifestBundleDigest,
-		ReadbackManifestSignerGeneration:        server.metadata.ManifestSignerGeneration,
+		ReadbackManifestRootId:                  state.RootID,
+		ReadbackManifestRootFingerprintSha256:   state.RootFingerprintSHA256,
+		ReadbackManifestBundleRevision:          state.ManifestBundleRevision,
+		ReadbackManifestBundleDigestSha256:      state.ManifestBundleDigestSHA256,
+		ReadbackManifestSignerGeneration:        state.SignerGeneration,
 		ReadbackManifestRootServedReadbackReady: true,
 	}, nil
 }

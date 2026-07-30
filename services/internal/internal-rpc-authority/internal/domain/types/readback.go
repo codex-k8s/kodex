@@ -118,3 +118,19 @@ type ReadbackReceipt struct {
 	ExpiresAt             time.Time
 	Intent                ReadbackIntent
 }
+
+// ReadbackTrustState фиксирует фактически обслуживаемую независимую цепочку
+// root -> manifest signer -> credential signer и её forward-only predecessor.
+type ReadbackTrustState struct {
+	RootID                       string
+	RootFingerprintSHA256        string
+	ManifestBundleRevision       uint64
+	ManifestBundleDigestSHA256   string
+	TrustSourceRevision          uint64
+	TrustSetDigestSHA256         string
+	TrustKeySetRevision          uint64
+	SignerGeneration             uint64
+	PredecessorStateDigestSHA256 string
+	ServedStateDigestSHA256      string
+	ServedAt                     time.Time
+}

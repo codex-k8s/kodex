@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 // ReadbackAttestor предоставляет варианты использования независимой проверки.
@@ -57,4 +58,18 @@ func (application *ReadbackAttestor) Attest(
 // Ready проверяет полный путь attestor.
 func (application *ReadbackAttestor) Ready(ctx context.Context) error {
 	return application.service.Ready(ctx)
+}
+
+// ActivateTrust сохраняет и атомарно переключает обслуживаемое доверие.
+func (application *ReadbackAttestor) ActivateTrust(
+	ctx context.Context,
+	trust map[string]service.VerificationKeyRecord,
+	state model.ReadbackTrustState,
+) error {
+	return application.service.ActivateTrust(ctx, trust, state)
+}
+
+// TrustState возвращает фактически обслуживаемый durable watermark.
+func (application *ReadbackAttestor) TrustState() model.ReadbackTrustState {
+	return application.service.TrustState()
 }
