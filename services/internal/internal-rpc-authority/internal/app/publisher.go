@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
@@ -20,7 +19,6 @@ import (
 	publisherrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/publisher"
 	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -37,6 +35,7 @@ type PublisherConfig struct {
 	PostgresDSNFile              string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
 	PostgresTLSServerName        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
 	PostgresExpectedUser         string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
+	PodUID                       string        `env:"POD_UID"`
 	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
 	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
 	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
@@ -86,7 +85,7 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 	if _, _, err := net.SplitHostPort(config.TechnicalListen); err != nil {
 		return PublisherConfig{}, errors.New("publisher technical listen address is invalid")
 	}
-	if config.PostgresExpectedUser == "" ||
+	if !runtimeUUIDPattern.MatchString(config.PodUID) ||
 		config.SignerSourceRevision == 0 ||
 		config.SignerKeySetRevision == 0 ||
 		config.SignerGeneration == 0 ||
@@ -365,43 +364,18 @@ func openPublisherPostgres(
 	ctx context.Context,
 	config PublisherConfig,
 ) (*pgxpool.Pool, error) {
-	raw, err := readPrivateFile(config.PostgresDSNFile, maxDSNFileBytes)
-	if err != nil {
-		return nil, errors.New("read publisher PostgreSQL DSN file")
-	}
-	poolConfig, err := pgxpool.ParseConfig(strings.TrimSpace(string(raw)))
-	if err != nil {
-		return nil, errors.New("parse publisher PostgreSQL DSN")
-	}
-	instrumentPGX(poolConfig, "internal_rpc_authority_publisher")
-	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
-		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
-		poolConfig.ConnConfig.TLSConfig == nil ||
-		poolConfig.ConnConfig.TLSConfig.RootCAs == nil ||
-		poolConfig.ConnConfig.TLSConfig.ServerName != config.PostgresTLSServerName ||
-		poolConfig.ConnConfig.TLSConfig.InsecureSkipVerify {
-		return nil, errors.New("publisher PostgreSQL TLS boundary rejected")
-	}
-	poolConfig.MaxConns = 8
-	poolConfig.ConnConfig.RuntimeParams["application_name"] =
-		"internal_rpc_authority_publisher"
-	poolConfig.AfterConnect = func(ctx context.Context, connection *pgx.Conn) error {
-		return sessionrepository.Configure(
-			ctx,
-			connection,
-			config.PostgresExpectedUser,
-			sessionrepository.CapabilityPublisher,
-		)
-	}
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		return nil, errors.New("open publisher PostgreSQL pool")
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, errors.New("verify publisher PostgreSQL connectivity")
-	}
-	return pool, nil
+	return openRotatingPostgres(ctx, rotatingPostgresConfig{
+		DSNTemplateFile: config.PostgresDSNFile,
+		TLSServerName:   config.PostgresTLSServerName,
+		Capability:      sessionrepository.CapabilityPublisher,
+		ApplicationName: "internal_rpc_authority_publisher",
+		PodUID:          config.PodUID,
+		Candidates: []databaseCredentialCandidate{
+			{Role: "internal-rpc-authority-publisher-g3", Principal: "ira_publisher_g3", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/g3"},
+			{Role: "internal-rpc-authority-publisher-g4", Principal: "ira_publisher_g4", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/g4"},
+			{Role: "internal-rpc-authority-publisher-g5", Principal: "ira_publisher_g5", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/g5"},
+		},
+	})
 }
 
 func newPublisherTechnicalServer(

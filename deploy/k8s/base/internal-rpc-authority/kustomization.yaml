@@ -8,6 +8,7 @@ resources:
   - service.yaml
   - poddisruptionbudget.yaml
   - networkpolicy.yaml
+  - credential-rollout-rbac.yaml
   - prometheusrule.yaml
   - dashboard.yaml
   - servicemonitor.yaml

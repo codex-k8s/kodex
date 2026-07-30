@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
@@ -23,7 +22,6 @@ import (
 	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
 	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -40,6 +38,7 @@ type ReadbackConfig struct {
 	PostgresDSNFile        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
 	PostgresTLSServerName  string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
 	PostgresExpectedUser   string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
+	PodUID                 string        `env:"POD_UID"`
 	RootPublicJWKFile      string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_ROOT_PUBLIC_JWK_FILE"`
 	RootMetadataFile       string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_ROOT_METADATA_FILE"`
 	ManifestBundleJWSFile  string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_BUNDLE_JWS_FILE"`
@@ -73,7 +72,7 @@ func LoadReadbackConfig() (ReadbackConfig, error) {
 	if _, _, err := net.SplitHostPort(config.TechnicalListen); err != nil {
 		return ReadbackConfig{}, errors.New("readback technical listen address is invalid")
 	}
-	if config.PostgresExpectedUser == "" ||
+	if !runtimeUUIDPattern.MatchString(config.PodUID) ||
 		config.PostgresTLSServerName == "" ||
 		config.VerifierGeneration == 0 {
 		return ReadbackConfig{}, errors.New("readback PostgreSQL identity is invalid")
@@ -333,43 +332,18 @@ func openReadbackPostgres(
 	ctx context.Context,
 	config ReadbackConfig,
 ) (*pgxpool.Pool, error) {
-	raw, err := readPrivateFile(config.PostgresDSNFile, maxDSNFileBytes)
-	if err != nil {
-		return nil, errors.New("read readback PostgreSQL DSN file")
-	}
-	poolConfig, err := pgxpool.ParseConfig(strings.TrimSpace(string(raw)))
-	if err != nil {
-		return nil, errors.New("parse readback PostgreSQL DSN")
-	}
-	instrumentPGX(poolConfig, "internal_rpc_authority_readback_attestor")
-	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
-		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
-		poolConfig.ConnConfig.TLSConfig == nil ||
-		poolConfig.ConnConfig.TLSConfig.RootCAs == nil ||
-		poolConfig.ConnConfig.TLSConfig.ServerName != config.PostgresTLSServerName ||
-		poolConfig.ConnConfig.TLSConfig.InsecureSkipVerify {
-		return nil, errors.New("readback PostgreSQL TLS boundary rejected")
-	}
-	poolConfig.MaxConns = 8
-	poolConfig.ConnConfig.RuntimeParams["application_name"] =
-		"internal_rpc_authority_readback_attestor"
-	poolConfig.AfterConnect = func(ctx context.Context, connection *pgx.Conn) error {
-		return sessionrepository.Configure(
-			ctx,
-			connection,
-			config.PostgresExpectedUser,
-			sessionrepository.CapabilityReadbackAttestor,
-		)
-	}
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		return nil, errors.New("open readback PostgreSQL pool")
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, errors.New("verify readback PostgreSQL connectivity")
-	}
-	return pool, nil
+	return openRotatingPostgres(ctx, rotatingPostgresConfig{
+		DSNTemplateFile: config.PostgresDSNFile,
+		TLSServerName:   config.PostgresTLSServerName,
+		Capability:      sessionrepository.CapabilityReadbackAttestor,
+		ApplicationName: "internal_rpc_authority_readback_attestor",
+		PodUID:          config.PodUID,
+		Candidates: []databaseCredentialCandidate{
+			{Role: "internal-rpc-authority-readback-attestor-g3", Principal: "ira_readback_attestor_g3", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/g3"},
+			{Role: "internal-rpc-authority-readback-attestor-g4", Principal: "ira_readback_attestor_g4", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/g4"},
+			{Role: "internal-rpc-authority-readback-attestor-g5", Principal: "ira_readback_attestor_g5", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/g5"},
+		},
+	})
 }
 
 func loadMTLSServerConfig(certificateFile, privateKeyFile, clientCAFile string) (

@@ -967,10 +967,15 @@ func TestCapabilityRegistryCriticalBoundary(t *testing.T) {
 	)
 	requireEqual(t, attestorDatabaseIdentity, "capabilityRoleLogin", false)
 	attestorVault := requiredMap(t, attestorDatabaseIdentity, "vaultDatabaseCredentials")
-	requireEqual(t, attestorVault, "currentPrincipal", "ira_readback_attestor_g3")
-	requireEqual(t, attestorVault, "nextPrincipal", "ira_readback_attestor_g4")
-	requireEqual(t, attestorVault, "previousPrincipal", "ira_readback_attestor_g2")
-	requireEqual(t, attestorVault, "retiredPrincipal", "ira_readback_attestor_g1")
+	requireEqual(t, attestorVault, "currentPrincipal", "ira_readback_attestor_g4")
+	requireEqual(t, attestorVault, "nextPrincipal", "ira_readback_attestor_g5")
+	requireEqual(t, attestorVault, "previousPrincipal", "ira_readback_attestor_g3")
+	requireStringSliceEqual(
+		t,
+		attestorVault,
+		"retiredPrincipals",
+		[]string{"ira_readback_attestor_g1", "ira_readback_attestor_g2"},
+	)
 	requireEqual(
 		t,
 		attestorVault,

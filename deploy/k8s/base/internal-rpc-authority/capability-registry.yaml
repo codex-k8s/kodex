@@ -194,12 +194,15 @@ spec:
             lifecycleStatus: RETIRED
           - principal: ira_publisher_g2
             generation: 2
-            lifecycleStatus: PREVIOUS
+            lifecycleStatus: RETIRED
           - principal: ira_publisher_g3
             generation: 3
-            lifecycleStatus: CURRENT
+            lifecycleStatus: PREVIOUS
           - principal: ira_publisher_g4
             generation: 4
+            lifecycleStatus: CURRENT
+          - principal: ira_publisher_g5
+            generation: 5
             lifecycleStatus: NEXT
         runtimePrincipalAttributes:
           login: true
@@ -223,18 +226,23 @@ spec:
           authMethod: kubernetes
           boundServiceAccount: internal-rpc-authority-publisher
           boundNamespace: mattercodex-system
-          currentVaultRole: internal-rpc-authority-publisher-g3
-          nextVaultRole: internal-rpc-authority-publisher-g4
-          previousVaultRole: internal-rpc-authority-publisher-g2
-          retiredVaultRole: internal-rpc-authority-publisher-g1
-          currentPrincipal: ira_publisher_g3
-          nextPrincipal: ira_publisher_g4
-          previousPrincipal: ira_publisher_g2
-          retiredPrincipal: ira_publisher_g1
+          currentVaultRole: internal-rpc-authority-publisher-g4
+          nextVaultRole: internal-rpc-authority-publisher-g5
+          previousVaultRole: internal-rpc-authority-publisher-g3
+          retiredVaultRoles:
+            - internal-rpc-authority-publisher-g1
+            - internal-rpc-authority-publisher-g2
+          currentPrincipal: ira_publisher_g4
+          nextPrincipal: ira_publisher_g5
+          previousPrincipal: ira_publisher_g3
+          retiredPrincipals:
+            - ira_publisher_g1
+            - ira_publisher_g2
           credentialReadPaths:
             - database/static-creds/internal-rpc-authority-publisher-g2
             - database/static-creds/internal-rpc-authority-publisher-g3
             - database/static-creds/internal-rpc-authority-publisher-g4
+            - database/static-creds/internal-rpc-authority-publisher-g5
           issuance: READ_EXACT_STATIC_CREDS_PATH_AFTER_KUBERNETES_AUTH
           renewal: RENEW_WORKLOAD_TOKEN_AND_REREAD_BEFORE_ROTATION
           rotation: VAULT_STATIC_ROLE_PASSWORD_ROTATION_WITH_CURRENT_NEXT_OVERLAP
@@ -552,15 +560,19 @@ spec:
           - READBACK_ATTESTOR
         exactPrincipals:
           PUBLISHER:
-            RETIRED: ira_publisher_g1
-            PREVIOUS: ira_publisher_g2
-            CURRENT: ira_publisher_g3
-            NEXT: ira_publisher_g4
+            RETIRED:
+              - ira_publisher_g1
+              - ira_publisher_g2
+            PREVIOUS: ira_publisher_g3
+            CURRENT: ira_publisher_g4
+            NEXT: ira_publisher_g5
           READBACK_ATTESTOR:
-            RETIRED: ira_readback_attestor_g1
-            PREVIOUS: ira_readback_attestor_g2
-            CURRENT: ira_readback_attestor_g3
-            NEXT: ira_readback_attestor_g4
+            RETIRED:
+              - ira_readback_attestor_g1
+              - ira_readback_attestor_g2
+            PREVIOUS: ira_readback_attestor_g3
+            CURRENT: ira_readback_attestor_g4
+            NEXT: ira_readback_attestor_g5
         lifecycle:
           - CURRENT
           - NEXT
@@ -588,9 +600,11 @@ spec:
           - database/static-roles/internal-rpc-authority-publisher-g2
           - database/static-roles/internal-rpc-authority-publisher-g3
           - database/static-roles/internal-rpc-authority-publisher-g4
+          - database/static-roles/internal-rpc-authority-publisher-g5
           - database/static-roles/internal-rpc-authority-readback-attestor-g2
           - database/static-roles/internal-rpc-authority-readback-attestor-g3
           - database/static-roles/internal-rpc-authority-readback-attestor-g4
+          - database/static-roles/internal-rpc-authority-readback-attestor-g5
           - database/rotate-role/internal-rpc-authority-publisher-g3
           - database/rotate-role/internal-rpc-authority-publisher-g4
           - database/rotate-role/internal-rpc-authority-readback-attestor-g3
@@ -620,7 +634,10 @@ spec:
         requireRetiredOpenSessionDeniedForEveryPrivilege: true
         requireServedSourceRevisionAndDigest: true
       rbac:
-        kubernetesApiReadAllowed: false
+        kubernetesApiReadAllowed: true
+        kubernetesApiPatchResourceNames:
+          - internal-rpc-authority-publisher
+          - internal-rpc-authority-readback-attestor
         secretReadAllowed: false
         tokenRequestForOwnServiceAccountOnly: true
       network:
@@ -648,12 +665,15 @@ spec:
             lifecycleStatus: RETIRED
           - principal: ira_readback_attestor_g2
             generation: 2
-            lifecycleStatus: PREVIOUS
+            lifecycleStatus: RETIRED
           - principal: ira_readback_attestor_g3
             generation: 3
-            lifecycleStatus: CURRENT
+            lifecycleStatus: PREVIOUS
           - principal: ira_readback_attestor_g4
             generation: 4
+            lifecycleStatus: CURRENT
+          - principal: ira_readback_attestor_g5
+            generation: 5
             lifecycleStatus: NEXT
         runtimePrincipalAttributes:
           login: true
@@ -677,18 +697,23 @@ spec:
           authMethod: kubernetes
           boundServiceAccount: internal-rpc-authority-readback-attestor
           boundNamespace: mattercodex-system
-          currentVaultRole: internal-rpc-authority-readback-attestor-g3
-          nextVaultRole: internal-rpc-authority-readback-attestor-g4
-          previousVaultRole: internal-rpc-authority-readback-attestor-g2
-          retiredVaultRole: internal-rpc-authority-readback-attestor-g1
-          currentPrincipal: ira_readback_attestor_g3
-          nextPrincipal: ira_readback_attestor_g4
-          previousPrincipal: ira_readback_attestor_g2
-          retiredPrincipal: ira_readback_attestor_g1
+          currentVaultRole: internal-rpc-authority-readback-attestor-g4
+          nextVaultRole: internal-rpc-authority-readback-attestor-g5
+          previousVaultRole: internal-rpc-authority-readback-attestor-g3
+          retiredVaultRoles:
+            - internal-rpc-authority-readback-attestor-g1
+            - internal-rpc-authority-readback-attestor-g2
+          currentPrincipal: ira_readback_attestor_g4
+          nextPrincipal: ira_readback_attestor_g5
+          previousPrincipal: ira_readback_attestor_g3
+          retiredPrincipals:
+            - ira_readback_attestor_g1
+            - ira_readback_attestor_g2
           credentialReadPaths:
             - database/static-creds/internal-rpc-authority-readback-attestor-g2
             - database/static-creds/internal-rpc-authority-readback-attestor-g3
             - database/static-creds/internal-rpc-authority-readback-attestor-g4
+            - database/static-creds/internal-rpc-authority-readback-attestor-g5
           issuance: READ_EXACT_STATIC_CREDS_PATH_AFTER_KUBERNETES_AUTH
           renewal: RENEW_WORKLOAD_TOKEN_AND_REREAD_BEFORE_ROTATION
           rotation: VAULT_STATIC_ROLE_PASSWORD_ROTATION_WITH_CURRENT_NEXT_OVERLAP
@@ -1093,8 +1118,8 @@ spec:
         sharedCapabilityRoles: NOLOGIN
         publisherRuntimeIdentity:
           loginPrincipals:
-            CURRENT: ira_publisher_g3
-            NEXT: ira_publisher_g4
+            CURRENT: ira_publisher_g4
+            NEXT: ira_publisher_g5
           capabilityRole: internal_rpc_authority_publisher
           membershipOnly: true
           activation: SET_ROLE
@@ -1254,13 +1279,13 @@ spec:
             actionCrash: LOCK_RELEASED_RETIREMENT_PROCEEDS_RETRY_REJECTED
         publisher:
           loginPrincipals:
-            CURRENT: ira_publisher_g3
-            NEXT: ira_publisher_g4
+            CURRENT: ira_publisher_g4
+            NEXT: ira_publisher_g5
           capabilityRole: internal_rpc_authority_publisher
         readbackAttestor:
           loginPrincipals:
-            CURRENT: ira_readback_attestor_g3
-            NEXT: ira_readback_attestor_g4
+            CURRENT: ira_readback_attestor_g4
+            NEXT: ira_readback_attestor_g5
           capabilityRole: internal_rpc_authority_readback_attestor
         exactPrivileges:
           mappingTableDirectRuntimeAccess: FORBIDDEN

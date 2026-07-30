@@ -21,6 +21,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	vaultclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/vault"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	credentialrollout "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/credentialrollout"
 	credentialrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/credentiallifecycle"
 	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
@@ -57,6 +58,10 @@ type ReconcilerConfig struct {
 	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
 	VaultAuthRole                string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE"`
 	VaultServiceAccountTokenFile string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE"`
+	KubernetesAPIAddress         string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_API_ADDRESS"`
+	KubernetesAPITLSServerName   string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_API_TLS_SERVER_NAME"`
+	KubernetesAPICAFile          string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_API_CA_FILE"`
+	KubernetesAPITokenFile       string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_API_TOKEN_FILE"`
 	SourceRevision               uint64        `env:"INTERNAL_RPC_AUTHORITY_REGISTERED_SET_SOURCE_REVISION"`
 	SourceDigest                 string        `env:"INTERNAL_RPC_AUTHORITY_REGISTERED_SET_SOURCE_DIGEST_SHA256"`
 	LeaseDuration                time.Duration `env:"INTERNAL_RPC_AUTHORITY_LEASE_DURATION"`
@@ -79,6 +84,10 @@ func LoadReconcilerConfig() (ReconcilerConfig, error) {
 		VaultCAFile:                  "/var/run/config/mattercodex/internal-rpc-authority/vault/ca.pem",
 		VaultAuthRole:                "internal-rpc-authority-database-credential-reconciler",
 		VaultServiceAccountTokenFile: "/var/run/secrets/tokens/vault/token",
+		KubernetesAPIAddress:         "https://kubernetes.default.svc:443",
+		KubernetesAPITLSServerName:   "kubernetes.default.svc",
+		KubernetesAPICAFile:          "/var/run/config/kubernetes.io/serviceaccount/ca.crt",
+		KubernetesAPITokenFile:       "/var/run/secrets/tokens/kubernetes-api/token",
 		LeaseDuration:                20 * time.Second,
 		ReconcileInterval:            10 * time.Second,
 		ShutdownTimeout:              10 * time.Second,
@@ -148,15 +157,39 @@ func RunDatabaseCredentialReconciler(
 		pool.Close()
 		return err
 	}
-	registered := credentialRegisteredSet(config.SourceRevision, config.SourceDigest)
+	rollout, err := credentialrollout.New(credentialrollout.Config{
+		Address:       config.KubernetesAPIAddress,
+		TLSServerName: config.KubernetesAPITLSServerName,
+		CAFile:        config.KubernetesAPICAFile,
+		TokenFile:     config.KubernetesAPITokenFile,
+		Namespace:     "mattercodex-system",
+		Deployments: []string{
+			"internal-rpc-authority-publisher",
+			"internal-rpc-authority-readback-attestor",
+		},
+		Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		vault.Close()
+		pool.Close()
+		return err
+	}
+	baseline, registered := credentialRegisteredSets(
+		config.SourceRevision,
+		config.SourceDigest,
+	)
 	credentialApplication, err := application.NewDatabaseCredentialLifecycle(
 		config.HolderID,
 		config.LeaseDuration,
+		baseline,
 		registered,
 		store,
 		vault,
+		rollout,
 	)
 	if err != nil {
+		rollout.Close()
+		vault.Close()
 		pool.Close()
 		return err
 	}
@@ -264,6 +297,14 @@ func RunDatabaseCredentialReconciler(
 			Run:     technicalServer.Shutdown,
 		},
 		serviceruntime.ShutdownOperation{
+			Name:    "kubernetes-api",
+			Timeout: config.ShutdownTimeout,
+			Run: func(context.Context) error {
+				rollout.Close()
+				return nil
+			},
+		},
+		serviceruntime.ShutdownOperation{
 			Name:    "vault-http",
 			Timeout: config.ShutdownTimeout,
 			Run: func(context.Context) error {
@@ -341,10 +382,10 @@ func openCredentialPostgres(
 	return pool, nil
 }
 
-func credentialRegisteredSet(
+func credentialRegisteredSets(
 	sourceRevision uint64,
 	sourceDigest string,
-) model.DatabaseCredentialRegisteredSet {
+) (model.DatabaseCredentialRegisteredSet, model.DatabaseCredentialRegisteredSet) {
 	generation := func(
 		capability model.DatabaseCredentialCapability,
 		number uint64,
@@ -362,7 +403,7 @@ func credentialRegisteredSet(
 			SourceDigest:    sourceDigest,
 		}
 	}
-	return model.DatabaseCredentialRegisteredSet{
+	baseline := model.DatabaseCredentialRegisteredSet{
 		Version:        model.ContractVersion,
 		SourceRevision: sourceRevision,
 		SourceDigest:   sourceDigest,
@@ -425,6 +466,24 @@ func credentialRegisteredSet(
 			),
 		},
 	}
+	target := model.DatabaseCredentialRegisteredSet{
+		Version:        model.ContractVersion,
+		SourceRevision: sourceRevision,
+		SourceDigest:   sourceDigest,
+		Generations: []model.DatabaseCredentialGeneration{
+			generation(model.DatabaseCredentialPublisher, 1, model.DatabaseCredentialRetired, "ira_publisher_g1", "internal-rpc-authority-publisher-g1"),
+			generation(model.DatabaseCredentialPublisher, 2, model.DatabaseCredentialRetired, "ira_publisher_g2", "internal-rpc-authority-publisher-g2"),
+			generation(model.DatabaseCredentialPublisher, 3, model.DatabaseCredentialPrevious, "ira_publisher_g3", "internal-rpc-authority-publisher-g3"),
+			generation(model.DatabaseCredentialPublisher, 4, model.DatabaseCredentialCurrent, "ira_publisher_g4", "internal-rpc-authority-publisher-g4"),
+			generation(model.DatabaseCredentialPublisher, 5, model.DatabaseCredentialNext, "ira_publisher_g5", "internal-rpc-authority-publisher-g5"),
+			generation(model.DatabaseCredentialAttestor, 1, model.DatabaseCredentialRetired, "ira_readback_attestor_g1", "internal-rpc-authority-readback-attestor-g1"),
+			generation(model.DatabaseCredentialAttestor, 2, model.DatabaseCredentialRetired, "ira_readback_attestor_g2", "internal-rpc-authority-readback-attestor-g2"),
+			generation(model.DatabaseCredentialAttestor, 3, model.DatabaseCredentialPrevious, "ira_readback_attestor_g3", "internal-rpc-authority-readback-attestor-g3"),
+			generation(model.DatabaseCredentialAttestor, 4, model.DatabaseCredentialCurrent, "ira_readback_attestor_g4", "internal-rpc-authority-readback-attestor-g4"),
+			generation(model.DatabaseCredentialAttestor, 5, model.DatabaseCredentialNext, "ira_readback_attestor_g5", "internal-rpc-authority-readback-attestor-g5"),
+		},
+	}
+	return baseline, target
 }
 
 func runCredentialReconciliation(

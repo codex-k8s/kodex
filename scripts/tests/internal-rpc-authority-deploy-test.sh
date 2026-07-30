@@ -56,8 +56,13 @@ for environment_name in staging production; do
   grep -Fq 'name: SENTRY_DSN_FILE' <<<"$rendered"
   grep -Fq 'name: internal-rpc-authority-dashboard' <<<"$rendered"
   grep -Fq 'runbook_url: https://docs.mattercodex.dev/runbooks/internal-rpc-authority' <<<"$rendered"
-  [[ "$(grep -Fc 'kind: SecretProviderClass' <<<"$rendered")" == "5" ]]
-  [[ "$(grep -Fc 'vaultSkipTLSVerify: "false"' <<<"$rendered")" == "5" ]]
+  [[ "$(grep -Fc 'kind: SecretProviderClass' <<<"$rendered")" == "11" ]]
+  grep -Fq 'name: internal-rpc-authority-publisher-database-g5' <<<"$rendered"
+  grep -Fq 'name: internal-rpc-authority-readback-database-g5' <<<"$rendered"
+  grep -Fq 'name: internal-rpc-authority-database-credential-kubernetes-api' <<<"$rendered"
+  ! grep -Fq 'secretName: internal-rpc-authority-publisher-postgresql' <<<"$rendered"
+  ! grep -Fq 'secretName: internal-rpc-authority-readback-attestor-postgresql' <<<"$rendered"
+  [[ "$(grep -Fc 'vaultSkipTLSVerify: "false"' <<<"$rendered")" == "11" ]]
   ! grep -Eq 'vaultSkipTLSVerify: "?true"?' <<<"$rendered"
   runtime_database_sources="$(
     yq eval-all '

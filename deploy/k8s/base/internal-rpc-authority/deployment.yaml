@@ -129,6 +129,12 @@ spec:
             - name: vault-token
               mountPath: /var/run/secrets/tokens/vault
               readOnly: true
+            - name: kubernetes-api-token
+              mountPath: /var/run/secrets/tokens/kubernetes-api
+              readOnly: true
+            - name: kubernetes-api-ca
+              mountPath: /var/run/config/kubernetes.io/serviceaccount
+              readOnly: true
             - name: observability
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability
               readOnly: true
@@ -169,6 +175,21 @@ spec:
                   path: token
                   audience: vault
                   expirationSeconds: 600
+        - name: kubernetes-api-token
+          projected:
+            defaultMode: 0400
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: https://kubernetes.default.svc
+                  expirationSeconds: 600
+        - name: kubernetes-api-ca
+          configMap:
+            name: kube-root-ca.crt
+            defaultMode: 0440
+            items:
+              - key: ca.crt
+                path: ca.crt
         - name: observability
           configMap:
             name: internal-rpc-authority-otel-ca

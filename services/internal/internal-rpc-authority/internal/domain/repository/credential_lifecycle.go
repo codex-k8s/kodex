@@ -26,6 +26,27 @@ type CredentialLifecycleStore interface {
 		ctx context.Context,
 		registered model.DatabaseCredentialRegisteredSet,
 	) ([]model.DatabaseCredentialGeneration, error)
+	LoadOrCreateRotationIntent(
+		ctx context.Context,
+		holderID string,
+		fencingToken uint64,
+		requestID string,
+		canonicalDigest string,
+	) (model.DatabaseCredentialRotationIntent, error)
+	AdvanceRotationIntent(
+		ctx context.Context,
+		holderID string,
+		fencingToken uint64,
+		requestID string,
+		canonicalDigest string,
+		expectedPhase model.DatabaseCredentialRotationPhase,
+		nextPhase model.DatabaseCredentialRotationPhase,
+		preRotationDigests map[string]string,
+		stagedDigests map[string]string,
+	) (model.DatabaseCredentialRotationIntent, error)
+	ReadSessionReadbacks(
+		ctx context.Context,
+	) ([]model.DatabaseCredentialSessionReadback, error)
 }
 
 // VaultStaticRoleManager управляет жизненным циклом статических ролей Vault.
@@ -34,6 +55,24 @@ type VaultStaticRoleManager interface {
 	RotateStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
 	RevokeStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
 	VerifyRevokedStaticRoles(ctx context.Context, roles []VaultStaticRoleExpectation) error
+	ReadStaticCredentialDigests(
+		ctx context.Context,
+		roles []VaultStaticRoleExpectation,
+	) (map[string]string, error)
+}
+
+// CredentialRollout переводит consumers на уже продвинутое поколение.
+type CredentialRollout interface {
+	RolloutNext(
+		ctx context.Context,
+		requestID string,
+		canonicalDigest string,
+	) error
+	RolloutCurrent(
+		ctx context.Context,
+		requestID string,
+		canonicalDigest string,
+	) error
 }
 
 // VaultStaticRoleExpectation задаёт точную связь роли Vault и principal.

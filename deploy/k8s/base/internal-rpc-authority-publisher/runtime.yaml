@@ -32,6 +32,13 @@ data:
   SENTRY_DSN_FILE: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn
   SENTRY_EXPECTED_HOST: sentry-relay.observability.svc:8443
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: internal-rpc-authority-publisher-postgresql-connection
+data:
+  dsn: "postgresql://internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -77,12 +84,16 @@ spec:
             - configMapRef:
                 name: internal-rpc-authority-publisher
           env:
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['mattercodex.dev/environment']
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/dsn
+              value: /var/run/config/mattercodex/internal-rpc-authority/publisher/database/dsn
             - name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE
               value: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/tls/tls.crt
             - name: INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE
@@ -132,8 +143,20 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - name: database-credentials
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/database
+            - name: database-g3
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/g3
+              readOnly: true
+            - name: database-g4
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/g4
+              readOnly: true
+            - name: database-g5
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/g5
+              readOnly: true
+            - name: database-connection
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher/database
+              readOnly: true
+            - name: postgresql-ca
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql
               readOnly: true
             - name: server-tls
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/tls
@@ -162,10 +185,35 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
-        - name: database-credentials
-          secret:
-            secretName: internal-rpc-authority-publisher-postgresql
+        - name: database-g3
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-publisher-database-g3
+        - name: database-g4
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-publisher-database-g4
+        - name: database-g5
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-publisher-database-g5
+        - name: database-connection
+          configMap:
+            name: internal-rpc-authority-publisher-postgresql-connection
             defaultMode: 0440
+        - name: postgresql-ca
+          configMap:
+            name: internal-rpc-authority-postgresql-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
         - name: server-tls
           secret:
             secretName: internal-rpc-authority-publisher-tls

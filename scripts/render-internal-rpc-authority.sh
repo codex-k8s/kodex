@@ -122,4 +122,25 @@ done
 cat <<'EOF'
       ports:
         - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internal-rpc-authority-database-credential-kubernetes-api
+  namespace: mattercodex-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: internal-rpc-authority
+      app.kubernetes.io/component: database-credential-reconciler
+  policyTypes: [Egress]
+  egress:
+    - to:
+EOF
+for cidr in "${api_cidrs[@]}"; do
+  printf '        - ipBlock: {cidr: %s}\n' "$cidr"
+done
+cat <<'EOF'
+      ports:
+        - {protocol: TCP, port: 443}
 EOF

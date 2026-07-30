@@ -118,6 +118,134 @@ func (repository *Repository) ReconcileCredentials(
 	return repository.ReadCredentialGenerations(ctx, registered)
 }
 
+// LoadOrCreateRotationIntent создаёт durable intent только под действующим lease.
+func (repository *Repository) LoadOrCreateRotationIntent(
+	ctx context.Context,
+	holderID string,
+	fencingToken uint64,
+	requestID string,
+	canonicalDigest string,
+) (model.DatabaseCredentialRotationIntent, error) {
+	return repository.scanIntent(
+		repository.pool.QueryRow(
+			ctx,
+			loadOrCreateIntentSQL,
+			pgx.StrictNamedArgs{
+				"holder_id":               holderID,
+				"fencing_token":           fencingToken,
+				"request_id":              requestID,
+				"canonical_digest_sha256": canonicalDigest,
+			},
+		),
+	)
+}
+
+// AdvanceRotationIntent выполняет exact-phase CAS; semantic retry читает уже
+// сохранённый тот же результат и никогда не повторяет внешний effect.
+func (repository *Repository) AdvanceRotationIntent(
+	ctx context.Context,
+	holderID string,
+	fencingToken uint64,
+	requestID string,
+	canonicalDigest string,
+	expectedPhase model.DatabaseCredentialRotationPhase,
+	nextPhase model.DatabaseCredentialRotationPhase,
+	preRotationDigests map[string]string,
+	stagedDigests map[string]string,
+) (model.DatabaseCredentialRotationIntent, error) {
+	preRaw, err := json.Marshal(nonNilDigestMap(preRotationDigests))
+	if err != nil {
+		return model.DatabaseCredentialRotationIntent{}, errors.New(
+			"encode pre-rotation credential digests",
+		)
+	}
+	stagedRaw, err := json.Marshal(nonNilDigestMap(stagedDigests))
+	if err != nil {
+		return model.DatabaseCredentialRotationIntent{}, errors.New(
+			"encode staged credential digests",
+		)
+	}
+	intent, err := repository.scanIntent(
+		repository.pool.QueryRow(
+			ctx,
+			advanceIntentSQL,
+			pgx.StrictNamedArgs{
+				"holder_id":               holderID,
+				"fencing_token":           fencingToken,
+				"request_id":              requestID,
+				"canonical_digest_sha256": canonicalDigest,
+				"expected_phase":          string(expectedPhase),
+				"next_phase":              string(nextPhase),
+				"pre_rotation_digests":    string(preRaw),
+				"staged_digests":          string(stagedRaw),
+			},
+		),
+	)
+	if err == nil {
+		return intent, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return model.DatabaseCredentialRotationIntent{}, err
+	}
+	intent, err = repository.scanIntent(
+		repository.pool.QueryRow(
+			ctx,
+			readIntentSQL,
+			pgx.StrictNamedArgs{
+				"request_id":              requestID,
+				"canonical_digest_sha256": canonicalDigest,
+			},
+		),
+	)
+	if err != nil ||
+		intent.Phase != nextPhase ||
+		!equalDigestMaps(intent.PreRotationDigests, preRotationDigests) ||
+		!equalDigestMaps(intent.StagedDigests, stagedDigests) {
+		return model.DatabaseCredentialRotationIntent{}, errors.New(
+			"database credential rotation phase CAS rejected",
+		)
+	}
+	return intent, nil
+}
+
+// ReadSessionReadbacks читает bounded server-derived consumer evidence.
+func (repository *Repository) ReadSessionReadbacks(
+	ctx context.Context,
+) ([]model.DatabaseCredentialSessionReadback, error) {
+	rows, err := repository.pool.Query(ctx, readSessionReadbacksSQL)
+	if err != nil {
+		return nil, fmt.Errorf("read database credential session readbacks: %w", err)
+	}
+	defer rows.Close()
+	result := make([]model.DatabaseCredentialSessionReadback, 0, 16)
+	for rows.Next() {
+		var readback model.DatabaseCredentialSessionReadback
+		var capability string
+		var status string
+		if err := rows.Scan(
+			&capability,
+			&readback.Generation,
+			&status,
+			&readback.Principal,
+			&readback.CredentialDigestSHA256,
+			&readback.PodUID,
+			&readback.ObservedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan database credential session readback: %w", err)
+		}
+		readback.Capability = model.DatabaseCredentialCapability(capability)
+		readback.Status = model.DatabaseCredentialStatus(status)
+		result = append(result, readback)
+		if len(result) > 32 {
+			return nil, errors.New("database credential session readback set is unbounded")
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate database credential session readbacks: %w", err)
+	}
+	return result, nil
+}
+
 // ReadCredentialGenerations сверяет обслуживаемые поколения с реестром.
 func (repository *Repository) ReadCredentialGenerations(
 	ctx context.Context,
@@ -165,6 +293,63 @@ func registeredDigest(registered model.DatabaseCredentialRegisteredSet) string {
 	}
 	digest := sha256.Sum256(encoded)
 	return hex.EncodeToString(digest[:])
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func (repository *Repository) scanIntent(
+	row rowScanner,
+) (model.DatabaseCredentialRotationIntent, error) {
+	var intent model.DatabaseCredentialRotationIntent
+	var phase string
+	var preRaw []byte
+	var stagedRaw []byte
+	if err := row.Scan(
+		&intent.RequestID,
+		&intent.CanonicalDigestSHA256,
+		&phase,
+		&preRaw,
+		&stagedRaw,
+		&intent.CreatedAt,
+		&intent.UpdatedAt,
+	); err != nil {
+		return model.DatabaseCredentialRotationIntent{}, err
+	}
+	if err := json.Unmarshal(preRaw, &intent.PreRotationDigests); err != nil {
+		return model.DatabaseCredentialRotationIntent{}, errors.New(
+			"decode pre-rotation credential digests",
+		)
+	}
+	if err := json.Unmarshal(stagedRaw, &intent.StagedDigests); err != nil {
+		return model.DatabaseCredentialRotationIntent{}, errors.New(
+			"decode staged credential digests",
+		)
+	}
+	intent.Phase = model.DatabaseCredentialRotationPhase(phase)
+	return intent, nil
+}
+
+func nonNilDigestMap(values map[string]string) map[string]string {
+	if values == nil {
+		return map[string]string{}
+	}
+	return values
+}
+
+func equalDigestMaps(first, second map[string]string) bool {
+	first = nonNilDigestMap(first)
+	second = nonNilDigestMap(second)
+	if len(first) != len(second) {
+		return false
+	}
+	for key, value := range first {
+		if second[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func desiredGeneration(

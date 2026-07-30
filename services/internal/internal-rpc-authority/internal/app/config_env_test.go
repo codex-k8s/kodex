@@ -30,6 +30,7 @@ func TestParseEnvironmentPreservesDefaultsAndRejectsInvalidTypes(t *testing.T) {
 }
 
 func TestLoadReadbackConfigUsesTypedEnvironment(t *testing.T) {
+	t.Setenv("POD_UID", "11111111-1111-4111-8111-111111111111")
 	t.Setenv(
 		"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER",
 		"internal_rpc_authority_readback_attestor_g1",
