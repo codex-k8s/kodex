@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -31,24 +32,21 @@ func (service *Service) EnqueueTurn(
 		value.ValidateID(input.SessionID) != nil ||
 		!validRuntimeReference(input.SourceRef) ||
 		value.ValidateID(input.PromptArtifactID) != nil ||
-		value.ValidateID(input.RuntimeRevisionID) != nil ||
 		(input.ProcessRunID != "" && value.ValidateID(input.ProcessRunID) != nil) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
-		Identity          commandIdentity
-		SessionID         string
-		SourceRef         string
-		PromptArtifactID  string
-		ProcessRunID      string
-		RuntimeRevisionID string
+		Identity         commandIdentity
+		SessionID        string
+		SourceRef        string
+		PromptArtifactID string
+		ProcessRunID     string
 	}{
 		identity(input.Principal),
 		input.SessionID,
 		input.SourceRef,
 		input.PromptArtifactID,
 		input.ProcessRunID,
-		input.RuntimeRevisionID,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -76,6 +74,40 @@ func (service *Service) EnqueueTurn(
 			}
 			if sessionSpec.LastTurnSequence == ^uint64(0) {
 				return entity.Resource{}, errs.ErrStateConflict
+			}
+			promptArtifact, err := service.requireCleanArtifact(
+				ctx,
+				tx,
+				input.Principal,
+				input.PromptArtifactID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			runtimeRevision, err := service.createRuntimeRevision(
+				ctx,
+				tx,
+				input.Principal,
+				session,
+				sessionSpec,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			if input.ProcessRunID != "" {
+				process, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.ProcessRunID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				if process.Kind != enum.KindProcessRun ||
+					process.State != enum.StateRunning {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
 			}
 			sessionSpec.LastTurnSequence++
 			now := service.now().UTC().Truncate(time.Microsecond)
@@ -109,8 +141,14 @@ func (service *Service) EnqueueTurn(
 					SourceRef:         input.SourceRef,
 					PromptArtifactID:  input.PromptArtifactID,
 					ProcessRunID:      input.ProcessRunID,
-					RuntimeRevisionID: input.RuntimeRevisionID,
+					RuntimeRevisionID: runtimeRevision.ID,
 					Attempt:           1,
+					EffectiveInputSHA256: hashRuntimeInput(
+						input.SourceRef,
+						promptArtifact.SHA256,
+						runtimeRevision.Spec.(entity.RuntimeRevisionSpec).ManifestSHA256,
+						input.ProcessRunID,
+					),
 				},
 				now,
 			)
@@ -121,6 +159,19 @@ func (service *Service) EnqueueTurn(
 				return entity.Resource{}, err
 			}
 			if err := tx.Insert(ctx, turn); err != nil {
+				return entity.Resource{}, err
+			}
+			turnSpec := turn.Spec.(entity.TurnSpec)
+			if err := tx.SaveTurnAttempt(ctx, domainrepo.TurnAttempt{
+				TurnID:              turn.ID,
+				Attempt:             turnSpec.Attempt,
+				WorkloadID:          "unassigned",
+				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				State:               "QUEUED",
+				InputSHA256:         turnSpec.EffectiveInputSHA256,
+				LeaseFence:          turn.Version,
+				StartedAt:           now,
+			}); err != nil {
 				return entity.Resource{}, err
 			}
 			return turn, service.appendMutationRecords(
@@ -156,8 +207,11 @@ func (service *Service) ClaimTurn(
 	mutated := false
 	err = service.repository.Transact(
 		ctx,
-		input.Principal.OrganizationID,
-		input.Principal.ProjectID,
+		domainrepo.Scope{
+			OrganizationID: input.Principal.OrganizationID,
+			ProjectID:      input.Principal.ProjectID,
+			ActorID:        input.Principal.ActorID,
+		},
 		func(tx domainrepo.Transaction) error {
 			receipt, receiptErr := tx.GetReceipt(
 				ctx,
@@ -179,9 +233,14 @@ func (service *Service) ClaimTurn(
 					LeaseToken: service.leaseToken(
 						receipt.Result.ID,
 						receipt.Result.Version,
+						payload.Attempt,
+						payload.AuthorityGeneration,
+						input.Principal.CallerWorkload,
 						input.IdempotencyKey,
 					),
-					LeaseExpiresAt: payload.LeaseExpiresAt,
+					LeaseExpiresAt:      payload.LeaseExpiresAt,
+					Attempt:             payload.Attempt,
+					AuthorityGeneration: payload.AuthorityGeneration,
 				}
 				return nil
 			}
@@ -200,7 +259,33 @@ func (service *Service) ClaimTurn(
 				return err
 			}
 			for _, stale := range expired {
-				requeued, err := stale.Turn.Transition(enum.StateQueued, now)
+				staleSpec, ok := stale.Turn.Spec.(entity.TurnSpec)
+				if !ok || staleSpec.Attempt != stale.Lease.Attempt ||
+					stale.Lease.AuthorityGeneration == 0 ||
+					staleSpec.Attempt >= 100 {
+					return errs.ErrStateConflict
+				}
+				if err := tx.FinishTurnAttempt(ctx, domainrepo.TurnAttempt{
+					TurnID:              stale.Turn.ID,
+					Attempt:             staleSpec.Attempt,
+					WorkloadID:          stale.Lease.WorkloadID,
+					AuthorityGeneration: stale.Lease.AuthorityGeneration,
+					State:               "EXPIRED",
+					InputSHA256:         staleSpec.EffectiveInputSHA256,
+					LeaseFence:          stale.Lease.Fence,
+					FinishedAt:          now,
+					Outcome:             "lease_expired",
+				}); err != nil {
+					return err
+				}
+				staleSpec.Attempt++
+				staleSpec.Outcome = ""
+				staleSpec.ResultArtifactID = ""
+				requeued, err := stale.Turn.ReplaceAndTransition(
+					staleSpec,
+					enum.StateQueued,
+					now,
+				)
 				if err != nil {
 					return errs.ErrStateConflict
 				}
@@ -212,6 +297,18 @@ func (service *Service) ClaimTurn(
 					stale.Turn.ID,
 					stale.Lease.Fence,
 				); err != nil {
+					return err
+				}
+				if err := tx.SaveTurnAttempt(ctx, domainrepo.TurnAttempt{
+					TurnID:              requeued.ID,
+					Attempt:             staleSpec.Attempt,
+					WorkloadID:          "unassigned",
+					AuthorityGeneration: input.Principal.AuthorityGeneration,
+					State:               "QUEUED",
+					InputSHA256:         staleSpec.EffectiveInputSHA256,
+					LeaseFence:          requeued.Version,
+					StartedAt:           now,
+				}); err != nil {
 					return err
 				}
 				if err := service.appendMutationRecords(
@@ -236,17 +333,42 @@ func (service *Service) ClaimTurn(
 			if err != nil {
 				return errs.ErrStateConflict
 			}
-			token := service.leaseToken(claimed.ID, claimed.Version, input.IdempotencyKey)
+			turnSpec, ok := claimed.Spec.(entity.TurnSpec)
+			if !ok {
+				return errs.ErrInternal
+			}
+			token := service.leaseToken(
+				claimed.ID,
+				claimed.Version,
+				turnSpec.Attempt,
+				input.Principal.AuthorityGeneration,
+				input.Principal.CallerWorkload,
+				input.IdempotencyKey,
+			)
 			expiresAt := now.Add(service.turnLeaseDuration)
 			if err := tx.Update(ctx, claimed, turn.Version); err != nil {
 				return err
 			}
 			if err := tx.SaveTurnLease(ctx, domainrepo.TurnLease{
-				TurnID:     claimed.ID,
-				TokenHash:  hashString(token),
-				WorkloadID: input.Principal.CallerWorkload,
-				ExpiresAt:  expiresAt,
-				Fence:      claimed.Version,
+				TurnID:              claimed.ID,
+				TokenHash:           hashString(token),
+				WorkloadID:          input.Principal.CallerWorkload,
+				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				Attempt:             turnSpec.Attempt,
+				ExpiresAt:           expiresAt,
+				Fence:               claimed.Version,
+			}); err != nil {
+				return err
+			}
+			if err := tx.SaveTurnAttempt(ctx, domainrepo.TurnAttempt{
+				TurnID:              claimed.ID,
+				Attempt:             turnSpec.Attempt,
+				WorkloadID:          input.Principal.CallerWorkload,
+				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				State:               "CLAIMED",
+				InputSHA256:         turnSpec.EffectiveInputSHA256,
+				LeaseFence:          claimed.Version,
+				StartedAt:           now,
 			}); err != nil {
 				return err
 			}
@@ -259,7 +381,11 @@ func (service *Service) ClaimTurn(
 			); err != nil {
 				return err
 			}
-			payload, err := json.Marshal(claimTurnReceipt{LeaseExpiresAt: expiresAt})
+			payload, err := json.Marshal(claimTurnReceipt{
+				LeaseExpiresAt:      expiresAt,
+				Attempt:             turnSpec.Attempt,
+				AuthorityGeneration: input.Principal.AuthorityGeneration,
+			})
 			if err != nil {
 				return errs.ErrInternal
 			}
@@ -276,9 +402,11 @@ func (service *Service) ClaimTurn(
 				return err
 			}
 			result = ClaimTurnResult{
-				Turn:           claimed,
-				LeaseToken:     token,
-				LeaseExpiresAt: expiresAt,
+				Turn:                claimed,
+				LeaseToken:          token,
+				LeaseExpiresAt:      expiresAt,
+				Attempt:             turnSpec.Attempt,
+				AuthorityGeneration: input.Principal.AuthorityGeneration,
 			}
 			mutated = true
 			return nil
@@ -287,6 +415,152 @@ func (service *Service) ClaimTurn(
 	if err == nil && mutated {
 		service.observer.ObserveMutation(enum.KindTurn, "claim_turn")
 	}
+	return result, err
+}
+
+// RenewTurn продлевает только exact current lease того же workload и generation.
+func (service *Service) RenewTurn(
+	ctx context.Context,
+	input RenewTurnInput,
+) (RenewTurnResult, error) {
+	if err := authorize(input.Principal, permissionRenewTurn); err != nil {
+		return RenewTurnResult{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.TurnID) != nil ||
+		len(input.LeaseToken) != 64 ||
+		input.ExpectedVersion == 0 ||
+		input.Attempt == 0 ||
+		input.Principal.AuthorityGeneration == 0 {
+		return RenewTurnResult{}, errs.ErrInvalidInput
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity        commandIdentity
+		TurnID          string
+		TokenHash       string
+		ExpectedVersion uint64
+		Attempt         uint32
+	}{
+		identity(input.Principal),
+		input.TurnID,
+		hashString(input.LeaseToken),
+		input.ExpectedVersion,
+		input.Attempt,
+	})
+	if err != nil {
+		return RenewTurnResult{}, errs.ErrInvalidInput
+	}
+	keyHash := hashString(input.IdempotencyKey)
+	var result RenewTurnResult
+	err = service.repository.Transact(
+		ctx,
+		domainrepo.Scope{
+			OrganizationID: input.Principal.OrganizationID,
+			ProjectID:      input.Principal.ProjectID,
+			ActorID:        input.Principal.ActorID,
+		},
+		func(tx domainrepo.Transaction) error {
+			receipt, receiptErr := tx.GetReceipt(
+				ctx,
+				input.Principal.OrganizationID,
+				"renew_turn",
+				keyHash,
+			)
+			if receiptErr == nil {
+				if receipt.RequestHash != requestHash {
+					return errs.ErrIdempotencyConflict
+				}
+				var payload claimTurnReceipt
+				if json.Unmarshal(receipt.Payload, &payload) != nil ||
+					payload.LeaseExpiresAt.IsZero() ||
+					payload.Attempt != input.Attempt ||
+					payload.AuthorityGeneration != input.Principal.AuthorityGeneration {
+					return errs.ErrInternal
+				}
+				result = RenewTurnResult{
+					Turn:                receipt.Result,
+					LeaseToken:          input.LeaseToken,
+					LeaseExpiresAt:      payload.LeaseExpiresAt,
+					Attempt:             payload.Attempt,
+					AuthorityGeneration: payload.AuthorityGeneration,
+				}
+				return nil
+			}
+			if !errors.Is(receiptErr, errs.ErrNotFound) {
+				return receiptErr
+			}
+			current, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				input.TurnID,
+			)
+			if err != nil {
+				return err
+			}
+			spec, ok := current.Spec.(entity.TurnSpec)
+			if !ok || current.Kind != enum.KindTurn ||
+				current.State != enum.StateClaimed ||
+				current.Version != input.ExpectedVersion ||
+				spec.Attempt != input.Attempt {
+				return errs.ErrStateConflict
+			}
+			now := service.now().UTC().Truncate(time.Microsecond)
+			renewed, err := tx.RenewTurnLease(
+				ctx,
+				domainrepo.TurnLease{
+					TurnID:              input.TurnID,
+					TokenHash:           hashString(input.LeaseToken),
+					WorkloadID:          input.Principal.CallerWorkload,
+					AuthorityGeneration: input.Principal.AuthorityGeneration,
+					Attempt:             input.Attempt,
+					ExpiresAt:           now.Add(service.turnLeaseDuration),
+					Fence:               input.ExpectedVersion,
+				},
+				now,
+			)
+			if err != nil {
+				return err
+			}
+			if err := service.appendMutationRecords(
+				ctx,
+				tx,
+				input.Principal,
+				"renew_turn",
+				current,
+			); err != nil {
+				return err
+			}
+			payload, err := json.Marshal(claimTurnReceipt{
+				LeaseExpiresAt:      renewed.ExpiresAt,
+				Attempt:             renewed.Attempt,
+				AuthorityGeneration: renewed.AuthorityGeneration,
+			})
+			if err != nil {
+				return errs.ErrInternal
+			}
+			if err := tx.SaveReceipt(ctx, domainrepo.Receipt{
+				OrganizationID: input.Principal.OrganizationID,
+				ProjectID:      input.Principal.ProjectID,
+				Scope:          "renew_turn",
+				KeyHash:        keyHash,
+				RequestHash:    requestHash,
+				Result:         current,
+				Payload:        payload,
+				CreatedAt:      now,
+			}); err != nil {
+				return err
+			}
+			result = RenewTurnResult{
+				Turn:                current,
+				LeaseToken:          input.LeaseToken,
+				LeaseExpiresAt:      renewed.ExpiresAt,
+				Attempt:             renewed.Attempt,
+				AuthorityGeneration: renewed.AuthorityGeneration,
+			}
+			return nil
+		},
+	)
 	return result, err
 }
 
@@ -302,6 +576,8 @@ func (service *Service) CompleteTurn(
 		value.ValidateID(input.TurnID) != nil ||
 		len(input.LeaseToken) != 64 ||
 		input.ExpectedVersion == 0 ||
+		input.Attempt == 0 ||
+		input.AuthorityGeneration == 0 ||
 		(input.TerminalState != enum.StateSucceeded &&
 			input.TerminalState != enum.StateFailed &&
 			input.TerminalState != enum.StateCancelled) ||
@@ -318,6 +594,8 @@ func (service *Service) CompleteTurn(
 		TerminalState    enum.State
 		Outcome          string
 		ResultArtifactID string
+		Attempt          uint32
+		Generation       uint64
 	}{
 		identity(input.Principal),
 		input.TurnID,
@@ -326,6 +604,8 @@ func (service *Service) CompleteTurn(
 		input.TerminalState,
 		input.Outcome,
 		input.ResultArtifactID,
+		input.Attempt,
+		input.AuthorityGeneration,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -355,17 +635,35 @@ func (service *Service) CompleteTurn(
 				input.TurnID,
 				hashString(input.LeaseToken),
 				input.Principal.CallerWorkload,
+				input.AuthorityGeneration,
+				input.Attempt,
 				service.now(),
 			)
 			if err != nil {
 				return entity.Resource{}, err
 			}
-			if lease.Fence != current.Version {
+			if lease.Fence != current.Version ||
+				lease.Attempt != input.Attempt ||
+				lease.AuthorityGeneration != input.AuthorityGeneration ||
+				input.AuthorityGeneration != input.Principal.AuthorityGeneration {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
 			spec, ok := current.Spec.(entity.TurnSpec)
 			if !ok {
 				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if spec.Attempt != input.Attempt {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if input.ResultArtifactID != "" {
+				if _, err := service.requireCleanArtifact(
+					ctx,
+					tx,
+					input.Principal,
+					input.ResultArtifactID,
+				); err != nil {
+					return entity.Resource{}, err
+				}
 			}
 			spec.Outcome = input.Outcome
 			spec.ResultArtifactID = input.ResultArtifactID
@@ -386,12 +684,216 @@ func (service *Service) CompleteTurn(
 			if err := tx.DeleteTurnLease(ctx, input.TurnID, lease.Fence); err != nil {
 				return entity.Resource{}, err
 			}
+			if err := tx.FinishTurnAttempt(ctx, domainrepo.TurnAttempt{
+				TurnID:              updated.ID,
+				Attempt:             spec.Attempt,
+				WorkloadID:          lease.WorkloadID,
+				AuthorityGeneration: lease.AuthorityGeneration,
+				State:               string(input.TerminalState),
+				InputSHA256:         spec.EffectiveInputSHA256,
+				LeaseFence:          lease.Fence,
+				FinishedAt:          service.now().UTC().Truncate(time.Microsecond),
+				Outcome:             input.Outcome,
+			}); err != nil {
+				return entity.Resource{}, err
+			}
 			return updated, service.appendMutationRecords(
 				ctx,
 				tx,
 				input.Principal,
 				"complete_turn",
 				updated,
+			)
+		},
+	)
+}
+
+// RetryTurn создаёт новую immutable attempt после завершённого/ожидающего turn.
+func (service *Service) RetryTurn(
+	ctx context.Context,
+	input RetryTurnInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionRetryTurn); err != nil {
+		return entity.Resource{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.TurnID) != nil ||
+		input.ExpectedVersion == 0 ||
+		value.ValidateStableKey(input.ReasonCode) != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity        commandIdentity
+		TurnID          string
+		ExpectedVersion uint64
+		ReasonCode      string
+	}{
+		identity(input.Principal),
+		input.TurnID,
+		input.ExpectedVersion,
+		input.ReasonCode,
+	})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	return service.withResourceReceipt(
+		ctx,
+		input.Principal,
+		input.IdempotencyKey,
+		"retry_turn",
+		requestHash,
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			current, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				input.TurnID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			spec, ok := current.Spec.(entity.TurnSpec)
+			if !ok || current.Kind != enum.KindTurn ||
+				current.Version != input.ExpectedVersion ||
+				(current.State != enum.StateFailed &&
+					current.State != enum.StateBlocked &&
+					current.State != enum.StateWaitingExternal &&
+					current.State != enum.StateWaitingOwner) ||
+				spec.Attempt == ^uint32(0) {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			spec.Attempt++
+			spec.Outcome = ""
+			spec.ResultArtifactID = ""
+			now := service.now().UTC().Truncate(time.Microsecond)
+			retried, err := current.ReplaceAndTransition(spec, enum.StateQueued, now)
+			if err != nil {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if err := tx.Update(ctx, retried, current.Version); err != nil {
+				return entity.Resource{}, err
+			}
+			if err := tx.SaveTurnAttempt(ctx, domainrepo.TurnAttempt{
+				TurnID:              retried.ID,
+				Attempt:             spec.Attempt,
+				WorkloadID:          "unassigned",
+				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				State:               "QUEUED",
+				InputSHA256:         spec.EffectiveInputSHA256,
+				LeaseFence:          retried.Version,
+				StartedAt:           now,
+				Outcome:             input.ReasonCode,
+			}); err != nil {
+				return entity.Resource{}, err
+			}
+			return retried, service.appendMutationRecords(
+				ctx,
+				tx,
+				input.Principal,
+				"retry_turn",
+				retried,
+			)
+		},
+	)
+}
+
+// CancelTurn завершает turn и атомарно отзывает существующую lease.
+func (service *Service) CancelTurn(
+	ctx context.Context,
+	input CancelTurnInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionCancelTurn); err != nil {
+		return entity.Resource{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.TurnID) != nil ||
+		input.ExpectedVersion == 0 ||
+		value.ValidateStableKey(input.ReasonCode) != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity        commandIdentity
+		TurnID          string
+		ExpectedVersion uint64
+		ReasonCode      string
+	}{
+		identity(input.Principal),
+		input.TurnID,
+		input.ExpectedVersion,
+		input.ReasonCode,
+	})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	return service.withResourceReceipt(
+		ctx,
+		input.Principal,
+		input.IdempotencyKey,
+		"cancel_turn",
+		requestHash,
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			current, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				input.TurnID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			spec, ok := current.Spec.(entity.TurnSpec)
+			if !ok || current.Kind != enum.KindTurn ||
+				current.Version != input.ExpectedVersion ||
+				current.State.Terminal() {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			spec.Outcome = input.ReasonCode
+			now := service.now().UTC().Truncate(time.Microsecond)
+			cancelled, err := current.ReplaceAndTransition(
+				spec,
+				enum.StateCancelled,
+				now,
+			)
+			if err != nil {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			var lease domainrepo.TurnLease
+			if current.State != enum.StateQueued {
+				lease, err = tx.GetTurnLeaseForUpdate(ctx, current.ID)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				if lease.Fence != current.Version || lease.Attempt != spec.Attempt {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			}
+			if err := tx.Update(ctx, cancelled, current.Version); err != nil {
+				return entity.Resource{}, err
+			}
+			if lease.TurnID != "" {
+				if err := tx.DeleteTurnLease(ctx, current.ID, lease.Fence); err != nil {
+					return entity.Resource{}, err
+				}
+				if err := tx.FinishTurnAttempt(ctx, domainrepo.TurnAttempt{
+					TurnID:              current.ID,
+					Attempt:             lease.Attempt,
+					WorkloadID:          lease.WorkloadID,
+					AuthorityGeneration: lease.AuthorityGeneration,
+					State:               "CANCELLED",
+					InputSHA256:         spec.EffectiveInputSHA256,
+					LeaseFence:          lease.Fence,
+					FinishedAt:          now,
+					Outcome:             input.ReasonCode,
+				}); err != nil {
+					return entity.Resource{}, err
+				}
+			}
+			return cancelled, service.appendMutationRecords(
+				ctx,
+				tx,
+				input.Principal,
+				"cancel_turn",
+				cancelled,
 			)
 		},
 	)
@@ -421,8 +923,11 @@ func (service *Service) ClaimDueSchedules(
 	mutated := false
 	err = service.repository.Transact(
 		ctx,
-		input.Principal.OrganizationID,
-		input.Principal.ProjectID,
+		domainrepo.Scope{
+			OrganizationID: input.Principal.OrganizationID,
+			ProjectID:      input.Principal.ProjectID,
+			ActorID:        input.Principal.ActorID,
+		},
 		func(tx domainrepo.Transaction) error {
 			receipt, receiptErr := tx.GetReceipt(
 				ctx,
@@ -491,15 +996,34 @@ func (service *Service) ClaimDueSchedules(
 						uuid.NameSpaceOID,
 						[]byte(schedule.ID+"\x00"+scheduledFor.Format(time.RFC3339Nano)),
 					).String(),
-					TargetResourceID: spec.TargetResourceID,
+					TargetResourceID:     spec.TargetResourceID,
+					TargetKind:           spec.TargetKind,
+					TargetVersion:        spec.TargetVersion,
+					EffectiveInputSHA256: spec.EffectiveInputSHA,
+					State:                "QUEUED",
+					Attempt:              1,
+					AvailableAt:          scheduledFor,
 				}
 				if err := tx.SaveScheduleOccurrence(ctx, domainrepo.ScheduleOccurrence{
-					ID:               occurrence.OccurrenceID,
-					ScheduleID:       occurrence.ScheduleID,
-					OrganizationID:   schedule.OrganizationID,
-					ProjectID:        schedule.ProjectID,
-					ScheduledFor:     occurrence.ScheduledFor,
-					TargetResourceID: occurrence.TargetResourceID,
+					ID:                   occurrence.OccurrenceID,
+					ScheduleID:           occurrence.ScheduleID,
+					OrganizationID:       schedule.OrganizationID,
+					ProjectID:            schedule.ProjectID,
+					ScheduledFor:         occurrence.ScheduledFor,
+					TargetResourceID:     occurrence.TargetResourceID,
+					TargetKind:           occurrence.TargetKind,
+					TargetVersion:        occurrence.TargetVersion,
+					EffectiveInputSHA256: occurrence.EffectiveInputSHA256,
+					OverlapPolicy:        spec.OverlapPolicy,
+					MaximumAttempts:      spec.MaximumAttempts,
+					InitialBackoff:       spec.InitialBackoff,
+					MaximumBackoff:       spec.MaximumBackoff,
+					DeadLetterAt:         scheduledFor.Add(spec.DeadLetterAfter),
+					State:                occurrence.State,
+					Attempt:              occurrence.Attempt,
+					AvailableAt:          occurrence.AvailableAt,
+					CreatedAt:            now,
+					UpdatedAt:            now,
 				}); err != nil {
 					return err
 				}
@@ -527,91 +1051,222 @@ func (service *Service) ClaimDueSchedules(
 	return result, err
 }
 
-// ResolveOwnerGate связывает решение владельца с exact gate version.
+// ResolveOwnerGate связывает решение с exact gate и process одним commit.
 func (service *Service) ResolveOwnerGate(
 	ctx context.Context,
 	input ResolveOwnerGateInput,
-) (entity.Resource, error) {
+) (OwnerGateResult, error) {
 	if err := authorize(input.Principal, permissionResolveGate); err != nil {
-		return entity.Resource{}, err
+		return OwnerGateResult{}, err
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
 		value.ValidateID(input.OwnerGateID) != nil ||
 		input.ExpectedVersion == 0 ||
+		value.ValidateID(input.ProcessRunID) != nil ||
+		input.ProcessExpectedVersion == 0 ||
+		value.ValidateID(input.SessionID) != nil ||
+		value.ValidateID(input.TurnID) != nil ||
+		input.Attempt == 0 ||
+		!validSHA256Text(input.ImmutableInputSHA256) ||
 		(input.Decision != "APPROVED" && input.Decision != "REJECTED" &&
 			input.Decision != "CHANGES_REQUESTED" && input.Decision != "CANCELLED") ||
 		len(input.Reason) < 1 || len(input.Reason) > 2048 {
-		return entity.Resource{}, errs.ErrInvalidInput
+		return OwnerGateResult{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
-		Identity        commandIdentity
-		OwnerGateID     string
-		ExpectedVersion uint64
-		Decision        string
-		Reason          string
+		Identity               commandIdentity
+		OwnerGateID            string
+		ExpectedVersion        uint64
+		Decision               string
+		Reason                 string
+		ProcessRunID           string
+		ProcessExpectedVersion uint64
+		SessionID              string
+		TurnID                 string
+		Attempt                uint32
+		ImmutableInputSHA256   string
 	}{
 		identity(input.Principal),
 		input.OwnerGateID,
 		input.ExpectedVersion,
 		input.Decision,
 		input.Reason,
+		input.ProcessRunID,
+		input.ProcessExpectedVersion,
+		input.SessionID,
+		input.TurnID,
+		input.Attempt,
+		input.ImmutableInputSHA256,
 	})
 	if err != nil {
-		return entity.Resource{}, errs.ErrInvalidInput
+		return OwnerGateResult{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	keyHash := hashString(input.IdempotencyKey)
+	var result OwnerGateResult
+	err = service.repository.Transact(
 		ctx,
-		input.Principal,
-		input.IdempotencyKey,
-		"resolve_owner_gate",
-		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			current, err := tx.GetForUpdate(
+		domainrepo.Scope{
+			OrganizationID: input.Principal.OrganizationID,
+			ProjectID:      input.Principal.ProjectID,
+			ActorID:        input.Principal.ActorID,
+		},
+		func(tx domainrepo.Transaction) error {
+			receipt, receiptErr := tx.GetReceipt(
+				ctx,
+				input.Principal.OrganizationID,
+				"resolve_owner_gate",
+				keyHash,
+			)
+			if receiptErr == nil {
+				if receipt.RequestHash != requestHash {
+					return errs.ErrIdempotencyConflict
+				}
+				var payload ownerGateReceipt
+				if json.Unmarshal(receipt.Payload, &payload) != nil {
+					return errs.ErrInternal
+				}
+				result = OwnerGateResult{
+					OwnerGate: receipt.Result,
+					Process:   payload.Process,
+				}
+				return nil
+			}
+			if !errors.Is(receiptErr, errs.ErrNotFound) {
+				return receiptErr
+			}
+			gate, err := tx.GetForUpdate(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
 				input.OwnerGateID,
 			)
 			if err != nil {
-				return entity.Resource{}, err
+				return err
 			}
-			if current.Kind != enum.KindOwnerGate ||
-				current.Version != input.ExpectedVersion {
-				return entity.Resource{}, errs.ErrVersionMismatch
+			if gate.Kind != enum.KindOwnerGate ||
+				gate.Version != input.ExpectedVersion {
+				return errs.ErrVersionMismatch
 			}
-			spec, ok := current.Spec.(entity.OwnerGateSpec)
-			if !ok {
-				return entity.Resource{}, errs.ErrStateConflict
+			gateSpec, ok := gate.Spec.(entity.OwnerGateSpec)
+			if !ok ||
+				gateSpec.ProcessRunID != input.ProcessRunID ||
+				gateSpec.SessionID != input.SessionID ||
+				gateSpec.TurnID != input.TurnID ||
+				gateSpec.Attempt != input.Attempt ||
+				gateSpec.ImmutableInputSHA256 != input.ImmutableInputSHA256 ||
+				gateSpec.RecipientActorID != input.Principal.ActorID {
+				return errs.ErrNotFound
 			}
-			target := ownerGateTarget(input.Decision)
-			if !spec.ExpiresAt.After(service.now()) {
-				target = enum.StateExpired
-				spec.Decision = ""
-				spec.DecisionReason = ""
-			} else {
-				spec.Decision = input.Decision
-				spec.DecisionReason = input.Reason
-			}
-			updated, err := current.ReplaceAndTransition(spec, target, service.now())
+			process, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				input.ProcessRunID,
+			)
 			if err != nil {
-				return entity.Resource{}, errs.ErrStateConflict
+				return err
 			}
-			if err := tx.Update(ctx, updated, current.Version); err != nil {
-				return entity.Resource{}, err
+			processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+			if !ok || process.Kind != enum.KindProcessRun ||
+				process.Version != input.ProcessExpectedVersion ||
+				process.State != enum.StateWaitingOwner ||
+				processSpec.RootInitiatorActorID != gateSpec.RootInitiatorActorID ||
+				processSpec.RootSessionID != gateSpec.SessionID ||
+				processSpec.RootTurnID != gateSpec.TurnID ||
+				processSpec.RootAttempt != gateSpec.Attempt ||
+				processSpec.ImmutableInputSHA256 != gateSpec.ImmutableInputSHA256 {
+				return errs.ErrStateConflict
 			}
-			return updated, service.appendMutationRecords(
+			gateTarget := ownerGateTarget(input.Decision)
+			processTarget := enum.StateRunning
+			switch input.Decision {
+			case "REJECTED":
+				processTarget = enum.StateFailed
+			case "CHANGES_REQUESTED":
+				processTarget = enum.StateBlocked
+			case "CANCELLED":
+				processTarget = enum.StateCancelled
+			}
+			if !gateSpec.ExpiresAt.After(service.now()) {
+				gateTarget = enum.StateExpired
+				processTarget = enum.StateFailed
+				gateSpec.Decision = ""
+				gateSpec.DecisionReason = ""
+			} else {
+				gateSpec.Decision = input.Decision
+				gateSpec.DecisionReason = input.Reason
+			}
+			now := service.now().UTC().Truncate(time.Microsecond)
+			updatedGate, err := gate.ReplaceAndTransition(
+				gateSpec,
+				gateTarget,
+				now,
+			)
+			if err != nil {
+				return errs.ErrStateConflict
+			}
+			updatedProcess, err := process.Transition(processTarget, now)
+			if err != nil {
+				return errs.ErrStateConflict
+			}
+			if err := tx.Update(ctx, updatedGate, gate.Version); err != nil {
+				return err
+			}
+			if err := tx.Update(
+				ctx,
+				updatedProcess,
+				process.Version,
+			); err != nil {
+				return err
+			}
+			if err := service.appendMutationRecords(
 				ctx,
 				tx,
 				input.Principal,
 				"resolve_owner_gate",
-				updated,
-			)
+				updatedGate,
+			); err != nil {
+				return err
+			}
+			if err := service.appendMutationRecords(
+				ctx,
+				tx,
+				input.Principal,
+				"owner_gate_process_transition",
+				updatedProcess,
+			); err != nil {
+				return err
+			}
+			payload, err := json.Marshal(ownerGateReceipt{Process: updatedProcess})
+			if err != nil {
+				return errs.ErrInternal
+			}
+			if err := tx.SaveReceipt(ctx, domainrepo.Receipt{
+				OrganizationID: input.Principal.OrganizationID,
+				ProjectID:      input.Principal.ProjectID,
+				Scope:          "resolve_owner_gate",
+				KeyHash:        keyHash,
+				RequestHash:    requestHash,
+				Result:         updatedGate,
+				Payload:        payload,
+				CreatedAt:      now,
+			}); err != nil {
+				return err
+			}
+			result = OwnerGateResult{
+				OwnerGate: updatedGate,
+				Process:   updatedProcess,
+			}
+			return nil
 		},
 	)
+	return result, err
 }
 
 type claimTurnReceipt struct {
-	LeaseExpiresAt time.Time `json:"leaseExpiresAt"`
+	LeaseExpiresAt      time.Time `json:"leaseExpiresAt"`
+	Attempt             uint32    `json:"attempt"`
+	AuthorityGeneration uint64    `json:"authorityGeneration"`
 }
 
 func ownerGateTarget(decision string) enum.State {
@@ -686,4 +1341,234 @@ func validRuntimeReference(reference string) bool {
 		}
 	}
 	return true
+}
+
+func (service *Service) requireCleanArtifact(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	artifactID string,
+) (entity.ArtifactSpec, error) {
+	artifact, err := tx.GetForUpdate(
+		ctx,
+		principal.OrganizationID,
+		principal.ProjectID,
+		artifactID,
+	)
+	if err != nil {
+		return entity.ArtifactSpec{}, err
+	}
+	spec, ok := artifact.Spec.(entity.ArtifactSpec)
+	if !ok || artifact.Kind != enum.KindArtifact ||
+		artifact.State != enum.StateActive ||
+		spec.ScanStatus != "CLEAN" ||
+		spec.ScanPolicyRevision == 0 ||
+		!validSHA256Text(spec.ScanEvidenceSHA256) {
+		return entity.ArtifactSpec{}, errs.ErrStateConflict
+	}
+	return spec, nil
+}
+
+func (service *Service) createRuntimeRevision(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	session entity.Resource,
+	sessionSpec entity.SessionSpec,
+) (entity.Resource, error) {
+	resources, err := tx.ListSnapshotResources(
+		ctx,
+		principal.OrganizationID,
+		principal.ProjectID,
+	)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	byID := make(map[string]entity.Resource, len(resources))
+	for _, item := range resources {
+		if item.State != enum.StateActive {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		byID[item.ID] = item
+	}
+	selected := make(map[string]entity.Resource)
+	add := func(identifier string, kind enum.Kind) (entity.Resource, error) {
+		item, ok := byID[identifier]
+		if !ok || item.Kind != kind || item.State != enum.StateActive {
+			return entity.Resource{}, errs.ErrNotFound
+		}
+		selected[item.ID] = item
+		return item, nil
+	}
+	if _, err := add(principal.ProjectID, enum.KindProject); err != nil {
+		return entity.Resource{}, err
+	}
+	selected[session.ID] = session
+	role, err := add(sessionSpec.AgentID, enum.KindRole)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	roleSpec, ok := role.Spec.(entity.RoleSpec)
+	if !ok {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	prompt, err := add(roleSpec.PromptProfileID, enum.KindPromptProfile)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	promptSpec, ok := prompt.Spec.(entity.PromptProfileSpec)
+	if !ok {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	if _, err := add(
+		sessionSpec.ProviderAccountBindingID,
+		enum.KindCredentialBinding,
+	); err != nil {
+		return entity.Resource{}, err
+	}
+	if sessionSpec.ConversationID != "" {
+		if _, err := add(sessionSpec.ConversationID, enum.KindChat); err != nil {
+			return entity.Resource{}, err
+		}
+	}
+	credentialIDs := map[string]struct{}{
+		sessionSpec.ProviderAccountBindingID: {},
+	}
+	integrationIDs := make([]string, 0, 16)
+	for _, item := range resources {
+		switch spec := item.Spec.(type) {
+		case entity.RepositoryWorkspaceSpec:
+			selected[item.ID] = item
+			if spec.CredentialBindingID != "" {
+				credentialIDs[spec.CredentialBindingID] = struct{}{}
+			}
+		case entity.IntegrationSpec:
+			selected[item.ID] = item
+			integrationIDs = append(integrationIDs, item.ID)
+			for _, identifier := range spec.CredentialBindingIDs {
+				credentialIDs[identifier] = struct{}{}
+			}
+		}
+	}
+	credentialList := make([]string, 0, len(credentialIDs))
+	for identifier := range credentialIDs {
+		if _, err := add(identifier, enum.KindCredentialBinding); err != nil {
+			return entity.Resource{}, err
+		}
+		credentialList = append(credentialList, identifier)
+	}
+	slices.Sort(credentialList)
+	slices.Sort(integrationIDs)
+	components := make([]entity.EffectiveResourceRef, 0, len(selected))
+	for _, item := range selected {
+		digest, err := entity.ProjectionSHA256(item)
+		if err != nil {
+			return entity.Resource{}, errs.ErrInternal
+		}
+		components = append(components, entity.EffectiveResourceRef{
+			Kind:             item.Kind,
+			ResourceID:       item.ID,
+			Version:          item.Version,
+			ProjectionSHA256: digest,
+		})
+	}
+	slices.SortFunc(components, func(left, right entity.EffectiveResourceRef) int {
+		if left.Kind != right.Kind {
+			if left.Kind < right.Kind {
+				return -1
+			}
+			return 1
+		}
+		if left.ResourceID < right.ResourceID {
+			return -1
+		}
+		if left.ResourceID > right.ResourceID {
+			return 1
+		}
+		return 0
+	})
+	predecessorID := ""
+	predecessor, err := tx.LatestRuntimeRevision(
+		ctx,
+		principal.OrganizationID,
+		principal.ProjectID,
+	)
+	if err == nil {
+		predecessorID = predecessor.ID
+	} else if !errors.Is(err, errs.ErrNotFound) {
+		return entity.Resource{}, err
+	}
+	now := service.now().UTC().Truncate(time.Microsecond)
+	manifestSHA256, err := canonicalHash(struct {
+		OrganizationID          string
+		ProjectID               string
+		PredecessorRevisionID   string
+		ImageDigest             string
+		AuthorityPolicyRevision uint64
+		AuthorityPolicySHA256   string
+		Components              []entity.EffectiveResourceRef
+		CreatedAt               time.Time
+	}{
+		principal.OrganizationID,
+		principal.ProjectID,
+		predecessorID,
+		service.runtimeImageDigest,
+		service.authorityPolicyRevision,
+		service.authorityPolicySHA256,
+		components,
+		now,
+	})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	revision, err := entity.New(
+		uuid.NewString(),
+		principal.OrganizationID,
+		principal.ProjectID,
+		session.ID,
+		principal.ActorID,
+		enum.KindRuntimeRevision,
+		"Effective runtime revision",
+		entity.RuntimeRevisionSpec{
+			ManifestSHA256:         manifestSHA256,
+			ImageDigest:            service.runtimeImageDigest,
+			PromptProfileID:        prompt.ID,
+			PromptRevision:         promptSpec.Revision,
+			CredentialBindingIDs:   credentialList,
+			IntegrationIDs:         integrationIDs,
+			PredecessorRevisionID:  predecessorID,
+			AuthorityPolicyVersion: service.authorityPolicyRevision,
+			AuthorityPolicySHA256:  service.authorityPolicySHA256,
+			Components:             components,
+			CreatedAt:              now,
+		},
+		now,
+	)
+	if err != nil {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	if err := tx.Insert(ctx, revision); err != nil {
+		return entity.Resource{}, err
+	}
+	if err := service.appendMutationRecords(
+		ctx,
+		tx,
+		principal,
+		"create_runtime_revision",
+		revision,
+	); err != nil {
+		return entity.Resource{}, err
+	}
+	return revision, nil
+}
+
+func hashRuntimeInput(
+	sourceRef, promptDigest, runtimeDigest, processRunID string,
+) string {
+	return hashString(
+		sourceRef + "\x00" +
+			promptDigest + "\x00" +
+			runtimeDigest + "\x00" +
+			processRunID,
+	)
 }

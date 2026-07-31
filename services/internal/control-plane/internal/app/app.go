@@ -120,7 +120,23 @@ func Run(
 	if err != nil {
 		return err
 	}
-	postgresRepository, err := postgrescontrolplane.New(state.runtimePool)
+	contextSigningKey, err := readSecret(
+		config.PostgresContextKeyFile,
+		128,
+	)
+	if err != nil || len(contextSigningKey) < 32 {
+		return errors.New("PostgreSQL context signing key is unavailable")
+	}
+	postgresRepository, err := postgrescontrolplane.New(
+		state.runtimePool,
+		postgrescontrolplane.Config{
+			PrincipalName:       config.PostgresPrincipalName,
+			PrincipalGeneration: config.PostgresPrincipalGeneration,
+			ContextKeyID:        config.PostgresContextKeyID,
+			ContextSigningKey:   contextSigningKey,
+			ContextTTL:          5 * time.Second,
+		},
+	)
 	if err != nil {
 		return err
 	}
@@ -163,10 +179,19 @@ func Run(
 		return errors.New("turn lease signing key is unavailable")
 	}
 	resourceService, err := resource.New(cachedRepository, resource.Config{
-		LeaseSigningKey:       leaseKey,
-		TurnLeaseDuration:     config.TurnLeaseDuration,
-		MaximumScheduleClaims: config.ScheduleClaimLimit,
-		Observer:              businessMetrics,
+		LeaseSigningKey:           leaseKey,
+		TurnLeaseDuration:         config.TurnLeaseDuration,
+		MaximumScheduleClaims:     config.ScheduleClaimLimit,
+		RuntimeImageDigest:        config.RuntimeImageDigest,
+		AuthorityPolicyRevision:   loadedPolicy.Revision,
+		AuthorityPolicySHA256:     loadedPolicy.Digest,
+		OwnerGateDeliveryWorkload: "control-api-gateway",
+		OwnerGateDeliverySPIFFEID: loadedPolicy.CallerSPIFFEID,
+		ScannerWorkload:           "artifact-scanner",
+		ScannerSPIFFEID:           "spiffe://mattercodex.local/ns/mattercodex-system/sa/artifact-scanner",
+		SchedulerWorkload:         "automation-scheduler",
+		SchedulerSPIFFEID:         "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+		Observer:                  businessMetrics,
 	})
 	if err != nil {
 		return err
@@ -237,6 +262,8 @@ func Run(
 		},
 		Replicas:        config.NATSReplicas,
 		MaxMessageBytes: 256 << 10,
+		MaxAge:          7 * 24 * time.Hour,
+		DuplicateWindow: 2 * time.Minute,
 		ConnectTimeout:  config.ReadinessTimeout,
 	})
 	if err != nil {

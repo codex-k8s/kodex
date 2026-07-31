@@ -4,23 +4,40 @@ package controlplane
 import (
 	"bytes"
 	"context"
-	"encoding/gob"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
-	"fmt"
+	"io"
+	"strconv"
 	"time"
 
 	sharedcache "github.com/codex-k8s/matter-codex/libs/go/cache"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 )
 
 const maximumCacheValueBytes = 128 << 10
 
+type cacheEnvelope struct {
+	Version          uint32          `json:"version"`
+	OrganizationID   string          `json:"organizationId"`
+	ProjectID        string          `json:"projectId"`
+	Kind             enum.Kind       `json:"kind"`
+	ResourceID       string          `json:"resourceId"`
+	ResourceVersion  uint64          `json:"resourceVersion"`
+	CacheEpoch       uint64          `json:"cacheEpoch"`
+	KeyDigestSHA256  string          `json:"keyDigestSha256"`
+	ProjectionSHA256 string          `json:"projectionSha256"`
+	Resource         json.RawMessage `json:"resource"`
+}
+
 // Repository кэширует только resource snapshots с PostgreSQL-owned epoch.
 type Repository struct {
 	source domainrepo.Repository
-	engine *sharedcache.Engine[entity.Resource]
+	engine *sharedcache.Engine[cacheEnvelope]
 }
 
 var _ domainrepo.Repository = (*Repository)(nil)
@@ -34,9 +51,9 @@ func New(
 	if source == nil {
 		return nil, errors.New("control-plane cache source is required")
 	}
-	engine, err := sharedcache.New[entity.Resource](
+	engine, err := sharedcache.New[cacheEnvelope](
 		store,
-		resourceCodec{},
+		envelopeCodec{},
 		timeout,
 		ttl,
 	)
@@ -48,30 +65,77 @@ func New(
 
 func (repository *Repository) Transact(
 	ctx context.Context,
-	organizationID, projectID string,
+	scope domainrepo.Scope,
 	callback func(domainrepo.Transaction) error,
 ) error {
-	return repository.source.Transact(ctx, organizationID, projectID, callback)
+	return repository.source.Transact(ctx, scope, callback)
 }
 
 func (repository *Repository) Get(
 	ctx context.Context,
 	organizationID, projectID, resourceID string,
+	expectedKind enum.Kind,
 ) (entity.Resource, error) {
 	epoch, err := repository.source.CacheEpoch(ctx, organizationID, projectID)
 	if err != nil {
 		return entity.Resource{}, err
 	}
-	key := fmt.Sprintf(
-		"control-plane:v1:resource:%s:%s:%d:%s",
+	keyDigest := digestCacheKey(
 		organizationID,
-		scopeKey(projectID),
-		epoch,
+		projectID,
+		expectedKind,
 		resourceID,
+		epoch,
 	)
-	return repository.engine.Load(ctx, key, func(ctx context.Context) (entity.Resource, error) {
-		return repository.source.Get(ctx, organizationID, projectID, resourceID)
-	})
+	key := "control-plane:v2:resource:" + keyDigest
+	envelope, err := repository.engine.Load(
+		ctx,
+		key,
+		func(ctx context.Context) (cacheEnvelope, error) {
+			resource, sourceErr := repository.source.Get(
+				ctx,
+				organizationID,
+				projectID,
+				resourceID,
+				expectedKind,
+			)
+			if sourceErr != nil {
+				return cacheEnvelope{}, sourceErr
+			}
+			return makeEnvelope(resource, epoch, keyDigest)
+		},
+	)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	resource, valid := validateEnvelope(
+		envelope,
+		organizationID,
+		projectID,
+		expectedKind,
+		resourceID,
+		epoch,
+		keyDigest,
+	)
+	if valid {
+		return resource, nil
+	}
+	_ = repository.engine.Invalidate(ctx, key)
+	resource, err = repository.source.Get(
+		ctx,
+		organizationID,
+		projectID,
+		resourceID,
+		expectedKind,
+	)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	repaired, err := makeEnvelope(resource, epoch, keyDigest)
+	if err == nil {
+		_ = repository.engine.Store(ctx, key, repaired)
+	}
+	return resource, nil
 }
 
 func (repository *Repository) List(
@@ -79,6 +143,13 @@ func (repository *Repository) List(
 	filter query.ResourceFilter,
 ) ([]entity.Resource, error) {
 	return repository.source.List(ctx, filter)
+}
+
+func (repository *Repository) Search(
+	ctx context.Context,
+	filter query.ResourceSearch,
+) ([]entity.Resource, error) {
+	return repository.source.Search(ctx, filter)
 }
 
 func (repository *Repository) ListEligibleProjects(
@@ -93,6 +164,34 @@ func (repository *Repository) ListEligibleProjects(
 		afterID,
 		limit,
 	)
+}
+
+func (repository *Repository) ListAudit(
+	ctx context.Context,
+	filter query.AuditFilter,
+) ([]domainrepo.Audit, error) {
+	return repository.source.ListAudit(ctx, filter)
+}
+
+func (repository *Repository) ListTombstones(
+	ctx context.Context,
+	filter query.TombstoneFilter,
+) ([]domainrepo.Tombstone, error) {
+	return repository.source.ListTombstones(ctx, filter)
+}
+
+func (repository *Repository) ListScheduleOccurrences(
+	ctx context.Context,
+	filter query.ScheduleOccurrenceFilter,
+) ([]domainrepo.ScheduleOccurrence, error) {
+	return repository.source.ListScheduleOccurrences(ctx, filter)
+}
+
+func (repository *Repository) Diagnostics(
+	ctx context.Context,
+	scope domainrepo.Scope,
+) (domainrepo.Diagnostics, error) {
+	return repository.source.Diagnostics(ctx, scope)
 }
 
 func (repository *Repository) CacheEpoch(
@@ -110,57 +209,121 @@ func (repository *Repository) Close() {
 	repository.source.Close()
 }
 
-type resourceCodec struct{}
+type envelopeCodec struct{}
 
-func (resourceCodec) Marshal(resource entity.Resource) ([]byte, error) {
-	if err := resource.Validate(); err != nil {
-		return nil, errors.New("cache resource is invalid")
+func (envelopeCodec) Marshal(envelope cacheEnvelope) ([]byte, error) {
+	if _, valid := validateEnvelope(
+		envelope,
+		envelope.OrganizationID,
+		envelope.ProjectID,
+		envelope.Kind,
+		envelope.ResourceID,
+		envelope.CacheEpoch,
+		envelope.KeyDigestSHA256,
+	); !valid {
+		return nil, errors.New("cache envelope is invalid")
 	}
-	var buffer bytes.Buffer
-	encoder := gob.NewEncoder(&buffer)
-	if err := encoder.Encode(&resource); err != nil ||
-		buffer.Len() > maximumCacheValueBytes {
-		return nil, errors.New("encode cached resource")
+	raw, err := json.Marshal(envelope)
+	if err != nil || len(raw) > maximumCacheValueBytes {
+		return nil, errors.New("encode cache envelope")
 	}
-	return buffer.Bytes(), nil
+	return raw, nil
 }
 
-func (resourceCodec) Unmarshal(raw []byte) (entity.Resource, error) {
+func (envelopeCodec) Unmarshal(raw []byte) (cacheEnvelope, error) {
 	if len(raw) == 0 || len(raw) > maximumCacheValueBytes {
-		return entity.Resource{}, errors.New("cached resource size is invalid")
+		return cacheEnvelope{}, errors.New("cached resource size is invalid")
 	}
-	decoder := gob.NewDecoder(bytes.NewReader(raw))
-	var resource entity.Resource
-	if err := decoder.Decode(&resource); err != nil ||
-		resource.Validate() != nil {
-		return entity.Resource{}, errors.New("decode cached resource")
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var envelope cacheEnvelope
+	if err := decoder.Decode(&envelope); err != nil {
+		return cacheEnvelope{}, errors.New("decode cache envelope")
 	}
-	return resource, nil
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return cacheEnvelope{}, errors.New("cache envelope has trailing data")
+	}
+	return envelope, nil
 }
 
-func scopeKey(projectID string) string {
-	if projectID == "" {
-		return "tenant"
+func makeEnvelope(
+	resource entity.Resource,
+	epoch uint64,
+	keyDigest string,
+) (cacheEnvelope, error) {
+	projection, err := entity.MarshalSnapshot(resource)
+	if err != nil {
+		return cacheEnvelope{}, err
 	}
-	return projectID
+	projectionDigest, err := entity.ProjectionSHA256(resource)
+	if err != nil {
+		return cacheEnvelope{}, err
+	}
+	return cacheEnvelope{
+		Version:          1,
+		OrganizationID:   resource.OrganizationID,
+		ProjectID:        resource.ProjectID,
+		Kind:             resource.Kind,
+		ResourceID:       resource.ID,
+		ResourceVersion:  resource.Version,
+		CacheEpoch:       epoch,
+		KeyDigestSHA256:  keyDigest,
+		ProjectionSHA256: projectionDigest,
+		Resource:         projection,
+	}, nil
 }
 
-func init() {
-	gob.Register(entity.ProjectSpec{})
-	gob.Register(entity.TeamSpec{})
-	gob.Register(entity.ChatSpec{})
-	gob.Register(entity.RoleSpec{})
-	gob.Register(entity.PromptProfileSpec{})
-	gob.Register(entity.CredentialBindingSpec{})
-	gob.Register(entity.RepositoryWorkspaceSpec{})
-	gob.Register(entity.IntegrationSpec{})
-	gob.Register(entity.RuntimeRevisionSpec{})
-	gob.Register(entity.SessionSpec{})
-	gob.Register(entity.TurnSpec{})
-	gob.Register(entity.ProcessRunSpec{})
-	gob.Register(entity.ScheduleSpec{})
-	gob.Register(entity.OwnerGateSpec{})
-	gob.Register(entity.MemoryRecordSpec{})
-	gob.Register(entity.WorkClaimSpec{})
-	gob.Register(entity.ArtifactSpec{})
+func validateEnvelope(
+	envelope cacheEnvelope,
+	organizationID, projectID string,
+	kind enum.Kind,
+	resourceID string,
+	epoch uint64,
+	keyDigest string,
+) (entity.Resource, bool) {
+	if envelope.Version != 1 ||
+		envelope.OrganizationID != organizationID ||
+		envelope.ProjectID != projectID ||
+		envelope.Kind != kind ||
+		envelope.ResourceID != resourceID ||
+		envelope.CacheEpoch != epoch ||
+		envelope.KeyDigestSHA256 != keyDigest ||
+		keyDigest != digestCacheKey(
+			organizationID,
+			projectID,
+			kind,
+			resourceID,
+			epoch,
+		) {
+		return entity.Resource{}, false
+	}
+	resource, err := entity.UnmarshalSnapshot(envelope.Resource)
+	if err != nil ||
+		resource.OrganizationID != organizationID ||
+		resource.ProjectID != projectID ||
+		resource.Kind != kind ||
+		resource.ID != resourceID ||
+		resource.Version != envelope.ResourceVersion {
+		return entity.Resource{}, false
+	}
+	digest, err := entity.ProjectionSHA256(resource)
+	if err != nil || digest != envelope.ProjectionSHA256 {
+		return entity.Resource{}, false
+	}
+	return resource, true
+}
+
+func digestCacheKey(
+	organizationID, projectID string,
+	kind enum.Kind,
+	resourceID string,
+	epoch uint64,
+) string {
+	canonical := organizationID + "\x00" +
+		projectID + "\x00" +
+		string(kind) + "\x00" +
+		resourceID + "\x00" +
+		strconv.FormatUint(epoch, 10)
+	digest := sha256.Sum256([]byte(canonical))
+	return hex.EncodeToString(digest[:])
 }

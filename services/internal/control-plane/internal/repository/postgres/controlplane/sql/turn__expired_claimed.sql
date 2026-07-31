@@ -14,6 +14,8 @@ SELECT
     lease.turn_id::text,
     lease.token_hash,
     lease.workload_id,
+    lease.authority_generation,
+    lease.attempt,
     lease.expires_at,
     lease.fence
 FROM control_plane.resources AS resource

@@ -266,8 +266,8 @@ type ScheduleOverlapPolicy int32
 const (
 	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_UNSPECIFIED ScheduleOverlapPolicy = 0
 	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_FORBID      ScheduleOverlapPolicy = 1
-	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_QUEUE_ALL   ScheduleOverlapPolicy = 2
-	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_COALESCE    ScheduleOverlapPolicy = 3
+	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_SKIP        ScheduleOverlapPolicy = 2
+	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_QUEUE       ScheduleOverlapPolicy = 3
 )
 
 // Enum value maps for ScheduleOverlapPolicy.
@@ -275,14 +275,14 @@ var (
 	ScheduleOverlapPolicy_name = map[int32]string{
 		0: "SCHEDULE_OVERLAP_POLICY_UNSPECIFIED",
 		1: "SCHEDULE_OVERLAP_POLICY_FORBID",
-		2: "SCHEDULE_OVERLAP_POLICY_QUEUE_ALL",
-		3: "SCHEDULE_OVERLAP_POLICY_COALESCE",
+		2: "SCHEDULE_OVERLAP_POLICY_SKIP",
+		3: "SCHEDULE_OVERLAP_POLICY_QUEUE",
 	}
 	ScheduleOverlapPolicy_value = map[string]int32{
 		"SCHEDULE_OVERLAP_POLICY_UNSPECIFIED": 0,
 		"SCHEDULE_OVERLAP_POLICY_FORBID":      1,
-		"SCHEDULE_OVERLAP_POLICY_QUEUE_ALL":   2,
-		"SCHEDULE_OVERLAP_POLICY_COALESCE":    3,
+		"SCHEDULE_OVERLAP_POLICY_SKIP":        2,
+		"SCHEDULE_OVERLAP_POLICY_QUEUE":       3,
 	}
 )
 
@@ -423,6 +423,189 @@ func (OwnerGateDecision) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{5}
 }
 
+type AdministrativeAction int32
+
+const (
+	AdministrativeAction_ADMINISTRATIVE_ACTION_UNSPECIFIED AdministrativeAction = 0
+	AdministrativeAction_ADMINISTRATIVE_ACTION_CREATE      AdministrativeAction = 1
+	AdministrativeAction_ADMINISTRATIVE_ACTION_UPDATE      AdministrativeAction = 2
+	AdministrativeAction_ADMINISTRATIVE_ACTION_ACTIVATE    AdministrativeAction = 3
+	AdministrativeAction_ADMINISTRATIVE_ACTION_PAUSE       AdministrativeAction = 4
+	AdministrativeAction_ADMINISTRATIVE_ACTION_ARCHIVE     AdministrativeAction = 5
+	AdministrativeAction_ADMINISTRATIVE_ACTION_DELETE      AdministrativeAction = 6
+)
+
+// Enum value maps for AdministrativeAction.
+var (
+	AdministrativeAction_name = map[int32]string{
+		0: "ADMINISTRATIVE_ACTION_UNSPECIFIED",
+		1: "ADMINISTRATIVE_ACTION_CREATE",
+		2: "ADMINISTRATIVE_ACTION_UPDATE",
+		3: "ADMINISTRATIVE_ACTION_ACTIVATE",
+		4: "ADMINISTRATIVE_ACTION_PAUSE",
+		5: "ADMINISTRATIVE_ACTION_ARCHIVE",
+		6: "ADMINISTRATIVE_ACTION_DELETE",
+	}
+	AdministrativeAction_value = map[string]int32{
+		"ADMINISTRATIVE_ACTION_UNSPECIFIED": 0,
+		"ADMINISTRATIVE_ACTION_CREATE":      1,
+		"ADMINISTRATIVE_ACTION_UPDATE":      2,
+		"ADMINISTRATIVE_ACTION_ACTIVATE":    3,
+		"ADMINISTRATIVE_ACTION_PAUSE":       4,
+		"ADMINISTRATIVE_ACTION_ARCHIVE":     5,
+		"ADMINISTRATIVE_ACTION_DELETE":      6,
+	}
+)
+
+func (x AdministrativeAction) Enum() *AdministrativeAction {
+	p := new(AdministrativeAction)
+	*p = x
+	return p
+}
+
+func (x AdministrativeAction) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AdministrativeAction) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_control_plane_proto_enumTypes[6].Descriptor()
+}
+
+func (AdministrativeAction) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_control_plane_proto_enumTypes[6]
+}
+
+func (x AdministrativeAction) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AdministrativeAction.Descriptor instead.
+func (AdministrativeAction) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{6}
+}
+
+type ArtifactScanState int32
+
+const (
+	ArtifactScanState_ARTIFACT_SCAN_STATE_UNSPECIFIED ArtifactScanState = 0
+	ArtifactScanState_ARTIFACT_SCAN_STATE_PENDING     ArtifactScanState = 1
+	ArtifactScanState_ARTIFACT_SCAN_STATE_SCANNING    ArtifactScanState = 2
+	ArtifactScanState_ARTIFACT_SCAN_STATE_CLEAN       ArtifactScanState = 3
+	ArtifactScanState_ARTIFACT_SCAN_STATE_QUARANTINED ArtifactScanState = 4
+	ArtifactScanState_ARTIFACT_SCAN_STATE_FAILED      ArtifactScanState = 5
+)
+
+// Enum value maps for ArtifactScanState.
+var (
+	ArtifactScanState_name = map[int32]string{
+		0: "ARTIFACT_SCAN_STATE_UNSPECIFIED",
+		1: "ARTIFACT_SCAN_STATE_PENDING",
+		2: "ARTIFACT_SCAN_STATE_SCANNING",
+		3: "ARTIFACT_SCAN_STATE_CLEAN",
+		4: "ARTIFACT_SCAN_STATE_QUARANTINED",
+		5: "ARTIFACT_SCAN_STATE_FAILED",
+	}
+	ArtifactScanState_value = map[string]int32{
+		"ARTIFACT_SCAN_STATE_UNSPECIFIED": 0,
+		"ARTIFACT_SCAN_STATE_PENDING":     1,
+		"ARTIFACT_SCAN_STATE_SCANNING":    2,
+		"ARTIFACT_SCAN_STATE_CLEAN":       3,
+		"ARTIFACT_SCAN_STATE_QUARANTINED": 4,
+		"ARTIFACT_SCAN_STATE_FAILED":      5,
+	}
+)
+
+func (x ArtifactScanState) Enum() *ArtifactScanState {
+	p := new(ArtifactScanState)
+	*p = x
+	return p
+}
+
+func (x ArtifactScanState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ArtifactScanState) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_control_plane_proto_enumTypes[7].Descriptor()
+}
+
+func (ArtifactScanState) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_control_plane_proto_enumTypes[7]
+}
+
+func (x ArtifactScanState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ArtifactScanState.Descriptor instead.
+func (ArtifactScanState) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{7}
+}
+
+type ScheduleOccurrenceState int32
+
+const (
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED ScheduleOccurrenceState = 0
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_QUEUED      ScheduleOccurrenceState = 1
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_CLAIMED     ScheduleOccurrenceState = 2
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_SUCCEEDED   ScheduleOccurrenceState = 3
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_FAILED      ScheduleOccurrenceState = 4
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_CANCELLED   ScheduleOccurrenceState = 5
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_SKIPPED     ScheduleOccurrenceState = 6
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER ScheduleOccurrenceState = 7
+)
+
+// Enum value maps for ScheduleOccurrenceState.
+var (
+	ScheduleOccurrenceState_name = map[int32]string{
+		0: "SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED",
+		1: "SCHEDULE_OCCURRENCE_STATE_QUEUED",
+		2: "SCHEDULE_OCCURRENCE_STATE_CLAIMED",
+		3: "SCHEDULE_OCCURRENCE_STATE_SUCCEEDED",
+		4: "SCHEDULE_OCCURRENCE_STATE_FAILED",
+		5: "SCHEDULE_OCCURRENCE_STATE_CANCELLED",
+		6: "SCHEDULE_OCCURRENCE_STATE_SKIPPED",
+		7: "SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER",
+	}
+	ScheduleOccurrenceState_value = map[string]int32{
+		"SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED": 0,
+		"SCHEDULE_OCCURRENCE_STATE_QUEUED":      1,
+		"SCHEDULE_OCCURRENCE_STATE_CLAIMED":     2,
+		"SCHEDULE_OCCURRENCE_STATE_SUCCEEDED":   3,
+		"SCHEDULE_OCCURRENCE_STATE_FAILED":      4,
+		"SCHEDULE_OCCURRENCE_STATE_CANCELLED":   5,
+		"SCHEDULE_OCCURRENCE_STATE_SKIPPED":     6,
+		"SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER": 7,
+	}
+)
+
+func (x ScheduleOccurrenceState) Enum() *ScheduleOccurrenceState {
+	p := new(ScheduleOccurrenceState)
+	*p = x
+	return p
+}
+
+func (x ScheduleOccurrenceState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ScheduleOccurrenceState) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_control_plane_proto_enumTypes[8].Descriptor()
+}
+
+func (ScheduleOccurrenceState) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_control_plane_proto_enumTypes[8]
+}
+
+func (x ScheduleOccurrenceState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ScheduleOccurrenceState.Descriptor instead.
+func (ScheduleOccurrenceState) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{8}
+}
+
 type ErrorReason int32
 
 const (
@@ -480,11 +663,11 @@ func (x ErrorReason) String() string {
 }
 
 func (ErrorReason) Descriptor() protoreflect.EnumDescriptor {
-	return file_controlplane_v1_control_plane_proto_enumTypes[6].Descriptor()
+	return file_controlplane_v1_control_plane_proto_enumTypes[9].Descriptor()
 }
 
 func (ErrorReason) Type() protoreflect.EnumType {
-	return &file_controlplane_v1_control_plane_proto_enumTypes[6]
+	return &file_controlplane_v1_control_plane_proto_enumTypes[9]
 }
 
 func (x ErrorReason) Number() protoreflect.EnumNumber {
@@ -493,7 +676,7 @@ func (x ErrorReason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ErrorReason.Descriptor instead.
 func (ErrorReason) EnumDescriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{6}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{9}
 }
 
 type CreateProjectRequest struct {
@@ -1265,15 +1448,21 @@ func (x *IntegrationSpec) GetEndpointRef() string {
 }
 
 type RuntimeRevisionSpec struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	ManifestSha256       string                 `protobuf:"bytes,1,opt,name=manifest_sha256,json=manifestSha256,proto3" json:"manifest_sha256,omitempty"`
-	ImageDigest          string                 `protobuf:"bytes,2,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
-	PromptProfileId      string                 `protobuf:"bytes,3,opt,name=prompt_profile_id,json=promptProfileId,proto3" json:"prompt_profile_id,omitempty"`
-	PromptRevision       uint64                 `protobuf:"varint,4,opt,name=prompt_revision,json=promptRevision,proto3" json:"prompt_revision,omitempty"`
-	CredentialBindingIds []string               `protobuf:"bytes,5,rep,name=credential_binding_ids,json=credentialBindingIds,proto3" json:"credential_binding_ids,omitempty"`
-	IntegrationIds       []string               `protobuf:"bytes,6,rep,name=integration_ids,json=integrationIds,proto3" json:"integration_ids,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// manifest_sha256 — server-generated digest полного effective snapshot.
+	ManifestSha256          string                  `protobuf:"bytes,1,opt,name=manifest_sha256,json=manifestSha256,proto3" json:"manifest_sha256,omitempty"`
+	ImageDigest             string                  `protobuf:"bytes,2,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
+	PromptProfileId         string                  `protobuf:"bytes,3,opt,name=prompt_profile_id,json=promptProfileId,proto3" json:"prompt_profile_id,omitempty"`
+	PromptRevision          uint64                  `protobuf:"varint,4,opt,name=prompt_revision,json=promptRevision,proto3" json:"prompt_revision,omitempty"`
+	CredentialBindingIds    []string                `protobuf:"bytes,5,rep,name=credential_binding_ids,json=credentialBindingIds,proto3" json:"credential_binding_ids,omitempty"`
+	IntegrationIds          []string                `protobuf:"bytes,6,rep,name=integration_ids,json=integrationIds,proto3" json:"integration_ids,omitempty"`
+	PredecessorRevisionId   string                  `protobuf:"bytes,7,opt,name=predecessor_revision_id,json=predecessorRevisionId,proto3" json:"predecessor_revision_id,omitempty"`
+	AuthorityPolicyRevision uint64                  `protobuf:"varint,8,opt,name=authority_policy_revision,json=authorityPolicyRevision,proto3" json:"authority_policy_revision,omitempty"`
+	AuthorityPolicySha256   string                  `protobuf:"bytes,9,opt,name=authority_policy_sha256,json=authorityPolicySha256,proto3" json:"authority_policy_sha256,omitempty"`
+	Components              []*EffectiveResourceRef `protobuf:"bytes,10,rep,name=components,proto3" json:"components,omitempty"`
+	CreatedAt               *timestamppb.Timestamp  `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *RuntimeRevisionSpec) Reset() {
@@ -1348,6 +1537,109 @@ func (x *RuntimeRevisionSpec) GetIntegrationIds() []string {
 	return nil
 }
 
+func (x *RuntimeRevisionSpec) GetPredecessorRevisionId() string {
+	if x != nil {
+		return x.PredecessorRevisionId
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSpec) GetAuthorityPolicyRevision() uint64 {
+	if x != nil {
+		return x.AuthorityPolicyRevision
+	}
+	return 0
+}
+
+func (x *RuntimeRevisionSpec) GetAuthorityPolicySha256() string {
+	if x != nil {
+		return x.AuthorityPolicySha256
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSpec) GetComponents() []*EffectiveResourceRef {
+	if x != nil {
+		return x.Components
+	}
+	return nil
+}
+
+func (x *RuntimeRevisionSpec) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+type EffectiveResourceRef struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Kind             ResourceKind           `protobuf:"varint,1,opt,name=kind,proto3,enum=controlplane.v1.ResourceKind" json:"kind,omitempty"`
+	ResourceId       string                 `protobuf:"bytes,2,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty"`
+	Version          uint64                 `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`
+	ProjectionSha256 string                 `protobuf:"bytes,4,opt,name=projection_sha256,json=projectionSha256,proto3" json:"projection_sha256,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *EffectiveResourceRef) Reset() {
+	*x = EffectiveResourceRef{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EffectiveResourceRef) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EffectiveResourceRef) ProtoMessage() {}
+
+func (x *EffectiveResourceRef) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EffectiveResourceRef.ProtoReflect.Descriptor instead.
+func (*EffectiveResourceRef) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *EffectiveResourceRef) GetKind() ResourceKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ResourceKind_RESOURCE_KIND_UNSPECIFIED
+}
+
+func (x *EffectiveResourceRef) GetResourceId() string {
+	if x != nil {
+		return x.ResourceId
+	}
+	return ""
+}
+
+func (x *EffectiveResourceRef) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *EffectiveResourceRef) GetProjectionSha256() string {
+	if x != nil {
+		return x.ProjectionSha256
+	}
+	return ""
+}
+
 type SessionSpec struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
 	AgentId                  string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
@@ -1361,7 +1653,7 @@ type SessionSpec struct {
 
 func (x *SessionSpec) Reset() {
 	*x = SessionSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[13]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1373,7 +1665,7 @@ func (x *SessionSpec) String() string {
 func (*SessionSpec) ProtoMessage() {}
 
 func (x *SessionSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[13]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1386,7 +1678,7 @@ func (x *SessionSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionSpec.ProtoReflect.Descriptor instead.
 func (*SessionSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{13}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SessionSpec) GetAgentId() string {
@@ -1425,23 +1717,25 @@ func (x *SessionSpec) GetLastTurnSequence() uint64 {
 }
 
 type TurnSpec struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	SessionId         string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Sequence          uint64                 `protobuf:"varint,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
-	SourceRef         string                 `protobuf:"bytes,3,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
-	PromptArtifactId  string                 `protobuf:"bytes,4,opt,name=prompt_artifact_id,json=promptArtifactId,proto3" json:"prompt_artifact_id,omitempty"`
-	RuntimeRevisionId string                 `protobuf:"bytes,5,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
-	ProcessRunId      string                 `protobuf:"bytes,6,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
-	Attempt           uint32                 `protobuf:"varint,7,opt,name=attempt,proto3" json:"attempt,omitempty"`
-	Outcome           string                 `protobuf:"bytes,8,opt,name=outcome,proto3" json:"outcome,omitempty"`
-	ResultArtifactId  string                 `protobuf:"bytes,9,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	SessionId            string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Sequence             uint64                 `protobuf:"varint,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	SourceRef            string                 `protobuf:"bytes,3,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	PromptArtifactId     string                 `protobuf:"bytes,4,opt,name=prompt_artifact_id,json=promptArtifactId,proto3" json:"prompt_artifact_id,omitempty"`
+	RuntimeRevisionId    string                 `protobuf:"bytes,5,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
+	ProcessRunId         string                 `protobuf:"bytes,6,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
+	Attempt              uint32                 `protobuf:"varint,7,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	Outcome              string                 `protobuf:"bytes,8,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	ResultArtifactId     string                 `protobuf:"bytes,9,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
+	EffectiveInputSha256 string                 `protobuf:"bytes,10,opt,name=effective_input_sha256,json=effectiveInputSha256,proto3" json:"effective_input_sha256,omitempty"`
+	PredecessorTurnId    string                 `protobuf:"bytes,11,opt,name=predecessor_turn_id,json=predecessorTurnId,proto3" json:"predecessor_turn_id,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *TurnSpec) Reset() {
 	*x = TurnSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[14]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1453,7 +1747,7 @@ func (x *TurnSpec) String() string {
 func (*TurnSpec) ProtoMessage() {}
 
 func (x *TurnSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[14]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1466,7 +1760,7 @@ func (x *TurnSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TurnSpec.ProtoReflect.Descriptor instead.
 func (*TurnSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{14}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TurnSpec) GetSessionId() string {
@@ -1532,20 +1826,39 @@ func (x *TurnSpec) GetResultArtifactId() string {
 	return ""
 }
 
+func (x *TurnSpec) GetEffectiveInputSha256() string {
+	if x != nil {
+		return x.EffectiveInputSha256
+	}
+	return ""
+}
+
+func (x *TurnSpec) GetPredecessorTurnId() string {
+	if x != nil {
+		return x.PredecessorTurnId
+	}
+	return ""
+}
+
 type ProcessRunSpec struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	ParentProcessRunId string                 `protobuf:"bytes,1,opt,name=parent_process_run_id,json=parentProcessRunId,proto3" json:"parent_process_run_id,omitempty"`
-	PlaybookRef        string                 `protobuf:"bytes,2,opt,name=playbook_ref,json=playbookRef,proto3" json:"playbook_ref,omitempty"`
-	PolicyRevision     uint64                 `protobuf:"varint,3,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
-	RootTriggerRef     string                 `protobuf:"bytes,4,opt,name=root_trigger_ref,json=rootTriggerRef,proto3" json:"root_trigger_ref,omitempty"`
-	ResultArtifactId   string                 `protobuf:"bytes,5,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	ParentProcessRunId   string                 `protobuf:"bytes,1,opt,name=parent_process_run_id,json=parentProcessRunId,proto3" json:"parent_process_run_id,omitempty"`
+	PlaybookRef          string                 `protobuf:"bytes,2,opt,name=playbook_ref,json=playbookRef,proto3" json:"playbook_ref,omitempty"`
+	PolicyRevision       uint64                 `protobuf:"varint,3,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	RootTriggerRef       string                 `protobuf:"bytes,4,opt,name=root_trigger_ref,json=rootTriggerRef,proto3" json:"root_trigger_ref,omitempty"`
+	ResultArtifactId     string                 `protobuf:"bytes,5,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
+	RootInitiatorActorId string                 `protobuf:"bytes,6,opt,name=root_initiator_actor_id,json=rootInitiatorActorId,proto3" json:"root_initiator_actor_id,omitempty"`
+	RootSessionId        string                 `protobuf:"bytes,7,opt,name=root_session_id,json=rootSessionId,proto3" json:"root_session_id,omitempty"`
+	RootTurnId           string                 `protobuf:"bytes,8,opt,name=root_turn_id,json=rootTurnId,proto3" json:"root_turn_id,omitempty"`
+	RootAttempt          uint32                 `protobuf:"varint,9,opt,name=root_attempt,json=rootAttempt,proto3" json:"root_attempt,omitempty"`
+	ImmutableInputSha256 string                 `protobuf:"bytes,10,opt,name=immutable_input_sha256,json=immutableInputSha256,proto3" json:"immutable_input_sha256,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *ProcessRunSpec) Reset() {
 	*x = ProcessRunSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[15]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1557,7 +1870,7 @@ func (x *ProcessRunSpec) String() string {
 func (*ProcessRunSpec) ProtoMessage() {}
 
 func (x *ProcessRunSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[15]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1570,7 +1883,7 @@ func (x *ProcessRunSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessRunSpec.ProtoReflect.Descriptor instead.
 func (*ProcessRunSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{15}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ProcessRunSpec) GetParentProcessRunId() string {
@@ -1608,23 +1921,67 @@ func (x *ProcessRunSpec) GetResultArtifactId() string {
 	return ""
 }
 
+func (x *ProcessRunSpec) GetRootInitiatorActorId() string {
+	if x != nil {
+		return x.RootInitiatorActorId
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetRootSessionId() string {
+	if x != nil {
+		return x.RootSessionId
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetRootTurnId() string {
+	if x != nil {
+		return x.RootTurnId
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetRootAttempt() uint32 {
+	if x != nil {
+		return x.RootAttempt
+	}
+	return 0
+}
+
+func (x *ProcessRunSpec) GetImmutableInputSha256() string {
+	if x != nil {
+		return x.ImmutableInputSha256
+	}
+	return ""
+}
+
 type ScheduleSpec struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	TargetResourceId string                 `protobuf:"bytes,1,opt,name=target_resource_id,json=targetResourceId,proto3" json:"target_resource_id,omitempty"`
-	Cron             string                 `protobuf:"bytes,2,opt,name=cron,proto3" json:"cron,omitempty"`
-	Interval         *durationpb.Duration   `protobuf:"bytes,3,opt,name=interval,proto3" json:"interval,omitempty"`
-	Timezone         string                 `protobuf:"bytes,4,opt,name=timezone,proto3" json:"timezone,omitempty"`
-	OverlapPolicy    ScheduleOverlapPolicy  `protobuf:"varint,5,opt,name=overlap_policy,json=overlapPolicy,proto3,enum=controlplane.v1.ScheduleOverlapPolicy" json:"overlap_policy,omitempty"`
-	MisfirePolicy    ScheduleMisfirePolicy  `protobuf:"varint,6,opt,name=misfire_policy,json=misfirePolicy,proto3,enum=controlplane.v1.ScheduleMisfirePolicy" json:"misfire_policy,omitempty"`
-	MisfireGrace     *durationpb.Duration   `protobuf:"bytes,7,opt,name=misfire_grace,json=misfireGrace,proto3" json:"misfire_grace,omitempty"`
-	NextRunAt        *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=next_run_at,json=nextRunAt,proto3" json:"next_run_at,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	TargetResourceId     string                 `protobuf:"bytes,1,opt,name=target_resource_id,json=targetResourceId,proto3" json:"target_resource_id,omitempty"`
+	Cron                 string                 `protobuf:"bytes,2,opt,name=cron,proto3" json:"cron,omitempty"`
+	Interval             *durationpb.Duration   `protobuf:"bytes,3,opt,name=interval,proto3" json:"interval,omitempty"`
+	Timezone             string                 `protobuf:"bytes,4,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	OverlapPolicy        ScheduleOverlapPolicy  `protobuf:"varint,5,opt,name=overlap_policy,json=overlapPolicy,proto3,enum=controlplane.v1.ScheduleOverlapPolicy" json:"overlap_policy,omitempty"`
+	MisfirePolicy        ScheduleMisfirePolicy  `protobuf:"varint,6,opt,name=misfire_policy,json=misfirePolicy,proto3,enum=controlplane.v1.ScheduleMisfirePolicy" json:"misfire_policy,omitempty"`
+	MisfireGrace         *durationpb.Duration   `protobuf:"bytes,7,opt,name=misfire_grace,json=misfireGrace,proto3" json:"misfire_grace,omitempty"`
+	NextRunAt            *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=next_run_at,json=nextRunAt,proto3" json:"next_run_at,omitempty"`
+	TargetKind           ResourceKind           `protobuf:"varint,9,opt,name=target_kind,json=targetKind,proto3,enum=controlplane.v1.ResourceKind" json:"target_kind,omitempty"`
+	TargetVersion        uint64                 `protobuf:"varint,10,opt,name=target_version,json=targetVersion,proto3" json:"target_version,omitempty"`
+	EffectiveInputSha256 string                 `protobuf:"bytes,11,opt,name=effective_input_sha256,json=effectiveInputSha256,proto3" json:"effective_input_sha256,omitempty"`
+	Calendar             string                 `protobuf:"bytes,12,opt,name=calendar,proto3" json:"calendar,omitempty"`
+	DeliveryPolicy       string                 `protobuf:"bytes,13,opt,name=delivery_policy,json=deliveryPolicy,proto3" json:"delivery_policy,omitempty"`
+	MaximumAttempts      uint32                 `protobuf:"varint,14,opt,name=maximum_attempts,json=maximumAttempts,proto3" json:"maximum_attempts,omitempty"`
+	InitialBackoff       *durationpb.Duration   `protobuf:"bytes,15,opt,name=initial_backoff,json=initialBackoff,proto3" json:"initial_backoff,omitempty"`
+	MaximumBackoff       *durationpb.Duration   `protobuf:"bytes,16,opt,name=maximum_backoff,json=maximumBackoff,proto3" json:"maximum_backoff,omitempty"`
+	DeadLetterAfter      *durationpb.Duration   `protobuf:"bytes,17,opt,name=dead_letter_after,json=deadLetterAfter,proto3" json:"dead_letter_after,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *ScheduleSpec) Reset() {
 	*x = ScheduleSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[16]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1636,7 +1993,7 @@ func (x *ScheduleSpec) String() string {
 func (*ScheduleSpec) ProtoMessage() {}
 
 func (x *ScheduleSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[16]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1649,7 +2006,7 @@ func (x *ScheduleSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleSpec.ProtoReflect.Descriptor instead.
 func (*ScheduleSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{16}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ScheduleSpec) GetTargetResourceId() string {
@@ -1708,21 +2065,92 @@ func (x *ScheduleSpec) GetNextRunAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *ScheduleSpec) GetTargetKind() ResourceKind {
+	if x != nil {
+		return x.TargetKind
+	}
+	return ResourceKind_RESOURCE_KIND_UNSPECIFIED
+}
+
+func (x *ScheduleSpec) GetTargetVersion() uint64 {
+	if x != nil {
+		return x.TargetVersion
+	}
+	return 0
+}
+
+func (x *ScheduleSpec) GetEffectiveInputSha256() string {
+	if x != nil {
+		return x.EffectiveInputSha256
+	}
+	return ""
+}
+
+func (x *ScheduleSpec) GetCalendar() string {
+	if x != nil {
+		return x.Calendar
+	}
+	return ""
+}
+
+func (x *ScheduleSpec) GetDeliveryPolicy() string {
+	if x != nil {
+		return x.DeliveryPolicy
+	}
+	return ""
+}
+
+func (x *ScheduleSpec) GetMaximumAttempts() uint32 {
+	if x != nil {
+		return x.MaximumAttempts
+	}
+	return 0
+}
+
+func (x *ScheduleSpec) GetInitialBackoff() *durationpb.Duration {
+	if x != nil {
+		return x.InitialBackoff
+	}
+	return nil
+}
+
+func (x *ScheduleSpec) GetMaximumBackoff() *durationpb.Duration {
+	if x != nil {
+		return x.MaximumBackoff
+	}
+	return nil
+}
+
+func (x *ScheduleSpec) GetDeadLetterAfter() *durationpb.Duration {
+	if x != nil {
+		return x.DeadLetterAfter
+	}
+	return nil
+}
+
 type OwnerGateSpec struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ProcessRunId   string                 `protobuf:"bytes,1,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
-	ResultRef      string                 `protobuf:"bytes,2,opt,name=result_ref,json=resultRef,proto3" json:"result_ref,omitempty"`
-	ResultSha256   string                 `protobuf:"bytes,3,opt,name=result_sha256,json=resultSha256,proto3" json:"result_sha256,omitempty"`
-	ExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	Decision       OwnerGateDecision      `protobuf:"varint,5,opt,name=decision,proto3,enum=controlplane.v1.OwnerGateDecision" json:"decision,omitempty"`
-	DecisionReason string                 `protobuf:"bytes,6,opt,name=decision_reason,json=decisionReason,proto3" json:"decision_reason,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	ProcessRunId         string                 `protobuf:"bytes,1,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
+	ResultRef            string                 `protobuf:"bytes,2,opt,name=result_ref,json=resultRef,proto3" json:"result_ref,omitempty"`
+	ResultSha256         string                 `protobuf:"bytes,3,opt,name=result_sha256,json=resultSha256,proto3" json:"result_sha256,omitempty"`
+	ExpiresAt            *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Decision             OwnerGateDecision      `protobuf:"varint,5,opt,name=decision,proto3,enum=controlplane.v1.OwnerGateDecision" json:"decision,omitempty"`
+	DecisionReason       string                 `protobuf:"bytes,6,opt,name=decision_reason,json=decisionReason,proto3" json:"decision_reason,omitempty"`
+	RootInitiatorActorId string                 `protobuf:"bytes,7,opt,name=root_initiator_actor_id,json=rootInitiatorActorId,proto3" json:"root_initiator_actor_id,omitempty"`
+	SessionId            string                 `protobuf:"bytes,8,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	TurnId               string                 `protobuf:"bytes,9,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
+	Attempt              uint32                 `protobuf:"varint,10,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	ImmutableInputSha256 string                 `protobuf:"bytes,11,opt,name=immutable_input_sha256,json=immutableInputSha256,proto3" json:"immutable_input_sha256,omitempty"`
+	RecipientActorId     string                 `protobuf:"bytes,12,opt,name=recipient_actor_id,json=recipientActorId,proto3" json:"recipient_actor_id,omitempty"`
+	DeliveryWorkloadId   string                 `protobuf:"bytes,13,opt,name=delivery_workload_id,json=deliveryWorkloadId,proto3" json:"delivery_workload_id,omitempty"`
+	DeliverySpiffeId     string                 `protobuf:"bytes,14,opt,name=delivery_spiffe_id,json=deliverySpiffeId,proto3" json:"delivery_spiffe_id,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *OwnerGateSpec) Reset() {
 	*x = OwnerGateSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[17]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1734,7 +2162,7 @@ func (x *OwnerGateSpec) String() string {
 func (*OwnerGateSpec) ProtoMessage() {}
 
 func (x *OwnerGateSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[17]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1747,7 +2175,7 @@ func (x *OwnerGateSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OwnerGateSpec.ProtoReflect.Descriptor instead.
 func (*OwnerGateSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{17}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *OwnerGateSpec) GetProcessRunId() string {
@@ -1792,6 +2220,62 @@ func (x *OwnerGateSpec) GetDecisionReason() string {
 	return ""
 }
 
+func (x *OwnerGateSpec) GetRootInitiatorActorId() string {
+	if x != nil {
+		return x.RootInitiatorActorId
+	}
+	return ""
+}
+
+func (x *OwnerGateSpec) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *OwnerGateSpec) GetTurnId() string {
+	if x != nil {
+		return x.TurnId
+	}
+	return ""
+}
+
+func (x *OwnerGateSpec) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *OwnerGateSpec) GetImmutableInputSha256() string {
+	if x != nil {
+		return x.ImmutableInputSha256
+	}
+	return ""
+}
+
+func (x *OwnerGateSpec) GetRecipientActorId() string {
+	if x != nil {
+		return x.RecipientActorId
+	}
+	return ""
+}
+
+func (x *OwnerGateSpec) GetDeliveryWorkloadId() string {
+	if x != nil {
+		return x.DeliveryWorkloadId
+	}
+	return ""
+}
+
+func (x *OwnerGateSpec) GetDeliverySpiffeId() string {
+	if x != nil {
+		return x.DeliverySpiffeId
+	}
+	return ""
+}
+
 type MemoryRecordSpec struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Scope         string                 `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
@@ -1807,7 +2291,7 @@ type MemoryRecordSpec struct {
 
 func (x *MemoryRecordSpec) Reset() {
 	*x = MemoryRecordSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[18]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1819,7 +2303,7 @@ func (x *MemoryRecordSpec) String() string {
 func (*MemoryRecordSpec) ProtoMessage() {}
 
 func (x *MemoryRecordSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[18]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1832,7 +2316,7 @@ func (x *MemoryRecordSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemoryRecordSpec.ProtoReflect.Descriptor instead.
 func (*MemoryRecordSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{18}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *MemoryRecordSpec) GetScope() string {
@@ -1897,7 +2381,7 @@ type WorkClaimSpec struct {
 
 func (x *WorkClaimSpec) Reset() {
 	*x = WorkClaimSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[19]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1909,7 +2393,7 @@ func (x *WorkClaimSpec) String() string {
 func (*WorkClaimSpec) ProtoMessage() {}
 
 func (x *WorkClaimSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[19]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1922,7 +2406,7 @@ func (x *WorkClaimSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkClaimSpec.ProtoReflect.Descriptor instead.
 func (*WorkClaimSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{19}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *WorkClaimSpec) GetProcessRunId() string {
@@ -1968,15 +2452,19 @@ type ArtifactSpec struct {
 	SizeBytes          uint64                 `protobuf:"varint,4,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
 	MediaType          string                 `protobuf:"bytes,5,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
 	Sha256             string                 `protobuf:"bytes,6,opt,name=sha256,proto3" json:"sha256,omitempty"`
-	ScanStatus         string                 `protobuf:"bytes,7,opt,name=scan_status,json=scanStatus,proto3" json:"scan_status,omitempty"`
+	ScanStatus         ArtifactScanState      `protobuf:"varint,7,opt,name=scan_status,json=scanStatus,proto3,enum=controlplane.v1.ArtifactScanState" json:"scan_status,omitempty"`
 	RetentionPolicyRef string                 `protobuf:"bytes,8,opt,name=retention_policy_ref,json=retentionPolicyRef,proto3" json:"retention_policy_ref,omitempty"`
+	ScanPolicyRevision uint64                 `protobuf:"varint,9,opt,name=scan_policy_revision,json=scanPolicyRevision,proto3" json:"scan_policy_revision,omitempty"`
+	ScanEvidenceSha256 string                 `protobuf:"bytes,10,opt,name=scan_evidence_sha256,json=scanEvidenceSha256,proto3" json:"scan_evidence_sha256,omitempty"`
+	ScannerWorkloadId  string                 `protobuf:"bytes,11,opt,name=scanner_workload_id,json=scannerWorkloadId,proto3" json:"scanner_workload_id,omitempty"`
+	ScannedAt          *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=scanned_at,json=scannedAt,proto3" json:"scanned_at,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ArtifactSpec) Reset() {
 	*x = ArtifactSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[20]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1988,7 +2476,7 @@ func (x *ArtifactSpec) String() string {
 func (*ArtifactSpec) ProtoMessage() {}
 
 func (x *ArtifactSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[20]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2001,7 +2489,7 @@ func (x *ArtifactSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArtifactSpec.ProtoReflect.Descriptor instead.
 func (*ArtifactSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{20}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ArtifactSpec) GetKind() string {
@@ -2046,11 +2534,11 @@ func (x *ArtifactSpec) GetSha256() string {
 	return ""
 }
 
-func (x *ArtifactSpec) GetScanStatus() string {
+func (x *ArtifactSpec) GetScanStatus() ArtifactScanState {
 	if x != nil {
 		return x.ScanStatus
 	}
-	return ""
+	return ArtifactScanState_ARTIFACT_SCAN_STATE_UNSPECIFIED
 }
 
 func (x *ArtifactSpec) GetRetentionPolicyRef() string {
@@ -2058,6 +2546,34 @@ func (x *ArtifactSpec) GetRetentionPolicyRef() string {
 		return x.RetentionPolicyRef
 	}
 	return ""
+}
+
+func (x *ArtifactSpec) GetScanPolicyRevision() uint64 {
+	if x != nil {
+		return x.ScanPolicyRevision
+	}
+	return 0
+}
+
+func (x *ArtifactSpec) GetScanEvidenceSha256() string {
+	if x != nil {
+		return x.ScanEvidenceSha256
+	}
+	return ""
+}
+
+func (x *ArtifactSpec) GetScannerWorkloadId() string {
+	if x != nil {
+		return x.ScannerWorkloadId
+	}
+	return ""
+}
+
+func (x *ArtifactSpec) GetScannedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ScannedAt
+	}
+	return nil
 }
 
 type ResourceSpec struct {
@@ -2088,7 +2604,7 @@ type ResourceSpec struct {
 
 func (x *ResourceSpec) Reset() {
 	*x = ResourceSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[21]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2100,7 +2616,7 @@ func (x *ResourceSpec) String() string {
 func (*ResourceSpec) ProtoMessage() {}
 
 func (x *ResourceSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[21]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2113,7 +2629,7 @@ func (x *ResourceSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceSpec.ProtoReflect.Descriptor instead.
 func (*ResourceSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{21}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ResourceSpec) GetValue() isResourceSpec_Value {
@@ -2400,7 +2916,7 @@ type Resource struct {
 
 func (x *Resource) Reset() {
 	*x = Resource{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[22]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2412,7 +2928,7 @@ func (x *Resource) String() string {
 func (*Resource) ProtoMessage() {}
 
 func (x *Resource) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[22]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2425,7 +2941,7 @@ func (x *Resource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Resource.ProtoReflect.Descriptor instead.
 func (*Resource) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{22}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *Resource) GetId() string {
@@ -2512,7 +3028,7 @@ type CreateResourceRequest struct {
 
 func (x *CreateResourceRequest) Reset() {
 	*x = CreateResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[23]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2524,7 +3040,7 @@ func (x *CreateResourceRequest) String() string {
 func (*CreateResourceRequest) ProtoMessage() {}
 
 func (x *CreateResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[23]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2537,7 +3053,7 @@ func (x *CreateResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateResourceRequest.ProtoReflect.Descriptor instead.
 func (*CreateResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{23}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CreateResourceRequest) GetIdempotencyKey() string {
@@ -2584,7 +3100,7 @@ type CreateResourceResponse struct {
 
 func (x *CreateResourceResponse) Reset() {
 	*x = CreateResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[24]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2596,7 +3112,7 @@ func (x *CreateResourceResponse) String() string {
 func (*CreateResourceResponse) ProtoMessage() {}
 
 func (x *CreateResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[24]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2609,7 +3125,7 @@ func (x *CreateResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateResourceResponse.ProtoReflect.Descriptor instead.
 func (*CreateResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{24}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *CreateResourceResponse) GetResource() *Resource {
@@ -2632,7 +3148,7 @@ type UpdateResourceRequest struct {
 
 func (x *UpdateResourceRequest) Reset() {
 	*x = UpdateResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[25]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2644,7 +3160,7 @@ func (x *UpdateResourceRequest) String() string {
 func (*UpdateResourceRequest) ProtoMessage() {}
 
 func (x *UpdateResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[25]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2657,7 +3173,7 @@ func (x *UpdateResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateResourceRequest.ProtoReflect.Descriptor instead.
 func (*UpdateResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{25}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *UpdateResourceRequest) GetIdempotencyKey() string {
@@ -2704,7 +3220,7 @@ type UpdateResourceResponse struct {
 
 func (x *UpdateResourceResponse) Reset() {
 	*x = UpdateResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[26]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2716,7 +3232,7 @@ func (x *UpdateResourceResponse) String() string {
 func (*UpdateResourceResponse) ProtoMessage() {}
 
 func (x *UpdateResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[26]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2729,7 +3245,7 @@ func (x *UpdateResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateResourceResponse.ProtoReflect.Descriptor instead.
 func (*UpdateResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{26}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *UpdateResourceResponse) GetResource() *Resource {
@@ -2752,7 +3268,7 @@ type TransitionResourceRequest struct {
 
 func (x *TransitionResourceRequest) Reset() {
 	*x = TransitionResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[27]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2764,7 +3280,7 @@ func (x *TransitionResourceRequest) String() string {
 func (*TransitionResourceRequest) ProtoMessage() {}
 
 func (x *TransitionResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[27]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2777,7 +3293,7 @@ func (x *TransitionResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransitionResourceRequest.ProtoReflect.Descriptor instead.
 func (*TransitionResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{27}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *TransitionResourceRequest) GetIdempotencyKey() string {
@@ -2824,7 +3340,7 @@ type TransitionResourceResponse struct {
 
 func (x *TransitionResourceResponse) Reset() {
 	*x = TransitionResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[28]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2836,7 +3352,7 @@ func (x *TransitionResourceResponse) String() string {
 func (*TransitionResourceResponse) ProtoMessage() {}
 
 func (x *TransitionResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[28]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2849,7 +3365,7 @@ func (x *TransitionResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransitionResourceResponse.ProtoReflect.Descriptor instead.
 func (*TransitionResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{28}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *TransitionResourceResponse) GetResource() *Resource {
@@ -2870,7 +3386,7 @@ type DeleteResourceRequest struct {
 
 func (x *DeleteResourceRequest) Reset() {
 	*x = DeleteResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[29]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2882,7 +3398,7 @@ func (x *DeleteResourceRequest) String() string {
 func (*DeleteResourceRequest) ProtoMessage() {}
 
 func (x *DeleteResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[29]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2895,7 +3411,7 @@ func (x *DeleteResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteResourceRequest.ProtoReflect.Descriptor instead.
 func (*DeleteResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{29}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *DeleteResourceRequest) GetIdempotencyKey() string {
@@ -2928,7 +3444,7 @@ type DeleteResourceResponse struct {
 
 func (x *DeleteResourceResponse) Reset() {
 	*x = DeleteResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[30]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2940,7 +3456,7 @@ func (x *DeleteResourceResponse) String() string {
 func (*DeleteResourceResponse) ProtoMessage() {}
 
 func (x *DeleteResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[30]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2953,10 +3469,146 @@ func (x *DeleteResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteResourceResponse.ProtoReflect.Descriptor instead.
 func (*DeleteResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{30}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *DeleteResourceResponse) GetResource() *Resource {
+	if x != nil {
+		return x.Resource
+	}
+	return nil
+}
+
+type ManageAccessResourceRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey  string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	Kind            ResourceKind           `protobuf:"varint,2,opt,name=kind,proto3,enum=controlplane.v1.ResourceKind" json:"kind,omitempty"`
+	Action          AdministrativeAction   `protobuf:"varint,3,opt,name=action,proto3,enum=controlplane.v1.AdministrativeAction" json:"action,omitempty"`
+	ResourceId      string                 `protobuf:"bytes,4,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty"`
+	ExpectedVersion uint64                 `protobuf:"varint,5,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	Name            string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
+	Spec            *ResourceSpec          `protobuf:"bytes,7,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ManageAccessResourceRequest) Reset() {
+	*x = ManageAccessResourceRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManageAccessResourceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManageAccessResourceRequest) ProtoMessage() {}
+
+func (x *ManageAccessResourceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManageAccessResourceRequest.ProtoReflect.Descriptor instead.
+func (*ManageAccessResourceRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ManageAccessResourceRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *ManageAccessResourceRequest) GetKind() ResourceKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ResourceKind_RESOURCE_KIND_UNSPECIFIED
+}
+
+func (x *ManageAccessResourceRequest) GetAction() AdministrativeAction {
+	if x != nil {
+		return x.Action
+	}
+	return AdministrativeAction_ADMINISTRATIVE_ACTION_UNSPECIFIED
+}
+
+func (x *ManageAccessResourceRequest) GetResourceId() string {
+	if x != nil {
+		return x.ResourceId
+	}
+	return ""
+}
+
+func (x *ManageAccessResourceRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *ManageAccessResourceRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ManageAccessResourceRequest) GetSpec() *ResourceSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
+type ManageAccessResourceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Resource      *Resource              `protobuf:"bytes,1,opt,name=resource,proto3" json:"resource,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ManageAccessResourceResponse) Reset() {
+	*x = ManageAccessResourceResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManageAccessResourceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManageAccessResourceResponse) ProtoMessage() {}
+
+func (x *ManageAccessResourceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManageAccessResourceResponse.ProtoReflect.Descriptor instead.
+func (*ManageAccessResourceResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *ManageAccessResourceResponse) GetResource() *Resource {
 	if x != nil {
 		return x.Resource
 	}
@@ -2973,7 +3625,7 @@ type GetResourceRequest struct {
 
 func (x *GetResourceRequest) Reset() {
 	*x = GetResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[31]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2985,7 +3637,7 @@ func (x *GetResourceRequest) String() string {
 func (*GetResourceRequest) ProtoMessage() {}
 
 func (x *GetResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[31]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2998,7 +3650,7 @@ func (x *GetResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourceRequest.ProtoReflect.Descriptor instead.
 func (*GetResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{31}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *GetResourceRequest) GetResourceId() string {
@@ -3024,7 +3676,7 @@ type GetResourceResponse struct {
 
 func (x *GetResourceResponse) Reset() {
 	*x = GetResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[32]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3036,7 +3688,7 @@ func (x *GetResourceResponse) String() string {
 func (*GetResourceResponse) ProtoMessage() {}
 
 func (x *GetResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[32]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3049,7 +3701,7 @@ func (x *GetResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourceResponse.ProtoReflect.Descriptor instead.
 func (*GetResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{32}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *GetResourceResponse) GetResource() *Resource {
@@ -3072,7 +3724,7 @@ type ListResourcesRequest struct {
 
 func (x *ListResourcesRequest) Reset() {
 	*x = ListResourcesRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[33]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3084,7 +3736,7 @@ func (x *ListResourcesRequest) String() string {
 func (*ListResourcesRequest) ProtoMessage() {}
 
 func (x *ListResourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[33]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3097,7 +3749,7 @@ func (x *ListResourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourcesRequest.ProtoReflect.Descriptor instead.
 func (*ListResourcesRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{33}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListResourcesRequest) GetKind() ResourceKind {
@@ -3145,7 +3797,7 @@ type ListResourcesResponse struct {
 
 func (x *ListResourcesResponse) Reset() {
 	*x = ListResourcesResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[34]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3157,7 +3809,7 @@ func (x *ListResourcesResponse) String() string {
 func (*ListResourcesResponse) ProtoMessage() {}
 
 func (x *ListResourcesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[34]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3170,7 +3822,7 @@ func (x *ListResourcesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourcesResponse.ProtoReflect.Descriptor instead.
 func (*ListResourcesResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{34}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListResourcesResponse) GetResources() []*Resource {
@@ -3187,21 +3839,716 @@ func (x *ListResourcesResponse) GetNextPageToken() string {
 	return ""
 }
 
+type SearchResourcesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          ResourceKind           `protobuf:"varint,1,opt,name=kind,proto3,enum=controlplane.v1.ResourceKind" json:"kind,omitempty"`
+	Query         string                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	States        []LifecycleState       `protobuf:"varint,3,rep,packed,name=states,proto3,enum=controlplane.v1.LifecycleState" json:"states,omitempty"`
+	PageSize      uint32                 `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                 `protobuf:"bytes,5,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchResourcesRequest) Reset() {
+	*x = SearchResourcesRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchResourcesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchResourcesRequest) ProtoMessage() {}
+
+func (x *SearchResourcesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchResourcesRequest.ProtoReflect.Descriptor instead.
+func (*SearchResourcesRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *SearchResourcesRequest) GetKind() ResourceKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ResourceKind_RESOURCE_KIND_UNSPECIFIED
+}
+
+func (x *SearchResourcesRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *SearchResourcesRequest) GetStates() []LifecycleState {
+	if x != nil {
+		return x.States
+	}
+	return nil
+}
+
+func (x *SearchResourcesRequest) GetPageSize() uint32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *SearchResourcesRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type SearchResourcesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Resources     []*Resource            `protobuf:"bytes,1,rep,name=resources,proto3" json:"resources,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchResourcesResponse) Reset() {
+	*x = SearchResourcesResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchResourcesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchResourcesResponse) ProtoMessage() {}
+
+func (x *SearchResourcesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchResourcesResponse.ProtoReflect.Descriptor instead.
+func (*SearchResourcesResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *SearchResourcesResponse) GetResources() []*Resource {
+	if x != nil {
+		return x.Resources
+	}
+	return nil
+}
+
+func (x *SearchResourcesResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+type AuditEvent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Action          string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	ResourceId      string                 `protobuf:"bytes,3,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty"`
+	ResourceKind    ResourceKind           `protobuf:"varint,4,opt,name=resource_kind,json=resourceKind,proto3,enum=controlplane.v1.ResourceKind" json:"resource_kind,omitempty"`
+	ResourceVersion uint64                 `protobuf:"varint,5,opt,name=resource_version,json=resourceVersion,proto3" json:"resource_version,omitempty"`
+	Outcome         string                 `protobuf:"bytes,6,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	ActorId         string                 `protobuf:"bytes,7,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	CorrelationId   string                 `protobuf:"bytes,8,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	PolicyRevision  uint64                 `protobuf:"varint,9,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	OccurredAt      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AuditEvent) Reset() {
+	*x = AuditEvent{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuditEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuditEvent) ProtoMessage() {}
+
+func (x *AuditEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuditEvent.ProtoReflect.Descriptor instead.
+func (*AuditEvent) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *AuditEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetResourceId() string {
+	if x != nil {
+		return x.ResourceId
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetResourceKind() ResourceKind {
+	if x != nil {
+		return x.ResourceKind
+	}
+	return ResourceKind_RESOURCE_KIND_UNSPECIFIED
+}
+
+func (x *AuditEvent) GetResourceVersion() uint64 {
+	if x != nil {
+		return x.ResourceVersion
+	}
+	return 0
+}
+
+func (x *AuditEvent) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *AuditEvent) GetOccurredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OccurredAt
+	}
+	return nil
+}
+
+type ListAuditEventsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ResourceKind  ResourceKind           `protobuf:"varint,1,opt,name=resource_kind,json=resourceKind,proto3,enum=controlplane.v1.ResourceKind" json:"resource_kind,omitempty"`
+	ResourceId    string                 `protobuf:"bytes,2,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty"`
+	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
+	PageSize      uint32                 `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                 `protobuf:"bytes,5,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAuditEventsRequest) Reset() {
+	*x = ListAuditEventsRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAuditEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAuditEventsRequest) ProtoMessage() {}
+
+func (x *ListAuditEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAuditEventsRequest.ProtoReflect.Descriptor instead.
+func (*ListAuditEventsRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *ListAuditEventsRequest) GetResourceKind() ResourceKind {
+	if x != nil {
+		return x.ResourceKind
+	}
+	return ResourceKind_RESOURCE_KIND_UNSPECIFIED
+}
+
+func (x *ListAuditEventsRequest) GetResourceId() string {
+	if x != nil {
+		return x.ResourceId
+	}
+	return ""
+}
+
+func (x *ListAuditEventsRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ListAuditEventsRequest) GetPageSize() uint32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListAuditEventsRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type ListAuditEventsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*AuditEvent          `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAuditEventsResponse) Reset() {
+	*x = ListAuditEventsResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAuditEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAuditEventsResponse) ProtoMessage() {}
+
+func (x *ListAuditEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAuditEventsResponse.ProtoReflect.Descriptor instead.
+func (*ListAuditEventsResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ListAuditEventsResponse) GetEvents() []*AuditEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *ListAuditEventsResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+type ResourceTombstone struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ResourceId       string                 `protobuf:"bytes,1,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty"`
+	Kind             ResourceKind           `protobuf:"varint,2,opt,name=kind,proto3,enum=controlplane.v1.ResourceKind" json:"kind,omitempty"`
+	Version          uint64                 `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`
+	ProjectionSha256 string                 `protobuf:"bytes,4,opt,name=projection_sha256,json=projectionSha256,proto3" json:"projection_sha256,omitempty"`
+	DeletedAt        *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=deleted_at,json=deletedAt,proto3" json:"deleted_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ResourceTombstone) Reset() {
+	*x = ResourceTombstone{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResourceTombstone) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResourceTombstone) ProtoMessage() {}
+
+func (x *ResourceTombstone) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResourceTombstone.ProtoReflect.Descriptor instead.
+func (*ResourceTombstone) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *ResourceTombstone) GetResourceId() string {
+	if x != nil {
+		return x.ResourceId
+	}
+	return ""
+}
+
+func (x *ResourceTombstone) GetKind() ResourceKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ResourceKind_RESOURCE_KIND_UNSPECIFIED
+}
+
+func (x *ResourceTombstone) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *ResourceTombstone) GetProjectionSha256() string {
+	if x != nil {
+		return x.ProjectionSha256
+	}
+	return ""
+}
+
+func (x *ResourceTombstone) GetDeletedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DeletedAt
+	}
+	return nil
+}
+
+type ListTombstonesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          ResourceKind           `protobuf:"varint,1,opt,name=kind,proto3,enum=controlplane.v1.ResourceKind" json:"kind,omitempty"`
+	PageSize      uint32                 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                 `protobuf:"bytes,3,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTombstonesRequest) Reset() {
+	*x = ListTombstonesRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTombstonesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTombstonesRequest) ProtoMessage() {}
+
+func (x *ListTombstonesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTombstonesRequest.ProtoReflect.Descriptor instead.
+func (*ListTombstonesRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *ListTombstonesRequest) GetKind() ResourceKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ResourceKind_RESOURCE_KIND_UNSPECIFIED
+}
+
+func (x *ListTombstonesRequest) GetPageSize() uint32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListTombstonesRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type ListTombstonesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tombstones    []*ResourceTombstone   `protobuf:"bytes,1,rep,name=tombstones,proto3" json:"tombstones,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTombstonesResponse) Reset() {
+	*x = ListTombstonesResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTombstonesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTombstonesResponse) ProtoMessage() {}
+
+func (x *ListTombstonesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTombstonesResponse.ProtoReflect.Descriptor instead.
+func (*ListTombstonesResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *ListTombstonesResponse) GetTombstones() []*ResourceTombstone {
+	if x != nil {
+		return x.Tombstones
+	}
+	return nil
+}
+
+func (x *ListTombstonesResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+type GetDiagnosticsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDiagnosticsRequest) Reset() {
+	*x = GetDiagnosticsRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDiagnosticsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDiagnosticsRequest) ProtoMessage() {}
+
+func (x *GetDiagnosticsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDiagnosticsRequest.ProtoReflect.Descriptor instead.
+func (*GetDiagnosticsRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{46}
+}
+
+type GetDiagnosticsResponse struct {
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion              uint64                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	PendingOutboxEvents        uint64                 `protobuf:"varint,2,opt,name=pending_outbox_events,json=pendingOutboxEvents,proto3" json:"pending_outbox_events,omitempty"`
+	TerminalOutboxEvents       uint64                 `protobuf:"varint,3,opt,name=terminal_outbox_events,json=terminalOutboxEvents,proto3" json:"terminal_outbox_events,omitempty"`
+	OldestPendingAge           *durationpb.Duration   `protobuf:"bytes,4,opt,name=oldest_pending_age,json=oldestPendingAge,proto3" json:"oldest_pending_age,omitempty"`
+	ActiveTurnLeases           uint64                 `protobuf:"varint,5,opt,name=active_turn_leases,json=activeTurnLeases,proto3" json:"active_turn_leases,omitempty"`
+	QueuedScheduleOccurrences  uint64                 `protobuf:"varint,6,opt,name=queued_schedule_occurrences,json=queuedScheduleOccurrences,proto3" json:"queued_schedule_occurrences,omitempty"`
+	RuntimePrincipalStatus     string                 `protobuf:"bytes,7,opt,name=runtime_principal_status,json=runtimePrincipalStatus,proto3" json:"runtime_principal_status,omitempty"`
+	RuntimePrincipalGeneration uint64                 `protobuf:"varint,8,opt,name=runtime_principal_generation,json=runtimePrincipalGeneration,proto3" json:"runtime_principal_generation,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *GetDiagnosticsResponse) Reset() {
+	*x = GetDiagnosticsResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDiagnosticsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDiagnosticsResponse) ProtoMessage() {}
+
+func (x *GetDiagnosticsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDiagnosticsResponse.ProtoReflect.Descriptor instead.
+func (*GetDiagnosticsResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *GetDiagnosticsResponse) GetSchemaVersion() uint64 {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return 0
+}
+
+func (x *GetDiagnosticsResponse) GetPendingOutboxEvents() uint64 {
+	if x != nil {
+		return x.PendingOutboxEvents
+	}
+	return 0
+}
+
+func (x *GetDiagnosticsResponse) GetTerminalOutboxEvents() uint64 {
+	if x != nil {
+		return x.TerminalOutboxEvents
+	}
+	return 0
+}
+
+func (x *GetDiagnosticsResponse) GetOldestPendingAge() *durationpb.Duration {
+	if x != nil {
+		return x.OldestPendingAge
+	}
+	return nil
+}
+
+func (x *GetDiagnosticsResponse) GetActiveTurnLeases() uint64 {
+	if x != nil {
+		return x.ActiveTurnLeases
+	}
+	return 0
+}
+
+func (x *GetDiagnosticsResponse) GetQueuedScheduleOccurrences() uint64 {
+	if x != nil {
+		return x.QueuedScheduleOccurrences
+	}
+	return 0
+}
+
+func (x *GetDiagnosticsResponse) GetRuntimePrincipalStatus() string {
+	if x != nil {
+		return x.RuntimePrincipalStatus
+	}
+	return ""
+}
+
+func (x *GetDiagnosticsResponse) GetRuntimePrincipalGeneration() uint64 {
+	if x != nil {
+		return x.RuntimePrincipalGeneration
+	}
+	return 0
+}
+
 type EnqueueTurnRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	IdempotencyKey    string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	SessionId         string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	SourceRef         string                 `protobuf:"bytes,3,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
-	PromptArtifactId  string                 `protobuf:"bytes,4,opt,name=prompt_artifact_id,json=promptArtifactId,proto3" json:"prompt_artifact_id,omitempty"`
-	ProcessRunId      string                 `protobuf:"bytes,5,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
-	RuntimeRevisionId string                 `protobuf:"bytes,6,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey   string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	SessionId        string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SourceRef        string                 `protobuf:"bytes,3,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	PromptArtifactId string                 `protobuf:"bytes,4,opt,name=prompt_artifact_id,json=promptArtifactId,proto3" json:"prompt_artifact_id,omitempty"`
+	ProcessRunId     string                 `protobuf:"bytes,5,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *EnqueueTurnRequest) Reset() {
 	*x = EnqueueTurnRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[35]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3213,7 +4560,7 @@ func (x *EnqueueTurnRequest) String() string {
 func (*EnqueueTurnRequest) ProtoMessage() {}
 
 func (x *EnqueueTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[35]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3226,7 +4573,7 @@ func (x *EnqueueTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnqueueTurnRequest.ProtoReflect.Descriptor instead.
 func (*EnqueueTurnRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{35}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *EnqueueTurnRequest) GetIdempotencyKey() string {
@@ -3264,13 +4611,6 @@ func (x *EnqueueTurnRequest) GetProcessRunId() string {
 	return ""
 }
 
-func (x *EnqueueTurnRequest) GetRuntimeRevisionId() string {
-	if x != nil {
-		return x.RuntimeRevisionId
-	}
-	return ""
-}
-
 type EnqueueTurnResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Turn          *Resource              `protobuf:"bytes,1,opt,name=turn,proto3" json:"turn,omitempty"`
@@ -3280,7 +4620,7 @@ type EnqueueTurnResponse struct {
 
 func (x *EnqueueTurnResponse) Reset() {
 	*x = EnqueueTurnResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[36]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3292,7 +4632,7 @@ func (x *EnqueueTurnResponse) String() string {
 func (*EnqueueTurnResponse) ProtoMessage() {}
 
 func (x *EnqueueTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[36]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3305,7 +4645,7 @@ func (x *EnqueueTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnqueueTurnResponse.ProtoReflect.Descriptor instead.
 func (*EnqueueTurnResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{36}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *EnqueueTurnResponse) GetTurn() *Resource {
@@ -3324,7 +4664,7 @@ type ClaimTurnRequest struct {
 
 func (x *ClaimTurnRequest) Reset() {
 	*x = ClaimTurnRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[37]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3336,7 +4676,7 @@ func (x *ClaimTurnRequest) String() string {
 func (*ClaimTurnRequest) ProtoMessage() {}
 
 func (x *ClaimTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[37]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3349,7 +4689,7 @@ func (x *ClaimTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimTurnRequest.ProtoReflect.Descriptor instead.
 func (*ClaimTurnRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{37}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ClaimTurnRequest) GetIdempotencyKey() string {
@@ -3360,17 +4700,19 @@ func (x *ClaimTurnRequest) GetIdempotencyKey() string {
 }
 
 type ClaimTurnResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Turn           *Resource              `protobuf:"bytes,1,opt,name=turn,proto3" json:"turn,omitempty"`
-	LeaseToken     string                 `protobuf:"bytes,2,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
-	LeaseExpiresAt *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Turn                *Resource              `protobuf:"bytes,1,opt,name=turn,proto3" json:"turn,omitempty"`
+	LeaseToken          string                 `protobuf:"bytes,2,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
+	LeaseExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
+	Attempt             uint32                 `protobuf:"varint,4,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	AuthorityGeneration uint64                 `protobuf:"varint,5,opt,name=authority_generation,json=authorityGeneration,proto3" json:"authority_generation,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *ClaimTurnResponse) Reset() {
 	*x = ClaimTurnResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[38]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3382,7 +4724,7 @@ func (x *ClaimTurnResponse) String() string {
 func (*ClaimTurnResponse) ProtoMessage() {}
 
 func (x *ClaimTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[38]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3395,7 +4737,7 @@ func (x *ClaimTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimTurnResponse.ProtoReflect.Descriptor instead.
 func (*ClaimTurnResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{38}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ClaimTurnResponse) GetTurn() *Resource {
@@ -3419,22 +4761,190 @@ func (x *ClaimTurnResponse) GetLeaseExpiresAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *ClaimTurnResponse) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *ClaimTurnResponse) GetAuthorityGeneration() uint64 {
+	if x != nil {
+		return x.AuthorityGeneration
+	}
+	return 0
+}
+
+type RenewTurnRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey  string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	TurnId          string                 `protobuf:"bytes,2,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
+	LeaseToken      string                 `protobuf:"bytes,3,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
+	ExpectedVersion uint64                 `protobuf:"varint,4,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	Attempt         uint32                 `protobuf:"varint,5,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RenewTurnRequest) Reset() {
+	*x = RenewTurnRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenewTurnRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenewTurnRequest) ProtoMessage() {}
+
+func (x *RenewTurnRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenewTurnRequest.ProtoReflect.Descriptor instead.
+func (*RenewTurnRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *RenewTurnRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *RenewTurnRequest) GetTurnId() string {
+	if x != nil {
+		return x.TurnId
+	}
+	return ""
+}
+
+func (x *RenewTurnRequest) GetLeaseToken() string {
+	if x != nil {
+		return x.LeaseToken
+	}
+	return ""
+}
+
+func (x *RenewTurnRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *RenewTurnRequest) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+type RenewTurnResponse struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Turn                *Resource              `protobuf:"bytes,1,opt,name=turn,proto3" json:"turn,omitempty"`
+	LeaseToken          string                 `protobuf:"bytes,2,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
+	LeaseExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
+	Attempt             uint32                 `protobuf:"varint,4,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	AuthorityGeneration uint64                 `protobuf:"varint,5,opt,name=authority_generation,json=authorityGeneration,proto3" json:"authority_generation,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *RenewTurnResponse) Reset() {
+	*x = RenewTurnResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenewTurnResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenewTurnResponse) ProtoMessage() {}
+
+func (x *RenewTurnResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenewTurnResponse.ProtoReflect.Descriptor instead.
+func (*RenewTurnResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *RenewTurnResponse) GetTurn() *Resource {
+	if x != nil {
+		return x.Turn
+	}
+	return nil
+}
+
+func (x *RenewTurnResponse) GetLeaseToken() string {
+	if x != nil {
+		return x.LeaseToken
+	}
+	return ""
+}
+
+func (x *RenewTurnResponse) GetLeaseExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LeaseExpiresAt
+	}
+	return nil
+}
+
+func (x *RenewTurnResponse) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *RenewTurnResponse) GetAuthorityGeneration() uint64 {
+	if x != nil {
+		return x.AuthorityGeneration
+	}
+	return 0
+}
+
 type CompleteTurnRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	IdempotencyKey   string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	TurnId           string                 `protobuf:"bytes,2,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
-	LeaseToken       string                 `protobuf:"bytes,3,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
-	ExpectedVersion  uint64                 `protobuf:"varint,4,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
-	TerminalState    LifecycleState         `protobuf:"varint,5,opt,name=terminal_state,json=terminalState,proto3,enum=controlplane.v1.LifecycleState" json:"terminal_state,omitempty"`
-	Outcome          string                 `protobuf:"bytes,6,opt,name=outcome,proto3" json:"outcome,omitempty"`
-	ResultArtifactId string                 `protobuf:"bytes,7,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey      string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	TurnId              string                 `protobuf:"bytes,2,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
+	LeaseToken          string                 `protobuf:"bytes,3,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
+	ExpectedVersion     uint64                 `protobuf:"varint,4,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	TerminalState       LifecycleState         `protobuf:"varint,5,opt,name=terminal_state,json=terminalState,proto3,enum=controlplane.v1.LifecycleState" json:"terminal_state,omitempty"`
+	Outcome             string                 `protobuf:"bytes,6,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	ResultArtifactId    string                 `protobuf:"bytes,7,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
+	Attempt             uint32                 `protobuf:"varint,8,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	AuthorityGeneration uint64                 `protobuf:"varint,9,opt,name=authority_generation,json=authorityGeneration,proto3" json:"authority_generation,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *CompleteTurnRequest) Reset() {
 	*x = CompleteTurnRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[39]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3446,7 +4956,7 @@ func (x *CompleteTurnRequest) String() string {
 func (*CompleteTurnRequest) ProtoMessage() {}
 
 func (x *CompleteTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[39]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3459,7 +4969,7 @@ func (x *CompleteTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteTurnRequest.ProtoReflect.Descriptor instead.
 func (*CompleteTurnRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{39}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *CompleteTurnRequest) GetIdempotencyKey() string {
@@ -3511,6 +5021,20 @@ func (x *CompleteTurnRequest) GetResultArtifactId() string {
 	return ""
 }
 
+func (x *CompleteTurnRequest) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *CompleteTurnRequest) GetAuthorityGeneration() uint64 {
+	if x != nil {
+		return x.AuthorityGeneration
+	}
+	return 0
+}
+
 type CompleteTurnResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Turn          *Resource              `protobuf:"bytes,1,opt,name=turn,proto3" json:"turn,omitempty"`
@@ -3520,7 +5044,7 @@ type CompleteTurnResponse struct {
 
 func (x *CompleteTurnResponse) Reset() {
 	*x = CompleteTurnResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[40]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3532,7 +5056,7 @@ func (x *CompleteTurnResponse) String() string {
 func (*CompleteTurnResponse) ProtoMessage() {}
 
 func (x *CompleteTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[40]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3545,12 +5069,364 @@ func (x *CompleteTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteTurnResponse.ProtoReflect.Descriptor instead.
 func (*CompleteTurnResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{40}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *CompleteTurnResponse) GetTurn() *Resource {
 	if x != nil {
 		return x.Turn
+	}
+	return nil
+}
+
+type RetryTurnRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey  string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	TurnId          string                 `protobuf:"bytes,2,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
+	ExpectedVersion uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	ReasonCode      string                 `protobuf:"bytes,4,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RetryTurnRequest) Reset() {
+	*x = RetryTurnRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetryTurnRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetryTurnRequest) ProtoMessage() {}
+
+func (x *RetryTurnRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetryTurnRequest.ProtoReflect.Descriptor instead.
+func (*RetryTurnRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *RetryTurnRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *RetryTurnRequest) GetTurnId() string {
+	if x != nil {
+		return x.TurnId
+	}
+	return ""
+}
+
+func (x *RetryTurnRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *RetryTurnRequest) GetReasonCode() string {
+	if x != nil {
+		return x.ReasonCode
+	}
+	return ""
+}
+
+type RetryTurnResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Turn          *Resource              `protobuf:"bytes,1,opt,name=turn,proto3" json:"turn,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RetryTurnResponse) Reset() {
+	*x = RetryTurnResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetryTurnResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetryTurnResponse) ProtoMessage() {}
+
+func (x *RetryTurnResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetryTurnResponse.ProtoReflect.Descriptor instead.
+func (*RetryTurnResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *RetryTurnResponse) GetTurn() *Resource {
+	if x != nil {
+		return x.Turn
+	}
+	return nil
+}
+
+type CancelTurnRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey  string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	TurnId          string                 `protobuf:"bytes,2,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
+	ExpectedVersion uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	ReasonCode      string                 `protobuf:"bytes,4,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CancelTurnRequest) Reset() {
+	*x = CancelTurnRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelTurnRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelTurnRequest) ProtoMessage() {}
+
+func (x *CancelTurnRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelTurnRequest.ProtoReflect.Descriptor instead.
+func (*CancelTurnRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *CancelTurnRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *CancelTurnRequest) GetTurnId() string {
+	if x != nil {
+		return x.TurnId
+	}
+	return ""
+}
+
+func (x *CancelTurnRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *CancelTurnRequest) GetReasonCode() string {
+	if x != nil {
+		return x.ReasonCode
+	}
+	return ""
+}
+
+type CancelTurnResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Turn          *Resource              `protobuf:"bytes,1,opt,name=turn,proto3" json:"turn,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelTurnResponse) Reset() {
+	*x = CancelTurnResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelTurnResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelTurnResponse) ProtoMessage() {}
+
+func (x *CancelTurnResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelTurnResponse.ProtoReflect.Descriptor instead.
+func (*CancelTurnResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *CancelTurnResponse) GetTurn() *Resource {
+	if x != nil {
+		return x.Turn
+	}
+	return nil
+}
+
+type ManageScheduleRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey  string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	Action          AdministrativeAction   `protobuf:"varint,2,opt,name=action,proto3,enum=controlplane.v1.AdministrativeAction" json:"action,omitempty"`
+	ScheduleId      string                 `protobuf:"bytes,3,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"`
+	ExpectedVersion uint64                 `protobuf:"varint,4,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	Name            string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	Spec            *ScheduleSpec          `protobuf:"bytes,6,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ManageScheduleRequest) Reset() {
+	*x = ManageScheduleRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManageScheduleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManageScheduleRequest) ProtoMessage() {}
+
+func (x *ManageScheduleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManageScheduleRequest.ProtoReflect.Descriptor instead.
+func (*ManageScheduleRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *ManageScheduleRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *ManageScheduleRequest) GetAction() AdministrativeAction {
+	if x != nil {
+		return x.Action
+	}
+	return AdministrativeAction_ADMINISTRATIVE_ACTION_UNSPECIFIED
+}
+
+func (x *ManageScheduleRequest) GetScheduleId() string {
+	if x != nil {
+		return x.ScheduleId
+	}
+	return ""
+}
+
+func (x *ManageScheduleRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *ManageScheduleRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ManageScheduleRequest) GetSpec() *ScheduleSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
+type ManageScheduleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Schedule      *Resource              `protobuf:"bytes,1,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ManageScheduleResponse) Reset() {
+	*x = ManageScheduleResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManageScheduleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManageScheduleResponse) ProtoMessage() {}
+
+func (x *ManageScheduleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManageScheduleResponse.ProtoReflect.Descriptor instead.
+func (*ManageScheduleResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *ManageScheduleResponse) GetSchedule() *Resource {
+	if x != nil {
+		return x.Schedule
 	}
 	return nil
 }
@@ -3565,7 +5441,7 @@ type ClaimDueSchedulesRequest struct {
 
 func (x *ClaimDueSchedulesRequest) Reset() {
 	*x = ClaimDueSchedulesRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[41]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3577,7 +5453,7 @@ func (x *ClaimDueSchedulesRequest) String() string {
 func (*ClaimDueSchedulesRequest) ProtoMessage() {}
 
 func (x *ClaimDueSchedulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[41]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3590,7 +5466,7 @@ func (x *ClaimDueSchedulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimDueSchedulesRequest.ProtoReflect.Descriptor instead.
 func (*ClaimDueSchedulesRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{41}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ClaimDueSchedulesRequest) GetIdempotencyKey() string {
@@ -3608,18 +5484,28 @@ func (x *ClaimDueSchedulesRequest) GetLimit() uint32 {
 }
 
 type ScheduleOccurrence struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	ScheduleId       string                 `protobuf:"bytes,1,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"`
-	ScheduledFor     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduled_for,omitempty"`
-	OccurrenceId     string                 `protobuf:"bytes,3,opt,name=occurrence_id,json=occurrenceId,proto3" json:"occurrence_id,omitempty"`
-	TargetResourceId string                 `protobuf:"bytes,4,opt,name=target_resource_id,json=targetResourceId,proto3" json:"target_resource_id,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                protoimpl.MessageState  `protogen:"open.v1"`
+	ScheduleId           string                  `protobuf:"bytes,1,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"`
+	ScheduledFor         *timestamppb.Timestamp  `protobuf:"bytes,2,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduled_for,omitempty"`
+	OccurrenceId         string                  `protobuf:"bytes,3,opt,name=occurrence_id,json=occurrenceId,proto3" json:"occurrence_id,omitempty"`
+	TargetResourceId     string                  `protobuf:"bytes,4,opt,name=target_resource_id,json=targetResourceId,proto3" json:"target_resource_id,omitempty"`
+	TargetKind           ResourceKind            `protobuf:"varint,5,opt,name=target_kind,json=targetKind,proto3,enum=controlplane.v1.ResourceKind" json:"target_kind,omitempty"`
+	TargetVersion        uint64                  `protobuf:"varint,6,opt,name=target_version,json=targetVersion,proto3" json:"target_version,omitempty"`
+	EffectiveInputSha256 string                  `protobuf:"bytes,7,opt,name=effective_input_sha256,json=effectiveInputSha256,proto3" json:"effective_input_sha256,omitempty"`
+	State                ScheduleOccurrenceState `protobuf:"varint,8,opt,name=state,proto3,enum=controlplane.v1.ScheduleOccurrenceState" json:"state,omitempty"`
+	Attempt              uint32                  `protobuf:"varint,9,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	ClaimantWorkloadId   string                  `protobuf:"bytes,10,opt,name=claimant_workload_id,json=claimantWorkloadId,proto3" json:"claimant_workload_id,omitempty"`
+	AuthorityGeneration  uint64                  `protobuf:"varint,11,opt,name=authority_generation,json=authorityGeneration,proto3" json:"authority_generation,omitempty"`
+	LeaseExpiresAt       *timestamppb.Timestamp  `protobuf:"bytes,12,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
+	AvailableAt          *timestamppb.Timestamp  `protobuf:"bytes,13,opt,name=available_at,json=availableAt,proto3" json:"available_at,omitempty"`
+	Outcome              string                  `protobuf:"bytes,14,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *ScheduleOccurrence) Reset() {
 	*x = ScheduleOccurrence{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[42]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3631,7 +5517,7 @@ func (x *ScheduleOccurrence) String() string {
 func (*ScheduleOccurrence) ProtoMessage() {}
 
 func (x *ScheduleOccurrence) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[42]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3644,7 +5530,7 @@ func (x *ScheduleOccurrence) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleOccurrence.ProtoReflect.Descriptor instead.
 func (*ScheduleOccurrence) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{42}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ScheduleOccurrence) GetScheduleId() string {
@@ -3675,6 +5561,76 @@ func (x *ScheduleOccurrence) GetTargetResourceId() string {
 	return ""
 }
 
+func (x *ScheduleOccurrence) GetTargetKind() ResourceKind {
+	if x != nil {
+		return x.TargetKind
+	}
+	return ResourceKind_RESOURCE_KIND_UNSPECIFIED
+}
+
+func (x *ScheduleOccurrence) GetTargetVersion() uint64 {
+	if x != nil {
+		return x.TargetVersion
+	}
+	return 0
+}
+
+func (x *ScheduleOccurrence) GetEffectiveInputSha256() string {
+	if x != nil {
+		return x.EffectiveInputSha256
+	}
+	return ""
+}
+
+func (x *ScheduleOccurrence) GetState() ScheduleOccurrenceState {
+	if x != nil {
+		return x.State
+	}
+	return ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED
+}
+
+func (x *ScheduleOccurrence) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *ScheduleOccurrence) GetClaimantWorkloadId() string {
+	if x != nil {
+		return x.ClaimantWorkloadId
+	}
+	return ""
+}
+
+func (x *ScheduleOccurrence) GetAuthorityGeneration() uint64 {
+	if x != nil {
+		return x.AuthorityGeneration
+	}
+	return 0
+}
+
+func (x *ScheduleOccurrence) GetLeaseExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LeaseExpiresAt
+	}
+	return nil
+}
+
+func (x *ScheduleOccurrence) GetAvailableAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.AvailableAt
+	}
+	return nil
+}
+
+func (x *ScheduleOccurrence) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
 type ClaimDueSchedulesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Occurrences   []*ScheduleOccurrence  `protobuf:"bytes,1,rep,name=occurrences,proto3" json:"occurrences,omitempty"`
@@ -3684,7 +5640,7 @@ type ClaimDueSchedulesResponse struct {
 
 func (x *ClaimDueSchedulesResponse) Reset() {
 	*x = ClaimDueSchedulesResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[43]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3696,7 +5652,7 @@ func (x *ClaimDueSchedulesResponse) String() string {
 func (*ClaimDueSchedulesResponse) ProtoMessage() {}
 
 func (x *ClaimDueSchedulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[43]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3709,7 +5665,7 @@ func (x *ClaimDueSchedulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimDueSchedulesResponse.ProtoReflect.Descriptor instead.
 func (*ClaimDueSchedulesResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{43}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *ClaimDueSchedulesResponse) GetOccurrences() []*ScheduleOccurrence {
@@ -3719,20 +5675,914 @@ func (x *ClaimDueSchedulesResponse) GetOccurrences() []*ScheduleOccurrence {
 	return nil
 }
 
-type ResolveOwnerGateRequest struct {
+type ClaimScheduleOccurrenceRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ClaimScheduleOccurrenceRequest) Reset() {
+	*x = ClaimScheduleOccurrenceRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimScheduleOccurrenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimScheduleOccurrenceRequest) ProtoMessage() {}
+
+func (x *ClaimScheduleOccurrenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimScheduleOccurrenceRequest.ProtoReflect.Descriptor instead.
+func (*ClaimScheduleOccurrenceRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *ClaimScheduleOccurrenceRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type ClaimScheduleOccurrenceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Occurrence    *ScheduleOccurrence    `protobuf:"bytes,1,opt,name=occurrence,proto3" json:"occurrence,omitempty"`
+	LeaseToken    string                 `protobuf:"bytes,2,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimScheduleOccurrenceResponse) Reset() {
+	*x = ClaimScheduleOccurrenceResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimScheduleOccurrenceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimScheduleOccurrenceResponse) ProtoMessage() {}
+
+func (x *ClaimScheduleOccurrenceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimScheduleOccurrenceResponse.ProtoReflect.Descriptor instead.
+func (*ClaimScheduleOccurrenceResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *ClaimScheduleOccurrenceResponse) GetOccurrence() *ScheduleOccurrence {
+	if x != nil {
+		return x.Occurrence
+	}
+	return nil
+}
+
+func (x *ClaimScheduleOccurrenceResponse) GetLeaseToken() string {
+	if x != nil {
+		return x.LeaseToken
+	}
+	return ""
+}
+
+type CompleteScheduleOccurrenceRequest struct {
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	IdempotencyKey   string                  `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	OccurrenceId     string                  `protobuf:"bytes,2,opt,name=occurrence_id,json=occurrenceId,proto3" json:"occurrence_id,omitempty"`
+	LeaseToken       string                  `protobuf:"bytes,3,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
+	ExpectedAttempt  uint32                  `protobuf:"varint,4,opt,name=expected_attempt,json=expectedAttempt,proto3" json:"expected_attempt,omitempty"`
+	TerminalState    ScheduleOccurrenceState `protobuf:"varint,5,opt,name=terminal_state,json=terminalState,proto3,enum=controlplane.v1.ScheduleOccurrenceState" json:"terminal_state,omitempty"`
+	Outcome          string                  `protobuf:"bytes,6,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	ResultArtifactId string                  `protobuf:"bytes,7,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CompleteScheduleOccurrenceRequest) Reset() {
+	*x = CompleteScheduleOccurrenceRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompleteScheduleOccurrenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompleteScheduleOccurrenceRequest) ProtoMessage() {}
+
+func (x *CompleteScheduleOccurrenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompleteScheduleOccurrenceRequest.ProtoReflect.Descriptor instead.
+func (*CompleteScheduleOccurrenceRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *CompleteScheduleOccurrenceRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *CompleteScheduleOccurrenceRequest) GetOccurrenceId() string {
+	if x != nil {
+		return x.OccurrenceId
+	}
+	return ""
+}
+
+func (x *CompleteScheduleOccurrenceRequest) GetLeaseToken() string {
+	if x != nil {
+		return x.LeaseToken
+	}
+	return ""
+}
+
+func (x *CompleteScheduleOccurrenceRequest) GetExpectedAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedAttempt
+	}
+	return 0
+}
+
+func (x *CompleteScheduleOccurrenceRequest) GetTerminalState() ScheduleOccurrenceState {
+	if x != nil {
+		return x.TerminalState
+	}
+	return ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED
+}
+
+func (x *CompleteScheduleOccurrenceRequest) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *CompleteScheduleOccurrenceRequest) GetResultArtifactId() string {
+	if x != nil {
+		return x.ResultArtifactId
+	}
+	return ""
+}
+
+type CompleteScheduleOccurrenceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Occurrence    *ScheduleOccurrence    `protobuf:"bytes,1,opt,name=occurrence,proto3" json:"occurrence,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompleteScheduleOccurrenceResponse) Reset() {
+	*x = CompleteScheduleOccurrenceResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompleteScheduleOccurrenceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompleteScheduleOccurrenceResponse) ProtoMessage() {}
+
+func (x *CompleteScheduleOccurrenceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompleteScheduleOccurrenceResponse.ProtoReflect.Descriptor instead.
+func (*CompleteScheduleOccurrenceResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *CompleteScheduleOccurrenceResponse) GetOccurrence() *ScheduleOccurrence {
+	if x != nil {
+		return x.Occurrence
+	}
+	return nil
+}
+
+type CancelScheduleOccurrenceRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	IdempotencyKey  string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	OwnerGateId     string                 `protobuf:"bytes,2,opt,name=owner_gate_id,json=ownerGateId,proto3" json:"owner_gate_id,omitempty"`
-	ExpectedVersion uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
-	Decision        OwnerGateDecision      `protobuf:"varint,4,opt,name=decision,proto3,enum=controlplane.v1.OwnerGateDecision" json:"decision,omitempty"`
-	Reason          string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	OccurrenceId    string                 `protobuf:"bytes,2,opt,name=occurrence_id,json=occurrenceId,proto3" json:"occurrence_id,omitempty"`
+	ExpectedAttempt uint32                 `protobuf:"varint,3,opt,name=expected_attempt,json=expectedAttempt,proto3" json:"expected_attempt,omitempty"`
+	ReasonCode      string                 `protobuf:"bytes,4,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
+func (x *CancelScheduleOccurrenceRequest) Reset() {
+	*x = CancelScheduleOccurrenceRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelScheduleOccurrenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelScheduleOccurrenceRequest) ProtoMessage() {}
+
+func (x *CancelScheduleOccurrenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelScheduleOccurrenceRequest.ProtoReflect.Descriptor instead.
+func (*CancelScheduleOccurrenceRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *CancelScheduleOccurrenceRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *CancelScheduleOccurrenceRequest) GetOccurrenceId() string {
+	if x != nil {
+		return x.OccurrenceId
+	}
+	return ""
+}
+
+func (x *CancelScheduleOccurrenceRequest) GetExpectedAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedAttempt
+	}
+	return 0
+}
+
+func (x *CancelScheduleOccurrenceRequest) GetReasonCode() string {
+	if x != nil {
+		return x.ReasonCode
+	}
+	return ""
+}
+
+type CancelScheduleOccurrenceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Occurrence    *ScheduleOccurrence    `protobuf:"bytes,1,opt,name=occurrence,proto3" json:"occurrence,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelScheduleOccurrenceResponse) Reset() {
+	*x = CancelScheduleOccurrenceResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelScheduleOccurrenceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelScheduleOccurrenceResponse) ProtoMessage() {}
+
+func (x *CancelScheduleOccurrenceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelScheduleOccurrenceResponse.ProtoReflect.Descriptor instead.
+func (*CancelScheduleOccurrenceResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *CancelScheduleOccurrenceResponse) GetOccurrence() *ScheduleOccurrence {
+	if x != nil {
+		return x.Occurrence
+	}
+	return nil
+}
+
+type ListScheduleOccurrencesRequest struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	ScheduleId    string                    `protobuf:"bytes,1,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"`
+	States        []ScheduleOccurrenceState `protobuf:"varint,2,rep,packed,name=states,proto3,enum=controlplane.v1.ScheduleOccurrenceState" json:"states,omitempty"`
+	PageSize      uint32                    `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                    `protobuf:"bytes,4,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListScheduleOccurrencesRequest) Reset() {
+	*x = ListScheduleOccurrencesRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListScheduleOccurrencesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListScheduleOccurrencesRequest) ProtoMessage() {}
+
+func (x *ListScheduleOccurrencesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListScheduleOccurrencesRequest.ProtoReflect.Descriptor instead.
+func (*ListScheduleOccurrencesRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *ListScheduleOccurrencesRequest) GetScheduleId() string {
+	if x != nil {
+		return x.ScheduleId
+	}
+	return ""
+}
+
+func (x *ListScheduleOccurrencesRequest) GetStates() []ScheduleOccurrenceState {
+	if x != nil {
+		return x.States
+	}
+	return nil
+}
+
+func (x *ListScheduleOccurrencesRequest) GetPageSize() uint32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListScheduleOccurrencesRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type ListScheduleOccurrencesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Occurrences   []*ScheduleOccurrence  `protobuf:"bytes,1,rep,name=occurrences,proto3" json:"occurrences,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListScheduleOccurrencesResponse) Reset() {
+	*x = ListScheduleOccurrencesResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListScheduleOccurrencesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListScheduleOccurrencesResponse) ProtoMessage() {}
+
+func (x *ListScheduleOccurrencesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListScheduleOccurrencesResponse.ProtoReflect.Descriptor instead.
+func (*ListScheduleOccurrencesResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *ListScheduleOccurrencesResponse) GetOccurrences() []*ScheduleOccurrence {
+	if x != nil {
+		return x.Occurrences
+	}
+	return nil
+}
+
+func (x *ListScheduleOccurrencesResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+type StartProcessRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey     string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	Name               string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	ParentProcessRunId string                 `protobuf:"bytes,3,opt,name=parent_process_run_id,json=parentProcessRunId,proto3" json:"parent_process_run_id,omitempty"`
+	PlaybookRef        string                 `protobuf:"bytes,4,opt,name=playbook_ref,json=playbookRef,proto3" json:"playbook_ref,omitempty"`
+	PolicyRevision     uint64                 `protobuf:"varint,5,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	RootTriggerRef     string                 `protobuf:"bytes,6,opt,name=root_trigger_ref,json=rootTriggerRef,proto3" json:"root_trigger_ref,omitempty"`
+	RootSessionId      string                 `protobuf:"bytes,7,opt,name=root_session_id,json=rootSessionId,proto3" json:"root_session_id,omitempty"`
+	RootTurnId         string                 `protobuf:"bytes,8,opt,name=root_turn_id,json=rootTurnId,proto3" json:"root_turn_id,omitempty"`
+	RootAttempt        uint32                 `protobuf:"varint,9,opt,name=root_attempt,json=rootAttempt,proto3" json:"root_attempt,omitempty"`
+	InputArtifactId    string                 `protobuf:"bytes,10,opt,name=input_artifact_id,json=inputArtifactId,proto3" json:"input_artifact_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *StartProcessRequest) Reset() {
+	*x = StartProcessRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[73]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartProcessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartProcessRequest) ProtoMessage() {}
+
+func (x *StartProcessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[73]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartProcessRequest.ProtoReflect.Descriptor instead.
+func (*StartProcessRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{73}
+}
+
+func (x *StartProcessRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *StartProcessRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *StartProcessRequest) GetParentProcessRunId() string {
+	if x != nil {
+		return x.ParentProcessRunId
+	}
+	return ""
+}
+
+func (x *StartProcessRequest) GetPlaybookRef() string {
+	if x != nil {
+		return x.PlaybookRef
+	}
+	return ""
+}
+
+func (x *StartProcessRequest) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *StartProcessRequest) GetRootTriggerRef() string {
+	if x != nil {
+		return x.RootTriggerRef
+	}
+	return ""
+}
+
+func (x *StartProcessRequest) GetRootSessionId() string {
+	if x != nil {
+		return x.RootSessionId
+	}
+	return ""
+}
+
+func (x *StartProcessRequest) GetRootTurnId() string {
+	if x != nil {
+		return x.RootTurnId
+	}
+	return ""
+}
+
+func (x *StartProcessRequest) GetRootAttempt() uint32 {
+	if x != nil {
+		return x.RootAttempt
+	}
+	return 0
+}
+
+func (x *StartProcessRequest) GetInputArtifactId() string {
+	if x != nil {
+		return x.InputArtifactId
+	}
+	return ""
+}
+
+type StartProcessResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProcessRun    *Resource              `protobuf:"bytes,1,opt,name=process_run,json=processRun,proto3" json:"process_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartProcessResponse) Reset() {
+	*x = StartProcessResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[74]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartProcessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartProcessResponse) ProtoMessage() {}
+
+func (x *StartProcessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[74]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartProcessResponse.ProtoReflect.Descriptor instead.
+func (*StartProcessResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{74}
+}
+
+func (x *StartProcessResponse) GetProcessRun() *Resource {
+	if x != nil {
+		return x.ProcessRun
+	}
+	return nil
+}
+
+type CancelProcessRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey  string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	ProcessRunId    string                 `protobuf:"bytes,2,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
+	ExpectedVersion uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	ReasonCode      string                 `protobuf:"bytes,4,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CancelProcessRequest) Reset() {
+	*x = CancelProcessRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[75]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelProcessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelProcessRequest) ProtoMessage() {}
+
+func (x *CancelProcessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[75]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelProcessRequest.ProtoReflect.Descriptor instead.
+func (*CancelProcessRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{75}
+}
+
+func (x *CancelProcessRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *CancelProcessRequest) GetProcessRunId() string {
+	if x != nil {
+		return x.ProcessRunId
+	}
+	return ""
+}
+
+func (x *CancelProcessRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *CancelProcessRequest) GetReasonCode() string {
+	if x != nil {
+		return x.ReasonCode
+	}
+	return ""
+}
+
+type CancelProcessResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProcessRun    *Resource              `protobuf:"bytes,1,opt,name=process_run,json=processRun,proto3" json:"process_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelProcessResponse) Reset() {
+	*x = CancelProcessResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[76]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelProcessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelProcessResponse) ProtoMessage() {}
+
+func (x *CancelProcessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[76]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelProcessResponse.ProtoReflect.Descriptor instead.
+func (*CancelProcessResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{76}
+}
+
+func (x *CancelProcessResponse) GetProcessRun() *Resource {
+	if x != nil {
+		return x.ProcessRun
+	}
+	return nil
+}
+
+type RequestOwnerGateRequest struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey         string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	ProcessRunId           string                 `protobuf:"bytes,2,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
+	ProcessExpectedVersion uint64                 `protobuf:"varint,3,opt,name=process_expected_version,json=processExpectedVersion,proto3" json:"process_expected_version,omitempty"`
+	SessionId              string                 `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	TurnId                 string                 `protobuf:"bytes,5,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
+	Attempt                uint32                 `protobuf:"varint,6,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	ResultArtifactId       string                 `protobuf:"bytes,7,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
+	ExpiresAt              *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *RequestOwnerGateRequest) Reset() {
+	*x = RequestOwnerGateRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[77]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestOwnerGateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestOwnerGateRequest) ProtoMessage() {}
+
+func (x *RequestOwnerGateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[77]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestOwnerGateRequest.ProtoReflect.Descriptor instead.
+func (*RequestOwnerGateRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{77}
+}
+
+func (x *RequestOwnerGateRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *RequestOwnerGateRequest) GetProcessRunId() string {
+	if x != nil {
+		return x.ProcessRunId
+	}
+	return ""
+}
+
+func (x *RequestOwnerGateRequest) GetProcessExpectedVersion() uint64 {
+	if x != nil {
+		return x.ProcessExpectedVersion
+	}
+	return 0
+}
+
+func (x *RequestOwnerGateRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *RequestOwnerGateRequest) GetTurnId() string {
+	if x != nil {
+		return x.TurnId
+	}
+	return ""
+}
+
+func (x *RequestOwnerGateRequest) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *RequestOwnerGateRequest) GetResultArtifactId() string {
+	if x != nil {
+		return x.ResultArtifactId
+	}
+	return ""
+}
+
+func (x *RequestOwnerGateRequest) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+type RequestOwnerGateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerGate     *Resource              `protobuf:"bytes,1,opt,name=owner_gate,json=ownerGate,proto3" json:"owner_gate,omitempty"`
+	ProcessRun    *Resource              `protobuf:"bytes,2,opt,name=process_run,json=processRun,proto3" json:"process_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestOwnerGateResponse) Reset() {
+	*x = RequestOwnerGateResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[78]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestOwnerGateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestOwnerGateResponse) ProtoMessage() {}
+
+func (x *RequestOwnerGateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[78]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestOwnerGateResponse.ProtoReflect.Descriptor instead.
+func (*RequestOwnerGateResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{78}
+}
+
+func (x *RequestOwnerGateResponse) GetOwnerGate() *Resource {
+	if x != nil {
+		return x.OwnerGate
+	}
+	return nil
+}
+
+func (x *RequestOwnerGateResponse) GetProcessRun() *Resource {
+	if x != nil {
+		return x.ProcessRun
+	}
+	return nil
+}
+
+type ResolveOwnerGateRequest struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey         string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	OwnerGateId            string                 `protobuf:"bytes,2,opt,name=owner_gate_id,json=ownerGateId,proto3" json:"owner_gate_id,omitempty"`
+	ExpectedVersion        uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	Decision               OwnerGateDecision      `protobuf:"varint,4,opt,name=decision,proto3,enum=controlplane.v1.OwnerGateDecision" json:"decision,omitempty"`
+	Reason                 string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	ProcessRunId           string                 `protobuf:"bytes,6,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
+	ProcessExpectedVersion uint64                 `protobuf:"varint,7,opt,name=process_expected_version,json=processExpectedVersion,proto3" json:"process_expected_version,omitempty"`
+	SessionId              string                 `protobuf:"bytes,8,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	TurnId                 string                 `protobuf:"bytes,9,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
+	Attempt                uint32                 `protobuf:"varint,10,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	ImmutableInputSha256   string                 `protobuf:"bytes,11,opt,name=immutable_input_sha256,json=immutableInputSha256,proto3" json:"immutable_input_sha256,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
 func (x *ResolveOwnerGateRequest) Reset() {
 	*x = ResolveOwnerGateRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[44]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3744,7 +6594,7 @@ func (x *ResolveOwnerGateRequest) String() string {
 func (*ResolveOwnerGateRequest) ProtoMessage() {}
 
 func (x *ResolveOwnerGateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[44]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3757,7 +6607,7 @@ func (x *ResolveOwnerGateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveOwnerGateRequest.ProtoReflect.Descriptor instead.
 func (*ResolveOwnerGateRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{44}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *ResolveOwnerGateRequest) GetIdempotencyKey() string {
@@ -3795,16 +6645,59 @@ func (x *ResolveOwnerGateRequest) GetReason() string {
 	return ""
 }
 
+func (x *ResolveOwnerGateRequest) GetProcessRunId() string {
+	if x != nil {
+		return x.ProcessRunId
+	}
+	return ""
+}
+
+func (x *ResolveOwnerGateRequest) GetProcessExpectedVersion() uint64 {
+	if x != nil {
+		return x.ProcessExpectedVersion
+	}
+	return 0
+}
+
+func (x *ResolveOwnerGateRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ResolveOwnerGateRequest) GetTurnId() string {
+	if x != nil {
+		return x.TurnId
+	}
+	return ""
+}
+
+func (x *ResolveOwnerGateRequest) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *ResolveOwnerGateRequest) GetImmutableInputSha256() string {
+	if x != nil {
+		return x.ImmutableInputSha256
+	}
+	return ""
+}
+
 type ResolveOwnerGateResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OwnerGate     *Resource              `protobuf:"bytes,1,opt,name=owner_gate,json=ownerGate,proto3" json:"owner_gate,omitempty"`
+	ProcessRun    *Resource              `protobuf:"bytes,2,opt,name=process_run,json=processRun,proto3" json:"process_run,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResolveOwnerGateResponse) Reset() {
 	*x = ResolveOwnerGateResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[45]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3816,7 +6709,7 @@ func (x *ResolveOwnerGateResponse) String() string {
 func (*ResolveOwnerGateResponse) ProtoMessage() {}
 
 func (x *ResolveOwnerGateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[45]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3829,12 +6722,259 @@ func (x *ResolveOwnerGateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveOwnerGateResponse.ProtoReflect.Descriptor instead.
 func (*ResolveOwnerGateResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{45}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *ResolveOwnerGateResponse) GetOwnerGate() *Resource {
 	if x != nil {
 		return x.OwnerGate
+	}
+	return nil
+}
+
+func (x *ResolveOwnerGateResponse) GetProcessRun() *Resource {
+	if x != nil {
+		return x.ProcessRun
+	}
+	return nil
+}
+
+type RegisterArtifactRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	ParentId       string                 `protobuf:"bytes,3,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	Spec           *ArtifactSpec          `protobuf:"bytes,4,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RegisterArtifactRequest) Reset() {
+	*x = RegisterArtifactRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterArtifactRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterArtifactRequest) ProtoMessage() {}
+
+func (x *RegisterArtifactRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterArtifactRequest.ProtoReflect.Descriptor instead.
+func (*RegisterArtifactRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *RegisterArtifactRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *RegisterArtifactRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RegisterArtifactRequest) GetParentId() string {
+	if x != nil {
+		return x.ParentId
+	}
+	return ""
+}
+
+func (x *RegisterArtifactRequest) GetSpec() *ArtifactSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
+type RegisterArtifactResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Artifact      *Resource              `protobuf:"bytes,1,opt,name=artifact,proto3" json:"artifact,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterArtifactResponse) Reset() {
+	*x = RegisterArtifactResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterArtifactResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterArtifactResponse) ProtoMessage() {}
+
+func (x *RegisterArtifactResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterArtifactResponse.ProtoReflect.Descriptor instead.
+func (*RegisterArtifactResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *RegisterArtifactResponse) GetArtifact() *Resource {
+	if x != nil {
+		return x.Artifact
+	}
+	return nil
+}
+
+type RecordArtifactScanRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey     string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	ArtifactId         string                 `protobuf:"bytes,2,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
+	ExpectedVersion    uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	TargetState        ArtifactScanState      `protobuf:"varint,4,opt,name=target_state,json=targetState,proto3,enum=controlplane.v1.ArtifactScanState" json:"target_state,omitempty"`
+	ScanPolicyRevision uint64                 `protobuf:"varint,5,opt,name=scan_policy_revision,json=scanPolicyRevision,proto3" json:"scan_policy_revision,omitempty"`
+	ScanEvidenceSha256 string                 `protobuf:"bytes,6,opt,name=scan_evidence_sha256,json=scanEvidenceSha256,proto3" json:"scan_evidence_sha256,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *RecordArtifactScanRequest) Reset() {
+	*x = RecordArtifactScanRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordArtifactScanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordArtifactScanRequest) ProtoMessage() {}
+
+func (x *RecordArtifactScanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordArtifactScanRequest.ProtoReflect.Descriptor instead.
+func (*RecordArtifactScanRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *RecordArtifactScanRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *RecordArtifactScanRequest) GetArtifactId() string {
+	if x != nil {
+		return x.ArtifactId
+	}
+	return ""
+}
+
+func (x *RecordArtifactScanRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *RecordArtifactScanRequest) GetTargetState() ArtifactScanState {
+	if x != nil {
+		return x.TargetState
+	}
+	return ArtifactScanState_ARTIFACT_SCAN_STATE_UNSPECIFIED
+}
+
+func (x *RecordArtifactScanRequest) GetScanPolicyRevision() uint64 {
+	if x != nil {
+		return x.ScanPolicyRevision
+	}
+	return 0
+}
+
+func (x *RecordArtifactScanRequest) GetScanEvidenceSha256() string {
+	if x != nil {
+		return x.ScanEvidenceSha256
+	}
+	return ""
+}
+
+type RecordArtifactScanResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Artifact      *Resource              `protobuf:"bytes,1,opt,name=artifact,proto3" json:"artifact,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordArtifactScanResponse) Reset() {
+	*x = RecordArtifactScanResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordArtifactScanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordArtifactScanResponse) ProtoMessage() {}
+
+func (x *RecordArtifactScanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordArtifactScanResponse.ProtoReflect.Descriptor instead.
+func (*RecordArtifactScanResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *RecordArtifactScanResponse) GetArtifact() *Resource {
+	if x != nil {
+		return x.Artifact
 	}
 	return nil
 }
@@ -3847,7 +6987,7 @@ type CheckReadinessRequest struct {
 
 func (x *CheckReadinessRequest) Reset() {
 	*x = CheckReadinessRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[46]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3859,7 +6999,7 @@ func (x *CheckReadinessRequest) String() string {
 func (*CheckReadinessRequest) ProtoMessage() {}
 
 func (x *CheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[46]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3872,7 +7012,7 @@ func (x *CheckReadinessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*CheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{46}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{85}
 }
 
 type CheckReadinessResponse struct {
@@ -3889,7 +7029,7 @@ type CheckReadinessResponse struct {
 
 func (x *CheckReadinessResponse) Reset() {
 	*x = CheckReadinessResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[47]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3901,7 +7041,7 @@ func (x *CheckReadinessResponse) String() string {
 func (*CheckReadinessResponse) ProtoMessage() {}
 
 func (x *CheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[47]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3914,7 +7054,7 @@ func (x *CheckReadinessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*CheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{47}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *CheckReadinessResponse) GetReady() bool {
@@ -3971,7 +7111,7 @@ type ErrorDetail struct {
 
 func (x *ErrorDetail) Reset() {
 	*x = ErrorDetail{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[48]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3983,7 +7123,7 @@ func (x *ErrorDetail) String() string {
 func (*ErrorDetail) ProtoMessage() {}
 
 func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[48]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3996,7 +7136,7 @@ func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorDetail.ProtoReflect.Descriptor instead.
 func (*ErrorDetail) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{48}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *ErrorDetail) GetReason() ErrorReason {
@@ -4095,21 +7235,36 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12definition_version\x18\x02 \x01(\x04R\x11definitionVersion\x12\"\n" +
 	"\fcapabilities\x18\x03 \x03(\tR\fcapabilities\x124\n" +
 	"\x16credential_binding_ids\x18\x04 \x03(\tR\x14credentialBindingIds\x12!\n" +
-	"\fendpoint_ref\x18\x05 \x01(\tR\vendpointRef\"\x95\x02\n" +
+	"\fendpoint_ref\x18\x05 \x01(\tR\vendpointRef\"\xc3\x04\n" +
 	"\x13RuntimeRevisionSpec\x12'\n" +
 	"\x0fmanifest_sha256\x18\x01 \x01(\tR\x0emanifestSha256\x12!\n" +
 	"\fimage_digest\x18\x02 \x01(\tR\vimageDigest\x12*\n" +
 	"\x11prompt_profile_id\x18\x03 \x01(\tR\x0fpromptProfileId\x12'\n" +
 	"\x0fprompt_revision\x18\x04 \x01(\x04R\x0epromptRevision\x124\n" +
 	"\x16credential_binding_ids\x18\x05 \x03(\tR\x14credentialBindingIds\x12'\n" +
-	"\x0fintegration_ids\x18\x06 \x03(\tR\x0eintegrationIds\"\xdf\x01\n" +
+	"\x0fintegration_ids\x18\x06 \x03(\tR\x0eintegrationIds\x126\n" +
+	"\x17predecessor_revision_id\x18\a \x01(\tR\x15predecessorRevisionId\x12:\n" +
+	"\x19authority_policy_revision\x18\b \x01(\x04R\x17authorityPolicyRevision\x126\n" +
+	"\x17authority_policy_sha256\x18\t \x01(\tR\x15authorityPolicySha256\x12E\n" +
+	"\n" +
+	"components\x18\n" +
+	" \x03(\v2%.controlplane.v1.EffectiveResourceRefR\n" +
+	"components\x129\n" +
+	"\n" +
+	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xb1\x01\n" +
+	"\x14EffectiveResourceRef\x121\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\x04kind\x12\x1f\n" +
+	"\vresource_id\x18\x02 \x01(\tR\n" +
+	"resourceId\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\x04R\aversion\x12+\n" +
+	"\x11projection_sha256\x18\x04 \x01(\tR\x10projectionSha256\"\xdf\x01\n" +
 	"\vSessionSpec\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12=\n" +
 	"\x1bprovider_account_binding_id\x18\x02 \x01(\tR\x18providerAccountBindingId\x12'\n" +
 	"\x0fconversation_id\x18\x03 \x01(\tR\x0econversationId\x12\x1f\n" +
 	"\varchive_ref\x18\x04 \x01(\tR\n" +
 	"archiveRef\x12,\n" +
-	"\x12last_turn_sequence\x18\x05 \x01(\x04R\x10lastTurnSequence\"\xca\x02\n" +
+	"\x12last_turn_sequence\x18\x05 \x01(\x04R\x10lastTurnSequence\"\xb0\x03\n" +
 	"\bTurnSpec\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1a\n" +
@@ -4121,13 +7276,23 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0eprocess_run_id\x18\x06 \x01(\tR\fprocessRunId\x12\x18\n" +
 	"\aattempt\x18\a \x01(\rR\aattempt\x12\x18\n" +
 	"\aoutcome\x18\b \x01(\tR\aoutcome\x12,\n" +
-	"\x12result_artifact_id\x18\t \x01(\tR\x10resultArtifactId\"\xe7\x01\n" +
+	"\x12result_artifact_id\x18\t \x01(\tR\x10resultArtifactId\x124\n" +
+	"\x16effective_input_sha256\x18\n" +
+	" \x01(\tR\x14effectiveInputSha256\x12.\n" +
+	"\x13predecessor_turn_id\x18\v \x01(\tR\x11predecessorTurnId\"\xc1\x03\n" +
 	"\x0eProcessRunSpec\x121\n" +
 	"\x15parent_process_run_id\x18\x01 \x01(\tR\x12parentProcessRunId\x12!\n" +
 	"\fplaybook_ref\x18\x02 \x01(\tR\vplaybookRef\x12'\n" +
 	"\x0fpolicy_revision\x18\x03 \x01(\x04R\x0epolicyRevision\x12(\n" +
 	"\x10root_trigger_ref\x18\x04 \x01(\tR\x0erootTriggerRef\x12,\n" +
-	"\x12result_artifact_id\x18\x05 \x01(\tR\x10resultArtifactId\"\xbd\x03\n" +
+	"\x12result_artifact_id\x18\x05 \x01(\tR\x10resultArtifactId\x125\n" +
+	"\x17root_initiator_actor_id\x18\x06 \x01(\tR\x14rootInitiatorActorId\x12&\n" +
+	"\x0froot_session_id\x18\a \x01(\tR\rrootSessionId\x12 \n" +
+	"\froot_turn_id\x18\b \x01(\tR\n" +
+	"rootTurnId\x12!\n" +
+	"\froot_attempt\x18\t \x01(\rR\vrootAttempt\x124\n" +
+	"\x16immutable_input_sha256\x18\n" +
+	" \x01(\tR\x14immutableInputSha256\"\x99\a\n" +
 	"\fScheduleSpec\x12,\n" +
 	"\x12target_resource_id\x18\x01 \x01(\tR\x10targetResourceId\x12\x12\n" +
 	"\x04cron\x18\x02 \x01(\tR\x04cron\x125\n" +
@@ -4136,7 +7301,18 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0eoverlap_policy\x18\x05 \x01(\x0e2&.controlplane.v1.ScheduleOverlapPolicyR\roverlapPolicy\x12M\n" +
 	"\x0emisfire_policy\x18\x06 \x01(\x0e2&.controlplane.v1.ScheduleMisfirePolicyR\rmisfirePolicy\x12>\n" +
 	"\rmisfire_grace\x18\a \x01(\v2\x19.google.protobuf.DurationR\fmisfireGrace\x12:\n" +
-	"\vnext_run_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tnextRunAt\"\x9d\x02\n" +
+	"\vnext_run_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tnextRunAt\x12>\n" +
+	"\vtarget_kind\x18\t \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\n" +
+	"targetKind\x12%\n" +
+	"\x0etarget_version\x18\n" +
+	" \x01(\x04R\rtargetVersion\x124\n" +
+	"\x16effective_input_sha256\x18\v \x01(\tR\x14effectiveInputSha256\x12\x1a\n" +
+	"\bcalendar\x18\f \x01(\tR\bcalendar\x12'\n" +
+	"\x0fdelivery_policy\x18\r \x01(\tR\x0edeliveryPolicy\x12)\n" +
+	"\x10maximum_attempts\x18\x0e \x01(\rR\x0fmaximumAttempts\x12B\n" +
+	"\x0finitial_backoff\x18\x0f \x01(\v2\x19.google.protobuf.DurationR\x0einitialBackoff\x12B\n" +
+	"\x0fmaximum_backoff\x18\x10 \x01(\v2\x19.google.protobuf.DurationR\x0emaximumBackoff\x12E\n" +
+	"\x11dead_letter_after\x18\x11 \x01(\v2\x19.google.protobuf.DurationR\x0fdeadLetterAfter\"\xea\x04\n" +
 	"\rOwnerGateSpec\x12$\n" +
 	"\x0eprocess_run_id\x18\x01 \x01(\tR\fprocessRunId\x12\x1d\n" +
 	"\n" +
@@ -4145,7 +7321,17 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12>\n" +
 	"\bdecision\x18\x05 \x01(\x0e2\".controlplane.v1.OwnerGateDecisionR\bdecision\x12'\n" +
-	"\x0fdecision_reason\x18\x06 \x01(\tR\x0edecisionReason\"\xd8\x01\n" +
+	"\x0fdecision_reason\x18\x06 \x01(\tR\x0edecisionReason\x125\n" +
+	"\x17root_initiator_actor_id\x18\a \x01(\tR\x14rootInitiatorActorId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\b \x01(\tR\tsessionId\x12\x17\n" +
+	"\aturn_id\x18\t \x01(\tR\x06turnId\x12\x18\n" +
+	"\aattempt\x18\n" +
+	" \x01(\rR\aattempt\x124\n" +
+	"\x16immutable_input_sha256\x18\v \x01(\tR\x14immutableInputSha256\x12,\n" +
+	"\x12recipient_actor_id\x18\f \x01(\tR\x10recipientActorId\x120\n" +
+	"\x14delivery_workload_id\x18\r \x01(\tR\x12deliveryWorkloadId\x12,\n" +
+	"\x12delivery_spiffe_id\x18\x0e \x01(\tR\x10deliverySpiffeId\"\xd8\x01\n" +
 	"\x10MemoryRecordSpec\x12\x14\n" +
 	"\x05scope\x18\x01 \x01(\tR\x05scope\x12\x17\n" +
 	"\arole_id\x18\x02 \x01(\tR\x06roleId\x12\x14\n" +
@@ -4163,7 +7349,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\aturn_id\x18\x02 \x01(\tR\x06turnId\x12\x18\n" +
 	"\asummary\x18\x03 \x01(\tR\asummary\x12\x18\n" +
 	"\adomains\x18\x04 \x03(\tR\adomains\x12#\n" +
-	"\rresource_keys\x18\x05 \x03(\tR\fresourceKeys\"\x8a\x02\n" +
+	"\rresource_keys\x18\x05 \x03(\tR\fresourceKeys\"\xfd\x03\n" +
 	"\fArtifactSpec\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1c\n" +
 	"\tdirection\x18\x02 \x01(\tR\tdirection\x12\x1f\n" +
@@ -4173,10 +7359,16 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"size_bytes\x18\x04 \x01(\x04R\tsizeBytes\x12\x1d\n" +
 	"\n" +
 	"media_type\x18\x05 \x01(\tR\tmediaType\x12\x16\n" +
-	"\x06sha256\x18\x06 \x01(\tR\x06sha256\x12\x1f\n" +
-	"\vscan_status\x18\a \x01(\tR\n" +
+	"\x06sha256\x18\x06 \x01(\tR\x06sha256\x12C\n" +
+	"\vscan_status\x18\a \x01(\x0e2\".controlplane.v1.ArtifactScanStateR\n" +
 	"scanStatus\x120\n" +
-	"\x14retention_policy_ref\x18\b \x01(\tR\x12retentionPolicyRef\"\xf7\b\n" +
+	"\x14retention_policy_ref\x18\b \x01(\tR\x12retentionPolicyRef\x120\n" +
+	"\x14scan_policy_revision\x18\t \x01(\x04R\x12scanPolicyRevision\x120\n" +
+	"\x14scan_evidence_sha256\x18\n" +
+	" \x01(\tR\x12scanEvidenceSha256\x12.\n" +
+	"\x13scanner_workload_id\x18\v \x01(\tR\x11scannerWorkloadId\x129\n" +
+	"\n" +
+	"scanned_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tscannedAt\"\xf7\b\n" +
 	"\fResourceSpec\x128\n" +
 	"\aproject\x18\x01 \x01(\v2\x1c.controlplane.v1.ProjectSpecH\x00R\aproject\x12/\n" +
 	"\x04team\x18\x02 \x01(\v2\x19.controlplane.v1.TeamSpecH\x00R\x04team\x12/\n" +
@@ -4249,6 +7441,17 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"resourceId\x12)\n" +
 	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\"O\n" +
 	"\x16DeleteResourceResponse\x125\n" +
+	"\bresource\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\bresource\"\xcb\x02\n" +
+	"\x1bManageAccessResourceRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x121\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\x04kind\x12=\n" +
+	"\x06action\x18\x03 \x01(\x0e2%.controlplane.v1.AdministrativeActionR\x06action\x12\x1f\n" +
+	"\vresource_id\x18\x04 \x01(\tR\n" +
+	"resourceId\x12)\n" +
+	"\x10expected_version\x18\x05 \x01(\x04R\x0fexpectedVersion\x12\x12\n" +
+	"\x04name\x18\x06 \x01(\tR\x04name\x121\n" +
+	"\x04spec\x18\a \x01(\v2\x1d.controlplane.v1.ResourceSpecR\x04spec\"U\n" +
+	"\x1cManageAccessResourceResponse\x125\n" +
 	"\bresource\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\bresource\"y\n" +
 	"\x12GetResourceRequest\x12\x1f\n" +
 	"\vresource_id\x18\x01 \x01(\tR\n" +
@@ -4266,7 +7469,71 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"project_id\"x\n" +
 	"\x15ListResourcesResponse\x127\n" +
 	"\tresources\x18\x01 \x03(\v2\x19.controlplane.v1.ResourceR\tresources\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xff\x01\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xd6\x01\n" +
+	"\x16SearchResourcesRequest\x121\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\x04kind\x12\x14\n" +
+	"\x05query\x18\x02 \x01(\tR\x05query\x127\n" +
+	"\x06states\x18\x03 \x03(\x0e2\x1f.controlplane.v1.LifecycleStateR\x06states\x12\x1b\n" +
+	"\tpage_size\x18\x04 \x01(\rR\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x05 \x01(\tR\tpageToken\"z\n" +
+	"\x17SearchResourcesResponse\x127\n" +
+	"\tresources\x18\x01 \x03(\v2\x19.controlplane.v1.ResourceR\tresources\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x86\x03\n" +
+	"\n" +
+	"AuditEvent\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1f\n" +
+	"\vresource_id\x18\x03 \x01(\tR\n" +
+	"resourceId\x12B\n" +
+	"\rresource_kind\x18\x04 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\fresourceKind\x12)\n" +
+	"\x10resource_version\x18\x05 \x01(\x04R\x0fresourceVersion\x12\x18\n" +
+	"\aoutcome\x18\x06 \x01(\tR\aoutcome\x12\x19\n" +
+	"\bactor_id\x18\a \x01(\tR\aactorId\x12%\n" +
+	"\x0ecorrelation_id\x18\b \x01(\tR\rcorrelationId\x12'\n" +
+	"\x0fpolicy_revision\x18\t \x01(\x04R\x0epolicyRevision\x12;\n" +
+	"\voccurred_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"occurredAt\"\xd1\x01\n" +
+	"\x16ListAuditEventsRequest\x12B\n" +
+	"\rresource_kind\x18\x01 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\fresourceKind\x12\x1f\n" +
+	"\vresource_id\x18\x02 \x01(\tR\n" +
+	"resourceId\x12\x16\n" +
+	"\x06action\x18\x03 \x01(\tR\x06action\x12\x1b\n" +
+	"\tpage_size\x18\x04 \x01(\rR\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x05 \x01(\tR\tpageToken\"v\n" +
+	"\x17ListAuditEventsResponse\x123\n" +
+	"\x06events\x18\x01 \x03(\v2\x1b.controlplane.v1.AuditEventR\x06events\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xe9\x01\n" +
+	"\x11ResourceTombstone\x12\x1f\n" +
+	"\vresource_id\x18\x01 \x01(\tR\n" +
+	"resourceId\x121\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\x04kind\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\x04R\aversion\x12+\n" +
+	"\x11projection_sha256\x18\x04 \x01(\tR\x10projectionSha256\x129\n" +
+	"\n" +
+	"deleted_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tdeletedAt\"\x86\x01\n" +
+	"\x15ListTombstonesRequest\x121\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\x04kind\x12\x1b\n" +
+	"\tpage_size\x18\x02 \x01(\rR\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x03 \x01(\tR\tpageToken\"\x84\x01\n" +
+	"\x16ListTombstonesResponse\x12B\n" +
+	"\n" +
+	"tombstones\x18\x01 \x03(\v2\".controlplane.v1.ResourceTombstoneR\n" +
+	"tombstones\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x17\n" +
+	"\x15GetDiagnosticsRequest\"\xdc\x03\n" +
+	"\x16GetDiagnosticsResponse\x12%\n" +
+	"\x0eschema_version\x18\x01 \x01(\x04R\rschemaVersion\x122\n" +
+	"\x15pending_outbox_events\x18\x02 \x01(\x04R\x13pendingOutboxEvents\x124\n" +
+	"\x16terminal_outbox_events\x18\x03 \x01(\x04R\x14terminalOutboxEvents\x12G\n" +
+	"\x12oldest_pending_age\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x10oldestPendingAge\x12,\n" +
+	"\x12active_turn_leases\x18\x05 \x01(\x04R\x10activeTurnLeases\x12>\n" +
+	"\x1bqueued_schedule_occurrences\x18\x06 \x01(\x04R\x19queuedScheduleOccurrences\x128\n" +
+	"\x18runtime_principal_status\x18\a \x01(\tR\x16runtimePrincipalStatus\x12@\n" +
+	"\x1cruntime_principal_generation\x18\b \x01(\x04R\x1aruntimePrincipalGeneration\"\xea\x01\n" +
 	"\x12EnqueueTurnRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x1d\n" +
 	"\n" +
@@ -4274,17 +7541,32 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"source_ref\x18\x03 \x01(\tR\tsourceRef\x12,\n" +
 	"\x12prompt_artifact_id\x18\x04 \x01(\tR\x10promptArtifactId\x12$\n" +
-	"\x0eprocess_run_id\x18\x05 \x01(\tR\fprocessRunId\x12.\n" +
-	"\x13runtime_revision_id\x18\x06 \x01(\tR\x11runtimeRevisionId\"D\n" +
+	"\x0eprocess_run_id\x18\x05 \x01(\tR\fprocessRunIdJ\x04\b\x06\x10\aR\x13runtime_revision_id\"D\n" +
 	"\x13EnqueueTurnResponse\x12-\n" +
 	"\x04turn\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x04turn\";\n" +
 	"\x10ClaimTurnRequest\x12'\n" +
-	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\xa9\x01\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\xf6\x01\n" +
 	"\x11ClaimTurnResponse\x12-\n" +
 	"\x04turn\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x04turn\x12\x1f\n" +
 	"\vlease_token\x18\x02 \x01(\tR\n" +
 	"leaseToken\x12D\n" +
-	"\x10lease_expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0eleaseExpiresAt\"\xb3\x02\n" +
+	"\x10lease_expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0eleaseExpiresAt\x12\x18\n" +
+	"\aattempt\x18\x04 \x01(\rR\aattempt\x121\n" +
+	"\x14authority_generation\x18\x05 \x01(\x04R\x13authorityGeneration\"\xba\x01\n" +
+	"\x10RenewTurnRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x17\n" +
+	"\aturn_id\x18\x02 \x01(\tR\x06turnId\x12\x1f\n" +
+	"\vlease_token\x18\x03 \x01(\tR\n" +
+	"leaseToken\x12)\n" +
+	"\x10expected_version\x18\x04 \x01(\x04R\x0fexpectedVersion\x12\x18\n" +
+	"\aattempt\x18\x05 \x01(\rR\aattempt\"\xf6\x01\n" +
+	"\x11RenewTurnResponse\x12-\n" +
+	"\x04turn\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x04turn\x12\x1f\n" +
+	"\vlease_token\x18\x02 \x01(\tR\n" +
+	"leaseToken\x12D\n" +
+	"\x10lease_expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0eleaseExpiresAt\x12\x18\n" +
+	"\aattempt\x18\x04 \x01(\rR\aattempt\x121\n" +
+	"\x14authority_generation\x18\x05 \x01(\x04R\x13authorityGeneration\"\x80\x03\n" +
 	"\x13CompleteTurnRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x17\n" +
 	"\aturn_id\x18\x02 \x01(\tR\x06turnId\x12\x1f\n" +
@@ -4293,29 +7575,178 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10expected_version\x18\x04 \x01(\x04R\x0fexpectedVersion\x12F\n" +
 	"\x0eterminal_state\x18\x05 \x01(\x0e2\x1f.controlplane.v1.LifecycleStateR\rterminalState\x12\x18\n" +
 	"\aoutcome\x18\x06 \x01(\tR\aoutcome\x12,\n" +
-	"\x12result_artifact_id\x18\a \x01(\tR\x10resultArtifactId\"E\n" +
+	"\x12result_artifact_id\x18\a \x01(\tR\x10resultArtifactId\x12\x18\n" +
+	"\aattempt\x18\b \x01(\rR\aattempt\x121\n" +
+	"\x14authority_generation\x18\t \x01(\x04R\x13authorityGeneration\"E\n" +
 	"\x14CompleteTurnResponse\x12-\n" +
-	"\x04turn\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x04turn\"Y\n" +
+	"\x04turn\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x04turn\"\xa0\x01\n" +
+	"\x10RetryTurnRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x17\n" +
+	"\aturn_id\x18\x02 \x01(\tR\x06turnId\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\x12\x1f\n" +
+	"\vreason_code\x18\x04 \x01(\tR\n" +
+	"reasonCode\"B\n" +
+	"\x11RetryTurnResponse\x12-\n" +
+	"\x04turn\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x04turn\"\xa1\x01\n" +
+	"\x11CancelTurnRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x17\n" +
+	"\aturn_id\x18\x02 \x01(\tR\x06turnId\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\x12\x1f\n" +
+	"\vreason_code\x18\x04 \x01(\tR\n" +
+	"reasonCode\"C\n" +
+	"\x12CancelTurnResponse\x12-\n" +
+	"\x04turn\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x04turn\"\x92\x02\n" +
+	"\x15ManageScheduleRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12=\n" +
+	"\x06action\x18\x02 \x01(\x0e2%.controlplane.v1.AdministrativeActionR\x06action\x12\x1f\n" +
+	"\vschedule_id\x18\x03 \x01(\tR\n" +
+	"scheduleId\x12)\n" +
+	"\x10expected_version\x18\x04 \x01(\x04R\x0fexpectedVersion\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\x121\n" +
+	"\x04spec\x18\x06 \x01(\v2\x1d.controlplane.v1.ScheduleSpecR\x04spec\"O\n" +
+	"\x16ManageScheduleResponse\x125\n" +
+	"\bschedule\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\bschedule\"Y\n" +
 	"\x18ClaimDueSchedulesRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\rR\x05limit\"\xc9\x01\n" +
+	"\x05limit\x18\x02 \x01(\rR\x05limit\"\xc4\x05\n" +
 	"\x12ScheduleOccurrence\x12\x1f\n" +
 	"\vschedule_id\x18\x01 \x01(\tR\n" +
 	"scheduleId\x12?\n" +
 	"\rscheduled_for\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\fscheduledFor\x12#\n" +
 	"\roccurrence_id\x18\x03 \x01(\tR\foccurrenceId\x12,\n" +
-	"\x12target_resource_id\x18\x04 \x01(\tR\x10targetResourceId\"b\n" +
+	"\x12target_resource_id\x18\x04 \x01(\tR\x10targetResourceId\x12>\n" +
+	"\vtarget_kind\x18\x05 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\n" +
+	"targetKind\x12%\n" +
+	"\x0etarget_version\x18\x06 \x01(\x04R\rtargetVersion\x124\n" +
+	"\x16effective_input_sha256\x18\a \x01(\tR\x14effectiveInputSha256\x12>\n" +
+	"\x05state\x18\b \x01(\x0e2(.controlplane.v1.ScheduleOccurrenceStateR\x05state\x12\x18\n" +
+	"\aattempt\x18\t \x01(\rR\aattempt\x120\n" +
+	"\x14claimant_workload_id\x18\n" +
+	" \x01(\tR\x12claimantWorkloadId\x121\n" +
+	"\x14authority_generation\x18\v \x01(\x04R\x13authorityGeneration\x12D\n" +
+	"\x10lease_expires_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\x0eleaseExpiresAt\x12=\n" +
+	"\favailable_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\vavailableAt\x12\x18\n" +
+	"\aoutcome\x18\x0e \x01(\tR\aoutcome\"b\n" +
 	"\x19ClaimDueSchedulesResponse\x12E\n" +
-	"\voccurrences\x18\x01 \x03(\v2#.controlplane.v1.ScheduleOccurrenceR\voccurrences\"\xe9\x01\n" +
+	"\voccurrences\x18\x01 \x03(\v2#.controlplane.v1.ScheduleOccurrenceR\voccurrences\"I\n" +
+	"\x1eClaimScheduleOccurrenceRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\x87\x01\n" +
+	"\x1fClaimScheduleOccurrenceResponse\x12C\n" +
+	"\n" +
+	"occurrence\x18\x01 \x01(\v2#.controlplane.v1.ScheduleOccurrenceR\n" +
+	"occurrence\x12\x1f\n" +
+	"\vlease_token\x18\x02 \x01(\tR\n" +
+	"leaseToken\"\xd6\x02\n" +
+	"!CompleteScheduleOccurrenceRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12#\n" +
+	"\roccurrence_id\x18\x02 \x01(\tR\foccurrenceId\x12\x1f\n" +
+	"\vlease_token\x18\x03 \x01(\tR\n" +
+	"leaseToken\x12)\n" +
+	"\x10expected_attempt\x18\x04 \x01(\rR\x0fexpectedAttempt\x12O\n" +
+	"\x0eterminal_state\x18\x05 \x01(\x0e2(.controlplane.v1.ScheduleOccurrenceStateR\rterminalState\x12\x18\n" +
+	"\aoutcome\x18\x06 \x01(\tR\aoutcome\x12,\n" +
+	"\x12result_artifact_id\x18\a \x01(\tR\x10resultArtifactId\"i\n" +
+	"\"CompleteScheduleOccurrenceResponse\x12C\n" +
+	"\n" +
+	"occurrence\x18\x01 \x01(\v2#.controlplane.v1.ScheduleOccurrenceR\n" +
+	"occurrence\"\xbb\x01\n" +
+	"\x1fCancelScheduleOccurrenceRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12#\n" +
+	"\roccurrence_id\x18\x02 \x01(\tR\foccurrenceId\x12)\n" +
+	"\x10expected_attempt\x18\x03 \x01(\rR\x0fexpectedAttempt\x12\x1f\n" +
+	"\vreason_code\x18\x04 \x01(\tR\n" +
+	"reasonCode\"g\n" +
+	" CancelScheduleOccurrenceResponse\x12C\n" +
+	"\n" +
+	"occurrence\x18\x01 \x01(\v2#.controlplane.v1.ScheduleOccurrenceR\n" +
+	"occurrence\"\xbf\x01\n" +
+	"\x1eListScheduleOccurrencesRequest\x12\x1f\n" +
+	"\vschedule_id\x18\x01 \x01(\tR\n" +
+	"scheduleId\x12@\n" +
+	"\x06states\x18\x02 \x03(\x0e2(.controlplane.v1.ScheduleOccurrenceStateR\x06states\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\rR\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x04 \x01(\tR\tpageToken\"\x90\x01\n" +
+	"\x1fListScheduleOccurrencesResponse\x12E\n" +
+	"\voccurrences\x18\x01 \x03(\v2#.controlplane.v1.ScheduleOccurrenceR\voccurrences\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x94\x03\n" +
+	"\x13StartProcessRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x121\n" +
+	"\x15parent_process_run_id\x18\x03 \x01(\tR\x12parentProcessRunId\x12!\n" +
+	"\fplaybook_ref\x18\x04 \x01(\tR\vplaybookRef\x12'\n" +
+	"\x0fpolicy_revision\x18\x05 \x01(\x04R\x0epolicyRevision\x12(\n" +
+	"\x10root_trigger_ref\x18\x06 \x01(\tR\x0erootTriggerRef\x12&\n" +
+	"\x0froot_session_id\x18\a \x01(\tR\rrootSessionId\x12 \n" +
+	"\froot_turn_id\x18\b \x01(\tR\n" +
+	"rootTurnId\x12!\n" +
+	"\froot_attempt\x18\t \x01(\rR\vrootAttempt\x12*\n" +
+	"\x11input_artifact_id\x18\n" +
+	" \x01(\tR\x0finputArtifactId\"R\n" +
+	"\x14StartProcessResponse\x12:\n" +
+	"\vprocess_run\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\n" +
+	"processRun\"\xb1\x01\n" +
+	"\x14CancelProcessRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12$\n" +
+	"\x0eprocess_run_id\x18\x02 \x01(\tR\fprocessRunId\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\x12\x1f\n" +
+	"\vreason_code\x18\x04 \x01(\tR\n" +
+	"reasonCode\"S\n" +
+	"\x15CancelProcessResponse\x12:\n" +
+	"\vprocess_run\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\n" +
+	"processRun\"\xdd\x02\n" +
+	"\x17RequestOwnerGateRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12$\n" +
+	"\x0eprocess_run_id\x18\x02 \x01(\tR\fprocessRunId\x128\n" +
+	"\x18process_expected_version\x18\x03 \x01(\x04R\x16processExpectedVersion\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x04 \x01(\tR\tsessionId\x12\x17\n" +
+	"\aturn_id\x18\x05 \x01(\tR\x06turnId\x12\x18\n" +
+	"\aattempt\x18\x06 \x01(\rR\aattempt\x12,\n" +
+	"\x12result_artifact_id\x18\a \x01(\tR\x10resultArtifactId\x129\n" +
+	"\n" +
+	"expires_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\x90\x01\n" +
+	"\x18RequestOwnerGateResponse\x128\n" +
+	"\n" +
+	"owner_gate\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\townerGate\x12:\n" +
+	"\vprocess_run\x18\x02 \x01(\v2\x19.controlplane.v1.ResourceR\n" +
+	"processRun\"\xd1\x03\n" +
 	"\x17ResolveOwnerGateRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\"\n" +
 	"\rowner_gate_id\x18\x02 \x01(\tR\vownerGateId\x12)\n" +
 	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\x12>\n" +
 	"\bdecision\x18\x04 \x01(\x0e2\".controlplane.v1.OwnerGateDecisionR\bdecision\x12\x16\n" +
-	"\x06reason\x18\x05 \x01(\tR\x06reason\"T\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x12$\n" +
+	"\x0eprocess_run_id\x18\x06 \x01(\tR\fprocessRunId\x128\n" +
+	"\x18process_expected_version\x18\a \x01(\x04R\x16processExpectedVersion\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\b \x01(\tR\tsessionId\x12\x17\n" +
+	"\aturn_id\x18\t \x01(\tR\x06turnId\x12\x18\n" +
+	"\aattempt\x18\n" +
+	" \x01(\rR\aattempt\x124\n" +
+	"\x16immutable_input_sha256\x18\v \x01(\tR\x14immutableInputSha256\"\x90\x01\n" +
 	"\x18ResolveOwnerGateResponse\x128\n" +
 	"\n" +
-	"owner_gate\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\townerGate\"\x17\n" +
+	"owner_gate\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\townerGate\x12:\n" +
+	"\vprocess_run\x18\x02 \x01(\v2\x19.controlplane.v1.ResourceR\n" +
+	"processRun\"\xa6\x01\n" +
+	"\x17RegisterArtifactRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
+	"\tparent_id\x18\x03 \x01(\tR\bparentId\x121\n" +
+	"\x04spec\x18\x04 \x01(\v2\x1d.controlplane.v1.ArtifactSpecR\x04spec\"Q\n" +
+	"\x18RegisterArtifactResponse\x125\n" +
+	"\bartifact\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\bartifact\"\xbb\x02\n" +
+	"\x19RecordArtifactScanRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x1f\n" +
+	"\vartifact_id\x18\x02 \x01(\tR\n" +
+	"artifactId\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\x12E\n" +
+	"\ftarget_state\x18\x04 \x01(\x0e2\".controlplane.v1.ArtifactScanStateR\vtargetState\x120\n" +
+	"\x14scan_policy_revision\x18\x05 \x01(\x04R\x12scanPolicyRevision\x120\n" +
+	"\x14scan_evidence_sha256\x18\x06 \x01(\tR\x12scanEvidenceSha256\"S\n" +
+	"\x1aRecordArtifactScanResponse\x125\n" +
+	"\bartifact\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\bartifact\"\x17\n" +
 	"\x15CheckReadinessRequest\"\xe9\x01\n" +
 	"\x16CheckReadinessResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\x12%\n" +
@@ -4373,12 +7804,12 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0eROOM_TYPE_USER\x10\x01\x12\x1a\n" +
 	"\x16ROOM_TYPE_COORDINATION\x10\x02\x12\x1a\n" +
 	"\x16ROOM_TYPE_WORK_CONTROL\x10\x03\x12\x12\n" +
-	"\x0eROOM_TYPE_RUNS\x10\x04*\xb1\x01\n" +
+	"\x0eROOM_TYPE_RUNS\x10\x04*\xa9\x01\n" +
 	"\x15ScheduleOverlapPolicy\x12'\n" +
 	"#SCHEDULE_OVERLAP_POLICY_UNSPECIFIED\x10\x00\x12\"\n" +
-	"\x1eSCHEDULE_OVERLAP_POLICY_FORBID\x10\x01\x12%\n" +
-	"!SCHEDULE_OVERLAP_POLICY_QUEUE_ALL\x10\x02\x12$\n" +
-	" SCHEDULE_OVERLAP_POLICY_COALESCE\x10\x03*\xd8\x01\n" +
+	"\x1eSCHEDULE_OVERLAP_POLICY_FORBID\x10\x01\x12 \n" +
+	"\x1cSCHEDULE_OVERLAP_POLICY_SKIP\x10\x02\x12!\n" +
+	"\x1dSCHEDULE_OVERLAP_POLICY_QUEUE\x10\x03*\xd8\x01\n" +
 	"\x15ScheduleMisfirePolicy\x12'\n" +
 	"#SCHEDULE_MISFIRE_POLICY_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cSCHEDULE_MISFIRE_POLICY_SKIP\x10\x01\x12$\n" +
@@ -4390,7 +7821,31 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1cOWNER_GATE_DECISION_APPROVED\x10\x01\x12 \n" +
 	"\x1cOWNER_GATE_DECISION_REJECTED\x10\x02\x12)\n" +
 	"%OWNER_GATE_DECISION_CHANGES_REQUESTED\x10\x03\x12!\n" +
-	"\x1dOWNER_GATE_DECISION_CANCELLED\x10\x04*\xf2\x02\n" +
+	"\x1dOWNER_GATE_DECISION_CANCELLED\x10\x04*\x8b\x02\n" +
+	"\x14AdministrativeAction\x12%\n" +
+	"!ADMINISTRATIVE_ACTION_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cADMINISTRATIVE_ACTION_CREATE\x10\x01\x12 \n" +
+	"\x1cADMINISTRATIVE_ACTION_UPDATE\x10\x02\x12\"\n" +
+	"\x1eADMINISTRATIVE_ACTION_ACTIVATE\x10\x03\x12\x1f\n" +
+	"\x1bADMINISTRATIVE_ACTION_PAUSE\x10\x04\x12!\n" +
+	"\x1dADMINISTRATIVE_ACTION_ARCHIVE\x10\x05\x12 \n" +
+	"\x1cADMINISTRATIVE_ACTION_DELETE\x10\x06*\xdf\x01\n" +
+	"\x11ArtifactScanState\x12#\n" +
+	"\x1fARTIFACT_SCAN_STATE_UNSPECIFIED\x10\x00\x12\x1f\n" +
+	"\x1bARTIFACT_SCAN_STATE_PENDING\x10\x01\x12 \n" +
+	"\x1cARTIFACT_SCAN_STATE_SCANNING\x10\x02\x12\x1d\n" +
+	"\x19ARTIFACT_SCAN_STATE_CLEAN\x10\x03\x12#\n" +
+	"\x1fARTIFACT_SCAN_STATE_QUARANTINED\x10\x04\x12\x1e\n" +
+	"\x1aARTIFACT_SCAN_STATE_FAILED\x10\x05*\xdb\x02\n" +
+	"\x17ScheduleOccurrenceState\x12)\n" +
+	"%SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED\x10\x00\x12$\n" +
+	" SCHEDULE_OCCURRENCE_STATE_QUEUED\x10\x01\x12%\n" +
+	"!SCHEDULE_OCCURRENCE_STATE_CLAIMED\x10\x02\x12'\n" +
+	"#SCHEDULE_OCCURRENCE_STATE_SUCCEEDED\x10\x03\x12$\n" +
+	" SCHEDULE_OCCURRENCE_STATE_FAILED\x10\x04\x12'\n" +
+	"#SCHEDULE_OCCURRENCE_STATE_CANCELLED\x10\x05\x12%\n" +
+	"!SCHEDULE_OCCURRENCE_STATE_SKIPPED\x10\x06\x12)\n" +
+	"%SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER\x10\a*\xf2\x02\n" +
 	"\vErrorReason\x12\x1c\n" +
 	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cERROR_REASON_INVALID_REQUEST\x10\x01\x12 \n" +
@@ -4403,22 +7858,40 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x18ERROR_REASON_UNAVAILABLE\x10\b\x12\x19\n" +
 	"\x15ERROR_REASON_INTERNAL\x10\t\x12\x1d\n" +
 	"\x19ERROR_REASON_RATE_LIMITED\x10\n" +
-	"2\xe7\n" +
-	"\n" +
+	"2\xd3\x19\n" +
 	"\x13ControlPlaneService\x12^\n" +
 	"\rCreateProject\x12%.controlplane.v1.CreateProjectRequest\x1a&.controlplane.v1.CreateProjectResponse\x12[\n" +
 	"\fListProjects\x12$.controlplane.v1.ListProjectsRequest\x1a%.controlplane.v1.ListProjectsResponse\x12a\n" +
 	"\x0eCreateResource\x12&.controlplane.v1.CreateResourceRequest\x1a'.controlplane.v1.CreateResourceResponse\x12a\n" +
 	"\x0eUpdateResource\x12&.controlplane.v1.UpdateResourceRequest\x1a'.controlplane.v1.UpdateResourceResponse\x12m\n" +
 	"\x12TransitionResource\x12*.controlplane.v1.TransitionResourceRequest\x1a+.controlplane.v1.TransitionResourceResponse\x12a\n" +
-	"\x0eDeleteResource\x12&.controlplane.v1.DeleteResourceRequest\x1a'.controlplane.v1.DeleteResourceResponse\x12X\n" +
+	"\x0eDeleteResource\x12&.controlplane.v1.DeleteResourceRequest\x1a'.controlplane.v1.DeleteResourceResponse\x12s\n" +
+	"\x14ManageAccessResource\x12,.controlplane.v1.ManageAccessResourceRequest\x1a-.controlplane.v1.ManageAccessResourceResponse\x12X\n" +
 	"\vGetResource\x12#.controlplane.v1.GetResourceRequest\x1a$.controlplane.v1.GetResourceResponse\x12^\n" +
-	"\rListResources\x12%.controlplane.v1.ListResourcesRequest\x1a&.controlplane.v1.ListResourcesResponse\x12X\n" +
+	"\rListResources\x12%.controlplane.v1.ListResourcesRequest\x1a&.controlplane.v1.ListResourcesResponse\x12d\n" +
+	"\x0fSearchResources\x12'.controlplane.v1.SearchResourcesRequest\x1a(.controlplane.v1.SearchResourcesResponse\x12d\n" +
+	"\x0fListAuditEvents\x12'.controlplane.v1.ListAuditEventsRequest\x1a(.controlplane.v1.ListAuditEventsResponse\x12a\n" +
+	"\x0eListTombstones\x12&.controlplane.v1.ListTombstonesRequest\x1a'.controlplane.v1.ListTombstonesResponse\x12a\n" +
+	"\x0eGetDiagnostics\x12&.controlplane.v1.GetDiagnosticsRequest\x1a'.controlplane.v1.GetDiagnosticsResponse\x12X\n" +
 	"\vEnqueueTurn\x12#.controlplane.v1.EnqueueTurnRequest\x1a$.controlplane.v1.EnqueueTurnResponse\x12R\n" +
-	"\tClaimTurn\x12!.controlplane.v1.ClaimTurnRequest\x1a\".controlplane.v1.ClaimTurnResponse\x12[\n" +
-	"\fCompleteTurn\x12$.controlplane.v1.CompleteTurnRequest\x1a%.controlplane.v1.CompleteTurnResponse\x12j\n" +
-	"\x11ClaimDueSchedules\x12).controlplane.v1.ClaimDueSchedulesRequest\x1a*.controlplane.v1.ClaimDueSchedulesResponse\x12g\n" +
-	"\x10ResolveOwnerGate\x12(.controlplane.v1.ResolveOwnerGateRequest\x1a).controlplane.v1.ResolveOwnerGateResponse\x12a\n" +
+	"\tClaimTurn\x12!.controlplane.v1.ClaimTurnRequest\x1a\".controlplane.v1.ClaimTurnResponse\x12R\n" +
+	"\tRenewTurn\x12!.controlplane.v1.RenewTurnRequest\x1a\".controlplane.v1.RenewTurnResponse\x12[\n" +
+	"\fCompleteTurn\x12$.controlplane.v1.CompleteTurnRequest\x1a%.controlplane.v1.CompleteTurnResponse\x12R\n" +
+	"\tRetryTurn\x12!.controlplane.v1.RetryTurnRequest\x1a\".controlplane.v1.RetryTurnResponse\x12U\n" +
+	"\n" +
+	"CancelTurn\x12\".controlplane.v1.CancelTurnRequest\x1a#.controlplane.v1.CancelTurnResponse\x12a\n" +
+	"\x0eManageSchedule\x12&.controlplane.v1.ManageScheduleRequest\x1a'.controlplane.v1.ManageScheduleResponse\x12j\n" +
+	"\x11ClaimDueSchedules\x12).controlplane.v1.ClaimDueSchedulesRequest\x1a*.controlplane.v1.ClaimDueSchedulesResponse\x12|\n" +
+	"\x17ClaimScheduleOccurrence\x12/.controlplane.v1.ClaimScheduleOccurrenceRequest\x1a0.controlplane.v1.ClaimScheduleOccurrenceResponse\x12\x85\x01\n" +
+	"\x1aCompleteScheduleOccurrence\x122.controlplane.v1.CompleteScheduleOccurrenceRequest\x1a3.controlplane.v1.CompleteScheduleOccurrenceResponse\x12\x7f\n" +
+	"\x18CancelScheduleOccurrence\x120.controlplane.v1.CancelScheduleOccurrenceRequest\x1a1.controlplane.v1.CancelScheduleOccurrenceResponse\x12|\n" +
+	"\x17ListScheduleOccurrences\x12/.controlplane.v1.ListScheduleOccurrencesRequest\x1a0.controlplane.v1.ListScheduleOccurrencesResponse\x12[\n" +
+	"\fStartProcess\x12$.controlplane.v1.StartProcessRequest\x1a%.controlplane.v1.StartProcessResponse\x12^\n" +
+	"\rCancelProcess\x12%.controlplane.v1.CancelProcessRequest\x1a&.controlplane.v1.CancelProcessResponse\x12g\n" +
+	"\x10RequestOwnerGate\x12(.controlplane.v1.RequestOwnerGateRequest\x1a).controlplane.v1.RequestOwnerGateResponse\x12g\n" +
+	"\x10ResolveOwnerGate\x12(.controlplane.v1.ResolveOwnerGateRequest\x1a).controlplane.v1.ResolveOwnerGateResponse\x12g\n" +
+	"\x10RegisterArtifact\x12(.controlplane.v1.RegisterArtifactRequest\x1a).controlplane.v1.RegisterArtifactResponse\x12m\n" +
+	"\x12RecordArtifactScan\x12*.controlplane.v1.RecordArtifactScanRequest\x1a+.controlplane.v1.RecordArtifactScanResponse\x12a\n" +
 	"\x0eCheckReadiness\x12&.controlplane.v1.CheckReadinessRequest\x1a'.controlplane.v1.CheckReadinessResponseBuZsgithub.com/codex-k8s/matter-codex/services/internal/control-plane/internal/generated/controlplane/v1;controlplanev1b\x06proto3"
 
 var (
@@ -4433,159 +7906,289 @@ func file_controlplane_v1_control_plane_proto_rawDescGZIP() []byte {
 	return file_controlplane_v1_control_plane_proto_rawDescData
 }
 
-var file_controlplane_v1_control_plane_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_controlplane_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 49)
+var file_controlplane_v1_control_plane_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
+var file_controlplane_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 88)
 var file_controlplane_v1_control_plane_proto_goTypes = []any{
-	(ResourceKind)(0),                  // 0: controlplane.v1.ResourceKind
-	(LifecycleState)(0),                // 1: controlplane.v1.LifecycleState
-	(RoomType)(0),                      // 2: controlplane.v1.RoomType
-	(ScheduleOverlapPolicy)(0),         // 3: controlplane.v1.ScheduleOverlapPolicy
-	(ScheduleMisfirePolicy)(0),         // 4: controlplane.v1.ScheduleMisfirePolicy
-	(OwnerGateDecision)(0),             // 5: controlplane.v1.OwnerGateDecision
-	(ErrorReason)(0),                   // 6: controlplane.v1.ErrorReason
-	(*CreateProjectRequest)(nil),       // 7: controlplane.v1.CreateProjectRequest
-	(*CreateProjectResponse)(nil),      // 8: controlplane.v1.CreateProjectResponse
-	(*ListProjectsRequest)(nil),        // 9: controlplane.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),       // 10: controlplane.v1.ListProjectsResponse
-	(*ProjectSpec)(nil),                // 11: controlplane.v1.ProjectSpec
-	(*TeamSpec)(nil),                   // 12: controlplane.v1.TeamSpec
-	(*ChatSpec)(nil),                   // 13: controlplane.v1.ChatSpec
-	(*RoleSpec)(nil),                   // 14: controlplane.v1.RoleSpec
-	(*PromptProfileSpec)(nil),          // 15: controlplane.v1.PromptProfileSpec
-	(*CredentialBindingSpec)(nil),      // 16: controlplane.v1.CredentialBindingSpec
-	(*RepositoryWorkspaceSpec)(nil),    // 17: controlplane.v1.RepositoryWorkspaceSpec
-	(*IntegrationSpec)(nil),            // 18: controlplane.v1.IntegrationSpec
-	(*RuntimeRevisionSpec)(nil),        // 19: controlplane.v1.RuntimeRevisionSpec
-	(*SessionSpec)(nil),                // 20: controlplane.v1.SessionSpec
-	(*TurnSpec)(nil),                   // 21: controlplane.v1.TurnSpec
-	(*ProcessRunSpec)(nil),             // 22: controlplane.v1.ProcessRunSpec
-	(*ScheduleSpec)(nil),               // 23: controlplane.v1.ScheduleSpec
-	(*OwnerGateSpec)(nil),              // 24: controlplane.v1.OwnerGateSpec
-	(*MemoryRecordSpec)(nil),           // 25: controlplane.v1.MemoryRecordSpec
-	(*WorkClaimSpec)(nil),              // 26: controlplane.v1.WorkClaimSpec
-	(*ArtifactSpec)(nil),               // 27: controlplane.v1.ArtifactSpec
-	(*ResourceSpec)(nil),               // 28: controlplane.v1.ResourceSpec
-	(*Resource)(nil),                   // 29: controlplane.v1.Resource
-	(*CreateResourceRequest)(nil),      // 30: controlplane.v1.CreateResourceRequest
-	(*CreateResourceResponse)(nil),     // 31: controlplane.v1.CreateResourceResponse
-	(*UpdateResourceRequest)(nil),      // 32: controlplane.v1.UpdateResourceRequest
-	(*UpdateResourceResponse)(nil),     // 33: controlplane.v1.UpdateResourceResponse
-	(*TransitionResourceRequest)(nil),  // 34: controlplane.v1.TransitionResourceRequest
-	(*TransitionResourceResponse)(nil), // 35: controlplane.v1.TransitionResourceResponse
-	(*DeleteResourceRequest)(nil),      // 36: controlplane.v1.DeleteResourceRequest
-	(*DeleteResourceResponse)(nil),     // 37: controlplane.v1.DeleteResourceResponse
-	(*GetResourceRequest)(nil),         // 38: controlplane.v1.GetResourceRequest
-	(*GetResourceResponse)(nil),        // 39: controlplane.v1.GetResourceResponse
-	(*ListResourcesRequest)(nil),       // 40: controlplane.v1.ListResourcesRequest
-	(*ListResourcesResponse)(nil),      // 41: controlplane.v1.ListResourcesResponse
-	(*EnqueueTurnRequest)(nil),         // 42: controlplane.v1.EnqueueTurnRequest
-	(*EnqueueTurnResponse)(nil),        // 43: controlplane.v1.EnqueueTurnResponse
-	(*ClaimTurnRequest)(nil),           // 44: controlplane.v1.ClaimTurnRequest
-	(*ClaimTurnResponse)(nil),          // 45: controlplane.v1.ClaimTurnResponse
-	(*CompleteTurnRequest)(nil),        // 46: controlplane.v1.CompleteTurnRequest
-	(*CompleteTurnResponse)(nil),       // 47: controlplane.v1.CompleteTurnResponse
-	(*ClaimDueSchedulesRequest)(nil),   // 48: controlplane.v1.ClaimDueSchedulesRequest
-	(*ScheduleOccurrence)(nil),         // 49: controlplane.v1.ScheduleOccurrence
-	(*ClaimDueSchedulesResponse)(nil),  // 50: controlplane.v1.ClaimDueSchedulesResponse
-	(*ResolveOwnerGateRequest)(nil),    // 51: controlplane.v1.ResolveOwnerGateRequest
-	(*ResolveOwnerGateResponse)(nil),   // 52: controlplane.v1.ResolveOwnerGateResponse
-	(*CheckReadinessRequest)(nil),      // 53: controlplane.v1.CheckReadinessRequest
-	(*CheckReadinessResponse)(nil),     // 54: controlplane.v1.CheckReadinessResponse
-	(*ErrorDetail)(nil),                // 55: controlplane.v1.ErrorDetail
-	(*timestamppb.Timestamp)(nil),      // 56: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),        // 57: google.protobuf.Duration
+	(ResourceKind)(0),                          // 0: controlplane.v1.ResourceKind
+	(LifecycleState)(0),                        // 1: controlplane.v1.LifecycleState
+	(RoomType)(0),                              // 2: controlplane.v1.RoomType
+	(ScheduleOverlapPolicy)(0),                 // 3: controlplane.v1.ScheduleOverlapPolicy
+	(ScheduleMisfirePolicy)(0),                 // 4: controlplane.v1.ScheduleMisfirePolicy
+	(OwnerGateDecision)(0),                     // 5: controlplane.v1.OwnerGateDecision
+	(AdministrativeAction)(0),                  // 6: controlplane.v1.AdministrativeAction
+	(ArtifactScanState)(0),                     // 7: controlplane.v1.ArtifactScanState
+	(ScheduleOccurrenceState)(0),               // 8: controlplane.v1.ScheduleOccurrenceState
+	(ErrorReason)(0),                           // 9: controlplane.v1.ErrorReason
+	(*CreateProjectRequest)(nil),               // 10: controlplane.v1.CreateProjectRequest
+	(*CreateProjectResponse)(nil),              // 11: controlplane.v1.CreateProjectResponse
+	(*ListProjectsRequest)(nil),                // 12: controlplane.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),               // 13: controlplane.v1.ListProjectsResponse
+	(*ProjectSpec)(nil),                        // 14: controlplane.v1.ProjectSpec
+	(*TeamSpec)(nil),                           // 15: controlplane.v1.TeamSpec
+	(*ChatSpec)(nil),                           // 16: controlplane.v1.ChatSpec
+	(*RoleSpec)(nil),                           // 17: controlplane.v1.RoleSpec
+	(*PromptProfileSpec)(nil),                  // 18: controlplane.v1.PromptProfileSpec
+	(*CredentialBindingSpec)(nil),              // 19: controlplane.v1.CredentialBindingSpec
+	(*RepositoryWorkspaceSpec)(nil),            // 20: controlplane.v1.RepositoryWorkspaceSpec
+	(*IntegrationSpec)(nil),                    // 21: controlplane.v1.IntegrationSpec
+	(*RuntimeRevisionSpec)(nil),                // 22: controlplane.v1.RuntimeRevisionSpec
+	(*EffectiveResourceRef)(nil),               // 23: controlplane.v1.EffectiveResourceRef
+	(*SessionSpec)(nil),                        // 24: controlplane.v1.SessionSpec
+	(*TurnSpec)(nil),                           // 25: controlplane.v1.TurnSpec
+	(*ProcessRunSpec)(nil),                     // 26: controlplane.v1.ProcessRunSpec
+	(*ScheduleSpec)(nil),                       // 27: controlplane.v1.ScheduleSpec
+	(*OwnerGateSpec)(nil),                      // 28: controlplane.v1.OwnerGateSpec
+	(*MemoryRecordSpec)(nil),                   // 29: controlplane.v1.MemoryRecordSpec
+	(*WorkClaimSpec)(nil),                      // 30: controlplane.v1.WorkClaimSpec
+	(*ArtifactSpec)(nil),                       // 31: controlplane.v1.ArtifactSpec
+	(*ResourceSpec)(nil),                       // 32: controlplane.v1.ResourceSpec
+	(*Resource)(nil),                           // 33: controlplane.v1.Resource
+	(*CreateResourceRequest)(nil),              // 34: controlplane.v1.CreateResourceRequest
+	(*CreateResourceResponse)(nil),             // 35: controlplane.v1.CreateResourceResponse
+	(*UpdateResourceRequest)(nil),              // 36: controlplane.v1.UpdateResourceRequest
+	(*UpdateResourceResponse)(nil),             // 37: controlplane.v1.UpdateResourceResponse
+	(*TransitionResourceRequest)(nil),          // 38: controlplane.v1.TransitionResourceRequest
+	(*TransitionResourceResponse)(nil),         // 39: controlplane.v1.TransitionResourceResponse
+	(*DeleteResourceRequest)(nil),              // 40: controlplane.v1.DeleteResourceRequest
+	(*DeleteResourceResponse)(nil),             // 41: controlplane.v1.DeleteResourceResponse
+	(*ManageAccessResourceRequest)(nil),        // 42: controlplane.v1.ManageAccessResourceRequest
+	(*ManageAccessResourceResponse)(nil),       // 43: controlplane.v1.ManageAccessResourceResponse
+	(*GetResourceRequest)(nil),                 // 44: controlplane.v1.GetResourceRequest
+	(*GetResourceResponse)(nil),                // 45: controlplane.v1.GetResourceResponse
+	(*ListResourcesRequest)(nil),               // 46: controlplane.v1.ListResourcesRequest
+	(*ListResourcesResponse)(nil),              // 47: controlplane.v1.ListResourcesResponse
+	(*SearchResourcesRequest)(nil),             // 48: controlplane.v1.SearchResourcesRequest
+	(*SearchResourcesResponse)(nil),            // 49: controlplane.v1.SearchResourcesResponse
+	(*AuditEvent)(nil),                         // 50: controlplane.v1.AuditEvent
+	(*ListAuditEventsRequest)(nil),             // 51: controlplane.v1.ListAuditEventsRequest
+	(*ListAuditEventsResponse)(nil),            // 52: controlplane.v1.ListAuditEventsResponse
+	(*ResourceTombstone)(nil),                  // 53: controlplane.v1.ResourceTombstone
+	(*ListTombstonesRequest)(nil),              // 54: controlplane.v1.ListTombstonesRequest
+	(*ListTombstonesResponse)(nil),             // 55: controlplane.v1.ListTombstonesResponse
+	(*GetDiagnosticsRequest)(nil),              // 56: controlplane.v1.GetDiagnosticsRequest
+	(*GetDiagnosticsResponse)(nil),             // 57: controlplane.v1.GetDiagnosticsResponse
+	(*EnqueueTurnRequest)(nil),                 // 58: controlplane.v1.EnqueueTurnRequest
+	(*EnqueueTurnResponse)(nil),                // 59: controlplane.v1.EnqueueTurnResponse
+	(*ClaimTurnRequest)(nil),                   // 60: controlplane.v1.ClaimTurnRequest
+	(*ClaimTurnResponse)(nil),                  // 61: controlplane.v1.ClaimTurnResponse
+	(*RenewTurnRequest)(nil),                   // 62: controlplane.v1.RenewTurnRequest
+	(*RenewTurnResponse)(nil),                  // 63: controlplane.v1.RenewTurnResponse
+	(*CompleteTurnRequest)(nil),                // 64: controlplane.v1.CompleteTurnRequest
+	(*CompleteTurnResponse)(nil),               // 65: controlplane.v1.CompleteTurnResponse
+	(*RetryTurnRequest)(nil),                   // 66: controlplane.v1.RetryTurnRequest
+	(*RetryTurnResponse)(nil),                  // 67: controlplane.v1.RetryTurnResponse
+	(*CancelTurnRequest)(nil),                  // 68: controlplane.v1.CancelTurnRequest
+	(*CancelTurnResponse)(nil),                 // 69: controlplane.v1.CancelTurnResponse
+	(*ManageScheduleRequest)(nil),              // 70: controlplane.v1.ManageScheduleRequest
+	(*ManageScheduleResponse)(nil),             // 71: controlplane.v1.ManageScheduleResponse
+	(*ClaimDueSchedulesRequest)(nil),           // 72: controlplane.v1.ClaimDueSchedulesRequest
+	(*ScheduleOccurrence)(nil),                 // 73: controlplane.v1.ScheduleOccurrence
+	(*ClaimDueSchedulesResponse)(nil),          // 74: controlplane.v1.ClaimDueSchedulesResponse
+	(*ClaimScheduleOccurrenceRequest)(nil),     // 75: controlplane.v1.ClaimScheduleOccurrenceRequest
+	(*ClaimScheduleOccurrenceResponse)(nil),    // 76: controlplane.v1.ClaimScheduleOccurrenceResponse
+	(*CompleteScheduleOccurrenceRequest)(nil),  // 77: controlplane.v1.CompleteScheduleOccurrenceRequest
+	(*CompleteScheduleOccurrenceResponse)(nil), // 78: controlplane.v1.CompleteScheduleOccurrenceResponse
+	(*CancelScheduleOccurrenceRequest)(nil),    // 79: controlplane.v1.CancelScheduleOccurrenceRequest
+	(*CancelScheduleOccurrenceResponse)(nil),   // 80: controlplane.v1.CancelScheduleOccurrenceResponse
+	(*ListScheduleOccurrencesRequest)(nil),     // 81: controlplane.v1.ListScheduleOccurrencesRequest
+	(*ListScheduleOccurrencesResponse)(nil),    // 82: controlplane.v1.ListScheduleOccurrencesResponse
+	(*StartProcessRequest)(nil),                // 83: controlplane.v1.StartProcessRequest
+	(*StartProcessResponse)(nil),               // 84: controlplane.v1.StartProcessResponse
+	(*CancelProcessRequest)(nil),               // 85: controlplane.v1.CancelProcessRequest
+	(*CancelProcessResponse)(nil),              // 86: controlplane.v1.CancelProcessResponse
+	(*RequestOwnerGateRequest)(nil),            // 87: controlplane.v1.RequestOwnerGateRequest
+	(*RequestOwnerGateResponse)(nil),           // 88: controlplane.v1.RequestOwnerGateResponse
+	(*ResolveOwnerGateRequest)(nil),            // 89: controlplane.v1.ResolveOwnerGateRequest
+	(*ResolveOwnerGateResponse)(nil),           // 90: controlplane.v1.ResolveOwnerGateResponse
+	(*RegisterArtifactRequest)(nil),            // 91: controlplane.v1.RegisterArtifactRequest
+	(*RegisterArtifactResponse)(nil),           // 92: controlplane.v1.RegisterArtifactResponse
+	(*RecordArtifactScanRequest)(nil),          // 93: controlplane.v1.RecordArtifactScanRequest
+	(*RecordArtifactScanResponse)(nil),         // 94: controlplane.v1.RecordArtifactScanResponse
+	(*CheckReadinessRequest)(nil),              // 95: controlplane.v1.CheckReadinessRequest
+	(*CheckReadinessResponse)(nil),             // 96: controlplane.v1.CheckReadinessResponse
+	(*ErrorDetail)(nil),                        // 97: controlplane.v1.ErrorDetail
+	(*timestamppb.Timestamp)(nil),              // 98: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),                // 99: google.protobuf.Duration
 }
 var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
-	11, // 0: controlplane.v1.CreateProjectRequest.spec:type_name -> controlplane.v1.ProjectSpec
-	29, // 1: controlplane.v1.CreateProjectResponse.project:type_name -> controlplane.v1.Resource
-	29, // 2: controlplane.v1.ListProjectsResponse.projects:type_name -> controlplane.v1.Resource
-	2,  // 3: controlplane.v1.ChatSpec.room_type:type_name -> controlplane.v1.RoomType
-	56, // 4: controlplane.v1.CredentialBindingSpec.expires_at:type_name -> google.protobuf.Timestamp
-	57, // 5: controlplane.v1.ScheduleSpec.interval:type_name -> google.protobuf.Duration
-	3,  // 6: controlplane.v1.ScheduleSpec.overlap_policy:type_name -> controlplane.v1.ScheduleOverlapPolicy
-	4,  // 7: controlplane.v1.ScheduleSpec.misfire_policy:type_name -> controlplane.v1.ScheduleMisfirePolicy
-	57, // 8: controlplane.v1.ScheduleSpec.misfire_grace:type_name -> google.protobuf.Duration
-	56, // 9: controlplane.v1.ScheduleSpec.next_run_at:type_name -> google.protobuf.Timestamp
-	56, // 10: controlplane.v1.OwnerGateSpec.expires_at:type_name -> google.protobuf.Timestamp
-	5,  // 11: controlplane.v1.OwnerGateSpec.decision:type_name -> controlplane.v1.OwnerGateDecision
-	11, // 12: controlplane.v1.ResourceSpec.project:type_name -> controlplane.v1.ProjectSpec
-	12, // 13: controlplane.v1.ResourceSpec.team:type_name -> controlplane.v1.TeamSpec
-	13, // 14: controlplane.v1.ResourceSpec.chat:type_name -> controlplane.v1.ChatSpec
-	14, // 15: controlplane.v1.ResourceSpec.role:type_name -> controlplane.v1.RoleSpec
-	15, // 16: controlplane.v1.ResourceSpec.prompt_profile:type_name -> controlplane.v1.PromptProfileSpec
-	16, // 17: controlplane.v1.ResourceSpec.credential_binding:type_name -> controlplane.v1.CredentialBindingSpec
-	17, // 18: controlplane.v1.ResourceSpec.repository_workspace:type_name -> controlplane.v1.RepositoryWorkspaceSpec
-	18, // 19: controlplane.v1.ResourceSpec.integration:type_name -> controlplane.v1.IntegrationSpec
-	19, // 20: controlplane.v1.ResourceSpec.runtime_revision:type_name -> controlplane.v1.RuntimeRevisionSpec
-	20, // 21: controlplane.v1.ResourceSpec.session:type_name -> controlplane.v1.SessionSpec
-	21, // 22: controlplane.v1.ResourceSpec.turn:type_name -> controlplane.v1.TurnSpec
-	22, // 23: controlplane.v1.ResourceSpec.process_run:type_name -> controlplane.v1.ProcessRunSpec
-	23, // 24: controlplane.v1.ResourceSpec.schedule:type_name -> controlplane.v1.ScheduleSpec
-	24, // 25: controlplane.v1.ResourceSpec.owner_gate:type_name -> controlplane.v1.OwnerGateSpec
-	25, // 26: controlplane.v1.ResourceSpec.memory_record:type_name -> controlplane.v1.MemoryRecordSpec
-	26, // 27: controlplane.v1.ResourceSpec.work_claim:type_name -> controlplane.v1.WorkClaimSpec
-	27, // 28: controlplane.v1.ResourceSpec.artifact:type_name -> controlplane.v1.ArtifactSpec
-	0,  // 29: controlplane.v1.Resource.kind:type_name -> controlplane.v1.ResourceKind
-	1,  // 30: controlplane.v1.Resource.state:type_name -> controlplane.v1.LifecycleState
-	28, // 31: controlplane.v1.Resource.spec:type_name -> controlplane.v1.ResourceSpec
-	56, // 32: controlplane.v1.Resource.created_at:type_name -> google.protobuf.Timestamp
-	56, // 33: controlplane.v1.Resource.updated_at:type_name -> google.protobuf.Timestamp
-	0,  // 34: controlplane.v1.CreateResourceRequest.kind:type_name -> controlplane.v1.ResourceKind
-	28, // 35: controlplane.v1.CreateResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
-	29, // 36: controlplane.v1.CreateResourceResponse.resource:type_name -> controlplane.v1.Resource
-	28, // 37: controlplane.v1.UpdateResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
-	29, // 38: controlplane.v1.UpdateResourceResponse.resource:type_name -> controlplane.v1.Resource
-	1,  // 39: controlplane.v1.TransitionResourceRequest.target_state:type_name -> controlplane.v1.LifecycleState
-	29, // 40: controlplane.v1.TransitionResourceResponse.resource:type_name -> controlplane.v1.Resource
-	29, // 41: controlplane.v1.DeleteResourceResponse.resource:type_name -> controlplane.v1.Resource
-	0,  // 42: controlplane.v1.GetResourceRequest.expected_kind:type_name -> controlplane.v1.ResourceKind
-	29, // 43: controlplane.v1.GetResourceResponse.resource:type_name -> controlplane.v1.Resource
-	0,  // 44: controlplane.v1.ListResourcesRequest.kind:type_name -> controlplane.v1.ResourceKind
-	1,  // 45: controlplane.v1.ListResourcesRequest.states:type_name -> controlplane.v1.LifecycleState
-	29, // 46: controlplane.v1.ListResourcesResponse.resources:type_name -> controlplane.v1.Resource
-	29, // 47: controlplane.v1.EnqueueTurnResponse.turn:type_name -> controlplane.v1.Resource
-	29, // 48: controlplane.v1.ClaimTurnResponse.turn:type_name -> controlplane.v1.Resource
-	56, // 49: controlplane.v1.ClaimTurnResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	1,  // 50: controlplane.v1.CompleteTurnRequest.terminal_state:type_name -> controlplane.v1.LifecycleState
-	29, // 51: controlplane.v1.CompleteTurnResponse.turn:type_name -> controlplane.v1.Resource
-	56, // 52: controlplane.v1.ScheduleOccurrence.scheduled_for:type_name -> google.protobuf.Timestamp
-	49, // 53: controlplane.v1.ClaimDueSchedulesResponse.occurrences:type_name -> controlplane.v1.ScheduleOccurrence
-	5,  // 54: controlplane.v1.ResolveOwnerGateRequest.decision:type_name -> controlplane.v1.OwnerGateDecision
-	29, // 55: controlplane.v1.ResolveOwnerGateResponse.owner_gate:type_name -> controlplane.v1.Resource
-	6,  // 56: controlplane.v1.ErrorDetail.reason:type_name -> controlplane.v1.ErrorReason
-	7,  // 57: controlplane.v1.ControlPlaneService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
-	9,  // 58: controlplane.v1.ControlPlaneService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
-	30, // 59: controlplane.v1.ControlPlaneService.CreateResource:input_type -> controlplane.v1.CreateResourceRequest
-	32, // 60: controlplane.v1.ControlPlaneService.UpdateResource:input_type -> controlplane.v1.UpdateResourceRequest
-	34, // 61: controlplane.v1.ControlPlaneService.TransitionResource:input_type -> controlplane.v1.TransitionResourceRequest
-	36, // 62: controlplane.v1.ControlPlaneService.DeleteResource:input_type -> controlplane.v1.DeleteResourceRequest
-	38, // 63: controlplane.v1.ControlPlaneService.GetResource:input_type -> controlplane.v1.GetResourceRequest
-	40, // 64: controlplane.v1.ControlPlaneService.ListResources:input_type -> controlplane.v1.ListResourcesRequest
-	42, // 65: controlplane.v1.ControlPlaneService.EnqueueTurn:input_type -> controlplane.v1.EnqueueTurnRequest
-	44, // 66: controlplane.v1.ControlPlaneService.ClaimTurn:input_type -> controlplane.v1.ClaimTurnRequest
-	46, // 67: controlplane.v1.ControlPlaneService.CompleteTurn:input_type -> controlplane.v1.CompleteTurnRequest
-	48, // 68: controlplane.v1.ControlPlaneService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
-	51, // 69: controlplane.v1.ControlPlaneService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
-	53, // 70: controlplane.v1.ControlPlaneService.CheckReadiness:input_type -> controlplane.v1.CheckReadinessRequest
-	8,  // 71: controlplane.v1.ControlPlaneService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
-	10, // 72: controlplane.v1.ControlPlaneService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
-	31, // 73: controlplane.v1.ControlPlaneService.CreateResource:output_type -> controlplane.v1.CreateResourceResponse
-	33, // 74: controlplane.v1.ControlPlaneService.UpdateResource:output_type -> controlplane.v1.UpdateResourceResponse
-	35, // 75: controlplane.v1.ControlPlaneService.TransitionResource:output_type -> controlplane.v1.TransitionResourceResponse
-	37, // 76: controlplane.v1.ControlPlaneService.DeleteResource:output_type -> controlplane.v1.DeleteResourceResponse
-	39, // 77: controlplane.v1.ControlPlaneService.GetResource:output_type -> controlplane.v1.GetResourceResponse
-	41, // 78: controlplane.v1.ControlPlaneService.ListResources:output_type -> controlplane.v1.ListResourcesResponse
-	43, // 79: controlplane.v1.ControlPlaneService.EnqueueTurn:output_type -> controlplane.v1.EnqueueTurnResponse
-	45, // 80: controlplane.v1.ControlPlaneService.ClaimTurn:output_type -> controlplane.v1.ClaimTurnResponse
-	47, // 81: controlplane.v1.ControlPlaneService.CompleteTurn:output_type -> controlplane.v1.CompleteTurnResponse
-	50, // 82: controlplane.v1.ControlPlaneService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
-	52, // 83: controlplane.v1.ControlPlaneService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
-	54, // 84: controlplane.v1.ControlPlaneService.CheckReadiness:output_type -> controlplane.v1.CheckReadinessResponse
-	71, // [71:85] is the sub-list for method output_type
-	57, // [57:71] is the sub-list for method input_type
-	57, // [57:57] is the sub-list for extension type_name
-	57, // [57:57] is the sub-list for extension extendee
-	0,  // [0:57] is the sub-list for field type_name
+	14,  // 0: controlplane.v1.CreateProjectRequest.spec:type_name -> controlplane.v1.ProjectSpec
+	33,  // 1: controlplane.v1.CreateProjectResponse.project:type_name -> controlplane.v1.Resource
+	33,  // 2: controlplane.v1.ListProjectsResponse.projects:type_name -> controlplane.v1.Resource
+	2,   // 3: controlplane.v1.ChatSpec.room_type:type_name -> controlplane.v1.RoomType
+	98,  // 4: controlplane.v1.CredentialBindingSpec.expires_at:type_name -> google.protobuf.Timestamp
+	23,  // 5: controlplane.v1.RuntimeRevisionSpec.components:type_name -> controlplane.v1.EffectiveResourceRef
+	98,  // 6: controlplane.v1.RuntimeRevisionSpec.created_at:type_name -> google.protobuf.Timestamp
+	0,   // 7: controlplane.v1.EffectiveResourceRef.kind:type_name -> controlplane.v1.ResourceKind
+	99,  // 8: controlplane.v1.ScheduleSpec.interval:type_name -> google.protobuf.Duration
+	3,   // 9: controlplane.v1.ScheduleSpec.overlap_policy:type_name -> controlplane.v1.ScheduleOverlapPolicy
+	4,   // 10: controlplane.v1.ScheduleSpec.misfire_policy:type_name -> controlplane.v1.ScheduleMisfirePolicy
+	99,  // 11: controlplane.v1.ScheduleSpec.misfire_grace:type_name -> google.protobuf.Duration
+	98,  // 12: controlplane.v1.ScheduleSpec.next_run_at:type_name -> google.protobuf.Timestamp
+	0,   // 13: controlplane.v1.ScheduleSpec.target_kind:type_name -> controlplane.v1.ResourceKind
+	99,  // 14: controlplane.v1.ScheduleSpec.initial_backoff:type_name -> google.protobuf.Duration
+	99,  // 15: controlplane.v1.ScheduleSpec.maximum_backoff:type_name -> google.protobuf.Duration
+	99,  // 16: controlplane.v1.ScheduleSpec.dead_letter_after:type_name -> google.protobuf.Duration
+	98,  // 17: controlplane.v1.OwnerGateSpec.expires_at:type_name -> google.protobuf.Timestamp
+	5,   // 18: controlplane.v1.OwnerGateSpec.decision:type_name -> controlplane.v1.OwnerGateDecision
+	7,   // 19: controlplane.v1.ArtifactSpec.scan_status:type_name -> controlplane.v1.ArtifactScanState
+	98,  // 20: controlplane.v1.ArtifactSpec.scanned_at:type_name -> google.protobuf.Timestamp
+	14,  // 21: controlplane.v1.ResourceSpec.project:type_name -> controlplane.v1.ProjectSpec
+	15,  // 22: controlplane.v1.ResourceSpec.team:type_name -> controlplane.v1.TeamSpec
+	16,  // 23: controlplane.v1.ResourceSpec.chat:type_name -> controlplane.v1.ChatSpec
+	17,  // 24: controlplane.v1.ResourceSpec.role:type_name -> controlplane.v1.RoleSpec
+	18,  // 25: controlplane.v1.ResourceSpec.prompt_profile:type_name -> controlplane.v1.PromptProfileSpec
+	19,  // 26: controlplane.v1.ResourceSpec.credential_binding:type_name -> controlplane.v1.CredentialBindingSpec
+	20,  // 27: controlplane.v1.ResourceSpec.repository_workspace:type_name -> controlplane.v1.RepositoryWorkspaceSpec
+	21,  // 28: controlplane.v1.ResourceSpec.integration:type_name -> controlplane.v1.IntegrationSpec
+	22,  // 29: controlplane.v1.ResourceSpec.runtime_revision:type_name -> controlplane.v1.RuntimeRevisionSpec
+	24,  // 30: controlplane.v1.ResourceSpec.session:type_name -> controlplane.v1.SessionSpec
+	25,  // 31: controlplane.v1.ResourceSpec.turn:type_name -> controlplane.v1.TurnSpec
+	26,  // 32: controlplane.v1.ResourceSpec.process_run:type_name -> controlplane.v1.ProcessRunSpec
+	27,  // 33: controlplane.v1.ResourceSpec.schedule:type_name -> controlplane.v1.ScheduleSpec
+	28,  // 34: controlplane.v1.ResourceSpec.owner_gate:type_name -> controlplane.v1.OwnerGateSpec
+	29,  // 35: controlplane.v1.ResourceSpec.memory_record:type_name -> controlplane.v1.MemoryRecordSpec
+	30,  // 36: controlplane.v1.ResourceSpec.work_claim:type_name -> controlplane.v1.WorkClaimSpec
+	31,  // 37: controlplane.v1.ResourceSpec.artifact:type_name -> controlplane.v1.ArtifactSpec
+	0,   // 38: controlplane.v1.Resource.kind:type_name -> controlplane.v1.ResourceKind
+	1,   // 39: controlplane.v1.Resource.state:type_name -> controlplane.v1.LifecycleState
+	32,  // 40: controlplane.v1.Resource.spec:type_name -> controlplane.v1.ResourceSpec
+	98,  // 41: controlplane.v1.Resource.created_at:type_name -> google.protobuf.Timestamp
+	98,  // 42: controlplane.v1.Resource.updated_at:type_name -> google.protobuf.Timestamp
+	0,   // 43: controlplane.v1.CreateResourceRequest.kind:type_name -> controlplane.v1.ResourceKind
+	32,  // 44: controlplane.v1.CreateResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
+	33,  // 45: controlplane.v1.CreateResourceResponse.resource:type_name -> controlplane.v1.Resource
+	32,  // 46: controlplane.v1.UpdateResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
+	33,  // 47: controlplane.v1.UpdateResourceResponse.resource:type_name -> controlplane.v1.Resource
+	1,   // 48: controlplane.v1.TransitionResourceRequest.target_state:type_name -> controlplane.v1.LifecycleState
+	33,  // 49: controlplane.v1.TransitionResourceResponse.resource:type_name -> controlplane.v1.Resource
+	33,  // 50: controlplane.v1.DeleteResourceResponse.resource:type_name -> controlplane.v1.Resource
+	0,   // 51: controlplane.v1.ManageAccessResourceRequest.kind:type_name -> controlplane.v1.ResourceKind
+	6,   // 52: controlplane.v1.ManageAccessResourceRequest.action:type_name -> controlplane.v1.AdministrativeAction
+	32,  // 53: controlplane.v1.ManageAccessResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
+	33,  // 54: controlplane.v1.ManageAccessResourceResponse.resource:type_name -> controlplane.v1.Resource
+	0,   // 55: controlplane.v1.GetResourceRequest.expected_kind:type_name -> controlplane.v1.ResourceKind
+	33,  // 56: controlplane.v1.GetResourceResponse.resource:type_name -> controlplane.v1.Resource
+	0,   // 57: controlplane.v1.ListResourcesRequest.kind:type_name -> controlplane.v1.ResourceKind
+	1,   // 58: controlplane.v1.ListResourcesRequest.states:type_name -> controlplane.v1.LifecycleState
+	33,  // 59: controlplane.v1.ListResourcesResponse.resources:type_name -> controlplane.v1.Resource
+	0,   // 60: controlplane.v1.SearchResourcesRequest.kind:type_name -> controlplane.v1.ResourceKind
+	1,   // 61: controlplane.v1.SearchResourcesRequest.states:type_name -> controlplane.v1.LifecycleState
+	33,  // 62: controlplane.v1.SearchResourcesResponse.resources:type_name -> controlplane.v1.Resource
+	0,   // 63: controlplane.v1.AuditEvent.resource_kind:type_name -> controlplane.v1.ResourceKind
+	98,  // 64: controlplane.v1.AuditEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	0,   // 65: controlplane.v1.ListAuditEventsRequest.resource_kind:type_name -> controlplane.v1.ResourceKind
+	50,  // 66: controlplane.v1.ListAuditEventsResponse.events:type_name -> controlplane.v1.AuditEvent
+	0,   // 67: controlplane.v1.ResourceTombstone.kind:type_name -> controlplane.v1.ResourceKind
+	98,  // 68: controlplane.v1.ResourceTombstone.deleted_at:type_name -> google.protobuf.Timestamp
+	0,   // 69: controlplane.v1.ListTombstonesRequest.kind:type_name -> controlplane.v1.ResourceKind
+	53,  // 70: controlplane.v1.ListTombstonesResponse.tombstones:type_name -> controlplane.v1.ResourceTombstone
+	99,  // 71: controlplane.v1.GetDiagnosticsResponse.oldest_pending_age:type_name -> google.protobuf.Duration
+	33,  // 72: controlplane.v1.EnqueueTurnResponse.turn:type_name -> controlplane.v1.Resource
+	33,  // 73: controlplane.v1.ClaimTurnResponse.turn:type_name -> controlplane.v1.Resource
+	98,  // 74: controlplane.v1.ClaimTurnResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	33,  // 75: controlplane.v1.RenewTurnResponse.turn:type_name -> controlplane.v1.Resource
+	98,  // 76: controlplane.v1.RenewTurnResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	1,   // 77: controlplane.v1.CompleteTurnRequest.terminal_state:type_name -> controlplane.v1.LifecycleState
+	33,  // 78: controlplane.v1.CompleteTurnResponse.turn:type_name -> controlplane.v1.Resource
+	33,  // 79: controlplane.v1.RetryTurnResponse.turn:type_name -> controlplane.v1.Resource
+	33,  // 80: controlplane.v1.CancelTurnResponse.turn:type_name -> controlplane.v1.Resource
+	6,   // 81: controlplane.v1.ManageScheduleRequest.action:type_name -> controlplane.v1.AdministrativeAction
+	27,  // 82: controlplane.v1.ManageScheduleRequest.spec:type_name -> controlplane.v1.ScheduleSpec
+	33,  // 83: controlplane.v1.ManageScheduleResponse.schedule:type_name -> controlplane.v1.Resource
+	98,  // 84: controlplane.v1.ScheduleOccurrence.scheduled_for:type_name -> google.protobuf.Timestamp
+	0,   // 85: controlplane.v1.ScheduleOccurrence.target_kind:type_name -> controlplane.v1.ResourceKind
+	8,   // 86: controlplane.v1.ScheduleOccurrence.state:type_name -> controlplane.v1.ScheduleOccurrenceState
+	98,  // 87: controlplane.v1.ScheduleOccurrence.lease_expires_at:type_name -> google.protobuf.Timestamp
+	98,  // 88: controlplane.v1.ScheduleOccurrence.available_at:type_name -> google.protobuf.Timestamp
+	73,  // 89: controlplane.v1.ClaimDueSchedulesResponse.occurrences:type_name -> controlplane.v1.ScheduleOccurrence
+	73,  // 90: controlplane.v1.ClaimScheduleOccurrenceResponse.occurrence:type_name -> controlplane.v1.ScheduleOccurrence
+	8,   // 91: controlplane.v1.CompleteScheduleOccurrenceRequest.terminal_state:type_name -> controlplane.v1.ScheduleOccurrenceState
+	73,  // 92: controlplane.v1.CompleteScheduleOccurrenceResponse.occurrence:type_name -> controlplane.v1.ScheduleOccurrence
+	73,  // 93: controlplane.v1.CancelScheduleOccurrenceResponse.occurrence:type_name -> controlplane.v1.ScheduleOccurrence
+	8,   // 94: controlplane.v1.ListScheduleOccurrencesRequest.states:type_name -> controlplane.v1.ScheduleOccurrenceState
+	73,  // 95: controlplane.v1.ListScheduleOccurrencesResponse.occurrences:type_name -> controlplane.v1.ScheduleOccurrence
+	33,  // 96: controlplane.v1.StartProcessResponse.process_run:type_name -> controlplane.v1.Resource
+	33,  // 97: controlplane.v1.CancelProcessResponse.process_run:type_name -> controlplane.v1.Resource
+	98,  // 98: controlplane.v1.RequestOwnerGateRequest.expires_at:type_name -> google.protobuf.Timestamp
+	33,  // 99: controlplane.v1.RequestOwnerGateResponse.owner_gate:type_name -> controlplane.v1.Resource
+	33,  // 100: controlplane.v1.RequestOwnerGateResponse.process_run:type_name -> controlplane.v1.Resource
+	5,   // 101: controlplane.v1.ResolveOwnerGateRequest.decision:type_name -> controlplane.v1.OwnerGateDecision
+	33,  // 102: controlplane.v1.ResolveOwnerGateResponse.owner_gate:type_name -> controlplane.v1.Resource
+	33,  // 103: controlplane.v1.ResolveOwnerGateResponse.process_run:type_name -> controlplane.v1.Resource
+	31,  // 104: controlplane.v1.RegisterArtifactRequest.spec:type_name -> controlplane.v1.ArtifactSpec
+	33,  // 105: controlplane.v1.RegisterArtifactResponse.artifact:type_name -> controlplane.v1.Resource
+	7,   // 106: controlplane.v1.RecordArtifactScanRequest.target_state:type_name -> controlplane.v1.ArtifactScanState
+	33,  // 107: controlplane.v1.RecordArtifactScanResponse.artifact:type_name -> controlplane.v1.Resource
+	9,   // 108: controlplane.v1.ErrorDetail.reason:type_name -> controlplane.v1.ErrorReason
+	10,  // 109: controlplane.v1.ControlPlaneService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
+	12,  // 110: controlplane.v1.ControlPlaneService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
+	34,  // 111: controlplane.v1.ControlPlaneService.CreateResource:input_type -> controlplane.v1.CreateResourceRequest
+	36,  // 112: controlplane.v1.ControlPlaneService.UpdateResource:input_type -> controlplane.v1.UpdateResourceRequest
+	38,  // 113: controlplane.v1.ControlPlaneService.TransitionResource:input_type -> controlplane.v1.TransitionResourceRequest
+	40,  // 114: controlplane.v1.ControlPlaneService.DeleteResource:input_type -> controlplane.v1.DeleteResourceRequest
+	42,  // 115: controlplane.v1.ControlPlaneService.ManageAccessResource:input_type -> controlplane.v1.ManageAccessResourceRequest
+	44,  // 116: controlplane.v1.ControlPlaneService.GetResource:input_type -> controlplane.v1.GetResourceRequest
+	46,  // 117: controlplane.v1.ControlPlaneService.ListResources:input_type -> controlplane.v1.ListResourcesRequest
+	48,  // 118: controlplane.v1.ControlPlaneService.SearchResources:input_type -> controlplane.v1.SearchResourcesRequest
+	51,  // 119: controlplane.v1.ControlPlaneService.ListAuditEvents:input_type -> controlplane.v1.ListAuditEventsRequest
+	54,  // 120: controlplane.v1.ControlPlaneService.ListTombstones:input_type -> controlplane.v1.ListTombstonesRequest
+	56,  // 121: controlplane.v1.ControlPlaneService.GetDiagnostics:input_type -> controlplane.v1.GetDiagnosticsRequest
+	58,  // 122: controlplane.v1.ControlPlaneService.EnqueueTurn:input_type -> controlplane.v1.EnqueueTurnRequest
+	60,  // 123: controlplane.v1.ControlPlaneService.ClaimTurn:input_type -> controlplane.v1.ClaimTurnRequest
+	62,  // 124: controlplane.v1.ControlPlaneService.RenewTurn:input_type -> controlplane.v1.RenewTurnRequest
+	64,  // 125: controlplane.v1.ControlPlaneService.CompleteTurn:input_type -> controlplane.v1.CompleteTurnRequest
+	66,  // 126: controlplane.v1.ControlPlaneService.RetryTurn:input_type -> controlplane.v1.RetryTurnRequest
+	68,  // 127: controlplane.v1.ControlPlaneService.CancelTurn:input_type -> controlplane.v1.CancelTurnRequest
+	70,  // 128: controlplane.v1.ControlPlaneService.ManageSchedule:input_type -> controlplane.v1.ManageScheduleRequest
+	72,  // 129: controlplane.v1.ControlPlaneService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
+	75,  // 130: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:input_type -> controlplane.v1.ClaimScheduleOccurrenceRequest
+	77,  // 131: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:input_type -> controlplane.v1.CompleteScheduleOccurrenceRequest
+	79,  // 132: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:input_type -> controlplane.v1.CancelScheduleOccurrenceRequest
+	81,  // 133: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:input_type -> controlplane.v1.ListScheduleOccurrencesRequest
+	83,  // 134: controlplane.v1.ControlPlaneService.StartProcess:input_type -> controlplane.v1.StartProcessRequest
+	85,  // 135: controlplane.v1.ControlPlaneService.CancelProcess:input_type -> controlplane.v1.CancelProcessRequest
+	87,  // 136: controlplane.v1.ControlPlaneService.RequestOwnerGate:input_type -> controlplane.v1.RequestOwnerGateRequest
+	89,  // 137: controlplane.v1.ControlPlaneService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
+	91,  // 138: controlplane.v1.ControlPlaneService.RegisterArtifact:input_type -> controlplane.v1.RegisterArtifactRequest
+	93,  // 139: controlplane.v1.ControlPlaneService.RecordArtifactScan:input_type -> controlplane.v1.RecordArtifactScanRequest
+	95,  // 140: controlplane.v1.ControlPlaneService.CheckReadiness:input_type -> controlplane.v1.CheckReadinessRequest
+	11,  // 141: controlplane.v1.ControlPlaneService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
+	13,  // 142: controlplane.v1.ControlPlaneService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
+	35,  // 143: controlplane.v1.ControlPlaneService.CreateResource:output_type -> controlplane.v1.CreateResourceResponse
+	37,  // 144: controlplane.v1.ControlPlaneService.UpdateResource:output_type -> controlplane.v1.UpdateResourceResponse
+	39,  // 145: controlplane.v1.ControlPlaneService.TransitionResource:output_type -> controlplane.v1.TransitionResourceResponse
+	41,  // 146: controlplane.v1.ControlPlaneService.DeleteResource:output_type -> controlplane.v1.DeleteResourceResponse
+	43,  // 147: controlplane.v1.ControlPlaneService.ManageAccessResource:output_type -> controlplane.v1.ManageAccessResourceResponse
+	45,  // 148: controlplane.v1.ControlPlaneService.GetResource:output_type -> controlplane.v1.GetResourceResponse
+	47,  // 149: controlplane.v1.ControlPlaneService.ListResources:output_type -> controlplane.v1.ListResourcesResponse
+	49,  // 150: controlplane.v1.ControlPlaneService.SearchResources:output_type -> controlplane.v1.SearchResourcesResponse
+	52,  // 151: controlplane.v1.ControlPlaneService.ListAuditEvents:output_type -> controlplane.v1.ListAuditEventsResponse
+	55,  // 152: controlplane.v1.ControlPlaneService.ListTombstones:output_type -> controlplane.v1.ListTombstonesResponse
+	57,  // 153: controlplane.v1.ControlPlaneService.GetDiagnostics:output_type -> controlplane.v1.GetDiagnosticsResponse
+	59,  // 154: controlplane.v1.ControlPlaneService.EnqueueTurn:output_type -> controlplane.v1.EnqueueTurnResponse
+	61,  // 155: controlplane.v1.ControlPlaneService.ClaimTurn:output_type -> controlplane.v1.ClaimTurnResponse
+	63,  // 156: controlplane.v1.ControlPlaneService.RenewTurn:output_type -> controlplane.v1.RenewTurnResponse
+	65,  // 157: controlplane.v1.ControlPlaneService.CompleteTurn:output_type -> controlplane.v1.CompleteTurnResponse
+	67,  // 158: controlplane.v1.ControlPlaneService.RetryTurn:output_type -> controlplane.v1.RetryTurnResponse
+	69,  // 159: controlplane.v1.ControlPlaneService.CancelTurn:output_type -> controlplane.v1.CancelTurnResponse
+	71,  // 160: controlplane.v1.ControlPlaneService.ManageSchedule:output_type -> controlplane.v1.ManageScheduleResponse
+	74,  // 161: controlplane.v1.ControlPlaneService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
+	76,  // 162: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:output_type -> controlplane.v1.ClaimScheduleOccurrenceResponse
+	78,  // 163: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:output_type -> controlplane.v1.CompleteScheduleOccurrenceResponse
+	80,  // 164: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:output_type -> controlplane.v1.CancelScheduleOccurrenceResponse
+	82,  // 165: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:output_type -> controlplane.v1.ListScheduleOccurrencesResponse
+	84,  // 166: controlplane.v1.ControlPlaneService.StartProcess:output_type -> controlplane.v1.StartProcessResponse
+	86,  // 167: controlplane.v1.ControlPlaneService.CancelProcess:output_type -> controlplane.v1.CancelProcessResponse
+	88,  // 168: controlplane.v1.ControlPlaneService.RequestOwnerGate:output_type -> controlplane.v1.RequestOwnerGateResponse
+	90,  // 169: controlplane.v1.ControlPlaneService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
+	92,  // 170: controlplane.v1.ControlPlaneService.RegisterArtifact:output_type -> controlplane.v1.RegisterArtifactResponse
+	94,  // 171: controlplane.v1.ControlPlaneService.RecordArtifactScan:output_type -> controlplane.v1.RecordArtifactScanResponse
+	96,  // 172: controlplane.v1.ControlPlaneService.CheckReadiness:output_type -> controlplane.v1.CheckReadinessResponse
+	141, // [141:173] is the sub-list for method output_type
+	109, // [109:141] is the sub-list for method input_type
+	109, // [109:109] is the sub-list for extension type_name
+	109, // [109:109] is the sub-list for extension extendee
+	0,   // [0:109] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_control_plane_proto_init() }
@@ -4593,7 +8196,7 @@ func file_controlplane_v1_control_plane_proto_init() {
 	if File_controlplane_v1_control_plane_proto != nil {
 		return
 	}
-	file_controlplane_v1_control_plane_proto_msgTypes[21].OneofWrappers = []any{
+	file_controlplane_v1_control_plane_proto_msgTypes[22].OneofWrappers = []any{
 		(*ResourceSpec_Project)(nil),
 		(*ResourceSpec_Team)(nil),
 		(*ResourceSpec_Chat)(nil),
@@ -4617,8 +8220,8 @@ func file_controlplane_v1_control_plane_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlplane_v1_control_plane_proto_rawDesc), len(file_controlplane_v1_control_plane_proto_rawDesc)),
-			NumEnums:      7,
-			NumMessages:   49,
+			NumEnums:      10,
+			NumMessages:   88,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

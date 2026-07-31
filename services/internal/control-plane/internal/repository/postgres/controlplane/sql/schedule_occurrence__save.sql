@@ -1,16 +1,45 @@
+-- name: ScheduleOccurrenceSave
 INSERT INTO control_plane.schedule_occurrences (
     id,
     schedule_id,
     organization_id,
     project_id,
     scheduled_for,
-    target_resource_id
+    target_resource_id,
+    target_kind,
+    target_version,
+    effective_input_sha256,
+    overlap_policy,
+    maximum_attempts,
+    initial_backoff_ms,
+    maximum_backoff_ms,
+    dead_letter_at,
+    state,
+    attempt,
+    available_at,
+    outcome,
+    result_artifact_id,
+    updated_at
 ) VALUES (
     @id::uuid,
     @schedule_id::uuid,
     @organization_id::uuid,
     @project_id::uuid,
     @scheduled_for,
-    @target_resource_id::uuid
+    @target_resource_id::uuid,
+    @target_kind,
+    @target_version,
+    @effective_input_sha256,
+    @overlap_policy,
+    @maximum_attempts,
+    @initial_backoff_ms,
+    @maximum_backoff_ms,
+    @dead_letter_at,
+    @state,
+    @attempt,
+    @available_at,
+    nullif(@outcome, ''),
+    nullif(@result_artifact_id, '')::uuid,
+    @updated_at
 )
 ON CONFLICT (schedule_id, scheduled_for) DO NOTHING

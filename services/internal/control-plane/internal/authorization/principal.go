@@ -42,13 +42,15 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 		projectID = verified.GetAuthority().GetProject().GetId()
 	}
 	principal := value.Principal{
-		ActorID:        verified.GetAuthority().GetActor().GetId(),
-		OrganizationID: verified.GetAuthority().GetTenant().GetId(),
-		ProjectID:      projectID,
-		Permission:     verified.GetPermission(),
-		CorrelationID:  verified.GetJti(),
-		PolicyRevision: verified.GetPolicyRevision(),
-		CallerWorkload: verified.GetCallerWorkloadId(),
+		ActorID:             verified.GetAuthority().GetActor().GetId(),
+		OrganizationID:      verified.GetAuthority().GetTenant().GetId(),
+		ProjectID:           projectID,
+		Permission:          verified.GetPermission(),
+		CorrelationID:       verified.GetJti(),
+		PolicyRevision:      verified.GetPolicyRevision(),
+		AuthorityGeneration: verified.GetSignerGeneration(),
+		CallerWorkload:      verified.GetCallerWorkloadId(),
+		CallerSPIFFEID:      verified.GetCallerSpiffeId(),
 	}
 	if err := principal.Validate(); err != nil {
 		return value.Principal{}, errors.New("verified authorization identity is invalid")

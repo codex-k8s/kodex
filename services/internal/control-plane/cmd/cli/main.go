@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/jackc/pgx/v5"
@@ -23,7 +25,10 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-const schemaVersion int64 = 20260731000100
+//go:embed sql/*.sql
+var operationalSQL embed.FS
+
+const schemaVersion int64 = 20260731000200
 
 func main() {
 	ctx, stop := signal.NotifyContext(
@@ -136,7 +141,7 @@ func migrateExpand(ctx context.Context, database *sql.DB) error {
 	); err != nil {
 		return fmt.Errorf("apply control-plane expand migration: %w", err)
 	}
-	return nil
+	return reconcileRuntimePrincipals(ctx, database)
 }
 
 func migrateUp(ctx context.Context, database *sql.DB) error {
@@ -150,5 +155,123 @@ func migrateUp(ctx context.Context, database *sql.DB) error {
 	if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 		return fmt.Errorf("apply control-plane migrations: %w", err)
 	}
+	return reconcileRuntimePrincipals(ctx, database)
+}
+
+type runtimePrincipalConfig struct {
+	ContextKeyID       string `env:"CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID,required,notEmpty"`
+	ContextKeyFile     string `env:"CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE,required,notEmpty"`
+	CurrentName        string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_PRINCIPAL,required,notEmpty"`
+	CurrentGeneration  uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_GENERATION,required"`
+	CurrentNotBefore   string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_NOT_BEFORE,required,notEmpty"`
+	CurrentNotAfter    string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_NOT_AFTER,required,notEmpty"`
+	NextName           string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_PRINCIPAL"`
+	NextGeneration     uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_GENERATION"`
+	NextNotBefore      string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_NOT_BEFORE"`
+	NextNotAfter       string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_NOT_AFTER"`
+	PreviousName       string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_PRINCIPAL"`
+	PreviousGeneration uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_GENERATION"`
+	PreviousNotBefore  string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_NOT_BEFORE"`
+	PreviousNotAfter   string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_NOT_AFTER"`
+}
+
+type runtimePrincipal struct {
+	PrincipalName string    `json:"principal_name"`
+	Generation    uint64    `json:"generation"`
+	Status        string    `json:"status"`
+	NotBefore     time.Time `json:"not_before"`
+	NotAfter      time.Time `json:"not_after"`
+}
+
+func reconcileRuntimePrincipals(ctx context.Context, database *sql.DB) error {
+	var config runtimePrincipalConfig
+	if err := env.Parse(&config); err != nil {
+		return errors.New("parse runtime principal reconciliation environment")
+	}
+	key, err := readRuntimeFile(config.ContextKeyFile, 128)
+	if err != nil || len(key) < 32 {
+		return errors.New("read bounded PostgreSQL context signing key")
+	}
+	principals := make([]runtimePrincipal, 0, 3)
+	current, err := parseRuntimePrincipal(
+		config.CurrentName,
+		config.CurrentGeneration,
+		"CURRENT",
+		config.CurrentNotBefore,
+		config.CurrentNotAfter,
+	)
+	if err != nil {
+		return err
+	}
+	principals = append(principals, current)
+	for _, candidate := range []struct {
+		name       string
+		generation uint64
+		status     string
+		notBefore  string
+		notAfter   string
+	}{
+		{
+			config.NextName,
+			config.NextGeneration,
+			"NEXT",
+			config.NextNotBefore,
+			config.NextNotAfter,
+		},
+		{
+			config.PreviousName,
+			config.PreviousGeneration,
+			"PREVIOUS",
+			config.PreviousNotBefore,
+			config.PreviousNotAfter,
+		},
+	} {
+		if candidate.name == "" && candidate.generation == 0 &&
+			candidate.notBefore == "" && candidate.notAfter == "" {
+			continue
+		}
+		parsed, parseErr := parseRuntimePrincipal(
+			candidate.name,
+			candidate.generation,
+			candidate.status,
+			candidate.notBefore,
+			candidate.notAfter,
+		)
+		if parseErr != nil {
+			return parseErr
+		}
+		principals = append(principals, parsed)
+	}
+	payload, err := json.Marshal(principals)
+	if err != nil {
+		return errors.New("encode runtime principal reconciliation input")
+	}
+	statement, err := operationalSQL.ReadFile("sql/runtime_principals__reconcile.sql")
+	if err != nil {
+		return errors.New("load runtime principal reconciliation SQL")
+	}
+	if _, err := database.ExecContext(ctx, string(statement), payload, config.ContextKeyID, key); err != nil {
+		return fmt.Errorf("reconcile runtime PostgreSQL principals: %w", err)
+	}
 	return nil
+}
+
+func parseRuntimePrincipal(
+	name string,
+	generation uint64,
+	status, notBeforeRaw, notAfterRaw string,
+) (runtimePrincipal, error) {
+	notBefore, beforeErr := time.Parse(time.RFC3339, notBeforeRaw)
+	notAfter, afterErr := time.Parse(time.RFC3339, notAfterRaw)
+	if name == "" || generation == 0 || beforeErr != nil || afterErr != nil ||
+		!notAfter.After(notBefore) {
+		return runtimePrincipal{}, errors.New("runtime principal lifecycle input is invalid")
+	}
+	return runtimePrincipal{
+		PrincipalName: name,
+		Generation:    generation,
+		Status:        status,
+		NotBefore:     notBefore.UTC(),
+		NotAfter:      notAfter.UTC(),
+	}, nil
 }

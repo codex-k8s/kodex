@@ -196,12 +196,17 @@ func (spec IntegrationSpec) Validate() error {
 }
 
 type RuntimeRevisionSpec struct {
-	ManifestSHA256       string   `json:"manifestSha256"`
-	ImageDigest          string   `json:"imageDigest"`
-	PromptProfileID      string   `json:"promptProfileId"`
-	PromptRevision       uint64   `json:"promptRevision"`
-	CredentialBindingIDs []string `json:"credentialBindingIds"`
-	IntegrationIDs       []string `json:"integrationIds"`
+	ManifestSHA256         string                 `json:"manifestSha256"`
+	ImageDigest            string                 `json:"imageDigest"`
+	PromptProfileID        string                 `json:"promptProfileId"`
+	PromptRevision         uint64                 `json:"promptRevision"`
+	CredentialBindingIDs   []string               `json:"credentialBindingIds"`
+	IntegrationIDs         []string               `json:"integrationIds"`
+	PredecessorRevisionID  string                 `json:"predecessorRevisionId,omitempty"`
+	AuthorityPolicyVersion uint64                 `json:"authorityPolicyRevision"`
+	AuthorityPolicySHA256  string                 `json:"authorityPolicySha256"`
+	Components             []EffectiveResourceRef `json:"components"`
+	CreatedAt              time.Time              `json:"createdAt"`
 }
 
 func (RuntimeRevisionSpec) Kind() enum.Kind { return enum.KindRuntimeRevision }
@@ -213,8 +218,16 @@ func (spec RuntimeRevisionSpec) Validate() error {
 		spec.PromptRevision == 0 ||
 		len(spec.CredentialBindingIDs) > 64 || len(spec.IntegrationIDs) > 64 ||
 		!validUniqueIDs(spec.CredentialBindingIDs) ||
-		!validUniqueIDs(spec.IntegrationIDs) {
+		!validUniqueIDs(spec.IntegrationIDs) ||
+		spec.AuthorityPolicyVersion == 0 ||
+		!validSHA256(spec.AuthorityPolicySHA256) ||
+		len(spec.Components) < 5 || len(spec.Components) > 256 ||
+		spec.CreatedAt.IsZero() {
 		return errors.New("runtime revision specification is invalid")
+	}
+	if spec.PredecessorRevisionID != "" &&
+		value.ValidateID(spec.PredecessorRevisionID) != nil {
+		return errors.New("runtime revision predecessor is invalid")
 	}
 	for _, identifiers := range [][]string{spec.CredentialBindingIDs, spec.IntegrationIDs} {
 		for _, identifier := range identifiers {
@@ -222,6 +235,34 @@ func (spec RuntimeRevisionSpec) Validate() error {
 				return errors.New("runtime revision binding is invalid")
 			}
 		}
+	}
+	seen := make(map[string]struct{}, len(spec.Components))
+	for _, component := range spec.Components {
+		if err := component.Validate(); err != nil {
+			return err
+		}
+		key := string(component.Kind) + "\x00" + component.ResourceID
+		if _, duplicate := seen[key]; duplicate {
+			return errors.New("runtime revision component is duplicated")
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+type EffectiveResourceRef struct {
+	Kind             enum.Kind `json:"kind"`
+	ResourceID       string    `json:"resourceId"`
+	Version          uint64    `json:"version"`
+	ProjectionSHA256 string    `json:"projectionSha256"`
+}
+
+func (reference EffectiveResourceRef) Validate() error {
+	if !reference.Kind.Valid() ||
+		value.ValidateID(reference.ResourceID) != nil ||
+		reference.Version == 0 ||
+		!validSHA256(reference.ProjectionSHA256) {
+		return errors.New("runtime revision component is invalid")
 	}
 	return nil
 }
@@ -252,15 +293,17 @@ func (spec SessionSpec) Validate() error {
 }
 
 type TurnSpec struct {
-	SessionID         string `json:"sessionId"`
-	Sequence          uint64 `json:"sequence"`
-	SourceRef         string `json:"sourceRef"`
-	PromptArtifactID  string `json:"promptArtifactId"`
-	RuntimeRevisionID string `json:"runtimeRevisionId,omitempty"`
-	ProcessRunID      string `json:"processRunId,omitempty"`
-	Attempt           uint32 `json:"attempt"`
-	Outcome           string `json:"outcome,omitempty"`
-	ResultArtifactID  string `json:"resultArtifactId,omitempty"`
+	SessionID            string `json:"sessionId"`
+	Sequence             uint64 `json:"sequence"`
+	SourceRef            string `json:"sourceRef"`
+	PromptArtifactID     string `json:"promptArtifactId"`
+	RuntimeRevisionID    string `json:"runtimeRevisionId"`
+	ProcessRunID         string `json:"processRunId,omitempty"`
+	Attempt              uint32 `json:"attempt"`
+	Outcome              string `json:"outcome,omitempty"`
+	ResultArtifactID     string `json:"resultArtifactId,omitempty"`
+	EffectiveInputSHA256 string `json:"effectiveInputSha256"`
+	PredecessorTurnID    string `json:"predecessorTurnId,omitempty"`
 }
 
 func (TurnSpec) Kind() enum.Kind { return enum.KindTurn }
@@ -268,14 +311,16 @@ func (spec TurnSpec) Validate() error {
 	if value.ValidateID(spec.SessionID) != nil || spec.Sequence == 0 ||
 		!validExternalRef(spec.SourceRef) ||
 		value.ValidateID(spec.PromptArtifactID) != nil ||
+		value.ValidateID(spec.RuntimeRevisionID) != nil ||
 		spec.Attempt == 0 || spec.Attempt > 100 ||
-		len(spec.Outcome) > 256 {
+		len(spec.Outcome) > 256 ||
+		!validSHA256(spec.EffectiveInputSHA256) {
 		return errors.New("turn specification is invalid")
 	}
 	for _, identifier := range []string{
-		spec.RuntimeRevisionID,
 		spec.ProcessRunID,
 		spec.ResultArtifactID,
+		spec.PredecessorTurnID,
 	} {
 		if identifier != "" && value.ValidateID(identifier) != nil {
 			return errors.New("turn binding is invalid")
@@ -285,17 +330,27 @@ func (spec TurnSpec) Validate() error {
 }
 
 type ProcessRunSpec struct {
-	ParentProcessRunID string `json:"parentProcessRunId,omitempty"`
-	PlaybookRef        string `json:"playbookRef"`
-	PolicyRevision     uint64 `json:"policyRevision"`
-	RootTriggerRef     string `json:"rootTriggerRef"`
-	ResultArtifactID   string `json:"resultArtifactId,omitempty"`
+	ParentProcessRunID   string `json:"parentProcessRunId,omitempty"`
+	PlaybookRef          string `json:"playbookRef"`
+	PolicyRevision       uint64 `json:"policyRevision"`
+	RootTriggerRef       string `json:"rootTriggerRef"`
+	ResultArtifactID     string `json:"resultArtifactId,omitempty"`
+	RootInitiatorActorID string `json:"rootInitiatorActorId"`
+	RootSessionID        string `json:"rootSessionId"`
+	RootTurnID           string `json:"rootTurnId"`
+	RootAttempt          uint32 `json:"rootAttempt"`
+	ImmutableInputSHA256 string `json:"immutableInputSha256"`
 }
 
 func (ProcessRunSpec) Kind() enum.Kind { return enum.KindProcessRun }
 func (spec ProcessRunSpec) Validate() error {
 	if !validExternalRef(spec.PlaybookRef) || spec.PolicyRevision == 0 ||
-		!validExternalRef(spec.RootTriggerRef) {
+		!validExternalRef(spec.RootTriggerRef) ||
+		value.ValidateID(spec.RootInitiatorActorID) != nil ||
+		value.ValidateID(spec.RootSessionID) != nil ||
+		value.ValidateID(spec.RootTurnID) != nil ||
+		spec.RootAttempt == 0 || spec.RootAttempt > 100 ||
+		!validSHA256(spec.ImmutableInputSHA256) {
 		return errors.New("process run specification is invalid")
 	}
 	for _, identifier := range []string{spec.ParentProcessRunID, spec.ResultArtifactID} {
@@ -307,27 +362,47 @@ func (spec ProcessRunSpec) Validate() error {
 }
 
 type ScheduleSpec struct {
-	TargetResourceID string        `json:"targetResourceId"`
-	Cron             string        `json:"cron,omitempty"`
-	Interval         time.Duration `json:"interval,omitempty"`
-	Timezone         string        `json:"timezone"`
-	OverlapPolicy    string        `json:"overlapPolicy"`
-	MisfirePolicy    string        `json:"misfirePolicy"`
-	MisfireGrace     time.Duration `json:"misfireGrace"`
-	NextRunAt        time.Time     `json:"nextRunAt"`
+	TargetResourceID  string        `json:"targetResourceId"`
+	TargetKind        enum.Kind     `json:"targetKind"`
+	TargetVersion     uint64        `json:"targetVersion"`
+	EffectiveInputSHA string        `json:"effectiveInputSha256"`
+	Cron              string        `json:"cron,omitempty"`
+	Interval          time.Duration `json:"interval,omitempty"`
+	Timezone          string        `json:"timezone"`
+	Calendar          string        `json:"calendar"`
+	OverlapPolicy     string        `json:"overlapPolicy"`
+	MisfirePolicy     string        `json:"misfirePolicy"`
+	MisfireGrace      time.Duration `json:"misfireGrace"`
+	NextRunAt         time.Time     `json:"nextRunAt"`
+	DeliveryPolicy    string        `json:"deliveryPolicy"`
+	MaximumAttempts   uint32        `json:"maximumAttempts"`
+	InitialBackoff    time.Duration `json:"initialBackoff"`
+	MaximumBackoff    time.Duration `json:"maximumBackoff"`
+	DeadLetterAfter   time.Duration `json:"deadLetterAfter"`
 }
 
 func (ScheduleSpec) Kind() enum.Kind { return enum.KindSchedule }
 func (spec ScheduleSpec) Validate() error {
 	if value.ValidateID(spec.TargetResourceID) != nil ||
+		!spec.TargetKind.Valid() || spec.TargetKind == enum.KindSchedule ||
+		spec.TargetVersion == 0 || !validSHA256(spec.EffectiveInputSHA) ||
 		(spec.Cron == "") == (spec.Interval == 0) ||
 		len(spec.Cron) > 128 ||
 		(spec.Interval != 0 && (spec.Interval < time.Minute || spec.Interval > 365*24*time.Hour)) ||
 		spec.NextRunAt.IsZero() ||
-		(spec.OverlapPolicy != "FORBID" && spec.OverlapPolicy != "QUEUE_ALL" &&
-			spec.OverlapPolicy != "COALESCE") ||
+		(spec.Calendar != "GREGORIAN" && spec.Calendar != "BUSINESS") ||
+		(spec.OverlapPolicy != "FORBID" && spec.OverlapPolicy != "SKIP" &&
+			spec.OverlapPolicy != "QUEUE") ||
 		(spec.MisfirePolicy != "SKIP" && spec.MisfirePolicy != "RUN_ONCE" &&
-			spec.MisfirePolicy != "CATCH_UP" && spec.MisfirePolicy != "WITHIN_GRACE") {
+			spec.MisfirePolicy != "CATCH_UP" && spec.MisfirePolicy != "WITHIN_GRACE") ||
+		(spec.DeliveryPolicy != "AT_LEAST_ONCE" &&
+			spec.DeliveryPolicy != "EXACTLY_ONCE_EFFECT") ||
+		spec.MaximumAttempts == 0 || spec.MaximumAttempts > 100 ||
+		spec.InitialBackoff < time.Second ||
+		spec.MaximumBackoff < spec.InitialBackoff ||
+		spec.MaximumBackoff > 24*time.Hour ||
+		spec.DeadLetterAfter < spec.MaximumBackoff ||
+		spec.DeadLetterAfter > 30*24*time.Hour {
 		return errors.New("schedule specification is invalid")
 	}
 	if (spec.MisfirePolicy == "WITHIN_GRACE" &&
@@ -342,12 +417,20 @@ func (spec ScheduleSpec) Validate() error {
 }
 
 type OwnerGateSpec struct {
-	ProcessRunID   string    `json:"processRunId"`
-	ResultRef      string    `json:"resultRef"`
-	ResultSHA256   string    `json:"resultSha256"`
-	ExpiresAt      time.Time `json:"expiresAt"`
-	Decision       string    `json:"decision,omitempty"`
-	DecisionReason string    `json:"decisionReason,omitempty"`
+	ProcessRunID         string    `json:"processRunId"`
+	ResultRef            string    `json:"resultRef"`
+	ResultSHA256         string    `json:"resultSha256"`
+	ExpiresAt            time.Time `json:"expiresAt"`
+	Decision             string    `json:"decision,omitempty"`
+	DecisionReason       string    `json:"decisionReason,omitempty"`
+	RootInitiatorActorID string    `json:"rootInitiatorActorId"`
+	SessionID            string    `json:"sessionId"`
+	TurnID               string    `json:"turnId"`
+	Attempt              uint32    `json:"attempt"`
+	ImmutableInputSHA256 string    `json:"immutableInputSha256"`
+	RecipientActorID     string    `json:"recipientActorId"`
+	DeliveryWorkloadID   string    `json:"deliveryWorkloadId"`
+	DeliverySPIFFEID     string    `json:"deliverySpiffeId"`
 }
 
 func (OwnerGateSpec) Kind() enum.Kind { return enum.KindOwnerGate }
@@ -356,6 +439,15 @@ func (spec OwnerGateSpec) Validate() error {
 		!validExternalRef(spec.ResultRef) ||
 		!validSHA256(spec.ResultSHA256) ||
 		spec.ExpiresAt.IsZero() ||
+		value.ValidateID(spec.RootInitiatorActorID) != nil ||
+		value.ValidateID(spec.SessionID) != nil ||
+		value.ValidateID(spec.TurnID) != nil ||
+		spec.Attempt == 0 || spec.Attempt > 100 ||
+		!validSHA256(spec.ImmutableInputSHA256) ||
+		value.ValidateID(spec.RecipientActorID) != nil ||
+		value.ValidateStableKey(spec.DeliveryWorkloadID) != nil ||
+		!strings.HasPrefix(spec.DeliverySPIFFEID, "spiffe://") ||
+		len(spec.DeliverySPIFFEID) > 512 ||
 		(spec.Decision != "" && spec.Decision != "APPROVED" &&
 			spec.Decision != "REJECTED" &&
 			spec.Decision != "CHANGES_REQUESTED" &&
@@ -421,14 +513,18 @@ func (spec WorkClaimSpec) Validate() error {
 }
 
 type ArtifactSpec struct {
-	ArtifactKind       string `json:"kind"`
-	Direction          string `json:"direction"`
-	StorageRef         string `json:"storageRef"`
-	SizeBytes          uint64 `json:"sizeBytes"`
-	MediaType          string `json:"mediaType"`
-	SHA256             string `json:"sha256"`
-	ScanStatus         string `json:"scanStatus"`
-	RetentionPolicyRef string `json:"retentionPolicyRef"`
+	ArtifactKind       string    `json:"kind"`
+	Direction          string    `json:"direction"`
+	StorageRef         string    `json:"storageRef"`
+	SizeBytes          uint64    `json:"sizeBytes"`
+	MediaType          string    `json:"mediaType"`
+	SHA256             string    `json:"sha256"`
+	ScanStatus         string    `json:"scanStatus"`
+	RetentionPolicyRef string    `json:"retentionPolicyRef"`
+	ScanPolicyRevision uint64    `json:"scanPolicyRevision,omitempty"`
+	ScanEvidenceSHA256 string    `json:"scanEvidenceSha256,omitempty"`
+	ScannerWorkloadID  string    `json:"scannerWorkloadId,omitempty"`
+	ScannedAt          time.Time `json:"scannedAt,omitempty"`
 }
 
 func (ArtifactSpec) Kind() enum.Kind { return enum.KindArtifact }
@@ -440,10 +536,31 @@ func (spec ArtifactSpec) Validate() error {
 		spec.SizeBytes == 0 || spec.SizeBytes > 10<<30 ||
 		len(spec.MediaType) < 3 || len(spec.MediaType) > 255 ||
 		!validSHA256(spec.SHA256) ||
-		(spec.ScanStatus != "PENDING" && spec.ScanStatus != "CLEAN" &&
+		(spec.ScanStatus != "PENDING" && spec.ScanStatus != "SCANNING" &&
+			spec.ScanStatus != "CLEAN" &&
 			spec.ScanStatus != "QUARANTINED" && spec.ScanStatus != "FAILED") ||
 		!validExternalRef(spec.RetentionPolicyRef) {
 		return errors.New("artifact specification is invalid")
+	}
+	if spec.ScanStatus == "PENDING" {
+		if spec.ScanPolicyRevision != 0 || spec.ScanEvidenceSHA256 != "" ||
+			spec.ScannerWorkloadID != "" || !spec.ScannedAt.IsZero() {
+			return errors.New("pending artifact scan metadata is invalid")
+		}
+		return nil
+	}
+	if spec.ScanPolicyRevision == 0 ||
+		value.ValidateStableKey(spec.ScannerWorkloadID) != nil {
+		return errors.New("artifact scan metadata is invalid")
+	}
+	if spec.ScanStatus == "SCANNING" {
+		if spec.ScanEvidenceSHA256 != "" || !spec.ScannedAt.IsZero() {
+			return errors.New("in-progress artifact evidence is invalid")
+		}
+		return nil
+	}
+	if !validSHA256(spec.ScanEvidenceSHA256) || spec.ScannedAt.IsZero() {
+		return errors.New("terminal artifact scan evidence is invalid")
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -22,35 +23,64 @@ import (
 )
 
 const (
-	permissionCreate        = "controlplane.resource.create"
-	permissionUpdate        = "controlplane.resource.update"
-	permissionTransition    = "controlplane.resource.transition"
-	permissionDelete        = "controlplane.resource.delete"
-	permissionRead          = "controlplane.resource.read"
-	permissionList          = "controlplane.resource.list"
-	permissionEnqueueTurn   = "controlplane.turn.enqueue"
-	permissionClaimTurn     = "controlplane.turn.claim"
-	permissionCompleteTurn  = "controlplane.turn.complete"
-	permissionClaimSchedule = "controlplane.schedule.claim"
-	permissionResolveGate   = "controlplane.owner_gate.resolve"
+	permissionCreate           = "controlplane.resource.create"
+	permissionUpdate           = "controlplane.resource.update"
+	permissionTransition       = "controlplane.resource.transition"
+	permissionDelete           = "controlplane.resource.delete"
+	permissionAccessManage     = "controlplane.access.manage"
+	permissionRead             = "controlplane.resource.read"
+	permissionList             = "controlplane.resource.list"
+	permissionEnqueueTurn      = "controlplane.turn.enqueue"
+	permissionClaimTurn        = "controlplane.turn.claim"
+	permissionRenewTurn        = "controlplane.turn.renew"
+	permissionCompleteTurn     = "controlplane.turn.complete"
+	permissionRetryTurn        = "controlplane.turn.retry"
+	permissionCancelTurn       = "controlplane.turn.cancel"
+	permissionClaimSchedule    = "controlplane.schedule.claim"
+	permissionManageSchedule   = "controlplane.schedule.manage"
+	permissionExecuteSchedule  = "controlplane.schedule.execute"
+	permissionStartProcess     = "controlplane.process.start"
+	permissionCancelProcess    = "controlplane.process.cancel"
+	permissionRequestGate      = "controlplane.owner_gate.request"
+	permissionResolveGate      = "controlplane.owner_gate.resolve"
+	permissionRegisterArtifact = "controlplane.artifact.register"
+	permissionScanArtifact     = "controlplane.artifact.scan"
 )
 
 // Config задаёт security-critical bounded runtime policy.
 type Config struct {
-	LeaseSigningKey       []byte
-	TurnLeaseDuration     time.Duration
-	MaximumScheduleClaims int
-	Observer              Observer
+	LeaseSigningKey           []byte
+	TurnLeaseDuration         time.Duration
+	MaximumScheduleClaims     int
+	RuntimeImageDigest        string
+	AuthorityPolicyRevision   uint64
+	AuthorityPolicySHA256     string
+	OwnerGateDeliveryWorkload string
+	OwnerGateDeliverySPIFFEID string
+	ScannerWorkload           string
+	ScannerSPIFFEID           string
+	SchedulerWorkload         string
+	SchedulerSPIFFEID         string
+	Observer                  Observer
 }
 
 // Service владеет business transitions; adapter только сохраняет намерение.
 type Service struct {
-	repository            domainrepo.Repository
-	leaseSigningKey       []byte
-	turnLeaseDuration     time.Duration
-	maximumScheduleClaims int
-	observer              Observer
-	now                   func() time.Time
+	repository                domainrepo.Repository
+	leaseSigningKey           []byte
+	turnLeaseDuration         time.Duration
+	maximumScheduleClaims     int
+	runtimeImageDigest        string
+	authorityPolicyRevision   uint64
+	authorityPolicySHA256     string
+	ownerGateDeliveryWorkload string
+	ownerGateDeliverySPIFFEID string
+	scannerWorkload           string
+	scannerSPIFFEID           string
+	schedulerWorkload         string
+	schedulerSPIFFEID         string
+	observer                  Observer
+	now                       func() time.Time
 }
 
 // New создаёт service только с полноценными durable boundaries.
@@ -60,22 +90,44 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		config.TurnLeaseDuration > 30*time.Minute ||
 		config.MaximumScheduleClaims < 1 ||
 		config.MaximumScheduleClaims > 100 ||
+		!validImageDigest(config.RuntimeImageDigest) ||
+		config.AuthorityPolicyRevision == 0 ||
+		!validSHA256Text(config.AuthorityPolicySHA256) ||
+		value.ValidateStableKey(config.OwnerGateDeliveryWorkload) != nil ||
+		!validSPIFFEID(config.OwnerGateDeliverySPIFFEID) ||
+		value.ValidateStableKey(config.ScannerWorkload) != nil ||
+		!validSPIFFEID(config.ScannerSPIFFEID) ||
+		value.ValidateStableKey(config.SchedulerWorkload) != nil ||
+		!validSPIFFEID(config.SchedulerSPIFFEID) ||
 		config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
 	return &Service{
-		repository:            repository,
-		leaseSigningKey:       slices.Clone(config.LeaseSigningKey),
-		turnLeaseDuration:     config.TurnLeaseDuration,
-		maximumScheduleClaims: config.MaximumScheduleClaims,
-		observer:              config.Observer,
-		now:                   time.Now,
+		repository:                repository,
+		leaseSigningKey:           slices.Clone(config.LeaseSigningKey),
+		turnLeaseDuration:         config.TurnLeaseDuration,
+		maximumScheduleClaims:     config.MaximumScheduleClaims,
+		runtimeImageDigest:        config.RuntimeImageDigest,
+		authorityPolicyRevision:   config.AuthorityPolicyRevision,
+		authorityPolicySHA256:     config.AuthorityPolicySHA256,
+		ownerGateDeliveryWorkload: config.OwnerGateDeliveryWorkload,
+		ownerGateDeliverySPIFFEID: config.OwnerGateDeliverySPIFFEID,
+		scannerWorkload:           config.ScannerWorkload,
+		scannerSPIFFEID:           config.ScannerSPIFFEID,
+		schedulerWorkload:         config.SchedulerWorkload,
+		schedulerSPIFFEID:         config.SchedulerSPIFFEID,
+		observer:                  config.Observer,
+		now:                       time.Now,
 	}, nil
 }
 
 // Create создаёт server-owned ID, owner, project scope, state и OCC version.
 func (service *Service) Create(ctx context.Context, input CreateInput) (entity.Resource, error) {
-	if err := authorize(input.Principal, permissionCreate); err != nil {
+	permission := permissionCreate
+	if input.Administrative {
+		permission = permissionAccessManage
+	}
+	if err := authorize(input.Principal, permission); err != nil {
 		return entity.Resource{}, err
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
@@ -86,6 +138,10 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 		input.Spec.Validate() != nil ||
 		(input.ParentID != "" && value.ValidateID(input.ParentID) != nil) {
 		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	if accessKind(input.Kind) != input.Administrative ||
+		(!input.Administrative && protectedCreateKind(input.Kind)) {
+		return entity.Resource{}, errs.ErrPermissionDenied
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
 	if err := validateTemporalCreation(input.Spec, now); err != nil {
@@ -110,6 +166,12 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+	if input.Administrative {
+		resource, err = resource.Transition(enum.StatePaused, now)
+		if err != nil {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+	}
 	requestHash, err := canonicalHash(struct {
 		Identity commandIdentity
 		Kind     enum.Kind
@@ -127,6 +189,17 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 		"create",
 		requestHash,
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			if input.Administrative {
+				if err := service.validateAccessMutation(
+					ctx,
+					tx,
+					input.Principal,
+					resource.Kind,
+					resource.Spec,
+				); err != nil {
+					return entity.Resource{}, err
+				}
+			}
 			if err := service.validateReferences(ctx, tx, resource); err != nil {
 				return entity.Resource{}, err
 			}
@@ -146,7 +219,11 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 
 // Update обновляет resource только после tenant/project resolution и OCC.
 func (service *Service) Update(ctx context.Context, input UpdateInput) (entity.Resource, error) {
-	if err := authorize(input.Principal, permissionUpdate); err != nil {
+	permission := permissionUpdate
+	if input.Administrative {
+		permission = permissionAccessManage
+	}
+	if err := authorize(input.Principal, permission); err != nil {
 		return entity.Resource{}, err
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
@@ -194,6 +271,21 @@ func (service *Service) Update(ctx context.Context, input UpdateInput) (entity.R
 			if current.Version != input.ExpectedVersion {
 				return entity.Resource{}, errs.ErrVersionMismatch
 			}
+			if accessKind(current.Kind) != input.Administrative ||
+				(!input.Administrative && protectedMutationKind(current.Kind)) {
+				return entity.Resource{}, errs.ErrPermissionDenied
+			}
+			if input.Administrative {
+				if err := service.validateAccessMutation(
+					ctx,
+					tx,
+					input.Principal,
+					current.Kind,
+					input.Spec,
+				); err != nil {
+					return entity.Resource{}, err
+				}
+			}
 			if err := validateGenericUpdate(current, input.Spec); err != nil {
 				return entity.Resource{}, err
 			}
@@ -223,7 +315,11 @@ func (service *Service) Transition(
 	ctx context.Context,
 	input TransitionInput,
 ) (entity.Resource, error) {
-	if err := authorize(input.Principal, permissionTransition); err != nil {
+	permission := permissionTransition
+	if input.Administrative {
+		permission = permissionAccessManage
+	}
+	if err := authorize(input.Principal, permission); err != nil {
 		return entity.Resource{}, err
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
@@ -267,6 +363,25 @@ func (service *Service) Transition(
 			if current.Version != input.ExpectedVersion {
 				return entity.Resource{}, errs.ErrVersionMismatch
 			}
+			if input.Administrative {
+				if !accessKind(current.Kind) ||
+					(input.Target != enum.StateActive &&
+						input.Target != enum.StatePaused &&
+						input.Target != enum.StateArchived) {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if err := service.validateAccessMutation(
+					ctx,
+					tx,
+					input.Principal,
+					current.Kind,
+					current.Spec,
+				); err != nil {
+					return entity.Resource{}, err
+				}
+			} else if protectedTransitionKind(current.Kind) {
+				return entity.Resource{}, errs.ErrPermissionDenied
+			}
 			updated, err := service.transitionResource(current, input.Target)
 			if err != nil {
 				return entity.Resource{}, err
@@ -287,7 +402,11 @@ func (service *Service) Transition(
 
 // Delete переводит resource через explicit deletion lifecycle.
 func (service *Service) Delete(ctx context.Context, input DeleteInput) (entity.Resource, error) {
-	if err := authorize(input.Principal, permissionDelete); err != nil {
+	permission := permissionDelete
+	if input.Administrative {
+		permission = permissionAccessManage
+	}
+	if err := authorize(input.Principal, permission); err != nil {
 		return entity.Resource{}, err
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
@@ -320,6 +439,21 @@ func (service *Service) Delete(ctx context.Context, input DeleteInput) (entity.R
 			}
 			if current.Version != input.ExpectedVersion {
 				return entity.Resource{}, errs.ErrVersionMismatch
+			}
+			if accessKind(current.Kind) != input.Administrative ||
+				(!input.Administrative && protectedMutationKind(current.Kind)) {
+				return entity.Resource{}, errs.ErrPermissionDenied
+			}
+			if input.Administrative {
+				if err := service.validateAccessMutation(
+					ctx,
+					tx,
+					input.Principal,
+					current.Kind,
+					current.Spec,
+				); err != nil {
+					return entity.Resource{}, err
+				}
 			}
 			target := enum.StateDeletionPending
 			if current.State == enum.StateDeletionPending {
@@ -356,6 +490,7 @@ func (service *Service) Get(ctx context.Context, input GetInput) (entity.Resourc
 		input.Principal.OrganizationID,
 		input.Principal.ProjectID,
 		input.ResourceID,
+		input.Kind,
 	)
 	if err != nil {
 		return entity.Resource{}, err
@@ -409,8 +544,11 @@ func (service *Service) withResourceReceipt(
 	mutated := false
 	err := service.repository.Transact(
 		ctx,
-		principal.OrganizationID,
-		principal.ProjectID,
+		domainrepo.Scope{
+			OrganizationID: principal.OrganizationID,
+			ProjectID:      principal.ProjectID,
+			ActorID:        principal.ActorID,
+		},
 		func(tx domainrepo.Transaction) error {
 			receipt, err := tx.GetReceipt(ctx, principal.OrganizationID, scope, keyHash)
 			if err == nil {
@@ -662,6 +800,155 @@ func validateTemporalCreation(spec entity.Spec, now time.Time) error {
 	return nil
 }
 
+func accessKind(kind enum.Kind) bool {
+	return kind == enum.KindTeam ||
+		kind == enum.KindRole ||
+		kind == enum.KindPromptProfile
+}
+
+func protectedCreateKind(kind enum.Kind) bool {
+	switch kind {
+	case enum.KindRuntimeRevision, enum.KindProcessRun, enum.KindSchedule,
+		enum.KindOwnerGate, enum.KindArtifact:
+		return true
+	default:
+		return false
+	}
+}
+
+func protectedMutationKind(kind enum.Kind) bool {
+	switch kind {
+	case enum.KindRuntimeRevision, enum.KindSession, enum.KindTurn,
+		enum.KindProcessRun, enum.KindSchedule, enum.KindOwnerGate,
+		enum.KindArtifact:
+		return true
+	default:
+		return false
+	}
+}
+
+func protectedTransitionKind(kind enum.Kind) bool {
+	return accessKind(kind) || protectedMutationKind(kind)
+}
+
+func kindAdminPermission(kind enum.Kind) string {
+	switch kind {
+	case enum.KindTeam:
+		return "controlplane.team.admin"
+	case enum.KindRole:
+		return "controlplane.role.admin"
+	case enum.KindPromptProfile:
+		return "controlplane.prompt_profile.admin"
+	default:
+		return ""
+	}
+}
+
+func (service *Service) validateAccessMutation(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	kind enum.Kind,
+	spec entity.Spec,
+) error {
+	required := kindAdminPermission(kind)
+	if required == "" || spec == nil || spec.Kind() != kind {
+		return errs.ErrStateConflict
+	}
+	permissions, err := tx.ActorPermissions(
+		ctx,
+		principal.OrganizationID,
+		principal.ProjectID,
+		principal.ActorID,
+	)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(permissions, "*") &&
+		!slices.Contains(permissions, required) {
+		return errs.ErrPermissionDenied
+	}
+	switch typed := spec.(type) {
+	case entity.PromptProfileSpec:
+		return nil
+	case entity.RoleSpec:
+		if err := ensureAssignable(permissions, typed.Capabilities); err != nil {
+			return err
+		}
+		prompt, err := tx.GetForUpdate(
+			ctx,
+			principal.OrganizationID,
+			principal.ProjectID,
+			typed.PromptProfileID,
+		)
+		if err != nil {
+			return err
+		}
+		if prompt.Kind != enum.KindPromptProfile ||
+			prompt.State != enum.StateActive {
+			return errs.ErrStateConflict
+		}
+		for _, roleID := range typed.AllowedTargetRoleIDs {
+			target, err := tx.GetForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				roleID,
+			)
+			if err != nil {
+				return err
+			}
+			targetSpec, ok := target.Spec.(entity.RoleSpec)
+			if !ok || target.Kind != enum.KindRole ||
+				target.State != enum.StateActive {
+				return errs.ErrStateConflict
+			}
+			if err := ensureAssignable(permissions, targetSpec.Capabilities); err != nil {
+				return err
+			}
+		}
+		return nil
+	case entity.TeamSpec:
+		if slices.Contains(typed.MemberActorIDs, principal.ActorID) {
+			return errs.ErrPermissionDenied
+		}
+		for _, roleID := range typed.RoleIDs {
+			role, err := tx.GetForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				roleID,
+			)
+			if err != nil {
+				return err
+			}
+			roleSpec, ok := role.Spec.(entity.RoleSpec)
+			if !ok || role.Kind != enum.KindRole ||
+				role.State != enum.StateActive {
+				return errs.ErrStateConflict
+			}
+			if err := ensureAssignable(permissions, roleSpec.Capabilities); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return errs.ErrStateConflict
+	}
+}
+
+func ensureAssignable(callerPermissions, requested []string) error {
+	if slices.Contains(callerPermissions, "*") {
+		return nil
+	}
+	for _, permission := range requested {
+		if !slices.Contains(callerPermissions, permission) {
+			return errs.ErrPermissionDenied
+		}
+	}
+	return nil
+}
+
 type reference struct {
 	id    string
 	kinds []enum.Kind
@@ -759,20 +1046,26 @@ func (service *Service) validateReferences(
 }
 
 type commandIdentity struct {
-	ActorID        string
-	OrganizationID string
-	ProjectID      string
-	Permission     string
-	CallerWorkload string
+	ActorID             string
+	OrganizationID      string
+	ProjectID           string
+	Permission          string
+	PolicyRevision      uint64
+	AuthorityGeneration uint64
+	CallerWorkload      string
+	CallerSPIFFEID      string
 }
 
 func identity(principal value.Principal) commandIdentity {
 	return commandIdentity{
-		ActorID:        principal.ActorID,
-		OrganizationID: principal.OrganizationID,
-		ProjectID:      principal.ProjectID,
-		Permission:     principal.Permission,
-		CallerWorkload: principal.CallerWorkload,
+		ActorID:             principal.ActorID,
+		OrganizationID:      principal.OrganizationID,
+		ProjectID:           principal.ProjectID,
+		Permission:          principal.Permission,
+		PolicyRevision:      principal.PolicyRevision,
+		AuthorityGeneration: principal.AuthorityGeneration,
+		CallerWorkload:      principal.CallerWorkload,
+		CallerSPIFFEID:      principal.CallerSPIFFEID,
 	}
 }
 
@@ -793,13 +1086,47 @@ func hashBytes(input []byte) string {
 	return hex.EncodeToString(digest[:])
 }
 
+func validSHA256Text(input string) bool {
+	if len(input) != 64 || input != strings.ToLower(input) {
+		return false
+	}
+	for _, symbol := range input {
+		if (symbol < '0' || symbol > '9') && (symbol < 'a' || symbol > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func validImageDigest(input string) bool {
+	return strings.HasPrefix(input, "sha256:") &&
+		validSHA256Text(strings.TrimPrefix(input, "sha256:"))
+}
+
+func validSPIFFEID(input string) bool {
+	return strings.HasPrefix(input, "spiffe://mattercodex.local/") &&
+		len(input) <= 512 && !strings.ContainsAny(input, " \t\r\n")
+}
+
 func (service *Service) leaseToken(
 	turnID string,
 	fence uint64,
+	attempt uint32,
+	authorityGeneration uint64,
+	workloadID string,
 	idempotencyKey string,
 ) string {
 	mac := hmac.New(sha256.New, service.leaseSigningKey)
-	_, _ = fmt.Fprintf(mac, "%s\x00%d\x00%s", turnID, fence, idempotencyKey)
+	_, _ = fmt.Fprintf(
+		mac,
+		"%s\x00%d\x00%d\x00%d\x00%s\x00%s",
+		turnID,
+		fence,
+		attempt,
+		authorityGeneration,
+		workloadID,
+		idempotencyKey,
+	)
 	return hex.EncodeToString(mac.Sum(nil))
 }
 

@@ -39,7 +39,7 @@ func (store *OutboxStore) Check(ctx context.Context) error {
 	); err != nil {
 		return mapError(err)
 	}
-	if version != 20260731000100 || !member || !nonSuperuser || !noBypassRLS {
+	if version != 20260731000200 || !member || !nonSuperuser || !noBypassRLS {
 		return errors.New("control-plane outbox role is not ready")
 	}
 	return nil
@@ -83,11 +83,24 @@ func (store *OutboxStore) Claim(
 func (store *OutboxStore) MarkPublished(
 	ctx context.Context,
 	eventID, leaseToken string,
+	receipt eventing.PublishReceipt,
 ) error {
+	if receipt.Stream == "" || receipt.Sequence == 0 {
+		return errors.New("outbox broker receipt is invalid")
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
 	tag, err := store.pool.Exec(
 		ctx,
 		query("outbox__mark_published.sql"),
-		pgx.StrictNamedArgs{"event_id": eventID, "lease_token": leaseToken},
+		pgx.StrictNamedArgs{
+			"event_id":         eventID,
+			"lease_token":      leaseToken,
+			"broker_stream":    receipt.Stream,
+			"broker_sequence":  receipt.Sequence,
+			"broker_duplicate": receipt.Duplicate,
+			"published_at":     now,
+			"cleanup_after":    now.Add(30 * 24 * time.Hour),
+		},
 	)
 	if err != nil {
 		return mapError(err)

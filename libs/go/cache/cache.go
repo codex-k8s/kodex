@@ -73,3 +73,27 @@ func (engine *Engine[T]) Load(ctx context.Context, key string, source Loader[T])
 	}
 	return value, nil
 }
+
+// Store сохраняет уже проверенную caller projection с bounded timeout/TTL.
+func (engine *Engine[T]) Store(ctx context.Context, key string, value T) error {
+	if key == "" {
+		return errors.New("cache store key is invalid")
+	}
+	encoded, err := engine.codec.Marshal(value)
+	if err != nil {
+		return err
+	}
+	cacheCtx, cancel := context.WithTimeout(ctx, engine.timeout)
+	defer cancel()
+	return engine.store.Set(cacheCtx, key, encoded, engine.ttl)
+}
+
+// Invalidate удаляет подозрительную или устаревшую запись best-effort caller policy.
+func (engine *Engine[T]) Invalidate(ctx context.Context, key string) error {
+	if key == "" {
+		return errors.New("cache invalidation key is invalid")
+	}
+	cacheCtx, cancel := context.WithTimeout(ctx, engine.timeout)
+	defer cancel()
+	return engine.store.Delete(cacheCtx, key)
+}

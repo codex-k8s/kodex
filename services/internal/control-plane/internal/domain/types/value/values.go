@@ -13,13 +13,15 @@ var stableKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$`)
 
 // Principal выводится только из проверенного authorization context.
 type Principal struct {
-	ActorID        string
-	OrganizationID string
-	ProjectID      string
-	Permission     string
-	CorrelationID  string
-	PolicyRevision uint64
-	CallerWorkload string
+	ActorID             string
+	OrganizationID      string
+	ProjectID           string
+	Permission          string
+	CorrelationID       string
+	PolicyRevision      uint64
+	AuthorityGeneration uint64
+	CallerWorkload      string
+	CallerSPIFFEID      string
 }
 
 // Validate проверяет обязательную server-derived identity.
@@ -37,7 +39,9 @@ func (principal Principal) Validate() error {
 	}
 	if _, err := uuid.Parse(principal.CorrelationID); err != nil ||
 		principal.Permission == "" || principal.PolicyRevision == 0 ||
-		principal.CallerWorkload == "" {
+		principal.AuthorityGeneration == 0 ||
+		principal.CallerWorkload == "" ||
+		principal.CallerSPIFFEID == "" {
 		return errors.New("authorization context is invalid")
 	}
 	return nil

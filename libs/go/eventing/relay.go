@@ -9,9 +9,16 @@ import (
 
 // Publisher отправляет неизменяемый envelope и проверяет broker contract.
 type Publisher interface {
-	Publish(context.Context, Envelope) error
+	Publish(context.Context, Envelope) (PublishReceipt, error)
 	Check(context.Context) error
 	Close() error
+}
+
+// PublishReceipt подтверждает durable broker admission exact event.
+type PublishReceipt struct {
+	Stream    string
+	Sequence  uint64
+	Duplicate bool
 }
 
 // ClaimedEvent связывает событие с server-owned lease token.
@@ -25,7 +32,7 @@ type ClaimedEvent struct {
 type OutboxStore interface {
 	Check(context.Context) error
 	Claim(context.Context, string, int, time.Duration) ([]ClaimedEvent, error)
-	MarkPublished(context.Context, string, string) error
+	MarkPublished(context.Context, string, string, PublishReceipt) error
 	MarkFailed(context.Context, string, string, bool, time.Duration) error
 }
 
@@ -105,7 +112,10 @@ func (relay *Relay) cycle(lifecycle, finalizeParent context.Context) error {
 	}
 	for _, item := range claimed {
 		publishCtx, cancelPublish := context.WithTimeout(lifecycle, relay.config.PublishTimeout)
-		publishErr := relay.publisher.Publish(publishCtx, item.Envelope)
+		publishReceipt, publishErr := relay.publisher.Publish(
+			publishCtx,
+			item.Envelope,
+		)
 		cancelPublish()
 
 		finalizeCtx, cancelFinalize := context.WithTimeout(
@@ -117,6 +127,7 @@ func (relay *Relay) cycle(lifecycle, finalizeParent context.Context) error {
 				finalizeCtx,
 				item.Envelope.EventID,
 				item.LeaseToken,
+				publishReceipt,
 			)
 		} else {
 			err = relay.store.MarkFailed(

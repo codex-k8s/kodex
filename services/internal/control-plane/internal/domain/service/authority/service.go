@@ -151,8 +151,11 @@ func (service *Service) Resolve(
 	var result authoritytype.Proof
 	err = service.repository.Transact(
 		ctx,
-		input.Identity.OrganizationID,
-		input.Identity.ProjectID,
+		domainrepo.Scope{
+			OrganizationID: input.Identity.OrganizationID,
+			ProjectID:      input.Identity.ProjectID,
+			ActorID:        input.Identity.ActorID,
+		},
 		func(tx domainrepo.Transaction) error {
 			receipt, receiptErr := tx.GetReceipt(
 				ctx,

@@ -29,6 +29,8 @@ type Config struct {
 	Subjects        []string
 	Replicas        int
 	MaxMessageBytes int32
+	MaxAge          time.Duration
+	DuplicateWindow time.Duration
 	ConnectTimeout  time.Duration
 }
 
@@ -91,6 +93,13 @@ func (publisher *Publisher) Check(ctx context.Context) error {
 		info.Config.Storage != jetstream.FileStorage ||
 		info.Config.Replicas != publisher.config.Replicas ||
 		info.Config.MaxMsgSize != publisher.config.MaxMessageBytes ||
+		info.Config.Retention != jetstream.LimitsPolicy ||
+		info.Config.Discard != jetstream.DiscardOld ||
+		info.Config.MaxAge != publisher.config.MaxAge ||
+		info.Config.Duplicates != publisher.config.DuplicateWindow ||
+		!info.Config.DenyDelete ||
+		!info.Config.DenyPurge ||
+		info.Config.AllowRollup ||
 		info.Config.Mirror != nil ||
 		len(info.Config.Sources) != 0 ||
 		info.Config.RePublish != nil ||
@@ -101,10 +110,13 @@ func (publisher *Publisher) Check(ctx context.Context) error {
 }
 
 // Publish отправляет canonical envelope и проверяет exact stream ack.
-func (publisher *Publisher) Publish(ctx context.Context, envelope eventing.Envelope) error {
+func (publisher *Publisher) Publish(
+	ctx context.Context,
+	envelope eventing.Envelope,
+) (eventing.PublishReceipt, error) {
 	payload, err := envelope.Marshal()
 	if err != nil {
-		return err
+		return eventing.PublishReceipt{}, err
 	}
 	ack, err := publisher.jetstream.PublishMsg(
 		ctx,
@@ -114,9 +126,13 @@ func (publisher *Publisher) Publish(ctx context.Context, envelope eventing.Envel
 		jetstream.WithRetryAttempts(0),
 	)
 	if err != nil || ack == nil || ack.Stream != publisher.config.Stream || ack.Sequence == 0 {
-		return errors.New("publish NATS JetStream event")
+		return eventing.PublishReceipt{}, errors.New("publish NATS JetStream event")
 	}
-	return nil
+	return eventing.PublishReceipt{
+		Stream:    ack.Stream,
+		Sequence:  ack.Sequence,
+		Duplicate: ack.Duplicate,
+	}, nil
 }
 
 // Close ограниченно очищает и закрывает connection.
@@ -138,6 +154,9 @@ func validateConfig(config Config) error {
 		!filepath.IsAbs(config.CredentialsFile) ||
 		config.Stream == "" || len(config.Subjects) == 0 ||
 		config.Replicas < 1 || config.MaxMessageBytes < 1024 ||
+		config.MaxAge < time.Hour || config.MaxAge > 30*24*time.Hour ||
+		config.DuplicateWindow < time.Minute ||
+		config.DuplicateWindow > config.MaxAge ||
 		config.ConnectTimeout < 100*time.Millisecond ||
 		config.ConnectTimeout > 10*time.Second {
 		return errors.New("NATS JetStream configuration is invalid")

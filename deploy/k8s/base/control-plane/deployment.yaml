@@ -63,6 +63,10 @@ spec:
               value: sentry-relay.observability.svc:8443
             - name: CONTROL_PLANE_NATS_REPLICAS
               value: "3"
+            - name: CONTROL_PLANE_RUNTIME_IMAGE_DIGEST
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['mattercodex.dev/image-digest']
           ports:
             - name: grpc
               containerPort: 8443
@@ -120,6 +124,9 @@ spec:
             - name: postgres-relay
               mountPath: /var/run/secrets/mattercodex/control-plane/postgres-relay
               readOnly: true
+            - name: postgres-context
+              mountPath: /var/run/secrets/mattercodex/control-plane/postgres-context
+              readOnly: true
             - name: postgres-ca
               mountPath: /var/run/config/mattercodex/control-plane/postgres
               readOnly: true
@@ -176,6 +183,12 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-postgres-relay
+        - name: postgres-context
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-postgres-context
         - name: postgres-ca
           configMap:
             name: control-plane-postgresql-ca

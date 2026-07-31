@@ -1,8 +1,10 @@
+-- name: ReadinessRuntimeIdentity
 SELECT
-    state.version,
-    pg_has_role(current_user, 'control_plane_runtime', 'member'),
-    NOT role.rolsuper,
-    NOT role.rolbypassrls
-FROM control_plane.schema_state AS state
-JOIN pg_catalog.pg_roles AS role ON role.rolname = current_user
-WHERE state.singleton = true
+    identity.schema_version,
+    pg_has_role(session_user, 'control_plane_runtime', 'member'),
+    identity.non_superuser,
+    identity.no_bypass_rls,
+    identity.principal_status,
+    identity.principal_generation,
+    identity.login_enabled
+FROM control_plane.runtime_identity() AS identity

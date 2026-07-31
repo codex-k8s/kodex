@@ -235,13 +235,35 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			EndpointRef:          value.Integration.GetEndpointRef(),
 		}, nil
 	case *controlplanev1.ResourceSpec_RuntimeRevision:
+		createdAt, err := requiredTime(value.RuntimeRevision.GetCreatedAt())
+		if err != nil {
+			return nil, err
+		}
+		components := make(
+			[]entity.EffectiveResourceRef,
+			0,
+			len(value.RuntimeRevision.GetComponents()),
+		)
+		for _, component := range value.RuntimeRevision.GetComponents() {
+			components = append(components, entity.EffectiveResourceRef{
+				Kind:             fromProtoKind(component.GetKind()),
+				ResourceID:       component.GetResourceId(),
+				Version:          component.GetVersion(),
+				ProjectionSHA256: component.GetProjectionSha256(),
+			})
+		}
 		return entity.RuntimeRevisionSpec{
-			ManifestSHA256:       value.RuntimeRevision.GetManifestSha256(),
-			ImageDigest:          value.RuntimeRevision.GetImageDigest(),
-			PromptProfileID:      value.RuntimeRevision.GetPromptProfileId(),
-			PromptRevision:       value.RuntimeRevision.GetPromptRevision(),
-			CredentialBindingIDs: value.RuntimeRevision.GetCredentialBindingIds(),
-			IntegrationIDs:       value.RuntimeRevision.GetIntegrationIds(),
+			ManifestSHA256:         value.RuntimeRevision.GetManifestSha256(),
+			ImageDigest:            value.RuntimeRevision.GetImageDigest(),
+			PromptProfileID:        value.RuntimeRevision.GetPromptProfileId(),
+			PromptRevision:         value.RuntimeRevision.GetPromptRevision(),
+			CredentialBindingIDs:   value.RuntimeRevision.GetCredentialBindingIds(),
+			IntegrationIDs:         value.RuntimeRevision.GetIntegrationIds(),
+			PredecessorRevisionID:  value.RuntimeRevision.GetPredecessorRevisionId(),
+			AuthorityPolicyVersion: value.RuntimeRevision.GetAuthorityPolicyRevision(),
+			AuthorityPolicySHA256:  value.RuntimeRevision.GetAuthorityPolicySha256(),
+			Components:             components,
+			CreatedAt:              createdAt,
 		}, nil
 	case *controlplanev1.ResourceSpec_Session:
 		return entity.SessionSpec{
@@ -253,23 +275,30 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 		}, nil
 	case *controlplanev1.ResourceSpec_Turn:
 		return entity.TurnSpec{
-			SessionID:         value.Turn.GetSessionId(),
-			Sequence:          value.Turn.GetSequence(),
-			SourceRef:         value.Turn.GetSourceRef(),
-			PromptArtifactID:  value.Turn.GetPromptArtifactId(),
-			RuntimeRevisionID: value.Turn.GetRuntimeRevisionId(),
-			ProcessRunID:      value.Turn.GetProcessRunId(),
-			Attempt:           value.Turn.GetAttempt(),
-			Outcome:           value.Turn.GetOutcome(),
-			ResultArtifactID:  value.Turn.GetResultArtifactId(),
+			SessionID:            value.Turn.GetSessionId(),
+			Sequence:             value.Turn.GetSequence(),
+			SourceRef:            value.Turn.GetSourceRef(),
+			PromptArtifactID:     value.Turn.GetPromptArtifactId(),
+			RuntimeRevisionID:    value.Turn.GetRuntimeRevisionId(),
+			ProcessRunID:         value.Turn.GetProcessRunId(),
+			Attempt:              value.Turn.GetAttempt(),
+			Outcome:              value.Turn.GetOutcome(),
+			ResultArtifactID:     value.Turn.GetResultArtifactId(),
+			EffectiveInputSHA256: value.Turn.GetEffectiveInputSha256(),
+			PredecessorTurnID:    value.Turn.GetPredecessorTurnId(),
 		}, nil
 	case *controlplanev1.ResourceSpec_ProcessRun:
 		return entity.ProcessRunSpec{
-			ParentProcessRunID: value.ProcessRun.GetParentProcessRunId(),
-			PlaybookRef:        value.ProcessRun.GetPlaybookRef(),
-			PolicyRevision:     value.ProcessRun.GetPolicyRevision(),
-			RootTriggerRef:     value.ProcessRun.GetRootTriggerRef(),
-			ResultArtifactID:   value.ProcessRun.GetResultArtifactId(),
+			ParentProcessRunID:   value.ProcessRun.GetParentProcessRunId(),
+			PlaybookRef:          value.ProcessRun.GetPlaybookRef(),
+			PolicyRevision:       value.ProcessRun.GetPolicyRevision(),
+			RootTriggerRef:       value.ProcessRun.GetRootTriggerRef(),
+			ResultArtifactID:     value.ProcessRun.GetResultArtifactId(),
+			RootInitiatorActorID: value.ProcessRun.GetRootInitiatorActorId(),
+			RootSessionID:        value.ProcessRun.GetRootSessionId(),
+			RootTurnID:           value.ProcessRun.GetRootTurnId(),
+			RootAttempt:          value.ProcessRun.GetRootAttempt(),
+			ImmutableInputSHA256: value.ProcessRun.GetImmutableInputSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_Schedule:
 		interval, err := optionalDuration(value.Schedule.GetInterval())
@@ -284,11 +313,27 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 		if err != nil {
 			return nil, err
 		}
+		initialBackoff, err := optionalDuration(value.Schedule.GetInitialBackoff())
+		if err != nil {
+			return nil, err
+		}
+		maximumBackoff, err := optionalDuration(value.Schedule.GetMaximumBackoff())
+		if err != nil {
+			return nil, err
+		}
+		deadLetterAfter, err := optionalDuration(value.Schedule.GetDeadLetterAfter())
+		if err != nil {
+			return nil, err
+		}
 		return entity.ScheduleSpec{
-			TargetResourceID: value.Schedule.GetTargetResourceId(),
-			Cron:             value.Schedule.GetCron(),
-			Interval:         interval,
-			Timezone:         value.Schedule.GetTimezone(),
+			TargetResourceID:  value.Schedule.GetTargetResourceId(),
+			TargetKind:        fromProtoKind(value.Schedule.GetTargetKind()),
+			TargetVersion:     value.Schedule.GetTargetVersion(),
+			EffectiveInputSHA: value.Schedule.GetEffectiveInputSha256(),
+			Cron:              value.Schedule.GetCron(),
+			Interval:          interval,
+			Timezone:          value.Schedule.GetTimezone(),
+			Calendar:          value.Schedule.GetCalendar(),
 			OverlapPolicy: trimEnum(
 				value.Schedule.GetOverlapPolicy().String(),
 				"SCHEDULE_OVERLAP_POLICY_",
@@ -297,8 +342,13 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 				value.Schedule.GetMisfirePolicy().String(),
 				"SCHEDULE_MISFIRE_POLICY_",
 			),
-			MisfireGrace: misfireGrace,
-			NextRunAt:    nextRunAt,
+			MisfireGrace:    misfireGrace,
+			NextRunAt:       nextRunAt,
+			DeliveryPolicy:  value.Schedule.GetDeliveryPolicy(),
+			MaximumAttempts: value.Schedule.GetMaximumAttempts(),
+			InitialBackoff:  initialBackoff,
+			MaximumBackoff:  maximumBackoff,
+			DeadLetterAfter: deadLetterAfter,
 		}, nil
 	case *controlplanev1.ResourceSpec_OwnerGate:
 		expiresAt, err := requiredTime(value.OwnerGate.GetExpiresAt())
@@ -306,12 +356,20 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			return nil, err
 		}
 		return entity.OwnerGateSpec{
-			ProcessRunID:   value.OwnerGate.GetProcessRunId(),
-			ResultRef:      value.OwnerGate.GetResultRef(),
-			ResultSHA256:   value.OwnerGate.GetResultSha256(),
-			ExpiresAt:      expiresAt,
-			Decision:       ownerDecisionFromProto(value.OwnerGate.GetDecision()),
-			DecisionReason: value.OwnerGate.GetDecisionReason(),
+			ProcessRunID:         value.OwnerGate.GetProcessRunId(),
+			ResultRef:            value.OwnerGate.GetResultRef(),
+			ResultSHA256:         value.OwnerGate.GetResultSha256(),
+			ExpiresAt:            expiresAt,
+			Decision:             ownerDecisionFromProto(value.OwnerGate.GetDecision()),
+			DecisionReason:       value.OwnerGate.GetDecisionReason(),
+			RootInitiatorActorID: value.OwnerGate.GetRootInitiatorActorId(),
+			SessionID:            value.OwnerGate.GetSessionId(),
+			TurnID:               value.OwnerGate.GetTurnId(),
+			Attempt:              value.OwnerGate.GetAttempt(),
+			ImmutableInputSHA256: value.OwnerGate.GetImmutableInputSha256(),
+			RecipientActorID:     value.OwnerGate.GetRecipientActorId(),
+			DeliveryWorkloadID:   value.OwnerGate.GetDeliveryWorkloadId(),
+			DeliverySPIFFEID:     value.OwnerGate.GetDeliverySpiffeId(),
 		}, nil
 	case *controlplanev1.ResourceSpec_MemoryRecord:
 		return entity.MemoryRecordSpec{
@@ -332,15 +390,26 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ResourceKeys: value.WorkClaim.GetResourceKeys(),
 		}, nil
 	case *controlplanev1.ResourceSpec_Artifact:
+		scannedAt, err := optionalTime(value.Artifact.GetScannedAt())
+		if err != nil {
+			return nil, err
+		}
 		return entity.ArtifactSpec{
-			ArtifactKind:       value.Artifact.GetKind(),
-			Direction:          value.Artifact.GetDirection(),
-			StorageRef:         value.Artifact.GetStorageRef(),
-			SizeBytes:          value.Artifact.GetSizeBytes(),
-			MediaType:          value.Artifact.GetMediaType(),
-			SHA256:             value.Artifact.GetSha256(),
-			ScanStatus:         value.Artifact.GetScanStatus(),
+			ArtifactKind: value.Artifact.GetKind(),
+			Direction:    value.Artifact.GetDirection(),
+			StorageRef:   value.Artifact.GetStorageRef(),
+			SizeBytes:    value.Artifact.GetSizeBytes(),
+			MediaType:    value.Artifact.GetMediaType(),
+			SHA256:       value.Artifact.GetSha256(),
+			ScanStatus: trimEnum(
+				value.Artifact.GetScanStatus().String(),
+				"ARTIFACT_SCAN_STATE_",
+			),
 			RetentionPolicyRef: value.Artifact.GetRetentionPolicyRef(),
+			ScanPolicyRevision: value.Artifact.GetScanPolicyRevision(),
+			ScanEvidenceSHA256: value.Artifact.GetScanEvidenceSha256(),
+			ScannerWorkloadID:  value.Artifact.GetScannerWorkloadId(),
+			ScannedAt:          scannedAt,
 		}, nil
 	default:
 		return nil, errors.New("resource specification is unknown")
@@ -444,14 +513,32 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 			},
 		}
 	case entity.RuntimeRevisionSpec:
+		components := make(
+			[]*controlplanev1.EffectiveResourceRef,
+			0,
+			len(value.Components),
+		)
+		for _, component := range value.Components {
+			components = append(components, &controlplanev1.EffectiveResourceRef{
+				Kind:             toProtoKind(component.Kind),
+				ResourceId:       component.ResourceID,
+				Version:          component.Version,
+				ProjectionSha256: component.ProjectionSHA256,
+			})
+		}
 		result.Value = &controlplanev1.ResourceSpec_RuntimeRevision{
 			RuntimeRevision: &controlplanev1.RuntimeRevisionSpec{
-				ManifestSha256:       value.ManifestSHA256,
-				ImageDigest:          value.ImageDigest,
-				PromptProfileId:      value.PromptProfileID,
-				PromptRevision:       value.PromptRevision,
-				CredentialBindingIds: value.CredentialBindingIDs,
-				IntegrationIds:       value.IntegrationIDs,
+				ManifestSha256:          value.ManifestSHA256,
+				ImageDigest:             value.ImageDigest,
+				PromptProfileId:         value.PromptProfileID,
+				PromptRevision:          value.PromptRevision,
+				CredentialBindingIds:    value.CredentialBindingIDs,
+				IntegrationIds:          value.IntegrationIDs,
+				PredecessorRevisionId:   value.PredecessorRevisionID,
+				AuthorityPolicyRevision: value.AuthorityPolicyVersion,
+				AuthorityPolicySha256:   value.AuthorityPolicySHA256,
+				Components:              components,
+				CreatedAt:               timestamppb.New(value.CreatedAt),
 			},
 		}
 	case entity.SessionSpec:
@@ -467,49 +554,73 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 	case entity.TurnSpec:
 		result.Value = &controlplanev1.ResourceSpec_Turn{
 			Turn: &controlplanev1.TurnSpec{
-				SessionId:         value.SessionID,
-				Sequence:          value.Sequence,
-				SourceRef:         value.SourceRef,
-				PromptArtifactId:  value.PromptArtifactID,
-				RuntimeRevisionId: value.RuntimeRevisionID,
-				ProcessRunId:      value.ProcessRunID,
-				Attempt:           value.Attempt,
-				Outcome:           value.Outcome,
-				ResultArtifactId:  value.ResultArtifactID,
+				SessionId:            value.SessionID,
+				Sequence:             value.Sequence,
+				SourceRef:            value.SourceRef,
+				PromptArtifactId:     value.PromptArtifactID,
+				RuntimeRevisionId:    value.RuntimeRevisionID,
+				ProcessRunId:         value.ProcessRunID,
+				Attempt:              value.Attempt,
+				Outcome:              value.Outcome,
+				ResultArtifactId:     value.ResultArtifactID,
+				EffectiveInputSha256: value.EffectiveInputSHA256,
+				PredecessorTurnId:    value.PredecessorTurnID,
 			},
 		}
 	case entity.ProcessRunSpec:
 		result.Value = &controlplanev1.ResourceSpec_ProcessRun{
 			ProcessRun: &controlplanev1.ProcessRunSpec{
-				ParentProcessRunId: value.ParentProcessRunID,
-				PlaybookRef:        value.PlaybookRef,
-				PolicyRevision:     value.PolicyRevision,
-				RootTriggerRef:     value.RootTriggerRef,
-				ResultArtifactId:   value.ResultArtifactID,
+				ParentProcessRunId:   value.ParentProcessRunID,
+				PlaybookRef:          value.PlaybookRef,
+				PolicyRevision:       value.PolicyRevision,
+				RootTriggerRef:       value.RootTriggerRef,
+				ResultArtifactId:     value.ResultArtifactID,
+				RootInitiatorActorId: value.RootInitiatorActorID,
+				RootSessionId:        value.RootSessionID,
+				RootTurnId:           value.RootTurnID,
+				RootAttempt:          value.RootAttempt,
+				ImmutableInputSha256: value.ImmutableInputSHA256,
 			},
 		}
 	case entity.ScheduleSpec:
 		result.Value = &controlplanev1.ResourceSpec_Schedule{
 			Schedule: &controlplanev1.ScheduleSpec{
-				TargetResourceId: value.TargetResourceID,
-				Cron:             value.Cron,
-				Interval:         optionalProtoDuration(value.Interval),
-				Timezone:         value.Timezone,
-				OverlapPolicy:    overlapPolicy(value.OverlapPolicy),
-				MisfirePolicy:    misfirePolicy(value.MisfirePolicy),
-				MisfireGrace:     optionalProtoDuration(value.MisfireGrace),
-				NextRunAt:        timestamppb.New(value.NextRunAt),
+				TargetResourceId:     value.TargetResourceID,
+				Cron:                 value.Cron,
+				Interval:             optionalProtoDuration(value.Interval),
+				Timezone:             value.Timezone,
+				OverlapPolicy:        overlapPolicy(value.OverlapPolicy),
+				MisfirePolicy:        misfirePolicy(value.MisfirePolicy),
+				MisfireGrace:         optionalProtoDuration(value.MisfireGrace),
+				NextRunAt:            timestamppb.New(value.NextRunAt),
+				TargetKind:           toProtoKind(value.TargetKind),
+				TargetVersion:        value.TargetVersion,
+				EffectiveInputSha256: value.EffectiveInputSHA,
+				Calendar:             value.Calendar,
+				DeliveryPolicy:       value.DeliveryPolicy,
+				MaximumAttempts:      value.MaximumAttempts,
+				InitialBackoff:       optionalProtoDuration(value.InitialBackoff),
+				MaximumBackoff:       optionalProtoDuration(value.MaximumBackoff),
+				DeadLetterAfter:      optionalProtoDuration(value.DeadLetterAfter),
 			},
 		}
 	case entity.OwnerGateSpec:
 		result.Value = &controlplanev1.ResourceSpec_OwnerGate{
 			OwnerGate: &controlplanev1.OwnerGateSpec{
-				ProcessRunId:   value.ProcessRunID,
-				ResultRef:      value.ResultRef,
-				ResultSha256:   value.ResultSHA256,
-				ExpiresAt:      timestamppb.New(value.ExpiresAt),
-				Decision:       ownerDecision(value.Decision),
-				DecisionReason: value.DecisionReason,
+				ProcessRunId:         value.ProcessRunID,
+				ResultRef:            value.ResultRef,
+				ResultSha256:         value.ResultSHA256,
+				ExpiresAt:            timestamppb.New(value.ExpiresAt),
+				Decision:             ownerDecision(value.Decision),
+				DecisionReason:       value.DecisionReason,
+				RootInitiatorActorId: value.RootInitiatorActorID,
+				SessionId:            value.SessionID,
+				TurnId:               value.TurnID,
+				Attempt:              value.Attempt,
+				ImmutableInputSha256: value.ImmutableInputSHA256,
+				RecipientActorId:     value.RecipientActorID,
+				DeliveryWorkloadId:   value.DeliveryWorkloadID,
+				DeliverySpiffeId:     value.DeliverySPIFFEID,
 			},
 		}
 	case entity.MemoryRecordSpec:
@@ -543,8 +654,12 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				SizeBytes:          value.SizeBytes,
 				MediaType:          value.MediaType,
 				Sha256:             value.SHA256,
-				ScanStatus:         value.ScanStatus,
+				ScanStatus:         artifactScanState(value.ScanStatus),
 				RetentionPolicyRef: value.RetentionPolicyRef,
+				ScanPolicyRevision: value.ScanPolicyRevision,
+				ScanEvidenceSha256: value.ScanEvidenceSHA256,
+				ScannerWorkloadId:  value.ScannerWorkloadID,
+				ScannedAt:          optionalTimestamp(value.ScannedAt),
 			},
 		}
 	default:
@@ -565,6 +680,23 @@ func optionalTime(value *timestamppb.Timestamp) (time.Time, error) {
 		return time.Time{}, nil
 	}
 	return requiredTime(value)
+}
+
+func artifactScanState(value string) controlplanev1.ArtifactScanState {
+	switch value {
+	case "PENDING":
+		return controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_PENDING
+	case "SCANNING":
+		return controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_SCANNING
+	case "CLEAN":
+		return controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_CLEAN
+	case "QUARANTINED":
+		return controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_QUARANTINED
+	case "FAILED":
+		return controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_FAILED
+	default:
+		return controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_UNSPECIFIED
+	}
 }
 
 func optionalDuration(value *durationpb.Duration) (time.Duration, error) {

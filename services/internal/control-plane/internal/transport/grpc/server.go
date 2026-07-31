@@ -334,13 +334,12 @@ func (server *Server) EnqueueTurn(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	turn, err := server.service.EnqueueTurn(ctx, resource.EnqueueTurnInput{
-		Principal:         principal,
-		IdempotencyKey:    request.GetIdempotencyKey(),
-		SessionID:         request.GetSessionId(),
-		SourceRef:         request.GetSourceRef(),
-		PromptArtifactID:  request.GetPromptArtifactId(),
-		ProcessRunID:      request.GetProcessRunId(),
-		RuntimeRevisionID: request.GetRuntimeRevisionId(),
+		Principal:        principal,
+		IdempotencyKey:   request.GetIdempotencyKey(),
+		SessionID:        request.GetSessionId(),
+		SourceRef:        request.GetSourceRef(),
+		PromptArtifactID: request.GetPromptArtifactId(),
+		ProcessRunID:     request.GetProcessRunId(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -375,9 +374,11 @@ func (server *Server) ClaimTurn(
 		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
 	return &controlplanev1.ClaimTurnResponse{
-		Turn:           encoded,
-		LeaseToken:     claimed.LeaseToken,
-		LeaseExpiresAt: timestamppb.New(claimed.LeaseExpiresAt),
+		Turn:                encoded,
+		LeaseToken:          claimed.LeaseToken,
+		LeaseExpiresAt:      timestamppb.New(claimed.LeaseExpiresAt),
+		Attempt:             claimed.Attempt,
+		AuthorityGeneration: claimed.AuthorityGeneration,
 	}, nil
 }
 
@@ -393,14 +394,16 @@ func (server *Server) CompleteTurn(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	turn, err := server.service.CompleteTurn(ctx, resource.CompleteTurnInput{
-		Principal:        principal,
-		IdempotencyKey:   request.GetIdempotencyKey(),
-		TurnID:           request.GetTurnId(),
-		LeaseToken:       request.GetLeaseToken(),
-		ExpectedVersion:  request.GetExpectedVersion(),
-		TerminalState:    fromProtoState(request.GetTerminalState()),
-		Outcome:          request.GetOutcome(),
-		ResultArtifactID: request.GetResultArtifactId(),
+		Principal:           principal,
+		IdempotencyKey:      request.GetIdempotencyKey(),
+		TurnID:              request.GetTurnId(),
+		LeaseToken:          request.GetLeaseToken(),
+		ExpectedVersion:     request.GetExpectedVersion(),
+		TerminalState:       fromProtoState(request.GetTerminalState()),
+		Outcome:             request.GetOutcome(),
+		ResultArtifactID:    request.GetResultArtifactId(),
+		Attempt:             request.GetAttempt(),
+		AuthorityGeneration: request.GetAuthorityGeneration(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -445,10 +448,16 @@ func (server *Server) ClaimDueSchedules(
 		response.Occurrences = append(
 			response.Occurrences,
 			&controlplanev1.ScheduleOccurrence{
-				ScheduleId:       occurrence.ScheduleID,
-				ScheduledFor:     timestamppb.New(occurrence.ScheduledFor),
-				OccurrenceId:     occurrence.OccurrenceID,
-				TargetResourceId: occurrence.TargetResourceID,
+				ScheduleId:           occurrence.ScheduleID,
+				ScheduledFor:         timestamppb.New(occurrence.ScheduledFor),
+				OccurrenceId:         occurrence.OccurrenceID,
+				TargetResourceId:     occurrence.TargetResourceID,
+				TargetKind:           toProtoKind(occurrence.TargetKind),
+				TargetVersion:        occurrence.TargetVersion,
+				EffectiveInputSha256: occurrence.EffectiveInputSHA256,
+				State:                occurrenceState(occurrence.State),
+				Attempt:              occurrence.Attempt,
+				AvailableAt:          timestamppb.New(occurrence.AvailableAt),
 			},
 		)
 	}
@@ -466,22 +475,35 @@ func (server *Server) ResolveOwnerGate(
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
-	gate, err := server.service.ResolveOwnerGate(ctx, resource.ResolveOwnerGateInput{
-		Principal:       principal,
-		IdempotencyKey:  request.GetIdempotencyKey(),
-		OwnerGateID:     request.GetOwnerGateId(),
-		ExpectedVersion: request.GetExpectedVersion(),
-		Decision:        ownerDecisionString(request.GetDecision()),
-		Reason:          request.GetReason(),
+	resolved, err := server.service.ResolveOwnerGate(ctx, resource.ResolveOwnerGateInput{
+		Principal:              principal,
+		IdempotencyKey:         request.GetIdempotencyKey(),
+		OwnerGateID:            request.GetOwnerGateId(),
+		ExpectedVersion:        request.GetExpectedVersion(),
+		Decision:               ownerDecisionString(request.GetDecision()),
+		Reason:                 request.GetReason(),
+		ProcessRunID:           request.GetProcessRunId(),
+		ProcessExpectedVersion: request.GetProcessExpectedVersion(),
+		SessionID:              request.GetSessionId(),
+		TurnID:                 request.GetTurnId(),
+		Attempt:                request.GetAttempt(),
+		ImmutableInputSHA256:   request.GetImmutableInputSha256(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	encoded, err := toProtoResource(gate)
+	encodedGate, err := toProtoResource(resolved.OwnerGate)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
-	return &controlplanev1.ResolveOwnerGateResponse{OwnerGate: encoded}, nil
+	encodedProcess, err := toProtoResource(resolved.Process)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.ResolveOwnerGateResponse{
+		OwnerGate:  encodedGate,
+		ProcessRun: encodedProcess,
+	}, nil
 }
 
 func (server *Server) CheckReadiness(
@@ -518,33 +540,33 @@ func rpcError(correlationID string, err error) error {
 	code := codes.Internal
 	reason := controlplanev1.ErrorReason_ERROR_REASON_INTERNAL
 	message := "internal control-plane failure"
-	safeCode := "CONTROL_PLANE_INTERNAL"
+	safeCode := "INTERNAL"
 	retryable := false
 	switch {
 	case errors.Is(err, errs.ErrInvalidInput):
 		code, reason = codes.InvalidArgument, controlplanev1.ErrorReason_ERROR_REASON_INVALID_REQUEST
-		message, safeCode = "control-plane request is invalid", "CONTROL_PLANE_INVALID_REQUEST"
+		message, safeCode = "control-plane request is invalid", "INVALID_REQUEST"
 	case errors.Is(err, errs.ErrUnauthenticated):
 		code, reason = codes.Unauthenticated, controlplanev1.ErrorReason_ERROR_REASON_UNAUTHENTICATED
-		message, safeCode = "control-plane authentication required", "CONTROL_PLANE_UNAUTHENTICATED"
+		message, safeCode = "control-plane authentication required", "UNAUTHENTICATED"
 	case errors.Is(err, errs.ErrPermissionDenied):
 		code, reason = codes.PermissionDenied, controlplanev1.ErrorReason_ERROR_REASON_PERMISSION_DENIED
-		message, safeCode = "control-plane permission denied", "CONTROL_PLANE_PERMISSION_DENIED"
+		message, safeCode = "control-plane permission denied", "PERMISSION_DENIED"
 	case errors.Is(err, errs.ErrNotFound):
 		code, reason = codes.NotFound, controlplanev1.ErrorReason_ERROR_REASON_NOT_FOUND
-		message, safeCode = "control-plane resource not found", "CONTROL_PLANE_NOT_FOUND"
+		message, safeCode = "control-plane resource not found", "NOT_FOUND"
 	case errors.Is(err, errs.ErrVersionMismatch):
 		code, reason = codes.Aborted, controlplanev1.ErrorReason_ERROR_REASON_VERSION_MISMATCH
-		message, safeCode = "control-plane version mismatch", "CONTROL_PLANE_VERSION_MISMATCH"
+		message, safeCode, retryable = "control-plane version mismatch", "VERSION_MISMATCH", true
 	case errors.Is(err, errs.ErrIdempotencyConflict):
 		code, reason = codes.AlreadyExists, controlplanev1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT
-		message, safeCode = "control-plane idempotency conflict", "CONTROL_PLANE_IDEMPOTENCY_CONFLICT"
+		message, safeCode = "control-plane idempotency conflict", "IDEMPOTENCY_CONFLICT"
 	case errors.Is(err, errs.ErrStateConflict):
 		code, reason = codes.FailedPrecondition, controlplanev1.ErrorReason_ERROR_REASON_STATE_CONFLICT
-		message, safeCode = "control-plane state conflict", "CONTROL_PLANE_STATE_CONFLICT"
+		message, safeCode = "control-plane state conflict", "STATE_CONFLICT"
 	case errors.Is(err, errs.ErrUnavailable):
 		code, reason = codes.Unavailable, controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE
-		message, safeCode, retryable = "control-plane dependency unavailable", "CONTROL_PLANE_UNAVAILABLE", true
+		message, safeCode, retryable = "control-plane dependency unavailable", "UNAVAILABLE", true
 	}
 	current := status.New(code, message)
 	withDetail, detailErr := current.WithDetails(&controlplanev1.ErrorDetail{

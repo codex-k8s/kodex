@@ -41,6 +41,11 @@ spec:
               value: control-plane-postgresql.mattercodex-system.svc.cluster.local
             - name: CONTROL_PLANE_POSTGRES_CA_FILE
               value: /var/run/config/mattercodex/control-plane/postgres/ca.pem
+            - name: CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE
+              value: /var/run/secrets/mattercodex/control-plane/postgres-context/key
+          envFrom:
+            - configMapRef:
+                name: control-plane-db-principals
           resources:
             requests:
               cpu: 25m
@@ -64,6 +69,9 @@ spec:
             - name: postgres-ca
               mountPath: /var/run/config/mattercodex/control-plane/postgres
               readOnly: true
+            - name: postgres-context
+              mountPath: /var/run/secrets/mattercodex/control-plane/postgres-context
+              readOnly: true
       volumes:
         - name: postgres-migration
           csi:
@@ -78,3 +86,9 @@ spec:
             items:
               - key: ca.pem
                 path: ca.pem
+        - name: postgres-context
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-postgres-context-migration
