@@ -101,14 +101,14 @@ func (filter ScheduleOccurrenceFilter) Validate() error {
 	if value.ValidateID(filter.ScheduleID) != nil ||
 		filter.Limit < 1 || filter.Limit > MaximumPageSize ||
 		(filter.AfterID != "" && value.ValidateID(filter.AfterID) != nil) ||
-		len(filter.States) > 7 {
+		len(filter.States) > 9 {
 		return errors.New("schedule occurrence filter is invalid")
 	}
 	seen := make(map[string]struct{}, len(filter.States))
 	for _, state := range filter.States {
 		switch state {
-		case "QUEUED", "CLAIMED", "SUCCEEDED", "FAILED",
-			"CANCELLED", "SKIPPED", "DEAD_LETTER":
+		case "QUEUED", "CLAIMED", "WAITING_OWNER", "CONTINUATION",
+			"SUCCEEDED", "FAILED", "CANCELLED", "SKIPPED", "DEAD_LETTER":
 		default:
 			return errors.New("schedule occurrence state is invalid")
 		}

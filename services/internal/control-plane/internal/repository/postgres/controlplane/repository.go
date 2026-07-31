@@ -488,7 +488,7 @@ func (repository *Repository) Check(ctx context.Context) error {
 	); err != nil {
 		return mapError(err)
 	}
-	if version != 20260731000500 || !member || !nonSuperuser || !noBypassRLS ||
+	if version != 20260731000600 || !member || !nonSuperuser || !noBypassRLS ||
 		!loginEnabled || generation != repository.config.PrincipalGeneration ||
 		(status != "CURRENT" && status != "NEXT" && status != "PREVIOUS") {
 		return errs.ErrUnavailable
@@ -1446,14 +1446,14 @@ func (wrapped *transaction) SkipOverlappedScheduleOccurrences(
 	return occurrences, mapError(rows.Err())
 }
 
-func (wrapped *transaction) RecoverExpiredScheduleOccurrences(
+func (wrapped *transaction) LockExpiredScheduleOccurrences(
 	ctx context.Context,
 	organizationID, projectID string,
 	now time.Time,
 ) ([]domainrepo.ScheduleOccurrence, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
-		sqlScheduleOccurrenceRecoverExpired,
+		sqlScheduleOccurrenceLockExpired,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1598,6 +1598,12 @@ func (wrapped *transaction) GetScheduledRunForUpdate(
 		&run.ResultArtifactID,
 		&run.CreatedAt,
 		&run.FinishedAt,
+		&run.ContinuationTurnID,
+		&run.ContinuationTurnVersion,
+		&run.ContinuationRuntimeRevisionID,
+		&run.ContinuationRuntimeRevisionVersion,
+		&run.ContinuationInputSHA256,
+		&run.OwnerFeedbackSHA256,
 	)
 	return run, mapError(err)
 }
@@ -1611,6 +1617,33 @@ func (wrapped *transaction) WaitScheduledRun(
 		ctx,
 		sqlScheduledRunWaitOwner,
 		pgx.StrictNamedArgs{"occurrence_id": occurrenceID, "attempt": attempt},
+	)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) ContinueScheduledRun(
+	ctx context.Context,
+	run domainrepo.ScheduledRun,
+) error {
+	tag, err := wrapped.tx.Exec(
+		ctx,
+		sqlScheduledRunContinue,
+		pgx.StrictNamedArgs{
+			"occurrence_id":                         run.OccurrenceID,
+			"attempt":                               run.Attempt,
+			"continuation_turn_id":                  run.ContinuationTurnID,
+			"continuation_turn_version":             run.ContinuationTurnVersion,
+			"continuation_runtime_revision_id":      run.ContinuationRuntimeRevisionID,
+			"continuation_runtime_revision_version": run.ContinuationRuntimeRevisionVersion,
+			"continuation_input_sha256":             run.ContinuationInputSHA256,
+			"owner_feedback_sha256":                 run.OwnerFeedbackSHA256,
+		},
 	)
 	if err != nil {
 		return mapError(err)
@@ -1858,6 +1891,20 @@ func (wrapped *transaction) NextOwnerGateDelivery(
 			"organization_id": organizationID,
 			"project_id":      projectID,
 			"now":             now,
+		},
+	))
+}
+
+func (wrapped *transaction) NextExpiredOwnerGate(
+	ctx context.Context,
+	organizationID, projectID string,
+) (entity.Resource, error) {
+	return scanResource(wrapped.tx.QueryRow(
+		ctx,
+		sqlOwnerGateNextExpired,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
 		},
 	))
 }

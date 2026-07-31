@@ -137,22 +137,28 @@ type ScheduleOccurrence struct {
 
 // ScheduledRun сохраняет одну неизменяемую попытку фактического исполнения.
 type ScheduledRun struct {
-	OccurrenceID           string
-	Attempt                uint32
-	SessionID              string
-	SessionVersion         uint64
-	TurnID                 string
-	TurnVersion            uint64
-	ProcessRunID           string
-	ProcessVersion         uint64
-	RuntimeRevisionID      string
-	RuntimeRevisionVersion uint64
-	EffectiveInputSHA256   string
-	State                  string
-	Outcome                string
-	ResultArtifactID       string
-	CreatedAt              time.Time
-	FinishedAt             time.Time
+	OccurrenceID                       string
+	Attempt                            uint32
+	SessionID                          string
+	SessionVersion                     uint64
+	TurnID                             string
+	TurnVersion                        uint64
+	ProcessRunID                       string
+	ProcessVersion                     uint64
+	RuntimeRevisionID                  string
+	RuntimeRevisionVersion             uint64
+	EffectiveInputSHA256               string
+	State                              string
+	Outcome                            string
+	ResultArtifactID                   string
+	CreatedAt                          time.Time
+	FinishedAt                         time.Time
+	ContinuationTurnID                 string
+	ContinuationTurnVersion            uint64
+	ContinuationRuntimeRevisionID      string
+	ContinuationRuntimeRevisionVersion uint64
+	ContinuationInputSHA256            string
+	OwnerFeedbackSHA256                string
 }
 
 // ProviderPoolCursor фиксирует один bounded slot версионированного цикла.
@@ -313,7 +319,7 @@ type Transaction interface {
 		string,
 		time.Time,
 	) ([]ScheduleOccurrence, error)
-	RecoverExpiredScheduleOccurrences(
+	LockExpiredScheduleOccurrences(
 		context.Context,
 		string,
 		string,
@@ -325,6 +331,7 @@ type Transaction interface {
 	SaveScheduledRun(context.Context, ScheduledRun) error
 	GetScheduledRunForUpdate(context.Context, string, uint32) (ScheduledRun, error)
 	WaitScheduledRun(context.Context, string, uint32) error
+	ContinueScheduledRun(context.Context, ScheduledRun) error
 	FinishScheduledRun(context.Context, ScheduledRun) error
 	AuthorizeProject(context.Context, string, string, string, string, string) (entity.Resource, error)
 	NextProofRevision(context.Context) (uint64, error)
@@ -332,6 +339,7 @@ type Transaction interface {
 	SearchMemory(context.Context, MemorySearch) ([]MemorySearchHit, error)
 	HasActiveChildProcesses(context.Context, string, string, string) (bool, error)
 	NextOwnerGateDelivery(context.Context, string, string, time.Time) (entity.Resource, error)
+	NextExpiredOwnerGate(context.Context, string, string) (entity.Resource, error)
 	ListTerminalOutbox(context.Context, string, string, string, int) ([]OutboxFailure, error)
 	RepairTerminalOutbox(context.Context, OutboxRepair) (OutboxFailure, error)
 	ActiveProviderSessions(context.Context, string, string, string) (uint64, error)

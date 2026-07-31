@@ -366,6 +366,11 @@ type ClaimOwnerGateDeliveryResult struct {
 	ExpiresAt  time.Time
 }
 
+type ExpireOwnerGateInput struct {
+	Principal      value.Principal
+	IdempotencyKey string
+}
+
 type RegisterArtifactInput struct {
 	Principal      value.Principal
 	IdempotencyKey string

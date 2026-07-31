@@ -814,6 +814,12 @@ func (service *Service) ClaimOwnerGateDelivery(
 			}
 			nextVersion := current.Version + 1
 			expiresAt := now.Add(service.turnLeaseDuration)
+			if spec.ExpiresAt.Before(expiresAt) {
+				expiresAt = spec.ExpiresAt
+			}
+			if !expiresAt.After(now) {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
 			token := service.leaseToken(
 				current.ID,
 				nextVersion,
@@ -923,6 +929,7 @@ func (service *Service) RecordOwnerGateDelivery(
 				spec.DeliveryFence != input.DeliveryFence ||
 				spec.DeliveryClaimTokenSHA256 != hashString(input.DeliveryClaimToken) ||
 				!spec.DeliveryClaimExpiresAt.After(service.now()) ||
+				!spec.ExpiresAt.After(service.now()) ||
 				spec.MattermostPostID != "" {
 				return entity.Resource{}, errs.ErrStateConflict
 			}

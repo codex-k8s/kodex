@@ -263,6 +263,7 @@ func expectedOperations() map[string]string {
 		"control.artifact-scanner.readiness":     controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.owner-gate.deliver":             controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
 		"control.owner-gate.claim-delivery":      controlplanev1.ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,
+		"control.owner-gate.expire":              controlplanev1.ControlPlaneService_ExpireOwnerGate_FullMethodName,
 		"control.owner-gate-delivery.readiness":  controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.runtime-revision.get":           controlplanev1.ControlPlaneService_GetRuntimeRevision_FullMethodName,
 		"control.runtime-resource.get":           controlplanev1.ControlPlaneService_GetResource_FullMethodName,

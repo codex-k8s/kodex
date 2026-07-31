@@ -411,7 +411,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				return receiptErr
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
-			recovered, err := tx.RecoverExpiredScheduleOccurrences(
+			recovered, err := tx.LockExpiredScheduleOccurrences(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
@@ -428,6 +428,11 @@ func (service *Service) ClaimScheduleOccurrence(
 					occurrence.ScheduleID,
 				)
 				if err != nil {
+					return err
+				}
+				if err := service.recoverExpiredScheduleOccurrence(
+					ctx, tx, input.Principal, schedule, occurrence, now,
+				); err != nil {
 					return err
 				}
 				if err := service.appendMutationRecords(
@@ -2261,6 +2266,16 @@ func (service *Service) RequestOwnerGate(
 			)
 			if err != nil {
 				return err
+			}
+			open, err := tx.ProcessHasOpenWork(
+				ctx, process.OrganizationID, process.ProjectID, process.ID,
+				gateTurn.ID, "",
+			)
+			if err != nil {
+				return err
+			}
+			if open {
+				return errs.ErrStateConflict
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
 			attempt, err := tx.GetTurnAttemptForUpdate(

@@ -44,7 +44,7 @@ func (store *OutboxStore) Check(ctx context.Context) error {
 		return mapError(err)
 	}
 	store.terminal.Store(terminalEvents)
-	if version != 20260731000500 || !member || !nonSuperuser || !noBypassRLS {
+	if version != 20260731000600 || !member || !nonSuperuser || !noBypassRLS {
 		return errors.New("control-plane outbox role is not ready")
 	}
 	return nil

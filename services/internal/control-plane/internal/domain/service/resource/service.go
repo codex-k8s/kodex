@@ -51,6 +51,7 @@ const (
 	permissionWriteProjectMemory    = "controlplane.memory.project.write"
 	permissionManageWorkClaim       = "controlplane.work_claim.manage"
 	permissionDeliverGate           = "controlplane.owner_gate.deliver"
+	permissionExpireGate            = "controlplane.owner_gate.expire"
 	permissionReadRuntimeRevision   = "controlplane.runtime_revision.read"
 	permissionIndexMemory           = "controlplane.memory.index"
 	permissionRepairOutbox          = "controlplane.outbox.repair"

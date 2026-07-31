@@ -519,31 +519,39 @@ func (spec TurnSpec) Validate() error {
 }
 
 type ProcessRunSpec struct {
-	ParentProcessRunID    string `json:"parentProcessRunId,omitempty"`
-	PlaybookRef           string `json:"playbookRef"`
-	PolicyRevision        uint64 `json:"policyRevision"`
-	RootTriggerRef        string `json:"rootTriggerRef"`
-	ResultArtifactID      string `json:"resultArtifactId,omitempty"`
-	RootInitiatorActorID  string `json:"rootInitiatorActorId"`
-	RootSessionID         string `json:"rootSessionId"`
-	RootSessionVersion    uint64 `json:"rootSessionVersion"`
-	RootTurnID            string `json:"rootTurnId"`
-	RootTurnVersion       uint64 `json:"rootTurnVersion"`
-	RootAttempt           uint32 `json:"rootAttempt"`
-	ImmutableInputSHA256  string `json:"immutableInputSha256"`
-	RuntimeRevisionID     string `json:"runtimeRevisionId"`
-	LaunchingProcessRunID string `json:"launchingProcessRunId,omitempty"`
-	LaunchingTurnID       string `json:"launchingTurnId,omitempty"`
-	LaunchingAttempt      uint32 `json:"launchingAttempt,omitempty"`
-	DelegationID          string `json:"delegationId,omitempty"`
-	TargetSessionID       string `json:"targetSessionId,omitempty"`
-	TargetSessionVersion  uint64 `json:"targetSessionVersion,omitempty"`
-	TargetTurnID          string `json:"targetTurnId,omitempty"`
-	TargetTurnVersion     uint64 `json:"targetTurnVersion,omitempty"`
-	TargetAttempt         uint32 `json:"targetAttempt,omitempty"`
-	Outcome               string `json:"outcome,omitempty"`
-	ScheduleID            string `json:"scheduleId,omitempty"`
-	OccurrenceID          string `json:"occurrenceId,omitempty"`
+	ParentProcessRunID                 string `json:"parentProcessRunId,omitempty"`
+	PlaybookRef                        string `json:"playbookRef"`
+	PolicyRevision                     uint64 `json:"policyRevision"`
+	RootTriggerRef                     string `json:"rootTriggerRef"`
+	ResultArtifactID                   string `json:"resultArtifactId,omitempty"`
+	RootInitiatorActorID               string `json:"rootInitiatorActorId"`
+	RootSessionID                      string `json:"rootSessionId"`
+	RootSessionVersion                 uint64 `json:"rootSessionVersion"`
+	RootTurnID                         string `json:"rootTurnId"`
+	RootTurnVersion                    uint64 `json:"rootTurnVersion"`
+	RootAttempt                        uint32 `json:"rootAttempt"`
+	ImmutableInputSHA256               string `json:"immutableInputSha256"`
+	RuntimeRevisionID                  string `json:"runtimeRevisionId"`
+	LaunchingProcessRunID              string `json:"launchingProcessRunId,omitempty"`
+	LaunchingTurnID                    string `json:"launchingTurnId,omitempty"`
+	LaunchingAttempt                   uint32 `json:"launchingAttempt,omitempty"`
+	DelegationID                       string `json:"delegationId,omitempty"`
+	TargetSessionID                    string `json:"targetSessionId,omitempty"`
+	TargetSessionVersion               uint64 `json:"targetSessionVersion,omitempty"`
+	TargetTurnID                       string `json:"targetTurnId,omitempty"`
+	TargetTurnVersion                  uint64 `json:"targetTurnVersion,omitempty"`
+	TargetAttempt                      uint32 `json:"targetAttempt,omitempty"`
+	Outcome                            string `json:"outcome,omitempty"`
+	ScheduleID                         string `json:"scheduleId,omitempty"`
+	OccurrenceID                       string `json:"occurrenceId,omitempty"`
+	ContinuationGateID                 string `json:"continuationGateId,omitempty"`
+	ContinuationTurnID                 string `json:"continuationTurnId,omitempty"`
+	ContinuationTurnVersion            uint64 `json:"continuationTurnVersion,omitempty"`
+	ContinuationAttempt                uint32 `json:"continuationAttempt,omitempty"`
+	ContinuationRuntimeRevisionID      string `json:"continuationRuntimeRevisionId,omitempty"`
+	ContinuationRuntimeRevisionVersion uint64 `json:"continuationRuntimeRevisionVersion,omitempty"`
+	ContinuationInputSHA256            string `json:"continuationInputSha256,omitempty"`
+	OwnerFeedbackSHA256                string `json:"ownerFeedbackSha256,omitempty"`
 }
 
 func (ProcessRunSpec) Kind() enum.Kind { return enum.KindProcessRun }
@@ -570,6 +578,9 @@ func (spec ProcessRunSpec) Validate() error {
 		spec.TargetTurnID,
 		spec.ScheduleID,
 		spec.OccurrenceID,
+		spec.ContinuationGateID,
+		spec.ContinuationTurnID,
+		spec.ContinuationRuntimeRevisionID,
 	} {
 		if identifier != "" && value.ValidateID(identifier) != nil {
 			return errors.New("process run binding is invalid")
@@ -596,6 +607,19 @@ func (spec ProcessRunSpec) Validate() error {
 	}
 	if (spec.ScheduleID == "") != (spec.OccurrenceID == "") {
 		return errors.New("process schedule lineage is incomplete")
+	}
+	continuation := spec.ContinuationGateID != "" || spec.ContinuationTurnID != "" ||
+		spec.ContinuationTurnVersion != 0 || spec.ContinuationAttempt != 0 ||
+		spec.ContinuationRuntimeRevisionID != "" ||
+		spec.ContinuationRuntimeRevisionVersion != 0 ||
+		spec.ContinuationInputSHA256 != "" || spec.OwnerFeedbackSHA256 != ""
+	if continuation && (spec.ContinuationGateID == "" || spec.ContinuationTurnID == "" ||
+		spec.ContinuationTurnVersion == 0 || spec.ContinuationAttempt == 0 ||
+		spec.ContinuationAttempt > 100 || spec.ContinuationRuntimeRevisionID == "" ||
+		spec.ContinuationRuntimeRevisionVersion == 0 ||
+		!validSHA256(spec.ContinuationInputSHA256) ||
+		!validSHA256(spec.OwnerFeedbackSHA256)) {
+		return errors.New("process continuation binding is invalid")
 	}
 	if spec.OccurrenceID != "" &&
 		spec.RootTriggerRef != "schedule-occurrence:"+spec.OccurrenceID {
@@ -738,6 +762,10 @@ type OwnerGateSpec struct {
 	DeliveredAt              time.Time `json:"deliveredAt,omitempty"`
 	ScheduleID               string    `json:"scheduleId,omitempty"`
 	OccurrenceID             string    `json:"occurrenceId,omitempty"`
+	DecisionReceiptSHA256    string    `json:"decisionReceiptSha256,omitempty"`
+	ContinuationTurnID       string    `json:"continuationTurnId,omitempty"`
+	ContinuationTurnVersion  uint64    `json:"continuationTurnVersion,omitempty"`
+	ContinuationInputSHA256  string    `json:"continuationInputSha256,omitempty"`
 }
 
 func (OwnerGateSpec) Kind() enum.Kind { return enum.KindOwnerGate }
@@ -759,6 +787,7 @@ func (spec OwnerGateSpec) Validate() error {
 		!validSHA256(spec.DeliveryPayloadSHA256) ||
 		(spec.ScheduleID != "" && value.ValidateID(spec.ScheduleID) != nil) ||
 		(spec.OccurrenceID != "" && value.ValidateID(spec.OccurrenceID) != nil) ||
+		(spec.ContinuationTurnID != "" && value.ValidateID(spec.ContinuationTurnID) != nil) ||
 		(spec.Decision != "" && spec.Decision != "APPROVED" &&
 			spec.Decision != "REJECTED" &&
 			spec.Decision != "CHANGES_REQUESTED" &&
@@ -789,6 +818,14 @@ func (spec OwnerGateSpec) Validate() error {
 	}
 	if (spec.ScheduleID == "") != (spec.OccurrenceID == "") {
 		return errors.New("owner gate schedule lineage is incomplete")
+	}
+	continuation := spec.DecisionReceiptSHA256 != "" || spec.ContinuationTurnID != "" ||
+		spec.ContinuationTurnVersion != 0 || spec.ContinuationInputSHA256 != ""
+	if continuation && (!validSHA256(spec.DecisionReceiptSHA256) ||
+		spec.ContinuationTurnID == "" || spec.ContinuationTurnVersion == 0 ||
+		!validSHA256(spec.ContinuationInputSHA256) ||
+		spec.Decision != "CHANGES_REQUESTED") {
+		return errors.New("owner gate continuation receipt is invalid")
 	}
 	return nil
 }

@@ -15,7 +15,13 @@ SELECT
     coalesce(outcome, ''),
     coalesce(result_artifact_id::text, ''),
     created_at,
-    coalesce(finished_at, 'epoch'::timestamptz)
+    coalesce(finished_at, 'epoch'::timestamptz),
+    coalesce(continuation_turn_id::text, ''),
+    coalesce(continuation_turn_version, 0),
+    coalesce(continuation_runtime_revision_id::text, ''),
+    coalesce(continuation_runtime_revision_version, 0),
+    coalesce(continuation_input_sha256, ''),
+    coalesce(owner_feedback_sha256, '')
 FROM control_plane.scheduled_runs
 WHERE occurrence_id = @occurrence_id::uuid
   AND attempt = @attempt

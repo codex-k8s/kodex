@@ -26,7 +26,7 @@ var migrations embed.FS
 //go:embed sql/*.sql
 var operationalSQL embed.FS
 
-const schemaVersion int64 = 20260731000500
+const schemaVersion int64 = 20260731000600
 
 func main() {
 	ctx, stop := signal.NotifyContext(

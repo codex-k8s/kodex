@@ -68,6 +68,22 @@ updated: 2026-07-29
 
 Для запроса, созданного итогом автоматизации, решение разрешено только после сохранённого `mattermost_post_id` точной server-owned карточки. Затем оно атомарно переводит точные `ScheduledRun` и occurrence в `succeeded`, задаёт `finished_at` и добавляет audit. Точный replay решения возвращает существующий результат; другой пользователь, канал, корневой тред или новый post после разрешения не создаёт повторного перехода. Гонка доставки и решения имеет два допустимых исхода: решение закрыто отклоняется до delivery proof либо выполняется после его фиксации.
 
+Просрочка lease планировщика сначала в одной owner-транзакции закрывает старый
+`ScheduledRun` и весь связанный session/turn/attempt/process/gate/claim graph,
+отзывает lease и generation grant и сохраняет неизменяемый audit/outbox факт.
+Только после этого допускается новая попытка; старый runner больше не может
+подтвердить результат, а старый graph остаётся доступен в PostgreSQL и audit.
+Та же ограда применяется к timeout, misfire, crash recovery и dead-letter.
+
+Просроченный owner gate не участвует в delivery query. Авторизованный
+`ExpireOwnerGate` reconciler забирает его под PostgreSQL row lock и атомарно
+закрывает gate и связанный turn/process/occurrence/`ScheduledRun` graph. Гонка
+решения владельца с expiry имеет одного победителя. `CHANGES_REQUESTED` —
+отдельный terminal decision: он сохраняет feedback/receipt и тот же root
+`ProcessRun`, закрывает прежнюю attempt и создаёт новую неизменяемую
+revision/input/turn attempt по server-owned continuation policy; это решение
+не отображается как `FAILED`.
+
 Read-only история Control Center читается из PostgreSQL через версионированный OpenAPI endpoint и сгенерированный Vue-клиент. Она показывает как `waiting_owner/open`, так и сохранённое `succeeded/resolved`; обновление после решения идёт по тому же серверному пути, без production-зависимости от browser globals.
 
 ## Критерии приемки

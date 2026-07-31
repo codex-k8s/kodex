@@ -1,0 +1,13 @@
+-- name: ScheduledRunContinue
+UPDATE control_plane.scheduled_runs
+SET state = 'CONTINUATION',
+    continuation_turn_id = @continuation_turn_id::uuid,
+    continuation_turn_version = @continuation_turn_version,
+    continuation_runtime_revision_id = @continuation_runtime_revision_id::uuid,
+    continuation_runtime_revision_version = @continuation_runtime_revision_version,
+    continuation_input_sha256 = @continuation_input_sha256,
+    owner_feedback_sha256 = @owner_feedback_sha256
+WHERE occurrence_id = @occurrence_id::uuid
+  AND attempt = @attempt
+  AND state = 'WAITING_OWNER'
+  AND continuation_turn_id IS NULL

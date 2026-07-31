@@ -91,6 +91,9 @@ service ControlPlaneService {
   // ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
   // сервером выбранной ожидающей карточки.
   rpc ClaimOwnerGateDelivery(ClaimOwnerGateDeliveryRequest) returns (ClaimOwnerGateDeliveryResponse);
+  // ExpireOwnerGate автономно закрывает одну выбранную PostgreSQL
+  // просроченную карточку и весь её execution graph.
+  rpc ExpireOwnerGate(ExpireOwnerGateRequest) returns (ExpireOwnerGateResponse);
   // RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
   // принадлежащей серверу.
   rpc RecordOwnerGateDelivery(RecordOwnerGateDeliveryRequest) returns (RecordOwnerGateDeliveryResponse);
@@ -331,6 +334,9 @@ enum ScheduleOccurrenceState {
   SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER = 7;
   // SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER — выполнение остановлено на единственном owner gate.
   SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER = 8;
+  // SCHEDULE_OCCURRENCE_STATE_CONTINUATION — решение CHANGES_REQUESTED принято,
+  // а новый неизменяемый ход продолжает тот же ProcessRun.
+  SCHEDULE_OCCURRENCE_STATE_CONTINUATION = 9;
 }
 
 // SessionAction задаёт закрытое перечисление контракта control-plane.
@@ -599,6 +605,14 @@ message ProcessRunSpec {
   uint64 root_turn_version = 23;
   uint64 target_session_version = 24;
   uint64 target_turn_version = 25;
+  string continuation_gate_id = 26;
+  string continuation_turn_id = 27;
+  uint64 continuation_turn_version = 28;
+  uint32 continuation_attempt = 29;
+  string continuation_runtime_revision_id = 30;
+  uint64 continuation_runtime_revision_version = 31;
+  string continuation_input_sha256 = 32;
+  string owner_feedback_sha256 = 33;
 }
 
 // ScheduleSpec описывает версионированное сообщение контракта control-plane.
@@ -663,6 +677,10 @@ message OwnerGateSpec {
   google.protobuf.Timestamp delivery_claim_expires_at = 23;
   string schedule_id = 24;
   string occurrence_id = 25;
+  string decision_receipt_sha256 = 26;
+  string continuation_turn_id = 27;
+  uint64 continuation_turn_version = 28;
+  string continuation_input_sha256 = 29;
 }
 
 // MemoryRecordSpec описывает версионированное сообщение контракта control-plane.
@@ -1340,6 +1358,17 @@ message ClaimOwnerGateDeliveryResponse {
   Resource owner_gate = 1;
   string delivery_claim_token = 2;
   google.protobuf.Timestamp delivery_claim_expires_at = 3;
+}
+
+// ExpireOwnerGateRequest задаёт только replay key: gate и время выбирает сервер.
+message ExpireOwnerGateRequest {
+  string idempotency_key = 1;
+}
+
+// ExpireOwnerGateResponse возвращает авторитетный terminal readback.
+message ExpireOwnerGateResponse {
+  Resource owner_gate = 1;
+  Resource process_run = 2;
 }
 
 // RecordOwnerGateDeliveryRequest описывает версионированное сообщение контракта control-plane.

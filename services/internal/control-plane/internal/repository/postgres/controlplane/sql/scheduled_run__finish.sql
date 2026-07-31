@@ -6,4 +6,4 @@ SET state = @state,
     finished_at = @finished_at
 WHERE occurrence_id = @occurrence_id::uuid
   AND attempt = @attempt
-  AND state IN ('CLAIMED', 'WAITING_OWNER')
+  AND state IN ('CLAIMED', 'WAITING_OWNER', 'CONTINUATION')

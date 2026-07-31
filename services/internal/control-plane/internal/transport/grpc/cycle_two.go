@@ -197,6 +197,41 @@ func (server *Server) ClaimOwnerGateDelivery(
 	}, nil
 }
 
+func (server *Server) ExpireOwnerGate(
+	ctx context.Context,
+	request *controlplanev1.ExpireOwnerGateRequest,
+) (*controlplanev1.ExpireOwnerGateResponse, error) {
+	principal, err := authorization.Principal(
+		ctx,
+		controlplanev1.ControlPlaneService_ExpireOwnerGate_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	expired, err := server.service.ExpireOwnerGate(
+		ctx,
+		resource.ExpireOwnerGateInput{
+			Principal:      principal,
+			IdempotencyKey: request.GetIdempotencyKey(),
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	gate, err := toProtoResource(expired.OwnerGate)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	process, err := toProtoResource(expired.Process)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.ExpireOwnerGateResponse{
+		OwnerGate:  gate,
+		ProcessRun: process,
+	}, nil
+}
+
 func (server *Server) GetRuntimeRevision(
 	ctx context.Context,
 	request *controlplanev1.GetRuntimeRevisionRequest,

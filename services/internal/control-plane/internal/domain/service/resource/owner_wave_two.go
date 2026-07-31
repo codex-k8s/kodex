@@ -28,6 +28,18 @@ func (service *Service) revokeExecutionClaims(
 	processRunID, turnID, reason string,
 	now time.Time,
 ) error {
+	return service.revokeExecutionClaimsForOwner(
+		ctx, tx, principal, principal.ActorID, processRunID, turnID, reason, now,
+	)
+}
+
+func (service *Service) revokeExecutionClaimsForOwner(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	ownerActorID, processRunID, turnID, reason string,
+	now time.Time,
+) error {
 	claims, err := tx.ActiveWorkClaimsForUpdate(
 		ctx, principal.OrganizationID, principal.ProjectID, processRunID, turnID,
 	)
@@ -35,8 +47,8 @@ func (service *Service) revokeExecutionClaims(
 		return err
 	}
 	for _, claim := range claims {
-		if err := requireLifecycleOwner(principal, claim); err != nil {
-			return err
+		if claim.OwnerActorID != ownerActorID {
+			return errs.ErrNotFound
 		}
 		cancelled, transitionErr := claim.Transition(enum.StateCancelled, now)
 		if transitionErr != nil {
@@ -62,8 +74,22 @@ func (service *Service) cancelTurnExecution(
 	reason string,
 	now time.Time,
 ) (entity.Resource, error) {
-	if err := requireLifecycleOwner(principal, turn); err != nil {
-		return entity.Resource{}, err
+	return service.cancelTurnExecutionForOwner(
+		ctx, tx, principal, principal.ActorID, turn, reason, now,
+	)
+}
+
+func (service *Service) cancelTurnExecutionForOwner(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	ownerActorID string,
+	turn entity.Resource,
+	reason string,
+	now time.Time,
+) (entity.Resource, error) {
+	if turn.OwnerActorID != ownerActorID {
+		return entity.Resource{}, errs.ErrNotFound
 	}
 	spec, ok := turn.Spec.(entity.TurnSpec)
 	if !ok || turn.Kind != enum.KindTurn || turn.State.Terminal() {
@@ -101,8 +127,8 @@ func (service *Service) cancelTurnExecution(
 	if err := tx.FinishTurnAttempt(ctx, attempt); err != nil {
 		return entity.Resource{}, err
 	}
-	if err := service.revokeExecutionClaims(
-		ctx, tx, principal, spec.ProcessRunID, turn.ID, reason, now,
+	if err := service.revokeExecutionClaimsForOwner(
+		ctx, tx, principal, ownerActorID, spec.ProcessRunID, turn.ID, reason, now,
 	); err != nil {
 		return entity.Resource{}, err
 	}
@@ -121,10 +147,22 @@ func validateScheduledRunBinding(
 	if run.OccurrenceID != occurrence.ID || run.Attempt != occurrence.Attempt ||
 		run.SessionID != occurrence.ExecutionSessionID ||
 		run.SessionVersion != occurrence.ExecutionSessionVersion ||
-		run.TurnID != occurrence.ExecutionTurnID ||
-		run.TurnVersion != occurrence.ExecutionTurnVersion ||
 		run.ProcessRunID != occurrence.ExecutionProcessRunID ||
-		run.ProcessVersion != occurrence.ExecutionProcessVersion ||
+		run.ProcessVersion > occurrence.ExecutionProcessVersion {
+		return errs.ErrStateConflict
+	}
+	if run.ContinuationTurnID != "" {
+		if run.ContinuationTurnID != occurrence.ExecutionTurnID ||
+			run.ContinuationTurnVersion != occurrence.ExecutionTurnVersion ||
+			run.ContinuationRuntimeRevisionID != occurrence.ExecutionRuntimeRevisionID ||
+			run.ContinuationRuntimeRevisionVersion != occurrence.ExecutionRuntimeRevisionVersion ||
+			run.ContinuationInputSHA256 != occurrence.EffectiveInputSHA256 {
+			return errs.ErrStateConflict
+		}
+		return nil
+	}
+	if run.TurnID != occurrence.ExecutionTurnID ||
+		run.TurnVersion != occurrence.ExecutionTurnVersion ||
 		run.RuntimeRevisionID != occurrence.ExecutionRuntimeRevisionID ||
 		run.RuntimeRevisionVersion != occurrence.ExecutionRuntimeRevisionVersion ||
 		run.EffectiveInputSHA256 != occurrence.EffectiveInputSHA256 {

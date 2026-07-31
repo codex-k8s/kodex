@@ -55,6 +55,7 @@ const (
 	ControlPlaneService_CompleteProcess_FullMethodName            = "/controlplane.v1.ControlPlaneService/CompleteProcess"
 	ControlPlaneService_RequestOwnerGate_FullMethodName           = "/controlplane.v1.ControlPlaneService/RequestOwnerGate"
 	ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName     = "/controlplane.v1.ControlPlaneService/ClaimOwnerGateDelivery"
+	ControlPlaneService_ExpireOwnerGate_FullMethodName            = "/controlplane.v1.ControlPlaneService/ExpireOwnerGate"
 	ControlPlaneService_RecordOwnerGateDelivery_FullMethodName    = "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery"
 	ControlPlaneService_ResolveOwnerGate_FullMethodName           = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
 	ControlPlaneService_RegisterArtifact_FullMethodName           = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
@@ -149,6 +150,9 @@ type ControlPlaneServiceClient interface {
 	// ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
 	// сервером выбранной ожидающей карточки.
 	ClaimOwnerGateDelivery(ctx context.Context, in *ClaimOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*ClaimOwnerGateDeliveryResponse, error)
+	// ExpireOwnerGate автономно закрывает одну выбранную PostgreSQL
+	// просроченную карточку и весь её execution graph.
+	ExpireOwnerGate(ctx context.Context, in *ExpireOwnerGateRequest, opts ...grpc.CallOption) (*ExpireOwnerGateResponse, error)
 	// RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
 	// принадлежащей серверу.
 	RecordOwnerGateDelivery(ctx context.Context, in *RecordOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*RecordOwnerGateDeliveryResponse, error)
@@ -537,6 +541,16 @@ func (c *controlPlaneServiceClient) ClaimOwnerGateDelivery(ctx context.Context, 
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ExpireOwnerGate(ctx context.Context, in *ExpireOwnerGateRequest, opts ...grpc.CallOption) (*ExpireOwnerGateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExpireOwnerGateResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ExpireOwnerGate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) RecordOwnerGateDelivery(ctx context.Context, in *RecordOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*RecordOwnerGateDeliveryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RecordOwnerGateDeliveryResponse)
@@ -692,6 +706,9 @@ type ControlPlaneServiceServer interface {
 	// ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
 	// сервером выбранной ожидающей карточки.
 	ClaimOwnerGateDelivery(context.Context, *ClaimOwnerGateDeliveryRequest) (*ClaimOwnerGateDeliveryResponse, error)
+	// ExpireOwnerGate автономно закрывает одну выбранную PostgreSQL
+	// просроченную карточку и весь её execution graph.
+	ExpireOwnerGate(context.Context, *ExpireOwnerGateRequest) (*ExpireOwnerGateResponse, error)
 	// RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
 	// принадлежащей серверу.
 	RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error)
@@ -827,6 +844,9 @@ func (UnimplementedControlPlaneServiceServer) RequestOwnerGate(context.Context, 
 }
 func (UnimplementedControlPlaneServiceServer) ClaimOwnerGateDelivery(context.Context, *ClaimOwnerGateDeliveryRequest) (*ClaimOwnerGateDeliveryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimOwnerGateDelivery not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ExpireOwnerGate(context.Context, *ExpireOwnerGateRequest) (*ExpireOwnerGateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExpireOwnerGate not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordOwnerGateDelivery not implemented")
@@ -1518,6 +1538,24 @@ func _ControlPlaneService_ClaimOwnerGateDelivery_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ExpireOwnerGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExpireOwnerGateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ExpireOwnerGate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ExpireOwnerGate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ExpireOwnerGate(ctx, req.(*ExpireOwnerGateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_RecordOwnerGateDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RecordOwnerGateDeliveryRequest)
 	if err := dec(in); err != nil {
@@ -1794,6 +1832,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClaimOwnerGateDelivery",
 			Handler:    _ControlPlaneService_ClaimOwnerGateDelivery_Handler,
+		},
+		{
+			MethodName: "ExpireOwnerGate",
+			Handler:    _ControlPlaneService_ExpireOwnerGate_Handler,
 		},
 		{
 			MethodName: "RecordOwnerGateDelivery",

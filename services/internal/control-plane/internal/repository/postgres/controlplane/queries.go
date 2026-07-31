@@ -51,6 +51,9 @@ var sqlOutboxTerminalRepair string
 //go:embed sql/owner_gate__next_delivery.sql
 var sqlOwnerGateNextDelivery string
 
+//go:embed sql/owner_gate__next_expired.sql
+var sqlOwnerGateNextExpired string
+
 //go:embed sql/permission_index__actor_list.sql
 var sqlPermissionIndexActorList string
 
@@ -129,8 +132,8 @@ var sqlScheduleOccurrenceList string
 //go:embed sql/schedule_occurrence__next.sql
 var sqlScheduleOccurrenceNext string
 
-//go:embed sql/schedule_occurrence__recover_expired.sql
-var sqlScheduleOccurrenceRecoverExpired string
+//go:embed sql/schedule_occurrence__lock_expired.sql
+var sqlScheduleOccurrenceLockExpired string
 
 //go:embed sql/schedule_occurrence__save.sql
 var sqlScheduleOccurrenceSave string
@@ -149,6 +152,9 @@ var sqlScheduledRunGetForUpdate string
 
 //go:embed sql/scheduled_run__wait_owner.sql
 var sqlScheduledRunWaitOwner string
+
+//go:embed sql/scheduled_run__continue.sql
+var sqlScheduledRunContinue string
 
 //go:embed sql/scheduled_run__finish.sql
 var sqlScheduledRunFinish string

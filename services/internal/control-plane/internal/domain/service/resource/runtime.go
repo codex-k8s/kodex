@@ -872,7 +872,10 @@ func (service *Service) completeProcessFromTurn(
 	}
 	terminalTurnID := processSpec.RootTurnID
 	terminalAttempt := processSpec.RootAttempt
-	if processSpec.ParentProcessRunID != "" {
+	if processSpec.ContinuationTurnID != "" {
+		terminalTurnID = processSpec.ContinuationTurnID
+		terminalAttempt = processSpec.ContinuationAttempt
+	} else if processSpec.ParentProcessRunID != "" {
 		terminalTurnID = processSpec.TargetTurnID
 		terminalAttempt = processSpec.TargetAttempt
 	}
@@ -908,8 +911,13 @@ func (service *Service) completeProcessFromTurn(
 	if err := tx.Update(ctx, updated, process.Version); err != nil {
 		return err
 	}
-	return service.appendMutationRecords(
+	if err := service.appendMutationRecords(
 		ctx, tx, principal, "complete_process_from_turn", updated,
+	); err != nil {
+		return err
+	}
+	return service.finishContinuationOccurrence(
+		ctx, tx, principal, updated, processSpec, turn, turnSpec,
 	)
 }
 
@@ -1466,6 +1474,31 @@ func (service *Service) ResolveOwnerGate(
 				relatedOccurrence = occurrence
 				relatedSchedule = schedule
 			}
+			now := service.now().UTC().Truncate(time.Microsecond)
+			if !gateSpec.ExpiresAt.After(now) {
+				result, err = service.expireOwnerGateGraph(
+					ctx, tx, input.Principal, gate, now,
+				)
+				if err != nil {
+					return err
+				}
+				return saveOwnerGateResultReceipt(
+					ctx, tx, input.Principal, keyHash, requestHash, result, now,
+				)
+			}
+			if input.Decision == "CHANGES_REQUESTED" {
+				result, err = service.continueOwnerGateGraph(
+					ctx, tx, input.Principal, gate, gateSpec, process, processSpec,
+					gateTurn, gateTurnSpec, input.Reason, relatedOccurrence,
+					relatedSchedule, now,
+				)
+				if err != nil {
+					return err
+				}
+				return saveOwnerGateResultReceipt(
+					ctx, tx, input.Principal, keyHash, requestHash, result, now,
+				)
+			}
 			gateTarget := ownerGateTarget(input.Decision)
 			processTarget := enum.StateFailed
 			switch input.Decision {
@@ -1478,15 +1511,8 @@ func (service *Service) ResolveOwnerGate(
 			case "CANCELLED":
 				processTarget = enum.StateCancelled
 			}
-			if !gateSpec.ExpiresAt.After(service.now()) {
-				gateTarget = enum.StateExpired
-				processTarget = enum.StateFailed
-				gateSpec.Decision = ""
-				gateSpec.DecisionReason = ""
-			} else {
-				gateSpec.Decision = input.Decision
-				gateSpec.DecisionReason = input.Reason
-			}
+			gateSpec.Decision = input.Decision
+			gateSpec.DecisionReason = input.Reason
 			if processTarget.Terminal() {
 				open, err := tx.ProcessHasOpenWork(
 					ctx, process.OrganizationID, process.ProjectID, process.ID,
@@ -1499,7 +1525,6 @@ func (service *Service) ResolveOwnerGate(
 					return errs.ErrStateConflict
 				}
 			}
-			now := service.now().UTC().Truncate(time.Microsecond)
 			turnTarget := processTarget
 			gateTurnSpec.Outcome = "owner_gate_" + strings.ToLower(input.Decision)
 			if gateTarget == enum.StateExpired {
@@ -1678,7 +1703,7 @@ func ownerGateTarget(decision string) enum.State {
 	case "REJECTED":
 		return enum.StateFailed
 	case "CHANGES_REQUESTED":
-		return enum.StateFailed
+		return enum.StateSucceeded
 	default:
 		return enum.StateCancelled
 	}

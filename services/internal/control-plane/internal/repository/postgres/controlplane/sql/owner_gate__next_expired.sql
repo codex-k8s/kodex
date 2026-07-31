@@ -1,4 +1,4 @@
--- name: OwnerGateNextDelivery
+-- name: OwnerGateNextExpired
 SELECT
     id,
     organization_id,
@@ -18,15 +18,7 @@ WHERE organization_id = @organization_id::uuid
   AND project_id = @project_id::uuid
   AND kind = 'OWNER_GATE'
   AND state = 'WAITING_OWNER'
-  AND (spec ->> 'expiresAt')::timestamptz > clock_timestamp()
-  AND coalesce(spec ->> 'mattermostPostId', '') = ''
-  AND (
-      coalesce(spec ->> 'deliveryClaimTokenSha256', '') = ''
-      OR coalesce(
-          (spec ->> 'deliveryClaimExpiresAt')::timestamptz,
-          '-infinity'::timestamptz
-      ) <= @now
-  )
-ORDER BY created_at, id
+  AND (spec ->> 'expiresAt')::timestamptz <= clock_timestamp()
+ORDER BY (spec ->> 'expiresAt')::timestamptz, created_at, id
 FOR UPDATE SKIP LOCKED
 LIMIT 1

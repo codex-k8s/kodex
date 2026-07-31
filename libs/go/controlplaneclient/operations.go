@@ -42,6 +42,7 @@ func OwnerGateDeliveryOperations() map[string]string {
 		"control.owner-gate-delivery.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.owner-gate.claim-delivery":     controlplanev1.ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,
 		"control.owner-gate.deliver":            controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
+		"control.owner-gate.expire":             controlplanev1.ControlPlaneService_ExpireOwnerGate_FullMethodName,
 	}
 }
 

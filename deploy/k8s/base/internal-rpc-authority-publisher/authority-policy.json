@@ -215,7 +215,8 @@
         "allowed_operation_ids": [
           "control.owner-gate-delivery.readiness",
           "control.owner-gate.claim-delivery",
-          "control.owner-gate.deliver"
+          "control.owner-gate.deliver",
+          "control.owner-gate.expire"
         ],
         "application_credential": "OWNER_GATE_DELIVERY_GRANT",
         "application_credential_audience": "urn:mattercodex:owner-gate-delivery",
@@ -1324,6 +1325,18 @@
         "full_method": "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery",
         "operation_id": "control.owner-gate.deliver",
         "permission": "controlplane.owner_gate.deliver",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.owner-gate-delivery",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "caller_workload_id": "interaction-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/ExpireOwnerGate",
+        "operation_id": "control.owner-gate.expire",
+        "permission": "controlplane.owner_gate.expire",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_workload_id": "control-plane"
