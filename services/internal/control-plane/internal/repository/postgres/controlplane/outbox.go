@@ -1,0 +1,129 @@
+package controlplane
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/codex-k8s/matter-codex/libs/go/eventing"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// OutboxStore использует отдельный least-privilege relay pool.
+type OutboxStore struct {
+	pool        *pgxpool.Pool
+	maxAttempts uint32
+}
+
+var _ eventing.OutboxStore = (*OutboxStore)(nil)
+
+// NewOutboxStore создаёт broker-neutral relay store.
+func NewOutboxStore(pool *pgxpool.Pool, maxAttempts uint32) (*OutboxStore, error) {
+	if pool == nil || maxAttempts < 1 || maxAttempts > 100 {
+		return nil, errors.New("control-plane outbox configuration is invalid")
+	}
+	return &OutboxStore{pool: pool, maxAttempts: maxAttempts}, nil
+}
+
+func (store *OutboxStore) Check(ctx context.Context) error {
+	var version uint64
+	var member, nonSuperuser, noBypassRLS bool
+	if err := store.pool.QueryRow(ctx, query("outbox__check.sql")).Scan(
+		&version,
+		&member,
+		&nonSuperuser,
+		&noBypassRLS,
+	); err != nil {
+		return mapError(err)
+	}
+	if version != 20260731000100 || !member || !nonSuperuser || !noBypassRLS {
+		return errors.New("control-plane outbox role is not ready")
+	}
+	return nil
+}
+
+func (store *OutboxStore) Claim(
+	ctx context.Context,
+	instanceID string,
+	limit int,
+	leaseDuration time.Duration,
+) ([]eventing.ClaimedEvent, error) {
+	rows, err := store.pool.Query(
+		ctx,
+		query("outbox__claim.sql"),
+		pgx.StrictNamedArgs{
+			"lease_owner":    instanceID,
+			"limit":          limit,
+			"lease_duration": postgresInterval(leaseDuration),
+		},
+	)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	claimed := make([]eventing.ClaimedEvent, 0, limit)
+	for rows.Next() {
+		var raw []byte
+		var item eventing.ClaimedEvent
+		if err := rows.Scan(&raw, &item.LeaseToken); err != nil {
+			return nil, mapError(err)
+		}
+		if err := json.Unmarshal(raw, &item.Envelope); err != nil ||
+			item.Envelope.Validate() != nil {
+			return nil, errors.New("decode canonical outbox envelope")
+		}
+		claimed = append(claimed, item)
+	}
+	return claimed, mapError(rows.Err())
+}
+
+func (store *OutboxStore) MarkPublished(
+	ctx context.Context,
+	eventID, leaseToken string,
+) error {
+	tag, err := store.pool.Exec(
+		ctx,
+		query("outbox__mark_published.sql"),
+		pgx.StrictNamedArgs{"event_id": eventID, "lease_token": leaseToken},
+	)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("outbox publish lease is stale")
+	}
+	return nil
+}
+
+func (store *OutboxStore) MarkFailed(
+	ctx context.Context,
+	eventID, leaseToken string,
+	retryable bool,
+	backoff time.Duration,
+) error {
+	tag, err := store.pool.Exec(
+		ctx,
+		query("outbox__mark_failed.sql"),
+		pgx.StrictNamedArgs{
+			"event_id":     eventID,
+			"lease_token":  leaseToken,
+			"retryable":    retryable,
+			"max_attempts": store.maxAttempts,
+			"available_at": time.Now().UTC().Add(backoff),
+		},
+	)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("outbox failure lease is stale")
+	}
+	return nil
+}
+
+func postgresInterval(duration time.Duration) string {
+	return fmt.Sprintf("%d microseconds", duration.Microseconds())
+}

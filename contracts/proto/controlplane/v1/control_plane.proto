@@ -1,0 +1,481 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/generated/controlplane/v1;controlplanev1";
+
+// ControlPlaneService владеет желаемым бизнес-состоянием MatterCodex.
+// Actor, organization, project scope и permissions не принимаются в payload:
+// transport получает их только из проверенного authorization context #186.
+service ControlPlaneService {
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse);
+  rpc UpdateResource(UpdateResourceRequest) returns (UpdateResourceResponse);
+  rpc TransitionResource(TransitionResourceRequest) returns (TransitionResourceResponse);
+  rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse);
+  rpc GetResource(GetResourceRequest) returns (GetResourceResponse);
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
+
+  // EnqueueTurn атомарно резервирует следующую FIFO sequence сессии.
+  rpc EnqueueTurn(EnqueueTurnRequest) returns (EnqueueTurnResponse);
+  // ClaimTurn выдает одну попытку exact workload и использует bounded lease.
+  rpc ClaimTurn(ClaimTurnRequest) returns (ClaimTurnResponse);
+  // CompleteTurn завершает только текущую lease и фиксирует terminal outcome.
+  rpc CompleteTurn(CompleteTurnRequest) returns (CompleteTurnResponse);
+
+  // ClaimDueSchedules резервирует наступившие occurrence без запуска runtime.
+  rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
+  // ResolveOwnerGate связывает решение с exact gate/version/initiator.
+  rpc ResolveOwnerGate(ResolveOwnerGateRequest) returns (ResolveOwnerGateResponse);
+
+  // CheckReadiness проверяет authority, PostgreSQL, cache и outbox publisher.
+  rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
+}
+
+message CreateProjectRequest {
+  string idempotency_key = 1;
+  string name = 2;
+  ProjectSpec spec = 3;
+}
+
+message CreateProjectResponse {
+  Resource project = 1;
+}
+
+message ListProjectsRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListProjectsResponse {
+  repeated Resource projects = 1;
+  string next_page_token = 2;
+}
+
+// ResourceKind — закрытый перечень агрегатов, принадлежащих control-plane.
+enum ResourceKind {
+  RESOURCE_KIND_UNSPECIFIED = 0;
+  RESOURCE_KIND_PROJECT = 1;
+  RESOURCE_KIND_TEAM = 2;
+  RESOURCE_KIND_CHAT = 3;
+  RESOURCE_KIND_ROLE = 4;
+  RESOURCE_KIND_PROMPT_PROFILE = 5;
+  RESOURCE_KIND_CREDENTIAL_BINDING = 6;
+  RESOURCE_KIND_REPOSITORY_WORKSPACE = 7;
+  RESOURCE_KIND_INTEGRATION = 8;
+  RESOURCE_KIND_RUNTIME_REVISION = 9;
+  RESOURCE_KIND_SESSION = 10;
+  RESOURCE_KIND_TURN = 11;
+  RESOURCE_KIND_PROCESS_RUN = 12;
+  RESOURCE_KIND_SCHEDULE = 13;
+  RESOURCE_KIND_OWNER_GATE = 14;
+  RESOURCE_KIND_MEMORY_RECORD = 15;
+  RESOURCE_KIND_WORK_CLAIM = 16;
+  RESOURCE_KIND_ARTIFACT = 17;
+}
+
+enum LifecycleState {
+  LIFECYCLE_STATE_UNSPECIFIED = 0;
+  LIFECYCLE_STATE_ACTIVE = 1;
+  LIFECYCLE_STATE_PAUSED = 2;
+  LIFECYCLE_STATE_ARCHIVED = 3;
+  LIFECYCLE_STATE_DELETION_PENDING = 4;
+  LIFECYCLE_STATE_DELETED = 5;
+  LIFECYCLE_STATE_QUEUED = 6;
+  LIFECYCLE_STATE_CLAIMED = 7;
+  LIFECYCLE_STATE_RUNNING = 8;
+  LIFECYCLE_STATE_WAITING_OWNER = 9;
+  LIFECYCLE_STATE_WAITING_EXTERNAL = 10;
+  LIFECYCLE_STATE_SUCCEEDED = 11;
+  LIFECYCLE_STATE_FAILED = 12;
+  LIFECYCLE_STATE_CANCELLED = 13;
+  LIFECYCLE_STATE_EXPIRED = 14;
+  LIFECYCLE_STATE_BLOCKED = 15;
+}
+
+enum RoomType {
+  ROOM_TYPE_UNSPECIFIED = 0;
+  ROOM_TYPE_USER = 1;
+  ROOM_TYPE_COORDINATION = 2;
+  ROOM_TYPE_WORK_CONTROL = 3;
+  ROOM_TYPE_RUNS = 4;
+}
+
+enum ScheduleOverlapPolicy {
+  SCHEDULE_OVERLAP_POLICY_UNSPECIFIED = 0;
+  SCHEDULE_OVERLAP_POLICY_FORBID = 1;
+  SCHEDULE_OVERLAP_POLICY_QUEUE_ALL = 2;
+  SCHEDULE_OVERLAP_POLICY_COALESCE = 3;
+}
+
+enum ScheduleMisfirePolicy {
+  SCHEDULE_MISFIRE_POLICY_UNSPECIFIED = 0;
+  SCHEDULE_MISFIRE_POLICY_SKIP = 1;
+  SCHEDULE_MISFIRE_POLICY_RUN_ONCE = 2;
+  SCHEDULE_MISFIRE_POLICY_CATCH_UP = 3;
+  SCHEDULE_MISFIRE_POLICY_WITHIN_GRACE = 4;
+}
+
+enum OwnerGateDecision {
+  OWNER_GATE_DECISION_UNSPECIFIED = 0;
+  OWNER_GATE_DECISION_APPROVED = 1;
+  OWNER_GATE_DECISION_REJECTED = 2;
+  OWNER_GATE_DECISION_CHANGES_REQUESTED = 3;
+  OWNER_GATE_DECISION_CANCELLED = 4;
+}
+
+message ProjectSpec {
+  string slug = 1;
+  string description = 2;
+  string locale = 3;
+}
+
+message TeamSpec {
+  reserved 1;
+  reserved "project_id";
+  string stable_key = 2;
+  string external_team_ref = 3;
+  repeated string member_actor_ids = 4;
+  repeated string role_ids = 5;
+}
+
+message ChatSpec {
+  reserved 1;
+  reserved "project_id";
+  string stable_key = 2;
+  RoomType room_type = 3;
+  string default_agent_id = 4;
+  string external_channel_ref = 5;
+  string work_policy = 6;
+}
+
+message RoleSpec {
+  string stable_key = 1;
+  repeated string capabilities = 2;
+  repeated string allowed_target_role_ids = 3;
+  string prompt_profile_id = 4;
+}
+
+message PromptProfileSpec {
+  uint64 revision = 1;
+  string content_sha256 = 2;
+  string source_ref = 3;
+  string locale = 4;
+}
+
+message CredentialBindingSpec {
+  string purpose = 1;
+  string secret_ref = 2;
+  string principal_ref = 3;
+  uint64 revision = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+message RepositoryWorkspaceSpec {
+  string repository_ref = 1;
+  string workspace_mode = 2;
+  string default_branch = 3;
+  string credential_binding_id = 4;
+}
+
+message IntegrationSpec {
+  string definition_ref = 1;
+  uint64 definition_version = 2;
+  repeated string capabilities = 3;
+  repeated string credential_binding_ids = 4;
+  string endpoint_ref = 5;
+}
+
+message RuntimeRevisionSpec {
+  string manifest_sha256 = 1;
+  string image_digest = 2;
+  string prompt_profile_id = 3;
+  uint64 prompt_revision = 4;
+  repeated string credential_binding_ids = 5;
+  repeated string integration_ids = 6;
+}
+
+message SessionSpec {
+  string agent_id = 1;
+  string provider_account_binding_id = 2;
+  string conversation_id = 3;
+  string archive_ref = 4;
+  uint64 last_turn_sequence = 5;
+}
+
+message TurnSpec {
+  string session_id = 1;
+  uint64 sequence = 2;
+  string source_ref = 3;
+  string prompt_artifact_id = 4;
+  string runtime_revision_id = 5;
+  string process_run_id = 6;
+  uint32 attempt = 7;
+  string outcome = 8;
+  string result_artifact_id = 9;
+}
+
+message ProcessRunSpec {
+  string parent_process_run_id = 1;
+  string playbook_ref = 2;
+  uint64 policy_revision = 3;
+  string root_trigger_ref = 4;
+  string result_artifact_id = 5;
+}
+
+message ScheduleSpec {
+  string target_resource_id = 1;
+  string cron = 2;
+  google.protobuf.Duration interval = 3;
+  string timezone = 4;
+  ScheduleOverlapPolicy overlap_policy = 5;
+  ScheduleMisfirePolicy misfire_policy = 6;
+  google.protobuf.Duration misfire_grace = 7;
+  google.protobuf.Timestamp next_run_at = 8;
+}
+
+message OwnerGateSpec {
+  string process_run_id = 1;
+  string result_ref = 2;
+  string result_sha256 = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  OwnerGateDecision decision = 5;
+  string decision_reason = 6;
+}
+
+message MemoryRecordSpec {
+  string scope = 1;
+  string role_id = 2;
+  string title = 3;
+  string content = 4;
+  string content_sha256 = 5;
+  string provenance = 6;
+  uint32 importance = 7;
+}
+
+message WorkClaimSpec {
+  string process_run_id = 1;
+  string turn_id = 2;
+  string summary = 3;
+  repeated string domains = 4;
+  repeated string resource_keys = 5;
+}
+
+message ArtifactSpec {
+  string kind = 1;
+  string direction = 2;
+  string storage_ref = 3;
+  uint64 size_bytes = 4;
+  string media_type = 5;
+  string sha256 = 6;
+  string scan_status = 7;
+  string retention_policy_ref = 8;
+}
+
+message ResourceSpec {
+  oneof value {
+    ProjectSpec project = 1;
+    TeamSpec team = 2;
+    ChatSpec chat = 3;
+    RoleSpec role = 4;
+    PromptProfileSpec prompt_profile = 5;
+    CredentialBindingSpec credential_binding = 6;
+    RepositoryWorkspaceSpec repository_workspace = 7;
+    IntegrationSpec integration = 8;
+    RuntimeRevisionSpec runtime_revision = 9;
+    SessionSpec session = 10;
+    TurnSpec turn = 11;
+    ProcessRunSpec process_run = 12;
+    ScheduleSpec schedule = 13;
+    OwnerGateSpec owner_gate = 14;
+    MemoryRecordSpec memory_record = 15;
+    WorkClaimSpec work_claim = 16;
+    ArtifactSpec artifact = 17;
+  }
+}
+
+message Resource {
+  string id = 1;
+  ResourceKind kind = 2;
+  string name = 3;
+  LifecycleState state = 4;
+  uint64 version = 5;
+  string project_id = 6;
+  string parent_id = 7;
+  ResourceSpec spec = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message CreateResourceRequest {
+  string idempotency_key = 1;
+  // RESOURCE_KIND_PROJECT запрещён: tenant-scoped create имеет отдельный RPC.
+  ResourceKind kind = 2;
+  string name = 3;
+  reserved 4;
+  reserved "project_id";
+  string parent_id = 5;
+  ResourceSpec spec = 6;
+}
+
+message CreateResourceResponse {
+  Resource resource = 1;
+}
+
+message UpdateResourceRequest {
+  string idempotency_key = 1;
+  string resource_id = 2;
+  uint64 expected_version = 3;
+  string name = 4;
+  ResourceSpec spec = 5;
+}
+
+message UpdateResourceResponse {
+  Resource resource = 1;
+}
+
+message TransitionResourceRequest {
+  string idempotency_key = 1;
+  string resource_id = 2;
+  uint64 expected_version = 3;
+  LifecycleState target_state = 4;
+  string reason_code = 5;
+}
+
+message TransitionResourceResponse {
+  Resource resource = 1;
+}
+
+message DeleteResourceRequest {
+  string idempotency_key = 1;
+  string resource_id = 2;
+  uint64 expected_version = 3;
+}
+
+message DeleteResourceResponse {
+  Resource resource = 1;
+}
+
+message GetResourceRequest {
+  string resource_id = 1;
+  ResourceKind expected_kind = 2;
+}
+
+message GetResourceResponse {
+  Resource resource = 1;
+}
+
+message ListResourcesRequest {
+  ResourceKind kind = 1;
+  reserved 2;
+  reserved "project_id";
+  string parent_id = 3;
+  repeated LifecycleState states = 4;
+  uint32 page_size = 5;
+  string page_token = 6;
+}
+
+message ListResourcesResponse {
+  repeated Resource resources = 1;
+  string next_page_token = 2;
+}
+
+message EnqueueTurnRequest {
+  string idempotency_key = 1;
+  string session_id = 2;
+  string source_ref = 3;
+  string prompt_artifact_id = 4;
+  string process_run_id = 5;
+}
+
+message EnqueueTurnResponse {
+  Resource turn = 1;
+}
+
+message ClaimTurnRequest {
+  string idempotency_key = 1;
+}
+
+message ClaimTurnResponse {
+  Resource turn = 1;
+  string lease_token = 2;
+  google.protobuf.Timestamp lease_expires_at = 3;
+}
+
+message CompleteTurnRequest {
+  string idempotency_key = 1;
+  string turn_id = 2;
+  string lease_token = 3;
+  uint64 expected_version = 4;
+  LifecycleState terminal_state = 5;
+  string outcome = 6;
+  string result_artifact_id = 7;
+}
+
+message CompleteTurnResponse {
+  Resource turn = 1;
+}
+
+message ClaimDueSchedulesRequest {
+  string idempotency_key = 1;
+  uint32 limit = 2;
+}
+
+message ScheduleOccurrence {
+  string schedule_id = 1;
+  google.protobuf.Timestamp scheduled_for = 2;
+  string occurrence_id = 3;
+  string target_resource_id = 4;
+}
+
+message ClaimDueSchedulesResponse {
+  repeated ScheduleOccurrence occurrences = 1;
+}
+
+message ResolveOwnerGateRequest {
+  string idempotency_key = 1;
+  string owner_gate_id = 2;
+  uint64 expected_version = 3;
+  OwnerGateDecision decision = 4;
+  string reason = 5;
+}
+
+message ResolveOwnerGateResponse {
+  Resource owner_gate = 1;
+}
+
+message CheckReadinessRequest {}
+
+message CheckReadinessResponse {
+  bool ready = 1;
+  uint64 schema_version = 2;
+  bool authority_ready = 3;
+  bool postgres_ready = 4;
+  bool redis_ready = 5;
+  bool outbox_ready = 6;
+}
+
+enum ErrorReason {
+  ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_INVALID_REQUEST = 1;
+  ERROR_REASON_UNAUTHENTICATED = 2;
+  ERROR_REASON_PERMISSION_DENIED = 3;
+  ERROR_REASON_NOT_FOUND = 4;
+  ERROR_REASON_STATE_CONFLICT = 5;
+  ERROR_REASON_IDEMPOTENCY_CONFLICT = 6;
+  ERROR_REASON_VERSION_MISMATCH = 7;
+  ERROR_REASON_UNAVAILABLE = 8;
+  ERROR_REASON_INTERNAL = 9;
+  ERROR_REASON_RATE_LIMITED = 10;
+}
+
+message ErrorDetail {
+  ErrorReason reason = 1;
+  string code = 2;
+  string correlation_id = 3;
+  bool retryable = 4;
+}

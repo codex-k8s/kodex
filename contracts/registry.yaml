@@ -1,5 +1,17 @@
 version: 1
 packages:
+  - id: control-plane-v1
+    format: proto
+    owner: control-plane
+    source: contracts/proto/controlplane/v1
+    generated:
+      go: services/internal/control-plane/internal/generated/controlplane/v1
+    consumers:
+      - control-plane
+      - control-api-gateway
+      - interaction-gateway
+      - runtime-controller
+      - automation-scheduler
   - id: internal-rpc-authority-v1
     format: proto
     owner: internal-rpc-authority
