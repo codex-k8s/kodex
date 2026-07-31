@@ -17,6 +17,8 @@ type RestorePITRConfig struct {
 	KubernetesCAFile        string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE"`
 	KubernetesTokenFile     string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE"`
 	EvidencePrivateJWKFile  string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_EVIDENCE_PRIVATE_JWK_FILE"`
+	BackupResourceName      string        `env:"INTERNAL_RPC_AUTHORITY_CNPG_BACKUP_NAME"`
+	SourceClusterName       string        `env:"INTERNAL_RPC_AUTHORITY_CNPG_SOURCE_CLUSTER_NAME"`
 	BarmanObjectName        string        `env:"INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_OBJECT_NAME"`
 	BarmanServerName        string        `env:"INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_SERVER_NAME"`
 	PostgresImage           string        `env:"INTERNAL_RPC_AUTHORITY_CNPG_POSTGRES_IMAGE"`
@@ -34,13 +36,16 @@ func LoadRestorePITRConfig() (RestorePITRConfig, error) {
 		KubernetesTokenFile:     "/var/run/secrets/tokens/kubernetes/token",
 		EvidencePrivateJWKFile:  "/var/run/secrets/mattercodex/internal-rpc-authority/restore-pitr/evidence-private.jwk",
 		BarmanServerName:        "internal-rpc-authority-primary",
+		SourceClusterName:       "internal-rpc-authority-primary",
 		StorageSize:             "20Gi",
 		Timeout:                 10 * time.Second,
 	}
 	if err := parseEnvironment(&config); err != nil {
 		return RestorePITRConfig{}, err
 	}
-	if config.BarmanObjectName == "" ||
+	if config.BackupResourceName == "" ||
+		config.SourceClusterName != "internal-rpc-authority-primary" ||
+		config.BarmanObjectName == "" ||
 		config.BarmanServerName != "internal-rpc-authority-primary" ||
 		!strings.Contains(config.PostgresImage, "@sha256:") ||
 		config.StorageClass == "" ||
@@ -92,6 +97,8 @@ func RunRestorePITR(
 		Namespace:          "mattercodex-system",
 		EvidenceSecretName: "internal-rpc-authority-restore-evidence",
 		PrivateJWKFile:     config.EvidencePrivateJWKFile,
+		BackupName:         config.BackupResourceName,
+		SourceClusterName:  config.SourceClusterName,
 		BarmanObjectName:   config.BarmanObjectName,
 		BarmanServerName:   config.BarmanServerName,
 		PostgresImage:      config.PostgresImage,

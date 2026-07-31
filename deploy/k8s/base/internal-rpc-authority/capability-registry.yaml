@@ -564,6 +564,8 @@ spec:
         readinessMethod: /internalrpcauthority.v1.DatabaseCredentialLifecycleService/CheckReadiness
         callerProvidedPrincipalGenerationOrStatusAllowed: false
         desiredSetSource: VERSIONED_CAPABILITY_REGISTRY
+        canonicalLayerPath: TRANSPORT_CASTER_DOMAIN_SERVICE_REPOSITORY_CLIENT_PORT_ADAPTER
+        parallelApplicationOrchestrationAllowed: false
       scope:
         capabilities:
           - PUBLISHER
@@ -652,10 +654,13 @@ spec:
         tokenRequestForOwnServiceAccountOnly: true
       network:
         exactDestinations:
+          - kubernetes.default.svc:443
           - vault.mattercodex-system.svc:8200
           - internal-rpc-authority-postgresql.mattercodex-system.svc:5432
           - otel-collector.observability.svc:4317
           - sentry-relay.observability.svc:8443
+        kubernetesApiEnvironmentRenderMustPinServiceAndReadyEndpoints: true
+        kubernetesApiEnvironmentRenderMustPinServiceAndReadyEndpointPorts: true
         wildcardDestinationAllowed: false
       failurePolicy: FAIL_CLOSED
     internal-rpc-authority-readback-attestor:
@@ -1815,24 +1820,35 @@ spec:
         controllerService: internalrpcauthority.v1.RestoreControllerService
         requirePreparedReadbackBeforeRestore: true
         databaseRestoreProtocol: POSTGRESQL_TLS_EXACT_CLUSTER
-        backupInput: IMMUTABLE_MANIFEST_DIGEST_AND_RECOVERY_TARGET_TIME
+        backupInput: SERVER_READ_CNPG_BACKUP_SOURCE_AND_RECOVERY_TARGET_TIME
+        manifestDigestInputFromOperator: FORBIDDEN
+        authoritativeBackupReadback:
+          apiVersion: postgresql.cnpg.io/v1
+          resource: backups
+          resourceName: internal-rpc-authority-backup
+          sourceCluster: internal-rpc-authority-primary
+          exactFields:
+            - metadata.uid
+            - metadata.resourceVersion
+            - metadata.generation
+            - status.backupId
+            - status.serverName
+            - status.beginWal
+            - status.endWal
+            - status.beginLSN
+            - status.endLSN
+            - status.stoppedAt
         requireCompletedReadbackAfterRestore: true
         recoveryStep: internal-rpc-authority-recovery-job
         recoveryRunsOnlyAfterCompletedReadback: true
         internalAuthorizationContext: FORBIDDEN
       kubernetesRbac:
-        resources: []
-        verbs: []
-      databaseCredential:
-        delivery: vault-database-secret
-        role: internal-rpc-authority-restore-operator
-        mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/restore-operator-dsn
-        exactClusterOnly: true
-      recoveryDatabaseCredential:
-        delivery: vault-database-secret
-        role: internal_rpc_authority_recovery
-        mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/recovery-dsn
-        exactFenceFunctionOnly: true
+        backups:
+          resourceNames: [internal-rpc-authority-backup]
+          verbs: [get]
+        clusters:
+          resourceNames: [internal-rpc-authority-primary]
+          verbs: [get]
       manualAcceptance:
         - submit-one-immutable-restore-request
         - observe-every-current-workload-role-generation-ack
@@ -1857,6 +1873,14 @@ spec:
           - restore_id
           - restore_epoch
           - backup_manifest_digest_sha256
+          - backup_uid
+          - backup_resource_version
+          - backup_generation
+          - provider_backup_id
+          - source_cluster_uid
+          - source_cluster_resource_version
+          - source_cluster_generation
+          - source_cluster_spec_sha256
           - recovery_target_time
           - source_server_name
           - barman_object_name
@@ -1865,6 +1889,8 @@ spec:
           - metadata.uid
           - metadata.resourceVersion
           - metadata.generation
+          - spec.bootstrap.recovery.recoveryTarget.backupID
+          - spec.bootstrap.recovery.recoveryTarget.targetTLI
           - status.observedGeneration
           - status.phase
           - status.readyInstances
@@ -1887,6 +1913,9 @@ spec:
         coordinationConfigMap: GET
         restoreEvidenceSecret: GET_UPDATE
         cloudNativePGClusters: GET_CREATE
+        cloudNativePGBackups:
+          resourceNames: [internal-rpc-authority-backup]
+          verbs: [get]
         listWatchPatchDeleteAllowed: false
       admission:
         clusterCreateOwner: internal-rpc-authority-restore-pitr
@@ -2056,15 +2085,16 @@ spec:
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_TLS_SERVER_NAME
         - INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_CA_FILE
       restoreOperator:
-        - INTERNAL_RPC_AUTHORITY_RESTORE_REQUEST_FILE
+        - INTERNAL_RPC_AUTHORITY_RESTORE_ACTION
+        - INTERNAL_RPC_AUTHORITY_RESTORE_ID
+        - INTERNAL_RPC_AUTHORITY_RECOVERY_TARGET
+        - INTERNAL_RPC_AUTHORITY_CNPG_BACKUP_NAME
+        - INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_OBJECT_NAME
         - INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_ADDRESS
         - INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_TLS_SERVER_NAME
         - INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE
         - INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE
-        - INTERNAL_RPC_AUTHORITY_BACKUP_MANIFEST_FILE
-        - INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
-        - INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME
-        - INTERNAL_RPC_AUTHORITY_POSTGRES_CA_FILE
+        - INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE
       recovery:
         - INTERNAL_RPC_AUTHORITY_RESTORE_EVIDENCE_RESOURCE_NAME
         - INTERNAL_RPC_AUTHORITY_RESTORE_EVIDENCE_TRUST_FILE
@@ -2214,6 +2244,7 @@ spec:
           port: 443
           tlsServerName: kubernetes.default.svc
           environmentRenderMustPinServiceAndReadyEndpoints: true
+          environmentRenderMustPinServiceAndReadyEndpointPorts: true
         - destination: vault
           namespace: mattercodex-system
           service: vault
@@ -2244,6 +2275,7 @@ spec:
           port: 443
           tlsServerName: kubernetes.default.svc
           environmentRenderMustPinServiceAndReadyEndpoints: true
+          environmentRenderMustPinServiceAndReadyEndpointPorts: true
         - destination: vault
           namespace: mattercodex-system
           service: vault
@@ -2359,6 +2391,13 @@ spec:
           port: 8443
           tlsServerName: internal-rpc-authority-restore-controller.mattercodex-system.svc
           environmentRenderMustPinClusterIP: true
+        - destination: kubernetes-api
+          namespace: default
+          service: kubernetes
+          port: 443
+          tlsServerName: kubernetes.default.svc
+          environmentRenderMustPinServiceAndReadyEndpoints: true
+          environmentRenderMustPinServiceAndReadyEndpointPorts: true
         - destination: postgresql
           namespace: mattercodex-system
           service: internal-rpc-authority-postgresql
@@ -2380,6 +2419,7 @@ spec:
           port: 443
           tlsServerName: kubernetes.default.svc
           environmentRenderMustPinServiceAndReadyEndpoints: true
+          environmentRenderMustPinServiceAndReadyEndpointPorts: true
     mtlsDownstreamRpc:
       required: true
       exactServerName: REQUIRED_PER_OPERATION_BINDING
@@ -2445,6 +2485,14 @@ spec:
     completedEvidenceRequiredAfterDatabaseRestore: true
     applicationTrafficDuringRestore: CLOSED
     issuanceAndReservationDuringRestore: CLOSED_ON_EVERY_WORK_PATH
+    startupAdmissionBarrier:
+      initialState: BLOCKED
+      externalPollBeforeSnapshotActivation: REQUIRED_BOUNDED
+      externalPollAfterSnapshotActivationBeforeBind: REQUIRED_BOUNDED
+      listenerBindBeforeSafeExternalReadback: FORBIDDEN
+      readinessBeforeSafeExternalReadback: FORBIDDEN
+      missingStaleRollbackInvalidOrUnsafePhase: FAIL_CLOSED
+      backgroundReconciliationStartsAfterBarrier: true
     preparedBarrier:
       expectedSet: EVERY_ACTIVE_WORKLOAD_ROLE_GENERATION
       ackIdentity: MTLS_SPIFFE_ROLE_CREDENTIAL_AND_BOUND_ACK_SIGNATURE

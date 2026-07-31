@@ -54,7 +54,11 @@ proof от домена-владельца и связывается с зара
 - `internal-rpc-authority-restore-controller` координирует
   `OPEN → QUIESCING → PREPARED → RESTORING → COMPLETED`, а отдельные
   `restore-operator` и `restore-recovery` исполняют запущенную владельцем
-  команду и серверное восстановление ограждения;
+  команду и серверное восстановление ограждения. Operator получает хэш
+  immutable intent только из фактически обслуживаемого CNPG `Backup` и его
+  source `Cluster`; PITR executor независимо повторяет readback, указывает
+  exact `backupID`/timeline и подписывает completion только при полном
+  совпадении;
 - `internal-rpc-authority-database-credential-reconciler` поддерживает
   выведенные сервером `CURRENT`/`NEXT` principal PostgreSQL для publisher и
   readback attestor через аутентификацию Vault Kubernetes;
@@ -123,6 +127,14 @@ readiness.
 issuer удаляет только резервирования authority proof, verifier — только
 резервирования контекста авторизации. Устойчивая верхняя отметка не удаляется.
 
+Restore admission закрыт уже при конструировании issuer/verifier. До активации
+snapshot выполняется bounded синхронный poll внешнего controller, после
+активации — повторный poll и served-state readback. UDS/technical listeners,
+readiness и фоновые workers создаются только после обоих успешных этапов.
+Timeout, cancel, отсутствующее/устаревшее/откаченное evidence либо фаза
+`QUIESCING`/`PREPARED`/`RESTORING` оставляют admission закрытым и завершают
+startup ошибкой.
+
 Reconciler дополнительно использует точные mTLS-сертификат/client CA,
 идентичность PostgreSQL, Vault HTTPS/SNI/CA, проецируемый токен Vault с
 закреплённой аудиторией и неизменяемые исходные ревизию/хэш реестра
@@ -131,6 +143,11 @@ Reconciler дополнительно использует точные mTLS-с�
 процесса обязан ссылаться на CA-файл из отдельного ConfigMap, подключённого
 только для чтения, и
 использовать `sslmode=verify-full`.
+State-changing credential lifecycle проходит
+`transport/grpc → domain/service → domain/repository ports →
+PostgreSQL/Vault/Kubernetes adapters`; composition root только проверяет
+конфигурацию и связывает зависимости. Параллельного orchestration/source of
+truth в `internal/application` для этого lifecycle нет.
 
 ## Быстрая проверка прототипа
 
@@ -153,13 +170,27 @@ baseline намеренно не входят в активный прототи
 фактически опубликованный неизменяемый образ:
 
 ```bash
+KUBERNETES_API_CIDRS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh)"
+KUBERNETES_API_PORTS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh --output ports)"
+test -n "$KUBERNETES_API_CIDRS"
+test -n "$KUBERNETES_API_PORTS"
 scripts/render-internal-rpc-authority.sh \
   --environment staging \
-  --image-ref ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:<digest>
+  --image-ref ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:<digest> \
+  --kubernetes-api-cidrs "$KUBERNETES_API_CIDRS" \
+  --kubernetes-api-ports "$KUBERNETES_API_PORTS"
 ```
 
 Нулевой digest в base является намеренным закрыто отклоняемым заполнителем
 источника и никогда не проходит итоговый render.
+Resolver материализует отсортированное объединение
+`Service/default/kubernetes.spec.clusterIPs` и адресов только готовых
+`EndpointSlice` как точные `/32` и `/128`. Он закрыто завершается при пустом,
+невалидном или чрезмерном наборе. Отдельный режим `--output ports` связывает
+Service port `443` и фактически обслуживаемые TCP-порты готовых EndpointSlice,
+чтобы политика работала до и после DNAT. Команду нужно повторять непосредственно
+перед каждым staging/production render: сохранённый набор после изменения
+Service/EndpointSlice не является допустимым входом.
 
 Issuer/verifier подключаются к workload через Kustomize components. Component
 добавляет sidecar, PodMonitor и точные подключения UDS/Secret, но не может

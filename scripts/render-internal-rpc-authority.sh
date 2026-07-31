@@ -7,12 +7,13 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --environment staging|production --image-ref <repository@sha256:digest> --kubernetes-api-cidrs <ip/32[,ipv6/128]>\n' "$0" >&2
+  printf 'Usage: %s --environment staging|production --image-ref <repository@sha256:digest> --kubernetes-api-cidrs <ip/32[,ipv6/128]> --kubernetes-api-ports <443[,endpoint-port]>\n' "$0" >&2
 }
 
 environment_name=""
 image_ref=""
 kubernetes_api_cidrs=""
+kubernetes_api_ports=""
 while (($# > 0)); do
   case "$1" in
     --environment)
@@ -30,6 +31,11 @@ while (($# > 0)); do
       kubernetes_api_cidrs="$2"
       shift 2
       ;;
+    --kubernetes-api-ports)
+      (($# >= 2)) || fail "--kubernetes-api-ports requires a value"
+      kubernetes_api_ports="$2"
+      shift 2
+      ;;
     --help)
       usage
       exit 0
@@ -39,6 +45,21 @@ while (($# > 0)); do
       ;;
   esac
 done
+
+[[ -n "$kubernetes_api_ports" ]] ||
+  fail "exact Kubernetes API Service and EndpointSlice ports are required"
+IFS=',' read -r -a api_ports <<<"$kubernetes_api_ports"
+((${#api_ports[@]} >= 1 && ${#api_ports[@]} <= 8)) ||
+  fail "Kubernetes API ports must contain between one and eight values"
+has_service_port=false
+for port in "${api_ports[@]}"; do
+  [[ "$port" =~ ^[0-9]+$ ]] &&
+    ((10#$port >= 1 && 10#$port <= 65535)) ||
+    fail "Kubernetes API ports must be exact TCP port numbers"
+  [[ "$port" == "443" ]] && has_service_port=true
+done
+[[ "$has_service_port" == true ]] ||
+  fail "Kubernetes API Service port 443 is required"
 
 case "$environment_name" in
   staging | production) ;;
@@ -61,8 +82,8 @@ digest="${image_ref##*@sha256:}"
 [[ -n "$kubernetes_api_cidrs" ]] ||
   fail "exact Kubernetes API endpoint CIDRs are required"
 IFS=',' read -r -a api_cidrs <<<"$kubernetes_api_cidrs"
-((${#api_cidrs[@]} >= 1 && ${#api_cidrs[@]} <= 8)) ||
-  fail "Kubernetes API endpoint CIDRs must contain between one and eight addresses"
+((${#api_cidrs[@]} >= 1 && ${#api_cidrs[@]} <= 32)) ||
+  fail "Kubernetes API endpoint CIDRs must contain between one and 32 addresses"
 for cidr in "${api_cidrs[@]}"; do
   if [[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$ ]]; then
     IFS='.' read -r octet1 octet2 octet3 octet4 <<<"${cidr%/32}"
@@ -110,6 +131,7 @@ spec:
         values:
           - internal-rpc-authority-publisher
           - internal-rpc-authority-restore-controller
+          - internal-rpc-authority-restore-operator
           - internal-rpc-authority-restore-pitr
           - internal-rpc-authority-restore-recovery
   policyTypes: [Egress]
@@ -121,7 +143,11 @@ for cidr in "${api_cidrs[@]}"; do
 done
 cat <<'EOF'
       ports:
-        - {protocol: TCP, port: 443}
+EOF
+for port in "${api_ports[@]}"; do
+  printf '        - {protocol: TCP, port: %s}\n' "$port"
+done
+cat <<'EOF'
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -142,5 +168,7 @@ for cidr in "${api_cidrs[@]}"; do
 done
 cat <<'EOF'
       ports:
-        - {protocol: TCP, port: 443}
 EOF
+for port in "${api_ports[@]}"; do
+  printf '        - {protocol: TCP, port: %s}\n' "$port"
+done

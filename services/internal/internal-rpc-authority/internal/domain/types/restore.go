@@ -159,6 +159,19 @@ type RestoreFenceEvidenceClaims struct {
 	DatabaseClusterID                     string                 `json:"database_cluster_id"`
 	RestoreID                             string                 `json:"restore_id"`
 	BackupManifestDigestSHA256            string                 `json:"backup_manifest_digest_sha256"`
+	BackupResourceName                    string                 `json:"backup_resource_name"`
+	BackupResourceUID                     string                 `json:"backup_resource_uid"`
+	BackupResourceVersion                 string                 `json:"backup_resource_version"`
+	BackupResourceGeneration              uint64                 `json:"backup_resource_generation"`
+	ProviderBackupID                      string                 `json:"provider_backup_id"`
+	ProviderBackupName                    string                 `json:"provider_backup_name"`
+	SourceClusterUID                      string                 `json:"source_cluster_uid"`
+	SourceClusterResourceVersion          string                 `json:"source_cluster_resource_version"`
+	SourceClusterGeneration               uint64                 `json:"source_cluster_generation"`
+	SourceClusterSpecSHA256               string                 `json:"source_cluster_spec_sha256"`
+	BarmanObjectName                      string                 `json:"barman_object_name"`
+	BarmanServerName                      string                 `json:"barman_server_name"`
+	SourceTimelineID                      uint64                 `json:"source_timeline_id"`
 	RecoveryTargetTime                    int64                  `json:"recovery_target_time"`
 	ControllerSignerGeneration            uint64                 `json:"controller_signer_generation"`
 	WorkloadSetRevision                   uint64                 `json:"workload_set_revision"`

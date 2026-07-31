@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	kubernetespitr "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
 	kubernetesrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
 	postgresrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/restore"
 	"google.golang.org/grpc"
@@ -29,9 +30,14 @@ type RestoreOperatorConfig struct {
 	ClientCertificateFile   string        `env:"INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE"`
 	ClientPrivateKeyFile    string        `env:"INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE"`
 	ApplicationTokenFile    string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_OPERATOR_TOKEN_FILE"`
+	KubernetesAddress       string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS"`
+	KubernetesTLSServerName string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME"`
+	KubernetesCAFile        string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE"`
+	KubernetesTokenFile     string        `env:"INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE"`
 	RestoreID               string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ID"`
 	DatabaseClusterID       string        `env:"INTERNAL_RPC_AUTHORITY_DATABASE_CLUSTER_ID"`
-	BackupManifestDigest    string        `env:"INTERNAL_RPC_AUTHORITY_BACKUP_MANIFEST_DIGEST_SHA256"`
+	BackupResourceName      string        `env:"INTERNAL_RPC_AUTHORITY_CNPG_BACKUP_NAME"`
+	BarmanObjectName        string        `env:"INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_OBJECT_NAME"`
 	RecoveryTarget          time.Time     `env:"INTERNAL_RPC_AUTHORITY_RECOVERY_TARGET"`
 	IdempotencyKey          string        `env:"INTERNAL_RPC_AUTHORITY_IDEMPOTENCY_KEY"`
 	CorrelationID           string        `env:"INTERNAL_RPC_AUTHORITY_CORRELATION_ID"`
@@ -47,6 +53,10 @@ func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 		ClientCertificateFile:   "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.crt",
 		ClientPrivateKeyFile:    "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.key",
 		ApplicationTokenFile:    "/var/run/secrets/tokens/restore-operator/token",
+		KubernetesAddress:       "https://kubernetes.default.svc:443",
+		KubernetesTLSServerName: "kubernetes.default.svc",
+		KubernetesCAFile:        "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+		KubernetesTokenFile:     "/var/run/secrets/tokens/kubernetes-api/token",
 		DatabaseClusterID:       "internal-rpc-authority-primary",
 		Timeout:                 20 * time.Second,
 	}
@@ -63,8 +73,13 @@ func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 		config.RestoreID == "" ||
 		config.RecoveryTarget.IsZero() ||
 		config.DatabaseClusterID != "internal-rpc-authority-primary" ||
+		config.KubernetesAddress != "https://kubernetes.default.svc:443" ||
+		config.KubernetesTLSServerName != "kubernetes.default.svc" ||
+		config.KubernetesCAFile == "" ||
+		config.KubernetesTokenFile == "" ||
 		config.ApplicationTokenFile == "" ||
-		len(config.BackupManifestDigest) != 64 ||
+		config.BackupResourceName == "" ||
+		config.BarmanObjectName == "" ||
 		config.IdempotencyKey == "" ||
 		config.CorrelationID == "" {
 		return RestoreOperatorConfig{}, errors.New(
@@ -93,6 +108,24 @@ func RunRestoreOperator(
 		return err
 	}
 	defer telemetry.cleanupAfterStartupFailure(shutdownBase, config.Timeout)
+	manifestResolver, err := kubernetespitr.NewManifestResolver(
+		kubernetespitr.ManifestResolverConfig{
+			Address:          config.KubernetesAddress,
+			TLSServerName:    config.KubernetesTLSServerName,
+			CAFile:           config.KubernetesCAFile,
+			TokenFile:        config.KubernetesTokenFile,
+			Namespace:        "mattercodex-system",
+			BackupName:       config.BackupResourceName,
+			SourceCluster:    config.DatabaseClusterID,
+			BarmanObjectName: config.BarmanObjectName,
+			BarmanServerName: config.DatabaseClusterID,
+			Timeout:          min(config.Timeout, 10*time.Second),
+		},
+	)
+	if err != nil {
+		return err
+	}
+	defer manifestResolver.Close()
 	tlsConfig, err := loadRestoreClientTLS(
 		config.ControllerCAFile,
 		config.ClientCertificateFile,
@@ -118,6 +151,10 @@ func RunRestoreOperator(
 	client := internalrpcauthorityv1.NewRestoreControllerServiceClient(connection)
 	callContext, cancel := context.WithTimeout(ctx, config.Timeout)
 	defer cancel()
+	manifest, err := manifestResolver.Resolve(callContext, config.RecoveryTarget)
+	if err != nil {
+		return err
+	}
 	tokenRaw, err := readPrivateFile(config.ApplicationTokenFile, 16<<10)
 	if err != nil || strings.TrimSpace(string(tokenRaw)) == "" {
 		return errors.New("read restore operator application credential")
@@ -133,7 +170,7 @@ func RunRestoreOperator(
 			&internalrpcauthorityv1.PrepareRestoreRequest{
 				RestoreId:                  config.RestoreID,
 				DatabaseClusterId:          config.DatabaseClusterID,
-				BackupManifestDigestSha256: config.BackupManifestDigest,
+				BackupManifestDigestSha256: manifest.DigestSHA256,
 				RecoveryTargetTime:         timestamppb.New(config.RecoveryTarget),
 				IdempotencyKey:             config.IdempotencyKey,
 				CorrelationId:              config.CorrelationID,
@@ -153,7 +190,7 @@ func RunRestoreOperator(
 		&internalrpcauthorityv1.CompleteRestoreRequest{
 			RestoreId:                  config.RestoreID,
 			DatabaseClusterId:          config.DatabaseClusterID,
-			BackupManifestDigestSha256: config.BackupManifestDigest,
+			BackupManifestDigestSha256: manifest.DigestSHA256,
 			RecoveryTargetTime:         timestamppb.New(config.RecoveryTarget),
 			IdempotencyKey:             config.IdempotencyKey,
 			CorrelationId:              config.CorrelationID,

@@ -231,6 +231,19 @@ func (verifier *Verifier) VerifyCompletedEvidence(
 		claims.DatabaseClusterID != expected.DatabaseClusterID ||
 		claims.RestoreID != expected.RestoreID ||
 		claims.BackupManifestDigestSHA256 != expected.BackupManifestDigest ||
+		claims.BackupResourceName == "" ||
+		len(claims.BackupResourceUID) < 8 ||
+		!validResourceVersion(claims.BackupResourceVersion) ||
+		claims.BackupResourceGeneration == 0 ||
+		claims.ProviderBackupID == "" ||
+		claims.ProviderBackupName == "" ||
+		len(claims.SourceClusterUID) < 8 ||
+		!validResourceVersion(claims.SourceClusterResourceVersion) ||
+		claims.SourceClusterGeneration == 0 ||
+		len(claims.SourceClusterSpecSHA256) != sha256.Size*2 ||
+		claims.BarmanObjectName == "" ||
+		claims.BarmanServerName != expected.DatabaseClusterID ||
+		claims.SourceTimelineID == 0 ||
 		claims.RecoveryTargetTime != expected.RecoveryTargetUnix ||
 		claims.ControllerSignerGeneration != expected.ControllerGeneration ||
 		claims.WorkloadSetRevision != expected.WorkloadSetRevision ||
@@ -249,6 +262,7 @@ func (verifier *Verifier) VerifyCompletedEvidence(
 		len(claims.RestoredClusterUID) > 128 ||
 		!strings.HasPrefix(claims.RestoredPrimary, clusterPrefix) ||
 		claims.RestoredTimelineID == 0 ||
+		claims.RestoredTimelineID < claims.SourceTimelineID ||
 		claims.ProviderObservedGeneration == 0 ||
 		!validResourceVersion(claims.RestoredClusterResourceVersion) {
 		return model.RestoreCompletionEvidence{}, errors.New(
@@ -326,13 +340,18 @@ func verifyAnnotations(
 	digest string,
 ) error {
 	expected := map[string]string{
-		"mattercodex.dev/restore-anchor-revision":           strconv.FormatUint(claims.AnchorRevision, 10),
-		"mattercodex.dev/restore-epoch":                     strconv.FormatUint(claims.RestoreEpoch, 10),
-		"mattercodex.dev/restore-evidence-digest-sha256":    digest,
-		"mattercodex.dev/restore-predecessor-revision":      strconv.FormatUint(claims.Predecessor.Revision, 10),
-		"mattercodex.dev/restore-predecessor-digest-sha256": claims.Predecessor.DigestSHA256,
-		"mattercodex.dev/restored-cluster-uid":              claims.RestoredClusterUID,
-		"mattercodex.dev/restored-timeline-id":              strconv.FormatUint(claims.RestoredTimelineID, 10),
+		"mattercodex.dev/restore-anchor-revision":              strconv.FormatUint(claims.AnchorRevision, 10),
+		"mattercodex.dev/restore-epoch":                        strconv.FormatUint(claims.RestoreEpoch, 10),
+		"mattercodex.dev/restore-evidence-digest-sha256":       digest,
+		"mattercodex.dev/restore-predecessor-revision":         strconv.FormatUint(claims.Predecessor.Revision, 10),
+		"mattercodex.dev/restore-predecessor-digest-sha256":    claims.Predecessor.DigestSHA256,
+		"mattercodex.dev/restored-cluster-uid":                 claims.RestoredClusterUID,
+		"mattercodex.dev/restored-timeline-id":                 strconv.FormatUint(claims.RestoredTimelineID, 10),
+		"mattercodex.dev/cnpg-backup-uid":                      claims.BackupResourceUID,
+		"mattercodex.dev/cnpg-backup-resource-version":         claims.BackupResourceVersion,
+		"mattercodex.dev/cnpg-backup-id":                       claims.ProviderBackupID,
+		"mattercodex.dev/cnpg-source-cluster-uid":              claims.SourceClusterUID,
+		"mattercodex.dev/cnpg-source-cluster-resource-version": claims.SourceClusterResourceVersion,
 	}
 	for name, value := range expected {
 		if annotations[name] != value {

@@ -274,7 +274,8 @@ spec:
                 - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_ACTION, value: owner-must-set-prepare-or-complete}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_ID, value: owner-must-set-uuid}
-                - {name: INTERNAL_RPC_AUTHORITY_BACKUP_MANIFEST_DIGEST_SHA256, value: owner-must-set-digest}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_BACKUP_NAME, value: internal-rpc-authority-backup}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_OBJECT_NAME, value: internal-rpc-authority-backup}
                 - {name: INTERNAL_RPC_AUTHORITY_RECOVERY_TARGET, value: owner-must-set-rfc3339}
                 - {name: INTERNAL_RPC_AUTHORITY_IDEMPOTENCY_KEY, value: owner-must-set-uuid}
                 - {name: INTERNAL_RPC_AUTHORITY_CORRELATION_ID, value: owner-must-set-uuid}
@@ -282,6 +283,10 @@ spec:
                 - {name: INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.key}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/restore-operator/controller-ca.pem}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_OPERATOR_TOKEN_FILE, value: /var/run/secrets/tokens/restore-operator/token}
+                - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS, value: "https://kubernetes.default.svc:443"}
+                - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME, value: kubernetes.default.svc}
+                - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE, value: /var/run/secrets/tokens/kubernetes-api/token}
+                - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE, value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -292,6 +297,8 @@ spec:
                 - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
                 - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
                 - {name: restore-operator-token, mountPath: /var/run/secrets/tokens/restore-operator, readOnly: true}
+                - {name: kubernetes-token, mountPath: /var/run/secrets/tokens/kubernetes-api, readOnly: true}
+                - {name: kubernetes-ca, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
           volumes:
             - name: operator-tls
               secret: {secretName: internal-rpc-authority-restore-operator-tls, defaultMode: 0440}
@@ -315,6 +322,18 @@ spec:
                       path: token
                       audience: urn:mattercodex:internal-rpc-authority-restore-controller
                       expirationSeconds: 600
+            - name: kubernetes-token
+              projected:
+                defaultMode: 0400
+                sources:
+                  - serviceAccountToken:
+                      path: token
+                      audience: https://kubernetes.default.svc
+                      expirationSeconds: 600
+            - name: kubernetes-ca
+              configMap:
+                name: kube-root-ca.crt
+                items: [{key: ca.crt, path: ca.crt}]
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -354,6 +373,8 @@ spec:
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE, value: /var/run/secrets/tokens/kubernetes/token}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE, value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_EVIDENCE_PRIVATE_JWK_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-pitr/evidence-private.jwk}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_BACKUP_NAME, value: internal-rpc-authority-backup}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_SOURCE_CLUSTER_NAME, value: internal-rpc-authority-primary}
                 - {name: INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_OBJECT_NAME, value: internal-rpc-authority-backup}
                 - {name: INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_SERVER_NAME, value: internal-rpc-authority-primary}
                 - {name: INTERNAL_RPC_AUTHORITY_CNPG_POSTGRES_IMAGE, value: "ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie@sha256:660141d8ac12d783f12a3f6bb5ca6c3b1412ea18881f73b9853cfb1eeb9cf128"}

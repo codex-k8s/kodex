@@ -80,6 +80,32 @@ roleRef:
   name: internal-rpc-authority-restore-pitr
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: internal-rpc-authority-restore-backup-reader
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [backups]
+    resourceNames: [internal-rpc-authority-backup]
+    verbs: [get]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    resourceNames: [internal-rpc-authority-primary]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: internal-rpc-authority-restore-backup-reader
+subjects:
+  - {kind: ServiceAccount, name: internal-rpc-authority-restore-operator}
+  - {kind: ServiceAccount, name: internal-rpc-authority-restore-pitr}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: internal-rpc-authority-restore-backup-reader
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: internal-rpc-authority-restore-tokenreview

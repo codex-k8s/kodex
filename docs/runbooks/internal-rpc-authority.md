@@ -4,7 +4,7 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.1.3
+version: 1.1.4
 updated: 2026-07-30
 ---
 
@@ -27,11 +27,24 @@ production-манифеста требуется отдельный шлюз в�
 2. Получить render той же версией кода:
 
 ```bash
+KUBERNETES_API_CIDRS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh)"
+KUBERNETES_API_PORTS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh --output ports)"
+test -n "$KUBERNETES_API_CIDRS"
+test -n "$KUBERNETES_API_PORTS"
 scripts/render-internal-rpc-authority.sh \
   --environment staging \
   --image-ref ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:<digest> \
+  --kubernetes-api-cidrs "$KUBERNETES_API_CIDRS" \
+  --kubernetes-api-ports "$KUBERNETES_API_PORTS" \
   > /tmp/internal-rpc-authority-staging.yaml
 ```
+
+Для production используется та же последовательность с
+`--environment production` и отдельно утверждённым точным digest. Resolver
+читает ClusterIP Kubernetes Service и готовые EndpointSlice; пустой,
+невалидный либо устаревший вручную сохранённый набор не заменять вымышленным
+адресом или правилом только по порту. После изменения Service/EndpointSlice
+получить CIDR заново и повторить render/readback.
 
 3. Проверить без значений Secret:
 
@@ -169,6 +182,19 @@ Secret не считается контрольным чтением: нужно
 публикации использует верхнюю отметку PostgreSQL и повторное точное контрольное
 чтение. PITR/откат, понизивший состояние ниже внешней опорной точки, оставляет
 компонент неготовым до разрешённого владельцем восстановления.
+
+Для PITR операторская задача принимает имя exact CNPG `Backup`, recovery
+target и идентификаторы команды, но не принимает заявленный человеком digest.
+Она через отдельный projected Kubernetes token читает immutable `Backup` и
+source `Cluster`, связывает UID/resourceVersion/generation, provider
+`backupID`, server, WAL timeline, LSN и plugin metadata в канонический digest.
+PITR executor повторяет тот же authoritative readback, создаёт новый Cluster
+с exact `recoveryTarget.backupID` и числовым `targetTLI`, а completion evidence
+содержит обе Kubernetes identity. Mutation, исчезновение поля, смена source,
+digest mismatch или readback другого Cluster закрыто прекращают операцию.
+Повтор с тем же immutable intent идемпотентно читает существующий Cluster;
+rollback требует нового restore ID/epoch и не переписывает опубликованное
+evidence.
 
 ## Миграции
 

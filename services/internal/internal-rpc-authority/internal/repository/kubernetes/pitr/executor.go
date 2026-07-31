@@ -38,6 +38,8 @@ type ExecutorConfig struct {
 	Namespace          string
 	EvidenceSecretName string
 	PrivateJWKFile     string
+	BackupName         string
+	SourceClusterName  string
 	BarmanObjectName   string
 	BarmanServerName   string
 	PostgresImage      string
@@ -53,6 +55,7 @@ type Executor struct {
 	config      ExecutorConfig
 	client      *http.Client
 	privateKey  internalrpcauth.ES256Key
+	manifest    *ManifestResolver
 	clustersURL string
 	evidenceURL string
 	now         func() time.Time
@@ -136,6 +139,7 @@ type desiredRecovery struct {
 type recoveryTarget struct {
 	TargetTime string `json:"targetTime"`
 	TargetTLI  string `json:"targetTLI"`
+	BackupID   string `json:"backupID"`
 }
 
 type externalCluster struct {
@@ -154,6 +158,8 @@ func NewExecutor(config ExecutorConfig) (*Executor, error) {
 		config.TLSServerName != "kubernetes.default.svc" ||
 		config.Namespace != "mattercodex-system" ||
 		config.EvidenceSecretName != "internal-rpc-authority-restore-evidence" ||
+		config.BackupName == "" ||
+		config.SourceClusterName != "internal-rpc-authority-primary" ||
 		config.BarmanObjectName == "" ||
 		config.BarmanServerName != "internal-rpc-authority-primary" ||
 		!strings.Contains(config.PostgresImage, "@sha256:") ||
@@ -190,6 +196,17 @@ func NewExecutor(config ExecutorConfig) (*Executor, error) {
 	}
 	base := config.Address + "/apis/postgresql.cnpg.io/v1/namespaces/" +
 		url.PathEscape(config.Namespace) + "/clusters"
+	manifest, err := NewManifestResolver(ManifestResolverConfig{
+		Address: config.Address, TLSServerName: config.TLSServerName,
+		CAFile: config.CAFile, TokenFile: config.TokenFile,
+		Namespace: config.Namespace, BackupName: config.BackupName,
+		SourceCluster:    config.SourceClusterName,
+		BarmanObjectName: config.BarmanObjectName,
+		BarmanServerName: config.BarmanServerName, Timeout: config.Timeout,
+	})
+	if err != nil {
+		return nil, err
+	}
 	return &Executor{
 		config: config,
 		client: &http.Client{
@@ -200,6 +217,7 @@ func NewExecutor(config ExecutorConfig) (*Executor, error) {
 			},
 		},
 		privateKey:  privateKey,
+		manifest:    manifest,
 		clustersURL: base,
 		evidenceURL: config.Address + "/api/v1/namespaces/" +
 			url.PathEscape(config.Namespace) + "/secrets/" +
@@ -210,6 +228,7 @@ func NewExecutor(config ExecutorConfig) (*Executor, error) {
 
 // Close закрывает простаивающие Kubernetes API connections.
 func (executor *Executor) Close() {
+	executor.manifest.Close()
 	executor.client.CloseIdleConnections()
 }
 
@@ -229,7 +248,17 @@ func (executor *Executor) Execute(
 		len(state.ACKs) != len(state.ExpectedTargets) {
 		return errors.New("PITR executor requires exact PREPARED coordination")
 	}
-	cluster, desired, created, err := executor.ensureCluster(ctx, state)
+	manifest, err := executor.manifest.Resolve(
+		ctx,
+		time.Unix(state.RecoveryTargetUnix, 0),
+	)
+	if err != nil {
+		return err
+	}
+	if manifest.DigestSHA256 != state.BackupManifestDigest {
+		return errors.New("authoritative CNPG backup manifest digest mismatch")
+	}
+	cluster, desired, created, err := executor.ensureCluster(ctx, state, manifest)
 	if err != nil {
 		return err
 	}
@@ -240,7 +269,7 @@ func (executor *Executor) Execute(
 	if err != nil {
 		return err
 	}
-	claims, err := executor.buildClaims(state, cluster, timeline)
+	claims, err := executor.buildClaims(state, manifest, cluster, timeline)
 	if err != nil {
 		return err
 	}
@@ -250,8 +279,9 @@ func (executor *Executor) Execute(
 func (executor *Executor) ensureCluster(
 	ctx context.Context,
 	state model.RestoreState,
+	manifest BackupManifest,
 ) (clusterEnvelope, desiredCluster, bool, error) {
-	desired, err := executor.desiredCluster(state)
+	desired, err := executor.desiredCluster(state, manifest)
 	if err != nil {
 		return clusterEnvelope{}, desiredCluster{}, false, err
 	}
@@ -315,20 +345,28 @@ func (executor *Executor) ensureCluster(
 		)
 	}
 	desiredSpecDigest, err := internalrpcauth.CanonicalJSONSHA256(desired.Spec)
-	if err != nil || servedSpecDigest != desiredSpecDigest ||
-		cluster.Metadata.Annotations["mattercodex.dev/restore-intent-digest-sha256"] !=
-			desired.Metadata.Annotations["mattercodex.dev/restore-intent-digest-sha256"] {
+	if err != nil || servedSpecDigest != desiredSpecDigest {
 		return clusterEnvelope{}, desired, false, errors.New(
 			"CloudNativePG PITR cluster immutable intent mismatch",
 		)
+	}
+	for name, value := range desired.Metadata.Annotations {
+		if cluster.Metadata.Annotations[name] != value {
+			return clusterEnvelope{}, desired, false, errors.New(
+				"CloudNativePG PITR cluster immutable annotation mismatch",
+			)
+		}
 	}
 	return cluster, desired, false, nil
 }
 
 func (executor *Executor) desiredCluster(
 	state model.RestoreState,
+	manifest BackupManifest,
 ) (desiredCluster, error) {
-	if !validRestoreID(state.RestoreID) {
+	if !validRestoreID(state.RestoreID) ||
+		manifest.DigestSHA256 != state.BackupManifestDigest ||
+		manifest.RecoveryTarget != state.RecoveryTargetUnix {
 		return desiredCluster{}, errors.New("PITR restore ID is invalid")
 	}
 	restorePrefix := strings.ToLower(state.RestoreID[:8])
@@ -338,14 +376,24 @@ func (executor *Executor) desiredCluster(
 		state.RestoreEpoch,
 	)
 	intent := struct {
-		RestoreID            string `json:"restore_id"`
-		RestoreEpoch         uint64 `json:"restore_epoch"`
-		BackupManifestDigest string `json:"backup_manifest_digest_sha256"`
-		RecoveryTarget       int64  `json:"recovery_target_time"`
+		RestoreID             string `json:"restore_id"`
+		RestoreEpoch          uint64 `json:"restore_epoch"`
+		BackupManifestDigest  string `json:"backup_manifest_digest_sha256"`
+		RecoveryTarget        int64  `json:"recovery_target_time"`
+		BackupUID             string `json:"backup_uid"`
+		BackupResourceVersion string `json:"backup_resource_version"`
+		ProviderBackupID      string `json:"provider_backup_id"`
+		SourceClusterUID      string `json:"source_cluster_uid"`
+		SourceClusterVersion  string `json:"source_cluster_resource_version"`
 	}{
 		RestoreID: state.RestoreID, RestoreEpoch: state.RestoreEpoch,
-		BackupManifestDigest: state.BackupManifestDigest,
-		RecoveryTarget:       state.RecoveryTargetUnix,
+		BackupManifestDigest:  state.BackupManifestDigest,
+		RecoveryTarget:        state.RecoveryTargetUnix,
+		BackupUID:             manifest.BackupUID,
+		BackupResourceVersion: manifest.BackupResourceVersion,
+		ProviderBackupID:      manifest.ProviderBackupID,
+		SourceClusterUID:      manifest.SourceClusterUID,
+		SourceClusterVersion:  manifest.SourceClusterResourceVersion,
 	}
 	intentDigest, err := internalrpcauth.CanonicalJSONSHA256(intent)
 	if err != nil {
@@ -358,9 +406,15 @@ func (executor *Executor) desiredCluster(
 			Name:      name,
 			Namespace: executor.config.Namespace,
 			Annotations: map[string]string{
-				"mattercodex.dev/restore-id":                   state.RestoreID,
-				"mattercodex.dev/restore-epoch":                strconv.FormatUint(state.RestoreEpoch, 10),
-				"mattercodex.dev/restore-intent-digest-sha256": intentDigest,
+				"mattercodex.dev/restore-id":                           state.RestoreID,
+				"mattercodex.dev/restore-epoch":                        strconv.FormatUint(state.RestoreEpoch, 10),
+				"mattercodex.dev/restore-intent-digest-sha256":         intentDigest,
+				"mattercodex.dev/backup-manifest-digest-sha256":        manifest.DigestSHA256,
+				"mattercodex.dev/cnpg-backup-uid":                      manifest.BackupUID,
+				"mattercodex.dev/cnpg-backup-resource-version":         manifest.BackupResourceVersion,
+				"mattercodex.dev/cnpg-backup-id":                       manifest.ProviderBackupID,
+				"mattercodex.dev/cnpg-source-cluster-uid":              manifest.SourceClusterUID,
+				"mattercodex.dev/cnpg-source-cluster-resource-version": manifest.SourceClusterResourceVersion,
 			},
 			Labels: map[string]string{
 				"app.kubernetes.io/name":      "internal-rpc-authority-restore-pitr",
@@ -382,7 +436,8 @@ func (executor *Executor) desiredCluster(
 						state.RecoveryTargetUnix,
 						0,
 					).UTC().Format(time.RFC3339),
-					TargetTLI: "latest",
+					TargetTLI: strconv.FormatUint(manifest.SourceTimeline, 10),
+					BackupID:  manifest.ProviderBackupID,
 				},
 			}},
 			ExternalClusters: []externalCluster{{
@@ -390,8 +445,8 @@ func (executor *Executor) desiredCluster(
 				Plugin: externalPlugin{
 					Name: barmanPluginName,
 					Parameters: map[string]string{
-						"barmanObjectName": executor.config.BarmanObjectName,
-						"serverName":       executor.config.BarmanServerName,
+						"barmanObjectName": manifest.BarmanObjectName,
+						"serverName":       manifest.BarmanServerName,
 					},
 				},
 			}},
@@ -437,6 +492,7 @@ func validateHealthyCluster(
 
 func (executor *Executor) buildClaims(
 	state model.RestoreState,
+	manifest BackupManifest,
 	cluster clusterEnvelope,
 	timeline uint64,
 ) (model.RestoreFenceEvidenceClaims, error) {
@@ -461,6 +517,19 @@ func (executor *Executor) buildClaims(
 		RestoreEpoch: state.RestoreEpoch, Phase: "COMPLETED",
 		DatabaseClusterID: state.DatabaseClusterID, RestoreID: state.RestoreID,
 		BackupManifestDigestSHA256:            state.BackupManifestDigest,
+		BackupResourceName:                    manifest.BackupName,
+		BackupResourceUID:                     manifest.BackupUID,
+		BackupResourceVersion:                 manifest.BackupResourceVersion,
+		BackupResourceGeneration:              manifest.BackupGeneration,
+		ProviderBackupID:                      manifest.ProviderBackupID,
+		ProviderBackupName:                    manifest.ProviderBackupName,
+		SourceClusterUID:                      manifest.SourceClusterUID,
+		SourceClusterResourceVersion:          manifest.SourceClusterResourceVersion,
+		SourceClusterGeneration:               manifest.SourceClusterGeneration,
+		SourceClusterSpecSHA256:               manifest.SourceClusterSpecSHA256,
+		BarmanObjectName:                      manifest.BarmanObjectName,
+		BarmanServerName:                      manifest.BarmanServerName,
+		SourceTimelineID:                      manifest.SourceTimeline,
 		RecoveryTargetTime:                    state.RecoveryTargetUnix,
 		ControllerSignerGeneration:            state.ControllerGeneration,
 		WorkloadSetRevision:                   state.WorkloadSetRevision,
@@ -527,13 +596,18 @@ func (executor *Executor) publishEvidence(
 	current.Kind = "Secret"
 	current.Type = "Opaque"
 	current.Metadata.Annotations = map[string]string{
-		"mattercodex.dev/restore-anchor-revision":           strconv.FormatUint(claims.AnchorRevision, 10),
-		"mattercodex.dev/restore-epoch":                     strconv.FormatUint(claims.RestoreEpoch, 10),
-		"mattercodex.dev/restore-evidence-digest-sha256":    digestHex,
-		"mattercodex.dev/restore-predecessor-revision":      strconv.FormatUint(claims.Predecessor.Revision, 10),
-		"mattercodex.dev/restore-predecessor-digest-sha256": claims.Predecessor.DigestSHA256,
-		"mattercodex.dev/restored-cluster-uid":              claims.RestoredClusterUID,
-		"mattercodex.dev/restored-timeline-id":              strconv.FormatUint(claims.RestoredTimelineID, 10),
+		"mattercodex.dev/restore-anchor-revision":              strconv.FormatUint(claims.AnchorRevision, 10),
+		"mattercodex.dev/restore-epoch":                        strconv.FormatUint(claims.RestoreEpoch, 10),
+		"mattercodex.dev/restore-evidence-digest-sha256":       digestHex,
+		"mattercodex.dev/restore-predecessor-revision":         strconv.FormatUint(claims.Predecessor.Revision, 10),
+		"mattercodex.dev/restore-predecessor-digest-sha256":    claims.Predecessor.DigestSHA256,
+		"mattercodex.dev/restored-cluster-uid":                 claims.RestoredClusterUID,
+		"mattercodex.dev/restored-timeline-id":                 strconv.FormatUint(claims.RestoredTimelineID, 10),
+		"mattercodex.dev/cnpg-backup-uid":                      claims.BackupResourceUID,
+		"mattercodex.dev/cnpg-backup-resource-version":         claims.BackupResourceVersion,
+		"mattercodex.dev/cnpg-backup-id":                       claims.ProviderBackupID,
+		"mattercodex.dev/cnpg-source-cluster-uid":              claims.SourceClusterUID,
+		"mattercodex.dev/cnpg-source-cluster-resource-version": claims.SourceClusterResourceVersion,
 	}
 	current.Data = map[string]string{
 		evidenceDataKey: base64.StdEncoding.EncodeToString([]byte(compact)),
