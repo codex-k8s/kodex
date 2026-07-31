@@ -306,11 +306,11 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			return nil, err
 		}
 		return entity.OwnerGateSpec{
-			ProcessRunID: value.OwnerGate.GetProcessRunId(),
-			ResultRef:    value.OwnerGate.GetResultRef(),
-			ResultSHA256: value.OwnerGate.GetResultSha256(),
-			ExpiresAt:    expiresAt,
-			Decision: ownerDecisionFromProto(value.OwnerGate.GetDecision()),
+			ProcessRunID:   value.OwnerGate.GetProcessRunId(),
+			ResultRef:      value.OwnerGate.GetResultRef(),
+			ResultSHA256:   value.OwnerGate.GetResultSha256(),
+			ExpiresAt:      expiresAt,
+			Decision:       ownerDecisionFromProto(value.OwnerGate.GetDecision()),
 			DecisionReason: value.OwnerGate.GetDecisionReason(),
 		}, nil
 	case *controlplanev1.ResourceSpec_MemoryRecord:

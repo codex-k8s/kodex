@@ -40,7 +40,19 @@ type Config struct {
 	AuthorizationContextAudience string
 	CallerWorkload               string
 	CallerSPIFFEID               string
+	PolicyRevision               uint64
+	PolicyDigest                 string
 	Operations                   map[string]Operation
+}
+
+// ReadinessState связывает served policy с independently trusted signer.
+type ReadinessState struct {
+	PolicyRevision   uint64
+	PolicyDigest     string
+	TrustRevision    uint64
+	TrustDigest      string
+	SignerGeneration uint64
+	PublicThumbprint string
 }
 
 type Service struct {
@@ -68,6 +80,7 @@ func New(
 		config.Issuer == "" || config.ProofAudience == "" ||
 		config.AuthorizationContextAudience == "" ||
 		config.CallerWorkload == "" || config.CallerSPIFFEID == "" ||
+		config.PolicyRevision == 0 || !validDigest(config.PolicyDigest) ||
 		len(config.Operations) == 0 {
 		return nil, errors.New("authority proof service configuration is invalid")
 	}
@@ -114,12 +127,18 @@ func (service *Service) Resolve(
 	}
 	requestHash, err := canonicalDigest(struct {
 		SubjectDigest     string
+		CredentialDigest  string
+		SessionJTI        string
+		SessionRevision   uint64
 		OrganizationID    string
 		ProjectID         string
 		OperationID       string
 		ResourceReference string
 	}{
 		input.Identity.SubjectDigest,
+		input.Identity.CredentialDigest,
+		input.Identity.SessionJTI,
+		input.Identity.SessionRevision,
 		input.Identity.OrganizationID,
 		input.Identity.ProjectID,
 		input.OperationID,
@@ -182,10 +201,6 @@ func (service *Service) Resolve(
 			if err != nil {
 				return err
 			}
-			signerState, err := service.signer.Check(ctx)
-			if err != nil {
-				return errs.ErrUnavailable
-			}
 			now := service.now().UTC().Truncate(time.Second)
 			provenance := authoritytype.Provenance{
 				Source:       "OIDC_SESSION",
@@ -215,14 +230,13 @@ func (service *Service) Resolve(
 					},
 					Project: projectAuthority,
 				},
-				ProofRevision:    revision,
-				SignerGeneration: signerState.SignerGeneration,
-				JTI:              uuid.NewString(),
-				IssuedAt:         now.Unix(),
-				NotBefore:        now.Unix(),
-				ExpiresAt:        now.Add(proofTTL).Unix(),
+				ProofRevision: revision,
+				JTI:           uuid.NewString(),
+				IssuedAt:      now.Unix(),
+				NotBefore:     now.Unix(),
+				ExpiresAt:     now.Add(proofTTL).Unix(),
 			}
-			compact, proofDigest, err := service.signer.Sign(ctx, claims)
+			compact, proofDigest, signerState, err := service.signer.Sign(ctx, claims)
 			if err != nil {
 				return errs.ErrUnavailable
 			}
@@ -231,7 +245,7 @@ func (service *Service) Resolve(
 				ExpiresAt:        now.Add(proofTTL),
 				ProofRevision:    revision,
 				ProofDigest:      proofDigest,
-				PolicyRevision:   signerState.PolicyRevision,
+				PolicyRevision:   service.config.PolicyRevision,
 				SignerGeneration: signerState.SignerGeneration,
 			}
 			payload, err := json.Marshal(result)
@@ -257,11 +271,22 @@ func (service *Service) Operation(operationID string) (Operation, bool) {
 	return operation, ok
 }
 
-func (service *Service) Check(ctx context.Context) (proofsigner.State, error) {
+func (service *Service) Check(ctx context.Context) (ReadinessState, error) {
 	if err := service.repository.Check(ctx); err != nil {
-		return proofsigner.State{}, err
+		return ReadinessState{}, err
 	}
-	return service.signer.Check(ctx)
+	signerState, err := service.signer.Check(ctx)
+	if err != nil {
+		return ReadinessState{}, err
+	}
+	return ReadinessState{
+		PolicyRevision:   service.config.PolicyRevision,
+		PolicyDigest:     service.config.PolicyDigest,
+		TrustRevision:    signerState.TrustRevision,
+		TrustDigest:      signerState.TrustDigest,
+		SignerGeneration: signerState.SignerGeneration,
+		PublicThumbprint: signerState.PublicThumbprint,
+	}, nil
 }
 
 func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) error {
@@ -284,4 +309,16 @@ func canonicalDigest(value any) (string, error) {
 func sha256String(value string) string {
 	digest := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(digest[:])
+}
+
+func validDigest(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, symbol := range value {
+		if (symbol < '0' || symbol > '9') && (symbol < 'a' || symbol > 'f') {
+			return false
+		}
+	}
+	return true
 }

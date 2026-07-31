@@ -68,7 +68,7 @@ func (store *OutboxStore) Claim(
 	for rows.Next() {
 		var raw []byte
 		var item eventing.ClaimedEvent
-		if err := rows.Scan(&raw, &item.LeaseToken); err != nil {
+		if err := rows.Scan(&raw, &item.LeaseToken, &item.Attempts); err != nil {
 			return nil, mapError(err)
 		}
 		if err := json.Unmarshal(raw, &item.Envelope); err != nil ||

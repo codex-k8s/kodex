@@ -31,21 +31,24 @@ func (service *Service) EnqueueTurn(
 		value.ValidateID(input.SessionID) != nil ||
 		!validRuntimeReference(input.SourceRef) ||
 		value.ValidateID(input.PromptArtifactID) != nil ||
+		value.ValidateID(input.RuntimeRevisionID) != nil ||
 		(input.ProcessRunID != "" && value.ValidateID(input.ProcessRunID) != nil) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
-		Identity         commandIdentity
-		SessionID        string
-		SourceRef        string
-		PromptArtifactID string
-		ProcessRunID     string
+		Identity          commandIdentity
+		SessionID         string
+		SourceRef         string
+		PromptArtifactID  string
+		ProcessRunID      string
+		RuntimeRevisionID string
 	}{
 		identity(input.Principal),
 		input.SessionID,
 		input.SourceRef,
 		input.PromptArtifactID,
 		input.ProcessRunID,
+		input.RuntimeRevisionID,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -101,12 +104,13 @@ func (service *Service) EnqueueTurn(
 				enum.KindTurn,
 				"Turn "+input.SessionID,
 				entity.TurnSpec{
-					SessionID:        input.SessionID,
-					Sequence:         sessionSpec.LastTurnSequence,
-					SourceRef:        input.SourceRef,
-					PromptArtifactID: input.PromptArtifactID,
-					ProcessRunID:     input.ProcessRunID,
-					Attempt:          1,
+					SessionID:         input.SessionID,
+					Sequence:          sessionSpec.LastTurnSequence,
+					SourceRef:         input.SourceRef,
+					PromptArtifactID:  input.PromptArtifactID,
+					ProcessRunID:      input.ProcessRunID,
+					RuntimeRevisionID: input.RuntimeRevisionID,
+					Attempt:           1,
 				},
 				now,
 			)
@@ -149,6 +153,7 @@ func (service *Service) ClaimTurn(
 	}
 	keyHash := hashString(input.IdempotencyKey)
 	var result ClaimTurnResult
+	mutated := false
 	err = service.repository.Transact(
 		ctx,
 		input.Principal.OrganizationID,
@@ -183,6 +188,42 @@ func (service *Service) ClaimTurn(
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
 				return receiptErr
 			}
+			now := service.now().UTC().Truncate(time.Microsecond)
+			expired, err := tx.ExpiredClaimedTurns(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				32,
+				now,
+			)
+			if err != nil {
+				return err
+			}
+			for _, stale := range expired {
+				requeued, err := stale.Turn.Transition(enum.StateQueued, now)
+				if err != nil {
+					return errs.ErrStateConflict
+				}
+				if err := tx.Update(ctx, requeued, stale.Turn.Version); err != nil {
+					return err
+				}
+				if err := tx.DeleteTurnLease(
+					ctx,
+					stale.Turn.ID,
+					stale.Lease.Fence,
+				); err != nil {
+					return err
+				}
+				if err := service.appendMutationRecords(
+					ctx,
+					tx,
+					input.Principal,
+					"requeue_expired_turn",
+					requeued,
+				); err != nil {
+					return err
+				}
+			}
 			turn, err := tx.NextQueuedTurn(
 				ctx,
 				input.Principal.OrganizationID,
@@ -191,14 +232,12 @@ func (service *Service) ClaimTurn(
 			if err != nil {
 				return err
 			}
-			claimed, err := turn.Transition(enum.StateClaimed, service.now())
+			claimed, err := turn.Transition(enum.StateClaimed, now)
 			if err != nil {
 				return errs.ErrStateConflict
 			}
 			token := service.leaseToken(claimed.ID, claimed.Version, input.IdempotencyKey)
-			expiresAt := service.now().UTC().
-				Truncate(time.Microsecond).
-				Add(service.turnLeaseDuration)
+			expiresAt := now.Add(service.turnLeaseDuration)
 			if err := tx.Update(ctx, claimed, turn.Version); err != nil {
 				return err
 			}
@@ -241,9 +280,13 @@ func (service *Service) ClaimTurn(
 				LeaseToken:     token,
 				LeaseExpiresAt: expiresAt,
 			}
+			mutated = true
 			return nil
 		},
 	)
+	if err == nil && mutated {
+		service.observer.ObserveMutation(enum.KindTurn, "claim_turn")
+	}
 	return result, err
 }
 
@@ -375,6 +418,7 @@ func (service *Service) ClaimDueSchedules(
 	}
 	keyHash := hashString(input.IdempotencyKey)
 	var result ClaimDueSchedulesResult
+	mutated := false
 	err = service.repository.Transact(
 		ctx,
 		input.Principal.OrganizationID,
@@ -465,6 +509,7 @@ func (service *Service) ClaimDueSchedules(
 			if err != nil {
 				return errs.ErrInternal
 			}
+			mutated = len(schedules) > 0
 			return tx.SaveReceipt(ctx, domainrepo.Receipt{
 				OrganizationID: input.Principal.OrganizationID,
 				ProjectID:      input.Principal.ProjectID,
@@ -476,6 +521,9 @@ func (service *Service) ClaimDueSchedules(
 			})
 		},
 	)
+	if err == nil && mutated {
+		service.observer.ObserveMutation(enum.KindSchedule, "claim_schedules")
+	}
 	return result, err
 }
 

@@ -47,6 +47,12 @@ type TurnLease struct {
 	Fence      uint64
 }
 
+// ExpiredTurn связывает claimed aggregate с устаревшей lease под одной блокировкой.
+type ExpiredTurn struct {
+	Turn  entity.Resource
+	Lease TurnLease
+}
+
 // ScheduleOccurrence — server-owned unique due occurrence.
 type ScheduleOccurrence struct {
 	ID               string
@@ -66,6 +72,7 @@ type Transaction interface {
 	Update(context.Context, entity.Resource, uint64) error
 	AppendAudit(context.Context, Audit) error
 	AppendEvent(context.Context, event.Change) error
+	ExpiredClaimedTurns(context.Context, string, string, int, time.Time) ([]ExpiredTurn, error)
 	NextQueuedTurn(context.Context, string, string) (entity.Resource, error)
 	SaveTurnLease(context.Context, TurnLease) error
 	ValidateTurnLease(context.Context, string, string, string, time.Time) (TurnLease, error)

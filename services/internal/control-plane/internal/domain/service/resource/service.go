@@ -40,6 +40,7 @@ type Config struct {
 	LeaseSigningKey       []byte
 	TurnLeaseDuration     time.Duration
 	MaximumScheduleClaims int
+	Observer              Observer
 }
 
 // Service владеет business transitions; adapter только сохраняет намерение.
@@ -48,6 +49,7 @@ type Service struct {
 	leaseSigningKey       []byte
 	turnLeaseDuration     time.Duration
 	maximumScheduleClaims int
+	observer              Observer
 	now                   func() time.Time
 }
 
@@ -57,7 +59,8 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		config.TurnLeaseDuration < 30*time.Second ||
 		config.TurnLeaseDuration > 30*time.Minute ||
 		config.MaximumScheduleClaims < 1 ||
-		config.MaximumScheduleClaims > 100 {
+		config.MaximumScheduleClaims > 100 ||
+		config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
 	return &Service{
@@ -65,6 +68,7 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		leaseSigningKey:       slices.Clone(config.LeaseSigningKey),
 		turnLeaseDuration:     config.TurnLeaseDuration,
 		maximumScheduleClaims: config.MaximumScheduleClaims,
+		observer:              config.Observer,
 		now:                   time.Now,
 	}, nil
 }
@@ -402,6 +406,7 @@ func (service *Service) withResourceReceipt(
 ) (entity.Resource, error) {
 	keyHash := hashString(idempotencyKey)
 	var result entity.Resource
+	mutated := false
 	err := service.repository.Transact(
 		ctx,
 		principal.OrganizationID,
@@ -435,9 +440,13 @@ func (service *Service) withResourceReceipt(
 				return err
 			}
 			result = applied
+			mutated = true
 			return nil
 		},
 	)
+	if err == nil && mutated {
+		service.observer.ObserveMutation(result.Kind, scope)
+	}
 	return result, err
 }
 
@@ -514,9 +523,63 @@ func validateGenericUpdate(current entity.Resource, next entity.Spec) error {
 		return errs.ErrStateConflict
 	}
 	switch currentSpec := current.Spec.(type) {
+	case entity.ProjectSpec:
+		nextSpec, ok := next.(entity.ProjectSpec)
+		if !ok || currentSpec.Slug != nextSpec.Slug {
+			return errs.ErrStateConflict
+		}
+	case entity.TeamSpec:
+		nextSpec, ok := next.(entity.TeamSpec)
+		if !ok || currentSpec.StableKey != nextSpec.StableKey {
+			return errs.ErrStateConflict
+		}
+	case entity.ChatSpec:
+		nextSpec, ok := next.(entity.ChatSpec)
+		if !ok || currentSpec.StableKey != nextSpec.StableKey ||
+			currentSpec.RoomType != nextSpec.RoomType ||
+			currentSpec.ExternalChannelRef != nextSpec.ExternalChannelRef {
+			return errs.ErrStateConflict
+		}
+	case entity.RoleSpec:
+		nextSpec, ok := next.(entity.RoleSpec)
+		if !ok || currentSpec.StableKey != nextSpec.StableKey {
+			return errs.ErrStateConflict
+		}
+	case entity.PromptProfileSpec:
+		nextSpec, ok := next.(entity.PromptProfileSpec)
+		if !ok || currentSpec.Revision == ^uint64(0) ||
+			nextSpec.Revision != currentSpec.Revision+1 {
+			return errs.ErrStateConflict
+		}
+	case entity.CredentialBindingSpec:
+		nextSpec, ok := next.(entity.CredentialBindingSpec)
+		if !ok || currentSpec.Purpose != nextSpec.Purpose ||
+			currentSpec.PrincipalRef != nextSpec.PrincipalRef ||
+			currentSpec.Revision == ^uint64(0) ||
+			nextSpec.Revision != currentSpec.Revision+1 {
+			return errs.ErrStateConflict
+		}
+	case entity.RepositoryWorkspaceSpec:
+		nextSpec, ok := next.(entity.RepositoryWorkspaceSpec)
+		if !ok || currentSpec.RepositoryRef != nextSpec.RepositoryRef ||
+			currentSpec.WorkspaceMode != nextSpec.WorkspaceMode {
+			return errs.ErrStateConflict
+		}
+	case entity.IntegrationSpec:
+		nextSpec, ok := next.(entity.IntegrationSpec)
+		if !ok || currentSpec.DefinitionRef != nextSpec.DefinitionRef ||
+			nextSpec.DefinitionVersion <= currentSpec.DefinitionVersion {
+			return errs.ErrStateConflict
+		}
+	case entity.RuntimeRevisionSpec:
+		return errs.ErrStateConflict
 	case entity.SessionSpec:
 		nextSpec, ok := next.(entity.SessionSpec)
-		if !ok || currentSpec.LastTurnSequence != nextSpec.LastTurnSequence {
+		if !ok || currentSpec.AgentID != nextSpec.AgentID ||
+			currentSpec.ProviderAccountBindingID != nextSpec.ProviderAccountBindingID ||
+			currentSpec.LastTurnSequence != nextSpec.LastTurnSequence ||
+			(currentSpec.ConversationID != "" &&
+				currentSpec.ConversationID != nextSpec.ConversationID) {
 			return errs.ErrStateConflict
 		}
 	case entity.OwnerGateSpec:
@@ -532,15 +595,51 @@ func validateGenericUpdate(current entity.Resource, next entity.Spec) error {
 	case entity.ProcessRunSpec:
 		nextSpec, ok := next.(entity.ProcessRunSpec)
 		if !ok || currentSpec.ParentProcessRunID != nextSpec.ParentProcessRunID ||
-			currentSpec.RootTriggerRef != nextSpec.RootTriggerRef {
+			currentSpec.RootTriggerRef != nextSpec.RootTriggerRef ||
+			currentSpec.PlaybookRef != nextSpec.PlaybookRef ||
+			currentSpec.PolicyRevision != nextSpec.PolicyRevision ||
+			(currentSpec.ResultArtifactID != "" &&
+				currentSpec.ResultArtifactID != nextSpec.ResultArtifactID) {
 			return errs.ErrStateConflict
 		}
+	case entity.ScheduleSpec:
+		nextSpec, ok := next.(entity.ScheduleSpec)
+		if !ok || currentSpec.TargetResourceID != nextSpec.TargetResourceID {
+			return errs.ErrStateConflict
+		}
+	case entity.MemoryRecordSpec:
+		nextSpec, ok := next.(entity.MemoryRecordSpec)
+		if !ok || currentSpec.Scope != nextSpec.Scope ||
+			currentSpec.RoleID != nextSpec.RoleID ||
+			currentSpec.Provenance != nextSpec.Provenance {
+			return errs.ErrStateConflict
+		}
+	case entity.WorkClaimSpec:
+		nextSpec, ok := next.(entity.WorkClaimSpec)
+		if !ok || currentSpec.ProcessRunID != nextSpec.ProcessRunID ||
+			currentSpec.TurnID != nextSpec.TurnID {
+			return errs.ErrStateConflict
+		}
+	case entity.ArtifactSpec:
+		return errs.ErrStateConflict
 	}
 	return nil
 }
 
 func validateTemporalCreation(spec entity.Spec, now time.Time) error {
 	switch typed := spec.(type) {
+	case entity.SessionSpec:
+		if typed.LastTurnSequence != 0 {
+			return errs.ErrInvalidInput
+		}
+	case entity.ProcessRunSpec:
+		if typed.ResultArtifactID != "" {
+			return errs.ErrInvalidInput
+		}
+	case entity.ArtifactSpec:
+		if typed.ScanStatus != "PENDING" {
+			return errs.ErrInvalidInput
+		}
 	case entity.CredentialBindingSpec:
 		if !typed.ExpiresAt.IsZero() && !typed.ExpiresAt.After(now) {
 			return errs.ErrInvalidInput

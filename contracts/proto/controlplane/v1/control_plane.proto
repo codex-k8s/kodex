@@ -390,6 +390,7 @@ message EnqueueTurnRequest {
   string source_ref = 3;
   string prompt_artifact_id = 4;
   string process_run_id = 5;
+  string runtime_revision_id = 6;
 }
 
 message EnqueueTurnResponse {

@@ -57,12 +57,13 @@ type ListInput struct {
 }
 
 type EnqueueTurnInput struct {
-	Principal        value.Principal
-	IdempotencyKey   string
-	SessionID        string
-	SourceRef        string
-	PromptArtifactID string
-	ProcessRunID     string
+	Principal         value.Principal
+	IdempotencyKey    string
+	SessionID         string
+	SourceRef         string
+	PromptArtifactID  string
+	ProcessRunID      string
+	RuntimeRevisionID string
 }
 
 type ClaimTurnInput struct {
@@ -111,4 +112,9 @@ type ResolveOwnerGateInput struct {
 	ExpectedVersion uint64
 	Decision        string
 	Reason          string
+}
+
+// Observer получает только закрытые kind/action после durable commit.
+type Observer interface {
+	ObserveMutation(kind enum.Kind, action string)
 }

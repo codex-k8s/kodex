@@ -85,7 +85,9 @@ func InitialState(kind Kind) State {
 
 // TransitionAllowed задаёт fail-closed state machine системно для всех видов.
 func TransitionAllowed(kind Kind, from, to State) bool {
-	if !kind.Valid() || from == to || from.Terminal() {
+	if !kind.Valid() || from == to ||
+		(from.Terminal() &&
+			!(kind == KindTurn && from == StateFailed && to == StateQueued)) {
 		return false
 	}
 	switch kind {
@@ -102,6 +104,8 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 				to == StateWaitingExternal || to == StateWaitingOwner
 		case StateWaitingExternal, StateWaitingOwner, StateBlocked:
 			return to == StateQueued || to == StateCancelled || to == StateFailed
+		case StateFailed:
+			return to == StateQueued
 		}
 	case KindSession:
 		switch from {
@@ -123,9 +127,19 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 			(to == StateSucceeded || to == StateFailed || to == StateBlocked ||
 				to == StateCancelled || to == StateExpired)
 	case KindProcessRun:
-		return from == StateRunning &&
-			(to == StateWaitingOwner || to == StateSucceeded ||
-				to == StateFailed || to == StateCancelled || to == StateBlocked)
+		switch from {
+		case StateRunning:
+			return to == StateWaitingOwner || to == StateWaitingExternal ||
+				to == StateSucceeded || to == StateFailed ||
+				to == StateCancelled || to == StateBlocked
+		case StateWaitingOwner, StateWaitingExternal, StateBlocked:
+			return to == StateRunning || to == StateSucceeded ||
+				to == StateFailed || to == StateCancelled
+		}
+	case KindWorkClaim:
+		return from == StateActive &&
+			(to == StateCancelled || to == StateExpired ||
+				to == StateArchived || to == StateDeletionPending)
 	default:
 		switch from {
 		case StateActive:

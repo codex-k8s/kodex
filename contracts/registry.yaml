@@ -1,5 +1,12 @@
 version: 1
 packages:
+  - id: control-plane-events-v1
+    format: asyncapi
+    owner: control-plane
+    source: contracts/asyncapi/control-plane/v1/asyncapi.yaml
+    consumers:
+      - runtime-controller
+      - automation-scheduler
   - id: control-plane-v1
     format: proto
     owner: control-plane

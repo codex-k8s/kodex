@@ -3188,14 +3188,15 @@ func (x *ListResourcesResponse) GetNextPageToken() string {
 }
 
 type EnqueueTurnRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	IdempotencyKey   string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	SessionId        string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	SourceRef        string                 `protobuf:"bytes,3,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
-	PromptArtifactId string                 `protobuf:"bytes,4,opt,name=prompt_artifact_id,json=promptArtifactId,proto3" json:"prompt_artifact_id,omitempty"`
-	ProcessRunId     string                 `protobuf:"bytes,5,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey    string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	SessionId         string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SourceRef         string                 `protobuf:"bytes,3,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	PromptArtifactId  string                 `protobuf:"bytes,4,opt,name=prompt_artifact_id,json=promptArtifactId,proto3" json:"prompt_artifact_id,omitempty"`
+	ProcessRunId      string                 `protobuf:"bytes,5,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
+	RuntimeRevisionId string                 `protobuf:"bytes,6,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *EnqueueTurnRequest) Reset() {
@@ -3259,6 +3260,13 @@ func (x *EnqueueTurnRequest) GetPromptArtifactId() string {
 func (x *EnqueueTurnRequest) GetProcessRunId() string {
 	if x != nil {
 		return x.ProcessRunId
+	}
+	return ""
+}
+
+func (x *EnqueueTurnRequest) GetRuntimeRevisionId() string {
+	if x != nil {
+		return x.RuntimeRevisionId
 	}
 	return ""
 }
@@ -4258,7 +4266,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"project_id\"x\n" +
 	"\x15ListResourcesResponse\x127\n" +
 	"\tresources\x18\x01 \x03(\v2\x19.controlplane.v1.ResourceR\tresources\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xcf\x01\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xff\x01\n" +
 	"\x12EnqueueTurnRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x1d\n" +
 	"\n" +
@@ -4266,7 +4274,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"source_ref\x18\x03 \x01(\tR\tsourceRef\x12,\n" +
 	"\x12prompt_artifact_id\x18\x04 \x01(\tR\x10promptArtifactId\x12$\n" +
-	"\x0eprocess_run_id\x18\x05 \x01(\tR\fprocessRunId\"D\n" +
+	"\x0eprocess_run_id\x18\x05 \x01(\tR\fprocessRunId\x12.\n" +
+	"\x13runtime_revision_id\x18\x06 \x01(\tR\x11runtimeRevisionId\"D\n" +
 	"\x13EnqueueTurnResponse\x12-\n" +
 	"\x04turn\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x04turn\";\n" +
 	"\x10ClaimTurnRequest\x12'\n" +

@@ -1,6 +1,8 @@
 package entity
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/url"
 	"regexp"
@@ -181,6 +183,7 @@ func (spec IntegrationSpec) Validate() error {
 	if !validExternalRef(spec.DefinitionRef) || spec.DefinitionVersion == 0 ||
 		!validBoundedKeys(spec.Capabilities, 128) ||
 		len(spec.CredentialBindingIDs) > 32 ||
+		!validUniqueIDs(spec.CredentialBindingIDs) ||
 		!validExternalRef(spec.EndpointRef) {
 		return errors.New("integration specification is invalid")
 	}
@@ -208,7 +211,9 @@ func (spec RuntimeRevisionSpec) Validate() error {
 		!validSHA256(strings.TrimPrefix(spec.ImageDigest, "sha256:")) ||
 		value.ValidateID(spec.PromptProfileID) != nil ||
 		spec.PromptRevision == 0 ||
-		len(spec.CredentialBindingIDs) > 64 || len(spec.IntegrationIDs) > 64 {
+		len(spec.CredentialBindingIDs) > 64 || len(spec.IntegrationIDs) > 64 ||
+		!validUniqueIDs(spec.CredentialBindingIDs) ||
+		!validUniqueIDs(spec.IntegrationIDs) {
 		return errors.New("runtime revision specification is invalid")
 	}
 	for _, identifiers := range [][]string{spec.CredentialBindingIDs, spec.IntegrationIDs} {
@@ -380,6 +385,7 @@ func (spec MemoryRecordSpec) Validate() error {
 		len(spec.Title) < 1 || len(spec.Title) > 256 ||
 		len(spec.Content) < 1 || len(spec.Content) > 32768 ||
 		!validSHA256(spec.ContentSHA256) ||
+		digestText(spec.Content) != spec.ContentSHA256 ||
 		!validExternalRef(spec.Provenance) ||
 		spec.Importance > 100 {
 		return errors.New("memory record specification is invalid")
@@ -468,9 +474,14 @@ func validExternalRef(reference string) bool {
 }
 
 func validSecretRef(reference string) bool {
-	return validExternalRef(reference) &&
-		(strings.HasPrefix(reference, "vault://") ||
-			strings.HasPrefix(reference, "k8s-secret://"))
+	if !validExternalRef(reference) {
+		return false
+	}
+	parsed, err := url.Parse(reference)
+	return err == nil &&
+		(parsed.Scheme == "vault" || parsed.Scheme == "k8s-secret") &&
+		parsed.Host != "" && parsed.Path != "" && parsed.Path != "/" &&
+		parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
 func validBoundedKeys(values []string, maximum int) bool {
@@ -513,4 +524,9 @@ func validPermissions(values []string, maximum int) bool {
 		}
 	}
 	return true
+}
+
+func digestText(value string) string {
+	digest := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(digest[:])
 }

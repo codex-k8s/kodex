@@ -18,6 +18,7 @@ type Publisher interface {
 type ClaimedEvent struct {
 	Envelope   Envelope
 	LeaseToken string
+	Attempts   uint32
 }
 
 // OutboxStore — узкий порт durable PostgreSQL outbox для relay.
@@ -123,7 +124,7 @@ func (relay *Relay) cycle(lifecycle, finalizeParent context.Context) error {
 				item.Envelope.EventID,
 				item.LeaseToken,
 				true,
-				relay.config.InitialBackoff,
+				relay.backoff(item.Attempts),
 			)
 		}
 		cancelFinalize()
@@ -132,4 +133,18 @@ func (relay *Relay) cycle(lifecycle, finalizeParent context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (relay *Relay) backoff(attempts uint32) time.Duration {
+	backoff := relay.config.InitialBackoff
+	for current := uint32(0); current < attempts; current++ {
+		if backoff >= relay.config.MaximumBackoff/2 {
+			return relay.config.MaximumBackoff
+		}
+		backoff *= 2
+	}
+	if backoff > relay.config.MaximumBackoff {
+		return relay.config.MaximumBackoff
+	}
+	return backoff
 }

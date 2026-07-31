@@ -9,14 +9,14 @@ import (
 
 // State фиксирует проверенную served identity signer.
 type State struct {
-	PolicyRevision   uint64
-	PolicyDigest     string
+	TrustRevision    uint64
+	TrustDigest      string
 	SignerGeneration uint64
 	PublicThumbprint string
 }
 
 // Signer подписывает canonical claims ключом, independently verified при startup.
 type Signer interface {
-	Sign(context.Context, authoritytype.ProofClaims) (string, string, error)
+	Sign(context.Context, authoritytype.ProofClaims) (string, string, State, error)
 	Check(context.Context) (State, error)
 }

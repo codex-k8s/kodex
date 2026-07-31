@@ -16,4 +16,4 @@ SET
     lease_until = clock_timestamp() + @lease_duration::interval
 FROM candidates
 WHERE event.event_id = candidates.event_id
-RETURNING event.envelope, event.lease_token::text
+RETURNING event.envelope, event.lease_token::text, event.attempts

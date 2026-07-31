@@ -106,6 +106,38 @@ CREATE UNIQUE INDEX resources_turn_sequence_uidx
         ((spec ->> 'sequence')::bigint)
     )
     WHERE kind = 'TURN';
+CREATE UNIQUE INDEX resources_runtime_manifest_uidx
+    ON control_plane.resources (
+        organization_id,
+        project_id,
+        (spec ->> 'manifestSha256')
+    )
+    WHERE kind = 'RUNTIME_REVISION' AND state <> 'DELETED';
+CREATE UNIQUE INDEX resources_session_conversation_uidx
+    ON control_plane.resources (
+        organization_id,
+        project_id,
+        (spec ->> 'conversationId')
+    )
+    WHERE kind = 'SESSION'
+      AND state <> 'DELETED'
+      AND coalesce(spec ->> 'conversationId', '') <> '';
+CREATE UNIQUE INDEX resources_active_work_claim_uidx
+    ON control_plane.resources (
+        organization_id,
+        project_id,
+        ((spec ->> 'processRunId')::uuid),
+        ((spec ->> 'turnId')::uuid)
+    )
+    WHERE kind = 'WORK_CLAIM'
+      AND state NOT IN ('ARCHIVED', 'DELETION_PENDING', 'DELETED', 'CANCELLED', 'EXPIRED');
+CREATE UNIQUE INDEX resources_artifact_storage_uidx
+    ON control_plane.resources (
+        organization_id,
+        project_id,
+        (spec ->> 'storageRef')
+    )
+    WHERE kind = 'ARTIFACT' AND state <> 'DELETED';
 
 CREATE TABLE control_plane.command_receipts (
     organization_id uuid NOT NULL,

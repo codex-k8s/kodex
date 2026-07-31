@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
@@ -141,10 +142,22 @@ func validateConfig(config Config) error {
 		config.ConnectTimeout > 10*time.Second {
 		return errors.New("NATS JetStream configuration is invalid")
 	}
+	credentials, err := os.Stat(config.CredentialsFile)
+	if err != nil || !credentials.Mode().IsRegular() ||
+		credentials.Size() <= 0 || credentials.Size() > maximumRuntimeFileBytes ||
+		credentials.Mode().Perm()&0o007 != 0 {
+		return errors.New("NATS credential file is unsafe")
+	}
+	seen := make(map[string]struct{}, len(config.Subjects))
 	for _, subject := range config.Subjects {
-		if subject == "" {
+		if subject == "" || strings.TrimSpace(subject) != subject ||
+			strings.ContainsAny(subject, "*> \t\r\n") {
 			return errors.New("NATS JetStream subject is invalid")
 		}
+		if _, duplicate := seen[subject]; duplicate {
+			return errors.New("NATS JetStream subject is duplicated")
+		}
+		seen[subject] = struct{}{}
 	}
 	return nil
 }

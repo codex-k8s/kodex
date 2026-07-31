@@ -530,6 +530,67 @@ func (wrapped *transaction) NextQueuedTurn(
 	))
 }
 
+func (wrapped *transaction) ExpiredClaimedTurns(
+	ctx context.Context,
+	organizationID, projectID string,
+	limit int,
+	now time.Time,
+) ([]domainrepo.ExpiredTurn, error) {
+	rows, err := wrapped.tx.Query(
+		ctx,
+		query("turn__expired_claimed.sql"),
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"limit":           limit,
+			"now":             now,
+		},
+	)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	expired := make([]domainrepo.ExpiredTurn, 0, limit)
+	for rows.Next() {
+		var item domainrepo.ExpiredTurn
+		var kind, state string
+		var specRaw []byte
+		if err := rows.Scan(
+			&item.Turn.ID,
+			&item.Turn.OrganizationID,
+			&item.Turn.ProjectID,
+			&item.Turn.ParentID,
+			&item.Turn.OwnerActorID,
+			&kind,
+			&item.Turn.Name,
+			&state,
+			&item.Turn.Version,
+			&specRaw,
+			&item.Turn.CreatedAt,
+			&item.Turn.UpdatedAt,
+			&item.Lease.TurnID,
+			&item.Lease.TokenHash,
+			&item.Lease.WorkloadID,
+			&item.Lease.ExpiresAt,
+			&item.Lease.Fence,
+		); err != nil {
+			return nil, mapError(err)
+		}
+		item.Turn.Kind = enum.Kind(kind)
+		item.Turn.State = enum.State(state)
+		item.Turn.Spec, err = unmarshalSpec(item.Turn.Kind, specRaw)
+		if err != nil || item.Turn.Validate() != nil ||
+			item.Turn.Kind != enum.KindTurn ||
+			item.Turn.State != enum.StateClaimed ||
+			item.Lease.TurnID != item.Turn.ID ||
+			item.Lease.Fence != item.Turn.Version {
+			return nil, errs.ErrInternal
+		}
+		expired = append(expired, item)
+	}
+	return expired, mapError(rows.Err())
+}
+
 func (wrapped *transaction) SaveTurnLease(
 	ctx context.Context,
 	lease domainrepo.TurnLease,
@@ -672,10 +733,10 @@ func (wrapped *transaction) AuthorizeProject(
 		ctx,
 		query("project__authorize.sql"),
 		pgx.StrictNamedArgs{
-			"organization_id":   organizationID,
-			"project_id":        projectID,
-			"actor_id":          actorID,
-			"permission":        permission,
+			"organization_id":    organizationID,
+			"project_id":         projectID,
+			"actor_id":           actorID,
+			"permission":         permission,
 			"resource_reference": resourceReference,
 		},
 	))

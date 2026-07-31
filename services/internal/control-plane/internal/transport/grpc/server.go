@@ -334,12 +334,13 @@ func (server *Server) EnqueueTurn(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	turn, err := server.service.EnqueueTurn(ctx, resource.EnqueueTurnInput{
-		Principal:        principal,
-		IdempotencyKey:   request.GetIdempotencyKey(),
-		SessionID:        request.GetSessionId(),
-		SourceRef:        request.GetSourceRef(),
-		PromptArtifactID: request.GetPromptArtifactId(),
-		ProcessRunID:     request.GetProcessRunId(),
+		Principal:         principal,
+		IdempotencyKey:    request.GetIdempotencyKey(),
+		SessionID:         request.GetSessionId(),
+		SourceRef:         request.GetSourceRef(),
+		PromptArtifactID:  request.GetPromptArtifactId(),
+		ProcessRunID:      request.GetProcessRunId(),
+		RuntimeRevisionID: request.GetRuntimeRevisionId(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
