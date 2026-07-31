@@ -4,7 +4,7 @@ title: Контракты
 type: contract-index
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.1.1
 updated: 2026-07-28
 ---
 
@@ -14,24 +14,26 @@ updated: 2026-07-28
 
 | Граница                                | Формат             |
 | -------------------------------------- | ------------------ |
-| внешний клиент → gateway               | OpenAPI            |
-| gateway/job/service → internal service | Proto/gRPC         |
-| realtime client                        | AsyncAPI WebSocket |
-| domain → consumers                     | AsyncAPI           |
-| authorization/error/registry policy    | YAML               |
+| внешний клиент → шлюз                         | OpenAPI            |
+| шлюз/задача/сервис → внутренний сервис        | Proto/gRPC         |
+| клиент обмена в реальном времени              | AsyncAPI WebSocket |
+| домен → потребители                           | AsyncAPI           |
+| политика авторизации, ошибок и реестра        | YAML               |
 
-Generated code не редактируется вручную. Он создается рядом с потребителем или
+Сгенерированный код не редактируется вручную. Он создается рядом с потребителем или
 во временном каталоге проверок.
 
-`registry.yaml` фиксирует package, owner, версию, source и consumers.
+`registry.yaml` фиксирует пакет, владельца, версию, источник и потребителей.
 Неизвестный пакет и расхождение владельца должны отклоняться закрыто.
 
-Gateway не владеет чужим бизнес-состоянием. Событие принадлежит сервису,
-который атомарно изменяет source of truth.
+Шлюз не владеет чужим бизнес-состоянием. Событие принадлежит сервису,
+который атомарно изменяет единый источник истины.
 
 Нормативные правила:
 
-- `CONTRACT-DOC-002` - Proto/gRPC package, authority, mutation и errors;
-- `CONTRACT-DOC-003` - AsyncAPI envelope, NATS subject, ordering и consumer
-  effect;
-- `GO-DOC-005` - runtime-путь синхронной и асинхронной коммуникации.
+- `CONTRACT-DOC-002` - пакет Proto/gRPC, полномочия, изменения и ошибки;
+- `CONTRACT-DOC-003` - конверт AsyncAPI, тема NATS, порядок и эффект
+  потребителя;
+- `CONTRACT-MC-004` - локальные для workload UDS, ES256 JWS/JWKS, машинная
+  политика, устойчивая защита от повтора и однонаправленная ротация;
+- `GO-DOC-005` - исполняемый путь синхронной и асинхронной коммуникации.

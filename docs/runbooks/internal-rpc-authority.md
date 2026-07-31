@@ -1,0 +1,223 @@
+---
+id: RUN-MC-006
+title: Диагностика и восстановление internal-rpc-authority
+type: runbook
+status: approved
+owner: sre
+version: 1.1.4
+updated: 2026-07-30
+---
+
+# Диагностика и восстановление internal-rpc-authority
+
+## Когда применять
+
+Инструкция используется при отказе готовности issuer/verifier, отклонении
+снимка, ошибках устойчивой защиты от повтора, недоступности reconciler, сбое
+жизненного цикла учётных данных Vault/PostgreSQL или перед контролируемой
+ротацией. Она не разрешает production-развёртывание: для применения
+production-манифеста требуется отдельный шлюз владельца.
+
+Не выводить DSN, полезную нагрузку JWT/JWS целиком, проецируемый токен, пароль,
+закрытый JWK, закрытый ключ сертификата или содержимое Kubernetes Secret.
+
+## Предварительная проверка без изменений
+
+1. Зафиксировать точные Git SHA и хэш образа.
+2. Получить render той же версией кода:
+
+```bash
+KUBERNETES_API_CIDRS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh)"
+KUBERNETES_API_PORTS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh --output ports)"
+test -n "$KUBERNETES_API_CIDRS"
+test -n "$KUBERNETES_API_PORTS"
+scripts/render-internal-rpc-authority.sh \
+  --environment staging \
+  --image-ref ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:<digest> \
+  --kubernetes-api-cidrs "$KUBERNETES_API_CIDRS" \
+  --kubernetes-api-ports "$KUBERNETES_API_PORTS" \
+  > /tmp/internal-rpc-authority-staging.yaml
+```
+
+Для production используется та же последовательность с
+`--environment production` и отдельно утверждённым точным digest. Resolver
+читает ClusterIP Kubernetes Service и готовые EndpointSlice; пустой,
+невалидный либо устаревший вручную сохранённый набор не заменять вымышленным
+адресом или правилом только по порту. После изменения Service/EndpointSlice
+получить CIDR заново и повторить render/readback.
+
+3. Проверить без значений Secret:
+
+```bash
+kubectl -n mattercodex-system get deploy,pod,job,svc,networkpolicy \
+  -l app.kubernetes.io/name=internal-rpc-authority
+kubectl -n mattercodex-system get endpoints \
+  internal-rpc-authority-database-credential-reconciler
+```
+
+4. Сверить ServiceAccount, UID/GID pod, хэш образа, имена томов, selectors
+   `NetworkPolicy` и точные назначения с итоговым render.
+5. Проверить `/readyz` и ограниченные метрики через локальный port-forward. Не
+   публиковать техническую точку доступа наружу.
+
+## Классы отказа
+
+### Телеметрия не готова
+
+Все исполняемые процессы и восстановительные задачи закрыто отказываются
+стартовать без доверенной точки OTLP TLS и файловой доставки Sentry DSN.
+Проверить:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` указывает ровно на
+  `otel-collector.observability.svc:4317`;
+- TLS SNI равен
+  `otel-collector.observability.svc.cluster.local`, CA читается из
+  `internal-rpc-authority-otel-ca`;
+- узел Sentry DSN равен `sentry-relay.observability.svc:8443`, DSN
+  доставлен файлом из `internal-rpc-authority-sentry`;
+- `NetworkPolicy` разрешает только соответствующие selectors pod и
+  пространства имён, а не произвольное назначение на портах `4317` или `8443`.
+
+Не выводить Sentry DSN при диагностике. Проверять только имя Secret, режим
+файла, размер файла и совпадение ожидаемого узла. Панель
+`mattercodex-internal-rpc-authority` показывает готовность обслуживаемого
+состояния, ограниченные исходы gRPC и задержку p99. Оповещения
+`InternalRPCAuthorityServedStateUnavailable`,
+`InternalRPCAuthorityUnexpectedGRPCFailures` и
+`InternalRPCAuthorityGRPCLatencyHigh` ведут в эту инструкцию.
+
+При остановке OTel trace provider и сброс Sentry получают независимые
+ограниченные контексты. Исчерпание одного бюджета не отменяет вторую операцию
+очистки.
+
+### UDS не готов
+
+- корень обязан быть реальным каталогом `uid=29000`, `gid=29000`, с режимом
+  `1770`;
+- `issuer.sock` и `verifier.sock` должны быть сокетами, а не symlink;
+- UID слушателей должны быть соответственно `29001` и `29002`;
+- peer приложения обязан иметь точные зарегистрированные UID/GID;
+- том — закрытый локальный для pod `emptyDir`, а не общий PVC/hostPath.
+
+Удалять устаревший сокет вручную внутри работающего pod запрещено. Нужно
+перезапустить pod: socket-init повторно проверит тип, владельца и режим, а
+исполняемый процесс выполнит атомарные bind/rename.
+
+### Снимок отклонён
+
+Сверить только метаданные: исходные ревизию/хэш, ревизию/хэш predecessor,
+ревизию набора ключей, ревизию политики, поколение подписанта, `kid` и срок
+действия.
+Проверить:
+
+- JWS манифеста подписан независимым корнем и каноничен;
+- точный workload имеет один `CURRENT` и ограниченные `NEXT`/`PREVIOUS`;
+- закрытый ключ issuer соответствует обслуживаемому открытому JWK;
+- verifier не получает закрытый ключ issuer;
+- доверие proof и относящийся к роли ключ владения readback доставлены отдельно;
+- resolver-sidecar сверил proof private key с exact `CURRENT` записью
+  independently delivered proof trust и получил отдельный receipt;
+- publisher promotion видит полный набор issuer/verifier/resolver readback для
+  той же source revision/digest, а обслуживаемый Kubernetes Secret имеет
+  совпадающий `resourceVersion` readback;
+- до конца 24-часового validity window текущего snapshot опубликована следующая
+  source revision; истечение окна без полной promotion закрывает readiness;
+- верхняя отметка PostgreSQL не выше предлагаемой ревизии.
+
+Изменение без увеличения ревизии и откат не обходить. При пропущенной ревизии
+publisher обязан дать корректную цепочку predecessor/истории, иначе workload
+остаётся неготовым.
+
+### Защита от повтора или устойчивое хранилище недоступны
+
+Проверить TLS `verify-full`, точное имя сервера, `session_user`, `SET ROLE` и
+доступность таблиц:
+
+- `authority_snapshot_watermarks`;
+- `authority_replay_reservations`;
+- `authority_proof_watermarks`;
+- `authority_proof_reservations`.
+
+Не очищать верхнюю отметку. Истёкшее резервирование удаляет только относящийся
+к роли фоновый обработчик после срока хранения: issuer не имеет `DELETE` к
+резервированиям verifier, verifier не имеет `DELETE` к резервированиям issuer.
+Запасной путь в памяти/`emptyDir` запрещён.
+
+### Reconciler не готов
+
+Проверить:
+
+- проецируемый токен ServiceAccount имеет аудиторию `vault` и TTL 600 секунд;
+- Vault доступен только по HTTPS с точным SNI и CA;
+- PostgreSQL доступен только по TLS `verify-full`;
+- активная аренда с ограждением принадлежит одной реплике;
+- выведенное сервером контрольное чтение содержит ровно publisher/attestor
+  `CURRENT`+`NEXT`;
+- `session_user` совпадает с principal reconciler, capability активирована
+  только через точный `SET ROLE`.
+
+Значение Secret не копировать в окружение и не сравнивать в выводе shell.
+
+## Контролируемая ротация
+
+1. Подтвердить готовность `CURRENT` и доставку `NEXT`.
+2. Проверить криптографическое контрольное чтение всех фактически
+   обслуживаемых workload.
+3. Атомарно опубликовать следующий снимок с хэшем predecessor.
+4. Дождаться готовности обслуживаемого состояния каждой реплики.
+5. Перевести прежний `CURRENT` в ограниченное состояние `PREVIOUS`.
+6. После перекрытия и отсутствия активных сессий установить principal процесса
+   `RETIRED`, затем `NOLOGIN`, отозвать точное членство, выполнить ротацию
+   Vault и ограниченное дренирование.
+7. Повтор старого JTI, старого поколения подписанта и прежнего пароля обязан
+   закрыто отклоняться.
+
+После обновления TLS-сертификата, PostgreSQL DSN либо LOGIN principal выполнить
+последовательный перезапуск соответствующего компонента. Обновлённый Kubernetes
+Secret не считается контрольным чтением: нужно проверить фактически
+обслуживаемый сертификат, `session_user`, `current_user` после точного
+`SET ROLE` и готовность на каждой новой реплике до удаления перекрытия.
+
+Авария до публикации не меняет обслуживаемое состояние. Авария после
+публикации использует верхнюю отметку PostgreSQL и повторное точное контрольное
+чтение. PITR/откат, понизивший состояние ниже внешней опорной точки, оставляет
+компонент неготовым до разрешённого владельцем восстановления.
+
+Для PITR операторская задача принимает имя exact CNPG `Backup`, recovery
+target и идентификаторы команды, но не принимает заявленный человеком digest.
+Она через отдельный projected Kubernetes token читает immutable `Backup` и
+source `Cluster`, связывает UID/resourceVersion/generation, provider
+`backupID`, server, WAL timeline, LSN и plugin metadata в канонический digest.
+PITR executor повторяет тот же authoritative readback, создаёт новый Cluster
+с exact `recoveryTarget.backupID` и числовым `targetTLI`, а completion evidence
+содержит обе Kubernetes identity. Mutation, исчезновение поля, смена source,
+digest mismatch или readback другого Cluster закрыто прекращают операцию.
+Повтор с тем же immutable intent идемпотентно читает существующий Cluster;
+rollback требует нового restore ID/epoch и не переписывает опубликованное
+evidence.
+
+## Миграции
+
+Задача миграции запускается до rollout и использует отдельный ServiceAccount и
+Secret с DSN. В активной фазе прототипа тяжёлая PostgreSQL integration suite не
+входит в обязательный baseline и не запускается этим runbook. Полный
+поддерживаемый disposable-контур будет введён отдельной owner-approved волной:
+[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
+
+Перед staging владелец отдельно утверждает фактическую миграционную проверку и
+одноразовое окружение. Production CLI не предоставляет `down`: откат схемы
+выполняется только новой компенсирующей однонаправленной миграцией после
+отдельного Issue, проверенной резервной копии и шлюза владельца.
+
+## Откат
+
+Образ приложения можно вернуть на предыдущий проверенный хэш только если он
+понимает уже опубликованную версию контракта и его ревизии
+подписанта/политики не ниже устойчивой верхней отметки. Снимок, верхняя отметка,
+резервирования защиты от повтора и поколения учётных данных назад не
+откатываются.
+
+При несовместимости оставить workload неготовым, остановить rollout и
+восстановить новую совместимую версию. Удаление таблиц, сброс watermark,
+повторное использование выведенных из обращения ключа/principal и
+незашифрованный запасной путь/TLS-skip запрещены.

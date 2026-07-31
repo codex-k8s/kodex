@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 1.2.0
-updated: 2026-07-29
+version: 1.3.0
+updated: 2026-07-30
 ---
 
 # Кодификация документов и задач
@@ -80,6 +80,7 @@ updated: 2026-07-28
 | `GOV-DOC-004`      | `docs/governance/project-template-adoption.md`          |
 | `CONTRACT-DOC-002` | `contracts/proto/README.md`                             |
 | `CONTRACT-DOC-003` | `contracts/asyncapi/README.md`                          |
+| `CONTRACT-MC-004`  | `contracts/authorization/README.md`                     |
 | `SVC-DOC-002`      | `contracts/README.md`                                   |
 | `PRD-MC-001`       | `docs/product/README.md`                                |
 | `PRD-MC-002`       | `docs/product/personas.md`                              |
@@ -120,5 +121,7 @@ updated: 2026-07-28
 | `FE-DOC-001`       | `docs/guides/frontend-vue.md`                           |
 | `INFRA-DOC-001`    | `docs/guides/infrastructure.md`                         |
 | `SVC-DOC-001`      | `services/README.md`                                    |
+| `SVC-MC-003`       | `services/internal/internal-rpc-authority/README.md`     |
+| `RUN-MC-006`       | `docs/runbooks/internal-rpc-authority.md`                |
 
 При добавлении управляемого документа реестр обновляется в том же PR.

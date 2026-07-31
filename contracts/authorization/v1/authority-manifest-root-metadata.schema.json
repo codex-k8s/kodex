@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-manifest-root-metadata.schema.json",
+  "title": "Независимо встроенный корень authority snapshot manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "root_id",
+    "root_generation",
+    "purpose",
+    "aud",
+    "kid",
+    "jwk_thumbprint_sha256",
+    "source_revision",
+    "source_digest_sha256",
+    "not_before",
+    "not_after"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "root_id": {
+      "const": "internal-rpc-authority-manifest-root-v1"
+    },
+    "root_generation": {
+      "$ref": "#/$defs/revision"
+    },
+    "purpose": {
+      "const": "AUTHORITY_SNAPSHOT_MANIFEST_ROOT"
+    },
+    "aud": {
+      "const": "urn:mattercodex:internal-rpc-authority:manifest-root"
+    },
+    "kid": {
+      "$ref": "#/$defs/kid"
+    },
+    "jwk_thumbprint_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "source_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "source_digest_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "not_before": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "not_after": {
+      "$ref": "#/$defs/unixTime"
+    }
+  },
+  "$defs": {
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "kid": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "unixTime": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 253402300799
+    }
+  }
+}

@@ -1,9 +1,150 @@
 version: 1
-packages: []
-# Пример записи после удаления комментария:
-# - id: example-service-v1
-#   format: proto
-#   owner: example-service
-#   source: contracts/proto/example-service/v1
-#   consumers:
-#     - example-gateway
+packages:
+  - id: internal-rpc-authority-v1
+    format: proto
+    owner: internal-rpc-authority
+    source: contracts/proto/internalrpcauthority/v1
+    generated:
+      go: libs/go/internalrpcauth/gen/internalrpcauthority/v1
+    consumers:
+      - internal-rpc-authority
+      - control-plane
+      - control-api-gateway
+      - interaction-gateway
+      - integration-gateway
+      - runtime-controller
+      - agent-runner
+      - automation-scheduler
+  - id: internal-rpc-authorization-policy-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1
+    consumers:
+      - internal-rpc-authority
+      - control-plane
+      - control-api-gateway
+      - interaction-gateway
+      - integration-gateway
+      - runtime-controller
+      - agent-runner
+      - automation-scheduler
+  - id: internal-rpc-authority-proof-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authority-proof.schema.json
+    consumers:
+      - internal-rpc-authority
+      - control-plane
+  - id: internal-rpc-authority-proof-trust-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authority-proof-trust.schema.json
+    consumers:
+      - internal-rpc-authority
+      - control-plane
+  - id: internal-rpc-authority-manifest-root-metadata-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authority-manifest-root-metadata.schema.json
+    consumers:
+      - internal-rpc-authority
+  - id: internal-rpc-authority-manifest-trust-bundle-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authority-manifest-trust-bundle.schema.json
+    consumers:
+      - internal-rpc-authority
+  - id: internal-rpc-authority-restore-evidence-v1
+    format: json-schema
+    owner: internal-rpc-authority-restore-controller
+    source: contracts/authorization/v1/restore-fence-evidence.schema.json
+    consumers:
+      - internal-rpc-authority-restore-controller
+      - internal-rpc-authority-restore-operator
+      - internal-rpc-authority-recovery
+      - internal-rpc-authority
+  - id: internal-rpc-authority-restore-coordination-v1
+    format: json-schema
+    owner: internal-rpc-authority-restore-controller
+    source: contracts/authorization/v1/restore-coordination.schema.json
+    consumers:
+      - internal-rpc-authority-restore-controller
+      - internal-rpc-authority-issuer
+      - internal-rpc-authority-verifier
+      - control-plane
+  - id: internal-rpc-authority-restore-role-trust-v1
+    format: json-schema
+    owner: internal-rpc-authority-restore-controller
+    source: contracts/authorization/v1/restore-role-trust.schema.json
+    consumers:
+      - internal-rpc-authority-publisher
+      - internal-rpc-authority-restore-controller
+  - id: internal-rpc-authority-readback-postgresql-v1
+    format: sql
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/postgresql-readback-boundary.sql
+    consumers:
+      - internal-rpc-authority-publisher
+      - internal-rpc-authority-issuer
+      - internal-rpc-authority-verifier
+      - control-plane
+  - id: internal-rpc-authority-readback-attestation-v1
+    format: json-schema
+    owner: internal-rpc-authority-readback-attestor
+    source: contracts/authorization/v1/readback-attestation.schema.json
+    consumers:
+      - internal-rpc-authority-issuer
+      - internal-rpc-authority-verifier
+      - internal-rpc-authority-readback-attestor
+      - control-plane
+  - id: internal-rpc-authority-readback-credential-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/readback-credential.schema.json
+    consumers:
+      - internal-rpc-authority-publisher
+      - internal-rpc-authority-issuer
+      - internal-rpc-authority-verifier
+      - internal-rpc-authority-readback-attestor
+      - control-plane
+  - id: internal-rpc-authority-readback-credential-trust-v1
+    format: json-schema
+    owner: internal-rpc-authority-readback-attestor
+    source: contracts/authorization/v1/readback-credential-trust.schema.json
+    consumers:
+      - internal-rpc-authority-publisher
+      - internal-rpc-authority-readback-attestor
+  - id: internal-rpc-authority-readback-manifest-trust-root-v1
+    format: json-schema
+    owner: internal-rpc-authority-readback-trust-root-controller
+    source: contracts/authorization/v1/readback-manifest-trust-root.schema.json
+    consumers:
+      - internal-rpc-authority-readback-attestor
+  - id: internal-rpc-authority-readback-root-verification-material-v1
+    format: json-schema
+    owner: internal-rpc-authority-readback-trust-root-controller
+    source: contracts/authorization/v1/readback-root-verification-material.schema.json
+    consumers:
+      - internal-rpc-authority-readback-attestor
+  - id: internal-rpc-authority-readback-root-rotation-v1
+    format: json-schema
+    owner: internal-rpc-authority-readback-trust-root-controller
+    source: contracts/authorization/v1/readback-root-rotation.schema.json
+    consumers:
+      - internal-rpc-authority-readback-attestor
+  - id: internal-rpc-authority-key-delivery-v1
+    format: json-schema
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/key-delivery-targets.schema.json
+    consumers:
+      - internal-rpc-authority-publisher
+      - internal-rpc-authority-issuer
+      - internal-rpc-authority-verifier
+      - control-plane
+  - id: internal-rpc-authority-error-matrix-v1
+    format: json
+    owner: internal-rpc-authority
+    source: contracts/authorization/v1/authorization-error-matrix.json
+    consumers:
+      - internal-rpc-authority
+      - control-plane

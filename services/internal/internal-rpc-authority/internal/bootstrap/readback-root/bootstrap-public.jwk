@@ -1,0 +1,1 @@
+{"kty":"EC","crv":"P-256","use":"sig","key_ops":["verify"],"alg":"ES256","kid":"ira-readback-root-g1","x":"fzqDZ7JKv1DqigBh9RhX7qhSfCKaTpJ742v4GqP6nQM","y":"l3QpBPKJwlLFoRkPWXtFbtkqaTHturx8vc_CxZjCJ4s"}

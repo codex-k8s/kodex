@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/readback-root-rotation.schema.json",
+  "title": "Взаимно подписанный переход корня normal-readback",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "rotation_id",
+    "purpose",
+    "aud",
+    "source_revision",
+    "predecessor_digest_sha256",
+    "current_root",
+    "next_root",
+    "current_signs_next_jws",
+    "next_signs_current_jws",
+    "overlap_not_before",
+    "overlap_not_after"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "rotation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "purpose": {
+      "const": "NORMAL_READBACK_ROOT_ROTATION"
+    },
+    "aud": {
+      "const": "urn:mattercodex:internal-rpc-authority-readback-attestor:root-rotation"
+    },
+    "source_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "predecessor_digest_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "current_root": {
+      "$ref": "readback-root-verification-material.schema.json"
+    },
+    "next_root": {
+      "$ref": "readback-root-verification-material.schema.json"
+    },
+    "current_signs_next_jws": {
+      "$ref": "#/$defs/compactJws"
+    },
+    "next_signs_current_jws": {
+      "$ref": "#/$defs/compactJws"
+    },
+    "overlap_not_before": {
+      "type": "integer"
+    },
+    "overlap_not_after": {
+      "type": "integer"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "compactJws": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 16384,
+      "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$"
+    }
+  }
+}

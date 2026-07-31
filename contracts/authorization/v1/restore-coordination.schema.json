@@ -1,0 +1,600 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/restore-coordination.schema.json",
+  "title": "Claims координации PITR MatterCodex",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/roleCredential"
+    },
+    {
+      "$ref": "#/$defs/directive"
+    },
+    {
+      "$ref": "#/$defs/quiescenceAck"
+    },
+    {
+      "$ref": "#/$defs/credentialIssuanceDirective"
+    },
+    {
+      "$ref": "#/$defs/credentialDeliveryReceipt"
+    }
+  ],
+  "$defs": {
+    "boundedIdentity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "positiveRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "role": {
+      "enum": [
+        "AUTHORIZATION_ISSUER",
+        "AUTHORIZATION_VERIFIER",
+        "AUTHORITY_PROOF_RESOLVER"
+      ]
+    },
+    "spiffeId": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 512,
+      "pattern": "^spiffe://mattercodex[.]local/"
+    },
+    "publicAckJwk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kty",
+        "crv",
+        "use",
+        "key_ops",
+        "alg",
+        "kid",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "kty": {
+          "const": "EC"
+        },
+        "crv": {
+          "const": "P-256"
+        },
+        "use": {
+          "const": "sig"
+        },
+        "key_ops": {
+          "const": [
+            "verify"
+          ]
+        },
+        "alg": {
+          "const": "ES256"
+        },
+        "kid": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "x": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "y": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        }
+      }
+    },
+    "credentialIssuanceDirective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "iss",
+        "aud",
+        "sub",
+        "jti",
+        "restore_id",
+        "restore_epoch",
+        "coordination_revision",
+        "target_registry_revision",
+        "target_registry_digest_sha256",
+        "delivery_target_id",
+        "workload_id",
+        "workload_spiffe_id",
+        "role",
+        "workload_generation",
+        "credential_generation",
+        "ack_key_generation",
+        "iat",
+        "nbf",
+        "exp"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "iss": {
+          "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller"
+        },
+        "aud": {
+          "const": "urn:mattercodex:internal-rpc-authority-restore-role-credential-publisher"
+        },
+        "sub": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "jti": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "restore_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "restore_epoch": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "coordination_revision": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "target_registry_revision": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "target_registry_digest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "delivery_target_id": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "workload_id": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "workload_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "workload_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "credential_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "ack_key_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "iat": {
+          "type": "integer"
+        },
+        "nbf": {
+          "type": "integer"
+        },
+        "exp": {
+          "type": "integer"
+        }
+      }
+    },
+    "credentialDeliveryReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "iss",
+        "aud",
+        "sub",
+        "jti",
+        "issuance_directive_jti",
+        "restore_id",
+        "restore_epoch",
+        "coordination_revision",
+        "delivery_target_id",
+        "workload_id",
+        "role",
+        "workload_generation",
+        "credential_generation",
+        "role_credential_digest_sha256",
+        "ack_key_kid",
+        "ack_key_generation",
+        "ack_key_thumbprint_sha256",
+        "vault_metadata_version",
+        "delivery_readback_digest_sha256",
+        "iat",
+        "nbf",
+        "exp"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "iss": {
+          "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
+        },
+        "aud": {
+          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+        },
+        "sub": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "jti": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "issuance_directive_jti": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "restore_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "restore_epoch": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "coordination_revision": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "delivery_target_id": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "workload_id": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "workload_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "credential_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "role_credential_digest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "ack_key_kid": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "ack_key_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "ack_key_thumbprint_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "vault_metadata_version": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "delivery_readback_digest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "iat": {
+          "type": "integer"
+        },
+        "nbf": {
+          "type": "integer"
+        },
+        "exp": {
+          "type": "integer"
+        }
+      }
+    },
+    "roleCredential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "iss",
+        "aud",
+        "sub",
+        "jti",
+        "workload_id",
+        "workload_spiffe_id",
+        "role",
+        "workload_generation",
+        "credential_generation",
+        "restore_id",
+        "restore_epoch",
+        "coordination_revision",
+        "credential_signer_source_revision",
+        "credential_signer_source_digest_sha256",
+        "credential_signer_key_set_revision",
+        "credential_signer_generation",
+        "credential_signer_kid",
+        "ack_key_kid",
+        "ack_key_generation",
+        "ack_public_jwk",
+        "ack_key_thumbprint_sha256",
+        "iat",
+        "nbf",
+        "exp"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "iss": {
+          "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
+        },
+        "aud": {
+          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+        },
+        "sub": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "jti": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workload_id": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "workload_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "workload_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "credential_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "restore_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "restore_epoch": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "coordination_revision": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "credential_signer_source_revision": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "credential_signer_source_digest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "credential_signer_key_set_revision": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "credential_signer_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "credential_signer_kid": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "ack_key_kid": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "ack_key_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "ack_public_jwk": {
+          "$ref": "#/$defs/publicAckJwk"
+        },
+        "ack_key_thumbprint_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "iat": {
+          "type": "integer"
+        },
+        "nbf": {
+          "type": "integer"
+        },
+        "exp": {
+          "type": "integer"
+        }
+      }
+    },
+    "directive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "iss",
+        "aud",
+        "sub",
+        "jti",
+        "restore_id",
+        "restore_epoch",
+        "coordination_revision",
+        "phase",
+        "workload_id",
+        "workload_spiffe_id",
+        "role",
+        "workload_generation",
+        "credential_generation",
+        "role_credential_digest_sha256",
+        "stop_accepting_required",
+        "drain_inflight_required",
+        "iat",
+        "nbf",
+        "exp"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "iss": {
+          "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller"
+        },
+        "aud": {
+          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+        },
+        "sub": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "jti": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "restore_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "restore_epoch": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "coordination_revision": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "phase": {
+          "const": "QUIESCING"
+        },
+        "workload_id": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "workload_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "workload_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "credential_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "role_credential_digest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "stop_accepting_required": {
+          "const": true
+        },
+        "drain_inflight_required": {
+          "const": true
+        },
+        "iat": {
+          "type": "integer"
+        },
+        "nbf": {
+          "type": "integer"
+        },
+        "exp": {
+          "type": "integer"
+        }
+      }
+    },
+    "quiescenceAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "iss",
+        "aud",
+        "sub",
+        "jti",
+        "directive_jti",
+        "restore_id",
+        "restore_epoch",
+        "coordination_revision",
+        "workload_id",
+        "workload_spiffe_id",
+        "role",
+        "workload_generation",
+        "credential_generation",
+        "ack_key_kid",
+        "ack_key_generation",
+        "ack_key_thumbprint_sha256",
+        "role_credential_digest_sha256",
+        "served_snapshot_digest_sha256",
+        "accepting_stopped",
+        "inflight_drained",
+        "inflight_count",
+        "iat",
+        "nbf",
+        "exp"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "iss": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "aud": {
+          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+        },
+        "sub": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "jti": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "directive_jti": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "restore_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "restore_epoch": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "coordination_revision": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "workload_id": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "workload_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "workload_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "credential_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "ack_key_kid": {
+          "$ref": "#/$defs/boundedIdentity"
+        },
+        "ack_key_generation": {
+          "$ref": "#/$defs/positiveRevision"
+        },
+        "ack_key_thumbprint_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "role_credential_digest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "served_snapshot_digest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "accepting_stopped": {
+          "const": true
+        },
+        "inflight_drained": {
+          "const": true
+        },
+        "inflight_count": {
+          "const": 0
+        },
+        "iat": {
+          "type": "integer"
+        },
+        "nbf": {
+          "type": "integer"
+        },
+        "exp": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

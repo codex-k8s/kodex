@@ -1,0 +1,689 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-snapshot.schema.json",
+  "title": "Подписанный JWKS и machine policy snapshot MatterCodex",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "source_revision",
+    "key_set_revision",
+    "policy_revision",
+    "signer_generation",
+    "published_at",
+    "valid_from",
+    "valid_until",
+    "predecessor",
+    "history",
+    "issuers",
+    "policy"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "source_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "key_set_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "policy_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "signer_generation": {
+      "$ref": "#/$defs/revision"
+    },
+    "published_at": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "valid_from": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "valid_until": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "predecessor": {
+      "$ref": "#/$defs/predecessor"
+    },
+    "history": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/revisionDigest"
+      }
+    },
+    "issuers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/issuerKeySet"
+      }
+    },
+    "policy": {
+      "$ref": "#/$defs/policy"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "unixTime": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 253402300799
+    },
+    "workloadId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "spiffeId": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 512,
+      "pattern": "^spiffe://[a-z0-9.-]+(?:/[A-Za-z0-9._~-]+)+$"
+    },
+    "audience": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 125,
+      "pattern": "^urn:mattercodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "authorityProofAudience": {
+      "type": "string",
+      "minLength": 49,
+      "maxLength": 142,
+      "pattern": "^urn:mattercodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "producerId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$"
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$"
+    },
+    "permission": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$"
+    },
+    "fullMethod": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 256,
+      "pattern": "^/[A-Za-z][A-Za-z0-9_.]{0,190}/[A-Za-z][A-Za-z0-9_]{0,62}$"
+    },
+    "tlsServerName": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 253,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"
+    },
+    "trustBundleId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]{1,94}[a-z0-9])$"
+    },
+    "kid": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]{1,62}[a-z0-9])$"
+    },
+    "base64urlCoordinate": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 43,
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "revisionDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "digest_sha256"
+      ],
+      "properties": {
+        "revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "digest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "predecessor": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/revisionDigest"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "revision",
+            "digest_sha256"
+          ],
+          "properties": {
+            "revision": {
+              "const": 0
+            },
+            "digest_sha256": {
+              "const": "0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        }
+      ]
+    },
+    "jwk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kty",
+        "crv",
+        "use",
+        "key_ops",
+        "alg",
+        "kid",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "kty": {
+          "const": "EC"
+        },
+        "crv": {
+          "const": "P-256"
+        },
+        "use": {
+          "const": "sig"
+        },
+        "key_ops": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "verify"
+            }
+          ],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "alg": {
+          "const": "ES256"
+        },
+        "kid": {
+          "$ref": "#/$defs/kid"
+        },
+        "x": {
+          "$ref": "#/$defs/base64urlCoordinate"
+        },
+        "y": {
+          "$ref": "#/$defs/base64urlCoordinate"
+        }
+      }
+    },
+    "keyEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "generation",
+        "purpose",
+        "audiences",
+        "not_before",
+        "not_after",
+        "jwk"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "CURRENT",
+            "NEXT",
+            "PREVIOUS"
+          ]
+        },
+        "generation": {
+          "$ref": "#/$defs/revision"
+        },
+        "purpose": {
+          "const": "AUTHORIZATION_CONTEXT"
+        },
+        "audiences": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/audience"
+          }
+        },
+        "not_before": {
+          "$ref": "#/$defs/unixTime"
+        },
+        "not_after": {
+          "$ref": "#/$defs/unixTime"
+        },
+        "jwk": {
+          "$ref": "#/$defs/jwk"
+        }
+      }
+    },
+    "issuerKeySet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "workload_id",
+        "keys"
+      ],
+      "properties": {
+        "issuer": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "keys": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/keyEntry"
+          },
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "CURRENT"
+                  }
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "NEXT"
+                  }
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "PREVIOUS"
+                  }
+                }
+              },
+              "minContains": 0,
+              "maxContains": 1
+            }
+          ]
+        }
+      }
+    },
+    "localPeer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uid",
+        "primary_gid",
+        "shared_fs_gid"
+      ],
+      "properties": {
+        "uid": {
+          "const": 10001
+        },
+        "primary_gid": {
+          "const": 10001
+        },
+        "shared_fs_gid": {
+          "const": 29000
+        }
+      }
+    },
+    "operationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation_id",
+        "caller_workload_id",
+        "caller_spiffe_id",
+        "issuer",
+        "target_workload_id",
+        "target_spiffe_id",
+        "audience",
+        "full_method",
+        "target_tls_server_name",
+        "target_trust_bundle_id",
+        "permission",
+        "authority_proof_producer_id",
+        "authority_sources",
+        "project_required",
+        "local_caller",
+        "local_target"
+      ],
+      "properties": {
+        "operation_id": {
+          "$ref": "#/$defs/operationId"
+        },
+        "caller_workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "caller_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "issuer": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "target_workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "target_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "audience": {
+          "$ref": "#/$defs/audience"
+        },
+        "full_method": {
+          "$ref": "#/$defs/fullMethod"
+        },
+        "target_tls_server_name": {
+          "$ref": "#/$defs/tlsServerName"
+        },
+        "target_trust_bundle_id": {
+          "$ref": "#/$defs/trustBundleId"
+        },
+        "permission": {
+          "$ref": "#/$defs/permission"
+        },
+        "authority_proof_producer_id": {
+          "$ref": "#/$defs/producerId"
+        },
+        "authority_sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "OIDC_SESSION",
+              "MATTERMOST_EVENT",
+              "DOMAIN_STATE",
+              "AGENT_SESSION",
+              "PROCESS_RUN",
+              "AUTOMATION_OCCURRENCE"
+            ]
+          }
+        },
+        "project_required": {
+          "type": "boolean"
+        },
+        "local_caller": {
+          "$ref": "#/$defs/localPeer"
+        },
+        "local_target": {
+          "$ref": "#/$defs/localPeer"
+        }
+      }
+    },
+    "authorityProofProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "producer_id",
+        "caller_workload_id",
+        "caller_spiffe_id",
+        "owner_workload_id",
+        "owner_spiffe_id",
+        "full_method",
+        "tls_server_name",
+        "transport_trust_bundle_id",
+        "application_credential",
+        "application_credential_metadata",
+        "application_credential_issuer",
+        "application_credential_audience",
+        "application_credential_trust_bundle_id",
+        "authority_proof_issuer",
+        "authority_proof_audience",
+        "authority_proof_trust_bundle_id",
+        "authority_proof_max_age_seconds",
+        "deadline_milliseconds",
+        "max_attempts",
+        "retryable_grpc_codes",
+        "idempotency_scope",
+        "authority_sources",
+        "allowed_operation_ids",
+        "server_resolved_fields"
+      ],
+      "properties": {
+        "producer_id": {
+          "$ref": "#/$defs/producerId"
+        },
+        "caller_workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "caller_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "owner_workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "owner_spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "full_method": {
+          "const": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof"
+        },
+        "tls_server_name": {
+          "$ref": "#/$defs/tlsServerName"
+        },
+        "transport_trust_bundle_id": {
+          "$ref": "#/$defs/trustBundleId"
+        },
+        "application_credential": {
+          "enum": [
+            "OIDC_BEARER",
+            "MATTERMOST_SIGNED_EVENT",
+            "AGENT_SESSION_GRANT",
+            "PROCESS_RUN_GRANT",
+            "AUTOMATION_OCCURRENCE_GRANT"
+          ]
+        },
+        "application_credential_metadata": {
+          "const": "authorization"
+        },
+        "application_credential_issuer": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 512,
+          "pattern": "^https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?:/[A-Za-z0-9._~-]+)*$"
+        },
+        "application_credential_audience": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9._:-]{1,126}[A-Za-z0-9])$"
+        },
+        "application_credential_trust_bundle_id": {
+          "$ref": "#/$defs/trustBundleId"
+        },
+        "authority_proof_issuer": {
+          "$ref": "#/$defs/spiffeId"
+        },
+        "authority_proof_audience": {
+          "$ref": "#/$defs/authorityProofAudience"
+        },
+        "authority_proof_trust_bundle_id": {
+          "$ref": "#/$defs/trustBundleId"
+        },
+        "authority_proof_max_age_seconds": {
+          "const": 15
+        },
+        "deadline_milliseconds": {
+          "const": 2000
+        },
+        "max_attempts": {
+          "const": 2
+        },
+        "retryable_grpc_codes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "UNAVAILABLE"
+            },
+            {
+              "const": "DEADLINE_EXCEEDED"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "idempotency_scope": {
+          "const": "credential-subject-digest+caller-workload+operation+idempotency-key"
+        },
+        "authority_sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "OIDC_SESSION",
+              "MATTERMOST_EVENT",
+              "DOMAIN_STATE",
+              "AGENT_SESSION",
+              "PROCESS_RUN",
+              "AUTOMATION_OCCURRENCE"
+            ]
+          }
+        },
+        "allowed_operation_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/operationId"
+          }
+        },
+        "server_resolved_fields": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "actor"
+            },
+            {
+              "const": "tenant"
+            },
+            {
+              "const": "project"
+            },
+            {
+              "const": "ownership"
+            },
+            {
+              "const": "provenance"
+            }
+          ],
+          "items": false,
+          "minItems": 5,
+          "maxItems": 5
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trust_domain",
+        "default_decision",
+        "token_ttl_seconds",
+        "allowed_clock_skew_seconds",
+        "max_compact_jws_bytes",
+        "authority_proof_producers",
+        "operation_bindings"
+      ],
+      "properties": {
+        "trust_domain": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 255,
+          "pattern": "^[a-z0-9](?:[a-z0-9.-]{1,253}[a-z0-9])$"
+        },
+        "default_decision": {
+          "const": "DENY"
+        },
+        "token_ttl_seconds": {
+          "const": 30
+        },
+        "allowed_clock_skew_seconds": {
+          "const": 5
+        },
+        "max_compact_jws_bytes": {
+          "const": 8192
+        },
+        "authority_proof_producers": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/authorityProofProducer"
+          }
+        },
+        "operation_bindings": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/operationBinding"
+          }
+        }
+      }
+    }
+  }
+}

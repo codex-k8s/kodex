@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/authorization-context.schema.json",
+  "title": "Контекст авторизации внутреннего RPC MatterCodex",
+  "$comment": "authority переносится только из криптографически проверенного authority proof; request issuer не задает actor, tenant, project или provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "iss",
+    "aud",
+    "sub",
+    "caller",
+    "target",
+    "rpc",
+    "operation_id",
+    "authority",
+    "permission",
+    "jti",
+    "iat",
+    "nbf",
+    "exp",
+    "replay_mode",
+    "source_revision",
+    "source_digest_sha256",
+    "key_set_revision",
+    "policy_revision",
+    "signer_generation"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "iss": {
+      "$ref": "#/$defs/spiffeId"
+    },
+    "aud": {
+      "$ref": "#/$defs/audience"
+    },
+    "sub": {
+      "$ref": "#/$defs/spiffeId"
+    },
+    "caller": {
+      "$ref": "#/$defs/workload"
+    },
+    "target": {
+      "$ref": "#/$defs/workload"
+    },
+    "rpc": {
+      "$ref": "#/$defs/fullMethod"
+    },
+    "operation_id": {
+      "$ref": "#/$defs/operationId"
+    },
+    "authority": {
+      "$ref": "#/$defs/authority"
+    },
+    "permission": {
+      "$ref": "#/$defs/permission"
+    },
+    "jti": {
+      "$ref": "#/$defs/uuid"
+    },
+    "iat": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "nbf": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "exp": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "replay_mode": {
+      "const": "ONE_TIME"
+    },
+    "source_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "source_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "key_set_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "policy_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "signer_generation": {
+      "$ref": "#/$defs/revision"
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "unixTime": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 253402300799
+    },
+    "spiffeId": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 512,
+      "pattern": "^spiffe://[a-z0-9.-]+(?:/[A-Za-z0-9._~-]+)+$"
+    },
+    "workloadId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "audience": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 125,
+      "pattern": "^urn:mattercodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "fullMethod": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 256,
+      "pattern": "^/[A-Za-z][A-Za-z0-9_.]{0,190}/[A-Za-z][A-Za-z0-9_]{0,62}$"
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$"
+    },
+    "permission": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$"
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workload_id",
+        "spiffe_id"
+      ],
+      "properties": {
+        "workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "reference",
+        "revision",
+        "digest_sha256"
+      ],
+      "properties": {
+        "source": {
+          "$comment": "Нормативное отображение Proto AuthoritySource задано CONTRACT-MC-004; prefixed enum.String() запрещен",
+          "enum": [
+            "OIDC_SESSION",
+            "MATTERMOST_EVENT",
+            "DOMAIN_STATE",
+            "AGENT_SESSION",
+            "PROCESS_RUN",
+            "AUTOMATION_OCCURRENCE"
+          ]
+        },
+        "reference": {
+          "$ref": "#/$defs/uuid"
+        },
+        "revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "digest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "provenance"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_kind",
+        "actor",
+        "tenant"
+      ],
+      "properties": {
+        "actor_kind": {
+          "$comment": "Нормативное отображение Proto ActorKind задано CONTRACT-MC-004; prefixed enum.String() запрещен",
+          "enum": [
+            "HUMAN",
+            "AGENT",
+            "SERVICE",
+            "AUTOMATION"
+          ]
+        },
+        "actor": {
+          "$ref": "#/$defs/identity"
+        },
+        "tenant": {
+          "$ref": "#/$defs/identity"
+        },
+        "project": {
+          "$ref": "#/$defs/identity"
+        }
+      }
+    }
+  }
+}

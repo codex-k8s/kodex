@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/jws-protected-header.schema.json",
+  "title": "Защищенный JWS header внутреннего RPC MatterCodex",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "alg",
+    "crit",
+    "kid",
+    "mcxv",
+    "typ"
+  ],
+  "properties": {
+    "alg": {
+      "const": "ES256"
+    },
+    "crit": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "mcxv"
+        }
+      ],
+      "items": false,
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "kid": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]{1,62}[a-z0-9])$"
+    },
+    "mcxv": {
+      "const": 1
+    },
+    "typ": {
+      "enum": [
+        "mattercodex-internal-rpc-auth+jws",
+        "mattercodex-internal-rpc-authority-proof+jws",
+        "mattercodex-internal-rpc-readback-attestation+jws",
+        "mattercodex-internal-rpc-readback-credential+jws",
+        "mattercodex-internal-rpc-readback-credential-trust+jws",
+        "mattercodex-internal-rpc-readback-manifest-root+jws",
+        "mattercodex-internal-rpc-restore-ack+jws",
+        "mattercodex-internal-rpc-restore-role-delivery-receipt+jws",
+        "mattercodex-internal-rpc-restore-directive+jws",
+        "mattercodex-internal-rpc-restore-evidence+jws",
+        "mattercodex-internal-rpc-restore-role-issuance+jws",
+        "mattercodex-internal-rpc-restore-role-credential+jws",
+        "mattercodex-internal-rpc-restore-role-trust+jws",
+        "mattercodex-internal-rpc-snapshot+jws"
+      ]
+    }
+  }
+}

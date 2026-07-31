@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-proof.schema.json",
+  "title": "Авторитетное доказательство actor/tenant/project MatterCodex",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "iss",
+    "aud",
+    "caller",
+    "operation_id",
+    "authorization_context_audience",
+    "authority",
+    "proof_revision",
+    "signer_generation",
+    "jti",
+    "iat",
+    "nbf",
+    "exp"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "iss": {
+      "$ref": "#/$defs/spiffeId"
+    },
+    "aud": {
+      "$ref": "#/$defs/proofAudience"
+    },
+    "caller": {
+      "$ref": "#/$defs/workload"
+    },
+    "operation_id": {
+      "$ref": "#/$defs/operationId"
+    },
+    "authorization_context_audience": {
+      "$ref": "#/$defs/contextAudience"
+    },
+    "authority": {
+      "$ref": "#/$defs/authority"
+    },
+    "proof_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "signer_generation": {
+      "$ref": "#/$defs/revision"
+    },
+    "jti": {
+      "$ref": "#/$defs/uuid"
+    },
+    "iat": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "nbf": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "exp": {
+      "$ref": "#/$defs/unixTime"
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "unixTime": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 253402300799
+    },
+    "spiffeId": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 512,
+      "pattern": "^spiffe://[a-z0-9.-]+(?:/[A-Za-z0-9._~-]+)+$"
+    },
+    "workloadId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "proofAudience": {
+      "type": "string",
+      "minLength": 49,
+      "maxLength": 142,
+      "pattern": "^urn:mattercodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "contextAudience": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 125,
+      "pattern": "^urn:mattercodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$"
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workload_id",
+        "spiffe_id"
+      ],
+      "properties": {
+        "workload_id": {
+          "$ref": "#/$defs/workloadId"
+        },
+        "spiffe_id": {
+          "$ref": "#/$defs/spiffeId"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "reference",
+        "revision",
+        "digest_sha256"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "OIDC_SESSION",
+            "MATTERMOST_EVENT",
+            "DOMAIN_STATE",
+            "AGENT_SESSION",
+            "PROCESS_RUN",
+            "AUTOMATION_OCCURRENCE"
+          ]
+        },
+        "reference": {
+          "$ref": "#/$defs/uuid"
+        },
+        "revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "digest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "provenance"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_kind",
+        "actor",
+        "tenant"
+      ],
+      "properties": {
+        "actor_kind": {
+          "enum": [
+            "HUMAN",
+            "AGENT",
+            "SERVICE",
+            "AUTOMATION"
+          ]
+        },
+        "actor": {
+          "$ref": "#/$defs/identity"
+        },
+        "tenant": {
+          "$ref": "#/$defs/identity"
+        },
+        "project": {
+          "$ref": "#/$defs/identity"
+        }
+      }
+    }
+  }
+}

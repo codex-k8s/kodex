@@ -1,0 +1,244 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: internal-rpc-authority-readback-attestor
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: internal-rpc-authority-readback-attestor
+data:
+  INTERNAL_RPC_AUTHORITY_READBACK_LISTEN: ":8443"
+  INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN: ":9090"
+  INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+  INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER: ira_readback_attestor_g3
+  INTERNAL_RPC_AUTHORITY_READBACK_VERIFIER_GENERATION: "1"
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.observability.svc:4317
+  OTEL_EXPORTER_OTLP_TLS_SERVER_NAME: otel-collector.observability.svc.cluster.local
+  OTEL_EXPORTER_OTLP_CA_FILE: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+  SENTRY_DSN_FILE: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn
+  SENTRY_EXPECTED_HOST: sentry-relay.observability.svc:8443
+  INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_BUNDLE_JWS_FILE: /var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root.jws
+  INTERNAL_RPC_AUTHORITY_READBACK_CREDENTIAL_TRUST_JWS_FILE: /var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust.jws
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: internal-rpc-authority-readback-attestor-postgresql-connection
+data:
+  dsn: "postgresql://internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: internal-rpc-authority-readback-attestor
+  labels:
+    app.kubernetes.io/name: internal-rpc-authority-readback-attestor
+    app.kubernetes.io/component: readback-attestor
+spec:
+  replicas: 2
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: internal-rpc-authority-readback-attestor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: internal-rpc-authority-readback-attestor
+        app.kubernetes.io/component: readback-attestor
+    spec:
+      serviceAccountName: internal-rpc-authority-readback-attestor
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 29004
+        runAsGroup: 29004
+        fsGroup: 29004
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: readback-attestor
+          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/local/bin/internal-rpc-authority-readback-attestor
+          envFrom:
+            - configMapRef:
+                name: internal-rpc-authority-readback-attestor
+          env:
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['mattercodex.dev/environment']
+            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
+              value: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor/database/dsn
+            - name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE
+              value: /var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls/tls.crt
+            - name: INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE
+              value: /var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls/tls.key
+            - name: INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE
+              value: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor/client-ca.pem
+          ports:
+            - name: grpc-mtls
+              containerPort: 8443
+            - name: technical
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: technical
+            timeoutSeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: technical
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: database-g3
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/g3
+              readOnly: true
+            - name: database-g4
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/g4
+              readOnly: true
+            - name: database-g5
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/g5
+              readOnly: true
+            - name: database-connection
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor/database
+              readOnly: true
+            - name: postgresql-ca
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql
+              readOnly: true
+            - name: server-tls
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls
+              readOnly: true
+            - name: client-ca
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor
+              readOnly: true
+            - name: readback-trust
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback
+              readOnly: true
+            - name: observability
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability
+              readOnly: true
+            - name: sentry-dsn
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: database-g3
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-readback-database-g3
+        - name: database-g4
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-readback-database-g4
+        - name: database-g5
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-readback-database-g5
+        - name: database-connection
+          configMap:
+            name: internal-rpc-authority-readback-attestor-postgresql-connection
+            defaultMode: 0440
+        - name: postgresql-ca
+          configMap:
+            name: internal-rpc-authority-postgresql-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
+        - name: server-tls
+          secret:
+            secretName: internal-rpc-authority-readback-attestor-tls
+            defaultMode: 0440
+        - name: client-ca
+          configMap:
+            name: internal-rpc-authority-readback-attestor-client-ca
+            defaultMode: 0440
+        - name: readback-trust
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-readback-trust
+        - name: observability
+          configMap:
+            name: internal-rpc-authority-otel-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: otel-ca.pem
+        - name: sentry-dsn
+          secret:
+            secretName: internal-rpc-authority-sentry
+            defaultMode: 0440
+            items:
+              - key: dsn
+                path: sentry-dsn
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: internal-rpc-authority-readback-attestor
+spec:
+  selector:
+    app.kubernetes.io/name: internal-rpc-authority-readback-attestor
+  ports:
+    - name: grpc-mtls
+      port: 8443
+      targetPort: grpc-mtls
+    - name: technical
+      port: 9090
+      targetPort: technical
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: internal-rpc-authority-readback-attestor
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: internal-rpc-authority-readback-attestor

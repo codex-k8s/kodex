@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: internal-rpc-authority-migrate
+  labels:
+    app.kubernetes.io/name: internal-rpc-authority
+    app.kubernetes.io/component: migrator
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: internal-rpc-authority
+        app.kubernetes.io/component: migrator
+    spec:
+      restartPolicy: Never
+      serviceAccountName: internal-rpc-authority-migrator
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 29006
+        runAsGroup: 29006
+        fsGroup: 29006
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command:
+            - /usr/local/bin/internal-rpc-authority-cli
+            - migrate
+            - expand
+          env:
+            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
+              value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
+            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME
+              value: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: postgresql-credentials
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres
+              readOnly: true
+            - name: postgresql-ca
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: postgresql-credentials
+          secret:
+            secretName: internal-rpc-authority-migrator-postgresql
+            defaultMode: 0440
+            items:
+              - key: dsn
+                path: dsn
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: postgresql-ca
+          configMap:
+            name: internal-rpc-authority-postgresql-ca
+            defaultMode: 0440

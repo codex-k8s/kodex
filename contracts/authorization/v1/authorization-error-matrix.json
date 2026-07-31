@@ -1,0 +1,383 @@
+{
+  "v": 1,
+  "errors": [
+    {
+      "reason": "MALFORMED_REQUEST",
+      "grpc_code": "INVALID_ARGUMENT",
+      "stage": "REQUEST",
+      "retryable": false,
+      "message": "malformed authorization request"
+    },
+    {
+      "reason": "UDS_PEER_REJECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "UDS",
+      "retryable": false,
+      "message": "authorization UDS peer rejected"
+    },
+    {
+      "reason": "UDS_ENDPOINT_INVALID",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "UDS",
+      "retryable": false,
+      "message": "authorization UDS endpoint invalid"
+    },
+    {
+      "reason": "OPERATION_NOT_ALLOWED",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "POLICY",
+      "retryable": false,
+      "message": "authorization operation not allowed"
+    },
+    {
+      "reason": "AUTHORITY_PROVENANCE_REJECTED",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "POLICY",
+      "retryable": false,
+      "message": "authority provenance rejected"
+    },
+    {
+      "reason": "MALFORMED_JWS",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "JWS_HEADER",
+      "retryable": false,
+      "message": "malformed authorization JWS"
+    },
+    {
+      "reason": "INVALID_PROTECTED_HEADER",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "JWS_HEADER",
+      "retryable": false,
+      "message": "invalid authorization protected header"
+    },
+    {
+      "reason": "INVALID_SIGNATURE",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "JWS_SIGNATURE",
+      "retryable": false,
+      "message": "invalid authorization signature"
+    },
+    {
+      "reason": "UNKNOWN_KEY",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "JWS_SIGNATURE",
+      "retryable": false,
+      "message": "authorization key not accepted"
+    },
+    {
+      "reason": "ISSUER_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "CLAIMS",
+      "retryable": false,
+      "message": "authorization issuer mismatch"
+    },
+    {
+      "reason": "AUDIENCE_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "CLAIMS",
+      "retryable": false,
+      "message": "authorization audience mismatch"
+    },
+    {
+      "reason": "CALLER_WORKLOAD_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "CLAIMS",
+      "retryable": false,
+      "message": "authorization caller workload mismatch"
+    },
+    {
+      "reason": "TARGET_WORKLOAD_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "CLAIMS",
+      "retryable": false,
+      "message": "authorization target workload mismatch"
+    },
+    {
+      "reason": "RPC_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "CLAIMS",
+      "retryable": false,
+      "message": "authorization RPC mismatch"
+    },
+    {
+      "reason": "PERMISSION_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "CLAIMS",
+      "retryable": false,
+      "message": "authorization permission mismatch"
+    },
+    {
+      "reason": "TOKEN_EXPIRED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "CLAIMS",
+      "retryable": false,
+      "message": "authorization context expired"
+    },
+    {
+      "reason": "TOKEN_NOT_YET_VALID",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "CLAIMS",
+      "retryable": false,
+      "message": "authorization context not yet valid"
+    },
+    {
+      "reason": "TOKEN_TTL_EXCEEDED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "CLAIMS",
+      "retryable": false,
+      "message": "authorization context lifetime invalid"
+    },
+    {
+      "reason": "REPLAY_DETECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "REPLAY",
+      "retryable": false,
+      "message": "authorization context replay detected"
+    },
+    {
+      "reason": "MTLS_REQUIRED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "MTLS_BINDING",
+      "retryable": false,
+      "message": "verified mTLS peer required"
+    },
+    {
+      "reason": "MTLS_PEER_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "MTLS_BINDING",
+      "retryable": false,
+      "message": "mTLS peer mismatch"
+    },
+    {
+      "reason": "POLICY_REVISION_REJECTED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "POLICY",
+      "retryable": false,
+      "message": "authorization policy revision rejected"
+    },
+    {
+      "reason": "SNAPSHOT_ROLLBACK",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "SNAPSHOT",
+      "retryable": false,
+      "message": "authorization snapshot rollback rejected"
+    },
+    {
+      "reason": "SNAPSHOT_MUTATION",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "SNAPSHOT",
+      "retryable": false,
+      "message": "authorization snapshot mutation rejected"
+    },
+    {
+      "reason": "SNAPSHOT_HISTORY_GAP",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "SNAPSHOT",
+      "retryable": false,
+      "message": "authorization snapshot history gap"
+    },
+    {
+      "reason": "PERSISTENCE_UNAVAILABLE",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "PERSISTENCE",
+      "retryable": true,
+      "message": "authorization persistence unavailable"
+    },
+    {
+      "reason": "SNAPSHOT_UNAVAILABLE",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "SNAPSHOT",
+      "retryable": true,
+      "message": "authorization snapshot unavailable"
+    },
+    {
+      "reason": "READBACK_MISMATCH",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "SNAPSHOT",
+      "retryable": true,
+      "message": "authorization readback mismatch"
+    },
+    {
+      "reason": "INTERNAL",
+      "grpc_code": "INTERNAL",
+      "stage": "INTERNAL",
+      "retryable": false,
+      "message": "internal authorization failure"
+    },
+    {
+      "reason": "AUTHORIZATION_CONTEXT_REQUIRED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "REQUEST",
+      "retryable": false,
+      "message": "authorization context required"
+    },
+    {
+      "reason": "AUTHORITY_PROOF_REQUIRED",
+      "grpc_code": "INVALID_ARGUMENT",
+      "stage": "AUTHORITY_PROOF",
+      "retryable": false,
+      "message": "authority proof required"
+    },
+    {
+      "reason": "AUTHORITY_PROOF_INVALID",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "AUTHORITY_PROOF",
+      "retryable": false,
+      "message": "authority proof invalid"
+    },
+    {
+      "reason": "AUTHORITY_PROOF_BINDING_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "AUTHORITY_PROOF",
+      "retryable": false,
+      "message": "authority proof binding mismatch"
+    },
+    {
+      "reason": "AUTHORITY_PROOF_EXPIRED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "AUTHORITY_PROOF",
+      "retryable": false,
+      "message": "authority proof expired"
+    },
+    {
+      "reason": "AUTHORITY_PROOF_REVISION_REJECTED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "AUTHORITY_PROOF",
+      "retryable": false,
+      "message": "authority proof revision rejected"
+    },
+    {
+      "reason": "AUTHORITY_PROOF_REPLAY_DETECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "AUTHORITY_PROOF",
+      "retryable": false,
+      "message": "authority proof replay detected"
+    },
+    {
+      "reason": "AUTHORITY_PROOF_UNAVAILABLE",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "AUTHORITY_PROOF",
+      "retryable": true,
+      "message": "authority proof verification unavailable"
+    },
+    {
+      "reason": "APPLICATION_CREDENTIAL_INVALID",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "application credential invalid"
+    },
+    {
+      "reason": "AUTHORITY_SCOPE_MISMATCH",
+      "grpc_code": "PERMISSION_DENIED",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "authority scope mismatch"
+    },
+    {
+      "reason": "IDEMPOTENCY_CONFLICT",
+      "grpc_code": "ALREADY_EXISTS",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "authority resolution idempotency conflict"
+    },
+    {
+      "reason": "RESTORE_BARRIER_INCOMPLETE",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore quarantine barrier incomplete"
+    },
+    {
+      "reason": "RESTORE_ANCHOR_REJECTED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore semantic anchor rejected"
+    },
+    {
+      "reason": "RESTORE_CONTROLLER_UNAVAILABLE",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "RESTORE",
+      "retryable": true,
+      "message": "restore controller unavailable"
+    },
+    {
+      "reason": "AUTHORITY_RESOURCE_NOT_FOUND",
+      "grpc_code": "NOT_FOUND",
+      "stage": "AUTHORITY_RESOLUTION",
+      "retryable": false,
+      "message": "authority resource not found"
+    },
+    {
+      "reason": "RESTORE_ROLE_CREDENTIAL_REJECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore role credential rejected"
+    },
+    {
+      "reason": "RESTORE_DIRECTIVE_REJECTED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore directive rejected"
+    },
+    {
+      "reason": "RESTORE_ACK_REPLAY_DETECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore acknowledgement replay detected"
+    },
+    {
+      "reason": "RESTORE_COORDINATION_UNAVAILABLE",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "RESTORE",
+      "retryable": true,
+      "message": "restore coordination unavailable"
+    },
+    {
+      "reason": "RESTORE_ACK_RECEIPT_EXPIRED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "RESTORE",
+      "retryable": false,
+      "message": "restore acknowledgement receipt expired"
+    },
+    {
+      "reason": "READBACK_CREDENTIAL_REJECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "SNAPSHOT",
+      "retryable": false,
+      "message": "readback credential rejected"
+    },
+    {
+      "reason": "READBACK_CHALLENGE_REJECTED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "SNAPSHOT",
+      "retryable": false,
+      "message": "readback attestation challenge rejected"
+    },
+    {
+      "reason": "READBACK_CHALLENGE_REPLAY_DETECTED",
+      "grpc_code": "UNAUTHENTICATED",
+      "stage": "REPLAY",
+      "retryable": false,
+      "message": "readback attestation challenge replay detected"
+    },
+    {
+      "reason": "READBACK_CHALLENGE_UNAVAILABLE",
+      "grpc_code": "UNAVAILABLE",
+      "stage": "PERSISTENCE",
+      "retryable": true,
+      "message": "readback attestation challenge unavailable"
+    },
+    {
+      "reason": "READBACK_RECEIPT_EXPIRED",
+      "grpc_code": "FAILED_PRECONDITION",
+      "stage": "SNAPSHOT",
+      "retryable": false,
+      "message": "readback attestation receipt expired"
+    }
+  ]
+}

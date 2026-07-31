@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-manifest-trust-bundle.schema.json",
+  "title": "Подписанный набор authority snapshot manifest signers",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "root_id",
+    "root_generation",
+    "purpose",
+    "aud",
+    "bundle_revision",
+    "bundle_digest_sha256",
+    "predecessor",
+    "history",
+    "keys",
+    "published_at",
+    "valid_until"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "root_id": {
+      "const": "internal-rpc-authority-manifest-root-v1"
+    },
+    "root_generation": {
+      "$ref": "#/$defs/revision"
+    },
+    "purpose": {
+      "const": "AUTHORITY_SNAPSHOT_MANIFEST_VERIFICATION"
+    },
+    "aud": {
+      "const": "urn:mattercodex:internal-rpc-authority:manifest-bundle"
+    },
+    "bundle_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "bundle_digest_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "predecessor": {
+      "$ref": "#/$defs/revisionDigest"
+    },
+    "history": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/revisionDigest"
+      }
+    },
+    "keys": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/key"
+      }
+    },
+    "published_at": {
+      "$ref": "#/$defs/unixTime"
+    },
+    "valid_until": {
+      "$ref": "#/$defs/unixTime"
+    }
+  },
+  "$defs": {
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "kid": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "unixTime": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 253402300799
+    },
+    "revisionDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "digest_sha256"
+      ],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "digest_sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "publicJwk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kty",
+        "crv",
+        "use",
+        "key_ops",
+        "alg",
+        "kid",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "kty": {
+          "const": "EC"
+        },
+        "crv": {
+          "const": "P-256"
+        },
+        "use": {
+          "const": "sig"
+        },
+        "key_ops": {
+          "const": [
+            "verify"
+          ]
+        },
+        "alg": {
+          "const": "ES256"
+        },
+        "kid": {
+          "$ref": "#/$defs/kid"
+        },
+        "x": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "y": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        }
+      }
+    },
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "generation",
+        "kid",
+        "public_jwk",
+        "jwk_thumbprint_sha256",
+        "not_before",
+        "not_after"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "CURRENT",
+            "NEXT",
+            "PREVIOUS"
+          ]
+        },
+        "generation": {
+          "$ref": "#/$defs/revision"
+        },
+        "kid": {
+          "$ref": "#/$defs/kid"
+        },
+        "public_jwk": {
+          "$ref": "#/$defs/publicJwk"
+        },
+        "jwk_thumbprint_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "not_before": {
+          "$ref": "#/$defs/unixTime"
+        },
+        "not_after": {
+          "$ref": "#/$defs/unixTime"
+        }
+      }
+    }
+  }
+}
