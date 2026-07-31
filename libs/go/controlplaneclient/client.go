@@ -1,4 +1,5 @@
-// Package controlplaneclient собирает exact producer proof, local issuer и mTLS client.
+// Package controlplaneclient собирает точное доказательство производителя,
+// использует локальный issuer и устанавливает mTLS-соединение с control-plane.
 package controlplaneclient
 
 import (

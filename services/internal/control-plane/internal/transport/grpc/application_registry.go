@@ -8,7 +8,8 @@ import (
 	authoritytype "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/authority"
 )
 
-// ApplicationRegistry выбирает verifier только по exact verified mTLS peer.
+// ApplicationRegistry выбирает проверяющий компонент только по точному
+// подтверждённому mTLS-узлу.
 type ApplicationRegistry struct {
 	authenticators []ApplicationAuthenticator
 }

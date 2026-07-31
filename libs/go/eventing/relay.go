@@ -4,31 +4,32 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
-// Publisher отправляет неизменяемый envelope и проверяет broker contract.
+// Publisher отправляет неизменяемый конверт и проверяет контракт брокера.
 type Publisher interface {
 	Publish(context.Context, Envelope) (PublishReceipt, error)
 	Check(context.Context) error
 	Close() error
 }
 
-// PublishReceipt подтверждает durable broker admission exact event.
+// PublishReceipt хранит устойчивое подтверждение брокером точного события.
 type PublishReceipt struct {
 	Stream    string
 	Sequence  uint64
 	Duplicate bool
 }
 
-// ClaimedEvent связывает событие с server-owned lease token.
+// ClaimedEvent связывает событие с назначенным сервером токеном аренды.
 type ClaimedEvent struct {
 	Envelope   Envelope
 	LeaseToken string
 	Attempts   uint32
 }
 
-// OutboxStore — узкий порт durable PostgreSQL outbox для relay.
+// OutboxStore — узкий порт устойчивого журнала исходящих событий PostgreSQL.
 type OutboxStore interface {
 	Check(context.Context) error
 	Claim(context.Context, string, int, time.Duration) ([]ClaimedEvent, error)
@@ -36,7 +37,7 @@ type OutboxStore interface {
 	MarkFailed(context.Context, string, string, bool, time.Duration) error
 }
 
-// RelayConfig задаёт bounded delivery lifecycle.
+// RelayConfig задаёт ограниченный жизненный цикл доставки.
 type RelayConfig struct {
 	InstanceID      string
 	BatchSize       int
@@ -54,6 +55,15 @@ type Relay struct {
 	config    RelayConfig
 	store     OutboxStore
 	publisher Publisher
+	claimed   atomic.Uint64
+	published atomic.Uint64
+	failed    atomic.Uint64
+}
+
+type RelayStats struct {
+	Claimed   uint64
+	Published uint64
+	Failed    uint64
 }
 
 // NewRelay проверяет конфигурацию и зависимости.
@@ -72,7 +82,7 @@ func NewRelay(config RelayConfig, store OutboxStore, publisher Publisher) (*Rela
 	return &Relay{config: config, store: store, publisher: publisher}, nil
 }
 
-// Check проверяет PostgreSQL outbox и exact broker contract.
+// Check проверяет журнал исходящих событий PostgreSQL и точный контракт брокера.
 func (relay *Relay) Check(ctx context.Context) error {
 	if err := relay.store.Check(ctx); err != nil {
 		return fmt.Errorf("check outbox: %w", err)
@@ -83,7 +93,7 @@ func (relay *Relay) Check(ctx context.Context) error {
 	return nil
 }
 
-// Run выполняет bounded claim/publish/finalize до отмены lifecycle.
+// Run ограниченно получает, публикует и завершает события до отмены жизненного цикла.
 func (relay *Relay) Run(lifecycle, finalizeParent context.Context) error {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -110,6 +120,7 @@ func (relay *Relay) cycle(lifecycle, finalizeParent context.Context) error {
 	if err != nil {
 		return fmt.Errorf("claim outbox: %w", err)
 	}
+	relay.claimed.Add(uint64(len(claimed)))
 	for _, item := range claimed {
 		publishCtx, cancelPublish := context.WithTimeout(lifecycle, relay.config.PublishTimeout)
 		publishReceipt, publishErr := relay.publisher.Publish(
@@ -129,6 +140,9 @@ func (relay *Relay) cycle(lifecycle, finalizeParent context.Context) error {
 				item.LeaseToken,
 				publishReceipt,
 			)
+			if err == nil {
+				relay.published.Add(1)
+			}
 		} else {
 			err = relay.store.MarkFailed(
 				finalizeCtx,
@@ -137,6 +151,9 @@ func (relay *Relay) cycle(lifecycle, finalizeParent context.Context) error {
 				true,
 				relay.backoff(item.Attempts),
 			)
+			if err == nil {
+				relay.failed.Add(1)
+			}
 		}
 		cancelFinalize()
 		if err != nil {
@@ -144,6 +161,14 @@ func (relay *Relay) cycle(lifecycle, finalizeParent context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (relay *Relay) Stats() RelayStats {
+	return RelayStats{
+		Claimed:   relay.claimed.Load(),
+		Published: relay.published.Load(),
+		Failed:    relay.failed.Load(),
+	}
 }
 
 func (relay *Relay) backoff(attempts uint32) time.Duration {

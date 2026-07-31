@@ -1,4 +1,4 @@
-// Package policy загружает versioned producer policy control-plane.
+// Package policy загружает версионированную политику производителей control-plane.
 package policy
 
 import (
@@ -18,7 +18,7 @@ const (
 	resolverFullMethod = "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof"
 )
 
-// Producer — exact server-owned application credential producer.
+// Producer — точный назначенный сервером производитель прикладных полномочий.
 type Producer struct {
 	ID                 string
 	CallerWorkload     string
@@ -30,7 +30,7 @@ type Producer struct {
 	ProofAudience      string
 }
 
-// Loaded содержит все зарегистрированные server-owned proof producers.
+// Loaded содержит всех зарегистрированных сервером производителей доказательств.
 type Loaded struct {
 	Revision                     uint64
 	Digest                       string
@@ -83,7 +83,7 @@ type binding struct {
 	ProjectRequired bool   `json:"project_required"`
 }
 
-// Load связывает каждую operation ровно с одним exact proof producer.
+// Load связывает каждую операцию ровно с одним точным производителем доказательств.
 func Load(path string, expected map[string]string) (Loaded, error) {
 	raw, err := readBounded(path)
 	if err != nil {

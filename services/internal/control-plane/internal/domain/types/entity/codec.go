@@ -27,7 +27,8 @@ type storedResource struct {
 	UpdatedAt      time.Time       `json:"updatedAt"`
 }
 
-// MarshalSnapshot кодирует каноническую service-owned projection без interface metadata.
+// MarshalSnapshot кодирует каноническую принадлежащую сервису проекцию без
+// метаданных интерфейса.
 func MarshalSnapshot(resource Resource) ([]byte, error) {
 	if err := resource.Validate(); err != nil {
 		return nil, err
@@ -52,7 +53,7 @@ func MarshalSnapshot(resource Resource) ([]byte, error) {
 	})
 }
 
-// UnmarshalSnapshot отклоняет неизвестные поля и семантически неверную projection.
+// UnmarshalSnapshot отклоняет неизвестные поля и семантически неверную проекцию.
 func UnmarshalSnapshot(raw []byte) (Resource, error) {
 	var stored storedResource
 	if err := decodeStrict(raw, &stored); err != nil {
@@ -79,7 +80,7 @@ func UnmarshalSnapshot(raw []byte) (Resource, error) {
 	return resource, resource.Validate()
 }
 
-// ProjectionSHA256 связывает immutable reference с точной projection.
+// ProjectionSHA256 связывает неизменяемую ссылку с точной проекцией.
 func ProjectionSHA256(resource Resource) (string, error) {
 	raw, err := MarshalSnapshot(resource)
 	if err != nil {
@@ -89,7 +90,7 @@ func ProjectionSHA256(resource Resource) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
-// MarshalSpec кодирует только предварительно проверенный закрытый spec.
+// MarshalSpec кодирует только предварительно проверенную закрытую спецификацию.
 func MarshalSpec(spec Spec) ([]byte, error) {
 	if spec == nil || spec.Validate() != nil {
 		return nil, errors.New("resource specification is invalid")
@@ -101,7 +102,8 @@ func MarshalSpec(spec Spec) ([]byte, error) {
 	return raw, nil
 }
 
-// UnmarshalSpec выбирает target только по server-owned kind и отклоняет расширения.
+// UnmarshalSpec выбирает целевой тип только по назначенному сервером виду и
+// отклоняет расширения.
 func UnmarshalSpec(kind enum.Kind, raw []byte) (Spec, error) {
 	var target Spec
 	switch kind {

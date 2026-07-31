@@ -1,4 +1,4 @@
-// Package proofsigner задаёт client port authority-proof signer.
+// Package proofsigner задаёт клиентский порт подписания доказательств полномочий.
 package proofsigner
 
 import (
@@ -7,7 +7,7 @@ import (
 	authoritytype "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/authority"
 )
 
-// State фиксирует проверенную served identity signer.
+// State фиксирует проверенную обслуживаемую идентичность подписывающего компонента.
 type State struct {
 	TrustRevision    uint64
 	TrustDigest      string
@@ -15,7 +15,7 @@ type State struct {
 	PublicThumbprint string
 }
 
-// Signer подписывает canonical claims ключом, independently verified при startup.
+// Signer подписывает канонические запросы ключом, независимо проверенным при запуске.
 type Signer interface {
 	Sign(context.Context, authoritytype.ProofClaims) (string, string, State, error)
 	Check(context.Context) (State, error)

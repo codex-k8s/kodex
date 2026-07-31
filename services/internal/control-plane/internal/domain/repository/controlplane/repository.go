@@ -1,4 +1,4 @@
-// Package controlplane задаёт доменный persistence port полного control-plane.
+// Package controlplane задаёт доменный порт хранения полного control-plane.
 package controlplane
 
 import (
@@ -11,14 +11,14 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 )
 
-// Scope — проверенная domain identity для одной PostgreSQL transaction.
+// Scope — проверенная доменная идентичность для одной транзакции PostgreSQL.
 type Scope struct {
 	OrganizationID string
 	ProjectID      string
 	ActorID        string
 }
 
-// Receipt хранит persisted result одной semantic command.
+// Receipt хранит устойчивый результат одной семантической команды.
 type Receipt struct {
 	OrganizationID string
 	ProjectID      string
@@ -30,7 +30,7 @@ type Receipt struct {
 	CreatedAt      time.Time
 }
 
-// Audit хранит безопасную атрибуцию state change.
+// Audit хранит безопасную атрибуцию изменения состояния.
 type Audit struct {
 	ID              string
 	OrganizationID  string
@@ -46,7 +46,7 @@ type Audit struct {
 	OccurredAt      time.Time
 }
 
-// TurnLease защищает одну runtime attempt.
+// TurnLease защищает одну попытку выполнения хода.
 type TurnLease struct {
 	TurnID              string
 	TokenHash           string
@@ -57,13 +57,13 @@ type TurnLease struct {
 	Fence               uint64
 }
 
-// ExpiredTurn связывает claimed aggregate с устаревшей lease под одной блокировкой.
+// ExpiredTurn связывает полученный агрегат с истёкшей арендой под одной блокировкой.
 type ExpiredTurn struct {
 	Turn  entity.Resource
 	Lease TurnLease
 }
 
-// ScheduleOccurrence — server-owned unique due occurrence.
+// ScheduleOccurrence — назначенный сервером уникальный запуск расписания.
 type ScheduleOccurrence struct {
 	ID                   string
 	ScheduleID           string
@@ -100,7 +100,7 @@ type ScheduleOccurrence struct {
 	UpdatedAt            time.Time
 }
 
-// TurnAttempt сохраняет immutable lineage каждой runtime lease.
+// TurnAttempt сохраняет неизменяемую родословную каждой аренды выполнения.
 type TurnAttempt struct {
 	TurnID              string
 	Attempt             uint32
@@ -114,7 +114,7 @@ type TurnAttempt struct {
 	Outcome             string
 }
 
-// Tombstone — безопасный authoritative read удалённого агрегата.
+// Tombstone — безопасное авторитетное представление удалённого агрегата.
 type Tombstone struct {
 	ResourceID       string
 	Kind             enum.Kind
@@ -123,7 +123,7 @@ type Tombstone struct {
 	DeletedAt        time.Time
 }
 
-// Diagnostics содержит только bounded safe operational counters.
+// Diagnostics содержит только ограниченные безопасные операционные счётчики.
 type Diagnostics struct {
 	SchemaVersion              uint64
 	PendingOutboxEvents        uint64
@@ -135,7 +135,7 @@ type Diagnostics struct {
 	RuntimePrincipalGeneration uint64
 }
 
-// MemoryProjection — локальная перестраиваемая pgvector projection.
+// MemoryProjection — локальная перестраиваемая проекция pgvector.
 type MemoryProjection struct {
 	ResourceID       string
 	OrganizationID   string
@@ -150,7 +150,8 @@ type MemoryProjection struct {
 	UpdatedAt        time.Time
 }
 
-// MemorySearch описывает bounded tenant/role-scoped FTS+optional vector query.
+// MemorySearch описывает ограниченный полнотекстовый поиск и необязательный
+// векторный запрос в области организации и роли.
 type MemorySearch struct {
 	OrganizationID      string
 	ProjectID           string
@@ -177,7 +178,7 @@ type MemorySearchHit struct {
 	VectorProjectionUsed bool
 }
 
-// Transaction выражает одну command transaction без утечки pgx.
+// Transaction выражает одну транзакцию команды без утечки pgx.
 type Transaction interface {
 	GetReceipt(context.Context, string, string, string) (Receipt, error)
 	SaveReceipt(context.Context, Receipt) error
@@ -190,8 +191,8 @@ type Transaction interface {
 	ActorRoleIDs(context.Context, string, string, string) ([]string, error)
 	ListSnapshotResources(context.Context, string, string) ([]entity.Resource, error)
 	LatestRuntimeRevision(context.Context, string, string) (entity.Resource, error)
-	ExpiredClaimedTurns(context.Context, string, string, int, time.Time) ([]ExpiredTurn, error)
-	NextQueuedTurn(context.Context, string, string) (entity.Resource, error)
+	ExpiredClaimedTurns(context.Context, string, string, string, int, time.Time) ([]ExpiredTurn, error)
+	NextQueuedTurn(context.Context, string, string, string) (entity.Resource, error)
 	SaveTurnLease(context.Context, TurnLease) error
 	RenewTurnLease(context.Context, TurnLease, time.Time) (TurnLease, error)
 	ValidateTurnLease(
@@ -230,9 +231,10 @@ type Transaction interface {
 	SaveMemoryProjection(context.Context, MemoryProjection) error
 	SearchMemory(context.Context, MemorySearch) ([]MemorySearchHit, error)
 	HasActiveChildProcesses(context.Context, string, string, string) (bool, error)
+	NextOwnerGateDelivery(context.Context, string, string, time.Time) (entity.Resource, error)
 }
 
-// Repository — PostgreSQL authoritative boundary.
+// Repository — авторитетная граница PostgreSQL.
 type Repository interface {
 	Transact(context.Context, Scope, func(Transaction) error) error
 	Get(context.Context, string, string, string, enum.Kind) (entity.Resource, error)

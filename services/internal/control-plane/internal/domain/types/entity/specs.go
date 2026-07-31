@@ -24,35 +24,116 @@ type Spec interface {
 	Validate() error
 }
 
+// ConfigurationOwnership фиксирует единственный UI либо Git источник истины.
+type ConfigurationOwnership struct {
+	ManagedBy      string `json:"managedBy"`
+	SourceRef      string `json:"sourceRef,omitempty"`
+	SourceRevision uint64 `json:"sourceRevision,omitempty"`
+}
+
+func (ownership ConfigurationOwnership) Validate() error {
+	switch ownership.ManagedBy {
+	case "UI":
+		if ownership.SourceRef != "" || ownership.SourceRevision != 0 {
+			return errors.New("UI configuration ownership is invalid")
+		}
+	case "GIT":
+		if !validExternalRef(ownership.SourceRef) ||
+			ownership.SourceRevision == 0 {
+			return errors.New("Git configuration ownership is invalid")
+		}
+	default:
+		return errors.New("configuration ownership is invalid")
+	}
+	return nil
+}
+
+// ConfiguredSpec — управляемая из UI либо Git конфигурация.
+type ConfiguredSpec interface {
+	Spec
+	ConfigurationOwnership() ConfigurationOwnership
+}
+
+// WithConfigurationOwnership возвращает копию только поддерживаемой конфигурации.
+func WithConfigurationOwnership(
+	spec Spec,
+	ownership ConfigurationOwnership,
+) (Spec, error) {
+	if ownership.Validate() != nil {
+		return nil, errors.New("configuration ownership is invalid")
+	}
+	switch value := spec.(type) {
+	case ProjectSpec:
+		value.Ownership = ownership
+		return value, nil
+	case TeamSpec:
+		value.Ownership = ownership
+		return value, nil
+	case ChatSpec:
+		value.Ownership = ownership
+		return value, nil
+	case RoleSpec:
+		value.Ownership = ownership
+		return value, nil
+	case PromptProfileSpec:
+		value.Ownership = ownership
+		return value, nil
+	case CredentialBindingSpec:
+		value.Ownership = ownership
+		return value, nil
+	case RepositoryWorkspaceSpec:
+		value.Ownership = ownership
+		return value, nil
+	case IntegrationSpec:
+		value.Ownership = ownership
+		return value, nil
+	case ScheduleSpec:
+		value.Ownership = ownership
+		return value, nil
+	default:
+		return nil, errors.New("resource is not managed configuration")
+	}
+}
+
 type ProjectSpec struct {
-	Slug        string `json:"slug"`
-	Description string `json:"description"`
-	Locale      string `json:"locale"`
+	Slug        string                 `json:"slug"`
+	Description string                 `json:"description"`
+	Locale      string                 `json:"locale"`
+	Ownership   ConfigurationOwnership `json:"ownership"`
 }
 
 func (ProjectSpec) Kind() enum.Kind { return enum.KindProject }
+func (spec ProjectSpec) ConfigurationOwnership() ConfigurationOwnership {
+	return spec.Ownership
+}
 func (spec ProjectSpec) Validate() error {
 	if value.ValidateStableKey(spec.Slug) != nil ||
 		len(spec.Description) > 4096 ||
-		(spec.Locale != "ru" && spec.Locale != "en") {
+		(spec.Locale != "ru" && spec.Locale != "en") ||
+		spec.Ownership.Validate() != nil {
 		return errors.New("project specification is invalid")
 	}
 	return nil
 }
 
 type TeamSpec struct {
-	StableKey       string   `json:"stableKey"`
-	ExternalTeamRef string   `json:"externalTeamRef"`
-	MemberActorIDs  []string `json:"memberActorIds"`
-	RoleIDs         []string `json:"roleIds"`
+	StableKey       string                 `json:"stableKey"`
+	ExternalTeamRef string                 `json:"externalTeamRef"`
+	MemberActorIDs  []string               `json:"memberActorIds"`
+	RoleIDs         []string               `json:"roleIds"`
+	Ownership       ConfigurationOwnership `json:"ownership"`
 }
 
 func (TeamSpec) Kind() enum.Kind { return enum.KindTeam }
+func (spec TeamSpec) ConfigurationOwnership() ConfigurationOwnership {
+	return spec.Ownership
+}
 func (spec TeamSpec) Validate() error {
 	if value.ValidateStableKey(spec.StableKey) != nil ||
 		!validExternalRef(spec.ExternalTeamRef) ||
 		len(spec.MemberActorIDs) > 1000 ||
-		len(spec.RoleIDs) < 1 || len(spec.RoleIDs) > 64 {
+		len(spec.RoleIDs) < 1 || len(spec.RoleIDs) > 64 ||
+		spec.Ownership.Validate() != nil {
 		return errors.New("team specification is invalid")
 	}
 	if !validUniqueIDs(spec.MemberActorIDs) || !validUniqueIDs(spec.RoleIDs) {
@@ -62,20 +143,25 @@ func (spec TeamSpec) Validate() error {
 }
 
 type ChatSpec struct {
-	StableKey          string `json:"stableKey"`
-	RoomType           string `json:"roomType"`
-	DefaultAgentID     string `json:"defaultAgentId,omitempty"`
-	ExternalChannelRef string `json:"externalChannelRef"`
-	WorkPolicy         string `json:"workPolicy"`
+	StableKey          string                 `json:"stableKey"`
+	RoomType           string                 `json:"roomType"`
+	DefaultAgentID     string                 `json:"defaultAgentId,omitempty"`
+	ExternalChannelRef string                 `json:"externalChannelRef"`
+	WorkPolicy         string                 `json:"workPolicy"`
+	Ownership          ConfigurationOwnership `json:"ownership"`
 }
 
 func (ChatSpec) Kind() enum.Kind { return enum.KindChat }
+func (spec ChatSpec) ConfigurationOwnership() ConfigurationOwnership {
+	return spec.Ownership
+}
 func (spec ChatSpec) Validate() error {
 	if value.ValidateStableKey(spec.StableKey) != nil ||
 		(spec.RoomType != "USER" && spec.RoomType != "COORDINATION" &&
 			spec.RoomType != "WORK_CONTROL" && spec.RoomType != "RUNS") ||
 		!validExternalRef(spec.ExternalChannelRef) ||
-		len(spec.WorkPolicy) > 8192 {
+		len(spec.WorkPolicy) > 8192 ||
+		spec.Ownership.Validate() != nil {
 		return errors.New("chat specification is invalid")
 	}
 	if spec.DefaultAgentID != "" && value.ValidateID(spec.DefaultAgentID) != nil {
@@ -85,16 +171,20 @@ func (spec ChatSpec) Validate() error {
 }
 
 type RoleSpec struct {
-	StableKey                    string   `json:"stableKey"`
-	Capabilities                 []string `json:"capabilities"`
-	AllowedTargetRoleIDs         []string `json:"allowedTargetRoleIds"`
-	PromptProfileID              string   `json:"promptProfileId"`
-	ProviderCredentialBindingIDs []string `json:"providerCredentialBindingIds"`
-	RepositoryWorkspaceIDs       []string `json:"repositoryWorkspaceIds"`
-	IntegrationIDs               []string `json:"integrationIds"`
+	StableKey                    string                 `json:"stableKey"`
+	Capabilities                 []string               `json:"capabilities"`
+	AllowedTargetRoleIDs         []string               `json:"allowedTargetRoleIds"`
+	PromptProfileID              string                 `json:"promptProfileId"`
+	ProviderCredentialBindingIDs []string               `json:"providerCredentialBindingIds"`
+	RepositoryWorkspaceIDs       []string               `json:"repositoryWorkspaceIds"`
+	IntegrationIDs               []string               `json:"integrationIds"`
+	Ownership                    ConfigurationOwnership `json:"ownership"`
 }
 
 func (RoleSpec) Kind() enum.Kind { return enum.KindRole }
+func (spec RoleSpec) ConfigurationOwnership() ConfigurationOwnership {
+	return spec.Ownership
+}
 func (spec RoleSpec) Validate() error {
 	if value.ValidateStableKey(spec.StableKey) != nil ||
 		value.ValidateID(spec.PromptProfileID) != nil ||
@@ -103,7 +193,8 @@ func (spec RoleSpec) Validate() error {
 		len(spec.ProviderCredentialBindingIDs) < 1 ||
 		len(spec.ProviderCredentialBindingIDs) > 8 ||
 		len(spec.RepositoryWorkspaceIDs) > 32 ||
-		len(spec.IntegrationIDs) > 32 {
+		len(spec.IntegrationIDs) > 32 ||
+		spec.Ownership.Validate() != nil {
 		return errors.New("role specification is invalid")
 	}
 	for _, identifiers := range [][]string{
@@ -120,51 +211,65 @@ func (spec RoleSpec) Validate() error {
 }
 
 type PromptProfileSpec struct {
-	Revision      uint64 `json:"revision"`
-	ContentSHA256 string `json:"contentSha256"`
-	SourceRef     string `json:"sourceRef"`
-	Locale        string `json:"locale"`
+	Revision      uint64                 `json:"revision"`
+	ContentSHA256 string                 `json:"contentSha256"`
+	SourceRef     string                 `json:"sourceRef"`
+	Locale        string                 `json:"locale"`
+	Ownership     ConfigurationOwnership `json:"ownership"`
 }
 
 func (PromptProfileSpec) Kind() enum.Kind { return enum.KindPromptProfile }
+func (spec PromptProfileSpec) ConfigurationOwnership() ConfigurationOwnership {
+	return spec.Ownership
+}
 func (spec PromptProfileSpec) Validate() error {
 	if spec.Revision == 0 || !validSHA256(spec.ContentSHA256) ||
 		!validExternalRef(spec.SourceRef) ||
-		(spec.Locale != "ru" && spec.Locale != "en") {
+		(spec.Locale != "ru" && spec.Locale != "en") ||
+		spec.Ownership.Validate() != nil {
 		return errors.New("prompt profile specification is invalid")
 	}
 	return nil
 }
 
 type CredentialBindingSpec struct {
-	Purpose      string    `json:"purpose"`
-	SecretRef    string    `json:"secretRef"`
-	PrincipalRef string    `json:"principalRef"`
-	Revision     uint64    `json:"revision"`
-	ExpiresAt    time.Time `json:"expiresAt,omitempty"`
+	Purpose      string                 `json:"purpose"`
+	SecretRef    string                 `json:"secretRef"`
+	PrincipalRef string                 `json:"principalRef"`
+	Revision     uint64                 `json:"revision"`
+	ExpiresAt    time.Time              `json:"expiresAt,omitempty"`
+	Ownership    ConfigurationOwnership `json:"ownership"`
 }
 
 func (CredentialBindingSpec) Kind() enum.Kind { return enum.KindCredentialBinding }
+func (spec CredentialBindingSpec) ConfigurationOwnership() ConfigurationOwnership {
+	return spec.Ownership
+}
 func (spec CredentialBindingSpec) Validate() error {
 	if value.ValidateStableKey(spec.Purpose) != nil ||
 		!validSecretRef(spec.SecretRef) ||
 		!validExternalRef(spec.PrincipalRef) ||
-		spec.Revision == 0 {
+		spec.Revision == 0 || spec.Ownership.Validate() != nil {
 		return errors.New("credential binding specification is invalid")
 	}
 	return nil
 }
 
 type RepositoryWorkspaceSpec struct {
-	RepositoryRef       string `json:"repositoryRef"`
-	WorkspaceMode       string `json:"workspaceMode"`
-	DefaultBranch       string `json:"defaultBranch"`
-	CredentialBindingID string `json:"credentialBindingId,omitempty"`
+	RepositoryRef       string                 `json:"repositoryRef"`
+	WorkspaceMode       string                 `json:"workspaceMode"`
+	DefaultBranch       string                 `json:"defaultBranch"`
+	CredentialBindingID string                 `json:"credentialBindingId,omitempty"`
+	Ownership           ConfigurationOwnership `json:"ownership"`
 }
 
 func (RepositoryWorkspaceSpec) Kind() enum.Kind { return enum.KindRepositoryWorkspace }
+func (spec RepositoryWorkspaceSpec) ConfigurationOwnership() ConfigurationOwnership {
+	return spec.Ownership
+}
 func (spec RepositoryWorkspaceSpec) Validate() error {
-	if spec.WorkspaceMode != "NONE" && spec.WorkspaceMode != "GIT" {
+	if (spec.WorkspaceMode != "NONE" && spec.WorkspaceMode != "GIT") ||
+		spec.Ownership.Validate() != nil {
 		return errors.New("repository workspace mode is invalid")
 	}
 	if spec.WorkspaceMode == "GIT" {
@@ -183,20 +288,25 @@ func (spec RepositoryWorkspaceSpec) Validate() error {
 }
 
 type IntegrationSpec struct {
-	DefinitionRef        string   `json:"definitionRef"`
-	DefinitionVersion    uint64   `json:"definitionVersion"`
-	Capabilities         []string `json:"capabilities"`
-	CredentialBindingIDs []string `json:"credentialBindingIds"`
-	EndpointRef          string   `json:"endpointRef"`
+	DefinitionRef        string                 `json:"definitionRef"`
+	DefinitionVersion    uint64                 `json:"definitionVersion"`
+	Capabilities         []string               `json:"capabilities"`
+	CredentialBindingIDs []string               `json:"credentialBindingIds"`
+	EndpointRef          string                 `json:"endpointRef"`
+	Ownership            ConfigurationOwnership `json:"ownership"`
 }
 
 func (IntegrationSpec) Kind() enum.Kind { return enum.KindIntegration }
+func (spec IntegrationSpec) ConfigurationOwnership() ConfigurationOwnership {
+	return spec.Ownership
+}
 func (spec IntegrationSpec) Validate() error {
 	if !validExternalRef(spec.DefinitionRef) || spec.DefinitionVersion == 0 ||
 		!validBoundedKeys(spec.Capabilities, 128) ||
 		len(spec.CredentialBindingIDs) > 32 ||
 		!validUniqueIDs(spec.CredentialBindingIDs) ||
-		!validExternalRef(spec.EndpointRef) {
+		!validExternalRef(spec.EndpointRef) ||
+		spec.Ownership.Validate() != nil {
 		return errors.New("integration specification is invalid")
 	}
 	for _, identifier := range spec.CredentialBindingIDs {
@@ -364,6 +474,8 @@ type ProcessRunSpec struct {
 	LaunchingProcessRunID string `json:"launchingProcessRunId,omitempty"`
 	LaunchingTurnID       string `json:"launchingTurnId,omitempty"`
 	LaunchingAttempt      uint32 `json:"launchingAttempt,omitempty"`
+	ScheduleID            string `json:"scheduleId,omitempty"`
+	OccurrenceID          string `json:"occurrenceId,omitempty"`
 }
 
 func (ProcessRunSpec) Kind() enum.Kind { return enum.KindProcessRun }
@@ -383,6 +495,8 @@ func (spec ProcessRunSpec) Validate() error {
 		spec.ResultArtifactID,
 		spec.LaunchingProcessRunID,
 		spec.LaunchingTurnID,
+		spec.ScheduleID,
+		spec.OccurrenceID,
 	} {
 		if identifier != "" && value.ValidateID(identifier) != nil {
 			return errors.New("process run binding is invalid")
@@ -398,42 +512,57 @@ func (spec ProcessRunSpec) Validate() error {
 		spec.LaunchingAttempt > 100 {
 		return errors.New("child process launching edge is invalid")
 	}
+	if (spec.ScheduleID == "") != (spec.OccurrenceID == "") {
+		return errors.New("process schedule lineage is incomplete")
+	}
+	if spec.OccurrenceID != "" &&
+		spec.RootTriggerRef != "schedule-occurrence:"+spec.OccurrenceID {
+		return errors.New("process occurrence lineage is invalid")
+	}
 	return nil
 }
 
 type ScheduleSpec struct {
-	TargetResourceID         string        `json:"targetResourceId"`
-	TargetKind               enum.Kind     `json:"targetKind"`
-	TargetVersion            uint64        `json:"targetVersion"`
-	EffectiveInputSHA        string        `json:"effectiveInputSha256"`
-	Cron                     string        `json:"cron,omitempty"`
-	Interval                 time.Duration `json:"interval,omitempty"`
-	Timezone                 string        `json:"timezone"`
-	Calendar                 string        `json:"calendar"`
-	OverlapPolicy            string        `json:"overlapPolicy"`
-	MisfirePolicy            string        `json:"misfirePolicy"`
-	MisfireGrace             time.Duration `json:"misfireGrace"`
-	NextRunAt                time.Time     `json:"nextRunAt"`
-	DeliveryPolicy           string        `json:"deliveryPolicy"`
-	MaximumAttempts          uint32        `json:"maximumAttempts"`
-	InitialBackoff           time.Duration `json:"initialBackoff"`
-	MaximumBackoff           time.Duration `json:"maximumBackoff"`
-	DeadLetterAfter          time.Duration `json:"deadLetterAfter"`
-	PromptProfileID          string        `json:"promptProfileId"`
-	PromptRevision           uint64        `json:"promptRevision"`
-	SessionPolicy            string        `json:"sessionPolicy"`
-	RoomID                   string        `json:"roomId,omitempty"`
-	NotificationPolicy       string        `json:"notificationPolicy"`
-	MaximumExecutionDuration time.Duration `json:"maximumExecutionDuration"`
-	Coalesce                 bool          `json:"coalesce"`
-	RuntimeRevisionID        string        `json:"runtimeRevisionId"`
+	TargetResourceID         string                 `json:"targetResourceId"`
+	TargetKind               enum.Kind              `json:"targetKind"`
+	TargetVersion            uint64                 `json:"targetVersion"`
+	EffectiveInputSHA        string                 `json:"effectiveInputSha256"`
+	Cron                     string                 `json:"cron,omitempty"`
+	Interval                 time.Duration          `json:"interval,omitempty"`
+	Timezone                 string                 `json:"timezone"`
+	Calendar                 string                 `json:"calendar"`
+	OverlapPolicy            string                 `json:"overlapPolicy"`
+	MisfirePolicy            string                 `json:"misfirePolicy"`
+	MisfireGrace             time.Duration          `json:"misfireGrace"`
+	NextRunAt                time.Time              `json:"nextRunAt"`
+	DeliveryPolicy           string                 `json:"deliveryPolicy"`
+	MaximumAttempts          uint32                 `json:"maximumAttempts"`
+	InitialBackoff           time.Duration          `json:"initialBackoff"`
+	MaximumBackoff           time.Duration          `json:"maximumBackoff"`
+	DeadLetterAfter          time.Duration          `json:"deadLetterAfter"`
+	PromptProfileID          string                 `json:"promptProfileId"`
+	PromptRevision           uint64                 `json:"promptRevision"`
+	SessionPolicy            string                 `json:"sessionPolicy"`
+	RoomID                   string                 `json:"roomId,omitempty"`
+	NotificationPolicy       string                 `json:"notificationPolicy"`
+	MaximumExecutionDuration time.Duration          `json:"maximumExecutionDuration"`
+	Coalesce                 bool                   `json:"coalesce"`
+	RuntimeRevisionID        string                 `json:"runtimeRevisionId"`
+	TargetType               string                 `json:"targetType"`
+	PlaybookRef              string                 `json:"playbookRef,omitempty"`
+	PlaybookVersion          uint64                 `json:"playbookVersion,omitempty"`
+	PromptArtifactID         string                 `json:"promptArtifactId"`
+	ExecutionSessionID       string                 `json:"executionSessionId,omitempty"`
+	Ownership                ConfigurationOwnership `json:"ownership"`
 }
 
 func (ScheduleSpec) Kind() enum.Kind { return enum.KindSchedule }
+func (spec ScheduleSpec) ConfigurationOwnership() ConfigurationOwnership {
+	return spec.Ownership
+}
 func (spec ScheduleSpec) Validate() error {
 	if value.ValidateID(spec.TargetResourceID) != nil ||
-		(spec.TargetKind != enum.KindRole &&
-			spec.TargetKind != enum.KindPromptProfile) ||
+		spec.TargetKind != enum.KindRole ||
 		spec.TargetVersion == 0 || !validSHA256(spec.EffectiveInputSHA) ||
 		value.ValidateID(spec.PromptProfileID) != nil ||
 		spec.PromptRevision == 0 ||
@@ -448,6 +577,8 @@ func (spec ScheduleSpec) Validate() error {
 		spec.MaximumExecutionDuration < time.Minute ||
 		spec.MaximumExecutionDuration > 24*time.Hour ||
 		value.ValidateID(spec.RuntimeRevisionID) != nil ||
+		(spec.TargetType != "AGENT" && spec.TargetType != "PLAYBOOK") ||
+		value.ValidateID(spec.PromptArtifactID) != nil ||
 		(spec.Cron == "") == (spec.Interval == 0) ||
 		len(spec.Cron) > 128 ||
 		(spec.Interval != 0 && (spec.Interval < time.Minute || spec.Interval > 365*24*time.Hour)) ||
@@ -464,11 +595,26 @@ func (spec ScheduleSpec) Validate() error {
 		spec.MaximumBackoff < spec.InitialBackoff ||
 		spec.MaximumBackoff > 24*time.Hour ||
 		spec.DeadLetterAfter < spec.MaximumBackoff ||
-		spec.DeadLetterAfter > 30*24*time.Hour {
+		spec.DeadLetterAfter > 30*24*time.Hour ||
+		spec.Ownership.Validate() != nil {
 		return errors.New("schedule specification is invalid")
 	}
 	if spec.OverlapPolicy == "QUEUE" && spec.Coalesce {
 		return errors.New("schedule queue policy cannot coalesce")
+	}
+	if spec.TargetType == "PLAYBOOK" {
+		if !validExternalRef(spec.PlaybookRef) || spec.PlaybookVersion == 0 {
+			return errors.New("schedule playbook target is invalid")
+		}
+	} else if spec.PlaybookRef != "" || spec.PlaybookVersion != 0 {
+		return errors.New("schedule agent target is invalid")
+	}
+	if spec.SessionPolicy == "NEW" {
+		if spec.ExecutionSessionID != "" {
+			return errors.New("new schedule session binding is invalid")
+		}
+	} else if value.ValidateID(spec.ExecutionSessionID) != nil {
+		return errors.New("persistent schedule session binding is invalid")
 	}
 	if spec.OverlapPolicy != "QUEUE" && !spec.Coalesce {
 		return errors.New("schedule overlap policy requires coalesce")
@@ -503,10 +649,13 @@ type OwnerGateSpec struct {
 	DeliveryPayloadSHA256    string    `json:"deliveryPayloadSha256"`
 	DeliveryClaimTokenSHA256 string    `json:"deliveryClaimTokenSha256,omitempty"`
 	DeliveryFence            uint64    `json:"deliveryFence,omitempty"`
+	DeliveryClaimExpiresAt   time.Time `json:"deliveryClaimExpiresAt,omitempty"`
 	MattermostPostID         string    `json:"mattermostPostId,omitempty"`
 	MattermostChannelID      string    `json:"mattermostChannelId,omitempty"`
 	MattermostRootPostID     string    `json:"mattermostRootPostId,omitempty"`
 	DeliveredAt              time.Time `json:"deliveredAt,omitempty"`
+	ScheduleID               string    `json:"scheduleId,omitempty"`
+	OccurrenceID             string    `json:"occurrenceId,omitempty"`
 }
 
 func (OwnerGateSpec) Kind() enum.Kind { return enum.KindOwnerGate }
@@ -526,6 +675,8 @@ func (spec OwnerGateSpec) Validate() error {
 		len(spec.DeliverySPIFFEID) > 512 ||
 		value.ValidateID(spec.DeliveryID) != nil ||
 		!validSHA256(spec.DeliveryPayloadSHA256) ||
+		(spec.ScheduleID != "" && value.ValidateID(spec.ScheduleID) != nil) ||
+		(spec.OccurrenceID != "" && value.ValidateID(spec.OccurrenceID) != nil) ||
 		(spec.Decision != "" && spec.Decision != "APPROVED" &&
 			spec.Decision != "REJECTED" &&
 			spec.Decision != "CHANGES_REQUESTED" &&
@@ -533,20 +684,29 @@ func (spec OwnerGateSpec) Validate() error {
 		len(spec.DecisionReason) > 2048 {
 		return errors.New("owner gate specification is invalid")
 	}
+	claimed := spec.DeliveryFence != 0 ||
+		spec.DeliveryClaimTokenSHA256 != "" ||
+		!spec.DeliveryClaimExpiresAt.IsZero()
+	if claimed && (spec.DeliveryFence == 0 ||
+		!validSHA256(spec.DeliveryClaimTokenSHA256) ||
+		spec.DeliveryClaimExpiresAt.IsZero()) {
+		return errors.New("owner gate delivery claim is invalid")
+	}
 	delivered := spec.MattermostPostID != "" || spec.MattermostChannelID != "" ||
-		spec.MattermostRootPostID != "" || !spec.DeliveredAt.IsZero() ||
-		spec.DeliveryFence != 0 || spec.DeliveryClaimTokenSHA256 != ""
+		spec.MattermostRootPostID != "" || !spec.DeliveredAt.IsZero()
 	if delivered {
 		if !validExternalRef(spec.MattermostPostID) ||
 			!validExternalRef(spec.MattermostChannelID) ||
 			!validExternalRef(spec.MattermostRootPostID) ||
-			spec.DeliveredAt.IsZero() || spec.DeliveryFence == 0 ||
-			!validSHA256(spec.DeliveryClaimTokenSHA256) {
+			spec.DeliveredAt.IsZero() || !claimed {
 			return errors.New("owner gate delivery receipt is invalid")
 		}
 	}
 	if (spec.Decision == "") != (spec.DecisionReason == "") {
 		return errors.New("owner gate decision is incomplete")
+	}
+	if (spec.ScheduleID == "") != (spec.OccurrenceID == "") {
+		return errors.New("owner gate schedule lineage is incomplete")
 	}
 	return nil
 }
@@ -583,16 +743,17 @@ func (spec MemoryRecordSpec) Validate() error {
 }
 
 type WorkClaimSpec struct {
-	ProcessRunID string    `json:"processRunId"`
-	TurnID       string    `json:"turnId"`
-	Summary      string    `json:"summary"`
-	Domains      []string  `json:"domains"`
-	ResourceKeys []string  `json:"resourceKeys"`
-	OwnerActorID string    `json:"ownerActorId"`
-	WorkloadID   string    `json:"workloadId"`
-	SessionID    string    `json:"sessionId"`
-	Attempt      uint32    `json:"attempt"`
-	ExpiresAt    time.Time `json:"expiresAt"`
+	ProcessRunID        string    `json:"processRunId"`
+	TurnID              string    `json:"turnId"`
+	Summary             string    `json:"summary"`
+	Domains             []string  `json:"domains"`
+	ResourceKeys        []string  `json:"resourceKeys"`
+	OwnerActorID        string    `json:"ownerActorId"`
+	WorkloadID          string    `json:"workloadId"`
+	SessionID           string    `json:"sessionId"`
+	Attempt             uint32    `json:"attempt"`
+	AuthorityGeneration uint64    `json:"authorityGeneration"`
+	ExpiresAt           time.Time `json:"expiresAt"`
 }
 
 func (WorkClaimSpec) Kind() enum.Kind { return enum.KindWorkClaim }
@@ -606,6 +767,7 @@ func (spec WorkClaimSpec) Validate() error {
 		value.ValidateStableKey(spec.WorkloadID) != nil ||
 		value.ValidateID(spec.SessionID) != nil ||
 		spec.Attempt == 0 || spec.Attempt > 100 ||
+		spec.AuthorityGeneration == 0 ||
 		spec.ExpiresAt.IsZero() {
 		return errors.New("work claim specification is invalid")
 	}

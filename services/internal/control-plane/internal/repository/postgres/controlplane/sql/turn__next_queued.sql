@@ -4,6 +4,7 @@ WITH candidate AS (
     FROM control_plane.resources AS queued
     WHERE queued.organization_id = @organization_id::uuid
       AND queued.project_id = @project_id::uuid
+      AND queued.id = @turn_id::uuid
       AND queued.kind = 'TURN'
       AND queued.state = 'QUEUED'
       AND NOT EXISTS (

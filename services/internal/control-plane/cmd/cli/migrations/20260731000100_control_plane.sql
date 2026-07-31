@@ -1,4 +1,7 @@
 -- +goose Up
+-- Базовая миграция только вперёд создаёт роли с минимальными полномочиями,
+-- авторитетную схему, RLS, идемпотентность, аудит, outbox и доменные ограничения.
+-- Порядок намеренно начинается с NOLOGIN-ролей и завершается явными GRANT.
 DO $roles$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'control_plane_owner') THEN
@@ -37,6 +40,8 @@ CREATE SEQUENCE control_plane.authority_proof_revision_seq
     MAXVALUE 9007199254740991
     NO CYCLE;
 
+-- Авторитетный универсальный конверт агрегатов. Ограничения JSON закрепляют
+-- закрытые виды, состояния, версии и серверное владение на уровне БД.
 CREATE TABLE control_plane.resources (
     id uuid PRIMARY KEY,
     organization_id uuid NOT NULL,
@@ -139,6 +144,8 @@ CREATE UNIQUE INDEX resources_artifact_storage_uidx
     )
     WHERE kind = 'ARTIFACT' AND state <> 'DELETED';
 
+-- Идемпотентность, аудит и журнал исходящих событий образуют атомарный след
+-- каждой команды.
 CREATE TABLE control_plane.command_receipts (
     organization_id uuid NOT NULL,
     project_id uuid,
@@ -215,6 +222,8 @@ CREATE INDEX outbox_events_claim_idx
     ON control_plane.outbox_events (available_at, occurred_at, event_id)
     WHERE published_at IS NULL AND terminal = false;
 
+-- Операционные таблицы хранят аренды ходов, запуски расписаний и эпохи кэша;
+-- PostgreSQL остаётся источником истины для всех этих границ.
 CREATE TABLE control_plane.turn_leases (
     turn_id uuid PRIMARY KEY,
     token_hash text NOT NULL CHECK (token_hash ~ '^[a-f0-9]{64}$'),
@@ -257,6 +266,8 @@ CREATE TABLE control_plane.cache_epochs (
     )
 );
 
+-- Индекс полномочий является производной серверной проекцией доменных ролей,
+-- а не данными, которые принимает транспорт от вызывающей стороны.
 CREATE TABLE control_plane.project_actor_permissions (
     organization_id uuid NOT NULL,
     project_id uuid NOT NULL,
@@ -284,6 +295,7 @@ CREATE TABLE control_plane.schema_state (
 INSERT INTO control_plane.schema_state (singleton, version, migrated_at)
 VALUES (true, 20260731000100, clock_timestamp());
 
+-- RLS включается и принудительно применяется ко всем таблицам организации.
 ALTER TABLE control_plane.resources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control_plane.resources FORCE ROW LEVEL SECURITY;
 ALTER TABLE control_plane.command_receipts ENABLE ROW LEVEL SECURITY;
@@ -301,6 +313,8 @@ ALTER TABLE control_plane.cache_epochs FORCE ROW LEVEL SECURITY;
 ALTER TABLE control_plane.project_actor_permissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control_plane.project_actor_permissions FORCE ROW LEVEL SECURITY;
 
+-- Начальные политики используют локальную для транзакции область; следующая
+-- миграция заменяет её подписанным контекстом, связанным с поколением LOGIN.
 CREATE POLICY resources_runtime_scope ON control_plane.resources
     FOR ALL TO control_plane_runtime
     USING (
@@ -504,6 +518,8 @@ CREATE POLICY project_actor_permissions_runtime_write
     );
 
 REVOKE ALL ON ALL TABLES IN SCHEMA control_plane FROM PUBLIC;
+-- Завершающие GRANT оставляют сервису и ретранслятору только минимально необходимые
+-- операции; владение схемой и DDL остаются у NOLOGIN control_plane_owner.
 GRANT SELECT, INSERT, UPDATE ON control_plane.resources TO control_plane_runtime;
 GRANT SELECT, INSERT ON control_plane.command_receipts TO control_plane_runtime;
 GRANT INSERT ON control_plane.audit_events TO control_plane_runtime;

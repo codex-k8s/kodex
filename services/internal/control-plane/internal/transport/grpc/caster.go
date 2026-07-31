@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -177,6 +178,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			Slug:        value.Project.GetSlug(),
 			Description: value.Project.GetDescription(),
 			Locale:      value.Project.GetLocale(),
+			Ownership:   configurationOwnershipFromProto(value.Project.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_Team:
 		return entity.TeamSpec{
@@ -184,6 +186,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ExternalTeamRef: value.Team.GetExternalTeamRef(),
 			MemberActorIDs:  value.Team.GetMemberActorIds(),
 			RoleIDs:         value.Team.GetRoleIds(),
+			Ownership:       configurationOwnershipFromProto(value.Team.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_Chat:
 		return entity.ChatSpec{
@@ -192,6 +195,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			DefaultAgentID:     value.Chat.GetDefaultAgentId(),
 			ExternalChannelRef: value.Chat.GetExternalChannelRef(),
 			WorkPolicy:         value.Chat.GetWorkPolicy(),
+			Ownership:          configurationOwnershipFromProto(value.Chat.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_Role:
 		return entity.RoleSpec{
@@ -202,6 +206,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ProviderCredentialBindingIDs: value.Role.GetProviderCredentialBindingIds(),
 			RepositoryWorkspaceIDs:       value.Role.GetRepositoryWorkspaceIds(),
 			IntegrationIDs:               value.Role.GetIntegrationIds(),
+			Ownership:                    configurationOwnershipFromProto(value.Role.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_PromptProfile:
 		return entity.PromptProfileSpec{
@@ -209,6 +214,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ContentSHA256: value.PromptProfile.GetContentSha256(),
 			SourceRef:     value.PromptProfile.GetSourceRef(),
 			Locale:        value.PromptProfile.GetLocale(),
+			Ownership:     configurationOwnershipFromProto(value.PromptProfile.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_CredentialBinding:
 		expiresAt, err := optionalTime(value.CredentialBinding.GetExpiresAt())
@@ -221,6 +227,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			PrincipalRef: value.CredentialBinding.GetPrincipalRef(),
 			Revision:     value.CredentialBinding.GetRevision(),
 			ExpiresAt:    expiresAt,
+			Ownership:    configurationOwnershipFromProto(value.CredentialBinding.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_RepositoryWorkspace:
 		return entity.RepositoryWorkspaceSpec{
@@ -228,6 +235,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			WorkspaceMode:       value.RepositoryWorkspace.GetWorkspaceMode(),
 			DefaultBranch:       value.RepositoryWorkspace.GetDefaultBranch(),
 			CredentialBindingID: value.RepositoryWorkspace.GetCredentialBindingId(),
+			Ownership:           configurationOwnershipFromProto(value.RepositoryWorkspace.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_Integration:
 		return entity.IntegrationSpec{
@@ -236,6 +244,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			Capabilities:         value.Integration.GetCapabilities(),
 			CredentialBindingIDs: value.Integration.GetCredentialBindingIds(),
 			EndpointRef:          value.Integration.GetEndpointRef(),
+			Ownership:            configurationOwnershipFromProto(value.Integration.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_RuntimeRevision:
 		createdAt, err := requiredTime(value.RuntimeRevision.GetCreatedAt())
@@ -310,6 +319,8 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			LaunchingProcessRunID: value.ProcessRun.GetLaunchingProcessRunId(),
 			LaunchingTurnID:       value.ProcessRun.GetLaunchingTurnId(),
 			LaunchingAttempt:      value.ProcessRun.GetLaunchingAttempt(),
+			ScheduleID:            value.ProcessRun.GetScheduleId(),
+			OccurrenceID:          value.ProcessRun.GetOccurrenceId(),
 		}, nil
 	case *controlplanev1.ResourceSpec_Schedule:
 		interval, err := optionalDuration(value.Schedule.GetInterval())
@@ -374,6 +385,15 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			),
 			MaximumExecutionDuration: value.Schedule.GetMaximumExecutionDuration().AsDuration(),
 			Coalesce:                 value.Schedule.GetCoalesce(),
+			TargetType: trimEnum(
+				value.Schedule.GetTargetType().String(),
+				"SCHEDULE_TARGET_TYPE_",
+			),
+			PlaybookRef:        value.Schedule.GetPlaybookRef(),
+			PlaybookVersion:    value.Schedule.GetPlaybookVersion(),
+			PromptArtifactID:   value.Schedule.GetPromptArtifactId(),
+			ExecutionSessionID: value.Schedule.GetExecutionSessionId(),
+			Ownership:          configurationOwnershipFromProto(value.Schedule.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_OwnerGate:
 		expiresAt, err := requiredTime(value.OwnerGate.GetExpiresAt())
@@ -381,6 +401,12 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			return nil, err
 		}
 		deliveredAt, err := optionalTime(value.OwnerGate.GetDeliveredAt())
+		if err != nil {
+			return nil, err
+		}
+		claimExpiresAt, err := optionalTime(
+			value.OwnerGate.GetDeliveryClaimExpiresAt(),
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -403,10 +429,13 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			DeliveryPayloadSHA256:    value.OwnerGate.GetDeliveryPayloadSha256(),
 			DeliveryClaimTokenSHA256: value.OwnerGate.GetDeliveryClaimTokenSha256(),
 			DeliveryFence:            value.OwnerGate.GetDeliveryFence(),
+			DeliveryClaimExpiresAt:   claimExpiresAt,
 			MattermostPostID:         value.OwnerGate.GetMattermostPostId(),
 			MattermostChannelID:      value.OwnerGate.GetMattermostChannelId(),
 			MattermostRootPostID:     value.OwnerGate.GetMattermostRootPostId(),
 			DeliveredAt:              deliveredAt,
+			ScheduleID:               value.OwnerGate.GetScheduleId(),
+			OccurrenceID:             value.OwnerGate.GetOccurrenceId(),
 		}, nil
 	case *controlplanev1.ResourceSpec_MemoryRecord:
 		return entity.MemoryRecordSpec{
@@ -424,16 +453,17 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			return nil, err
 		}
 		return entity.WorkClaimSpec{
-			ProcessRunID: value.WorkClaim.GetProcessRunId(),
-			TurnID:       value.WorkClaim.GetTurnId(),
-			Summary:      value.WorkClaim.GetSummary(),
-			Domains:      value.WorkClaim.GetDomains(),
-			ResourceKeys: value.WorkClaim.GetResourceKeys(),
-			OwnerActorID: value.WorkClaim.GetOwnerActorId(),
-			WorkloadID:   value.WorkClaim.GetWorkloadId(),
-			SessionID:    value.WorkClaim.GetSessionId(),
-			Attempt:      value.WorkClaim.GetAttempt(),
-			ExpiresAt:    expiresAt,
+			ProcessRunID:        value.WorkClaim.GetProcessRunId(),
+			TurnID:              value.WorkClaim.GetTurnId(),
+			Summary:             value.WorkClaim.GetSummary(),
+			Domains:             value.WorkClaim.GetDomains(),
+			ResourceKeys:        value.WorkClaim.GetResourceKeys(),
+			OwnerActorID:        value.WorkClaim.GetOwnerActorId(),
+			WorkloadID:          value.WorkClaim.GetWorkloadId(),
+			SessionID:           value.WorkClaim.GetSessionId(),
+			Attempt:             value.WorkClaim.GetAttempt(),
+			AuthorityGeneration: value.WorkClaim.GetAuthorityGeneration(),
+			ExpiresAt:           expiresAt,
 		}, nil
 	case *controlplanev1.ResourceSpec_Artifact:
 		scannedAt, err := optionalTime(value.Artifact.GetScannedAt())
@@ -490,6 +520,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				Slug:        value.Slug,
 				Description: value.Description,
 				Locale:      value.Locale,
+				Ownership:   configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.TeamSpec:
@@ -499,6 +530,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ExternalTeamRef: value.ExternalTeamRef,
 				MemberActorIds:  value.MemberActorIDs,
 				RoleIds:         value.RoleIDs,
+				Ownership:       configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.ChatSpec:
@@ -509,6 +541,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				DefaultAgentId:     value.DefaultAgentID,
 				ExternalChannelRef: value.ExternalChannelRef,
 				WorkPolicy:         value.WorkPolicy,
+				Ownership:          configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.RoleSpec:
@@ -521,6 +554,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ProviderCredentialBindingIds: value.ProviderCredentialBindingIDs,
 				RepositoryWorkspaceIds:       value.RepositoryWorkspaceIDs,
 				IntegrationIds:               value.IntegrationIDs,
+				Ownership:                    configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.PromptProfileSpec:
@@ -530,6 +564,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ContentSha256: value.ContentSHA256,
 				SourceRef:     value.SourceRef,
 				Locale:        value.Locale,
+				Ownership:     configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.CredentialBindingSpec:
@@ -540,6 +575,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				PrincipalRef: value.PrincipalRef,
 				Revision:     value.Revision,
 				ExpiresAt:    optionalTimestamp(value.ExpiresAt),
+				Ownership:    configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.RepositoryWorkspaceSpec:
@@ -549,6 +585,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				WorkspaceMode:       value.WorkspaceMode,
 				DefaultBranch:       value.DefaultBranch,
 				CredentialBindingId: value.CredentialBindingID,
+				Ownership:           configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.IntegrationSpec:
@@ -559,6 +596,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				Capabilities:         value.Capabilities,
 				CredentialBindingIds: value.CredentialBindingIDs,
 				EndpointRef:          value.EndpointRef,
+				Ownership:            configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.RuntimeRevisionSpec:
@@ -637,6 +675,8 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				LaunchingProcessRunId: value.LaunchingProcessRunID,
 				LaunchingTurnId:       value.LaunchingTurnID,
 				LaunchingAttempt:      value.LaunchingAttempt,
+				ScheduleId:            value.ScheduleID,
+				OccurrenceId:          value.OccurrenceID,
 			},
 		}
 	case entity.ScheduleSpec:
@@ -667,6 +707,12 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				NotificationPolicy:       scheduleNotificationPolicy(value.NotificationPolicy),
 				MaximumExecutionDuration: optionalProtoDuration(value.MaximumExecutionDuration),
 				Coalesce:                 value.Coalesce,
+				TargetType:               scheduleTargetType(value.TargetType),
+				PlaybookRef:              value.PlaybookRef,
+				PlaybookVersion:          value.PlaybookVersion,
+				PromptArtifactId:         value.PromptArtifactID,
+				ExecutionSessionId:       value.ExecutionSessionID,
+				Ownership:                configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.OwnerGateSpec:
@@ -690,10 +736,13 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				DeliveryPayloadSha256:    value.DeliveryPayloadSHA256,
 				DeliveryClaimTokenSha256: value.DeliveryClaimTokenSHA256,
 				DeliveryFence:            value.DeliveryFence,
+				DeliveryClaimExpiresAt:   optionalTimestamp(value.DeliveryClaimExpiresAt),
 				MattermostPostId:         value.MattermostPostID,
 				MattermostChannelId:      value.MattermostChannelID,
 				MattermostRootPostId:     value.MattermostRootPostID,
 				DeliveredAt:              optionalTimestamp(value.DeliveredAt),
+				ScheduleId:               value.ScheduleID,
+				OccurrenceId:             value.OccurrenceID,
 			},
 		}
 	case entity.MemoryRecordSpec:
@@ -711,16 +760,17 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 	case entity.WorkClaimSpec:
 		result.Value = &controlplanev1.ResourceSpec_WorkClaim{
 			WorkClaim: &controlplanev1.WorkClaimSpec{
-				ProcessRunId: value.ProcessRunID,
-				TurnId:       value.TurnID,
-				Summary:      value.Summary,
-				Domains:      value.Domains,
-				ResourceKeys: value.ResourceKeys,
-				OwnerActorId: value.OwnerActorID,
-				WorkloadId:   value.WorkloadID,
-				SessionId:    value.SessionID,
-				Attempt:      value.Attempt,
-				ExpiresAt:    timestamppb.New(value.ExpiresAt),
+				ProcessRunId:        value.ProcessRunID,
+				TurnId:              value.TurnID,
+				Summary:             value.Summary,
+				Domains:             value.Domains,
+				ResourceKeys:        value.ResourceKeys,
+				OwnerActorId:        value.OwnerActorID,
+				WorkloadId:          value.WorkloadID,
+				SessionId:           value.SessionID,
+				Attempt:             value.Attempt,
+				AuthorityGeneration: value.AuthorityGeneration,
+				ExpiresAt:           timestamppb.New(value.ExpiresAt),
 			},
 		}
 	case entity.ArtifactSpec:
@@ -830,10 +880,45 @@ func scheduleSessionPolicy(value string) controlplanev1.ScheduleSessionPolicy {
 	)
 }
 
+func scheduleTargetType(value string) controlplanev1.ScheduleTargetType {
+	if result, ok := controlplanev1.ScheduleTargetType_value["SCHEDULE_TARGET_TYPE_"+value]; ok {
+		return controlplanev1.ScheduleTargetType(result)
+	}
+	return controlplanev1.ScheduleTargetType_SCHEDULE_TARGET_TYPE_UNSPECIFIED
+}
+
 func scheduleNotificationPolicy(value string) controlplanev1.ScheduleNotificationPolicy {
 	return controlplanev1.ScheduleNotificationPolicy(
 		controlplanev1.ScheduleNotificationPolicy_value["SCHEDULE_NOTIFICATION_POLICY_"+value],
 	)
+}
+
+func configurationOwnershipFromProto(
+	ownership *controlplanev1.ConfigurationOwnership,
+) entity.ConfigurationOwnership {
+	if ownership == nil {
+		return entity.ConfigurationOwnership{}
+	}
+	return entity.ConfigurationOwnership{
+		ManagedBy: strings.TrimPrefix(
+			ownership.GetManagedBy().String(),
+			"CONFIGURATION_MANAGER_",
+		),
+		SourceRef:      ownership.GetSourceRef(),
+		SourceRevision: ownership.GetSourceRevision(),
+	}
+}
+
+func configurationOwnershipToProto(
+	ownership entity.ConfigurationOwnership,
+) *controlplanev1.ConfigurationOwnership {
+	return &controlplanev1.ConfigurationOwnership{
+		ManagedBy: controlplanev1.ConfigurationManager(
+			controlplanev1.ConfigurationManager_value["CONFIGURATION_MANAGER_"+ownership.ManagedBy],
+		),
+		SourceRef:      ownership.SourceRef,
+		SourceRevision: ownership.SourceRevision,
+	}
 }
 
 func ownerDecision(value string) controlplanev1.OwnerGateDecision {

@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type memoryCursor struct {
@@ -32,16 +33,17 @@ func (server *Server) ManageSession(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	changed, err := server.service.ManageSession(ctx, resource.ManageSessionInput{
-		Principal:       principal,
-		IdempotencyKey:  request.GetIdempotencyKey(),
-		Action:          trimEnum(request.GetAction().String(), "SESSION_ACTION_"),
-		SessionID:       request.GetSessionId(),
-		ExpectedVersion: request.GetExpectedVersion(),
-		Name:            request.GetName(),
-		RoleID:          request.GetRoleId(),
-		ConversationID:  request.GetConversationId(),
-		ArchiveRef:      request.GetArchiveRef(),
-		ReasonCode:      request.GetReasonCode(),
+		Principal:                            principal,
+		IdempotencyKey:                       request.GetIdempotencyKey(),
+		Action:                               trimEnum(request.GetAction().String(), "SESSION_ACTION_"),
+		SessionID:                            request.GetSessionId(),
+		ExpectedVersion:                      request.GetExpectedVersion(),
+		Name:                                 request.GetName(),
+		RoleID:                               request.GetRoleId(),
+		ConversationID:                       request.GetConversationId(),
+		ArchiveRef:                           request.GetArchiveRef(),
+		ReasonCode:                           request.GetReasonCode(),
+		PreferredProviderCredentialBindingID: request.GetPreferredProviderCredentialBindingId(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -163,6 +165,38 @@ func (server *Server) RecordOwnerGateDelivery(
 	return &controlplanev1.RecordOwnerGateDeliveryResponse{OwnerGate: encoded}, nil
 }
 
+func (server *Server) ClaimOwnerGateDelivery(
+	ctx context.Context,
+	request *controlplanev1.ClaimOwnerGateDeliveryRequest,
+) (*controlplanev1.ClaimOwnerGateDeliveryResponse, error) {
+	principal, err := authorization.Principal(
+		ctx,
+		controlplanev1.ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	claimed, err := server.service.ClaimOwnerGateDelivery(
+		ctx,
+		resource.ClaimOwnerGateDeliveryInput{
+			Principal:      principal,
+			IdempotencyKey: request.GetIdempotencyKey(),
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	encoded, err := toProtoResource(claimed.OwnerGate)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.ClaimOwnerGateDeliveryResponse{
+		OwnerGate:              encoded,
+		DeliveryClaimToken:     claimed.ClaimToken,
+		DeliveryClaimExpiresAt: timestamppb.New(claimed.ExpiresAt),
+	}, nil
+}
+
 func (server *Server) GetRuntimeRevision(
 	ctx context.Context,
 	request *controlplanev1.GetRuntimeRevisionRequest,
@@ -208,10 +242,6 @@ func (server *Server) RecordMemoryEmbedding(
 			MemoryRecordID:          request.GetMemoryRecordId(),
 			ExpectedResourceVersion: request.GetExpectedResourceVersion(),
 			ContentSHA256:           request.GetContentSha256(),
-			ModelID:                 request.GetModelId(),
-			ModelRevision:           request.GetModelRevision(),
-			ModelSHA256:             request.GetModelSha256(),
-			Embedding:               request.GetEmbedding(),
 		},
 	)
 	if err != nil {
@@ -241,19 +271,15 @@ func (server *Server) SearchMemoryRecords(
 	}
 	limit := pageSize(request.GetPageSize())
 	found, err := server.service.SearchMemory(ctx, resource.SearchMemoryInput{
-		Principal:              principal,
-		Query:                  request.GetQuery(),
-		QueryEmbedding:         request.GetQueryEmbedding(),
-		EmbeddingModelID:       request.GetEmbeddingModelId(),
-		EmbeddingModelRevision: request.GetEmbeddingModelRevision(),
-		EmbeddingModelSHA256:   request.GetEmbeddingModelSha256(),
-		Scope:                  request.GetScope(),
-		RoleID:                 request.GetRoleId(),
-		AfterID:                cursor.ID,
-		AfterTextRank:          cursor.TextRank,
-		AfterVectorDistance:    cursor.VectorDistance,
-		AfterVectorUsed:        cursor.VectorUsed,
-		Limit:                  limit,
+		Principal:           principal,
+		Query:               request.GetQuery(),
+		Scope:               request.GetScope(),
+		RoleID:              request.GetRoleId(),
+		AfterID:             cursor.ID,
+		AfterTextRank:       cursor.TextRank,
+		AfterVectorDistance: cursor.VectorDistance,
+		AfterVectorUsed:     cursor.VectorUsed,
+		Limit:               limit,
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)

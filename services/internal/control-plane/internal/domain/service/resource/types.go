@@ -22,13 +22,14 @@ type CreateInput struct {
 }
 
 type UpdateInput struct {
-	Principal       value.Principal
-	IdempotencyKey  string
-	ResourceID      string
-	ExpectedVersion uint64
-	Name            string
-	Spec            entity.Spec
-	Administrative  bool
+	Principal           value.Principal
+	IdempotencyKey      string
+	ResourceID          string
+	ExpectedVersion     uint64
+	Name                string
+	Spec                entity.Spec
+	Administrative      bool
+	DetachGitManagement bool
 }
 
 type TransitionInput struct {
@@ -50,9 +51,10 @@ type DeleteInput struct {
 }
 
 type GetInput struct {
-	Principal  value.Principal
-	ResourceID string
-	Kind       enum.Kind
+	Principal       value.Principal
+	ResourceID      string
+	Kind            enum.Kind
+	ExpectedVersion uint64
 }
 
 type ListInput struct {
@@ -103,12 +105,13 @@ type ClaimTurnResult struct {
 }
 
 type RenewTurnInput struct {
-	Principal       value.Principal
-	IdempotencyKey  string
-	TurnID          string
-	LeaseToken      string
-	ExpectedVersion uint64
-	Attempt         uint32
+	Principal           value.Principal
+	IdempotencyKey      string
+	TurnID              string
+	LeaseToken          string
+	ExpectedVersion     uint64
+	Attempt             uint32
+	AuthorityGeneration uint64
 }
 
 type RenewTurnResult = ClaimTurnResult
@@ -137,16 +140,17 @@ type RetryTurnInput struct {
 type CancelTurnInput = RetryTurnInput
 
 type ManageSessionInput struct {
-	Principal       value.Principal
-	IdempotencyKey  string
-	Action          string
-	SessionID       string
-	ExpectedVersion uint64
-	Name            string
-	RoleID          string
-	ConversationID  string
-	ArchiveRef      string
-	ReasonCode      string
+	Principal                            value.Principal
+	IdempotencyKey                       string
+	Action                               string
+	SessionID                            string
+	ExpectedVersion                      uint64
+	Name                                 string
+	RoleID                               string
+	ConversationID                       string
+	ArchiveRef                           string
+	ReasonCode                           string
+	PreferredProviderCredentialBindingID string
 }
 
 type ManageMemoryRecordInput struct {
@@ -211,13 +215,14 @@ type ScheduleOccurrence struct {
 }
 
 type ManageScheduleInput struct {
-	Principal       value.Principal
-	IdempotencyKey  string
-	Action          string
-	ScheduleID      string
-	ExpectedVersion uint64
-	Name            string
-	Spec            entity.ScheduleSpec
+	Principal           value.Principal
+	IdempotencyKey      string
+	Action              string
+	ScheduleID          string
+	ExpectedVersion     uint64
+	Name                string
+	Spec                entity.ScheduleSpec
+	DetachGitManagement bool
 }
 
 type ClaimScheduleOccurrenceInput struct {
@@ -324,6 +329,17 @@ type RecordOwnerGateDeliveryInput struct {
 	MattermostRootPostID  string
 }
 
+type ClaimOwnerGateDeliveryInput struct {
+	Principal      value.Principal
+	IdempotencyKey string
+}
+
+type ClaimOwnerGateDeliveryResult struct {
+	OwnerGate  entity.Resource
+	ClaimToken string
+	ExpiresAt  time.Time
+}
+
 type RegisterArtifactInput struct {
 	Principal      value.Principal
 	IdempotencyKey string
@@ -354,10 +370,6 @@ type RecordMemoryEmbeddingInput struct {
 	MemoryRecordID          string
 	ExpectedResourceVersion uint64
 	ContentSHA256           string
-	ModelID                 string
-	ModelRevision           uint64
-	ModelSHA256             string
-	Embedding               []float32
 }
 
 type RecordMemoryEmbeddingResult struct {
@@ -367,19 +379,15 @@ type RecordMemoryEmbeddingResult struct {
 }
 
 type SearchMemoryInput struct {
-	Principal              value.Principal
-	Query                  string
-	QueryEmbedding         []float32
-	EmbeddingModelID       string
-	EmbeddingModelRevision uint64
-	EmbeddingModelSHA256   string
-	Scope                  string
-	RoleID                 string
-	AfterID                string
-	AfterTextRank          float32
-	AfterVectorDistance    float32
-	AfterVectorUsed        bool
-	Limit                  int
+	Principal           value.Principal
+	Query               string
+	Scope               string
+	RoleID              string
+	AfterID             string
+	AfterTextRank       float32
+	AfterVectorDistance float32
+	AfterVectorUsed     bool
+	Limit               int
 }
 
 type MemorySearchHit struct {
@@ -389,7 +397,7 @@ type MemorySearchHit struct {
 	VectorProjectionUsed bool
 }
 
-// Observer получает только закрытые kind/action после durable commit.
+// Observer получает только закрытые вид и действие после устойчивой фиксации.
 type Observer interface {
 	ObserveMutation(kind enum.Kind, action string)
 }

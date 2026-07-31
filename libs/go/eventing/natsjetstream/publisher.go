@@ -19,7 +19,7 @@ import (
 
 const maximumRuntimeFileBytes = 1 << 20
 
-// Config фиксирует exact environment-owned stream и TLS identity.
+// Config фиксирует точный поток окружения и идентичность TLS.
 type Config struct {
 	URL             string
 	TLSServerName   string
@@ -37,7 +37,7 @@ type Config struct {
 	ConnectTimeout  time.Duration
 }
 
-// Publisher владеет NATS connection и synchronous JetStream publish.
+// Publisher владеет соединением NATS и синхронной публикацией JetStream.
 type Publisher struct {
 	connection *nats.Conn
 	jetstream  jetstream.JetStream
@@ -77,7 +77,7 @@ func New(config Config) (*Publisher, error) {
 	return &Publisher{connection: connection, jetstream: js, config: config}, nil
 }
 
-// Check сверяет exact stream contract и не создаёт ресурс.
+// Check сверяет точный контракт потока и не создаёт ресурс.
 func (publisher *Publisher) Check(ctx context.Context) error {
 	stream, err := publisher.jetstream.Stream(ctx, publisher.config.Stream)
 	if err != nil {
@@ -115,7 +115,7 @@ func (publisher *Publisher) Check(ctx context.Context) error {
 	return nil
 }
 
-// Publish отправляет canonical envelope и проверяет exact stream ack.
+// Publish отправляет канонический конверт и проверяет подтверждение точного потока.
 func (publisher *Publisher) Publish(
 	ctx context.Context,
 	envelope eventing.Envelope,

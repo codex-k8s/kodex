@@ -1,4 +1,5 @@
-// Package controlplane реализует versioned Redis read-through поверх PostgreSQL.
+// Package controlplane реализует версионированное сквозное чтение Redis поверх
+// PostgreSQL.
 package controlplane
 
 import (
@@ -34,7 +35,7 @@ type cacheEnvelope struct {
 	Resource         json.RawMessage `json:"resource"`
 }
 
-// Repository кэширует только resource snapshots с PostgreSQL-owned epoch.
+// Repository кэширует только снимки ресурсов с эпохой, принадлежащей PostgreSQL.
 type Repository struct {
 	source domainrepo.Repository
 	engine *sharedcache.Engine[cacheEnvelope]
@@ -42,7 +43,7 @@ type Repository struct {
 
 var _ domainrepo.Repository = (*Repository)(nil)
 
-// New создаёт decorator; cache failure всегда отступает к PostgreSQL.
+// New создаёт декоратор; при сбое кэша чтение всегда возвращается к PostgreSQL.
 func New(
 	source domainrepo.Repository,
 	store sharedcache.Store,
@@ -88,21 +89,17 @@ func (repository *Repository) Get(
 		epoch,
 	)
 	key := "control-plane:v2:resource:" + keyDigest
-	envelope, err := repository.engine.Load(
+	envelope, err := repository.engine.GetOrSet(
 		ctx,
 		key,
-		func(ctx context.Context) (cacheEnvelope, error) {
-			resource, sourceErr := repository.source.Get(
-				ctx,
-				organizationID,
-				projectID,
-				resourceID,
-				expectedKind,
-			)
-			if sourceErr != nil {
-				return cacheEnvelope{}, sourceErr
-			}
-			return makeEnvelope(resource, epoch, keyDigest)
+		resourceEnvelopeSource{
+			repository:     repository.source,
+			organizationID: organizationID,
+			projectID:      projectID,
+			resourceID:     resourceID,
+			expectedKind:   expectedKind,
+			epoch:          epoch,
+			keyDigest:      keyDigest,
 		},
 	)
 	if err != nil {
@@ -136,6 +133,30 @@ func (repository *Repository) Get(
 		_ = repository.engine.Store(ctx, key, repaired)
 	}
 	return resource, nil
+}
+
+type resourceEnvelopeSource struct {
+	repository     domainrepo.Repository
+	organizationID string
+	projectID      string
+	resourceID     string
+	expectedKind   enum.Kind
+	epoch          uint64
+	keyDigest      string
+}
+
+func (source resourceEnvelopeSource) Get(ctx context.Context) (cacheEnvelope, error) {
+	resource, err := source.repository.Get(
+		ctx,
+		source.organizationID,
+		source.projectID,
+		source.resourceID,
+		source.expectedKind,
+	)
+	if err != nil {
+		return cacheEnvelope{}, err
+	}
+	return makeEnvelope(resource, source.epoch, source.keyDigest)
 }
 
 func (repository *Repository) List(

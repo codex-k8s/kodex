@@ -26,7 +26,7 @@ type Envelope struct {
 	Data             json.RawMessage `json:"data"`
 }
 
-// Validate закрыто проверяет bounded wire-инварианты envelope.
+// Validate закрыто проверяет ограниченные транспортные инварианты конверта.
 func (envelope Envelope) Validate() error {
 	if _, err := uuid.Parse(envelope.EventID); err != nil ||
 		envelope.EventName == "" || len(envelope.EventName) > 128 ||

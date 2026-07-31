@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Store — provider-neutral TTL key/value storage.
+// Store — независимое от провайдера хранилище ключей и значений с TTL.
 type Store interface {
 	Get(context.Context, string) ([]byte, error)
 	Set(context.Context, string, []byte, time.Duration) error
@@ -18,17 +18,24 @@ type Store interface {
 // ErrMiss отличает отсутствие записи от инфраструктурной ошибки.
 var ErrMiss = errors.New("cache miss")
 
-// Codec преобразует service-owned domain snapshot в bounded wire form.
+// Codec преобразует принадлежащий сервису доменный снимок в ограниченную
+// транспортную форму.
 type Codec[T any] interface {
 	Marshal(T) ([]byte, error)
 	Unmarshal([]byte) (T, error)
 }
 
-// Loader читает authoritative source.
+// Loader читает авторитетный источник данных.
 type Loader[T any] func(context.Context) (T, error)
 
-// Engine реализует fail-open-to-source read-through без права выдавать stale
-// состояние при ошибке PostgreSQL.
+// Source задаёт минимальный интерфейс авторитетного загрузчика. Конкретный
+// репозиторий может реализовать его небольшим адаптером требуемой области.
+type Source[T any] interface {
+	Get(context.Context) (T, error)
+}
+
+// Engine реализует сквозное чтение с обязательным возвратом к авторитетному
+// источнику и не выдаёт устаревшее состояние при ошибке PostgreSQL.
 type Engine[T any] struct {
 	store   Store
 	codec   Codec[T]
@@ -36,7 +43,7 @@ type Engine[T any] struct {
 	ttl     time.Duration
 }
 
-// New создаёт bounded engine.
+// New создаёт ограниченный механизм.
 func New[T any](store Store, codec Codec[T], timeout, ttl time.Duration) (*Engine[T], error) {
 	if store == nil || codec == nil ||
 		timeout < 10*time.Millisecond || timeout > time.Second ||
@@ -46,8 +53,18 @@ func New[T any](store Store, codec Codec[T], timeout, ttl time.Duration) (*Engin
 	return &Engine[T]{store: store, codec: codec, timeout: timeout, ttl: ttl}, nil
 }
 
-// Load сначала проверяет cache, затем authoritative source.
+// Load сначала проверяет кэш, затем авторитетный источник.
 func (engine *Engine[T]) Load(ctx context.Context, key string, source Loader[T]) (T, error) {
+	return engine.GetOrSet(ctx, key, sourceAdapter[T]{load: source})
+}
+
+// GetOrSet сначала читает ограниченный кэш, а при промахе или повреждении вызывает
+// переданный авторитетный Source и по возможности сохраняет его результат.
+func (engine *Engine[T]) GetOrSet(
+	ctx context.Context,
+	key string,
+	source Source[T],
+) (T, error) {
 	var zero T
 	if key == "" || source == nil {
 		return zero, errors.New("cache load input is invalid")
@@ -61,7 +78,7 @@ func (engine *Engine[T]) Load(ctx context.Context, key string, source Loader[T])
 			return value, nil
 		}
 	}
-	value, sourceErr := source(ctx)
+	value, sourceErr := source.Get(ctx)
 	if sourceErr != nil {
 		return zero, sourceErr
 	}
@@ -74,7 +91,20 @@ func (engine *Engine[T]) Load(ctx context.Context, key string, source Loader[T])
 	return value, nil
 }
 
-// Store сохраняет уже проверенную caller projection с bounded timeout/TTL.
+type sourceAdapter[T any] struct {
+	load Loader[T]
+}
+
+func (adapter sourceAdapter[T]) Get(ctx context.Context) (T, error) {
+	var zero T
+	if adapter.load == nil {
+		return zero, errors.New("cache source is invalid")
+	}
+	return adapter.load(ctx)
+}
+
+// Store сохраняет уже проверенную вызывающей стороной проекцию с ограниченными
+// тайм-аутом и TTL.
 func (engine *Engine[T]) Store(ctx context.Context, key string, value T) error {
 	if key == "" {
 		return errors.New("cache store key is invalid")
@@ -88,7 +118,7 @@ func (engine *Engine[T]) Store(ctx context.Context, key string, value T) error {
 	return engine.store.Set(cacheCtx, key, encoded, engine.ttl)
 }
 
-// Invalidate удаляет подозрительную или устаревшую запись best-effort caller policy.
+// Invalidate по возможности удаляет подозрительную или устаревшую запись.
 func (engine *Engine[T]) Invalidate(ctx context.Context, key string) error {
 	if key == "" {
 		return errors.New("cache invalidation key is invalid")

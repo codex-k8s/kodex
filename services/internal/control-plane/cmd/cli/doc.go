@@ -1,2 +1,2 @@
-// Command control-plane-cli выполняет embedded forward-only migrations.
+// Command control-plane-cli выполняет встроенные forward-only migrations.
 package main

@@ -14,9 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
-	"github.com/caarlos0/env/v11"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -52,13 +50,9 @@ func run(ctx context.Context, arguments []string) error {
 		action != "status" && action != "version" {
 		return errors.New("usage: control-plane-cli migrate expand|up|status|version")
 	}
-	config := struct {
-		DSNFile       string `env:"CONTROL_PLANE_POSTGRES_MIGRATION_DSN_FILE,required,notEmpty"`
-		TLSServerName string `env:"CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME,required,notEmpty"`
-		CAFile        string `env:"CONTROL_PLANE_POSTGRES_CA_FILE,required,notEmpty"`
-	}{}
-	if err := env.Parse(&config); err != nil {
-		return errors.New("parse migration environment")
+	config, err := loadMigrationConfig()
+	if err != nil {
+		return err
 	}
 	raw, err := readRuntimeFile(config.DSNFile, 64<<10)
 	if err != nil {
@@ -188,41 +182,15 @@ func migrateUp(
 	)
 }
 
-type runtimePrincipalConfig struct {
-	ContextKeyID       string `env:"CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID,required,notEmpty"`
-	ContextKeyFile     string `env:"CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE,required,notEmpty"`
-	CurrentName        string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_PRINCIPAL,required,notEmpty"`
-	CurrentGeneration  uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_GENERATION,required"`
-	CurrentNotBefore   string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_NOT_BEFORE,required,notEmpty"`
-	CurrentNotAfter    string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_NOT_AFTER,required,notEmpty"`
-	NextName           string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_PRINCIPAL"`
-	NextGeneration     uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_GENERATION"`
-	NextNotBefore      string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_NOT_BEFORE"`
-	NextNotAfter       string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_NOT_AFTER"`
-	NextDSNFile        string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE"`
-	PreviousName       string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_PRINCIPAL"`
-	PreviousGeneration uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_GENERATION"`
-	PreviousNotBefore  string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_NOT_BEFORE"`
-	PreviousNotAfter   string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_NOT_AFTER"`
-}
-
-type runtimePrincipal struct {
-	PrincipalName string    `json:"principal_name"`
-	Generation    uint64    `json:"generation"`
-	Status        string    `json:"status"`
-	NotBefore     time.Time `json:"not_before"`
-	NotAfter      time.Time `json:"not_after"`
-}
-
 func reconcileRuntimePrincipals(
 	ctx context.Context,
 	database *sql.DB,
 	serverName string,
 	roots *x509.CertPool,
 ) error {
-	var config runtimePrincipalConfig
-	if err := env.Parse(&config); err != nil {
-		return errors.New("parse runtime principal reconciliation environment")
+	config, err := loadRuntimePrincipalConfig()
+	if err != nil {
+		return err
 	}
 	key, err := readRuntimeFile(config.ContextKeyFile, 128)
 	if err != nil || len(key) < 32 {
@@ -331,24 +299,4 @@ func reconcileRuntimePrincipals(
 		return errors.New("NEXT PostgreSQL principal readback failed")
 	}
 	return nil
-}
-
-func parseRuntimePrincipal(
-	name string,
-	generation uint64,
-	status, notBeforeRaw, notAfterRaw string,
-) (runtimePrincipal, error) {
-	notBefore, beforeErr := time.Parse(time.RFC3339, notBeforeRaw)
-	notAfter, afterErr := time.Parse(time.RFC3339, notAfterRaw)
-	if name == "" || generation == 0 || beforeErr != nil || afterErr != nil ||
-		!notAfter.After(notBefore) {
-		return runtimePrincipal{}, errors.New("runtime principal lifecycle input is invalid")
-	}
-	return runtimePrincipal{
-		PrincipalName: name,
-		Generation:    generation,
-		Status:        status,
-		NotBefore:     notBefore.UTC(),
-		NotAfter:      notAfter.UTC(),
-	}, nil
 }

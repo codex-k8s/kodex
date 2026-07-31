@@ -1,4 +1,5 @@
-// Package oidc реализует exact mTLS + OIDC application boundary proof resolver.
+// Package oidc реализует прикладную границу точных mTLS- и OIDC-проверок
+// сервиса выдачи доказательств полномочий.
 package oidc
 
 import (
@@ -31,7 +32,8 @@ const (
 	maximumTokenTTL    = 15 * time.Minute
 )
 
-// Config фиксирует issuer, audience, TLS и единственного transport caller.
+// Config фиксирует издателя, аудиторию, TLS и единственного транспортного
+// вызывающего.
 type Config struct {
 	Issuer               string
 	Audience             string
@@ -43,7 +45,7 @@ type Config struct {
 	HTTPTimeout          time.Duration
 }
 
-// Verifier владеет provider/JWKS cache с exact TLS transport.
+// Verifier владеет кэшем поставщика и JWKS с точным транспортом TLS.
 type Verifier struct {
 	config    Config
 	verifier  *coreosoidc.IDTokenVerifier
@@ -60,7 +62,8 @@ type claims struct {
 	NotBefore       int64  `json:"nbf"`
 }
 
-// New выполняет OIDC discovery через pinned CA/SNI до открытия listener.
+// New выполняет обнаружение OIDC через закреплённые CA и SNI до открытия
+// прослушивателя.
 func New(ctx context.Context, config Config) (*Verifier, error) {
 	issuer, err := url.Parse(config.Issuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" ||
@@ -136,14 +139,14 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 	}, nil
 }
 
-// Close завершает idle OIDC discovery/JWKS transport.
+// Close завершает простаивающий транспорт обнаружения OIDC и JWKS.
 func (verifier *Verifier) Close() {
 	if verifier != nil && verifier.transport != nil {
 		verifier.transport.CloseIdleConnections()
 	}
 }
 
-// VerifyPeer проверяет единственную exact caller SPIFFE identity.
+// VerifyPeer проверяет единственную точную SPIFFE-идентичность вызывающего.
 func (verifier *Verifier) VerifyPeer(ctx context.Context) error {
 	peerValue, ok := peer.FromContext(ctx)
 	if !ok {
@@ -162,7 +165,8 @@ func (verifier *Verifier) VerifyPeer(ctx context.Context) error {
 	return nil
 }
 
-// Authenticate получает Bearer только из metadata и возвращает verified identity.
+// Authenticate получает Bearer только из метаданных и возвращает проверенную
+// идентичность.
 func (verifier *Verifier) Authenticate(
 	ctx context.Context,
 ) (authoritytype.ApplicationIdentity, error) {

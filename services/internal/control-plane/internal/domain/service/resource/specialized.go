@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -14,7 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// ManageSchedule реализует закрытый набор действий над schedule.
+// ManageSchedule реализует закрытый набор действий над расписанием.
 func (service *Service) ManageSchedule(
 	ctx context.Context,
 	input ManageScheduleInput,
@@ -40,6 +42,7 @@ func (service *Service) ManageSchedule(
 		ExpectedVersion uint64
 		Name            string
 		Spec            entity.ScheduleSpec
+		DetachGit       bool
 	}{
 		identity(input.Principal),
 		input.Action,
@@ -47,6 +50,7 @@ func (service *Service) ManageSchedule(
 		input.ExpectedVersion,
 		input.Name,
 		input.Spec,
+		input.DetachGitManagement,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -60,6 +64,19 @@ func (service *Service) ManageSchedule(
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
 			now := service.now().UTC().Truncate(time.Microsecond)
 			if input.Action == "CREATE" || input.Action == "UPDATE" {
+				if input.Action == "CREATE" {
+					if input.DetachGitManagement {
+						return entity.Resource{}, errs.ErrInvalidInput
+					}
+					if err := validateConfigurationCreate(
+						ctx,
+						tx,
+						input.Principal,
+						input.Spec,
+					); err != nil {
+						return entity.Resource{}, err
+					}
+				}
 				target, err := tx.GetForUpdate(
 					ctx,
 					input.Principal.OrganizationID,
@@ -70,15 +87,23 @@ func (service *Service) ManageSchedule(
 					return entity.Resource{}, err
 				}
 				if target.State != enum.StateActive ||
-					(target.Kind != enum.KindRole &&
-						target.Kind != enum.KindPromptProfile) {
+					target.Kind != enum.KindRole {
 					return entity.Resource{}, errs.ErrNotFound
 				}
 				input.Spec.TargetKind = target.Kind
 				input.Spec.TargetVersion = target.Version
-				input.Spec.EffectiveInputSHA, err = entity.ProjectionSHA256(target)
+				targetProjectionSHA256, err := entity.ProjectionSHA256(target)
 				if err != nil {
 					return entity.Resource{}, errs.ErrInternal
+				}
+				promptArtifact, err := service.requireCleanArtifact(
+					ctx,
+					tx,
+					input.Principal,
+					input.Spec.PromptArtifactID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
 				}
 				prompt, err := tx.GetForUpdate(
 					ctx,
@@ -109,10 +134,7 @@ func (service *Service) ManageSchedule(
 					revision.State != enum.StateActive ||
 					revisionSpec.PromptProfileID != prompt.ID ||
 					revisionSpec.PromptRevision != promptSpec.Revision ||
-					(target.Kind == enum.KindRole &&
-						revisionSpec.RoleID != target.ID) ||
-					(target.Kind == enum.KindPromptProfile &&
-						revisionSpec.PromptProfileID != target.ID) {
+					revisionSpec.RoleID != target.ID {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
 				if input.Spec.RoomID != "" {
@@ -133,6 +155,37 @@ func (service *Service) ManageSchedule(
 					}
 				} else if revisionSpec.ChatID != "" {
 					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if input.Spec.SessionPolicy != "NEW" {
+					session, err := tx.GetForUpdate(
+						ctx,
+						input.Principal.OrganizationID,
+						input.Principal.ProjectID,
+						input.Spec.ExecutionSessionID,
+					)
+					if err != nil {
+						return entity.Resource{}, err
+					}
+					sessionSpec, ok := session.Spec.(entity.SessionSpec)
+					if !ok || session.Kind != enum.KindSession ||
+						session.State != enum.StateActive ||
+						session.OwnerActorID != input.Principal.ActorID ||
+						sessionSpec.AgentID != target.ID ||
+						sessionSpec.ProviderAccountBindingID !=
+							revisionSpec.ProviderCredentialBindingID ||
+						sessionSpec.ConversationID != input.Spec.RoomID {
+						return entity.Resource{}, errs.ErrStateConflict
+					}
+				}
+				input.Spec.EffectiveInputSHA, err = scheduleEffectiveInput(
+					input.Spec,
+					targetProjectionSHA256,
+					promptArtifact.SHA256,
+					revision.Version,
+					revisionSpec.ManifestSHA256,
+				)
+				if err != nil {
+					return entity.Resource{}, errs.ErrInternal
 				}
 				if input.Spec.Validate() != nil {
 					return entity.Resource{}, errs.ErrInvalidInput
@@ -177,6 +230,36 @@ func (service *Service) ManageSchedule(
 				current.Version != input.ExpectedVersion {
 				return entity.Resource{}, errs.ErrVersionMismatch
 			}
+			if input.Action == "UPDATE" {
+				nextSpec, err := configurationUpdateSpec(
+					ctx,
+					tx,
+					input.Principal,
+					current.Spec,
+					input.Spec,
+					input.DetachGitManagement,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				var ok bool
+				input.Spec, ok = nextSpec.(entity.ScheduleSpec)
+				if !ok {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			} else {
+				if input.DetachGitManagement {
+					return entity.Resource{}, errs.ErrInvalidInput
+				}
+				if err := authorizeGitManagedMutation(
+					ctx,
+					tx,
+					input.Principal,
+					current.Spec,
+				); err != nil {
+					return entity.Resource{}, err
+				}
+			}
 			var updated entity.Resource
 			switch input.Action {
 			case "UPDATE":
@@ -214,12 +297,50 @@ func (service *Service) ManageSchedule(
 	)
 }
 
+func scheduleEffectiveInput(
+	spec entity.ScheduleSpec,
+	targetProjectionSHA256 string,
+	promptArtifactSHA256 string,
+	runtimeVersion uint64,
+	runtimeManifestSHA256 string,
+) (string, error) {
+	return canonicalHash(struct {
+		TargetProjectionSHA256 string
+		TargetType             string
+		PlaybookRef            string
+		PlaybookVersion        uint64
+		PromptProfileID        string
+		PromptRevision         uint64
+		PromptArtifactSHA256   string
+		RuntimeRevisionID      string
+		RuntimeVersion         uint64
+		RuntimeManifestSHA256  string
+		SessionPolicy          string
+		ExecutionSessionID     string
+		RoomID                 string
+	}{
+		targetProjectionSHA256,
+		spec.TargetType,
+		spec.PlaybookRef,
+		spec.PlaybookVersion,
+		spec.PromptProfileID,
+		spec.PromptRevision,
+		promptArtifactSHA256,
+		spec.RuntimeRevisionID,
+		runtimeVersion,
+		runtimeManifestSHA256,
+		spec.SessionPolicy,
+		spec.ExecutionSessionID,
+		spec.RoomID,
+	})
+}
+
 type scheduleOccurrenceReceipt struct {
 	Occurrence domainrepo.ScheduleOccurrence `json:"occurrence"`
 	LeaseToken string                        `json:"leaseToken,omitempty"`
 }
 
-// ClaimScheduleOccurrence выдаёт exact scheduler bounded single-attempt lease.
+// ClaimScheduleOccurrence выдаёт точному планировщику ограниченную аренду одной попытки.
 func (service *Service) ClaimScheduleOccurrence(
 	ctx context.Context,
 	input ClaimScheduleOccurrenceInput,
@@ -343,6 +464,29 @@ func (service *Service) ClaimScheduleOccurrence(
 			if err != nil {
 				return err
 			}
+			schedule, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				occurrence.ScheduleID,
+			)
+			if err != nil {
+				return err
+			}
+			scheduleSpec, ok := schedule.Spec.(entity.ScheduleSpec)
+			if !ok || schedule.Kind != enum.KindSchedule ||
+				schedule.State != enum.StateActive ||
+				scheduleSpec.EffectiveInputSHA != occurrence.EffectiveInputSHA256 ||
+				scheduleSpec.TargetResourceID != occurrence.TargetResourceID ||
+				scheduleSpec.TargetKind != occurrence.TargetKind ||
+				scheduleSpec.TargetVersion != occurrence.TargetVersion ||
+				scheduleSpec.PromptProfileID != occurrence.PromptProfileID ||
+				scheduleSpec.PromptRevision != occurrence.PromptRevision ||
+				scheduleSpec.RuntimeRevisionID != occurrence.RuntimeRevisionID ||
+				scheduleSpec.SessionPolicy != occurrence.SessionPolicy ||
+				scheduleSpec.RoomID != occurrence.RoomID {
+				return errs.ErrStateConflict
+			}
 			target, err := tx.GetForUpdate(
 				ctx,
 				input.Principal.OrganizationID,
@@ -358,7 +502,6 @@ func (service *Service) ClaimScheduleOccurrence(
 			}
 			if target.Kind != occurrence.TargetKind ||
 				target.Version != occurrence.TargetVersion ||
-				targetDigest != occurrence.EffectiveInputSHA256 ||
 				target.State == enum.StateDeleted {
 				return errs.ErrStateConflict
 			}
@@ -407,6 +550,171 @@ func (service *Service) ClaimScheduleOccurrence(
 					return errs.ErrStateConflict
 				}
 			}
+			promptArtifact, err := service.requireCleanArtifact(
+				ctx,
+				tx,
+				input.Principal,
+				scheduleSpec.PromptArtifactID,
+			)
+			if err != nil {
+				return err
+			}
+			pinnedInputSHA256, err := scheduleEffectiveInput(
+				scheduleSpec,
+				targetDigest,
+				promptArtifact.SHA256,
+				revision.Version,
+				revisionSpec.ManifestSHA256,
+			)
+			if err != nil {
+				return errs.ErrInternal
+			}
+			if pinnedInputSHA256 != occurrence.EffectiveInputSHA256 {
+				return errs.ErrStateConflict
+			}
+			session, sessionSpec, err := service.prepareScheduleSession(
+				ctx,
+				tx,
+				input.Principal,
+				schedule,
+				scheduleSpec,
+				revisionSpec,
+				now,
+			)
+			if err != nil {
+				return err
+			}
+			runtimeRevision, err := service.createRuntimeRevision(
+				ctx,
+				tx,
+				input.Principal,
+				session,
+				sessionSpec,
+			)
+			if err != nil {
+				return err
+			}
+			processID := ""
+			if scheduleSpec.TargetType == "PLAYBOOK" {
+				processID = uuid.NewString()
+			}
+			sessionSpec.LastTurnSequence++
+			updatedSession, err := session.Update(
+				session.Name,
+				sessionSpec,
+				now,
+			)
+			if err != nil {
+				return errs.ErrStateConflict
+			}
+			if err := tx.Update(ctx, updatedSession, session.Version); err != nil {
+				return err
+			}
+			if err := service.appendMutationRecords(
+				ctx,
+				tx,
+				input.Principal,
+				"schedule_enqueue_session",
+				updatedSession,
+			); err != nil {
+				return err
+			}
+			sourceRef := "schedule-occurrence:" + occurrence.ID
+			runtimeSpec := runtimeRevision.Spec.(entity.RuntimeRevisionSpec)
+			turnID := uuid.NewString()
+			turn, err := entity.New(
+				turnID,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				session.ID,
+				schedule.OwnerActorID,
+				enum.KindTurn,
+				"Scheduled turn "+occurrence.ID,
+				entity.TurnSpec{
+					SessionID:         session.ID,
+					Sequence:          sessionSpec.LastTurnSequence,
+					SourceRef:         sourceRef,
+					PromptArtifactID:  scheduleSpec.PromptArtifactID,
+					RuntimeRevisionID: runtimeRevision.ID,
+					ProcessRunID:      processID,
+					Attempt:           1,
+					EffectiveInputSHA256: hashRuntimeInput(
+						sourceRef,
+						promptArtifact.SHA256,
+						runtimeSpec.ManifestSHA256,
+						processID,
+					),
+				},
+				now,
+			)
+			if err != nil {
+				return errs.ErrInternal
+			}
+			if err := tx.Insert(ctx, turn); err != nil {
+				return err
+			}
+			turnSpec := turn.Spec.(entity.TurnSpec)
+			if err := tx.SaveTurnAttempt(ctx, domainrepo.TurnAttempt{
+				TurnID:              turn.ID,
+				Attempt:             turnSpec.Attempt,
+				WorkloadID:          "unassigned",
+				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				State:               "QUEUED",
+				InputSHA256:         turnSpec.EffectiveInputSHA256,
+				LeaseFence:          turn.Version,
+				StartedAt:           now,
+			}); err != nil {
+				return err
+			}
+			if err := service.appendMutationRecords(
+				ctx,
+				tx,
+				input.Principal,
+				"schedule_enqueue_turn",
+				turn,
+			); err != nil {
+				return err
+			}
+			if processID != "" {
+				process, err := entity.New(
+					processID,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					schedule.ID,
+					schedule.OwnerActorID,
+					enum.KindProcessRun,
+					"Scheduled process "+occurrence.ID,
+					entity.ProcessRunSpec{
+						PlaybookRef:          scheduleSpec.PlaybookRef,
+						PolicyRevision:       scheduleSpec.PlaybookVersion,
+						RootTriggerRef:       sourceRef,
+						RootInitiatorActorID: schedule.OwnerActorID,
+						RootSessionID:        session.ID,
+						RootTurnID:           turn.ID,
+						RootAttempt:          1,
+						ImmutableInputSHA256: turnSpec.EffectiveInputSHA256,
+						RuntimeRevisionID:    runtimeRevision.ID,
+						ScheduleID:           schedule.ID,
+						OccurrenceID:         occurrence.ID,
+					},
+					now,
+				)
+				if err != nil {
+					return errs.ErrInternal
+				}
+				if err := tx.Insert(ctx, process); err != nil {
+					return err
+				}
+				if err := service.appendMutationRecords(
+					ctx,
+					tx,
+					input.Principal,
+					"schedule_start_process",
+					process,
+				); err != nil {
+					return err
+				}
+			}
 			token := service.leaseToken(
 				occurrence.ID,
 				uint64(occurrence.Attempt),
@@ -428,15 +736,6 @@ func (service *Service) ClaimScheduleOccurrence(
 				expectedAttempt,
 				"",
 			); err != nil {
-				return err
-			}
-			schedule, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				occurrence.ScheduleID,
-			)
-			if err != nil {
 				return err
 			}
 			if err := service.appendMutationRecords(
@@ -476,7 +775,105 @@ func (service *Service) ClaimScheduleOccurrence(
 	return result, err
 }
 
-// CompleteScheduleOccurrence завершает/retries только current scheduler lease.
+func (service *Service) prepareScheduleSession(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	schedule entity.Resource,
+	spec entity.ScheduleSpec,
+	revisionSpec entity.RuntimeRevisionSpec,
+	now time.Time,
+) (entity.Resource, entity.SessionSpec, error) {
+	if spec.SessionPolicy != "NEW" {
+		session, err := tx.GetForUpdate(
+			ctx,
+			principal.OrganizationID,
+			principal.ProjectID,
+			spec.ExecutionSessionID,
+		)
+		if err != nil {
+			return entity.Resource{}, entity.SessionSpec{}, err
+		}
+		sessionSpec, ok := session.Spec.(entity.SessionSpec)
+		if !ok || session.Kind != enum.KindSession ||
+			session.State != enum.StateActive ||
+			session.OwnerActorID != schedule.OwnerActorID ||
+			sessionSpec.AgentID != spec.TargetResourceID ||
+			sessionSpec.ProviderAccountBindingID !=
+				revisionSpec.ProviderCredentialBindingID ||
+			sessionSpec.ConversationID != spec.RoomID {
+			return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+		}
+		return session, sessionSpec, nil
+	}
+	role, err := tx.GetForUpdate(
+		ctx,
+		principal.OrganizationID,
+		principal.ProjectID,
+		spec.TargetResourceID,
+	)
+	if err != nil {
+		return entity.Resource{}, entity.SessionSpec{}, err
+	}
+	roleSpec, ok := role.Spec.(entity.RoleSpec)
+	if !ok || role.Kind != enum.KindRole || role.State != enum.StateActive ||
+		!slices.Contains(
+			roleSpec.ProviderCredentialBindingIDs,
+			revisionSpec.ProviderCredentialBindingID,
+		) {
+		return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+	}
+	binding, err := tx.GetForUpdate(
+		ctx,
+		principal.OrganizationID,
+		principal.ProjectID,
+		revisionSpec.ProviderCredentialBindingID,
+	)
+	if err != nil {
+		return entity.Resource{}, entity.SessionSpec{}, err
+	}
+	bindingSpec, ok := binding.Spec.(entity.CredentialBindingSpec)
+	if !ok || binding.Kind != enum.KindCredentialBinding ||
+		binding.State != enum.StateActive ||
+		bindingSpec.Purpose != "provider-account" ||
+		(!bindingSpec.ExpiresAt.IsZero() && !bindingSpec.ExpiresAt.After(now)) {
+		return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+	}
+	sessionSpec := entity.SessionSpec{
+		AgentID:                  role.ID,
+		ProviderAccountBindingID: binding.ID,
+		ConversationID:           spec.RoomID,
+	}
+	session, err := entity.New(
+		uuid.NewString(),
+		principal.OrganizationID,
+		principal.ProjectID,
+		schedule.ID,
+		schedule.OwnerActorID,
+		enum.KindSession,
+		"Scheduled session "+schedule.ID,
+		sessionSpec,
+		now,
+	)
+	if err != nil {
+		return entity.Resource{}, entity.SessionSpec{}, errs.ErrInternal
+	}
+	if err := tx.Insert(ctx, session); err != nil {
+		return entity.Resource{}, entity.SessionSpec{}, err
+	}
+	if err := service.appendMutationRecords(
+		ctx,
+		tx,
+		principal,
+		"schedule_create_session",
+		session,
+	); err != nil {
+		return entity.Resource{}, entity.SessionSpec{}, err
+	}
+	return session, sessionSpec, nil
+}
+
+// CompleteScheduleOccurrence завершает или повторяет только текущую аренду планировщика.
 func (service *Service) CompleteScheduleOccurrence(
 	ctx context.Context,
 	input CompleteScheduleOccurrenceInput,
@@ -652,7 +1049,7 @@ func (service *Service) CompleteScheduleOccurrence(
 	return result, err
 }
 
-// CancelScheduleOccurrence отзывает queued/current occurrence без запуска.
+// CancelScheduleOccurrence отзывает ожидающий или текущий запуск без исполнения.
 func (service *Service) CancelScheduleOccurrence(
 	ctx context.Context,
 	input CancelScheduleOccurrenceInput,
@@ -795,7 +1192,8 @@ func scheduleBackoff(spec entity.ScheduleSpec, attempt uint32) time.Duration {
 	return delay
 }
 
-// StartProcess связывает server-derived root actor с immutable turn input.
+// StartProcess связывает определённого сервером корневого инициатора с
+// неизменяемым входом хода.
 func (service *Service) StartProcess(
 	ctx context.Context,
 	input StartProcessInput,
@@ -805,14 +1203,18 @@ func (service *Service) StartProcess(
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
 		value.ValidateName(input.Name) != nil ||
-		!validRuntimeReference(input.PlaybookRef) ||
-		!validRuntimeReference(input.RootTriggerRef) ||
-		input.PolicyRevision == 0 ||
 		value.ValidateID(input.InputArtifactID) != nil ||
 		(input.ParentProcessID != "" &&
 			value.ValidateID(input.ParentProcessID) != nil) ||
 		(input.ParentProcessID == "" &&
-			(value.ValidateID(input.RootSessionID) != nil ||
+			(!validRuntimeReference(input.PlaybookRef) ||
+				!validRuntimeReference(input.RootTriggerRef) ||
+				strings.HasPrefix(
+					input.RootTriggerRef,
+					"schedule-occurrence:",
+				) ||
+				input.PolicyRevision == 0 ||
+				value.ValidateID(input.RootSessionID) != nil ||
 				value.ValidateID(input.RootTurnID) != nil ||
 				input.RootAttempt == 0 ||
 				input.LaunchingTurnID != "" ||
@@ -820,6 +1222,9 @@ func (service *Service) StartProcess(
 		(input.ParentProcessID != "" &&
 			(value.ValidateID(input.LaunchingTurnID) != nil ||
 				input.LaunchingAttempt == 0 ||
+				input.PlaybookRef != "" ||
+				input.PolicyRevision != 0 ||
+				input.RootTriggerRef != "" ||
 				input.RootSessionID != "" ||
 				input.RootTurnID != "" ||
 				input.RootAttempt != 0)) {
@@ -870,6 +1275,11 @@ func (service *Service) StartProcess(
 			launchingAttempt := uint32(0)
 			runtimeRevisionID := ""
 			rootImmutableInput := ""
+			playbookRef := input.PlaybookRef
+			policyRevision := input.PolicyRevision
+			rootTriggerRef := input.RootTriggerRef
+			scheduleID := ""
+			occurrenceID := ""
 			if input.ParentProcessID != "" {
 				parent, err := tx.GetForUpdate(
 					ctx,
@@ -909,6 +1319,11 @@ func (service *Service) StartProcess(
 				rootAttempt = parentSpec.RootAttempt
 				runtimeRevisionID = parentSpec.RuntimeRevisionID
 				rootImmutableInput = parentSpec.ImmutableInputSHA256
+				playbookRef = parentSpec.PlaybookRef
+				policyRevision = parentSpec.PolicyRevision
+				rootTriggerRef = parentSpec.RootTriggerRef
+				scheduleID = parentSpec.ScheduleID
+				occurrenceID = parentSpec.OccurrenceID
 				launchingTurnID = launchingTurn.ID
 				launchingAttempt = input.LaunchingAttempt
 			} else {
@@ -954,9 +1369,9 @@ func (service *Service) StartProcess(
 			now := service.now().UTC().Truncate(time.Microsecond)
 			spec := entity.ProcessRunSpec{
 				ParentProcessRunID:    input.ParentProcessID,
-				PlaybookRef:           input.PlaybookRef,
-				PolicyRevision:        input.PolicyRevision,
-				RootTriggerRef:        input.RootTriggerRef,
+				PlaybookRef:           playbookRef,
+				PolicyRevision:        policyRevision,
+				RootTriggerRef:        rootTriggerRef,
 				RootInitiatorActorID:  rootActorID,
 				RootSessionID:         rootSessionID,
 				RootTurnID:            rootTurnID,
@@ -966,18 +1381,20 @@ func (service *Service) StartProcess(
 				LaunchingTurnID:       launchingTurnID,
 				LaunchingAttempt:      launchingAttempt,
 				ImmutableInputSHA256: hashRuntimeInput(
-					input.RootTriggerRef,
+					rootTriggerRef,
 					artifact.SHA256,
 					rootImmutableInput,
-					input.PlaybookRef,
+					playbookRef,
 				),
+				ScheduleID:   scheduleID,
+				OccurrenceID: occurrenceID,
 			}
 			process, err := entity.New(
 				uuid.NewString(),
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
 				input.ParentProcessID,
-				input.Principal.ActorID,
+				rootActorID,
 				enum.KindProcessRun,
 				input.Name,
 				spec,
@@ -1000,7 +1417,7 @@ func (service *Service) StartProcess(
 	)
 }
 
-// CancelProcess завершает exact process version специализированной командой.
+// CancelProcess завершает точную версию процесса специализированной командой.
 func (service *Service) CancelProcess(
 	ctx context.Context,
 	input CancelProcessInput,
@@ -1082,7 +1499,8 @@ func (service *Service) CancelProcess(
 	)
 }
 
-// RegisterArtifact принимает только immutable metadata и server-owned PENDING.
+// RegisterArtifact принимает только неизменяемые метаданные и назначенное
+// сервером состояние PENDING.
 func (service *Service) RegisterArtifact(
 	ctx context.Context,
 	input RegisterArtifactInput,
@@ -1154,7 +1572,7 @@ func (service *Service) RegisterArtifact(
 	)
 }
 
-// RecordArtifactScan принимает result только от exact configured scanner.
+// RecordArtifactScan принимает результат только от точно настроенного сканера.
 func (service *Service) RecordArtifactScan(
 	ctx context.Context,
 	input RecordArtifactScanInput,
@@ -1254,7 +1672,7 @@ type ownerGateReceipt struct {
 	Process entity.Resource `json:"process"`
 }
 
-// RequestOwnerGate создаёт gate и переводит связанный process одним commit.
+// RequestOwnerGate создаёт шлюз и переводит связанный процесс одной фиксацией.
 func (service *Service) RequestOwnerGate(
 	ctx context.Context,
 	input RequestOwnerGateInput,
@@ -1356,18 +1774,6 @@ func (service *Service) RequestOwnerGate(
 			if err != nil {
 				return err
 			}
-			project, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.Principal.ProjectID,
-			)
-			if err != nil {
-				return err
-			}
-			if project.Kind != enum.KindProject || project.OwnerActorID == "" {
-				return errs.ErrStateConflict
-			}
 			now := service.now().UTC().Truncate(time.Microsecond)
 			gateID := uuid.NewString()
 			deliveryID := uuid.NewString()
@@ -1383,6 +1789,8 @@ func (service *Service) RequestOwnerGate(
 				ImmutableInput   string
 				RecipientActorID string
 				ExpiresAt        time.Time
+				ScheduleID       string
+				OccurrenceID     string
 			}{
 				1,
 				deliveryID,
@@ -1393,8 +1801,10 @@ func (service *Service) RequestOwnerGate(
 				processSpec.RootAttempt,
 				artifact.SHA256,
 				processSpec.ImmutableInputSHA256,
-				project.OwnerActorID,
+				processSpec.RootInitiatorActorID,
 				input.ExpiresAt.UTC().Truncate(time.Microsecond),
+				processSpec.ScheduleID,
+				processSpec.OccurrenceID,
 			})
 			if err != nil {
 				return errs.ErrInternal
@@ -1417,11 +1827,13 @@ func (service *Service) RequestOwnerGate(
 					TurnID:                processSpec.RootTurnID,
 					Attempt:               processSpec.RootAttempt,
 					ImmutableInputSHA256:  processSpec.ImmutableInputSHA256,
-					RecipientActorID:      project.OwnerActorID,
+					RecipientActorID:      processSpec.RootInitiatorActorID,
 					DeliveryWorkloadID:    service.ownerGateDeliveryWorkload,
 					DeliverySPIFFEID:      service.ownerGateDeliverySPIFFEID,
 					DeliveryID:            deliveryID,
 					DeliveryPayloadSHA256: deliveryPayloadSHA256,
+					ScheduleID:            processSpec.ScheduleID,
+					OccurrenceID:          processSpec.OccurrenceID,
 				},
 				now,
 			)

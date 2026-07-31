@@ -23,6 +23,7 @@ JOIN control_plane.turn_leases AS lease
   ON lease.turn_id = resource.id
 WHERE resource.organization_id = @organization_id::uuid
   AND resource.project_id = @project_id::uuid
+  AND resource.id = @turn_id::uuid
   AND resource.kind = 'TURN'
   AND resource.state = 'CLAIMED'
   AND lease.expires_at <= @now

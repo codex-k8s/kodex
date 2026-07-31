@@ -12,7 +12,7 @@ const (
 	ScheduleChanged             = "control_plane.schedule_changed"
 )
 
-// Change — безопасная ссылка для authoritative downstream read.
+// Change — безопасная ссылка для авторитетного чтения потребителем.
 type Change struct {
 	EventID         string
 	EventName       string
@@ -28,7 +28,7 @@ type Change struct {
 	CausationID     string
 }
 
-// EventNameForKind возвращает только утверждённые факты с consumers.
+// EventNameForKind возвращает только утверждённые факты с потребителями.
 func EventNameForKind(kind enum.Kind) (string, bool) {
 	switch kind {
 	case enum.KindProject, enum.KindTeam, enum.KindChat, enum.KindRole,

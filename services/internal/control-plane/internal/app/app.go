@@ -1,4 +1,4 @@
-// Package app содержит единственный composition root control-plane.
+// Package app содержит единственный корень композиции control-plane.
 package app
 
 import (
@@ -60,7 +60,7 @@ type runtimeState struct {
 	relayPool   *pgxpool.Pool
 }
 
-// Run запускает startup barriers, gRPC, relay и bounded shutdown.
+// Run запускает стартовые барьеры, gRPC, ретранслятор и ограниченное завершение.
 func Run(
 	lifecycle context.Context,
 	shutdownBase context.Context,
@@ -149,7 +149,7 @@ func Run(
 	if err != nil || strings.TrimSpace(string(redisPassword)) == "" {
 		return errors.New("Redis credential is unavailable")
 	}
-	state.cache, err = redisstore.New(redisstore.Config{
+	redisCache, err := redisstore.New(redisstore.Config{
 		Address:       config.RedisAddress,
 		TLSServerName: config.RedisTLSServerName,
 		CAFile:        config.RedisCAFile,
@@ -164,6 +164,7 @@ func Run(
 	if err != nil {
 		return err
 	}
+	state.cache = redisCache
 	cachedRepository, err := cachecontrolplane.New(
 		postgresRepository,
 		state.cache,
@@ -310,6 +311,15 @@ func Run(
 		MaximumBackoff:  time.Minute,
 	}, outboxStore, state.publisher)
 	if err != nil {
+		return err
+	}
+	if err := internalobservability.RegisterInfrastructureMetrics(
+		state.metrics.Register,
+		state.runtimePool,
+		state.relayPool,
+		redisCache,
+		relay,
+	); err != nil {
 		return err
 	}
 	checker := &readinessChecker{

@@ -1,9 +1,14 @@
 -- +goose Up
+-- Укрепление второго цикла добавляет локальные FTS и pgvector-проекцию,
+-- полный жизненный цикл запусков расписаний и устойчивое к откату намерение.
+-- PostgreSQL остаётся авторитетным источником; векторная проекция перестраиваема.
 RESET ROLE;
 CREATE EXTENSION IF NOT EXISTS vector;
 SET ROLE control_plane_owner;
 SET search_path = pg_catalog, control_plane;
 
+-- Локальный полнотекстовый индекс обслуживает title/content MEMORY_RECORD без
+-- внешнего поставщика векторизации.
 CREATE INDEX resources_memory_fts_idx
     ON control_plane.resources
     USING gin (
@@ -14,6 +19,8 @@ CREATE INDEX resources_memory_fts_idx
     )
     WHERE kind = 'MEMORY_RECORD' AND state = 'ACTIVE';
 
+-- Сначала добавляются закреплённые поля исполнения и доставки, затем старые
+-- строки приводятся к безопасному конечному состоянию перед ограничениями NOT NULL.
 ALTER TABLE control_plane.schedule_occurrences
     ADD COLUMN prompt_profile_id uuid,
     ADD COLUMN prompt_revision bigint,
@@ -94,6 +101,8 @@ CREATE INDEX schedule_occurrences_open_idx
     )
     WHERE state IN ('QUEUED', 'CLAIMED');
 
+-- pgvector-проекция перестраиваема и принимается только с точным digest,
+-- версией ресурса и локальным происхождением модели.
 CREATE TABLE control_plane.memory_vector_projections (
     resource_id uuid PRIMARY KEY REFERENCES control_plane.resources (id),
     organization_id uuid NOT NULL,
@@ -152,10 +161,12 @@ CREATE POLICY memory_vector_projections_runtime_scope
 GRANT SELECT, INSERT, UPDATE ON control_plane.memory_vector_projections
     TO control_plane_runtime;
 
+-- Верхняя граница и digest намерения переживают удаление pod и запрещают откат
+-- или повторное появление уже выведенного поколения.
 CREATE TABLE control_plane.runtime_principal_lifecycle (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
     generation_high_watermark bigint NOT NULL CHECK (
-        generation_high_watermark BETWEEN 1 AND 9007199254740991
+        generation_high_watermark BETWEEN 0 AND 9007199254740991
     ),
     intent_revision bigint NOT NULL CHECK (
         intent_revision BETWEEN 1 AND 9007199254740991
@@ -172,7 +183,7 @@ INSERT INTO control_plane.runtime_principal_lifecycle (
 )
 SELECT
     true,
-    coalesce(max(generation), 1),
+    coalesce(max(generation), 0),
     1,
     encode(digest(coalesce(string_agg(
         principal_name::text || ':' || generation::text || ':' || status,
@@ -181,6 +192,8 @@ SELECT
     clock_timestamp()
 FROM control_plane.runtime_principals;
 
+-- NEXT может стать CURRENT только после фактического входа и устойчивого readback
+-- именно этим LOGIN.
 CREATE TABLE control_plane.runtime_principal_readbacks (
     principal_name name NOT NULL,
     generation bigint NOT NULL,
@@ -245,6 +258,8 @@ BEGIN
 END
 $function$;
 
+-- Усиленная сверка проверяет предшественника, верхнюю границу и readback, делает
+-- роли RETIRED недоступными для входа, отзывает членство и завершает процессы.
 CREATE OR REPLACE FUNCTION control_plane.reconcile_runtime_principals(
     requested_principals jsonb,
     requested_key_id text,
@@ -339,6 +354,21 @@ BEGIN
 
     IF requested_max_generation < lifecycle_high_watermark
        OR requested_current_generation < persisted_current_generation
+       OR EXISTS (
+            SELECT 1
+              FROM jsonb_to_recordset(requested_principals)
+                AS item(
+                    principal_name text,
+                    generation bigint,
+                    status text,
+                    not_before timestamptz,
+                    not_after timestamptz
+                )
+              LEFT JOIN control_plane.runtime_principals AS persisted
+                ON persisted.generation = item.generation
+             WHERE persisted.generation IS NULL
+               AND item.generation <= lifecycle_high_watermark
+       )
        OR EXISTS (
             SELECT 1
               FROM jsonb_to_recordset(requested_principals)

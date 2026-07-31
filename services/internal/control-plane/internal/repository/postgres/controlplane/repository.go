@@ -1,4 +1,4 @@
-// Package controlplane реализует PostgreSQL adapter доменного repository port.
+// Package controlplane реализует адаптер PostgreSQL для доменного порта репозитория.
 package controlplane
 
 import (
@@ -31,7 +31,7 @@ const (
 	nullActorID         = "00000000-0000-0000-0000-000000000000"
 )
 
-// Config связывает каждый SQL statement с second-factor runtime context.
+// Config связывает каждый оператор SQL с дополнительным контекстом выполнения.
 type Config struct {
 	PrincipalName       string
 	PrincipalGeneration uint64
@@ -40,7 +40,8 @@ type Config struct {
 	ContextTTL          time.Duration
 }
 
-// Repository владеет runtime pool; caller закрывает его после workers.
+// Repository владеет пулом выполнения; вызывающая сторона закрывает его после
+// завершения обработчиков.
 type Repository struct {
 	pool   *pgxpool.Pool
 	config Config
@@ -55,7 +56,7 @@ type transaction struct {
 var _ domainrepo.Repository = (*Repository)(nil)
 var _ domainrepo.Transaction = (*transaction)(nil)
 
-// New создаёт runtime repository.
+// New создаёт репозиторий выполнения.
 func New(pool *pgxpool.Pool, config Config) (*Repository, error) {
 	if pool == nil || config.PrincipalName == "" ||
 		config.PrincipalGeneration == 0 || config.ContextKeyID == "" ||
@@ -66,7 +67,7 @@ func New(pool *pgxpool.Pool, config Config) (*Repository, error) {
 	return &Repository{pool: pool, config: config}, nil
 }
 
-// Transact выполняет serializable command с transaction-local RLS scope.
+// Transact выполняет сериализуемую команду с локальной для транзакции областью RLS.
 func (repository *Repository) Transact(
 	ctx context.Context,
 	scope domainrepo.Scope,
@@ -107,7 +108,7 @@ func (repository *Repository) Transact(
 	return fmt.Errorf("%w: transaction retry exhausted: %v", errs.ErrUnavailable, last)
 }
 
-// Get выполняет ownership-filtered authoritative lookup.
+// Get выполняет авторитетный поиск с фильтром владения.
 func (repository *Repository) Get(
 	ctx context.Context,
 	organizationID, projectID, resourceID string,
@@ -118,7 +119,7 @@ func (repository *Repository) Get(
 		var scanErr error
 		resource, scanErr = scanResource(tx.QueryRow(
 			ctx,
-			query("resource__get.sql"),
+			sqlResourceGet,
 			pgx.StrictNamedArgs{
 				"organization_id": organizationID,
 				"project_id":      projectID,
@@ -133,7 +134,7 @@ func (repository *Repository) Get(
 	return resource, err
 }
 
-// List возвращает stable UUID cursor page.
+// List возвращает страницу с устойчивым курсором UUID.
 func (repository *Repository) List(
 	ctx context.Context,
 	filter domainquery.ResourceFilter,
@@ -151,7 +152,7 @@ func (repository *Repository) List(
 			}
 			rows, err := tx.Query(
 				ctx,
-				query("resource__list.sql"),
+				sqlResourceList,
 				pgx.StrictNamedArgs{
 					"organization_id": filter.OrganizationID,
 					"project_id":      filter.ProjectID,
@@ -196,7 +197,7 @@ func (repository *Repository) Search(
 			}
 			rows, err := tx.Query(
 				ctx,
-				query("resource__search.sql"),
+				sqlResourceSearch,
 				pgx.StrictNamedArgs{
 					"organization_id": filter.OrganizationID,
 					"project_id":      filter.ProjectID,
@@ -231,7 +232,7 @@ func (wrapped *transaction) SearchMemory(
 	var hits []domainrepo.MemorySearchHit
 	rows, err := wrapped.tx.Query(
 		ctx,
-		query("memory__search.sql"),
+		sqlMemorySearch,
 		pgx.StrictNamedArgs{
 			"organization_id":       search.OrganizationID,
 			"project_id":            search.ProjectID,
@@ -265,7 +266,7 @@ func (wrapped *transaction) SearchMemory(
 	return hits, mapError(rows.Err())
 }
 
-// ListEligibleProjects возвращает только owner/member-visible projects.
+// ListEligibleProjects возвращает только проекты, видимые владельцу или участнику.
 func (repository *Repository) ListEligibleProjects(
 	ctx context.Context,
 	organizationID, actorID, afterID string,
@@ -275,7 +276,7 @@ func (repository *Repository) ListEligibleProjects(
 	err := repository.read(ctx, organizationID, "", actorID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(
 			ctx,
-			query("project__list_eligible.sql"),
+			sqlProjectListEligible,
 			pgx.StrictNamedArgs{
 				"organization_id": organizationID,
 				"actor_id":        actorID,
@@ -312,7 +313,7 @@ func (repository *Repository) ListAudit(
 		func(tx pgx.Tx) error {
 			rows, err := tx.Query(
 				ctx,
-				query("audit__list.sql"),
+				sqlAuditList,
 				pgx.StrictNamedArgs{
 					"organization_id": filter.OrganizationID,
 					"project_id":      filter.ProjectID,
@@ -366,7 +367,7 @@ func (repository *Repository) ListTombstones(
 		func(tx pgx.Tx) error {
 			rows, err := tx.Query(
 				ctx,
-				query("resource__list_tombstones.sql"),
+				sqlResourceListTombstones,
 				pgx.StrictNamedArgs{
 					"organization_id": filter.OrganizationID,
 					"project_id":      filter.ProjectID,
@@ -415,7 +416,7 @@ func (repository *Repository) ListScheduleOccurrences(
 		func(tx pgx.Tx) error {
 			rows, err := tx.Query(
 				ctx,
-				query("schedule_occurrence__list.sql"),
+				sqlScheduleOccurrenceList,
 				pgx.StrictNamedArgs{
 					"organization_id": filter.OrganizationID,
 					"project_id":      filter.ProjectID,
@@ -454,7 +455,7 @@ func (repository *Repository) Diagnostics(
 		scope.ProjectID,
 		scope.ActorID,
 		func(tx pgx.Tx) error {
-			return tx.QueryRow(ctx, query("diagnostics__get.sql")).Scan(
+			return tx.QueryRow(ctx, sqlDiagnosticsGet).Scan(
 				&diagnostics.SchemaVersion,
 				&diagnostics.PendingOutboxEvents,
 				&diagnostics.TerminalOutboxEvents,
@@ -470,13 +471,13 @@ func (repository *Repository) Diagnostics(
 	return diagnostics, err
 }
 
-// Check проверяет schema version и эффективную non-superuser runtime роль.
+// Check проверяет версию схемы и действующую непривилегированную роль выполнения.
 func (repository *Repository) Check(ctx context.Context) error {
 	var version uint64
 	var generation uint64
 	var status string
 	var member, nonSuperuser, noBypassRLS, loginEnabled bool
-	if err := repository.pool.QueryRow(ctx, query("readiness__check.sql")).Scan(
+	if err := repository.pool.QueryRow(ctx, sqlReadinessCheck).Scan(
 		&version,
 		&member,
 		&nonSuperuser,
@@ -495,7 +496,7 @@ func (repository *Repository) Check(ctx context.Context) error {
 	return nil
 }
 
-// CacheEpoch возвращает PostgreSQL-owned invalidation version.
+// CacheEpoch возвращает принадлежащую PostgreSQL версию инвалидации.
 func (repository *Repository) CacheEpoch(
 	ctx context.Context,
 	organizationID, projectID string,
@@ -504,7 +505,7 @@ func (repository *Repository) CacheEpoch(
 	err := repository.read(ctx, organizationID, projectID, nullActorID, func(tx pgx.Tx) error {
 		scanErr := tx.QueryRow(
 			ctx,
-			query("cache_epoch__get.sql"),
+			sqlCacheEpochGet,
 			pgx.StrictNamedArgs{
 				"organization_id": organizationID,
 				"project_id":      projectID,
@@ -519,7 +520,7 @@ func (repository *Repository) CacheEpoch(
 	return epoch, err
 }
 
-// Close освобождает runtime pool.
+// Close освобождает пул выполнения.
 func (repository *Repository) Close() {
 	repository.pool.Close()
 }
@@ -574,7 +575,7 @@ func (repository *Repository) setScope(
 	_, _ = mac.Write([]byte(canonical))
 	if _, err := tx.Exec(
 		ctx,
-		query("transaction__set_scope.sql"),
+		sqlTransactionSetScope,
 		pgx.StrictNamedArgs{
 			"organization_id":      scope.OrganizationID,
 			"project_id":           scope.ProjectID,
@@ -600,7 +601,7 @@ func (wrapped *transaction) GetReceipt(
 	var resultRaw, payloadRaw []byte
 	err := wrapped.tx.QueryRow(
 		ctx,
-		query("receipt__get.sql"),
+		sqlReceiptGet,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"scope":           scope,
@@ -652,7 +653,7 @@ func (wrapped *transaction) SaveReceipt(
 	}
 	_, err := wrapped.tx.Exec(
 		ctx,
-		query("receipt__save.sql"),
+		sqlReceiptSave,
 		pgx.StrictNamedArgs{
 			"organization_id": receipt.OrganizationID,
 			"project_id":      receipt.ProjectID,
@@ -673,7 +674,7 @@ func (wrapped *transaction) GetForUpdate(
 ) (entity.Resource, error) {
 	return scanResource(wrapped.tx.QueryRow(
 		ctx,
-		query("resource__get_for_update.sql"),
+		sqlResourceGetForUpdate,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -689,7 +690,7 @@ func (wrapped *transaction) Insert(ctx context.Context, resource entity.Resource
 	}
 	tag, err := wrapped.tx.Exec(
 		ctx,
-		query("resource__insert.sql"),
+		sqlResourceInsert,
 		pgx.StrictNamedArgs{
 			"id":                   resource.ID,
 			"organization_id":      resource.OrganizationID,
@@ -729,7 +730,7 @@ func (wrapped *transaction) Update(
 	}
 	tag, err := wrapped.tx.Exec(
 		ctx,
-		query("resource__update.sql"),
+		sqlResourceUpdate,
 		pgx.StrictNamedArgs{
 			"id":                   resource.ID,
 			"organization_id":      resource.OrganizationID,
@@ -758,7 +759,7 @@ func (wrapped *transaction) Update(
 func (wrapped *transaction) AppendAudit(ctx context.Context, audit domainrepo.Audit) error {
 	_, err := wrapped.tx.Exec(
 		ctx,
-		query("audit__append.sql"),
+		sqlAuditAppend,
 		pgx.StrictNamedArgs{
 			"id":               audit.ID,
 			"organization_id":  audit.OrganizationID,
@@ -809,7 +810,7 @@ func (wrapped *transaction) AppendEvent(ctx context.Context, change event.Change
 	}
 	_, err = wrapped.tx.Exec(
 		ctx,
-		query("outbox__append.sql"),
+		sqlOutboxAppend,
 		pgx.StrictNamedArgs{
 			"event_id":          change.EventID,
 			"organization_id":   change.OrganizationID,
@@ -834,7 +835,7 @@ func (wrapped *transaction) ActorPermissions(
 ) ([]string, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
-		query("permission_index__actor_list.sql"),
+		sqlPermissionIndexActorList,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -862,7 +863,7 @@ func (wrapped *transaction) ActorRoleIDs(
 ) ([]string, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
-		query("permission_index__actor_roles.sql"),
+		sqlPermissionIndexActorRoles,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -890,7 +891,7 @@ func (wrapped *transaction) ListSnapshotResources(
 ) ([]entity.Resource, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
-		query("runtime_revision__components.sql"),
+		sqlRuntimeRevisionComponents,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -917,7 +918,7 @@ func (wrapped *transaction) LatestRuntimeRevision(
 ) (entity.Resource, error) {
 	return scanResource(wrapped.tx.QueryRow(
 		ctx,
-		query("runtime_revision__latest.sql"),
+		sqlRuntimeRevisionLatest,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -927,30 +928,32 @@ func (wrapped *transaction) LatestRuntimeRevision(
 
 func (wrapped *transaction) NextQueuedTurn(
 	ctx context.Context,
-	organizationID, projectID string,
+	organizationID, projectID, turnID string,
 ) (entity.Resource, error) {
 	return scanResource(wrapped.tx.QueryRow(
 		ctx,
-		query("turn__next_queued.sql"),
+		sqlTurnNextQueued,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
+			"turn_id":         turnID,
 		},
 	))
 }
 
 func (wrapped *transaction) ExpiredClaimedTurns(
 	ctx context.Context,
-	organizationID, projectID string,
+	organizationID, projectID, turnID string,
 	limit int,
 	now time.Time,
 ) ([]domainrepo.ExpiredTurn, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
-		query("turn__expired_claimed.sql"),
+		sqlTurnExpiredClaimed,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
+			"turn_id":         turnID,
 			"limit":           limit,
 			"now":             now,
 		},
@@ -1008,7 +1011,7 @@ func (wrapped *transaction) SaveTurnLease(
 ) error {
 	tag, err := wrapped.tx.Exec(
 		ctx,
-		query("turn_lease__save.sql"),
+		sqlTurnLeaseSave,
 		pgx.StrictNamedArgs{
 			"turn_id":              lease.TurnID,
 			"token_hash":           lease.TokenHash,
@@ -1036,7 +1039,7 @@ func (wrapped *transaction) RenewTurnLease(
 	var renewed domainrepo.TurnLease
 	err := wrapped.tx.QueryRow(
 		ctx,
-		query("turn_lease__renew.sql"),
+		sqlTurnLeaseRenew,
 		pgx.StrictNamedArgs{
 			"turn_id":              lease.TurnID,
 			"token_hash":           lease.TokenHash,
@@ -1072,7 +1075,7 @@ func (wrapped *transaction) ValidateTurnLease(
 	var lease domainrepo.TurnLease
 	err := wrapped.tx.QueryRow(
 		ctx,
-		query("turn_lease__validate.sql"),
+		sqlTurnLeaseValidate,
 		pgx.StrictNamedArgs{
 			"turn_id":              turnID,
 			"token_hash":           tokenHash,
@@ -1103,7 +1106,7 @@ func (wrapped *transaction) GetTurnLeaseForUpdate(
 	var lease domainrepo.TurnLease
 	err := wrapped.tx.QueryRow(
 		ctx,
-		query("turn_lease__get_for_update.sql"),
+		sqlTurnLeaseGetForUpdate,
 		pgx.StrictNamedArgs{"turn_id": turnID},
 	).Scan(
 		&lease.TurnID,
@@ -1126,7 +1129,7 @@ func (wrapped *transaction) SaveTurnAttempt(
 ) error {
 	tag, err := wrapped.tx.Exec(
 		ctx,
-		query("turn_attempt__save.sql"),
+		sqlTurnAttemptSave,
 		pgx.StrictNamedArgs{
 			"turn_id":              attempt.TurnID,
 			"attempt":              attempt.Attempt,
@@ -1153,7 +1156,7 @@ func (wrapped *transaction) FinishTurnAttempt(
 ) error {
 	tag, err := wrapped.tx.Exec(
 		ctx,
-		query("turn_attempt__finish.sql"),
+		sqlTurnAttemptFinish,
 		pgx.StrictNamedArgs{
 			"turn_id":              attempt.TurnID,
 			"attempt":              attempt.Attempt,
@@ -1181,7 +1184,7 @@ func (wrapped *transaction) DeleteTurnLease(
 ) error {
 	tag, err := wrapped.tx.Exec(
 		ctx,
-		query("turn_lease__delete.sql"),
+		sqlTurnLeaseDelete,
 		pgx.StrictNamedArgs{"turn_id": turnID, "fence": fence},
 	)
 	if err != nil {
@@ -1201,7 +1204,7 @@ func (wrapped *transaction) DueSchedules(
 ) ([]entity.Resource, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
-		query("schedule__due.sql"),
+		sqlScheduleDue,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1230,7 +1233,7 @@ func (wrapped *transaction) SaveScheduleOccurrence(
 ) error {
 	tag, err := wrapped.tx.Exec(
 		ctx,
-		query("schedule_occurrence__save.sql"),
+		sqlScheduleOccurrenceSave,
 		pgx.StrictNamedArgs{
 			"id":                            occurrence.ID,
 			"schedule_id":                   occurrence.ScheduleID,
@@ -1278,7 +1281,7 @@ func (wrapped *transaction) HasOpenScheduleOccurrence(
 	var found bool
 	err := wrapped.tx.QueryRow(
 		ctx,
-		query("schedule_occurrence__has_open.sql"),
+		sqlScheduleOccurrenceHasOpen,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1295,7 +1298,7 @@ func (wrapped *transaction) SkipOverlappedScheduleOccurrences(
 ) ([]domainrepo.ScheduleOccurrence, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
-		query("schedule_occurrence__skip_overlap.sql"),
+		sqlScheduleOccurrenceSkipOverlap,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1324,7 +1327,7 @@ func (wrapped *transaction) RecoverExpiredScheduleOccurrences(
 ) ([]domainrepo.ScheduleOccurrence, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
-		query("schedule_occurrence__recover_expired.sql"),
+		sqlScheduleOccurrenceRecoverExpired,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1353,7 +1356,7 @@ func (wrapped *transaction) NextScheduleOccurrence(
 ) (domainrepo.ScheduleOccurrence, error) {
 	return scanScheduleOccurrence(wrapped.tx.QueryRow(
 		ctx,
-		query("schedule_occurrence__next.sql"),
+		sqlScheduleOccurrenceNext,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1370,7 +1373,7 @@ func (wrapped *transaction) UpdateScheduleOccurrence(
 ) error {
 	tag, err := wrapped.tx.Exec(
 		ctx,
-		query("schedule_occurrence__update.sql"),
+		sqlScheduleOccurrenceUpdate,
 		pgx.StrictNamedArgs{
 			"id":                   occurrence.ID,
 			"state":                occurrence.State,
@@ -1402,7 +1405,7 @@ func (wrapped *transaction) GetScheduleOccurrenceForUpdate(
 ) (domainrepo.ScheduleOccurrence, error) {
 	return scanScheduleOccurrence(wrapped.tx.QueryRow(
 		ctx,
-		query("schedule_occurrence__get_for_update.sql"),
+		sqlScheduleOccurrenceGetForUpdate,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1417,7 +1420,7 @@ func (wrapped *transaction) AuthorizeProject(
 ) (entity.Resource, error) {
 	return scanResource(wrapped.tx.QueryRow(
 		ctx,
-		query("project__authorize.sql"),
+		sqlProjectAuthorize,
 		pgx.StrictNamedArgs{
 			"organization_id":    organizationID,
 			"project_id":         projectID,
@@ -1430,7 +1433,7 @@ func (wrapped *transaction) AuthorizeProject(
 
 func (wrapped *transaction) NextProofRevision(ctx context.Context) (uint64, error) {
 	var revision uint64
-	err := wrapped.tx.QueryRow(ctx, query("proof_revision__next.sql")).Scan(&revision)
+	err := wrapped.tx.QueryRow(ctx, sqlProofRevisionNext).Scan(&revision)
 	return revision, mapError(err)
 }
 
@@ -1440,7 +1443,7 @@ func (wrapped *transaction) SaveMemoryProjection(
 ) error {
 	tag, err := wrapped.tx.Exec(
 		ctx,
-		query("memory_projection__upsert.sql"),
+		sqlMemoryProjectionUpsert,
 		pgx.StrictNamedArgs{
 			"resource_id":       projection.ResourceID,
 			"organization_id":   projection.OrganizationID,
@@ -1471,7 +1474,7 @@ func (wrapped *transaction) HasActiveChildProcesses(
 	var exists bool
 	err := wrapped.tx.QueryRow(
 		ctx,
-		query("process__has_active_children.sql"),
+		sqlProcessHasActiveChildren,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1479,6 +1482,22 @@ func (wrapped *transaction) HasActiveChildProcesses(
 		},
 	).Scan(&exists)
 	return exists, mapError(err)
+}
+
+func (wrapped *transaction) NextOwnerGateDelivery(
+	ctx context.Context,
+	organizationID, projectID string,
+	now time.Time,
+) (entity.Resource, error) {
+	return scanResource(wrapped.tx.QueryRow(
+		ctx,
+		sqlOwnerGateNextDelivery,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"now":             now,
+		},
+	))
 }
 
 type rowScanner interface {
@@ -1688,7 +1707,7 @@ func (wrapped *transaction) bumpOneCacheEpoch(
 	var epoch uint64
 	err := wrapped.tx.QueryRow(
 		ctx,
-		query("cache_epoch__bump.sql"),
+		sqlCacheEpochBump,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1712,7 +1731,7 @@ func (wrapped *transaction) rebuildPermissionIndex(
 	}
 	_, err := wrapped.tx.Exec(
 		ctx,
-		query("permission_index__rebuild.sql"),
+		sqlPermissionIndexRebuild,
 		pgx.StrictNamedArgs{
 			"organization_id": resource.OrganizationID,
 			"project_id":      projectID,

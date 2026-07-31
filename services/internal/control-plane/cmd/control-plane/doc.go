@@ -1,2 +1,2 @@
-// Command control-plane запускает внутренний gRPC service и outbox relay.
+// Command control-plane запускает внутренний gRPC-сервис и ретранслятор outbox.
 package main

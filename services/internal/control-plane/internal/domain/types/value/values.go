@@ -1,4 +1,4 @@
-// Package value содержит проверяемые value objects control-plane.
+// Package value содержит проверяемые объекты-значения control-plane.
 package value
 
 import (
@@ -11,20 +11,25 @@ import (
 
 var stableKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$`)
 
-// Principal выводится только из проверенного authorization context.
+// Principal выводится только из проверенного контекста авторизации.
 type Principal struct {
-	ActorID             string
-	OrganizationID      string
-	ProjectID           string
-	Permission          string
-	CorrelationID       string
-	PolicyRevision      uint64
-	AuthorityGeneration uint64
-	CallerWorkload      string
-	CallerSPIFFEID      string
+	ActorID                  string
+	OrganizationID           string
+	ProjectID                string
+	Permission               string
+	CorrelationID            string
+	PolicyRevision           uint64
+	AuthorityGeneration      uint64
+	CallerWorkload           string
+	CallerSPIFFEID           string
+	AuthoritySource          string
+	AuthorityReference       string
+	AuthorityRevision        uint64
+	AuthorityDigest          string
+	AuthorityGrantGeneration uint64
 }
 
-// Validate проверяет обязательную server-derived identity.
+// Validate проверяет обязательную определённую сервером идентичность.
 func (principal Principal) Validate() error {
 	if _, err := uuid.Parse(principal.ActorID); err != nil {
 		return errors.New("actor identity is invalid")
@@ -41,8 +46,16 @@ func (principal Principal) Validate() error {
 		principal.Permission == "" || principal.PolicyRevision == 0 ||
 		principal.AuthorityGeneration == 0 ||
 		principal.CallerWorkload == "" ||
-		principal.CallerSPIFFEID == "" {
+		principal.CallerSPIFFEID == "" ||
+		principal.AuthoritySource == "" ||
+		ValidateID(principal.AuthorityReference) != nil ||
+		principal.AuthorityRevision == 0 ||
+		len(principal.AuthorityDigest) != 64 {
 		return errors.New("authorization context is invalid")
+	}
+	if principal.AuthoritySource == "AGENT_SESSION" &&
+		principal.AuthorityGrantGeneration == 0 {
+		return errors.New("agent grant generation is invalid")
 	}
 	return nil
 }
@@ -69,7 +82,7 @@ func ValidateName(name string) error {
 	return nil
 }
 
-// ValidateStableKey проверяет server-safe stable key.
+// ValidateStableKey проверяет стабильный ключ, безопасный для сервера.
 func ValidateStableKey(value string) error {
 	if len(value) < 1 || len(value) > 96 || !stableKeyPattern.MatchString(value) {
 		return errors.New("stable key is invalid")
@@ -77,7 +90,7 @@ func ValidateStableKey(value string) error {
 	return nil
 }
 
-// ValidateIdempotencyKey проверяет opaque client key до hashing.
+// ValidateIdempotencyKey проверяет непрозрачный клиентский ключ до хеширования.
 func ValidateIdempotencyKey(value string) error {
 	if len(value) < 16 || len(value) > 128 {
 		return errors.New("idempotency key is invalid")

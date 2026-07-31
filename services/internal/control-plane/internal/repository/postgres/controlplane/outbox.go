@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// OutboxStore использует отдельный least-privilege relay pool.
+// OutboxStore использует отдельный пул ретранслятора с минимальными полномочиями.
 type OutboxStore struct {
 	pool        *pgxpool.Pool
 	maxAttempts uint32
@@ -20,7 +20,7 @@ type OutboxStore struct {
 
 var _ eventing.OutboxStore = (*OutboxStore)(nil)
 
-// NewOutboxStore создаёт broker-neutral relay store.
+// NewOutboxStore создаёт независимое от брокера хранилище ретранслятора.
 func NewOutboxStore(pool *pgxpool.Pool, maxAttempts uint32) (*OutboxStore, error) {
 	if pool == nil || maxAttempts < 1 || maxAttempts > 100 {
 		return nil, errors.New("control-plane outbox configuration is invalid")
@@ -31,7 +31,7 @@ func NewOutboxStore(pool *pgxpool.Pool, maxAttempts uint32) (*OutboxStore, error
 func (store *OutboxStore) Check(ctx context.Context) error {
 	var version uint64
 	var member, nonSuperuser, noBypassRLS bool
-	if err := store.pool.QueryRow(ctx, query("outbox__check.sql")).Scan(
+	if err := store.pool.QueryRow(ctx, sqlOutboxCheck).Scan(
 		&version,
 		&member,
 		&nonSuperuser,
@@ -53,7 +53,7 @@ func (store *OutboxStore) Claim(
 ) ([]eventing.ClaimedEvent, error) {
 	rows, err := store.pool.Query(
 		ctx,
-		query("outbox__claim.sql"),
+		sqlOutboxClaim,
 		pgx.StrictNamedArgs{
 			"lease_owner":    instanceID,
 			"limit":          limit,
@@ -91,7 +91,7 @@ func (store *OutboxStore) MarkPublished(
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	tag, err := store.pool.Exec(
 		ctx,
-		query("outbox__mark_published.sql"),
+		sqlOutboxMarkPublished,
 		pgx.StrictNamedArgs{
 			"event_id":         eventID,
 			"lease_token":      leaseToken,
@@ -119,7 +119,7 @@ func (store *OutboxStore) MarkFailed(
 ) error {
 	tag, err := store.pool.Exec(
 		ctx,
-		query("outbox__mark_failed.sql"),
+		sqlOutboxMarkFailed,
 		pgx.StrictNamedArgs{
 			"event_id":     eventID,
 			"lease_token":  leaseToken,

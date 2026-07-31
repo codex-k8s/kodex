@@ -1,4 +1,4 @@
-// Package grpc реализует strict generated transport control-plane.
+// Package grpc реализует строгий сгенерированный транспорт control-plane.
 package grpc
 
 import (
@@ -19,7 +19,7 @@ import (
 
 const readinessPermission = "controlplane.readiness.check"
 
-// ReadinessState описывает фактические dependency checks.
+// ReadinessState описывает фактические проверки зависимостей.
 type ReadinessState struct {
 	SchemaVersion  uint64
 	AuthorityReady bool
@@ -28,7 +28,7 @@ type ReadinessState struct {
 	OutboxReady    bool
 }
 
-// Readiness проверяет тот же production path, что используют RPC и relay.
+// Readiness проверяет тот же промышленный путь, что используют RPC и ретранслятор.
 type Readiness interface {
 	Check(context.Context) (ReadinessState, error)
 }
@@ -40,7 +40,7 @@ type Server struct {
 	readiness Readiness
 }
 
-// NewServer создаёт transport над доменным service.
+// NewServer создаёт транспорт над доменным сервисом.
 func NewServer(service *resource.Service, readiness Readiness) (*Server, error) {
 	if service == nil || readiness == nil {
 		return nil, errors.New("control-plane gRPC dependencies are required")
@@ -176,12 +176,13 @@ func (server *Server) UpdateResource(
 		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
 	}
 	updated, err := server.service.Update(ctx, resource.UpdateInput{
-		Principal:       principal,
-		IdempotencyKey:  request.GetIdempotencyKey(),
-		ResourceID:      request.GetResourceId(),
-		ExpectedVersion: request.GetExpectedVersion(),
-		Name:            request.GetName(),
-		Spec:            spec,
+		Principal:           principal,
+		IdempotencyKey:      request.GetIdempotencyKey(),
+		ResourceID:          request.GetResourceId(),
+		ExpectedVersion:     request.GetExpectedVersion(),
+		Name:                request.GetName(),
+		Spec:                spec,
+		DetachGitManagement: request.GetDetachGitManagement(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -261,9 +262,10 @@ func (server *Server) GetResource(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	found, err := server.service.Get(ctx, resource.GetInput{
-		Principal:  principal,
-		ResourceID: request.GetResourceId(),
-		Kind:       fromProtoKind(request.GetExpectedKind()),
+		Principal:       principal,
+		ResourceID:      request.GetResourceId(),
+		Kind:            fromProtoKind(request.GetExpectedKind()),
+		ExpectedVersion: request.GetExpectedVersion(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)

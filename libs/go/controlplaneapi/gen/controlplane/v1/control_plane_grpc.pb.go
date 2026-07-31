@@ -51,6 +51,7 @@ const (
 	ControlPlaneService_StartProcess_FullMethodName               = "/controlplane.v1.ControlPlaneService/StartProcess"
 	ControlPlaneService_CancelProcess_FullMethodName              = "/controlplane.v1.ControlPlaneService/CancelProcess"
 	ControlPlaneService_RequestOwnerGate_FullMethodName           = "/controlplane.v1.ControlPlaneService/RequestOwnerGate"
+	ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName     = "/controlplane.v1.ControlPlaneService/ClaimOwnerGateDelivery"
 	ControlPlaneService_RecordOwnerGateDelivery_FullMethodName    = "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery"
 	ControlPlaneService_ResolveOwnerGate_FullMethodName           = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
 	ControlPlaneService_RegisterArtifact_FullMethodName           = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
@@ -65,62 +66,97 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // ControlPlaneService владеет желаемым бизнес-состоянием MatterCodex.
-// Actor, organization, project scope и permissions не принимаются в payload:
-// transport получает их только из проверенного authorization context #186.
+// Actor, организация, область проекта и полномочия не принимаются в нагрузке:
+// транспорт получает их только из проверенного контекста авторизации #186.
 type ControlPlaneServiceClient interface {
+	// CreateProject выполняет версионированную операцию ControlPlaneService.
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
+	// ListProjects выполняет версионированную операцию ControlPlaneService.
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
+	// CreateResource выполняет версионированную операцию ControlPlaneService.
 	CreateResource(ctx context.Context, in *CreateResourceRequest, opts ...grpc.CallOption) (*CreateResourceResponse, error)
+	// UpdateResource выполняет версионированную операцию ControlPlaneService.
 	UpdateResource(ctx context.Context, in *UpdateResourceRequest, opts ...grpc.CallOption) (*UpdateResourceResponse, error)
+	// TransitionResource выполняет версионированную операцию ControlPlaneService.
 	TransitionResource(ctx context.Context, in *TransitionResourceRequest, opts ...grpc.CallOption) (*TransitionResourceResponse, error)
+	// DeleteResource выполняет версионированную операцию ControlPlaneService.
 	DeleteResource(ctx context.Context, in *DeleteResourceRequest, opts ...grpc.CallOption) (*DeleteResourceResponse, error)
-	// ManageAccessResource — закрытая administrative command для TEAM/ROLE/PROMPT_PROFILE.
+	// ManageAccessResource — закрытая административная команда для TEAM/ROLE/PROMPT_PROFILE.
 	ManageAccessResource(ctx context.Context, in *ManageAccessResourceRequest, opts ...grpc.CallOption) (*ManageAccessResourceResponse, error)
+	// GetResource выполняет версионированную операцию ControlPlaneService.
 	GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error)
+	// ListResources выполняет версионированную операцию ControlPlaneService.
 	ListResources(ctx context.Context, in *ListResourcesRequest, opts ...grpc.CallOption) (*ListResourcesResponse, error)
+	// SearchResources выполняет версионированную операцию ControlPlaneService.
 	SearchResources(ctx context.Context, in *SearchResourcesRequest, opts ...grpc.CallOption) (*SearchResourcesResponse, error)
+	// SearchMemoryRecords выполняет версионированную операцию ControlPlaneService.
 	SearchMemoryRecords(ctx context.Context, in *SearchMemoryRecordsRequest, opts ...grpc.CallOption) (*SearchMemoryRecordsResponse, error)
+	// ListAuditEvents выполняет версионированную операцию ControlPlaneService.
 	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
+	// ListTombstones выполняет версионированную операцию ControlPlaneService.
 	ListTombstones(ctx context.Context, in *ListTombstonesRequest, opts ...grpc.CallOption) (*ListTombstonesResponse, error)
+	// GetDiagnostics выполняет версионированную операцию ControlPlaneService.
 	GetDiagnostics(ctx context.Context, in *GetDiagnosticsRequest, opts ...grpc.CallOption) (*GetDiagnosticsResponse, error)
-	// EnqueueTurn атомарно резервирует следующую FIFO sequence сессии.
+	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
 	EnqueueTurn(ctx context.Context, in *EnqueueTurnRequest, opts ...grpc.CallOption) (*EnqueueTurnResponse, error)
-	// ClaimTurn выдает одну попытку exact workload и использует bounded lease.
+	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
+	// ограниченную аренду.
 	ClaimTurn(ctx context.Context, in *ClaimTurnRequest, opts ...grpc.CallOption) (*ClaimTurnResponse, error)
-	// RenewTurn продлевает только текущую attempt/fence/generation lease.
+	// RenewTurn продлевает только аренду текущей попытки, fence и поколения.
 	RenewTurn(ctx context.Context, in *RenewTurnRequest, opts ...grpc.CallOption) (*RenewTurnResponse, error)
-	// CompleteTurn завершает только текущую lease и фиксирует terminal outcome.
+	// CompleteTurn завершает только текущую аренду и фиксирует конечный исход.
 	CompleteTurn(ctx context.Context, in *CompleteTurnRequest, opts ...grpc.CallOption) (*CompleteTurnResponse, error)
+	// RetryTurn выполняет версионированную операцию ControlPlaneService.
 	RetryTurn(ctx context.Context, in *RetryTurnRequest, opts ...grpc.CallOption) (*RetryTurnResponse, error)
+	// CancelTurn выполняет версионированную операцию ControlPlaneService.
 	CancelTurn(ctx context.Context, in *CancelTurnRequest, opts ...grpc.CallOption) (*CancelTurnResponse, error)
-	// ManageSession — единственный lifecycle path SESSION; provider binding выбирает сервер.
+	// ManageSession — единственный путь жизненного цикла SESSION; привязку
+	// провайдера выбирает сервер.
 	ManageSession(ctx context.Context, in *ManageSessionRequest, opts ...grpc.CallOption) (*ManageSessionResponse, error)
-	// ManageMemoryRecord связывает scope и owner с проверенным actor.
+	// ManageMemoryRecord связывает область и владельца с проверенным actor.
 	ManageMemoryRecord(ctx context.Context, in *ManageMemoryRecordRequest, opts ...grpc.CallOption) (*ManageMemoryRecordResponse, error)
-	// ManageWorkClaim связывает claim с exact process/session/turn/attempt/workload.
+	// ManageWorkClaim связывает получение работы с точными процессом, сессией,
+	// ходом, попыткой и рабочей нагрузкой.
 	ManageWorkClaim(ctx context.Context, in *ManageWorkClaimRequest, opts ...grpc.CallOption) (*ManageWorkClaimResponse, error)
-	// ManageSchedule изменяет schedule только через закрытые server-owned actions.
+	// ManageSchedule изменяет расписание только через закрытые действия сервера.
 	ManageSchedule(ctx context.Context, in *ManageScheduleRequest, opts ...grpc.CallOption) (*ManageScheduleResponse, error)
-	// ClaimDueSchedules материализует наступившие QUEUED occurrence без запуска runtime.
+	// ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
+	// среды исполнения.
 	ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error)
+	// ClaimScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	ClaimScheduleOccurrence(ctx context.Context, in *ClaimScheduleOccurrenceRequest, opts ...grpc.CallOption) (*ClaimScheduleOccurrenceResponse, error)
+	// CompleteScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	CompleteScheduleOccurrence(ctx context.Context, in *CompleteScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CompleteScheduleOccurrenceResponse, error)
+	// CancelScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	CancelScheduleOccurrence(ctx context.Context, in *CancelScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CancelScheduleOccurrenceResponse, error)
+	// ListScheduleOccurrences выполняет версионированную операцию ControlPlaneService.
 	ListScheduleOccurrences(ctx context.Context, in *ListScheduleOccurrencesRequest, opts ...grpc.CallOption) (*ListScheduleOccurrencesResponse, error)
+	// StartProcess выполняет версионированную операцию ControlPlaneService.
 	StartProcess(ctx context.Context, in *StartProcessRequest, opts ...grpc.CallOption) (*StartProcessResponse, error)
+	// CancelProcess выполняет версионированную операцию ControlPlaneService.
 	CancelProcess(ctx context.Context, in *CancelProcessRequest, opts ...grpc.CallOption) (*CancelProcessResponse, error)
+	// RequestOwnerGate выполняет версионированную операцию ControlPlaneService.
 	RequestOwnerGate(ctx context.Context, in *RequestOwnerGateRequest, opts ...grpc.CallOption) (*RequestOwnerGateResponse, error)
-	// RecordOwnerGateDelivery фиксирует durable receipt exact server-owned карточки.
+	// ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
+	// сервером выбранной ожидающей карточки.
+	ClaimOwnerGateDelivery(ctx context.Context, in *ClaimOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*ClaimOwnerGateDeliveryResponse, error)
+	// RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
+	// принадлежащей серверу.
 	RecordOwnerGateDelivery(ctx context.Context, in *RecordOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*RecordOwnerGateDeliveryResponse, error)
-	// ResolveOwnerGate связывает решение с exact gate/process/session/turn/attempt.
+	// ResolveOwnerGate связывает решение с точными шлюзом, процессом, сессией,
+	// ходом и попыткой.
 	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
+	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
 	RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error)
+	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
 	RecordArtifactScan(ctx context.Context, in *RecordArtifactScanRequest, opts ...grpc.CallOption) (*RecordArtifactScanResponse, error)
-	// GetRuntimeRevision — version-pinned authoritative read для runtime-controller.
+	// GetRuntimeRevision — авторитетное чтение закреплённой версии для
+	// runtime-controller.
 	GetRuntimeRevision(ctx context.Context, in *GetRuntimeRevisionRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionResponse, error)
-	// RecordMemoryEmbedding фиксирует локальную перестраиваемую projection, не источник истины.
+	// RecordMemoryEmbedding фиксирует локальную перестраиваемую проекцию, а не
+	// источник истины.
 	RecordMemoryEmbedding(ctx context.Context, in *RecordMemoryEmbeddingRequest, opts ...grpc.CallOption) (*RecordMemoryEmbeddingResponse, error)
-	// CheckReadiness проверяет authority, PostgreSQL, cache и outbox publisher.
+	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
 }
 
@@ -452,6 +488,16 @@ func (c *controlPlaneServiceClient) RequestOwnerGate(ctx context.Context, in *Re
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ClaimOwnerGateDelivery(ctx context.Context, in *ClaimOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*ClaimOwnerGateDeliveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimOwnerGateDeliveryResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) RecordOwnerGateDelivery(ctx context.Context, in *RecordOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*RecordOwnerGateDeliveryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RecordOwnerGateDeliveryResponse)
@@ -527,62 +573,97 @@ func (c *controlPlaneServiceClient) CheckReadiness(ctx context.Context, in *Chec
 // for forward compatibility.
 //
 // ControlPlaneService владеет желаемым бизнес-состоянием MatterCodex.
-// Actor, organization, project scope и permissions не принимаются в payload:
-// transport получает их только из проверенного authorization context #186.
+// Actor, организация, область проекта и полномочия не принимаются в нагрузке:
+// транспорт получает их только из проверенного контекста авторизации #186.
 type ControlPlaneServiceServer interface {
+	// CreateProject выполняет версионированную операцию ControlPlaneService.
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
+	// ListProjects выполняет версионированную операцию ControlPlaneService.
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
+	// CreateResource выполняет версионированную операцию ControlPlaneService.
 	CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error)
+	// UpdateResource выполняет версионированную операцию ControlPlaneService.
 	UpdateResource(context.Context, *UpdateResourceRequest) (*UpdateResourceResponse, error)
+	// TransitionResource выполняет версионированную операцию ControlPlaneService.
 	TransitionResource(context.Context, *TransitionResourceRequest) (*TransitionResourceResponse, error)
+	// DeleteResource выполняет версионированную операцию ControlPlaneService.
 	DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error)
-	// ManageAccessResource — закрытая administrative command для TEAM/ROLE/PROMPT_PROFILE.
+	// ManageAccessResource — закрытая административная команда для TEAM/ROLE/PROMPT_PROFILE.
 	ManageAccessResource(context.Context, *ManageAccessResourceRequest) (*ManageAccessResourceResponse, error)
+	// GetResource выполняет версионированную операцию ControlPlaneService.
 	GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error)
+	// ListResources выполняет версионированную операцию ControlPlaneService.
 	ListResources(context.Context, *ListResourcesRequest) (*ListResourcesResponse, error)
+	// SearchResources выполняет версионированную операцию ControlPlaneService.
 	SearchResources(context.Context, *SearchResourcesRequest) (*SearchResourcesResponse, error)
+	// SearchMemoryRecords выполняет версионированную операцию ControlPlaneService.
 	SearchMemoryRecords(context.Context, *SearchMemoryRecordsRequest) (*SearchMemoryRecordsResponse, error)
+	// ListAuditEvents выполняет версионированную операцию ControlPlaneService.
 	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
+	// ListTombstones выполняет версионированную операцию ControlPlaneService.
 	ListTombstones(context.Context, *ListTombstonesRequest) (*ListTombstonesResponse, error)
+	// GetDiagnostics выполняет версионированную операцию ControlPlaneService.
 	GetDiagnostics(context.Context, *GetDiagnosticsRequest) (*GetDiagnosticsResponse, error)
-	// EnqueueTurn атомарно резервирует следующую FIFO sequence сессии.
+	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
 	EnqueueTurn(context.Context, *EnqueueTurnRequest) (*EnqueueTurnResponse, error)
-	// ClaimTurn выдает одну попытку exact workload и использует bounded lease.
+	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
+	// ограниченную аренду.
 	ClaimTurn(context.Context, *ClaimTurnRequest) (*ClaimTurnResponse, error)
-	// RenewTurn продлевает только текущую attempt/fence/generation lease.
+	// RenewTurn продлевает только аренду текущей попытки, fence и поколения.
 	RenewTurn(context.Context, *RenewTurnRequest) (*RenewTurnResponse, error)
-	// CompleteTurn завершает только текущую lease и фиксирует terminal outcome.
+	// CompleteTurn завершает только текущую аренду и фиксирует конечный исход.
 	CompleteTurn(context.Context, *CompleteTurnRequest) (*CompleteTurnResponse, error)
+	// RetryTurn выполняет версионированную операцию ControlPlaneService.
 	RetryTurn(context.Context, *RetryTurnRequest) (*RetryTurnResponse, error)
+	// CancelTurn выполняет версионированную операцию ControlPlaneService.
 	CancelTurn(context.Context, *CancelTurnRequest) (*CancelTurnResponse, error)
-	// ManageSession — единственный lifecycle path SESSION; provider binding выбирает сервер.
+	// ManageSession — единственный путь жизненного цикла SESSION; привязку
+	// провайдера выбирает сервер.
 	ManageSession(context.Context, *ManageSessionRequest) (*ManageSessionResponse, error)
-	// ManageMemoryRecord связывает scope и owner с проверенным actor.
+	// ManageMemoryRecord связывает область и владельца с проверенным actor.
 	ManageMemoryRecord(context.Context, *ManageMemoryRecordRequest) (*ManageMemoryRecordResponse, error)
-	// ManageWorkClaim связывает claim с exact process/session/turn/attempt/workload.
+	// ManageWorkClaim связывает получение работы с точными процессом, сессией,
+	// ходом, попыткой и рабочей нагрузкой.
 	ManageWorkClaim(context.Context, *ManageWorkClaimRequest) (*ManageWorkClaimResponse, error)
-	// ManageSchedule изменяет schedule только через закрытые server-owned actions.
+	// ManageSchedule изменяет расписание только через закрытые действия сервера.
 	ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error)
-	// ClaimDueSchedules материализует наступившие QUEUED occurrence без запуска runtime.
+	// ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
+	// среды исполнения.
 	ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error)
+	// ClaimScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	ClaimScheduleOccurrence(context.Context, *ClaimScheduleOccurrenceRequest) (*ClaimScheduleOccurrenceResponse, error)
+	// CompleteScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	CompleteScheduleOccurrence(context.Context, *CompleteScheduleOccurrenceRequest) (*CompleteScheduleOccurrenceResponse, error)
+	// CancelScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	CancelScheduleOccurrence(context.Context, *CancelScheduleOccurrenceRequest) (*CancelScheduleOccurrenceResponse, error)
+	// ListScheduleOccurrences выполняет версионированную операцию ControlPlaneService.
 	ListScheduleOccurrences(context.Context, *ListScheduleOccurrencesRequest) (*ListScheduleOccurrencesResponse, error)
+	// StartProcess выполняет версионированную операцию ControlPlaneService.
 	StartProcess(context.Context, *StartProcessRequest) (*StartProcessResponse, error)
+	// CancelProcess выполняет версионированную операцию ControlPlaneService.
 	CancelProcess(context.Context, *CancelProcessRequest) (*CancelProcessResponse, error)
+	// RequestOwnerGate выполняет версионированную операцию ControlPlaneService.
 	RequestOwnerGate(context.Context, *RequestOwnerGateRequest) (*RequestOwnerGateResponse, error)
-	// RecordOwnerGateDelivery фиксирует durable receipt exact server-owned карточки.
+	// ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
+	// сервером выбранной ожидающей карточки.
+	ClaimOwnerGateDelivery(context.Context, *ClaimOwnerGateDeliveryRequest) (*ClaimOwnerGateDeliveryResponse, error)
+	// RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
+	// принадлежащей серверу.
 	RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error)
-	// ResolveOwnerGate связывает решение с exact gate/process/session/turn/attempt.
+	// ResolveOwnerGate связывает решение с точными шлюзом, процессом, сессией,
+	// ходом и попыткой.
 	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
+	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
 	RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error)
+	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
 	RecordArtifactScan(context.Context, *RecordArtifactScanRequest) (*RecordArtifactScanResponse, error)
-	// GetRuntimeRevision — version-pinned authoritative read для runtime-controller.
+	// GetRuntimeRevision — авторитетное чтение закреплённой версии для
+	// runtime-controller.
 	GetRuntimeRevision(context.Context, *GetRuntimeRevisionRequest) (*GetRuntimeRevisionResponse, error)
-	// RecordMemoryEmbedding фиксирует локальную перестраиваемую projection, не источник истины.
+	// RecordMemoryEmbedding фиксирует локальную перестраиваемую проекцию, а не
+	// источник истины.
 	RecordMemoryEmbedding(context.Context, *RecordMemoryEmbeddingRequest) (*RecordMemoryEmbeddingResponse, error)
-	// CheckReadiness проверяет authority, PostgreSQL, cache и outbox publisher.
+	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
 }
@@ -689,6 +770,9 @@ func (UnimplementedControlPlaneServiceServer) CancelProcess(context.Context, *Ca
 }
 func (UnimplementedControlPlaneServiceServer) RequestOwnerGate(context.Context, *RequestOwnerGateRequest) (*RequestOwnerGateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestOwnerGate not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ClaimOwnerGateDelivery(context.Context, *ClaimOwnerGateDeliveryRequest) (*ClaimOwnerGateDeliveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimOwnerGateDelivery not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordOwnerGateDelivery not implemented")
@@ -1308,6 +1392,24 @@ func _ControlPlaneService_RequestOwnerGate_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ClaimOwnerGateDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimOwnerGateDeliveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ClaimOwnerGateDelivery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ClaimOwnerGateDelivery(ctx, req.(*ClaimOwnerGateDeliveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_RecordOwnerGateDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RecordOwnerGateDeliveryRequest)
 	if err := dec(in); err != nil {
@@ -1568,6 +1670,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RequestOwnerGate",
 			Handler:    _ControlPlaneService_RequestOwnerGate_Handler,
+		},
+		{
+			MethodName: "ClaimOwnerGateDelivery",
+			Handler:    _ControlPlaneService_ClaimOwnerGateDelivery_Handler,
 		},
 		{
 			MethodName: "RecordOwnerGateDelivery",

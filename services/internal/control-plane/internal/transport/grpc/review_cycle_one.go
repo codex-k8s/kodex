@@ -274,12 +274,13 @@ func (server *Server) RenewTurn(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	renewed, err := server.service.RenewTurn(ctx, resource.RenewTurnInput{
-		Principal:       principal,
-		IdempotencyKey:  request.GetIdempotencyKey(),
-		TurnID:          request.GetTurnId(),
-		LeaseToken:      request.GetLeaseToken(),
-		ExpectedVersion: request.GetExpectedVersion(),
-		Attempt:         request.GetAttempt(),
+		Principal:           principal,
+		IdempotencyKey:      request.GetIdempotencyKey(),
+		TurnID:              request.GetTurnId(),
+		LeaseToken:          request.GetLeaseToken(),
+		ExpectedVersion:     request.GetExpectedVersion(),
+		Attempt:             request.GetAttempt(),
+		AuthorityGeneration: request.GetAuthorityGeneration(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -376,13 +377,14 @@ func (server *Server) ManageSchedule(
 		}
 	}
 	changed, err := server.service.ManageSchedule(ctx, resource.ManageScheduleInput{
-		Principal:       principal,
-		IdempotencyKey:  request.GetIdempotencyKey(),
-		Action:          trimEnum(request.GetAction().String(), "ADMINISTRATIVE_ACTION_"),
-		ScheduleID:      request.GetScheduleId(),
-		ExpectedVersion: request.GetExpectedVersion(),
-		Name:            request.GetName(),
-		Spec:            spec,
+		Principal:           principal,
+		IdempotencyKey:      request.GetIdempotencyKey(),
+		Action:              trimEnum(request.GetAction().String(), "ADMINISTRATIVE_ACTION_"),
+		ScheduleID:          request.GetScheduleId(),
+		ExpectedVersion:     request.GetExpectedVersion(),
+		Name:                request.GetName(),
+		Spec:                spec,
+		DetachGitManagement: request.GetDetachGitManagement(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)

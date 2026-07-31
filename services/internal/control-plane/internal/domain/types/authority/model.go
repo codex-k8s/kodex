@@ -1,9 +1,10 @@
-// Package authority содержит neutral claims между OIDC adapter и proof service.
+// Package authority содержит нейтральные запросы между адаптером OIDC и
+// сервисом доказательств полномочий.
 package authority
 
 import "time"
 
-// ApplicationIdentity — результат exact mTLS + verified OIDC, не request payload.
+// ApplicationIdentity — результат точных mTLS- и OIDC-проверок, а не поле запроса.
 type ApplicationIdentity struct {
 	ActorID          string
 	OrganizationID   string
@@ -15,6 +16,11 @@ type ApplicationIdentity struct {
 	TenantOwner      bool
 	CallerWorkload   string
 	CallerSPIFFEID   string
+	BoundSessionID   string
+	BoundTurnID      string
+	BoundAttempt     uint32
+	BoundInputSHA256 string
+	BoundGeneration  uint64
 }
 
 type Provenance struct {

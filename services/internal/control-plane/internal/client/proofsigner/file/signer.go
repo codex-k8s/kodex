@@ -1,4 +1,5 @@
-// Package file реализует independently delivered authority-proof signer.
+// Package file реализует подписывающий компонент доказательств полномочий с
+// независимо доставленным доверием.
 package file
 
 import (
@@ -27,7 +28,7 @@ const (
 	proofType        = "mattercodex-internal-rpc-authority-proof+jws"
 )
 
-// Config фиксирует immutable trust intent для одного pod.
+// Config фиксирует неизменяемое намерение доверия для одного pod.
 type Config struct {
 	PrivateJWKFile   string
 	TrustFile        string
@@ -76,7 +77,8 @@ type trustKey struct {
 	JWK        json.RawMessage `json:"jwk"`
 }
 
-// New загружает private key и independently delivered trust одним startup barrier.
+// New загружает закрытый ключ и независимо доставленное доверие одним
+// стартовым барьером.
 func New(config Config) (*Signer, error) {
 	if config.PrivateJWKFile == "" || config.TrustFile == "" ||
 		config.Issuer == "" || config.Audience == "" ||
@@ -127,7 +129,7 @@ func New(config Config) (*Signer, error) {
 	}, nil
 }
 
-// Sign подписывает claims тем же key/state snapshot без TOCTOU.
+// Sign подписывает запросы тем же снимком ключа и состояния без TOCTOU.
 func (signer *Signer) Sign(
 	ctx context.Context,
 	claims authoritytype.ProofClaims,

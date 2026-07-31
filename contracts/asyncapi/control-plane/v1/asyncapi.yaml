@@ -3,14 +3,18 @@ info:
   title: Доменные факты control-plane
   version: 1.0.0
   description: >-
-    Два утверждённых immutable факта для runtime-controller и
-    automation-scheduler. Полный state остаётся доступен через gRPC read path.
+    Два утверждённых неизменяемых факта для runtime-controller и
+    automation-scheduler. Полное состояние остаётся доступно через gRPC-чтение.
 defaultContentType: application/json
 servers:
+  staging:
+    host: nats.mattercodex-staging.svc:4222
+    protocol: nats
+    description: NATS JetStream только с TLS для staging и отдельными учётными данными Vault CSI.
   production:
     host: nats.mattercodex-system.svc:4222
     protocol: nats
-    description: TLS-only NATS JetStream; credentials доставляются через Vault CSI.
+    description: NATS JetStream только с TLS; учётные данные доставляются через Vault CSI.
 channels:
   runtimeConfigurationChanged:
     address: control_plane.runtime_configuration_changed
@@ -27,20 +31,20 @@ operations:
     action: send
     channel:
       $ref: '#/channels/runtimeConfigurationChanged'
-    summary: Уведомить runtime-controller о новой aggregate version.
+    summary: Уведомить runtime-controller о новой версии агрегата.
     x-publisher: control-plane
     x-consumers:
       - service: runtime-controller
         purpose: REFRESH_PINNED_RUNTIME_INPUT_BY_GRPC
         exactEffect: >-
-          Для RUNTIME_REVISION вызвать exact version-pinned
-          ControlPlaneService.GetRuntimeRevision через workload-specific
-          mTLS/application-grant/local-issuer path; для остальных aggregate
-          использовать typed GetResource. Атомарно заменить локальную
-          projection с durable inbox/cursor.
+          Для RUNTIME_REVISION вызвать закреплённый на точной версии
+          ControlPlaneService.GetRuntimeRevision через путь mTLS, прикладного
+          разрешения и локального issuer для конкретной рабочей нагрузки; для
+          остальных агрегатов использовать типизированный GetResource.
+          Атомарно заменить локальную проекцию с устойчивыми inbox и курсором.
         readiness: >-
-          Subscription запускается только после готовности durable inbox,
-          exact JetStream contract и защищённого GetRuntimeRevision read path.
+          Подписка запускается только после готовности устойчивого inbox,
+          точного контракта JetStream и защищённого чтения GetRuntimeRevision.
     x-delivery:
       mode: AT_LEAST_ONCE
       deduplicationKey: eventId
@@ -53,14 +57,17 @@ operations:
     action: send
     channel:
       $ref: '#/channels/scheduleChanged'
-    summary: Уведомить automation-scheduler о новой версии schedule.
+    summary: Уведомить automation-scheduler о новой версии расписания.
     x-publisher: control-plane
     x-consumers:
       - service: automation-scheduler
         purpose: REFRESH_DUE_SCHEDULE_BY_GRPC
         exactEffect: >-
-          Прочитать schedule через versioned control-plane gRPC, атомарно
-          заменить локальную projection с durable inbox/cursor.
+          Прочитать расписание через версионированный gRPC control-plane,
+          атомарно заменить локальную проекцию с устойчивыми inbox и курсором.
+        readiness: >-
+          Подписка запускается только после готовности устойчивого inbox,
+          точного контракта JetStream и защищённого версионированного GetResource.
     x-delivery:
       mode: AT_LEAST_ONCE
       deduplicationKey: eventId
@@ -73,12 +80,12 @@ components:
   messages:
     runtimeConfigurationChanged:
       name: control_plane.runtime_configuration_changed
-      title: Runtime configuration changed
+      title: Конфигурация среды исполнения изменена
       payload:
         $ref: '#/components/schemas/envelope'
     scheduleChanged:
       name: control_plane.schedule_changed
-      title: Schedule changed
+      title: Расписание изменено
       payload:
         $ref: '#/components/schemas/envelope'
   schemas:

@@ -1,3 +1,3 @@
-// Package cache предоставляет bounded read-through engine без бизнесовой
-// authority и provider-specific ключей.
+// Package cache предоставляет ограниченный механизм сквозного чтения без
+// бизнесовых полномочий и зависимых от провайдера ключей.
 package cache

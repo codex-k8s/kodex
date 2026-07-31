@@ -7,9 +7,6 @@ packages:
     consumers:
       - runtime-controller
       - automation-scheduler
-      - agent-runner
-      - artifact-scanner
-      - memory-indexer
   - id: control-plane-v1
     format: proto
     owner: control-plane

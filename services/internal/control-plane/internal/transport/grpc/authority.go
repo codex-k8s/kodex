@@ -14,20 +14,21 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// ApplicationAuthenticator владеет exact mTLS + OIDC boundary.
+// ApplicationAuthenticator владеет точной границей mTLS и OIDC.
 type ApplicationAuthenticator interface {
 	Authenticate(context.Context) (authoritytype.ApplicationIdentity, error)
 	VerifyPeer(context.Context) error
 }
 
-// AuthorityServer реализует first-call proof resolver boundary.
+// AuthorityServer реализует первый вызов границы выдачи доказательств полномочий.
 type AuthorityServer struct {
 	internalrpcauthorityv1.UnimplementedAuthorityProofResolverServiceServer
 	service       *authorityservice.Service
 	authenticator ApplicationAuthenticator
 }
 
-// NewAuthorityServer создаёт transport без caller-controlled identity.
+// NewAuthorityServer создаёт транспорт без идентичности, управляемой вызывающей
+// стороной.
 func NewAuthorityServer(
 	service *authorityservice.Service,
 	authenticator ApplicationAuthenticator,

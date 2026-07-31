@@ -1,4 +1,5 @@
-// Package authority реализует server-side OIDC-to-domain authority resolution.
+// Package authority реализует серверное преобразование OIDC-идентичности
+// в доменные полномочия.
 package authority
 
 import (
@@ -7,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"time"
 
@@ -15,6 +17,8 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	authoritytype "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/authority"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
 )
@@ -25,7 +29,7 @@ var operationPattern = regexp.MustCompile(
 	`^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$`,
 )
 
-// Operation — versioned producer-side policy derived from the same snapshot.
+// Operation — версионированная политика производителя, полученная из того же снимка.
 type Operation struct {
 	FullMethod      string
 	Permission      string
@@ -38,7 +42,7 @@ type Operation struct {
 	ProofAudience   string
 }
 
-// Config задаёт exact proof purpose/audiences and policy.
+// Config задаёт точные назначение и аудитории доказательства, а также политику.
 type Config struct {
 	Issuer                       string
 	ProofAudience                string
@@ -48,7 +52,8 @@ type Config struct {
 	Operations                   map[string]Operation
 }
 
-// ReadinessState связывает served policy с independently trusted signer.
+// ReadinessState связывает обслуживаемую политику с независимо доверенным
+// подписывающим компонентом.
 type ReadinessState struct {
 	PolicyRevision   uint64
 	PolicyDigest     string
@@ -73,7 +78,7 @@ type ResolveInput struct {
 	CorrelationID     string
 }
 
-// New создаёт fail-closed proof service.
+// New создаёт сервис доказательств с закрытым отказом.
 func New(
 	repository domainrepo.Repository,
 	signer proofsigner.Signer,
@@ -104,7 +109,7 @@ func New(
 	}, nil
 }
 
-// Resolve выдаёт proof после server-side ownership/eligibility resolution.
+// Resolve выдаёт доказательство после серверной проверки владения и допустимости.
 func (service *Service) Resolve(
 	ctx context.Context,
 	input ResolveInput,
@@ -140,6 +145,11 @@ func (service *Service) Resolve(
 		ProjectID         string
 		OperationID       string
 		ResourceReference string
+		BoundSessionID    string
+		BoundTurnID       string
+		BoundAttempt      uint32
+		BoundInputSHA256  string
+		BoundGeneration   uint64
 	}{
 		input.Identity.SubjectDigest,
 		input.Identity.CredentialDigest,
@@ -149,6 +159,11 @@ func (service *Service) Resolve(
 		input.Identity.ProjectID,
 		input.OperationID,
 		input.ResourceReference,
+		input.Identity.BoundSessionID,
+		input.Identity.BoundTurnID,
+		input.Identity.BoundAttempt,
+		input.Identity.BoundInputSHA256,
+		input.Identity.BoundGeneration,
 	})
 	if err != nil {
 		return authoritytype.Proof{}, errs.ErrInternal
@@ -206,6 +221,27 @@ func (service *Service) Resolve(
 					},
 				}
 			}
+			if input.Identity.CallerWorkload == "agent-runner" {
+				turn, err := tx.GetForUpdate(
+					ctx,
+					input.Identity.OrganizationID,
+					input.Identity.ProjectID,
+					input.Identity.BoundTurnID,
+				)
+				if err != nil {
+					return err
+				}
+				turnSpec, ok := turn.Spec.(entity.TurnSpec)
+				if !ok || turn.Kind != enum.KindTurn ||
+					turn.OwnerActorID != input.Identity.ActorID ||
+					turnSpec.SessionID != input.Identity.BoundSessionID ||
+					turnSpec.Attempt != input.Identity.BoundAttempt ||
+					turnSpec.EffectiveInputSHA256 != input.Identity.BoundInputSHA256 ||
+					(input.ResourceReference != "" &&
+						input.ResourceReference != turn.ID) {
+					return errs.ErrPermissionDenied
+				}
+			}
 			revision, err := tx.NextProofRevision(ctx)
 			if err != nil {
 				return err
@@ -216,6 +252,16 @@ func (service *Service) Resolve(
 				Reference:    input.Identity.SessionJTI,
 				Revision:     input.Identity.SessionRevision,
 				DigestSHA256: input.Identity.CredentialDigest,
+			}
+			if input.Identity.CallerWorkload == "agent-runner" {
+				provenance.Reference = fmt.Sprintf(
+					"%s/%d/%d",
+					input.Identity.BoundTurnID,
+					input.Identity.BoundAttempt,
+					input.Identity.BoundGeneration,
+				)
+				provenance.Revision = input.Identity.BoundGeneration
+				provenance.DigestSHA256 = input.Identity.BoundInputSHA256
 			}
 			claims := authoritytype.ProofClaims{
 				Version:  1,
@@ -307,6 +353,14 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 		len(identity.SubjectDigest) != 64 ||
 		len(identity.CredentialDigest) != 64 {
 		return errors.New("application identity is invalid")
+	}
+	if identity.CallerWorkload == "agent-runner" &&
+		(value.ValidateID(identity.BoundSessionID) != nil ||
+			value.ValidateID(identity.BoundTurnID) != nil ||
+			identity.BoundAttempt == 0 || identity.BoundAttempt > 100 ||
+			!validDigest(identity.BoundInputSHA256) ||
+			identity.BoundGeneration == 0) {
+		return errors.New("agent session grant binding is invalid")
 	}
 	return nil
 }

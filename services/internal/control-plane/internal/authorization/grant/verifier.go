@@ -1,4 +1,5 @@
-// Package grant проверяет independently delivered workload grants для proof resolver.
+// Package grant проверяет независимо доставленные разрешения рабочих нагрузок
+// для сервиса выдачи доказательств полномочий.
 package grant
 
 import (
@@ -53,6 +54,11 @@ type claims struct {
 	TenantOwner    bool   `json:"tenant_owner"`
 	WorkloadID     string `json:"workload_id"`
 	CallerSPIFFEID string `json:"caller_spiffe_id"`
+	SessionID      string `json:"session_id,omitempty"`
+	TurnID         string `json:"turn_id,omitempty"`
+	Attempt        uint32 `json:"attempt,omitempty"`
+	InputSHA256    string `json:"input_sha256,omitempty"`
+	Generation     uint64 `json:"generation,omitempty"`
 	IssuedAt       int64  `json:"iat"`
 	NotBefore      int64  `json:"nbf"`
 	ExpiresAt      int64  `json:"exp"`
@@ -159,6 +165,14 @@ func (verifier *Verifier) Authenticate(
 		expiresAt.Sub(issuedAt) > maximumGrantTTL {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
+	if verifier.config.WorkloadID == "agent-runner" &&
+		(value.ValidateID(parsed.SessionID) != nil ||
+			value.ValidateID(parsed.TurnID) != nil ||
+			parsed.Attempt == 0 || parsed.Attempt > 100 ||
+			!validSHA256(parsed.InputSHA256) ||
+			parsed.Generation == 0) {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
 	return authoritytype.ApplicationIdentity{
 		ActorID:          parsed.Subject,
 		OrganizationID:   parsed.OrganizationID,
@@ -170,10 +184,27 @@ func (verifier *Verifier) Authenticate(
 		TenantOwner:      parsed.TenantOwner,
 		CallerWorkload:   verifier.config.WorkloadID,
 		CallerSPIFFEID:   verifier.config.CallerSPIFFEID,
+		BoundSessionID:   parsed.SessionID,
+		BoundTurnID:      parsed.TurnID,
+		BoundAttempt:     parsed.Attempt,
+		BoundInputSHA256: parsed.InputSHA256,
+		BoundGeneration:  parsed.Generation,
 	}, nil
 }
 
 func digest(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
+}
+
+func validSHA256(value string) bool {
+	if len(value) != 64 || value != strings.ToLower(value) {
+		return false
+	}
+	for _, symbol := range value {
+		if (symbol < '0' || symbol > '9') && (symbol < 'a' || symbol > 'f') {
+			return false
+		}
+	}
+	return true
 }

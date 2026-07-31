@@ -1,4 +1,4 @@
-// Package resource реализует canonical commands/queries control-plane.
+// Package resource реализует канонические команды и запросы control-plane.
 package resource
 
 import (
@@ -23,38 +23,40 @@ import (
 )
 
 const (
-	permissionCreate              = "controlplane.resource.create"
-	permissionUpdate              = "controlplane.resource.update"
-	permissionTransition          = "controlplane.resource.transition"
-	permissionDelete              = "controlplane.resource.delete"
-	permissionAccessManage        = "controlplane.access.manage"
-	permissionRead                = "controlplane.resource.read"
-	permissionList                = "controlplane.resource.list"
-	permissionEnqueueTurn         = "controlplane.turn.enqueue"
-	permissionClaimTurn           = "controlplane.turn.claim"
-	permissionRenewTurn           = "controlplane.turn.renew"
-	permissionCompleteTurn        = "controlplane.turn.complete"
-	permissionRetryTurn           = "controlplane.turn.retry"
-	permissionCancelTurn          = "controlplane.turn.cancel"
-	permissionClaimSchedule       = "controlplane.schedule.claim"
-	permissionManageSchedule      = "controlplane.schedule.manage"
-	permissionExecuteSchedule     = "controlplane.schedule.execute"
-	permissionStartProcess        = "controlplane.process.start"
-	permissionCancelProcess       = "controlplane.process.cancel"
-	permissionRequestGate         = "controlplane.owner_gate.request"
-	permissionResolveGate         = "controlplane.owner_gate.resolve"
-	permissionRegisterArtifact    = "controlplane.artifact.register"
-	permissionScanArtifact        = "controlplane.artifact.scan"
-	permissionManageSession       = "controlplane.session.manage"
-	permissionWriteMemory         = "controlplane.memory.write"
-	permissionWriteProjectMemory  = "controlplane.memory.project.write"
-	permissionManageWorkClaim     = "controlplane.work_claim.manage"
-	permissionDeliverGate         = "controlplane.owner_gate.deliver"
-	permissionReadRuntimeRevision = "controlplane.runtime_revision.read"
-	permissionIndexMemory         = "controlplane.memory.index"
+	permissionCreate                = "controlplane.resource.create"
+	permissionUpdate                = "controlplane.resource.update"
+	permissionTransition            = "controlplane.resource.transition"
+	permissionDelete                = "controlplane.resource.delete"
+	permissionAccessManage          = "controlplane.access.manage"
+	permissionRead                  = "controlplane.resource.read"
+	permissionList                  = "controlplane.resource.list"
+	permissionEnqueueTurn           = "controlplane.turn.enqueue"
+	permissionClaimTurn             = "controlplane.turn.claim"
+	permissionRenewTurn             = "controlplane.turn.renew"
+	permissionCompleteTurn          = "controlplane.turn.complete"
+	permissionRetryTurn             = "controlplane.turn.retry"
+	permissionCancelTurn            = "controlplane.turn.cancel"
+	permissionClaimSchedule         = "controlplane.schedule.claim"
+	permissionManageSchedule        = "controlplane.schedule.manage"
+	permissionExecuteSchedule       = "controlplane.schedule.execute"
+	permissionStartProcess          = "controlplane.process.start"
+	permissionCancelProcess         = "controlplane.process.cancel"
+	permissionRequestGate           = "controlplane.owner_gate.request"
+	permissionResolveGate           = "controlplane.owner_gate.resolve"
+	permissionRegisterArtifact      = "controlplane.artifact.register"
+	permissionScanArtifact          = "controlplane.artifact.scan"
+	permissionManageSession         = "controlplane.session.manage"
+	permissionWriteMemory           = "controlplane.memory.write"
+	permissionWriteProjectMemory    = "controlplane.memory.project.write"
+	permissionManageWorkClaim       = "controlplane.work_claim.manage"
+	permissionDeliverGate           = "controlplane.owner_gate.deliver"
+	permissionReadRuntimeRevision   = "controlplane.runtime_revision.read"
+	permissionIndexMemory           = "controlplane.memory.index"
+	permissionApplyGitConfiguration = "controlplane.configuration.git.apply"
+	permissionDetachConfiguration   = "controlplane.configuration.detach"
 )
 
-// Config задаёт security-critical bounded runtime policy.
+// Config задаёт критичную для безопасности ограниченную политику выполнения.
 type Config struct {
 	LeaseSigningKey           []byte
 	TurnLeaseDuration         time.Duration
@@ -73,7 +75,7 @@ type Config struct {
 	Observer                  Observer
 }
 
-// Service владеет business transitions; adapter только сохраняет намерение.
+// Service владеет прикладными переходами; адаптер только сохраняет намерение.
 type Service struct {
 	repository                domainrepo.Repository
 	leaseSigningKey           []byte
@@ -94,7 +96,7 @@ type Service struct {
 	now                       func() time.Time
 }
 
-// New создаёт service только с полноценными durable boundaries.
+// New создаёт сервис только с полноценными устойчивыми границами.
 func New(repository domainrepo.Repository, config Config) (*Service, error) {
 	if repository == nil || len(config.LeaseSigningKey) < 32 ||
 		config.TurnLeaseDuration < 30*time.Second ||
@@ -136,7 +138,8 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 	}, nil
 }
 
-// Create создаёт server-owned ID, owner, project scope, state и OCC version.
+// Create создаёт назначенные сервером ID, владельца, область проекта, состояние
+// и версию OCC.
 func (service *Service) Create(ctx context.Context, input CreateInput) (entity.Resource, error) {
 	permission := permissionCreate
 	if input.Administrative {
@@ -204,6 +207,14 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 		"create",
 		requestHash,
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			if err := validateConfigurationCreate(
+				ctx,
+				tx,
+				input.Principal,
+				input.Spec,
+			); err != nil {
+				return entity.Resource{}, err
+			}
 			if input.Administrative {
 				if err := service.validateAccessMutation(
 					ctx,
@@ -232,7 +243,7 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 	)
 }
 
-// Update обновляет resource только после tenant/project resolution и OCC.
+// Update обновляет ресурс только после определения организации, проекта и OCC.
 func (service *Service) Update(ctx context.Context, input UpdateInput) (entity.Resource, error) {
 	permission := permissionUpdate
 	if input.Administrative {
@@ -257,12 +268,14 @@ func (service *Service) Update(ctx context.Context, input UpdateInput) (entity.R
 		ExpectedVersion uint64
 		Name            string
 		Spec            entity.Spec
+		DetachGit       bool
 	}{
 		identity(input.Principal),
 		input.ResourceID,
 		input.ExpectedVersion,
 		input.Name,
 		input.Spec,
+		input.DetachGitManagement,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -304,7 +317,18 @@ func (service *Service) Update(ctx context.Context, input UpdateInput) (entity.R
 			if err := validateGenericUpdate(current, input.Spec); err != nil {
 				return entity.Resource{}, err
 			}
-			updated, err := current.Update(input.Name, input.Spec, now)
+			nextSpec, err := configurationUpdateSpec(
+				ctx,
+				tx,
+				input.Principal,
+				current.Spec,
+				input.Spec,
+				input.DetachGitManagement,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			updated, err := current.Update(input.Name, nextSpec, now)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
@@ -325,7 +349,7 @@ func (service *Service) Update(ctx context.Context, input UpdateInput) (entity.R
 	)
 }
 
-// Transition выполняет закрытую state machine; retry turn увеличивает attempt.
+// Transition выполняет закрытый автомат состояний; повтор хода увеличивает попытку.
 func (service *Service) Transition(
 	ctx context.Context,
 	input TransitionInput,
@@ -397,6 +421,14 @@ func (service *Service) Transition(
 			} else if protectedTransitionKind(current.Kind) {
 				return entity.Resource{}, errs.ErrPermissionDenied
 			}
+			if err := authorizeGitManagedMutation(
+				ctx,
+				tx,
+				input.Principal,
+				current.Spec,
+			); err != nil {
+				return entity.Resource{}, err
+			}
 			updated, err := service.transitionResource(current, input.Target)
 			if err != nil {
 				return entity.Resource{}, err
@@ -415,7 +447,7 @@ func (service *Service) Transition(
 	)
 }
 
-// Delete переводит resource через explicit deletion lifecycle.
+// Delete переводит ресурс через явный жизненный цикл удаления.
 func (service *Service) Delete(ctx context.Context, input DeleteInput) (entity.Resource, error) {
 	permission := permissionDelete
 	if input.Administrative {
@@ -459,6 +491,14 @@ func (service *Service) Delete(ctx context.Context, input DeleteInput) (entity.R
 				(!input.Administrative && protectedMutationKind(current.Kind)) {
 				return entity.Resource{}, errs.ErrPermissionDenied
 			}
+			if err := authorizeGitManagedMutation(
+				ctx,
+				tx,
+				input.Principal,
+				current.Spec,
+			); err != nil {
+				return entity.Resource{}, err
+			}
 			if input.Administrative {
 				if err := service.validateAccessMutation(
 					ctx,
@@ -492,7 +532,7 @@ func (service *Service) Delete(ctx context.Context, input DeleteInput) (entity.R
 	)
 }
 
-// Get скрывает отсутствующий, чужой, удалённый и wrong-kind resource одинаково.
+// Get одинаково скрывает отсутствующий, чужой, удалённый ресурс и неверный вид.
 func (service *Service) Get(ctx context.Context, input GetInput) (entity.Resource, error) {
 	if err := authorize(input.Principal, permissionRead); err != nil {
 		return entity.Resource{}, err
@@ -513,10 +553,18 @@ func (service *Service) Get(ctx context.Context, input GetInput) (entity.Resourc
 	if resource.Kind != input.Kind || resource.State == enum.StateDeleted {
 		return entity.Resource{}, errs.ErrNotFound
 	}
+	if (input.Principal.CallerWorkload == "runtime-controller" ||
+		input.Principal.CallerWorkload == "automation-scheduler") &&
+		input.ExpectedVersion == 0 {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	if input.ExpectedVersion != 0 && resource.Version != input.ExpectedVersion {
+		return entity.Resource{}, errs.ErrNotFound
+	}
 	return resource, nil
 }
 
-// List принудительно заменяет caller filters на verified ownership boundary.
+// List заменяет фильтры вызывающего проверенной границей владения.
 func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Resource, error) {
 	if err := authorize(input.Principal, permissionList); err != nil {
 		return nil, err
@@ -1036,6 +1084,8 @@ func (service *Service) validateReferences(
 	case entity.ScheduleSpec:
 		add(spec.TargetResourceID)
 		add(spec.PromptProfileID, enum.KindPromptProfile)
+		add(spec.PromptArtifactID, enum.KindArtifact)
+		add(spec.ExecutionSessionID, enum.KindSession)
 		add(spec.RoomID, enum.KindChat)
 		add(spec.RuntimeRevisionID, enum.KindRuntimeRevision)
 	case entity.OwnerGateSpec:
@@ -1083,6 +1133,7 @@ type commandIdentity struct {
 	Permission          string
 	PolicyRevision      uint64
 	AuthorityGeneration uint64
+	GrantGeneration     uint64
 	CallerWorkload      string
 	CallerSPIFFEID      string
 }
@@ -1095,6 +1146,7 @@ func identity(principal value.Principal) commandIdentity {
 		Permission:          principal.Permission,
 		PolicyRevision:      principal.PolicyRevision,
 		AuthorityGeneration: principal.AuthorityGeneration,
+		GrantGeneration:     principal.AuthorityGrantGeneration,
 		CallerWorkload:      principal.CallerWorkload,
 		CallerSPIFFEID:      principal.CallerSPIFFEID,
 	}
@@ -1166,6 +1218,143 @@ func authorize(principal value.Principal, permission string) error {
 		return errs.ErrUnauthenticated
 	}
 	if principal.Permission != permission {
+		return errs.ErrPermissionDenied
+	}
+	return nil
+}
+
+func validateConfigurationCreate(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	spec entity.Spec,
+) error {
+	configured, ok := spec.(entity.ConfiguredSpec)
+	if !ok {
+		return nil
+	}
+	ownership := configured.ConfigurationOwnership()
+	if ownership.ManagedBy == "UI" {
+		return nil
+	}
+	if ownership.ManagedBy != "GIT" {
+		return errs.ErrInvalidInput
+	}
+	return requireDurablePermission(
+		ctx,
+		tx,
+		principal,
+		permissionApplyGitConfiguration,
+	)
+}
+
+func configurationUpdateSpec(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	current entity.Spec,
+	next entity.Spec,
+	detach bool,
+) (entity.Spec, error) {
+	currentConfigured, currentOK := current.(entity.ConfiguredSpec)
+	nextConfigured, nextOK := next.(entity.ConfiguredSpec)
+	if currentOK != nextOK {
+		return nil, errs.ErrStateConflict
+	}
+	if !currentOK {
+		if detach {
+			return nil, errs.ErrInvalidInput
+		}
+		return next, nil
+	}
+	currentOwnership := currentConfigured.ConfigurationOwnership()
+	nextOwnership := nextConfigured.ConfigurationOwnership()
+	if detach {
+		if currentOwnership.ManagedBy != "GIT" {
+			return nil, errs.ErrStateConflict
+		}
+		if err := requireDurablePermission(
+			ctx,
+			tx,
+			principal,
+			permissionDetachConfiguration,
+		); err != nil {
+			return nil, err
+		}
+		detached, err := entity.WithConfigurationOwnership(
+			next,
+			entity.ConfigurationOwnership{ManagedBy: "UI"},
+		)
+		if err != nil {
+			return nil, errs.ErrStateConflict
+		}
+		return detached, nil
+	}
+	switch currentOwnership.ManagedBy {
+	case "UI":
+		if nextOwnership.ManagedBy == "UI" {
+			return next, nil
+		}
+		if nextOwnership.ManagedBy != "GIT" {
+			return nil, errs.ErrStateConflict
+		}
+	case "GIT":
+		if nextOwnership.ManagedBy != "GIT" ||
+			nextOwnership.SourceRef != currentOwnership.SourceRef ||
+			nextOwnership.SourceRevision <= currentOwnership.SourceRevision {
+			return nil, errs.ErrStateConflict
+		}
+	default:
+		return nil, errs.ErrStateConflict
+	}
+	if err := requireDurablePermission(
+		ctx,
+		tx,
+		principal,
+		permissionApplyGitConfiguration,
+	); err != nil {
+		return nil, err
+	}
+	return next, nil
+}
+
+func authorizeGitManagedMutation(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	spec entity.Spec,
+) error {
+	configured, ok := spec.(entity.ConfiguredSpec)
+	if !ok || configured.ConfigurationOwnership().ManagedBy == "UI" {
+		return nil
+	}
+	if configured.ConfigurationOwnership().ManagedBy != "GIT" {
+		return errs.ErrStateConflict
+	}
+	return requireDurablePermission(
+		ctx,
+		tx,
+		principal,
+		permissionApplyGitConfiguration,
+	)
+}
+
+func requireDurablePermission(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	permission string,
+) error {
+	permissions, err := tx.ActorPermissions(
+		ctx,
+		principal.OrganizationID,
+		principal.ProjectID,
+		principal.ActorID,
+	)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(permissions, permission) {
 		return errs.ErrPermissionDenied
 	}
 	return nil

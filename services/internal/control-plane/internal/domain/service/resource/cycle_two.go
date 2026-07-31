@@ -2,10 +2,13 @@ package resource
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -17,11 +20,14 @@ import (
 )
 
 const (
-	maximumWorkClaimTTL  = 24 * time.Hour
-	maximumEmbeddingSize = 2000
+	maximumWorkClaimTTL             = 24 * time.Hour
+	localMemoryProjectionDimensions = 256
+	localMemoryProjectionModelID    = "mattercodex-local-token-hash"
+	localMemoryProjectionRevision   = 1
 )
 
-// ManageSession создаёт и завершает SESSION без caller-selected credential binding.
+// ManageSession создаёт и завершает SESSION без выбранной вызывающей стороной
+// привязки учётных данных.
 func (service *Service) ManageSession(
 	ctx context.Context,
 	input ManageSessionInput,
@@ -36,13 +42,16 @@ func (service *Service) ManageSession(
 		if value.ValidateName(input.Name) != nil ||
 			value.ValidateID(input.RoleID) != nil ||
 			(input.ConversationID != "" && value.ValidateID(input.ConversationID) != nil) ||
+			(input.PreferredProviderCredentialBindingID != "" &&
+				value.ValidateID(input.PreferredProviderCredentialBindingID) != nil) ||
 			input.SessionID != "" || input.ExpectedVersion != 0 ||
 			input.ArchiveRef != "" || input.ReasonCode != "" {
 			return entity.Resource{}, errs.ErrInvalidInput
 		}
 	} else if value.ValidateID(input.SessionID) != nil ||
 		input.ExpectedVersion == 0 || value.ValidateStableKey(input.ReasonCode) != nil ||
-		input.Name != "" || input.RoleID != "" || input.ConversationID != "" {
+		input.Name != "" || input.RoleID != "" || input.ConversationID != "" ||
+		input.PreferredProviderCredentialBindingID != "" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	if input.Action != "CREATE" && input.Action != "CLOSE" &&
@@ -83,7 +92,7 @@ func (service *Service) ManageSession(
 				}
 				roleSpec, ok := role.Spec.(entity.RoleSpec)
 				if !ok || role.Kind != enum.KindRole || role.State != enum.StateActive ||
-					len(roleSpec.ProviderCredentialBindingIDs) != 1 {
+					len(roleSpec.ProviderCredentialBindingIDs) == 0 {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
 				roleIDs, err := tx.ActorRoleIDs(
@@ -98,11 +107,22 @@ func (service *Service) ManageSession(
 				if !slices.Contains(roleIDs, role.ID) {
 					return entity.Resource{}, errs.ErrNotFound
 				}
+				selectedBindingID := input.PreferredProviderCredentialBindingID
+				if selectedBindingID == "" &&
+					len(roleSpec.ProviderCredentialBindingIDs) == 1 {
+					selectedBindingID = roleSpec.ProviderCredentialBindingIDs[0]
+				}
+				if !slices.Contains(
+					roleSpec.ProviderCredentialBindingIDs,
+					selectedBindingID,
+				) {
+					return entity.Resource{}, errs.ErrNotFound
+				}
 				binding, err := tx.GetForUpdate(
 					ctx,
 					input.Principal.OrganizationID,
 					input.Principal.ProjectID,
-					roleSpec.ProviderCredentialBindingIDs[0],
+					selectedBindingID,
 				)
 				if err != nil {
 					return entity.Resource{}, err
@@ -201,7 +221,8 @@ func (service *Service) ManageSession(
 	)
 }
 
-// ManageMemoryRecord применяет project/role capability и server-owned owner.
+// ManageMemoryRecord проверяет полномочия проекта и роли и назначает владельца
+// на сервере.
 func (service *Service) ManageMemoryRecord(
 	ctx context.Context,
 	input ManageMemoryRecordInput,
@@ -377,7 +398,7 @@ func authorizeMemoryScope(
 	return nil
 }
 
-// ManageWorkClaim связывает claim с immutable runtime lineage.
+// ManageWorkClaim связывает получение работы с неизменяемой родословной выполнения.
 func (service *Service) ManageWorkClaim(
 	ctx context.Context,
 	input ManageWorkClaimInput,
@@ -448,17 +469,33 @@ func (service *Service) ManageWorkClaim(
 					processSpec.RootAttempt != turnSpec.Attempt {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
+				if input.Principal.CallerWorkload == "agent-runner" &&
+					(input.Principal.AuthoritySource != "AGENT_SESSION" ||
+						input.Principal.AuthorityReference != turn.ID ||
+						input.Principal.AuthorityRevision != uint64(turnSpec.Attempt) ||
+						input.Principal.AuthorityDigest !=
+							turnSpec.EffectiveInputSHA256) {
+					return entity.Resource{}, errs.ErrPermissionDenied
+				}
+				authorityGeneration := input.Principal.AuthorityGeneration
+				if input.Principal.CallerWorkload == "agent-runner" {
+					authorityGeneration = input.Principal.AuthorityGrantGeneration
+					if authorityGeneration == 0 {
+						return entity.Resource{}, errs.ErrPermissionDenied
+					}
+				}
 				spec := entity.WorkClaimSpec{
-					ProcessRunID: input.ProcessRunID,
-					TurnID:       input.TurnID,
-					Summary:      input.Summary,
-					Domains:      input.Domains,
-					ResourceKeys: input.ResourceKeys,
-					OwnerActorID: input.Principal.ActorID,
-					WorkloadID:   input.Principal.CallerWorkload,
-					SessionID:    turnSpec.SessionID,
-					Attempt:      turnSpec.Attempt,
-					ExpiresAt:    now.Add(input.TTL),
+					ProcessRunID:        input.ProcessRunID,
+					TurnID:              input.TurnID,
+					Summary:             input.Summary,
+					Domains:             input.Domains,
+					ResourceKeys:        input.ResourceKeys,
+					OwnerActorID:        input.Principal.ActorID,
+					WorkloadID:          input.Principal.CallerWorkload,
+					SessionID:           turnSpec.SessionID,
+					Attempt:             turnSpec.Attempt,
+					AuthorityGeneration: authorityGeneration,
+					ExpiresAt:           now.Add(input.TTL),
 				}
 				if spec.Validate() != nil {
 					return entity.Resource{}, errs.ErrInvalidInput
@@ -499,6 +536,14 @@ func (service *Service) ManageWorkClaim(
 				spec.WorkloadID != input.Principal.CallerWorkload {
 				return entity.Resource{}, errs.ErrNotFound
 			}
+			if input.Principal.CallerWorkload == "agent-runner" &&
+				(input.Principal.AuthoritySource != "AGENT_SESSION" ||
+					input.Principal.AuthorityReference != spec.TurnID ||
+					input.Principal.AuthorityRevision != uint64(spec.Attempt) ||
+					input.Principal.AuthorityGrantGeneration !=
+						spec.AuthorityGeneration) {
+				return entity.Resource{}, errs.ErrPermissionDenied
+			}
 			if current.Version != input.ExpectedVersion {
 				return entity.Resource{}, errs.ErrVersionMismatch
 			}
@@ -533,7 +578,104 @@ func (service *Service) ManageWorkClaim(
 	)
 }
 
-// RecordOwnerGateDelivery фиксирует exact post binding до ResolveOwnerGate.
+// ClaimOwnerGateDelivery выдаёт ограниченное право доставки следующей карточки.
+func (service *Service) ClaimOwnerGateDelivery(
+	ctx context.Context,
+	input ClaimOwnerGateDeliveryInput,
+) (ClaimOwnerGateDeliveryResult, error) {
+	if err := authorize(input.Principal, permissionDeliverGate); err != nil {
+		return ClaimOwnerGateDeliveryResult{}, err
+	}
+	if input.Principal.CallerWorkload != service.ownerGateDeliveryWorkload ||
+		input.Principal.CallerSPIFFEID != service.ownerGateDeliverySPIFFEID {
+		return ClaimOwnerGateDeliveryResult{}, errs.ErrPermissionDenied
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil {
+		return ClaimOwnerGateDeliveryResult{}, errs.ErrInvalidInput
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity commandIdentity
+	}{identity(input.Principal)})
+	if err != nil {
+		return ClaimOwnerGateDeliveryResult{}, errs.ErrInvalidInput
+	}
+	gate, err := service.withResourceReceipt(
+		ctx,
+		input.Principal,
+		input.IdempotencyKey,
+		"claim_owner_gate_delivery",
+		requestHash,
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			now := service.now().UTC().Truncate(time.Microsecond)
+			current, err := tx.NextOwnerGateDelivery(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				now,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			spec, ok := current.Spec.(entity.OwnerGateSpec)
+			if !ok || current.Kind != enum.KindOwnerGate ||
+				current.State != enum.StateWaitingOwner ||
+				spec.MattermostPostID != "" ||
+				spec.DeliveryWorkloadID != input.Principal.CallerWorkload ||
+				spec.DeliverySPIFFEID != input.Principal.CallerSPIFFEID {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			nextVersion := current.Version + 1
+			expiresAt := now.Add(service.turnLeaseDuration)
+			token := service.leaseToken(
+				current.ID,
+				nextVersion,
+				1,
+				input.Principal.AuthorityGeneration,
+				input.Principal.CallerWorkload,
+				input.IdempotencyKey,
+			)
+			spec.DeliveryClaimTokenSHA256 = hashString(token)
+			spec.DeliveryFence = nextVersion
+			spec.DeliveryClaimExpiresAt = expiresAt
+			updated, err := current.Update(current.Name, spec, now)
+			if err != nil {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if err := tx.Update(ctx, updated, current.Version); err != nil {
+				return entity.Resource{}, err
+			}
+			return updated, service.appendMutationRecords(
+				ctx,
+				tx,
+				input.Principal,
+				"claim_owner_gate_delivery",
+				updated,
+			)
+		},
+	)
+	if err != nil {
+		return ClaimOwnerGateDeliveryResult{}, err
+	}
+	spec, ok := gate.Spec.(entity.OwnerGateSpec)
+	if !ok || spec.DeliveryFence != gate.Version ||
+		spec.DeliveryClaimExpiresAt.IsZero() {
+		return ClaimOwnerGateDeliveryResult{}, errs.ErrInternal
+	}
+	return ClaimOwnerGateDeliveryResult{
+		OwnerGate: gate,
+		ClaimToken: service.leaseToken(
+			gate.ID,
+			gate.Version,
+			1,
+			input.Principal.AuthorityGeneration,
+			input.Principal.CallerWorkload,
+			input.IdempotencyKey,
+		),
+		ExpiresAt: spec.DeliveryClaimExpiresAt,
+	}, nil
+}
+
+// RecordOwnerGateDelivery фиксирует точную привязку сообщения до ResolveOwnerGate.
 func (service *Service) RecordOwnerGateDelivery(
 	ctx context.Context,
 	input RecordOwnerGateDeliveryInput,
@@ -590,11 +732,12 @@ func (service *Service) RecordOwnerGateDelivery(
 				spec.DeliveryPayloadSHA256 != input.DeliveryPayloadSHA256 ||
 				spec.DeliveryWorkloadID != input.Principal.CallerWorkload ||
 				spec.DeliverySPIFFEID != input.Principal.CallerSPIFFEID ||
+				spec.DeliveryFence != input.DeliveryFence ||
+				spec.DeliveryClaimTokenSHA256 != hashString(input.DeliveryClaimToken) ||
+				!spec.DeliveryClaimExpiresAt.After(service.now()) ||
 				spec.MattermostPostID != "" {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			spec.DeliveryClaimTokenSHA256 = hashString(input.DeliveryClaimToken)
-			spec.DeliveryFence = input.DeliveryFence
 			spec.MattermostPostID = input.MattermostPostID
 			spec.MattermostChannelID = input.MattermostChannelID
 			spec.MattermostRootPostID = input.MattermostRootPostID
@@ -613,7 +756,7 @@ func (service *Service) RecordOwnerGateDelivery(
 	)
 }
 
-// GetRuntimeRevision предоставляет exact version-pinned read runtime-controller.
+// GetRuntimeRevision предоставляет runtime-controller точное чтение закреплённой версии.
 func (service *Service) GetRuntimeRevision(
 	ctx context.Context,
 	input GetRuntimeRevisionInput,
@@ -642,7 +785,8 @@ func (service *Service) GetRuntimeRevision(
 	return revision, nil
 }
 
-// SearchMemory выполняет FTS всегда и vector ranking только при exact projection provenance.
+// SearchMemory всегда выполняет полнотекстовый поиск, а векторное ранжирование
+// использует только при точном происхождении проекции.
 func (service *Service) SearchMemory(
 	ctx context.Context,
 	input SearchMemoryInput,
@@ -654,22 +798,11 @@ func (service *Service) SearchMemory(
 		input.Limit < 1 || input.Limit > 100 ||
 		(input.AfterID != "" && value.ValidateID(input.AfterID) != nil) ||
 		(input.Scope != "" && input.Scope != "PROJECT" && input.Scope != "ROLE") ||
-		(input.RoleID != "" && value.ValidateID(input.RoleID) != nil) ||
-		len(input.QueryEmbedding) > maximumEmbeddingSize {
+		(input.RoleID != "" && value.ValidateID(input.RoleID) != nil) {
 		return nil, errs.ErrInvalidInput
 	}
-	if len(input.QueryEmbedding) > 0 {
-		if value.ValidateStableKey(input.EmbeddingModelID) != nil ||
-			input.EmbeddingModelRevision == 0 ||
-			!validSHA256Text(input.EmbeddingModelSHA256) {
-			return nil, errs.ErrInvalidInput
-		}
-		for _, component := range input.QueryEmbedding {
-			if math.IsNaN(float64(component)) || math.IsInf(float64(component), 0) {
-				return nil, errs.ErrInvalidInput
-			}
-		}
-	}
+	queryEmbedding := localMemoryProjection(input.Query)
+	modelSHA256 := localMemoryProjectionModelSHA256()
 	var hits []domainrepo.MemorySearchHit
 	err := service.repository.Transact(
 		ctx,
@@ -712,10 +845,10 @@ func (service *Service) SearchMemory(
 				Scope:               input.Scope,
 				RoleID:              input.RoleID,
 				Query:               input.Query,
-				QueryEmbedding:      input.QueryEmbedding,
-				ModelID:             input.EmbeddingModelID,
-				ModelRevision:       input.EmbeddingModelRevision,
-				ModelSHA256:         input.EmbeddingModelSHA256,
+				QueryEmbedding:      queryEmbedding,
+				ModelID:             localMemoryProjectionModelID,
+				ModelRevision:       localMemoryProjectionRevision,
+				ModelSHA256:         modelSHA256,
 				AfterID:             input.AfterID,
 				AfterTextRank:       input.AfterTextRank,
 				AfterVectorDistance: input.AfterVectorDistance,
@@ -742,7 +875,7 @@ func (service *Service) SearchMemory(
 	return result, nil
 }
 
-// RecordMemoryEmbedding сохраняет только локальную перестраиваемую projection.
+// RecordMemoryEmbedding сохраняет только локальную перестраиваемую проекцию.
 func (service *Service) RecordMemoryEmbedding(
 	ctx context.Context,
 	input RecordMemoryEmbeddingInput,
@@ -757,16 +890,8 @@ func (service *Service) RecordMemoryEmbedding(
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
 		value.ValidateID(input.MemoryRecordID) != nil ||
 		input.ExpectedResourceVersion == 0 ||
-		!validSHA256Text(input.ContentSHA256) ||
-		value.ValidateStableKey(input.ModelID) != nil ||
-		input.ModelRevision == 0 || !validSHA256Text(input.ModelSHA256) ||
-		len(input.Embedding) < 2 || len(input.Embedding) > maximumEmbeddingSize {
+		!validSHA256Text(input.ContentSHA256) {
 		return RecordMemoryEmbeddingResult{}, errs.ErrInvalidInput
-	}
-	for _, component := range input.Embedding {
-		if math.IsNaN(float64(component)) || math.IsInf(float64(component), 0) {
-			return RecordMemoryEmbeddingResult{}, errs.ErrInvalidInput
-		}
 	}
 	requestHash, err := canonicalHash(struct {
 		Identity commandIdentity
@@ -817,6 +942,8 @@ func (service *Service) RecordMemoryEmbedding(
 				spec.ContentSHA256 != input.ContentSHA256 {
 				return errs.ErrStateConflict
 			}
+			embedding := localMemoryProjection(spec.Title + " " + spec.Content)
+			modelSHA256 := localMemoryProjectionModelSHA256()
 			projectionDigest, err := canonicalHash(struct {
 				ResourceID      string
 				ResourceVersion uint64
@@ -829,10 +956,10 @@ func (service *Service) RecordMemoryEmbedding(
 				record.ID,
 				record.Version,
 				spec.ContentSHA256,
-				input.ModelID,
-				input.ModelRevision,
-				input.ModelSHA256,
-				input.Embedding,
+				localMemoryProjectionModelID,
+				uint64(localMemoryProjectionRevision),
+				modelSHA256,
+				embedding,
 			})
 			if err != nil {
 				return errs.ErrInternal
@@ -844,10 +971,10 @@ func (service *Service) RecordMemoryEmbedding(
 				ProjectID:        record.ProjectID,
 				ResourceVersion:  record.Version,
 				ContentSHA256:    spec.ContentSHA256,
-				ModelID:          input.ModelID,
-				ModelRevision:    input.ModelRevision,
-				ModelSHA256:      input.ModelSHA256,
-				Embedding:        input.Embedding,
+				ModelID:          localMemoryProjectionModelID,
+				ModelRevision:    localMemoryProjectionRevision,
+				ModelSHA256:      modelSHA256,
+				Embedding:        embedding,
 				ProjectionSHA256: projectionDigest,
 				UpdatedAt:        now,
 			}); err != nil {
@@ -891,4 +1018,41 @@ func (service *Service) RecordMemoryEmbedding(
 		},
 	)
 	return result, err
+}
+
+func localMemoryProjection(text string) []float32 {
+	tokens := strings.Fields(strings.ToLower(text))
+	if len(tokens) == 0 {
+		return nil
+	}
+	projection := make([]float32, localMemoryProjectionDimensions)
+	for _, token := range tokens {
+		digest := sha256.Sum256([]byte(token))
+		index := (uint16(digest[0])<<8 | uint16(digest[1])) %
+			localMemoryProjectionDimensions
+		delta := float32(1)
+		if digest[2]&1 != 0 {
+			delta = -1
+		}
+		projection[index] += delta
+	}
+	var squared float64
+	for _, component := range projection {
+		squared += float64(component * component)
+	}
+	if squared == 0 {
+		return nil
+	}
+	norm := float32(math.Sqrt(squared))
+	for index := range projection {
+		projection[index] /= norm
+	}
+	return projection
+}
+
+func localMemoryProjectionModelSHA256() string {
+	digest := sha256.Sum256([]byte(
+		"mattercodex-local-token-hash:v1:sha256-index-sign:l2:dim-256",
+	))
+	return hex.EncodeToString(digest[:])
 }

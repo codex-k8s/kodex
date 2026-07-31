@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -20,7 +21,7 @@ var scheduleParser = cron.NewParser(
 	cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 )
 
-// EnqueueTurn атомарно увеличивает session sequence и создаёт exact attempt.
+// EnqueueTurn атомарно увеличивает последовательность сессии и создаёт точную попытку.
 func (service *Service) EnqueueTurn(
 	ctx context.Context,
 	input EnqueueTurnInput,
@@ -69,8 +70,21 @@ func (service *Service) EnqueueTurn(
 			}
 			sessionSpec, ok := session.Spec.(entity.SessionSpec)
 			if !ok || session.Kind != enum.KindSession ||
-				session.State != enum.StateActive {
+				session.State != enum.StateActive ||
+				session.OwnerActorID != input.Principal.ActorID {
 				return entity.Resource{}, errs.ErrStateConflict
+			}
+			roleIDs, err := tx.ActorRoleIDs(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				input.Principal.ActorID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			if !slices.Contains(roleIDs, sessionSpec.AgentID) {
+				return entity.Resource{}, errs.ErrNotFound
 			}
 			if sessionSpec.LastTurnSequence == ^uint64(0) {
 				return entity.Resource{}, errs.ErrStateConflict
@@ -84,7 +98,6 @@ func (service *Service) EnqueueTurn(
 			if err != nil {
 				return entity.Resource{}, err
 			}
-			var runtimeRevision entity.Resource
 			if input.ProcessRunID != "" {
 				process, err := tx.GetForUpdate(
 					ctx,
@@ -103,30 +116,19 @@ func (service *Service) EnqueueTurn(
 					value.ValidateID(processSpec.RuntimeRevisionID) != nil {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				runtimeRevision, err = tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					processSpec.RuntimeRevisionID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				if runtimeRevision.Kind != enum.KindRuntimeRevision ||
-					runtimeRevision.State != enum.StateActive {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-			} else {
-				runtimeRevision, err = service.createRuntimeRevision(
-					ctx,
-					tx,
-					input.Principal,
-					session,
-					sessionSpec,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+			}
+			// Каждый ход получает свежий server-resolved effective снимок.
+			// Revision процесса остаётся связью родословной, но не переиспользуется
+			// как authority для нового исполнения.
+			runtimeRevision, err := service.createRuntimeRevision(
+				ctx,
+				tx,
+				input.Principal,
+				session,
+				sessionSpec,
+			)
+			if err != nil {
+				return entity.Resource{}, err
 			}
 			sessionSpec.LastTurnSequence++
 			now := service.now().UTC().Truncate(time.Microsecond)
@@ -204,7 +206,7 @@ func (service *Service) EnqueueTurn(
 	)
 }
 
-// ClaimTurn выдаёт exact workload одну bounded lease.
+// ClaimTurn выдаёт точной рабочей нагрузке одну ограниченную аренду.
 func (service *Service) ClaimTurn(
 	ctx context.Context,
 	input ClaimTurnInput,
@@ -212,7 +214,12 @@ func (service *Service) ClaimTurn(
 	if err := authorize(input.Principal, permissionClaimTurn); err != nil {
 		return ClaimTurnResult{}, err
 	}
-	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil {
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		input.Principal.AuthoritySource != "AGENT_SESSION" ||
+		value.ValidateID(input.Principal.AuthorityReference) != nil ||
+		input.Principal.AuthorityRevision == 0 ||
+		input.Principal.AuthorityGrantGeneration == 0 ||
+		!validSHA256Text(input.Principal.AuthorityDigest) {
 		return ClaimTurnResult{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
@@ -271,6 +278,7 @@ func (service *Service) ClaimTurn(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
+				input.Principal.AuthorityReference,
 				32,
 				now,
 			)
@@ -322,7 +330,7 @@ func (service *Service) ClaimTurn(
 					TurnID:              requeued.ID,
 					Attempt:             staleSpec.Attempt,
 					WorkloadID:          "unassigned",
-					AuthorityGeneration: input.Principal.AuthorityGeneration,
+					AuthorityGeneration: input.Principal.AuthorityGrantGeneration,
 					State:               "QUEUED",
 					InputSHA256:         staleSpec.EffectiveInputSHA256,
 					LeaseFence:          requeued.Version,
@@ -344,6 +352,7 @@ func (service *Service) ClaimTurn(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
+				input.Principal.AuthorityReference,
 			)
 			if err != nil {
 				return err
@@ -353,14 +362,17 @@ func (service *Service) ClaimTurn(
 				return errs.ErrStateConflict
 			}
 			turnSpec, ok := claimed.Spec.(entity.TurnSpec)
-			if !ok {
-				return errs.ErrInternal
+			if !ok ||
+				claimed.OwnerActorID != input.Principal.ActorID ||
+				uint64(turnSpec.Attempt) != input.Principal.AuthorityRevision ||
+				turnSpec.EffectiveInputSHA256 != input.Principal.AuthorityDigest {
+				return errs.ErrPermissionDenied
 			}
 			token := service.leaseToken(
 				claimed.ID,
 				claimed.Version,
 				turnSpec.Attempt,
-				input.Principal.AuthorityGeneration,
+				input.Principal.AuthorityGrantGeneration,
 				input.Principal.CallerWorkload,
 				input.IdempotencyKey,
 			)
@@ -372,7 +384,7 @@ func (service *Service) ClaimTurn(
 				TurnID:              claimed.ID,
 				TokenHash:           hashString(token),
 				WorkloadID:          input.Principal.CallerWorkload,
-				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				AuthorityGeneration: input.Principal.AuthorityGrantGeneration,
 				Attempt:             turnSpec.Attempt,
 				ExpiresAt:           expiresAt,
 				Fence:               claimed.Version,
@@ -383,7 +395,7 @@ func (service *Service) ClaimTurn(
 				TurnID:              claimed.ID,
 				Attempt:             turnSpec.Attempt,
 				WorkloadID:          input.Principal.CallerWorkload,
-				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				AuthorityGeneration: input.Principal.AuthorityGrantGeneration,
 				State:               "CLAIMED",
 				InputSHA256:         turnSpec.EffectiveInputSHA256,
 				LeaseFence:          claimed.Version,
@@ -403,7 +415,7 @@ func (service *Service) ClaimTurn(
 			payload, err := json.Marshal(claimTurnReceipt{
 				LeaseExpiresAt:      expiresAt,
 				Attempt:             turnSpec.Attempt,
-				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				AuthorityGeneration: input.Principal.AuthorityGrantGeneration,
 			})
 			if err != nil {
 				return errs.ErrInternal
@@ -425,7 +437,7 @@ func (service *Service) ClaimTurn(
 				LeaseToken:          token,
 				LeaseExpiresAt:      expiresAt,
 				Attempt:             turnSpec.Attempt,
-				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				AuthorityGeneration: input.Principal.AuthorityGrantGeneration,
 			}
 			mutated = true
 			return nil
@@ -437,7 +449,7 @@ func (service *Service) ClaimTurn(
 	return result, err
 }
 
-// RenewTurn продлевает только exact current lease того же workload и generation.
+// RenewTurn продлевает только точную текущую аренду той же рабочей нагрузки и поколения.
 func (service *Service) RenewTurn(
 	ctx context.Context,
 	input RenewTurnInput,
@@ -450,7 +462,13 @@ func (service *Service) RenewTurn(
 		len(input.LeaseToken) != 64 ||
 		input.ExpectedVersion == 0 ||
 		input.Attempt == 0 ||
-		input.Principal.AuthorityGeneration == 0 {
+		input.Principal.AuthorityGrantGeneration == 0 ||
+		input.Principal.AuthoritySource != "AGENT_SESSION" ||
+		input.Principal.AuthorityReference != input.TurnID ||
+		input.Principal.AuthorityRevision != uint64(input.Attempt) ||
+		input.Principal.AuthorityGrantGeneration !=
+			input.AuthorityGeneration ||
+		!validSHA256Text(input.Principal.AuthorityDigest) {
 		return RenewTurnResult{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
@@ -493,7 +511,7 @@ func (service *Service) RenewTurn(
 				if json.Unmarshal(receipt.Payload, &payload) != nil ||
 					payload.LeaseExpiresAt.IsZero() ||
 					payload.Attempt != input.Attempt ||
-					payload.AuthorityGeneration != input.Principal.AuthorityGeneration {
+					payload.AuthorityGeneration != input.Principal.AuthorityGrantGeneration {
 					return errs.ErrInternal
 				}
 				result = RenewTurnResult{
@@ -521,7 +539,9 @@ func (service *Service) RenewTurn(
 			if !ok || current.Kind != enum.KindTurn ||
 				current.State != enum.StateClaimed ||
 				current.Version != input.ExpectedVersion ||
-				spec.Attempt != input.Attempt {
+				spec.Attempt != input.Attempt ||
+				current.OwnerActorID != input.Principal.ActorID ||
+				spec.EffectiveInputSHA256 != input.Principal.AuthorityDigest {
 				return errs.ErrStateConflict
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
@@ -531,7 +551,7 @@ func (service *Service) RenewTurn(
 					TurnID:              input.TurnID,
 					TokenHash:           hashString(input.LeaseToken),
 					WorkloadID:          input.Principal.CallerWorkload,
-					AuthorityGeneration: input.Principal.AuthorityGeneration,
+					AuthorityGeneration: input.Principal.AuthorityGrantGeneration,
 					Attempt:             input.Attempt,
 					ExpiresAt:           now.Add(service.turnLeaseDuration),
 					Fence:               input.ExpectedVersion,
@@ -583,7 +603,7 @@ func (service *Service) RenewTurn(
 	return result, err
 }
 
-// CompleteTurn принимает terminal outcome только для current unexpired lease.
+// CompleteTurn принимает конечный результат только для текущей неистёкшей аренды.
 func (service *Service) CompleteTurn(
 	ctx context.Context,
 	input CompleteTurnInput,
@@ -602,7 +622,11 @@ func (service *Service) CompleteTurn(
 			input.TerminalState != enum.StateCancelled) ||
 		len(input.Outcome) < 1 || len(input.Outcome) > 256 ||
 		(input.ResultArtifactID != "" &&
-			value.ValidateID(input.ResultArtifactID) != nil) {
+			value.ValidateID(input.ResultArtifactID) != nil) ||
+		input.Principal.AuthoritySource != "AGENT_SESSION" ||
+		input.Principal.AuthorityReference != input.TurnID ||
+		input.Principal.AuthorityRevision != uint64(input.Attempt) ||
+		!validSHA256Text(input.Principal.AuthorityDigest) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
@@ -664,14 +688,17 @@ func (service *Service) CompleteTurn(
 			if lease.Fence != current.Version ||
 				lease.Attempt != input.Attempt ||
 				lease.AuthorityGeneration != input.AuthorityGeneration ||
-				input.AuthorityGeneration != input.Principal.AuthorityGeneration {
+				input.AuthorityGeneration !=
+					input.Principal.AuthorityGrantGeneration {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
 			spec, ok := current.Spec.(entity.TurnSpec)
 			if !ok {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			if spec.Attempt != input.Attempt {
+			if spec.Attempt != input.Attempt ||
+				current.OwnerActorID != input.Principal.ActorID ||
+				spec.EffectiveInputSHA256 != input.Principal.AuthorityDigest {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
 			if input.ResultArtifactID != "" {
@@ -727,7 +754,7 @@ func (service *Service) CompleteTurn(
 	)
 }
 
-// RetryTurn создаёт новую immutable attempt после завершённого/ожидающего turn.
+// RetryTurn создаёт новую неизменяемую попытку после завершённого или ожидающего хода.
 func (service *Service) RetryTurn(
 	ctx context.Context,
 	input RetryTurnInput,
@@ -816,7 +843,7 @@ func (service *Service) RetryTurn(
 	)
 }
 
-// CancelTurn завершает turn и атомарно отзывает существующую lease.
+// CancelTurn завершает ход и атомарно отзывает существующую аренду.
 func (service *Service) CancelTurn(
 	ctx context.Context,
 	input CancelTurnInput,
@@ -918,7 +945,7 @@ func (service *Service) CancelTurn(
 	)
 }
 
-// ClaimDueSchedules фиксирует immutable occurrences и сдвигает high watermark.
+// ClaimDueSchedules фиксирует неизменяемые запуски и сдвигает верхнюю границу.
 func (service *Service) ClaimDueSchedules(
 	ctx context.Context,
 	input ClaimDueSchedulesInput,
@@ -1104,7 +1131,7 @@ func (service *Service) ClaimDueSchedules(
 	return result, err
 }
 
-// ResolveOwnerGate связывает решение с exact gate и process одним commit.
+// ResolveOwnerGate связывает решение с точными шлюзом и процессом одной фиксацией.
 func (service *Service) ResolveOwnerGate(
 	ctx context.Context,
 	input ResolveOwnerGateInput,
@@ -1233,8 +1260,42 @@ func (service *Service) ResolveOwnerGate(
 				processSpec.RootSessionID != gateSpec.SessionID ||
 				processSpec.RootTurnID != gateSpec.TurnID ||
 				processSpec.RootAttempt != gateSpec.Attempt ||
-				processSpec.ImmutableInputSHA256 != gateSpec.ImmutableInputSHA256 {
+				processSpec.ImmutableInputSHA256 != gateSpec.ImmutableInputSHA256 ||
+				processSpec.ScheduleID != gateSpec.ScheduleID ||
+				processSpec.OccurrenceID != gateSpec.OccurrenceID {
 				return errs.ErrStateConflict
+			}
+			var relatedOccurrence domainrepo.ScheduleOccurrence
+			var relatedSchedule entity.Resource
+			if gateSpec.OccurrenceID != "" {
+				occurrence, err := tx.GetScheduleOccurrenceForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					gateSpec.OccurrenceID,
+				)
+				if err != nil {
+					return err
+				}
+				if occurrence.ScheduleID != gateSpec.ScheduleID ||
+					occurrence.State != "CLAIMED" ||
+					occurrence.EffectiveInputSHA256 == "" {
+					return errs.ErrStateConflict
+				}
+				schedule, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					gateSpec.ScheduleID,
+				)
+				if err != nil {
+					return err
+				}
+				if schedule.Kind != enum.KindSchedule {
+					return errs.ErrStateConflict
+				}
+				relatedOccurrence = occurrence
+				relatedSchedule = schedule
 			}
 			gateTarget := ownerGateTarget(input.Decision)
 			processTarget := enum.StateRunning
@@ -1255,7 +1316,61 @@ func (service *Service) ResolveOwnerGate(
 				gateSpec.Decision = input.Decision
 				gateSpec.DecisionReason = input.Reason
 			}
+			if processTarget.Terminal() {
+				activeChildren, err := tx.HasActiveChildProcesses(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					process.ID,
+				)
+				if err != nil {
+					return err
+				}
+				if activeChildren {
+					return errs.ErrStateConflict
+				}
+			}
 			now := service.now().UTC().Truncate(time.Microsecond)
+			if relatedOccurrence.ID != "" {
+				expectedToken := relatedOccurrence.TokenHash
+				relatedOccurrence.Outcome = "owner_gate_" +
+					strings.ToLower(input.Decision)
+				if gateTarget == enum.StateExpired {
+					relatedOccurrence.State = "FAILED"
+					relatedOccurrence.Outcome = "owner_gate_expired"
+				} else {
+					switch input.Decision {
+					case "REJECTED":
+						relatedOccurrence.State = "FAILED"
+					case "CANCELLED":
+						relatedOccurrence.State = "CANCELLED"
+					}
+				}
+				if relatedOccurrence.State != "CLAIMED" {
+					relatedOccurrence.ClaimantWorkloadID = ""
+					relatedOccurrence.AuthorityGeneration = 0
+					relatedOccurrence.TokenHash = ""
+					relatedOccurrence.LeaseExpiresAt = time.Time{}
+				}
+				relatedOccurrence.UpdatedAt = now
+				if err := tx.UpdateScheduleOccurrence(
+					ctx,
+					relatedOccurrence,
+					relatedOccurrence.Attempt,
+					expectedToken,
+				); err != nil {
+					return err
+				}
+				if err := service.appendMutationRecords(
+					ctx,
+					tx,
+					input.Principal,
+					"owner_gate_occurrence_transition",
+					relatedSchedule,
+				); err != nil {
+					return err
+				}
+			}
 			updatedGate, err := gate.ReplaceAndTransition(
 				gateSpec,
 				gateTarget,
@@ -1617,7 +1732,7 @@ func (service *Service) createRuntimeRevision(
 		principal.OrganizationID,
 		principal.ProjectID,
 		session.ID,
-		principal.ActorID,
+		session.OwnerActorID,
 		enum.KindRuntimeRevision,
 		"Effective runtime revision",
 		entity.RuntimeRevisionSpec{

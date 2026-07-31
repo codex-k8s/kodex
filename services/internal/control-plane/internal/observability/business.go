@@ -1,4 +1,4 @@
-// Package observability содержит bounded бизнесовые метрики control-plane.
+// Package observability содержит ограниченные бизнесовые метрики control-plane.
 package observability
 
 import (

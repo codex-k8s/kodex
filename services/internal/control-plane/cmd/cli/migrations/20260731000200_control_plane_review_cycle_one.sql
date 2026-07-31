@@ -1,9 +1,14 @@
 -- +goose Up
+-- Укрепление первого цикла вводит ротацию principals исполнения, подписанный
+-- локальный для транзакции контекст RLS, аренды, попытки и устойчивые квитанции.
+-- Функции SECURITY DEFINER ниже всегда фиксируют search_path и проверяют роль.
 RESET ROLE;
 GRANT pg_signal_backend TO control_plane_owner;
 SET ROLE control_plane_owner;
 SET search_path = pg_catalog, control_plane;
 
+-- Устойчивый реестр связывает каждый LOGIN с поколением и закрытым статусом,
+-- а отдельный реестр ключей поддерживает подписанный контекст транзакции.
 CREATE TABLE control_plane.runtime_principals (
     principal_name name PRIMARY KEY,
     generation bigint NOT NULL CHECK (generation BETWEEN 1 AND 9007199254740991),
@@ -51,6 +56,8 @@ CREATE TABLE control_plane.runtime_transaction_contexts (
 CREATE INDEX runtime_transaction_contexts_expiry_idx
     ON control_plane.runtime_transaction_contexts (expires_at);
 
+-- Активация принимает область только вместе с HMAC, точным session_user,
+-- поколением, PID серверного процесса и текущей транзакцией.
 CREATE OR REPLACE FUNCTION control_plane.activate_runtime_context(
     requested_organization_id uuid,
     requested_project_id uuid,
@@ -186,6 +193,8 @@ BEGIN
 END
 $function$;
 
+-- Сверка применяет целый набор CURRENT/NEXT/PREVIOUS одной транзакцией,
+-- переводит отсутствующие поколения в RETIRED и завершает их серверные сессии.
 CREATE OR REPLACE FUNCTION control_plane.reconcile_runtime_principals(
     requested_principals jsonb,
     requested_key_id text,
@@ -401,6 +410,8 @@ BEGIN
 END
 $function$;
 
+-- Попытки и аренды получают неизменяемые привязки нагрузки, поколения и барьера;
+-- уникальный индекс запрещает два активных хода одной сессии.
 ALTER TABLE control_plane.turn_leases
     ADD COLUMN authority_generation bigint NOT NULL DEFAULT 1
         CHECK (authority_generation BETWEEN 1 AND 9007199254740991),
@@ -439,6 +450,8 @@ CREATE UNIQUE INDEX resources_one_active_turn_per_session_uidx
         'CLAIMED', 'RUNNING', 'WAITING_OWNER', 'WAITING_EXTERNAL', 'BLOCKED'
       );
 
+-- Запуск расписания становится устойчивым автоматом состояний с повторами,
+-- задержкой, точным снимком входа, арендой и доказательством завершения.
 ALTER TABLE control_plane.schedule_occurrences
     ADD COLUMN target_kind text NOT NULL DEFAULT 'PROCESS_RUN',
     ADD COLUMN target_version bigint NOT NULL DEFAULT 1 CHECK (target_version > 0),
@@ -496,6 +509,8 @@ CREATE INDEX schedule_occurrences_claim_idx
     )
     WHERE state = 'QUEUED';
 
+-- Журнал исходящих событий сохраняет порядок и устойчивую квитанцию PubAck до
+-- очистки, поэтому публикация не уничтожает авторитетное доказательство.
 ALTER TABLE control_plane.outbox_events
     ADD COLUMN ordering_key text GENERATED ALWAYS AS (
         organization_id::text || ':' || event_name || ':' ||
@@ -530,6 +545,8 @@ CREATE INDEX outbox_events_cleanup_idx
     ON control_plane.outbox_events (cleanup_after, event_id)
     WHERE published_at IS NOT NULL;
 
+-- Все политики исполнения пересоздаются поверх runtime_scope(), который каждый
+-- оператор связывает с действующим поколением LOGIN и подписанным контекстом.
 DROP POLICY resources_runtime_scope ON control_plane.resources;
 DROP POLICY receipts_runtime_scope ON control_plane.command_receipts;
 DROP POLICY audit_runtime_scope ON control_plane.audit_events;
@@ -704,6 +721,7 @@ CREATE POLICY project_actor_permissions_runtime_write
         )
     );
 
+-- SECURITY DEFINER функции закрыты от PUBLIC и выданы только точным ролям.
 GRANT EXECUTE ON FUNCTION control_plane.activate_runtime_context(
     uuid, uuid, uuid, name, bigint, text, uuid, bigint, bytea
 ) TO control_plane_runtime;

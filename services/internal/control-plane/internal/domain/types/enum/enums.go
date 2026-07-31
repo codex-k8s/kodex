@@ -38,7 +38,7 @@ func (kind Kind) Valid() bool {
 	}
 }
 
-// State — закрытый lifecycle агрегата.
+// State — закрытый жизненный цикл агрегата.
 type State string
 
 const (
@@ -69,7 +69,7 @@ func (state State) Terminal() bool {
 	}
 }
 
-// InitialState возвращает server-owned начальное состояние.
+// InitialState возвращает назначенное сервером начальное состояние.
 func InitialState(kind Kind) State {
 	switch kind {
 	case KindProcessRun:
@@ -83,7 +83,7 @@ func InitialState(kind Kind) State {
 	}
 }
 
-// TransitionAllowed задаёт fail-closed state machine системно для всех видов.
+// TransitionAllowed задаёт закрытый автомат состояний для всех видов.
 func TransitionAllowed(kind Kind, from, to State) bool {
 	if !kind.Valid() || from == to ||
 		(from.Terminal() &&

@@ -8,7 +8,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Resource — единый versioned envelope типизированного агрегата.
+// Resource — единая версионированная оболочка типизированного агрегата.
 type Resource struct {
 	ID             string
 	OrganizationID string
@@ -47,7 +47,8 @@ func (resource Resource) Validate() error {
 	return resource.Spec.Validate()
 }
 
-// New создаёт server-owned aggregate ID, owner, state, version и timestamps.
+// New создаёт назначенные сервером ID агрегата, владельца, состояние, версию
+// и временные отметки.
 func New(
 	id string,
 	organizationID string,
@@ -79,7 +80,7 @@ func New(
 	return resource, nil
 }
 
-// Update применяет business update и увеличивает OCC version.
+// Update применяет прикладное обновление и увеличивает версию OCC.
 func (resource Resource) Update(name string, spec Spec, now time.Time) (Resource, error) {
 	if resource.State.Terminal() || resource.State == enum.StateDeletionPending ||
 		spec == nil || spec.Kind() != resource.Kind {
@@ -95,7 +96,7 @@ func (resource Resource) Update(name string, spec Spec, now time.Time) (Resource
 	return resource, nil
 }
 
-// Transition применяет fail-closed lifecycle transition.
+// Transition применяет переход закрытого жизненного цикла.
 func (resource Resource) Transition(target enum.State, now time.Time) (Resource, error) {
 	if !enum.TransitionAllowed(resource.Kind, resource.State, target) {
 		return Resource{}, errors.New("resource transition is not allowed")
@@ -106,7 +107,8 @@ func (resource Resource) Transition(target enum.State, now time.Time) (Resource,
 	return resource, resource.Validate()
 }
 
-// ReplaceAndTransition атомарно меняет typed payload и состояние с одним OCC increment.
+// ReplaceAndTransition атомарно меняет типизированную нагрузку и состояние
+// с одним увеличением версии OCC.
 func (resource Resource) ReplaceAndTransition(
 	spec Spec,
 	target enum.State,

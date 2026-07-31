@@ -35,6 +35,15 @@ type Store struct {
 	client *redis.Client
 }
 
+type PoolStats struct {
+	Hits     uint32
+	Misses   uint32
+	Timeouts uint32
+	Total    uint32
+	Idle     uint32
+	Stale    uint32
+}
+
 // New создаёт TLS-only Redis store.
 func New(config Config) (*Store, error) {
 	if config.Address == "" || config.TLSServerName == "" ||
@@ -66,7 +75,7 @@ func New(config Config) (*Store, error) {
 	return &Store{client: client}, nil
 }
 
-// Get читает bounded byte snapshot.
+// Get читает ограниченный байтовый снимок.
 func (store *Store) Get(ctx context.Context, key string) ([]byte, error) {
 	raw, err := store.client.Get(ctx, key).Bytes()
 	if errors.Is(err, redis.Nil) {
@@ -78,7 +87,7 @@ func (store *Store) Get(ctx context.Context, key string) ([]byte, error) {
 	return raw, nil
 }
 
-// Set сохраняет snapshot с обязательным TTL.
+// Set сохраняет снимок с обязательным TTL.
 func (store *Store) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	if ttl <= 0 {
 		return errors.New("Redis cache TTL is invalid")
@@ -108,6 +117,18 @@ func (store *Store) Check(ctx context.Context) error {
 // Close закрывает client.
 func (store *Store) Close() error {
 	return store.client.Close()
+}
+
+func (store *Store) PoolStats() PoolStats {
+	stats := store.client.PoolStats()
+	return PoolStats{
+		Hits:     stats.Hits,
+		Misses:   stats.Misses,
+		Timeouts: stats.Timeouts,
+		Total:    stats.TotalConns,
+		Idle:     stats.IdleConns,
+		Stale:    stats.StaleConns,
+	}
 }
 
 func loadCertificatePool(path string) (*x509.CertPool, error) {

@@ -1,4 +1,4 @@
-// Package query задаёт доменные фильтры и pagination.
+// Package query задаёт доменные фильтры и постраничную выдачу.
 package query
 
 import (
@@ -15,7 +15,7 @@ const MaximumPageSize = 100
 
 var auditActionPattern = regexp.MustCompile(`^[a-z][a-z0-9_:]{0,95}$`)
 
-// ResourceFilter ограничивает tenant-scoped stable list.
+// ResourceFilter ограничивает устойчивый список областью организации и проекта.
 type ResourceFilter struct {
 	OrganizationID string
 	ProjectID      string
@@ -26,7 +26,7 @@ type ResourceFilter struct {
 	Limit          int
 }
 
-// ResourceSearch ограничивает tenant-scoped normalized search.
+// ResourceSearch ограничивает нормализованный поиск областью организации и проекта.
 type ResourceSearch struct {
 	OrganizationID string
 	ProjectID      string
@@ -50,7 +50,7 @@ func (filter ResourceSearch) Validate() error {
 	}.Validate()
 }
 
-// AuditFilter задаёт безопасный cursor по immutable audit records.
+// AuditFilter задаёт безопасный курсор по неизменяемым записям аудита.
 type AuditFilter struct {
 	OrganizationID string
 	ProjectID      string
@@ -120,7 +120,7 @@ func (filter ScheduleOccurrenceFilter) Validate() error {
 	return nil
 }
 
-// Validate проверяет bounded filtering.
+// Validate проверяет ограниченную фильтрацию.
 func (filter ResourceFilter) Validate() error {
 	if !filter.Kind.Valid() || filter.Limit < 1 || filter.Limit > MaximumPageSize {
 		return errors.New("resource filter is invalid")

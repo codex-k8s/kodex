@@ -1,9 +1,10 @@
-// Package authorization связывает verified #186 context с доменным Principal.
+// Package authorization связывает проверенный контекст #186 с доменным Principal.
 package authorization
 
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
@@ -16,7 +17,8 @@ const (
 	expectedWorkloadSPIFFE = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"
 )
 
-// Principal возвращает только server-verified identity и exact method binding.
+// Principal возвращает только проверенную сервером идентичность и точную
+// привязку метода.
 func Principal(ctx context.Context, fullMethod string) (value.Principal, error) {
 	verified, ok := authorityclient.VerifiedAuthorizationContext(ctx)
 	if !ok || verified.GetContractVersion() != 1 ||
@@ -26,6 +28,7 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 		verified.GetFullMethod() != fullMethod ||
 		verified.GetAuthority() == nil ||
 		verified.GetAuthority().GetActor() == nil ||
+		verified.GetAuthority().GetActor().GetProvenance() == nil ||
 		verified.GetAuthority().GetTenant() == nil ||
 		verified.GetPermission() == "" ||
 		verified.GetCallerWorkloadId() == "" ||
@@ -41,16 +44,44 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 	if verified.GetAuthority().GetProject() != nil {
 		projectID = verified.GetAuthority().GetProject().GetId()
 	}
+	authoritySource := strings.TrimPrefix(
+		verified.GetAuthority().GetActor().GetProvenance().GetSource().String(),
+		"AUTHORITY_SOURCE_",
+	)
+	authorityReference := verified.GetAuthority().GetActor().GetProvenance().GetReference()
+	authorityRevision := verified.GetAuthority().GetActor().GetProvenance().GetRevision()
+	authorityGrantGeneration := uint64(0)
+	if authoritySource == "AGENT_SESSION" {
+		parts := strings.Split(authorityReference, "/")
+		if len(parts) != 3 {
+			return value.Principal{}, errors.New("agent grant lineage is invalid")
+		}
+		attempt, parseAttemptErr := strconv.ParseUint(parts[1], 10, 32)
+		generation, parseGenerationErr := strconv.ParseUint(parts[2], 10, 64)
+		if parseAttemptErr != nil || parseGenerationErr != nil ||
+			attempt == 0 || generation == 0 ||
+			generation != authorityRevision {
+			return value.Principal{}, errors.New("agent grant lineage is invalid")
+		}
+		authorityReference = parts[0]
+		authorityRevision = attempt
+		authorityGrantGeneration = generation
+	}
 	principal := value.Principal{
-		ActorID:             verified.GetAuthority().GetActor().GetId(),
-		OrganizationID:      verified.GetAuthority().GetTenant().GetId(),
-		ProjectID:           projectID,
-		Permission:          verified.GetPermission(),
-		CorrelationID:       verified.GetJti(),
-		PolicyRevision:      verified.GetPolicyRevision(),
-		AuthorityGeneration: verified.GetSignerGeneration(),
-		CallerWorkload:      verified.GetCallerWorkloadId(),
-		CallerSPIFFEID:      verified.GetCallerSpiffeId(),
+		ActorID:                  verified.GetAuthority().GetActor().GetId(),
+		OrganizationID:           verified.GetAuthority().GetTenant().GetId(),
+		ProjectID:                projectID,
+		Permission:               verified.GetPermission(),
+		CorrelationID:            verified.GetJti(),
+		PolicyRevision:           verified.GetPolicyRevision(),
+		AuthorityGeneration:      verified.GetSignerGeneration(),
+		CallerWorkload:           verified.GetCallerWorkloadId(),
+		CallerSPIFFEID:           verified.GetCallerSpiffeId(),
+		AuthoritySource:          authoritySource,
+		AuthorityReference:       authorityReference,
+		AuthorityRevision:        authorityRevision,
+		AuthorityDigest:          verified.GetAuthority().GetActor().GetProvenance().GetDigestSha256(),
+		AuthorityGrantGeneration: authorityGrantGeneration,
 	}
 	if err := principal.Validate(); err != nil {
 		return value.Principal{}, errors.New("verified authorization identity is invalid")
