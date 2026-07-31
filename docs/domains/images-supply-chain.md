@@ -39,8 +39,12 @@ promotion writer и node pull по Pod, ServiceAccount, mTLS/Vault identity,
 NetworkPolicy и хранилищу. Pull монтирует promoted storage только read-only и
 не имеет пути к внутренним endpoints. Build Job принимает read-only
 `context.tar` с exact digest/revision, обращается к BuildKit через client-only
-mTLS, публикует в staging и переносит в promoted storage только прочитанный
-OCI digest. Admin DELETE не выдаётся сборщику или pull. `noProcessSandbox`
+mTLS и публикует только в staging. Отдельный admission owner связывает exact
+source/build/image digest с BuildKit provenance, SBOM digest, версией и
+результатом vulnerability policy, проверенной signature identity и
+подписанным admission receipt. Только короткоживущий claim этого владельца
+разрешает promotion writer перенести exact digest; pull видит только promoted
+admitted content. Admin DELETE не выдаётся сборщику или pull. `noProcessSandbox`
 ограничивается rootless BuildKit Pod без Kubernetes token, прикладных секретов
 и persistent worker state; это не даёт права ослаблять mTLS или registry scopes.
 

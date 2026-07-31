@@ -58,7 +58,8 @@ runbook и ручная проверка входят в один Issue и од�
 | `integration-gateway` | external gateway | MCP/API/CLI integration execution, grants, approvals и credential isolation | чужое domain state и agent orchestration |
 | `agent-runner` | job/runtime process | один claimed turn, локальный process lifecycle, workspace и session materialization | authoritative session state и orchestration decisions |
 | `automation-scheduler` | job | due occurrence selection, overlap/misfire policy и enqueue | AI execution, Mattermost transport и aggregate state других доменов |
-| `role-image-builder` | job | build specification hash, BuildKit execution, SBOM, provenance, signature и registry artifact | runtime admission и role business state |
+| `role-image-builder` | job | build specification hash, BuildKit execution, provenance и staging registry artifact | SBOM/vulnerability/signature admission, promotion и role business state |
+| `image-admission` | bounded job | SBOM, vulnerability-policy verdict, signature verification, admission receipt и одноразовый promotion claim exact digest | build execution, node pull и role business state |
 | `control-center` | staff PWA | UI state | business authority, secrets и прямой доступ к внутренним RPC |
 
 Один aggregate имеет одного авторитетного владельца. Gateway, runner, cache,
@@ -80,10 +81,12 @@ credential, audience, полным именем метода и permission. Ск
 `role-image-builder` материализуется owner-triggered Job через
 `tools/render-image-build-job.sh`: его вход — read-only source PVC и exact
 digest `context.tar`, подготовленные владельцем workspace; Job не выбирает
-tenant, рецепт или source revision. Он использует client-only mTLS BuildKit,
-scoped staging push и promotion identity, а затем сохраняет digest readback.
-Pull/admin credentials, runtime admission и изменение доменных агрегатов этому
-Job не выдаются.
+tenant, рецепт или source revision. Он использует client-only mTLS BuildKit и
+scoped staging push, но не получает promotion identity. Отдельный
+`render-image-admission-job.sh` применяет server-owned
+provenance/SBOM/vulnerability/signature policy, подписывает exact admission
+receipt и выдаёт promotion claim только после полного readback. Pull/admin
+credentials и изменение доменных агрегатов build Job не выдаются.
 
 ## Контракты
 

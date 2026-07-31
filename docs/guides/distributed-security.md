@@ -347,6 +347,10 @@ applied -> pending -> reload -> exact peer readback -> applied
   transport/application credentials, приватные ключи, NetworkPolicy и
   storage mode; публичный pull не видит внутренние credentials и монтирует
   promoted storage только read-only. Label не заменяет mTLS и scoped auth.
+- Build identity не получает promotion credential или egress. Promotion
+  принимает только exact digest и bounded подписанный claim admission owner,
+  связанный с provenance, SBOM, vulnerability policy/version и проверенной
+  signature identity; missing/stale/rejected evidence закрыто отклоняется.
 
 Kubernetes API не описывается переносимым `podSelector` на компонент
 control-plane. Политика строится из фактического Service ClusterIP и готовых

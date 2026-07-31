@@ -7,6 +7,7 @@ resources:
   - registry-tls-secret-provider-class.yaml
   - buildkit.yaml
   - buildkit-tls-secret-provider-class.yaml
+  - admission-secret-provider-classes.yaml
   - cleanup.yaml
   - node-pull-readback.yaml
   - networkpolicy.yaml
@@ -17,5 +18,8 @@ configMapGenerator:
   - name: mattercodex-registry-cleanup
     files:
       - cleanup.sh
+  - name: mattercodex-image-admission
+    files:
+      - image-admission.sh
 generatorOptions:
   disableNameSuffixHash: true

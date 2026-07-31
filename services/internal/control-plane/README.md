@@ -105,8 +105,8 @@ Deployments не принадлежат Issue #187 и здесь не подме
 | Ход | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence |
 | Восстановление хода | истечение срока или ручной повтор создаёт новую неизменяемую попытку; отмена и завершение отзывают аренду, устаревшие workload/generation/token отклоняются |
 | Процесс | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate |
-| Расписание | закрытые цели `AGENT|PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; completion выводит outcome из terminal Turn/Process, retry оставляет terminal старый run и создаёт новый attempt; owner gate двигает тот же run; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO |
-| Шлюз владельца | запрос закрепляет корневого инициатора, process/session/turn/attempt/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; решение допускается только после доставки и атомарно с процессом, аудитом и outbox |
+| Расписание | закрытые цели `AGENT|PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; lease recovery под row lock сначала закрывает прежние turn/attempt/process/gate/claim/grant и immutable run, затем допускает новую attempt; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO |
+| Шлюз владельца | запрос закрепляет корневого инициатора, process/session/turn/attempt/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` под PostgreSQL row lock автономно закрывает просроченный graph, а delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt, тот же ProcessRun/root и создаёт свежие revision/input/turn, не отображая решение в `FAILED` |
 | Память | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest |
 | Заявка на работу | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна |
 | Метаданные артефакта | только `RegisterArtifact` создаёт `PENDING`; точный scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; прикреплять и использовать разрешено только точный `CLEAN` digest |
@@ -130,7 +130,7 @@ Vault. Устойчивая монотонная верхняя граница �
 поколение, состояние, organization/project/actor, PID соединения и ID
 транзакции. GUC и `SET SESSION AUTHORIZATION` не являются источником
 полномочий. Readiness проверяет схему
-`20260731000500`,
+`20260731000600`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
@@ -243,9 +243,14 @@ BuildKit API требует mTLS с exact SNI/CA: server/probe и `role-image-bu
 ключи из разных SecretProviderClass/Vault roles, а label NetworkPolicy не
 является полномочием. `tools/render-image-build-job.sh` создаёт bounded Job из
 read-only PVC с `context.tar`, сверяет exact source SHA-256, отправляет сборку
-в BuildKit, публикует в staging, затем отдельной scoped identity копирует exact
-digest в promotion endpoint и читает его обратно. Job не имеет Kubernetes API
-token или admin DELETE. Push, promotion и admin credentials различны и
+в BuildKit и публикует только в staging. Он не монтирует promotion identity и
+не имеет сетевого пути к promotion endpoint. Отдельный
+`tools/render-image-admission-job.sh` закрепляет exact source/build/image,
+формирует SBOM, применяет фиксированную vulnerability policy, проверяет
+BuildKit provenance и cosign identity, выпускает короткоживущий подписанный
+admission receipt/claim и только после его readback копирует exact digest.
+Rejected, stale или неполное evidence закрыто останавливает Job. Push,
+signer, admission owner, promotion и admin credentials различны и
 доставляются Vault CSI без значений в manifest. `noProcessSandbox=true`
 остаётся только вынужденной границей
 rootless worker: BuildKit не получает ServiceAccount token или прикладные
@@ -276,11 +281,21 @@ tools/render-image-build-job.sh \
   sha256:<context.tar-digest> \
   agent-runtime \
   > /tmp/agent-runtime-build.yaml
+
+tools/render-image-admission-job.sh \
+  staging \
+  v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
+  sha256:<context.tar-digest> \
+  agent-runtime \
+  sha256:<staging-image-digest> \
+  <approved-admission-tools-image>@sha256:<digest> \
+  <approved-vulnerability-policy-revision> \
+  > /tmp/agent-runtime-admission.yaml
 ```
 
-Обе команды только материализуют YAML. Apply, сборка и promotion требуют
+Команды только материализуют YAML. Apply, сборка и promotion требуют
 отдельного разрешения владельца; после них обязательны exact digest readback
-promotion endpoint и готовность node-pull DaemonSet.
+admission receipt/promotion endpoint и готовность node-pull DaemonSet.
 
 Migration Job запускает `control-plane-cli migrate expand` до rollout и
 атомарно согласует `CURRENT`/`NEXT`/`PREVIOUS`, активный ключ контекста и
@@ -290,7 +305,7 @@ controller bootstrap и закрыто сверяет catalog membership. При
 CLI дополнительно подключается именно этим LOGIN и сохраняет readback; только
 следующее идемпотентное согласование может повысить его до `CURRENT`. Миграции
 `20260731000200`, `20260731000300`, `20260731000400` и
-`20260731000500` явно forward-only: downgrade отклоняется,
+`20260731000500` и `20260731000600` явно forward-only: downgrade отклоняется,
 потому что потерял бы RLS fences, верхнюю границу и readback principal,
 попытки, подтверждения и происхождение вектора. Откат приложения выполняется
 только совместимым образом; откат схемы — новой компенсирующей forward
@@ -357,5 +372,7 @@ OpenTelemetry, Sentry, Kubernetes и Vault, но вернул quota error. Ис�
 - [BuildKit](https://github.com/moby/buildkit),
   [Distribution registry](https://distribution.github.io/distribution/),
   [regctl](https://regclient.org/usage/regctl/),
+  [Vault CSI provider](https://developer.hashicorp.com/vault/docs/platform/k8s/csi/configurations),
+  [Vault PKI issue API](https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-certificate-and-key),
   [Shipwright Build](https://shipwright.io/docs/build/) и
   [Tekton Tasks](https://tekton.dev/docs/pipelines/tasks/).

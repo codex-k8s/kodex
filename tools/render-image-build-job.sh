@@ -166,75 +166,6 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
-        - name: promote
-          image: regclient/regctl:v0.9.2-alpine@sha256:53115c38927846d4f2ae111121cca7e95a033fd84132d69569e814ede1a696d3
-          imagePullPolicy: IfNotPresent
-          command:
-            - /bin/sh
-            - -ec
-          args:
-            - |
-              remaining=900
-              while [ ! -f /work/build.complete ]; do
-                [ ! -f /work/build.failed ]
-                [ "\$remaining" -gt 0 ]
-                remaining=\$((remaining - 1))
-                sleep 1
-              done
-              digest="\$(cat /work/image.digest)"
-              echo "\$digest" | grep -Eq '^sha256:[a-f0-9]{64}\$'
-              push_host=mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001
-              promotion_host=mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003
-              regctl registry set "\$push_host" --tls enabled --cacert /var/run/config/mattercodex/registry/ca.pem
-              regctl registry set "\$promotion_host" --tls enabled --cacert /var/run/config/mattercodex/registry/ca.pem
-              regctl registry login "\$push_host" \
-                --user "\$(tr -d '\r\n' </var/run/secrets/mattercodex/registry/push-client/username)" \
-                --pass-stdin </var/run/secrets/mattercodex/registry/push-client/password >/dev/null
-              regctl registry login "\$promotion_host" \
-                --user "\$(tr -d '\r\n' </var/run/secrets/mattercodex/registry/promotion-client/username)" \
-                --pass-stdin </var/run/secrets/mattercodex/registry/promotion-client/password >/dev/null
-              regctl image copy \
-                "\$push_host/mattercodex/${image_name}@\$digest" \
-                "\$promotion_host/mattercodex/${image_name}:${build_tag}"
-              readback="\$(regctl image digest "\$promotion_host/mattercodex/${image_name}:${build_tag}")"
-              [ "\$readback" = "\$digest" ]
-              printf 'promoted image digest: %s\n' "\$digest"
-              regctl registry logout "\$push_host" >/dev/null
-              regctl registry logout "\$promotion_host" >/dev/null
-          env:
-            - name: HOME
-              value: /tmp
-          resources:
-            requests:
-              cpu: 25m
-              memory: 32Mi
-            limits:
-              cpu: 250m
-              memory: 128Mi
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
-          volumeMounts:
-            - name: work
-              mountPath: /work
-              readOnly: true
-            - name: registry-ca
-              mountPath: /var/run/config/mattercodex/registry
-              readOnly: true
-            - name: push-client
-              mountPath: /var/run/secrets/mattercodex/registry/push-client
-              readOnly: true
-            - name: promotion-client
-              mountPath: /var/run/secrets/mattercodex/registry/promotion-client
-              readOnly: true
-            - name: tmp
-              mountPath: /tmp
       volumes:
         - name: source
           persistentVolumeClaim:
@@ -255,15 +186,6 @@ spec:
             items:
               - key: .dockerconfigjson
                 path: config.json
-        - name: registry-ca
-          secret:
-            secretName: mattercodex-image-registry-ca
-        - name: push-client
-          secret:
-            secretName: mattercodex-image-push-client
-        - name: promotion-client
-          secret:
-            secretName: mattercodex-image-promotion-client
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi

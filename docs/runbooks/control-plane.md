@@ -51,19 +51,26 @@ registry выполняется отдельной операционной по
 
 Code-first bootstrap/readback после отдельного owner approval:
 
-1. materialize утверждённый FQDN в canonical render; до apply сверить, что
+1. выполнить `tools/configure-image-supply-chain-pki.sh staging` тем же
+   репозиторным кодом: server roles обязаны иметь только `ServerAuth`,
+   BuildKit probe/builder — только `ClientAuth`, exact allowed names и bounded
+   TTL; каждый CSI `pki*/issue/*` использует `method: PUT` и exact
+   `common_name`/`alt_names`/`ttl`, CA читается через `pki/cert/ca`;
+2. materialize утверждённый FQDN в canonical render; до apply сверить, что
    Vault public certificate SAN, `dockerconfigjson.auths` и ExternalDNS hostname
    содержат ровно этот FQDN, а internal certificate SAN содержит push/admin
    Service DNS;
-2. дождаться registry pod и LoadBalancer address, затем сверить DNS→address и
+3. дождаться registry pod и LoadBalancer address, затем сверить DNS→address и
    TLS chain/SNI без `insecure`/добавления CA на узлы;
-3. Job из `tools/render-image-build-job.sh` использует client-only BuildKit
-   mTLS, scoped staging-push и promotion identities; server/probe Pod не
-   содержит client key, а NetworkPolicy label не доказывает полномочия;
-4. после staging push promotion container копирует только exact digest в
-   отдельный promoted PVC и читает digest обратно; затем сверить manifest
-   через pull identity и готовность node pull readback на каждом узле;
-5. retention job использует только admin identity. Отрицательный readback
+4. Job из `tools/render-image-build-job.sh` использует client-only BuildKit
+   mTLS и scoped staging-push, но не содержит promotion identity и не имеет
+   egress к promotion endpoint; server/probe Pod не содержит client key;
+5. отдельный Job из `tools/render-image-admission-job.sh` проверяет exact
+   BuildKit provenance/source, формирует SBOM, применяет зафиксированную
+   vulnerability policy, проверяет signature identity и выпускает bounded
+   подписанный admission receipt/claim; только затем promotion container
+   копирует exact digest и читает обратно image и receipt digest;
+6. retention job использует только admin identity. Отрицательный readback
    обязан показать, что pull не может push/delete, push не может delete, а
    неавторизованный BuildKit client не проходит TLS handshake.
 
@@ -95,6 +102,24 @@ tools/render-image-supply-chain.sh \
   sha256:<control-plane-image-digest> \
   registry-pull.<environment-domain> \
   > /tmp/image-supply-chain-staging.yaml
+
+tools/render-image-build-job.sh \
+  staging \
+  v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
+  <read-only-source-pvc> \
+  sha256:<context.tar-digest> \
+  agent-runtime \
+  > /tmp/agent-runtime-build.yaml
+
+tools/render-image-admission-job.sh \
+  staging \
+  v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
+  sha256:<context.tar-digest> \
+  agent-runtime \
+  sha256:<staging-image-digest> \
+  <approved-admission-tools-image>@sha256:<digest> \
+  <approved-vulnerability-policy-revision> \
+  > /tmp/agent-runtime-admission.yaml
 ```
 
 4. Сверить имена ServiceAccount, SecretProviderClass, ConfigMap, probes,
@@ -114,7 +139,7 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260731000500`;
+- migration schema version равна `20260731000600`;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
@@ -207,8 +232,16 @@ Owner gate не изменяется отдельно от process: request pin-
 initiator/session/turn/attempt/input/delivery/recipient и переводит process в
 `WAITING_OWNER`. `interaction-gateway` сначала фиксирует exact immutable
 delivery ID, payload digest, channel/root/post identity и durable receipt;
-approve/reject/expire без подтверждённой delivery закрыто отклоняются и
-атомарно переводят gate и process вместе с audit/outbox.
+approve/reject без подтверждённой delivery закрыто отклоняются.
+`interaction-gateway` отдельным `ExpireOwnerGate` poll с новым idempotency key
+получает одну выбранную PostgreSQL просроченную строку: transaction row lock и
+OCC version являются claim/fence, а crash откатывает весь переход. Expiry
+атомарно терминализирует gate/turn/attempt/process/occurrence/ScheduledRun и
+claims; delivery query использует PostgreSQL time и никогда не возвращает
+просроченную карточку. `CHANGES_REQUESTED` завершает прежний turn/attempt,
+сохраняет неизменяемый feedback receipt и создаёт свежие revision/input/turn в
+том же ProcessRun/root; scheduled run переходит в `CONTINUATION` до terminal
+readback нового хода.
 Manual retry/cancel используют специализированные команды и отзывают старый
 lease/grant.
 
