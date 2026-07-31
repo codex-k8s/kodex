@@ -23,6 +23,7 @@ spec:
         app.kubernetes.io/component: internal-service
       annotations:
         kubectl.kubernetes.io/default-container: control-plane
+        mattercodex.dev/agent-runtime-image-digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
     spec:
       serviceAccountName: control-plane
       automountServiceAccountToken: false
@@ -66,7 +67,7 @@ spec:
             - name: CONTROL_PLANE_RUNTIME_IMAGE_DIGEST
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.annotations['mattercodex.dev/image-digest']
+                  fieldPath: metadata.annotations['mattercodex.dev/agent-runtime-image-digest']
           ports:
             - name: grpc
               containerPort: 8443

@@ -40,6 +40,14 @@ spec:
                 - buildctl
                 - --addr
                 - tcp://127.0.0.1:1234
+                - --tlscacert
+                - /var/run/secrets/mattercodex/buildkit/tls/ca.pem
+                - --tlscert
+                - /var/run/secrets/mattercodex/buildkit/tls/probe.crt
+                - --tlskey
+                - /var/run/secrets/mattercodex/buildkit/tls/probe.key
+                - --tlsservername
+                - mattercodex-buildkit.mattercodex-system.svc.cluster.local
                 - debug
                 - workers
             periodSeconds: 5
@@ -51,6 +59,14 @@ spec:
                 - buildctl
                 - --addr
                 - tcp://127.0.0.1:1234
+                - --tlscacert
+                - /var/run/secrets/mattercodex/buildkit/tls/ca.pem
+                - --tlscert
+                - /var/run/secrets/mattercodex/buildkit/tls/probe.crt
+                - --tlskey
+                - /var/run/secrets/mattercodex/buildkit/tls/probe.key
+                - --tlsservername
+                - mattercodex-buildkit.mattercodex-system.svc.cluster.local
                 - debug
                 - workers
             periodSeconds: 15
@@ -82,6 +98,9 @@ spec:
             - name: registry-ca
               mountPath: /var/run/config/mattercodex/image-registry
               readOnly: true
+            - name: buildkit-tls
+              mountPath: /var/run/secrets/mattercodex/buildkit/tls
+              readOnly: true
       volumes:
         - name: state
           emptyDir:
@@ -94,6 +113,12 @@ spec:
           secret:
             secretName: mattercodex-image-registry-ca
             defaultMode: 0440
+        - name: buildkit-tls
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: mattercodex-buildkit-tls
 ---
 apiVersion: v1
 kind: Service

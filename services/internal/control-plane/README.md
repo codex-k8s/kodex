@@ -98,14 +98,14 @@ Deployments не принадлежат Issue #187 и здесь не подме
 | Проект | ID и владельца назначает сервер; создание в организации требует полномочия владельца; slug стабилен |
 | Команда, роль и prompt | общий CRUD не управляет полномочиями; отдельная административная команда проверяет полномочие вида, назначаемое подмножество и запрещает самостоятельное включение и повышение |
 | Управляемая конфигурация | каждый project/team/chat/role/prompt/binding/workspace/integration/schedule хранит `managed_by=UI|GIT`; Git-объект обновляется только тем же источником с возрастающей ревизией, а переход к UI требует явного `detach_git_management` и отдельного устойчивого полномочия |
-| Привязка учётных данных | хранится только URI метаданных; назначение и principal неизменяемы; ревизия растёт ровно на один |
+| Привязка учётных данных | хранится только URI метаданных; назначение и principal неизменяемы; ревизия растёт ровно на один; provider binding несёт server-verified eligibility/capabilities, лимит, usage, время и ревизию наблюдения |
 | Интеграция | идентичность определения неизменяема; версия движется только вперёд |
 | Ревизия среды исполнения | перед каждым ходом сервер разрешает точные сессию и разрешение роли, активные chat/prompt/привязку провайдера и только связанные с ролью workspace/integration/credential; создаётся неизменяемый снимок с версиями, digest, политикой, образом и предшественником; `runtime-controller` читает его через отдельный авторизованный RPC |
-| Сессия | привязку провайдера сервер выбирает из точного разрешения роли; общий create/update/transition запрещён; close/cancel/archive/cleanup имеют отдельный закрытый автомат состояний, OCC, подтверждение, аудит и tombstone |
+| Сессия | привязку провайдера сервер выбирает из версионированного `AccountPool` роли по `least_used` или детерминированному `weighted`, exact freshness/limit/eligibility; ручной preferred binding — только проверенный override; общий create/update/transition запрещён; close/cancel атомарно закрывают queued/active turns, attempts и grants, а archive/cleanup доходят до terminal tombstone |
 | Ход | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence |
 | Восстановление хода | истечение срока или ручной повтор создаёт новую неизменяемую попытку; отмена и завершение отзывают аренду, устаревшие workload/generation/token отклоняются |
-| Процесс | дочерний процесс наследует принадлежащие серверу корневые actor/org/project/session/turn/attempt/revision, проверяет точного активного родителя и ребро запуска; enqueue повторно проверяет полную родословную |
-| Расписание | закрытые цели `AGENT|PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; получение в одной транзакции создаёт либо разрешает сессию, свежую RuntimeRevision, Turn и при `PLAYBOOK` корневой ProcessRun; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO |
+| Процесс | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate |
+| Расписание | закрытые цели `AGENT|PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; completion выводит outcome из terminal Turn/Process, retry оставляет terminal старый run и создаёт новый attempt; owner gate двигает тот же run; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO |
 | Шлюз владельца | запрос закрепляет корневого инициатора, process/session/turn/attempt/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; решение допускается только после доставки и атомарно с процессом, аудитом и outbox |
 | Память | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest |
 | Заявка на работу | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна |
@@ -130,7 +130,7 @@ Vault. Устойчивая монотонная верхняя граница �
 поколение, состояние, organization/project/actor, PID соединения и ID
 транзакции. GUC и `SET SESSION AUTHORIZATION` не являются источником
 полномочий. Readiness проверяет схему
-`20260731000300`,
+`20260731000400`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
@@ -207,13 +207,16 @@ runbook.
 
 База находится в `deploy/k8s/base/control-plane`, наложения окружений — в
 `deploy/k8s/overlays/{staging,production}/control-plane`. Канонический render
-требует два реальных digest образов и закрыто отказывает при placeholder:
+требует три независимых digest и node-reachable FQDN pull endpoint; смешивать
+digest `control-plane` и среды агента запрещено:
 
 ```bash
 tools/render-control-plane.sh \
   staging \
   sha256:<control-plane-image-digest> \
   sha256:<internal-rpc-authority-image-digest> \
+  sha256:<agent-runtime-image-digest> \
+  registry-pull.<environment-domain> \
   > /tmp/control-plane-staging.yaml
 ```
 
@@ -221,15 +224,25 @@ tools/render-control-plane.sh \
 заменить `staging` на `production` и использовать отдельно утверждённые digest.
 
 Общая база `deploy/k8s/base/image-supply-chain` материализует локальный
-OCI registry только с TLS, два rootless worker BuildKit и ежедневную задачу
-хранения. Все прикладные образы в итоговом render ссылаются на локальный
-registry по digest. Теги обязаны иметь вид `vYYYYMMDDHHMMSS-<git-sha>`; задача
+OCI registry с тремя физически разделёнными TLS/auth endpoints: публично
+доверенный node-reachable read-only pull, internal push без DELETE и отдельный
+admin DELETE только для retention job. Kubelet получает отдельный
+`dockerconfigjson`; DaemonSet `mattercodex-registry-node-pull-readback` на
+каждом узле доказывает pull exact digest. Все прикладные образы в итоговом
+render ссылаются на node endpoint по digest. Теги обязаны иметь вид
+`vYYYYMMDDHHMMSS-<git-sha>`; задача
 оставляет текущую и две предыдущие версии каждого репозитория `mattercodex/*`
 и закрыто отказывается удалять неизвестный формат. Три начальных образа
 (`registry`, `moby/buildkit`, `regctl`) закреплены публичными OCI digest;
 после начальной загрузки оператор зеркалирует их в тот же локальный registry.
-CA доставляется через Vault CSI и используется клиентами BuildKit и хранения
-без отключения TLS.
+BuildKit API требует mTLS с exact SNI/CA: probe и build controller имеют разные
+client certificates, а label NetworkPolicy не является полномочием. Push и
+admin credentials также различны и доставляются Vault CSI без значений в
+manifest. `noProcessSandbox=true` остаётся только вынужденной границей
+rootless worker: BuildKit не получает ServiceAccount token или прикладные
+секреты, API закрыт mTLS, state ограничен `emptyDir`, а build client не получает
+admin DELETE. Отключать TLS/auth или использовать internal Service DNS как
+kubelet pull host запрещено.
 
 Варианты сборщика Kubernetes сверены с официальными источниками: standalone
 BuildKit, Shipwright Build/BuildRun и Tekton Tasks. В соответствии с
@@ -244,7 +257,7 @@ Migration Job запускает `control-plane-cli migrate expand` до rollout
 одновременно доставить `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_*` и отдельный файл
 DSN: CLI сначала подключается именно этим LOGIN и сохраняет readback, только
 следующее идемпотентное согласование может повысить его до `CURRENT`. Миграции
-`20260731000200` и `20260731000300` явно forward-only: downgrade отклоняется,
+`20260731000200`, `20260731000300` и `20260731000400` явно forward-only: downgrade отклоняется,
 потому что потерял бы RLS fences, верхнюю границу и readback principal,
 попытки, подтверждения и происхождение вектора. Откат приложения выполняется
 только совместимым образом; откат схемы — новой компенсирующей forward
@@ -262,8 +275,8 @@ DSN: CLI сначала подключается именно этим LOGIN и 
 
 1. собрать оба бинарных файла и публичные модули клиента и API;
 2. выполнить `buf build` и проверить воспроизводимую генерацию кода;
-3. проверить разбор YAML/JSON и канонический render с двумя тестовыми
-   ненулевыми digest;
+3. проверить разбор YAML/JSON и канонический render с тремя тестовыми
+   ненулевыми digest и тестовым node-reachable FQDN;
 4. убедиться, что render содержит рабочую нагрузку non-root/read-only,
    Migration Job, deny-all и только NetworkPolicy с точными назначениями;
 5. сравнить все методы Proto с политикой полномочий, а группы ошибок —

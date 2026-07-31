@@ -59,6 +59,9 @@ spec:
                 - name: registry-ca
                   mountPath: /var/run/config/mattercodex/image-registry
                   readOnly: true
+                - name: registry-admin
+                  mountPath: /var/run/secrets/mattercodex/image-registry/admin
+                  readOnly: true
                 - name: tmp
                   mountPath: /tmp
           volumes:
@@ -69,6 +72,10 @@ spec:
             - name: registry-ca
               secret:
                 secretName: mattercodex-image-registry-ca
+                defaultMode: 0440
+            - name: registry-admin
+              secret:
+                secretName: mattercodex-image-registry-admin
                 defaultMode: 0440
             - name: tmp
               emptyDir:

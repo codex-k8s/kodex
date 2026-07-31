@@ -11,6 +11,7 @@ spec:
           - image-registry
           - image-builder
           - image-retention
+          - image-pull-readback
   policyTypes:
     - Ingress
     - Egress
@@ -27,19 +28,30 @@ spec:
     - Ingress
     - Egress
   ingress:
+    # Node pull идёт через LoadBalancer; exact FQDN/TLS/auth и read-only
+    # registry scope являются authority boundary, а не source IP кластера.
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        - ipBlock:
+            cidr: ::/0
+      ports:
+        - protocol: TCP
+          port: 5000
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-buildkit
+      ports:
+        - protocol: TCP
+          port: 5001
+    - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-registry-cleanup
-        - podSelector:
-            matchLabels:
-              mattercodex.dev/registry-client: "true"
       ports:
         - protocol: TCP
-          port: 5000
+          port: 5002
   egress: []
 ---
 apiVersion: networking.k8s.io/v1
@@ -80,7 +92,7 @@ spec:
               app.kubernetes.io/name: mattercodex-image-registry
       ports:
         - protocol: TCP
-          port: 5000
+          port: 5001
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -113,4 +125,4 @@ spec:
               app.kubernetes.io/name: mattercodex-image-registry
       ports:
         - protocol: TCP
-          port: 5000
+          port: 5002

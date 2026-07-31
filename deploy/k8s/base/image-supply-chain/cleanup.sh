@@ -1,10 +1,19 @@
 #!/bin/sh
 set -eu
 
-registry_host="mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000"
+registry_host="mattercodex-image-registry-admin.mattercodex-system.svc.cluster.local:5002"
 ca_file="/var/run/config/mattercodex/image-registry/ca.pem"
+username_file="/var/run/secrets/mattercodex/image-registry/admin/username"
+password_file="/var/run/secrets/mattercodex/image-registry/admin/password"
 
 regctl registry set "${registry_host}" --tls enabled --cacert "${ca_file}"
+registry_username=$(tr -d '\r\n' <"${username_file}")
+if [ -z "${registry_username}" ] || [ ! -s "${password_file}" ]; then
+  echo "registry admin credentials are unavailable" >&2
+  exit 1
+fi
+regctl registry login "${registry_host}" \
+  --user "${registry_username}" --pass-stdin <"${password_file}" >/dev/null
 repository_file="$(mktemp)"
 regctl repo ls "${registry_host}" >"${repository_file}"
 while IFS= read -r repository; do
@@ -27,4 +36,6 @@ while IFS= read -r repository; do
   done <"${prune_file}"
   rm -f "${tag_file}" "${prune_file}"
 done <"${repository_file}"
+
+regctl registry logout "${registry_host}" >/dev/null
 rm -f "${repository_file}"

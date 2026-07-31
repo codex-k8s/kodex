@@ -6,7 +6,9 @@ resources:
   - registry.yaml
   - registry-tls-secret-provider-class.yaml
   - buildkit.yaml
+  - buildkit-tls-secret-provider-class.yaml
   - cleanup.yaml
+  - node-pull-readback.yaml
   - networkpolicy.yaml
 configMapGenerator:
   - name: mattercodex-buildkit-config
