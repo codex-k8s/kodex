@@ -36,6 +36,9 @@ spec:
               command:
                 - /bin/sh
                 - /var/run/config/mattercodex/registry-cleanup/cleanup.sh
+              env:
+                - name: HOME
+                  value: /tmp
               resources:
                 requests:
                   cpu: 25m

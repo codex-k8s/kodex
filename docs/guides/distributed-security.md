@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.0.6
-updated: 2026-07-30
+version: 1.0.7
+updated: 2026-07-31
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -342,6 +342,11 @@ applied -> pending -> reload -> exact peer readback -> applied
   целиком.
 - Разрешенный selector обязан ссылаться на реально принадлежащий компонент и
   достижимый `Service`, а не на предполагаемый pod.
+- Read-only pull, staging push, promotion и delete/admin цепочки поставки не
+  совмещаются в одном Pod или writable volume. У них разные ServiceAccount,
+  transport/application credentials, приватные ключи, NetworkPolicy и
+  storage mode; публичный pull не видит внутренние credentials и монтирует
+  promoted storage только read-only. Label не заменяет mTLS и scoped auth.
 
 Kubernetes API не описывается переносимым `podSelector` на компонент
 control-plane. Политика строится из фактического Service ClusterIP и готовых

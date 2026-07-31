@@ -10,6 +10,7 @@ spec:
         values:
           - image-registry
           - image-builder
+          - image-build-client
           - image-retention
           - image-pull-readback
   policyTypes:
@@ -19,17 +20,16 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: mattercodex-image-registry-exact-paths
+  name: mattercodex-image-registry-pull
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: pull
   policyTypes:
     - Ingress
     - Egress
   ingress:
-    # Node pull идёт через LoadBalancer; exact FQDN/TLS/auth и read-only
-    # registry scope являются authority boundary, а не source IP кластера.
     - from:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -38,13 +38,46 @@ spec:
       ports:
         - protocol: TCP
           port: 5000
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mattercodex-image-registry-push
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: push
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-buildkit
+        - podSelector:
+            matchLabels:
+              mattercodex.dev/image-build-client: "true"
       ports:
         - protocol: TCP
           port: 5001
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mattercodex-image-registry-admin
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: admin
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
     - from:
         - podSelector:
             matchLabels:
@@ -52,6 +85,28 @@ spec:
       ports:
         - protocol: TCP
           port: 5002
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mattercodex-image-registry-promotion
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: promotion
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              mattercodex.dev/image-build-client: "true"
+      ports:
+        - protocol: TCP
+          port: 5003
   egress: []
 ---
 apiVersion: networking.k8s.io/v1
@@ -90,9 +145,59 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-image-registry
+              mattercodex.dev/registry-scope: push
       ports:
         - protocol: TCP
           port: 5001
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mattercodex-image-build-client-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      mattercodex.dev/image-build-client: "true"
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mattercodex-buildkit
+      ports:
+        - protocol: TCP
+          port: 1234
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mattercodex-image-registry
+              mattercodex.dev/registry-scope: push
+      ports:
+        - protocol: TCP
+          port: 5001
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mattercodex-image-registry
+              mattercodex.dev/registry-scope: promotion
+      ports:
+        - protocol: TCP
+          port: 5003
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -123,6 +228,7 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-image-registry
+              mattercodex.dev/registry-scope: admin
       ports:
         - protocol: TCP
           port: 5002

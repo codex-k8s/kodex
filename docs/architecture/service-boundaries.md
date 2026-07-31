@@ -4,7 +4,7 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.0
+version: 1.2.1
 updated: 2026-07-31
 ---
 
@@ -76,6 +76,14 @@ payload. Команды среды исполнения, планировщик�
 credential, audience, полным именем метода и permission. Сканер владеет
 проверкой байтов, а `control-plane` — границей метаданных, состояния и
 результата.
+
+`role-image-builder` материализуется owner-triggered Job через
+`tools/render-image-build-job.sh`: его вход — read-only source PVC и exact
+digest `context.tar`, подготовленные владельцем workspace; Job не выбирает
+tenant, рецепт или source revision. Он использует client-only mTLS BuildKit,
+scoped staging push и promotion identity, а затем сохраняет digest readback.
+Pull/admin credentials, runtime admission и изменение доменных агрегатов этому
+Job не выдаются.
 
 ## Контракты
 

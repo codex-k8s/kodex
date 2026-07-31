@@ -1,13 +1,27 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mattercodex-image-registry
+  name: mattercodex-image-registry-staging
   labels:
     app.kubernetes.io/name: mattercodex-image-registry
-    app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-storage: staging
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mattercodex-image-registry-promoted
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-storage: promoted
+spec:
+  accessModes:
+    - ReadWriteMany
   resources:
     requests:
       storage: 100Gi
@@ -15,79 +29,79 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mattercodex-image-registry
+  name: mattercodex-image-registry-pull
   labels:
     app.kubernetes.io/name: mattercodex-image-registry
     app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-scope: pull
 spec:
-  replicas: 1
+  replicas: 2
   revisionHistoryLimit: 2
-  strategy:
-    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: mattercodex-image-registry
-      app.kubernetes.io/component: image-registry
+      mattercodex.dev/registry-scope: pull
   template:
     metadata:
       labels:
         app.kubernetes.io/name: mattercodex-image-registry
         app.kubernetes.io/component: image-registry
+        mattercodex.dev/registry-scope: pull
     spec:
-      serviceAccountName: mattercodex-image-registry
+      serviceAccountName: mattercodex-image-registry-pull
       automountServiceAccountToken: false
       enableServiceLinks: false
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
-        # Pull использует отдельные credentials, публично доверенный exact TLS
-        # endpoint и read-only storage. Он физически не принимает push/delete.
-        - name: registry-pull
+        - name: registry
           image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
           imagePullPolicy: IfNotPresent
           env:
             - name: REGISTRY_HTTP_ADDR
               value: 0.0.0.0:5000
             - name: REGISTRY_HTTP_TLS_CERTIFICATE
-              value: /var/run/secrets/mattercodex/image-registry/tls/pull.crt
+              value: /var/run/secrets/mattercodex/registry/tls.crt
             - name: REGISTRY_HTTP_TLS_KEY
-              value: /var/run/secrets/mattercodex/image-registry/tls/pull.key
+              value: /var/run/secrets/mattercodex/registry/tls.key
             - name: REGISTRY_AUTH
               value: htpasswd
             - name: REGISTRY_AUTH_HTPASSWD_REALM
               value: mattercodex-image-pull
             - name: REGISTRY_AUTH_HTPASSWD_PATH
-              value: /var/run/secrets/mattercodex/image-registry/auth/pull.htpasswd
+              value: /var/run/secrets/mattercodex/registry/auth.htpasswd
             - name: REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED
               value: "true"
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "false"
           ports:
-            - name: pull
+            - name: registry
               containerPort: 5000
-          readinessProbe: &registry_probe
+          readinessProbe:
             tcpSocket:
-              port: pull
+              port: registry
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
           livenessProbe:
             tcpSocket:
-              port: pull
+              port: registry
             periodSeconds: 15
             timeoutSeconds: 2
             failureThreshold: 3
-          resources: &registry_resources
+          resources:
             requests:
               cpu: 50m
               memory: 64Mi
             limits:
               cpu: 500m
               memory: 256Mi
-          securityContext: &registry_security
+          securityContext:
             runAsNonRoot: true
             runAsUser: 10001
             runAsGroup: 10001
@@ -96,102 +110,347 @@ spec:
             capabilities:
               drop:
                 - ALL
-          volumeMounts: &registry_mounts
+          volumeMounts:
             - name: data
               mountPath: /var/lib/registry
+              readOnly: true
             - name: credentials
-              mountPath: /var/run/secrets/mattercodex/image-registry
+              mountPath: /var/run/secrets/mattercodex/registry
               readOnly: true
             - name: tmp
               mountPath: /tmp
-        # Push имеет отдельную identity и не может удалять manifests/blobs.
-        - name: registry-push
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mattercodex-image-registry-promoted
+            readOnly: true
+        - name: credentials
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: mattercodex-image-registry-pull
+        - name: tmp
+          emptyDir:
+            sizeLimit: 32Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattercodex-image-registry-push
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-scope: push
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: push
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mattercodex-image-registry
+        app.kubernetes.io/component: image-registry
+        mattercodex.dev/registry-scope: push
+    spec:
+      serviceAccountName: mattercodex-image-registry-push
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry
           image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
           imagePullPolicy: IfNotPresent
           env:
             - name: REGISTRY_HTTP_ADDR
               value: 0.0.0.0:5001
             - name: REGISTRY_HTTP_TLS_CERTIFICATE
-              value: /var/run/secrets/mattercodex/image-registry/tls/internal.crt
+              value: /var/run/secrets/mattercodex/registry/tls.crt
             - name: REGISTRY_HTTP_TLS_KEY
-              value: /var/run/secrets/mattercodex/image-registry/tls/internal.key
+              value: /var/run/secrets/mattercodex/registry/tls.key
             - name: REGISTRY_AUTH
               value: htpasswd
             - name: REGISTRY_AUTH_HTPASSWD_REALM
               value: mattercodex-image-push
             - name: REGISTRY_AUTH_HTPASSWD_PATH
-              value: /var/run/secrets/mattercodex/image-registry/auth/push.htpasswd
+              value: /var/run/secrets/mattercodex/registry/auth.htpasswd
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "false"
           ports:
-            - name: push
+            - name: registry
               containerPort: 5001
           readinessProbe:
             tcpSocket:
-              port: push
+              port: registry
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
           livenessProbe:
             tcpSocket:
-              port: push
+              port: registry
             periodSeconds: 15
             timeoutSeconds: 2
             failureThreshold: 3
-          resources: *registry_resources
-          securityContext: *registry_security
-          volumeMounts: *registry_mounts
-        # Admin endpoint доступен только retention job и единственный включает
-        # DELETE; его credentials не выдаются builder или kubelet.
-        - name: registry-admin
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+            - name: credentials
+              mountPath: /var/run/secrets/mattercodex/registry
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mattercodex-image-registry-staging
+        - name: credentials
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: mattercodex-image-registry-push
+        - name: tmp
+          emptyDir:
+            sizeLimit: 32Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattercodex-image-registry-admin
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-scope: admin
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: admin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mattercodex-image-registry
+        app.kubernetes.io/component: image-registry
+        mattercodex.dev/registry-scope: admin
+    spec:
+      serviceAccountName: mattercodex-image-registry-admin
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry
           image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
           imagePullPolicy: IfNotPresent
           env:
             - name: REGISTRY_HTTP_ADDR
               value: 0.0.0.0:5002
             - name: REGISTRY_HTTP_TLS_CERTIFICATE
-              value: /var/run/secrets/mattercodex/image-registry/tls/internal.crt
+              value: /var/run/secrets/mattercodex/registry/tls.crt
             - name: REGISTRY_HTTP_TLS_KEY
-              value: /var/run/secrets/mattercodex/image-registry/tls/internal.key
+              value: /var/run/secrets/mattercodex/registry/tls.key
             - name: REGISTRY_AUTH
               value: htpasswd
             - name: REGISTRY_AUTH_HTPASSWD_REALM
               value: mattercodex-image-admin
             - name: REGISTRY_AUTH_HTPASSWD_PATH
-              value: /var/run/secrets/mattercodex/image-registry/auth/admin.htpasswd
+              value: /var/run/secrets/mattercodex/registry/auth.htpasswd
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "true"
           ports:
-            - name: admin
+            - name: registry
               containerPort: 5002
           readinessProbe:
             tcpSocket:
-              port: admin
+              port: registry
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
           livenessProbe:
             tcpSocket:
-              port: admin
+              port: registry
             periodSeconds: 15
             timeoutSeconds: 2
             failureThreshold: 3
-          resources: *registry_resources
-          securityContext: *registry_security
-          volumeMounts: *registry_mounts
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+            - name: credentials
+              mountPath: /var/run/secrets/mattercodex/registry
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: mattercodex-image-registry
+            claimName: mattercodex-image-registry-staging
         - name: credentials
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: mattercodex-image-registry-credentials
+              secretProviderClass: mattercodex-image-registry-admin
         - name: tmp
           emptyDir:
-            sizeLimit: 96Mi
+            sizeLimit: 32Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattercodex-image-registry-promotion
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-scope: promotion
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: promotion
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mattercodex-image-registry
+        app.kubernetes.io/component: image-registry
+        mattercodex.dev/registry-scope: promotion
+    spec:
+      serviceAccountName: mattercodex-image-registry-promotion
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry
+          image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: REGISTRY_HTTP_ADDR
+              value: 0.0.0.0:5003
+            - name: REGISTRY_HTTP_TLS_CERTIFICATE
+              value: /var/run/secrets/mattercodex/registry/tls.crt
+            - name: REGISTRY_HTTP_TLS_KEY
+              value: /var/run/secrets/mattercodex/registry/tls.key
+            - name: REGISTRY_AUTH
+              value: htpasswd
+            - name: REGISTRY_AUTH_HTPASSWD_REALM
+              value: mattercodex-image-promotion
+            - name: REGISTRY_AUTH_HTPASSWD_PATH
+              value: /var/run/secrets/mattercodex/registry/auth.htpasswd
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "false"
+          ports:
+            - name: registry
+              containerPort: 5003
+          readinessProbe:
+            tcpSocket:
+              port: registry
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: registry
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+            - name: credentials
+              mountPath: /var/run/secrets/mattercodex/registry
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mattercodex-image-registry-promoted
+        - name: credentials
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: mattercodex-image-registry-promotion
+        - name: tmp
+          emptyDir:
+            sizeLimit: 32Mi
 ---
 apiVersion: v1
 kind: Service
@@ -201,18 +460,17 @@ metadata:
     external-dns.alpha.kubernetes.io/hostname: registry-pull.invalid
   labels:
     app.kubernetes.io/name: mattercodex-image-registry
-    app.kubernetes.io/component: image-registry
     mattercodex.dev/registry-scope: pull
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Local
   selector:
     app.kubernetes.io/name: mattercodex-image-registry
-    app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-scope: pull
   ports:
     - name: https
       port: 443
-      targetPort: pull
+      targetPort: registry
 ---
 apiVersion: v1
 kind: Service
@@ -220,16 +478,15 @@ metadata:
   name: mattercodex-image-registry-push
   labels:
     app.kubernetes.io/name: mattercodex-image-registry
-    app.kubernetes.io/component: image-registry
     mattercodex.dev/registry-scope: push
 spec:
   selector:
     app.kubernetes.io/name: mattercodex-image-registry
-    app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-scope: push
   ports:
     - name: https
       port: 5001
-      targetPort: push
+      targetPort: registry
 ---
 apiVersion: v1
 kind: Service
@@ -237,13 +494,28 @@ metadata:
   name: mattercodex-image-registry-admin
   labels:
     app.kubernetes.io/name: mattercodex-image-registry
-    app.kubernetes.io/component: image-registry
     mattercodex.dev/registry-scope: admin
 spec:
   selector:
     app.kubernetes.io/name: mattercodex-image-registry
-    app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-scope: admin
   ports:
     - name: https
       port: 5002
-      targetPort: admin
+      targetPort: registry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattercodex-image-registry-promotion
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-scope: promotion
+spec:
+  selector:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-scope: promotion
+  ports:
+    - name: https
+      port: 5003
+      targetPort: registry

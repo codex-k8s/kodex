@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.4.0
+version: 1.5.0
 updated: 2026-07-31
 ---
 
@@ -23,20 +23,23 @@ lease-signing key, TLS private key, Sentry DSN и содержимое Secret.
 ## Локальный реестр и сборщик
 
 `deploy/k8s/base/image-supply-chain` создаёт TLS-only OCI registry, два
-rootless BuildKit worker и retention CronJob. Итоговый render направляет
+rootless BuildKit worker, owner-triggered build Job и retention CronJob. Pull,
+push, admin и promotion работают в разных Pod/ServiceAccount/Vault roles;
+pull видит только promoted PVC read-only, а staging PVC доступен только
+push/admin. Итоговый render направляет
 `control-plane` и `internal-rpc-authority` в отдельный node-reachable pull FQDN
 и использует только digest. Internal push и admin DELETE доступны на разных
 Service и имеют независимые Vault identities; pull endpoint физически read-only.
 
 При отказе:
 
-1. проверить готовность трёх registry containers и наличие Vault CSI
-   certificate/auth objects только по именам;
+1. проверить готовность четырёх registry Deployment и наличие у каждого
+   только его Vault CSI certificate/auth objects по именам;
 2. проверить, что DaemonSet `mattercodex-registry-node-pull-readback` готов на
    каждом schedulable node, его image использует exact pull FQDN и digest;
 3. проверить BuildKit `debug workers` probe с exact SNI/CA и отдельным probe
-   client certificate; build client дополнительно обязан иметь собственный
-   mTLS secret, label сам по себе полномочий не даёт;
+   client certificate; build Job обязан монтировать отдельный
+   `mattercodex-role-image-builder-tls`, label сам по себе полномочий не даёт;
 4. проверить retention job: он оставляет три лексикографически последних
    immutable tag вида `vYYYYMMDDHHMMSS-<git-sha>` и удаляет четвёртый и старше;
 5. при неизвестном tag job должен завершиться ошибкой без удаления; pull/push
@@ -54,11 +57,12 @@ Code-first bootstrap/readback после отдельного owner approval:
    Service DNS;
 2. дождаться registry pod и LoadBalancer address, затем сверить DNS→address и
    TLS chain/SNI без `insecure`/добавления CA на узлы;
-3. build controller использует `mattercodex-buildkit-client-tls` для API и
-   `mattercodex-image-push` для push; readiness probe использует отдельный
-   client certificate и не доказывается NetworkPolicy label;
-4. после push по immutable tag прочитать manifest через pull identity, сверить
-   digest и дождаться готовности node pull readback на каждом узле;
+3. Job из `tools/render-image-build-job.sh` использует client-only BuildKit
+   mTLS, scoped staging-push и promotion identities; server/probe Pod не
+   содержит client key, а NetworkPolicy label не доказывает полномочия;
+4. после staging push promotion container копирует только exact digest в
+   отдельный promoted PVC и читает digest обратно; затем сверить manifest
+   через pull identity и готовность node pull readback на каждом узле;
 5. retention job использует только admin identity. Отрицательный readback
    обязан показать, что pull не может push/delete, push не может delete, а
    неавторизованный BuildKit client не проходит TLS handshake.
@@ -83,9 +87,19 @@ tools/render-control-plane.sh \
   > /tmp/control-plane-staging.yaml
 ```
 
-3. Сверить имена ServiceAccount, SecretProviderClass, ConfigMap, probes,
+3. Получить отдельный supply-chain render без apply:
+
+```bash
+tools/render-image-supply-chain.sh \
+  staging \
+  sha256:<control-plane-image-digest> \
+  registry-pull.<environment-domain> \
+  > /tmp/image-supply-chain-staging.yaml
+```
+
+4. Сверить имена ServiceAccount, SecretProviderClass, ConfigMap, probes,
    selectors и exact destinations NetworkPolicy.
-4. После отдельного разрешения на доступ к среде читать только metadata:
+5. После отдельного разрешения на доступ к среде читать только metadata:
 
 ```bash
 kubectl -n mattercodex-system get deploy,job,pod,svc,pdb,networkpolicy \
@@ -100,7 +114,7 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260731000400`;
+- migration schema version равна `20260731000500`;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
@@ -133,10 +147,14 @@ Vault DSN. Production down отсутствует. При ошибке:
 Runtime DSN обязан принадлежать exact `CURRENT`, `NEXT` или bounded
 `PREVIOUS` LOGIN principal. Monotonic generation high-watermark и digest
 GitOps intent переживают pod replacement и запрещают resurrection
-`RETIRED` generation. Для promotion сначала добавить exact
-`CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_*`, смонтировать отдельный
-`CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE` и запустить migration Job:
-CLI подключится через сам `NEXT` principal и сохранит durable readback.
+`RETIRED` generation. Для каждого объявленного `CURRENT`/`NEXT`/`PREVIOUS`
+смонтировать отдельный
+`CONTROL_PLANE_POSTGRES_RUNTIME_{CURRENT,NEXT,PREVIOUS}_DSN_FILE`. CLI через
+owner-only SECURITY DEFINER bootstrap создаёт только точное имя
+`control_plane_runtime_g<generation>`, выдаёт controller ADMIN OPTION и лишь
+затем согласует intent; runtime не получает `CREATEROLE`. Для promotion
+добавить exact `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_*`: CLI подключится через
+сам `NEXT` principal и сохранит durable readback.
 Повторный idempotent запуск выполняет promotion. Откат ConfigMap или Vault
 credential не уменьшает high-watermark. На каждом transaction проверить server-side
 `session_user`, generation/status/lifetime и одноразовый подписанный context,
