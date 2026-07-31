@@ -4,7 +4,7 @@ title: Надежная доставка доменных событий в Go
 type: guide
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.2.0
 updated: 2026-07-28
 ---
 
@@ -155,16 +155,18 @@ Broker adapter реализует только:
 
 ```go
 type Publisher interface {
-    Publish(context.Context, eventing.Envelope) error
+    Publish(context.Context, eventing.Envelope) (PublishReceipt, error)
     Check(context.Context) error
 }
 ```
 
 Adapter обязан дождаться подтверждения broker, классифицировать ошибку в
 bounded code и признак retryability, не менять payload и не скрывать
-неподтвержденную публикацию как успех. Замена broker меняет adapter и
-deployment-конфигурацию, но не producer repository, доменный сервис и
-AsyncAPI.
+неподтвержденную публикацию как успех. `PublishReceipt` содержит bounded
+provider identity, durable sequence и duplicate flag; secret/provider payload
+в него не входит. Producer repository сохраняет receipt вместе с
+`published_at`, lease release и cleanup deadline. Замена broker меняет adapter
+и receipt mapping, но не доменный сервис и AsyncAPI.
 
 Базовая реализация находится в `libs/go/eventing/natsjetstream`. Она публикует
 неизмененный serialized envelope в subject, равный `eventName`, передает
@@ -173,6 +175,10 @@ attempt и ждет synchronous JetStream acknowledgement ожидаемого s
 Adapter не создает stream: `Check` сверяет его exact environment-owned
 конфигурацию. Детальный NATS contract, durable consumer и правила subjects
 описаны в `GO-DOC-005`.
+
+Подтверждённая строка outbox не удаляется в finalize: она остаётся
+авторитетным bounded delivery receipt до server-side cleanup deadline.
+Cleanup не затрагивает unpublished, retry, in-flight или dead-letter rows.
 
 Broker acknowledgement имеет явный durability contract. Если broker
 подтверждает запись до `fsync` или допускает потерю acknowledged messages в

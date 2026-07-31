@@ -50,10 +50,12 @@ tenant boundary до подписи proof.
 - authority policy: `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
 
 Внешний mapping принадлежит будущему `control-api-gateway`; этот unit
-публикует только внутренний gRPC. Runtime operations `ClaimTurn`,
-`CompleteTurn` и `ClaimDueSchedules` присутствуют в versioned contract, но
-deny-by-default policy не открывает их до появления зарегистрированных
-`agent-runner`/`automation-scheduler` proof producers. Ручной обход отсутствует.
+публикует только внутренний gRPC. Deny-by-default policy регистрирует отдельные
+proof producers и exact caller identities для gateway, `agent-runner`,
+`automation-scheduler` и внешнего `artifact-scanner`. Последний владеет
+сканированием байтов, а `control-plane` — только командой результата,
+метаданными и state machine. Неизвестный producer, credential purpose,
+workload, SPIFFE ID, full method, audience или permission закрыто отклоняется.
 
 Публикуются только два факта с утверждёнными consumers:
 
@@ -63,12 +65,13 @@ deny-by-default policy не открывает их до появления за
 | `control_plane.schedule_changed` | durable изменение schedule/high-watermark | `automation-scheduler` | at-least-once, consumer inbox/cursor |
 
 Для process runs, owner gates, memory, work claims и artifact metadata
-спекулятивные события не публикуются: авторитетный путь — `GetResource` и
-`ListResources`. Delete/cancel/terminal/retry каждого агрегата видны через
-тот же versioned read path. Outbox фиксируется в транзакции команды; relay не
-публикует из transport/domain кода и удаляет запись только после exact
-JetStream acknowledgement. Потерянный acknowledgement безопасно повторяет
-тот же `event_id`.
+спекулятивные события не публикуются: авторитетные пути — `GetResource`,
+`ListResources`, `SearchResources`, `ListAuditEvents` и `ListTombstones`.
+Delete/cancel/terminal/retry каждого агрегата сохраняют tombstone, audit и
+receipt. Outbox фиксируется в транзакции команды; relay не публикует из
+transport/domain кода. После durable JetStream `PubAck` строка остаётся с
+stream/sequence/duplicate receipt и bounded cleanup deadline. Потерянный
+acknowledgement безопасно повторяет тот же `event_id`.
 
 ## Доменные инварианты
 
@@ -76,19 +79,19 @@ JetStream acknowledgement. Потерянный acknowledgement безопасн
 | --- | --- |
 | Все commands | semantic idempotency key + canonical request digest, OCC и audit фиксируются атомарно |
 | Project | ID и owner назначает сервер; tenant create требует owner claim; slug стабилен |
-| Team/Role | stable key неизменяем; роли и prompt profiles разрешаются в том же project |
+| Team/Role/Prompt | generic CRUD не управляет authority; отдельная admin-команда проверяет kind-specific permission, assignable subset и запрещает self-membership/self-promotion |
 | Credential binding | хранится только URI metadata; purpose/principal неизменяемы; revision растёт ровно на один |
 | Integration | definition identity неизменяема; version движется только вперёд |
-| Runtime revision | manifest/image/prompt/bindings неизменяемы после создания |
+| Runtime revision | перед каждым turn сервер разрешает active chat/role/prompt/bindings/workspace/integrations/policy/image и создаёт immutable effective snapshot с digest/predecessor |
 | Session | agent/provider и server-owned turn sequence не переписываются |
-| Turn | runtime revision обязателен; FIFO sequence резервируется вместе с session update; lease fenced и bounded |
-| Turn recovery | expired claimed lease под блокировкой возвращается в queue; retry увеличивает attempt; stale lease отклоняется |
-| Process run | parent/root/playbook/policy образуют неизменяемую lineage; result можно установить один раз до terminal transition |
-| Schedule | cron xor interval, timezone, misfire и overlap — закрытые значения; occurrence уникален по schedule/time; high-watermark сдвигается атомарно |
-| Owner gate | result digest и expiry pin-ятся при создании; решение и terminal state фиксируются одной командой |
+| Turn | immutable snapshot pin, строгий FIFO и один active turn на session; claim/renew/complete bind-ят workload, attempt, authority generation, expiry и fence |
+| Turn recovery | expiry/manual retry создаёт новую immutable attempt; cancel/terminal отзывают lease, stale workload/generation/token отклоняются |
+| Process run | root initiator/session/turn/attempt и immutable input образуют server-owned lineage; start/cancel доступны только отдельными командами |
+| Schedule | exact target kind/id/version/digest, timezone/calendar, delivery/retry/dead-letter и `FORBID`/`SKIP`/`QUEUE`; occurrence имеет claim/result/cancel/retry read path |
+| Owner gate | request pin-ит root initiator/process/session/turn/attempt/input/delivery/recipient; decision и process transition атомарны |
 | Memory | scope/provenance неизменяемы; `content_sha256` обязан совпадать с content |
 | Work claim | process/turn binding неизменяем; активный exact process/turn claim уникален |
-| Artifact metadata | storage reference/digest/retention metadata неизменяемы; create принимает только `PENDING`, binary scan не принадлежит сервису |
+| Artifact metadata | только `RegisterArtifact` создаёт `PENDING`; exact scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; attach/use допускают только exact `CLEAN` digest |
 
 Reference resolution выполняется внутри текущих organization/project RLS
 settings; cross-tenant и hidden resource дают одинаковый `NotFound`.
@@ -97,10 +100,14 @@ settings; cross-tenant и hidden resource дают одинаковый `NotFoun
 
 PostgreSQL — единственный источник истины. Миграция создаёт schema
 `control_plane`, отдельного `NOLOGIN/NOSUPERUSER/NOBYPASSRLS` owner, runtime
-и relay group roles, `FORCE RLS`, constraints и точные grants. Login
-principals создаёт и ротирует environment-owned Vault database engine; они
-должны иметь только соответствующее group membership. Readiness проверяет
-schema version, membership, `NOSUPERUSER` и `NOBYPASSRLS`.
+и relay group roles, `FORCE RLS`, constraints и точные grants. Runtime login
+generations `CURRENT`/`NEXT`/bounded `PREVIOUS`/`RETIRED` материализуются
+environment-owned Vault lifecycle. Каждый statement использует одноразовый
+HMAC-bound transaction context и заново связывает `session_user`, generation,
+status, organization/project/actor, backend PID и transaction ID. GUC и
+`SET SESSION AUTHORIZATION` не являются authority; retired backends
+завершаются server-side. Readiness проверяет schema `20260731000200`,
+membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
 `internal/repository/postgres/controlplane/sql`. Command transaction использует
@@ -109,8 +116,10 @@ scope.
 
 Redis хранит только bounded resource snapshots:
 
-- key:
-  `control-plane:v1:resource:<organization>:<project|tenant>:<epoch>:<id>`;
+- key содержит SHA-256 exact
+  `organization+project+kind+id+epoch` namespace;
+- strict envelope повторяет organization/project/kind/id/version, key digest
+  и projection digest; unknown field или mismatch никогда не возвращает cache;
 - TTL не более минуты, value не более 128 KiB;
 - authoritative cache epoch увеличивается в той же PostgreSQL transaction;
 - cache miss, corruption или Redis error отступает к PostgreSQL;
@@ -124,7 +133,9 @@ Redis хранит только bounded resource snapshots:
 1. runtime и relay PostgreSQL roles/schema;
 2. Redis TLS path;
 3. exact JetStream stream (`CONTROL_PLANE`, subjects, replicas, file storage,
-   maximum message size);
+   `LimitsPolicy`, `DiscardOld`, 7-day max age, 2-minute dedup window,
+   maximum message size, deny delete/purge, no mirror/source/republish/rollup/
+   transform);
 4. independently delivered proof private key/trust и policy revision;
 5. тот же локальный verifier #186, который обслуживает рабочие RPC.
 
@@ -149,6 +160,7 @@ runbook URL.
 | `CONTROL_PLANE_TLS_CERTIFICATE_FILE`, `CONTROL_PLANE_TLS_PRIVATE_KEY_FILE`, `CONTROL_PLANE_TLS_CLIENT_CA_FILE` | exact workload mTLS |
 | `CONTROL_PLANE_POSTGRES_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RELAY_DSN_FILE` | runtime/relay DSN files |
 | `CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME`, `CONTROL_PLANE_POSTGRES_CA_FILE`, `CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS` | PostgreSQL TLS/pool |
+| `CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME`, `CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE` | exact runtime generation и transaction-context proof |
 | `CONTROL_PLANE_REDIS_ADDRESS`, `CONTROL_PLANE_REDIS_TLS_SERVER_NAME`, `CONTROL_PLANE_REDIS_CA_FILE`, `CONTROL_PLANE_REDIS_USERNAME`, `CONTROL_PLANE_REDIS_PASSWORD_FILE`, `CONTROL_PLANE_REDIS_DATABASE`, `CONTROL_PLANE_REDIS_POOL_SIZE` | bounded Redis cache |
 | `CONTROL_PLANE_NATS_URL`, `CONTROL_PLANE_NATS_TLS_SERVER_NAME`, `CONTROL_PLANE_NATS_CA_FILE`, `CONTROL_PLANE_NATS_CREDENTIALS_FILE`, `CONTROL_PLANE_NATS_STREAM`, `CONTROL_PLANE_NATS_REPLICAS` | exact JetStream publisher |
 | `CONTROL_PLANE_AUTHORITY_POLICY_FILE` | versioned deny-by-default policy |
@@ -179,10 +191,12 @@ tools/render-control-plane.sh \
 Команда только рендерит; она не применяет manifest. Для production заменить
 `staging` на `production` и использовать отдельно утверждённые digests.
 
-Migration Job запускает `control-plane-cli migrate expand` до rollout. Down
-не является production rollback. После опубликованной forward migration
-rollback выполняется совместимым предыдущим образом либо новой компенсирующей
-forward migration по отдельному Issue.
+Migration Job запускает `control-plane-cli migrate expand` до rollout и
+атомарно reconcile-ит `CURRENT`/`NEXT`/`PREVIOUS`, active context key и
+retired sessions. Security migration `20260731000200` явно forward-only:
+downgrade отклоняется, потому что вернул бы caller-controlled RLS и удалил
+durable attempts/receipts. Application rollback выполняется только совместимым
+образом; schema rollback — новой compensating forward migration.
 
 JetStream stream и Vault database/static credentials являются
 environment-owned зависимостями. Их exact contract проверяется startup
@@ -201,7 +215,9 @@ environment-owned driver.
    digests;
 4. убедиться, что render содержит non-root/read-only workload, migration Job,
    deny-all и только exact-destination NetworkPolicy;
-5. проверить, что `Closes #187` относится только к одному draft PR.
+5. сравнить все Proto methods с authority policy, а error groups —
+   с `contracts/errors/v1/rpc-http-mapping.yaml`;
+6. проверить, что `Closes #187` относится только к одному draft PR.
 
 Фактические PostgreSQL/Redis/NATS/Vault/Kubernetes проверки и staging rollout
 требуют отдельного разрешения и окружения.

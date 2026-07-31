@@ -4,7 +4,7 @@ title: Межсервисная коммуникация и доменные с�
 type: guide
 status: approved
 owner: architect
-version: 1.0.0
+version: 1.1.0
 updated: 2026-07-28
 ---
 
@@ -183,9 +183,11 @@ schema или AsyncAPI.
 - возвращает только bounded failure code и retryability;
 - не логирует payload и provider diagnostics.
 
-Outbox row помечается опубликованной только после подтвержденного ack. Сбой
-после ack, но до PostgreSQL finalize приводит к повторной публикации; это
-нормальная часть at-least-once доставки.
+Outbox row помечается опубликованной только после подтвержденного ack.
+Finalize сохраняет bounded broker stream/sequence/duplicate receipt и cleanup
+deadline; немедленное удаление evidence запрещено. Сбой после ack, но до
+PostgreSQL finalize приводит к повторной публикации; это нормальная часть
+at-least-once доставки.
 
 ### Stream ownership
 

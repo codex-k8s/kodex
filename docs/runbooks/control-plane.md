@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.1.0
 updated: 2026-07-31
 ---
 
@@ -50,10 +50,12 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260731000100`;
+- migration schema version равна `20260731000200`;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
-  replicas окружения и maximum message size;
+  replicas окружения, `LimitsPolicy`, `DiscardOld`, maximum message size,
+  max age 7 дней, dedup window 2 минуты, deny delete/purge и без mirror/source/
+  republish/rollup/transform;
 - policy revision, independently delivered proof trust/private key и локальный
   verifier #186 согласованы;
 - OIDC discovery/JWKS доступны только по pinned HTTPS path.
@@ -76,6 +78,13 @@ Vault DSN. Production down отсутствует. При ошибке:
 Не запускать `SET SESSION AUTHORIZATION`, не выдавать runtime superuser,
 `BYPASSRLS`, schema ownership или членство relay.
 
+Runtime DSN обязан принадлежать exact `CURRENT`, `NEXT` или bounded
+`PREVIOUS` LOGIN principal. На каждом transaction проверить server-side
+`session_user`, generation/status/lifetime и одноразовый подписанный context,
+связанный с backend PID и transaction ID. GUC не является диагностическим
+способом установки tenant. При promotion прежний principal становится
+`PREVIOUS`, затем `RETIRED`; reconciliation завершает его открытые backends.
+
 ## Authority proof или OIDC
 
 - caller обязан иметь exact gateway SPIFFE identity;
@@ -89,35 +98,64 @@ Vault DSN. Production down отсутствует. При ошибке:
 
 Не копировать bearer/JWS/JWK в Issue или лог.
 
-## Turn stuck в CLAIMED
+## Turn или process stuck
 
-Lease хранится в PostgreSQL с workload ID, expiry и version fence. Следующий
+Lease хранится в PostgreSQL с workload ID, authority generation, immutable
+attempt, expiry и version fence. Следующий
 `ClaimTurn` под одной serializable transaction:
 
 1. блокирует просроченные claimed turns;
 2. удаляет только совпавшую stale lease;
-3. увеличивает aggregate version и возвращает turn в FIFO queue;
+3. завершает прежнюю attempt как `EXPIRED`, создаёт следующий номер attempt и
+   возвращает turn в строгую FIFO queue;
 4. фиксирует audit/outbox;
-5. выдаёт новую lease.
+5. выдаёт новую lease; `RenewTurn` принимает только exact
+   workload/generation/attempt/token/fence.
 
 Не менять state/lease вручную. Если recovery не проходит, проверить clock,
 RLS scope, OCC conflict и `turn_leases` metadata без token hash.
 
+Owner gate не изменяется отдельно от process: request pin-ит root
+initiator/session/turn/attempt/input/delivery/recipient и переводит process в
+`WAITING_OWNER`; approve/reject/expire атомарно переводят gate и process.
+Manual retry/cancel используют специализированные команды и отзывают старый
+lease/grant.
+
+## Artifact scan и schedule occurrence
+
+`PENDING` artifact не используется как input/result. Внешний scanner вызывает
+только `RecordArtifactScan` под exact workload/SPIFFE/permission и передаёт
+совпадающие digest, scan policy/version, evidence и idempotency key. Допустимы
+`PENDING`→`SCANNING`→`CLEAN|QUARANTINED|FAILED`; attach/enqueue разрешены
+только для `CLEAN`.
+
+Schedule хранит exact target kind/id/version/digest, timezone/calendar,
+delivery/retry/dead-letter и overlap policy. При stuck occurrence проверить
+attempt, claimant/generation/token hash/expiry и predecessor. Expiry создаёт
+следующую attempt с bounded backoff; `FORBID`/`SKIP` не допускают второй
+active occurrence, `QUEUE` сохраняет FIFO. Ручной запуск исключённых
+Kubernetes/Mattermost/MCP/Codex действий запрещён.
+
 ## Redis
 
-Redis не является authority. При miss/corruption/error чтение отступает к
-PostgreSQL. Readiness остаётся закрытой, пока Redis недоступен, чтобы
-оператор видел деградацию заявленного профиля. Не восстанавливать cache из
-backup и не копировать tenant snapshots вручную; epoch в PostgreSQL делает
-старые keys недостижимыми.
+Redis не является authority. Key и strict envelope связывают exact
+organization/project/kind/id/version/epoch и оба digest. При
+unknown-field/mismatch/corruption/error cached data не возвращается: ключ
+удаляется, чтение идёт в PostgreSQL. Readiness остаётся закрытой, пока Redis
+недоступен. Не восстанавливать cache из backup и не копировать tenant
+snapshots вручную; epoch в PostgreSQL делает старые keys недостижимыми.
 
 ## Outbox и NATS
 
 Relay использует отдельный least-privilege PostgreSQL principal. Ошибка
 publish увеличивает attempt, применяет capped exponential backoff и после
-25 неудач оставляет terminal record для расследования. Успешный exact
-JetStream ack удаляет запись; потерянный response повторяет тот же event ID,
-а broker deduplication и consumer inbox/cursor обеспечивают at-least-once.
+25 неудач оставляет terminal record для расследования. Earliest
+unpublished/terminal/backoff/in-flight predecessor блокирует следующий event
+того же ordering key; другие keys продолжают доставку. Успешный exact
+JetStream `PubAck` сохраняет stream/sequence/duplicate receipt и bounded
+cleanup deadline; строка не удаляется в finalize. Потерянный response повторяет
+тот же event ID, а broker deduplication и consumer inbox/cursor обеспечивают
+at-least-once.
 
 Проверять только event ID, event name, aggregate type/version, attempt,
 lease expiry и error class. Payload может содержать business metadata и не

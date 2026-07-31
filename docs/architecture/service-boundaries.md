@@ -4,7 +4,7 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.2.0
 updated: 2026-07-31
 ---
 
@@ -70,8 +70,10 @@ search projection и UI не читают БД другого компонент
 фиксирует aggregate, semantic idempotency receipt, audit и каждый обязательный
 outbox fact. Redis остаётся только versioned read-through cache. Gateway
 получает authority proof у доменного владельца, но не передаёт actor/tenant/
-project authority в business payload. Runtime и scheduler commands закрыты
-policy до регистрации их собственных workload/proof producer unit.
+project authority в business payload. Runtime, scheduler и scanner commands
+открываются только отдельными policy bindings с exact workload/SPIFFE,
+credential purpose, audience, full method и permission; scanner владеет
+проверкой байтов, а `control-plane` — metadata/state/result boundary.
 
 ## Контракты
 
