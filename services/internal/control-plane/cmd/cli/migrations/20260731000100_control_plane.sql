@@ -514,7 +514,7 @@ GRANT SELECT, INSERT, UPDATE ON control_plane.cache_epochs TO control_plane_runt
 GRANT SELECT, INSERT, UPDATE, DELETE
     ON control_plane.project_actor_permissions TO control_plane_runtime;
 GRANT SELECT ON control_plane.schema_state TO control_plane_runtime, control_plane_relay;
-GRANT SELECT, UPDATE ON control_plane.outbox_events TO control_plane_relay;
+GRANT SELECT, UPDATE, DELETE ON control_plane.outbox_events TO control_plane_relay;
 GRANT USAGE ON SEQUENCE control_plane.authority_proof_revision_seq
     TO control_plane_runtime;
 

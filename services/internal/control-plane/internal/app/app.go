@@ -338,6 +338,10 @@ func Run(
 			)
 		},
 	)
+	workerResult := make(chan error, 1)
+	go func() {
+		workerResult <- state.workers.Wait(context.WithoutCancel(shutdownBase))
+	}()
 	state.readiness.Set(true, "ready")
 	state.metrics.SetReady(true)
 	state.logger.Info("control-plane started")
@@ -346,6 +350,14 @@ func Run(
 		return nil
 	case err := <-serveErrors:
 		return err
+	case err := <-workerResult:
+		if err != nil {
+			return fmt.Errorf("control-plane worker failed: %w", err)
+		}
+		if lifecycle.Err() == nil {
+			return errors.New("control-plane workers stopped unexpectedly")
+		}
+		return nil
 	}
 }
 

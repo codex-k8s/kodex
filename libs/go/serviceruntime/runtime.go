@@ -44,6 +44,7 @@ type WorkerGroup struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 	err    chan error
+	result error
 	once   sync.Once
 }
 
@@ -69,6 +70,9 @@ func StartWorkers(parent context.Context, workers ...Worker) *WorkerGroup {
 	go func() {
 		wait.Wait()
 		close(group.err)
+		for workerErr := range group.err {
+			group.result = errors.Join(group.result, workerErr)
+		}
 		close(group.done)
 	}()
 	return group
@@ -85,11 +89,7 @@ func (group *WorkerGroup) Wait(ctx context.Context) error {
 	case <-ctx.Done():
 		return fmt.Errorf("wait workers: %w", ctx.Err())
 	case <-group.done:
-		var joined error
-		for err := range group.err {
-			joined = errors.Join(joined, err)
-		}
-		return joined
+		return group.result
 	}
 }
 

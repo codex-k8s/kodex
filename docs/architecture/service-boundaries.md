@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-07-29
+version: 1.1.0
+updated: 2026-07-31
 ---
 
 # Границы сервисов и структура репозитория
@@ -64,6 +64,14 @@ runbook и ручная проверка входят в один Issue и од�
 Один aggregate имеет одного авторитетного владельца. Gateway, runner, cache,
 search projection и UI не читают БД другого компонента и не изменяют его
 состояние напрямую.
+
+`control-plane` материализует эту границу в
+`services/internal/control-plane`: PostgreSQL transaction одновременно
+фиксирует aggregate, semantic idempotency receipt, audit и каждый обязательный
+outbox fact. Redis остаётся только versioned read-through cache. Gateway
+получает authority proof у доменного владельца, но не передаёт actor/tenant/
+project authority в business payload. Runtime и scheduler commands закрыты
+policy до регистрации их собственных workload/proof producer unit.
 
 ## Контракты
 

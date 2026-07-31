@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-plane-dashboard
+  labels:
+    app.kubernetes.io/name: control-plane
+    grafana_dashboard: "1"
+data:
+  control-plane.json: |
+    {
+      "annotations": {"list": []},
+      "editable": false,
+      "panels": [
+        {
+          "id": 1,
+          "title": "Готовые реплики",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(mattercodex_control_plane_readiness{ready=\"true\"})",
+              "legendFormat": "ready"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "gRPC requests по bounded operation/code",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum by (operation, code) (rate(mattercodex_control_plane_grpc_requests_total[5m]))",
+              "legendFormat": "{{operation}} {{code}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "p95 gRPC latency",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(mattercodex_control_plane_grpc_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{operation}}"
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["mattercodex", "control-plane"],
+      "templating": {"list": []},
+      "time": {"from": "now-6h", "to": "now"},
+      "timezone": "browser",
+      "title": "MatterCodex control-plane",
+      "uid": "mattercodex-control-plane",
+      "version": 1
+    }

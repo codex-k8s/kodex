@@ -35,16 +35,15 @@ spec:
               value: /run/mattercodex/internal-rpc-authority/verifier.sock
             - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
               value: verifier
-          readinessProbe:
-            exec:
-              command:
-                - /run/mattercodex/internal-rpc-authority/local-readiness
-            timeoutSeconds: 3
-            periodSeconds: 5
-            failureThreshold: 3
           volumeMounts:
             - name: internal-rpc-authority-sockets
               mountPath: /run/mattercodex/internal-rpc-authority
+              readOnly: true
+            - name: internal-rpc-authority-resolver-key
+              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/proof-signer
+              readOnly: true
+            - name: internal-rpc-authority-resolver-trust
+              mountPath: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust
               readOnly: true
         - name: internal-rpc-authority-verifier
           image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000

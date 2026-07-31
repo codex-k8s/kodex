@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: control-plane
+          env:
+            - name: CONTROL_PLANE_NATS_REPLICAS
+              value: "1"

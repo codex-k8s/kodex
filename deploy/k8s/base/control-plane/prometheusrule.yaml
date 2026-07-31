@@ -1,0 +1,59 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: control-plane
+  labels:
+    app.kubernetes.io/name: control-plane
+spec:
+  groups:
+    - name: control-plane.availability
+      rules:
+        - alert: ControlPlaneUnavailable
+          expr: >-
+            absent(up{service="control-plane"})
+            or sum(up{service="control-plane"}) < 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Control-plane недоступен
+            description: Prometheus не видит ни одного доступного control-plane pod.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+        - alert: ControlPlaneNotReady
+          expr: >-
+            absent(mattercodex_control_plane_readiness{ready="true"})
+            or sum(mattercodex_control_plane_readiness{ready="true"}) < 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Control-plane не проходит readiness
+            description: Все реплики закрыто отклоняют traffic из-за dependency barrier.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+        - alert: ControlPlaneInternalRPCFailures
+          expr: >-
+            sum(rate(mattercodex_control_plane_grpc_requests_total{
+              code=~"Internal|Unavailable|Unknown|DataLoss"
+            }[5m])) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Растёт число неожиданных control-plane RPC ошибок
+            description: Проверить PostgreSQL, Redis, NATS, authority verifier и traces.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+        - alert: ControlPlaneGRPCLatencyHigh
+          expr: >-
+            histogram_quantile(
+              0.99,
+              sum by (le) (
+                rate(mattercodex_control_plane_grpc_request_duration_seconds_bucket[5m])
+              )
+            ) > 2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Высокая p99 задержка control-plane gRPC
+            description: Проверить dependency latency, pool saturation и traces без payload.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md

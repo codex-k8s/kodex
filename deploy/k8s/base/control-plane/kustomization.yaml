@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - poddisruptionbudget.yaml
+  - migration-job.yaml
+  - networkpolicy.yaml
+  - vault-secret-provider-classes.yaml
+  - servicemonitor.yaml
+  - prometheusrule.yaml
+  - dashboard.yaml
+components:
+  - ../../components/internal-rpc-authority-control-plane-verifier
+configMapGenerator:
+  - name: control-plane-runtime
+    literals:
+      - CONTROL_PLANE_NATS_STREAM=CONTROL_PLANE
+      - CONTROL_PLANE_REDIS_USERNAME=control-plane
+generatorOptions:
+  disableNameSuffixHash: true
