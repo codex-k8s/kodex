@@ -688,6 +688,8 @@ const (
 	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_SKIPPED ScheduleOccurrenceState = 6
 	// SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER — значение закрытого перечисления ScheduleOccurrenceState.
 	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER ScheduleOccurrenceState = 7
+	// SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER — выполнение остановлено на единственном owner gate.
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER ScheduleOccurrenceState = 8
 )
 
 // Enum value maps for ScheduleOccurrenceState.
@@ -701,16 +703,18 @@ var (
 		5: "SCHEDULE_OCCURRENCE_STATE_CANCELLED",
 		6: "SCHEDULE_OCCURRENCE_STATE_SKIPPED",
 		7: "SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER",
+		8: "SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER",
 	}
 	ScheduleOccurrenceState_value = map[string]int32{
-		"SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED": 0,
-		"SCHEDULE_OCCURRENCE_STATE_QUEUED":      1,
-		"SCHEDULE_OCCURRENCE_STATE_CLAIMED":     2,
-		"SCHEDULE_OCCURRENCE_STATE_SUCCEEDED":   3,
-		"SCHEDULE_OCCURRENCE_STATE_FAILED":      4,
-		"SCHEDULE_OCCURRENCE_STATE_CANCELLED":   5,
-		"SCHEDULE_OCCURRENCE_STATE_SKIPPED":     6,
-		"SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER": 7,
+		"SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED":   0,
+		"SCHEDULE_OCCURRENCE_STATE_QUEUED":        1,
+		"SCHEDULE_OCCURRENCE_STATE_CLAIMED":       2,
+		"SCHEDULE_OCCURRENCE_STATE_SUCCEEDED":     3,
+		"SCHEDULE_OCCURRENCE_STATE_FAILED":        4,
+		"SCHEDULE_OCCURRENCE_STATE_CANCELLED":     5,
+		"SCHEDULE_OCCURRENCE_STATE_SKIPPED":       6,
+		"SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER":   7,
+		"SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER": 8,
 	}
 )
 
@@ -2740,6 +2744,10 @@ type ProcessRunSpec struct {
 	TargetTurnId          string                 `protobuf:"bytes,19,opt,name=target_turn_id,json=targetTurnId,proto3" json:"target_turn_id,omitempty"`
 	TargetAttempt         uint32                 `protobuf:"varint,20,opt,name=target_attempt,json=targetAttempt,proto3" json:"target_attempt,omitempty"`
 	Outcome               string                 `protobuf:"bytes,21,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	RootSessionVersion    uint64                 `protobuf:"varint,22,opt,name=root_session_version,json=rootSessionVersion,proto3" json:"root_session_version,omitempty"`
+	RootTurnVersion       uint64                 `protobuf:"varint,23,opt,name=root_turn_version,json=rootTurnVersion,proto3" json:"root_turn_version,omitempty"`
+	TargetSessionVersion  uint64                 `protobuf:"varint,24,opt,name=target_session_version,json=targetSessionVersion,proto3" json:"target_session_version,omitempty"`
+	TargetTurnVersion     uint64                 `protobuf:"varint,25,opt,name=target_turn_version,json=targetTurnVersion,proto3" json:"target_turn_version,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -2919,6 +2927,34 @@ func (x *ProcessRunSpec) GetOutcome() string {
 		return x.Outcome
 	}
 	return ""
+}
+
+func (x *ProcessRunSpec) GetRootSessionVersion() uint64 {
+	if x != nil {
+		return x.RootSessionVersion
+	}
+	return 0
+}
+
+func (x *ProcessRunSpec) GetRootTurnVersion() uint64 {
+	if x != nil {
+		return x.RootTurnVersion
+	}
+	return 0
+}
+
+func (x *ProcessRunSpec) GetTargetSessionVersion() uint64 {
+	if x != nil {
+		return x.TargetSessionVersion
+	}
+	return 0
+}
+
+func (x *ProcessRunSpec) GetTargetTurnVersion() uint64 {
+	if x != nil {
+		return x.TargetTurnVersion
+	}
+	return 0
 }
 
 // ScheduleSpec описывает версионированное сообщение контракта control-plane.
@@ -10436,7 +10472,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12result_artifact_id\x18\t \x01(\tR\x10resultArtifactId\x124\n" +
 	"\x16effective_input_sha256\x18\n" +
 	" \x01(\tR\x14effectiveInputSha256\x12.\n" +
-	"\x13predecessor_turn_id\x18\v \x01(\tR\x11predecessorTurnId\"\x81\a\n" +
+	"\x13predecessor_turn_id\x18\v \x01(\tR\x11predecessorTurnId\"\xc5\b\n" +
 	"\x0eProcessRunSpec\x121\n" +
 	"\x15parent_process_run_id\x18\x01 \x01(\tR\x12parentProcessRunId\x12!\n" +
 	"\fplaybook_ref\x18\x02 \x01(\tR\vplaybookRef\x12'\n" +
@@ -10461,7 +10497,11 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x11target_session_id\x18\x12 \x01(\tR\x0ftargetSessionId\x12$\n" +
 	"\x0etarget_turn_id\x18\x13 \x01(\tR\ftargetTurnId\x12%\n" +
 	"\x0etarget_attempt\x18\x14 \x01(\rR\rtargetAttempt\x12\x18\n" +
-	"\aoutcome\x18\x15 \x01(\tR\aoutcome\"\x94\r\n" +
+	"\aoutcome\x18\x15 \x01(\tR\aoutcome\x120\n" +
+	"\x14root_session_version\x18\x16 \x01(\x04R\x12rootSessionVersion\x12*\n" +
+	"\x11root_turn_version\x18\x17 \x01(\x04R\x0frootTurnVersion\x124\n" +
+	"\x16target_session_version\x18\x18 \x01(\x04R\x14targetSessionVersion\x12.\n" +
+	"\x13target_turn_version\x18\x19 \x01(\x04R\x11targetTurnVersion\"\x94\r\n" +
 	"\fScheduleSpec\x12,\n" +
 	"\x12target_resource_id\x18\x01 \x01(\tR\x10targetResourceId\x12\x12\n" +
 	"\x04cron\x18\x02 \x01(\tR\x04cron\x125\n" +
@@ -11211,7 +11251,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1cARTIFACT_SCAN_STATE_SCANNING\x10\x02\x12\x1d\n" +
 	"\x19ARTIFACT_SCAN_STATE_CLEAN\x10\x03\x12#\n" +
 	"\x1fARTIFACT_SCAN_STATE_QUARANTINED\x10\x04\x12\x1e\n" +
-	"\x1aARTIFACT_SCAN_STATE_FAILED\x10\x05*\xdb\x02\n" +
+	"\x1aARTIFACT_SCAN_STATE_FAILED\x10\x05*\x88\x03\n" +
 	"\x17ScheduleOccurrenceState\x12)\n" +
 	"%SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED\x10\x00\x12$\n" +
 	" SCHEDULE_OCCURRENCE_STATE_QUEUED\x10\x01\x12%\n" +
@@ -11220,7 +11260,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	" SCHEDULE_OCCURRENCE_STATE_FAILED\x10\x04\x12'\n" +
 	"#SCHEDULE_OCCURRENCE_STATE_CANCELLED\x10\x05\x12%\n" +
 	"!SCHEDULE_OCCURRENCE_STATE_SKIPPED\x10\x06\x12)\n" +
-	"%SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER\x10\a*\xb7\x01\n" +
+	"%SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER\x10\a\x12+\n" +
+	"'SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER\x10\b*\xb7\x01\n" +
 	"\rSessionAction\x12\x1e\n" +
 	"\x1aSESSION_ACTION_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SESSION_ACTION_CREATE\x10\x01\x12\x18\n" +

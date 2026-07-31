@@ -605,6 +605,9 @@ func (service *Service) RenewTurn(
 				return err
 			}
 			spec, ok := current.Spec.(entity.TurnSpec)
+			if err := requireLifecycleOwner(input.Principal, current); err != nil {
+				return err
+			}
 			if !ok || current.Kind != enum.KindTurn ||
 				current.State != enum.StateClaimed ||
 				current.Version != input.ExpectedVersion ||
@@ -741,6 +744,9 @@ func (service *Service) CompleteTurn(
 			if err != nil {
 				return entity.Resource{}, err
 			}
+			if err := requireLifecycleOwner(input.Principal, current); err != nil {
+				return entity.Resource{}, err
+			}
 			if current.Kind != enum.KindTurn ||
 				current.Version != input.ExpectedVersion {
 				return entity.Resource{}, errs.ErrVersionMismatch
@@ -818,6 +824,12 @@ func (service *Service) CompleteTurn(
 			}); err != nil {
 				return entity.Resource{}, err
 			}
+			if err := service.revokeExecutionClaims(
+				ctx, tx, input.Principal, spec.ProcessRunID, updated.ID,
+				"complete_turn", service.now().UTC().Truncate(time.Microsecond),
+			); err != nil {
+				return entity.Resource{}, err
+			}
 			if err := service.appendMutationRecords(
 				ctx,
 				tx,
@@ -858,8 +870,23 @@ func (service *Service) completeProcessFromTurn(
 		processSpec.RootInitiatorActorID != principal.ActorID {
 		return errs.ErrStateConflict
 	}
+	terminalTurnID := processSpec.RootTurnID
+	terminalAttempt := processSpec.RootAttempt
+	if processSpec.ParentProcessRunID != "" {
+		terminalTurnID = processSpec.TargetTurnID
+		terminalAttempt = processSpec.TargetAttempt
+	}
+	if turn.ID != terminalTurnID || turnSpec.Attempt != terminalAttempt {
+		return nil
+	}
 	if process.State.Terminal() {
 		return nil
+	}
+	if err := service.revokeExecutionClaims(
+		ctx, tx, principal, process.ID, turn.ID, "complete_process",
+		service.now().UTC().Truncate(time.Microsecond),
+	); err != nil {
+		return err
 	}
 	open, err := tx.ProcessHasOpenWork(
 		ctx, process.OrganizationID, process.ProjectID, process.ID, turn.ID, "",
@@ -951,6 +978,9 @@ func (service *Service) RetryTurn(
 				return entity.Resource{}, err
 			}
 			spec, ok := current.Spec.(entity.TurnSpec)
+			if err := requireLifecycleOwner(input.Principal, current); err != nil {
+				return entity.Resource{}, err
+			}
 			if !ok || current.Kind != enum.KindTurn ||
 				current.Version != input.ExpectedVersion ||
 				(current.State != enum.StateFailed &&
@@ -964,6 +994,12 @@ func (service *Service) RetryTurn(
 			spec.Outcome = ""
 			spec.ResultArtifactID = ""
 			now := service.now().UTC().Truncate(time.Microsecond)
+			if err := service.revokeExecutionClaims(
+				ctx, tx, input.Principal, spec.ProcessRunID, current.ID,
+				"retry_turn", now,
+			); err != nil {
+				return entity.Resource{}, err
+			}
 			retried, err := current.ReplaceAndTransition(spec, enum.StateQueued, now)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict
@@ -1039,59 +1075,17 @@ func (service *Service) CancelTurn(
 			if err != nil {
 				return entity.Resource{}, err
 			}
-			spec, ok := current.Spec.(entity.TurnSpec)
-			if !ok || current.Kind != enum.KindTurn ||
+			if err := requireLifecycleOwner(input.Principal, current); err != nil {
+				return entity.Resource{}, err
+			}
+			if current.Kind != enum.KindTurn ||
 				current.Version != input.ExpectedVersion ||
 				current.State.Terminal() {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			spec.Outcome = input.ReasonCode
 			now := service.now().UTC().Truncate(time.Microsecond)
-			cancelled, err := current.ReplaceAndTransition(
-				spec,
-				enum.StateCancelled,
-				now,
-			)
-			if err != nil {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			var lease domainrepo.TurnLease
-			if current.State != enum.StateQueued {
-				lease, err = tx.GetTurnLeaseForUpdate(ctx, current.ID)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				if lease.Fence != current.Version || lease.Attempt != spec.Attempt {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-			}
-			if err := tx.Update(ctx, cancelled, current.Version); err != nil {
-				return entity.Resource{}, err
-			}
-			if lease.TurnID != "" {
-				if err := tx.DeleteTurnLease(ctx, current.ID, lease.Fence); err != nil {
-					return entity.Resource{}, err
-				}
-				if err := tx.FinishTurnAttempt(ctx, domainrepo.TurnAttempt{
-					TurnID:              current.ID,
-					Attempt:             lease.Attempt,
-					WorkloadID:          lease.WorkloadID,
-					AuthorityGeneration: lease.AuthorityGeneration,
-					State:               "CANCELLED",
-					InputSHA256:         spec.EffectiveInputSHA256,
-					LeaseFence:          lease.Fence,
-					FinishedAt:          now,
-					Outcome:             input.ReasonCode,
-				}); err != nil {
-					return entity.Resource{}, err
-				}
-			}
-			return cancelled, service.appendMutationRecords(
-				ctx,
-				tx,
-				input.Principal,
-				"cancel_turn",
-				cancelled,
+			return service.cancelTurnExecution(
+				ctx, tx, input.Principal, current, input.ReasonCode, now,
 			)
 		},
 	)
@@ -1405,13 +1399,19 @@ func (service *Service) ResolveOwnerGate(
 				return err
 			}
 			processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+			executionMatches := processSpec.RootSessionID == gateSpec.SessionID &&
+				processSpec.RootTurnID == gateSpec.TurnID &&
+				processSpec.RootAttempt == gateSpec.Attempt
+			if processSpec.ParentProcessRunID != "" {
+				executionMatches = processSpec.TargetSessionID == gateSpec.SessionID &&
+					processSpec.TargetTurnID == gateSpec.TurnID &&
+					processSpec.TargetAttempt == gateSpec.Attempt
+			}
 			if !ok || process.Kind != enum.KindProcessRun ||
 				process.Version != input.ProcessExpectedVersion ||
 				process.State != enum.StateWaitingOwner ||
 				processSpec.RootInitiatorActorID != gateSpec.RootInitiatorActorID ||
-				processSpec.RootSessionID != gateSpec.SessionID ||
-				processSpec.RootTurnID != gateSpec.TurnID ||
-				processSpec.RootAttempt != gateSpec.Attempt ||
+				!executionMatches ||
 				processSpec.ImmutableInputSHA256 != gateSpec.ImmutableInputSHA256 ||
 				processSpec.ScheduleID != gateSpec.ScheduleID ||
 				processSpec.OccurrenceID != gateSpec.OccurrenceID {
@@ -1426,10 +1426,12 @@ func (service *Service) ResolveOwnerGate(
 			}
 			gateTurnSpec, ok := gateTurn.Spec.(entity.TurnSpec)
 			if !ok || gateTurn.Kind != enum.KindTurn ||
+				gateTurn.State != enum.StateWaitingOwner ||
 				gateTurnSpec.SessionID != gateSpec.SessionID ||
 				gateTurnSpec.Attempt != gateSpec.Attempt ||
-				gateTurnSpec.EffectiveInputSHA256 != gateSpec.ImmutableInputSHA256 ||
-				gateTurnSpec.ProcessRunID != process.ID {
+				gateTurnSpec.ProcessRunID != process.ID ||
+				gateTurnSpec.ResultArtifactID == "" ||
+				gateTurnSpec.Outcome != "owner_gate_pending" {
 				return errs.ErrStateConflict
 			}
 			var relatedOccurrence domainrepo.ScheduleOccurrence
@@ -1445,7 +1447,7 @@ func (service *Service) ResolveOwnerGate(
 					return err
 				}
 				if occurrence.ScheduleID != gateSpec.ScheduleID ||
-					occurrence.State != "CLAIMED" ||
+					occurrence.State != "WAITING_OWNER" ||
 					occurrence.EffectiveInputSHA256 == "" {
 					return errs.ErrStateConflict
 				}
@@ -1465,17 +1467,14 @@ func (service *Service) ResolveOwnerGate(
 				relatedSchedule = schedule
 			}
 			gateTarget := ownerGateTarget(input.Decision)
-			processTarget := enum.StateBlocked
+			processTarget := enum.StateFailed
 			switch input.Decision {
 			case "APPROVED":
-				if gateTurn.State != enum.StateSucceeded {
-					return errs.ErrStateConflict
-				}
 				processTarget = enum.StateSucceeded
 			case "REJECTED":
 				processTarget = enum.StateFailed
 			case "CHANGES_REQUESTED":
-				processTarget = enum.StateBlocked
+				processTarget = enum.StateFailed
 			case "CANCELLED":
 				processTarget = enum.StateCancelled
 			}
@@ -1501,26 +1500,43 @@ func (service *Service) ResolveOwnerGate(
 				}
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
-			if processTarget == enum.StateFailed || processTarget == enum.StateCancelled {
-				if !gateTurn.State.Terminal() {
-					gateTurnSpec.Outcome = "owner_gate_" + strings.ToLower(input.Decision)
-					updatedTurn, err := gateTurn.ReplaceAndTransition(
-						gateTurnSpec, processTarget, now,
-					)
-					if err != nil {
-						return errs.ErrStateConflict
-					}
-					if err := tx.Update(ctx, updatedTurn, gateTurn.Version); err != nil {
-						return err
-					}
-					if err := service.appendMutationRecords(
-						ctx, tx, input.Principal, "owner_gate_terminal_turn", updatedTurn,
-					); err != nil {
-						return err
-					}
-					gateTurn = updatedTurn
-				}
+			turnTarget := processTarget
+			gateTurnSpec.Outcome = "owner_gate_" + strings.ToLower(input.Decision)
+			if gateTarget == enum.StateExpired {
+				turnTarget = enum.StateFailed
+				gateTurnSpec.Outcome = "owner_gate_expired"
 			}
+			if turnTarget != enum.StateSucceeded {
+				gateTurnSpec.ResultArtifactID = ""
+			}
+			updatedTurn, err := gateTurn.ReplaceAndTransition(
+				gateTurnSpec, turnTarget, now,
+			)
+			if err != nil {
+				return errs.ErrStateConflict
+			}
+			if err := tx.Update(ctx, updatedTurn, gateTurn.Version); err != nil {
+				return err
+			}
+			attempt, err := tx.GetTurnAttemptForUpdate(
+				ctx, gateTurn.ID, gateTurnSpec.Attempt,
+			)
+			if err != nil || attempt.State != "CLAIMED" ||
+				attempt.InputSHA256 != gateTurnSpec.EffectiveInputSHA256 {
+				return errs.ErrStateConflict
+			}
+			attempt.State = string(turnTarget)
+			attempt.FinishedAt = now
+			attempt.Outcome = gateTurnSpec.Outcome
+			if err := tx.FinishTurnAttempt(ctx, attempt); err != nil {
+				return err
+			}
+			if err := service.appendMutationRecords(
+				ctx, tx, input.Principal, "owner_gate_terminal_turn", updatedTurn,
+			); err != nil {
+				return err
+			}
+			gateTurn = updatedTurn
 			if relatedOccurrence.ID != "" {
 				if relatedOccurrence.ExecutionTurnID != gateTurn.ID ||
 					relatedOccurrence.ExecutionProcessRunID != process.ID {
@@ -1535,7 +1551,7 @@ func (service *Service) ResolveOwnerGate(
 				} else if processTarget.Terminal() {
 					relatedOccurrence.State = string(processTarget)
 				}
-				if relatedOccurrence.State != "CLAIMED" {
+				if relatedOccurrence.State != "WAITING_OWNER" {
 					relatedOccurrence.ClaimantWorkloadID = ""
 					relatedOccurrence.AuthorityGeneration = 0
 					relatedOccurrence.TokenHash = ""
@@ -1550,7 +1566,7 @@ func (service *Service) ResolveOwnerGate(
 				); err != nil {
 					return err
 				}
-				if relatedOccurrence.State != "CLAIMED" {
+				if relatedOccurrence.State != "WAITING_OWNER" {
 					if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
 						OccurrenceID:     relatedOccurrence.ID,
 						Attempt:          relatedOccurrence.Attempt,
@@ -1662,7 +1678,7 @@ func ownerGateTarget(decision string) enum.State {
 	case "REJECTED":
 		return enum.StateFailed
 	case "CHANGES_REQUESTED":
-		return enum.StateBlocked
+		return enum.StateFailed
 	default:
 		return enum.StateCancelled
 	}

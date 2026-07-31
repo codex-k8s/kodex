@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -66,7 +68,14 @@ func (service *Service) RepairOutboxEvent(
 	if err != nil {
 		return domainrepo.OutboxFailure{}, errs.ErrInvalidInput
 	}
-	keyHash := hashString(input.IdempotencyKey)
+	keyHash := hashString(strings.Join([]string{
+		input.Principal.OrganizationID,
+		input.Principal.ProjectID,
+		"REQUEUE",
+		input.EventID,
+		strconv.FormatUint(input.ExpectedSequence, 10),
+		input.IdempotencyKey,
+	}, "\n"))
 	var result domainrepo.OutboxFailure
 	err = service.repository.Transact(ctx, domainrepo.Scope{
 		OrganizationID: input.Principal.OrganizationID,

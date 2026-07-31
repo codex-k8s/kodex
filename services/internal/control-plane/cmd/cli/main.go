@@ -26,7 +26,7 @@ var migrations embed.FS
 //go:embed sql/*.sql
 var operationalSQL embed.FS
 
-const schemaVersion int64 = 20260731000400
+const schemaVersion int64 = 20260731000500
 
 func main() {
 	ctx, stop := signal.NotifyContext(
@@ -257,6 +257,47 @@ func reconcileRuntimePrincipals(
 	if err != nil {
 		return errors.New("encode runtime principal reconciliation input")
 	}
+	principalFiles := map[string]string{
+		config.CurrentName: config.CurrentDSNFile,
+	}
+	if config.NextName != "" {
+		if config.NextDSNFile == "" {
+			return errors.New("NEXT PostgreSQL DSN is required")
+		}
+		principalFiles[config.NextName] = config.NextDSNFile
+	}
+	if config.PreviousName != "" {
+		if config.PreviousDSNFile == "" {
+			return errors.New("PREVIOUS PostgreSQL DSN is required")
+		}
+		principalFiles[config.PreviousName] = config.PreviousDSNFile
+	}
+	bootstrapStatement, err := operationalSQL.ReadFile(
+		"sql/runtime_principal__bootstrap.sql",
+	)
+	if err != nil {
+		return errors.New("load runtime principal bootstrap SQL")
+	}
+	for _, principal := range principals {
+		principalConfig, parseErr := parseRuntimePrincipalDSN(
+			principalFiles[principal.PrincipalName],
+			principal.PrincipalName,
+			serverName,
+			roots,
+		)
+		if parseErr != nil {
+			return parseErr
+		}
+		if _, execErr := database.ExecContext(
+			ctx,
+			string(bootstrapStatement),
+			principal.PrincipalName,
+			principal.Generation,
+			principalConfig.Password,
+		); execErr != nil {
+			return fmt.Errorf("bootstrap runtime PostgreSQL principal: %w", execErr)
+		}
+	}
 	statement, err := operationalSQL.ReadFile("sql/runtime_principals__reconcile.sql")
 	if err != nil {
 		return errors.New("load runtime principal reconciliation SQL")
@@ -306,4 +347,30 @@ func reconcileRuntimePrincipals(
 		return errors.New("NEXT PostgreSQL principal readback failed")
 	}
 	return nil
+}
+
+func parseRuntimePrincipalDSN(
+	path string,
+	expectedPrincipal string,
+	serverName string,
+	roots *x509.CertPool,
+) (*pgx.ConnConfig, error) {
+	raw, err := readRuntimeFile(path, 64<<10)
+	if err != nil {
+		return nil, errors.New("read bounded runtime PostgreSQL DSN")
+	}
+	config, err := pgx.ParseConfig(strings.TrimSpace(string(raw)))
+	if err != nil || len(config.Fallbacks) != 0 ||
+		config.User != expectedPrincipal || config.Password == "" ||
+		config.Host != serverName || config.TLSConfig == nil ||
+		config.TLSConfig.ServerName != serverName ||
+		config.TLSConfig.InsecureSkipVerify {
+		return nil, errors.New("runtime PostgreSQL DSN must use exact principal and verify-full TLS")
+	}
+	config.TLSConfig = &tls.Config{
+		MinVersion: tls.VersionTLS13,
+		ServerName: serverName,
+		RootCAs:    roots,
+	}
+	return config, nil
 }

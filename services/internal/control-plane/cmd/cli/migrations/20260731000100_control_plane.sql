@@ -27,8 +27,33 @@ ALTER ROLE control_plane_relay
     NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 
 CREATE SCHEMA control_plane AUTHORIZATION control_plane_owner;
+CREATE SCHEMA control_plane_extensions AUTHORIZATION control_plane_owner;
 REVOKE ALL ON SCHEMA control_plane FROM PUBLIC;
+REVOKE ALL ON SCHEMA control_plane_extensions FROM PUBLIC;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA control_plane_extensions;
+DO $pgcrypto_schema$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_extension AS extension
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = extension.extnamespace
+        WHERE extension.extname = 'pgcrypto'
+          AND namespace.nspname = 'control_plane_extensions'
+    ) THEN
+        ALTER EXTENSION pgcrypto SET SCHEMA control_plane_extensions;
+    END IF;
+END
+$pgcrypto_schema$;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA control_plane_extensions FROM PUBLIC;
+GRANT USAGE ON SCHEMA control_plane_extensions TO control_plane_owner;
+GRANT EXECUTE ON FUNCTION
+    control_plane_extensions.digest(bytea, text),
+    control_plane_extensions.digest(text, text),
+    control_plane_extensions.hmac(bytea, bytea, text),
+    control_plane_extensions.hmac(text, text, text)
+    TO control_plane_owner;
 GRANT USAGE ON SCHEMA control_plane TO control_plane_runtime, control_plane_relay;
 
 SET ROLE control_plane_owner;

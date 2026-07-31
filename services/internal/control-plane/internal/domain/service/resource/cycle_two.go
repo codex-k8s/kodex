@@ -3,11 +3,11 @@ package resource
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math"
+	"math/bits"
 	"slices"
 	"strings"
 	"time"
@@ -110,9 +110,9 @@ func (service *Service) ManageSession(
 				}
 				sessionID := uuid.NewString()
 				binding, err := service.selectProviderBinding(
-					ctx, tx, input.Principal, roleSpec,
+					ctx, tx, input.Principal, role.ID, roleSpec,
 					input.PreferredProviderCredentialBindingID,
-					sessionID, now,
+					now,
 				)
 				if err != nil {
 					return entity.Resource{}, err
@@ -218,8 +218,9 @@ func (service *Service) selectProviderBinding(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
+	roleID string,
 	roleSpec entity.RoleSpec,
-	preferredBindingID, selectionNonce string,
+	preferredBindingID string,
 	now time.Time,
 ) (entity.Resource, error) {
 	type candidate struct {
@@ -227,7 +228,6 @@ func (service *Service) selectProviderBinding(
 		spec     entity.CredentialBindingSpec
 		active   uint64
 		weight   uint32
-		score    uint64
 	}
 	weights := make(map[string]uint32, len(roleSpec.ProviderAccountPool.Bindings))
 	for _, binding := range roleSpec.ProviderAccountPool.Bindings {
@@ -255,14 +255,13 @@ func (service *Service) selectProviderBinding(
 		if err != nil {
 			return entity.Resource{}, err
 		}
-		if spec.ProviderObservedUsage+active >= spec.ProviderObservedLimit {
+		if spec.ProviderObservedUsage >= spec.ProviderObservedLimit ||
+			active >= spec.ProviderObservedLimit-spec.ProviderObservedUsage {
 			continue
 		}
-		digest := sha256.Sum256([]byte(selectionNonce + "\x00" + binding.ID))
-		score := binary.BigEndian.Uint64(digest[:8]) / uint64(weights[binding.ID])
 		candidates = append(candidates, candidate{
 			resource: binding, spec: spec, active: active,
-			weight: weights[binding.ID], score: score,
+			weight: weights[binding.ID],
 		})
 	}
 	if preferredBindingID != "" {
@@ -276,29 +275,88 @@ func (service *Service) selectProviderBinding(
 	if len(candidates) == 0 {
 		return entity.Resource{}, errs.ErrStateConflict
 	}
-	slices.SortFunc(candidates, func(left, right candidate) int {
-		if roleSpec.ProviderAccountPool.Policy == "least_used" {
+	if roleSpec.ProviderAccountPool.Policy == "least_used" {
+		slices.SortFunc(candidates, func(left, right candidate) int {
 			leftUsage := left.spec.ProviderObservedUsage + left.active
 			rightUsage := right.spec.ProviderObservedUsage + right.active
-			leftScaled := leftUsage * right.spec.ProviderObservedLimit
-			rightScaled := rightUsage * left.spec.ProviderObservedLimit
-			if leftScaled < rightScaled {
+			leftHigh, leftLow := bits.Mul64(
+				leftUsage, right.spec.ProviderObservedLimit,
+			)
+			rightHigh, rightLow := bits.Mul64(
+				rightUsage, left.spec.ProviderObservedLimit,
+			)
+			if leftHigh < rightHigh ||
+				(leftHigh == rightHigh && leftLow < rightLow) {
 				return -1
 			}
-			if leftScaled > rightScaled {
+			if leftHigh > rightHigh ||
+				(leftHigh == rightHigh && leftLow > rightLow) {
 				return 1
 			}
-		} else {
-			if left.score < right.score {
-				return -1
-			}
-			if left.score > right.score {
-				return 1
-			}
-		}
+			return strings.Compare(left.resource.ID, right.resource.ID)
+		})
+		return candidates[0].resource, nil
+	}
+	slices.SortFunc(candidates, func(left, right candidate) int {
 		return strings.Compare(left.resource.ID, right.resource.ID)
 	})
-	return candidates[0].resource, nil
+	type poolSnapshotBinding struct {
+		ID                  string
+		Weight              uint32
+		ObservationRevision uint64
+		ObservedLimit       uint64
+	}
+	snapshot := make([]poolSnapshotBinding, 0, len(candidates))
+	var totalWeight uint64
+	for _, item := range candidates {
+		if totalWeight > 80000-uint64(item.weight) {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		totalWeight += uint64(item.weight)
+		snapshot = append(snapshot, poolSnapshotBinding{
+			ID: item.resource.ID, Weight: item.weight,
+			ObservationRevision: item.spec.ProviderObservationRevision,
+			ObservedLimit:       item.spec.ProviderObservedLimit,
+		})
+	}
+	snapshotSHA256, err := canonicalHash(snapshot)
+	if err != nil {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	slot, err := tx.NextProviderPoolSlot(ctx, domainrepo.ProviderPoolCursor{
+		RoleID: roleID, PolicyRevision: roleSpec.ProviderAccountPool.PolicyRevision,
+		SnapshotSHA256: snapshotSHA256, TotalWeight: totalWeight,
+	})
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	selectionWeights := make([]uint32, len(candidates))
+	for index := range candidates {
+		selectionWeights[index] = candidates[index].weight
+	}
+	selected, ok := weightedCandidateIndex(selectionWeights, slot)
+	if ok {
+		return candidates[selected].resource, nil
+	}
+	return entity.Resource{}, errs.ErrInternal
+}
+
+// weightedCandidateIndex отображает durable slot полного цикла на закрытый
+// список весов. Функция не использует случайность и не переполняет сумму:
+// вызывающий код заранее ограничивает totalWeight значением 80000.
+func weightedCandidateIndex(weights []uint32, slot uint64) (int, bool) {
+	for _, weight := range weights {
+		if weight == 0 {
+			return 0, false
+		}
+	}
+	for index, weight := range weights {
+		if slot < uint64(weight) {
+			return index, true
+		}
+		slot -= uint64(weight)
+	}
+	return 0, false
 }
 
 func (service *Service) cancelSessionTurns(
@@ -315,34 +373,11 @@ func (service *Service) cancelSessionTurns(
 		return err
 	}
 	for _, item := range turns {
-		spec, ok := item.Turn.Spec.(entity.TurnSpec)
-		if !ok || item.Attempt.TurnID != item.Turn.ID ||
-			item.Attempt.Attempt != spec.Attempt {
+		if item.Attempt.TurnID != item.Turn.ID {
 			return errs.ErrStateConflict
 		}
-		spec.Outcome = reason
-		cancelled, err := item.Turn.ReplaceAndTransition(
-			spec, enum.StateCancelled, now,
-		)
-		if err != nil {
-			return errs.ErrStateConflict
-		}
-		if err := tx.Update(ctx, cancelled, item.Turn.Version); err != nil {
-			return err
-		}
-		if item.Lease.TurnID != "" {
-			if err := tx.DeleteTurnLease(ctx, item.Turn.ID, item.Lease.Fence); err != nil {
-				return err
-			}
-		}
-		item.Attempt.State = "CANCELLED"
-		item.Attempt.FinishedAt = now
-		item.Attempt.Outcome = reason
-		if err := tx.FinishTurnAttempt(ctx, item.Attempt); err != nil {
-			return err
-		}
-		if err := service.appendMutationRecords(
-			ctx, tx, principal, "session_cancel_turn", cancelled,
+		if _, err := service.cancelTurnExecution(
+			ctx, tx, principal, item.Turn, reason, now,
 		); err != nil {
 			return err
 		}
@@ -699,6 +734,11 @@ func (service *Service) ManageWorkClaim(
 				if input.TTL < time.Minute || input.TTL > maximumWorkClaimTTL ||
 					current.State != enum.StateActive {
 					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if err := service.validateActiveWorkClaimGraph(
+					ctx, tx, input.Principal, current, spec,
+				); err != nil {
+					return entity.Resource{}, err
 				}
 				spec.ExpiresAt = now.Add(input.TTL)
 				updated, err := current.Update(current.Name, spec, now)

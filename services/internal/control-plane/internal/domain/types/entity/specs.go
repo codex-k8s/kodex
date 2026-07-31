@@ -526,7 +526,9 @@ type ProcessRunSpec struct {
 	ResultArtifactID      string `json:"resultArtifactId,omitempty"`
 	RootInitiatorActorID  string `json:"rootInitiatorActorId"`
 	RootSessionID         string `json:"rootSessionId"`
+	RootSessionVersion    uint64 `json:"rootSessionVersion"`
 	RootTurnID            string `json:"rootTurnId"`
+	RootTurnVersion       uint64 `json:"rootTurnVersion"`
 	RootAttempt           uint32 `json:"rootAttempt"`
 	ImmutableInputSHA256  string `json:"immutableInputSha256"`
 	RuntimeRevisionID     string `json:"runtimeRevisionId"`
@@ -535,7 +537,9 @@ type ProcessRunSpec struct {
 	LaunchingAttempt      uint32 `json:"launchingAttempt,omitempty"`
 	DelegationID          string `json:"delegationId,omitempty"`
 	TargetSessionID       string `json:"targetSessionId,omitempty"`
+	TargetSessionVersion  uint64 `json:"targetSessionVersion,omitempty"`
 	TargetTurnID          string `json:"targetTurnId,omitempty"`
+	TargetTurnVersion     uint64 `json:"targetTurnVersion,omitempty"`
 	TargetAttempt         uint32 `json:"targetAttempt,omitempty"`
 	Outcome               string `json:"outcome,omitempty"`
 	ScheduleID            string `json:"scheduleId,omitempty"`
@@ -548,7 +552,9 @@ func (spec ProcessRunSpec) Validate() error {
 		!validExternalRef(spec.RootTriggerRef) ||
 		value.ValidateID(spec.RootInitiatorActorID) != nil ||
 		value.ValidateID(spec.RootSessionID) != nil ||
+		spec.RootSessionVersion == 0 ||
 		value.ValidateID(spec.RootTurnID) != nil ||
+		spec.RootTurnVersion == 0 ||
 		spec.RootAttempt == 0 || spec.RootAttempt > 100 ||
 		!validSHA256(spec.ImmutableInputSHA256) ||
 		value.ValidateID(spec.RuntimeRevisionID) != nil {
@@ -575,14 +581,16 @@ func (spec ProcessRunSpec) Validate() error {
 	if spec.ParentProcessRunID == "" {
 		if spec.LaunchingProcessRunID != "" || spec.LaunchingTurnID != "" ||
 			spec.LaunchingAttempt != 0 || spec.DelegationID != "" ||
-			spec.TargetSessionID != "" || spec.TargetTurnID != "" ||
+			spec.TargetSessionID != "" || spec.TargetSessionVersion != 0 ||
+			spec.TargetTurnID != "" || spec.TargetTurnVersion != 0 ||
 			spec.TargetAttempt != 0 {
 			return errors.New("root process launching edge is invalid")
 		}
 	} else if spec.LaunchingProcessRunID != spec.ParentProcessRunID ||
 		spec.LaunchingTurnID == "" || spec.LaunchingAttempt == 0 ||
 		spec.LaunchingAttempt > 100 || spec.DelegationID == "" ||
-		spec.TargetSessionID == "" || spec.TargetTurnID == "" ||
+		spec.TargetSessionID == "" || spec.TargetSessionVersion == 0 ||
+		spec.TargetTurnID == "" || spec.TargetTurnVersion == 0 ||
 		spec.TargetAttempt == 0 || spec.TargetAttempt > 100 {
 		return errors.New("child process launching edge is invalid")
 	}

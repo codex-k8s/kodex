@@ -1,3 +1,4 @@
+-- name: ProcessTurnActiveForUpdate
 SELECT
     id::text,
     organization_id::text,
@@ -13,14 +14,12 @@ SELECT
     updated_at
 FROM control_plane.resources
 WHERE organization_id = @organization_id::uuid
-  AND id = @resource_id::uuid
-  AND state <> 'DELETED'
-  AND (
-      project_id = nullif(@project_id, '')::uuid
-      OR (@project_id = '' AND kind = 'PROJECT')
+  AND project_id = @project_id::uuid
+  AND kind = 'TURN'
+  AND spec ->> 'processRunId' = @process_run_id
+  AND state IN (
+      'QUEUED', 'CLAIMED', 'RUNNING', 'WAITING_OWNER',
+      'WAITING_EXTERNAL', 'BLOCKED'
   )
-  AND (
-      kind <> 'WORK_CLAIM'
-      OR state <> 'ACTIVE'
-      OR control_plane.work_claim_graph_is_active(resources)
-  )
+ORDER BY id
+FOR UPDATE

@@ -39,6 +39,8 @@ spec:
               value: /var/run/secrets/mattercodex/control-plane/postgres-migration/dsn
             - name: CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME
               value: control-plane-postgresql.mattercodex-system.svc.cluster.local
+            - name: CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_DSN_FILE
+              value: /var/run/secrets/mattercodex/control-plane/postgres-migration/runtime-current-dsn
             - name: CONTROL_PLANE_POSTGRES_CA_FILE
               value: /var/run/config/mattercodex/control-plane/postgres/ca.pem
             - name: CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE

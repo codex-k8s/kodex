@@ -144,6 +144,12 @@ var sqlScheduleOccurrenceUpdate string
 //go:embed sql/scheduled_run__save.sql
 var sqlScheduledRunSave string
 
+//go:embed sql/scheduled_run__get_for_update.sql
+var sqlScheduledRunGetForUpdate string
+
+//go:embed sql/scheduled_run__wait_owner.sql
+var sqlScheduledRunWaitOwner string
+
 //go:embed sql/scheduled_run__finish.sql
 var sqlScheduledRunFinish string
 
@@ -161,6 +167,9 @@ var sqlTurnNextQueued string
 
 //go:embed sql/turn_attempt__finish.sql
 var sqlTurnAttemptFinish string
+
+//go:embed sql/turn_attempt__get_for_update.sql
+var sqlTurnAttemptGetForUpdate string
 
 //go:embed sql/turn_attempt__save.sql
 var sqlTurnAttemptSave string
@@ -185,3 +194,15 @@ var sqlDelegationEdgeSave string
 
 //go:embed sql/delegation_edge__get_by_target_turn.sql
 var sqlDelegationEdgeGetByTargetTurn string
+
+//go:embed sql/provider_pool__next_slot.sql
+var sqlProviderPoolNextSlot string
+
+//go:embed sql/work_claim__active_for_update.sql
+var sqlWorkClaimActiveForUpdate string
+
+//go:embed sql/process_turn__active_for_update.sql
+var sqlProcessTurnActiveForUpdate string
+
+//go:embed sql/owner_gate__active_by_process.sql
+var sqlOwnerGateActiveByProcess string

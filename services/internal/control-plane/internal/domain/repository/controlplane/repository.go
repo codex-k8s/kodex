@@ -155,6 +155,14 @@ type ScheduledRun struct {
 	FinishedAt             time.Time
 }
 
+// ProviderPoolCursor фиксирует один bounded slot версионированного цикла.
+type ProviderPoolCursor struct {
+	RoleID         string
+	PolicyRevision uint64
+	SnapshotSHA256 string
+	TotalWeight    uint64
+}
+
 // OutboxFailure — ограниченная безопасная проекция terminal-события.
 type OutboxFailure struct {
 	EventID        string
@@ -293,6 +301,7 @@ type Transaction interface {
 	DeleteTurnLease(context.Context, string, uint64) error
 	SaveTurnAttempt(context.Context, TurnAttempt) error
 	FinishTurnAttempt(context.Context, TurnAttempt) error
+	GetTurnAttemptForUpdate(context.Context, string, uint32) (TurnAttempt, error)
 	SaveDelegationEdge(context.Context, DelegationEdge) error
 	GetDelegationEdgeByTargetTurn(context.Context, string, string, string) (DelegationEdge, error)
 	DueSchedules(context.Context, string, string, int, time.Time) ([]entity.Resource, error)
@@ -314,6 +323,8 @@ type Transaction interface {
 	UpdateScheduleOccurrence(context.Context, ScheduleOccurrence, uint32, string) error
 	GetScheduleOccurrenceForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
 	SaveScheduledRun(context.Context, ScheduledRun) error
+	GetScheduledRunForUpdate(context.Context, string, uint32) (ScheduledRun, error)
+	WaitScheduledRun(context.Context, string, uint32) error
 	FinishScheduledRun(context.Context, ScheduledRun) error
 	AuthorizeProject(context.Context, string, string, string, string, string) (entity.Resource, error)
 	NextProofRevision(context.Context) (uint64, error)
@@ -324,7 +335,11 @@ type Transaction interface {
 	ListTerminalOutbox(context.Context, string, string, string, int) ([]OutboxFailure, error)
 	RepairTerminalOutbox(context.Context, OutboxRepair) (OutboxFailure, error)
 	ActiveProviderSessions(context.Context, string, string, string) (uint64, error)
+	NextProviderPoolSlot(context.Context, ProviderPoolCursor) (uint64, error)
 	ProcessHasOpenWork(context.Context, string, string, string, string, string) (bool, error)
+	ActiveWorkClaimsForUpdate(context.Context, string, string, string, string) ([]entity.Resource, error)
+	ActiveProcessTurnsForUpdate(context.Context, string, string, string) ([]entity.Resource, error)
+	ActiveOwnerGateForProcess(context.Context, string, string, string) (entity.Resource, error)
 }
 
 // Repository — авторитетная граница PostgreSQL.

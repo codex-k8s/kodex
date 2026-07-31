@@ -130,7 +130,7 @@ Vault. Устойчивая монотонная верхняя граница �
 поколение, состояние, organization/project/actor, PID соединения и ID
 транзакции. GUC и `SET SESSION AUTHORIZATION` не являются источником
 полномочий. Readiness проверяет схему
-`20260731000400`,
+`20260731000500`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
@@ -186,7 +186,7 @@ runbook.
 | `CONTROL_PLANE_GRPC_LISTEN`, `CONTROL_PLANE_TECHNICAL_LISTEN` | внутренние listeners |
 | `CONTROL_PLANE_TLS_CERTIFICATE_FILE`, `CONTROL_PLANE_TLS_PRIVATE_KEY_FILE`, `CONTROL_PLANE_TLS_CLIENT_CA_FILE` | точный mTLS рабочей нагрузки |
 | `CONTROL_PLANE_POSTGRES_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RELAY_DSN_FILE` | файлы DSN среды исполнения и ретранслятора |
-| `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE` | точный DSN `NEXT` только для миграции и обязательного чтения перед повышением |
+| `CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_DSN_FILE` | точные DSN materialized LOGIN; CLI создаёт отсутствующее поколение через ограниченный controller, затем проверяет `NEXT` отдельным подключением |
 | `CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME`, `CONTROL_PLANE_POSTGRES_CA_FILE`, `CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS` | TLS и пул PostgreSQL |
 | `CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME`, `CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE` | точное поколение среды исполнения и доказательство контекста транзакции |
 | `CONTROL_PLANE_REDIS_ADDRESS`, `CONTROL_PLANE_REDIS_TLS_SERVER_NAME`, `CONTROL_PLANE_REDIS_CA_FILE`, `CONTROL_PLANE_REDIS_USERNAME`, `CONTROL_PLANE_REDIS_PASSWORD_FILE`, `CONTROL_PLANE_REDIS_DATABASE`, `CONTROL_PLANE_REDIS_POOL_SIZE` | ограниченный кэш Redis |
@@ -224,9 +224,13 @@ tools/render-control-plane.sh \
 заменить `staging` на `production` и использовать отдельно утверждённые digest.
 
 Общая база `deploy/k8s/base/image-supply-chain` материализует локальный
-OCI registry с тремя физически разделёнными TLS/auth endpoints: публично
-доверенный node-reachable read-only pull, internal push без DELETE и отдельный
-admin DELETE только для retention job. Kubelet получает отдельный
+OCI registry четырьмя независимыми Deployment/ServiceAccount/Vault CSI
+границами: публичный node-reachable read-only pull, staging push без DELETE,
+admin DELETE только staging-retention и отдельный promotion writer. Pull
+монтирует только promoted PVC read-only и не имеет сети к остальным endpoints;
+push/admin разделяют staging PVC, а promotion единолично пишет другой promoted
+PVC. Компрометация pull поэтому не открывает push/delete, приватные ключи
+внутренних endpoints или изменяемое хранилище. Kubelet получает отдельный
 `dockerconfigjson`; DaemonSet `mattercodex-registry-node-pull-readback` на
 каждом узле доказывает pull exact digest. Все прикладные образы в итоговом
 render ссылаются на node endpoint по digest. Теги обязаны иметь вид
@@ -235,10 +239,15 @@ render ссылаются на node endpoint по digest. Теги обязан�
 и закрыто отказывается удалять неизвестный формат. Три начальных образа
 (`registry`, `moby/buildkit`, `regctl`) закреплены публичными OCI digest;
 после начальной загрузки оператор зеркалирует их в тот же локальный registry.
-BuildKit API требует mTLS с exact SNI/CA: probe и build controller имеют разные
-client certificates, а label NetworkPolicy не является полномочием. Push и
-admin credentials также различны и доставляются Vault CSI без значений в
-manifest. `noProcessSandbox=true` остаётся только вынужденной границей
+BuildKit API требует mTLS с exact SNI/CA: server/probe и `role-image-builder` получают
+ключи из разных SecretProviderClass/Vault roles, а label NetworkPolicy не
+является полномочием. `tools/render-image-build-job.sh` создаёт bounded Job из
+read-only PVC с `context.tar`, сверяет exact source SHA-256, отправляет сборку
+в BuildKit, публикует в staging, затем отдельной scoped identity копирует exact
+digest в promotion endpoint и читает его обратно. Job не имеет Kubernetes API
+token или admin DELETE. Push, promotion и admin credentials различны и
+доставляются Vault CSI без значений в manifest. `noProcessSandbox=true`
+остаётся только вынужденной границей
 rootless worker: BuildKit не получает ServiceAccount token или прикладные
 секреты, API закрыт mTLS, state ограничен `emptyDir`, а build client не получает
 admin DELETE. Отключать TLS/auth или использовать internal Service DNS как
@@ -251,13 +260,37 @@ Shipwright и Tekton остаются возможными оркестрато�
 создают второй источник истины. Старый Kaniko template сохранён только для
 legacy-контура и не включён в новую базу.
 
+Supply-chain и build Job имеют отдельные fail-closed render interfaces:
+
+```bash
+tools/render-image-supply-chain.sh \
+  staging \
+  sha256:<control-plane-image-digest> \
+  registry-pull.<environment-domain> \
+  > /tmp/image-supply-chain-staging.yaml
+
+tools/render-image-build-job.sh \
+  staging \
+  v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
+  <read-only-source-pvc> \
+  sha256:<context.tar-digest> \
+  agent-runtime \
+  > /tmp/agent-runtime-build.yaml
+```
+
+Обе команды только материализуют YAML. Apply, сборка и promotion требуют
+отдельного разрешения владельца; после них обязательны exact digest readback
+promotion endpoint и готовность node-pull DaemonSet.
+
 Migration Job запускает `control-plane-cli migrate expand` до rollout и
 атомарно согласует `CURRENT`/`NEXT`/`PREVIOUS`, активный ключ контекста и
-выведенные из эксплуатации сессии. При наличии `NEXT` наложение GitOps обязано
-одновременно доставить `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_*` и отдельный файл
-DSN: CLI сначала подключается именно этим LOGIN и сохраняет readback, только
+выведенные из эксплуатации сессии. Для каждого объявленного поколения GitOps
+доставляет отдельный DSN-файл: CLI создаёт exact LOGIN через owner-only
+controller bootstrap и закрыто сверяет catalog membership. При наличии `NEXT`
+CLI дополнительно подключается именно этим LOGIN и сохраняет readback; только
 следующее идемпотентное согласование может повысить его до `CURRENT`. Миграции
-`20260731000200`, `20260731000300` и `20260731000400` явно forward-only: downgrade отклоняется,
+`20260731000200`, `20260731000300`, `20260731000400` и
+`20260731000500` явно forward-only: downgrade отклоняется,
 потому что потерял бы RLS fences, верхнюю границу и readback principal,
 попытки, подтверждения и происхождение вектора. Откат приложения выполняется
 только совместимым образом; откат схемы — новой компенсирующей forward

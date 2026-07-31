@@ -488,7 +488,7 @@ func (repository *Repository) Check(ctx context.Context) error {
 	); err != nil {
 		return mapError(err)
 	}
-	if version != 20260731000400 || !member || !nonSuperuser || !noBypassRLS ||
+	if version != 20260731000500 || !member || !nonSuperuser || !noBypassRLS ||
 		!loginEnabled || generation != repository.config.PrincipalGeneration ||
 		(status != "CURRENT" && status != "NEXT" && status != "PREVIOUS") {
 		return errs.ErrUnavailable
@@ -1226,6 +1226,31 @@ func (wrapped *transaction) FinishTurnAttempt(
 	return nil
 }
 
+func (wrapped *transaction) GetTurnAttemptForUpdate(
+	ctx context.Context,
+	turnID string,
+	attemptNumber uint32,
+) (domainrepo.TurnAttempt, error) {
+	var attempt domainrepo.TurnAttempt
+	err := wrapped.tx.QueryRow(
+		ctx,
+		sqlTurnAttemptGetForUpdate,
+		pgx.StrictNamedArgs{"turn_id": turnID, "attempt": attemptNumber},
+	).Scan(
+		&attempt.TurnID,
+		&attempt.Attempt,
+		&attempt.WorkloadID,
+		&attempt.AuthorityGeneration,
+		&attempt.State,
+		&attempt.InputSHA256,
+		&attempt.LeaseFence,
+		&attempt.StartedAt,
+		&attempt.FinishedAt,
+		&attempt.Outcome,
+	)
+	return attempt, mapError(err)
+}
+
 func (wrapped *transaction) SaveDelegationEdge(
 	ctx context.Context,
 	edge domainrepo.DelegationEdge,
@@ -1546,6 +1571,56 @@ func (wrapped *transaction) SaveScheduledRun(
 	return nil
 }
 
+func (wrapped *transaction) GetScheduledRunForUpdate(
+	ctx context.Context,
+	occurrenceID string,
+	attempt uint32,
+) (domainrepo.ScheduledRun, error) {
+	var run domainrepo.ScheduledRun
+	err := wrapped.tx.QueryRow(
+		ctx,
+		sqlScheduledRunGetForUpdate,
+		pgx.StrictNamedArgs{"occurrence_id": occurrenceID, "attempt": attempt},
+	).Scan(
+		&run.OccurrenceID,
+		&run.Attempt,
+		&run.SessionID,
+		&run.SessionVersion,
+		&run.TurnID,
+		&run.TurnVersion,
+		&run.ProcessRunID,
+		&run.ProcessVersion,
+		&run.RuntimeRevisionID,
+		&run.RuntimeRevisionVersion,
+		&run.EffectiveInputSHA256,
+		&run.State,
+		&run.Outcome,
+		&run.ResultArtifactID,
+		&run.CreatedAt,
+		&run.FinishedAt,
+	)
+	return run, mapError(err)
+}
+
+func (wrapped *transaction) WaitScheduledRun(
+	ctx context.Context,
+	occurrenceID string,
+	attempt uint32,
+) error {
+	tag, err := wrapped.tx.Exec(
+		ctx,
+		sqlScheduledRunWaitOwner,
+		pgx.StrictNamedArgs{"occurrence_id": occurrenceID, "attempt": attempt},
+	)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
 func (wrapped *transaction) FinishScheduledRun(
 	ctx context.Context,
 	run domainrepo.ScheduledRun,
@@ -1658,6 +1733,76 @@ func (wrapped *transaction) ActiveProviderSessions(
 		"binding_id":      bindingID,
 	}).Scan(&count)
 	return count, mapError(err)
+}
+
+func (wrapped *transaction) NextProviderPoolSlot(
+	ctx context.Context,
+	cursor domainrepo.ProviderPoolCursor,
+) (uint64, error) {
+	var slot uint64
+	err := wrapped.tx.QueryRow(ctx, sqlProviderPoolNextSlot, pgx.StrictNamedArgs{
+		"role_id": cursor.RoleID, "policy_revision": cursor.PolicyRevision,
+		"snapshot_sha256": cursor.SnapshotSHA256, "total_weight": cursor.TotalWeight,
+	}).Scan(&slot)
+	return slot, mapError(err)
+}
+
+func (wrapped *transaction) ActiveWorkClaimsForUpdate(
+	ctx context.Context,
+	organizationID, projectID, processRunID, turnID string,
+) ([]entity.Resource, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlWorkClaimActiveForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID,
+		"process_run_id": processRunID, "turn_id": turnID,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	var result []entity.Resource
+	for rows.Next() {
+		item, scanErr := scanResource(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		result = append(result, item)
+	}
+	return result, mapError(rows.Err())
+}
+
+func (wrapped *transaction) ActiveOwnerGateForProcess(
+	ctx context.Context,
+	organizationID, projectID, processRunID string,
+) (entity.Resource, error) {
+	return scanResource(wrapped.tx.QueryRow(
+		ctx, sqlOwnerGateActiveByProcess, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID,
+			"process_run_id": processRunID,
+		},
+	))
+}
+
+func (wrapped *transaction) ActiveProcessTurnsForUpdate(
+	ctx context.Context,
+	organizationID, projectID, processRunID string,
+) ([]entity.Resource, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlProcessTurnActiveForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID,
+		"process_run_id": processRunID,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	var result []entity.Resource
+	for rows.Next() {
+		item, scanErr := scanResource(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		result = append(result, item)
+	}
+	return result, mapError(rows.Err())
 }
 
 func (wrapped *transaction) ListTerminalOutbox(

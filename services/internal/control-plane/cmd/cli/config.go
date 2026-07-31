@@ -20,6 +20,7 @@ type runtimePrincipalConfig struct {
 	CurrentGeneration  uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_GENERATION,required"`
 	CurrentNotBefore   string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_NOT_BEFORE,required,notEmpty"`
 	CurrentNotAfter    string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_NOT_AFTER,required,notEmpty"`
+	CurrentDSNFile     string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_DSN_FILE,required,notEmpty"`
 	NextName           string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_PRINCIPAL"`
 	NextGeneration     uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_GENERATION"`
 	NextNotBefore      string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_NOT_BEFORE"`
@@ -29,6 +30,7 @@ type runtimePrincipalConfig struct {
 	PreviousGeneration uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_GENERATION"`
 	PreviousNotBefore  string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_NOT_BEFORE"`
 	PreviousNotAfter   string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_NOT_AFTER"`
+	PreviousDSNFile    string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_DSN_FILE"`
 }
 
 type runtimePrincipal struct {

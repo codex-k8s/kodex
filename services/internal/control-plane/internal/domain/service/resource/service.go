@@ -556,6 +556,10 @@ func (service *Service) Get(ctx context.Context, input GetInput) (entity.Resourc
 	if resource.Kind != input.Kind || resource.State == enum.StateDeleted {
 		return entity.Resource{}, errs.ErrNotFound
 	}
+	if ownerBoundLifecycleKind(resource.Kind) &&
+		resource.OwnerActorID != input.Principal.ActorID {
+		return entity.Resource{}, errs.ErrNotFound
+	}
 	if (input.Principal.CallerWorkload == "runtime-controller" ||
 		input.Principal.CallerWorkload == "automation-scheduler") &&
 		input.ExpectedVersion == 0 {
@@ -592,7 +596,11 @@ func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Res
 	if input.Filter.Kind == enum.KindProject || input.Principal.ProjectID == "" {
 		return nil, errs.ErrPermissionDenied
 	}
-	return service.repository.List(ctx, input.Filter)
+	resources, err := service.repository.List(ctx, input.Filter)
+	if err != nil {
+		return nil, err
+	}
+	return filterOwnerBoundResources(resources, input.Principal.ActorID), nil
 }
 
 type resourceMutation func(domainrepo.Transaction) (entity.Resource, error)
@@ -896,6 +904,30 @@ func protectedMutationKind(kind enum.Kind) bool {
 
 func protectedTransitionKind(kind enum.Kind) bool {
 	return accessKind(kind) || protectedMutationKind(kind)
+}
+
+func ownerBoundLifecycleKind(kind enum.Kind) bool {
+	switch kind {
+	case enum.KindSession, enum.KindTurn, enum.KindProcessRun,
+		enum.KindSchedule, enum.KindOwnerGate, enum.KindWorkClaim:
+		return true
+	default:
+		return false
+	}
+}
+
+func filterOwnerBoundResources(
+	resources []entity.Resource,
+	actorID string,
+) []entity.Resource {
+	filtered := resources[:0]
+	for _, resource := range resources {
+		if !ownerBoundLifecycleKind(resource.Kind) ||
+			resource.OwnerActorID == actorID {
+			filtered = append(filtered, resource)
+		}
+	}
+	return filtered
 }
 
 func kindAdminPermission(kind enum.Kind) string {

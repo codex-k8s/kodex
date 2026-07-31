@@ -122,7 +122,9 @@ BEGIN
         || requested_actor_id::text || chr(10)
         || requested_nonce::text || chr(10)
         || requested_expires_unix_micro::text;
-    IF hmac(convert_to(canonical, 'UTF8'), active_secret, 'sha256')
+    IF control_plane_extensions.hmac(
+        convert_to(canonical, 'UTF8'), active_secret, 'sha256'
+    )
        <> requested_signature THEN
         RAISE EXCEPTION 'runtime context signature is invalid' USING ERRCODE = '28000';
     END IF;

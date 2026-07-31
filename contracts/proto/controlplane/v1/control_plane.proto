@@ -329,6 +329,8 @@ enum ScheduleOccurrenceState {
   SCHEDULE_OCCURRENCE_STATE_SKIPPED = 6;
   // SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER — значение закрытого перечисления ScheduleOccurrenceState.
   SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER = 7;
+  // SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER — выполнение остановлено на единственном owner gate.
+  SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER = 8;
 }
 
 // SessionAction задаёт закрытое перечисление контракта control-plane.
@@ -593,6 +595,10 @@ message ProcessRunSpec {
   string target_turn_id = 19;
   uint32 target_attempt = 20;
   string outcome = 21;
+  uint64 root_session_version = 22;
+  uint64 root_turn_version = 23;
+  uint64 target_session_version = 24;
+  uint64 target_turn_version = 25;
 }
 
 // ScheduleSpec описывает версионированное сообщение контракта control-plane.

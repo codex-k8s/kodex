@@ -56,6 +56,6 @@ func (checker *readinessChecker) Check(
 		return state, errors.New("internal RPC authority verifier is not ready")
 	}
 	state.AuthorityReady = true
-	state.SchemaVersion = 20260731000400
+	state.SchemaVersion = 20260731000500
 	return state, nil
 }

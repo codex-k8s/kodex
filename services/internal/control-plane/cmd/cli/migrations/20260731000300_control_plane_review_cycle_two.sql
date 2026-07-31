@@ -185,7 +185,7 @@ SELECT
     true,
     coalesce(max(generation), 0),
     1,
-    encode(digest(coalesce(string_agg(
+    encode(control_plane_extensions.digest(coalesce(string_agg(
         principal_name::text || ':' || generation::text || ':' || status,
         ',' ORDER BY generation
     ), ''), 'sha256'), 'hex'),
@@ -486,7 +486,9 @@ BEGIN
     SET secret = excluded.secret, status = 'ACTIVE', updated_at = excluded.updated_at;
 
     intent_digest := encode(
-        digest(convert_to(requested_principals::text, 'UTF8'), 'sha256'),
+        control_plane_extensions.digest(
+            convert_to(requested_principals::text, 'UTF8'), 'sha256'
+        ),
         'hex'
     );
     UPDATE control_plane.runtime_principal_lifecycle
