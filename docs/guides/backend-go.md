@@ -4,8 +4,8 @@ title: Серверная разработка на Go
 type: guide
 status: approved
 owner: developer
-version: 1.2.0
-updated: 2026-07-30
+version: 1.3.0
+updated: 2026-07-31
 ---
 
 # Серверная разработка на Go
@@ -87,20 +87,20 @@ read-only query не создает outbox event, а локальная command 
 
 ## Ответственность слоев
 
-| Слой | Обязанности | Запрещено |
-| --- | --- | --- |
-| `cmd/<binary>` | root context, signals, запуск `app` | бизнес-логика, SQL, ручная сборка зависимостей |
-| `internal/app` | config, composition, startup barrier, readiness, shutdown | сценарии использования, transport branching |
-| `internal/transport/<protocol>` | protocol validation, casters, вызов сервиса, error mapping | SQL, domain policy, прямой broker publish |
-| `internal/domain/types` | entities, values, enums, queries и их инварианты | transport/driver DTO, config процесса |
-| `internal/domain/service` | command/query orchestration и бизнесовые переходы | gRPC/HTTP codes, SQLSTATE, broker SDK |
-| `internal/domain/repository` | persistence ports и атомарные transaction ports | pgx types, SQL, реализация adapter |
-| `internal/clients` | адаптация generated downstream client к domain-safe port | бизнесовое владение чужими данными |
-| `internal/integration` | внешний provider SDK/API за узким портом | распространение provider DTO по домену |
-| `internal/repository` | PostgreSQL/cache/object-storage adapters | новые бизнесовые правила |
-| `internal/maintenance` | bounded cleanup/reconciliation внутри владельца данных | отдельный скрытый workflow без lifecycle |
-| `internal/observability` | только бизнесовые метрики сервиса | копии общего runtime и произвольные labels |
-| `internal/generated` | воспроизводимый результат codegen | ручное редактирование |
+| Слой                            | Обязанности                                                | Запрещено                                      |
+| ------------------------------- | ---------------------------------------------------------- | ---------------------------------------------- |
+| `cmd/<binary>`                  | root context, signals, запуск `app`                        | бизнес-логика, SQL, ручная сборка зависимостей |
+| `internal/app`                  | config, composition, startup barrier, readiness, shutdown  | сценарии использования, transport branching    |
+| `internal/transport/<protocol>` | protocol validation, casters, вызов сервиса, error mapping | SQL, domain policy, прямой broker publish      |
+| `internal/domain/types`         | entities, values, enums, queries и их инварианты           | transport/driver DTO, config процесса          |
+| `internal/domain/service`       | command/query orchestration и бизнесовые переходы          | gRPC/HTTP codes, SQLSTATE, broker SDK          |
+| `internal/domain/repository`    | persistence ports и атомарные transaction ports            | pgx types, SQL, реализация adapter             |
+| `internal/clients`              | адаптация generated downstream client к domain-safe port   | бизнесовое владение чужими данными             |
+| `internal/integration`          | внешний provider SDK/API за узким портом                   | распространение provider DTO по домену         |
+| `internal/repository`           | PostgreSQL/cache/object-storage adapters                   | новые бизнесовые правила                       |
+| `internal/maintenance`          | bounded cleanup/reconciliation внутри владельца данных     | отдельный скрытый workflow без lifecycle       |
+| `internal/observability`        | только бизнесовые метрики сервиса                          | копии общего runtime и произвольные labels     |
+| `internal/generated`            | воспроизводимый результат codegen                          | ручное редактирование                          |
 
 `internal/authorization` допустим только как service-specific adapter общей
 межсервисной security boundary. Он не становится вторым доменом авторизации и
@@ -113,10 +113,15 @@ read-only query не создает outbox event, а локальная command 
 - PostgreSQL остается авторитетным источником;
 - Redis хранит версионированный protobuf-снимок с ограниченным TTL;
 - ключ с пользовательскими идентификаторами хэшируется;
+- envelope до выдачи точно связывает полученные сервером organization/project,
+  kind, ID, version/epoch, key digest, source version и projection digest;
 - значение после чтения снова проходит доменные constructors;
 - одновременные cache miss одного процесса объединяются;
 - ошибка Redis ведет к чтению PostgreSQL, а не к отказу доступности;
 - ошибка PostgreSQL не маскируется stale или синтетическим разрешением.
+- mismatch, unknown field, corruption либо подмена tenant/key/envelope удаляет
+  или игнорирует запись и всегда выполняет authoritative PostgreSQL fallback;
+  cached snapshot никогда не выдаётся частично;
 - SQL ограничивает объем выборки значением `limit + 1`, а превышение
   согласованной границы закрывается отказом без частичного результата.
 
@@ -124,6 +129,11 @@ read-only query не создает outbox event, а локальная command 
 Сервис передает observer с закрытыми низкокардинальными событиями. TTL
 решений доступа по умолчанию равен 10 секундам и не может быть больше минуты
 без отдельного решения о допустимом окне отзыва доступа.
+
+Общий `GetOrSet` принимает узкий `Source`, который реализует сервисный
+repository. Библиотека координирует hit/miss и best-effort сохранение, но не
+разрешает owner/tenant, не строит ключи домена и не превращает ошибку источника
+истины в cache hit.
 
 ## `cmd` и `internal/app`
 
@@ -346,6 +356,12 @@ audit и outbox, граница выбрана неверно. Публикац�
 до commit запрещены. Необратимый внешний effect моделируется отдельной task
 или событием после устойчивой фиксации намерения.
 
+Несущие полномочия и исполняемые агрегаты обслуживаются только
+специализированными командами по `GUIDE-DOC-006`. Универсальный CRUD имеет
+закрытый список безопасных видов и отклоняет защищённый вид на каждом из путей
+create/update/transition/delete. Для фонового процесса transaction port
+блокирует и переводит полный граф выполнения, а не одну строку envelope.
+
 ## Repository ports
 
 Интерфейс хранилища принадлежит домену и находится в
@@ -478,6 +494,7 @@ Downstream client не открывает circuit breaker внутри domain en
 который необходим для commit локальной транзакции, требует отдельного анализа:
 удерживать PostgreSQL transaction во время сетевого RPC по умолчанию
 запрещено.
+
 - SDK внешнего провайдера изолируется в отдельном adapter; provider-specific
   типы не протекают в домен.
 
@@ -542,6 +559,11 @@ Ordering, retry, dead letter, retention и PITR определены в `GO-DOC-
 - Сквозная проверка связывает domain field, repository snapshot, transport
   response, event payload и consumer action. Совпадение имен без совпадения
   semantics и lifecycle недостаточно.
+- Ссылочное событие с ID/version имеет материализованный защищённый RPC
+  чтения/повторного присоединения для точного consumer: generated client
+  operation, привязку полномочий, скрывающую tenant семантику и readiness того
+  же рабочего пути. Запись имени consumer в registry без
+  operation/effect/inbox/readiness запрещена.
 
 ## OCI-сборка Go-модулей
 
@@ -554,6 +576,12 @@ Multi-stage Dockerfile учитывает полный local-module closure ос
 3. Docker context и ignore rules явно разрешают ту же closure.
 4. Runtime и migration targets собираются из одного проверенного source tree,
    но имеют минимально разные entrypoint и содержимое.
+
+Builder, runtime service, migration/job и agent-runtime images имеют отдельные
+immutable digests. Один digest нельзя неявно переиспользовать для разных
+артефактов. Canonical renderer принимает каждый digest, source tar/commit,
+policy/tools digest и остальные обязательные config inputs явно, валидирует
+их до создания Pod/Job и материализует в типизированных config/readback.
 
 Успешная локальная сборка вне container не доказывает OCI target. Отсутствующий
 manifest replaced module, исключенный ignore rules каталог или mutable builder
@@ -649,4 +677,4 @@ contract/deploy/render/lifecycle/oracle suites и общего baseline до
 
 Связанные документы: `REPO-DOC-001`, `GO-DOC-002`, `GO-DOC-003`,
 `GO-DOC-004`, `GO-DOC-005`, `GO-DOC-006`, `GUIDE-DOC-003`,
-`ARCH-DOC-001`.
+`GUIDE-DOC-006`, `ARCH-DOC-001`.

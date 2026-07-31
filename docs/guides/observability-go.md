@@ -4,8 +4,8 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-07-28
+version: 1.1.0
+updated: 2026-07-31
 ---
 
 # Наблюдаемость Go-сервисов
@@ -203,6 +203,25 @@ namespace также считается ошибкой.
 alert содержит severity и абсолютный HTTPS URL доступного runbook. Относительный
 путь репозитория не является рабочей ссылкой для Alertmanager или Grafana.
 `runbook_url` каждого правила обязан быть абсолютным HTTPS URL.
+
+Принадлежащий deployable dashboard не ограничивается транспортом. Для
+применимых зависимостей и сценариев он показывает:
+
+- частоту запросов, ошибки, latency/in-flight и startup/readiness;
+- Go heap, goroutines, GC/scheduler, CPU и process limits;
+- каждый именованный runtime/relay PostgreSQL pool и Redis pool;
+- outbox/inbox claimed, published/processed, retry, terminal/dead-letter,
+  ordering blockage и repair outcome;
+- защищённый жизненный цикл: queued/claimed/running/waiting-owner/continuation,
+  expiry lease, grants/claims и конечные исходы;
+- критичные доменные изменения и счётчики частичных эффектов независимо от
+  итогового исхода цикла.
+
+Каждый запрос панели использует только закрытые labels из этого документа.
+Произвольный resource ID, event name, route, status, ответ provider или текст
+ошибки не добавляется ради детализации. Alert для terminal/blocked path
+ссылается на точный абсолютный HTTPS runbook, который содержит авторитетные
+read/repair и запрет ручного изменения состояния.
 
 ## Проверки
 

@@ -4,8 +4,8 @@ title: Надежная доставка доменных событий в Go
 type: guide
 status: approved
 owner: architect
-version: 1.2.0
-updated: 2026-07-28
+version: 1.3.0
+updated: 2026-07-31
 ---
 
 # Надежная доставка доменных событий в Go
@@ -230,6 +230,28 @@ Dead-letter predecessor продолжает блокировать следую
 3. оценки последующих событий того же ordering key;
 4. фиксации оператора, времени, причины и evidence;
 5. проверки backlog после повторной доставки.
+
+Завершившееся ошибкой событие имеет ограниченный авторитетный list/read без
+выдачи полезной нагрузки и специализированный разрешаемый владельцем протокол
+repair. Repair/skip:
+
+- работает только с самым ранним предшественником точного ordering key;
+- сверяет tenant, event ID/name, sequence, число attempt/repair и дайджест
+  неизменяемого evidence;
+- имеет назначаемую сервером область idempotency
+  `(organization, project, operation, key hash)` и request hash;
+- отличает повтор того же запроса от иного запроса в той же области;
+- сохраняет неизменяемые receipt/result, actor, reason, evidence и timestamps
+  независимо от последующей очистки строки outbox;
+- не меняет payload/sequence и не пропускает последователей без отдельного
+  утверждённого аудируемого skip с эквивалентным evidence/read path;
+- ограничивает число repair, обновляет метрики/alert и связан с точным
+  runbook.
+
+Глобальный primary key только по переданному вызывающей стороной idempotency
+key запрещён: одинаковые ключи разных tenants не взаимодействуют. Ручной
+`UPDATE`, удаление terminal row или объявление его опубликованным не являются
+repair.
 
 ## Consumer и durable inbox
 
