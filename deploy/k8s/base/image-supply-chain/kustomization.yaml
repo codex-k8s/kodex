@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - serviceaccount.yaml
+  - registry.yaml
+  - registry-tls-secret-provider-class.yaml
+  - buildkit.yaml
+  - cleanup.yaml
+  - networkpolicy.yaml
+configMapGenerator:
+  - name: mattercodex-buildkit-config
+    files:
+      - buildkitd.toml
+  - name: mattercodex-registry-cleanup
+    files:
+      - cleanup.sh
+generatorOptions:
+  disableNameSuffixHash: true

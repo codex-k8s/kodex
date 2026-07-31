@@ -3,203 +3,211 @@
 `control-plane` — авторитетный внутренний сервис конфигурации и управляющего
 состояния MatterCodex. Он реализует Issue
 [#187](https://github.com/codex-k8s/matter-codex/issues/187) как один
-развёртываемый unit.
+развёртываемый компонент.
 
 Сервис владеет:
 
-- проектами, командами, чатами, ролями и профилями prompt;
-- метаданными credential bindings, repositories/workspaces и integrations;
-- неизменяемыми runtime revisions;
-- sessions, turns и process lineage;
-- schedules, owner gates, memory records и work claims;
-- метаданными artifacts, но не их байтами.
+- проектами, командами, чатами, ролями и профилями запросов;
+- метаданными привязок учётных данных, репозиториев, рабочих пространств и
+  интеграций;
+- неизменяемыми ревизиями среды исполнения;
+- сессиями, ходами и родословной процессов;
+- расписаниями, шлюзами владельца, памятью и заявками на работу;
+- метаданными артефактов, но не их байтами.
 
-Secret values остаются во внешнем Vault/Kubernetes secret storage.
+Значения секретов остаются во внешнем хранилище Vault/Kubernetes.
 `control-plane` не вызывает Mattermost, MCP, Codex и Kubernetes API, не
-reconcile-ит runtime и не реализует внешний HTTP API.
+согласует среду исполнения и не реализует внешний HTTP API.
 
 ## Сквозные границы
 
 ```text
 control-api-gateway
-  -> exact mTLS + OIDC first call
+  -> точные mTLS и первый OIDC-вызов
   -> control-plane AuthorityProofResolver
-  -> server-side project/permission resolution in PostgreSQL
-  -> short-lived authority proof
-  -> workload-local #186 issuer/verifier path
-  -> ControlPlaneService full method
-  -> caster -> domain service -> repository port
-  -> PostgreSQL transaction
-       aggregate + idempotency receipt + audit + optional outbox fact
-  -> Redis read-through cache by PostgreSQL-owned epoch
-  -> outbox relay -> exact NATS JetStream stream/subject
+  -> серверное разрешение проекта и полномочий в PostgreSQL
+  -> короткоживущее доказательство полномочий
+  -> локальный для рабочей нагрузки путь issuer/verifier #186
+  -> полный метод ControlPlaneService
+  -> caster -> доменный сервис -> порт репозитория
+  -> транзакция PostgreSQL
+       агрегат + подтверждение идемпотентности + аудит + необязательный факт outbox
+  -> сквозной кэш Redis по принадлежащей PostgreSQL эпохе
+  -> ретранслятор outbox -> точные поток и subject NATS JetStream
 ```
 
-Actor, organization, project, permission, workload и SPIFFE identity не
-принимаются в business request. Они выводятся из проверенного контекста
-Issue #186. Для OIDC first call сервис дополнительно проверяет exact mTLS
-caller, issuer, единственную audience, `iat`/`nbf`/`exp`, максимальный TTL,
-session revision и JTI. Project authority разрешается внутри PostgreSQL
-tenant boundary до подписи proof.
+Actor, организация, проект, полномочия, рабочая нагрузка и SPIFFE-идентичность
+не принимаются в бизнес-запросе. Они выводятся из проверенного контекста
+Issue #186. Для первого OIDC-вызова сервис дополнительно проверяет точного
+mTLS-клиента, issuer, единственную audience, `iat`/`nbf`/`exp`, максимальный
+TTL, ревизию сессии и JTI. Полномочия проекта разрешаются внутри границы
+организации PostgreSQL до подписи доказательства.
 
-## Контракты и consumers
+## Контракты и потребители
 
 - Proto: `contracts/proto/controlplane/v1/control_plane.proto`;
-- generated public Go API: `libs/go/controlplaneapi/gen/controlplane/v1`;
-- reusable production client composition: `libs/go/controlplaneclient`;
+- сгенерированный публичный Go API: `libs/go/controlplaneapi/gen/controlplane/v1`;
+- переиспользуемая промышленная композиция клиента: `libs/go/controlplaneclient`;
 - AsyncAPI: `contracts/asyncapi/control-plane/v1/asyncapi.yaml`;
-- authority policy: `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
+- политика полномочий: `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
 
-Внешний mapping принадлежит будущему `control-api-gateway`; этот unit
-публикует только внутренний gRPC. Deny-by-default policy регистрирует отдельные
-proof producers и exact caller identities для gateway, `agent-runner`,
+Внешнее отображение принадлежит будущему `control-api-gateway`; этот компонент
+публикует только внутренний gRPC. Политика deny-by-default регистрирует
+отдельных производителей доказательств и точные идентичности клиентов для gateway, `agent-runner`,
 `automation-scheduler`, внешнего `artifact-scanner`, `interaction-gateway`,
 `runtime-controller` и локального `memory-indexer`. Последний индексирует
-локальную pgvector projection без внешнего embedding service, scanner владеет
-сканированием байтов, а `control-plane` — метаданными и state machine.
-Неизвестный producer, credential purpose, workload, SPIFFE ID, full method,
-audience или permission закрыто отклоняется.
+локальную проекцию pgvector без внешнего сервиса embeddings, scanner владеет
+сканированием байтов, а `control-plane` — метаданными и автоматом состояний.
+Неизвестные производитель, назначение учётных данных, рабочая нагрузка,
+SPIFFE ID, полный метод, audience или полномочие закрыто отклоняются.
 
-`controlplaneclient` выполняет полный consumer path: exact mTLS к
-`control-plane`, проверка workload-specific application grant через
-`AuthorityProofResolver`, local UDS issuer Issue #186, full-method interceptor
-и readiness через тот же protected RPC. Конкретный consumer unit обязан
-смонтировать свой grant, issuer socket и mTLS files и вызвать один из закрытых
-operation profiles (`AgentRunnerOperations`, `AutomationSchedulerOperations`,
+`controlplaneclient` выполняет полный путь потребителя: точный mTLS к
+`control-plane`, проверку прикладного разрешения конкретной рабочей нагрузки
+через `AuthorityProofResolver`, локальный UDS issuer Issue #186, interceptor
+полного метода и readiness через тот же защищённый RPC. Конкретный компонент
+потребителя обязан смонтировать своё разрешение, сокет issuer и файлы mTLS и
+вызвать один из закрытых профилей операций (`AgentRunnerOperations`,
+`AutomationSchedulerOperations`,
 `ArtifactScannerOperations`, `RuntimeControllerOperations`,
 `OwnerGateDeliveryOperations`, `MemoryIndexerOperations`). Consumer
 Deployments не принадлежат Issue #187 и здесь не подменяются фиктивными
-deployables.
+развёртываемыми компонентами.
 
-Публикуются только два факта с утверждёнными consumers:
+Публикуются только два факта с утверждёнными потребителями:
 
-| Факт | Условие | Consumer | Delivery |
+| Факт | Условие | Потребитель | Доставка |
 | --- | --- | --- | --- |
-| `control_plane.runtime_configuration_changed` | durable изменение project/team/chat/role/prompt/binding/workspace/integration/runtime/session/turn | `runtime-controller` | at-least-once, consumer inbox/cursor |
-| `control_plane.schedule_changed` | durable изменение schedule/high-watermark | `automation-scheduler` | at-least-once, consumer inbox/cursor |
+| `control_plane.runtime_configuration_changed` | устойчивое изменение project/team/chat/role/prompt/binding/workspace/integration/runtime/session/turn | `runtime-controller` | at-least-once, inbox и курсор потребителя |
+| `control_plane.schedule_changed` | устойчивое изменение расписания и верхней границы | `automation-scheduler` | at-least-once, inbox и курсор потребителя |
 
-Для process runs, owner gates, memory, work claims и artifact metadata
+Для процессов, шлюзов владельца, памяти, заявок на работу и метаданных артефактов
 спекулятивные события не публикуются: авторитетные пути — `GetResource`,
 `ListResources`, `SearchResources`, `ListAuditEvents` и `ListTombstones`.
-Delete/cancel/terminal/retry каждого агрегата сохраняют tombstone, audit и
-receipt. Outbox фиксируется в транзакции команды; relay не публикует из
-transport/domain кода. После durable JetStream `PubAck` строка остаётся с
-stream/sequence/duplicate receipt и bounded cleanup deadline. Потерянный
-acknowledgement безопасно повторяет тот же `event_id`.
+Удаление, отмена, завершение и повтор каждого агрегата сохраняют tombstone,
+аудит и подтверждение. Outbox фиксируется в транзакции команды; ретранслятор
+не публикует из транспортного или доменного кода. После устойчивого JetStream
+`PubAck` строка остаётся с потоком, последовательностью, признаком дубликата и
+ограниченным сроком очистки. Потерянное подтверждение безопасно повторяет тот
+же `event_id`.
 
 ## Доменные инварианты
 
 | Область | Инвариант |
 | --- | --- |
-| Все commands | semantic idempotency key + canonical request digest, OCC и audit фиксируются атомарно |
-| Project | ID и owner назначает сервер; tenant create требует owner claim; slug стабилен |
-| Team/Role/Prompt | generic CRUD не управляет authority; отдельная admin-команда проверяет kind-specific permission, assignable subset и запрещает self-membership/self-promotion |
-| Credential binding | хранится только URI metadata; purpose/principal неизменяемы; revision растёт ровно на один |
-| Integration | definition identity неизменяема; version движется только вперёд |
-| Runtime revision | перед каждым turn сервер разрешает exact session/role grant, active chat/prompt/provider binding и только role-bound workspace/integrations/credentials; создаётся immutable snapshot с versions/digests/policy/image/predecessor; `runtime-controller` читает его через отдельный authorized RPC |
-| Session | provider binding выбирается сервером из exact role grant; generic create/update/transition запрещён; close/cancel/archive/cleanup имеют отдельную closed state machine, OCC, receipt, audit и tombstone |
-| Turn | immutable snapshot pin, строгий FIFO и один active turn на session; claim/renew/complete bind-ят workload, attempt, authority generation, expiry и fence |
-| Turn recovery | expiry/manual retry создаёт новую immutable attempt; cancel/terminal отзывают lease, stale workload/generation/token отклоняются |
-| Process run | child наследует server-owned root actor/org/project/session/turn/attempt/revision, проверяет exact active parent и launching edge; enqueue повторно проверяет полный lineage |
-| Schedule | closed target kinds, exact target/prompt/runtime/session/room/notification/deadline snapshot; `FORBID` не сдвигает watermark при open occurrence, `SKIP` оставляет terminal receipt, `QUEUE` сохраняет FIFO, coalesce разрешён только для первых двух |
-| Owner gate | request pin-ит root initiator/process/session/turn/attempt/input/exact recipient; delivery имеет immutable ID/payload digest/Mattermost post identity/durable receipt; decision допускается только после delivery и атомарна с process/audit/outbox |
-| Memory | scope/owner/process/workload и provenance назначает сервер; FTS ищет title/content с ranking/cursor; pgvector projection связывает exact content/resource/model version и digest |
-| Work claim | owner/process/workload/task/attempt выводятся server-side и неизменяемы; активный exact process/turn claim уникален |
-| Artifact metadata | только `RegisterArtifact` создаёт `PENDING`; exact scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; attach/use допускают только exact `CLEAN` digest |
+| Все команды | семантический ключ идемпотентности, канонический digest запроса, OCC и аудит фиксируются атомарно |
+| Проект | ID и владельца назначает сервер; создание в организации требует полномочия владельца; slug стабилен |
+| Команда, роль и prompt | общий CRUD не управляет полномочиями; отдельная административная команда проверяет полномочие вида, назначаемое подмножество и запрещает самостоятельное включение и повышение |
+| Управляемая конфигурация | каждый project/team/chat/role/prompt/binding/workspace/integration/schedule хранит `managed_by=UI|GIT`; Git-объект обновляется только тем же источником с возрастающей ревизией, а переход к UI требует явного `detach_git_management` и отдельного устойчивого полномочия |
+| Привязка учётных данных | хранится только URI метаданных; назначение и principal неизменяемы; ревизия растёт ровно на один |
+| Интеграция | идентичность определения неизменяема; версия движется только вперёд |
+| Ревизия среды исполнения | перед каждым ходом сервер разрешает точные сессию и разрешение роли, активные chat/prompt/привязку провайдера и только связанные с ролью workspace/integration/credential; создаётся неизменяемый снимок с версиями, digest, политикой, образом и предшественником; `runtime-controller` читает его через отдельный авторизованный RPC |
+| Сессия | привязку провайдера сервер выбирает из точного разрешения роли; общий create/update/transition запрещён; close/cancel/archive/cleanup имеют отдельный закрытый автомат состояний, OCC, подтверждение, аудит и tombstone |
+| Ход | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence |
+| Восстановление хода | истечение срока или ручной повтор создаёт новую неизменяемую попытку; отмена и завершение отзывают аренду, устаревшие workload/generation/token отклоняются |
+| Процесс | дочерний процесс наследует принадлежащие серверу корневые actor/org/project/session/turn/attempt/revision, проверяет точного активного родителя и ребро запуска; enqueue повторно проверяет полную родословную |
+| Расписание | закрытые цели `AGENT|PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; получение в одной транзакции создаёт либо разрешает сессию, свежую RuntimeRevision, Turn и при `PLAYBOOK` корневой ProcessRun; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO |
+| Шлюз владельца | запрос закрепляет корневого инициатора, process/session/turn/attempt/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; решение допускается только после доставки и атомарно с процессом, аудитом и outbox |
+| Память | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest |
+| Заявка на работу | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна |
+| Метаданные артефакта | только `RegisterArtifact` создаёт `PENDING`; точный scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; прикреплять и использовать разрешено только точный `CLEAN` digest |
 
-Reference resolution выполняется внутри текущих organization/project RLS
-settings; cross-tenant и hidden resource дают одинаковый `NotFound`.
+Ссылки разрешаются внутри текущих настроек RLS организации и проекта;
+межорганизационный и скрытый ресурсы дают одинаковый `NotFound`.
 
-## Данные и cache
+## Данные и кэш
 
-PostgreSQL — единственный источник истины. Миграция создаёт schema
-`control_plane`, отдельного `NOLOGIN/NOSUPERUSER/NOBYPASSRLS` owner, runtime
-и relay group roles, `FORCE RLS`, constraints и точные grants. Runtime login
-generations `CURRENT`/`NEXT`/bounded `PREVIOUS`/`RETIRED` материализуются
-environment-owned Vault lifecycle. Durable monotonic high-watermark и intent
-не допускают resurrection поколения после отката ConfigMap/Vault metadata;
-promotion требует фактического `NEXT` LOGIN readback через его DSN.
-Retirement выполняет `NOLOGIN`, revoke membership и server-side termination
-открытых backends. Каждый statement использует одноразовый
-HMAC-bound transaction context и заново связывает `session_user`, generation,
-status, organization/project/actor, backend PID и transaction ID. GUC и
-`SET SESSION AUTHORIZATION` не являются authority. Readiness проверяет schema
+PostgreSQL — единственный источник истины. Миграция создаёт схему
+`control_plane`, отдельного владельца `NOLOGIN/NOSUPERUSER/NOBYPASSRLS`,
+групповые роли среды исполнения и ретранслятора, `FORCE RLS`, ограничения и
+точные разрешения. Поколения LOGIN `CURRENT`/`NEXT`/ограниченное
+`PREVIOUS`/`RETIRED` материализуются принадлежащим окружению жизненным циклом
+Vault. Устойчивая монотонная верхняя граница и намерение не допускают
+воскрешения поколения после отката метаданных ConfigMap/Vault; повышение
+требует фактического чтения через DSN principal `NEXT`.
+Вывод из эксплуатации выполняет `NOLOGIN`, отзыв членства и серверное
+завершение открытых соединений. Каждый statement использует одноразовый
+привязанный HMAC контекст транзакции и заново связывает `session_user`,
+поколение, состояние, organization/project/actor, PID соединения и ID
+транзакции. GUC и `SET SESSION AUTHORIZATION` не являются источником
+полномочий. Readiness проверяет схему
 `20260731000300`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
-`internal/repository/postgres/controlplane/sql`. Command transaction использует
-`SERIALIZABLE`; query path — `READ ONLY` transaction с transaction-local RLS
-scope.
+`internal/repository/postgres/controlplane/sql`. Транзакция команды использует
+`SERIALIZABLE`; путь запроса — транзакцию `READ ONLY` с локальной для
+транзакции областью RLS.
 
-Redis хранит только bounded resource snapshots:
+Redis хранит только ограниченные снимки ресурсов:
 
-- key содержит SHA-256 exact
-  `organization+project+kind+id+epoch` namespace;
-- strict envelope повторяет organization/project/kind/id/version, key digest
-  и projection digest; unknown field или mismatch никогда не возвращает cache;
+- ключ содержит SHA-256 точного пространства имён
+  `organization+project+kind+id+epoch`;
+- строгая оболочка повторяет organization/project/kind/id/version, digest ключа
+  и проекции; неизвестное поле или несовпадение никогда не возвращает кэш;
 - TTL не более минуты, value не более 128 KiB;
-- authoritative cache epoch увеличивается в той же PostgreSQL transaction;
-- cache miss, corruption или Redis error отступает к PostgreSQL;
-- ownership, permissions, idempotency, leases и high-watermarks в Redis не
+- авторитетная эпоха кэша увеличивается в той же транзакции PostgreSQL;
+- промах, повреждение или ошибка Redis приводит к чтению PostgreSQL;
+- владение, полномочия, идемпотентность, аренды и верхние границы в Redis не
   хранятся.
 
-## Startup, readiness и shutdown
+## Запуск, готовность и остановка
 
-До bind gRPC listener сервис синхронно проверяет:
+До привязки gRPC listener сервис синхронно проверяет:
 
-1. runtime и relay PostgreSQL roles/schema;
-2. Redis TLS path;
-3. exact JetStream stream (`CONTROL_PLANE`, subjects, replicas, file storage,
-   `LimitsPolicy`, `DiscardOld`, 30-day max age, 2-minute dedup window,
+1. роли и схему PostgreSQL для среды исполнения и ретранслятора;
+2. путь Redis с TLS;
+3. точный поток JetStream (`CONTROL_PLANE`, subjects, replicas, файловое
+   хранилище, `LimitsPolicy`, `DiscardOld`, максимальный срок 30 дней, окно
+   дедупликации 2 минуты,
    `MaxMsgs=10000000`, `MaxBytes=34359738368`,
-   `MaxMsgsPerSubject=5000000`, maximum message size 262144 bytes,
-   deny delete/purge, no mirror/source/republish/rollup/transform);
-4. independently delivered proof private key/trust и policy revision;
+   `MaxMsgsPerSubject=5000000`, максимальный размер сообщения 262144 байта,
+   запрет delete/purge, отсутствие mirror/source/republish/rollup/transform);
+4. независимо доставленные закрытый ключ и доверие доказательства, ревизию
+   политики;
 5. тот же локальный verifier #186, который обслуживает рабочие RPC.
 
-После barrier запускаются relay и периодический readiness reconcile.
+После барьера запускаются ретранслятор и периодическое согласование readiness.
 Неожиданное завершение любого worker закрыто завершает процесс; orchestrator
-не получает внешне живую реплику без relay/readiness loop. При остановке
-readiness сначала закрывается, workers отменяются и join-ятся до закрытия
-PostgreSQL/Redis/NATS; gRPC и HTTP получают bounded shutdown. Tracing shutdown
-и Sentry flush используют независимые бюджеты.
+не получает внешне живую реплику без циклов ретранслятора и readiness. При
+остановке readiness сначала закрывается, workers отменяются и присоединяются
+до закрытия PostgreSQL/Redis/NATS; gRPC и HTTP получают ограниченную остановку.
+Остановка tracing и сброс Sentry используют независимые бюджеты.
 
-Метрики не содержат tenant/resource ID и используют закрытые labels.
-Dashboard — `mattercodex-control-plane`. Alerts ведут в абсолютный HTTPS
-runbook URL.
+Метрики не содержат ID организации или ресурса и используют закрытые labels.
+Dashboard — `mattercodex-control-plane`. Alerts ведут на абсолютный HTTPS URL
+runbook.
 
 ## Конфигурация
 
-Значения ниже — имена, не secret values.
+Значения ниже — имена, а не значения секретов.
 
 | Переменная | Назначение |
 | --- | --- |
 | `CONTROL_PLANE_GRPC_LISTEN`, `CONTROL_PLANE_TECHNICAL_LISTEN` | внутренние listeners |
-| `CONTROL_PLANE_TLS_CERTIFICATE_FILE`, `CONTROL_PLANE_TLS_PRIVATE_KEY_FILE`, `CONTROL_PLANE_TLS_CLIENT_CA_FILE` | exact workload mTLS |
-| `CONTROL_PLANE_POSTGRES_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RELAY_DSN_FILE` | runtime/relay DSN files |
-| `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE` | migration-only exact NEXT DSN для обязательного readback до promotion |
-| `CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME`, `CONTROL_PLANE_POSTGRES_CA_FILE`, `CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS` | PostgreSQL TLS/pool |
-| `CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME`, `CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE` | exact runtime generation и transaction-context proof |
-| `CONTROL_PLANE_REDIS_ADDRESS`, `CONTROL_PLANE_REDIS_TLS_SERVER_NAME`, `CONTROL_PLANE_REDIS_CA_FILE`, `CONTROL_PLANE_REDIS_USERNAME`, `CONTROL_PLANE_REDIS_PASSWORD_FILE`, `CONTROL_PLANE_REDIS_DATABASE`, `CONTROL_PLANE_REDIS_POOL_SIZE` | bounded Redis cache |
-| `CONTROL_PLANE_NATS_URL`, `CONTROL_PLANE_NATS_TLS_SERVER_NAME`, `CONTROL_PLANE_NATS_CA_FILE`, `CONTROL_PLANE_NATS_CREDENTIALS_FILE`, `CONTROL_PLANE_NATS_STREAM`, `CONTROL_PLANE_NATS_REPLICAS` | exact JetStream publisher |
-| `CONTROL_PLANE_AUTHORITY_POLICY_FILE` | versioned deny-by-default policy |
-| `CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR` | independently delivered public JWK exact producer grants |
-| `CONTROL_PLANE_PROOF_PRIVATE_JWK_FILE`, `CONTROL_PLANE_PROOF_TRUST_FILE`, `CONTROL_PLANE_PROOF_SIGNER_GENERATION` | independently checked proof signer |
-| `CONTROL_PLANE_LEASE_SIGNING_KEY_FILE` | turn lease HMAC key |
-| `CONTROL_PLANE_OIDC_TLS_SERVER_NAME`, `CONTROL_PLANE_OIDC_CA_FILE` | pinned OIDC discovery/JWKS TLS |
-| `POD_UID` | relay lease owner |
-| `CONTROL_PLANE_*_TIMEOUT`, `CONTROL_PLANE_*_INTERVAL`, `CONTROL_PLANE_CACHE_TTL`, `CONTROL_PLANE_SCHEDULE_CLAIM_LIMIT` | bounded lifecycle limits |
-| `OTEL_*`, `SENTRY_DSN_FILE`, `SENTRY_EXPECTED_HOST` | shared observability runtime |
+| `CONTROL_PLANE_TLS_CERTIFICATE_FILE`, `CONTROL_PLANE_TLS_PRIVATE_KEY_FILE`, `CONTROL_PLANE_TLS_CLIENT_CA_FILE` | точный mTLS рабочей нагрузки |
+| `CONTROL_PLANE_POSTGRES_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RELAY_DSN_FILE` | файлы DSN среды исполнения и ретранслятора |
+| `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE` | точный DSN `NEXT` только для миграции и обязательного чтения перед повышением |
+| `CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME`, `CONTROL_PLANE_POSTGRES_CA_FILE`, `CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS` | TLS и пул PostgreSQL |
+| `CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME`, `CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE` | точное поколение среды исполнения и доказательство контекста транзакции |
+| `CONTROL_PLANE_REDIS_ADDRESS`, `CONTROL_PLANE_REDIS_TLS_SERVER_NAME`, `CONTROL_PLANE_REDIS_CA_FILE`, `CONTROL_PLANE_REDIS_USERNAME`, `CONTROL_PLANE_REDIS_PASSWORD_FILE`, `CONTROL_PLANE_REDIS_DATABASE`, `CONTROL_PLANE_REDIS_POOL_SIZE` | ограниченный кэш Redis |
+| `CONTROL_PLANE_NATS_URL`, `CONTROL_PLANE_NATS_TLS_SERVER_NAME`, `CONTROL_PLANE_NATS_CA_FILE`, `CONTROL_PLANE_NATS_CREDENTIALS_FILE`, `CONTROL_PLANE_NATS_STREAM`, `CONTROL_PLANE_NATS_REPLICAS` | точный издатель JetStream |
+| `CONTROL_PLANE_AUTHORITY_POLICY_FILE` | версионированная политика deny-by-default |
+| `CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR` | независимо доставленные публичные JWK точных разрешений производителей |
+| `CONTROL_PLANE_PROOF_PRIVATE_JWK_FILE`, `CONTROL_PLANE_PROOF_TRUST_FILE`, `CONTROL_PLANE_PROOF_SIGNER_GENERATION` | независимо проверенный signer доказательств |
+| `CONTROL_PLANE_LEASE_SIGNING_KEY_FILE` | HMAC-ключ аренды хода |
+| `CONTROL_PLANE_OIDC_TLS_SERVER_NAME`, `CONTROL_PLANE_OIDC_CA_FILE` | закреплённый TLS discovery/JWKS OIDC |
+| `POD_UID` | владелец аренды ретранслятора |
+| `CONTROL_PLANE_*_TIMEOUT`, `CONTROL_PLANE_*_INTERVAL`, `CONTROL_PLANE_CACHE_TTL`, `CONTROL_PLANE_SCHEDULE_CLAIM_LIMIT` | ограниченные пределы жизненного цикла |
+| `OTEL_*`, `SENTRY_DSN_FILE`, `SENTRY_EXPECTED_HOST` | общая среда наблюдаемости |
 
-Secret files должны быть absolute regular files без разрешений для `other`.
-DSN/JWK/credentials/keys и payload credentials не логируются.
+Файлы секретов должны быть абсолютными обычными файлами без разрешений для
+`other`. DSN, JWK, учётные данные, ключи и их содержимое не логируются.
 
-## Deploy и миграции
+## Развёртывание и миграции
 
-Base находится в `deploy/k8s/base/control-plane`, environment overlays — в
-`deploy/k8s/overlays/{staging,production}/control-plane`. Canonical render
-требует два реальных image digest и закрыто отказывает при placeholder:
+База находится в `deploy/k8s/base/control-plane`, наложения окружений — в
+`deploy/k8s/overlays/{staging,production}/control-plane`. Канонический render
+требует два реальных digest образов и закрыто отказывает при placeholder:
 
 ```bash
 tools/render-control-plane.sh \
@@ -209,54 +217,72 @@ tools/render-control-plane.sh \
   > /tmp/control-plane-staging.yaml
 ```
 
-Команда только рендерит; она не применяет manifest. Для production заменить
-`staging` на `production` и использовать отдельно утверждённые digests.
+Команда только рендерит; она не применяет manifest. Для production нужно
+заменить `staging` на `production` и использовать отдельно утверждённые digest.
+
+Общая база `deploy/k8s/base/image-supply-chain` материализует локальный
+OCI registry только с TLS, два rootless worker BuildKit и ежедневную задачу
+хранения. Все прикладные образы в итоговом render ссылаются на локальный
+registry по digest. Теги обязаны иметь вид `vYYYYMMDDHHMMSS-<git-sha>`; задача
+оставляет текущую и две предыдущие версии каждого репозитория `mattercodex/*`
+и закрыто отказывается удалять неизвестный формат. Три начальных образа
+(`registry`, `moby/buildkit`, `regctl`) закреплены публичными OCI digest;
+после начальной загрузки оператор зеркалирует их в тот же локальный registry.
+CA доставляется через Vault CSI и используется клиентами BuildKit и хранения
+без отключения TLS.
+
+Варианты сборщика Kubernetes сверены с официальными источниками: standalone
+BuildKit, Shipwright Build/BuildRun и Tekton Tasks. В соответствии с
+`ADR-MC-008` выбран прямой BuildKit как минимальный авторитетный backend;
+Shipwright и Tekton остаются возможными оркестраторами поверх него, но не
+создают второй источник истины. Старый Kaniko template сохранён только для
+legacy-контура и не включён в новую базу.
 
 Migration Job запускает `control-plane-cli migrate expand` до rollout и
-атомарно reconcile-ит `CURRENT`/`NEXT`/`PREVIOUS`, active context key и
-retired sessions. При наличии `NEXT` GitOps overlay обязан одновременно
-доставить `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_*` и отдельный DSN file:
-CLI сначала подключается именно этим LOGIN и сохраняет readback, только
-следующий idempotent reconcile может повысить его до `CURRENT`. Миграции
+атомарно согласует `CURRENT`/`NEXT`/`PREVIOUS`, активный ключ контекста и
+выведенные из эксплуатации сессии. При наличии `NEXT` наложение GitOps обязано
+одновременно доставить `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_*` и отдельный файл
+DSN: CLI сначала подключается именно этим LOGIN и сохраняет readback, только
+следующее идемпотентное согласование может повысить его до `CURRENT`. Миграции
 `20260731000200` и `20260731000300` явно forward-only: downgrade отклоняется,
-потому что потерял бы RLS fences, principal high-watermark/readback, attempts,
-receipts и vector provenance. Application rollback выполняется только
-совместимым образом; schema rollback — новой compensating forward migration.
+потому что потерял бы RLS fences, верхнюю границу и readback principal,
+попытки, подтверждения и происхождение вектора. Откат приложения выполняется
+только совместимым образом; откат схемы — новой компенсирующей forward
+миграцией.
 
-JetStream stream и Vault database/static credentials являются
-environment-owned зависимостями. Их exact contract проверяется startup
-barrier; сервис не создаёт и не ослабляет broker/Vault ресурсы.
-RBAC Role/RoleBinding намеренно отсутствуют: application и migration
-containers не обращаются к Kubernetes API; CSI delivery выполняет
-environment-owned driver.
+Поток JetStream и учётные данные Vault database/static принадлежат окружению.
+Их точный контракт проверяется стартовым барьером; сервис не создаёт и не
+ослабляет ресурсы брокера или Vault. RBAC Role/RoleBinding намеренно
+отсутствуют: контейнеры приложения и миграции не обращаются к Kubernetes API;
+доставку CSI выполняет драйвер окружения.
 
 ## Ручная приёмка
 
 Без deploy можно:
 
-1. собрать оба binary и public client/API modules;
-2. выполнить `buf build` и проверить воспроизводимый codegen;
-3. проверить YAML/JSON parse и canonical render с двумя тестовыми ненулевыми
-   digests;
-4. убедиться, что render содержит non-root/read-only workload, migration Job,
-   deny-all и только exact-destination NetworkPolicy;
-5. сравнить все Proto methods с authority policy, а error groups —
+1. собрать оба бинарных файла и публичные модули клиента и API;
+2. выполнить `buf build` и проверить воспроизводимую генерацию кода;
+3. проверить разбор YAML/JSON и канонический render с двумя тестовыми
+   ненулевыми digest;
+4. убедиться, что render содержит рабочую нагрузку non-root/read-only,
+   Migration Job, deny-all и только NetworkPolicy с точными назначениями;
+5. сравнить все методы Proto с политикой полномочий, а группы ошибок —
    с `contracts/errors/v1/rpc-http-mapping.yaml`;
-6. проверить, что `Closes #187` относится только к одному draft PR.
+6. проверить, что `Closes #187` относится только к одному PR.
 
-Фактические PostgreSQL/Redis/NATS/Vault/Kubernetes проверки и staging rollout
+Фактические проверки PostgreSQL/Redis/NATS/Vault/Kubernetes и staging rollout
 требуют отдельного разрешения и окружения.
 
-## Prototype policy и ограничения
+## Политика прототипа и ограничения
 
-Активен профиль `Prototype`: comprehensive coverage, integration/E2E,
+Активен профиль `Prototype`: полное покрытие, integration/E2E,
 contract/deploy/render/lifecycle/oracle suites и полный baseline не входят в
 этот PR. Поддерживаемая волна тестирования отслеживается в
 [Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
 
-Не входят в unit: внешний OpenAPI/HTTP gateway, runtime reconciliation,
-automation execution, Mattermost/MCP/Codex process, binary artifact storage и
-secret values.
+Не входят в компонент: внешний OpenAPI/HTTP gateway, согласование среды
+исполнения, выполнение автоматизаций, процессы Mattermost/MCP/Codex, хранение
+байтов артефактов и значения секретов.
 
 Эксплуатация и восстановление описаны в
 [`docs/runbooks/control-plane.md`](../../../docs/runbooks/control-plane.md).
@@ -265,7 +291,7 @@ secret values.
 
 Context7 был вызван для PostgreSQL, pgx, goose, gRPC/Protobuf, Redis, NATS,
 OpenTelemetry, Sentry, Kubernetes и Vault, но вернул quota error. Использован
-fallback на официальные primary docs:
+резервный путь к официальной первичной документации:
 
 - [PostgreSQL row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html),
   [transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html)
@@ -281,4 +307,9 @@ fallback на официальные primary docs:
   [Sentry Go](https://docs.sentry.io/platforms/go/),
   [Kubernetes NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/),
   [Kustomize](https://kubectl.docs.kubernetes.io/references/kustomize/) и
-  [Secrets Store CSI Driver](https://secrets-store-csi-driver.sigs.k8s.io/).
+  [Secrets Store CSI Driver](https://secrets-store-csi-driver.sigs.k8s.io/);
+- [BuildKit](https://github.com/moby/buildkit),
+  [Distribution registry](https://distribution.github.io/distribution/),
+  [regctl](https://regclient.org/usage/regctl/),
+  [Shipwright Build](https://shipwright.io/docs/build/) и
+  [Tekton Tasks](https://tekton.dev/docs/pipelines/tasks/).

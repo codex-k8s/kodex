@@ -9,6 +9,7 @@ ARG VERSION=dev
 WORKDIR /workspace
 
 COPY libs/go/cache/ libs/go/cache/
+COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
 COPY libs/go/eventing/ libs/go/eventing/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/

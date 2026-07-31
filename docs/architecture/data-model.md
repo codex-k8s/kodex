@@ -4,8 +4,8 @@ title: Логическая модель данных
 type: architecture
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-07-22
+version: 0.3.0
+updated: 2026-07-31
 ---
 
 # Логическая модель данных
@@ -117,6 +117,12 @@ updated: 2026-07-22
 - PVC удаляется только после подтвержденного архива сессии и наступления `eligible_at`.
 - ArtifactVersion immutable; изменение файла создает новую version.
 - Git-managed object не изменяется UI до explicit detach.
+- Управляемые `Project`, `Team`, `Chat`, `Role`, `PromptProfile`,
+  `CredentialBinding`, `RepositoryWorkspace`, `Integration` и `Schedule`
+  содержат `managed_by: UI|GIT`. Для `GIT` обязательны неизменяемая ссылка на
+  источник и монотонно возрастающая ревизия. Изменение через UI запрещено до
+  явного `detach_git_management`; отсоединение атомарно очищает ссылку и
+  ревизию и требует отдельного полномочия.
 - Mattermost/Kubernetes external IDs не являются primary business IDs.
 - Отображаемое имя и тип роли не предоставляют полномочий.
 - Корневой инициатор и ревизия политики не меняются внутри `ProcessRun`.

@@ -27,7 +27,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: migrate
-          image: ghcr.io/codex-k8s/matter-codex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           command:
             - /usr/local/bin/control-plane-cli

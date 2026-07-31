@@ -1,0 +1,14 @@
+debug = false
+root = "/var/lib/buildkit"
+
+[grpc]
+  address = ["tcp://0.0.0.0:1234"]
+
+[worker.oci]
+  enabled = true
+  snapshotter = "native"
+  rootless = true
+  noProcessSandbox = true
+
+[registry."mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000"]
+  ca = ["/var/run/config/mattercodex/image-registry/ca.pem"]

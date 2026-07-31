@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
+version: 1.3.0
 updated: 2026-07-31
 ---
 
@@ -19,6 +19,29 @@ values.
 
 Не печатать DSN, Redis password, NATS credentials, OIDC/JWS/JWK payload,
 lease-signing key, TLS private key, Sentry DSN и содержимое Secret.
+
+## Локальный реестр и сборщик
+
+`deploy/k8s/base/image-supply-chain` создаёт TLS-only OCI registry, два
+rootless BuildKit worker и retention CronJob. Итоговый render направляет
+`control-plane` и `internal-rpc-authority` в
+`mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000` и
+использует только digest.
+
+При отказе:
+
+1. проверить готовность registry и наличие Vault CSI certificate/CA только по
+   именам объектов;
+2. проверить BuildKit `debug workers` probe и точный CA path;
+3. проверить, что build client имеет label
+   `mattercodex.dev/image-build-client=true`, а произвольный egress отсутствует;
+4. проверить retention job: он оставляет три лексикографически последних
+   immutable tag вида `vYYYYMMDDHHMMSS-<git-sha>` и удаляет четвёртый и старше;
+5. при неизвестном tag job должен завершиться ошибкой без удаления.
+
+Не переключать BuildKit на insecure registry и не возвращать Kaniko в новый
+контур. Bootstrap images закреплены digest; их зеркалирование в локальный
+registry выполняется отдельной операционной поставкой до запрета внешнего pull.
 
 ## Read-only preflight
 
@@ -152,6 +175,11 @@ attempt, claimant/generation/token hash/expiry и predecessor. Expiry созда
 prompt/runtime revision и room и использует exact maximum execution lease.
 Ручной запуск исключённых
 Kubernetes/Mattermost/MCP/Codex действий запрещён.
+Успешный claim атомарно создаёт или разрешает execution session, свежую
+`RuntimeRevision`, `Turn` и для цели `PLAYBOOK` корневой `ProcessRun`;
+источник хода и process lineage содержат exact occurrence. Owner gate из
+такого process повторяет schedule/occurrence и закрыто сверяет active
+occurrence перед решением.
 
 ## Redis
 

@@ -46,8 +46,9 @@ final_render="$temporary_directory/final.yaml"
 
 kubectl kustomize "$overlay" >"$raw_render"
 
-placeholder='ghcr.io/codex-k8s/matter-codex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000'
-replacement="ghcr.io/codex-k8s/matter-codex/control-plane@$image_digest"
+registry_host='mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000'
+placeholder="$registry_host/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+replacement="$registry_host/mattercodex/control-plane@$image_digest"
 placeholder_count=$(grep -F -c "$placeholder" "$raw_render" || true)
 if [[ "$placeholder_count" -ne 2 ]]; then
   echo "canonical render does not contain exactly two image inputs" >&2
@@ -55,7 +56,7 @@ if [[ "$placeholder_count" -ne 2 ]]; then
 fi
 
 authority_placeholder='ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000'
-authority_replacement="ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@$authority_image_digest"
+authority_replacement="$registry_host/mattercodex/internal-rpc-authority@$authority_image_digest"
 authority_placeholder_count=$(grep -F -c "$authority_placeholder" "$raw_render" || true)
 if [[ "$authority_placeholder_count" -ne 2 ]]; then
   echo "canonical render does not contain exactly two authority image inputs" >&2

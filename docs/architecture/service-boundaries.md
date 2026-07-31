@@ -66,14 +66,16 @@ search projection и UI не читают БД другого компонент
 состояние напрямую.
 
 `control-plane` материализует эту границу в
-`services/internal/control-plane`: PostgreSQL transaction одновременно
-фиксирует aggregate, semantic idempotency receipt, audit и каждый обязательный
-outbox fact. Redis остаётся только versioned read-through cache. Gateway
-получает authority proof у доменного владельца, но не передаёт actor/tenant/
-project authority в business payload. Runtime, scheduler и scanner commands
-открываются только отдельными policy bindings с exact workload/SPIFFE,
-credential purpose, audience, full method и permission; scanner владеет
-проверкой байтов, а `control-plane` — metadata/state/result boundary.
+`services/internal/control-plane`: транзакция PostgreSQL одновременно фиксирует
+агрегат, квитанцию семантической идемпотентности, аудит и каждый обязательный
+факт исходящего журнала. Redis остаётся только версионированным сквозным
+кэшем. Шлюз получает подтверждение полномочий у доменного владельца, но не
+передаёт идентификаторы actor/tenant/project как полномочия в прикладном
+payload. Команды среды исполнения, планировщика и сканера открываются только
+отдельными привязками политики с точными workload/SPIFFE, назначением
+credential, audience, полным именем метода и permission. Сканер владеет
+проверкой байтов, а `control-plane` — границей метаданных, состояния и
+результата.
 
 ## Контракты
 
