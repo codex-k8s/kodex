@@ -27,6 +27,14 @@ INSERT INTO control_plane.schedule_occurrences (
     available_at,
     outcome,
     result_artifact_id,
+    execution_session_id,
+    execution_session_version,
+    execution_turn_id,
+    execution_turn_version,
+    execution_process_run_id,
+    execution_process_version,
+    execution_runtime_revision_id,
+    execution_runtime_revision_version,
     updated_at
 ) VALUES (
     @id::uuid,
@@ -56,6 +64,14 @@ INSERT INTO control_plane.schedule_occurrences (
     @available_at,
     nullif(@outcome, ''),
     nullif(@result_artifact_id, '')::uuid,
+    nullif(@execution_session_id, '')::uuid,
+    nullif(@execution_session_version, 0),
+    nullif(@execution_turn_id, '')::uuid,
+    nullif(@execution_turn_version, 0),
+    nullif(@execution_process_run_id, '')::uuid,
+    nullif(@execution_process_version, 0),
+    nullif(@execution_runtime_revision_id, '')::uuid,
+    nullif(@execution_runtime_revision_version, 0),
     @updated_at
 )
 ON CONFLICT (schedule_id, scheduled_for) DO NOTHING

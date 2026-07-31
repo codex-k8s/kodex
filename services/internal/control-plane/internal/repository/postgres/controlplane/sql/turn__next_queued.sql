@@ -7,6 +7,16 @@ WITH candidate AS (
       AND queued.id = @turn_id::uuid
       AND queued.kind = 'TURN'
       AND queued.state = 'QUEUED'
+      AND EXISTS (
+          SELECT 1
+          FROM control_plane.resources AS session
+          WHERE session.id = (queued.spec ->> 'sessionId')::uuid
+            AND session.organization_id = queued.organization_id
+            AND session.project_id = queued.project_id
+            AND session.kind = 'SESSION'
+            AND session.state = 'ACTIVE'
+            AND session.owner_actor_id = queued.owner_actor_id
+      )
       AND NOT EXISTS (
           SELECT 1
           FROM control_plane.resources AS earlier
@@ -59,7 +69,17 @@ SELECT
     created_at,
     updated_at
 FROM serialized
-WHERE NOT EXISTS (
+WHERE EXISTS (
+    SELECT 1
+    FROM control_plane.resources AS session
+    WHERE session.id = (serialized.spec ->> 'sessionId')::uuid
+      AND session.organization_id = serialized.organization_id
+      AND session.project_id = serialized.project_id
+      AND session.kind = 'SESSION'
+      AND session.state = 'ACTIVE'
+      AND session.owner_actor_id = serialized.owner_actor_id
+)
+AND NOT EXISTS (
     SELECT 1
     FROM control_plane.resources AS active
     WHERE active.organization_id = serialized.organization_id

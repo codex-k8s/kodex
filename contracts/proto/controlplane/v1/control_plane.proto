@@ -39,6 +39,10 @@ service ControlPlaneService {
   rpc ListTombstones(ListTombstonesRequest) returns (ListTombstonesResponse);
   // GetDiagnostics выполняет версионированную операцию ControlPlaneService.
   rpc GetDiagnostics(GetDiagnosticsRequest) returns (GetDiagnosticsResponse);
+  // ListOutboxFailures возвращает ограниченный terminal repair contour.
+  rpc ListOutboxFailures(ListOutboxFailuresRequest) returns (ListOutboxFailuresResponse);
+  // RepairOutboxEvent повторно открывает только exact заблокировавший predecessor.
+  rpc RepairOutboxEvent(RepairOutboxEventRequest) returns (RepairOutboxEventResponse);
 
   // EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
   rpc EnqueueTurn(EnqueueTurnRequest) returns (EnqueueTurnResponse);
@@ -80,6 +84,8 @@ service ControlPlaneService {
   rpc StartProcess(StartProcessRequest) returns (StartProcessResponse);
   // CancelProcess выполняет версионированную операцию ControlPlaneService.
   rpc CancelProcess(CancelProcessRequest) returns (CancelProcessResponse);
+  // CompleteProcess завершает процесс по авторитетному terminal-ходу.
+  rpc CompleteProcess(CompleteProcessRequest) returns (CompleteProcessResponse);
   // RequestOwnerGate выполняет версионированную операцию ControlPlaneService.
   rpc RequestOwnerGate(RequestOwnerGateRequest) returns (RequestOwnerGateResponse);
   // ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
@@ -133,155 +139,273 @@ message ListProjectsResponse {
 
 // ResourceKind — закрытый перечень агрегатов, принадлежащих control-plane.
 enum ResourceKind {
+  // RESOURCE_KIND_UNSPECIFIED — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_UNSPECIFIED = 0;
+  // RESOURCE_KIND_PROJECT — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_PROJECT = 1;
+  // RESOURCE_KIND_TEAM — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_TEAM = 2;
+  // RESOURCE_KIND_CHAT — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_CHAT = 3;
+  // RESOURCE_KIND_ROLE — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_ROLE = 4;
+  // RESOURCE_KIND_PROMPT_PROFILE — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_PROMPT_PROFILE = 5;
+  // RESOURCE_KIND_CREDENTIAL_BINDING — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_CREDENTIAL_BINDING = 6;
+  // RESOURCE_KIND_REPOSITORY_WORKSPACE — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_REPOSITORY_WORKSPACE = 7;
+  // RESOURCE_KIND_INTEGRATION — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_INTEGRATION = 8;
+  // RESOURCE_KIND_RUNTIME_REVISION — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_RUNTIME_REVISION = 9;
+  // RESOURCE_KIND_SESSION — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_SESSION = 10;
+  // RESOURCE_KIND_TURN — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_TURN = 11;
+  // RESOURCE_KIND_PROCESS_RUN — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_PROCESS_RUN = 12;
+  // RESOURCE_KIND_SCHEDULE — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_SCHEDULE = 13;
+  // RESOURCE_KIND_OWNER_GATE — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_OWNER_GATE = 14;
+  // RESOURCE_KIND_MEMORY_RECORD — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_MEMORY_RECORD = 15;
+  // RESOURCE_KIND_WORK_CLAIM — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_WORK_CLAIM = 16;
+  // RESOURCE_KIND_ARTIFACT — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_ARTIFACT = 17;
 }
 
+// LifecycleState задаёт закрытое перечисление контракта control-plane.
 enum LifecycleState {
+  // LIFECYCLE_STATE_UNSPECIFIED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_UNSPECIFIED = 0;
+  // LIFECYCLE_STATE_ACTIVE — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_ACTIVE = 1;
+  // LIFECYCLE_STATE_PAUSED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_PAUSED = 2;
+  // LIFECYCLE_STATE_ARCHIVED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_ARCHIVED = 3;
+  // LIFECYCLE_STATE_DELETION_PENDING — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_DELETION_PENDING = 4;
+  // LIFECYCLE_STATE_DELETED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_DELETED = 5;
+  // LIFECYCLE_STATE_QUEUED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_QUEUED = 6;
+  // LIFECYCLE_STATE_CLAIMED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_CLAIMED = 7;
+  // LIFECYCLE_STATE_RUNNING — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_RUNNING = 8;
+  // LIFECYCLE_STATE_WAITING_OWNER — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_WAITING_OWNER = 9;
+  // LIFECYCLE_STATE_WAITING_EXTERNAL — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_WAITING_EXTERNAL = 10;
+  // LIFECYCLE_STATE_SUCCEEDED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_SUCCEEDED = 11;
+  // LIFECYCLE_STATE_FAILED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_FAILED = 12;
+  // LIFECYCLE_STATE_CANCELLED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_CANCELLED = 13;
+  // LIFECYCLE_STATE_EXPIRED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_EXPIRED = 14;
+  // LIFECYCLE_STATE_BLOCKED — значение закрытого перечисления LifecycleState.
   LIFECYCLE_STATE_BLOCKED = 15;
 }
 
+// RoomType задаёт закрытое перечисление контракта control-plane.
 enum RoomType {
+  // ROOM_TYPE_UNSPECIFIED — значение закрытого перечисления RoomType.
   ROOM_TYPE_UNSPECIFIED = 0;
+  // ROOM_TYPE_USER — значение закрытого перечисления RoomType.
   ROOM_TYPE_USER = 1;
+  // ROOM_TYPE_COORDINATION — значение закрытого перечисления RoomType.
   ROOM_TYPE_COORDINATION = 2;
+  // ROOM_TYPE_WORK_CONTROL — значение закрытого перечисления RoomType.
   ROOM_TYPE_WORK_CONTROL = 3;
+  // ROOM_TYPE_RUNS — значение закрытого перечисления RoomType.
   ROOM_TYPE_RUNS = 4;
 }
 
+// ScheduleOverlapPolicy задаёт закрытое перечисление контракта control-plane.
 enum ScheduleOverlapPolicy {
+  // SCHEDULE_OVERLAP_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleOverlapPolicy.
   SCHEDULE_OVERLAP_POLICY_UNSPECIFIED = 0;
+  // SCHEDULE_OVERLAP_POLICY_FORBID — значение закрытого перечисления ScheduleOverlapPolicy.
   SCHEDULE_OVERLAP_POLICY_FORBID = 1;
+  // SCHEDULE_OVERLAP_POLICY_SKIP — значение закрытого перечисления ScheduleOverlapPolicy.
   SCHEDULE_OVERLAP_POLICY_SKIP = 2;
+  // SCHEDULE_OVERLAP_POLICY_QUEUE — значение закрытого перечисления ScheduleOverlapPolicy.
   SCHEDULE_OVERLAP_POLICY_QUEUE = 3;
 }
 
+// ScheduleMisfirePolicy задаёт закрытое перечисление контракта control-plane.
 enum ScheduleMisfirePolicy {
+  // SCHEDULE_MISFIRE_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleMisfirePolicy.
   SCHEDULE_MISFIRE_POLICY_UNSPECIFIED = 0;
+  // SCHEDULE_MISFIRE_POLICY_SKIP — значение закрытого перечисления ScheduleMisfirePolicy.
   SCHEDULE_MISFIRE_POLICY_SKIP = 1;
+  // SCHEDULE_MISFIRE_POLICY_RUN_ONCE — значение закрытого перечисления ScheduleMisfirePolicy.
   SCHEDULE_MISFIRE_POLICY_RUN_ONCE = 2;
+  // SCHEDULE_MISFIRE_POLICY_CATCH_UP — значение закрытого перечисления ScheduleMisfirePolicy.
   SCHEDULE_MISFIRE_POLICY_CATCH_UP = 3;
+  // SCHEDULE_MISFIRE_POLICY_WITHIN_GRACE — значение закрытого перечисления ScheduleMisfirePolicy.
   SCHEDULE_MISFIRE_POLICY_WITHIN_GRACE = 4;
 }
 
 // ScheduleTargetType задаёт закрытый тип запуска.
 enum ScheduleTargetType {
+  // SCHEDULE_TARGET_TYPE_UNSPECIFIED — значение закрытого перечисления ScheduleTargetType.
   SCHEDULE_TARGET_TYPE_UNSPECIFIED = 0;
+  // SCHEDULE_TARGET_TYPE_AGENT — значение закрытого перечисления ScheduleTargetType.
   SCHEDULE_TARGET_TYPE_AGENT = 1;
+  // SCHEDULE_TARGET_TYPE_PLAYBOOK — значение закрытого перечисления ScheduleTargetType.
   SCHEDULE_TARGET_TYPE_PLAYBOOK = 2;
 }
 
+// OwnerGateDecision задаёт закрытое перечисление контракта control-plane.
 enum OwnerGateDecision {
+  // OWNER_GATE_DECISION_UNSPECIFIED — значение закрытого перечисления OwnerGateDecision.
   OWNER_GATE_DECISION_UNSPECIFIED = 0;
+  // OWNER_GATE_DECISION_APPROVED — значение закрытого перечисления OwnerGateDecision.
   OWNER_GATE_DECISION_APPROVED = 1;
+  // OWNER_GATE_DECISION_REJECTED — значение закрытого перечисления OwnerGateDecision.
   OWNER_GATE_DECISION_REJECTED = 2;
+  // OWNER_GATE_DECISION_CHANGES_REQUESTED — значение закрытого перечисления OwnerGateDecision.
   OWNER_GATE_DECISION_CHANGES_REQUESTED = 3;
+  // OWNER_GATE_DECISION_CANCELLED — значение закрытого перечисления OwnerGateDecision.
   OWNER_GATE_DECISION_CANCELLED = 4;
 }
 
+// AdministrativeAction задаёт закрытое перечисление контракта control-plane.
 enum AdministrativeAction {
+  // ADMINISTRATIVE_ACTION_UNSPECIFIED — значение закрытого перечисления AdministrativeAction.
   ADMINISTRATIVE_ACTION_UNSPECIFIED = 0;
+  // ADMINISTRATIVE_ACTION_CREATE — значение закрытого перечисления AdministrativeAction.
   ADMINISTRATIVE_ACTION_CREATE = 1;
+  // ADMINISTRATIVE_ACTION_UPDATE — значение закрытого перечисления AdministrativeAction.
   ADMINISTRATIVE_ACTION_UPDATE = 2;
+  // ADMINISTRATIVE_ACTION_ACTIVATE — значение закрытого перечисления AdministrativeAction.
   ADMINISTRATIVE_ACTION_ACTIVATE = 3;
+  // ADMINISTRATIVE_ACTION_PAUSE — значение закрытого перечисления AdministrativeAction.
   ADMINISTRATIVE_ACTION_PAUSE = 4;
+  // ADMINISTRATIVE_ACTION_ARCHIVE — значение закрытого перечисления AdministrativeAction.
   ADMINISTRATIVE_ACTION_ARCHIVE = 5;
+  // ADMINISTRATIVE_ACTION_DELETE — значение закрытого перечисления AdministrativeAction.
   ADMINISTRATIVE_ACTION_DELETE = 6;
 }
 
+// ArtifactScanState задаёт закрытое перечисление контракта control-plane.
 enum ArtifactScanState {
+  // ARTIFACT_SCAN_STATE_UNSPECIFIED — значение закрытого перечисления ArtifactScanState.
   ARTIFACT_SCAN_STATE_UNSPECIFIED = 0;
+  // ARTIFACT_SCAN_STATE_PENDING — значение закрытого перечисления ArtifactScanState.
   ARTIFACT_SCAN_STATE_PENDING = 1;
+  // ARTIFACT_SCAN_STATE_SCANNING — значение закрытого перечисления ArtifactScanState.
   ARTIFACT_SCAN_STATE_SCANNING = 2;
+  // ARTIFACT_SCAN_STATE_CLEAN — значение закрытого перечисления ArtifactScanState.
   ARTIFACT_SCAN_STATE_CLEAN = 3;
+  // ARTIFACT_SCAN_STATE_QUARANTINED — значение закрытого перечисления ArtifactScanState.
   ARTIFACT_SCAN_STATE_QUARANTINED = 4;
+  // ARTIFACT_SCAN_STATE_FAILED — значение закрытого перечисления ArtifactScanState.
   ARTIFACT_SCAN_STATE_FAILED = 5;
 }
 
+// ScheduleOccurrenceState задаёт закрытое перечисление контракта control-plane.
 enum ScheduleOccurrenceState {
+  // SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED — значение закрытого перечисления ScheduleOccurrenceState.
   SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED = 0;
+  // SCHEDULE_OCCURRENCE_STATE_QUEUED — значение закрытого перечисления ScheduleOccurrenceState.
   SCHEDULE_OCCURRENCE_STATE_QUEUED = 1;
+  // SCHEDULE_OCCURRENCE_STATE_CLAIMED — значение закрытого перечисления ScheduleOccurrenceState.
   SCHEDULE_OCCURRENCE_STATE_CLAIMED = 2;
+  // SCHEDULE_OCCURRENCE_STATE_SUCCEEDED — значение закрытого перечисления ScheduleOccurrenceState.
   SCHEDULE_OCCURRENCE_STATE_SUCCEEDED = 3;
+  // SCHEDULE_OCCURRENCE_STATE_FAILED — значение закрытого перечисления ScheduleOccurrenceState.
   SCHEDULE_OCCURRENCE_STATE_FAILED = 4;
+  // SCHEDULE_OCCURRENCE_STATE_CANCELLED — значение закрытого перечисления ScheduleOccurrenceState.
   SCHEDULE_OCCURRENCE_STATE_CANCELLED = 5;
+  // SCHEDULE_OCCURRENCE_STATE_SKIPPED — значение закрытого перечисления ScheduleOccurrenceState.
   SCHEDULE_OCCURRENCE_STATE_SKIPPED = 6;
+  // SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER — значение закрытого перечисления ScheduleOccurrenceState.
   SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER = 7;
 }
 
+// SessionAction задаёт закрытое перечисление контракта control-plane.
 enum SessionAction {
+  // SESSION_ACTION_UNSPECIFIED — значение закрытого перечисления SessionAction.
   SESSION_ACTION_UNSPECIFIED = 0;
+  // SESSION_ACTION_CREATE — значение закрытого перечисления SessionAction.
   SESSION_ACTION_CREATE = 1;
+  // SESSION_ACTION_CLOSE — значение закрытого перечисления SessionAction.
   SESSION_ACTION_CLOSE = 2;
+  // SESSION_ACTION_ARCHIVE — значение закрытого перечисления SessionAction.
   SESSION_ACTION_ARCHIVE = 3;
+  // SESSION_ACTION_CANCEL — значение закрытого перечисления SessionAction.
   SESSION_ACTION_CANCEL = 4;
+  // SESSION_ACTION_CLEANUP — значение закрытого перечисления SessionAction.
   SESSION_ACTION_CLEANUP = 5;
 }
 
+// MemoryAction задаёт закрытое перечисление контракта control-plane.
 enum MemoryAction {
+  // MEMORY_ACTION_UNSPECIFIED — значение закрытого перечисления MemoryAction.
   MEMORY_ACTION_UNSPECIFIED = 0;
+  // MEMORY_ACTION_CREATE — значение закрытого перечисления MemoryAction.
   MEMORY_ACTION_CREATE = 1;
+  // MEMORY_ACTION_SUPERSEDE — значение закрытого перечисления MemoryAction.
   MEMORY_ACTION_SUPERSEDE = 2;
+  // MEMORY_ACTION_ARCHIVE — значение закрытого перечисления MemoryAction.
   MEMORY_ACTION_ARCHIVE = 3;
 }
 
+// WorkClaimAction задаёт закрытое перечисление контракта control-plane.
 enum WorkClaimAction {
+  // WORK_CLAIM_ACTION_UNSPECIFIED — значение закрытого перечисления WorkClaimAction.
   WORK_CLAIM_ACTION_UNSPECIFIED = 0;
+  // WORK_CLAIM_ACTION_CREATE — значение закрытого перечисления WorkClaimAction.
   WORK_CLAIM_ACTION_CREATE = 1;
+  // WORK_CLAIM_ACTION_RENEW — значение закрытого перечисления WorkClaimAction.
   WORK_CLAIM_ACTION_RENEW = 2;
+  // WORK_CLAIM_ACTION_RELEASE — значение закрытого перечисления WorkClaimAction.
   WORK_CLAIM_ACTION_RELEASE = 3;
 }
 
+// ScheduleSessionPolicy задаёт закрытое перечисление контракта control-plane.
 enum ScheduleSessionPolicy {
+  // SCHEDULE_SESSION_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleSessionPolicy.
   SCHEDULE_SESSION_POLICY_UNSPECIFIED = 0;
+  // SCHEDULE_SESSION_POLICY_NEW — значение закрытого перечисления ScheduleSessionPolicy.
   SCHEDULE_SESSION_POLICY_NEW = 1;
+  // SCHEDULE_SESSION_POLICY_PERSISTENT — значение закрытого перечисления ScheduleSessionPolicy.
   SCHEDULE_SESSION_POLICY_PERSISTENT = 2;
+  // SCHEDULE_SESSION_POLICY_ROLLING — значение закрытого перечисления ScheduleSessionPolicy.
   SCHEDULE_SESSION_POLICY_ROLLING = 3;
 }
 
+// ScheduleNotificationPolicy задаёт закрытое перечисление контракта control-plane.
 enum ScheduleNotificationPolicy {
+  // SCHEDULE_NOTIFICATION_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleNotificationPolicy.
   SCHEDULE_NOTIFICATION_POLICY_UNSPECIFIED = 0;
+  // SCHEDULE_NOTIFICATION_POLICY_ALWAYS — значение закрытого перечисления ScheduleNotificationPolicy.
   SCHEDULE_NOTIFICATION_POLICY_ALWAYS = 1;
+  // SCHEDULE_NOTIFICATION_POLICY_ON_ACTION — значение закрытого перечисления ScheduleNotificationPolicy.
   SCHEDULE_NOTIFICATION_POLICY_ON_ACTION = 2;
+  // SCHEDULE_NOTIFICATION_POLICY_ON_FAILURE — значение закрытого перечисления ScheduleNotificationPolicy.
   SCHEDULE_NOTIFICATION_POLICY_ON_FAILURE = 3;
+  // SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE — значение закрытого перечисления ScheduleNotificationPolicy.
   SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE = 4;
+  // SCHEDULE_NOTIFICATION_POLICY_AUDIT_ONLY — значение закрытого перечисления ScheduleNotificationPolicy.
   SCHEDULE_NOTIFICATION_POLICY_AUDIT_ONLY = 5;
 }
 
+// ConfigurationManager задаёт закрытое перечисление контракта control-plane.
 enum ConfigurationManager {
+  // CONFIGURATION_MANAGER_UNSPECIFIED — значение закрытого перечисления ConfigurationManager.
   CONFIGURATION_MANAGER_UNSPECIFIED = 0;
+  // CONFIGURATION_MANAGER_UI — значение закрытого перечисления ConfigurationManager.
   CONFIGURATION_MANAGER_UI = 1;
+  // CONFIGURATION_MANAGER_GIT — значение закрытого перечисления ConfigurationManager.
   CONFIGURATION_MANAGER_GIT = 2;
 }
 
@@ -332,7 +456,22 @@ message RoleSpec {
   repeated string provider_credential_binding_ids = 5;
   repeated string repository_workspace_ids = 6;
   repeated string integration_ids = 7;
+  ProviderAccountPool provider_account_pool = 8;
   ConfigurationOwnership ownership = 10;
+}
+
+// ProviderAccountPool задаёт server-owned выбор свежей допустимой учётной записи.
+message ProviderAccountPool {
+  string policy = 1;
+  uint64 policy_revision = 2;
+  google.protobuf.Duration observation_max_age = 3;
+  repeated ProviderAccountPoolBinding bindings = 4;
+}
+
+// ProviderAccountPoolBinding задаёт только metadata-вес без secret value.
+message ProviderAccountPoolBinding {
+  string credential_binding_id = 1;
+  uint32 weight = 2;
 }
 
 // PromptProfileSpec описывает версионированное сообщение контракта control-plane.
@@ -351,7 +490,13 @@ message CredentialBindingSpec {
   string principal_ref = 3;
   uint64 revision = 4;
   google.protobuf.Timestamp expires_at = 5;
+  bool provider_eligible = 6;
+  repeated string provider_capabilities = 7;
+  uint64 provider_observed_usage = 8;
+  uint64 provider_observed_limit = 9;
   ConfigurationOwnership ownership = 10;
+  uint64 provider_observation_revision = 11;
+  google.protobuf.Timestamp provider_observed_at = 12;
 }
 
 // RepositoryWorkspaceSpec описывает версионированное сообщение контракта control-plane.
@@ -443,6 +588,11 @@ message ProcessRunSpec {
   uint32 launching_attempt = 14;
   string schedule_id = 15;
   string occurrence_id = 16;
+  string delegation_id = 17;
+  string target_session_id = 18;
+  string target_turn_id = 19;
+  uint32 target_attempt = 20;
+  string outcome = 21;
 }
 
 // ScheduleSpec описывает версионированное сообщение контракта control-plane.
@@ -998,6 +1148,14 @@ message ScheduleOccurrence {
   ScheduleNotificationPolicy notification_policy = 20;
   google.protobuf.Duration maximum_execution_duration = 21;
   bool coalesce = 22;
+  string execution_session_id = 23;
+  uint64 execution_session_version = 24;
+  string execution_turn_id = 25;
+  uint64 execution_turn_version = 26;
+  string execution_process_run_id = 27;
+  uint64 execution_process_version = 28;
+  string execution_runtime_revision_id = 29;
+  uint64 execution_runtime_revision_version = 30;
 }
 
 // ClaimDueSchedulesResponse описывает версионированное сообщение контракта control-plane.
@@ -1022,9 +1180,8 @@ message CompleteScheduleOccurrenceRequest {
   string occurrence_id = 2;
   string lease_token = 3;
   uint32 expected_attempt = 4;
-  ScheduleOccurrenceState terminal_state = 5;
-  string outcome = 6;
-  string result_artifact_id = 7;
+  reserved 5, 6, 7;
+  reserved "terminal_state", "outcome", "result_artifact_id";
 }
 
 // CompleteScheduleOccurrenceResponse описывает версионированное сообщение контракта control-plane.
@@ -1091,6 +1248,62 @@ message CancelProcessRequest {
 // CancelProcessResponse описывает версионированное сообщение контракта control-plane.
 message CancelProcessResponse {
   Resource process_run = 1;
+}
+
+// CompleteProcessRequest связывает terminal outcome с exact OCC-версией процесса.
+message CompleteProcessRequest {
+  string idempotency_key = 1;
+  string process_run_id = 2;
+  uint64 expected_version = 3;
+  LifecycleState terminal_state = 4;
+  string outcome = 5;
+  string result_artifact_id = 6;
+}
+
+// CompleteProcessResponse возвращает авторитетный terminal-процесс.
+message CompleteProcessResponse {
+  Resource process_run = 1;
+}
+
+// ListOutboxFailuresRequest задаёт ограниченную UUID-пагинацию.
+message ListOutboxFailuresRequest {
+  string page_token = 1;
+  uint32 page_size = 2;
+}
+
+// OutboxFailure скрывает payload и предоставляет только repair evidence.
+message OutboxFailure {
+  string event_id = 1;
+  string ordering_key = 2;
+  uint64 event_sequence = 3;
+  string event_name = 4;
+  string aggregate_id = 5;
+  uint32 attempts = 6;
+  uint32 repair_count = 7;
+  string last_error_class = 8;
+  google.protobuf.Timestamp occurred_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// ListOutboxFailuresResponse возвращает terminal predecessors без envelope.
+message ListOutboxFailuresResponse {
+  repeated OutboxFailure failures = 1;
+  string next_page_token = 2;
+}
+
+// RepairOutboxEventRequest требует exact sequence/attempt fence и evidence digest.
+message RepairOutboxEventRequest {
+  string idempotency_key = 1;
+  string event_id = 2;
+  uint64 expected_sequence = 3;
+  uint32 expected_attempts = 4;
+  string reason_code = 5;
+  string evidence_sha256 = 6;
+}
+
+// RepairOutboxEventResponse возвращает повторно открытый predecessor.
+message RepairOutboxEventResponse {
+  OutboxFailure failure = 1;
 }
 
 // RequestOwnerGateRequest описывает версионированное сообщение контракта control-plane.
@@ -1232,17 +1445,29 @@ message CheckReadinessResponse {
   bool outbox_ready = 6;
 }
 
+// ErrorReason задаёт закрытое перечисление контракта control-plane.
 enum ErrorReason {
+  // ERROR_REASON_UNSPECIFIED — значение закрытого перечисления ErrorReason.
   ERROR_REASON_UNSPECIFIED = 0;
+  // ERROR_REASON_INVALID_REQUEST — значение закрытого перечисления ErrorReason.
   ERROR_REASON_INVALID_REQUEST = 1;
+  // ERROR_REASON_UNAUTHENTICATED — значение закрытого перечисления ErrorReason.
   ERROR_REASON_UNAUTHENTICATED = 2;
+  // ERROR_REASON_PERMISSION_DENIED — значение закрытого перечисления ErrorReason.
   ERROR_REASON_PERMISSION_DENIED = 3;
+  // ERROR_REASON_NOT_FOUND — значение закрытого перечисления ErrorReason.
   ERROR_REASON_NOT_FOUND = 4;
+  // ERROR_REASON_STATE_CONFLICT — значение закрытого перечисления ErrorReason.
   ERROR_REASON_STATE_CONFLICT = 5;
+  // ERROR_REASON_IDEMPOTENCY_CONFLICT — значение закрытого перечисления ErrorReason.
   ERROR_REASON_IDEMPOTENCY_CONFLICT = 6;
+  // ERROR_REASON_VERSION_MISMATCH — значение закрытого перечисления ErrorReason.
   ERROR_REASON_VERSION_MISMATCH = 7;
+  // ERROR_REASON_UNAVAILABLE — значение закрытого перечисления ErrorReason.
   ERROR_REASON_UNAVAILABLE = 8;
+  // ERROR_REASON_INTERNAL — значение закрытого перечисления ErrorReason.
   ERROR_REASON_INTERNAL = 9;
+  // ERROR_REASON_RATE_LIMITED — значение закрытого перечисления ErrorReason.
   ERROR_REASON_RATE_LIMITED = 10;
 }
 

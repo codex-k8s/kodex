@@ -437,14 +437,11 @@ func (server *Server) CompleteScheduleOccurrence(
 	completed, err := server.service.CompleteScheduleOccurrence(
 		ctx,
 		resource.CompleteScheduleOccurrenceInput{
-			Principal:        principal,
-			IdempotencyKey:   request.GetIdempotencyKey(),
-			OccurrenceID:     request.GetOccurrenceId(),
-			LeaseToken:       request.GetLeaseToken(),
-			ExpectedAttempt:  request.GetExpectedAttempt(),
-			TerminalState:    occurrenceStateString(request.GetTerminalState()),
-			Outcome:          request.GetOutcome(),
-			ResultArtifactID: request.GetResultArtifactId(),
+			Principal:       principal,
+			IdempotencyKey:  request.GetIdempotencyKey(),
+			OccurrenceID:    request.GetOccurrenceId(),
+			LeaseToken:      request.GetLeaseToken(),
+			ExpectedAttempt: request.GetExpectedAttempt(),
 		},
 	)
 	if err != nil {
@@ -735,13 +732,21 @@ func toProtoOccurrence(
 		MaximumExecutionDuration: durationpb.New(
 			occurrence.MaximumExecution,
 		),
-		Coalesce:            occurrence.Coalesce,
-		State:               occurrenceState(occurrence.State),
-		Attempt:             occurrence.Attempt,
-		ClaimantWorkloadId:  occurrence.ClaimantWorkloadID,
-		AuthorityGeneration: occurrence.AuthorityGeneration,
-		AvailableAt:         timestamppb.New(occurrence.AvailableAt),
-		Outcome:             occurrence.Outcome,
+		Coalesce:                        occurrence.Coalesce,
+		State:                           occurrenceState(occurrence.State),
+		Attempt:                         occurrence.Attempt,
+		ClaimantWorkloadId:              occurrence.ClaimantWorkloadID,
+		AuthorityGeneration:             occurrence.AuthorityGeneration,
+		AvailableAt:                     timestamppb.New(occurrence.AvailableAt),
+		Outcome:                         occurrence.Outcome,
+		ExecutionSessionId:              occurrence.ExecutionSessionID,
+		ExecutionSessionVersion:         occurrence.ExecutionSessionVersion,
+		ExecutionTurnId:                 occurrence.ExecutionTurnID,
+		ExecutionTurnVersion:            occurrence.ExecutionTurnVersion,
+		ExecutionProcessRunId:           occurrence.ExecutionProcessRunID,
+		ExecutionProcessVersion:         occurrence.ExecutionProcessVersion,
+		ExecutionRuntimeRevisionId:      occurrence.ExecutionRuntimeRevisionID,
+		ExecutionRuntimeRevisionVersion: occurrence.ExecutionRuntimeRevisionVersion,
 	}
 	if !occurrence.LeaseExpiresAt.IsZero() &&
 		!occurrence.LeaseExpiresAt.Equal(time.Unix(0, 0)) {

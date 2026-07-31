@@ -26,7 +26,7 @@ var migrations embed.FS
 //go:embed sql/*.sql
 var operationalSQL embed.FS
 
-const schemaVersion int64 = 20260731000300
+const schemaVersion int64 = 20260731000400
 
 func main() {
 	ctx, stop := signal.NotifyContext(
@@ -42,8 +42,15 @@ func main() {
 }
 
 func run(ctx context.Context, arguments []string) error {
+	if len(arguments) == 1 && arguments[0] == "image-readback" {
+		if _, err := fmt.Fprintln(os.Stdout, "control-plane image pull verified"); err != nil {
+			return err
+		}
+		<-ctx.Done()
+		return nil
+	}
 	if len(arguments) != 2 || arguments[0] != "migrate" {
-		return errors.New("usage: control-plane-cli migrate expand|up|status|version")
+		return errors.New("usage: control-plane-cli image-readback|migrate expand|up|status|version")
 	}
 	action := arguments[1]
 	if action != "expand" && action != "up" &&

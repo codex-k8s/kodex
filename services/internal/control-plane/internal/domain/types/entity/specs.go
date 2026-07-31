@@ -178,7 +178,45 @@ type RoleSpec struct {
 	ProviderCredentialBindingIDs []string               `json:"providerCredentialBindingIds"`
 	RepositoryWorkspaceIDs       []string               `json:"repositoryWorkspaceIds"`
 	IntegrationIDs               []string               `json:"integrationIds"`
+	ProviderAccountPool          ProviderAccountPool    `json:"providerAccountPool"`
 	Ownership                    ConfigurationOwnership `json:"ownership"`
+}
+
+// ProviderAccountPool задаёт закрытую серверную политику выбора учётной записи.
+type ProviderAccountPool struct {
+	Policy            string                       `json:"policy"`
+	PolicyRevision    uint64                       `json:"policyRevision"`
+	ObservationMaxAge time.Duration                `json:"observationMaxAge"`
+	Bindings          []ProviderAccountPoolBinding `json:"bindings"`
+}
+
+// ProviderAccountPoolBinding связывает привязку с весом, а не с секретом.
+type ProviderAccountPoolBinding struct {
+	CredentialBindingID string `json:"credentialBindingId"`
+	Weight              uint32 `json:"weight"`
+}
+
+func (pool ProviderAccountPool) Validate(allowed []string) error {
+	if (pool.Policy != "least_used" && pool.Policy != "weighted") ||
+		pool.PolicyRevision == 0 ||
+		pool.ObservationMaxAge < time.Minute ||
+		pool.ObservationMaxAge > 24*time.Hour ||
+		len(pool.Bindings) != len(allowed) || len(pool.Bindings) == 0 {
+		return errors.New("provider account pool is invalid")
+	}
+	seen := make(map[string]struct{}, len(pool.Bindings))
+	for _, binding := range pool.Bindings {
+		if value.ValidateID(binding.CredentialBindingID) != nil ||
+			binding.Weight == 0 || binding.Weight > 10000 ||
+			!slices.Contains(allowed, binding.CredentialBindingID) {
+			return errors.New("provider account pool binding is invalid")
+		}
+		if _, exists := seen[binding.CredentialBindingID]; exists {
+			return errors.New("provider account pool binding is duplicated")
+		}
+		seen[binding.CredentialBindingID] = struct{}{}
+	}
+	return nil
 }
 
 func (RoleSpec) Kind() enum.Kind { return enum.KindRole }
@@ -194,6 +232,7 @@ func (spec RoleSpec) Validate() error {
 		len(spec.ProviderCredentialBindingIDs) > 8 ||
 		len(spec.RepositoryWorkspaceIDs) > 32 ||
 		len(spec.IntegrationIDs) > 32 ||
+		spec.ProviderAccountPool.Validate(spec.ProviderCredentialBindingIDs) != nil ||
 		spec.Ownership.Validate() != nil {
 		return errors.New("role specification is invalid")
 	}
@@ -233,12 +272,18 @@ func (spec PromptProfileSpec) Validate() error {
 }
 
 type CredentialBindingSpec struct {
-	Purpose      string                 `json:"purpose"`
-	SecretRef    string                 `json:"secretRef"`
-	PrincipalRef string                 `json:"principalRef"`
-	Revision     uint64                 `json:"revision"`
-	ExpiresAt    time.Time              `json:"expiresAt,omitempty"`
-	Ownership    ConfigurationOwnership `json:"ownership"`
+	Purpose                     string                 `json:"purpose"`
+	SecretRef                   string                 `json:"secretRef"`
+	PrincipalRef                string                 `json:"principalRef"`
+	Revision                    uint64                 `json:"revision"`
+	ExpiresAt                   time.Time              `json:"expiresAt,omitempty"`
+	ProviderEligible            bool                   `json:"providerEligible"`
+	ProviderCapabilities        []string               `json:"providerCapabilities,omitempty"`
+	ProviderObservedUsage       uint64                 `json:"providerObservedUsage,omitempty"`
+	ProviderObservedLimit       uint64                 `json:"providerObservedLimit,omitempty"`
+	ProviderObservationRevision uint64                 `json:"providerObservationRevision,omitempty"`
+	ProviderObservedAt          time.Time              `json:"providerObservedAt,omitempty"`
+	Ownership                   ConfigurationOwnership `json:"ownership"`
 }
 
 func (CredentialBindingSpec) Kind() enum.Kind { return enum.KindCredentialBinding }
@@ -251,6 +296,20 @@ func (spec CredentialBindingSpec) Validate() error {
 		!validExternalRef(spec.PrincipalRef) ||
 		spec.Revision == 0 || spec.Ownership.Validate() != nil {
 		return errors.New("credential binding specification is invalid")
+	}
+	if spec.Purpose == "provider-account" {
+		if !spec.ProviderEligible ||
+			!validBoundedKeys(spec.ProviderCapabilities, 64) ||
+			spec.ProviderObservedLimit == 0 ||
+			spec.ProviderObservedUsage > spec.ProviderObservedLimit ||
+			spec.ProviderObservationRevision == 0 ||
+			spec.ProviderObservedAt.IsZero() {
+			return errors.New("provider account observation is invalid")
+		}
+	} else if spec.ProviderEligible || len(spec.ProviderCapabilities) != 0 ||
+		spec.ProviderObservedUsage != 0 || spec.ProviderObservedLimit != 0 ||
+		spec.ProviderObservationRevision != 0 || !spec.ProviderObservedAt.IsZero() {
+		return errors.New("non-provider observation is forbidden")
 	}
 	return nil
 }
@@ -474,6 +533,11 @@ type ProcessRunSpec struct {
 	LaunchingProcessRunID string `json:"launchingProcessRunId,omitempty"`
 	LaunchingTurnID       string `json:"launchingTurnId,omitempty"`
 	LaunchingAttempt      uint32 `json:"launchingAttempt,omitempty"`
+	DelegationID          string `json:"delegationId,omitempty"`
+	TargetSessionID       string `json:"targetSessionId,omitempty"`
+	TargetTurnID          string `json:"targetTurnId,omitempty"`
+	TargetAttempt         uint32 `json:"targetAttempt,omitempty"`
+	Outcome               string `json:"outcome,omitempty"`
 	ScheduleID            string `json:"scheduleId,omitempty"`
 	OccurrenceID          string `json:"occurrenceId,omitempty"`
 }
@@ -495,6 +559,9 @@ func (spec ProcessRunSpec) Validate() error {
 		spec.ResultArtifactID,
 		spec.LaunchingProcessRunID,
 		spec.LaunchingTurnID,
+		spec.DelegationID,
+		spec.TargetSessionID,
+		spec.TargetTurnID,
 		spec.ScheduleID,
 		spec.OccurrenceID,
 	} {
@@ -502,14 +569,21 @@ func (spec ProcessRunSpec) Validate() error {
 			return errors.New("process run binding is invalid")
 		}
 	}
+	if len(spec.Outcome) > 256 {
+		return errors.New("process outcome is invalid")
+	}
 	if spec.ParentProcessRunID == "" {
 		if spec.LaunchingProcessRunID != "" || spec.LaunchingTurnID != "" ||
-			spec.LaunchingAttempt != 0 {
+			spec.LaunchingAttempt != 0 || spec.DelegationID != "" ||
+			spec.TargetSessionID != "" || spec.TargetTurnID != "" ||
+			spec.TargetAttempt != 0 {
 			return errors.New("root process launching edge is invalid")
 		}
 	} else if spec.LaunchingProcessRunID != spec.ParentProcessRunID ||
 		spec.LaunchingTurnID == "" || spec.LaunchingAttempt == 0 ||
-		spec.LaunchingAttempt > 100 {
+		spec.LaunchingAttempt > 100 || spec.DelegationID == "" ||
+		spec.TargetSessionID == "" || spec.TargetTurnID == "" ||
+		spec.TargetAttempt == 0 || spec.TargetAttempt > 100 {
 		return errors.New("child process launching edge is invalid")
 	}
 	if (spec.ScheduleID == "") != (spec.OccurrenceID == "") {

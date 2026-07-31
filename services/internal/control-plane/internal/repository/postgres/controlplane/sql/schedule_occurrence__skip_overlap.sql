@@ -50,6 +50,14 @@ SELECT
     available_at,
     coalesce(outcome, ''),
     coalesce(result_artifact_id::text, ''),
+    coalesce(execution_session_id::text, ''),
+    coalesce(execution_session_version, 0),
+    coalesce(execution_turn_id::text, ''),
+    coalesce(execution_turn_version, 0),
+    coalesce(execution_process_run_id::text, ''),
+    coalesce(execution_process_version, 0),
+    coalesce(execution_runtime_revision_id::text, ''),
+    coalesce(execution_runtime_revision_version, 0),
     claimed_at,
     updated_at
 FROM skipped

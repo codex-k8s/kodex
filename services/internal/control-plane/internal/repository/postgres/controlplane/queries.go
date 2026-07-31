@@ -42,6 +42,12 @@ var sqlOutboxMarkFailed string
 //go:embed sql/outbox__mark_published.sql
 var sqlOutboxMarkPublished string
 
+//go:embed sql/outbox_terminal__list.sql
+var sqlOutboxTerminalList string
+
+//go:embed sql/outbox_terminal__repair.sql
+var sqlOutboxTerminalRepair string
+
 //go:embed sql/owner_gate__next_delivery.sql
 var sqlOwnerGateNextDelivery string
 
@@ -56,6 +62,12 @@ var sqlPermissionIndexRebuild string
 
 //go:embed sql/process__has_active_children.sql
 var sqlProcessHasActiveChildren string
+
+//go:embed sql/process__has_open_work.sql
+var sqlProcessHasOpenWork string
+
+//go:embed sql/provider_binding__active_sessions.sql
+var sqlProviderBindingActiveSessions string
 
 //go:embed sql/project__authorize.sql
 var sqlProjectAuthorize string
@@ -129,6 +141,15 @@ var sqlScheduleOccurrenceSkipOverlap string
 //go:embed sql/schedule_occurrence__update.sql
 var sqlScheduleOccurrenceUpdate string
 
+//go:embed sql/scheduled_run__save.sql
+var sqlScheduledRunSave string
+
+//go:embed sql/scheduled_run__finish.sql
+var sqlScheduledRunFinish string
+
+//go:embed sql/session__open_turns.sql
+var sqlSessionOpenTurns string
+
 //go:embed sql/transaction__set_scope.sql
 var sqlTransactionSetScope string
 
@@ -158,3 +179,9 @@ var sqlTurnLeaseSave string
 
 //go:embed sql/turn_lease__validate.sql
 var sqlTurnLeaseValidate string
+
+//go:embed sql/delegation_edge__save.sql
+var sqlDelegationEdgeSave string
+
+//go:embed sql/delegation_edge__get_by_target_turn.sql
+var sqlDelegationEdgeGetByTargetTurn string

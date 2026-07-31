@@ -33,6 +33,8 @@ const (
 	ControlPlaneService_ListAuditEvents_FullMethodName            = "/controlplane.v1.ControlPlaneService/ListAuditEvents"
 	ControlPlaneService_ListTombstones_FullMethodName             = "/controlplane.v1.ControlPlaneService/ListTombstones"
 	ControlPlaneService_GetDiagnostics_FullMethodName             = "/controlplane.v1.ControlPlaneService/GetDiagnostics"
+	ControlPlaneService_ListOutboxFailures_FullMethodName         = "/controlplane.v1.ControlPlaneService/ListOutboxFailures"
+	ControlPlaneService_RepairOutboxEvent_FullMethodName          = "/controlplane.v1.ControlPlaneService/RepairOutboxEvent"
 	ControlPlaneService_EnqueueTurn_FullMethodName                = "/controlplane.v1.ControlPlaneService/EnqueueTurn"
 	ControlPlaneService_ClaimTurn_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ClaimTurn"
 	ControlPlaneService_RenewTurn_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RenewTurn"
@@ -50,6 +52,7 @@ const (
 	ControlPlaneService_ListScheduleOccurrences_FullMethodName    = "/controlplane.v1.ControlPlaneService/ListScheduleOccurrences"
 	ControlPlaneService_StartProcess_FullMethodName               = "/controlplane.v1.ControlPlaneService/StartProcess"
 	ControlPlaneService_CancelProcess_FullMethodName              = "/controlplane.v1.ControlPlaneService/CancelProcess"
+	ControlPlaneService_CompleteProcess_FullMethodName            = "/controlplane.v1.ControlPlaneService/CompleteProcess"
 	ControlPlaneService_RequestOwnerGate_FullMethodName           = "/controlplane.v1.ControlPlaneService/RequestOwnerGate"
 	ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName     = "/controlplane.v1.ControlPlaneService/ClaimOwnerGateDelivery"
 	ControlPlaneService_RecordOwnerGateDelivery_FullMethodName    = "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery"
@@ -97,6 +100,10 @@ type ControlPlaneServiceClient interface {
 	ListTombstones(ctx context.Context, in *ListTombstonesRequest, opts ...grpc.CallOption) (*ListTombstonesResponse, error)
 	// GetDiagnostics выполняет версионированную операцию ControlPlaneService.
 	GetDiagnostics(ctx context.Context, in *GetDiagnosticsRequest, opts ...grpc.CallOption) (*GetDiagnosticsResponse, error)
+	// ListOutboxFailures возвращает ограниченный terminal repair contour.
+	ListOutboxFailures(ctx context.Context, in *ListOutboxFailuresRequest, opts ...grpc.CallOption) (*ListOutboxFailuresResponse, error)
+	// RepairOutboxEvent повторно открывает только exact заблокировавший predecessor.
+	RepairOutboxEvent(ctx context.Context, in *RepairOutboxEventRequest, opts ...grpc.CallOption) (*RepairOutboxEventResponse, error)
 	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
 	EnqueueTurn(ctx context.Context, in *EnqueueTurnRequest, opts ...grpc.CallOption) (*EnqueueTurnResponse, error)
 	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
@@ -135,6 +142,8 @@ type ControlPlaneServiceClient interface {
 	StartProcess(ctx context.Context, in *StartProcessRequest, opts ...grpc.CallOption) (*StartProcessResponse, error)
 	// CancelProcess выполняет версионированную операцию ControlPlaneService.
 	CancelProcess(ctx context.Context, in *CancelProcessRequest, opts ...grpc.CallOption) (*CancelProcessResponse, error)
+	// CompleteProcess завершает процесс по авторитетному terminal-ходу.
+	CompleteProcess(ctx context.Context, in *CompleteProcessRequest, opts ...grpc.CallOption) (*CompleteProcessResponse, error)
 	// RequestOwnerGate выполняет версионированную операцию ControlPlaneService.
 	RequestOwnerGate(ctx context.Context, in *RequestOwnerGateRequest, opts ...grpc.CallOption) (*RequestOwnerGateResponse, error)
 	// ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
@@ -302,6 +311,26 @@ func (c *controlPlaneServiceClient) GetDiagnostics(ctx context.Context, in *GetD
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetDiagnosticsResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_GetDiagnostics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListOutboxFailures(ctx context.Context, in *ListOutboxFailuresRequest, opts ...grpc.CallOption) (*ListOutboxFailuresResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOutboxFailuresResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListOutboxFailures_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RepairOutboxEvent(ctx context.Context, in *RepairOutboxEventRequest, opts ...grpc.CallOption) (*RepairOutboxEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RepairOutboxEventResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RepairOutboxEvent_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -478,6 +507,16 @@ func (c *controlPlaneServiceClient) CancelProcess(ctx context.Context, in *Cance
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) CompleteProcess(ctx context.Context, in *CompleteProcessRequest, opts ...grpc.CallOption) (*CompleteProcessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteProcessResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteProcess_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) RequestOwnerGate(ctx context.Context, in *RequestOwnerGateRequest, opts ...grpc.CallOption) (*RequestOwnerGateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RequestOwnerGateResponse)
@@ -604,6 +643,10 @@ type ControlPlaneServiceServer interface {
 	ListTombstones(context.Context, *ListTombstonesRequest) (*ListTombstonesResponse, error)
 	// GetDiagnostics выполняет версионированную операцию ControlPlaneService.
 	GetDiagnostics(context.Context, *GetDiagnosticsRequest) (*GetDiagnosticsResponse, error)
+	// ListOutboxFailures возвращает ограниченный terminal repair contour.
+	ListOutboxFailures(context.Context, *ListOutboxFailuresRequest) (*ListOutboxFailuresResponse, error)
+	// RepairOutboxEvent повторно открывает только exact заблокировавший predecessor.
+	RepairOutboxEvent(context.Context, *RepairOutboxEventRequest) (*RepairOutboxEventResponse, error)
 	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
 	EnqueueTurn(context.Context, *EnqueueTurnRequest) (*EnqueueTurnResponse, error)
 	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
@@ -642,6 +685,8 @@ type ControlPlaneServiceServer interface {
 	StartProcess(context.Context, *StartProcessRequest) (*StartProcessResponse, error)
 	// CancelProcess выполняет версионированную операцию ControlPlaneService.
 	CancelProcess(context.Context, *CancelProcessRequest) (*CancelProcessResponse, error)
+	// CompleteProcess завершает процесс по авторитетному terminal-ходу.
+	CompleteProcess(context.Context, *CompleteProcessRequest) (*CompleteProcessResponse, error)
 	// RequestOwnerGate выполняет версионированную операцию ControlPlaneService.
 	RequestOwnerGate(context.Context, *RequestOwnerGateRequest) (*RequestOwnerGateResponse, error)
 	// ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
@@ -717,6 +762,12 @@ func (UnimplementedControlPlaneServiceServer) ListTombstones(context.Context, *L
 func (UnimplementedControlPlaneServiceServer) GetDiagnostics(context.Context, *GetDiagnosticsRequest) (*GetDiagnosticsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDiagnostics not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) ListOutboxFailures(context.Context, *ListOutboxFailuresRequest) (*ListOutboxFailuresResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOutboxFailures not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RepairOutboxEvent(context.Context, *RepairOutboxEventRequest) (*RepairOutboxEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RepairOutboxEvent not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) EnqueueTurn(context.Context, *EnqueueTurnRequest) (*EnqueueTurnResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EnqueueTurn not implemented")
 }
@@ -767,6 +818,9 @@ func (UnimplementedControlPlaneServiceServer) StartProcess(context.Context, *Sta
 }
 func (UnimplementedControlPlaneServiceServer) CancelProcess(context.Context, *CancelProcessRequest) (*CancelProcessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelProcess not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CompleteProcess(context.Context, *CompleteProcessRequest) (*CompleteProcessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteProcess not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) RequestOwnerGate(context.Context, *RequestOwnerGateRequest) (*RequestOwnerGateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestOwnerGate not implemented")
@@ -1064,6 +1118,42 @@ func _ControlPlaneService_GetDiagnostics_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).GetDiagnostics(ctx, req.(*GetDiagnosticsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListOutboxFailures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOutboxFailuresRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListOutboxFailures(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListOutboxFailures_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListOutboxFailures(ctx, req.(*ListOutboxFailuresRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RepairOutboxEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RepairOutboxEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RepairOutboxEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RepairOutboxEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RepairOutboxEvent(ctx, req.(*RepairOutboxEventRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1374,6 +1464,24 @@ func _ControlPlaneService_CancelProcess_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_CompleteProcess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteProcessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CompleteProcess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CompleteProcess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CompleteProcess(ctx, req.(*CompleteProcessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_RequestOwnerGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RequestOwnerGateRequest)
 	if err := dec(in); err != nil {
@@ -1600,6 +1708,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_GetDiagnostics_Handler,
 		},
 		{
+			MethodName: "ListOutboxFailures",
+			Handler:    _ControlPlaneService_ListOutboxFailures_Handler,
+		},
+		{
+			MethodName: "RepairOutboxEvent",
+			Handler:    _ControlPlaneService_RepairOutboxEvent_Handler,
+		},
+		{
 			MethodName: "EnqueueTurn",
 			Handler:    _ControlPlaneService_EnqueueTurn_Handler,
 		},
@@ -1666,6 +1782,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelProcess",
 			Handler:    _ControlPlaneService_CancelProcess_Handler,
+		},
+		{
+			MethodName: "CompleteProcess",
+			Handler:    _ControlPlaneService_CompleteProcess_Handler,
 		},
 		{
 			MethodName: "RequestOwnerGate",

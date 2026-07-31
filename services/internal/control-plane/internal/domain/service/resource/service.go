@@ -41,6 +41,7 @@ const (
 	permissionExecuteSchedule       = "controlplane.schedule.execute"
 	permissionStartProcess          = "controlplane.process.start"
 	permissionCancelProcess         = "controlplane.process.cancel"
+	permissionCompleteProcess       = "controlplane.process.complete"
 	permissionRequestGate           = "controlplane.owner_gate.request"
 	permissionResolveGate           = "controlplane.owner_gate.resolve"
 	permissionRegisterArtifact      = "controlplane.artifact.register"
@@ -52,6 +53,8 @@ const (
 	permissionDeliverGate           = "controlplane.owner_gate.deliver"
 	permissionReadRuntimeRevision   = "controlplane.runtime_revision.read"
 	permissionIndexMemory           = "controlplane.memory.index"
+	permissionRepairOutbox          = "controlplane.outbox.repair"
+	permissionReadOutbox            = "controlplane.outbox.read"
 	permissionApplyGitConfiguration = "controlplane.configuration.git.apply"
 	permissionDetachConfiguration   = "controlplane.configuration.detach"
 )
@@ -1183,6 +1186,7 @@ func validSHA256Text(input string) bool {
 
 func validImageDigest(input string) bool {
 	return strings.HasPrefix(input, "sha256:") &&
+		input != "sha256:0000000000000000000000000000000000000000000000000000000000000000" &&
 		validSHA256Text(strings.TrimPrefix(input, "sha256:"))
 }
 

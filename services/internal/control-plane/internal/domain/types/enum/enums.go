@@ -129,7 +129,9 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 		}
 	case KindSchedule:
 		return (from == StateActive && (to == StatePaused || to == StateArchived)) ||
-			(from == StatePaused && (to == StateActive || to == StateArchived))
+			(from == StatePaused && (to == StateActive || to == StateArchived)) ||
+			(from == StateArchived && to == StateDeletionPending) ||
+			(from == StateDeletionPending && to == StateDeleted)
 	case KindOwnerGate:
 		return from == StateWaitingOwner &&
 			(to == StateSucceeded || to == StateFailed || to == StateBlocked ||

@@ -198,6 +198,23 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			Ownership:          configurationOwnershipFromProto(value.Chat.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_Role:
+		poolMaxAge, err := optionalDuration(
+			value.Role.GetProviderAccountPool().GetObservationMaxAge(),
+		)
+		if err != nil {
+			return nil, err
+		}
+		poolBindings := make(
+			[]entity.ProviderAccountPoolBinding,
+			0,
+			len(value.Role.GetProviderAccountPool().GetBindings()),
+		)
+		for _, binding := range value.Role.GetProviderAccountPool().GetBindings() {
+			poolBindings = append(poolBindings, entity.ProviderAccountPoolBinding{
+				CredentialBindingID: binding.GetCredentialBindingId(),
+				Weight:              binding.GetWeight(),
+			})
+		}
 		return entity.RoleSpec{
 			StableKey:                    value.Role.GetStableKey(),
 			Capabilities:                 value.Role.GetCapabilities(),
@@ -206,7 +223,13 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ProviderCredentialBindingIDs: value.Role.GetProviderCredentialBindingIds(),
 			RepositoryWorkspaceIDs:       value.Role.GetRepositoryWorkspaceIds(),
 			IntegrationIDs:               value.Role.GetIntegrationIds(),
-			Ownership:                    configurationOwnershipFromProto(value.Role.GetOwnership()),
+			ProviderAccountPool: entity.ProviderAccountPool{
+				Policy:            value.Role.GetProviderAccountPool().GetPolicy(),
+				PolicyRevision:    value.Role.GetProviderAccountPool().GetPolicyRevision(),
+				ObservationMaxAge: poolMaxAge,
+				Bindings:          poolBindings,
+			},
+			Ownership: configurationOwnershipFromProto(value.Role.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_PromptProfile:
 		return entity.PromptProfileSpec{
@@ -221,13 +244,23 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 		if err != nil {
 			return nil, err
 		}
+		observedAt, err := optionalTime(value.CredentialBinding.GetProviderObservedAt())
+		if err != nil {
+			return nil, err
+		}
 		return entity.CredentialBindingSpec{
-			Purpose:      value.CredentialBinding.GetPurpose(),
-			SecretRef:    value.CredentialBinding.GetSecretRef(),
-			PrincipalRef: value.CredentialBinding.GetPrincipalRef(),
-			Revision:     value.CredentialBinding.GetRevision(),
-			ExpiresAt:    expiresAt,
-			Ownership:    configurationOwnershipFromProto(value.CredentialBinding.GetOwnership()),
+			Purpose:                     value.CredentialBinding.GetPurpose(),
+			SecretRef:                   value.CredentialBinding.GetSecretRef(),
+			PrincipalRef:                value.CredentialBinding.GetPrincipalRef(),
+			Revision:                    value.CredentialBinding.GetRevision(),
+			ExpiresAt:                   expiresAt,
+			ProviderEligible:            value.CredentialBinding.GetProviderEligible(),
+			ProviderCapabilities:        value.CredentialBinding.GetProviderCapabilities(),
+			ProviderObservedUsage:       value.CredentialBinding.GetProviderObservedUsage(),
+			ProviderObservedLimit:       value.CredentialBinding.GetProviderObservedLimit(),
+			ProviderObservationRevision: value.CredentialBinding.GetProviderObservationRevision(),
+			ProviderObservedAt:          observedAt,
+			Ownership:                   configurationOwnershipFromProto(value.CredentialBinding.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_RepositoryWorkspace:
 		return entity.RepositoryWorkspaceSpec{
@@ -321,6 +354,11 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			LaunchingAttempt:      value.ProcessRun.GetLaunchingAttempt(),
 			ScheduleID:            value.ProcessRun.GetScheduleId(),
 			OccurrenceID:          value.ProcessRun.GetOccurrenceId(),
+			DelegationID:          value.ProcessRun.GetDelegationId(),
+			TargetSessionID:       value.ProcessRun.GetTargetSessionId(),
+			TargetTurnID:          value.ProcessRun.GetTargetTurnId(),
+			TargetAttempt:         value.ProcessRun.GetTargetAttempt(),
+			Outcome:               value.ProcessRun.GetOutcome(),
 		}, nil
 	case *controlplanev1.ResourceSpec_Schedule:
 		interval, err := optionalDuration(value.Schedule.GetInterval())
@@ -545,6 +583,17 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 			},
 		}
 	case entity.RoleSpec:
+		poolBindings := make(
+			[]*controlplanev1.ProviderAccountPoolBinding,
+			0,
+			len(value.ProviderAccountPool.Bindings),
+		)
+		for _, binding := range value.ProviderAccountPool.Bindings {
+			poolBindings = append(poolBindings, &controlplanev1.ProviderAccountPoolBinding{
+				CredentialBindingId: binding.CredentialBindingID,
+				Weight:              binding.Weight,
+			})
+		}
 		result.Value = &controlplanev1.ResourceSpec_Role{
 			Role: &controlplanev1.RoleSpec{
 				StableKey:                    value.StableKey,
@@ -554,7 +603,15 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ProviderCredentialBindingIds: value.ProviderCredentialBindingIDs,
 				RepositoryWorkspaceIds:       value.RepositoryWorkspaceIDs,
 				IntegrationIds:               value.IntegrationIDs,
-				Ownership:                    configurationOwnershipToProto(value.Ownership),
+				ProviderAccountPool: &controlplanev1.ProviderAccountPool{
+					Policy:         value.ProviderAccountPool.Policy,
+					PolicyRevision: value.ProviderAccountPool.PolicyRevision,
+					ObservationMaxAge: optionalProtoDuration(
+						value.ProviderAccountPool.ObservationMaxAge,
+					),
+					Bindings: poolBindings,
+				},
+				Ownership: configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.PromptProfileSpec:
@@ -570,12 +627,18 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 	case entity.CredentialBindingSpec:
 		result.Value = &controlplanev1.ResourceSpec_CredentialBinding{
 			CredentialBinding: &controlplanev1.CredentialBindingSpec{
-				Purpose:      value.Purpose,
-				SecretRef:    value.SecretRef,
-				PrincipalRef: value.PrincipalRef,
-				Revision:     value.Revision,
-				ExpiresAt:    optionalTimestamp(value.ExpiresAt),
-				Ownership:    configurationOwnershipToProto(value.Ownership),
+				Purpose:                     value.Purpose,
+				SecretRef:                   value.SecretRef,
+				PrincipalRef:                value.PrincipalRef,
+				Revision:                    value.Revision,
+				ExpiresAt:                   optionalTimestamp(value.ExpiresAt),
+				ProviderEligible:            value.ProviderEligible,
+				ProviderCapabilities:        value.ProviderCapabilities,
+				ProviderObservedUsage:       value.ProviderObservedUsage,
+				ProviderObservedLimit:       value.ProviderObservedLimit,
+				ProviderObservationRevision: value.ProviderObservationRevision,
+				ProviderObservedAt:          optionalTimestamp(value.ProviderObservedAt),
+				Ownership:                   configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.RepositoryWorkspaceSpec:
@@ -677,6 +740,11 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				LaunchingAttempt:      value.LaunchingAttempt,
 				ScheduleId:            value.ScheduleID,
 				OccurrenceId:          value.OccurrenceID,
+				DelegationId:          value.DelegationID,
+				TargetSessionId:       value.TargetSessionID,
+				TargetTurnId:          value.TargetTurnID,
+				TargetAttempt:         value.TargetAttempt,
+				Outcome:               value.Outcome,
 			},
 		}
 	case entity.ScheduleSpec:

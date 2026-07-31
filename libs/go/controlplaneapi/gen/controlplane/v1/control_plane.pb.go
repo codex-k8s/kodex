@@ -27,24 +27,42 @@ const (
 type ResourceKind int32
 
 const (
-	ResourceKind_RESOURCE_KIND_UNSPECIFIED          ResourceKind = 0
-	ResourceKind_RESOURCE_KIND_PROJECT              ResourceKind = 1
-	ResourceKind_RESOURCE_KIND_TEAM                 ResourceKind = 2
-	ResourceKind_RESOURCE_KIND_CHAT                 ResourceKind = 3
-	ResourceKind_RESOURCE_KIND_ROLE                 ResourceKind = 4
-	ResourceKind_RESOURCE_KIND_PROMPT_PROFILE       ResourceKind = 5
-	ResourceKind_RESOURCE_KIND_CREDENTIAL_BINDING   ResourceKind = 6
+	// RESOURCE_KIND_UNSPECIFIED — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_UNSPECIFIED ResourceKind = 0
+	// RESOURCE_KIND_PROJECT — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_PROJECT ResourceKind = 1
+	// RESOURCE_KIND_TEAM — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_TEAM ResourceKind = 2
+	// RESOURCE_KIND_CHAT — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_CHAT ResourceKind = 3
+	// RESOURCE_KIND_ROLE — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_ROLE ResourceKind = 4
+	// RESOURCE_KIND_PROMPT_PROFILE — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_PROMPT_PROFILE ResourceKind = 5
+	// RESOURCE_KIND_CREDENTIAL_BINDING — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_CREDENTIAL_BINDING ResourceKind = 6
+	// RESOURCE_KIND_REPOSITORY_WORKSPACE — значение закрытого перечисления ResourceKind.
 	ResourceKind_RESOURCE_KIND_REPOSITORY_WORKSPACE ResourceKind = 7
-	ResourceKind_RESOURCE_KIND_INTEGRATION          ResourceKind = 8
-	ResourceKind_RESOURCE_KIND_RUNTIME_REVISION     ResourceKind = 9
-	ResourceKind_RESOURCE_KIND_SESSION              ResourceKind = 10
-	ResourceKind_RESOURCE_KIND_TURN                 ResourceKind = 11
-	ResourceKind_RESOURCE_KIND_PROCESS_RUN          ResourceKind = 12
-	ResourceKind_RESOURCE_KIND_SCHEDULE             ResourceKind = 13
-	ResourceKind_RESOURCE_KIND_OWNER_GATE           ResourceKind = 14
-	ResourceKind_RESOURCE_KIND_MEMORY_RECORD        ResourceKind = 15
-	ResourceKind_RESOURCE_KIND_WORK_CLAIM           ResourceKind = 16
-	ResourceKind_RESOURCE_KIND_ARTIFACT             ResourceKind = 17
+	// RESOURCE_KIND_INTEGRATION — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_INTEGRATION ResourceKind = 8
+	// RESOURCE_KIND_RUNTIME_REVISION — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_RUNTIME_REVISION ResourceKind = 9
+	// RESOURCE_KIND_SESSION — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_SESSION ResourceKind = 10
+	// RESOURCE_KIND_TURN — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_TURN ResourceKind = 11
+	// RESOURCE_KIND_PROCESS_RUN — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_PROCESS_RUN ResourceKind = 12
+	// RESOURCE_KIND_SCHEDULE — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_SCHEDULE ResourceKind = 13
+	// RESOURCE_KIND_OWNER_GATE — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_OWNER_GATE ResourceKind = 14
+	// RESOURCE_KIND_MEMORY_RECORD — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_MEMORY_RECORD ResourceKind = 15
+	// RESOURCE_KIND_WORK_CLAIM — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_WORK_CLAIM ResourceKind = 16
+	// RESOURCE_KIND_ARTIFACT — значение закрытого перечисления ResourceKind.
+	ResourceKind_RESOURCE_KIND_ARTIFACT ResourceKind = 17
 )
 
 // Enum value maps for ResourceKind.
@@ -118,25 +136,42 @@ func (ResourceKind) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{0}
 }
 
+// LifecycleState задаёт закрытое перечисление контракта control-plane.
 type LifecycleState int32
 
 const (
-	LifecycleState_LIFECYCLE_STATE_UNSPECIFIED      LifecycleState = 0
-	LifecycleState_LIFECYCLE_STATE_ACTIVE           LifecycleState = 1
-	LifecycleState_LIFECYCLE_STATE_PAUSED           LifecycleState = 2
-	LifecycleState_LIFECYCLE_STATE_ARCHIVED         LifecycleState = 3
+	// LIFECYCLE_STATE_UNSPECIFIED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_UNSPECIFIED LifecycleState = 0
+	// LIFECYCLE_STATE_ACTIVE — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_ACTIVE LifecycleState = 1
+	// LIFECYCLE_STATE_PAUSED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_PAUSED LifecycleState = 2
+	// LIFECYCLE_STATE_ARCHIVED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_ARCHIVED LifecycleState = 3
+	// LIFECYCLE_STATE_DELETION_PENDING — значение закрытого перечисления LifecycleState.
 	LifecycleState_LIFECYCLE_STATE_DELETION_PENDING LifecycleState = 4
-	LifecycleState_LIFECYCLE_STATE_DELETED          LifecycleState = 5
-	LifecycleState_LIFECYCLE_STATE_QUEUED           LifecycleState = 6
-	LifecycleState_LIFECYCLE_STATE_CLAIMED          LifecycleState = 7
-	LifecycleState_LIFECYCLE_STATE_RUNNING          LifecycleState = 8
-	LifecycleState_LIFECYCLE_STATE_WAITING_OWNER    LifecycleState = 9
+	// LIFECYCLE_STATE_DELETED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_DELETED LifecycleState = 5
+	// LIFECYCLE_STATE_QUEUED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_QUEUED LifecycleState = 6
+	// LIFECYCLE_STATE_CLAIMED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_CLAIMED LifecycleState = 7
+	// LIFECYCLE_STATE_RUNNING — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_RUNNING LifecycleState = 8
+	// LIFECYCLE_STATE_WAITING_OWNER — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_WAITING_OWNER LifecycleState = 9
+	// LIFECYCLE_STATE_WAITING_EXTERNAL — значение закрытого перечисления LifecycleState.
 	LifecycleState_LIFECYCLE_STATE_WAITING_EXTERNAL LifecycleState = 10
-	LifecycleState_LIFECYCLE_STATE_SUCCEEDED        LifecycleState = 11
-	LifecycleState_LIFECYCLE_STATE_FAILED           LifecycleState = 12
-	LifecycleState_LIFECYCLE_STATE_CANCELLED        LifecycleState = 13
-	LifecycleState_LIFECYCLE_STATE_EXPIRED          LifecycleState = 14
-	LifecycleState_LIFECYCLE_STATE_BLOCKED          LifecycleState = 15
+	// LIFECYCLE_STATE_SUCCEEDED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_SUCCEEDED LifecycleState = 11
+	// LIFECYCLE_STATE_FAILED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_FAILED LifecycleState = 12
+	// LIFECYCLE_STATE_CANCELLED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_CANCELLED LifecycleState = 13
+	// LIFECYCLE_STATE_EXPIRED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_EXPIRED LifecycleState = 14
+	// LIFECYCLE_STATE_BLOCKED — значение закрытого перечисления LifecycleState.
+	LifecycleState_LIFECYCLE_STATE_BLOCKED LifecycleState = 15
 )
 
 // Enum value maps for LifecycleState.
@@ -206,14 +241,20 @@ func (LifecycleState) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1}
 }
 
+// RoomType задаёт закрытое перечисление контракта control-plane.
 type RoomType int32
 
 const (
-	RoomType_ROOM_TYPE_UNSPECIFIED  RoomType = 0
-	RoomType_ROOM_TYPE_USER         RoomType = 1
+	// ROOM_TYPE_UNSPECIFIED — значение закрытого перечисления RoomType.
+	RoomType_ROOM_TYPE_UNSPECIFIED RoomType = 0
+	// ROOM_TYPE_USER — значение закрытого перечисления RoomType.
+	RoomType_ROOM_TYPE_USER RoomType = 1
+	// ROOM_TYPE_COORDINATION — значение закрытого перечисления RoomType.
 	RoomType_ROOM_TYPE_COORDINATION RoomType = 2
+	// ROOM_TYPE_WORK_CONTROL — значение закрытого перечисления RoomType.
 	RoomType_ROOM_TYPE_WORK_CONTROL RoomType = 3
-	RoomType_ROOM_TYPE_RUNS         RoomType = 4
+	// ROOM_TYPE_RUNS — значение закрытого перечисления RoomType.
+	RoomType_ROOM_TYPE_RUNS RoomType = 4
 )
 
 // Enum value maps for RoomType.
@@ -261,13 +302,18 @@ func (RoomType) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{2}
 }
 
+// ScheduleOverlapPolicy задаёт закрытое перечисление контракта control-plane.
 type ScheduleOverlapPolicy int32
 
 const (
+	// SCHEDULE_OVERLAP_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleOverlapPolicy.
 	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_UNSPECIFIED ScheduleOverlapPolicy = 0
-	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_FORBID      ScheduleOverlapPolicy = 1
-	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_SKIP        ScheduleOverlapPolicy = 2
-	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_QUEUE       ScheduleOverlapPolicy = 3
+	// SCHEDULE_OVERLAP_POLICY_FORBID — значение закрытого перечисления ScheduleOverlapPolicy.
+	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_FORBID ScheduleOverlapPolicy = 1
+	// SCHEDULE_OVERLAP_POLICY_SKIP — значение закрытого перечисления ScheduleOverlapPolicy.
+	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_SKIP ScheduleOverlapPolicy = 2
+	// SCHEDULE_OVERLAP_POLICY_QUEUE — значение закрытого перечисления ScheduleOverlapPolicy.
+	ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_QUEUE ScheduleOverlapPolicy = 3
 )
 
 // Enum value maps for ScheduleOverlapPolicy.
@@ -313,13 +359,19 @@ func (ScheduleOverlapPolicy) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{3}
 }
 
+// ScheduleMisfirePolicy задаёт закрытое перечисление контракта control-plane.
 type ScheduleMisfirePolicy int32
 
 const (
-	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_UNSPECIFIED  ScheduleMisfirePolicy = 0
-	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_SKIP         ScheduleMisfirePolicy = 1
-	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_RUN_ONCE     ScheduleMisfirePolicy = 2
-	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_CATCH_UP     ScheduleMisfirePolicy = 3
+	// SCHEDULE_MISFIRE_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleMisfirePolicy.
+	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_UNSPECIFIED ScheduleMisfirePolicy = 0
+	// SCHEDULE_MISFIRE_POLICY_SKIP — значение закрытого перечисления ScheduleMisfirePolicy.
+	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_SKIP ScheduleMisfirePolicy = 1
+	// SCHEDULE_MISFIRE_POLICY_RUN_ONCE — значение закрытого перечисления ScheduleMisfirePolicy.
+	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_RUN_ONCE ScheduleMisfirePolicy = 2
+	// SCHEDULE_MISFIRE_POLICY_CATCH_UP — значение закрытого перечисления ScheduleMisfirePolicy.
+	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_CATCH_UP ScheduleMisfirePolicy = 3
+	// SCHEDULE_MISFIRE_POLICY_WITHIN_GRACE — значение закрытого перечисления ScheduleMisfirePolicy.
 	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_WITHIN_GRACE ScheduleMisfirePolicy = 4
 )
 
@@ -372,9 +424,12 @@ func (ScheduleMisfirePolicy) EnumDescriptor() ([]byte, []int) {
 type ScheduleTargetType int32
 
 const (
+	// SCHEDULE_TARGET_TYPE_UNSPECIFIED — значение закрытого перечисления ScheduleTargetType.
 	ScheduleTargetType_SCHEDULE_TARGET_TYPE_UNSPECIFIED ScheduleTargetType = 0
-	ScheduleTargetType_SCHEDULE_TARGET_TYPE_AGENT       ScheduleTargetType = 1
-	ScheduleTargetType_SCHEDULE_TARGET_TYPE_PLAYBOOK    ScheduleTargetType = 2
+	// SCHEDULE_TARGET_TYPE_AGENT — значение закрытого перечисления ScheduleTargetType.
+	ScheduleTargetType_SCHEDULE_TARGET_TYPE_AGENT ScheduleTargetType = 1
+	// SCHEDULE_TARGET_TYPE_PLAYBOOK — значение закрытого перечисления ScheduleTargetType.
+	ScheduleTargetType_SCHEDULE_TARGET_TYPE_PLAYBOOK ScheduleTargetType = 2
 )
 
 // Enum value maps for ScheduleTargetType.
@@ -418,14 +473,20 @@ func (ScheduleTargetType) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{5}
 }
 
+// OwnerGateDecision задаёт закрытое перечисление контракта control-plane.
 type OwnerGateDecision int32
 
 const (
-	OwnerGateDecision_OWNER_GATE_DECISION_UNSPECIFIED       OwnerGateDecision = 0
-	OwnerGateDecision_OWNER_GATE_DECISION_APPROVED          OwnerGateDecision = 1
-	OwnerGateDecision_OWNER_GATE_DECISION_REJECTED          OwnerGateDecision = 2
+	// OWNER_GATE_DECISION_UNSPECIFIED — значение закрытого перечисления OwnerGateDecision.
+	OwnerGateDecision_OWNER_GATE_DECISION_UNSPECIFIED OwnerGateDecision = 0
+	// OWNER_GATE_DECISION_APPROVED — значение закрытого перечисления OwnerGateDecision.
+	OwnerGateDecision_OWNER_GATE_DECISION_APPROVED OwnerGateDecision = 1
+	// OWNER_GATE_DECISION_REJECTED — значение закрытого перечисления OwnerGateDecision.
+	OwnerGateDecision_OWNER_GATE_DECISION_REJECTED OwnerGateDecision = 2
+	// OWNER_GATE_DECISION_CHANGES_REQUESTED — значение закрытого перечисления OwnerGateDecision.
 	OwnerGateDecision_OWNER_GATE_DECISION_CHANGES_REQUESTED OwnerGateDecision = 3
-	OwnerGateDecision_OWNER_GATE_DECISION_CANCELLED         OwnerGateDecision = 4
+	// OWNER_GATE_DECISION_CANCELLED — значение закрытого перечисления OwnerGateDecision.
+	OwnerGateDecision_OWNER_GATE_DECISION_CANCELLED OwnerGateDecision = 4
 )
 
 // Enum value maps for OwnerGateDecision.
@@ -473,16 +534,24 @@ func (OwnerGateDecision) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{6}
 }
 
+// AdministrativeAction задаёт закрытое перечисление контракта control-plane.
 type AdministrativeAction int32
 
 const (
+	// ADMINISTRATIVE_ACTION_UNSPECIFIED — значение закрытого перечисления AdministrativeAction.
 	AdministrativeAction_ADMINISTRATIVE_ACTION_UNSPECIFIED AdministrativeAction = 0
-	AdministrativeAction_ADMINISTRATIVE_ACTION_CREATE      AdministrativeAction = 1
-	AdministrativeAction_ADMINISTRATIVE_ACTION_UPDATE      AdministrativeAction = 2
-	AdministrativeAction_ADMINISTRATIVE_ACTION_ACTIVATE    AdministrativeAction = 3
-	AdministrativeAction_ADMINISTRATIVE_ACTION_PAUSE       AdministrativeAction = 4
-	AdministrativeAction_ADMINISTRATIVE_ACTION_ARCHIVE     AdministrativeAction = 5
-	AdministrativeAction_ADMINISTRATIVE_ACTION_DELETE      AdministrativeAction = 6
+	// ADMINISTRATIVE_ACTION_CREATE — значение закрытого перечисления AdministrativeAction.
+	AdministrativeAction_ADMINISTRATIVE_ACTION_CREATE AdministrativeAction = 1
+	// ADMINISTRATIVE_ACTION_UPDATE — значение закрытого перечисления AdministrativeAction.
+	AdministrativeAction_ADMINISTRATIVE_ACTION_UPDATE AdministrativeAction = 2
+	// ADMINISTRATIVE_ACTION_ACTIVATE — значение закрытого перечисления AdministrativeAction.
+	AdministrativeAction_ADMINISTRATIVE_ACTION_ACTIVATE AdministrativeAction = 3
+	// ADMINISTRATIVE_ACTION_PAUSE — значение закрытого перечисления AdministrativeAction.
+	AdministrativeAction_ADMINISTRATIVE_ACTION_PAUSE AdministrativeAction = 4
+	// ADMINISTRATIVE_ACTION_ARCHIVE — значение закрытого перечисления AdministrativeAction.
+	AdministrativeAction_ADMINISTRATIVE_ACTION_ARCHIVE AdministrativeAction = 5
+	// ADMINISTRATIVE_ACTION_DELETE — значение закрытого перечисления AdministrativeAction.
+	AdministrativeAction_ADMINISTRATIVE_ACTION_DELETE AdministrativeAction = 6
 )
 
 // Enum value maps for AdministrativeAction.
@@ -534,15 +603,22 @@ func (AdministrativeAction) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{7}
 }
 
+// ArtifactScanState задаёт закрытое перечисление контракта control-plane.
 type ArtifactScanState int32
 
 const (
+	// ARTIFACT_SCAN_STATE_UNSPECIFIED — значение закрытого перечисления ArtifactScanState.
 	ArtifactScanState_ARTIFACT_SCAN_STATE_UNSPECIFIED ArtifactScanState = 0
-	ArtifactScanState_ARTIFACT_SCAN_STATE_PENDING     ArtifactScanState = 1
-	ArtifactScanState_ARTIFACT_SCAN_STATE_SCANNING    ArtifactScanState = 2
-	ArtifactScanState_ARTIFACT_SCAN_STATE_CLEAN       ArtifactScanState = 3
+	// ARTIFACT_SCAN_STATE_PENDING — значение закрытого перечисления ArtifactScanState.
+	ArtifactScanState_ARTIFACT_SCAN_STATE_PENDING ArtifactScanState = 1
+	// ARTIFACT_SCAN_STATE_SCANNING — значение закрытого перечисления ArtifactScanState.
+	ArtifactScanState_ARTIFACT_SCAN_STATE_SCANNING ArtifactScanState = 2
+	// ARTIFACT_SCAN_STATE_CLEAN — значение закрытого перечисления ArtifactScanState.
+	ArtifactScanState_ARTIFACT_SCAN_STATE_CLEAN ArtifactScanState = 3
+	// ARTIFACT_SCAN_STATE_QUARANTINED — значение закрытого перечисления ArtifactScanState.
 	ArtifactScanState_ARTIFACT_SCAN_STATE_QUARANTINED ArtifactScanState = 4
-	ArtifactScanState_ARTIFACT_SCAN_STATE_FAILED      ArtifactScanState = 5
+	// ARTIFACT_SCAN_STATE_FAILED — значение закрытого перечисления ArtifactScanState.
+	ArtifactScanState_ARTIFACT_SCAN_STATE_FAILED ArtifactScanState = 5
 )
 
 // Enum value maps for ArtifactScanState.
@@ -592,16 +668,25 @@ func (ArtifactScanState) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{8}
 }
 
+// ScheduleOccurrenceState задаёт закрытое перечисление контракта control-plane.
 type ScheduleOccurrenceState int32
 
 const (
+	// SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED — значение закрытого перечисления ScheduleOccurrenceState.
 	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED ScheduleOccurrenceState = 0
-	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_QUEUED      ScheduleOccurrenceState = 1
-	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_CLAIMED     ScheduleOccurrenceState = 2
-	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_SUCCEEDED   ScheduleOccurrenceState = 3
-	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_FAILED      ScheduleOccurrenceState = 4
-	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_CANCELLED   ScheduleOccurrenceState = 5
-	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_SKIPPED     ScheduleOccurrenceState = 6
+	// SCHEDULE_OCCURRENCE_STATE_QUEUED — значение закрытого перечисления ScheduleOccurrenceState.
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_QUEUED ScheduleOccurrenceState = 1
+	// SCHEDULE_OCCURRENCE_STATE_CLAIMED — значение закрытого перечисления ScheduleOccurrenceState.
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_CLAIMED ScheduleOccurrenceState = 2
+	// SCHEDULE_OCCURRENCE_STATE_SUCCEEDED — значение закрытого перечисления ScheduleOccurrenceState.
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_SUCCEEDED ScheduleOccurrenceState = 3
+	// SCHEDULE_OCCURRENCE_STATE_FAILED — значение закрытого перечисления ScheduleOccurrenceState.
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_FAILED ScheduleOccurrenceState = 4
+	// SCHEDULE_OCCURRENCE_STATE_CANCELLED — значение закрытого перечисления ScheduleOccurrenceState.
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_CANCELLED ScheduleOccurrenceState = 5
+	// SCHEDULE_OCCURRENCE_STATE_SKIPPED — значение закрытого перечисления ScheduleOccurrenceState.
+	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_SKIPPED ScheduleOccurrenceState = 6
+	// SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER — значение закрытого перечисления ScheduleOccurrenceState.
 	ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER ScheduleOccurrenceState = 7
 )
 
@@ -656,15 +741,22 @@ func (ScheduleOccurrenceState) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{9}
 }
 
+// SessionAction задаёт закрытое перечисление контракта control-plane.
 type SessionAction int32
 
 const (
+	// SESSION_ACTION_UNSPECIFIED — значение закрытого перечисления SessionAction.
 	SessionAction_SESSION_ACTION_UNSPECIFIED SessionAction = 0
-	SessionAction_SESSION_ACTION_CREATE      SessionAction = 1
-	SessionAction_SESSION_ACTION_CLOSE       SessionAction = 2
-	SessionAction_SESSION_ACTION_ARCHIVE     SessionAction = 3
-	SessionAction_SESSION_ACTION_CANCEL      SessionAction = 4
-	SessionAction_SESSION_ACTION_CLEANUP     SessionAction = 5
+	// SESSION_ACTION_CREATE — значение закрытого перечисления SessionAction.
+	SessionAction_SESSION_ACTION_CREATE SessionAction = 1
+	// SESSION_ACTION_CLOSE — значение закрытого перечисления SessionAction.
+	SessionAction_SESSION_ACTION_CLOSE SessionAction = 2
+	// SESSION_ACTION_ARCHIVE — значение закрытого перечисления SessionAction.
+	SessionAction_SESSION_ACTION_ARCHIVE SessionAction = 3
+	// SESSION_ACTION_CANCEL — значение закрытого перечисления SessionAction.
+	SessionAction_SESSION_ACTION_CANCEL SessionAction = 4
+	// SESSION_ACTION_CLEANUP — значение закрытого перечисления SessionAction.
+	SessionAction_SESSION_ACTION_CLEANUP SessionAction = 5
 )
 
 // Enum value maps for SessionAction.
@@ -714,13 +806,18 @@ func (SessionAction) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{10}
 }
 
+// MemoryAction задаёт закрытое перечисление контракта control-plane.
 type MemoryAction int32
 
 const (
+	// MEMORY_ACTION_UNSPECIFIED — значение закрытого перечисления MemoryAction.
 	MemoryAction_MEMORY_ACTION_UNSPECIFIED MemoryAction = 0
-	MemoryAction_MEMORY_ACTION_CREATE      MemoryAction = 1
-	MemoryAction_MEMORY_ACTION_SUPERSEDE   MemoryAction = 2
-	MemoryAction_MEMORY_ACTION_ARCHIVE     MemoryAction = 3
+	// MEMORY_ACTION_CREATE — значение закрытого перечисления MemoryAction.
+	MemoryAction_MEMORY_ACTION_CREATE MemoryAction = 1
+	// MEMORY_ACTION_SUPERSEDE — значение закрытого перечисления MemoryAction.
+	MemoryAction_MEMORY_ACTION_SUPERSEDE MemoryAction = 2
+	// MEMORY_ACTION_ARCHIVE — значение закрытого перечисления MemoryAction.
+	MemoryAction_MEMORY_ACTION_ARCHIVE MemoryAction = 3
 )
 
 // Enum value maps for MemoryAction.
@@ -766,13 +863,18 @@ func (MemoryAction) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{11}
 }
 
+// WorkClaimAction задаёт закрытое перечисление контракта control-plane.
 type WorkClaimAction int32
 
 const (
+	// WORK_CLAIM_ACTION_UNSPECIFIED — значение закрытого перечисления WorkClaimAction.
 	WorkClaimAction_WORK_CLAIM_ACTION_UNSPECIFIED WorkClaimAction = 0
-	WorkClaimAction_WORK_CLAIM_ACTION_CREATE      WorkClaimAction = 1
-	WorkClaimAction_WORK_CLAIM_ACTION_RENEW       WorkClaimAction = 2
-	WorkClaimAction_WORK_CLAIM_ACTION_RELEASE     WorkClaimAction = 3
+	// WORK_CLAIM_ACTION_CREATE — значение закрытого перечисления WorkClaimAction.
+	WorkClaimAction_WORK_CLAIM_ACTION_CREATE WorkClaimAction = 1
+	// WORK_CLAIM_ACTION_RENEW — значение закрытого перечисления WorkClaimAction.
+	WorkClaimAction_WORK_CLAIM_ACTION_RENEW WorkClaimAction = 2
+	// WORK_CLAIM_ACTION_RELEASE — значение закрытого перечисления WorkClaimAction.
+	WorkClaimAction_WORK_CLAIM_ACTION_RELEASE WorkClaimAction = 3
 )
 
 // Enum value maps for WorkClaimAction.
@@ -818,13 +920,18 @@ func (WorkClaimAction) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{12}
 }
 
+// ScheduleSessionPolicy задаёт закрытое перечисление контракта control-plane.
 type ScheduleSessionPolicy int32
 
 const (
+	// SCHEDULE_SESSION_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleSessionPolicy.
 	ScheduleSessionPolicy_SCHEDULE_SESSION_POLICY_UNSPECIFIED ScheduleSessionPolicy = 0
-	ScheduleSessionPolicy_SCHEDULE_SESSION_POLICY_NEW         ScheduleSessionPolicy = 1
-	ScheduleSessionPolicy_SCHEDULE_SESSION_POLICY_PERSISTENT  ScheduleSessionPolicy = 2
-	ScheduleSessionPolicy_SCHEDULE_SESSION_POLICY_ROLLING     ScheduleSessionPolicy = 3
+	// SCHEDULE_SESSION_POLICY_NEW — значение закрытого перечисления ScheduleSessionPolicy.
+	ScheduleSessionPolicy_SCHEDULE_SESSION_POLICY_NEW ScheduleSessionPolicy = 1
+	// SCHEDULE_SESSION_POLICY_PERSISTENT — значение закрытого перечисления ScheduleSessionPolicy.
+	ScheduleSessionPolicy_SCHEDULE_SESSION_POLICY_PERSISTENT ScheduleSessionPolicy = 2
+	// SCHEDULE_SESSION_POLICY_ROLLING — значение закрытого перечисления ScheduleSessionPolicy.
+	ScheduleSessionPolicy_SCHEDULE_SESSION_POLICY_ROLLING ScheduleSessionPolicy = 3
 )
 
 // Enum value maps for ScheduleSessionPolicy.
@@ -870,15 +977,22 @@ func (ScheduleSessionPolicy) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{13}
 }
 
+// ScheduleNotificationPolicy задаёт закрытое перечисление контракта control-plane.
 type ScheduleNotificationPolicy int32
 
 const (
-	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_UNSPECIFIED          ScheduleNotificationPolicy = 0
-	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ALWAYS               ScheduleNotificationPolicy = 1
-	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ON_ACTION            ScheduleNotificationPolicy = 2
-	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ON_FAILURE           ScheduleNotificationPolicy = 3
+	// SCHEDULE_NOTIFICATION_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleNotificationPolicy.
+	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_UNSPECIFIED ScheduleNotificationPolicy = 0
+	// SCHEDULE_NOTIFICATION_POLICY_ALWAYS — значение закрытого перечисления ScheduleNotificationPolicy.
+	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ALWAYS ScheduleNotificationPolicy = 1
+	// SCHEDULE_NOTIFICATION_POLICY_ON_ACTION — значение закрытого перечисления ScheduleNotificationPolicy.
+	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ON_ACTION ScheduleNotificationPolicy = 2
+	// SCHEDULE_NOTIFICATION_POLICY_ON_FAILURE — значение закрытого перечисления ScheduleNotificationPolicy.
+	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ON_FAILURE ScheduleNotificationPolicy = 3
+	// SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE — значение закрытого перечисления ScheduleNotificationPolicy.
 	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE ScheduleNotificationPolicy = 4
-	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_AUDIT_ONLY           ScheduleNotificationPolicy = 5
+	// SCHEDULE_NOTIFICATION_POLICY_AUDIT_ONLY — значение закрытого перечисления ScheduleNotificationPolicy.
+	ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_AUDIT_ONLY ScheduleNotificationPolicy = 5
 )
 
 // Enum value maps for ScheduleNotificationPolicy.
@@ -928,12 +1042,16 @@ func (ScheduleNotificationPolicy) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{14}
 }
 
+// ConfigurationManager задаёт закрытое перечисление контракта control-plane.
 type ConfigurationManager int32
 
 const (
+	// CONFIGURATION_MANAGER_UNSPECIFIED — значение закрытого перечисления ConfigurationManager.
 	ConfigurationManager_CONFIGURATION_MANAGER_UNSPECIFIED ConfigurationManager = 0
-	ConfigurationManager_CONFIGURATION_MANAGER_UI          ConfigurationManager = 1
-	ConfigurationManager_CONFIGURATION_MANAGER_GIT         ConfigurationManager = 2
+	// CONFIGURATION_MANAGER_UI — значение закрытого перечисления ConfigurationManager.
+	ConfigurationManager_CONFIGURATION_MANAGER_UI ConfigurationManager = 1
+	// CONFIGURATION_MANAGER_GIT — значение закрытого перечисления ConfigurationManager.
+	ConfigurationManager_CONFIGURATION_MANAGER_GIT ConfigurationManager = 2
 )
 
 // Enum value maps for ConfigurationManager.
@@ -977,20 +1095,32 @@ func (ConfigurationManager) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{15}
 }
 
+// ErrorReason задаёт закрытое перечисление контракта control-plane.
 type ErrorReason int32
 
 const (
-	ErrorReason_ERROR_REASON_UNSPECIFIED          ErrorReason = 0
-	ErrorReason_ERROR_REASON_INVALID_REQUEST      ErrorReason = 1
-	ErrorReason_ERROR_REASON_UNAUTHENTICATED      ErrorReason = 2
-	ErrorReason_ERROR_REASON_PERMISSION_DENIED    ErrorReason = 3
-	ErrorReason_ERROR_REASON_NOT_FOUND            ErrorReason = 4
-	ErrorReason_ERROR_REASON_STATE_CONFLICT       ErrorReason = 5
+	// ERROR_REASON_UNSPECIFIED — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_UNSPECIFIED ErrorReason = 0
+	// ERROR_REASON_INVALID_REQUEST — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_INVALID_REQUEST ErrorReason = 1
+	// ERROR_REASON_UNAUTHENTICATED — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_UNAUTHENTICATED ErrorReason = 2
+	// ERROR_REASON_PERMISSION_DENIED — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_PERMISSION_DENIED ErrorReason = 3
+	// ERROR_REASON_NOT_FOUND — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_NOT_FOUND ErrorReason = 4
+	// ERROR_REASON_STATE_CONFLICT — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_STATE_CONFLICT ErrorReason = 5
+	// ERROR_REASON_IDEMPOTENCY_CONFLICT — значение закрытого перечисления ErrorReason.
 	ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT ErrorReason = 6
-	ErrorReason_ERROR_REASON_VERSION_MISMATCH     ErrorReason = 7
-	ErrorReason_ERROR_REASON_UNAVAILABLE          ErrorReason = 8
-	ErrorReason_ERROR_REASON_INTERNAL             ErrorReason = 9
-	ErrorReason_ERROR_REASON_RATE_LIMITED         ErrorReason = 10
+	// ERROR_REASON_VERSION_MISMATCH — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_VERSION_MISMATCH ErrorReason = 7
+	// ERROR_REASON_UNAVAILABLE — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_UNAVAILABLE ErrorReason = 8
+	// ERROR_REASON_INTERNAL — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_INTERNAL ErrorReason = 9
+	// ERROR_REASON_RATE_LIMITED — значение закрытого перечисления ErrorReason.
+	ErrorReason_ERROR_REASON_RATE_LIMITED ErrorReason = 10
 )
 
 // Enum value maps for ErrorReason.
@@ -1564,6 +1694,7 @@ type RoleSpec struct {
 	ProviderCredentialBindingIds []string                `protobuf:"bytes,5,rep,name=provider_credential_binding_ids,json=providerCredentialBindingIds,proto3" json:"provider_credential_binding_ids,omitempty"`
 	RepositoryWorkspaceIds       []string                `protobuf:"bytes,6,rep,name=repository_workspace_ids,json=repositoryWorkspaceIds,proto3" json:"repository_workspace_ids,omitempty"`
 	IntegrationIds               []string                `protobuf:"bytes,7,rep,name=integration_ids,json=integrationIds,proto3" json:"integration_ids,omitempty"`
+	ProviderAccountPool          *ProviderAccountPool    `protobuf:"bytes,8,opt,name=provider_account_pool,json=providerAccountPool,proto3" json:"provider_account_pool,omitempty"`
 	Ownership                    *ConfigurationOwnership `protobuf:"bytes,10,opt,name=ownership,proto3" json:"ownership,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
@@ -1648,11 +1779,140 @@ func (x *RoleSpec) GetIntegrationIds() []string {
 	return nil
 }
 
+func (x *RoleSpec) GetProviderAccountPool() *ProviderAccountPool {
+	if x != nil {
+		return x.ProviderAccountPool
+	}
+	return nil
+}
+
 func (x *RoleSpec) GetOwnership() *ConfigurationOwnership {
 	if x != nil {
 		return x.Ownership
 	}
 	return nil
+}
+
+// ProviderAccountPool задаёт server-owned выбор свежей допустимой учётной записи.
+type ProviderAccountPool struct {
+	state             protoimpl.MessageState        `protogen:"open.v1"`
+	Policy            string                        `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
+	PolicyRevision    uint64                        `protobuf:"varint,2,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	ObservationMaxAge *durationpb.Duration          `protobuf:"bytes,3,opt,name=observation_max_age,json=observationMaxAge,proto3" json:"observation_max_age,omitempty"`
+	Bindings          []*ProviderAccountPoolBinding `protobuf:"bytes,4,rep,name=bindings,proto3" json:"bindings,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ProviderAccountPool) Reset() {
+	*x = ProviderAccountPool{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProviderAccountPool) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProviderAccountPool) ProtoMessage() {}
+
+func (x *ProviderAccountPool) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProviderAccountPool.ProtoReflect.Descriptor instead.
+func (*ProviderAccountPool) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ProviderAccountPool) GetPolicy() string {
+	if x != nil {
+		return x.Policy
+	}
+	return ""
+}
+
+func (x *ProviderAccountPool) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *ProviderAccountPool) GetObservationMaxAge() *durationpb.Duration {
+	if x != nil {
+		return x.ObservationMaxAge
+	}
+	return nil
+}
+
+func (x *ProviderAccountPool) GetBindings() []*ProviderAccountPoolBinding {
+	if x != nil {
+		return x.Bindings
+	}
+	return nil
+}
+
+// ProviderAccountPoolBinding задаёт только metadata-вес без secret value.
+type ProviderAccountPoolBinding struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	CredentialBindingId string                 `protobuf:"bytes,1,opt,name=credential_binding_id,json=credentialBindingId,proto3" json:"credential_binding_id,omitempty"`
+	Weight              uint32                 `protobuf:"varint,2,opt,name=weight,proto3" json:"weight,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ProviderAccountPoolBinding) Reset() {
+	*x = ProviderAccountPoolBinding{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProviderAccountPoolBinding) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProviderAccountPoolBinding) ProtoMessage() {}
+
+func (x *ProviderAccountPoolBinding) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProviderAccountPoolBinding.ProtoReflect.Descriptor instead.
+func (*ProviderAccountPoolBinding) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ProviderAccountPoolBinding) GetCredentialBindingId() string {
+	if x != nil {
+		return x.CredentialBindingId
+	}
+	return ""
+}
+
+func (x *ProviderAccountPoolBinding) GetWeight() uint32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
 }
 
 // PromptProfileSpec описывает версионированное сообщение контракта control-plane.
@@ -1669,7 +1929,7 @@ type PromptProfileSpec struct {
 
 func (x *PromptProfileSpec) Reset() {
 	*x = PromptProfileSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[9]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1681,7 +1941,7 @@ func (x *PromptProfileSpec) String() string {
 func (*PromptProfileSpec) ProtoMessage() {}
 
 func (x *PromptProfileSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[9]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1694,7 +1954,7 @@ func (x *PromptProfileSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptProfileSpec.ProtoReflect.Descriptor instead.
 func (*PromptProfileSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{9}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *PromptProfileSpec) GetRevision() uint64 {
@@ -1734,20 +1994,26 @@ func (x *PromptProfileSpec) GetOwnership() *ConfigurationOwnership {
 
 // CredentialBindingSpec описывает версионированное сообщение контракта control-plane.
 type CredentialBindingSpec struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Purpose       string                  `protobuf:"bytes,1,opt,name=purpose,proto3" json:"purpose,omitempty"`
-	SecretRef     string                  `protobuf:"bytes,2,opt,name=secret_ref,json=secretRef,proto3" json:"secret_ref,omitempty"`
-	PrincipalRef  string                  `protobuf:"bytes,3,opt,name=principal_ref,json=principalRef,proto3" json:"principal_ref,omitempty"`
-	Revision      uint64                  `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`
-	ExpiresAt     *timestamppb.Timestamp  `protobuf:"bytes,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	Ownership     *ConfigurationOwnership `protobuf:"bytes,10,opt,name=ownership,proto3" json:"ownership,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                       protoimpl.MessageState  `protogen:"open.v1"`
+	Purpose                     string                  `protobuf:"bytes,1,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	SecretRef                   string                  `protobuf:"bytes,2,opt,name=secret_ref,json=secretRef,proto3" json:"secret_ref,omitempty"`
+	PrincipalRef                string                  `protobuf:"bytes,3,opt,name=principal_ref,json=principalRef,proto3" json:"principal_ref,omitempty"`
+	Revision                    uint64                  `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`
+	ExpiresAt                   *timestamppb.Timestamp  `protobuf:"bytes,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	ProviderEligible            bool                    `protobuf:"varint,6,opt,name=provider_eligible,json=providerEligible,proto3" json:"provider_eligible,omitempty"`
+	ProviderCapabilities        []string                `protobuf:"bytes,7,rep,name=provider_capabilities,json=providerCapabilities,proto3" json:"provider_capabilities,omitempty"`
+	ProviderObservedUsage       uint64                  `protobuf:"varint,8,opt,name=provider_observed_usage,json=providerObservedUsage,proto3" json:"provider_observed_usage,omitempty"`
+	ProviderObservedLimit       uint64                  `protobuf:"varint,9,opt,name=provider_observed_limit,json=providerObservedLimit,proto3" json:"provider_observed_limit,omitempty"`
+	Ownership                   *ConfigurationOwnership `protobuf:"bytes,10,opt,name=ownership,proto3" json:"ownership,omitempty"`
+	ProviderObservationRevision uint64                  `protobuf:"varint,11,opt,name=provider_observation_revision,json=providerObservationRevision,proto3" json:"provider_observation_revision,omitempty"`
+	ProviderObservedAt          *timestamppb.Timestamp  `protobuf:"bytes,12,opt,name=provider_observed_at,json=providerObservedAt,proto3" json:"provider_observed_at,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *CredentialBindingSpec) Reset() {
 	*x = CredentialBindingSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[10]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1759,7 +2025,7 @@ func (x *CredentialBindingSpec) String() string {
 func (*CredentialBindingSpec) ProtoMessage() {}
 
 func (x *CredentialBindingSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[10]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1772,7 +2038,7 @@ func (x *CredentialBindingSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CredentialBindingSpec.ProtoReflect.Descriptor instead.
 func (*CredentialBindingSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{10}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CredentialBindingSpec) GetPurpose() string {
@@ -1810,9 +2076,51 @@ func (x *CredentialBindingSpec) GetExpiresAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *CredentialBindingSpec) GetProviderEligible() bool {
+	if x != nil {
+		return x.ProviderEligible
+	}
+	return false
+}
+
+func (x *CredentialBindingSpec) GetProviderCapabilities() []string {
+	if x != nil {
+		return x.ProviderCapabilities
+	}
+	return nil
+}
+
+func (x *CredentialBindingSpec) GetProviderObservedUsage() uint64 {
+	if x != nil {
+		return x.ProviderObservedUsage
+	}
+	return 0
+}
+
+func (x *CredentialBindingSpec) GetProviderObservedLimit() uint64 {
+	if x != nil {
+		return x.ProviderObservedLimit
+	}
+	return 0
+}
+
 func (x *CredentialBindingSpec) GetOwnership() *ConfigurationOwnership {
 	if x != nil {
 		return x.Ownership
+	}
+	return nil
+}
+
+func (x *CredentialBindingSpec) GetProviderObservationRevision() uint64 {
+	if x != nil {
+		return x.ProviderObservationRevision
+	}
+	return 0
+}
+
+func (x *CredentialBindingSpec) GetProviderObservedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ProviderObservedAt
 	}
 	return nil
 }
@@ -1831,7 +2139,7 @@ type RepositoryWorkspaceSpec struct {
 
 func (x *RepositoryWorkspaceSpec) Reset() {
 	*x = RepositoryWorkspaceSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[11]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1843,7 +2151,7 @@ func (x *RepositoryWorkspaceSpec) String() string {
 func (*RepositoryWorkspaceSpec) ProtoMessage() {}
 
 func (x *RepositoryWorkspaceSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[11]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1856,7 +2164,7 @@ func (x *RepositoryWorkspaceSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepositoryWorkspaceSpec.ProtoReflect.Descriptor instead.
 func (*RepositoryWorkspaceSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{11}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RepositoryWorkspaceSpec) GetRepositoryRef() string {
@@ -1909,7 +2217,7 @@ type IntegrationSpec struct {
 
 func (x *IntegrationSpec) Reset() {
 	*x = IntegrationSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[12]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1921,7 +2229,7 @@ func (x *IntegrationSpec) String() string {
 func (*IntegrationSpec) ProtoMessage() {}
 
 func (x *IntegrationSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[12]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1934,7 +2242,7 @@ func (x *IntegrationSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntegrationSpec.ProtoReflect.Descriptor instead.
 func (*IntegrationSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{12}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *IntegrationSpec) GetDefinitionRef() string {
@@ -2004,7 +2312,7 @@ type RuntimeRevisionSpec struct {
 
 func (x *RuntimeRevisionSpec) Reset() {
 	*x = RuntimeRevisionSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[13]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2016,7 +2324,7 @@ func (x *RuntimeRevisionSpec) String() string {
 func (*RuntimeRevisionSpec) ProtoMessage() {}
 
 func (x *RuntimeRevisionSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[13]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2029,7 +2337,7 @@ func (x *RuntimeRevisionSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeRevisionSpec.ProtoReflect.Descriptor instead.
 func (*RuntimeRevisionSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{13}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *RuntimeRevisionSpec) GetManifestSha256() string {
@@ -2150,7 +2458,7 @@ type EffectiveResourceRef struct {
 
 func (x *EffectiveResourceRef) Reset() {
 	*x = EffectiveResourceRef{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[14]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2162,7 +2470,7 @@ func (x *EffectiveResourceRef) String() string {
 func (*EffectiveResourceRef) ProtoMessage() {}
 
 func (x *EffectiveResourceRef) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[14]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2175,7 +2483,7 @@ func (x *EffectiveResourceRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EffectiveResourceRef.ProtoReflect.Descriptor instead.
 func (*EffectiveResourceRef) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{14}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *EffectiveResourceRef) GetKind() ResourceKind {
@@ -2220,7 +2528,7 @@ type SessionSpec struct {
 
 func (x *SessionSpec) Reset() {
 	*x = SessionSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[15]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2232,7 +2540,7 @@ func (x *SessionSpec) String() string {
 func (*SessionSpec) ProtoMessage() {}
 
 func (x *SessionSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[15]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2245,7 +2553,7 @@ func (x *SessionSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionSpec.ProtoReflect.Descriptor instead.
 func (*SessionSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{15}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SessionSpec) GetAgentId() string {
@@ -2303,7 +2611,7 @@ type TurnSpec struct {
 
 func (x *TurnSpec) Reset() {
 	*x = TurnSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[16]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2315,7 +2623,7 @@ func (x *TurnSpec) String() string {
 func (*TurnSpec) ProtoMessage() {}
 
 func (x *TurnSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[16]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2328,7 +2636,7 @@ func (x *TurnSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TurnSpec.ProtoReflect.Descriptor instead.
 func (*TurnSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{16}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TurnSpec) GetSessionId() string {
@@ -2427,13 +2735,18 @@ type ProcessRunSpec struct {
 	LaunchingAttempt      uint32                 `protobuf:"varint,14,opt,name=launching_attempt,json=launchingAttempt,proto3" json:"launching_attempt,omitempty"`
 	ScheduleId            string                 `protobuf:"bytes,15,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"`
 	OccurrenceId          string                 `protobuf:"bytes,16,opt,name=occurrence_id,json=occurrenceId,proto3" json:"occurrence_id,omitempty"`
+	DelegationId          string                 `protobuf:"bytes,17,opt,name=delegation_id,json=delegationId,proto3" json:"delegation_id,omitempty"`
+	TargetSessionId       string                 `protobuf:"bytes,18,opt,name=target_session_id,json=targetSessionId,proto3" json:"target_session_id,omitempty"`
+	TargetTurnId          string                 `protobuf:"bytes,19,opt,name=target_turn_id,json=targetTurnId,proto3" json:"target_turn_id,omitempty"`
+	TargetAttempt         uint32                 `protobuf:"varint,20,opt,name=target_attempt,json=targetAttempt,proto3" json:"target_attempt,omitempty"`
+	Outcome               string                 `protobuf:"bytes,21,opt,name=outcome,proto3" json:"outcome,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ProcessRunSpec) Reset() {
 	*x = ProcessRunSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[17]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2445,7 +2758,7 @@ func (x *ProcessRunSpec) String() string {
 func (*ProcessRunSpec) ProtoMessage() {}
 
 func (x *ProcessRunSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[17]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2458,7 +2771,7 @@ func (x *ProcessRunSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessRunSpec.ProtoReflect.Descriptor instead.
 func (*ProcessRunSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{17}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ProcessRunSpec) GetParentProcessRunId() string {
@@ -2573,6 +2886,41 @@ func (x *ProcessRunSpec) GetOccurrenceId() string {
 	return ""
 }
 
+func (x *ProcessRunSpec) GetDelegationId() string {
+	if x != nil {
+		return x.DelegationId
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetTargetSessionId() string {
+	if x != nil {
+		return x.TargetSessionId
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetTargetTurnId() string {
+	if x != nil {
+		return x.TargetTurnId
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetTargetAttempt() uint32 {
+	if x != nil {
+		return x.TargetAttempt
+	}
+	return 0
+}
+
+func (x *ProcessRunSpec) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
 // ScheduleSpec описывает версионированное сообщение контракта control-plane.
 type ScheduleSpec struct {
 	state                    protoimpl.MessageState     `protogen:"open.v1"`
@@ -2613,7 +2961,7 @@ type ScheduleSpec struct {
 
 func (x *ScheduleSpec) Reset() {
 	*x = ScheduleSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[18]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2625,7 +2973,7 @@ func (x *ScheduleSpec) String() string {
 func (*ScheduleSpec) ProtoMessage() {}
 
 func (x *ScheduleSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[18]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2638,7 +2986,7 @@ func (x *ScheduleSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleSpec.ProtoReflect.Descriptor instead.
 func (*ScheduleSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{18}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ScheduleSpec) GetTargetResourceId() string {
@@ -2892,7 +3240,7 @@ type OwnerGateSpec struct {
 
 func (x *OwnerGateSpec) Reset() {
 	*x = OwnerGateSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[19]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2904,7 +3252,7 @@ func (x *OwnerGateSpec) String() string {
 func (*OwnerGateSpec) ProtoMessage() {}
 
 func (x *OwnerGateSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[19]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2917,7 +3265,7 @@ func (x *OwnerGateSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OwnerGateSpec.ProtoReflect.Descriptor instead.
 func (*OwnerGateSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{19}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *OwnerGateSpec) GetProcessRunId() string {
@@ -3111,7 +3459,7 @@ type MemoryRecordSpec struct {
 
 func (x *MemoryRecordSpec) Reset() {
 	*x = MemoryRecordSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[20]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3123,7 +3471,7 @@ func (x *MemoryRecordSpec) String() string {
 func (*MemoryRecordSpec) ProtoMessage() {}
 
 func (x *MemoryRecordSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[20]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3136,7 +3484,7 @@ func (x *MemoryRecordSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemoryRecordSpec.ProtoReflect.Descriptor instead.
 func (*MemoryRecordSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{20}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *MemoryRecordSpec) GetScope() string {
@@ -3208,7 +3556,7 @@ type WorkClaimSpec struct {
 
 func (x *WorkClaimSpec) Reset() {
 	*x = WorkClaimSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[21]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3220,7 +3568,7 @@ func (x *WorkClaimSpec) String() string {
 func (*WorkClaimSpec) ProtoMessage() {}
 
 func (x *WorkClaimSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[21]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3233,7 +3581,7 @@ func (x *WorkClaimSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkClaimSpec.ProtoReflect.Descriptor instead.
 func (*WorkClaimSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{21}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *WorkClaimSpec) GetProcessRunId() string {
@@ -3334,7 +3682,7 @@ type ArtifactSpec struct {
 
 func (x *ArtifactSpec) Reset() {
 	*x = ArtifactSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[22]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3346,7 +3694,7 @@ func (x *ArtifactSpec) String() string {
 func (*ArtifactSpec) ProtoMessage() {}
 
 func (x *ArtifactSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[22]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3359,7 +3707,7 @@ func (x *ArtifactSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArtifactSpec.ProtoReflect.Descriptor instead.
 func (*ArtifactSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{22}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ArtifactSpec) GetKind() string {
@@ -3475,7 +3823,7 @@ type ResourceSpec struct {
 
 func (x *ResourceSpec) Reset() {
 	*x = ResourceSpec{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[23]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3487,7 +3835,7 @@ func (x *ResourceSpec) String() string {
 func (*ResourceSpec) ProtoMessage() {}
 
 func (x *ResourceSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[23]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3500,7 +3848,7 @@ func (x *ResourceSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceSpec.ProtoReflect.Descriptor instead.
 func (*ResourceSpec) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{23}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ResourceSpec) GetValue() isResourceSpec_Value {
@@ -3788,7 +4136,7 @@ type Resource struct {
 
 func (x *Resource) Reset() {
 	*x = Resource{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[24]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3800,7 +4148,7 @@ func (x *Resource) String() string {
 func (*Resource) ProtoMessage() {}
 
 func (x *Resource) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[24]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3813,7 +4161,7 @@ func (x *Resource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Resource.ProtoReflect.Descriptor instead.
 func (*Resource) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{24}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *Resource) GetId() string {
@@ -3902,7 +4250,7 @@ type CreateResourceRequest struct {
 
 func (x *CreateResourceRequest) Reset() {
 	*x = CreateResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[25]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3914,7 +4262,7 @@ func (x *CreateResourceRequest) String() string {
 func (*CreateResourceRequest) ProtoMessage() {}
 
 func (x *CreateResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[25]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3927,7 +4275,7 @@ func (x *CreateResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateResourceRequest.ProtoReflect.Descriptor instead.
 func (*CreateResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{25}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *CreateResourceRequest) GetIdempotencyKey() string {
@@ -3975,7 +4323,7 @@ type CreateResourceResponse struct {
 
 func (x *CreateResourceResponse) Reset() {
 	*x = CreateResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[26]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3987,7 +4335,7 @@ func (x *CreateResourceResponse) String() string {
 func (*CreateResourceResponse) ProtoMessage() {}
 
 func (x *CreateResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[26]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4000,7 +4348,7 @@ func (x *CreateResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateResourceResponse.ProtoReflect.Descriptor instead.
 func (*CreateResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{26}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CreateResourceResponse) GetResource() *Resource {
@@ -4026,7 +4374,7 @@ type UpdateResourceRequest struct {
 
 func (x *UpdateResourceRequest) Reset() {
 	*x = UpdateResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[27]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4038,7 +4386,7 @@ func (x *UpdateResourceRequest) String() string {
 func (*UpdateResourceRequest) ProtoMessage() {}
 
 func (x *UpdateResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[27]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4051,7 +4399,7 @@ func (x *UpdateResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateResourceRequest.ProtoReflect.Descriptor instead.
 func (*UpdateResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{27}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *UpdateResourceRequest) GetIdempotencyKey() string {
@@ -4106,7 +4454,7 @@ type UpdateResourceResponse struct {
 
 func (x *UpdateResourceResponse) Reset() {
 	*x = UpdateResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[28]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4118,7 +4466,7 @@ func (x *UpdateResourceResponse) String() string {
 func (*UpdateResourceResponse) ProtoMessage() {}
 
 func (x *UpdateResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[28]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4131,7 +4479,7 @@ func (x *UpdateResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateResourceResponse.ProtoReflect.Descriptor instead.
 func (*UpdateResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{28}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *UpdateResourceResponse) GetResource() *Resource {
@@ -4155,7 +4503,7 @@ type TransitionResourceRequest struct {
 
 func (x *TransitionResourceRequest) Reset() {
 	*x = TransitionResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[29]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4167,7 +4515,7 @@ func (x *TransitionResourceRequest) String() string {
 func (*TransitionResourceRequest) ProtoMessage() {}
 
 func (x *TransitionResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[29]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4180,7 +4528,7 @@ func (x *TransitionResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransitionResourceRequest.ProtoReflect.Descriptor instead.
 func (*TransitionResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{29}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *TransitionResourceRequest) GetIdempotencyKey() string {
@@ -4228,7 +4576,7 @@ type TransitionResourceResponse struct {
 
 func (x *TransitionResourceResponse) Reset() {
 	*x = TransitionResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[30]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4240,7 +4588,7 @@ func (x *TransitionResourceResponse) String() string {
 func (*TransitionResourceResponse) ProtoMessage() {}
 
 func (x *TransitionResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[30]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4253,7 +4601,7 @@ func (x *TransitionResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransitionResourceResponse.ProtoReflect.Descriptor instead.
 func (*TransitionResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{30}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *TransitionResourceResponse) GetResource() *Resource {
@@ -4275,7 +4623,7 @@ type DeleteResourceRequest struct {
 
 func (x *DeleteResourceRequest) Reset() {
 	*x = DeleteResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[31]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4287,7 +4635,7 @@ func (x *DeleteResourceRequest) String() string {
 func (*DeleteResourceRequest) ProtoMessage() {}
 
 func (x *DeleteResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[31]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4300,7 +4648,7 @@ func (x *DeleteResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteResourceRequest.ProtoReflect.Descriptor instead.
 func (*DeleteResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{31}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *DeleteResourceRequest) GetIdempotencyKey() string {
@@ -4334,7 +4682,7 @@ type DeleteResourceResponse struct {
 
 func (x *DeleteResourceResponse) Reset() {
 	*x = DeleteResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[32]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4346,7 +4694,7 @@ func (x *DeleteResourceResponse) String() string {
 func (*DeleteResourceResponse) ProtoMessage() {}
 
 func (x *DeleteResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[32]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4359,7 +4707,7 @@ func (x *DeleteResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteResourceResponse.ProtoReflect.Descriptor instead.
 func (*DeleteResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{32}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *DeleteResourceResponse) GetResource() *Resource {
@@ -4385,7 +4733,7 @@ type ManageAccessResourceRequest struct {
 
 func (x *ManageAccessResourceRequest) Reset() {
 	*x = ManageAccessResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[33]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4397,7 +4745,7 @@ func (x *ManageAccessResourceRequest) String() string {
 func (*ManageAccessResourceRequest) ProtoMessage() {}
 
 func (x *ManageAccessResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[33]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4410,7 +4758,7 @@ func (x *ManageAccessResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageAccessResourceRequest.ProtoReflect.Descriptor instead.
 func (*ManageAccessResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{33}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ManageAccessResourceRequest) GetIdempotencyKey() string {
@@ -4472,7 +4820,7 @@ type ManageAccessResourceResponse struct {
 
 func (x *ManageAccessResourceResponse) Reset() {
 	*x = ManageAccessResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[34]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4484,7 +4832,7 @@ func (x *ManageAccessResourceResponse) String() string {
 func (*ManageAccessResourceResponse) ProtoMessage() {}
 
 func (x *ManageAccessResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[34]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4497,7 +4845,7 @@ func (x *ManageAccessResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageAccessResourceResponse.ProtoReflect.Descriptor instead.
 func (*ManageAccessResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{34}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ManageAccessResourceResponse) GetResource() *Resource {
@@ -4519,7 +4867,7 @@ type GetResourceRequest struct {
 
 func (x *GetResourceRequest) Reset() {
 	*x = GetResourceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[35]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4531,7 +4879,7 @@ func (x *GetResourceRequest) String() string {
 func (*GetResourceRequest) ProtoMessage() {}
 
 func (x *GetResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[35]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4544,7 +4892,7 @@ func (x *GetResourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourceRequest.ProtoReflect.Descriptor instead.
 func (*GetResourceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{35}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *GetResourceRequest) GetResourceId() string {
@@ -4578,7 +4926,7 @@ type GetResourceResponse struct {
 
 func (x *GetResourceResponse) Reset() {
 	*x = GetResourceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[36]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4590,7 +4938,7 @@ func (x *GetResourceResponse) String() string {
 func (*GetResourceResponse) ProtoMessage() {}
 
 func (x *GetResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[36]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4603,7 +4951,7 @@ func (x *GetResourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourceResponse.ProtoReflect.Descriptor instead.
 func (*GetResourceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{36}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *GetResourceResponse) GetResource() *Resource {
@@ -4627,7 +4975,7 @@ type ListResourcesRequest struct {
 
 func (x *ListResourcesRequest) Reset() {
 	*x = ListResourcesRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[37]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4639,7 +4987,7 @@ func (x *ListResourcesRequest) String() string {
 func (*ListResourcesRequest) ProtoMessage() {}
 
 func (x *ListResourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[37]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4652,7 +5000,7 @@ func (x *ListResourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourcesRequest.ProtoReflect.Descriptor instead.
 func (*ListResourcesRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{37}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ListResourcesRequest) GetKind() ResourceKind {
@@ -4701,7 +5049,7 @@ type ListResourcesResponse struct {
 
 func (x *ListResourcesResponse) Reset() {
 	*x = ListResourcesResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[38]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4713,7 +5061,7 @@ func (x *ListResourcesResponse) String() string {
 func (*ListResourcesResponse) ProtoMessage() {}
 
 func (x *ListResourcesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[38]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4726,7 +5074,7 @@ func (x *ListResourcesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourcesResponse.ProtoReflect.Descriptor instead.
 func (*ListResourcesResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{38}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListResourcesResponse) GetResources() []*Resource {
@@ -4757,7 +5105,7 @@ type SearchResourcesRequest struct {
 
 func (x *SearchResourcesRequest) Reset() {
 	*x = SearchResourcesRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[39]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4769,7 +5117,7 @@ func (x *SearchResourcesRequest) String() string {
 func (*SearchResourcesRequest) ProtoMessage() {}
 
 func (x *SearchResourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[39]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4782,7 +5130,7 @@ func (x *SearchResourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchResourcesRequest.ProtoReflect.Descriptor instead.
 func (*SearchResourcesRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{39}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *SearchResourcesRequest) GetKind() ResourceKind {
@@ -4831,7 +5179,7 @@ type SearchResourcesResponse struct {
 
 func (x *SearchResourcesResponse) Reset() {
 	*x = SearchResourcesResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[40]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4843,7 +5191,7 @@ func (x *SearchResourcesResponse) String() string {
 func (*SearchResourcesResponse) ProtoMessage() {}
 
 func (x *SearchResourcesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[40]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4856,7 +5204,7 @@ func (x *SearchResourcesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchResourcesResponse.ProtoReflect.Descriptor instead.
 func (*SearchResourcesResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{40}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *SearchResourcesResponse) GetResources() []*Resource {
@@ -4887,7 +5235,7 @@ type SearchMemoryRecordsRequest struct {
 
 func (x *SearchMemoryRecordsRequest) Reset() {
 	*x = SearchMemoryRecordsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[41]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4899,7 +5247,7 @@ func (x *SearchMemoryRecordsRequest) String() string {
 func (*SearchMemoryRecordsRequest) ProtoMessage() {}
 
 func (x *SearchMemoryRecordsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[41]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4912,7 +5260,7 @@ func (x *SearchMemoryRecordsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchMemoryRecordsRequest.ProtoReflect.Descriptor instead.
 func (*SearchMemoryRecordsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{41}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *SearchMemoryRecordsRequest) GetQuery() string {
@@ -4963,7 +5311,7 @@ type MemorySearchHit struct {
 
 func (x *MemorySearchHit) Reset() {
 	*x = MemorySearchHit{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[42]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4975,7 +5323,7 @@ func (x *MemorySearchHit) String() string {
 func (*MemorySearchHit) ProtoMessage() {}
 
 func (x *MemorySearchHit) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[42]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4988,7 +5336,7 @@ func (x *MemorySearchHit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemorySearchHit.ProtoReflect.Descriptor instead.
 func (*MemorySearchHit) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{42}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *MemorySearchHit) GetResource() *Resource {
@@ -5030,7 +5378,7 @@ type SearchMemoryRecordsResponse struct {
 
 func (x *SearchMemoryRecordsResponse) Reset() {
 	*x = SearchMemoryRecordsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[43]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5042,7 +5390,7 @@ func (x *SearchMemoryRecordsResponse) String() string {
 func (*SearchMemoryRecordsResponse) ProtoMessage() {}
 
 func (x *SearchMemoryRecordsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[43]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5055,7 +5403,7 @@ func (x *SearchMemoryRecordsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchMemoryRecordsResponse.ProtoReflect.Descriptor instead.
 func (*SearchMemoryRecordsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{43}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *SearchMemoryRecordsResponse) GetHits() []*MemorySearchHit {
@@ -5091,7 +5439,7 @@ type AuditEvent struct {
 
 func (x *AuditEvent) Reset() {
 	*x = AuditEvent{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[44]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5103,7 +5451,7 @@ func (x *AuditEvent) String() string {
 func (*AuditEvent) ProtoMessage() {}
 
 func (x *AuditEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[44]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5116,7 +5464,7 @@ func (x *AuditEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEvent.ProtoReflect.Descriptor instead.
 func (*AuditEvent) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{44}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *AuditEvent) GetId() string {
@@ -5203,7 +5551,7 @@ type ListAuditEventsRequest struct {
 
 func (x *ListAuditEventsRequest) Reset() {
 	*x = ListAuditEventsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[45]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5215,7 +5563,7 @@ func (x *ListAuditEventsRequest) String() string {
 func (*ListAuditEventsRequest) ProtoMessage() {}
 
 func (x *ListAuditEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[45]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5228,7 +5576,7 @@ func (x *ListAuditEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListAuditEventsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{45}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListAuditEventsRequest) GetResourceKind() ResourceKind {
@@ -5277,7 +5625,7 @@ type ListAuditEventsResponse struct {
 
 func (x *ListAuditEventsResponse) Reset() {
 	*x = ListAuditEventsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[46]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5289,7 +5637,7 @@ func (x *ListAuditEventsResponse) String() string {
 func (*ListAuditEventsResponse) ProtoMessage() {}
 
 func (x *ListAuditEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[46]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5302,7 +5650,7 @@ func (x *ListAuditEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListAuditEventsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{46}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ListAuditEventsResponse) GetEvents() []*AuditEvent {
@@ -5333,7 +5681,7 @@ type ResourceTombstone struct {
 
 func (x *ResourceTombstone) Reset() {
 	*x = ResourceTombstone{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[47]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5345,7 +5693,7 @@ func (x *ResourceTombstone) String() string {
 func (*ResourceTombstone) ProtoMessage() {}
 
 func (x *ResourceTombstone) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[47]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5358,7 +5706,7 @@ func (x *ResourceTombstone) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceTombstone.ProtoReflect.Descriptor instead.
 func (*ResourceTombstone) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{47}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ResourceTombstone) GetResourceId() string {
@@ -5408,7 +5756,7 @@ type ListTombstonesRequest struct {
 
 func (x *ListTombstonesRequest) Reset() {
 	*x = ListTombstonesRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[48]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5420,7 +5768,7 @@ func (x *ListTombstonesRequest) String() string {
 func (*ListTombstonesRequest) ProtoMessage() {}
 
 func (x *ListTombstonesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[48]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5433,7 +5781,7 @@ func (x *ListTombstonesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTombstonesRequest.ProtoReflect.Descriptor instead.
 func (*ListTombstonesRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{48}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ListTombstonesRequest) GetKind() ResourceKind {
@@ -5468,7 +5816,7 @@ type ListTombstonesResponse struct {
 
 func (x *ListTombstonesResponse) Reset() {
 	*x = ListTombstonesResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[49]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5480,7 +5828,7 @@ func (x *ListTombstonesResponse) String() string {
 func (*ListTombstonesResponse) ProtoMessage() {}
 
 func (x *ListTombstonesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[49]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5493,7 +5841,7 @@ func (x *ListTombstonesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTombstonesResponse.ProtoReflect.Descriptor instead.
 func (*ListTombstonesResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{49}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ListTombstonesResponse) GetTombstones() []*ResourceTombstone {
@@ -5519,7 +5867,7 @@ type GetDiagnosticsRequest struct {
 
 func (x *GetDiagnosticsRequest) Reset() {
 	*x = GetDiagnosticsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[50]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5531,7 +5879,7 @@ func (x *GetDiagnosticsRequest) String() string {
 func (*GetDiagnosticsRequest) ProtoMessage() {}
 
 func (x *GetDiagnosticsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[50]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5544,7 +5892,7 @@ func (x *GetDiagnosticsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDiagnosticsRequest.ProtoReflect.Descriptor instead.
 func (*GetDiagnosticsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{50}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{52}
 }
 
 // GetDiagnosticsResponse описывает версионированное сообщение контракта control-plane.
@@ -5564,7 +5912,7 @@ type GetDiagnosticsResponse struct {
 
 func (x *GetDiagnosticsResponse) Reset() {
 	*x = GetDiagnosticsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[51]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5576,7 +5924,7 @@ func (x *GetDiagnosticsResponse) String() string {
 func (*GetDiagnosticsResponse) ProtoMessage() {}
 
 func (x *GetDiagnosticsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[51]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5589,7 +5937,7 @@ func (x *GetDiagnosticsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDiagnosticsResponse.ProtoReflect.Descriptor instead.
 func (*GetDiagnosticsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{51}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *GetDiagnosticsResponse) GetSchemaVersion() uint64 {
@@ -5662,7 +6010,7 @@ type EnqueueTurnRequest struct {
 
 func (x *EnqueueTurnRequest) Reset() {
 	*x = EnqueueTurnRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[52]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5674,7 +6022,7 @@ func (x *EnqueueTurnRequest) String() string {
 func (*EnqueueTurnRequest) ProtoMessage() {}
 
 func (x *EnqueueTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[52]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5687,7 +6035,7 @@ func (x *EnqueueTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnqueueTurnRequest.ProtoReflect.Descriptor instead.
 func (*EnqueueTurnRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{52}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *EnqueueTurnRequest) GetIdempotencyKey() string {
@@ -5735,7 +6083,7 @@ type EnqueueTurnResponse struct {
 
 func (x *EnqueueTurnResponse) Reset() {
 	*x = EnqueueTurnResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[53]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5747,7 +6095,7 @@ func (x *EnqueueTurnResponse) String() string {
 func (*EnqueueTurnResponse) ProtoMessage() {}
 
 func (x *EnqueueTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[53]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5760,7 +6108,7 @@ func (x *EnqueueTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnqueueTurnResponse.ProtoReflect.Descriptor instead.
 func (*EnqueueTurnResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{53}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *EnqueueTurnResponse) GetTurn() *Resource {
@@ -5780,7 +6128,7 @@ type ClaimTurnRequest struct {
 
 func (x *ClaimTurnRequest) Reset() {
 	*x = ClaimTurnRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[54]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5792,7 +6140,7 @@ func (x *ClaimTurnRequest) String() string {
 func (*ClaimTurnRequest) ProtoMessage() {}
 
 func (x *ClaimTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[54]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5805,7 +6153,7 @@ func (x *ClaimTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimTurnRequest.ProtoReflect.Descriptor instead.
 func (*ClaimTurnRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{54}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ClaimTurnRequest) GetIdempotencyKey() string {
@@ -5829,7 +6177,7 @@ type ClaimTurnResponse struct {
 
 func (x *ClaimTurnResponse) Reset() {
 	*x = ClaimTurnResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[55]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5841,7 +6189,7 @@ func (x *ClaimTurnResponse) String() string {
 func (*ClaimTurnResponse) ProtoMessage() {}
 
 func (x *ClaimTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[55]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5854,7 +6202,7 @@ func (x *ClaimTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimTurnResponse.ProtoReflect.Descriptor instead.
 func (*ClaimTurnResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{55}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *ClaimTurnResponse) GetTurn() *Resource {
@@ -5907,7 +6255,7 @@ type RenewTurnRequest struct {
 
 func (x *RenewTurnRequest) Reset() {
 	*x = RenewTurnRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[56]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5919,7 +6267,7 @@ func (x *RenewTurnRequest) String() string {
 func (*RenewTurnRequest) ProtoMessage() {}
 
 func (x *RenewTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[56]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5932,7 +6280,7 @@ func (x *RenewTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewTurnRequest.ProtoReflect.Descriptor instead.
 func (*RenewTurnRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{56}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *RenewTurnRequest) GetIdempotencyKey() string {
@@ -5991,7 +6339,7 @@ type RenewTurnResponse struct {
 
 func (x *RenewTurnResponse) Reset() {
 	*x = RenewTurnResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[57]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6003,7 +6351,7 @@ func (x *RenewTurnResponse) String() string {
 func (*RenewTurnResponse) ProtoMessage() {}
 
 func (x *RenewTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[57]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6016,7 +6364,7 @@ func (x *RenewTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewTurnResponse.ProtoReflect.Descriptor instead.
 func (*RenewTurnResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{57}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *RenewTurnResponse) GetTurn() *Resource {
@@ -6072,7 +6420,7 @@ type CompleteTurnRequest struct {
 
 func (x *CompleteTurnRequest) Reset() {
 	*x = CompleteTurnRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[58]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6084,7 +6432,7 @@ func (x *CompleteTurnRequest) String() string {
 func (*CompleteTurnRequest) ProtoMessage() {}
 
 func (x *CompleteTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[58]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6097,7 +6445,7 @@ func (x *CompleteTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteTurnRequest.ProtoReflect.Descriptor instead.
 func (*CompleteTurnRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{58}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *CompleteTurnRequest) GetIdempotencyKey() string {
@@ -6173,7 +6521,7 @@ type CompleteTurnResponse struct {
 
 func (x *CompleteTurnResponse) Reset() {
 	*x = CompleteTurnResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[59]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6185,7 +6533,7 @@ func (x *CompleteTurnResponse) String() string {
 func (*CompleteTurnResponse) ProtoMessage() {}
 
 func (x *CompleteTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[59]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6198,7 +6546,7 @@ func (x *CompleteTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteTurnResponse.ProtoReflect.Descriptor instead.
 func (*CompleteTurnResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{59}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *CompleteTurnResponse) GetTurn() *Resource {
@@ -6221,7 +6569,7 @@ type RetryTurnRequest struct {
 
 func (x *RetryTurnRequest) Reset() {
 	*x = RetryTurnRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[60]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6233,7 +6581,7 @@ func (x *RetryTurnRequest) String() string {
 func (*RetryTurnRequest) ProtoMessage() {}
 
 func (x *RetryTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[60]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6246,7 +6594,7 @@ func (x *RetryTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetryTurnRequest.ProtoReflect.Descriptor instead.
 func (*RetryTurnRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{60}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *RetryTurnRequest) GetIdempotencyKey() string {
@@ -6287,7 +6635,7 @@ type RetryTurnResponse struct {
 
 func (x *RetryTurnResponse) Reset() {
 	*x = RetryTurnResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[61]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6299,7 +6647,7 @@ func (x *RetryTurnResponse) String() string {
 func (*RetryTurnResponse) ProtoMessage() {}
 
 func (x *RetryTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[61]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6312,7 +6660,7 @@ func (x *RetryTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetryTurnResponse.ProtoReflect.Descriptor instead.
 func (*RetryTurnResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{61}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *RetryTurnResponse) GetTurn() *Resource {
@@ -6335,7 +6683,7 @@ type CancelTurnRequest struct {
 
 func (x *CancelTurnRequest) Reset() {
 	*x = CancelTurnRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[62]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6347,7 +6695,7 @@ func (x *CancelTurnRequest) String() string {
 func (*CancelTurnRequest) ProtoMessage() {}
 
 func (x *CancelTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[62]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6360,7 +6708,7 @@ func (x *CancelTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTurnRequest.ProtoReflect.Descriptor instead.
 func (*CancelTurnRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{62}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *CancelTurnRequest) GetIdempotencyKey() string {
@@ -6401,7 +6749,7 @@ type CancelTurnResponse struct {
 
 func (x *CancelTurnResponse) Reset() {
 	*x = CancelTurnResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[63]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6413,7 +6761,7 @@ func (x *CancelTurnResponse) String() string {
 func (*CancelTurnResponse) ProtoMessage() {}
 
 func (x *CancelTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[63]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6426,7 +6774,7 @@ func (x *CancelTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTurnResponse.ProtoReflect.Descriptor instead.
 func (*CancelTurnResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{63}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *CancelTurnResponse) GetTurn() *Resource {
@@ -6457,7 +6805,7 @@ type ManageSessionRequest struct {
 
 func (x *ManageSessionRequest) Reset() {
 	*x = ManageSessionRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[64]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6469,7 +6817,7 @@ func (x *ManageSessionRequest) String() string {
 func (*ManageSessionRequest) ProtoMessage() {}
 
 func (x *ManageSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[64]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6482,7 +6830,7 @@ func (x *ManageSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageSessionRequest.ProtoReflect.Descriptor instead.
 func (*ManageSessionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{64}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ManageSessionRequest) GetIdempotencyKey() string {
@@ -6565,7 +6913,7 @@ type ManageSessionResponse struct {
 
 func (x *ManageSessionResponse) Reset() {
 	*x = ManageSessionResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[65]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6577,7 +6925,7 @@ func (x *ManageSessionResponse) String() string {
 func (*ManageSessionResponse) ProtoMessage() {}
 
 func (x *ManageSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[65]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6590,7 +6938,7 @@ func (x *ManageSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageSessionResponse.ProtoReflect.Descriptor instead.
 func (*ManageSessionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{65}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ManageSessionResponse) GetSession() *Resource {
@@ -6620,7 +6968,7 @@ type ManageMemoryRecordRequest struct {
 
 func (x *ManageMemoryRecordRequest) Reset() {
 	*x = ManageMemoryRecordRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[66]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6632,7 +6980,7 @@ func (x *ManageMemoryRecordRequest) String() string {
 func (*ManageMemoryRecordRequest) ProtoMessage() {}
 
 func (x *ManageMemoryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[66]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6645,7 +6993,7 @@ func (x *ManageMemoryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageMemoryRecordRequest.ProtoReflect.Descriptor instead.
 func (*ManageMemoryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{66}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *ManageMemoryRecordRequest) GetIdempotencyKey() string {
@@ -6735,7 +7083,7 @@ type ManageMemoryRecordResponse struct {
 
 func (x *ManageMemoryRecordResponse) Reset() {
 	*x = ManageMemoryRecordResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[67]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6747,7 +7095,7 @@ func (x *ManageMemoryRecordResponse) String() string {
 func (*ManageMemoryRecordResponse) ProtoMessage() {}
 
 func (x *ManageMemoryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[67]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6760,7 +7108,7 @@ func (x *ManageMemoryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageMemoryRecordResponse.ProtoReflect.Descriptor instead.
 func (*ManageMemoryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{67}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *ManageMemoryRecordResponse) GetMemoryRecord() *Resource {
@@ -6789,7 +7137,7 @@ type ManageWorkClaimRequest struct {
 
 func (x *ManageWorkClaimRequest) Reset() {
 	*x = ManageWorkClaimRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[68]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6801,7 +7149,7 @@ func (x *ManageWorkClaimRequest) String() string {
 func (*ManageWorkClaimRequest) ProtoMessage() {}
 
 func (x *ManageWorkClaimRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[68]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6814,7 +7162,7 @@ func (x *ManageWorkClaimRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageWorkClaimRequest.ProtoReflect.Descriptor instead.
 func (*ManageWorkClaimRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{68}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *ManageWorkClaimRequest) GetIdempotencyKey() string {
@@ -6897,7 +7245,7 @@ type ManageWorkClaimResponse struct {
 
 func (x *ManageWorkClaimResponse) Reset() {
 	*x = ManageWorkClaimResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[69]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6909,7 +7257,7 @@ func (x *ManageWorkClaimResponse) String() string {
 func (*ManageWorkClaimResponse) ProtoMessage() {}
 
 func (x *ManageWorkClaimResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[69]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6922,7 +7270,7 @@ func (x *ManageWorkClaimResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageWorkClaimResponse.ProtoReflect.Descriptor instead.
 func (*ManageWorkClaimResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{69}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *ManageWorkClaimResponse) GetWorkClaim() *Resource {
@@ -6948,7 +7296,7 @@ type ManageScheduleRequest struct {
 
 func (x *ManageScheduleRequest) Reset() {
 	*x = ManageScheduleRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[70]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6960,7 +7308,7 @@ func (x *ManageScheduleRequest) String() string {
 func (*ManageScheduleRequest) ProtoMessage() {}
 
 func (x *ManageScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[70]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6973,7 +7321,7 @@ func (x *ManageScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageScheduleRequest.ProtoReflect.Descriptor instead.
 func (*ManageScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{70}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ManageScheduleRequest) GetIdempotencyKey() string {
@@ -7035,7 +7383,7 @@ type ManageScheduleResponse struct {
 
 func (x *ManageScheduleResponse) Reset() {
 	*x = ManageScheduleResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[71]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7047,7 +7395,7 @@ func (x *ManageScheduleResponse) String() string {
 func (*ManageScheduleResponse) ProtoMessage() {}
 
 func (x *ManageScheduleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[71]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7060,7 +7408,7 @@ func (x *ManageScheduleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageScheduleResponse.ProtoReflect.Descriptor instead.
 func (*ManageScheduleResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{71}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *ManageScheduleResponse) GetSchedule() *Resource {
@@ -7081,7 +7429,7 @@ type ClaimDueSchedulesRequest struct {
 
 func (x *ClaimDueSchedulesRequest) Reset() {
 	*x = ClaimDueSchedulesRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[72]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7093,7 +7441,7 @@ func (x *ClaimDueSchedulesRequest) String() string {
 func (*ClaimDueSchedulesRequest) ProtoMessage() {}
 
 func (x *ClaimDueSchedulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[72]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7106,7 +7454,7 @@ func (x *ClaimDueSchedulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimDueSchedulesRequest.ProtoReflect.Descriptor instead.
 func (*ClaimDueSchedulesRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{72}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ClaimDueSchedulesRequest) GetIdempotencyKey() string {
@@ -7125,36 +7473,44 @@ func (x *ClaimDueSchedulesRequest) GetLimit() uint32 {
 
 // ScheduleOccurrence описывает версионированное сообщение контракта control-plane.
 type ScheduleOccurrence struct {
-	state                    protoimpl.MessageState     `protogen:"open.v1"`
-	ScheduleId               string                     `protobuf:"bytes,1,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"`
-	ScheduledFor             *timestamppb.Timestamp     `protobuf:"bytes,2,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduled_for,omitempty"`
-	OccurrenceId             string                     `protobuf:"bytes,3,opt,name=occurrence_id,json=occurrenceId,proto3" json:"occurrence_id,omitempty"`
-	TargetResourceId         string                     `protobuf:"bytes,4,opt,name=target_resource_id,json=targetResourceId,proto3" json:"target_resource_id,omitempty"`
-	TargetKind               ResourceKind               `protobuf:"varint,5,opt,name=target_kind,json=targetKind,proto3,enum=controlplane.v1.ResourceKind" json:"target_kind,omitempty"`
-	TargetVersion            uint64                     `protobuf:"varint,6,opt,name=target_version,json=targetVersion,proto3" json:"target_version,omitempty"`
-	EffectiveInputSha256     string                     `protobuf:"bytes,7,opt,name=effective_input_sha256,json=effectiveInputSha256,proto3" json:"effective_input_sha256,omitempty"`
-	State                    ScheduleOccurrenceState    `protobuf:"varint,8,opt,name=state,proto3,enum=controlplane.v1.ScheduleOccurrenceState" json:"state,omitempty"`
-	Attempt                  uint32                     `protobuf:"varint,9,opt,name=attempt,proto3" json:"attempt,omitempty"`
-	ClaimantWorkloadId       string                     `protobuf:"bytes,10,opt,name=claimant_workload_id,json=claimantWorkloadId,proto3" json:"claimant_workload_id,omitempty"`
-	AuthorityGeneration      uint64                     `protobuf:"varint,11,opt,name=authority_generation,json=authorityGeneration,proto3" json:"authority_generation,omitempty"`
-	LeaseExpiresAt           *timestamppb.Timestamp     `protobuf:"bytes,12,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
-	AvailableAt              *timestamppb.Timestamp     `protobuf:"bytes,13,opt,name=available_at,json=availableAt,proto3" json:"available_at,omitempty"`
-	Outcome                  string                     `protobuf:"bytes,14,opt,name=outcome,proto3" json:"outcome,omitempty"`
-	PromptProfileId          string                     `protobuf:"bytes,15,opt,name=prompt_profile_id,json=promptProfileId,proto3" json:"prompt_profile_id,omitempty"`
-	PromptRevision           uint64                     `protobuf:"varint,16,opt,name=prompt_revision,json=promptRevision,proto3" json:"prompt_revision,omitempty"`
-	RuntimeRevisionId        string                     `protobuf:"bytes,17,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
-	SessionPolicy            ScheduleSessionPolicy      `protobuf:"varint,18,opt,name=session_policy,json=sessionPolicy,proto3,enum=controlplane.v1.ScheduleSessionPolicy" json:"session_policy,omitempty"`
-	RoomId                   string                     `protobuf:"bytes,19,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
-	NotificationPolicy       ScheduleNotificationPolicy `protobuf:"varint,20,opt,name=notification_policy,json=notificationPolicy,proto3,enum=controlplane.v1.ScheduleNotificationPolicy" json:"notification_policy,omitempty"`
-	MaximumExecutionDuration *durationpb.Duration       `protobuf:"bytes,21,opt,name=maximum_execution_duration,json=maximumExecutionDuration,proto3" json:"maximum_execution_duration,omitempty"`
-	Coalesce                 bool                       `protobuf:"varint,22,opt,name=coalesce,proto3" json:"coalesce,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state                           protoimpl.MessageState     `protogen:"open.v1"`
+	ScheduleId                      string                     `protobuf:"bytes,1,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"`
+	ScheduledFor                    *timestamppb.Timestamp     `protobuf:"bytes,2,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduled_for,omitempty"`
+	OccurrenceId                    string                     `protobuf:"bytes,3,opt,name=occurrence_id,json=occurrenceId,proto3" json:"occurrence_id,omitempty"`
+	TargetResourceId                string                     `protobuf:"bytes,4,opt,name=target_resource_id,json=targetResourceId,proto3" json:"target_resource_id,omitempty"`
+	TargetKind                      ResourceKind               `protobuf:"varint,5,opt,name=target_kind,json=targetKind,proto3,enum=controlplane.v1.ResourceKind" json:"target_kind,omitempty"`
+	TargetVersion                   uint64                     `protobuf:"varint,6,opt,name=target_version,json=targetVersion,proto3" json:"target_version,omitempty"`
+	EffectiveInputSha256            string                     `protobuf:"bytes,7,opt,name=effective_input_sha256,json=effectiveInputSha256,proto3" json:"effective_input_sha256,omitempty"`
+	State                           ScheduleOccurrenceState    `protobuf:"varint,8,opt,name=state,proto3,enum=controlplane.v1.ScheduleOccurrenceState" json:"state,omitempty"`
+	Attempt                         uint32                     `protobuf:"varint,9,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	ClaimantWorkloadId              string                     `protobuf:"bytes,10,opt,name=claimant_workload_id,json=claimantWorkloadId,proto3" json:"claimant_workload_id,omitempty"`
+	AuthorityGeneration             uint64                     `protobuf:"varint,11,opt,name=authority_generation,json=authorityGeneration,proto3" json:"authority_generation,omitempty"`
+	LeaseExpiresAt                  *timestamppb.Timestamp     `protobuf:"bytes,12,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
+	AvailableAt                     *timestamppb.Timestamp     `protobuf:"bytes,13,opt,name=available_at,json=availableAt,proto3" json:"available_at,omitempty"`
+	Outcome                         string                     `protobuf:"bytes,14,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	PromptProfileId                 string                     `protobuf:"bytes,15,opt,name=prompt_profile_id,json=promptProfileId,proto3" json:"prompt_profile_id,omitempty"`
+	PromptRevision                  uint64                     `protobuf:"varint,16,opt,name=prompt_revision,json=promptRevision,proto3" json:"prompt_revision,omitempty"`
+	RuntimeRevisionId               string                     `protobuf:"bytes,17,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
+	SessionPolicy                   ScheduleSessionPolicy      `protobuf:"varint,18,opt,name=session_policy,json=sessionPolicy,proto3,enum=controlplane.v1.ScheduleSessionPolicy" json:"session_policy,omitempty"`
+	RoomId                          string                     `protobuf:"bytes,19,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	NotificationPolicy              ScheduleNotificationPolicy `protobuf:"varint,20,opt,name=notification_policy,json=notificationPolicy,proto3,enum=controlplane.v1.ScheduleNotificationPolicy" json:"notification_policy,omitempty"`
+	MaximumExecutionDuration        *durationpb.Duration       `protobuf:"bytes,21,opt,name=maximum_execution_duration,json=maximumExecutionDuration,proto3" json:"maximum_execution_duration,omitempty"`
+	Coalesce                        bool                       `protobuf:"varint,22,opt,name=coalesce,proto3" json:"coalesce,omitempty"`
+	ExecutionSessionId              string                     `protobuf:"bytes,23,opt,name=execution_session_id,json=executionSessionId,proto3" json:"execution_session_id,omitempty"`
+	ExecutionSessionVersion         uint64                     `protobuf:"varint,24,opt,name=execution_session_version,json=executionSessionVersion,proto3" json:"execution_session_version,omitempty"`
+	ExecutionTurnId                 string                     `protobuf:"bytes,25,opt,name=execution_turn_id,json=executionTurnId,proto3" json:"execution_turn_id,omitempty"`
+	ExecutionTurnVersion            uint64                     `protobuf:"varint,26,opt,name=execution_turn_version,json=executionTurnVersion,proto3" json:"execution_turn_version,omitempty"`
+	ExecutionProcessRunId           string                     `protobuf:"bytes,27,opt,name=execution_process_run_id,json=executionProcessRunId,proto3" json:"execution_process_run_id,omitempty"`
+	ExecutionProcessVersion         uint64                     `protobuf:"varint,28,opt,name=execution_process_version,json=executionProcessVersion,proto3" json:"execution_process_version,omitempty"`
+	ExecutionRuntimeRevisionId      string                     `protobuf:"bytes,29,opt,name=execution_runtime_revision_id,json=executionRuntimeRevisionId,proto3" json:"execution_runtime_revision_id,omitempty"`
+	ExecutionRuntimeRevisionVersion uint64                     `protobuf:"varint,30,opt,name=execution_runtime_revision_version,json=executionRuntimeRevisionVersion,proto3" json:"execution_runtime_revision_version,omitempty"`
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
 }
 
 func (x *ScheduleOccurrence) Reset() {
 	*x = ScheduleOccurrence{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[73]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7166,7 +7522,7 @@ func (x *ScheduleOccurrence) String() string {
 func (*ScheduleOccurrence) ProtoMessage() {}
 
 func (x *ScheduleOccurrence) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[73]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7179,7 +7535,7 @@ func (x *ScheduleOccurrence) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleOccurrence.ProtoReflect.Descriptor instead.
 func (*ScheduleOccurrence) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{73}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *ScheduleOccurrence) GetScheduleId() string {
@@ -7336,6 +7692,62 @@ func (x *ScheduleOccurrence) GetCoalesce() bool {
 	return false
 }
 
+func (x *ScheduleOccurrence) GetExecutionSessionId() string {
+	if x != nil {
+		return x.ExecutionSessionId
+	}
+	return ""
+}
+
+func (x *ScheduleOccurrence) GetExecutionSessionVersion() uint64 {
+	if x != nil {
+		return x.ExecutionSessionVersion
+	}
+	return 0
+}
+
+func (x *ScheduleOccurrence) GetExecutionTurnId() string {
+	if x != nil {
+		return x.ExecutionTurnId
+	}
+	return ""
+}
+
+func (x *ScheduleOccurrence) GetExecutionTurnVersion() uint64 {
+	if x != nil {
+		return x.ExecutionTurnVersion
+	}
+	return 0
+}
+
+func (x *ScheduleOccurrence) GetExecutionProcessRunId() string {
+	if x != nil {
+		return x.ExecutionProcessRunId
+	}
+	return ""
+}
+
+func (x *ScheduleOccurrence) GetExecutionProcessVersion() uint64 {
+	if x != nil {
+		return x.ExecutionProcessVersion
+	}
+	return 0
+}
+
+func (x *ScheduleOccurrence) GetExecutionRuntimeRevisionId() string {
+	if x != nil {
+		return x.ExecutionRuntimeRevisionId
+	}
+	return ""
+}
+
+func (x *ScheduleOccurrence) GetExecutionRuntimeRevisionVersion() uint64 {
+	if x != nil {
+		return x.ExecutionRuntimeRevisionVersion
+	}
+	return 0
+}
+
 // ClaimDueSchedulesResponse описывает версионированное сообщение контракта control-plane.
 type ClaimDueSchedulesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -7346,7 +7758,7 @@ type ClaimDueSchedulesResponse struct {
 
 func (x *ClaimDueSchedulesResponse) Reset() {
 	*x = ClaimDueSchedulesResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[74]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7358,7 +7770,7 @@ func (x *ClaimDueSchedulesResponse) String() string {
 func (*ClaimDueSchedulesResponse) ProtoMessage() {}
 
 func (x *ClaimDueSchedulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[74]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7371,7 +7783,7 @@ func (x *ClaimDueSchedulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimDueSchedulesResponse.ProtoReflect.Descriptor instead.
 func (*ClaimDueSchedulesResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{74}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *ClaimDueSchedulesResponse) GetOccurrences() []*ScheduleOccurrence {
@@ -7391,7 +7803,7 @@ type ClaimScheduleOccurrenceRequest struct {
 
 func (x *ClaimScheduleOccurrenceRequest) Reset() {
 	*x = ClaimScheduleOccurrenceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[75]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7403,7 +7815,7 @@ func (x *ClaimScheduleOccurrenceRequest) String() string {
 func (*ClaimScheduleOccurrenceRequest) ProtoMessage() {}
 
 func (x *ClaimScheduleOccurrenceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[75]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7416,7 +7828,7 @@ func (x *ClaimScheduleOccurrenceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimScheduleOccurrenceRequest.ProtoReflect.Descriptor instead.
 func (*ClaimScheduleOccurrenceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{75}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *ClaimScheduleOccurrenceRequest) GetIdempotencyKey() string {
@@ -7437,7 +7849,7 @@ type ClaimScheduleOccurrenceResponse struct {
 
 func (x *ClaimScheduleOccurrenceResponse) Reset() {
 	*x = ClaimScheduleOccurrenceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[76]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7449,7 +7861,7 @@ func (x *ClaimScheduleOccurrenceResponse) String() string {
 func (*ClaimScheduleOccurrenceResponse) ProtoMessage() {}
 
 func (x *ClaimScheduleOccurrenceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[76]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7462,7 +7874,7 @@ func (x *ClaimScheduleOccurrenceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimScheduleOccurrenceResponse.ProtoReflect.Descriptor instead.
 func (*ClaimScheduleOccurrenceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{76}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *ClaimScheduleOccurrenceResponse) GetOccurrence() *ScheduleOccurrence {
@@ -7481,21 +7893,18 @@ func (x *ClaimScheduleOccurrenceResponse) GetLeaseToken() string {
 
 // CompleteScheduleOccurrenceRequest описывает версионированное сообщение контракта control-plane.
 type CompleteScheduleOccurrenceRequest struct {
-	state            protoimpl.MessageState  `protogen:"open.v1"`
-	IdempotencyKey   string                  `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	OccurrenceId     string                  `protobuf:"bytes,2,opt,name=occurrence_id,json=occurrenceId,proto3" json:"occurrence_id,omitempty"`
-	LeaseToken       string                  `protobuf:"bytes,3,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
-	ExpectedAttempt  uint32                  `protobuf:"varint,4,opt,name=expected_attempt,json=expectedAttempt,proto3" json:"expected_attempt,omitempty"`
-	TerminalState    ScheduleOccurrenceState `protobuf:"varint,5,opt,name=terminal_state,json=terminalState,proto3,enum=controlplane.v1.ScheduleOccurrenceState" json:"terminal_state,omitempty"`
-	Outcome          string                  `protobuf:"bytes,6,opt,name=outcome,proto3" json:"outcome,omitempty"`
-	ResultArtifactId string                  `protobuf:"bytes,7,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey  string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	OccurrenceId    string                 `protobuf:"bytes,2,opt,name=occurrence_id,json=occurrenceId,proto3" json:"occurrence_id,omitempty"`
+	LeaseToken      string                 `protobuf:"bytes,3,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
+	ExpectedAttempt uint32                 `protobuf:"varint,4,opt,name=expected_attempt,json=expectedAttempt,proto3" json:"expected_attempt,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CompleteScheduleOccurrenceRequest) Reset() {
 	*x = CompleteScheduleOccurrenceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[77]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7507,7 +7916,7 @@ func (x *CompleteScheduleOccurrenceRequest) String() string {
 func (*CompleteScheduleOccurrenceRequest) ProtoMessage() {}
 
 func (x *CompleteScheduleOccurrenceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[77]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7520,7 +7929,7 @@ func (x *CompleteScheduleOccurrenceRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use CompleteScheduleOccurrenceRequest.ProtoReflect.Descriptor instead.
 func (*CompleteScheduleOccurrenceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{77}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *CompleteScheduleOccurrenceRequest) GetIdempotencyKey() string {
@@ -7551,27 +7960,6 @@ func (x *CompleteScheduleOccurrenceRequest) GetExpectedAttempt() uint32 {
 	return 0
 }
 
-func (x *CompleteScheduleOccurrenceRequest) GetTerminalState() ScheduleOccurrenceState {
-	if x != nil {
-		return x.TerminalState
-	}
-	return ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED
-}
-
-func (x *CompleteScheduleOccurrenceRequest) GetOutcome() string {
-	if x != nil {
-		return x.Outcome
-	}
-	return ""
-}
-
-func (x *CompleteScheduleOccurrenceRequest) GetResultArtifactId() string {
-	if x != nil {
-		return x.ResultArtifactId
-	}
-	return ""
-}
-
 // CompleteScheduleOccurrenceResponse описывает версионированное сообщение контракта control-plane.
 type CompleteScheduleOccurrenceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -7582,7 +7970,7 @@ type CompleteScheduleOccurrenceResponse struct {
 
 func (x *CompleteScheduleOccurrenceResponse) Reset() {
 	*x = CompleteScheduleOccurrenceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[78]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7594,7 +7982,7 @@ func (x *CompleteScheduleOccurrenceResponse) String() string {
 func (*CompleteScheduleOccurrenceResponse) ProtoMessage() {}
 
 func (x *CompleteScheduleOccurrenceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[78]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7607,7 +7995,7 @@ func (x *CompleteScheduleOccurrenceResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CompleteScheduleOccurrenceResponse.ProtoReflect.Descriptor instead.
 func (*CompleteScheduleOccurrenceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{78}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *CompleteScheduleOccurrenceResponse) GetOccurrence() *ScheduleOccurrence {
@@ -7630,7 +8018,7 @@ type CancelScheduleOccurrenceRequest struct {
 
 func (x *CancelScheduleOccurrenceRequest) Reset() {
 	*x = CancelScheduleOccurrenceRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[79]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7642,7 +8030,7 @@ func (x *CancelScheduleOccurrenceRequest) String() string {
 func (*CancelScheduleOccurrenceRequest) ProtoMessage() {}
 
 func (x *CancelScheduleOccurrenceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[79]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7655,7 +8043,7 @@ func (x *CancelScheduleOccurrenceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelScheduleOccurrenceRequest.ProtoReflect.Descriptor instead.
 func (*CancelScheduleOccurrenceRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{79}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *CancelScheduleOccurrenceRequest) GetIdempotencyKey() string {
@@ -7696,7 +8084,7 @@ type CancelScheduleOccurrenceResponse struct {
 
 func (x *CancelScheduleOccurrenceResponse) Reset() {
 	*x = CancelScheduleOccurrenceResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[80]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7708,7 +8096,7 @@ func (x *CancelScheduleOccurrenceResponse) String() string {
 func (*CancelScheduleOccurrenceResponse) ProtoMessage() {}
 
 func (x *CancelScheduleOccurrenceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[80]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7721,7 +8109,7 @@ func (x *CancelScheduleOccurrenceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelScheduleOccurrenceResponse.ProtoReflect.Descriptor instead.
 func (*CancelScheduleOccurrenceResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{80}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *CancelScheduleOccurrenceResponse) GetOccurrence() *ScheduleOccurrence {
@@ -7744,7 +8132,7 @@ type ListScheduleOccurrencesRequest struct {
 
 func (x *ListScheduleOccurrencesRequest) Reset() {
 	*x = ListScheduleOccurrencesRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[81]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7756,7 +8144,7 @@ func (x *ListScheduleOccurrencesRequest) String() string {
 func (*ListScheduleOccurrencesRequest) ProtoMessage() {}
 
 func (x *ListScheduleOccurrencesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[81]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7769,7 +8157,7 @@ func (x *ListScheduleOccurrencesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListScheduleOccurrencesRequest.ProtoReflect.Descriptor instead.
 func (*ListScheduleOccurrencesRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{81}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListScheduleOccurrencesRequest) GetScheduleId() string {
@@ -7811,7 +8199,7 @@ type ListScheduleOccurrencesResponse struct {
 
 func (x *ListScheduleOccurrencesResponse) Reset() {
 	*x = ListScheduleOccurrencesResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[82]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7823,7 +8211,7 @@ func (x *ListScheduleOccurrencesResponse) String() string {
 func (*ListScheduleOccurrencesResponse) ProtoMessage() {}
 
 func (x *ListScheduleOccurrencesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[82]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7836,7 +8224,7 @@ func (x *ListScheduleOccurrencesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListScheduleOccurrencesResponse.ProtoReflect.Descriptor instead.
 func (*ListScheduleOccurrencesResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{82}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ListScheduleOccurrencesResponse) GetOccurrences() []*ScheduleOccurrence {
@@ -7874,7 +8262,7 @@ type StartProcessRequest struct {
 
 func (x *StartProcessRequest) Reset() {
 	*x = StartProcessRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[83]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7886,7 +8274,7 @@ func (x *StartProcessRequest) String() string {
 func (*StartProcessRequest) ProtoMessage() {}
 
 func (x *StartProcessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[83]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7899,7 +8287,7 @@ func (x *StartProcessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartProcessRequest.ProtoReflect.Descriptor instead.
 func (*StartProcessRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{83}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *StartProcessRequest) GetIdempotencyKey() string {
@@ -7996,7 +8384,7 @@ type StartProcessResponse struct {
 
 func (x *StartProcessResponse) Reset() {
 	*x = StartProcessResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[84]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8008,7 +8396,7 @@ func (x *StartProcessResponse) String() string {
 func (*StartProcessResponse) ProtoMessage() {}
 
 func (x *StartProcessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[84]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8021,7 +8409,7 @@ func (x *StartProcessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartProcessResponse.ProtoReflect.Descriptor instead.
 func (*StartProcessResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{84}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *StartProcessResponse) GetProcessRun() *Resource {
@@ -8044,7 +8432,7 @@ type CancelProcessRequest struct {
 
 func (x *CancelProcessRequest) Reset() {
 	*x = CancelProcessRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[85]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8056,7 +8444,7 @@ func (x *CancelProcessRequest) String() string {
 func (*CancelProcessRequest) ProtoMessage() {}
 
 func (x *CancelProcessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[85]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8069,7 +8457,7 @@ func (x *CancelProcessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelProcessRequest.ProtoReflect.Descriptor instead.
 func (*CancelProcessRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{85}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *CancelProcessRequest) GetIdempotencyKey() string {
@@ -8110,7 +8498,7 @@ type CancelProcessResponse struct {
 
 func (x *CancelProcessResponse) Reset() {
 	*x = CancelProcessResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[86]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8122,7 +8510,7 @@ func (x *CancelProcessResponse) String() string {
 func (*CancelProcessResponse) ProtoMessage() {}
 
 func (x *CancelProcessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[86]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8135,12 +8523,495 @@ func (x *CancelProcessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelProcessResponse.ProtoReflect.Descriptor instead.
 func (*CancelProcessResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{86}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *CancelProcessResponse) GetProcessRun() *Resource {
 	if x != nil {
 		return x.ProcessRun
+	}
+	return nil
+}
+
+// CompleteProcessRequest связывает terminal outcome с exact OCC-версией процесса.
+type CompleteProcessRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey   string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	ProcessRunId     string                 `protobuf:"bytes,2,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
+	ExpectedVersion  uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	TerminalState    LifecycleState         `protobuf:"varint,4,opt,name=terminal_state,json=terminalState,proto3,enum=controlplane.v1.LifecycleState" json:"terminal_state,omitempty"`
+	Outcome          string                 `protobuf:"bytes,5,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	ResultArtifactId string                 `protobuf:"bytes,6,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CompleteProcessRequest) Reset() {
+	*x = CompleteProcessRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[89]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompleteProcessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompleteProcessRequest) ProtoMessage() {}
+
+func (x *CompleteProcessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[89]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompleteProcessRequest.ProtoReflect.Descriptor instead.
+func (*CompleteProcessRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{89}
+}
+
+func (x *CompleteProcessRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *CompleteProcessRequest) GetProcessRunId() string {
+	if x != nil {
+		return x.ProcessRunId
+	}
+	return ""
+}
+
+func (x *CompleteProcessRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *CompleteProcessRequest) GetTerminalState() LifecycleState {
+	if x != nil {
+		return x.TerminalState
+	}
+	return LifecycleState_LIFECYCLE_STATE_UNSPECIFIED
+}
+
+func (x *CompleteProcessRequest) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *CompleteProcessRequest) GetResultArtifactId() string {
+	if x != nil {
+		return x.ResultArtifactId
+	}
+	return ""
+}
+
+// CompleteProcessResponse возвращает авторитетный terminal-процесс.
+type CompleteProcessResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProcessRun    *Resource              `protobuf:"bytes,1,opt,name=process_run,json=processRun,proto3" json:"process_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompleteProcessResponse) Reset() {
+	*x = CompleteProcessResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[90]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompleteProcessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompleteProcessResponse) ProtoMessage() {}
+
+func (x *CompleteProcessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[90]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompleteProcessResponse.ProtoReflect.Descriptor instead.
+func (*CompleteProcessResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{90}
+}
+
+func (x *CompleteProcessResponse) GetProcessRun() *Resource {
+	if x != nil {
+		return x.ProcessRun
+	}
+	return nil
+}
+
+// ListOutboxFailuresRequest задаёт ограниченную UUID-пагинацию.
+type ListOutboxFailuresRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PageToken     string                 `protobuf:"bytes,1,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	PageSize      uint32                 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOutboxFailuresRequest) Reset() {
+	*x = ListOutboxFailuresRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[91]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOutboxFailuresRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOutboxFailuresRequest) ProtoMessage() {}
+
+func (x *ListOutboxFailuresRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[91]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOutboxFailuresRequest.ProtoReflect.Descriptor instead.
+func (*ListOutboxFailuresRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{91}
+}
+
+func (x *ListOutboxFailuresRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+func (x *ListOutboxFailuresRequest) GetPageSize() uint32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+// OutboxFailure скрывает payload и предоставляет только repair evidence.
+type OutboxFailure struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	EventId        string                 `protobuf:"bytes,1,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	OrderingKey    string                 `protobuf:"bytes,2,opt,name=ordering_key,json=orderingKey,proto3" json:"ordering_key,omitempty"`
+	EventSequence  uint64                 `protobuf:"varint,3,opt,name=event_sequence,json=eventSequence,proto3" json:"event_sequence,omitempty"`
+	EventName      string                 `protobuf:"bytes,4,opt,name=event_name,json=eventName,proto3" json:"event_name,omitempty"`
+	AggregateId    string                 `protobuf:"bytes,5,opt,name=aggregate_id,json=aggregateId,proto3" json:"aggregate_id,omitempty"`
+	Attempts       uint32                 `protobuf:"varint,6,opt,name=attempts,proto3" json:"attempts,omitempty"`
+	RepairCount    uint32                 `protobuf:"varint,7,opt,name=repair_count,json=repairCount,proto3" json:"repair_count,omitempty"`
+	LastErrorClass string                 `protobuf:"bytes,8,opt,name=last_error_class,json=lastErrorClass,proto3" json:"last_error_class,omitempty"`
+	OccurredAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *OutboxFailure) Reset() {
+	*x = OutboxFailure{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[92]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OutboxFailure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OutboxFailure) ProtoMessage() {}
+
+func (x *OutboxFailure) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[92]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OutboxFailure.ProtoReflect.Descriptor instead.
+func (*OutboxFailure) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *OutboxFailure) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *OutboxFailure) GetOrderingKey() string {
+	if x != nil {
+		return x.OrderingKey
+	}
+	return ""
+}
+
+func (x *OutboxFailure) GetEventSequence() uint64 {
+	if x != nil {
+		return x.EventSequence
+	}
+	return 0
+}
+
+func (x *OutboxFailure) GetEventName() string {
+	if x != nil {
+		return x.EventName
+	}
+	return ""
+}
+
+func (x *OutboxFailure) GetAggregateId() string {
+	if x != nil {
+		return x.AggregateId
+	}
+	return ""
+}
+
+func (x *OutboxFailure) GetAttempts() uint32 {
+	if x != nil {
+		return x.Attempts
+	}
+	return 0
+}
+
+func (x *OutboxFailure) GetRepairCount() uint32 {
+	if x != nil {
+		return x.RepairCount
+	}
+	return 0
+}
+
+func (x *OutboxFailure) GetLastErrorClass() string {
+	if x != nil {
+		return x.LastErrorClass
+	}
+	return ""
+}
+
+func (x *OutboxFailure) GetOccurredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OccurredAt
+	}
+	return nil
+}
+
+func (x *OutboxFailure) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+// ListOutboxFailuresResponse возвращает terminal predecessors без envelope.
+type ListOutboxFailuresResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Failures      []*OutboxFailure       `protobuf:"bytes,1,rep,name=failures,proto3" json:"failures,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOutboxFailuresResponse) Reset() {
+	*x = ListOutboxFailuresResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOutboxFailuresResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOutboxFailuresResponse) ProtoMessage() {}
+
+func (x *ListOutboxFailuresResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOutboxFailuresResponse.ProtoReflect.Descriptor instead.
+func (*ListOutboxFailuresResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *ListOutboxFailuresResponse) GetFailures() []*OutboxFailure {
+	if x != nil {
+		return x.Failures
+	}
+	return nil
+}
+
+func (x *ListOutboxFailuresResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+// RepairOutboxEventRequest требует exact sequence/attempt fence и evidence digest.
+type RepairOutboxEventRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey   string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	EventId          string                 `protobuf:"bytes,2,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	ExpectedSequence uint64                 `protobuf:"varint,3,opt,name=expected_sequence,json=expectedSequence,proto3" json:"expected_sequence,omitempty"`
+	ExpectedAttempts uint32                 `protobuf:"varint,4,opt,name=expected_attempts,json=expectedAttempts,proto3" json:"expected_attempts,omitempty"`
+	ReasonCode       string                 `protobuf:"bytes,5,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	EvidenceSha256   string                 `protobuf:"bytes,6,opt,name=evidence_sha256,json=evidenceSha256,proto3" json:"evidence_sha256,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *RepairOutboxEventRequest) Reset() {
+	*x = RepairOutboxEventRequest{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[94]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RepairOutboxEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RepairOutboxEventRequest) ProtoMessage() {}
+
+func (x *RepairOutboxEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[94]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RepairOutboxEventRequest.ProtoReflect.Descriptor instead.
+func (*RepairOutboxEventRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{94}
+}
+
+func (x *RepairOutboxEventRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *RepairOutboxEventRequest) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *RepairOutboxEventRequest) GetExpectedSequence() uint64 {
+	if x != nil {
+		return x.ExpectedSequence
+	}
+	return 0
+}
+
+func (x *RepairOutboxEventRequest) GetExpectedAttempts() uint32 {
+	if x != nil {
+		return x.ExpectedAttempts
+	}
+	return 0
+}
+
+func (x *RepairOutboxEventRequest) GetReasonCode() string {
+	if x != nil {
+		return x.ReasonCode
+	}
+	return ""
+}
+
+func (x *RepairOutboxEventRequest) GetEvidenceSha256() string {
+	if x != nil {
+		return x.EvidenceSha256
+	}
+	return ""
+}
+
+// RepairOutboxEventResponse возвращает повторно открытый predecessor.
+type RepairOutboxEventResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Failure       *OutboxFailure         `protobuf:"bytes,1,opt,name=failure,proto3" json:"failure,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RepairOutboxEventResponse) Reset() {
+	*x = RepairOutboxEventResponse{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[95]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RepairOutboxEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RepairOutboxEventResponse) ProtoMessage() {}
+
+func (x *RepairOutboxEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[95]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RepairOutboxEventResponse.ProtoReflect.Descriptor instead.
+func (*RepairOutboxEventResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{95}
+}
+
+func (x *RepairOutboxEventResponse) GetFailure() *OutboxFailure {
+	if x != nil {
+		return x.Failure
 	}
 	return nil
 }
@@ -8162,7 +9033,7 @@ type RequestOwnerGateRequest struct {
 
 func (x *RequestOwnerGateRequest) Reset() {
 	*x = RequestOwnerGateRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[87]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8174,7 +9045,7 @@ func (x *RequestOwnerGateRequest) String() string {
 func (*RequestOwnerGateRequest) ProtoMessage() {}
 
 func (x *RequestOwnerGateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[87]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8187,7 +9058,7 @@ func (x *RequestOwnerGateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestOwnerGateRequest.ProtoReflect.Descriptor instead.
 func (*RequestOwnerGateRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{87}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *RequestOwnerGateRequest) GetIdempotencyKey() string {
@@ -8257,7 +9128,7 @@ type RequestOwnerGateResponse struct {
 
 func (x *RequestOwnerGateResponse) Reset() {
 	*x = RequestOwnerGateResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[88]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8269,7 +9140,7 @@ func (x *RequestOwnerGateResponse) String() string {
 func (*RequestOwnerGateResponse) ProtoMessage() {}
 
 func (x *RequestOwnerGateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[88]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8282,7 +9153,7 @@ func (x *RequestOwnerGateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestOwnerGateResponse.ProtoReflect.Descriptor instead.
 func (*RequestOwnerGateResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{88}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *RequestOwnerGateResponse) GetOwnerGate() *Resource {
@@ -8309,7 +9180,7 @@ type ClaimOwnerGateDeliveryRequest struct {
 
 func (x *ClaimOwnerGateDeliveryRequest) Reset() {
 	*x = ClaimOwnerGateDeliveryRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[89]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8321,7 +9192,7 @@ func (x *ClaimOwnerGateDeliveryRequest) String() string {
 func (*ClaimOwnerGateDeliveryRequest) ProtoMessage() {}
 
 func (x *ClaimOwnerGateDeliveryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[89]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8334,7 +9205,7 @@ func (x *ClaimOwnerGateDeliveryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimOwnerGateDeliveryRequest.ProtoReflect.Descriptor instead.
 func (*ClaimOwnerGateDeliveryRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{89}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *ClaimOwnerGateDeliveryRequest) GetIdempotencyKey() string {
@@ -8356,7 +9227,7 @@ type ClaimOwnerGateDeliveryResponse struct {
 
 func (x *ClaimOwnerGateDeliveryResponse) Reset() {
 	*x = ClaimOwnerGateDeliveryResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[90]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8368,7 +9239,7 @@ func (x *ClaimOwnerGateDeliveryResponse) String() string {
 func (*ClaimOwnerGateDeliveryResponse) ProtoMessage() {}
 
 func (x *ClaimOwnerGateDeliveryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[90]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8381,7 +9252,7 @@ func (x *ClaimOwnerGateDeliveryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimOwnerGateDeliveryResponse.ProtoReflect.Descriptor instead.
 func (*ClaimOwnerGateDeliveryResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{90}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *ClaimOwnerGateDeliveryResponse) GetOwnerGate() *Resource {
@@ -8424,7 +9295,7 @@ type RecordOwnerGateDeliveryRequest struct {
 
 func (x *RecordOwnerGateDeliveryRequest) Reset() {
 	*x = RecordOwnerGateDeliveryRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[91]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8436,7 +9307,7 @@ func (x *RecordOwnerGateDeliveryRequest) String() string {
 func (*RecordOwnerGateDeliveryRequest) ProtoMessage() {}
 
 func (x *RecordOwnerGateDeliveryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[91]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8449,7 +9320,7 @@ func (x *RecordOwnerGateDeliveryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordOwnerGateDeliveryRequest.ProtoReflect.Descriptor instead.
 func (*RecordOwnerGateDeliveryRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{91}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *RecordOwnerGateDeliveryRequest) GetIdempotencyKey() string {
@@ -8532,7 +9403,7 @@ type RecordOwnerGateDeliveryResponse struct {
 
 func (x *RecordOwnerGateDeliveryResponse) Reset() {
 	*x = RecordOwnerGateDeliveryResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[92]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8544,7 +9415,7 @@ func (x *RecordOwnerGateDeliveryResponse) String() string {
 func (*RecordOwnerGateDeliveryResponse) ProtoMessage() {}
 
 func (x *RecordOwnerGateDeliveryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[92]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8557,7 +9428,7 @@ func (x *RecordOwnerGateDeliveryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordOwnerGateDeliveryResponse.ProtoReflect.Descriptor instead.
 func (*RecordOwnerGateDeliveryResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{92}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *RecordOwnerGateDeliveryResponse) GetOwnerGate() *Resource {
@@ -8587,7 +9458,7 @@ type ResolveOwnerGateRequest struct {
 
 func (x *ResolveOwnerGateRequest) Reset() {
 	*x = ResolveOwnerGateRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[93]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8599,7 +9470,7 @@ func (x *ResolveOwnerGateRequest) String() string {
 func (*ResolveOwnerGateRequest) ProtoMessage() {}
 
 func (x *ResolveOwnerGateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[93]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8612,7 +9483,7 @@ func (x *ResolveOwnerGateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveOwnerGateRequest.ProtoReflect.Descriptor instead.
 func (*ResolveOwnerGateRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{93}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *ResolveOwnerGateRequest) GetIdempotencyKey() string {
@@ -8703,7 +9574,7 @@ type ResolveOwnerGateResponse struct {
 
 func (x *ResolveOwnerGateResponse) Reset() {
 	*x = ResolveOwnerGateResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[94]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8715,7 +9586,7 @@ func (x *ResolveOwnerGateResponse) String() string {
 func (*ResolveOwnerGateResponse) ProtoMessage() {}
 
 func (x *ResolveOwnerGateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[94]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8728,7 +9599,7 @@ func (x *ResolveOwnerGateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveOwnerGateResponse.ProtoReflect.Descriptor instead.
 func (*ResolveOwnerGateResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{94}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *ResolveOwnerGateResponse) GetOwnerGate() *Resource {
@@ -8758,7 +9629,7 @@ type RegisterArtifactRequest struct {
 
 func (x *RegisterArtifactRequest) Reset() {
 	*x = RegisterArtifactRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[95]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8770,7 +9641,7 @@ func (x *RegisterArtifactRequest) String() string {
 func (*RegisterArtifactRequest) ProtoMessage() {}
 
 func (x *RegisterArtifactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[95]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8783,7 +9654,7 @@ func (x *RegisterArtifactRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterArtifactRequest.ProtoReflect.Descriptor instead.
 func (*RegisterArtifactRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{95}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *RegisterArtifactRequest) GetIdempotencyKey() string {
@@ -8824,7 +9695,7 @@ type RegisterArtifactResponse struct {
 
 func (x *RegisterArtifactResponse) Reset() {
 	*x = RegisterArtifactResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[96]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8836,7 +9707,7 @@ func (x *RegisterArtifactResponse) String() string {
 func (*RegisterArtifactResponse) ProtoMessage() {}
 
 func (x *RegisterArtifactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[96]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8849,7 +9720,7 @@ func (x *RegisterArtifactResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterArtifactResponse.ProtoReflect.Descriptor instead.
 func (*RegisterArtifactResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{96}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *RegisterArtifactResponse) GetArtifact() *Resource {
@@ -8874,7 +9745,7 @@ type RecordArtifactScanRequest struct {
 
 func (x *RecordArtifactScanRequest) Reset() {
 	*x = RecordArtifactScanRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[97]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8886,7 +9757,7 @@ func (x *RecordArtifactScanRequest) String() string {
 func (*RecordArtifactScanRequest) ProtoMessage() {}
 
 func (x *RecordArtifactScanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[97]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8899,7 +9770,7 @@ func (x *RecordArtifactScanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordArtifactScanRequest.ProtoReflect.Descriptor instead.
 func (*RecordArtifactScanRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{97}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *RecordArtifactScanRequest) GetIdempotencyKey() string {
@@ -8954,7 +9825,7 @@ type RecordArtifactScanResponse struct {
 
 func (x *RecordArtifactScanResponse) Reset() {
 	*x = RecordArtifactScanResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[98]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8966,7 +9837,7 @@ func (x *RecordArtifactScanResponse) String() string {
 func (*RecordArtifactScanResponse) ProtoMessage() {}
 
 func (x *RecordArtifactScanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[98]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8979,7 +9850,7 @@ func (x *RecordArtifactScanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordArtifactScanResponse.ProtoReflect.Descriptor instead.
 func (*RecordArtifactScanResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{98}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *RecordArtifactScanResponse) GetArtifact() *Resource {
@@ -9000,7 +9871,7 @@ type GetRuntimeRevisionRequest struct {
 
 func (x *GetRuntimeRevisionRequest) Reset() {
 	*x = GetRuntimeRevisionRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[99]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9012,7 +9883,7 @@ func (x *GetRuntimeRevisionRequest) String() string {
 func (*GetRuntimeRevisionRequest) ProtoMessage() {}
 
 func (x *GetRuntimeRevisionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[99]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9025,7 +9896,7 @@ func (x *GetRuntimeRevisionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRuntimeRevisionRequest.ProtoReflect.Descriptor instead.
 func (*GetRuntimeRevisionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{99}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *GetRuntimeRevisionRequest) GetRuntimeRevisionId() string {
@@ -9052,7 +9923,7 @@ type GetRuntimeRevisionResponse struct {
 
 func (x *GetRuntimeRevisionResponse) Reset() {
 	*x = GetRuntimeRevisionResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[100]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9064,7 +9935,7 @@ func (x *GetRuntimeRevisionResponse) String() string {
 func (*GetRuntimeRevisionResponse) ProtoMessage() {}
 
 func (x *GetRuntimeRevisionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[100]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9077,7 +9948,7 @@ func (x *GetRuntimeRevisionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRuntimeRevisionResponse.ProtoReflect.Descriptor instead.
 func (*GetRuntimeRevisionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{100}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *GetRuntimeRevisionResponse) GetRuntimeRevision() *Resource {
@@ -9100,7 +9971,7 @@ type RecordMemoryEmbeddingRequest struct {
 
 func (x *RecordMemoryEmbeddingRequest) Reset() {
 	*x = RecordMemoryEmbeddingRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[101]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9112,7 +9983,7 @@ func (x *RecordMemoryEmbeddingRequest) String() string {
 func (*RecordMemoryEmbeddingRequest) ProtoMessage() {}
 
 func (x *RecordMemoryEmbeddingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[101]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9125,7 +9996,7 @@ func (x *RecordMemoryEmbeddingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordMemoryEmbeddingRequest.ProtoReflect.Descriptor instead.
 func (*RecordMemoryEmbeddingRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{101}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *RecordMemoryEmbeddingRequest) GetIdempotencyKey() string {
@@ -9168,7 +10039,7 @@ type RecordMemoryEmbeddingResponse struct {
 
 func (x *RecordMemoryEmbeddingResponse) Reset() {
 	*x = RecordMemoryEmbeddingResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[102]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9180,7 +10051,7 @@ func (x *RecordMemoryEmbeddingResponse) String() string {
 func (*RecordMemoryEmbeddingResponse) ProtoMessage() {}
 
 func (x *RecordMemoryEmbeddingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[102]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9193,7 +10064,7 @@ func (x *RecordMemoryEmbeddingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordMemoryEmbeddingResponse.ProtoReflect.Descriptor instead.
 func (*RecordMemoryEmbeddingResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{102}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *RecordMemoryEmbeddingResponse) GetMemoryRecordId() string {
@@ -9226,7 +10097,7 @@ type CheckReadinessRequest struct {
 
 func (x *CheckReadinessRequest) Reset() {
 	*x = CheckReadinessRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[103]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9238,7 +10109,7 @@ func (x *CheckReadinessRequest) String() string {
 func (*CheckReadinessRequest) ProtoMessage() {}
 
 func (x *CheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[103]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9251,7 +10122,7 @@ func (x *CheckReadinessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*CheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{103}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{112}
 }
 
 // CheckReadinessResponse описывает версионированное сообщение контракта control-plane.
@@ -9269,7 +10140,7 @@ type CheckReadinessResponse struct {
 
 func (x *CheckReadinessResponse) Reset() {
 	*x = CheckReadinessResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[104]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9281,7 +10152,7 @@ func (x *CheckReadinessResponse) String() string {
 func (*CheckReadinessResponse) ProtoMessage() {}
 
 func (x *CheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[104]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9294,7 +10165,7 @@ func (x *CheckReadinessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*CheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{104}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *CheckReadinessResponse) GetReady() bool {
@@ -9352,7 +10223,7 @@ type ErrorDetail struct {
 
 func (x *ErrorDetail) Reset() {
 	*x = ErrorDetail{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[105]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9364,7 +10235,7 @@ func (x *ErrorDetail) String() string {
 func (*ErrorDetail) ProtoMessage() {}
 
 func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[105]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9377,7 +10248,7 @@ func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorDetail.ProtoReflect.Descriptor instead.
 func (*ErrorDetail) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{105}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *ErrorDetail) GetReason() ErrorReason {
@@ -9457,7 +10328,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"workPolicy\x12E\n" +
 	"\townership\x18\n" +
 	" \x01(\v2'.controlplane.v1.ConfigurationOwnershipR\townershipJ\x04\b\x01\x10\x02R\n" +
-	"project_id\"\xa1\x03\n" +
+	"project_id\"\xfb\x03\n" +
 	"\bRoleSpec\x12\x1d\n" +
 	"\n" +
 	"stable_key\x18\x01 \x01(\tR\tstableKey\x12\"\n" +
@@ -9466,9 +10337,18 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x11prompt_profile_id\x18\x04 \x01(\tR\x0fpromptProfileId\x12E\n" +
 	"\x1fprovider_credential_binding_ids\x18\x05 \x03(\tR\x1cproviderCredentialBindingIds\x128\n" +
 	"\x18repository_workspace_ids\x18\x06 \x03(\tR\x16repositoryWorkspaceIds\x12'\n" +
-	"\x0fintegration_ids\x18\a \x03(\tR\x0eintegrationIds\x12E\n" +
+	"\x0fintegration_ids\x18\a \x03(\tR\x0eintegrationIds\x12X\n" +
+	"\x15provider_account_pool\x18\b \x01(\v2$.controlplane.v1.ProviderAccountPoolR\x13providerAccountPool\x12E\n" +
 	"\townership\x18\n" +
-	" \x01(\v2'.controlplane.v1.ConfigurationOwnershipR\townership\"\xd4\x01\n" +
+	" \x01(\v2'.controlplane.v1.ConfigurationOwnershipR\townership\"\xea\x01\n" +
+	"\x13ProviderAccountPool\x12\x16\n" +
+	"\x06policy\x18\x01 \x01(\tR\x06policy\x12'\n" +
+	"\x0fpolicy_revision\x18\x02 \x01(\x04R\x0epolicyRevision\x12I\n" +
+	"\x13observation_max_age\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\x11observationMaxAge\x12G\n" +
+	"\bbindings\x18\x04 \x03(\v2+.controlplane.v1.ProviderAccountPoolBindingR\bbindings\"h\n" +
+	"\x1aProviderAccountPoolBinding\x122\n" +
+	"\x15credential_binding_id\x18\x01 \x01(\tR\x13credentialBindingId\x12\x16\n" +
+	"\x06weight\x18\x02 \x01(\rR\x06weight\"\xd4\x01\n" +
 	"\x11PromptProfileSpec\x12\x1a\n" +
 	"\brevision\x18\x01 \x01(\x04R\brevision\x12%\n" +
 	"\x0econtent_sha256\x18\x02 \x01(\tR\rcontentSha256\x12\x1d\n" +
@@ -9476,7 +10356,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"source_ref\x18\x03 \x01(\tR\tsourceRef\x12\x16\n" +
 	"\x06locale\x18\x04 \x01(\tR\x06locale\x12E\n" +
 	"\townership\x18\n" +
-	" \x01(\v2'.controlplane.v1.ConfigurationOwnershipR\townership\"\x93\x02\n" +
+	" \x01(\v2'.controlplane.v1.ConfigurationOwnershipR\townership\"\xf7\x04\n" +
 	"\x15CredentialBindingSpec\x12\x18\n" +
 	"\apurpose\x18\x01 \x01(\tR\apurpose\x12\x1d\n" +
 	"\n" +
@@ -9484,9 +10364,15 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\rprincipal_ref\x18\x03 \x01(\tR\fprincipalRef\x12\x1a\n" +
 	"\brevision\x18\x04 \x01(\x04R\brevision\x129\n" +
 	"\n" +
-	"expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12E\n" +
+	"expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12+\n" +
+	"\x11provider_eligible\x18\x06 \x01(\bR\x10providerEligible\x123\n" +
+	"\x15provider_capabilities\x18\a \x03(\tR\x14providerCapabilities\x126\n" +
+	"\x17provider_observed_usage\x18\b \x01(\x04R\x15providerObservedUsage\x126\n" +
+	"\x17provider_observed_limit\x18\t \x01(\x04R\x15providerObservedLimit\x12E\n" +
 	"\townership\x18\n" +
-	" \x01(\v2'.controlplane.v1.ConfigurationOwnershipR\townership\"\x89\x02\n" +
+	" \x01(\v2'.controlplane.v1.ConfigurationOwnershipR\townership\x12B\n" +
+	"\x1dprovider_observation_revision\x18\v \x01(\x04R\x1bproviderObservationRevision\x12L\n" +
+	"\x14provider_observed_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\x12providerObservedAt\"\x89\x02\n" +
 	"\x17RepositoryWorkspaceSpec\x12%\n" +
 	"\x0erepository_ref\x18\x01 \x01(\tR\rrepositoryRef\x12%\n" +
 	"\x0eworkspace_mode\x18\x02 \x01(\tR\rworkspaceMode\x12%\n" +
@@ -9550,7 +10436,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12result_artifact_id\x18\t \x01(\tR\x10resultArtifactId\x124\n" +
 	"\x16effective_input_sha256\x18\n" +
 	" \x01(\tR\x14effectiveInputSha256\x12.\n" +
-	"\x13predecessor_turn_id\x18\v \x01(\tR\x11predecessorTurnId\"\xc9\x05\n" +
+	"\x13predecessor_turn_id\x18\v \x01(\tR\x11predecessorTurnId\"\x81\a\n" +
 	"\x0eProcessRunSpec\x121\n" +
 	"\x15parent_process_run_id\x18\x01 \x01(\tR\x12parentProcessRunId\x12!\n" +
 	"\fplaybook_ref\x18\x02 \x01(\tR\vplaybookRef\x12'\n" +
@@ -9570,7 +10456,12 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x11launching_attempt\x18\x0e \x01(\rR\x10launchingAttempt\x12\x1f\n" +
 	"\vschedule_id\x18\x0f \x01(\tR\n" +
 	"scheduleId\x12#\n" +
-	"\roccurrence_id\x18\x10 \x01(\tR\foccurrenceId\"\x94\r\n" +
+	"\roccurrence_id\x18\x10 \x01(\tR\foccurrenceId\x12#\n" +
+	"\rdelegation_id\x18\x11 \x01(\tR\fdelegationId\x12*\n" +
+	"\x11target_session_id\x18\x12 \x01(\tR\x0ftargetSessionId\x12$\n" +
+	"\x0etarget_turn_id\x18\x13 \x01(\tR\ftargetTurnId\x12%\n" +
+	"\x0etarget_attempt\x18\x14 \x01(\rR\rtargetAttempt\x12\x18\n" +
+	"\aoutcome\x18\x15 \x01(\tR\aoutcome\"\x94\r\n" +
 	"\fScheduleSpec\x12,\n" +
 	"\x12target_resource_id\x18\x01 \x01(\tR\x10targetResourceId\x12\x12\n" +
 	"\x04cron\x18\x02 \x01(\tR\x04cron\x125\n" +
@@ -9994,7 +10885,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\bschedule\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\bschedule\"Y\n" +
 	"\x18ClaimDueSchedulesRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\rR\x05limit\"\x84\t\n" +
+	"\x05limit\x18\x02 \x01(\rR\x05limit\"\xd9\f\n" +
 	"\x12ScheduleOccurrence\x12\x1f\n" +
 	"\vschedule_id\x18\x01 \x01(\tR\n" +
 	"scheduleId\x12?\n" +
@@ -10020,7 +10911,15 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\aroom_id\x18\x13 \x01(\tR\x06roomId\x12\\\n" +
 	"\x13notification_policy\x18\x14 \x01(\x0e2+.controlplane.v1.ScheduleNotificationPolicyR\x12notificationPolicy\x12W\n" +
 	"\x1amaximum_execution_duration\x18\x15 \x01(\v2\x19.google.protobuf.DurationR\x18maximumExecutionDuration\x12\x1a\n" +
-	"\bcoalesce\x18\x16 \x01(\bR\bcoalesce\"b\n" +
+	"\bcoalesce\x18\x16 \x01(\bR\bcoalesce\x120\n" +
+	"\x14execution_session_id\x18\x17 \x01(\tR\x12executionSessionId\x12:\n" +
+	"\x19execution_session_version\x18\x18 \x01(\x04R\x17executionSessionVersion\x12*\n" +
+	"\x11execution_turn_id\x18\x19 \x01(\tR\x0fexecutionTurnId\x124\n" +
+	"\x16execution_turn_version\x18\x1a \x01(\x04R\x14executionTurnVersion\x127\n" +
+	"\x18execution_process_run_id\x18\x1b \x01(\tR\x15executionProcessRunId\x12:\n" +
+	"\x19execution_process_version\x18\x1c \x01(\x04R\x17executionProcessVersion\x12A\n" +
+	"\x1dexecution_runtime_revision_id\x18\x1d \x01(\tR\x1aexecutionRuntimeRevisionId\x12K\n" +
+	"\"execution_runtime_revision_version\x18\x1e \x01(\x04R\x1fexecutionRuntimeRevisionVersion\"b\n" +
 	"\x19ClaimDueSchedulesResponse\x12E\n" +
 	"\voccurrences\x18\x01 \x03(\v2#.controlplane.v1.ScheduleOccurrenceR\voccurrences\"I\n" +
 	"\x1eClaimScheduleOccurrenceRequest\x12'\n" +
@@ -10030,16 +10929,13 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"occurrence\x18\x01 \x01(\v2#.controlplane.v1.ScheduleOccurrenceR\n" +
 	"occurrence\x12\x1f\n" +
 	"\vlease_token\x18\x02 \x01(\tR\n" +
-	"leaseToken\"\xd6\x02\n" +
+	"leaseToken\"\xfc\x01\n" +
 	"!CompleteScheduleOccurrenceRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12#\n" +
 	"\roccurrence_id\x18\x02 \x01(\tR\foccurrenceId\x12\x1f\n" +
 	"\vlease_token\x18\x03 \x01(\tR\n" +
 	"leaseToken\x12)\n" +
-	"\x10expected_attempt\x18\x04 \x01(\rR\x0fexpectedAttempt\x12O\n" +
-	"\x0eterminal_state\x18\x05 \x01(\x0e2(.controlplane.v1.ScheduleOccurrenceStateR\rterminalState\x12\x18\n" +
-	"\aoutcome\x18\x06 \x01(\tR\aoutcome\x12,\n" +
-	"\x12result_artifact_id\x18\a \x01(\tR\x10resultArtifactId\"i\n" +
+	"\x10expected_attempt\x18\x04 \x01(\rR\x0fexpectedAttemptJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\x0eterminal_stateR\aoutcomeR\x12result_artifact_id\"i\n" +
 	"\"CompleteScheduleOccurrenceResponse\x12C\n" +
 	"\n" +
 	"occurrence\x18\x01 \x01(\v2#.controlplane.v1.ScheduleOccurrenceR\n" +
@@ -10090,7 +10986,49 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"reasonCode\"S\n" +
 	"\x15CancelProcessResponse\x12:\n" +
 	"\vprocess_run\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\n" +
-	"processRun\"\xdd\x02\n" +
+	"processRun\"\xa2\x02\n" +
+	"\x16CompleteProcessRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12$\n" +
+	"\x0eprocess_run_id\x18\x02 \x01(\tR\fprocessRunId\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\x12F\n" +
+	"\x0eterminal_state\x18\x04 \x01(\x0e2\x1f.controlplane.v1.LifecycleStateR\rterminalState\x12\x18\n" +
+	"\aoutcome\x18\x05 \x01(\tR\aoutcome\x12,\n" +
+	"\x12result_artifact_id\x18\x06 \x01(\tR\x10resultArtifactId\"U\n" +
+	"\x17CompleteProcessResponse\x12:\n" +
+	"\vprocess_run\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\n" +
+	"processRun\"W\n" +
+	"\x19ListOutboxFailuresRequest\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x01 \x01(\tR\tpageToken\x12\x1b\n" +
+	"\tpage_size\x18\x02 \x01(\rR\bpageSize\"\x97\x03\n" +
+	"\rOutboxFailure\x12\x19\n" +
+	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12!\n" +
+	"\fordering_key\x18\x02 \x01(\tR\vorderingKey\x12%\n" +
+	"\x0eevent_sequence\x18\x03 \x01(\x04R\reventSequence\x12\x1d\n" +
+	"\n" +
+	"event_name\x18\x04 \x01(\tR\teventName\x12!\n" +
+	"\faggregate_id\x18\x05 \x01(\tR\vaggregateId\x12\x1a\n" +
+	"\battempts\x18\x06 \x01(\rR\battempts\x12!\n" +
+	"\frepair_count\x18\a \x01(\rR\vrepairCount\x12(\n" +
+	"\x10last_error_class\x18\b \x01(\tR\x0elastErrorClass\x12;\n" +
+	"\voccurred_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"occurredAt\x129\n" +
+	"\n" +
+	"updated_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x80\x01\n" +
+	"\x1aListOutboxFailuresResponse\x12:\n" +
+	"\bfailures\x18\x01 \x03(\v2\x1e.controlplane.v1.OutboxFailureR\bfailures\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x82\x02\n" +
+	"\x18RepairOutboxEventRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x19\n" +
+	"\bevent_id\x18\x02 \x01(\tR\aeventId\x12+\n" +
+	"\x11expected_sequence\x18\x03 \x01(\x04R\x10expectedSequence\x12+\n" +
+	"\x11expected_attempts\x18\x04 \x01(\rR\x10expectedAttempts\x12\x1f\n" +
+	"\vreason_code\x18\x05 \x01(\tR\n" +
+	"reasonCode\x12'\n" +
+	"\x0fevidence_sha256\x18\x06 \x01(\tR\x0eevidenceSha256\"U\n" +
+	"\x19RepairOutboxEventResponse\x128\n" +
+	"\afailure\x18\x01 \x01(\v2\x1e.controlplane.v1.OutboxFailureR\afailure\"\xdd\x02\n" +
 	"\x17RequestOwnerGateRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12$\n" +
 	"\x0eprocess_run_id\x18\x02 \x01(\tR\fprocessRunId\x128\n" +
@@ -10328,7 +11266,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x18ERROR_REASON_UNAVAILABLE\x10\b\x12\x19\n" +
 	"\x15ERROR_REASON_INTERNAL\x10\t\x12\x1d\n" +
 	"\x19ERROR_REASON_RATE_LIMITED\x10\n" +
-	"2\xda \n" +
+	"2\x9b#\n" +
 	"\x13ControlPlaneService\x12^\n" +
 	"\rCreateProject\x12%.controlplane.v1.CreateProjectRequest\x1a&.controlplane.v1.CreateProjectResponse\x12[\n" +
 	"\fListProjects\x12$.controlplane.v1.ListProjectsRequest\x1a%.controlplane.v1.ListProjectsResponse\x12a\n" +
@@ -10343,7 +11281,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x13SearchMemoryRecords\x12+.controlplane.v1.SearchMemoryRecordsRequest\x1a,.controlplane.v1.SearchMemoryRecordsResponse\x12d\n" +
 	"\x0fListAuditEvents\x12'.controlplane.v1.ListAuditEventsRequest\x1a(.controlplane.v1.ListAuditEventsResponse\x12a\n" +
 	"\x0eListTombstones\x12&.controlplane.v1.ListTombstonesRequest\x1a'.controlplane.v1.ListTombstonesResponse\x12a\n" +
-	"\x0eGetDiagnostics\x12&.controlplane.v1.GetDiagnosticsRequest\x1a'.controlplane.v1.GetDiagnosticsResponse\x12X\n" +
+	"\x0eGetDiagnostics\x12&.controlplane.v1.GetDiagnosticsRequest\x1a'.controlplane.v1.GetDiagnosticsResponse\x12m\n" +
+	"\x12ListOutboxFailures\x12*.controlplane.v1.ListOutboxFailuresRequest\x1a+.controlplane.v1.ListOutboxFailuresResponse\x12j\n" +
+	"\x11RepairOutboxEvent\x12).controlplane.v1.RepairOutboxEventRequest\x1a*.controlplane.v1.RepairOutboxEventResponse\x12X\n" +
 	"\vEnqueueTurn\x12#.controlplane.v1.EnqueueTurnRequest\x1a$.controlplane.v1.EnqueueTurnResponse\x12R\n" +
 	"\tClaimTurn\x12!.controlplane.v1.ClaimTurnRequest\x1a\".controlplane.v1.ClaimTurnResponse\x12R\n" +
 	"\tRenewTurn\x12!.controlplane.v1.RenewTurnRequest\x1a\".controlplane.v1.RenewTurnResponse\x12[\n" +
@@ -10361,7 +11301,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x18CancelScheduleOccurrence\x120.controlplane.v1.CancelScheduleOccurrenceRequest\x1a1.controlplane.v1.CancelScheduleOccurrenceResponse\x12|\n" +
 	"\x17ListScheduleOccurrences\x12/.controlplane.v1.ListScheduleOccurrencesRequest\x1a0.controlplane.v1.ListScheduleOccurrencesResponse\x12[\n" +
 	"\fStartProcess\x12$.controlplane.v1.StartProcessRequest\x1a%.controlplane.v1.StartProcessResponse\x12^\n" +
-	"\rCancelProcess\x12%.controlplane.v1.CancelProcessRequest\x1a&.controlplane.v1.CancelProcessResponse\x12g\n" +
+	"\rCancelProcess\x12%.controlplane.v1.CancelProcessRequest\x1a&.controlplane.v1.CancelProcessResponse\x12d\n" +
+	"\x0fCompleteProcess\x12'.controlplane.v1.CompleteProcessRequest\x1a(.controlplane.v1.CompleteProcessResponse\x12g\n" +
 	"\x10RequestOwnerGate\x12(.controlplane.v1.RequestOwnerGateRequest\x1a).controlplane.v1.RequestOwnerGateResponse\x12y\n" +
 	"\x16ClaimOwnerGateDelivery\x12..controlplane.v1.ClaimOwnerGateDeliveryRequest\x1a/.controlplane.v1.ClaimOwnerGateDeliveryResponse\x12|\n" +
 	"\x17RecordOwnerGateDelivery\x12/.controlplane.v1.RecordOwnerGateDeliveryRequest\x1a0.controlplane.v1.RecordOwnerGateDeliveryResponse\x12g\n" +
@@ -10385,7 +11326,7 @@ func file_controlplane_v1_control_plane_proto_rawDescGZIP() []byte {
 }
 
 var file_controlplane_v1_control_plane_proto_enumTypes = make([]protoimpl.EnumInfo, 17)
-var file_controlplane_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 106)
+var file_controlplane_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 115)
 var file_controlplane_v1_control_plane_proto_goTypes = []any{
 	(ResourceKind)(0),                          // 0: controlplane.v1.ResourceKind
 	(LifecycleState)(0),                        // 1: controlplane.v1.LifecycleState
@@ -10413,334 +11354,358 @@ var file_controlplane_v1_control_plane_proto_goTypes = []any{
 	(*TeamSpec)(nil),                           // 23: controlplane.v1.TeamSpec
 	(*ChatSpec)(nil),                           // 24: controlplane.v1.ChatSpec
 	(*RoleSpec)(nil),                           // 25: controlplane.v1.RoleSpec
-	(*PromptProfileSpec)(nil),                  // 26: controlplane.v1.PromptProfileSpec
-	(*CredentialBindingSpec)(nil),              // 27: controlplane.v1.CredentialBindingSpec
-	(*RepositoryWorkspaceSpec)(nil),            // 28: controlplane.v1.RepositoryWorkspaceSpec
-	(*IntegrationSpec)(nil),                    // 29: controlplane.v1.IntegrationSpec
-	(*RuntimeRevisionSpec)(nil),                // 30: controlplane.v1.RuntimeRevisionSpec
-	(*EffectiveResourceRef)(nil),               // 31: controlplane.v1.EffectiveResourceRef
-	(*SessionSpec)(nil),                        // 32: controlplane.v1.SessionSpec
-	(*TurnSpec)(nil),                           // 33: controlplane.v1.TurnSpec
-	(*ProcessRunSpec)(nil),                     // 34: controlplane.v1.ProcessRunSpec
-	(*ScheduleSpec)(nil),                       // 35: controlplane.v1.ScheduleSpec
-	(*OwnerGateSpec)(nil),                      // 36: controlplane.v1.OwnerGateSpec
-	(*MemoryRecordSpec)(nil),                   // 37: controlplane.v1.MemoryRecordSpec
-	(*WorkClaimSpec)(nil),                      // 38: controlplane.v1.WorkClaimSpec
-	(*ArtifactSpec)(nil),                       // 39: controlplane.v1.ArtifactSpec
-	(*ResourceSpec)(nil),                       // 40: controlplane.v1.ResourceSpec
-	(*Resource)(nil),                           // 41: controlplane.v1.Resource
-	(*CreateResourceRequest)(nil),              // 42: controlplane.v1.CreateResourceRequest
-	(*CreateResourceResponse)(nil),             // 43: controlplane.v1.CreateResourceResponse
-	(*UpdateResourceRequest)(nil),              // 44: controlplane.v1.UpdateResourceRequest
-	(*UpdateResourceResponse)(nil),             // 45: controlplane.v1.UpdateResourceResponse
-	(*TransitionResourceRequest)(nil),          // 46: controlplane.v1.TransitionResourceRequest
-	(*TransitionResourceResponse)(nil),         // 47: controlplane.v1.TransitionResourceResponse
-	(*DeleteResourceRequest)(nil),              // 48: controlplane.v1.DeleteResourceRequest
-	(*DeleteResourceResponse)(nil),             // 49: controlplane.v1.DeleteResourceResponse
-	(*ManageAccessResourceRequest)(nil),        // 50: controlplane.v1.ManageAccessResourceRequest
-	(*ManageAccessResourceResponse)(nil),       // 51: controlplane.v1.ManageAccessResourceResponse
-	(*GetResourceRequest)(nil),                 // 52: controlplane.v1.GetResourceRequest
-	(*GetResourceResponse)(nil),                // 53: controlplane.v1.GetResourceResponse
-	(*ListResourcesRequest)(nil),               // 54: controlplane.v1.ListResourcesRequest
-	(*ListResourcesResponse)(nil),              // 55: controlplane.v1.ListResourcesResponse
-	(*SearchResourcesRequest)(nil),             // 56: controlplane.v1.SearchResourcesRequest
-	(*SearchResourcesResponse)(nil),            // 57: controlplane.v1.SearchResourcesResponse
-	(*SearchMemoryRecordsRequest)(nil),         // 58: controlplane.v1.SearchMemoryRecordsRequest
-	(*MemorySearchHit)(nil),                    // 59: controlplane.v1.MemorySearchHit
-	(*SearchMemoryRecordsResponse)(nil),        // 60: controlplane.v1.SearchMemoryRecordsResponse
-	(*AuditEvent)(nil),                         // 61: controlplane.v1.AuditEvent
-	(*ListAuditEventsRequest)(nil),             // 62: controlplane.v1.ListAuditEventsRequest
-	(*ListAuditEventsResponse)(nil),            // 63: controlplane.v1.ListAuditEventsResponse
-	(*ResourceTombstone)(nil),                  // 64: controlplane.v1.ResourceTombstone
-	(*ListTombstonesRequest)(nil),              // 65: controlplane.v1.ListTombstonesRequest
-	(*ListTombstonesResponse)(nil),             // 66: controlplane.v1.ListTombstonesResponse
-	(*GetDiagnosticsRequest)(nil),              // 67: controlplane.v1.GetDiagnosticsRequest
-	(*GetDiagnosticsResponse)(nil),             // 68: controlplane.v1.GetDiagnosticsResponse
-	(*EnqueueTurnRequest)(nil),                 // 69: controlplane.v1.EnqueueTurnRequest
-	(*EnqueueTurnResponse)(nil),                // 70: controlplane.v1.EnqueueTurnResponse
-	(*ClaimTurnRequest)(nil),                   // 71: controlplane.v1.ClaimTurnRequest
-	(*ClaimTurnResponse)(nil),                  // 72: controlplane.v1.ClaimTurnResponse
-	(*RenewTurnRequest)(nil),                   // 73: controlplane.v1.RenewTurnRequest
-	(*RenewTurnResponse)(nil),                  // 74: controlplane.v1.RenewTurnResponse
-	(*CompleteTurnRequest)(nil),                // 75: controlplane.v1.CompleteTurnRequest
-	(*CompleteTurnResponse)(nil),               // 76: controlplane.v1.CompleteTurnResponse
-	(*RetryTurnRequest)(nil),                   // 77: controlplane.v1.RetryTurnRequest
-	(*RetryTurnResponse)(nil),                  // 78: controlplane.v1.RetryTurnResponse
-	(*CancelTurnRequest)(nil),                  // 79: controlplane.v1.CancelTurnRequest
-	(*CancelTurnResponse)(nil),                 // 80: controlplane.v1.CancelTurnResponse
-	(*ManageSessionRequest)(nil),               // 81: controlplane.v1.ManageSessionRequest
-	(*ManageSessionResponse)(nil),              // 82: controlplane.v1.ManageSessionResponse
-	(*ManageMemoryRecordRequest)(nil),          // 83: controlplane.v1.ManageMemoryRecordRequest
-	(*ManageMemoryRecordResponse)(nil),         // 84: controlplane.v1.ManageMemoryRecordResponse
-	(*ManageWorkClaimRequest)(nil),             // 85: controlplane.v1.ManageWorkClaimRequest
-	(*ManageWorkClaimResponse)(nil),            // 86: controlplane.v1.ManageWorkClaimResponse
-	(*ManageScheduleRequest)(nil),              // 87: controlplane.v1.ManageScheduleRequest
-	(*ManageScheduleResponse)(nil),             // 88: controlplane.v1.ManageScheduleResponse
-	(*ClaimDueSchedulesRequest)(nil),           // 89: controlplane.v1.ClaimDueSchedulesRequest
-	(*ScheduleOccurrence)(nil),                 // 90: controlplane.v1.ScheduleOccurrence
-	(*ClaimDueSchedulesResponse)(nil),          // 91: controlplane.v1.ClaimDueSchedulesResponse
-	(*ClaimScheduleOccurrenceRequest)(nil),     // 92: controlplane.v1.ClaimScheduleOccurrenceRequest
-	(*ClaimScheduleOccurrenceResponse)(nil),    // 93: controlplane.v1.ClaimScheduleOccurrenceResponse
-	(*CompleteScheduleOccurrenceRequest)(nil),  // 94: controlplane.v1.CompleteScheduleOccurrenceRequest
-	(*CompleteScheduleOccurrenceResponse)(nil), // 95: controlplane.v1.CompleteScheduleOccurrenceResponse
-	(*CancelScheduleOccurrenceRequest)(nil),    // 96: controlplane.v1.CancelScheduleOccurrenceRequest
-	(*CancelScheduleOccurrenceResponse)(nil),   // 97: controlplane.v1.CancelScheduleOccurrenceResponse
-	(*ListScheduleOccurrencesRequest)(nil),     // 98: controlplane.v1.ListScheduleOccurrencesRequest
-	(*ListScheduleOccurrencesResponse)(nil),    // 99: controlplane.v1.ListScheduleOccurrencesResponse
-	(*StartProcessRequest)(nil),                // 100: controlplane.v1.StartProcessRequest
-	(*StartProcessResponse)(nil),               // 101: controlplane.v1.StartProcessResponse
-	(*CancelProcessRequest)(nil),               // 102: controlplane.v1.CancelProcessRequest
-	(*CancelProcessResponse)(nil),              // 103: controlplane.v1.CancelProcessResponse
-	(*RequestOwnerGateRequest)(nil),            // 104: controlplane.v1.RequestOwnerGateRequest
-	(*RequestOwnerGateResponse)(nil),           // 105: controlplane.v1.RequestOwnerGateResponse
-	(*ClaimOwnerGateDeliveryRequest)(nil),      // 106: controlplane.v1.ClaimOwnerGateDeliveryRequest
-	(*ClaimOwnerGateDeliveryResponse)(nil),     // 107: controlplane.v1.ClaimOwnerGateDeliveryResponse
-	(*RecordOwnerGateDeliveryRequest)(nil),     // 108: controlplane.v1.RecordOwnerGateDeliveryRequest
-	(*RecordOwnerGateDeliveryResponse)(nil),    // 109: controlplane.v1.RecordOwnerGateDeliveryResponse
-	(*ResolveOwnerGateRequest)(nil),            // 110: controlplane.v1.ResolveOwnerGateRequest
-	(*ResolveOwnerGateResponse)(nil),           // 111: controlplane.v1.ResolveOwnerGateResponse
-	(*RegisterArtifactRequest)(nil),            // 112: controlplane.v1.RegisterArtifactRequest
-	(*RegisterArtifactResponse)(nil),           // 113: controlplane.v1.RegisterArtifactResponse
-	(*RecordArtifactScanRequest)(nil),          // 114: controlplane.v1.RecordArtifactScanRequest
-	(*RecordArtifactScanResponse)(nil),         // 115: controlplane.v1.RecordArtifactScanResponse
-	(*GetRuntimeRevisionRequest)(nil),          // 116: controlplane.v1.GetRuntimeRevisionRequest
-	(*GetRuntimeRevisionResponse)(nil),         // 117: controlplane.v1.GetRuntimeRevisionResponse
-	(*RecordMemoryEmbeddingRequest)(nil),       // 118: controlplane.v1.RecordMemoryEmbeddingRequest
-	(*RecordMemoryEmbeddingResponse)(nil),      // 119: controlplane.v1.RecordMemoryEmbeddingResponse
-	(*CheckReadinessRequest)(nil),              // 120: controlplane.v1.CheckReadinessRequest
-	(*CheckReadinessResponse)(nil),             // 121: controlplane.v1.CheckReadinessResponse
-	(*ErrorDetail)(nil),                        // 122: controlplane.v1.ErrorDetail
-	(*timestamppb.Timestamp)(nil),              // 123: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),                // 124: google.protobuf.Duration
+	(*ProviderAccountPool)(nil),                // 26: controlplane.v1.ProviderAccountPool
+	(*ProviderAccountPoolBinding)(nil),         // 27: controlplane.v1.ProviderAccountPoolBinding
+	(*PromptProfileSpec)(nil),                  // 28: controlplane.v1.PromptProfileSpec
+	(*CredentialBindingSpec)(nil),              // 29: controlplane.v1.CredentialBindingSpec
+	(*RepositoryWorkspaceSpec)(nil),            // 30: controlplane.v1.RepositoryWorkspaceSpec
+	(*IntegrationSpec)(nil),                    // 31: controlplane.v1.IntegrationSpec
+	(*RuntimeRevisionSpec)(nil),                // 32: controlplane.v1.RuntimeRevisionSpec
+	(*EffectiveResourceRef)(nil),               // 33: controlplane.v1.EffectiveResourceRef
+	(*SessionSpec)(nil),                        // 34: controlplane.v1.SessionSpec
+	(*TurnSpec)(nil),                           // 35: controlplane.v1.TurnSpec
+	(*ProcessRunSpec)(nil),                     // 36: controlplane.v1.ProcessRunSpec
+	(*ScheduleSpec)(nil),                       // 37: controlplane.v1.ScheduleSpec
+	(*OwnerGateSpec)(nil),                      // 38: controlplane.v1.OwnerGateSpec
+	(*MemoryRecordSpec)(nil),                   // 39: controlplane.v1.MemoryRecordSpec
+	(*WorkClaimSpec)(nil),                      // 40: controlplane.v1.WorkClaimSpec
+	(*ArtifactSpec)(nil),                       // 41: controlplane.v1.ArtifactSpec
+	(*ResourceSpec)(nil),                       // 42: controlplane.v1.ResourceSpec
+	(*Resource)(nil),                           // 43: controlplane.v1.Resource
+	(*CreateResourceRequest)(nil),              // 44: controlplane.v1.CreateResourceRequest
+	(*CreateResourceResponse)(nil),             // 45: controlplane.v1.CreateResourceResponse
+	(*UpdateResourceRequest)(nil),              // 46: controlplane.v1.UpdateResourceRequest
+	(*UpdateResourceResponse)(nil),             // 47: controlplane.v1.UpdateResourceResponse
+	(*TransitionResourceRequest)(nil),          // 48: controlplane.v1.TransitionResourceRequest
+	(*TransitionResourceResponse)(nil),         // 49: controlplane.v1.TransitionResourceResponse
+	(*DeleteResourceRequest)(nil),              // 50: controlplane.v1.DeleteResourceRequest
+	(*DeleteResourceResponse)(nil),             // 51: controlplane.v1.DeleteResourceResponse
+	(*ManageAccessResourceRequest)(nil),        // 52: controlplane.v1.ManageAccessResourceRequest
+	(*ManageAccessResourceResponse)(nil),       // 53: controlplane.v1.ManageAccessResourceResponse
+	(*GetResourceRequest)(nil),                 // 54: controlplane.v1.GetResourceRequest
+	(*GetResourceResponse)(nil),                // 55: controlplane.v1.GetResourceResponse
+	(*ListResourcesRequest)(nil),               // 56: controlplane.v1.ListResourcesRequest
+	(*ListResourcesResponse)(nil),              // 57: controlplane.v1.ListResourcesResponse
+	(*SearchResourcesRequest)(nil),             // 58: controlplane.v1.SearchResourcesRequest
+	(*SearchResourcesResponse)(nil),            // 59: controlplane.v1.SearchResourcesResponse
+	(*SearchMemoryRecordsRequest)(nil),         // 60: controlplane.v1.SearchMemoryRecordsRequest
+	(*MemorySearchHit)(nil),                    // 61: controlplane.v1.MemorySearchHit
+	(*SearchMemoryRecordsResponse)(nil),        // 62: controlplane.v1.SearchMemoryRecordsResponse
+	(*AuditEvent)(nil),                         // 63: controlplane.v1.AuditEvent
+	(*ListAuditEventsRequest)(nil),             // 64: controlplane.v1.ListAuditEventsRequest
+	(*ListAuditEventsResponse)(nil),            // 65: controlplane.v1.ListAuditEventsResponse
+	(*ResourceTombstone)(nil),                  // 66: controlplane.v1.ResourceTombstone
+	(*ListTombstonesRequest)(nil),              // 67: controlplane.v1.ListTombstonesRequest
+	(*ListTombstonesResponse)(nil),             // 68: controlplane.v1.ListTombstonesResponse
+	(*GetDiagnosticsRequest)(nil),              // 69: controlplane.v1.GetDiagnosticsRequest
+	(*GetDiagnosticsResponse)(nil),             // 70: controlplane.v1.GetDiagnosticsResponse
+	(*EnqueueTurnRequest)(nil),                 // 71: controlplane.v1.EnqueueTurnRequest
+	(*EnqueueTurnResponse)(nil),                // 72: controlplane.v1.EnqueueTurnResponse
+	(*ClaimTurnRequest)(nil),                   // 73: controlplane.v1.ClaimTurnRequest
+	(*ClaimTurnResponse)(nil),                  // 74: controlplane.v1.ClaimTurnResponse
+	(*RenewTurnRequest)(nil),                   // 75: controlplane.v1.RenewTurnRequest
+	(*RenewTurnResponse)(nil),                  // 76: controlplane.v1.RenewTurnResponse
+	(*CompleteTurnRequest)(nil),                // 77: controlplane.v1.CompleteTurnRequest
+	(*CompleteTurnResponse)(nil),               // 78: controlplane.v1.CompleteTurnResponse
+	(*RetryTurnRequest)(nil),                   // 79: controlplane.v1.RetryTurnRequest
+	(*RetryTurnResponse)(nil),                  // 80: controlplane.v1.RetryTurnResponse
+	(*CancelTurnRequest)(nil),                  // 81: controlplane.v1.CancelTurnRequest
+	(*CancelTurnResponse)(nil),                 // 82: controlplane.v1.CancelTurnResponse
+	(*ManageSessionRequest)(nil),               // 83: controlplane.v1.ManageSessionRequest
+	(*ManageSessionResponse)(nil),              // 84: controlplane.v1.ManageSessionResponse
+	(*ManageMemoryRecordRequest)(nil),          // 85: controlplane.v1.ManageMemoryRecordRequest
+	(*ManageMemoryRecordResponse)(nil),         // 86: controlplane.v1.ManageMemoryRecordResponse
+	(*ManageWorkClaimRequest)(nil),             // 87: controlplane.v1.ManageWorkClaimRequest
+	(*ManageWorkClaimResponse)(nil),            // 88: controlplane.v1.ManageWorkClaimResponse
+	(*ManageScheduleRequest)(nil),              // 89: controlplane.v1.ManageScheduleRequest
+	(*ManageScheduleResponse)(nil),             // 90: controlplane.v1.ManageScheduleResponse
+	(*ClaimDueSchedulesRequest)(nil),           // 91: controlplane.v1.ClaimDueSchedulesRequest
+	(*ScheduleOccurrence)(nil),                 // 92: controlplane.v1.ScheduleOccurrence
+	(*ClaimDueSchedulesResponse)(nil),          // 93: controlplane.v1.ClaimDueSchedulesResponse
+	(*ClaimScheduleOccurrenceRequest)(nil),     // 94: controlplane.v1.ClaimScheduleOccurrenceRequest
+	(*ClaimScheduleOccurrenceResponse)(nil),    // 95: controlplane.v1.ClaimScheduleOccurrenceResponse
+	(*CompleteScheduleOccurrenceRequest)(nil),  // 96: controlplane.v1.CompleteScheduleOccurrenceRequest
+	(*CompleteScheduleOccurrenceResponse)(nil), // 97: controlplane.v1.CompleteScheduleOccurrenceResponse
+	(*CancelScheduleOccurrenceRequest)(nil),    // 98: controlplane.v1.CancelScheduleOccurrenceRequest
+	(*CancelScheduleOccurrenceResponse)(nil),   // 99: controlplane.v1.CancelScheduleOccurrenceResponse
+	(*ListScheduleOccurrencesRequest)(nil),     // 100: controlplane.v1.ListScheduleOccurrencesRequest
+	(*ListScheduleOccurrencesResponse)(nil),    // 101: controlplane.v1.ListScheduleOccurrencesResponse
+	(*StartProcessRequest)(nil),                // 102: controlplane.v1.StartProcessRequest
+	(*StartProcessResponse)(nil),               // 103: controlplane.v1.StartProcessResponse
+	(*CancelProcessRequest)(nil),               // 104: controlplane.v1.CancelProcessRequest
+	(*CancelProcessResponse)(nil),              // 105: controlplane.v1.CancelProcessResponse
+	(*CompleteProcessRequest)(nil),             // 106: controlplane.v1.CompleteProcessRequest
+	(*CompleteProcessResponse)(nil),            // 107: controlplane.v1.CompleteProcessResponse
+	(*ListOutboxFailuresRequest)(nil),          // 108: controlplane.v1.ListOutboxFailuresRequest
+	(*OutboxFailure)(nil),                      // 109: controlplane.v1.OutboxFailure
+	(*ListOutboxFailuresResponse)(nil),         // 110: controlplane.v1.ListOutboxFailuresResponse
+	(*RepairOutboxEventRequest)(nil),           // 111: controlplane.v1.RepairOutboxEventRequest
+	(*RepairOutboxEventResponse)(nil),          // 112: controlplane.v1.RepairOutboxEventResponse
+	(*RequestOwnerGateRequest)(nil),            // 113: controlplane.v1.RequestOwnerGateRequest
+	(*RequestOwnerGateResponse)(nil),           // 114: controlplane.v1.RequestOwnerGateResponse
+	(*ClaimOwnerGateDeliveryRequest)(nil),      // 115: controlplane.v1.ClaimOwnerGateDeliveryRequest
+	(*ClaimOwnerGateDeliveryResponse)(nil),     // 116: controlplane.v1.ClaimOwnerGateDeliveryResponse
+	(*RecordOwnerGateDeliveryRequest)(nil),     // 117: controlplane.v1.RecordOwnerGateDeliveryRequest
+	(*RecordOwnerGateDeliveryResponse)(nil),    // 118: controlplane.v1.RecordOwnerGateDeliveryResponse
+	(*ResolveOwnerGateRequest)(nil),            // 119: controlplane.v1.ResolveOwnerGateRequest
+	(*ResolveOwnerGateResponse)(nil),           // 120: controlplane.v1.ResolveOwnerGateResponse
+	(*RegisterArtifactRequest)(nil),            // 121: controlplane.v1.RegisterArtifactRequest
+	(*RegisterArtifactResponse)(nil),           // 122: controlplane.v1.RegisterArtifactResponse
+	(*RecordArtifactScanRequest)(nil),          // 123: controlplane.v1.RecordArtifactScanRequest
+	(*RecordArtifactScanResponse)(nil),         // 124: controlplane.v1.RecordArtifactScanResponse
+	(*GetRuntimeRevisionRequest)(nil),          // 125: controlplane.v1.GetRuntimeRevisionRequest
+	(*GetRuntimeRevisionResponse)(nil),         // 126: controlplane.v1.GetRuntimeRevisionResponse
+	(*RecordMemoryEmbeddingRequest)(nil),       // 127: controlplane.v1.RecordMemoryEmbeddingRequest
+	(*RecordMemoryEmbeddingResponse)(nil),      // 128: controlplane.v1.RecordMemoryEmbeddingResponse
+	(*CheckReadinessRequest)(nil),              // 129: controlplane.v1.CheckReadinessRequest
+	(*CheckReadinessResponse)(nil),             // 130: controlplane.v1.CheckReadinessResponse
+	(*ErrorDetail)(nil),                        // 131: controlplane.v1.ErrorDetail
+	(*durationpb.Duration)(nil),                // 132: google.protobuf.Duration
+	(*timestamppb.Timestamp)(nil),              // 133: google.protobuf.Timestamp
 }
 var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	22,  // 0: controlplane.v1.CreateProjectRequest.spec:type_name -> controlplane.v1.ProjectSpec
-	41,  // 1: controlplane.v1.CreateProjectResponse.project:type_name -> controlplane.v1.Resource
-	41,  // 2: controlplane.v1.ListProjectsResponse.projects:type_name -> controlplane.v1.Resource
+	43,  // 1: controlplane.v1.CreateProjectResponse.project:type_name -> controlplane.v1.Resource
+	43,  // 2: controlplane.v1.ListProjectsResponse.projects:type_name -> controlplane.v1.Resource
 	15,  // 3: controlplane.v1.ConfigurationOwnership.managed_by:type_name -> controlplane.v1.ConfigurationManager
 	21,  // 4: controlplane.v1.ProjectSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
 	21,  // 5: controlplane.v1.TeamSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
 	2,   // 6: controlplane.v1.ChatSpec.room_type:type_name -> controlplane.v1.RoomType
 	21,  // 7: controlplane.v1.ChatSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
-	21,  // 8: controlplane.v1.RoleSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
-	21,  // 9: controlplane.v1.PromptProfileSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
-	123, // 10: controlplane.v1.CredentialBindingSpec.expires_at:type_name -> google.protobuf.Timestamp
-	21,  // 11: controlplane.v1.CredentialBindingSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
-	21,  // 12: controlplane.v1.RepositoryWorkspaceSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
-	21,  // 13: controlplane.v1.IntegrationSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
-	31,  // 14: controlplane.v1.RuntimeRevisionSpec.components:type_name -> controlplane.v1.EffectiveResourceRef
-	123, // 15: controlplane.v1.RuntimeRevisionSpec.created_at:type_name -> google.protobuf.Timestamp
-	0,   // 16: controlplane.v1.EffectiveResourceRef.kind:type_name -> controlplane.v1.ResourceKind
-	124, // 17: controlplane.v1.ScheduleSpec.interval:type_name -> google.protobuf.Duration
-	3,   // 18: controlplane.v1.ScheduleSpec.overlap_policy:type_name -> controlplane.v1.ScheduleOverlapPolicy
-	4,   // 19: controlplane.v1.ScheduleSpec.misfire_policy:type_name -> controlplane.v1.ScheduleMisfirePolicy
-	124, // 20: controlplane.v1.ScheduleSpec.misfire_grace:type_name -> google.protobuf.Duration
-	123, // 21: controlplane.v1.ScheduleSpec.next_run_at:type_name -> google.protobuf.Timestamp
-	0,   // 22: controlplane.v1.ScheduleSpec.target_kind:type_name -> controlplane.v1.ResourceKind
-	124, // 23: controlplane.v1.ScheduleSpec.initial_backoff:type_name -> google.protobuf.Duration
-	124, // 24: controlplane.v1.ScheduleSpec.maximum_backoff:type_name -> google.protobuf.Duration
-	124, // 25: controlplane.v1.ScheduleSpec.dead_letter_after:type_name -> google.protobuf.Duration
-	13,  // 26: controlplane.v1.ScheduleSpec.session_policy:type_name -> controlplane.v1.ScheduleSessionPolicy
-	14,  // 27: controlplane.v1.ScheduleSpec.notification_policy:type_name -> controlplane.v1.ScheduleNotificationPolicy
-	124, // 28: controlplane.v1.ScheduleSpec.maximum_execution_duration:type_name -> google.protobuf.Duration
-	5,   // 29: controlplane.v1.ScheduleSpec.target_type:type_name -> controlplane.v1.ScheduleTargetType
-	21,  // 30: controlplane.v1.ScheduleSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
-	123, // 31: controlplane.v1.OwnerGateSpec.expires_at:type_name -> google.protobuf.Timestamp
-	6,   // 32: controlplane.v1.OwnerGateSpec.decision:type_name -> controlplane.v1.OwnerGateDecision
-	123, // 33: controlplane.v1.OwnerGateSpec.delivered_at:type_name -> google.protobuf.Timestamp
-	123, // 34: controlplane.v1.OwnerGateSpec.delivery_claim_expires_at:type_name -> google.protobuf.Timestamp
-	123, // 35: controlplane.v1.WorkClaimSpec.expires_at:type_name -> google.protobuf.Timestamp
-	8,   // 36: controlplane.v1.ArtifactSpec.scan_status:type_name -> controlplane.v1.ArtifactScanState
-	123, // 37: controlplane.v1.ArtifactSpec.scanned_at:type_name -> google.protobuf.Timestamp
-	22,  // 38: controlplane.v1.ResourceSpec.project:type_name -> controlplane.v1.ProjectSpec
-	23,  // 39: controlplane.v1.ResourceSpec.team:type_name -> controlplane.v1.TeamSpec
-	24,  // 40: controlplane.v1.ResourceSpec.chat:type_name -> controlplane.v1.ChatSpec
-	25,  // 41: controlplane.v1.ResourceSpec.role:type_name -> controlplane.v1.RoleSpec
-	26,  // 42: controlplane.v1.ResourceSpec.prompt_profile:type_name -> controlplane.v1.PromptProfileSpec
-	27,  // 43: controlplane.v1.ResourceSpec.credential_binding:type_name -> controlplane.v1.CredentialBindingSpec
-	28,  // 44: controlplane.v1.ResourceSpec.repository_workspace:type_name -> controlplane.v1.RepositoryWorkspaceSpec
-	29,  // 45: controlplane.v1.ResourceSpec.integration:type_name -> controlplane.v1.IntegrationSpec
-	30,  // 46: controlplane.v1.ResourceSpec.runtime_revision:type_name -> controlplane.v1.RuntimeRevisionSpec
-	32,  // 47: controlplane.v1.ResourceSpec.session:type_name -> controlplane.v1.SessionSpec
-	33,  // 48: controlplane.v1.ResourceSpec.turn:type_name -> controlplane.v1.TurnSpec
-	34,  // 49: controlplane.v1.ResourceSpec.process_run:type_name -> controlplane.v1.ProcessRunSpec
-	35,  // 50: controlplane.v1.ResourceSpec.schedule:type_name -> controlplane.v1.ScheduleSpec
-	36,  // 51: controlplane.v1.ResourceSpec.owner_gate:type_name -> controlplane.v1.OwnerGateSpec
-	37,  // 52: controlplane.v1.ResourceSpec.memory_record:type_name -> controlplane.v1.MemoryRecordSpec
-	38,  // 53: controlplane.v1.ResourceSpec.work_claim:type_name -> controlplane.v1.WorkClaimSpec
-	39,  // 54: controlplane.v1.ResourceSpec.artifact:type_name -> controlplane.v1.ArtifactSpec
-	0,   // 55: controlplane.v1.Resource.kind:type_name -> controlplane.v1.ResourceKind
-	1,   // 56: controlplane.v1.Resource.state:type_name -> controlplane.v1.LifecycleState
-	40,  // 57: controlplane.v1.Resource.spec:type_name -> controlplane.v1.ResourceSpec
-	123, // 58: controlplane.v1.Resource.created_at:type_name -> google.protobuf.Timestamp
-	123, // 59: controlplane.v1.Resource.updated_at:type_name -> google.protobuf.Timestamp
-	0,   // 60: controlplane.v1.CreateResourceRequest.kind:type_name -> controlplane.v1.ResourceKind
-	40,  // 61: controlplane.v1.CreateResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
-	41,  // 62: controlplane.v1.CreateResourceResponse.resource:type_name -> controlplane.v1.Resource
-	40,  // 63: controlplane.v1.UpdateResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
-	41,  // 64: controlplane.v1.UpdateResourceResponse.resource:type_name -> controlplane.v1.Resource
-	1,   // 65: controlplane.v1.TransitionResourceRequest.target_state:type_name -> controlplane.v1.LifecycleState
-	41,  // 66: controlplane.v1.TransitionResourceResponse.resource:type_name -> controlplane.v1.Resource
-	41,  // 67: controlplane.v1.DeleteResourceResponse.resource:type_name -> controlplane.v1.Resource
-	0,   // 68: controlplane.v1.ManageAccessResourceRequest.kind:type_name -> controlplane.v1.ResourceKind
-	7,   // 69: controlplane.v1.ManageAccessResourceRequest.action:type_name -> controlplane.v1.AdministrativeAction
-	40,  // 70: controlplane.v1.ManageAccessResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
-	41,  // 71: controlplane.v1.ManageAccessResourceResponse.resource:type_name -> controlplane.v1.Resource
-	0,   // 72: controlplane.v1.GetResourceRequest.expected_kind:type_name -> controlplane.v1.ResourceKind
-	41,  // 73: controlplane.v1.GetResourceResponse.resource:type_name -> controlplane.v1.Resource
-	0,   // 74: controlplane.v1.ListResourcesRequest.kind:type_name -> controlplane.v1.ResourceKind
-	1,   // 75: controlplane.v1.ListResourcesRequest.states:type_name -> controlplane.v1.LifecycleState
-	41,  // 76: controlplane.v1.ListResourcesResponse.resources:type_name -> controlplane.v1.Resource
-	0,   // 77: controlplane.v1.SearchResourcesRequest.kind:type_name -> controlplane.v1.ResourceKind
-	1,   // 78: controlplane.v1.SearchResourcesRequest.states:type_name -> controlplane.v1.LifecycleState
-	41,  // 79: controlplane.v1.SearchResourcesResponse.resources:type_name -> controlplane.v1.Resource
-	41,  // 80: controlplane.v1.MemorySearchHit.resource:type_name -> controlplane.v1.Resource
-	59,  // 81: controlplane.v1.SearchMemoryRecordsResponse.hits:type_name -> controlplane.v1.MemorySearchHit
-	0,   // 82: controlplane.v1.AuditEvent.resource_kind:type_name -> controlplane.v1.ResourceKind
-	123, // 83: controlplane.v1.AuditEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	0,   // 84: controlplane.v1.ListAuditEventsRequest.resource_kind:type_name -> controlplane.v1.ResourceKind
-	61,  // 85: controlplane.v1.ListAuditEventsResponse.events:type_name -> controlplane.v1.AuditEvent
-	0,   // 86: controlplane.v1.ResourceTombstone.kind:type_name -> controlplane.v1.ResourceKind
-	123, // 87: controlplane.v1.ResourceTombstone.deleted_at:type_name -> google.protobuf.Timestamp
-	0,   // 88: controlplane.v1.ListTombstonesRequest.kind:type_name -> controlplane.v1.ResourceKind
-	64,  // 89: controlplane.v1.ListTombstonesResponse.tombstones:type_name -> controlplane.v1.ResourceTombstone
-	124, // 90: controlplane.v1.GetDiagnosticsResponse.oldest_pending_age:type_name -> google.protobuf.Duration
-	41,  // 91: controlplane.v1.EnqueueTurnResponse.turn:type_name -> controlplane.v1.Resource
-	41,  // 92: controlplane.v1.ClaimTurnResponse.turn:type_name -> controlplane.v1.Resource
-	123, // 93: controlplane.v1.ClaimTurnResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	41,  // 94: controlplane.v1.RenewTurnResponse.turn:type_name -> controlplane.v1.Resource
-	123, // 95: controlplane.v1.RenewTurnResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	1,   // 96: controlplane.v1.CompleteTurnRequest.terminal_state:type_name -> controlplane.v1.LifecycleState
-	41,  // 97: controlplane.v1.CompleteTurnResponse.turn:type_name -> controlplane.v1.Resource
-	41,  // 98: controlplane.v1.RetryTurnResponse.turn:type_name -> controlplane.v1.Resource
-	41,  // 99: controlplane.v1.CancelTurnResponse.turn:type_name -> controlplane.v1.Resource
-	10,  // 100: controlplane.v1.ManageSessionRequest.action:type_name -> controlplane.v1.SessionAction
-	41,  // 101: controlplane.v1.ManageSessionResponse.session:type_name -> controlplane.v1.Resource
-	11,  // 102: controlplane.v1.ManageMemoryRecordRequest.action:type_name -> controlplane.v1.MemoryAction
-	41,  // 103: controlplane.v1.ManageMemoryRecordResponse.memory_record:type_name -> controlplane.v1.Resource
-	12,  // 104: controlplane.v1.ManageWorkClaimRequest.action:type_name -> controlplane.v1.WorkClaimAction
-	124, // 105: controlplane.v1.ManageWorkClaimRequest.ttl:type_name -> google.protobuf.Duration
-	41,  // 106: controlplane.v1.ManageWorkClaimResponse.work_claim:type_name -> controlplane.v1.Resource
-	7,   // 107: controlplane.v1.ManageScheduleRequest.action:type_name -> controlplane.v1.AdministrativeAction
-	35,  // 108: controlplane.v1.ManageScheduleRequest.spec:type_name -> controlplane.v1.ScheduleSpec
-	41,  // 109: controlplane.v1.ManageScheduleResponse.schedule:type_name -> controlplane.v1.Resource
-	123, // 110: controlplane.v1.ScheduleOccurrence.scheduled_for:type_name -> google.protobuf.Timestamp
-	0,   // 111: controlplane.v1.ScheduleOccurrence.target_kind:type_name -> controlplane.v1.ResourceKind
-	9,   // 112: controlplane.v1.ScheduleOccurrence.state:type_name -> controlplane.v1.ScheduleOccurrenceState
-	123, // 113: controlplane.v1.ScheduleOccurrence.lease_expires_at:type_name -> google.protobuf.Timestamp
-	123, // 114: controlplane.v1.ScheduleOccurrence.available_at:type_name -> google.protobuf.Timestamp
-	13,  // 115: controlplane.v1.ScheduleOccurrence.session_policy:type_name -> controlplane.v1.ScheduleSessionPolicy
-	14,  // 116: controlplane.v1.ScheduleOccurrence.notification_policy:type_name -> controlplane.v1.ScheduleNotificationPolicy
-	124, // 117: controlplane.v1.ScheduleOccurrence.maximum_execution_duration:type_name -> google.protobuf.Duration
-	90,  // 118: controlplane.v1.ClaimDueSchedulesResponse.occurrences:type_name -> controlplane.v1.ScheduleOccurrence
-	90,  // 119: controlplane.v1.ClaimScheduleOccurrenceResponse.occurrence:type_name -> controlplane.v1.ScheduleOccurrence
-	9,   // 120: controlplane.v1.CompleteScheduleOccurrenceRequest.terminal_state:type_name -> controlplane.v1.ScheduleOccurrenceState
-	90,  // 121: controlplane.v1.CompleteScheduleOccurrenceResponse.occurrence:type_name -> controlplane.v1.ScheduleOccurrence
-	90,  // 122: controlplane.v1.CancelScheduleOccurrenceResponse.occurrence:type_name -> controlplane.v1.ScheduleOccurrence
-	9,   // 123: controlplane.v1.ListScheduleOccurrencesRequest.states:type_name -> controlplane.v1.ScheduleOccurrenceState
-	90,  // 124: controlplane.v1.ListScheduleOccurrencesResponse.occurrences:type_name -> controlplane.v1.ScheduleOccurrence
-	41,  // 125: controlplane.v1.StartProcessResponse.process_run:type_name -> controlplane.v1.Resource
-	41,  // 126: controlplane.v1.CancelProcessResponse.process_run:type_name -> controlplane.v1.Resource
-	123, // 127: controlplane.v1.RequestOwnerGateRequest.expires_at:type_name -> google.protobuf.Timestamp
-	41,  // 128: controlplane.v1.RequestOwnerGateResponse.owner_gate:type_name -> controlplane.v1.Resource
-	41,  // 129: controlplane.v1.RequestOwnerGateResponse.process_run:type_name -> controlplane.v1.Resource
-	41,  // 130: controlplane.v1.ClaimOwnerGateDeliveryResponse.owner_gate:type_name -> controlplane.v1.Resource
-	123, // 131: controlplane.v1.ClaimOwnerGateDeliveryResponse.delivery_claim_expires_at:type_name -> google.protobuf.Timestamp
-	41,  // 132: controlplane.v1.RecordOwnerGateDeliveryResponse.owner_gate:type_name -> controlplane.v1.Resource
-	6,   // 133: controlplane.v1.ResolveOwnerGateRequest.decision:type_name -> controlplane.v1.OwnerGateDecision
-	41,  // 134: controlplane.v1.ResolveOwnerGateResponse.owner_gate:type_name -> controlplane.v1.Resource
-	41,  // 135: controlplane.v1.ResolveOwnerGateResponse.process_run:type_name -> controlplane.v1.Resource
-	39,  // 136: controlplane.v1.RegisterArtifactRequest.spec:type_name -> controlplane.v1.ArtifactSpec
-	41,  // 137: controlplane.v1.RegisterArtifactResponse.artifact:type_name -> controlplane.v1.Resource
-	8,   // 138: controlplane.v1.RecordArtifactScanRequest.target_state:type_name -> controlplane.v1.ArtifactScanState
-	41,  // 139: controlplane.v1.RecordArtifactScanResponse.artifact:type_name -> controlplane.v1.Resource
-	41,  // 140: controlplane.v1.GetRuntimeRevisionResponse.runtime_revision:type_name -> controlplane.v1.Resource
-	16,  // 141: controlplane.v1.ErrorDetail.reason:type_name -> controlplane.v1.ErrorReason
-	17,  // 142: controlplane.v1.ControlPlaneService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
-	19,  // 143: controlplane.v1.ControlPlaneService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
-	42,  // 144: controlplane.v1.ControlPlaneService.CreateResource:input_type -> controlplane.v1.CreateResourceRequest
-	44,  // 145: controlplane.v1.ControlPlaneService.UpdateResource:input_type -> controlplane.v1.UpdateResourceRequest
-	46,  // 146: controlplane.v1.ControlPlaneService.TransitionResource:input_type -> controlplane.v1.TransitionResourceRequest
-	48,  // 147: controlplane.v1.ControlPlaneService.DeleteResource:input_type -> controlplane.v1.DeleteResourceRequest
-	50,  // 148: controlplane.v1.ControlPlaneService.ManageAccessResource:input_type -> controlplane.v1.ManageAccessResourceRequest
-	52,  // 149: controlplane.v1.ControlPlaneService.GetResource:input_type -> controlplane.v1.GetResourceRequest
-	54,  // 150: controlplane.v1.ControlPlaneService.ListResources:input_type -> controlplane.v1.ListResourcesRequest
-	56,  // 151: controlplane.v1.ControlPlaneService.SearchResources:input_type -> controlplane.v1.SearchResourcesRequest
-	58,  // 152: controlplane.v1.ControlPlaneService.SearchMemoryRecords:input_type -> controlplane.v1.SearchMemoryRecordsRequest
-	62,  // 153: controlplane.v1.ControlPlaneService.ListAuditEvents:input_type -> controlplane.v1.ListAuditEventsRequest
-	65,  // 154: controlplane.v1.ControlPlaneService.ListTombstones:input_type -> controlplane.v1.ListTombstonesRequest
-	67,  // 155: controlplane.v1.ControlPlaneService.GetDiagnostics:input_type -> controlplane.v1.GetDiagnosticsRequest
-	69,  // 156: controlplane.v1.ControlPlaneService.EnqueueTurn:input_type -> controlplane.v1.EnqueueTurnRequest
-	71,  // 157: controlplane.v1.ControlPlaneService.ClaimTurn:input_type -> controlplane.v1.ClaimTurnRequest
-	73,  // 158: controlplane.v1.ControlPlaneService.RenewTurn:input_type -> controlplane.v1.RenewTurnRequest
-	75,  // 159: controlplane.v1.ControlPlaneService.CompleteTurn:input_type -> controlplane.v1.CompleteTurnRequest
-	77,  // 160: controlplane.v1.ControlPlaneService.RetryTurn:input_type -> controlplane.v1.RetryTurnRequest
-	79,  // 161: controlplane.v1.ControlPlaneService.CancelTurn:input_type -> controlplane.v1.CancelTurnRequest
-	81,  // 162: controlplane.v1.ControlPlaneService.ManageSession:input_type -> controlplane.v1.ManageSessionRequest
-	83,  // 163: controlplane.v1.ControlPlaneService.ManageMemoryRecord:input_type -> controlplane.v1.ManageMemoryRecordRequest
-	85,  // 164: controlplane.v1.ControlPlaneService.ManageWorkClaim:input_type -> controlplane.v1.ManageWorkClaimRequest
-	87,  // 165: controlplane.v1.ControlPlaneService.ManageSchedule:input_type -> controlplane.v1.ManageScheduleRequest
-	89,  // 166: controlplane.v1.ControlPlaneService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
-	92,  // 167: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:input_type -> controlplane.v1.ClaimScheduleOccurrenceRequest
-	94,  // 168: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:input_type -> controlplane.v1.CompleteScheduleOccurrenceRequest
-	96,  // 169: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:input_type -> controlplane.v1.CancelScheduleOccurrenceRequest
-	98,  // 170: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:input_type -> controlplane.v1.ListScheduleOccurrencesRequest
-	100, // 171: controlplane.v1.ControlPlaneService.StartProcess:input_type -> controlplane.v1.StartProcessRequest
-	102, // 172: controlplane.v1.ControlPlaneService.CancelProcess:input_type -> controlplane.v1.CancelProcessRequest
-	104, // 173: controlplane.v1.ControlPlaneService.RequestOwnerGate:input_type -> controlplane.v1.RequestOwnerGateRequest
-	106, // 174: controlplane.v1.ControlPlaneService.ClaimOwnerGateDelivery:input_type -> controlplane.v1.ClaimOwnerGateDeliveryRequest
-	108, // 175: controlplane.v1.ControlPlaneService.RecordOwnerGateDelivery:input_type -> controlplane.v1.RecordOwnerGateDeliveryRequest
-	110, // 176: controlplane.v1.ControlPlaneService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
-	112, // 177: controlplane.v1.ControlPlaneService.RegisterArtifact:input_type -> controlplane.v1.RegisterArtifactRequest
-	114, // 178: controlplane.v1.ControlPlaneService.RecordArtifactScan:input_type -> controlplane.v1.RecordArtifactScanRequest
-	116, // 179: controlplane.v1.ControlPlaneService.GetRuntimeRevision:input_type -> controlplane.v1.GetRuntimeRevisionRequest
-	118, // 180: controlplane.v1.ControlPlaneService.RecordMemoryEmbedding:input_type -> controlplane.v1.RecordMemoryEmbeddingRequest
-	120, // 181: controlplane.v1.ControlPlaneService.CheckReadiness:input_type -> controlplane.v1.CheckReadinessRequest
-	18,  // 182: controlplane.v1.ControlPlaneService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
-	20,  // 183: controlplane.v1.ControlPlaneService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
-	43,  // 184: controlplane.v1.ControlPlaneService.CreateResource:output_type -> controlplane.v1.CreateResourceResponse
-	45,  // 185: controlplane.v1.ControlPlaneService.UpdateResource:output_type -> controlplane.v1.UpdateResourceResponse
-	47,  // 186: controlplane.v1.ControlPlaneService.TransitionResource:output_type -> controlplane.v1.TransitionResourceResponse
-	49,  // 187: controlplane.v1.ControlPlaneService.DeleteResource:output_type -> controlplane.v1.DeleteResourceResponse
-	51,  // 188: controlplane.v1.ControlPlaneService.ManageAccessResource:output_type -> controlplane.v1.ManageAccessResourceResponse
-	53,  // 189: controlplane.v1.ControlPlaneService.GetResource:output_type -> controlplane.v1.GetResourceResponse
-	55,  // 190: controlplane.v1.ControlPlaneService.ListResources:output_type -> controlplane.v1.ListResourcesResponse
-	57,  // 191: controlplane.v1.ControlPlaneService.SearchResources:output_type -> controlplane.v1.SearchResourcesResponse
-	60,  // 192: controlplane.v1.ControlPlaneService.SearchMemoryRecords:output_type -> controlplane.v1.SearchMemoryRecordsResponse
-	63,  // 193: controlplane.v1.ControlPlaneService.ListAuditEvents:output_type -> controlplane.v1.ListAuditEventsResponse
-	66,  // 194: controlplane.v1.ControlPlaneService.ListTombstones:output_type -> controlplane.v1.ListTombstonesResponse
-	68,  // 195: controlplane.v1.ControlPlaneService.GetDiagnostics:output_type -> controlplane.v1.GetDiagnosticsResponse
-	70,  // 196: controlplane.v1.ControlPlaneService.EnqueueTurn:output_type -> controlplane.v1.EnqueueTurnResponse
-	72,  // 197: controlplane.v1.ControlPlaneService.ClaimTurn:output_type -> controlplane.v1.ClaimTurnResponse
-	74,  // 198: controlplane.v1.ControlPlaneService.RenewTurn:output_type -> controlplane.v1.RenewTurnResponse
-	76,  // 199: controlplane.v1.ControlPlaneService.CompleteTurn:output_type -> controlplane.v1.CompleteTurnResponse
-	78,  // 200: controlplane.v1.ControlPlaneService.RetryTurn:output_type -> controlplane.v1.RetryTurnResponse
-	80,  // 201: controlplane.v1.ControlPlaneService.CancelTurn:output_type -> controlplane.v1.CancelTurnResponse
-	82,  // 202: controlplane.v1.ControlPlaneService.ManageSession:output_type -> controlplane.v1.ManageSessionResponse
-	84,  // 203: controlplane.v1.ControlPlaneService.ManageMemoryRecord:output_type -> controlplane.v1.ManageMemoryRecordResponse
-	86,  // 204: controlplane.v1.ControlPlaneService.ManageWorkClaim:output_type -> controlplane.v1.ManageWorkClaimResponse
-	88,  // 205: controlplane.v1.ControlPlaneService.ManageSchedule:output_type -> controlplane.v1.ManageScheduleResponse
-	91,  // 206: controlplane.v1.ControlPlaneService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
-	93,  // 207: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:output_type -> controlplane.v1.ClaimScheduleOccurrenceResponse
-	95,  // 208: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:output_type -> controlplane.v1.CompleteScheduleOccurrenceResponse
-	97,  // 209: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:output_type -> controlplane.v1.CancelScheduleOccurrenceResponse
-	99,  // 210: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:output_type -> controlplane.v1.ListScheduleOccurrencesResponse
-	101, // 211: controlplane.v1.ControlPlaneService.StartProcess:output_type -> controlplane.v1.StartProcessResponse
-	103, // 212: controlplane.v1.ControlPlaneService.CancelProcess:output_type -> controlplane.v1.CancelProcessResponse
-	105, // 213: controlplane.v1.ControlPlaneService.RequestOwnerGate:output_type -> controlplane.v1.RequestOwnerGateResponse
-	107, // 214: controlplane.v1.ControlPlaneService.ClaimOwnerGateDelivery:output_type -> controlplane.v1.ClaimOwnerGateDeliveryResponse
-	109, // 215: controlplane.v1.ControlPlaneService.RecordOwnerGateDelivery:output_type -> controlplane.v1.RecordOwnerGateDeliveryResponse
-	111, // 216: controlplane.v1.ControlPlaneService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
-	113, // 217: controlplane.v1.ControlPlaneService.RegisterArtifact:output_type -> controlplane.v1.RegisterArtifactResponse
-	115, // 218: controlplane.v1.ControlPlaneService.RecordArtifactScan:output_type -> controlplane.v1.RecordArtifactScanResponse
-	117, // 219: controlplane.v1.ControlPlaneService.GetRuntimeRevision:output_type -> controlplane.v1.GetRuntimeRevisionResponse
-	119, // 220: controlplane.v1.ControlPlaneService.RecordMemoryEmbedding:output_type -> controlplane.v1.RecordMemoryEmbeddingResponse
-	121, // 221: controlplane.v1.ControlPlaneService.CheckReadiness:output_type -> controlplane.v1.CheckReadinessResponse
-	182, // [182:222] is the sub-list for method output_type
-	142, // [142:182] is the sub-list for method input_type
-	142, // [142:142] is the sub-list for extension type_name
-	142, // [142:142] is the sub-list for extension extendee
-	0,   // [0:142] is the sub-list for field type_name
+	26,  // 8: controlplane.v1.RoleSpec.provider_account_pool:type_name -> controlplane.v1.ProviderAccountPool
+	21,  // 9: controlplane.v1.RoleSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
+	132, // 10: controlplane.v1.ProviderAccountPool.observation_max_age:type_name -> google.protobuf.Duration
+	27,  // 11: controlplane.v1.ProviderAccountPool.bindings:type_name -> controlplane.v1.ProviderAccountPoolBinding
+	21,  // 12: controlplane.v1.PromptProfileSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
+	133, // 13: controlplane.v1.CredentialBindingSpec.expires_at:type_name -> google.protobuf.Timestamp
+	21,  // 14: controlplane.v1.CredentialBindingSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
+	133, // 15: controlplane.v1.CredentialBindingSpec.provider_observed_at:type_name -> google.protobuf.Timestamp
+	21,  // 16: controlplane.v1.RepositoryWorkspaceSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
+	21,  // 17: controlplane.v1.IntegrationSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
+	33,  // 18: controlplane.v1.RuntimeRevisionSpec.components:type_name -> controlplane.v1.EffectiveResourceRef
+	133, // 19: controlplane.v1.RuntimeRevisionSpec.created_at:type_name -> google.protobuf.Timestamp
+	0,   // 20: controlplane.v1.EffectiveResourceRef.kind:type_name -> controlplane.v1.ResourceKind
+	132, // 21: controlplane.v1.ScheduleSpec.interval:type_name -> google.protobuf.Duration
+	3,   // 22: controlplane.v1.ScheduleSpec.overlap_policy:type_name -> controlplane.v1.ScheduleOverlapPolicy
+	4,   // 23: controlplane.v1.ScheduleSpec.misfire_policy:type_name -> controlplane.v1.ScheduleMisfirePolicy
+	132, // 24: controlplane.v1.ScheduleSpec.misfire_grace:type_name -> google.protobuf.Duration
+	133, // 25: controlplane.v1.ScheduleSpec.next_run_at:type_name -> google.protobuf.Timestamp
+	0,   // 26: controlplane.v1.ScheduleSpec.target_kind:type_name -> controlplane.v1.ResourceKind
+	132, // 27: controlplane.v1.ScheduleSpec.initial_backoff:type_name -> google.protobuf.Duration
+	132, // 28: controlplane.v1.ScheduleSpec.maximum_backoff:type_name -> google.protobuf.Duration
+	132, // 29: controlplane.v1.ScheduleSpec.dead_letter_after:type_name -> google.protobuf.Duration
+	13,  // 30: controlplane.v1.ScheduleSpec.session_policy:type_name -> controlplane.v1.ScheduleSessionPolicy
+	14,  // 31: controlplane.v1.ScheduleSpec.notification_policy:type_name -> controlplane.v1.ScheduleNotificationPolicy
+	132, // 32: controlplane.v1.ScheduleSpec.maximum_execution_duration:type_name -> google.protobuf.Duration
+	5,   // 33: controlplane.v1.ScheduleSpec.target_type:type_name -> controlplane.v1.ScheduleTargetType
+	21,  // 34: controlplane.v1.ScheduleSpec.ownership:type_name -> controlplane.v1.ConfigurationOwnership
+	133, // 35: controlplane.v1.OwnerGateSpec.expires_at:type_name -> google.protobuf.Timestamp
+	6,   // 36: controlplane.v1.OwnerGateSpec.decision:type_name -> controlplane.v1.OwnerGateDecision
+	133, // 37: controlplane.v1.OwnerGateSpec.delivered_at:type_name -> google.protobuf.Timestamp
+	133, // 38: controlplane.v1.OwnerGateSpec.delivery_claim_expires_at:type_name -> google.protobuf.Timestamp
+	133, // 39: controlplane.v1.WorkClaimSpec.expires_at:type_name -> google.protobuf.Timestamp
+	8,   // 40: controlplane.v1.ArtifactSpec.scan_status:type_name -> controlplane.v1.ArtifactScanState
+	133, // 41: controlplane.v1.ArtifactSpec.scanned_at:type_name -> google.protobuf.Timestamp
+	22,  // 42: controlplane.v1.ResourceSpec.project:type_name -> controlplane.v1.ProjectSpec
+	23,  // 43: controlplane.v1.ResourceSpec.team:type_name -> controlplane.v1.TeamSpec
+	24,  // 44: controlplane.v1.ResourceSpec.chat:type_name -> controlplane.v1.ChatSpec
+	25,  // 45: controlplane.v1.ResourceSpec.role:type_name -> controlplane.v1.RoleSpec
+	28,  // 46: controlplane.v1.ResourceSpec.prompt_profile:type_name -> controlplane.v1.PromptProfileSpec
+	29,  // 47: controlplane.v1.ResourceSpec.credential_binding:type_name -> controlplane.v1.CredentialBindingSpec
+	30,  // 48: controlplane.v1.ResourceSpec.repository_workspace:type_name -> controlplane.v1.RepositoryWorkspaceSpec
+	31,  // 49: controlplane.v1.ResourceSpec.integration:type_name -> controlplane.v1.IntegrationSpec
+	32,  // 50: controlplane.v1.ResourceSpec.runtime_revision:type_name -> controlplane.v1.RuntimeRevisionSpec
+	34,  // 51: controlplane.v1.ResourceSpec.session:type_name -> controlplane.v1.SessionSpec
+	35,  // 52: controlplane.v1.ResourceSpec.turn:type_name -> controlplane.v1.TurnSpec
+	36,  // 53: controlplane.v1.ResourceSpec.process_run:type_name -> controlplane.v1.ProcessRunSpec
+	37,  // 54: controlplane.v1.ResourceSpec.schedule:type_name -> controlplane.v1.ScheduleSpec
+	38,  // 55: controlplane.v1.ResourceSpec.owner_gate:type_name -> controlplane.v1.OwnerGateSpec
+	39,  // 56: controlplane.v1.ResourceSpec.memory_record:type_name -> controlplane.v1.MemoryRecordSpec
+	40,  // 57: controlplane.v1.ResourceSpec.work_claim:type_name -> controlplane.v1.WorkClaimSpec
+	41,  // 58: controlplane.v1.ResourceSpec.artifact:type_name -> controlplane.v1.ArtifactSpec
+	0,   // 59: controlplane.v1.Resource.kind:type_name -> controlplane.v1.ResourceKind
+	1,   // 60: controlplane.v1.Resource.state:type_name -> controlplane.v1.LifecycleState
+	42,  // 61: controlplane.v1.Resource.spec:type_name -> controlplane.v1.ResourceSpec
+	133, // 62: controlplane.v1.Resource.created_at:type_name -> google.protobuf.Timestamp
+	133, // 63: controlplane.v1.Resource.updated_at:type_name -> google.protobuf.Timestamp
+	0,   // 64: controlplane.v1.CreateResourceRequest.kind:type_name -> controlplane.v1.ResourceKind
+	42,  // 65: controlplane.v1.CreateResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
+	43,  // 66: controlplane.v1.CreateResourceResponse.resource:type_name -> controlplane.v1.Resource
+	42,  // 67: controlplane.v1.UpdateResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
+	43,  // 68: controlplane.v1.UpdateResourceResponse.resource:type_name -> controlplane.v1.Resource
+	1,   // 69: controlplane.v1.TransitionResourceRequest.target_state:type_name -> controlplane.v1.LifecycleState
+	43,  // 70: controlplane.v1.TransitionResourceResponse.resource:type_name -> controlplane.v1.Resource
+	43,  // 71: controlplane.v1.DeleteResourceResponse.resource:type_name -> controlplane.v1.Resource
+	0,   // 72: controlplane.v1.ManageAccessResourceRequest.kind:type_name -> controlplane.v1.ResourceKind
+	7,   // 73: controlplane.v1.ManageAccessResourceRequest.action:type_name -> controlplane.v1.AdministrativeAction
+	42,  // 74: controlplane.v1.ManageAccessResourceRequest.spec:type_name -> controlplane.v1.ResourceSpec
+	43,  // 75: controlplane.v1.ManageAccessResourceResponse.resource:type_name -> controlplane.v1.Resource
+	0,   // 76: controlplane.v1.GetResourceRequest.expected_kind:type_name -> controlplane.v1.ResourceKind
+	43,  // 77: controlplane.v1.GetResourceResponse.resource:type_name -> controlplane.v1.Resource
+	0,   // 78: controlplane.v1.ListResourcesRequest.kind:type_name -> controlplane.v1.ResourceKind
+	1,   // 79: controlplane.v1.ListResourcesRequest.states:type_name -> controlplane.v1.LifecycleState
+	43,  // 80: controlplane.v1.ListResourcesResponse.resources:type_name -> controlplane.v1.Resource
+	0,   // 81: controlplane.v1.SearchResourcesRequest.kind:type_name -> controlplane.v1.ResourceKind
+	1,   // 82: controlplane.v1.SearchResourcesRequest.states:type_name -> controlplane.v1.LifecycleState
+	43,  // 83: controlplane.v1.SearchResourcesResponse.resources:type_name -> controlplane.v1.Resource
+	43,  // 84: controlplane.v1.MemorySearchHit.resource:type_name -> controlplane.v1.Resource
+	61,  // 85: controlplane.v1.SearchMemoryRecordsResponse.hits:type_name -> controlplane.v1.MemorySearchHit
+	0,   // 86: controlplane.v1.AuditEvent.resource_kind:type_name -> controlplane.v1.ResourceKind
+	133, // 87: controlplane.v1.AuditEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	0,   // 88: controlplane.v1.ListAuditEventsRequest.resource_kind:type_name -> controlplane.v1.ResourceKind
+	63,  // 89: controlplane.v1.ListAuditEventsResponse.events:type_name -> controlplane.v1.AuditEvent
+	0,   // 90: controlplane.v1.ResourceTombstone.kind:type_name -> controlplane.v1.ResourceKind
+	133, // 91: controlplane.v1.ResourceTombstone.deleted_at:type_name -> google.protobuf.Timestamp
+	0,   // 92: controlplane.v1.ListTombstonesRequest.kind:type_name -> controlplane.v1.ResourceKind
+	66,  // 93: controlplane.v1.ListTombstonesResponse.tombstones:type_name -> controlplane.v1.ResourceTombstone
+	132, // 94: controlplane.v1.GetDiagnosticsResponse.oldest_pending_age:type_name -> google.protobuf.Duration
+	43,  // 95: controlplane.v1.EnqueueTurnResponse.turn:type_name -> controlplane.v1.Resource
+	43,  // 96: controlplane.v1.ClaimTurnResponse.turn:type_name -> controlplane.v1.Resource
+	133, // 97: controlplane.v1.ClaimTurnResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	43,  // 98: controlplane.v1.RenewTurnResponse.turn:type_name -> controlplane.v1.Resource
+	133, // 99: controlplane.v1.RenewTurnResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	1,   // 100: controlplane.v1.CompleteTurnRequest.terminal_state:type_name -> controlplane.v1.LifecycleState
+	43,  // 101: controlplane.v1.CompleteTurnResponse.turn:type_name -> controlplane.v1.Resource
+	43,  // 102: controlplane.v1.RetryTurnResponse.turn:type_name -> controlplane.v1.Resource
+	43,  // 103: controlplane.v1.CancelTurnResponse.turn:type_name -> controlplane.v1.Resource
+	10,  // 104: controlplane.v1.ManageSessionRequest.action:type_name -> controlplane.v1.SessionAction
+	43,  // 105: controlplane.v1.ManageSessionResponse.session:type_name -> controlplane.v1.Resource
+	11,  // 106: controlplane.v1.ManageMemoryRecordRequest.action:type_name -> controlplane.v1.MemoryAction
+	43,  // 107: controlplane.v1.ManageMemoryRecordResponse.memory_record:type_name -> controlplane.v1.Resource
+	12,  // 108: controlplane.v1.ManageWorkClaimRequest.action:type_name -> controlplane.v1.WorkClaimAction
+	132, // 109: controlplane.v1.ManageWorkClaimRequest.ttl:type_name -> google.protobuf.Duration
+	43,  // 110: controlplane.v1.ManageWorkClaimResponse.work_claim:type_name -> controlplane.v1.Resource
+	7,   // 111: controlplane.v1.ManageScheduleRequest.action:type_name -> controlplane.v1.AdministrativeAction
+	37,  // 112: controlplane.v1.ManageScheduleRequest.spec:type_name -> controlplane.v1.ScheduleSpec
+	43,  // 113: controlplane.v1.ManageScheduleResponse.schedule:type_name -> controlplane.v1.Resource
+	133, // 114: controlplane.v1.ScheduleOccurrence.scheduled_for:type_name -> google.protobuf.Timestamp
+	0,   // 115: controlplane.v1.ScheduleOccurrence.target_kind:type_name -> controlplane.v1.ResourceKind
+	9,   // 116: controlplane.v1.ScheduleOccurrence.state:type_name -> controlplane.v1.ScheduleOccurrenceState
+	133, // 117: controlplane.v1.ScheduleOccurrence.lease_expires_at:type_name -> google.protobuf.Timestamp
+	133, // 118: controlplane.v1.ScheduleOccurrence.available_at:type_name -> google.protobuf.Timestamp
+	13,  // 119: controlplane.v1.ScheduleOccurrence.session_policy:type_name -> controlplane.v1.ScheduleSessionPolicy
+	14,  // 120: controlplane.v1.ScheduleOccurrence.notification_policy:type_name -> controlplane.v1.ScheduleNotificationPolicy
+	132, // 121: controlplane.v1.ScheduleOccurrence.maximum_execution_duration:type_name -> google.protobuf.Duration
+	92,  // 122: controlplane.v1.ClaimDueSchedulesResponse.occurrences:type_name -> controlplane.v1.ScheduleOccurrence
+	92,  // 123: controlplane.v1.ClaimScheduleOccurrenceResponse.occurrence:type_name -> controlplane.v1.ScheduleOccurrence
+	92,  // 124: controlplane.v1.CompleteScheduleOccurrenceResponse.occurrence:type_name -> controlplane.v1.ScheduleOccurrence
+	92,  // 125: controlplane.v1.CancelScheduleOccurrenceResponse.occurrence:type_name -> controlplane.v1.ScheduleOccurrence
+	9,   // 126: controlplane.v1.ListScheduleOccurrencesRequest.states:type_name -> controlplane.v1.ScheduleOccurrenceState
+	92,  // 127: controlplane.v1.ListScheduleOccurrencesResponse.occurrences:type_name -> controlplane.v1.ScheduleOccurrence
+	43,  // 128: controlplane.v1.StartProcessResponse.process_run:type_name -> controlplane.v1.Resource
+	43,  // 129: controlplane.v1.CancelProcessResponse.process_run:type_name -> controlplane.v1.Resource
+	1,   // 130: controlplane.v1.CompleteProcessRequest.terminal_state:type_name -> controlplane.v1.LifecycleState
+	43,  // 131: controlplane.v1.CompleteProcessResponse.process_run:type_name -> controlplane.v1.Resource
+	133, // 132: controlplane.v1.OutboxFailure.occurred_at:type_name -> google.protobuf.Timestamp
+	133, // 133: controlplane.v1.OutboxFailure.updated_at:type_name -> google.protobuf.Timestamp
+	109, // 134: controlplane.v1.ListOutboxFailuresResponse.failures:type_name -> controlplane.v1.OutboxFailure
+	109, // 135: controlplane.v1.RepairOutboxEventResponse.failure:type_name -> controlplane.v1.OutboxFailure
+	133, // 136: controlplane.v1.RequestOwnerGateRequest.expires_at:type_name -> google.protobuf.Timestamp
+	43,  // 137: controlplane.v1.RequestOwnerGateResponse.owner_gate:type_name -> controlplane.v1.Resource
+	43,  // 138: controlplane.v1.RequestOwnerGateResponse.process_run:type_name -> controlplane.v1.Resource
+	43,  // 139: controlplane.v1.ClaimOwnerGateDeliveryResponse.owner_gate:type_name -> controlplane.v1.Resource
+	133, // 140: controlplane.v1.ClaimOwnerGateDeliveryResponse.delivery_claim_expires_at:type_name -> google.protobuf.Timestamp
+	43,  // 141: controlplane.v1.RecordOwnerGateDeliveryResponse.owner_gate:type_name -> controlplane.v1.Resource
+	6,   // 142: controlplane.v1.ResolveOwnerGateRequest.decision:type_name -> controlplane.v1.OwnerGateDecision
+	43,  // 143: controlplane.v1.ResolveOwnerGateResponse.owner_gate:type_name -> controlplane.v1.Resource
+	43,  // 144: controlplane.v1.ResolveOwnerGateResponse.process_run:type_name -> controlplane.v1.Resource
+	41,  // 145: controlplane.v1.RegisterArtifactRequest.spec:type_name -> controlplane.v1.ArtifactSpec
+	43,  // 146: controlplane.v1.RegisterArtifactResponse.artifact:type_name -> controlplane.v1.Resource
+	8,   // 147: controlplane.v1.RecordArtifactScanRequest.target_state:type_name -> controlplane.v1.ArtifactScanState
+	43,  // 148: controlplane.v1.RecordArtifactScanResponse.artifact:type_name -> controlplane.v1.Resource
+	43,  // 149: controlplane.v1.GetRuntimeRevisionResponse.runtime_revision:type_name -> controlplane.v1.Resource
+	16,  // 150: controlplane.v1.ErrorDetail.reason:type_name -> controlplane.v1.ErrorReason
+	17,  // 151: controlplane.v1.ControlPlaneService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
+	19,  // 152: controlplane.v1.ControlPlaneService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
+	44,  // 153: controlplane.v1.ControlPlaneService.CreateResource:input_type -> controlplane.v1.CreateResourceRequest
+	46,  // 154: controlplane.v1.ControlPlaneService.UpdateResource:input_type -> controlplane.v1.UpdateResourceRequest
+	48,  // 155: controlplane.v1.ControlPlaneService.TransitionResource:input_type -> controlplane.v1.TransitionResourceRequest
+	50,  // 156: controlplane.v1.ControlPlaneService.DeleteResource:input_type -> controlplane.v1.DeleteResourceRequest
+	52,  // 157: controlplane.v1.ControlPlaneService.ManageAccessResource:input_type -> controlplane.v1.ManageAccessResourceRequest
+	54,  // 158: controlplane.v1.ControlPlaneService.GetResource:input_type -> controlplane.v1.GetResourceRequest
+	56,  // 159: controlplane.v1.ControlPlaneService.ListResources:input_type -> controlplane.v1.ListResourcesRequest
+	58,  // 160: controlplane.v1.ControlPlaneService.SearchResources:input_type -> controlplane.v1.SearchResourcesRequest
+	60,  // 161: controlplane.v1.ControlPlaneService.SearchMemoryRecords:input_type -> controlplane.v1.SearchMemoryRecordsRequest
+	64,  // 162: controlplane.v1.ControlPlaneService.ListAuditEvents:input_type -> controlplane.v1.ListAuditEventsRequest
+	67,  // 163: controlplane.v1.ControlPlaneService.ListTombstones:input_type -> controlplane.v1.ListTombstonesRequest
+	69,  // 164: controlplane.v1.ControlPlaneService.GetDiagnostics:input_type -> controlplane.v1.GetDiagnosticsRequest
+	108, // 165: controlplane.v1.ControlPlaneService.ListOutboxFailures:input_type -> controlplane.v1.ListOutboxFailuresRequest
+	111, // 166: controlplane.v1.ControlPlaneService.RepairOutboxEvent:input_type -> controlplane.v1.RepairOutboxEventRequest
+	71,  // 167: controlplane.v1.ControlPlaneService.EnqueueTurn:input_type -> controlplane.v1.EnqueueTurnRequest
+	73,  // 168: controlplane.v1.ControlPlaneService.ClaimTurn:input_type -> controlplane.v1.ClaimTurnRequest
+	75,  // 169: controlplane.v1.ControlPlaneService.RenewTurn:input_type -> controlplane.v1.RenewTurnRequest
+	77,  // 170: controlplane.v1.ControlPlaneService.CompleteTurn:input_type -> controlplane.v1.CompleteTurnRequest
+	79,  // 171: controlplane.v1.ControlPlaneService.RetryTurn:input_type -> controlplane.v1.RetryTurnRequest
+	81,  // 172: controlplane.v1.ControlPlaneService.CancelTurn:input_type -> controlplane.v1.CancelTurnRequest
+	83,  // 173: controlplane.v1.ControlPlaneService.ManageSession:input_type -> controlplane.v1.ManageSessionRequest
+	85,  // 174: controlplane.v1.ControlPlaneService.ManageMemoryRecord:input_type -> controlplane.v1.ManageMemoryRecordRequest
+	87,  // 175: controlplane.v1.ControlPlaneService.ManageWorkClaim:input_type -> controlplane.v1.ManageWorkClaimRequest
+	89,  // 176: controlplane.v1.ControlPlaneService.ManageSchedule:input_type -> controlplane.v1.ManageScheduleRequest
+	91,  // 177: controlplane.v1.ControlPlaneService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
+	94,  // 178: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:input_type -> controlplane.v1.ClaimScheduleOccurrenceRequest
+	96,  // 179: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:input_type -> controlplane.v1.CompleteScheduleOccurrenceRequest
+	98,  // 180: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:input_type -> controlplane.v1.CancelScheduleOccurrenceRequest
+	100, // 181: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:input_type -> controlplane.v1.ListScheduleOccurrencesRequest
+	102, // 182: controlplane.v1.ControlPlaneService.StartProcess:input_type -> controlplane.v1.StartProcessRequest
+	104, // 183: controlplane.v1.ControlPlaneService.CancelProcess:input_type -> controlplane.v1.CancelProcessRequest
+	106, // 184: controlplane.v1.ControlPlaneService.CompleteProcess:input_type -> controlplane.v1.CompleteProcessRequest
+	113, // 185: controlplane.v1.ControlPlaneService.RequestOwnerGate:input_type -> controlplane.v1.RequestOwnerGateRequest
+	115, // 186: controlplane.v1.ControlPlaneService.ClaimOwnerGateDelivery:input_type -> controlplane.v1.ClaimOwnerGateDeliveryRequest
+	117, // 187: controlplane.v1.ControlPlaneService.RecordOwnerGateDelivery:input_type -> controlplane.v1.RecordOwnerGateDeliveryRequest
+	119, // 188: controlplane.v1.ControlPlaneService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
+	121, // 189: controlplane.v1.ControlPlaneService.RegisterArtifact:input_type -> controlplane.v1.RegisterArtifactRequest
+	123, // 190: controlplane.v1.ControlPlaneService.RecordArtifactScan:input_type -> controlplane.v1.RecordArtifactScanRequest
+	125, // 191: controlplane.v1.ControlPlaneService.GetRuntimeRevision:input_type -> controlplane.v1.GetRuntimeRevisionRequest
+	127, // 192: controlplane.v1.ControlPlaneService.RecordMemoryEmbedding:input_type -> controlplane.v1.RecordMemoryEmbeddingRequest
+	129, // 193: controlplane.v1.ControlPlaneService.CheckReadiness:input_type -> controlplane.v1.CheckReadinessRequest
+	18,  // 194: controlplane.v1.ControlPlaneService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
+	20,  // 195: controlplane.v1.ControlPlaneService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
+	45,  // 196: controlplane.v1.ControlPlaneService.CreateResource:output_type -> controlplane.v1.CreateResourceResponse
+	47,  // 197: controlplane.v1.ControlPlaneService.UpdateResource:output_type -> controlplane.v1.UpdateResourceResponse
+	49,  // 198: controlplane.v1.ControlPlaneService.TransitionResource:output_type -> controlplane.v1.TransitionResourceResponse
+	51,  // 199: controlplane.v1.ControlPlaneService.DeleteResource:output_type -> controlplane.v1.DeleteResourceResponse
+	53,  // 200: controlplane.v1.ControlPlaneService.ManageAccessResource:output_type -> controlplane.v1.ManageAccessResourceResponse
+	55,  // 201: controlplane.v1.ControlPlaneService.GetResource:output_type -> controlplane.v1.GetResourceResponse
+	57,  // 202: controlplane.v1.ControlPlaneService.ListResources:output_type -> controlplane.v1.ListResourcesResponse
+	59,  // 203: controlplane.v1.ControlPlaneService.SearchResources:output_type -> controlplane.v1.SearchResourcesResponse
+	62,  // 204: controlplane.v1.ControlPlaneService.SearchMemoryRecords:output_type -> controlplane.v1.SearchMemoryRecordsResponse
+	65,  // 205: controlplane.v1.ControlPlaneService.ListAuditEvents:output_type -> controlplane.v1.ListAuditEventsResponse
+	68,  // 206: controlplane.v1.ControlPlaneService.ListTombstones:output_type -> controlplane.v1.ListTombstonesResponse
+	70,  // 207: controlplane.v1.ControlPlaneService.GetDiagnostics:output_type -> controlplane.v1.GetDiagnosticsResponse
+	110, // 208: controlplane.v1.ControlPlaneService.ListOutboxFailures:output_type -> controlplane.v1.ListOutboxFailuresResponse
+	112, // 209: controlplane.v1.ControlPlaneService.RepairOutboxEvent:output_type -> controlplane.v1.RepairOutboxEventResponse
+	72,  // 210: controlplane.v1.ControlPlaneService.EnqueueTurn:output_type -> controlplane.v1.EnqueueTurnResponse
+	74,  // 211: controlplane.v1.ControlPlaneService.ClaimTurn:output_type -> controlplane.v1.ClaimTurnResponse
+	76,  // 212: controlplane.v1.ControlPlaneService.RenewTurn:output_type -> controlplane.v1.RenewTurnResponse
+	78,  // 213: controlplane.v1.ControlPlaneService.CompleteTurn:output_type -> controlplane.v1.CompleteTurnResponse
+	80,  // 214: controlplane.v1.ControlPlaneService.RetryTurn:output_type -> controlplane.v1.RetryTurnResponse
+	82,  // 215: controlplane.v1.ControlPlaneService.CancelTurn:output_type -> controlplane.v1.CancelTurnResponse
+	84,  // 216: controlplane.v1.ControlPlaneService.ManageSession:output_type -> controlplane.v1.ManageSessionResponse
+	86,  // 217: controlplane.v1.ControlPlaneService.ManageMemoryRecord:output_type -> controlplane.v1.ManageMemoryRecordResponse
+	88,  // 218: controlplane.v1.ControlPlaneService.ManageWorkClaim:output_type -> controlplane.v1.ManageWorkClaimResponse
+	90,  // 219: controlplane.v1.ControlPlaneService.ManageSchedule:output_type -> controlplane.v1.ManageScheduleResponse
+	93,  // 220: controlplane.v1.ControlPlaneService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
+	95,  // 221: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:output_type -> controlplane.v1.ClaimScheduleOccurrenceResponse
+	97,  // 222: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:output_type -> controlplane.v1.CompleteScheduleOccurrenceResponse
+	99,  // 223: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:output_type -> controlplane.v1.CancelScheduleOccurrenceResponse
+	101, // 224: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:output_type -> controlplane.v1.ListScheduleOccurrencesResponse
+	103, // 225: controlplane.v1.ControlPlaneService.StartProcess:output_type -> controlplane.v1.StartProcessResponse
+	105, // 226: controlplane.v1.ControlPlaneService.CancelProcess:output_type -> controlplane.v1.CancelProcessResponse
+	107, // 227: controlplane.v1.ControlPlaneService.CompleteProcess:output_type -> controlplane.v1.CompleteProcessResponse
+	114, // 228: controlplane.v1.ControlPlaneService.RequestOwnerGate:output_type -> controlplane.v1.RequestOwnerGateResponse
+	116, // 229: controlplane.v1.ControlPlaneService.ClaimOwnerGateDelivery:output_type -> controlplane.v1.ClaimOwnerGateDeliveryResponse
+	118, // 230: controlplane.v1.ControlPlaneService.RecordOwnerGateDelivery:output_type -> controlplane.v1.RecordOwnerGateDeliveryResponse
+	120, // 231: controlplane.v1.ControlPlaneService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
+	122, // 232: controlplane.v1.ControlPlaneService.RegisterArtifact:output_type -> controlplane.v1.RegisterArtifactResponse
+	124, // 233: controlplane.v1.ControlPlaneService.RecordArtifactScan:output_type -> controlplane.v1.RecordArtifactScanResponse
+	126, // 234: controlplane.v1.ControlPlaneService.GetRuntimeRevision:output_type -> controlplane.v1.GetRuntimeRevisionResponse
+	128, // 235: controlplane.v1.ControlPlaneService.RecordMemoryEmbedding:output_type -> controlplane.v1.RecordMemoryEmbeddingResponse
+	130, // 236: controlplane.v1.ControlPlaneService.CheckReadiness:output_type -> controlplane.v1.CheckReadinessResponse
+	194, // [194:237] is the sub-list for method output_type
+	151, // [151:194] is the sub-list for method input_type
+	151, // [151:151] is the sub-list for extension type_name
+	151, // [151:151] is the sub-list for extension extendee
+	0,   // [0:151] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_control_plane_proto_init() }
@@ -10748,7 +11713,7 @@ func file_controlplane_v1_control_plane_proto_init() {
 	if File_controlplane_v1_control_plane_proto != nil {
 		return
 	}
-	file_controlplane_v1_control_plane_proto_msgTypes[23].OneofWrappers = []any{
+	file_controlplane_v1_control_plane_proto_msgTypes[25].OneofWrappers = []any{
 		(*ResourceSpec_Project)(nil),
 		(*ResourceSpec_Team)(nil),
 		(*ResourceSpec_Chat)(nil),
@@ -10773,7 +11738,7 @@ func file_controlplane_v1_control_plane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlplane_v1_control_plane_proto_rawDesc), len(file_controlplane_v1_control_plane_proto_rawDesc)),
 			NumEnums:      17,
-			NumMessages:   106,
+			NumMessages:   115,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

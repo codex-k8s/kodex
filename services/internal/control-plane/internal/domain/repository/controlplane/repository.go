@@ -63,41 +63,125 @@ type ExpiredTurn struct {
 	Lease TurnLease
 }
 
-// ScheduleOccurrence — назначенный сервером уникальный запуск расписания.
-type ScheduleOccurrence struct {
+// SessionTurn связывает незавершённый ход с необязательной действующей арендой.
+type SessionTurn struct {
+	Turn    entity.Resource
+	Lease   TurnLease
+	Attempt TurnAttempt
+}
+
+// DelegationEdge — неизменяемая серверная связь исходного и целевого хода.
+type DelegationEdge struct {
 	ID                   string
-	ScheduleID           string
 	OrganizationID       string
 	ProjectID            string
-	ScheduledFor         time.Time
-	TargetResourceID     string
-	TargetKind           enum.Kind
-	TargetVersion        uint64
-	EffectiveInputSHA256 string
-	PromptProfileID      string
-	PromptRevision       uint64
-	RuntimeRevisionID    string
-	SessionPolicy        string
-	RoomID               string
-	NotificationPolicy   string
-	MaximumExecution     time.Duration
-	Coalesce             bool
-	OverlapPolicy        string
-	MaximumAttempts      uint32
-	InitialBackoff       time.Duration
-	MaximumBackoff       time.Duration
-	DeadLetterAt         time.Time
-	State                string
-	Attempt              uint32
-	ClaimantWorkloadID   string
-	AuthorityGeneration  uint64
-	TokenHash            string
-	LeaseExpiresAt       time.Time
-	AvailableAt          time.Time
-	Outcome              string
-	ResultArtifactID     string
+	ParentProcessRunID   string
+	SourceSessionID      string
+	SourceTurnID         string
+	SourceAttempt        uint32
+	SourceInputSHA256    string
+	TargetSessionID      string
+	TargetRoleID         string
+	TargetTurnID         string
+	TargetAttempt        uint32
+	TargetInputSHA256    string
+	RootInitiatorActorID string
+	GrantGeneration      uint64
 	CreatedAt            time.Time
-	UpdatedAt            time.Time
+}
+
+// ScheduleOccurrence — назначенный сервером уникальный запуск расписания.
+type ScheduleOccurrence struct {
+	ID                              string
+	ScheduleID                      string
+	OrganizationID                  string
+	ProjectID                       string
+	ScheduledFor                    time.Time
+	TargetResourceID                string
+	TargetKind                      enum.Kind
+	TargetVersion                   uint64
+	EffectiveInputSHA256            string
+	PromptProfileID                 string
+	PromptRevision                  uint64
+	RuntimeRevisionID               string
+	SessionPolicy                   string
+	RoomID                          string
+	NotificationPolicy              string
+	MaximumExecution                time.Duration
+	Coalesce                        bool
+	OverlapPolicy                   string
+	MaximumAttempts                 uint32
+	InitialBackoff                  time.Duration
+	MaximumBackoff                  time.Duration
+	DeadLetterAt                    time.Time
+	State                           string
+	Attempt                         uint32
+	ClaimantWorkloadID              string
+	AuthorityGeneration             uint64
+	TokenHash                       string
+	LeaseExpiresAt                  time.Time
+	AvailableAt                     time.Time
+	Outcome                         string
+	ResultArtifactID                string
+	ExecutionSessionID              string
+	ExecutionSessionVersion         uint64
+	ExecutionTurnID                 string
+	ExecutionTurnVersion            uint64
+	ExecutionProcessRunID           string
+	ExecutionProcessVersion         uint64
+	ExecutionRuntimeRevisionID      string
+	ExecutionRuntimeRevisionVersion uint64
+	CreatedAt                       time.Time
+	UpdatedAt                       time.Time
+}
+
+// ScheduledRun сохраняет одну неизменяемую попытку фактического исполнения.
+type ScheduledRun struct {
+	OccurrenceID           string
+	Attempt                uint32
+	SessionID              string
+	SessionVersion         uint64
+	TurnID                 string
+	TurnVersion            uint64
+	ProcessRunID           string
+	ProcessVersion         uint64
+	RuntimeRevisionID      string
+	RuntimeRevisionVersion uint64
+	EffectiveInputSHA256   string
+	State                  string
+	Outcome                string
+	ResultArtifactID       string
+	CreatedAt              time.Time
+	FinishedAt             time.Time
+}
+
+// OutboxFailure — ограниченная безопасная проекция terminal-события.
+type OutboxFailure struct {
+	EventID        string
+	OrderingKey    string
+	EventSequence  uint64
+	EventName      string
+	AggregateID    string
+	Attempts       uint32
+	RepairCount    uint32
+	LastErrorClass string
+	OccurredAt     time.Time
+	UpdatedAt      time.Time
+}
+
+// OutboxRepair фиксирует авторизованное повторное открытие exact predecessor.
+type OutboxRepair struct {
+	EventID            string
+	ExpectedSequence   uint64
+	ExpectedAttempts   uint32
+	ReasonCode         string
+	EvidenceSHA256     string
+	ActorID            string
+	CorrelationID      string
+	PolicyRevision     uint64
+	IdempotencyKeyHash string
+	RequestHash        string
+	RepairedAt         time.Time
 }
 
 // TurnAttempt сохраняет неизменяемую родословную каждой аренды выполнения.
@@ -192,6 +276,7 @@ type Transaction interface {
 	ListSnapshotResources(context.Context, string, string) ([]entity.Resource, error)
 	LatestRuntimeRevision(context.Context, string, string) (entity.Resource, error)
 	ExpiredClaimedTurns(context.Context, string, string, string, int, time.Time) ([]ExpiredTurn, error)
+	OpenSessionTurns(context.Context, string, string, string) ([]SessionTurn, error)
 	NextQueuedTurn(context.Context, string, string, string) (entity.Resource, error)
 	SaveTurnLease(context.Context, TurnLease) error
 	RenewTurnLease(context.Context, TurnLease, time.Time) (TurnLease, error)
@@ -208,6 +293,8 @@ type Transaction interface {
 	DeleteTurnLease(context.Context, string, uint64) error
 	SaveTurnAttempt(context.Context, TurnAttempt) error
 	FinishTurnAttempt(context.Context, TurnAttempt) error
+	SaveDelegationEdge(context.Context, DelegationEdge) error
+	GetDelegationEdgeByTargetTurn(context.Context, string, string, string) (DelegationEdge, error)
 	DueSchedules(context.Context, string, string, int, time.Time) ([]entity.Resource, error)
 	SaveScheduleOccurrence(context.Context, ScheduleOccurrence) error
 	HasOpenScheduleOccurrence(context.Context, string, string, string) (bool, error)
@@ -226,12 +313,18 @@ type Transaction interface {
 	NextScheduleOccurrence(context.Context, string, string, time.Time) (ScheduleOccurrence, error)
 	UpdateScheduleOccurrence(context.Context, ScheduleOccurrence, uint32, string) error
 	GetScheduleOccurrenceForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
+	SaveScheduledRun(context.Context, ScheduledRun) error
+	FinishScheduledRun(context.Context, ScheduledRun) error
 	AuthorizeProject(context.Context, string, string, string, string, string) (entity.Resource, error)
 	NextProofRevision(context.Context) (uint64, error)
 	SaveMemoryProjection(context.Context, MemoryProjection) error
 	SearchMemory(context.Context, MemorySearch) ([]MemorySearchHit, error)
 	HasActiveChildProcesses(context.Context, string, string, string) (bool, error)
 	NextOwnerGateDelivery(context.Context, string, string, time.Time) (entity.Resource, error)
+	ListTerminalOutbox(context.Context, string, string, string, int) ([]OutboxFailure, error)
+	RepairTerminalOutbox(context.Context, OutboxRepair) (OutboxFailure, error)
+	ActiveProviderSessions(context.Context, string, string, string) (uint64, error)
+	ProcessHasOpenWork(context.Context, string, string, string, string, string) (bool, error)
 }
 
 // Repository — авторитетная граница PostgreSQL.

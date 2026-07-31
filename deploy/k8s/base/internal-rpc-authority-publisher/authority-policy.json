@@ -32,7 +32,10 @@
           "control.session.manage",
           "control.memory.manage",
           "control.memory.search",
-          "control.work-claim.manage"
+          "control.work-claim.manage",
+          "control.process.complete",
+          "control.outbox.read",
+          "control.outbox.repair"
         ],
         "application_credential": "OIDC_BEARER",
         "application_credential_audience": "mattercodex-control-api",
@@ -70,11 +73,11 @@
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
       },
-    {
-      "allowed_operation_ids": [
-        "control.agent-runner.readiness",
-        "control.agent-work-claim.manage",
-        "control.turn.claim",
+      {
+        "allowed_operation_ids": [
+          "control.agent-runner.readiness",
+          "control.agent-work-claim.manage",
+          "control.turn.claim",
           "control.turn.renew",
           "control.turn.complete"
         ],
@@ -104,26 +107,26 @@
           "UNAVAILABLE",
           "DEADLINE_EXCEEDED"
         ],
-      "server_resolved_fields": [
-        "actor",
-        "tenant",
-        "project",
-        "session",
-        "turn",
-        "workload",
-        "attempt",
-        "input_sha256",
-        "generation",
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "session",
+          "turn",
+          "workload",
+          "attempt",
+          "input_sha256",
+          "generation",
           "provenance"
         ],
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
       },
-    {
-      "allowed_operation_ids": [
-        "control.automation-scheduler.readiness",
-        "control.schedule-resource.get",
-        "control.schedule.claim-due",
+      {
+        "allowed_operation_ids": [
+          "control.automation-scheduler.readiness",
+          "control.schedule-resource.get",
+          "control.schedule.claim-due",
           "control.schedule.claim-occurrence",
           "control.schedule.complete-occurrence"
         ],
@@ -165,10 +168,10 @@
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
       },
-    {
-      "allowed_operation_ids": [
-        "control.artifact-scanner.readiness",
-        "control.artifact.scan"
+      {
+        "allowed_operation_ids": [
+          "control.artifact-scanner.readiness",
+          "control.artifact.scan"
         ],
         "application_credential": "PROCESS_RUN_GRANT",
         "application_credential_audience": "urn:mattercodex:artifact-scan",
@@ -208,11 +211,11 @@
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
       },
-    {
-      "allowed_operation_ids": [
-        "control.owner-gate-delivery.readiness",
-        "control.owner-gate.claim-delivery",
-        "control.owner-gate.deliver"
+      {
+        "allowed_operation_ids": [
+          "control.owner-gate-delivery.readiness",
+          "control.owner-gate.claim-delivery",
+          "control.owner-gate.deliver"
         ],
         "application_credential": "OWNER_GATE_DELIVERY_GRANT",
         "application_credential_audience": "urn:mattercodex:owner-gate-delivery",
@@ -251,11 +254,11 @@
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
       },
-    {
-      "allowed_operation_ids": [
-        "control.runtime-controller.readiness",
-        "control.runtime-resource.get",
-        "control.runtime-revision.get"
+      {
+        "allowed_operation_ids": [
+          "control.runtime-controller.readiness",
+          "control.runtime-resource.get",
+          "control.runtime-revision.get"
         ],
         "application_credential": "RUNTIME_REVISION_GRANT",
         "application_credential_audience": "urn:mattercodex:runtime-revision",
@@ -292,10 +295,10 @@
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
       },
-    {
-      "allowed_operation_ids": [
-        "control.memory-indexer.readiness",
-        "control.memory.index"
+      {
+        "allowed_operation_ids": [
+          "control.memory-indexer.readiness",
+          "control.memory.index"
         ],
         "application_credential": "MEMORY_INDEX_GRANT",
         "application_credential_audience": "urn:mattercodex:memory-index",
@@ -1467,6 +1470,93 @@
         "permission": "controlplane.readiness.check",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/CompleteProcess",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.process.complete",
+        "permission": "controlplane.process.complete",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/ListOutboxFailures",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.outbox.read",
+        "permission": "controlplane.outbox.read",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/RepairOutboxEvent",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.outbox.repair",
+        "permission": "controlplane.outbox.repair",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
         "target_workload_id": "control-plane"
       }
     ],

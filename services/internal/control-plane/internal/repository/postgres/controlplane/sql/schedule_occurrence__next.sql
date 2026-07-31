@@ -61,6 +61,14 @@ SELECT
     occurrence.available_at,
     coalesce(occurrence.outcome, ''),
     coalesce(occurrence.result_artifact_id::text, ''),
+    coalesce(occurrence.execution_session_id::text, ''),
+    coalesce(occurrence.execution_session_version, 0),
+    coalesce(occurrence.execution_turn_id::text, ''),
+    coalesce(occurrence.execution_turn_version, 0),
+    coalesce(occurrence.execution_process_run_id::text, ''),
+    coalesce(occurrence.execution_process_version, 0),
+    coalesce(occurrence.execution_runtime_revision_id::text, ''),
+    coalesce(occurrence.execution_runtime_revision_version, 0),
     occurrence.claimed_at,
     occurrence.updated_at
 FROM control_plane.schedule_occurrences AS occurrence

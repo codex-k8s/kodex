@@ -7,11 +7,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+type terminalOutboxState interface {
+	TerminalEvents() uint64
+}
+
 func RegisterInfrastructureMetrics(
 	register func(...prometheus.Collector) error,
 	runtimePool, relayPool *pgxpool.Pool,
 	redis *redisstore.Store,
 	relay *eventing.Relay,
+	outbox terminalOutboxState,
 ) error {
 	collectors := []prometheus.Collector{
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
@@ -54,6 +59,11 @@ func RegisterInfrastructureMetrics(
 			Name: "outbox_events_failed_total",
 			Help: "Total failed outbox publish attempts durably rescheduled.",
 		}, func() float64 { return float64(relay.Stats().Failed) }),
+		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Namespace: "mattercodex", Subsystem: "control_plane",
+			Name: "outbox_terminal_events",
+			Help: "Current terminal outbox predecessors from the last readiness readback.",
+		}, func() float64 { return float64(outbox.TerminalEvents()) }),
 	}
 	return register(collectors...)
 }

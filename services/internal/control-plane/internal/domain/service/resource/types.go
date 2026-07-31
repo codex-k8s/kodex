@@ -82,6 +82,22 @@ type DiagnosticsInput struct {
 	Principal value.Principal
 }
 
+type ListOutboxFailuresInput struct {
+	Principal    value.Principal
+	AfterEventID string
+	Limit        int
+}
+
+type RepairOutboxEventInput struct {
+	Principal        value.Principal
+	IdempotencyKey   string
+	EventID          string
+	ExpectedSequence uint64
+	ExpectedAttempts uint32
+	ReasonCode       string
+	EvidenceSHA256   string
+}
+
 type EnqueueTurnInput struct {
 	Principal        value.Principal
 	IdempotencyKey   string
@@ -281,6 +297,16 @@ type CancelProcessInput struct {
 	ProcessRunID    string
 	ExpectedVersion uint64
 	ReasonCode      string
+}
+
+type CompleteProcessInput struct {
+	Principal        value.Principal
+	IdempotencyKey   string
+	ProcessRunID     string
+	ExpectedVersion  uint64
+	TerminalState    enum.State
+	Outcome          string
+	ResultArtifactID string
 }
 
 type RequestOwnerGateInput struct {

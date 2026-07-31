@@ -488,7 +488,7 @@ func (repository *Repository) Check(ctx context.Context) error {
 	); err != nil {
 		return mapError(err)
 	}
-	if version != 20260731000300 || !member || !nonSuperuser || !noBypassRLS ||
+	if version != 20260731000400 || !member || !nonSuperuser || !noBypassRLS ||
 		!loginEnabled || generation != repository.config.PrincipalGeneration ||
 		(status != "CURRENT" && status != "NEXT" && status != "PREVIOUS") {
 		return errs.ErrUnavailable
@@ -1005,6 +1005,55 @@ func (wrapped *transaction) ExpiredClaimedTurns(
 	return expired, mapError(rows.Err())
 }
 
+func (wrapped *transaction) OpenSessionTurns(
+	ctx context.Context,
+	organizationID, projectID, sessionID string,
+) ([]domainrepo.SessionTurn, error) {
+	rows, err := wrapped.tx.Query(
+		ctx,
+		sqlSessionOpenTurns,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"session_id":      sessionID,
+		},
+	)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	var result []domainrepo.SessionTurn
+	for rows.Next() {
+		var item domainrepo.SessionTurn
+		var kind, state string
+		var specRaw []byte
+		if err := rows.Scan(
+			&item.Turn.ID, &item.Turn.OrganizationID, &item.Turn.ProjectID,
+			&item.Turn.ParentID, &item.Turn.OwnerActorID, &kind,
+			&item.Turn.Name, &state, &item.Turn.Version, &specRaw,
+			&item.Turn.CreatedAt, &item.Turn.UpdatedAt,
+			&item.Lease.TurnID, &item.Lease.TokenHash, &item.Lease.WorkloadID,
+			&item.Lease.AuthorityGeneration, &item.Lease.Attempt,
+			&item.Lease.ExpiresAt, &item.Lease.Fence,
+			&item.Attempt.TurnID, &item.Attempt.Attempt,
+			&item.Attempt.WorkloadID, &item.Attempt.AuthorityGeneration,
+			&item.Attempt.State, &item.Attempt.InputSHA256,
+			&item.Attempt.LeaseFence, &item.Attempt.StartedAt,
+			&item.Attempt.FinishedAt, &item.Attempt.Outcome,
+		); err != nil {
+			return nil, mapError(err)
+		}
+		item.Turn.Kind = enum.Kind(kind)
+		item.Turn.State = enum.State(state)
+		item.Turn.Spec, err = unmarshalSpec(item.Turn.Kind, specRaw)
+		if err != nil || item.Turn.Validate() != nil || item.Turn.Kind != enum.KindTurn {
+			return nil, errs.ErrInternal
+		}
+		result = append(result, item)
+	}
+	return result, mapError(rows.Err())
+}
+
 func (wrapped *transaction) SaveTurnLease(
 	ctx context.Context,
 	lease domainrepo.TurnLease,
@@ -1177,6 +1226,50 @@ func (wrapped *transaction) FinishTurnAttempt(
 	return nil
 }
 
+func (wrapped *transaction) SaveDelegationEdge(
+	ctx context.Context,
+	edge domainrepo.DelegationEdge,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlDelegationEdgeSave, pgx.StrictNamedArgs{
+		"id": edge.ID, "organization_id": edge.OrganizationID,
+		"project_id": edge.ProjectID, "parent_process_run_id": edge.ParentProcessRunID,
+		"source_session_id": edge.SourceSessionID, "source_turn_id": edge.SourceTurnID,
+		"source_attempt": edge.SourceAttempt, "source_input_sha256": edge.SourceInputSHA256,
+		"target_session_id": edge.TargetSessionID, "target_role_id": edge.TargetRoleID,
+		"target_turn_id": edge.TargetTurnID, "target_attempt": edge.TargetAttempt,
+		"target_input_sha256":     edge.TargetInputSHA256,
+		"root_initiator_actor_id": edge.RootInitiatorActorID,
+		"grant_generation":        edge.GrantGeneration, "created_at": edge.CreatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) GetDelegationEdgeByTargetTurn(
+	ctx context.Context,
+	organizationID, projectID, targetTurnID string,
+) (domainrepo.DelegationEdge, error) {
+	var edge domainrepo.DelegationEdge
+	err := wrapped.tx.QueryRow(ctx, sqlDelegationEdgeGetByTargetTurn, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+		"target_turn_id":  targetTurnID,
+	}).Scan(
+		&edge.ID, &edge.OrganizationID, &edge.ProjectID,
+		&edge.ParentProcessRunID, &edge.SourceSessionID, &edge.SourceTurnID,
+		&edge.SourceAttempt, &edge.SourceInputSHA256, &edge.TargetSessionID,
+		&edge.TargetRoleID, &edge.TargetTurnID, &edge.TargetAttempt,
+		&edge.TargetInputSHA256, &edge.RootInitiatorActorID,
+		&edge.GrantGeneration, &edge.CreatedAt,
+	)
+	return edge, mapError(err)
+}
+
 func (wrapped *transaction) DeleteTurnLease(
 	ctx context.Context,
 	turnID string,
@@ -1235,34 +1328,42 @@ func (wrapped *transaction) SaveScheduleOccurrence(
 		ctx,
 		sqlScheduleOccurrenceSave,
 		pgx.StrictNamedArgs{
-			"id":                            occurrence.ID,
-			"schedule_id":                   occurrence.ScheduleID,
-			"organization_id":               occurrence.OrganizationID,
-			"project_id":                    occurrence.ProjectID,
-			"scheduled_for":                 occurrence.ScheduledFor,
-			"target_resource_id":            occurrence.TargetResourceID,
-			"target_kind":                   string(occurrence.TargetKind),
-			"target_version":                occurrence.TargetVersion,
-			"effective_input_sha256":        occurrence.EffectiveInputSHA256,
-			"prompt_profile_id":             occurrence.PromptProfileID,
-			"prompt_revision":               occurrence.PromptRevision,
-			"runtime_revision_id":           occurrence.RuntimeRevisionID,
-			"session_policy":                occurrence.SessionPolicy,
-			"room_id":                       occurrence.RoomID,
-			"notification_policy":           occurrence.NotificationPolicy,
-			"maximum_execution_duration_ms": occurrence.MaximumExecution.Milliseconds(),
-			"coalesce":                      occurrence.Coalesce,
-			"overlap_policy":                occurrence.OverlapPolicy,
-			"maximum_attempts":              occurrence.MaximumAttempts,
-			"initial_backoff_ms":            occurrence.InitialBackoff.Milliseconds(),
-			"maximum_backoff_ms":            occurrence.MaximumBackoff.Milliseconds(),
-			"dead_letter_at":                occurrence.DeadLetterAt,
-			"state":                         occurrence.State,
-			"attempt":                       occurrence.Attempt,
-			"available_at":                  occurrence.AvailableAt,
-			"outcome":                       occurrence.Outcome,
-			"result_artifact_id":            occurrence.ResultArtifactID,
-			"updated_at":                    occurrence.UpdatedAt,
+			"id":                                 occurrence.ID,
+			"schedule_id":                        occurrence.ScheduleID,
+			"organization_id":                    occurrence.OrganizationID,
+			"project_id":                         occurrence.ProjectID,
+			"scheduled_for":                      occurrence.ScheduledFor,
+			"target_resource_id":                 occurrence.TargetResourceID,
+			"target_kind":                        string(occurrence.TargetKind),
+			"target_version":                     occurrence.TargetVersion,
+			"effective_input_sha256":             occurrence.EffectiveInputSHA256,
+			"prompt_profile_id":                  occurrence.PromptProfileID,
+			"prompt_revision":                    occurrence.PromptRevision,
+			"runtime_revision_id":                occurrence.RuntimeRevisionID,
+			"session_policy":                     occurrence.SessionPolicy,
+			"room_id":                            occurrence.RoomID,
+			"notification_policy":                occurrence.NotificationPolicy,
+			"maximum_execution_duration_ms":      occurrence.MaximumExecution.Milliseconds(),
+			"coalesce":                           occurrence.Coalesce,
+			"overlap_policy":                     occurrence.OverlapPolicy,
+			"maximum_attempts":                   occurrence.MaximumAttempts,
+			"initial_backoff_ms":                 occurrence.InitialBackoff.Milliseconds(),
+			"maximum_backoff_ms":                 occurrence.MaximumBackoff.Milliseconds(),
+			"dead_letter_at":                     occurrence.DeadLetterAt,
+			"state":                              occurrence.State,
+			"attempt":                            occurrence.Attempt,
+			"available_at":                       occurrence.AvailableAt,
+			"outcome":                            occurrence.Outcome,
+			"result_artifact_id":                 occurrence.ResultArtifactID,
+			"execution_session_id":               occurrence.ExecutionSessionID,
+			"execution_session_version":          occurrence.ExecutionSessionVersion,
+			"execution_turn_id":                  occurrence.ExecutionTurnID,
+			"execution_turn_version":             occurrence.ExecutionTurnVersion,
+			"execution_process_run_id":           occurrence.ExecutionProcessRunID,
+			"execution_process_version":          occurrence.ExecutionProcessVersion,
+			"execution_runtime_revision_id":      occurrence.ExecutionRuntimeRevisionID,
+			"execution_runtime_revision_version": occurrence.ExecutionRuntimeRevisionVersion,
+			"updated_at":                         occurrence.UpdatedAt,
 		},
 	)
 	if err != nil {
@@ -1375,19 +1476,27 @@ func (wrapped *transaction) UpdateScheduleOccurrence(
 		ctx,
 		sqlScheduleOccurrenceUpdate,
 		pgx.StrictNamedArgs{
-			"id":                   occurrence.ID,
-			"state":                occurrence.State,
-			"attempt":              occurrence.Attempt,
-			"claimant_workload_id": occurrence.ClaimantWorkloadID,
-			"authority_generation": occurrence.AuthorityGeneration,
-			"token_hash":           occurrence.TokenHash,
-			"lease_expires_at":     occurrence.LeaseExpiresAt,
-			"available_at":         occurrence.AvailableAt,
-			"outcome":              occurrence.Outcome,
-			"result_artifact_id":   occurrence.ResultArtifactID,
-			"updated_at":           occurrence.UpdatedAt,
-			"expected_attempt":     expectedAttempt,
-			"expected_token_hash":  expectedTokenHash,
+			"id":                                 occurrence.ID,
+			"state":                              occurrence.State,
+			"attempt":                            occurrence.Attempt,
+			"claimant_workload_id":               occurrence.ClaimantWorkloadID,
+			"authority_generation":               occurrence.AuthorityGeneration,
+			"token_hash":                         occurrence.TokenHash,
+			"lease_expires_at":                   occurrence.LeaseExpiresAt,
+			"available_at":                       occurrence.AvailableAt,
+			"outcome":                            occurrence.Outcome,
+			"result_artifact_id":                 occurrence.ResultArtifactID,
+			"execution_session_id":               occurrence.ExecutionSessionID,
+			"execution_session_version":          occurrence.ExecutionSessionVersion,
+			"execution_turn_id":                  occurrence.ExecutionTurnID,
+			"execution_turn_version":             occurrence.ExecutionTurnVersion,
+			"execution_process_run_id":           occurrence.ExecutionProcessRunID,
+			"execution_process_version":          occurrence.ExecutionProcessVersion,
+			"execution_runtime_revision_id":      occurrence.ExecutionRuntimeRevisionID,
+			"execution_runtime_revision_version": occurrence.ExecutionRuntimeRevisionVersion,
+			"updated_at":                         occurrence.UpdatedAt,
+			"expected_attempt":                   expectedAttempt,
+			"expected_token_hash":                expectedTokenHash,
 		},
 	)
 	if err != nil {
@@ -1412,6 +1521,47 @@ func (wrapped *transaction) GetScheduleOccurrenceForUpdate(
 			"id":              occurrenceID,
 		},
 	))
+}
+
+func (wrapped *transaction) SaveScheduledRun(
+	ctx context.Context,
+	run domainrepo.ScheduledRun,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlScheduledRunSave, pgx.StrictNamedArgs{
+		"occurrence_id": run.OccurrenceID, "attempt": run.Attempt,
+		"session_id": run.SessionID, "session_version": run.SessionVersion,
+		"turn_id": run.TurnID, "turn_version": run.TurnVersion,
+		"process_run_id": run.ProcessRunID, "process_version": run.ProcessVersion,
+		"runtime_revision_id":      run.RuntimeRevisionID,
+		"runtime_revision_version": run.RuntimeRevisionVersion,
+		"effective_input_sha256":   run.EffectiveInputSHA256,
+		"state":                    run.State, "created_at": run.CreatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) FinishScheduledRun(
+	ctx context.Context,
+	run domainrepo.ScheduledRun,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlScheduledRunFinish, pgx.StrictNamedArgs{
+		"occurrence_id": run.OccurrenceID, "attempt": run.Attempt,
+		"state": run.State, "outcome": run.Outcome,
+		"result_artifact_id": run.ResultArtifactID, "finished_at": run.FinishedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (wrapped *transaction) AuthorizeProject(
@@ -1484,6 +1634,73 @@ func (wrapped *transaction) HasActiveChildProcesses(
 	return exists, mapError(err)
 }
 
+func (wrapped *transaction) ProcessHasOpenWork(
+	ctx context.Context,
+	organizationID, projectID, processID, excludeTurnID, excludeGateID string,
+) (bool, error) {
+	var found bool
+	err := wrapped.tx.QueryRow(ctx, sqlProcessHasOpenWork, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID,
+		"process_id": processID, "exclude_turn_id": excludeTurnID,
+		"exclude_gate_id": excludeGateID,
+	}).Scan(&found)
+	return found, mapError(err)
+}
+
+func (wrapped *transaction) ActiveProviderSessions(
+	ctx context.Context,
+	organizationID, projectID, bindingID string,
+) (uint64, error) {
+	var count uint64
+	err := wrapped.tx.QueryRow(ctx, sqlProviderBindingActiveSessions, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+		"binding_id":      bindingID,
+	}).Scan(&count)
+	return count, mapError(err)
+}
+
+func (wrapped *transaction) ListTerminalOutbox(
+	ctx context.Context,
+	organizationID, projectID, afterEventID string,
+	limit int,
+) ([]domainrepo.OutboxFailure, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlOutboxTerminalList, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID,
+		"after_event_id": afterEventID, "limit": limit,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	var result []domainrepo.OutboxFailure
+	for rows.Next() {
+		item, err := scanOutboxFailure(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, mapError(rows.Err())
+}
+
+func (wrapped *transaction) RepairTerminalOutbox(
+	ctx context.Context,
+	repair domainrepo.OutboxRepair,
+) (domainrepo.OutboxFailure, error) {
+	return scanOutboxFailure(wrapped.tx.QueryRow(
+		ctx, sqlOutboxTerminalRepair, pgx.StrictNamedArgs{
+			"event_id": repair.EventID, "expected_sequence": repair.ExpectedSequence,
+			"expected_attempts": repair.ExpectedAttempts,
+			"reason_code":       repair.ReasonCode, "evidence_sha256": repair.EvidenceSHA256,
+			"actor_id": repair.ActorID, "correlation_id": repair.CorrelationID,
+			"policy_revision":      repair.PolicyRevision,
+			"idempotency_key_hash": repair.IdempotencyKeyHash,
+			"request_hash":         repair.RequestHash, "repaired_at": repair.RepairedAt,
+		},
+	))
+}
+
 func (wrapped *transaction) NextOwnerGateDelivery(
 	ctx context.Context,
 	organizationID, projectID string,
@@ -1502,6 +1719,19 @@ func (wrapped *transaction) NextOwnerGateDelivery(
 
 type rowScanner interface {
 	Scan(...any) error
+}
+
+func scanOutboxFailure(row rowScanner) (domainrepo.OutboxFailure, error) {
+	var item domainrepo.OutboxFailure
+	err := row.Scan(
+		&item.EventID, &item.OrderingKey, &item.EventSequence, &item.EventName,
+		&item.AggregateID, &item.Attempts, &item.RepairCount,
+		&item.LastErrorClass, &item.OccurredAt, &item.UpdatedAt,
+	)
+	if err != nil {
+		return domainrepo.OutboxFailure{}, mapError(err)
+	}
+	return item, nil
 }
 
 func scanResource(row rowScanner) (entity.Resource, error) {
@@ -1619,6 +1849,14 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 		&occurrence.AvailableAt,
 		&occurrence.Outcome,
 		&occurrence.ResultArtifactID,
+		&occurrence.ExecutionSessionID,
+		&occurrence.ExecutionSessionVersion,
+		&occurrence.ExecutionTurnID,
+		&occurrence.ExecutionTurnVersion,
+		&occurrence.ExecutionProcessRunID,
+		&occurrence.ExecutionProcessVersion,
+		&occurrence.ExecutionRuntimeRevisionID,
+		&occurrence.ExecutionRuntimeRevisionVersion,
 		&occurrence.CreatedAt,
 		&occurrence.UpdatedAt,
 	)
@@ -1633,6 +1871,15 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 		value.ValidateID(occurrence.PromptProfileID) != nil ||
 		occurrence.PromptRevision == 0 ||
 		value.ValidateID(occurrence.RuntimeRevisionID) != nil ||
+		(occurrence.ExecutionSessionID != "" &&
+			(value.ValidateID(occurrence.ExecutionSessionID) != nil ||
+				occurrence.ExecutionSessionVersion == 0 ||
+				value.ValidateID(occurrence.ExecutionTurnID) != nil ||
+				occurrence.ExecutionTurnVersion == 0 ||
+				value.ValidateID(occurrence.ExecutionRuntimeRevisionID) != nil ||
+				occurrence.ExecutionRuntimeRevisionVersion == 0)) ||
+		(occurrence.ExecutionProcessRunID == "") !=
+			(occurrence.ExecutionProcessVersion == 0) ||
 		(occurrence.SessionPolicy != "NEW" &&
 			occurrence.SessionPolicy != "PERSISTENT" &&
 			occurrence.SessionPolicy != "ROLLING") ||

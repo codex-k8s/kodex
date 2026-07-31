@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -107,32 +108,14 @@ func (service *Service) ManageSession(
 				if !slices.Contains(roleIDs, role.ID) {
 					return entity.Resource{}, errs.ErrNotFound
 				}
-				selectedBindingID := input.PreferredProviderCredentialBindingID
-				if selectedBindingID == "" &&
-					len(roleSpec.ProviderCredentialBindingIDs) == 1 {
-					selectedBindingID = roleSpec.ProviderCredentialBindingIDs[0]
-				}
-				if !slices.Contains(
-					roleSpec.ProviderCredentialBindingIDs,
-					selectedBindingID,
-				) {
-					return entity.Resource{}, errs.ErrNotFound
-				}
-				binding, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					selectedBindingID,
+				sessionID := uuid.NewString()
+				binding, err := service.selectProviderBinding(
+					ctx, tx, input.Principal, roleSpec,
+					input.PreferredProviderCredentialBindingID,
+					sessionID, now,
 				)
 				if err != nil {
 					return entity.Resource{}, err
-				}
-				bindingSpec, ok := binding.Spec.(entity.CredentialBindingSpec)
-				if !ok || binding.Kind != enum.KindCredentialBinding ||
-					binding.State != enum.StateActive ||
-					bindingSpec.Purpose != "provider-account" ||
-					(!bindingSpec.ExpiresAt.IsZero() && !bindingSpec.ExpiresAt.After(now)) {
-					return entity.Resource{}, errs.ErrStateConflict
 				}
 				if input.ConversationID != "" {
 					conversation, err := tx.GetForUpdate(
@@ -150,7 +133,7 @@ func (service *Service) ManageSession(
 					}
 				}
 				session, err := entity.New(
-					uuid.NewString(),
+					sessionID,
 					input.Principal.OrganizationID,
 					input.Principal.ProjectID,
 					input.ConversationID,
@@ -201,11 +184,21 @@ func (service *Service) ManageSession(
 			case "CANCEL":
 				target = enum.StateCancelled
 			case "CLEANUP":
-				if current.State != enum.StateArchived &&
-					current.State != enum.StateCancelled {
+				if current.State == enum.StateDeletionPending {
+					target = enum.StateDeleted
+				} else if current.State == enum.StateArchived ||
+					current.State == enum.StateCancelled {
+					target = enum.StateDeletionPending
+				} else {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				target = enum.StateDeletionPending
+			}
+			if input.Action == "CLOSE" || input.Action == "CANCEL" {
+				if err := service.cancelSessionTurns(
+					ctx, tx, input.Principal, current.ID, input.ReasonCode, now,
+				); err != nil {
+					return entity.Resource{}, err
+				}
 			}
 			updated, err := current.ReplaceAndTransition(spec, target, now)
 			if err != nil {
@@ -219,6 +212,142 @@ func (service *Service) ManageSession(
 			)
 		},
 	)
+}
+
+func (service *Service) selectProviderBinding(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	roleSpec entity.RoleSpec,
+	preferredBindingID, selectionNonce string,
+	now time.Time,
+) (entity.Resource, error) {
+	type candidate struct {
+		resource entity.Resource
+		spec     entity.CredentialBindingSpec
+		active   uint64
+		weight   uint32
+		score    uint64
+	}
+	weights := make(map[string]uint32, len(roleSpec.ProviderAccountPool.Bindings))
+	for _, binding := range roleSpec.ProviderAccountPool.Bindings {
+		weights[binding.CredentialBindingID] = binding.Weight
+	}
+	var candidates []candidate
+	for _, bindingID := range roleSpec.ProviderCredentialBindingIDs {
+		binding, err := tx.GetForUpdate(
+			ctx, principal.OrganizationID, principal.ProjectID, bindingID,
+		)
+		if err != nil {
+			return entity.Resource{}, err
+		}
+		spec, ok := binding.Spec.(entity.CredentialBindingSpec)
+		if !ok || binding.Kind != enum.KindCredentialBinding ||
+			binding.State != enum.StateActive || spec.Purpose != "provider-account" ||
+			!spec.ProviderEligible ||
+			(!spec.ExpiresAt.IsZero() && !spec.ExpiresAt.After(now)) ||
+			now.Sub(spec.ProviderObservedAt) > roleSpec.ProviderAccountPool.ObservationMaxAge {
+			continue
+		}
+		active, err := tx.ActiveProviderSessions(
+			ctx, principal.OrganizationID, principal.ProjectID, binding.ID,
+		)
+		if err != nil {
+			return entity.Resource{}, err
+		}
+		if spec.ProviderObservedUsage+active >= spec.ProviderObservedLimit {
+			continue
+		}
+		digest := sha256.Sum256([]byte(selectionNonce + "\x00" + binding.ID))
+		score := binary.BigEndian.Uint64(digest[:8]) / uint64(weights[binding.ID])
+		candidates = append(candidates, candidate{
+			resource: binding, spec: spec, active: active,
+			weight: weights[binding.ID], score: score,
+		})
+	}
+	if preferredBindingID != "" {
+		for _, item := range candidates {
+			if item.resource.ID == preferredBindingID {
+				return item.resource, nil
+			}
+		}
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	if len(candidates) == 0 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	slices.SortFunc(candidates, func(left, right candidate) int {
+		if roleSpec.ProviderAccountPool.Policy == "least_used" {
+			leftUsage := left.spec.ProviderObservedUsage + left.active
+			rightUsage := right.spec.ProviderObservedUsage + right.active
+			leftScaled := leftUsage * right.spec.ProviderObservedLimit
+			rightScaled := rightUsage * left.spec.ProviderObservedLimit
+			if leftScaled < rightScaled {
+				return -1
+			}
+			if leftScaled > rightScaled {
+				return 1
+			}
+		} else {
+			if left.score < right.score {
+				return -1
+			}
+			if left.score > right.score {
+				return 1
+			}
+		}
+		return strings.Compare(left.resource.ID, right.resource.ID)
+	})
+	return candidates[0].resource, nil
+}
+
+func (service *Service) cancelSessionTurns(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	sessionID, reason string,
+	now time.Time,
+) error {
+	turns, err := tx.OpenSessionTurns(
+		ctx, principal.OrganizationID, principal.ProjectID, sessionID,
+	)
+	if err != nil {
+		return err
+	}
+	for _, item := range turns {
+		spec, ok := item.Turn.Spec.(entity.TurnSpec)
+		if !ok || item.Attempt.TurnID != item.Turn.ID ||
+			item.Attempt.Attempt != spec.Attempt {
+			return errs.ErrStateConflict
+		}
+		spec.Outcome = reason
+		cancelled, err := item.Turn.ReplaceAndTransition(
+			spec, enum.StateCancelled, now,
+		)
+		if err != nil {
+			return errs.ErrStateConflict
+		}
+		if err := tx.Update(ctx, cancelled, item.Turn.Version); err != nil {
+			return err
+		}
+		if item.Lease.TurnID != "" {
+			if err := tx.DeleteTurnLease(ctx, item.Turn.ID, item.Lease.Fence); err != nil {
+				return err
+			}
+		}
+		item.Attempt.State = "CANCELLED"
+		item.Attempt.FinishedAt = now
+		item.Attempt.Outcome = reason
+		if err := tx.FinishTurnAttempt(ctx, item.Attempt); err != nil {
+			return err
+		}
+		if err := service.appendMutationRecords(
+			ctx, tx, principal, "session_cancel_turn", cancelled,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ManageMemoryRecord проверяет полномочия проекта и роли и назначает владельца
@@ -463,11 +592,30 @@ func (service *Service) ManageWorkClaim(
 					process.State.Terminal() ||
 					turn.Kind != enum.KindTurn || turn.State.Terminal() ||
 					processSpec.RootInitiatorActorID != input.Principal.ActorID ||
-					turnSpec.ProcessRunID != process.ID ||
-					processSpec.RootSessionID != turnSpec.SessionID ||
-					processSpec.RootTurnID != turn.ID ||
-					processSpec.RootAttempt != turnSpec.Attempt {
+					turnSpec.ProcessRunID != process.ID {
 					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if processSpec.ParentProcessRunID == "" {
+					if processSpec.RootSessionID != turnSpec.SessionID ||
+						processSpec.RootTurnID != turn.ID ||
+						processSpec.RootAttempt != turnSpec.Attempt {
+						return entity.Resource{}, errs.ErrStateConflict
+					}
+				} else {
+					if processSpec.TargetSessionID != turnSpec.SessionID ||
+						processSpec.TargetTurnID != turn.ID ||
+						processSpec.TargetAttempt != turnSpec.Attempt {
+						return entity.Resource{}, errs.ErrStateConflict
+					}
+					edge, err := tx.GetDelegationEdgeByTargetTurn(
+						ctx, input.Principal.OrganizationID,
+						input.Principal.ProjectID, turn.ID,
+					)
+					if err != nil || edge.ID != processSpec.DelegationID ||
+						edge.ParentProcessRunID != processSpec.ParentProcessRunID ||
+						edge.TargetInputSHA256 != turnSpec.EffectiveInputSHA256 {
+						return entity.Resource{}, errs.ErrStateConflict
+					}
 				}
 				if input.Principal.CallerWorkload == "agent-runner" &&
 					(input.Principal.AuthoritySource != "AGENT_SESSION" ||

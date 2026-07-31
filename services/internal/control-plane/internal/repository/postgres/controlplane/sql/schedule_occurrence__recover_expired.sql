@@ -37,6 +37,19 @@ WITH recovered AS (
       AND occurrence.state = 'CLAIMED'
       AND occurrence.lease_expires_at <= @now
     RETURNING occurrence.*
+), finished_runs AS (
+    UPDATE control_plane.scheduled_runs AS run
+    SET state = 'FAILED',
+        outcome = 'lease_expired',
+        finished_at = @now
+    FROM recovered
+    WHERE run.occurrence_id = recovered.id
+      AND run.attempt = CASE
+          WHEN recovered.state = 'QUEUED' THEN recovered.attempt - 1
+          ELSE recovered.attempt
+      END
+      AND run.state = 'CLAIMED'
+    RETURNING run.occurrence_id
 )
 SELECT
     id::text,
@@ -70,6 +83,14 @@ SELECT
     available_at,
     coalesce(outcome, ''),
     coalesce(result_artifact_id::text, ''),
+    coalesce(execution_session_id::text, ''),
+    coalesce(execution_session_version, 0),
+    coalesce(execution_turn_id::text, ''),
+    coalesce(execution_turn_version, 0),
+    coalesce(execution_process_run_id::text, ''),
+    coalesce(execution_process_version, 0),
+    coalesce(execution_runtime_revision_id::text, ''),
+    coalesce(execution_runtime_revision_version, 0),
     claimed_at,
     updated_at
 FROM recovered

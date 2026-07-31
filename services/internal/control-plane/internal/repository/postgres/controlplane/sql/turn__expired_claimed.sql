@@ -21,6 +21,12 @@ SELECT
 FROM control_plane.resources AS resource
 JOIN control_plane.turn_leases AS lease
   ON lease.turn_id = resource.id
+JOIN control_plane.resources AS session
+  ON session.id = (resource.spec ->> 'sessionId')::uuid
+ AND session.organization_id = resource.organization_id
+ AND session.project_id = resource.project_id
+ AND session.kind = 'SESSION'
+ AND session.state = 'ACTIVE'
 WHERE resource.organization_id = @organization_id::uuid
   AND resource.project_id = @project_id::uuid
   AND resource.id = @turn_id::uuid

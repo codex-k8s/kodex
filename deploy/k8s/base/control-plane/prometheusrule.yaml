@@ -57,3 +57,13 @@ spec:
             summary: Высокая p99 задержка control-plane gRPC
             description: Проверить dependency latency, pool saturation и traces без payload.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+        - alert: ControlPlaneOutboxTerminalPredecessor
+          expr: >-
+            max(mattercodex_control_plane_outbox_terminal_events) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Terminal predecessor заблокировал ordering key control-plane
+            description: Использовать bounded read/repair RPC; не удалять и не пропускать событие вручную.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md

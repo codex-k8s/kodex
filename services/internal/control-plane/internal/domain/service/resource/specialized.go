@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"slices"
 	"strings"
 	"time"
 
@@ -275,10 +274,22 @@ func (service *Service) ManageSchedule(
 			case "ARCHIVE":
 				updated, err = current.Transition(enum.StateArchived, now)
 			case "DELETE":
-				if current.State != enum.StateArchived {
+				open, openErr := tx.HasOpenScheduleOccurrence(
+					ctx, current.OrganizationID, current.ProjectID, current.ID,
+				)
+				if openErr != nil {
+					return entity.Resource{}, openErr
+				}
+				if open {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				updated, err = current.Transition(enum.StateDeletionPending, now)
+				if current.State == enum.StateArchived {
+					updated, err = current.Transition(enum.StateDeletionPending, now)
+				} else if current.State == enum.StateDeletionPending {
+					updated, err = current.Transition(enum.StateDeleted, now)
+				} else {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
 			}
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict
@@ -675,6 +686,7 @@ func (service *Service) ClaimScheduleOccurrence(
 			); err != nil {
 				return err
 			}
+			var scheduledProcess entity.Resource
 			if processID != "" {
 				process, err := entity.New(
 					processID,
@@ -705,6 +717,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				if err := tx.Insert(ctx, process); err != nil {
 					return err
 				}
+				scheduledProcess = process
 				if err := service.appendMutationRecords(
 					ctx,
 					tx,
@@ -729,6 +742,14 @@ func (service *Service) ClaimScheduleOccurrence(
 			occurrence.AuthorityGeneration = input.Principal.AuthorityGeneration
 			occurrence.TokenHash = hashString(token)
 			occurrence.LeaseExpiresAt = now.Add(occurrence.MaximumExecution)
+			occurrence.ExecutionSessionID = updatedSession.ID
+			occurrence.ExecutionSessionVersion = updatedSession.Version
+			occurrence.ExecutionTurnID = turn.ID
+			occurrence.ExecutionTurnVersion = turn.Version
+			occurrence.ExecutionProcessRunID = scheduledProcess.ID
+			occurrence.ExecutionProcessVersion = scheduledProcess.Version
+			occurrence.ExecutionRuntimeRevisionID = runtimeRevision.ID
+			occurrence.ExecutionRuntimeRevisionVersion = runtimeRevision.Version
 			occurrence.UpdatedAt = now
 			if err := tx.UpdateScheduleOccurrence(
 				ctx,
@@ -736,6 +757,18 @@ func (service *Service) ClaimScheduleOccurrence(
 				expectedAttempt,
 				"",
 			); err != nil {
+				return err
+			}
+			if err := tx.SaveScheduledRun(ctx, domainrepo.ScheduledRun{
+				OccurrenceID: occurrence.ID, Attempt: occurrence.Attempt,
+				SessionID: updatedSession.ID, SessionVersion: updatedSession.Version,
+				TurnID: turn.ID, TurnVersion: turn.Version,
+				ProcessRunID: scheduledProcess.ID, ProcessVersion: scheduledProcess.Version,
+				RuntimeRevisionID:      runtimeRevision.ID,
+				RuntimeRevisionVersion: runtimeRevision.Version,
+				EffectiveInputSHA256:   turnSpec.EffectiveInputSHA256,
+				State:                  "CLAIMED", CreatedAt: now,
+			}); err != nil {
 				return err
 			}
 			if err := service.appendMutationRecords(
@@ -816,28 +849,15 @@ func (service *Service) prepareScheduleSession(
 		return entity.Resource{}, entity.SessionSpec{}, err
 	}
 	roleSpec, ok := role.Spec.(entity.RoleSpec)
-	if !ok || role.Kind != enum.KindRole || role.State != enum.StateActive ||
-		!slices.Contains(
-			roleSpec.ProviderCredentialBindingIDs,
-			revisionSpec.ProviderCredentialBindingID,
-		) {
+	if !ok || role.Kind != enum.KindRole || role.State != enum.StateActive {
 		return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
 	}
-	binding, err := tx.GetForUpdate(
-		ctx,
-		principal.OrganizationID,
-		principal.ProjectID,
-		revisionSpec.ProviderCredentialBindingID,
+	binding, err := service.selectProviderBinding(
+		ctx, tx, principal, roleSpec, "",
+		schedule.ID+"\x00"+now.Format(time.RFC3339Nano), now,
 	)
 	if err != nil {
 		return entity.Resource{}, entity.SessionSpec{}, err
-	}
-	bindingSpec, ok := binding.Spec.(entity.CredentialBindingSpec)
-	if !ok || binding.Kind != enum.KindCredentialBinding ||
-		binding.State != enum.StateActive ||
-		bindingSpec.Purpose != "provider-account" ||
-		(!bindingSpec.ExpiresAt.IsZero() && !bindingSpec.ExpiresAt.After(now)) {
-		return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
 	}
 	sessionSpec := entity.SessionSpec{
 		AgentID:                  role.ID,
@@ -889,28 +909,20 @@ func (service *Service) CompleteScheduleOccurrence(
 		value.ValidateID(input.OccurrenceID) != nil ||
 		len(input.LeaseToken) != 64 ||
 		input.ExpectedAttempt == 0 ||
-		(input.TerminalState != "SUCCEEDED" && input.TerminalState != "FAILED") ||
-		len(input.Outcome) < 1 || len(input.Outcome) > 256 ||
-		(input.ResultArtifactID != "" &&
-			value.ValidateID(input.ResultArtifactID) != nil) {
+		input.TerminalState != "" || input.Outcome != "" ||
+		input.ResultArtifactID != "" {
 		return domainrepo.ScheduleOccurrence{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
-		Identity         commandIdentity
-		OccurrenceID     string
-		TokenHash        string
-		ExpectedAttempt  uint32
-		TerminalState    string
-		Outcome          string
-		ResultArtifactID string
+		Identity        commandIdentity
+		OccurrenceID    string
+		TokenHash       string
+		ExpectedAttempt uint32
 	}{
 		identity(input.Principal),
 		input.OccurrenceID,
 		hashString(input.LeaseToken),
 		input.ExpectedAttempt,
-		input.TerminalState,
-		input.Outcome,
-		input.ResultArtifactID,
 	})
 	if err != nil {
 		return domainrepo.ScheduleOccurrence{}, errs.ErrInvalidInput
@@ -963,14 +975,48 @@ func (service *Service) CompleteScheduleOccurrence(
 				!occurrence.LeaseExpiresAt.After(service.now()) {
 				return errs.ErrStateConflict
 			}
-			if input.ResultArtifactID != "" {
-				if _, err := service.requireCleanArtifact(
-					ctx,
-					tx,
-					input.Principal,
-					input.ResultArtifactID,
-				); err != nil {
+			if value.ValidateID(occurrence.ExecutionSessionID) != nil ||
+				value.ValidateID(occurrence.ExecutionTurnID) != nil ||
+				value.ValidateID(occurrence.ExecutionRuntimeRevisionID) != nil ||
+				occurrence.ExecutionSessionVersion == 0 ||
+				occurrence.ExecutionTurnVersion == 0 ||
+				occurrence.ExecutionRuntimeRevisionVersion == 0 {
+				return errs.ErrStateConflict
+			}
+			turn, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				occurrence.ExecutionTurnID,
+			)
+			if err != nil {
+				return err
+			}
+			turnSpec, ok := turn.Spec.(entity.TurnSpec)
+			if !ok || turn.Kind != enum.KindTurn || !turn.State.Terminal() ||
+				(turn.State != enum.StateSucceeded && turn.State != enum.StateFailed &&
+					turn.State != enum.StateCancelled) ||
+				turnSpec.SessionID != occurrence.ExecutionSessionID ||
+				turnSpec.RuntimeRevisionID != occurrence.ExecutionRuntimeRevisionID ||
+				turnSpec.Attempt != 1 ||
+				turnSpec.Outcome == "" {
+				return errs.ErrStateConflict
+			}
+			terminalState := string(turn.State)
+			outcome := turnSpec.Outcome
+			resultArtifactID := turnSpec.ResultArtifactID
+			if occurrence.ExecutionProcessRunID != "" {
+				process, err := tx.GetForUpdate(
+					ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+					occurrence.ExecutionProcessRunID,
+				)
+				if err != nil {
 					return err
+				}
+				processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+				if !ok || process.Kind != enum.KindProcessRun || !process.State.Terminal() ||
+					process.State != turn.State || processSpec.OccurrenceID != occurrence.ID ||
+					processSpec.RootTurnID != turn.ID || processSpec.Outcome != outcome ||
+					processSpec.ResultArtifactID != resultArtifactID {
+					return errs.ErrStateConflict
 				}
 			}
 			schedule, err := tx.GetForUpdate(
@@ -988,15 +1034,15 @@ func (service *Service) CompleteScheduleOccurrence(
 			}
 			expectedToken := occurrence.TokenHash
 			now := service.now().UTC().Truncate(time.Microsecond)
-			occurrence.State = input.TerminalState
-			occurrence.Outcome = input.Outcome
-			occurrence.ResultArtifactID = input.ResultArtifactID
+			occurrence.State = terminalState
+			occurrence.Outcome = outcome
+			occurrence.ResultArtifactID = resultArtifactID
 			occurrence.ClaimantWorkloadID = ""
 			occurrence.AuthorityGeneration = 0
 			occurrence.TokenHash = ""
 			occurrence.LeaseExpiresAt = time.Time{}
 			occurrence.UpdatedAt = now
-			if input.TerminalState == "FAILED" {
+			if terminalState == "FAILED" {
 				if occurrence.Attempt < scheduleSpec.MaximumAttempts &&
 					now.Sub(occurrence.ScheduledFor) < scheduleSpec.DeadLetterAfter {
 					occurrence.State = "QUEUED"
@@ -1007,6 +1053,13 @@ func (service *Service) CompleteScheduleOccurrence(
 				} else {
 					occurrence.State = "DEAD_LETTER"
 				}
+			}
+			if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
+				OccurrenceID: occurrence.ID, Attempt: input.ExpectedAttempt,
+				State: terminalState, Outcome: outcome,
+				ResultArtifactID: resultArtifactID, FinishedAt: now,
+			}); err != nil {
+				return err
 			}
 			if err := tx.UpdateScheduleOccurrence(
 				ctx,
@@ -1222,6 +1275,11 @@ func (service *Service) StartProcess(
 		(input.ParentProcessID != "" &&
 			(value.ValidateID(input.LaunchingTurnID) != nil ||
 				input.LaunchingAttempt == 0 ||
+				input.Principal.AuthoritySource != "AGENT_SESSION" ||
+				value.ValidateID(input.Principal.AuthorityReference) != nil ||
+				input.LaunchingTurnID != input.Principal.AuthorityReference ||
+				input.LaunchingAttempt != uint32(input.Principal.AuthorityRevision) ||
+				input.Principal.AuthorityGrantGeneration == 0 ||
 				input.PlaybookRef != "" ||
 				input.PolicyRevision != 0 ||
 				input.RootTriggerRef != "" ||
@@ -1267,12 +1325,17 @@ func (service *Service) StartProcess(
 		"start_process",
 		requestHash,
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			var delegatedTargetTurn entity.Resource
 			rootActorID := input.Principal.ActorID
 			rootSessionID := input.RootSessionID
 			rootTurnID := input.RootTurnID
 			rootAttempt := input.RootAttempt
 			launchingTurnID := ""
 			launchingAttempt := uint32(0)
+			delegationID := ""
+			targetSessionID := ""
+			targetTurnID := ""
+			targetAttempt := uint32(0)
 			runtimeRevisionID := ""
 			rootImmutableInput := ""
 			playbookRef := input.PlaybookRef
@@ -1295,37 +1358,56 @@ func (service *Service) StartProcess(
 					parent.State.Terminal() {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				launchingTurn, err := tx.GetForUpdate(
+				delegation, err := tx.GetDelegationEdgeByTargetTurn(
 					ctx,
 					input.Principal.OrganizationID,
 					input.Principal.ProjectID,
-					input.LaunchingTurnID,
+					input.Principal.AuthorityReference,
 				)
 				if err != nil {
 					return entity.Resource{}, err
 				}
-				launchingSpec, ok := launchingTurn.Spec.(entity.TurnSpec)
-				if !ok || launchingTurn.Kind != enum.KindTurn ||
-					launchingTurn.State.Terminal() ||
-					launchingSpec.ProcessRunID != parent.ID ||
-					launchingSpec.SessionID != parentSpec.RootSessionID ||
-					launchingSpec.Attempt != input.LaunchingAttempt ||
-					launchingSpec.RuntimeRevisionID != parentSpec.RuntimeRevisionID {
+				if delegation.ParentProcessRunID != parent.ID ||
+					delegation.TargetTurnID != input.Principal.AuthorityReference ||
+					delegation.TargetAttempt != uint32(input.Principal.AuthorityRevision) ||
+					delegation.TargetInputSHA256 != input.Principal.AuthorityDigest ||
+					delegation.RootInitiatorActorID != parentSpec.RootInitiatorActorID ||
+					delegation.GrantGeneration != input.Principal.AuthorityGrantGeneration {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
+				targetTurn, err := tx.GetForUpdate(
+					ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+					delegation.TargetTurnID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				targetSpec, ok := targetTurn.Spec.(entity.TurnSpec)
+				if !ok || targetTurn.Kind != enum.KindTurn || targetTurn.State.Terminal() ||
+					targetSpec.SessionID != delegation.TargetSessionID ||
+					targetSpec.ProcessRunID != parent.ID ||
+					targetSpec.Attempt != delegation.TargetAttempt ||
+					targetSpec.EffectiveInputSHA256 != delegation.TargetInputSHA256 {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				delegatedTargetTurn = targetTurn
 				rootActorID = parentSpec.RootInitiatorActorID
 				rootSessionID = parentSpec.RootSessionID
 				rootTurnID = parentSpec.RootTurnID
 				rootAttempt = parentSpec.RootAttempt
-				runtimeRevisionID = parentSpec.RuntimeRevisionID
+				runtimeRevisionID = targetSpec.RuntimeRevisionID
 				rootImmutableInput = parentSpec.ImmutableInputSHA256
 				playbookRef = parentSpec.PlaybookRef
 				policyRevision = parentSpec.PolicyRevision
 				rootTriggerRef = parentSpec.RootTriggerRef
 				scheduleID = parentSpec.ScheduleID
 				occurrenceID = parentSpec.OccurrenceID
-				launchingTurnID = launchingTurn.ID
+				launchingTurnID = delegation.TargetTurnID
 				launchingAttempt = input.LaunchingAttempt
+				delegationID = delegation.ID
+				targetSessionID = delegation.TargetSessionID
+				targetTurnID = delegation.TargetTurnID
+				targetAttempt = delegation.TargetAttempt
 			} else {
 				session, err := tx.GetForUpdate(
 					ctx,
@@ -1380,6 +1462,10 @@ func (service *Service) StartProcess(
 				LaunchingProcessRunID: input.ParentProcessID,
 				LaunchingTurnID:       launchingTurnID,
 				LaunchingAttempt:      launchingAttempt,
+				DelegationID:          delegationID,
+				TargetSessionID:       targetSessionID,
+				TargetTurnID:          targetTurnID,
+				TargetAttempt:         targetAttempt,
 				ImmutableInputSHA256: hashRuntimeInput(
 					rootTriggerRef,
 					artifact.SHA256,
@@ -1389,8 +1475,9 @@ func (service *Service) StartProcess(
 				ScheduleID:   scheduleID,
 				OccurrenceID: occurrenceID,
 			}
+			processID := uuid.NewString()
 			process, err := entity.New(
-				uuid.NewString(),
+				processID,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
 				input.ParentProcessID,
@@ -1406,12 +1493,118 @@ func (service *Service) StartProcess(
 			if err := tx.Insert(ctx, process); err != nil {
 				return entity.Resource{}, err
 			}
+			if delegatedTargetTurn.ID != "" {
+				targetSpec := delegatedTargetTurn.Spec.(entity.TurnSpec)
+				targetSpec.ProcessRunID = process.ID
+				updatedTarget, err := delegatedTargetTurn.Update(
+					delegatedTargetTurn.Name, targetSpec, now,
+				)
+				if err != nil {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if err := tx.Update(
+					ctx, updatedTarget, delegatedTargetTurn.Version,
+				); err != nil {
+					return entity.Resource{}, err
+				}
+				if err := service.appendMutationRecords(
+					ctx, tx, input.Principal, "bind_delegated_turn", updatedTarget,
+				); err != nil {
+					return entity.Resource{}, err
+				}
+			}
 			return process, service.appendMutationRecords(
 				ctx,
 				tx,
 				input.Principal,
 				"start_process",
 				process,
+			)
+		},
+	)
+}
+
+// CompleteProcess завершает процесс только по авторитетному terminal-ходу.
+func (service *Service) CompleteProcess(
+	ctx context.Context,
+	input CompleteProcessInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionCompleteProcess); err != nil {
+		return entity.Resource{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.ProcessRunID) != nil || input.ExpectedVersion == 0 ||
+		(input.TerminalState != enum.StateSucceeded &&
+			input.TerminalState != enum.StateFailed &&
+			input.TerminalState != enum.StateCancelled) ||
+		len(input.Outcome) < 1 || len(input.Outcome) > 256 ||
+		(input.ResultArtifactID != "" && value.ValidateID(input.ResultArtifactID) != nil) {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity commandIdentity
+		Input    CompleteProcessInput
+	}{identity(input.Principal), input})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	return service.withResourceReceipt(
+		ctx, input.Principal, input.IdempotencyKey, "complete_process", requestHash,
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			process, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				input.ProcessRunID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			spec, ok := process.Spec.(entity.ProcessRunSpec)
+			if !ok || process.Kind != enum.KindProcessRun ||
+				process.Version != input.ExpectedVersion || process.State.Terminal() ||
+				spec.RootInitiatorActorID != input.Principal.ActorID {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			terminalTurnID := spec.RootTurnID
+			if spec.ParentProcessRunID != "" {
+				terminalTurnID = spec.TargetTurnID
+			}
+			turn, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				terminalTurnID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			turnSpec, ok := turn.Spec.(entity.TurnSpec)
+			if !ok || turn.Kind != enum.KindTurn || turnSpec.ProcessRunID != process.ID ||
+				turn.State != input.TerminalState || turnSpec.Outcome != input.Outcome ||
+				turnSpec.ResultArtifactID != input.ResultArtifactID {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			open, err := tx.ProcessHasOpenWork(
+				ctx, process.OrganizationID, process.ProjectID, process.ID,
+				turn.ID, "",
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			if open {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			spec.Outcome = turnSpec.Outcome
+			spec.ResultArtifactID = turnSpec.ResultArtifactID
+			updated, err := process.ReplaceAndTransition(
+				spec, input.TerminalState,
+				service.now().UTC().Truncate(time.Microsecond),
+			)
+			if err != nil {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if err := tx.Update(ctx, updated, process.Version); err != nil {
+				return entity.Resource{}, err
+			}
+			return updated, service.appendMutationRecords(
+				ctx, tx, input.Principal, "complete_process", updated,
 			)
 		},
 	)

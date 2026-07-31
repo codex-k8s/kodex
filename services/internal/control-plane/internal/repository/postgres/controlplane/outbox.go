@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
@@ -16,6 +17,7 @@ import (
 type OutboxStore struct {
 	pool        *pgxpool.Pool
 	maxAttempts uint32
+	terminal    atomic.Uint64
 }
 
 var _ eventing.OutboxStore = (*OutboxStore)(nil)
@@ -31,18 +33,26 @@ func NewOutboxStore(pool *pgxpool.Pool, maxAttempts uint32) (*OutboxStore, error
 func (store *OutboxStore) Check(ctx context.Context) error {
 	var version uint64
 	var member, nonSuperuser, noBypassRLS bool
+	var terminalEvents uint64
 	if err := store.pool.QueryRow(ctx, sqlOutboxCheck).Scan(
 		&version,
 		&member,
 		&nonSuperuser,
 		&noBypassRLS,
+		&terminalEvents,
 	); err != nil {
 		return mapError(err)
 	}
-	if version != 20260731000300 || !member || !nonSuperuser || !noBypassRLS {
+	store.terminal.Store(terminalEvents)
+	if version != 20260731000400 || !member || !nonSuperuser || !noBypassRLS {
 		return errors.New("control-plane outbox role is not ready")
 	}
 	return nil
+}
+
+// TerminalEvents возвращает последний bounded readiness readback без payload.
+func (store *OutboxStore) TerminalEvents() uint64 {
+	return store.terminal.Load()
 }
 
 func (store *OutboxStore) Claim(

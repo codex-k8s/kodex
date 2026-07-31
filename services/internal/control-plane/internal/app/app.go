@@ -319,6 +319,7 @@ func Run(
 		state.relayPool,
 		redisCache,
 		relay,
+		outboxStore,
 	); err != nil {
 		return err
 	}

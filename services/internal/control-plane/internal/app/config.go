@@ -146,8 +146,7 @@ func (config Config) validate() error {
 		config.PostgresPrincipalName == "" ||
 		config.PostgresPrincipalGeneration == 0 ||
 		config.PostgresContextKeyID == "" ||
-		!strings.HasPrefix(config.RuntimeImageDigest, "sha256:") ||
-		len(config.RuntimeImageDigest) != 71 ||
+		!validRuntimeImageDigest(config.RuntimeImageDigest) ||
 		config.InstanceID == "" || len(config.InstanceID) > 128 ||
 		config.ScheduleClaimLimit < 1 || config.ScheduleClaimLimit > 128 {
 		return errors.New("control-plane bounded configuration is invalid")
@@ -203,6 +202,19 @@ func (config Config) validate() error {
 	return nil
 }
 
+func validRuntimeImageDigest(input string) bool {
+	const zeroDigest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	if len(input) != 71 || !strings.HasPrefix(input, "sha256:") || input == zeroDigest {
+		return false
+	}
+	for _, symbol := range strings.TrimPrefix(input, "sha256:") {
+		if (symbol < '0' || symbol > '9') && (symbol < 'a' || symbol > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 func expectedOperations() map[string]string {
 	return map[string]string{
 		"control.project.create":                 controlplanev1.ControlPlaneService_CreateProject_FullMethodName,
@@ -227,6 +239,9 @@ func expectedOperations() map[string]string {
 		"control.schedule.list-occurrences":      controlplanev1.ControlPlaneService_ListScheduleOccurrences_FullMethodName,
 		"control.process.start":                  controlplanev1.ControlPlaneService_StartProcess_FullMethodName,
 		"control.process.cancel":                 controlplanev1.ControlPlaneService_CancelProcess_FullMethodName,
+		"control.process.complete":               controlplanev1.ControlPlaneService_CompleteProcess_FullMethodName,
+		"control.outbox.read":                    controlplanev1.ControlPlaneService_ListOutboxFailures_FullMethodName,
+		"control.outbox.repair":                  controlplanev1.ControlPlaneService_RepairOutboxEvent_FullMethodName,
 		"control.owner-gate.request":             controlplanev1.ControlPlaneService_RequestOwnerGate_FullMethodName,
 		"control.owner-gate.resolve":             controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
 		"control.artifact.register":              controlplanev1.ControlPlaneService_RegisterArtifact_FullMethodName,
