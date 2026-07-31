@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.2.0
 updated: 2026-07-31
 ---
 
@@ -50,12 +50,14 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260731000200`;
+- migration schema version равна `20260731000300`;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
-  replicas окружения, `LimitsPolicy`, `DiscardOld`, maximum message size,
-  max age 7 дней, dedup window 2 минуты, deny delete/purge и без mirror/source/
-  republish/rollup/transform;
+  replicas окружения, `LimitsPolicy`, `DiscardOld`,
+  `MaxMsgs=10000000`, `MaxBytes=34359738368`,
+  `MaxMsgsPerSubject=5000000`, maximum message size 262144 bytes,
+  max age 30 дней, dedup window 2 минуты, deny delete/purge и без
+  mirror/source/republish/rollup/transform;
 - policy revision, independently delivered proof trust/private key и локальный
   verifier #186 согласованы;
 - OIDC discovery/JWKS доступны только по pinned HTTPS path.
@@ -79,7 +81,14 @@ Vault DSN. Production down отсутствует. При ошибке:
 `BYPASSRLS`, schema ownership или членство relay.
 
 Runtime DSN обязан принадлежать exact `CURRENT`, `NEXT` или bounded
-`PREVIOUS` LOGIN principal. На каждом transaction проверить server-side
+`PREVIOUS` LOGIN principal. Monotonic generation high-watermark и digest
+GitOps intent переживают pod replacement и запрещают resurrection
+`RETIRED` generation. Для promotion сначала добавить exact
+`CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_*`, смонтировать отдельный
+`CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE` и запустить migration Job:
+CLI подключится через сам `NEXT` principal и сохранит durable readback.
+Повторный idempotent запуск выполняет promotion. Откат ConfigMap или Vault
+credential не уменьшает high-watermark. На каждом transaction проверить server-side
 `session_user`, generation/status/lifetime и одноразовый подписанный context,
 связанный с backend PID и transaction ID. GUC не является диагностическим
 способом установки tenant. При promotion прежний principal становится
@@ -117,7 +126,10 @@ RLS scope, OCC conflict и `turn_leases` metadata без token hash.
 
 Owner gate не изменяется отдельно от process: request pin-ит root
 initiator/session/turn/attempt/input/delivery/recipient и переводит process в
-`WAITING_OWNER`; approve/reject/expire атомарно переводят gate и process.
+`WAITING_OWNER`. `interaction-gateway` сначала фиксирует exact immutable
+delivery ID, payload digest, channel/root/post identity и durable receipt;
+approve/reject/expire без подтверждённой delivery закрыто отклоняются и
+атомарно переводят gate и process вместе с audit/outbox.
 Manual retry/cancel используют специализированные команды и отзывают старый
 lease/grant.
 
@@ -129,11 +141,16 @@ lease/grant.
 `PENDING`→`SCANNING`→`CLEAN|QUARANTINED|FAILED`; attach/enqueue разрешены
 только для `CLEAN`.
 
-Schedule хранит exact target kind/id/version/digest, timezone/calendar,
+Schedule хранит exact target/prompt/runtime revision/session policy/room/
+notification/max execution duration snapshot, timezone/calendar,
 delivery/retry/dead-letter и overlap policy. При stuck occurrence проверить
 attempt, claimant/generation/token hash/expiry и predecessor. Expiry создаёт
-следующую attempt с bounded backoff; `FORBID`/`SKIP` не допускают второй
-active occurrence, `QUEUE` сохраняет FIFO. Ручной запуск исключённых
+следующую attempt с bounded backoff. `FORBID` не сдвигает schedule watermark,
+пока есть open occurrence; `SKIP` сдвигает его и оставляет terminal
+`SKIPPED` receipt; `QUEUE` сохраняет все occurrence в FIFO. Coalesce допустим
+только для `FORBID`/`SKIP`. Claim повторно сверяет pinned target,
+prompt/runtime revision и room и использует exact maximum execution lease.
+Ручной запуск исключённых
 Kubernetes/Mattermost/MCP/Codex действий запрещён.
 
 ## Redis
@@ -156,6 +173,11 @@ JetStream `PubAck` сохраняет stream/sequence/duplicate receipt и bound
 cleanup deadline; строка не удаляется в finalize. Потерянный response повторяет
 тот же event ID, а broker deduplication и consumer inbox/cursor обеспечивают
 at-least-once.
+
+Outbox delivered receipt очищается не ранее 31 дня, то есть позже
+30-дневного JetStream retention. Любое отличие `MaxMsgs`, `MaxBytes`,
+`MaxMsgsPerSubject`, retention или dedup contract закрывает readiness; нельзя
+обходить его уменьшением ожидаемых значений в application.
 
 Проверять только event ID, event name, aggregate type/version, attempt,
 lease expiry и error class. Payload может содержать business metadata и не

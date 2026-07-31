@@ -45,17 +45,31 @@ tenant boundary до подписи proof.
 ## Контракты и consumers
 
 - Proto: `contracts/proto/controlplane/v1/control_plane.proto`;
-- generated Go: `internal/generated/controlplane/v1`;
+- generated public Go API: `libs/go/controlplaneapi/gen/controlplane/v1`;
+- reusable production client composition: `libs/go/controlplaneclient`;
 - AsyncAPI: `contracts/asyncapi/control-plane/v1/asyncapi.yaml`;
 - authority policy: `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
 
 Внешний mapping принадлежит будущему `control-api-gateway`; этот unit
 публикует только внутренний gRPC. Deny-by-default policy регистрирует отдельные
 proof producers и exact caller identities для gateway, `agent-runner`,
-`automation-scheduler` и внешнего `artifact-scanner`. Последний владеет
-сканированием байтов, а `control-plane` — только командой результата,
-метаданными и state machine. Неизвестный producer, credential purpose,
-workload, SPIFFE ID, full method, audience или permission закрыто отклоняется.
+`automation-scheduler`, внешнего `artifact-scanner`, `interaction-gateway`,
+`runtime-controller` и локального `memory-indexer`. Последний индексирует
+локальную pgvector projection без внешнего embedding service, scanner владеет
+сканированием байтов, а `control-plane` — метаданными и state machine.
+Неизвестный producer, credential purpose, workload, SPIFFE ID, full method,
+audience или permission закрыто отклоняется.
+
+`controlplaneclient` выполняет полный consumer path: exact mTLS к
+`control-plane`, проверка workload-specific application grant через
+`AuthorityProofResolver`, local UDS issuer Issue #186, full-method interceptor
+и readiness через тот же protected RPC. Конкретный consumer unit обязан
+смонтировать свой grant, issuer socket и mTLS files и вызвать один из закрытых
+operation profiles (`AgentRunnerOperations`, `AutomationSchedulerOperations`,
+`ArtifactScannerOperations`, `RuntimeControllerOperations`,
+`OwnerGateDeliveryOperations`, `MemoryIndexerOperations`). Consumer
+Deployments не принадлежат Issue #187 и здесь не подменяются фиктивными
+deployables.
 
 Публикуются только два факта с утверждёнными consumers:
 
@@ -82,15 +96,15 @@ acknowledgement безопасно повторяет тот же `event_id`.
 | Team/Role/Prompt | generic CRUD не управляет authority; отдельная admin-команда проверяет kind-specific permission, assignable subset и запрещает self-membership/self-promotion |
 | Credential binding | хранится только URI metadata; purpose/principal неизменяемы; revision растёт ровно на один |
 | Integration | definition identity неизменяема; version движется только вперёд |
-| Runtime revision | перед каждым turn сервер разрешает active chat/role/prompt/bindings/workspace/integrations/policy/image и создаёт immutable effective snapshot с digest/predecessor |
-| Session | agent/provider и server-owned turn sequence не переписываются |
+| Runtime revision | перед каждым turn сервер разрешает exact session/role grant, active chat/prompt/provider binding и только role-bound workspace/integrations/credentials; создаётся immutable snapshot с versions/digests/policy/image/predecessor; `runtime-controller` читает его через отдельный authorized RPC |
+| Session | provider binding выбирается сервером из exact role grant; generic create/update/transition запрещён; close/cancel/archive/cleanup имеют отдельную closed state machine, OCC, receipt, audit и tombstone |
 | Turn | immutable snapshot pin, строгий FIFO и один active turn на session; claim/renew/complete bind-ят workload, attempt, authority generation, expiry и fence |
 | Turn recovery | expiry/manual retry создаёт новую immutable attempt; cancel/terminal отзывают lease, stale workload/generation/token отклоняются |
-| Process run | root initiator/session/turn/attempt и immutable input образуют server-owned lineage; start/cancel доступны только отдельными командами |
-| Schedule | exact target kind/id/version/digest, timezone/calendar, delivery/retry/dead-letter и `FORBID`/`SKIP`/`QUEUE`; occurrence имеет claim/result/cancel/retry read path |
-| Owner gate | request pin-ит root initiator/process/session/turn/attempt/input/delivery/recipient; decision и process transition атомарны |
-| Memory | scope/provenance неизменяемы; `content_sha256` обязан совпадать с content |
-| Work claim | process/turn binding неизменяем; активный exact process/turn claim уникален |
+| Process run | child наследует server-owned root actor/org/project/session/turn/attempt/revision, проверяет exact active parent и launching edge; enqueue повторно проверяет полный lineage |
+| Schedule | closed target kinds, exact target/prompt/runtime/session/room/notification/deadline snapshot; `FORBID` не сдвигает watermark при open occurrence, `SKIP` оставляет terminal receipt, `QUEUE` сохраняет FIFO, coalesce разрешён только для первых двух |
+| Owner gate | request pin-ит root initiator/process/session/turn/attempt/input/exact recipient; delivery имеет immutable ID/payload digest/Mattermost post identity/durable receipt; decision допускается только после delivery и атомарна с process/audit/outbox |
+| Memory | scope/owner/process/workload и provenance назначает сервер; FTS ищет title/content с ranking/cursor; pgvector projection связывает exact content/resource/model version и digest |
+| Work claim | owner/process/workload/task/attempt выводятся server-side и неизменяемы; активный exact process/turn claim уникален |
 | Artifact metadata | только `RegisterArtifact` создаёт `PENDING`; exact scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; attach/use допускают только exact `CLEAN` digest |
 
 Reference resolution выполняется внутри текущих organization/project RLS
@@ -102,11 +116,15 @@ PostgreSQL — единственный источник истины. Мигр�
 `control_plane`, отдельного `NOLOGIN/NOSUPERUSER/NOBYPASSRLS` owner, runtime
 и relay group roles, `FORCE RLS`, constraints и точные grants. Runtime login
 generations `CURRENT`/`NEXT`/bounded `PREVIOUS`/`RETIRED` материализуются
-environment-owned Vault lifecycle. Каждый statement использует одноразовый
+environment-owned Vault lifecycle. Durable monotonic high-watermark и intent
+не допускают resurrection поколения после отката ConfigMap/Vault metadata;
+promotion требует фактического `NEXT` LOGIN readback через его DSN.
+Retirement выполняет `NOLOGIN`, revoke membership и server-side termination
+открытых backends. Каждый statement использует одноразовый
 HMAC-bound transaction context и заново связывает `session_user`, generation,
 status, organization/project/actor, backend PID и transaction ID. GUC и
-`SET SESSION AUTHORIZATION` не являются authority; retired backends
-завершаются server-side. Readiness проверяет schema `20260731000200`,
+`SET SESSION AUTHORIZATION` не являются authority. Readiness проверяет schema
+`20260731000300`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
@@ -133,9 +151,10 @@ Redis хранит только bounded resource snapshots:
 1. runtime и relay PostgreSQL roles/schema;
 2. Redis TLS path;
 3. exact JetStream stream (`CONTROL_PLANE`, subjects, replicas, file storage,
-   `LimitsPolicy`, `DiscardOld`, 7-day max age, 2-minute dedup window,
-   maximum message size, deny delete/purge, no mirror/source/republish/rollup/
-   transform);
+   `LimitsPolicy`, `DiscardOld`, 30-day max age, 2-minute dedup window,
+   `MaxMsgs=10000000`, `MaxBytes=34359738368`,
+   `MaxMsgsPerSubject=5000000`, maximum message size 262144 bytes,
+   deny delete/purge, no mirror/source/republish/rollup/transform);
 4. independently delivered proof private key/trust и policy revision;
 5. тот же локальный verifier #186, который обслуживает рабочие RPC.
 
@@ -159,11 +178,13 @@ runbook URL.
 | `CONTROL_PLANE_GRPC_LISTEN`, `CONTROL_PLANE_TECHNICAL_LISTEN` | внутренние listeners |
 | `CONTROL_PLANE_TLS_CERTIFICATE_FILE`, `CONTROL_PLANE_TLS_PRIVATE_KEY_FILE`, `CONTROL_PLANE_TLS_CLIENT_CA_FILE` | exact workload mTLS |
 | `CONTROL_PLANE_POSTGRES_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RELAY_DSN_FILE` | runtime/relay DSN files |
+| `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE` | migration-only exact NEXT DSN для обязательного readback до promotion |
 | `CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME`, `CONTROL_PLANE_POSTGRES_CA_FILE`, `CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS` | PostgreSQL TLS/pool |
 | `CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME`, `CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE` | exact runtime generation и transaction-context proof |
 | `CONTROL_PLANE_REDIS_ADDRESS`, `CONTROL_PLANE_REDIS_TLS_SERVER_NAME`, `CONTROL_PLANE_REDIS_CA_FILE`, `CONTROL_PLANE_REDIS_USERNAME`, `CONTROL_PLANE_REDIS_PASSWORD_FILE`, `CONTROL_PLANE_REDIS_DATABASE`, `CONTROL_PLANE_REDIS_POOL_SIZE` | bounded Redis cache |
 | `CONTROL_PLANE_NATS_URL`, `CONTROL_PLANE_NATS_TLS_SERVER_NAME`, `CONTROL_PLANE_NATS_CA_FILE`, `CONTROL_PLANE_NATS_CREDENTIALS_FILE`, `CONTROL_PLANE_NATS_STREAM`, `CONTROL_PLANE_NATS_REPLICAS` | exact JetStream publisher |
 | `CONTROL_PLANE_AUTHORITY_POLICY_FILE` | versioned deny-by-default policy |
+| `CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR` | independently delivered public JWK exact producer grants |
 | `CONTROL_PLANE_PROOF_PRIVATE_JWK_FILE`, `CONTROL_PLANE_PROOF_TRUST_FILE`, `CONTROL_PLANE_PROOF_SIGNER_GENERATION` | independently checked proof signer |
 | `CONTROL_PLANE_LEASE_SIGNING_KEY_FILE` | turn lease HMAC key |
 | `CONTROL_PLANE_OIDC_TLS_SERVER_NAME`, `CONTROL_PLANE_OIDC_CA_FILE` | pinned OIDC discovery/JWKS TLS |
@@ -193,10 +214,14 @@ tools/render-control-plane.sh \
 
 Migration Job запускает `control-plane-cli migrate expand` до rollout и
 атомарно reconcile-ит `CURRENT`/`NEXT`/`PREVIOUS`, active context key и
-retired sessions. Security migration `20260731000200` явно forward-only:
-downgrade отклоняется, потому что вернул бы caller-controlled RLS и удалил
-durable attempts/receipts. Application rollback выполняется только совместимым
-образом; schema rollback — новой compensating forward migration.
+retired sessions. При наличии `NEXT` GitOps overlay обязан одновременно
+доставить `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_*` и отдельный DSN file:
+CLI сначала подключается именно этим LOGIN и сохраняет readback, только
+следующий idempotent reconcile может повысить его до `CURRENT`. Миграции
+`20260731000200` и `20260731000300` явно forward-only: downgrade отклоняется,
+потому что потерял бы RLS fences, principal high-watermark/readback, attempts,
+receipts и vector provenance. Application rollback выполняется только
+совместимым образом; schema rollback — новой compensating forward migration.
 
 JetStream stream и Vault database/static credentials являются
 environment-owned зависимостями. Их exact contract проверяется startup
@@ -209,7 +234,7 @@ environment-owned driver.
 
 Без deploy можно:
 
-1. собрать оба binary;
+1. собрать оба binary и public client/API modules;
 2. выполнить `buf build` и проверить воспроизводимый codegen;
 3. проверить YAML/JSON parse и canonical render с двумя тестовыми ненулевыми
    digests;
@@ -242,14 +267,16 @@ Context7 был вызван для PostgreSQL, pgx, goose, gRPC/Protobuf, Redis
 OpenTelemetry, Sentry, Kubernetes и Vault, но вернул quota error. Использован
 fallback на официальные primary docs:
 
-- [PostgreSQL row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
-  и [transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html);
+- [PostgreSQL row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html),
+  [transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html)
+  и [full-text search](https://www.postgresql.org/docs/current/textsearch.html);
 - [pgx](https://pkg.go.dev/github.com/jackc/pgx/v5) и
   [goose](https://github.com/pressly/goose);
 - [gRPC Go](https://grpc.io/docs/languages/go/) и
   [Protocol Buffers](https://protobuf.dev/);
 - [Redis Go client](https://redis.io/docs/latest/develop/clients/go/) и
   [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream);
+- [pgvector](https://github.com/pgvector/pgvector);
 - [OpenTelemetry Go](https://opentelemetry.io/docs/languages/go/),
   [Sentry Go](https://docs.sentry.io/platforms/go/),
   [Kubernetes NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/),
