@@ -74,6 +74,14 @@ type ScheduleOccurrence struct {
 	TargetKind           enum.Kind
 	TargetVersion        uint64
 	EffectiveInputSHA256 string
+	PromptProfileID      string
+	PromptRevision       uint64
+	RuntimeRevisionID    string
+	SessionPolicy        string
+	RoomID               string
+	NotificationPolicy   string
+	MaximumExecution     time.Duration
+	Coalesce             bool
 	OverlapPolicy        string
 	MaximumAttempts      uint32
 	InitialBackoff       time.Duration
@@ -127,6 +135,48 @@ type Diagnostics struct {
 	RuntimePrincipalGeneration uint64
 }
 
+// MemoryProjection — локальная перестраиваемая pgvector projection.
+type MemoryProjection struct {
+	ResourceID       string
+	OrganizationID   string
+	ProjectID        string
+	ResourceVersion  uint64
+	ContentSHA256    string
+	ModelID          string
+	ModelRevision    uint64
+	ModelSHA256      string
+	Embedding        []float32
+	ProjectionSHA256 string
+	UpdatedAt        time.Time
+}
+
+// MemorySearch описывает bounded tenant/role-scoped FTS+optional vector query.
+type MemorySearch struct {
+	OrganizationID      string
+	ProjectID           string
+	Scope               string
+	RoleID              string
+	Query               string
+	QueryEmbedding      []float32
+	ModelID             string
+	ModelRevision       uint64
+	ModelSHA256         string
+	AfterID             string
+	AfterTextRank       float32
+	AfterVectorDistance float32
+	AfterVectorUsed     bool
+	Limit               int
+	CanReadProject      bool
+	ActorRoleIDs        []string
+}
+
+type MemorySearchHit struct {
+	Resource             entity.Resource
+	TextRank             float32
+	VectorDistance       float32
+	VectorProjectionUsed bool
+}
+
 // Transaction выражает одну command transaction без утечки pgx.
 type Transaction interface {
 	GetReceipt(context.Context, string, string, string) (Receipt, error)
@@ -137,6 +187,7 @@ type Transaction interface {
 	AppendAudit(context.Context, Audit) error
 	AppendEvent(context.Context, event.Change) error
 	ActorPermissions(context.Context, string, string, string) ([]string, error)
+	ActorRoleIDs(context.Context, string, string, string) ([]string, error)
 	ListSnapshotResources(context.Context, string, string) ([]entity.Resource, error)
 	LatestRuntimeRevision(context.Context, string, string) (entity.Resource, error)
 	ExpiredClaimedTurns(context.Context, string, string, int, time.Time) ([]ExpiredTurn, error)
@@ -158,6 +209,7 @@ type Transaction interface {
 	FinishTurnAttempt(context.Context, TurnAttempt) error
 	DueSchedules(context.Context, string, string, int, time.Time) ([]entity.Resource, error)
 	SaveScheduleOccurrence(context.Context, ScheduleOccurrence) error
+	HasOpenScheduleOccurrence(context.Context, string, string, string) (bool, error)
 	SkipOverlappedScheduleOccurrences(
 		context.Context,
 		string,
@@ -175,6 +227,9 @@ type Transaction interface {
 	GetScheduleOccurrenceForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
 	AuthorizeProject(context.Context, string, string, string, string, string) (entity.Resource, error)
 	NextProofRevision(context.Context) (uint64, error)
+	SaveMemoryProjection(context.Context, MemoryProjection) error
+	SearchMemory(context.Context, MemorySearch) ([]MemorySearchHit, error)
+	HasActiveChildProcesses(context.Context, string, string, string) (bool, error)
 }
 
 // Repository — PostgreSQL authoritative boundary.

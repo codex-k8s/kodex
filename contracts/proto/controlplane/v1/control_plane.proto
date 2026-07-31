@@ -5,7 +5,7 @@ package controlplane.v1;
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/generated/controlplane/v1;controlplanev1";
+option go_package = "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
 
 // ControlPlaneService владеет желаемым бизнес-состоянием MatterCodex.
 // Actor, organization, project scope и permissions не принимаются в payload:
@@ -22,6 +22,7 @@ service ControlPlaneService {
   rpc GetResource(GetResourceRequest) returns (GetResourceResponse);
   rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
   rpc SearchResources(SearchResourcesRequest) returns (SearchResourcesResponse);
+  rpc SearchMemoryRecords(SearchMemoryRecordsRequest) returns (SearchMemoryRecordsResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
   rpc ListTombstones(ListTombstonesRequest) returns (ListTombstonesResponse);
   rpc GetDiagnostics(GetDiagnosticsRequest) returns (GetDiagnosticsResponse);
@@ -36,6 +37,12 @@ service ControlPlaneService {
   rpc CompleteTurn(CompleteTurnRequest) returns (CompleteTurnResponse);
   rpc RetryTurn(RetryTurnRequest) returns (RetryTurnResponse);
   rpc CancelTurn(CancelTurnRequest) returns (CancelTurnResponse);
+  // ManageSession — единственный lifecycle path SESSION; provider binding выбирает сервер.
+  rpc ManageSession(ManageSessionRequest) returns (ManageSessionResponse);
+  // ManageMemoryRecord связывает scope и owner с проверенным actor.
+  rpc ManageMemoryRecord(ManageMemoryRecordRequest) returns (ManageMemoryRecordResponse);
+  // ManageWorkClaim связывает claim с exact process/session/turn/attempt/workload.
+  rpc ManageWorkClaim(ManageWorkClaimRequest) returns (ManageWorkClaimResponse);
 
   // ManageSchedule изменяет schedule только через закрытые server-owned actions.
   rpc ManageSchedule(ManageScheduleRequest) returns (ManageScheduleResponse);
@@ -49,11 +56,17 @@ service ControlPlaneService {
   rpc StartProcess(StartProcessRequest) returns (StartProcessResponse);
   rpc CancelProcess(CancelProcessRequest) returns (CancelProcessResponse);
   rpc RequestOwnerGate(RequestOwnerGateRequest) returns (RequestOwnerGateResponse);
+  // RecordOwnerGateDelivery фиксирует durable receipt exact server-owned карточки.
+  rpc RecordOwnerGateDelivery(RecordOwnerGateDeliveryRequest) returns (RecordOwnerGateDeliveryResponse);
   // ResolveOwnerGate связывает решение с exact gate/process/session/turn/attempt.
   rpc ResolveOwnerGate(ResolveOwnerGateRequest) returns (ResolveOwnerGateResponse);
 
   rpc RegisterArtifact(RegisterArtifactRequest) returns (RegisterArtifactResponse);
   rpc RecordArtifactScan(RecordArtifactScanRequest) returns (RecordArtifactScanResponse);
+  // GetRuntimeRevision — version-pinned authoritative read для runtime-controller.
+  rpc GetRuntimeRevision(GetRuntimeRevisionRequest) returns (GetRuntimeRevisionResponse);
+  // RecordMemoryEmbedding фиксирует локальную перестраиваемую projection, не источник истины.
+  rpc RecordMemoryEmbedding(RecordMemoryEmbeddingRequest) returns (RecordMemoryEmbeddingResponse);
 
   // CheckReadiness проверяет authority, PostgreSQL, cache и outbox publisher.
   rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
@@ -181,6 +194,45 @@ enum ScheduleOccurrenceState {
   SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER = 7;
 }
 
+enum SessionAction {
+  SESSION_ACTION_UNSPECIFIED = 0;
+  SESSION_ACTION_CREATE = 1;
+  SESSION_ACTION_CLOSE = 2;
+  SESSION_ACTION_ARCHIVE = 3;
+  SESSION_ACTION_CANCEL = 4;
+  SESSION_ACTION_CLEANUP = 5;
+}
+
+enum MemoryAction {
+  MEMORY_ACTION_UNSPECIFIED = 0;
+  MEMORY_ACTION_CREATE = 1;
+  MEMORY_ACTION_SUPERSEDE = 2;
+  MEMORY_ACTION_ARCHIVE = 3;
+}
+
+enum WorkClaimAction {
+  WORK_CLAIM_ACTION_UNSPECIFIED = 0;
+  WORK_CLAIM_ACTION_CREATE = 1;
+  WORK_CLAIM_ACTION_RENEW = 2;
+  WORK_CLAIM_ACTION_RELEASE = 3;
+}
+
+enum ScheduleSessionPolicy {
+  SCHEDULE_SESSION_POLICY_UNSPECIFIED = 0;
+  SCHEDULE_SESSION_POLICY_NEW = 1;
+  SCHEDULE_SESSION_POLICY_PERSISTENT = 2;
+  SCHEDULE_SESSION_POLICY_ROLLING = 3;
+}
+
+enum ScheduleNotificationPolicy {
+  SCHEDULE_NOTIFICATION_POLICY_UNSPECIFIED = 0;
+  SCHEDULE_NOTIFICATION_POLICY_ALWAYS = 1;
+  SCHEDULE_NOTIFICATION_POLICY_ON_ACTION = 2;
+  SCHEDULE_NOTIFICATION_POLICY_ON_FAILURE = 3;
+  SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE = 4;
+  SCHEDULE_NOTIFICATION_POLICY_AUDIT_ONLY = 5;
+}
+
 message ProjectSpec {
   string slug = 1;
   string description = 2;
@@ -211,6 +263,9 @@ message RoleSpec {
   repeated string capabilities = 2;
   repeated string allowed_target_role_ids = 3;
   string prompt_profile_id = 4;
+  repeated string provider_credential_binding_ids = 5;
+  repeated string repository_workspace_ids = 6;
+  repeated string integration_ids = 7;
 }
 
 message PromptProfileSpec {
@@ -256,6 +311,10 @@ message RuntimeRevisionSpec {
   string authority_policy_sha256 = 9;
   repeated EffectiveResourceRef components = 10;
   google.protobuf.Timestamp created_at = 11;
+  string session_id = 12;
+  string role_id = 13;
+  string chat_id = 14;
+  string provider_credential_binding_id = 15;
 }
 
 message EffectiveResourceRef {
@@ -298,6 +357,10 @@ message ProcessRunSpec {
   string root_turn_id = 8;
   uint32 root_attempt = 9;
   string immutable_input_sha256 = 10;
+  string runtime_revision_id = 11;
+  string launching_process_run_id = 12;
+  string launching_turn_id = 13;
+  uint32 launching_attempt = 14;
 }
 
 message ScheduleSpec {
@@ -318,6 +381,14 @@ message ScheduleSpec {
   google.protobuf.Duration initial_backoff = 15;
   google.protobuf.Duration maximum_backoff = 16;
   google.protobuf.Duration dead_letter_after = 17;
+  string prompt_profile_id = 18;
+  uint64 prompt_revision = 19;
+  ScheduleSessionPolicy session_policy = 20;
+  string room_id = 21;
+  ScheduleNotificationPolicy notification_policy = 22;
+  google.protobuf.Duration maximum_execution_duration = 23;
+  bool coalesce = 24;
+  string runtime_revision_id = 25;
 }
 
 message OwnerGateSpec {
@@ -335,6 +406,14 @@ message OwnerGateSpec {
   string recipient_actor_id = 12;
   string delivery_workload_id = 13;
   string delivery_spiffe_id = 14;
+  string delivery_id = 15;
+  string delivery_payload_sha256 = 16;
+  string delivery_claim_token_sha256 = 17;
+  uint64 delivery_fence = 18;
+  string mattermost_post_id = 19;
+  string mattermost_channel_id = 20;
+  string mattermost_root_post_id = 21;
+  google.protobuf.Timestamp delivered_at = 22;
 }
 
 message MemoryRecordSpec {
@@ -353,6 +432,11 @@ message WorkClaimSpec {
   string summary = 3;
   repeated string domains = 4;
   repeated string resource_keys = 5;
+  string owner_actor_id = 6;
+  string workload_id = 7;
+  string session_id = 8;
+  uint32 attempt = 9;
+  google.protobuf.Timestamp expires_at = 10;
 }
 
 message ArtifactSpec {
@@ -505,6 +589,30 @@ message SearchResourcesResponse {
   string next_page_token = 2;
 }
 
+message SearchMemoryRecordsRequest {
+  string query = 1;
+  repeated float query_embedding = 2;
+  string embedding_model_id = 3;
+  uint64 embedding_model_revision = 4;
+  string embedding_model_sha256 = 5;
+  uint32 page_size = 6;
+  string page_token = 7;
+  string scope = 8;
+  string role_id = 9;
+}
+
+message MemorySearchHit {
+  Resource resource = 1;
+  float text_rank = 2;
+  float vector_distance = 3;
+  bool vector_projection_used = 4;
+}
+
+message SearchMemoryRecordsResponse {
+  repeated MemorySearchHit hits = 1;
+  string next_page_token = 2;
+}
+
 message AuditEvent {
   string id = 1;
   string action = 2;
@@ -643,6 +751,57 @@ message CancelTurnResponse {
   Resource turn = 1;
 }
 
+message ManageSessionRequest {
+  string idempotency_key = 1;
+  SessionAction action = 2;
+  string session_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  string role_id = 6;
+  string conversation_id = 7;
+  string archive_ref = 8;
+  string reason_code = 9;
+}
+
+message ManageSessionResponse {
+  Resource session = 1;
+}
+
+message ManageMemoryRecordRequest {
+  string idempotency_key = 1;
+  MemoryAction action = 2;
+  string memory_record_id = 3;
+  uint64 expected_version = 4;
+  string scope = 5;
+  string role_id = 6;
+  string title = 7;
+  string content = 8;
+  string content_sha256 = 9;
+  string provenance = 10;
+  uint32 importance = 11;
+}
+
+message ManageMemoryRecordResponse {
+  Resource memory_record = 1;
+}
+
+message ManageWorkClaimRequest {
+  string idempotency_key = 1;
+  WorkClaimAction action = 2;
+  string work_claim_id = 3;
+  uint64 expected_version = 4;
+  string process_run_id = 5;
+  string turn_id = 6;
+  string summary = 7;
+  repeated string domains = 8;
+  repeated string resource_keys = 9;
+  google.protobuf.Duration ttl = 10;
+}
+
+message ManageWorkClaimResponse {
+  Resource work_claim = 1;
+}
+
 message ManageScheduleRequest {
   string idempotency_key = 1;
   AdministrativeAction action = 2;
@@ -676,6 +835,14 @@ message ScheduleOccurrence {
   google.protobuf.Timestamp lease_expires_at = 12;
   google.protobuf.Timestamp available_at = 13;
   string outcome = 14;
+  string prompt_profile_id = 15;
+  uint64 prompt_revision = 16;
+  string runtime_revision_id = 17;
+  ScheduleSessionPolicy session_policy = 18;
+  string room_id = 19;
+  ScheduleNotificationPolicy notification_policy = 20;
+  google.protobuf.Duration maximum_execution_duration = 21;
+  bool coalesce = 22;
 }
 
 message ClaimDueSchedulesResponse {
@@ -739,6 +906,8 @@ message StartProcessRequest {
   string root_turn_id = 8;
   uint32 root_attempt = 9;
   string input_artifact_id = 10;
+  string launching_turn_id = 11;
+  uint32 launching_attempt = 12;
 }
 
 message StartProcessResponse {
@@ -770,6 +939,23 @@ message RequestOwnerGateRequest {
 message RequestOwnerGateResponse {
   Resource owner_gate = 1;
   Resource process_run = 2;
+}
+
+message RecordOwnerGateDeliveryRequest {
+  string idempotency_key = 1;
+  string owner_gate_id = 2;
+  uint64 expected_version = 3;
+  string delivery_id = 4;
+  string delivery_payload_sha256 = 5;
+  string delivery_claim_token = 6;
+  uint64 delivery_fence = 7;
+  string mattermost_post_id = 8;
+  string mattermost_channel_id = 9;
+  string mattermost_root_post_id = 10;
+}
+
+message RecordOwnerGateDeliveryResponse {
+  Resource owner_gate = 1;
 }
 
 message ResolveOwnerGateRequest {
@@ -813,6 +999,32 @@ message RecordArtifactScanRequest {
 
 message RecordArtifactScanResponse {
   Resource artifact = 1;
+}
+
+message GetRuntimeRevisionRequest {
+  string runtime_revision_id = 1;
+  uint64 expected_version = 2;
+}
+
+message GetRuntimeRevisionResponse {
+  Resource runtime_revision = 1;
+}
+
+message RecordMemoryEmbeddingRequest {
+  string idempotency_key = 1;
+  string memory_record_id = 2;
+  uint64 expected_resource_version = 3;
+  string content_sha256 = 4;
+  string model_id = 5;
+  uint64 model_revision = 6;
+  string model_sha256 = 7;
+  repeated float embedding = 8;
+}
+
+message RecordMemoryEmbeddingResponse {
+  string memory_record_id = 1;
+  uint64 resource_version = 2;
+  string projection_sha256 = 3;
 }
 
 message CheckReadinessRequest {}

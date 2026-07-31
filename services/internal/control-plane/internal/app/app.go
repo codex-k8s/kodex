@@ -8,11 +8,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
 	sharedcache "github.com/codex-k8s/matter-codex/libs/go/cache"
 	"github.com/codex-k8s/matter-codex/libs/go/cache/redisstore"
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
 	"github.com/codex-k8s/matter-codex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
@@ -20,12 +22,12 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
+	grantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/grant"
 	oidcauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/oidc"
 	authoritypolicy "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/policy"
 	proofsignerfile "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/client/proofsigner/file"
 	authorityservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authority"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
-	controlplanev1 "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/generated/controlplane/v1"
 	internalobservability "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/observability"
 	cachecontrolplane "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/repository/cache/controlplane"
 	postgrescontrolplane "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/repository/postgres/controlplane"
@@ -95,7 +97,7 @@ func Run(
 
 	loadedPolicy, err := authoritypolicy.Load(
 		config.AuthorityPolicyFile,
-		expectedOIDCOperations(),
+		expectedOperations(),
 	)
 	if err != nil {
 		return err
@@ -185,12 +187,14 @@ func Run(
 		RuntimeImageDigest:        config.RuntimeImageDigest,
 		AuthorityPolicyRevision:   loadedPolicy.Revision,
 		AuthorityPolicySHA256:     loadedPolicy.Digest,
-		OwnerGateDeliveryWorkload: "control-api-gateway",
-		OwnerGateDeliverySPIFFEID: loadedPolicy.CallerSPIFFEID,
+		OwnerGateDeliveryWorkload: "interaction-gateway",
+		OwnerGateDeliverySPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
 		ScannerWorkload:           "artifact-scanner",
 		ScannerSPIFFEID:           "spiffe://mattercodex.local/ns/mattercodex-system/sa/artifact-scanner",
 		SchedulerWorkload:         "automation-scheduler",
 		SchedulerSPIFFEID:         "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+		MemoryIndexerWorkload:     "memory-indexer",
+		MemoryIndexerSPIFFEID:     "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
 		Observer:                  businessMetrics,
 	})
 	if err != nil {
@@ -214,8 +218,6 @@ func Run(
 			Issuer:                       loadedPolicy.Issuer,
 			ProofAudience:                loadedPolicy.ProofAudience,
 			AuthorizationContextAudience: loadedPolicy.AuthorizationContextAudience,
-			CallerWorkload:               loadedPolicy.CallerWorkload,
-			CallerSPIFFEID:               loadedPolicy.CallerSPIFFEID,
 			PolicyRevision:               loadedPolicy.Revision,
 			PolicyDigest:                 loadedPolicy.Digest,
 			Operations:                   loadedPolicy.Operations,
@@ -225,15 +227,39 @@ func Run(
 		return err
 	}
 	state.oidc, err = oidcauth.New(startup, oidcauth.Config{
-		Issuer:               loadedPolicy.ApplicationIssuer,
-		Audience:             loadedPolicy.ApplicationAudience,
+		Issuer:               loadedPolicy.OIDC.CredentialIssuer,
+		Audience:             loadedPolicy.OIDC.CredentialAudience,
 		TLSServerName:        config.OIDCTLSServerName,
 		CAFile:               config.OIDCCAFile,
-		ExpectedCallerSPIFFE: loadedPolicy.CallerSPIFFEID,
-		ExpectedWorkload:     loadedPolicy.CallerWorkload,
+		ExpectedCallerSPIFFE: loadedPolicy.OIDC.CallerSPIFFEID,
+		ExpectedWorkload:     loadedPolicy.OIDC.CallerWorkload,
 		ClockSkew:            5 * time.Second,
 		HTTPTimeout:          config.ReadinessTimeout,
 	})
+	if err != nil {
+		return err
+	}
+	authenticators := []transportgrpc.ApplicationAuthenticator{state.oidc}
+	for producerID, producer := range loadedPolicy.Producers {
+		if producerID == loadedPolicy.OIDC.ID {
+			continue
+		}
+		verifier, err := grantauth.New(grantauth.Config{
+			Issuer:         producer.CredentialIssuer,
+			Audience:       producer.CredentialAudience,
+			WorkloadID:     producer.CallerWorkload,
+			CallerSPIFFEID: producer.CallerSPIFFEID,
+			PublicJWKFile: filepath.Join(
+				config.ApplicationGrantTrustDir,
+				producerID+".public.jwk",
+			),
+		})
+		if err != nil {
+			return err
+		}
+		authenticators = append(authenticators, verifier)
+	}
+	applicationRegistry, err := transportgrpc.NewApplicationRegistry(authenticators)
 	if err != nil {
 		return err
 	}
@@ -262,7 +288,10 @@ func Run(
 		},
 		Replicas:        config.NATSReplicas,
 		MaxMessageBytes: 256 << 10,
-		MaxAge:          7 * 24 * time.Hour,
+		MaxMessages:     10_000_000,
+		MaxBytes:        32 << 30,
+		MaxPerSubject:   5_000_000,
+		MaxAge:          30 * 24 * time.Hour,
 		DuplicateWindow: 2 * time.Minute,
 		ConnectTimeout:  config.ReadinessTimeout,
 	})
@@ -298,7 +327,10 @@ func Run(
 	if err != nil {
 		return err
 	}
-	authorityServer, err := transportgrpc.NewAuthorityServer(proofService, state.oidc)
+	authorityServer, err := transportgrpc.NewAuthorityServer(
+		proofService,
+		applicationRegistry,
+	)
 	if err != nil {
 		return err
 	}

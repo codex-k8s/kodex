@@ -29,6 +29,7 @@ const (
 	ControlPlaneService_GetResource_FullMethodName                = "/controlplane.v1.ControlPlaneService/GetResource"
 	ControlPlaneService_ListResources_FullMethodName              = "/controlplane.v1.ControlPlaneService/ListResources"
 	ControlPlaneService_SearchResources_FullMethodName            = "/controlplane.v1.ControlPlaneService/SearchResources"
+	ControlPlaneService_SearchMemoryRecords_FullMethodName        = "/controlplane.v1.ControlPlaneService/SearchMemoryRecords"
 	ControlPlaneService_ListAuditEvents_FullMethodName            = "/controlplane.v1.ControlPlaneService/ListAuditEvents"
 	ControlPlaneService_ListTombstones_FullMethodName             = "/controlplane.v1.ControlPlaneService/ListTombstones"
 	ControlPlaneService_GetDiagnostics_FullMethodName             = "/controlplane.v1.ControlPlaneService/GetDiagnostics"
@@ -38,6 +39,9 @@ const (
 	ControlPlaneService_CompleteTurn_FullMethodName               = "/controlplane.v1.ControlPlaneService/CompleteTurn"
 	ControlPlaneService_RetryTurn_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RetryTurn"
 	ControlPlaneService_CancelTurn_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CancelTurn"
+	ControlPlaneService_ManageSession_FullMethodName              = "/controlplane.v1.ControlPlaneService/ManageSession"
+	ControlPlaneService_ManageMemoryRecord_FullMethodName         = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
+	ControlPlaneService_ManageWorkClaim_FullMethodName            = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
 	ControlPlaneService_ManageSchedule_FullMethodName             = "/controlplane.v1.ControlPlaneService/ManageSchedule"
 	ControlPlaneService_ClaimDueSchedules_FullMethodName          = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
 	ControlPlaneService_ClaimScheduleOccurrence_FullMethodName    = "/controlplane.v1.ControlPlaneService/ClaimScheduleOccurrence"
@@ -47,9 +51,12 @@ const (
 	ControlPlaneService_StartProcess_FullMethodName               = "/controlplane.v1.ControlPlaneService/StartProcess"
 	ControlPlaneService_CancelProcess_FullMethodName              = "/controlplane.v1.ControlPlaneService/CancelProcess"
 	ControlPlaneService_RequestOwnerGate_FullMethodName           = "/controlplane.v1.ControlPlaneService/RequestOwnerGate"
+	ControlPlaneService_RecordOwnerGateDelivery_FullMethodName    = "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery"
 	ControlPlaneService_ResolveOwnerGate_FullMethodName           = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
 	ControlPlaneService_RegisterArtifact_FullMethodName           = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
 	ControlPlaneService_RecordArtifactScan_FullMethodName         = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
+	ControlPlaneService_GetRuntimeRevision_FullMethodName         = "/controlplane.v1.ControlPlaneService/GetRuntimeRevision"
+	ControlPlaneService_RecordMemoryEmbedding_FullMethodName      = "/controlplane.v1.ControlPlaneService/RecordMemoryEmbedding"
 	ControlPlaneService_CheckReadiness_FullMethodName             = "/controlplane.v1.ControlPlaneService/CheckReadiness"
 )
 
@@ -72,6 +79,7 @@ type ControlPlaneServiceClient interface {
 	GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error)
 	ListResources(ctx context.Context, in *ListResourcesRequest, opts ...grpc.CallOption) (*ListResourcesResponse, error)
 	SearchResources(ctx context.Context, in *SearchResourcesRequest, opts ...grpc.CallOption) (*SearchResourcesResponse, error)
+	SearchMemoryRecords(ctx context.Context, in *SearchMemoryRecordsRequest, opts ...grpc.CallOption) (*SearchMemoryRecordsResponse, error)
 	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
 	ListTombstones(ctx context.Context, in *ListTombstonesRequest, opts ...grpc.CallOption) (*ListTombstonesResponse, error)
 	GetDiagnostics(ctx context.Context, in *GetDiagnosticsRequest, opts ...grpc.CallOption) (*GetDiagnosticsResponse, error)
@@ -85,6 +93,12 @@ type ControlPlaneServiceClient interface {
 	CompleteTurn(ctx context.Context, in *CompleteTurnRequest, opts ...grpc.CallOption) (*CompleteTurnResponse, error)
 	RetryTurn(ctx context.Context, in *RetryTurnRequest, opts ...grpc.CallOption) (*RetryTurnResponse, error)
 	CancelTurn(ctx context.Context, in *CancelTurnRequest, opts ...grpc.CallOption) (*CancelTurnResponse, error)
+	// ManageSession — единственный lifecycle path SESSION; provider binding выбирает сервер.
+	ManageSession(ctx context.Context, in *ManageSessionRequest, opts ...grpc.CallOption) (*ManageSessionResponse, error)
+	// ManageMemoryRecord связывает scope и owner с проверенным actor.
+	ManageMemoryRecord(ctx context.Context, in *ManageMemoryRecordRequest, opts ...grpc.CallOption) (*ManageMemoryRecordResponse, error)
+	// ManageWorkClaim связывает claim с exact process/session/turn/attempt/workload.
+	ManageWorkClaim(ctx context.Context, in *ManageWorkClaimRequest, opts ...grpc.CallOption) (*ManageWorkClaimResponse, error)
 	// ManageSchedule изменяет schedule только через закрытые server-owned actions.
 	ManageSchedule(ctx context.Context, in *ManageScheduleRequest, opts ...grpc.CallOption) (*ManageScheduleResponse, error)
 	// ClaimDueSchedules материализует наступившие QUEUED occurrence без запуска runtime.
@@ -96,10 +110,16 @@ type ControlPlaneServiceClient interface {
 	StartProcess(ctx context.Context, in *StartProcessRequest, opts ...grpc.CallOption) (*StartProcessResponse, error)
 	CancelProcess(ctx context.Context, in *CancelProcessRequest, opts ...grpc.CallOption) (*CancelProcessResponse, error)
 	RequestOwnerGate(ctx context.Context, in *RequestOwnerGateRequest, opts ...grpc.CallOption) (*RequestOwnerGateResponse, error)
+	// RecordOwnerGateDelivery фиксирует durable receipt exact server-owned карточки.
+	RecordOwnerGateDelivery(ctx context.Context, in *RecordOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*RecordOwnerGateDeliveryResponse, error)
 	// ResolveOwnerGate связывает решение с exact gate/process/session/turn/attempt.
 	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
 	RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error)
 	RecordArtifactScan(ctx context.Context, in *RecordArtifactScanRequest, opts ...grpc.CallOption) (*RecordArtifactScanResponse, error)
+	// GetRuntimeRevision — version-pinned authoritative read для runtime-controller.
+	GetRuntimeRevision(ctx context.Context, in *GetRuntimeRevisionRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionResponse, error)
+	// RecordMemoryEmbedding фиксирует локальную перестраиваемую projection, не источник истины.
+	RecordMemoryEmbedding(ctx context.Context, in *RecordMemoryEmbeddingRequest, opts ...grpc.CallOption) (*RecordMemoryEmbeddingResponse, error)
 	// CheckReadiness проверяет authority, PostgreSQL, cache и outbox publisher.
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
 }
@@ -212,6 +232,16 @@ func (c *controlPlaneServiceClient) SearchResources(ctx context.Context, in *Sea
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) SearchMemoryRecords(ctx context.Context, in *SearchMemoryRecordsRequest, opts ...grpc.CallOption) (*SearchMemoryRecordsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchMemoryRecordsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SearchMemoryRecords_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAuditEventsResponse)
@@ -296,6 +326,36 @@ func (c *controlPlaneServiceClient) CancelTurn(ctx context.Context, in *CancelTu
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CancelTurnResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_CancelTurn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ManageSession(ctx context.Context, in *ManageSessionRequest, opts ...grpc.CallOption) (*ManageSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageSessionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ManageSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ManageMemoryRecord(ctx context.Context, in *ManageMemoryRecordRequest, opts ...grpc.CallOption) (*ManageMemoryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageMemoryRecordResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ManageMemoryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ManageWorkClaim(ctx context.Context, in *ManageWorkClaimRequest, opts ...grpc.CallOption) (*ManageWorkClaimResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageWorkClaimResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ManageWorkClaim_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -392,6 +452,16 @@ func (c *controlPlaneServiceClient) RequestOwnerGate(ctx context.Context, in *Re
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) RecordOwnerGateDelivery(ctx context.Context, in *RecordOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*RecordOwnerGateDeliveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordOwnerGateDeliveryResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RecordOwnerGateDelivery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResolveOwnerGateResponse)
@@ -416,6 +486,26 @@ func (c *controlPlaneServiceClient) RecordArtifactScan(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RecordArtifactScanResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_RecordArtifactScan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetRuntimeRevision(ctx context.Context, in *GetRuntimeRevisionRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeRevisionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetRuntimeRevision_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RecordMemoryEmbedding(ctx context.Context, in *RecordMemoryEmbeddingRequest, opts ...grpc.CallOption) (*RecordMemoryEmbeddingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordMemoryEmbeddingResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RecordMemoryEmbedding_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -451,6 +541,7 @@ type ControlPlaneServiceServer interface {
 	GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error)
 	ListResources(context.Context, *ListResourcesRequest) (*ListResourcesResponse, error)
 	SearchResources(context.Context, *SearchResourcesRequest) (*SearchResourcesResponse, error)
+	SearchMemoryRecords(context.Context, *SearchMemoryRecordsRequest) (*SearchMemoryRecordsResponse, error)
 	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
 	ListTombstones(context.Context, *ListTombstonesRequest) (*ListTombstonesResponse, error)
 	GetDiagnostics(context.Context, *GetDiagnosticsRequest) (*GetDiagnosticsResponse, error)
@@ -464,6 +555,12 @@ type ControlPlaneServiceServer interface {
 	CompleteTurn(context.Context, *CompleteTurnRequest) (*CompleteTurnResponse, error)
 	RetryTurn(context.Context, *RetryTurnRequest) (*RetryTurnResponse, error)
 	CancelTurn(context.Context, *CancelTurnRequest) (*CancelTurnResponse, error)
+	// ManageSession — единственный lifecycle path SESSION; provider binding выбирает сервер.
+	ManageSession(context.Context, *ManageSessionRequest) (*ManageSessionResponse, error)
+	// ManageMemoryRecord связывает scope и owner с проверенным actor.
+	ManageMemoryRecord(context.Context, *ManageMemoryRecordRequest) (*ManageMemoryRecordResponse, error)
+	// ManageWorkClaim связывает claim с exact process/session/turn/attempt/workload.
+	ManageWorkClaim(context.Context, *ManageWorkClaimRequest) (*ManageWorkClaimResponse, error)
 	// ManageSchedule изменяет schedule только через закрытые server-owned actions.
 	ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error)
 	// ClaimDueSchedules материализует наступившие QUEUED occurrence без запуска runtime.
@@ -475,10 +572,16 @@ type ControlPlaneServiceServer interface {
 	StartProcess(context.Context, *StartProcessRequest) (*StartProcessResponse, error)
 	CancelProcess(context.Context, *CancelProcessRequest) (*CancelProcessResponse, error)
 	RequestOwnerGate(context.Context, *RequestOwnerGateRequest) (*RequestOwnerGateResponse, error)
+	// RecordOwnerGateDelivery фиксирует durable receipt exact server-owned карточки.
+	RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error)
 	// ResolveOwnerGate связывает решение с exact gate/process/session/turn/attempt.
 	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
 	RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error)
 	RecordArtifactScan(context.Context, *RecordArtifactScanRequest) (*RecordArtifactScanResponse, error)
+	// GetRuntimeRevision — version-pinned authoritative read для runtime-controller.
+	GetRuntimeRevision(context.Context, *GetRuntimeRevisionRequest) (*GetRuntimeRevisionResponse, error)
+	// RecordMemoryEmbedding фиксирует локальную перестраиваемую projection, не источник истины.
+	RecordMemoryEmbedding(context.Context, *RecordMemoryEmbeddingRequest) (*RecordMemoryEmbeddingResponse, error)
 	// CheckReadiness проверяет authority, PostgreSQL, cache и outbox publisher.
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
@@ -521,6 +624,9 @@ func (UnimplementedControlPlaneServiceServer) ListResources(context.Context, *Li
 func (UnimplementedControlPlaneServiceServer) SearchResources(context.Context, *SearchResourcesRequest) (*SearchResourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SearchResources not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) SearchMemoryRecords(context.Context, *SearchMemoryRecordsRequest) (*SearchMemoryRecordsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchMemoryRecords not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAuditEvents not implemented")
 }
@@ -547,6 +653,15 @@ func (UnimplementedControlPlaneServiceServer) RetryTurn(context.Context, *RetryT
 }
 func (UnimplementedControlPlaneServiceServer) CancelTurn(context.Context, *CancelTurnRequest) (*CancelTurnResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelTurn not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ManageSession(context.Context, *ManageSessionRequest) (*ManageSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ManageMemoryRecord(context.Context, *ManageMemoryRecordRequest) (*ManageMemoryRecordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageMemoryRecord not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ManageWorkClaim(context.Context, *ManageWorkClaimRequest) (*ManageWorkClaimResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageWorkClaim not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageSchedule not implemented")
@@ -575,6 +690,9 @@ func (UnimplementedControlPlaneServiceServer) CancelProcess(context.Context, *Ca
 func (UnimplementedControlPlaneServiceServer) RequestOwnerGate(context.Context, *RequestOwnerGateRequest) (*RequestOwnerGateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestOwnerGate not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordOwnerGateDelivery not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveOwnerGate not implemented")
 }
@@ -583,6 +701,12 @@ func (UnimplementedControlPlaneServiceServer) RegisterArtifact(context.Context, 
 }
 func (UnimplementedControlPlaneServiceServer) RecordArtifactScan(context.Context, *RecordArtifactScanRequest) (*RecordArtifactScanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordArtifactScan not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetRuntimeRevision(context.Context, *GetRuntimeRevisionRequest) (*GetRuntimeRevisionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeRevision not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RecordMemoryEmbedding(context.Context, *RecordMemoryEmbeddingRequest) (*RecordMemoryEmbeddingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordMemoryEmbedding not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
@@ -788,6 +912,24 @@ func _ControlPlaneService_SearchResources_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_SearchMemoryRecords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchMemoryRecordsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SearchMemoryRecords(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SearchMemoryRecords_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SearchMemoryRecords(ctx, req.(*SearchMemoryRecordsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ListAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAuditEventsRequest)
 	if err := dec(in); err != nil {
@@ -946,6 +1088,60 @@ func _ControlPlaneService_CancelTurn_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).CancelTurn(ctx, req.(*CancelTurnRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ManageSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ManageSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ManageSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ManageSession(ctx, req.(*ManageSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ManageMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageMemoryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ManageMemoryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ManageMemoryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ManageMemoryRecord(ctx, req.(*ManageMemoryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ManageWorkClaim_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageWorkClaimRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ManageWorkClaim(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ManageWorkClaim_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ManageWorkClaim(ctx, req.(*ManageWorkClaimRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1112,6 +1308,24 @@ func _ControlPlaneService_RequestOwnerGate_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_RecordOwnerGateDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordOwnerGateDeliveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RecordOwnerGateDelivery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RecordOwnerGateDelivery(ctx, req.(*RecordOwnerGateDeliveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ResolveOwnerGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResolveOwnerGateRequest)
 	if err := dec(in); err != nil {
@@ -1162,6 +1376,42 @@ func _ControlPlaneService_RecordArtifactScan_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).RecordArtifactScan(ctx, req.(*RecordArtifactScanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetRuntimeRevision_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeRevisionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetRuntimeRevision(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetRuntimeRevision_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetRuntimeRevision(ctx, req.(*GetRuntimeRevisionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RecordMemoryEmbedding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordMemoryEmbeddingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RecordMemoryEmbedding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RecordMemoryEmbedding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RecordMemoryEmbedding(ctx, req.(*RecordMemoryEmbeddingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1232,6 +1482,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_SearchResources_Handler,
 		},
 		{
+			MethodName: "SearchMemoryRecords",
+			Handler:    _ControlPlaneService_SearchMemoryRecords_Handler,
+		},
+		{
 			MethodName: "ListAuditEvents",
 			Handler:    _ControlPlaneService_ListAuditEvents_Handler,
 		},
@@ -1266,6 +1520,18 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelTurn",
 			Handler:    _ControlPlaneService_CancelTurn_Handler,
+		},
+		{
+			MethodName: "ManageSession",
+			Handler:    _ControlPlaneService_ManageSession_Handler,
+		},
+		{
+			MethodName: "ManageMemoryRecord",
+			Handler:    _ControlPlaneService_ManageMemoryRecord_Handler,
+		},
+		{
+			MethodName: "ManageWorkClaim",
+			Handler:    _ControlPlaneService_ManageWorkClaim_Handler,
 		},
 		{
 			MethodName: "ManageSchedule",
@@ -1304,6 +1570,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_RequestOwnerGate_Handler,
 		},
 		{
+			MethodName: "RecordOwnerGateDelivery",
+			Handler:    _ControlPlaneService_RecordOwnerGateDelivery_Handler,
+		},
+		{
 			MethodName: "ResolveOwnerGate",
 			Handler:    _ControlPlaneService_ResolveOwnerGate_Handler,
 		},
@@ -1314,6 +1584,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordArtifactScan",
 			Handler:    _ControlPlaneService_RecordArtifactScan_Handler,
+		},
+		{
+			MethodName: "GetRuntimeRevision",
+			Handler:    _ControlPlaneService_GetRuntimeRevision_Handler,
+		},
+		{
+			MethodName: "RecordMemoryEmbedding",
+			Handler:    _ControlPlaneService_RecordMemoryEmbedding_Handler,
 		},
 		{
 			MethodName: "CheckReadiness",

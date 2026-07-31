@@ -69,8 +69,9 @@ func (service *Service) ManageSchedule(
 				if err != nil {
 					return entity.Resource{}, err
 				}
-				if target.State == enum.StateDeleted ||
-					target.Kind == enum.KindSchedule {
+				if target.State != enum.StateActive ||
+					(target.Kind != enum.KindRole &&
+						target.Kind != enum.KindPromptProfile) {
 					return entity.Resource{}, errs.ErrNotFound
 				}
 				input.Spec.TargetKind = target.Kind
@@ -78,6 +79,63 @@ func (service *Service) ManageSchedule(
 				input.Spec.EffectiveInputSHA, err = entity.ProjectionSHA256(target)
 				if err != nil {
 					return entity.Resource{}, errs.ErrInternal
+				}
+				prompt, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.Spec.PromptProfileID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				promptSpec, ok := prompt.Spec.(entity.PromptProfileSpec)
+				if !ok || prompt.Kind != enum.KindPromptProfile ||
+					prompt.State != enum.StateActive ||
+					promptSpec.Revision != input.Spec.PromptRevision {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				revision, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.Spec.RuntimeRevisionID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				revisionSpec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
+				if !ok || revision.Kind != enum.KindRuntimeRevision ||
+					revision.State != enum.StateActive ||
+					revisionSpec.PromptProfileID != prompt.ID ||
+					revisionSpec.PromptRevision != promptSpec.Revision ||
+					(target.Kind == enum.KindRole &&
+						revisionSpec.RoleID != target.ID) ||
+					(target.Kind == enum.KindPromptProfile &&
+						revisionSpec.PromptProfileID != target.ID) {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if input.Spec.RoomID != "" {
+					room, err := tx.GetForUpdate(
+						ctx,
+						input.Principal.OrganizationID,
+						input.Principal.ProjectID,
+						input.Spec.RoomID,
+					)
+					if err != nil {
+						return entity.Resource{}, err
+					}
+					if room.Kind != enum.KindChat || room.State != enum.StateActive {
+						return entity.Resource{}, errs.ErrNotFound
+					}
+					if revisionSpec.ChatID != room.ID {
+						return entity.Resource{}, errs.ErrStateConflict
+					}
+				} else if revisionSpec.ChatID != "" {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if input.Spec.Validate() != nil {
+					return entity.Resource{}, errs.ErrInvalidInput
 				}
 			}
 			if input.Action == "CREATE" {
@@ -304,6 +362,51 @@ func (service *Service) ClaimScheduleOccurrence(
 				target.State == enum.StateDeleted {
 				return errs.ErrStateConflict
 			}
+			prompt, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				occurrence.PromptProfileID,
+			)
+			if err != nil {
+				return err
+			}
+			promptSpec, ok := prompt.Spec.(entity.PromptProfileSpec)
+			if !ok || prompt.Kind != enum.KindPromptProfile ||
+				prompt.State != enum.StateActive ||
+				promptSpec.Revision != occurrence.PromptRevision {
+				return errs.ErrStateConflict
+			}
+			revision, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				occurrence.RuntimeRevisionID,
+			)
+			if err != nil {
+				return err
+			}
+			revisionSpec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
+			if !ok || revision.Kind != enum.KindRuntimeRevision ||
+				revision.State != enum.StateActive ||
+				revisionSpec.PromptProfileID != occurrence.PromptProfileID ||
+				revisionSpec.PromptRevision != occurrence.PromptRevision {
+				return errs.ErrStateConflict
+			}
+			if occurrence.RoomID != "" {
+				room, roomErr := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					occurrence.RoomID,
+				)
+				if roomErr != nil {
+					return roomErr
+				}
+				if room.Kind != enum.KindChat || room.State != enum.StateActive {
+					return errs.ErrStateConflict
+				}
+			}
 			token := service.leaseToken(
 				occurrence.ID,
 				uint64(occurrence.Attempt),
@@ -317,7 +420,7 @@ func (service *Service) ClaimScheduleOccurrence(
 			occurrence.ClaimantWorkloadID = input.Principal.CallerWorkload
 			occurrence.AuthorityGeneration = input.Principal.AuthorityGeneration
 			occurrence.TokenHash = hashString(token)
-			occurrence.LeaseExpiresAt = now.Add(service.turnLeaseDuration)
+			occurrence.LeaseExpiresAt = now.Add(occurrence.MaximumExecution)
 			occurrence.UpdatedAt = now
 			if err := tx.UpdateScheduleOccurrence(
 				ctx,
@@ -705,25 +808,36 @@ func (service *Service) StartProcess(
 		!validRuntimeReference(input.PlaybookRef) ||
 		!validRuntimeReference(input.RootTriggerRef) ||
 		input.PolicyRevision == 0 ||
-		value.ValidateID(input.RootSessionID) != nil ||
-		value.ValidateID(input.RootTurnID) != nil ||
-		input.RootAttempt == 0 ||
 		value.ValidateID(input.InputArtifactID) != nil ||
 		(input.ParentProcessID != "" &&
-			value.ValidateID(input.ParentProcessID) != nil) {
+			value.ValidateID(input.ParentProcessID) != nil) ||
+		(input.ParentProcessID == "" &&
+			(value.ValidateID(input.RootSessionID) != nil ||
+				value.ValidateID(input.RootTurnID) != nil ||
+				input.RootAttempt == 0 ||
+				input.LaunchingTurnID != "" ||
+				input.LaunchingAttempt != 0)) ||
+		(input.ParentProcessID != "" &&
+			(value.ValidateID(input.LaunchingTurnID) != nil ||
+				input.LaunchingAttempt == 0 ||
+				input.RootSessionID != "" ||
+				input.RootTurnID != "" ||
+				input.RootAttempt != 0)) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
-		Identity        commandIdentity
-		Name            string
-		ParentProcessID string
-		PlaybookRef     string
-		PolicyRevision  uint64
-		RootTriggerRef  string
-		RootSessionID   string
-		RootTurnID      string
-		RootAttempt     uint32
-		InputArtifactID string
+		Identity         commandIdentity
+		Name             string
+		ParentProcessID  string
+		PlaybookRef      string
+		PolicyRevision   uint64
+		RootTriggerRef   string
+		RootSessionID    string
+		RootTurnID       string
+		RootAttempt      uint32
+		InputArtifactID  string
+		LaunchingTurnID  string
+		LaunchingAttempt uint32
 	}{
 		identity(input.Principal),
 		input.Name,
@@ -735,6 +849,8 @@ func (service *Service) StartProcess(
 		input.RootTurnID,
 		input.RootAttempt,
 		input.InputArtifactID,
+		input.LaunchingTurnID,
+		input.LaunchingAttempt,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -746,42 +862,14 @@ func (service *Service) StartProcess(
 		"start_process",
 		requestHash,
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			session, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.RootSessionID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
-			turn, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.RootTurnID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
-			turnSpec, ok := turn.Spec.(entity.TurnSpec)
-			if !ok || session.Kind != enum.KindSession ||
-				session.State != enum.StateActive ||
-				turn.Kind != enum.KindTurn ||
-				turnSpec.SessionID != session.ID ||
-				turnSpec.Attempt != input.RootAttempt ||
-				turn.State.Terminal() {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			artifact, err := service.requireCleanArtifact(
-				ctx,
-				tx,
-				input.Principal,
-				input.InputArtifactID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
+			rootActorID := input.Principal.ActorID
+			rootSessionID := input.RootSessionID
+			rootTurnID := input.RootTurnID
+			rootAttempt := input.RootAttempt
+			launchingTurnID := ""
+			launchingAttempt := uint32(0)
+			runtimeRevisionID := ""
+			rootImmutableInput := ""
 			if input.ParentProcessID != "" {
 				parent, err := tx.GetForUpdate(
 					ctx,
@@ -792,25 +880,95 @@ func (service *Service) StartProcess(
 				if err != nil {
 					return entity.Resource{}, err
 				}
-				if parent.Kind != enum.KindProcessRun ||
+				parentSpec, ok := parent.Spec.(entity.ProcessRunSpec)
+				if !ok || parent.Kind != enum.KindProcessRun ||
 					parent.State.Terminal() {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
+				launchingTurn, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.LaunchingTurnID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				launchingSpec, ok := launchingTurn.Spec.(entity.TurnSpec)
+				if !ok || launchingTurn.Kind != enum.KindTurn ||
+					launchingTurn.State.Terminal() ||
+					launchingSpec.ProcessRunID != parent.ID ||
+					launchingSpec.SessionID != parentSpec.RootSessionID ||
+					launchingSpec.Attempt != input.LaunchingAttempt ||
+					launchingSpec.RuntimeRevisionID != parentSpec.RuntimeRevisionID {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				rootActorID = parentSpec.RootInitiatorActorID
+				rootSessionID = parentSpec.RootSessionID
+				rootTurnID = parentSpec.RootTurnID
+				rootAttempt = parentSpec.RootAttempt
+				runtimeRevisionID = parentSpec.RuntimeRevisionID
+				rootImmutableInput = parentSpec.ImmutableInputSHA256
+				launchingTurnID = launchingTurn.ID
+				launchingAttempt = input.LaunchingAttempt
+			} else {
+				session, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.RootSessionID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				turn, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.RootTurnID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				turnSpec, ok := turn.Spec.(entity.TurnSpec)
+				if !ok || session.Kind != enum.KindSession ||
+					session.State != enum.StateActive ||
+					turn.Kind != enum.KindTurn ||
+					turnSpec.SessionID != session.ID ||
+					turnSpec.Attempt != input.RootAttempt ||
+					turn.State.Terminal() {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				runtimeRevisionID = turnSpec.RuntimeRevisionID
+				rootImmutableInput = turnSpec.EffectiveInputSHA256
+			}
+			artifact, err := service.requireCleanArtifact(
+				ctx,
+				tx,
+				input.Principal,
+				input.InputArtifactID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
 			spec := entity.ProcessRunSpec{
-				ParentProcessRunID:   input.ParentProcessID,
-				PlaybookRef:          input.PlaybookRef,
-				PolicyRevision:       input.PolicyRevision,
-				RootTriggerRef:       input.RootTriggerRef,
-				RootInitiatorActorID: input.Principal.ActorID,
-				RootSessionID:        session.ID,
-				RootTurnID:           turn.ID,
-				RootAttempt:          input.RootAttempt,
+				ParentProcessRunID:    input.ParentProcessID,
+				PlaybookRef:           input.PlaybookRef,
+				PolicyRevision:        input.PolicyRevision,
+				RootTriggerRef:        input.RootTriggerRef,
+				RootInitiatorActorID:  rootActorID,
+				RootSessionID:         rootSessionID,
+				RootTurnID:            rootTurnID,
+				RootAttempt:           rootAttempt,
+				RuntimeRevisionID:     runtimeRevisionID,
+				LaunchingProcessRunID: input.ParentProcessID,
+				LaunchingTurnID:       launchingTurnID,
+				LaunchingAttempt:      launchingAttempt,
 				ImmutableInputSHA256: hashRuntimeInput(
 					input.RootTriggerRef,
 					artifact.SHA256,
-					turnSpec.EffectiveInputSHA256,
+					rootImmutableInput,
 					input.PlaybookRef,
 				),
 			}
@@ -889,6 +1047,18 @@ func (service *Service) CancelProcess(
 			if process.Kind != enum.KindProcessRun ||
 				process.Version != input.ExpectedVersion ||
 				process.State.Terminal() {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			activeChildren, err := tx.HasActiveChildProcesses(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				process.ID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			if activeChildren {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
 			cancelled, err := process.Transition(
@@ -1199,8 +1369,38 @@ func (service *Service) RequestOwnerGate(
 				return errs.ErrStateConflict
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
+			gateID := uuid.NewString()
+			deliveryID := uuid.NewString()
+			deliveryPayloadSHA256, err := canonicalHash(struct {
+				Version          int
+				DeliveryID       string
+				OwnerGateID      string
+				ProcessRunID     string
+				SessionID        string
+				TurnID           string
+				Attempt          uint32
+				ResultSHA256     string
+				ImmutableInput   string
+				RecipientActorID string
+				ExpiresAt        time.Time
+			}{
+				1,
+				deliveryID,
+				gateID,
+				process.ID,
+				processSpec.RootSessionID,
+				processSpec.RootTurnID,
+				processSpec.RootAttempt,
+				artifact.SHA256,
+				processSpec.ImmutableInputSHA256,
+				project.OwnerActorID,
+				input.ExpiresAt.UTC().Truncate(time.Microsecond),
+			})
+			if err != nil {
+				return errs.ErrInternal
+			}
 			gate, err := entity.New(
-				uuid.NewString(),
+				gateID,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
 				process.ID,
@@ -1208,18 +1408,20 @@ func (service *Service) RequestOwnerGate(
 				enum.KindOwnerGate,
 				"Owner gate "+process.ID,
 				entity.OwnerGateSpec{
-					ProcessRunID:         process.ID,
-					ResultRef:            artifact.StorageRef,
-					ResultSHA256:         artifact.SHA256,
-					ExpiresAt:            input.ExpiresAt.UTC().Truncate(time.Microsecond),
-					RootInitiatorActorID: processSpec.RootInitiatorActorID,
-					SessionID:            processSpec.RootSessionID,
-					TurnID:               processSpec.RootTurnID,
-					Attempt:              processSpec.RootAttempt,
-					ImmutableInputSHA256: processSpec.ImmutableInputSHA256,
-					RecipientActorID:     project.OwnerActorID,
-					DeliveryWorkloadID:   service.ownerGateDeliveryWorkload,
-					DeliverySPIFFEID:     service.ownerGateDeliverySPIFFEID,
+					ProcessRunID:          process.ID,
+					ResultRef:             artifact.StorageRef,
+					ResultSHA256:          artifact.SHA256,
+					ExpiresAt:             input.ExpiresAt.UTC().Truncate(time.Microsecond),
+					RootInitiatorActorID:  processSpec.RootInitiatorActorID,
+					SessionID:             processSpec.RootSessionID,
+					TurnID:                processSpec.RootTurnID,
+					Attempt:               processSpec.RootAttempt,
+					ImmutableInputSHA256:  processSpec.ImmutableInputSHA256,
+					RecipientActorID:      project.OwnerActorID,
+					DeliveryWorkloadID:    service.ownerGateDeliveryWorkload,
+					DeliverySPIFFEID:      service.ownerGateDeliverySPIFFEID,
+					DeliveryID:            deliveryID,
+					DeliveryPayloadSHA256: deliveryPayloadSHA256,
 				},
 				now,
 			)

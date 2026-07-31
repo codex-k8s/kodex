@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -11,7 +12,6 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
-	controlplanev1 "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/generated/controlplane/v1"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -540,17 +540,19 @@ func (server *Server) StartProcess(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	started, err := server.service.StartProcess(ctx, resource.StartProcessInput{
-		Principal:       principal,
-		IdempotencyKey:  request.GetIdempotencyKey(),
-		Name:            request.GetName(),
-		ParentProcessID: request.GetParentProcessRunId(),
-		PlaybookRef:     request.GetPlaybookRef(),
-		PolicyRevision:  request.GetPolicyRevision(),
-		RootTriggerRef:  request.GetRootTriggerRef(),
-		RootSessionID:   request.GetRootSessionId(),
-		RootTurnID:      request.GetRootTurnId(),
-		RootAttempt:     request.GetRootAttempt(),
-		InputArtifactID: request.GetInputArtifactId(),
+		Principal:        principal,
+		IdempotencyKey:   request.GetIdempotencyKey(),
+		Name:             request.GetName(),
+		ParentProcessID:  request.GetParentProcessRunId(),
+		PlaybookRef:      request.GetPlaybookRef(),
+		PolicyRevision:   request.GetPolicyRevision(),
+		RootTriggerRef:   request.GetRootTriggerRef(),
+		RootSessionID:    request.GetRootSessionId(),
+		RootTurnID:       request.GetRootTurnId(),
+		RootAttempt:      request.GetRootAttempt(),
+		InputArtifactID:  request.GetInputArtifactId(),
+		LaunchingTurnID:  request.GetLaunchingTurnId(),
+		LaunchingAttempt: request.GetLaunchingAttempt(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -722,12 +724,22 @@ func toProtoOccurrence(
 		TargetKind:           toProtoKind(occurrence.TargetKind),
 		TargetVersion:        occurrence.TargetVersion,
 		EffectiveInputSha256: occurrence.EffectiveInputSHA256,
-		State:                occurrenceState(occurrence.State),
-		Attempt:              occurrence.Attempt,
-		ClaimantWorkloadId:   occurrence.ClaimantWorkloadID,
-		AuthorityGeneration:  occurrence.AuthorityGeneration,
-		AvailableAt:          timestamppb.New(occurrence.AvailableAt),
-		Outcome:              occurrence.Outcome,
+		PromptProfileId:      occurrence.PromptProfileID,
+		PromptRevision:       occurrence.PromptRevision,
+		RuntimeRevisionId:    occurrence.RuntimeRevisionID,
+		SessionPolicy:        scheduleSessionPolicy(occurrence.SessionPolicy),
+		RoomId:               occurrence.RoomID,
+		NotificationPolicy:   scheduleNotificationPolicy(occurrence.NotificationPolicy),
+		MaximumExecutionDuration: durationpb.New(
+			occurrence.MaximumExecution,
+		),
+		Coalesce:            occurrence.Coalesce,
+		State:               occurrenceState(occurrence.State),
+		Attempt:             occurrence.Attempt,
+		ClaimantWorkloadId:  occurrence.ClaimantWorkloadID,
+		AuthorityGeneration: occurrence.AuthorityGeneration,
+		AvailableAt:         timestamppb.New(occurrence.AvailableAt),
+		Outcome:             occurrence.Outcome,
 	}
 	if !occurrence.LeaseExpiresAt.IsZero() &&
 		!occurrence.LeaseExpiresAt.Equal(time.Unix(0, 0)) {

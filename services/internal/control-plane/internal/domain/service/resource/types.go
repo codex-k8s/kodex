@@ -136,6 +136,48 @@ type RetryTurnInput struct {
 
 type CancelTurnInput = RetryTurnInput
 
+type ManageSessionInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	Action          string
+	SessionID       string
+	ExpectedVersion uint64
+	Name            string
+	RoleID          string
+	ConversationID  string
+	ArchiveRef      string
+	ReasonCode      string
+}
+
+type ManageMemoryRecordInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	Action          string
+	MemoryRecordID  string
+	ExpectedVersion uint64
+	Scope           string
+	RoleID          string
+	Title           string
+	Content         string
+	ContentSHA256   string
+	Provenance      string
+	Importance      uint32
+}
+
+type ManageWorkClaimInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	Action          string
+	WorkClaimID     string
+	ExpectedVersion uint64
+	ProcessRunID    string
+	TurnID          string
+	Summary         string
+	Domains         []string
+	ResourceKeys    []string
+	TTL             time.Duration
+}
+
 type ClaimDueSchedulesInput struct {
 	Principal      value.Principal
 	IdempotencyKey string
@@ -147,16 +189,25 @@ type ClaimDueSchedulesResult struct {
 }
 
 type ScheduleOccurrence struct {
-	ScheduleID           string    `json:"scheduleId"`
-	ScheduledFor         time.Time `json:"scheduledFor"`
-	OccurrenceID         string    `json:"occurrenceId"`
-	TargetResourceID     string    `json:"targetResourceId"`
-	TargetKind           enum.Kind `json:"targetKind"`
-	TargetVersion        uint64    `json:"targetVersion"`
-	EffectiveInputSHA256 string    `json:"effectiveInputSha256"`
-	State                string    `json:"state"`
-	Attempt              uint32    `json:"attempt"`
-	AvailableAt          time.Time `json:"availableAt"`
+	ScheduleID           string        `json:"scheduleId"`
+	ScheduledFor         time.Time     `json:"scheduledFor"`
+	OccurrenceID         string        `json:"occurrenceId"`
+	TargetResourceID     string        `json:"targetResourceId"`
+	TargetKind           enum.Kind     `json:"targetKind"`
+	TargetVersion        uint64        `json:"targetVersion"`
+	EffectiveInputSHA256 string        `json:"effectiveInputSha256"`
+	PromptProfileID      string        `json:"promptProfileId"`
+	PromptRevision       uint64        `json:"promptRevision"`
+	RuntimeRevisionID    string        `json:"runtimeRevisionId"`
+	SessionPolicy        string        `json:"sessionPolicy"`
+	RoomID               string        `json:"roomId,omitempty"`
+	NotificationPolicy   string        `json:"notificationPolicy"`
+	MaximumExecution     time.Duration `json:"maximumExecutionDuration"`
+	Coalesce             bool          `json:"coalesce"`
+	State                string        `json:"state"`
+	Attempt              uint32        `json:"attempt"`
+	AvailableAt          time.Time     `json:"availableAt"`
+	Outcome              string        `json:"outcome,omitempty"`
 }
 
 type ManageScheduleInput struct {
@@ -204,17 +255,19 @@ type ListScheduleOccurrencesInput struct {
 }
 
 type StartProcessInput struct {
-	Principal       value.Principal
-	IdempotencyKey  string
-	Name            string
-	ParentProcessID string
-	PlaybookRef     string
-	PolicyRevision  uint64
-	RootTriggerRef  string
-	RootSessionID   string
-	RootTurnID      string
-	RootAttempt     uint32
-	InputArtifactID string
+	Principal        value.Principal
+	IdempotencyKey   string
+	Name             string
+	ParentProcessID  string
+	PlaybookRef      string
+	PolicyRevision   uint64
+	RootTriggerRef   string
+	RootSessionID    string
+	RootTurnID       string
+	RootAttempt      uint32
+	InputArtifactID  string
+	LaunchingTurnID  string
+	LaunchingAttempt uint32
 }
 
 type CancelProcessInput struct {
@@ -257,6 +310,20 @@ type ResolveOwnerGateInput struct {
 	ImmutableInputSHA256   string
 }
 
+type RecordOwnerGateDeliveryInput struct {
+	Principal             value.Principal
+	IdempotencyKey        string
+	OwnerGateID           string
+	ExpectedVersion       uint64
+	DeliveryID            string
+	DeliveryPayloadSHA256 string
+	DeliveryClaimToken    string
+	DeliveryFence         uint64
+	MattermostPostID      string
+	MattermostChannelID   string
+	MattermostRootPostID  string
+}
+
 type RegisterArtifactInput struct {
 	Principal      value.Principal
 	IdempotencyKey string
@@ -273,6 +340,53 @@ type RecordArtifactScanInput struct {
 	TargetState        string
 	ScanPolicyRevision uint64
 	EvidenceSHA256     string
+}
+
+type GetRuntimeRevisionInput struct {
+	Principal         value.Principal
+	RuntimeRevisionID string
+	ExpectedVersion   uint64
+}
+
+type RecordMemoryEmbeddingInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	MemoryRecordID          string
+	ExpectedResourceVersion uint64
+	ContentSHA256           string
+	ModelID                 string
+	ModelRevision           uint64
+	ModelSHA256             string
+	Embedding               []float32
+}
+
+type RecordMemoryEmbeddingResult struct {
+	MemoryRecordID   string
+	ResourceVersion  uint64
+	ProjectionSHA256 string
+}
+
+type SearchMemoryInput struct {
+	Principal              value.Principal
+	Query                  string
+	QueryEmbedding         []float32
+	EmbeddingModelID       string
+	EmbeddingModelRevision uint64
+	EmbeddingModelSHA256   string
+	Scope                  string
+	RoleID                 string
+	AfterID                string
+	AfterTextRank          float32
+	AfterVectorDistance    float32
+	AfterVectorUsed        bool
+	Limit                  int
+}
+
+type MemorySearchHit struct {
+	Resource             entity.Resource
+	TextRank             float32
+	VectorDistance       float32
+	VectorProjectionUsed bool
 }
 
 // Observer получает только закрытые kind/action после durable commit.

@@ -28,7 +28,7 @@ var migrations embed.FS
 //go:embed sql/*.sql
 var operationalSQL embed.FS
 
-const schemaVersion int64 = 20260731000200
+const schemaVersion int64 = 20260731000300
 
 func main() {
 	ctx, stop := signal.NotifyContext(
@@ -99,9 +99,19 @@ func run(ctx context.Context, arguments []string) error {
 	}
 	switch action {
 	case "expand":
-		return migrateExpand(ctx, database)
+		return migrateExpand(
+			ctx,
+			database,
+			config.TLSServerName,
+			roots,
+		)
 	case "up":
-		return migrateUp(ctx, database)
+		return migrateUp(
+			ctx,
+			database,
+			config.TLSServerName,
+			roots,
+		)
 	case "status":
 		return goose.StatusContext(ctx, database, "migrations")
 	case "version":
@@ -132,7 +142,12 @@ func readRuntimeFile(path string, maximum int64) ([]byte, error) {
 	return raw, nil
 }
 
-func migrateExpand(ctx context.Context, database *sql.DB) error {
+func migrateExpand(
+	ctx context.Context,
+	database *sql.DB,
+	serverName string,
+	roots *x509.CertPool,
+) error {
 	if err := goose.UpToContext(
 		ctx,
 		database,
@@ -141,10 +156,20 @@ func migrateExpand(ctx context.Context, database *sql.DB) error {
 	); err != nil {
 		return fmt.Errorf("apply control-plane expand migration: %w", err)
 	}
-	return reconcileRuntimePrincipals(ctx, database)
+	return reconcileRuntimePrincipals(
+		ctx,
+		database,
+		serverName,
+		roots,
+	)
 }
 
-func migrateUp(ctx context.Context, database *sql.DB) error {
+func migrateUp(
+	ctx context.Context,
+	database *sql.DB,
+	serverName string,
+	roots *x509.CertPool,
+) error {
 	version, err := goose.GetDBVersionContext(ctx, database)
 	if err != nil {
 		return err
@@ -155,7 +180,12 @@ func migrateUp(ctx context.Context, database *sql.DB) error {
 	if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 		return fmt.Errorf("apply control-plane migrations: %w", err)
 	}
-	return reconcileRuntimePrincipals(ctx, database)
+	return reconcileRuntimePrincipals(
+		ctx,
+		database,
+		serverName,
+		roots,
+	)
 }
 
 type runtimePrincipalConfig struct {
@@ -169,6 +199,7 @@ type runtimePrincipalConfig struct {
 	NextGeneration     uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_GENERATION"`
 	NextNotBefore      string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_NOT_BEFORE"`
 	NextNotAfter       string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_NOT_AFTER"`
+	NextDSNFile        string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE"`
 	PreviousName       string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_PRINCIPAL"`
 	PreviousGeneration uint64 `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_GENERATION"`
 	PreviousNotBefore  string `env:"CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_NOT_BEFORE"`
@@ -183,7 +214,12 @@ type runtimePrincipal struct {
 	NotAfter      time.Time `json:"not_after"`
 }
 
-func reconcileRuntimePrincipals(ctx context.Context, database *sql.DB) error {
+func reconcileRuntimePrincipals(
+	ctx context.Context,
+	database *sql.DB,
+	serverName string,
+	roots *x509.CertPool,
+) error {
 	var config runtimePrincipalConfig
 	if err := env.Parse(&config); err != nil {
 		return errors.New("parse runtime principal reconciliation environment")
@@ -252,6 +288,47 @@ func reconcileRuntimePrincipals(ctx context.Context, database *sql.DB) error {
 	}
 	if _, err := database.ExecContext(ctx, string(statement), payload, config.ContextKeyID, key); err != nil {
 		return fmt.Errorf("reconcile runtime PostgreSQL principals: %w", err)
+	}
+	if config.NextName == "" {
+		if config.NextDSNFile != "" {
+			return errors.New("NEXT PostgreSQL DSN is unexpected")
+		}
+		return nil
+	}
+	if config.NextDSNFile == "" {
+		return errors.New("NEXT PostgreSQL DSN is required for readback")
+	}
+	nextRaw, err := readRuntimeFile(config.NextDSNFile, 64<<10)
+	if err != nil {
+		return errors.New("read bounded NEXT PostgreSQL DSN")
+	}
+	nextConfig, err := pgx.ParseConfig(strings.TrimSpace(string(nextRaw)))
+	if err != nil || len(nextConfig.Fallbacks) != 0 ||
+		nextConfig.Host != serverName ||
+		nextConfig.TLSConfig == nil ||
+		nextConfig.TLSConfig.ServerName != serverName ||
+		nextConfig.TLSConfig.InsecureSkipVerify {
+		return errors.New("NEXT PostgreSQL DSN must use exact verify-full TLS")
+	}
+	nextConfig.TLSConfig = &tls.Config{
+		MinVersion: tls.VersionTLS13,
+		ServerName: serverName,
+		RootCAs:    roots,
+	}
+	nextDatabase := stdlib.OpenDB(*nextConfig)
+	defer nextDatabase.Close()
+	readbackStatement, err := operationalSQL.ReadFile(
+		"sql/runtime_principal__readback.sql",
+	)
+	if err != nil {
+		return errors.New("load NEXT PostgreSQL principal readback SQL")
+	}
+	var generation uint64
+	if err := nextDatabase.QueryRowContext(
+		ctx,
+		string(readbackStatement),
+	).Scan(&generation); err != nil || generation != config.NextGeneration {
+		return errors.New("NEXT PostgreSQL principal readback failed")
 	}
 	return nil
 }

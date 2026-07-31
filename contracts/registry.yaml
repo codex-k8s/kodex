@@ -7,18 +7,24 @@ packages:
     consumers:
       - runtime-controller
       - automation-scheduler
+      - agent-runner
+      - artifact-scanner
+      - memory-indexer
   - id: control-plane-v1
     format: proto
     owner: control-plane
     source: contracts/proto/controlplane/v1
     generated:
-      go: services/internal/control-plane/internal/generated/controlplane/v1
+      go: libs/go/controlplaneapi/gen/controlplane/v1
     consumers:
       - control-plane
       - control-api-gateway
       - interaction-gateway
       - runtime-controller
       - automation-scheduler
+      - agent-runner
+      - artifact-scanner
+      - memory-indexer
   - id: internal-rpc-authority-v1
     format: proto
     owner: internal-rpc-authority

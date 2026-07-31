@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
@@ -18,6 +19,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	domainquery "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -220,6 +222,47 @@ func (repository *Repository) Search(
 		},
 	)
 	return resources, err
+}
+
+func (wrapped *transaction) SearchMemory(
+	ctx context.Context,
+	search domainrepo.MemorySearch,
+) ([]domainrepo.MemorySearchHit, error) {
+	var hits []domainrepo.MemorySearchHit
+	rows, err := wrapped.tx.Query(
+		ctx,
+		query("memory__search.sql"),
+		pgx.StrictNamedArgs{
+			"organization_id":       search.OrganizationID,
+			"project_id":            search.ProjectID,
+			"scope":                 search.Scope,
+			"role_id":               search.RoleID,
+			"query":                 search.Query,
+			"query_embedding":       formatVector(search.QueryEmbedding),
+			"model_id":              search.ModelID,
+			"model_revision":        search.ModelRevision,
+			"model_sha256":          search.ModelSHA256,
+			"after_id":              search.AfterID,
+			"after_text_rank":       search.AfterTextRank,
+			"after_vector_distance": search.AfterVectorDistance,
+			"after_vector_used":     search.AfterVectorUsed,
+			"limit":                 search.Limit,
+			"can_read_project":      search.CanReadProject,
+			"actor_role_ids":        search.ActorRoleIDs,
+		},
+	)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		hit, err := scanMemorySearchHit(rows)
+		if err != nil {
+			return nil, err
+		}
+		hits = append(hits, hit)
+	}
+	return hits, mapError(rows.Err())
 }
 
 // ListEligibleProjects возвращает только owner/member-visible projects.
@@ -444,7 +487,7 @@ func (repository *Repository) Check(ctx context.Context) error {
 	); err != nil {
 		return mapError(err)
 	}
-	if version != 20260731000200 || !member || !nonSuperuser || !noBypassRLS ||
+	if version != 20260731000300 || !member || !nonSuperuser || !noBypassRLS ||
 		!loginEnabled || generation != repository.config.PrincipalGeneration ||
 		(status != "CURRENT" && status != "NEXT" && status != "PREVIOUS") {
 		return errs.ErrUnavailable
@@ -813,6 +856,34 @@ func (wrapped *transaction) ActorPermissions(
 	return permissions, mapError(rows.Err())
 }
 
+func (wrapped *transaction) ActorRoleIDs(
+	ctx context.Context,
+	organizationID, projectID, actorID string,
+) ([]string, error) {
+	rows, err := wrapped.tx.Query(
+		ctx,
+		query("permission_index__actor_roles.sql"),
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"actor_id":        actorID,
+		},
+	)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	var roleIDs []string
+	for rows.Next() {
+		var roleID string
+		if err := rows.Scan(&roleID); err != nil {
+			return nil, mapError(err)
+		}
+		roleIDs = append(roleIDs, roleID)
+	}
+	return roleIDs, mapError(rows.Err())
+}
+
 func (wrapped *transaction) ListSnapshotResources(
 	ctx context.Context,
 	organizationID, projectID string,
@@ -1161,26 +1232,34 @@ func (wrapped *transaction) SaveScheduleOccurrence(
 		ctx,
 		query("schedule_occurrence__save.sql"),
 		pgx.StrictNamedArgs{
-			"id":                     occurrence.ID,
-			"schedule_id":            occurrence.ScheduleID,
-			"organization_id":        occurrence.OrganizationID,
-			"project_id":             occurrence.ProjectID,
-			"scheduled_for":          occurrence.ScheduledFor,
-			"target_resource_id":     occurrence.TargetResourceID,
-			"target_kind":            string(occurrence.TargetKind),
-			"target_version":         occurrence.TargetVersion,
-			"effective_input_sha256": occurrence.EffectiveInputSHA256,
-			"overlap_policy":         occurrence.OverlapPolicy,
-			"maximum_attempts":       occurrence.MaximumAttempts,
-			"initial_backoff_ms":     occurrence.InitialBackoff.Milliseconds(),
-			"maximum_backoff_ms":     occurrence.MaximumBackoff.Milliseconds(),
-			"dead_letter_at":         occurrence.DeadLetterAt,
-			"state":                  occurrence.State,
-			"attempt":                occurrence.Attempt,
-			"available_at":           occurrence.AvailableAt,
-			"outcome":                occurrence.Outcome,
-			"result_artifact_id":     occurrence.ResultArtifactID,
-			"updated_at":             occurrence.UpdatedAt,
+			"id":                            occurrence.ID,
+			"schedule_id":                   occurrence.ScheduleID,
+			"organization_id":               occurrence.OrganizationID,
+			"project_id":                    occurrence.ProjectID,
+			"scheduled_for":                 occurrence.ScheduledFor,
+			"target_resource_id":            occurrence.TargetResourceID,
+			"target_kind":                   string(occurrence.TargetKind),
+			"target_version":                occurrence.TargetVersion,
+			"effective_input_sha256":        occurrence.EffectiveInputSHA256,
+			"prompt_profile_id":             occurrence.PromptProfileID,
+			"prompt_revision":               occurrence.PromptRevision,
+			"runtime_revision_id":           occurrence.RuntimeRevisionID,
+			"session_policy":                occurrence.SessionPolicy,
+			"room_id":                       occurrence.RoomID,
+			"notification_policy":           occurrence.NotificationPolicy,
+			"maximum_execution_duration_ms": occurrence.MaximumExecution.Milliseconds(),
+			"coalesce":                      occurrence.Coalesce,
+			"overlap_policy":                occurrence.OverlapPolicy,
+			"maximum_attempts":              occurrence.MaximumAttempts,
+			"initial_backoff_ms":            occurrence.InitialBackoff.Milliseconds(),
+			"maximum_backoff_ms":            occurrence.MaximumBackoff.Milliseconds(),
+			"dead_letter_at":                occurrence.DeadLetterAt,
+			"state":                         occurrence.State,
+			"attempt":                       occurrence.Attempt,
+			"available_at":                  occurrence.AvailableAt,
+			"outcome":                       occurrence.Outcome,
+			"result_artifact_id":            occurrence.ResultArtifactID,
+			"updated_at":                    occurrence.UpdatedAt,
 		},
 	)
 	if err != nil {
@@ -1190,6 +1269,23 @@ func (wrapped *transaction) SaveScheduleOccurrence(
 		return errs.ErrStateConflict
 	}
 	return nil
+}
+
+func (wrapped *transaction) HasOpenScheduleOccurrence(
+	ctx context.Context,
+	organizationID, projectID, scheduleID string,
+) (bool, error) {
+	var found bool
+	err := wrapped.tx.QueryRow(
+		ctx,
+		query("schedule_occurrence__has_open.sql"),
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"schedule_id":     scheduleID,
+		},
+	).Scan(&found)
+	return found, mapError(err)
 }
 
 func (wrapped *transaction) SkipOverlappedScheduleOccurrences(
@@ -1338,6 +1434,53 @@ func (wrapped *transaction) NextProofRevision(ctx context.Context) (uint64, erro
 	return revision, mapError(err)
 }
 
+func (wrapped *transaction) SaveMemoryProjection(
+	ctx context.Context,
+	projection domainrepo.MemoryProjection,
+) error {
+	tag, err := wrapped.tx.Exec(
+		ctx,
+		query("memory_projection__upsert.sql"),
+		pgx.StrictNamedArgs{
+			"resource_id":       projection.ResourceID,
+			"organization_id":   projection.OrganizationID,
+			"project_id":        projection.ProjectID,
+			"resource_version":  projection.ResourceVersion,
+			"content_sha256":    projection.ContentSHA256,
+			"model_id":          projection.ModelID,
+			"model_revision":    projection.ModelRevision,
+			"model_sha256":      projection.ModelSHA256,
+			"embedding":         formatVector(projection.Embedding),
+			"projection_sha256": projection.ProjectionSHA256,
+			"updated_at":        projection.UpdatedAt,
+		},
+	)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrVersionMismatch
+	}
+	return nil
+}
+
+func (wrapped *transaction) HasActiveChildProcesses(
+	ctx context.Context,
+	organizationID, projectID, processRunID string,
+) (bool, error) {
+	var exists bool
+	err := wrapped.tx.QueryRow(
+		ctx,
+		query("process__has_active_children.sql"),
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"process_run_id":  processRunID,
+		},
+	).Scan(&exists)
+	return exists, mapError(err)
+}
+
 type rowScanner interface {
 	Scan(...any) error
 }
@@ -1372,10 +1515,59 @@ func scanResource(row rowScanner) (entity.Resource, error) {
 	return resource, nil
 }
 
+func scanMemorySearchHit(row rowScanner) (domainrepo.MemorySearchHit, error) {
+	var hit domainrepo.MemorySearchHit
+	var kind, state string
+	var specRaw []byte
+	err := row.Scan(
+		&hit.Resource.ID,
+		&hit.Resource.OrganizationID,
+		&hit.Resource.ProjectID,
+		&hit.Resource.ParentID,
+		&hit.Resource.OwnerActorID,
+		&kind,
+		&hit.Resource.Name,
+		&state,
+		&hit.Resource.Version,
+		&specRaw,
+		&hit.Resource.CreatedAt,
+		&hit.Resource.UpdatedAt,
+		&hit.TextRank,
+		&hit.VectorDistance,
+		&hit.VectorProjectionUsed,
+	)
+	if err != nil {
+		return domainrepo.MemorySearchHit{}, mapError(err)
+	}
+	hit.Resource.Kind = enum.Kind(kind)
+	hit.Resource.State = enum.State(state)
+	hit.Resource.Spec, err = unmarshalSpec(hit.Resource.Kind, specRaw)
+	if err != nil || hit.Resource.Validate() != nil {
+		return domainrepo.MemorySearchHit{}, errs.ErrInternal
+	}
+	return hit, nil
+}
+
+func formatVector(values []float32) string {
+	if len(values) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteByte('[')
+	for index, value := range values {
+		if index > 0 {
+			builder.WriteByte(',')
+		}
+		builder.WriteString(strconv.FormatFloat(float64(value), 'g', -1, 32))
+	}
+	builder.WriteByte(']')
+	return builder.String()
+}
+
 func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, error) {
 	var occurrence domainrepo.ScheduleOccurrence
 	var targetKind string
-	var initialBackoffMS, maximumBackoffMS int64
+	var initialBackoffMS, maximumBackoffMS, maximumExecutionMS int64
 	err := row.Scan(
 		&occurrence.ID,
 		&occurrence.ScheduleID,
@@ -1386,6 +1578,14 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 		&targetKind,
 		&occurrence.TargetVersion,
 		&occurrence.EffectiveInputSHA256,
+		&occurrence.PromptProfileID,
+		&occurrence.PromptRevision,
+		&occurrence.RuntimeRevisionID,
+		&occurrence.SessionPolicy,
+		&occurrence.RoomID,
+		&occurrence.NotificationPolicy,
+		&maximumExecutionMS,
+		&occurrence.Coalesce,
 		&occurrence.OverlapPolicy,
 		&occurrence.MaximumAttempts,
 		&initialBackoffMS,
@@ -1406,10 +1606,27 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 	occurrence.TargetKind = enum.Kind(targetKind)
 	occurrence.InitialBackoff = time.Duration(initialBackoffMS) * time.Millisecond
 	occurrence.MaximumBackoff = time.Duration(maximumBackoffMS) * time.Millisecond
+	occurrence.MaximumExecution = time.Duration(maximumExecutionMS) * time.Millisecond
 	if err != nil || !occurrence.TargetKind.Valid() ||
 		occurrence.ID == "" || occurrence.ScheduleID == "" ||
 		occurrence.TargetVersion == 0 ||
 		!validDigest(occurrence.EffectiveInputSHA256) ||
+		value.ValidateID(occurrence.PromptProfileID) != nil ||
+		occurrence.PromptRevision == 0 ||
+		value.ValidateID(occurrence.RuntimeRevisionID) != nil ||
+		(occurrence.SessionPolicy != "NEW" &&
+			occurrence.SessionPolicy != "PERSISTENT" &&
+			occurrence.SessionPolicy != "ROLLING") ||
+		(occurrence.RoomID != "" && value.ValidateID(occurrence.RoomID) != nil) ||
+		(occurrence.NotificationPolicy != "ALWAYS" &&
+			occurrence.NotificationPolicy != "ON_ACTION" &&
+			occurrence.NotificationPolicy != "ON_FAILURE" &&
+			occurrence.NotificationPolicy != "ON_ACTION_OR_FAILURE" &&
+			occurrence.NotificationPolicy != "AUDIT_ONLY") ||
+		occurrence.MaximumExecution < time.Minute ||
+		occurrence.MaximumExecution > 24*time.Hour ||
+		(occurrence.OverlapPolicy == "QUEUE" && occurrence.Coalesce) ||
+		(occurrence.OverlapPolicy != "QUEUE" && !occurrence.Coalesce) ||
 		(occurrence.OverlapPolicy != "FORBID" &&
 			occurrence.OverlapPolicy != "SKIP" &&
 			occurrence.OverlapPolicy != "QUEUE") ||

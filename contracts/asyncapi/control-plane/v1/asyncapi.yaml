@@ -33,8 +33,14 @@ operations:
       - service: runtime-controller
         purpose: REFRESH_PINNED_RUNTIME_INPUT_BY_GRPC
         exactEffect: >-
-          Прочитать aggregate через versioned control-plane gRPC, атомарно
-          заменить локальную projection с durable inbox/cursor.
+          Для RUNTIME_REVISION вызвать exact version-pinned
+          ControlPlaneService.GetRuntimeRevision через workload-specific
+          mTLS/application-grant/local-issuer path; для остальных aggregate
+          использовать typed GetResource. Атомарно заменить локальную
+          projection с durable inbox/cursor.
+        readiness: >-
+          Subscription запускается только после готовности durable inbox,
+          exact JetStream contract и защищённого GetRuntimeRevision read path.
     x-delivery:
       mode: AT_LEAST_ONCE
       deduplicationKey: eventId

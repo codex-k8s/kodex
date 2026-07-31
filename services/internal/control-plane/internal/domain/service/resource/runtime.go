@@ -84,16 +84,7 @@ func (service *Service) EnqueueTurn(
 			if err != nil {
 				return entity.Resource{}, err
 			}
-			runtimeRevision, err := service.createRuntimeRevision(
-				ctx,
-				tx,
-				input.Principal,
-				session,
-				sessionSpec,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
+			var runtimeRevision entity.Resource
 			if input.ProcessRunID != "" {
 				process, err := tx.GetForUpdate(
 					ctx,
@@ -104,9 +95,37 @@ func (service *Service) EnqueueTurn(
 				if err != nil {
 					return entity.Resource{}, err
 				}
-				if process.Kind != enum.KindProcessRun ||
-					process.State != enum.StateRunning {
+				processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+				if !ok || process.Kind != enum.KindProcessRun ||
+					process.State != enum.StateRunning ||
+					processSpec.RootSessionID != session.ID ||
+					processSpec.RootInitiatorActorID != input.Principal.ActorID ||
+					value.ValidateID(processSpec.RuntimeRevisionID) != nil {
 					return entity.Resource{}, errs.ErrStateConflict
+				}
+				runtimeRevision, err = tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					processSpec.RuntimeRevisionID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				if runtimeRevision.Kind != enum.KindRuntimeRevision ||
+					runtimeRevision.State != enum.StateActive {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			} else {
+				runtimeRevision, err = service.createRuntimeRevision(
+					ctx,
+					tx,
+					input.Principal,
+					session,
+					sessionSpec,
+				)
+				if err != nil {
+					return entity.Resource{}, err
 				}
 			}
 			sessionSpec.LastTurnSequence++
@@ -957,6 +976,7 @@ func (service *Service) ClaimDueSchedules(
 				return err
 			}
 			result.Occurrences = make([]ScheduleOccurrence, 0, len(schedules))
+			changedSchedules := 0
 			for _, schedule := range schedules {
 				spec, ok := schedule.Spec.(entity.ScheduleSpec)
 				if !ok || schedule.Kind != enum.KindSchedule ||
@@ -964,7 +984,24 @@ func (service *Service) ClaimDueSchedules(
 					return errs.ErrStateConflict
 				}
 				scheduledFor := spec.NextRunAt.UTC().Truncate(time.Microsecond)
-				emit := shouldEmitOccurrence(spec, scheduledFor, now)
+				open, err := tx.HasOpenScheduleOccurrence(
+					ctx,
+					schedule.OrganizationID,
+					schedule.ProjectID,
+					schedule.ID,
+				)
+				if err != nil {
+					return err
+				}
+				if spec.OverlapPolicy == "FORBID" && open {
+					continue
+				}
+				state, outcome := scheduleOccurrenceDisposition(
+					spec,
+					scheduledFor,
+					now,
+					open,
+				)
 				nextRun, err := nextScheduleRun(spec, scheduledFor, now)
 				if err != nil {
 					return err
@@ -986,9 +1023,7 @@ func (service *Service) ClaimDueSchedules(
 				); err != nil {
 					return err
 				}
-				if !emit {
-					continue
-				}
+				changedSchedules++
 				occurrence := ScheduleOccurrence{
 					ScheduleID:   schedule.ID,
 					ScheduledFor: scheduledFor,
@@ -1000,9 +1035,18 @@ func (service *Service) ClaimDueSchedules(
 					TargetKind:           spec.TargetKind,
 					TargetVersion:        spec.TargetVersion,
 					EffectiveInputSHA256: spec.EffectiveInputSHA,
-					State:                "QUEUED",
+					PromptProfileID:      spec.PromptProfileID,
+					PromptRevision:       spec.PromptRevision,
+					RuntimeRevisionID:    spec.RuntimeRevisionID,
+					SessionPolicy:        spec.SessionPolicy,
+					RoomID:               spec.RoomID,
+					NotificationPolicy:   spec.NotificationPolicy,
+					MaximumExecution:     spec.MaximumExecutionDuration,
+					Coalesce:             spec.Coalesce,
+					State:                state,
 					Attempt:              1,
 					AvailableAt:          scheduledFor,
+					Outcome:              outcome,
 				}
 				if err := tx.SaveScheduleOccurrence(ctx, domainrepo.ScheduleOccurrence{
 					ID:                   occurrence.OccurrenceID,
@@ -1014,6 +1058,14 @@ func (service *Service) ClaimDueSchedules(
 					TargetKind:           occurrence.TargetKind,
 					TargetVersion:        occurrence.TargetVersion,
 					EffectiveInputSHA256: occurrence.EffectiveInputSHA256,
+					PromptProfileID:      occurrence.PromptProfileID,
+					PromptRevision:       occurrence.PromptRevision,
+					RuntimeRevisionID:    occurrence.RuntimeRevisionID,
+					SessionPolicy:        occurrence.SessionPolicy,
+					RoomID:               occurrence.RoomID,
+					NotificationPolicy:   occurrence.NotificationPolicy,
+					MaximumExecution:     occurrence.MaximumExecution,
+					Coalesce:             occurrence.Coalesce,
 					OverlapPolicy:        spec.OverlapPolicy,
 					MaximumAttempts:      spec.MaximumAttempts,
 					InitialBackoff:       spec.InitialBackoff,
@@ -1022,6 +1074,7 @@ func (service *Service) ClaimDueSchedules(
 					State:                occurrence.State,
 					Attempt:              occurrence.Attempt,
 					AvailableAt:          occurrence.AvailableAt,
+					Outcome:              occurrence.Outcome,
 					CreatedAt:            now,
 					UpdatedAt:            now,
 				}); err != nil {
@@ -1033,7 +1086,7 @@ func (service *Service) ClaimDueSchedules(
 			if err != nil {
 				return errs.ErrInternal
 			}
-			mutated = len(schedules) > 0
+			mutated = changedSchedules > 0
 			return tx.SaveReceipt(ctx, domainrepo.Receipt{
 				OrganizationID: input.Principal.OrganizationID,
 				ProjectID:      input.Principal.ProjectID,
@@ -1154,7 +1207,13 @@ func (service *Service) ResolveOwnerGate(
 				gateSpec.TurnID != input.TurnID ||
 				gateSpec.Attempt != input.Attempt ||
 				gateSpec.ImmutableInputSHA256 != input.ImmutableInputSHA256 ||
-				gateSpec.RecipientActorID != input.Principal.ActorID {
+				gateSpec.RecipientActorID != input.Principal.ActorID ||
+				gateSpec.MattermostPostID == "" ||
+				gateSpec.MattermostChannelID == "" ||
+				gateSpec.MattermostRootPostID == "" ||
+				gateSpec.DeliveredAt.IsZero() ||
+				gateSpec.DeliveryFence == 0 ||
+				!validSHA256Text(gateSpec.DeliveryClaimTokenSHA256) {
 				return errs.ErrNotFound
 			}
 			process, err := tx.GetForUpdate(
@@ -1282,21 +1341,27 @@ func ownerGateTarget(decision string) enum.State {
 	}
 }
 
-func shouldEmitOccurrence(
+func scheduleOccurrenceDisposition(
 	spec entity.ScheduleSpec,
 	scheduledFor, now time.Time,
-) bool {
+	open bool,
+) (string, string) {
+	if spec.OverlapPolicy == "SKIP" && open {
+		return "SKIPPED", "overlap"
+	}
 	if !scheduledFor.Before(now) {
-		return true
+		return "QUEUED", ""
 	}
 	switch spec.MisfirePolicy {
 	case "SKIP":
-		return false
+		return "SKIPPED", "misfire"
 	case "WITHIN_GRACE":
-		return now.Sub(scheduledFor) <= spec.MisfireGrace
+		if now.Sub(scheduledFor) > spec.MisfireGrace {
+			return "SKIPPED", "misfire_grace_expired"
+		}
 	default:
-		return true
 	}
+	return "QUEUED", ""
 }
 
 func nextScheduleRun(
@@ -1322,7 +1387,7 @@ func nextScheduleRun(
 		}
 	}
 	nextRun := next(scheduledFor)
-	if spec.MisfirePolicy == "CATCH_UP" {
+	if spec.MisfirePolicy == "CATCH_UP" && !spec.Coalesce {
 		return nextRun.UTC().Truncate(time.Microsecond), nil
 	}
 	for !nextRun.After(now) {
@@ -1412,6 +1477,12 @@ func (service *Service) createRuntimeRevision(
 	if !ok {
 		return entity.Resource{}, errs.ErrInternal
 	}
+	if !slices.Contains(
+		roleSpec.ProviderCredentialBindingIDs,
+		sessionSpec.ProviderAccountBindingID,
+	) {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
 	prompt, err := add(roleSpec.PromptProfileID, enum.KindPromptProfile)
 	if err != nil {
 		return entity.Resource{}, err
@@ -1434,20 +1505,32 @@ func (service *Service) createRuntimeRevision(
 	credentialIDs := map[string]struct{}{
 		sessionSpec.ProviderAccountBindingID: {},
 	}
-	integrationIDs := make([]string, 0, 16)
-	for _, item := range resources {
-		switch spec := item.Spec.(type) {
-		case entity.RepositoryWorkspaceSpec:
-			selected[item.ID] = item
-			if spec.CredentialBindingID != "" {
-				credentialIDs[spec.CredentialBindingID] = struct{}{}
-			}
-		case entity.IntegrationSpec:
-			selected[item.ID] = item
-			integrationIDs = append(integrationIDs, item.ID)
-			for _, identifier := range spec.CredentialBindingIDs {
-				credentialIDs[identifier] = struct{}{}
-			}
+	integrationIDs := make([]string, 0, len(roleSpec.IntegrationIDs))
+	for _, identifier := range roleSpec.RepositoryWorkspaceIDs {
+		item, err := add(identifier, enum.KindRepositoryWorkspace)
+		if err != nil {
+			return entity.Resource{}, err
+		}
+		spec, ok := item.Spec.(entity.RepositoryWorkspaceSpec)
+		if !ok {
+			return entity.Resource{}, errs.ErrInternal
+		}
+		if spec.CredentialBindingID != "" {
+			credentialIDs[spec.CredentialBindingID] = struct{}{}
+		}
+	}
+	for _, identifier := range roleSpec.IntegrationIDs {
+		item, err := add(identifier, enum.KindIntegration)
+		if err != nil {
+			return entity.Resource{}, err
+		}
+		spec, ok := item.Spec.(entity.IntegrationSpec)
+		if !ok {
+			return entity.Resource{}, errs.ErrInternal
+		}
+		integrationIDs = append(integrationIDs, item.ID)
+		for _, credentialID := range spec.CredentialBindingIDs {
+			credentialIDs[credentialID] = struct{}{}
 		}
 	}
 	credentialList := make([]string, 0, len(credentialIDs))
@@ -1500,14 +1583,18 @@ func (service *Service) createRuntimeRevision(
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
 	manifestSHA256, err := canonicalHash(struct {
-		OrganizationID          string
-		ProjectID               string
-		PredecessorRevisionID   string
-		ImageDigest             string
-		AuthorityPolicyRevision uint64
-		AuthorityPolicySHA256   string
-		Components              []entity.EffectiveResourceRef
-		CreatedAt               time.Time
+		OrganizationID              string
+		ProjectID                   string
+		PredecessorRevisionID       string
+		ImageDigest                 string
+		AuthorityPolicyRevision     uint64
+		AuthorityPolicySHA256       string
+		Components                  []entity.EffectiveResourceRef
+		CreatedAt                   time.Time
+		SessionID                   string
+		RoleID                      string
+		ChatID                      string
+		ProviderCredentialBindingID string
 	}{
 		principal.OrganizationID,
 		principal.ProjectID,
@@ -1517,6 +1604,10 @@ func (service *Service) createRuntimeRevision(
 		service.authorityPolicySHA256,
 		components,
 		now,
+		session.ID,
+		role.ID,
+		sessionSpec.ConversationID,
+		sessionSpec.ProviderAccountBindingID,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInternal
@@ -1530,17 +1621,21 @@ func (service *Service) createRuntimeRevision(
 		enum.KindRuntimeRevision,
 		"Effective runtime revision",
 		entity.RuntimeRevisionSpec{
-			ManifestSHA256:         manifestSHA256,
-			ImageDigest:            service.runtimeImageDigest,
-			PromptProfileID:        prompt.ID,
-			PromptRevision:         promptSpec.Revision,
-			CredentialBindingIDs:   credentialList,
-			IntegrationIDs:         integrationIDs,
-			PredecessorRevisionID:  predecessorID,
-			AuthorityPolicyVersion: service.authorityPolicyRevision,
-			AuthorityPolicySHA256:  service.authorityPolicySHA256,
-			Components:             components,
-			CreatedAt:              now,
+			ManifestSHA256:              manifestSHA256,
+			ImageDigest:                 service.runtimeImageDigest,
+			PromptProfileID:             prompt.ID,
+			PromptRevision:              promptSpec.Revision,
+			CredentialBindingIDs:        credentialList,
+			IntegrationIDs:              integrationIDs,
+			PredecessorRevisionID:       predecessorID,
+			AuthorityPolicyVersion:      service.authorityPolicyRevision,
+			AuthorityPolicySHA256:       service.authorityPolicySHA256,
+			Components:                  components,
+			CreatedAt:                   now,
+			SessionID:                   session.ID,
+			RoleID:                      role.ID,
+			ChatID:                      sessionSpec.ConversationID,
+			ProviderCredentialBindingID: sessionSpec.ProviderAccountBindingID,
 		},
 		now,
 	)

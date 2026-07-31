@@ -5,14 +5,15 @@ import (
 	"context"
 	"errors"
 
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
-	controlplanev1 "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/generated/controlplane/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -455,9 +456,20 @@ func (server *Server) ClaimDueSchedules(
 				TargetKind:           toProtoKind(occurrence.TargetKind),
 				TargetVersion:        occurrence.TargetVersion,
 				EffectiveInputSha256: occurrence.EffectiveInputSHA256,
-				State:                occurrenceState(occurrence.State),
-				Attempt:              occurrence.Attempt,
-				AvailableAt:          timestamppb.New(occurrence.AvailableAt),
+				PromptProfileId:      occurrence.PromptProfileID,
+				PromptRevision:       occurrence.PromptRevision,
+				RuntimeRevisionId:    occurrence.RuntimeRevisionID,
+				SessionPolicy:        scheduleSessionPolicy(occurrence.SessionPolicy),
+				RoomId:               occurrence.RoomID,
+				NotificationPolicy:   scheduleNotificationPolicy(occurrence.NotificationPolicy),
+				MaximumExecutionDuration: durationpb.New(
+					occurrence.MaximumExecution,
+				),
+				Coalesce:    occurrence.Coalesce,
+				State:       occurrenceState(occurrence.State),
+				Attempt:     occurrence.Attempt,
+				AvailableAt: timestamppb.New(occurrence.AvailableAt),
+				Outcome:     occurrence.Outcome,
 			},
 		)
 	}

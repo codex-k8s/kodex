@@ -9,7 +9,7 @@ WITH skipped AS (
       AND occurrence.project_id = @project_id::uuid
       AND occurrence.state = 'QUEUED'
       AND occurrence.available_at <= @now
-      AND occurrence.overlap_policy IN ('FORBID', 'SKIP')
+      AND occurrence.overlap_policy = 'SKIP'
       AND EXISTS (
           SELECT 1
           FROM control_plane.schedule_occurrences AS active
@@ -28,6 +28,14 @@ SELECT
     target_kind,
     target_version,
     effective_input_sha256,
+    prompt_profile_id::text,
+    prompt_revision,
+    runtime_revision_id::text,
+    session_policy,
+    coalesce(room_id::text, ''),
+    notification_policy,
+    maximum_execution_duration_ms,
+    coalesce,
     overlap_policy,
     maximum_attempts,
     initial_backoff_ms,

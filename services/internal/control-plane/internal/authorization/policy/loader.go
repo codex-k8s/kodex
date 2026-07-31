@@ -15,22 +15,30 @@ import (
 
 const (
 	maximumPolicyBytes = 1 << 20
-	producerID         = "control-plane.oidc"
 	resolverFullMethod = "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof"
 )
 
-// Loaded содержит только server-owned proof producer view.
+// Producer — exact server-owned application credential producer.
+type Producer struct {
+	ID                 string
+	CallerWorkload     string
+	CallerSPIFFEID     string
+	Credential         string
+	CredentialMetadata string
+	CredentialIssuer   string
+	CredentialAudience string
+	ProofAudience      string
+}
+
+// Loaded содержит все зарегистрированные server-owned proof producers.
 type Loaded struct {
 	Revision                     uint64
 	Digest                       string
 	Issuer                       string
 	ProofAudience                string
 	AuthorizationContextAudience string
-	CallerWorkload               string
-	CallerSPIFFEID               string
-	ApplicationIssuer            string
-	ApplicationAudience          string
-	ApplicationCredential        string
+	OIDC                         Producer
+	Producers                    map[string]Producer
 	Operations                   map[string]authorityservice.Operation
 }
 
@@ -75,7 +83,7 @@ type binding struct {
 	ProjectRequired bool   `json:"project_required"`
 }
 
-// Load связывает operations с одним exact proof producer.
+// Load связывает каждую operation ровно с одним exact proof producer.
 func Load(path string, expected map[string]string) (Loaded, error) {
 	raw, err := readBounded(path)
 	if err != nil {
@@ -108,50 +116,71 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 	if err != nil {
 		return Loaded{}, err
 	}
-	var producer proofProducer
-	matches := 0
+	producers := make(map[string]Producer, len(policy.ProofProducers))
+	allowed := make(map[string]string)
+	var oidc Producer
+	var issuer, proofAudience string
 	for _, candidate := range policy.ProofProducers {
-		if candidate.ID == producerID {
-			producer = candidate
-			matches++
+		if candidate.ID == "" ||
+			candidate.OwnerWorkload != "control-plane" ||
+			candidate.OwnerSPIFFEID != "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane" ||
+			candidate.FullMethod != resolverFullMethod ||
+			candidate.CallerWorkload == "" || candidate.CallerSPIFFEID == "" ||
+			candidate.CredentialMetadata != "authorization" ||
+			candidate.CredentialIssuer == "" ||
+			candidate.CredentialAudience == "" ||
+			!supportedCredential(candidate.Credential) ||
+			candidate.ProofIssuer != candidate.OwnerSPIFFEID ||
+			candidate.ProofAudience == "" {
+			return Loaded{}, errors.New("control-plane proof producer is invalid")
+		}
+		if _, duplicate := producers[candidate.ID]; duplicate {
+			return Loaded{}, errors.New("control-plane proof producer is duplicated")
+		}
+		producer := Producer{
+			ID:                 candidate.ID,
+			CallerWorkload:     candidate.CallerWorkload,
+			CallerSPIFFEID:     candidate.CallerSPIFFEID,
+			Credential:         candidate.Credential,
+			CredentialMetadata: candidate.CredentialMetadata,
+			CredentialIssuer:   candidate.CredentialIssuer,
+			CredentialAudience: candidate.CredentialAudience,
+			ProofAudience:      candidate.ProofAudience,
+		}
+		producers[candidate.ID] = producer
+		if candidate.ID == "control-plane.oidc" {
+			if candidate.Credential != "OIDC_BEARER" {
+				return Loaded{}, errors.New("control-plane OIDC producer is invalid")
+			}
+			oidc = producer
+			issuer = candidate.ProofIssuer
+			proofAudience = candidate.ProofAudience
+		} else if candidate.Credential == "OIDC_BEARER" {
+			return Loaded{}, errors.New("OIDC credential producer is ambiguous")
+		}
+		for _, operationID := range candidate.AllowedOperationIDs {
+			if _, duplicate := allowed[operationID]; duplicate {
+				return Loaded{}, errors.New("proof producer operation is duplicated")
+			}
+			allowed[operationID] = candidate.ID
 		}
 	}
-	if matches != 1 ||
-		producer.OwnerWorkload != "control-plane" ||
-		producer.OwnerSPIFFEID != "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane" ||
-		producer.FullMethod != resolverFullMethod ||
-		producer.CallerWorkload != "control-api-gateway" ||
-		producer.CallerSPIFFEID != "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway" ||
-		producer.Credential != "OIDC_BEARER" ||
-		producer.CredentialMetadata != "authorization" ||
-		producer.CredentialIssuer == "" ||
-		producer.CredentialAudience == "" ||
-		producer.ProofIssuer != producer.OwnerSPIFFEID ||
-		producer.ProofAudience == "" {
-		return Loaded{}, errors.New("control-plane proof producer is invalid")
-	}
-	allowed := make(map[string]struct{}, len(producer.AllowedOperationIDs))
-	for _, operationID := range producer.AllowedOperationIDs {
-		if _, duplicate := allowed[operationID]; duplicate {
-			return Loaded{}, errors.New("proof producer operation is duplicated")
-		}
-		allowed[operationID] = struct{}{}
+	if oidc.ID == "" || issuer == "" || len(producers) < 2 {
+		return Loaded{}, errors.New("control-plane producer registry is incomplete")
 	}
 	operations := make(map[string]authorityservice.Operation, len(expected))
 	for _, candidate := range policy.Bindings {
-		if candidate.ProofProducerID != producerID {
-			continue
-		}
+		producer, producerExists := producers[candidate.ProofProducerID]
 		expectedMethod, ok := expected[candidate.OperationID]
-		_, permitted := allowed[candidate.OperationID]
-		if !ok || !permitted ||
+		permittedProducer := allowed[candidate.OperationID]
+		if !producerExists || !ok || permittedProducer != candidate.ProofProducerID ||
 			candidate.FullMethod != expectedMethod ||
 			candidate.Permission == "" ||
 			candidate.Audience == "" ||
 			candidate.CallerWorkload != producer.CallerWorkload ||
 			candidate.CallerSPIFFEID != producer.CallerSPIFFEID ||
-			candidate.TargetWorkload != producer.OwnerWorkload ||
-			candidate.TargetSPIFFEID != producer.OwnerSPIFFEID {
+			candidate.TargetWorkload != "control-plane" ||
+			candidate.TargetSPIFFEID != "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane" {
 			return Loaded{}, errors.New("control-plane operation binding is invalid")
 		}
 		if _, duplicate := operations[candidate.OperationID]; duplicate {
@@ -162,6 +191,11 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 			Permission:      candidate.Permission,
 			ProjectRequired: candidate.ProjectRequired,
 			TenantOwnerOnly: candidate.OperationID == "control.project.create",
+			CallerWorkload:  producer.CallerWorkload,
+			CallerSPIFFEID:  producer.CallerSPIFFEID,
+			ActorKind:       producerActorKind(producer),
+			AuthoritySource: producerAuthoritySource(producer),
+			ProofAudience:   producer.ProofAudience,
 		}
 		if candidate.Audience != "urn:mattercodex:internal-rpc:control-plane" {
 			return Loaded{}, errors.New("control-plane operation audience is invalid")
@@ -173,16 +207,48 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 	return Loaded{
 		Revision:                     parsed.Revision,
 		Digest:                       digest,
-		Issuer:                       producer.ProofIssuer,
-		ProofAudience:                producer.ProofAudience,
+		Issuer:                       issuer,
+		ProofAudience:                proofAudience,
 		AuthorizationContextAudience: "urn:mattercodex:internal-rpc:control-plane",
-		CallerWorkload:               producer.CallerWorkload,
-		CallerSPIFFEID:               producer.CallerSPIFFEID,
-		ApplicationIssuer:            producer.CredentialIssuer,
-		ApplicationAudience:          producer.CredentialAudience,
-		ApplicationCredential:        producer.Credential,
+		OIDC:                         oidc,
+		Producers:                    producers,
 		Operations:                   operations,
 	}, nil
+}
+
+func producerActorKind(producer Producer) string {
+	if producer.Credential == "OIDC_BEARER" {
+		return "HUMAN"
+	}
+	return "WORKLOAD"
+}
+
+func producerAuthoritySource(producer Producer) string {
+	switch producer.Credential {
+	case "OIDC_BEARER":
+		return "OIDC_SESSION"
+	case "AGENT_SESSION_GRANT":
+		return "AGENT_SESSION"
+	case "AUTOMATION_OCCURRENCE_GRANT":
+		return "AUTOMATION_OCCURRENCE"
+	default:
+		return "PROCESS_RUN"
+	}
+}
+
+func supportedCredential(credential string) bool {
+	switch credential {
+	case "OIDC_BEARER",
+		"AGENT_SESSION_GRANT",
+		"AUTOMATION_OCCURRENCE_GRANT",
+		"PROCESS_RUN_GRANT",
+		"OWNER_GATE_DELIVERY_GRANT",
+		"RUNTIME_REVISION_GRANT",
+		"MEMORY_INDEX_GRANT":
+		return true
+	default:
+		return false
+	}
 }
 
 func readBounded(path string) ([]byte, error) {

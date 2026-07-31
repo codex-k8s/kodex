@@ -5,6 +5,7 @@ go 1.26.5
 require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/matter-codex/libs/go/cache v0.0.0-00010101000000-000000000000
+	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0-00010101000000-000000000000
@@ -78,6 +79,8 @@ require (
 )
 
 replace github.com/codex-k8s/matter-codex/libs/go/cache => ../../../libs/go/cache
+
+replace github.com/codex-k8s/matter-codex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
 
 replace github.com/codex-k8s/matter-codex/libs/go/eventing => ../../../libs/go/eventing
 

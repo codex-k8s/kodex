@@ -39,7 +39,7 @@ func (store *OutboxStore) Check(ctx context.Context) error {
 	); err != nil {
 		return mapError(err)
 	}
-	if version != 20260731000200 || !member || !nonSuperuser || !noBypassRLS {
+	if version != 20260731000300 || !member || !nonSuperuser || !noBypassRLS {
 		return errors.New("control-plane outbox role is not ready")
 	}
 	return nil
@@ -99,7 +99,7 @@ func (store *OutboxStore) MarkPublished(
 			"broker_sequence":  receipt.Sequence,
 			"broker_duplicate": receipt.Duplicate,
 			"published_at":     now,
-			"cleanup_after":    now.Add(30 * 24 * time.Hour),
+			"cleanup_after":    now.Add(31 * 24 * time.Hour),
 		},
 	)
 	if err != nil {

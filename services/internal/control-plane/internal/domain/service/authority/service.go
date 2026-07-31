@@ -31,6 +31,11 @@ type Operation struct {
 	Permission      string
 	ProjectRequired bool
 	TenantOwnerOnly bool
+	CallerWorkload  string
+	CallerSPIFFEID  string
+	ActorKind       string
+	AuthoritySource string
+	ProofAudience   string
 }
 
 // Config задаёт exact proof purpose/audiences and policy.
@@ -38,8 +43,6 @@ type Config struct {
 	Issuer                       string
 	ProofAudience                string
 	AuthorizationContextAudience string
-	CallerWorkload               string
-	CallerSPIFFEID               string
 	PolicyRevision               uint64
 	PolicyDigest                 string
 	Operations                   map[string]Operation
@@ -79,14 +82,17 @@ func New(
 	if repository == nil || signer == nil ||
 		config.Issuer == "" || config.ProofAudience == "" ||
 		config.AuthorizationContextAudience == "" ||
-		config.CallerWorkload == "" || config.CallerSPIFFEID == "" ||
 		config.PolicyRevision == 0 || !validDigest(config.PolicyDigest) ||
 		len(config.Operations) == 0 {
 		return nil, errors.New("authority proof service configuration is invalid")
 	}
 	for operationID, operation := range config.Operations {
 		if !operationPattern.MatchString(operationID) ||
-			operation.FullMethod == "" || operation.Permission == "" {
+			operation.FullMethod == "" || operation.Permission == "" ||
+			operation.CallerWorkload == "" ||
+			operation.CallerSPIFFEID == "" ||
+			(operation.ActorKind != "HUMAN" && operation.ActorKind != "WORKLOAD") ||
+			operation.AuthoritySource == "" || operation.ProofAudience == "" {
 			return nil, errors.New("authority proof operation is invalid")
 		}
 	}
@@ -107,8 +113,8 @@ func (service *Service) Resolve(
 	if !ok || value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
 		value.ValidateID(input.CorrelationID) != nil ||
 		validateApplicationIdentity(input.Identity) != nil ||
-		input.Identity.CallerWorkload != service.config.CallerWorkload ||
-		input.Identity.CallerSPIFFEID != service.config.CallerSPIFFEID {
+		input.Identity.CallerWorkload != operation.CallerWorkload ||
+		input.Identity.CallerSPIFFEID != operation.CallerSPIFFEID {
 		return authoritytype.Proof{}, errs.ErrUnauthenticated
 	}
 	if operation.ProjectRequired {
@@ -206,7 +212,7 @@ func (service *Service) Resolve(
 			}
 			now := service.now().UTC().Truncate(time.Second)
 			provenance := authoritytype.Provenance{
-				Source:       "OIDC_SESSION",
+				Source:       operation.AuthoritySource,
 				Reference:    input.Identity.SessionJTI,
 				Revision:     input.Identity.SessionRevision,
 				DigestSHA256: input.Identity.CredentialDigest,
@@ -214,15 +220,15 @@ func (service *Service) Resolve(
 			claims := authoritytype.ProofClaims{
 				Version:  1,
 				Issuer:   service.config.Issuer,
-				Audience: service.config.ProofAudience,
+				Audience: operation.ProofAudience,
 				Caller: authoritytype.Workload{
-					WorkloadID: service.config.CallerWorkload,
-					SPIFFEID:   service.config.CallerSPIFFEID,
+					WorkloadID: operation.CallerWorkload,
+					SPIFFEID:   operation.CallerSPIFFEID,
 				},
 				OperationID:                  input.OperationID,
 				AuthorizationContextAudience: service.config.AuthorizationContextAudience,
 				Authority: authoritytype.Authority{
-					ActorKind: "HUMAN",
+					ActorKind: operation.ActorKind,
 					Actor: authoritytype.Identity{
 						ID:         input.Identity.ActorID,
 						Provenance: provenance,

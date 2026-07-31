@@ -151,6 +151,9 @@ spec:
             - name: oidc-ca
               mountPath: /var/run/config/mattercodex/control-plane/oidc
               readOnly: true
+            - name: application-grants
+              mountPath: /var/run/config/mattercodex/control-plane/application-grants
+              readOnly: true
             - name: otel-ca
               mountPath: /var/run/config/mattercodex/control-plane/observability
               readOnly: true
@@ -242,6 +245,12 @@ spec:
             items:
               - key: ca.pem
                 path: ca.pem
+        - name: application-grants
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-application-grants
         - name: otel-ca
           configMap:
             name: mattercodex-otel-ca

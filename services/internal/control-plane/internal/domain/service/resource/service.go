@@ -23,28 +23,35 @@ import (
 )
 
 const (
-	permissionCreate           = "controlplane.resource.create"
-	permissionUpdate           = "controlplane.resource.update"
-	permissionTransition       = "controlplane.resource.transition"
-	permissionDelete           = "controlplane.resource.delete"
-	permissionAccessManage     = "controlplane.access.manage"
-	permissionRead             = "controlplane.resource.read"
-	permissionList             = "controlplane.resource.list"
-	permissionEnqueueTurn      = "controlplane.turn.enqueue"
-	permissionClaimTurn        = "controlplane.turn.claim"
-	permissionRenewTurn        = "controlplane.turn.renew"
-	permissionCompleteTurn     = "controlplane.turn.complete"
-	permissionRetryTurn        = "controlplane.turn.retry"
-	permissionCancelTurn       = "controlplane.turn.cancel"
-	permissionClaimSchedule    = "controlplane.schedule.claim"
-	permissionManageSchedule   = "controlplane.schedule.manage"
-	permissionExecuteSchedule  = "controlplane.schedule.execute"
-	permissionStartProcess     = "controlplane.process.start"
-	permissionCancelProcess    = "controlplane.process.cancel"
-	permissionRequestGate      = "controlplane.owner_gate.request"
-	permissionResolveGate      = "controlplane.owner_gate.resolve"
-	permissionRegisterArtifact = "controlplane.artifact.register"
-	permissionScanArtifact     = "controlplane.artifact.scan"
+	permissionCreate              = "controlplane.resource.create"
+	permissionUpdate              = "controlplane.resource.update"
+	permissionTransition          = "controlplane.resource.transition"
+	permissionDelete              = "controlplane.resource.delete"
+	permissionAccessManage        = "controlplane.access.manage"
+	permissionRead                = "controlplane.resource.read"
+	permissionList                = "controlplane.resource.list"
+	permissionEnqueueTurn         = "controlplane.turn.enqueue"
+	permissionClaimTurn           = "controlplane.turn.claim"
+	permissionRenewTurn           = "controlplane.turn.renew"
+	permissionCompleteTurn        = "controlplane.turn.complete"
+	permissionRetryTurn           = "controlplane.turn.retry"
+	permissionCancelTurn          = "controlplane.turn.cancel"
+	permissionClaimSchedule       = "controlplane.schedule.claim"
+	permissionManageSchedule      = "controlplane.schedule.manage"
+	permissionExecuteSchedule     = "controlplane.schedule.execute"
+	permissionStartProcess        = "controlplane.process.start"
+	permissionCancelProcess       = "controlplane.process.cancel"
+	permissionRequestGate         = "controlplane.owner_gate.request"
+	permissionResolveGate         = "controlplane.owner_gate.resolve"
+	permissionRegisterArtifact    = "controlplane.artifact.register"
+	permissionScanArtifact        = "controlplane.artifact.scan"
+	permissionManageSession       = "controlplane.session.manage"
+	permissionWriteMemory         = "controlplane.memory.write"
+	permissionWriteProjectMemory  = "controlplane.memory.project.write"
+	permissionManageWorkClaim     = "controlplane.work_claim.manage"
+	permissionDeliverGate         = "controlplane.owner_gate.deliver"
+	permissionReadRuntimeRevision = "controlplane.runtime_revision.read"
+	permissionIndexMemory         = "controlplane.memory.index"
 )
 
 // Config задаёт security-critical bounded runtime policy.
@@ -61,6 +68,8 @@ type Config struct {
 	ScannerSPIFFEID           string
 	SchedulerWorkload         string
 	SchedulerSPIFFEID         string
+	MemoryIndexerWorkload     string
+	MemoryIndexerSPIFFEID     string
 	Observer                  Observer
 }
 
@@ -79,6 +88,8 @@ type Service struct {
 	scannerSPIFFEID           string
 	schedulerWorkload         string
 	schedulerSPIFFEID         string
+	memoryIndexerWorkload     string
+	memoryIndexerSPIFFEID     string
 	observer                  Observer
 	now                       func() time.Time
 }
@@ -99,6 +110,8 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validSPIFFEID(config.ScannerSPIFFEID) ||
 		value.ValidateStableKey(config.SchedulerWorkload) != nil ||
 		!validSPIFFEID(config.SchedulerSPIFFEID) ||
+		value.ValidateStableKey(config.MemoryIndexerWorkload) != nil ||
+		!validSPIFFEID(config.MemoryIndexerSPIFFEID) ||
 		config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
@@ -116,6 +129,8 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		scannerSPIFFEID:           config.ScannerSPIFFEID,
 		schedulerWorkload:         config.SchedulerWorkload,
 		schedulerSPIFFEID:         config.SchedulerSPIFFEID,
+		memoryIndexerWorkload:     config.MemoryIndexerWorkload,
+		memoryIndexerSPIFFEID:     config.MemoryIndexerSPIFFEID,
 		observer:                  config.Observer,
 		now:                       time.Now,
 	}, nil
@@ -809,7 +824,8 @@ func accessKind(kind enum.Kind) bool {
 func protectedCreateKind(kind enum.Kind) bool {
 	switch kind {
 	case enum.KindRuntimeRevision, enum.KindProcessRun, enum.KindSchedule,
-		enum.KindOwnerGate, enum.KindArtifact:
+		enum.KindOwnerGate, enum.KindArtifact, enum.KindSession,
+		enum.KindMemoryRecord, enum.KindWorkClaim:
 		return true
 	default:
 		return false
@@ -820,7 +836,7 @@ func protectedMutationKind(kind enum.Kind) bool {
 	switch kind {
 	case enum.KindRuntimeRevision, enum.KindSession, enum.KindTurn,
 		enum.KindProcessRun, enum.KindSchedule, enum.KindOwnerGate,
-		enum.KindArtifact:
+		enum.KindArtifact, enum.KindMemoryRecord, enum.KindWorkClaim:
 		return true
 	default:
 		return false
@@ -978,6 +994,15 @@ func (service *Service) validateReferences(
 		for _, identifier := range spec.AllowedTargetRoleIDs {
 			add(identifier, enum.KindRole)
 		}
+		for _, identifier := range spec.ProviderCredentialBindingIDs {
+			add(identifier, enum.KindCredentialBinding)
+		}
+		for _, identifier := range spec.RepositoryWorkspaceIDs {
+			add(identifier, enum.KindRepositoryWorkspace)
+		}
+		for _, identifier := range spec.IntegrationIDs {
+			add(identifier, enum.KindIntegration)
+		}
 	case entity.RepositoryWorkspaceSpec:
 		add(spec.CredentialBindingID, enum.KindCredentialBinding)
 	case entity.IntegrationSpec:
@@ -1005,8 +1030,14 @@ func (service *Service) validateReferences(
 	case entity.ProcessRunSpec:
 		add(spec.ParentProcessRunID, enum.KindProcessRun)
 		add(spec.ResultArtifactID, enum.KindArtifact)
+		add(spec.RuntimeRevisionID, enum.KindRuntimeRevision)
+		add(spec.LaunchingProcessRunID, enum.KindProcessRun)
+		add(spec.LaunchingTurnID, enum.KindTurn)
 	case entity.ScheduleSpec:
 		add(spec.TargetResourceID)
+		add(spec.PromptProfileID, enum.KindPromptProfile)
+		add(spec.RoomID, enum.KindChat)
+		add(spec.RuntimeRevisionID, enum.KindRuntimeRevision)
 	case entity.OwnerGateSpec:
 		add(spec.ProcessRunID, enum.KindProcessRun)
 	case entity.MemoryRecordSpec:

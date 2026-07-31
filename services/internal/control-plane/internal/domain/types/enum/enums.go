@@ -87,7 +87,9 @@ func InitialState(kind Kind) State {
 func TransitionAllowed(kind Kind, from, to State) bool {
 	if !kind.Valid() || from == to ||
 		(from.Terminal() &&
-			!(kind == KindTurn && from == StateFailed && to == StateQueued)) {
+			!(kind == KindTurn && from == StateFailed && to == StateQueued) &&
+			!(kind == KindSession && from == StateCancelled &&
+				to == StateDeletionPending)) {
 		return false
 	}
 	switch kind {
@@ -110,14 +112,20 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 	case KindSession:
 		switch from {
 		case StateActive:
-			return to == StateQueued || to == StateArchived || to == StateBlocked
+			return to == StateQueued || to == StateArchived ||
+				to == StateCancelled || to == StateBlocked
 		case StateQueued:
 			return to == StateRunning || to == StateCancelled || to == StateBlocked
 		case StateRunning:
 			return to == StateActive || to == StateWaitingOwner ||
 				to == StateWaitingExternal || to == StateBlocked || to == StateFailed
 		case StateWaitingExternal, StateWaitingOwner, StateBlocked:
-			return to == StateQueued || to == StateArchived || to == StateFailed
+			return to == StateQueued || to == StateArchived ||
+				to == StateCancelled || to == StateFailed
+		case StateArchived, StateCancelled:
+			return to == StateDeletionPending
+		case StateDeletionPending:
+			return to == StateDeleted
 		}
 	case KindSchedule:
 		return (from == StateActive && (to == StatePaused || to == StateArchived)) ||

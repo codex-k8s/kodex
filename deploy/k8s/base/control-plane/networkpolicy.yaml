@@ -27,6 +27,24 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: control-api-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-runner
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: automation-scheduler
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: artifact-scanner
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: interaction-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: runtime-controller
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: memory-indexer
       ports:
         - protocol: TCP
           port: 8443

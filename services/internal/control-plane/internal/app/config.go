@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	controlplanev1 "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/generated/controlplane/v1"
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
 const serviceName = "control_plane"
@@ -50,6 +50,7 @@ type Config struct {
 	RuntimeImageDigest          string        `env:"CONTROL_PLANE_RUNTIME_IMAGE_DIGEST"`
 	OIDCTLSServerName           string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
 	OIDCCAFile                  string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
+	ApplicationGrantTrustDir    string        `env:"CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR"`
 	InstanceID                  string        `env:"POD_UID"`
 	StartupTimeout              time.Duration `env:"CONTROL_PLANE_STARTUP_TIMEOUT"`
 	ReadinessTimeout            time.Duration `env:"CONTROL_PLANE_READINESS_TIMEOUT"`
@@ -101,6 +102,7 @@ func loadConfig() (Config, error) {
 		LeaseSigningKeyFile:         "/var/run/secrets/mattercodex/control-plane/lease-signing/key",
 		OIDCTLSServerName:           "sso.mattercodex.local",
 		OIDCCAFile:                  "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
+		ApplicationGrantTrustDir:    "/var/run/config/mattercodex/control-plane/application-grants",
 		StartupTimeout:              15 * time.Second,
 		ReadinessTimeout:            2 * time.Second,
 		ReadinessInterval:           10 * time.Second,
@@ -177,6 +179,7 @@ func (config Config) validate() error {
 		config.ProofTrustFile,
 		config.LeaseSigningKeyFile,
 		config.OIDCCAFile,
+		config.ApplicationGrantTrustDir,
 	} {
 		if !filepath.IsAbs(path) {
 			return errors.New("control-plane runtime path must be absolute")
@@ -200,32 +203,46 @@ func (config Config) validate() error {
 	return nil
 }
 
-func expectedOIDCOperations() map[string]string {
+func expectedOperations() map[string]string {
 	return map[string]string{
-		"control.project.create":             controlplanev1.ControlPlaneService_CreateProject_FullMethodName,
-		"control.project.list":               controlplanev1.ControlPlaneService_ListProjects_FullMethodName,
-		"control.resource.create":            controlplanev1.ControlPlaneService_CreateResource_FullMethodName,
-		"control.resource.update":            controlplanev1.ControlPlaneService_UpdateResource_FullMethodName,
-		"control.resource.transition":        controlplanev1.ControlPlaneService_TransitionResource_FullMethodName,
-		"control.resource.delete":            controlplanev1.ControlPlaneService_DeleteResource_FullMethodName,
-		"control.access.manage":              controlplanev1.ControlPlaneService_ManageAccessResource_FullMethodName,
-		"control.resource.get":               controlplanev1.ControlPlaneService_GetResource_FullMethodName,
-		"control.resource.list":              controlplanev1.ControlPlaneService_ListResources_FullMethodName,
-		"control.resource.search":            controlplanev1.ControlPlaneService_SearchResources_FullMethodName,
-		"control.audit.list":                 controlplanev1.ControlPlaneService_ListAuditEvents_FullMethodName,
-		"control.tombstone.list":             controlplanev1.ControlPlaneService_ListTombstones_FullMethodName,
-		"control.diagnostics.get":            controlplanev1.ControlPlaneService_GetDiagnostics_FullMethodName,
-		"control.readiness.check":            controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.turn.enqueue":               controlplanev1.ControlPlaneService_EnqueueTurn_FullMethodName,
-		"control.turn.retry":                 controlplanev1.ControlPlaneService_RetryTurn_FullMethodName,
-		"control.turn.cancel":                controlplanev1.ControlPlaneService_CancelTurn_FullMethodName,
-		"control.schedule.manage":            controlplanev1.ControlPlaneService_ManageSchedule_FullMethodName,
-		"control.schedule.cancel-occurrence": controlplanev1.ControlPlaneService_CancelScheduleOccurrence_FullMethodName,
-		"control.schedule.list-occurrences":  controlplanev1.ControlPlaneService_ListScheduleOccurrences_FullMethodName,
-		"control.process.start":              controlplanev1.ControlPlaneService_StartProcess_FullMethodName,
-		"control.process.cancel":             controlplanev1.ControlPlaneService_CancelProcess_FullMethodName,
-		"control.owner-gate.request":         controlplanev1.ControlPlaneService_RequestOwnerGate_FullMethodName,
-		"control.owner-gate.resolve":         controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
-		"control.artifact.register":          controlplanev1.ControlPlaneService_RegisterArtifact_FullMethodName,
+		"control.project.create":               controlplanev1.ControlPlaneService_CreateProject_FullMethodName,
+		"control.project.list":                 controlplanev1.ControlPlaneService_ListProjects_FullMethodName,
+		"control.resource.create":              controlplanev1.ControlPlaneService_CreateResource_FullMethodName,
+		"control.resource.update":              controlplanev1.ControlPlaneService_UpdateResource_FullMethodName,
+		"control.resource.transition":          controlplanev1.ControlPlaneService_TransitionResource_FullMethodName,
+		"control.resource.delete":              controlplanev1.ControlPlaneService_DeleteResource_FullMethodName,
+		"control.access.manage":                controlplanev1.ControlPlaneService_ManageAccessResource_FullMethodName,
+		"control.resource.get":                 controlplanev1.ControlPlaneService_GetResource_FullMethodName,
+		"control.resource.list":                controlplanev1.ControlPlaneService_ListResources_FullMethodName,
+		"control.resource.search":              controlplanev1.ControlPlaneService_SearchResources_FullMethodName,
+		"control.audit.list":                   controlplanev1.ControlPlaneService_ListAuditEvents_FullMethodName,
+		"control.tombstone.list":               controlplanev1.ControlPlaneService_ListTombstones_FullMethodName,
+		"control.diagnostics.get":              controlplanev1.ControlPlaneService_GetDiagnostics_FullMethodName,
+		"control.readiness.check":              controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.turn.enqueue":                 controlplanev1.ControlPlaneService_EnqueueTurn_FullMethodName,
+		"control.turn.retry":                   controlplanev1.ControlPlaneService_RetryTurn_FullMethodName,
+		"control.turn.cancel":                  controlplanev1.ControlPlaneService_CancelTurn_FullMethodName,
+		"control.schedule.manage":              controlplanev1.ControlPlaneService_ManageSchedule_FullMethodName,
+		"control.schedule.cancel-occurrence":   controlplanev1.ControlPlaneService_CancelScheduleOccurrence_FullMethodName,
+		"control.schedule.list-occurrences":    controlplanev1.ControlPlaneService_ListScheduleOccurrences_FullMethodName,
+		"control.process.start":                controlplanev1.ControlPlaneService_StartProcess_FullMethodName,
+		"control.process.cancel":               controlplanev1.ControlPlaneService_CancelProcess_FullMethodName,
+		"control.owner-gate.request":           controlplanev1.ControlPlaneService_RequestOwnerGate_FullMethodName,
+		"control.owner-gate.resolve":           controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
+		"control.artifact.register":            controlplanev1.ControlPlaneService_RegisterArtifact_FullMethodName,
+		"control.session.manage":               controlplanev1.ControlPlaneService_ManageSession_FullMethodName,
+		"control.memory.manage":                controlplanev1.ControlPlaneService_ManageMemoryRecord_FullMethodName,
+		"control.memory.search":                controlplanev1.ControlPlaneService_SearchMemoryRecords_FullMethodName,
+		"control.work-claim.manage":            controlplanev1.ControlPlaneService_ManageWorkClaim_FullMethodName,
+		"control.turn.claim":                   controlplanev1.ControlPlaneService_ClaimTurn_FullMethodName,
+		"control.turn.renew":                   controlplanev1.ControlPlaneService_RenewTurn_FullMethodName,
+		"control.turn.complete":                controlplanev1.ControlPlaneService_CompleteTurn_FullMethodName,
+		"control.schedule.claim-due":           controlplanev1.ControlPlaneService_ClaimDueSchedules_FullMethodName,
+		"control.schedule.claim-occurrence":    controlplanev1.ControlPlaneService_ClaimScheduleOccurrence_FullMethodName,
+		"control.schedule.complete-occurrence": controlplanev1.ControlPlaneService_CompleteScheduleOccurrence_FullMethodName,
+		"control.artifact.scan":                controlplanev1.ControlPlaneService_RecordArtifactScan_FullMethodName,
+		"control.owner-gate.deliver":           controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
+		"control.runtime-revision.get":         controlplanev1.ControlPlaneService_GetRuntimeRevision_FullMethodName,
+		"control.memory.index":                 controlplanev1.ControlPlaneService_RecordMemoryEmbedding_FullMethodName,
 	}
 }

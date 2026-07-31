@@ -85,10 +85,13 @@ func (spec ChatSpec) Validate() error {
 }
 
 type RoleSpec struct {
-	StableKey            string   `json:"stableKey"`
-	Capabilities         []string `json:"capabilities"`
-	AllowedTargetRoleIDs []string `json:"allowedTargetRoleIds"`
-	PromptProfileID      string   `json:"promptProfileId"`
+	StableKey                    string   `json:"stableKey"`
+	Capabilities                 []string `json:"capabilities"`
+	AllowedTargetRoleIDs         []string `json:"allowedTargetRoleIds"`
+	PromptProfileID              string   `json:"promptProfileId"`
+	ProviderCredentialBindingIDs []string `json:"providerCredentialBindingIds"`
+	RepositoryWorkspaceIDs       []string `json:"repositoryWorkspaceIds"`
+	IntegrationIDs               []string `json:"integrationIds"`
 }
 
 func (RoleSpec) Kind() enum.Kind { return enum.KindRole }
@@ -96,11 +99,20 @@ func (spec RoleSpec) Validate() error {
 	if value.ValidateStableKey(spec.StableKey) != nil ||
 		value.ValidateID(spec.PromptProfileID) != nil ||
 		!validPermissions(spec.Capabilities, 64) ||
-		len(spec.AllowedTargetRoleIDs) > 64 {
+		len(spec.AllowedTargetRoleIDs) > 64 ||
+		len(spec.ProviderCredentialBindingIDs) < 1 ||
+		len(spec.ProviderCredentialBindingIDs) > 8 ||
+		len(spec.RepositoryWorkspaceIDs) > 32 ||
+		len(spec.IntegrationIDs) > 32 {
 		return errors.New("role specification is invalid")
 	}
-	for _, identifier := range spec.AllowedTargetRoleIDs {
-		if value.ValidateID(identifier) != nil {
+	for _, identifiers := range [][]string{
+		spec.AllowedTargetRoleIDs,
+		spec.ProviderCredentialBindingIDs,
+		spec.RepositoryWorkspaceIDs,
+		spec.IntegrationIDs,
+	} {
+		if !validUniqueIDs(identifiers) {
 			return errors.New("role relationship is invalid")
 		}
 	}
@@ -196,17 +208,21 @@ func (spec IntegrationSpec) Validate() error {
 }
 
 type RuntimeRevisionSpec struct {
-	ManifestSHA256         string                 `json:"manifestSha256"`
-	ImageDigest            string                 `json:"imageDigest"`
-	PromptProfileID        string                 `json:"promptProfileId"`
-	PromptRevision         uint64                 `json:"promptRevision"`
-	CredentialBindingIDs   []string               `json:"credentialBindingIds"`
-	IntegrationIDs         []string               `json:"integrationIds"`
-	PredecessorRevisionID  string                 `json:"predecessorRevisionId,omitempty"`
-	AuthorityPolicyVersion uint64                 `json:"authorityPolicyRevision"`
-	AuthorityPolicySHA256  string                 `json:"authorityPolicySha256"`
-	Components             []EffectiveResourceRef `json:"components"`
-	CreatedAt              time.Time              `json:"createdAt"`
+	ManifestSHA256              string                 `json:"manifestSha256"`
+	ImageDigest                 string                 `json:"imageDigest"`
+	PromptProfileID             string                 `json:"promptProfileId"`
+	PromptRevision              uint64                 `json:"promptRevision"`
+	CredentialBindingIDs        []string               `json:"credentialBindingIds"`
+	IntegrationIDs              []string               `json:"integrationIds"`
+	PredecessorRevisionID       string                 `json:"predecessorRevisionId,omitempty"`
+	AuthorityPolicyVersion      uint64                 `json:"authorityPolicyRevision"`
+	AuthorityPolicySHA256       string                 `json:"authorityPolicySha256"`
+	Components                  []EffectiveResourceRef `json:"components"`
+	CreatedAt                   time.Time              `json:"createdAt"`
+	SessionID                   string                 `json:"sessionId"`
+	RoleID                      string                 `json:"roleId"`
+	ChatID                      string                 `json:"chatId,omitempty"`
+	ProviderCredentialBindingID string                 `json:"providerCredentialBindingId"`
 }
 
 func (RuntimeRevisionSpec) Kind() enum.Kind { return enum.KindRuntimeRevision }
@@ -222,7 +238,11 @@ func (spec RuntimeRevisionSpec) Validate() error {
 		spec.AuthorityPolicyVersion == 0 ||
 		!validSHA256(spec.AuthorityPolicySHA256) ||
 		len(spec.Components) < 5 || len(spec.Components) > 256 ||
-		spec.CreatedAt.IsZero() {
+		spec.CreatedAt.IsZero() ||
+		value.ValidateID(spec.SessionID) != nil ||
+		value.ValidateID(spec.RoleID) != nil ||
+		value.ValidateID(spec.ProviderCredentialBindingID) != nil ||
+		(spec.ChatID != "" && value.ValidateID(spec.ChatID) != nil) {
 		return errors.New("runtime revision specification is invalid")
 	}
 	if spec.PredecessorRevisionID != "" &&
@@ -330,16 +350,20 @@ func (spec TurnSpec) Validate() error {
 }
 
 type ProcessRunSpec struct {
-	ParentProcessRunID   string `json:"parentProcessRunId,omitempty"`
-	PlaybookRef          string `json:"playbookRef"`
-	PolicyRevision       uint64 `json:"policyRevision"`
-	RootTriggerRef       string `json:"rootTriggerRef"`
-	ResultArtifactID     string `json:"resultArtifactId,omitempty"`
-	RootInitiatorActorID string `json:"rootInitiatorActorId"`
-	RootSessionID        string `json:"rootSessionId"`
-	RootTurnID           string `json:"rootTurnId"`
-	RootAttempt          uint32 `json:"rootAttempt"`
-	ImmutableInputSHA256 string `json:"immutableInputSha256"`
+	ParentProcessRunID    string `json:"parentProcessRunId,omitempty"`
+	PlaybookRef           string `json:"playbookRef"`
+	PolicyRevision        uint64 `json:"policyRevision"`
+	RootTriggerRef        string `json:"rootTriggerRef"`
+	ResultArtifactID      string `json:"resultArtifactId,omitempty"`
+	RootInitiatorActorID  string `json:"rootInitiatorActorId"`
+	RootSessionID         string `json:"rootSessionId"`
+	RootTurnID            string `json:"rootTurnId"`
+	RootAttempt           uint32 `json:"rootAttempt"`
+	ImmutableInputSHA256  string `json:"immutableInputSha256"`
+	RuntimeRevisionID     string `json:"runtimeRevisionId"`
+	LaunchingProcessRunID string `json:"launchingProcessRunId,omitempty"`
+	LaunchingTurnID       string `json:"launchingTurnId,omitempty"`
+	LaunchingAttempt      uint32 `json:"launchingAttempt,omitempty"`
 }
 
 func (ProcessRunSpec) Kind() enum.Kind { return enum.KindProcessRun }
@@ -350,42 +374,80 @@ func (spec ProcessRunSpec) Validate() error {
 		value.ValidateID(spec.RootSessionID) != nil ||
 		value.ValidateID(spec.RootTurnID) != nil ||
 		spec.RootAttempt == 0 || spec.RootAttempt > 100 ||
-		!validSHA256(spec.ImmutableInputSHA256) {
+		!validSHA256(spec.ImmutableInputSHA256) ||
+		value.ValidateID(spec.RuntimeRevisionID) != nil {
 		return errors.New("process run specification is invalid")
 	}
-	for _, identifier := range []string{spec.ParentProcessRunID, spec.ResultArtifactID} {
+	for _, identifier := range []string{
+		spec.ParentProcessRunID,
+		spec.ResultArtifactID,
+		spec.LaunchingProcessRunID,
+		spec.LaunchingTurnID,
+	} {
 		if identifier != "" && value.ValidateID(identifier) != nil {
 			return errors.New("process run binding is invalid")
 		}
+	}
+	if spec.ParentProcessRunID == "" {
+		if spec.LaunchingProcessRunID != "" || spec.LaunchingTurnID != "" ||
+			spec.LaunchingAttempt != 0 {
+			return errors.New("root process launching edge is invalid")
+		}
+	} else if spec.LaunchingProcessRunID != spec.ParentProcessRunID ||
+		spec.LaunchingTurnID == "" || spec.LaunchingAttempt == 0 ||
+		spec.LaunchingAttempt > 100 {
+		return errors.New("child process launching edge is invalid")
 	}
 	return nil
 }
 
 type ScheduleSpec struct {
-	TargetResourceID  string        `json:"targetResourceId"`
-	TargetKind        enum.Kind     `json:"targetKind"`
-	TargetVersion     uint64        `json:"targetVersion"`
-	EffectiveInputSHA string        `json:"effectiveInputSha256"`
-	Cron              string        `json:"cron,omitempty"`
-	Interval          time.Duration `json:"interval,omitempty"`
-	Timezone          string        `json:"timezone"`
-	Calendar          string        `json:"calendar"`
-	OverlapPolicy     string        `json:"overlapPolicy"`
-	MisfirePolicy     string        `json:"misfirePolicy"`
-	MisfireGrace      time.Duration `json:"misfireGrace"`
-	NextRunAt         time.Time     `json:"nextRunAt"`
-	DeliveryPolicy    string        `json:"deliveryPolicy"`
-	MaximumAttempts   uint32        `json:"maximumAttempts"`
-	InitialBackoff    time.Duration `json:"initialBackoff"`
-	MaximumBackoff    time.Duration `json:"maximumBackoff"`
-	DeadLetterAfter   time.Duration `json:"deadLetterAfter"`
+	TargetResourceID         string        `json:"targetResourceId"`
+	TargetKind               enum.Kind     `json:"targetKind"`
+	TargetVersion            uint64        `json:"targetVersion"`
+	EffectiveInputSHA        string        `json:"effectiveInputSha256"`
+	Cron                     string        `json:"cron,omitempty"`
+	Interval                 time.Duration `json:"interval,omitempty"`
+	Timezone                 string        `json:"timezone"`
+	Calendar                 string        `json:"calendar"`
+	OverlapPolicy            string        `json:"overlapPolicy"`
+	MisfirePolicy            string        `json:"misfirePolicy"`
+	MisfireGrace             time.Duration `json:"misfireGrace"`
+	NextRunAt                time.Time     `json:"nextRunAt"`
+	DeliveryPolicy           string        `json:"deliveryPolicy"`
+	MaximumAttempts          uint32        `json:"maximumAttempts"`
+	InitialBackoff           time.Duration `json:"initialBackoff"`
+	MaximumBackoff           time.Duration `json:"maximumBackoff"`
+	DeadLetterAfter          time.Duration `json:"deadLetterAfter"`
+	PromptProfileID          string        `json:"promptProfileId"`
+	PromptRevision           uint64        `json:"promptRevision"`
+	SessionPolicy            string        `json:"sessionPolicy"`
+	RoomID                   string        `json:"roomId,omitempty"`
+	NotificationPolicy       string        `json:"notificationPolicy"`
+	MaximumExecutionDuration time.Duration `json:"maximumExecutionDuration"`
+	Coalesce                 bool          `json:"coalesce"`
+	RuntimeRevisionID        string        `json:"runtimeRevisionId"`
 }
 
 func (ScheduleSpec) Kind() enum.Kind { return enum.KindSchedule }
 func (spec ScheduleSpec) Validate() error {
 	if value.ValidateID(spec.TargetResourceID) != nil ||
-		!spec.TargetKind.Valid() || spec.TargetKind == enum.KindSchedule ||
+		(spec.TargetKind != enum.KindRole &&
+			spec.TargetKind != enum.KindPromptProfile) ||
 		spec.TargetVersion == 0 || !validSHA256(spec.EffectiveInputSHA) ||
+		value.ValidateID(spec.PromptProfileID) != nil ||
+		spec.PromptRevision == 0 ||
+		(spec.SessionPolicy != "NEW" && spec.SessionPolicy != "PERSISTENT" &&
+			spec.SessionPolicy != "ROLLING") ||
+		(spec.RoomID != "" && value.ValidateID(spec.RoomID) != nil) ||
+		(spec.NotificationPolicy != "ALWAYS" &&
+			spec.NotificationPolicy != "ON_ACTION" &&
+			spec.NotificationPolicy != "ON_FAILURE" &&
+			spec.NotificationPolicy != "ON_ACTION_OR_FAILURE" &&
+			spec.NotificationPolicy != "AUDIT_ONLY") ||
+		spec.MaximumExecutionDuration < time.Minute ||
+		spec.MaximumExecutionDuration > 24*time.Hour ||
+		value.ValidateID(spec.RuntimeRevisionID) != nil ||
 		(spec.Cron == "") == (spec.Interval == 0) ||
 		len(spec.Cron) > 128 ||
 		(spec.Interval != 0 && (spec.Interval < time.Minute || spec.Interval > 365*24*time.Hour)) ||
@@ -405,6 +467,12 @@ func (spec ScheduleSpec) Validate() error {
 		spec.DeadLetterAfter > 30*24*time.Hour {
 		return errors.New("schedule specification is invalid")
 	}
+	if spec.OverlapPolicy == "QUEUE" && spec.Coalesce {
+		return errors.New("schedule queue policy cannot coalesce")
+	}
+	if spec.OverlapPolicy != "QUEUE" && !spec.Coalesce {
+		return errors.New("schedule overlap policy requires coalesce")
+	}
 	if (spec.MisfirePolicy == "WITHIN_GRACE" &&
 		(spec.MisfireGrace < time.Second || spec.MisfireGrace > 24*time.Hour)) ||
 		(spec.MisfirePolicy != "WITHIN_GRACE" && spec.MisfireGrace != 0) {
@@ -417,20 +485,28 @@ func (spec ScheduleSpec) Validate() error {
 }
 
 type OwnerGateSpec struct {
-	ProcessRunID         string    `json:"processRunId"`
-	ResultRef            string    `json:"resultRef"`
-	ResultSHA256         string    `json:"resultSha256"`
-	ExpiresAt            time.Time `json:"expiresAt"`
-	Decision             string    `json:"decision,omitempty"`
-	DecisionReason       string    `json:"decisionReason,omitempty"`
-	RootInitiatorActorID string    `json:"rootInitiatorActorId"`
-	SessionID            string    `json:"sessionId"`
-	TurnID               string    `json:"turnId"`
-	Attempt              uint32    `json:"attempt"`
-	ImmutableInputSHA256 string    `json:"immutableInputSha256"`
-	RecipientActorID     string    `json:"recipientActorId"`
-	DeliveryWorkloadID   string    `json:"deliveryWorkloadId"`
-	DeliverySPIFFEID     string    `json:"deliverySpiffeId"`
+	ProcessRunID             string    `json:"processRunId"`
+	ResultRef                string    `json:"resultRef"`
+	ResultSHA256             string    `json:"resultSha256"`
+	ExpiresAt                time.Time `json:"expiresAt"`
+	Decision                 string    `json:"decision,omitempty"`
+	DecisionReason           string    `json:"decisionReason,omitempty"`
+	RootInitiatorActorID     string    `json:"rootInitiatorActorId"`
+	SessionID                string    `json:"sessionId"`
+	TurnID                   string    `json:"turnId"`
+	Attempt                  uint32    `json:"attempt"`
+	ImmutableInputSHA256     string    `json:"immutableInputSha256"`
+	RecipientActorID         string    `json:"recipientActorId"`
+	DeliveryWorkloadID       string    `json:"deliveryWorkloadId"`
+	DeliverySPIFFEID         string    `json:"deliverySpiffeId"`
+	DeliveryID               string    `json:"deliveryId"`
+	DeliveryPayloadSHA256    string    `json:"deliveryPayloadSha256"`
+	DeliveryClaimTokenSHA256 string    `json:"deliveryClaimTokenSha256,omitempty"`
+	DeliveryFence            uint64    `json:"deliveryFence,omitempty"`
+	MattermostPostID         string    `json:"mattermostPostId,omitempty"`
+	MattermostChannelID      string    `json:"mattermostChannelId,omitempty"`
+	MattermostRootPostID     string    `json:"mattermostRootPostId,omitempty"`
+	DeliveredAt              time.Time `json:"deliveredAt,omitempty"`
 }
 
 func (OwnerGateSpec) Kind() enum.Kind { return enum.KindOwnerGate }
@@ -448,12 +524,26 @@ func (spec OwnerGateSpec) Validate() error {
 		value.ValidateStableKey(spec.DeliveryWorkloadID) != nil ||
 		!strings.HasPrefix(spec.DeliverySPIFFEID, "spiffe://") ||
 		len(spec.DeliverySPIFFEID) > 512 ||
+		value.ValidateID(spec.DeliveryID) != nil ||
+		!validSHA256(spec.DeliveryPayloadSHA256) ||
 		(spec.Decision != "" && spec.Decision != "APPROVED" &&
 			spec.Decision != "REJECTED" &&
 			spec.Decision != "CHANGES_REQUESTED" &&
 			spec.Decision != "CANCELLED") ||
 		len(spec.DecisionReason) > 2048 {
 		return errors.New("owner gate specification is invalid")
+	}
+	delivered := spec.MattermostPostID != "" || spec.MattermostChannelID != "" ||
+		spec.MattermostRootPostID != "" || !spec.DeliveredAt.IsZero() ||
+		spec.DeliveryFence != 0 || spec.DeliveryClaimTokenSHA256 != ""
+	if delivered {
+		if !validExternalRef(spec.MattermostPostID) ||
+			!validExternalRef(spec.MattermostChannelID) ||
+			!validExternalRef(spec.MattermostRootPostID) ||
+			spec.DeliveredAt.IsZero() || spec.DeliveryFence == 0 ||
+			!validSHA256(spec.DeliveryClaimTokenSHA256) {
+			return errors.New("owner gate delivery receipt is invalid")
+		}
 	}
 	if (spec.Decision == "") != (spec.DecisionReason == "") {
 		return errors.New("owner gate decision is incomplete")
@@ -493,11 +583,16 @@ func (spec MemoryRecordSpec) Validate() error {
 }
 
 type WorkClaimSpec struct {
-	ProcessRunID string   `json:"processRunId"`
-	TurnID       string   `json:"turnId"`
-	Summary      string   `json:"summary"`
-	Domains      []string `json:"domains"`
-	ResourceKeys []string `json:"resourceKeys"`
+	ProcessRunID string    `json:"processRunId"`
+	TurnID       string    `json:"turnId"`
+	Summary      string    `json:"summary"`
+	Domains      []string  `json:"domains"`
+	ResourceKeys []string  `json:"resourceKeys"`
+	OwnerActorID string    `json:"ownerActorId"`
+	WorkloadID   string    `json:"workloadId"`
+	SessionID    string    `json:"sessionId"`
+	Attempt      uint32    `json:"attempt"`
+	ExpiresAt    time.Time `json:"expiresAt"`
 }
 
 func (WorkClaimSpec) Kind() enum.Kind { return enum.KindWorkClaim }
@@ -506,7 +601,12 @@ func (spec WorkClaimSpec) Validate() error {
 		value.ValidateID(spec.TurnID) != nil ||
 		len(spec.Summary) < 1 || len(spec.Summary) > 2048 ||
 		!validBoundedKeys(spec.Domains, 32) ||
-		!validBoundedKeys(spec.ResourceKeys, 128) {
+		!validBoundedKeys(spec.ResourceKeys, 128) ||
+		value.ValidateID(spec.OwnerActorID) != nil ||
+		value.ValidateStableKey(spec.WorkloadID) != nil ||
+		value.ValidateID(spec.SessionID) != nil ||
+		spec.Attempt == 0 || spec.Attempt > 100 ||
+		spec.ExpiresAt.IsZero() {
 		return errors.New("work claim specification is invalid")
 	}
 	return nil

@@ -29,6 +29,9 @@ type Config struct {
 	Subjects        []string
 	Replicas        int
 	MaxMessageBytes int32
+	MaxMessages     int64
+	MaxBytes        int64
+	MaxPerSubject   int64
 	MaxAge          time.Duration
 	DuplicateWindow time.Duration
 	ConnectTimeout  time.Duration
@@ -93,6 +96,9 @@ func (publisher *Publisher) Check(ctx context.Context) error {
 		info.Config.Storage != jetstream.FileStorage ||
 		info.Config.Replicas != publisher.config.Replicas ||
 		info.Config.MaxMsgSize != publisher.config.MaxMessageBytes ||
+		info.Config.MaxMsgs != publisher.config.MaxMessages ||
+		info.Config.MaxBytes != publisher.config.MaxBytes ||
+		info.Config.MaxMsgsPerSubject != publisher.config.MaxPerSubject ||
 		info.Config.Retention != jetstream.LimitsPolicy ||
 		info.Config.Discard != jetstream.DiscardOld ||
 		info.Config.MaxAge != publisher.config.MaxAge ||
@@ -154,6 +160,10 @@ func validateConfig(config Config) error {
 		!filepath.IsAbs(config.CredentialsFile) ||
 		config.Stream == "" || len(config.Subjects) == 0 ||
 		config.Replicas < 1 || config.MaxMessageBytes < 1024 ||
+		config.MaxMessages < 1 ||
+		config.MaxBytes < int64(config.MaxMessageBytes) ||
+		config.MaxPerSubject < 1 ||
+		config.MaxPerSubject > config.MaxMessages ||
 		config.MaxAge < time.Hour || config.MaxAge > 30*24*time.Hour ||
 		config.DuplicateWindow < time.Minute ||
 		config.DuplicateWindow > config.MaxAge ||

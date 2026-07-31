@@ -32,7 +32,7 @@ check_remote_plugin() {
         next
       }
       current_remote == required_remote && $1 == "revision:" {
-        if (found) {
+        if (found && revision != $2) {
           exit 2
         }
         found = 1

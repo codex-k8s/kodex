@@ -78,6 +78,13 @@ func openPostgres(
 	if err != nil {
 		return nil, errors.New("parse PostgreSQL DSN")
 	}
+	if len(config.ConnConfig.Fallbacks) != 0 ||
+		config.ConnConfig.Host != serverName ||
+		config.ConnConfig.TLSConfig == nil ||
+		config.ConnConfig.TLSConfig.ServerName != serverName ||
+		config.ConnConfig.TLSConfig.InsecureSkipVerify {
+		return nil, errors.New("PostgreSQL DSN must use exact verify-full TLS")
+	}
 	roots, err := loadCertPool(caFile)
 	if err != nil {
 		return nil, errors.New("load PostgreSQL CA")
