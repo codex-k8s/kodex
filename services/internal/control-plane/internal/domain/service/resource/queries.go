@@ -31,6 +31,27 @@ func (service *Service) Search(
 		input.Filter.Validate() != nil {
 		return nil, errs.ErrInvalidInput
 	}
+	if input.Filter.Kind == enum.KindMemoryRecord {
+		hits, err := service.searchEligibleMemory(
+			ctx,
+			input.Principal,
+			domainrepo.MemorySearch{
+				Query:        input.Filter.Query,
+				States:       input.Filter.States,
+				AfterID:      input.Filter.AfterID,
+				Limit:        input.Filter.Limit,
+				GenericOrder: true,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		resources := make([]entity.Resource, 0, len(hits))
+		for _, hit := range hits {
+			resources = append(resources, hit.Resource)
+		}
+		return resources, nil
+	}
 	resources, err := service.repository.Search(ctx, input.Filter)
 	if err != nil {
 		return nil, err

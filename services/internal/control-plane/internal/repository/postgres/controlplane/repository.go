@@ -250,6 +250,9 @@ func (wrapped *transaction) SearchMemory(
 			"limit":                 search.Limit,
 			"can_read_project":      search.CanReadProject,
 			"actor_role_ids":        search.ActorRoleIDs,
+			"parent_id":             search.ParentID,
+			"states":                statesAsStrings(search.States),
+			"generic_order":         search.GenericOrder,
 		},
 	)
 	if err != nil {
@@ -264,6 +267,14 @@ func (wrapped *transaction) SearchMemory(
 		hits = append(hits, hit)
 	}
 	return hits, mapError(rows.Err())
+}
+
+func statesAsStrings(states []enum.State) []string {
+	result := make([]string, 0, len(states))
+	for _, state := range states {
+		result = append(result, string(state))
+	}
+	return result
 }
 
 // ListEligibleProjects возвращает только проекты, видимые владельцу или участнику.
@@ -1557,10 +1568,20 @@ func (wrapped *transaction) SaveScheduledRun(
 		"session_id": run.SessionID, "session_version": run.SessionVersion,
 		"turn_id": run.TurnID, "turn_version": run.TurnVersion,
 		"process_run_id": run.ProcessRunID, "process_version": run.ProcessVersion,
-		"runtime_revision_id":      run.RuntimeRevisionID,
-		"runtime_revision_version": run.RuntimeRevisionVersion,
-		"effective_input_sha256":   run.EffectiveInputSHA256,
-		"state":                    run.State, "created_at": run.CreatedAt,
+		"runtime_revision_id":              run.RuntimeRevisionID,
+		"runtime_revision_version":         run.RuntimeRevisionVersion,
+		"effective_input_sha256":           run.EffectiveInputSHA256,
+		"current_session_id":               run.CurrentSessionID,
+		"current_session_version":          run.CurrentSessionVersion,
+		"current_turn_id":                  run.CurrentTurnID,
+		"current_turn_version":             run.CurrentTurnVersion,
+		"current_turn_attempt":             run.CurrentTurnAttempt,
+		"current_process_run_id":           run.CurrentProcessRunID,
+		"current_process_version":          run.CurrentProcessVersion,
+		"current_runtime_revision_id":      run.CurrentRuntimeRevisionID,
+		"current_runtime_revision_version": run.CurrentRuntimeRevisionVersion,
+		"current_input_sha256":             run.CurrentInputSHA256,
+		"state":                            run.State, "created_at": run.CreatedAt,
 	})
 	if err != nil {
 		return mapError(err)
@@ -1604,6 +1625,16 @@ func (wrapped *transaction) GetScheduledRunForUpdate(
 		&run.ContinuationRuntimeRevisionVersion,
 		&run.ContinuationInputSHA256,
 		&run.OwnerFeedbackSHA256,
+		&run.CurrentSessionID,
+		&run.CurrentSessionVersion,
+		&run.CurrentTurnID,
+		&run.CurrentTurnVersion,
+		&run.CurrentTurnAttempt,
+		&run.CurrentProcessRunID,
+		&run.CurrentProcessVersion,
+		&run.CurrentRuntimeRevisionID,
+		&run.CurrentRuntimeRevisionVersion,
+		&run.CurrentInputSHA256,
 	)
 	return run, mapError(err)
 }
@@ -1643,6 +1674,51 @@ func (wrapped *transaction) ContinueScheduledRun(
 			"continuation_runtime_revision_version": run.ContinuationRuntimeRevisionVersion,
 			"continuation_input_sha256":             run.ContinuationInputSHA256,
 			"owner_feedback_sha256":                 run.OwnerFeedbackSHA256,
+			"current_session_id":                    run.CurrentSessionID,
+			"current_session_version":               run.CurrentSessionVersion,
+			"current_turn_id":                       run.CurrentTurnID,
+			"current_turn_version":                  run.CurrentTurnVersion,
+			"current_turn_attempt":                  run.CurrentTurnAttempt,
+			"current_process_run_id":                run.CurrentProcessRunID,
+			"current_process_version":               run.CurrentProcessVersion,
+			"current_runtime_revision_id":           run.CurrentRuntimeRevisionID,
+			"current_runtime_revision_version":      run.CurrentRuntimeRevisionVersion,
+			"current_input_sha256":                  run.CurrentInputSHA256,
+		},
+	)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) RebindScheduledRun(
+	ctx context.Context,
+	run domainrepo.ScheduledRun,
+	expectedTurnID string,
+	expectedTurnAttempt uint32,
+) error {
+	tag, err := wrapped.tx.Exec(
+		ctx,
+		sqlScheduledRunRebind,
+		pgx.StrictNamedArgs{
+			"occurrence_id":                    run.OccurrenceID,
+			"attempt":                          run.Attempt,
+			"expected_turn_id":                 expectedTurnID,
+			"expected_turn_attempt":            expectedTurnAttempt,
+			"current_session_id":               run.CurrentSessionID,
+			"current_session_version":          run.CurrentSessionVersion,
+			"current_turn_id":                  run.CurrentTurnID,
+			"current_turn_version":             run.CurrentTurnVersion,
+			"current_turn_attempt":             run.CurrentTurnAttempt,
+			"current_process_run_id":           run.CurrentProcessRunID,
+			"current_process_version":          run.CurrentProcessVersion,
+			"current_runtime_revision_id":      run.CurrentRuntimeRevisionID,
+			"current_runtime_revision_version": run.CurrentRuntimeRevisionVersion,
+			"current_input_sha256":             run.CurrentInputSHA256,
 		},
 	)
 	if err != nil {

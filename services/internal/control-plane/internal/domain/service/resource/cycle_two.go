@@ -562,6 +562,108 @@ func authorizeMemoryScope(
 	return nil
 }
 
+type memoryEligibility struct {
+	CanReadProject bool
+	RoleIDs        []string
+}
+
+func resolveMemoryEligibility(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+) (memoryEligibility, error) {
+	roleIDs, err := tx.ActorRoleIDs(
+		ctx, principal.OrganizationID, principal.ProjectID, principal.ActorID,
+	)
+	if err != nil {
+		return memoryEligibility{}, err
+	}
+	return memoryEligibility{
+		// Verified project authority уже доказывает членство; capability
+		// публикации нужна только для записи, а не для чтения PROJECT scope.
+		CanReadProject: principal.ProjectID != "",
+		RoleIDs:        roleIDs,
+	}, nil
+}
+
+func memoryResourceEligible(
+	resource entity.Resource,
+	eligibility memoryEligibility,
+) bool {
+	spec, ok := resource.Spec.(entity.MemoryRecordSpec)
+	if !ok || resource.Kind != enum.KindMemoryRecord {
+		return false
+	}
+	if spec.Scope == "PROJECT" {
+		return eligibility.CanReadProject
+	}
+	return spec.Scope == "ROLE" && slices.Contains(eligibility.RoleIDs, spec.RoleID)
+}
+
+func (service *Service) searchEligibleMemory(
+	ctx context.Context,
+	principal value.Principal,
+	search domainrepo.MemorySearch,
+) ([]domainrepo.MemorySearchHit, error) {
+	var hits []domainrepo.MemorySearchHit
+	err := service.repository.Transact(
+		ctx,
+		domainrepo.Scope{
+			OrganizationID: principal.OrganizationID,
+			ProjectID:      principal.ProjectID,
+			ActorID:        principal.ActorID,
+		},
+		func(tx domainrepo.Transaction) error {
+			eligibility, err := resolveMemoryEligibility(ctx, tx, principal)
+			if err != nil {
+				return err
+			}
+			search.OrganizationID = principal.OrganizationID
+			search.ProjectID = principal.ProjectID
+			search.CanReadProject = eligibility.CanReadProject
+			search.ActorRoleIDs = eligibility.RoleIDs
+			hits, err = tx.SearchMemory(ctx, search)
+			return err
+		},
+	)
+	return hits, err
+}
+
+func (service *Service) getEligibleMemory(
+	ctx context.Context,
+	principal value.Principal,
+	resourceID string,
+) (entity.Resource, error) {
+	var result entity.Resource
+	err := service.repository.Transact(
+		ctx,
+		domainrepo.Scope{
+			OrganizationID: principal.OrganizationID,
+			ProjectID:      principal.ProjectID,
+			ActorID:        principal.ActorID,
+		},
+		func(tx domainrepo.Transaction) error {
+			eligibility, err := resolveMemoryEligibility(ctx, tx, principal)
+			if err != nil {
+				return err
+			}
+			resource, err := tx.GetForUpdate(
+				ctx, principal.OrganizationID, principal.ProjectID, resourceID,
+			)
+			if err != nil {
+				return err
+			}
+			if !memoryResourceEligible(resource, eligibility) ||
+				resource.State == enum.StateDeleted {
+				return errs.ErrNotFound
+			}
+			result = resource
+			return nil
+		},
+	)
+	return result, err
+}
+
 // ManageWorkClaim связывает получение работы с неизменяемой родословной выполнения.
 func (service *Service) ManageWorkClaim(
 	ctx context.Context,
@@ -630,13 +732,14 @@ func (service *Service) ManageWorkClaim(
 					turnSpec.ProcessRunID != process.ID {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				if processSpec.ParentProcessRunID == "" {
-					if processSpec.RootSessionID != turnSpec.SessionID ||
-						processSpec.RootTurnID != turn.ID ||
-						processSpec.RootAttempt != turnSpec.Attempt {
-						return entity.Resource{}, errs.ErrStateConflict
-					}
-				} else {
+				execution, err := service.resolveCurrentExecution(
+					ctx, tx, input.Principal, process, processSpec,
+				)
+				if err != nil || !executionMatchesTurn(execution, turn, turnSpec) {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if processSpec.ParentProcessRunID != "" &&
+					processSpec.ContinuationTurnID == "" {
 					if processSpec.TargetSessionID != turnSpec.SessionID ||
 						processSpec.TargetTurnID != turn.ID ||
 						processSpec.TargetAttempt != turnSpec.Attempt {
@@ -998,61 +1101,25 @@ func (service *Service) SearchMemory(
 	}
 	queryEmbedding := localMemoryProjection(input.Query)
 	modelSHA256 := localMemoryProjectionModelSHA256()
-	var hits []domainrepo.MemorySearchHit
-	err := service.repository.Transact(
+	hits, err := service.searchEligibleMemory(
 		ctx,
-		domainrepo.Scope{
-			OrganizationID: input.Principal.OrganizationID,
-			ProjectID:      input.Principal.ProjectID,
-			ActorID:        input.Principal.ActorID,
-		},
-		func(tx domainrepo.Transaction) error {
-			permissions, err := tx.ActorPermissions(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.Principal.ActorID,
-			)
-			if err != nil {
-				return err
-			}
-			roleIDs, err := tx.ActorRoleIDs(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.Principal.ActorID,
-			)
-			if err != nil {
-				return err
-			}
-			canReadProject := slices.Contains(permissions, "*") ||
-				slices.Contains(permissions, permissionWriteProjectMemory)
-			if input.Scope != "" {
-				if err := authorizeMemoryScope(
-					ctx, tx, input.Principal, input.Scope, input.RoleID,
-				); err != nil {
-					return err
-				}
-			}
-			hits, err = tx.SearchMemory(ctx, domainrepo.MemorySearch{
-				OrganizationID:      input.Principal.OrganizationID,
-				ProjectID:           input.Principal.ProjectID,
-				Scope:               input.Scope,
-				RoleID:              input.RoleID,
-				Query:               input.Query,
-				QueryEmbedding:      queryEmbedding,
-				ModelID:             localMemoryProjectionModelID,
-				ModelRevision:       localMemoryProjectionRevision,
-				ModelSHA256:         modelSHA256,
-				AfterID:             input.AfterID,
-				AfterTextRank:       input.AfterTextRank,
-				AfterVectorDistance: input.AfterVectorDistance,
-				AfterVectorUsed:     input.AfterVectorUsed,
-				Limit:               input.Limit,
-				CanReadProject:      canReadProject,
-				ActorRoleIDs:        roleIDs,
-			})
-			return err
+		input.Principal,
+		domainrepo.MemorySearch{
+			OrganizationID:      input.Principal.OrganizationID,
+			ProjectID:           input.Principal.ProjectID,
+			Scope:               input.Scope,
+			RoleID:              input.RoleID,
+			Query:               input.Query,
+			QueryEmbedding:      queryEmbedding,
+			ModelID:             localMemoryProjectionModelID,
+			ModelRevision:       localMemoryProjectionRevision,
+			ModelSHA256:         modelSHA256,
+			AfterID:             input.AfterID,
+			AfterTextRank:       input.AfterTextRank,
+			AfterVectorDistance: input.AfterVectorDistance,
+			AfterVectorUsed:     input.AfterVectorUsed,
+			Limit:               input.Limit,
+			States:              []enum.State{enum.StateActive},
 		},
 	)
 	if err != nil {

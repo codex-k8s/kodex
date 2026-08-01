@@ -80,6 +80,7 @@ func (service *Service) continueOwnerGateGraph(
 	if err != nil {
 		return OwnerGateResult{}, errs.ErrInternal
 	}
+	feedbackContentSHA256 := hashString(reason)
 	sourceRef := "owner-gate-continuation:" + gate.ID + ":" + feedbackSHA256
 	sessionSpec.LastTurnSequence++
 	updatedSession, err := session.Update(session.Name, sessionSpec, now)
@@ -103,7 +104,11 @@ func (service *Service) continueOwnerGateGraph(
 			EffectiveInputSHA256: hashRuntimeInput(
 				sourceRef, promptArtifact.SHA256, revisionSpec.ManifestSHA256, process.ID,
 			),
-			PredecessorTurnID: turn.ID,
+			PredecessorTurnID:    turn.ID,
+			OwnerFeedback:        reason,
+			OwnerFeedbackGateID:  gate.ID,
+			OwnerFeedbackVersion: gate.Version,
+			OwnerFeedbackSHA256:  feedbackContentSHA256,
 		},
 		now,
 	)
@@ -161,7 +166,17 @@ func (service *Service) continueOwnerGateGraph(
 	processSpec.ContinuationRuntimeRevisionID = revision.ID
 	processSpec.ContinuationRuntimeRevisionVersion = revision.Version
 	processSpec.ContinuationInputSHA256 = continuationSpec.EffectiveInputSHA256
-	processSpec.OwnerFeedbackSHA256 = feedbackSHA256
+	processSpec.OwnerFeedbackSHA256 = feedbackContentSHA256
+	setCurrentExecution(&processSpec, executionTuple{
+		SessionID:              session.ID,
+		SessionVersion:         updatedSession.Version,
+		TurnID:                 continuation.ID,
+		TurnVersion:            continuation.Version,
+		Attempt:                continuationSpec.Attempt,
+		RuntimeRevisionID:      revision.ID,
+		RuntimeRevisionVersion: revision.Version,
+		InputSHA256:            continuationSpec.EffectiveInputSHA256,
+	})
 	processSpec.Outcome = ""
 	processSpec.ResultArtifactID = ""
 	continuedProcess, err := process.ReplaceAndTransition(
@@ -218,7 +233,17 @@ func (service *Service) continueOwnerGateGraph(
 			ContinuationRuntimeRevisionID:      revision.ID,
 			ContinuationRuntimeRevisionVersion: revision.Version,
 			ContinuationInputSHA256:            continuationSpec.EffectiveInputSHA256,
-			OwnerFeedbackSHA256:                feedbackSHA256,
+			OwnerFeedbackSHA256:                feedbackContentSHA256,
+			CurrentSessionID:                   session.ID,
+			CurrentSessionVersion:              updatedSession.Version,
+			CurrentTurnID:                      continuation.ID,
+			CurrentTurnVersion:                 continuation.Version,
+			CurrentTurnAttempt:                 continuationSpec.Attempt,
+			CurrentProcessRunID:                continuedProcess.ID,
+			CurrentProcessVersion:              continuedProcess.Version,
+			CurrentRuntimeRevisionID:           revision.ID,
+			CurrentRuntimeRevisionVersion:      revision.Version,
+			CurrentInputSHA256:                 continuationSpec.EffectiveInputSHA256,
 		}); err != nil {
 			return OwnerGateResult{}, err
 		}

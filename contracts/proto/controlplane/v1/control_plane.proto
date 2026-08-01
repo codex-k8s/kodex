@@ -576,6 +576,10 @@ message TurnSpec {
   string result_artifact_id = 9;
   string effective_input_sha256 = 10;
   string predecessor_turn_id = 11;
+  string owner_feedback = 12;
+  string owner_feedback_gate_id = 13;
+  uint64 owner_feedback_gate_version = 14;
+  string owner_feedback_sha256 = 15;
 }
 
 // ProcessRunSpec описывает версионированное сообщение контракта control-plane.
@@ -613,6 +617,14 @@ message ProcessRunSpec {
   uint64 continuation_runtime_revision_version = 31;
   string continuation_input_sha256 = 32;
   string owner_feedback_sha256 = 33;
+  string current_session_id = 34;
+  uint64 current_session_version = 35;
+  string current_turn_id = 36;
+  uint64 current_turn_version = 37;
+  uint32 current_attempt = 38;
+  string current_runtime_revision_id = 39;
+  uint64 current_runtime_revision_version = 40;
+  string current_input_sha256 = 41;
 }
 
 // ScheduleSpec описывает версионированное сообщение контракта control-plane.

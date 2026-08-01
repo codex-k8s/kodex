@@ -300,6 +300,7 @@ func (service *Service) ClaimTurn(
 	keyHash := hashString(input.IdempotencyKey)
 	var result ClaimTurnResult
 	mutated := false
+	recovered := false
 	err = service.repository.Transact(
 		ctx,
 		domainrepo.Scope{
@@ -374,13 +375,8 @@ func (service *Service) ClaimTurn(
 				}); err != nil {
 					return err
 				}
-				staleSpec.Attempt++
-				staleSpec.Outcome = ""
-				staleSpec.ResultArtifactID = ""
-				requeued, err := stale.Turn.ReplaceAndTransition(
-					staleSpec,
-					enum.StateQueued,
-					now,
+				requeued, staleSpec, err := service.prepareRetriedExecution(
+					ctx, tx, input.Principal, stale.Turn, staleSpec, now,
 				)
 				if err != nil {
 					return errs.ErrStateConflict
@@ -399,7 +395,7 @@ func (service *Service) ClaimTurn(
 					TurnID:              requeued.ID,
 					Attempt:             staleSpec.Attempt,
 					WorkloadID:          "unassigned",
-					AuthorityGeneration: input.Principal.AuthorityGrantGeneration,
+					AuthorityGeneration: input.Principal.AuthorityGeneration,
 					State:               "QUEUED",
 					InputSHA256:         staleSpec.EffectiveInputSHA256,
 					LeaseFence:          requeued.Version,
@@ -416,6 +412,13 @@ func (service *Service) ClaimTurn(
 				); err != nil {
 					return err
 				}
+				recovered = true
+			}
+			if recovered {
+				// Новый immutable tuple должен попасть в outbox и authority issuer
+				// до следующего ClaimTurn. Старое proof не может сразу заявить retry.
+				mutated = true
+				return nil
 			}
 			turn, err := tx.NextQueuedTurn(
 				ctx,
@@ -514,6 +517,9 @@ func (service *Service) ClaimTurn(
 	)
 	if err == nil && mutated {
 		service.observer.ObserveMutation(enum.KindTurn, "claim_turn")
+	}
+	if err == nil && recovered {
+		return ClaimTurnResult{}, errs.ErrUnavailable
 	}
 	return result, err
 }
@@ -870,16 +876,11 @@ func (service *Service) completeProcessFromTurn(
 		processSpec.RootInitiatorActorID != principal.ActorID {
 		return errs.ErrStateConflict
 	}
-	terminalTurnID := processSpec.RootTurnID
-	terminalAttempt := processSpec.RootAttempt
-	if processSpec.ContinuationTurnID != "" {
-		terminalTurnID = processSpec.ContinuationTurnID
-		terminalAttempt = processSpec.ContinuationAttempt
-	} else if processSpec.ParentProcessRunID != "" {
-		terminalTurnID = processSpec.TargetTurnID
-		terminalAttempt = processSpec.TargetAttempt
+	execution, err := currentExecution(processSpec)
+	if err != nil {
+		return err
 	}
-	if turn.ID != terminalTurnID || turnSpec.Attempt != terminalAttempt {
+	if !executionMatchesTurn(execution, turn, turnSpec) {
 		return nil
 	}
 	if process.State.Terminal() {
@@ -998,9 +999,6 @@ func (service *Service) RetryTurn(
 				spec.Attempt == ^uint32(0) {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			spec.Attempt++
-			spec.Outcome = ""
-			spec.ResultArtifactID = ""
 			now := service.now().UTC().Truncate(time.Microsecond)
 			if err := service.revokeExecutionClaims(
 				ctx, tx, input.Principal, spec.ProcessRunID, current.ID,
@@ -1008,7 +1006,9 @@ func (service *Service) RetryTurn(
 			); err != nil {
 				return entity.Resource{}, err
 			}
-			retried, err := current.ReplaceAndTransition(spec, enum.StateQueued, now)
+			retried, spec, err := service.prepareRetriedExecution(
+				ctx, tx, input.Principal, current, spec, now,
+			)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
@@ -1407,14 +1407,11 @@ func (service *Service) ResolveOwnerGate(
 				return err
 			}
 			processSpec, ok := process.Spec.(entity.ProcessRunSpec)
-			executionMatches := processSpec.RootSessionID == gateSpec.SessionID &&
-				processSpec.RootTurnID == gateSpec.TurnID &&
-				processSpec.RootAttempt == gateSpec.Attempt
-			if processSpec.ParentProcessRunID != "" {
-				executionMatches = processSpec.TargetSessionID == gateSpec.SessionID &&
-					processSpec.TargetTurnID == gateSpec.TurnID &&
-					processSpec.TargetAttempt == gateSpec.Attempt
-			}
+			execution, executionErr := currentExecution(processSpec)
+			executionMatches := executionErr == nil &&
+				execution.SessionID == gateSpec.SessionID &&
+				execution.TurnID == gateSpec.TurnID &&
+				execution.Attempt == gateSpec.Attempt
 			if !ok || process.Kind != enum.KindProcessRun ||
 				process.Version != input.ProcessExpectedVersion ||
 				process.State != enum.StateWaitingOwner ||

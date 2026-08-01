@@ -544,6 +544,18 @@ func (service *Service) Get(ctx context.Context, input GetInput) (entity.Resourc
 	if value.ValidateID(input.ResourceID) != nil || !input.Kind.Valid() {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+	if input.Kind == enum.KindMemoryRecord {
+		resource, err := service.getEligibleMemory(
+			ctx, input.Principal, input.ResourceID,
+		)
+		if err != nil {
+			return entity.Resource{}, err
+		}
+		if input.ExpectedVersion != 0 && resource.Version != input.ExpectedVersion {
+			return entity.Resource{}, errs.ErrNotFound
+		}
+		return resource, nil
+	}
 	resource, err := service.repository.Get(
 		ctx,
 		input.Principal.OrganizationID,
@@ -596,6 +608,27 @@ func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Res
 	}
 	if input.Filter.Kind == enum.KindProject || input.Principal.ProjectID == "" {
 		return nil, errs.ErrPermissionDenied
+	}
+	if input.Filter.Kind == enum.KindMemoryRecord {
+		hits, err := service.searchEligibleMemory(
+			ctx,
+			input.Principal,
+			domainrepo.MemorySearch{
+				ParentID:     input.Filter.ParentID,
+				States:       input.Filter.States,
+				AfterID:      input.Filter.AfterID,
+				Limit:        input.Filter.Limit,
+				GenericOrder: true,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		resources := make([]entity.Resource, 0, len(hits))
+		for _, hit := range hits {
+			resources = append(resources, hit.Resource)
+		}
+		return resources, nil
 	}
 	resources, err := service.repository.List(ctx, input.Filter)
 	if err != nil {

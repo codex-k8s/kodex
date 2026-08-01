@@ -144,28 +144,35 @@ func validateScheduledRunBinding(
 	occurrence domainrepo.ScheduleOccurrence,
 	run domainrepo.ScheduledRun,
 ) error {
-	if run.OccurrenceID != occurrence.ID || run.Attempt != occurrence.Attempt ||
-		run.SessionID != occurrence.ExecutionSessionID ||
-		run.SessionVersion != occurrence.ExecutionSessionVersion ||
-		run.ProcessRunID != occurrence.ExecutionProcessRunID ||
-		run.ProcessVersion > occurrence.ExecutionProcessVersion {
-		return errs.ErrStateConflict
-	}
-	if run.ContinuationTurnID != "" {
-		if run.ContinuationTurnID != occurrence.ExecutionTurnID ||
-			run.ContinuationTurnVersion != occurrence.ExecutionTurnVersion ||
-			run.ContinuationRuntimeRevisionID != occurrence.ExecutionRuntimeRevisionID ||
-			run.ContinuationRuntimeRevisionVersion != occurrence.ExecutionRuntimeRevisionVersion ||
-			run.ContinuationInputSHA256 != occurrence.EffectiveInputSHA256 {
-			return errs.ErrStateConflict
+	if run.CurrentSessionID == "" {
+		run.CurrentSessionID = run.SessionID
+		run.CurrentSessionVersion = run.SessionVersion
+		run.CurrentTurnID = run.TurnID
+		run.CurrentTurnVersion = run.TurnVersion
+		run.CurrentTurnAttempt = 1
+		run.CurrentProcessRunID = run.ProcessRunID
+		run.CurrentProcessVersion = run.ProcessVersion
+		run.CurrentRuntimeRevisionID = run.RuntimeRevisionID
+		run.CurrentRuntimeRevisionVersion = run.RuntimeRevisionVersion
+		run.CurrentInputSHA256 = run.EffectiveInputSHA256
+		if run.ContinuationTurnID != "" {
+			run.CurrentTurnID = run.ContinuationTurnID
+			run.CurrentTurnVersion = run.ContinuationTurnVersion
+			run.CurrentRuntimeRevisionID = run.ContinuationRuntimeRevisionID
+			run.CurrentRuntimeRevisionVersion = run.ContinuationRuntimeRevisionVersion
+			run.CurrentInputSHA256 = run.ContinuationInputSHA256
 		}
-		return nil
 	}
-	if run.TurnID != occurrence.ExecutionTurnID ||
-		run.TurnVersion != occurrence.ExecutionTurnVersion ||
-		run.RuntimeRevisionID != occurrence.ExecutionRuntimeRevisionID ||
-		run.RuntimeRevisionVersion != occurrence.ExecutionRuntimeRevisionVersion ||
-		run.EffectiveInputSHA256 != occurrence.EffectiveInputSHA256 {
+	if run.OccurrenceID != occurrence.ID || run.Attempt != occurrence.Attempt ||
+		run.CurrentSessionID != occurrence.ExecutionSessionID ||
+		run.CurrentSessionVersion != occurrence.ExecutionSessionVersion ||
+		run.CurrentTurnID != occurrence.ExecutionTurnID ||
+		run.CurrentTurnVersion != occurrence.ExecutionTurnVersion ||
+		run.CurrentProcessRunID != occurrence.ExecutionProcessRunID ||
+		run.CurrentProcessVersion > occurrence.ExecutionProcessVersion ||
+		run.CurrentRuntimeRevisionID != occurrence.ExecutionRuntimeRevisionID ||
+		run.CurrentRuntimeRevisionVersion != occurrence.ExecutionRuntimeRevisionVersion ||
+		run.CurrentInputSHA256 != occurrence.EffectiveInputSHA256 {
 		return errs.ErrStateConflict
 	}
 	return nil
@@ -216,6 +223,13 @@ func (service *Service) validateActiveWorkClaimGraph(
 		attempt.InputSHA256 != turnSpec.EffectiveInputSHA256 ||
 		attempt.AuthorityGeneration != spec.AuthorityGeneration {
 		return errs.ErrStateConflict
+	}
+	execution, err := currentExecution(processSpec)
+	if err != nil || !executionMatchesTurn(execution, turn, turnSpec) {
+		return errs.ErrStateConflict
+	}
+	if processSpec.ContinuationTurnID != "" {
+		return nil
 	}
 	if processSpec.ParentProcessRunID == "" {
 		if processSpec.RootSessionID != session.ID ||

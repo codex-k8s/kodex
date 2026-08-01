@@ -335,6 +335,10 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ResultArtifactID:     value.Turn.GetResultArtifactId(),
 			EffectiveInputSHA256: value.Turn.GetEffectiveInputSha256(),
 			PredecessorTurnID:    value.Turn.GetPredecessorTurnId(),
+			OwnerFeedback:        value.Turn.GetOwnerFeedback(),
+			OwnerFeedbackGateID:  value.Turn.GetOwnerFeedbackGateId(),
+			OwnerFeedbackVersion: value.Turn.GetOwnerFeedbackGateVersion(),
+			OwnerFeedbackSHA256:  value.Turn.GetOwnerFeedbackSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_ProcessRun:
 		return entity.ProcessRunSpec{
@@ -371,6 +375,14 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ContinuationRuntimeRevisionVersion: value.ProcessRun.GetContinuationRuntimeRevisionVersion(),
 			ContinuationInputSHA256:            value.ProcessRun.GetContinuationInputSha256(),
 			OwnerFeedbackSHA256:                value.ProcessRun.GetOwnerFeedbackSha256(),
+			CurrentSessionID:                   value.ProcessRun.GetCurrentSessionId(),
+			CurrentSessionVersion:              value.ProcessRun.GetCurrentSessionVersion(),
+			CurrentTurnID:                      value.ProcessRun.GetCurrentTurnId(),
+			CurrentTurnVersion:                 value.ProcessRun.GetCurrentTurnVersion(),
+			CurrentAttempt:                     value.ProcessRun.GetCurrentAttempt(),
+			CurrentRuntimeRevisionID:           value.ProcessRun.GetCurrentRuntimeRevisionId(),
+			CurrentRuntimeRevisionVersion:      value.ProcessRun.GetCurrentRuntimeRevisionVersion(),
+			CurrentInputSHA256:                 value.ProcessRun.GetCurrentInputSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_Schedule:
 		interval, err := optionalDuration(value.Schedule.GetInterval())
@@ -724,17 +736,21 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 	case entity.TurnSpec:
 		result.Value = &controlplanev1.ResourceSpec_Turn{
 			Turn: &controlplanev1.TurnSpec{
-				SessionId:            value.SessionID,
-				Sequence:             value.Sequence,
-				SourceRef:            value.SourceRef,
-				PromptArtifactId:     value.PromptArtifactID,
-				RuntimeRevisionId:    value.RuntimeRevisionID,
-				ProcessRunId:         value.ProcessRunID,
-				Attempt:              value.Attempt,
-				Outcome:              value.Outcome,
-				ResultArtifactId:     value.ResultArtifactID,
-				EffectiveInputSha256: value.EffectiveInputSHA256,
-				PredecessorTurnId:    value.PredecessorTurnID,
+				SessionId:                value.SessionID,
+				Sequence:                 value.Sequence,
+				SourceRef:                value.SourceRef,
+				PromptArtifactId:         value.PromptArtifactID,
+				RuntimeRevisionId:        value.RuntimeRevisionID,
+				ProcessRunId:             value.ProcessRunID,
+				Attempt:                  value.Attempt,
+				Outcome:                  value.Outcome,
+				ResultArtifactId:         value.ResultArtifactID,
+				EffectiveInputSha256:     value.EffectiveInputSHA256,
+				PredecessorTurnId:        value.PredecessorTurnID,
+				OwnerFeedback:            value.OwnerFeedback,
+				OwnerFeedbackGateId:      value.OwnerFeedbackGateID,
+				OwnerFeedbackGateVersion: value.OwnerFeedbackVersion,
+				OwnerFeedbackSha256:      value.OwnerFeedbackSHA256,
 			},
 		}
 	case entity.ProcessRunSpec:
@@ -773,6 +789,14 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ContinuationRuntimeRevisionVersion: value.ContinuationRuntimeRevisionVersion,
 				ContinuationInputSha256:            value.ContinuationInputSHA256,
 				OwnerFeedbackSha256:                value.OwnerFeedbackSHA256,
+				CurrentSessionId:                   value.CurrentSessionID,
+				CurrentSessionVersion:              value.CurrentSessionVersion,
+				CurrentTurnId:                      value.CurrentTurnID,
+				CurrentTurnVersion:                 value.CurrentTurnVersion,
+				CurrentAttempt:                     value.CurrentAttempt,
+				CurrentRuntimeRevisionId:           value.CurrentRuntimeRevisionID,
+				CurrentRuntimeRevisionVersion:      value.CurrentRuntimeRevisionVersion,
+				CurrentInputSha256:                 value.CurrentInputSHA256,
 			},
 		}
 	case entity.ScheduleSpec:

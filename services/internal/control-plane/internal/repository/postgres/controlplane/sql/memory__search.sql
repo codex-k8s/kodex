@@ -44,7 +44,8 @@ WITH ranked AS (
     WHERE resource.organization_id = @organization_id::uuid
       AND resource.project_id = @project_id::uuid
       AND resource.kind = 'MEMORY_RECORD'
-      AND resource.state = 'ACTIVE'
+      AND (cardinality(@states::text[]) = 0 OR resource.state = ANY(@states::text[]))
+      AND (@parent_id = '' OR resource.parent_id = @parent_id::uuid)
       AND (
           (
               resource.spec ->> 'scope' = 'PROJECT'
@@ -84,6 +85,12 @@ SELECT
     vector_distance IS NOT NULL
 FROM ranked
 WHERE (
+    @generic_order
+    AND (@after_id = '' OR id > @after_id::uuid)
+)
+OR (
+    NOT @generic_order
+    AND (
     @after_id = ''
     OR (vector_distance IS NOT NULL)::integer < @after_vector_used::integer
     OR (
@@ -100,11 +107,11 @@ WHERE (
         AND text_rank = @after_text_rank::real
         AND coalesce(vector_distance, 0) = @after_vector_distance::real
         AND id > @after_id::uuid
-    )
+    ))
 )
 ORDER BY
-    (vector_distance IS NOT NULL) DESC,
-    text_rank DESC,
-    vector_distance ASC NULLS LAST,
+    CASE WHEN @generic_order THEN 0 ELSE (vector_distance IS NOT NULL)::integer END DESC,
+    CASE WHEN @generic_order THEN 0 ELSE text_rank END DESC,
+    CASE WHEN @generic_order THEN 0 ELSE vector_distance END ASC NULLS LAST,
     id
 LIMIT @limit

@@ -156,6 +156,9 @@ var sqlScheduledRunWaitOwner string
 //go:embed sql/scheduled_run__continue.sql
 var sqlScheduledRunContinue string
 
+//go:embed sql/scheduled_run__rebind.sql
+var sqlScheduledRunRebind string
+
 //go:embed sql/scheduled_run__finish.sql
 var sqlScheduledRunFinish string
 

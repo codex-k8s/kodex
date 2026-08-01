@@ -2602,20 +2602,24 @@ func (x *SessionSpec) GetLastTurnSequence() uint64 {
 
 // TurnSpec описывает версионированное сообщение контракта control-plane.
 type TurnSpec struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	SessionId            string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Sequence             uint64                 `protobuf:"varint,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
-	SourceRef            string                 `protobuf:"bytes,3,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
-	PromptArtifactId     string                 `protobuf:"bytes,4,opt,name=prompt_artifact_id,json=promptArtifactId,proto3" json:"prompt_artifact_id,omitempty"`
-	RuntimeRevisionId    string                 `protobuf:"bytes,5,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
-	ProcessRunId         string                 `protobuf:"bytes,6,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
-	Attempt              uint32                 `protobuf:"varint,7,opt,name=attempt,proto3" json:"attempt,omitempty"`
-	Outcome              string                 `protobuf:"bytes,8,opt,name=outcome,proto3" json:"outcome,omitempty"`
-	ResultArtifactId     string                 `protobuf:"bytes,9,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
-	EffectiveInputSha256 string                 `protobuf:"bytes,10,opt,name=effective_input_sha256,json=effectiveInputSha256,proto3" json:"effective_input_sha256,omitempty"`
-	PredecessorTurnId    string                 `protobuf:"bytes,11,opt,name=predecessor_turn_id,json=predecessorTurnId,proto3" json:"predecessor_turn_id,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	SessionId                string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Sequence                 uint64                 `protobuf:"varint,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	SourceRef                string                 `protobuf:"bytes,3,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	PromptArtifactId         string                 `protobuf:"bytes,4,opt,name=prompt_artifact_id,json=promptArtifactId,proto3" json:"prompt_artifact_id,omitempty"`
+	RuntimeRevisionId        string                 `protobuf:"bytes,5,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
+	ProcessRunId             string                 `protobuf:"bytes,6,opt,name=process_run_id,json=processRunId,proto3" json:"process_run_id,omitempty"`
+	Attempt                  uint32                 `protobuf:"varint,7,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	Outcome                  string                 `protobuf:"bytes,8,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	ResultArtifactId         string                 `protobuf:"bytes,9,opt,name=result_artifact_id,json=resultArtifactId,proto3" json:"result_artifact_id,omitempty"`
+	EffectiveInputSha256     string                 `protobuf:"bytes,10,opt,name=effective_input_sha256,json=effectiveInputSha256,proto3" json:"effective_input_sha256,omitempty"`
+	PredecessorTurnId        string                 `protobuf:"bytes,11,opt,name=predecessor_turn_id,json=predecessorTurnId,proto3" json:"predecessor_turn_id,omitempty"`
+	OwnerFeedback            string                 `protobuf:"bytes,12,opt,name=owner_feedback,json=ownerFeedback,proto3" json:"owner_feedback,omitempty"`
+	OwnerFeedbackGateId      string                 `protobuf:"bytes,13,opt,name=owner_feedback_gate_id,json=ownerFeedbackGateId,proto3" json:"owner_feedback_gate_id,omitempty"`
+	OwnerFeedbackGateVersion uint64                 `protobuf:"varint,14,opt,name=owner_feedback_gate_version,json=ownerFeedbackGateVersion,proto3" json:"owner_feedback_gate_version,omitempty"`
+	OwnerFeedbackSha256      string                 `protobuf:"bytes,15,opt,name=owner_feedback_sha256,json=ownerFeedbackSha256,proto3" json:"owner_feedback_sha256,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *TurnSpec) Reset() {
@@ -2725,6 +2729,34 @@ func (x *TurnSpec) GetPredecessorTurnId() string {
 	return ""
 }
 
+func (x *TurnSpec) GetOwnerFeedback() string {
+	if x != nil {
+		return x.OwnerFeedback
+	}
+	return ""
+}
+
+func (x *TurnSpec) GetOwnerFeedbackGateId() string {
+	if x != nil {
+		return x.OwnerFeedbackGateId
+	}
+	return ""
+}
+
+func (x *TurnSpec) GetOwnerFeedbackGateVersion() uint64 {
+	if x != nil {
+		return x.OwnerFeedbackGateVersion
+	}
+	return 0
+}
+
+func (x *TurnSpec) GetOwnerFeedbackSha256() string {
+	if x != nil {
+		return x.OwnerFeedbackSha256
+	}
+	return ""
+}
+
 // ProcessRunSpec описывает версионированное сообщение контракта control-plane.
 type ProcessRunSpec struct {
 	state                              protoimpl.MessageState `protogen:"open.v1"`
@@ -2761,6 +2793,14 @@ type ProcessRunSpec struct {
 	ContinuationRuntimeRevisionVersion uint64                 `protobuf:"varint,31,opt,name=continuation_runtime_revision_version,json=continuationRuntimeRevisionVersion,proto3" json:"continuation_runtime_revision_version,omitempty"`
 	ContinuationInputSha256            string                 `protobuf:"bytes,32,opt,name=continuation_input_sha256,json=continuationInputSha256,proto3" json:"continuation_input_sha256,omitempty"`
 	OwnerFeedbackSha256                string                 `protobuf:"bytes,33,opt,name=owner_feedback_sha256,json=ownerFeedbackSha256,proto3" json:"owner_feedback_sha256,omitempty"`
+	CurrentSessionId                   string                 `protobuf:"bytes,34,opt,name=current_session_id,json=currentSessionId,proto3" json:"current_session_id,omitempty"`
+	CurrentSessionVersion              uint64                 `protobuf:"varint,35,opt,name=current_session_version,json=currentSessionVersion,proto3" json:"current_session_version,omitempty"`
+	CurrentTurnId                      string                 `protobuf:"bytes,36,opt,name=current_turn_id,json=currentTurnId,proto3" json:"current_turn_id,omitempty"`
+	CurrentTurnVersion                 uint64                 `protobuf:"varint,37,opt,name=current_turn_version,json=currentTurnVersion,proto3" json:"current_turn_version,omitempty"`
+	CurrentAttempt                     uint32                 `protobuf:"varint,38,opt,name=current_attempt,json=currentAttempt,proto3" json:"current_attempt,omitempty"`
+	CurrentRuntimeRevisionId           string                 `protobuf:"bytes,39,opt,name=current_runtime_revision_id,json=currentRuntimeRevisionId,proto3" json:"current_runtime_revision_id,omitempty"`
+	CurrentRuntimeRevisionVersion      uint64                 `protobuf:"varint,40,opt,name=current_runtime_revision_version,json=currentRuntimeRevisionVersion,proto3" json:"current_runtime_revision_version,omitempty"`
+	CurrentInputSha256                 string                 `protobuf:"bytes,41,opt,name=current_input_sha256,json=currentInputSha256,proto3" json:"current_input_sha256,omitempty"`
 	unknownFields                      protoimpl.UnknownFields
 	sizeCache                          protoimpl.SizeCache
 }
@@ -3022,6 +3062,62 @@ func (x *ProcessRunSpec) GetContinuationInputSha256() string {
 func (x *ProcessRunSpec) GetOwnerFeedbackSha256() string {
 	if x != nil {
 		return x.OwnerFeedbackSha256
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetCurrentSessionId() string {
+	if x != nil {
+		return x.CurrentSessionId
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetCurrentSessionVersion() uint64 {
+	if x != nil {
+		return x.CurrentSessionVersion
+	}
+	return 0
+}
+
+func (x *ProcessRunSpec) GetCurrentTurnId() string {
+	if x != nil {
+		return x.CurrentTurnId
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetCurrentTurnVersion() uint64 {
+	if x != nil {
+		return x.CurrentTurnVersion
+	}
+	return 0
+}
+
+func (x *ProcessRunSpec) GetCurrentAttempt() uint32 {
+	if x != nil {
+		return x.CurrentAttempt
+	}
+	return 0
+}
+
+func (x *ProcessRunSpec) GetCurrentRuntimeRevisionId() string {
+	if x != nil {
+		return x.CurrentRuntimeRevisionId
+	}
+	return ""
+}
+
+func (x *ProcessRunSpec) GetCurrentRuntimeRevisionVersion() uint64 {
+	if x != nil {
+		return x.CurrentRuntimeRevisionVersion
+	}
+	return 0
+}
+
+func (x *ProcessRunSpec) GetCurrentInputSha256() string {
+	if x != nil {
+		return x.CurrentInputSha256
 	}
 	return ""
 }
@@ -10656,7 +10752,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0fconversation_id\x18\x03 \x01(\tR\x0econversationId\x12\x1f\n" +
 	"\varchive_ref\x18\x04 \x01(\tR\n" +
 	"archiveRef\x12,\n" +
-	"\x12last_turn_sequence\x18\x05 \x01(\x04R\x10lastTurnSequence\"\xb0\x03\n" +
+	"\x12last_turn_sequence\x18\x05 \x01(\x04R\x10lastTurnSequence\"\xff\x04\n" +
 	"\bTurnSpec\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1a\n" +
@@ -10671,7 +10767,11 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12result_artifact_id\x18\t \x01(\tR\x10resultArtifactId\x124\n" +
 	"\x16effective_input_sha256\x18\n" +
 	" \x01(\tR\x14effectiveInputSha256\x12.\n" +
-	"\x13predecessor_turn_id\x18\v \x01(\tR\x11predecessorTurnId\"\xa4\f\n" +
+	"\x13predecessor_turn_id\x18\v \x01(\tR\x11predecessorTurnId\x12%\n" +
+	"\x0eowner_feedback\x18\f \x01(\tR\rownerFeedback\x123\n" +
+	"\x16owner_feedback_gate_id\x18\r \x01(\tR\x13ownerFeedbackGateId\x12=\n" +
+	"\x1bowner_feedback_gate_version\x18\x0e \x01(\x04R\x18ownerFeedbackGateVersion\x122\n" +
+	"\x15owner_feedback_sha256\x18\x0f \x01(\tR\x13ownerFeedbackSha256\"\xc7\x0f\n" +
 	"\x0eProcessRunSpec\x121\n" +
 	"\x15parent_process_run_id\x18\x01 \x01(\tR\x12parentProcessRunId\x12!\n" +
 	"\fplaybook_ref\x18\x02 \x01(\tR\vplaybookRef\x12'\n" +
@@ -10708,7 +10808,15 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	" continuation_runtime_revision_id\x18\x1e \x01(\tR\x1dcontinuationRuntimeRevisionId\x12Q\n" +
 	"%continuation_runtime_revision_version\x18\x1f \x01(\x04R\"continuationRuntimeRevisionVersion\x12:\n" +
 	"\x19continuation_input_sha256\x18  \x01(\tR\x17continuationInputSha256\x122\n" +
-	"\x15owner_feedback_sha256\x18! \x01(\tR\x13ownerFeedbackSha256\"\x94\r\n" +
+	"\x15owner_feedback_sha256\x18! \x01(\tR\x13ownerFeedbackSha256\x12,\n" +
+	"\x12current_session_id\x18\" \x01(\tR\x10currentSessionId\x126\n" +
+	"\x17current_session_version\x18# \x01(\x04R\x15currentSessionVersion\x12&\n" +
+	"\x0fcurrent_turn_id\x18$ \x01(\tR\rcurrentTurnId\x120\n" +
+	"\x14current_turn_version\x18% \x01(\x04R\x12currentTurnVersion\x12'\n" +
+	"\x0fcurrent_attempt\x18& \x01(\rR\x0ecurrentAttempt\x12=\n" +
+	"\x1bcurrent_runtime_revision_id\x18' \x01(\tR\x18currentRuntimeRevisionId\x12G\n" +
+	" current_runtime_revision_version\x18( \x01(\x04R\x1dcurrentRuntimeRevisionVersion\x120\n" +
+	"\x14current_input_sha256\x18) \x01(\tR\x12currentInputSha256\"\x94\r\n" +
 	"\fScheduleSpec\x12,\n" +
 	"\x12target_resource_id\x18\x01 \x01(\tR\x10targetResourceId\x12\x12\n" +
 	"\x04cron\x18\x02 \x01(\tR\x04cron\x125\n" +

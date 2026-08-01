@@ -159,6 +159,16 @@ type ScheduledRun struct {
 	ContinuationRuntimeRevisionVersion uint64
 	ContinuationInputSHA256            string
 	OwnerFeedbackSHA256                string
+	CurrentSessionID                   string
+	CurrentSessionVersion              uint64
+	CurrentTurnID                      string
+	CurrentTurnVersion                 uint64
+	CurrentTurnAttempt                 uint32
+	CurrentProcessRunID                string
+	CurrentProcessVersion              uint64
+	CurrentRuntimeRevisionID           string
+	CurrentRuntimeRevisionVersion      uint64
+	CurrentInputSHA256                 string
 }
 
 // ProviderPoolCursor фиксирует один bounded slot версионированного цикла.
@@ -267,6 +277,9 @@ type MemorySearch struct {
 	Limit               int
 	CanReadProject      bool
 	ActorRoleIDs        []string
+	ParentID            string
+	States              []enum.State
+	GenericOrder        bool
 }
 
 type MemorySearchHit struct {
@@ -332,6 +345,7 @@ type Transaction interface {
 	GetScheduledRunForUpdate(context.Context, string, uint32) (ScheduledRun, error)
 	WaitScheduledRun(context.Context, string, uint32) error
 	ContinueScheduledRun(context.Context, ScheduledRun) error
+	RebindScheduledRun(context.Context, ScheduledRun, string, uint32) error
 	FinishScheduledRun(context.Context, ScheduledRun) error
 	AuthorizeProject(context.Context, string, string, string, string, string) (entity.Resource, error)
 	NextProofRevision(context.Context) (uint64, error)

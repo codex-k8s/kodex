@@ -705,19 +705,27 @@ func (service *Service) ClaimScheduleOccurrence(
 					enum.KindProcessRun,
 					"Scheduled process "+occurrence.ID,
 					entity.ProcessRunSpec{
-						PlaybookRef:          scheduleSpec.PlaybookRef,
-						PolicyRevision:       scheduleSpec.PlaybookVersion,
-						RootTriggerRef:       sourceRef,
-						RootInitiatorActorID: schedule.OwnerActorID,
-						RootSessionID:        session.ID,
-						RootSessionVersion:   updatedSession.Version,
-						RootTurnID:           turn.ID,
-						RootTurnVersion:      turn.Version,
-						RootAttempt:          1,
-						ImmutableInputSHA256: turnSpec.EffectiveInputSHA256,
-						RuntimeRevisionID:    runtimeRevision.ID,
-						ScheduleID:           schedule.ID,
-						OccurrenceID:         occurrence.ID,
+						PlaybookRef:                   scheduleSpec.PlaybookRef,
+						PolicyRevision:                scheduleSpec.PlaybookVersion,
+						RootTriggerRef:                sourceRef,
+						RootInitiatorActorID:          schedule.OwnerActorID,
+						RootSessionID:                 session.ID,
+						RootSessionVersion:            updatedSession.Version,
+						RootTurnID:                    turn.ID,
+						RootTurnVersion:               turn.Version,
+						RootAttempt:                   1,
+						ImmutableInputSHA256:          turnSpec.EffectiveInputSHA256,
+						RuntimeRevisionID:             runtimeRevision.ID,
+						ScheduleID:                    schedule.ID,
+						OccurrenceID:                  occurrence.ID,
+						CurrentSessionID:              session.ID,
+						CurrentSessionVersion:         updatedSession.Version,
+						CurrentTurnID:                 turn.ID,
+						CurrentTurnVersion:            turn.Version,
+						CurrentAttempt:                1,
+						CurrentRuntimeRevisionID:      runtimeRevision.ID,
+						CurrentRuntimeRevisionVersion: runtimeRevision.Version,
+						CurrentInputSHA256:            turnSpec.EffectiveInputSHA256,
 					},
 					now,
 				)
@@ -774,10 +782,20 @@ func (service *Service) ClaimScheduleOccurrence(
 				SessionID: updatedSession.ID, SessionVersion: updatedSession.Version,
 				TurnID: turn.ID, TurnVersion: turn.Version,
 				ProcessRunID: scheduledProcess.ID, ProcessVersion: scheduledProcess.Version,
-				RuntimeRevisionID:      runtimeRevision.ID,
-				RuntimeRevisionVersion: runtimeRevision.Version,
-				EffectiveInputSHA256:   turnSpec.EffectiveInputSHA256,
-				State:                  "CLAIMED", CreatedAt: now,
+				RuntimeRevisionID:             runtimeRevision.ID,
+				RuntimeRevisionVersion:        runtimeRevision.Version,
+				EffectiveInputSHA256:          turnSpec.EffectiveInputSHA256,
+				CurrentSessionID:              updatedSession.ID,
+				CurrentSessionVersion:         updatedSession.Version,
+				CurrentTurnID:                 turn.ID,
+				CurrentTurnVersion:            turn.Version,
+				CurrentTurnAttempt:            turnSpec.Attempt,
+				CurrentProcessRunID:           scheduledProcess.ID,
+				CurrentProcessVersion:         scheduledProcess.Version,
+				CurrentRuntimeRevisionID:      runtimeRevision.ID,
+				CurrentRuntimeRevisionVersion: runtimeRevision.Version,
+				CurrentInputSHA256:            turnSpec.EffectiveInputSHA256,
+				State:                         "CLAIMED", CreatedAt: now,
 			}); err != nil {
 				return err
 			}
@@ -1500,6 +1518,8 @@ func (service *Service) StartProcess(
 			targetTurnVersion := uint64(0)
 			targetAttempt := uint32(0)
 			runtimeRevisionID := ""
+			runtimeRevisionVersion := uint64(0)
+			currentInputSHA256 := ""
 			rootImmutableInput := ""
 			playbookRef := input.PlaybookRef
 			policyRevision := input.PolicyRevision
@@ -1575,6 +1595,7 @@ func (service *Service) StartProcess(
 				rootTurnVersion = parentSpec.RootTurnVersion
 				rootAttempt = parentSpec.RootAttempt
 				runtimeRevisionID = targetSpec.RuntimeRevisionID
+				currentInputSHA256 = targetSpec.EffectiveInputSHA256
 				rootImmutableInput = parentSpec.ImmutableInputSHA256
 				playbookRef = parentSpec.PlaybookRef
 				policyRevision = parentSpec.PolicyRevision
@@ -1620,10 +1641,22 @@ func (service *Service) StartProcess(
 					return entity.Resource{}, errs.ErrStateConflict
 				}
 				runtimeRevisionID = turnSpec.RuntimeRevisionID
+				currentInputSHA256 = turnSpec.EffectiveInputSHA256
 				rootImmutableInput = turnSpec.EffectiveInputSHA256
 				rootSessionVersion = session.Version
 				rootTurnVersion = turn.Version + 1
 			}
+			runtimeRevision, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				runtimeRevisionID,
+			)
+			if err != nil || runtimeRevision.Kind != enum.KindRuntimeRevision ||
+				runtimeRevision.State != enum.StateActive {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			runtimeRevisionVersion = runtimeRevision.Version
 			artifact, err := service.requireCleanArtifact(
 				ctx,
 				tx,
@@ -1664,6 +1697,28 @@ func (service *Service) StartProcess(
 				ScheduleID:   scheduleID,
 				OccurrenceID: occurrenceID,
 			}
+			currentTurnID := rootTurnID
+			currentTurnVersion := rootTurnVersion
+			currentSessionID := rootSessionID
+			currentSessionVersion := rootSessionVersion
+			currentAttempt := rootAttempt
+			if input.ParentProcessID != "" {
+				currentTurnID = targetTurnID
+				currentTurnVersion = targetTurnVersion
+				currentSessionID = targetSessionID
+				currentSessionVersion = targetSessionVersion
+				currentAttempt = targetAttempt
+			}
+			setCurrentExecution(&spec, executionTuple{
+				SessionID:              currentSessionID,
+				SessionVersion:         currentSessionVersion,
+				TurnID:                 currentTurnID,
+				TurnVersion:            currentTurnVersion,
+				Attempt:                currentAttempt,
+				RuntimeRevisionID:      runtimeRevisionID,
+				RuntimeRevisionVersion: runtimeRevisionVersion,
+				InputSHA256:            currentInputSHA256,
+			})
 			processID := uuid.NewString()
 			process, err := entity.New(
 				processID,
@@ -1771,22 +1826,20 @@ func (service *Service) CompleteProcess(
 				spec.RootInitiatorActorID != input.Principal.ActorID {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			terminalTurnID := spec.RootTurnID
-			terminalAttempt := spec.RootAttempt
-			if spec.ParentProcessRunID != "" {
-				terminalTurnID = spec.TargetTurnID
-				terminalAttempt = spec.TargetAttempt
+			execution, err := currentExecution(spec)
+			if err != nil {
+				return entity.Resource{}, err
 			}
 			turn, err := tx.GetForUpdate(
 				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-				terminalTurnID,
+				execution.TurnID,
 			)
 			if err != nil {
 				return entity.Resource{}, err
 			}
 			turnSpec, ok := turn.Spec.(entity.TurnSpec)
 			if !ok || turn.Kind != enum.KindTurn || turnSpec.ProcessRunID != process.ID ||
-				turnSpec.Attempt != terminalAttempt ||
+				!executionMatchesTurn(execution, turn, turnSpec) ||
 				turn.State != input.TerminalState || turnSpec.Outcome != input.Outcome ||
 				turnSpec.ResultArtifactID != input.ResultArtifactID {
 				return entity.Resource{}, errs.ErrStateConflict
@@ -2224,14 +2277,15 @@ func (service *Service) RequestOwnerGate(
 				processSpec.RootInitiatorActorID != input.Principal.ActorID {
 				return errs.ErrStateConflict
 			}
-			executionSessionID := processSpec.RootSessionID
-			executionTurnID := processSpec.RootTurnID
-			executionAttempt := processSpec.RootAttempt
-			if processSpec.ParentProcessRunID != "" {
-				executionSessionID = processSpec.TargetSessionID
-				executionTurnID = processSpec.TargetTurnID
-				executionAttempt = processSpec.TargetAttempt
+			execution, err := service.resolveCurrentExecution(
+				ctx, tx, input.Principal, process, processSpec,
+			)
+			if err != nil {
+				return err
 			}
+			executionSessionID := execution.SessionID
+			executionTurnID := execution.TurnID
+			executionAttempt := execution.Attempt
 			if executionSessionID != input.SessionID ||
 				executionTurnID != input.TurnID || executionAttempt != input.Attempt {
 				return errs.ErrStateConflict

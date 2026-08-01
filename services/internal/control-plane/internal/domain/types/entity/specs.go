@@ -493,6 +493,10 @@ type TurnSpec struct {
 	ResultArtifactID     string `json:"resultArtifactId,omitempty"`
 	EffectiveInputSHA256 string `json:"effectiveInputSha256"`
 	PredecessorTurnID    string `json:"predecessorTurnId,omitempty"`
+	OwnerFeedback        string `json:"ownerFeedback,omitempty"`
+	OwnerFeedbackGateID  string `json:"ownerFeedbackGateId,omitempty"`
+	OwnerFeedbackVersion uint64 `json:"ownerFeedbackGateVersion,omitempty"`
+	OwnerFeedbackSHA256  string `json:"ownerFeedbackSha256,omitempty"`
 }
 
 func (TurnSpec) Kind() enum.Kind { return enum.KindTurn }
@@ -510,10 +514,19 @@ func (spec TurnSpec) Validate() error {
 		spec.ProcessRunID,
 		spec.ResultArtifactID,
 		spec.PredecessorTurnID,
+		spec.OwnerFeedbackGateID,
 	} {
 		if identifier != "" && value.ValidateID(identifier) != nil {
 			return errors.New("turn binding is invalid")
 		}
+	}
+	feedback := spec.OwnerFeedback != "" || spec.OwnerFeedbackGateID != "" ||
+		spec.OwnerFeedbackVersion != 0 || spec.OwnerFeedbackSHA256 != ""
+	if feedback && (len(spec.OwnerFeedback) < 1 || len(spec.OwnerFeedback) > 2048 ||
+		spec.OwnerFeedbackGateID == "" || spec.OwnerFeedbackVersion == 0 ||
+		!validSHA256(spec.OwnerFeedbackSHA256) ||
+		digestText(spec.OwnerFeedback) != spec.OwnerFeedbackSHA256) {
+		return errors.New("turn owner feedback binding is invalid")
 	}
 	return nil
 }
@@ -552,6 +565,14 @@ type ProcessRunSpec struct {
 	ContinuationRuntimeRevisionVersion uint64 `json:"continuationRuntimeRevisionVersion,omitempty"`
 	ContinuationInputSHA256            string `json:"continuationInputSha256,omitempty"`
 	OwnerFeedbackSHA256                string `json:"ownerFeedbackSha256,omitempty"`
+	CurrentSessionID                   string `json:"currentSessionId,omitempty"`
+	CurrentSessionVersion              uint64 `json:"currentSessionVersion,omitempty"`
+	CurrentTurnID                      string `json:"currentTurnId,omitempty"`
+	CurrentTurnVersion                 uint64 `json:"currentTurnVersion,omitempty"`
+	CurrentAttempt                     uint32 `json:"currentAttempt,omitempty"`
+	CurrentRuntimeRevisionID           string `json:"currentRuntimeRevisionId,omitempty"`
+	CurrentRuntimeRevisionVersion      uint64 `json:"currentRuntimeRevisionVersion,omitempty"`
+	CurrentInputSHA256                 string `json:"currentInputSha256,omitempty"`
 }
 
 func (ProcessRunSpec) Kind() enum.Kind { return enum.KindProcessRun }
@@ -581,6 +602,9 @@ func (spec ProcessRunSpec) Validate() error {
 		spec.ContinuationGateID,
 		spec.ContinuationTurnID,
 		spec.ContinuationRuntimeRevisionID,
+		spec.CurrentSessionID,
+		spec.CurrentTurnID,
+		spec.CurrentRuntimeRevisionID,
 	} {
 		if identifier != "" && value.ValidateID(identifier) != nil {
 			return errors.New("process run binding is invalid")
@@ -620,6 +644,18 @@ func (spec ProcessRunSpec) Validate() error {
 		!validSHA256(spec.ContinuationInputSHA256) ||
 		!validSHA256(spec.OwnerFeedbackSHA256)) {
 		return errors.New("process continuation binding is invalid")
+	}
+	current := spec.CurrentSessionID != "" || spec.CurrentSessionVersion != 0 ||
+		spec.CurrentTurnID != "" || spec.CurrentTurnVersion != 0 ||
+		spec.CurrentAttempt != 0 || spec.CurrentRuntimeRevisionID != "" ||
+		spec.CurrentRuntimeRevisionVersion != 0 || spec.CurrentInputSHA256 != ""
+	if current && (spec.CurrentSessionID == "" || spec.CurrentSessionVersion == 0 ||
+		spec.CurrentTurnID == "" || spec.CurrentTurnVersion == 0 ||
+		spec.CurrentAttempt == 0 || spec.CurrentAttempt > 100 ||
+		spec.CurrentRuntimeRevisionID == "" ||
+		spec.CurrentRuntimeRevisionVersion == 0 ||
+		!validSHA256(spec.CurrentInputSHA256)) {
+		return errors.New("process current execution binding is invalid")
 	}
 	if spec.OccurrenceID != "" &&
 		spec.RootTriggerRef != "schedule-occurrence:"+spec.OccurrenceID {
