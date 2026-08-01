@@ -4,8 +4,8 @@ title: Межсервисная коммуникация и доменные с�
 type: guide
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-07-28
+version: 1.2.0
+updated: 2026-07-31
 ---
 
 # Межсервисная коммуникация и доменные события
@@ -16,16 +16,16 @@ inbox - `GO-DOC-004`, а transport security - `GUIDE-DOC-003`.
 
 ## Базовые решения
 
-| Потребность | Канонический механизм |
-| --- | --- |
-| немедленный типизированный ответ | Proto/gRPC |
-| внешнее HTTP API | OpenAPI в gateway с вызовом внутренних gRPC |
-| внешнее двунаправленное соединение | WebSocket в gateway |
-| уведомление об уже совершенном доменном факте | AsyncAPI + domain event |
-| надежный запуск длительной работы | устойчивая task + domain event |
-| периодический запуск | отдельная job/scheduler с устойчивой фиксацией attempt |
-| доставка события | PostgreSQL outbox -> relay -> NATS JetStream |
-| обработка события | NATS durable consumer -> PostgreSQL inbox/cursor/effect |
+| Потребность                                   | Канонический механизм                                   |
+| --------------------------------------------- | ------------------------------------------------------- |
+| немедленный типизированный ответ              | Proto/gRPC                                              |
+| внешнее HTTP API                              | OpenAPI в gateway с вызовом внутренних gRPC             |
+| внешнее двунаправленное соединение            | WebSocket в gateway                                     |
+| уведомление об уже совершенном доменном факте | AsyncAPI + domain event                                 |
+| надежный запуск длительной работы             | устойчивая task + domain event                          |
+| периодический запуск                          | отдельная job/scheduler с устойчивой фиксацией attempt  |
+| доставка события                              | PostgreSQL outbox -> relay -> NATS JetStream            |
+| обработка события                             | NATS durable consumer -> PostgreSQL inbox/cursor/effect |
 
 Сервис является единственным владельцем своего бизнесового состояния. Другой
 компонент не читает его таблицы, Redis keys, S3 prefix или внутренние очереди.
@@ -140,6 +140,24 @@ Domain event описывает совершившийся бизнесовый 
 достаточный immutable snapshot для заявленного consumer effect либо устойчивые
 идентификаторы и версии для явного authoritative read path.
 
+Ссылочное событие с aggregate ID/version считается полным, только если каждый
+заявленный consumer имеет достижимый version-pinned read/rejoin path:
+
+```text
+AsyncAPI operation
+-> exact durable consumer/inbox/cursor
+-> generated client operation profile
+-> workload/SPIFFE/audience/method/permission binding
+-> protected gRPC read exact version
+-> hidden tenant semantics
+-> consumer effect + inbox + cursor commit
+```
+
+Readiness до subscription проверяет этот же рабочий путь. Пропущенное событие,
+restart и rejoin повторяют authoritative read; прямое чтение чужой БД
+запрещено. Если такого пути нет, событие несёт полный безопасный immutable
+snapshot либо consumer удаляется из контракта.
+
 ## Producer
 
 Типовой state-changing путь:
@@ -183,9 +201,11 @@ schema или AsyncAPI.
 - возвращает только bounded failure code и retryability;
 - не логирует payload и provider diagnostics.
 
-Outbox row помечается опубликованной только после подтвержденного ack. Сбой
-после ack, но до PostgreSQL finalize приводит к повторной публикации; это
-нормальная часть at-least-once доставки.
+Outbox row помечается опубликованной только после подтвержденного ack.
+Finalize сохраняет bounded broker stream/sequence/duplicate receipt и cleanup
+deadline; немедленное удаление evidence запрещено. Сбой после ack, но до
+PostgreSQL finalize приводит к повторной публикации; это нормальная часть
+at-least-once доставки.
 
 ### Stream ownership
 
@@ -207,6 +227,10 @@ expectation:
 Production-профиль использует file storage, TLS, credentials из runtime files
 и не менее трех replicas, если кластер NATS имеет достаточное число узлов.
 Иное число replicas, retention или RPO фиксируется ADR.
+
+AsyncAPI перечисляет каждый поддерживаемый environment server, включая
+staging и production, с exact TLS/credential/stream profile. Отсутствующий
+server не заменяется подразумеваемой общей шиной.
 
 ### Subjects
 
@@ -267,6 +291,13 @@ Consumer config задает:
 Исчерпание `MaxDeliver` не считается успешной обработкой. Операционная политика
 обязана сохранить сообщение или ссылку на него для расследования и повторного
 запуска. Broker redelivery не заменяет durable inbox.
+
+Машинный реестр перечисляет только фактически материализованные consumer
+событий. gRPC caller/producer profile не делает workload потребителем события.
+Для
+каждого consumer совпадают AsyncAPI operation/subject, deploy owner, effect,
+durable inbox/cursor, authority/read path и readiness; лишняя запись registry
+считается ложной topology и закрыто отклоняется проверкой.
 
 ## Гарантии доставки
 
@@ -332,3 +363,6 @@ Consumer:
 
 Перед изменением версий или API документация повторно проверяется через
 Context7.
+
+Связанные документы: `GO-DOC-001`, `GO-DOC-004`, `GUIDE-DOC-003`,
+`GUIDE-DOC-006`, `GUIDE-MC-007`.

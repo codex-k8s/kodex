@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-07-28
+version: 1.1.0
+updated: 2026-07-31
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -131,6 +131,65 @@ rollback после отмены request выполняется через от�
   подключение до отзыва прежнего и не выводит DSN или password.
 - Ошибки parse, connect и `Ping` отображаются в bounded diagnostics без host,
   user, database и query parameters.
+
+## RLS и идентичность сессии
+
+Область tenant/actor в RLS связывается с неизменяемым `session_user`, точным
+LOGIN principal, устойчивыми поколением/состоянием credential и текущей
+транзакцией. GUC, установленная вызывающей стороной, actor/organization из
+аргумента SQL или членство в общей роли не являются идентичностью. Если
+приложение активирует контекст транзакции, его подписывает принадлежащая серверу
+граница, а каждая policy/привилегированная функция повторно проверяет principal
+и поколение до доступа.
+
+- Runtime получает только минимальные привилегии table/function и `FORCE RLS`.
+- Прямой grant к таблице не обходит ограждение owner/tenant либо
+  `SECURITY DEFINER` API.
+- Открытая session со статусом `RETIRED` перестаёт проходить ограждение каждого
+  statement даже до завершения backend.
+- Readiness подключается точным runtime principal и проверяет фактические
+  привилегии, RLS и отрицательный путь cross-tenant/direct-DML.
+- Поиск owner выполняется внутри доверенной tenant boundary до OCC и
+  idempotency; неизвестный либо чужой ресурс скрыто отклоняется.
+
+Жизненный цикл credential имеет устойчивую монотонную верхнюю отметку и
+закрытые `CURRENT|NEXT|PREVIOUS|RETIRED`. Любое впервые встреченное generation
+должно
+быть выше watermark; меньшее поколение допустимо только как уже сохранённый
+predecessor. `RETIRED` не воскресает после отката ConfigMap/Vault intent.
+Promotion разрешён только для сохранённого `NEXT` после независимого readback
+точного LOGIN. Retirement согласованно выполняет `NOLOGIN`, отзыв членства,
+ограниченные termination/readback и устойчивый статус.
+
+Управление LOGIN принадлежит отдельной минимальной controller role с
+`NOLOGIN`. Миграционный/bootstrap path до записи intent создаёт или принимает
+точный LOGIN, выдаёт controller только необходимые `ADMIN OPTION`, управление
+ролью и фактические возможности `pg_signal_backend`, затем проверяет их
+readback. `NOINHERIT`, `SET ROLE`, владение функцией и поддерживаемые версии
+PostgreSQL проверяются как фактическая семантика; runtime не получает
+`CREATEROLE`.
+
+## Extensions и `SECURITY DEFINER`
+
+Каждое используемое extension устанавливается code-first до первого вызова в
+точную защищённую schema. Для `pgcrypto` вызовы `digest`/`hmac` всегда
+квалифицируются схемой; добавлять доступную для записи `public` в `search_path`
+запрещено. Миграция отзывает лишний `PUBLIC`, выдаёт только требуемые
+`USAGE/EXECUTE` и проверяет фактические schema/owner/version.
+
+Функция `SECURITY DEFINER`:
+
+- имеет точного owner, который реально способен выполнить все statements;
+- использует фиксированный безопасный `search_path` только из `pg_catalog` и
+  schema, а внешние функции всё равно schema-qualified;
+- принимает ограниченные типизированные входы и повторно проверяет
+  tenant/principal;
+- недоступна `PUBLIC` и вызывается только явно разрешёнными roles;
+- не строит динамический SQL из данных вызывающей стороны;
+- закрыто откатывает business state, receipt/audit и lifecycle при
+  невозможности revoke/terminate/readback;
+- имеет статическую проверку и readback фактических привилегий, а не только
+  декларативных атрибутов роли.
 
 ## Миграции goose
 

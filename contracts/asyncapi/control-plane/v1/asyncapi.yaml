@@ -1,0 +1,176 @@
+asyncapi: 3.0.0
+info:
+  title: Доменные факты control-plane
+  version: 1.0.0
+  description: >-
+    Два утверждённых неизменяемых факта для runtime-controller и
+    automation-scheduler. Полное состояние остаётся доступно через gRPC-чтение.
+defaultContentType: application/json
+servers:
+  staging:
+    host: nats.mattercodex-staging.svc:4222
+    protocol: nats
+    description: NATS JetStream только с TLS для staging и отдельными учётными данными Vault CSI.
+  production:
+    host: nats.mattercodex-system.svc:4222
+    protocol: nats
+    description: NATS JetStream только с TLS; учётные данные доставляются через Vault CSI.
+channels:
+  runtimeConfigurationChanged:
+    address: control_plane.runtime_configuration_changed
+    messages:
+      runtimeConfigurationChanged:
+        $ref: '#/components/messages/runtimeConfigurationChanged'
+  scheduleChanged:
+    address: control_plane.schedule_changed
+    messages:
+      scheduleChanged:
+        $ref: '#/components/messages/scheduleChanged'
+operations:
+  publishRuntimeConfigurationChanged:
+    action: send
+    channel:
+      $ref: '#/channels/runtimeConfigurationChanged'
+    summary: Уведомить runtime-controller о новой версии агрегата.
+    x-publisher: control-plane
+    x-consumers:
+      - service: runtime-controller
+        purpose: REFRESH_PINNED_RUNTIME_INPUT_BY_GRPC
+        exactEffect: >-
+          Для RUNTIME_REVISION вызвать закреплённый на точной версии
+          ControlPlaneService.GetRuntimeRevision через путь mTLS, прикладного
+          разрешения и локального issuer для конкретной рабочей нагрузки; для
+          остальных агрегатов использовать типизированный GetResource.
+          Атомарно заменить локальную проекцию с устойчивыми inbox и курсором.
+        readiness: >-
+          Подписка запускается только после готовности устойчивого inbox,
+          точного контракта JetStream и защищённого чтения GetRuntimeRevision.
+    x-delivery:
+      mode: AT_LEAST_ONCE
+      deduplicationKey: eventId
+      orderingKey: organizationId+eventName+aggregateType+aggregateId
+      sequenceField: eventSequence
+      duplicate: ACK_WITHOUT_EFFECT
+      stale: ACK_WITHOUT_EFFECT
+      gap: RETRY_WITHOUT_ACK
+  publishScheduleChanged:
+    action: send
+    channel:
+      $ref: '#/channels/scheduleChanged'
+    summary: Уведомить automation-scheduler о новой версии расписания.
+    x-publisher: control-plane
+    x-consumers:
+      - service: automation-scheduler
+        purpose: REFRESH_DUE_SCHEDULE_BY_GRPC
+        exactEffect: >-
+          Прочитать расписание через версионированный gRPC control-plane,
+          атомарно заменить локальную проекцию с устойчивыми inbox и курсором.
+        readiness: >-
+          Подписка запускается только после готовности устойчивого inbox,
+          точного контракта JetStream и защищённого версионированного GetResource.
+    x-delivery:
+      mode: AT_LEAST_ONCE
+      deduplicationKey: eventId
+      orderingKey: organizationId+eventName+aggregateType+aggregateId
+      sequenceField: eventSequence
+      duplicate: ACK_WITHOUT_EFFECT
+      stale: ACK_WITHOUT_EFFECT
+      gap: RETRY_WITHOUT_ACK
+components:
+  messages:
+    runtimeConfigurationChanged:
+      name: control_plane.runtime_configuration_changed
+      title: Конфигурация среды исполнения изменена
+      payload:
+        $ref: '#/components/schemas/envelope'
+    scheduleChanged:
+      name: control_plane.schedule_changed
+      title: Расписание изменено
+      payload:
+        $ref: '#/components/schemas/envelope'
+  schemas:
+    envelope:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - eventName
+        - eventVersion
+        - schemaVersion
+        - occurredAt
+        - aggregateType
+        - aggregateId
+        - aggregateVersion
+        - eventSequence
+        - correlationId
+        - organizationId
+        - data
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventName:
+          type: string
+          enum:
+            - control_plane.runtime_configuration_changed
+            - control_plane.schedule_changed
+        eventVersion:
+          type: integer
+          const: 1
+        schemaVersion:
+          type: integer
+          const: 1
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateType:
+          type: string
+          minLength: 2
+          maxLength: 64
+        aggregateId:
+          type: string
+          format: uuid
+        aggregateVersion:
+          type: integer
+          minimum: 1
+        eventSequence:
+          type: integer
+          minimum: 1
+        correlationId:
+          type: string
+          format: uuid
+        causationId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/changeReference'
+    changeReference:
+      type: object
+      additionalProperties: false
+      required:
+        - projectId
+        - resourceId
+        - resourceKind
+        - resourceState
+        - resourceVersion
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        resourceId:
+          type: string
+          format: uuid
+        resourceKind:
+          type: string
+          minLength: 2
+          maxLength: 64
+        resourceState:
+          type: string
+          minLength: 2
+          maxLength: 32
+        resourceVersion:
+          type: integer
+          minimum: 1

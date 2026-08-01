@@ -4,8 +4,8 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 0.2.0
+updated: 2026-07-31
 ---
 
 # Образы и цепочка поставки
@@ -33,6 +33,20 @@ updated: 2026-07-16
 Kaniko не используется в промышленной конфигурации, поскольку исходный проект архивирован. BuildKit выполняет сборку в отдельном namespace и под отдельной служебной учетной записью. Режим без root предпочтителен; привилегированный резервный режим допускается только изолированно и документируется.
 
 Сборщик не получает промышленные учетные данные среды выполнения. Токен реестра пакетов, если нужен, выдается как краткоживущий секрет с ограниченной областью и не попадает в слои образа или логи.
+
+Канонический локальный контур разделяет staging push, staging admin,
+promotion writer и node pull по Pod, ServiceAccount, mTLS/Vault identity,
+NetworkPolicy и хранилищу. Pull монтирует promoted storage только read-only и
+не имеет пути к внутренним endpoints. Build Job принимает read-only
+`context.tar` с exact digest/revision, обращается к BuildKit через client-only
+mTLS и публикует только в staging. Отдельный admission owner связывает exact
+source/build/image digest с BuildKit provenance, SBOM digest, версией и
+результатом vulnerability policy, проверенной signature identity и
+подписанным admission receipt. Только короткоживущий claim этого владельца
+разрешает promotion writer перенести exact digest; pull видит только promoted
+admitted content. Admin DELETE не выдаётся сборщику или pull. `noProcessSandbox`
+ограничивается rootless BuildKit Pod без Kubernetes token, прикладных секретов
+и persistent worker state; это не даёт права ослаблять mTLS или registry scopes.
 
 ## Допуск к публикации
 

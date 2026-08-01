@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.0.6
-updated: 2026-07-30
+version: 1.1.0
+updated: 2026-07-31
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -92,6 +92,21 @@ Client adapter явно собирает все принятые слои:
 Credential не передается по незашифрованному соединению. Для gRPC
 `PerRPCCredentials` требует transport security. Health/готовность проверяют тот
 же auth path, который используют рабочие RPC, а не упрощенный обход.
+
+Worker/application grant не может быть разрешением на claim для всего проекта.
+Он неизменяемо связывает точные workload/SPIFFE, audience, полный метод,
+permission, organization/project, session, turn, attempt, дайджест неизменяемого
+входа, поколение credential и ограниченные JTI/fence. Resolver перечитывает
+авторитетный незавершённый граф перед выпуском свежего proof. Renew/complete
+повторяют ту же связку; terminal/cancel/retry/expiry атомарно отзывают прежний
+grant. Идентификаторы из полезной нагрузки RPC не расширяют область grant.
+
+Ресурс, который выдаёт полномочия либо управляет исполнением, не изменяется
+универсальным CRUD. Специализированная команда назначает owner и начальное
+состояние на сервере, проверяет разрешённое для назначения подмножество и
+запрещает самовыдачу/самоповышение. Обычная project permission не разрешает
+жизненный цикл чужого owner; исключение требует отдельной административной
+permission и собственного пути аудита.
 
 Транспорт, verifier и домен используют разные модели. Общий verifier
 возвращает нейтральные проверенные утверждения; преобразование в доменный
@@ -237,6 +252,14 @@ Vault/PostgreSQL, лидера с ограждением/CAS, восстанов
 principals/поколения из версионированного реестра и не принимает их как
 источник полномочий из RPC-запроса.
 
+Такой controller должен иметь фактически применимые минимальные полномочия, а
+не только декларативное имя роли. Bootstrap code-first создаёт или принимает
+каждый точный LOGIN, выдаёт controller ограниченный `ADMIN OPTION`, управление
+ролью и возможность завершения backends, затем читает фактические привилегии.
+`NOINHERIT`, `SET ROLE`, владение `SECURITY DEFINER` и поддерживаемые версии
+PostgreSQL проверяются как исполняемый путь. Выдавать `CREATEROLE` runtime
+principal запрещено.
+
 Одноразовые подпись/JTI не отменяют семантическую идемпотентность изменяющего
 состояние RPC. Одна устойчивая CAS-транзакция хранит ключ идемпотентности,
 канонический хэш запроса, JTI и полный принятый результат/подтверждение. Точная
@@ -291,6 +314,14 @@ principals/поколения из версионированного реест
 - workload получает только минимальный набор ключей через отдельный локальный
   для пространства имён граф аутентификации.
 
+Vault CSI object для PKI `issue/<role>` является операцией записи: он задаёт
+поддерживаемый `PUT`/`POST`, точный `common_name`, SAN, ограниченный TTL и
+назначение сертификата. Серверные и клиентские роли разделены по EKU, Vault
+policy, ServiceAccount и `SecretProviderClass`; CA читается отдельным путём.
+Render, startup и readback закрыто проверяют метод, разрешённые имена, EKU,
+TTL, SNI и фактически обслуживаемый путь mTLS. Синтаксически корректный GET к
+PKI issue path не считается доставкой сертификата.
+
 Переход с незашифрованного транспорта на TLS выполняется системно: сначала
 инвентаризируются все
 активные клиенты, затем им доставляется CA и точный egress, после этого
@@ -342,6 +373,15 @@ applied -> pending -> reload -> exact peer readback -> applied
   целиком.
 - Разрешенный selector обязан ссылаться на реально принадлежащий компонент и
   достижимый `Service`, а не на предполагаемый pod.
+- Read-only pull, staging push, promotion и delete/admin цепочки поставки не
+  совмещаются в одном Pod или writable volume. У них разные ServiceAccount,
+  transport/application credentials, приватные ключи, NetworkPolicy и
+  storage mode; публичный pull не видит внутренние credentials и монтирует
+  promoted storage только read-only. Label не заменяет mTLS и scoped auth.
+- Build identity не получает promotion credential или egress. Promotion
+  принимает только exact digest и bounded подписанный claim admission owner,
+  связанный с provenance, SBOM, vulnerability policy/version и проверенной
+  signature identity; missing/stale/rejected evidence закрыто отклоняется.
 
 Kubernetes API не описывается переносимым `podSelector` на компонент
 control-plane. Политика строится из фактического Service ClusterIP и готовых
@@ -423,3 +463,5 @@ integration/E2E/contract/deploy/render/lifecycle suite либо полного c
 
 Связанные документы: `AGENT-DOC-001`, `GO-DOC-001`, `GO-DOC-003`,
 `GO-DOC-004`, `GO-DOC-005`, `GO-DOC-006`, `INFRA-DOC-001`.
+Для защищённых агрегатов и графа выполнения дополнительно применяется
+`GUIDE-DOC-006`.

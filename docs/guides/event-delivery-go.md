@@ -4,8 +4,8 @@ title: Надежная доставка доменных событий в Go
 type: guide
 status: approved
 owner: architect
-version: 1.1.0
-updated: 2026-07-28
+version: 1.3.0
+updated: 2026-07-31
 ---
 
 # Надежная доставка доменных событий в Go
@@ -155,16 +155,18 @@ Broker adapter реализует только:
 
 ```go
 type Publisher interface {
-    Publish(context.Context, eventing.Envelope) error
+    Publish(context.Context, eventing.Envelope) (PublishReceipt, error)
     Check(context.Context) error
 }
 ```
 
 Adapter обязан дождаться подтверждения broker, классифицировать ошибку в
 bounded code и признак retryability, не менять payload и не скрывать
-неподтвержденную публикацию как успех. Замена broker меняет adapter и
-deployment-конфигурацию, но не producer repository, доменный сервис и
-AsyncAPI.
+неподтвержденную публикацию как успех. `PublishReceipt` содержит bounded
+provider identity, durable sequence и duplicate flag; secret/provider payload
+в него не входит. Producer repository сохраняет receipt вместе с
+`published_at`, lease release и cleanup deadline. Замена broker меняет adapter
+и receipt mapping, но не доменный сервис и AsyncAPI.
 
 Базовая реализация находится в `libs/go/eventing/natsjetstream`. Она публикует
 неизмененный serialized envelope в subject, равный `eventName`, передает
@@ -173,6 +175,10 @@ attempt и ждет synchronous JetStream acknowledgement ожидаемого s
 Adapter не создает stream: `Check` сверяет его exact environment-owned
 конфигурацию. Детальный NATS contract, durable consumer и правила subjects
 описаны в `GO-DOC-005`.
+
+Подтверждённая строка outbox не удаляется в finalize: она остаётся
+авторитетным bounded delivery receipt до server-side cleanup deadline.
+Cleanup не затрагивает unpublished, retry, in-flight или dead-letter rows.
 
 Broker acknowledgement имеет явный durability contract. Если broker
 подтверждает запись до `fsync` или допускает потерю acknowledged messages в
@@ -224,6 +230,28 @@ Dead-letter predecessor продолжает блокировать следую
 3. оценки последующих событий того же ordering key;
 4. фиксации оператора, времени, причины и evidence;
 5. проверки backlog после повторной доставки.
+
+Завершившееся ошибкой событие имеет ограниченный авторитетный list/read без
+выдачи полезной нагрузки и специализированный разрешаемый владельцем протокол
+repair. Repair/skip:
+
+- работает только с самым ранним предшественником точного ordering key;
+- сверяет tenant, event ID/name, sequence, число attempt/repair и дайджест
+  неизменяемого evidence;
+- имеет назначаемую сервером область idempotency
+  `(organization, project, operation, key hash)` и request hash;
+- отличает повтор того же запроса от иного запроса в той же области;
+- сохраняет неизменяемые receipt/result, actor, reason, evidence и timestamps
+  независимо от последующей очистки строки outbox;
+- не меняет payload/sequence и не пропускает последователей без отдельного
+  утверждённого аудируемого skip с эквивалентным evidence/read path;
+- ограничивает число repair, обновляет метрики/alert и связан с точным
+  runbook.
+
+Глобальный primary key только по переданному вызывающей стороной idempotency
+key запрещён: одинаковые ключи разных tenants не взаимодействуют. Ручной
+`UPDATE`, удаление terminal row или объявление его опубликованным не являются
+repair.
 
 ## Consumer и durable inbox
 

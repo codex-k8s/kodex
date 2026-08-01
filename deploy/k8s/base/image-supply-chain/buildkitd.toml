@@ -1,0 +1,20 @@
+debug = false
+root = "/var/lib/buildkit"
+
+[grpc]
+  address = ["tcp://0.0.0.0:1234"]
+  ca = "/var/run/secrets/mattercodex/buildkit/tls/ca.pem"
+  cert = "/var/run/secrets/mattercodex/buildkit/tls/server.crt"
+  key = "/var/run/secrets/mattercodex/buildkit/tls/server.key"
+
+[worker.oci]
+  enabled = true
+  snapshotter = "native"
+  rootless = true
+  noProcessSandbox = true
+
+[registry."mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001"]
+  ca = ["/var/run/config/mattercodex/image-registry/ca.pem"]
+  [[registry."mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001".keypair]]
+    cert = "/var/run/secrets/mattercodex/buildkit/tls/registry-client.crt"
+    key = "/var/run/secrets/mattercodex/buildkit/tls/registry-client.key"

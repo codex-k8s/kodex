@@ -83,6 +83,16 @@ func (metrics *Metrics) PrometheusHandler() http.Handler {
 	return promhttp.HandlerFor(metrics.registry, promhttp.HandlerOpts{})
 }
 
+// Register добавляет service-owned collectors в изолированный registry.
+func (metrics *Metrics) Register(collectors ...prometheus.Collector) error {
+	for _, collector := range collectors {
+		if err := metrics.registry.Register(collector); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // UnaryServerInterceptor учитывает длительность и код завершённого RPC.
 func (metrics *Metrics) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(

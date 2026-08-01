@@ -4,8 +4,8 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 1.0.0
-updated: 2026-07-28
+version: 1.1.0
+updated: 2026-07-31
 ---
 
 # Infrastructure Guide
@@ -71,6 +71,14 @@ database, broker, egress proxy и secret operator фиксируются:
 - bounded shutdown и порядок закрытия;
 - environment apply order, readback и repair/rollback runbook.
 
+Для Deployment/Job дополнительно явно задаются утверждённые владельцем
+`replicas`, `revisionHistoryLimit`, стратегия rollout,
+`activeDeadlineSeconds`, retry/backoff, история cleanup, disruption policy и
+поведение при отказе readiness. Значения не наследуются из случайного default
+и сверяются в итоговом render окружения. Число реплик и глубина истории
+относятся к контракту конкретного component, а не являются одной глобальной
+константой проекта.
+
 Ручное заполнение `emptyDir`/ConfigMap, selector несуществующего workload,
 ссылка на отсутствующий namespace-local auth resource и фиктивно успешный
 provider path запрещены. Обязательная зависимость проверяется до открытия
@@ -133,6 +141,69 @@ Multi-stage Dockerfile включает полный local-module closure: manif
 локальных replaced Go modules копируются до download, их исходники и
 Dockerfile ignore rules — до build. Runtime и migration OCI targets проверяются
 как самостоятельные artifacts; локальная host-сборка их не заменяет.
+
+Канонический renderer принимает отдельные неизменяемые дайджесты для builder,
+runtime service, migration/job, agent runtime и инструментов допуска. Он также
+принимает точные source/commit или дайджест архива исходников, revision policy
+и все обязательные входы конфигурации. Один дайджест по умолчанию не
+используется для разных artifacts. Нулевой, изменяемый или отсутствующий вход
+останавливает render до apply; каждый вход материализуется в типизированных
+config, annotation/manifest и readback.
+
+## Поставка и допуск образов
+
+Локальная цепочка образов считается исполнимой только как полный путь
+потребителя:
+
+```text
+immutable source + Dockerfile/module graph
+-> bounded build Job/controller
+-> exact mTLS BuildKit identity
+-> staging push identity/storage
+-> provenance + SBOM + vulnerability verdict + signature
+-> server-owned admission receipt
+-> isolated promotion identity/storage
+-> node-reachable pull endpoint
+-> pull/readback exact digest на каждой node boundary
+```
+
+Объявленный listener BuildKit без Job/CLI-владельца, secret mounts,
+`NetworkPolicy`, failure policy и readback дайджеста не считается путём сборки.
+BuildKit TCP требует точный серверный TLS и отдельные клиентские identities для
+probe и builder; UDS допустим только тогда, когда шаг сборки физически может к
+нему обратиться. Label selector остаётся сетевым слоем и не заменяет mTLS.
+
+Registry pull, staging push, admin/retention и promotion разделяются физически:
+
+- разные Pods/Deployments, ServiceAccounts, Services, Vault roles/SPC,
+  application credentials и `NetworkPolicy`;
+- pull видит только собственные TLS/auth materials и доступное только для
+  чтения promoted storage, не имеет localhost/admin path и writable volume;
+- push пишет только staging и не имеет delete/promotion identity;
+- admin/retention ограничен staging cleanup policy;
+- promotion является единственной стороной записи в promoted storage и не
+  совмещается с builder либо публичным pull.
+
+Kubelet/container runtime должен достичь endpoint pull до запуска Pod.
+ClusterIP/pod DNS и том CA будущего Pod этого не доказывают. Окружение
+материализует доступные с узла точные FQDN/route, DNS и доверие CA/runtime,
+доступный только для чтения credential pull и code-first readback точного
+дайджеста с границы каждого узла. Небезопасный registry, незашифрованный
+запасной путь и скрытая ручная настройка runtime узла запрещены. Rollback
+выбирает ранее допущенный дайджест тем же путём.
+
+Сборка публикует только staging digest и неизменяемые metadata происхождения.
+Отдельный владелец допуска связывает точные дайджесты source/build/image/tools,
+identity/digest SPDX SBOM, revision/verdict policy уязвимостей и проверенную
+identity подписи. Ограниченный подписанный claim/receipt содержит expiry,
+idempotency и аудит; promotion сверяет его до copy и затем читает обратно
+точные дайджест образа и OCI receipt допуска. Отсутствующее, устаревшее,
+отклонённое или несовпадающее evidence закрыто блокирует promotion.
+
+Vault CSI PKI выдаёт identities BuildKit/registry операцией записи с точными
+`common_name`, SAN, TTL и server/client EKU по `GUIDE-DOC-003`. CA имеет
+отдельный путь чтения; render/startup/readiness проверяют фактический mTLS, а не
+только наличие `SecretProviderClass`.
 
 ## PostgreSQL в Kubernetes и за его пределами
 
@@ -200,3 +271,5 @@ QA не получает SRE SSH/root credentials.
 
 Связанные документы: `OPS-DOC-001`, `RUN-DOC-001`, `DEPLOY-DOC-001`,
 `GO-DOC-001`, `GUIDE-DOC-003`.
+Для контура deploy защищённого графа выполнения дополнительно применяется
+`GUIDE-DOC-006`.

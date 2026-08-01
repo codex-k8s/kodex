@@ -4,8 +4,8 @@ title: Эпики, волны и human gate
 type: guide
 status: approved
 owner: manager
-version: 1.2.0
-updated: 2026-07-30
+version: 1.3.0
+updated: 2026-07-31
 ---
 
 # Эпики, волны и human gate
@@ -146,6 +146,40 @@ Reviewer оставляет замечания с severity, файлом/стр�
 production path, противоречие требованиям или fail-open boundary остаётся
 finding независимо от наличия теста.
 
+### Обязательный checklist reviewer для полного unit
+
+Каждое направление проверяет не только изменённую строку, но полный
+сквозной контур и системные аналоги причины:
+
+- источник требования, actor, назначаемые сервером authority/owner/delegation
+  и точную tenant boundary;
+- внешний endpoint либо producer, gateway/client mapping, внутренний RPC и
+  авторитетный владелец данных;
+- create, read/list/search, update, claim/renew/complete, cancel, delete,
+  retry, expiry, dead letter и каждый owner-decision/continuation outcome;
+- транзакцию, ограждение с одним победителем, область OCC/idempotency,
+  отзыв grant/lease, аудит, событие либо авторитетный tombstone/read path;
+- ссылочное событие, versioned read/rejoin, эффект consumer, durable inbox и
+  readiness того же рабочего пути;
+- composition/config, Docker-граф локальных модулей, все неизменяемые дайджесты
+  и входы render, владение deploy, replicas/history, probes/failure policy,
+  `NetworkPolicy`, dashboards, alerts и точный runbook;
+- аналогичные защищённые виды, terminal paths, credentials, caches,
+  policies, environments и consumers во всём diff.
+
+Product reviewer отдельно доказывает полноту состояний и пользовательских/
+операторских исходов. Security reviewer проверяет полномочия, изоляцию
+owner/tenant, replay, PostgreSQL/cache и границы компрометации цепочки поставки.
+Architecture reviewer проверяет согласованность contracts, data, events,
+жизненного цикла и контура deploy. Подробная матрица жизненного цикла задана
+`GUIDE-DOC-006`.
+
+Ответ автора, зелёная быстрая сборка и состояние thread `resolved` не заменяют
+перепроверку исходного пути отказа на новом точном SHA. В `Prototype`
+статически достижимый production-дефект остаётся замечанием; отсутствующая
+полная проверка в живом окружении не является замечанием и не требуется как
+условие его формулировки или устранения.
+
 ## Цикл устранения замечаний
 
 1. Developer получает все три review одного раунда.
@@ -159,6 +193,10 @@ finding независимо от наличия теста.
    без проверки нового diff не является доказательством.
 6. Если хотя бы одно направление нашло новое замечание, цикл повторяется с
    пункта 1.
+
+При повторной проверке reviewer явно перечисляет просмотренные системные
+аналоги и сохраняющиеся ограничения доказательств. Формулировка «исправлено по
+ответу автора» без чтения нового production diff недопустима.
 
 Review завершено только когда:
 

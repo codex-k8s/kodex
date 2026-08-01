@@ -1,0 +1,1527 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// ControlPlaneService владеет желаемым бизнес-состоянием MatterCodex.
+// Actor, организация, область проекта и полномочия не принимаются в нагрузке:
+// транспорт получает их только из проверенного контекста авторизации #186.
+service ControlPlaneService {
+  // CreateProject выполняет версионированную операцию ControlPlaneService.
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+  // ListProjects выполняет версионированную операцию ControlPlaneService.
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  // CreateResource выполняет версионированную операцию ControlPlaneService.
+  rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse);
+  // UpdateResource выполняет версионированную операцию ControlPlaneService.
+  rpc UpdateResource(UpdateResourceRequest) returns (UpdateResourceResponse);
+  // TransitionResource выполняет версионированную операцию ControlPlaneService.
+  rpc TransitionResource(TransitionResourceRequest) returns (TransitionResourceResponse);
+  // DeleteResource выполняет версионированную операцию ControlPlaneService.
+  rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse);
+  // ManageAccessResource — закрытая административная команда для TEAM/ROLE/PROMPT_PROFILE.
+  rpc ManageAccessResource(ManageAccessResourceRequest) returns (ManageAccessResourceResponse);
+  // GetResource выполняет версионированную операцию ControlPlaneService.
+  rpc GetResource(GetResourceRequest) returns (GetResourceResponse);
+  // ListResources выполняет версионированную операцию ControlPlaneService.
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
+  // SearchResources выполняет версионированную операцию ControlPlaneService.
+  rpc SearchResources(SearchResourcesRequest) returns (SearchResourcesResponse);
+  // SearchMemoryRecords выполняет версионированную операцию ControlPlaneService.
+  rpc SearchMemoryRecords(SearchMemoryRecordsRequest) returns (SearchMemoryRecordsResponse);
+  // ListAuditEvents выполняет версионированную операцию ControlPlaneService.
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
+  // ListTombstones выполняет версионированную операцию ControlPlaneService.
+  rpc ListTombstones(ListTombstonesRequest) returns (ListTombstonesResponse);
+  // GetDiagnostics выполняет версионированную операцию ControlPlaneService.
+  rpc GetDiagnostics(GetDiagnosticsRequest) returns (GetDiagnosticsResponse);
+  // ListOutboxFailures возвращает ограниченный terminal repair contour.
+  rpc ListOutboxFailures(ListOutboxFailuresRequest) returns (ListOutboxFailuresResponse);
+  // RepairOutboxEvent повторно открывает только exact заблокировавший predecessor.
+  rpc RepairOutboxEvent(RepairOutboxEventRequest) returns (RepairOutboxEventResponse);
+
+  // EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
+  rpc EnqueueTurn(EnqueueTurnRequest) returns (EnqueueTurnResponse);
+  // ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
+  // ограниченную аренду.
+  rpc ClaimTurn(ClaimTurnRequest) returns (ClaimTurnResponse);
+  // RenewTurn продлевает только аренду текущей попытки, fence и поколения.
+  rpc RenewTurn(RenewTurnRequest) returns (RenewTurnResponse);
+  // CompleteTurn завершает только текущую аренду и фиксирует конечный исход.
+  rpc CompleteTurn(CompleteTurnRequest) returns (CompleteTurnResponse);
+  // RetryTurn выполняет версионированную операцию ControlPlaneService.
+  rpc RetryTurn(RetryTurnRequest) returns (RetryTurnResponse);
+  // CancelTurn выполняет версионированную операцию ControlPlaneService.
+  rpc CancelTurn(CancelTurnRequest) returns (CancelTurnResponse);
+  // ManageSession — единственный путь жизненного цикла SESSION; привязку
+  // провайдера выбирает сервер.
+  rpc ManageSession(ManageSessionRequest) returns (ManageSessionResponse);
+  // ManageMemoryRecord связывает область и владельца с проверенным actor.
+  rpc ManageMemoryRecord(ManageMemoryRecordRequest) returns (ManageMemoryRecordResponse);
+  // ManageWorkClaim связывает получение работы с точными процессом, сессией,
+  // ходом, попыткой и рабочей нагрузкой.
+  rpc ManageWorkClaim(ManageWorkClaimRequest) returns (ManageWorkClaimResponse);
+
+  // ManageSchedule изменяет расписание только через закрытые действия сервера.
+  rpc ManageSchedule(ManageScheduleRequest) returns (ManageScheduleResponse);
+  // ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
+  // среды исполнения.
+  rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
+  // ClaimScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
+  rpc ClaimScheduleOccurrence(ClaimScheduleOccurrenceRequest) returns (ClaimScheduleOccurrenceResponse);
+  // CompleteScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
+  rpc CompleteScheduleOccurrence(CompleteScheduleOccurrenceRequest) returns (CompleteScheduleOccurrenceResponse);
+  // CancelScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
+  rpc CancelScheduleOccurrence(CancelScheduleOccurrenceRequest) returns (CancelScheduleOccurrenceResponse);
+  // ListScheduleOccurrences выполняет версионированную операцию ControlPlaneService.
+  rpc ListScheduleOccurrences(ListScheduleOccurrencesRequest) returns (ListScheduleOccurrencesResponse);
+
+  // StartProcess выполняет версионированную операцию ControlPlaneService.
+  rpc StartProcess(StartProcessRequest) returns (StartProcessResponse);
+  // CancelProcess выполняет версионированную операцию ControlPlaneService.
+  rpc CancelProcess(CancelProcessRequest) returns (CancelProcessResponse);
+  // CompleteProcess завершает процесс по авторитетному terminal-ходу.
+  rpc CompleteProcess(CompleteProcessRequest) returns (CompleteProcessResponse);
+  // RequestOwnerGate выполняет версионированную операцию ControlPlaneService.
+  rpc RequestOwnerGate(RequestOwnerGateRequest) returns (RequestOwnerGateResponse);
+  // ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
+  // сервером выбранной ожидающей карточки.
+  rpc ClaimOwnerGateDelivery(ClaimOwnerGateDeliveryRequest) returns (ClaimOwnerGateDeliveryResponse);
+  // ExpireOwnerGate автономно закрывает одну выбранную PostgreSQL
+  // просроченную карточку и весь её execution graph.
+  rpc ExpireOwnerGate(ExpireOwnerGateRequest) returns (ExpireOwnerGateResponse);
+  // RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
+  // принадлежащей серверу.
+  rpc RecordOwnerGateDelivery(RecordOwnerGateDeliveryRequest) returns (RecordOwnerGateDeliveryResponse);
+  // ResolveOwnerGate связывает решение с точными шлюзом, процессом, сессией,
+  // ходом и попыткой.
+  rpc ResolveOwnerGate(ResolveOwnerGateRequest) returns (ResolveOwnerGateResponse);
+
+  // RegisterArtifact выполняет версионированную операцию ControlPlaneService.
+  rpc RegisterArtifact(RegisterArtifactRequest) returns (RegisterArtifactResponse);
+  // RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
+  rpc RecordArtifactScan(RecordArtifactScanRequest) returns (RecordArtifactScanResponse);
+  // GetRuntimeRevision — авторитетное чтение закреплённой версии для
+  // runtime-controller.
+  rpc GetRuntimeRevision(GetRuntimeRevisionRequest) returns (GetRuntimeRevisionResponse);
+  // RecordMemoryEmbedding фиксирует локальную перестраиваемую проекцию, а не
+  // источник истины.
+  rpc RecordMemoryEmbedding(RecordMemoryEmbeddingRequest) returns (RecordMemoryEmbeddingResponse);
+
+  // CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
+  rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
+}
+
+// CreateProjectRequest описывает версионированное сообщение контракта control-plane.
+message CreateProjectRequest {
+  string idempotency_key = 1;
+  string name = 2;
+  ProjectSpec spec = 3;
+}
+
+// CreateProjectResponse описывает версионированное сообщение контракта control-plane.
+message CreateProjectResponse {
+  Resource project = 1;
+}
+
+// ListProjectsRequest описывает версионированное сообщение контракта control-plane.
+message ListProjectsRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+
+// ListProjectsResponse описывает версионированное сообщение контракта control-plane.
+message ListProjectsResponse {
+  repeated Resource projects = 1;
+  string next_page_token = 2;
+}
+
+// ResourceKind — закрытый перечень агрегатов, принадлежащих control-plane.
+enum ResourceKind {
+  // RESOURCE_KIND_UNSPECIFIED — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_UNSPECIFIED = 0;
+  // RESOURCE_KIND_PROJECT — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_PROJECT = 1;
+  // RESOURCE_KIND_TEAM — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_TEAM = 2;
+  // RESOURCE_KIND_CHAT — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_CHAT = 3;
+  // RESOURCE_KIND_ROLE — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_ROLE = 4;
+  // RESOURCE_KIND_PROMPT_PROFILE — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_PROMPT_PROFILE = 5;
+  // RESOURCE_KIND_CREDENTIAL_BINDING — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_CREDENTIAL_BINDING = 6;
+  // RESOURCE_KIND_REPOSITORY_WORKSPACE — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_REPOSITORY_WORKSPACE = 7;
+  // RESOURCE_KIND_INTEGRATION — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_INTEGRATION = 8;
+  // RESOURCE_KIND_RUNTIME_REVISION — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_RUNTIME_REVISION = 9;
+  // RESOURCE_KIND_SESSION — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_SESSION = 10;
+  // RESOURCE_KIND_TURN — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_TURN = 11;
+  // RESOURCE_KIND_PROCESS_RUN — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_PROCESS_RUN = 12;
+  // RESOURCE_KIND_SCHEDULE — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_SCHEDULE = 13;
+  // RESOURCE_KIND_OWNER_GATE — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_OWNER_GATE = 14;
+  // RESOURCE_KIND_MEMORY_RECORD — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_MEMORY_RECORD = 15;
+  // RESOURCE_KIND_WORK_CLAIM — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_WORK_CLAIM = 16;
+  // RESOURCE_KIND_ARTIFACT — значение закрытого перечисления ResourceKind.
+  RESOURCE_KIND_ARTIFACT = 17;
+}
+
+// LifecycleState задаёт закрытое перечисление контракта control-plane.
+enum LifecycleState {
+  // LIFECYCLE_STATE_UNSPECIFIED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_UNSPECIFIED = 0;
+  // LIFECYCLE_STATE_ACTIVE — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_ACTIVE = 1;
+  // LIFECYCLE_STATE_PAUSED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_PAUSED = 2;
+  // LIFECYCLE_STATE_ARCHIVED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_ARCHIVED = 3;
+  // LIFECYCLE_STATE_DELETION_PENDING — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_DELETION_PENDING = 4;
+  // LIFECYCLE_STATE_DELETED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_DELETED = 5;
+  // LIFECYCLE_STATE_QUEUED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_QUEUED = 6;
+  // LIFECYCLE_STATE_CLAIMED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_CLAIMED = 7;
+  // LIFECYCLE_STATE_RUNNING — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_RUNNING = 8;
+  // LIFECYCLE_STATE_WAITING_OWNER — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_WAITING_OWNER = 9;
+  // LIFECYCLE_STATE_WAITING_EXTERNAL — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_WAITING_EXTERNAL = 10;
+  // LIFECYCLE_STATE_SUCCEEDED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_SUCCEEDED = 11;
+  // LIFECYCLE_STATE_FAILED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_FAILED = 12;
+  // LIFECYCLE_STATE_CANCELLED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_CANCELLED = 13;
+  // LIFECYCLE_STATE_EXPIRED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_EXPIRED = 14;
+  // LIFECYCLE_STATE_BLOCKED — значение закрытого перечисления LifecycleState.
+  LIFECYCLE_STATE_BLOCKED = 15;
+}
+
+// RoomType задаёт закрытое перечисление контракта control-plane.
+enum RoomType {
+  // ROOM_TYPE_UNSPECIFIED — значение закрытого перечисления RoomType.
+  ROOM_TYPE_UNSPECIFIED = 0;
+  // ROOM_TYPE_USER — значение закрытого перечисления RoomType.
+  ROOM_TYPE_USER = 1;
+  // ROOM_TYPE_COORDINATION — значение закрытого перечисления RoomType.
+  ROOM_TYPE_COORDINATION = 2;
+  // ROOM_TYPE_WORK_CONTROL — значение закрытого перечисления RoomType.
+  ROOM_TYPE_WORK_CONTROL = 3;
+  // ROOM_TYPE_RUNS — значение закрытого перечисления RoomType.
+  ROOM_TYPE_RUNS = 4;
+}
+
+// ScheduleOverlapPolicy задаёт закрытое перечисление контракта control-plane.
+enum ScheduleOverlapPolicy {
+  // SCHEDULE_OVERLAP_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleOverlapPolicy.
+  SCHEDULE_OVERLAP_POLICY_UNSPECIFIED = 0;
+  // SCHEDULE_OVERLAP_POLICY_FORBID — значение закрытого перечисления ScheduleOverlapPolicy.
+  SCHEDULE_OVERLAP_POLICY_FORBID = 1;
+  // SCHEDULE_OVERLAP_POLICY_SKIP — значение закрытого перечисления ScheduleOverlapPolicy.
+  SCHEDULE_OVERLAP_POLICY_SKIP = 2;
+  // SCHEDULE_OVERLAP_POLICY_QUEUE — значение закрытого перечисления ScheduleOverlapPolicy.
+  SCHEDULE_OVERLAP_POLICY_QUEUE = 3;
+}
+
+// ScheduleMisfirePolicy задаёт закрытое перечисление контракта control-plane.
+enum ScheduleMisfirePolicy {
+  // SCHEDULE_MISFIRE_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleMisfirePolicy.
+  SCHEDULE_MISFIRE_POLICY_UNSPECIFIED = 0;
+  // SCHEDULE_MISFIRE_POLICY_SKIP — значение закрытого перечисления ScheduleMisfirePolicy.
+  SCHEDULE_MISFIRE_POLICY_SKIP = 1;
+  // SCHEDULE_MISFIRE_POLICY_RUN_ONCE — значение закрытого перечисления ScheduleMisfirePolicy.
+  SCHEDULE_MISFIRE_POLICY_RUN_ONCE = 2;
+  // SCHEDULE_MISFIRE_POLICY_CATCH_UP — значение закрытого перечисления ScheduleMisfirePolicy.
+  SCHEDULE_MISFIRE_POLICY_CATCH_UP = 3;
+  // SCHEDULE_MISFIRE_POLICY_WITHIN_GRACE — значение закрытого перечисления ScheduleMisfirePolicy.
+  SCHEDULE_MISFIRE_POLICY_WITHIN_GRACE = 4;
+}
+
+// ScheduleTargetType задаёт закрытый тип запуска.
+enum ScheduleTargetType {
+  // SCHEDULE_TARGET_TYPE_UNSPECIFIED — значение закрытого перечисления ScheduleTargetType.
+  SCHEDULE_TARGET_TYPE_UNSPECIFIED = 0;
+  // SCHEDULE_TARGET_TYPE_AGENT — значение закрытого перечисления ScheduleTargetType.
+  SCHEDULE_TARGET_TYPE_AGENT = 1;
+  // SCHEDULE_TARGET_TYPE_PLAYBOOK — значение закрытого перечисления ScheduleTargetType.
+  SCHEDULE_TARGET_TYPE_PLAYBOOK = 2;
+}
+
+// OwnerGateDecision задаёт закрытое перечисление контракта control-plane.
+enum OwnerGateDecision {
+  // OWNER_GATE_DECISION_UNSPECIFIED — значение закрытого перечисления OwnerGateDecision.
+  OWNER_GATE_DECISION_UNSPECIFIED = 0;
+  // OWNER_GATE_DECISION_APPROVED — значение закрытого перечисления OwnerGateDecision.
+  OWNER_GATE_DECISION_APPROVED = 1;
+  // OWNER_GATE_DECISION_REJECTED — значение закрытого перечисления OwnerGateDecision.
+  OWNER_GATE_DECISION_REJECTED = 2;
+  // OWNER_GATE_DECISION_CHANGES_REQUESTED — значение закрытого перечисления OwnerGateDecision.
+  OWNER_GATE_DECISION_CHANGES_REQUESTED = 3;
+  // OWNER_GATE_DECISION_CANCELLED — значение закрытого перечисления OwnerGateDecision.
+  OWNER_GATE_DECISION_CANCELLED = 4;
+}
+
+// AdministrativeAction задаёт закрытое перечисление контракта control-plane.
+enum AdministrativeAction {
+  // ADMINISTRATIVE_ACTION_UNSPECIFIED — значение закрытого перечисления AdministrativeAction.
+  ADMINISTRATIVE_ACTION_UNSPECIFIED = 0;
+  // ADMINISTRATIVE_ACTION_CREATE — значение закрытого перечисления AdministrativeAction.
+  ADMINISTRATIVE_ACTION_CREATE = 1;
+  // ADMINISTRATIVE_ACTION_UPDATE — значение закрытого перечисления AdministrativeAction.
+  ADMINISTRATIVE_ACTION_UPDATE = 2;
+  // ADMINISTRATIVE_ACTION_ACTIVATE — значение закрытого перечисления AdministrativeAction.
+  ADMINISTRATIVE_ACTION_ACTIVATE = 3;
+  // ADMINISTRATIVE_ACTION_PAUSE — значение закрытого перечисления AdministrativeAction.
+  ADMINISTRATIVE_ACTION_PAUSE = 4;
+  // ADMINISTRATIVE_ACTION_ARCHIVE — значение закрытого перечисления AdministrativeAction.
+  ADMINISTRATIVE_ACTION_ARCHIVE = 5;
+  // ADMINISTRATIVE_ACTION_DELETE — значение закрытого перечисления AdministrativeAction.
+  ADMINISTRATIVE_ACTION_DELETE = 6;
+}
+
+// ArtifactScanState задаёт закрытое перечисление контракта control-plane.
+enum ArtifactScanState {
+  // ARTIFACT_SCAN_STATE_UNSPECIFIED — значение закрытого перечисления ArtifactScanState.
+  ARTIFACT_SCAN_STATE_UNSPECIFIED = 0;
+  // ARTIFACT_SCAN_STATE_PENDING — значение закрытого перечисления ArtifactScanState.
+  ARTIFACT_SCAN_STATE_PENDING = 1;
+  // ARTIFACT_SCAN_STATE_SCANNING — значение закрытого перечисления ArtifactScanState.
+  ARTIFACT_SCAN_STATE_SCANNING = 2;
+  // ARTIFACT_SCAN_STATE_CLEAN — значение закрытого перечисления ArtifactScanState.
+  ARTIFACT_SCAN_STATE_CLEAN = 3;
+  // ARTIFACT_SCAN_STATE_QUARANTINED — значение закрытого перечисления ArtifactScanState.
+  ARTIFACT_SCAN_STATE_QUARANTINED = 4;
+  // ARTIFACT_SCAN_STATE_FAILED — значение закрытого перечисления ArtifactScanState.
+  ARTIFACT_SCAN_STATE_FAILED = 5;
+}
+
+// ScheduleOccurrenceState задаёт закрытое перечисление контракта control-plane.
+enum ScheduleOccurrenceState {
+  // SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED — значение закрытого перечисления ScheduleOccurrenceState.
+  SCHEDULE_OCCURRENCE_STATE_UNSPECIFIED = 0;
+  // SCHEDULE_OCCURRENCE_STATE_QUEUED — значение закрытого перечисления ScheduleOccurrenceState.
+  SCHEDULE_OCCURRENCE_STATE_QUEUED = 1;
+  // SCHEDULE_OCCURRENCE_STATE_CLAIMED — значение закрытого перечисления ScheduleOccurrenceState.
+  SCHEDULE_OCCURRENCE_STATE_CLAIMED = 2;
+  // SCHEDULE_OCCURRENCE_STATE_SUCCEEDED — значение закрытого перечисления ScheduleOccurrenceState.
+  SCHEDULE_OCCURRENCE_STATE_SUCCEEDED = 3;
+  // SCHEDULE_OCCURRENCE_STATE_FAILED — значение закрытого перечисления ScheduleOccurrenceState.
+  SCHEDULE_OCCURRENCE_STATE_FAILED = 4;
+  // SCHEDULE_OCCURRENCE_STATE_CANCELLED — значение закрытого перечисления ScheduleOccurrenceState.
+  SCHEDULE_OCCURRENCE_STATE_CANCELLED = 5;
+  // SCHEDULE_OCCURRENCE_STATE_SKIPPED — значение закрытого перечисления ScheduleOccurrenceState.
+  SCHEDULE_OCCURRENCE_STATE_SKIPPED = 6;
+  // SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER — значение закрытого перечисления ScheduleOccurrenceState.
+  SCHEDULE_OCCURRENCE_STATE_DEAD_LETTER = 7;
+  // SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER — выполнение остановлено на единственном owner gate.
+  SCHEDULE_OCCURRENCE_STATE_WAITING_OWNER = 8;
+  // SCHEDULE_OCCURRENCE_STATE_CONTINUATION — решение CHANGES_REQUESTED принято,
+  // а новый неизменяемый ход продолжает тот же ProcessRun.
+  SCHEDULE_OCCURRENCE_STATE_CONTINUATION = 9;
+}
+
+// SessionAction задаёт закрытое перечисление контракта control-plane.
+enum SessionAction {
+  // SESSION_ACTION_UNSPECIFIED — значение закрытого перечисления SessionAction.
+  SESSION_ACTION_UNSPECIFIED = 0;
+  // SESSION_ACTION_CREATE — значение закрытого перечисления SessionAction.
+  SESSION_ACTION_CREATE = 1;
+  // SESSION_ACTION_CLOSE — значение закрытого перечисления SessionAction.
+  SESSION_ACTION_CLOSE = 2;
+  // SESSION_ACTION_ARCHIVE — значение закрытого перечисления SessionAction.
+  SESSION_ACTION_ARCHIVE = 3;
+  // SESSION_ACTION_CANCEL — значение закрытого перечисления SessionAction.
+  SESSION_ACTION_CANCEL = 4;
+  // SESSION_ACTION_CLEANUP — значение закрытого перечисления SessionAction.
+  SESSION_ACTION_CLEANUP = 5;
+}
+
+// MemoryAction задаёт закрытое перечисление контракта control-plane.
+enum MemoryAction {
+  // MEMORY_ACTION_UNSPECIFIED — значение закрытого перечисления MemoryAction.
+  MEMORY_ACTION_UNSPECIFIED = 0;
+  // MEMORY_ACTION_CREATE — значение закрытого перечисления MemoryAction.
+  MEMORY_ACTION_CREATE = 1;
+  // MEMORY_ACTION_SUPERSEDE — значение закрытого перечисления MemoryAction.
+  MEMORY_ACTION_SUPERSEDE = 2;
+  // MEMORY_ACTION_ARCHIVE — значение закрытого перечисления MemoryAction.
+  MEMORY_ACTION_ARCHIVE = 3;
+}
+
+// WorkClaimAction задаёт закрытое перечисление контракта control-plane.
+enum WorkClaimAction {
+  // WORK_CLAIM_ACTION_UNSPECIFIED — значение закрытого перечисления WorkClaimAction.
+  WORK_CLAIM_ACTION_UNSPECIFIED = 0;
+  // WORK_CLAIM_ACTION_CREATE — значение закрытого перечисления WorkClaimAction.
+  WORK_CLAIM_ACTION_CREATE = 1;
+  // WORK_CLAIM_ACTION_RENEW — значение закрытого перечисления WorkClaimAction.
+  WORK_CLAIM_ACTION_RENEW = 2;
+  // WORK_CLAIM_ACTION_RELEASE — значение закрытого перечисления WorkClaimAction.
+  WORK_CLAIM_ACTION_RELEASE = 3;
+}
+
+// ScheduleSessionPolicy задаёт закрытое перечисление контракта control-plane.
+enum ScheduleSessionPolicy {
+  // SCHEDULE_SESSION_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleSessionPolicy.
+  SCHEDULE_SESSION_POLICY_UNSPECIFIED = 0;
+  // SCHEDULE_SESSION_POLICY_NEW — значение закрытого перечисления ScheduleSessionPolicy.
+  SCHEDULE_SESSION_POLICY_NEW = 1;
+  // SCHEDULE_SESSION_POLICY_PERSISTENT — значение закрытого перечисления ScheduleSessionPolicy.
+  SCHEDULE_SESSION_POLICY_PERSISTENT = 2;
+  // SCHEDULE_SESSION_POLICY_ROLLING — значение закрытого перечисления ScheduleSessionPolicy.
+  SCHEDULE_SESSION_POLICY_ROLLING = 3;
+}
+
+// ScheduleNotificationPolicy задаёт закрытое перечисление контракта control-plane.
+enum ScheduleNotificationPolicy {
+  // SCHEDULE_NOTIFICATION_POLICY_UNSPECIFIED — значение закрытого перечисления ScheduleNotificationPolicy.
+  SCHEDULE_NOTIFICATION_POLICY_UNSPECIFIED = 0;
+  // SCHEDULE_NOTIFICATION_POLICY_ALWAYS — значение закрытого перечисления ScheduleNotificationPolicy.
+  SCHEDULE_NOTIFICATION_POLICY_ALWAYS = 1;
+  // SCHEDULE_NOTIFICATION_POLICY_ON_ACTION — значение закрытого перечисления ScheduleNotificationPolicy.
+  SCHEDULE_NOTIFICATION_POLICY_ON_ACTION = 2;
+  // SCHEDULE_NOTIFICATION_POLICY_ON_FAILURE — значение закрытого перечисления ScheduleNotificationPolicy.
+  SCHEDULE_NOTIFICATION_POLICY_ON_FAILURE = 3;
+  // SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE — значение закрытого перечисления ScheduleNotificationPolicy.
+  SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE = 4;
+  // SCHEDULE_NOTIFICATION_POLICY_AUDIT_ONLY — значение закрытого перечисления ScheduleNotificationPolicy.
+  SCHEDULE_NOTIFICATION_POLICY_AUDIT_ONLY = 5;
+}
+
+// ConfigurationManager задаёт закрытое перечисление контракта control-plane.
+enum ConfigurationManager {
+  // CONFIGURATION_MANAGER_UNSPECIFIED — значение закрытого перечисления ConfigurationManager.
+  CONFIGURATION_MANAGER_UNSPECIFIED = 0;
+  // CONFIGURATION_MANAGER_UI — значение закрытого перечисления ConfigurationManager.
+  CONFIGURATION_MANAGER_UI = 1;
+  // CONFIGURATION_MANAGER_GIT — значение закрытого перечисления ConfigurationManager.
+  CONFIGURATION_MANAGER_GIT = 2;
+}
+
+// ConfigurationOwnership фиксирует единственный источник управляемой конфигурации.
+message ConfigurationOwnership {
+  ConfigurationManager managed_by = 1;
+  string source_ref = 2;
+  uint64 source_revision = 3;
+}
+
+// ProjectSpec описывает версионированное сообщение контракта control-plane.
+message ProjectSpec {
+  string slug = 1;
+  string description = 2;
+  string locale = 3;
+  ConfigurationOwnership ownership = 10;
+}
+
+// TeamSpec описывает версионированное сообщение контракта control-plane.
+message TeamSpec {
+  reserved 1;
+  reserved "project_id";
+  string stable_key = 2;
+  string external_team_ref = 3;
+  repeated string member_actor_ids = 4;
+  repeated string role_ids = 5;
+  ConfigurationOwnership ownership = 10;
+}
+
+// ChatSpec описывает версионированное сообщение контракта control-plane.
+message ChatSpec {
+  reserved 1;
+  reserved "project_id";
+  string stable_key = 2;
+  RoomType room_type = 3;
+  string default_agent_id = 4;
+  string external_channel_ref = 5;
+  string work_policy = 6;
+  ConfigurationOwnership ownership = 10;
+}
+
+// RoleSpec описывает версионированное сообщение контракта control-plane.
+message RoleSpec {
+  string stable_key = 1;
+  repeated string capabilities = 2;
+  repeated string allowed_target_role_ids = 3;
+  string prompt_profile_id = 4;
+  repeated string provider_credential_binding_ids = 5;
+  repeated string repository_workspace_ids = 6;
+  repeated string integration_ids = 7;
+  ProviderAccountPool provider_account_pool = 8;
+  ConfigurationOwnership ownership = 10;
+}
+
+// ProviderAccountPool задаёт server-owned выбор свежей допустимой учётной записи.
+message ProviderAccountPool {
+  string policy = 1;
+  uint64 policy_revision = 2;
+  google.protobuf.Duration observation_max_age = 3;
+  repeated ProviderAccountPoolBinding bindings = 4;
+}
+
+// ProviderAccountPoolBinding задаёт только metadata-вес без secret value.
+message ProviderAccountPoolBinding {
+  string credential_binding_id = 1;
+  uint32 weight = 2;
+}
+
+// PromptProfileSpec описывает версионированное сообщение контракта control-plane.
+message PromptProfileSpec {
+  uint64 revision = 1;
+  string content_sha256 = 2;
+  string source_ref = 3;
+  string locale = 4;
+  ConfigurationOwnership ownership = 10;
+}
+
+// CredentialBindingSpec описывает версионированное сообщение контракта control-plane.
+message CredentialBindingSpec {
+  string purpose = 1;
+  string secret_ref = 2;
+  string principal_ref = 3;
+  uint64 revision = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  bool provider_eligible = 6;
+  repeated string provider_capabilities = 7;
+  uint64 provider_observed_usage = 8;
+  uint64 provider_observed_limit = 9;
+  ConfigurationOwnership ownership = 10;
+  uint64 provider_observation_revision = 11;
+  google.protobuf.Timestamp provider_observed_at = 12;
+}
+
+// RepositoryWorkspaceSpec описывает версионированное сообщение контракта control-plane.
+message RepositoryWorkspaceSpec {
+  string repository_ref = 1;
+  string workspace_mode = 2;
+  string default_branch = 3;
+  string credential_binding_id = 4;
+  ConfigurationOwnership ownership = 10;
+}
+
+// IntegrationSpec описывает версионированное сообщение контракта control-plane.
+message IntegrationSpec {
+  string definition_ref = 1;
+  uint64 definition_version = 2;
+  repeated string capabilities = 3;
+  repeated string credential_binding_ids = 4;
+  string endpoint_ref = 5;
+  ConfigurationOwnership ownership = 10;
+}
+
+// RuntimeRevisionSpec описывает версионированное сообщение контракта control-plane.
+message RuntimeRevisionSpec {
+  // manifest_sha256 — вычисленный сервером digest полного эффективного снимка.
+  string manifest_sha256 = 1;
+  string image_digest = 2;
+  string prompt_profile_id = 3;
+  uint64 prompt_revision = 4;
+  repeated string credential_binding_ids = 5;
+  repeated string integration_ids = 6;
+  string predecessor_revision_id = 7;
+  uint64 authority_policy_revision = 8;
+  string authority_policy_sha256 = 9;
+  repeated EffectiveResourceRef components = 10;
+  google.protobuf.Timestamp created_at = 11;
+  string session_id = 12;
+  string role_id = 13;
+  string chat_id = 14;
+  string provider_credential_binding_id = 15;
+}
+
+// EffectiveResourceRef описывает версионированное сообщение контракта control-plane.
+message EffectiveResourceRef {
+  ResourceKind kind = 1;
+  string resource_id = 2;
+  uint64 version = 3;
+  string projection_sha256 = 4;
+}
+
+// SessionSpec описывает версионированное сообщение контракта control-plane.
+message SessionSpec {
+  string agent_id = 1;
+  string provider_account_binding_id = 2;
+  string conversation_id = 3;
+  string archive_ref = 4;
+  uint64 last_turn_sequence = 5;
+}
+
+// TurnSpec описывает версионированное сообщение контракта control-plane.
+message TurnSpec {
+  string session_id = 1;
+  uint64 sequence = 2;
+  string source_ref = 3;
+  string prompt_artifact_id = 4;
+  string runtime_revision_id = 5;
+  string process_run_id = 6;
+  uint32 attempt = 7;
+  string outcome = 8;
+  string result_artifact_id = 9;
+  string effective_input_sha256 = 10;
+  string predecessor_turn_id = 11;
+  string owner_feedback = 12;
+  string owner_feedback_gate_id = 13;
+  uint64 owner_feedback_gate_version = 14;
+  string owner_feedback_sha256 = 15;
+}
+
+// ProcessRunSpec описывает версионированное сообщение контракта control-plane.
+message ProcessRunSpec {
+  string parent_process_run_id = 1;
+  string playbook_ref = 2;
+  uint64 policy_revision = 3;
+  string root_trigger_ref = 4;
+  string result_artifact_id = 5;
+  string root_initiator_actor_id = 6;
+  string root_session_id = 7;
+  string root_turn_id = 8;
+  uint32 root_attempt = 9;
+  string immutable_input_sha256 = 10;
+  string runtime_revision_id = 11;
+  string launching_process_run_id = 12;
+  string launching_turn_id = 13;
+  uint32 launching_attempt = 14;
+  string schedule_id = 15;
+  string occurrence_id = 16;
+  string delegation_id = 17;
+  string target_session_id = 18;
+  string target_turn_id = 19;
+  uint32 target_attempt = 20;
+  string outcome = 21;
+  uint64 root_session_version = 22;
+  uint64 root_turn_version = 23;
+  uint64 target_session_version = 24;
+  uint64 target_turn_version = 25;
+  string continuation_gate_id = 26;
+  string continuation_turn_id = 27;
+  uint64 continuation_turn_version = 28;
+  uint32 continuation_attempt = 29;
+  string continuation_runtime_revision_id = 30;
+  uint64 continuation_runtime_revision_version = 31;
+  string continuation_input_sha256 = 32;
+  string owner_feedback_sha256 = 33;
+  string current_session_id = 34;
+  uint64 current_session_version = 35;
+  string current_turn_id = 36;
+  uint64 current_turn_version = 37;
+  uint32 current_attempt = 38;
+  string current_runtime_revision_id = 39;
+  uint64 current_runtime_revision_version = 40;
+  string current_input_sha256 = 41;
+}
+
+// ScheduleSpec описывает версионированное сообщение контракта control-plane.
+message ScheduleSpec {
+  string target_resource_id = 1;
+  string cron = 2;
+  google.protobuf.Duration interval = 3;
+  string timezone = 4;
+  ScheduleOverlapPolicy overlap_policy = 5;
+  ScheduleMisfirePolicy misfire_policy = 6;
+  google.protobuf.Duration misfire_grace = 7;
+  google.protobuf.Timestamp next_run_at = 8;
+  ResourceKind target_kind = 9;
+  uint64 target_version = 10;
+  string effective_input_sha256 = 11;
+  string calendar = 12;
+  string delivery_policy = 13;
+  uint32 maximum_attempts = 14;
+  google.protobuf.Duration initial_backoff = 15;
+  google.protobuf.Duration maximum_backoff = 16;
+  google.protobuf.Duration dead_letter_after = 17;
+  string prompt_profile_id = 18;
+  uint64 prompt_revision = 19;
+  ScheduleSessionPolicy session_policy = 20;
+  string room_id = 21;
+  ScheduleNotificationPolicy notification_policy = 22;
+  google.protobuf.Duration maximum_execution_duration = 23;
+  bool coalesce = 24;
+  string runtime_revision_id = 25;
+  ScheduleTargetType target_type = 26;
+  string playbook_ref = 27;
+  uint64 playbook_version = 28;
+  string prompt_artifact_id = 29;
+  string execution_session_id = 30;
+  ConfigurationOwnership ownership = 31;
+}
+
+// OwnerGateSpec описывает версионированное сообщение контракта control-plane.
+message OwnerGateSpec {
+  string process_run_id = 1;
+  string result_ref = 2;
+  string result_sha256 = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  OwnerGateDecision decision = 5;
+  string decision_reason = 6;
+  string root_initiator_actor_id = 7;
+  string session_id = 8;
+  string turn_id = 9;
+  uint32 attempt = 10;
+  string immutable_input_sha256 = 11;
+  string recipient_actor_id = 12;
+  string delivery_workload_id = 13;
+  string delivery_spiffe_id = 14;
+  string delivery_id = 15;
+  string delivery_payload_sha256 = 16;
+  string delivery_claim_token_sha256 = 17;
+  uint64 delivery_fence = 18;
+  string mattermost_post_id = 19;
+  string mattermost_channel_id = 20;
+  string mattermost_root_post_id = 21;
+  google.protobuf.Timestamp delivered_at = 22;
+  google.protobuf.Timestamp delivery_claim_expires_at = 23;
+  string schedule_id = 24;
+  string occurrence_id = 25;
+  string decision_receipt_sha256 = 26;
+  string continuation_turn_id = 27;
+  uint64 continuation_turn_version = 28;
+  string continuation_input_sha256 = 29;
+}
+
+// MemoryRecordSpec описывает версионированное сообщение контракта control-plane.
+message MemoryRecordSpec {
+  string scope = 1;
+  string role_id = 2;
+  string title = 3;
+  string content = 4;
+  string content_sha256 = 5;
+  string provenance = 6;
+  uint32 importance = 7;
+}
+
+// WorkClaimSpec описывает версионированное сообщение контракта control-plane.
+message WorkClaimSpec {
+  string process_run_id = 1;
+  string turn_id = 2;
+  string summary = 3;
+  repeated string domains = 4;
+  repeated string resource_keys = 5;
+  string owner_actor_id = 6;
+  string workload_id = 7;
+  string session_id = 8;
+  uint32 attempt = 9;
+  google.protobuf.Timestamp expires_at = 10;
+  uint64 authority_generation = 11;
+}
+
+// ArtifactSpec описывает версионированное сообщение контракта control-plane.
+message ArtifactSpec {
+  string kind = 1;
+  string direction = 2;
+  string storage_ref = 3;
+  uint64 size_bytes = 4;
+  string media_type = 5;
+  string sha256 = 6;
+  ArtifactScanState scan_status = 7;
+  string retention_policy_ref = 8;
+  uint64 scan_policy_revision = 9;
+  string scan_evidence_sha256 = 10;
+  string scanner_workload_id = 11;
+  google.protobuf.Timestamp scanned_at = 12;
+}
+
+// ResourceSpec описывает версионированное сообщение контракта control-plane.
+message ResourceSpec {
+  oneof value {
+    ProjectSpec project = 1;
+    TeamSpec team = 2;
+    ChatSpec chat = 3;
+    RoleSpec role = 4;
+    PromptProfileSpec prompt_profile = 5;
+    CredentialBindingSpec credential_binding = 6;
+    RepositoryWorkspaceSpec repository_workspace = 7;
+    IntegrationSpec integration = 8;
+    RuntimeRevisionSpec runtime_revision = 9;
+    SessionSpec session = 10;
+    TurnSpec turn = 11;
+    ProcessRunSpec process_run = 12;
+    ScheduleSpec schedule = 13;
+    OwnerGateSpec owner_gate = 14;
+    MemoryRecordSpec memory_record = 15;
+    WorkClaimSpec work_claim = 16;
+    ArtifactSpec artifact = 17;
+  }
+}
+
+// Resource описывает версионированное сообщение контракта control-plane.
+message Resource {
+  string id = 1;
+  ResourceKind kind = 2;
+  string name = 3;
+  LifecycleState state = 4;
+  uint64 version = 5;
+  string project_id = 6;
+  string parent_id = 7;
+  ResourceSpec spec = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// CreateResourceRequest описывает версионированное сообщение контракта control-plane.
+message CreateResourceRequest {
+  string idempotency_key = 1;
+  // RESOURCE_KIND_PROJECT запрещён: создание в области организации имеет
+  // отдельный RPC.
+  ResourceKind kind = 2;
+  string name = 3;
+  reserved 4;
+  reserved "project_id";
+  string parent_id = 5;
+  ResourceSpec spec = 6;
+}
+
+// CreateResourceResponse описывает версионированное сообщение контракта control-plane.
+message CreateResourceResponse {
+  Resource resource = 1;
+}
+
+// UpdateResourceRequest описывает версионированное сообщение контракта control-plane.
+message UpdateResourceRequest {
+  string idempotency_key = 1;
+  string resource_id = 2;
+  uint64 expected_version = 3;
+  string name = 4;
+  ResourceSpec spec = 5;
+  // detach_git_management — явный переход Git → UI без скрытой двусторонней записи.
+  bool detach_git_management = 6;
+}
+
+// UpdateResourceResponse описывает версионированное сообщение контракта control-plane.
+message UpdateResourceResponse {
+  Resource resource = 1;
+}
+
+// TransitionResourceRequest описывает версионированное сообщение контракта control-plane.
+message TransitionResourceRequest {
+  string idempotency_key = 1;
+  string resource_id = 2;
+  uint64 expected_version = 3;
+  LifecycleState target_state = 4;
+  string reason_code = 5;
+}
+
+// TransitionResourceResponse описывает версионированное сообщение контракта control-plane.
+message TransitionResourceResponse {
+  Resource resource = 1;
+}
+
+// DeleteResourceRequest описывает версионированное сообщение контракта control-plane.
+message DeleteResourceRequest {
+  string idempotency_key = 1;
+  string resource_id = 2;
+  uint64 expected_version = 3;
+}
+
+// DeleteResourceResponse описывает версионированное сообщение контракта control-plane.
+message DeleteResourceResponse {
+  Resource resource = 1;
+}
+
+// ManageAccessResourceRequest описывает версионированное сообщение контракта control-plane.
+message ManageAccessResourceRequest {
+  string idempotency_key = 1;
+  ResourceKind kind = 2;
+  AdministrativeAction action = 3;
+  string resource_id = 4;
+  uint64 expected_version = 5;
+  string name = 6;
+  ResourceSpec spec = 7;
+}
+
+// ManageAccessResourceResponse описывает версионированное сообщение контракта control-plane.
+message ManageAccessResourceResponse {
+  Resource resource = 1;
+}
+
+// GetResourceRequest описывает версионированное сообщение контракта control-plane.
+message GetResourceRequest {
+  string resource_id = 1;
+  ResourceKind expected_kind = 2;
+  uint64 expected_version = 3;
+}
+
+// GetResourceResponse описывает версионированное сообщение контракта control-plane.
+message GetResourceResponse {
+  Resource resource = 1;
+}
+
+// ListResourcesRequest описывает версионированное сообщение контракта control-plane.
+message ListResourcesRequest {
+  ResourceKind kind = 1;
+  reserved 2;
+  reserved "project_id";
+  string parent_id = 3;
+  repeated LifecycleState states = 4;
+  uint32 page_size = 5;
+  string page_token = 6;
+}
+
+// ListResourcesResponse описывает версионированное сообщение контракта control-plane.
+message ListResourcesResponse {
+  repeated Resource resources = 1;
+  string next_page_token = 2;
+}
+
+// SearchResourcesRequest описывает версионированное сообщение контракта control-plane.
+message SearchResourcesRequest {
+  ResourceKind kind = 1;
+  string query = 2;
+  repeated LifecycleState states = 3;
+  uint32 page_size = 4;
+  string page_token = 5;
+}
+
+// SearchResourcesResponse описывает версионированное сообщение контракта control-plane.
+message SearchResourcesResponse {
+  repeated Resource resources = 1;
+  string next_page_token = 2;
+}
+
+// SearchMemoryRecordsRequest описывает версионированное сообщение контракта control-plane.
+message SearchMemoryRecordsRequest {
+  string query = 1;
+  reserved 2, 3, 4, 5;
+  reserved "query_embedding", "embedding_model_id", "embedding_model_revision", "embedding_model_sha256";
+  uint32 page_size = 6;
+  string page_token = 7;
+  string scope = 8;
+  string role_id = 9;
+}
+
+// MemorySearchHit описывает версионированное сообщение контракта control-plane.
+message MemorySearchHit {
+  Resource resource = 1;
+  float text_rank = 2;
+  float vector_distance = 3;
+  bool vector_projection_used = 4;
+}
+
+// SearchMemoryRecordsResponse описывает версионированное сообщение контракта control-plane.
+message SearchMemoryRecordsResponse {
+  repeated MemorySearchHit hits = 1;
+  string next_page_token = 2;
+}
+
+// AuditEvent описывает версионированное сообщение контракта control-plane.
+message AuditEvent {
+  string id = 1;
+  string action = 2;
+  string resource_id = 3;
+  ResourceKind resource_kind = 4;
+  uint64 resource_version = 5;
+  string outcome = 6;
+  string actor_id = 7;
+  string correlation_id = 8;
+  uint64 policy_revision = 9;
+  google.protobuf.Timestamp occurred_at = 10;
+}
+
+// ListAuditEventsRequest описывает версионированное сообщение контракта control-plane.
+message ListAuditEventsRequest {
+  ResourceKind resource_kind = 1;
+  string resource_id = 2;
+  string action = 3;
+  uint32 page_size = 4;
+  string page_token = 5;
+}
+
+// ListAuditEventsResponse описывает версионированное сообщение контракта control-plane.
+message ListAuditEventsResponse {
+  repeated AuditEvent events = 1;
+  string next_page_token = 2;
+}
+
+// ResourceTombstone описывает версионированное сообщение контракта control-plane.
+message ResourceTombstone {
+  string resource_id = 1;
+  ResourceKind kind = 2;
+  uint64 version = 3;
+  string projection_sha256 = 4;
+  google.protobuf.Timestamp deleted_at = 5;
+}
+
+// ListTombstonesRequest описывает версионированное сообщение контракта control-plane.
+message ListTombstonesRequest {
+  ResourceKind kind = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
+// ListTombstonesResponse описывает версионированное сообщение контракта control-plane.
+message ListTombstonesResponse {
+  repeated ResourceTombstone tombstones = 1;
+  string next_page_token = 2;
+}
+
+// GetDiagnosticsRequest описывает версионированное сообщение контракта control-plane.
+message GetDiagnosticsRequest {}
+
+// GetDiagnosticsResponse описывает версионированное сообщение контракта control-plane.
+message GetDiagnosticsResponse {
+  uint64 schema_version = 1;
+  uint64 pending_outbox_events = 2;
+  uint64 terminal_outbox_events = 3;
+  google.protobuf.Duration oldest_pending_age = 4;
+  uint64 active_turn_leases = 5;
+  uint64 queued_schedule_occurrences = 6;
+  string runtime_principal_status = 7;
+  uint64 runtime_principal_generation = 8;
+}
+
+// EnqueueTurnRequest описывает версионированное сообщение контракта control-plane.
+message EnqueueTurnRequest {
+  string idempotency_key = 1;
+  string session_id = 2;
+  string source_ref = 3;
+  string prompt_artifact_id = 4;
+  string process_run_id = 5;
+  reserved 6;
+  reserved "runtime_revision_id";
+}
+
+// EnqueueTurnResponse описывает версионированное сообщение контракта control-plane.
+message EnqueueTurnResponse {
+  Resource turn = 1;
+}
+
+// ClaimTurnRequest описывает версионированное сообщение контракта control-plane.
+message ClaimTurnRequest {
+  string idempotency_key = 1;
+}
+
+// ClaimTurnResponse описывает версионированное сообщение контракта control-plane.
+message ClaimTurnResponse {
+  Resource turn = 1;
+  string lease_token = 2;
+  google.protobuf.Timestamp lease_expires_at = 3;
+  uint32 attempt = 4;
+  uint64 authority_generation = 5;
+}
+
+// RenewTurnRequest описывает версионированное сообщение контракта control-plane.
+message RenewTurnRequest {
+  string idempotency_key = 1;
+  string turn_id = 2;
+  string lease_token = 3;
+  uint64 expected_version = 4;
+  uint32 attempt = 5;
+  uint64 authority_generation = 6;
+}
+
+// RenewTurnResponse описывает версионированное сообщение контракта control-plane.
+message RenewTurnResponse {
+  Resource turn = 1;
+  string lease_token = 2;
+  google.protobuf.Timestamp lease_expires_at = 3;
+  uint32 attempt = 4;
+  uint64 authority_generation = 5;
+}
+
+// CompleteTurnRequest описывает версионированное сообщение контракта control-plane.
+message CompleteTurnRequest {
+  string idempotency_key = 1;
+  string turn_id = 2;
+  string lease_token = 3;
+  uint64 expected_version = 4;
+  LifecycleState terminal_state = 5;
+  string outcome = 6;
+  string result_artifact_id = 7;
+  uint32 attempt = 8;
+  uint64 authority_generation = 9;
+}
+
+// CompleteTurnResponse описывает версионированное сообщение контракта control-plane.
+message CompleteTurnResponse {
+  Resource turn = 1;
+}
+
+// RetryTurnRequest описывает версионированное сообщение контракта control-plane.
+message RetryTurnRequest {
+  string idempotency_key = 1;
+  string turn_id = 2;
+  uint64 expected_version = 3;
+  string reason_code = 4;
+}
+
+// RetryTurnResponse описывает версионированное сообщение контракта control-plane.
+message RetryTurnResponse {
+  Resource turn = 1;
+}
+
+// CancelTurnRequest описывает версионированное сообщение контракта control-plane.
+message CancelTurnRequest {
+  string idempotency_key = 1;
+  string turn_id = 2;
+  uint64 expected_version = 3;
+  string reason_code = 4;
+}
+
+// CancelTurnResponse описывает версионированное сообщение контракта control-plane.
+message CancelTurnResponse {
+  Resource turn = 1;
+}
+
+// ManageSessionRequest описывает версионированное сообщение контракта control-plane.
+message ManageSessionRequest {
+  string idempotency_key = 1;
+  SessionAction action = 2;
+  string session_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  string role_id = 6;
+  string conversation_id = 7;
+  string archive_ref = 8;
+  string reason_code = 9;
+  // preferred_provider_credential_binding_id выбирает только элемент
+  // проверенного сервером разрешения роли; произвольная привязка отклоняется.
+  string preferred_provider_credential_binding_id = 10;
+}
+
+// ManageSessionResponse описывает версионированное сообщение контракта control-plane.
+message ManageSessionResponse {
+  Resource session = 1;
+}
+
+// ManageMemoryRecordRequest описывает версионированное сообщение контракта control-plane.
+message ManageMemoryRecordRequest {
+  string idempotency_key = 1;
+  MemoryAction action = 2;
+  string memory_record_id = 3;
+  uint64 expected_version = 4;
+  string scope = 5;
+  string role_id = 6;
+  string title = 7;
+  string content = 8;
+  string content_sha256 = 9;
+  string provenance = 10;
+  uint32 importance = 11;
+}
+
+// ManageMemoryRecordResponse описывает версионированное сообщение контракта control-plane.
+message ManageMemoryRecordResponse {
+  Resource memory_record = 1;
+}
+
+// ManageWorkClaimRequest описывает версионированное сообщение контракта control-plane.
+message ManageWorkClaimRequest {
+  string idempotency_key = 1;
+  WorkClaimAction action = 2;
+  string work_claim_id = 3;
+  uint64 expected_version = 4;
+  string process_run_id = 5;
+  string turn_id = 6;
+  string summary = 7;
+  repeated string domains = 8;
+  repeated string resource_keys = 9;
+  google.protobuf.Duration ttl = 10;
+}
+
+// ManageWorkClaimResponse описывает версионированное сообщение контракта control-plane.
+message ManageWorkClaimResponse {
+  Resource work_claim = 1;
+}
+
+// ManageScheduleRequest описывает версионированное сообщение контракта control-plane.
+message ManageScheduleRequest {
+  string idempotency_key = 1;
+  AdministrativeAction action = 2;
+  string schedule_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  ScheduleSpec spec = 6;
+  bool detach_git_management = 7;
+}
+
+// ManageScheduleResponse описывает версионированное сообщение контракта control-plane.
+message ManageScheduleResponse {
+  Resource schedule = 1;
+}
+
+// ClaimDueSchedulesRequest описывает версионированное сообщение контракта control-plane.
+message ClaimDueSchedulesRequest {
+  string idempotency_key = 1;
+  uint32 limit = 2;
+}
+
+// ScheduleOccurrence описывает версионированное сообщение контракта control-plane.
+message ScheduleOccurrence {
+  string schedule_id = 1;
+  google.protobuf.Timestamp scheduled_for = 2;
+  string occurrence_id = 3;
+  string target_resource_id = 4;
+  ResourceKind target_kind = 5;
+  uint64 target_version = 6;
+  string effective_input_sha256 = 7;
+  ScheduleOccurrenceState state = 8;
+  uint32 attempt = 9;
+  string claimant_workload_id = 10;
+  uint64 authority_generation = 11;
+  google.protobuf.Timestamp lease_expires_at = 12;
+  google.protobuf.Timestamp available_at = 13;
+  string outcome = 14;
+  string prompt_profile_id = 15;
+  uint64 prompt_revision = 16;
+  string runtime_revision_id = 17;
+  ScheduleSessionPolicy session_policy = 18;
+  string room_id = 19;
+  ScheduleNotificationPolicy notification_policy = 20;
+  google.protobuf.Duration maximum_execution_duration = 21;
+  bool coalesce = 22;
+  string execution_session_id = 23;
+  uint64 execution_session_version = 24;
+  string execution_turn_id = 25;
+  uint64 execution_turn_version = 26;
+  string execution_process_run_id = 27;
+  uint64 execution_process_version = 28;
+  string execution_runtime_revision_id = 29;
+  uint64 execution_runtime_revision_version = 30;
+}
+
+// ClaimDueSchedulesResponse описывает версионированное сообщение контракта control-plane.
+message ClaimDueSchedulesResponse {
+  repeated ScheduleOccurrence occurrences = 1;
+}
+
+// ClaimScheduleOccurrenceRequest описывает версионированное сообщение контракта control-plane.
+message ClaimScheduleOccurrenceRequest {
+  string idempotency_key = 1;
+}
+
+// ClaimScheduleOccurrenceResponse описывает версионированное сообщение контракта control-plane.
+message ClaimScheduleOccurrenceResponse {
+  ScheduleOccurrence occurrence = 1;
+  string lease_token = 2;
+}
+
+// CompleteScheduleOccurrenceRequest описывает версионированное сообщение контракта control-plane.
+message CompleteScheduleOccurrenceRequest {
+  string idempotency_key = 1;
+  string occurrence_id = 2;
+  string lease_token = 3;
+  uint32 expected_attempt = 4;
+  reserved 5, 6, 7;
+  reserved "terminal_state", "outcome", "result_artifact_id";
+}
+
+// CompleteScheduleOccurrenceResponse описывает версионированное сообщение контракта control-plane.
+message CompleteScheduleOccurrenceResponse {
+  ScheduleOccurrence occurrence = 1;
+}
+
+// CancelScheduleOccurrenceRequest описывает версионированное сообщение контракта control-plane.
+message CancelScheduleOccurrenceRequest {
+  string idempotency_key = 1;
+  string occurrence_id = 2;
+  uint32 expected_attempt = 3;
+  string reason_code = 4;
+}
+
+// CancelScheduleOccurrenceResponse описывает версионированное сообщение контракта control-plane.
+message CancelScheduleOccurrenceResponse {
+  ScheduleOccurrence occurrence = 1;
+}
+
+// ListScheduleOccurrencesRequest описывает версионированное сообщение контракта control-plane.
+message ListScheduleOccurrencesRequest {
+  string schedule_id = 1;
+  repeated ScheduleOccurrenceState states = 2;
+  uint32 page_size = 3;
+  string page_token = 4;
+}
+
+// ListScheduleOccurrencesResponse описывает версионированное сообщение контракта control-plane.
+message ListScheduleOccurrencesResponse {
+  repeated ScheduleOccurrence occurrences = 1;
+  string next_page_token = 2;
+}
+
+// StartProcessRequest описывает версионированное сообщение контракта control-plane.
+message StartProcessRequest {
+  string idempotency_key = 1;
+  string name = 2;
+  string parent_process_run_id = 3;
+  string playbook_ref = 4;
+  uint64 policy_revision = 5;
+  string root_trigger_ref = 6;
+  string root_session_id = 7;
+  string root_turn_id = 8;
+  uint32 root_attempt = 9;
+  string input_artifact_id = 10;
+  string launching_turn_id = 11;
+  uint32 launching_attempt = 12;
+}
+
+// StartProcessResponse описывает версионированное сообщение контракта control-plane.
+message StartProcessResponse {
+  Resource process_run = 1;
+}
+
+// CancelProcessRequest описывает версионированное сообщение контракта control-plane.
+message CancelProcessRequest {
+  string idempotency_key = 1;
+  string process_run_id = 2;
+  uint64 expected_version = 3;
+  string reason_code = 4;
+}
+
+// CancelProcessResponse описывает версионированное сообщение контракта control-plane.
+message CancelProcessResponse {
+  Resource process_run = 1;
+}
+
+// CompleteProcessRequest связывает terminal outcome с exact OCC-версией процесса.
+message CompleteProcessRequest {
+  string idempotency_key = 1;
+  string process_run_id = 2;
+  uint64 expected_version = 3;
+  LifecycleState terminal_state = 4;
+  string outcome = 5;
+  string result_artifact_id = 6;
+}
+
+// CompleteProcessResponse возвращает авторитетный terminal-процесс.
+message CompleteProcessResponse {
+  Resource process_run = 1;
+}
+
+// ListOutboxFailuresRequest задаёт ограниченную UUID-пагинацию.
+message ListOutboxFailuresRequest {
+  string page_token = 1;
+  uint32 page_size = 2;
+}
+
+// OutboxFailure скрывает payload и предоставляет только repair evidence.
+message OutboxFailure {
+  string event_id = 1;
+  string ordering_key = 2;
+  uint64 event_sequence = 3;
+  string event_name = 4;
+  string aggregate_id = 5;
+  uint32 attempts = 6;
+  uint32 repair_count = 7;
+  string last_error_class = 8;
+  google.protobuf.Timestamp occurred_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// ListOutboxFailuresResponse возвращает terminal predecessors без envelope.
+message ListOutboxFailuresResponse {
+  repeated OutboxFailure failures = 1;
+  string next_page_token = 2;
+}
+
+// RepairOutboxEventRequest требует exact sequence/attempt fence и evidence digest.
+message RepairOutboxEventRequest {
+  string idempotency_key = 1;
+  string event_id = 2;
+  uint64 expected_sequence = 3;
+  uint32 expected_attempts = 4;
+  string reason_code = 5;
+  string evidence_sha256 = 6;
+}
+
+// RepairOutboxEventResponse возвращает повторно открытый predecessor.
+message RepairOutboxEventResponse {
+  OutboxFailure failure = 1;
+}
+
+// RequestOwnerGateRequest описывает версионированное сообщение контракта control-plane.
+message RequestOwnerGateRequest {
+  string idempotency_key = 1;
+  string process_run_id = 2;
+  uint64 process_expected_version = 3;
+  string session_id = 4;
+  string turn_id = 5;
+  uint32 attempt = 6;
+  string result_artifact_id = 7;
+  google.protobuf.Timestamp expires_at = 8;
+}
+
+// RequestOwnerGateResponse описывает версионированное сообщение контракта control-plane.
+message RequestOwnerGateResponse {
+  Resource owner_gate = 1;
+  Resource process_run = 2;
+}
+
+// ClaimOwnerGateDeliveryRequest описывает версионированное сообщение контракта control-plane.
+message ClaimOwnerGateDeliveryRequest {
+  string idempotency_key = 1;
+}
+
+// ClaimOwnerGateDeliveryResponse описывает версионированное сообщение контракта control-plane.
+message ClaimOwnerGateDeliveryResponse {
+  Resource owner_gate = 1;
+  string delivery_claim_token = 2;
+  google.protobuf.Timestamp delivery_claim_expires_at = 3;
+}
+
+// ExpireOwnerGateRequest задаёт только replay key: gate и время выбирает сервер.
+message ExpireOwnerGateRequest {
+  string idempotency_key = 1;
+}
+
+// ExpireOwnerGateResponse возвращает авторитетный terminal readback.
+message ExpireOwnerGateResponse {
+  Resource owner_gate = 1;
+  Resource process_run = 2;
+}
+
+// RecordOwnerGateDeliveryRequest описывает версионированное сообщение контракта control-plane.
+message RecordOwnerGateDeliveryRequest {
+  string idempotency_key = 1;
+  string owner_gate_id = 2;
+  uint64 expected_version = 3;
+  string delivery_id = 4;
+  string delivery_payload_sha256 = 5;
+  string delivery_claim_token = 6;
+  uint64 delivery_fence = 7;
+  string mattermost_post_id = 8;
+  string mattermost_channel_id = 9;
+  string mattermost_root_post_id = 10;
+}
+
+// RecordOwnerGateDeliveryResponse описывает версионированное сообщение контракта control-plane.
+message RecordOwnerGateDeliveryResponse {
+  Resource owner_gate = 1;
+}
+
+// ResolveOwnerGateRequest описывает версионированное сообщение контракта control-plane.
+message ResolveOwnerGateRequest {
+  string idempotency_key = 1;
+  string owner_gate_id = 2;
+  uint64 expected_version = 3;
+  OwnerGateDecision decision = 4;
+  string reason = 5;
+  string process_run_id = 6;
+  uint64 process_expected_version = 7;
+  string session_id = 8;
+  string turn_id = 9;
+  uint32 attempt = 10;
+  string immutable_input_sha256 = 11;
+}
+
+// ResolveOwnerGateResponse описывает версионированное сообщение контракта control-plane.
+message ResolveOwnerGateResponse {
+  Resource owner_gate = 1;
+  Resource process_run = 2;
+}
+
+// RegisterArtifactRequest описывает версионированное сообщение контракта control-plane.
+message RegisterArtifactRequest {
+  string idempotency_key = 1;
+  string name = 2;
+  string parent_id = 3;
+  ArtifactSpec spec = 4;
+}
+
+// RegisterArtifactResponse описывает версионированное сообщение контракта control-plane.
+message RegisterArtifactResponse {
+  Resource artifact = 1;
+}
+
+// RecordArtifactScanRequest описывает версионированное сообщение контракта control-plane.
+message RecordArtifactScanRequest {
+  string idempotency_key = 1;
+  string artifact_id = 2;
+  uint64 expected_version = 3;
+  ArtifactScanState target_state = 4;
+  uint64 scan_policy_revision = 5;
+  string scan_evidence_sha256 = 6;
+}
+
+// RecordArtifactScanResponse описывает версионированное сообщение контракта control-plane.
+message RecordArtifactScanResponse {
+  Resource artifact = 1;
+}
+
+// GetRuntimeRevisionRequest описывает версионированное сообщение контракта control-plane.
+message GetRuntimeRevisionRequest {
+  string runtime_revision_id = 1;
+  uint64 expected_version = 2;
+}
+
+// GetRuntimeRevisionResponse описывает версионированное сообщение контракта control-plane.
+message GetRuntimeRevisionResponse {
+  Resource runtime_revision = 1;
+}
+
+// RecordMemoryEmbeddingRequest описывает версионированное сообщение контракта control-plane.
+message RecordMemoryEmbeddingRequest {
+  string idempotency_key = 1;
+  string memory_record_id = 2;
+  uint64 expected_resource_version = 3;
+  string content_sha256 = 4;
+  reserved 5, 6, 7, 8;
+  reserved "model_id", "model_revision", "model_sha256", "embedding";
+}
+
+// RecordMemoryEmbeddingResponse описывает версионированное сообщение контракта control-plane.
+message RecordMemoryEmbeddingResponse {
+  string memory_record_id = 1;
+  uint64 resource_version = 2;
+  string projection_sha256 = 3;
+}
+
+// CheckReadinessRequest описывает версионированное сообщение контракта control-plane.
+message CheckReadinessRequest {}
+
+// CheckReadinessResponse описывает версионированное сообщение контракта control-plane.
+message CheckReadinessResponse {
+  bool ready = 1;
+  uint64 schema_version = 2;
+  bool authority_ready = 3;
+  bool postgres_ready = 4;
+  bool redis_ready = 5;
+  bool outbox_ready = 6;
+}
+
+// ErrorReason задаёт закрытое перечисление контракта control-plane.
+enum ErrorReason {
+  // ERROR_REASON_UNSPECIFIED — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_UNSPECIFIED = 0;
+  // ERROR_REASON_INVALID_REQUEST — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_INVALID_REQUEST = 1;
+  // ERROR_REASON_UNAUTHENTICATED — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_UNAUTHENTICATED = 2;
+  // ERROR_REASON_PERMISSION_DENIED — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_PERMISSION_DENIED = 3;
+  // ERROR_REASON_NOT_FOUND — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_NOT_FOUND = 4;
+  // ERROR_REASON_STATE_CONFLICT — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_STATE_CONFLICT = 5;
+  // ERROR_REASON_IDEMPOTENCY_CONFLICT — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_IDEMPOTENCY_CONFLICT = 6;
+  // ERROR_REASON_VERSION_MISMATCH — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_VERSION_MISMATCH = 7;
+  // ERROR_REASON_UNAVAILABLE — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_UNAVAILABLE = 8;
+  // ERROR_REASON_INTERNAL — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_INTERNAL = 9;
+  // ERROR_REASON_RATE_LIMITED — значение закрытого перечисления ErrorReason.
+  ERROR_REASON_RATE_LIMITED = 10;
+}
+
+// ErrorDetail описывает версионированное сообщение контракта control-plane.
+message ErrorDetail {
+  ErrorReason reason = 1;
+  string code = 2;
+  string correlation_id = 3;
+  bool retryable = 4;
+}

@@ -4,8 +4,8 @@ title: Инструкции для агентов MatterCodex
 type: agent-rules
 status: approved
 owner: manager
-version: 2.1.0
-updated: 2026-07-30
+version: 2.2.0
+updated: 2026-07-31
 ---
 
 # Инструкции для агентов MatterCodex
@@ -35,6 +35,9 @@ updated: 2026-07-30
   AsyncAPI, domain event или NATS subject - `CONTRACT-DOC-003`.
 - Перед изменением межсервисной авторизации, mTLS, JWS/JWKS, Vault, TLS
   lifecycle, security sidecar или `NetworkPolicy` прочитать `GUIDE-DOC-003`.
+- Перед изменением защищённого вида, control plane, планировщика, фоновой
+  задачи, owner gate, lease/claim/retry либо межсессионного делегирования
+  прочитать `GUIDE-DOC-006` и составить полную матрицу жизненного цикла.
 - Перед изменением Vue/TypeScript PWA прочитать `FE-DOC-001`.
 - Перед заявлением результата проверки прочитать `GOV-DOC-003`.
 - Production-действия выполняются только после отдельного подтверждения владельца.
@@ -97,6 +100,11 @@ updated: 2026-07-30
   сначала разрешается внутри доверенной owner/tenant boundary; только затем
   проверяются version и idempotency. Idempotency scope и `If-Match` не заменяют
   проверку владения.
+- Несущие полномочия и исполняемые виды не обслуживаются универсальными
+  `create|update|transition|delete`: для каждого вида нужен закрытый реестр
+  специализированных команд. Actor/owner/root lineage назначаются или
+  разрешаются сервером; самовыдача и полномочия на жизненный цикл всего проекта
+  запрещены.
 - Для каждого terminal, cancel, delete, retry и частичного перехода явно
   фиксируется одно из двух: атомарное событие с origin, condition, cardinality и
   consumers либо отсутствие события с авторитетным read path. Обобщать это
@@ -105,6 +113,20 @@ updated: 2026-07-30
   version, attempt и immutable input snapshot. Retry создаёт новую attempt,
   event и grant; cancel/delete/terminal закрывают task и отзывают grant в
   owner-транзакции.
+- Grant/claim фоновой работы связывается с точными workload, полным методом,
+  session, turn, attempt, immutable input digest и монотонным поколением.
+  Межсессионный дочерний процесс запускается только через принадлежащее серверу
+  ребро делегирования и наследует root actor/policy/route; идентификаторы
+  parent/child из payload не доказывают происхождение.
+- Create, claim, renew, complete, cancel, delete, retry, lease expiry,
+  dead-letter, `WAITING_OWNER` и `CHANGES_REQUESTED` проверяются как переходы
+  полного графа выполнения. Одна транзакция владельца закрывает прежние leases,
+  grants, claims и связанные агрегаты; частичный terminal envelope запрещён.
+- Перед каждым turn/retry/continuation сервер создаёт свежую immutable
+  `RuntimeRevision` из точного набора активных grants и версий/дайджестов
+  зависимостей. Ссылочное событие имеет защищённый version-pinned read/rejoin
+  path каждого
+  consumer либо несёт полный безопасный snapshot.
 - Новый gateway, worker, sidecar, verifier, reconciler или job считается
   реализуемой частью профиля только при наличии записи в реестре, интерфейса,
   конфигурации, deploy ownership, readiness/failure policy и способа доставки
@@ -112,6 +134,16 @@ updated: 2026-07-30
 - Reviewer проверяет сквозной сценарий и системные аналоги, а не только
   корректность каждого файла по отдельности. Совпадение имён между форматами не
   доказывает совпадение типов, authority, lifecycle и ошибок.
+- Полная материализация интерфейса включает producer/client operation profile,
+  authority registration, generated adapter, consumer effect/inbox,
+  readiness рабочего пути, deploy ownership и итоговый environment render.
+  Декларация в policy или registry без исполняемого consumer не считается
+  реализацией.
+- Конфигурация с несколькими источниками записи хранит назначаемые сервером
+  `managed_by=ui|git`, source и immutable revision; UI меняет Git-owned объект
+  только через отдельный `detach|copy`. FTS/vector проекция хранит source
+  version/content/model
+  provenance и не расширяет tenant/owner eligibility.
 
 ## Обязательная проверка security boundary
 
@@ -133,6 +165,22 @@ updated: 2026-07-30
 - `NetworkPolicy` проверяется по итоговому environment render. Для database,
   broker, Vault, telemetry и Kubernetes API правило только по порту без
   exact destination запрещено.
+- PostgreSQL RLS связывает scope с неизменяемым `session_user` и устойчивым
+  поколением credential; caller-set GUC не является identity. Retire является
+  forward-only и включает фактически достижимые `NOLOGIN`, revoke membership,
+  termination и readback через минимальную controller identity.
+- Результат чтения кэша до выдачи точно связывает tenant/project/kind/id/version,
+  key и source/projection digests. Повреждение или mismatch всегда ведёт к
+  авторитетному PostgreSQL fallback, а не к выдаче snapshot.
+- Outbox не пропускает unpublished/terminal predecessor одного ordering key,
+  сохраняет durable broker receipt дольше broker retention и разблокируется
+  только bounded tenant-scoped audited repair/skip. Readiness сверяет exact
+  durability, retention, message/bytes/age/dedup/delete limits.
+- BuildKit и registry используют точные mTLS/application identities; pull,
+  staging push, admin и promotion физически разделены. Promotion разрешается
+  только после назначаемого сервером допуска по provenance, SBOM, заключению об
+  уязвимостях и signature; node pull доказывает exact digest через достижимую
+  границу DNS/CA/runtime без небезопасного запасного пути.
 - После устранения security или architecture замечания исполнитель проверяет,
   является ли его причина общей. Общий инвариант закрепляется в
   `GUIDE-DOC-003` либо профильном техническом гайде, а не остается знанием
@@ -184,6 +232,9 @@ updated: 2026-07-30
 - Рецензирование относится к фактическому diff, архитектурным и security
   границам. После замечания исполнитель ищет системные аналоги во всем наборе
   изменений и связанных контрактах, документации, коде и конфигурации.
+- Статически доказанный production defect, недостижимый обязательный path или
+  fail-open boundary остаётся finding в `Prototype`. Отсутствие отложенной
+  live/integration/deploy проверки не усиливает и не снимает такой finding.
 - Завершенный unit проходит одновременно продуктовое, security и архитектурное
   review на одном SHA. После исправлений все три направления повторно
   проверяют новый SHA; human gate запрещен, пока есть хотя бы одно незакрытое
@@ -328,6 +379,10 @@ Production-действия выполняются только после от�
   полномочия, ошибки и ручную приемку.
 - Не придумывает отсутствующее бизнес-правило и не расширяет MVP без решения
   владельца.
+- Для защищённого lifecycle сверяет матрицу обычных, terminal, cancel, delete,
+  retry, expiry, owner-decision и continuation исходов; проверяет точное
+  происхождение UI/Git-конфигурации, доставку и назначаемые сервером версии
+  целевых объектов.
 
 ### SRE
 
@@ -350,13 +405,18 @@ Production-действия выполняются только после от�
 - Работает через отдельный worktree, ветку и один PR на полный unit проекта.
 - Перед реализацией читает профильные документы `REPO-DOC-001`,
   `GO-DOC-001`, `GO-DOC-002`, `GO-DOC-003`, `GO-DOC-004`, `GO-DOC-005`,
-  `GO-DOC-006`, `GUIDE-DOC-003`, `GUIDE-DOC-005`, `FE-DOC-001` и актуальные
+  `GO-DOC-006`, `GUIDE-DOC-003`, `GUIDE-DOC-005`, `GUIDE-DOC-006`,
+  `FE-DOC-001` и актуальные
   документы через Context7 MCP в применимой части.
 - Реализует принадлежащие unit Dockerfile, Kubernetes manifests, dashboards,
   alerts, README и runbook в том же PR. Общую инфраструктуру меняет только при
   явном scope Issue.
 - При изменении lifecycle или наблюдаемости учитывает инварианты раздела выше
   до передачи PR на review.
+- До реализации control plane или фонового процесса прикладывает список
+  защищённых видов, граф выполнения, матрицу жизненного цикла/полномочий и карту
+  producer→client→consumer→readiness→deploy; исправляет все системные аналоги
+  найденной причины до повторного review.
 
 ### reviewer
 
@@ -372,11 +432,21 @@ Production-действия выполняются только после от�
 - Для lifecycle и наблюдаемости сверяет полный набор кодов, отказов и
   частичных результатов, а не выводит корректность из одного штатного
   сценария.
+- Для полного unit проходит контуры полномочий, жизненного цикла и развёртывания
+  целиком: универсальные и специализированные команды, межсессионное
+  происхождение, все terminal и recovery paths,
+  producer/client/consumer/readiness, Docker inputs,
+  environment render, dashboards/alerts/runbook. Ответ автора и `resolved`
+  thread доказательством не являются.
 
 ### security
 
 - Проверяет trust boundaries, authority, tenant isolation, replay,
   idempotency, secrets, PII, TLS, network policy и supply chain.
+- Проверяет точную привязку grant к session/turn/attempt/input, назначаемые
+  сервером owner/delegation, PostgreSQL principal/RLS capabilities, cache
+  envelope и физическое разделение identities цепочки
+  pull/push/admin/promotion.
 - Не требует расширять продуктовый scope без доказанного security impact.
 - Блокирует fail-open path, потерю authority, утечку данных и недоказанный
   production transport.
@@ -386,6 +456,14 @@ Production-действия выполняются только после от�
 - Периодически анализирует замечания принятых PR и причины повторных дефектов.
 - Улучшает `AGENTS.md`, гайды и шаблоны отдельным документационным PR.
 - Не меняет архитектурное или продуктовое решение без согласования владельца.
+- Для выбранного PR с полной курсорной пагинацией получает все review threads,
+  вложенные комментарии, submitted reviews и conversation comments; resolved и
+  outdated не отбрасывает. Замечания дедуплицирует по root cause и переносит
+  только устойчивые проверяемые правила, без статуса конкретной задачи и
+  временных доказательств.
+- Краткие сквозные инварианты закрепляет в `AGENT-DOC-001`, подробные матрицы
+  сценариев и checklist — в профильных утверждённых гайдах с регистрацией
+  по `GOV-DOC-001`; существующие источники не дублирует.
 
 ### docs-acceptance
 

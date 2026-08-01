@@ -1,0 +1,138 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattercodex-buildkit
+  labels:
+    app.kubernetes.io/name: mattercodex-buildkit
+    app.kubernetes.io/component: image-builder
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-buildkit
+      app.kubernetes.io/component: image-builder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mattercodex-buildkit
+        app.kubernetes.io/component: image-builder
+    spec:
+      serviceAccountName: mattercodex-buildkit
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: buildkitd
+          image: moby/buildkit:v0.24.0-rootless@sha256:995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config=/var/run/config/mattercodex/buildkit/buildkitd.toml
+          ports:
+            - name: buildkit
+              containerPort: 1234
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+                - buildctl
+                - --addr
+                - tcp://127.0.0.1:1234
+                - --tlscacert
+                - /var/run/secrets/mattercodex/buildkit/tls/ca.pem
+                - --tlscert
+                - /var/run/secrets/mattercodex/buildkit/tls/probe.crt
+                - --tlskey
+                - /var/run/secrets/mattercodex/buildkit/tls/probe.key
+                - --tlsservername
+                - mattercodex-buildkit.mattercodex-system.svc.cluster.local
+                - debug
+                - workers
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command:
+                - buildctl
+                - --addr
+                - tcp://127.0.0.1:1234
+                - --tlscacert
+                - /var/run/secrets/mattercodex/buildkit/tls/ca.pem
+                - --tlscert
+                - /var/run/secrets/mattercodex/buildkit/tls/probe.crt
+                - --tlskey
+                - /var/run/secrets/mattercodex/buildkit/tls/probe.key
+                - --tlsservername
+                - mattercodex-buildkit.mattercodex-system.svc.cluster.local
+                - debug
+                - workers
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: Unconfined
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/buildkit
+            - name: config
+              mountPath: /var/run/config/mattercodex/buildkit
+              readOnly: true
+            - name: registry-ca
+              mountPath: /var/run/config/mattercodex/image-registry
+              readOnly: true
+            - name: buildkit-tls
+              mountPath: /var/run/secrets/mattercodex/buildkit/tls
+              readOnly: true
+      volumes:
+        - name: state
+          emptyDir:
+            sizeLimit: 20Gi
+        - name: config
+          configMap:
+            name: mattercodex-buildkit-config
+            defaultMode: 0440
+        - name: registry-ca
+          secret:
+            secretName: mattercodex-image-registry-ca
+            defaultMode: 0440
+        - name: buildkit-tls
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: mattercodex-buildkit-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattercodex-buildkit
+  labels:
+    app.kubernetes.io/name: mattercodex-buildkit
+    app.kubernetes.io/component: image-builder
+spec:
+  selector:
+    app.kubernetes.io/name: mattercodex-buildkit
+    app.kubernetes.io/component: image-builder
+  ports:
+    - name: buildkit
+      port: 1234
+      targetPort: buildkit
+      protocol: TCP

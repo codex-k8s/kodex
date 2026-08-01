@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - ../image-supply-chain
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - poddisruptionbudget.yaml
+  - migration-job.yaml
+  - networkpolicy.yaml
+  - vault-secret-provider-classes.yaml
+  - servicemonitor.yaml
+  - prometheusrule.yaml
+  - dashboard.yaml
+components:
+  - ../../components/internal-rpc-authority-control-plane-verifier
+configMapGenerator:
+  - name: control-plane-runtime
+    literals:
+      - CONTROL_PLANE_NATS_STREAM=CONTROL_PLANE
+      - CONTROL_PLANE_REDIS_USERNAME=control-plane
+      - CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME=control_plane_runtime_g1
+      - CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION=1
+      - CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID=control-plane-db-context-g1
+  - name: control-plane-db-principals
+    literals:
+      - CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID=control-plane-db-context-g1
+      - CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_PRINCIPAL=control_plane_runtime_g1
+      - CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_GENERATION=1
+      - CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_NOT_BEFORE=2026-07-31T00:00:00Z
+      - CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_NOT_AFTER=2026-10-31T00:00:00Z
+generatorOptions:
+  disableNameSuffixHash: true

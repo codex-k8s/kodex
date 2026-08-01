@@ -1,5 +1,27 @@
 version: 1
 packages:
+  - id: control-plane-events-v1
+    format: asyncapi
+    owner: control-plane
+    source: contracts/asyncapi/control-plane/v1/asyncapi.yaml
+    consumers:
+      - runtime-controller
+      - automation-scheduler
+  - id: control-plane-v1
+    format: proto
+    owner: control-plane
+    source: contracts/proto/controlplane/v1
+    generated:
+      go: libs/go/controlplaneapi/gen/controlplane/v1
+    consumers:
+      - control-plane
+      - control-api-gateway
+      - interaction-gateway
+      - runtime-controller
+      - automation-scheduler
+      - agent-runner
+      - artifact-scanner
+      - memory-indexer
   - id: internal-rpc-authority-v1
     format: proto
     owner: internal-rpc-authority

@@ -1,0 +1,146 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-plane-dashboard
+  labels:
+    app.kubernetes.io/name: control-plane
+    grafana_dashboard: "1"
+data:
+  control-plane.json: |
+    {
+      "annotations": {"list": []},
+      "editable": false,
+      "panels": [
+        {
+          "id": 1,
+          "title": "Готовые реплики",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(mattercodex_control_plane_readiness{ready=\"true\"})",
+              "legendFormat": "ready"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "gRPC requests по bounded operation/code",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum by (operation, code) (rate(mattercodex_control_plane_grpc_requests_total[5m]))",
+              "legendFormat": "{{operation}} {{code}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "p95 gRPC latency",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(mattercodex_control_plane_grpc_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{operation}}"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Go heap и goroutines",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "go_memstats_heap_alloc_bytes{job=\"control-plane\"}",
+              "legendFormat": "heap {{pod}}"
+            },
+            {
+              "expr": "go_goroutines{job=\"control-plane\"}",
+              "legendFormat": "goroutines {{pod}}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Go GC pauses p99",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(go_gc_duration_seconds_bucket{job=\"control-plane\"}[5m])))",
+              "legendFormat": "p99"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "PostgreSQL pool connections",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "mattercodex_control_plane_pgx_runtime_acquired_connections",
+              "legendFormat": "runtime acquired"
+            },
+            {
+              "expr": "mattercodex_control_plane_pgx_runtime_idle_connections",
+              "legendFormat": "runtime idle"
+            },
+            {
+              "expr": "mattercodex_control_plane_pgx_relay_acquired_connections",
+              "legendFormat": "relay acquired"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "Redis pool connections",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "mattercodex_control_plane_redis_total_connections",
+              "legendFormat": "total"
+            },
+            {
+              "expr": "mattercodex_control_plane_redis_idle_connections",
+              "legendFormat": "idle"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "title": "Outbox relay outcomes",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "rate(mattercodex_control_plane_outbox_events_claimed_total[5m])",
+              "legendFormat": "claimed"
+            },
+            {
+              "expr": "rate(mattercodex_control_plane_outbox_events_published_total[5m])",
+              "legendFormat": "published"
+            },
+            {
+              "expr": "rate(mattercodex_control_plane_outbox_events_failed_total[5m])",
+              "legendFormat": "failed"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "title": "Domain mutations",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum by (kind, action) (rate(mattercodex_control_plane_mutations_total[5m]))",
+              "legendFormat": "{{kind}} {{action}}"
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["mattercodex", "control-plane"],
+      "templating": {"list": []},
+      "time": {"from": "now-6h", "to": "now"},
+      "timezone": "browser",
+      "title": "MatterCodex control-plane",
+      "uid": "mattercodex-control-plane",
+      "version": 1
+    }
