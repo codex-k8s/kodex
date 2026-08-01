@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/schema"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -25,8 +26,6 @@ var migrations embed.FS
 
 //go:embed sql/*.sql
 var operationalSQL embed.FS
-
-const schemaVersion int64 = 20260731000600
 
 func main() {
 	ctx, stop := signal.NotifyContext(
@@ -153,7 +152,7 @@ func migrateExpand(
 		ctx,
 		database,
 		"migrations",
-		schemaVersion,
+		schema.CurrentVersion,
 	); err != nil {
 		return fmt.Errorf("apply control-plane expand migration: %w", err)
 	}
@@ -175,7 +174,7 @@ func migrateUp(
 	if err != nil {
 		return err
 	}
-	if version < schemaVersion {
+	if version < schema.CurrentVersion {
 		return errors.New("expand migration must complete before up")
 	}
 	if err := goose.UpContext(ctx, database, "migrations"); err != nil {

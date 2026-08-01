@@ -9,6 +9,7 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	authorityservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authority"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/schema"
 	transportgrpc "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/transport/grpc"
 )
 
@@ -56,6 +57,6 @@ func (checker *readinessChecker) Check(
 		return state, errors.New("internal RPC authority verifier is not ready")
 	}
 	state.AuthorityReady = true
-	state.SchemaVersion = 20260731000600
+	state.SchemaVersion = uint64(schema.CurrentVersion)
 	return state, nil
 }

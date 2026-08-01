@@ -1010,6 +1010,13 @@ func (service *Service) CompleteScheduleOccurrence(
 				occurrence.ExecutionRuntimeRevisionVersion == 0 {
 				return errs.ErrStateConflict
 			}
+			run, err := tx.GetScheduledRunForUpdate(
+				ctx, occurrence.ID, occurrence.Attempt,
+			)
+			if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
+				run.State != "CLAIMED" {
+				return errs.ErrStateConflict
+			}
 			turn, err := tx.GetForUpdate(
 				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
 				occurrence.ExecutionTurnID,
@@ -1023,7 +1030,7 @@ func (service *Service) CompleteScheduleOccurrence(
 					turn.State != enum.StateCancelled) ||
 				turnSpec.SessionID != occurrence.ExecutionSessionID ||
 				turnSpec.RuntimeRevisionID != occurrence.ExecutionRuntimeRevisionID ||
-				turnSpec.Attempt != 1 ||
+				turnSpec.Attempt != run.CurrentTurnAttempt ||
 				turnSpec.Outcome == "" {
 				return errs.ErrStateConflict
 			}
@@ -1039,9 +1046,11 @@ func (service *Service) CompleteScheduleOccurrence(
 					return err
 				}
 				processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+				current, currentErr := currentExecution(processSpec)
 				if !ok || process.Kind != enum.KindProcessRun || !process.State.Terminal() ||
 					process.State != turn.State || processSpec.OccurrenceID != occurrence.ID ||
-					processSpec.RootTurnID != turn.ID || processSpec.Outcome != outcome ||
+					currentErr != nil || !executionMatchesTurn(current, turn, turnSpec) ||
+					processSpec.Outcome != outcome ||
 					processSpec.ResultArtifactID != resultArtifactID {
 					return errs.ErrStateConflict
 				}
@@ -1198,7 +1207,8 @@ func (service *Service) CancelScheduleOccurrence(
 			}
 			if occurrence.Attempt != input.ExpectedAttempt ||
 				(occurrence.State != "QUEUED" && occurrence.State != "CLAIMED" &&
-					occurrence.State != "WAITING_OWNER") {
+					occurrence.State != "WAITING_OWNER" &&
+					occurrence.State != "CONTINUATION") {
 				return errs.ErrStateConflict
 			}
 			schedule, err := tx.GetForUpdate(
@@ -1252,9 +1262,9 @@ func (service *Service) CancelScheduleOccurrence(
 					turn.Kind != enum.KindTurn ||
 					turn.OwnerActorID != schedule.OwnerActorID ||
 					turnSpec.SessionID != session.ID ||
-					turnSpec.Attempt != 1 ||
-					turnSpec.RuntimeRevisionID != run.RuntimeRevisionID ||
-					turnSpec.EffectiveInputSHA256 != run.EffectiveInputSHA256 {
+					turnSpec.Attempt != run.CurrentTurnAttempt ||
+					turnSpec.RuntimeRevisionID != run.CurrentRuntimeRevisionID ||
+					turnSpec.EffectiveInputSHA256 != run.CurrentInputSHA256 {
 					return errs.ErrStateConflict
 				}
 				if !turn.State.Terminal() {
@@ -1267,22 +1277,22 @@ func (service *Service) CancelScheduleOccurrence(
 					turn.State != enum.StateCancelled {
 					return errs.ErrStateConflict
 				}
-				if run.ProcessRunID != "" {
+				if run.CurrentProcessRunID != "" {
 					process, err := tx.GetForUpdate(
 						ctx, occurrence.OrganizationID, occurrence.ProjectID,
-						run.ProcessRunID,
+						run.CurrentProcessRunID,
 					)
 					if err != nil {
 						return err
 					}
 					processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+					current, currentErr := currentExecution(processSpec)
 					if !ok || process.Kind != enum.KindProcessRun ||
 						process.State.Terminal() ||
 						process.OwnerActorID != schedule.OwnerActorID ||
 						processSpec.OccurrenceID != occurrence.ID ||
-						processSpec.ScheduleID != schedule.ID ||
-						processSpec.RootSessionID != session.ID ||
-						processSpec.RootTurnID != turn.ID {
+						processSpec.ScheduleID != schedule.ID || currentErr != nil ||
+						!executionMatchesTurn(current, turn, turnSpec) {
 						return errs.ErrStateConflict
 					}
 					children, err := tx.HasActiveChildProcesses(
@@ -2446,7 +2456,7 @@ func (service *Service) RequestOwnerGate(
 				)
 				if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
 					occurrence.ScheduleID != processSpec.ScheduleID ||
-					occurrence.State != "CLAIMED" || run.State != "CLAIMED" ||
+					!scheduledExecutionMayWaitOwner(occurrence.State, run.State) ||
 					occurrence.ExecutionSessionID != executionSessionID ||
 					occurrence.ExecutionTurnID != waitingTurn.ID ||
 					occurrence.ExecutionProcessRunID != process.ID {
@@ -2537,4 +2547,11 @@ func (service *Service) RequestOwnerGate(
 		},
 	)
 	return result, err
+}
+
+func scheduledExecutionMayWaitOwner(occurrenceState, runState string) bool {
+	eligible := func(state string) bool {
+		return state == "CLAIMED" || state == "CONTINUATION"
+	}
+	return occurrenceState == runState && eligible(occurrenceState)
 }

@@ -11,8 +11,10 @@ immutable: true
 data:
   toolsImage: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
   policyRevision: "0"
+  builderIdentity: spiffe://mattercodex.local/ns/mattercodex-system/sa/mattercodex-role-image-builder
+  buildType: https://mobyproject.org/buildkit@v1
   scannerIdentity: mattercodex-image-scanner
   signerIdentity: mattercodex-image-signer
   admissionOwnerIdentity: mattercodex-image-admission-owner
   promotionIdentity: mattercodex-image-promotion-writer
-  requiredTools: base64,cmp,cosign,curl,date,grype,jq,openssl,pgrep,regctl,sha256sum,syft
+  requiredTools: base64,buildctl,cmp,cosign,curl,date,grype,jq,openssl,pgrep,regctl,sha256sum,syft

@@ -20,6 +20,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	domainquery "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/schema"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -499,7 +500,7 @@ func (repository *Repository) Check(ctx context.Context) error {
 	); err != nil {
 		return mapError(err)
 	}
-	if version != 20260731000600 || !member || !nonSuperuser || !noBypassRLS ||
+	if version != uint64(schema.CurrentVersion) || !member || !nonSuperuser || !noBypassRLS ||
 		!loginEnabled || generation != repository.config.PrincipalGeneration ||
 		(status != "CURRENT" && status != "NEXT" && status != "PREVIOUS") {
 		return errs.ErrUnavailable
@@ -1597,12 +1598,27 @@ func (wrapped *transaction) GetScheduledRunForUpdate(
 	occurrenceID string,
 	attempt uint32,
 ) (domainrepo.ScheduledRun, error) {
-	var run domainrepo.ScheduledRun
-	err := wrapped.tx.QueryRow(
+	return scanScheduledRun(wrapped.tx.QueryRow(
 		ctx,
 		sqlScheduledRunGetForUpdate,
 		pgx.StrictNamedArgs{"occurrence_id": occurrenceID, "attempt": attempt},
-	).Scan(
+	))
+}
+
+func (wrapped *transaction) GetScheduledRunByCurrentTurnForUpdate(
+	ctx context.Context,
+	turnID string,
+) (domainrepo.ScheduledRun, error) {
+	return scanScheduledRun(wrapped.tx.QueryRow(
+		ctx,
+		sqlScheduledRunGetByCurrentTurnForUpdate,
+		pgx.StrictNamedArgs{"current_turn_id": turnID},
+	))
+}
+
+func scanScheduledRun(row pgx.Row) (domainrepo.ScheduledRun, error) {
+	var run domainrepo.ScheduledRun
+	err := row.Scan(
 		&run.OccurrenceID,
 		&run.Attempt,
 		&run.SessionID,
@@ -1705,20 +1721,26 @@ func (wrapped *transaction) RebindScheduledRun(
 		ctx,
 		sqlScheduledRunRebind,
 		pgx.StrictNamedArgs{
-			"occurrence_id":                    run.OccurrenceID,
-			"attempt":                          run.Attempt,
-			"expected_turn_id":                 expectedTurnID,
-			"expected_turn_attempt":            expectedTurnAttempt,
-			"current_session_id":               run.CurrentSessionID,
-			"current_session_version":          run.CurrentSessionVersion,
-			"current_turn_id":                  run.CurrentTurnID,
-			"current_turn_version":             run.CurrentTurnVersion,
-			"current_turn_attempt":             run.CurrentTurnAttempt,
-			"current_process_run_id":           run.CurrentProcessRunID,
-			"current_process_version":          run.CurrentProcessVersion,
-			"current_runtime_revision_id":      run.CurrentRuntimeRevisionID,
-			"current_runtime_revision_version": run.CurrentRuntimeRevisionVersion,
-			"current_input_sha256":             run.CurrentInputSHA256,
+			"occurrence_id":                         run.OccurrenceID,
+			"attempt":                               run.Attempt,
+			"expected_turn_id":                      expectedTurnID,
+			"expected_turn_attempt":                 expectedTurnAttempt,
+			"current_session_id":                    run.CurrentSessionID,
+			"current_session_version":               run.CurrentSessionVersion,
+			"current_turn_id":                       run.CurrentTurnID,
+			"current_turn_version":                  run.CurrentTurnVersion,
+			"current_turn_attempt":                  run.CurrentTurnAttempt,
+			"current_process_run_id":                run.CurrentProcessRunID,
+			"current_process_version":               run.CurrentProcessVersion,
+			"current_runtime_revision_id":           run.CurrentRuntimeRevisionID,
+			"current_runtime_revision_version":      run.CurrentRuntimeRevisionVersion,
+			"current_input_sha256":                  run.CurrentInputSHA256,
+			"continuation_turn_id":                  run.ContinuationTurnID,
+			"continuation_turn_version":             run.ContinuationTurnVersion,
+			"continuation_runtime_revision_id":      run.ContinuationRuntimeRevisionID,
+			"continuation_runtime_revision_version": run.ContinuationRuntimeRevisionVersion,
+			"continuation_input_sha256":             run.ContinuationInputSHA256,
+			"owner_feedback_sha256":                 run.OwnerFeedbackSHA256,
 		},
 	)
 	if err != nil {

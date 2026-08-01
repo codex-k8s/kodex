@@ -150,6 +150,9 @@ var sqlScheduledRunSave string
 //go:embed sql/scheduled_run__get_for_update.sql
 var sqlScheduledRunGetForUpdate string
 
+//go:embed sql/scheduled_run__get_by_current_turn_for_update.sql
+var sqlScheduledRunGetByCurrentTurnForUpdate string
+
 //go:embed sql/scheduled_run__wait_owner.sql
 var sqlScheduledRunWaitOwner string
 

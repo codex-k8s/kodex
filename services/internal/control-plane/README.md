@@ -103,11 +103,11 @@ Deployments не принадлежат Issue #187 и здесь не подме
 | Ревизия среды исполнения | перед каждым ходом сервер разрешает точные сессию и разрешение роли, активные chat/prompt/привязку провайдера и только связанные с ролью workspace/integration/credential; создаётся неизменяемый снимок с версиями, digest, политикой, образом и предшественником; `runtime-controller` читает его через отдельный авторизованный RPC                                                                                                                                                                                                                                                                                                                                           |
 | Сессия                   | привязку провайдера сервер выбирает из версионированного `AccountPool` роли по `least_used` или детерминированному `weighted`, exact freshness/limit/eligibility; ручной preferred binding — только проверенный override; общий create/update/transition запрещён; close/cancel атомарно закрывают queued/active turns, attempts и grants, а archive/cleanup доходят до terminal tombstone                                                                                                                                                                                                                                                                                       |
 | Ход                      | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Восстановление хода      | истечение срока или ручной повтор создаёт новую неизменяемую попытку; отмена и завершение отзывают аренду, устаревшие workload/generation/token отклоняются                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Восстановление хода      | истечение срока или ручной повтор сначала закрывает прежние attempt/lease/gate/claim, затем создаёт свежие `RuntimeRevision`, effective input, attempt и grant и атомарно перепривязывает единый current execution tuple процесса и `ScheduledRun`; `SourceRef` остаётся bounded server-owned identity, номер attempt хранится только в tuple; устаревшие workload/generation/token отклоняются                                                                                                                                                                                                                                                                                  |
 | Процесс                  | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate                                                                                                                                                                                                                                                                                        |
 | Расписание               | закрытые цели `AGENT` и `PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; lease recovery под row lock сначала закрывает прежние turn/attempt/process/gate/claim/grant и immutable run, затем допускает новую attempt; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO                                                                                                              |
 | Шлюз владельца           | запрос закрепляет корневого инициатора и единый server-owned current execution tuple process/session/turn/attempt/runtime revision/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` под PostgreSQL row lock автономно закрывает просроченный graph, а delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt и полное неизменяемое owner feedback в новом `TurnSpec`, тот же ProcessRun/root и создаёт свежие revision/input/turn; complete/gate/work-claim/schedule/retry читают одну current-связку, а решение не отображается в `FAILED` |
-| Память                   | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Память                   | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; единый eligibility скрывает `DELETED` title/content в single/list/generic/FTS/vector путях и оставляет tombstone только в авторизованном audit/read path; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest                                                                                                                                                                                                                                                                                                       |
 | Заявка на работу         | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Метаданные артефакта     | только `RegisterArtifact` создаёт `PENDING`; точный scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; прикреплять и использовать разрешено только точный `CLEAN` digest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
@@ -130,7 +130,7 @@ Vault. Устойчивая монотонная верхняя граница �
 поколение, состояние, organization/project/actor, PID соединения и ID
 транзакции. GUC и `SET SESSION AUTHORIZATION` не являются источником
 полномочий. Readiness проверяет схему
-`20260731000600`,
+`20260801000100`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
@@ -219,6 +219,7 @@ tools/render-control-plane.sh \
   registry-pull.<environment-domain> \
   <approved-admission-tools-image>@sha256:<digest> \
   <approved-vulnerability-policy-revision> \
+  <forward-only-pull-credential-generation> \
   > /tmp/control-plane-staging.yaml
 ```
 
@@ -246,9 +247,15 @@ server/probe, BuildKit→push, `role-image-builder`, scanner, signer, admission,
 promotion и cleanup получают client-only ключи из разных
 SecretProviderClass/Vault roles, а label NetworkPolicy не является
 полномочием. Certificate guard сравнивает обслуживаемый leaf с ротированным
-CSI leaf, проверяет hostname/CA/срок и выполняет аутентифицированный `/v2/`
-readback; несовпадение снимает readiness и закрыто перезапускает только
-registry process для перечитывания ключей. `tools/render-image-build-job.sh` создаёт bounded Job из
+CSI leaf, проверяет hostname/CA/срок, перечитывает текущий
+`dockerconfigjson` и теми же pull credentials выполняет exact digest manifest
+readback через node FQDN; несовпадение htpasswd/dockerconfig generation,
+digest или TLS снимает readiness и закрыто перезапускает только
+registry process для перечитывания ключей. Forward-only pull credential
+generation входит в Pod templates registry и node-readback DaemonSet: coherent
+rotation обязательно создаёт новые Pod на каждом узле, а пропущенная либо
+рассинхронная generation не получает readiness.
+`tools/render-image-build-job.sh` создаёт bounded Job из
 read-only PVC с `context.tar`, сверяет exact source SHA-256, отправляет сборку
 в BuildKit и публикует только в staging. Он не монтирует promotion identity и
 не имеет сетевого пути к promotion endpoint. Отдельный
@@ -261,9 +268,16 @@ Rejected, stale или неполное evidence закрыто останавл
 signer, admission owner и promotion выполняются четырьмя Job с разными
 ServiceAccount, Vault role, client certificate, прикладными credentials и
 NetworkPolicy; приватные signing/admission/promotion ключи не сосуществуют в
-одном Pod. DSSE сначала base64-декодируется, затем проверяется как точный
-in-toto Statement с SLSA predicate, image subject и source digest. Immutable
-owner intent также фиксирует закрытый состав `base64`, `cmp`, `cosign`, `curl`,
+одном Pod. DSSE сначала base64-декодируется, затем проверяется как единственный
+точный in-toto Statement с SLSA predicate, image subject, server-owned
+builder/build type, source/build tag/tools/policy parameters и уникальными
+immutable resolved dependencies, включая exact source material. Build Job
+нормализует эту связь после проверки context digest и подписывает отдельной
+builder key; scanner/signer/admission повторно проверяют builder signature.
+Canonical digest dependency graph входит в admission receipt. Evidence PVC и каждый marker привязаны к полному tuple
+source/build/image/tools/policy/scanner/signer/admission/promotion; новая policy
+revision или run не может повторно использовать старое evidence. Immutable
+owner intent также фиксирует закрытый состав `base64`, `buildctl`, `cmp`, `cosign`, `curl`,
 `date`, `grype`, `jq`, `openssl`, `pgrep`, `regctl`, `sha256sum`, `syft`; образ
 без любого из них не является утверждённым. Push,
 signer, admission owner, promotion и admin credentials различны и
@@ -290,6 +304,7 @@ tools/render-image-supply-chain.sh \
   registry-pull.<environment-domain> \
   <approved-admission-tools-image>@sha256:<digest> \
   <approved-vulnerability-policy-revision> \
+  <forward-only-pull-credential-generation> \
   > /tmp/image-supply-chain-staging.yaml
 
 tools/render-image-build-job.sh \

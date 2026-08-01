@@ -375,6 +375,12 @@ func (service *Service) ClaimTurn(
 				}); err != nil {
 					return err
 				}
+				if err := service.revokeExecutionClaims(
+					ctx, tx, input.Principal, staleSpec.ProcessRunID, stale.Turn.ID,
+					"lease_expired", now,
+				); err != nil {
+					return err
+				}
 				requeued, staleSpec, err := service.prepareRetriedExecution(
 					ctx, tx, input.Principal, stale.Turn, staleSpec, now,
 				)
@@ -1000,6 +1006,40 @@ func (service *Service) RetryTurn(
 				return entity.Resource{}, errs.ErrStateConflict
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
+			previousAttempt, err := tx.GetTurnAttemptForUpdate(
+				ctx, current.ID, spec.Attempt,
+			)
+			if err != nil || previousAttempt.InputSHA256 != spec.EffectiveInputSHA256 {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if current.State == enum.StateFailed {
+				if previousAttempt.FinishedAt.IsZero() {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			} else {
+				if !previousAttempt.FinishedAt.IsZero() {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				previousAttempt.State = "CANCELLED"
+				previousAttempt.FinishedAt = now
+				previousAttempt.Outcome = "retry_" + input.ReasonCode
+				if err := tx.FinishTurnAttempt(ctx, previousAttempt); err != nil {
+					return entity.Resource{}, err
+				}
+			}
+			lease, leaseErr := tx.GetTurnLeaseForUpdate(ctx, current.ID)
+			if leaseErr != nil && !errors.Is(leaseErr, errs.ErrNotFound) {
+				return entity.Resource{}, leaseErr
+			}
+			if leaseErr == nil {
+				if lease.Attempt != spec.Attempt ||
+					lease.AuthorityGeneration != previousAttempt.AuthorityGeneration {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if err := tx.DeleteTurnLease(ctx, current.ID, lease.Fence); err != nil {
+					return entity.Resource{}, err
+				}
+			}
 			if err := service.revokeExecutionClaims(
 				ctx, tx, input.Principal, spec.ProcessRunID, current.ID,
 				"retry_turn", now,

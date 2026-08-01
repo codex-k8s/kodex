@@ -20,4 +20,3 @@ SET state = 'CONTINUATION',
 WHERE occurrence_id = @occurrence_id::uuid
   AND attempt = @attempt
   AND state = 'WAITING_OWNER'
-  AND continuation_turn_id IS NULL

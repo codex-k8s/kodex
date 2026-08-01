@@ -69,6 +69,7 @@ configure_client_role() {
 configure_server_role pki mattercodex-buildkit-server mattercodex-buildkit
 configure_client_role mattercodex-buildkit-probe mattercodex-buildkit-probe
 configure_client_role mattercodex-buildkit-client mattercodex-role-image-builder
+configure_client_role mattercodex-role-image-builder-registry-client mattercodex-role-image-builder
 configure_client_role mattercodex-buildkit-registry-client mattercodex-buildkit
 configure_client_role mattercodex-image-registry-push-probe mattercodex-image-registry-push-probe
 configure_client_role mattercodex-image-registry-admin-probe mattercodex-image-registry-admin-probe
@@ -110,8 +111,16 @@ write_issue_policy mattercodex-buildkit-pki-issue pki \
   mattercodex-buildkit-server mattercodex-buildkit-probe mattercodex-buildkit-registry-client
 write_ca_policy mattercodex-buildkit-pki-ca pki
 write_issue_policy mattercodex-role-image-builder-pki-issue pki \
-  mattercodex-buildkit-client
+  mattercodex-buildkit-client mattercodex-role-image-builder-registry-client
 write_ca_policy mattercodex-role-image-builder-pki-ca pki
+cat <<'HCL' | vault policy write mattercodex-role-image-builder-attestation - >/dev/null
+path "kv/data/mattercodex/image-admission/builder" {
+  capabilities = ["read"]
+}
+path "kv/data/mattercodex/image-admission/builder-public" {
+  capabilities = ["read"]
+}
+HCL
 cat <<'HCL' | vault policy write mattercodex-image-registry-pull-pki - >/dev/null
 path "pki-public/issue/mattercodex-image-registry-pull" {
   capabilities = ["update"]
@@ -186,7 +195,7 @@ vault write auth/kubernetes/role/mattercodex-buildkit \
 vault write auth/kubernetes/role/mattercodex-role-image-builder \
   bound_service_account_names=mattercodex-role-image-builder \
   bound_service_account_namespaces=mattercodex-system \
-  token_policies=mattercodex-role-image-builder-pki-issue,mattercodex-role-image-builder-pki-ca \
+  token_policies=mattercodex-role-image-builder-pki-issue,mattercodex-role-image-builder-pki-ca,mattercodex-role-image-builder-attestation \
   token_ttl=30m token_max_ttl=1h >/dev/null
 configure_kubernetes_role mattercodex-image-registry-pull mattercodex-image-registry-pull mattercodex-image-registry-pull-pki
 vault write auth/kubernetes/role/mattercodex-image-registry-push \
@@ -211,15 +220,16 @@ configure_phase_policy() {
 }
 
 configure_phase_policy mattercodex-image-scanner mattercodex-image-scanner \
-  mattercodex/image-registry/scanner
+  mattercodex/image-registry/scanner mattercodex/image-admission/builder-public
 configure_phase_policy mattercodex-image-signer mattercodex-image-signer \
-  mattercodex/image-registry/signer mattercodex/image-admission/signing
+  mattercodex/image-registry/signer mattercodex/image-admission/signing \
+  mattercodex/image-admission/builder-public
 configure_phase_policy mattercodex-image-admission-owner mattercodex-image-admission-owner \
   mattercodex/image-registry/admission mattercodex/image-admission/signing \
-  mattercodex/image-admission/admission
+  mattercodex/image-admission/admission mattercodex/image-admission/builder-public
 configure_phase_policy mattercodex-image-promotion-writer mattercodex-image-promotion-writer \
   mattercodex/image-registry/promotion-staging mattercodex/image-registry/promotion \
-  mattercodex/image-admission/admission
+  mattercodex/image-admission/admission mattercodex/image-admission/builder-public
 configure_phase_policy mattercodex-registry-cleanup mattercodex-registry-cleanup \
   mattercodex/image-registry/admin
 configure_kubernetes_role mattercodex-image-scanner mattercodex-image-scanner mattercodex-image-scanner
@@ -261,6 +271,7 @@ verify_client_role() {
 verify_server_role pki mattercodex-buildkit-server mattercodex-buildkit
 verify_client_role mattercodex-buildkit-probe mattercodex-buildkit-probe
 verify_client_role mattercodex-buildkit-client mattercodex-role-image-builder
+verify_client_role mattercodex-role-image-builder-registry-client mattercodex-role-image-builder
 verify_client_role mattercodex-buildkit-registry-client mattercodex-buildkit
 verify_client_role mattercodex-image-registry-push-probe mattercodex-image-registry-push-probe
 verify_client_role mattercodex-image-registry-admin-probe mattercodex-image-registry-admin-probe

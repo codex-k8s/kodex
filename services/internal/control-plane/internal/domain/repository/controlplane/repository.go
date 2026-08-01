@@ -343,6 +343,7 @@ type Transaction interface {
 	GetScheduleOccurrenceForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
 	SaveScheduledRun(context.Context, ScheduledRun) error
 	GetScheduledRunForUpdate(context.Context, string, uint32) (ScheduledRun, error)
+	GetScheduledRunByCurrentTurnForUpdate(context.Context, string) (ScheduledRun, error)
 	WaitScheduledRun(context.Context, string, uint32) error
 	ContinueScheduledRun(context.Context, ScheduledRun) error
 	RebindScheduledRun(context.Context, ScheduledRun, string, uint32) error

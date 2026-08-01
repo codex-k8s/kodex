@@ -108,19 +108,19 @@ Schedule
 перехода. Объединять разные виды задач в одну строку без одинаковой семантики
 полномочий и жизненного цикла запрещено.
 
-| Переход               | Обязательная блокировка и проверка                                               | Атомарный результат                                                      |
-| --------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| create/materialize    | owner, версии источников, допустимость, отсутствие конфликтующей привязки        | новые узлы, неизменяемые input/revision, receipt, аудит, события         |
-| claim/start           | точный предшественник в очереди, FIFO/session fence, workload/grant/attempt      | одна победившая lease, attempt и claim                                   |
-| renew                 | lease token/fence, незавершённая session→turn→attempt→process/delegation         | только продление той же attempt; terminal/stale закрыто отклоняется      |
-| complete              | точный конечный результат worker, проверки открытых дочерних процессов и работ   | turn/attempt/process/run/result и claims согласованы                     |
-| cancel                | весь материализованный граф и owner                                              | lease/grants/claims/gates отозваны, связанные узлы завершены             |
-| delete/cleanup        | отсутствие активной работы либо её согласованное закрытие                        | достижимый `DELETED`, tombstone и авторитетное чтение                    |
-| retry                 | завершённый/просроченный предшественник, лимит и неизменяемая предыдущая attempt | новая attempt/grant/revision после закрытия старой                       |
-| lease expiry          | блокировка строки точной lease и полная неизменяемая привязка                    | старый граф закрыт до возврата в очередь/dead letter; один победитель    |
-| dead letter           | исчерпание лимита и доказательство завершения                                    | поток заблокирован до ограниченного аудируемого repair/skip              |
-| owner waiting         | точная привязка root/delivery/schedule                                           | turn/process/occurrence/run переходят в `WAITING_OWNER`, leases отозваны |
-| owner decision/expiry | receipt доставки или expiry по времени PostgreSQL, OCC/fence                     | ровно один decision/expiry закрывает или продолжает весь граф            |
+| Переход               | Обязательная блокировка и проверка                                                                  | Атомарный результат                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| create/materialize    | owner, версии источников, допустимость, отсутствие конфликтующей привязки                           | новые узлы, неизменяемые input/revision, receipt, аудит, события                                     |
+| claim/start           | точный предшественник в очереди, FIFO/session fence, workload/grant/attempt                         | одна победившая lease, attempt и claim                                                               |
+| renew                 | lease token/fence, незавершённая session→turn→attempt→process/delegation                            | только продление той же attempt; terminal/stale закрыто отклоняется                                  |
+| complete              | точный конечный результат worker, проверки открытых дочерних процессов и работ                      | turn/attempt/process/run/result и claims согласованы                                                 |
+| cancel                | весь материализованный граф и owner                                                                 | lease/grants/claims/gates отозваны, связанные узлы завершены                                         |
+| delete/cleanup        | отсутствие активной работы либо её согласованное закрытие                                           | достижимый `DELETED`, tombstone и авторитетное чтение                                                |
+| retry                 | завершённый/просроченный предшественник, лимит, неизменяемый bounded SourceRef и предыдущая attempt | новая attempt/grant/revision и полный current execution tuple после закрытия старых gate/claim/lease |
+| lease expiry          | блокировка строки точной lease и полная неизменяемая привязка                                       | старый граф закрыт до возврата в очередь/dead letter; один победитель                                |
+| dead letter           | исчерпание лимита и доказательство завершения                                                       | поток заблокирован до ограниченного аудируемого repair/skip                                          |
+| owner waiting         | точная привязка root/delivery/schedule                                                              | turn/process/occurrence/run переходят в `WAITING_OWNER`, leases отозваны                             |
+| owner decision/expiry | receipt доставки или expiry по времени PostgreSQL, OCC/fence                                        | ровно один decision/expiry закрывает или продолжает весь граф                                        |
 
 Завершение только одного envelope при живом дочернем исполнении запрещено.
 Каждый путь terminal/cancel/delete/retry/expiry повторяет одну проверку owner и
@@ -150,6 +150,9 @@ delivery ID, canonical payload digest и фактический post/interaction
   продуктовый контракт требует продолжения, прежние attempt/grants закрываются,
   а тот же process получает новые созданные сервером turn, input и
   `RuntimeRevision`; граф расписания хранит отдельную привязку продолжения.
+- Повторный `CHANGES_REQUESTED` проходит тот же переход из `CONTINUATION`:
+  новый gate/feedback/attempt не перезаписывает историю и атомарно обновляет
+  current tuple процесса, occurrence и `ScheduledRun`.
 
 ## Свежая `RuntimeRevision`
 

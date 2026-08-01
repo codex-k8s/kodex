@@ -44,6 +44,7 @@ WITH ranked AS (
     WHERE resource.organization_id = @organization_id::uuid
       AND resource.project_id = @project_id::uuid
       AND resource.kind = 'MEMORY_RECORD'
+      AND resource.state <> 'DELETED'
       AND (cardinality(@states::text[]) = 0 OR resource.state = ANY(@states::text[]))
       AND (@parent_id = '' OR resource.parent_id = @parent_id::uuid)
       AND (

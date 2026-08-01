@@ -72,6 +72,10 @@ ALTER TABLE control_plane.scheduled_runs
              OR (current_process_run_id IS NOT NULL AND current_process_version > 0))
     );
 
+CREATE UNIQUE INDEX scheduled_runs_active_current_turn_idx
+    ON control_plane.scheduled_runs (current_turn_id)
+    WHERE state IN ('CLAIMED', 'WAITING_OWNER', 'CONTINUATION');
+
 UPDATE control_plane.schema_state
 SET version = 20260801000100, migrated_at = clock_timestamp()
 WHERE singleton = true;

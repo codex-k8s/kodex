@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/schema"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -44,7 +45,7 @@ func (store *OutboxStore) Check(ctx context.Context) error {
 		return mapError(err)
 	}
 	store.terminal.Store(terminalEvents)
-	if version != 20260731000600 || !member || !nonSuperuser || !noBypassRLS {
+	if version != uint64(schema.CurrentVersion) || !member || !nonSuperuser || !noBypassRLS {
 		return errors.New("control-plane outbox role is not ready")
 	}
 	return nil

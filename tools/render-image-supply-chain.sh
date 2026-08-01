@@ -2,10 +2,10 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: render-image-supply-chain.sh staging|production control-plane-sha256 registry-pull-fqdn admission-tools-image@sha256:digest policy-revision" >&2
+  echo "usage: render-image-supply-chain.sh staging|production control-plane-sha256 registry-pull-fqdn admission-tools-image@sha256:digest policy-revision pull-credential-generation" >&2
 }
 
-if [[ $# -ne 5 ]]; then
+if [[ $# -ne 6 ]]; then
   usage
   exit 2
 fi
@@ -15,6 +15,7 @@ control_plane_digest=$2
 registry_pull_host=$3
 admission_tools_image=$4
 policy_revision=$5
+pull_credential_generation=$6
 
 case "$environment_name" in
   staging|production) ;;
@@ -32,6 +33,10 @@ if [[ ! "$admission_tools_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$
 fi
 [[ $policy_revision =~ ^[1-9][0-9]*$ ]] || {
   echo "policy_revision is invalid" >&2
+  exit 2
+}
+[[ $pull_credential_generation =~ ^[1-9][0-9]*$ ]] || {
+  echo "pull_credential_generation is invalid" >&2
   exit 2
 }
 if [[ ! "$registry_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
@@ -63,12 +68,22 @@ if [[ $(grep -F -c "$digest_placeholder" "$raw_render" || true) -ne 1 ]]; then
   echo "supply-chain render must contain one node readback image input" >&2
   exit 1
 fi
+pull_readback_placeholder='registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000'
+if [[ $(grep -F -c "$pull_readback_placeholder" "$raw_render" || true) -ne 1 ]]; then
+  echo "supply-chain render must contain one authenticated pull readback input" >&2
+  exit 1
+fi
 tools_placeholder='admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000'
 tools_digest=${admission_tools_image##*@}
 if [[ $(grep -F -c "$tools_placeholder" "$raw_render" || true) -lt 1 ]] ||
   [[ $(grep -F -c 'mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000' "$raw_render" || true) -ne 1 ]] ||
   [[ $(grep -F -c 'policyRevision: "0"' "$raw_render" || true) -ne 1 ]]; then
   echo "supply-chain render does not contain the owner admission intent" >&2
+  exit 1
+fi
+if [[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "0"' "$raw_render" || true) -ne 2 ]] ||
+  [[ $(grep -F -c 'name: PULL_CREDENTIAL_GENERATION' "$raw_render" || true) -ne 1 ]]; then
+  echo "supply-chain render does not contain the pull credential generation fence" >&2
   exit 1
 fi
 if [[ $(grep -F -c 'registry-pull.invalid' "$raw_render" || true) -lt 3 ]]; then
@@ -78,9 +93,12 @@ fi
 
 sed \
   -e "s|$digest_placeholder|$digest_replacement|g" \
+  -e "s|$pull_readback_placeholder|$digest_replacement|g" \
   -e "s|$tools_placeholder|$admission_tools_image|g" \
   -e "s|mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000|mattercodex.dev/admission-tools-sha256: $tools_digest|g" \
   -e "s|policyRevision: \"0\"|policyRevision: \"$policy_revision\"|g" \
+  -e "s|mattercodex.dev/pull-credential-generation: \"0\"|mattercodex.dev/pull-credential-generation: \"$pull_credential_generation\"|g" \
+  -e "/name: PULL_CREDENTIAL_GENERATION/{n;s|value: \"0\"|value: \"$pull_credential_generation\"|;}" \
   -e "s|registry-pull.invalid|$registry_pull_host|g" \
   "$raw_render" >"$final_render"
 

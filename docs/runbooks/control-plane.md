@@ -59,8 +59,8 @@ registry-pull.<environment-domain>` тем же
    `common_name`/`alt_names`/`ttl`, CA читается через `pki/cert/ca`;
 2. materialize утверждённый FQDN в canonical render; до apply сверить, что
    Vault public certificate SAN, `dockerconfigjson.auths` и ExternalDNS hostname
-   содержат ровно этот FQDN, а internal certificate SAN содержит push/admin
-   Service DNS;
+   содержат ровно этот FQDN, forward-only pull credential generation повышена,
+   а internal certificate SAN содержит push/admin Service DNS;
 3. дождаться registry pod и LoadBalancer address, затем сверить DNS→address и
    TLS chain/SNI без `insecure`/добавления CA на узлы;
 4. Job из `tools/render-image-build-job.sh` использует client-only BuildKit
@@ -68,7 +68,9 @@ registry-pull.<environment-domain>` тем же
    egress к promotion endpoint; server/probe Pod не содержит client key;
 5. четыре последовательно ожидающих Job из
    `tools/render-image-admission-job.sh` проверяют exact
-   BuildKit provenance/source, формирует SBOM, применяет зафиксированную
+   BuildKit provenance/source/builder/build type/build tag, exact source
+   material, immutable resolved dependencies и отдельную builder signature,
+   формируют SBOM, применяют зафиксированную
    vulnerability policy, проверяет signature identity и выпускает bounded
    подписанный admission receipt/claim; scanner/signer/admission/promotion
    имеют разные ServiceAccount, Vault role, mTLS identity и ключи; только
@@ -96,6 +98,7 @@ tools/render-control-plane.sh \
   registry-pull.<environment-domain> \
   <approved-admission-tools-image>@sha256:<digest> \
   <approved-vulnerability-policy-revision> \
+  <forward-only-pull-credential-generation> \
   > /tmp/control-plane-staging.yaml
 ```
 
@@ -108,6 +111,7 @@ tools/render-image-supply-chain.sh \
   registry-pull.<environment-domain> \
   <approved-admission-tools-image>@sha256:<digest> \
   <approved-vulnerability-policy-revision> \
+  <forward-only-pull-credential-generation> \
   > /tmp/image-supply-chain-staging.yaml
 
 tools/render-image-build-job.sh \
@@ -127,7 +131,8 @@ tools/render-image-admission-job.sh \
   > /tmp/agent-runtime-admission.yaml
 ```
 
-4. Сверить immutable ConfigMap owner intent, четыре admission ServiceAccount,
+4. Сверить immutable ConfigMap owner intent, server-owned builder/build type,
+   полный admission attempt digest в PVC/Jobs, четыре admission ServiceAccount,
    SecretProviderClass, client certificate, certificate guard, probes,
    selectors и exact destinations NetworkPolicy.
 5. После отдельного разрешения на доступ к среде читать только metadata:
@@ -145,7 +150,7 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260731000600`;
+- migration schema version равна `20260801000100`;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
@@ -244,12 +249,15 @@ approve/reject без подтверждённой delivery закрыто от�
 OCC version являются claim/fence, а crash откатывает весь переход. Expiry
 атомарно терминализирует gate/turn/attempt/process/occurrence/ScheduledRun и
 claims; delivery query использует PostgreSQL time и никогда не возвращает
-просроченную карточку. `CHANGES_REQUESTED` завершает прежний turn/attempt,
+просроченную карточку. Каждый `CHANGES_REQUESTED` завершает прежний turn/attempt,
 сохраняет неизменяемый feedback receipt и создаёт свежие revision/input/turn в
 том же ProcessRun/root; scheduled run переходит в `CONTINUATION` до terminal
-readback нового хода.
-Manual retry/cancel используют специализированные команды и отзывают старый
-lease/grant.
+readback нового хода. Следующий owner gate разрешён из этой же current-связки,
+поэтому correction loop повторяем и сохраняет историю всех gates/feedback.
+Manual retry и lease recovery используют специализированный единый путь:
+закрывают старые attempt/lease/gate/WorkClaim, не меняют bounded `SourceRef`,
+создают свежую RuntimeRevision/input/attempt/grant и перепривязывают
+ProcessRun/occurrence/ScheduledRun до следующего claim.
 
 ## Artifact scan и schedule occurrence
 

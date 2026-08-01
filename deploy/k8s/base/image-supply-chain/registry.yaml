@@ -47,6 +47,8 @@ spec:
         app.kubernetes.io/name: mattercodex-image-registry
         app.kubernetes.io/component: image-registry
         mattercodex.dev/registry-scope: pull
+      annotations:
+        mattercodex.dev/pull-credential-generation: "0"
     spec:
       serviceAccountName: mattercodex-image-registry-pull
       shareProcessNamespace: true
@@ -128,6 +130,9 @@ spec:
             - {name: TARGET_PORT, value: "5000"}
             - {name: SERVER_NAME, value: registry-pull.invalid}
             - {name: CLIENT_AUTH_REQUIRED, value: "false"}
+            - {name: DOCKER_CONFIG_FILE, value: /identity/pull-dockerconfigjson}
+            - {name: READBACK_IMAGE, value: "registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+            - {name: PULL_CREDENTIAL_GENERATION, value: "0"}
           readinessProbe:
             exec: {command: [/bin/sh, -ec, test -f /tmp/registry-ready]}
             periodSeconds: 5

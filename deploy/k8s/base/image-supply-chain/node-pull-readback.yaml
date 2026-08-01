@@ -20,6 +20,7 @@ spec:
         app.kubernetes.io/component: image-pull-readback
       annotations:
         mattercodex.dev/registry-pull-host: registry-pull.invalid
+        mattercodex.dev/pull-credential-generation: "0"
     spec:
       serviceAccountName: mattercodex-image-pull-readback
       automountServiceAccountToken: false

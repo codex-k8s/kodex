@@ -591,7 +591,8 @@ func memoryResourceEligible(
 	eligibility memoryEligibility,
 ) bool {
 	spec, ok := resource.Spec.(entity.MemoryRecordSpec)
-	if !ok || resource.Kind != enum.KindMemoryRecord {
+	if !ok || resource.Kind != enum.KindMemoryRecord ||
+		resource.State == enum.StateDeleted {
 		return false
 	}
 	if spec.Scope == "PROJECT" {

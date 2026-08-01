@@ -2,7 +2,7 @@ package resource
 
 import (
 	"context"
-	"strconv"
+	"errors"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -61,23 +61,20 @@ func (service *Service) prepareRetriedExecution(
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrInternal
 	}
 	previousAttempt := spec.Attempt
-	spec.Attempt++
-	spec.RuntimeRevisionID = revision.ID
-	spec.SourceRef += ":attempt:" + strconv.FormatUint(uint64(spec.Attempt), 10)
-	spec.EffectiveInputSHA256 = hashRuntimeInput(
-		spec.SourceRef,
-		prompt.SHA256,
-		revisionSpec.ManifestSHA256,
-		spec.ProcessRunID,
+	spec, err = prepareRetryTurnSpec(
+		spec, revision.ID, prompt.SHA256, revisionSpec.ManifestSHA256,
 	)
-	spec.Outcome = ""
-	spec.ResultArtifactID = ""
+	if err != nil {
+		return entity.Resource{}, entity.TurnSpec{}, err
+	}
 	retried, err := turn.ReplaceAndTransition(spec, enum.StateQueued, now)
 	if err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
 	if spec.ProcessRunID == "" {
-		return retried, spec, nil
+		return service.rebindStandaloneScheduledRetry(
+			ctx, tx, principal, turn, retried, spec, previousAttempt, now,
+		)
 	}
 
 	process, err := tx.GetForUpdate(
@@ -93,7 +90,29 @@ func (service *Service) prepareRetriedExecution(
 		current.Attempt != previousAttempt {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
-	setCurrentExecution(&processSpec, executionTuple{
+	wasWaitingOwner := process.State == enum.StateWaitingOwner
+	if wasWaitingOwner {
+		gate, gateErr := tx.ActiveOwnerGateForProcess(
+			ctx, process.OrganizationID, process.ProjectID, process.ID,
+		)
+		if gateErr != nil || gate.OwnerActorID != process.OwnerActorID {
+			return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
+		}
+		cancelledGate, transitionErr := gate.Transition(enum.StateCancelled, now)
+		if transitionErr != nil {
+			return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
+		}
+		if err := tx.Update(ctx, cancelledGate, gate.Version); err != nil {
+			return entity.Resource{}, entity.TurnSpec{}, err
+		}
+		if err := service.appendMutationRecords(
+			ctx, tx, principal, "retry_turn_cancel_owner_gate", cancelledGate,
+		); err != nil {
+			return entity.Resource{}, entity.TurnSpec{}, err
+		}
+		processSpec.ContinuationGateID = gate.ID
+	}
+	tuple := executionTuple{
 		SessionID:              session.ID,
 		SessionVersion:         session.Version,
 		TurnID:                 retried.ID,
@@ -102,8 +121,26 @@ func (service *Service) prepareRetriedExecution(
 		RuntimeRevisionID:      revision.ID,
 		RuntimeRevisionVersion: revision.Version,
 		InputSHA256:            spec.EffectiveInputSHA256,
-	})
-	updatedProcess, err := process.Update(process.Name, processSpec, now)
+	}
+	setCurrentExecution(&processSpec, tuple)
+	if processSpec.ContinuationTurnID != "" || wasWaitingOwner {
+		processSpec.ContinuationTurnID = retried.ID
+		processSpec.ContinuationTurnVersion = retried.Version
+		processSpec.ContinuationAttempt = spec.Attempt
+		processSpec.ContinuationRuntimeRevisionID = revision.ID
+		processSpec.ContinuationRuntimeRevisionVersion = revision.Version
+		processSpec.ContinuationInputSHA256 = spec.EffectiveInputSHA256
+		if processSpec.OwnerFeedbackSHA256 == "" {
+			processSpec.OwnerFeedbackSHA256 = hashString("retry_turn")
+		}
+	}
+	var updatedProcess entity.Resource
+	if process.State == enum.StateWaitingOwner ||
+		process.State == enum.StateWaitingExternal || process.State == enum.StateBlocked {
+		updatedProcess, err = process.ReplaceAndTransition(processSpec, enum.StateRunning, now)
+	} else {
+		updatedProcess, err = process.Update(process.Name, processSpec, now)
+	}
 	if err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
@@ -138,6 +175,9 @@ func (service *Service) prepareRetriedExecution(
 	occurrence.ExecutionRuntimeRevisionID = revision.ID
 	occurrence.ExecutionRuntimeRevisionVersion = revision.Version
 	occurrence.EffectiveInputSHA256 = spec.EffectiveInputSHA256
+	if occurrence.State == "WAITING_OWNER" {
+		occurrence.State = "CONTINUATION"
+	}
 	occurrence.UpdatedAt = now
 	if err := tx.UpdateScheduleOccurrence(
 		ctx, occurrence, occurrence.Attempt, occurrence.TokenHash,
@@ -154,6 +194,14 @@ func (service *Service) prepareRetriedExecution(
 	run.CurrentRuntimeRevisionID = revision.ID
 	run.CurrentRuntimeRevisionVersion = revision.Version
 	run.CurrentInputSHA256 = spec.EffectiveInputSHA256
+	if processSpec.ContinuationTurnID != "" {
+		run.ContinuationTurnID = retried.ID
+		run.ContinuationTurnVersion = retried.Version
+		run.ContinuationRuntimeRevisionID = revision.ID
+		run.ContinuationRuntimeRevisionVersion = revision.Version
+		run.ContinuationInputSHA256 = spec.EffectiveInputSHA256
+		run.OwnerFeedbackSHA256 = processSpec.OwnerFeedbackSHA256
+	}
 	if err := tx.RebindScheduledRun(ctx, run, turn.ID, previousAttempt); err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
 	}
@@ -162,6 +210,96 @@ func (service *Service) prepareRetriedExecution(
 	)
 	if err != nil || schedule.Kind != enum.KindSchedule ||
 		schedule.OwnerActorID != process.OwnerActorID {
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
+	}
+	if err := service.appendMutationRecords(
+		ctx, tx, principal, "rebind_schedule_retry", schedule,
+	); err != nil {
+		return entity.Resource{}, entity.TurnSpec{}, err
+	}
+	return retried, spec, nil
+}
+
+func prepareRetryTurnSpec(
+	spec entity.TurnSpec,
+	runtimeRevisionID, promptSHA256, manifestSHA256 string,
+) (entity.TurnSpec, error) {
+	if spec.Attempt >= 100 || value.ValidateID(runtimeRevisionID) != nil ||
+		!validSHA256Text(promptSHA256) || !validSHA256Text(manifestSHA256) {
+		return entity.TurnSpec{}, errs.ErrStateConflict
+	}
+	spec.Attempt++
+	spec.RuntimeRevisionID = runtimeRevisionID
+	// SourceRef — неизменяемая server-bound identity. Номер попытки уже входит
+	// в current tuple и не должен безгранично раздувать допустимую ссылку.
+	spec.EffectiveInputSHA256 = hashRuntimeInput(
+		spec.SourceRef, promptSHA256, manifestSHA256, spec.ProcessRunID,
+	)
+	spec.Outcome = ""
+	spec.ResultArtifactID = ""
+	return spec, nil
+}
+
+func (service *Service) rebindStandaloneScheduledRetry(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	previous, retried entity.Resource,
+	spec entity.TurnSpec,
+	previousAttempt uint32,
+	now time.Time,
+) (entity.Resource, entity.TurnSpec, error) {
+	run, err := tx.GetScheduledRunByCurrentTurnForUpdate(ctx, previous.ID)
+	if errors.Is(err, errs.ErrNotFound) {
+		return retried, spec, nil
+	}
+	previousSpec, previousOK := previous.Spec.(entity.TurnSpec)
+	if err != nil || !previousOK || run.CurrentTurnAttempt != previousAttempt ||
+		run.CurrentInputSHA256 != previousSpec.EffectiveInputSHA256 ||
+		run.CurrentProcessRunID != "" {
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
+	}
+	occurrence, err := tx.GetScheduleOccurrenceForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, run.OccurrenceID,
+	)
+	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
+		occurrence.State != "CLAIMED" {
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
+	}
+	revision, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, spec.RuntimeRevisionID,
+	)
+	if err != nil || revision.Kind != enum.KindRuntimeRevision ||
+		revision.State != enum.StateActive {
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
+	}
+	occurrence.ExecutionSessionID = spec.SessionID
+	occurrence.ExecutionSessionVersion = run.CurrentSessionVersion
+	occurrence.ExecutionTurnID = retried.ID
+	occurrence.ExecutionTurnVersion = retried.Version
+	occurrence.ExecutionRuntimeRevisionID = spec.RuntimeRevisionID
+	occurrence.ExecutionRuntimeRevisionVersion = revision.Version
+	occurrence.EffectiveInputSHA256 = spec.EffectiveInputSHA256
+	occurrence.UpdatedAt = now
+	if err := tx.UpdateScheduleOccurrence(
+		ctx, occurrence, occurrence.Attempt, occurrence.TokenHash,
+	); err != nil {
+		return entity.Resource{}, entity.TurnSpec{}, err
+	}
+	run.CurrentTurnID = retried.ID
+	run.CurrentTurnVersion = retried.Version
+	run.CurrentTurnAttempt = spec.Attempt
+	run.CurrentRuntimeRevisionID = spec.RuntimeRevisionID
+	run.CurrentRuntimeRevisionVersion = revision.Version
+	run.CurrentInputSHA256 = spec.EffectiveInputSHA256
+	if err := tx.RebindScheduledRun(ctx, run, previous.ID, previousAttempt); err != nil {
+		return entity.Resource{}, entity.TurnSpec{}, err
+	}
+	schedule, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, occurrence.ScheduleID,
+	)
+	if err != nil || schedule.Kind != enum.KindSchedule ||
+		schedule.OwnerActorID != retried.OwnerActorID {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
 	if err := service.appendMutationRecords(

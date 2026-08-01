@@ -36,6 +36,12 @@ tools_image=$(jq -er '.data.toolsImage' <<<"$intent")
 policy_revision=$(jq -er '.data.policyRevision' <<<"$intent")
 tools_digest=$(jq -er '.metadata.annotations["mattercodex.dev/admission-tools-sha256"]' <<<"$intent")
 required_tools=$(jq -er '.data.requiredTools' <<<"$intent")
+builder_identity=$(jq -er '.data.builderIdentity' <<<"$intent")
+build_type=$(jq -er '.data.buildType' <<<"$intent")
+scanner_identity=$(jq -er '.data.scannerIdentity' <<<"$intent")
+signer_identity=$(jq -er '.data.signerIdentity' <<<"$intent")
+admission_owner_identity=$(jq -er '.data.admissionOwnerIdentity' <<<"$intent")
+promotion_identity=$(jq -er '.data.promotionIdentity' <<<"$intent")
 jq -e '.immutable == true and .metadata.labels["mattercodex.dev/owner-intent"] == "true"' <<<"$intent" >/dev/null ||
   { echo "admission owner intent is not immutable" >&2; exit 78; }
 [[ $tools_image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] &&
@@ -43,10 +49,26 @@ jq -e '.immutable == true and .metadata.labels["mattercodex.dev/owner-intent"] =
   { echo "admission owner intent image binding is invalid" >&2; exit 78; }
 [[ $policy_revision =~ ^[1-9][0-9]*$ ]] ||
   { echo "admission owner intent policy revision is invalid" >&2; exit 78; }
-[[ $required_tools == base64,cmp,cosign,curl,date,grype,jq,openssl,pgrep,regctl,sha256sum,syft ]] ||
+[[ $required_tools == base64,buildctl,cmp,cosign,curl,date,grype,jq,openssl,pgrep,regctl,sha256sum,syft ]] ||
   { echo "admission owner intent tools contract is invalid" >&2; exit 78; }
+[[ $builder_identity == spiffe://mattercodex.local/ns/mattercodex-system/sa/mattercodex-role-image-builder ]] ||
+  { echo "admission builder identity is invalid" >&2; exit 78; }
+[[ $build_type == https://mobyproject.org/buildkit@v1 ]] ||
+  { echo "admission build type is invalid" >&2; exit 78; }
+for identity in "$scanner_identity" "$signer_identity" "$admission_owner_identity" "$promotion_identity"; do
+  [[ $identity =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
+    { echo "admission phase identity is invalid" >&2; exit 78; }
+done
 
-suffix=${image_digest:7:20}
+# Полный immutable evidence tuple задаёт отдельное хранилище и replay fence.
+# Повтор того же tuple идемпотентен, новая policy/run identity не видит старых markers.
+attempt_sha256=$(printf '%s\n' "$source_digest" "$build_tag" "$image_digest" \
+  "$tools_digest" "$policy_revision" "$builder_identity" "$build_type" \
+  "$scanner_identity" "$signer_identity" "$admission_owner_identity" \
+  "$promotion_identity" | sha256sum | awk '{print $1}')
+[[ $attempt_sha256 =~ ^[a-f0-9]{64}$ ]] ||
+  { echo "admission attempt digest is invalid" >&2; exit 78; }
+suffix=${attempt_sha256:0:32}
 claim_name="mc-admit-$suffix"
 deadline=1800
 [[ $environment_name == production ]] && deadline=2700
@@ -60,6 +82,8 @@ metadata:
   labels:
     app.kubernetes.io/name: mattercodex-image-admission
     mattercodex.dev/image-admission-id: ${suffix}
+  annotations:
+    mattercodex.dev/admission-attempt-sha256: ${attempt_sha256}
 spec:
   accessModes: [ReadWriteMany]
   resources:
@@ -90,6 +114,7 @@ metadata:
     mattercodex.dev/build-tag: ${build_tag}
     mattercodex.dev/admission-policy-revision: "${policy_revision}"
     mattercodex.dev/admission-tools-sha256: ${tools_digest}
+    mattercodex.dev/admission-attempt-sha256: ${attempt_sha256}
 spec:
   backoffLimit: 1
   activeDeadlineSeconds: ${deadline}
@@ -126,6 +151,14 @@ spec:
             - {name: IMAGE_DIGEST, value: "${image_digest}"}
             - {name: POLICY_REVISION, value: "${policy_revision}"}
             - {name: ADMISSION_TOOLS_IMAGE, value: "${tools_image}"}
+            - {name: ADMISSION_TOOLS_SHA256, value: "${tools_digest}"}
+            - {name: ADMISSION_ATTEMPT_SHA256, value: "${attempt_sha256}"}
+            - {name: EXPECTED_BUILDER_ID, value: "${builder_identity}"}
+            - {name: EXPECTED_BUILD_TYPE, value: "${build_type}"}
+            - {name: SCANNER_IDENTITY, value: "${scanner_identity}"}
+            - {name: SIGNER_IDENTITY, value: "${signer_identity}"}
+            - {name: ADMISSION_OWNER_IDENTITY, value: "${admission_owner_identity}"}
+            - {name: PROMOTION_IDENTITY, value: "${promotion_identity}"}
             - {name: ADMISSION_PHASE, value: "${phase}"}
             - {name: HOME, value: /tmp}
           volumeMounts:
