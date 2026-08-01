@@ -159,7 +159,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		CallbackPublishConcurrency:  cfg.CallbackPublishConcurrency,
 		CallbackPublishDeadline:     cfg.CallbackPublishDeadline,
 	})
-	chatRunSvc.SetTerminalFailureReconciler(sessionSvc)
+	chatRunSvc.SetTerminalReconciler(sessionSvc)
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
 		StatusService:          statusSvc,
