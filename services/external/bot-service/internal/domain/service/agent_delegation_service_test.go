@@ -1184,15 +1184,18 @@ func TestAgentSessionRepairFailureReturnsDelegationAndFinalizesRun(t *testing.T)
 		t.Fatalf("GetAgentSessionTurn() error = %v", err)
 	}
 
-	err = svc.ReconcileTerminalAgentSessionFailure(
+	err = svc.ReconcileTerminalAgentSessionTurn(
 		context.Background(),
 		targetSession,
 		targetTurn,
-		"agent runtime pod is terminal: Error exit=1",
-		`{"runtime_repair":{"phase":"Failed","reason":"container runner terminated: Error exit=1"}}`,
+		AgentSessionTerminalRepair{
+			ErrorMessage:  "agent runtime pod is terminal: Error exit=1",
+			Artifacts:     `{"runtime_repair":{"phase":"Failed","reason":"container runner terminated: Error exit=1"}}`,
+			PublishResult: true,
+		},
 	)
 	if err != nil {
-		t.Fatalf("ReconcileTerminalAgentSessionFailure() error = %v", err)
+		t.Fatalf("ReconcileTerminalAgentSessionTurn() error = %v", err)
 	}
 	delegation := store.agentDelegations[started.DelegationID]
 	if delegation.CallbackTurnID != 3 || delegation.CallbackRunID != "callback-run" {

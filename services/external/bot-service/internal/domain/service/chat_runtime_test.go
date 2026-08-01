@@ -914,46 +914,76 @@ func TestChatRunRepairEnsuresQueuedIdleSessionRuntime(t *testing.T) {
 
 func TestChatRunRepairResetsStaleActiveSession(t *testing.T) {
 	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{ID: 1, ProjectID: 1, Name: "security", RoleType: "security", OpenAIAccountName: "main", Enabled: true}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Development", ChatType: "multi_role"}
 	sessionKey := agentSessionKey(1, 1, agentSessionScopeThreadRole, "post-1")
 	store.agentSessions = map[string]entity.AgentSession{
 		sessionKey: {
-			ID:             1,
-			SessionKey:     sessionKey,
-			ProjectID:      1,
-			ChatID:         1,
-			RoleID:         1,
-			Status:         agentSessionStatusRunning,
-			ActiveTurnID:   1,
-			ActiveRunID:    "run-1",
-			PodName:        "mc-session-stale",
-			PVCName:        "mc-session-ws-stale",
-			TokenSecretRef: "session-secret",
-			TTLSeconds:     defaultThreadSessionTTLSeconds,
+			ID:                       1,
+			SessionKey:               sessionKey,
+			ProjectID:                1,
+			ChatID:                   1,
+			RoleID:                   1,
+			SessionScope:             agentSessionScopeThreadRole,
+			MattermostChannelID:      "channel-1",
+			MattermostRootPostID:     "post-1",
+			CodexSessionID:           "codex-session-1",
+			SessionArchiveGzipBase64: "session-archive",
+			Status:                   agentSessionStatusRunning,
+			ActiveTurnID:             1,
+			ActiveRunID:              "run-1",
+			PodName:                  "mc-session-stale",
+			PVCName:                  "mc-session-ws-stale",
+			TokenSecretRef:           "session-secret",
+			TTLSeconds:               defaultThreadSessionTTLSeconds,
 		},
 	}
 	store.sessionTurns = []entity.AgentSessionTurn{
-		{ID: 1, SessionID: 1, RunID: "run-1", Status: agentSessionTurnSucceeded},
+		{ID: 1, SessionID: 1, RunID: "run-1", Status: agentSessionTurnSucceeded, FinalMessage: "review completed", Artifacts: `{"codex-limits":"limits"}`, MattermostChannelID: "channel-1", MattermostRootPostID: "post-1", MattermostStatusPostID: "status-1"},
+		{ID: 2, SessionID: 1, RunID: "run-2", Status: agentSessionTurnQueued, MattermostChannelID: "channel-1", MattermostRootPostID: "post-1"},
 	}
-	runner := &fakeRuntimeRunner{}
+	runner := &fakeRuntimeRunner{botTokenSecrets: map[string]string{"session-secret": "session-token"}}
+	publisher := &fakeThreadPublisher{}
+	terminalReconciler := NewAgentSessionService(AgentSessionServiceConfig{
+		Localizer:       testLocalizer(t, texti18n.DefaultLocale),
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+	})
 	svc := NewChatRunService(ChatRunServiceConfig{
-		Localizer:      testLocalizer(t, texti18n.DefaultLocale),
-		Store:          store,
-		RuntimeRunner:  runner,
-		StorageReady:   true,
-		RuntimeReady:   true,
-		DisableMonitor: true,
+		Localizer:          testLocalizer(t, texti18n.DefaultLocale),
+		Store:              store,
+		RuntimeRunner:      runner,
+		StorageReady:       true,
+		RuntimeReady:       true,
+		DisableMonitor:     true,
+		TerminalReconciler: terminalReconciler,
 	})
 
 	result, err := svc.RepairAgentSessions(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("RepairAgentSessions() error = %v", err)
 	}
-	if result.StaleSessionsReset != 1 || result.QueuedSessionsEnsured != 0 || result.Failed != 0 {
+	if result.StaleSessionsReset != 1 || result.QueuedSessionsEnsured != 1 || result.Failed != 0 {
 		t.Fatalf("result = %#v", result)
 	}
 	session := store.agentSessions[sessionKey]
-	if session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != "" || runner.cleanedSessionKey != sessionKey {
+	if session.Status != agentSessionStatusIdle || session.ActiveTurnID != 0 || session.PodName != "mc-session-"+sessionKey || runner.cleanedSessionKey != sessionKey {
 		t.Fatalf("session=%#v runner=%#v", session, runner)
+	}
+	if session.CodexSessionID != "codex-session-1" || session.SessionArchiveGzipBase64 != "session-archive" {
+		t.Fatalf("session snapshot was not preserved: %#v", session)
+	}
+	if store.updatedRunStatus != agentSessionTurnSucceeded {
+		t.Fatalf("run status = %q", store.updatedRunStatus)
+	}
+	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].SessionKey != sessionKey {
+		t.Fatalf("session runs = %#v", runner.sessionRuns)
+	}
+	if len(publisher.posts) != 0 || len(publisher.cardUpdates) != 1 {
+		t.Fatalf("repair must update the status card without duplicating the final result: posts=%#v updates=%#v", publisher.posts, publisher.cardUpdates)
 	}
 }
 
@@ -1003,7 +1033,7 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 		},
 	}
 	reconciler := &fakeAutomationRuntimeReconciler{}
-	terminalReconciler := &fakeTerminalFailureReconciler{automation: reconciler}
+	terminalReconciler := &fakeTerminalReconciler{automation: reconciler}
 	svc := NewChatRunService(ChatRunServiceConfig{
 		Localizer:                   testLocalizer(t, texti18n.DefaultLocale),
 		Store:                       store,
@@ -1012,7 +1042,7 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 		RuntimeReady:                true,
 		DisableMonitor:              true,
 		AutomationRuntimeReconciler: reconciler,
-		TerminalFailureReconciler:   terminalReconciler,
+		TerminalReconciler:          terminalReconciler,
 	})
 
 	result, err := svc.RepairAgentSessions(context.Background(), 10)
@@ -1035,7 +1065,7 @@ func TestChatRunRepairResetsTerminalRunningSessionAndEnsuresQueue(t *testing.T) 
 		t.Fatalf("cleanedSessionKey = %q", runner.cleanedSessionKey)
 	}
 	if terminalReconciler.calls != 1 || terminalReconciler.session.ID != 1 || terminalReconciler.turn.ID != 1 ||
-		!strings.Contains(terminalReconciler.errorMessage, "OOMKilled") || !strings.Contains(terminalReconciler.artifacts, `"runtime_repair"`) {
+		!strings.Contains(terminalReconciler.repair.ErrorMessage, "OOMKilled") || !strings.Contains(terminalReconciler.repair.Artifacts, `"runtime_repair"`) || !terminalReconciler.repair.PublishResult {
 		t.Fatalf("terminal failure reconciliation = %#v", terminalReconciler)
 	}
 	if len(runner.sessionRuns) != 1 || runner.sessionRuns[0].SessionKey != sessionKey {
@@ -2346,27 +2376,24 @@ func (publisher *fakeThreadPublisher) AddPostReactionWithToken(_ context.Context
 	return nil
 }
 
-type fakeTerminalFailureReconciler struct {
-	calls        int
-	session      entity.AgentSession
-	turn         entity.AgentSessionTurn
-	errorMessage string
-	artifacts    string
-	automation   AutomationRuntimeTerminalReconciler
+type fakeTerminalReconciler struct {
+	calls      int
+	session    entity.AgentSession
+	turn       entity.AgentSessionTurn
+	repair     AgentSessionTerminalRepair
+	automation AutomationRuntimeTerminalReconciler
 }
 
-func (reconciler *fakeTerminalFailureReconciler) ReconcileTerminalAgentSessionFailure(
+func (reconciler *fakeTerminalReconciler) ReconcileTerminalAgentSessionTurn(
 	ctx context.Context,
 	session entity.AgentSession,
 	turn entity.AgentSessionTurn,
-	errorMessage string,
-	artifacts string,
+	repair AgentSessionTerminalRepair,
 ) error {
 	reconciler.calls++
 	reconciler.session = session
 	reconciler.turn = turn
-	reconciler.errorMessage = errorMessage
-	reconciler.artifacts = artifacts
+	reconciler.repair = repair
 	if reconciler.automation == nil {
 		return nil
 	}

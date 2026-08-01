@@ -173,8 +173,14 @@ type TransactionalAgentTurnDispatcher interface {
 	EnqueueExistingAgentTurn(ctx context.Context, store adminrepo.Repository, expectedSession entity.AgentSession, request AgentTurnRequest) (AgentTurnQueued, error)
 }
 
-type AgentSessionTerminalFailureReconciler interface {
-	ReconcileTerminalAgentSessionFailure(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, errorMessage string, artifacts string) error
+type AgentSessionTerminalReconciler interface {
+	ReconcileTerminalAgentSessionTurn(ctx context.Context, session entity.AgentSession, turn entity.AgentSessionTurn, repair AgentSessionTerminalRepair) error
+}
+
+type AgentSessionTerminalRepair struct {
+	ErrorMessage  string
+	Artifacts     string
+	PublishResult bool
 }
 
 type ThreadRepositorySelectionInput struct {
@@ -209,7 +215,7 @@ type ChatRunServiceConfig struct {
 	CapacityRetryDelay              time.Duration
 	AutomationRuntimeReconciler     AutomationRuntimeTerminalReconciler
 	AutomationOwnerDecisionResolver AutomationOwnerDecisionResolver
-	TerminalFailureReconciler       AgentSessionTerminalFailureReconciler
+	TerminalReconciler              AgentSessionTerminalReconciler
 }
 
 type ChatRunService struct {
@@ -260,9 +266,9 @@ func (svc *ChatRunService) SetAutomationOwnerDecisionResolver(resolver Automatio
 	}
 }
 
-func (svc *ChatRunService) SetTerminalFailureReconciler(reconciler AgentSessionTerminalFailureReconciler) {
+func (svc *ChatRunService) SetTerminalReconciler(reconciler AgentSessionTerminalReconciler) {
 	if svc != nil {
-		svc.cfg.TerminalFailureReconciler = reconciler
+		svc.cfg.TerminalReconciler = reconciler
 	}
 }
 
@@ -974,7 +980,7 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 			result.Failed++
 			continue
 		}
-		if current.ActiveTurnID > 0 && svc.cfg.AutomationRuntimeReconciler != nil {
+		if current.ActiveTurnID > 0 && (svc.cfg.TerminalReconciler != nil || svc.cfg.AutomationRuntimeReconciler != nil) {
 			if repairErr := svc.completeAndReconcileRepairTurn(ctx, current, role, chat, "agent_session.repair_stale_terminal_reconcile.side_effect", "agent runtime became stale before terminal completion", "{}"); repairErr != nil {
 				result.Failed++
 				continue
@@ -1081,6 +1087,7 @@ func (svc *ChatRunService) completeAndReconcileRepairTurn(ctx context.Context, s
 	}
 	var turn entity.AgentSessionTurn
 	canceledNoop := false
+	alreadyTerminal := false
 	err := svc.turnStatusCards.withCurrentSessionPersistenceFence(ctx, session, operation, func(current entity.AgentSession, guardedStore adminrepo.Repository) error {
 		currentTurn, getErr := guardedStore.GetAgentSessionTurn(ctx, session.ActiveTurnID)
 		if getErr != nil {
@@ -1092,6 +1099,7 @@ func (svc *ChatRunService) completeAndReconcileRepairTurn(ctx context.Context, s
 		if agentSessionTurnTerminal(currentTurn.Status) {
 			turn = currentTurn
 			canceledNoop = currentTurn.Status == agentSessionTurnCanceled
+			alreadyTerminal = true
 			return nil
 		}
 		var completeErr error
@@ -1112,8 +1120,12 @@ func (svc *ChatRunService) completeAndReconcileRepairTurn(ctx context.Context, s
 	if canceledNoop {
 		return nil
 	}
-	if svc.cfg.TerminalFailureReconciler != nil {
-		return svc.cfg.TerminalFailureReconciler.ReconcileTerminalAgentSessionFailure(ctx, session, turn, errorMessage, artifacts)
+	if svc.cfg.TerminalReconciler != nil {
+		return svc.cfg.TerminalReconciler.ReconcileTerminalAgentSessionTurn(ctx, session, turn, AgentSessionTerminalRepair{
+			ErrorMessage:  errorMessage,
+			Artifacts:     artifacts,
+			PublishResult: !alreadyTerminal,
+		})
 	}
 	if svc.cfg.AutomationRuntimeReconciler == nil {
 		return nil
