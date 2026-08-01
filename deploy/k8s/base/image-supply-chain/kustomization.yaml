@@ -2,6 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: mattercodex-system
 resources:
+  - admission-policy.yaml
   - serviceaccount.yaml
   - registry.yaml
   - registry-tls-secret-provider-class.yaml
@@ -21,5 +22,9 @@ configMapGenerator:
   - name: mattercodex-image-admission
     files:
       - image-admission.sh
+      - provenance-policy.jq
+  - name: mattercodex-registry-readiness
+    files:
+      - registry-readiness.sh
 generatorOptions:
   disableNameSuffixHash: true

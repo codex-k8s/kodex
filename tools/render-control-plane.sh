@@ -2,10 +2,10 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: render-control-plane.sh staging|production control-plane-sha256 authority-sha256 agent-runtime-sha256 registry-pull-fqdn" >&2
+  echo "usage: render-control-plane.sh staging|production control-plane-sha256 authority-sha256 agent-runtime-sha256 registry-pull-fqdn admission-tools-image@sha256:digest policy-revision" >&2
 }
 
-if [[ $# -ne 5 ]]; then
+if [[ $# -ne 7 ]]; then
   usage
   exit 2
 fi
@@ -15,6 +15,8 @@ image_digest=$2
 authority_image_digest=$3
 agent_runtime_image_digest=$4
 registry_pull_host=$5
+admission_tools_image=$6
+policy_revision=$7
 
 case "$environment_name" in
   staging|production) ;;
@@ -32,6 +34,15 @@ for digest_name in image_digest authority_image_digest agent_runtime_image_diges
     exit 2
   fi
 done
+if [[ ! "$admission_tools_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
+  [[ "$admission_tools_image" == *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]]; then
+  echo "admission_tools_image is invalid" >&2
+  exit 2
+fi
+[[ $policy_revision =~ ^[1-9][0-9]*$ ]] || {
+  echo "policy_revision is invalid" >&2
+  exit 2
+}
 
 if [[ ! "$registry_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
   [[ "$registry_pull_host" != *.* ]] ||
@@ -88,11 +99,22 @@ if [[ "$registry_host_placeholder_count" -lt 2 ]]; then
   echo "canonical render does not materialize the node registry endpoint" >&2
   exit 1
 fi
+tools_placeholder='admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000'
+tools_digest=${admission_tools_image##*@}
+if [[ $(grep -F -c "$tools_placeholder" "$raw_render" || true) -lt 5 ]] ||
+  [[ $(grep -F -c 'mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000' "$raw_render" || true) -ne 1 ]] ||
+  [[ $(grep -F -c 'policyRevision: "0"' "$raw_render" || true) -ne 1 ]]; then
+  echo "canonical render does not contain the owner admission intent" >&2
+  exit 1
+fi
 
 sed \
   -e "s|$placeholder|$replacement|g" \
   -e "s|$authority_placeholder|$authority_replacement|g" \
   -e "s|$runtime_digest_placeholder|$runtime_digest_replacement|g" \
+  -e "s|$tools_placeholder|$admission_tools_image|g" \
+  -e "s|mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000|mattercodex.dev/admission-tools-sha256: $tools_digest|g" \
+  -e "s|policyRevision: \"0\"|policyRevision: \"$policy_revision\"|g" \
   -e "s|$registry_host_placeholder|$registry_pull_host|g" \
   "$raw_render" >"$final_render"
 

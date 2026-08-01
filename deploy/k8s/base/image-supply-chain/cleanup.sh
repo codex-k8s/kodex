@@ -2,11 +2,16 @@
 set -eu
 
 registry_host="mattercodex-image-registry-admin.mattercodex-system.svc.cluster.local:5002"
-ca_file="/var/run/config/mattercodex/image-registry/ca.pem"
+ca_file="/var/run/secrets/mattercodex/image-registry/admin/ca.pem"
+certificate_file="/var/run/secrets/mattercodex/image-registry/admin/client.crt"
+key_file="/var/run/secrets/mattercodex/image-registry/admin/client.key"
 username_file="/var/run/secrets/mattercodex/image-registry/admin/username"
 password_file="/var/run/secrets/mattercodex/image-registry/admin/password"
 
-regctl registry set "${registry_host}" --tls enabled --cacert "${ca_file}"
+regctl registry set "${registry_host}" --tls enabled \
+  --cacert "$(cat "${ca_file}")" \
+  --client-cert "$(cat "${certificate_file}")" \
+  --client-key "$(cat "${key_file}")"
 registry_username=$(tr -d '\r\n' <"${username_file}")
 if [ -z "${registry_username}" ] || [ ! -s "${password_file}" ]; then
   echo "registry admin credentials are unavailable" >&2

@@ -2,10 +2,10 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: render-image-admission-job.sh staging|production vYYYYMMDDHHMMSS-gitsha sha256:source-digest image-name sha256:image-digest admission-tools-image@sha256:digest policy-revision" >&2
+  echo "usage: render-image-admission-job.sh staging|production vYYYYMMDDHHMMSS-gitsha sha256:source-digest image-name sha256:image-digest" >&2
 }
 
-if [[ $# -ne 7 ]]; then
+if [[ $# -ne 5 ]]; then
   usage
   exit 64
 fi
@@ -15,8 +15,6 @@ build_tag=$2
 source_digest=$3
 image_name=$4
 image_digest=$5
-tools_image=$6
-policy_revision=$7
 
 [[ $environment_name == staging || $environment_name == production ]] || { usage; exit 64; }
 [[ $build_tag =~ ^v[0-9]{14}-[a-f0-9]{40}$ ]] || { echo "build_tag is invalid" >&2; exit 64; }
@@ -28,32 +26,72 @@ policy_revision=$7
   { echo "image_digest is invalid" >&2; exit 64; }
 [[ $image_name =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]] && [[ ${#image_name} -le 80 ]] ||
   { echo "image_name is invalid" >&2; exit 64; }
-[[ $tools_image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
-  { echo "admission tools image must be immutable" >&2; exit 64; }
-[[ $policy_revision =~ ^[1-9][0-9]*$ ]] || { echo "policy_revision is invalid" >&2; exit 64; }
+command -v kubectl >/dev/null 2>&1 || { echo "kubectl is required" >&2; exit 69; }
+command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 69; }
 
-job_name="mc-admit-${image_digest:7:20}"
+# Tools image and policy revision are durable owner intent. A caller that may
+# request admission cannot substitute either value in this renderer.
+intent=$(kubectl --namespace mattercodex-system get configmap mattercodex-image-admission-policy -o json)
+tools_image=$(jq -er '.data.toolsImage' <<<"$intent")
+policy_revision=$(jq -er '.data.policyRevision' <<<"$intent")
+tools_digest=$(jq -er '.metadata.annotations["mattercodex.dev/admission-tools-sha256"]' <<<"$intent")
+required_tools=$(jq -er '.data.requiredTools' <<<"$intent")
+jq -e '.immutable == true and .metadata.labels["mattercodex.dev/owner-intent"] == "true"' <<<"$intent" >/dev/null ||
+  { echo "admission owner intent is not immutable" >&2; exit 78; }
+[[ $tools_image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] &&
+  [[ ${tools_image##*@} == "$tools_digest" ]] ||
+  { echo "admission owner intent image binding is invalid" >&2; exit 78; }
+[[ $policy_revision =~ ^[1-9][0-9]*$ ]] ||
+  { echo "admission owner intent policy revision is invalid" >&2; exit 78; }
+[[ $required_tools == base64,cmp,cosign,curl,date,grype,jq,openssl,pgrep,regctl,sha256sum,syft ]] ||
+  { echo "admission owner intent tools contract is invalid" >&2; exit 78; }
+
+suffix=${image_digest:7:20}
+claim_name="mc-admit-$suffix"
 deadline=1800
 [[ $environment_name == production ]] && deadline=2700
 
 cat <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${claim_name}
+  namespace: mattercodex-system
+  labels:
+    app.kubernetes.io/name: mattercodex-image-admission
+    mattercodex.dev/image-admission-id: ${suffix}
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests: {storage: 2Gi}
+EOF
+
+emit_job() {
+  local phase=$1
+  local service_account=$2
+  local identity_spc=$3
+  cat <<EOF
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ${job_name}
+  name: ${claim_name}-${phase}
   namespace: mattercodex-system
   labels:
     app.kubernetes.io/name: mattercodex-image-admission
     app.kubernetes.io/component: image-admission
     mattercodex.dev/image-admission: "true"
+    mattercodex.dev/image-admission-phase: ${phase}
+    mattercodex.dev/image-admission-id: ${suffix}
     mattercodex.dev/environment: ${environment_name}
   annotations:
     mattercodex.dev/source-sha256: ${source_digest}
     mattercodex.dev/image-sha256: ${image_digest}
     mattercodex.dev/build-tag: ${build_tag}
     mattercodex.dev/admission-policy-revision: "${policy_revision}"
+    mattercodex.dev/admission-tools-sha256: ${tools_digest}
 spec:
-  backoffLimit: 0
+  backoffLimit: 1
   activeDeadlineSeconds: ${deadline}
   ttlSecondsAfterFinished: 86400
   template:
@@ -62,9 +100,11 @@ spec:
         app.kubernetes.io/name: mattercodex-image-admission
         app.kubernetes.io/component: image-admission
         mattercodex.dev/image-admission: "true"
+        mattercodex.dev/image-admission-phase: ${phase}
+        mattercodex.dev/image-admission-id: ${suffix}
         mattercodex.dev/environment: ${environment_name}
     spec:
-      serviceAccountName: mattercodex-image-admission
+      serviceAccountName: ${service_account}
       automountServiceAccountToken: false
       enableServiceLinks: false
       restartPolicy: Never
@@ -73,109 +113,52 @@ spec:
         runAsNonRoot: true
         fsGroup: 2000
         fsGroupChangePolicy: OnRootMismatch
-        seccompProfile:
-          type: RuntimeDefault
-      initContainers:
-        - name: evidence-scanner
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: ${phase}
           image: ${tools_image}
           imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/mattercodex/image-admission.sh, scan]
-          env: &admission-env
+          command: [/bin/sh, /opt/mattercodex/image-admission.sh, ${phase}]
+          env:
             - {name: SOURCE_DIGEST, value: "${source_digest}"}
             - {name: BUILD_TAG, value: "${build_tag}"}
             - {name: IMAGE_NAME, value: "${image_name}"}
             - {name: IMAGE_DIGEST, value: "${image_digest}"}
             - {name: POLICY_REVISION, value: "${policy_revision}"}
             - {name: ADMISSION_TOOLS_IMAGE, value: "${tools_image}"}
+            - {name: ADMISSION_PHASE, value: "${phase}"}
             - {name: HOME, value: /tmp}
           volumeMounts:
             - {name: work, mountPath: /work}
             - {name: script, mountPath: /opt/mattercodex, readOnly: true}
-            - {name: registry-ca, mountPath: /registry-ca, readOnly: true}
-            - {name: push-client, mountPath: /registry-push, readOnly: true}
+            - {name: identity, mountPath: /identity, readOnly: true}
             - {name: tmp, mountPath: /tmp}
-          securityContext: &locked-context
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          securityContext:
             runAsNonRoot: true
             runAsUser: 10001
             runAsGroup: 10001
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
-          resources: &admission-resources
-            requests: {cpu: 100m, memory: 128Mi}
-            limits: {cpu: "1", memory: 1Gi}
-        - name: evidence-signer
-          image: ${tools_image}
-          imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/mattercodex/image-admission.sh, sign]
-          env: *admission-env
-          volumeMounts:
-            - {name: work, mountPath: /work}
-            - {name: script, mountPath: /opt/mattercodex, readOnly: true}
-            - {name: registry-ca, mountPath: /registry-ca, readOnly: true}
-            - {name: push-client, mountPath: /registry-push, readOnly: true}
-            - {name: signing, mountPath: /signing, readOnly: true}
-            - {name: tmp, mountPath: /tmp}
-          securityContext: *locked-context
-          resources: *admission-resources
-        - name: admission-owner
-          image: ${tools_image}
-          imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/mattercodex/image-admission.sh, admit]
-          env: *admission-env
-          volumeMounts:
-            - {name: work, mountPath: /work}
-            - {name: script, mountPath: /opt/mattercodex, readOnly: true}
-            - {name: registry-ca, mountPath: /registry-ca, readOnly: true}
-            - {name: push-client, mountPath: /registry-push, readOnly: true}
-            - {name: admission-owner, mountPath: /admission, readOnly: true}
-            - {name: tmp, mountPath: /tmp}
-          securityContext: *locked-context
-          resources: *admission-resources
-      containers:
-        - name: promotion
-          image: ${tools_image}
-          imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/mattercodex/image-admission.sh, promote]
-          env: *admission-env
-          volumeMounts:
-            - {name: work, mountPath: /work}
-            - {name: script, mountPath: /opt/mattercodex, readOnly: true}
-            - {name: registry-ca, mountPath: /registry-ca, readOnly: true}
-            - {name: push-client, mountPath: /registry-push, readOnly: true}
-            - {name: promotion-client, mountPath: /registry-promotion, readOnly: true}
-            - {name: admission-public, mountPath: /admission-public, readOnly: true}
-            - {name: tmp, mountPath: /tmp}
-          securityContext: *locked-context
-          resources: *admission-resources
       volumes:
         - name: work
-          emptyDir: {sizeLimit: 2Gi}
+          persistentVolumeClaim: {claimName: ${claim_name}}
         - name: tmp
           emptyDir: {sizeLimit: 64Mi}
         - name: script
-          configMap:
-            name: mattercodex-image-admission
-            defaultMode: 0555
-        - name: registry-ca
-          secret: {secretName: mattercodex-image-registry-ca}
-        - name: push-client
-          secret: {secretName: mattercodex-image-push-client}
-        - name: promotion-client
-          secret: {secretName: mattercodex-image-promotion-client}
-        - name: signing
+          configMap: {name: mattercodex-image-admission, defaultMode: 0555}
+        - name: identity
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
-            volumeAttributes: {secretProviderClass: mattercodex-image-signer}
-        - name: admission-owner
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: mattercodex-image-admission-owner}
-        - name: admission-public
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: mattercodex-image-promotion-verifier}
+            volumeAttributes: {secretProviderClass: ${identity_spc}}
 EOF
+}
+
+emit_job scan mattercodex-image-scanner mattercodex-image-scanner
+emit_job sign mattercodex-image-signer mattercodex-image-signer
+emit_job admit mattercodex-image-admission-owner mattercodex-image-admission-owner
+emit_job promote mattercodex-image-promotion-writer mattercodex-image-promotion-writer

@@ -51,7 +51,8 @@ registry выполняется отдельной операционной по
 
 Code-first bootstrap/readback после отдельного owner approval:
 
-1. выполнить `tools/configure-image-supply-chain-pki.sh staging` тем же
+1. выполнить `tools/configure-image-supply-chain-pki.sh staging
+registry-pull.<environment-domain>` тем же
    репозиторным кодом: server roles обязаны иметь только `ServerAuth`,
    BuildKit probe/builder — только `ClientAuth`, exact allowed names и bounded
    TTL; каждый CSI `pki*/issue/*` использует `method: PUT` и exact
@@ -65,11 +66,13 @@ Code-first bootstrap/readback после отдельного owner approval:
 4. Job из `tools/render-image-build-job.sh` использует client-only BuildKit
    mTLS и scoped staging-push, но не содержит promotion identity и не имеет
    egress к promotion endpoint; server/probe Pod не содержит client key;
-5. отдельный Job из `tools/render-image-admission-job.sh` проверяет exact
+5. четыре последовательно ожидающих Job из
+   `tools/render-image-admission-job.sh` проверяют exact
    BuildKit provenance/source, формирует SBOM, применяет зафиксированную
    vulnerability policy, проверяет signature identity и выпускает bounded
-   подписанный admission receipt/claim; только затем promotion container
-   копирует exact digest и читает обратно image и receipt digest;
+   подписанный admission receipt/claim; scanner/signer/admission/promotion
+   имеют разные ServiceAccount, Vault role, mTLS identity и ключи; только
+   promotion Job копирует exact digest и читает обратно image и receipt digest;
 6. retention job использует только admin identity. Отрицательный readback
    обязан показать, что pull не может push/delete, push не может delete, а
    неавторизованный BuildKit client не проходит TLS handshake.
@@ -91,6 +94,8 @@ tools/render-control-plane.sh \
   sha256:<internal-rpc-authority-image-digest> \
   sha256:<agent-runtime-image-digest> \
   registry-pull.<environment-domain> \
+  <approved-admission-tools-image>@sha256:<digest> \
+  <approved-vulnerability-policy-revision> \
   > /tmp/control-plane-staging.yaml
 ```
 
@@ -101,6 +106,8 @@ tools/render-image-supply-chain.sh \
   staging \
   sha256:<control-plane-image-digest> \
   registry-pull.<environment-domain> \
+  <approved-admission-tools-image>@sha256:<digest> \
+  <approved-vulnerability-policy-revision> \
   > /tmp/image-supply-chain-staging.yaml
 
 tools/render-image-build-job.sh \
@@ -117,12 +124,11 @@ tools/render-image-admission-job.sh \
   sha256:<context.tar-digest> \
   agent-runtime \
   sha256:<staging-image-digest> \
-  <approved-admission-tools-image>@sha256:<digest> \
-  <approved-vulnerability-policy-revision> \
   > /tmp/agent-runtime-admission.yaml
 ```
 
-4. Сверить имена ServiceAccount, SecretProviderClass, ConfigMap, probes,
+4. Сверить immutable ConfigMap owner intent, четыре admission ServiceAccount,
+   SecretProviderClass, client certificate, certificate guard, probes,
    selectors и exact destinations NetworkPolicy.
 5. После отдельного разрешения на доступ к среде читать только metadata:
 

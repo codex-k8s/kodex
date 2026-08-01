@@ -59,10 +59,7 @@ spec:
                 - name: script
                   mountPath: /var/run/config/mattercodex/registry-cleanup
                   readOnly: true
-                - name: registry-ca
-                  mountPath: /var/run/config/mattercodex/image-registry
-                  readOnly: true
-                - name: registry-admin
+                - name: registry-identity
                   mountPath: /var/run/secrets/mattercodex/image-registry/admin
                   readOnly: true
                 - name: tmp
@@ -72,14 +69,12 @@ spec:
               configMap:
                 name: mattercodex-registry-cleanup
                 defaultMode: 0550
-            - name: registry-ca
-              secret:
-                secretName: mattercodex-image-registry-ca
-                defaultMode: 0440
-            - name: registry-admin
-              secret:
-                secretName: mattercodex-image-registry-admin
-                defaultMode: 0440
+            - name: registry-identity
+              csi:
+                driver: secrets-store.csi.k8s.io
+                readOnly: true
+                volumeAttributes:
+                  secretProviderClass: mattercodex-registry-cleanup-client
             - name: tmp
               emptyDir:
                 sizeLimit: 16Mi

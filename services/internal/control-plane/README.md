@@ -75,10 +75,10 @@ Deployments не принадлежат Issue #187 и здесь не подме
 
 Публикуются только два факта с утверждёнными потребителями:
 
-| Факт | Условие | Потребитель | Доставка |
-| --- | --- | --- | --- |
-| `control_plane.runtime_configuration_changed` | устойчивое изменение project/team/chat/role/prompt/binding/workspace/integration/runtime/session/turn | `runtime-controller` | at-least-once, inbox и курсор потребителя |
-| `control_plane.schedule_changed` | устойчивое изменение расписания и верхней границы | `automation-scheduler` | at-least-once, inbox и курсор потребителя |
+| Факт                                          | Условие                                                                                               | Потребитель            | Доставка                                  |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- |
+| `control_plane.runtime_configuration_changed` | устойчивое изменение project/team/chat/role/prompt/binding/workspace/integration/runtime/session/turn | `runtime-controller`   | at-least-once, inbox и курсор потребителя |
+| `control_plane.schedule_changed`              | устойчивое изменение расписания и верхней границы                                                     | `automation-scheduler` | at-least-once, inbox и курсор потребителя |
 
 Для процессов, шлюзов владельца, памяти, заявок на работу и метаданных артефактов
 спекулятивные события не публикуются: авторитетные пути — `GetResource`,
@@ -92,24 +92,24 @@ Deployments не принадлежат Issue #187 и здесь не подме
 
 ## Доменные инварианты
 
-| Область | Инвариант |
-| --- | --- |
-| Все команды | семантический ключ идемпотентности, канонический digest запроса, OCC и аудит фиксируются атомарно |
-| Проект | ID и владельца назначает сервер; создание в организации требует полномочия владельца; slug стабилен |
-| Команда, роль и prompt | общий CRUD не управляет полномочиями; отдельная административная команда проверяет полномочие вида, назначаемое подмножество и запрещает самостоятельное включение и повышение |
-| Управляемая конфигурация | каждый project/team/chat/role/prompt/binding/workspace/integration/schedule хранит `managed_by=UI|GIT`; Git-объект обновляется только тем же источником с возрастающей ревизией, а переход к UI требует явного `detach_git_management` и отдельного устойчивого полномочия |
-| Привязка учётных данных | хранится только URI метаданных; назначение и principal неизменяемы; ревизия растёт ровно на один; provider binding несёт server-verified eligibility/capabilities, лимит, usage, время и ревизию наблюдения |
-| Интеграция | идентичность определения неизменяема; версия движется только вперёд |
-| Ревизия среды исполнения | перед каждым ходом сервер разрешает точные сессию и разрешение роли, активные chat/prompt/привязку провайдера и только связанные с ролью workspace/integration/credential; создаётся неизменяемый снимок с версиями, digest, политикой, образом и предшественником; `runtime-controller` читает его через отдельный авторизованный RPC |
-| Сессия | привязку провайдера сервер выбирает из версионированного `AccountPool` роли по `least_used` или детерминированному `weighted`, exact freshness/limit/eligibility; ручной preferred binding — только проверенный override; общий create/update/transition запрещён; close/cancel атомарно закрывают queued/active turns, attempts и grants, а archive/cleanup доходят до terminal tombstone |
-| Ход | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence |
-| Восстановление хода | истечение срока или ручной повтор создаёт новую неизменяемую попытку; отмена и завершение отзывают аренду, устаревшие workload/generation/token отклоняются |
-| Процесс | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate |
-| Расписание | закрытые цели `AGENT|PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; lease recovery под row lock сначала закрывает прежние turn/attempt/process/gate/claim/grant и immutable run, затем допускает новую attempt; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO |
-| Шлюз владельца | запрос закрепляет корневого инициатора, process/session/turn/attempt/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` под PostgreSQL row lock автономно закрывает просроченный graph, а delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt, тот же ProcessRun/root и создаёт свежие revision/input/turn, не отображая решение в `FAILED` |
-| Память | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest |
-| Заявка на работу | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна |
-| Метаданные артефакта | только `RegisterArtifact` создаёт `PENDING`; точный scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; прикреплять и использовать разрешено только точный `CLEAN` digest |
+| Область                  | Инвариант                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Все команды              | семантический ключ идемпотентности, канонический digest запроса, OCC и аудит фиксируются атомарно                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Проект                   | ID и владельца назначает сервер; создание в организации требует полномочия владельца; slug стабилен                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Команда, роль и prompt   | общий CRUD не управляет полномочиями; отдельная административная команда проверяет полномочие вида, назначаемое подмножество и запрещает самостоятельное включение и повышение                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Управляемая конфигурация | каждый project/team/chat/role/prompt/binding/workspace/integration/schedule хранит `managed_by=UI` или `managed_by=GIT`; Git-объект обновляется только тем же источником с возрастающей ревизией, а переход к UI требует явного `detach_git_management` и отдельного устойчивого полномочия                                                                                                                                                                                                                                                                                                                                                                                      |
+| Привязка учётных данных  | хранится только URI метаданных; назначение и principal неизменяемы; ревизия растёт ровно на один; provider binding несёт server-verified eligibility/capabilities, лимит, usage, время и ревизию наблюдения                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Интеграция               | идентичность определения неизменяема; версия движется только вперёд                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Ревизия среды исполнения | перед каждым ходом сервер разрешает точные сессию и разрешение роли, активные chat/prompt/привязку провайдера и только связанные с ролью workspace/integration/credential; создаётся неизменяемый снимок с версиями, digest, политикой, образом и предшественником; `runtime-controller` читает его через отдельный авторизованный RPC                                                                                                                                                                                                                                                                                                                                           |
+| Сессия                   | привязку провайдера сервер выбирает из версионированного `AccountPool` роли по `least_used` или детерминированному `weighted`, exact freshness/limit/eligibility; ручной preferred binding — только проверенный override; общий create/update/transition запрещён; close/cancel атомарно закрывают queued/active turns, attempts и grants, а archive/cleanup доходят до terminal tombstone                                                                                                                                                                                                                                                                                       |
+| Ход                      | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Восстановление хода      | истечение срока или ручной повтор создаёт новую неизменяемую попытку; отмена и завершение отзывают аренду, устаревшие workload/generation/token отклоняются                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Процесс                  | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate                                                                                                                                                                                                                                                                                        |
+| Расписание               | закрытые цели `AGENT` и `PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; lease recovery под row lock сначала закрывает прежние turn/attempt/process/gate/claim/grant и immutable run, затем допускает новую attempt; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO                                                                                                              |
+| Шлюз владельца           | запрос закрепляет корневого инициатора и единый server-owned current execution tuple process/session/turn/attempt/runtime revision/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` под PostgreSQL row lock автономно закрывает просроченный graph, а delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt и полное неизменяемое owner feedback в новом `TurnSpec`, тот же ProcessRun/root и создаёт свежие revision/input/turn; complete/gate/work-claim/schedule/retry читают одну current-связку, а решение не отображается в `FAILED` |
+| Память                   | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Заявка на работу         | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Метаданные артефакта     | только `RegisterArtifact` создаёт `PENDING`; точный scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; прикреплять и использовать разрешено только точный `CLEAN` digest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 Ссылки разрешаются внутри текущих настроек RLS организации и проекта;
 межорганизационный и скрытый ресурсы дают одинаковый `NotFound`.
@@ -181,24 +181,24 @@ runbook.
 
 Значения ниже — имена, а не значения секретов.
 
-| Переменная | Назначение |
-| --- | --- |
-| `CONTROL_PLANE_GRPC_LISTEN`, `CONTROL_PLANE_TECHNICAL_LISTEN` | внутренние listeners |
-| `CONTROL_PLANE_TLS_CERTIFICATE_FILE`, `CONTROL_PLANE_TLS_PRIVATE_KEY_FILE`, `CONTROL_PLANE_TLS_CLIENT_CA_FILE` | точный mTLS рабочей нагрузки |
-| `CONTROL_PLANE_POSTGRES_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RELAY_DSN_FILE` | файлы DSN среды исполнения и ретранслятора |
-| `CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_DSN_FILE` | точные DSN materialized LOGIN; CLI создаёт отсутствующее поколение через ограниченный controller, затем проверяет `NEXT` отдельным подключением |
-| `CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME`, `CONTROL_PLANE_POSTGRES_CA_FILE`, `CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS` | TLS и пул PostgreSQL |
-| `CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME`, `CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE` | точное поколение среды исполнения и доказательство контекста транзакции |
-| `CONTROL_PLANE_REDIS_ADDRESS`, `CONTROL_PLANE_REDIS_TLS_SERVER_NAME`, `CONTROL_PLANE_REDIS_CA_FILE`, `CONTROL_PLANE_REDIS_USERNAME`, `CONTROL_PLANE_REDIS_PASSWORD_FILE`, `CONTROL_PLANE_REDIS_DATABASE`, `CONTROL_PLANE_REDIS_POOL_SIZE` | ограниченный кэш Redis |
-| `CONTROL_PLANE_NATS_URL`, `CONTROL_PLANE_NATS_TLS_SERVER_NAME`, `CONTROL_PLANE_NATS_CA_FILE`, `CONTROL_PLANE_NATS_CREDENTIALS_FILE`, `CONTROL_PLANE_NATS_STREAM`, `CONTROL_PLANE_NATS_REPLICAS` | точный издатель JetStream |
-| `CONTROL_PLANE_AUTHORITY_POLICY_FILE` | версионированная политика deny-by-default |
-| `CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR` | независимо доставленные публичные JWK точных разрешений производителей |
-| `CONTROL_PLANE_PROOF_PRIVATE_JWK_FILE`, `CONTROL_PLANE_PROOF_TRUST_FILE`, `CONTROL_PLANE_PROOF_SIGNER_GENERATION` | независимо проверенный signer доказательств |
-| `CONTROL_PLANE_LEASE_SIGNING_KEY_FILE` | HMAC-ключ аренды хода |
-| `CONTROL_PLANE_OIDC_TLS_SERVER_NAME`, `CONTROL_PLANE_OIDC_CA_FILE` | закреплённый TLS discovery/JWKS OIDC |
-| `POD_UID` | владелец аренды ретранслятора |
-| `CONTROL_PLANE_*_TIMEOUT`, `CONTROL_PLANE_*_INTERVAL`, `CONTROL_PLANE_CACHE_TTL`, `CONTROL_PLANE_SCHEDULE_CLAIM_LIMIT` | ограниченные пределы жизненного цикла |
-| `OTEL_*`, `SENTRY_DSN_FILE`, `SENTRY_EXPECTED_HOST` | общая среда наблюдаемости |
+| Переменная                                                                                                                                                                                                                                | Назначение                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONTROL_PLANE_GRPC_LISTEN`, `CONTROL_PLANE_TECHNICAL_LISTEN`                                                                                                                                                                             | внутренние listeners                                                                                                                            |
+| `CONTROL_PLANE_TLS_CERTIFICATE_FILE`, `CONTROL_PLANE_TLS_PRIVATE_KEY_FILE`, `CONTROL_PLANE_TLS_CLIENT_CA_FILE`                                                                                                                            | точный mTLS рабочей нагрузки                                                                                                                    |
+| `CONTROL_PLANE_POSTGRES_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RELAY_DSN_FILE`                                                                                                                                                                | файлы DSN среды исполнения и ретранслятора                                                                                                      |
+| `CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RUNTIME_NEXT_DSN_FILE`, `CONTROL_PLANE_POSTGRES_RUNTIME_PREVIOUS_DSN_FILE`                                                                                     | точные DSN materialized LOGIN; CLI создаёт отсутствующее поколение через ограниченный controller, затем проверяет `NEXT` отдельным подключением |
+| `CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME`, `CONTROL_PLANE_POSTGRES_CA_FILE`, `CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS`                                                                                                                      | TLS и пул PostgreSQL                                                                                                                            |
+| `CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME`, `CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE`                                                                | точное поколение среды исполнения и доказательство контекста транзакции                                                                         |
+| `CONTROL_PLANE_REDIS_ADDRESS`, `CONTROL_PLANE_REDIS_TLS_SERVER_NAME`, `CONTROL_PLANE_REDIS_CA_FILE`, `CONTROL_PLANE_REDIS_USERNAME`, `CONTROL_PLANE_REDIS_PASSWORD_FILE`, `CONTROL_PLANE_REDIS_DATABASE`, `CONTROL_PLANE_REDIS_POOL_SIZE` | ограниченный кэш Redis                                                                                                                          |
+| `CONTROL_PLANE_NATS_URL`, `CONTROL_PLANE_NATS_TLS_SERVER_NAME`, `CONTROL_PLANE_NATS_CA_FILE`, `CONTROL_PLANE_NATS_CREDENTIALS_FILE`, `CONTROL_PLANE_NATS_STREAM`, `CONTROL_PLANE_NATS_REPLICAS`                                           | точный издатель JetStream                                                                                                                       |
+| `CONTROL_PLANE_AUTHORITY_POLICY_FILE`                                                                                                                                                                                                     | версионированная политика deny-by-default                                                                                                       |
+| `CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR`                                                                                                                                                                                               | независимо доставленные публичные JWK точных разрешений производителей                                                                          |
+| `CONTROL_PLANE_PROOF_PRIVATE_JWK_FILE`, `CONTROL_PLANE_PROOF_TRUST_FILE`, `CONTROL_PLANE_PROOF_SIGNER_GENERATION`                                                                                                                         | независимо проверенный signer доказательств                                                                                                     |
+| `CONTROL_PLANE_LEASE_SIGNING_KEY_FILE`                                                                                                                                                                                                    | HMAC-ключ аренды хода                                                                                                                           |
+| `CONTROL_PLANE_OIDC_TLS_SERVER_NAME`, `CONTROL_PLANE_OIDC_CA_FILE`                                                                                                                                                                        | закреплённый TLS discovery/JWKS OIDC                                                                                                            |
+| `POD_UID`                                                                                                                                                                                                                                 | владелец аренды ретранслятора                                                                                                                   |
+| `CONTROL_PLANE_*_TIMEOUT`, `CONTROL_PLANE_*_INTERVAL`, `CONTROL_PLANE_CACHE_TTL`, `CONTROL_PLANE_SCHEDULE_CLAIM_LIMIT`                                                                                                                    | ограниченные пределы жизненного цикла                                                                                                           |
+| `OTEL_*`, `SENTRY_DSN_FILE`, `SENTRY_EXPECTED_HOST`                                                                                                                                                                                       | общая среда наблюдаемости                                                                                                                       |
 
 Файлы секретов должны быть абсолютными обычными файлами без разрешений для
 `other`. DSN, JWK, учётные данные, ключи и их содержимое не логируются.
@@ -217,6 +217,8 @@ tools/render-control-plane.sh \
   sha256:<internal-rpc-authority-image-digest> \
   sha256:<agent-runtime-image-digest> \
   registry-pull.<environment-domain> \
+  <approved-admission-tools-image>@sha256:<digest> \
+  <approved-vulnerability-policy-revision> \
   > /tmp/control-plane-staging.yaml
 ```
 
@@ -239,17 +241,31 @@ render ссылаются на node endpoint по digest. Теги обязан�
 и закрыто отказывается удалять неизвестный формат. Три начальных образа
 (`registry`, `moby/buildkit`, `regctl`) закреплены публичными OCI digest;
 после начальной загрузки оператор зеркалирует их в тот же локальный registry.
-BuildKit API требует mTLS с exact SNI/CA: server/probe и `role-image-builder` получают
-ключи из разных SecretProviderClass/Vault roles, а label NetworkPolicy не
-является полномочием. `tools/render-image-build-job.sh` создаёт bounded Job из
+BuildKit API и внутренние registry endpoints требуют mTLS с exact SNI/CA:
+server/probe, BuildKit→push, `role-image-builder`, scanner, signer, admission,
+promotion и cleanup получают client-only ключи из разных
+SecretProviderClass/Vault roles, а label NetworkPolicy не является
+полномочием. Certificate guard сравнивает обслуживаемый leaf с ротированным
+CSI leaf, проверяет hostname/CA/срок и выполняет аутентифицированный `/v2/`
+readback; несовпадение снимает readiness и закрыто перезапускает только
+registry process для перечитывания ключей. `tools/render-image-build-job.sh` создаёт bounded Job из
 read-only PVC с `context.tar`, сверяет exact source SHA-256, отправляет сборку
 в BuildKit и публикует только в staging. Он не монтирует promotion identity и
 не имеет сетевого пути к promotion endpoint. Отдельный
-`tools/render-image-admission-job.sh` закрепляет exact source/build/image,
+`tools/render-image-admission-job.sh` читает immutable owner intent
+`mattercodex-image-admission-policy`, закрепляет exact source/build/image,
 формирует SBOM, применяет фиксированную vulnerability policy, проверяет
 BuildKit provenance и cosign identity, выпускает короткоживущий подписанный
 admission receipt/claim и только после его readback копирует exact digest.
-Rejected, stale или неполное evidence закрыто останавливает Job. Push,
+Rejected, stale или неполное evidence закрыто останавливает цепочку. Scanner,
+signer, admission owner и promotion выполняются четырьмя Job с разными
+ServiceAccount, Vault role, client certificate, прикладными credentials и
+NetworkPolicy; приватные signing/admission/promotion ключи не сосуществуют в
+одном Pod. DSSE сначала base64-декодируется, затем проверяется как точный
+in-toto Statement с SLSA predicate, image subject и source digest. Immutable
+owner intent также фиксирует закрытый состав `base64`, `cmp`, `cosign`, `curl`,
+`date`, `grype`, `jq`, `openssl`, `pgrep`, `regctl`, `sha256sum`, `syft`; образ
+без любого из них не является утверждённым. Push,
 signer, admission owner, promotion и admin credentials различны и
 доставляются Vault CSI без значений в manifest. `noProcessSandbox=true`
 остаётся только вынужденной границей
@@ -272,6 +288,8 @@ tools/render-image-supply-chain.sh \
   staging \
   sha256:<control-plane-image-digest> \
   registry-pull.<environment-domain> \
+  <approved-admission-tools-image>@sha256:<digest> \
+  <approved-vulnerability-policy-revision> \
   > /tmp/image-supply-chain-staging.yaml
 
 tools/render-image-build-job.sh \
@@ -288,8 +306,6 @@ tools/render-image-admission-job.sh \
   sha256:<context.tar-digest> \
   agent-runtime \
   sha256:<staging-image-digest> \
-  <approved-admission-tools-image>@sha256:<digest> \
-  <approved-vulnerability-policy-revision> \
   > /tmp/agent-runtime-admission.yaml
 ```
 
@@ -305,7 +321,8 @@ controller bootstrap и закрыто сверяет catalog membership. При
 CLI дополнительно подключается именно этим LOGIN и сохраняет readback; только
 следующее идемпотентное согласование может повысить его до `CURRENT`. Миграции
 `20260731000200`, `20260731000300`, `20260731000400` и
-`20260731000500` и `20260731000600` явно forward-only: downgrade отклоняется,
+`20260731000500`, `20260731000600` и `20260801000100` явно forward-only:
+downgrade отклоняется,
 потому что потерял бы RLS fences, верхнюю границу и readback principal,
 попытки, подтверждения и происхождение вектора. Откат приложения выполняется
 только совместимым образом; откат схемы — новой компенсирующей forward

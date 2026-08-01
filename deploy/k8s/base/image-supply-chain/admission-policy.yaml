@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mattercodex-image-admission-policy
+  labels:
+    app.kubernetes.io/name: mattercodex-image-admission
+    mattercodex.dev/owner-intent: "true"
+  annotations:
+    mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000
+immutable: true
+data:
+  toolsImage: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  policyRevision: "0"
+  scannerIdentity: mattercodex-image-scanner
+  signerIdentity: mattercodex-image-signer
+  admissionOwnerIdentity: mattercodex-image-admission-owner
+  promotionIdentity: mattercodex-image-promotion-writer
+  requiredTools: base64,cmp,cosign,curl,date,grype,jq,openssl,pgrep,regctl,sha256sum,syft

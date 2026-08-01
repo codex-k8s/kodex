@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 || ( $1 != staging && $1 != production ) ]]; then
-  echo "usage: configure-image-supply-chain-pki.sh staging|production" >&2
+if [[ $# -ne 2 || ( $1 != staging && $1 != production ) ]]; then
+  echo "usage: configure-image-supply-chain-pki.sh staging|production registry-pull-fqdn" >&2
   exit 64
 fi
+registry_pull_host=$2
+[[ $registry_pull_host =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] &&
+  [[ $registry_pull_host == *.* ]] &&
+  [[ $registry_pull_host != *.svc ]] &&
+  [[ $registry_pull_host != *.svc.cluster.local ]] || {
+  echo "registry-pull-fqdn is invalid" >&2
+  exit 64
+}
 
 command -v vault >/dev/null 2>&1 || {
   echo "vault CLI is required" >&2
@@ -61,7 +69,21 @@ configure_client_role() {
 configure_server_role pki mattercodex-buildkit-server mattercodex-buildkit
 configure_client_role mattercodex-buildkit-probe mattercodex-buildkit-probe
 configure_client_role mattercodex-buildkit-client mattercodex-role-image-builder
-configure_server_role pki-public mattercodex-image-registry-pull mattercodex-image-registry-pull
+configure_client_role mattercodex-buildkit-registry-client mattercodex-buildkit
+configure_client_role mattercodex-image-registry-push-probe mattercodex-image-registry-push-probe
+configure_client_role mattercodex-image-registry-admin-probe mattercodex-image-registry-admin-probe
+configure_client_role mattercodex-image-registry-promotion-probe mattercodex-image-registry-promotion-probe
+configure_client_role mattercodex-image-scanner mattercodex-image-scanner
+configure_client_role mattercodex-image-signer mattercodex-image-signer
+configure_client_role mattercodex-image-admission-owner mattercodex-image-admission-owner
+configure_client_role mattercodex-image-promotion-writer mattercodex-image-promotion-writer
+configure_client_role mattercodex-registry-cleanup mattercodex-registry-cleanup
+vault write pki-public/roles/mattercodex-image-registry-pull \
+  allowed_domains="$registry_pull_host" allow_bare_domains=true \
+  allow_subdomains=false allow_glob_domains=false enforce_hostnames=true \
+  require_cn=true server_flag=true client_flag=false key_type=rsa key_bits=3072 \
+  key_usage="DigitalSignature,KeyEncipherment" ext_key_usage=ServerAuth \
+  ttl=1h max_ttl=2h >/dev/null
 configure_server_role pki mattercodex-image-registry-push mattercodex-image-registry-push
 configure_server_role pki mattercodex-image-registry-admin mattercodex-image-registry-admin
 configure_server_role pki mattercodex-image-registry-promotion mattercodex-image-registry-promotion
@@ -85,7 +107,7 @@ write_ca_policy() {
 }
 
 write_issue_policy mattercodex-buildkit-pki-issue pki \
-  mattercodex-buildkit-server mattercodex-buildkit-probe
+  mattercodex-buildkit-server mattercodex-buildkit-probe mattercodex-buildkit-registry-client
 write_ca_policy mattercodex-buildkit-pki-ca pki
 write_issue_policy mattercodex-role-image-builder-pki-issue pki \
   mattercodex-buildkit-client
@@ -97,9 +119,15 @@ path "pki-public/issue/mattercodex-image-registry-pull" {
 path "kv/data/mattercodex/image-registry/pull" {
   capabilities = ["read"]
 }
+path "pki-public/cert/ca" {
+  capabilities = ["read"]
+}
 HCL
 cat <<'HCL' | vault policy write mattercodex-image-registry-push-pki - >/dev/null
 path "pki/issue/mattercodex-image-registry-push" {
+  capabilities = ["update"]
+}
+path "pki/issue/mattercodex-image-registry-push-probe" {
   capabilities = ["update"]
 }
 path "pki/cert/ca" {
@@ -113,6 +141,12 @@ cat <<'HCL' | vault policy write mattercodex-image-registry-admin-pki - >/dev/nu
 path "pki/issue/mattercodex-image-registry-admin" {
   capabilities = ["update"]
 }
+path "pki/issue/mattercodex-image-registry-admin-probe" {
+  capabilities = ["update"]
+}
+path "pki/cert/ca" {
+  capabilities = ["read"]
+}
 path "kv/data/mattercodex/image-registry/admin" {
   capabilities = ["read"]
 }
@@ -120,6 +154,12 @@ HCL
 cat <<'HCL' | vault policy write mattercodex-image-registry-promotion-pki - >/dev/null
 path "pki/issue/mattercodex-image-registry-promotion" {
   capabilities = ["update"]
+}
+path "pki/issue/mattercodex-image-registry-promotion-probe" {
+  capabilities = ["update"]
+}
+path "pki/cert/ca" {
+  capabilities = ["read"]
 }
 path "kv/data/mattercodex/image-registry/promotion" {
   capabilities = ["read"]
@@ -157,15 +197,36 @@ vault write auth/kubernetes/role/mattercodex-image-registry-push \
 configure_kubernetes_role mattercodex-image-registry-admin mattercodex-image-registry-admin mattercodex-image-registry-admin-pki
 configure_kubernetes_role mattercodex-image-registry-promotion mattercodex-image-registry-promotion mattercodex-image-registry-promotion-pki
 
-cat <<'HCL' | vault policy write mattercodex-image-admission - >/dev/null
-path "kv/data/mattercodex/image-admission/signing" {
-  capabilities = ["read"]
+configure_phase_policy() {
+  local policy=$1
+  local certificate_role=$2
+  shift 2
+  {
+    printf 'path "pki/issue/%s" { capabilities = ["update"] }\n' "$certificate_role"
+    printf 'path "pki/cert/ca" { capabilities = ["read"] }\n'
+    for secret_path in "$@"; do
+      printf 'path "kv/data/%s" { capabilities = ["read"] }\n' "$secret_path"
+    done
+  } | vault policy write "$policy" - >/dev/null
 }
-path "kv/data/mattercodex/image-admission/admission" {
-  capabilities = ["read"]
-}
-HCL
-configure_kubernetes_role mattercodex-image-admission mattercodex-image-admission mattercodex-image-admission
+
+configure_phase_policy mattercodex-image-scanner mattercodex-image-scanner \
+  mattercodex/image-registry/scanner
+configure_phase_policy mattercodex-image-signer mattercodex-image-signer \
+  mattercodex/image-registry/signer mattercodex/image-admission/signing
+configure_phase_policy mattercodex-image-admission-owner mattercodex-image-admission-owner \
+  mattercodex/image-registry/admission mattercodex/image-admission/signing \
+  mattercodex/image-admission/admission
+configure_phase_policy mattercodex-image-promotion-writer mattercodex-image-promotion-writer \
+  mattercodex/image-registry/promotion-staging mattercodex/image-registry/promotion \
+  mattercodex/image-admission/admission
+configure_phase_policy mattercodex-registry-cleanup mattercodex-registry-cleanup \
+  mattercodex/image-registry/admin
+configure_kubernetes_role mattercodex-image-scanner mattercodex-image-scanner mattercodex-image-scanner
+configure_kubernetes_role mattercodex-image-signer mattercodex-image-signer mattercodex-image-signer
+configure_kubernetes_role mattercodex-image-admission-owner mattercodex-image-admission-owner mattercodex-image-admission-owner
+configure_kubernetes_role mattercodex-image-promotion-writer mattercodex-image-promotion-writer mattercodex-image-promotion-writer
+configure_kubernetes_role mattercodex-registry-cleanup mattercodex-registry-cleanup mattercodex-registry-cleanup
 
 verify_server_role() {
   local mount=$1
@@ -200,9 +261,26 @@ verify_client_role() {
 verify_server_role pki mattercodex-buildkit-server mattercodex-buildkit
 verify_client_role mattercodex-buildkit-probe mattercodex-buildkit-probe
 verify_client_role mattercodex-buildkit-client mattercodex-role-image-builder
-verify_server_role pki-public mattercodex-image-registry-pull mattercodex-image-registry-pull
+verify_client_role mattercodex-buildkit-registry-client mattercodex-buildkit
+verify_client_role mattercodex-image-registry-push-probe mattercodex-image-registry-push-probe
+verify_client_role mattercodex-image-registry-admin-probe mattercodex-image-registry-admin-probe
+verify_client_role mattercodex-image-registry-promotion-probe mattercodex-image-registry-promotion-probe
+verify_client_role mattercodex-image-scanner mattercodex-image-scanner
+verify_client_role mattercodex-image-signer mattercodex-image-signer
+verify_client_role mattercodex-image-admission-owner mattercodex-image-admission-owner
+verify_client_role mattercodex-image-promotion-writer mattercodex-image-promotion-writer
+verify_client_role mattercodex-registry-cleanup mattercodex-registry-cleanup
+vault read -format=json pki-public/roles/mattercodex-image-registry-pull |
+  jq -e --arg fqdn "$registry_pull_host" '
+    .data.server_flag == true and .data.client_flag == false and
+    .data.allow_any_name == false and .data.allow_subdomains == false and
+    .data.ttl == 3600 and .data.max_ttl == 7200 and
+    .data.allowed_domains == [$fqdn] and
+    (.data.ext_key_usage | index("ServerAuth") != null) and
+    (.data.ext_key_usage | index("ClientAuth") == null)
+  ' >/dev/null
 verify_server_role pki mattercodex-image-registry-push mattercodex-image-registry-push
 verify_server_role pki mattercodex-image-registry-admin mattercodex-image-registry-admin
 verify_server_role pki mattercodex-image-registry-promotion mattercodex-image-registry-promotion
 
-echo "image supply-chain PKI roles configured for $1"
+echo "image supply-chain PKI roles configured for $1 and exact pull host"

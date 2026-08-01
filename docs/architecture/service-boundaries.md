@@ -48,19 +48,19 @@ runbook и ручная проверка входят в один Issue и од�
 
 ## Реестр компонентов
 
-| Компонент | Тип | Владеет | Не владеет |
-| --- | --- | --- | --- |
-| `internal-rpc-authority` | workload-local internal sidecar | короткоживущие authorization contexts, signing key lifecycle, JWKS manifest и verifier snapshot | пользователи, роли, проекты, permissions и transport identity caller |
-| `control-plane` | internal service | проекты, чаты, роли, bindings, integrations metadata, runtime revisions, sessions, processes, schedules, memory, gates и artifact metadata | Mattermost transport, Kubernetes resources, MCP execution и AI process |
-| `runtime-controller` | internal controller | reconciliation pod/PVC/Secret/ConfigMap, capacity, TTL, archive/restore и runtime health | бизнесовая конфигурация, Codex process и пользовательские сообщения |
-| `control-api-gateway` | external gateway | HTTP/WebSocket transport state и owner session boundary | domain state и прямой доступ к PostgreSQL |
-| `interaction-gateway` | external gateway | Mattermost transport, idempotency, cards, bot identities и file delivery | sessions, processes, schedules и Kubernetes state |
-| `integration-gateway` | external gateway | MCP/API/CLI integration execution, grants, approvals и credential isolation | чужое domain state и agent orchestration |
-| `agent-runner` | job/runtime process | один claimed turn, локальный process lifecycle, workspace и session materialization | authoritative session state и orchestration decisions |
-| `automation-scheduler` | job | due occurrence selection, overlap/misfire policy и enqueue | AI execution, Mattermost transport и aggregate state других доменов |
-| `role-image-builder` | job | build specification hash, BuildKit execution, provenance и staging registry artifact | SBOM/vulnerability/signature admission, promotion и role business state |
-| `image-admission` | bounded job | SBOM, vulnerability-policy verdict, signature verification, admission receipt и одноразовый promotion claim exact digest | build execution, node pull и role business state |
-| `control-center` | staff PWA | UI state | business authority, secrets и прямой доступ к внутренним RPC |
+| Компонент                | Тип                             | Владеет                                                                                                                                    | Не владеет                                                              |
+| ------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `internal-rpc-authority` | workload-local internal sidecar | короткоживущие authorization contexts, signing key lifecycle, JWKS manifest и verifier snapshot                                            | пользователи, роли, проекты, permissions и transport identity caller    |
+| `control-plane`          | internal service                | проекты, чаты, роли, bindings, integrations metadata, runtime revisions, sessions, processes, schedules, memory, gates и artifact metadata | Mattermost transport, Kubernetes resources, MCP execution и AI process  |
+| `runtime-controller`     | internal controller             | reconciliation pod/PVC/Secret/ConfigMap, capacity, TTL, archive/restore и runtime health                                                   | бизнесовая конфигурация, Codex process и пользовательские сообщения     |
+| `control-api-gateway`    | external gateway                | HTTP/WebSocket transport state и owner session boundary                                                                                    | domain state и прямой доступ к PostgreSQL                               |
+| `interaction-gateway`    | external gateway                | Mattermost transport, idempotency, cards, bot identities и file delivery                                                                   | sessions, processes, schedules и Kubernetes state                       |
+| `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, grants, approvals и credential isolation                                                                | чужое domain state и agent orchestration                                |
+| `agent-runner`           | job/runtime process             | один claimed turn, локальный process lifecycle, workspace и session materialization                                                        | authoritative session state и orchestration decisions                   |
+| `automation-scheduler`   | job                             | due occurrence selection, overlap/misfire policy и enqueue                                                                                 | AI execution, Mattermost transport и aggregate state других доменов     |
+| `role-image-builder`     | job                             | build specification hash, BuildKit execution, provenance и staging registry artifact                                                       | SBOM/vulnerability/signature admission, promotion и role business state |
+| `image-admission`        | bounded job                     | SBOM, vulnerability-policy verdict, signature verification, admission receipt и одноразовый promotion claim exact digest                   | build execution, node pull и role business state                        |
+| `control-center`         | staff PWA                       | UI state                                                                                                                                   | business authority, secrets и прямой доступ к внутренним RPC            |
 
 Один aggregate имеет одного авторитетного владельца. Gateway, runner, cache,
 search projection и UI не читают БД другого компонента и не изменяют его
@@ -83,7 +83,9 @@ credential, audience, полным именем метода и permission. Ск
 digest `context.tar`, подготовленные владельцем workspace; Job не выбирает
 tenant, рецепт или source revision. Он использует client-only mTLS BuildKit и
 scoped staging push, но не получает promotion identity. Отдельный
-`render-image-admission-job.sh` применяет server-owned
+`render-image-admission-job.sh` читает immutable owner intent и разделяет
+scanner, signer, admission owner и promotion по четырём Pod/ServiceAccount/
+Vault/mTLS границам. Он декодирует и семантически проверяет DSSE
 provenance/SBOM/vulnerability/signature policy, подписывает exact admission
 receipt и выдаёт promotion claim только после полного readback. Pull/admin
 credentials и изменение доменных агрегатов build Job не выдаются.

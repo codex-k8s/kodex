@@ -15,3 +15,6 @@ root = "/var/lib/buildkit"
 
 [registry."mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001"]
   ca = ["/var/run/config/mattercodex/image-registry/ca.pem"]
+  [[registry."mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001".keypair]]
+    cert = "/var/run/secrets/mattercodex/buildkit/tls/registry-client.crt"
+    key = "/var/run/secrets/mattercodex/buildkit/tls/registry-client.key"
