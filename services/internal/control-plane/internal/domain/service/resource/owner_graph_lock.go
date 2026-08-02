@@ -39,6 +39,76 @@ type lockedOwnerGraph struct {
 	Steps      []string
 }
 
+type runtimeGraphDisposition string
+
+const (
+	runtimeDispositionAbsent      runtimeGraphDisposition = "ABSENT"
+	runtimeDispositionNonterminal runtimeGraphDisposition = "CURRENT_NONTERMINAL"
+	runtimeDispositionTerminal    runtimeGraphDisposition = "TERMINAL"
+)
+
+func ownerGraphRuntimeDisposition(graph lockedOwnerGraph) runtimeGraphDisposition {
+	if graph.Runtime == nil {
+		return runtimeDispositionAbsent
+	}
+	if runtimeTerminal(graph.Runtime.State) {
+		return runtimeDispositionTerminal
+	}
+	return runtimeDispositionNonterminal
+}
+
+// requireOwnerGraphRuntimeDisposition не позволяет caller незаметно отбросить
+// graph.Runtime. Каждый переход общего графа обязан явно назвать допустимое
+// состояние runtime либо закрыто отказаться до первого effect.
+func requireOwnerGraphRuntimeDisposition(
+	graph lockedOwnerGraph,
+	allowed ...runtimeGraphDisposition,
+) error {
+	if slices.Contains(allowed, ownerGraphRuntimeDisposition(graph)) {
+		return nil
+	}
+	return errs.ErrStateConflict
+}
+
+// requireClosedRuntimeConsistentWithTurn доказывает, что terminal runtime и
+// текущий Turn описывают один закрытый outcome. Generic/scheduler path может
+// продолжить только после этого доказательства; live runtime обслуживается
+// исключительно специализированной runtime-командой.
+func requireClosedRuntimeConsistentWithTurn(graph lockedOwnerGraph) error {
+	if graph.Runtime == nil {
+		return nil
+	}
+	if ownerGraphRuntimeDisposition(graph) != runtimeDispositionTerminal ||
+		graph.Runtime.TerminalOutcome == "" {
+		return errs.ErrStateConflict
+	}
+	expected := enum.State("")
+	switch graph.Runtime.State {
+	case "SUCCEEDED":
+		expected = enum.StateSucceeded
+	case "FAILED":
+		expected = enum.StateFailed
+	case "CANCELLED":
+		expected = enum.StateCancelled
+	case "EXPIRED":
+		expected = enum.StateExpired
+	case "SUSPENDED":
+		if graph.Turn.State != enum.StateWaitingOwner &&
+			graph.Turn.State != enum.StateWaitingExternal {
+			return errs.ErrStateConflict
+		}
+		return nil
+	default:
+		// RETRIED не остаётся current: retry продвигает attempt Turn раньше,
+		// чем generic graph path сможет её наблюдать.
+		return errs.ErrStateConflict
+	}
+	if graph.Turn.State != expected {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
 func ownerGraphLockPlan(runtime, scheduled, process bool) []string {
 	steps := make([]string, 0, 7)
 	if runtime {
@@ -184,6 +254,44 @@ func (service *Service) lockOwnerGraphByTurn(
 		graph.Steps, ownerGraphLockPlan(graph.Runtime != nil, scheduled, hasProcess),
 	) {
 		return lockedOwnerGraph{}, errs.ErrInternal
+	}
+	return graph, nil
+}
+
+// lockOwnerGraphByProcess выводит current Turn только из server-owned
+// ProcessRunSpec, а затем использует тот же единственный acquisition path.
+// Caller-selected process ID после locks повторно сверяется с exact lineage.
+func (service *Service) lockOwnerGraphByProcess(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	processID string,
+) (lockedOwnerGraph, error) {
+	candidate, err := tx.Get(
+		ctx, principal.OrganizationID, principal.ProjectID, processID,
+	)
+	if err != nil {
+		return lockedOwnerGraph{}, err
+	}
+	spec, ok := candidate.Spec.(entity.ProcessRunSpec)
+	if !ok || candidate.Kind != enum.KindProcessRun {
+		return lockedOwnerGraph{}, errs.ErrStateConflict
+	}
+	current, err := currentExecution(spec)
+	if err != nil || value.ValidateID(current.TurnID) != nil {
+		return lockedOwnerGraph{}, errs.ErrStateConflict
+	}
+	graph, err := service.lockOwnerGraphByTurn(ctx, tx, principal, current.TurnID)
+	if err != nil {
+		return lockedOwnerGraph{}, err
+	}
+	lockedSpec, ok := graph.Process.Spec.(entity.ProcessRunSpec)
+	lockedCurrent, currentErr := currentExecution(lockedSpec)
+	if !ok || currentErr != nil || graph.Process.ID != processID ||
+		graph.Process.Version != candidate.Version ||
+		lockedCurrent != current || graph.Turn.ID != current.TurnID ||
+		graph.Session.ID != current.SessionID {
+		return lockedOwnerGraph{}, errs.ErrStateConflict
 	}
 	return graph, nil
 }

@@ -2,7 +2,6 @@ package resource
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -31,21 +30,18 @@ func (service *Service) prepareRetriedExecution(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
-	turn entity.Resource,
+	graph lockedOwnerGraph,
 	spec entity.TurnSpec,
 	now time.Time,
 ) (entity.Resource, entity.TurnSpec, error) {
+	turn := graph.Turn
 	if spec.Attempt >= 100 {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
-	session, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, spec.SessionID,
-	)
-	if err != nil {
-		return entity.Resource{}, entity.TurnSpec{}, err
-	}
+	session := graph.Session
 	sessionSpec, ok := session.Spec.(entity.SessionSpec)
-	if !ok || session.Kind != enum.KindSession || session.State != enum.StateActive ||
+	if !ok || session.ID != spec.SessionID || session.Kind != enum.KindSession ||
+		session.State != enum.StateActive ||
 		session.OwnerActorID != turn.OwnerActorID {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
@@ -74,19 +70,16 @@ func (service *Service) prepareRetriedExecution(
 	}
 	if spec.ProcessRunID == "" {
 		return service.rebindStandaloneScheduledRetry(
-			ctx, tx, principal, turn, retried, spec, previousAttempt, now,
+			ctx, tx, principal, graph, retried, spec, previousAttempt,
+			revision, now,
 		)
 	}
 
-	process, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, spec.ProcessRunID,
-	)
-	if err != nil {
-		return entity.Resource{}, entity.TurnSpec{}, err
-	}
+	process := graph.Process
 	processSpec, ok := process.Spec.(entity.ProcessRunSpec)
 	current, currentErr := currentExecution(processSpec)
-	if !ok || currentErr != nil || process.Kind != enum.KindProcessRun ||
+	if !ok || currentErr != nil || process.ID != spec.ProcessRunID ||
+		process.Kind != enum.KindProcessRun ||
 		(process.State.Terminal() && process.State != enum.StateFailed &&
 			process.State != enum.StateExpired) || current.TurnID != turn.ID ||
 		current.Attempt != previousAttempt {
@@ -177,21 +170,18 @@ func (service *Service) prepareRetriedExecution(
 	if processSpec.OccurrenceID == "" {
 		return retried, spec, nil
 	}
-	occurrence, err := tx.GetScheduleOccurrenceForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, processSpec.OccurrenceID,
-	)
-	if err != nil {
-		return entity.Resource{}, entity.TurnSpec{}, err
+	if graph.Occurrence.ID == "" {
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
-	schedule, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, processSpec.ScheduleID,
-	)
-	if err != nil || schedule.Kind != enum.KindSchedule ||
+	occurrence := graph.Occurrence
+	schedule := graph.Schedule
+	run := graph.Run
+	if occurrence.ID != processSpec.OccurrenceID ||
+		schedule.ID != processSpec.ScheduleID || schedule.Kind != enum.KindSchedule ||
 		schedule.OwnerActorID != process.OwnerActorID {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
-	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
-	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
+	if validateScheduledRunBinding(occurrence, run) != nil ||
 		occurrence.ExecutionTurnID != turn.ID ||
 		occurrence.ExecutionProcessRunID != process.ID {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
@@ -272,32 +262,31 @@ func (service *Service) rebindStandaloneScheduledRetry(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
-	previous, retried entity.Resource,
+	graph lockedOwnerGraph,
+	retried entity.Resource,
 	spec entity.TurnSpec,
 	previousAttempt uint32,
+	revision entity.Resource,
 	now time.Time,
 ) (entity.Resource, entity.TurnSpec, error) {
-	run, err := tx.GetScheduledRunByCurrentTurnForUpdate(ctx, previous.ID)
-	if errors.Is(err, errs.ErrNotFound) {
+	if graph.Occurrence.ID == "" {
 		return retried, spec, nil
 	}
+	previous := graph.Turn
+	run := graph.Run
 	previousSpec, previousOK := previous.Spec.(entity.TurnSpec)
-	if err != nil || !previousOK || run.CurrentTurnAttempt != previousAttempt ||
+	if !previousOK || run.CurrentTurnID != previous.ID ||
+		run.CurrentTurnAttempt != previousAttempt ||
 		run.CurrentInputSHA256 != previousSpec.EffectiveInputSHA256 ||
 		run.CurrentProcessRunID != "" {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
-	occurrence, err := tx.GetScheduleOccurrenceForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, run.OccurrenceID,
-	)
-	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
+	occurrence := graph.Occurrence
+	if validateScheduledRunBinding(occurrence, run) != nil ||
 		occurrence.State != "CLAIMED" {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
-	revision, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, spec.RuntimeRevisionID,
-	)
-	if err != nil || revision.Kind != enum.KindRuntimeRevision ||
+	if revision.ID != spec.RuntimeRevisionID || revision.Kind != enum.KindRuntimeRevision ||
 		revision.State != enum.StateActive {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
@@ -323,10 +312,8 @@ func (service *Service) rebindStandaloneScheduledRetry(
 	if err := tx.RebindScheduledRun(ctx, run, previous.ID, previousAttempt); err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
 	}
-	schedule, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, occurrence.ScheduleID,
-	)
-	if err != nil || schedule.Kind != enum.KindSchedule ||
+	schedule := graph.Schedule
+	if schedule.ID != occurrence.ScheduleID || schedule.Kind != enum.KindSchedule ||
 		schedule.OwnerActorID != retried.OwnerActorID {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
@@ -429,62 +416,4 @@ func executionMatchesTurn(
 		tuple.SessionID == spec.SessionID &&
 		tuple.RuntimeRevisionID == spec.RuntimeRevisionID &&
 		tuple.InputSHA256 == spec.EffectiveInputSHA256
-}
-
-func (service *Service) resolveCurrentExecution(
-	ctx context.Context,
-	tx domainrepo.Transaction,
-	principal value.Principal,
-	process entity.Resource,
-	spec entity.ProcessRunSpec,
-) (executionTuple, error) {
-	tuple, err := currentExecution(spec)
-	if err != nil {
-		return executionTuple{}, err
-	}
-	session, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, tuple.SessionID,
-	)
-	if err != nil {
-		return executionTuple{}, err
-	}
-	turn, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, tuple.TurnID,
-	)
-	if err != nil {
-		return executionTuple{}, err
-	}
-	turnSpec, ok := turn.Spec.(entity.TurnSpec)
-	if tuple.RuntimeRevisionID == "" {
-		tuple.RuntimeRevisionID = turnSpec.RuntimeRevisionID
-		tuple.InputSHA256 = turnSpec.EffectiveInputSHA256
-	}
-	if !ok || session.Kind != enum.KindSession || session.State != enum.StateActive ||
-		turn.Kind != enum.KindTurn || turn.State.Terminal() ||
-		session.OwnerActorID != process.OwnerActorID ||
-		turn.OwnerActorID != process.OwnerActorID ||
-		turnSpec.ProcessRunID != process.ID ||
-		!executionMatchesTurn(tuple, turn, turnSpec) {
-		return executionTuple{}, errs.ErrStateConflict
-	}
-	if tuple.SessionVersion == 0 {
-		tuple.SessionVersion = session.Version
-	}
-	if tuple.TurnVersion == 0 {
-		tuple.TurnVersion = turn.Version
-	}
-	if tuple.RuntimeRevisionVersion == 0 {
-		revision, getErr := tx.GetForUpdate(
-			ctx, principal.OrganizationID, principal.ProjectID,
-			turnSpec.RuntimeRevisionID,
-		)
-		if getErr != nil || revision.Kind != enum.KindRuntimeRevision ||
-			revision.State != enum.StateActive {
-			return executionTuple{}, errs.ErrStateConflict
-		}
-		tuple.RuntimeRevisionID = revision.ID
-		tuple.RuntimeRevisionVersion = revision.Version
-		tuple.InputSHA256 = turnSpec.EffectiveInputSHA256
-	}
-	return tuple, nil
 }

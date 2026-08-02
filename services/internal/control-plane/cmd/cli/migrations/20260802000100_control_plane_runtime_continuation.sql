@@ -250,6 +250,17 @@ CREATE INDEX integration_continuations_session_cleanup_idx
         organization_id, project_id, session_id, continuation_state
     ) WHERE continuation_state <> 'REJOINED';
 
+-- Устойчивая server-owned привязка позволяет повтору планировщика разрешить и
+-- проверить current occurrence до раскрытия lease token из receipt.
+ALTER TABLE control_plane.schedule_occurrences
+    ADD COLUMN claim_key_sha256 text CHECK (
+        claim_key_sha256 IS NULL OR claim_key_sha256 ~ '^[a-f0-9]{64}$'
+    );
+CREATE UNIQUE INDEX schedule_occurrences_claim_key_uidx
+    ON control_plane.schedule_occurrences (
+        organization_id, project_id, claim_key_sha256
+    ) WHERE claim_key_sha256 IS NOT NULL;
+
 ALTER TABLE control_plane.runtime_executions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control_plane.runtime_executions FORCE ROW LEVEL SECURITY;
 ALTER TABLE control_plane.runtime_execution_incidents ENABLE ROW LEVEL SECURITY;

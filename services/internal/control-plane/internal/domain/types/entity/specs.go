@@ -899,6 +899,7 @@ type OwnerGateSpec struct {
 	DeliveryID               string    `json:"deliveryId"`
 	DeliveryPayloadSHA256    string    `json:"deliveryPayloadSha256"`
 	DeliveryClaimTokenSHA256 string    `json:"deliveryClaimTokenSha256,omitempty"`
+	DeliveryClaimKeySHA256   string    `json:"deliveryClaimKeySha256,omitempty"`
 	DeliveryFence            uint64    `json:"deliveryFence,omitempty"`
 	DeliveryClaimExpiresAt   time.Time `json:"deliveryClaimExpiresAt,omitempty"`
 	MattermostPostID         string    `json:"mattermostPostId,omitempty"`
@@ -942,9 +943,11 @@ func (spec OwnerGateSpec) Validate() error {
 	}
 	claimed := spec.DeliveryFence != 0 ||
 		spec.DeliveryClaimTokenSHA256 != "" ||
+		spec.DeliveryClaimKeySHA256 != "" ||
 		!spec.DeliveryClaimExpiresAt.IsZero()
 	if claimed && (spec.DeliveryFence == 0 ||
 		!validSHA256(spec.DeliveryClaimTokenSHA256) ||
+		!validSHA256(spec.DeliveryClaimKeySHA256) ||
 		spec.DeliveryClaimExpiresAt.IsZero()) {
 		return errors.New("owner gate delivery claim is invalid")
 	}

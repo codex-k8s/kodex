@@ -120,6 +120,7 @@ type ScheduleOccurrence struct {
 	ClaimantWorkloadID              string
 	AuthorityGeneration             uint64
 	TokenHash                       string
+	ClaimKeySHA256                  string
 	LeaseExpiresAt                  time.Time
 	AvailableAt                     time.Time
 	Outcome                         string
@@ -476,6 +477,7 @@ type Transaction interface {
 	GetScheduleOccurrence(context.Context, string, string, string) (ScheduleOccurrence, error)
 	GetScheduleOccurrenceForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
 	GetScheduleOccurrenceByCurrentTurn(context.Context, string, string, string) (ScheduleOccurrence, error)
+	GetScheduleOccurrenceByClaimKey(context.Context, string, string, string) (ScheduleOccurrence, error)
 	SaveScheduledRun(context.Context, ScheduledRun) error
 	GetScheduledRunForUpdate(context.Context, string, uint32) (ScheduledRun, error)
 	GetScheduledRunByCurrentTurnForUpdate(context.Context, string) (ScheduledRun, error)
@@ -490,6 +492,7 @@ type Transaction interface {
 	SearchMemory(context.Context, MemorySearch) ([]MemorySearchHit, error)
 	HasActiveChildProcesses(context.Context, string, string, string) (bool, error)
 	NextOwnerGateDelivery(context.Context, string, string, time.Time) (entity.Resource, error)
+	OwnerGateByDeliveryClaimKey(context.Context, string, string, string) (entity.Resource, error)
 	NextExpiredOwnerGateCandidate(context.Context, string, string) (entity.Resource, error)
 	ListTerminalOutbox(context.Context, string, string, string, int) ([]OutboxFailure, error)
 	RepairTerminalOutbox(context.Context, OutboxRepair) (OutboxFailure, error)
@@ -497,7 +500,7 @@ type Transaction interface {
 	NextProviderPoolSlot(context.Context, ProviderPoolCursor) (uint64, error)
 	ProcessHasOpenWork(context.Context, string, string, string, string, string) (bool, error)
 	ActiveWorkClaimsForUpdate(context.Context, string, string, string, string) ([]entity.Resource, error)
-	ActiveProcessTurnsForUpdate(context.Context, string, string, string) ([]entity.Resource, error)
+	ActiveProcessTurnCandidates(context.Context, string, string, string) ([]entity.Resource, error)
 	ActiveOwnerGateForProcess(context.Context, string, string, string) (entity.Resource, error)
 }
 

@@ -2,6 +2,9 @@ package resource
 
 import (
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,6 +17,183 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 )
+
+func TestLifecycleReceiptValidationPrecedesLookup(t *testing.T) {
+	content, err := os.ReadFile("runtime_continuation.go")
+	if err != nil {
+		t.Fatalf("read lifecycle source: %v", err)
+	}
+	source := string(content)
+	start := strings.Index(source, "func (service *Service) withLifecycleReceipt(")
+	end := strings.Index(source[start:], "\nfunc (service *Service) appendLifecycleAudit(")
+	if start < 0 || end < 0 {
+		t.Fatal("lifecycle receipt wrapper was not found")
+	}
+	body := source[start : start+end]
+	validated := strings.Index(body, "disposition, err := validate(tx)")
+	lookup := strings.Index(body, "tx.GetReceipt(")
+	if validated < 0 || lookup < 0 || validated > lookup {
+		t.Fatal("receipt lookup is reachable before authoritative validation")
+	}
+}
+
+func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
+	targets := map[string]struct {
+		file                 string
+		mustValidateReceipt  bool
+		mustDisposition      bool
+		receiptAfterResolver bool
+	}{
+		"ManageWorkClaim":            {"cycle_two.go", true, true, false},
+		"CompleteProcess":            {"specialized.go", true, true, false},
+		"CancelProcess":              {"specialized.go", true, true, false},
+		"CompleteTurn":               {"runtime.go", true, true, false},
+		"RetryTurn":                  {"runtime.go", true, true, false},
+		"CancelTurn":                 {"runtime.go", true, true, false},
+		"ClaimTurn":                  {"runtime.go", false, true, true},
+		"RenewTurn":                  {"runtime.go", false, true, true},
+		"RequestOwnerGate":           {"specialized.go", false, true, true},
+		"ResolveOwnerGate":           {"runtime.go", false, true, true},
+		"ExpireOwnerGate":            {"final_owner_wave.go", false, true, true},
+		"CompleteScheduleOccurrence": {"specialized.go", false, true, true},
+		"CancelScheduleOccurrence":   {"specialized.go", false, true, true},
+		"ClaimScheduleOccurrence":    {"specialized.go", false, true, true},
+		"ClaimOwnerGateDelivery":     {"cycle_two.go", false, true, true},
+		"RecordOwnerGateDelivery":    {"cycle_two.go", true, true, false},
+	}
+	files := map[string]*ast.File{}
+	fset := token.NewFileSet()
+	for _, target := range targets {
+		if files[target.file] != nil {
+			continue
+		}
+		parsed, err := parser.ParseFile(fset, target.file, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", target.file, err)
+		}
+		files[target.file] = parsed
+	}
+	for name, target := range targets {
+		t.Run(name, func(t *testing.T) {
+			var declaration *ast.FuncDecl
+			for _, item := range files[target.file].Decls {
+				candidate, ok := item.(*ast.FuncDecl)
+				if ok && candidate.Name.Name == name {
+					declaration = candidate
+					break
+				}
+			}
+			if declaration == nil {
+				t.Fatal("production entry point was not found")
+			}
+			calls := map[string][]token.Pos{}
+			ast.Inspect(declaration.Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if ok {
+					calls[selector.Sel.Name] = append(calls[selector.Sel.Name], call.Pos())
+				}
+				identifier, ok := call.Fun.(*ast.Ident)
+				if ok {
+					calls[identifier.Name] = append(calls[identifier.Name], call.Pos())
+				}
+				return true
+			})
+			resolver := calls["lockOwnerGraphByTurn"]
+			resolver = append(resolver, calls["lockOwnerGraphByProcess"]...)
+			resolver = append(resolver, calls["prelockScheduledGraphByTurn"]...)
+			resolver = append(resolver, calls["lockOwnerGateAfterGraph"]...)
+			if len(resolver) == 0 {
+				t.Fatal("canonical owner graph resolver is absent")
+			}
+			if target.mustValidateReceipt && len(calls["withValidatedResourceReceipt"]) == 0 {
+				t.Fatal("shared graph command bypasses validated receipt wrapper")
+			}
+			if target.mustDisposition && len(calls["requireOwnerGraphRuntimeDisposition"]) == 0 &&
+				len(calls["requireClosedRuntimeConsistentWithTurn"]) == 0 {
+				t.Fatal("RuntimeExecution disposition is not explicit")
+			}
+			if target.receiptAfterResolver && len(calls["GetReceipt"]) > 0 {
+				firstResolver := resolver[0]
+				for _, position := range resolver[1:] {
+					if position < firstResolver {
+						firstResolver = position
+					}
+				}
+				if calls["GetReceipt"][0] < firstResolver {
+					t.Fatal("receipt is read before canonical owner resolution")
+				}
+			}
+		})
+	}
+}
+
+func TestRetryAndOwnerGateCannotBypassLockedGraph(t *testing.T) {
+	checks := []struct {
+		file       string
+		function   string
+		mustCall   string
+		forbidden  []string
+		beforeCall string
+	}{
+		{
+			file: "current_execution.go", function: "prepareRetriedExecution",
+			forbidden: []string{
+				"GetScheduleOccurrenceForUpdate", "GetScheduledRunForUpdate",
+				"GetScheduledRunByCurrentTurnForUpdate", "GetForUpdate",
+			},
+		},
+		{
+			file: "specialized.go", function: "RequestOwnerGate",
+			mustCall: "suspendRuntimeExecutionForOwnerGate", beforeCall: "ReplaceAndTransition",
+		},
+	}
+	for _, check := range checks {
+		t.Run(check.function, func(t *testing.T) {
+			fset := token.NewFileSet()
+			parsed, err := parser.ParseFile(fset, check.file, nil, 0)
+			if err != nil {
+				t.Fatalf("parse %s: %v", check.file, err)
+			}
+			var declaration *ast.FuncDecl
+			for _, item := range parsed.Decls {
+				candidate, ok := item.(*ast.FuncDecl)
+				if ok && candidate.Name.Name == check.function {
+					declaration = candidate
+					break
+				}
+			}
+			if declaration == nil {
+				t.Fatal("production function was not found")
+			}
+			calls := map[string][]token.Pos{}
+			ast.Inspect(declaration.Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				if selector, ok := call.Fun.(*ast.SelectorExpr); ok {
+					calls[selector.Sel.Name] = append(calls[selector.Sel.Name], call.Pos())
+				}
+				return true
+			})
+			for _, forbidden := range check.forbidden {
+				if len(calls[forbidden]) != 0 {
+					t.Fatalf("late shared graph lock %s remains", forbidden)
+				}
+			}
+			if check.mustCall != "" {
+				if len(calls[check.mustCall]) == 0 || len(calls[check.beforeCall]) == 0 ||
+					calls[check.mustCall][0] > calls[check.beforeCall][0] {
+					t.Fatalf("%s must precede %s", check.mustCall, check.beforeCall)
+				}
+			}
+		})
+	}
+}
 
 func TestSemanticCommandHashIgnoresOneTimeCorrelationID(t *testing.T) {
 	principal := value.Principal{
@@ -247,6 +427,101 @@ func TestRuntimeMutationRejectsStaleFenceAndAuthority(t *testing.T) {
 	foreignSPIFFE.Principal.CallerSPIFFEID = "spiffe://mattercodex.local/ns/foreign/sa/runtime-controller"
 	if err := matchRuntimeMutation(execution, foreignSPIFFE); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("foreign SPIFFE returned %v", err)
+	}
+}
+
+func TestAdmissionReceiptIsExposedOnlyWhileLeaseIsCurrent(t *testing.T) {
+	token := strings.Repeat("a", 64)
+	current := RuntimeExecution{
+		ID:    "3ed0d109-5eba-4e4e-8b98-f755f6e6fc6b",
+		State: "ADMITTED", Version: 2, Fence: 2,
+		LeaseTokenSHA256: hashString(token),
+	}
+	now := time.Now()
+	current.LeaseExpiresAt = now.Add(time.Minute)
+	stored := AdmitRuntimeExecutionResult{Execution: current, LeaseToken: token}
+	if err := validateAdmitRuntimeReceipt(current, stored, now); err != nil {
+		t.Fatalf("live admission replay was rejected: %v", err)
+	}
+	expired := current
+	expired.LeaseExpiresAt = now
+	expiredStored := stored
+	expiredStored.Execution = expired
+	if err := validateAdmitRuntimeReceipt(expired, expiredStored, now); !errors.Is(
+		err, errs.ErrStateConflict,
+	) {
+		t.Fatalf("expired admission lease token was exposed: %v", err)
+	}
+	revoked := current
+	revoked.State = "CANCELLED"
+	revoked.Version++
+	revoked.Fence++
+	revoked.LeaseTokenSHA256 = ""
+	if err := validateAdmitRuntimeReceipt(revoked, stored, now); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("revoked lease token was exposed: %v", err)
+	}
+}
+
+func TestRuntimeReceiptDispositionRejectsTerminalOrSuccessor(t *testing.T) {
+	input := RuntimeExecutionInput{ExpectedVersion: 4, ExpectedFence: 9}
+	current := RuntimeExecution{State: "RUNNING", Version: 4, Fence: 9}
+	disposition, err := runtimeMutationReceiptDisposition(
+		current, input, []string{"RUNNING"}, []string{"SUCCEEDED"}, 1,
+	)
+	if err != nil || disposition != lifecycleReceiptApply {
+		t.Fatalf("current source was rejected: %v/%d", err, disposition)
+	}
+	current.State = "SUCCEEDED"
+	current.Version++
+	current.Fence++
+	disposition, err = runtimeMutationReceiptDisposition(
+		current, input, []string{"RUNNING"}, []string{"SUCCEEDED"}, 1,
+	)
+	if err != nil || disposition != lifecycleReceiptReplay {
+		t.Fatalf("exact terminal outcome was not replayable: %v/%d", err, disposition)
+	}
+	current.Version++
+	current.Fence++
+	if _, err := runtimeMutationReceiptDisposition(
+		current, input, []string{"RUNNING"}, []string{"SUCCEEDED"}, 1,
+	); err == nil {
+		t.Fatal("superseded terminal outcome remained replayable")
+	}
+}
+
+func TestRuntimeExecutionDispositionIsMandatoryForGraphTransitions(t *testing.T) {
+	absent := lockedOwnerGraph{}
+	if err := requireOwnerGraphRuntimeDisposition(absent, runtimeDispositionAbsent); err != nil {
+		t.Fatalf("absent runtime was rejected: %v", err)
+	}
+	live := lockedOwnerGraph{
+		Runtime: &RuntimeExecution{State: "RUNNING"},
+		Turn:    entity.Resource{State: enum.StateRunning},
+	}
+	if err := requireClosedRuntimeConsistentWithTurn(live); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("generic path accepted live runtime: %v", err)
+	}
+	terminal := lockedOwnerGraph{
+		Runtime: &RuntimeExecution{State: "SUCCEEDED", TerminalOutcome: "SUCCEEDED"},
+		Turn:    entity.Resource{State: enum.StateSucceeded},
+	}
+	if err := requireClosedRuntimeConsistentWithTurn(terminal); err != nil {
+		t.Fatalf("consistent terminal runtime was rejected: %v", err)
+	}
+	terminal.Turn.State = enum.StateCancelled
+	if err := requireClosedRuntimeConsistentWithTurn(terminal); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("mixed terminal graph was accepted: %v", err)
+	}
+	suspended := lockedOwnerGraph{
+		Runtime: &RuntimeExecution{State: "SUSPENDED", TerminalOutcome: "SUSPENDED"},
+		Turn:    entity.Resource{State: enum.StateWaitingOwner},
+	}
+	if err := requireClosedRuntimeConsistentWithTurn(suspended); err != nil {
+		t.Fatalf("owner-gate suspension was rejected: %v", err)
+	}
+	suspended.Turn.State = enum.StateRunning
+	if err := requireClosedRuntimeConsistentWithTurn(suspended); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("live Turn with suspended runtime was accepted: %v", err)
 	}
 }
 

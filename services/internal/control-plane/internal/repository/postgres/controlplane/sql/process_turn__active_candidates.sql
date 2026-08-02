@@ -1,4 +1,7 @@
--- name: ProcessTurnActiveForUpdate
+-- name: ProcessTurnActiveCandidates
+-- Поиск кандидатов намеренно не блокирует строки. Перед эффектом caller обязан
+-- получить точную строку через lockOwnerGraphByTurn и повторно проверить
+-- текущую родословную процесса.
 SELECT
     id::text,
     organization_id::text,
@@ -22,4 +25,3 @@ WHERE organization_id = @organization_id::uuid
       'WAITING_EXTERNAL', 'BLOCKED'
   )
 ORDER BY id
-FOR UPDATE

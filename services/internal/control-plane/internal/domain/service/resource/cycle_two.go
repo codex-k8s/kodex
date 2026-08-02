@@ -689,40 +689,133 @@ func (service *Service) ManageWorkClaim(
 		input.ExpectedVersion == 0 {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    ManageWorkClaimInput
-	}{identity(input.Principal), input})
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Action          string
+		WorkClaimID     string
+		ExpectedVersion uint64
+		ProcessRunID    string
+		TurnID          string
+		Summary         string
+		Domains         []string
+		ResourceKeys    []string
+		TTL             time.Duration
+	}{
+		input.Action, input.WorkClaimID, input.ExpectedVersion,
+		input.ProcessRunID, input.TurnID, input.Summary,
+		append([]string{}, input.Domains...),
+		append([]string{}, input.ResourceKeys...), input.TTL,
+	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var receiptClaim entity.Resource
+	var lockedGraph lockedOwnerGraph
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"manage_work_claim_"+input.Action,
 		requestHash,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			if input.Action == "CREATE" {
+				graph, err := service.lockOwnerGraphByTurn(
+					ctx, tx, input.Principal, input.TurnID,
+				)
+				if err != nil {
+					return 0, err
+				}
+				if err := requireOwnerGraphRuntimeDisposition(
+					graph, runtimeDispositionAbsent, runtimeDispositionNonterminal,
+				); err != nil {
+					return 0, err
+				}
+				turnSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
+				processSpec, processOK := graph.Process.Spec.(entity.ProcessRunSpec)
+				current, currentErr := currentExecution(processSpec)
+				if !ok || !processOK || currentErr != nil ||
+					graph.Process.ID != input.ProcessRunID || graph.Process.State.Terminal() ||
+					graph.Turn.State.Terminal() || turnSpec.ProcessRunID != graph.Process.ID ||
+					!executionMatchesTurn(current, graph.Turn, turnSpec) {
+					return 0, errs.ErrStateConflict
+				}
+				lockedGraph = graph
+				return lifecycleReceiptApplyOrReplay, nil
+			}
+			candidate, err := tx.Get(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				input.WorkClaimID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			spec, ok := candidate.Spec.(entity.WorkClaimSpec)
+			if !ok || candidate.Kind != enum.KindWorkClaim ||
+				spec.OwnerActorID != input.Principal.ActorID ||
+				spec.WorkloadID != input.Principal.CallerWorkload {
+				return 0, errs.ErrNotFound
+			}
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, spec.TurnID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent, runtimeDispositionNonterminal,
+			); err != nil {
+				return 0, err
+			}
+			if spec.ProcessRunID != graph.Process.ID || spec.TurnID != graph.Turn.ID {
+				return 0, errs.ErrStateConflict
+			}
+			lockedGraph = graph
+			current, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				input.WorkClaimID,
+			)
+			if err != nil || current.Version != candidate.Version {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			if current.Version == input.ExpectedVersion && current.State == enum.StateActive {
+				return lifecycleReceiptApply, nil
+			}
+			if current.Version == input.ExpectedVersion+1 &&
+				((input.Action == "RENEW" && current.State == enum.StateActive) ||
+					(input.Action == "RELEASE" && current.State == enum.StateCancelled)) {
+				receiptClaim = current
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func(tx domainrepo.Transaction, stored entity.Resource) error {
+			current, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID, stored.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if receiptClaim.ID == "" {
+				receiptClaim = current
+			}
+			storedSpec, storedOK := stored.Spec.(entity.WorkClaimSpec)
+			currentSpec, currentOK := receiptClaim.Spec.(entity.WorkClaimSpec)
+			if !storedOK || !currentOK || stored.Kind != enum.KindWorkClaim ||
+				storedSpec.ProcessRunID != lockedGraph.Process.ID ||
+				storedSpec.TurnID != lockedGraph.Turn.ID ||
+				currentSpec.ProcessRunID != storedSpec.ProcessRunID ||
+				currentSpec.TurnID != storedSpec.TurnID {
+				return errs.ErrStateConflict
+			}
+			return resourceReceiptMatchesCurrent(receiptClaim, stored)
+		},
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
 			now := service.now().UTC().Truncate(time.Microsecond)
 			if input.Action == "CREATE" {
-				process, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.ProcessRunID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				turn, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.TurnID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+				process := lockedGraph.Process
+				turn := lockedGraph.Turn
 				processSpec, processOK := process.Spec.(entity.ProcessRunSpec)
 				turnSpec, turnOK := turn.Spec.(entity.TurnSpec)
 				if !processOK || !turnOK ||
@@ -733,9 +826,7 @@ func (service *Service) ManageWorkClaim(
 					turnSpec.ProcessRunID != process.ID {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				execution, err := service.resolveCurrentExecution(
-					ctx, tx, input.Principal, process, processSpec,
-				)
+				execution, err := currentExecution(processSpec)
 				if err != nil || !executionMatchesTurn(execution, turn, turnSpec) {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
@@ -870,6 +961,38 @@ func (service *Service) ManageWorkClaim(
 	)
 }
 
+func (service *Service) lockOwnerGateAfterGraph(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	candidate entity.Resource,
+) (lockedOwnerGraph, entity.Resource, entity.OwnerGateSpec, error) {
+	spec, ok := candidate.Spec.(entity.OwnerGateSpec)
+	if !ok || candidate.Kind != enum.KindOwnerGate ||
+		value.ValidateID(spec.TurnID) != nil {
+		return lockedOwnerGraph{}, entity.Resource{}, entity.OwnerGateSpec{},
+			errs.ErrStateConflict
+	}
+	graph, err := service.lockOwnerGraphByTurn(ctx, tx, principal, spec.TurnID)
+	if err != nil {
+		return lockedOwnerGraph{}, entity.Resource{}, entity.OwnerGateSpec{}, err
+	}
+	gate, err := tx.GetForUpdate(
+		ctx, candidate.OrganizationID, candidate.ProjectID, candidate.ID,
+	)
+	if err != nil {
+		return lockedOwnerGraph{}, entity.Resource{}, entity.OwnerGateSpec{}, err
+	}
+	lockedSpec, ok := gate.Spec.(entity.OwnerGateSpec)
+	if !ok || gate.Kind != enum.KindOwnerGate || gate.ID != candidate.ID ||
+		gate.Version != candidate.Version || lockedSpec.ProcessRunID != graph.Process.ID ||
+		lockedSpec.SessionID != graph.Session.ID || lockedSpec.TurnID != graph.Turn.ID {
+		return lockedOwnerGraph{}, entity.Resource{}, entity.OwnerGateSpec{},
+			errs.ErrStateConflict
+	}
+	return graph, gate, lockedSpec, nil
+}
+
 // ClaimOwnerGateDelivery выдаёт ограниченное право доставки следующей карточки.
 func (service *Service) ClaimOwnerGateDelivery(
 	ctx context.Context,
@@ -891,71 +1014,126 @@ func (service *Service) ClaimOwnerGateDelivery(
 	if err != nil {
 		return ClaimOwnerGateDeliveryResult{}, errs.ErrInvalidInput
 	}
-	gate, err := service.withResourceReceipt(
-		ctx,
-		input.Principal,
-		input.IdempotencyKey,
-		"claim_owner_gate_delivery",
-		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			now := service.now().UTC().Truncate(time.Microsecond)
-			current, err := tx.NextOwnerGateDelivery(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				now,
+	keyHash := hashString(input.IdempotencyKey)
+	var gate entity.Resource
+	mutated := false
+	err = service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		candidate, candidateErr := tx.OwnerGateByDeliveryClaimKey(
+			ctx, input.Principal.OrganizationID, input.Principal.ProjectID, keyHash,
+		)
+		replayCandidate := candidateErr == nil
+		if candidateErr != nil {
+			if !errors.Is(candidateErr, errs.ErrNotFound) {
+				return candidateErr
+			}
+			now, nowErr := tx.CurrentTime(ctx)
+			if nowErr != nil {
+				return nowErr
+			}
+			candidate, candidateErr = tx.NextOwnerGateDelivery(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID, now,
 			)
-			if err != nil {
-				return entity.Resource{}, err
+			if candidateErr != nil {
+				return candidateErr
 			}
-			spec, ok := current.Spec.(entity.OwnerGateSpec)
-			if !ok || current.Kind != enum.KindOwnerGate ||
-				current.State != enum.StateWaitingOwner ||
-				spec.MattermostPostID != "" ||
-				spec.DeliveryWorkloadID != input.Principal.CallerWorkload ||
-				spec.DeliverySPIFFEID != input.Principal.CallerSPIFFEID {
-				return entity.Resource{}, errs.ErrStateConflict
+		}
+		graph, current, currentSpec, lockErr := service.lockOwnerGateAfterGraph(
+			ctx, tx, input.Principal, candidate,
+		)
+		if lockErr != nil {
+			return lockErr
+		}
+		if currentSpec.DeliveryWorkloadID != input.Principal.CallerWorkload ||
+			currentSpec.DeliverySPIFFEID != input.Principal.CallerSPIFFEID ||
+			currentSpec.MattermostPostID != "" {
+			return errs.ErrStateConflict
+		}
+		if err := requireClosedRuntimeConsistentWithTurn(graph); err != nil {
+			return err
+		}
+		now, nowErr := tx.CurrentTime(ctx)
+		if nowErr != nil {
+			return nowErr
+		}
+		receipt, receiptErr := tx.GetReceipt(
+			ctx, input.Principal.OrganizationID, "claim_owner_gate_delivery", keyHash,
+		)
+		if receiptErr == nil {
+			if !replayCandidate || receipt.RequestHash != requestHash ||
+				currentSpec.DeliveryClaimKeySHA256 != keyHash ||
+				currentSpec.DeliveryFence != current.Version ||
+				!currentSpec.DeliveryClaimExpiresAt.After(now) ||
+				resourceReceiptMatchesCurrent(current, receipt.Result) != nil {
+				return errs.ErrStateConflict
 			}
-			nextVersion := current.Version + 1
-			expiresAt := now.Add(service.turnLeaseDuration)
-			if spec.ExpiresAt.Before(expiresAt) {
-				expiresAt = spec.ExpiresAt
-			}
-			if !expiresAt.After(now) {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			token := service.leaseToken(
-				current.ID,
-				nextVersion,
-				1,
-				input.Principal.AuthorityGeneration,
-				input.Principal.CallerWorkload,
-				input.IdempotencyKey,
-			)
-			spec.DeliveryClaimTokenSHA256 = hashString(token)
-			spec.DeliveryFence = nextVersion
-			spec.DeliveryClaimExpiresAt = expiresAt
-			updated, err := current.Update(current.Name, spec, now)
-			if err != nil {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			if err := tx.Update(ctx, updated, current.Version); err != nil {
-				return entity.Resource{}, err
-			}
-			return updated, service.appendMutationRecords(
-				ctx,
-				tx,
-				input.Principal,
-				"claim_owner_gate_delivery",
-				updated,
-			)
-		},
-	)
+			gate = current
+			return nil
+		}
+		if !errors.Is(receiptErr, errs.ErrNotFound) {
+			return receiptErr
+		}
+		if replayCandidate || current.State != enum.StateWaitingOwner ||
+			currentSpec.DeliveryClaimKeySHA256 != "" ||
+			(currentSpec.DeliveryClaimTokenSHA256 != "" &&
+				currentSpec.DeliveryClaimExpiresAt.After(now)) {
+			return errs.ErrStateConflict
+		}
+		nextVersion := current.Version + 1
+		expiresAt := now.Add(service.turnLeaseDuration)
+		if currentSpec.ExpiresAt.Before(expiresAt) {
+			expiresAt = currentSpec.ExpiresAt
+		}
+		if !expiresAt.After(now) {
+			return errs.ErrStateConflict
+		}
+		token := service.leaseToken(
+			current.ID, nextVersion, 1, input.Principal.AuthorityGeneration,
+			input.Principal.CallerWorkload, input.IdempotencyKey,
+		)
+		currentSpec.DeliveryClaimTokenSHA256 = hashString(token)
+		currentSpec.DeliveryClaimKeySHA256 = keyHash
+		currentSpec.DeliveryFence = nextVersion
+		currentSpec.DeliveryClaimExpiresAt = expiresAt
+		updated, updateErr := current.Update(current.Name, currentSpec, now)
+		if updateErr != nil {
+			return errs.ErrStateConflict
+		}
+		if updateErr = tx.Update(ctx, updated, current.Version); updateErr != nil {
+			return updateErr
+		}
+		if updateErr = service.appendMutationRecords(
+			ctx, tx, input.Principal, "claim_owner_gate_delivery", updated,
+		); updateErr != nil {
+			return updateErr
+		}
+		if updateErr = tx.SaveReceipt(ctx, domainrepo.Receipt{
+			OrganizationID: input.Principal.OrganizationID,
+			ProjectID:      input.Principal.ProjectID,
+			Scope:          "claim_owner_gate_delivery",
+			KeyHash:        keyHash,
+			RequestHash:    requestHash,
+			Result:         updated,
+			CreatedAt:      now,
+		}); updateErr != nil {
+			return updateErr
+		}
+		gate = updated
+		mutated = true
+		return nil
+	})
 	if err != nil {
 		return ClaimOwnerGateDeliveryResult{}, err
 	}
+	if mutated {
+		service.observer.ObserveMutation(enum.KindOwnerGate, "claim_owner_gate_delivery")
+	}
 	spec, ok := gate.Spec.(entity.OwnerGateSpec)
 	if !ok || spec.DeliveryFence != gate.Version ||
+		spec.DeliveryClaimKeySHA256 != keyHash ||
 		spec.DeliveryClaimExpiresAt.IsZero() {
 		return ClaimOwnerGateDeliveryResult{}, errs.ErrInternal
 	}
@@ -997,50 +1175,88 @@ func (service *Service) RecordOwnerGateDelivery(
 		!validRuntimeReference(input.MattermostRootPostID) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    RecordOwnerGateDeliveryInput
-	}{identity(input.Principal), input})
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		OwnerGateID           string
+		ExpectedVersion       uint64
+		DeliveryID            string
+		DeliveryPayloadSHA256 string
+		DeliveryClaimSHA256   string
+		DeliveryFence         uint64
+		MattermostPostID      string
+		MattermostChannelID   string
+		MattermostRootPostID  string
+	}{
+		input.OwnerGateID, input.ExpectedVersion, input.DeliveryID,
+		input.DeliveryPayloadSHA256, hashString(input.DeliveryClaimToken),
+		input.DeliveryFence, input.MattermostPostID, input.MattermostChannelID,
+		input.MattermostRootPostID,
+	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var lockedGate entity.Resource
+	var lockedGateSpec entity.OwnerGateSpec
+	var lockedNow time.Time
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"record_owner_gate_delivery",
 		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			gate, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			candidate, err := tx.Get(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
 				input.OwnerGateID,
 			)
 			if err != nil {
-				return entity.Resource{}, err
+				return 0, err
 			}
-			if gate.Kind != enum.KindOwnerGate ||
-				gate.Version != input.ExpectedVersion ||
-				gate.State != enum.StateWaitingOwner {
-				return entity.Resource{}, errs.ErrVersionMismatch
+			graph, gate, spec, err := service.lockOwnerGateAfterGraph(
+				ctx, tx, input.Principal, candidate,
+			)
+			if err != nil {
+				return 0, err
 			}
-			spec, ok := gate.Spec.(entity.OwnerGateSpec)
-			if !ok || spec.DeliveryID != input.DeliveryID ||
+			if err := requireClosedRuntimeConsistentWithTurn(graph); err != nil {
+				return 0, err
+			}
+			lockedNow, err = tx.CurrentTime(ctx)
+			if err != nil {
+				return 0, err
+			}
+			if gate.State != enum.StateWaitingOwner || spec.DeliveryID != input.DeliveryID ||
 				spec.DeliveryPayloadSHA256 != input.DeliveryPayloadSHA256 ||
 				spec.DeliveryWorkloadID != input.Principal.CallerWorkload ||
 				spec.DeliverySPIFFEID != input.Principal.CallerSPIFFEID ||
 				spec.DeliveryFence != input.DeliveryFence ||
 				spec.DeliveryClaimTokenSHA256 != hashString(input.DeliveryClaimToken) ||
-				!spec.DeliveryClaimExpiresAt.After(service.now()) ||
-				!spec.ExpiresAt.After(service.now()) ||
-				spec.MattermostPostID != "" {
-				return entity.Resource{}, errs.ErrStateConflict
+				!validSHA256Text(spec.DeliveryClaimKeySHA256) {
+				return 0, errs.ErrStateConflict
 			}
+			lockedGate, lockedGateSpec = gate, spec
+			if gate.Version == input.ExpectedVersion && spec.MattermostPostID == "" &&
+				spec.DeliveryClaimExpiresAt.After(lockedNow) &&
+				spec.ExpiresAt.After(lockedNow) {
+				return lifecycleReceiptApply, nil
+			}
+			if gate.Version == input.ExpectedVersion+1 &&
+				spec.MattermostPostID == input.MattermostPostID &&
+				spec.MattermostChannelID == input.MattermostChannelID &&
+				spec.MattermostRootPostID == input.MattermostRootPostID &&
+				!spec.DeliveredAt.IsZero() {
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			return resourceReceiptMatchesCurrent(lockedGate, stored)
+		},
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			gate, spec := lockedGate, lockedGateSpec
 			spec.MattermostPostID = input.MattermostPostID
 			spec.MattermostChannelID = input.MattermostChannelID
 			spec.MattermostRootPostID = input.MattermostRootPostID
-			spec.DeliveredAt = service.now().UTC().Truncate(time.Microsecond)
+			spec.DeliveredAt = lockedNow
 			updated, err := gate.Update(gate.Name, spec, spec.DeliveredAt)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict

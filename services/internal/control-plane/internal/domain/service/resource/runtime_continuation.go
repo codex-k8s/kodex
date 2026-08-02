@@ -109,11 +109,29 @@ type acknowledgeIntegrationIntent struct {
 	ExpectedInputSHA256 string
 }
 
+type lifecycleReceiptDisposition uint8
+
+const (
+	lifecycleReceiptApply lifecycleReceiptDisposition = iota + 1
+	lifecycleReceiptReplay
+	lifecycleReceiptApplyOrReplay
+)
+
+type lifecycleReceiptValidation func(
+	domainrepo.Transaction,
+) (lifecycleReceiptDisposition, error)
+
+// withLifecycleReceipt сначала разрешает и блокирует актуальное owner state.
+// Receipt не является authority: сохранённый result можно прочитать только
+// когда validate доказал, что текущая строка всё ещё представляет именно этот
+// результат. При отсутствии receipt effect разрешён только из source state.
 func (service *Service) withLifecycleReceipt(
 	ctx context.Context,
 	principal value.Principal,
 	idempotencyKey, scope, requestHash string,
 	result any,
+	validate lifecycleReceiptValidation,
+	validateReplay func() error,
 	apply func(domainrepo.Transaction) error,
 ) error {
 	keyHash := hashString(idempotencyKey)
@@ -122,8 +140,16 @@ func (service *Service) withLifecycleReceipt(
 		ProjectID:      principal.ProjectID,
 		ActorID:        principal.ActorID,
 	}, func(tx domainrepo.Transaction) error {
+		disposition, err := validate(tx)
+		if err != nil {
+			return err
+		}
 		receipt, err := tx.GetReceipt(ctx, principal.OrganizationID, scope, keyHash)
 		if err == nil {
+			if disposition != lifecycleReceiptReplay &&
+				disposition != lifecycleReceiptApplyOrReplay {
+				return errs.ErrStateConflict
+			}
 			if receipt.RequestHash != requestHash ||
 				len(receipt.Payload) == 0 {
 				return errs.ErrIdempotencyConflict
@@ -131,10 +157,14 @@ func (service *Service) withLifecycleReceipt(
 			if json.Unmarshal(receipt.Payload, result) != nil {
 				return errs.ErrInternal
 			}
-			return nil
+			return validateReplay()
 		}
 		if !errors.Is(err, errs.ErrNotFound) {
 			return err
+		}
+		if disposition != lifecycleReceiptApply &&
+			disposition != lifecycleReceiptApplyOrReplay {
+			return errs.ErrStateConflict
 		}
 		if err := apply(tx); err != nil {
 			return err
@@ -336,22 +366,35 @@ func (service *Service) ClaimRuntimeExecution(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, principal, idempotencyKey, "claim_runtime_execution", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			resolved, err := service.resolveBoundExecution(ctx, tx, principal)
+			if err != nil {
+				return 0, err
+			}
+			if resolved.Runtime == nil {
+				return lifecycleReceiptApply, nil
+			}
+			receiptExecution = *resolved.Runtime
+			if receiptExecution.State != "PENDING" || receiptExecution.Version != 1 ||
+				receiptExecution.Fence != 1 ||
+				receiptExecution.GrantGeneration != principal.AuthorityGrantGeneration ||
+				receiptExecution.RuntimeRevisionSHA256 != resolved.RevisionHash ||
+				receiptExecution.ImmutableInputSHA256 != principal.AuthorityDigest {
+				return 0, errs.ErrStateConflict
+			}
+			return lifecycleReceiptReplay, nil
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
 			resolved, err := service.resolveBoundExecution(ctx, tx, principal)
 			if err != nil {
 				return err
 			}
 			if resolved.Runtime != nil {
-				existing := *resolved.Runtime
-				if existing.GrantGeneration != principal.AuthorityGrantGeneration ||
-					existing.RuntimeRevisionSHA256 != resolved.RevisionHash ||
-					existing.ImmutableInputSHA256 != principal.AuthorityDigest {
-					return errs.ErrStateConflict
-				}
-				result = existing
-				return nil
+				return errs.ErrStateConflict
 			}
 			resourceClass, clusterProfile := runtimeResourcePolicy(resolved.RoleSpec)
 			now := service.now().UTC().Truncate(time.Microsecond)
@@ -436,9 +479,31 @@ func (service *Service) AdmitRuntimeExecution(
 		return AdmitRuntimeExecutionResult{}, errs.ErrInvalidInput
 	}
 	var result AdmitRuntimeExecutionResult
+	var receiptExecution RuntimeExecution
+	var receiptNow time.Time
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "admit_runtime_execution",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if _, err := service.requireActiveRuntimeGraph(
+				ctx, tx, input.Principal, locked.Execution,
+			); err != nil {
+				return 0, err
+			}
+			receiptExecution = locked.Execution
+			receiptNow = locked.Now
+			return runtimeMutationReceiptDisposition(
+				locked.Execution, input, []string{"PENDING"}, []string{"ADMITTED"}, 1,
+			)
+		},
+		func() error { return validateAdmitRuntimeReceipt(receiptExecution, result, receiptNow) },
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
@@ -492,9 +557,34 @@ func (service *Service) HeartbeatRuntimeExecution(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "heartbeat_runtime_execution",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if _, err := service.requireActiveRuntimeGraph(
+				ctx, tx, input.Principal, locked.Execution,
+			); err != nil {
+				return 0, err
+			}
+			if locked.Execution.LeaseTokenSHA256 != hashString(input.LeaseToken) ||
+				!locked.Execution.LeaseExpiresAt.After(locked.Now) {
+				return 0, errs.ErrStateConflict
+			}
+			receiptExecution = locked.Execution
+			return runtimeMutationReceiptDisposition(
+				locked.Execution, input,
+				[]string{"ADMITTED", "RUNNING"}, []string{"RUNNING"}, 1,
+			)
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
@@ -556,9 +646,31 @@ func (service *Service) RecordRuntimeIncident(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "record_runtime_incident",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if _, err := service.requireActiveRuntimeGraph(
+				ctx, tx, input.Principal, locked.Execution,
+			); err != nil {
+				return 0, err
+			}
+			receiptExecution = locked.Execution
+			return runtimeMutationReceiptDisposition(
+				locked.Execution, input.RuntimeExecutionInput,
+				[]string{"ADMITTED", "RUNNING"},
+				[]string{"ADMITTED", "RUNNING"}, 1,
+			)
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
@@ -650,6 +762,124 @@ func matchRuntimeMutation(
 	return nil
 }
 
+type lockedRuntimeReceipt struct {
+	Execution RuntimeExecution
+	Graph     lockedOwnerGraph
+	Now       time.Time
+}
+
+func (service *Service) lockRuntimeReceiptAuthority(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	executionID string,
+) (lockedRuntimeReceipt, error) {
+	execution, err := tx.GetRuntimeExecutionForUpdate(ctx, executionID)
+	if err != nil {
+		return lockedRuntimeReceipt{}, err
+	}
+	graph, err := service.lockOwnerGraphByTurn(ctx, tx, principal, execution.TurnID)
+	if err != nil {
+		return lockedRuntimeReceipt{}, err
+	}
+	if graph.Runtime == nil || graph.Runtime.ID != execution.ID ||
+		graph.Runtime.Version != execution.Version || graph.Runtime.Fence != execution.Fence ||
+		graph.Session.ID != execution.SessionID || graph.Turn.ID != execution.TurnID ||
+		graph.Process.ID != execution.ProcessID {
+		return lockedRuntimeReceipt{}, errs.ErrStateConflict
+	}
+	if err := service.requireRuntimeOwner(ctx, tx, principal, execution); err != nil {
+		return lockedRuntimeReceipt{}, err
+	}
+	if err := requireExactRuntimeApplicationAuthority(execution, principal); err != nil {
+		return lockedRuntimeReceipt{}, err
+	}
+	now, err := tx.CurrentTime(ctx)
+	if err != nil {
+		return lockedRuntimeReceipt{}, err
+	}
+	return lockedRuntimeReceipt{Execution: execution, Graph: graph, Now: now}, nil
+}
+
+func runtimeMutationReceiptDisposition(
+	execution RuntimeExecution,
+	input RuntimeExecutionInput,
+	sourceStates []string,
+	replayStates []string,
+	replayVersionDeltas ...uint64,
+) (lifecycleReceiptDisposition, error) {
+	if input.ExpectedGrantGeneration != 0 &&
+		execution.GrantGeneration != input.ExpectedGrantGeneration {
+		return 0, errs.ErrStateConflict
+	}
+	if execution.Version == input.ExpectedVersion && execution.Fence == input.ExpectedFence {
+		if slices.Contains(sourceStates, execution.State) {
+			return lifecycleReceiptApply, nil
+		}
+		return 0, errs.ErrStateConflict
+	}
+	for _, delta := range replayVersionDeltas {
+		if delta != 0 && execution.Version == input.ExpectedVersion+delta &&
+			execution.Fence == input.ExpectedFence+delta &&
+			slices.Contains(replayStates, execution.State) {
+			return lifecycleReceiptReplay, nil
+		}
+	}
+	return 0, errs.ErrVersionMismatch
+}
+
+func runtimeReceiptMatchesCurrent(current, stored RuntimeExecution) error {
+	if current != stored {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func validateAdmitRuntimeReceipt(
+	current RuntimeExecution,
+	stored AdmitRuntimeExecutionResult,
+	now time.Time,
+) error {
+	if err := runtimeReceiptMatchesCurrent(current, stored.Execution); err != nil {
+		return err
+	}
+	if current.State != "ADMITTED" || current.LeaseTokenSHA256 == "" ||
+		!current.LeaseExpiresAt.After(now) ||
+		hashString(stored.LeaseToken) != current.LeaseTokenSHA256 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func validateClosedRuntimeReceiptGraph(locked lockedRuntimeReceipt) error {
+	execution := locked.Execution
+	turnSpec, turnOK := locked.Graph.Turn.Spec.(entity.TurnSpec)
+	processSpec, processOK := locked.Graph.Process.Spec.(entity.ProcessRunSpec)
+	current, currentErr := currentExecution(processSpec)
+	if !turnOK || !processOK || currentErr != nil ||
+		turnSpec.Attempt != execution.Attempt ||
+		turnSpec.RuntimeRevisionID != execution.RuntimeRevisionID ||
+		turnSpec.EffectiveInputSHA256 != execution.ImmutableInputSHA256 ||
+		!executionMatchesTurn(current, locked.Graph.Turn, turnSpec) {
+		return errs.ErrStateConflict
+	}
+	want := enum.State(execution.State)
+	if execution.State == "SUSPENDED" {
+		if (locked.Graph.Turn.State != enum.StateWaitingExternal &&
+			locked.Graph.Turn.State != enum.StateWaitingOwner) ||
+			(locked.Graph.Process.State != enum.StateWaitingExternal &&
+				locked.Graph.Process.State != enum.StateWaitingOwner) {
+			return errs.ErrStateConflict
+		}
+		return nil
+	}
+	if !runtimeTerminal(execution.State) || execution.State == "RETRIED" ||
+		locked.Graph.Turn.State != want || locked.Graph.Process.State != want {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
 func (service *Service) CompleteRuntimeExecution(
 	ctx context.Context,
 	input CompleteRuntimeExecutionInput,
@@ -676,15 +906,57 @@ func (service *Service) CompleteRuntimeExecution(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "complete_runtime_execution",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			disposition, err := runtimeMutationReceiptDisposition(
+				locked.Execution, input.RuntimeExecutionInput,
+				[]string{"ADMITTED", "RUNNING"}, []string{input.Outcome}, 1,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if disposition == lifecycleReceiptApply {
+				if _, err := service.requireActiveRuntimeGraph(
+					ctx, tx, input.Principal, locked.Execution,
+				); err != nil || locked.Execution.LeaseTokenSHA256 != hashString(input.LeaseToken) ||
+					!locked.Execution.LeaseExpiresAt.After(locked.Now) {
+					if err != nil {
+						return 0, err
+					}
+					return 0, errs.ErrStateConflict
+				}
+			} else if err := validateClosedRuntimeReceiptGraph(locked); err != nil {
+				return 0, err
+			}
+			receiptExecution = locked.Execution
+			return disposition, nil
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
 			}
-			if err := service.prelockRuntimeScheduledGraph(
-				ctx, tx, input.Principal, execution,
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, execution.TurnID,
+			)
+			if err != nil || graph.Runtime == nil || graph.Runtime.ID != execution.ID {
+				if err != nil {
+					return err
+				}
+				return errs.ErrStateConflict
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionNonterminal, runtimeDispositionTerminal,
 			); err != nil {
 				return err
 			}
@@ -762,15 +1034,49 @@ func (service *Service) CancelRuntimeExecution(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "cancel_runtime_execution",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			disposition, err := runtimeMutationReceiptDisposition(
+				locked.Execution, input.RuntimeExecutionInput,
+				[]string{"PENDING", "ADMITTED", "RUNNING"}, []string{"CANCELLED"}, 1,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if disposition == lifecycleReceiptReplay {
+				if err := validateClosedRuntimeReceiptGraph(locked); err != nil {
+					return 0, err
+				}
+			}
+			receiptExecution = locked.Execution
+			return disposition, nil
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
 			}
-			if err := service.prelockRuntimeScheduledGraph(
-				ctx, tx, input.Principal, execution,
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, execution.TurnID,
+			)
+			if err != nil || graph.Runtime == nil || graph.Runtime.ID != execution.ID {
+				if err != nil {
+					return err
+				}
+				return errs.ErrStateConflict
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionNonterminal, runtimeDispositionTerminal,
 			); err != nil {
 				return err
 			}
@@ -835,15 +1141,87 @@ func (service *Service) RetryRuntimeExecution(
 		return RetryRuntimeExecutionResult{}, errs.ErrInvalidInput
 	}
 	var result RetryRuntimeExecutionResult
+	var receiptPrevious RuntimeExecution
+	var receiptTurn entity.Resource
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "retry_runtime_execution",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			if err != nil {
+				return 0, err
+			}
+			if err := requireExactRuntimeApplicationAuthority(
+				execution, input.Principal,
+			); err != nil {
+				return 0, err
+			}
+			if execution.Version == input.ExpectedVersion &&
+				execution.Fence == input.ExpectedFence {
+				if !slices.Contains(
+					[]string{"PENDING", "ADMITTED", "RUNNING", "FAILED", "EXPIRED"},
+					execution.State,
+				) {
+					return 0, errs.ErrStateConflict
+				}
+				graph, err := service.lockOwnerGraphByTurn(
+					ctx, tx, input.Principal, execution.TurnID,
+				)
+				if err != nil || graph.Runtime == nil || graph.Runtime.ID != execution.ID {
+					if err != nil {
+						return 0, err
+					}
+					return 0, errs.ErrStateConflict
+				}
+				return lifecycleReceiptApply, nil
+			}
+			if execution.Version != input.ExpectedVersion+1 ||
+				execution.Fence != input.ExpectedFence+1 || execution.State != "RETRIED" {
+				return 0, errs.ErrVersionMismatch
+			}
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, execution.TurnID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			turnSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
+			if !ok || graph.Runtime != nil || turnSpec.Attempt != execution.Attempt+1 ||
+				graph.Process.ID != execution.ProcessID ||
+				turnSpec.RuntimeRevisionID == execution.RuntimeRevisionID ||
+				turnSpec.EffectiveInputSHA256 == execution.ImmutableInputSHA256 {
+				return 0, errs.ErrStateConflict
+			}
+			receiptPrevious = execution
+			receiptTurn = graph.Turn
+			return lifecycleReceiptReplay, nil
+		},
+		func() error {
+			if err := runtimeReceiptMatchesCurrent(receiptPrevious, result.Previous); err != nil {
+				return err
+			}
+			if result.Turn.ID != receiptTurn.ID || result.Turn.Version != receiptTurn.Version ||
+				result.Turn.State != receiptTurn.State {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
 			}
-			if err := service.prelockRuntimeScheduledGraph(
-				ctx, tx, input.Principal, execution,
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, execution.TurnID,
+			)
+			if err != nil || graph.Runtime == nil || graph.Runtime.ID != execution.ID {
+				if err != nil {
+					return err
+				}
+				return errs.ErrStateConflict
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionNonterminal, runtimeDispositionTerminal,
 			); err != nil {
 				return err
 			}
@@ -853,25 +1231,13 @@ func (service *Service) RetryRuntimeExecution(
 			if err := matchRuntimeMutation(execution, input); err != nil {
 				return errs.ErrStateConflict
 			}
-			// Scheduled rows уже заблокированы в общем порядке до Session/Turn/ProcessRun.
-			turn, err := tx.GetForUpdate(
-				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-				execution.TurnID,
-			)
-			if err != nil {
-				return err
-			}
+			// Shared rows получены только единым owner graph resolver.
+			turn := graph.Turn
 			turnSpec, ok := turn.Spec.(entity.TurnSpec)
 			if !ok || turn.Kind != enum.KindTurn ||
 				turnSpec.SessionID != execution.SessionID ||
 				turnSpec.Attempt != execution.Attempt {
 				return errs.ErrStateConflict
-			}
-			if _, err := tx.GetForUpdate(
-				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-				execution.SessionID,
-			); err != nil {
-				return err
 			}
 			now, err := tx.CurrentTime(ctx)
 			if err != nil {
@@ -912,8 +1278,9 @@ func (service *Service) RetryRuntimeExecution(
 			if !ok {
 				return errs.ErrInternal
 			}
+			graph.Turn = turn
 			retried, retriedSpec, err := service.prepareRetriedExecution(
-				ctx, tx, input.Principal, turn, turnSpec, now,
+				ctx, tx, input.Principal, graph, turnSpec, now,
 			)
 			if err != nil {
 				return err
@@ -970,9 +1337,56 @@ func (service *Service) ExpireRuntimeExecution(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, principal, idempotencyKey, "expire_runtime_execution", requestHash,
-		&result, func(tx domainrepo.Transaction) error {
+		&result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			execution, err := tx.NextExpiredRuntimeExecution(
+				ctx, principal.OrganizationID, principal.ProjectID,
+				principal.AuthorityReference, uint32(principal.AuthorityRevision),
+			)
+			if err == nil {
+				if err := requireExactRuntimeApplicationAuthority(execution, principal); err != nil {
+					return 0, err
+				}
+				graph, graphErr := service.lockOwnerGraphByTurn(
+					ctx, tx, principal, execution.TurnID,
+				)
+				if graphErr != nil || graph.Runtime == nil || graph.Runtime.ID != execution.ID {
+					if graphErr != nil {
+						return 0, graphErr
+					}
+					return 0, errs.ErrStateConflict
+				}
+				return lifecycleReceiptApply, nil
+			}
+			if !errors.Is(err, errs.ErrNotFound) {
+				return 0, err
+			}
+			execution, err = tx.GetRuntimeExecutionByTurnForUpdate(
+				ctx, principal.AuthorityReference, uint32(principal.AuthorityRevision),
+			)
+			if err != nil {
+				return 0, err
+			}
+			if err := requireExactRuntimeApplicationAuthority(execution, principal); err != nil {
+				return 0, err
+			}
+			graph, err := service.lockOwnerGraphByTurn(ctx, tx, principal, execution.TurnID)
+			if err != nil {
+				return 0, err
+			}
+			locked := lockedRuntimeReceipt{Execution: execution, Graph: graph}
+			if execution.State != "EXPIRED" || graph.Runtime == nil ||
+				graph.Runtime.ID != execution.ID || validateClosedRuntimeReceiptGraph(locked) != nil {
+				return 0, errs.ErrStateConflict
+			}
+			receiptExecution = execution
+			return lifecycleReceiptReplay, nil
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.NextExpiredRuntimeExecution(
 				ctx, principal.OrganizationID, principal.ProjectID,
 				principal.AuthorityReference, uint32(principal.AuthorityRevision),
@@ -1052,9 +1466,42 @@ func (service *Service) RecordRuntimeArchive(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "record_runtime_archive",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil || validateClosedRuntimeReceiptGraph(locked) != nil {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			execution := locked.Execution
+			var disposition lifecycleReceiptDisposition
+			switch {
+			case execution.Version == input.ExpectedVersion &&
+				execution.Fence == input.ExpectedFence &&
+				execution.ArchiveSHA256 == "":
+				disposition = lifecycleReceiptApply
+			case execution.Version == input.ExpectedVersion+1 &&
+				execution.Fence == input.ExpectedFence+1 &&
+				execution.ArchiveReference == input.ArchiveReference &&
+				execution.ArchiveSHA256 == input.ArchiveSHA256 &&
+				execution.RestoreProofSHA256 == "" &&
+				execution.CleanupAuthorizationState == "NONE":
+				disposition = lifecycleReceiptReplay
+			default:
+				return 0, errs.ErrStateConflict
+			}
+			receiptExecution = execution
+			return disposition, nil
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
@@ -1115,9 +1562,47 @@ func (service *Service) VerifyRuntimeRestore(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "verify_runtime_restore",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil || validateClosedRuntimeReceiptGraph(locked) != nil {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			execution := locked.Execution
+			if execution.ArchiveSHA256 != input.ArchiveSHA256 {
+				return 0, errs.ErrStateConflict
+			}
+			var disposition lifecycleReceiptDisposition
+			switch {
+			case execution.Version == input.ExpectedVersion &&
+				execution.Fence == input.ExpectedFence &&
+				execution.RestoreProofSHA256 == "" &&
+				execution.CleanupAuthorizationState == "NONE":
+				disposition = lifecycleReceiptApply
+			case execution.Version == input.ExpectedVersion+1 &&
+				execution.Fence == input.ExpectedFence+1 &&
+				execution.RestoreProofReference == input.RestoreProofReference &&
+				execution.RestoreProofSHA256 == input.RestoreProofSHA256 &&
+				execution.RestoreVerifierWorkload == input.Principal.CallerWorkload &&
+				execution.RestoreVerifierSPIFFEID == input.Principal.CallerSPIFFEID &&
+				execution.CleanupAuthorizationState == "NONE":
+				disposition = lifecycleReceiptReplay
+			default:
+				return 0, errs.ErrStateConflict
+			}
+			receiptExecution = execution
+			return disposition, nil
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
@@ -1187,9 +1672,60 @@ func (service *Service) AuthorizeRuntimeCleanup(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "authorize_runtime_cleanup",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil || validateClosedRuntimeReceiptGraph(locked) != nil {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			execution := locked.Execution
+			if execution.ArchiveSHA256 != input.ArchiveSHA256 ||
+				execution.RestoreProofSHA256 != input.RestoreProofSHA256 ||
+				execution.RestoreVerifierWorkload != service.restoreVerifierWorkload ||
+				execution.RestoreVerifierSPIFFEID != service.restoreVerifierSPIFFEID ||
+				execution.RestoreVerifierGeneration != execution.GrantGeneration {
+				return 0, errs.ErrStateConflict
+			}
+			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
+			)
+			if err != nil || blocked {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			if execution.Version == input.ExpectedVersion &&
+				execution.Fence == input.ExpectedFence {
+				if _, err := cleanupAuthorizationIssueDisposition(
+					execution, input.ExpectedCleanupGeneration, locked.Now,
+				); err != nil {
+					return 0, err
+				}
+				return lifecycleReceiptApply, nil
+			}
+			if (execution.Version != input.ExpectedVersion+1 &&
+				execution.Version != input.ExpectedVersion+2) ||
+				execution.Fence != input.ExpectedFence+(execution.Version-input.ExpectedVersion) ||
+				execution.CleanupAuthorizationState != "ACTIVE" ||
+				execution.CleanupAuthorizationGeneration != input.ExpectedCleanupGeneration+1 ||
+				value.ValidateID(execution.CleanupAuthorizationID) != nil ||
+				!execution.CleanupAuthorizationExpiresAt.After(locked.Now) {
+				return 0, errs.ErrStateConflict
+			}
+			receiptExecution = execution
+			return lifecycleReceiptReplay, nil
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
+		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
@@ -1328,9 +1864,55 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey,
 		"consume_runtime_cleanup_authorization", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil || validateClosedRuntimeReceiptGraph(locked) != nil {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			execution := locked.Execution
+			if execution.CleanupAuthorizationID != input.CleanupAuthorizationID ||
+				execution.CleanupAuthorizationGeneration != input.CleanupAuthorizationGeneration ||
+				execution.ArchiveSHA256 != input.ArchiveSHA256 ||
+				execution.RestoreProofSHA256 != input.RestoreProofSHA256 {
+				return 0, errs.ErrStateConflict
+			}
+			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
+			)
+			if err != nil || blocked {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			var disposition lifecycleReceiptDisposition
+			switch {
+			case execution.Version == input.ExpectedVersion &&
+				execution.Fence == input.ExpectedFence &&
+				execution.CleanupAuthorizationState == "ACTIVE" &&
+				execution.CleanupAuthorizationExpiresAt.After(locked.Now):
+				disposition = lifecycleReceiptApply
+			case execution.Version == input.ExpectedVersion+1 &&
+				execution.Fence == input.ExpectedFence+1 &&
+				execution.CleanupAuthorizationState == "CONSUMED" &&
+				!execution.CleanupConsumedAt.IsZero():
+				disposition = lifecycleReceiptReplay
+			default:
+				return 0, errs.ErrStateConflict
+			}
+			receiptExecution = execution
+			return disposition, nil
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
@@ -1433,9 +2015,43 @@ func (service *Service) ExpireRuntimeCleanupAuthorization(
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	var result RuntimeExecution
+	var receiptExecution RuntimeExecution
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey,
 		"expire_runtime_cleanup_authorization", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
+			if err != nil || validateClosedRuntimeReceiptGraph(locked) != nil {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			execution := locked.Execution
+			if execution.CleanupAuthorizationID != input.CleanupAuthorizationID ||
+				execution.CleanupAuthorizationGeneration != input.CleanupAuthorizationGeneration {
+				return 0, errs.ErrStateConflict
+			}
+			var disposition lifecycleReceiptDisposition
+			switch {
+			case execution.Version == input.ExpectedVersion &&
+				execution.Fence == input.ExpectedFence &&
+				execution.CleanupAuthorizationState == "ACTIVE" &&
+				!execution.CleanupAuthorizationExpiresAt.After(locked.Now):
+				disposition = lifecycleReceiptApply
+			case execution.Version == input.ExpectedVersion+1 &&
+				execution.Fence == input.ExpectedFence+1 &&
+				execution.CleanupAuthorizationState == "EXPIRED":
+				disposition = lifecycleReceiptReplay
+			default:
+				return 0, errs.ErrStateConflict
+			}
+			receiptExecution = execution
+			return disposition, nil
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
@@ -2184,6 +2800,54 @@ func (service *Service) suspendRuntimeExecutionForIntegration(
 	)
 }
 
+func (service *Service) suspendRuntimeExecutionForOwnerGate(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	graph lockedOwnerGraph,
+	gateID string,
+	requestSHA256 string,
+	now time.Time,
+) error {
+	if graph.Runtime == nil {
+		return nil
+	}
+	execution := *graph.Runtime
+	turnSpec, turnOK := graph.Turn.Spec.(entity.TurnSpec)
+	if !turnOK || execution.OrganizationID != principal.OrganizationID ||
+		execution.ProjectID != principal.ProjectID ||
+		execution.ProcessID != graph.Process.ID ||
+		execution.SessionID != graph.Session.ID || execution.TurnID != graph.Turn.ID ||
+		execution.Attempt != turnSpec.Attempt ||
+		execution.RuntimeRevisionID != turnSpec.RuntimeRevisionID ||
+		execution.ImmutableInputSHA256 != turnSpec.EffectiveInputSHA256 ||
+		execution.GrantGeneration != principal.AuthorityGrantGeneration ||
+		(execution.State != "PENDING" && execution.State != "ADMITTED" &&
+			execution.State != "RUNNING") {
+		return errs.ErrStateConflict
+	}
+	expectedVersion, expectedFence := execution.Version, execution.Fence
+	execution.Version++
+	execution.Fence++
+	execution.State = "SUSPENDED"
+	execution.TerminalOutcome = "SUSPENDED"
+	execution.TerminalReference = gateID
+	execution.TerminalSHA256 = requestSHA256
+	execution.LeaseID = ""
+	execution.LeaseTokenSHA256 = ""
+	execution.LeaseExpiresAt = time.Time{}
+	execution.UpdatedAt = now
+	if err := tx.UpdateRuntimeExecution(
+		ctx, execution, expectedVersion, expectedFence,
+	); err != nil {
+		return err
+	}
+	return service.appendLifecycleAudit(
+		ctx, tx, principal, "suspend_runtime_for_owner_gate", execution.ID,
+		"RUNTIME_EXECUTION", execution.Version, now,
+	)
+}
+
 func (service *Service) validatePinnedIntegrationContinuation(
 	ctx context.Context,
 	tx domainrepo.Transaction,
@@ -2310,10 +2974,84 @@ func (service *Service) SuspendForIntegrationApproval(
 	if err != nil {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
+	continuationID := uuid.NewString()
 	var result IntegrationContinuation
+	var receiptContinuation IntegrationContinuation
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "suspend_integration_approval",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			execution, err := tx.GetRuntimeExecutionByTurnForUpdate(
+				ctx, input.Principal.AuthorityReference,
+				uint32(input.Principal.AuthorityRevision),
+			)
+			if err != nil {
+				return 0, err
+			}
+			if err := requireExactRuntimeApplicationAuthority(
+				execution, input.Principal,
+			); err != nil {
+				return 0, err
+			}
+			if execution.State == "SUSPENDED" {
+				if value.ValidateID(execution.TerminalReference) != nil ||
+					execution.TerminalSHA256 != input.RequestSHA256 {
+					return 0, errs.ErrStateConflict
+				}
+				locked, err := service.lockIntegrationReceiptAuthority(
+					ctx, tx, input.Principal, execution.TerminalReference, false,
+				)
+				if err != nil {
+					return 0, err
+				}
+				continuation := locked.Continuation
+				databaseNow, nowErr := tx.CurrentTime(ctx)
+				if nowErr != nil {
+					return 0, nowErr
+				}
+				if continuation.ContinuationState != "SUSPENDED" ||
+					continuation.ApprovalState != "PENDING" ||
+					continuation.ExecutionState != "NOT_STARTED" ||
+					continuation.InvocationID != input.InvocationID ||
+					continuation.ApprovalID != input.ApprovalID ||
+					continuation.IntegrationID != input.IntegrationID ||
+					continuation.IntegrationVersion != input.IntegrationVersion ||
+					continuation.IntegrationSHA256 != input.IntegrationSHA256 ||
+					continuation.RequestSHA256 != input.RequestSHA256 ||
+					!continuation.ApprovalExpiresAt.After(databaseNow) {
+					return 0, errs.ErrStateConflict
+				}
+				receiptContinuation = continuation
+				return lifecycleReceiptReplay, nil
+			}
+			if execution.State != "PENDING" && execution.State != "ADMITTED" &&
+				execution.State != "RUNNING" {
+				return 0, errs.ErrStateConflict
+			}
+			if err := service.prelockRuntimeScheduledGraph(
+				ctx, tx, input.Principal, execution,
+			); err != nil {
+				return 0, err
+			}
+			resolved, err := service.resolveBoundExecution(ctx, tx, input.Principal)
+			if err != nil {
+				return 0, err
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return 0, err
+			}
+			if _, err := service.resolveSelectedIntegrationBinding(
+				ctx, tx, input.Principal, resolved, input, now,
+			); err != nil {
+				return 0, err
+			}
+			return lifecycleReceiptApply, nil
+		},
+		func() error {
+			return integrationReceiptMatchesCurrent(receiptContinuation, result)
+		},
+		func(tx domainrepo.Transaction) error {
 			now, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return err
@@ -2349,7 +3087,7 @@ func (service *Service) SuspendForIntegrationApproval(
 				return err
 			}
 			if err := service.suspendRuntimeExecutionForIntegration(
-				ctx, tx, input.Principal, resolved, execution, input.InvocationID,
+				ctx, tx, input.Principal, resolved, execution, continuationID,
 				input.RequestSHA256, now,
 			); err != nil {
 				return err
@@ -2364,7 +3102,7 @@ func (service *Service) SuspendForIntegrationApproval(
 				threadID = resolved.Session.ID
 			}
 			result = IntegrationContinuation{
-				ID: uuid.NewString(), OrganizationID: input.Principal.OrganizationID,
+				ID: continuationID, OrganizationID: input.Principal.OrganizationID,
 				ProjectID: input.Principal.ProjectID, ProcessID: suspendedProcess.ID,
 				SessionID: suspendedSession.ID, SessionVersion: suspendedSession.Version,
 				ThreadID: threadID, RoleID: resolved.Role.ID,
@@ -2452,9 +3190,8 @@ func (service *Service) prelockScheduledGraphByTurn(
 	tx domainrepo.Transaction,
 	principal value.Principal,
 	turnID string,
-) error {
-	_, err := service.lockOwnerGraphByTurn(ctx, tx, principal, turnID)
-	return err
+) (lockedOwnerGraph, error) {
+	return service.lockOwnerGraphByTurn(ctx, tx, principal, turnID)
 }
 
 func (service *Service) suspendIntegrationGraph(
@@ -2698,8 +3435,52 @@ func (service *Service) decideIntegration(
 	} else if decision == "CANCELLED" {
 		scope = "cancel_integration_invocation"
 	}
+	var receiptContinuation IntegrationContinuation
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, scope, requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockIntegrationReceiptAuthority(
+				ctx, tx, input.Principal, input.ContinuationID, decision == "APPROVED",
+			)
+			if err != nil {
+				return 0, err
+			}
+			continuation := locked.Continuation
+			if continuation.InvocationID != input.InvocationID ||
+				continuation.ApprovalID != input.ApprovalID ||
+				continuation.RequestSHA256 != input.RequestSHA256 {
+				return 0, errs.ErrStateConflict
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return 0, err
+			}
+			sourceAllowed := integrationDecisionAllowed(continuation, decision, now) &&
+				continuation.ContinuationState == "SUSPENDED"
+			replayState := "SUSPENDED"
+			if materialize {
+				replayState = "READY"
+			}
+			replayAllowed := continuation.ApprovalState == decision &&
+				continuation.DecisionReference == input.DecisionReference &&
+				continuation.DecisionSHA256 == input.DecisionSHA256 &&
+				continuation.ContinuationState == replayState
+			if decision != "APPROVED" {
+				replayAllowed = replayAllowed && continuation.ExecutionState == "NOT_APPLICABLE"
+			}
+			disposition, err := integrationMutationReceiptDisposition(
+				continuation, input.ExpectedVersion, input.ExpectedFence,
+				sourceAllowed, replayAllowed,
+			)
+			if err != nil {
+				return 0, err
+			}
+			receiptContinuation = continuation
+			return disposition, nil
+		},
+		func() error {
+			return integrationReceiptMatchesCurrent(receiptContinuation, result)
+		},
 		func(tx domainrepo.Transaction) error {
 			var continuation IntegrationContinuation
 			var err error
@@ -2795,9 +3576,67 @@ func (service *Service) ExpireIntegrationInvocation(
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
 	var result IntegrationContinuation
+	var receiptContinuation IntegrationContinuation
 	err = service.withLifecycleReceipt(
 		ctx, principal, idempotencyKey, "expire_integration_invocation",
-		requestHash, &result, func(tx domainrepo.Transaction) error {
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			snapshot, err := tx.NextExpiredIntegrationContinuation(
+				ctx, principal.OrganizationID, principal.ProjectID,
+				principal.AuthorityReference, uint32(principal.AuthorityRevision),
+			)
+			if err == nil {
+				continuation, lockErr := service.prelockIntegrationTerminalGraph(
+					ctx, tx, principal, snapshot,
+				)
+				if lockErr != nil {
+					return 0, lockErr
+				}
+				now, clockErr := tx.CurrentTime(ctx)
+				if clockErr != nil {
+					return 0, clockErr
+				}
+				if continuation.ApprovalState != "PENDING" ||
+					continuation.ExecutionState != "NOT_STARTED" ||
+					continuation.ContinuationState != "SUSPENDED" ||
+					continuation.ApprovalExpiresAt.After(now) ||
+					matchIntegrationGateway(continuation, principal) != nil {
+					return 0, errs.ErrStateConflict
+				}
+				return lifecycleReceiptApply, nil
+			}
+			if !errors.Is(err, errs.ErrNotFound) {
+				return 0, err
+			}
+			execution, err := tx.GetRuntimeExecutionByTurnForUpdate(
+				ctx, principal.AuthorityReference, uint32(principal.AuthorityRevision),
+			)
+			if err != nil || execution.State != "SUSPENDED" ||
+				value.ValidateID(execution.TerminalReference) != nil {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			locked, err := service.lockIntegrationReceiptAuthority(
+				ctx, tx, principal, execution.TerminalReference, false,
+			)
+			if err != nil {
+				return 0, err
+			}
+			continuation := locked.Continuation
+			if continuation.ApprovalState != "EXPIRED" ||
+				continuation.ExecutionState != "NOT_APPLICABLE" ||
+				continuation.ContinuationState != "READY" {
+				return 0, errs.ErrStateConflict
+			}
+			receiptContinuation = continuation
+			return lifecycleReceiptReplay, nil
+		},
+		func() error {
+			return integrationReceiptMatchesCurrent(receiptContinuation, result)
+		},
+		func(tx domainrepo.Transaction) error {
 			snapshot, err := tx.NextExpiredIntegrationContinuation(
 				ctx, principal.OrganizationID, principal.ProjectID,
 				principal.AuthorityReference, uint32(principal.AuthorityRevision),
@@ -2931,8 +3770,59 @@ func (service *Service) executeIntegrationTransition(
 	} else if target == "FAILED" {
 		scope = "fail_integration_execution"
 	}
+	var receiptContinuation IntegrationContinuation
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, scope, requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockIntegrationReceiptAuthority(
+				ctx, tx, input.Principal, input.ContinuationID, target == "BEGIN",
+			)
+			if err != nil {
+				return 0, err
+			}
+			continuation := locked.Continuation
+			if continuation.InvocationID != input.InvocationID ||
+				continuation.RequestSHA256 != input.RequestSHA256 ||
+				continuation.ApprovalState != "APPROVED" {
+				return 0, errs.ErrStateConflict
+			}
+			sourceExecutionState := "NOT_STARTED"
+			replayContinuationState := "SUSPENDED"
+			if target != "BEGIN" {
+				sourceExecutionState = "EXECUTING"
+				replayContinuationState = "READY"
+			}
+			replayExecutionState := target
+			if target == "BEGIN" {
+				replayExecutionState = "EXECUTING"
+			}
+			replayAllowed := continuation.ExecutionState == replayExecutionState &&
+				continuation.ContinuationState == replayContinuationState
+			switch target {
+			case "SUCCEEDED":
+				replayAllowed = replayAllowed &&
+					continuation.ResultReference == input.ResultReference &&
+					continuation.ResultSHA256 == input.ResultSHA256
+			case "FAILED":
+				replayAllowed = replayAllowed && continuation.ErrorCode == input.ErrorCode &&
+					continuation.ErrorReference == input.ErrorReference &&
+					continuation.ErrorSHA256 == input.ErrorSHA256
+			}
+			disposition, err := integrationMutationReceiptDisposition(
+				continuation, input.ExpectedVersion, input.ExpectedFence,
+				continuation.ExecutionState == sourceExecutionState &&
+					continuation.ContinuationState == "SUSPENDED",
+				replayAllowed,
+			)
+			if err != nil {
+				return 0, err
+			}
+			receiptContinuation = continuation
+			return disposition, nil
+		},
+		func() error {
+			return integrationReceiptMatchesCurrent(receiptContinuation, result)
+		},
 		func(tx domainrepo.Transaction) error {
 			var continuation IntegrationContinuation
 			var err error
@@ -3036,6 +3926,119 @@ func matchIntegrationGateway(
 		return errs.ErrNotFound
 	}
 	return nil
+}
+
+type lockedIntegrationReceipt struct {
+	Continuation  IntegrationContinuation
+	Graph         lockedOwnerGraph
+	SourceRuntime RuntimeExecution
+}
+
+func (service *Service) lockIntegrationReceiptAuthority(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	continuationID string,
+	requireActiveBindings bool,
+) (lockedIntegrationReceipt, error) {
+	snapshot, err := tx.GetIntegrationContinuation(ctx, continuationID)
+	if err != nil {
+		return lockedIntegrationReceipt{}, err
+	}
+	if err := matchIntegrationGateway(snapshot, principal); err != nil {
+		return lockedIntegrationReceipt{}, err
+	}
+	sourceRuntime, err := tx.GetRuntimeExecutionByTurnForUpdate(
+		ctx, snapshot.TurnID, snapshot.Attempt,
+	)
+	if err != nil {
+		return lockedIntegrationReceipt{}, err
+	}
+	if sourceRuntime.OrganizationID != snapshot.OrganizationID ||
+		sourceRuntime.ProjectID != snapshot.ProjectID ||
+		sourceRuntime.ProcessID != snapshot.ProcessID ||
+		sourceRuntime.SessionID != snapshot.SessionID ||
+		sourceRuntime.RuntimeRevisionID != snapshot.RuntimeRevisionID ||
+		sourceRuntime.ImmutableInputSHA256 != snapshot.ImmutableInputSHA256 ||
+		sourceRuntime.State != "SUSPENDED" ||
+		sourceRuntime.TerminalReference != snapshot.ID ||
+		sourceRuntime.TerminalSHA256 != snapshot.RequestSHA256 {
+		return lockedIntegrationReceipt{}, errs.ErrStateConflict
+	}
+	turnID := snapshot.TurnID
+	if snapshot.ContinuationState != "SUSPENDED" {
+		turnID = snapshot.ContinuationTurnID
+		if value.ValidateID(turnID) != nil {
+			return lockedIntegrationReceipt{}, errs.ErrStateConflict
+		}
+	}
+	graph, err := service.lockOwnerGraphByTurn(ctx, tx, principal, turnID)
+	if err != nil {
+		return lockedIntegrationReceipt{}, err
+	}
+	if graph.Process.ID != snapshot.ProcessID ||
+		graph.Session.ID != snapshot.SessionID {
+		return lockedIntegrationReceipt{}, errs.ErrStateConflict
+	}
+	if snapshot.ContinuationState == "SUSPENDED" {
+		if graph.Runtime == nil || graph.Runtime.ID != sourceRuntime.ID {
+			return lockedIntegrationReceipt{}, errs.ErrStateConflict
+		}
+	} else if graph.Runtime != nil {
+		// После claim/rebind delivery stored terminal result уже не является
+		// текущим response этой команды и не должен replay-иться.
+		return lockedIntegrationReceipt{}, errs.ErrStateConflict
+	}
+	locked, err := service.lockIntegrationContinuationAfterBindings(
+		ctx, tx, principal, snapshot, requireActiveBindings,
+	)
+	if err != nil {
+		return lockedIntegrationReceipt{}, err
+	}
+	return lockedIntegrationReceipt{
+		Continuation: locked, Graph: graph, SourceRuntime: sourceRuntime,
+	}, nil
+}
+
+func integrationReceiptMatchesCurrent(
+	current IntegrationContinuation,
+	stored IntegrationContinuation,
+) error {
+	currentHash, err := canonicalHash(current)
+	if err != nil {
+		return errs.ErrInternal
+	}
+	storedHash, err := canonicalHash(stored)
+	if err != nil {
+		return errs.ErrInternal
+	}
+	if currentHash != storedHash {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func integrationMutationReceiptDisposition(
+	continuation IntegrationContinuation,
+	expectedVersion uint64,
+	expectedFence uint64,
+	sourceAllowed bool,
+	replayAllowed bool,
+) (lifecycleReceiptDisposition, error) {
+	if continuation.Version == expectedVersion && continuation.Fence == expectedFence {
+		if !sourceAllowed {
+			return 0, errs.ErrStateConflict
+		}
+		return lifecycleReceiptApply, nil
+	}
+	if continuation.Version == expectedVersion+1 &&
+		continuation.Fence == expectedFence+1 {
+		if !replayAllowed {
+			return 0, errs.ErrStateConflict
+		}
+		return lifecycleReceiptReplay, nil
+	}
+	return 0, errs.ErrVersionMismatch
 }
 
 // prelockIntegrationTerminalGraph берёт общий scheduled graph до owner row

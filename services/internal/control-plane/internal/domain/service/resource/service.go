@@ -707,6 +707,97 @@ func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Res
 
 type resourceMutation func(domainrepo.Transaction) (entity.Resource, error)
 
+type resourceReceiptValidation func(
+	domainrepo.Transaction,
+) (lifecycleReceiptDisposition, error)
+
+func resourceReceiptMatchesCurrent(current, stored entity.Resource) error {
+	currentHash, err := canonicalHash(current)
+	if err != nil {
+		return errs.ErrInternal
+	}
+	storedHash, err := canonicalHash(stored)
+	if err != nil {
+		return errs.ErrInternal
+	}
+	if currentHash != storedHash {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (service *Service) withValidatedResourceReceipt(
+	ctx context.Context,
+	principal value.Principal,
+	idempotencyKey string,
+	scope string,
+	requestHash string,
+	validate resourceReceiptValidation,
+	validateReplay func(domainrepo.Transaction, entity.Resource) error,
+	apply resourceMutation,
+) (entity.Resource, error) {
+	keyHash := hashString(idempotencyKey)
+	var result entity.Resource
+	mutated := false
+	err := service.repository.Transact(
+		ctx,
+		domainrepo.Scope{
+			OrganizationID: principal.OrganizationID,
+			ProjectID:      principal.ProjectID,
+			ActorID:        principal.ActorID,
+		},
+		func(tx domainrepo.Transaction) error {
+			disposition, err := validate(tx)
+			if err != nil {
+				return err
+			}
+			receipt, err := tx.GetReceipt(
+				ctx, principal.OrganizationID, scope, keyHash,
+			)
+			if err == nil {
+				if (disposition != lifecycleReceiptReplay &&
+					disposition != lifecycleReceiptApplyOrReplay) ||
+					receipt.RequestHash != requestHash {
+					return errs.ErrIdempotencyConflict
+				}
+				result = receipt.Result
+				if err := result.Validate(); err != nil {
+					return errs.ErrInternal
+				}
+				return validateReplay(tx, result)
+			}
+			if !errors.Is(err, errs.ErrNotFound) {
+				return err
+			}
+			if disposition != lifecycleReceiptApply &&
+				disposition != lifecycleReceiptApplyOrReplay {
+				return errs.ErrStateConflict
+			}
+			result, err = apply(tx)
+			if err != nil {
+				return err
+			}
+			if err := tx.SaveReceipt(ctx, domainrepo.Receipt{
+				OrganizationID: principal.OrganizationID,
+				ProjectID:      principal.ProjectID,
+				Scope:          scope,
+				KeyHash:        keyHash,
+				RequestHash:    requestHash,
+				Result:         result,
+				CreatedAt:      service.now().UTC().Truncate(time.Microsecond),
+			}); err != nil {
+				return err
+			}
+			mutated = true
+			return nil
+		},
+	)
+	if err == nil && mutated {
+		service.observer.ObserveMutation(result.Kind, scope)
+	}
+	return result, err
+}
+
 func (service *Service) withResourceReceipt(
 	ctx context.Context,
 	principal value.Principal,

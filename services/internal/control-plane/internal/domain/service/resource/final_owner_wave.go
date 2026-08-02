@@ -135,8 +135,9 @@ func (service *Service) continueOwnerGateGraph(
 		return OwnerGateResult{}, err
 	}
 	attempt, err := tx.GetTurnAttemptForUpdate(ctx, turn.ID, turnSpec.Attempt)
-	if err != nil || attempt.State != "CLAIMED" ||
-		attempt.InputSHA256 != turnSpec.EffectiveInputSHA256 || !attempt.FinishedAt.IsZero() {
+	if err != nil || attempt.State != "WAITING_OWNER" ||
+		attempt.InputSHA256 != turnSpec.EffectiveInputSHA256 ||
+		attempt.FinishedAt.IsZero() || attempt.Outcome != "owner_gate_pending" {
 		return OwnerGateResult{}, errs.ErrStateConflict
 	}
 	turnSpec.Outcome = "owner_gate_changes_requested"
@@ -145,12 +146,6 @@ func (service *Service) continueOwnerGateGraph(
 		return OwnerGateResult{}, errs.ErrStateConflict
 	}
 	if err := tx.Update(ctx, cancelledTurn, turn.Version); err != nil {
-		return OwnerGateResult{}, err
-	}
-	attempt.State = "CANCELLED"
-	attempt.FinishedAt = now
-	attempt.Outcome = turnSpec.Outcome
-	if err := tx.FinishTurnAttempt(ctx, attempt); err != nil {
 		return OwnerGateResult{}, err
 	}
 	if err := service.revokeExecutionClaimsForOwner(
@@ -395,23 +390,6 @@ func (service *Service) ExpireOwnerGate(
 			ActorID:        input.Principal.ActorID,
 		},
 		func(tx domainrepo.Transaction) error {
-			receipt, receiptErr := tx.GetReceipt(
-				ctx, input.Principal.OrganizationID, "expire_owner_gate", keyHash,
-			)
-			if receiptErr == nil {
-				if receipt.RequestHash != requestHash {
-					return errs.ErrIdempotencyConflict
-				}
-				var payload ownerGateReceipt
-				if json.Unmarshal(receipt.Payload, &payload) != nil {
-					return errs.ErrInternal
-				}
-				result = OwnerGateResult{OwnerGate: receipt.Result, Process: payload.Process}
-				return nil
-			}
-			if !errors.Is(receiptErr, errs.ErrNotFound) {
-				return receiptErr
-			}
 			gateCandidate, err := tx.NextExpiredOwnerGateCandidate(
 				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
 			)
@@ -426,6 +404,16 @@ func (service *Service) ExpireOwnerGate(
 				ctx, tx, input.Principal, candidateSpec.TurnID,
 			)
 			if err != nil {
+				return err
+			}
+			if graph.Runtime != nil &&
+				(graph.Runtime.State != "SUSPENDED" ||
+					graph.Runtime.TerminalReference != gateCandidate.ID) {
+				return errs.ErrStateConflict
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent, runtimeDispositionTerminal,
+			); err != nil {
 				return err
 			}
 			gate, err := tx.GetForUpdate(
@@ -443,6 +431,21 @@ func (service *Service) ExpireOwnerGate(
 			if !ok || gate.Version != gateCandidate.Version ||
 				gate.State != enum.StateWaitingOwner || lockedSpec.ExpiresAt.After(now) {
 				return errs.ErrStateConflict
+			}
+			receipt, receiptErr := tx.GetReceipt(
+				ctx, input.Principal.OrganizationID, "expire_owner_gate", keyHash,
+			)
+			if receiptErr == nil {
+				// Ограниченный поиск кандидата не доказывает, что receipt прежнего
+				// terminal Gate относится к current candidate. Сохранённый result
+				// не раскрывается, а повторное использование ключа закрыто.
+				if receipt.RequestHash != requestHash {
+					return errs.ErrIdempotencyConflict
+				}
+				return errs.ErrStateConflict
+			}
+			if !errors.Is(receiptErr, errs.ErrNotFound) {
+				return receiptErr
 			}
 			result, err = service.expireOwnerGateGraph(
 				ctx, tx, input.Principal, gate, graph,
@@ -510,8 +513,9 @@ func (service *Service) expireOwnerGateGraph(
 		return OwnerGateResult{}, errs.ErrStateConflict
 	}
 	attempt, err := tx.GetTurnAttemptForUpdate(ctx, turn.ID, turnSpec.Attempt)
-	if err != nil || attempt.State != "CLAIMED" ||
-		attempt.InputSHA256 != turnSpec.EffectiveInputSHA256 || !attempt.FinishedAt.IsZero() {
+	if err != nil || attempt.State != "WAITING_OWNER" ||
+		attempt.InputSHA256 != turnSpec.EffectiveInputSHA256 ||
+		attempt.FinishedAt.IsZero() || attempt.Outcome != "owner_gate_pending" {
 		return OwnerGateResult{}, errs.ErrStateConflict
 	}
 	turnSpec.Outcome = "owner_gate_expired"
@@ -521,12 +525,6 @@ func (service *Service) expireOwnerGateGraph(
 		return OwnerGateResult{}, errs.ErrStateConflict
 	}
 	if err := tx.Update(ctx, failedTurn, turn.Version); err != nil {
-		return OwnerGateResult{}, err
-	}
-	attempt.State = "FAILED"
-	attempt.FinishedAt = now
-	attempt.Outcome = turnSpec.Outcome
-	if err := tx.FinishTurnAttempt(ctx, attempt); err != nil {
 		return OwnerGateResult{}, err
 	}
 	if err := service.revokeExecutionClaimsForOwner(
@@ -633,6 +631,14 @@ func (service *Service) recoverExpiredScheduleOccurrence(
 		turnSpec.SessionID != session.ID || turnSpec.Attempt == 0 ||
 		turnSpec.RuntimeRevisionID != run.RuntimeRevisionID ||
 		turnSpec.EffectiveInputSHA256 != run.EffectiveInputSHA256 {
+		return errs.ErrStateConflict
+	}
+	if err := requireClosedRuntimeConsistentWithTurn(graph); err != nil {
+		return err
+	}
+	if graph.Runtime != nil && !turn.State.Terminal() {
+		// Scheduler recovery не является runtime authority. SUSPENDED runtime
+		// сохраняет WAITING_OWNER/WAITING_EXTERNAL до специализированного path.
 		return errs.ErrStateConflict
 	}
 

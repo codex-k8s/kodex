@@ -129,16 +129,38 @@ code-enforced acquisition: read-only candidate, затем существующ�
 RuntimeExecution → ScheduleOccurrence → Schedule → ScheduledRun → Session →
 Turn → ProcessRun → pinned resources → OwnerGate → IntegrationContinuation.
 Unscheduled path использует подмножество без schedule rows. Current-turn
-discovery охватывает `CLAIMED`, `WAITING_OWNER`, `CONTINUATION` и retryable
-`FAILED`; stale ClaimTurn, scheduler recovery, Get/ACK и owner-gate decision
+discovery охватывает `CLAIMED`, `WAITING_OWNER`, `CONTINUATION` и terminal
+`SUCCEEDED/FAILED/CANCELLED`; stale ClaimTurn, scheduler recovery, Get/ACK и owner-gate decision
 повторно проверяют exact tuple/deadline/version после locks. PostgreSQL retry
 остаётся safety net, а не способом исправить lock inversion.
+
+Каждая lifecycle-команда с receipt использует двухфазный порядок: сначала
+exact owner/current graph, transport authority, attempt/revision/input,
+version/fence/generation/state/expiry, затем receipt и только после отсутствия
+receipt — effect. Admission replay возвращает LeaseToken лишь пока тот же
+RuntimeExecution остаётся current `ADMITTED` и token digest совпадает; после
+terminal/cancel/expiry/rebind старый authority-bearing result закрыт.
+`ManageWorkClaim`, `CompleteProcess` и `CancelProcess` выводят current Turn из
+server-owned ProcessRun и проходят тот же resolver до первого shared row lock.
+Generic Turn/Process и stale scheduler paths закрыто отказываются при live
+RuntimeExecution. `RequestOwnerGate` вместо этого атомарно переводит exact
+active runtime в `SUSPENDED`, очищает lease/token/deadline, завершает attempt и
+лишь затем фиксирует `WAITING_OWNER`; решение или retry создаёт только свежую
+authority.
+OwnerGate delivery claim хранит только server-side hash idempotency key:
+unlocked candidate проходит тот же graph resolver, Gate блокируется последним,
+и receipt читается после workload/SPIFFE/deadline/current-claim проверки.
+После delivery, expiry или decision старый ClaimToken не возвращается.
+`ClaimTurn`/`RenewTurn` также разрешают exact Turn и lease до receipt. Scheduler
+claim сохраняет отдельный server-owned claim-key hash в occurrence: retry
+сначала восстанавливает current graph по этой привязке, и только live exact
+occurrence может повторно вернуть LeaseToken.
 
 ## Доменные инварианты
 
 | Область                  | Инвариант                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Все команды              | семантический ключ идемпотентности, канонический digest запроса, OCC и аудит фиксируются атомарно                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Все команды              | семантический ключ идемпотентности, канонический digest запроса, OCC и аудит фиксируются атомарно; receipt читается только после authoritative current eligibility, а superseded authority-bearing result никогда не возвращается                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Проект                   | ID и владельца назначает сервер; создание в организации требует полномочия владельца; slug стабилен                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Команда, роль и prompt   | общий CRUD не управляет полномочиями; отдельная административная команда проверяет полномочие вида, назначаемое подмножество и запрещает самостоятельное включение и повышение                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Управляемая конфигурация | каждый project/team/chat/role/prompt/binding/workspace/integration/schedule хранит `managed_by=UI` или `managed_by=GIT`; Git-объект обновляется только тем же источником с возрастающей ревизией, а переход к UI требует явного `detach_git_management` и отдельного устойчивого полномочия                                                                                                                                                                                                                                                                                                                                                                                      |

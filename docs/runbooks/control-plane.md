@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.10.0
+version: 1.11.0
 updated: 2026-08-02
 ---
 
@@ -272,8 +272,8 @@ proof и значения credential не выводить. При stale heartbe
 cancel, retry или expiry проверить, что один PostgreSQL transaction:
 
 1. выполнил только read-only candidate discovery, затем заблокировал exact
-   существующий RuntimeExecution и связанный graph в порядке occurrence →
-   schedule → scheduled run → Session → Turn → ProcessRun;
+   graph в порядке RuntimeExecution → occurrence → schedule → scheduled run →
+   Session → Turn → ProcessRun;
 2. после ProcessRun заблокировал только применимые pinned resources,
    OwnerGate и IntegrationContinuation и сверил
    attempt/input/revision/workload/generation/version/fence;
@@ -286,8 +286,9 @@ cancel, retry или expiry проверить, что один PostgreSQL trans
 Для stale `ClaimTurn`, scheduler recovery и `ExpireOwnerGate` candidate queries
 не содержат `FOR UPDATE`: после выбора общий graph resolver получает locks и
 повторно проверяет state/version/lease/deadline. Для scheduled Turn current
-occurrence query обязана находить `CLAIMED`, `WAITING_OWNER`, `CONTINUATION` и
-`FAILED`; иначе `WAITING_OWNER` ошибочно станет unscheduled. PostgreSQL
+occurrence query обязана находить `CLAIMED`, `WAITING_OWNER`, `CONTINUATION`,
+`SUCCEEDED`, `FAILED` и `CANCELLED`; иначе ожидание или terminal replay
+ошибочно станет unscheduled. PostgreSQL
 deadlock/serialization retry остаётся safety net, а не штатной синхронизацией.
 
 Если RuntimeExecution/Turn terminal, а ProcessRun остался `RUNNING`, считать
@@ -321,6 +322,37 @@ correlation ID, nonce и transport timestamp. Повтор потерянног�
 actor, organization/project, workload/SPIFFE, permission, authority reference,
 attempt/revision/input/fence/generation остаются частью hash. Для ACK owner и
 current delivery binding разрешаются до чтения receipt.
+
+Для любой receipt-bearing lifecycle-команды проверить фактический порядок в
+одной transaction: canonical owner/current graph lock → transport/tenant/owner
+и operation-specific state/version/fence/generation/deadline validation →
+receipt lookup → effect при отсутствии receipt. Если `AdmitRuntimeExecution`
+уже был отозван terminal/cancel/expiry/rebind, старый LeaseToken не должен
+появиться даже при том же semantic intent и новом валидном JTI. Terminal receipt
+возвращается только пока current graph точно совпадает с сохранённым outcome и
+не имеет successor.
+
+Для `ClaimTurn`/`RenewTurn` до receipt должны совпасть exact current Turn,
+RuntimeExecution disposition, workload, generation, attempt, fence, token и
+PostgreSQL expiry. `ClaimScheduleOccurrence` использует server-owned
+`claim_key_sha256`: сначала по нему разрешается current occurrence и полный
+graph, затем сверяются workload/generation/token/deadline и только потом
+допустим replay. После runtime claim, terminal, expiry или rebind прежний
+LeaseToken не возвращается.
+
+Generic `CompleteTurn`, `CancelTurn`, `CompleteProcess`, `CancelProcess`, stale
+`ClaimTurn` и scheduler recovery не являются runtime authority: при current
+nonterminal RuntimeExecution они обязаны откатиться без изменения graph.
+`ManageWorkClaim` и Process-команды сначала выводят current Turn/Session из
+owner state и используют общий resolver. `RequestOwnerGate` — отдельное
+исключение: exact active runtime атомарно становится `SUSPENDED`, его lease и
+token очищаются, attempt/TurnLease/claims закрываются и лишь затем graph
+становится `WAITING_OWNER`. Owner decision или retry не оживляет прежнюю
+attempt, а создаёт свежие revision/input/grant.
+Claim/Record доставки OwnerGate также не читают receipt заранее: поиск Gate по
+next candidate либо server-stored claim key выполняется без lock, затем
+блокируется полный graph и Gate последним. При истёкшем claim, уже записанном
+Mattermost receipt или terminal decision прежний ClaimToken закрыт.
 
 Integration suspension pin-ит invocation, approval, request digest, полный
 runtime tuple и exact Integration/credential ID+version+projection digest.

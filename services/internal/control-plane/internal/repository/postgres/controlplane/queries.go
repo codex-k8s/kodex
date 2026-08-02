@@ -54,6 +54,9 @@ var sqlOutboxTerminalRepair string
 //go:embed sql/owner_gate__next_delivery.sql
 var sqlOwnerGateNextDelivery string
 
+//go:embed sql/owner_gate__by_delivery_claim_key.sql
+var sqlOwnerGateByDeliveryClaimKey string
+
 //go:embed sql/owner_gate__next_expired.sql
 var sqlOwnerGateNextExpired string
 
@@ -171,6 +174,9 @@ var sqlScheduleOccurrenceGetForUpdate string
 //go:embed sql/schedule_occurrence__get_by_current_turn.sql
 var sqlScheduleOccurrenceGetByCurrentTurn string
 
+//go:embed sql/schedule_occurrence__get_by_claim_key.sql
+var sqlScheduleOccurrenceGetByClaimKey string
+
 //go:embed sql/schedule_occurrence__has_open.sql
 var sqlScheduleOccurrenceHasOpen string
 
@@ -264,8 +270,8 @@ var sqlProviderPoolNextSlot string
 //go:embed sql/work_claim__active_for_update.sql
 var sqlWorkClaimActiveForUpdate string
 
-//go:embed sql/process_turn__active_for_update.sql
-var sqlProcessTurnActiveForUpdate string
+//go:embed sql/process_turn__active_candidates.sql
+var sqlProcessTurnActiveCandidates string
 
 //go:embed sql/owner_gate__active_by_process.sql
 var sqlOwnerGateActiveByProcess string

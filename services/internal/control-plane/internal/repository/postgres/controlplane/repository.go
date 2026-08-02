@@ -1542,6 +1542,7 @@ func (wrapped *transaction) UpdateScheduleOccurrence(
 			"claimant_workload_id":               occurrence.ClaimantWorkloadID,
 			"authority_generation":               occurrence.AuthorityGeneration,
 			"token_hash":                         occurrence.TokenHash,
+			"claim_key_sha256":                   occurrence.ClaimKeySHA256,
 			"lease_expires_at":                   occurrence.LeaseExpiresAt,
 			"available_at":                       occurrence.AvailableAt,
 			"outcome":                            occurrence.Outcome,
@@ -1609,6 +1610,21 @@ func (wrapped *transaction) GetScheduleOccurrenceByCurrentTurn(
 			"organization_id": organizationID,
 			"project_id":      projectID,
 			"turn_id":         turnID,
+		},
+	))
+}
+
+func (wrapped *transaction) GetScheduleOccurrenceByClaimKey(
+	ctx context.Context,
+	organizationID, projectID, claimKeySHA256 string,
+) (domainrepo.ScheduleOccurrence, error) {
+	return scanScheduleOccurrence(wrapped.tx.QueryRow(
+		ctx,
+		sqlScheduleOccurrenceGetByClaimKey,
+		pgx.StrictNamedArgs{
+			"organization_id":  organizationID,
+			"project_id":       projectID,
+			"claim_key_sha256": claimKeySHA256,
 		},
 	))
 }
@@ -2007,11 +2023,11 @@ func (wrapped *transaction) ActiveOwnerGateForProcess(
 	))
 }
 
-func (wrapped *transaction) ActiveProcessTurnsForUpdate(
+func (wrapped *transaction) ActiveProcessTurnCandidates(
 	ctx context.Context,
 	organizationID, projectID, processRunID string,
 ) ([]entity.Resource, error) {
-	rows, err := wrapped.tx.Query(ctx, sqlProcessTurnActiveForUpdate, pgx.StrictNamedArgs{
+	rows, err := wrapped.tx.Query(ctx, sqlProcessTurnActiveCandidates, pgx.StrictNamedArgs{
 		"organization_id": organizationID, "project_id": projectID,
 		"process_run_id": processRunID,
 	})
@@ -2083,6 +2099,21 @@ func (wrapped *transaction) NextOwnerGateDelivery(
 			"organization_id": organizationID,
 			"project_id":      projectID,
 			"now":             now,
+		},
+	))
+}
+
+func (wrapped *transaction) OwnerGateByDeliveryClaimKey(
+	ctx context.Context,
+	organizationID, projectID, deliveryClaimKeySHA256 string,
+) (entity.Resource, error) {
+	return scanResource(wrapped.tx.QueryRow(
+		ctx,
+		sqlOwnerGateByDeliveryClaimKey,
+		pgx.StrictNamedArgs{
+			"organization_id":           organizationID,
+			"project_id":                projectID,
+			"delivery_claim_key_sha256": deliveryClaimKeySHA256,
 		},
 	))
 }
@@ -2630,6 +2661,7 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 		&occurrence.ClaimantWorkloadID,
 		&occurrence.AuthorityGeneration,
 		&occurrence.TokenHash,
+		&occurrence.ClaimKeySHA256,
 		&occurrence.LeaseExpiresAt,
 		&occurrence.AvailableAt,
 		&occurrence.Outcome,
@@ -2653,6 +2685,7 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 		occurrence.ID == "" || occurrence.ScheduleID == "" ||
 		occurrence.TargetVersion == 0 ||
 		!validDigest(occurrence.EffectiveInputSHA256) ||
+		(occurrence.ClaimKeySHA256 != "" && !validDigest(occurrence.ClaimKeySHA256)) ||
 		value.ValidateID(occurrence.PromptProfileID) != nil ||
 		occurrence.PromptRevision == 0 ||
 		value.ValidateID(occurrence.RuntimeRevisionID) != nil ||

@@ -1,4 +1,4 @@
--- name: ScheduleOccurrenceGet
+-- name: ScheduleOccurrenceGetByClaimKey
 SELECT
     id::text,
     schedule_id::text,
@@ -45,4 +45,4 @@ SELECT
 FROM control_plane.schedule_occurrences
 WHERE organization_id = @organization_id::uuid
   AND project_id = @project_id::uuid
-  AND id = @id::uuid
+  AND claim_key_sha256 = @claim_key_sha256

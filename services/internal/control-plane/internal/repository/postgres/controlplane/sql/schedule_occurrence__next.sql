@@ -59,6 +59,7 @@ SELECT
     coalesce(occurrence.claimant_workload_id, ''),
     coalesce(occurrence.authority_generation, 0),
     coalesce(occurrence.token_hash, ''),
+    coalesce(occurrence.claim_key_sha256, ''),
     coalesce(occurrence.lease_expires_at, 'epoch'::timestamptz),
     occurrence.available_at,
     coalesce(occurrence.outcome, ''),
