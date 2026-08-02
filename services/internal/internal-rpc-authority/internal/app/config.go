@@ -49,7 +49,7 @@ type Config struct {
 	VaultAddress                     string `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
 	VaultTLSServerName               string `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
 	VaultCAFile                      string `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
-	VaultAuthRole                    string
+	VaultAuthRole                    string `env:"INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE"`
 	VaultAuthFile                    string `env:"INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE"`
 	ReadbackCredentialVaultPath      string
 	ReadbackPossessionVaultPath      string
@@ -167,10 +167,68 @@ func LoadConfig(mode Mode) (Config, error) {
 	if err := parseEnvironment(&config); err != nil {
 		return Config{}, err
 	}
+	if err := applyWorkloadProfile(&config); err != nil {
+		return Config{}, err
+	}
 	if err := config.Validate(); err != nil {
 		return Config{}, err
 	}
 	return config, nil
+}
+
+// applyWorkloadProfile закрывает trusted deployment configuration до реестра
+// известных workload. Vault paths нельзя выбирать через окружение workload.
+func applyWorkloadProfile(config *Config) error {
+	if config == nil {
+		return errors.New("authority workload profile is required")
+	}
+	type workloadProfile struct {
+		spiffeID                  string
+		vaultRole                 string
+		readbackCredentialPath    string
+		readbackPossessionPath    string
+		restoreRoleCredentialPath string
+		restoreACKPath            string
+	}
+	profiles := map[Mode]map[string]workloadProfile{
+		ModeIssuer: {
+			"control-api-gateway": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+				vaultRole:                 "internal-rpc-authority-control-api-gateway",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/restore-ack",
+			},
+			"integration-gateway": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+				vaultRole:                 "internal-rpc-authority-integration-gateway",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/restore-ack",
+			},
+		},
+		ModeVerifier: {
+			"control-plane": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+				vaultRole:                 "internal-rpc-authority-control-plane",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack",
+			},
+		},
+	}
+	profile, ok := profiles[config.Mode][config.WorkloadID]
+	if !ok || config.WorkloadSPIFFEID != profile.spiffeID || config.VaultAuthRole != profile.vaultRole {
+		return errors.New("authority workload profile is not registered")
+	}
+	config.ReadbackCredentialVaultPath = profile.readbackCredentialPath
+	config.ReadbackPossessionVaultPath = profile.readbackPossessionPath
+	config.RestoreRoleCredentialVaultPath = profile.restoreRoleCredentialPath
+	config.RestoreACKVaultPath = profile.restoreACKPath
+	return nil
 }
 
 // Validate проверяет точные пути, идентичности и ограниченные интервалы.

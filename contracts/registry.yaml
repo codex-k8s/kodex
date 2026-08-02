@@ -1,5 +1,11 @@
 version: 1
 packages:
+  - id: integration-gateway-api-v1
+    format: openapi
+    owner: integration-gateway
+    source: contracts/openapi/integration-gateway/v1/openapi.yaml
+    consumers:
+      - integration-gateway
   - id: control-plane-events-v1
     format: asyncapi
     owner: control-plane
@@ -22,6 +28,7 @@ packages:
       - agent-runner
       - artifact-scanner
       - memory-indexer
+      - integration-gateway
   - id: runtime-controller-agent-runner-input-v1
     format: json-schema
     owner: runtime-controller

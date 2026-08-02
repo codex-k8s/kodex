@@ -23,6 +23,17 @@ import (
 
 const maximumCredentialBytes = 16 << 10
 
+type applicationGrantContextKey struct{}
+
+// WithApplicationGrant связывает один уже полученный transport bearer с
+// точным RPC. Значение не сохраняется в Client и не попадает в диагностику.
+func WithApplicationGrant(ctx context.Context, grant string) (context.Context, error) {
+	if ctx == nil || grant == "" || len(grant) > maximumCredentialBytes || strings.TrimSpace(grant) != grant {
+		return nil, errors.New("request application grant is invalid")
+	}
+	return context.WithValue(ctx, applicationGrantContextKey{}, grant), nil
+}
+
 type Config struct {
 	Target                string
 	TLSServerName         string
@@ -138,9 +149,13 @@ func (client *Client) AuthorityProof(
 	if !ok || expectedOperation != operationID {
 		return "", "", errors.New("control-plane operation is not registered")
 	}
-	grant, err := readCredential(client.grantFile)
-	if err != nil {
-		return "", "", err
+	grant, _ := ctx.Value(applicationGrantContextKey{}).(string)
+	if grant == "" {
+		var err error
+		grant, err = readCredential(client.grantFile)
+		if err != nil {
+			return "", "", err
+		}
 	}
 	correlationID := uuid.NewString()
 	requestContext := metadata.AppendToOutgoingContext(

@@ -2299,6 +2299,14 @@ spec:
             matchLabels:
               app.kubernetes.io/name: control-api-gateway
           egressPolicy: internal-rpc-authority-restore-egress-control-api-gateway
+        - workloadId: integration-gateway
+          roles:
+            - AUTHORIZATION_ISSUER
+          serviceAccountName: integration-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-gateway
+          egressPolicy: internal-rpc-authority-restore-egress-integration-gateway
         - workloadId: control-plane
           roles:
             - AUTHORIZATION_VERIFIER

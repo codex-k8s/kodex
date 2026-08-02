@@ -1,0 +1,50 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: integration-gateway
+  labels:
+    app.kubernetes.io/name: integration-gateway
+spec:
+  groups:
+    - name: integration-gateway.availability
+      rules:
+        - alert: IntegrationGatewayUnavailable
+          expr: absent(up{service="integration-gateway"}) or sum(up{service="integration-gateway"}) < 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Integration gateway недоступен
+            description: Prometheus не видит доступной реплики gateway.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+        - alert: IntegrationGatewayNotReady
+          expr: absent(mattercodex_integration_gateway_readiness{ready="true"}) or sum(mattercodex_integration_gateway_readiness{ready="true"}) < 1
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Integration gateway не проходит readiness
+            description: Проверить PostgreSQL, control-plane и локальный authority issuer.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+        - alert: IntegrationGatewayContinuationFailures
+          expr: sum(rate(mattercodex_integration_gateway_worker_cycles_total{worker="continuation",outcome="failure"}[5m])) > 0.1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Не синхронизируется integration continuation
+            description: Durable effect не подтверждается control-plane; provider path остаётся закрыт.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+        - alert: IntegrationGatewayProviderFailures
+          expr: sum(rate(mattercodex_integration_gateway_invocations_total{outcome="failure"}[5m])) > 0.1
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Растёт число provider failure outcomes
+            description: Проверить bounded provider proxy, credential binding и terminal continuation delivery.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+        - alert: IntegrationGatewayUnknownOutcomes
+          expr: sum(rate(mattercodex_integration_gateway_invocations_total{outcome="unknown"}[5m])) > 0
+          for: 2m
+          labels: {severity: critical}
+          annotations:
+            summary: Обнаружен неопределённый результат integration invocation
+            description: Повтор внешнего действия закрыт; требуется сверить provider receipt и durable result перед repair.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md

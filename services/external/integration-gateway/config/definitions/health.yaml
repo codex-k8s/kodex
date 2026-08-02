@@ -1,0 +1,40 @@
+apiVersion: mattercodex.io/v1
+kind: IntegrationDefinition
+metadata:
+  name: provider-health
+  version: 1
+spec:
+  tools:
+    - name: read-provider-health
+      version: 1
+      description: Read a bounded provider health status through the approved egress proxy.
+      capability: provider-health
+      risk: READ
+      permission: integrations.provider-health.read
+      approval: NEVER
+      idempotency: NONE
+      inputSchema:
+        type: object
+        additionalProperties: false
+        properties: {}
+      outputSchema:
+        type: object
+        additionalProperties: false
+        properties:
+          status:
+            type: string
+        required:
+          - status
+      redactionPointers: []
+      direct:
+        reference: provider-health.readonly
+        cliNames:
+          - provider-health
+        environmentNames:
+          - PROVIDER_HEALTH_REFERENCE
+      http:
+        method: GET
+        path: /health
+        timeout: 2s
+        idempotencyHeader: ""
+        credentialHeaders: {}

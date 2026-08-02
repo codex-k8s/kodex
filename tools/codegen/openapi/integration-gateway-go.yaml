@@ -1,0 +1,7 @@
+package: generated
+output: services/external/integration-gateway/internal/transport/http/generated/integration_gateway.gen.go
+generate:
+  models: true
+  std-http-server: true
+output-options:
+  skip-prune: false
