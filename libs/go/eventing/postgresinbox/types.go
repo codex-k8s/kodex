@@ -3,6 +3,7 @@ package postgresinbox
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"math"
 	"regexp"
@@ -28,9 +29,11 @@ const (
 	maximumBackoff              = 24 * time.Hour
 	maximumCleanupBatch         = 1000
 	maximumTransactionRetries   = 3
+	maximumBlockagePage         = 100
+	defaultBlockagePage         = 50
 	schemaVersion               = 1
 	schemaComponent             = "postgresinbox"
-	schemaDigestHex             = "d5d672cab4214cd25d25e97300410e9fd42fcfa9ec797dfe4ea0ec2eec8e6e44"
+	schemaDigestHex             = "4c44aeb7b45033cd140b9d49db24d67d0ff620687249879d3274427e1e29d5f2"
 )
 
 var (
@@ -40,6 +43,7 @@ var (
 	instanceIDPattern    = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$`)
 	errorCodePattern     = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 	repairKeyPattern     = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$`)
+	effectNamePattern    = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 )
 
 // Beginner открывает принадлежащую Processor PostgreSQL-транзакцию.
@@ -47,8 +51,58 @@ type Beginner interface {
 	BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error)
 }
 
-// Handler выполняет только локальный effect через переданную транзакцию.
-type Handler func(context.Context, pgx.Tx, eventing.Envelope) error
+// EventSnapshot хранит закреплённую копию envelope без разделяемой mutable памяти.
+type EventSnapshot struct {
+	envelope eventing.Envelope
+}
+
+// Envelope возвращает независимую копию закреплённого envelope.
+func (snapshot EventSnapshot) Envelope() eventing.Envelope {
+	return cloneEnvelope(snapshot.envelope)
+}
+
+// Data возвращает независимую копию закреплённого payload.
+func (snapshot EventSnapshot) Data() json.RawMessage {
+	return append(json.RawMessage(nil), snapshot.envelope.Data...)
+}
+
+// EffectOperation — opaque ссылка на зарегистрированную service-owned функцию.
+type EffectOperation struct {
+	name     string
+	schema   string
+	function string
+	query    string
+}
+
+// NewEffectOperation создаёт вызов exact schema-qualified функции (jsonb)->jsonb.
+func NewEffectOperation(name, schema, function string) (EffectOperation, error) {
+	if !effectNamePattern.MatchString(name) ||
+		!schemaNamePattern.MatchString(schema) || strings.HasPrefix(schema, "pg_") ||
+		!effectNamePattern.MatchString(function) {
+		return EffectOperation{}, ErrInvalidEffectOperation
+	}
+	query, err := buildEffectCallQuery(pgx.Identifier{schema, function}.Sanitize())
+	if err != nil {
+		return EffectOperation{}, err
+	}
+	return EffectOperation{
+		name:     name,
+		schema:   schema,
+		function: function,
+		query:    query,
+	}, nil
+}
+
+// Name возвращает bounded техническое имя операции.
+func (operation EffectOperation) Name() string { return operation.name }
+
+// EffectTx не раскрывает соединение, transaction/session control или raw SQL.
+type EffectTx interface {
+	Call(EffectOperation, json.RawMessage) (json.RawMessage, error)
+}
+
+// Handler выполняет локальный effect через узкую transaction-bound capability.
+type Handler func(context.Context, EffectTx, EventSnapshot) error
 
 // Consumer задаёт назначенную сервером устойчивую identity consumer.
 type Consumer struct {
@@ -99,9 +153,9 @@ func (config Config) validate() error {
 		!instanceIDPattern.MatchString(config.InstanceID) ||
 		config.LeaseDuration < time.Second ||
 		config.LeaseDuration > maximumLeaseDuration ||
-		config.EffectTimeout <= 0 ||
+		config.EffectTimeout <= 0 || config.EffectTimeout >= config.LeaseDuration ||
 		config.FinalizeTimeout <= 0 ||
-		config.EffectTimeout+config.FinalizeTimeout >= config.LeaseDuration ||
+		config.FinalizeTimeout >= config.LeaseDuration-config.EffectTimeout ||
 		config.InitialBackoff < 100*time.Millisecond ||
 		config.MaximumBackoff < config.InitialBackoff ||
 		config.MaximumBackoff > maximumBackoff ||
@@ -141,6 +195,8 @@ const (
 	OutcomeRepaired   Outcome = "repaired"
 	OutcomeCleaned    Outcome = "cleaned"
 	OutcomeReady      Outcome = "ready"
+	OutcomeListed     Outcome = "listed"
+	OutcomeRecovered  Outcome = "recovered"
 	OutcomeCanceled   Outcome = "canceled"
 	OutcomeError      Outcome = "error"
 )
@@ -196,10 +252,44 @@ func (failure *EffectFailure) Code() string { return failure.code }
 // Retryable сообщает, разрешён ли следующий attempt.
 func (failure *EffectFailure) Retryable() bool { return failure.retryable }
 
+// OperatorAction — закрытая авторизуемая операция над durable blockage.
+type OperatorAction string
+
+const (
+	OperatorActionRead    OperatorAction = "read"
+	OperatorActionRecover OperatorAction = "recover"
+	OperatorActionRepair  OperatorAction = "repair"
+)
+
+// OperatorTarget содержит только exact consumer/event coordinates, не authority.
+type OperatorTarget struct {
+	Action             OperatorAction
+	Consumer           Consumer
+	IdempotencyKey     string
+	EventID            string
+	EventDigest        [sha256.Size]byte
+	ExpectedGeneration uint64
+	ExpectedFence      uint64
+}
+
+// OperatorAuthority возвращается trusted boundary из context/authoritative state.
+type OperatorAuthority struct {
+	Actor        string
+	Organization string
+	Project      string
+	Operation    string
+	KeyHash      [sha256.Size]byte
+}
+
+// OperatorAuthorizer назначает actor и canonical durable idempotency scope.
+type OperatorAuthorizer interface {
+	AuthorizeOperator(context.Context, OperatorTarget) (OperatorAuthority, error)
+}
+
 // RepairRequest задаёт bounded audited REQUEUE exact dead-letter predecessor.
 type RepairRequest struct {
 	Consumer           Consumer
-	IdempotencyKey     string
+	IdempotencyKey     string // Только вход authorizer; в durable scope не сохраняется.
 	EventID            string
 	EventDigest        [sha256.Size]byte
 	ExpectedGeneration uint64
@@ -230,25 +320,6 @@ func (request RepairRequest) validate() error {
 	return nil
 }
 
-// RepairTarget передаёт authorizer только exact immutable repair coordinates.
-type RepairTarget struct {
-	Consumer           Consumer
-	EventID            string
-	EventDigest        [sha256.Size]byte
-	ExpectedGeneration uint64
-	ExpectedFence      uint64
-}
-
-// RepairAuthority содержит actor, разрешённого внешней trusted boundary.
-type RepairAuthority struct {
-	Actor string
-}
-
-// RepairAuthorizer разрешает actor из context/authoritative state, не из request.
-type RepairAuthorizer interface {
-	AuthorizeRepair(context.Context, RepairTarget) (RepairAuthority, error)
-}
-
 // RepairReceipt является неизменяемым durable результатом repair.
 type RepairReceipt struct {
 	RepairID        string
@@ -258,6 +329,136 @@ type RepairReceipt struct {
 	Fence           uint64
 	CreatedAt       time.Time
 	AlreadyRepaired bool
+}
+
+// RecoveryDirective задаёт явный следующий шаг operator/broker adapter.
+type RecoveryDirective string
+
+const (
+	RecoveryReplayRequired  RecoveryDirective = "replay_required"
+	RecoveryWaitPredecessor RecoveryDirective = "wait_predecessor"
+	RecoveryWaitLease       RecoveryDirective = "wait_lease"
+	RecoveryWaitBackoff     RecoveryDirective = "wait_backoff"
+	RecoveryRepairRequired  RecoveryDirective = "repair_required"
+	RecoveryACKEligible     RecoveryDirective = "ack_eligible"
+)
+
+// RecoveryRequest фиксирует исчерпание внешней redelivery exact event.
+type RecoveryRequest struct {
+	Consumer           Consumer
+	IdempotencyKey     string // Только вход authorizer; в durable scope не сохраняется.
+	EventID            string
+	EventDigest        [sha256.Size]byte
+	ExpectedGeneration uint64
+	ExpectedFence      uint64
+	Reason             string
+	EvidenceDigest     [sha256.Size]byte
+}
+
+func (request RecoveryRequest) validate() error {
+	if err := request.Consumer.validate(); err != nil {
+		return err
+	}
+	if len(request.IdempotencyKey) < minimumIdempotencyKeyLength ||
+		len(request.IdempotencyKey) > maximumIdempotencyKeyLength ||
+		!repairKeyPattern.MatchString(request.IdempotencyKey) ||
+		len(request.Reason) == 0 || len(request.Reason) > maximumReasonLength ||
+		strings.TrimSpace(request.Reason) != request.Reason ||
+		!canonicalUUID(request.EventID) ||
+		request.EventDigest == ([sha256.Size]byte{}) ||
+		request.EvidenceDigest == ([sha256.Size]byte{}) ||
+		request.ExpectedGeneration > math.MaxInt64 || request.ExpectedFence > math.MaxInt64 ||
+		(request.ExpectedGeneration == 0) != (request.ExpectedFence == 0) {
+		return ErrInvalidRecovery
+	}
+	return nil
+}
+
+// RecoveryReceipt — durable решение без ACK/skip и без payload.
+type RecoveryReceipt struct {
+	RecoveryID      string
+	EventID         string
+	EventDigest     [sha256.Size]byte
+	Generation      uint64
+	Fence           uint64
+	Directive       RecoveryDirective
+	CreatedAt       time.Time
+	AlreadyRecorded bool
+}
+
+// BlockageEligibility — закрытая причина блокировки/следующий безопасный шаг.
+type BlockageEligibility string
+
+const (
+	BlockageReplayRequired  BlockageEligibility = "replay_required"
+	BlockageWaitPredecessor BlockageEligibility = "wait_predecessor"
+	BlockageWaitLease       BlockageEligibility = "wait_lease"
+	BlockageWaitBackoff     BlockageEligibility = "wait_backoff"
+	BlockageRepairRequired  BlockageEligibility = "repair_required"
+)
+
+// BlockageCursor задаёт bounded keyset pagination без payload/ordering key.
+type BlockageCursor struct {
+	ReceivedAt time.Time
+	EventID    string
+}
+
+// BlockageListRequest ограничивает страницу авторитетного operator read.
+type BlockageListRequest struct {
+	Limit int
+	After *BlockageCursor
+}
+
+func (request BlockageListRequest) validate() (BlockageListRequest, error) {
+	if request.Limit == 0 {
+		request.Limit = defaultBlockagePage
+	}
+	if request.Limit < 1 || request.Limit > maximumBlockagePage {
+		return BlockageListRequest{}, ErrInvalidBlockageRead
+	}
+	if request.After != nil && (request.After.ReceivedAt.IsZero() ||
+		!canonicalUUID(request.After.EventID)) {
+		return BlockageListRequest{}, ErrInvalidBlockageRead
+	}
+	return request, nil
+}
+
+// BlockageState — закрытое сохранённое состояние blocking predecessor.
+type BlockageState string
+
+const (
+	BlockageStateReceived   BlockageState = "RECEIVED"
+	BlockageStateProcessing BlockageState = "PROCESSING"
+	BlockageStateRetry      BlockageState = "RETRY"
+	BlockageStateDeadLetter BlockageState = "DEAD_LETTER"
+)
+
+// Blockage — безопасные durable coordinates самого раннего predecessor.
+type Blockage struct {
+	EventID           string
+	EventDigest       [sha256.Size]byte
+	OrderingKeyDigest [sha256.Size]byte
+	EventSequence     uint64
+	CursorSequence    uint64
+	State             BlockageState
+	Eligibility       BlockageEligibility
+	Attempts          uint32
+	MaxAttempts       uint32
+	RepairCount       uint32
+	MaxRepairs        uint32
+	LeaseGeneration   uint64
+	LeaseFence        uint64
+	AvailableAt       time.Time
+	LeaseExpiresAt    *time.Time
+	TerminalAt        *time.Time
+	FailureCode       string
+	ReceivedAt        time.Time
+}
+
+// BlockagePage содержит bounded страницу и keyset continuation.
+type BlockagePage struct {
+	Items []Blockage
+	Next  *BlockageCursor
 }
 
 func classifyEffectFailure(err error) *EffectFailure {

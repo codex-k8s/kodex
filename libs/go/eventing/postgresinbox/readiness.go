@@ -59,9 +59,20 @@ func (processor *Processor) Check(ctx context.Context) (err error) {
 		if rows.Err() != nil {
 			return schemaMismatch(rows.Err())
 		}
-		for key, expected := range requiredSchemaObjects() {
-			if actual[key] != expected {
-				return ErrSchemaMismatch
+		if validateSchemaObjects(actual) != nil {
+			return ErrSchemaMismatch
+		}
+		for _, operation := range processor.effectOperations {
+			var effectReady bool
+			if probeErr := tx.QueryRow(
+				ctx,
+				processor.queries.effectInspect,
+				pgx.StrictNamedArgs{
+					"schema_name":   operation.schema,
+					"function_name": operation.function,
+				},
+			).Scan(&effectReady); probeErr != nil || !effectReady {
+				return schemaMismatch(probeErr)
 			}
 		}
 
@@ -73,6 +84,21 @@ func (processor *Processor) Check(ctx context.Context) (err error) {
 		return nil
 	})
 	return err
+}
+
+func validateSchemaObjects(actual map[string]string) error {
+	for key, expected := range requiredSchemaObjects() {
+		if actual[key] != expected {
+			return ErrSchemaMismatch
+		}
+		delete(actual, key)
+	}
+	for key, signature := range actual {
+		if !strings.HasPrefix(key, "extension_index/") || signature != "1" {
+			return ErrSchemaMismatch
+		}
+	}
+	return nil
 }
 
 func schemaMismatch(cause error) error {
@@ -108,6 +134,8 @@ func requiredSchemaObjects() map[string]string {
 		"privilege/runtime_inbox_repairs":         "1",
 		"privilege/runtime_event_ordering_key":    "1",
 		"privilege/schema":                        "1",
+		"privilege/principal":                     "1",
+		"privilege/sequences":                     "1",
 	}
 
 	addRequiredColumns(required)
@@ -166,9 +194,12 @@ func addRequiredColumns(required map[string]string) {
 
 		"runtime_inbox_repairs.consumer_name":       columnSignature("text", true, "-", "-"),
 		"runtime_inbox_repairs.consumer_scope":      columnSignature("text", true, "-", "-"),
-		"runtime_inbox_repairs.idempotency_key":     columnSignature("text", true, "-", "-"),
+		"runtime_inbox_repairs.organization_scope":  columnSignature("text", true, "-", "-"),
+		"runtime_inbox_repairs.project_scope":       columnSignature("text", true, "-", "-"),
+		"runtime_inbox_repairs.operation":           columnSignature("text", true, "-", "-"),
+		"runtime_inbox_repairs.key_hash":            columnSignature("bytea", true, "-", "-"),
 		"runtime_inbox_repairs.request_digest":      columnSignature("bytea", true, "-", "-"),
-		"runtime_inbox_repairs.repair_id":           columnSignature("uuid", true, "-", "-"),
+		"runtime_inbox_repairs.receipt_id":          columnSignature("uuid", true, "-", "-"),
 		"runtime_inbox_repairs.event_id":            columnSignature("uuid", true, "-", "-"),
 		"runtime_inbox_repairs.event_digest":        columnSignature("bytea", true, "-", "-"),
 		"runtime_inbox_repairs.expected_generation": columnSignature("bigint", true, "-", "-"),
@@ -179,6 +210,7 @@ func addRequiredColumns(required map[string]string) {
 		"runtime_inbox_repairs.evidence_digest":     columnSignature("bytea", true, "-", "-"),
 		"runtime_inbox_repairs.result_generation":   columnSignature("bigint", true, "-", "-"),
 		"runtime_inbox_repairs.result_fence":        columnSignature("bigint", true, "-", "-"),
+		"runtime_inbox_repairs.result_directive":    columnSignature("text", true, "-", "-"),
 		"runtime_inbox_repairs.created_at":          columnSignature("timestamp with time zone", true, "-", "clock_timestamp"),
 	}
 	for name, signature := range columns {
@@ -226,25 +258,26 @@ func addRequiredConstraints(required map[string]string) {
 		"runtime_inbox_events.runtime_inbox_events_state_check":                "c|1|0|0|-|CHECKstate=ANYARRAY['RECEIVED'::text,'PROCESSING'::text,'RETRY'::text,'COMPLETED'::text,'STALE'::text,'DEAD_LETTER'::text]",
 		"runtime_inbox_events.runtime_inbox_events_attempt_budget_check":       "c|1|0|0|-|CHECKattempts>=0ANDmax_attempts>=1ANDmax_attempts<=100ANDattempts<=max_attempts",
 		"runtime_inbox_events.runtime_inbox_events_repair_budget_check":        "c|1|0|0|-|CHECKrepair_count>=0ANDmax_repairs>=1ANDmax_repairs<=20ANDrepair_count<=max_repairs",
-		"runtime_inbox_events.runtime_inbox_events_lease_generation_check":     "c|1|0|0|-|CHECKlease_generation>=0",
+		"runtime_inbox_events.runtime_inbox_events_lease_generation_check":     "c|1|0|0|-|CHECKlease_generation>=0ANDlease_generation=0=lease_fence=0",
 		"runtime_inbox_events.runtime_inbox_events_lease_fence_check":          "c|1|0|0|-|CHECKlease_fence>=0",
 		"runtime_inbox_events.runtime_inbox_events_error_code_check":           "c|1|0|0|-|CHECKlast_error_codeISNULLORlast_error_code~'^[a-z][a-z0-9_]{0,62}$'::text",
 		"runtime_inbox_events.runtime_inbox_events_lease_consistency_check":    "c|1|0|0|-|CHECKstate='PROCESSING'::textANDlease_ownerISNOTNULLANDchar_lengthlease_owner>=1ANDchar_lengthlease_owner<=128ANDlease_tokenISNOTNULLANDlease_generation>0ANDlease_fence>0ANDlease_expires_atISNOTNULLORstate<>'PROCESSING'::textANDlease_ownerISNULLANDlease_tokenISNULLANDlease_expires_atISNULL",
 		"runtime_inbox_events.runtime_inbox_events_terminal_consistency_check": "c|1|0|0|-|CHECKstate=ANYARRAY['COMPLETED'::text,'STALE'::text]ANDprocessed_atISNOTNULLANDcleanup_afterISNOTNULLANDterminal_atISNULLORstate='DEAD_LETTER'::textANDprocessed_atISNULLANDcleanup_afterISNULLANDterminal_atISNOTNULLORstate=ANYARRAY['RECEIVED'::text,'PROCESSING'::text,'RETRY'::text]ANDprocessed_atISNULLANDcleanup_afterISNULLANDterminal_atISNULL",
 
-		"runtime_inbox_repairs.runtime_inbox_repairs_pkey":                  "p|1|0|0|1|PRIMARYKEYconsumer_name,consumer_scope,idempotency_key",
-		"runtime_inbox_repairs.runtime_inbox_repairs_repair_id_key":         "u|1|0|0|1|UNIQUErepair_id",
-		"runtime_inbox_repairs.runtime_inbox_repairs_consumer_name_check":   "c|1|0|0|-|CHECKconsumer_name~'^[a-z][a-z0-9._-]{0,127}$'::text",
-		"runtime_inbox_repairs.runtime_inbox_repairs_consumer_scope_check":  "c|1|0|0|-|CHECKconsumer_scope~'^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'::text",
-		"runtime_inbox_repairs.runtime_inbox_repairs_idempotency_key_check": "c|1|0|0|-|CHECKchar_lengthidempotency_key>=8ANDchar_lengthidempotency_key<=128",
-		"runtime_inbox_repairs.runtime_inbox_repairs_request_digest_check":  "c|1|0|0|-|CHECKoctet_lengthrequest_digest=32",
-		"runtime_inbox_repairs.runtime_inbox_repairs_event_digest_check":    "c|1|0|0|-|CHECKoctet_lengthevent_digest=32",
-		"runtime_inbox_repairs.runtime_inbox_repairs_expected_fence_check":  "c|1|0|0|-|CHECKexpected_generation>0ANDexpected_fence>0",
-		"runtime_inbox_repairs.runtime_inbox_repairs_action_check":          "c|1|0|0|-|CHECKaction='REQUEUE'::text",
-		"runtime_inbox_repairs.runtime_inbox_repairs_actor_check":           "c|1|0|0|-|CHECKchar_lengthactor>=1ANDchar_lengthactor<=256",
-		"runtime_inbox_repairs.runtime_inbox_repairs_reason_check":          "c|1|0|0|-|CHECKchar_lengthreason>=1ANDchar_lengthreason<=1024",
-		"runtime_inbox_repairs.runtime_inbox_repairs_evidence_digest_check": "c|1|0|0|-|CHECKoctet_lengthevidence_digest=32",
-		"runtime_inbox_repairs.runtime_inbox_repairs_result_fence_check":    "c|1|0|0|-|CHECKresult_generation>0ANDresult_fence>0",
+		"runtime_inbox_repairs.runtime_inbox_repairs_pkey":                   "p|1|0|0|1|PRIMARYKEYorganization_scope,project_scope,operation,key_hash",
+		"runtime_inbox_repairs.runtime_inbox_repairs_receipt_id_key":         "u|1|0|0|1|UNIQUEreceipt_id",
+		"runtime_inbox_repairs.runtime_inbox_repairs_consumer_name_check":    "c|1|0|0|-|CHECKconsumer_name~'^[a-z][a-z0-9._-]{0,127}$'::text",
+		"runtime_inbox_repairs.runtime_inbox_repairs_consumer_scope_check":   "c|1|0|0|-|CHECKconsumer_scope~'^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'::text",
+		"runtime_inbox_repairs.runtime_inbox_repairs_authorized_scope_check": "c|1|0|0|-|CHECKorganization_scope~'^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'::textANDproject_scope~'^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'::textANDoperation~'^[a-z][a-z0-9._-]{0,127}$'::textANDoctet_lengthkey_hash=32",
+		"runtime_inbox_repairs.runtime_inbox_repairs_request_digest_check":   "c|1|0|0|-|CHECKoctet_lengthrequest_digest=32",
+		"runtime_inbox_repairs.runtime_inbox_repairs_event_digest_check":     "c|1|0|0|-|CHECKoctet_lengthevent_digest=32",
+		"runtime_inbox_repairs.runtime_inbox_repairs_expected_fence_check":   "c|1|0|0|-|CHECKexpected_generation>=0ANDexpected_fence>=0ANDexpected_generation=0=expected_fence=0",
+		"runtime_inbox_repairs.runtime_inbox_repairs_action_check":           "c|1|0|0|-|CHECKaction=ANYARRAY['REQUEUE'::text,'REJOIN'::text,'TERMINALIZE'::text,'WAIT'::text]",
+		"runtime_inbox_repairs.runtime_inbox_repairs_actor_check":            "c|1|0|0|-|CHECKchar_lengthactor>=1ANDchar_lengthactor<=256",
+		"runtime_inbox_repairs.runtime_inbox_repairs_reason_check":           "c|1|0|0|-|CHECKchar_lengthreason>=1ANDchar_lengthreason<=1024",
+		"runtime_inbox_repairs.runtime_inbox_repairs_evidence_digest_check":  "c|1|0|0|-|CHECKoctet_lengthevidence_digest=32",
+		"runtime_inbox_repairs.runtime_inbox_repairs_result_fence_check":     "c|1|0|0|-|CHECKresult_generation>=0ANDresult_fence>=0ANDresult_generation=expected_generationANDresult_fence=expected_fence",
+		"runtime_inbox_repairs.runtime_inbox_repairs_result_directive_check": "c|1|0|0|-|CHECKresult_directive=ANYARRAY['replay_required'::text,'wait_predecessor'::text,'wait_lease'::text,'wait_backoff'::text,'repair_required'::text,'ack_eligible'::text]",
 	}
 	for name, signature := range constraints {
 		required["constraint/"+name] = signature
@@ -285,9 +318,9 @@ func addRequiredIndexes(required map[string]string) {
 		),
 		"runtime_inbox_repairs_event_idx": indexSignature(
 			5,
-			"consumer_name,consumer_scope,event_id,created_at,repair_id",
+			"consumer_name,consumer_scope,event_id,created_at,receipt_id",
 			"-",
-			"CREATEINDEXruntime_inbox_repairs_event_idxONruntime_inbox_repairsUSINGbtreeconsumer_name,consumer_scope,event_id,created_at,repair_id",
+			"CREATEINDEXruntime_inbox_repairs_event_idxONruntime_inbox_repairsUSINGbtreeconsumer_name,consumer_scope,event_id,created_at,receipt_id",
 		),
 	}
 	for name, signature := range indexes {

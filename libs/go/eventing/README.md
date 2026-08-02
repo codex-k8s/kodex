@@ -23,6 +23,7 @@ context. NATS adapter не создаёт stream: `Check` сверяет exact �
 Подпакет [`postgresinbox`](postgresinbox/README.md) фиксирует provider-neutral
 consumer API, exact schema contract, receive/claim/effect lifecycle,
 transaction/ACK ownership, generation/fence, retry/dead-letter/repair,
+bounded operator read/recovery, узкую transaction-bound effect capability,
 readiness и retention. Нормативный `schema.sql` не применяется библиотекой:
 каждый сервис включает эквивалентный DDL в собственную forward-only goose
 migration.

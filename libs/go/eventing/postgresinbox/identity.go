@@ -18,6 +18,7 @@ type eventRecord struct {
 }
 
 func newEventRecord(envelope eventing.Envelope) (eventRecord, error) {
+	envelope = cloneEnvelope(envelope)
 	encoded, err := envelope.Marshal()
 	if err != nil {
 		return eventRecord{}, ErrInvalidEvent
@@ -44,6 +45,11 @@ func newEventRecord(envelope eventing.Envelope) (eventRecord, error) {
 	}, nil
 }
 
+func cloneEnvelope(envelope eventing.Envelope) eventing.Envelope {
+	envelope.Data = append(json.RawMessage(nil), envelope.Data...)
+	return envelope
+}
+
 func canonicalUUID(value string) bool {
 	parsed, err := uuid.Parse(value)
 	return err == nil && parsed != uuid.Nil && parsed.String() == value
@@ -68,23 +74,50 @@ func buildOrderingKey(envelope eventing.Envelope) (string, error) {
 	return string(encoded), nil
 }
 
-func repairRequestDigest(request RepairRequest, actor string) [sha256.Size]byte {
+func repairRequestDigest(request RepairRequest, authority OperatorAuthority) [sha256.Size]byte {
 	hash := sha256.New()
+	writeAuthorityDigest(hash, authority)
+	writeDigestPart(hash, string(OperatorActionRepair))
 	writeDigestPart(hash, request.Consumer.Name)
 	writeDigestPart(hash, request.Consumer.Scope)
-	writeDigestPart(hash, request.IdempotencyKey)
 	writeDigestPart(hash, request.EventID)
 	hash.Write(request.EventDigest[:])
 	var numbers [16]byte
 	binary.BigEndian.PutUint64(numbers[:8], request.ExpectedGeneration)
 	binary.BigEndian.PutUint64(numbers[8:], request.ExpectedFence)
 	hash.Write(numbers[:])
-	writeDigestPart(hash, actor)
 	writeDigestPart(hash, request.Reason)
 	hash.Write(request.EvidenceDigest[:])
 	var result [sha256.Size]byte
 	copy(result[:], hash.Sum(nil))
 	return result
+}
+
+func recoveryRequestDigest(request RecoveryRequest, authority OperatorAuthority) [sha256.Size]byte {
+	hash := sha256.New()
+	writeAuthorityDigest(hash, authority)
+	writeDigestPart(hash, string(OperatorActionRecover))
+	writeDigestPart(hash, request.Consumer.Name)
+	writeDigestPart(hash, request.Consumer.Scope)
+	writeDigestPart(hash, request.EventID)
+	hash.Write(request.EventDigest[:])
+	var numbers [16]byte
+	binary.BigEndian.PutUint64(numbers[:8], request.ExpectedGeneration)
+	binary.BigEndian.PutUint64(numbers[8:], request.ExpectedFence)
+	hash.Write(numbers[:])
+	writeDigestPart(hash, request.Reason)
+	hash.Write(request.EvidenceDigest[:])
+	var result [sha256.Size]byte
+	copy(result[:], hash.Sum(nil))
+	return result
+}
+
+func writeAuthorityDigest(hash interface{ Write([]byte) (int, error) }, authority OperatorAuthority) {
+	writeDigestPart(hash, authority.Actor)
+	writeDigestPart(hash, authority.Organization)
+	writeDigestPart(hash, authority.Project)
+	writeDigestPart(hash, authority.Operation)
+	_, _ = hash.Write(authority.KeyHash[:])
 }
 
 func writeDigestPart(buffer interface{ Write([]byte) (int, error) }, value string) {

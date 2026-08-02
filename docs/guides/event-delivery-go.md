@@ -256,19 +256,47 @@ repair.
 ## Consumer и durable inbox
 
 Consumer передает каждое проверенное событие в
-`postgresinbox.Processor.Process`. Handler получает ту же `pgx.Tx`, в которой
-фиксируются inbox и cursor:
+`postgresinbox.Processor.Process`. Composition root заранее регистрирует exact
+service-owned PostgreSQL function `(jsonb)->jsonb`. Handler получает только
+transaction-bound `EffectTx` и immutable `EventSnapshot`; raw `pgx.Tx`,
+connection и transaction/session control ему не выдаются:
 
 ```go
+applyProjection, err := postgresinbox.NewEffectOperation(
+    "apply_search_projection",
+    "search_service",
+    "apply_search_projection",
+)
+if err != nil {
+    return err
+}
+
 result, err := inbox.Process(
     ctx,
-    "search-projection",
+    postgresinbox.Consumer{Name: "search-projection", Scope: "v1"},
     event,
-    func(ctx context.Context, tx pgx.Tx, event eventing.Envelope) error {
-        return projection.Apply(ctx, tx, event)
+    func(
+        ctx context.Context,
+        tx postgresinbox.EffectTx,
+        event postgresinbox.EventSnapshot,
+    ) error {
+        input, err := event.Envelope().Marshal()
+        if err != nil {
+            return err
+        }
+        _, err = tx.Call(applyProjection, input)
+        return err
     },
 )
 ```
+
+`applyProjection` передаётся в `WithEffectOperations` при создании Processor.
+Capability исполняет только зарегистрированную schema-qualified function в
+savepoint той же физической caller-visible транзакции. Она не предоставляет
+`Conn`, `Begin`, `Commit`, `Rollback`, raw SQL, `SET ROLE`, смену `search_path`
+либо прямое изменение runtime inbox/cursor. Readiness проверяет точную
+сигнатуру функции, invoker mode, owner/membership и non-delegatable `EXECUTE`
+без `PUBLIC`; migration и composition root остаются доверенной boundary.
 
 Устойчивые исходы:
 

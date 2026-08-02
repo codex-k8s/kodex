@@ -57,14 +57,29 @@ var rawInboxRenew string
 //go:embed sql/inbox__cleanup.sql
 var rawInboxCleanup string
 
-//go:embed sql/repair__get_by_idempotency.sql
-var rawRepairGetByIdempotency string
+//go:embed sql/operator__get_receipt.sql
+var rawOperatorGetReceipt string
 
-//go:embed sql/repair__insert.sql
-var rawRepairInsert string
+//go:embed sql/operator__insert_receipt.sql
+var rawOperatorInsertReceipt string
 
 //go:embed sql/inbox__requeue.sql
 var rawInboxRequeue string
+
+//go:embed sql/inbox__recover_rejoin.sql
+var rawInboxRecoverRejoin string
+
+//go:embed sql/blockage__get.sql
+var rawBlockageGet string
+
+//go:embed sql/blockage__list.sql
+var rawBlockageList string
+
+//go:embed sql/effect__inspect.sql
+var rawEffectInspect string
+
+//go:embed sql/effect__call.sql
+var rawEffectCall string
 
 //go:embed sql/schema__inspect.sql
 var rawSchemaInspect string
@@ -90,9 +105,13 @@ type querySet struct {
 	inboxExpireToDeadLetter     string
 	inboxRenew                  string
 	inboxCleanup                string
-	repairGetByIdempotency      string
-	repairInsert                string
+	operatorGetReceipt          string
+	operatorInsertReceipt       string
 	inboxRequeue                string
+	inboxRecoverRejoin          string
+	blockageGet                 string
+	blockageList                string
+	effectInspect               string
 	schemaInspect               string
 	schemaProbe                 string
 }
@@ -121,9 +140,13 @@ func loadQueries() (querySet, error) {
 		{"inbox__expire_to_dead_letter.sql", "inbox__expire_to_dead_letter", ":exec", rawInboxExpireToDeadLetter},
 		{"inbox__renew.sql", "inbox__renew", ":one", rawInboxRenew},
 		{"inbox__cleanup.sql", "inbox__cleanup", ":one", rawInboxCleanup},
-		{"repair__get_by_idempotency.sql", "repair__get_by_idempotency", ":one", rawRepairGetByIdempotency},
-		{"repair__insert.sql", "repair__insert", ":one", rawRepairInsert},
+		{"operator__get_receipt.sql", "operator__get_receipt", ":one", rawOperatorGetReceipt},
+		{"operator__insert_receipt.sql", "operator__insert_receipt", ":one", rawOperatorInsertReceipt},
 		{"inbox__requeue.sql", "inbox__requeue", ":exec", rawInboxRequeue},
+		{"inbox__recover_rejoin.sql", "inbox__recover_rejoin", ":exec", rawInboxRecoverRejoin},
+		{"blockage__get.sql", "blockage__get", ":one", rawBlockageGet},
+		{"blockage__list.sql", "blockage__list", ":many", rawBlockageList},
+		{"effect__inspect.sql", "effect__inspect", ":one", rawEffectInspect},
 		{"schema__inspect.sql", "schema__inspect", ":many", rawSchemaInspect},
 		{"schema__probe.sql", "schema__probe", ":one", rawSchemaProbe},
 	}
@@ -147,9 +170,13 @@ func loadQueries() (querySet, error) {
 		&queries.inboxExpireToDeadLetter,
 		&queries.inboxRenew,
 		&queries.inboxCleanup,
-		&queries.repairGetByIdempotency,
-		&queries.repairInsert,
+		&queries.operatorGetReceipt,
+		&queries.operatorInsertReceipt,
 		&queries.inboxRequeue,
+		&queries.inboxRecoverRejoin,
+		&queries.blockageGet,
+		&queries.blockageList,
+		&queries.effectInspect,
 		&queries.schemaInspect,
 		&queries.schemaProbe,
 	}
@@ -180,4 +207,22 @@ func loadQuery(filename, name, cardinality, raw string) (string, error) {
 		return "", ErrInvalidConfiguration
 	}
 	return trimmed, nil
+}
+
+func buildEffectCallQuery(identifier string) (string, error) {
+	template, err := loadQuery(
+		"effect__call.sql",
+		"effect__call",
+		":one",
+		rawEffectCall,
+	)
+	if err != nil || strings.Count(template, "__postgresinbox_effect_function__") != 1 {
+		return "", ErrInvalidConfiguration
+	}
+	return strings.Replace(
+		template,
+		"__postgresinbox_effect_function__",
+		identifier,
+		1,
+	), nil
 }

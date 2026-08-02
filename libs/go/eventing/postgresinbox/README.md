@@ -53,26 +53,41 @@ consumer. Он принимает уже проверенный `eventing.Envelo
 - `Acquire`, `Renew` и `ApplyClaim` дают тот же протокол adapter, которому
   нужен явный раздельный claim/renew flow;
 - `Check` проверяет exact schema и working principal path;
+- `GetBlockage`/`ListBlockages` дают авторизованный bounded operator read без
+  payload/PII, `Recover` фиксирует решение после исчерпания broker redelivery;
 - `Repair` выполняет только авторизованный audited `REQUEUE`, `Cleanup` —
   bounded retention;
 - `Cancel` и `Join` задают lifecycle перед закрытием PostgreSQL;
 - `WithObserver`/`WithTracer` подключают только закрытые operation/outcome;
-- `WithRepairAuthorizer` подключает обязательную trusted boundary, которая
-  разрешает actor из проверенного context или authoritative state.
+- `WithOperatorAuthorizer` подключает обязательную trusted boundary, которая
+  назначает actor и canonical `(organization, project, operation, key hash)`;
+- `WithEffectOperations` регистрирует закрытый набор service-owned PostgreSQL
+  functions, доступных узкой `EffectTx` capability.
 
 `Config` фиксирует schema, instance identity, lease/effect/finalize budgets,
 retry/backoff/attempt/repair limits, retention horizon и cleanup batch. Нулевые
 `FinalizeTimeout` и `CleanupBatchSize` получают defaults `5s` и `100`;
 остальные safety-параметры обязательны.
+Проверка `EffectTimeout + FinalizeTimeout < LeaseDuration` выполняется без
+сложения: после положительных upper bounds сравнивается
+`FinalizeTimeout < LeaseDuration - EffectTimeout`, поэтому `time.Duration`
+не может переполниться. Exponential backoff удваивается только после
+overflow-safe сравнения с `MaximumBackoff` и насыщается на этом пределе.
 
 ## Идентичности и неизменяемость
 
 ### Event identity и digest
 
 `eventId` берётся из предварительно проверенного `eventing.Envelope`. Пакет
-повторно вызывает `Envelope.Validate`, сериализует envelope через
+сначала делает глубокую копию полного envelope и `json.RawMessage`, затем
+повторно вызывает `Envelope.Validate`, сериализует snapshot через
 `Envelope.Marshal` и вычисляет SHA-256 от всех metadata и `data`. Digest
 неизменяемо сохраняется в `runtime_inbox_events.event_digest`.
+
+`Handler` получает `EventSnapshot`; каждый вызов `Data`/`Envelope` возвращает
+новую копию. Мутация caller buffer после входа в `Process`, конкурентная
+мутация исходного `RawMessage` и мутация handler view не меняют digest,
+persisted metadata либо bytes, переданные effect.
 
 Ключ dedup:
 
@@ -147,6 +162,11 @@ PROCESSING
 DEAD_LETTER
   -> audited bounded REQUEUE repair -> RETRY
 
+broker MaxDeliver exhausted
+  -> WAIT predecessor|lease|backoff
+  -> REJOIN eligible row -> replay required
+  -> TERMINALIZE exhausted row -> repair required
+
 COMPLETED|STALE
   -> bounded cleanup после обоих retention gates
 ```
@@ -167,42 +187,50 @@ cleanup рассчитываются по `clock_timestamp()` PostgreSQL. Вре
    `lease_generation` и монотонный cursor fence.
 5. Effect-транзакция повторно блокирует inbox/cursor и сверяет event digest,
    owner, token, generation, fence, lease expiry и ожидаемую sequence.
-6. Handler получает `pgx.Tx` savepoint той же физической PostgreSQL-
-   транзакции. При успехе через этот же `pgx.Tx` записываются `COMPLETED` и
-   cursor, затем фиксируется единственный верхнеуровневый commit.
+6. Handler получает `EffectTx` savepoint той же физической PostgreSQL-
+   транзакции и immutable `EventSnapshot`. `EffectTx.Call` допускает только
+   заранее зарегистрированную schema-qualified service function
+   `(jsonb)->jsonb`; raw SQL, `Conn`, `Begin`, `Commit`, `Rollback`, session
+   control и runtime inbox/cursor DML из handler недостижимы. При успехе через
+   тот же savepoint записываются `COMPLETED` и cursor, затем фиксируется
+   единственный верхнеуровневый commit.
 7. При ошибке handler savepoint откатывается, поэтому частичный локальный
    effect не сохраняется. Внешняя транзакция устойчиво фиксирует `RETRY` либо
    `DEAD_LETTER`; cursor остаётся прежним.
 8. Только после успешного верхнеуровневого commit пакет возвращает durable
    broker action. Ошибка commit не может вернуть `ACK`.
-9. `Repair` сначала запрашивает server-resolved actor у `RepairAuthorizer`,
+9. `Repair` сначала запрашивает server-resolved scope у `OperatorAuthorizer`,
    затем повторно ставит только самый ранний точный dead-letter predecessor
    после проверки digest, generation/fence, idempotency request hash,
    actor/reason/evidence и repair budget. Без настроенного authorizer repair
    закрыто запрещён.
-10. `Cleanup` удаляет ограниченную порцию только `COMPLETED|STALE`, для которых
+10. `GetBlockage`/`ListBlockages` возвращают только event/digest/sequence,
+    hash ordering key, state/attempt/generation/fence/time/failure coordinates
+    самого раннего predecessor. `Recover` сохраняет неизменяемый receipt для
+    `WAIT|REJOIN|TERMINALIZE`; ни один исход не означает скрытый ACK/skip.
+11. `Cleanup` удаляет ограниченную порцию только `COMPLETED|STALE`, для которых
     прошли сохранённый `cleanup_after` и текущий минимальный retention horizon.
 
 Receive и claim являются отдельными явно документированными durable
 переходами. Транзакция effect не открывает второй metadata commit: успешный
 локальный effect, `COMPLETED` evidence и продвижение cursor существуют только
-вместе. Handler не получает pool либо repository shortcut от библиотеки —
-только точный `pgx.Tx`. Он обязан использовать transaction-bound adapters и
-не выполнять внешний необратимый вызов.
+вместе. Handler не получает pool, raw `pgx.Tx` либо repository shortcut от
+библиотеки — только transaction-bound allowlist зарегистрированных функций.
 
 ## Владение транзакцией
 
-`Processor` начинает транзакции через переданный `Beginner`; environment pool
-и его закрытие принадлежат composition root. `Process` передаёт handler
-`pgx.Tx` и сам обрабатывает `Begin`, savepoint `Begin`, `Commit`, `Rollback` и
+`Processor` начинает caller-visible физическую транзакцию через переданный
+`Beginner`; environment pool и его закрытие принадлежат composition root.
+`Process` передаёт handler узкую `EffectTx` и сам обрабатывает `Begin`,
+savepoint `Begin`, `Commit`, `Rollback` и
 ошибки commit. Верхнеуровневые commit/rollback получают отдельные bounded
 contexts с `FinalizeTimeout`, созданные от `context.WithoutCancel` переданного
 контекста; исчерпание caller context не оставляет cleanup без бюджета. Пакет не
 создаёт соединение, pool, root context либо скрытую transaction для consumer
 effect.
 
-Если результат должен уйти наружу, handler записывает локальное состояние и
-новое outbox-событие через transaction-bound adapter в полученном `pgx.Tx`.
+Если результат должен уйти наружу, зарегистрированная service function
+записывает локальное состояние и новое outbox-событие в той же транзакции.
 Сетевой RPC, broker publish, файловый effect и иной необратимый side effect в
 handler запрещены: PostgreSQL rollback не способен их отменить.
 
@@ -256,15 +284,20 @@ durable `Result`. Наличие ошибки само по себе не отм
 | Stale owner/token/generation/fence | изменение не выполняется | без cursor/effect | `nack_retry`, `ErrStaleClaim` |
 | Retryable handler error | savepoint rollback, `RETRY` с bounded backoff | без cursor/effect | `nack_retry` |
 | Attempt budget исчерпан | `DEAD_LETTER` | predecessor блокирует cursor | `nack_terminal` |
-| Repair без authority | без изменения event | без cursor/effect | `ErrRepairNotAllowed` |
-| Повтор repair с тем же key/hash | возвращается сохранённый receipt | без второго repair | прежний результат |
-| Repair key с иным request hash | без изменения event | без cursor/effect | `ErrRepairConflict` |
+| Broker MaxDeliver исчерпан на gap/busy/backoff | durable `WAIT` receipt; blockage остаётся в bounded list | без cursor/effect/ACK | новый scoped recovery после изменения eligibility |
+| Broker MaxDeliver исчерпан на eligible row | `REJOIN`, row становится немедленно replay-eligible | без cursor/effect/ACK | `replay_required` из авторитетного source/DLQ |
+| Broker MaxDeliver исчерпан вместе с attempt budget | `TERMINALIZE -> DEAD_LETTER` | predecessor продолжает блокировать | `repair_required`, ACK/skip запрещены |
+| Restart после `WAIT|REJOIN|TERMINALIZE` commit | receipt и blockage читаются из PostgreSQL | без повторной мутации | точный прежний operator outcome |
+| Operator read без authority | без изменения/выдачи coordinates | без cursor/effect | `ErrOperatorNotAllowed` |
+| Repair без authority | без изменения event | без cursor/effect | `ErrOperatorNotAllowed` |
+| Повтор repair/recovery с тем же authorized scope/hash | возвращается сохранённый receipt | без второй мутации | прежний result/directive |
+| Operator scope/key с иным request hash | без изменения event | без cursor/effect | `ErrOperatorConflict` |
 | Stale repair generation/fence/digest | без изменения event | без cursor/effect | `ErrStaleClaim`/`ErrEventConflict` |
 | Cleanup до safety horizon | строка не eligible | evidence сохраняется | без broker action |
 | Cleanup terminal/predecessor/cursor/repair | запрещён SQL predicate/schema | evidence сохраняется | без broker action |
 | Readiness marker/object mismatch | startup fail-closed | subscription не запускается | сообщения не принимаются |
 
-## Retry, dead letter и repair
+## Retry, dead letter, recovery и repair
 
 Attempt увеличивается только победившим claim. Backoff вычисляется как
 ограниченная экспонента `InitialBackoff * 2^(attempt-1)` с верхней границей
@@ -272,13 +305,38 @@ Attempt увеличивается только победившим claim. Back
 `MaxAttempts` сохраняется при первом receive, поэтому rollout config не меняет
 бюджет уже принятого события.
 
-`DEAD_LETTER` остаётся в inbox и блокирует следующий sequence. `Repair`
+`DEAD_LETTER` остаётся в inbox и блокирует следующий sequence. Авторитетные
+`GetBlockage` и `ListBlockages` требуют `OperatorAuthorizer`, фильтруются exact
+`Consumer` и возвращают не более 100 earliest predecessors с keyset cursor.
+Payload, raw ordering key, organization/aggregate/correlation identifiers и
+actor не выдаются. Для `Repair` возвращаются event/digest/sequence,
+state/attempt/repair budget, cursor sequence, generation/fence, bounded failure
+code и PostgreSQL timestamps. Raw ordering key заменён SHA-256 digest.
+
+Если broker исчерпал `MaxDeliver` на `gap|busy|retry`, adapter вызывает
+`Recover` до provider-specific termination. `Recover` не подтверждает и не
+пропускает событие: он сохраняет один из `wait_predecessor|wait_lease|`
+    `wait_backoff|replay_required|repair_required|ack_eligible`.
+`ack_eligible` возвращается только после авторитетного durable read уже
+`COMPLETED|STALE`; фактический ACK по-прежнему выполняет adapter. После изменения eligibility
+operator использует новую server-scoped idempotency operation/key; точный
+повтор прежнего scope возвращает неизменяемое старое решение. Replay выполняет
+внешний adapter из durable broker source/DLQ с исходным envelope. Если source
+утрачен, строка остаётся видимой blockage и cursor не продвигается.
+
+`Repair`
 поддерживает только `REQUEUE`, не меняет envelope/digest/key/sequence и не
 продвигает cursor. Запрос включает причину, SHA-256 evidence, expected
-generation/fence и idempotency key. Actor отсутствует в request и возвращается
-`RepairAuthorizer` только из проверенного context либо authoritative state;
-default authorizer всегда запрещает repair. Actor входит в canonical request
-digest и durable receipt. Receipt хранится в `runtime_inbox_repairs` независимо
+generation/fence и caller key. Actor и canonical durable scope отсутствуют в
+request и возвращаются `OperatorAuthorizer` только из проверенного context
+либо authoritative state; default authorizer всегда запрещает operator API.
+Authorizer хеширует caller key внутри server-assigned
+`(organization, project, operation)` и возвращает только `key_hash`. В таблице
+нет caller key. Actor, authorized scope/key hash и все request coordinates
+входят в canonical request digest и durable receipt. Точный повтор возвращает
+receipt; иной request digest в том же scope конфликтует; одинаковые caller
+keys разных organization/project/operation независимы. Receipt хранится в
+`runtime_inbox_repairs` независимо
 от последующего cleanup event row. Число repair ограничено сохранённым
 `max_repairs`.
 
@@ -297,6 +355,16 @@ marker только после создания всех объектов в т�
 Применённая migration не редактируется; rollback — новая компенсирующая
 forward migration по `expand -> migrate -> contract`.
 
+Та же migration до marker отзывает `PUBLIC` на schema и всех runtime/effect
+functions, выдаёт runtime principal `USAGE` schema, exact table grants и
+`EXECUTE` только зарегистрированных `(jsonb)->jsonb` functions — всегда без
+grant option. Имена ролей service-owned и потому не входят в общий DDL;
+`Check` сверяет фактически обслуживающий `session_user`, не credential name из
+конфигурации. Зарегистрированная effect function обязана быть единственной
+точной `(jsonb)->jsonb`, `SECURITY INVOKER`, не set-returning и без function-
+local configuration; разрешены только `VOLATILE PARALLEL UNSAFE` функции
+`sql|plpgsql`, наследующие защищённый transaction `search_path`.
+
 Schema/readiness contract v1 рассчитан на PostgreSQL 17+ и проверен по
 `/websites/postgresql_current`; нижняя граница обусловлена exact проверкой
 табличной привилегии `MAINTAIN`. Неподдерживаемый catalog или версия
@@ -307,8 +375,15 @@ principal и query loader, что рабочие операции. Он fail-clo
 required table/function, columns/types/nullability/defaults/generated
 expression, table access method/RLS/rules/triggers/inheritance/replica identity,
 constraints, indexes, predicates, validity и фактические privileges. Совпавшее
-имя с другой сигнатурой несовместимо. Дополнительные service-owned объекты
-разрешены только под другими именами и не могут менять required definition.
+имя с другой сигнатурой несовместимо. Дополнительные columns, defaults,
+generated expressions, constraints, unique/exclusion/expression/partial/
+covering indexes и любые triggers/rules закрыто несовместимы: они способны
+изменить обязательный INSERT/UPDATE/claim/cleanup path. Единственное расширение
+v1 — performance-only B-tree index с именем `postgresinbox_ext_*`: только
+обычные существующие columns, default opclass/collation/order, без expression,
+predicate, INCLUDE, uniqueness, exclusion либо constraint ownership. Catalog
+probe машинно доказывает этот узкий профиль; прочие service constraints
+требуют новой совместимой версии общих runtime-объектов.
 
 Рабочая транзакция устанавливает точный `search_path` вида
 `pg_catalog,<service_schema>,pg_temp`: первое место `pg_catalog` запрещает
@@ -316,9 +391,17 @@ service-owned функциям затенять built-ins, а явное пос�
 запрещает временной таблице затенить runtime relation. Readiness требует
 `USAGE` без `CREATE` для runtime principal на service schema, проверяет, что
 runtime principal не входит в роли владельцев schema/required tables/function,
-и сверяет exact table privileges рабочего пути: marker `SELECT`, cursors
+и сверяет exact direct table privileges рабочего пути: marker `SELECT`, cursors
 `SELECT|INSERT|UPDATE`, events `SELECT|INSERT|UPDATE|DELETE`, repairs
-`SELECT|INSERT`; `TRUNCATE|REFERENCES|TRIGGER|MAINTAIN` запрещены. Каждая
+`SELECT|INSERT`; `TRUNCATE|REFERENCES|TRIGGER|MAINTAIN` запрещены. ACL grantor
+обязан быть owner, grantee — только exact `session_user`, `PUBLIC` и
+неожиданные roles запрещены, `WITH GRANT OPTION` запрещён для table/schema/
+function/sequence. Runtime principal не может быть superuser/createdb/
+createrole/replication/bypassrls и не может иметь membership/`SET ROLE` path к
+owner. Service sequences допускают только прямые non-grantable
+`USAGE|SELECT` runtime principal без `PUBLIC`/третьих roles; общий contract сам
+sequence не создаёт. Функция ordering key явно отзывает default `PUBLIC
+EXECUTE`, а migration выдаёт exact `EXECUTE` runtime principal. Каждая
 транзакция также закрыто требует неизменную identity
 `current_user = session_user`.
 
@@ -382,20 +465,32 @@ broker/process boundary логирует её ровно один раз. Runtim
 
 - Consumer identity/scope назначает server-side composition root.
 - Envelope и его `organizationId` не являются authority для доменного effect.
-- Handler до записи применяет service-owned eligibility/owner policy из
+- Handler видит только immutable snapshot и зарегистрированные effect
+  functions. Function применяет service-owned eligibility/owner policy из
   проверенного transport/signed context либо authoritative state.
 - Runtime PostgreSQL principal, TLS `verify-full`, RLS/privileges и egress
   принадлежат сервису; `Check` не заменяет deploy/security validation.
 - Event payload и identifiers не попадают в diagnostics/metric labels.
 - Случайный lease token, generation, fence и digest никогда не доказывают
   actor authority; они только ограждают конкурентную обработку.
-- Repair request не содержит actor. `RepairAuthorizer` обязан сопоставить exact
-  consumer/event/digest/generation/fence с actor из проверенного context либо
-  authoritative state; без этого hook операция fail-closed.
+- Operator request не содержит actor/organization/project/operation/key hash.
+  `OperatorAuthorizer` обязан сопоставить exact action/consumer/event/digest/
+  generation/fence и caller key с canonical authorized scope из проверенного
+  context либо authoritative state; без этого hook read/recovery/repair
+  fail-closed.
 
 ## Минимальное подключение
 
 ```go
+applyProjection, err := postgresinbox.NewEffectOperation(
+    "apply_projection",
+    "runtime_controller",
+    "apply_projection",
+)
+if err != nil {
+    return err
+}
+
 processor, err := postgresinbox.New(pool, postgresinbox.Config{
     Schema:           "runtime_controller",
     InstanceID:       instanceID,
@@ -408,7 +503,10 @@ processor, err := postgresinbox.New(pool, postgresinbox.Config{
     MaxRepairs:       3,
     RetentionHorizon: 35 * 24 * time.Hour,
     CleanupBatchSize: 100,
-})
+},
+    postgresinbox.WithEffectOperations(applyProjection),
+    postgresinbox.WithOperatorAuthorizer(operatorAuthorizer),
+)
 if err != nil {
     return err
 }
@@ -420,8 +518,17 @@ result, err := processor.Process(
     messageCtx,
     postgresinbox.Consumer{Name: "runtime-controller", Scope: "v1"},
     envelope,
-    func(ctx context.Context, tx pgx.Tx, event eventing.Envelope) error {
-        return projection.ApplyTx(ctx, tx, event)
+    func(
+        ctx context.Context,
+        tx postgresinbox.EffectTx,
+        event postgresinbox.EventSnapshot,
+    ) error {
+        input, err := event.Envelope().Marshal()
+        if err != nil {
+            return err
+        }
+        _, err = tx.Call(applyProjection, input)
+        return err
     },
 )
 if err != nil {
@@ -439,6 +546,26 @@ default:
     return message.Nak()
 }
 ```
+
+При исчерпании broker redelivery adapter не делает скрытый success ACK:
+
+```go
+blockage, err := processor.GetBlockage(operatorCtx, consumer, eventID)
+if err != nil {
+    return err
+}
+receipt, err := processor.Recover(operatorCtx, recoveryRequestFrom(blockage))
+if err != nil {
+    return err
+}
+if receipt.Directive == postgresinbox.RecoveryReplayRequired {
+    return durableBrokerSource.Replay(blockage.EventID)
+}
+```
+
+`recoveryRequestFrom` передаёт exact digest/generation/fence и evidence, но не
+actor/tenant authority. `OperatorAuthorizer` назначает organization/project/
+operation/key hash из trusted context/authoritative state.
 
 Перед закрытием pool:
 
@@ -475,4 +602,6 @@ compensating change. Удаление колонок, evidence или marker н�
   `pg_catalog`/`information_schema`, generated columns, constraints и
   index validity/predicate inspection, `pg_has_role` и exact
   `has_table_privilege` (`SELECT|INSERT|UPDATE|DELETE|TRUNCATE|REFERENCES|`
-  `TRIGGER|MAINTAIN`).
+  `TRIGGER|MAINTAIN`), `has_*_privilege ... WITH GRANT OPTION`,
+  `aclexplode`, `acldefault` для table/schema/function/sequence и
+  `pg_auth_members`.

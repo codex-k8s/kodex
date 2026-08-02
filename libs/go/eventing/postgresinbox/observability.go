@@ -12,6 +12,8 @@ const (
 	OperationCheck   Operation = "check"
 	OperationRenew   Operation = "renew"
 	OperationRepair  Operation = "repair"
+	OperationRecover Operation = "recover"
+	OperationList    Operation = "list"
 	OperationCleanup Operation = "cleanup"
 )
 
@@ -44,13 +46,13 @@ type noopSpan struct{}
 
 func (noopSpan) End(Outcome) {}
 
-type denyRepairAuthorizer struct{}
+type denyOperatorAuthorizer struct{}
 
-func (denyRepairAuthorizer) AuthorizeRepair(
+func (denyOperatorAuthorizer) AuthorizeOperator(
 	context.Context,
-	RepairTarget,
-) (RepairAuthority, error) {
-	return RepairAuthority{}, ErrRepairNotAllowed
+	OperatorTarget,
+) (OperatorAuthority, error) {
+	return OperatorAuthority{}, ErrOperatorNotAllowed
 }
 
 // Option изменяет только provider-neutral hooks Processor.
@@ -74,11 +76,23 @@ func WithTracer(tracer Tracer) Option {
 	}
 }
 
-// WithRepairAuthorizer подключает обязательную trusted boundary repair.
-func WithRepairAuthorizer(authorizer RepairAuthorizer) Option {
+// WithOperatorAuthorizer подключает trusted boundary read/recovery/repair.
+func WithOperatorAuthorizer(authorizer OperatorAuthorizer) Option {
 	return func(processor *Processor) {
 		if authorizer != nil {
-			processor.repairAuthorizer = authorizer
+			processor.operatorAuthorizer = authorizer
 		}
+	}
+}
+
+// WithEffectOperations задаёт закрытый реестр service-owned effect functions.
+func WithEffectOperations(operations ...EffectOperation) Option {
+	return func(processor *Processor) {
+		registered, err := buildEffectOperations(operations)
+		if err != nil {
+			processor.effectOperations = nil
+			return
+		}
+		processor.effectOperations = registered
 	}
 }

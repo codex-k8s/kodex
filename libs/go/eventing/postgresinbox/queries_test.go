@@ -41,9 +41,13 @@ func TestStrictNamedArgumentsMatchEveryProductionQuery(t *testing.T) {
 		{"inbox exhaustion", queries.inboxExpireToDeadLetter, named("consumer_name", "consumer_scope", "event_id", "event_digest", "error_code")},
 		{"inbox renew", queries.inboxRenew, named("consumer_name", "consumer_scope", "event_id", "event_digest", "lease_owner", "lease_token", "lease_generation", "lease_fence", "lease_seconds")},
 		{"inbox cleanup", queries.inboxCleanup, named("retention_seconds", "batch_size")},
-		{"repair read", queries.repairGetByIdempotency, named("consumer_name", "consumer_scope", "idempotency_key")},
-		{"repair insert", queries.repairInsert, named("consumer_name", "consumer_scope", "idempotency_key", "request_digest", "repair_id", "event_id", "event_digest", "expected_generation", "expected_fence", "actor", "reason", "evidence_digest", "result_generation", "result_fence")},
+		{"operator read", queries.operatorGetReceipt, named("organization_scope", "project_scope", "operation", "key_hash")},
+		{"operator insert", queries.operatorInsertReceipt, named("consumer_name", "consumer_scope", "organization_scope", "project_scope", "operation", "key_hash", "request_digest", "receipt_id", "event_id", "event_digest", "expected_generation", "expected_fence", "action", "actor", "reason", "evidence_digest", "result_generation", "result_fence", "result_directive")},
 		{"inbox requeue", queries.inboxRequeue, named("consumer_name", "consumer_scope", "event_id", "event_digest", "event_sequence", "expected_generation", "expected_fence")},
+		{"inbox recovery", queries.inboxRecoverRejoin, named("consumer_name", "consumer_scope", "event_id", "event_digest", "expected_generation", "expected_fence")},
+		{"blockage get", queries.blockageGet, named("consumer_name", "consumer_scope", "event_id")},
+		{"blockage list", queries.blockageList, named("consumer_name", "consumer_scope", "after_received_at", "after_event_id", "page_limit")},
+		{"effect inspect", queries.effectInspect, named("schema_name", "function_name")},
 		{"schema inspect", queries.schemaInspect, named("schema_name", "schema_component")},
 		{"schema probe", queries.schemaProbe, named()},
 	}
@@ -107,6 +111,16 @@ func TestReadinessQueriesKeepSecurityBoundaryClosed(t *testing.T) {
 	}
 	inspectFragments := []string{
 		"pg_catalog.pg_has_role",
+		"pg_catalog.aclexplode",
+		"pg_catalog.acldefault",
+		"acl.is_grantable",
+		"pg_catalog.pg_auth_members",
+		"column_record.attacl IS NOT NULL",
+		"WITH GRANT OPTION",
+		"extension_index",
+		"postgresinbox_ext_%",
+		"index_record.indexprs IS NULL",
+		"index_record.indnatts = index_record.indnkeyatts",
 		"relation.relrowsecurity",
 		"relation.relhastriggers",
 		"pg_catalog.pg_inherits",
@@ -118,6 +132,18 @@ func TestReadinessQueriesKeepSecurityBoundaryClosed(t *testing.T) {
 	for _, fragment := range inspectFragments {
 		if !strings.Contains(rawSchemaInspect, fragment) {
 			t.Fatalf("schema inspection misses %s", fragment)
+		}
+	}
+	effectFragments := []string{
+		"procedure.prosecdef",
+		"procedure.proconfig IS NULL",
+		"EXECUTE WITH GRANT OPTION",
+		"pg_catalog.aclexplode",
+		"acl.is_grantable",
+	}
+	for _, fragment := range effectFragments {
+		if !strings.Contains(rawEffectInspect, fragment) {
+			t.Fatalf("effect inspection misses %s", fragment)
 		}
 	}
 }

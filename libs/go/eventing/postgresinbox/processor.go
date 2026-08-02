@@ -9,12 +9,13 @@ import (
 
 // Processor координирует durable receive/claim/effect и явный lifecycle.
 type Processor struct {
-	beginner         Beginner
-	config           Config
-	queries          querySet
-	observer         Observer
-	tracer           Tracer
-	repairAuthorizer RepairAuthorizer
+	beginner           Beginner
+	config             Config
+	queries            querySet
+	observer           Observer
+	tracer             Tracer
+	operatorAuthorizer OperatorAuthorizer
+	effectOperations   map[string]EffectOperation
 
 	mu       sync.Mutex
 	stopping bool
@@ -37,17 +38,26 @@ func New(beginner Beginner, config Config, options ...Option) (*Processor, error
 		return nil, err
 	}
 	processor := &Processor{
-		beginner:         beginner,
-		config:           config,
-		queries:          queries,
-		observer:         noopObserver{},
-		tracer:           noopTracer{},
-		repairAuthorizer: denyRepairAuthorizer{},
-		joined:           make(chan struct{}),
+		beginner:           beginner,
+		config:             config,
+		queries:            queries,
+		observer:           noopObserver{},
+		tracer:             noopTracer{},
+		operatorAuthorizer: denyOperatorAuthorizer{},
+		effectOperations:   make(map[string]EffectOperation),
+		joined:             make(chan struct{}),
 	}
 	for _, option := range options {
 		if option != nil {
 			option(processor)
+		}
+	}
+	if processor.effectOperations == nil {
+		return nil, ErrInvalidEffectOperation
+	}
+	for _, operation := range processor.effectOperations {
+		if operation.schema != config.Schema {
+			return nil, ErrInvalidEffectOperation
 		}
 	}
 	return processor, nil

@@ -62,7 +62,11 @@ func (processor *Processor) apply(
 		}
 
 		effectCtx, cancelEffect := context.WithTimeout(ctx, processor.config.EffectTimeout)
-		effectErr := handler(effectCtx, workTx, record.Envelope)
+		effectErr := handler(effectCtx, &effectTx{
+			ctx:        effectCtx,
+			tx:         workTx,
+			operations: processor.effectOperations,
+		}, EventSnapshot{envelope: record.Envelope})
 		if effectErr == nil && effectCtx.Err() != nil {
 			effectErr = effectCtx.Err()
 		}
@@ -245,10 +249,11 @@ func (processor *Processor) backoff(attempt uint32) time.Duration {
 		return backoff
 	}
 	for current := uint32(1); current < attempt; current++ {
-		if backoff >= processor.config.MaximumBackoff/2 {
+		if backoff >= processor.config.MaximumBackoff ||
+			backoff > processor.config.MaximumBackoff-backoff {
 			return processor.config.MaximumBackoff
 		}
-		backoff *= 2
+		backoff += backoff
 	}
 	if backoff > processor.config.MaximumBackoff {
 		return processor.config.MaximumBackoff

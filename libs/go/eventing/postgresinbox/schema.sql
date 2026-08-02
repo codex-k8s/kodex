@@ -41,6 +41,10 @@ AS $function$
     END
 $function$;
 
+-- PostgreSQL выдаёт PUBLIC EXECUTE на новые функции по умолчанию.
+REVOKE ALL ON FUNCTION runtime_event_ordering_key(text, text, text, text)
+    FROM PUBLIC;
+
 CREATE TABLE runtime_event_cursors (
     consumer_name text NOT NULL,
     consumer_scope text NOT NULL,
@@ -179,7 +183,10 @@ CREATE TABLE runtime_inbox_events (
             AND repair_count <= max_repairs
         ),
     CONSTRAINT runtime_inbox_events_lease_generation_check
-        CHECK (lease_generation >= 0),
+        CHECK (
+            lease_generation >= 0
+            AND ((lease_generation = 0) = (lease_fence = 0))
+        ),
     CONSTRAINT runtime_inbox_events_lease_fence_check
         CHECK (lease_fence >= 0),
     CONSTRAINT runtime_inbox_events_error_code_check
@@ -277,9 +284,12 @@ CREATE INDEX runtime_inbox_events_dead_letter_idx
 CREATE TABLE runtime_inbox_repairs (
     consumer_name text NOT NULL,
     consumer_scope text NOT NULL,
-    idempotency_key text NOT NULL,
+    organization_scope text NOT NULL,
+    project_scope text NOT NULL,
+    operation text NOT NULL,
+    key_hash bytea NOT NULL,
     request_digest bytea NOT NULL,
-    repair_id uuid NOT NULL,
+    receipt_id uuid NOT NULL,
     event_id uuid NOT NULL,
     event_digest bytea NOT NULL,
     expected_generation bigint NOT NULL,
@@ -290,23 +300,34 @@ CREATE TABLE runtime_inbox_repairs (
     evidence_digest bytea NOT NULL,
     result_generation bigint NOT NULL,
     result_fence bigint NOT NULL,
+    result_directive text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     CONSTRAINT runtime_inbox_repairs_pkey
-        PRIMARY KEY (consumer_name, consumer_scope, idempotency_key),
-    CONSTRAINT runtime_inbox_repairs_repair_id_key UNIQUE (repair_id),
+        PRIMARY KEY (organization_scope, project_scope, operation, key_hash),
+    CONSTRAINT runtime_inbox_repairs_receipt_id_key UNIQUE (receipt_id),
     CONSTRAINT runtime_inbox_repairs_consumer_name_check
         CHECK (consumer_name ~ '^[a-z][a-z0-9._-]{0,127}$'),
     CONSTRAINT runtime_inbox_repairs_consumer_scope_check
         CHECK (consumer_scope ~ '^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'),
-    CONSTRAINT runtime_inbox_repairs_idempotency_key_check
-        CHECK (char_length(idempotency_key) BETWEEN 8 AND 128),
+    CONSTRAINT runtime_inbox_repairs_authorized_scope_check
+        CHECK (
+            organization_scope ~ '^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'
+            AND project_scope ~ '^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'
+            AND operation ~ '^[a-z][a-z0-9._-]{0,127}$'
+            AND octet_length(key_hash) = 32
+        ),
     CONSTRAINT runtime_inbox_repairs_request_digest_check
         CHECK (octet_length(request_digest) = 32),
     CONSTRAINT runtime_inbox_repairs_event_digest_check
         CHECK (octet_length(event_digest) = 32),
     CONSTRAINT runtime_inbox_repairs_expected_fence_check
-        CHECK (expected_generation > 0 AND expected_fence > 0),
-    CONSTRAINT runtime_inbox_repairs_action_check CHECK (action = 'REQUEUE'),
+        CHECK (
+            expected_generation >= 0
+            AND expected_fence >= 0
+            AND ((expected_generation = 0) = (expected_fence = 0))
+        ),
+    CONSTRAINT runtime_inbox_repairs_action_check
+        CHECK (action IN ('REQUEUE', 'REJOIN', 'TERMINALIZE', 'WAIT')),
     CONSTRAINT runtime_inbox_repairs_actor_check
         CHECK (char_length(actor) BETWEEN 1 AND 256),
     CONSTRAINT runtime_inbox_repairs_reason_check
@@ -314,7 +335,23 @@ CREATE TABLE runtime_inbox_repairs (
     CONSTRAINT runtime_inbox_repairs_evidence_digest_check
         CHECK (octet_length(evidence_digest) = 32),
     CONSTRAINT runtime_inbox_repairs_result_fence_check
-        CHECK (result_generation > 0 AND result_fence > 0)
+        CHECK (
+            result_generation >= 0
+            AND result_fence >= 0
+            AND result_generation = expected_generation
+            AND result_fence = expected_fence
+        ),
+    CONSTRAINT runtime_inbox_repairs_result_directive_check
+        CHECK (
+            result_directive IN (
+                'replay_required',
+                'wait_predecessor',
+                'wait_lease',
+                'wait_backoff',
+                'repair_required',
+                'ack_eligible'
+            )
+        )
 );
 
 CREATE INDEX runtime_inbox_repairs_event_idx
@@ -323,8 +360,16 @@ CREATE INDEX runtime_inbox_repairs_event_idx
         consumer_scope,
         event_id,
         created_at,
-        repair_id
+        receipt_id
     );
+
+-- До marker service migration обязана отдельно выполнить для своего exact
+-- runtime principal: REVOKE ALL ON SCHEMA ... FROM PUBLIC; GRANT USAGE без
+-- grant option; exact table grants из README; EXECUTE без grant option на
+-- ordering/effect functions после REVOKE FROM PUBLIC. Runtime principal не
+-- владеет schema/объектами, не состоит в ролях владельцев и не получает
+-- column-level ACL. Идентичность principal намеренно не является частью
+-- общего provider-neutral DDL.
 
 -- Marker создаётся только после всех готовых объектов в той же migration.
 INSERT INTO runtime_event_schema_versions (
@@ -335,5 +380,5 @@ INSERT INTO runtime_event_schema_versions (
 VALUES (
     'postgresinbox',
     1,
-    decode('d5d672cab4214cd25d25e97300410e9fd42fcfa9ec797dfe4ea0ec2eec8e6e44', 'hex')
+    decode('4c44aeb7b45033cd140b9d49db24d67d0ff620687249879d3274427e1e29d5f2', 'hex')
 );
