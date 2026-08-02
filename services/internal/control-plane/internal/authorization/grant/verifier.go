@@ -165,7 +165,9 @@ func (verifier *Verifier) Authenticate(
 		expiresAt.Sub(issuedAt) > maximumGrantTTL {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
-	if verifier.config.WorkloadID == "agent-runner" &&
+	if (verifier.config.WorkloadID == "agent-runner" ||
+		verifier.config.WorkloadID == "runtime-controller" ||
+		verifier.config.WorkloadID == "integration-gateway") &&
 		(value.ValidateID(parsed.SessionID) != nil ||
 			value.ValidateID(parsed.TurnID) != nil ||
 			parsed.Attempt == 0 || parsed.Attempt > 100 ||

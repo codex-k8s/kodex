@@ -99,10 +99,11 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 			return to == StateClaimed || to == StateCancelled
 		case StateClaimed:
 			return to == StateRunning || to == StateQueued ||
-				to == StateSucceeded || to == StateFailed || to == StateCancelled
+				to == StateSucceeded || to == StateFailed || to == StateCancelled ||
+				to == StateExpired || to == StateWaitingExternal
 		case StateRunning:
 			return to == StateSucceeded || to == StateFailed ||
-				to == StateCancelled || to == StateBlocked ||
+				to == StateCancelled || to == StateExpired || to == StateBlocked ||
 				to == StateWaitingExternal || to == StateWaitingOwner
 		case StateWaitingExternal, StateWaitingOwner, StateBlocked:
 			return to == StateQueued || to == StateSucceeded ||
@@ -114,7 +115,8 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 		switch from {
 		case StateActive:
 			return to == StateQueued || to == StateArchived ||
-				to == StateCancelled || to == StateBlocked
+				to == StateCancelled || to == StateBlocked ||
+				to == StateWaitingExternal
 		case StateQueued:
 			return to == StateRunning || to == StateCancelled || to == StateBlocked
 		case StateRunning:

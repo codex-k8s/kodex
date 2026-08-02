@@ -3,7 +3,9 @@
 `control-plane` — авторитетный внутренний сервис конфигурации и управляющего
 состояния MatterCodex. Он реализует Issue
 [#187](https://github.com/codex-k8s/matter-codex/issues/187) как один
-развёртываемый компонент.
+развёртываемый компонент и расширяет его специализированным runtime и
+integration-continuation контуром Issue
+[#221](https://github.com/codex-k8s/matter-codex/issues/221).
 
 Сервис владеет:
 
@@ -11,6 +13,10 @@
 - метаданными привязок учётных данных, репозиториев, рабочих пространств и
   интеграций;
 - неизменяемыми ревизиями среды исполнения;
+- immutable runtime execution snapshot, lease/fence, архивной ссылкой,
+  независимым restore proof и bounded cleanup authorization;
+- typed integration approval/execution continuation и её version-pinned
+  authoritative read/rejoin;
 - сессиями, ходами и родословной процессов;
 - расписаниями, шлюзами владельца, памятью и заявками на работу;
 - метаданными артефактов, но не их байтами.
@@ -50,12 +56,15 @@ TTL, ревизию сессии и JTI. Полномочия проекта р�
 - переиспользуемая промышленная композиция клиента: `libs/go/controlplaneclient`;
 - AsyncAPI: `contracts/asyncapi/control-plane/v1/asyncapi.yaml`;
 - политика полномочий: `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
+- две lifecycle/authority matrix и сквозная карта:
+  `services/internal/control-plane/runtime-continuation-contract.md`.
 
 Внешнее отображение принадлежит будущему `control-api-gateway`; этот компонент
 публикует только внутренний gRPC. Политика deny-by-default регистрирует
 отдельных производителей доказательств и точные идентичности клиентов для gateway, `agent-runner`,
 `automation-scheduler`, внешнего `artifact-scanner`, `interaction-gateway`,
-`runtime-controller` и локального `memory-indexer`. Последний индексирует
+`runtime-controller`, `integration-gateway` и локального `memory-indexer`.
+Последний индексирует
 локальную проекцию pgvector без внешнего сервиса embeddings, scanner владеет
 сканированием байтов, а `control-plane` — метаданными и автоматом состояний.
 Неизвестные производитель, назначение учётных данных, рабочая нагрузка,
@@ -69,7 +78,9 @@ SPIFFE ID, полный метод, audience или полномочие зак�
 вызвать один из закрытых профилей операций (`AgentRunnerOperations`,
 `AutomationSchedulerOperations`,
 `ArtifactScannerOperations`, `RuntimeControllerOperations`,
-`OwnerGateDeliveryOperations`, `MemoryIndexerOperations`). Consumer
+`RuntimeOwnerOperations`, `IntegrationGatewayOperations`,
+`OwnerGateDeliveryOperations`,
+`MemoryIndexerOperations`). Consumer
 Deployments не принадлежат Issue #187 и здесь не подменяются фиктивными
 развёртываемыми компонентами.
 
@@ -90,6 +101,11 @@ Deployments не принадлежат Issue #187 и здесь не подме
 ограниченным сроком очистки. Потерянное подтверждение безопасно повторяет тот
 же `event_id`.
 
+Runtime execution и integration continuation не добавляют speculative facts в
+AsyncAPI: до материализации будущего потребителя Issue #192 их результат
+доступен через специализированные защищённые read/rejoin RPC. Каждый read
+возвращает exact version/digest/fence и не объявляется активным event consumer.
+
 ## Доменные инварианты
 
 | Область                  | Инвариант                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -104,6 +120,8 @@ Deployments не принадлежат Issue #187 и здесь не подме
 | Сессия                   | привязку провайдера сервер выбирает из версионированного `AccountPool` роли по `least_used` или детерминированному `weighted`, exact freshness/limit/eligibility; ручной preferred binding — только проверенный override; общий create/update/transition запрещён; close/cancel атомарно закрывают queued/active turns, attempts и grants, а archive/cleanup доходят до terminal tombstone                                                                                                                                                                                                                                                                                       |
 | Ход                      | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Восстановление хода      | истечение срока или ручной повтор сначала закрывает прежние attempt/lease/gate/claim, затем создаёт свежие `RuntimeRevision`, effective input, attempt и grant и атомарно перепривязывает единый current execution tuple процесса и `ScheduledRun`; `SourceRef` остаётся bounded server-owned identity, номер attempt хранится только в tuple; устаревшие workload/generation/token отклоняются                                                                                                                                                                                                                                                                                  |
+| Runtime execution       | control-plane материализует server-owned tuple organization/project/process/session/thread/role/turn/attempt, immutable input digest, RuntimeRevision version/digest, закрытые ResourceClass/ClusterAccessProfile, exact workload/generation и monotonic fence; terminal/cancel/retry/expiry под одной транзакцией выбирают одного победителя и закрывают старые lease/attempt/claims; cleanup невозможна без exact archive checksum и независимого restore proof, повтор возвращает receipt без второй авторизации |
+| Integration continuation | suspension закрепляет invocation/approval/request digest и полный execution tuple; decision и execution имеют раздельные закрытые автоматы, а terminal rejected/expired/cancelled/success/error атомарно создаёт одну новую RuntimeRevision и один continuation Turn; будущий agent-runner читает и подтверждает exact version-pinned tuple через специализированный RPC |
 | Процесс                  | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate                                                                                                                                                                                                                                                                                        |
 | Расписание               | закрытые цели `AGENT` и `PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; lease recovery под row lock сначала закрывает прежние turn/attempt/process/gate/claim/grant и immutable run, затем допускает новую attempt; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO                                                                                                              |
 | Шлюз владельца           | запрос закрепляет корневого инициатора и единый server-owned current execution tuple process/session/turn/attempt/runtime revision/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` под PostgreSQL row lock автономно закрывает просроченный graph, а delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt и полное неизменяемое owner feedback в новом `TurnSpec`, тот же ProcessRun/root и создаёт свежие revision/input/turn; complete/gate/work-claim/schedule/retry читают одну current-связку, а решение не отображается в `FAILED` |
@@ -361,7 +379,10 @@ downgrade отклоняется,
    Migration Job, deny-all и только NetworkPolicy с точными назначениями;
 5. сравнить все методы Proto с политикой полномочий, а группы ошибок —
    с `contracts/errors/v1/rpc-http-mapping.yaml`;
-6. проверить, что `Closes #187` относится только к одному PR.
+6. для Issue #221 пройти negative/competition/replay сценарии из
+   `runtime-continuation-contract.md` и сверить все 24 новых full methods,
+   operation IDs, permissions и producer profiles;
+7. проверить, что `Closes #187` или `Closes #221` относится только к своему PR.
 
 Фактические проверки PostgreSQL/Redis/NATS/Vault/Kubernetes и staging rollout
 требуют отдельного разрешения и окружения.
@@ -408,3 +429,10 @@ OpenTelemetry, Sentry, Kubernetes и Vault, но вернул quota error. Ис�
   [Vault PKI issue API](https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-certificate-and-key),
   [Shipwright Build](https://shipwright.io/docs/build/) и
   [Tekton Tasks](https://tekton.dev/docs/pipelines/tasks/).
+
+Для Issue #221 Context7 повторно подтвердил API `/jackc/pgx` v5.10.0,
+`/pressly/goose` v3.27.3, `/grpc/grpc-go` v1.82.1, `/bufbuild/buf` и
+`/protocolbuffers/protobuf-go`: транзакции и `Serializable`, forward-only
+migrations, gRPC full method/status/interceptor, `buf format|lint|build|generate`
+и совместимость generated Go API с runtime. Использованы закреплённые
+репозиторием версии инструментов.

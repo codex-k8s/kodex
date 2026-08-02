@@ -2,6 +2,9 @@ package controlplane
 
 import _ "embed"
 
+//go:embed sql/clock__get.sql
+var sqlClockGet string
+
 // Каждая декларация связывает конкретный именованный запрос с бинарём на
 // этапе компиляции. Удалённый или переименованный SQL-файл поэтому завершает
 // сборку ошибкой, а не вызывает панику уже запущенного сервиса.
@@ -116,6 +119,42 @@ var sqlRuntimeRevisionComponents string
 
 //go:embed sql/runtime_revision__latest.sql
 var sqlRuntimeRevisionLatest string
+
+//go:embed sql/runtime_execution__get_for_update.sql
+var sqlRuntimeExecutionGetForUpdate string
+
+//go:embed sql/runtime_execution__get_by_turn_for_update.sql
+var sqlRuntimeExecutionGetByTurnForUpdate string
+
+//go:embed sql/runtime_execution__insert.sql
+var sqlRuntimeExecutionInsert string
+
+//go:embed sql/runtime_execution__update.sql
+var sqlRuntimeExecutionUpdate string
+
+//go:embed sql/runtime_execution__next_expired.sql
+var sqlRuntimeExecutionNextExpired string
+
+//go:embed sql/runtime_incident__insert.sql
+var sqlRuntimeIncidentInsert string
+
+//go:embed sql/integration_continuation__get_for_update.sql
+var sqlIntegrationContinuationGetForUpdate string
+
+//go:embed sql/integration_continuation__get_by_source_turn.sql
+var sqlIntegrationContinuationGetBySourceTurn string
+
+//go:embed sql/integration_continuation__get_by_continuation_turn.sql
+var sqlIntegrationContinuationGetByContinuationTurn string
+
+//go:embed sql/integration_continuation__next_expired.sql
+var sqlIntegrationContinuationNextExpired string
+
+//go:embed sql/integration_continuation__insert.sql
+var sqlIntegrationContinuationInsert string
+
+//go:embed sql/integration_continuation__update.sql
+var sqlIntegrationContinuationUpdate string
 
 //go:embed sql/schedule__due.sql
 var sqlScheduleDue string

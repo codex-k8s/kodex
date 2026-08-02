@@ -962,7 +962,7 @@ func optionalDuration(value *durationpb.Duration) (time.Duration, error) {
 }
 
 func optionalTimestamp(value time.Time) *timestamppb.Timestamp {
-	if value.IsZero() {
+	if value.IsZero() || value.Equal(time.Unix(0, 0)) {
 		return nil
 	}
 	return timestamppb.New(value)

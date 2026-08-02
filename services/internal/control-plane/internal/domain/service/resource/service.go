@@ -23,81 +23,111 @@ import (
 )
 
 const (
-	permissionCreate                = "controlplane.resource.create"
-	permissionUpdate                = "controlplane.resource.update"
-	permissionTransition            = "controlplane.resource.transition"
-	permissionDelete                = "controlplane.resource.delete"
-	permissionAccessManage          = "controlplane.access.manage"
-	permissionRead                  = "controlplane.resource.read"
-	permissionList                  = "controlplane.resource.list"
-	permissionEnqueueTurn           = "controlplane.turn.enqueue"
-	permissionClaimTurn             = "controlplane.turn.claim"
-	permissionRenewTurn             = "controlplane.turn.renew"
-	permissionCompleteTurn          = "controlplane.turn.complete"
-	permissionRetryTurn             = "controlplane.turn.retry"
-	permissionCancelTurn            = "controlplane.turn.cancel"
-	permissionClaimSchedule         = "controlplane.schedule.claim"
-	permissionManageSchedule        = "controlplane.schedule.manage"
-	permissionExecuteSchedule       = "controlplane.schedule.execute"
-	permissionStartProcess          = "controlplane.process.start"
-	permissionCancelProcess         = "controlplane.process.cancel"
-	permissionCompleteProcess       = "controlplane.process.complete"
-	permissionRequestGate           = "controlplane.owner_gate.request"
-	permissionResolveGate           = "controlplane.owner_gate.resolve"
-	permissionRegisterArtifact      = "controlplane.artifact.register"
-	permissionScanArtifact          = "controlplane.artifact.scan"
-	permissionManageSession         = "controlplane.session.manage"
-	permissionWriteMemory           = "controlplane.memory.write"
-	permissionWriteProjectMemory    = "controlplane.memory.project.write"
-	permissionManageWorkClaim       = "controlplane.work_claim.manage"
-	permissionDeliverGate           = "controlplane.owner_gate.deliver"
-	permissionExpireGate            = "controlplane.owner_gate.expire"
-	permissionReadRuntimeRevision   = "controlplane.runtime_revision.read"
-	permissionIndexMemory           = "controlplane.memory.index"
-	permissionRepairOutbox          = "controlplane.outbox.repair"
-	permissionReadOutbox            = "controlplane.outbox.read"
-	permissionApplyGitConfiguration = "controlplane.configuration.git.apply"
-	permissionDetachConfiguration   = "controlplane.configuration.detach"
+	permissionCreate                 = "controlplane.resource.create"
+	permissionUpdate                 = "controlplane.resource.update"
+	permissionTransition             = "controlplane.resource.transition"
+	permissionDelete                 = "controlplane.resource.delete"
+	permissionAccessManage           = "controlplane.access.manage"
+	permissionRead                   = "controlplane.resource.read"
+	permissionList                   = "controlplane.resource.list"
+	permissionEnqueueTurn            = "controlplane.turn.enqueue"
+	permissionClaimTurn              = "controlplane.turn.claim"
+	permissionRenewTurn              = "controlplane.turn.renew"
+	permissionCompleteTurn           = "controlplane.turn.complete"
+	permissionRetryTurn              = "controlplane.turn.retry"
+	permissionCancelTurn             = "controlplane.turn.cancel"
+	permissionClaimSchedule          = "controlplane.schedule.claim"
+	permissionManageSchedule         = "controlplane.schedule.manage"
+	permissionExecuteSchedule        = "controlplane.schedule.execute"
+	permissionStartProcess           = "controlplane.process.start"
+	permissionCancelProcess          = "controlplane.process.cancel"
+	permissionCompleteProcess        = "controlplane.process.complete"
+	permissionRequestGate            = "controlplane.owner_gate.request"
+	permissionResolveGate            = "controlplane.owner_gate.resolve"
+	permissionRegisterArtifact       = "controlplane.artifact.register"
+	permissionScanArtifact           = "controlplane.artifact.scan"
+	permissionManageSession          = "controlplane.session.manage"
+	permissionWriteMemory            = "controlplane.memory.write"
+	permissionWriteProjectMemory     = "controlplane.memory.project.write"
+	permissionManageWorkClaim        = "controlplane.work_claim.manage"
+	permissionDeliverGate            = "controlplane.owner_gate.deliver"
+	permissionExpireGate             = "controlplane.owner_gate.expire"
+	permissionReadRuntimeRevision    = "controlplane.runtime_revision.read"
+	permissionIndexMemory            = "controlplane.memory.index"
+	permissionRepairOutbox           = "controlplane.outbox.repair"
+	permissionReadOutbox             = "controlplane.outbox.read"
+	permissionApplyGitConfiguration  = "controlplane.configuration.git.apply"
+	permissionDetachConfiguration    = "controlplane.configuration.detach"
+	permissionRuntimeClaim           = "controlplane.runtime_execution.claim"
+	permissionRuntimeRead            = "controlplane.runtime_execution.read"
+	permissionRuntimeAdmit           = "controlplane.runtime_execution.admit"
+	permissionRuntimeHeartbeat       = "controlplane.runtime_execution.heartbeat"
+	permissionRuntimeIncident        = "controlplane.runtime_execution.incident"
+	permissionRuntimeComplete        = "controlplane.runtime_execution.complete"
+	permissionRuntimeCancel          = "controlplane.runtime_execution.cancel"
+	permissionRuntimeRetry           = "controlplane.runtime_execution.retry"
+	permissionRuntimeExpire          = "controlplane.runtime_execution.expire"
+	permissionRuntimeArchive         = "controlplane.runtime_execution.archive"
+	permissionRuntimeRestore         = "controlplane.runtime_execution.restore.verify"
+	permissionRuntimeCleanup         = "controlplane.runtime_execution.cleanup.authorize"
+	permissionIntegrationResolve     = "controlplane.integration_session.read"
+	permissionIntegrationSuspend     = "controlplane.integration_continuation.suspend"
+	permissionIntegrationDecide      = "controlplane.integration_continuation.decide"
+	permissionIntegrationExecute     = "controlplane.integration_continuation.execute"
+	permissionIntegrationRead        = "controlplane.integration_continuation.read"
+	permissionIntegrationAcknowledge = "controlplane.integration_continuation.acknowledge"
 )
 
 // Config задаёт критичную для безопасности ограниченную политику выполнения.
 type Config struct {
-	LeaseSigningKey           []byte
-	TurnLeaseDuration         time.Duration
-	MaximumScheduleClaims     int
-	RuntimeImageDigest        string
-	AuthorityPolicyRevision   uint64
-	AuthorityPolicySHA256     string
-	OwnerGateDeliveryWorkload string
-	OwnerGateDeliverySPIFFEID string
-	ScannerWorkload           string
-	ScannerSPIFFEID           string
-	SchedulerWorkload         string
-	SchedulerSPIFFEID         string
-	MemoryIndexerWorkload     string
-	MemoryIndexerSPIFFEID     string
-	Observer                  Observer
+	LeaseSigningKey            []byte
+	TurnLeaseDuration          time.Duration
+	MaximumScheduleClaims      int
+	RuntimeImageDigest         string
+	AuthorityPolicyRevision    uint64
+	AuthorityPolicySHA256      string
+	OwnerGateDeliveryWorkload  string
+	OwnerGateDeliverySPIFFEID  string
+	ScannerWorkload            string
+	ScannerSPIFFEID            string
+	SchedulerWorkload          string
+	SchedulerSPIFFEID          string
+	MemoryIndexerWorkload      string
+	MemoryIndexerSPIFFEID      string
+	RuntimeControllerWorkload  string
+	RuntimeControllerSPIFFEID  string
+	IntegrationGatewayWorkload string
+	IntegrationGatewaySPIFFEID string
+	RestoreVerifierWorkload    string
+	RestoreVerifierSPIFFEID    string
+	Observer                   Observer
 }
 
 // Service владеет прикладными переходами; адаптер только сохраняет намерение.
 type Service struct {
-	repository                domainrepo.Repository
-	leaseSigningKey           []byte
-	turnLeaseDuration         time.Duration
-	maximumScheduleClaims     int
-	runtimeImageDigest        string
-	authorityPolicyRevision   uint64
-	authorityPolicySHA256     string
-	ownerGateDeliveryWorkload string
-	ownerGateDeliverySPIFFEID string
-	scannerWorkload           string
-	scannerSPIFFEID           string
-	schedulerWorkload         string
-	schedulerSPIFFEID         string
-	memoryIndexerWorkload     string
-	memoryIndexerSPIFFEID     string
-	observer                  Observer
-	now                       func() time.Time
+	repository                 domainrepo.Repository
+	leaseSigningKey            []byte
+	turnLeaseDuration          time.Duration
+	maximumScheduleClaims      int
+	runtimeImageDigest         string
+	authorityPolicyRevision    uint64
+	authorityPolicySHA256      string
+	ownerGateDeliveryWorkload  string
+	ownerGateDeliverySPIFFEID  string
+	scannerWorkload            string
+	scannerSPIFFEID            string
+	schedulerWorkload          string
+	schedulerSPIFFEID          string
+	memoryIndexerWorkload      string
+	memoryIndexerSPIFFEID      string
+	runtimeControllerWorkload  string
+	runtimeControllerSPIFFEID  string
+	integrationGatewayWorkload string
+	integrationGatewaySPIFFEID string
+	restoreVerifierWorkload    string
+	restoreVerifierSPIFFEID    string
+	observer                   Observer
+	now                        func() time.Time
 }
 
 // New создаёт сервис только с полноценными устойчивыми границами.
@@ -118,27 +148,41 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validSPIFFEID(config.SchedulerSPIFFEID) ||
 		value.ValidateStableKey(config.MemoryIndexerWorkload) != nil ||
 		!validSPIFFEID(config.MemoryIndexerSPIFFEID) ||
+		value.ValidateStableKey(config.RuntimeControllerWorkload) != nil ||
+		!validSPIFFEID(config.RuntimeControllerSPIFFEID) ||
+		value.ValidateStableKey(config.IntegrationGatewayWorkload) != nil ||
+		!validSPIFFEID(config.IntegrationGatewaySPIFFEID) ||
+		value.ValidateStableKey(config.RestoreVerifierWorkload) != nil ||
+		!validSPIFFEID(config.RestoreVerifierSPIFFEID) ||
+		config.RestoreVerifierWorkload == config.RuntimeControllerWorkload ||
+		config.RestoreVerifierSPIFFEID == config.RuntimeControllerSPIFFEID ||
 		config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
 	return &Service{
-		repository:                repository,
-		leaseSigningKey:           slices.Clone(config.LeaseSigningKey),
-		turnLeaseDuration:         config.TurnLeaseDuration,
-		maximumScheduleClaims:     config.MaximumScheduleClaims,
-		runtimeImageDigest:        config.RuntimeImageDigest,
-		authorityPolicyRevision:   config.AuthorityPolicyRevision,
-		authorityPolicySHA256:     config.AuthorityPolicySHA256,
-		ownerGateDeliveryWorkload: config.OwnerGateDeliveryWorkload,
-		ownerGateDeliverySPIFFEID: config.OwnerGateDeliverySPIFFEID,
-		scannerWorkload:           config.ScannerWorkload,
-		scannerSPIFFEID:           config.ScannerSPIFFEID,
-		schedulerWorkload:         config.SchedulerWorkload,
-		schedulerSPIFFEID:         config.SchedulerSPIFFEID,
-		memoryIndexerWorkload:     config.MemoryIndexerWorkload,
-		memoryIndexerSPIFFEID:     config.MemoryIndexerSPIFFEID,
-		observer:                  config.Observer,
-		now:                       time.Now,
+		repository:                 repository,
+		leaseSigningKey:            slices.Clone(config.LeaseSigningKey),
+		turnLeaseDuration:          config.TurnLeaseDuration,
+		maximumScheduleClaims:      config.MaximumScheduleClaims,
+		runtimeImageDigest:         config.RuntimeImageDigest,
+		authorityPolicyRevision:    config.AuthorityPolicyRevision,
+		authorityPolicySHA256:      config.AuthorityPolicySHA256,
+		ownerGateDeliveryWorkload:  config.OwnerGateDeliveryWorkload,
+		ownerGateDeliverySPIFFEID:  config.OwnerGateDeliverySPIFFEID,
+		scannerWorkload:            config.ScannerWorkload,
+		scannerSPIFFEID:            config.ScannerSPIFFEID,
+		schedulerWorkload:          config.SchedulerWorkload,
+		schedulerSPIFFEID:          config.SchedulerSPIFFEID,
+		memoryIndexerWorkload:      config.MemoryIndexerWorkload,
+		memoryIndexerSPIFFEID:      config.MemoryIndexerSPIFFEID,
+		runtimeControllerWorkload:  config.RuntimeControllerWorkload,
+		runtimeControllerSPIFFEID:  config.RuntimeControllerSPIFFEID,
+		integrationGatewayWorkload: config.IntegrationGatewayWorkload,
+		integrationGatewaySPIFFEID: config.IntegrationGatewaySPIFFEID,
+		restoreVerifierWorkload:    config.RestoreVerifierWorkload,
+		restoreVerifierSPIFFEID:    config.RestoreVerifierSPIFFEID,
+		observer:                   config.Observer,
+		now:                        time.Now,
 	}, nil
 }
 

@@ -428,6 +428,185 @@ type MemorySearchHit struct {
 	VectorProjectionUsed bool
 }
 
+type RuntimeExecution = domainrepo.RuntimeExecution
+type IntegrationContinuation = domainrepo.IntegrationContinuation
+
+type RuntimeExecutionInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	ExecutionID             string
+	ExpectedVersion         uint64
+	ExpectedFence           uint64
+	ExpectedGrantGeneration uint64
+	LeaseToken              string
+}
+
+type RecordRuntimeIncidentInput struct {
+	RuntimeExecutionInput
+	Kind           string
+	IncidentID     string
+	EvidenceSHA256 string
+}
+
+type CompleteRuntimeExecutionInput struct {
+	RuntimeExecutionInput
+	Outcome           string
+	TerminalReference string
+	TerminalSHA256    string
+}
+
+type CancelRuntimeExecutionInput struct {
+	RuntimeExecutionInput
+	ReasonCode string
+}
+
+type RuntimeArchiveInput struct {
+	RuntimeExecutionInput
+	ArchiveReference string
+	ArchiveSHA256    string
+}
+
+type RuntimeRestoreInput struct {
+	RuntimeExecutionInput
+	ArchiveSHA256         string
+	RestoreProofReference string
+	RestoreProofSHA256    string
+}
+
+type RuntimeCleanupInput struct {
+	RuntimeExecutionInput
+	ArchiveSHA256      string
+	RestoreProofSHA256 string
+}
+
+type AdmitRuntimeExecutionResult struct {
+	Execution  RuntimeExecution
+	LeaseToken string
+}
+
+type RetryRuntimeExecutionResult struct {
+	Previous RuntimeExecution
+	Turn     entity.Resource
+}
+
+type IntegrationExecutionBinding struct {
+	OrganizationID         string
+	ProjectID              string
+	ProcessID              string
+	SessionID              string
+	SessionVersion         uint64
+	ThreadID               string
+	RoleID                 string
+	TurnID                 string
+	TurnVersion            uint64
+	Attempt                uint32
+	RuntimeRevisionID      string
+	RuntimeRevisionVersion uint64
+	RuntimeRevisionSHA256  string
+	ImmutableInputSHA256   string
+	GrantGeneration        uint64
+	Fence                  uint64
+}
+
+type IntegrationSessionContext struct {
+	OrganizationID         string
+	ProjectID              string
+	OwnerActorID           string
+	ProcessID              string
+	SessionID              string
+	SessionVersion         uint64
+	ThreadID               string
+	TurnID                 string
+	TurnVersion            uint64
+	Attempt                uint32
+	InputSHA256            string
+	RuntimeRevisionID      string
+	RuntimeRevisionVersion uint64
+	RuntimeRevisionSHA256  string
+	RuntimeManifestSHA256  string
+	RoleID                 string
+	RoleVersion            uint64
+	RoleCapabilities       []string
+	GrantGeneration        uint64
+	Integrations           []IntegrationSessionBinding
+}
+
+type IntegrationSessionBinding struct {
+	IntegrationID      string
+	IntegrationVersion uint64
+	ProjectionSHA256   string
+	DefinitionRef      string
+	DefinitionVersion  uint64
+	Capabilities       []string
+	EndpointRef        string
+	CredentialBindings []IntegrationCredentialBinding
+}
+
+type IntegrationCredentialBinding struct {
+	CredentialBindingID      string
+	CredentialBindingVersion uint64
+	ProjectionSHA256         string
+	Purpose                  string
+	SecretRef                string
+	PrincipalRef             string
+	CredentialRevision       uint64
+	ExpiresAt                time.Time
+}
+
+type SuspendIntegrationInput struct {
+	Principal         value.Principal
+	IdempotencyKey    string
+	InvocationID      string
+	ApprovalID        string
+	IntegrationID     string
+	RequestSHA256     string
+	ApprovalExpiresAt time.Time
+}
+
+type IntegrationDecisionInput struct {
+	Principal         value.Principal
+	IdempotencyKey    string
+	ContinuationID    string
+	ExpectedVersion   uint64
+	ExpectedFence     uint64
+	InvocationID      string
+	ApprovalID        string
+	RequestSHA256     string
+	DecisionReference string
+	DecisionSHA256    string
+}
+
+type IntegrationExecutionInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ContinuationID  string
+	ExpectedVersion uint64
+	ExpectedFence   uint64
+	InvocationID    string
+	RequestSHA256   string
+	ResultReference string
+	ResultSHA256    string
+	ErrorCode       string
+	ErrorReference  string
+	ErrorSHA256     string
+}
+
+type GetIntegrationContinuationInput struct {
+	Principal                      value.Principal
+	ExpectedVersion                uint64
+	ExpectedRuntimeRevisionVersion uint64
+	ExpectedInputSHA256            string
+	ExpectedFence                  uint64
+}
+
+type AcknowledgeIntegrationContinuationInput struct {
+	Principal           value.Principal
+	IdempotencyKey      string
+	ExpectedVersion     uint64
+	ExpectedFence       uint64
+	ExpectedInputSHA256 string
+}
+
 // Observer получает только закрытые вид и действие после устойчивой фиксации.
 type Observer interface {
 	ObserveMutation(kind enum.Kind, action string)

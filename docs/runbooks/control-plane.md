@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.5.0
-updated: 2026-07-31
+version: 1.6.0
+updated: 2026-08-02
 ---
 
 # Диагностика и восстановление control-plane
@@ -13,7 +13,8 @@ updated: 2026-07-31
 ## Назначение и запреты
 
 Runbook применяется при отказе startup/readiness, миграции, authority proof,
-cache, turn lease или outbox relay. Он не разрешает deploy, production change,
+cache, turn lease, runtime execution, integration continuation или outbox
+relay. Он не разрешает deploy, production change,
 ручное изменение доменных таблиц, сброс RLS/high-watermark или вывод secret
 values.
 
@@ -150,7 +151,7 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260801000100`;
+- migration schema version равна `20260802000100`;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
@@ -259,6 +260,38 @@ Manual retry и lease recovery используют специализирова
 создают свежую RuntimeRevision/input/attempt/grant и перепривязывают
 ProcessRun/occurrence/ScheduledRun до следующего claim.
 
+## Runtime execution и integration continuation
+
+Runtime execution диагностируется только по безопасным metadata: exact
+organization/project/process/session/thread/role/turn/attempt,
+`RuntimeRevision` version/digest, immutable input digest, workload/SPIFFE,
+grant generation, version/fence, state и времени lease. Lease token hash,
+proof и значения credential не выводить. При stale heartbeat, terminal,
+cancel, retry или expiry проверить, что один PostgreSQL transaction:
+
+1. заблокировал exact execution и связанный Turn;
+2. сверил attempt/input/revision/workload/generation/version/fence;
+3. удалил совпавший Turn lease, завершил attempt и отозвал WorkClaim;
+4. сделал единственный terminal transition и сохранил semantic receipt/audit.
+
+Archive reference принимается только после terminal state. Cleanup
+authorization не выдаётся без совпавшего archive checksum и independently
+verified restore proof другого exact workload; повтор того же ключа возвращает
+сохранённую authorization с тем же 15-минутным expiry, а новый intent не
+создаёт второе разрешение.
+Ручное обновление `runtime_executions` и очистка до restore proof запрещены.
+
+Integration suspension pin-ит invocation, approval, request digest и полный
+runtime tuple. Для `PENDING` допускается один из `APPROVED`, `REJECTED`,
+`EXPIRED`, `CANCELLED`; выполнение разрешено только после `APPROVED` и имеет
+единственный terminal `SUCCEEDED` или `FAILED`. Terminal transition в той же
+транзакции создаёт одну свежую `RuntimeRevision`, continuation Turn и
+version-pinned read/rejoin tuple. До реализации agent-runner Issue #192
+фактического event consumer нет: проверять защищённые
+`GetIntegrationContinuation`/`AcknowledgeIntegrationContinuation`, а не NATS.
+При гонке повторно читать version/fence; обход OCC и повторная материализация
+Turn запрещены.
+
 ## Artifact scan и schedule occurrence
 
 `PENDING` artifact не используется как input/result. Внешний scanner вызывает
@@ -359,6 +392,12 @@ Application rollback допустим только к образу, которы
 опубликованные Proto/schema/policy revisions. Schema, authority policy,
 proof generation, audit и outbox назад не откатываются. При несовместимости
 оставить workload not ready и подготовить forward fix.
+
+После миграции `20260802000100` rollback выполняется только вперёд: старый
+runtime выключается, данные runtime execution/continuation сохраняются, новая
+migration или совместимый образ восстанавливает обслуживание. Удалять таблицы,
+уменьшать schema/policy revision, повторно открывать закрытые lease/grant либо
+выдавать cleanup authorization вручную запрещено.
 
 ## Prototype policy
 

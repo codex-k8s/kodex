@@ -54,6 +54,14 @@ type transaction struct {
 	projectID      string
 }
 
+func (wrapped *transaction) CurrentTime(ctx context.Context) (time.Time, error) {
+	var current time.Time
+	if err := wrapped.tx.QueryRow(ctx, sqlClockGet).Scan(&current); err != nil {
+		return time.Time{}, mapError(err)
+	}
+	return current.UTC().Truncate(time.Microsecond), nil
+}
+
 var _ domainrepo.Repository = (*Repository)(nil)
 var _ domainrepo.Transaction = (*transaction)(nil)
 
@@ -2007,8 +2015,354 @@ func (wrapped *transaction) NextExpiredOwnerGate(
 	))
 }
 
+func (wrapped *transaction) GetRuntimeExecutionForUpdate(
+	ctx context.Context,
+	executionID string,
+) (domainrepo.RuntimeExecution, error) {
+	return scanRuntimeExecution(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeExecutionGetForUpdate,
+		pgx.StrictNamedArgs{"execution_id": executionID},
+	))
+}
+
+func (wrapped *transaction) GetRuntimeExecutionByTurnForUpdate(
+	ctx context.Context,
+	turnID string,
+	attempt uint32,
+) (domainrepo.RuntimeExecution, error) {
+	return scanRuntimeExecution(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeExecutionGetByTurnForUpdate,
+		pgx.StrictNamedArgs{"turn_id": turnID, "attempt": attempt},
+	))
+}
+
+func (wrapped *transaction) InsertRuntimeExecution(
+	ctx context.Context,
+	execution domainrepo.RuntimeExecution,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeExecutionInsert, runtimeExecutionArgs(execution))
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) UpdateRuntimeExecution(
+	ctx context.Context,
+	execution domainrepo.RuntimeExecution,
+	expectedVersion, expectedFence uint64,
+) error {
+	arguments := runtimeExecutionUpdateArgs(execution, expectedVersion, expectedFence)
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeExecutionUpdate, arguments)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrVersionMismatch
+	}
+	return nil
+}
+
+func (wrapped *transaction) NextExpiredRuntimeExecution(
+	ctx context.Context,
+	organizationID, projectID, turnID string,
+	attempt uint32,
+) (domainrepo.RuntimeExecution, error) {
+	return scanRuntimeExecution(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeExecutionNextExpired,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"turn_id":         turnID,
+			"attempt":         attempt,
+		},
+	))
+}
+
+func (wrapped *transaction) InsertRuntimeIncident(
+	ctx context.Context,
+	incident domainrepo.RuntimeIncident,
+) error {
+	_, err := wrapped.tx.Exec(ctx, sqlRuntimeIncidentInsert, pgx.StrictNamedArgs{
+		"id":              incident.ID,
+		"organization_id": incident.OrganizationID,
+		"project_id":      incident.ProjectID,
+		"execution_id":    incident.ExecutionID,
+		"execution_fence": incident.ExecutionFence,
+		"kind":            incident.Kind,
+		"evidence_sha256": incident.EvidenceSHA256,
+		"workload_id":     incident.WorkloadID,
+		"occurred_at":     incident.OccurredAt,
+	})
+	return mapError(err)
+}
+
+func (wrapped *transaction) GetIntegrationContinuationForUpdate(
+	ctx context.Context,
+	continuationID string,
+) (domainrepo.IntegrationContinuation, error) {
+	return scanIntegrationContinuation(wrapped.tx.QueryRow(
+		ctx, sqlIntegrationContinuationGetForUpdate,
+		pgx.StrictNamedArgs{"continuation_id": continuationID},
+	))
+}
+
+func (wrapped *transaction) GetIntegrationContinuationBySourceTurnForUpdate(
+	ctx context.Context,
+	turnID string,
+) (domainrepo.IntegrationContinuation, error) {
+	return scanIntegrationContinuation(wrapped.tx.QueryRow(
+		ctx, sqlIntegrationContinuationGetBySourceTurn,
+		pgx.StrictNamedArgs{"turn_id": turnID},
+	))
+}
+
+func (wrapped *transaction) GetIntegrationContinuationByContinuationTurn(
+	ctx context.Context,
+	turnID string,
+) (domainrepo.IntegrationContinuation, error) {
+	return scanIntegrationContinuation(wrapped.tx.QueryRow(
+		ctx, sqlIntegrationContinuationGetByContinuationTurn,
+		pgx.StrictNamedArgs{"turn_id": turnID},
+	))
+}
+
+func (wrapped *transaction) NextExpiredIntegrationContinuation(
+	ctx context.Context,
+	organizationID, projectID, turnID string,
+	attempt uint32,
+) (domainrepo.IntegrationContinuation, error) {
+	return scanIntegrationContinuation(wrapped.tx.QueryRow(
+		ctx, sqlIntegrationContinuationNextExpired,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"turn_id":         turnID,
+			"attempt":         attempt,
+		},
+	))
+}
+
+func (wrapped *transaction) InsertIntegrationContinuation(
+	ctx context.Context,
+	continuation domainrepo.IntegrationContinuation,
+) error {
+	tag, err := wrapped.tx.Exec(
+		ctx, sqlIntegrationContinuationInsert, integrationContinuationArgs(continuation),
+	)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) UpdateIntegrationContinuation(
+	ctx context.Context,
+	continuation domainrepo.IntegrationContinuation,
+	expectedVersion, expectedFence uint64,
+) error {
+	arguments := integrationContinuationUpdateArgs(
+		continuation, expectedVersion, expectedFence,
+	)
+	tag, err := wrapped.tx.Exec(ctx, sqlIntegrationContinuationUpdate, arguments)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrVersionMismatch
+	}
+	return nil
+}
+
+func runtimeExecutionArgs(execution domainrepo.RuntimeExecution) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"id": execution.ID, "organization_id": execution.OrganizationID,
+		"project_id": execution.ProjectID, "process_id": execution.ProcessID,
+		"session_id": execution.SessionID, "thread_id": execution.ThreadID,
+		"role_id": execution.RoleID, "turn_id": execution.TurnID,
+		"attempt": execution.Attempt, "runtime_revision_id": execution.RuntimeRevisionID,
+		"runtime_revision_version": execution.RuntimeRevisionVersion,
+		"runtime_revision_sha256":  execution.RuntimeRevisionSHA256,
+		"immutable_input_sha256":   execution.ImmutableInputSHA256,
+		"resource_class":           execution.ResourceClass,
+		"cluster_access_profile":   execution.ClusterAccessProfile,
+		"workload_id":              execution.WorkloadID,
+		"workload_spiffe_id":       execution.WorkloadSPIFFEID,
+		"grant_generation":         execution.GrantGeneration,
+		"version":                  execution.Version, "fence": execution.Fence,
+		"state": execution.State, "lease_id": execution.LeaseID,
+		"lease_token_sha256":               execution.LeaseTokenSHA256,
+		"lease_expires_at":                 execution.LeaseExpiresAt,
+		"terminal_outcome":                 execution.TerminalOutcome,
+		"terminal_reference":               execution.TerminalReference,
+		"terminal_sha256":                  execution.TerminalSHA256,
+		"archive_reference":                execution.ArchiveReference,
+		"archive_sha256":                   execution.ArchiveSHA256,
+		"restore_proof_reference":          execution.RestoreProofReference,
+		"restore_proof_sha256":             execution.RestoreProofSHA256,
+		"restore_verifier_workload_id":     execution.RestoreVerifierWorkload,
+		"cleanup_authorization_id":         execution.CleanupAuthorizationID,
+		"cleanup_authorization_expires_at": execution.CleanupAuthorizationExpiresAt,
+		"created_at":                       execution.CreatedAt, "updated_at": execution.UpdatedAt,
+	}
+}
+
+func runtimeExecutionUpdateArgs(
+	execution domainrepo.RuntimeExecution,
+	expectedVersion, expectedFence uint64,
+) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"id": execution.ID, "version": execution.Version, "fence": execution.Fence,
+		"state": execution.State, "lease_id": execution.LeaseID,
+		"lease_token_sha256":               execution.LeaseTokenSHA256,
+		"lease_expires_at":                 execution.LeaseExpiresAt,
+		"terminal_outcome":                 execution.TerminalOutcome,
+		"terminal_reference":               execution.TerminalReference,
+		"terminal_sha256":                  execution.TerminalSHA256,
+		"archive_reference":                execution.ArchiveReference,
+		"archive_sha256":                   execution.ArchiveSHA256,
+		"restore_proof_reference":          execution.RestoreProofReference,
+		"restore_proof_sha256":             execution.RestoreProofSHA256,
+		"restore_verifier_workload_id":     execution.RestoreVerifierWorkload,
+		"cleanup_authorization_id":         execution.CleanupAuthorizationID,
+		"cleanup_authorization_expires_at": execution.CleanupAuthorizationExpiresAt,
+		"updated_at":                       execution.UpdatedAt,
+		"expected_version":                 expectedVersion, "expected_fence": expectedFence,
+	}
+}
+
+func integrationContinuationArgs(
+	continuation domainrepo.IntegrationContinuation,
+) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"id": continuation.ID, "organization_id": continuation.OrganizationID,
+		"project_id": continuation.ProjectID, "process_id": continuation.ProcessID,
+		"session_id":      continuation.SessionID,
+		"session_version": continuation.SessionVersion,
+		"thread_id":       continuation.ThreadID, "role_id": continuation.RoleID,
+		"turn_id": continuation.TurnID, "turn_version": continuation.TurnVersion,
+		"attempt":                  continuation.Attempt,
+		"runtime_revision_id":      continuation.RuntimeRevisionID,
+		"runtime_revision_version": continuation.RuntimeRevisionVersion,
+		"runtime_revision_sha256":  continuation.RuntimeRevisionSHA256,
+		"immutable_input_sha256":   continuation.ImmutableInputSHA256,
+		"grant_generation":         continuation.GrantGeneration,
+		"invocation_id":            continuation.InvocationID, "approval_id": continuation.ApprovalID,
+		"integration_id": continuation.IntegrationID, "request_sha256": continuation.RequestSHA256,
+		"approval_state":     continuation.ApprovalState,
+		"execution_state":    continuation.ExecutionState,
+		"continuation_state": continuation.ContinuationState,
+		"version":            continuation.Version, "fence": continuation.Fence,
+		"approval_expires_at":                   continuation.ApprovalExpiresAt,
+		"decision_reference":                    continuation.DecisionReference,
+		"decision_sha256":                       continuation.DecisionSHA256,
+		"result_reference":                      continuation.ResultReference,
+		"result_sha256":                         continuation.ResultSHA256,
+		"error_code":                            continuation.ErrorCode,
+		"error_reference":                       continuation.ErrorReference,
+		"error_sha256":                          continuation.ErrorSHA256,
+		"continuation_turn_id":                  continuation.ContinuationTurnID,
+		"continuation_turn_version":             continuation.ContinuationTurnVersion,
+		"continuation_runtime_revision_id":      continuation.ContinuationRuntimeRevisionID,
+		"continuation_runtime_revision_version": continuation.ContinuationRuntimeRevisionVersion,
+		"continuation_input_sha256":             continuation.ContinuationInputSHA256,
+		"created_at":                            continuation.CreatedAt, "updated_at": continuation.UpdatedAt,
+	}
+}
+
+func integrationContinuationUpdateArgs(
+	continuation domainrepo.IntegrationContinuation,
+	expectedVersion, expectedFence uint64,
+) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"id":                 continuation.ID,
+		"approval_state":     continuation.ApprovalState,
+		"execution_state":    continuation.ExecutionState,
+		"continuation_state": continuation.ContinuationState,
+		"version":            continuation.Version, "fence": continuation.Fence,
+		"decision_reference":                    continuation.DecisionReference,
+		"decision_sha256":                       continuation.DecisionSHA256,
+		"result_reference":                      continuation.ResultReference,
+		"result_sha256":                         continuation.ResultSHA256,
+		"error_code":                            continuation.ErrorCode,
+		"error_reference":                       continuation.ErrorReference,
+		"error_sha256":                          continuation.ErrorSHA256,
+		"continuation_turn_id":                  continuation.ContinuationTurnID,
+		"continuation_turn_version":             continuation.ContinuationTurnVersion,
+		"continuation_runtime_revision_id":      continuation.ContinuationRuntimeRevisionID,
+		"continuation_runtime_revision_version": continuation.ContinuationRuntimeRevisionVersion,
+		"continuation_input_sha256":             continuation.ContinuationInputSHA256,
+		"updated_at":                            continuation.UpdatedAt,
+		"expected_version":                      expectedVersion, "expected_fence": expectedFence,
+	}
+}
+
 type rowScanner interface {
 	Scan(...any) error
+}
+
+func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
+	var execution domainrepo.RuntimeExecution
+	err := row.Scan(
+		&execution.ID, &execution.OrganizationID, &execution.ProjectID,
+		&execution.ProcessID, &execution.SessionID, &execution.ThreadID,
+		&execution.RoleID, &execution.TurnID, &execution.Attempt,
+		&execution.RuntimeRevisionID, &execution.RuntimeRevisionVersion,
+		&execution.RuntimeRevisionSHA256, &execution.ImmutableInputSHA256,
+		&execution.ResourceClass, &execution.ClusterAccessProfile,
+		&execution.WorkloadID, &execution.WorkloadSPIFFEID,
+		&execution.GrantGeneration, &execution.Version, &execution.Fence,
+		&execution.State, &execution.LeaseID, &execution.LeaseTokenSHA256,
+		&execution.LeaseExpiresAt, &execution.TerminalOutcome,
+		&execution.TerminalReference, &execution.TerminalSHA256,
+		&execution.ArchiveReference, &execution.ArchiveSHA256,
+		&execution.RestoreProofReference, &execution.RestoreProofSHA256,
+		&execution.RestoreVerifierWorkload, &execution.CleanupAuthorizationID,
+		&execution.CleanupAuthorizationExpiresAt,
+		&execution.CreatedAt, &execution.UpdatedAt,
+	)
+	if err != nil {
+		return domainrepo.RuntimeExecution{}, mapError(err)
+	}
+	return execution, nil
+}
+
+func scanIntegrationContinuation(
+	row rowScanner,
+) (domainrepo.IntegrationContinuation, error) {
+	var continuation domainrepo.IntegrationContinuation
+	err := row.Scan(
+		&continuation.ID, &continuation.OrganizationID, &continuation.ProjectID,
+		&continuation.ProcessID, &continuation.SessionID,
+		&continuation.SessionVersion, &continuation.ThreadID, &continuation.RoleID,
+		&continuation.TurnID, &continuation.TurnVersion, &continuation.Attempt,
+		&continuation.RuntimeRevisionID, &continuation.RuntimeRevisionVersion,
+		&continuation.RuntimeRevisionSHA256, &continuation.ImmutableInputSHA256,
+		&continuation.GrantGeneration, &continuation.InvocationID,
+		&continuation.ApprovalID, &continuation.IntegrationID,
+		&continuation.RequestSHA256, &continuation.ApprovalState,
+		&continuation.ExecutionState, &continuation.ContinuationState,
+		&continuation.Version, &continuation.Fence,
+		&continuation.ApprovalExpiresAt, &continuation.DecisionReference,
+		&continuation.DecisionSHA256, &continuation.ResultReference,
+		&continuation.ResultSHA256, &continuation.ErrorCode,
+		&continuation.ErrorReference, &continuation.ErrorSHA256,
+		&continuation.ContinuationTurnID, &continuation.ContinuationTurnVersion,
+		&continuation.ContinuationRuntimeRevisionID,
+		&continuation.ContinuationRuntimeRevisionVersion,
+		&continuation.ContinuationInputSHA256, &continuation.CreatedAt,
+		&continuation.UpdatedAt,
+	)
+	if err != nil {
+		return domainrepo.IntegrationContinuation{}, mapError(err)
+	}
+	return continuation, nil
 }
 
 func scanOutboxFailure(row rowScanner) (domainrepo.OutboxFailure, error) {

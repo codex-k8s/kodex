@@ -1,0 +1,22 @@
+UPDATE control_plane.integration_continuations
+SET approval_state = @approval_state,
+    execution_state = @execution_state,
+    continuation_state = @continuation_state,
+    version = @version,
+    fence = @fence,
+    decision_reference = nullif(@decision_reference, ''),
+    decision_sha256 = nullif(@decision_sha256, ''),
+    result_reference = nullif(@result_reference, ''),
+    result_sha256 = nullif(@result_sha256, ''),
+    error_code = nullif(@error_code, ''),
+    error_reference = nullif(@error_reference, ''),
+    error_sha256 = nullif(@error_sha256, ''),
+    continuation_turn_id = nullif(@continuation_turn_id, '')::uuid,
+    continuation_turn_version = nullif(@continuation_turn_version, 0),
+    continuation_runtime_revision_id = nullif(@continuation_runtime_revision_id, '')::uuid,
+    continuation_runtime_revision_version = nullif(@continuation_runtime_revision_version, 0),
+    continuation_input_sha256 = nullif(@continuation_input_sha256, ''),
+    updated_at = @updated_at
+WHERE id = @id
+  AND version = @expected_version
+  AND fence = @expected_fence;

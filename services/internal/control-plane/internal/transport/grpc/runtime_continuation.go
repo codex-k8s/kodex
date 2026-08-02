@@ -1,0 +1,813 @@
+package grpc
+
+import (
+	"context"
+
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+func (server *Server) ClaimRuntimeExecution(
+	ctx context.Context,
+	request *controlplanev1.ClaimRuntimeExecutionRequest,
+) (*controlplanev1.ClaimRuntimeExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.ClaimRuntimeExecution(
+		ctx, principal, request.GetIdempotencyKey(),
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.ClaimRuntimeExecutionResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) GetRuntimeExecution(
+	ctx context.Context,
+	request *controlplanev1.GetRuntimeExecutionRequest,
+) (*controlplanev1.GetRuntimeExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.GetRuntimeExecution(
+		ctx, principal, request.GetExecutionId(), request.GetExpectedVersion(),
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.GetRuntimeExecutionResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) AdmitRuntimeExecution(
+	ctx context.Context,
+	request *controlplanev1.AdmitRuntimeExecutionRequest,
+) (*controlplanev1.AdmitRuntimeExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_AdmitRuntimeExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	result, err := server.service.AdmitRuntimeExecution(ctx, resource.RuntimeExecutionInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+		ExpectedFence:           request.GetExpectedFence(),
+		ExpectedGrantGeneration: request.GetExpectedGrantGeneration(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.AdmitRuntimeExecutionResponse{
+		Execution: toProtoRuntimeExecution(result.Execution), LeaseToken: result.LeaseToken,
+	}, nil
+}
+
+func (server *Server) HeartbeatRuntimeExecution(
+	ctx context.Context,
+	request *controlplanev1.HeartbeatRuntimeExecutionRequest,
+) (*controlplanev1.HeartbeatRuntimeExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.HeartbeatRuntimeExecution(ctx, resource.RuntimeExecutionInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+		ExpectedFence:           request.GetExpectedFence(),
+		ExpectedGrantGeneration: request.GetExpectedGrantGeneration(),
+		LeaseToken:              request.GetLeaseToken(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.HeartbeatRuntimeExecutionResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) RecordRuntimeIncident(
+	ctx context.Context,
+	request *controlplanev1.RecordRuntimeIncidentRequest,
+) (*controlplanev1.RecordRuntimeIncidentResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_RecordRuntimeIncident_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.RecordRuntimeIncident(ctx, resource.RecordRuntimeIncidentInput{
+		RuntimeExecutionInput: resource.RuntimeExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedFence:           request.GetExpectedFence(),
+			ExpectedGrantGeneration: principal.AuthorityGrantGeneration,
+		},
+		Kind: runtimeIncidentKind(request.GetKind()), IncidentID: request.GetIncidentId(),
+		EvidenceSHA256: request.GetEvidenceSha256(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.RecordRuntimeIncidentResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) CompleteRuntimeExecution(
+	ctx context.Context,
+	request *controlplanev1.CompleteRuntimeExecutionRequest,
+) (*controlplanev1.CompleteRuntimeExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.CompleteRuntimeExecution(ctx, resource.CompleteRuntimeExecutionInput{
+		RuntimeExecutionInput: resource.RuntimeExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedFence:           request.GetExpectedFence(),
+			ExpectedGrantGeneration: request.GetExpectedGrantGeneration(),
+			LeaseToken:              request.GetLeaseToken(),
+		},
+		Outcome:           runtimeTerminalOutcome(request.GetOutcome()),
+		TerminalReference: request.GetTerminalReference(),
+		TerminalSHA256:    request.GetTerminalSha256(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.CompleteRuntimeExecutionResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) CancelRuntimeExecution(
+	ctx context.Context,
+	request *controlplanev1.CancelRuntimeExecutionRequest,
+) (*controlplanev1.CancelRuntimeExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_CancelRuntimeExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.CancelRuntimeExecution(ctx, resource.CancelRuntimeExecutionInput{
+		RuntimeExecutionInput: resource.RuntimeExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedFence: request.GetExpectedFence(),
+		},
+		ReasonCode: request.GetReasonCode(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.CancelRuntimeExecutionResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) RetryRuntimeExecution(
+	ctx context.Context,
+	request *controlplanev1.RetryRuntimeExecutionRequest,
+) (*controlplanev1.RetryRuntimeExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_RetryRuntimeExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	result, err := server.service.RetryRuntimeExecution(ctx, resource.RuntimeExecutionInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+		ExpectedFence: request.GetExpectedFence(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	turn, err := toProtoResource(result.Turn)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.RetryRuntimeExecutionResponse{
+		PreviousExecution: toProtoRuntimeExecution(result.Previous), Turn: turn,
+	}, nil
+}
+
+func (server *Server) ExpireRuntimeExecution(
+	ctx context.Context,
+	request *controlplanev1.ExpireRuntimeExecutionRequest,
+) (*controlplanev1.ExpireRuntimeExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.ExpireRuntimeExecution(
+		ctx, principal, request.GetIdempotencyKey(),
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.ExpireRuntimeExecutionResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) RecordRuntimeArchive(
+	ctx context.Context,
+	request *controlplanev1.RecordRuntimeArchiveRequest,
+) (*controlplanev1.RecordRuntimeArchiveResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_RecordRuntimeArchive_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.RecordRuntimeArchive(ctx, resource.RuntimeArchiveInput{
+		RuntimeExecutionInput: resource.RuntimeExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedFence:           request.GetExpectedFence(),
+			ExpectedGrantGeneration: principal.AuthorityGrantGeneration,
+		},
+		ArchiveReference: request.GetArchiveReference(), ArchiveSHA256: request.GetArchiveSha256(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.RecordRuntimeArchiveResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) VerifyRuntimeRestore(
+	ctx context.Context,
+	request *controlplanev1.VerifyRuntimeRestoreRequest,
+) (*controlplanev1.VerifyRuntimeRestoreResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_VerifyRuntimeRestore_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.VerifyRuntimeRestore(ctx, resource.RuntimeRestoreInput{
+		RuntimeExecutionInput: resource.RuntimeExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedFence: request.GetExpectedFence(),
+		},
+		ArchiveSHA256:         request.GetArchiveSha256(),
+		RestoreProofReference: request.GetRestoreProofReference(),
+		RestoreProofSHA256:    request.GetRestoreProofSha256(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.VerifyRuntimeRestoreResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) AuthorizeRuntimeCleanup(
+	ctx context.Context,
+	request *controlplanev1.AuthorizeRuntimeCleanupRequest,
+) (*controlplanev1.AuthorizeRuntimeCleanupResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.AuthorizeRuntimeCleanup(ctx, resource.RuntimeCleanupInput{
+		RuntimeExecutionInput: resource.RuntimeExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedFence: request.GetExpectedFence(),
+		},
+		ArchiveSHA256:      request.GetArchiveSha256(),
+		RestoreProofSHA256: request.GetRestoreProofSha256(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.AuthorizeRuntimeCleanupResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func toProtoRuntimeExecution(execution resource.RuntimeExecution) *controlplanev1.RuntimeExecution {
+	return &controlplanev1.RuntimeExecution{
+		ExecutionId: execution.ID, OrganizationId: execution.OrganizationID,
+		ProjectId: execution.ProjectID, ProcessId: execution.ProcessID,
+		SessionId: execution.SessionID, ThreadId: execution.ThreadID,
+		RoleId: execution.RoleID, TurnId: execution.TurnID, Attempt: execution.Attempt,
+		RuntimeRevisionId:      execution.RuntimeRevisionID,
+		RuntimeRevisionVersion: execution.RuntimeRevisionVersion,
+		RuntimeRevisionSha256:  execution.RuntimeRevisionSHA256,
+		ImmutableInputSha256:   execution.ImmutableInputSHA256,
+		ResourceClass:          toProtoRuntimeResourceClass(execution.ResourceClass),
+		ClusterAccessProfile:   toProtoClusterAccessProfile(execution.ClusterAccessProfile),
+		WorkloadId:             execution.WorkloadID, WorkloadSpiffeId: execution.WorkloadSPIFFEID,
+		GrantGeneration: execution.GrantGeneration, Version: execution.Version,
+		Fence: execution.Fence, State: toProtoRuntimeExecutionState(execution.State),
+		LeaseId: execution.LeaseID, LeaseExpiresAt: optionalTimestamp(execution.LeaseExpiresAt),
+		TerminalOutcome:   toProtoRuntimeTerminalOutcome(execution.TerminalOutcome),
+		TerminalReference: execution.TerminalReference,
+		TerminalSha256:    execution.TerminalSHA256,
+		ArchiveReference:  execution.ArchiveReference, ArchiveSha256: execution.ArchiveSHA256,
+		RestoreProofReference:         execution.RestoreProofReference,
+		RestoreProofSha256:            execution.RestoreProofSHA256,
+		RestoreVerifierWorkloadId:     execution.RestoreVerifierWorkload,
+		CleanupAuthorizationId:        execution.CleanupAuthorizationID,
+		CleanupAuthorizationExpiresAt: optionalTimestamp(execution.CleanupAuthorizationExpiresAt),
+		CreatedAt:                     timestamppb.New(execution.CreatedAt), UpdatedAt: timestamppb.New(execution.UpdatedAt),
+	}
+}
+
+func runtimeIncidentKind(kind controlplanev1.RuntimeIncidentKind) string {
+	return map[controlplanev1.RuntimeIncidentKind]string{
+		controlplanev1.RuntimeIncidentKind_RUNTIME_INCIDENT_KIND_HEARTBEAT_MISSED:     "HEARTBEAT_MISSED",
+		controlplanev1.RuntimeIncidentKind_RUNTIME_INCIDENT_KIND_RECONCILE_FAILED:     "RECONCILE_FAILED",
+		controlplanev1.RuntimeIncidentKind_RUNTIME_INCIDENT_KIND_WORKLOAD_UNAVAILABLE: "WORKLOAD_UNAVAILABLE",
+	}[kind]
+}
+
+func runtimeTerminalOutcome(outcome controlplanev1.RuntimeTerminalOutcome) string {
+	return map[controlplanev1.RuntimeTerminalOutcome]string{
+		controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_SUCCEEDED: "SUCCEEDED",
+		controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_FAILED:    "FAILED",
+	}[outcome]
+}
+
+func toProtoRuntimeResourceClass(value string) controlplanev1.RuntimeResourceClass {
+	return map[string]controlplanev1.RuntimeResourceClass{
+		"STANDARD":    controlplanev1.RuntimeResourceClass_RUNTIME_RESOURCE_CLASS_STANDARD,
+		"HIGH_MEMORY": controlplanev1.RuntimeResourceClass_RUNTIME_RESOURCE_CLASS_HIGH_MEMORY,
+		"ACCELERATED": controlplanev1.RuntimeResourceClass_RUNTIME_RESOURCE_CLASS_ACCELERATED,
+	}[value]
+}
+
+func toProtoClusterAccessProfile(value string) controlplanev1.ClusterAccessProfile {
+	return map[string]controlplanev1.ClusterAccessProfile{
+		"NONE":                      controlplanev1.ClusterAccessProfile_CLUSTER_ACCESS_PROFILE_NONE,
+		"PROJECT_READ_ONLY":         controlplanev1.ClusterAccessProfile_CLUSTER_ACCESS_PROFILE_PROJECT_READ_ONLY,
+		"PROJECT_WORKLOAD_OPERATOR": controlplanev1.ClusterAccessProfile_CLUSTER_ACCESS_PROFILE_PROJECT_WORKLOAD_OPERATOR,
+	}[value]
+}
+
+func toProtoRuntimeExecutionState(value string) controlplanev1.RuntimeExecutionState {
+	return map[string]controlplanev1.RuntimeExecutionState{
+		"PENDING":   controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_PENDING,
+		"ADMITTED":  controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_ADMITTED,
+		"RUNNING":   controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_RUNNING,
+		"SUCCEEDED": controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_SUCCEEDED,
+		"FAILED":    controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_FAILED,
+		"CANCELLED": controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_CANCELLED,
+		"EXPIRED":   controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_EXPIRED,
+		"RETRIED":   controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_RETRIED,
+	}[value]
+}
+
+func toProtoRuntimeTerminalOutcome(value string) controlplanev1.RuntimeTerminalOutcome {
+	return map[string]controlplanev1.RuntimeTerminalOutcome{
+		"SUCCEEDED": controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_SUCCEEDED,
+		"FAILED":    controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_FAILED,
+	}[value]
+}
+
+func (server *Server) ResolveIntegrationSession(
+	ctx context.Context,
+	_ *controlplanev1.ResolveIntegrationSessionRequest,
+) (*controlplanev1.ResolveIntegrationSessionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ResolveIntegrationSession_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	resolvedContext, err := server.service.ResolveIntegrationSession(ctx, principal)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.ResolveIntegrationSessionResponse{
+		Context: toProtoIntegrationSessionContext(resolvedContext),
+	}, nil
+}
+
+func (server *Server) SuspendForIntegrationApproval(
+	ctx context.Context,
+	request *controlplanev1.SuspendForIntegrationApprovalRequest,
+) (*controlplanev1.SuspendForIntegrationApprovalResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_SuspendForIntegrationApproval_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	expiresAt, err := requiredTime(request.GetApprovalExpiresAt())
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	continuation, err := server.service.SuspendForIntegrationApproval(
+		ctx, resource.SuspendIntegrationInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			InvocationID: request.GetInvocationId(), ApprovalID: request.GetApprovalId(),
+			IntegrationID: request.GetIntegrationId(), RequestSHA256: request.GetRequestSha256(),
+			ApprovalExpiresAt: expiresAt,
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.SuspendForIntegrationApprovalResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func (server *Server) ApproveIntegrationInvocation(
+	ctx context.Context,
+	request *controlplanev1.ApproveIntegrationInvocationRequest,
+) (*controlplanev1.ApproveIntegrationInvocationResponse, error) {
+	continuation, correlationID, err := server.integrationDecision(
+		ctx, request.GetDecision(), "approve",
+	)
+	if err != nil {
+		return nil, rpcError(correlationID, err)
+	}
+	return &controlplanev1.ApproveIntegrationInvocationResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func (server *Server) RejectIntegrationInvocation(
+	ctx context.Context,
+	request *controlplanev1.RejectIntegrationInvocationRequest,
+) (*controlplanev1.RejectIntegrationInvocationResponse, error) {
+	continuation, correlationID, err := server.integrationDecision(
+		ctx, request.GetDecision(), "reject",
+	)
+	if err != nil {
+		return nil, rpcError(correlationID, err)
+	}
+	return &controlplanev1.RejectIntegrationInvocationResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func (server *Server) CancelIntegrationInvocation(
+	ctx context.Context,
+	request *controlplanev1.CancelIntegrationInvocationRequest,
+) (*controlplanev1.CancelIntegrationInvocationResponse, error) {
+	continuation, correlationID, err := server.integrationDecision(
+		ctx, request.GetDecision(), "cancel",
+	)
+	if err != nil {
+		return nil, rpcError(correlationID, err)
+	}
+	return &controlplanev1.CancelIntegrationInvocationResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func (server *Server) integrationDecision(
+	ctx context.Context,
+	decision *controlplanev1.IntegrationDecisionReference,
+	action string,
+) (resource.IntegrationContinuation, string, error) {
+	fullMethod := controlplanev1.ControlPlaneService_ApproveIntegrationInvocation_FullMethodName
+	if action == "reject" {
+		fullMethod = controlplanev1.ControlPlaneService_RejectIntegrationInvocation_FullMethodName
+	} else if action == "cancel" {
+		fullMethod = controlplanev1.ControlPlaneService_CancelIntegrationInvocation_FullMethodName
+	}
+	principal, err := authorization.Principal(ctx, fullMethod)
+	if err != nil {
+		return resource.IntegrationContinuation{}, "", errs.ErrUnauthenticated
+	}
+	if decision == nil {
+		return resource.IntegrationContinuation{}, principal.CorrelationID, errs.ErrInvalidInput
+	}
+	input := resource.IntegrationDecisionInput{
+		Principal: principal, IdempotencyKey: decision.GetIdempotencyKey(),
+		ContinuationID:  decision.GetContinuationId(),
+		ExpectedVersion: decision.GetExpectedVersion(), ExpectedFence: decision.GetExpectedFence(),
+		InvocationID: decision.GetInvocationId(), ApprovalID: decision.GetApprovalId(),
+		RequestSHA256:     decision.GetRequestSha256(),
+		DecisionReference: decision.GetDecisionReference(),
+		DecisionSHA256:    decision.GetDecisionSha256(),
+	}
+	var continuation resource.IntegrationContinuation
+	if action == "approve" {
+		continuation, err = server.service.ApproveIntegrationInvocation(ctx, input)
+	} else if action == "reject" {
+		continuation, err = server.service.RejectIntegrationInvocation(ctx, input)
+	} else {
+		continuation, err = server.service.CancelIntegrationInvocation(ctx, input)
+	}
+	return continuation, principal.CorrelationID, err
+}
+
+func (server *Server) ExpireIntegrationInvocation(
+	ctx context.Context,
+	request *controlplanev1.ExpireIntegrationInvocationRequest,
+) (*controlplanev1.ExpireIntegrationInvocationResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ExpireIntegrationInvocation_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	continuation, err := server.service.ExpireIntegrationInvocation(
+		ctx, principal, request.GetIdempotencyKey(),
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.ExpireIntegrationInvocationResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func (server *Server) BeginIntegrationExecution(
+	ctx context.Context,
+	request *controlplanev1.BeginIntegrationExecutionRequest,
+) (*controlplanev1.BeginIntegrationExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_BeginIntegrationExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	continuation, err := server.service.BeginIntegrationExecution(
+		ctx, resource.IntegrationExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ContinuationID:  request.GetContinuationId(),
+			ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(),
+			InvocationID: request.GetInvocationId(), RequestSHA256: request.GetRequestSha256(),
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.BeginIntegrationExecutionResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func (server *Server) CompleteIntegrationExecution(
+	ctx context.Context,
+	request *controlplanev1.CompleteIntegrationExecutionRequest,
+) (*controlplanev1.CompleteIntegrationExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_CompleteIntegrationExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	continuation, err := server.service.CompleteIntegrationExecution(
+		ctx, resource.IntegrationExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ContinuationID:  request.GetContinuationId(),
+			ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(),
+			InvocationID: request.GetInvocationId(), RequestSHA256: request.GetRequestSha256(),
+			ResultReference: request.GetResultReference(), ResultSHA256: request.GetResultSha256(),
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.CompleteIntegrationExecutionResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func (server *Server) FailIntegrationExecution(
+	ctx context.Context,
+	request *controlplanev1.FailIntegrationExecutionRequest,
+) (*controlplanev1.FailIntegrationExecutionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_FailIntegrationExecution_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	continuation, err := server.service.FailIntegrationExecution(
+		ctx, resource.IntegrationExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ContinuationID:  request.GetContinuationId(),
+			ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(),
+			InvocationID: request.GetInvocationId(), RequestSHA256: request.GetRequestSha256(),
+			ErrorCode: request.GetErrorCode(), ErrorReference: request.GetErrorReference(),
+			ErrorSHA256: request.GetErrorSha256(),
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.FailIntegrationExecutionResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func (server *Server) GetIntegrationContinuation(
+	ctx context.Context,
+	request *controlplanev1.GetIntegrationContinuationRequest,
+) (*controlplanev1.GetIntegrationContinuationResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_GetIntegrationContinuation_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	continuation, err := server.service.GetIntegrationContinuation(
+		ctx, resource.GetIntegrationContinuationInput{
+			Principal: principal, ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedRuntimeRevisionVersion: request.GetExpectedRuntimeRevisionVersion(),
+			ExpectedInputSHA256:            request.GetExpectedInputSha256(),
+			ExpectedFence:                  request.GetExpectedFence(),
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.GetIntegrationContinuationResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func (server *Server) AcknowledgeIntegrationContinuation(
+	ctx context.Context,
+	request *controlplanev1.AcknowledgeIntegrationContinuationRequest,
+) (*controlplanev1.AcknowledgeIntegrationContinuationResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	continuation, err := server.service.AcknowledgeIntegrationContinuation(
+		ctx, resource.AcknowledgeIntegrationContinuationInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(),
+			ExpectedInputSHA256: request.GetExpectedInputSha256(),
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.AcknowledgeIntegrationContinuationResponse{
+		Continuation: toProtoIntegrationContinuation(continuation),
+	}, nil
+}
+
+func toProtoIntegrationExecutionBinding(
+	binding resource.IntegrationExecutionBinding,
+) *controlplanev1.IntegrationExecutionBinding {
+	return &controlplanev1.IntegrationExecutionBinding{
+		OrganizationId: binding.OrganizationID, ProjectId: binding.ProjectID,
+		ProcessId: binding.ProcessID, SessionId: binding.SessionID,
+		SessionVersion: binding.SessionVersion, ThreadId: binding.ThreadID,
+		RoleId: binding.RoleID, TurnId: binding.TurnID, TurnVersion: binding.TurnVersion,
+		Attempt: binding.Attempt, RuntimeRevisionId: binding.RuntimeRevisionID,
+		RuntimeRevisionVersion: binding.RuntimeRevisionVersion,
+		RuntimeRevisionSha256:  binding.RuntimeRevisionSHA256,
+		ImmutableInputSha256:   binding.ImmutableInputSHA256,
+		GrantGeneration:        binding.GrantGeneration, Fence: binding.Fence,
+	}
+}
+
+func toProtoIntegrationSessionContext(
+	context resource.IntegrationSessionContext,
+) *controlplanev1.IntegrationSessionContext {
+	integrations := make([]*controlplanev1.IntegrationSessionBinding, 0, len(context.Integrations))
+	for _, integration := range context.Integrations {
+		credentials := make(
+			[]*controlplanev1.IntegrationCredentialBinding,
+			0,
+			len(integration.CredentialBindings),
+		)
+		for _, credential := range integration.CredentialBindings {
+			credentials = append(credentials, &controlplanev1.IntegrationCredentialBinding{
+				CredentialBindingId:      credential.CredentialBindingID,
+				CredentialBindingVersion: credential.CredentialBindingVersion,
+				ProjectionSha256:         credential.ProjectionSHA256,
+				Purpose:                  credential.Purpose, SecretRef: credential.SecretRef,
+				PrincipalRef:       credential.PrincipalRef,
+				CredentialRevision: credential.CredentialRevision,
+				ExpiresAt:          optionalTimestamp(credential.ExpiresAt),
+			})
+		}
+		integrations = append(integrations, &controlplanev1.IntegrationSessionBinding{
+			IntegrationId:      integration.IntegrationID,
+			IntegrationVersion: integration.IntegrationVersion,
+			ProjectionSha256:   integration.ProjectionSHA256,
+			DefinitionRef:      integration.DefinitionRef,
+			DefinitionVersion:  integration.DefinitionVersion,
+			Capabilities:       integration.Capabilities, EndpointRef: integration.EndpointRef,
+			CredentialBindings: credentials,
+		})
+	}
+	return &controlplanev1.IntegrationSessionContext{
+		OrganizationId: context.OrganizationID, ProjectId: context.ProjectID,
+		OwnerActorId: context.OwnerActorID, ProcessId: context.ProcessID,
+		SessionId: context.SessionID, SessionVersion: context.SessionVersion,
+		ThreadId: context.ThreadID, TurnId: context.TurnID,
+		TurnVersion: context.TurnVersion, Attempt: context.Attempt,
+		InputSha256:            context.InputSHA256,
+		RuntimeRevisionId:      context.RuntimeRevisionID,
+		RuntimeRevisionVersion: context.RuntimeRevisionVersion,
+		RuntimeRevisionSha256:  context.RuntimeRevisionSHA256,
+		RuntimeManifestSha256:  context.RuntimeManifestSHA256,
+		RoleId:                 context.RoleID, RoleVersion: context.RoleVersion,
+		RoleCapabilities: context.RoleCapabilities,
+		GrantGeneration:  context.GrantGeneration, Integrations: integrations,
+	}
+}
+
+func toProtoIntegrationContinuation(
+	continuation resource.IntegrationContinuation,
+) *controlplanev1.IntegrationContinuation {
+	binding := resource.IntegrationExecutionBinding{
+		OrganizationID: continuation.OrganizationID, ProjectID: continuation.ProjectID,
+		ProcessID: continuation.ProcessID, SessionID: continuation.SessionID,
+		SessionVersion: continuation.SessionVersion, ThreadID: continuation.ThreadID,
+		RoleID: continuation.RoleID, TurnID: continuation.TurnID,
+		TurnVersion: continuation.TurnVersion, Attempt: continuation.Attempt,
+		RuntimeRevisionID:      continuation.RuntimeRevisionID,
+		RuntimeRevisionVersion: continuation.RuntimeRevisionVersion,
+		RuntimeRevisionSHA256:  continuation.RuntimeRevisionSHA256,
+		ImmutableInputSHA256:   continuation.ImmutableInputSHA256,
+		GrantGeneration:        continuation.GrantGeneration, Fence: continuation.Fence,
+	}
+	return &controlplanev1.IntegrationContinuation{
+		ContinuationId: continuation.ID,
+		Binding:        toProtoIntegrationExecutionBinding(binding),
+		InvocationId:   continuation.InvocationID, ApprovalId: continuation.ApprovalID,
+		IntegrationId: continuation.IntegrationID, RequestSha256: continuation.RequestSHA256,
+		ApprovalState:     toProtoIntegrationApprovalState(continuation.ApprovalState),
+		ExecutionState:    toProtoIntegrationExecutionState(continuation.ExecutionState),
+		ContinuationState: toProtoIntegrationContinuationState(continuation.ContinuationState),
+		Version:           continuation.Version, Fence: continuation.Fence,
+		ApprovalExpiresAt: timestamppb.New(continuation.ApprovalExpiresAt),
+		DecisionReference: continuation.DecisionReference,
+		DecisionSha256:    continuation.DecisionSHA256,
+		ResultReference:   continuation.ResultReference, ResultSha256: continuation.ResultSHA256,
+		ErrorCode: continuation.ErrorCode, ErrorReference: continuation.ErrorReference,
+		ErrorSha256:                        continuation.ErrorSHA256,
+		ContinuationTurnId:                 continuation.ContinuationTurnID,
+		ContinuationTurnVersion:            continuation.ContinuationTurnVersion,
+		ContinuationRuntimeRevisionId:      continuation.ContinuationRuntimeRevisionID,
+		ContinuationRuntimeRevisionVersion: continuation.ContinuationRuntimeRevisionVersion,
+		ContinuationInputSha256:            continuation.ContinuationInputSHA256,
+		CreatedAt:                          timestamppb.New(continuation.CreatedAt),
+		UpdatedAt:                          timestamppb.New(continuation.UpdatedAt),
+	}
+}
+
+func toProtoIntegrationApprovalState(value string) controlplanev1.IntegrationApprovalState {
+	return map[string]controlplanev1.IntegrationApprovalState{
+		"PENDING":   controlplanev1.IntegrationApprovalState_INTEGRATION_APPROVAL_STATE_PENDING,
+		"APPROVED":  controlplanev1.IntegrationApprovalState_INTEGRATION_APPROVAL_STATE_APPROVED,
+		"REJECTED":  controlplanev1.IntegrationApprovalState_INTEGRATION_APPROVAL_STATE_REJECTED,
+		"EXPIRED":   controlplanev1.IntegrationApprovalState_INTEGRATION_APPROVAL_STATE_EXPIRED,
+		"CANCELLED": controlplanev1.IntegrationApprovalState_INTEGRATION_APPROVAL_STATE_CANCELLED,
+	}[value]
+}
+
+func toProtoIntegrationExecutionState(value string) controlplanev1.IntegrationExecutionState {
+	return map[string]controlplanev1.IntegrationExecutionState{
+		"NOT_STARTED":    controlplanev1.IntegrationExecutionState_INTEGRATION_EXECUTION_STATE_NOT_STARTED,
+		"EXECUTING":      controlplanev1.IntegrationExecutionState_INTEGRATION_EXECUTION_STATE_EXECUTING,
+		"SUCCEEDED":      controlplanev1.IntegrationExecutionState_INTEGRATION_EXECUTION_STATE_SUCCEEDED,
+		"FAILED":         controlplanev1.IntegrationExecutionState_INTEGRATION_EXECUTION_STATE_FAILED,
+		"NOT_APPLICABLE": controlplanev1.IntegrationExecutionState_INTEGRATION_EXECUTION_STATE_NOT_APPLICABLE,
+	}[value]
+}
+
+func toProtoIntegrationContinuationState(value string) controlplanev1.IntegrationContinuationState {
+	return map[string]controlplanev1.IntegrationContinuationState{
+		"SUSPENDED": controlplanev1.IntegrationContinuationState_INTEGRATION_CONTINUATION_STATE_SUSPENDED,
+		"READY":     controlplanev1.IntegrationContinuationState_INTEGRATION_CONTINUATION_STATE_READY,
+		"REJOINED":  controlplanev1.IntegrationContinuationState_INTEGRATION_CONTINUATION_STATE_REJOINED,
+	}[value]
+}
