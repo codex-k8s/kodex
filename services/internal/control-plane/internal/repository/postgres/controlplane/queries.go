@@ -141,8 +141,8 @@ var sqlRuntimeIncidentInsert string
 //go:embed sql/integration_continuation__get_for_update.sql
 var sqlIntegrationContinuationGetForUpdate string
 
-//go:embed sql/integration_continuation__get_by_source_turn.sql
-var sqlIntegrationContinuationGetBySourceTurn string
+//go:embed sql/integration_continuation__get.sql
+var sqlIntegrationContinuationGet string
 
 //go:embed sql/integration_continuation__get_by_continuation_turn.sql
 var sqlIntegrationContinuationGetByContinuationTurn string

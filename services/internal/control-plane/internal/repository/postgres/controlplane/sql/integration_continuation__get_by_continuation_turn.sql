@@ -15,5 +15,4 @@ SELECT id, organization_id, project_id, process_id, session_id,
        coalesce(continuation_runtime_revision_version, 0),
        coalesce(continuation_input_sha256, ''), created_at, updated_at
 FROM control_plane.integration_continuations
-WHERE continuation_turn_id = @turn_id
-FOR UPDATE;
+WHERE continuation_turn_id = @turn_id;

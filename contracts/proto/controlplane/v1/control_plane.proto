@@ -471,6 +471,13 @@ enum ConfigurationManager {
   CONFIGURATION_MANAGER_GIT = 2;
 }
 
+// ProcessContinuationKind различает закрытые owner-gate и integration binding.
+enum ProcessContinuationKind {
+  PROCESS_CONTINUATION_KIND_UNSPECIFIED = 0;
+  PROCESS_CONTINUATION_KIND_OWNER_GATE = 1;
+  PROCESS_CONTINUATION_KIND_INTEGRATION = 2;
+}
+
 // ConfigurationOwnership фиксирует единственный источник управляемой конфигурации.
 message ConfigurationOwnership {
   ConfigurationManager managed_by = 1;
@@ -679,6 +686,9 @@ message ProcessRunSpec {
   string current_runtime_revision_id = 39;
   uint64 current_runtime_revision_version = 40;
   string current_input_sha256 = 41;
+  ProcessContinuationKind continuation_kind = 42;
+  string continuation_integration_id = 43;
+  string continuation_outcome_sha256 = 44;
 }
 
 // ScheduleSpec описывает версионированное сообщение контракта control-plane.

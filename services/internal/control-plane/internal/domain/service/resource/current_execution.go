@@ -113,6 +113,7 @@ func (service *Service) prepareRetriedExecution(
 			return entity.Resource{}, entity.TurnSpec{}, err
 		}
 		processSpec.ContinuationGateID = gate.ID
+		processSpec.ContinuationKind = enum.ProcessContinuationOwnerGate
 	}
 	tuple := executionTuple{
 		SessionID:              session.ID,
@@ -127,15 +128,21 @@ func (service *Service) prepareRetriedExecution(
 	setCurrentExecution(&processSpec, tuple)
 	processSpec.Outcome = ""
 	processSpec.ResultArtifactID = ""
-	if processSpec.ContinuationTurnID != "" || wasWaitingOwner {
+	if processSpec.ContinuationKind != enum.ProcessContinuationNone || wasWaitingOwner {
 		processSpec.ContinuationTurnID = retried.ID
 		processSpec.ContinuationTurnVersion = retried.Version
 		processSpec.ContinuationAttempt = spec.Attempt
 		processSpec.ContinuationRuntimeRevisionID = revision.ID
 		processSpec.ContinuationRuntimeRevisionVersion = revision.Version
 		processSpec.ContinuationInputSHA256 = spec.EffectiveInputSHA256
-		if processSpec.OwnerFeedbackSHA256 == "" {
+		if processSpec.ContinuationKind == enum.ProcessContinuationOwnerGate &&
+			processSpec.OwnerFeedbackSHA256 == "" {
 			processSpec.OwnerFeedbackSHA256 = hashString("retry_turn")
+		}
+		if processSpec.ContinuationKind == enum.ProcessContinuationIntegration &&
+			(value.ValidateID(processSpec.ContinuationIntegrationID) != nil ||
+				!validSHA256Text(processSpec.ContinuationOutcomeSHA256)) {
+			return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 		}
 	}
 	var updatedProcess entity.Resource
@@ -165,6 +172,13 @@ func (service *Service) prepareRetriedExecution(
 	)
 	if err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
+	}
+	schedule, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, processSpec.ScheduleID,
+	)
+	if err != nil || schedule.Kind != enum.KindSchedule ||
+		schedule.OwnerActorID != process.OwnerActorID {
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
 	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
 	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
@@ -215,13 +229,6 @@ func (service *Service) prepareRetriedExecution(
 	}
 	if err := tx.RebindScheduledRun(ctx, run, turn.ID, previousAttempt); err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
-	}
-	schedule, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, processSpec.ScheduleID,
-	)
-	if err != nil || schedule.Kind != enum.KindSchedule ||
-		schedule.OwnerActorID != process.OwnerActorID {
-		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
 	if err := service.appendMutationRecords(
 		ctx, tx, principal, "rebind_schedule_retry", schedule,

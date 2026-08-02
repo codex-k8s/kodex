@@ -23,6 +23,11 @@ const (
 	cleanupAuthorizationLifetime = 15 * time.Minute
 )
 
+var scheduledGraphLockOrder = [...]string{
+	"runtime_execution", "schedule_occurrence", "schedule", "scheduled_run",
+	"session", "turn", "process_run", "integration_continuation",
+}
+
 type resolvedExecution struct {
 	Turn         entity.Resource
 	TurnSpec     entity.TurnSpec
@@ -35,6 +40,71 @@ type resolvedExecution struct {
 	Role         entity.Resource
 	RoleSpec     entity.RoleSpec
 	RevisionHash string
+}
+
+type runtimeExecutionIntent struct {
+	ExecutionID             string
+	ExpectedVersion         uint64
+	ExpectedFence           uint64
+	ExpectedGrantGeneration uint64
+	LeaseTokenSHA256        string
+}
+
+func runtimeIntent(input RuntimeExecutionInput) runtimeExecutionIntent {
+	leaseTokenSHA256 := ""
+	if input.LeaseToken != "" {
+		leaseTokenSHA256 = hashString(input.LeaseToken)
+	}
+	return runtimeExecutionIntent{
+		ExecutionID:             input.ExecutionID,
+		ExpectedVersion:         input.ExpectedVersion,
+		ExpectedFence:           input.ExpectedFence,
+		ExpectedGrantGeneration: input.ExpectedGrantGeneration,
+		LeaseTokenSHA256:        leaseTokenSHA256,
+	}
+}
+
+type suspendIntegrationIntent struct {
+	InvocationID       string
+	ApprovalID         string
+	IntegrationID      string
+	IntegrationVersion uint64
+	IntegrationSHA256  string
+	CredentialBindings []PinnedIntegrationResource
+	RequestSHA256      string
+	ApprovalExpiresAt  time.Time
+}
+
+type integrationDecisionIntent struct {
+	ContinuationID    string
+	ExpectedVersion   uint64
+	ExpectedFence     uint64
+	InvocationID      string
+	ApprovalID        string
+	RequestSHA256     string
+	DecisionReference string
+	DecisionSHA256    string
+	Decision          string
+}
+
+type integrationExecutionIntent struct {
+	ContinuationID  string
+	ExpectedVersion uint64
+	ExpectedFence   uint64
+	InvocationID    string
+	RequestSHA256   string
+	ResultReference string
+	ResultSHA256    string
+	ErrorCode       string
+	ErrorReference  string
+	ErrorSHA256     string
+	Target          string
+}
+
+type acknowledgeIntegrationIntent struct {
+	ExpectedVersion     uint64
+	ExpectedFence       uint64
+	ExpectedInputSHA256 string
 }
 
 func (service *Service) withLifecycleReceipt(
@@ -261,7 +331,7 @@ func (service *Service) ClaimRuntimeExecution(
 		principal.CallerSPIFFEID != service.runtimeControllerSPIFFEID {
 		return RuntimeExecution{}, errs.ErrPermissionDenied
 	}
-	requestHash, err := canonicalHash(struct{ Identity commandIdentity }{identity(principal)})
+	requestHash, err := semanticCommandHash(principal, struct{}{})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -366,10 +436,7 @@ func (service *Service) AdmitRuntimeExecution(
 	if err := validateRuntimeMutation(service, input, permissionRuntimeAdmit, true); err != nil {
 		return AdmitRuntimeExecutionResult{}, err
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    RuntimeExecutionInput
-	}{identity(input.Principal), input})
+	requestHash, err := semanticCommandHash(input.Principal, runtimeIntent(input))
 	if err != nil {
 		return AdmitRuntimeExecutionResult{}, errs.ErrInvalidInput
 	}
@@ -425,14 +492,7 @@ func (service *Service) HeartbeatRuntimeExecution(
 		}
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity  commandIdentity
-		Execution string
-		Version   uint64
-		Fence     uint64
-		TokenHash string
-	}{identity(input.Principal), input.ExecutionID, input.ExpectedVersion,
-		input.ExpectedFence, hashString(input.LeaseToken)})
+	requestHash, err := semanticCommandHash(input.Principal, runtimeIntent(input))
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -491,7 +551,12 @@ func (service *Service) RecordRuntimeIncident(
 			input.Kind != "WORKLOAD_UNAVAILABLE") {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(input)
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Runtime        runtimeExecutionIntent
+		Kind           string
+		IncidentID     string
+		EvidenceSHA256 string
+	}{runtimeIntent(input.RuntimeExecutionInput), input.Kind, input.IncidentID, input.EvidenceSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -605,11 +670,13 @@ func (service *Service) CompleteRuntimeExecution(
 		!validSHA256Text(input.TerminalSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    CompleteRuntimeExecutionInput
-		Token    string
-	}{identity(input.Principal), input, hashString(input.LeaseToken)})
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Runtime           runtimeExecutionIntent
+		Outcome           string
+		TerminalReference string
+		TerminalSHA256    string
+	}{runtimeIntent(input.RuntimeExecutionInput), input.Outcome,
+		input.TerminalReference, input.TerminalSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -619,6 +686,11 @@ func (service *Service) CompleteRuntimeExecution(
 		requestHash, &result, func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
+				return err
+			}
+			if err := service.prelockRuntimeScheduledGraph(
+				ctx, tx, input.Principal, execution,
+			); err != nil {
 				return err
 			}
 			now, err := service.requireActiveRuntimeGraph(
@@ -687,7 +759,10 @@ func (service *Service) CancelRuntimeExecution(
 	if value.ValidateStableKey(input.ReasonCode) != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(input)
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Runtime    runtimeExecutionIntent
+		ReasonCode string
+	}{runtimeIntent(input.RuntimeExecutionInput), input.ReasonCode})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -697,6 +772,11 @@ func (service *Service) CancelRuntimeExecution(
 		requestHash, &result, func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
+				return err
+			}
+			if err := service.prelockRuntimeScheduledGraph(
+				ctx, tx, input.Principal, execution,
+			); err != nil {
 				return err
 			}
 			if err := service.requireRuntimeOwner(ctx, tx, input.Principal, execution); err != nil {
@@ -755,7 +835,7 @@ func (service *Service) RetryRuntimeExecution(
 	if err := validateRuntimeMutation(service, input, permissionRuntimeRetry, false); err != nil {
 		return RetryRuntimeExecutionResult{}, err
 	}
-	requestHash, err := canonicalHash(input)
+	requestHash, err := semanticCommandHash(input.Principal, runtimeIntent(input))
 	if err != nil {
 		return RetryRuntimeExecutionResult{}, errs.ErrInvalidInput
 	}
@@ -767,16 +847,18 @@ func (service *Service) RetryRuntimeExecution(
 			if err != nil {
 				return err
 			}
+			if err := service.prelockRuntimeScheduledGraph(
+				ctx, tx, input.Principal, execution,
+			); err != nil {
+				return err
+			}
 			if err := service.requireRuntimeOwner(ctx, tx, input.Principal, execution); err != nil {
 				return err
 			}
 			if err := matchRuntimeMutation(execution, input); err != nil {
 				return errs.ErrStateConflict
 			}
-			// Единый порядок retry/read-rejoin: execution -> turn -> session ->
-			// process -> occurrence -> scheduled run -> schedule -> continuation.
-			// Предварительные row locks не дают closed-predecessor path захватить
-			// ProcessRun раньше Session и образовать цикл с защищённым Get/ACK.
+			// Scheduled rows уже заблокированы в общем порядке до Session/Turn/ProcessRun.
 			turn, err := tx.GetForUpdate(
 				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
 				execution.TurnID,
@@ -888,7 +970,7 @@ func (service *Service) ExpireRuntimeExecution(
 		principal.CallerSPIFFEID != service.runtimeControllerSPIFFEID {
 		return RuntimeExecution{}, errs.ErrPermissionDenied
 	}
-	requestHash, err := canonicalHash(struct{ Identity commandIdentity }{identity(principal)})
+	requestHash, err := semanticCommandHash(principal, struct{}{})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -901,6 +983,11 @@ func (service *Service) ExpireRuntimeExecution(
 				principal.AuthorityReference, uint32(principal.AuthorityRevision),
 			)
 			if err != nil {
+				return err
+			}
+			if err := service.prelockRuntimeScheduledGraph(
+				ctx, tx, principal, execution,
+			); err != nil {
 				return err
 			}
 			now, err := tx.CurrentTime(ctx)
@@ -960,7 +1047,12 @@ func (service *Service) RecordRuntimeArchive(
 		!validSHA256Text(input.ArchiveSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(input)
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Runtime          runtimeExecutionIntent
+		ArchiveReference string
+		ArchiveSHA256    string
+	}{runtimeIntent(input.RuntimeExecutionInput), input.ArchiveReference,
+		input.ArchiveSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1017,7 +1109,13 @@ func (service *Service) VerifyRuntimeRestore(
 		!validSHA256Text(input.RestoreProofSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(input)
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Runtime               runtimeExecutionIntent
+		ArchiveSHA256         string
+		RestoreProofReference string
+		RestoreProofSHA256    string
+	}{runtimeIntent(input.RuntimeExecutionInput), input.ArchiveSHA256,
+		input.RestoreProofReference, input.RestoreProofSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1083,7 +1181,13 @@ func (service *Service) AuthorizeRuntimeCleanup(
 		!validSHA256Text(input.RestoreProofSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(input)
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Runtime                   runtimeExecutionIntent
+		ArchiveSHA256             string
+		RestoreProofSHA256        string
+		ExpectedCleanupGeneration uint64
+	}{runtimeIntent(input.RuntimeExecutionInput), input.ArchiveSHA256,
+		input.RestoreProofSHA256, input.ExpectedCleanupGeneration})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1112,8 +1216,13 @@ func (service *Service) AuthorizeRuntimeCleanup(
 			if err != nil {
 				return err
 			}
+			if err := lockRuntimeCleanupSession(
+				ctx, tx, input.Principal, execution,
+			); err != nil {
+				return err
+			}
 			blocked, err := tx.IntegrationContinuationBlocksCleanup(
-				ctx, execution.TurnID, execution.Attempt,
+				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
 				if err != nil {
@@ -1211,7 +1320,15 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 		!validSHA256Text(input.RestoreProofSHA256) {
 		return RuntimeExecution{}, errs.ErrPermissionDenied
 	}
-	requestHash, err := canonicalHash(input)
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Runtime                        runtimeExecutionIntent
+		CleanupAuthorizationID         string
+		CleanupAuthorizationGeneration uint64
+		ArchiveSHA256                  string
+		RestoreProofSHA256             string
+	}{runtimeIntent(input.RuntimeExecutionInput), input.CleanupAuthorizationID,
+		input.CleanupAuthorizationGeneration, input.ArchiveSHA256,
+		input.RestoreProofSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1238,8 +1355,13 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 				!execution.CleanupAuthorizationExpiresAt.After(now) {
 				return errs.ErrStateConflict
 			}
+			if err := lockRuntimeCleanupSession(
+				ctx, tx, input.Principal, execution,
+			); err != nil {
+				return err
+			}
 			blocked, err := tx.IntegrationContinuationBlocksCleanup(
-				ctx, execution.TurnID, execution.Attempt,
+				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
 				if err != nil {
@@ -1268,6 +1390,26 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 	return result, err
 }
 
+func lockRuntimeCleanupSession(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	execution RuntimeExecution,
+) error {
+	session, err := tx.GetForUpdate(
+		ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
+	)
+	if err != nil {
+		return err
+	}
+	if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID ||
+		session.OrganizationID != execution.OrganizationID ||
+		session.ProjectID != execution.ProjectID {
+		return errs.ErrNotFound
+	}
+	return nil
+}
+
 func (service *Service) ExpireRuntimeCleanupAuthorization(
 	ctx context.Context,
 	input RuntimeCleanupAuthorizationInput,
@@ -1283,7 +1425,15 @@ func (service *Service) ExpireRuntimeCleanupAuthorization(
 		input.CleanupAuthorizationGeneration == 0 {
 		return RuntimeExecution{}, errs.ErrPermissionDenied
 	}
-	requestHash, err := canonicalHash(input)
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Runtime                        runtimeExecutionIntent
+		CleanupAuthorizationID         string
+		CleanupAuthorizationGeneration uint64
+		ArchiveSHA256                  string
+		RestoreProofSHA256             string
+	}{runtimeIntent(input.RuntimeExecutionInput), input.CleanupAuthorizationID,
+		input.CleanupAuthorizationGeneration, input.ArchiveSHA256,
+		input.RestoreProofSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1607,14 +1757,15 @@ func (service *Service) rebindIntegrationContinuationRetry(
 	if err != nil {
 		return err
 	}
-	if err := service.validatePinnedIntegrationContinuation(
-		ctx, tx, principal, continuation, false,
-	); err != nil {
-		return err
-	}
 	revision, err := tx.GetForUpdate(
 		ctx, principal.OrganizationID, principal.ProjectID,
 		retriedSpec.RuntimeRevisionID,
+	)
+	if err != nil {
+		return err
+	}
+	continuation, err = service.lockIntegrationContinuationAfterBindings(
+		ctx, tx, principal, continuation, false,
 	)
 	if err != nil {
 		return err
@@ -2153,10 +2304,14 @@ func (service *Service) SuspendForIntegrationApproval(
 		input.ApprovalExpiresAt.After(now.Add(maximumApprovalLifetime)) {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    SuspendIntegrationInput
-	}{identity(input.Principal), input})
+	requestHash, err := semanticCommandHash(input.Principal, suspendIntegrationIntent{
+		InvocationID: input.InvocationID, ApprovalID: input.ApprovalID,
+		IntegrationID: input.IntegrationID, IntegrationVersion: input.IntegrationVersion,
+		IntegrationSHA256:  input.IntegrationSHA256,
+		CredentialBindings: append([]PinnedIntegrationResource{}, input.CredentialBindings...),
+		RequestSHA256:      input.RequestSHA256,
+		ApprovalExpiresAt:  input.ApprovalExpiresAt.UTC().Truncate(time.Microsecond),
+	})
 	if err != nil {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
@@ -2179,7 +2334,7 @@ func (service *Service) SuspendForIntegrationApproval(
 			if err != nil {
 				return err
 			}
-			if err := service.prelockIntegrationScheduledGraph(
+			if err := service.prelockRuntimeScheduledGraph(
 				ctx, tx, input.Principal, execution,
 			); err != nil {
 				return err
@@ -2250,11 +2405,11 @@ func (service *Service) SuspendForIntegrationApproval(
 	return result, err
 }
 
-// prelockIntegrationScheduledGraph согласует suspension со scheduler recovery:
+// prelockRuntimeScheduledGraph согласует terminal/retry/suspension со scheduler recovery:
 // occurrence -> schedule -> run -> session -> turn -> process. RuntimeExecution
 // блокируется раньше и scheduler её не изменяет. NotFound означает точный
 // unscheduled path; существующий, но несогласованный граф закрыто отклоняется.
-func (service *Service) prelockIntegrationScheduledGraph(
+func (service *Service) prelockRuntimeScheduledGraph(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
@@ -2264,6 +2419,15 @@ func (service *Service) prelockIntegrationScheduledGraph(
 		ctx, principal.OrganizationID, principal.ProjectID, execution.TurnID,
 	)
 	if errors.Is(err, errs.ErrNotFound) {
+		session, sessionErr := tx.GetForUpdate(
+			ctx, principal.OrganizationID, principal.ProjectID, execution.SessionID,
+		)
+		if sessionErr != nil {
+			return sessionErr
+		}
+		if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID {
+			return errs.ErrStateConflict
+		}
 		return nil
 	}
 	if err != nil {
@@ -2288,12 +2452,59 @@ func (service *Service) prelockIntegrationScheduledGraph(
 	}
 	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
 	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
-		!scheduledExecutionMaySuspendExternal(occurrence.State, run.State) ||
+		!scheduledExecutionMayLockRuntime(occurrence.State, run.State) ||
 		run.CurrentTurnAttempt != execution.Attempt {
 		return errs.ErrStateConflict
 	}
 	session, err := tx.GetForUpdate(
 		ctx, principal.OrganizationID, principal.ProjectID, execution.SessionID,
+	)
+	if err != nil {
+		return err
+	}
+	if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func scheduledExecutionMayLockRuntime(occurrenceState, runState string) bool {
+	return occurrenceState == runState &&
+		(occurrenceState == "CLAIMED" || occurrenceState == "CONTINUATION" ||
+			occurrenceState == "FAILED")
+}
+
+// prelockScheduledGraphByTurn задаёт совместимый поднабор общего порядка для
+// legacy Turn-команд: occurrence -> schedule -> run -> session -> turn -> process.
+func (service *Service) prelockScheduledGraphByTurn(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	turnID string,
+) error {
+	occurrence, err := tx.GetScheduleOccurrenceByCurrentTurnForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, turnID,
+	)
+	if errors.Is(err, errs.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	schedule, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, occurrence.ScheduleID,
+	)
+	if err != nil {
+		return err
+	}
+	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
+	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
+		occurrence.ExecutionTurnID != turnID || schedule.Kind != enum.KindSchedule ||
+		schedule.OwnerActorID != principal.ActorID {
+		return errs.ErrStateConflict
+	}
+	session, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, occurrence.ExecutionSessionID,
 	)
 	if err != nil {
 		return err
@@ -2429,6 +2640,17 @@ func (service *Service) suspendIntegrationScheduledGraph(
 	if err != nil {
 		return err
 	}
+	schedule, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID,
+		resolved.ProcessSpec.ScheduleID,
+	)
+	if err != nil {
+		return err
+	}
+	if schedule.Kind != enum.KindSchedule ||
+		schedule.OwnerActorID != resolved.Process.OwnerActorID {
+		return errs.ErrStateConflict
+	}
 	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
 	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
 		!scheduledExecutionMaySuspendExternal(occurrence.State, run.State) ||
@@ -2469,17 +2691,6 @@ func (service *Service) suspendIntegrationScheduledGraph(
 		ctx, run, resolved.Turn.ID, resolved.TurnSpec.Attempt,
 	); err != nil {
 		return err
-	}
-	schedule, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID,
-		resolved.ProcessSpec.ScheduleID,
-	)
-	if err != nil {
-		return err
-	}
-	if schedule.Kind != enum.KindSchedule ||
-		schedule.OwnerActorID != resolved.Process.OwnerActorID {
-		return errs.ErrStateConflict
 	}
 	return service.appendMutationRecords(
 		ctx, tx, principal, "suspend_integration_schedule", schedule,
@@ -2528,11 +2739,13 @@ func (service *Service) decideIntegration(
 		}
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Decision string
-		Input    IntegrationDecisionInput
-	}{identity(input.Principal), decision, input})
+	requestHash, err := semanticCommandHash(input.Principal, integrationDecisionIntent{
+		ContinuationID: input.ContinuationID, ExpectedVersion: input.ExpectedVersion,
+		ExpectedFence: input.ExpectedFence, InvocationID: input.InvocationID,
+		ApprovalID: input.ApprovalID, RequestSHA256: input.RequestSHA256,
+		DecisionReference: input.DecisionReference, DecisionSHA256: input.DecisionSHA256,
+		Decision: decision,
+	})
 	if err != nil {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
@@ -2546,9 +2759,25 @@ func (service *Service) decideIntegration(
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, scope, requestHash, &result,
 		func(tx domainrepo.Transaction) error {
-			continuation, err := tx.GetIntegrationContinuationForUpdate(
-				ctx, input.ContinuationID,
-			)
+			var continuation IntegrationContinuation
+			var err error
+			if materialize {
+				snapshot, readErr := tx.GetIntegrationContinuation(ctx, input.ContinuationID)
+				if readErr != nil {
+					return readErr
+				}
+				continuation, err = service.prelockIntegrationTerminalGraph(
+					ctx, tx, input.Principal, snapshot,
+				)
+			} else {
+				snapshot, readErr := tx.GetIntegrationContinuation(ctx, input.ContinuationID)
+				if readErr != nil {
+					return readErr
+				}
+				continuation, err = service.lockIntegrationContinuationAfterBindings(
+					ctx, tx, input.Principal, snapshot, decision == "APPROVED",
+				)
+			}
 			if err != nil {
 				return err
 			}
@@ -2619,7 +2848,7 @@ func (service *Service) ExpireIntegrationInvocation(
 		}
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct{ Identity commandIdentity }{identity(principal)})
+	requestHash, err := semanticCommandHash(principal, struct{}{})
 	if err != nil {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
@@ -2627,9 +2856,15 @@ func (service *Service) ExpireIntegrationInvocation(
 	err = service.withLifecycleReceipt(
 		ctx, principal, idempotencyKey, "expire_integration_invocation",
 		requestHash, &result, func(tx domainrepo.Transaction) error {
-			continuation, err := tx.NextExpiredIntegrationContinuation(
+			snapshot, err := tx.NextExpiredIntegrationContinuation(
 				ctx, principal.OrganizationID, principal.ProjectID,
 				principal.AuthorityReference, uint32(principal.AuthorityRevision),
+			)
+			if err != nil {
+				return err
+			}
+			continuation, err := service.prelockIntegrationTerminalGraph(
+				ctx, tx, principal, snapshot,
 			)
 			if err != nil {
 				return err
@@ -2637,6 +2872,12 @@ func (service *Service) ExpireIntegrationInvocation(
 			now, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return err
+			}
+			if continuation.ApprovalState != "PENDING" ||
+				continuation.ExecutionState != "NOT_STARTED" ||
+				continuation.ContinuationState != "SUSPENDED" ||
+				continuation.ApprovalExpiresAt.After(now) {
+				return errs.ErrStateConflict
 			}
 			if err := matchIntegrationGateway(continuation, principal); err != nil {
 				return err
@@ -2730,11 +2971,14 @@ func (service *Service) executeIntegrationTransition(
 		input.ErrorCode != "" || input.ErrorReference != "" || input.ErrorSHA256 != "") {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Target   string
-		Input    IntegrationExecutionInput
-	}{identity(input.Principal), target, input})
+	requestHash, err := semanticCommandHash(input.Principal, integrationExecutionIntent{
+		ContinuationID: input.ContinuationID, ExpectedVersion: input.ExpectedVersion,
+		ExpectedFence: input.ExpectedFence, InvocationID: input.InvocationID,
+		RequestSHA256: input.RequestSHA256, ResultReference: input.ResultReference,
+		ResultSHA256: input.ResultSHA256, ErrorCode: input.ErrorCode,
+		ErrorReference: input.ErrorReference, ErrorSHA256: input.ErrorSHA256,
+		Target: target,
+	})
 	if err != nil {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
@@ -2748,9 +2992,25 @@ func (service *Service) executeIntegrationTransition(
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, scope, requestHash, &result,
 		func(tx domainrepo.Transaction) error {
-			continuation, err := tx.GetIntegrationContinuationForUpdate(
-				ctx, input.ContinuationID,
-			)
+			var continuation IntegrationContinuation
+			var err error
+			if target != "BEGIN" {
+				snapshot, readErr := tx.GetIntegrationContinuation(ctx, input.ContinuationID)
+				if readErr != nil {
+					return readErr
+				}
+				continuation, err = service.prelockIntegrationTerminalGraph(
+					ctx, tx, input.Principal, snapshot,
+				)
+			} else {
+				snapshot, readErr := tx.GetIntegrationContinuation(ctx, input.ContinuationID)
+				if readErr != nil {
+					return readErr
+				}
+				continuation, err = service.lockIntegrationContinuationAfterBindings(
+					ctx, tx, input.Principal, snapshot, true,
+				)
+			}
 			if err != nil {
 				return err
 			}
@@ -2834,6 +3094,88 @@ func matchIntegrationGateway(
 		return errs.ErrNotFound
 	}
 	return nil
+}
+
+// prelockIntegrationTerminalGraph берёт общий scheduled graph до owner row
+// continuation. Это устраняет цикл continuation -> Session/Turn/ProcessRun
+// против runtime/scheduler path, который приходит к continuation последней.
+func (service *Service) prelockIntegrationTerminalGraph(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	snapshot IntegrationContinuation,
+) (IntegrationContinuation, error) {
+	execution, err := tx.GetRuntimeExecutionByTurnForUpdate(
+		ctx, snapshot.TurnID, snapshot.Attempt,
+	)
+	if err != nil {
+		return IntegrationContinuation{}, err
+	}
+	if execution.OrganizationID != snapshot.OrganizationID ||
+		execution.ProjectID != snapshot.ProjectID || execution.ProcessID != snapshot.ProcessID ||
+		execution.SessionID != snapshot.SessionID || execution.TurnID != snapshot.TurnID ||
+		execution.Attempt != snapshot.Attempt ||
+		execution.RuntimeRevisionID != snapshot.RuntimeRevisionID ||
+		execution.RuntimeRevisionVersion != snapshot.RuntimeRevisionVersion ||
+		execution.ImmutableInputSHA256 != snapshot.ImmutableInputSHA256 ||
+		execution.State != "SUSPENDED" {
+		return IntegrationContinuation{}, errs.ErrStateConflict
+	}
+	if err := service.prelockRuntimeScheduledGraph(ctx, tx, principal, execution); err != nil {
+		return IntegrationContinuation{}, err
+	}
+	session, err := tx.GetForUpdate(
+		ctx, snapshot.OrganizationID, snapshot.ProjectID, snapshot.SessionID,
+	)
+	if err != nil {
+		return IntegrationContinuation{}, err
+	}
+	turn, err := tx.GetForUpdate(
+		ctx, snapshot.OrganizationID, snapshot.ProjectID, snapshot.TurnID,
+	)
+	if err != nil {
+		return IntegrationContinuation{}, err
+	}
+	process, err := tx.GetForUpdate(
+		ctx, snapshot.OrganizationID, snapshot.ProjectID, snapshot.ProcessID,
+	)
+	if err != nil {
+		return IntegrationContinuation{}, err
+	}
+	if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID ||
+		turn.Kind != enum.KindTurn || turn.OwnerActorID != principal.ActorID ||
+		process.Kind != enum.KindProcessRun || process.OwnerActorID != principal.ActorID {
+		return IntegrationContinuation{}, errs.ErrNotFound
+	}
+	return service.lockIntegrationContinuationAfterBindings(
+		ctx, tx, principal, snapshot, false,
+	)
+}
+
+func (service *Service) lockIntegrationContinuationAfterBindings(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	snapshot IntegrationContinuation,
+	requireActiveBindings bool,
+) (IntegrationContinuation, error) {
+	if err := service.validatePinnedIntegrationContinuation(
+		ctx, tx, principal, snapshot, requireActiveBindings,
+	); err != nil {
+		return IntegrationContinuation{}, err
+	}
+	locked, err := tx.GetIntegrationContinuationForUpdate(ctx, snapshot.ID)
+	if err != nil {
+		return IntegrationContinuation{}, err
+	}
+	if locked.Version != snapshot.Version || locked.Fence != snapshot.Fence ||
+		locked.TurnID != snapshot.TurnID || locked.Attempt != snapshot.Attempt ||
+		locked.SessionID != snapshot.SessionID || locked.ProcessID != snapshot.ProcessID ||
+		locked.RuntimeRevisionID != snapshot.RuntimeRevisionID ||
+		locked.ImmutableInputSHA256 != snapshot.ImmutableInputSHA256 {
+		return IntegrationContinuation{}, errs.ErrStateConflict
+	}
+	return locked, nil
 }
 
 func (service *Service) materializeIntegrationContinuation(
@@ -2946,6 +3288,11 @@ func (service *Service) materializeIntegrationContinuation(
 	processSpec.ContinuationRuntimeRevisionID = revision.ID
 	processSpec.ContinuationRuntimeRevisionVersion = revision.Version
 	processSpec.ContinuationInputSHA256 = inputDigest
+	processSpec.ContinuationKind = enum.ProcessContinuationIntegration
+	processSpec.ContinuationIntegrationID = continuation.ID
+	processSpec.ContinuationOutcomeSHA256 = outcomeDigest
+	processSpec.ContinuationGateID = ""
+	processSpec.OwnerFeedbackSHA256 = ""
 	runningProcess, err := process.ReplaceAndTransition(processSpec, enum.StateRunning, now)
 	if err != nil {
 		return errs.ErrStateConflict
@@ -3024,6 +3371,16 @@ func (service *Service) materializeIntegrationScheduledGraph(
 	if err != nil {
 		return err
 	}
+	schedule, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, processSpec.ScheduleID,
+	)
+	if err != nil {
+		return err
+	}
+	if schedule.Kind != enum.KindSchedule ||
+		schedule.OwnerActorID != previousProcess.OwnerActorID {
+		return errs.ErrStateConflict
+	}
 	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
 	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
 		occurrence.State != "CONTINUATION" || run.State != "CONTINUATION" ||
@@ -3071,16 +3428,6 @@ func (service *Service) materializeIntegrationScheduledGraph(
 	); err != nil {
 		return err
 	}
-	schedule, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, processSpec.ScheduleID,
-	)
-	if err != nil {
-		return err
-	}
-	if schedule.Kind != enum.KindSchedule ||
-		schedule.OwnerActorID != previousProcess.OwnerActorID {
-		return errs.ErrStateConflict
-	}
 	return service.appendMutationRecords(
 		ctx, tx, principal, "materialize_integration_schedule", schedule,
 	)
@@ -3113,6 +3460,12 @@ func (service *Service) GetIntegrationContinuation(
 		if err != nil {
 			return err
 		}
+		continuation, err = service.lockIntegrationContinuationAfterBindings(
+			ctx, tx, input.Principal, continuation, false,
+		)
+		if err != nil {
+			return err
+		}
 		if continuation.ContinuationState != "READY" ||
 			continuation.ContinuationTurnID != input.Principal.AuthorityReference ||
 			resolved.Turn.ID != continuation.ContinuationTurnID ||
@@ -3124,11 +3477,6 @@ func (service *Service) GetIntegrationContinuation(
 			continuation.ContinuationAttempt != uint32(input.Principal.AuthorityRevision) ||
 			resolved.TurnSpec.Attempt != continuation.ContinuationAttempt {
 			return errs.ErrNotFound
-		}
-		if err := service.validatePinnedIntegrationContinuation(
-			ctx, tx, input.Principal, continuation, false,
-		); err != nil {
-			return err
 		}
 		result = continuation
 		return nil
@@ -3150,10 +3498,10 @@ func (service *Service) AcknowledgeIntegrationContinuation(
 		!validSHA256Text(input.ExpectedInputSHA256) {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    AcknowledgeIntegrationContinuationInput
-	}{identity(input.Principal), input})
+	requestHash, err := semanticCommandHash(input.Principal, acknowledgeIntegrationIntent{
+		ExpectedVersion: input.ExpectedVersion, ExpectedFence: input.ExpectedFence,
+		ExpectedInputSHA256: input.ExpectedInputSHA256,
+	})
 	if err != nil {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
@@ -3171,6 +3519,12 @@ func (service *Service) AcknowledgeIntegrationContinuation(
 		}
 		continuation, err := tx.GetIntegrationContinuationByContinuationTurn(
 			ctx, resolved.Turn.ID,
+		)
+		if err != nil {
+			return err
+		}
+		continuation, err = service.lockIntegrationContinuationAfterBindings(
+			ctx, tx, input.Principal, continuation, false,
 		)
 		if err != nil {
 			return err
@@ -3213,11 +3567,6 @@ func (service *Service) AcknowledgeIntegrationContinuation(
 			resolved.Revision.Version != continuation.ContinuationRuntimeRevisionVersion ||
 			continuation.ContinuationInputSHA256 != input.ExpectedInputSHA256 {
 			return errs.ErrStateConflict
-		}
-		if err := service.validatePinnedIntegrationContinuation(
-			ctx, tx, input.Principal, continuation, false,
-		); err != nil {
-			return err
 		}
 		now, err := tx.CurrentTime(ctx)
 		if err != nil {

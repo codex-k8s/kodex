@@ -22,5 +22,4 @@ WHERE organization_id = @organization_id
   AND approval_state = 'PENDING'
   AND approval_expires_at <= clock_timestamp()
 ORDER BY approval_expires_at, id
-LIMIT 1
-FOR UPDATE SKIP LOCKED;
+LIMIT 1;

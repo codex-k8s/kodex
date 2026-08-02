@@ -245,6 +245,10 @@ CREATE INDEX integration_continuations_expiry_idx
 CREATE UNIQUE INDEX integration_continuations_rejoin_turn_idx
     ON control_plane.integration_continuations (continuation_turn_id)
     WHERE continuation_turn_id IS NOT NULL;
+CREATE INDEX integration_continuations_session_cleanup_idx
+    ON control_plane.integration_continuations (
+        organization_id, project_id, session_id, continuation_state
+    ) WHERE continuation_state <> 'REJOINED';
 
 ALTER TABLE control_plane.runtime_executions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control_plane.runtime_executions FORCE ROW LEVEL SECURITY;

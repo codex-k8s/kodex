@@ -2,6 +2,7 @@ package resource
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -10,6 +11,95 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 )
+
+func TestSemanticCommandHashIgnoresOneTimeCorrelationID(t *testing.T) {
+	principal := value.Principal{
+		ActorID:        "5574792c-5721-4b85-83b7-e8c6857b8fef",
+		OrganizationID: "3a3ed463-59fe-4a2b-9f96-58cd7d3dd526",
+		ProjectID:      "fd0570db-07c9-4a9a-8d35-3657119068c3",
+		Permission:     permissionIntegrationAcknowledge, PolicyRevision: 8,
+		AuthorityGeneration: 12, CallerWorkload: "agent-runner",
+		CallerSPIFFEID:           "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+		AuthoritySource:          "AGENT_SESSION",
+		AuthorityReference:       "1373ea94-fdda-47f7-adbe-7ae3bc633c03",
+		AuthorityRevision:        2,
+		AuthorityDigest:          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		AuthorityGrantGeneration: 21,
+		CorrelationID:            "8bdfe85e-8ddf-4904-b139-bfa9139df42e",
+	}
+	intent := acknowledgeIntegrationIntent{
+		ExpectedVersion: 7, ExpectedFence: 9,
+		ExpectedInputSHA256: principal.AuthorityDigest,
+	}
+	first, err := semanticCommandHash(principal, intent)
+	if err != nil {
+		t.Fatalf("first semantic hash: %v", err)
+	}
+	principal.CorrelationID = "e910cf2c-702b-4f8a-806f-6cfd094696cd"
+	second, err := semanticCommandHash(principal, intent)
+	if err != nil || first != second {
+		t.Fatalf("new proof JTI changed semantic intent: %s %s %v", first, second, err)
+	}
+	principal.AuthorityGrantGeneration++
+	changed, err := semanticCommandHash(principal, intent)
+	if err != nil || changed == first {
+		t.Fatalf("authority-critical generation did not change semantic intent")
+	}
+}
+
+func TestProcessContinuationBindingClosedUnion(t *testing.T) {
+	digest := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	base := entity.ProcessRunSpec{
+		PlaybookRef: "playbook:v1", PolicyRevision: 1, RootTriggerRef: "manual:test",
+		RootInitiatorActorID: "5574792c-5721-4b85-83b7-e8c6857b8fef",
+		RootSessionID:        "3a3ed463-59fe-4a2b-9f96-58cd7d3dd526", RootSessionVersion: 1,
+		RootTurnID: "fd0570db-07c9-4a9a-8d35-3657119068c3", RootTurnVersion: 1,
+		RootAttempt: 1, ImmutableInputSHA256: digest,
+		RuntimeRevisionID:       "1373ea94-fdda-47f7-adbe-7ae3bc633c03",
+		ContinuationTurnID:      "8bdfe85e-8ddf-4904-b139-bfa9139df42e",
+		ContinuationTurnVersion: 1, ContinuationAttempt: 1,
+		ContinuationRuntimeRevisionID:      "e910cf2c-702b-4f8a-806f-6cfd094696cd",
+		ContinuationRuntimeRevisionVersion: 1, ContinuationInputSHA256: digest,
+	}
+	ownerGate := base
+	ownerGate.ContinuationKind = enum.ProcessContinuationOwnerGate
+	ownerGate.ContinuationGateID = "ca9787b5-0ebf-44bb-bdb5-64b4f35c1713"
+	ownerGate.OwnerFeedbackSHA256 = digest
+	if err := ownerGate.Validate(); err != nil {
+		t.Fatalf("valid owner gate continuation rejected: %v", err)
+	}
+	integration := base
+	integration.ContinuationKind = enum.ProcessContinuationIntegration
+	integration.ContinuationIntegrationID = "c27fc37f-c9ec-4c95-a307-101f30d3bc97"
+	integration.ContinuationOutcomeSHA256 = digest
+	if err := integration.Validate(); err != nil {
+		t.Fatalf("valid integration continuation rejected: %v", err)
+	}
+	missingKind := integration
+	missingKind.ContinuationKind = enum.ProcessContinuationNone
+	if err := missingKind.Validate(); err == nil {
+		t.Fatal("integration continuation without discriminator was accepted")
+	}
+	incomplete := integration
+	incomplete.ContinuationOutcomeSHA256 = ""
+	if err := incomplete.Validate(); err == nil {
+		t.Fatal("incomplete integration continuation was accepted")
+	}
+	integration.ContinuationGateID = ownerGate.ContinuationGateID
+	if err := integration.Validate(); err == nil {
+		t.Fatal("mixed owner gate and integration continuation was accepted")
+	}
+}
+
+func TestScheduledGraphCanonicalLockOrder(t *testing.T) {
+	want := []string{
+		"runtime_execution", "schedule_occurrence", "schedule", "scheduled_run",
+		"session", "turn", "process_run", "integration_continuation",
+	}
+	if !slices.Equal(scheduledGraphLockOrder[:], want) {
+		t.Fatalf("unexpected scheduled graph lock order: %v", scheduledGraphLockOrder)
+	}
+}
 
 func TestRuntimeResourcePolicyClosedCapabilities(t *testing.T) {
 	tests := []struct {

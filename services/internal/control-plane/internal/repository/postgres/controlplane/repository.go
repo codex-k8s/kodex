@@ -2166,13 +2166,13 @@ func (wrapped *transaction) GetIntegrationContinuationForUpdate(
 	))
 }
 
-func (wrapped *transaction) GetIntegrationContinuationBySourceTurnForUpdate(
+func (wrapped *transaction) GetIntegrationContinuation(
 	ctx context.Context,
-	turnID string,
+	continuationID string,
 ) (domainrepo.IntegrationContinuation, error) {
 	return scanIntegrationContinuation(wrapped.tx.QueryRow(
-		ctx, sqlIntegrationContinuationGetBySourceTurn,
-		pgx.StrictNamedArgs{"turn_id": turnID},
+		ctx, sqlIntegrationContinuationGet,
+		pgx.StrictNamedArgs{"continuation_id": continuationID},
 	))
 }
 
@@ -2188,14 +2188,17 @@ func (wrapped *transaction) GetIntegrationContinuationByContinuationTurn(
 
 func (wrapped *transaction) IntegrationContinuationBlocksCleanup(
 	ctx context.Context,
-	turnID string,
-	attempt uint32,
+	organizationID, projectID, sessionID string,
 ) (bool, error) {
 	var blocked bool
 	err := wrapped.tx.QueryRow(
 		ctx,
 		sqlIntegrationContinuationBlocksCleanup,
-		pgx.StrictNamedArgs{"turn_id": turnID, "attempt": attempt},
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"session_id":      sessionID,
+		},
 	).Scan(&blocked)
 	return blocked, mapError(err)
 }

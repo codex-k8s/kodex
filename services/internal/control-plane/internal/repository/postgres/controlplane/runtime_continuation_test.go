@@ -50,6 +50,12 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 				"organization_id": "", "project_id": "", "turn_id": "",
 			},
 		},
+		{
+			name: "session cleanup blocker", sql: sqlIntegrationContinuationBlocksCleanup,
+			args: pgx.StrictNamedArgs{
+				"organization_id": "", "project_id": "", "session_id": "",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -68,6 +74,24 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestIntegrationContinuationCleanupBlockerIsSessionScoped(t *testing.T) {
+	for _, required := range []string{
+		"organization_id = @organization_id::uuid",
+		"project_id = @project_id::uuid",
+		"session_id = @session_id::uuid",
+		"continuation_state <> 'REJOINED'",
+	} {
+		if !strings.Contains(sqlIntegrationContinuationBlocksCleanup, required) {
+			t.Fatalf("cleanup blocker misses %q", required)
+		}
+	}
+	for _, forbidden := range []string{"turn_id =", "attempt ="} {
+		if strings.Contains(sqlIntegrationContinuationBlocksCleanup, forbidden) {
+			t.Fatalf("cleanup blocker remains execution-scoped: %s", forbidden)
+		}
 	}
 }
 

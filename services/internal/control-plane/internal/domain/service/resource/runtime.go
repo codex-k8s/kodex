@@ -747,6 +747,11 @@ func (service *Service) CompleteTurn(
 		"complete_turn",
 		requestHash,
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			if err := service.prelockScheduledGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
+			); err != nil {
+				return entity.Resource{}, err
+			}
 			current, err := tx.GetForUpdate(
 				ctx,
 				input.Principal.OrganizationID,
@@ -983,6 +988,11 @@ func (service *Service) RetryTurn(
 		"retry_turn",
 		requestHash,
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			if err := service.prelockScheduledGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
+			); err != nil {
+				return entity.Resource{}, err
+			}
 			current, err := tx.GetForUpdate(
 				ctx,
 				input.Principal.OrganizationID,
@@ -1114,6 +1124,11 @@ func (service *Service) CancelTurn(
 		"cancel_turn",
 		requestHash,
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			if err := service.prelockScheduledGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
+			); err != nil {
+				return entity.Resource{}, err
+			}
 			current, err := tx.GetForUpdate(
 				ctx,
 				input.Principal.OrganizationID,

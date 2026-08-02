@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.8.0
+version: 1.9.0
 updated: 2026-08-02
 ---
 
@@ -298,16 +298,26 @@ Cleanup lifecycle диагностировать по `NONE/ACTIVE/EXPIRED/CONSU
 authorization ID, монотонной generation и PostgreSQL expiry. Exact replay
 возвращает прежний receipt. Живой `ACTIVE` блокирует новую выдачу; истёкший
 `ACTIVE` сначала атомарно становится `EXPIRED`, затем новый intent получает
-большую generation. `CONSUMED` никогда не переиздаётся. Pending integration
-continuation до `REJOINED` блокирует issue и consume. Ручное обновление
-`runtime_executions` и очистка до restore proof запрещены.
+большую generation. `CONSUMED` никогда не переиздаётся. Integration continuation
+проверяется по exact organization/project/session: любая её source или current
+delivery binding до `REJOINED` блокирует issue и повторную проверку consume.
+Строка другой session не блокирует. Ручное обновление `runtime_executions` и
+очистка до restore proof запрещены.
+
+Semantic receipt runtime/integration команд не включает одноразовый JTI,
+correlation ID, nonce и transport timestamp. Повтор потерянного ответа обязан
+использовать новый валидный proof, тот же key и тот же business/authority tuple;
+actor, organization/project, workload/SPIFFE, permission, authority reference,
+attempt/revision/input/fence/generation остаются частью hash. Для ACK owner и
+current delivery binding разрешаются до чтения receipt.
 
 Integration suspension pin-ит invocation, approval, request digest, полный
 runtime tuple и exact Integration/credential ID+version+projection digest.
 Та же transaction переводит старую RuntimeExecution в `SUSPENDED`, закрывает
 lease/attempt/claims/grants и переводит Turn/Session/Process в
 `WAITING_EXTERNAL`. Для scheduled process она также блокирует граф в общем со
-scheduler recovery порядке execution→occurrence→schedule→run→session→turn→process,
+scheduler recovery порядке RuntimeExecution→occurrence→schedule→scheduled run→
+session→turn→ProcessRun→pinned resources→integration continuation,
 переводит occurrence/run из `CLAIMED` в
 `CONTINUATION`, очищает claimant/generation/token/lease и сохраняет suspended
 current tuple. Поэтому stale scheduler expiry/claim, overlap и delete не могут
@@ -323,6 +333,10 @@ Approval/begin повторно требуют активную pinned binding; 
 Terminal transition в той же transaction создаёт одну свежую RuntimeRevision,
 input, continuation Turn и будущий grant, а scheduled occurrence/run
 перепривязывает к точным новым session/turn/process/revision/input versions.
+`ProcessRunSpec.continuation_kind` обязан быть закрытым union: `OWNER_GATE`
+требует gate/owner-feedback, `INTEGRATION` требует exact continuation ID/outcome
+digest; смешанная или неполная binding является повреждением графа и закрыто
+отклоняется.
 Первый защищённый
 `GetIntegrationContinuation` имеет пустой request и разрешает строку из signed
 authority нового Turn; response возвращает current version/fence/input для

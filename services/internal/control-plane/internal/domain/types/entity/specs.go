@@ -40,7 +40,7 @@ func (ownership ConfigurationOwnership) Validate() error {
 	case "GIT":
 		if !validExternalRef(ownership.SourceRef) ||
 			ownership.SourceRevision == 0 {
-			return errors.New("Git configuration ownership is invalid")
+			return errors.New("git configuration ownership is invalid")
 		}
 	default:
 		return errors.New("configuration ownership is invalid")
@@ -532,47 +532,50 @@ func (spec TurnSpec) Validate() error {
 }
 
 type ProcessRunSpec struct {
-	ParentProcessRunID                 string `json:"parentProcessRunId,omitempty"`
-	PlaybookRef                        string `json:"playbookRef"`
-	PolicyRevision                     uint64 `json:"policyRevision"`
-	RootTriggerRef                     string `json:"rootTriggerRef"`
-	ResultArtifactID                   string `json:"resultArtifactId,omitempty"`
-	RootInitiatorActorID               string `json:"rootInitiatorActorId"`
-	RootSessionID                      string `json:"rootSessionId"`
-	RootSessionVersion                 uint64 `json:"rootSessionVersion"`
-	RootTurnID                         string `json:"rootTurnId"`
-	RootTurnVersion                    uint64 `json:"rootTurnVersion"`
-	RootAttempt                        uint32 `json:"rootAttempt"`
-	ImmutableInputSHA256               string `json:"immutableInputSha256"`
-	RuntimeRevisionID                  string `json:"runtimeRevisionId"`
-	LaunchingProcessRunID              string `json:"launchingProcessRunId,omitempty"`
-	LaunchingTurnID                    string `json:"launchingTurnId,omitempty"`
-	LaunchingAttempt                   uint32 `json:"launchingAttempt,omitempty"`
-	DelegationID                       string `json:"delegationId,omitempty"`
-	TargetSessionID                    string `json:"targetSessionId,omitempty"`
-	TargetSessionVersion               uint64 `json:"targetSessionVersion,omitempty"`
-	TargetTurnID                       string `json:"targetTurnId,omitempty"`
-	TargetTurnVersion                  uint64 `json:"targetTurnVersion,omitempty"`
-	TargetAttempt                      uint32 `json:"targetAttempt,omitempty"`
-	Outcome                            string `json:"outcome,omitempty"`
-	ScheduleID                         string `json:"scheduleId,omitempty"`
-	OccurrenceID                       string `json:"occurrenceId,omitempty"`
-	ContinuationGateID                 string `json:"continuationGateId,omitempty"`
-	ContinuationTurnID                 string `json:"continuationTurnId,omitempty"`
-	ContinuationTurnVersion            uint64 `json:"continuationTurnVersion,omitempty"`
-	ContinuationAttempt                uint32 `json:"continuationAttempt,omitempty"`
-	ContinuationRuntimeRevisionID      string `json:"continuationRuntimeRevisionId,omitempty"`
-	ContinuationRuntimeRevisionVersion uint64 `json:"continuationRuntimeRevisionVersion,omitempty"`
-	ContinuationInputSHA256            string `json:"continuationInputSha256,omitempty"`
-	OwnerFeedbackSHA256                string `json:"ownerFeedbackSha256,omitempty"`
-	CurrentSessionID                   string `json:"currentSessionId,omitempty"`
-	CurrentSessionVersion              uint64 `json:"currentSessionVersion,omitempty"`
-	CurrentTurnID                      string `json:"currentTurnId,omitempty"`
-	CurrentTurnVersion                 uint64 `json:"currentTurnVersion,omitempty"`
-	CurrentAttempt                     uint32 `json:"currentAttempt,omitempty"`
-	CurrentRuntimeRevisionID           string `json:"currentRuntimeRevisionId,omitempty"`
-	CurrentRuntimeRevisionVersion      uint64 `json:"currentRuntimeRevisionVersion,omitempty"`
-	CurrentInputSHA256                 string `json:"currentInputSha256,omitempty"`
+	ParentProcessRunID                 string                       `json:"parentProcessRunId,omitempty"`
+	PlaybookRef                        string                       `json:"playbookRef"`
+	PolicyRevision                     uint64                       `json:"policyRevision"`
+	RootTriggerRef                     string                       `json:"rootTriggerRef"`
+	ResultArtifactID                   string                       `json:"resultArtifactId,omitempty"`
+	RootInitiatorActorID               string                       `json:"rootInitiatorActorId"`
+	RootSessionID                      string                       `json:"rootSessionId"`
+	RootSessionVersion                 uint64                       `json:"rootSessionVersion"`
+	RootTurnID                         string                       `json:"rootTurnId"`
+	RootTurnVersion                    uint64                       `json:"rootTurnVersion"`
+	RootAttempt                        uint32                       `json:"rootAttempt"`
+	ImmutableInputSHA256               string                       `json:"immutableInputSha256"`
+	RuntimeRevisionID                  string                       `json:"runtimeRevisionId"`
+	LaunchingProcessRunID              string                       `json:"launchingProcessRunId,omitempty"`
+	LaunchingTurnID                    string                       `json:"launchingTurnId,omitempty"`
+	LaunchingAttempt                   uint32                       `json:"launchingAttempt,omitempty"`
+	DelegationID                       string                       `json:"delegationId,omitempty"`
+	TargetSessionID                    string                       `json:"targetSessionId,omitempty"`
+	TargetSessionVersion               uint64                       `json:"targetSessionVersion,omitempty"`
+	TargetTurnID                       string                       `json:"targetTurnId,omitempty"`
+	TargetTurnVersion                  uint64                       `json:"targetTurnVersion,omitempty"`
+	TargetAttempt                      uint32                       `json:"targetAttempt,omitempty"`
+	Outcome                            string                       `json:"outcome,omitempty"`
+	ScheduleID                         string                       `json:"scheduleId,omitempty"`
+	OccurrenceID                       string                       `json:"occurrenceId,omitempty"`
+	ContinuationGateID                 string                       `json:"continuationGateId,omitempty"`
+	ContinuationTurnID                 string                       `json:"continuationTurnId,omitempty"`
+	ContinuationTurnVersion            uint64                       `json:"continuationTurnVersion,omitempty"`
+	ContinuationAttempt                uint32                       `json:"continuationAttempt,omitempty"`
+	ContinuationRuntimeRevisionID      string                       `json:"continuationRuntimeRevisionId,omitempty"`
+	ContinuationRuntimeRevisionVersion uint64                       `json:"continuationRuntimeRevisionVersion,omitempty"`
+	ContinuationInputSHA256            string                       `json:"continuationInputSha256,omitempty"`
+	ContinuationKind                   enum.ProcessContinuationKind `json:"continuationKind,omitempty"`
+	ContinuationIntegrationID          string                       `json:"continuationIntegrationId,omitempty"`
+	ContinuationOutcomeSHA256          string                       `json:"continuationOutcomeSha256,omitempty"`
+	OwnerFeedbackSHA256                string                       `json:"ownerFeedbackSha256,omitempty"`
+	CurrentSessionID                   string                       `json:"currentSessionId,omitempty"`
+	CurrentSessionVersion              uint64                       `json:"currentSessionVersion,omitempty"`
+	CurrentTurnID                      string                       `json:"currentTurnId,omitempty"`
+	CurrentTurnVersion                 uint64                       `json:"currentTurnVersion,omitempty"`
+	CurrentAttempt                     uint32                       `json:"currentAttempt,omitempty"`
+	CurrentRuntimeRevisionID           string                       `json:"currentRuntimeRevisionId,omitempty"`
+	CurrentRuntimeRevisionVersion      uint64                       `json:"currentRuntimeRevisionVersion,omitempty"`
+	CurrentInputSHA256                 string                       `json:"currentInputSha256,omitempty"`
 }
 
 func (ProcessRunSpec) Kind() enum.Kind { return enum.KindProcessRun }
@@ -602,6 +605,7 @@ func (spec ProcessRunSpec) Validate() error {
 		spec.ContinuationGateID,
 		spec.ContinuationTurnID,
 		spec.ContinuationRuntimeRevisionID,
+		spec.ContinuationIntegrationID,
 		spec.CurrentSessionID,
 		spec.CurrentTurnID,
 		spec.CurrentRuntimeRevisionID,
@@ -632,18 +636,37 @@ func (spec ProcessRunSpec) Validate() error {
 	if (spec.ScheduleID == "") != (spec.OccurrenceID == "") {
 		return errors.New("process schedule lineage is incomplete")
 	}
-	continuation := spec.ContinuationGateID != "" || spec.ContinuationTurnID != "" ||
+	continuation := spec.ContinuationKind != enum.ProcessContinuationNone ||
+		spec.ContinuationGateID != "" || spec.ContinuationIntegrationID != "" ||
+		spec.ContinuationOutcomeSHA256 != "" || spec.ContinuationTurnID != "" ||
 		spec.ContinuationTurnVersion != 0 || spec.ContinuationAttempt != 0 ||
 		spec.ContinuationRuntimeRevisionID != "" ||
 		spec.ContinuationRuntimeRevisionVersion != 0 ||
 		spec.ContinuationInputSHA256 != "" || spec.OwnerFeedbackSHA256 != ""
-	if continuation && (spec.ContinuationGateID == "" || spec.ContinuationTurnID == "" ||
+	if !spec.ContinuationKind.Valid() {
+		return errors.New("process continuation kind is invalid")
+	}
+	if continuation && (spec.ContinuationKind == enum.ProcessContinuationNone ||
+		spec.ContinuationTurnID == "" ||
 		spec.ContinuationTurnVersion == 0 || spec.ContinuationAttempt == 0 ||
 		spec.ContinuationAttempt > 100 || spec.ContinuationRuntimeRevisionID == "" ||
 		spec.ContinuationRuntimeRevisionVersion == 0 ||
-		!validSHA256(spec.ContinuationInputSHA256) ||
-		!validSHA256(spec.OwnerFeedbackSHA256)) {
+		!validSHA256(spec.ContinuationInputSHA256)) {
 		return errors.New("process continuation binding is invalid")
+	}
+	if !continuation && spec.ContinuationKind != enum.ProcessContinuationNone {
+		return errors.New("process continuation binding is invalid")
+	}
+	if spec.ContinuationKind == enum.ProcessContinuationOwnerGate &&
+		(spec.ContinuationGateID == "" || !validSHA256(spec.OwnerFeedbackSHA256) ||
+			spec.ContinuationIntegrationID != "" || spec.ContinuationOutcomeSHA256 != "") {
+		return errors.New("owner gate continuation binding is invalid")
+	}
+	if spec.ContinuationKind == enum.ProcessContinuationIntegration &&
+		(spec.ContinuationIntegrationID == "" ||
+			!validSHA256(spec.ContinuationOutcomeSHA256) ||
+			spec.ContinuationGateID != "" || spec.OwnerFeedbackSHA256 != "") {
+		return errors.New("integration continuation binding is invalid")
 	}
 	current := spec.CurrentSessionID != "" || spec.CurrentSessionVersion != 0 ||
 		spec.CurrentTurnID != "" || spec.CurrentTurnVersion != 0 ||

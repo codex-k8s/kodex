@@ -444,9 +444,9 @@ type Transaction interface {
 	) (RuntimeExecution, error)
 	InsertRuntimeIncident(context.Context, RuntimeIncident) error
 	GetIntegrationContinuationForUpdate(context.Context, string) (IntegrationContinuation, error)
-	GetIntegrationContinuationBySourceTurnForUpdate(context.Context, string) (IntegrationContinuation, error)
+	GetIntegrationContinuation(context.Context, string) (IntegrationContinuation, error)
 	GetIntegrationContinuationByContinuationTurn(context.Context, string) (IntegrationContinuation, error)
-	IntegrationContinuationBlocksCleanup(context.Context, string, uint32) (bool, error)
+	IntegrationContinuationBlocksCleanup(context.Context, string, string, string) (bool, error)
 	NextExpiredIntegrationContinuation(
 		context.Context, string, string, string, uint32,
 	) (IntegrationContinuation, error)

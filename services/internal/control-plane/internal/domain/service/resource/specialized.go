@@ -1007,11 +1007,35 @@ func (service *Service) CompleteScheduleOccurrence(
 				occurrence.ExecutionRuntimeRevisionVersion == 0 {
 				return errs.ErrStateConflict
 			}
+			schedule, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				occurrence.ScheduleID,
+			)
+			if err != nil {
+				return err
+			}
+			scheduleSpec, ok := schedule.Spec.(entity.ScheduleSpec)
+			if !ok || schedule.Kind != enum.KindSchedule {
+				return errs.ErrStateConflict
+			}
 			run, err := tx.GetScheduledRunForUpdate(
 				ctx, occurrence.ID, occurrence.Attempt,
 			)
 			if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
 				run.State != "CLAIMED" {
+				return errs.ErrStateConflict
+			}
+			session, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				occurrence.ExecutionSessionID,
+			)
+			if err != nil {
+				return err
+			}
+			if session.Kind != enum.KindSession ||
+				session.OwnerActorID != schedule.OwnerActorID {
 				return errs.ErrStateConflict
 			}
 			turn, err := tx.GetForUpdate(
@@ -1051,19 +1075,6 @@ func (service *Service) CompleteScheduleOccurrence(
 					processSpec.ResultArtifactID != resultArtifactID {
 					return errs.ErrStateConflict
 				}
-			}
-			schedule, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				occurrence.ScheduleID,
-			)
-			if err != nil {
-				return err
-			}
-			scheduleSpec, ok := schedule.Spec.(entity.ScheduleSpec)
-			if !ok || schedule.Kind != enum.KindSchedule {
-				return errs.ErrStateConflict
 			}
 			expectedToken := occurrence.TokenHash
 			now := service.now().UTC().Truncate(time.Microsecond)

@@ -160,6 +160,7 @@ func (service *Service) continueOwnerGateGraph(
 		return OwnerGateResult{}, err
 	}
 	processSpec.ContinuationGateID = gate.ID
+	processSpec.ContinuationKind = enum.ProcessContinuationOwnerGate
 	processSpec.ContinuationTurnID = continuation.ID
 	processSpec.ContinuationTurnVersion = continuation.Version
 	processSpec.ContinuationAttempt = continuationSpec.Attempt
@@ -316,6 +317,15 @@ func (service *Service) finishContinuationOccurrence(
 	if err != nil {
 		return err
 	}
+	schedule, err := tx.GetForUpdate(
+		ctx, process.OrganizationID, process.ProjectID, occurrence.ScheduleID,
+	)
+	if err != nil {
+		return err
+	}
+	if schedule.Kind != enum.KindSchedule || schedule.OwnerActorID != process.OwnerActorID {
+		return errs.ErrStateConflict
+	}
 	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
 	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
 		occurrence.State != "CONTINUATION" || run.State != "CONTINUATION" ||
@@ -326,15 +336,6 @@ func (service *Service) finishContinuationOccurrence(
 		turnSpec.Attempt != processSpec.ContinuationAttempt ||
 		turnSpec.EffectiveInputSHA256 != processSpec.ContinuationInputSHA256 ||
 		!turn.State.Terminal() {
-		return errs.ErrStateConflict
-	}
-	schedule, err := tx.GetForUpdate(
-		ctx, process.OrganizationID, process.ProjectID, occurrence.ScheduleID,
-	)
-	if err != nil {
-		return err
-	}
-	if schedule.Kind != enum.KindSchedule || schedule.OwnerActorID != process.OwnerActorID {
 		return errs.ErrStateConflict
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)

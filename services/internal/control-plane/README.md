@@ -114,7 +114,12 @@ tokens: exact row разрешается из signed authority нового serv
 возвращает current delivery attempt/version/fence/input; ACK сверяет эти exact
 значения. Retry `FAILED/EXPIRED` атомарно перепривязывает тот же immutable
 outcome к свежим RuntimeRevision/input/attempt/grant и не повторяет approval
-или внешний вызов.
+или внешний вызов. `ProcessRunSpec` различает взаимоисключающие typed bindings
+`OWNER_GATE` и `INTEGRATION`; integration binding хранит exact continuation ID
+и outcome digest без фиктивного owner feedback. Semantic idempotency не зависит
+от одноразового JTI/correlation ID, но сохраняет полный проверенный owner и
+authority tuple. Cleanup issue и consume повторно проверяют все non-`REJOINED`
+continuation exact session, включая current delivery binding.
 
 ## Доменные инварианты
 

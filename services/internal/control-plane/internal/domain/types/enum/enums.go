@@ -24,6 +24,20 @@ const (
 	KindArtifact            Kind = "ARTIFACT"
 )
 
+// ProcessContinuationKind различает взаимоисключающие owner continuation.
+type ProcessContinuationKind string
+
+const (
+	ProcessContinuationNone        ProcessContinuationKind = ""
+	ProcessContinuationOwnerGate   ProcessContinuationKind = "OWNER_GATE"
+	ProcessContinuationIntegration ProcessContinuationKind = "INTEGRATION"
+)
+
+func (kind ProcessContinuationKind) Valid() bool {
+	return kind == ProcessContinuationNone || kind == ProcessContinuationOwnerGate ||
+		kind == ProcessContinuationIntegration
+}
+
 // Valid сообщает принадлежность закрытому множеству.
 func (kind Kind) Valid() bool {
 	switch kind {

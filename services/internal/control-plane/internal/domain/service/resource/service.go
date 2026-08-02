@@ -1270,9 +1270,13 @@ type commandIdentity struct {
 	Permission          string
 	PolicyRevision      uint64
 	AuthorityGeneration uint64
-	GrantGeneration     uint64
 	CallerWorkload      string
 	CallerSPIFFEID      string
+	AuthoritySource     string
+	AuthorityReference  string
+	AuthorityRevision   uint64
+	AuthorityDigest     string
+	GrantGeneration     uint64
 }
 
 func identity(principal value.Principal) commandIdentity {
@@ -1283,10 +1287,24 @@ func identity(principal value.Principal) commandIdentity {
 		Permission:          principal.Permission,
 		PolicyRevision:      principal.PolicyRevision,
 		AuthorityGeneration: principal.AuthorityGeneration,
-		GrantGeneration:     principal.AuthorityGrantGeneration,
 		CallerWorkload:      principal.CallerWorkload,
 		CallerSPIFFEID:      principal.CallerSPIFFEID,
+		AuthoritySource:     principal.AuthoritySource,
+		AuthorityReference:  principal.AuthorityReference,
+		AuthorityRevision:   principal.AuthorityRevision,
+		AuthorityDigest:     principal.AuthorityDigest,
+		GrantGeneration:     principal.AuthorityGrantGeneration,
 	}
+}
+
+// semanticCommandHash связывает долговечный intent только со стабильной
+// проверенной authority и бизнес-полями. CorrelationID/JTI и прочие
+// одноразовые transport proof artifacts намеренно не входят в receipt hash.
+func semanticCommandHash(principal value.Principal, command any) (string, error) {
+	return canonicalHash(struct {
+		Identity commandIdentity
+		Command  any
+	}{identity(principal), command})
 }
 
 func canonicalHash(input any) (string, error) {

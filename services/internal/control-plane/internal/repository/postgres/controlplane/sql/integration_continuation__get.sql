@@ -1,3 +1,4 @@
+-- name: GetIntegrationContinuation
 SELECT id, organization_id, project_id, process_id, session_id,
        session_version, thread_id, role_id, turn_id, turn_version, attempt,
        runtime_revision_id, runtime_revision_version, runtime_revision_sha256,
@@ -15,7 +16,4 @@ SELECT id, organization_id, project_id, process_id, session_id,
        coalesce(continuation_runtime_revision_version, 0),
        coalesce(continuation_input_sha256, ''), created_at, updated_at
 FROM control_plane.integration_continuations
-WHERE turn_id = @turn_id
-ORDER BY created_at DESC, id
-LIMIT 1
-FOR UPDATE;
+WHERE id = @continuation_id;
