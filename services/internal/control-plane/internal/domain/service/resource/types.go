@@ -475,9 +475,20 @@ type RuntimeRestoreInput struct {
 
 type RuntimeCleanupInput struct {
 	RuntimeExecutionInput
-	ArchiveSHA256      string
-	RestoreProofSHA256 string
+	ArchiveSHA256             string
+	RestoreProofSHA256        string
+	ExpectedCleanupGeneration uint64
 }
+
+type RuntimeCleanupAuthorizationInput struct {
+	RuntimeExecutionInput
+	CleanupAuthorizationID         string
+	CleanupAuthorizationGeneration uint64
+	ArchiveSHA256                  string
+	RestoreProofSHA256             string
+}
+
+type PinnedIntegrationResource = domainrepo.PinnedIntegrationResource
 
 type AdmitRuntimeExecutionResult struct {
 	Execution  RuntimeExecution
@@ -506,6 +517,8 @@ type IntegrationExecutionBinding struct {
 	ImmutableInputSHA256   string
 	GrantGeneration        uint64
 	Fence                  uint64
+	Integration            PinnedIntegrationResource
+	CredentialBindings     []PinnedIntegrationResource
 }
 
 type IntegrationSessionContext struct {
@@ -554,13 +567,16 @@ type IntegrationCredentialBinding struct {
 }
 
 type SuspendIntegrationInput struct {
-	Principal         value.Principal
-	IdempotencyKey    string
-	InvocationID      string
-	ApprovalID        string
-	IntegrationID     string
-	RequestSHA256     string
-	ApprovalExpiresAt time.Time
+	Principal          value.Principal
+	IdempotencyKey     string
+	InvocationID       string
+	ApprovalID         string
+	IntegrationID      string
+	IntegrationVersion uint64
+	IntegrationSHA256  string
+	CredentialBindings []PinnedIntegrationResource
+	RequestSHA256      string
+	ApprovalExpiresAt  time.Time
 }
 
 type IntegrationDecisionInput struct {
@@ -592,11 +608,7 @@ type IntegrationExecutionInput struct {
 }
 
 type GetIntegrationContinuationInput struct {
-	Principal                      value.Principal
-	ExpectedVersion                uint64
-	ExpectedRuntimeRevisionVersion uint64
-	ExpectedInputSHA256            string
-	ExpectedFence                  uint64
+	Principal value.Principal
 }
 
 type AcknowledgeIntegrationContinuationInput struct {

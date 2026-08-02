@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.6.0
+version: 1.7.0
 updated: 2026-08-02
 ---
 
@@ -159,8 +159,10 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
   `MaxMsgsPerSubject=5000000`, maximum message size 262144 bytes,
   max age 30 дней, dedup window 2 минуты, deny delete/purge и без
   mirror/source/republish/rollup/transform;
-- policy revision, independently delivered proof trust/private key и локальный
-  verifier #186 согласованы;
+- authority policy revision 8, independently delivered proof trust/private key
+  и локальный verifier #186 согласованы; отсутствующие отдельные public JWK для
+  `runtime-restore-verifier` или `runtime-cleanup-authorizer` закрывают startup,
+  а не включают OIDC fallback;
 - OIDC discovery/JWKS доступны только по pinned HTTPS path.
 
 Не обходить отказ readiness отключением dependency или permissive fallback.
@@ -272,25 +274,53 @@ cancel, retry или expiry проверить, что один PostgreSQL trans
 1. заблокировал exact execution и связанный Turn;
 2. сверил attempt/input/revision/workload/generation/version/fence;
 3. удалил совпавший Turn lease, завершил attempt и отозвал WorkClaim;
-4. сделал единственный terminal transition и сохранил semantic receipt/audit.
+4. проверил exact current ProcessRun и отсутствие open children/work, затем тем
+   же `completeProcessFromTurn` согласованно закрыл ProcessRun и применимые
+   occurrence/ScheduledRun;
+5. сделал единственный terminal transition и сохранил semantic receipt/audit.
 
-Archive reference принимается только после terminal state. Cleanup
-authorization не выдаётся без совпавшего archive checksum и independently
-verified restore proof другого exact workload; повтор того же ключа возвращает
-сохранённую authorization с тем же 15-минутным expiry, а новый intent не
-создаёт второе разрешение.
-Ручное обновление `runtime_executions` и очистка до restore proof запрещены.
+Если RuntimeExecution/Turn terminal, а ProcessRun остался `RUNNING`, считать
+transaction некорректной и не исправлять строки вручную. Retry сохранённых
+`FAILED/EXPIRED` обязан оставить прежний outcome в старой RuntimeExecution,
+перевести её в `RETRIED` и создать новую attempt со свежими
+RuntimeRevision/input/grant. `SUCCEEDED/CANCELLED/SUSPENDED` не retryable.
 
-Integration suspension pin-ит invocation, approval, request digest и полный
-runtime tuple. Для `PENDING` допускается один из `APPROVED`, `REJECTED`,
-`EXPIRED`, `CANCELLED`; выполнение разрешено только после `APPROVED` и имеет
-единственный terminal `SUCCEEDED` или `FAILED`. Terminal transition в той же
-транзакции создаёт одну свежую `RuntimeRevision`, continuation Turn и
-version-pinned read/rejoin tuple. До реализации agent-runner Issue #192
-фактического event consumer нет: проверять защищённые
-`GetIntegrationContinuation`/`AcknowledgeIntegrationContinuation`, а не NATS.
-При гонке повторно читать version/fence; обход OCC и повторная материализация
-Turn запрещены.
+Archive reference принимается только после terminal state. Restore proof
+разрешён только exact `runtime-restore-verifier` SPIFFE с отдельными audience,
+credential purpose и protected readiness; `control-api-gateway`, OIDC и
+`runtime-controller` этот RPC вызывать не могут. Cleanup issue/expire разрешён
+только `runtime-cleanup-authorizer`, а consume — exact `runtime-controller`.
+Внешние verifier/authorizer deployable и issuer/readback не поставляются #221,
+поэтому до их отдельной материализации destructive path должен оставаться
+fail-closed.
+
+Cleanup lifecycle диагностировать по `NONE/ACTIVE/EXPIRED/CONSUMED`, exact
+authorization ID, монотонной generation и PostgreSQL expiry. Exact replay
+возвращает прежний receipt. Живой `ACTIVE` блокирует новую выдачу; истёкший
+`ACTIVE` сначала атомарно становится `EXPIRED`, затем новый intent получает
+большую generation. `CONSUMED` никогда не переиздаётся. Pending integration
+continuation до `REJOINED` блокирует issue и consume. Ручное обновление
+`runtime_executions` и очистка до restore proof запрещены.
+
+Integration suspension pin-ит invocation, approval, request digest, полный
+runtime tuple и exact Integration/credential ID+version+projection digest.
+Та же transaction переводит старую RuntimeExecution в `SUSPENDED`, закрывает
+lease/attempt/claims/grants и переводит Turn/Session/Process в
+`WAITING_EXTERNAL`; heartbeat/complete/retry/expiry старого fence после этого
+не должны проходить. Для `PENDING` допускается один из `APPROVED`, `REJECTED`,
+`EXPIRED`, `CANCELLED`. После `APPROVED+NOT_STARTED` cancel конкурирует с
+`BeginIntegrationExecution`: cancel winner создаёт один continuation, begin
+winner оставляет `EXECUTING`, и поздний cancel не отменяет внешний effect.
+Approval/begin повторно требуют активную pinned binding; terminal result/error
+закрывают уже начатый effect по immutable snapshot.
+
+Terminal transition в той же transaction создаёт одну свежую RuntimeRevision,
+input, continuation Turn и будущий grant. Первый защищённый
+`GetIntegrationContinuation` имеет пустой request и разрешает строку из signed
+authority нового Turn; response возвращает current version/fence/input для
+последующего ACK. До реализации agent-runner Issue #192 фактического event
+consumer нет: проверять read/rejoin RPC, а не NATS. При гонке повторно читать
+version/fence; обход OCC и повторная материализация Turn запрещены.
 
 ## Artifact scan и schedule occurrence
 
@@ -389,7 +419,7 @@ resource ID или произвольный input.
 5. tracing shutdown и Sentry flush получают независимые contexts.
 
 Application rollback допустим только к образу, который понимает уже
-опубликованные Proto/schema/policy revisions. Schema, authority policy,
+опубликованные Proto/schema/policy revisions. Schema и authority policy 8,
 proof generation, audit и outbox назад не откатываются. При несовместимости
 оставить workload not ready и подготовить forward fix.
 

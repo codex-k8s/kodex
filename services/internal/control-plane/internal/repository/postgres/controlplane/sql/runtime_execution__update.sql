@@ -13,9 +13,14 @@ SET version = @version,
     restore_proof_reference = nullif(@restore_proof_reference, ''),
     restore_proof_sha256 = nullif(@restore_proof_sha256, ''),
     restore_verifier_workload_id = nullif(@restore_verifier_workload_id, ''),
+    restore_verifier_spiffe_id = nullif(@restore_verifier_spiffe_id, ''),
+    restore_verifier_generation = nullif(@restore_verifier_generation, 0),
     cleanup_authorization_id = nullif(@cleanup_authorization_id, '')::uuid,
     cleanup_authorization_expires_at =
         nullif(@cleanup_authorization_expires_at, 'epoch'::timestamptz),
+    cleanup_authorization_state = @cleanup_authorization_state,
+    cleanup_authorization_generation = @cleanup_authorization_generation,
+    cleanup_consumed_at = nullif(@cleanup_consumed_at, 'epoch'::timestamptz),
     updated_at = @updated_at
 WHERE id = @id
   AND version = @expected_version

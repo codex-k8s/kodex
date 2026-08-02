@@ -33,27 +33,43 @@ func ArtifactScannerOperations() map[string]string {
 
 func RuntimeControllerOperations() map[string]string {
 	return map[string]string{
-		"control.runtime-controller.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-resource.get":         controlplanev1.ControlPlaneService_GetResource_FullMethodName,
-		"control.runtime-revision.get":         controlplanev1.ControlPlaneService_GetRuntimeRevision_FullMethodName,
-		"control.runtime-execution.claim":      controlplanev1.ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
-		"control.runtime-execution.get":        controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
-		"control.runtime-execution.admit":      controlplanev1.ControlPlaneService_AdmitRuntimeExecution_FullMethodName,
-		"control.runtime-execution.heartbeat":  controlplanev1.ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
-		"control.runtime-execution.incident":   controlplanev1.ControlPlaneService_RecordRuntimeIncident_FullMethodName,
-		"control.runtime-execution.complete":   controlplanev1.ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
-		"control.runtime-execution.expire":     controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
-		"control.runtime-execution.archive":    controlplanev1.ControlPlaneService_RecordRuntimeArchive_FullMethodName,
+		"control.runtime-controller.readiness":      controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.runtime-resource.get":              controlplanev1.ControlPlaneService_GetResource_FullMethodName,
+		"control.runtime-revision.get":              controlplanev1.ControlPlaneService_GetRuntimeRevision_FullMethodName,
+		"control.runtime-execution.claim":           controlplanev1.ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
+		"control.runtime-execution.get":             controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
+		"control.runtime-execution.admit":           controlplanev1.ControlPlaneService_AdmitRuntimeExecution_FullMethodName,
+		"control.runtime-execution.heartbeat":       controlplanev1.ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
+		"control.runtime-execution.incident":        controlplanev1.ControlPlaneService_RecordRuntimeIncident_FullMethodName,
+		"control.runtime-execution.complete":        controlplanev1.ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
+		"control.runtime-execution.expire":          controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
+		"control.runtime-execution.archive":         controlplanev1.ControlPlaneService_RecordRuntimeArchive_FullMethodName,
+		"control.runtime-execution.cleanup.consume": controlplanev1.ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
 	}
 }
 
-// RuntimeOwnerOperations возвращает только owner/restore lifecycle full methods.
+// RuntimeOwnerOperations возвращает только owner lifecycle full methods.
 func RuntimeOwnerOperations() map[string]string {
 	return map[string]string{
-		"control.runtime-execution.cancel":            controlplanev1.ControlPlaneService_CancelRuntimeExecution_FullMethodName,
-		"control.runtime-execution.retry":             controlplanev1.ControlPlaneService_RetryRuntimeExecution_FullMethodName,
-		"control.runtime-execution.restore.verify":    controlplanev1.ControlPlaneService_VerifyRuntimeRestore_FullMethodName,
-		"control.runtime-execution.cleanup.authorize": controlplanev1.ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName,
+		"control.runtime-execution.cancel": controlplanev1.ControlPlaneService_CancelRuntimeExecution_FullMethodName,
+		"control.runtime-execution.retry":  controlplanev1.ControlPlaneService_RetryRuntimeExecution_FullMethodName,
+	}
+}
+
+// RuntimeRestoreVerifierOperations отделяет independent proof от owner/cleanup.
+func RuntimeRestoreVerifierOperations() map[string]string {
+	return map[string]string{
+		"control.runtime-restore-verifier.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.runtime-execution.restore.verify":   controlplanev1.ControlPlaneService_VerifyRuntimeRestore_FullMethodName,
+	}
+}
+
+// RuntimeCleanupAuthorizerOperations выдаёт/истекает destructive authorization.
+func RuntimeCleanupAuthorizerOperations() map[string]string {
+	return map[string]string{
+		"control.runtime-cleanup-authorizer.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.runtime-execution.cleanup.authorize":  controlplanev1.ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName,
+		"control.runtime-execution.cleanup.expire":     controlplanev1.ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName,
 	}
 }
 

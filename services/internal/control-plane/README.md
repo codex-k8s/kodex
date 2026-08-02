@@ -78,11 +78,16 @@ SPIFFE ID, полный метод, audience или полномочие зак�
 вызвать один из закрытых профилей операций (`AgentRunnerOperations`,
 `AutomationSchedulerOperations`,
 `ArtifactScannerOperations`, `RuntimeControllerOperations`,
-`RuntimeOwnerOperations`, `IntegrationGatewayOperations`,
+`RuntimeOwnerOperations`, `RuntimeRestoreVerifierOperations`,
+`RuntimeCleanupAuthorizerOperations`, `IntegrationGatewayOperations`,
 `OwnerGateDeliveryOperations`,
 `MemoryIndexerOperations`). Consumer
 Deployments не принадлежат Issue #187 и здесь не подменяются фиктивными
-развёртываемыми компонентами.
+развёртываемыми компонентами. В частности, внешние deployable/readback и
+issuer profiles `runtime-restore-verifier` и `runtime-cleanup-authorizer` не
+материализованы Issue #221: до их отдельной поставки destructive cleanup path
+остаётся fail-closed. `control-api-gateway` не входит ни в один из этих
+профилей и не может тем же trust path подтвердить restore и разрешить cleanup.
 
 Публикуются только два факта с утверждёнными потребителями:
 
@@ -103,8 +108,10 @@ Deployments не принадлежат Issue #187 и здесь не подме
 
 Runtime execution и integration continuation не добавляют speculative facts в
 AsyncAPI: до материализации будущего потребителя Issue #192 их результат
-доступен через специализированные защищённые read/rejoin RPC. Каждый read
-возвращает exact version/digest/fence и не объявляется активным event consumer.
+доступен через специализированные защищённые read/rejoin RPC. Первый
+`GetIntegrationContinuation` не принимает неизвестные caller-selected OCC
+tokens: exact row разрешается из signed authority нового server-owned Turn и
+возвращает current version/fence/input; ACK уже сверяет эти exact значения.
 
 ## Доменные инварианты
 
@@ -120,8 +127,8 @@ AsyncAPI: до материализации будущего потребите�
 | Сессия                   | привязку провайдера сервер выбирает из версионированного `AccountPool` роли по `least_used` или детерминированному `weighted`, exact freshness/limit/eligibility; ручной preferred binding — только проверенный override; общий create/update/transition запрещён; close/cancel атомарно закрывают queued/active turns, attempts и grants, а archive/cleanup доходят до terminal tombstone                                                                                                                                                                                                                                                                                       |
 | Ход                      | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Восстановление хода      | истечение срока или ручной повтор сначала закрывает прежние attempt/lease/gate/claim, затем создаёт свежие `RuntimeRevision`, effective input, attempt и grant и атомарно перепривязывает единый current execution tuple процесса и `ScheduledRun`; `SourceRef` остаётся bounded server-owned identity, номер attempt хранится только в tuple; устаревшие workload/generation/token отклоняются                                                                                                                                                                                                                                                                                  |
-| Runtime execution       | control-plane материализует server-owned tuple organization/project/process/session/thread/role/turn/attempt, immutable input digest, RuntimeRevision version/digest, закрытые ResourceClass/ClusterAccessProfile, exact workload/generation и monotonic fence; terminal/cancel/retry/expiry под одной транзакцией выбирают одного победителя и закрывают старые lease/attempt/claims; cleanup невозможна без exact archive checksum и независимого restore proof, повтор возвращает receipt без второй авторизации |
-| Integration continuation | suspension закрепляет invocation/approval/request digest и полный execution tuple; decision и execution имеют раздельные закрытые автоматы, а terminal rejected/expired/cancelled/success/error атомарно создаёт одну новую RuntimeRevision и один continuation Turn; будущий agent-runner читает и подтверждает exact version-pinned tuple через специализированный RPC |
+| Runtime execution       | control-plane материализует server-owned tuple organization/project/process/session/thread/role/turn/attempt, immutable input digest, RuntimeRevision version/digest, закрытые ResourceClass и `NONE/PROJECT_READ_ONLY/CLUSTER_ADMIN`, exact workload/generation и monotonic fence; terminal/cancel/expiry закрывают Turn/ProcessRun/occurrence/ScheduledRun вместе, retry принимает только active/`FAILED`/`EXPIRED` и создаёт свежие revision/input/attempt/grant; cleanup проходит монотонные `NONE/ACTIVE/EXPIRED/CONSUMED` и невозможна без exact archive checksum и отдельной verifier attestation |
+| Integration continuation | suspension атомарно терминализирует старую RuntimeExecution как `SUSPENDED`, закрывает lease/attempt/claims, переводит graph в `WAITING_EXTERNAL` и закрепляет invocation/approval/request digest, полный execution tuple, exact Integration и credential ID/version/digest; approved cancel конкурирует с begin, terminal decision/result создаёт свежие RuntimeRevision/input/Turn/grant, а pending continuation блокирует cleanup до rejoin |
 | Процесс                  | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate                                                                                                                                                                                                                                                                                        |
 | Расписание               | закрытые цели `AGENT` и `PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; lease recovery под row lock сначала закрывает прежние turn/attempt/process/gate/claim/grant и immutable run, затем допускает новую attempt; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO                                                                                                              |
 | Шлюз владельца           | запрос закрепляет корневого инициатора и единый server-owned current execution tuple process/session/turn/attempt/runtime revision/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` под PostgreSQL row lock автономно закрывает просроченный graph, а delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt и полное неизменяемое owner feedback в новом `TurnSpec`, тот же ProcessRun/root и создаёт свежие revision/input/turn; complete/gate/work-claim/schedule/retry читают одну current-связку, а решение не отображается в `FAILED` |
@@ -148,7 +155,7 @@ Vault. Устойчивая монотонная верхняя граница �
 поколение, состояние, organization/project/actor, PID соединения и ID
 транзакции. GUC и `SET SESSION AUTHORIZATION` не являются источником
 полномочий. Readiness проверяет схему
-`20260801000100`,
+`20260802000100`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
@@ -354,7 +361,8 @@ controller bootstrap и закрыто сверяет catalog membership. При
 CLI дополнительно подключается именно этим LOGIN и сохраняет readback; только
 следующее идемпотентное согласование может повысить его до `CURRENT`. Миграции
 `20260731000200`, `20260731000300`, `20260731000400` и
-`20260731000500`, `20260731000600` и `20260801000100` явно forward-only:
+`20260731000500`, `20260731000600`, `20260801000100` и
+`20260802000100` явно forward-only:
 downgrade отклоняется,
 потому что потерял бы RLS fences, верхнюю границу и readback principal,
 попытки, подтверждения и происхождение вектора. Откат приложения выполняется
@@ -380,7 +388,7 @@ downgrade отклоняется,
 5. сравнить все методы Proto с политикой полномочий, а группы ошибок —
    с `contracts/errors/v1/rpc-http-mapping.yaml`;
 6. для Issue #221 пройти negative/competition/replay сценарии из
-   `runtime-continuation-contract.md` и сверить все 24 новых full methods,
+   `runtime-continuation-contract.md` и сверить все перечисленные full methods,
    operation IDs, permissions и producer profiles;
 7. проверить, что `Closes #187` или `Closes #221` относится только к своему PR.
 

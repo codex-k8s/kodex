@@ -86,7 +86,8 @@ func (service *Service) prepareRetriedExecution(
 	processSpec, ok := process.Spec.(entity.ProcessRunSpec)
 	current, currentErr := currentExecution(processSpec)
 	if !ok || currentErr != nil || process.Kind != enum.KindProcessRun ||
-		process.State.Terminal() || current.TurnID != turn.ID ||
+		(process.State.Terminal() && process.State != enum.StateFailed &&
+			process.State != enum.StateExpired) || current.TurnID != turn.ID ||
 		current.Attempt != previousAttempt {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
@@ -123,6 +124,8 @@ func (service *Service) prepareRetriedExecution(
 		InputSHA256:            spec.EffectiveInputSHA256,
 	}
 	setCurrentExecution(&processSpec, tuple)
+	processSpec.Outcome = ""
+	processSpec.ResultArtifactID = ""
 	if processSpec.ContinuationTurnID != "" || wasWaitingOwner {
 		processSpec.ContinuationTurnID = retried.ID
 		processSpec.ContinuationTurnVersion = retried.Version
@@ -135,7 +138,8 @@ func (service *Service) prepareRetriedExecution(
 		}
 	}
 	var updatedProcess entity.Resource
-	if process.State == enum.StateWaitingOwner ||
+	if process.State == enum.StateFailed || process.State == enum.StateExpired ||
+		process.State == enum.StateWaitingOwner ||
 		process.State == enum.StateWaitingExternal || process.State == enum.StateBlocked {
 		updatedProcess, err = process.ReplaceAndTransition(processSpec, enum.StateRunning, now)
 	} else {
@@ -175,9 +179,11 @@ func (service *Service) prepareRetriedExecution(
 	occurrence.ExecutionRuntimeRevisionID = revision.ID
 	occurrence.ExecutionRuntimeRevisionVersion = revision.Version
 	occurrence.EffectiveInputSHA256 = spec.EffectiveInputSHA256
-	if occurrence.State == "WAITING_OWNER" {
+	if occurrence.State == "WAITING_OWNER" || occurrence.State == "FAILED" {
 		occurrence.State = "CONTINUATION"
 	}
+	occurrence.Outcome = ""
+	occurrence.ResultArtifactID = ""
 	occurrence.UpdatedAt = now
 	if err := tx.UpdateScheduleOccurrence(
 		ctx, occurrence, occurrence.Attempt, occurrence.TokenHash,

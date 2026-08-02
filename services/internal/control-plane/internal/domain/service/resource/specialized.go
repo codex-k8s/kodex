@@ -401,10 +401,7 @@ func (service *Service) ClaimScheduleOccurrence(
 					payload.LeaseToken == "" {
 					return errs.ErrInternal
 				}
-				result = ScheduleOccurrenceResult{
-					Occurrence: payload.Occurrence,
-					LeaseToken: payload.LeaseToken,
-				}
+				result = ScheduleOccurrenceResult(payload)
 				return nil
 			}
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
@@ -1027,14 +1024,14 @@ func (service *Service) CompleteScheduleOccurrence(
 			turnSpec, ok := turn.Spec.(entity.TurnSpec)
 			if !ok || turn.Kind != enum.KindTurn || !turn.State.Terminal() ||
 				(turn.State != enum.StateSucceeded && turn.State != enum.StateFailed &&
-					turn.State != enum.StateCancelled) ||
+					turn.State != enum.StateCancelled && turn.State != enum.StateExpired) ||
 				turnSpec.SessionID != occurrence.ExecutionSessionID ||
 				turnSpec.RuntimeRevisionID != occurrence.ExecutionRuntimeRevisionID ||
 				turnSpec.Attempt != run.CurrentTurnAttempt ||
 				turnSpec.Outcome == "" {
 				return errs.ErrStateConflict
 			}
-			terminalState := string(turn.State)
+			terminalState := scheduledTerminalState(turn.State)
 			outcome := turnSpec.Outcome
 			resultArtifactID := turnSpec.ResultArtifactID
 			if occurrence.ExecutionProcessRunID != "" {

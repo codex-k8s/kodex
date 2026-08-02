@@ -304,13 +304,75 @@ func (server *Server) AuthorizeRuntimeCleanup(
 			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
 			ExpectedFence: request.GetExpectedFence(),
 		},
-		ArchiveSHA256:      request.GetArchiveSha256(),
-		RestoreProofSHA256: request.GetRestoreProofSha256(),
+		ArchiveSHA256:             request.GetArchiveSha256(),
+		RestoreProofSHA256:        request.GetRestoreProofSha256(),
+		ExpectedCleanupGeneration: request.GetExpectedCleanupGeneration(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	return &controlplanev1.AuthorizeRuntimeCleanupResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) ConsumeRuntimeCleanupAuthorization(
+	ctx context.Context,
+	request *controlplanev1.ConsumeRuntimeCleanupAuthorizationRequest,
+) (*controlplanev1.ConsumeRuntimeCleanupAuthorizationResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.ConsumeRuntimeCleanupAuthorization(
+		ctx, resource.RuntimeCleanupAuthorizationInput{
+			RuntimeExecutionInput: resource.RuntimeExecutionInput{
+				Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+				ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+				ExpectedFence:           request.GetExpectedFence(),
+				ExpectedGrantGeneration: principal.AuthorityGrantGeneration,
+			},
+			CleanupAuthorizationID:         request.GetCleanupAuthorizationId(),
+			CleanupAuthorizationGeneration: request.GetCleanupAuthorizationGeneration(),
+			ArchiveSHA256:                  request.GetArchiveSha256(),
+			RestoreProofSHA256:             request.GetRestoreProofSha256(),
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.ConsumeRuntimeCleanupAuthorizationResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) ExpireRuntimeCleanupAuthorization(
+	ctx context.Context,
+	request *controlplanev1.ExpireRuntimeCleanupAuthorizationRequest,
+) (*controlplanev1.ExpireRuntimeCleanupAuthorizationResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.ExpireRuntimeCleanupAuthorization(
+		ctx, resource.RuntimeCleanupAuthorizationInput{
+			RuntimeExecutionInput: resource.RuntimeExecutionInput{
+				Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+				ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+				ExpectedFence: request.GetExpectedFence(),
+			},
+			CleanupAuthorizationID:         request.GetCleanupAuthorizationId(),
+			CleanupAuthorizationGeneration: request.GetCleanupAuthorizationGeneration(),
+		},
+	)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.ExpireRuntimeCleanupAuthorizationResponse{
 		Execution: toProtoRuntimeExecution(execution),
 	}, nil
 }
@@ -335,12 +397,17 @@ func toProtoRuntimeExecution(execution resource.RuntimeExecution) *controlplanev
 		TerminalReference: execution.TerminalReference,
 		TerminalSha256:    execution.TerminalSHA256,
 		ArchiveReference:  execution.ArchiveReference, ArchiveSha256: execution.ArchiveSHA256,
-		RestoreProofReference:         execution.RestoreProofReference,
-		RestoreProofSha256:            execution.RestoreProofSHA256,
-		RestoreVerifierWorkloadId:     execution.RestoreVerifierWorkload,
-		CleanupAuthorizationId:        execution.CleanupAuthorizationID,
-		CleanupAuthorizationExpiresAt: optionalTimestamp(execution.CleanupAuthorizationExpiresAt),
-		CreatedAt:                     timestamppb.New(execution.CreatedAt), UpdatedAt: timestamppb.New(execution.UpdatedAt),
+		RestoreProofReference:          execution.RestoreProofReference,
+		RestoreProofSha256:             execution.RestoreProofSHA256,
+		RestoreVerifierWorkloadId:      execution.RestoreVerifierWorkload,
+		RestoreVerifierSpiffeId:        execution.RestoreVerifierSPIFFEID,
+		RestoreVerifierGeneration:      execution.RestoreVerifierGeneration,
+		CleanupAuthorizationId:         execution.CleanupAuthorizationID,
+		CleanupAuthorizationExpiresAt:  optionalTimestamp(execution.CleanupAuthorizationExpiresAt),
+		CleanupAuthorizationState:      toProtoRuntimeCleanupAuthorizationState(execution.CleanupAuthorizationState),
+		CleanupAuthorizationGeneration: execution.CleanupAuthorizationGeneration,
+		CleanupConsumedAt:              optionalTimestamp(execution.CleanupConsumedAt),
+		CreatedAt:                      timestamppb.New(execution.CreatedAt), UpdatedAt: timestamppb.New(execution.UpdatedAt),
 	}
 }
 
@@ -369,9 +436,9 @@ func toProtoRuntimeResourceClass(value string) controlplanev1.RuntimeResourceCla
 
 func toProtoClusterAccessProfile(value string) controlplanev1.ClusterAccessProfile {
 	return map[string]controlplanev1.ClusterAccessProfile{
-		"NONE":                      controlplanev1.ClusterAccessProfile_CLUSTER_ACCESS_PROFILE_NONE,
-		"PROJECT_READ_ONLY":         controlplanev1.ClusterAccessProfile_CLUSTER_ACCESS_PROFILE_PROJECT_READ_ONLY,
-		"PROJECT_WORKLOAD_OPERATOR": controlplanev1.ClusterAccessProfile_CLUSTER_ACCESS_PROFILE_PROJECT_WORKLOAD_OPERATOR,
+		"NONE":              controlplanev1.ClusterAccessProfile_CLUSTER_ACCESS_PROFILE_NONE,
+		"PROJECT_READ_ONLY": controlplanev1.ClusterAccessProfile_CLUSTER_ACCESS_PROFILE_PROJECT_READ_ONLY,
+		"CLUSTER_ADMIN":     controlplanev1.ClusterAccessProfile_CLUSTER_ACCESS_PROFILE_CLUSTER_ADMIN,
 	}[value]
 }
 
@@ -385,6 +452,7 @@ func toProtoRuntimeExecutionState(value string) controlplanev1.RuntimeExecutionS
 		"CANCELLED": controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_CANCELLED,
 		"EXPIRED":   controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_EXPIRED,
 		"RETRIED":   controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_RETRIED,
+		"SUSPENDED": controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_SUSPENDED,
 	}[value]
 }
 
@@ -392,6 +460,20 @@ func toProtoRuntimeTerminalOutcome(value string) controlplanev1.RuntimeTerminalO
 	return map[string]controlplanev1.RuntimeTerminalOutcome{
 		"SUCCEEDED": controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_SUCCEEDED,
 		"FAILED":    controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_FAILED,
+		"SUSPENDED": controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_SUSPENDED,
+		"CANCELLED": controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_CANCELLED,
+		"EXPIRED":   controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_EXPIRED,
+	}[value]
+}
+
+func toProtoRuntimeCleanupAuthorizationState(
+	value string,
+) controlplanev1.RuntimeCleanupAuthorizationState {
+	return map[string]controlplanev1.RuntimeCleanupAuthorizationState{
+		"NONE":     controlplanev1.RuntimeCleanupAuthorizationState_RUNTIME_CLEANUP_AUTHORIZATION_STATE_NONE,
+		"ACTIVE":   controlplanev1.RuntimeCleanupAuthorizationState_RUNTIME_CLEANUP_AUTHORIZATION_STATE_ACTIVE,
+		"CONSUMED": controlplanev1.RuntimeCleanupAuthorizationState_RUNTIME_CLEANUP_AUTHORIZATION_STATE_CONSUMED,
+		"EXPIRED":  controlplanev1.RuntimeCleanupAuthorizationState_RUNTIME_CLEANUP_AUTHORIZATION_STATE_EXPIRED,
 	}[value]
 }
 
@@ -428,12 +510,32 @@ func (server *Server) SuspendForIntegrationApproval(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
 	}
+	selected := request.GetSelectedBinding()
+	if selected == nil || selected.GetIntegration() == nil ||
+		selected.GetIntegration().GetResourceId() != request.GetIntegrationId() {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	credentialBindings := make(
+		[]resource.PinnedIntegrationResource,
+		0,
+		len(selected.GetCredentialBindings()),
+	)
+	for _, binding := range selected.GetCredentialBindings() {
+		credentialBindings = append(
+			credentialBindings,
+			fromProtoPinnedIntegrationResource(binding),
+		)
+	}
 	continuation, err := server.service.SuspendForIntegrationApproval(
 		ctx, resource.SuspendIntegrationInput{
 			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
 			InvocationID: request.GetInvocationId(), ApprovalID: request.GetApprovalId(),
-			IntegrationID: request.GetIntegrationId(), RequestSHA256: request.GetRequestSha256(),
-			ApprovalExpiresAt: expiresAt,
+			IntegrationID:      request.GetIntegrationId(),
+			IntegrationVersion: selected.GetIntegration().GetVersion(),
+			IntegrationSHA256:  selected.GetIntegration().GetProjectionSha256(),
+			CredentialBindings: credentialBindings,
+			RequestSHA256:      request.GetRequestSha256(),
+			ApprovalExpiresAt:  expiresAt,
 		},
 	)
 	if err != nil {
@@ -631,7 +733,7 @@ func (server *Server) FailIntegrationExecution(
 
 func (server *Server) GetIntegrationContinuation(
 	ctx context.Context,
-	request *controlplanev1.GetIntegrationContinuationRequest,
+	_ *controlplanev1.GetIntegrationContinuationRequest,
 ) (*controlplanev1.GetIntegrationContinuationResponse, error) {
 	principal, err := authorization.Principal(
 		ctx, controlplanev1.ControlPlaneService_GetIntegrationContinuation_FullMethodName,
@@ -641,10 +743,7 @@ func (server *Server) GetIntegrationContinuation(
 	}
 	continuation, err := server.service.GetIntegrationContinuation(
 		ctx, resource.GetIntegrationContinuationInput{
-			Principal: principal, ExpectedVersion: request.GetExpectedVersion(),
-			ExpectedRuntimeRevisionVersion: request.GetExpectedRuntimeRevisionVersion(),
-			ExpectedInputSHA256:            request.GetExpectedInputSha256(),
-			ExpectedFence:                  request.GetExpectedFence(),
+			Principal: principal,
 		},
 	)
 	if err != nil {
@@ -683,6 +782,17 @@ func (server *Server) AcknowledgeIntegrationContinuation(
 func toProtoIntegrationExecutionBinding(
 	binding resource.IntegrationExecutionBinding,
 ) *controlplanev1.IntegrationExecutionBinding {
+	credentialBindings := make(
+		[]*controlplanev1.PinnedIntegrationResource,
+		0,
+		len(binding.CredentialBindings),
+	)
+	for _, credential := range binding.CredentialBindings {
+		credentialBindings = append(
+			credentialBindings,
+			toProtoPinnedIntegrationResource(credential),
+		)
+	}
 	return &controlplanev1.IntegrationExecutionBinding{
 		OrganizationId: binding.OrganizationID, ProjectId: binding.ProjectID,
 		ProcessId: binding.ProcessID, SessionId: binding.SessionID,
@@ -693,6 +803,31 @@ func toProtoIntegrationExecutionBinding(
 		RuntimeRevisionSha256:  binding.RuntimeRevisionSHA256,
 		ImmutableInputSha256:   binding.ImmutableInputSHA256,
 		GrantGeneration:        binding.GrantGeneration, Fence: binding.Fence,
+		IntegrationBinding: &controlplanev1.IntegrationApprovalBinding{
+			Integration:        toProtoPinnedIntegrationResource(binding.Integration),
+			CredentialBindings: credentialBindings,
+		},
+	}
+}
+
+func fromProtoPinnedIntegrationResource(
+	input *controlplanev1.PinnedIntegrationResource,
+) resource.PinnedIntegrationResource {
+	if input == nil {
+		return resource.PinnedIntegrationResource{}
+	}
+	return resource.PinnedIntegrationResource{
+		ResourceID: input.GetResourceId(), Version: input.GetVersion(),
+		ProjectionSHA256: input.GetProjectionSha256(),
+	}
+}
+
+func toProtoPinnedIntegrationResource(
+	item resource.PinnedIntegrationResource,
+) *controlplanev1.PinnedIntegrationResource {
+	return &controlplanev1.PinnedIntegrationResource{
+		ResourceId: item.ResourceID, Version: item.Version,
+		ProjectionSha256: item.ProjectionSHA256,
 	}
 }
 
@@ -758,6 +893,12 @@ func toProtoIntegrationContinuation(
 		RuntimeRevisionSHA256:  continuation.RuntimeRevisionSHA256,
 		ImmutableInputSHA256:   continuation.ImmutableInputSHA256,
 		GrantGeneration:        continuation.GrantGeneration, Fence: continuation.Fence,
+		Integration: resource.PinnedIntegrationResource{
+			ResourceID:       continuation.IntegrationID,
+			Version:          continuation.IntegrationVersion,
+			ProjectionSHA256: continuation.IntegrationSHA256,
+		},
+		CredentialBindings: continuation.CredentialBindings,
 	}
 	return &controlplanev1.IntegrationContinuation{
 		ContinuationId: continuation.ID,

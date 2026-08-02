@@ -37,9 +37,7 @@
           "control.outbox.read",
           "control.outbox.repair",
           "control.runtime-execution.cancel",
-          "control.runtime-execution.retry",
-          "control.runtime-execution.restore.verify",
-          "control.runtime-execution.cleanup.authorize"
+          "control.runtime-execution.retry"
         ],
         "application_credential": "OIDC_BEARER",
         "application_credential_audience": "mattercodex-control-api",
@@ -273,7 +271,8 @@
           "control.runtime-execution.incident",
           "control.runtime-execution.complete",
           "control.runtime-execution.expire",
-          "control.runtime-execution.archive"
+          "control.runtime-execution.archive",
+          "control.runtime-execution.cleanup.consume"
         ],
         "application_credential": "RUNTIME_REVISION_GRANT",
         "application_credential_audience": "urn:mattercodex:runtime-revision",
@@ -314,6 +313,107 @@
           "runtime_revision",
           "input_sha256",
           "generation"
+        ],
+        "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
+      },
+      {
+        "allowed_operation_ids": [
+          "control.runtime-restore-verifier.readiness",
+          "control.runtime-execution.restore.verify"
+        ],
+        "application_credential": "RUNTIME_RESTORE_VERIFIER_GRANT",
+        "application_credential_audience": "urn:mattercodex:runtime-restore-verification",
+        "application_credential_issuer": "https://control-plane.mattercodex-system.svc.cluster.local/authority/runtime-restore-verifier",
+        "application_credential_metadata": "authorization",
+        "application_credential_trust_bundle_id": "runtime-restore-verifier-grants-g1",
+        "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:runtime-restore-verifier",
+        "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "authority_proof_max_age_seconds": 15,
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
+        "caller_workload_id": "runtime-restore-verifier",
+        "deadline_milliseconds": 2000,
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "max_attempts": 2,
+        "owner_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "owner_workload_id": "control-plane",
+        "producer_id": "control-plane.runtime-restore-verifier",
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "process",
+          "session",
+          "thread",
+          "role",
+          "turn",
+          "attempt",
+          "runtime_revision",
+          "input_sha256",
+          "generation",
+          "archive_checksum"
+        ],
+        "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
+      },
+      {
+        "allowed_operation_ids": [
+          "control.runtime-cleanup-authorizer.readiness",
+          "control.runtime-execution.cleanup.authorize",
+          "control.runtime-execution.cleanup.expire"
+        ],
+        "application_credential": "RUNTIME_CLEANUP_AUTHORIZER_GRANT",
+        "application_credential_audience": "urn:mattercodex:runtime-cleanup-authorization",
+        "application_credential_issuer": "https://control-plane.mattercodex-system.svc.cluster.local/authority/runtime-cleanup-authorizer",
+        "application_credential_metadata": "authorization",
+        "application_credential_trust_bundle_id": "runtime-cleanup-authorizer-grants-g1",
+        "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:runtime-cleanup-authorizer",
+        "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "authority_proof_max_age_seconds": 15,
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+        "caller_workload_id": "runtime-cleanup-authorizer",
+        "deadline_milliseconds": 2000,
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "max_attempts": 2,
+        "owner_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "owner_workload_id": "control-plane",
+        "producer_id": "control-plane.runtime-cleanup-authorizer",
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "process",
+          "session",
+          "thread",
+          "role",
+          "turn",
+          "attempt",
+          "runtime_revision",
+          "input_sha256",
+          "generation",
+          "archive_checksum",
+          "restore_proof",
+          "cleanup_generation"
         ],
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
@@ -1886,6 +1986,35 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/ConsumeRuntimeCleanupAuthorization",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.cleanup.consume",
+        "permission": "controlplane.runtime_execution.cleanup.consume",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
         "authority_proof_producer_id": "control-plane.oidc",
         "authority_sources": [
           "OIDC_SESSION",
@@ -1944,13 +2073,42 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_proof_producer_id": "control-plane.runtime-restore-verifier",
         "authority_sources": [
-          "OIDC_SESSION",
+          "PROCESS_RUN",
           "DOMAIN_STATE"
         ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
+        "caller_workload_id": "runtime-restore-verifier",
+        "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-restore-verifier.readiness",
+        "permission": "controlplane.readiness.check",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-restore-verifier",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
+        "caller_workload_id": "runtime-restore-verifier",
         "full_method": "/controlplane.v1.ControlPlaneService/VerifyRuntimeRestore",
         "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "local_caller": {
@@ -1973,13 +2131,42 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_proof_producer_id": "control-plane.runtime-cleanup-authorizer",
         "authority_sources": [
-          "OIDC_SESSION",
+          "PROCESS_RUN",
           "DOMAIN_STATE"
         ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+        "caller_workload_id": "runtime-cleanup-authorizer",
+        "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-cleanup-authorizer.readiness",
+        "permission": "controlplane.readiness.check",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-cleanup-authorizer",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+        "caller_workload_id": "runtime-cleanup-authorizer",
         "full_method": "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeCleanup",
         "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "local_caller": {
@@ -1994,6 +2181,35 @@
         },
         "operation_id": "control.runtime-execution.cleanup.authorize",
         "permission": "controlplane.runtime_execution.cleanup.authorize",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-cleanup-authorizer",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+        "caller_workload_id": "runtime-cleanup-authorizer",
+        "full_method": "/controlplane.v1.ControlPlaneService/ExpireRuntimeCleanupAuthorization",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.cleanup.expire",
+        "permission": "controlplane.runtime_execution.cleanup.expire",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -2352,6 +2568,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 7,
+  "policy_revision": 8,
   "v": 1
 }

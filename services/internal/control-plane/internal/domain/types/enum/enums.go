@@ -87,7 +87,8 @@ func InitialState(kind Kind) State {
 func TransitionAllowed(kind Kind, from, to State) bool {
 	if !kind.Valid() || from == to ||
 		(from.Terminal() &&
-			!(kind == KindTurn && from == StateFailed && to == StateQueued) &&
+			!(kind == KindTurn && (from == StateFailed || from == StateExpired) && to == StateQueued) &&
+			!(kind == KindProcessRun && (from == StateFailed || from == StateExpired) && to == StateRunning) &&
 			!(kind == KindSession && from == StateCancelled &&
 				to == StateDeletionPending)) {
 		return false
@@ -108,7 +109,7 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 		case StateWaitingExternal, StateWaitingOwner, StateBlocked:
 			return to == StateQueued || to == StateSucceeded ||
 				to == StateCancelled || to == StateFailed
-		case StateFailed:
+		case StateFailed, StateExpired:
 			return to == StateQueued
 		}
 	case KindSession:
@@ -144,10 +145,12 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 		case StateRunning:
 			return to == StateWaitingOwner || to == StateWaitingExternal ||
 				to == StateSucceeded || to == StateFailed ||
-				to == StateCancelled || to == StateBlocked
+				to == StateCancelled || to == StateExpired || to == StateBlocked
 		case StateWaitingOwner, StateWaitingExternal, StateBlocked:
 			return to == StateRunning || to == StateSucceeded ||
-				to == StateFailed || to == StateCancelled
+				to == StateFailed || to == StateCancelled || to == StateExpired
+		case StateFailed, StateExpired:
+			return to == StateRunning
 		}
 	case KindWorkClaim:
 		return from == StateActive &&

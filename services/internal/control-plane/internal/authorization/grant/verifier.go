@@ -167,7 +167,9 @@ func (verifier *Verifier) Authenticate(
 	}
 	if (verifier.config.WorkloadID == "agent-runner" ||
 		verifier.config.WorkloadID == "runtime-controller" ||
-		verifier.config.WorkloadID == "integration-gateway") &&
+		verifier.config.WorkloadID == "integration-gateway" ||
+		verifier.config.WorkloadID == "runtime-restore-verifier" ||
+		verifier.config.WorkloadID == "runtime-cleanup-authorizer") &&
 		(value.ValidateID(parsed.SessionID) != nil ||
 			value.ValidateID(parsed.TurnID) != nil ||
 			parsed.Attempt == 0 || parsed.Attempt > 100 ||

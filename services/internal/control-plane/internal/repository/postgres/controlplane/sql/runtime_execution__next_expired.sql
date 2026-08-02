@@ -10,8 +10,12 @@ SELECT id, organization_id, project_id, process_id, session_id, thread_id,
        coalesce(archive_sha256, ''), coalesce(restore_proof_reference, ''),
        coalesce(restore_proof_sha256, ''),
        coalesce(restore_verifier_workload_id, ''),
+       coalesce(restore_verifier_spiffe_id, ''),
+       coalesce(restore_verifier_generation, 0),
        coalesce(cleanup_authorization_id::text, ''),
        coalesce(cleanup_authorization_expires_at, 'epoch'::timestamptz),
+       cleanup_authorization_state, cleanup_authorization_generation,
+       coalesce(cleanup_consumed_at, 'epoch'::timestamptz),
        created_at, updated_at
 FROM control_plane.runtime_executions
 WHERE organization_id = @organization_id

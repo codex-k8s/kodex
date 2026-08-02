@@ -147,7 +147,7 @@ func Run(
 		maximumSecretFileBytes,
 	)
 	if err != nil || strings.TrimSpace(string(redisPassword)) == "" {
-		return errors.New("Redis credential is unavailable")
+		return errors.New("redis credential is unavailable")
 	}
 	redisCache, err := redisstore.New(redisstore.Config{
 		Address:       config.RedisAddress,
@@ -200,8 +200,10 @@ func Run(
 		RuntimeControllerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
 		IntegrationGatewayWorkload: "integration-gateway",
 		IntegrationGatewaySPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
-		RestoreVerifierWorkload:    "control-api-gateway",
-		RestoreVerifierSPIFFEID:    "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+		RestoreVerifierWorkload:    "runtime-restore-verifier",
+		RestoreVerifierSPIFFEID:    "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
+		CleanupAuthorizerWorkload:  "runtime-cleanup-authorizer",
+		CleanupAuthorizerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
 		Observer:                   businessMetrics,
 	})
 	if err != nil {

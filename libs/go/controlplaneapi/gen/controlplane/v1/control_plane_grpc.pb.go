@@ -74,6 +74,8 @@ const (
 	ControlPlaneService_RecordRuntimeArchive_FullMethodName               = "/controlplane.v1.ControlPlaneService/RecordRuntimeArchive"
 	ControlPlaneService_VerifyRuntimeRestore_FullMethodName               = "/controlplane.v1.ControlPlaneService/VerifyRuntimeRestore"
 	ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName            = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeCleanup"
+	ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName = "/controlplane.v1.ControlPlaneService/ConsumeRuntimeCleanupAuthorization"
+	ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName  = "/controlplane.v1.ControlPlaneService/ExpireRuntimeCleanupAuthorization"
 	ControlPlaneService_ResolveIntegrationSession_FullMethodName          = "/controlplane.v1.ControlPlaneService/ResolveIntegrationSession"
 	ControlPlaneService_SuspendForIntegrationApproval_FullMethodName      = "/controlplane.v1.ControlPlaneService/SuspendForIntegrationApproval"
 	ControlPlaneService_ApproveIntegrationInvocation_FullMethodName       = "/controlplane.v1.ControlPlaneService/ApproveIntegrationInvocation"
@@ -217,6 +219,10 @@ type ControlPlaneServiceClient interface {
 	VerifyRuntimeRestore(ctx context.Context, in *VerifyRuntimeRestoreRequest, opts ...grpc.CallOption) (*VerifyRuntimeRestoreResponse, error)
 	// AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
 	AuthorizeRuntimeCleanup(ctx context.Context, in *AuthorizeRuntimeCleanupRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeCleanupResponse, error)
+	// ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
+	ConsumeRuntimeCleanupAuthorization(ctx context.Context, in *ConsumeRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeCleanupAuthorizationResponse, error)
+	// ExpireRuntimeCleanupAuthorization закрывает просроченную authorization по PostgreSQL clock.
+	ExpireRuntimeCleanupAuthorization(ctx context.Context, in *ExpireRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ExpireRuntimeCleanupAuthorizationResponse, error)
 	// ResolveIntegrationSession возвращает server-owned execution tuple без IDs запроса.
 	ResolveIntegrationSession(ctx context.Context, in *ResolveIntegrationSessionRequest, opts ...grpc.CallOption) (*ResolveIntegrationSessionResponse, error)
 	// SuspendForIntegrationApproval атомарно переводит точный graph в WAITING_EXTERNAL.
@@ -802,6 +808,26 @@ func (c *controlPlaneServiceClient) AuthorizeRuntimeCleanup(ctx context.Context,
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ConsumeRuntimeCleanupAuthorization(ctx context.Context, in *ConsumeRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeCleanupAuthorizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConsumeRuntimeCleanupAuthorizationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ExpireRuntimeCleanupAuthorization(ctx context.Context, in *ExpireRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ExpireRuntimeCleanupAuthorizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExpireRuntimeCleanupAuthorizationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ResolveIntegrationSession(ctx context.Context, in *ResolveIntegrationSessionRequest, opts ...grpc.CallOption) (*ResolveIntegrationSessionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResolveIntegrationSessionResponse)
@@ -1051,6 +1077,10 @@ type ControlPlaneServiceServer interface {
 	VerifyRuntimeRestore(context.Context, *VerifyRuntimeRestoreRequest) (*VerifyRuntimeRestoreResponse, error)
 	// AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
 	AuthorizeRuntimeCleanup(context.Context, *AuthorizeRuntimeCleanupRequest) (*AuthorizeRuntimeCleanupResponse, error)
+	// ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
+	ConsumeRuntimeCleanupAuthorization(context.Context, *ConsumeRuntimeCleanupAuthorizationRequest) (*ConsumeRuntimeCleanupAuthorizationResponse, error)
+	// ExpireRuntimeCleanupAuthorization закрывает просроченную authorization по PostgreSQL clock.
+	ExpireRuntimeCleanupAuthorization(context.Context, *ExpireRuntimeCleanupAuthorizationRequest) (*ExpireRuntimeCleanupAuthorizationResponse, error)
 	// ResolveIntegrationSession возвращает server-owned execution tuple без IDs запроса.
 	ResolveIntegrationSession(context.Context, *ResolveIntegrationSessionRequest) (*ResolveIntegrationSessionResponse, error)
 	// SuspendForIntegrationApproval атомарно переводит точный graph в WAITING_EXTERNAL.
@@ -1250,6 +1280,12 @@ func (UnimplementedControlPlaneServiceServer) VerifyRuntimeRestore(context.Conte
 }
 func (UnimplementedControlPlaneServiceServer) AuthorizeRuntimeCleanup(context.Context, *AuthorizeRuntimeCleanupRequest) (*AuthorizeRuntimeCleanupResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AuthorizeRuntimeCleanup not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ConsumeRuntimeCleanupAuthorization(context.Context, *ConsumeRuntimeCleanupAuthorizationRequest) (*ConsumeRuntimeCleanupAuthorizationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConsumeRuntimeCleanupAuthorization not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ExpireRuntimeCleanupAuthorization(context.Context, *ExpireRuntimeCleanupAuthorizationRequest) (*ExpireRuntimeCleanupAuthorizationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExpireRuntimeCleanupAuthorization not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ResolveIntegrationSession(context.Context, *ResolveIntegrationSessionRequest) (*ResolveIntegrationSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveIntegrationSession not implemented")
@@ -2298,6 +2334,42 @@ func _ControlPlaneService_AuthorizeRuntimeCleanup_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ConsumeRuntimeCleanupAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConsumeRuntimeCleanupAuthorizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ConsumeRuntimeCleanupAuthorization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ConsumeRuntimeCleanupAuthorization(ctx, req.(*ConsumeRuntimeCleanupAuthorizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ExpireRuntimeCleanupAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExpireRuntimeCleanupAuthorizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ExpireRuntimeCleanupAuthorization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ExpireRuntimeCleanupAuthorization(ctx, req.(*ExpireRuntimeCleanupAuthorizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ResolveIntegrationSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResolveIntegrationSessionRequest)
 	if err := dec(in); err != nil {
@@ -2740,6 +2812,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AuthorizeRuntimeCleanup",
 			Handler:    _ControlPlaneService_AuthorizeRuntimeCleanup_Handler,
+		},
+		{
+			MethodName: "ConsumeRuntimeCleanupAuthorization",
+			Handler:    _ControlPlaneService_ConsumeRuntimeCleanupAuthorization_Handler,
+		},
+		{
+			MethodName: "ExpireRuntimeCleanupAuthorization",
+			Handler:    _ControlPlaneService_ExpireRuntimeCleanupAuthorization_Handler,
 		},
 		{
 			MethodName: "ResolveIntegrationSession",

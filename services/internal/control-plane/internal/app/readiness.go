@@ -27,11 +27,11 @@ func (checker *readinessChecker) Check(
 ) (transportgrpc.ReadinessState, error) {
 	state := transportgrpc.ReadinessState{}
 	if err := checker.repository.Check(ctx); err != nil {
-		return state, errors.New("PostgreSQL runtime is not ready")
+		return state, errors.New("postgresql runtime is not ready")
 	}
 	state.PostgresReady = true
 	if err := checker.cache.Check(ctx); err != nil {
-		return state, errors.New("Redis cache is not ready")
+		return state, errors.New("redis cache is not ready")
 	}
 	state.RedisReady = true
 	if err := checker.relay.Check(ctx); err != nil {

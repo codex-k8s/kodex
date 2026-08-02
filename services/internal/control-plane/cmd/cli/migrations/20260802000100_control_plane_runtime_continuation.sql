@@ -21,7 +21,7 @@ CREATE TABLE control_plane.runtime_executions (
     immutable_input_sha256 text NOT NULL CHECK (immutable_input_sha256 ~ '^[a-f0-9]{64}$'),
     resource_class text NOT NULL CHECK (resource_class IN ('STANDARD', 'HIGH_MEMORY', 'ACCELERATED')),
     cluster_access_profile text NOT NULL CHECK (cluster_access_profile IN (
-        'NONE', 'PROJECT_READ_ONLY', 'PROJECT_WORKLOAD_OPERATOR'
+        'NONE', 'PROJECT_READ_ONLY', 'CLUSTER_ADMIN'
     )),
     workload_id text NOT NULL CHECK (workload_id ~ '^[a-z0-9][a-z0-9._-]{0,127}$'),
     workload_spiffe_id text NOT NULL CHECK (workload_spiffe_id LIKE 'spiffe://%'),
@@ -30,12 +30,14 @@ CREATE TABLE control_plane.runtime_executions (
     fence bigint NOT NULL CHECK (fence BETWEEN 1 AND 9007199254740991),
     state text NOT NULL CHECK (state IN (
         'PENDING', 'ADMITTED', 'RUNNING', 'SUCCEEDED', 'FAILED',
-        'CANCELLED', 'EXPIRED', 'RETRIED'
+        'CANCELLED', 'EXPIRED', 'RETRIED', 'SUSPENDED'
     )),
     lease_id uuid,
     lease_token_sha256 text CHECK (lease_token_sha256 IS NULL OR lease_token_sha256 ~ '^[a-f0-9]{64}$'),
     lease_expires_at timestamptz,
-    terminal_outcome text CHECK (terminal_outcome IS NULL OR terminal_outcome IN ('SUCCEEDED', 'FAILED')),
+    terminal_outcome text CHECK (terminal_outcome IS NULL OR terminal_outcome IN (
+        'SUCCEEDED', 'FAILED', 'SUSPENDED', 'CANCELLED', 'EXPIRED'
+    )),
     terminal_reference text,
     terminal_sha256 text CHECK (terminal_sha256 IS NULL OR terminal_sha256 ~ '^[a-f0-9]{64}$'),
     archive_reference text,
@@ -43,8 +45,17 @@ CREATE TABLE control_plane.runtime_executions (
     restore_proof_reference text,
     restore_proof_sha256 text CHECK (restore_proof_sha256 IS NULL OR restore_proof_sha256 ~ '^[a-f0-9]{64}$'),
     restore_verifier_workload_id text,
+    restore_verifier_spiffe_id text,
+    restore_verifier_generation bigint CHECK (restore_verifier_generation IS NULL OR restore_verifier_generation > 0),
     cleanup_authorization_id uuid,
     cleanup_authorization_expires_at timestamptz,
+    cleanup_authorization_state text NOT NULL CHECK (cleanup_authorization_state IN (
+        'NONE', 'ACTIVE', 'CONSUMED', 'EXPIRED'
+    )),
+    cleanup_authorization_generation bigint NOT NULL CHECK (
+        cleanup_authorization_generation BETWEEN 0 AND 9007199254740991
+    ),
+    cleanup_consumed_at timestamptz,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL CHECK (updated_at >= created_at),
     UNIQUE (organization_id, project_id, id),
@@ -64,22 +75,52 @@ CREATE TABLE control_plane.runtime_executions (
     CHECK (
         (state = 'SUCCEEDED' AND terminal_outcome = 'SUCCEEDED')
         OR (state = 'FAILED' AND terminal_outcome = 'FAILED')
-        OR (state NOT IN ('SUCCEEDED', 'FAILED') AND terminal_outcome IS NULL)
+        OR (state = 'SUSPENDED' AND terminal_outcome = 'SUSPENDED')
+        OR (state = 'CANCELLED' AND terminal_outcome = 'CANCELLED')
+        OR (state = 'EXPIRED' AND terminal_outcome = 'EXPIRED')
+        OR (state = 'RETRIED' AND terminal_outcome IN ('FAILED', 'EXPIRED'))
+        OR (state NOT IN ('SUCCEEDED', 'FAILED', 'SUSPENDED', 'CANCELLED', 'EXPIRED', 'RETRIED')
+            AND terminal_outcome IS NULL)
     ),
     CHECK (
         (archive_reference IS NULL AND archive_sha256 IS NULL)
         OR (archive_reference IS NOT NULL AND archive_sha256 IS NOT NULL)
     ),
     CHECK (
-        (restore_proof_reference IS NULL AND restore_proof_sha256 IS NULL AND restore_verifier_workload_id IS NULL)
-        OR (restore_proof_reference IS NOT NULL AND restore_proof_sha256 IS NOT NULL AND restore_verifier_workload_id IS NOT NULL)
+        (restore_proof_reference IS NULL AND restore_proof_sha256 IS NULL
+            AND restore_verifier_workload_id IS NULL AND restore_verifier_spiffe_id IS NULL
+            AND restore_verifier_generation IS NULL)
+        OR (restore_proof_reference IS NOT NULL AND restore_proof_sha256 IS NOT NULL
+            AND restore_verifier_workload_id IS NOT NULL
+            AND restore_verifier_spiffe_id LIKE 'spiffe://%'
+            AND restore_verifier_generation = grant_generation)
     ),
-    CHECK (archive_sha256 IS NULL OR state IN ('SUCCEEDED', 'FAILED', 'CANCELLED', 'EXPIRED', 'RETRIED')),
+    CHECK (archive_sha256 IS NULL OR state IN ('SUCCEEDED', 'FAILED', 'CANCELLED', 'EXPIRED', 'RETRIED', 'SUSPENDED')),
     CHECK (restore_proof_sha256 IS NULL OR archive_sha256 IS NOT NULL),
     CHECK (
-        (cleanup_authorization_id IS NULL AND cleanup_authorization_expires_at IS NULL)
-        OR (cleanup_authorization_id IS NOT NULL
+        (cleanup_authorization_state = 'NONE'
+            AND cleanup_authorization_generation = 0
+            AND cleanup_authorization_id IS NULL
+            AND cleanup_authorization_expires_at IS NULL
+            AND cleanup_consumed_at IS NULL)
+        OR (cleanup_authorization_state = 'ACTIVE'
+            AND cleanup_authorization_generation > 0
+            AND cleanup_authorization_id IS NOT NULL
             AND cleanup_authorization_expires_at > updated_at
+            AND cleanup_consumed_at IS NULL
+            AND archive_sha256 IS NOT NULL AND restore_proof_sha256 IS NOT NULL)
+        OR (cleanup_authorization_state = 'EXPIRED'
+            AND cleanup_authorization_generation > 0
+            AND cleanup_authorization_id IS NOT NULL
+            AND cleanup_authorization_expires_at <= updated_at
+            AND cleanup_consumed_at IS NULL
+            AND archive_sha256 IS NOT NULL AND restore_proof_sha256 IS NOT NULL)
+        OR (cleanup_authorization_state = 'CONSUMED'
+            AND cleanup_authorization_generation > 0
+            AND cleanup_authorization_id IS NOT NULL
+            AND cleanup_authorization_expires_at IS NOT NULL
+            AND cleanup_consumed_at IS NOT NULL
+            AND cleanup_consumed_at <= updated_at
             AND archive_sha256 IS NOT NULL AND restore_proof_sha256 IS NOT NULL)
     )
 );
@@ -124,6 +165,12 @@ CREATE TABLE control_plane.integration_continuations (
     invocation_id uuid NOT NULL,
     approval_id uuid NOT NULL,
     integration_id uuid NOT NULL REFERENCES control_plane.resources (id),
+    integration_version bigint NOT NULL CHECK (integration_version > 0),
+    integration_sha256 text NOT NULL CHECK (integration_sha256 ~ '^[a-f0-9]{64}$'),
+    credential_bindings jsonb NOT NULL CHECK (
+        jsonb_typeof(credential_bindings) = 'array'
+        AND jsonb_array_length(credential_bindings) BETWEEN 0 AND 16
+    ),
     request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[a-f0-9]{64}$'),
     approval_state text NOT NULL CHECK (approval_state IN ('PENDING', 'APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED')),
     execution_state text NOT NULL CHECK (execution_state IN ('NOT_STARTED', 'EXECUTING', 'SUCCEEDED', 'FAILED', 'NOT_APPLICABLE')),

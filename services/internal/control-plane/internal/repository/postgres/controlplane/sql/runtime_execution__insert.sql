@@ -8,7 +8,10 @@ INSERT INTO control_plane.runtime_executions (
     terminal_outcome, terminal_reference, terminal_sha256,
     archive_reference, archive_sha256, restore_proof_reference,
     restore_proof_sha256, restore_verifier_workload_id,
+    restore_verifier_spiffe_id, restore_verifier_generation,
     cleanup_authorization_id, cleanup_authorization_expires_at,
+    cleanup_authorization_state, cleanup_authorization_generation,
+    cleanup_consumed_at,
     created_at, updated_at
 ) VALUES (
     @id, @organization_id, @project_id, @process_id, @session_id, @thread_id,
@@ -22,7 +25,10 @@ INSERT INTO control_plane.runtime_executions (
     nullif(@terminal_sha256, ''), nullif(@archive_reference, ''),
     nullif(@archive_sha256, ''), nullif(@restore_proof_reference, ''),
     nullif(@restore_proof_sha256, ''), nullif(@restore_verifier_workload_id, ''),
+    nullif(@restore_verifier_spiffe_id, ''), nullif(@restore_verifier_generation, 0),
     nullif(@cleanup_authorization_id, '')::uuid,
     nullif(@cleanup_authorization_expires_at, 'epoch'::timestamptz),
+    @cleanup_authorization_state, @cleanup_authorization_generation,
+    nullif(@cleanup_consumed_at, 'epoch'::timestamptz),
     @created_at, @updated_at
 );

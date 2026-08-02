@@ -2130,6 +2130,20 @@ func (wrapped *transaction) GetIntegrationContinuationByContinuationTurn(
 	))
 }
 
+func (wrapped *transaction) IntegrationContinuationBlocksCleanup(
+	ctx context.Context,
+	turnID string,
+	attempt uint32,
+) (bool, error) {
+	var blocked bool
+	err := wrapped.tx.QueryRow(
+		ctx,
+		sqlIntegrationContinuationBlocksCleanup,
+		pgx.StrictNamedArgs{"turn_id": turnID, "attempt": attempt},
+	).Scan(&blocked)
+	return blocked, mapError(err)
+}
+
 func (wrapped *transaction) NextExpiredIntegrationContinuation(
 	ctx context.Context,
 	organizationID, projectID, turnID string,
@@ -2150,8 +2164,12 @@ func (wrapped *transaction) InsertIntegrationContinuation(
 	ctx context.Context,
 	continuation domainrepo.IntegrationContinuation,
 ) error {
+	arguments, err := integrationContinuationArgs(continuation)
+	if err != nil {
+		return err
+	}
 	tag, err := wrapped.tx.Exec(
-		ctx, sqlIntegrationContinuationInsert, integrationContinuationArgs(continuation),
+		ctx, sqlIntegrationContinuationInsert, arguments,
 	)
 	if err != nil {
 		return mapError(err)
@@ -2207,8 +2225,13 @@ func runtimeExecutionArgs(execution domainrepo.RuntimeExecution) pgx.StrictNamed
 		"restore_proof_reference":          execution.RestoreProofReference,
 		"restore_proof_sha256":             execution.RestoreProofSHA256,
 		"restore_verifier_workload_id":     execution.RestoreVerifierWorkload,
+		"restore_verifier_spiffe_id":       execution.RestoreVerifierSPIFFEID,
+		"restore_verifier_generation":      execution.RestoreVerifierGeneration,
 		"cleanup_authorization_id":         execution.CleanupAuthorizationID,
 		"cleanup_authorization_expires_at": execution.CleanupAuthorizationExpiresAt,
+		"cleanup_authorization_state":      execution.CleanupAuthorizationState,
+		"cleanup_authorization_generation": execution.CleanupAuthorizationGeneration,
+		"cleanup_consumed_at":              execution.CleanupConsumedAt,
 		"created_at":                       execution.CreatedAt, "updated_at": execution.UpdatedAt,
 	}
 }
@@ -2230,8 +2253,13 @@ func runtimeExecutionUpdateArgs(
 		"restore_proof_reference":          execution.RestoreProofReference,
 		"restore_proof_sha256":             execution.RestoreProofSHA256,
 		"restore_verifier_workload_id":     execution.RestoreVerifierWorkload,
+		"restore_verifier_spiffe_id":       execution.RestoreVerifierSPIFFEID,
+		"restore_verifier_generation":      execution.RestoreVerifierGeneration,
 		"cleanup_authorization_id":         execution.CleanupAuthorizationID,
 		"cleanup_authorization_expires_at": execution.CleanupAuthorizationExpiresAt,
+		"cleanup_authorization_state":      execution.CleanupAuthorizationState,
+		"cleanup_authorization_generation": execution.CleanupAuthorizationGeneration,
+		"cleanup_consumed_at":              execution.CleanupConsumedAt,
 		"updated_at":                       execution.UpdatedAt,
 		"expected_version":                 expectedVersion, "expected_fence": expectedFence,
 	}
@@ -2239,7 +2267,15 @@ func runtimeExecutionUpdateArgs(
 
 func integrationContinuationArgs(
 	continuation domainrepo.IntegrationContinuation,
-) pgx.StrictNamedArgs {
+) (pgx.StrictNamedArgs, error) {
+	bindings := continuation.CredentialBindings
+	if bindings == nil {
+		bindings = []domainrepo.PinnedIntegrationResource{}
+	}
+	credentialBindings, err := json.Marshal(bindings)
+	if err != nil {
+		return nil, errs.ErrInternal
+	}
 	return pgx.StrictNamedArgs{
 		"id": continuation.ID, "organization_id": continuation.OrganizationID,
 		"project_id": continuation.ProjectID, "process_id": continuation.ProcessID,
@@ -2254,11 +2290,15 @@ func integrationContinuationArgs(
 		"immutable_input_sha256":   continuation.ImmutableInputSHA256,
 		"grant_generation":         continuation.GrantGeneration,
 		"invocation_id":            continuation.InvocationID, "approval_id": continuation.ApprovalID,
-		"integration_id": continuation.IntegrationID, "request_sha256": continuation.RequestSHA256,
-		"approval_state":     continuation.ApprovalState,
-		"execution_state":    continuation.ExecutionState,
-		"continuation_state": continuation.ContinuationState,
-		"version":            continuation.Version, "fence": continuation.Fence,
+		"integration_id":      continuation.IntegrationID,
+		"integration_version": continuation.IntegrationVersion,
+		"integration_sha256":  continuation.IntegrationSHA256,
+		"credential_bindings": credentialBindings,
+		"request_sha256":      continuation.RequestSHA256,
+		"approval_state":      continuation.ApprovalState,
+		"execution_state":     continuation.ExecutionState,
+		"continuation_state":  continuation.ContinuationState,
+		"version":             continuation.Version, "fence": continuation.Fence,
 		"approval_expires_at":                   continuation.ApprovalExpiresAt,
 		"decision_reference":                    continuation.DecisionReference,
 		"decision_sha256":                       continuation.DecisionSHA256,
@@ -2273,7 +2313,7 @@ func integrationContinuationArgs(
 		"continuation_runtime_revision_version": continuation.ContinuationRuntimeRevisionVersion,
 		"continuation_input_sha256":             continuation.ContinuationInputSHA256,
 		"created_at":                            continuation.CreatedAt, "updated_at": continuation.UpdatedAt,
-	}
+	}, nil
 }
 
 func integrationContinuationUpdateArgs(
@@ -2323,8 +2363,10 @@ func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 		&execution.TerminalReference, &execution.TerminalSHA256,
 		&execution.ArchiveReference, &execution.ArchiveSHA256,
 		&execution.RestoreProofReference, &execution.RestoreProofSHA256,
-		&execution.RestoreVerifierWorkload, &execution.CleanupAuthorizationID,
-		&execution.CleanupAuthorizationExpiresAt,
+		&execution.RestoreVerifierWorkload, &execution.RestoreVerifierSPIFFEID,
+		&execution.RestoreVerifierGeneration, &execution.CleanupAuthorizationID,
+		&execution.CleanupAuthorizationExpiresAt, &execution.CleanupAuthorizationState,
+		&execution.CleanupAuthorizationGeneration, &execution.CleanupConsumedAt,
 		&execution.CreatedAt, &execution.UpdatedAt,
 	)
 	if err != nil {
@@ -2337,6 +2379,7 @@ func scanIntegrationContinuation(
 	row rowScanner,
 ) (domainrepo.IntegrationContinuation, error) {
 	var continuation domainrepo.IntegrationContinuation
+	var credentialBindings []byte
 	err := row.Scan(
 		&continuation.ID, &continuation.OrganizationID, &continuation.ProjectID,
 		&continuation.ProcessID, &continuation.SessionID,
@@ -2346,6 +2389,8 @@ func scanIntegrationContinuation(
 		&continuation.RuntimeRevisionSHA256, &continuation.ImmutableInputSHA256,
 		&continuation.GrantGeneration, &continuation.InvocationID,
 		&continuation.ApprovalID, &continuation.IntegrationID,
+		&continuation.IntegrationVersion, &continuation.IntegrationSHA256,
+		&credentialBindings,
 		&continuation.RequestSHA256, &continuation.ApprovalState,
 		&continuation.ExecutionState, &continuation.ContinuationState,
 		&continuation.Version, &continuation.Fence,
@@ -2361,6 +2406,10 @@ func scanIntegrationContinuation(
 	)
 	if err != nil {
 		return domainrepo.IntegrationContinuation{}, mapError(err)
+	}
+	if json.Unmarshal(credentialBindings, &continuation.CredentialBindings) != nil ||
+		len(continuation.CredentialBindings) > 16 {
+		return domainrepo.IntegrationContinuation{}, errs.ErrInternal
 	}
 	return continuation, nil
 }

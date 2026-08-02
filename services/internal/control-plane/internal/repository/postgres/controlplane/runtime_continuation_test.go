@@ -11,6 +11,13 @@ import (
 var namedPlaceholderPattern = regexp.MustCompile(`@([a-z][a-z0-9_]*)`)
 
 func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
+	integrationArgs, err := integrationContinuationArgs(domainrepo.IntegrationContinuation{})
+	if err != nil {
+		t.Fatalf("integration continuation args: %v", err)
+	}
+	if string(integrationArgs["credential_bindings"].([]byte)) != "[]" {
+		t.Fatal("empty credential binding set must persist as an exact JSON array")
+	}
 	tests := []struct {
 		name string
 		sql  string
@@ -26,7 +33,7 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 		},
 		{
 			name: "integration insert", sql: sqlIntegrationContinuationInsert,
-			args: integrationContinuationArgs(domainrepo.IntegrationContinuation{}),
+			args: integrationArgs,
 		},
 		{
 			name: "integration update", sql: sqlIntegrationContinuationUpdate,

@@ -70,12 +70,16 @@ const (
 	permissionRuntimeArchive         = "controlplane.runtime_execution.archive"
 	permissionRuntimeRestore         = "controlplane.runtime_execution.restore.verify"
 	permissionRuntimeCleanup         = "controlplane.runtime_execution.cleanup.authorize"
+	permissionRuntimeCleanupConsume  = "controlplane.runtime_execution.cleanup.consume"
+	permissionRuntimeCleanupExpire   = "controlplane.runtime_execution.cleanup.expire"
 	permissionIntegrationResolve     = "controlplane.integration_session.read"
 	permissionIntegrationSuspend     = "controlplane.integration_continuation.suspend"
 	permissionIntegrationDecide      = "controlplane.integration_continuation.decide"
 	permissionIntegrationExecute     = "controlplane.integration_continuation.execute"
 	permissionIntegrationRead        = "controlplane.integration_continuation.read"
 	permissionIntegrationAcknowledge = "controlplane.integration_continuation.acknowledge"
+	controlAPIGatewayWorkload        = "control-api-gateway"
+	controlAPIGatewaySPIFFEID        = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
 )
 
 // Config задаёт критичную для безопасности ограниченную политику выполнения.
@@ -100,6 +104,8 @@ type Config struct {
 	IntegrationGatewaySPIFFEID string
 	RestoreVerifierWorkload    string
 	RestoreVerifierSPIFFEID    string
+	CleanupAuthorizerWorkload  string
+	CleanupAuthorizerSPIFFEID  string
 	Observer                   Observer
 }
 
@@ -126,6 +132,8 @@ type Service struct {
 	integrationGatewaySPIFFEID string
 	restoreVerifierWorkload    string
 	restoreVerifierSPIFFEID    string
+	cleanupAuthorizerWorkload  string
+	cleanupAuthorizerSPIFFEID  string
 	observer                   Observer
 	now                        func() time.Time
 }
@@ -154,8 +162,22 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validSPIFFEID(config.IntegrationGatewaySPIFFEID) ||
 		value.ValidateStableKey(config.RestoreVerifierWorkload) != nil ||
 		!validSPIFFEID(config.RestoreVerifierSPIFFEID) ||
+		value.ValidateStableKey(config.CleanupAuthorizerWorkload) != nil ||
+		!validSPIFFEID(config.CleanupAuthorizerSPIFFEID) ||
 		config.RestoreVerifierWorkload == config.RuntimeControllerWorkload ||
 		config.RestoreVerifierSPIFFEID == config.RuntimeControllerSPIFFEID ||
+		config.RestoreVerifierWorkload == config.CleanupAuthorizerWorkload ||
+		config.RestoreVerifierSPIFFEID == config.CleanupAuthorizerSPIFFEID ||
+		config.RestoreVerifierWorkload == config.IntegrationGatewayWorkload ||
+		config.RestoreVerifierSPIFFEID == config.IntegrationGatewaySPIFFEID ||
+		config.RestoreVerifierWorkload == controlAPIGatewayWorkload ||
+		config.RestoreVerifierSPIFFEID == controlAPIGatewaySPIFFEID ||
+		config.CleanupAuthorizerWorkload == config.RuntimeControllerWorkload ||
+		config.CleanupAuthorizerSPIFFEID == config.RuntimeControllerSPIFFEID ||
+		config.CleanupAuthorizerWorkload == config.IntegrationGatewayWorkload ||
+		config.CleanupAuthorizerSPIFFEID == config.IntegrationGatewaySPIFFEID ||
+		config.CleanupAuthorizerWorkload == controlAPIGatewayWorkload ||
+		config.CleanupAuthorizerSPIFFEID == controlAPIGatewaySPIFFEID ||
 		config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
@@ -181,6 +203,8 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		integrationGatewaySPIFFEID: config.IntegrationGatewaySPIFFEID,
 		restoreVerifierWorkload:    config.RestoreVerifierWorkload,
 		restoreVerifierSPIFFEID:    config.RestoreVerifierSPIFFEID,
+		cleanupAuthorizerWorkload:  config.CleanupAuthorizerWorkload,
+		cleanupAuthorizerSPIFFEID:  config.CleanupAuthorizerSPIFFEID,
 		observer:                   config.Observer,
 		now:                        time.Now,
 	}, nil

@@ -356,7 +356,9 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 	}
 	if (identity.CallerWorkload == "agent-runner" ||
 		identity.CallerWorkload == "runtime-controller" ||
-		identity.CallerWorkload == "integration-gateway") &&
+		identity.CallerWorkload == "integration-gateway" ||
+		identity.CallerWorkload == "runtime-restore-verifier" ||
+		identity.CallerWorkload == "runtime-cleanup-authorizer") &&
 		(value.ValidateID(identity.BoundSessionID) != nil ||
 			value.ValidateID(identity.BoundTurnID) != nil ||
 			identity.BoundAttempt == 0 || identity.BoundAttempt > 100 ||

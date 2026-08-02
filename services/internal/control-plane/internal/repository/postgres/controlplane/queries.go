@@ -150,6 +150,9 @@ var sqlIntegrationContinuationGetByContinuationTurn string
 //go:embed sql/integration_continuation__next_expired.sql
 var sqlIntegrationContinuationNextExpired string
 
+//go:embed sql/integration_continuation__blocks_cleanup.sql
+var sqlIntegrationContinuationBlocksCleanup string
+
 //go:embed sql/integration_continuation__insert.sql
 var sqlIntegrationContinuationInsert string
 

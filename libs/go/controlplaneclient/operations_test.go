@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
 func TestRuntimeAndIntegrationProfilesMatchAuthorityPolicy(t *testing.T) {
@@ -33,6 +35,8 @@ func TestRuntimeAndIntegrationProfilesMatchAuthorityPolicy(t *testing.T) {
 		profile    map[string]string
 	}{
 		{producerID: "control-plane.runtime-controller", profile: RuntimeControllerOperations()},
+		{producerID: "control-plane.runtime-restore-verifier", profile: RuntimeRestoreVerifierOperations()},
+		{producerID: "control-plane.runtime-cleanup-authorizer", profile: RuntimeCleanupAuthorizerOperations()},
 		{producerID: "control-plane.integration-gateway", profile: IntegrationGatewayOperations()},
 		{producerID: "control-plane.agent-session", profile: AgentRunnerOperations()},
 	}
@@ -46,5 +50,12 @@ func TestRuntimeAndIntegrationProfilesMatchAuthorityPolicy(t *testing.T) {
 		if !reflect.DeepEqual(actual, test.profile) {
 			t.Fatalf("operation profile mismatch for %s", test.producerID)
 		}
+	}
+}
+
+func TestFirstIntegrationContinuationReadHasNoCallerSelectedTokens(t *testing.T) {
+	request := (&controlplanev1.GetIntegrationContinuationRequest{}).ProtoReflect()
+	if request.Descriptor().Fields().Len() != 0 {
+		t.Fatal("first continuation read must resolve OCC tokens from server-owned turn authority")
 	}
 }

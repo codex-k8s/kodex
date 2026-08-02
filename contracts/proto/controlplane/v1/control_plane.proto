@@ -137,6 +137,10 @@ service ControlPlaneService {
   rpc VerifyRuntimeRestore(VerifyRuntimeRestoreRequest) returns (VerifyRuntimeRestoreResponse);
   // AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
   rpc AuthorizeRuntimeCleanup(AuthorizeRuntimeCleanupRequest) returns (AuthorizeRuntimeCleanupResponse);
+  // ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
+  rpc ConsumeRuntimeCleanupAuthorization(ConsumeRuntimeCleanupAuthorizationRequest) returns (ConsumeRuntimeCleanupAuthorizationResponse);
+  // ExpireRuntimeCleanupAuthorization закрывает просроченную authorization по PostgreSQL clock.
+  rpc ExpireRuntimeCleanupAuthorization(ExpireRuntimeCleanupAuthorizationRequest) returns (ExpireRuntimeCleanupAuthorizationResponse);
 
   // ResolveIntegrationSession возвращает server-owned execution tuple без IDs запроса.
   rpc ResolveIntegrationSession(ResolveIntegrationSessionRequest) returns (ResolveIntegrationSessionResponse);
@@ -1542,7 +1546,7 @@ enum ClusterAccessProfile {
   CLUSTER_ACCESS_PROFILE_UNSPECIFIED = 0;
   CLUSTER_ACCESS_PROFILE_NONE = 1;
   CLUSTER_ACCESS_PROFILE_PROJECT_READ_ONLY = 2;
-  CLUSTER_ACCESS_PROFILE_PROJECT_WORKLOAD_OPERATOR = 3;
+  CLUSTER_ACCESS_PROFILE_CLUSTER_ADMIN = 3;
 }
 
 // RuntimeExecutionState — полный жизненный цикл одной immutable attempt.
@@ -1556,6 +1560,7 @@ enum RuntimeExecutionState {
   RUNTIME_EXECUTION_STATE_CANCELLED = 6;
   RUNTIME_EXECUTION_STATE_EXPIRED = 7;
   RUNTIME_EXECUTION_STATE_RETRIED = 8;
+  RUNTIME_EXECUTION_STATE_SUSPENDED = 9;
 }
 
 // RuntimeTerminalOutcome — закрытый terminal outcome специализированной команды.
@@ -1563,6 +1568,18 @@ enum RuntimeTerminalOutcome {
   RUNTIME_TERMINAL_OUTCOME_UNSPECIFIED = 0;
   RUNTIME_TERMINAL_OUTCOME_SUCCEEDED = 1;
   RUNTIME_TERMINAL_OUTCOME_FAILED = 2;
+  RUNTIME_TERMINAL_OUTCOME_SUSPENDED = 3;
+  RUNTIME_TERMINAL_OUTCOME_CANCELLED = 4;
+  RUNTIME_TERMINAL_OUTCOME_EXPIRED = 5;
+}
+
+// RuntimeCleanupAuthorizationState — crash-safe lifecycle destructive authorization.
+enum RuntimeCleanupAuthorizationState {
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_UNSPECIFIED = 0;
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_NONE = 1;
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_ACTIVE = 2;
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_CONSUMED = 3;
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_EXPIRED = 4;
 }
 
 // RuntimeIncidentKind — закрытый класс watchdog incident.
@@ -1610,6 +1627,11 @@ message RuntimeExecution {
   google.protobuf.Timestamp created_at = 33;
   google.protobuf.Timestamp updated_at = 34;
   google.protobuf.Timestamp cleanup_authorization_expires_at = 35;
+  string restore_verifier_spiffe_id = 36;
+  uint64 restore_verifier_generation = 37;
+  RuntimeCleanupAuthorizationState cleanup_authorization_state = 38;
+  uint64 cleanup_authorization_generation = 39;
+  google.protobuf.Timestamp cleanup_consumed_at = 40;
 }
 
 message ClaimRuntimeExecutionRequest {
@@ -1751,9 +1773,38 @@ message AuthorizeRuntimeCleanupRequest {
   uint64 expected_fence = 4;
   string archive_sha256 = 5;
   string restore_proof_sha256 = 6;
+  uint64 expected_cleanup_generation = 7;
 }
 
 message AuthorizeRuntimeCleanupResponse {
+  RuntimeExecution execution = 1;
+}
+
+message ConsumeRuntimeCleanupAuthorizationRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string cleanup_authorization_id = 5;
+  uint64 cleanup_authorization_generation = 6;
+  string archive_sha256 = 7;
+  string restore_proof_sha256 = 8;
+}
+
+message ConsumeRuntimeCleanupAuthorizationResponse {
+  RuntimeExecution execution = 1;
+}
+
+message ExpireRuntimeCleanupAuthorizationRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string cleanup_authorization_id = 5;
+  uint64 cleanup_authorization_generation = 6;
+}
+
+message ExpireRuntimeCleanupAuthorizationResponse {
   RuntimeExecution execution = 1;
 }
 
@@ -1803,8 +1854,21 @@ message IntegrationExecutionBinding {
   string immutable_input_sha256 = 14;
   uint64 grant_generation = 15;
   uint64 fence = 16;
-  repeated string integration_ids = 17;
-  repeated string credential_binding_ids = 18;
+  IntegrationApprovalBinding integration_binding = 17;
+}
+
+// PinnedIntegrationResource связывает owner resource с exact version/digest.
+message PinnedIntegrationResource {
+  string resource_id = 1;
+  uint64 version = 2;
+  string projection_sha256 = 3;
+}
+
+// IntegrationApprovalBinding — выбранная gateway связка, которую owner
+// повторно разрешает из RuntimeRevision; caller fields не являются authority.
+message IntegrationApprovalBinding {
+  PinnedIntegrationResource integration = 1;
+  repeated PinnedIntegrationResource credential_bindings = 2;
 }
 
 // IntegrationContinuation — typed durable suspension и structured result/error.
@@ -1899,6 +1963,7 @@ message SuspendForIntegrationApprovalRequest {
   string integration_id = 4;
   string request_sha256 = 5;
   google.protobuf.Timestamp approval_expires_at = 6;
+  IntegrationApprovalBinding selected_binding = 7;
 }
 
 message SuspendForIntegrationApprovalResponse {
@@ -1993,12 +2058,9 @@ message FailIntegrationExecutionResponse {
   IntegrationContinuation continuation = 1;
 }
 
-message GetIntegrationContinuationRequest {
-  uint64 expected_version = 1;
-  uint64 expected_runtime_revision_version = 2;
-  string expected_input_sha256 = 3;
-  uint64 expected_fence = 4;
-}
+// Первый read не принимает неизвестные owner OCC tokens: exact row разрешается
+// только из проверенного continuation Turn/application grant.
+message GetIntegrationContinuationRequest {}
 
 message GetIntegrationContinuationResponse {
   IntegrationContinuation continuation = 1;

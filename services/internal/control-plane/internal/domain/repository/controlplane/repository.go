@@ -224,42 +224,54 @@ type TurnAttempt struct {
 
 // RuntimeExecution хранит immutable execution tuple и monotonic owner fence.
 type RuntimeExecution struct {
-	ID                            string
-	OrganizationID                string
-	ProjectID                     string
-	ProcessID                     string
-	SessionID                     string
-	ThreadID                      string
-	RoleID                        string
-	TurnID                        string
-	Attempt                       uint32
-	RuntimeRevisionID             string
-	RuntimeRevisionVersion        uint64
-	RuntimeRevisionSHA256         string
-	ImmutableInputSHA256          string
-	ResourceClass                 string
-	ClusterAccessProfile          string
-	WorkloadID                    string
-	WorkloadSPIFFEID              string
-	GrantGeneration               uint64
-	Version                       uint64
-	Fence                         uint64
-	State                         string
-	LeaseID                       string
-	LeaseTokenSHA256              string
-	LeaseExpiresAt                time.Time
-	TerminalOutcome               string
-	TerminalReference             string
-	TerminalSHA256                string
-	ArchiveReference              string
-	ArchiveSHA256                 string
-	RestoreProofReference         string
-	RestoreProofSHA256            string
-	RestoreVerifierWorkload       string
-	CleanupAuthorizationID        string
-	CleanupAuthorizationExpiresAt time.Time
-	CreatedAt                     time.Time
-	UpdatedAt                     time.Time
+	ID                             string
+	OrganizationID                 string
+	ProjectID                      string
+	ProcessID                      string
+	SessionID                      string
+	ThreadID                       string
+	RoleID                         string
+	TurnID                         string
+	Attempt                        uint32
+	RuntimeRevisionID              string
+	RuntimeRevisionVersion         uint64
+	RuntimeRevisionSHA256          string
+	ImmutableInputSHA256           string
+	ResourceClass                  string
+	ClusterAccessProfile           string
+	WorkloadID                     string
+	WorkloadSPIFFEID               string
+	GrantGeneration                uint64
+	Version                        uint64
+	Fence                          uint64
+	State                          string
+	LeaseID                        string
+	LeaseTokenSHA256               string
+	LeaseExpiresAt                 time.Time
+	TerminalOutcome                string
+	TerminalReference              string
+	TerminalSHA256                 string
+	ArchiveReference               string
+	ArchiveSHA256                  string
+	RestoreProofReference          string
+	RestoreProofSHA256             string
+	RestoreVerifierWorkload        string
+	RestoreVerifierSPIFFEID        string
+	RestoreVerifierGeneration      uint64
+	CleanupAuthorizationID         string
+	CleanupAuthorizationExpiresAt  time.Time
+	CleanupAuthorizationState      string
+	CleanupAuthorizationGeneration uint64
+	CleanupConsumedAt              time.Time
+	CreatedAt                      time.Time
+	UpdatedAt                      time.Time
+}
+
+// PinnedIntegrationResource хранит exact owner version/projection без secret value.
+type PinnedIntegrationResource struct {
+	ResourceID       string `json:"resourceId"`
+	Version          uint64 `json:"version"`
+	ProjectionSHA256 string `json:"projectionSha256"`
 }
 
 // RuntimeIncident — append-only watchdog evidence exact execution/fence.
@@ -296,6 +308,9 @@ type IntegrationContinuation struct {
 	InvocationID                       string
 	ApprovalID                         string
 	IntegrationID                      string
+	IntegrationVersion                 uint64
+	IntegrationSHA256                  string
+	CredentialBindings                 []PinnedIntegrationResource
 	RequestSHA256                      string
 	ApprovalState                      string
 	ExecutionState                     string
@@ -430,6 +445,7 @@ type Transaction interface {
 	GetIntegrationContinuationForUpdate(context.Context, string) (IntegrationContinuation, error)
 	GetIntegrationContinuationBySourceTurnForUpdate(context.Context, string) (IntegrationContinuation, error)
 	GetIntegrationContinuationByContinuationTurn(context.Context, string) (IntegrationContinuation, error)
+	IntegrationContinuationBlocksCleanup(context.Context, string, uint32) (bool, error)
 	NextExpiredIntegrationContinuation(
 		context.Context, string, string, string, uint32,
 	) (IntegrationContinuation, error)

@@ -338,14 +338,14 @@ func (service *Service) finishContinuationOccurrence(
 		return errs.ErrStateConflict
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
-	occurrence.State = string(turn.State)
+	occurrence.State = scheduledTerminalState(turn.State)
 	occurrence.Outcome = turnSpec.Outcome
 	occurrence.ResultArtifactID = turnSpec.ResultArtifactID
 	occurrence.UpdatedAt = now
 	if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
 		OccurrenceID:     occurrence.ID,
 		Attempt:          occurrence.Attempt,
-		State:            string(turn.State),
+		State:            occurrence.State,
 		Outcome:          turnSpec.Outcome,
 		ResultArtifactID: turnSpec.ResultArtifactID,
 		FinishedAt:       now,
