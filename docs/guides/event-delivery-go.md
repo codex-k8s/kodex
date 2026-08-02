@@ -4,8 +4,8 @@ title: Надежная доставка доменных событий в Go
 type: guide
 status: approved
 owner: architect
-version: 1.3.0
-updated: 2026-07-31
+version: 1.4.0
+updated: 2026-08-02
 ---
 
 # Надежная доставка доменных событий в Go
@@ -394,11 +394,18 @@ Production-пример forward-only миграций находится в
 колонок, тип и нормализованное определение каждого обязательного runtime
 constraint, структуру, predicate и validity каждого обязательного index, а
 также выражение generated ordering key. Одинаковое имя обязательного объекта с
-другим определением считается несовместимой схемой. Сервис вправе добавлять
-собственные constraints и indexes под отдельными именами, не изменяя
-определения общих runtime-объектов. Version marker добавляется в той же
-атомарной forward-only миграции, что и полностью готовые таблицы, constraints и
-indexes. Ставить marker до готовности схемы запрещено.
+другим определением считается несовместимой схемой. Для runtime-таблиц inbox
+v1 допускается только машинно проверяемое performance-only расширение:
+неуникальный B-tree index с именем `postgresinbox_ext_*` по существующим
+обычным колонкам, default opclass/collation/order, без expression, predicate,
+`INCLUDE`, uniqueness, exclusion либо constraint ownership. Дополнительные
+columns/defaults/generated expressions, constraints, triggers, rules и прочие
+indexes закрыто несовместимы, даже если имеют отдельные service-owned имена:
+они способны изменить общий write path. Новому constraint/extension profile
+нужны новая versioned shared schema и точная readiness signature. Version
+marker добавляется в той же атомарной forward-only миграции, что и полностью
+готовые таблицы, constraints и indexes. Ставить marker до готовности схемы
+запрещено.
 
 ## Retention, backup и PITR
 

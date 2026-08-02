@@ -49,12 +49,14 @@ func (processor *Processor) Recover(
 				return nil
 			}
 
-			row, rowErr := processor.getInboxByEvent(ctx, tx, request.Consumer, request.EventID)
+			cursor, row, rowErr := processor.lockCursorThenInbox(
+				ctx, tx, request.Consumer, request.EventID,
+			)
 			if errors.Is(rowErr, pgx.ErrNoRows) {
 				return ErrRecoveryNotAllowed
 			}
 			if rowErr != nil {
-				return wrapSafe(errorTextDatabaseOperation, rowErr)
+				return rowErr
 			}
 			if !sameDigest(row.EventDigest, request.EventDigest[:]) {
 				return ErrEventConflict
@@ -62,12 +64,6 @@ func (processor *Processor) Recover(
 			if row.LeaseGeneration != request.ExpectedGeneration ||
 				row.LeaseFence != request.ExpectedFence {
 				return ErrStaleClaim
-			}
-			cursor, lockErr := processor.ensureAndLockCursor(
-				ctx, tx, request.Consumer, row.OrderingKey,
-			)
-			if lockErr != nil {
-				return lockErr
 			}
 			directive, action := recoveryDecision(row, cursor)
 			switch action {
@@ -138,7 +134,7 @@ func recoveryDecision(row inboxRow, cursor cursorRow) (RecoveryDirective, string
 	if row.State == stateDeadLetter {
 		return RecoveryRepairRequired, operatorReceiptWait
 	}
-	if row.EventSequence > cursor.LastSequence+1 {
+	if hasSequenceGap(row.EventSequence, cursor.LastSequence) {
 		return RecoveryWaitPredecessor, operatorReceiptWait
 	}
 	if row.State == stateProcessing && row.LeaseActive {

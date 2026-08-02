@@ -6,15 +6,16 @@ import "context"
 type Operation string
 
 const (
-	OperationProcess Operation = "process"
-	OperationClaim   Operation = "claim"
-	OperationApply   Operation = "apply"
-	OperationCheck   Operation = "check"
-	OperationRenew   Operation = "renew"
-	OperationRepair  Operation = "repair"
-	OperationRecover Operation = "recover"
-	OperationList    Operation = "list"
-	OperationCleanup Operation = "cleanup"
+	OperationProcess  Operation = "process"
+	OperationClaim    Operation = "claim"
+	OperationApply    Operation = "apply"
+	OperationCheck    Operation = "check"
+	OperationRenew    Operation = "renew"
+	OperationRepair   Operation = "repair"
+	OperationRecover  Operation = "recover"
+	OperationDelivery Operation = "delivery_outcome"
+	OperationList     Operation = "list"
+	OperationCleanup  Operation = "cleanup"
 )
 
 // Observer получает только закрытые низкокардинальные значения.

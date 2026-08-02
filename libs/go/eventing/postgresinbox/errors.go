@@ -12,6 +12,7 @@ const (
 	errorTextInvalidRepair             = "postgres inbox repair request is invalid"
 	errorTextInvalidRecovery           = "postgres inbox recovery request is invalid"
 	errorTextInvalidBlockageRead       = "postgres inbox blockage read is invalid"
+	errorTextInvalidDeliveryRead       = "postgres inbox delivery outcome read is invalid"
 	errorTextInvalidEffectOperation    = "postgres inbox effect operation is invalid"
 	errorTextEffectOperationNotAllowed = "postgres inbox effect operation is not allowed"
 	errorTextInvalidEffectInput        = "postgres inbox effect input is invalid"
@@ -26,6 +27,7 @@ const (
 	errorTextOperatorNotAllowed        = "postgres inbox operator action is not allowed"
 	errorTextRecoveryNotAllowed        = "postgres inbox recovery is not allowed"
 	errorTextBlockageNotFound          = "postgres inbox blockage was not found"
+	errorTextDeliveryOutcomeNotFound   = "postgres inbox delivery outcome was not found"
 	errorTextSchemaMismatch            = "postgres inbox schema contract mismatch"
 	errorTextEffectFailed              = "postgres inbox effect failed"
 	errorTextDatabaseOperation         = "postgres inbox database operation failed"
@@ -42,27 +44,29 @@ const (
 )
 
 var (
-	ErrInvalidConfiguration      = errors.New(errorTextInvalidConfiguration)
-	ErrInvalidConsumer           = errors.New(errorTextInvalidConsumer)
-	ErrInvalidEvent              = errors.New(errorTextInvalidEvent)
-	ErrInvalidRepair             = errors.New(errorTextInvalidRepair)
-	ErrInvalidRecovery           = errors.New(errorTextInvalidRecovery)
-	ErrInvalidBlockageRead       = errors.New(errorTextInvalidBlockageRead)
-	ErrInvalidEffectOperation    = errors.New(errorTextInvalidEffectOperation)
-	ErrEffectOperationNotAllowed = errors.New(errorTextEffectOperationNotAllowed)
-	ErrInvalidEffectInput        = errors.New(errorTextInvalidEffectInput)
-	ErrProcessorStopped          = errors.New(errorTextProcessorStopped)
-	ErrSequenceGap               = errors.New(errorTextSequenceGap)
-	ErrEventConflict             = errors.New(errorTextEventConflict)
-	ErrStaleClaim                = errors.New(errorTextStaleClaim)
-	ErrRetryExhausted            = errors.New(errorTextRetryExhausted)
-	ErrOperatorConflict          = errors.New(errorTextOperatorConflict)
-	ErrRepairNotAllowed          = errors.New(errorTextRepairNotAllowed)
-	ErrOperatorNotAllowed        = errors.New(errorTextOperatorNotAllowed)
-	ErrRecoveryNotAllowed        = errors.New(errorTextRecoveryNotAllowed)
-	ErrBlockageNotFound          = errors.New(errorTextBlockageNotFound)
-	ErrSchemaMismatch            = errors.New(errorTextSchemaMismatch)
-	ErrEffectFailed              = errors.New(errorTextEffectFailed)
+	ErrInvalidConfiguration       = errors.New(errorTextInvalidConfiguration)
+	ErrInvalidConsumer            = errors.New(errorTextInvalidConsumer)
+	ErrInvalidEvent               = errors.New(errorTextInvalidEvent)
+	ErrInvalidRepair              = errors.New(errorTextInvalidRepair)
+	ErrInvalidRecovery            = errors.New(errorTextInvalidRecovery)
+	ErrInvalidBlockageRead        = errors.New(errorTextInvalidBlockageRead)
+	ErrInvalidDeliveryOutcomeRead = errors.New(errorTextInvalidDeliveryRead)
+	ErrInvalidEffectOperation     = errors.New(errorTextInvalidEffectOperation)
+	ErrEffectOperationNotAllowed  = errors.New(errorTextEffectOperationNotAllowed)
+	ErrInvalidEffectInput         = errors.New(errorTextInvalidEffectInput)
+	ErrProcessorStopped           = errors.New(errorTextProcessorStopped)
+	ErrSequenceGap                = errors.New(errorTextSequenceGap)
+	ErrEventConflict              = errors.New(errorTextEventConflict)
+	ErrStaleClaim                 = errors.New(errorTextStaleClaim)
+	ErrRetryExhausted             = errors.New(errorTextRetryExhausted)
+	ErrOperatorConflict           = errors.New(errorTextOperatorConflict)
+	ErrRepairNotAllowed           = errors.New(errorTextRepairNotAllowed)
+	ErrOperatorNotAllowed         = errors.New(errorTextOperatorNotAllowed)
+	ErrRecoveryNotAllowed         = errors.New(errorTextRecoveryNotAllowed)
+	ErrBlockageNotFound           = errors.New(errorTextBlockageNotFound)
+	ErrDeliveryOutcomeNotFound    = errors.New(errorTextDeliveryOutcomeNotFound)
+	ErrSchemaMismatch             = errors.New(errorTextSchemaMismatch)
+	ErrEffectFailed               = errors.New(errorTextEffectFailed)
 )
 
 type safeError struct {

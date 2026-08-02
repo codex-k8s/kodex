@@ -387,6 +387,139 @@ func TestRecoveryDecisionKeepsPredecessorBlocking(t *testing.T) {
 	}
 }
 
+func TestDeliveryOutcomeSurvivesRestartFromDurableState(t *testing.T) {
+	t.Parallel()
+	digest := sha256.Sum256([]byte("immutable event"))
+	stored := deliveryOutcomeRow{
+		EventDigest:    digest[:],
+		State:          stateCompleted,
+		EventSequence:  7,
+		CursorSequence: 7,
+		Attempts:       1,
+		MaxAttempts:    8,
+	}
+	first, err := classifyDeliveryOutcome(digest, stored)
+	if err != nil {
+		t.Fatalf("first durable read error = %v", err)
+	}
+	second, err := classifyDeliveryOutcome(digest, stored)
+	if err != nil {
+		t.Fatalf("restart durable read error = %v", err)
+	}
+	if first != second || second.State != DeliveryStateCompleted ||
+		second.Directive != RecoveryACKEligible ||
+		second.Action != BrokerActionACK || !second.Durable {
+		t.Fatalf("restart decision = %#v", second)
+	}
+
+	stored.State = stateStale
+	stale, err := classifyDeliveryOutcome(digest, stored)
+	if err != nil || stale.State != DeliveryStateStale ||
+		stale.Directive != RecoveryACKEligible || stale.Action != BrokerActionACK {
+		t.Fatalf("stale decision = %#v, error = %v", stale, err)
+	}
+	otherDigest := sha256.Sum256([]byte("conflicting event"))
+	if _, err := classifyDeliveryOutcome(otherDigest, stored); !errors.Is(err, ErrEventConflict) {
+		t.Fatalf("digest mismatch error = %v", err)
+	}
+	stored.State = stateCompleted
+	stored.CursorSequence = stored.EventSequence - 1
+	if _, err := classifyDeliveryOutcome(digest, stored); !errors.Is(err, ErrSchemaMismatch) {
+		t.Fatalf("inconsistent completed evidence error = %v", err)
+	}
+}
+
+func TestDeliveryOutcomeKeepsNonterminalStatesDistinct(t *testing.T) {
+	t.Parallel()
+	digest := sha256.Sum256([]byte("immutable event"))
+	tests := []struct {
+		name      string
+		row       deliveryOutcomeRow
+		directive RecoveryDirective
+		action    BrokerAction
+	}{
+		{
+			name: "gap",
+			row: deliveryOutcomeRow{State: stateReceived, EventSequence: 3, CursorSequence: 1,
+				Attempts: 0, MaxAttempts: 8, AvailableNow: true},
+			directive: RecoveryWaitPredecessor, action: BrokerActionNACKRetry,
+		},
+		{
+			name: "busy",
+			row: deliveryOutcomeRow{State: stateProcessing, EventSequence: 2, CursorSequence: 1,
+				Attempts: 1, MaxAttempts: 8, AvailableNow: true, LeaseActive: true},
+			directive: RecoveryWaitLease, action: BrokerActionNACKRetry,
+		},
+		{
+			name: "retry backoff",
+			row: deliveryOutcomeRow{State: stateRetry, EventSequence: 2, CursorSequence: 1,
+				Attempts: 1, MaxAttempts: 8, AvailableNow: false},
+			directive: RecoveryWaitBackoff, action: BrokerActionNACKRetry,
+		},
+		{
+			name: "replay",
+			row: deliveryOutcomeRow{State: stateRetry, EventSequence: 2, CursorSequence: 1,
+				Attempts: 1, MaxAttempts: 8, AvailableNow: true},
+			directive: RecoveryReplayRequired, action: BrokerActionNACKRetry,
+		},
+		{
+			name: "dead letter",
+			row: deliveryOutcomeRow{State: stateDeadLetter, EventSequence: 2, CursorSequence: 1,
+				Attempts: 8, MaxAttempts: 8},
+			directive: RecoveryRepairRequired, action: BrokerActionNACKTerminal,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			test.row.EventDigest = digest[:]
+			decision, err := classifyDeliveryOutcome(digest, test.row)
+			if err != nil || decision.Directive != test.directive ||
+				decision.Action != test.action || !decision.Durable {
+				t.Fatalf("decision = %#v, error = %v", decision, err)
+			}
+		})
+	}
+}
+
+func TestDeliveryOutcomeAuthorizationReceivesExactIdentity(t *testing.T) {
+	t.Parallel()
+	authorizer := &capturingOperatorAuthorizer{
+		authority: OperatorAuthority{Actor: "operator"},
+	}
+	processor, err := New(
+		failingBeginner{}, validConfig(), WithOperatorAuthorizer(authorizer),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	request := DeliveryOutcomeRequest{
+		Consumer:    Consumer{Name: "consumer", Scope: "scope-a"},
+		EventID:     uuid.NewString(),
+		EventDigest: sha256.Sum256([]byte("immutable event")),
+	}
+	_, _ = processor.ReadDeliveryOutcome(context.Background(), request)
+	if authorizer.target.Action != OperatorActionDeliveryOutcome ||
+		authorizer.target.Consumer != request.Consumer ||
+		authorizer.target.EventID != request.EventID ||
+		authorizer.target.EventDigest != request.EventDigest ||
+		authorizer.target.ExpectedGeneration != 0 ||
+		authorizer.target.ExpectedFence != 0 {
+		t.Fatalf("authorization target = %#v", authorizer.target)
+	}
+}
+
+func TestCanonicalMutationLockOrder(t *testing.T) {
+	t.Parallel()
+	if canonicalMutationLockOrder != ([2]mutationLockResource{
+		mutationLockCursor,
+		mutationLockInbox,
+	}) {
+		t.Fatalf("mutation lock order = %#v", canonicalMutationLockOrder)
+	}
+}
+
 func TestBlockagePaginationIsBounded(t *testing.T) {
 	t.Parallel()
 	request, err := (BlockageListRequest{}).validate()
@@ -493,4 +626,17 @@ type failingBeginner struct{}
 
 func (failingBeginner) BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error) {
 	return nil, errors.New("transaction unavailable")
+}
+
+type capturingOperatorAuthorizer struct {
+	target    OperatorTarget
+	authority OperatorAuthority
+}
+
+func (authorizer *capturingOperatorAuthorizer) AuthorizeOperator(
+	_ context.Context,
+	target OperatorTarget,
+) (OperatorAuthority, error) {
+	authorizer.target = target
+	return authorizer.authority, nil
 }

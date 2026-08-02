@@ -427,8 +427,9 @@ WITH target_tables(table_name, expected_privileges) AS (
                 SELECT 1
                 FROM pg_catalog.pg_auth_members AS membership
                 WHERE membership.member = role_record.oid
+                   OR membership.roleid = role_record.oid
             )
-        THEN '1' ELSE '0' END
+        THEN '2' ELSE '0' END
     FROM pg_catalog.pg_roles AS role_record
     WHERE role_record.rolname = session_user
 

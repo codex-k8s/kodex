@@ -13,6 +13,24 @@ import (
 //go:embed schema.sql
 var testSchemaContract string
 
+//go:embed receive.go
+var testReceiveSource string
+
+//go:embed claim.go
+var testClaimSource string
+
+//go:embed apply.go
+var testApplySource string
+
+//go:embed recovery.go
+var testRecoverySource string
+
+//go:embed maintenance.go
+var testMaintenanceSource string
+
+//go:embed repository.go
+var testRepositorySource string
+
 func TestStrictNamedArgumentsMatchEveryProductionQuery(t *testing.T) {
 	t.Parallel()
 	queries, err := loadQueries()
@@ -47,6 +65,7 @@ func TestStrictNamedArgumentsMatchEveryProductionQuery(t *testing.T) {
 		{"inbox recovery", queries.inboxRecoverRejoin, named("consumer_name", "consumer_scope", "event_id", "event_digest", "expected_generation", "expected_fence")},
 		{"blockage get", queries.blockageGet, named("consumer_name", "consumer_scope", "event_id")},
 		{"blockage list", queries.blockageList, named("consumer_name", "consumer_scope", "after_received_at", "after_event_id", "page_limit")},
+		{"delivery outcome", queries.deliveryReadOutcome, named("consumer_name", "consumer_scope", "event_id")},
 		{"effect inspect", queries.effectInspect, named("schema_name", "function_name")},
 		{"schema inspect", queries.schemaInspect, named("schema_name", "schema_component")},
 		{"schema probe", queries.schemaProbe, named()},
@@ -115,6 +134,8 @@ func TestReadinessQueriesKeepSecurityBoundaryClosed(t *testing.T) {
 		"pg_catalog.acldefault",
 		"acl.is_grantable",
 		"pg_catalog.pg_auth_members",
+		"membership.member = role_record.oid",
+		"membership.roleid = role_record.oid",
 		"column_record.attacl IS NOT NULL",
 		"WITH GRANT OPTION",
 		"extension_index",
@@ -145,6 +166,65 @@ func TestReadinessQueriesKeepSecurityBoundaryClosed(t *testing.T) {
 		if !strings.Contains(rawEffectInspect, fragment) {
 			t.Fatalf("effect inspection misses %s", fragment)
 		}
+	}
+}
+
+func TestDeliveryOutcomeQueryDoesNotProjectSensitiveCoordinates(t *testing.T) {
+	t.Parallel()
+	selectEnd := strings.Index(rawDeliveryReadOutcome, "\nFROM ")
+	if selectEnd < 0 {
+		t.Fatal("delivery outcome query has no bounded projection")
+	}
+	projection := rawDeliveryReadOutcome[:selectEnd]
+	for _, forbidden := range []string{"ordering_key", "event_id", "organization_id", "aggregate_id", "payload", "data"} {
+		if strings.Contains(projection, forbidden) {
+			t.Fatalf("delivery outcome projection exposes %s", forbidden)
+		}
+	}
+	for _, exactScope := range []string{
+		"event.consumer_name = @consumer_name",
+		"event.consumer_scope = @consumer_scope",
+		"event.event_id = @event_id::uuid",
+	} {
+		if !strings.Contains(rawDeliveryReadOutcome, exactScope) {
+			t.Fatalf("delivery outcome query misses %s", exactScope)
+		}
+	}
+}
+
+func TestMutatingFlowsUseCanonicalCursorThenInboxLockOrder(t *testing.T) {
+	t.Parallel()
+	for name, source := range map[string]string{
+		"receive": testReceiveSource,
+		"claim":   testClaimSource,
+		"apply":   testApplySource,
+	} {
+		cursor := strings.Index(source, "ensureAndLockCursor(")
+		inbox := strings.Index(source, "getInboxByEvent(")
+		if cursor < 0 || inbox < 0 || cursor >= inbox {
+			t.Fatalf("%s does not lock cursor before inbox", name)
+		}
+	}
+	for name, source := range map[string]string{
+		"recover": testRecoverySource,
+		"repair":  testMaintenanceSource,
+	} {
+		if !strings.Contains(source, "lockCursorThenInbox(") ||
+			strings.Contains(source, "getInboxByEvent(") ||
+			strings.Contains(source, "ensureAndLockCursor(") {
+			t.Fatalf("%s bypasses canonical lock helper", name)
+		}
+	}
+	helperStart := strings.Index(testRepositorySource,
+		"func (processor *Processor) lockCursorThenInbox(")
+	if helperStart < 0 {
+		t.Fatal("canonical lock helper is absent")
+	}
+	helper := testRepositorySource[helperStart:]
+	cursor := strings.Index(helper, "ensureAndLockCursor(")
+	inbox := strings.Index(helper, "getInboxByEvent(")
+	if cursor < 0 || inbox < 0 || cursor >= inbox {
+		t.Fatal("canonical helper does not lock cursor before inbox")
 	}
 }
 

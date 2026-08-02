@@ -88,22 +88,14 @@ func (processor *Processor) Repair(
 				return nil
 			}
 
-			preRead, readErr := processor.readInboxByEvent(ctx, tx, request.Consumer, request.EventID)
-			if errors.Is(readErr, pgx.ErrNoRows) {
+			cursor, row, rowErr := processor.lockCursorThenInbox(
+				ctx, tx, request.Consumer, request.EventID,
+			)
+			if errors.Is(rowErr, pgx.ErrNoRows) {
 				return ErrRepairNotAllowed
 			}
-			if readErr != nil {
-				return wrapSafe(errorTextDatabaseOperation, readErr)
-			}
-			cursor, lockErr := processor.ensureAndLockCursor(
-				ctx, tx, request.Consumer, preRead.OrderingKey,
-			)
-			if lockErr != nil {
-				return lockErr
-			}
-			row, rowErr := processor.getInboxByEvent(ctx, tx, request.Consumer, request.EventID)
 			if rowErr != nil {
-				return wrapSafe(errorTextDatabaseOperation, rowErr)
+				return rowErr
 			}
 			if !sameDigest(row.EventDigest, request.EventDigest[:]) {
 				return ErrEventConflict

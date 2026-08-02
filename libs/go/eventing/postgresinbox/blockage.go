@@ -163,7 +163,7 @@ func blockageEligibility(
 	if blockage.State == BlockageStateDeadLetter {
 		return BlockageRepairRequired
 	}
-	if blockage.EventSequence > blockage.CursorSequence+1 {
+	if hasSequenceGap(blockage.EventSequence, blockage.CursorSequence) {
 		return BlockageWaitPredecessor
 	}
 	if blockage.State == BlockageStateProcessing && leaseActive {

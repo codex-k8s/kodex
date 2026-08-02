@@ -53,8 +53,11 @@ consumer. Он принимает уже проверенный `eventing.Envelo
 - `Acquire`, `Renew` и `ApplyClaim` дают тот же протокол adapter, которому
   нужен явный раздельный claim/renew flow;
 - `Check` проверяет exact schema и working principal path;
-- `GetBlockage`/`ListBlockages` дают авторизованный bounded operator read без
-  payload/PII, `Recover` фиксирует решение после исчерпания broker redelivery;
+- `ReadDeliveryOutcome` авторитетно возвращает exact durable delivery decision
+  после restart без payload/PII или claim coordinates;
+- `GetBlockage`/`ListBlockages` дают авторизованный bounded operator read
+  незавершённых predecessors, `Recover` фиксирует решение после исчерпания
+  broker redelivery;
 - `Repair` выполняет только авторизованный audited `REQUEUE`, `Cleanup` —
   bounded retention;
 - `Cancel` и `Join` задают lifecycle перед закрытием PostgreSQL;
@@ -175,6 +178,16 @@ Eligibility, lease start/expiry, `available_at`, completion, terminal time и
 cleanup рассчитываются по `clock_timestamp()` PostgreSQL. Время процесса не
 решает, кто может claim, renew, finalize, repair или cleanup.
 
+Все mutating flows, которым нужны обе строки, берут locks только в порядке
+`cursor -> inbox`. `Recover` и `Repair` сначала неблокирующе разрешают
+immutable ordering coordinates, затем блокируют cursor, после него inbox через
+`FOR UPDATE` и повторно сверяют event ID/digest/ordering key/sequence и
+generation/fence/state. Исчезновение либо изменение строки между read и lock
+закрыто классифицируется как stale claim. `receive`, `claim` и `apply`
+используют тот же порядок; `renew` и terminal-only `cleanup` берут только inbox
+и после него никогда не пытаются взять cursor. `SERIALIZABLE` и обработка
+`40P01` не заменяют этот порядок и не разрешают автоматический повтор effect.
+
 ## Полный receive → cleanup
 
 1. Broker adapter строго проверяет envelope и конкретную AsyncAPI schema.
@@ -185,7 +198,7 @@ cleanup рассчитываются по `clock_timestamp()` PostgreSQL. Вре
 4. Claim-транзакция проверяет точного предшественника, backoff и terminal
    blockage, затем назначает `lease_owner`, случайный `lease_token`, новое
    `lease_generation` и монотонный cursor fence.
-5. Effect-транзакция повторно блокирует inbox/cursor и сверяет event digest,
+5. Effect-транзакция повторно блокирует cursor/inbox и сверяет event digest,
    owner, token, generation, fence, lease expiry и ожидаемую sequence.
 6. Handler получает `EffectTx` savepoint той же физической PostgreSQL-
    транзакции и immutable `EventSnapshot`. `EffectTx.Call` допускает только
@@ -204,11 +217,15 @@ cleanup рассчитываются по `clock_timestamp()` PostgreSQL. Вре
    после проверки digest, generation/fence, idempotency request hash,
    actor/reason/evidence и repair budget. Без настроенного authorizer repair
    закрыто запрещён.
-10. `GetBlockage`/`ListBlockages` возвращают только event/digest/sequence,
+10. `ReadDeliveryOutcome` по exact consumer/event/digest после restart читает
+    сохранённые `COMPLETED|STALE` как `ack_eligible`; mismatch закрыт, effect и
+    cursor не меняются. Для незавершённых состояний возвращается отдельный
+    `wait_predecessor|wait_lease|wait_backoff|replay_required|repair_required`.
+11. `GetBlockage`/`ListBlockages` возвращают только event/digest/sequence,
     hash ordering key, state/attempt/generation/fence/time/failure coordinates
     самого раннего predecessor. `Recover` сохраняет неизменяемый receipt для
     `WAIT|REJOIN|TERMINALIZE`; ни один исход не означает скрытый ACK/skip.
-11. `Cleanup` удаляет ограниченную порцию только `COMPLETED|STALE`, для которых
+12. `Cleanup` удаляет ограниченную порцию только `COMPLETED|STALE`, для которых
     прошли сохранённый `cleanup_after` и текущий минимальный retention horizon.
 
 Receive и claim являются отдельными явно документированными durable
@@ -276,7 +293,7 @@ durable `Result`. Наличие ошибки само по себе не отм
 | Тот же `eventId` с иным содержимым | без изменения сохранённой строки | без effect/изменения cursor | `nack_terminal`, `ErrEventConflict` |
 | Другой `eventId` для того же key+sequence | без изменения predecessor | без effect/изменения cursor | `nack_terminal`, `ErrEventConflict` |
 | Crash до effect commit | effect-транзакция откатывается; claim истекает | без cursor/effect | redelivery, новый generation/fence |
-| Crash после effect+inbox+cursor commit до ACK | строка `COMPLETED` | effect не повторяется | redelivery возвращает `duplicate/ack` |
+| Crash/restart после effect+inbox+cursor commit до ACK | строка `COMPLETED`; exact `ReadDeliveryOutcome` повторно даёт `ack_eligible` | effect не повторяется | adapter выполняет `ack` без generation/fence |
 | Broker redelivery во время действующей lease | claim не меняется | без второго effect | `nack_retry` (`busy`) |
 | Replay после cleanup, sequence ниже cursor | новая `STALE` evidence | без effect | `ack` после commit; conflict гарантирован в retention horizon |
 | Lease expiry до начала effect | новый claim увеличивает generation/fence | старый claim не действует | новый worker продолжает |
@@ -287,6 +304,8 @@ durable `Result`. Наличие ошибки само по себе не отм
 | Broker MaxDeliver исчерпан на gap/busy/backoff | durable `WAIT` receipt; blockage остаётся в bounded list | без cursor/effect/ACK | новый scoped recovery после изменения eligibility |
 | Broker MaxDeliver исчерпан на eligible row | `REJOIN`, row становится немедленно replay-eligible | без cursor/effect/ACK | `replay_required` из авторитетного source/DLQ |
 | Broker MaxDeliver исчерпан вместе с attempt budget | `TERMINALIZE -> DEAD_LETTER` | predecessor продолжает блокировать | `repair_required`, ACK/skip запрещены |
+| Broker MaxDeliver исчерпан после durable `COMPLETED|STALE` | read-only `ack_eligible` по exact consumer/event/digest | без мутации/effect/cursor | adapter выполняет фактический `ack` |
+| Delivery read с иным digest/scope | без изменения/выдачи evidence | без мутации/effect/cursor | `ErrEventConflict`/`ErrDeliveryOutcomeNotFound` |
 | Restart после `WAIT|REJOIN|TERMINALIZE` commit | receipt и blockage читаются из PostgreSQL | без повторной мутации | точный прежний operator outcome |
 | Operator read без authority | без изменения/выдачи coordinates | без cursor/effect | `ErrOperatorNotAllowed` |
 | Repair без authority | без изменения event | без cursor/effect | `ErrOperatorNotAllowed` |
@@ -313,16 +332,36 @@ actor не выдаются. Для `Repair` возвращаются event/dige
 state/attempt/repair budget, cursor sequence, generation/fence, bounded failure
 code и PostgreSQL timestamps. Raw ordering key заменён SHA-256 digest.
 
+`ReadDeliveryOutcome` — отдельный авторизованный read точного
+`Consumer + eventId + eventDigest`. Он не входит в blockage pagination и не
+требует active generation/fence. После restart, crash после effect+commit до
+ACK либо исчерпания broker `MaxDeliver` он повторно читает durable
+`COMPLETED|STALE` и возвращает `ack_eligible`, `BrokerActionACK` и
+`Durable=true`. Фактический ACK выполняет только broker adapter. Метод не
+повторяет effect, не меняет cursor/state, не сохраняет receipt и не возвращает
+payload, raw ordering key, event/tenant/aggregate coordinates сверх exact
+identity запроса. Другой digest даёт `ErrEventConflict`; неизвестный
+consumer/scope/event — `ErrDeliveryOutcomeNotFound`; отказ trusted
+`OperatorAuthorizer` — закрытый `ErrOperatorNotAllowed`.
+
+Для `RECEIVED|PROCESSING|RETRY|DEAD_LETTER` тот же read возвращает отличимый
+`wait_predecessor|wait_lease|wait_backoff|replay_required|repair_required` и
+никогда не выдаёт ACK. Adapter продолжает через `GetBlockage` и при
+необходимости fenced `Recover`/`Repair`; read-only результат не terminalize-ит
+row и не превращает исчерпание broker redelivery в скрытый skip.
+
 Если broker исчерпал `MaxDeliver` на `gap|busy|retry`, adapter вызывает
 `Recover` до provider-specific termination. `Recover` не подтверждает и не
 пропускает событие: он сохраняет один из `wait_predecessor|wait_lease|`
-    `wait_backoff|replay_required|repair_required|ack_eligible`.
-`ack_eligible` возвращается только после авторитетного durable read уже
-`COMPLETED|STALE`; фактический ACK по-прежнему выполняет adapter. После изменения eligibility
-operator использует новую server-scoped idempotency operation/key; точный
-повтор прежнего scope возвращает неизменяемое старое решение. Replay выполняет
-внешний adapter из durable broker source/DLQ с исходным envelope. Если source
-утрачен, строка остаётся видимой blockage и cursor не продвигается.
+`wait_backoff|replay_required|repair_required|ack_eligible`. Fenced `Recover`
+может сохранить `ack_eligible`, если row завершилась до его lock; после restart
+без claim coordinates тот же результат достигается через
+`ReadDeliveryOutcome`. Фактический ACK по-прежнему выполняет adapter. После
+изменения eligibility operator использует новую server-scoped idempotency
+operation/key; точный повтор прежнего scope возвращает неизменяемое старое
+решение. Replay выполняет внешний adapter из durable broker source/DLQ с
+исходным envelope. Если source утрачен, строка остаётся видимой blockage и
+cursor не продвигается.
 
 `Repair`
 поддерживает только `REQUEUE`, не меняет envelope/digest/key/sequence и не
@@ -397,8 +436,12 @@ runtime principal не входит в роли владельцев schema/requ
 обязан быть owner, grantee — только exact `session_user`, `PUBLIC` и
 неожиданные roles запрещены, `WITH GRANT OPTION` запрещён для table/schema/
 function/sequence. Runtime principal не может быть superuser/createdb/
-createrole/replication/bypassrls и не может иметь membership/`SET ROLE` path к
-owner. Service sequences допускают только прямые non-grantable
+createrole/replication/bypassrls. Exact v1 profile запрещает любую запись
+`pg_auth_members`, где runtime principal является как `member`, так и `roleid`,
+независимо от `inherit_option`/`set_option`: поэтому он не входит в чужую роль,
+а чужая role/login не может унаследовать его DML или выполнить `SET ROLE` в
+него; первый и последний edge любой транзитивной цепочки также закрыты.
+Service sequences допускают только прямые non-grantable
 `USAGE|SELECT` runtime principal без `PUBLIC`/третьих roles; общий contract сам
 sequence не создаёт. Функция ordering key явно отзывает default `PUBLIC
 EXECUTE`, а migration выдаёт exact `EXECUTE` runtime principal. Каждая
@@ -475,9 +518,10 @@ broker/process boundary логирует её ровно один раз. Runtim
   actor authority; они только ограждают конкурентную обработку.
 - Operator request не содержит actor/organization/project/operation/key hash.
   `OperatorAuthorizer` обязан сопоставить exact action/consumer/event/digest/
-  generation/fence и caller key с canonical authorized scope из проверенного
-  context либо authoritative state; без этого hook read/recovery/repair
-  fail-closed.
+  scope с проверенным context либо authoritative state. Для mutation он также
+  проверяет generation/fence и caller key и назначает canonical durable scope;
+  read-only delivery outcome не принимает caller key или claim coordinates.
+  Без этого hook delivery read/blockage/recovery/repair fail-closed.
 
 ## Минимальное подключение
 
@@ -547,6 +591,29 @@ default:
 }
 ```
 
+После restart либо crash после commit до broker ACK adapter сначала выполняет
+точный авторизованный read и не нуждается в сохранённых generation/fence:
+
+```go
+delivery, err := processor.ReadDeliveryOutcome(operatorCtx,
+    postgresinbox.DeliveryOutcomeRequest{
+        Consumer:    consumer,
+        EventID:     eventID,
+        EventDigest: immutableDigest,
+    },
+)
+if err != nil {
+    return err
+}
+if delivery.Durable &&
+    delivery.Directive == postgresinbox.RecoveryACKEligible &&
+    delivery.Action == postgresinbox.BrokerActionACK {
+    return message.Ack()
+}
+// pending/gap/busy/retry/dead-letter остаются NACK/operator recovery path.
+return message.Nak()
+```
+
 При исчерпании broker redelivery adapter не делает скрытый success ACK:
 
 ```go
@@ -603,5 +670,7 @@ compensating change. Удаление колонок, evidence или marker н�
   index validity/predicate inspection, `pg_has_role` и exact
   `has_table_privilege` (`SELECT|INSERT|UPDATE|DELETE|TRUNCATE|REFERENCES|`
   `TRIGGER|MAINTAIN`), `has_*_privilege ... WITH GRANT OPTION`,
-  `aclexplode`, `acldefault` для table/schema/function/sequence и
-  `pg_auth_members`.
+  `aclexplode`, `acldefault` для table/schema/function/sequence,
+  `pg_auth_members` (`roleid`, `member`, `inherit_option`, `set_option`) и
+  `pg_has_role` (`MEMBER|USAGE|SET`). Также проверено требование единого порядка
+  row locks для предотвращения deadlock.

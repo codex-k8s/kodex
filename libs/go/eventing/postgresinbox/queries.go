@@ -75,6 +75,9 @@ var rawBlockageGet string
 //go:embed sql/blockage__list.sql
 var rawBlockageList string
 
+//go:embed sql/delivery__read_outcome.sql
+var rawDeliveryReadOutcome string
+
 //go:embed sql/effect__inspect.sql
 var rawEffectInspect string
 
@@ -111,6 +114,7 @@ type querySet struct {
 	inboxRecoverRejoin          string
 	blockageGet                 string
 	blockageList                string
+	deliveryReadOutcome         string
 	effectInspect               string
 	schemaInspect               string
 	schemaProbe                 string
@@ -146,6 +150,7 @@ func loadQueries() (querySet, error) {
 		{"inbox__recover_rejoin.sql", "inbox__recover_rejoin", ":exec", rawInboxRecoverRejoin},
 		{"blockage__get.sql", "blockage__get", ":one", rawBlockageGet},
 		{"blockage__list.sql", "blockage__list", ":many", rawBlockageList},
+		{"delivery__read_outcome.sql", "delivery__read_outcome", ":one", rawDeliveryReadOutcome},
 		{"effect__inspect.sql", "effect__inspect", ":one", rawEffectInspect},
 		{"schema__inspect.sql", "schema__inspect", ":many", rawSchemaInspect},
 		{"schema__probe.sql", "schema__probe", ":one", rawSchemaProbe},
@@ -176,6 +181,7 @@ func loadQueries() (querySet, error) {
 		&queries.inboxRecoverRejoin,
 		&queries.blockageGet,
 		&queries.blockageList,
+		&queries.deliveryReadOutcome,
 		&queries.effectInspect,
 		&queries.schemaInspect,
 		&queries.schemaProbe,

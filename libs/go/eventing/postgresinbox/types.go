@@ -252,13 +252,14 @@ func (failure *EffectFailure) Code() string { return failure.code }
 // Retryable сообщает, разрешён ли следующий attempt.
 func (failure *EffectFailure) Retryable() bool { return failure.retryable }
 
-// OperatorAction — закрытая авторизуемая операция над durable blockage.
+// OperatorAction — закрытая авторизуемая операция над durable evidence.
 type OperatorAction string
 
 const (
-	OperatorActionRead    OperatorAction = "read"
-	OperatorActionRecover OperatorAction = "recover"
-	OperatorActionRepair  OperatorAction = "repair"
+	OperatorActionRead            OperatorAction = "read"
+	OperatorActionDeliveryOutcome OperatorAction = "delivery_outcome"
+	OperatorActionRecover         OperatorAction = "recover"
+	OperatorActionRepair          OperatorAction = "repair"
 )
 
 // OperatorTarget содержит только exact consumer/event coordinates, не authority.
@@ -284,6 +285,44 @@ type OperatorAuthority struct {
 // OperatorAuthorizer назначает actor и canonical durable idempotency scope.
 type OperatorAuthorizer interface {
 	AuthorizeOperator(context.Context, OperatorTarget) (OperatorAuthority, error)
+}
+
+// DeliveryOutcomeRequest задаёт exact immutable identity авторитетного read.
+type DeliveryOutcomeRequest struct {
+	Consumer    Consumer
+	EventID     string
+	EventDigest [sha256.Size]byte
+}
+
+func (request DeliveryOutcomeRequest) validate() error {
+	if err := request.Consumer.validate(); err != nil {
+		return err
+	}
+	if !canonicalUUID(request.EventID) ||
+		request.EventDigest == ([sha256.Size]byte{}) {
+		return ErrInvalidDeliveryOutcomeRead
+	}
+	return nil
+}
+
+// DeliveryState — закрытое сохранённое состояние exact delivery evidence.
+type DeliveryState string
+
+const (
+	DeliveryStateReceived   DeliveryState = "RECEIVED"
+	DeliveryStateProcessing DeliveryState = "PROCESSING"
+	DeliveryStateRetry      DeliveryState = "RETRY"
+	DeliveryStateCompleted  DeliveryState = "COMPLETED"
+	DeliveryStateStale      DeliveryState = "STALE"
+	DeliveryStateDeadLetter DeliveryState = "DEAD_LETTER"
+)
+
+// DeliveryDecision — read-only решение для adapter без payload и claim coordinates.
+type DeliveryDecision struct {
+	State     DeliveryState
+	Directive RecoveryDirective
+	Action    BrokerAction
+	Durable   bool
 }
 
 // RepairRequest задаёт bounded audited REQUEUE exact dead-letter predecessor.

@@ -134,7 +134,7 @@ func requiredSchemaObjects() map[string]string {
 		"privilege/runtime_inbox_repairs":         "1",
 		"privilege/runtime_event_ordering_key":    "1",
 		"privilege/schema":                        "1",
-		"privilege/principal":                     "1",
+		"privilege/principal":                     "2",
 		"privilege/sequences":                     "1",
 	}
 

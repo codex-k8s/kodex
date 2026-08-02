@@ -15,6 +15,19 @@ const (
 	sqlStateUniqueViolation      = "23505"
 )
 
+type mutationLockResource uint8
+
+const (
+	mutationLockCursor mutationLockResource = iota + 1
+	mutationLockInbox
+)
+
+// canonicalMutationLockOrder закрепляет единый порядок для multi-row mutators.
+var canonicalMutationLockOrder = [...]mutationLockResource{
+	mutationLockCursor,
+	mutationLockInbox,
+}
+
 type cursorRow struct {
 	LastSequence    uint64
 	LastEventID     *string
@@ -170,6 +183,40 @@ func (processor *Processor) readInboxByEvent(
 	eventID string,
 ) (inboxRow, error) {
 	return processor.getInbox(ctx, tx, processor.queries.inboxGetByEvent, consumer, eventID)
+}
+
+// lockCursorThenInbox разрешает immutable key без lock, затем берёт cursor и inbox.
+func (processor *Processor) lockCursorThenInbox(
+	ctx context.Context,
+	tx pgx.Tx,
+	consumer Consumer,
+	eventID string,
+) (cursorRow, inboxRow, error) {
+	preRead, err := processor.readInboxByEvent(ctx, tx, consumer, eventID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return cursorRow{}, inboxRow{}, err
+		}
+		return cursorRow{}, inboxRow{}, wrapSafe(errorTextDatabaseOperation, err)
+	}
+	cursor, err := processor.ensureAndLockCursor(ctx, tx, consumer, preRead.OrderingKey)
+	if err != nil {
+		return cursorRow{}, inboxRow{}, err
+	}
+	row, err := processor.getInboxByEvent(ctx, tx, consumer, eventID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return cursorRow{}, inboxRow{}, ErrStaleClaim
+	}
+	if err != nil {
+		return cursorRow{}, inboxRow{}, wrapSafe(errorTextDatabaseOperation, err)
+	}
+	if row.EventID != preRead.EventID ||
+		!sameDigest(row.EventDigest, preRead.EventDigest) ||
+		!sameOrderingKey(row.OrderingKey, preRead.OrderingKey) ||
+		row.EventSequence != preRead.EventSequence {
+		return cursorRow{}, inboxRow{}, ErrStaleClaim
+	}
+	return cursor, row, nil
 }
 
 func (processor *Processor) getInbox(
