@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.9.0
+version: 1.10.0
 updated: 2026-08-02
 ---
 
@@ -271,13 +271,24 @@ grant generation, version/fence, state и времени lease. Lease token hash
 proof и значения credential не выводить. При stale heartbeat, terminal,
 cancel, retry или expiry проверить, что один PostgreSQL transaction:
 
-1. заблокировал exact execution и связанный Turn;
-2. сверил attempt/input/revision/workload/generation/version/fence;
+1. выполнил только read-only candidate discovery, затем заблокировал exact
+   существующий RuntimeExecution и связанный graph в порядке occurrence →
+   schedule → scheduled run → Session → Turn → ProcessRun;
+2. после ProcessRun заблокировал только применимые pinned resources,
+   OwnerGate и IntegrationContinuation и сверил
+   attempt/input/revision/workload/generation/version/fence;
 3. удалил совпавший Turn lease, завершил attempt и отозвал WorkClaim;
 4. проверил exact current ProcessRun и отсутствие open children/work, затем тем
    же `completeProcessFromTurn` согласованно закрыл ProcessRun и применимые
    occurrence/ScheduledRun;
 5. сделал единственный terminal transition и сохранил semantic receipt/audit.
+
+Для stale `ClaimTurn`, scheduler recovery и `ExpireOwnerGate` candidate queries
+не содержат `FOR UPDATE`: после выбора общий graph resolver получает locks и
+повторно проверяет state/version/lease/deadline. Для scheduled Turn current
+occurrence query обязана находить `CLAIMED`, `WAITING_OWNER`, `CONTINUATION` и
+`FAILED`; иначе `WAITING_OWNER` ошибочно станет unscheduled. PostgreSQL
+deadlock/serialization retry остаётся safety net, а не штатной синхронизацией.
 
 Если RuntimeExecution/Turn terminal, а ProcessRun остался `RUNNING`, считать
 transaction некорректной и не исправлять строки вручную. Retry сохранённых
@@ -336,7 +347,11 @@ input, continuation Turn и будущий grant, а scheduled occurrence/run
 `ProcessRunSpec.continuation_kind` обязан быть закрытым union: `OWNER_GATE`
 требует gate/owner-feedback, `INTEGRATION` требует exact continuation ID/outcome
 digest; смешанная или неполная binding является повреждением графа и закрыто
-отклоняется.
+отклоняется. Переход между arms выполняется только целой domain operation:
+открытие нового OwnerGate очищает завершённый INTEGRATION arm, а
+`CHANGES_REQUESTED` устанавливает полный OWNER_GATE tuple. Прежний outcome
+остаётся в IntegrationContinuation/audit; фиктивные gate ID или digest
+запрещены.
 Первый защищённый
 `GetIntegrationContinuation` имеет пустой request и разрешает строку из signed
 authority нового Turn; response возвращает current version/fence/input для

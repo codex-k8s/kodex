@@ -703,6 +703,21 @@ func (wrapped *transaction) GetForUpdate(
 	))
 }
 
+func (wrapped *transaction) Get(
+	ctx context.Context,
+	organizationID, projectID, resourceID string,
+) (entity.Resource, error) {
+	return scanResource(wrapped.tx.QueryRow(
+		ctx,
+		sqlResourceGet,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"resource_id":     resourceID,
+		},
+	))
+}
+
 func (wrapped *transaction) Insert(ctx context.Context, resource entity.Resource) error {
 	spec, err := marshalSpec(resource.Spec)
 	if err != nil {
@@ -961,7 +976,7 @@ func (wrapped *transaction) NextQueuedTurn(
 	))
 }
 
-func (wrapped *transaction) ExpiredClaimedTurns(
+func (wrapped *transaction) ExpiredClaimedTurnCandidates(
 	ctx context.Context,
 	organizationID, projectID, turnID string,
 	limit int,
@@ -1466,14 +1481,14 @@ func (wrapped *transaction) SkipOverlappedScheduleOccurrences(
 	return occurrences, mapError(rows.Err())
 }
 
-func (wrapped *transaction) LockExpiredScheduleOccurrences(
+func (wrapped *transaction) ExpiredScheduleOccurrenceCandidates(
 	ctx context.Context,
 	organizationID, projectID string,
 	now time.Time,
 ) ([]domainrepo.ScheduleOccurrence, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
-		sqlScheduleOccurrenceLockExpired,
+		sqlScheduleOccurrenceExpiredCandidates,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -1568,13 +1583,28 @@ func (wrapped *transaction) GetScheduleOccurrenceForUpdate(
 	))
 }
 
-func (wrapped *transaction) GetScheduleOccurrenceByCurrentTurnForUpdate(
+func (wrapped *transaction) GetScheduleOccurrence(
+	ctx context.Context,
+	organizationID, projectID, occurrenceID string,
+) (domainrepo.ScheduleOccurrence, error) {
+	return scanScheduleOccurrence(wrapped.tx.QueryRow(
+		ctx,
+		sqlScheduleOccurrenceGet,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"id":              occurrenceID,
+		},
+	))
+}
+
+func (wrapped *transaction) GetScheduleOccurrenceByCurrentTurn(
 	ctx context.Context,
 	organizationID, projectID, turnID string,
 ) (domainrepo.ScheduleOccurrence, error) {
 	return scanScheduleOccurrence(wrapped.tx.QueryRow(
 		ctx,
-		sqlScheduleOccurrenceGetByCurrentTurnForUpdate,
+		sqlScheduleOccurrenceGetByCurrentTurn,
 		pgx.StrictNamedArgs{
 			"organization_id": organizationID,
 			"project_id":      projectID,
@@ -2057,7 +2087,7 @@ func (wrapped *transaction) NextOwnerGateDelivery(
 	))
 }
 
-func (wrapped *transaction) NextExpiredOwnerGate(
+func (wrapped *transaction) NextExpiredOwnerGateCandidate(
 	ctx context.Context,
 	organizationID, projectID string,
 ) (entity.Resource, error) {

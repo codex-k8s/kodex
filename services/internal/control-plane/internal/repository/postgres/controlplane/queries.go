@@ -162,11 +162,14 @@ var sqlIntegrationContinuationUpdate string
 //go:embed sql/schedule__due.sql
 var sqlScheduleDue string
 
+//go:embed sql/schedule_occurrence__get.sql
+var sqlScheduleOccurrenceGet string
+
 //go:embed sql/schedule_occurrence__get_for_update.sql
 var sqlScheduleOccurrenceGetForUpdate string
 
-//go:embed sql/schedule_occurrence__get_by_current_turn_for_update.sql
-var sqlScheduleOccurrenceGetByCurrentTurnForUpdate string
+//go:embed sql/schedule_occurrence__get_by_current_turn.sql
+var sqlScheduleOccurrenceGetByCurrentTurn string
 
 //go:embed sql/schedule_occurrence__has_open.sql
 var sqlScheduleOccurrenceHasOpen string
@@ -178,7 +181,7 @@ var sqlScheduleOccurrenceList string
 var sqlScheduleOccurrenceNext string
 
 //go:embed sql/schedule_occurrence__lock_expired.sql
-var sqlScheduleOccurrenceLockExpired string
+var sqlScheduleOccurrenceExpiredCandidates string
 
 //go:embed sql/schedule_occurrence__save.sql
 var sqlScheduleOccurrenceSave string

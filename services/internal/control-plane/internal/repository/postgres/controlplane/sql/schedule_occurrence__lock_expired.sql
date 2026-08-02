@@ -1,4 +1,4 @@
--- name: ScheduleOccurrenceLockExpired
+-- name: ScheduleOccurrenceExpiredCandidates
 SELECT
     occurrence.id::text,
     occurrence.schedule_id::text,
@@ -47,5 +47,4 @@ WHERE occurrence.organization_id = @organization_id::uuid
   AND occurrence.state = 'CLAIMED'
   AND occurrence.lease_expires_at <= @now
 ORDER BY occurrence.lease_expires_at, occurrence.scheduled_for, occurrence.id
-FOR UPDATE OF occurrence SKIP LOCKED
 LIMIT 16

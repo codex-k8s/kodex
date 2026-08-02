@@ -34,5 +34,4 @@ WHERE resource.organization_id = @organization_id::uuid
   AND resource.state = 'CLAIMED'
   AND lease.expires_at <= @now
 ORDER BY lease.expires_at, resource.id
-FOR UPDATE OF resource, lease SKIP LOCKED
 LIMIT @limit

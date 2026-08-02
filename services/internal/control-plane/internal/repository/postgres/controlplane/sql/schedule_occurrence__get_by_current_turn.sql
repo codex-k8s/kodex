@@ -1,4 +1,4 @@
--- name: ScheduleOccurrenceGetByCurrentTurnForUpdate
+-- name: ScheduleOccurrenceGetByCurrentTurn
 SELECT
     occurrence.id::text,
     occurrence.schedule_id::text,
@@ -45,7 +45,7 @@ FROM control_plane.schedule_occurrences AS occurrence
 WHERE occurrence.organization_id = @organization_id::uuid
   AND occurrence.project_id = @project_id::uuid
   AND occurrence.execution_turn_id = @turn_id::uuid
-  AND occurrence.state IN ('CLAIMED', 'CONTINUATION')
+  AND occurrence.state IN ('CLAIMED', 'WAITING_OWNER', 'CONTINUATION', 'FAILED')
   AND EXISTS (
       SELECT 1
       FROM control_plane.scheduled_runs AS run
@@ -54,4 +54,3 @@ WHERE occurrence.organization_id = @organization_id::uuid
         AND run.current_turn_id = @turn_id::uuid
         AND run.state = occurrence.state
   )
-FOR UPDATE OF occurrence

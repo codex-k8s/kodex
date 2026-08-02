@@ -57,7 +57,8 @@ type TurnLease struct {
 	Fence               uint64
 }
 
-// ExpiredTurn связывает полученный агрегат с истёкшей арендой под одной блокировкой.
+// ExpiredTurn связывает unlocked candidate агрегата с истёкшей арендой.
+// Команда обязана повторно получить их через канонический owner-graph lock path.
 type ExpiredTurn struct {
 	Turn  entity.Resource
 	Lease TurnLease
@@ -407,6 +408,7 @@ type Transaction interface {
 	CurrentTime(context.Context) (time.Time, error)
 	GetReceipt(context.Context, string, string, string) (Receipt, error)
 	SaveReceipt(context.Context, Receipt) error
+	Get(context.Context, string, string, string) (entity.Resource, error)
 	GetForUpdate(context.Context, string, string, string) (entity.Resource, error)
 	Insert(context.Context, entity.Resource) error
 	Update(context.Context, entity.Resource, uint64) error
@@ -416,7 +418,7 @@ type Transaction interface {
 	ActorRoleIDs(context.Context, string, string, string) ([]string, error)
 	ListSnapshotResources(context.Context, string, string) ([]entity.Resource, error)
 	LatestRuntimeRevision(context.Context, string, string) (entity.Resource, error)
-	ExpiredClaimedTurns(context.Context, string, string, string, int, time.Time) ([]ExpiredTurn, error)
+	ExpiredClaimedTurnCandidates(context.Context, string, string, string, int, time.Time) ([]ExpiredTurn, error)
 	OpenSessionTurns(context.Context, string, string, string) ([]SessionTurn, error)
 	NextQueuedTurn(context.Context, string, string, string) (entity.Resource, error)
 	SaveTurnLease(context.Context, TurnLease) error
@@ -463,7 +465,7 @@ type Transaction interface {
 		string,
 		time.Time,
 	) ([]ScheduleOccurrence, error)
-	LockExpiredScheduleOccurrences(
+	ExpiredScheduleOccurrenceCandidates(
 		context.Context,
 		string,
 		string,
@@ -471,8 +473,9 @@ type Transaction interface {
 	) ([]ScheduleOccurrence, error)
 	NextScheduleOccurrence(context.Context, string, string, time.Time) (ScheduleOccurrence, error)
 	UpdateScheduleOccurrence(context.Context, ScheduleOccurrence, uint32, string) error
+	GetScheduleOccurrence(context.Context, string, string, string) (ScheduleOccurrence, error)
 	GetScheduleOccurrenceForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
-	GetScheduleOccurrenceByCurrentTurnForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
+	GetScheduleOccurrenceByCurrentTurn(context.Context, string, string, string) (ScheduleOccurrence, error)
 	SaveScheduledRun(context.Context, ScheduledRun) error
 	GetScheduledRunForUpdate(context.Context, string, uint32) (ScheduledRun, error)
 	GetScheduledRunByCurrentTurnForUpdate(context.Context, string) (ScheduledRun, error)
@@ -487,7 +490,7 @@ type Transaction interface {
 	SearchMemory(context.Context, MemorySearch) ([]MemorySearchHit, error)
 	HasActiveChildProcesses(context.Context, string, string, string) (bool, error)
 	NextOwnerGateDelivery(context.Context, string, string, time.Time) (entity.Resource, error)
-	NextExpiredOwnerGate(context.Context, string, string) (entity.Resource, error)
+	NextExpiredOwnerGateCandidate(context.Context, string, string) (entity.Resource, error)
 	ListTerminalOutbox(context.Context, string, string, string, int) ([]OutboxFailure, error)
 	RepairTerminalOutbox(context.Context, OutboxRepair) (OutboxFailure, error)
 	ActiveProviderSessions(context.Context, string, string, string) (uint64, error)

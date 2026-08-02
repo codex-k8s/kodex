@@ -24,8 +24,9 @@ const (
 )
 
 var scheduledGraphLockOrder = [...]string{
-	"runtime_execution", "schedule_occurrence", "schedule", "scheduled_run",
-	"session", "turn", "process_run", "integration_continuation",
+	graphLockRuntimeExecution, graphLockOccurrence, graphLockSchedule,
+	graphLockScheduledRun, graphLockSession, graphLockTurn, graphLockProcessRun,
+	graphLockPinnedResource, graphLockOwnerGate, graphLockContinuation,
 }
 
 type resolvedExecution struct {
@@ -40,6 +41,7 @@ type resolvedExecution struct {
 	Role         entity.Resource
 	RoleSpec     entity.RoleSpec
 	RevisionHash string
+	Runtime      *RuntimeExecution
 }
 
 type runtimeExecutionIntent struct {
@@ -187,12 +189,13 @@ func (service *Service) resolveBoundExecution(
 		!validSHA256Text(principal.AuthorityDigest) {
 		return resolvedExecution{}, errs.ErrPermissionDenied
 	}
-	turn, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, principal.AuthorityReference,
+	graph, err := service.lockOwnerGraphByTurn(
+		ctx, tx, principal, principal.AuthorityReference,
 	)
 	if err != nil {
 		return resolvedExecution{}, err
 	}
+	turn, session, process := graph.Turn, graph.Session, graph.Process
 	turnSpec, ok := turn.Spec.(entity.TurnSpec)
 	if !ok || turn.Kind != enum.KindTurn || turn.OwnerActorID != principal.ActorID ||
 		turnSpec.Attempt != uint32(principal.AuthorityRevision) ||
@@ -200,6 +203,27 @@ func (service *Service) resolveBoundExecution(
 		turnSpec.ProcessRunID == "" {
 		return resolvedExecution{}, errs.ErrNotFound
 	}
+	if graph.Runtime != nil &&
+		(graph.Runtime.RuntimeRevisionID != turnSpec.RuntimeRevisionID ||
+			graph.Runtime.GrantGeneration != principal.AuthorityGrantGeneration) {
+		return resolvedExecution{}, errs.ErrNotFound
+	}
+	sessionSpec, ok := session.Spec.(entity.SessionSpec)
+	if !ok || session.Kind != enum.KindSession || session.OwnerActorID != turn.OwnerActorID {
+		return resolvedExecution{}, errs.ErrStateConflict
+	}
+	processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+	current, currentErr := currentExecution(processSpec)
+	if !ok || currentErr != nil || process.Kind != enum.KindProcessRun ||
+		process.OwnerActorID != turn.OwnerActorID || process.State.Terminal() ||
+		current.SessionID != session.ID || current.TurnID != turn.ID ||
+		current.Attempt != turnSpec.Attempt ||
+		current.RuntimeRevisionID != turnSpec.RuntimeRevisionID ||
+		current.InputSHA256 != turnSpec.EffectiveInputSHA256 {
+		return resolvedExecution{}, errs.ErrStateConflict
+	}
+	// Lease/attempt являются дочерними строками уже заблокированного Turn и
+	// берутся только после полного owner graph, чтобы не образовать inversion.
 	lease, err := tx.GetTurnLeaseForUpdate(ctx, turn.ID)
 	if err != nil {
 		return resolvedExecution{}, err
@@ -219,32 +243,6 @@ func (service *Service) resolveBoundExecution(
 		attempt.InputSHA256 != turnSpec.EffectiveInputSHA256 ||
 		!attempt.FinishedAt.IsZero() {
 		return resolvedExecution{}, errs.ErrNotFound
-	}
-	session, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, turnSpec.SessionID,
-	)
-	if err != nil {
-		return resolvedExecution{}, err
-	}
-	sessionSpec, ok := session.Spec.(entity.SessionSpec)
-	if !ok || session.Kind != enum.KindSession || session.OwnerActorID != turn.OwnerActorID {
-		return resolvedExecution{}, errs.ErrStateConflict
-	}
-	process, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, turnSpec.ProcessRunID,
-	)
-	if err != nil {
-		return resolvedExecution{}, err
-	}
-	processSpec, ok := process.Spec.(entity.ProcessRunSpec)
-	current, currentErr := currentExecution(processSpec)
-	if !ok || currentErr != nil || process.Kind != enum.KindProcessRun ||
-		process.OwnerActorID != turn.OwnerActorID || process.State.Terminal() ||
-		current.SessionID != session.ID || current.TurnID != turn.ID ||
-		current.Attempt != turnSpec.Attempt ||
-		current.RuntimeRevisionID != turnSpec.RuntimeRevisionID ||
-		current.InputSHA256 != turnSpec.EffectiveInputSHA256 {
-		return resolvedExecution{}, errs.ErrStateConflict
 	}
 	revision, err := tx.GetForUpdate(
 		ctx, principal.OrganizationID, principal.ProjectID, turnSpec.RuntimeRevisionID,
@@ -292,12 +290,14 @@ func (service *Service) resolveBoundExecution(
 	if roleComponentCount != 1 || !roleMatches {
 		return resolvedExecution{}, errs.ErrStateConflict
 	}
-	return resolvedExecution{
+	resolved := resolvedExecution{
 		Turn: turn, TurnSpec: turnSpec, Session: session, SessionSpec: sessionSpec,
 		Process: process, ProcessSpec: processSpec, Revision: revision,
 		RevisionSpec: revisionSpec,
 		Role:         role, RoleSpec: roleSpec, RevisionHash: revisionHash,
-	}, nil
+	}
+	resolved.Runtime = graph.Runtime
+	return resolved, nil
 }
 
 func runtimeResourcePolicy(role entity.RoleSpec) (string, string) {
@@ -343,10 +343,8 @@ func (service *Service) ClaimRuntimeExecution(
 			if err != nil {
 				return err
 			}
-			existing, err := tx.GetRuntimeExecutionByTurnForUpdate(
-				ctx, resolved.Turn.ID, resolved.TurnSpec.Attempt,
-			)
-			if err == nil {
+			if resolved.Runtime != nil {
+				existing := *resolved.Runtime
 				if existing.GrantGeneration != principal.AuthorityGrantGeneration ||
 					existing.RuntimeRevisionSHA256 != resolved.RevisionHash ||
 					existing.ImmutableInputSHA256 != principal.AuthorityDigest {
@@ -354,9 +352,6 @@ func (service *Service) ClaimRuntimeExecution(
 				}
 				result = existing
 				return nil
-			}
-			if !errors.Is(err, errs.ErrNotFound) {
-				return err
 			}
 			resourceClass, clusterProfile := runtimeResourcePolicy(resolved.RoleSpec)
 			now := service.now().UTC().Truncate(time.Microsecond)
@@ -2415,54 +2410,30 @@ func (service *Service) prelockRuntimeScheduledGraph(
 	principal value.Principal,
 	execution RuntimeExecution,
 ) error {
-	occurrence, err := tx.GetScheduleOccurrenceByCurrentTurnForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, execution.TurnID,
-	)
-	if errors.Is(err, errs.ErrNotFound) {
-		session, sessionErr := tx.GetForUpdate(
-			ctx, principal.OrganizationID, principal.ProjectID, execution.SessionID,
-		)
-		if sessionErr != nil {
-			return sessionErr
-		}
-		if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID {
-			return errs.ErrStateConflict
-		}
+	graph, err := service.lockOwnerGraphByTurn(ctx, tx, principal, execution.TurnID)
+	if err != nil {
+		return err
+	}
+	if graph.Runtime == nil || graph.Runtime.ID != execution.ID ||
+		graph.Runtime.Version != execution.Version || graph.Runtime.Fence != execution.Fence ||
+		graph.Session.ID != execution.SessionID || graph.Process.ID != execution.ProcessID ||
+		graph.Session.Kind != enum.KindSession ||
+		graph.Session.OwnerActorID != principal.ActorID {
+		return errs.ErrStateConflict
+	}
+	if graph.Occurrence.ID == "" {
 		return nil
 	}
-	if err != nil {
-		return err
-	}
-	if occurrence.ExecutionTurnID != execution.TurnID ||
-		occurrence.ExecutionProcessRunID != execution.ProcessID ||
-		occurrence.ExecutionSessionID != execution.SessionID ||
-		occurrence.ExecutionRuntimeRevisionID != execution.RuntimeRevisionID ||
-		occurrence.ExecutionRuntimeRevisionVersion != execution.RuntimeRevisionVersion ||
-		occurrence.EffectiveInputSHA256 != execution.ImmutableInputSHA256 {
-		return errs.ErrStateConflict
-	}
-	schedule, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, occurrence.ScheduleID,
-	)
-	if err != nil {
-		return err
-	}
-	if schedule.Kind != enum.KindSchedule || schedule.OwnerActorID != principal.ActorID {
-		return errs.ErrStateConflict
-	}
-	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
-	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
-		!scheduledExecutionMayLockRuntime(occurrence.State, run.State) ||
-		run.CurrentTurnAttempt != execution.Attempt {
-		return errs.ErrStateConflict
-	}
-	session, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, execution.SessionID,
-	)
-	if err != nil {
-		return err
-	}
-	if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID {
+	if graph.Occurrence.ExecutionTurnID != execution.TurnID ||
+		graph.Occurrence.ExecutionProcessRunID != execution.ProcessID ||
+		graph.Occurrence.ExecutionSessionID != execution.SessionID ||
+		graph.Occurrence.ExecutionRuntimeRevisionID != execution.RuntimeRevisionID ||
+		graph.Occurrence.ExecutionRuntimeRevisionVersion != execution.RuntimeRevisionVersion ||
+		graph.Occurrence.EffectiveInputSHA256 != execution.ImmutableInputSHA256 ||
+		graph.Schedule.Kind != enum.KindSchedule ||
+		graph.Schedule.OwnerActorID != principal.ActorID ||
+		!scheduledExecutionMayLockRuntime(graph.Occurrence.State, graph.Run.State) ||
+		graph.Run.CurrentTurnAttempt != execution.Attempt {
 		return errs.ErrStateConflict
 	}
 	return nil
@@ -2482,37 +2453,8 @@ func (service *Service) prelockScheduledGraphByTurn(
 	principal value.Principal,
 	turnID string,
 ) error {
-	occurrence, err := tx.GetScheduleOccurrenceByCurrentTurnForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, turnID,
-	)
-	if errors.Is(err, errs.ErrNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	schedule, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, occurrence.ScheduleID,
-	)
-	if err != nil {
-		return err
-	}
-	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
-	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
-		occurrence.ExecutionTurnID != turnID || schedule.Kind != enum.KindSchedule ||
-		schedule.OwnerActorID != principal.ActorID {
-		return errs.ErrStateConflict
-	}
-	session, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, occurrence.ExecutionSessionID,
-	)
-	if err != nil {
-		return err
-	}
-	if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID {
-		return errs.ErrStateConflict
-	}
-	return nil
+	_, err := service.lockOwnerGraphByTurn(ctx, tx, principal, turnID)
+	return err
 }
 
 func (service *Service) suspendIntegrationGraph(
@@ -3282,17 +3224,13 @@ func (service *Service) materializeIntegrationContinuation(
 		InputSHA256: inputDigest,
 	}
 	setCurrentExecution(&processSpec, tuple)
-	processSpec.ContinuationTurnID = turn.ID
-	processSpec.ContinuationTurnVersion = turn.Version
-	processSpec.ContinuationAttempt = 1
-	processSpec.ContinuationRuntimeRevisionID = revision.ID
-	processSpec.ContinuationRuntimeRevisionVersion = revision.Version
-	processSpec.ContinuationInputSHA256 = inputDigest
-	processSpec.ContinuationKind = enum.ProcessContinuationIntegration
-	processSpec.ContinuationIntegrationID = continuation.ID
-	processSpec.ContinuationOutcomeSHA256 = outcomeDigest
-	processSpec.ContinuationGateID = ""
-	processSpec.OwnerFeedbackSHA256 = ""
+	if err := processSpec.SetIntegrationContinuation(entity.ProcessContinuationBinding{
+		TurnID: turn.ID, TurnVersion: turn.Version, Attempt: 1,
+		RuntimeRevisionID: revision.ID, RuntimeRevisionVersion: revision.Version,
+		InputSHA256: inputDigest,
+	}, continuation.ID, outcomeDigest); err != nil {
+		return errs.ErrStateConflict
+	}
 	runningProcess, err := process.ReplaceAndTransition(processSpec, enum.StateRunning, now)
 	if err != nil {
 		return errs.ErrStateConflict

@@ -2,7 +2,10 @@ package resource
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +47,31 @@ func TestSemanticCommandHashIgnoresOneTimeCorrelationID(t *testing.T) {
 	changed, err := semanticCommandHash(principal, intent)
 	if err != nil || changed == first {
 		t.Fatalf("authority-critical generation did not change semantic intent")
+	}
+}
+
+func TestProcessContinuationProductionPathsUseDomainArmOperations(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read resource package: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".go" ||
+			strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		content, err := os.ReadFile(entry.Name())
+		if err != nil {
+			t.Fatalf("read %s: %v", entry.Name(), err)
+		}
+		for lineNumber, line := range strings.Split(string(content), "\n") {
+			left, _, assignment := strings.Cut(line, " = ")
+			if assignment && (strings.Contains(left, "processSpec.Continuation") ||
+				strings.Contains(left, "processSpec.OwnerFeedbackSHA256")) {
+				t.Fatalf("manual continuation arm write in %s:%d: %s",
+					entry.Name(), lineNumber+1, strings.TrimSpace(line))
+			}
+		}
 	}
 }
 
@@ -89,15 +117,62 @@ func TestProcessContinuationBindingClosedUnion(t *testing.T) {
 	if err := integration.Validate(); err == nil {
 		t.Fatal("mixed owner gate and integration continuation was accepted")
 	}
+
+	binding := entity.ProcessContinuationBinding{
+		TurnID: base.ContinuationTurnID, TurnVersion: base.ContinuationTurnVersion,
+		Attempt:                base.ContinuationAttempt,
+		RuntimeRevisionID:      base.ContinuationRuntimeRevisionID,
+		RuntimeRevisionVersion: base.ContinuationRuntimeRevisionVersion,
+		InputSHA256:            base.ContinuationInputSHA256,
+	}
+	switched := ownerGate
+	if err := switched.SetIntegrationContinuation(
+		binding, integration.ContinuationIntegrationID, digest,
+	); err != nil {
+		t.Fatalf("OWNER_GATE -> INTEGRATION: %v", err)
+	}
+	if switched.ContinuationKind != enum.ProcessContinuationIntegration ||
+		switched.ContinuationGateID != "" || switched.OwnerFeedbackSHA256 != "" ||
+		switched.Validate() != nil {
+		t.Fatalf("OWNER_GATE fields survived arm switch: %#v", switched)
+	}
+	if err := switched.SetOwnerGateContinuation(
+		binding, ownerGate.ContinuationGateID, digest,
+	); err != nil {
+		t.Fatalf("INTEGRATION -> OWNER_GATE: %v", err)
+	}
+	if switched.ContinuationKind != enum.ProcessContinuationOwnerGate ||
+		switched.ContinuationIntegrationID != "" ||
+		switched.ContinuationOutcomeSHA256 != "" || switched.Validate() != nil {
+		t.Fatalf("INTEGRATION fields survived arm switch: %#v", switched)
+	}
+	switched.ClearContinuation()
+	if switched.ContinuationKind != enum.ProcessContinuationNone ||
+		switched.ContinuationTurnID != "" || switched.ContinuationGateID != "" ||
+		switched.ContinuationIntegrationID != "" || switched.Validate() != nil {
+		t.Fatalf("continuation arm was not cleared: %#v", switched)
+	}
 }
 
 func TestScheduledGraphCanonicalLockOrder(t *testing.T) {
 	want := []string{
 		"runtime_execution", "schedule_occurrence", "schedule", "scheduled_run",
-		"session", "turn", "process_run", "integration_continuation",
+		"session", "turn", "process_run", "pinned_resource", "owner_gate",
+		"integration_continuation",
 	}
 	if !slices.Equal(scheduledGraphLockOrder[:], want) {
 		t.Fatalf("unexpected scheduled graph lock order: %v", scheduledGraphLockOrder)
+	}
+	if got := ownerGraphLockPlan(true, true, true); !slices.Equal(
+		got,
+		[]string{"runtime_execution", "schedule_occurrence", "schedule", "scheduled_run", "session", "turn", "process_run"},
+	) {
+		t.Fatalf("unexpected scheduled owner graph trace: %v", got)
+	}
+	if got := ownerGraphLockPlan(false, false, true); !slices.Equal(
+		got, []string{"session", "turn", "process_run"},
+	) {
+		t.Fatalf("unexpected unscheduled owner graph trace: %v", got)
 	}
 }
 

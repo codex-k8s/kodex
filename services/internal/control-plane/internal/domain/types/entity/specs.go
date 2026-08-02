@@ -578,6 +578,92 @@ type ProcessRunSpec struct {
 	CurrentInputSHA256                 string                       `json:"currentInputSha256,omitempty"`
 }
 
+// ProcessContinuationBinding задаёт общую server-owned координату одного
+// активного arm закрытого ProcessRun continuation union.
+type ProcessContinuationBinding struct {
+	TurnID                 string
+	TurnVersion            uint64
+	Attempt                uint32
+	RuntimeRevisionID      string
+	RuntimeRevisionVersion uint64
+	InputSHA256            string
+}
+
+func (binding ProcessContinuationBinding) validate() error {
+	if value.ValidateID(binding.TurnID) != nil || binding.TurnVersion == 0 ||
+		binding.Attempt == 0 || binding.Attempt > 100 ||
+		value.ValidateID(binding.RuntimeRevisionID) != nil ||
+		binding.RuntimeRevisionVersion == 0 || !validSHA256(binding.InputSHA256) {
+		return errors.New("process continuation binding is invalid")
+	}
+	return nil
+}
+
+// SetOwnerGateContinuation атомарно переключает union на OWNER_GATE и удаляет
+// все поля INTEGRATION arm. История прежнего arm остаётся в owner aggregate и audit.
+func (spec *ProcessRunSpec) SetOwnerGateContinuation(
+	binding ProcessContinuationBinding,
+	gateID, feedbackSHA256 string,
+) error {
+	if binding.validate() != nil || value.ValidateID(gateID) != nil ||
+		!validSHA256(feedbackSHA256) {
+		return errors.New("owner gate continuation binding is invalid")
+	}
+	spec.clearContinuation()
+	spec.ContinuationKind = enum.ProcessContinuationOwnerGate
+	spec.ContinuationGateID = gateID
+	spec.OwnerFeedbackSHA256 = feedbackSHA256
+	spec.setContinuationBinding(binding)
+	return nil
+}
+
+// SetIntegrationContinuation атомарно переключает union на INTEGRATION и
+// удаляет все поля OWNER_GATE arm.
+func (spec *ProcessRunSpec) SetIntegrationContinuation(
+	binding ProcessContinuationBinding,
+	integrationContinuationID, outcomeSHA256 string,
+) error {
+	if binding.validate() != nil || value.ValidateID(integrationContinuationID) != nil ||
+		!validSHA256(outcomeSHA256) {
+		return errors.New("integration continuation binding is invalid")
+	}
+	spec.clearContinuation()
+	spec.ContinuationKind = enum.ProcessContinuationIntegration
+	spec.ContinuationIntegrationID = integrationContinuationID
+	spec.ContinuationOutcomeSHA256 = outcomeSHA256
+	spec.setContinuationBinding(binding)
+	return nil
+}
+
+// ClearContinuation завершает активный continuation arm. Provenance не
+// переносится между arms и сохраняется только в исходном owner aggregate/audit.
+func (spec *ProcessRunSpec) ClearContinuation() {
+	spec.clearContinuation()
+}
+
+func (spec *ProcessRunSpec) setContinuationBinding(binding ProcessContinuationBinding) {
+	spec.ContinuationTurnID = binding.TurnID
+	spec.ContinuationTurnVersion = binding.TurnVersion
+	spec.ContinuationAttempt = binding.Attempt
+	spec.ContinuationRuntimeRevisionID = binding.RuntimeRevisionID
+	spec.ContinuationRuntimeRevisionVersion = binding.RuntimeRevisionVersion
+	spec.ContinuationInputSHA256 = binding.InputSHA256
+}
+
+func (spec *ProcessRunSpec) clearContinuation() {
+	spec.ContinuationKind = enum.ProcessContinuationNone
+	spec.ContinuationGateID = ""
+	spec.ContinuationIntegrationID = ""
+	spec.ContinuationOutcomeSHA256 = ""
+	spec.OwnerFeedbackSHA256 = ""
+	spec.ContinuationTurnID = ""
+	spec.ContinuationTurnVersion = 0
+	spec.ContinuationAttempt = 0
+	spec.ContinuationRuntimeRevisionID = ""
+	spec.ContinuationRuntimeRevisionVersion = 0
+	spec.ContinuationInputSHA256 = ""
+}
+
 func (ProcessRunSpec) Kind() enum.Kind { return enum.KindProcessRun }
 func (spec ProcessRunSpec) Validate() error {
 	if !validExternalRef(spec.PlaybookRef) || spec.PolicyRevision == 0 ||

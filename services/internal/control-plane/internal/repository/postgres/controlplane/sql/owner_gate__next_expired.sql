@@ -1,4 +1,4 @@
--- name: OwnerGateNextExpired
+-- name: OwnerGateNextExpiredCandidate
 SELECT
     id,
     organization_id,
@@ -20,5 +20,4 @@ WHERE organization_id = @organization_id::uuid
   AND state = 'WAITING_OWNER'
   AND (spec ->> 'expiresAt')::timestamptz <= clock_timestamp()
 ORDER BY (spec ->> 'expiresAt')::timestamptz, created_at, id
-FOR UPDATE SKIP LOCKED
 LIMIT 1

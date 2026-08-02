@@ -112,8 +112,10 @@ func (service *Service) prepareRetriedExecution(
 		); err != nil {
 			return entity.Resource{}, entity.TurnSpec{}, err
 		}
-		processSpec.ContinuationGateID = gate.ID
-		processSpec.ContinuationKind = enum.ProcessContinuationOwnerGate
+		// Незавершённый gate не имеет owner feedback и поэтому не является
+		// OWNER_GATE continuation arm. Retry закрывает gate и начинает обычную
+		// свежую попытку без фиктивных gate/digest provenance.
+		processSpec.ClearContinuation()
 	}
 	tuple := executionTuple{
 		SessionID:              session.ID,
@@ -128,22 +130,30 @@ func (service *Service) prepareRetriedExecution(
 	setCurrentExecution(&processSpec, tuple)
 	processSpec.Outcome = ""
 	processSpec.ResultArtifactID = ""
-	if processSpec.ContinuationKind != enum.ProcessContinuationNone || wasWaitingOwner {
-		processSpec.ContinuationTurnID = retried.ID
-		processSpec.ContinuationTurnVersion = retried.Version
-		processSpec.ContinuationAttempt = spec.Attempt
-		processSpec.ContinuationRuntimeRevisionID = revision.ID
-		processSpec.ContinuationRuntimeRevisionVersion = revision.Version
-		processSpec.ContinuationInputSHA256 = spec.EffectiveInputSHA256
-		if processSpec.ContinuationKind == enum.ProcessContinuationOwnerGate &&
-			processSpec.OwnerFeedbackSHA256 == "" {
-			processSpec.OwnerFeedbackSHA256 = hashString("retry_turn")
-		}
-		if processSpec.ContinuationKind == enum.ProcessContinuationIntegration &&
-			(value.ValidateID(processSpec.ContinuationIntegrationID) != nil ||
-				!validSHA256Text(processSpec.ContinuationOutcomeSHA256)) {
+	continuationBinding := entity.ProcessContinuationBinding{
+		TurnID: retried.ID, TurnVersion: retried.Version, Attempt: spec.Attempt,
+		RuntimeRevisionID: revision.ID, RuntimeRevisionVersion: revision.Version,
+		InputSHA256: spec.EffectiveInputSHA256,
+	}
+	switch processSpec.ContinuationKind {
+	case enum.ProcessContinuationNone:
+		processSpec.ClearContinuation()
+	case enum.ProcessContinuationOwnerGate:
+		if err := processSpec.SetOwnerGateContinuation(
+			continuationBinding, processSpec.ContinuationGateID,
+			processSpec.OwnerFeedbackSHA256,
+		); err != nil {
 			return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 		}
+	case enum.ProcessContinuationIntegration:
+		if err := processSpec.SetIntegrationContinuation(
+			continuationBinding, processSpec.ContinuationIntegrationID,
+			processSpec.ContinuationOutcomeSHA256,
+		); err != nil {
+			return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
+		}
+	default:
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
 	var updatedProcess entity.Resource
 	if process.State == enum.StateFailed || process.State == enum.StateExpired ||

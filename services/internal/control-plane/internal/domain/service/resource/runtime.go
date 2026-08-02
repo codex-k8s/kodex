@@ -344,7 +344,7 @@ func (service *Service) ClaimTurn(
 				return receiptErr
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
-			expired, err := tx.ExpiredClaimedTurns(
+			expired, err := tx.ExpiredClaimedTurnCandidates(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
@@ -356,12 +356,29 @@ func (service *Service) ClaimTurn(
 				return err
 			}
 			for _, stale := range expired {
-				staleSpec, ok := stale.Turn.Spec.(entity.TurnSpec)
-				if !ok || staleSpec.Attempt != stale.Lease.Attempt ||
-					stale.Lease.AuthorityGeneration == 0 ||
+				// ExpiredClaimedTurnCandidates выполняет только unlocked discovery.
+				// Перед эффектом весь owner graph берётся в каноническом порядке и
+				// lease/deadline повторно проверяются под locks.
+				graph, graphErr := service.lockOwnerGraphByTurn(
+					ctx, tx, input.Principal, stale.Turn.ID,
+				)
+				if graphErr != nil {
+					return graphErr
+				}
+				lockedLease, leaseErr := tx.GetTurnLeaseForUpdate(ctx, graph.Turn.ID)
+				if leaseErr != nil {
+					return leaseErr
+				}
+				staleSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
+				if !ok || graph.Turn.State != enum.StateClaimed ||
+					graph.Turn.Version != stale.Turn.Version ||
+					staleSpec.Attempt != lockedLease.Attempt ||
+					lockedLease.AuthorityGeneration == 0 || lockedLease.ExpiresAt.After(now) ||
 					staleSpec.Attempt >= 100 {
 					return errs.ErrStateConflict
 				}
+				stale.Turn = graph.Turn
+				stale.Lease = lockedLease
 				if err := tx.FinishTurnAttempt(ctx, domainrepo.TurnAttempt{
 					TurnID:              stale.Turn.ID,
 					Attempt:             staleSpec.Attempt,
@@ -1423,7 +1440,7 @@ func (service *Service) ResolveOwnerGate(
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
 				return receiptErr
 			}
-			gate, err := tx.GetForUpdate(
+			gateCandidate, err := tx.Get(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
@@ -1432,8 +1449,31 @@ func (service *Service) ResolveOwnerGate(
 			if err != nil {
 				return err
 			}
-			if gate.Kind != enum.KindOwnerGate ||
-				gate.Version != input.ExpectedVersion {
+			candidateSpec, ok := gateCandidate.Spec.(entity.OwnerGateSpec)
+			if !ok || gateCandidate.Kind != enum.KindOwnerGate ||
+				gateCandidate.Version != input.ExpectedVersion ||
+				candidateSpec.ProcessRunID != input.ProcessRunID ||
+				candidateSpec.SessionID != input.SessionID ||
+				candidateSpec.TurnID != input.TurnID {
+				return errs.ErrNotFound
+			}
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, candidateSpec.TurnID,
+			)
+			if err != nil {
+				return err
+			}
+			// OwnerGate является pinned owner resource и блокируется только
+			// после полного execution graph.
+			gate, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				gateCandidate.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if gate.Kind != enum.KindOwnerGate || gate.Version != input.ExpectedVersion ||
+				gate.Version != gateCandidate.Version {
 				return errs.ErrVersionMismatch
 			}
 			gateSpec, ok := gate.Spec.(entity.OwnerGateSpec)
@@ -1452,15 +1492,7 @@ func (service *Service) ResolveOwnerGate(
 				!validSHA256Text(gateSpec.DeliveryClaimTokenSHA256) {
 				return errs.ErrNotFound
 			}
-			process, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.ProcessRunID,
-			)
-			if err != nil {
-				return err
-			}
+			process := graph.Process
 			processSpec, ok := process.Spec.(entity.ProcessRunSpec)
 			execution, executionErr := currentExecution(processSpec)
 			executionMatches := executionErr == nil &&
@@ -1477,13 +1509,7 @@ func (service *Service) ResolveOwnerGate(
 				processSpec.OccurrenceID != gateSpec.OccurrenceID {
 				return errs.ErrStateConflict
 			}
-			gateTurn, err := tx.GetForUpdate(
-				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-				gateSpec.TurnID,
-			)
-			if err != nil {
-				return err
-			}
+			gateTurn := graph.Turn
 			gateTurnSpec, ok := gateTurn.Spec.(entity.TurnSpec)
 			if !ok || gateTurn.Kind != enum.KindTurn ||
 				gateTurn.State != enum.StateWaitingOwner ||
@@ -1497,29 +1523,14 @@ func (service *Service) ResolveOwnerGate(
 			var relatedOccurrence domainrepo.ScheduleOccurrence
 			var relatedSchedule entity.Resource
 			if gateSpec.OccurrenceID != "" {
-				occurrence, err := tx.GetScheduleOccurrenceForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					gateSpec.OccurrenceID,
-				)
-				if err != nil {
-					return err
-				}
+				occurrence := graph.Occurrence
 				if occurrence.ScheduleID != gateSpec.ScheduleID ||
+					occurrence.ID != gateSpec.OccurrenceID ||
 					occurrence.State != "WAITING_OWNER" ||
 					occurrence.EffectiveInputSHA256 == "" {
 					return errs.ErrStateConflict
 				}
-				schedule, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					gateSpec.ScheduleID,
-				)
-				if err != nil {
-					return err
-				}
+				schedule := graph.Schedule
 				if schedule.Kind != enum.KindSchedule {
 					return errs.ErrStateConflict
 				}
@@ -1529,7 +1540,7 @@ func (service *Service) ResolveOwnerGate(
 			now := service.now().UTC().Truncate(time.Microsecond)
 			if !gateSpec.ExpiresAt.After(now) {
 				result, err = service.expireOwnerGateGraph(
-					ctx, tx, input.Principal, gate, now,
+					ctx, tx, input.Principal, gate, graph, now,
 				)
 				if err != nil {
 					return err

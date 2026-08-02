@@ -45,7 +45,7 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 			args: scheduledRunSuspendArgs(domainrepo.ScheduledRun{}, "", 1),
 		},
 		{
-			name: "scheduled prelock", sql: sqlScheduleOccurrenceGetByCurrentTurnForUpdate,
+			name: "scheduled candidate", sql: sqlScheduleOccurrenceGetByCurrentTurn,
 			args: pgx.StrictNamedArgs{
 				"organization_id": "", "project_id": "", "turn_id": "",
 			},
@@ -74,6 +74,30 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestScheduleCurrentTurnDiscoveryCoversApprovedOpenStates(t *testing.T) {
+	for name, query := range map[string]string{
+		"candidate": sqlScheduleOccurrenceGetByCurrentTurn,
+	} {
+		for _, state := range []string{"CLAIMED", "WAITING_OWNER", "CONTINUATION", "FAILED"} {
+			if !strings.Contains(query, "'"+state+"'") {
+				t.Fatalf("%s current-turn query misses %s", name, state)
+			}
+		}
+		if strings.Contains(query, "FOR UPDATE") {
+			t.Fatal("candidate discovery unexpectedly takes a row lock")
+		}
+	}
+	if strings.Contains(sqlTurnExpiredClaimed, "FOR UPDATE") {
+		t.Fatal("stale ClaimTurn candidate discovery unexpectedly locks Turn")
+	}
+	if strings.Contains(sqlOwnerGateNextExpired, "FOR UPDATE") {
+		t.Fatal("expired OwnerGate candidate discovery unexpectedly locks Gate")
+	}
+	if strings.Contains(sqlScheduleOccurrenceExpiredCandidates, "FOR UPDATE") {
+		t.Fatal("scheduler recovery candidate discovery unexpectedly locks occurrence")
 	}
 }
 
