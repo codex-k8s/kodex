@@ -13337,8 +13337,11 @@ type IntegrationContinuation struct {
 	ContinuationInputSha256            string                       `protobuf:"bytes,24,opt,name=continuation_input_sha256,json=continuationInputSha256,proto3" json:"continuation_input_sha256,omitempty"`
 	CreatedAt                          *timestamppb.Timestamp       `protobuf:"bytes,25,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt                          *timestamppb.Timestamp       `protobuf:"bytes,26,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields                      protoimpl.UnknownFields
-	sizeCache                          protoimpl.SizeCache
+	// continuation_attempt — текущая server-owned delivery attempt; retry
+	// перепривязывает тот же immutable outcome и увеличивает version/fence.
+	ContinuationAttempt uint32 `protobuf:"varint,27,opt,name=continuation_attempt,json=continuationAttempt,proto3" json:"continuation_attempt,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *IntegrationContinuation) Reset() {
@@ -13551,6 +13554,13 @@ func (x *IntegrationContinuation) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *IntegrationContinuation) GetContinuationAttempt() uint32 {
+	if x != nil {
+		return x.ContinuationAttempt
+	}
+	return 0
 }
 
 type ResolveIntegrationSessionRequest struct {
@@ -16512,8 +16522,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x11projection_sha256\x18\x03 \x01(\tR\x10projectionSha256\"\xc7\x01\n" +
 	"\x1aIntegrationApprovalBinding\x12L\n" +
 	"\vintegration\x18\x01 \x01(\v2*.controlplane.v1.PinnedIntegrationResourceR\vintegration\x12[\n" +
-	"\x13credential_bindings\x18\x02 \x03(\v2*.controlplane.v1.PinnedIntegrationResourceR\x12credentialBindings\"\xee\n" +
-	"\n" +
+	"\x13credential_bindings\x18\x02 \x03(\v2*.controlplane.v1.PinnedIntegrationResourceR\x12credentialBindings\"\xa1\v\n" +
 	"\x17IntegrationContinuation\x12'\n" +
 	"\x0fcontinuation_id\x18\x01 \x01(\tR\x0econtinuationId\x12F\n" +
 	"\abinding\x18\x02 \x01(\v2,.controlplane.v1.IntegrationExecutionBindingR\abinding\x12#\n" +
@@ -16545,7 +16554,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x19 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x1a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\"\n" +
+	"updated_at\x18\x1a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x121\n" +
+	"\x14continuation_attempt\x18\x1b \x01(\rR\x13continuationAttempt\"\"\n" +
 	" ResolveIntegrationSessionRequest\"i\n" +
 	"!ResolveIntegrationSessionResponse\x12D\n" +
 	"\acontext\x18\x01 \x01(\v2*.controlplane.v1.IntegrationSessionContextR\acontext\"\xc4\x06\n" +

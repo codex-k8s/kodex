@@ -773,11 +773,33 @@ func (service *Service) RetryRuntimeExecution(
 			if err := matchRuntimeMutation(execution, input); err != nil {
 				return errs.ErrStateConflict
 			}
+			// Единый порядок retry/read-rejoin: execution -> turn -> session ->
+			// process -> occurrence -> scheduled run -> schedule -> continuation.
+			// Предварительные row locks не дают closed-predecessor path захватить
+			// ProcessRun раньше Session и образовать цикл с защищённым Get/ACK.
+			turn, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				execution.TurnID,
+			)
+			if err != nil {
+				return err
+			}
+			turnSpec, ok := turn.Spec.(entity.TurnSpec)
+			if !ok || turn.Kind != enum.KindTurn ||
+				turnSpec.SessionID != execution.SessionID ||
+				turnSpec.Attempt != execution.Attempt {
+				return errs.ErrStateConflict
+			}
+			if _, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				execution.SessionID,
+			); err != nil {
+				return err
+			}
 			now, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return err
 			}
-			var turn entity.Resource
 			switch execution.State {
 			case "PENDING", "ADMITTED", "RUNNING":
 				turn, err = service.closeRuntimeGraph(
@@ -809,11 +831,11 @@ func (service *Service) RetryRuntimeExecution(
 			if open {
 				return errs.ErrStateConflict
 			}
-			turnSpec, ok := turn.Spec.(entity.TurnSpec)
+			turnSpec, ok = turn.Spec.(entity.TurnSpec)
 			if !ok {
 				return errs.ErrInternal
 			}
-			retried, _, err := service.prepareRetriedExecution(
+			retried, retriedSpec, err := service.prepareRetriedExecution(
 				ctx, tx, input.Principal, turn, turnSpec, now,
 			)
 			if err != nil {
@@ -824,6 +846,11 @@ func (service *Service) RetryRuntimeExecution(
 			}
 			if err := service.appendMutationRecords(
 				ctx, tx, input.Principal, "retry_runtime_turn", retried,
+			); err != nil {
+				return err
+			}
+			if err := service.rebindIntegrationContinuationRetry(
+				ctx, tx, input.Principal, execution, retried, retriedSpec, now,
 			); err != nil {
 				return err
 			}
@@ -1547,6 +1574,105 @@ func retryableRuntimePredecessor(state string) bool {
 	return state == "FAILED" || state == "EXPIRED"
 }
 
+func integrationOutcomeReadyForDelivery(continuation IntegrationContinuation) bool {
+	if continuation.ContinuationState != "READY" &&
+		continuation.ContinuationState != "REJOINED" {
+		return false
+	}
+	if continuation.ApprovalState == "APPROVED" {
+		return continuation.ExecutionState == "SUCCEEDED" ||
+			continuation.ExecutionState == "FAILED"
+	}
+	return (continuation.ApprovalState == "REJECTED" ||
+		continuation.ApprovalState == "EXPIRED" ||
+		continuation.ApprovalState == "CANCELLED") &&
+		continuation.ExecutionState == "NOT_APPLICABLE"
+}
+
+func (service *Service) rebindIntegrationContinuationRetry(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	previous RuntimeExecution,
+	retried entity.Resource,
+	retriedSpec entity.TurnSpec,
+	now time.Time,
+) error {
+	continuation, err := tx.GetIntegrationContinuationByContinuationTurn(
+		ctx, previous.TurnID,
+	)
+	if errors.Is(err, errs.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := service.validatePinnedIntegrationContinuation(
+		ctx, tx, principal, continuation, false,
+	); err != nil {
+		return err
+	}
+	revision, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID,
+		retriedSpec.RuntimeRevisionID,
+	)
+	if err != nil {
+		return err
+	}
+	expectedVersion, expectedFence := continuation.Version, continuation.Fence
+	continuation, err = rebindIntegrationDelivery(
+		continuation, previous, retried, retriedSpec, revision, now,
+	)
+	if err != nil {
+		return err
+	}
+	if err := tx.UpdateIntegrationContinuation(
+		ctx, continuation, expectedVersion, expectedFence,
+	); err != nil {
+		return err
+	}
+	return service.appendLifecycleAudit(
+		ctx, tx, principal, "rebind_integration_continuation_retry",
+		continuation.ID, "INTEGRATION_CONTINUATION", continuation.Version, now,
+	)
+}
+
+func rebindIntegrationDelivery(
+	continuation IntegrationContinuation,
+	previous RuntimeExecution,
+	retried entity.Resource,
+	retriedSpec entity.TurnSpec,
+	revision entity.Resource,
+	now time.Time,
+) (IntegrationContinuation, error) {
+	if !integrationOutcomeReadyForDelivery(continuation) ||
+		continuation.ProcessID != previous.ProcessID ||
+		continuation.SessionID != previous.SessionID ||
+		continuation.ContinuationTurnID != previous.TurnID ||
+		continuation.ContinuationAttempt != previous.Attempt ||
+		continuation.ContinuationRuntimeRevisionID != previous.RuntimeRevisionID ||
+		continuation.ContinuationRuntimeRevisionVersion != previous.RuntimeRevisionVersion ||
+		continuation.ContinuationInputSHA256 != previous.ImmutableInputSHA256 ||
+		retried.ID != previous.TurnID || retriedSpec.SessionID != previous.SessionID ||
+		retriedSpec.ProcessRunID != previous.ProcessID ||
+		retriedSpec.Attempt != previous.Attempt+1 ||
+		!validSHA256Text(retriedSpec.EffectiveInputSHA256) ||
+		revision.Kind != enum.KindRuntimeRevision || revision.State != enum.StateActive ||
+		revision.ID != retriedSpec.RuntimeRevisionID {
+		return IntegrationContinuation{}, errs.ErrStateConflict
+	}
+	continuation.Version++
+	continuation.Fence++
+	continuation.ContinuationState = "READY"
+	continuation.ContinuationTurnVersion = retried.Version
+	continuation.ContinuationAttempt = retriedSpec.Attempt
+	continuation.ContinuationRuntimeRevisionID = revision.ID
+	continuation.ContinuationRuntimeRevisionVersion = revision.Version
+	continuation.ContinuationInputSHA256 = retriedSpec.EffectiveInputSHA256
+	continuation.UpdatedAt = now
+	return continuation, nil
+}
+
 func scheduledTerminalState(state enum.State) string {
 	if state == enum.StateExpired {
 		return "FAILED"
@@ -1861,16 +1987,11 @@ func (service *Service) suspendRuntimeExecutionForIntegration(
 	tx domainrepo.Transaction,
 	principal value.Principal,
 	resolved resolvedExecution,
+	execution RuntimeExecution,
 	invocationID string,
 	requestSHA256 string,
 	now time.Time,
 ) error {
-	execution, err := tx.GetRuntimeExecutionByTurnForUpdate(
-		ctx, resolved.Turn.ID, resolved.TurnSpec.Attempt,
-	)
-	if err != nil {
-		return err
-	}
 	threadID := resolved.SessionSpec.ConversationID
 	if threadID == "" {
 		threadID = resolved.Session.ID
@@ -2051,6 +2172,18 @@ func (service *Service) SuspendForIntegrationApproval(
 				input.ApprovalExpiresAt.After(now.Add(maximumApprovalLifetime)) {
 				return errs.ErrInvalidInput
 			}
+			execution, err := tx.GetRuntimeExecutionByTurnForUpdate(
+				ctx, input.Principal.AuthorityReference,
+				uint32(input.Principal.AuthorityRevision),
+			)
+			if err != nil {
+				return err
+			}
+			if err := service.prelockIntegrationScheduledGraph(
+				ctx, tx, input.Principal, execution,
+			); err != nil {
+				return err
+			}
 			resolved, err := service.resolveBoundExecution(ctx, tx, input.Principal)
 			if err != nil {
 				return err
@@ -2066,7 +2199,7 @@ func (service *Service) SuspendForIntegrationApproval(
 				return err
 			}
 			if err := service.suspendRuntimeExecutionForIntegration(
-				ctx, tx, input.Principal, resolved, input.InvocationID,
+				ctx, tx, input.Principal, resolved, execution, input.InvocationID,
 				input.RequestSHA256, now,
 			); err != nil {
 				return err
@@ -2115,6 +2248,60 @@ func (service *Service) SuspendForIntegrationApproval(
 		},
 	)
 	return result, err
+}
+
+// prelockIntegrationScheduledGraph согласует suspension со scheduler recovery:
+// occurrence -> schedule -> run -> session -> turn -> process. RuntimeExecution
+// блокируется раньше и scheduler её не изменяет. NotFound означает точный
+// unscheduled path; существующий, но несогласованный граф закрыто отклоняется.
+func (service *Service) prelockIntegrationScheduledGraph(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	execution RuntimeExecution,
+) error {
+	occurrence, err := tx.GetScheduleOccurrenceByCurrentTurnForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, execution.TurnID,
+	)
+	if errors.Is(err, errs.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if occurrence.ExecutionTurnID != execution.TurnID ||
+		occurrence.ExecutionProcessRunID != execution.ProcessID ||
+		occurrence.ExecutionSessionID != execution.SessionID ||
+		occurrence.ExecutionRuntimeRevisionID != execution.RuntimeRevisionID ||
+		occurrence.ExecutionRuntimeRevisionVersion != execution.RuntimeRevisionVersion ||
+		occurrence.EffectiveInputSHA256 != execution.ImmutableInputSHA256 {
+		return errs.ErrStateConflict
+	}
+	schedule, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, occurrence.ScheduleID,
+	)
+	if err != nil {
+		return err
+	}
+	if schedule.Kind != enum.KindSchedule || schedule.OwnerActorID != principal.ActorID {
+		return errs.ErrStateConflict
+	}
+	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
+	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
+		!scheduledExecutionMaySuspendExternal(occurrence.State, run.State) ||
+		run.CurrentTurnAttempt != execution.Attempt {
+		return errs.ErrStateConflict
+	}
+	session, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, execution.SessionID,
+	)
+	if err != nil {
+		return err
+	}
+	if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (service *Service) suspendIntegrationGraph(
@@ -2187,6 +2374,12 @@ func (service *Service) suspendIntegrationGraph(
 	if err := tx.Update(ctx, suspendedProcess, resolved.Process.Version); err != nil {
 		return entity.Resource{}, entity.Resource{}, entity.Resource{}, err
 	}
+	if err := service.suspendIntegrationScheduledGraph(
+		ctx, tx, principal, resolved, suspendedTurn, suspendedSession,
+		suspendedProcess, now,
+	); err != nil {
+		return entity.Resource{}, entity.Resource{}, entity.Resource{}, err
+	}
 	if err := service.revokeExecutionClaims(
 		ctx, tx, principal, resolved.Process.ID, resolved.Turn.ID,
 		"integration_approval", now,
@@ -2203,6 +2396,94 @@ func (service *Service) suspendIntegrationGraph(
 		}
 	}
 	return suspendedTurn, suspendedSession, suspendedProcess, nil
+}
+
+func scheduledExecutionMaySuspendExternal(occurrenceState, runState string) bool {
+	return occurrenceState == runState &&
+		(occurrenceState == "CLAIMED" || occurrenceState == "CONTINUATION")
+}
+
+func (service *Service) suspendIntegrationScheduledGraph(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	resolved resolvedExecution,
+	suspendedTurn entity.Resource,
+	suspendedSession entity.Resource,
+	suspendedProcess entity.Resource,
+	now time.Time,
+) error {
+	if resolved.ProcessSpec.OccurrenceID == "" {
+		if resolved.ProcessSpec.ScheduleID != "" {
+			return errs.ErrStateConflict
+		}
+		return nil
+	}
+	if resolved.ProcessSpec.ScheduleID == "" {
+		return errs.ErrStateConflict
+	}
+	occurrence, err := tx.GetScheduleOccurrenceForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID,
+		resolved.ProcessSpec.OccurrenceID,
+	)
+	if err != nil {
+		return err
+	}
+	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
+	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
+		!scheduledExecutionMaySuspendExternal(occurrence.State, run.State) ||
+		occurrence.ScheduleID != resolved.ProcessSpec.ScheduleID ||
+		occurrence.ExecutionSessionID != resolved.Session.ID ||
+		occurrence.ExecutionSessionVersion != resolved.Session.Version ||
+		occurrence.ExecutionTurnID != resolved.Turn.ID ||
+		occurrence.ExecutionTurnVersion != resolved.Turn.Version ||
+		occurrence.ExecutionProcessRunID != resolved.Process.ID ||
+		occurrence.ExecutionProcessVersion != resolved.Process.Version ||
+		run.CurrentTurnAttempt != resolved.TurnSpec.Attempt ||
+		run.CurrentRuntimeRevisionID != resolved.Revision.ID ||
+		run.CurrentRuntimeRevisionVersion != resolved.Revision.Version ||
+		run.CurrentInputSHA256 != resolved.TurnSpec.EffectiveInputSHA256 {
+		return errs.ErrStateConflict
+	}
+	expectedToken := occurrence.TokenHash
+	occurrence.State = "CONTINUATION"
+	occurrence.ClaimantWorkloadID = ""
+	occurrence.AuthorityGeneration = 0
+	occurrence.TokenHash = ""
+	occurrence.LeaseExpiresAt = time.Time{}
+	occurrence.ExecutionSessionVersion = suspendedSession.Version
+	occurrence.ExecutionTurnVersion = suspendedTurn.Version
+	occurrence.ExecutionProcessVersion = suspendedProcess.Version
+	occurrence.Outcome = ""
+	occurrence.ResultArtifactID = ""
+	occurrence.UpdatedAt = now
+	if err := tx.UpdateScheduleOccurrence(
+		ctx, occurrence, occurrence.Attempt, expectedToken,
+	); err != nil {
+		return err
+	}
+	run.CurrentSessionVersion = suspendedSession.Version
+	run.CurrentTurnVersion = suspendedTurn.Version
+	run.CurrentProcessVersion = suspendedProcess.Version
+	if err := tx.SuspendScheduledRun(
+		ctx, run, resolved.Turn.ID, resolved.TurnSpec.Attempt,
+	); err != nil {
+		return err
+	}
+	schedule, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID,
+		resolved.ProcessSpec.ScheduleID,
+	)
+	if err != nil {
+		return err
+	}
+	if schedule.Kind != enum.KindSchedule ||
+		schedule.OwnerActorID != resolved.Process.OwnerActorID {
+		return errs.ErrStateConflict
+	}
+	return service.appendMutationRecords(
+		ctx, tx, principal, "suspend_integration_schedule", schedule,
+	)
 }
 
 func (service *Service) ApproveIntegrationInvocation(
@@ -2678,6 +2959,13 @@ func (service *Service) materializeIntegrationContinuation(
 	if err := tx.Update(ctx, runningProcess, process.Version); err != nil {
 		return err
 	}
+	if err := service.materializeIntegrationScheduledGraph(
+		ctx, tx, principal, processSpec, process, previousTurn,
+		continuation.Attempt, turn, queuedSession, runningProcess, revision,
+		inputDigest, now,
+	); err != nil {
+		return err
+	}
 	for action, changed := range map[string]entity.Resource{
 		"create_integration_continuation_turn":    turn,
 		"queue_integration_continuation_session":  queuedSession,
@@ -2690,10 +2978,112 @@ func (service *Service) materializeIntegrationContinuation(
 	continuation.ContinuationState = "READY"
 	continuation.ContinuationTurnID = turn.ID
 	continuation.ContinuationTurnVersion = turn.Version
+	continuation.ContinuationAttempt = 1
 	continuation.ContinuationRuntimeRevisionID = revision.ID
 	continuation.ContinuationRuntimeRevisionVersion = revision.Version
 	continuation.ContinuationInputSHA256 = inputDigest
 	return nil
+}
+
+func (service *Service) materializeIntegrationScheduledGraph(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	processSpec entity.ProcessRunSpec,
+	previousProcess entity.Resource,
+	previousTurn entity.Resource,
+	previousAttempt uint32,
+	continuationTurn entity.Resource,
+	queuedSession entity.Resource,
+	runningProcess entity.Resource,
+	revision entity.Resource,
+	inputSHA256 string,
+	now time.Time,
+) error {
+	if processSpec.OccurrenceID == "" {
+		if processSpec.ScheduleID != "" {
+			return errs.ErrStateConflict
+		}
+		return nil
+	}
+	if processSpec.ScheduleID == "" {
+		return errs.ErrStateConflict
+	}
+	continuationSpec, ok := continuationTurn.Spec.(entity.TurnSpec)
+	if !ok || continuationSpec.Attempt == 0 ||
+		continuationSpec.EffectiveInputSHA256 != inputSHA256 {
+		return errs.ErrStateConflict
+	}
+	previousSpec, ok := previousTurn.Spec.(entity.TurnSpec)
+	if !ok || previousSpec.Attempt != previousAttempt {
+		return errs.ErrStateConflict
+	}
+	occurrence, err := tx.GetScheduleOccurrenceForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, processSpec.OccurrenceID,
+	)
+	if err != nil {
+		return err
+	}
+	run, err := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
+	if err != nil || validateScheduledRunBinding(occurrence, run) != nil ||
+		occurrence.State != "CONTINUATION" || run.State != "CONTINUATION" ||
+		occurrence.ScheduleID != processSpec.ScheduleID ||
+		occurrence.ExecutionSessionVersion+1 != queuedSession.Version ||
+		occurrence.ExecutionProcessRunID != previousProcess.ID ||
+		occurrence.ExecutionProcessVersion != previousProcess.Version ||
+		occurrence.ExecutionTurnID != previousTurn.ID ||
+		occurrence.ExecutionTurnVersion != previousTurn.Version ||
+		occurrence.ExecutionRuntimeRevisionID != previousSpec.RuntimeRevisionID ||
+		occurrence.EffectiveInputSHA256 != previousSpec.EffectiveInputSHA256 ||
+		run.CurrentTurnAttempt != previousAttempt ||
+		run.CurrentProcessVersion != previousProcess.Version {
+		return errs.ErrStateConflict
+	}
+	occurrence.ExecutionSessionID = queuedSession.ID
+	occurrence.ExecutionSessionVersion = queuedSession.Version
+	occurrence.ExecutionTurnID = continuationTurn.ID
+	occurrence.ExecutionTurnVersion = continuationTurn.Version
+	occurrence.ExecutionProcessRunID = runningProcess.ID
+	occurrence.ExecutionProcessVersion = runningProcess.Version
+	occurrence.ExecutionRuntimeRevisionID = revision.ID
+	occurrence.ExecutionRuntimeRevisionVersion = revision.Version
+	occurrence.EffectiveInputSHA256 = inputSHA256
+	occurrence.Outcome = ""
+	occurrence.ResultArtifactID = ""
+	occurrence.UpdatedAt = now
+	if err := tx.UpdateScheduleOccurrence(
+		ctx, occurrence, occurrence.Attempt, occurrence.TokenHash,
+	); err != nil {
+		return err
+	}
+	run.CurrentSessionID = queuedSession.ID
+	run.CurrentSessionVersion = queuedSession.Version
+	run.CurrentTurnID = continuationTurn.ID
+	run.CurrentTurnVersion = continuationTurn.Version
+	run.CurrentTurnAttempt = continuationSpec.Attempt
+	run.CurrentProcessRunID = runningProcess.ID
+	run.CurrentProcessVersion = runningProcess.Version
+	run.CurrentRuntimeRevisionID = revision.ID
+	run.CurrentRuntimeRevisionVersion = revision.Version
+	run.CurrentInputSHA256 = inputSHA256
+	if err := tx.RebindScheduledRun(
+		ctx, run, previousTurn.ID, previousAttempt,
+	); err != nil {
+		return err
+	}
+	schedule, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, processSpec.ScheduleID,
+	)
+	if err != nil {
+		return err
+	}
+	if schedule.Kind != enum.KindSchedule ||
+		schedule.OwnerActorID != previousProcess.OwnerActorID {
+		return errs.ErrStateConflict
+	}
+	return service.appendMutationRecords(
+		ctx, tx, principal, "materialize_integration_schedule", schedule,
+	)
 }
 
 func (service *Service) GetIntegrationContinuation(
@@ -2713,13 +3103,13 @@ func (service *Service) GetIntegrationContinuation(
 		OrganizationID: input.Principal.OrganizationID,
 		ProjectID:      input.Principal.ProjectID, ActorID: input.Principal.ActorID,
 	}, func(tx domainrepo.Transaction) error {
-		continuation, err := tx.GetIntegrationContinuationByContinuationTurn(
-			ctx, input.Principal.AuthorityReference,
-		)
+		resolved, err := service.resolveBoundExecution(ctx, tx, input.Principal)
 		if err != nil {
 			return err
 		}
-		resolved, err := service.resolveBoundExecution(ctx, tx, input.Principal)
+		continuation, err := tx.GetIntegrationContinuationByContinuationTurn(
+			ctx, resolved.Turn.ID,
+		)
 		if err != nil {
 			return err
 		}
@@ -2731,7 +3121,8 @@ func (service *Service) GetIntegrationContinuation(
 			resolved.Revision.ID != continuation.ContinuationRuntimeRevisionID ||
 			resolved.Revision.Version != continuation.ContinuationRuntimeRevisionVersion ||
 			continuation.ContinuationInputSHA256 != input.Principal.AuthorityDigest ||
-			input.Principal.AuthorityRevision != 1 {
+			continuation.ContinuationAttempt != uint32(input.Principal.AuthorityRevision) ||
+			resolved.TurnSpec.Attempt != continuation.ContinuationAttempt {
 			return errs.ErrNotFound
 		}
 		if err := service.validatePinnedIntegrationContinuation(
@@ -2766,57 +3157,103 @@ func (service *Service) AcknowledgeIntegrationContinuation(
 	if err != nil {
 		return IntegrationContinuation{}, errs.ErrInvalidInput
 	}
+	const receiptScope = "acknowledge_integration_continuation"
+	keyHash := hashString(input.IdempotencyKey)
 	var result IntegrationContinuation
-	err = service.withLifecycleReceipt(
-		ctx, input.Principal, input.IdempotencyKey,
-		"acknowledge_integration_continuation", requestHash, &result,
-		func(tx domainrepo.Transaction) error {
-			continuation, err := tx.GetIntegrationContinuationByContinuationTurn(
-				ctx, input.Principal.AuthorityReference,
-			)
-			if err != nil {
-				return err
+	err = service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		resolved, err := service.resolveBoundExecution(ctx, tx, input.Principal)
+		if err != nil {
+			return err
+		}
+		continuation, err := tx.GetIntegrationContinuationByContinuationTurn(
+			ctx, resolved.Turn.ID,
+		)
+		if err != nil {
+			return err
+		}
+		if continuation.ContinuationTurnID != input.Principal.AuthorityReference ||
+			continuation.ContinuationAttempt != uint32(input.Principal.AuthorityRevision) ||
+			resolved.TurnSpec.Attempt != continuation.ContinuationAttempt ||
+			continuation.ContinuationInputSHA256 != input.Principal.AuthorityDigest {
+			return errs.ErrNotFound
+		}
+		receipt, receiptErr := tx.GetReceipt(
+			ctx, input.Principal.OrganizationID, receiptScope, keyHash,
+		)
+		if receiptErr == nil {
+			if receipt.RequestHash != requestHash || len(receipt.Payload) == 0 ||
+				json.Unmarshal(receipt.Payload, &result) != nil {
+				return errs.ErrIdempotencyConflict
 			}
-			resolved, err := service.resolveBoundExecution(ctx, tx, input.Principal)
-			if err != nil {
-				return err
-			}
-			if continuation.ContinuationState != "READY" ||
-				continuation.Version != input.ExpectedVersion ||
-				continuation.Fence != input.ExpectedFence ||
-				resolved.Turn.ID != continuation.ContinuationTurnID ||
-				resolved.Process.ID != continuation.ProcessID ||
-				resolved.Session.ID != continuation.SessionID ||
-				resolved.Revision.ID != continuation.ContinuationRuntimeRevisionID ||
-				resolved.Revision.Version != continuation.ContinuationRuntimeRevisionVersion ||
-				continuation.ContinuationTurnID != input.Principal.AuthorityReference ||
-				continuation.ContinuationInputSHA256 != input.ExpectedInputSHA256 ||
-				continuation.ContinuationInputSHA256 != input.Principal.AuthorityDigest {
+			if continuation.ContinuationState != "REJOINED" ||
+				result.ID != continuation.ID || result.Version != continuation.Version ||
+				result.Fence != continuation.Fence ||
+				result.ContinuationAttempt != continuation.ContinuationAttempt ||
+				result.ContinuationRuntimeRevisionID !=
+					continuation.ContinuationRuntimeRevisionID ||
+				result.ContinuationInputSHA256 != continuation.ContinuationInputSHA256 {
 				return errs.ErrStateConflict
 			}
-			if err := service.validatePinnedIntegrationContinuation(
-				ctx, tx, input.Principal, continuation, false,
-			); err != nil {
-				return err
-			}
-			now := service.now().UTC().Truncate(time.Microsecond)
-			expectedVersion, expectedFence := continuation.Version, continuation.Fence
-			continuation.Version++
-			continuation.Fence++
-			continuation.ContinuationState = "REJOINED"
-			continuation.UpdatedAt = now
-			if err := tx.UpdateIntegrationContinuation(
-				ctx, continuation, expectedVersion, expectedFence,
-			); err != nil {
-				return err
-			}
-			result = continuation
-			return service.appendLifecycleAudit(
-				ctx, tx, input.Principal, "acknowledge_integration_continuation",
-				continuation.ID, "INTEGRATION_CONTINUATION", continuation.Version, now,
-			)
-		},
-	)
+			return nil
+		}
+		if !errors.Is(receiptErr, errs.ErrNotFound) {
+			return receiptErr
+		}
+		if continuation.ContinuationState != "READY" ||
+			continuation.Version != input.ExpectedVersion ||
+			continuation.Fence != input.ExpectedFence ||
+			resolved.Turn.ID != continuation.ContinuationTurnID ||
+			resolved.Process.ID != continuation.ProcessID ||
+			resolved.Session.ID != continuation.SessionID ||
+			resolved.Revision.ID != continuation.ContinuationRuntimeRevisionID ||
+			resolved.Revision.Version != continuation.ContinuationRuntimeRevisionVersion ||
+			continuation.ContinuationInputSHA256 != input.ExpectedInputSHA256 {
+			return errs.ErrStateConflict
+		}
+		if err := service.validatePinnedIntegrationContinuation(
+			ctx, tx, input.Principal, continuation, false,
+		); err != nil {
+			return err
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		expectedVersion, expectedFence := continuation.Version, continuation.Fence
+		continuation.Version++
+		continuation.Fence++
+		continuation.ContinuationState = "REJOINED"
+		continuation.UpdatedAt = now
+		if err := tx.UpdateIntegrationContinuation(
+			ctx, continuation, expectedVersion, expectedFence,
+		); err != nil {
+			return err
+		}
+		result = continuation
+		if err := service.appendLifecycleAudit(
+			ctx, tx, input.Principal, receiptScope,
+			continuation.ID, "INTEGRATION_CONTINUATION", continuation.Version, now,
+		); err != nil {
+			return err
+		}
+		payload, err := json.Marshal(result)
+		if err != nil {
+			return errs.ErrInternal
+		}
+		return tx.SaveReceipt(ctx, domainrepo.Receipt{
+			OrganizationID: input.Principal.OrganizationID,
+			ProjectID:      input.Principal.ProjectID,
+			Scope:          receiptScope,
+			KeyHash:        keyHash,
+			RequestHash:    requestHash,
+			Payload:        payload,
+			CreatedAt:      now,
+		})
+	})
 	return result, err
 }
 

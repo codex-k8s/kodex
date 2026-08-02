@@ -1899,6 +1899,9 @@ message IntegrationContinuation {
   string continuation_input_sha256 = 24;
   google.protobuf.Timestamp created_at = 25;
   google.protobuf.Timestamp updated_at = 26;
+  // continuation_attempt — текущая server-owned delivery attempt; retry
+  // перепривязывает тот же immutable outcome и увеличивает version/fence.
+  uint32 continuation_attempt = 27;
 }
 
 message ResolveIntegrationSessionRequest {}

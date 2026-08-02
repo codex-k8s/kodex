@@ -1,36 +1,4 @@
--- name: ScheduleOccurrenceNext
-WITH candidate AS (
-    SELECT occurrence.id
-    FROM control_plane.schedule_occurrences AS occurrence
-    WHERE occurrence.organization_id = @organization_id::uuid
-      AND occurrence.project_id = @project_id::uuid
-      AND occurrence.state = 'QUEUED'
-      AND occurrence.available_at <= @now
-      AND NOT EXISTS (
-          SELECT 1
-          FROM control_plane.schedule_occurrences AS active
-          WHERE active.schedule_id = occurrence.schedule_id
-            AND active.state IN ('CLAIMED', 'WAITING_OWNER', 'CONTINUATION')
-      )
-      AND NOT EXISTS (
-          SELECT 1
-          FROM control_plane.schedule_occurrences AS predecessor
-          WHERE predecessor.schedule_id = occurrence.schedule_id
-            AND (
-                predecessor.scheduled_for < occurrence.scheduled_for
-                OR (
-                    predecessor.scheduled_for = occurrence.scheduled_for
-                    AND predecessor.id < occurrence.id
-                )
-            )
-            AND predecessor.state IN (
-                'QUEUED', 'CLAIMED', 'WAITING_OWNER', 'CONTINUATION'
-            )
-      )
-    ORDER BY occurrence.available_at, occurrence.scheduled_for, occurrence.id
-    FOR UPDATE OF occurrence SKIP LOCKED
-    LIMIT 1
-)
+-- name: ScheduleOccurrenceGetByCurrentTurnForUpdate
 SELECT
     occurrence.id::text,
     occurrence.schedule_id::text,
@@ -74,5 +42,16 @@ SELECT
     occurrence.claimed_at,
     occurrence.updated_at
 FROM control_plane.schedule_occurrences AS occurrence
-JOIN candidate ON candidate.id = occurrence.id
+WHERE occurrence.organization_id = @organization_id::uuid
+  AND occurrence.project_id = @project_id::uuid
+  AND occurrence.execution_turn_id = @turn_id::uuid
+  AND occurrence.state IN ('CLAIMED', 'CONTINUATION')
+  AND EXISTS (
+      SELECT 1
+      FROM control_plane.scheduled_runs AS run
+      WHERE run.occurrence_id = occurrence.id
+        AND run.attempt = occurrence.attempt
+        AND run.current_turn_id = @turn_id::uuid
+        AND run.state = occurrence.state
+  )
 FOR UPDATE OF occurrence

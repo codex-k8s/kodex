@@ -917,6 +917,7 @@ func toProtoIntegrationContinuation(
 		ErrorSha256:                        continuation.ErrorSHA256,
 		ContinuationTurnId:                 continuation.ContinuationTurnID,
 		ContinuationTurnVersion:            continuation.ContinuationTurnVersion,
+		ContinuationAttempt:                continuation.ContinuationAttempt,
 		ContinuationRuntimeRevisionId:      continuation.ContinuationRuntimeRevisionID,
 		ContinuationRuntimeRevisionVersion: continuation.ContinuationRuntimeRevisionVersion,
 		ContinuationInputSha256:            continuation.ContinuationInputSHA256,

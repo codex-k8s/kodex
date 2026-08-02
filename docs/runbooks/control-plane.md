@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.7.0
+version: 1.8.0
 updated: 2026-08-02
 ---
 
@@ -306,8 +306,14 @@ Integration suspension pin-ит invocation, approval, request digest, полны
 runtime tuple и exact Integration/credential ID+version+projection digest.
 Та же transaction переводит старую RuntimeExecution в `SUSPENDED`, закрывает
 lease/attempt/claims/grants и переводит Turn/Session/Process в
-`WAITING_EXTERNAL`; heartbeat/complete/retry/expiry старого fence после этого
-не должны проходить. Для `PENDING` допускается один из `APPROVED`, `REJECTED`,
+`WAITING_EXTERNAL`. Для scheduled process она также блокирует граф в общем со
+scheduler recovery порядке execution→occurrence→schedule→run→session→turn→process,
+переводит occurrence/run из `CLAIMED` в
+`CONTINUATION`, очищает claimant/generation/token/lease и сохраняет suspended
+current tuple. Поэтому stale scheduler expiry/claim, overlap и delete не могут
+отменить ожидающий approval или открыть параллельный graph; heartbeat/complete/
+retry/expiry старого runtime fence также не проходят. Для `PENDING` допускается
+один из `APPROVED`, `REJECTED`,
 `EXPIRED`, `CANCELLED`. После `APPROVED+NOT_STARTED` cancel конкурирует с
 `BeginIntegrationExecution`: cancel winner создаёт один continuation, begin
 winner оставляет `EXECUTING`, и поздний cancel не отменяет внешний effect.
@@ -315,10 +321,18 @@ Approval/begin повторно требуют активную pinned binding; 
 закрывают уже начатый effect по immutable snapshot.
 
 Terminal transition в той же transaction создаёт одну свежую RuntimeRevision,
-input, continuation Turn и будущий grant. Первый защищённый
+input, continuation Turn и будущий grant, а scheduled occurrence/run
+перепривязывает к точным новым session/turn/process/revision/input versions.
+Первый защищённый
 `GetIntegrationContinuation` имеет пустой request и разрешает строку из signed
 authority нового Turn; response возвращает current version/fence/input для
-последующего ACK. До реализации agent-runner Issue #192 фактического event
+последующего ACK. Если delivery RuntimeExecution завершилась `FAILED/EXPIRED`,
+`RetryRuntimeExecution` в той же transaction сохраняет integration outcome,
+увеличивает delivery attempt/version/fence, создаёт свежие revision/input/grant,
+повторно открывает `READY` и перепривязывает scheduled current tuple. Это
+работает до первого Get, между Get и ACK и после прежнего ACK: старый grant
+закрыт, на текущую binding есть один ACK winner, новый approval и external
+execution не создаются. До реализации agent-runner Issue #192 фактического event
 consumer нет: проверять read/rejoin RPC, а не NATS. При гонке повторно читать
 version/fence; обход OCC и повторная материализация Turn запрещены.
 

@@ -8,6 +8,7 @@ INSERT INTO control_plane.integration_continuations (
     version, fence, approval_expires_at, decision_reference, decision_sha256,
     result_reference, result_sha256, error_code, error_reference, error_sha256,
     continuation_turn_id, continuation_turn_version,
+    continuation_attempt,
     continuation_runtime_revision_id, continuation_runtime_revision_version,
     continuation_input_sha256, created_at, updated_at
 ) VALUES (
@@ -23,6 +24,7 @@ INSERT INTO control_plane.integration_continuations (
     nullif(@error_reference, ''), nullif(@error_sha256, ''),
     nullif(@continuation_turn_id, '')::uuid,
     nullif(@continuation_turn_version, 0),
+    nullif(@continuation_attempt, 0),
     nullif(@continuation_runtime_revision_id, '')::uuid,
     nullif(@continuation_runtime_revision_version, 0),
     nullif(@continuation_input_sha256, ''), @created_at, @updated_at

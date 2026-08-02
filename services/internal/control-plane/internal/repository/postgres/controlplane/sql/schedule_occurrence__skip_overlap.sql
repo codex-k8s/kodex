@@ -14,7 +14,7 @@ WITH skipped AS (
           SELECT 1
           FROM control_plane.schedule_occurrences AS active
           WHERE active.schedule_id = occurrence.schedule_id
-            AND active.state = 'CLAIMED'
+            AND active.state IN ('CLAIMED', 'WAITING_OWNER', 'CONTINUATION')
       )
     RETURNING occurrence.*
 )

@@ -187,6 +187,7 @@ CREATE TABLE control_plane.integration_continuations (
     error_sha256 text CHECK (error_sha256 IS NULL OR error_sha256 ~ '^[a-f0-9]{64}$'),
     continuation_turn_id uuid REFERENCES control_plane.resources (id),
     continuation_turn_version bigint,
+    continuation_attempt integer CHECK (continuation_attempt BETWEEN 1 AND 100),
     continuation_runtime_revision_id uuid REFERENCES control_plane.resources (id),
     continuation_runtime_revision_version bigint,
     continuation_input_sha256 text CHECK (continuation_input_sha256 IS NULL OR continuation_input_sha256 ~ '^[a-f0-9]{64}$'),
@@ -208,10 +209,12 @@ CREATE TABLE control_plane.integration_continuations (
     ),
     CHECK (
         (continuation_turn_id IS NULL AND continuation_turn_version IS NULL
+         AND continuation_attempt IS NULL
          AND continuation_runtime_revision_id IS NULL
          AND continuation_runtime_revision_version IS NULL
          AND continuation_input_sha256 IS NULL)
         OR (continuation_turn_id IS NOT NULL AND continuation_turn_version > 0
+            AND continuation_attempt BETWEEN 1 AND 100
             AND continuation_runtime_revision_id IS NOT NULL
             AND continuation_runtime_revision_version > 0
             AND continuation_input_sha256 IS NOT NULL)

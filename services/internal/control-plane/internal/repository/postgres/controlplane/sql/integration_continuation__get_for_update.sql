@@ -10,6 +10,7 @@ SELECT id, organization_id, project_id, process_id, session_id,
        coalesce(error_code, ''), coalesce(error_reference, ''),
        coalesce(error_sha256, ''), coalesce(continuation_turn_id::text, ''),
        coalesce(continuation_turn_version, 0),
+       coalesce(continuation_attempt, 0),
        coalesce(continuation_runtime_revision_id::text, ''),
        coalesce(continuation_runtime_revision_version, 0),
        coalesce(continuation_input_sha256, ''), created_at, updated_at

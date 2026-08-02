@@ -1568,6 +1568,21 @@ func (wrapped *transaction) GetScheduleOccurrenceForUpdate(
 	))
 }
 
+func (wrapped *transaction) GetScheduleOccurrenceByCurrentTurnForUpdate(
+	ctx context.Context,
+	organizationID, projectID, turnID string,
+) (domainrepo.ScheduleOccurrence, error) {
+	return scanScheduleOccurrence(wrapped.tx.QueryRow(
+		ctx,
+		sqlScheduleOccurrenceGetByCurrentTurnForUpdate,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"turn_id":         turnID,
+		},
+	))
+}
+
 func (wrapped *transaction) SaveScheduledRun(
 	ctx context.Context,
 	run domainrepo.ScheduledRun,
@@ -1680,6 +1695,47 @@ func (wrapped *transaction) WaitScheduledRun(
 		return errs.ErrStateConflict
 	}
 	return nil
+}
+
+func (wrapped *transaction) SuspendScheduledRun(
+	ctx context.Context,
+	run domainrepo.ScheduledRun,
+	expectedTurnID string,
+	expectedTurnAttempt uint32,
+) error {
+	tag, err := wrapped.tx.Exec(
+		ctx,
+		sqlScheduledRunSuspendExternal,
+		scheduledRunSuspendArgs(run, expectedTurnID, expectedTurnAttempt),
+	)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func scheduledRunSuspendArgs(
+	run domainrepo.ScheduledRun,
+	expectedTurnID string,
+	expectedTurnAttempt uint32,
+) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"occurrence_id": run.OccurrenceID, "attempt": run.Attempt,
+		"expected_turn_id": expectedTurnID, "expected_turn_attempt": expectedTurnAttempt,
+		"current_session_id":               run.CurrentSessionID,
+		"current_session_version":          run.CurrentSessionVersion,
+		"current_turn_id":                  run.CurrentTurnID,
+		"current_turn_version":             run.CurrentTurnVersion,
+		"current_turn_attempt":             run.CurrentTurnAttempt,
+		"current_process_run_id":           run.CurrentProcessRunID,
+		"current_process_version":          run.CurrentProcessVersion,
+		"current_runtime_revision_id":      run.CurrentRuntimeRevisionID,
+		"current_runtime_revision_version": run.CurrentRuntimeRevisionVersion,
+		"current_input_sha256":             run.CurrentInputSHA256,
+	}
 }
 
 func (wrapped *transaction) ContinueScheduledRun(
@@ -2309,6 +2365,7 @@ func integrationContinuationArgs(
 		"error_sha256":                          continuation.ErrorSHA256,
 		"continuation_turn_id":                  continuation.ContinuationTurnID,
 		"continuation_turn_version":             continuation.ContinuationTurnVersion,
+		"continuation_attempt":                  continuation.ContinuationAttempt,
 		"continuation_runtime_revision_id":      continuation.ContinuationRuntimeRevisionID,
 		"continuation_runtime_revision_version": continuation.ContinuationRuntimeRevisionVersion,
 		"continuation_input_sha256":             continuation.ContinuationInputSHA256,
@@ -2335,6 +2392,7 @@ func integrationContinuationUpdateArgs(
 		"error_sha256":                          continuation.ErrorSHA256,
 		"continuation_turn_id":                  continuation.ContinuationTurnID,
 		"continuation_turn_version":             continuation.ContinuationTurnVersion,
+		"continuation_attempt":                  continuation.ContinuationAttempt,
 		"continuation_runtime_revision_id":      continuation.ContinuationRuntimeRevisionID,
 		"continuation_runtime_revision_version": continuation.ContinuationRuntimeRevisionVersion,
 		"continuation_input_sha256":             continuation.ContinuationInputSHA256,
@@ -2399,6 +2457,7 @@ func scanIntegrationContinuation(
 		&continuation.ResultSHA256, &continuation.ErrorCode,
 		&continuation.ErrorReference, &continuation.ErrorSHA256,
 		&continuation.ContinuationTurnID, &continuation.ContinuationTurnVersion,
+		&continuation.ContinuationAttempt,
 		&continuation.ContinuationRuntimeRevisionID,
 		&continuation.ContinuationRuntimeRevisionVersion,
 		&continuation.ContinuationInputSHA256, &continuation.CreatedAt,

@@ -327,6 +327,7 @@ type IntegrationContinuation struct {
 	ErrorSHA256                        string
 	ContinuationTurnID                 string
 	ContinuationTurnVersion            uint64
+	ContinuationAttempt                uint32
 	ContinuationRuntimeRevisionID      string
 	ContinuationRuntimeRevisionVersion uint64
 	ContinuationInputSHA256            string
@@ -471,10 +472,12 @@ type Transaction interface {
 	NextScheduleOccurrence(context.Context, string, string, time.Time) (ScheduleOccurrence, error)
 	UpdateScheduleOccurrence(context.Context, ScheduleOccurrence, uint32, string) error
 	GetScheduleOccurrenceForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
+	GetScheduleOccurrenceByCurrentTurnForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
 	SaveScheduledRun(context.Context, ScheduledRun) error
 	GetScheduledRunForUpdate(context.Context, string, uint32) (ScheduledRun, error)
 	GetScheduledRunByCurrentTurnForUpdate(context.Context, string) (ScheduledRun, error)
 	WaitScheduledRun(context.Context, string, uint32) error
+	SuspendScheduledRun(context.Context, ScheduledRun, string, uint32) error
 	ContinueScheduledRun(context.Context, ScheduledRun) error
 	RebindScheduledRun(context.Context, ScheduledRun, string, uint32) error
 	FinishScheduledRun(context.Context, ScheduledRun) error

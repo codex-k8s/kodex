@@ -245,3 +245,72 @@ func TestIntegrationBindingAndApprovedCancelCompetition(t *testing.T) {
 		t.Fatal("expired approval decision was accepted")
 	}
 }
+
+func TestIntegrationDeliveryRetryRebindsImmutableOutcome(t *testing.T) {
+	now := time.Date(2026, 8, 2, 13, 0, 0, 0, time.UTC)
+	oldInput := "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	newInput := "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	turnID := "a189a33f-fea7-4d20-96f0-b5a05c6a5c5c"
+	processID := "3a3ed463-59fe-4a2b-9f96-58cd7d3dd526"
+	sessionID := "fd0570db-07c9-4a9a-8d35-3657119068c3"
+	oldRevisionID := "1373ea94-fdda-47f7-adbe-7ae3bc633c03"
+	newRevisionID := "8bdfe85e-8ddf-4904-b139-bfa9139df42e"
+	previous := RuntimeExecution{
+		ProcessID: processID, SessionID: sessionID, TurnID: turnID, Attempt: 1,
+		RuntimeRevisionID: oldRevisionID, RuntimeRevisionVersion: 4,
+		ImmutableInputSHA256: oldInput,
+	}
+	base := IntegrationContinuation{
+		ProcessID: processID, SessionID: sessionID,
+		ApprovalState: "APPROVED", ExecutionState: "FAILED",
+		ContinuationState: "READY", Version: 7, Fence: 9,
+		ContinuationTurnID: turnID, ContinuationTurnVersion: 3,
+		ContinuationAttempt: 1, ContinuationRuntimeRevisionID: oldRevisionID,
+		ContinuationRuntimeRevisionVersion: 4, ContinuationInputSHA256: oldInput,
+	}
+	retried := entity.Resource{ID: turnID, Version: 4}
+	retriedSpec := entity.TurnSpec{
+		SessionID: sessionID, ProcessRunID: processID, Attempt: 2,
+		RuntimeRevisionID: newRevisionID, EffectiveInputSHA256: newInput,
+	}
+	revision := entity.Resource{
+		ID: newRevisionID, Kind: enum.KindRuntimeRevision,
+		State: enum.StateActive, Version: 1,
+	}
+	for _, previousState := range []string{"READY", "REJOINED"} {
+		continuation := base
+		continuation.ContinuationState = previousState
+		rebound, err := rebindIntegrationDelivery(
+			continuation, previous, retried, retriedSpec, revision, now,
+		)
+		if err != nil {
+			t.Fatalf("%s delivery rebind failed: %v", previousState, err)
+		}
+		if rebound.ContinuationState != "READY" || rebound.Version != 8 ||
+			rebound.Fence != 10 || rebound.ContinuationAttempt != 2 ||
+			rebound.ContinuationRuntimeRevisionID != newRevisionID ||
+			rebound.ContinuationInputSHA256 != newInput {
+			t.Fatalf("unexpected rebound delivery: %#v", rebound)
+		}
+	}
+	stale := base
+	stale.ContinuationAttempt = 2
+	if _, err := rebindIntegrationDelivery(
+		stale, previous, retried, retriedSpec, revision, now,
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("stale delivery binding returned %v", err)
+	}
+}
+
+func TestScheduledExecutionMaySuspendExternal(t *testing.T) {
+	for _, states := range [][2]string{{"CLAIMED", "CLAIMED"}, {"CONTINUATION", "CONTINUATION"}} {
+		if !scheduledExecutionMaySuspendExternal(states[0], states[1]) {
+			t.Fatalf("scheduled graph %v must suspend atomically", states)
+		}
+	}
+	for _, states := range [][2]string{{"CLAIMED", "CONTINUATION"}, {"FAILED", "FAILED"}, {"WAITING_OWNER", "WAITING_OWNER"}} {
+		if scheduledExecutionMaySuspendExternal(states[0], states[1]) {
+			t.Fatalf("incoherent scheduled graph %v must fail closed", states)
+		}
+	}
+}

@@ -5,5 +5,5 @@ SELECT EXISTS (
     WHERE organization_id = @organization_id::uuid
       AND project_id = @project_id::uuid
       AND schedule_id = @schedule_id::uuid
-      AND state IN ('QUEUED', 'CLAIMED')
+      AND state IN ('QUEUED', 'CLAIMED', 'WAITING_OWNER', 'CONTINUATION')
 )

@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -39,6 +40,16 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 			name: "integration update", sql: sqlIntegrationContinuationUpdate,
 			args: integrationContinuationUpdateArgs(domainrepo.IntegrationContinuation{}, 1, 1),
 		},
+		{
+			name: "scheduled suspension", sql: sqlScheduledRunSuspendExternal,
+			args: scheduledRunSuspendArgs(domainrepo.ScheduledRun{}, "", 1),
+		},
+		{
+			name: "scheduled prelock", sql: sqlScheduleOccurrenceGetByCurrentTurnForUpdate,
+			args: pgx.StrictNamedArgs{
+				"organization_id": "", "project_id": "", "turn_id": "",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -57,5 +68,19 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestScheduledContinuationRemainsOpenAndUnclaimable(t *testing.T) {
+	for name, query := range map[string]string{
+		"open": sqlScheduleOccurrenceHasOpen,
+		"next": sqlScheduleOccurrenceNext,
+		"skip": sqlScheduleOccurrenceSkipOverlap,
+	} {
+		for _, state := range []string{"WAITING_OWNER", "CONTINUATION"} {
+			if !strings.Contains(query, state) {
+				t.Fatalf("%s query does not protect %s", name, state)
+			}
+		}
 	}
 }

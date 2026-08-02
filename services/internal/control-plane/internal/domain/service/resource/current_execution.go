@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -200,7 +201,11 @@ func (service *Service) prepareRetriedExecution(
 	run.CurrentRuntimeRevisionID = revision.ID
 	run.CurrentRuntimeRevisionVersion = revision.Version
 	run.CurrentInputSHA256 = spec.EffectiveInputSHA256
-	if processSpec.ContinuationTurnID != "" {
+	// Поля ScheduledRun.Continuation* сохраняют owner-feedback provenance и
+	// применимы только к OwnerGate. Integration continuation использует тот же
+	// current tuple, но её immutable outcome хранится в отдельном owner aggregate.
+	if processSpec.ContinuationTurnID != "" &&
+		strings.HasPrefix(spec.SourceRef, "owner-gate-continuation:") {
 		run.ContinuationTurnID = retried.ID
 		run.ContinuationTurnVersion = retried.Version
 		run.ContinuationRuntimeRevisionID = revision.ID

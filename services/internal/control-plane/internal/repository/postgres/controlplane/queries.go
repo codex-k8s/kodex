@@ -165,6 +165,9 @@ var sqlScheduleDue string
 //go:embed sql/schedule_occurrence__get_for_update.sql
 var sqlScheduleOccurrenceGetForUpdate string
 
+//go:embed sql/schedule_occurrence__get_by_current_turn_for_update.sql
+var sqlScheduleOccurrenceGetByCurrentTurnForUpdate string
+
 //go:embed sql/schedule_occurrence__has_open.sql
 var sqlScheduleOccurrenceHasOpen string
 
@@ -197,6 +200,9 @@ var sqlScheduledRunGetByCurrentTurnForUpdate string
 
 //go:embed sql/scheduled_run__wait_owner.sql
 var sqlScheduledRunWaitOwner string
+
+//go:embed sql/scheduled_run__suspend_external.sql
+var sqlScheduledRunSuspendExternal string
 
 //go:embed sql/scheduled_run__continue.sql
 var sqlScheduledRunContinue string
