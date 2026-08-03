@@ -4,8 +4,8 @@ title: Надежная доставка доменных событий в Go
 type: guide
 status: approved
 owner: architect
-version: 1.3.0
-updated: 2026-07-31
+version: 1.4.0
+updated: 2026-08-02
 ---
 
 # Надежная доставка доменных событий в Go
@@ -256,19 +256,47 @@ repair.
 ## Consumer и durable inbox
 
 Consumer передает каждое проверенное событие в
-`postgresinbox.Processor.Process`. Handler получает ту же `pgx.Tx`, в которой
-фиксируются inbox и cursor:
+`postgresinbox.Processor.Process`. Composition root заранее регистрирует exact
+service-owned PostgreSQL function `(jsonb)->jsonb`. Handler получает только
+transaction-bound `EffectTx` и immutable `EventSnapshot`; raw `pgx.Tx`,
+connection и transaction/session control ему не выдаются:
 
 ```go
+applyProjection, err := postgresinbox.NewEffectOperation(
+    "apply_search_projection",
+    "search_service",
+    "apply_search_projection",
+)
+if err != nil {
+    return err
+}
+
 result, err := inbox.Process(
     ctx,
-    "search-projection",
+    postgresinbox.Consumer{Name: "search-projection", Scope: "v1"},
     event,
-    func(ctx context.Context, tx pgx.Tx, event eventing.Envelope) error {
-        return projection.Apply(ctx, tx, event)
+    func(
+        ctx context.Context,
+        tx postgresinbox.EffectTx,
+        event postgresinbox.EventSnapshot,
+    ) error {
+        input, err := event.Envelope().Marshal()
+        if err != nil {
+            return err
+        }
+        _, err = tx.Call(applyProjection, input)
+        return err
     },
 )
 ```
+
+`applyProjection` передаётся в `WithEffectOperations` при создании Processor.
+Capability исполняет только зарегистрированную schema-qualified function в
+savepoint той же физической caller-visible транзакции. Она не предоставляет
+`Conn`, `Begin`, `Commit`, `Rollback`, raw SQL, `SET ROLE`, смену `search_path`
+либо прямое изменение runtime inbox/cursor. Readiness проверяет точную
+сигнатуру функции, invoker mode, owner/membership и non-delegatable `EXECUTE`
+без `PUBLIC`; migration и composition root остаются доверенной boundary.
 
 Устойчивые исходы:
 
@@ -366,11 +394,18 @@ Production-пример forward-only миграций находится в
 колонок, тип и нормализованное определение каждого обязательного runtime
 constraint, структуру, predicate и validity каждого обязательного index, а
 также выражение generated ordering key. Одинаковое имя обязательного объекта с
-другим определением считается несовместимой схемой. Сервис вправе добавлять
-собственные constraints и indexes под отдельными именами, не изменяя
-определения общих runtime-объектов. Version marker добавляется в той же
-атомарной forward-only миграции, что и полностью готовые таблицы, constraints и
-indexes. Ставить marker до готовности схемы запрещено.
+другим определением считается несовместимой схемой. Для runtime-таблиц inbox
+v1 допускается только машинно проверяемое performance-only расширение:
+неуникальный B-tree index с именем `postgresinbox_ext_*` по существующим
+обычным колонкам, default opclass/collation/order, без expression, predicate,
+`INCLUDE`, uniqueness, exclusion либо constraint ownership. Дополнительные
+columns/defaults/generated expressions, constraints, triggers, rules и прочие
+indexes закрыто несовместимы, даже если имеют отдельные service-owned имена:
+они способны изменить общий write path. Новому constraint/extension profile
+нужны новая versioned shared schema и точная readiness signature. Version
+marker добавляется в той же атомарной forward-only миграции, что и полностью
+готовые таблицы, constraints и indexes. Ставить marker до готовности схемы
+запрещено.
 
 ## Retention, backup и PITR
 

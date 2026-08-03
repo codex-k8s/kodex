@@ -1,3 +1,3 @@
-// Package eventing предоставляет независимые от провайдера конверт события,
-// ретранслятор исходящих событий и границу публикации доменных событий MatterCodex.
+// Package eventing предоставляет независимые от провайдера envelope, relay,
+// публикацию и общий durable inbox доменных событий MatterCodex.
 package eventing
