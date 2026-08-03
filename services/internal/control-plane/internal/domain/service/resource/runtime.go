@@ -394,6 +394,9 @@ func (service *Service) ClaimTurn(
 					authorityTurn.State != enum.StateClaimed) {
 				return errs.ErrPermissionDenied
 			}
+			if err := requireCurrentTurnBinding(authorityGraph); err != nil {
+				return err
+			}
 			var authorityLease domainrepo.TurnLease
 			if authorityTurn.State == enum.StateClaimed {
 				authorityLease, err = tx.GetTurnLeaseForUpdate(ctx, authorityTurn.ID)
@@ -571,6 +574,11 @@ func (service *Service) ClaimTurn(
 			if err != nil {
 				return err
 			}
+			if turn.ID != authorityGraph.Turn.ID ||
+				turn.Version != authorityGraph.Turn.Version ||
+				turn.State != authorityGraph.Turn.State {
+				return errs.ErrStateConflict
+			}
 			claimNow, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return err
@@ -596,6 +604,11 @@ func (service *Service) ClaimTurn(
 			)
 			expiresAt := claimNow.Add(service.turnLeaseDuration)
 			if err := tx.Update(ctx, claimed, turn.Version); err != nil {
+				return err
+			}
+			if _, err := service.propagateCurrentTurnTransition(
+				ctx, tx, input.Principal, authorityGraph, claimed, claimNow,
+			); err != nil {
 				return err
 			}
 			if err := tx.SaveTurnLease(ctx, domainrepo.TurnLease{

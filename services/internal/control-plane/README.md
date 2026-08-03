@@ -134,6 +134,15 @@ discovery охватывает `CLAIMED`, `WAITING_OWNER`, `CONTINUATION` и ter
 повторно проверяют exact tuple/deadline/version после locks. PostgreSQL retry
 остаётся safety net, а не способом исправить lock inversion.
 
+`ClaimTurn` после server-owned `QUEUED -> CLAIMED` под теми же locks переносит
+новую `Turn.Version` в `ProcessRun.Current*` и применимые
+`ScheduleOccurrence.Execution*`/`ScheduledRun.Current*`; новый
+`ProcessRun.Version` также становится частью scheduled binding. Только после
+этого одной transaction сохраняются Turn lease/attempt, receipt, audit и outbox.
+Stale process/occurrence/run tuple закрыто отклоняет весь claim, а exact replay
+не создаёт второго version bump. Поэтому первый `ClaimRuntimeExecution` видит
+согласованный scheduled или unscheduled graph без caller-selected versions.
+
 Session lifecycle и cross-session delegation используют batch-вариант того же
 resolver: RuntimeExecution/occurrence/schedule/run, Session, Turn и ProcessRun
 глобально сортируются для всех затронутых graphs. `ManageSession` повторяет

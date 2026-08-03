@@ -407,6 +407,157 @@ func setCurrentExecution(spec *entity.ProcessRunSpec, tuple executionTuple) {
 	spec.CurrentInputSHA256 = tuple.InputSHA256
 }
 
+// requireCurrentTurnBinding доказывает, что все уже заблокированные строки
+// owner graph указывают на одну и ту же текущую попытку. Проверка выполняется
+// до receipt replay и до любого version bump: сохранённый receipt не может
+// скрыть stale ProcessRun либо scheduled binding.
+func requireCurrentTurnBinding(graph lockedOwnerGraph) error {
+	turnSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
+	if !ok || graph.Turn.Kind != enum.KindTurn ||
+		graph.Session.Kind != enum.KindSession ||
+		turnSpec.SessionID != graph.Session.ID {
+		return errs.ErrStateConflict
+	}
+	var processCurrent executionTuple
+	if turnSpec.ProcessRunID == "" {
+		if graph.Process.ID != "" {
+			return errs.ErrStateConflict
+		}
+	} else {
+		processSpec, processOK := graph.Process.Spec.(entity.ProcessRunSpec)
+		current, currentErr := currentExecution(processSpec)
+		if !processOK || currentErr != nil || graph.Process.Kind != enum.KindProcessRun ||
+			graph.Process.ID != turnSpec.ProcessRunID ||
+			current.SessionID != graph.Session.ID ||
+			current.SessionVersion != graph.Session.Version ||
+			current.TurnID != graph.Turn.ID ||
+			current.TurnVersion != graph.Turn.Version ||
+			current.Attempt != turnSpec.Attempt ||
+			current.RuntimeRevisionID != turnSpec.RuntimeRevisionID ||
+			current.InputSHA256 != turnSpec.EffectiveInputSHA256 {
+			return errs.ErrStateConflict
+		}
+		processCurrent = current
+	}
+	if graph.Occurrence.ID == "" {
+		if graph.Run.OccurrenceID != "" {
+			return errs.ErrStateConflict
+		}
+		return nil
+	}
+	occurrence, run := graph.Occurrence, graph.Run
+	if graph.Schedule.Kind != enum.KindSchedule ||
+		graph.Schedule.ID != occurrence.ScheduleID ||
+		validateScheduledRunBinding(occurrence, run) != nil ||
+		occurrence.ExecutionSessionID != graph.Session.ID ||
+		occurrence.ExecutionSessionVersion != graph.Session.Version ||
+		occurrence.ExecutionTurnID != graph.Turn.ID ||
+		occurrence.ExecutionTurnVersion != graph.Turn.Version ||
+		run.CurrentTurnAttempt != turnSpec.Attempt ||
+		run.CurrentRuntimeRevisionID != turnSpec.RuntimeRevisionID ||
+		run.CurrentInputSHA256 != turnSpec.EffectiveInputSHA256 {
+		return errs.ErrStateConflict
+	}
+	if turnSpec.ProcessRunID == "" {
+		if occurrence.ExecutionProcessRunID != "" ||
+			occurrence.ExecutionProcessVersion != 0 ||
+			run.CurrentProcessRunID != "" || run.CurrentProcessVersion != 0 {
+			return errs.ErrStateConflict
+		}
+		return nil
+	}
+	if occurrence.ExecutionProcessRunID != graph.Process.ID ||
+		occurrence.ExecutionProcessVersion != graph.Process.Version ||
+		run.CurrentProcessRunID != graph.Process.ID ||
+		run.CurrentProcessVersion != graph.Process.Version ||
+		occurrence.ExecutionRuntimeRevisionVersion != processCurrent.RuntimeRevisionVersion ||
+		run.CurrentRuntimeRevisionVersion != processCurrent.RuntimeRevisionVersion {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+// propagateCurrentTurnTransition переносит server-owned current tuple после
+// нетерминального version bump Turn. Все строки уже получены через
+// lockOwnerGraphByTurn; helper не открывает поздние locks и либо сохраняет
+// Turn/ProcessRun/scheduled binding целиком, либо откатывает owner transaction.
+func (service *Service) propagateCurrentTurnTransition(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	graph lockedOwnerGraph,
+	updatedTurn entity.Resource,
+	now time.Time,
+) (entity.Resource, error) {
+	if err := requireCurrentTurnBinding(graph); err != nil {
+		return entity.Resource{}, err
+	}
+	previousSpec, previousOK := graph.Turn.Spec.(entity.TurnSpec)
+	updatedSpec, updatedOK := updatedTurn.Spec.(entity.TurnSpec)
+	if !previousOK || !updatedOK || updatedTurn.ID != graph.Turn.ID ||
+		updatedTurn.Version != graph.Turn.Version+1 || updatedSpec != previousSpec ||
+		updatedTurn.State.Terminal() {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+
+	updatedProcess := graph.Process
+	if updatedSpec.ProcessRunID != "" {
+		processSpec, ok := graph.Process.Spec.(entity.ProcessRunSpec)
+		if !ok {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		current, err := currentExecution(processSpec)
+		if err != nil {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		current.TurnVersion = updatedTurn.Version
+		setCurrentExecution(&processSpec, current)
+		updatedProcess, err = graph.Process.Update(graph.Process.Name, processSpec, now)
+		if err != nil {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		if err := tx.Update(ctx, updatedProcess, graph.Process.Version); err != nil {
+			return entity.Resource{}, err
+		}
+		if err := service.appendMutationRecords(
+			ctx, tx, principal, "propagate_current_turn_process", updatedProcess,
+		); err != nil {
+			return entity.Resource{}, err
+		}
+	}
+
+	if graph.Occurrence.ID == "" {
+		return updatedProcess, nil
+	}
+	occurrence := graph.Occurrence
+	occurrence.ExecutionTurnVersion = updatedTurn.Version
+	if updatedProcess.ID != "" {
+		occurrence.ExecutionProcessVersion = updatedProcess.Version
+	}
+	occurrence.UpdatedAt = now
+	if err := tx.UpdateScheduleOccurrence(
+		ctx, occurrence, graph.Occurrence.Attempt, graph.Occurrence.TokenHash,
+	); err != nil {
+		return entity.Resource{}, err
+	}
+	run := graph.Run
+	run.CurrentTurnVersion = updatedTurn.Version
+	if updatedProcess.ID != "" {
+		run.CurrentProcessVersion = updatedProcess.Version
+	}
+	if err := tx.RebindScheduledRun(
+		ctx, run, graph.Turn.ID, previousSpec.Attempt,
+	); err != nil {
+		return entity.Resource{}, err
+	}
+	if err := service.appendMutationRecords(
+		ctx, tx, principal, "propagate_current_turn_schedule", graph.Schedule,
+	); err != nil {
+		return entity.Resource{}, err
+	}
+	return updatedProcess, nil
+}
+
 func executionMatchesTurn(
 	tuple executionTuple,
 	turn entity.Resource,

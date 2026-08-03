@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.14.0
+version: 1.15.0
 updated: 2026-08-03
 ---
 
@@ -239,6 +239,14 @@ attempt, expiry и version fence. Следующий
 5. выдаёт новую lease; `RenewTurn` принимает только exact
    workload/generation/attempt/token/fence.
 
+Для обычного `QUEUED -> CLAIMED` тот же resolver уже удерживает Session, Turn,
+ProcessRun и применимый scheduled graph. До сохранения lease/attempt/receipt
+проверить, что старые current versions совпадают, затем одним propagation helper
+перенести новую `Turn.Version` в `ProcessRun.CurrentTurnVersion` и, для scheduled
+запуска, в occurrence/run вместе с новой `ProcessRun.Version`. Несовпадение хотя
+бы одной строки означает полный rollback; вручную выравнивать JSON tuple нельзя.
+Exact replay обязан вернуть прежнюю live lease без нового version bump.
+
 Не менять state/lease вручную. Если recovery не проходит, проверить clock,
 RLS scope, OCC conflict и `turn_leases` metadata без token hash.
 
@@ -290,6 +298,13 @@ occurrence query обязана находить `CLAIMED`, `WAITING_OWNER`, `CO
 `SUCCEEDED`, `FAILED` и `CANCELLED`; иначе ожидание или terminal replay
 ошибочно станет unscheduled. PostgreSQL
 deadlock/serialization retry остаётся safety net, а не штатной синхронизацией.
+
+Если первый `ClaimRuntimeExecution` после настоящего `ClaimTurn` возвращает
+state conflict, сравнить безопасные metadata `Turn.Version`,
+`ProcessRun.CurrentTurnVersion` и, для scheduled graph,
+`ScheduleOccurrence.ExecutionTurnVersion`/`ScheduledRun.CurrentTurnVersion` и
+обе process versions. Любое расхождение считается атомарно отклонённым claim,
+а не состоянием для repair SQL. Unscheduled graph не должен иметь occurrence/run.
 
 Для Session lifecycle и delegation проверить batch acquisition всех затронутых
 graphs: RuntimeExecution/occurrence/schedule/run сортируются раньше всех
@@ -346,7 +361,9 @@ receipt lookup → effect при отсутствии receipt. Если `AdmitRu
 
 Для `ClaimTurn`/`RenewTurn` до receipt должны совпасть exact current Turn,
 RuntimeExecution disposition, workload, generation, attempt, fence, token и
-PostgreSQL expiry. `ClaimScheduleOccurrence` использует server-owned
+PostgreSQL expiry. Для нового claim до выдачи token обязана завершиться
+current-tuple propagation; replay проверяет уже сохранённую полную binding и не
+увеличивает версии повторно. `ClaimScheduleOccurrence` использует server-owned
 `claim_key_sha256`: сначала по нему разрешается current occurrence и полный
 graph, затем сверяются workload/generation/token/deadline и только потом
 допустим replay. После runtime claim, terminal, expiry или rebind прежний
