@@ -20,35 +20,37 @@ var sensitiveNames = map[string]struct{}{
 }
 
 type Request struct {
-	DefinitionID           string          `json:"definition_id"`
-	DefinitionVersion      uint64          `json:"definition_version"`
-	ConnectionID           string          `json:"connection_id"`
-	ConnectionRevision     uint64          `json:"connection_revision"`
-	ConnectionGeneration   uint64          `json:"connection_generation"`
-	Capability             string          `json:"capability"`
-	ToolName               string          `json:"tool_name"`
-	ToolVersion            uint64          `json:"tool_version"`
-	TenantID               string          `json:"tenant_id"`
-	ProjectID              string          `json:"project_id"`
-	ProcessID              string          `json:"process_id"`
-	SessionID              string          `json:"session_id"`
-	SessionVersion         uint64          `json:"session_version"`
-	ThreadID               string          `json:"thread_id"`
-	TurnID                 string          `json:"turn_id"`
-	TurnVersion            uint64          `json:"turn_version"`
-	Attempt                uint32          `json:"attempt"`
-	InputDigest            string          `json:"input_digest"`
-	RuntimeRevisionID      string          `json:"runtime_revision_id"`
-	RuntimeRevisionVersion uint64          `json:"runtime_revision_version"`
-	RuntimeRevisionDigest  string          `json:"runtime_revision_digest"`
-	RuntimeManifestDigest  string          `json:"runtime_manifest_digest"`
-	RoleID                 string          `json:"role_id"`
-	RoleVersion            uint64          `json:"role_version"`
-	GrantID                string          `json:"grant_id"`
-	GrantGeneration        uint64          `json:"grant_generation"`
-	Method                 string          `json:"method"`
-	Path                   string          `json:"path"`
-	Arguments              json.RawMessage `json:"arguments"`
+	DefinitionID            string          `json:"definition_id"`
+	DefinitionVersion       uint64          `json:"definition_version"`
+	DefinitionDigest        string          `json:"definition_digest"`
+	ConnectionID            string          `json:"connection_id"`
+	ConnectionRevision      uint64          `json:"connection_revision"`
+	ConnectionGeneration    uint64          `json:"connection_generation"`
+	ConnectionBindingDigest string          `json:"connection_binding_digest"`
+	Capability              string          `json:"capability"`
+	ToolName                string          `json:"tool_name"`
+	ToolVersion             uint64          `json:"tool_version"`
+	TenantID                string          `json:"tenant_id"`
+	ProjectID               string          `json:"project_id"`
+	ProcessID               string          `json:"process_id"`
+	SessionID               string          `json:"session_id"`
+	SessionVersion          uint64          `json:"session_version"`
+	ThreadID                string          `json:"thread_id"`
+	TurnID                  string          `json:"turn_id"`
+	TurnVersion             uint64          `json:"turn_version"`
+	Attempt                 uint32          `json:"attempt"`
+	InputDigest             string          `json:"input_digest"`
+	RuntimeRevisionID       string          `json:"runtime_revision_id"`
+	RuntimeRevisionVersion  uint64          `json:"runtime_revision_version"`
+	RuntimeRevisionDigest   string          `json:"runtime_revision_digest"`
+	RuntimeManifestDigest   string          `json:"runtime_manifest_digest"`
+	RoleID                  string          `json:"role_id"`
+	RoleVersion             uint64          `json:"role_version"`
+	GrantID                 string          `json:"grant_id"`
+	GrantGeneration         uint64          `json:"grant_generation"`
+	Method                  string          `json:"method"`
+	Path                    string          `json:"path"`
+	Arguments               json.RawMessage `json:"arguments"`
 }
 
 func Normalize(raw []byte, maximumBytes int64) (json.RawMessage, error) {

@@ -5,12 +5,67 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func loadPublicTLSConfig(config Config) (*tls.Config, error) {
+	return loadServerTLSConfig(config, config.TLSAllowedClientSPIFFEIDs)
+}
+
+func loadResultTLSConfig(config Config) (*tls.Config, error) {
+	return loadServerTLSConfig(config,
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner")
+}
+
+func loadServerTLSConfig(config Config, allowedIdentities string) (*tls.Config, error) {
+	certificate, err := tls.LoadX509KeyPair(config.TLSCertificateFile, config.TLSPrivateKeyFile)
+	if err != nil {
+		return nil, errors.New("load HTTPS server certificate")
+	}
+	caRaw, err := readRuntimeFile(config.TLSClientCAFile, 1<<20)
+	if err != nil {
+		return nil, errors.New("read HTTPS client CA")
+	}
+	clientRoots := x509.NewCertPool()
+	if !clientRoots.AppendCertsFromPEM(caRaw) {
+		return nil, errors.New("parse HTTPS client CA")
+	}
+	allowed := make(map[string]struct{})
+	for _, raw := range strings.Split(allowedIdentities, ",") {
+		identity := strings.TrimSpace(raw)
+		parsed, parseErr := url.Parse(identity)
+		if parseErr != nil || parsed.Scheme != "spiffe" || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return nil, errors.New("HTTPS client SPIFFE allowlist is invalid")
+		}
+		allowed[identity] = struct{}{}
+	}
+	if len(allowed) == 0 || len(allowed) > 8 {
+		return nil, errors.New("HTTPS client SPIFFE allowlist is invalid")
+	}
+	return &tls.Config{
+		MinVersion:   tls.VersionTLS13,
+		Certificates: []tls.Certificate{certificate},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    clientRoots,
+		VerifyConnection: func(connection tls.ConnectionState) error {
+			if len(connection.VerifiedChains) != 1 || len(connection.PeerCertificates) == 0 ||
+				len(connection.PeerCertificates[0].URIs) != 1 {
+				return errors.New("HTTPS client workload identity is invalid")
+			}
+			identity := connection.PeerCertificates[0].URIs[0].String()
+			if _, ok := allowed[identity]; !ok {
+				return fmt.Errorf("HTTPS client workload identity is not allowed")
+			}
+			return nil
+		},
+	}, nil
+}
 
 func readRuntimeFile(path string, maximum int64) ([]byte, error) {
 	if !filepath.IsAbs(path) {

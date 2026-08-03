@@ -69,11 +69,13 @@ type ContinuationClaim struct {
 }
 
 type ContinuationCompletion struct {
-	InvocationID string
-	Action       enum.ContinuationAction
-	LeaseID      string
-	LeaseFence   uint64
-	State        ContinuationState
+	InvocationID             string
+	Action                   enum.ContinuationAction
+	LeaseID                  string
+	LeaseFence               uint64
+	State                    ContinuationState
+	EncryptedTransitionGrant []byte
+	TransitionGrantExpiresAt time.Time
 }
 
 type ContinuationState struct {
@@ -94,9 +96,10 @@ type ContinuationRetry struct {
 }
 
 type ToolBinding struct {
-	Tool       entity.Tool
-	Connection entity.Connection
-	Grant      entity.Grant
+	Tool             entity.Tool
+	Connection       entity.Connection
+	Grant            entity.Grant
+	DefinitionDigest string
 }
 
 type ExecutionCompletion struct {
@@ -107,6 +110,22 @@ type ExecutionCompletion struct {
 	GrantGeneration      uint64
 	Result               entity.Result
 	Audit                entity.AuditEvent
+}
+
+type ResultBinding struct {
+	InvocationID string
+	AttemptID    string
+	ResultSHA256 string
+}
+
+type ResultAcknowledgement struct {
+	Binding         ResultBinding
+	DeliveryVersion uint64
+	DeliveryFence   uint64
+	IdempotencyHash string
+	RequestHash     string
+	AcknowledgedAt  time.Time
+	Audit           entity.AuditEvent
 }
 
 type ConnectionValidation struct {
@@ -124,6 +143,7 @@ type Transaction interface {
 	CancelInvocation(context.Context, Cancellation) (entity.Invocation, bool, error)
 	ClaimExecution(context.Context, time.Time) (ExecutionClaim, bool, error)
 	CompleteExecution(context.Context, ExecutionCompletion) error
+	AcknowledgeResult(context.Context, ResultAcknowledgement) (entity.Result, error)
 	SetConnectionValidation(context.Context, ConnectionValidation) error
 	CloseSession(context.Context, string, time.Time, entity.AuditEvent) error
 	Expire(context.Context, time.Time, int) (int64, error)
@@ -140,6 +160,7 @@ type Repository interface {
 	GetConnection(context.Context, Scope, string) (entity.Connection, error)
 	ListTools(context.Context, Scope, string) ([]ToolBinding, error)
 	GetInvocation(context.Context, Scope, string) (entity.Invocation, *entity.Approval, *entity.Result, error)
+	ResolveResult(context.Context, Scope, ResultBinding) (entity.Result, error)
 	TouchSession(context.Context, Scope, string, string, time.Time, time.Time, uint64, uint32) (entity.TransportSession, error)
 	ReleaseSession(context.Context, Scope, string) error
 	Check(context.Context) error

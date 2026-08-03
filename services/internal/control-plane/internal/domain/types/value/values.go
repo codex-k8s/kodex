@@ -53,9 +53,9 @@ func (principal Principal) Validate() error {
 		len(principal.AuthorityDigest) != 64 {
 		return errors.New("authorization context is invalid")
 	}
-	if principal.AuthoritySource == "AGENT_SESSION" &&
+	if (principal.AuthoritySource == "AGENT_SESSION" || principal.AuthoritySource == "INTEGRATION_CONTINUATION") &&
 		principal.AuthorityGrantGeneration == 0 {
-		return errors.New("agent grant generation is invalid")
+		return errors.New("authority grant generation is invalid")
 	}
 	return nil
 }

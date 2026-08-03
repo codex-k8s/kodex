@@ -4,8 +4,10 @@ package grpc
 import (
 	"context"
 	"errors"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
@@ -36,17 +38,25 @@ type Readiness interface {
 // Server реализует generated service без infrastructure orchestration.
 type Server struct {
 	controlplanev1.UnimplementedControlPlaneServiceServer
-	service   *resource.Service
-	readiness Readiness
+	service          *resource.Service
+	readiness        Readiness
+	transitionSigner grantSigner
+	resultSigner     grantSigner
+}
+
+type grantSigner interface {
+	Sign(context.Context, integrationgatewayauth.Claims) (string, error)
 }
 
 // NewServer создаёт транспорт над доменным сервисом.
-func NewServer(service *resource.Service, readiness Readiness) (*Server, error) {
-	if service == nil || readiness == nil {
+func NewServer(service *resource.Service, readiness Readiness, transitionSigner, resultSigner grantSigner) (*Server, error) {
+	if service == nil || readiness == nil || transitionSigner == nil || resultSigner == nil {
 		return nil, errors.New("control-plane gRPC dependencies are required")
 	}
-	return &Server{service: service, readiness: readiness}, nil
+	return &Server{service: service, readiness: readiness, transitionSigner: transitionSigner, resultSigner: resultSigner}, nil
 }
+
+const continuationGrantTTL = 8 * 24 * time.Hour
 
 func (server *Server) CreateProject(
 	ctx context.Context,

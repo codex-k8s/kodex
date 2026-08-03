@@ -33,3 +33,21 @@ spec:
       path: /metrics
       interval: 30s
       scrapeTimeout: 5s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: integration-gateway-internal-rpc-authority-verifier
+  labels:
+    app.kubernetes.io/name: internal-rpc-authority
+    app.kubernetes.io/component: verifier
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: integration-gateway
+      mattercodex.dev/internal-rpc-authority-verifier: enabled
+  podMetricsEndpoints:
+    - port: verifier-metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s

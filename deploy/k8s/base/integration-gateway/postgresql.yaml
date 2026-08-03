@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: integration-gateway-postgresql-bootstrap
+automountServiceAccountToken: false
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: integration-gateway-postgresql
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+spec:
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: integration-gateway-postgresql
+    serviceAccount: integration-gateway-postgresql-bootstrap
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: integration-gateway-postgresql-bootstrap
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  vaultAuthRef: integration-gateway-postgresql
+  mount: kv
+  type: kv-v2
+  path: mattercodex/integration-gateway/postgres/bootstrap
+  refreshAfter: 1h
+  destination:
+    create: true
+    name: integration-gateway-postgresql-bootstrap
+    overwrite: false
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: integration-gateway-postgresql
+  labels:
+    app.kubernetes.io/name: integration-gateway-postgresql
+    app.kubernetes.io/component: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie@sha256:660141d8ac12d783f12a3f6bb5ca6c3b1412ea18881f73b9853cfb1eeb9cf128
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  failoverDelay: 0
+  switchoverDelay: 60
+  smartShutdownTimeout: 30
+  stopDelay: 30
+  startDelay: 30
+  enableSuperuserAccess: false
+  bootstrap:
+    initdb:
+      database: mattercodex
+      owner: integration_gateway_owner
+      secret:
+        name: integration-gateway-postgresql-bootstrap
+  storage:
+    size: 20Gi
+    storageClass: mattercodex-postgresql
+  walStorage:
+    size: 10Gi
+    storageClass: mattercodex-postgresql
+  postgresql:
+    parameters:
+      ssl_min_protocol_version: TLSv1.3
+      password_encryption: scram-sha-256
+      max_connections: "100"
+      shared_preload_libraries: "pg_stat_statements"
+  monitoring:
+    enablePodMonitor: true
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: integration-gateway-postgresql
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      cnpg.io/cluster: integration-gateway-postgresql
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: integration-gateway-postgresql-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: integration-gateway-postgresql
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-gateway
+      ports:
+        - {protocol: TCP, port: 5432}
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: integration-gateway-postgresql
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 8000}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: integration-gateway-postgresql
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 8000}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              component: kube-apiserver
+      ports:
+        - {protocol: TCP, port: 6443}

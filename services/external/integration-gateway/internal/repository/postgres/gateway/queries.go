@@ -53,6 +53,9 @@ var sqlContinuationClaim string
 //go:embed sql/continuation__complete.sql
 var sqlContinuationComplete string
 
+//go:embed sql/continuation__lock.sql
+var sqlContinuationLock string
+
 //go:embed sql/continuation__retry.sql
 var sqlContinuationRetry string
 
@@ -106,6 +109,12 @@ var sqlAttemptComplete string
 
 //go:embed sql/result__insert.sql
 var sqlResultInsert string
+
+//go:embed sql/result__resolve.sql
+var sqlResultResolve string
+
+//go:embed sql/result__acknowledge.sql
+var sqlResultAcknowledge string
 
 //go:embed sql/invocation__complete.sql
 var sqlInvocationComplete string

@@ -88,7 +88,10 @@
           "control.turn.renew",
           "control.turn.complete",
           "control.integration-continuation.get",
-          "control.integration-continuation.acknowledge"
+          "control.integration-continuation.acknowledge",
+          "integration.result.resolve",
+          "integration.result.acknowledge",
+          "integration.result.readiness"
         ],
         "application_credential": "AGENT_SESSION_GRANT",
         "application_credential_audience": "urn:mattercodex:agent-session",
@@ -543,14 +546,7 @@
         "allowed_operation_ids": [
           "control.integration-gateway.readiness",
           "control.integration-session.resolve",
-          "control.integration-continuation.suspend",
-          "control.integration-invocation.approve",
-          "control.integration-invocation.reject",
-          "control.integration-invocation.expire",
-          "control.integration-invocation.cancel",
-          "control.integration-execution.begin",
-          "control.integration-execution.complete",
-          "control.integration-execution.fail"
+          "control.integration-continuation.suspend"
         ],
         "application_credential": "AGENT_SESSION_GRANT",
         "application_credential_audience": "urn:mattercodex:integration-session",
@@ -593,6 +589,66 @@
           "generation",
           "provenance",
           "integration_metadata"
+        ],
+        "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
+      },
+      {
+        "allowed_operation_ids": [
+          "control.integration-invocation.approve",
+          "control.integration-invocation.reject",
+          "control.integration-invocation.expire",
+          "control.integration-invocation.cancel",
+          "control.integration-execution.begin",
+          "control.integration-execution.complete",
+          "control.integration-execution.fail"
+        ],
+        "application_credential": "INTEGRATION_CONTINUATION_GRANT",
+        "application_credential_audience": "urn:mattercodex:integration-continuation",
+        "application_credential_issuer": "https://control-plane.mattercodex-system.svc.cluster.local/authority/integration-continuation",
+        "application_credential_metadata": "authorization",
+        "application_credential_trust_bundle_id": "integration-continuation-grants-g1",
+        "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:integration-gateway",
+        "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "authority_proof_max_age_seconds": 15,
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_sources": [
+          "INTEGRATION_CONTINUATION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "deadline_milliseconds": 2000,
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "max_attempts": 2,
+        "owner_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "owner_workload_id": "control-plane",
+        "producer_id": "control-plane.integration-continuation",
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "process",
+          "session",
+          "thread",
+          "role",
+          "turn",
+          "attempt",
+          "runtime_revision",
+          "input_sha256",
+          "generation",
+          "provenance",
+          "integration_metadata",
+          "continuation_id",
+          "continuation_version",
+          "continuation_fence",
+          "invocation_id",
+          "allowed_operation_ids"
         ],
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
@@ -2509,9 +2565,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_proof_producer_id": "control-plane.integration-continuation",
         "authority_sources": [
-          "AGENT_SESSION",
+          "INTEGRATION_CONTINUATION",
           "DOMAIN_STATE"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
@@ -2538,9 +2594,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_proof_producer_id": "control-plane.integration-continuation",
         "authority_sources": [
-          "AGENT_SESSION",
+          "INTEGRATION_CONTINUATION",
           "DOMAIN_STATE"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
@@ -2567,9 +2623,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_proof_producer_id": "control-plane.integration-continuation",
         "authority_sources": [
-          "AGENT_SESSION",
+          "INTEGRATION_CONTINUATION",
           "DOMAIN_STATE"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
@@ -2596,9 +2652,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_proof_producer_id": "control-plane.integration-continuation",
         "authority_sources": [
-          "AGENT_SESSION",
+          "INTEGRATION_CONTINUATION",
           "DOMAIN_STATE"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
@@ -2625,9 +2681,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_proof_producer_id": "control-plane.integration-continuation",
         "authority_sources": [
-          "AGENT_SESSION",
+          "INTEGRATION_CONTINUATION",
           "DOMAIN_STATE"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
@@ -2654,9 +2710,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_proof_producer_id": "control-plane.integration-continuation",
         "authority_sources": [
-          "AGENT_SESSION",
+          "INTEGRATION_CONTINUATION",
           "DOMAIN_STATE"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
@@ -2683,9 +2739,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_proof_producer_id": "control-plane.integration-continuation",
         "authority_sources": [
-          "AGENT_SESSION",
+          "INTEGRATION_CONTINUATION",
           "DOMAIN_STATE"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
@@ -2767,11 +2823,98 @@
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
         "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:integration-gateway",
+        "authority_proof_producer_id": "control-plane.agent-session",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+        "caller_workload_id": "agent-runner",
+        "full_method": "/integrationgateway.v1.IntegrationResultService/ResolveIntegrationResult",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "integration.result.resolve",
+        "permission": "integration.result.read",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "target_tls_server_name": "integration-gateway.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "integration-gateway"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:integration-gateway",
+        "authority_proof_producer_id": "control-plane.agent-session",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+        "caller_workload_id": "agent-runner",
+        "full_method": "/integrationgateway.v1.IntegrationResultService/AcknowledgeIntegrationResult",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "integration.result.acknowledge",
+        "permission": "integration.result.acknowledge",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "target_tls_server_name": "integration-gateway.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "integration-gateway"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:integration-gateway",
+        "authority_proof_producer_id": "control-plane.agent-session",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+        "caller_workload_id": "agent-runner",
+        "full_method": "/integrationgateway.v1.IntegrationResultService/CheckReadiness",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "integration.result.readiness",
+        "permission": "integration.result.readiness",
+        "project_required": false,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "target_tls_server_name": "integration-gateway.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "integration-gateway"
       }
     ],
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 8,
+  "policy_revision": 10,
   "v": 1
 }

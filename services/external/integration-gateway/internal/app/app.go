@@ -14,6 +14,10 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
+	integrationgatewayv1 "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
+	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
+	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/authorization/oidc"
@@ -27,23 +31,31 @@ import (
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/observability"
 	postgresgateway "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/repository/postgres/gateway"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/security/payloadcipher"
+	resultgrpc "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/transport/grpc/result"
 	apihttp "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/transport/http/api"
 	mcphttp "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/transport/http/mcp"
 	"github.com/jackc/pgx/v5/pgxpool"
+	stdgrpc "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type state struct {
-	config          Config
-	logger          *slog.Logger
-	telemetry       *sharedobservability.Runtime
-	metrics         *sharedobservability.Metrics
-	business        *internalobservability.Metrics
-	readiness       *serviceruntime.Readiness
-	workers         *serviceruntime.WorkerGroup
-	publicServer    *http.Server
-	technicalServer *http.Server
-	pool            *pgxpool.Pool
-	control         *controlplaneclient.Client
+	config            Config
+	logger            *slog.Logger
+	telemetry         *sharedobservability.Runtime
+	metrics           *sharedobservability.Metrics
+	business          *internalobservability.Metrics
+	readiness         *serviceruntime.Readiness
+	workers           *serviceruntime.WorkerGroup
+	publicServer      *http.Server
+	technicalServer   *http.Server
+	resultServer      *stdgrpc.Server
+	publicListener    net.Listener
+	technicalListener net.Listener
+	resultListener    net.Listener
+	pool              *pgxpool.Pool
+	control           *controlplaneclient.Client
+	authority         *authorityclient.LocalConnection
 }
 
 func Run(lifecycle context.Context, shutdownBase context.Context, version string) (resultErr error) {
@@ -81,6 +93,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	repository, err := postgresgateway.New(current.pool, postgresgateway.Config{
 		PrincipalName: config.PostgresPrincipalName, PrincipalGeneration: config.PostgresPrincipalGeneration,
 		ContextKeyID: config.PostgresContextKeyID, ContextSigningKey: contextKey, ContextTTL: 5 * time.Second,
+		CleanupBase: shutdownBase, CleanupTimeout: config.ShutdownTimeout,
 	})
 	if err != nil {
 		return err
@@ -93,10 +106,12 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	provider, err := providerhttp.New(providerhttp.Config{ProxyURL: config.ProviderProxyURL,
+	provider, err := providerhttp.New(providerhttp.Config{
+		ProxyURL:        config.ProviderProxyURL,
 		ProxyServerName: config.ProviderProxyTLSServerName, CAFile: config.ProviderProxyCAFile,
 		ClientCertificateFile: config.TLSCertificateFile, ClientPrivateKeyFile: config.TLSPrivateKeyFile,
-		MaximumConnections: config.MaximumGlobalConcurrency})
+		MaximumConnections: config.MaximumGlobalConcurrency,
+	})
 	if err != nil {
 		return err
 	}
@@ -122,16 +137,43 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	if err := loadDefinitions(startup, config.DefinitionDirectory, service, catalog); err != nil {
-		return err
-	}
-	oidcVerifier, err := oidc.New(lifecycle, oidc.Config{Issuer: config.OIDCIssuer, Audience: config.OIDCAudience,
-		TLSServerName: config.OIDCTLSServerName, CAFile: config.OIDCCAFile, Timeout: 5 * time.Second})
+	resultGrantVerifier, err := integrationgatewayauth.NewVerifier(integrationgatewayauth.Config{
+		Issuer: config.ResultGrantIssuer, Audience: "urn:mattercodex:integration-result-access",
+		WorkloadID: "agent-runner", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+		Generation: config.ResultGrantSignerGeneration, MaximumTTL: 8 * 24 * time.Hour,
+	}, config.ResultGrantPublicJWKFile)
 	if err != nil {
 		return err
 	}
-	mcpHandler, err := mcphttp.New(service, control, mcphttp.Config{MaximumBodyBytes: config.MaximumBodyBytes,
-		RequestDeadline: config.RequestDeadline, MaximumGlobalConcurrency: config.MaximumGlobalConcurrency})
+	current.authority, err = authorityclient.DialLocal(startup, authorityclient.LocalConfig{
+		SocketPath: authorityclient.VerifierSocketPath, ExpectedServerUID: config.AuthorityVerifierUID,
+		ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: 2 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	authorityChecker := authorityVerifierChecker{client: current.authority.Verifier()}
+	if err := authorityChecker.Check(startup); err != nil {
+		return fmt.Errorf("startup barrier: %w", err)
+	}
+	resultTransport, err := resultgrpc.New(service, resultGrantVerifier, repository)
+	if err != nil {
+		return err
+	}
+	if err := loadDefinitions(startup, config.DefinitionDirectory, service, catalog); err != nil {
+		return err
+	}
+	oidcVerifier, err := oidc.New(lifecycle, oidc.Config{
+		Issuer: config.OIDCIssuer, Audience: config.OIDCAudience,
+		TLSServerName: config.OIDCTLSServerName, CAFile: config.OIDCCAFile, Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	mcpHandler, err := mcphttp.New(service, control, mcphttp.Config{
+		MaximumBodyBytes: config.MaximumBodyBytes,
+		RequestDeadline:  config.RequestDeadline, MaximumGlobalConcurrency: config.MaximumGlobalConcurrency,
+	})
 	if err != nil {
 		return err
 	}
@@ -152,10 +194,26 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	publicMux.Handle("/mcp/v1", observeHTTP(current.business, "mcp", mcpHandler.HTTPHandler()))
 	publicMux.Handle("/api/v1/", observeHTTP(current.business, "api",
 		boundedHTTP(apiHandler, config.MaximumGlobalConcurrency, config.RequestDeadline)))
-	current.publicServer = &http.Server{Addr: config.HTTPListen, Handler: publicMux,
+	publicTLS, err := loadPublicTLSConfig(config)
+	if err != nil {
+		return err
+	}
+	current.publicServer = &http.Server{
+		Addr: config.HTTPListen, Handler: publicMux,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: config.RequestDeadline + time.Second,
 		WriteTimeout: config.RequestDeadline + time.Second, IdleTimeout: 30 * time.Second,
-		MaxHeaderBytes: 16 << 10, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}}
+		MaxHeaderBytes: 16 << 10, TLSConfig: publicTLS,
+	}
+	resultTLS, err := loadResultTLSConfig(config)
+	if err != nil {
+		return err
+	}
+	current.resultServer = stdgrpc.NewServer(
+		stdgrpc.Creds(credentials.NewTLS(resultTLS)),
+		stdgrpc.MaxRecvMsgSize(64<<10), stdgrpc.MaxSendMsgSize(512<<10),
+		stdgrpc.ChainUnaryInterceptor(authorityclient.VerifierUnaryServerInterceptor(current.authority.Verifier())),
+	)
+	integrationgatewayv1.RegisterIntegrationResultServiceServer(current.resultServer, resultTransport)
 	technicalMux := http.NewServeMux()
 	technicalMux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
 	technicalMux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
@@ -167,17 +225,37 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		response.WriteHeader(http.StatusNoContent)
 	})
 	technicalMux.Handle("/metrics", current.metrics.PrometheusHandler())
-	current.technicalServer = &http.Server{Addr: config.TechnicalListen, Handler: technicalMux,
-		ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 15 * time.Second, MaxHeaderBytes: 8 << 10}
+	current.technicalServer = &http.Server{
+		Addr: config.TechnicalListen, Handler: technicalMux,
+		ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 15 * time.Second, MaxHeaderBytes: 8 << 10,
+	}
+	current.publicListener, err = net.Listen("tcp", config.HTTPListen)
+	if err != nil {
+		return errors.New("bind HTTPS listener")
+	}
+	current.publicListener = tls.NewListener(current.publicListener, publicTLS)
+	current.resultListener, err = net.Listen("tcp", config.ResultRPCListen)
+	if err != nil {
+		_ = current.publicListener.Close()
+		return errors.New("bind integration result gRPC listener")
+	}
+	current.technicalListener, err = net.Listen("tcp", config.TechnicalListen)
+	if err != nil {
+		_ = current.publicListener.Close()
+		_ = current.resultListener.Close()
+		return errors.New("bind technical HTTP listener")
+	}
 	current.readiness.Set(true, "ready")
 	current.metrics.SetReady(true)
-	current.workers = serviceruntime.StartWorkers(lifecycle,
-		serverWorker(current.publicServer, true, config.TLSCertificateFile, config.TLSPrivateKeyFile),
-		serverWorker(current.technicalServer, false, "", ""),
+	current.workers = serviceruntime.StartWorkers(
+		lifecycle,
+		serverWorker(current.publicServer, current.publicListener),
+		grpcServerWorker(current.resultServer, current.resultListener),
+		serverWorker(current.technicalServer, current.technicalListener),
 		executionWorker(service, current.business, current.logger, config.WorkerInterval, shutdownBase),
 		continuationWorker(service, current.business, current.logger, config.WorkerInterval),
 		lifecycleWorker(service, current.business, current.logger, config.WorkerInterval),
-		readinessWorker(repository, current.control, provider, cipher, current.readiness, current.metrics, current.business, current.logger, config.ReadinessInterval),
+		readinessWorker(repository, current.control, provider, cipher, authorityChecker, current.readiness, current.metrics, current.business, current.logger, config.ReadinessInterval),
 	)
 	workerResult := make(chan error, 1)
 	go func() { workerResult <- current.workers.Wait(shutdownBase) }()
@@ -216,19 +294,26 @@ func loadDefinitions(ctx context.Context, directory string, service *domainservi
 	return nil
 }
 
-func serverWorker(server *http.Server, withTLS bool, certificateFile, keyFile string) serviceruntime.Worker {
+func serverWorker(server *http.Server, listener net.Listener) serviceruntime.Worker {
 	return func(ctx context.Context) error {
-		listener, err := net.Listen("tcp", server.Addr)
-		if err != nil {
-			return errors.New("listen HTTP server")
-		}
 		go func() { <-ctx.Done(); _ = listener.Close() }()
-		if withTLS {
-			err = server.ServeTLS(listener, certificateFile, keyFile)
-		} else {
-			err = server.Serve(listener)
-		}
+		err := server.Serve(listener)
 		if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) {
+			return nil
+		}
+		return err
+	}
+}
+
+func grpcServerWorker(server *stdgrpc.Server, listener net.Listener) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		go func() {
+			<-ctx.Done()
+			server.Stop()
+			_ = listener.Close()
+		}()
+		err := server.Serve(listener)
+		if errors.Is(err, net.ErrClosed) {
 			return nil
 		}
 		return err
@@ -310,11 +395,27 @@ func continuationWorker(service *domainservice.Service, metrics *internalobserva
 
 type checker interface{ Check(context.Context) error }
 
-func readinessWorker(repository, control, provider, payloadKeyset checker, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, business *internalobservability.Metrics, logger *slog.Logger, interval time.Duration) serviceruntime.Worker {
+type authorityVerifierChecker struct {
+	client internalrpcauthorityv1.AuthorizationVerifierServiceClient
+}
+
+func (checker authorityVerifierChecker) Check(ctx context.Context) error {
+	response, err := checker.client.CheckReadiness(ctx,
+		&internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest{})
+	if err != nil || !response.GetReady() || !response.GetReplayStoreReady() ||
+		response.GetSourceRevision() == 0 || response.GetPolicyRevision() == 0 ||
+		response.GetSignerGeneration() == 0 || response.GetSnapshotDigestSha256() == "" {
+		return errors.New("local authorization verifier is unavailable")
+	}
+	return nil
+}
+
+func readinessWorker(repository, control, provider, payloadKeyset, authority checker, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, business *internalobservability.Metrics, logger *slog.Logger, interval time.Duration) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		for {
 			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			err := errors.Join(repository.Check(checkCtx), control.Check(checkCtx), provider.Check(checkCtx), payloadKeyset.Check(checkCtx))
+			err := errors.Join(repository.Check(checkCtx), control.Check(checkCtx), provider.Check(checkCtx),
+				payloadKeyset.Check(checkCtx), authority.Check(checkCtx))
 			cancel()
 			if err != nil {
 				readiness.Set(false, "dependency unavailable")
@@ -410,6 +511,9 @@ func (current *state) shutdown(background context.Context) error {
 	}
 	if current.control != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "control-plane client", Timeout: current.config.ShutdownTimeout, Run: func(context.Context) error { return current.control.Close() }})
+	}
+	if current.authority != nil {
+		operations = append(operations, serviceruntime.ShutdownOperation{Name: "authority verifier client", Timeout: current.config.ShutdownTimeout, Run: func(context.Context) error { return current.authority.Close() }})
 	}
 	if current.pool != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "PostgreSQL", Timeout: current.config.ShutdownTimeout, Run: func(context.Context) error { current.pool.Close(); return nil }})

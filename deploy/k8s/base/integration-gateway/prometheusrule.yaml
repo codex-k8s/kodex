@@ -48,3 +48,19 @@ spec:
             summary: Обнаружен неопределённый результат integration invocation
             description: Повтор внешнего действия закрыт; требуется сверить provider receipt и durable result перед repair.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+        - alert: IntegrationGatewayEgressProxyUnavailable
+          expr: kube_deployment_status_replicas_available{namespace="mattercodex-system",deployment="integration-egress-proxy"} < 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Egress proxy integration gateway недоступен
+            description: Exact mTLS provider path закрыт до восстановления proxy readiness.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+        - alert: IntegrationGatewayPostgresqlUnavailable
+          expr: sum(kube_pod_status_ready{namespace="mattercodex-system",condition="true",pod=~"integration-gateway-postgresql-.*"}) < 2
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: PostgreSQL integration gateway потерял кворум готовности
+            description: Новые invocation и lifecycle effects остаются закрыты до восстановления CNPG read path.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md

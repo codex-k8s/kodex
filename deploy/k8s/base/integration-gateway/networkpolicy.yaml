@@ -27,6 +27,10 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: agent-runner
+      ports:
+        - {protocol: TCP, port: 8443}
+        - {protocol: TCP, port: 9443}
+    - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: control-api-gateway
@@ -42,6 +46,7 @@ spec:
       ports:
         - {protocol: TCP, port: 9090}
         - {protocol: TCP, port: 9091}
+        - {protocol: TCP, port: 9092}
   egress:
     - to:
         - namespaceSelector:
@@ -56,7 +61,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: integration-gateway-postgresql
+              cnpg.io/cluster: integration-gateway-postgresql
       ports:
         - {protocol: TCP, port: 5432}
     - to:
@@ -150,6 +155,6 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: integration-gateway-postgresql
+              cnpg.io/cluster: integration-gateway-postgresql
       ports:
         - {protocol: TCP, port: 5432}

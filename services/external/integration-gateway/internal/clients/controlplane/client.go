@@ -140,10 +140,12 @@ func (client *Client) Resolve(ctx context.Context, bearer string) (domainservice
 			}
 			seenCredentials[credential.GetCredentialBindingId()] = struct{}{}
 			seenPurposes[credential.GetPurpose()] = struct{}{}
-			binding := entity.CredentialBinding{ID: credential.GetCredentialBindingId(),
+			binding := entity.CredentialBinding{
+				ID:       credential.GetCredentialBindingId(),
 				Version:  credential.GetCredentialBindingVersion(),
 				Revision: credential.GetCredentialRevision(), ProjectionDigest: credential.GetProjectionSha256(),
-				Purpose: credential.GetPurpose(), SecretRef: credential.GetSecretRef(), PrincipalRef: credential.GetPrincipalRef()}
+				Purpose: credential.GetPurpose(), SecretRef: credential.GetSecretRef(), PrincipalRef: credential.GetPrincipalRef(),
+			}
 			if credential.GetExpiresAt() != nil {
 				expiresAt := credential.GetExpiresAt().AsTime()
 				if !expiresAt.After(now) {
@@ -180,7 +182,8 @@ func (client *Client) Resolve(ctx context.Context, bearer string) (domainservice
 		if !grantExpiresAt.After(now) {
 			return domainservice.Authority{}, errors.New("control-plane integration grant lifetime is insufficient")
 		}
-		grant := entity.Grant{ID: grantID, TenantID: value.GetOrganizationId(), ProjectID: value.GetProjectId(),
+		grant := entity.Grant{
+			ID: grantID, TenantID: value.GetOrganizationId(), ProjectID: value.GetProjectId(),
 			ProcessID: value.GetProcessId(), SessionID: value.GetSessionId(), SessionVersion: value.GetSessionVersion(),
 			ThreadID: value.GetThreadId(), TurnID: value.GetTurnId(), TurnVersion: value.GetTurnVersion(),
 			Attempt:     value.GetAttempt(),
@@ -192,7 +195,8 @@ func (client *Client) Resolve(ctx context.Context, bearer string) (domainservice
 			IntegrationID: integration.GetIntegrationId(), ConnectionID: connection.ID,
 			Capabilities: slices.Clone(integration.GetCapabilities()), Permissions: permissions,
 			Generation: value.GetGrantGeneration(), Status: enum.GrantActive,
-			ExpiresAt: grantExpiresAt}
+			ExpiresAt: grantExpiresAt,
+		}
 		authority.Connections = append(authority.Connections, connection)
 		authority.Grants = append(authority.Grants, grant)
 	}
@@ -249,8 +253,10 @@ func (client *Client) Apply(ctx context.Context, command continuationclient.Comm
 				ApprovalId: command.ApprovalID, IntegrationId: command.IntegrationID,
 				RequestSha256: command.RequestDigest, ApprovalExpiresAt: timestamppb.New(command.ApprovalExpiresAt),
 				SelectedBinding: &controlplanev1.IntegrationApprovalBinding{
-					Integration: &controlplanev1.PinnedIntegrationResource{ResourceId: command.IntegrationID,
-						Version: command.IntegrationVersion, ProjectionSha256: command.IntegrationDigest},
+					Integration: &controlplanev1.PinnedIntegrationResource{
+						ResourceId: command.IntegrationID,
+						Version:    command.IntegrationVersion, ProjectionSha256: command.IntegrationDigest,
+					},
 					CredentialBindings: credentials,
 				},
 			})
@@ -297,32 +303,38 @@ func (client *Client) Apply(ctx context.Context, command continuationclient.Comm
 		value = response.GetContinuation()
 	case enum.ContinuationBegin:
 		response, callErr := client.client.ControlPlane.BeginIntegrationExecution(requestContext,
-			&controlplanev1.BeginIntegrationExecutionRequest{IdempotencyKey: command.IdempotencyKey,
+			&controlplanev1.BeginIntegrationExecutionRequest{
+				IdempotencyKey: command.IdempotencyKey,
 				ContinuationId: command.ContinuationID, ExpectedVersion: command.ExpectedVersion,
 				ExpectedFence: command.ExpectedFence, InvocationId: command.InvocationID,
-				RequestSha256: command.RequestDigest})
+				RequestSha256: command.RequestDigest,
+			})
 		if callErr != nil {
 			return continuationclient.State{}, callErr
 		}
 		value = response.GetContinuation()
 	case enum.ContinuationSucceed:
 		response, callErr := client.client.ControlPlane.CompleteIntegrationExecution(requestContext,
-			&controlplanev1.CompleteIntegrationExecutionRequest{IdempotencyKey: command.IdempotencyKey,
+			&controlplanev1.CompleteIntegrationExecutionRequest{
+				IdempotencyKey: command.IdempotencyKey,
 				ContinuationId: command.ContinuationID, ExpectedVersion: command.ExpectedVersion,
 				ExpectedFence: command.ExpectedFence, InvocationId: command.InvocationID,
 				RequestSha256: command.RequestDigest, ResultReference: command.ResultReference,
-				ResultSha256: command.ResultDigest})
+				ResultSha256: command.ResultDigest,
+			})
 		if callErr != nil {
 			return continuationclient.State{}, callErr
 		}
 		value = response.GetContinuation()
 	case enum.ContinuationFail:
 		response, callErr := client.client.ControlPlane.FailIntegrationExecution(requestContext,
-			&controlplanev1.FailIntegrationExecutionRequest{IdempotencyKey: command.IdempotencyKey,
+			&controlplanev1.FailIntegrationExecutionRequest{
+				IdempotencyKey: command.IdempotencyKey,
 				ContinuationId: command.ContinuationID, ExpectedVersion: command.ExpectedVersion,
 				ExpectedFence: command.ExpectedFence, InvocationId: command.InvocationID,
 				RequestSha256: command.RequestDigest, ErrorCode: command.ErrorCode,
-				ErrorReference: command.ErrorReference, ErrorSha256: command.ErrorDigest})
+				ErrorReference: command.ErrorReference, ErrorSha256: command.ErrorDigest,
+			})
 		if callErr != nil {
 			return continuationclient.State{}, callErr
 		}
@@ -340,9 +352,25 @@ func (client *Client) Apply(ctx context.Context, command continuationclient.Comm
 	if approvalState == "UNSPECIFIED" || executionState == "UNSPECIFIED" || continuationState == "UNSPECIFIED" {
 		return continuationclient.State{}, errors.New("control-plane continuation state is invalid")
 	}
-	return continuationclient.State{ID: value.GetContinuationId(), Version: value.GetVersion(), Fence: value.GetFence(),
+	var transitionExpiresAt time.Time
+	if value.GetTransitionGrant() != "" {
+		if value.GetTransitionGrantExpiresAt() == nil {
+			return continuationclient.State{}, errors.New("control-plane transition grant expiry is missing")
+		}
+		transitionExpiresAt = value.GetTransitionGrantExpiresAt().AsTime()
+		parsedExpiry, expiryErr := applicationGrantExpiry(value.GetTransitionGrant())
+		if expiryErr != nil || !parsedExpiry.Equal(transitionExpiresAt) || !transitionExpiresAt.After(time.Now().UTC()) {
+			return continuationclient.State{}, errors.New("control-plane transition grant is invalid")
+		}
+	} else if continuationState == "SUSPENDED" {
+		return continuationclient.State{}, errors.New("control-plane transition grant is unavailable")
+	}
+	return continuationclient.State{
+		ID: value.GetContinuationId(), Version: value.GetVersion(), Fence: value.GetFence(),
 		ApprovalState: approvalState, ExecutionState: executionState,
-		ContinuationState: continuationState}, nil
+		ContinuationState: continuationState, TransitionGrant: value.GetTransitionGrant(),
+		TransitionGrantExpiresAt: transitionExpiresAt,
+	}, nil
 }
 
 func (client *Client) Check(ctx context.Context) error {

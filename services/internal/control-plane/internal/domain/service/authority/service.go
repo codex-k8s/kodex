@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
@@ -31,15 +32,16 @@ var operationPattern = regexp.MustCompile(
 
 // Operation — версионированная политика производителя, полученная из того же снимка.
 type Operation struct {
-	FullMethod      string
-	Permission      string
-	ProjectRequired bool
-	TenantOwnerOnly bool
-	CallerWorkload  string
-	CallerSPIFFEID  string
-	ActorKind       string
-	AuthoritySource string
-	ProofAudience   string
+	FullMethod                   string
+	Permission                   string
+	ProjectRequired              bool
+	TenantOwnerOnly              bool
+	CallerWorkload               string
+	CallerSPIFFEID               string
+	ActorKind                    string
+	AuthoritySource              string
+	ProofAudience                string
+	AuthorizationContextAudience string
 }
 
 // Config задаёт точные назначение и аудитории доказательства, а также политику.
@@ -97,7 +99,8 @@ func New(
 			operation.CallerWorkload == "" ||
 			operation.CallerSPIFFEID == "" ||
 			(operation.ActorKind != "HUMAN" && operation.ActorKind != "WORKLOAD") ||
-			operation.AuthoritySource == "" || operation.ProofAudience == "" {
+			operation.AuthoritySource == "" || operation.ProofAudience == "" ||
+			operation.AuthorizationContextAudience == "" {
 			return nil, errors.New("authority proof operation is invalid")
 		}
 	}
@@ -119,7 +122,8 @@ func (service *Service) Resolve(
 		value.ValidateID(input.CorrelationID) != nil ||
 		validateApplicationIdentity(input.Identity) != nil ||
 		input.Identity.CallerWorkload != operation.CallerWorkload ||
-		input.Identity.CallerSPIFFEID != operation.CallerSPIFFEID {
+		input.Identity.CallerSPIFFEID != operation.CallerSPIFFEID ||
+		(input.Identity.BoundContinuationID != "" && !slices.Contains(input.Identity.AllowedOperationIDs, input.OperationID)) {
 		return authoritytype.Proof{}, errs.ErrUnauthenticated
 	}
 	if operation.ProjectRequired {
@@ -137,19 +141,26 @@ func (service *Service) Resolve(
 		return authoritytype.Proof{}, errs.ErrPermissionDenied
 	}
 	requestHash, err := canonicalDigest(struct {
-		SubjectDigest     string
-		CredentialDigest  string
-		SessionJTI        string
-		SessionRevision   uint64
-		OrganizationID    string
-		ProjectID         string
-		OperationID       string
-		ResourceReference string
-		BoundSessionID    string
-		BoundTurnID       string
-		BoundAttempt      uint32
-		BoundInputSHA256  string
-		BoundGeneration   uint64
+		SubjectDigest               string
+		CredentialDigest            string
+		SessionJTI                  string
+		SessionRevision             uint64
+		OrganizationID              string
+		ProjectID                   string
+		OperationID                 string
+		ResourceReference           string
+		BoundSessionID              string
+		BoundTurnID                 string
+		BoundAttempt                uint32
+		BoundInputSHA256            string
+		BoundGeneration             uint64
+		BoundRuntimeRevisionID      string
+		BoundRuntimeRevisionVersion uint64
+		BoundRuntimeRevisionSHA256  string
+		BoundContinuationID         string
+		BoundContinuationVersion    uint64
+		BoundContinuationFence      uint64
+		BoundInvocationID           string
 	}{
 		input.Identity.SubjectDigest,
 		input.Identity.CredentialDigest,
@@ -164,6 +175,13 @@ func (service *Service) Resolve(
 		input.Identity.BoundAttempt,
 		input.Identity.BoundInputSHA256,
 		input.Identity.BoundGeneration,
+		input.Identity.BoundRuntimeRevisionID,
+		input.Identity.BoundRuntimeRevisionVersion,
+		input.Identity.BoundRuntimeRevisionSHA256,
+		input.Identity.BoundContinuationID,
+		input.Identity.BoundContinuationVersion,
+		input.Identity.BoundContinuationFence,
+		input.Identity.BoundInvocationID,
 	})
 	if err != nil {
 		return authoritytype.Proof{}, errs.ErrInternal
@@ -193,6 +211,24 @@ func (service *Service) Resolve(
 			}
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
 				return receiptErr
+			}
+			if input.Identity.BoundContinuationID != "" {
+				continuation, err := tx.GetIntegrationContinuationForUpdate(ctx, input.Identity.BoundContinuationID)
+				if err != nil || continuation.OrganizationID != input.Identity.OrganizationID ||
+					continuation.ProjectID != input.Identity.ProjectID ||
+					continuation.SessionID != input.Identity.BoundSessionID ||
+					continuation.TurnID != input.Identity.BoundTurnID ||
+					continuation.Attempt != input.Identity.BoundAttempt ||
+					continuation.ImmutableInputSHA256 != input.Identity.BoundInputSHA256 ||
+					continuation.RuntimeRevisionID != input.Identity.BoundRuntimeRevisionID ||
+					continuation.RuntimeRevisionVersion != input.Identity.BoundRuntimeRevisionVersion ||
+					continuation.RuntimeRevisionSHA256 != input.Identity.BoundRuntimeRevisionSHA256 ||
+					continuation.GrantGeneration != input.Identity.BoundGeneration ||
+					!continuationGrantVersionAllowed(continuation.Version, continuation.Fence,
+						input.Identity.BoundContinuationVersion, input.Identity.BoundContinuationFence) ||
+					continuation.InvocationID != input.Identity.BoundInvocationID {
+					return errs.ErrPermissionDenied
+				}
 			}
 			var projectAuthority *authoritytype.Identity
 			if operation.ProjectRequired {
@@ -272,7 +308,7 @@ func (service *Service) Resolve(
 					SPIFFEID:   operation.CallerSPIFFEID,
 				},
 				OperationID:                  input.OperationID,
-				AuthorizationContextAudience: service.config.AuthorizationContextAudience,
+				AuthorizationContextAudience: operation.AuthorizationContextAudience,
 				Authority: authoritytype.Authority{
 					ActorKind: operation.ActorKind,
 					Actor: authoritytype.Identity{
@@ -321,6 +357,11 @@ func (service *Service) Resolve(
 	return result, err
 }
 
+func continuationGrantVersionAllowed(currentVersion, currentFence, grantedVersion, grantedFence uint64) bool {
+	return currentVersion == grantedVersion && currentFence == grantedFence ||
+		currentVersion == grantedVersion+1 && currentFence == grantedFence+1
+}
+
 func (service *Service) Operation(operationID string) (Operation, bool) {
 	operation, ok := service.config.Operations[operationID]
 	return operation, ok
@@ -365,6 +406,13 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 			!validDigest(identity.BoundInputSHA256) ||
 			identity.BoundGeneration == 0) {
 		return errors.New("agent session grant binding is invalid")
+	}
+	if identity.BoundContinuationID != "" &&
+		(value.ValidateID(identity.BoundContinuationID) != nil || identity.BoundContinuationVersion == 0 ||
+			identity.BoundContinuationFence == 0 || value.ValidateID(identity.BoundInvocationID) != nil ||
+			value.ValidateID(identity.BoundRuntimeRevisionID) != nil || identity.BoundRuntimeRevisionVersion == 0 ||
+			!validDigest(identity.BoundRuntimeRevisionSHA256) || len(identity.AllowedOperationIDs) == 0) {
+		return errors.New("integration continuation grant binding is invalid")
 	}
 	return nil
 }

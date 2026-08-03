@@ -25,17 +25,20 @@ timestamps, generation и opaque UUID/digest.
 ## Read-only preflight
 
 1. Зафиксировать Git SHA и immutable image digest.
-2. Проверить metadata Deployment, migration Job, Service, ServiceAccount,
-   SecretProviderClass и NetworkPolicy без чтения Secret.
+2. Проверить metadata Deployment, CNPG `Cluster`, migration Job, Service,
+   ServiceAccount, SecretProviderClass и NetworkPolicy без чтения Secret.
 3. Проверить, что runtime Pod имеет только gateway credential CSI volume, а
    agent Pod не имеет provider credential, payload keyset или gateway DSN.
-4. Проверить exact destinations: PostgreSQL, control-plane, internal authority,
+4. Проверить не менее двух ready Pod CNPG, primary Service
+   `integration-gateway-postgresql-rw` и exact destinations: PostgreSQL,
+   control-plane, internal authority,
    Vault, identity SSO, telemetry и `integration-egress-proxy`. Прямой provider
    egress отсутствует.
 5. Проверить, что authority publisher target имеет workload
-   `integration-gateway`, а issuer использует только собственные
+   `integration-gateway`, а issuer/verifier используют только собственные
    Vault/readback/restore paths. Не читать key material.
-6. Проверить, что Pod не имеет прямого provider egress: рабочий и readiness
+6. Проверить две готовые реплики `integration-egress-proxy`, client-mTLS SAN
+   gateway и exact закрытый `/health` route. Проверить, что Pod не имеет прямого provider egress: рабочий и readiness
    path должны идти через exact `integration-egress-proxy` destination.
 
 ## Startup и readiness
@@ -47,7 +50,7 @@ Startup barrier должен пройти до обслуживания MCP/API:
 - PostgreSQL DSN использует exact SNI/CA, а `session_user` совпадает с
   `integration_gateway_runtime_g<generation>` и не имеет `BYPASSRLS`;
 - context key и payload keyset доставлены файлами и имеют безопасные mode;
-- local authority issuer, control-plane verifier/resolver и защищённый
+- local authority issuer/verifier, control-plane resolver и защищённый
   `CheckReadiness` проходят тот же mTLS/application grant/signed context path,
   что рабочий RPC;
 - continuation worker может выполнить тот же специализированный control-plane
@@ -60,6 +63,14 @@ Startup barrier должен пройти до обслуживания MCP/API:
 Не отключать issuer, OIDC, RLS, TLS verify, schema validation или dependency
 readiness. Не подменять provider proxy прямым HTTPS egress.
 
+Входящий `IntegrationResultService` доступен только на `9443`: mTLS peer должен
+быть exact `agent-runner`, workload-local verifier обязан подтвердить signed
+authorization context, а отдельный control-plane result-access grant — exact
+invocation/attempt/result digest и разрешённую операцию. `Resolve` не принимает
+resource ID, `Acknowledge` атомарно фиксирует idempotency receipt и exact
+delivery version/fence. Отсутствующий, истёкший либо mismatched grant нельзя
+заменять ручным чтением БД.
+
 ## PostgreSQL и миграция
 
 Migration Job использует отдельный migrator principal. Forward-only reconcile:
@@ -71,6 +82,18 @@ Migration Job использует отдельный migrator principal. Forwar
 4. retired principal/context key не может стать active снова;
 5. runtime transaction устанавливает scope только подписанным одноразовым
    context, связанным с `session_user`, generation, backend PID и transaction.
+
+Migration Job получает `CURRENT` и заранее доставленный `NEXT` DSN отдельными
+Vault objects. Перед `NEXT -> CURRENT` reconciler соединяется именно новым DSN,
+сверяет `session_user` и `runtime_identity_ready()`, затем одной serializable
+transaction повышает verifier-owned high-watermark. Понижение generation,
+`PREVIOUS -> CURRENT`, пропущенный readback и неизвестный served state закрыто
+отклоняются. После promotion прежняя generation проходит только
+`CURRENT -> PREVIOUS -> RETIRED`.
+
+При crash повторить тот же migration Job с теми же generation и DSN files:
+high-watermark делает reconcile идемпотентным. Не менять fence row и не
+переназначать status вручную.
 
 При ошибке сохранить только SQLSTATE и safe error class. Не выводить query
 arguments. Не выполнять `goose down`, ручной `SET SESSION AUTHORIZATION` или

@@ -2220,6 +2220,13 @@ message IntegrationContinuation {
   // continuation_attempt — текущая server-owned delivery attempt; retry
   // перепривязывает тот же immutable outcome и увеличивает version/fence.
   uint32 continuation_attempt = 27;
+  // transition_grant — свежая узкая authority для следующего gateway transition.
+  string transition_grant = 28;
+  google.protobuf.Timestamp transition_grant_expires_at = 29;
+  // result_access_grant выдаётся только READY continuation turn и позволяет
+  // producer-owned version-pinned read/ack в integration-gateway.
+  string result_access_grant = 30;
+  google.protobuf.Timestamp result_access_grant_expires_at = 31;
 }
 
 message ResolveIntegrationSessionRequest {}

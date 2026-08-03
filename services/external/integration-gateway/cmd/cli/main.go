@@ -59,13 +59,14 @@ type principal struct {
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, os.Args[1:]); err != nil {
+	cleanupBase := context.Background()
+	if err := run(ctx, cleanupBase, os.Args[1:]); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "integration-gateway CLI failed: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, arguments []string) error {
+func run(ctx, cleanupBase context.Context, arguments []string) error {
 	if len(arguments) == 1 && arguments[0] == "image-readback" {
 		if _, err := fmt.Fprintln(os.Stdout, "integration-gateway image pull verified"); err != nil {
 			return err
@@ -108,20 +109,22 @@ func run(ctx context.Context, arguments []string) error {
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			return errors.New("apply integration gateway migrations")
 		}
-		return reconcile(ctx, configuration, pgxConfig)
+		return reconcile(ctx, cleanupBase, configuration, pgxConfig)
 	default:
 		return errors.New("unsupported migration command")
 	}
 }
 
 func loadConfig() (config, error) {
-	value := config{MigrationDSNFile: "/var/run/secrets/mattercodex/integration-gateway/postgres-migrator/dsn",
+	value := config{
+		MigrationDSNFile:      "/var/run/secrets/mattercodex/integration-gateway/postgres-migrator/dsn",
 		PostgresCAFile:        "/var/run/config/mattercodex/integration-gateway/postgres/ca.pem",
-		PostgresTLSServerName: "integration-gateway-postgresql.mattercodex-system.svc.cluster.local",
+		PostgresTLSServerName: "integration-gateway-postgresql-rw.mattercodex-system.svc.cluster.local",
 		ContextKeyID:          "integration-gateway-db-context-g1",
 		ContextKeyFile:        "/var/run/secrets/mattercodex/integration-gateway/postgres-context/key",
 		CurrentDSNFile:        "/var/run/secrets/mattercodex/integration-gateway/postgres-runtime/dsn",
-		CurrentGeneration:     1, CurrentNotBefore: "2026-01-01T00:00:00Z", CurrentNotAfter: "2027-01-01T00:00:00Z"}
+		CurrentGeneration:     1, CurrentNotBefore: "2026-01-01T00:00:00Z", CurrentNotAfter: "2027-01-01T00:00:00Z",
+	}
 	if err := env.Parse(&value); err != nil {
 		return config{}, err
 	}
@@ -136,7 +139,7 @@ func loadConfig() (config, error) {
 	return value, nil
 }
 
-func reconcile(ctx context.Context, configuration config, migrationConfig *pgx.ConnConfig) error {
+func reconcile(ctx, cleanupBase context.Context, configuration config, migrationConfig *pgx.ConnConfig) (resultErr error) {
 	candidates := []struct {
 		file                        string
 		generation                  uint64
@@ -170,8 +173,10 @@ func reconcile(ctx context.Context, configuration config, migrationConfig *pgx.C
 		if parsed.User != expectedName || parsed.Password == "" || len(parsed.Password) < 32 || len(parsed.Password) > 1024 || strings.TrimSpace(parsed.Password) != parsed.Password {
 			return errors.New("runtime principal identity is invalid")
 		}
-		principals = append(principals, principal{Name: parsed.User, Generation: candidate.generation,
-			Status: candidate.status, NotBefore: notBefore, NotAfter: notAfter, Password: parsed.Password})
+		principals = append(principals, principal{
+			Name: parsed.User, Generation: candidate.generation,
+			Status: candidate.status, NotBefore: notBefore, NotAfter: notAfter, Password: parsed.Password,
+		})
 	}
 	key, err := readFile(configuration.ContextKeyFile, 128)
 	if err != nil || len(key) < 32 {
@@ -181,12 +186,43 @@ func reconcile(ctx context.Context, configuration config, migrationConfig *pgx.C
 	if err != nil {
 		return errors.New("open PostgreSQL reconciliation connection")
 	}
-	defer connection.Close(ctx)
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(cleanupBase), 5*time.Second)
+		defer cancel()
+		resultErr = errors.Join(resultErr, connection.Close(cleanup))
+	}()
+	stateSQL, _ := operationalSQL.ReadFile("sql/runtime__state.sql")
+	var highWatermark uint64
+	var requestedCurrentStatus string
+	if err := connection.QueryRow(ctx, string(stateSQL), pgx.StrictNamedArgs{
+		"current_generation": configuration.CurrentGeneration,
+	}).Scan(&highWatermark, &requestedCurrentStatus); err != nil {
+		return errors.New("read runtime credential high-watermark")
+	}
+	servedGeneration := highWatermark
+	if highWatermark > 0 {
+		if configuration.CurrentGeneration < highWatermark ||
+			(requestedCurrentStatus != "CURRENT" && requestedCurrentStatus != "NEXT") {
+			return errors.New("runtime credential rollback is forbidden")
+		}
+		if err := readbackRuntimeIdentity(ctx, configuration, fmt.Sprintf(
+			"integration_gateway_runtime_g%d", configuration.CurrentGeneration,
+		)); err != nil {
+			return err
+		}
+		servedGeneration = configuration.CurrentGeneration
+	}
 	tx, err := connection.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(cleanupBase), 5*time.Second)
+		defer cancel()
+		if err := tx.Rollback(cleanup); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			resultErr = errors.Join(resultErr, fmt.Errorf("rollback PostgreSQL reconciliation: %w", err))
+		}
+	}()
 	registeredSQL, _ := operationalSQL.ReadFile("sql/runtime__registered.sql")
 	rows, err := tx.Query(ctx, string(registeredSQL))
 	if err != nil {
@@ -224,16 +260,39 @@ func reconcile(ctx context.Context, configuration config, migrationConfig *pgx.C
 		return errors.New("encode runtime principals")
 	}
 	reconcileSQL, _ := operationalSQL.ReadFile("sql/runtime__reconcile.sql")
-	var reconciledPrincipals, reconciledKeys int
+	var reconciledPrincipals, reconciledKeys, reconciledFences int
 	if err := tx.QueryRow(ctx, string(reconcileSQL), pgx.StrictNamedArgs{
 		"principals": payload, "context_key_id": configuration.ContextKeyID, "context_key": key,
-	}).Scan(&reconciledPrincipals, &reconciledKeys); err != nil {
+		"current_generation": configuration.CurrentGeneration, "served_generation": servedGeneration,
+	}).Scan(&reconciledPrincipals, &reconciledKeys, &reconciledFences); err != nil {
 		return errors.New("reconcile runtime database identities")
 	}
-	if reconciledPrincipals != len(principals) || reconciledKeys != 1 {
+	if reconciledPrincipals != len(principals) || reconciledKeys != 1 || reconciledFences != 1 {
 		return errors.New("runtime database identity reconciliation is not forward-only")
 	}
 	return tx.Commit(ctx)
+}
+
+func readbackRuntimeIdentity(ctx context.Context, configuration config, expectedName string) error {
+	runtimeConfig, _, err := parseDSN(configuration.CurrentDSNFile, configuration.PostgresCAFile,
+		configuration.PostgresTLSServerName)
+	if err != nil {
+		return err
+	}
+	readback, err := pgx.ConnectConfig(ctx, runtimeConfig)
+	if err != nil {
+		return errors.New("open runtime identity readback connection")
+	}
+	defer readback.Close(ctx)
+	var sessionUser string
+	var ready bool
+	if err := readback.QueryRow(
+		ctx,
+		"SELECT session_user::text, integration_gateway.runtime_identity_ready()",
+	).Scan(&sessionUser, &ready); err != nil || sessionUser != expectedName || !ready {
+		return errors.New("runtime identity exact served-state readback failed")
+	}
+	return nil
 }
 
 func parseDSN(path, caFile, serverName string) (*pgx.ConnConfig, *x509.CertPool, error) {

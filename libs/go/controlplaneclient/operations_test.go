@@ -21,9 +21,10 @@ func TestRuntimeAndIntegrationProfilesMatchAuthorityPolicy(t *testing.T) {
 	var document struct {
 		Policy struct {
 			Bindings []struct {
-				ProducerID  string `json:"authority_proof_producer_id"`
-				OperationID string `json:"operation_id"`
-				FullMethod  string `json:"full_method"`
+				ProducerID     string `json:"authority_proof_producer_id"`
+				OperationID    string `json:"operation_id"`
+				FullMethod     string `json:"full_method"`
+				TargetWorkload string `json:"target_workload_id"`
 			} `json:"operation_bindings"`
 		} `json:"policy"`
 	}
@@ -38,19 +39,29 @@ func TestRuntimeAndIntegrationProfilesMatchAuthorityPolicy(t *testing.T) {
 		{producerID: "control-plane.runtime-archive", profile: RuntimeArchiveOperations()},
 		{producerID: "control-plane.runtime-restore-verifier", profile: RuntimeRestoreVerifierOperations()},
 		{producerID: "control-plane.runtime-cleanup-authorizer", profile: RuntimeCleanupAuthorizerOperations()},
-		{producerID: "control-plane.integration-gateway", profile: IntegrationGatewayOperations()},
 		{producerID: "control-plane.agent-session", profile: AgentRunnerOperations()},
 	}
 	for _, test := range tests {
 		actual := make(map[string]string)
 		for _, binding := range document.Policy.Bindings {
-			if binding.ProducerID == test.producerID {
+			if binding.ProducerID == test.producerID && binding.TargetWorkload == "control-plane" {
 				actual[binding.OperationID] = binding.FullMethod
 			}
 		}
 		if !reflect.DeepEqual(actual, test.profile) {
 			t.Fatalf("operation profile mismatch for %s", test.producerID)
 		}
+	}
+	integrationActual := make(map[string]string)
+	for _, binding := range document.Policy.Bindings {
+		if (binding.ProducerID == "control-plane.integration-gateway" ||
+			binding.ProducerID == "control-plane.integration-continuation") &&
+			binding.TargetWorkload == "control-plane" {
+			integrationActual[binding.OperationID] = binding.FullMethod
+		}
+	}
+	if !reflect.DeepEqual(integrationActual, IntegrationGatewayOperations()) {
+		t.Fatal("integration gateway initial/continuation profiles do not cover the client operation set")
 	}
 }
 

@@ -24,6 +24,12 @@ WITH desired AS (
         updated_at = clock_timestamp()
     WHERE integration_gateway.runtime_principals.status <> 'RETIRED'
       AND EXCLUDED.generation >= integration_gateway.runtime_principals.generation
+      AND (
+          integration_gateway.runtime_principals.status = EXCLUDED.status
+          OR integration_gateway.runtime_principals.status = 'NEXT' AND EXCLUDED.status = 'CURRENT'
+          OR integration_gateway.runtime_principals.status = 'CURRENT' AND EXCLUDED.status IN ('PREVIOUS', 'RETIRED')
+          OR integration_gateway.runtime_principals.status = 'PREVIOUS' AND EXCLUDED.status = 'RETIRED'
+      )
     RETURNING principal_name
 ), retired_keys AS (
     UPDATE integration_gateway.runtime_context_keys SET status = 'RETIRED', updated_at = clock_timestamp()
@@ -39,7 +45,24 @@ WITH desired AS (
     WHERE integration_gateway.runtime_context_keys.status = 'ACTIVE'
       AND integration_gateway.runtime_context_keys.secret = EXCLUDED.secret
     RETURNING key_id
+), credential_fence AS (
+    UPDATE integration_gateway.runtime_credential_fence AS fence SET
+        current_high_watermark = GREATEST(fence.current_high_watermark, @current_generation),
+        served_readback_generation = GREATEST(fence.served_readback_generation, @served_generation),
+        updated_at = clock_timestamp()
+     WHERE fence.singleton
+       AND @current_generation >= fence.current_high_watermark
+       AND (fence.current_high_watermark = 0
+            OR @current_generation = fence.current_high_watermark
+            OR @served_generation = @current_generation)
+       AND NOT EXISTS (
+           SELECT 1 FROM integration_gateway.runtime_principals AS previous
+            WHERE previous.generation = @current_generation
+              AND previous.status IN ('PREVIOUS', 'RETIRED')
+       )
+    RETURNING singleton
 )
 SELECT
     (SELECT count(*) FROM upserted) AS reconciled_principals,
-    (SELECT count(*) FROM reconciled_key) AS reconciled_keys
+    (SELECT count(*) FROM reconciled_key) AS reconciled_keys,
+    (SELECT count(*) FROM credential_fence) AS reconciled_fences

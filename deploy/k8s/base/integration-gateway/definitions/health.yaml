@@ -1,4 +1,4 @@
-apiVersion: mattercodex.io/v1
++apiVersion: mattercodex.io/v1
 kind: IntegrationDefinition
 metadata:
   name: provider-health

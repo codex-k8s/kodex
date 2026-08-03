@@ -1,7 +1,11 @@
 package entity
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"slices"
+	"sort"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/enum"
@@ -77,6 +81,37 @@ type CredentialBinding struct {
 	ExpiresAt        *time.Time
 }
 
+func ConnectionBindingDigest(connection Connection) string {
+	bindings := slices.Clone(connection.CredentialBindingRefs)
+	sort.Slice(bindings, func(left, right int) bool {
+		if bindings[left].ID == bindings[right].ID {
+			return bindings[left].Version < bindings[right].Version
+		}
+		return bindings[left].ID < bindings[right].ID
+	})
+	canonical, err := json.Marshal(struct {
+		ID                 string              `json:"id"`
+		Revision           uint64              `json:"revision"`
+		Generation         uint64              `json:"generation"`
+		IntegrationID      string              `json:"integration_id"`
+		IntegrationVersion uint64              `json:"integration_version"`
+		IntegrationDigest  string              `json:"integration_digest"`
+		DefinitionID       string              `json:"definition_id"`
+		DefinitionVersion  uint64              `json:"definition_version"`
+		EndpointRef        string              `json:"endpoint_ref"`
+		Bindings           []CredentialBinding `json:"credential_bindings"`
+	}{
+		connection.ID, connection.Revision, connection.Generation, connection.IntegrationID,
+		connection.IntegrationVersion, connection.IntegrationDigest, connection.DefinitionID,
+		connection.DefinitionVersion, connection.EndpointRef, bindings,
+	})
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(canonical)
+	return hex.EncodeToString(digest[:])
+}
+
 type Grant struct {
 	ID                     string
 	TenantID               string
@@ -132,44 +167,48 @@ type TransportSession struct {
 }
 
 type Invocation struct {
-	ID                     string
-	TenantID               string
-	ProjectID              string
-	TransportSessionID     string
-	ProcessID              string
-	AgentSessionID         string
-	AgentSessionVersion    uint64
-	ThreadID               string
-	TurnID                 string
-	TurnVersion            uint64
-	Attempt                uint32
-	InputDigest            string
-	RuntimeRevisionID      string
-	RuntimeRevisionVersion uint64
-	RuntimeRevisionDigest  string
-	RuntimeManifestDigest  string
-	RoleID                 string
-	RoleVersion            uint64
-	DefinitionID           string
-	DefinitionVersion      uint64
-	ConnectionID           string
-	ConnectionRevision     uint64
-	ConnectionGeneration   uint64
-	GrantID                string
-	GrantGeneration        uint64
-	Capability             string
-	ToolName               string
-	ToolVersion            uint64
-	Risk                   enum.RiskLevel
-	Permission             string
-	SemanticKey            string
-	CanonicalRequestHash   string
-	EncryptedArguments     []byte
-	Preview                json.RawMessage
-	Status                 enum.InvocationStatus
-	CreatedAt              time.Time
-	ExpiresAt              time.Time
-	UpdatedAt              time.Time
+	ID                      string
+	TenantID                string
+	ProjectID               string
+	TransportSessionID      string
+	ProcessID               string
+	AgentSessionID          string
+	AgentSessionVersion     uint64
+	ThreadID                string
+	TurnID                  string
+	TurnVersion             uint64
+	Attempt                 uint32
+	InputDigest             string
+	RuntimeRevisionID       string
+	RuntimeRevisionVersion  uint64
+	RuntimeRevisionDigest   string
+	RuntimeManifestDigest   string
+	RoleID                  string
+	RoleVersion             uint64
+	DefinitionID            string
+	DefinitionVersion       uint64
+	DefinitionDigest        string
+	ConnectionID            string
+	ConnectionRevision      uint64
+	ConnectionGeneration    uint64
+	ConnectionBindingDigest string
+	PinnedConnection        Connection
+	PinnedTool              Tool
+	GrantID                 string
+	GrantGeneration         uint64
+	Capability              string
+	ToolName                string
+	ToolVersion             uint64
+	Risk                    enum.RiskLevel
+	Permission              string
+	SemanticKey             string
+	CanonicalRequestHash    string
+	EncryptedArguments      []byte
+	Preview                 json.RawMessage
+	Status                  enum.InvocationStatus
+	CreatedAt               time.Time
+	ExpiresAt               time.Time
+	UpdatedAt               time.Time
 }
 
 type Approval struct {
@@ -241,6 +280,9 @@ type Result struct {
 	EncryptedPayload []byte
 	PayloadDigest    string
 	ProviderReceipt  string
+	DeliveryVersion  uint64
+	DeliveryFence    uint64
+	AcknowledgedAt   *time.Time
 	CompletedAt      time.Time
 }
 

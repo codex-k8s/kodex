@@ -145,6 +145,7 @@
             "MATTERMOST_EVENT",
             "DOMAIN_STATE",
             "AGENT_SESSION",
+            "INTEGRATION_CONTINUATION",
             "PROCESS_RUN",
             "AUTOMATION_OCCURRENCE"
           ]

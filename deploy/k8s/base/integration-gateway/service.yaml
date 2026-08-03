@@ -13,6 +13,10 @@ spec:
       port: 8443
       targetPort: https
       protocol: TCP
+    - name: result-grpc
+      port: 9443
+      targetPort: result-grpc
+      protocol: TCP
     - name: metrics
       port: 9090
       targetPort: metrics

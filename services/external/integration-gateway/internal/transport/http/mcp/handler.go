@@ -132,8 +132,10 @@ func New(service *domainservice.Service, control *controlclient.Client, config C
 		config.MaximumGlobalConcurrency < 1 || config.MaximumGlobalConcurrency > 1024 {
 		return nil, errors.New("MCP handler configuration is invalid")
 	}
-	handler := &Handler{service: service, control: control, config: config,
-		semaphore: make(chan struct{}, config.MaximumGlobalConcurrency)}
+	handler := &Handler{
+		service: service, control: control, config: config,
+		semaphore: make(chan struct{}, config.MaximumGlobalConcurrency),
+	}
 	handler.streamable = mcpsdk.NewStreamableHTTPHandler(handler.server, &mcpsdk.StreamableHTTPOptions{
 		Stateless:    true,
 		JSONResponse: true,
@@ -319,7 +321,8 @@ func (handler *Handler) server(request *http.Request) *mcpsdk.Server {
 				Scope: admitted.scope, TransportSessionID: admitted.transportSessionID,
 				Authority: admitted.authority,
 				Tool:      bound.Tool, Connection: bound.Connection, Grant: bound.Grant,
-				Arguments: request.Params.Arguments, SemanticKey: semanticKey,
+				DefinitionDigest: bound.DefinitionDigest,
+				Arguments:        request.Params.Arguments, SemanticKey: semanticKey,
 			})
 			if err != nil {
 				return toolError(err), nil
@@ -423,8 +426,10 @@ func toolError(err error) *mcpsdk.CallToolResult {
 	case errors.Is(err, errs.ErrExpired):
 		code = "SESSION_EXPIRED"
 	}
-	return &mcpsdk.CallToolResult{IsError: true, Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"error":"` + code + `"}`}},
-		StructuredContent: map[string]any{"error": code}}
+	return &mcpsdk.CallToolResult{
+		IsError: true, Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: `{"error":"` + code + `"}`}},
+		StructuredContent: map[string]any{"error": code},
+	}
 }
 
 func writeAdmissionError(response http.ResponseWriter, err error) {

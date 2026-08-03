@@ -87,6 +87,7 @@ type InvokeInput struct {
 	Tool               entity.Tool
 	Connection         entity.Connection
 	Grant              entity.Grant
+	DefinitionDigest   string
 	Arguments          json.RawMessage
 	SemanticKey        string
 }
@@ -97,6 +98,111 @@ type InvocationReceipt struct {
 	RequestHash  string                `json:"request_hash"`
 	ApprovalID   string                `json:"approval_id,omitempty"`
 	PollPath     string                `json:"poll_path"`
+}
+
+type ResultAccessBinding struct {
+	TenantID     string
+	ProjectID    string
+	ActorID      string
+	InvocationID string
+	AttemptID    string
+	ResultSHA256 string
+}
+
+type ResolvedResult struct {
+	InvocationID    string
+	AttemptID       string
+	ResultSHA256    string
+	StructuredJSON  json.RawMessage
+	DeliveryVersion uint64
+	DeliveryFence   uint64
+	CompletedAt     time.Time
+	AcknowledgedAt  *time.Time
+}
+
+type ResultAcknowledgement struct {
+	Binding         ResultAccessBinding
+	IdempotencyKey  string
+	DeliveryVersion uint64
+	DeliveryFence   uint64
+}
+
+func (service *Service) ResolveResult(ctx context.Context, binding ResultAccessBinding) (ResolvedResult, error) {
+	if !validResultAccessBinding(binding) {
+		return ResolvedResult{}, errs.ErrForbidden
+	}
+	result, err := service.repository.ResolveResult(ctx, domainrepo.Scope{
+		TenantID: binding.TenantID, ProjectID: binding.ProjectID, ActorID: binding.ActorID,
+	}, domainrepo.ResultBinding{
+		InvocationID: binding.InvocationID, AttemptID: binding.AttemptID, ResultSHA256: binding.ResultSHA256,
+	})
+	if err != nil {
+		return ResolvedResult{}, err
+	}
+	payload, err := service.cipher.Decrypt(ctx, result.EncryptedPayload)
+	if err != nil {
+		return ResolvedResult{}, errors.New("decrypt integration result")
+	}
+	digest := sha256.Sum256(payload)
+	if hex.EncodeToString(digest[:]) != binding.ResultSHA256 || !json.Valid(payload) {
+		return ResolvedResult{}, errs.ErrConflict
+	}
+	return ResolvedResult{
+		InvocationID: result.InvocationID, AttemptID: result.AttemptID,
+		ResultSHA256: result.PayloadDigest, StructuredJSON: payload,
+		DeliveryVersion: result.DeliveryVersion, DeliveryFence: result.DeliveryFence,
+		CompletedAt: result.CompletedAt, AcknowledgedAt: result.AcknowledgedAt,
+	}, nil
+}
+
+func (service *Service) AcknowledgeResult(
+	ctx context.Context,
+	input ResultAcknowledgement,
+) (ResolvedResult, error) {
+	if !validResultAccessBinding(input.Binding) || input.DeliveryVersion == 0 ||
+		input.DeliveryFence == 0 || len(input.IdempotencyKey) < 16 || len(input.IdempotencyKey) > 128 {
+		return ResolvedResult{}, errs.ErrInvalid
+	}
+	idempotencyDigest := sha256.Sum256([]byte(input.IdempotencyKey))
+	requestDigest := sha256.Sum256([]byte(fmt.Sprintf("v1\x00%s\x00%s\x00%s\x00%d\x00%d",
+		input.Binding.InvocationID, input.Binding.AttemptID, input.Binding.ResultSHA256,
+		input.DeliveryVersion, input.DeliveryFence)))
+	now := service.now().UTC()
+	var acknowledged entity.Result
+	err := service.repository.Transact(ctx, domainrepo.Scope{
+		TenantID: input.Binding.TenantID, ProjectID: input.Binding.ProjectID, ActorID: input.Binding.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		var err error
+		acknowledged, err = tx.AcknowledgeResult(ctx, domainrepo.ResultAcknowledgement{
+			Binding: domainrepo.ResultBinding{
+				InvocationID: input.Binding.InvocationID,
+				AttemptID:    input.Binding.AttemptID, ResultSHA256: input.Binding.ResultSHA256,
+			},
+			DeliveryVersion: input.DeliveryVersion, DeliveryFence: input.DeliveryFence,
+			IdempotencyHash: hex.EncodeToString(idempotencyDigest[:]), RequestHash: hex.EncodeToString(requestDigest[:]),
+			AcknowledgedAt: now, Audit: entity.AuditEvent{
+				ID: uuid.NewString(), TenantID: input.Binding.TenantID,
+				ProjectID: input.Binding.ProjectID, ActorID: input.Binding.ActorID, Action: "result.acknowledge",
+				ResourceKind: "INTEGRATION_RESULT", ResourceID: input.Binding.InvocationID,
+				RequestHash: hex.EncodeToString(requestDigest[:]), Outcome: "ACKNOWLEDGED", OccurredAt: now,
+			},
+		})
+		return err
+	})
+	if err != nil {
+		return ResolvedResult{}, err
+	}
+	return ResolvedResult{
+		InvocationID: acknowledged.InvocationID, AttemptID: acknowledged.AttemptID,
+		ResultSHA256: acknowledged.PayloadDigest, DeliveryVersion: acknowledged.DeliveryVersion,
+		DeliveryFence: acknowledged.DeliveryFence, CompletedAt: acknowledged.CompletedAt,
+		AcknowledgedAt: acknowledged.AcknowledgedAt,
+	}, nil
+}
+
+func validResultAccessBinding(binding ResultAccessBinding) bool {
+	return binding.TenantID != "" && binding.ProjectID != "" && binding.ActorID != "" &&
+		binding.InvocationID != "" && binding.AttemptID != "" && validDigestText(binding.ResultSHA256)
 }
 
 type InvocationView struct {
@@ -129,8 +235,10 @@ func New(repository domainrepo.Repository, cipher payloadcipher.Cipher, provider
 		config.MaximumSessionRequests == 0 || config.MaximumConcurrentRequests == 0 {
 		return nil, errors.New("integration gateway service configuration is invalid")
 	}
-	return &Service{repository: repository, cipher: cipher, provider: providerClient, credentials: credentials,
-		validator: validator, continuation: continuation, config: config, now: time.Now}, nil
+	return &Service{
+		repository: repository, cipher: cipher, provider: providerClient, credentials: credentials,
+		validator: validator, continuation: continuation, config: config, now: time.Now,
+	}, nil
 }
 
 func (service *Service) StoreDefinition(ctx context.Context, definition entity.Definition) error {
@@ -174,9 +282,11 @@ func (service *Service) AdmitSession(ctx context.Context, authority Authority, t
 		RequestCount: 1, ConcurrentRequests: 1,
 		ExpiresAt: expiresAt, LastSeenAt: now,
 	}
-	audit := entity.AuditEvent{ID: uuid.NewString(), TenantID: authority.TenantID, ProjectID: authority.ProjectID,
+	audit := entity.AuditEvent{
+		ID: uuid.NewString(), TenantID: authority.TenantID, ProjectID: authority.ProjectID,
 		ActorID: authority.OwnerActorID, Action: "transport_session.initialize", ResourceKind: "TRANSPORT_SESSION",
-		ResourceID: transportSessionID, Outcome: "ACCEPTED", OccurredAt: now}
+		ResourceID: transportSessionID, Outcome: "ACCEPTED", OccurredAt: now,
+	}
 	scope := domainrepo.Scope{TenantID: authority.TenantID, ProjectID: authority.ProjectID, ActorID: authority.OwnerActorID}
 	err := service.repository.Transact(ctx, scope, func(tx domainrepo.Transaction) error {
 		return tx.AdmitSession(ctx, domainrepo.SessionAdmission{Session: session, Connections: authority.Connections, Grants: authority.Grants, Audit: audit})
@@ -203,9 +313,11 @@ func (service *Service) ReleaseSession(ctx context.Context, scope domainrepo.Sco
 
 func (service *Service) CloseSession(ctx context.Context, scope domainrepo.Scope, sessionID string) error {
 	now := service.now().UTC()
-	audit := entity.AuditEvent{ID: uuid.NewString(), TenantID: scope.TenantID, ProjectID: scope.ProjectID,
+	audit := entity.AuditEvent{
+		ID: uuid.NewString(), TenantID: scope.TenantID, ProjectID: scope.ProjectID,
 		ActorID: scope.ActorID, Action: "transport_session.close", ResourceKind: "TRANSPORT_SESSION",
-		ResourceID: sessionID, Outcome: "CLOSED", OccurredAt: now}
+		ResourceID: sessionID, Outcome: "CLOSED", OccurredAt: now,
+	}
 	return service.repository.Transact(ctx, scope, func(tx domainrepo.Transaction) error {
 		return tx.CloseSession(ctx, sessionID, now, audit)
 	})
@@ -223,12 +335,16 @@ func (service *Service) ReadInvocation(ctx context.Context, scope domainrepo.Sco
 	if expectedTransportSessionID != "" && invocation.TransportSessionID != expectedTransportSessionID {
 		return InvocationView{}, errs.ErrForbidden
 	}
-	view := InvocationView{InvocationID: invocation.ID, Status: invocation.Status,
-		RequestHash: invocation.CanonicalRequestHash, Preview: invocation.Preview}
+	view := InvocationView{
+		InvocationID: invocation.ID, Status: invocation.Status,
+		RequestHash: invocation.CanonicalRequestHash, Preview: invocation.Preview,
+	}
 	if approval != nil {
-		view.Approval = &ApprovalView{ApprovalID: approval.ID, Status: approval.Status,
+		view.Approval = &ApprovalView{
+			ApprovalID: approval.ID, Status: approval.Status,
 			RequestHash: approval.RequestHash, Preview: approval.Preview, ExpiresAt: approval.ExpiresAt,
-			DecidedAt: approval.DecidedAt, ReasonCode: approval.DecisionReasonCode}
+			DecidedAt: approval.DecidedAt, ReasonCode: approval.DecisionReasonCode,
+		}
 	}
 	if result != nil {
 		if len(result.EncryptedPayload) > 0 {
@@ -272,12 +388,16 @@ func (service *Service) ValidateConnection(ctx context.Context, scope domainrepo
 	} else {
 		connection.Status = enum.ConnectionInvalid
 	}
-	audit := entity.AuditEvent{ID: uuid.NewString(), TenantID: scope.TenantID, ProjectID: scope.ProjectID,
+	audit := entity.AuditEvent{
+		ID: uuid.NewString(), TenantID: scope.TenantID, ProjectID: scope.ProjectID,
 		ActorID: scope.ActorID, Action: "connection.validate", ResourceKind: "INTEGRATION_CONNECTION",
-		ResourceID: connection.ID, Outcome: string(code), OccurredAt: now}
+		ResourceID: connection.ID, Outcome: string(code), OccurredAt: now,
+	}
 	err = service.repository.Transact(ctx, scope, func(tx domainrepo.Transaction) error {
-		return tx.SetConnectionValidation(ctx, domainrepo.ConnectionValidation{ConnectionID: connection.ID,
-			ExpectedGeneration: connection.Generation, Status: connection, Audit: audit})
+		return tx.SetConnectionValidation(ctx, domainrepo.ConnectionValidation{
+			ConnectionID:       connection.ID,
+			ExpectedGeneration: connection.Generation, Status: connection, Audit: audit,
+		})
 	})
 	return connection, err
 }
@@ -298,6 +418,7 @@ func (service *Service) Invoke(ctx context.Context, input InvokeInput) (Invocati
 		input.Grant.TenantID != input.Scope.TenantID || input.Grant.ProjectID != input.Scope.ProjectID ||
 		input.Connection.TenantID != input.Scope.TenantID || input.Connection.ProjectID != input.Scope.ProjectID ||
 		input.Grant.Status != enum.GrantActive || !slices.Contains(input.Grant.Capabilities, input.Tool.Capability) ||
+		!validDigestText(input.DefinitionDigest) || entity.ConnectionBindingDigest(input.Connection) == "" ||
 		!slices.Contains(input.Grant.Permissions, input.Tool.Permission) ||
 		input.Connection.Status != enum.ConnectionValid || input.Grant.ConnectionID != input.Connection.ID ||
 		input.Grant.IntegrationID != input.Connection.IntegrationID ||
@@ -323,9 +444,11 @@ func (service *Service) Invoke(ctx context.Context, input InvokeInput) (Invocati
 	}
 	hash, _, err := canonical.Hash(canonical.Request{
 		DefinitionID: input.Connection.DefinitionID, DefinitionVersion: input.Connection.DefinitionVersion,
-		ConnectionID: input.Connection.ID, ConnectionRevision: input.Connection.Revision,
-		ConnectionGeneration: input.Connection.Generation, Capability: input.Tool.Capability,
-		ToolName: input.Tool.Name, ToolVersion: input.Tool.Version, TenantID: input.Scope.TenantID,
+		DefinitionDigest: input.DefinitionDigest,
+		ConnectionID:     input.Connection.ID, ConnectionRevision: input.Connection.Revision,
+		ConnectionGeneration: input.Connection.Generation, ConnectionBindingDigest: entity.ConnectionBindingDigest(input.Connection),
+		Capability: input.Tool.Capability,
+		ToolName:   input.Tool.Name, ToolVersion: input.Tool.Version, TenantID: input.Scope.TenantID,
 		ProjectID: input.Scope.ProjectID, ProcessID: input.Grant.ProcessID,
 		SessionID: input.Grant.SessionID, SessionVersion: input.Grant.SessionVersion,
 		ThreadID: input.Grant.ThreadID, TurnID: input.Grant.TurnID, TurnVersion: input.Grant.TurnVersion,
@@ -350,13 +473,6 @@ func (service *Service) Invoke(ctx context.Context, input InvokeInput) (Invocati
 		return InvocationReceipt{}, err
 	}
 	approvalExpiresAt := now.Add(service.config.InvocationTTL)
-	grantDeadline := input.Authority.ApplicationGrantExpiresAt.Add(-continuationSafetyWindow)
-	if approvalExpiresAt.After(grantDeadline) {
-		approvalExpiresAt = grantDeadline
-	}
-	if approvalExpiresAt.After(input.Grant.ExpiresAt) {
-		approvalExpiresAt = input.Grant.ExpiresAt
-	}
 	if input.Connection.ExpiresAt != nil && approvalExpiresAt.After(*input.Connection.ExpiresAt) {
 		approvalExpiresAt = *input.Connection.ExpiresAt
 	}
@@ -384,7 +500,8 @@ func (service *Service) Invoke(ctx context.Context, input InvokeInput) (Invocati
 		approval.DecisionReasonCode = "SAFE_POLICY"
 		approval.DecidedAt = &now
 	}
-	invocation := entity.Invocation{ID: invocationID, TenantID: input.Scope.TenantID, ProjectID: input.Scope.ProjectID,
+	invocation := entity.Invocation{
+		ID: invocationID, TenantID: input.Scope.TenantID, ProjectID: input.Scope.ProjectID,
 		TransportSessionID: input.TransportSessionID, ProcessID: input.Grant.ProcessID,
 		AgentSessionID: input.Grant.SessionID, AgentSessionVersion: input.Grant.SessionVersion,
 		ThreadID: input.Grant.ThreadID, TurnID: input.Grant.TurnID, TurnVersion: input.Grant.TurnVersion,
@@ -394,38 +511,50 @@ func (service *Service) Invoke(ctx context.Context, input InvokeInput) (Invocati
 		RuntimeManifestDigest: input.Grant.RuntimeManifestDigest,
 		RoleID:                input.Grant.RoleID, RoleVersion: input.Grant.RoleVersion,
 		DefinitionID: input.Connection.DefinitionID, DefinitionVersion: input.Connection.DefinitionVersion,
-		ConnectionID: input.Connection.ID, ConnectionRevision: input.Connection.Revision,
-		ConnectionGeneration: input.Connection.Generation, GrantID: input.Grant.ID,
+		DefinitionDigest: input.DefinitionDigest,
+		ConnectionID:     input.Connection.ID, ConnectionRevision: input.Connection.Revision,
+		ConnectionGeneration:    input.Connection.Generation,
+		ConnectionBindingDigest: entity.ConnectionBindingDigest(input.Connection),
+		PinnedConnection:        input.Connection, PinnedTool: input.Tool, GrantID: input.Grant.ID,
 		GrantGeneration: input.Grant.Generation, Capability: input.Tool.Capability, ToolName: input.Tool.Name,
 		ToolVersion: input.Tool.Version, Risk: input.Tool.Risk, Permission: input.Tool.Permission,
 		SemanticKey: input.SemanticKey, CanonicalRequestHash: hash, EncryptedArguments: encrypted,
-		Preview: preview, Status: status, CreatedAt: now, UpdatedAt: now, ExpiresAt: approvalExpiresAt}
+		Preview: preview, Status: status, CreatedAt: now, UpdatedAt: now, ExpiresAt: approvalExpiresAt,
+	}
 	pins := make([]entity.PinnedCredentialBinding, 0, len(input.Connection.CredentialBindingRefs))
 	for _, binding := range input.Connection.CredentialBindingRefs {
-		pins = append(pins, entity.PinnedCredentialBinding{ID: binding.ID, Version: binding.Version,
-			Digest: binding.ProjectionDigest})
+		pins = append(pins, entity.PinnedCredentialBinding{
+			ID: binding.ID, Version: binding.Version,
+			Digest: binding.ProjectionDigest,
+		})
 	}
 	sort.Slice(pins, func(left, right int) bool { return pins[left].ID < pins[right].ID })
 	desiredAction := enum.ContinuationNone
 	if status == enum.InvocationApproved {
 		desiredAction = enum.ContinuationApprove
 	}
-	effect := entity.ContinuationEffect{InvocationID: invocationID, TenantID: input.Scope.TenantID,
+	effect := entity.ContinuationEffect{
+		InvocationID: invocationID, TenantID: input.Scope.TenantID,
 		ProjectID: input.Scope.ProjectID, ApprovalID: approval.ID, RequestDigest: hash,
 		IntegrationID: input.Connection.IntegrationID, IntegrationVersion: input.Connection.IntegrationVersion,
 		IntegrationDigest: input.Connection.IntegrationDigest, CredentialBindings: pins,
 		EncryptedApplicationGrant: encryptedGrant,
 		ApplicationGrantExpiresAt: input.Authority.ApplicationGrantExpiresAt,
-		Action:                    enum.ContinuationSuspend, DesiredAction: desiredAction, AvailableAt: now}
+		Action:                    enum.ContinuationSuspend, DesiredAction: desiredAction, AvailableAt: now,
+	}
 	receiptKeyHash := semanticReceiptKey(input.Scope, input.Grant, input.SemanticKey)
-	audit := entity.AuditEvent{ID: uuid.NewString(), TenantID: input.Scope.TenantID, ProjectID: input.Scope.ProjectID,
+	audit := entity.AuditEvent{
+		ID: uuid.NewString(), TenantID: input.Scope.TenantID, ProjectID: input.Scope.ProjectID,
 		ActorID: input.Scope.ActorID, Action: "tool.invoke", ResourceKind: "TOOL_INVOCATION", ResourceID: invocationID,
-		RequestHash: hash, Outcome: string(status), OccurredAt: now}
+		RequestHash: hash, Outcome: string(status), OccurredAt: now,
+	}
 	var stored entity.Invocation
 	var replay bool
 	err = service.repository.Transact(ctx, input.Scope, func(tx domainrepo.Transaction) error {
-		stored, replay, err = tx.ReserveInvocation(ctx, domainrepo.InvocationReservation{Invocation: invocation,
-			Approval: approval, Continuation: effect, ReceiptKeyHash: receiptKeyHash, RequestHash: hash, Audit: audit})
+		stored, replay, err = tx.ReserveInvocation(ctx, domainrepo.InvocationReservation{
+			Invocation: invocation,
+			Approval:   approval, Continuation: effect, ReceiptKeyHash: receiptKeyHash, RequestHash: hash, Audit: audit,
+		})
 		return err
 	})
 	if err != nil {
@@ -434,8 +563,10 @@ func (service *Service) Invoke(ctx context.Context, input InvokeInput) (Invocati
 	if replay && stored.CanonicalRequestHash != hash {
 		return InvocationReceipt{}, errs.ErrConflict
 	}
-	receipt := InvocationReceipt{InvocationID: stored.ID, Status: stored.Status, RequestHash: stored.CanonicalRequestHash,
-		PollPath: "/api/v1/invocations/" + stored.ID}
+	receipt := InvocationReceipt{
+		InvocationID: stored.ID, Status: stored.Status, RequestHash: stored.CanonicalRequestHash,
+		PollPath: "/api/v1/invocations/" + stored.ID,
+	}
 	if status == enum.InvocationPendingApproval && !replay {
 		receipt.ApprovalID = approval.ID
 	}
@@ -471,18 +602,22 @@ func (service *Service) Decide(ctx context.Context, scope domainrepo.Scope, appr
 	}
 	now := service.now().UTC()
 	decision := map[bool]string{true: "APPROVED", false: "REJECTED"}[approve]
-	audit := entity.AuditEvent{ID: uuid.NewString(), TenantID: scope.TenantID, ProjectID: scope.ProjectID,
+	audit := entity.AuditEvent{
+		ID: uuid.NewString(), TenantID: scope.TenantID, ProjectID: scope.ProjectID,
 		ActorID: scope.ActorID, Action: "approval.decide", ResourceKind: "APPROVAL_REQUEST",
 		ResourceID: approvalID, Outcome: decision,
-		ReasonCode: reasonCode, OccurredAt: now}
+		ReasonCode: reasonCode, OccurredAt: now,
+	}
 	receiptKeyHash := operationReceiptKey(scope, "approval.decide", approvalID, semanticKey)
 	requestHash := operationRequestHash("approval.decide", approvalID, decision, reasonCode)
 	var invocation entity.Invocation
 	err := service.repository.Transact(ctx, scope, func(tx domainrepo.Transaction) error {
 		var err error
-		invocation, _, err = tx.DecideApproval(ctx, domainrepo.Decision{ApprovalID: approvalID, Approve: approve,
+		invocation, _, err = tx.DecideApproval(ctx, domainrepo.Decision{
+			ApprovalID: approvalID, Approve: approve,
 			ActorID: scope.ActorID, ReasonCode: reasonCode, ReceiptKeyHash: receiptKeyHash,
-			RequestHash: requestHash, DecidedAt: now, Audit: audit})
+			RequestHash: requestHash, DecidedAt: now, Audit: audit,
+		})
 		return err
 	})
 	return invocation, err
@@ -493,9 +628,11 @@ func (service *Service) Cancel(ctx context.Context, scope domainrepo.Scope, invo
 		return InvocationReceipt{}, errs.ErrInvalid
 	}
 	now := service.now().UTC()
-	audit := entity.AuditEvent{ID: uuid.NewString(), TenantID: scope.TenantID, ProjectID: scope.ProjectID,
+	audit := entity.AuditEvent{
+		ID: uuid.NewString(), TenantID: scope.TenantID, ProjectID: scope.ProjectID,
 		ActorID: scope.ActorID, Action: "invocation.cancel", ResourceKind: "TOOL_INVOCATION",
-		ResourceID: invocationID, Outcome: string(enum.InvocationCancelled), ReasonCode: reasonCode, OccurredAt: now}
+		ResourceID: invocationID, Outcome: string(enum.InvocationCancelled), ReasonCode: reasonCode, OccurredAt: now,
+	}
 	receiptKeyHash := operationReceiptKey(scope, "invocation.cancel", invocationID, semanticKey)
 	requestHash := operationRequestHash("invocation.cancel", invocationID, string(enum.InvocationCancelled), reasonCode)
 	var invocation entity.Invocation
@@ -511,8 +648,10 @@ func (service *Service) Cancel(ctx context.Context, scope domainrepo.Scope, invo
 	if err != nil {
 		return InvocationReceipt{}, err
 	}
-	return InvocationReceipt{InvocationID: invocation.ID, Status: invocation.Status,
-		RequestHash: invocation.CanonicalRequestHash, PollPath: "/api/v1/invocations/" + invocation.ID}, nil
+	return InvocationReceipt{
+		InvocationID: invocation.ID, Status: invocation.Status,
+		RequestHash: invocation.CanonicalRequestHash, PollPath: "/api/v1/invocations/" + invocation.ID,
+	}, nil
 }
 
 func (service *Service) ExecuteOne(ctx context.Context, finalizationBase context.Context) (bool, enum.InvocationStatus, error) {
@@ -553,7 +692,7 @@ func (service *Service) ExecuteOne(ctx context.Context, finalizationBase context
 		providerResult.Status = enum.InvocationUnknown
 	}
 	if providerResult.Status == enum.InvocationSucceeded && service.validator.Validate(claim.Tool.OutputSchema, providerResult.Payload) != nil {
-		providerResult.Status = enum.InvocationFailed
+		providerResult.Status = enum.InvocationUnknown
 		providerResult.Payload = json.RawMessage(`{"status":"provider_output_schema_mismatch"}`)
 	}
 	encryptedResult, encryptErr := service.cipher.Encrypt(ctx, providerResult.Payload)
@@ -561,10 +700,12 @@ func (service *Service) ExecuteOne(ctx context.Context, finalizationBase context
 		return true, enum.InvocationUnknown, service.finishBounded(finalizationBase, claim, enum.InvocationUnknown, nil, "RESULT_ENCRYPT_FAILED")
 	}
 	payloadDigest := sha256.Sum256(providerResult.Payload)
-	result := &entity.Result{InvocationID: claim.Invocation.ID, AttemptID: claim.Attempt.ID,
+	result := &entity.Result{
+		InvocationID: claim.Invocation.ID, AttemptID: claim.Attempt.ID,
 		Status: providerResult.Status, EncryptedPayload: encryptedResult,
 		PayloadDigest: hex.EncodeToString(payloadDigest[:]), ProviderReceipt: providerResult.ProviderReceipt,
-		CompletedAt: service.now().UTC()}
+		CompletedAt: service.now().UTC(),
+	}
 	return true, providerResult.Status, service.finishBounded(finalizationBase, claim, providerResult.Status, result, "")
 }
 
@@ -613,13 +754,24 @@ func (service *Service) SyncContinuationOne(ctx context.Context) (bool, error) {
 		return true, service.retryContinuation(ctx, scope, claim,
 			errors.New("control-plane continuation transition is inconsistent"))
 	}
+	var encryptedTransitionGrant []byte
+	if state.TransitionGrant != "" {
+		encryptedTransitionGrant, err = service.cipher.Encrypt(ctx, []byte(state.TransitionGrant))
+		if err != nil {
+			return true, service.retryContinuation(ctx, scope, claim, err)
+		}
+	}
 	err = service.repository.Transact(ctx, scope, func(tx domainrepo.Transaction) error {
 		return tx.CompleteContinuation(ctx, domainrepo.ContinuationCompletion{
 			InvocationID: claim.Invocation.ID, Action: claim.Effect.Action,
 			LeaseID: claim.Effect.LeaseID, LeaseFence: claim.Effect.LeaseFence,
-			State: domainrepo.ContinuationState{ID: state.ID, Version: state.Version, Fence: state.Fence,
+			State: domainrepo.ContinuationState{
+				ID: state.ID, Version: state.Version, Fence: state.Fence,
 				ApprovalState: state.ApprovalState, ExecutionState: state.ExecutionState,
-				ContinuationState: state.ContinuationState},
+				ContinuationState: state.ContinuationState,
+			},
+			EncryptedTransitionGrant: encryptedTransitionGrant,
+			TransitionGrantExpiresAt: state.TransitionGrantExpiresAt,
 		})
 	})
 	return true, err
@@ -760,18 +912,24 @@ func (service *Service) finishBounded(base context.Context, claim domainrepo.Exe
 	defer cancel()
 	now := service.now().UTC()
 	if result == nil {
-		result = &entity.Result{InvocationID: claim.Invocation.ID, AttemptID: claim.Attempt.ID,
-			Status: status, PayloadDigest: digestText(string(status) + "\x00" + reason), CompletedAt: now}
+		result = &entity.Result{
+			InvocationID: claim.Invocation.ID, AttemptID: claim.Attempt.ID,
+			Status: status, PayloadDigest: digestText(string(status) + "\x00" + reason), CompletedAt: now,
+		}
 	} else if !validDigestText(result.PayloadDigest) {
 		result.PayloadDigest = digestText(string(status) + "\x00" + reason)
 	}
-	audit := entity.AuditEvent{ID: uuid.NewString(), TenantID: claim.Invocation.TenantID, ProjectID: claim.Invocation.ProjectID,
+	audit := entity.AuditEvent{
+		ID: uuid.NewString(), TenantID: claim.Invocation.TenantID, ProjectID: claim.Invocation.ProjectID,
 		Action: "tool.execute", ResourceKind: "TOOL_INVOCATION", ResourceID: claim.Invocation.ID,
-		RequestHash: claim.Invocation.CanonicalRequestHash, Outcome: string(status), ReasonCode: reason, OccurredAt: now}
+		RequestHash: claim.Invocation.CanonicalRequestHash, Outcome: string(status), ReasonCode: reason, OccurredAt: now,
+	}
 	return service.repository.Transact(ctx, domainrepo.Scope{TenantID: claim.Invocation.TenantID, ProjectID: claim.Invocation.ProjectID}, func(tx domainrepo.Transaction) error {
-		return tx.CompleteExecution(ctx, domainrepo.ExecutionCompletion{InvocationID: claim.Invocation.ID,
-			AttemptID: claim.Attempt.ID, Fence: claim.Attempt.Fence,
+		return tx.CompleteExecution(ctx, domainrepo.ExecutionCompletion{
+			InvocationID: claim.Invocation.ID,
+			AttemptID:    claim.Attempt.ID, Fence: claim.Attempt.Fence,
 			ConnectionGeneration: claim.Attempt.ConnectionGeneration, GrantGeneration: claim.Attempt.GrantGeneration,
-			Result: *result, Audit: audit})
+			Result: *result, Audit: audit,
+		})
 	})
 }

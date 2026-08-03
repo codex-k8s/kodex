@@ -16,7 +16,7 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authority policy mismatch: %v", err)
 	}
-	if loaded.Revision != 8 {
+	if loaded.Revision != 10 {
 		t.Fatalf("unexpected authority policy revision: %d", loaded.Revision)
 	}
 	for _, producerID := range []string{
@@ -24,6 +24,7 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		"control-plane.runtime-restore-verifier",
 		"control-plane.runtime-cleanup-authorizer",
 		"control-plane.integration-gateway",
+		"control-plane.integration-continuation",
 		"control-plane.agent-session",
 		"control-plane.oidc",
 	} {

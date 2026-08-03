@@ -1,5 +1,102 @@
 -- name: LifecycleExpire
-WITH expired_sessions AS (
+WITH authority_changed AS (
+    SELECT invocation.invocation_id, invocation.tenant_id, invocation.project_id,
+           invocation.canonical_request_hash,
+           invocation.status AS previous_status,
+           EXISTS (
+               SELECT 1 FROM integration_gateway.execution_attempts AS attempt
+                WHERE attempt.invocation_id = invocation.invocation_id
+                  AND attempt.finished_at IS NULL
+                  AND attempt.provider_dispatched_at IS NOT NULL
+           ) AS provider_dispatched
+      FROM integration_gateway.invocations AS invocation
+      JOIN integration_gateway.connections AS connection
+        ON connection.connection_id = invocation.connection_id
+       AND connection.tenant_id = invocation.tenant_id
+       AND connection.project_id = invocation.project_id
+      JOIN integration_gateway.grants AS grant
+        ON grant.grant_id = invocation.grant_id
+       AND grant.tenant_id = invocation.tenant_id
+       AND grant.project_id = invocation.project_id
+     WHERE invocation.status IN ('PENDING_APPROVAL', 'APPROVED', 'EXECUTING')
+       AND (connection.status <> 'VALID'
+         OR connection.generation <> invocation.connection_generation
+         OR grant.status <> 'ACTIVE'
+         OR grant.generation <> invocation.grant_generation
+         OR grant.expires_at <= clock_timestamp()
+         OR EXISTS (
+             SELECT 1
+               FROM jsonb_array_elements(invocation.payload->'PinnedConnection'->'CredentialBindingRefs') AS binding
+              WHERE binding->>'ExpiresAt' IS NOT NULL
+                AND (binding->>'ExpiresAt')::timestamptz <= clock_timestamp()
+         ))
+     ORDER BY invocation.updated_at, invocation.invocation_id
+     LIMIT @limit
+     FOR UPDATE OF invocation, connection, grant SKIP LOCKED
+), authority_terminal_invocations AS (
+    UPDATE integration_gateway.invocations AS invocation SET
+        status = CASE WHEN changed.provider_dispatched THEN 'UNKNOWN' ELSE 'CANCELLED' END,
+        updated_at = clock_timestamp(),
+        payload = jsonb_set(invocation.payload, '{Status}',
+            to_jsonb(CASE WHEN changed.provider_dispatched THEN 'UNKNOWN' ELSE 'CANCELLED' END::text), false)
+      FROM authority_changed AS changed
+     WHERE invocation.invocation_id = changed.invocation_id
+    RETURNING invocation.invocation_id
+), authority_terminal_approvals AS (
+    UPDATE integration_gateway.approvals AS approval SET
+        status = 'CANCELLED', decided_at = clock_timestamp(),
+        payload = jsonb_set(approval.payload, '{Status}', '"CANCELLED"'::jsonb, false)
+     WHERE approval.invocation_id IN (SELECT invocation_id FROM authority_terminal_invocations)
+       AND approval.status IN ('PENDING', 'APPROVED')
+    RETURNING approval.invocation_id
+), authority_terminal_attempts AS (
+    UPDATE integration_gateway.execution_attempts AS attempt SET
+        outcome = 'UNKNOWN', finished_at = clock_timestamp(),
+        payload = jsonb_set(
+            jsonb_set(attempt.payload, '{Outcome}', '"UNKNOWN"'::jsonb, false),
+            '{FinishedAt}', to_jsonb(clock_timestamp()), false
+        )
+      FROM authority_changed AS changed
+     WHERE attempt.invocation_id = changed.invocation_id
+       AND changed.provider_dispatched AND attempt.finished_at IS NULL
+    RETURNING attempt.invocation_id, attempt.attempt_id, attempt.tenant_id,
+              attempt.project_id, attempt.finished_at
+), authority_terminal_results AS (
+    INSERT INTO integration_gateway.results (
+        invocation_id, tenant_id, project_id, attempt_id, status, payload, completed_at
+    )
+    SELECT attempt.invocation_id, attempt.tenant_id, attempt.project_id, attempt.attempt_id,
+           'UNKNOWN', jsonb_build_object(
+               'InvocationID', attempt.invocation_id,
+               'AttemptID', attempt.attempt_id,
+               'Status', 'UNKNOWN',
+               'EncryptedPayload', NULL,
+               'PayloadDigest', integration_gateway.result_reference_digest(
+                   attempt.invocation_id, attempt.attempt_id, 'UNKNOWN'
+               ),
+               'ProviderReceipt', '',
+               'DeliveryVersion', 1,
+               'DeliveryFence', 1,
+               'AcknowledgedAt', NULL,
+               'CompletedAt', attempt.finished_at
+           ), attempt.finished_at
+      FROM authority_terminal_attempts AS attempt
+    ON CONFLICT (invocation_id) DO NOTHING
+    RETURNING invocation_id
+), authority_terminal_continuations AS (
+    UPDATE integration_gateway.continuation_effects AS effect SET
+        desired_action = CASE WHEN changed.provider_dispatched THEN 'FAIL' ELSE 'CANCEL' END,
+        action = CASE
+            WHEN effect.continuation_id = '' THEN 'SUSPEND'
+            WHEN changed.provider_dispatched THEN 'FAIL'
+            ELSE 'CANCEL'
+        END,
+        lease_id = '', lease_expires_at = NULL,
+        available_at = clock_timestamp(), updated_at = clock_timestamp()
+      FROM authority_changed AS changed
+     WHERE effect.invocation_id = changed.invocation_id
+    RETURNING effect.invocation_id
+), expired_sessions AS (
     UPDATE integration_gateway.transport_sessions SET status = 'EXPIRED', concurrent_requests = 0
      WHERE transport_session_id IN (
         SELECT transport_session_id FROM integration_gateway.transport_sessions
@@ -106,6 +203,13 @@ WITH expired_sessions AS (
       FROM expired_sessions
     UNION ALL
     SELECT integration_gateway_extensions.gen_random_uuid()::text, tenant_id, project_id,
+           'system:integration-gateway-lifecycle', 'authority.revoke',
+           'TOOL_INVOCATION', invocation_id, canonical_request_hash,
+           CASE WHEN provider_dispatched THEN 'UNKNOWN' ELSE 'CANCELLED' END,
+           'AUTHORITY_CHANGED', clock_timestamp()
+      FROM authority_changed
+    UNION ALL
+    SELECT integration_gateway_extensions.gen_random_uuid()::text, tenant_id, project_id,
            'system:integration-gateway-lifecycle', 'approval.expire',
            'TOOL_INVOCATION', invocation_id, canonical_request_hash, 'EXPIRED', 'TTL', clock_timestamp()
       FROM expired_invocations
@@ -122,6 +226,7 @@ WITH expired_sessions AS (
     RETURNING audit_id
 )
 SELECT (SELECT count(*) FROM expired_sessions)
+     + (SELECT count(*) FROM authority_terminal_invocations)
      + (SELECT count(*) FROM expired_invocations)
      + (SELECT count(*) FROM expired_approved_invocations)
      + (SELECT count(*) FROM abandoned_results)

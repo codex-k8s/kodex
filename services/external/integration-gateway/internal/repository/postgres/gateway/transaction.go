@@ -68,10 +68,12 @@ func (transaction *transaction) AdmitSession(ctx context.Context, admission doma
 		}).Scan(&revoked); err != nil {
 			return err
 		}
-		if err := transaction.appendAudit(ctx, entity.AuditEvent{ID: uuid.NewString(), TenantID: connection.TenantID,
+		if err := transaction.appendAudit(ctx, entity.AuditEvent{
+			ID: uuid.NewString(), TenantID: connection.TenantID,
 			ProjectID: connection.ProjectID, ActorID: admission.Audit.ActorID, Action: "connection.resolve",
 			ResourceKind: "INTEGRATION_CONNECTION", ResourceID: connection.ID, Outcome: string(connection.Status),
-			OccurredAt: admission.Audit.OccurredAt}); err != nil {
+			OccurredAt: admission.Audit.OccurredAt,
+		}); err != nil {
 			return err
 		}
 	}
@@ -105,10 +107,12 @@ func (transaction *transaction) AdmitSession(ctx context.Context, admission doma
 		}).Scan(&identifier); err != nil {
 			return err
 		}
-		if err := transaction.appendAudit(ctx, entity.AuditEvent{ID: uuid.NewString(), TenantID: grant.TenantID,
+		if err := transaction.appendAudit(ctx, entity.AuditEvent{
+			ID: uuid.NewString(), TenantID: grant.TenantID,
 			ProjectID: grant.ProjectID, ActorID: admission.Audit.ActorID, Action: "grant.resolve",
 			ResourceKind: "INTEGRATION_GRANT", ResourceID: grant.ID, Outcome: string(grant.Status),
-			OccurredAt: admission.Audit.OccurredAt}); err != nil {
+			OccurredAt: admission.Audit.OccurredAt,
+		}); err != nil {
 			return err
 		}
 	}
@@ -419,6 +423,21 @@ func (transaction *transaction) ClaimExecution(ctx context.Context, now time.Tim
 		json.Unmarshal(grantRaw, &grant) != nil || json.Unmarshal(definitionRaw, &definition) != nil {
 		return domainrepo.ExecutionClaim{}, false, errors.New("stored execution claim is invalid")
 	}
+	if invocation.PinnedConnection.ID != invocation.ConnectionID ||
+		invocation.PinnedConnection.Revision != invocation.ConnectionRevision ||
+		invocation.PinnedConnection.Generation != invocation.ConnectionGeneration ||
+		entity.ConnectionBindingDigest(invocation.PinnedConnection) != invocation.ConnectionBindingDigest ||
+		entity.ConnectionBindingDigest(connection) != invocation.ConnectionBindingDigest ||
+		definition.ID != invocation.DefinitionID || definition.Version != invocation.DefinitionVersion ||
+		definition.Digest != invocation.DefinitionDigest {
+		return domainrepo.ExecutionClaim{}, false, errs.ErrConflict
+	}
+	for _, binding := range invocation.PinnedConnection.CredentialBindingRefs {
+		if binding.ID == "" || binding.Version == 0 || binding.Revision == 0 ||
+			(binding.ExpiresAt != nil && !binding.ExpiresAt.After(now)) || binding.ProjectionDigest == "" {
+			return domainrepo.ExecutionClaim{}, false, errs.ErrExpired
+		}
+	}
 	var tool entity.Tool
 	found := false
 	for _, candidate := range definition.Tools {
@@ -431,6 +450,12 @@ func (transaction *transaction) ClaimExecution(ctx context.Context, now time.Tim
 	if !found || !slices.Contains(grant.Capabilities, tool.Capability) || !slices.Contains(grant.Permissions, tool.Permission) {
 		return domainrepo.ExecutionClaim{}, false, errs.ErrForbidden
 	}
+	if invocation.PinnedTool.Name != tool.Name || invocation.PinnedTool.Version != tool.Version ||
+		invocation.PinnedTool.Capability != tool.Capability || invocation.PinnedTool.Permission != tool.Permission {
+		return domainrepo.ExecutionClaim{}, false, errs.ErrConflict
+	}
+	connection = invocation.PinnedConnection
+	tool = invocation.PinnedTool
 	if invocationStatus == enum.InvocationExecuting {
 		var attempt entity.ExecutionAttempt
 		if continuationExecutionState != "EXECUTING" || len(attemptRaw) == 0 ||
@@ -455,15 +480,19 @@ func (transaction *transaction) ClaimExecution(ctx context.Context, now time.Tim
 			pgx.StrictNamedArgs{"invocation_id": invocation.ID}); err != nil {
 			return domainrepo.ExecutionClaim{}, false, err
 		}
-		return domainrepo.ExecutionClaim{Invocation: invocation, Attempt: attempt, Tool: tool,
-			Connection: connection, ProviderReady: true}, true, nil
+		return domainrepo.ExecutionClaim{
+			Invocation: invocation, Attempt: attempt, Tool: tool,
+			Connection: connection, ProviderReady: true,
+		}, true, nil
 	}
 	if invocationStatus != enum.InvocationApproved || continuationExecutionState != "NOT_STARTED" {
 		return domainrepo.ExecutionClaim{}, false, errs.ErrConflict
 	}
-	attempt := entity.ExecutionAttempt{ID: uuid.NewString(), InvocationID: invocation.ID, Number: 1, Fence: 1,
+	attempt := entity.ExecutionAttempt{
+		ID: uuid.NewString(), InvocationID: invocation.ID, Number: 1, Fence: 1,
 		ConnectionGeneration: invocation.ConnectionGeneration, GrantGeneration: invocation.GrantGeneration,
-		ProviderIdempotencyKey: invocation.CanonicalRequestHash, StartedAt: now, Outcome: enum.InvocationExecuting}
+		ProviderIdempotencyKey: invocation.CanonicalRequestHash, StartedAt: now, Outcome: enum.InvocationExecuting,
+	}
 	attemptPayload, err := marshal(attempt)
 	if err != nil {
 		return domainrepo.ExecutionClaim{}, false, err
@@ -489,10 +518,12 @@ func (transaction *transaction) ClaimExecution(ctx context.Context, now time.Tim
 	}).Scan(&identifier); err != nil {
 		return domainrepo.ExecutionClaim{}, false, err
 	}
-	if err := transaction.appendAudit(ctx, entity.AuditEvent{ID: uuid.NewString(), TenantID: transaction.tenantID,
+	if err := transaction.appendAudit(ctx, entity.AuditEvent{
+		ID: uuid.NewString(), TenantID: transaction.tenantID,
 		ProjectID: transaction.projectID, ActorID: "system:integration-gateway-worker", Action: "tool.claim",
 		ResourceKind: "EXECUTION_ATTEMPT", ResourceID: attempt.ID, RequestHash: invocation.CanonicalRequestHash,
-		Outcome: "EXECUTING", OccurredAt: now}); err != nil {
+		Outcome: "EXECUTING", OccurredAt: now,
+	}); err != nil {
 		return domainrepo.ExecutionClaim{}, false, err
 	}
 	if err := transaction.scheduleContinuation(ctx, invocation.ID, enum.ContinuationBegin, now); err != nil {
@@ -534,6 +565,8 @@ func (transaction *transaction) CompleteExecution(ctx context.Context, completio
 		completion.Audit.Outcome = string(enum.InvocationUnknown)
 		completion.Audit.ReasonCode = "AUTHORITY_GENERATION_CHANGED"
 	}
+	completion.Result.DeliveryVersion = 1
+	completion.Result.DeliveryFence = attempt.Fence
 	finishedAt := completion.Result.CompletedAt
 	attempt.Outcome = completion.Result.Status
 	attempt.FinishedAt = &finishedAt
@@ -580,6 +613,38 @@ func (transaction *transaction) CompleteExecution(ctx context.Context, completio
 		action = enum.ContinuationSucceed
 	}
 	return transaction.scheduleContinuation(ctx, invocation.ID, action, finishedAt)
+}
+
+func (transaction *transaction) AcknowledgeResult(
+	ctx context.Context,
+	acknowledgement domainrepo.ResultAcknowledgement,
+) (entity.Result, error) {
+	var result entity.Result
+	var raw []byte
+	if err := transaction.tx.QueryRow(ctx, sqlResultAcknowledge, pgx.StrictNamedArgs{
+		"invocation_id":    acknowledgement.Binding.InvocationID,
+		"attempt_id":       acknowledgement.Binding.AttemptID,
+		"tenant_id":        transaction.tenantID,
+		"project_id":       transaction.projectID,
+		"delivery_version": acknowledgement.DeliveryVersion,
+		"delivery_fence":   acknowledgement.DeliveryFence,
+		"idempotency_hash": acknowledgement.IdempotencyHash,
+		"request_hash":     acknowledgement.RequestHash,
+		"acknowledged_at":  acknowledgement.AcknowledgedAt,
+	}).Scan(&raw, &result.DeliveryVersion, &result.DeliveryFence,
+		&result.AcknowledgedAt, &result.CompletedAt); err != nil {
+		return entity.Result{}, err
+	}
+	if json.Unmarshal(raw, &result) != nil || result.InvocationID != acknowledgement.Binding.InvocationID ||
+		result.AttemptID != acknowledgement.Binding.AttemptID ||
+		result.PayloadDigest != acknowledgement.Binding.ResultSHA256 ||
+		result.Status != enum.InvocationSucceeded || result.AcknowledgedAt == nil {
+		return entity.Result{}, errs.ErrConflict
+	}
+	if err := transaction.appendAudit(ctx, acknowledgement.Audit); err != nil {
+		return entity.Result{}, err
+	}
+	return result, nil
 }
 
 func storedResultDigest(invocationID, attemptID string, status enum.InvocationStatus) string {
@@ -705,16 +770,40 @@ func (transaction *transaction) CompleteContinuation(
 	ctx context.Context,
 	completion domainrepo.ContinuationCompletion,
 ) error {
+	var currentRaw []byte
+	if err := transaction.tx.QueryRow(ctx, sqlContinuationLock, pgx.StrictNamedArgs{
+		"invocation_id": completion.InvocationID,
+	}).Scan(&currentRaw); err != nil {
+		return err
+	}
+	var effect entity.ContinuationEffect
+	if json.Unmarshal(currentRaw, &effect) != nil {
+		return errors.New("stored continuation effect is invalid")
+	}
+	effect.EncryptedApplicationGrant = completion.EncryptedTransitionGrant
+	effect.ApplicationGrantExpiresAt = completion.TransitionGrantExpiresAt
+	effect.ContinuationID = completion.State.ID
+	effect.Version = completion.State.Version
+	effect.Fence = completion.State.Fence
+	effect.ApprovalState = completion.State.ApprovalState
+	effect.ExecutionState = completion.State.ExecutionState
+	effect.ContinuationState = completion.State.ContinuationState
+	payload, err := marshal(effect)
+	if err != nil {
+		return err
+	}
 	var identifier string
 	return transaction.tx.QueryRow(ctx, sqlContinuationComplete, pgx.StrictNamedArgs{
 		"invocation_id": completion.InvocationID, "action": completion.Action,
 		"lease_id": completion.LeaseID, "lease_fence": completion.LeaseFence,
-		"continuation_id":      completion.State.ID,
-		"continuation_version": completion.State.Version,
-		"continuation_fence":   completion.State.Fence,
-		"approval_state":       completion.State.ApprovalState,
-		"execution_state":      completion.State.ExecutionState,
-		"continuation_state":   completion.State.ContinuationState,
+		"continuation_id":             completion.State.ID,
+		"continuation_version":        completion.State.Version,
+		"continuation_fence":          completion.State.Fence,
+		"approval_state":              completion.State.ApprovalState,
+		"execution_state":             completion.State.ExecutionState,
+		"continuation_state":          completion.State.ContinuationState,
+		"transition_grant_expires_at": optionalTime(completion.TransitionGrantExpiresAt),
+		"continuation_payload":        payload,
 	}).Scan(&identifier)
 }
 
@@ -791,4 +880,11 @@ func marshal(value any) ([]byte, error) {
 		return nil, errors.New("marshal repository payload")
 	}
 	return payload, nil
+}
+
+func optionalTime(value time.Time) any {
+	if value.IsZero() {
+		return nil
+	}
+	return value
 }

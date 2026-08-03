@@ -30,6 +30,8 @@ type Config struct {
 	ContextKeyID        string
 	ContextSigningKey   []byte
 	ContextTTL          time.Duration
+	CleanupBase         context.Context
+	CleanupTimeout      time.Duration
 }
 
 type Repository struct {
@@ -43,13 +45,16 @@ type transaction struct {
 	projectID string
 }
 
-var _ domainrepo.Repository = (*Repository)(nil)
-var _ domainrepo.Transaction = (*transaction)(nil)
+var (
+	_ domainrepo.Repository  = (*Repository)(nil)
+	_ domainrepo.Transaction = (*transaction)(nil)
+)
 
 func New(pool *pgxpool.Pool, config Config) (*Repository, error) {
 	if pool == nil || config.PrincipalName == "" || config.PrincipalGeneration == 0 ||
 		config.ContextKeyID == "" || len(config.ContextSigningKey) < 32 ||
-		config.ContextTTL < time.Second || config.ContextTTL > 10*time.Second {
+		config.ContextTTL < time.Second || config.ContextTTL > 10*time.Second ||
+		config.CleanupBase == nil || config.CleanupTimeout < time.Second || config.CleanupTimeout > time.Minute {
 		return nil, errors.New("integration gateway PostgreSQL configuration is invalid")
 	}
 	return &Repository{pool: pool, config: config}, nil
@@ -67,14 +72,13 @@ func (repository *Repository) Transact(ctx context.Context, scope domainrepo.Sco
 			return mapError(err)
 		}
 		if err := repository.setScope(ctx, tx, scope); err != nil {
-			_ = tx.Rollback(ctx)
-			return err
+			return errors.Join(err, repository.rollback(tx))
 		}
 		err = callback(&transaction{tx: tx, tenantID: scope.TenantID, projectID: scope.ProjectID})
 		if err == nil {
 			err = tx.Commit(ctx)
 		} else {
-			_ = tx.Rollback(ctx)
+			err = errors.Join(err, repository.rollback(tx))
 		}
 		if !retryable(err) {
 			return mapError(err)
@@ -155,7 +159,10 @@ func (repository *Repository) ListTools(ctx context.Context, scope domainrepo.Sc
 					return errs.ErrConflict
 				}
 				seen[tool.Name] = struct{}{}
-				bindings = append(bindings, domainrepo.ToolBinding{Tool: tool, Connection: connection, Grant: grant})
+				bindings = append(bindings, domainrepo.ToolBinding{
+					Tool: tool, Connection: connection, Grant: grant,
+					DefinitionDigest: definition.Digest,
+				})
 			}
 		}
 		return rows.Err()
@@ -210,6 +217,34 @@ func (repository *Repository) GetInvocation(ctx context.Context, scope domainrep
 		return nil
 	})
 	return invocation, approval, result, err
+}
+
+func (repository *Repository) ResolveResult(
+	ctx context.Context,
+	scope domainrepo.Scope,
+	binding domainrepo.ResultBinding,
+) (entity.Result, error) {
+	var result entity.Result
+	err := repository.read(ctx, scope, func(tx pgx.Tx) error {
+		var raw []byte
+		if err := tx.QueryRow(ctx, sqlResultResolve, pgx.StrictNamedArgs{
+			"invocation_id": binding.InvocationID,
+			"attempt_id":    binding.AttemptID,
+			"tenant_id":     scope.TenantID,
+			"project_id":    scope.ProjectID,
+		}).Scan(&raw, &result.DeliveryVersion, &result.DeliveryFence,
+			&result.AcknowledgedAt, &result.CompletedAt); err != nil {
+			return err
+		}
+		if json.Unmarshal(raw, &result) != nil || result.InvocationID != binding.InvocationID ||
+			result.AttemptID != binding.AttemptID || result.PayloadDigest != binding.ResultSHA256 ||
+			result.Status != enum.InvocationSucceeded || result.DeliveryVersion == 0 ||
+			result.DeliveryFence == 0 {
+			return errs.ErrConflict
+		}
+		return nil
+	})
+	return result, err
 }
 
 func (repository *Repository) TouchSession(ctx context.Context, scope domainrepo.Scope, sessionID, tokenDigest string, now, expiresAt time.Time, maximumRequests uint64, maximumConcurrency uint32) (entity.TransportSession, error) {
@@ -283,14 +318,25 @@ func (repository *Repository) withTransaction(ctx context.Context, scope domainr
 	if err != nil {
 		return mapError(err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
 	if err := repository.setScope(ctx, tx, scope); err != nil {
-		return err
+		return errors.Join(err, repository.rollback(tx))
 	}
 	if err := callback(tx); err != nil {
-		return mapError(err)
+		return mapError(errors.Join(err, repository.rollback(tx)))
 	}
-	return mapError(tx.Commit(ctx))
+	if err := tx.Commit(ctx); err != nil {
+		return mapError(errors.Join(err, repository.rollback(tx)))
+	}
+	return nil
+}
+
+func (repository *Repository) rollback(tx pgx.Tx) error {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(repository.config.CleanupBase), repository.config.CleanupTimeout)
+	defer cancel()
+	if err := tx.Rollback(cleanup); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+		return fmt.Errorf("rollback PostgreSQL transaction: %w", err)
+	}
+	return nil
 }
 
 func (repository *Repository) setScope(ctx context.Context, tx pgx.Tx, scope domainrepo.Scope) error {

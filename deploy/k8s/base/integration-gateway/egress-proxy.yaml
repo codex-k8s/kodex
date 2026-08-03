@@ -1,0 +1,182 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: integration-egress-proxy
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: integration-egress-proxy-config
+data:
+  envoy.yaml: |
+    static_resources:
+      listeners:
+        - name: ingress_mtls
+          address:
+            socket_address: {address: 0.0.0.0, port_value: 8443}
+          filter_chains:
+            - transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  require_client_certificate: true
+                  common_tls_context:
+                    tls_params: {tls_minimum_protocol_version: TLSv1_3}
+                    tls_certificates:
+                      - certificate_chain: {filename: /var/run/secrets/mattercodex/integration-egress-proxy/tls/tls.crt}
+                        private_key: {filename: /var/run/secrets/mattercodex/integration-egress-proxy/tls/tls.key}
+                    validation_context:
+                      trusted_ca: {filename: /var/run/config/mattercodex/integration-egress-proxy/client-ca/ca.pem}
+                      match_typed_subject_alt_names:
+                        - san_type: URI
+                          matcher:
+                            exact: spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway
+              filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: integration_provider
+                    request_headers_to_remove: [x-forwarded-for, x-envoy-external-address]
+                    route_config:
+                      name: exact_provider_routes
+                      virtual_hosts:
+                        - name: provider_health
+                          domains: ["integration-egress-proxy.mattercodex-system.svc:8443"]
+                          routes:
+                            - match: {path: /readyz}
+                              direct_response: {status: 204}
+                            - match:
+                                path: /validate
+                                headers:
+                                  - name: x-mattercodex-target
+                                    string_match: {exact: provider-health.readonly}
+                              direct_response: {status: 204}
+                            - match:
+                                path: /health
+                                headers:
+                                  - name: x-mattercodex-target
+                                    string_match: {exact: provider-health.readonly}
+                              direct_response:
+                                status: 200
+                                body: {inline_string: "{\"status\":\"ok\"}\n"}
+                              response_headers_to_add:
+                                - header: {key: content-type, value: application/json}
+                    http_filters:
+                      - name: envoy.filters.http.router
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+    admin:
+      access_log_path: /dev/null
+      address:
+        socket_address: {address: 0.0.0.0, port_value: 9901}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: integration-egress-proxy
+  labels:
+    app.kubernetes.io/name: integration-egress-proxy
+    app.kubernetes.io/component: egress-proxy
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: integration-egress-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: integration-egress-proxy
+        app.kubernetes.io/component: egress-proxy
+    spec:
+      serviceAccountName: integration-egress-proxy
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10002
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: envoy
+          image: docker.io/envoyproxy/envoy:distroless-v1.35.3@sha256:f9080877fdbaecc788e79e200d912382e57f780b63752160e27dfe34f5d0aa36
+          args: [-c, /etc/envoy/envoy.yaml, --concurrency, "2", --log-level, warning]
+          ports:
+            - {name: https, containerPort: 8443}
+          startupProbe:
+            httpGet: {path: /ready, port: 9901}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /ready, port: 9901}
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: {path: /server_info, port: 9901}
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10002
+            runAsGroup: 10002
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/envoy, readOnly: true}
+            - {name: server-tls, mountPath: /var/run/secrets/mattercodex/integration-egress-proxy/tls, readOnly: true}
+            - {name: client-ca, mountPath: /var/run/config/mattercodex/integration-egress-proxy/client-ca, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config
+          configMap: {name: integration-egress-proxy-config, defaultMode: 0440}
+        - name: server-tls
+          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-egress-proxy-server-tls}}
+        - name: client-ca
+          configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
+        - {name: tmp, emptyDir: {sizeLimit: 8Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: integration-egress-proxy
+spec:
+  selector:
+    app.kubernetes.io/name: integration-egress-proxy
+  ports:
+    - {name: https, port: 8443, targetPort: https, protocol: TCP}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: integration-egress-proxy
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: integration-egress-proxy
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: integration-egress-proxy-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: integration-egress-proxy
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-gateway
+      ports:
+        - {protocol: TCP, port: 8443}
+  egress: []

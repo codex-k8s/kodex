@@ -11,12 +11,14 @@ import (
 )
 
 type State struct {
-	ID                string
-	Version           uint64
-	Fence             uint64
-	ApprovalState     string
-	ExecutionState    string
-	ContinuationState string
+	ID                       string
+	Version                  uint64
+	Fence                    uint64
+	ApprovalState            string
+	ExecutionState           string
+	ContinuationState        string
+	TransitionGrant          string
+	TransitionGrantExpiresAt time.Time
 }
 
 type Command struct {

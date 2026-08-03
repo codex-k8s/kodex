@@ -178,27 +178,23 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 			candidate.Permission == "" ||
 			candidate.Audience == "" ||
 			candidate.CallerWorkload != producer.CallerWorkload ||
-			candidate.CallerSPIFFEID != producer.CallerSPIFFEID ||
-			candidate.TargetWorkload != "control-plane" ||
-			candidate.TargetSPIFFEID != "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane" {
+			candidate.CallerSPIFFEID != producer.CallerSPIFFEID || !validTarget(candidate) {
 			return Loaded{}, errors.New("control-plane operation binding is invalid")
 		}
 		if _, duplicate := operations[candidate.OperationID]; duplicate {
 			return Loaded{}, errors.New("control-plane operation binding is ambiguous")
 		}
 		operations[candidate.OperationID] = authorityservice.Operation{
-			FullMethod:      candidate.FullMethod,
-			Permission:      candidate.Permission,
-			ProjectRequired: candidate.ProjectRequired,
-			TenantOwnerOnly: candidate.OperationID == "control.project.create",
-			CallerWorkload:  producer.CallerWorkload,
-			CallerSPIFFEID:  producer.CallerSPIFFEID,
-			ActorKind:       producerActorKind(producer),
-			AuthoritySource: producerAuthoritySource(producer),
-			ProofAudience:   producer.ProofAudience,
-		}
-		if candidate.Audience != "urn:mattercodex:internal-rpc:control-plane" {
-			return Loaded{}, errors.New("control-plane operation audience is invalid")
+			FullMethod:                   candidate.FullMethod,
+			Permission:                   candidate.Permission,
+			ProjectRequired:              candidate.ProjectRequired,
+			TenantOwnerOnly:              candidate.OperationID == "control.project.create",
+			CallerWorkload:               producer.CallerWorkload,
+			CallerSPIFFEID:               producer.CallerSPIFFEID,
+			ActorKind:                    producerActorKind(producer),
+			AuthoritySource:              producerAuthoritySource(producer),
+			ProofAudience:                producer.ProofAudience,
+			AuthorizationContextAudience: candidate.Audience,
 		}
 	}
 	if len(operations) != len(expected) || len(allowed) != len(expected) {
@@ -216,6 +212,19 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 	}, nil
 }
 
+func validTarget(candidate binding) bool {
+	switch candidate.Audience {
+	case "urn:mattercodex:internal-rpc:control-plane":
+		return candidate.TargetWorkload == "control-plane" &&
+			candidate.TargetSPIFFEID == "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"
+	case "urn:mattercodex:internal-rpc:integration-gateway":
+		return candidate.TargetWorkload == "integration-gateway" &&
+			candidate.TargetSPIFFEID == "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway"
+	default:
+		return false
+	}
+}
+
 func producerActorKind(producer Producer) string {
 	if producer.Credential == "OIDC_BEARER" {
 		return "HUMAN"
@@ -231,6 +240,8 @@ func producerAuthoritySource(producer Producer) string {
 		return "AGENT_SESSION"
 	case "AUTOMATION_OCCURRENCE_GRANT":
 		return "AUTOMATION_OCCURRENCE"
+	case "INTEGRATION_CONTINUATION_GRANT":
+		return "INTEGRATION_CONTINUATION"
 	default:
 		return "PROCESS_RUN"
 	}
@@ -247,6 +258,9 @@ func supportedCredential(credential string) bool {
 		"RUNTIME_RESTORE_VERIFIER_GRANT",
 		"RUNTIME_CLEANUP_AUTHORIZER_GRANT",
 		"MEMORY_INDEX_GRANT":
+		// server-owned capability следующего exact integration transition.
+		return true
+	case "INTEGRATION_CONTINUATION_GRANT":
 		return true
 	default:
 		return false

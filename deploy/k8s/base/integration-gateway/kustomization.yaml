@@ -8,6 +8,8 @@ resources:
   - service.yaml
   - poddisruptionbudget.yaml
   - migration-job.yaml
+  - postgresql.yaml
+  - egress-proxy.yaml
   - networkpolicy.yaml
   - vault-secret-provider-classes.yaml
   - servicemonitor.yaml
@@ -25,8 +27,11 @@ configMapGenerator:
       - INTEGRATION_GATEWAY_POSTGRES_CURRENT_GENERATION=1
       - INTEGRATION_GATEWAY_POSTGRES_CURRENT_NOT_BEFORE=2026-08-03T00:00:00Z
       - INTEGRATION_GATEWAY_POSTGRES_CURRENT_NOT_AFTER=2026-11-03T00:00:00Z
+      - INTEGRATION_GATEWAY_POSTGRES_NEXT_GENERATION=2
+      - INTEGRATION_GATEWAY_POSTGRES_NEXT_NOT_BEFORE=2026-10-20T00:00:00Z
+      - INTEGRATION_GATEWAY_POSTGRES_NEXT_NOT_AFTER=2027-02-03T00:00:00Z
   - name: integration-gateway-definitions
     files:
-      - health.yaml=../../../../services/external/integration-gateway/config/definitions/health.yaml
+      - health.yaml=definitions/health.yaml
 generatorOptions:
   disableNameSuffixHash: true

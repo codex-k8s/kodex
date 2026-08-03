@@ -222,12 +222,13 @@ func actorKind(value string) internalrpcauthorityv1.ActorKind {
 
 func authoritySource(value string) internalrpcauthorityv1.AuthoritySource {
 	return map[string]internalrpcauthorityv1.AuthoritySource{
-		"OIDC_SESSION":          internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION,
-		"MATTERMOST_EVENT":      internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_MATTERMOST_EVENT,
-		"DOMAIN_STATE":          internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE,
-		"AGENT_SESSION":         internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_AGENT_SESSION,
-		"PROCESS_RUN":           internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_PROCESS_RUN,
-		"AUTOMATION_OCCURRENCE": internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE,
+		"OIDC_SESSION":             internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION,
+		"MATTERMOST_EVENT":         internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_MATTERMOST_EVENT,
+		"DOMAIN_STATE":             internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE,
+		"AGENT_SESSION":            internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_AGENT_SESSION,
+		"PROCESS_RUN":              internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_PROCESS_RUN,
+		"AUTOMATION_OCCURRENCE":    internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE,
+		"INTEGRATION_CONTINUATION": internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_INTEGRATION_CONTINUATION,
 	}[value]
 }
 

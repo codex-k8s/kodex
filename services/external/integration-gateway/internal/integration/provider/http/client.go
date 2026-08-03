@@ -84,8 +84,10 @@ func New(config Config) (*Client, error) {
 	}
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{Timeout: 3 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, ServerName: config.ProxyServerName,
-			RootCAs: roots, Certificates: []tls.Certificate{certificate}},
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS13, ServerName: config.ProxyServerName,
+			RootCAs: roots, Certificates: []tls.Certificate{certificate},
+		},
 		MaxConnsPerHost:       config.MaximumConnections,
 		MaxIdleConnsPerHost:   config.MaximumConnections,
 		IdleConnTimeout:       30 * time.Second,
@@ -156,14 +158,19 @@ func (client *Client) Execute(ctx context.Context, connection entity.Connection,
 		return providerport.Result{Status: enum.InvocationUnknown}, errors.New("provider response is invalid")
 	}
 	status := enum.InvocationSucceeded
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
+	if response.StatusCode >= 500 {
+		status = enum.InvocationUnknown
+		body = []byte(`{"status":"provider_outcome_unknown","code":` + strconv.Itoa(response.StatusCode) + `}`)
+	} else if response.StatusCode < 200 || response.StatusCode >= 300 {
+		// Только явный 4xx считается авторитетным terminal rejection после dispatch.
+		// Любой неоднозначный 5xx выше остаётся UNKNOWN и не допускает auto retry.
 		status = enum.InvocationFailed
 		body = []byte(`{"status":"provider_rejected","code":` + strconv.Itoa(response.StatusCode) + `}`)
 	}
 	if !json.Valid(body) {
 		body = []byte(`{"status":"provider_response_not_json"}`)
 		if status == enum.InvocationSucceeded {
-			status = enum.InvocationFailed
+			status = enum.InvocationUnknown
 		}
 	}
 	receipt := response.Header.Get("X-Request-Id")

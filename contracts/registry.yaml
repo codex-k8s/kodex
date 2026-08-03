@@ -6,6 +6,15 @@ packages:
     source: contracts/openapi/integration-gateway/v1/openapi.yaml
     consumers:
       - integration-gateway
+  - id: integration-gateway-internal-v1
+    format: proto
+    owner: integration-gateway
+    source: contracts/proto/integrationgateway/v1
+    generated:
+      go: libs/go/integrationgatewayapi/gen/integrationgateway/v1
+    consumers:
+      - integration-gateway
+      - agent-runner
   - id: control-plane-events-v1
     format: asyncapi
     owner: control-plane
