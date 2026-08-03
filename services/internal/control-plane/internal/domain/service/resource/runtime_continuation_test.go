@@ -198,7 +198,8 @@ func TestDeadlineSensitiveAuthorityUsesPostLockDatabaseTime(t *testing.T) {
 		{"runtime.go", "ClaimTurn", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "", "tx.NextQueuedTurn", true},
 		{"runtime.go", "RenewTurn", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "tx.GetReceipt", "", false},
 		{"specialized.go", "RequestOwnerGate", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "tx.GetReceipt", "", false},
-		{"specialized.go", "ClaimScheduleOccurrence", "service.lockOwnerGraphByTurn", "tx.CurrentTime", "", "tx.NextScheduleOccurrence", true},
+		{"specialized.go", "ClaimScheduleOccurrence", "tx.NextScheduleOccurrence", "tx.CurrentTime", "", "", true},
+		{"specialized.go", "replayScheduleOccurrenceClaim", "service.lockOwnerGraphByTurn", "tx.CurrentTime", "tx.GetReceipt", "", false},
 		{"runtime_continuation.go", "integrationSessionContext", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
 		{"runtime_continuation.go", "resolveSelectedIntegrationBinding", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
 		{"runtime_continuation.go", "validatePinnedIntegrationContinuation", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
@@ -256,7 +257,7 @@ func TestDeadlineSensitiveAuthorityUsesPostLockDatabaseTime(t *testing.T) {
 		lock     string
 	}{
 		{"runtime.go", "ClaimTurn", "tx.GetTurnLeaseForUpdate"},
-		{"specialized.go", "ClaimScheduleOccurrence", "service.lockOwnerGraphByTurn"},
+		{"specialized.go", "replayScheduleOccurrenceClaim", "service.lockOwnerGraphByTurn"},
 	} {
 		source := productionFunctionSource(t, claim.file, claim.function)
 		lock := strings.Index(source, claim.lock)
@@ -265,6 +266,50 @@ func TestDeadlineSensitiveAuthorityUsesPostLockDatabaseTime(t *testing.T) {
 		if lock < 0 || clock < lock || receipt < clock {
 			t.Fatalf("%s can expose a receipt before post-lock deadline validation", claim.function)
 		}
+	}
+}
+
+func TestSchedulerMaintenanceCommitsBeforeCandidateSelection(t *testing.T) {
+	claim := productionFunctionSource(t, "specialized.go", "ClaimScheduleOccurrence")
+	for _, required := range []string{
+		"service.recoverExpiredScheduleOccurrences",
+		"service.skipOverlappedScheduleOccurrences",
+		"tx.NextScheduleOccurrence",
+		"tx.HasBlockingScheduleExecution",
+	} {
+		if !strings.Contains(claim, required) {
+			t.Fatalf("scheduler claim misses %s", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"tx.ExpiredScheduleOccurrenceCandidates",
+		"tx.SkipOverlappedScheduleOccurrences",
+		"service.recoverExpiredScheduleOccurrence(",
+	} {
+		if strings.Contains(claim, forbidden) {
+			t.Fatalf("scheduler maintenance remains inside candidate transaction: %s", forbidden)
+		}
+	}
+	recovery := productionFunctionSource(t, "specialized.go", "recoverExpiredScheduleOccurrences")
+	if strings.Count(recovery, "service.repository.Transact") < 2 ||
+		!strings.Contains(recovery, "service.recoverExpiredScheduleOccurrence") {
+		t.Fatal("watchdog discovery and exact disposition do not have independent commits")
+	}
+	skip := productionFunctionSource(t, "specialized.go", "skipOverlappedScheduleOccurrences")
+	if !strings.Contains(skip, "service.repository.Transact") ||
+		!strings.Contains(skip, "appendScheduleOccurrenceAudit") {
+		t.Fatal("overlap skip and audit are not an independent atomic fact")
+	}
+	next := strings.Index(claim, "tx.NextScheduleOccurrence")
+	if next < 0 {
+		t.Fatal("scheduler selection is absent")
+	}
+	scheduleLock := strings.Index(claim[next:], "tx.GetForUpdate")
+	cardinality := strings.Index(claim[next:], "tx.HasBlockingScheduleExecution")
+	firstEffect := strings.Index(claim[next:], "service.prepareScheduleSession")
+	if scheduleLock < 0 || cardinality < scheduleLock ||
+		firstEffect < 0 || cardinality > firstEffect {
+		t.Fatal("schedule cardinality is not rechecked after schedule lock and before graph effects")
 	}
 }
 
@@ -687,6 +732,7 @@ func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
 			resolver = append(resolver, calls["lockSessionLifecycleGraph"]...)
 			resolver = append(resolver, calls["prelockScheduledGraphByTurn"]...)
 			resolver = append(resolver, calls["lockOwnerGateAfterGraph"]...)
+			resolver = append(resolver, calls["replayScheduleOccurrenceClaim"]...)
 			if len(resolver) == 0 {
 				t.Fatal("canonical owner graph resolver is absent")
 			}
@@ -694,7 +740,8 @@ func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
 				t.Fatal("shared graph command bypasses validated receipt wrapper")
 			}
 			if target.mustDisposition && len(calls["requireOwnerGraphRuntimeDisposition"]) == 0 &&
-				len(calls["requireClosedRuntimeConsistentWithTurn"]) == 0 {
+				len(calls["requireClosedRuntimeConsistentWithTurn"]) == 0 &&
+				len(calls["replayScheduleOccurrenceClaim"]) == 0 {
 				t.Fatal("RuntimeExecution disposition is not explicit")
 			}
 			if target.receiptAfterResolver && len(calls["GetReceipt"]) > 0 {

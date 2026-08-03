@@ -462,6 +462,13 @@ type Transaction interface {
 	DueSchedules(context.Context, string, string, int, time.Time) ([]entity.Resource, error)
 	SaveScheduleOccurrence(context.Context, ScheduleOccurrence) error
 	HasOpenScheduleOccurrence(context.Context, string, string, string) (bool, error)
+	HasBlockingScheduleExecution(
+		context.Context,
+		string,
+		string,
+		string,
+		string,
+	) (bool, error)
 	SkipOverlappedScheduleOccurrences(
 		context.Context,
 		string,

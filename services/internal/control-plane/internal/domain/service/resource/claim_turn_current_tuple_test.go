@@ -473,10 +473,57 @@ func (tx *currentTupleTestTransaction) HasOpenScheduleOccurrence(
 	return false, nil
 }
 
+func (tx *currentTupleTestTransaction) HasBlockingScheduleExecution(
+	_ context.Context,
+	organizationID, projectID, scheduleID, candidateOccurrenceID string,
+) (bool, error) {
+	for _, occurrence := range tx.occurrences {
+		if occurrence.OrganizationID != organizationID ||
+			occurrence.ProjectID != projectID || occurrence.ScheduleID != scheduleID {
+			continue
+		}
+		if occurrence.ID != candidateOccurrenceID &&
+			(occurrence.State == "CLAIMED" || occurrence.State == "WAITING_OWNER" ||
+				occurrence.State == "CONTINUATION") {
+			return true, nil
+		}
+		for key, run := range tx.runs {
+			if strings.HasPrefix(key, occurrence.ID+"\x00") &&
+				(run.State == "CLAIMED" || run.State == "WAITING_OWNER" ||
+					run.State == "CONTINUATION") {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 func (tx *currentTupleTestTransaction) SkipOverlappedScheduleOccurrences(
-	context.Context, string, string, time.Time,
+	ctx context.Context, organizationID, projectID string, now time.Time,
 ) ([]domainrepo.ScheduleOccurrence, error) {
-	return nil, nil
+	result := make([]domainrepo.ScheduleOccurrence, 0)
+	for id, occurrence := range tx.occurrences {
+		if occurrence.OrganizationID != organizationID ||
+			occurrence.ProjectID != projectID || occurrence.State != "QUEUED" ||
+			occurrence.OverlapPolicy != "SKIP" || occurrence.AvailableAt.After(now) {
+			continue
+		}
+		blocking, err := tx.HasBlockingScheduleExecution(
+			ctx, organizationID, projectID, occurrence.ScheduleID, occurrence.ID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if !blocking {
+			continue
+		}
+		occurrence.State = "SKIPPED"
+		occurrence.Outcome = "overlap"
+		occurrence.UpdatedAt = now
+		tx.occurrences[id] = occurrence
+		result = append(result, occurrence)
+	}
+	return result, nil
 }
 
 func (tx *currentTupleTestTransaction) ExpiredScheduleOccurrenceCandidates(
@@ -495,13 +542,23 @@ func (tx *currentTupleTestTransaction) ExpiredScheduleOccurrenceCandidates(
 }
 
 func (tx *currentTupleTestTransaction) NextScheduleOccurrence(
-	_ context.Context,
+	ctx context.Context,
 	organizationID, projectID string,
 	now time.Time,
 ) (domainrepo.ScheduleOccurrence, error) {
 	for _, occurrence := range tx.occurrences {
 		if occurrence.OrganizationID == organizationID && occurrence.ProjectID == projectID &&
 			occurrence.State == "QUEUED" && !occurrence.AvailableAt.After(now) {
+			blocking, err := tx.HasBlockingScheduleExecution(
+				ctx, organizationID, projectID,
+				occurrence.ScheduleID, occurrence.ID,
+			)
+			if err != nil {
+				return domainrepo.ScheduleOccurrence{}, err
+			}
+			if blocking {
+				continue
+			}
 			return occurrence, nil
 		}
 	}
@@ -1177,6 +1234,34 @@ func (fixture currentTupleFixture) createNextDueOccurrence(
 	return domainrepo.ScheduleOccurrence{}
 }
 
+func (fixture currentTupleFixture) addQueuedOccurrenceForSchedule(
+	t *testing.T,
+	produced scheduledProducerPath,
+	overlapPolicy string,
+) domainrepo.ScheduleOccurrence {
+	t.Helper()
+	queued := produced.claim.Occurrence
+	queued.ID = uuid.NewString()
+	queued.ScheduledFor = fixture.tx.now
+	queued.EffectiveInputSHA256 = produced.snapshotDigest
+	queued.State = "QUEUED"
+	queued.Attempt = 1
+	queued.OverlapPolicy = overlapPolicy
+	queued.ClaimantWorkloadID = ""
+	queued.AuthorityGeneration = 0
+	queued.TokenHash = ""
+	queued.ClaimKeySHA256 = ""
+	queued.LeaseExpiresAt = time.Time{}
+	queued.AvailableAt = fixture.tx.now
+	queued.Outcome = ""
+	queued.ResultArtifactID = ""
+	clearScheduledExecutionBinding(&queued)
+	queued.CreatedAt = fixture.tx.now
+	queued.UpdatedAt = fixture.tx.now
+	fixture.tx.occurrences[queued.ID] = queued
+	return queued
+}
+
 func (fixture currentTupleFixture) installScheduledProcess(t *testing.T) entity.Resource {
 	t.Helper()
 	turn := fixture.tx.resources[fixture.turnID]
@@ -1650,6 +1735,176 @@ func TestScheduleArchiveSucceedsOnlyAfterTerminalGraph(t *testing.T) {
 	}
 }
 
+func TestScheduleRecoveryCommitsBeforeNoNextCandidate(t *testing.T) {
+	for _, scenario := range []struct {
+		name               string
+		maximumAttempts    uint32
+		terminalTurn       bool
+		expectedState      string
+		expectedAttempt    uint32
+		expectedRunOutcome string
+	}{
+		{
+			name: "expired live graph requeues", maximumAttempts: 3,
+			expectedState: "QUEUED", expectedAttempt: 2,
+			expectedRunOutcome: "scheduler_lease_expired",
+		},
+		{
+			name: "terminal winner reaches dead letter", maximumAttempts: 1,
+			terminalTurn: true, expectedState: "DEAD_LETTER", expectedAttempt: 1,
+			expectedRunOutcome: "execution_failed",
+		},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fixture := newCurrentTupleFixture(t)
+			produced := fixture.produceScheduledGraphWithMaximumAttempts(
+				t, scenario.maximumAttempts,
+			)
+			if scenario.terminalTurn {
+				fixture.failScheduledTurn(t, produced, "no-next-terminal")
+			}
+			previous := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+			fixture.tx.now = previous.LeaseExpiresAt.Add(time.Microsecond)
+			schedule := fixture.tx.resources[produced.schedule.ID]
+			spec := schedule.Spec.(entity.ScheduleSpec)
+			auditsBefore := len(fixture.tx.audits)
+			result, err := fixture.service.ClaimScheduleOccurrence(
+				context.Background(), ClaimScheduleOccurrenceInput{
+					Principal: fixture.principalFor(
+						permissionExecuteSchedule, "scheduler",
+						"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+						schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
+					),
+					IdempotencyKey: "claim-after-no-next-recovery",
+				},
+			)
+			if !errors.Is(err, errs.ErrNotFound) || result.LeaseToken != "" {
+				t.Fatalf("no-next poll returned %v %+v", err, result)
+			}
+			recovered := fixture.tx.occurrences[previous.ID]
+			finishedRun := fixture.tx.runs[turnAttemptMapKey(previous.ID, previous.Attempt)]
+			if recovered.State != scenario.expectedState ||
+				recovered.Attempt != scenario.expectedAttempt ||
+				recovered.TokenHash != "" || recovered.ClaimKeySHA256 != "" ||
+				recovered.AuthorityGeneration != 0 ||
+				!recovered.LeaseExpiresAt.IsZero() ||
+				finishedRun.State != "FAILED" ||
+				finishedRun.Outcome != scenario.expectedRunOutcome ||
+				finishedRun.FinishedAt.IsZero() || len(fixture.tx.audits) <= auditsBefore {
+				t.Fatalf("recovery was rolled back by no-next: occurrence=%+v run=%+v",
+					recovered, finishedRun)
+			}
+			if recovered.State == "QUEUED" &&
+				(recovered.EffectiveInputSHA256 != produced.snapshotDigest ||
+					occurrenceHasExecutionBinding(recovered)) {
+				t.Fatalf("queued recovery did not close the old graph: %+v", recovered)
+			}
+			stale, staleErr := fixture.service.ClaimScheduleOccurrence(
+				context.Background(), ClaimScheduleOccurrenceInput{
+					Principal: fixture.principalFor(
+						permissionExecuteSchedule, "scheduler",
+						"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+						schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
+					),
+					IdempotencyKey: "claim-occurrence-current-digest",
+				},
+			)
+			if !errors.Is(staleErr, errs.ErrStateConflict) || stale.LeaseToken != "" {
+				t.Fatalf("recovery exposed stale scheduler authority: %v %+v", staleErr, stale)
+			}
+		})
+	}
+}
+
+func TestSkipOverlapCommitsBeforeNoNextCandidate(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	skippedCandidate := fixture.addQueuedOccurrenceForSchedule(t, produced, "SKIP")
+	auditsBefore := len(fixture.tx.audits)
+	eventsBefore := len(fixture.tx.events)
+	schedule := fixture.tx.resources[produced.schedule.ID]
+	spec := schedule.Spec.(entity.ScheduleSpec)
+	result, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: fixture.principalFor(
+				permissionExecuteSchedule, "scheduler",
+				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+				schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
+			),
+			IdempotencyKey: "claim-after-only-overlap-skip",
+		},
+	)
+	if !errors.Is(err, errs.ErrNotFound) || result.LeaseToken != "" {
+		t.Fatalf("skip-only poll returned %v %+v", err, result)
+	}
+	skipped := fixture.tx.occurrences[skippedCandidate.ID]
+	if skipped.State != "SKIPPED" || skipped.Outcome != "overlap" ||
+		len(fixture.tx.audits) != auditsBefore+1 ||
+		len(fixture.tx.events) != eventsBefore ||
+		fixture.tx.audits[len(fixture.tx.audits)-1].Action != "skip_schedule_occurrence" {
+		t.Fatalf("skip mutation was rolled back by no-next: occurrence=%+v audits=%+v",
+			skipped, fixture.tx.audits[auditsBefore:])
+	}
+	auditsAfter := len(fixture.tx.audits)
+	if _, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: fixture.principalFor(
+				permissionExecuteSchedule, "scheduler",
+				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+				schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
+			),
+			IdempotencyKey: "repeat-after-only-overlap-skip",
+		},
+	); !errors.Is(err, errs.ErrNotFound) || len(fixture.tx.audits) != auditsAfter ||
+		len(fixture.tx.events) != eventsBefore {
+		t.Fatalf("repeat after committed skip created another effect: %v", err)
+	}
+}
+
+func TestHistoricalOpenScheduledRunBlocksQueueMaterialization(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	fixture.failScheduledTurn(t, produced, "historical-open-run")
+	historical := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+	historical.State = "FAILED"
+	historical.Outcome = "execution_failed"
+	fixture.tx.occurrences[historical.ID] = historical
+	candidate := fixture.addQueuedOccurrenceForSchedule(t, produced, "QUEUE")
+	schedule := fixture.tx.resources[produced.schedule.ID]
+	spec := schedule.Spec.(entity.ScheduleSpec)
+	principal := fixture.principalFor(
+		permissionExecuteSchedule, "scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
+	)
+	resourcesBefore := len(fixture.tx.resources)
+	auditsBefore := len(fixture.tx.audits)
+	blocked, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "claim-behind-historical-open-run",
+		},
+	)
+	if !errors.Is(err, errs.ErrNotFound) || blocked.LeaseToken != "" ||
+		len(fixture.tx.resources) != resourcesBefore || len(fixture.tx.audits) != auditsBefore {
+		t.Fatalf("historical open run did not block materialization: %v %+v", err, blocked)
+	}
+	runKey := turnAttemptMapKey(historical.ID, historical.Attempt)
+	run := fixture.tx.runs[runKey]
+	run.State = "FAILED"
+	run.Outcome = "execution_failed"
+	run.FinishedAt = fixture.tx.now
+	fixture.tx.runs[runKey] = run
+	claimed, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "claim-after-historical-run-close",
+		},
+	)
+	if err != nil || claimed.Occurrence.ID != candidate.ID ||
+		claimed.Occurrence.State != "CLAIMED" || claimed.LeaseToken == "" {
+		t.Fatalf("closed historical run did not unblock materialization: %v %+v", err, claimed)
+	}
+}
+
 func TestTerminalWinnerWatchdogRecoveryUsesCompletionRetryDisposition(t *testing.T) {
 	fixture := newCurrentTupleFixture(t)
 	produced := fixture.produceScheduledGraph(t)
@@ -1826,6 +2081,14 @@ func TestScheduledRequeueRestoresSnapshotAndNextAttemptReachesClaimTurn(t *testi
 				produced.claim.Occurrence.TokenHash,
 			); err != nil {
 				t.Fatalf("persist requeued occurrence: %v", err)
+			}
+			if err := fixture.tx.FinishScheduledRun(
+				context.Background(), domainrepo.ScheduledRun{
+					OccurrenceID: occurrence.ID, Attempt: previousAttempt,
+					State: "FAILED", Outcome: scenario.outcome, FinishedAt: fixture.tx.now,
+				},
+			); err != nil {
+				t.Fatalf("persist terminal predecessor run: %v", err)
 			}
 			persisted := fixture.tx.occurrences[occurrence.ID]
 			if persisted.State != "QUEUED" || persisted.Attempt != previousAttempt+1 ||

@@ -186,6 +186,9 @@ var sqlScheduleOccurrenceGetByClaimKey string
 //go:embed sql/schedule_occurrence__has_open.sql
 var sqlScheduleOccurrenceHasOpen string
 
+//go:embed sql/schedule_occurrence__has_blocking_execution.sql
+var sqlScheduleOccurrenceHasBlockingExecution string
+
 //go:embed sql/schedule_occurrence__list.sql
 var sqlScheduleOccurrenceList string
 

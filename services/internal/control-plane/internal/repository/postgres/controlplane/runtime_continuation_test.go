@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/jackc/pgx/v5"
@@ -54,6 +55,34 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 			name: "scheduled candidate", sql: sqlScheduleOccurrenceGetByCurrentTurn,
 			args: pgx.StrictNamedArgs{
 				"organization_id": "", "project_id": "", "turn_id": "",
+			},
+		},
+		{
+			name: "schedule blocking execution", sql: sqlScheduleOccurrenceHasBlockingExecution,
+			args: pgx.StrictNamedArgs{
+				"organization_id": "", "project_id": "", "schedule_id": "",
+				"candidate_occurrence_id": "", "open_execution_states": []string{},
+			},
+		},
+		{
+			name: "schedule open execution", sql: sqlScheduleOccurrenceHasOpen,
+			args: pgx.StrictNamedArgs{
+				"organization_id": "", "project_id": "", "schedule_id": "",
+				"open_execution_states": []string{},
+			},
+		},
+		{
+			name: "schedule next occurrence", sql: sqlScheduleOccurrenceNext,
+			args: pgx.StrictNamedArgs{
+				"organization_id": "", "project_id": "", "now": time.Time{},
+				"open_execution_states": []string{},
+			},
+		},
+		{
+			name: "schedule skip overlap", sql: sqlScheduleOccurrenceSkipOverlap,
+			args: pgx.StrictNamedArgs{
+				"organization_id": "", "project_id": "", "now": time.Time{},
+				"open_execution_states": []string{},
 			},
 		},
 		{
@@ -159,11 +188,13 @@ func TestScheduledContinuationRemainsOpenAndUnclaimable(t *testing.T) {
 		"next": sqlScheduleOccurrenceNext,
 		"skip": sqlScheduleOccurrenceSkipOverlap,
 	} {
-		for _, state := range []string{"WAITING_OWNER", "CONTINUATION"} {
-			if !strings.Contains(query, state) {
-				t.Fatalf("%s query does not protect %s", name, state)
-			}
+		if !strings.Contains(query, "@open_execution_states::text[]") {
+			t.Fatalf("%s query bypasses shared open execution states", name)
 		}
+	}
+	states := scheduleOpenExecutionStates()
+	if strings.Join(states, ",") != "CLAIMED,WAITING_OWNER,CONTINUATION" {
+		t.Fatalf("unexpected closed schedule execution state set: %v", states)
 	}
 }
 
@@ -171,10 +202,37 @@ func TestScheduleOpenGraphIncludesCurrentScheduledRunAuthority(t *testing.T) {
 	for _, required := range []string{
 		"LEFT JOIN control_plane.scheduled_runs AS run",
 		"run.occurrence_id = occurrence.id",
-		"run.state IN ('CLAIMED', 'WAITING_OWNER', 'CONTINUATION')",
+		"run.state = ANY(@open_execution_states::text[])",
 	} {
 		if !strings.Contains(sqlScheduleOccurrenceHasOpen, required) {
 			t.Fatalf("schedule open-graph query misses %q", required)
+		}
+	}
+}
+
+func TestScheduleClaimCardinalityIncludesHistoricalOpenRun(t *testing.T) {
+	for name, query := range map[string]string{
+		"selection":         sqlScheduleOccurrenceNext,
+		"overlap skip":      sqlScheduleOccurrenceSkipOverlap,
+		"post-lock recheck": sqlScheduleOccurrenceHasBlockingExecution,
+	} {
+		for _, required := range []string{
+			"control_plane.scheduled_runs AS open_run",
+			"open_run.occurrence_id =",
+			"open_run.state = ANY(@open_execution_states::text[])",
+		} {
+			if !strings.Contains(query, required) {
+				t.Fatalf("%s misses historical run predicate %q", name, required)
+			}
+		}
+	}
+	for _, required := range []string{
+		"owned_occurrence.id <> @candidate_occurrence_id::uuid",
+		"owned_occurrence.schedule_id = @schedule_id::uuid",
+		"open_run.occurrence_id IS NOT NULL",
+	} {
+		if !strings.Contains(sqlScheduleOccurrenceHasBlockingExecution, required) {
+			t.Fatalf("post-lock cardinality query misses %q", required)
 		}
 	}
 }

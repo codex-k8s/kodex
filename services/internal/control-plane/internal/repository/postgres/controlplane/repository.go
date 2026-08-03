@@ -1461,9 +1461,29 @@ func (wrapped *transaction) HasOpenScheduleOccurrence(
 		ctx,
 		sqlScheduleOccurrenceHasOpen,
 		pgx.StrictNamedArgs{
-			"organization_id": organizationID,
-			"project_id":      projectID,
-			"schedule_id":     scheduleID,
+			"organization_id":       organizationID,
+			"project_id":            projectID,
+			"schedule_id":           scheduleID,
+			"open_execution_states": scheduleOpenExecutionStates(),
+		},
+	).Scan(&found)
+	return found, mapError(err)
+}
+
+func (wrapped *transaction) HasBlockingScheduleExecution(
+	ctx context.Context,
+	organizationID, projectID, scheduleID, candidateOccurrenceID string,
+) (bool, error) {
+	var found bool
+	err := wrapped.tx.QueryRow(
+		ctx,
+		sqlScheduleOccurrenceHasBlockingExecution,
+		pgx.StrictNamedArgs{
+			"organization_id":         organizationID,
+			"project_id":              projectID,
+			"schedule_id":             scheduleID,
+			"candidate_occurrence_id": candidateOccurrenceID,
+			"open_execution_states":   scheduleOpenExecutionStates(),
 		},
 	).Scan(&found)
 	return found, mapError(err)
@@ -1478,9 +1498,10 @@ func (wrapped *transaction) SkipOverlappedScheduleOccurrences(
 		ctx,
 		sqlScheduleOccurrenceSkipOverlap,
 		pgx.StrictNamedArgs{
-			"organization_id": organizationID,
-			"project_id":      projectID,
-			"now":             now,
+			"organization_id":       organizationID,
+			"project_id":            projectID,
+			"now":                   now,
+			"open_execution_states": scheduleOpenExecutionStates(),
 		},
 	)
 	if err != nil {
@@ -1536,11 +1557,16 @@ func (wrapped *transaction) NextScheduleOccurrence(
 		ctx,
 		sqlScheduleOccurrenceNext,
 		pgx.StrictNamedArgs{
-			"organization_id": organizationID,
-			"project_id":      projectID,
-			"now":             now,
+			"organization_id":       organizationID,
+			"project_id":            projectID,
+			"now":                   now,
+			"open_execution_states": scheduleOpenExecutionStates(),
 		},
 	))
+}
+
+func scheduleOpenExecutionStates() []string {
+	return []string{"CLAIMED", "WAITING_OWNER", "CONTINUATION"}
 }
 
 func (wrapped *transaction) UpdateScheduleOccurrence(

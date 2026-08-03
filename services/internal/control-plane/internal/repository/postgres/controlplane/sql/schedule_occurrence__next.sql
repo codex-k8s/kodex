@@ -9,13 +9,27 @@ WITH candidate AS (
       AND NOT EXISTS (
           SELECT 1
           FROM control_plane.schedule_occurrences AS active
-          WHERE active.schedule_id = occurrence.schedule_id
-            AND active.state IN ('CLAIMED', 'WAITING_OWNER', 'CONTINUATION')
+          WHERE active.organization_id = occurrence.organization_id
+            AND active.project_id = occurrence.project_id
+            AND active.schedule_id = occurrence.schedule_id
+            AND active.state = ANY(@open_execution_states::text[])
+      )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM control_plane.schedule_occurrences AS run_owner
+          JOIN control_plane.scheduled_runs AS open_run
+            ON open_run.occurrence_id = run_owner.id
+           AND open_run.state = ANY(@open_execution_states::text[])
+          WHERE run_owner.organization_id = occurrence.organization_id
+            AND run_owner.project_id = occurrence.project_id
+            AND run_owner.schedule_id = occurrence.schedule_id
       )
       AND NOT EXISTS (
           SELECT 1
           FROM control_plane.schedule_occurrences AS predecessor
-          WHERE predecessor.schedule_id = occurrence.schedule_id
+          WHERE predecessor.organization_id = occurrence.organization_id
+            AND predecessor.project_id = occurrence.project_id
+            AND predecessor.schedule_id = occurrence.schedule_id
             AND (
                 predecessor.scheduled_for < occurrence.scheduled_for
                 OR (
@@ -23,8 +37,9 @@ WITH candidate AS (
                     AND predecessor.id < occurrence.id
                 )
             )
-            AND predecessor.state IN (
-                'QUEUED', 'CLAIMED', 'WAITING_OWNER', 'CONTINUATION'
+            AND (
+                predecessor.state = 'QUEUED'
+                OR predecessor.state = ANY(@open_execution_states::text[])
             )
       )
     ORDER BY occurrence.available_at, occurrence.scheduled_for, occurrence.id

@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.18.0
+version: 1.19.0
 updated: 2026-08-03
 ---
 
@@ -505,6 +505,16 @@ retry/dead-letter формулой. Прежний run сначала получ
 lease/generation и весь execution tuple очищаются. На maximum attempts либо
 dead-letter deadline occurrence остаётся `DEAD_LETTER`; второй winner не
 создаёт attempt/run/receipt.
+Watchdog recovery выполняется до отдельного scheduler selection: discovery
+не блокирует строки, затем exact owner graph и свежий PostgreSQL clock дают
+один terminal/retry winner, а transaction коммитит run, occurrence, закрытие
+token/claim authority и audit. Только после этого новый poll ищет candidate.
+Поэтому `ErrNotFound` означает отсутствие следующей работы и не откатывает
+уже зафиксированный `QUEUED` backoff либо `DEAD_LETTER`. Тот же принцип
+применяется к overlap `SKIP`: `SKIPPED`+audit — самостоятельный terminal fact.
+Если следующий poll снова видит старую `CLAIMED` строку или прежний token при
+no-candidate, остановить scheduler: это нарушение commit boundary, а не повод
+повторно открывать authority вручную.
 `UpdateScheduleOccurrence` обязан передать `effective_input_sha256`, а SQL —
 записать его; расхождение authoritative readback является дефектом producer, а
 не поводом ручного `UPDATE`. Если locked Schedule уже несёт другой snapshot,
@@ -585,6 +595,13 @@ terminal и scheduler expiry сравнить итог с обычным complet
 terminal, occurrence ровно `QUEUED` следующей attempt либо `DEAD_LETTER`, token/
 claim/execution authority очищена. Расхождение означает дефект producer и
 требует нового forward-only application fix.
+Для `overlap_policy=QUEUE` проверка не ограничивается current occurrence:
+terminal O1 с historical R1 в `CLAIMED/WAITING_OWNER/CONTINUATION` блокирует
+materialization O2. Selection SQL выполняет ранний filter, а после canonical
+occurrence→Schedule locks тот же закрытый predicate повторяется до первого
+эффекта Session/Turn/Process. Закрывать R1 ручным SQL или создавать O2 в обход
+claim запрещено; после specialized terminal closure R1 следующий poll может
+создать ровно один graph O2.
 
 ## Наблюдаемость
 

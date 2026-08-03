@@ -417,154 +417,57 @@ func (service *Service) ClaimScheduleOccurrence(
 		return ScheduleOccurrenceResult{}, errs.ErrInvalidInput
 	}
 	keyHash := hashString(input.IdempotencyKey)
+	scope := domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}
 	var result ScheduleOccurrenceResult
 	err = service.repository.Transact(
 		ctx,
-		domainrepo.Scope{
-			OrganizationID: input.Principal.OrganizationID,
-			ProjectID:      input.Principal.ProjectID,
-			ActorID:        input.Principal.ActorID,
-		},
+		scope,
 		func(tx domainrepo.Transaction) error {
-			bound, boundErr := tx.GetScheduleOccurrenceByClaimKey(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				keyHash,
+			result = ScheduleOccurrenceResult{}
+			replayed, found, replayErr := service.replayScheduleOccurrenceClaim(
+				ctx, tx, input, requestHash, keyHash,
 			)
-			if boundErr == nil {
-				if bound.ExecutionTurnID == "" {
-					return errs.ErrStateConflict
-				}
-				graph, graphErr := service.lockOwnerGraphByTurn(
-					ctx, tx, input.Principal, bound.ExecutionTurnID,
-				)
-				if graphErr != nil {
-					return graphErr
-				}
-				if err := requireOwnerGraphRuntimeDisposition(
-					graph, runtimeDispositionAbsent,
-				); err != nil {
-					return err
-				}
-				now, err := tx.CurrentTime(ctx)
-				if err != nil {
-					return err
-				}
-				current := graph.Occurrence
-				if current.ID != bound.ID || current.State != "CLAIMED" ||
-					current.ClaimKeySHA256 != keyHash ||
-					current.ClaimantWorkloadID != input.Principal.CallerWorkload ||
-					current.AuthorityGeneration != input.Principal.AuthorityGeneration ||
-					current.TokenHash == "" || !current.LeaseExpiresAt.After(now) {
-					return errs.ErrStateConflict
-				}
-				receipt, receiptErr := tx.GetReceipt(
-					ctx,
-					input.Principal.OrganizationID,
-					"claim_schedule_occurrence",
-					keyHash,
-				)
-				if receiptErr != nil {
-					return receiptErr
-				}
-				if receipt.RequestHash != requestHash {
-					return errs.ErrIdempotencyConflict
-				}
-				var payload scheduleOccurrenceReceipt
-				if json.Unmarshal(receipt.Payload, &payload) != nil ||
-					payload.Occurrence.ID != current.ID ||
-					payload.Occurrence.Attempt != current.Attempt ||
-					payload.Occurrence.ClaimKeySHA256 != keyHash ||
-					payload.LeaseToken == "" {
-					return errs.ErrInternal
-				}
-				expectedToken := service.leaseToken(
-					current.ID,
-					uint64(current.Attempt),
-					current.Attempt,
-					current.AuthorityGeneration,
-					input.Principal.CallerWorkload,
-					input.IdempotencyKey,
-				)
-				if payload.LeaseToken != expectedToken ||
-					current.TokenHash != hashString(expectedToken) {
-					return errs.ErrStateConflict
-				}
-				result = ScheduleOccurrenceResult{
-					Occurrence: current,
-					LeaseToken: expectedToken,
-				}
+			if replayErr == nil && found {
+				result = replayed
+			}
+			return replayErr
+		},
+	)
+	if err != nil || result.LeaseToken != "" {
+		return result, err
+	}
+	if err := service.recoverExpiredScheduleOccurrences(
+		ctx, scope, input.Principal,
+	); err != nil {
+		return ScheduleOccurrenceResult{}, err
+	}
+	if err := service.skipOverlappedScheduleOccurrences(
+		ctx, scope, input.Principal,
+	); err != nil {
+		return ScheduleOccurrenceResult{}, err
+	}
+	err = service.repository.Transact(
+		ctx,
+		scope,
+		func(tx domainrepo.Transaction) error {
+			result = ScheduleOccurrenceResult{}
+			replayed, found, replayErr := service.replayScheduleOccurrenceClaim(
+				ctx, tx, input, requestHash, keyHash,
+			)
+			if replayErr != nil {
+				return replayErr
+			}
+			if found {
+				result = replayed
 				return nil
-			}
-			if !errors.Is(boundErr, errs.ErrNotFound) {
-				return boundErr
-			}
-			_, receiptErr := tx.GetReceipt(
-				ctx,
-				input.Principal.OrganizationID,
-				"claim_schedule_occurrence",
-				keyHash,
-			)
-			if receiptErr == nil {
-				// Receipt без server-owned binding повреждён либо вытеснен;
-				// прежняя scheduler lease через него никогда не раскрывается.
-				return errs.ErrStateConflict
-			}
-			if !errors.Is(receiptErr, errs.ErrNotFound) {
-				return receiptErr
 			}
 			candidateNow, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return err
-			}
-			recovered, err := tx.ExpiredScheduleOccurrenceCandidates(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				candidateNow,
-			)
-			if err != nil {
-				return err
-			}
-			for _, occurrence := range recovered {
-				if occurrence.ExecutionTurnID == "" {
-					return errs.ErrStateConflict
-				}
-				graph, err := service.lockOwnerGraphByTurn(
-					ctx, tx, input.Principal, occurrence.ExecutionTurnID,
-				)
-				if err != nil {
-					return err
-				}
-				if graph.Occurrence.ID != occurrence.ID {
-					return errs.ErrStateConflict
-				}
-				recoveryNow, err := tx.CurrentTime(ctx)
-				if err != nil {
-					return err
-				}
-				if err := service.recoverExpiredScheduleOccurrence(
-					ctx, tx, input.Principal, graph, recoveryNow,
-				); err != nil {
-					return err
-				}
-			}
-			skipped, err := tx.SkipOverlappedScheduleOccurrences(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				candidateNow,
-			)
-			if err != nil {
-				return err
-			}
-			for _, occurrence := range skipped {
-				if err := appendScheduleOccurrenceAudit(
-					ctx, tx, input.Principal, "skip_schedule_occurrence", occurrence,
-				); err != nil {
-					return err
-				}
 			}
 			occurrence, err := tx.NextScheduleOccurrence(
 				ctx,
@@ -573,6 +476,23 @@ func (service *Service) ClaimScheduleOccurrence(
 				candidateNow,
 			)
 			if err != nil {
+				if errors.Is(err, errs.ErrNotFound) {
+					_, receiptErr := tx.GetReceipt(
+						ctx,
+						input.Principal.OrganizationID,
+						"claim_schedule_occurrence",
+						keyHash,
+					)
+					switch {
+					case receiptErr == nil:
+						// Закрытый/superseded binding не раскрывает receipt и
+						// отличается от обычного отсутствия scheduler work.
+						return errs.ErrStateConflict
+					case errors.Is(receiptErr, errs.ErrNotFound):
+					default:
+						return receiptErr
+					}
+				}
 				return err
 			}
 			schedule, err := tx.GetForUpdate(
@@ -583,6 +503,19 @@ func (service *Service) ClaimScheduleOccurrence(
 			)
 			if err != nil {
 				return err
+			}
+			blockingExecution, err := tx.HasBlockingScheduleExecution(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				schedule.ID,
+				occurrence.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if blockingExecution {
+				return errs.ErrStateConflict
 			}
 			scheduleSpec, ok := schedule.Spec.(entity.ScheduleSpec)
 			if !ok || schedule.Kind != enum.KindSchedule ||
@@ -693,6 +626,21 @@ func (service *Service) ClaimScheduleOccurrence(
 			}
 			if occurrence.State != "QUEUED" || occurrence.AvailableAt.After(claimNow) {
 				return errs.ErrStateConflict
+			}
+			_, receiptErr := tx.GetReceipt(
+				ctx,
+				input.Principal.OrganizationID,
+				"claim_schedule_occurrence",
+				keyHash,
+			)
+			switch {
+			case receiptErr == nil:
+				// Receipt без exact server-owned claim binding не разрешает
+				// повтор и отклоняется после authoritative candidate locks.
+				return errs.ErrStateConflict
+			case errors.Is(receiptErr, errs.ErrNotFound):
+			default:
+				return receiptErr
 			}
 			session, sessionSpec, err := service.prepareScheduleSession(
 				ctx,
@@ -940,6 +888,185 @@ func (service *Service) ClaimScheduleOccurrence(
 		},
 	)
 	return result, err
+}
+
+func (service *Service) replayScheduleOccurrenceClaim(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input ClaimScheduleOccurrenceInput,
+	requestHash, keyHash string,
+) (ScheduleOccurrenceResult, bool, error) {
+	bound, err := tx.GetScheduleOccurrenceByClaimKey(
+		ctx,
+		input.Principal.OrganizationID,
+		input.Principal.ProjectID,
+		keyHash,
+	)
+	if errors.Is(err, errs.ErrNotFound) {
+		return ScheduleOccurrenceResult{}, false, nil
+	}
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	if bound.ExecutionTurnID == "" {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	graph, err := service.lockOwnerGraphByTurn(
+		ctx, tx, input.Principal, bound.ExecutionTurnID,
+	)
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	if err := requireOwnerGraphRuntimeDisposition(
+		graph, runtimeDispositionAbsent,
+	); err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	now, err := tx.CurrentTime(ctx)
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	current := graph.Occurrence
+	if current.ID != bound.ID || current.State != "CLAIMED" ||
+		current.ClaimKeySHA256 != keyHash ||
+		current.ClaimantWorkloadID != input.Principal.CallerWorkload ||
+		current.AuthorityGeneration != input.Principal.AuthorityGeneration ||
+		current.TokenHash == "" || !current.LeaseExpiresAt.After(now) {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	receipt, err := tx.GetReceipt(
+		ctx,
+		input.Principal.OrganizationID,
+		"claim_schedule_occurrence",
+		keyHash,
+	)
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	if receipt.RequestHash != requestHash {
+		return ScheduleOccurrenceResult{}, false, errs.ErrIdempotencyConflict
+	}
+	var payload scheduleOccurrenceReceipt
+	if json.Unmarshal(receipt.Payload, &payload) != nil ||
+		payload.Occurrence.ID != current.ID ||
+		payload.Occurrence.Attempt != current.Attempt ||
+		payload.Occurrence.ClaimKeySHA256 != keyHash ||
+		payload.LeaseToken == "" {
+		return ScheduleOccurrenceResult{}, false, errs.ErrInternal
+	}
+	expectedToken := service.leaseToken(
+		current.ID,
+		uint64(current.Attempt),
+		current.Attempt,
+		current.AuthorityGeneration,
+		input.Principal.CallerWorkload,
+		input.IdempotencyKey,
+	)
+	if payload.LeaseToken != expectedToken ||
+		current.TokenHash != hashString(expectedToken) {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	return ScheduleOccurrenceResult{
+		Occurrence: current,
+		LeaseToken: expectedToken,
+	}, true, nil
+}
+
+// recoverExpiredScheduleOccurrences фиксирует каждую независимую watchdog
+// disposition до выбора следующего claimable occurrence. Поэтому штатный
+// ErrNotFound следующего poll не способен откатить уже закрытую authority.
+func (service *Service) recoverExpiredScheduleOccurrences(
+	ctx context.Context,
+	scope domainrepo.Scope,
+	principal value.Principal,
+) error {
+	var candidates []domainrepo.ScheduleOccurrence
+	if err := service.repository.Transact(
+		ctx,
+		scope,
+		func(tx domainrepo.Transaction) error {
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			candidates, err = tx.ExpiredScheduleOccurrenceCandidates(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				now,
+			)
+			return err
+		},
+	); err != nil {
+		return err
+	}
+	for _, candidate := range candidates {
+		candidate := candidate
+		if candidate.ExecutionTurnID == "" {
+			return errs.ErrStateConflict
+		}
+		if err := service.repository.Transact(
+			ctx,
+			scope,
+			func(tx domainrepo.Transaction) error {
+				graph, err := service.lockOwnerGraphByTurn(
+					ctx, tx, principal, candidate.ExecutionTurnID,
+				)
+				if err != nil {
+					return err
+				}
+				if graph.Occurrence.ID != candidate.ID {
+					return errs.ErrStateConflict
+				}
+				now, err := tx.CurrentTime(ctx)
+				if err != nil {
+					return err
+				}
+				return service.recoverExpiredScheduleOccurrence(
+					ctx, tx, principal, graph, now,
+				)
+			},
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// skipOverlappedScheduleOccurrences коммитит terminal SKIPPED и его audit как
+// самостоятельный owner fact до следующей попытки выбора scheduler work.
+func (service *Service) skipOverlappedScheduleOccurrences(
+	ctx context.Context,
+	scope domainrepo.Scope,
+	principal value.Principal,
+) error {
+	return service.repository.Transact(
+		ctx,
+		scope,
+		func(tx domainrepo.Transaction) error {
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			skipped, err := tx.SkipOverlappedScheduleOccurrences(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				now,
+			)
+			if err != nil {
+				return err
+			}
+			for _, occurrence := range skipped {
+				if err := appendScheduleOccurrenceAudit(
+					ctx, tx, principal, "skip_schedule_occurrence", occurrence,
+				); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	)
 }
 
 func (service *Service) prepareScheduleSession(
